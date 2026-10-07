@@ -156,6 +156,15 @@ test('writeAtomic leaves the final file and no temp file', async () => {
   assert.deepEqual(fs.readdirSync(path.dirname(file)), ['b.json'])
 })
 
+test('writeAtomic removes its temp file when the rename fails', async () => {
+  const dir = tmp()
+  const file = path.join(dir, 'target')
+  fs.mkdirSync(file)
+  fs.writeFileSync(path.join(file, 'x'), 'x') // a non-empty directory cannot be replaced by rename
+  await assert.rejects(writeAtomic(file, 'one'))
+  assert.deepEqual(fs.readdirSync(dir), ['target'])
+})
+
 test('flush writes queued columns, never more than 8 per flush, and coalesces repeats', async () => {
   const columns = Object.fromEntries(Array.from({ length: 20 }, (_, i) => [`${i},0`, makeColumn()]))
   const bot = fakeBot({ columns })

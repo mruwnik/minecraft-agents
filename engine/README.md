@@ -80,7 +80,7 @@ through interop, for example `(.moveTo p token #js {:pos #js {:x 1 :y 64 :z 2}})
 - Every acting method is `async name(token, args)` and resolves to an object with a `status` string. A domain failure is a
   status, never a rejection. A mineflayer error inside an acting call resolves `{status: 'failed', reason}`.
 - Rejections happen only for a cut (`err.code === 'cut'`) and for bad args (`'bad-args'`).
-- Time bounds are hard: a method that reaches its bound stops and resolves `timeout` (or `partial` for `moveTo`).
+- Time bounds are hard: a method that reaches its bound stops and resolves `timeout` (or `partial` for `moveTo`). A `timeout` after the stacks changed carries `inventoryChange` `{item: delta}`: `trade` and `enchant` read it, the others re-read the inventory.
 - Sensing methods are synchronous, take no token, and are cheap (scans are bounded by radius and `max`).
 - Primitives do not walk. Reach for `dig`, `place`, `transfer`, `sleep`, `attack` etc. is the caller's job (`moveTo` first).
 

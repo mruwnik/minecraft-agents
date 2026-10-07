@@ -2233,6 +2233,13 @@ test('createPrimitives: a socket error while the world loads does not throw on t
   await result
 })
 
+test('createPrimitives: the world-wait error guard is gone once the body is bound (only its own handler stays)', async () => {
+  const bot = stubBot(world)
+  const before = bot.listenerCount('error')
+  await createPrimitives(WORLD_OPTS, { connect: async () => bot, timeScale: SCALE, worldTimeoutMs: 5000 })
+  assert.equal(bot.listenerCount('error'), before + 1)
+})
+
 test('createPrimitives refuses to start, before it connects, when a required dependency patch is missing', async () => {
   let connected = false
   const connect = async () => { connected = true; return stubBot(world) }

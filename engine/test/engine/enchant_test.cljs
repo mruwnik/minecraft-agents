@@ -298,3 +298,17 @@
           (is (seq (tu/walk-calls p)))
           (is (true? (:enchanted result)))
           (is (= ["offers" "enchant"] (ops p))))))))
+
+(deftest an-enchant-that-timed-out-after-the-table-did-it-is-found-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[r p] (await (enchant! table-world {}
+                                     #(.override (.-world %) "enchant"
+                                                 (fn ^:async f [token args impl]
+                                                   (let [r (await (impl token args))]
+                                                     (if (= "enchant" (.-op args))
+                                                       #js {:status "timeout" :inventoryChange #js {"lapis_lazuli" -3}}
+                                                       r))))))]
+          (is (true? (:enchanted r)))
+          (is (= ["offers" "enchant" "offers"] (ops p))))))))

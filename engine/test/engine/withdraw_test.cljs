@@ -165,3 +165,17 @@
         (let [{:keys [eng]} (setup {:containers {"10,64,0" [{:name "bread" :count 5}]}})
               result (await (child-outcome eng job {:chest chest :items (array-map "bread" 16)} 1))]
           (is (= {:gave-up false :status :stopped :short {"bread" 11}} result)))))))
+
+(deftest withdraw-counts-what-moved-before-a-transfer-timed-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory [] :containers {"10,64,0" [{:name "bread" :count 32}]}})]
+          (.override (.-world p) "transfer"
+                     (fn ^:async f [token args impl]
+                       (await (impl token args))
+                       #js {:status "timeout" :inventoryChange #js {"bread" 16}}))
+          (let [result (await (child-outcome eng job {:chest chest :items {"bread" 16}} 8))]
+            (is (= {:gave-up false :short {}} result))
+            (is (= {"bread" 16} (inv p)))
+            (is (= 1 (count (calls p "transfer"))))))))))

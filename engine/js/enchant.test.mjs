@@ -327,6 +327,14 @@ test('a cut registers the window close for the abort path', async () => {
   assert.ok(names(bot).filter(n => n === 'close').length >= 1)
 })
 
+test('a cut after the enchant call leaves no experience or slot listener on the bot', async () => {
+  const bot = makeBot({ pockets: [sword, lapis(5)] })
+  let n = 0
+  const cut = { alive: () => { if (++n > 3) throw new Error('cut') }, onAbort: () => {} }
+  await assert.rejects(enchantVisit(bot, cut, { pos, op: 'enchant', item: 'diamond_sword', choice: 0 }, opts), /cut/)
+  assert.equal(bot.listenerCount('experience'), 0)
+})
+
 test('a cut inside the visit closes the window and ends it', async () => {
   const bot = makeBot({ pockets: [sword, lapis(5)] })
   let n = 0

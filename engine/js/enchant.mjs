@@ -170,10 +170,13 @@ async function enchant (bot, ctx, win, a, timeScale, xpLevel) {
   } finally {
     clearTimeout(timer)
   }
-  ctx.alive()
-  // the server's new level can arrive after the window call has returned
-  if (!stalled && !error) await levelMoved.wait(LEVEL_WAIT_MS * timeScale)
-  levelMoved.stop()
+  try {
+    ctx.alive()
+    // the server's new level can arrive after the window call has returned
+    if (!stalled && !error) await levelMoved.wait(LEVEL_WAIT_MS * timeScale)
+  } finally {
+    levelMoved.stop()
+  }
   return { measure: { stalled, error } }
 }
 

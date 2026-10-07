@@ -109,6 +109,15 @@
       (pos? gained) :again
       :else (retry "incomplete" "a buy stopped short"))))
 
+(defn timed-out
+  "A buy that hit the act time bound, as a bought result: the goods gained and the rest paid, from its inventory change."
+  [c r]
+  (let [change (js->clj (.-inventoryChange r))
+        buy (:buy (:args c))]
+    #js {:gained (doto #js {} (aset buy (max 0 (get change buy 0))))
+         :paid (clj->js (into {} (keep (fn [[k v]] (when (and (not= k buy) (neg? v)) [k (- v)]))) change))
+         :stopped nil}))
+
 (defn ^:async buy!
   "Buy the trades still wanted of the chosen offer and handle the outcome."
   [c offer]
@@ -119,6 +128,9 @@
         status (.-status r)]
     (case status
       "bought" (bought! c r)
+      "timeout" (if (.-inventoryChange r)
+                  (bought! c (timed-out c r))
+                  (retry "timeout" "the buy timed out"))
       "no-item" (give-up! c "payment-short" "cannot pay")
       "full" (give-up! c "no-room" "no room for the goods")
       "gone" (give-up! c "gone" "the villager is gone")

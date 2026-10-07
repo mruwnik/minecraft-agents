@@ -322,3 +322,18 @@
                                             {}))]
           (is (= {:bought 0 :paid {} :item "bread" :status :stopped :reason "unreachable"} result))
           (is (contains? (kinds seen) :trade.gave-up)))))))
+
+(deftest a-buy-that-timed-out-after-the-goods-landed-counts-them
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (trade {:entities [(villager [(bread {})])] :inventory [{:name "emerald" :count 10}]} {}
+                                       #(.override (.-world %) "trade"
+                                                   (fn ^:async f [token args impl]
+                                                     (let [r (await (impl token args))]
+                                                       (if (= "buy" (.-op args))
+                                                         #js {:status "timeout" :inventoryChange #js {"bread" 1 "emerald" -1}}
+                                                         r))))))]
+          (is (= {:bought 1 :paid {"emerald" 1} :item "bread"} result))
+          (is (= {"emerald" 9 "bread" 1} (inv p)))
+          (is (= 1 (count (filter #(= "buy" (.-op (.-args %))) (calls p "trade"))))))))))

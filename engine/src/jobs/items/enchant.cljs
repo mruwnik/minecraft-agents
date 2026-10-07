@@ -139,6 +139,7 @@
                  "not-enchantable" (give-up! c "not-enchantable" {})
                  "already-enchanted" (give-up! c "already-enchanted" {})
                  (fail-up! c (str (:reason r))))
+      "timeout" (if (:inventoryChange r) :again (fail-up! c "timeout"))
       "failed" (give-up! c (get failed-reasons (:reason r) "enchant-failed") (spent-of r))
       "no-item" (give-up! c "no-item" {})
       "missing" (give-up! c "no-table" {})

@@ -58,7 +58,10 @@ export async function writeAtomic (file, data) {
     await fs.promises.mkdir(path.dirname(file), { recursive: true })
     await write()
   })
-  await fs.promises.rename(tmp, file)
+  await fs.promises.rename(tmp, file).catch(async err => {
+    await fs.promises.rm(tmp, { force: true })
+    throw err
+  })
 }
 
 // One write in flight per file. A write asked for meanwhile replaces any waiting one, so the last data always lands

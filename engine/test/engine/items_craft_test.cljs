@@ -318,3 +318,16 @@
               result (await (child-outcome eng job {:item "bread" :fetch false} 40))]
           (is (= {:made 0 :status :stopped :reason "no-table"} result))
           (is (= 1 (get (inv p) "crafting_table"))))))))
+
+(deftest craft-goes-on-after-a-timeout-that-made-something
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory [{:name "oak_log" :count 1}]})]
+          (.override (.-world p) "craft"
+                     (fn ^:async f [token args impl]
+                       (await (impl token args))
+                       #js {:status "timeout" :inventoryChange #js {"oak_planks" 4 "oak_log" -1}}))
+          (let [result (await (child-outcome eng job {:item "oak_planks" :count 4} 8))]
+            (is (= {:made 4} result))
+            (is (= 1 (count (calls p "craft"))))))))))

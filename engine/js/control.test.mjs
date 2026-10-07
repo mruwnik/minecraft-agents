@@ -47,6 +47,18 @@ test('serves the handle reply over a real unix socket with mode 0600, and close 
   assert.equal(fs.existsSync(socketPath), false)
 })
 
+test('listen refuses a socket another process still serves, and leaves it in place', async () => {
+  const { socketPath, control } = rig()
+  const first = createControl({ socketPath, handle: () => ({ status: 200, json: {} }) })
+  await first.listen()
+  try {
+    await assert.rejects(control.listen(), /already in use/)
+    assert.equal((await request(socketPath, 'GET', '/drive')).status, 200)
+  } finally {
+    await first.close()
+  }
+})
+
 test('method, path (without the query) and parsed body reach handle; an empty body is null', async () => {
   const { socketPath, calls, control } = rig()
   await control.listen()

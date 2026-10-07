@@ -546,12 +546,15 @@ export async function createPrimitives ({ view: viewOpts, ...opts }, { connect =
   // would go unseen, so guard the wait and refuse to start on a bot that already dropped
   let dropped = null
   const onDrop = reason => { dropped = reason }
-  bot.on('error', () => {})
+  const guardError = () => {}
+  bot.on('error', guardError)
   bot.once('end', onDrop)
   bot.once('kicked', onDrop)
   const loaded = await waitForWorld(bot, { timeoutMs: worldTimeoutMs, stop: () => dropped !== null })
   bot.removeListener('end', onDrop)
   bot.removeListener('kicked', onDrop)
+  // a dropped bot is thrown away, so its guard stays; a started one is bound at once and reports errors through its own handler
+  if (dropped === null) bot.removeListener('error', guardError)
   if (dropped !== null) throw new Error(`connection dropped while the world loaded: ${JSON.stringify(dropped)}`)
   const pending = loaded ? [] : [{ kind: 'world-not-loaded', ms: worldTimeoutMs }]
   const titles = missingPatches(readFile)

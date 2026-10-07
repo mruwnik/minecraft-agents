@@ -3,12 +3,20 @@
 // pass bounded EDN text through to the ClojureScript owner-token handler.
 import fs from 'node:fs'
 import http from 'node:http'
+import net from 'node:net'
 
 const MAX_SOCKET_PATH = 107
 const MAX_BODY = 16 * 1024
 
 const reply = (json, status) => ({ status, json })
 const ednReply = (value, status) => ({ status, contentType: 'application/edn', text: `${value}\n` })
+
+// true when something accepts connections on the socket file: a stale file from a dead body refuses them
+const served = socketPath => new Promise(resolve => {
+  const probe = net.connect(socketPath)
+  probe.once('connect', () => { probe.destroy(); resolve(true) })
+  probe.once('error', () => resolve(false))
+})
 
 const readText = (req) => new Promise((resolve, reject) => {
   const chunks = []
@@ -63,6 +71,7 @@ export function createControl ({ socketPath, handle }) {
     if (Buffer.byteLength(socketPath) > MAX_SOCKET_PATH) {
       throw new Error(`control socket path ${socketPath} is too long for a unix socket (over ${MAX_SOCKET_PATH} bytes)`)
     }
+    if (fs.existsSync(socketPath) && await served(socketPath)) throw new Error(`control socket ${socketPath} is already in use by another process`)
     fs.rmSync(socketPath, { force: true })
     server = http.createServer((req, res) => { onRequest(req, res).catch(() => res.destroy()) })
     await new Promise((resolve, reject) => {

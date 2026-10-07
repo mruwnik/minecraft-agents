@@ -88,3 +88,30 @@
           (let [result (await (wt/child-outcome eng job {:chest chest :items ["dirt" "gravel"]} 1))]
             (is (= {"gravel" 7} (wt/inv p)))
             (is (= {:gave-up true :reason "full" :status :stopped :moved 5} result))))))))
+
+(defn timed-out
+  "An override of a primitive that does the work, then answers an act timeout carrying the inventory change."
+  [change]
+  (fn ^:async f [token args impl]
+    (await (impl token args))
+    #js {:status "timeout" :inventoryChange (clj->js change)}))
+
+(deftest deposit-counts-what-moved-before-a-transfer-timed-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (wt/setup {:inventory [{:name "dirt" :count 5}] :containers {"10,64,0" []}})]
+          (.override (.-world p) "transfer" (timed-out {"dirt" -5}))
+          (let [result (await (wt/child-outcome eng job {:chest chest :items ["dirt"]} 12))]
+            (is (= {:gave-up false} result))
+            (is (= {} (wt/inv p)))
+            (is (= 1 (count (wt/calls p "transfer"))))))))))
+
+(deftest deposit-gives-up-on-a-timeout-that-moved-nothing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (wt/setup {:inventory [{:name "dirt" :count 5}] :containers {"10,64,0" []}})]
+          (.override (.-world p) "transfer" (fn ^:async f [_ _ _] #js {:status "timeout"}))
+          (let [result (await (wt/child-outcome eng job {:chest chest :items ["dirt"]} 12))]
+            (is (= true (:gave-up result)))))))))
