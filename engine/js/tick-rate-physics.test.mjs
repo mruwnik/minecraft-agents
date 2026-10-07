@@ -11,14 +11,14 @@ const air = { name: 'air', type: 0, boundingBox: 'empty', shapes: [], stateId: 0
 
 // A real mineflayer bot on a fake packet stream with the shim as its physics plugin and a hand-driven clock:
 // `advance(ms)` moves the clock and the mocked setInterval together.
-async function fakeBot (t) {
+async function fakeBot (t, shimOptions = {}) {
   mock.timers.enable({ apis: ['setInterval'] })
   t.after(() => { mock.timers.reset() })
   const client = new EventEmitter()
   const written = []
   Object.assign(client, { state: 'play', version: '26.1', write: (name, packet) => written.push(name), end () {}, registerChannel () {}, writeChannel () {} })
   let clock = 0
-  const bot = mineflayer.createBot({ client, version: '26.1', username: 'x', plugins: { physics: tickRatePhysics({ now: () => clock }) } })
+  const bot = mineflayer.createBot({ client, version: '26.1', username: 'x', plugins: { physics: tickRatePhysics({ now: () => clock, ...shimOptions }) } })
   await new Promise(resolve => bot.once('inject_allowed', resolve)) // the plugins load on it
   bot.entity = { position: new Vec3(0.5, 64, 0.5), velocity: new Vec3(0, 0, 0), yaw: 0, pitch: 0, onGround: true, effects: {}, height: 1.8, isInWater: false }
   bot.blockAt = () => air
@@ -85,4 +85,13 @@ test('the shim replaces stock physics: one physics plugin, the shim one, runs', 
   assert.equal(typeof bot.physicsClock?.digMs, 'function')
   advance(1000)
   assert.equal(ticks.n, 20, 'a stock plugin loaded as well would tick twice')
+})
+
+test('a patch target that no longer matches falls back to stock physics and reports it once', async t => {
+  const reasons = []
+  const { bot } = await fakeBot(t, { source: 'module.exports = () => {}', onStock: reason => reasons.push(reason) })
+  assert.equal(typeof bot.setControlState, 'function', 'the stock physics plugin is loaded')
+  assert.equal(bot.physicsClock, undefined)
+  assert.equal(reasons.length, 1)
+  assert.match(reasons[0], /patch target not found/)
 })

@@ -2,7 +2,7 @@
 // Physics that follows the server's tick rate. Mineflayer's own plugin ticks every 50 ms for ever; with /tick rate R the
 // server runs R ticks a second, so the body must too (set_ticking_state: rate and frozen; step_tick: run n ticks).
 // Instead of a copy of the 500-line plugin this loads mineflayer's own physics.js, patches the few lines that hold the
-// 50 ms (each patch must match or loading throws, so a mineflayer upgrade fails loudly), and runs it per bot. At 20 TPS
+// 50 ms (each patch must match, else the bot runs stock physics and bot.tickRateStock names why), and runs it per bot. At 20 TPS
 // nothing differs from stock. Pass as `plugins.physics` to createBot (loader.js takes a function as a replacement).
 import fs from 'node:fs'
 import { createRequire } from 'node:module'
@@ -31,28 +31,38 @@ const PATCHES = [
 }`]
 ]
 
-function patchedSource () {
+function patchedSource (stockSource) {
   return PATCHES.reduce((src, [from, to]) => {
     if (!src.includes(from)) throw new Error(`mineflayer physics.js changed: patch target not found: ${from.trim()}`)
     return src.replace(from, to)
-  }, fs.readFileSync(STOCK_PATH, 'utf8'))
+  }, stockSource)
 }
 
 // Stock plugin (patched) as a function of (bot, options); its relative requires resolve against mineflayer, its
 // perf_hooks clock is ours and `hooks` is the object the patches reach into.
-function load (hooks, clock) {
+function load (hooks, clock, source) {
   const stockRequire = createRequire(STOCK_PATH)
   const localRequire = id => id === 'perf_hooks' ? { performance: clock } : stockRequire(id)
   const module = { exports: {} }
-  const wrapper = new Function('exports', 'require', 'module', '__filename', '__dirname', 'hooks', patchedSource() + '\n;return module.exports') // eslint-disable-line no-new-func
+  const wrapper = new Function('exports', 'require', 'module', '__filename', '__dirname', 'hooks', patchedSource(source) + '\n;return module.exports') // eslint-disable-line no-new-func
   return wrapper(module.exports, localRequire, module, STOCK_PATH, path.dirname(STOCK_PATH), hooks)
 }
 
-// The plugin for createBot. `now` is the clock the physics accumulator reads (tests inject one).
-export function tickRatePhysics ({ now = () => performance.now() } = {}) {
+// The plugin for createBot. `now` is the clock the physics accumulator reads, `source` the stock plugin text (tests
+// inject them). A patch that does not match runs stock physics instead: onStock gets the reason, bot.tickRateStock too.
+export function tickRatePhysics ({ now = () => performance.now(), source = fs.readFileSync(STOCK_PATH, 'utf8'), onStock = () => {} } = {}) {
   return (bot, options) => {
     const hooks = { frozen: false }
-    load(hooks, { now })(bot, options)
+    let plugin
+    try {
+      plugin = load(hooks, { now }, source)
+    } catch (err) {
+      bot.tickRateStock = err.message
+      onStock(err.message)
+      require(STOCK_PATH)(bot, options)
+      return
+    }
+    plugin(bot, options)
     let rate = VANILLA_RATE
     const clock = {
       rate: () => rate,

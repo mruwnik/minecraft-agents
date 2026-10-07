@@ -29,7 +29,9 @@
 
 (def settings
   {:engine.main/shutdown-limit-ms {:default 5000 :type :int :min 1
-                                   :doc "The signal handler exits after this long even when the body has not stopped, ms."}})
+                                   :doc "The signal handler exits after this long even when the body has not stopped, ms."}
+   :engine.game/follow-tick-rate {:default true :type :bool
+                                  :doc "Body physics follows the server's /tick rate (freeze, step, faster or slower); off runs stock 20 TPS physics. Read at body start."}})
 
 (defn parse-args [args]
   (loop [[a b & more :as all] args
@@ -66,7 +68,8 @@
 (defn connect-options
   "The connection part of createPrimitives' options; viewDistance only when the config sets it (connect.mjs defaults it)."
   [{:keys [host port username view-distance]}]
-  (cond-> #js {:host host :port port :username username}
+  (cond-> #js {:host host :port port :username username
+               :followTickRate (settings/get settings :engine.game/follow-tick-rate)}
     (some? view-distance) (doto (unchecked-set "viewDistance" view-distance))))
 
 (defn missing-primitives-message [file]

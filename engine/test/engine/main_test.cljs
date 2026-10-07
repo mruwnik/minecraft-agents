@@ -5,6 +5,7 @@
             [engine.events :as events]
             [engine.main :as main]
             [engine.registry :as registry]
+            [engine.settings :as settings]
             [engine.trigger-api :as api]
             [engine.test-util :as tu]
             ["fs" :as fs]
@@ -34,6 +35,11 @@
     (is (= 4 (:view-distance (main/load-agent dir "w" "Bob"))))
     (is (= 4 (.-viewDistance (main/connect-options (main/load-agent dir "w" "Bob")))))
     (is (not (contains? (js->clj (main/connect-options {:host "h" :port 7 :username "Bob"})) "viewDistance")))))
+
+(deftest tick-rate-physics-follows-the-setting-on-by-default
+  (is (true? (.-followTickRate (main/connect-options {:host "h" :port 7 :username "Bob"}))))
+  (with-redefs [settings/state (atom {:values {:engine.game/follow-tick-rate false}})]
+    (is (false? (.-followTickRate (main/connect-options {:host "h" :port 7 :username "Bob"}))))))
 
 (deftest the-world-comes-from-the-flag-not-the-config
   (let [dir (agent-state-dir)]

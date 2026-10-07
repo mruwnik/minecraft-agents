@@ -12,15 +12,16 @@ test('botOptions passes a configured view distance', () => {
 })
 
 test('botOptions keeps the connection settings', () => {
-  assert.deepEqual(botOptions({ host: 'h', port: 1, username: 'u' }), { host: 'h', port: 1, username: 'u', auth: 'offline', version: '26.1', viewDistance: DEFAULTS.viewDistance })
+  assert.deepEqual(botOptions({ host: 'h', port: 1, username: 'u', followTickRate: false }), { host: 'h', port: 1, username: 'u', auth: 'offline', version: '26.1', viewDistance: DEFAULTS.viewDistance })
 })
 
 test('botOptions refuses a version the planner block table is not built for', () => {
   assert.throws(() => botOptions({ host: 'h', port: 1, username: 'u', version: '1.20.4' }), /not supported/)
 })
 
-test('botOptions swaps in tick-rate physics only when asked', () => {
+test('botOptions swaps in tick-rate physics by default and not when turned off', () => {
   const base = { host: 'h', port: 1, username: 'u' }
-  assert.equal(botOptions({ ...base, followTickRate: false }).plugins, undefined)
+  assert.equal(typeof botOptions(base).plugins.physics, 'function')
   assert.equal(typeof botOptions({ ...base, followTickRate: true }).plugins.physics, 'function')
+  assert.equal(botOptions({ ...base, followTickRate: false }).plugins, undefined)
 })

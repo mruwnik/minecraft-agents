@@ -565,6 +565,7 @@ export async function createPrimitives ({ view: viewOpts, ...opts }, { connect =
   if (dropped === null) bot.removeListener('error', guardError)
   if (dropped !== null) throw new Error(`connection dropped while the world loaded: ${JSON.stringify(dropped)}`)
   const pending = loaded ? [] : [{ kind: 'world-not-loaded', ms: worldTimeoutMs }]
+  if (bot.tickRateStock) pending.push({ kind: 'tick-rate.stock', level: 'info', reason: bot.tickRateStock, text: `tick-rate physics shim not applied, stock physics: ${bot.tickRateStock}` })
   const titles = missingPatches(readFile)
   if (titles.length) pending.push({ kind: 'dependency-patches-missing', titles, text: 'run node tools/patch-deps.mjs (an npm install undid them)' })
   const prims = createPrimitivesFromBot(bot, { timeScale, reconnect: () => connect(connectOpts), view, worldTimeoutMs, settleMs, pending })

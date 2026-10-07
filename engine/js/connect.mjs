@@ -16,9 +16,9 @@ const { pathfinder } = pf
 export const DEFAULTS = { version: MC_VERSION, auth: 'offline', viewDistance: 8 }
 export const SPAWN_TIMEOUT_MS = 60000
 
-// The mineflayer createBot options for a body's connection settings. followTickRate (or MC_FOLLOW_TICK_RATE=1 in the
-// environment) swaps in physics that follows /tick rate, see tick-rate-physics.mjs; off by default.
-export function botOptions ({ host, port, username, auth = DEFAULTS.auth, version = DEFAULTS.version, viewDistance = DEFAULTS.viewDistance, followTickRate = process.env.MC_FOLLOW_TICK_RATE === '1' }) {
+// The mineflayer createBot options for a body's connection settings. followTickRate (default on) swaps in
+// physics that follows /tick rate, see tick-rate-physics.mjs.
+export function botOptions ({ host, port, username, auth = DEFAULTS.auth, version = DEFAULTS.version, viewDistance = DEFAULTS.viewDistance, followTickRate = true }) {
   if (version !== MC_VERSION) throw new Error(`minecraft version ${version} is not supported: the planner block table is built for ${MC_VERSION}`)
   const options = { host, port, username, auth, version, viewDistance }
   return followTickRate ? { ...options, plugins: { physics: tickRatePhysics() } } : options
