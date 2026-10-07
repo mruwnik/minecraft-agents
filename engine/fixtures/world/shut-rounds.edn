@@ -28,6 +28,9 @@
            [:block [10 0 16] "oak_fence_gate[open=true]"]]}
   {:name "standing-in-gate-kept-then-shut-later"
    ;; card 268296ab: the run leaves the gate the body stands in (entry kept); stepped off, the reflex shuts it
+   ;; only this gate: with a second one the run walks to it, and the 3 east tp would land the body in its shut cell
+   :blocks [[:set [16 0 16] "oak_fence"]]
+   :memory [{:kind :opened :data {:cell #xyz [10 0 16] :by "j0" :shut? true}}]
    :body {:at [10.5 0 16.5]}
    :act [[:job (jobs.maintenance.shut-doors)] [:await {:source :job :kind :shut-doors.stopped} 20]
          [:rcon "execute at $BODY run tp $BODY ~3 ~ ~"]]

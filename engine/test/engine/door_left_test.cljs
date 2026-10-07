@@ -4,6 +4,7 @@
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
             [engine.events :as events]
+            [engine.fake :as fake]
             [engine.memory :as mem]
             [jobs.lib.near :as near]
             [jobs.lib.pass :as pass]
@@ -244,3 +245,17 @@
           (is (empty? (filter #(and (= :warn (:level %)) (= :job (:source %)) (not= :stopped (:kind %))) @seen)) "the job adds no warn of its own for an interrupted walk")
           (is (= [@(:clock s)] (mapv :t (mem/entries (mem/view (:store eng)) :opened)))
               "the entry is stamped afresh, so the trigger waits open-s again"))))))
+
+(deftest a-gate-left-while-standing-in-is-shut-by-the-reflex-once-the-body-steps-off
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p] :as s} (setup (gate-world true 5 0))]
+          (core/register-reflex! eng {:trigger :door-left})
+          (remember-opened! s)
+          (core/submit! eng '(jobs.maintenance.shut-doors) {})
+          (await (tick-until s #(empty? (:list (core/state eng))) 3))
+          (is (open? p gate-cell))
+          (swap! (fake/state p) assoc-in [:self :pos] [8.5 64 0.5])
+          (await (tick-until s #(not (open? p gate-cell)) 60))
+          (is (not (open? p gate-cell)) "shut by the reflex after the body stepped off"))))))
