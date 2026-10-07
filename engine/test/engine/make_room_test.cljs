@@ -611,7 +611,7 @@
           (is (empty? (calls p "collect")) "nothing picked up again")
           (is (empty? (spots)) "the walk away was made, the spot is forgotten"))))))
 
-(deftest a-walk-away-that-yields-keeps-the-spot-and-yields-too
+(deftest a-walk-away-that-yields-is-waited-out-and-make-room-never-yields
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -625,9 +625,9 @@
                                           'returns-parent (returns-parent (atom nil) returns {} nil)))]
           (core/submit! eng '(returns-parent) {})
           (await (tick-out! eng 30))
-          (is (= [:continue :done] @returns) "the yield of the walk is the yield of make-room")
+          (is (= [:done] @returns) "a reflex never yields: the walk is waited out inside the call")
           (is (= 2 @walks))
-          (is (empty? (spots)) "the spot is forgotten only once the walk is done"))))))
+          (is (empty? (spots)) "the spot is forgotten once the walk is done"))))))
 
 (deftest a-refused-chest-and-nothing-to-toss-is-nothing-to-go
   (async done

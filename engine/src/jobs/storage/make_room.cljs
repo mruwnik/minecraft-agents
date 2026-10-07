@@ -8,6 +8,7 @@
             [engine.memory :as mem]
             [jobs.lib.worth :as value]
             [jobs.lib.pace :as pace]
+            [jobs.lib.child :as child]
             [jobs.lib.result :as res]
             [jobs.storage.deposit :as deposit]
             [jobs.survival.dig-in :as dig-in]
@@ -16,7 +17,7 @@
 (def doc
   "Make room in a nearly full inventory (the inventory-nearly-full reflex) until :free slots are free. One round is
   the whole attempt: it re-reads the inventory before every step and puts away, swaps or tosses until enough is free
-  or nothing more may go. It yields (:continue) only while its walk away yields.
+  or nothing more may go. It never yields: the walk away is waited out inside the round.
   What is thrown, like a player: plain junk blocks first (junk-blocks: cobblestone, cobbled deepslate, granite,
   tuff, dirt, gravel...), whole big stacks before partial, then the rest by worth; ores, fuel and the like
   only after the junk. Never put away or thrown: tools, weapons, armour and buckets. Food is never thrown and is put away only above
@@ -287,15 +288,14 @@
 
 (defn ^:async walk-away!
   "Walk :away blocks back from spot, where the items were thrown (a go-to child), so they are not picked up again. Best
-  effort: a walk that does not arrive is not retried. A walk that yields (:continue) keeps the spot; returns the child's
-  result."
+  effort: a walk that does not arrive is not retried. The walk is run to its end (child/run!); the spot is forgotten
+  whatever the result."
   [c {:keys [at dir]}]
   (let [away (:away (:args c))
         [dx dz] dir
         goal {:x (- (:x at) (* away dx)) :y (:y at) :z (- (:z at) (* away dz))}]
-    (let [r (await (ctx/call-child c :away 'jobs.movement.go-to {:pos goal :range 1 :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
-      (when (not= :continue r)
-        (ctx/forget-where! c :make-room-tossed (constantly true)))
+    (let [r (await (child/run! c :away 'jobs.movement.go-to {:pos goal :range 1 :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+      (ctx/forget-where! c :make-room-tossed (constantly true))
       r)))
 
 (defn ^:async put-away!
@@ -375,10 +375,8 @@
   (let [spot (tossed-spot c)
         near? (and spot (near-spot? c spot))
         _ (when (and spot (not near?)) (ctx/forget-where! c :make-room-tossed (constantly true)))
-        walked (when near? (await (walk-away! c spot)))]
-    (if (= :continue walked)
-      :continue
-      (await (finish-end! c reason)))))
+        _ (when near? (await (walk-away! c spot)))]
+    (await (finish-end! c reason))))
 
 (defn ^:async step!
   "One unit of work on a fresh look at the inventory: a deposit child call, a swap or a toss (:again), or the end
