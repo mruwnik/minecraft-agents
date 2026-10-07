@@ -345,3 +345,47 @@
 (deftest substitute-fills-the-plot-box
   (is (= "kill @e[type=zombie,x=20000,y=149,z=20000,dx=31,dy=7,dz=31]"
          (f/substitute "kill @e[type=zombie,$BOX]" "B" [20000 150 20000] (f/box-selector f/default-grid [20000 150 20000] 6)))))
+
+;; ------------------------------------------------------------------ :zones and :places
+
+(def zones-text "[{:name \"hut\" :min [1 2 3] :max [4 5 6] :owner \"Ann\"}\n {:name \"pen\" :min [7 8 9] :max [9 9 9] :owner \"Bob\" :allow #{:dig}}]\n")
+
+(deftest shared-entries-are-tagged-with-the-body
+  (is (= "wt-probefixture" (f/shared-tag "ProbeFixture")))
+  (is (= [{:name "wt-probefixture-box" :min [20001 150 20002] :max [20003 152 20004] :owner "Other" :allow #{:dig}}
+          {:name "wt-probefixture-b2" :min [1 2 3] :max [4 5 6] :owner "Zed"}]
+         (f/zone-entries "ProbeFixture"
+                         [{:name "box" :min [20001 150 20002] :max [20003 152 20004] :allow #{:dig}}
+                          {:name "b2" :min [1 2 3] :max [4 5 6] :owner "Zed"}])))
+  (is (= [{:name "home" :kind "base" :x 20001 :y 150 :z 20002 :by "wt-probefixture" :note "n"}
+          {:name "mine" :kind "place" :x 1 :y 2 :z 3 :by "wt-probefixture"}]
+         (f/marker-entries "ProbeFixture"
+                           [{:name "home" :kind "base" :pos [20001 150 20002] :note "n"}
+                            {:name "mine" :pos [1 2 3]}]))))
+
+(deftest zones-text-gains-and-loses-the-case-zones-and-keeps-the-rest
+  (let [mine (f/zone-entries "B" [{:name "box" :min [1 1 1] :max [2 2 2]}])
+        with (f/zones-with zones-text mine)]
+    (is (= ["hut" "pen" "wt-b-box"] (map :name (cljs.reader/read-string with))))
+    (is (= zones-text (f/zones-without with "wt-b")))
+    (is (= zones-text (f/zones-without zones-text "wt-b")))
+    (is (= ["wt-b-box"] (map :name (cljs.reader/read-string (f/zones-with "[]" mine)))))
+    (is (= ["wt-b-box"] (map :name (cljs.reader/read-string (f/zones-with "" mine)))))
+    (is (= ["hut"] (map :name (cljs.reader/read-string (f/zones-without (f/zones-with "[{:name \"hut\" :min [1 2 3] :max [4 5 6] :owner \"Ann\"}]" mine) "wt-b")))))
+    (is (thrown? js/Error (f/zones-with "[{:name" mine)))))
+
+(deftest markers-text-gains-and-loses-the-case-markers-and-keeps-the-rest
+  (let [text "[\n {\n  \"name\": \"hut\",\n  \"kind\": \"base\",\n  \"x\": 1,\n  \"y\": 2,\n  \"z\": 3,\n  \"by\": \"Ann\"\n }\n]\n"
+        mine (f/marker-entries "B" [{:name "home" :pos [5 6 7]}])
+        with (f/markers-with text mine)]
+    (is (= ["hut" "home"] (map #(aget % "name") (js/JSON.parse with))))
+    (is (= text (f/markers-without with "wt-b")))
+    (is (= ["home"] (map #(aget % "name") (js/JSON.parse (f/markers-with "" mine)))))
+    (is (= "" (f/markers-without "" "wt-b")))))
+
+(deftest zones-and-places-problems
+  (let [ps (fn [c] (f/problems (merge {:name "x" :time :day :plot {:height 16} :body {:at [0 0 0]} :expect [{:event {} :within-s 1}]} c)))]
+    (is (empty? (ps {:zones [{:name "z" :min [0 0 0] :max [1 1 1]}] :places [{:name "p" :pos [0 0 0]}]})))
+    (is (some #(re-find #":zones" %) (ps {:zones [{:name "z" :min [0 0] :max [1 1 1]}]})))
+    (is (some #(re-find #":places" %) (ps {:places [{:pos [0 0 0]}]})))
+    (is (some #(re-find #":places" %) (ps {:places [{:name "p" :pos [0 0]}]})))))

@@ -632,6 +632,66 @@
              (fs/writeFileSync file (f/plan-file-text (f/resolve-body-refs plan (:body opts)) (plan-prefix opts)))
              file))))
 
+(defn world-file [opts name] (repo-path "worlds" (:world opts) name))
+
+(def shared-lock (path/join (os/tmpdir) "world-test-shared-files.lock"))
+(def shared-settle-ms 3200)
+
+(defn with-shared-lock!
+  "Runs thunk (-> promise) while holding the lock that serialises the runners' edits of zones.edn and places.json (a
+  directory made exclusively; one held over 30 s is taken over)."
+  [thunk]
+  (let [until (+ (js/Date.now) 15000)]
+    (letfn [(try-lock []
+              (if (try (fs/mkdirSync shared-lock) true
+                       (catch :default _
+                         (when (try (> (- (js/Date.now) (.-mtimeMs (fs/statSync shared-lock))) 30000) (catch :default _ false))
+                           (try (fs/rmdirSync shared-lock) (catch :default _ nil)))
+                         false))
+                (-> (js/Promise.resolve (thunk))
+                    (.finally #(try (fs/rmdirSync shared-lock) (catch :default _ nil))))
+                (if (> (js/Date.now) until)
+                  (js/Promise.reject (js/Error. "the shared zones/places lock stayed busy for 15 s"))
+                  (.then (sleep 100) try-lock))))]
+      (try-lock))))
+
+(defn edit-shared-file!
+  "Rewrites file with (f text) atomically (tmp file, rename); a missing file reads as empty text."
+  [file f]
+  (let [text (if (fs/existsSync file) (fs/readFileSync file "utf8") "")
+        out (f text)]
+    (when (not= out text)
+      (fs/writeFileSync (str file ".wt-tmp") out)
+      (fs/renameSync (str file ".wt-tmp") file))))
+
+(defn drop-shared!
+  "Removes the body's tagged zones and markers (the case's, or an earlier run's leftovers)."
+  [opts]
+  (let [tag (f/shared-tag (:body opts))]
+    (with-shared-lock!
+      (fn []
+        (edit-shared-file! (world-file opts "zones.edn") #(f/zones-without % tag))
+        (when (fs/existsSync (world-file opts "places.json"))
+          (edit-shared-file! (world-file opts "places.json") #(f/markers-without % tag)))))))
+
+(defn abs-entries [origin entries ks]
+  (mapv (fn [e] (reduce #(update %1 %2 (partial f/abs-pos origin)) e (filter #(contains? e %) ks))) entries))
+
+(defn seed-shared!
+  "Adds the case's :zones and :places (plot-relative in c, resolved against origin) to the world's zones.edn and
+  places.json, tagged with the body; resolves after the body's world cache is due for a re-read. Nothing to do when the
+  case has neither."
+  [opts origin c]
+  (if (and (empty? (:zones c)) (empty? (:places c)))
+    (js/Promise.resolve nil)
+    (let [zones (f/zone-entries (:body opts) (abs-entries origin (:zones c) [:min :max]))
+          markers (f/marker-entries (:body opts) (abs-entries origin (:places c) [:pos]))]
+      (-> (with-shared-lock!
+            (fn []
+              (when (seq zones) (edit-shared-file! (world-file opts "zones.edn") #(f/zones-with % zones)))
+              (when (seq markers) (edit-shared-file! (world-file opts "places.json") #(f/markers-with % markers)))))
+          (.then #(sleep (:shared-settle-ms opts shared-settle-ms)))))))
+
 (defn submit-job!
   "Submits spec with tools/jobs.mjs; resolves to the job id or throws with the tool's answer."
   [opts spec flags]
@@ -865,6 +925,7 @@
                        (.then (fn [] (ev/emit! (ev/phase :setup)) (build-plot! {:send rcon! :sleep sleep} grid origin rc)))
                        (.then (fn [why] (when why (throw (js/Error. why)))))
                        (.then #(reset! plan-files (write-plans! opts rc)))
+                       (.then #(seed-shared! opts origin c))
                        (.then #(rcon! (f/body-commands origin (:body opts) rc)))
                        (.then #(ensure-at-start! {:send rcon! :sleep sleep} origin (:body opts) rc))
                        (.then (fn [why] (when why (throw (js/Error. why)))))
@@ -898,6 +959,7 @@
         (.then (fn [r]
                  (-> (exec-file ["engine/tools/jobs.mjs" (:body opts) "--world" (:world opts) "cancel-all"])
                      (.then #(rcon! (f/cleanup-commands grid origin (:body opts) rc)))
+                     (.then (fn [_] (when (or (seq (:zones c)) (seq (:places c))) (drop-shared! opts))))
                      (.then (fn [_] (run! #(when (fs/existsSync %) (fs/unlinkSync %)) @plan-files) r))
                      (.catch (fn [_] (run! #(when (fs/existsSync %) (fs/unlinkSync %)) @plan-files) r)))))
         (.finally (fn [] (stop-monitor) (release-time-lock!))))))
@@ -1104,6 +1166,7 @@
                               (do (log! refusal) 2)
                               (-> (ensure-body! opts)
                                   (.then #(lease-body! opts))
+                                  (.then #(drop-shared! opts))
                                   (.then #(run-all! opts cases))
                                   (.then (fn [results]
                                            (reset! final-results results)

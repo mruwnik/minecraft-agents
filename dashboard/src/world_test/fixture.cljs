@@ -66,6 +66,8 @@
    :plot {:height 16 :floor "stone"}
    :blocks []
    :memory []
+   :zones []
+   :places []
    :plans []
    :body {:at [16.5 0 16.5] :inventory [] :effects [] :settle-s 1}
    :act []
@@ -75,7 +77,7 @@
 
 (def concatenated
   "Keys a case adds to its file's :defaults instead of replacing them."
-  #{:blocks :memory :act :expect :after :plans})
+  #{:blocks :memory :zones :places :act :expect :after :plans})
 
 (defn merge-case
   "A case over its file's defaults: :body and :plot merge key by key, the concatenated keys append, the rest replace."
@@ -113,6 +115,67 @@
           {:entries {} :policies {}}
           entries))
 
+;; The body reads worlds/<world>/zones.edn and places.json, which every shard shares: a case's :zones and :places are
+;; merged in tagged with the body (plot coordinates never overlap between shards) and removed again by that tag.
+
+(defn shared-tag [body] (str "wt-" (str/lower-case body)))
+
+(defn zone-entries
+  "A case's :zones (positions absolute) as zone-file entries named <tag>-<name>; :owner defaults to \"Other\"."
+  [body zones]
+  (mapv #(-> (assoc % :name (str (shared-tag body) "-" (:name %)))
+             (update :owner (fnil identity "Other")))
+        zones))
+
+(defn marker-entries
+  "A case's :places ({:name :kind :pos [x y z] :note}, positions absolute) as places.json markers by the body's tag."
+  [body places]
+  (mapv (fn [{:keys [name kind pos note]}]
+          (let [[x y z] pos]
+            (cond-> {:name name :kind (or kind "place") :x x :y y :z z :by (shared-tag body)}
+              note (assoc :note note))))
+        places))
+
+(defn zone-str [zone]
+  (str "{" (str/join " " (map (fn [[k v]] (str (pr-str k) " " (pr-str v))) zone)) "}"))
+
+(defn zones-text [zones]
+  (str "[" (str/join "\n " (map zone-str zones)) "]\n"))
+
+(defn read-zones [text]
+  (if (str/blank? text) [] (reader/read-string text)))
+
+(defn zones-with
+  "The zone file text with entries appended; throws when the text is not a zone vector."
+  [text entries]
+  (zones-text (into (read-zones text) entries)))
+
+(defn zones-without
+  "The zone file text without the zones named <tag>-...; text without such zones comes back unchanged."
+  [text tag]
+  (let [zones (read-zones text)
+        kept (vec (remove #(str/starts-with? (:name %) (str tag "-")) zones))]
+    (if (= (count kept) (count zones)) text (zones-text kept))))
+
+(defn read-markers [text]
+  (if (str/blank? text) #js [] (js/JSON.parse text)))
+
+(defn markers-text [arr] (str (js/JSON.stringify arr nil 1) "\n"))
+
+(defn markers-with
+  "The places.json text with markers appended."
+  [text markers]
+  (let [arr (read-markers text)]
+    (run! #(.push arr (clj->js %)) markers)
+    (markers-text arr)))
+
+(defn markers-without
+  "The places.json text without the markers by tag."
+  [text tag]
+  (let [arr (read-markers text)
+        kept (.filter arr (fn [m] (not= tag (.-by m))))]
+    (if (= (.-length kept) (.-length arr)) text (markers-text kept))))
+
 (def step-kinds #{:summon :rcon :rcon-until :job :wait-s :await :kill-body :time-set})
 (def after-kinds #{:block :not-block :body-near :body-far :item :entities})
 
@@ -127,6 +190,8 @@
        (remove #(re-find #"(?:if|unless) entity @e" (str %)))
        (filter #(some (fn [[_ sel]] (not (or (str/includes? (or sel "") "dx=") (str/includes? (or sel "") "$BOX"))))
                       (re-seq #"@e(?:\[([^\]]*)\])?" (str %))))))
+
+(defn coords? [v] (and (vector? v) (= 3 (count v)) (every? number? v)))
 
 (defn problems
   "Why a merged case cannot run, as a vector of strings (empty when it can)."
@@ -143,6 +208,8 @@
       (not (and (int? h) (< 1 h 32))) (conj ":plot :height must be an integer 2..31")
       (not (every? #(and (keyword? (:kind %)) (map? (:data %))) (:memory c))) (conj ":memory entries need a keyword :kind and a map :data")
       (and (seq (:memory c)) (:keep-memory c)) (conj ":memory cannot be combined with :keep-memory")
+      (not (every? #(and (string? (:name %)) (not (str/blank? (:name %))) (coords? (:min %)) (coords? (:max %))) (:zones c))) (conj ":zones entries need a :name and :min / :max [x y z]")
+      (not (every? #(and (string? (:name %)) (not (str/blank? (:name %))) (coords? (:pos %))) (:places c))) (conj ":places entries need a :name and :pos [x y z]")
       (not (vector? (get-in c [:body :at]))) (conj ":body :at must be [x y z]")
       (some #(not (step-kinds (first %))) (:act c)) (conj (str ":act steps must be one of " (sort step-kinds)))
       (seq (unbounded-selectors c)) (conj "an @e selector must be bounded to the plot: use $BOX (x,y,z,dx,dy,dz), not distance")

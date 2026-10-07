@@ -521,3 +521,38 @@
 (deftest changed-since-pass-is-an-option
   (is (true? (:changed-since-pass (r/parse-args #js ["--changed-since-pass"]))))
   (is (nil? (:changed-since-pass (r/parse-args #js [])))))
+
+(deftest a-case-seeds-its-zones-and-places-and-drops-only-its-own
+  (let [repo (fs/mkdtempSync (path/join (os/tmpdir) "wt-shared-"))
+        old (.. js/process -env -WORLD_TEST_REPO)
+        world (path/join repo "worlds" "w")
+        zones (path/join world "zones.edn")
+        places (path/join world "places.json")
+        opts {:body "ProbeX" :world "w" :shared-settle-ms 0}
+        c {:zones [{:name "box" :min [1 0 1] :max [2 3 2] :owner "Ann" :allow #{:dig}}]
+           :places [{:name "home" :pos [4 0 5] :note "n"}]}
+        names #(map :name (cljs.reader/read-string (fs/readFileSync zones "utf8")))
+        markers #(map (fn [m] (.-name m)) (js/JSON.parse (fs/readFileSync places "utf8")))]
+    (set! (.. js/process -env -WORLD_TEST_REPO) repo)
+    (fs/mkdirSync world #js {:recursive true})
+    (fs/writeFileSync zones "[{:name \"keep\" :min [0 0 0] :max [1 1 1] :owner \"Z\"}\n {:name \"wt-other-box\" :min [0 0 0] :max [1 1 1] :owner \"Z\"}]\n")
+    (fs/writeFileSync places "[\n {\n  \"name\": \"mine\",\n  \"x\": 1,\n  \"y\": 2,\n  \"z\": 3\n }\n]\n")
+    (async done
+      (-> (r/seed-shared! opts [20000 150 20000] c)
+          (.then (fn []
+                   (is (= ["keep" "wt-other-box" "wt-probex-box"] (names)))
+                   (is (= {:min [20001 150 20001] :max [20002 153 20002] :owner "Ann"}
+                          (select-keys (last (cljs.reader/read-string (fs/readFileSync zones "utf8"))) [:min :max :owner])))
+                   (is (= ["mine" "home"] (markers)))
+                   (let [m (aget (js/JSON.parse (fs/readFileSync places "utf8")) 1)]
+                     (is (= [20004 150 20005 "wt-probex"] [(.-x m) (.-y m) (.-z m) (.-by m)])))
+                   (r/drop-shared! opts)))
+          (.then (fn []
+                   (is (= ["keep" "wt-other-box"] (names)))
+                   (is (= ["mine"] (markers)))
+                   (is (not (fs/existsSync r/shared-lock)))))
+          (.catch (fn [e] (is false (.-message e))))
+          (.finally (fn []
+                      (if old (set! (.. js/process -env -WORLD_TEST_REPO) old) (js-delete (.-env js/process) "WORLD_TEST_REPO"))
+                      (fs/rmSync repo #js {:recursive true :force true})
+                      (done)))))))
