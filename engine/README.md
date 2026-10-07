@@ -655,7 +655,7 @@ the fastest), `jobs.lib.tools/needs-tool-to-clear?` (what stair, tunnel cleanup 
 ## Path planner
 
 `src/engine/path/planner_tuned.cljs` is the only planner (the `Search` fields and its methods by part in `src/engine/path/planner/`): an A* over a snapshot of section state ids (walking, jumps, drops,
-gap jumps, climbing, water, doors), with costs in seconds plus risk. Its inputs: `engine.path.blocks` (the block state table, typed arrays by state id), `engine.path.space` (free body positions in a cell; `jobs.lib.walk.world/path-world` adds both to the primitives' snapshot); the snapshot stays `js/path/snapshot.mjs`. Tests are `test/engine/planner_*_test.cljs`;
+gap jumps, climbing, water, doors), with costs in seconds plus risk. Its inputs: `engine.path.blocks` (the block state table, typed arrays by state id), `engine.path.space` (free body positions in a cell; both load `js/offsets.mjs` from the engine root, `engine.path.offsets`; `jobs.lib.walk.world/path-world` adds both to the primitives' snapshot); the snapshot stays `js/path/snapshot.mjs`. Tests are `test/engine/planner_*_test.cljs`;
 the recorded pins (`planner_{bench,options,goals,courses}_golden.cljs`, `js/path/bench.golden.mjs`) are opt-in: `tools/test-engine --golden` or `npm run test:golden`, run when planner code changes (`tools/test-engine <ns>` of a -golden namespace exits 2: it is not in the :test bundle). `planner_bench_golden.cljs` replays recorded queries against `test/planner-bench.json` (the frozen-world queries need
 `PLANNER_BENCH_DIR` (skipped with a warning where there is no world); after an intended planner change run
 `npm run record:planner-bench`). Benchmarks are under `bench-lang/` (compile `planner-bench`, `goto-bench`, `search-bench`).

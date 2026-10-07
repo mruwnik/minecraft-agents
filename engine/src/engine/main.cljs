@@ -6,6 +6,7 @@
             [engine.fsutil :as fsu]
             [engine.event-api :as event-api]
             [engine.notes :as notes]
+            [engine.path.offsets :as offsets]
             [engine.perception :as perception]
             [engine.registry :as registry]
             [jobs.survival.recover-drops :as recover-drops]
@@ -158,6 +159,7 @@
   Resolves to {:engine eng :stop f}."
   [{:keys [fresh? upgrade?] :as opts} {:keys [root cfg plan stale state-dir events-max-bytes]} release]
   (let [engine-file (path/join (:engine-dir cfg) "engine.edn")
+        _ (offsets/set-root! root)
         _ (when (and fresh? (fs/existsSync engine-file)) (fs/unlinkSync engine-file))
         restoring? (fs/existsSync engine-file)
         create-primitives (.-createPrimitives ((createRequire (str root "/")) "./js/primitives.mjs"))

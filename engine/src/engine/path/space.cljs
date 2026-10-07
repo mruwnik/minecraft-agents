@@ -2,12 +2,10 @@
   "Free space for the body centre inside a cell: which of the 17x17 sub-positions (1/16 apart) let the 0.62-wide body
   stand clear of every collision box nearby. Boxes are world-coordinate, 6 floats each: x0 y0 z0 x1 y1 z1. `space` is the
   JS object the planner takes as options.space (boxesNear, freeMask, labelRegions)."
-  (:require ["module" :refer [createRequire]]))
+  (:require [engine.path.offsets :as offsets]
+            [engine.path.planner.base :as base]))
 
-;; the shared vanilla offset hash stays JS (the per-tick physics wrapper uses it too)
-(def ^:private offsets (delay ((createRequire (str (js/process.cwd) "/")) "./js/offsets.mjs")))
-
-(def ^:const UNLOADED 0xFFFF)
+(def ^:const UNLOADED base/UNLOADED)
 (def ^:const HALF-WIDTH 0.31)
 (def ^:const GRID 17)
 ;; the server refuses a move that leaves the body's box exactly touching a face, so touching counts as overlap
@@ -40,7 +38,7 @@
         box-count ^js (.-boxCount ^js table)
         boxes ^js (.-boxes ^js table)
         offset-max ^js (.-offsetMax ^js table)
-        block-offset (.-blockOffset ^js @offsets)
+        block-offset (.-blockOffset ^js (offsets/offsets))
         h #js {:out SCRATCH :n 0}]
     (loop [cy (dec y) cz (dec z) cx (dec x)]
       (cond

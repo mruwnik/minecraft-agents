@@ -1,4 +1,4 @@
-// Tiny air-and-stone worlds for the bench pins (the planner tests use engine.path.fixture in cljs; no fence/wall joins here). Why JavaScript: it feeds the JS space/blocks tests.
+// Tiny air-and-stone worlds for the bench pins (the planner tests use engine.path.fixture in cljs; no fence/wall joins here). Why JavaScript: it feeds the golden bench pins (bench.golden.mjs).
 import prismarineRegistry from 'prismarine-registry'
 import prismarineBlock from 'prismarine-block'
 import { createSnapshot } from './snapshot.mjs'

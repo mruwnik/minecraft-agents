@@ -2,12 +2,9 @@
   "What the planner needs to know about a block state, as flat typed arrays indexed by state id (a JS object whose fields the
   search reads in its inner loop with no allocation): built once from prismarine-registry by interop. Heights are in 1/16 block
   above the cell's floor."
-  (:require ["module" :refer [createRequire]]
-            ["prismarine-block" :as prismarine-block]
-            ["prismarine-registry" :as prismarine-registry]))
-
-;; the shared vanilla offset hash stays JS (the per-tick physics wrapper uses it too)
-(def ^:private offsets (delay ((createRequire (str (js/process.cwd) "/")) "./js/offsets.mjs")))
+  (:require ["prismarine-block" :as prismarine-block]
+            ["prismarine-registry" :as prismarine-registry]
+            [engine.path.offsets :as offsets]))
 
 (def ^:const OPEN 0) ;; no collision, not fluid, not hazard
 (def ^:const SOLID 1) ;; has collision
@@ -141,7 +138,7 @@
   dripleaf, farmland, boxStart, boxCount, boxes, offsetMax, partial), as a JS object."
   [registry]
   (let [Block (prismarine-block registry)
-        offset-max (.-OFFSET_MAX ^js @offsets)
+        offset-max (.-OFFSET_MAX ^js (offsets/offsets))
         blocks (.-blocksArray ^js registry)
         size (inc (reduce (fn [m b] (max m (.-maxStateId ^js b))) 0 blocks))
         top (js/Uint8Array. size)
