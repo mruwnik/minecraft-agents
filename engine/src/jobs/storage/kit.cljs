@@ -6,7 +6,7 @@
             [jobs.lib.cost.food :as food]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.util :as u]
-            [jobs.lib.near :as near]
+            [jobs.lib.pace :as pace]
             [jobs.items.craft]
             [jobs.storage.deposit :as deposit]
             [jobs.storage.withdraw]
@@ -18,13 +18,13 @@
   A name is of a tool kind when it equals it or ends in _kind. Any tier counts, the best tier and best food are
   taken first. Food is
   any name in the eat table.
-  Each round works out the needs from the inventory and the plan from the inspected chest, and hands the plan to
+  One call is the whole kit: it yields :continue only while a child waits on the world. Each step works out the needs from the inventory and the plan from the inspected chest, and hands the plan to
   jobs.storage.withdraw as carry-at-least targets.
   Ends with {:gave-up false :short {kind n}}. :short is empty when the kit is complete, else what the chest could
   not supply, keyed by the kind string or :food. After failed attempts it ends {:gave-up true :reason r :short
   {...}}, with r \"unreachable\", the inspect status or the withdraw's reason. A chest that refuses (zone or
   claim) ends at once with :reason :refused.
-  With :craft (the default) a short does not end the job. It enters a craft phase. Each craft round makes
+  With :craft (the default) a short does not end the job. It enters a craft phase. Each craft step makes
   exactly one child call:
   - For a short tool kind K, the tiers of :craft-tiers are tried in order for tier_K (jobs.items.craft).
   - When the craft comes back short of a material, the chest is asked for it (jobs.storage.withdraw). Failing
@@ -135,8 +135,10 @@
   "u/fail!, and when it gives up hand the parent the reason and what is short."
   [c reason short]
   (let [r (u/fail! c :kit.gave-up (str "kit gave up: " reason))]
-    (when (= :done r) (ctx/result! c {:gave-up true :reason reason :short short}))
-    r))
+    (if (= :done r)
+      (do (ctx/result! c {:gave-up true :reason reason :short short})
+          :done)
+      :again)))
 
 (defn refused!
   "End at once with the withdraw child's refusal res ({:reason :refused :zones :claims}) and what is short: another's
@@ -300,23 +302,32 @@
     (ctx/result! c (cond-> {:gave-up false :short short} missing (assoc :missing missing)))
     :done))
 
+(defn ^:async reach-chest!
+  "Walk to within 3 of the chest (a go-to child) unless already there: nil when there, :continue while go-to waits,
+  else the give-up for an unreachable chest."
+  [c chest still]
+  (if (u/within? (u/self-pos c) chest 3)
+    nil
+    (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos chest :range 3 :escalate false :warn false :retry false}))]
+      (cond
+        (= :continue r) :continue
+        (:arrived (ctx/child-result c :walk)) nil
+        :else (give-up! c "unreachable" (into {} still))))))
+
 (defn ^:async load-chest!
   "The inspected chest stacks, from memory or by walking near and inspecting
   (stored in memory); a keyword (:continue, or the give-up's) when that failed."
   [c chest still]
   (if-let [stacks (:chest-items (ctx/mem c))]
     stacks
-    (let [w (await (near/walk-near! c chest 3))]
-      (case w
-        :partial :continue
-        :blocked (give-up! c "unreachable" (into {} still))
+    (or (await (reach-chest! c chest still))
         (let [seen (await (ctx/act c :inspectContainer (clj->js {:pos chest})))]
           (if (not= "ok" (.-status seen))
             (give-up! c (.-status seen) (into {} still))
             (let [stacks (stacks-of (.-items seen))]
               (fetch/note-stock! c chest stacks)
               (ctx/update-mem! c assoc :chest-items stacks)
-              stacks)))))))
+              stacks))))))
 
 (defn ^:async craft-round
   "One bounded craft-phase round: one child call, then fold its result into memory."
@@ -338,18 +349,18 @@
               (let [r (await (ctx/call-child c (:slot call) (:job call) (:args call)))
                     res (when (= :done r) (ctx/child-result c (:slot call)))]
                 (if-not (= :done r)
-                  (if (= :continue r) :continue (u/fail! c :kit.gave-up "kit craft child declined"))
+                  (if (= :continue r) :continue (give-up! c "craft child declined" (into {} need)))
                   (let [{:keys [mem end fail]} (absorb mem call res stacks inv)]
                     (ctx/update-mem! c merge (select-keys mem craft-keys))
                     (cond
                       (= :refused fail) (refused! c res (into {} need))
                       fail (give-up! c fail (into {} need))
                       end (finish-craft! c need end)
-                      :else (do (u/progress! c) :continue))))))))))))
+                      :else (do (u/progress! c) :again))))))))))))
 
-(defn ^:async round
-  "One bounded step; see doc. Early returns: nothing needed, walk, inspect,
-  nothing takeable, then one withdraw round."
+(defn ^:async step!
+  "One piece; see doc. Early returns: nothing needed, walk, inspect, nothing takeable, then one withdraw call.
+  :again, :continue (a child waits) or :done."
   [c]
   (let [a (:args c)
         chest (deposit/chest-of (ctx/view c) a)
@@ -358,10 +369,7 @@
       (= :craft (:phase (ctx/mem c))) (await (craft-round c))
       (empty? still) (finish! c {})
       :else
-      (let [w (await (near/walk-near! c chest 3))]
-        (case w
-          :partial :continue
-          :blocked (give-up! c "unreachable" (into {} still))
+      (or (await (reach-chest! c chest still))
           (let [seen (await (ctx/act c :inspectContainer (clj->js {:pos chest})))]
             (if (not= "ok" (.-status seen))
               (give-up! c (.-status seen) (into {} still))
@@ -374,7 +382,7 @@
                   (finish-uncrafted! c short)
                   (and (empty? take) (:craft a))
                   (do (ctx/update-mem! c assoc :phase :craft :chest-items (stacks-of (.-items seen)))
-                      :continue)
+                      :again)
                   (empty? take) (do (ctx/emit! c :kit.short :info {:short short :text (str "chest lacks " (pr-str short))})
                                     (finish! c short))
                   :else
@@ -382,7 +390,14 @@
                                                  (merge (select-keys a [:ignore-zones?]) {:chest chest :items take})))
                         res (when (= :done r) (ctx/child-result c :take))]
                     (cond
+                      (= :continue r) :continue
+                      (= :declined r) (give-up! c "withdraw declined" (merge (into {} (needs inv a stacks)) short))
                       (= :refused (:reason res)) (refused! c res (merge (into {} (needs inv a stacks)) short))
                       (:gave-up res) (do (ctx/result! c {:gave-up true :reason (:reason res) :short (merge (into {} (needs inv a stacks)) short)})
                                          :done)
-                      :else (do (when (= :done r) (u/progress! c)) :continue))))))))))))
+                      :else (do (u/progress! c) :again)))))))))))
+
+(defn ^:async round
+  "The whole kit in one call: step! again until it is done or stopped."
+  [c]
+  (await (pace/steps! c (fn ^:async kit-step [] (await (step! c))))))

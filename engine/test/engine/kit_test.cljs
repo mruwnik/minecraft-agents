@@ -290,3 +290,13 @@
         (let [{:keys [result inv]} (await (craft-run {:contents [{:name "bread" :count 5}] :args {:chest chest :tools [] :spare 0}}))]
           (is (= {:gave-up false :short {:food 7} :missing {:food "wheat"}} result))
           (is (= {"bread" 5} inv)))))))
+
+(deftest a-kit-is-one-call
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:containers {"10,64,0" full-chest}})]
+          (core/submit! eng (list job kit-args) {})
+          (await (core/tick! eng))
+          (is (empty? (:list (core/state eng))))
+          (is (= 2 (reduce + (for [[k n] (inv p) :when (= "stone_hoe" k)] n)))))))))
