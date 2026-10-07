@@ -24,13 +24,34 @@
   [p pos]
   (some-> (block-at p pos) .-name))
 
+(def hitbox-half 0.3)
+(def hitbox-height 1.8)
+(def feel-margin 0.1)
+
+(defn touches?
+  "Whether a body with its feet at (fx fy fz) touches the cell [x y z]: it overlaps the hitbox (0.6 wide, 1.8 tall) grown by
+  feel-margin, or is the support under the feet whose collision top (a block's height above its floor) reaches the feet.
+  The same rule as engine.perception.rays/felt?, over feet instead of the eye."
+  [fx fy fz [x y z] top]
+  (let [r (+ hitbox-half feel-margin)
+        over? (fn [c lo hi] (and (< c hi) (> (inc c) lo)))]
+    (and (over? x (- fx r) (+ fx r))
+         (over? z (- fz r) (+ fz r))
+         (or (over? y (- fy feel-margin) (+ fy hitbox-height feel-margin))
+             (and (< y fy) (>= (+ y top) (- fy feel-margin)))))))
+
 (defn feel
   "The block at a cell the body touches (its feet, head and the cell under the feet), as the JS object, in any light;
-  nil for a cell it does not touch. Primitives that are not wrapped by perception (a bare fake) have no feel and read blockAt."
+  nil for a cell it does not touch. Without perception (no feel on p) the raw block is answered only for a cell touches?
+  accepts: a block without a collision top reaches the feet only as a full cube."
   [p pos]
   (if (some? (.-feel p))
     (.feel p (clj->js pos))
-    (block-at p pos)))
+    (let [^js at (.-pos ^js (.self p)) ^js q (clj->js pos)
+          ^js b (block-at p q)
+          top (or (some-> b .-top) (if (some-> b .-fullCube) 1 0))]
+      (when (and b (touches? (.-x at) (.-y at) (.-z at) [(.-x q) (.-y q) (.-z q)] top))
+        b))))
 
 (defn feel-name
   "The block name at a cell the body touches, or nil (see feel)."

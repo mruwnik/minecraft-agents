@@ -37,9 +37,10 @@
 (defn suffocates?
   "Whether the block at cell makes a head inside it suffocate: sensing reports
   its collision shape as filling the cell (:fullCube). Plants, slabs, fluids
-  and air do not. An unloaded cell does not."
+  and air do not. An unloaded cell does not; a cell never seen counts as solid (not assumed safe)."
   [p cell]
-  (boolean (some-> (.blockAt p (clj->js cell)) .-fullCube)))
+  (let [b (u/sensed p cell)]
+    (boolean (and b (or (true? (.-unknown b)) (.-fullCube b))))))
 
 (defn situation
   "Why the body at p is suffocating, :drowning or :enclosed, or nil."

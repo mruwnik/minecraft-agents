@@ -63,10 +63,12 @@
 (declare unsafe-below go!)
 
 (defn land-footing?
-  "The block under the feet cell is solid ground: not air, water, lava, fire or magma, and loaded. A body pressed
-  against a wall over water is onGround for a tick without it."
+  "The support under the feet is solid ground: not air, water, lava, fire or magma, and loaded. It is the cell below
+  the feet cell, or the feet cell itself on a slab, farmland, path or carpet (feet above the cell's floor). A body
+  pressed against a wall over water is onGround for a tick without it."
   [p self]
-  (let [below (u/feel-name p {:x (js/Math.floor (.. self -pos -x)) :y (dec (js/Math.floor (.. self -pos -y)))
+  (let [y (.. self -pos -y) fy (js/Math.floor y)
+        below (u/feel-name p {:x (js/Math.floor (.. self -pos -x)) :y (if (> (- y fy) 0.001) fy (dec fy))
                                :z (js/Math.floor (.. self -pos -z))})]
     (boolean (and below (not (breath/air? below)) (not (contains? unsafe-below below))))))
 

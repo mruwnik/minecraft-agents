@@ -48,3 +48,19 @@
 (deftest walk-settle-reads-the-feet-cell-by-feel
   (let [p (felt-only {:self {:onGround false} :blocks {"0,64,0" "ladder"}})]
     (is (true? (walk/grounded? p)))))
+
+(deftest u-feel-without-perception-is-still-felt-only
+  (let [p (tu/fake {:blocks {"0,64,0" "dirt" "0,63,0" "stone" "2,64,0" "gold_block" "0,66,0" "stone"}})]
+    (is (= "dirt" (u/feel-name p pos)) "the feet cell")
+    (is (= "stone" (u/feel-name p {:x 0 :y 63 :z 0})) "the support under the feet")
+    (is (nil? (u/feel p {:x 2 :y 64 :z 0})) "2 away: not touched, never raw")
+    (is (nil? (u/feel p {:x 0 :y 66 :z 0})) "above the head")))
+
+(deftest land-footing-reads-the-support-of-a-partial-floor
+  (doseq [floor ["stone_slab" "farmland"]]
+    (let [p (felt-only {:self {:pos {:x 0 :y 64.5 :z 0}} :blocks {"0,64,0" floor}})]
+      (is (true? (breathe/land-footing? p (.self p))) floor))))
+
+(deftest suffocates-reads-no-unseen-cell-raw
+  (let [p (felt-only {:blocks {"5,64,0" "sand"}})]
+    (is (true? (breath/suffocates? p {:x 5 :y 64 :z 0})) "never seen: not assumed safe, and no raw read")))
