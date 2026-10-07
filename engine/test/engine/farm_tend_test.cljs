@@ -8,6 +8,8 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.farm.tend :as tend]
+            [jobs.farm.tend-decide :as decide]
+            [jobs.farm.tend-stock :as stock]
             [jobs.lib.world-files :as world]))
 
 (def box {:min {:x 2 :y 63 :z 2} :max {:x 4 :y 64 :z 4}})
@@ -340,7 +342,7 @@
     {} 4 [(item "bread" 5) (item "melon_seeds" 3)]))
 
 (deftest the-keep-holds-sowing-seed-a-backup-stack-per-seed-and-the-food-reserve
-  (are [expected sow inventory keep] (= expected (tend/keeps sow inventory keep))
+  (are [expected sow inventory keep] (= expected (stock/keeps sow inventory keep))
     {"wheat_seeds" 64 "beetroot_seeds" 64 "melon_seeds" 64 "pumpkin_seeds" 64} {} [] {}
     {"wheat_seeds" 100 "beetroot_seeds" 64 "melon_seeds" 64 "pumpkin_seeds" 64} {"wheat_seeds" 100} [] {}
     {"wheat_seeds" 64 "beetroot_seeds" 64 "melon_seeds" 64 "pumpkin_seeds" 64 "bread" 4 "carrot" 9}
@@ -348,10 +350,10 @@
     {"wheat_seeds" 64 "beetroot_seeds" 64 "melon_seeds" 64 "pumpkin_seeds" 70} {} [] {"pumpkin_seeds" 70}))
 
 (deftest food-crops-are-farm-goods-but-the-reserve-stays-carried
-  (is (every? (set tend/farm-goods) ["carrot" "potato" "beetroot" "melon_slice" "wheat"])))
+  (is (every? (set stock/farm-goods) ["carrot" "potato" "beetroot" "melon_slice" "wheat"])))
 
 (deftest tools-food-and-meal-are-never-farm-goods
-  (are [name] (not (some #{name} tend/farm-goods))
+  (are [name] (not (some #{name} stock/farm-goods))
     "stone_hoe" "iron_hoe" "shears" "bread" "bone_meal" "water_bucket"))
 
 (deftest crops-are-stored-down-to-the-food-reserve
@@ -365,7 +367,7 @@
           (is (= {"carrot" 15 "bread" 3} (inv s))))))))
 
 (deftest surplus-lists-names-above-their-keep
-  (are [expected inventory keep names] (= expected (tend/surplus inventory keep names))
+  (are [expected inventory keep names] (= expected (stock/surplus inventory keep names))
     ["wheat"] [(item "wheat" 2) (item "bread" 4)] {} ["wheat" "carrot"]
     [] [(item "wheat" 2)] {"wheat" 2} ["wheat"]
     ["wheat"] [(item "wheat" 2) (item "wheat" 1)] {"wheat" 2} ["wheat"]
@@ -391,7 +393,7 @@
     0 [{:name "stone" :above "air"} {:name "dirt" :above nil}]))
 
 (deftest each-step-decides-from-its-facts
-  (are [expected step args facts] (= expected (:skip (tend/decide step args facts)))
+  (are [expected step args facts] (= expected (:skip (decide/decide step args facts)))
     :no-ripe :harvest {} {:ripe 0}
     nil :harvest {} {:ripe 1 :mid {:x 0 :y 0 :z 0} :radius 2}
     :till-off :till {:till false} {:hoe true :untilled [{}] :bare 0 :seeds 3}
@@ -416,11 +418,11 @@
 (deftest the-till-call-names-the-nearest-cell-and-the-plan-keeps-a-tilled-report
   (let [cell {:x 3 :y 63 :z 2}
         facts {:hoe true :untilled [cell {:x 4 :y 63 :z 2}] :bare 0 :seeds 3}]
-    (is (= {:from cell :to cell} (:args (:call (tend/decide :till {:till true} facts)))))
+    (is (= {:from cell :to cell} (:args (:call (decide/decide :till {:till true} facts)))))
     (is (= {:till {:tilled 2} :plant {:skipped :no-bare}}
-           (:report (tend/plan [:till :plant] {:till true} {:hoe true :untilled [] :bare 0 :seeds 3} {:till {:tilled 2}}))))
+           (:report (decide/plan [:till :plant] {:till true} {:hoe true :untilled [] :bare 0 :seeds 3} {:till {:tilled 2}}))))
     (is (= {:till {:skipped :nothing-to-till}}
-           (:report (tend/plan [:till] {:till true} {:hoe true :untilled [] :bare 0 :seeds 3} {}))))))
+           (:report (decide/plan [:till] {:till true} {:hoe true :untilled [] :bare 0 :seeds 3} {}))))))
 
 ;; ------------------------------------------------------------------ zones
 
