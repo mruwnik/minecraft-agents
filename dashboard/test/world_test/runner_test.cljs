@@ -804,3 +804,38 @@
                    (is (not (fs/existsSync file)))
                    (fs/rmSync dir #js {:recursive true})
                    (done)))))))
+
+(defn job-ev [kind id & {:as more}]
+  (merge {:time-ms 1000100 :source :job :kind kind :context {:job-id id :chain [id]}} more))
+
+(def never-expect [{:event {:kind :never} :within-s 90}])
+
+(defn watch-case [c events]
+  (r/watch-with! (fake-watch-io {} (constantly events)) c 1000000 #{"j1"} (r/stall-clock 1000000)))
+
+(deftest a-job-case-ends-early-once-no-job-is-active
+  (async done
+    (.then (watch-case {:limit-s 100 :expect never-expect} [(job-ev :queued "j1") (job-ev :failed "j1" :message "parked: no tree")])
+           (fn [res]
+             (is (= [:fail] (mapv :status res)))
+             (is (re-find #"no job active: failed parked: no tree" (:evidence (first res))))
+             (is (< 80 (:ended-early-s (first res)) 100))
+             (done)))))
+
+(deftest a-job-case-keeps-waiting-while-a-job-is-active
+  (async done
+    (.then (watch-case {:limit-s 5 :expect [{:event {:kind :never} :within-s 2}]} [(job-ev :queued "j1")])
+           (fn [res]
+             (is (= [:fail] (mapv :status res)))
+             (is (= "no matching event within 2 s" (:evidence (first res))) "judged by its own deadline, not ended early")
+             (is (nil? (:ended-early-s (first res))))
+             (done)))))
+
+(deftest early-end-is-off-for-wait-full-register-and-no-event-cases
+  (async done
+    (let [ended [(job-ev :completed "j1")]
+          keeps (fn [c] (.then (watch-case (merge {:limit-s 5} c) ended) (fn [res] (nil? (:ended-early-s (first res))))))]
+      (-> (js/Promise.all #js [(keeps {:wait-full true :expect never-expect})
+                               (keeps {:register [{:id "t"}] :expect never-expect})
+                               (keeps {:expect [{:no-event {:kind :bad} :for-s 4}]})])
+          (.then (fn [oks] (is (every? true? oks)) (done)))))))

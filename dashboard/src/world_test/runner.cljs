@@ -29,6 +29,7 @@
        "--changed-since-pass skips a fixture file that passed fully at a recorded revision (every run passes record it, in .claude/world-test-passes.edn) when no file of the jobs and triggers it uses (and what their source names) changed since, tracked or untracked; any engine, js, trigger-default or runner change, or a change to the fixture file, runs it.\n"
        "--retry-failed N reruns each failed case (not errors or inconclusive) up to N times after the batch, on the same body; a pass on a retry is reported :flaky (counted apart, never :pass, exit 0, also the live outcome) with the first failure kept under :first-failure; not combinable with --stop-on-fail.\n"
        "--check only loads and validates the fixtures (no body, no server): one result per case, exit 1 on a parse error or problem.\n"
+       "A job case (no :register, no :wait-full true, only :event expectations pending) ends 3 s after every job it submitted has ended, failed or parked (\"no job active: ...\", :ended-early-s in the result).\n"
        "Runs world fixtures (default dir engine/fixtures/world) on the reserved plot grid x/z 20000..20640, y 150 (large plots: lanes south of it, to z 22240).\n"
        "--allow-time lets a case that needs night or day set the time (each set appended to --time-log); without it\n"
        "such a case is skipped. A case that depends on the time of day (with --allow-time, every case) holds a time lock shared by phase (day cases together,\n"
@@ -947,23 +948,50 @@
     (assoc r :status :inconclusive :why "runner stalled during the case (host suspended or process stopped)")
     r))
 
+(def idle-grace-ms
+  "How long a job case waits after its last job ended, for trailing events, before it is judged."
+  3000)
+
+(defn early-end?
+  "Whether a case may end before its limit once its jobs are idle: it submitted jobs, has no register, does not set
+  :wait-full, and every pending expectation is an :event one (a :no-event / :count-event may still pass by waiting)."
+  [c ids results]
+  (and (seq ids) (empty? (:register c)) (not (:wait-full c))
+       (every? #(or (not= :pending (:status %)) (:event (:expect %))) results)))
+
+(defn end-early
+  "results with the pending ones failed: no job was active; saved-s seconds before the case's limit."
+  [results {:keys [state why]} saved-s]
+  (mapv #(if (= :pending (:status %))
+           (assoc % :status :fail :ended-early-s saved-s
+                  :evidence (str "no job active: " (name state) (when why (str " " why))))
+           %)
+        results))
+
 (defn watch-with!
   "Polls until every expectation is decided or the case's limit; resolves to the judged results. io: {:now :sleep
   :events (events from the window start)}. clock: the case's stall clock; a gap over stall-gap-ms in it ends the watch
-  with the undecided expectations :stalled."
+  with the undecided expectations :stalled. A job case whose jobs have all ended for idle-grace-ms ends early (see
+  early-end?); the pending expectations fail with :ended-early-s."
   [{:keys [now sleep events]} c t0 ids clock]
-  (let [limit (+ t0 (* 1000 (max (:limit-s c) (+ 2 (x/deadline-s (:expect c))))))]
+  (let [limit (+ t0 (* 1000 (max (:limit-s c) (+ 2 (x/deadline-s (:expect c))))))
+        idle-since (atom nil)]
     (letfn [(poll []
               (let [t (now)
                     _ (tick! clock t)
                     stalled? (clock-stalled? clock)
+                    evs (events)
                     ;; a stall must not run out the clock of an expectation: judge as of when the gap began
-                    results (x/judge-all (:expect c) (events) {:t0-ms t0 :now-ms (if stalled? (:gap-start @clock) t) :job-ids ids})]
+                    results (x/judge-all (:expect c) evs {:t0-ms t0 :now-ms (if stalled? (:gap-start @clock) t) :job-ids ids})
+                    idle (when (and (not stalled?) (early-end? c ids results)) (x/jobs-idle evs ids))
+                    _ (reset! idle-since (when idle (or @idle-since t)))]
                 (cond
                   stalled? (js/Promise.resolve (stall-results results (:gap @clock)))
                   (x/failed? results) (js/Promise.resolve (x/stop-early results))
                   (or (x/decided? results) (> t limit))
                   (js/Promise.resolve (mapv #(if (= :pending (:status %)) (assoc % :status :fail :evidence "undecided at the case's limit") %) results))
+                  (and idle (>= (- t @idle-since) idle-grace-ms))
+                  (js/Promise.resolve (end-early results idle (js/Math.round (/ (- limit t) 1000))))
                   :else
                   (.then (sleep 500) poll))))]
       (poll))))
@@ -1145,8 +1173,9 @@
                                                         (.then (after-checks! opts origin rc)
                                                                (fn [afters]
                                                                  (mark-stalled
-                                                                  (result {:status (if (and (x/passed? expects) (every? :pass? afters)) :pass :fail)
-                                                                           :expects expects :afters afters}))))))))))))))))
+                                                                  (result (cond-> {:status (if (and (x/passed? expects) (every? :pass? afters)) :pass :fail)
+                                                                                   :expects expects :afters afters}
+                                                                            (some :ended-early-s expects) (assoc :ended-early-s (some :ended-early-s expects)))))))))))))))))))
         (.catch (fn [e] (result {:status :error :why (.-message e)})))
         (.then (fn [r]
                  (if (and @t-start (= :fail (:status r)))

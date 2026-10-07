@@ -124,3 +124,28 @@
   "The latest second (after t0) at which any expectation can still change."
   [expectations]
   (reduce max 0 (map #(or (:within-s %) (:for-s %) 0) expectations)))
+
+(def job-lifecycle
+  "Root-job events that set its state: ended ones (done, failed or parked, cancelled) or still active ones."
+  {:queued :active :round_started :active :yielded :active :waiting :active :cut :active
+   :completed :ended :stopped :ended :failed :ended :cancelled :ended})
+
+(defn- why-text [e]
+  (or (:message e)
+      (some-> (get-in e [:data :reason]) name)
+      (some-> (get-in e [:data :error]) str)))
+
+(defn jobs-idle
+  "When every job of job-ids has ended (its latest own event is completed, stopped, failed or cancelled): {:state kind
+  :why text} of the last one to end; nil while one is queued, running, waiting, not yet seen, or there are no jobs."
+  [events job-ids]
+  (let [latest (reduce (fn [m e]
+                         (let [id (get-in e [:context :job-id])]
+                           (if (and (= :job (:source e)) (contains? job-ids id) (job-lifecycle (:kind e)))
+                             (assoc m id e)
+                             m)))
+                       {} events)
+        ends (map latest job-ids)]
+    (when (and (seq job-ids) (every? #(and % (= :ended (job-lifecycle (:kind %)))) ends))
+      (let [last-end (apply max-key #(:time-ms % 0) ends)]
+        {:state (:kind last-end) :why (why-text last-end)}))))

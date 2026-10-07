@@ -132,3 +132,22 @@
     (is (= :pass (:status (x/judge e [fired herd-done] (assoc opts :now-ms 19001)))))
     (is (= :fail (:status (x/judge e [herd-done (at 12000)] (assoc opts :now-ms 12500)))))
     (is (= :pass (:status (x/judge e [herd-done (at 20000)] (assoc opts :now-ms 20001)))) "a fire after the window does not count")))
+
+(defn job-ev [kind id & {:as more}]
+  (merge {:time-ms 1 :source :job :kind kind :context {:job-id id :chain [id]}} more))
+
+(deftest jobs-idle-when-every-root-job-ended-or-is-parked
+  (is (= {:state :completed :why nil} (x/jobs-idle [(job-ev :queued "j1") (job-ev :completed "j1")] #{"j1"})))
+  (is (= {:state :failed :why "no tree"} (x/jobs-idle [(job-ev :queued "j1") (job-ev :failed "j1" :message "no tree")] #{"j1"})))
+  (is (= :cancelled (:state (x/jobs-idle [(job-ev :cancelled "j1")] #{"j1"}))))
+  (is (= "no-site" (:why (x/jobs-idle [(job-ev :stopped "j1" :data {:reason :no-site})] #{"j1"})))))
+
+(deftest jobs-not-idle-while-one-is-queued-running-or-unseen
+  (is (nil? (x/jobs-idle [(job-ev :queued "j1")] #{"j1"})))
+  (is (nil? (x/jobs-idle [(job-ev :queued "j1") (job-ev :waiting "j1")] #{"j1"})))
+  (is (nil? (x/jobs-idle [] #{"j1"})) "no event for the job yet")
+  (is (nil? (x/jobs-idle [(job-ev :completed "j1")] #{"j1" "j2"})))
+  (is (nil? (x/jobs-idle [(job-ev :failed "j1") (job-ev :queued "j1")] #{"j1"})) "retried")
+  (is (nil? (x/jobs-idle [] #{})) "no jobs: not a job case")
+  (is (= :completed (:state (x/jobs-idle [(job-ev :completed "j1") {:source :job :kind :waiting :context {:job-id "j1/c" :chain ["j1" "j1/c"]}}] #{"j1"})))
+      "a child's events do not change the root's state"))
