@@ -13,6 +13,7 @@
             [engine.trigger-api :as trigger-api]
             [engine.triggers :as triggers]
             [jobs.lib.cost :as cost]
+            [jobs.lib.near :as near]
             [jobs.lib.world-files :as ew]
             [jobs.movement.look-around :as look-around]
             [jobs.storage.deposit :as dep]))
@@ -185,16 +186,30 @@
           (is (= [] (debts eng)) "no debt without a felled tree")
           (is (= 1 (count (filter #(= :tree_blocked (:kind %)) @seen)))))))))
 
+(defn ^:async with-partial-walks
+  "Run the async f with the first n go-near! calls (all when n is nil) resolving :partial, as a walk that waits on the world; later ones walk."
+  [n f]
+  (let [k "cljs$core$IFn$_invoke$arity$4"
+        orig (aget near/go-near! k)
+        calls* (atom 0)]
+    (aset near/go-near! k (fn ^:async partial-first [c pos range opts]
+                            (if (or (nil? n) (< (dec (swap! calls* inc)) n))
+                              :partial
+                              (await (orig c pos range opts)))))
+    (try (await (f))
+         (finally (aset near/go-near! k orig)))))
+
 (deftest fell-tree-gives-up-on-a-tree-after-three-partials-in-a-row
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:blocks (tree 30 0 "oak" 3)})]
-          (tu/short-walks! p 10)
-          (core/submit! eng (list 'jobs.forestry.fell-tree {:radius 40}) {})
-          (await (run-until-empty eng 2))
-          (is (empty? (:unreachable (job-mem eng "j1" []))) "two partials are still progress")
-          (await (run-until-empty eng 10))
+          (await (with-partial-walks nil
+                   (fn ^:async b []
+                     (core/submit! eng (list 'jobs.forestry.fell-tree {:radius 40}) {})
+                     (await (run-until-empty eng 2))
+                     (is (empty? (:unreachable (job-mem eng "j1" []))) "two partials are still progress")
+                     (await (run-until-empty eng 10)))))
           (is (= [] (calls p "dig")))
           (is (= 1 (count (filter #(= :tree_blocked (:kind %)) @seen)))))))))
 
@@ -203,9 +218,10 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:blocks (tree 20 0 "oak" 4)})]
-          (tu/short-walks! p 10 2)
-          (core/submit! eng (list 'jobs.forestry.fell-tree {:radius 30}) {})
-          (is (pos? (await (run-until-empty eng 30))))
+          (is (pos? (await (with-partial-walks 2
+                             (fn ^:async b []
+                               (core/submit! eng (list 'jobs.forestry.fell-tree {:radius 30}) {})
+                               (await (run-until-empty eng 30)))))))
           (is (= 4 (count (calls p "dig"))) "two partials, then the walk arrives: the high logs are dug from the foot of the column")
           (is (not-any? #(= :tree_blocked (:kind %)) @seen)))))))
 
@@ -777,12 +793,13 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:blocks (tree 30 0 "oak" 3)})]
-          (tu/short-walks! p 10 1)
-          (core/submit! eng (list 'jobs.forestry.fell-tree {:species "oak" :radius 40}) {})
-          (await (core/tick! eng))
-          (is (= [] (calls p "dig")) "a partial walk is not in reach, so nothing is dug")
-          (is (nil? (:failures (job-mem eng "j1" []))) "a partial walk is progress, not a failure")
-          (is (pos? (await (run-until-empty eng 10))))
+          (await (with-partial-walks 1
+                   (fn ^:async b []
+                     (core/submit! eng (list 'jobs.forestry.fell-tree {:species "oak" :radius 40}) {})
+                     (await (core/tick! eng))
+                     (is (= [] (calls p "dig")) "a partial walk is not in reach, so nothing is dug")
+                     (is (nil? (:failures (job-mem eng "j1" []))) "a partial walk is progress, not a failure")
+                     (is (pos? (await (run-until-empty eng 10)))))))
           (is (= [] (:list (core/state eng))))
           (is (= 3 (count (calls p "dig")))))))))
 
