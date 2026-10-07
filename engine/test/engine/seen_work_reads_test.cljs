@@ -7,12 +7,19 @@
             [engine.perception :as perception]
             [engine.test-util :as tu]
             [jobs.animals.lead-to :as lead-to]
+            [jobs.apiary.harvest :as apiary-harvest]
             [jobs.farm.harvest :as harvest]
             [jobs.farm.plant :as plant]
+            [jobs.farm.tend :as tend]
+            [jobs.farm.tend-plan :as tend-plan]
+            [jobs.farm.till :as till]
+            [jobs.forestry.maintain :as maintain]
+            [jobs.forestry.prepare-rule :as prepare-rule]
             [jobs.forestry.plant-sapling :as sapling]
             [jobs.gather.get-seeds :as seeds]
             [jobs.lib.access :as access]
             [jobs.lib.apiary :as apiary]
+            [jobs.lib.tidy-rules :as tidy-rules]
             [jobs.lib.util :as u]))
 
 (defn wrapped
@@ -22,6 +29,7 @@
         p (tu/fake {:blocks (merge blocks wall)})
         per (perception/create (fake-raw/create p) {:now (constantly 1000000)})
         w (perception/wrap p per)]
+    (perception/pass! per)
     (aset w "blockAt" (fn [_] (throw (js/Error. "raw blockAt"))))
     w))
 
@@ -69,3 +77,49 @@
   (let [blocks {"0,64,4" "wheat"}
         ripe (fn [w] (vec (harvest/planned-ripe w {} {{:x 0 :y 64 :z 4} "wheat"} [])))]
     (is (= [] (ripe (wrapped blocks true))) "behind stone: unknown, not ripe")))
+
+(def cell {:x 0 :y 64 :z 4})
+
+(defn job-ctx [w args]
+  {:primitives w :args args :root "j1" :slots [] :view (fn [] {:now 0 :data {}})})
+
+(deftest till-pending-needs-sight
+  (let [pending (fn [w] (till/pending (job-ctx w {:from cell :to cell})))]
+    (is (= [[cell nil]] (pending (wrapped far true))) "behind stone: unknown")
+    (is (= [] (pending (wrapped far false))) "in view: farmland, nothing to till")))
+
+(deftest tend-plan-reads-need-sight
+  (let [blocks {"0,64,4" "farmland" "0,65,4" "wheat"}]
+    (is (= {:pos cell :name nil :above nil} (tend-plan/ground-cell (wrapped blocks true) cell)))
+    (is (= {:pos cell :name "farmland" :above "wheat"} (tend-plan/ground-cell (wrapped blocks false) cell)))
+    (is (= [] (tend-plan/wrong-crops (wrapped {"0,64,4" "carrots"} true) {cell "wheat"})))
+    (is (= 1 (count (tend-plan/wrong-crops (wrapped {"0,64,4" "carrots"} false) {cell "wheat"}))))
+    (is (= [] (tend-plan/unripe-planned (wrapped {"0,64,4" "wheat"} true) {cell "wheat"})))))
+
+(deftest tend-ground-and-unripe-need-sight
+  (let [box {:min cell :max cell}
+        blocks {"0,64,4" "farmland" "0,65,4" "wheat"}]
+    (is (= [{:pos cell :name nil :above nil}] (tend/ground-layer (wrapped blocks true) box)))
+    (is (= [{:pos cell :name "farmland" :above "wheat"}] (tend/ground-layer (wrapped blocks false) box)))
+    (is (= [] (tend/unripe-in-box (wrapped {"0,64,4" "wheat"} true) box {:x 0 :y 64 :z 4} 8)))))
+
+(deftest tidy-world-block-needs-sight
+  (let [blocks {"0,64,4" "stone"}]
+    (is (nil? (tidy-rules/world-block (wrapped blocks true) [0 64 4])))
+    (is (= {:name "stone"} (tidy-rules/world-block (wrapped blocks false) [0 64 4])))))
+
+(deftest forestry-classify-and-rule-reads-need-sight
+  (let [blocks {"0,63,4" "dirt" "0,64,4" "air" "0,65,4" "air"}]
+    (is (= :unloaded (maintain/classify (wrapped blocks true) cell "oak")))
+    (is (= :bare (maintain/classify (wrapped blocks false) cell "oak")))
+    (is (= {:state :unloaded} (prepare-rule/own-cell (wrapped {"0,64,4" "oak_log"} true) cell "oak")))
+    (is (= {:state :grown} (prepare-rule/own-cell (wrapped {"0,64,4" "oak_log"} false) cell "oak")))
+    (is (= {:state :unloaded} (prepare-rule/growth-space (wrapped {"0,65,4" "stone"} true) cell "oak" nil)))
+    (is (= {:state :unloaded} (prepare-rule/soil-state (wrapped blocks true) {:x 0 :y 64 :z 4} "oak" {:carried #{}})))
+    (is (nil? (prepare-rule/soil-state (wrapped blocks false) {:x 0 :y 64 :z 4} "oak" {:carried #{}})))))
+
+(deftest apiary-harvest-classify-needs-sight
+  (let [blocks {"0,64,4" "beehive" "0,63,4" "campfire"}
+        classify (fn [w] (select-keys (apiary-harvest/classify (job-ctx w {}) [{:pos cell :ripe true}]) [:todo :declined]))]
+    (is (= {:todo [] :declined {"0,64,4" :not-smoked}} (classify (wrapped blocks true))) "unseen fire: not smoked")
+    (is (= {:todo [cell] :declined {}} (classify (wrapped blocks false))))))
