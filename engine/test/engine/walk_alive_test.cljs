@@ -53,7 +53,7 @@
         (reset! targets/searches {})
         (let [[yields out]
               (await (slices-after-cut
-                      (fn [c _] (targets/nearest! c [{:x 105 :y 64 :z 24} {:x 106 :y 64 :z 24}] 0 {:budget 100000}))))]
+                      (fn [c _] (targets/nearest! c [{:x 105 :y 64 :z 24} {:x 106 :y 64 :z 24}] 0 {:budget 100000 :dangers false :dark false}))))]
           (reset! targets/searches {})
           (is (<= yields 3) "no slice after the cut")
           (is (core/cut? out) "the cut ends the call as an act would"))))))
