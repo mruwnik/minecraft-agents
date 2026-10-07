@@ -10,7 +10,7 @@
   "Plant a sapling at :at, or at the oldest replant debt, and clear that debt. With :bone-meal n it then uses up to
   n bone meal on it.
   With :near and :within only the debts within :within blocks of :near count; the others stay owed.
-  A missing sapling is fetched (jobs.lib.fetch: a seen chest, a craft) unless :fetch is false; then, or when the
+  A missing sapling is fetched (jobs.lib.fetch: a seen chest, or the leaves of its tree broken for the drop) unless :fetch is false; then, or when the
   fetch failed, it waits (check) with :reason :no-sapling (:species). It also waits :log-on-spot when the spot still
   holds a log. The sapling kind is the species' (mangrove propagule, fungus too); the same one already on the spot
   counts as planted. Ends at once when there is nothing to plant or the spot is refused (a debt stays owed).
@@ -89,13 +89,13 @@
   holds a log. Else it waits with reason :no-sapling (and :species) or :log-on-spot (and :pos)."
   [c]
   (let [p (:primitives c)
-        t (target-of (debts c) (:args c))]
+        t (target-of (debts c) (:args c))
+        w (problem c)]
     (cond
       (:meal (ctx/mem c)) true
       (nil? t) true
-      (problem c) (let [w (problem c)
-                        r (fetch/check c 'jobs.forestry.plant-sapling (fetch-wait w))]
-                    (or (true? r) (ctx/wait c (shown-wait c w))))
+      w (let [r (fetch/check c 'jobs.forestry.plant-sapling (fetch-wait w))]
+          (or (true? r) (ctx/wait c (shown-wait c w))))
       (log-name? (some-> (u/block-at p (:pos t)) .-name)) (ctx/wait c {:reason :log-on-spot :pos (:pos t)})
       :else true)))
 

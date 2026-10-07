@@ -26,7 +26,8 @@
     planks to sticks to the tool, and a crafting table when the chain needs one and none is seen (crafted, then put
     down on a free cell beside the body with a jobs.blocks.place child). Each step is a jobs.items.craft child. The
     names are tried in order; the first with a plan is made. Three fruitless steps stop it (:tried :craft).
-  - :gather (in :how): what a craft chain lacks that has no recipe (logs, cobblestone, coal; recipes/gatherable?) is
+  - :gather (in :how): a sapling (no recipe) comes from the leaves of its tree the body has seen, broken by
+    jobs.gather.get-seeds (the drop is picked up). What a craft chain lacks that has no recipe (logs, cobblestone, coal; recipes/gatherable?) is
     felled or mined as one child per round, only what the body has seen: logs by jobs.forestry.harvest-wood,
     cobblestone and coal by jobs.gather.mine. The crafts follow once the chain is whole (a chain that is craftable now
     is crafted first). A child that brings in nothing three times stops it (:tried :gather).
@@ -104,27 +105,41 @@
               (assoc pl :item name)))
           names)))
 
+(defn leaves-of
+  "The leaf block that drops this sapling (oak_sapling: oak_leaves; mangrove_propagule: mangrove_leaves), or nil."
+  [name]
+  (cond
+    (clojure.string/ends-with? name "_sapling") (str (subs name 0 (- (count name) (count "_sapling"))) "_leaves")
+    (= "mangrove_propagule" name) "mangrove_leaves"))
+
 (defn gather-plan
   "The craft chain for the first of names that has one once the raw items it lacks are gathered, with :gather
-  {name n} when it lacks any, else nil."
+  {name n} when it lacks any, else nil. A sapling has no recipe: its plan is just :gather {name n}, when its leaves are seen (or its child is running)."
   [c names n]
   (let [p (:primitives c)
         have (carried-counts p)
         version (game/version-of p)]
     (some (fn [name]
-            (when-let [pl (recipes/plan version have name n {:table? (boolean (or (:table (ctx/mem c)) (craft/nearest-table p craft-radius)))
+            (if-let [leaves (leaves-of name)]
+              (when (or (= name (get-in (ctx/mem c) [:gather :item]))
+                        (seq (look/seen-blocks p {:match #(= leaves %) :radius 16 :max 1})))
+                {:steps [] :gather {name n} :item name})
+              (when-let [pl (recipes/plan version have name n {:table? (boolean (or (:table (ctx/mem c)) (craft/nearest-table p craft-radius)))
                                                            :gather? true})]
-              (assoc pl :item name)))
+                (assoc pl :item name))))
           names)))
 
 (defn log? [name] (clojure.string/ends-with? name "_log"))
 
 (defn gather-need
   "The first raw need of a plan's :gather map, logs first: {:key k :count n :job sym :args {..} :seen fn of a block name: what must have been seen}. A new gather source
-  (saplings from leaves) is one more case here."
+  is one more case here."
   [gather]
-  (let [logs (reduce + 0 (for [[k v] gather :when (log? k)] v))]
+  (let [logs (reduce + 0 (for [[k v] gather :when (log? k)] v))
+        [sapling n] (first (filter (comp leaves-of key) gather))]
     (cond
+      sapling {:key sapling :count n :job 'jobs.gather.get-seeds :seen #{(leaves-of sapling)}
+               :args {:item sapling :count n :sources [(leaves-of sapling)]}}
       (pos? logs) {:key "log" :count logs :job 'jobs.forestry.harvest-wood :seen log? :args {}}
       (get gather "cobblestone") {:key "cobblestone" :count (get gather "cobblestone") :job 'jobs.gather.mine
                                   :seen #{"stone"}
@@ -292,13 +307,14 @@
       (do (tried! c :gather :none-seen) :continue)
       :else
       (do (when-not (get-in (ctx/mem c) [:gather :before])
-            (ctx/update-mem! c assoc-in [:gather :before] (gather-carried p need)))
+            (ctx/update-mem! c assoc-in [:gather :before] (gather-carried p need))
+            (ctx/update-mem! c assoc-in [:gather :item] (:key need)))
           (let [r (await (ctx/call-child c :gather (:job need) (:args need)))]
             (if (= :continue r)
               :continue
               (let [res (ctx/child-result c :gather)
                     before (get-in (ctx/mem c) [:gather :before])]
-                (ctx/update-mem! c update :gather dissoc :before)
+                (ctx/update-mem! c update :gather dissoc :before :item)
                 (if (> (gather-carried p need) before)
                   (do (ctx/update-mem! c assoc-in [:gather :fruitless] 0) :continue)
                   (gather-failed! c (or (:reason res) :nothing-gathered))))))))))

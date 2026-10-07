@@ -692,3 +692,36 @@
           (core/submit! (:eng s) (list 'jobs.items.obtain {:item "wooden_pickaxe" :how #{:craft :chest}}) {})
           (await (run-ticks s 10))
           (is (empty? (calls s "dig"))))))))
+
+(def leaf-blocks
+  {"0,66,4" "oak_leaves" "1,66,4" "oak_leaves" "0,65,4" "oak_leaves" "1,65,4" "oak_leaves"})
+
+(deftest obtain-gathers-a-sapling-from-leaves-seen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (assoc (update (bare []) :blocks merge leaf-blocks) :drops {"oak_leaves" "oak_sapling"}) [own-zone])]
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "oak_sapling"}) {})
+          (await (run-ticks s 80))
+          (is (empty? (listed s)))
+          (is (pos? (get (inv s) "oak_sapling" 0)))
+          (is (seq (calls s "dig")) "a leaf was broken"))))))
+
+(deftest obtain-sapling-waits-no-source-without-leaves-seen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (bare []) [own-zone])]
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "oak_sapling"}) {})
+          (await (run-ticks s 6))
+          (is (= 1 (count (filter #(= :no-source (:reason %)) (events-of s :waiting)))))
+          (is (empty? (calls s "dig"))))))))
+
+(deftest obtain-sapling-gather-is-off-when-how-leaves-it-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (update (bare []) :blocks merge leaf-blocks) [own-zone])]
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "oak_sapling" :how #{:chest :craft}}) {})
+          (await (run-ticks s 10))
+          (is (empty? (calls s "dig"))))))))
