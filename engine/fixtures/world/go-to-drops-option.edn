@@ -1,0 +1,36 @@
+;; Card 293cc3af: go-to :drop-cost. Default (1) keeps survivable drops; false takes no drop of 2 or 3 (maxDrop 1); a negative or non-number
+;; is refused :bad-drop-cost. A platform y 0..2 fills x 1..15 (the body on top at feet y 3, x 8.5), the goal on the floor east of its edge
+;; at x 22, walls all round; the ramp cases carve steps down at z 28..30 (x 13 feet 2, x 14 feet 1, x 15 feet 0). Plain boots: a 3 drop is
+;; survivable.
+{:defaults
+ {:tags [:movement]
+  :time :any
+  :plot {:height 14}
+  :blocks [[:fill [0 0 0] [31 9 0] "stone"] [:fill [0 0 31] [31 9 31] "stone"] [:fill [0 0 0] [0 9 31] "stone"] [:fill [31 0 0] [31 9 31] "stone"]
+           [:fill [1 0 1] [15 2 30] "stone"]]
+  :body {:at [8.5 3 16.5]}
+  :limit-s 90}
+ :cases
+ [{:name "default-takes-the-3-drop"
+   :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots"] [:wait-s 2]
+         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
+   :after [[:body-near [22.5 0 16.5] 2]]}
+  {:name "drop-cost-false-with-no-detour-refuses"
+   :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots"] [:wait-s 2]
+         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :escalate false :drop-cost false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 30 :until {:source :job :kind :result}}]
+   :after [[:body-far [22.5 0 16.5] 4]]}
+  {:name "drop-cost-false-walks-the-ramp-round"
+   :blocks [[:fill [13 2 28] [15 2 30] "air"] [:fill [14 1 28] [15 1 30] "air"] [:fill [15 0 28] [15 0 30] "air"]]
+   :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots"] [:wait-s 2]
+         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :escalate false :drop-cost false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 80 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 80 :until {:source :job :kind :result}}]
+   :after [[:body-near [22.5 0 16.5] 2]]}
+  {:name "negative-drop-cost-refused"
+   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :escalate false :drop-cost -1})]]
+   :expect [{:event {:source :job :kind :refused :data {:reason :bad-drop-cost}} :within-s 15 :of-job true}
+            {:event {:source :job :kind :result :data {:arrived false :reason :bad-drop-cost}} :within-s 15 :of-job true}]
+   :after [[:body-near [8.5 3 16.5] 1.5]]}]}

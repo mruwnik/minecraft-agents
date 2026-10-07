@@ -1,0 +1,39 @@
+;; Card 0ce349f0: withdraw and deposit end at once when the recorded chest is missing (result {:gave-up true :reason "missing"}, the place
+;; retracted with one chest_missing warn); a check that finds no chest waits with a reason (:no-chest), so a parent chain shows why. The
+;; chest place is seeded in memory with no block built at it (a chest broken since it was seen). An explicit :chest argument is not the
+;; recorded place: it is retried three times, then gives up "missing" with no retraction.
+{:defaults
+ {:tags [:storage :memory]
+  :time :any
+  :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]] :inventory [["bread" 3]]}
+  :limit-s 90}
+ :cases
+ [{:name "withdraw-recorded-chest-gone-ends-missing"
+   :memory [{:kind :chest :data {:pos #xyz [24 0 16]}}]
+   :act [[:job (jobs.storage.withdraw {:items {"bread" 5}})]]
+   :expect [{:event {:source :job :kind :chest_missing} :within-s 40 :of-job true}
+            {:event {:source :job :kind :stopped :data {:gave-up true :reason "missing"}} :within-s 40 :of-job true}]}
+  {:name "deposit-recorded-chest-gone-ends-missing"
+   :memory [{:kind :chest :data {:pos #xyz [24 0 16]}}]
+   :act [[:job (jobs.storage.deposit {:items ["bread"]})]]
+   :expect [{:event {:source :job :kind :chest_missing} :within-s 40 :of-job true}
+            {:event {:source :job :kind :stopped :data {:gave-up true :reason "missing"}} :within-s 40 :of-job true}]}
+  {:name "withdraw-no-chest-known-waits-with-a-reason"
+   :act [[:job (jobs.storage.withdraw {:items {"bread" 5}})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-chest}} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind :stopped} :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-chest}}}]}
+  {:name "deposit-no-chest-known-waits-with-a-reason"
+   :act [[:job (jobs.storage.deposit {:items ["bread"]})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-chest}} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind :stopped} :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-chest}}}]}
+  {:name "withdraw-explicit-missing-chest-gives-up-without-retracting"
+   :act [[:job (jobs.storage.withdraw {:chest #at [24 0 16] :items {"bread" 5}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:gave-up true :reason "missing"}} :within-s 80 :of-job true}
+            {:no-event {:source :job :kind :chest_missing} :for-s 80 :until {:source :job :kind :stopped :data {:gave-up true :reason "missing"}}}]
+   :limit-s 90}
+  {:name "untouched-withdraw-completes"
+   :blocks [[:set [24 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:bread\",count:8}]}"]]
+   :memory [{:kind :chest :data {:pos #xyz [24 0 16]}}]
+   :act [[:job (jobs.storage.withdraw {:items {"bread" 8}})]]
+   :expect [{:event {:source :job :kind :completed :data {:status :completed}} :within-s 60 :of-job true}]
+   :after [[:item "bread" [:>= 8]]]}]}

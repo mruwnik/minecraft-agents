@@ -1,0 +1,27 @@
+;; Card 3e6929aa: the walk look-ahead plans round a mob standing still in a 1-wide way ahead (:replan :why :mob, its cells as walls) before the
+;; body is stuck against it. A corridor along x 6..26 at z 16 between stone walls (z 15 and 17, y 0..2, open top), the body at its west mouth
+;; and the goal beyond its east mouth; outside the walls the plot is open, so the way round is the detour. The mob is a NoAI cow.
+;; Should-fail (no replan): a cow standing beside the route in the open, outside the corridor, is no wall.
+{:defaults
+ {:tags [:movement :watch]
+  :time :any
+  :plot {:height 8}
+  :blocks [[:fill [6 0 15] [26 2 15] "stone"] [:fill [6 0 17] [26 2 17] "stone"]]
+  :body {:at [4.5 0 16.5] :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [{:name "cow-in-the-corridor-replans-and-arrives-round"
+   :act [[:summon "cow" [14.5 0 16.5] "{NoAI:1b}"]
+         [:wait-s 2]
+         [:job (jobs.movement.go-to {:pos #at [29 0 16] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :replan :data {:why :mob}} :within-s 40 :of-job true}
+            {:event {:source :job :kind :result :data {:arrived true}} :within-s 80 :of-job true}]
+   :after [[:body-near [29.5 0 16.5] 2] [:entities "type=cow,tag=wt" [[12 0 15] [16 2 17]] 1]]}
+  {:name "cow-beside-the-route-no-replan"
+   :blocks [[:fill [6 0 15] [26 2 15] "air"] [:fill [6 0 17] [26 2 17] "air"]]
+   :act [[:summon "cow" [14.5 0 20.5] "{NoAI:1b}"]
+         [:wait-s 2]
+         [:job (jobs.movement.go-to {:pos #at [29 0 16] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :replan :data {:why :mob}} :for-s 60 :until {:source :job :kind :result :data {:arrived true}}}]
+   :after [[:body-near [29.5 0 16.5] 2]]}]}

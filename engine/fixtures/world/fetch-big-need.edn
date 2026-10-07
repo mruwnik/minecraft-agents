@@ -1,0 +1,26 @@
+;; Card 1d206297: a need above 64 (a plan short of 100 cobblestone) is fetched: jobs.lib.fetch hands jobs.items.obtain the whole count and
+;; obtain takes 64 a trip; it is no longer refused at submit (:count had :max 64). The body stands at [4.5 0 16.5] facing the chest at
+;; [4 0 12] (turned by RCON so its first sight sees it); the plan is a 10x10 cobblestone floor x 18..27, z 12..21 (100 cells).
+;; Should-fail: no chest and no stone to gather (dirt floor): fetch.failed, the build ends short.
+{:defaults
+ {:tags [:fetch :build]
+  :time :any
+  :plot {:height 12 :floor "stone"}
+  :plans [{:id "floor" :metadata {:by "$body"}
+           :parts [{:id "floor" :box [#at [18 0 12] #at [27 0 21]] :want "cobblestone"}]}]
+  :body {:at [4.5 0 16.5] :effects [["resistance" 600 4]]}
+  :limit-s 240}
+ :cases
+ [{:name "100-cobblestone-fetched-from-a-seen-chest"
+   :blocks [[:set [4 0 12] "chest{Items:[{Slot:0b,id:\"minecraft:cobblestone\",count:64},{Slot:1b,id:\"minecraft:cobblestone\",count:64}]}"]]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 180 20"] [:wait-s 2]
+         [:job (jobs.build.from-plan {:plan "$plan:floor"})]]
+   :expect [{:event {:source :job :kind :fetch.started :data {:args {:item "cobblestone" :count [:> 64]}}} :within-s 40 :of-job true}
+            {:event {:source :job :kind :build.done :data {:missing 0}} :within-s 220 :of-job true}]
+   :after [[:block [18 0 12] "cobblestone"] [:block [27 0 21] "cobblestone"] [:block [22 0 17] "cobblestone"]]}
+  {:name "no-chest-no-stone-fetch-fails"
+   :plot {:floor "dirt"}
+   :act [[:job (jobs.build.from-plan {:plan "$plan:floor"})]]
+   :expect [{:event {:source :job :kind :fetch.failed :data {:for :need}} :within-s 90 :of-job true}]
+   :after [[:not-block [22 0 17] "cobblestone"]]
+   :limit-s 100}]}

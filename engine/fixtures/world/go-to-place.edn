@@ -1,0 +1,25 @@
+;; Card 3e5ba0b4: go-to :place walks to a named place of body memory (jobs.memory.set-place); a name that is unknown, or not a valid name,
+;; is refused at once with a :refused warn and a :result {:arrived false :reason ...}, and the body does not move.
+{:defaults
+ {:tags [:movement :memory]
+  :time :any
+  :plot {:height 8}
+  :body {:at [4.5 0 16.5] :effects [["resistance" 600 4]]}
+  :limit-s 60}
+ :cases
+ [{:name "set-place-then-go-to-place-arrives"
+   :act [[:job (jobs.memory.set-place {:name :camp :pos #at [24 0 16]})]
+         [:wait-s 2]
+         [:job (jobs.movement.go-to {:place :camp :range 1})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 45 :of-job true}]
+   :after [[:body-near [24.5 0 16.5] 2]]}
+  {:name "unknown-place-refused-no-walk"
+   :act [[:job (jobs.movement.go-to {:place :nowhere :range 1})]]
+   :expect [{:event {:source :job :kind :refused :data {:reason :unknown-place}} :within-s 15 :of-job true}
+            {:event {:source :job :kind :result :data {:arrived false :reason :unknown-place}} :within-s 15 :of-job true}]
+   :after [[:body-near [4.5 0 16.5] 1.5]]}
+  {:name "bad-place-name-refused-no-walk"
+   :act [[:job (jobs.movement.go-to {:place "" :range 1})]]
+   :expect [{:event {:source :job :kind :refused :data {:reason :bad-name}} :within-s 15 :of-job true}
+            {:event {:source :job :kind :result :data {:arrived false :reason :bad-name}} :within-s 15 :of-job true}]
+   :after [[:body-near [4.5 0 16.5] 1.5]]}]}

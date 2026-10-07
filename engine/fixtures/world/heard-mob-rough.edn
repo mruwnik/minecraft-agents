@@ -1,0 +1,32 @@
+;; Cards 4d65437f, 28ae6edb: a mob the body only hears is judged by its bearing and distance band, not its exact place (reach/mob-pos,
+;; threats/place-of). A NoAI zombie 6 south of the body behind a stone wall (x 8..24, z 19, y 0..3) is heard, not seen; the way round the wall
+;; ends gives it a way to the body, so hostile-near fires. A mob beyond hearing (16) or a passive one fires nothing.
+;; Not checked here (no :after reads memory.edn): that :hostile / :threat memory and :hostile.chased carry :direction :band :from and no :pos
+;; for a heard mob; flee_test pins those.
+{:defaults
+ {:tags [:hostile :survival :sensing]
+  :time :any
+  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+              :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+  :blocks [[:fill [8 0 19] [24 3 19] "stone"]]
+  :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]}
+  :limit-s 40}
+ :cases
+ [{:name "zombie-heard-behind-wall-fires"
+   :act [[:summon "zombie" [16.5 0 22.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 15}]}
+  {:name "zombie-seen-in-the-open-fires"
+   :blocks [[:fill [8 0 19] [24 3 19] "air"]]
+   :act [[:summon "zombie" [16.5 0 22.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 15}]}
+  {:name "zombie-beyond-hearing-quiet"
+   :body {:at [16.5 0 4.5]}
+   :act [[:summon "zombie" [16.5 0 31.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:wait-s 12]]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 12}]
+   :after [[:body-near [16.5 0 4.5] 2]]}
+  {:name "cow-heard-behind-wall-quiet"
+   :act [[:summon "cow" [16.5 0 22.5] "{NoAI:1b}"]
+         [:wait-s 12]]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 12}]
+   :after [[:body-near [16.5 0 16.5] 2] [:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 1]]}]}
