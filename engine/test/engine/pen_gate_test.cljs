@@ -421,3 +421,53 @@
           (is (= [:walk-interrupted] (mapv :reason (:left (first (events-of s :shut-gate.stopped))))))
           (is (empty? (events-of s :shut-gate.gave-up)) "no warn: it is not a verdict on the gate")
           (is (= [[2 64 0]] (gave-up-cells s)) "a short entry"))))))
+
+;; ------------------------------------------------------------------ gates not seen lately
+
+(defn unseen-from-afar
+  "p whose sensedAt reports the cell as unknown (aged out) until the body stands within near blocks of it; with
+  read-only?: a gate that never shows."
+  [p cell near never?]
+  (let [sensed (.-sensedAt p)
+        [cx cy cz] cell]
+    (aset p "sensedAt"
+          (fn [pos]
+            (let [self (.-pos (.self p))
+                  gate? (and (= cx (.-x pos)) (= cy (.-y pos)) (= cz (.-z pos)))
+                  far? (> (js/Math.hypot (- (.-x self) cx) (- (.-z self) cz)) near)]
+              (if (and gate? (or never? far?)) #js {:unknown true} (sensed pos)))))
+    p))
+
+(defn run-unseen
+  "Run :plan pen-a over the open gate at 2,64,0 that reads unknown from afar."
+  [never? n]
+  (let [s (start (pen-world true 2 -9) {"pen-a" pen-a} nil)]
+    (unseen-from-afar (:p s) [2 64 0] 4 never?)
+    (core/submit! (:eng s) (list 'jobs.animals.shut-gate {:plan "pen-a"}) {})
+    (js/Promise.resolve s)))
+
+(deftest a-planned-gate-aged-out-is-walked-to-looked-at-and-shut
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (run-unseen false 0))]
+          (loop [i 0]
+            (when (and (< i 40) (seq (:list (core/state (:eng s)))))
+              (swap! clock + 700)
+              (await (core/tick! (:eng s)))
+              (recur (inc i))))
+          (is (not (gate-open? (:p s) 2 64 0)) "the open gate was shut")
+          (is (= 1 (:shut (first (events-of s :shut-gate.done))))))))))
+
+(deftest a-planned-gate-that-never-shows-is-left-unseen-not-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (run-unseen true 0))]
+          (loop [i 0]
+            (when (and (< i 40) (seq (:list (core/state (:eng s)))))
+              (swap! clock + 700)
+              (await (core/tick! (:eng s)))
+              (recur (inc i))))
+          (is (empty? (events-of s :shut-gate.done)) "not done: the gate was never read")
+          (is (= [{:cell [2 64 0] :reason :unseen}] (:left (first (events-of s :shut-gate.stopped))))))))))
