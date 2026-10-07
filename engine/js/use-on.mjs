@@ -61,7 +61,7 @@ export function createUseOn ({ act, getBot, inventory, eye, lookNow, timeScale, 
       if (item !== undefined && !stack) return refuse('no-item')
       const distance = Math.hypot(eye().x - (p.x + 0.5), eye().y - (p.y + 0.5), eye().z - (p.z + 0.5))
       if (distance > REACH) return refuse('unreachable', { reason: 'too-far', distance: Math.round(distance * 100) / 100 })
-            // noLine comes from engine.senses: the eye's ray reaches no part of the target before another block's shape.
+      // noLine comes from engine.senses: the eye's ray reaches no part of the target before another block's shape.
       if (a.noLine) return refuse('unreachable', { reason: 'no-line' })
       if (stack) {
         await bot.equip(stack, 'hand')

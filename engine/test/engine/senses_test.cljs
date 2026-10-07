@@ -19,14 +19,14 @@
                      (case (get blocks [x y z])
                        :block #js [#js [0 0 0 1 1 1]]
                        :fence #js [#js [0.375 0 0.375 0.625 1.5 0.625]]
-                       #js []))}))
+                       (let [b (get blocks [x y z])] (if (vector? b) (clj->js b) #js []))))}))
 
 (defn ent [id name kind x & [extra]]
   (js/Object.assign #js {:id id :name name :kind kind :pos (at x 64 0.5) :distance (- x 0.5) :height 1.8} (clj->js extra)))
 
 (defn stub
   "Raw primitives: self fields, the entity list entities answers, the args sleep and the body listener were given."
-  [{:keys [self entities blocks unloaded]}]
+  [{:keys [self entities blocks unloaded names]}]
   (let [seen (atom {})
         listener (atom nil)]
     {:seen seen
@@ -36,7 +36,7 @@
                            (into-array (filter #(or (nil? (.-kind a)) (= (.-kind a) (.-kind %))) entities)))
              :sleep (fn [token a] (swap! seen assoc :sleep a) (js/Promise.resolve #js {:status "sleeping"}))
              :useOn (fn [token a] (swap! seen assoc :use-on a) (js/Promise.resolve #js {:status "used"}))
-             :blockAt (fn [pos] #js {:name "dirt"})
+             :blockAt (fn [pos] #js {:name (get names [(.-x pos) (.-y pos) (.-z pos)] "dirt")})
              :onBodyEvent (fn [l] (reset! listener l) (fn []))
              :rawWorld (raw-world blocks unloaded)}}))
 
@@ -107,6 +107,26 @@
     (is (= true (no-line wall)) "stone between the eye and the block: no line")
     (is (= false (no-line {})) "open air: a line")
     (is (= false (no-line {[4 64 0] :block})) "a block behind the target does not block the line")))
+
+(deftest use-on-line-over-real-shapes
+  (let [no-line (fn [target names blocks]
+                  (let [{:keys [p seen]} (stub {:self {:timeOfDay 6000} :blocks blocks :names names})
+                        w (senses/wrap p (.-rawWorld p))]
+                    (.useOn ^js w "t" #js {:pos (apply at target)})
+                    (.-noLine ^js (:use-on @seen))))
+        full [[0 0 0 1 1 1]]
+        leaf [[0 0 0.4 1 1 0.6]]
+        gate [[0 0 0.375 1 1.5 0.625]]
+        around (fn [[x y z]] (for [[dx dy dz] [[-1 0 0] [-1 1 0] [-1 -1 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1] [1 0 0]]]
+                               [(+ x dx) (+ y dy) (+ z dz)]))]
+    (is (= false (no-line [1 64 0] {[1 64 0] "oak_door" [1 65 0] "oak_door"} {[1 64 0] leaf [1 65 0] leaf}))
+        "a door lower half: its closed upper half (the partner) never blocks")
+    (is (= false (no-line [1 64 0] {} {[1 64 0] gate [1 64 1] :block [1 65 1] :block [2 64 0] :block}))
+        "a gate beside a wall is clicked from the open side")
+    (is (= true (no-line [3 64 0] {} (into {[3 64 0] gate} (map (fn [c] [c :block]) (around [3 64 0])))))
+        "a gate walled in on every side has no line")
+    (is (= true (no-line [3 64 0] {} {[2 64 0] full [2 65 0] full}))
+        "glass-like full boxes between the eye and a dirt block hide it")))
 
 (deftest weather-event-fires-when-raining-or-thundering-flips
   (let [{:keys [p listener]} (stub {:self {:timeOfDay 6000 :rainState 0 :thunderState 0}})

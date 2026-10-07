@@ -96,6 +96,11 @@ test('eye is the head position and look in mineflayer radians, null offline', ()
   assert.deepEqual([raw.eye(), offline.eye()], [{ x: 1.5, y: 65.62, z: 2.5, yaw: 1, pitch: -0.5, dimension: 'overworld' }, null])
 })
 
+test('shapesAt: a solid block with no shape list counts as a full box', () => {
+  const raw = createRawWorld({ getBot: () => ({ blockAt: () => ({ boundingBox: 'block' }) }) })
+  assert.deepEqual(raw.shapesAt(1, 2, 3), [[0, 0, 0, 1, 1, 1]])
+})
+
 test('shapesAt gives the collision boxes of a solid block, none for a non-solid or an unloaded cell', () => {
   const { bot } = makeBot()
   const cube = [[0, 0, 0, 1, 1, 1]]

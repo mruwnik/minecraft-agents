@@ -187,10 +187,11 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
       if (!e?.position || isOffline()) return null
       return { x: e.position.x, y: e.position.y + EYE_HEIGHT, z: e.position.z, yaw: e.yaw ?? 0, pitch: e.pitch ?? 0, dimension: bot.game?.dimension ?? 'overworld' }
     },
-    // collision boxes of the cell, local coordinates (0..1 across it): a solid block's shapes, none for an unloaded or non-solid cell
+    // collision boxes of the cell, local coordinates (0..1 across it): a solid block's shapes (a full box when it lists none), none for an unloaded or non-solid cell
     shapesAt: (x, y, z) => {
       const block = follow()?.blockAt?.(new Vec3(x, y, z))
-      return block?.boundingBox === 'block' ? block.shapes ?? [] : []
+      if (block?.boundingBox !== 'block') return []
+      return block.shapes?.length ? block.shapes : [[0, 0, 0, 1, 1, 1]]
     },
     // the name of the item in the off hand (slot 45), or null
     offHand: () => follow()?.inventory?.slots?.[45]?.name ?? null,
