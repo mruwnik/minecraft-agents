@@ -322,10 +322,16 @@
                   :else
                   (fruitless! c (or (:reason res) (when (:short res) {:short (:short res)}) :declined))))))))))
 
-(defn gather-failed! [c need why]
+(defn fruitless-limit
+  "Fruitless runs that end the gather source: the need's :max-runs, but only for a run that happened; a child that
+  was declined (:declined: it could not start) broke nothing and counts against the default."
+  [need r]
+  (if (= :declined r) max-fruitless (:max-runs need max-fruitless)))
+
+(defn gather-failed! [c need why r]
   (let [k (inc (get-in (ctx/mem c) [:gather :fruitless] 0))]
     (ctx/update-mem! c assoc-in [:gather :fruitless] k)
-    (when (>= k (:max-runs need max-fruitless)) (tried! c :gather (or why :failed)))
+    (when (>= k (fruitless-limit need r)) (tried! c :gather (or why :failed)))
     :continue))
 
 (defn ^:async gather-step!
@@ -349,7 +355,7 @@
                 (ctx/update-mem! c update :gather dissoc :before :item)
                 (if (> (gather-carried p need) before)
                   (do (ctx/update-mem! c assoc-in [:gather :fruitless] 0) :continue)
-                  (gather-failed! c need (or (:reason res) :nothing-gathered))))))))))
+                  (gather-failed! c need (or (:reason res) :nothing-gathered) r)))))))))
 
 (defn ^:async round [c]
   (let [a (:args c)

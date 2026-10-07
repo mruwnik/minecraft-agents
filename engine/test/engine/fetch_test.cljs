@@ -767,7 +767,12 @@
   (let [need (obtain/gather-need {"oak_sapling" 1})]
     (is (= 20 (:dry-digs (:args need))) "digs per child run")
     (is (= 1 (:max-runs need)) "one fruitless run ends the source")
-    (is (= obtain/max-fruitless (:max-runs (obtain/gather-need {"cobblestone" 1}) obtain/max-fruitless)))))
+    (is (nil? (:max-runs (obtain/gather-need {"cobblestone" 1}))) "other sources use the default bound")))
+
+(deftest a-declined-child-is-not-a-fruitless-run
+  (let [sapling (obtain/gather-need {"oak_sapling" 1})]
+    (is (= 1 (obtain/fruitless-limit sapling :done)))
+    (is (= obtain/max-fruitless (obtain/fruitless-limit sapling :declined)) "a child that could not start broke no leaves")))
 
 (deftest obtain-sapling-does-not-break-leaves-in-another-owners-zone
   (async done
