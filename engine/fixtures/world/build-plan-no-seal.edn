@@ -8,7 +8,7 @@
   :body {:at [11.5 0 11.5] :inventory [["dirt" 64]] :effects [["resistance" 600 4]] :settle-s 4}}
  :cases
  [{:name "closed-box-body-inside"
-   :plans [{:id "box" :metadata {:by "ProbePlanSeal"}
+   :plans [{:id "box" :metadata {:by "$body"}
             :parts [{:id "walls" :outline [#at [10 0 10] #at [13 1 13]] :want "dirt"}
                     {:id "roof" :box [#at [10 2 10] #at [13 2 13]] :want "dirt"}]}]
    :act [[:job (jobs.build.from-plan {:plan "$plan:box"})]]
@@ -20,7 +20,7 @@
            [:not-block [11.5 0 11.5] "dirt"]]}
   {:name "closed-box-body-inside-slope"
    ;; plan one up (walls y 1..2, roof y 3) on a hillside: stone y0 from x 5, one higher from x 15; interior bumps so the body stands at feet y2
-   :plans [{:id "box" :metadata {:by "ProbePlanSeal"}
+   :plans [{:id "box" :metadata {:by "$body"}
             :parts [{:id "walls" :outline [#at [10 1 10] #at [13 2 13]] :want "dirt"}
                     {:id "roof" :box [#at [10 3 10] #at [13 3 13]] :want "dirt"}]}]
    :blocks [[:fill [5 0 5] [22 0 22] "stone"] [:fill [15 1 5] [22 1 22] "stone"]
@@ -35,7 +35,7 @@
    :after [[:block [10 1 10] "dirt"] [:block [13 2 13] "dirt"] [:block [13 3 10] "dirt"] [:block [11 2 13] "dirt"]
            [:not-block [11 2 11] "dirt"] [:not-block [12 2 12] "dirt"]]}
   {:name "clear-doorway-leaves"
-   :plans [{:id "hut" :metadata {:by "ProbePlanSeal"}
+   :plans [{:id "hut" :metadata {:by "$body"}
             :parts [{:id "walls" :box [#at [10 0 10] #at [13 1 10]] :want "dirt"}
                     {:id "wall-w" :box [#at [10 0 11] #at [10 1 12]] :want "dirt"}
                     {:id "wall-e" :box [#at [13 0 11] #at [13 1 12]] :want "dirt"}
@@ -53,7 +53,7 @@
   {:name "pit-cannot-walk-out"
    ;; stone mass x 4..19, z 4..19 y 0..4 with an open 8x8 pit x 8..15 z 8..15 (4 deep); plan walls in the pit floor; no pickaxe.
    ;; The pit is already no way out for the walker (the flood is walkable): nothing is held back; the whole box is built (40/40).
-   :plans [{:id "box" :metadata {:by "ProbePlanSeal"}
+   :plans [{:id "box" :metadata {:by "$body"}
             :parts [{:id "walls" :outline [#at [10 0 10] #at [13 1 13]] :want "dirt"}
                     {:id "roof" :box [#at [10 2 10] #at [13 2 13]] :want "dirt"}]}]
    :blocks [[:fill [4 0 4] [19 4 19] "stone"] [:fill [8 0 8] [15 4 15] "air"]]
@@ -64,7 +64,7 @@
   {:name "island-exit-unwalkable"
    ;; box on a 6x6 stone platform in the air (floor removed 2 deep around it): the flood sees a way out (a 2-block drop), the walk to the exit
    ;; point (2 outside the box) cannot get within range; the sealing cells must be given up :unreachable, never placed
-   :plans [{:id "box" :metadata {:by "ProbePlanSeal"}
+   :plans [{:id "box" :metadata {:by "$body"}
             :parts [{:id "walls" :outline [#at [10 0 10] #at [13 1 13]] :want "dirt"}
                     {:id "roof" :box [#at [10 2 10] #at [13 2 13]] :want "dirt"}]}]
    :blocks [[:fill [0 -3 0] [31 -3 31] "stone"] [:fill [0 -2 0] [31 -1 31] "air"] [:fill [9 -1 9] [14 -1 14] "stone"]]

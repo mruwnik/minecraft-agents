@@ -51,7 +51,7 @@
    :act [[:job (jobs.combat.attack {:targets 99999999})]]
    :expect [{:event {:source :job :kind :attack.done :data {:reason :absent :killed []}} :within-s 20 :of-job true}]}
   {:name "own-name-never-attacked"
-   :act [[:job (jobs.combat.attack {:targets ["ProbeFixtures"]})]]
+   :act [[:job (jobs.combat.attack {:targets ["$body"]})]]
    :expect [{:event {:source :job :kind :attack.done :data {:reason :absent :killed []}} :within-s 20 :of-job true}]}
   {:name "zombie-in-glass-box-given-up-unreachable"
    :blocks [[:fill [20 0 20] [24 3 24] "glass" :hollow]]
