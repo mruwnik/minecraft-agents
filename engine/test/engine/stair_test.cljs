@@ -694,9 +694,9 @@
               chunk wplan/chunk-expansions]
           (set! wplan/chunk-expansions 16)
           (js/setTimeout #(swap! order conj :timer) 0)
-          (await (way-back-of (slab 63 (range 60)) [50 64 1]))
+          (try (await (way-back-of (slab 63 (range 60)) [50 64 1]))
+               (finally (set! wplan/chunk-expansions chunk)))
           (swap! order conj :planned)
-          (set! wplan/chunk-expansions chunk)
           (is (= [:timer :planned] @order)))))))
 
 (def around-the-cut {:name "plot" :min [1 60 -1] :max [3 70 1]})

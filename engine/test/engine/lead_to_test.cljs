@@ -409,9 +409,9 @@
               chunk wplan/chunk-expansions]
           (set! wplan/chunk-expansions 16)
           (js/setTimeout #(swap! order conj :timer) 0)
-          (await (reach-check s {:x 33.4 :y 64 :z 0.6}))
+          (try (await (reach-check s {:x 33.4 :y 64 :z 0.6}))
+               (finally (set! wplan/chunk-expansions chunk)))
           (swap! order conj :checked)
-          (set! wplan/chunk-expansions chunk)
           (is (= [:timer :checked] @order)))))))
 
 ;; ------------------------------------------------------- looking round while leading (card 9970c377)

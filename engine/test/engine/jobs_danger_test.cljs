@@ -2,6 +2,7 @@
   "jobs.lib.cost/route-danger: the danger of walking a route past the mobs the body senses, after its armour."
   (:require [cljs.test :refer [deftest is are]]
             [jobs.lib.cost :as d]
+            [jobs.lib.cost.danger :as danger]
             [jobs.lib.reach :as reach]
             [engine.game :as game]
             [engine.test-util :as tu]))
@@ -101,3 +102,13 @@
     (is (= {:x 0 :y 64 :z 0} (first r)))
     (is (= {:x 10 :y 64 :z 0} (last r)))
     (is (= 65 (:y (first (filter #(= 5 (:x %)) r)))) "a step up onto the block")))
+
+(defn solid-at [& cells] (fn [x _ z] (if (some #{[x z]} cells) :solid :air)))
+
+(deftest line-clear-walks-the-exact-cells-of-the-ray
+  (let [from {:x 0.5 :y 64.5 :z 0.5}]
+    (are [cells to clear?] (= clear? (danger/line-clear? (apply solid-at cells) from to))
+      [[1 0]] {:x 2.5 :y 64.5 :z 2.0} false  ;; clips the corner of a solid cell for a sliver
+      [[0 1] [2 0]] {:x 2.5 :y 64.5 :z 1.5} true  ;; a diagonal between solid cells
+      [[0 0] [2 1]] {:x 2.5 :y 64.5 :z 1.5} true  ;; solid start and end cells do not count
+      [[1 0]] {:x 2.5 :y 64.5 :z 1.5} false)))

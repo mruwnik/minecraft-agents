@@ -70,7 +70,7 @@
   (await (ctx/act c :steer (steer-args 3 (centre-decider tx tz)))))
 
 (defn ^:async plan-walk!
-  "plan-walk with plan-within! (yields to the event loop between search slices): what the walks (jobs.lib.near, walk-to!)
+  "Plan a walk with plan-within! (yields to the event loop between search slices): what the walks (jobs.lib.near, walk-to!)
   plan with, so a long search never holds the body's API. With :budget (go-to: round-budget), one call searches at most
   that many expansions (plan-walk-budgeted!): a search that needs more walks to where it has got to, or nowhere
   (\"searching\"), and goes on at the next call; with :progress false only nowhere until the search ends."
@@ -144,11 +144,11 @@
           (recur (inc n)))))))
 
 (defn ^:async follow!
-  "Walk plan (a plan-walk result) and plan again from the body's cell, in the same call, whenever the walk stops for it:
+  "Walk plan (a plan-walk! result) and plan again from the body's cell, in the same call, whenever the walk stops for it:
   the look-ahead saw the way change (:changed: the new plan is walked), a partial plan is due a refresh (:refresh: the new
   plan is walked only when take-refresh? says it is clearly better, else the rest of the old one), or the body is stuck with
   a mob in its way (:mob: wait, plan round it). At most max-watch-replans; past that the plan is walked unwatched.
-  opts: :plan-fn (fn [walls]) -> a plan-walk result (or a promise of one: plan-walk!) from where the body stands now, the
+  opts: :plan-fn (fn [walls]) -> a plan-walk! result (or a promise of one: plan-walk!) from where the body stands now, the
   cells {:x :y :z} read as walls;
   :walk-fn (fn [steps watch]) -> [done ms] (walk! or jobs.lib.pass/walk!); :to the goal cell; :policy for no-walk;
   :dangers true: a danger newly sensed near the way ahead is planned round once (watch-stop);

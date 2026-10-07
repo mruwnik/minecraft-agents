@@ -135,7 +135,7 @@
 
 (defn ^:async run-search!
   "Run search on for at most budget expansions and round-ms, in slices of chunk-expansions with a yield! between them. [search within]:
-  within, plan-within's answer, once the search is over (the search without the limits run after the limited one when
+  within, plan-within!'s answer, once the search is over (the search without the limits run after the limited one when
   beyond-needed?), else nil and the search to go on with."
   [c search budget policy to range weight]
   (let [walled (:walled search)
@@ -164,7 +164,7 @@
                     (recur search used)))))))
 
 (defn unfinished-plan
-  "The plan-walk answer of a search still going on: the path to its progress end (planner progress) when that is at least
+  "The plan-walk! answer of a search still going on: the path to its progress end (planner progress) when that is at least
   progress-blocks nearer the goal than the start, walked as a partial plan; else status \"searching\" with no steps
   (no-walk: :searching), and the search goes on at the next call. With one-way :open, a progress whose nearest node lies
   past a step the body cannot undo and stands at the loaded edge (progress oneWay.open, the rule open-path applies to a
@@ -189,7 +189,7 @@
 
 (defn ^:async plan-walk-budgeted!
   "plan-walk! that runs at most budget expansions of search (run-search!), going on with the body's unfinished search
-  (searches) when it plans the same thing from the same cell. A search that ends is plan-walk's answer; one that does not
+  (searches) when it plans the same thing from the same cell. A search that ends is plan-walk!'s answer; one that does not
   is unfinished-plan's (progress, default true: whether it may walk to where the search has got to). With frontier, the
   searches read and add to the body's known land toward the goal (known-land): a frontier in land an earlier search
   knew to its end is walked to only when there is no other (:frontier-taken :known)."
