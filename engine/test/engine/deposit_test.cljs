@@ -1,6 +1,7 @@
 (ns engine.deposit-test
   "jobs.storage.deposit against the fake world."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.core :as core]
             [engine.withdraw-test :as wt]
             [engine.test-util :as tu]))
 
@@ -34,3 +35,23 @@
               result (await (wt/child-outcome eng job {:chest chest} 16))]
           (is (= {"bread" 12} (wt/inv p)) "bread 12 is the 60 points; dirt and the 8 spare bread go")
           (is (= {:gave-up false} result)))))))
+
+(deftest deposit-gives-up-when-the-known-chest-is-gone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (wt/setup {:inventory [{:name "dirt" :count 5}]})]
+          (wt/know-place! eng :chest chest)
+          (is (= {:gave-up true :reason "missing"}
+                 (await (wt/child-outcome eng job {:items ["dirt"]} 8))))
+          (is (some #(= :chest_missing (:kind %)) @seen))
+          (is (= [] (:list (core/state eng)))))))))
+
+(deftest deposit-waits-with-a-reason-when-no-chest-is-known
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (wt/setup {:inventory [{:name "dirt" :count 5}]})]
+          (core/submit! eng (list job {:items ["dirt"]}) {})
+          (core/tick! eng)
+          (is (some #(and (= :waiting (:kind %)) (= :no-chest (:reason %))) @seen)))))))

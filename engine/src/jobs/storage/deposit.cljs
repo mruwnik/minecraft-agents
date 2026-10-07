@@ -18,7 +18,8 @@
   Memory: a :chest argument that took at least one item and finished clean is offered to the :chest place. It is
   recorded when none is recorded or the recorded one is gone, never over a different live one (place.kept
   event; jobs.memory.set-place moves it). A transfer that finds the recorded chest missing retracts it, with one
-  chest_missing warn.
+  chest_missing warn, and ends at once with reason \"missing\". No chest known: waits, reason :no-chest; no chest
+  at round time gives up \"no-chest\".
   Zones: a chest in another owner's zone or claim that does not allow :put is refused before the walk and again
   before the transfer. The job ends {:gave-up true :reason :refused :zones [..] :claims [..]} after one
   deposit.refused warn and puts nothing in. :ignore-zones? true skips the check.
@@ -67,9 +68,10 @@
        (some #(when-not (tool? (:name %)) (pick %)) items)))))
 
 (defn check
-  "A chest is known."
+  "A chest is known; else waits with reason :no-chest."
   [c]
-  (boolean (chest-of (ctx/view c) (:args c))))
+  (or (boolean (chest-of (ctx/view c) (:args c)))
+      (ctx/wait c {:reason :no-chest})))
 
 (defn give-up!
   "u/fail!, and when it gives up hand the parent the reason."
@@ -77,6 +79,19 @@
   (let [r (u/fail! c kind text)]
     (when (= :done r) (ctx/result! c {:gave-up true :reason reason}))
     r))
+
+(defn end-gave-up!
+  "End now, without further tries: {:gave-up true :reason reason} as the result."
+  [c reason]
+  (ctx/result! c {:gave-up true :reason reason})
+  :done)
+
+(defn retracted?
+  "retract-if-missing!, and true when status is \"missing\" at the recorded chest place (so the job ends at once)."
+  [c chest status]
+  (let [recorded (mem/place (ctx/view c) :chest)]
+    (places/retract-if-missing! c :chest chest status)
+    (and (= "missing" status) (some? recorded) (= chest recorded))))
 
 (defn refuse!
   "End refused: one deposit.refused warn naming the zones and claims, the refusal as the result."
@@ -99,7 +114,7 @@
                         (places/offer! c :chest (:chest (:args c))))
                       (ctx/result! c {:gave-up false})
                       :done)
-      (nil? chest) :continue
+      (nil? chest) (give-up! c :chest_unusable "no chest is known" "no-chest")
       (access/container-refusal c :put chest) (refuse! c (access/container-refusal c :put chest))
       :else
       (let [w (await (near/walk-near! c chest 3))]
@@ -117,5 +132,6 @@
                       (fetch/note-moved! c chest (:name (:stack pick)) (.-moved r))
                       :continue)
                   (give-up! c :chest_unusable "nothing moved into the chest" "nothing-moved"))
-                (do (places/retract-if-missing! c :chest chest (.-status r))
-                    (give-up! c :chest_unusable (str "chest not usable: " (.-status r)) (.-status r)))))))))))
+                (if (retracted? c chest (.-status r))
+                  (end-gave-up! c (.-status r))
+                  (give-up! c :chest_unusable (str "chest not usable: " (.-status r)) (.-status r)))))))))))

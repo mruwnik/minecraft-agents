@@ -4,7 +4,6 @@
             [jobs.lib.fetch :as fetch]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
-            [jobs.lib.places :as places]
             [jobs.storage.deposit :as deposit]))
 
 (def doc
@@ -14,7 +13,7 @@
   Ends with {:gave-up false :short {name n}}. :short is empty when everything is carried, else what the chest could
   not supply. After three failed attempts it ends {:gave-up true :reason r :short {...}} and warns. r is the
   inspect or transfer status, \"unreachable\" (blocked walk) or \"nothing-moved\".
-  Memory: a container missing at the recorded :chest retracts that place, with one chest_missing warn.
+  Memory: a container missing at the recorded :chest retracts that place, with one chest_missing warn, and ends at once with reason \"missing\". No chest known: the job waits, reason :no-chest.
   Zones: a chest in another owner's zone or claim that does not allow :take is refused before the walk and again
   before the transfer. The job ends {:gave-up true :reason :refused :zones [..] :claims [..]} after one
   withdraw.refused warn and takes nothing. :ignore-zones? true skips the check.
@@ -36,9 +35,10 @@
        vec))
 
 (defn check
-  "A chest is known."
+  "A chest is known; else waits with reason :no-chest."
   [c]
-  (boolean (deposit/chest-of (ctx/view c) (:args c))))
+  (or (boolean (deposit/chest-of (ctx/view c) (:args c)))
+      (ctx/wait c {:reason :no-chest})))
 
 (defn give-up!
   "u/fail!, and when it gives up hand the parent the reason and the shortfall."
@@ -46,6 +46,12 @@
   (let [r (u/fail! c :withdraw.gave-up (str "withdraw gave up: " reason))]
     (when (= :done r) (ctx/result! c {:gave-up true :reason reason :short (into {} short)}))
     r))
+
+(defn end-gave-up!
+  "End now, without further tries: the reason and the shortfall as the result."
+  [c reason short]
+  (ctx/result! c {:gave-up true :reason reason :short (into {} short)})
+  :done)
 
 (defn held-in
   "How many of name the inspected container items hold."
@@ -79,8 +85,9 @@
           :blocked (give-up! c "unreachable" short)
           (let [seen (await (ctx/act c :inspectContainer (clj->js {:pos chest})))]
             (if (not= "ok" (.-status seen))
-              (do (places/retract-if-missing! c :chest chest (.-status seen))
-                  (give-up! c (.-status seen) short))
+              (if (deposit/retracted? c chest (.-status seen))
+                (end-gave-up! c (.-status seen) short)
+                (give-up! c (.-status seen) short))
               (let [_ (fetch/note-stock! c chest (.-items seen))
                     pick (some (fn [[name n]] (let [held (held-in (.-items seen) name)]
                                                 (when (pos? held) [name (min n held)])))
@@ -95,7 +102,8 @@
                   (let [[name n] pick
                         r (await (ctx/act c :transfer (clj->js {:pos chest :direction "withdraw" :item name :count n})))]
                     (cond
-                      (not= "ok" (.-status r)) (do (places/retract-if-missing! c :chest chest (.-status r))
+                      (not= "ok" (.-status r)) (if (deposit/retracted? c chest (.-status r))
+                                                   (end-gave-up! c (.-status r) short)
                                                    (give-up! c (.-status r) short))
                       (zero? (.-moved r)) (give-up! c "nothing-moved" short)
                       :else (do (fetch/note-moved! c chest name (- (.-moved r)))

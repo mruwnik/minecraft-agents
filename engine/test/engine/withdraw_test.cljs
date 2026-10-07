@@ -136,3 +136,24 @@
         (let [{:keys [eng]} (setup {})]
           (is (= {:gave-up true :reason "missing" :short {"bread" 3}}
                  (await (child-outcome eng job {:chest chest :items {"bread" 3}} 8)))))))))
+
+(deftest withdraw-gives-up-when-the-known-chest-is-gone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {})]
+          (know-place! eng :chest chest)
+          (is (= {:gave-up true :reason "missing" :short {"bread" 3}}
+                 (await (child-outcome eng job {:items {"bread" 3}} 8))))
+          (is (some #(= :chest_missing (:kind %)) @seen))
+          (is (= [] (:list (core/state eng)))))))))
+
+(deftest withdraw-waits-with-a-reason-when-no-chest-is-known
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {})]
+          (core/submit! eng (list job {:items {"bread" 3}}) {})
+          (core/tick! eng)
+          (is (some #(and (= :waiting (:kind %)) (= :no-chest (:reason %))) @seen)))))))
+
