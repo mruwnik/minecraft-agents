@@ -71,7 +71,7 @@
   (let [skipped (:skipped (ctx/mem c) {})]
     (->> (cells (:args c))
          (remove #(contains? skipped %))
-         (map (fn [pos] [pos (u/block-name (:primitives c) pos)]))
+         (map (fn [pos] [pos (u/seen-name (:primitives c) pos)]))
          (remove (fn [[_ n]] (= "dirt_path" n)))
          vec)))
 
@@ -175,7 +175,7 @@
     (if (= :partial w)
       :continue
       (let [above-pos (update target :y inc)
-            above (u/block-name p above-pos)]
+            above (u/seen-name p above-pos)]
         (cond
           (= :blocked w) (do (bump! c target :unreachable) :again)
           (not (permitted? c :dig target)) (do (skip! c [target] :not-permitted) :again)

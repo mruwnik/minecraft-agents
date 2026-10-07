@@ -193,7 +193,7 @@
         p (:primitives c)
         villager (pick! c)
         e (when villager (trade/find-villager p villager))
-        block (u/block-name p pos)
+        block (u/seen-name p pos)
         profession (when e (.-profession e))
         out-of-tries? (>= (rolls c) tries)]
     (cond

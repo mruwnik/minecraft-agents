@@ -63,8 +63,8 @@
         solid? (fn [n] (and n (not (b/air n)) (not (b/fluids n)) (not (b/clearable n))))]
     (some (fn [[dx dz]]
             (let [pos {:x (+ x dx) :y y :z (+ z dz)}]
-              (when (and (b/air (u/block-name p pos))
-                         (solid? (u/block-name p (update pos :y dec))))
+              (when (and (b/air (u/seen-name p pos))
+                         (solid? (u/seen-name p (update pos :y dec))))
                 pos)))
           table-offsets)))
 

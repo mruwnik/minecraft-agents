@@ -74,7 +74,7 @@
   (let [skipped (:skipped (ctx/mem c) {})]
     (->> (cells (:args c))
          (remove #(contains? skipped %))
-         (keep (fn [pos] (when-let [n (u/block-name (:primitives c) pos)] [pos n]))))))
+         (keep (fn [pos] (when-let [n (u/seen-name (:primitives c) pos)] [pos n]))))))
 
 (defn pending
   "[[pos block-name-or-nil] ...]: the loaded cells to dig, and the unloaded
@@ -84,7 +84,7 @@
         skipped (:skipped (ctx/mem c) {})]
     (->> (cells (:args c))
          (remove #(contains? skipped %))
-         (map (fn [pos] [pos (u/block-name (:primitives c) pos)]))
+         (map (fn [pos] [pos (u/seen-name (:primitives c) pos)]))
          (remove (fn [[_ n]] (and n (or (air n) (fluids n) (kept? keep n)))))
          vec)))
 
@@ -240,7 +240,7 @@
           (if (nil? n)
             (let [w (await (near/go-near! c pos 3 {:zone-tolls true}))]
               (when (= :blocked w) (bump! c pos :unreachable))
-              (if (or (= :partial w) (and (= :there w) (nil? (u/block-name (:primitives c) pos)))) :continue :again))
+              (if (or (= :partial w) (and (= :there w) (nil? (u/seen-name (:primitives c) pos)))) :continue :again))
             (do (ctx/update-mem! c assoc :target pos)
                 (await (dig! c pos))))
           (await (step-off! c allowed)))))))
