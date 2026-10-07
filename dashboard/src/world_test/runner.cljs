@@ -635,7 +635,26 @@
 
 (defn world-file [opts name] (repo-path "worlds" (:world opts) name))
 
-(def shared-settle-ms 3200)
+(def shared-settle-ms
+  "How long seed-shared! waits for the body to re-read an edited file (it stats them lazily, at most every 3 s)."
+  4000)
+
+(defn await-reload!
+  "Polls the body's log from cursor until every file in names (file names, e.g. \"zones.edn\") appears in a :world.reloaded
+  event newer than since-ms; resolves true then, false after limit-ms."
+  [opts cursor since-ms names limit-ms]
+  (let [until (+ (js/Date.now) limit-ms)
+        reloaded (fn []
+                   (->> (read-events-from (events-file opts) cursor)
+                        (filter #(and (= :world.reloaded (:kind %)) (>= (:time-ms % 0) since-ms)))
+                        (mapcat #(get-in % [:data :files]))))
+        done? (fn [] (let [files (reloaded)] (every? (fn [n] (some #(str/ends-with? % n) files)) names)))]
+    (letfn [(poll []
+              (cond
+                (done?) (js/Promise.resolve true)
+                (> (js/Date.now) until) (js/Promise.resolve false)
+                :else (.then (sleep 250) poll)))]
+      (poll))))
 
 (defn with-shared-files!
   "Returns a thunk that runs thunk (-> promise) while holding the agent tools' own lock (<file>.lock) on each of files
@@ -672,18 +691,21 @@
 
 (defn seed-shared!
   "Adds the case's :zones and :places (plot-relative in c, resolved against origin) to the world's zones.edn and
-  places.json, tagged with the body; resolves after the body's world cache is due for a re-read. Nothing to do when the
-  case has neither."
+  places.json, tagged with the body; resolves once the body logged world.reloaded for them (or after shared-settle-ms: an idle body reads
+  nothing, so its first job re-reads). Nothing to do when the case has neither."
   [opts origin c]
   (if (and (empty? (:zones c)) (empty? (:places c)))
     (js/Promise.resolve nil)
     (let [zones (f/zone-entries (:body opts) (abs-entries origin (:zones c) [:min :max]))
           markers (f/marker-entries (:body opts) (f/resolve-body-refs (abs-entries origin (:places c) [:pos]) (:body opts)))]
-      (-> ((with-shared-files! [(world-file opts "zones.edn") (world-file opts "places.json")]
-             (fn []
-               (when (seq zones) (edit-shared-file! (world-file opts "zones.edn") #(f/zones-with % zones)))
-               (when (seq markers) (edit-shared-file! (world-file opts "places.json") #(f/markers-with % markers))))))
-          (.then #(sleep (:shared-settle-ms opts shared-settle-ms)))))))
+      (let [cursor (log-cursor (events-file opts))
+            since (js/Date.now)]
+        (-> ((with-shared-files! [(world-file opts "zones.edn") (world-file opts "places.json")]
+               (fn []
+                 (when (seq zones) (edit-shared-file! (world-file opts "zones.edn") #(f/zones-with % zones)))
+                 (when (seq markers) (edit-shared-file! (world-file opts "places.json") #(f/markers-with % markers))))))
+            (.then #(await-reload! opts cursor since (cond-> [] (seq zones) (conj "zones.edn") (seq markers) (conj "places.json"))
+                                   (:shared-settle-ms opts shared-settle-ms))))))))
 
 (defn submit-job!
   "Submits spec with tools/jobs.mjs; resolves to the job id or throws with the tool's answer."

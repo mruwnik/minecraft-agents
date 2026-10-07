@@ -599,3 +599,41 @@
                   (is (re-find #":until \[:file \"never.edn\"\] not met after 1 s" (.-message e)))
                   (is (re-find #"never.edn does not exist" (.-message e)))))
         (.finally done))))
+
+(defn log-reload!
+  "Appends a world.reloaded event for files to the body's event log, as the engine writes it."
+  [opts files]
+  (let [file (r/events-file opts)]
+    (fs/mkdirSync (path/dirname file) #js {:recursive true})
+    (fs/appendFileSync file (str (pr-str {:source :system :kind :world.reloaded :level :debug :time-ms (js/Date.now)
+                                          :data {:files files}}) "\n"))))
+
+(deftest await-reload-resolves-when-every-written-file-was-re-read-after-the-write
+  (async done
+    (-> (with-body-dir
+          (fn [opts _]
+            (let [since (js/Date.now)
+                  cursor (r/log-cursor (r/events-file opts))]
+              (js/setTimeout #(log-reload! opts ["/w/zones.edn"]) 300)
+              (js/setTimeout #(log-reload! opts ["/w/places.json"]) 900)
+              (r/await-reload! opts cursor since ["zones.edn" "places.json"] 10000))))
+        (.then (fn [v] (is (true? v))))
+        (.catch (fn [e] (is false (.-message e))))
+        (.finally done))))
+
+(deftest await-reload-gives-up-at-its-bound-and-ignores-older-events
+  (async done
+    (-> (with-body-dir
+          (fn [opts _]
+            (log-reload! opts ["/w/zones.edn"])
+            (let [cursor {:ino nil :pos 0}]
+              (r/await-reload! opts cursor (+ (js/Date.now) 5) ["zones.edn"] 600))))
+        (.then (fn [v] (is (false? v))))
+        (.catch (fn [e] (is false (.-message e))))
+        (.finally done))))
+
+(deftest tick-rate-of-reads-the-tick-query-reply
+  (is (= 20 (r/tick-rate-of "The game is running normallyTarget tick rate: 20.0 per second.\nAverage time per tick: 2.6ms")))
+  (is (= 60 (r/tick-rate-of "The game is running normallyTarget tick rate: 60.0 per second.")))
+  (is (= 20 (r/tick-rate-of "")) "no reading means the vanilla rate")
+  (is (= 20 (r/tick-rate-of nil))))
