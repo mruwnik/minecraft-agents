@@ -231,13 +231,13 @@
           (core/register-reflex! eng {:trigger :tidy-pending})
           (core/submit! eng '(jobs.survival.breathe {:min-oxygen 12}) {})
           (await (ticks! eng 40))
-          (is (= [] (zs/calls p "place")) "not while the body is shut in the shaft")
-          (is (= 2 (count (tidy-entries eng))) "the dug cells wait")
+          (is (= [{:x 0 :y 66 :z 0}] (mapv zs/arg-pos (zs/calls p "place"))) "gravity drops the body back to the shaft floor: the roof cell is clear of it and goes back, its head cell does not")
+          (is (= 1 (count (tidy-entries eng))) "the cell at its head waits")
           (fake/swap-self! p assoc :pos [4 64 0])
           (await (ticks! eng 40))
           (is (= #{{:x 0 :y 65 :z 0} {:x 0 :y 66 :z 0}} (set (map zs/arg-pos (zs/calls p "place")))))
           (is (= [] (tidy-entries eng)))
-          (is (= [[[0 65 0] [0 66 0]]] (mapv :cells (zs/trespass seen :tidy.restored)))))))))
+          (is (= [[[0 66 0]] [[0 65 0]]] (mapv :cells (zs/trespass seen :tidy.restored)))))))))
 
 (deftest a-walk-that-fails-is-a-try-and-the-cell-is-given-up-in-one-run
   (async done
