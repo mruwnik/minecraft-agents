@@ -343,7 +343,7 @@
   "Way 1: :again when bread was made, else nil with :no-bake remembered."
   [c]
   (let [loaves (min (loaves-wanted c) (quot (carried-count c "wheat") 3))
-        st (await (child/run! c :bake 'jobs.items.craft {:item "bread" :count loaves :radius 32}))
+        st (await (child/run! c :bake 'jobs.items.craft {:item "bread" :count loaves :radius 32 :fetch false}))
         res (when (= :done st) (ctx/child-result c :bake))]
     (cond
       (= :continue st) :continue

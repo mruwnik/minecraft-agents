@@ -209,7 +209,7 @@
                                             :args (merge (select-keys a [:ignore-zones?])
                                                          {:chest chest :items {"wheat" (* 3 loaves)}})}]
           :else [mem {:slot :craft :job 'jobs.items.craft :for :food
-                      :args {:item "bread" :count loaves :radius (:radius a)}}]))
+                      :args {:item "bread" :count loaves :radius (:radius a) :fetch false}}]))
       :else
       (let [steps (when (= kind (:kind (:try mem))) (:steps mem))
             tier (first (remove (set (get-in mem [:ruled kind])) (tiers-of a)))]
@@ -220,7 +220,7 @@
                    {:slot :get :job 'jobs.storage.withdraw :for :get
                     :args (merge (select-keys a [:ignore-zones?]) {:chest chest :items {get count}})}
                    {:slot :craft :job 'jobs.items.craft :for :tool
-                    :args {:item item :count count :radius (:radius a)}})])
+                    :args {:item item :count count :radius (:radius a) :fetch false}})])
           (nil? tier) (recur (mark-missing mem kind (or (get (:why mem) kind) "no tier")) a still stacks inv chest)
           :else (recur (assoc mem :try {:kind kind :tier tier}
                               :steps [{:item (str tier "_" kind) :count 1}])

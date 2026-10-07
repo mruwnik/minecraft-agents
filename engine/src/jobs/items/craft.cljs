@@ -1,6 +1,7 @@
 (ns jobs.items.craft
   (:require [jobs.items.shortfall :as craft]
             [engine.ctx :as ctx]
+            [jobs.lib.fetch :as fetch]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.lib.look :as look]
@@ -14,13 +15,16 @@
   Ends with {:made n}, the number of items gained. When it stops short it adds :short {name n} (an ingredient ran
   out) or :reason (\"no-table\", \"not-a-table\", \"unreachable\", \"full\", the cannot reason, or the failed
   status), after a warn, and its status is stopped. One call is the whole craft: it walks (a go-to child) and crafts
-  again until the count is carried or it stops; it yields only while go-to waits on the world.")
+  again until the count is carried or it stops; it yields only while go-to waits on the world.
+  An ingredient that runs out is fetched (jobs.lib.fetch: a jobs.items.obtain child for each missing item) and the
+  craft goes on, unless :fetch is false or the fetch failed: then it stops with :short. A missing table is not fetched.")
 
 (def args
   {:item {:doc "item name to craft" :default nil}
    :count {:doc "how many more to end up with" :default 1}
    :table {:doc "crafting table position; the nearest seen within :radius when nil and the recipe needs one" :type :pos :default nil}
-   :radius {:doc "how far to look for a crafting table" :default 32}})
+   :radius {:doc "how far to look for a crafting table" :default 32}
+   :fetch {:doc "get an ingredient that runs out (jobs.lib.fetch): true, a set of kinds or a map of limits; false stops :short" :default true}})
 
 (defn check
   "An item name is given."
@@ -69,14 +73,35 @@
                 (:arrived (ctx/child-result c :walk)) :again
                 :else (give-up! c made "unreachable"))))))))
 
-(defn short!
-  "A craft ran out of an ingredient: emit the info and finish with what is
-  missing, and the alternatives (name [cousins]) when other recipes use different ingredients.
+(defn problem
+  "The :need wait for the first ingredient of the last shortage still not carried up to the amount it needed, else nil."
+  [c]
+  (let [have (u/inventory (:primitives c))]
+    (some (fn [[name want]]
+            (let [n (deposit/carried have name)]
+              (when (< n want) {:reason :need :item name :count (- want n)})))
+          (:wants (ctx/mem c)))))
+
+(defn ^:async short!
+  "A craft ran out of an ingredient: fetch what it lacks (:fetch) and craft again (:again, :continue while a fetch
+  waits), else emit the info and finish with what is missing, and the alternatives (name [cousins]) when other
+  recipes use different ingredients.
   The primitive hands back every candidate recipe and the counts carried; jobs.items.shortfall chooses."
   [c item r made]
-  (let [{:keys [short] :as shortage} (craft/no-item (js->clj (.-recipes r)) (js->clj (.-have r)))]
-    (ctx/emit! c :craft.short :info {:text (str "craft " item " is missing " (pr-str short))})
-    (finish! c made shortage)))
+  (let [{:keys [short] :as shortage} (craft/no-item (js->clj (.-recipes r)) (js->clj (.-have r)))
+        have (js->clj (.-have r))]
+    (when (and (seq short) (fetch/opts c 'jobs.items.craft) (not (:fetched (ctx/mem c))))
+      (ctx/update-mem! c assoc :wants (into {} (map (fn [[name n]] [name (+ n (get have name 0))])) short)))
+    (let [f (when (seq (:wants (ctx/mem c))) (await (fetch/fetch! c 'jobs.items.craft problem)))]
+      (cond
+        f f
+        (and (seq (:wants (ctx/mem c))) (nil? (problem c)))
+        (do (ctx/update-mem! c #(-> % (assoc :fetched true) (dissoc :wants))) :again)
+
+        :else
+        (do (ctx/update-mem! c dissoc :wants)
+            (ctx/emit! c :craft.short :info {:text (str "craft " item " is missing " (pr-str short))})
+            (finish! c made shortage))))))
 
 (defn ^:async step!
   "Stop when the target is carried, else craft the rest and act on the status: :again, :continue (go-to waits) or :done."
@@ -97,9 +122,9 @@
         (when table (ctx/update-mem! c assoc :table table))
         (case status
           "crafted" (finish! c made {})
-          "no-item" (short! c item r made)
+          "no-item" (await (short! c item r made))
           "partial" (if (= "no-item" (.-reason r))
-                      (short! c item r made)
+                      (await (short! c item r made))
                       (do (u/progress! c) :again))
           "out-of-reach" (let [handed (u/pos-of (.-table r))]
                            (cond

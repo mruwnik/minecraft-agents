@@ -134,7 +134,7 @@
   "Craft the carried wheat into bread through the craft child."
   [c table wheat]
   (ctx/update-mem! c assoc :started true)
-  (let [cargs {:item "bread" :count (quot wheat 3) :table table}
+  (let [cargs {:item "bread" :count (quot wheat 3) :table table :fetch false}
         r (await (ctx/call-child c :craft 'jobs.items.craft cargs))
         out (ctx/child-result c :craft)]
     (if-not (= :done r)

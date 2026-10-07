@@ -331,7 +331,7 @@
 
       :else
       (do (ctx/update-mem! c assoc-in [:craft :step] step)
-          (let [r (await (ctx/call-child c :craft 'jobs.items.craft (cond-> {:item (:item step) :count (:count step)}
+          (let [r (await (ctx/call-child c :craft 'jobs.items.craft (cond-> {:item (:item step) :count (:count step) :fetch false}
                                                                         (and (:table? step) (:table (ctx/mem c))) (assoc :table (:table (ctx/mem c))))))]
             (if (= :continue r)
               :continue

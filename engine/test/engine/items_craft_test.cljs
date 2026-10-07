@@ -1,6 +1,7 @@
 (ns engine.items-craft-test
   "jobs.items.craft against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
+            [engine.fake]
             [engine.registry :as registry]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -264,3 +265,26 @@
       (fn ^:async t []
         (let [[result] (await (craft {:inventory [{:name "wheat" :count 2}] :blocks table-block} {:item "bread"}))]
           (is (= {:made 0 :status :stopped :short {"wheat" 1}} result)))))))
+
+(def wheat-chest {"-2,64,3" "chest"})
+(defn wheat-world [] {:inventory [{:name "wheat" :count 2}] :blocks (merge table-block wheat-chest) :containers {"-2,64,3" [{:name "wheat" :count 1}]}})
+(defn chest-wheat [p] (some #(when (= "wheat" (:name %)) (:count %)) (get-in @(engine.fake/state p) [:containers [-2 64 3]])))
+
+(deftest craft-fetches-a-missing-ingredient-from-a-seen-chest-by-default
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup (wheat-world))
+              result (await (child-outcome eng job {:item "bread"} 80))]
+          (is (= {:made 1} result))
+          (is (= 1 (get (inv p) "bread")))
+          (is (nil? (chest-wheat p))))))))
+
+(deftest craft-fetch-false-reports-the-shortfall-and-leaves-the-chest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup (wheat-world))
+              result (await (child-outcome eng job {:item "bread" :fetch false} 80))]
+          (is (= {:made 0 :status :stopped :short {"wheat" 1}} result))
+          (is (= 1 (chest-wheat p))))))))
