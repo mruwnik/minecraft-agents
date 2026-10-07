@@ -181,6 +181,16 @@
          (let [need (with-block c (first needs))]
            (boolean (ctx/check-child c :gather (:job need) (:args need)))))))
 
+(defn unseen-why
+  "Text for the gather source: the raw needs of the chain whose blocks are not seen, or the general text."
+  [c names n]
+  (let [unseen (->> (some-> (gather-plan c names n) :gather gather-needs)
+                    (remove #(seen-of c %)))]
+    (str "nothing seen to gather what a craft lacks"
+         (when (seq unseen)
+           (str ": " (clojure.string/join ", " (for [{:keys [key seen]} unseen]
+                                                  (if (set? seen) (str key " (from " (clojure.string/join "/" (sort seen)) ")") key))))))))
+
 (defn no-source-why
   "Text for the no-source wait: what each allowed source lacks."
   [c names n]
@@ -191,7 +201,7 @@
      "; "
      (concat (when (contains? how :chest) [(str "no seen chest that may hold " (clojure.string/join "/" names))])
              (when (contains? how :craft) [(recipes/lacking version have (first names) n)])
-             (when (contains? how :gather) ["nothing seen to gather what a craft lacks"])))))
+             (when (contains? how :gather) [(unseen-why c names n)])))))
 
 (defn check [c]
   (let [a (:args c)

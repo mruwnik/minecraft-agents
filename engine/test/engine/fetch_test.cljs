@@ -734,7 +734,10 @@
           (core/submit! (:eng s) (list 'jobs.items.obtain {:item "stone_pickaxe"}) {})
           (await (run-ticks s 10))
           (is (= 1 (count (filter #(= :no-source (:reason %)) (events-of s :waiting)))))
-          (is (empty? (calls s "dig")) "no tree felled for a chain that then lacks stone"))))))
+          (is (empty? (calls s "dig")) "no tree felled for a chain that then lacks stone")
+          (let [why (:why (first (events-of s :waiting)))]
+            (is (re-find #"cobblestone \(from stone\)" why))
+            (is (not (re-find #"log" why)) "the log that is seen is not named")))))))
 
 (deftest obtain-gathers-coal-from-a-deepslate-ore
   (async done
