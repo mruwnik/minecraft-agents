@@ -128,3 +128,28 @@
         (let [far (assoc boat :pos {:x 1.5 :y 64 :z 30.5})
               o (await (run {:entities [far]} {:id 9} nil :done))]
           (is (= :unreachable (:reason (result-of o)))))))))
+
+(deftest a-heard-row-without-a-position-is-skipped
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [heard (-> boat (assoc :id 5) (dissoc :pos))
+              o (await (run {:entities [heard boat]} {:name "oak_boat"}))
+              g (await (run {:entities [heard]} {:id 5}))]
+          (is (= 9 (:id (result-of o))))
+          (is (= :gone (:reason (result-of g)))))))))
+
+(defn check-with [spec args]
+  (let [waiting (atom nil)
+        p (tu/fake spec)
+        ok (mount/check {:primitives p :args args :wait waiting})]
+    {:ok ok :why @waiting}))
+
+(deftest check-declines-when-no-vehicle-is-in-sight
+  (is (= {:ok false :why :no-vehicle}
+         (update (check-with {:entities []} {:id 9}) :why #(some-> % :reason)))
+      "by id")
+  (is (= :no-vehicle (:reason (:why (check-with {:entities [(dissoc boat :pos)]} {:name "oak_boat"})))) "heard only")
+  (is (true? (:ok (check-with {:entities [boat]} {:id 9}))))
+  (is (true? (:ok (check-with {:entities [boat]} {:name "oak_boat"}))))
+  (is (true? (:ok (check-with {:entities []} {:id "x"}))) "bad args are the round's stop"))

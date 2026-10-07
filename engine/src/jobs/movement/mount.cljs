@@ -9,7 +9,7 @@
   Holds the vehicle (jobs.movement.vehicle) while the job lives, so the :mounted trigger does not step the body off:
   the body stays aboard only in manual mode, otherwise the hold ends with the job and the trigger steps it off ~30 s later.
   By :name it prefers a vehicle with no rider.
-  The check always passes. It yields :continue only when the walk waits on the world.
+  The check waits (:no-vehicle) while none is in sight. The round yields :continue only when the walk waits on the world.
 
   Ends {:status :done :id :vehicle name} (plus :already true when aboard it already), info vehicle.mounted, or
   {:status :stopped :reason r}: :bad-args, :gone (no such entity in sight), :not-mountable, :occupied, :hand-full
@@ -23,16 +23,31 @@
 (def reach 2.5)
 (def max-walks 2)
 
-(defn check [_c] true)
+(defn sensed
+  "The entities in sight with a position (heard mobs have none)."
+  [p]
+  (filter #(some? (.-pos %)) (array-seq (.entities p #js {:radius 64 :max 64}))))
 
 (defn entity-of [p id]
-  (first (filter #(= id (.-id %)) (array-seq (.entities p #js {:radius 64 :max 64})))))
+  (first (filter #(= id (.-id %)) (sensed p))))
+
+(defn check
+  "Declines while no entity of that :id or :name is in sight; bad args pass for the round to stop on."
+  [c]
+  (let [{:keys [id name]} (:args c)
+        p (:primitives c)]
+    (cond
+      (and (nil? id) (string? name))
+      (or (some #(= name (.-name %)) (sensed p)) (ctx/wait c {:reason :no-vehicle :why (str "no " name " in sight")}))
+      (and (integer? id) (pos? id))
+      (or (some? (entity-of p id)) (ctx/wait c {:reason :no-vehicle :why (str "entity " id " not in sight")}))
+      :else true)))
 
 (defn nearest-named
   "The id of the nearest sensed entity named name, a free one before an occupied one, or nil."
   [c name]
   (let [p (:primitives c) me (u/self-pos c)]
-    (some->> (array-seq (.entities p #js {:radius 64 :max 64}))
+    (some->> (sensed p)
              (filter #(= name (.-name %)))
              (sort-by (juxt #(pos? (count (.-passengers %))) #(u/dist me (u/pos-of (.-pos %)))))
              first .-id)))
