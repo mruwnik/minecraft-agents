@@ -306,3 +306,66 @@
     [(assoc a-claim :status :released)] 1000 []
     [(assoc a-claim :status "active")] 1000 ["c1"]
     [a-claim (assoc a-claim :id "c2" :until 100)] 1000 ["c1"]))
+
+;; ------------------------------------------------------------------ shared markers
+
+(def a-marker {:name "hut" :kind "base" :x 116 :y 69 :z -141 :by "Claude" :note "bed inside"})
+
+(defn marker-reader
+  "A world over fresh dirs; the markers file places.json sits beside the zones file (not written yet)."
+  []
+  (let [dir (tu/tmp-dir)
+        clock (atom 0)
+        seen (atom [])
+        file (path/join dir "places.json")
+        w (world/open {:plans-dir (path/join dir "plans") :blueprint-dir (path/join dir "bps")
+                       :zones-file (path/join dir "zones.edn") :now #(deref clock) :every-ms 3000
+                       :emit #(swap! seen conj %)})]
+    {:file file :clock clock :seen seen :w w}))
+
+(defn marker-warns [seen] (filter #(= :world.markers-unreadable (:kind %)) @seen))
+
+(defn later-markers! [clock w] (swap! clock + 3000) (world/markers w))
+
+(defn write-markers! [file text] (write-zones! file text))
+
+(deftest a-missing-markers-file-is-no-markers-without-a-warn
+  (let [{:keys [clock seen w]} (marker-reader)]
+    (is (= [] (world/markers w)))
+    (is (= [] (later-markers! clock w)))
+    (is (= [] (filter #(= :world.markers-unreadable (:kind %)) @seen)))))
+
+(deftest a-good-markers-file-is-read-and-a-marker-found-by-name
+  (let [{:keys [file clock w]} (marker-reader)]
+    (write-markers! file (js/JSON.stringify (clj->js [a-marker])))
+    (is (= [a-marker] (world/markers w)))
+    (is (= a-marker (world/marker w "hut")))
+    (is (nil? (world/marker w "mine")))
+    (write-markers! file (js/JSON.stringify (clj->js [a-marker (assoc a-marker :name "mine" :x 1)])))
+    (is (= 1 (:x (do (swap! clock + 3000) (world/marker w "mine")))))))
+
+(deftest a-broken-markers-edit-keeps-the-last-good-copy-with-one-warn
+  (let [{:keys [file clock seen w]} (marker-reader)]
+    (write-markers! file (js/JSON.stringify (clj->js [a-marker])))
+    (world/markers w)
+    (write-markers! file "[{\"name\": ")
+    (is (= [a-marker] (later-markers! clock w)))
+    (is (= [a-marker] (later-markers! clock w)))
+    (is (= [[:world.markers-unreadable true]] (map (juxt :kind :kept) (marker-warns seen))))
+    (write-markers! file (js/JSON.stringify (clj->js [(assoc a-marker :name "pen")])))
+    (is (= "pen" (:name (first (later-markers! clock w)))))
+    (is (= 1 (count (marker-warns seen))))))
+
+(deftest a-marker-without-a-name-or-position-makes-the-file-bad
+  (let [{:keys [file clock seen w]} (marker-reader)]
+    (write-markers! file (js/JSON.stringify (clj->js [(dissoc a-marker :x)])))
+    (is (= [] (world/markers w)))
+    (is (= [[:world.markers-unreadable false]] (map (juxt :kind :kept) (marker-warns seen))))))
+
+(deftest a-world-from-data-has-no-markers-unless-given
+  (let [w (world/of-data {} {})]
+    (is (= [] (world/markers w)))
+    (world/set-markers! w [a-marker])
+    (is (= a-marker (world/marker w "hut"))))
+  (is (= [] (world/markers nil)))
+  (is (nil? (world/marker nil "hut"))))

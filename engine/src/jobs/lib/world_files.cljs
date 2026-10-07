@@ -5,6 +5,7 @@
     blueprints/<id>.edn            the blueprints plans place (repo root)
     worlds/<world>/zones.edn       zones (checked by jobs.lib.zone-file)
     worlds/<world>/claims.edn      shared-map area claims of bodies (jobs.lib.zone-file/parse-claims)
+    worlds/<world>/places.json     shared markers {:name :kind :x :y :z :by :note}, written by the agent tools only
 
   A world is {:state atom :said atom :opts {...}}. Jobs ask through jobs.lib.world (plan, zones, claims), which
   answers from memory.
@@ -15,13 +16,13 @@
     A file that was never readable answers as broken, not as absent.
   Zones differ: a missing file answers nil (warned once by world.zones-missing, each time it goes), so a dig or
   place job declines. An empty vector is a valid \"no zones\".
-  Claims differ: a missing file is [] (no claims, no warn).
+  Claims differ: a missing file is [] (no claims, no warn). So are markers (world.markers-unreadable on a bad file).
 
   The state: {:plans {id entry} :blueprints {id entry} :zones entry :area-claims entry :expanded {id expansion}
   :claims {id #{cell}} :footprints {cell id} :checked-at ms}.
     An entry is {:stamp [mtime size] :value v :error text}: :value the last good copy, :error the current file's
     trouble. The zone entry is {:missing true} while there is no file.
-    :area-claims holds the claims file. :claims and :footprints are the plans' cells, by plan and by cell."
+    :area-claims holds the claims file, :markers the markers file. :claims and :footprints are the plans' cells, by plan and by cell."
   (:require ["fs" :as fs]
             ["path" :as path]
             [clojure.string :as str]
@@ -138,6 +139,48 @@
     :else (let [[entries warn] (fsync/absorb {:area-claims entry} :area-claims stamp (parsed))]
             [(:area-claims entries) warn])))
 
+(defn marker-problems [i m]
+  (cond
+    (not (map? m)) [(str "marker " i ": not an object")]
+    (not (and (string? (:name m)) (seq (:name m)))) [(str "marker " i ": :name must be a non-empty string")]
+    (not-every? #(js/Number.isFinite (get m %)) [:x :y :z]) [(str "marker " (:name m) ": :x :y :z must be numbers")]))
+
+(defn parse-markers
+  "Text of the markers file (a JSON array of objects with name, x, y, z) -> {:value [marker ..]} (keyword keys) or
+  {:errors [text ..]}; never throws."
+  [text]
+  (let [read (try {:value (js->clj (js/JSON.parse text) :keywordize-keys true)}
+                  (catch :default e {:error (str "unreadable JSON: " (ex-message e))}))
+        markers (:value read)]
+    (cond
+      (:error read) {:errors [(:error read)]}
+      (not (vector? markers)) {:errors ["the markers file must hold an array of markers"]}
+      :else (let [errors (vec (keep-indexed marker-problems markers))]
+              (if (seq errors) {:errors errors} {:value markers})))))
+
+(defn read-markers
+  "The markers file parsed into {:value markers} or {:errors [..]}; an unreadable file is an error."
+  [file]
+  (let [text (try (.readFileSync fs file "utf8") (catch :default e {:error (ex-message e)}))]
+    (if (map? text)
+      {:errors [(str "unreadable file: " (:error text))]}
+      (parse-markers text))))
+
+(defn absorb-markers
+  "Fold the markers file's stamp (nil: no file) into its entry: [entry warn]. No file is no markers; a bad file
+  keeps the last good copy and warns {:id :error :kept} like absorb. parsed is a thunk, called only when the stamp changed."
+  [entry stamp parsed]
+  (cond
+    (nil? stamp) [{:value []} nil]
+    (= stamp (:stamp entry)) [entry nil]
+    :else (let [[entries warn] (fsync/absorb {:markers entry} :markers stamp (parsed))]
+            [(:markers entries) warn])))
+
+(defn markers-warn-event [file {:keys [error kept]}]
+  {:source :system :kind :world.markers-unreadable :level :warn :path file :error error :kept kept
+   :text (str "markers file " file " cannot be read (" error ")"
+              (if kept "; the last good copy is still used" "; it was never readable, no markers are known"))})
+
 (defn claims-warn-event [file {:keys [error kept]}]
   {:source :system :kind :world.claims-unreadable :level :warn :path file :error error :kept kept
    :text (str "claims file " file " cannot be read (" error ")"
@@ -172,18 +215,24 @@
               [zone-entry zone-warn] (if file
                                        (absorb-zones (:zones old) (file-stamp file) #(read-zones file))
                                        [(:zones old) nil])
+              markers-file (or (:markers-file opts) (some-> file (path/join ".." "places.json") path/normalize))
+              [markers-entry markers-warn] (if markers-file
+                                             (absorb-markers (:markers old) (file-stamp markers-file) #(read-markers markers-file))
+                                             [(:markers old) nil])
               claims-file (:claims-file opts)
               [claims-entry claims-warn] (if claims-file
                                            (absorb-claims (:area-claims old) (file-stamp claims-file) #(read-claims claims-file))
                                            [(:area-claims old) nil])]
           (reset! state (cond-> (assoc old :checked-at now :plans plans :blueprints blueprints :zones zone-entry
-                                       :area-claims claims-entry)
+                                       :area-claims claims-entry :markers markers-entry)
                           (or (not= (:plans old) plans) (not= (:blueprints old) blueprints)) expand-all))
           (doseq [[kind [_ warns]] results
                   warn warns]
             ((:emit opts) (warn-event (get kinds kind) warn)))
           (when zone-warn
             ((:emit opts) (zones-warn-event file zone-warn)))
+          (when markers-warn
+            ((:emit opts) (markers-warn-event markers-file markers-warn)))
           (when claims-warn
             ((:emit opts) (claims-warn-event claims-file claims-warn))))))))
 
@@ -209,7 +258,7 @@
   memory, no files (tests)."
   ([plans blueprints] (of-data plans blueprints []))
   ([plans blueprints zones]
-   {:state (atom (assoc (data-state plans blueprints) :zones (zone-entry zones) :area-claims {:value []})) :said (atom #{}) :derived (atom {})
+   {:state (atom (assoc (data-state plans blueprints) :zones (zone-entry zones) :area-claims {:value []} :markers {:value []})) :said (atom #{}) :derived (atom {})
     :opts {}}))
 
 (defn blank
@@ -220,7 +269,7 @@
 (defn set-data!
   "Replace the plans and blueprints of a world made with of-data; its zones stay."
   [w plans blueprints]
-  (swap! (:state w) #(assoc (data-state plans blueprints) :zones (:zones %) :area-claims (:area-claims %))))
+  (swap! (:state w) #(assoc (data-state plans blueprints) :zones (:zones %) :area-claims (:area-claims %) :markers (:markers %))))
 
 (defn set-zones!
   "Replace the zones of a world made with of-data (nil: never read)."
@@ -231,6 +280,11 @@
   "Replace the claims of a world made with of-data."
   [w claims]
   (swap! (:state w) assoc :area-claims {:value claims}))
+
+(defn set-markers!
+  "Replace the markers of a world made with of-data."
+  [w markers]
+  (swap! (:state w) assoc :markers {:value markers}))
 
 (defn plan
   "The answer for plan id (see answer); nil for a nil world."
@@ -301,6 +355,20 @@
     []
     (do (refresh! w)
         (or (get-in @(:state w) [:area-claims :value]) []))))
+
+(defn markers
+  "The shared markers of places.json as read ([] when there is no file or no world; the last good copy when it is bad).
+  Bodies only read them; the agent tools write."
+  [w]
+  (if-not w
+    []
+    (do (refresh! w)
+        (or (get-in @(:state w) [:markers :value]) []))))
+
+(defn marker
+  "The marker called name (text), or nil."
+  [w name]
+  (first (filter #(= name (:name %)) (markers w))))
 
 (defn live-claims
   "The claims that are :active (keyword or text) and whose :until is after now (ms)."

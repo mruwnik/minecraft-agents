@@ -1,5 +1,5 @@
 (ns jobs.lib.world
-  "What a job reads of its body's world (jobs.lib.world-files): plans, zones, claims, plan authors and footprints."
+  "What a job reads of its body's world (jobs.lib.world-files): plans, zones, claims, shared markers, plan authors and footprints."
   (:require [engine.ctx :as ctx]
             [jobs.lib.world-files :as world]))
 
@@ -34,3 +34,14 @@
   ([ctx] (footprints ctx {}))
   ([ctx {:keys [except]}]
    (world/footprints (:world (:engine ctx)) except)))
+
+(defn markers
+  "The shared markers the agent tools wrote to the world's places.json: [{:name :kind :x :y :z :by :note} ...]. Read-only
+  for bodies; [] when there are none. A body's own places stay in its memory (jobs.lib.places)."
+  [ctx]
+  (world/markers (:world (:engine ctx))))
+
+(defn marker
+  "The shared marker called name (text), or nil."
+  [ctx name]
+  (world/marker (:world (:engine ctx)) name))
