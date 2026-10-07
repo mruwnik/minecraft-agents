@@ -41,6 +41,25 @@
     (doseq [[k v] costs] (unchecked-set o (planner-names k) v))
     o))
 
+(def gaits
+  "go-to's :gait values: :auto (sprints where the executor does), :walk (never sprints), :sneak (sneaks: no drop, no gap)."
+  #{:auto :walk :sneak})
+
+(defn gait-problem
+  "Why gait is not a usable go-to :gait (nil, or one of gaits), else nil."
+  [gait]
+  (when-not (or (nil? gait) (contains? gaits gait))
+    (str ":gait must be one of " (pr-str (sort gaits)) ", got " (pr-str gait))))
+
+(defn gait-costs
+  "The planner's options.costs walkS and sprintS (seconds per block walked and per block of a gap jump) for gait: a walking
+  body runs a gap jump at walking speed, a sneaking one walks at sneak speed; :auto: the planner's defaults."
+  [gait]
+  (case gait
+    :walk #js {:sprintS base/WALK-S}
+    :sneak #js {:walkS base/SNEAK-S :sprintS base/SNEAK-S}
+    #js {}))
+
 (def default-landing
   "Block name -> share of a fall's damage a body takes landing on it (go-to's :landing, which overrides entry by entry): hay
   and honey take 80% off; a negative factor (slime) takes no drop over 3 onto the block at all, the body bounces off it."

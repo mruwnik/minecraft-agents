@@ -1,6 +1,6 @@
 (ns engine.path.planner.nodes
   "Search methods: the goal test and heuristic, and node storage (hash, heap, recording an arrival, refused moves)."
-  (:require [engine.path.planner.base :refer [AIR-STEP AVOID-CLIMB DMG-STEP AVOID-OPEN AVOID-WATER HALF JUMP-UP MOVE-CLIMB-UP MOVE-DROP MOVE-GAP MOVE-OPEN MOVE-SWIM REGIONS SPAN SQRT2 WALK-S cell-key grown next-pow2]]
+  (:require [engine.path.planner.base :refer [AIR-STEP AVOID-CLIMB DMG-STEP AVOID-OPEN AVOID-WATER HALF JUMP-UP MOVE-CLIMB-UP MOVE-DROP MOVE-GAP MOVE-OPEN MOVE-SWIM REGIONS SPAN SQRT2 cell-key grown next-pow2]]
             [engine.path.planner.search :refer [Search]]))
 
 (set! *warn-on-infer* true)
@@ -56,8 +56,8 @@
       (loop [i 0 best js/Infinity]
         (if (< i (.-n-goals s))
           (recur (inc i) (js/Math.min best (js/Math.max 0 (- (.octileTo s x z (aget ^js (.-g-xs s) i) (aget ^js (.-g-zs s) i)) (aget ^js (.-g-slack s) i)))))
-          (* best WALK-S)))
-      (* (js/Math.max 0 (- (.distanceTo s x z) (.-slack s))) WALK-S)))
+          (* best (.-c-walk-s s))))
+      (* (js/Math.max 0 (- (.distanceTo s x z) (.-slack s))) (.-c-walk-s s))))
 
   ;; ---- node storage ----
   (hashOf [s x y z region]

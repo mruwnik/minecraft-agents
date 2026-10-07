@@ -91,6 +91,13 @@
      (let [walled (wworld/with-walls pw walls)]
        (wplan/walk-plan c pw walled to one-way frontier (await (wplan/plan-within! c walled to range weight policy)))))))
 
+(defn gait-controls
+  "The executor's controls under the policy's gait: a sneaking walk holds sneak and never sprints, except in water (sneaking
+  there sinks the body)."
+  [policy {:keys [in-water]} controls]
+  (cond-> controls
+    (and (= :sneak (:gait policy)) (not in-water)) (assoc :sneak true :sprint false)))
+
 (defn ^:async walk!
   "Follow steps once. [result ms]: the executor's done map, or {:status :stuck ...} on a timeout,
   {:status :failed ...}; ms is the wall time of the steer act. With a watch (see watch-stop), the walk also stops at a step
@@ -112,7 +119,7 @@
                    (vreset! state state')
                    (if done
                      (do (vreset! last-done done) #js {:done (clj->js done)})
-                     #js {:controls (clj->js controls) :yaw yaw :pitch pitch})))
+                     #js {:controls (clj->js (gait-controls policy pose controls)) :yaw yaw :pitch pitch})))
         t (js/Date.now)
         r (await (ctx/act c :steer (steer-args timeout-s decide)))
         ms (- (js/Date.now) t)]

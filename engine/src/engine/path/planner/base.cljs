@@ -54,20 +54,23 @@
   #js {:START 0 :WALK 1 :DIAGONAL 2 :JUMP 3 :DROP 4 :GAP 5 :CORNER 6 :CLIMB_UP 7 :CLIMB_DOWN 8 :JUMP_CLIMB 9 :OPEN 10
        :SWIM 11 :SWIM_UP 12 :SWIM_DOWN 13 :EXIT 14})
 
+(def ^:const WALK-S 0.23164234422052352) ; seconds per block: 1 / 4.317
+(def ^:const SPRINT-S 0.1781895937277263) ; 1 / 5.612
+(def ^:const SNEAK-S 0.7722007722007722) ; 1 / 1.295 (a sneaking body: 30% of the walking speed)
+
 (def DEFAULT-COSTS
-  "every cost the policy might want to change, in seconds; options.costs overrides"
+  "every cost the policy might want to change, in seconds; options.costs overrides (walkS and sprintS: the seconds a block of walking and of a gap jump's run costs, the gait)"
   #js {:climbUp 0.43 :climbDown 0.33 :jumpClimb 0.5 :open 1.0 :openRedstone 1.5 :openLever 6 :openPlate 0 :besideMagmaColumn 1
        :swimH 0.5 :swimUp 0.3 :swimDown 0.35 :exit 0.6 :current 0.3 :bubbleUp 0.08 :bubbleDown 0.12
        :airSupply 15 :airLimit 12 :maxWaterDrop 64 :dripleaf 0.2 :dripleafRisk 0.5
-       :dropFactor 1})
+       :dropFactor 1
+       :walkS WALK-S :sprintS SPRINT-S})
 
 (def ^:const BODY 29) ; 1.8 blocks in 1/16, rounded up
 (def ^:const STEP 9) ; 0.6 blocks
 (def ^:const JUMP-UP 20) ; 1.25 blocks
 (def ^:const ARC 32) ; headroom over a gap: feet + 2
 (def ^:const ARC-UP 40) ; headroom over a gap whose landing is one block higher: feet + 2.5
-(def ^:const WALK-S 0.23164234422052352) ; seconds per block: 1 / 4.317
-(def ^:const SPRINT-S 0.1781895937277263) ; 1 / 5.612
 (def ^:const JUMP-S 0.35) ; a jump up costs this much more than the walk it replaces
 (def ^:const GAP-S 0.5) ; a gap jump's run-up and landing, on top of the sprint over its length
 (def ^:const GAP-UP-S 0.3) ; a gap jump landing one block higher costs this much more than a level one

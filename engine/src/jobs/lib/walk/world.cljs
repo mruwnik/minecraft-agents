@@ -154,7 +154,8 @@
 (def setting-checks
   "The body setting's keys and what a valid value is."
   {:min-health #(and (number? %) (<= 1 % 20))
-   :max-damage #(and (number? %) (>= % 0))})
+   :max-damage #(and (number? %) (>= % 0))
+   :gait #(contains? cost/gaits %)})
 
 (defn body-setting
   "The body's memory :walk-settings entry's {:min-health :max-damage} (written with jobs.memory.remember, :ttl-s :forever,
@@ -169,13 +170,18 @@
   [c]
   (into (first (body-setting c)) (remove (comp nil? val)) (select-keys (:args c) [:min-health :max-damage])))
 
+(defn gait
+  "The gait the walk keeps: go-to's :gait arg over the body's :gait setting (body-setting), else :auto."
+  [c]
+  (or (:gait (:args c)) (:gait (first (body-setting c))) :auto))
+
 (defn warn-bad-settings!
   "An :info walk-settings.bad event naming the keys of the body's setting that are ignored; go-to calls it once per attempt."
   [c]
   (let [bad (second (body-setting c))]
     (when (seq bad)
       (ctx/emit! c :walk-settings.bad :info
-                 {:keys bad :text (str "the body's :walk-settings " (pr-str bad) " is out of range (:min-health 1-20, :max-damage >= 0); ignored")}))))
+                 {:keys bad :text (str "the body's :walk-settings " (pr-str bad) " is out of range (:min-health 1-20, :max-damage >= 0, :gait :auto|:walk|:sneak); ignored")}))))
 
 (defn damage-budget
   "The hp the body may spend walking now (jobs.lib.cost/damage-budget): its health, food and effects, and the walk-settings
@@ -184,7 +190,7 @@
   ((if (:over-budget c) cost/survivable-budget cost/damage-budget) (damage-body c) (walk-settings c)))
 
 (defn body-policy
-  "executor/policy for the body: with the walk's food (food-of) 6 or less the client does not sprint, so :sprint is false (a corner jump past
+  "executor/policy for the body: the gait (:walk, :sneak) never sprints, and :sneak takes neither drop nor gap; with the walk's food (food-of) 6 or less the client does not sprint, so :sprint is false (a corner jump past
   a high block is then refused). :damage-budget (hp, damage-budget) and :damage-weight (seconds an hp costs at its health)
   price the damage of a walk, :danger-cap the total hp a second its known dangers cost (jobs.lib.cost/danger-cap, more when the job's :danger-max-rate is) (the job's :hp-seconds arg: the seconds an hp costs at full health, default jobs.lib.cost/hp-seconds);
   :max-drop and :fall-factor follow its fall enchantments and the longest drop it survives (the survivable-budget under the job's :max-damage,
@@ -199,7 +205,9 @@
                     :damage-weight (* (or (:hp-seconds (:args c)) cost/hp-seconds) (cost/health-scale (.-health self)))
                     :danger-cap (max cost/danger-cap (or (:danger-max-rate (:args c)) 0))}
                    (when-some [landing (:landing (:args c))] {:landing landing}))
-      (and (number? food) (<= food 6)) (assoc :sprint false))))
+      (and (number? food) (<= food 6)) (assoc :sprint false)
+      (= :walk (gait c)) (assoc :sprint false :gait :walk)
+      (= :sneak (gait c)) (-> (assoc :sprint false :gait :sneak) (update :moves disj :drop :gap)))))
 
 (defn body-cell
   "The cell the body stands in, as a step's {:x :y :z}."

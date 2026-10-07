@@ -212,6 +212,7 @@
      (unchecked-get costs "exit") (unchecked-get costs "current") (unchecked-get costs "bubbleUp") (unchecked-get costs "bubbleDown")
      (unchecked-get costs "airSupply") (unchecked-get costs "airLimit") (unchecked-get costs "maxWaterDrop")
      (unchecked-get costs "dripleaf") (unchecked-get costs "dripleafRisk") (unchecked-get costs "dropFactor")
+     (unchecked-get costs "walkS") (unchecked-get costs "sprintS")
      ;; search box
      (- (aget bounds 0) margin) (+ (aget bounds 1) margin)
      (- (aget bounds 2) margin) (+ (aget bounds 3) margin)

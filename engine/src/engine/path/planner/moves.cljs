@@ -1,6 +1,6 @@
 (ns engine.path.planner.moves
   "Search methods: the moves out of a node: walks, diagonals, jumps, drops, gap jumps and climbing."
-  (:require [engine.path.planner.base :refer [ARC ARC-UP BODY CLIMB-TRAP-SHUT CORNER-S GAP-PIT-RISK GAP-S GAP-UP-S GRID HAZARD-SLIDE-RISK JUMP-S JUMP-UP LAVA MOVE-CLIMB-DOWN MOVE-CLIMB-UP MOVE-CORNER MOVE-DIAGONAL MOVE-DROP MOVE-EXIT MOVE-GAP MOVE-JUMP MOVE-JUMP-CLIMB MOVE-OPEN MOVE-SWIM MOVE-WALK SLOW-EXTRA SNAP SPRINT-S SQRT2 STEP UNLOADED WALK-S WATER WHOLE FREE-FALL]]
+  (:require [engine.path.planner.base :refer [ARC ARC-UP BODY CLIMB-TRAP-SHUT CORNER-S GAP-PIT-RISK GAP-S GAP-UP-S GRID HAZARD-SLIDE-RISK JUMP-S JUMP-UP LAVA MOVE-CLIMB-DOWN MOVE-CLIMB-UP MOVE-CORNER MOVE-DIAGONAL MOVE-DROP MOVE-EXIT MOVE-GAP MOVE-JUMP MOVE-JUMP-CLIMB MOVE-OPEN MOVE-SWIM MOVE-WALK SLOW-EXTRA SNAP SQRT2 STEP UNLOADED WATER WHOLE FREE-FALL]]
             [engine.path.planner.search :refer [Search]]))
 
 (set! *warn-on-infer* true)
@@ -40,7 +40,7 @@
   (dropIntoWater [s i x y z h region c x2 y2 z2 h0 slow-from ^boolean tight-src]
     (let [fall (- h0 (* y2 16))]
       (when-not (or (< (.swimAt s x2 y2 z2) 0) (> fall (* (.-c-max-water-drop s) 16)))
-        (let [sec (+ (* WALK-S (+ 1 (* SLOW-EXTRA slow-from))) (* 0.25 (js/Math.sqrt (/ fall 16))))]
+        (let [sec (+ (* (.-c-walk-s s) (+ 1 (* SLOW-EXTRA slow-from))) (* 0.25 (js/Math.sqrt (/ fall 16))))]
           (if (or tight-src ^boolean (.isTight s x2 y2 z2))
             (.tightMove s i x y z h region c x2 y2 z2 0 MOVE-DROP sec (.swimRisk s x2 y2 z2) 0 SNAP 0)
             (.edge s x2 y2 z2 0 MOVE-DROP i sec (.swimRisk s x2 y2 z2) 0 0 0))))))
@@ -76,7 +76,7 @@
                         fall (- h0 (+ (* y2 16) h1))
                         dmg (.dropDamage s sup fall)]
                     (when-not (or (> fall (* (.-max-drop s) 16)) (neg? dmg))
-                      (let [sec (+ (* WALK-S (+ 1 (* SLOW-EXTRA (+ slow-from (.-enter-slow s)))))
+                      (let [sec (+ (* (.-c-walk-s s) (+ 1 (* SLOW-EXTRA (+ slow-from (.-enter-slow s)))))
                                    (* (.-c-drop-factor s) 0.25 (js/Math.sqrt (/ (js/Math.max 0 fall) 16)))
                                    (.-enter-extra s))]
                         (set! (.-move-dmg s) (+ dmg (.-enter-dmg s)))
@@ -141,7 +141,7 @@
                                          (do (set! (.-limit-refused s) true) true)))
                         (set! (.-move-dmg s) (.-enter-dmg s))
                         (.edge s lx ly lz h1 MOVE-GAP i
-                               (+ (* (inc n) SPRINT-S) GAP-S (if (pos? delta) GAP-UP-S 0) (.-enter-extra s))
+                               (+ (* (inc n) (.-c-sprint-s s)) GAP-S (if (pos? delta) GAP-UP-S 0) (.-enter-extra s))
                                (+ (.-enter-risk s) risk) (.-enter-slow s) 0 0)
                         (set! (.-move-dmg s) 0))))
                   (recur (inc n) hole pit up-arc)))))))))
@@ -153,7 +153,7 @@
       (if (>= h1 0)
         (let [y2 (.-ty s)
               delta (- (+ (* y2 16) h1) h0)
-              walk (* WALK-S (+ 1 (* SLOW-EXTRA (+ slow-from (.-enter-slow s)))))
+              walk (* (.-c-walk-s s) (+ 1 (* SLOW-EXTRA (+ slow-from (.-enter-slow s)))))
               ;; climbing a stairs block in its direction is a walk, though the node above it is a whole block up
               climbs (and (== (aget (.-tbl-stair s) (.-support s)) (inc c)) (<= delta WHOLE))
               ;; (the body steps off a climbable without a jump: it is already rising)
@@ -219,7 +219,7 @@
                          (or (not jump) (zero? slide) (nil? ^js (.-limit-corner s))
                              (true? (^js (.-limit-corner s) x y z (- h0 (* y 16)) x2 y2 z2 h1))
                              (do (set! (.-limit-refused s) true) false)))
-                (let [walk (+ (* WALK-S SQRT2 (+ 1 (* SLOW-EXTRA (+ slow-from (.-enter-slow s))))) (* slide CORNER-S))
+                (let [walk (+ (* (.-c-walk-s s) SQRT2 (+ 1 (* SLOW-EXTRA (+ slow-from (.-enter-slow s))))) (* slide CORNER-S))
                       touched (+ (.sideTouch s x2 z lo hi) (.sideTouch s x z2 lo hi))
                       brushed (+ touched
                                  ;; a slide over a hole onto lava or fire (the open side is x2 z when sb holds the corner)
