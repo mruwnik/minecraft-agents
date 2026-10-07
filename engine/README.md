@@ -49,7 +49,7 @@ Agent command-line tools run ahead-of-time compiled JavaScript directly in Node,
 
 Layout:
 
-- `js/primitives.mjs` the real mineflayer layer (lifecycle, reconnect, events; its acting and sensing live in `js/prim-*.mjs`); `js/connect.mjs` makes the bot (`MC_FOLLOW_TICK_RATE=1` swaps in `js/tick-rate-physics.mjs`: physics that follows `/tick rate`, `set_ticking_state` and `step_tick`; stock at 20 TPS; off by default); `js/stub-bot.mjs` is a bare stub for primitive
+- `js/primitives.mjs` the real mineflayer layer (lifecycle, reconnect, events; its acting and sensing live in `js/prim-*.mjs`); `js/compile-cache.mjs` (first import of primitives.mjs) turns on node's compile cache in `state/compile-cache` (`MC_COMPILE_CACHE=off` disables); `js/connect.mjs` makes the bot (`MC_FOLLOW_TICK_RATE=1` swaps in `js/tick-rate-physics.mjs`: physics that follows `/tick rate`, `set_ticking_state` and `step_tick`; stock at 20 TPS; off by default); `js/stub-bot.mjs` is a bare stub for primitive
   tests; `js/view.mjs` writes the view dump for the renderer (skips a reloaded column whose content is unchanged; `BODY_VIEW=0` disables; format in `docs/view-format.md`).
   Other `js/*.mjs` files are helpers per primitive (furnace, enchant, trade, vehicle, leash, light, sight, ...).
 - `src/engine/` the engine core only: `core` (API and lifecycle; parts in `core.*`: list edits, register, scheduler, round with act wrapper and call-child, settling, backoff, restart), `memory`, `events`,
