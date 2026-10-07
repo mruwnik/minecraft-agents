@@ -34,16 +34,16 @@
   :distance (no leg left), :legs (:max-legs walked), :time (:timeout-s since the first round), :stuck,
   :not-loaded or :bad-args.
 
-  Memory: :origin :started :legs :scans :found :tried :failed :skipped :farthest :failed-in-row, and :leg while
+  Memory: :origin :started :legs :scans :found :tried :failed :skipped :farthest :failed-in-row :deferred (unloaded legs set aside while a sweep goes on), and :leg while
   a walk is under way, so a cut or restart resumes it.")
 
 (def args
   {:target {:doc "a block or entity name, or several (a vector or set)" :default nil}
    :count {:doc "how many targets end the search" :default 1}
-   :max-distance {:doc "how far (XZ) from the origin a leg may go" :default 96}
+   :max-distance {:doc "how far (XZ) from the origin a leg may go, 1 to 128" :type :int :min 1 :max 128 :default 96}
    :pattern {:doc ":spiral (rings round the origin) or :outward (ahead along :heading)" :default :spiral}
    :heading {:doc ":north, :east, :south or :west, for :outward" :default :north}
-   :spacing {:doc "blocks between legs" :default 16}
+   :spacing {:doc "blocks between legs, 4 to 64" :type :int :min 4 :max 64 :default 16}
    :scan-radius {:doc "how far round the body each look reaches" :default 24}
    :max-legs {:doc "legs walked before it gives up" :default 32}
    :timeout-s {:doc "seconds from the first round before it gives up" :default 600}
@@ -205,26 +205,30 @@
       (outward-points [x z] (keyword heading) spacing)
       (spiral-points [ox oz] spacing max-distance))))
 
+(def stand-cap "Stand cells one choice reads; past it :more says candidates are left for the next step." 48)
+
 (defn choose-leg
   "{:leg [x y z] (or nil when none is left) :tried [points looked at] :failed [{:pos :reason}] :skipped n
-  :unloaded [{:pos :reason :not-loaded}]}; an unloaded column is not tried, so a later round looks again."
+  :unloaded [{:pos :reason :not-loaded}] :more true when stand-cap cells were read and candidates may be left}; an
+  unloaded column is not tried, so a later round looks again (m's :deferred ones are kept out of this sweep)."
   [c m names ns]
   (let [{:keys [max-distance]} (:args c)
         [ox y oz] (here c)
         origin [((:origin m) 0) ((:origin m) 2)]
-        tried (set (:tried m))
+        tried (into (set (:tried m)) (map (fn [{[x _ z] :pos}] [x z])) (:deferred m))
         p (:primitives c)
         block-at (fn [[bx by bz]] (u/block-name p {:x bx :y by :z bz}))]
-    (loop [[pt & more] (candidates c m) acc {:tried [] :failed [] :skipped 0 :unloaded []}]
+    (loop [[pt & more] (candidates c m) reads 0 acc {:tried [] :failed [] :skipped 0 :unloaded (vec (:deferred m))}]
       (cond
         (nil? pt) acc
-        (or (tried pt) (> (xz-dist pt origin) max-distance) (= pt [ox oz])) (recur more acc)
-        (some #(notes/covers? % pt names) ns) (recur more (-> acc (update :tried conj pt) (update :skipped inc)))
+        (>= reads stand-cap) (assoc acc :more true)
+        (or (tried pt) (> (xz-dist pt origin) max-distance) (= pt [ox oz])) (recur more reads acc)
+        (some #(notes/covers? % pt names) ns) (recur more reads (-> acc (update :tried conj pt) (update :skipped inc)))
         :else (let [{sy :y fail :fail} (stand-cell block-at (pt 0) (pt 1) y)
                     failed {:pos [(pt 0) y (pt 1)] :reason fail}]
                 (cond
-                  (= :not-loaded fail) (recur more (update acc :unloaded conj failed))
-                  fail (recur more (-> acc (update :tried conj pt) (update :failed conj failed)))
+                  (= :not-loaded fail) (recur more (inc reads) (update acc :unloaded conj failed))
+                  fail (recur more (inc reads) (-> acc (update :tried conj pt) (update :failed conj failed)))
                   :else (assoc (update acc :tried conj pt) :leg [(pt 0) sy (pt 1)])))))))
 
 (defn ^:async walk!
@@ -254,16 +258,18 @@
     (cond
       (>= (count found) want) (finish! c :found nil)
       (>= (:legs m 0) max-legs) (finish! c :not-found :legs)
-      :else (let [{:keys [leg tried failed skipped unloaded]} (choose-leg c m names ns)
+      :else (let [{:keys [leg tried failed skipped unloaded more]} (choose-leg c m names ns)
                   now (ctx/now c)
                   waited (- now (:waiting-since m now))]
               (ctx/update-mem! c (fn [m] (-> m
                                              (update :tried (fnil into []) tried)
                                              (update :failed (fnil into []) failed)
-                                             (update :skipped (fnil + 0) skipped))))
+                                             (update :skipped (fnil + 0) skipped)
+                                             (assoc :deferred (when (and more (not leg)) unloaded)))))
               (cond
                 leg (do (ctx/update-mem! c (fn [m] (-> m (dissoc :waiting-since) (assoc :leg leg) (update :legs (fnil inc 0)))))
                         (await (walk! c)))
+                more :again
                 (empty? unloaded) (finish! c :not-found :distance)
                 (< waited (* 1000 (:load-wait-s (:args c))))
                 (do (ctx/update-mem! c assoc :waiting-since (- now waited) :wait-until (+ now wait-ms))

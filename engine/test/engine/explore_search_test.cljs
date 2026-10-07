@@ -321,3 +321,31 @@
   (let [p (tu/seeing-all (tu/fake {:blocks (merge (tu/box 1 64 1 10 64 7 "hay_block") {"14,64,0" "diamond_block"})}))
         seen (set (map :what (search/sense p ["hay_block" "diamond_block"] 20)))]
     (is (= #{"hay_block" "diamond_block"} seen))))
+
+(deftest spacing-and-distance-are-typed-and-bounded
+  (is (= [:int 4 64] ((juxt :type :min :max) (:spacing search/args))))
+  (is (= [:int 1 128] ((juxt :type :min :max) (:max-distance search/args)))))
+
+(deftest one-choice-reads-a-bounded-number-of-stand-cells-and-says-more-is-left
+  (let [reads (atom 0)
+        p (tu/fake {})
+        counting (js/Proxy. p #js {:get (fn [t k] (if (= "blockAt" k)
+                                                   (fn [pos] (swap! reads inc) (.blockAt t pos))
+                                                   (let [v (aget t k)] (if (fn? v) (.bind v t) v))))})
+        c {:args {:pattern :spiral :spacing 4 :max-distance 128} :primitives counting}
+        r (search/choose-leg c {:origin [0 64 0]} ["diamond_block"] [])]
+    (is (nil? (:leg r)))
+    (is (:more r))
+    (is (< @reads 5000))))
+
+(deftest a-search-over-ground-with-no-surface-takes-several-steps-and-ends-not-found-distance
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup {} 0)]
+          (core/submit! (:eng s) '(jobs.explore.search {:target "diamond_block" :max-distance 40 :spacing 4}) {})
+          (await (run-until-done s 400))
+          (let [e (event-of s :search.not-found)]
+            (is (> (get-in e [:coverage :scans]) 5) "the points are examined over several steps")
+            (is (= :distance (:why e)))
+            (is (> (count (get-in e [:coverage :failed])) 100))))))))
