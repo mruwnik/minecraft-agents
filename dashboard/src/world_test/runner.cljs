@@ -954,10 +954,14 @@
 
 (defn early-end?
   "Whether a case may end before its limit once its jobs are idle: it submitted jobs, has no register, does not set
-  :wait-full, and every pending expectation is an :event one (a :no-event / :count-event may still pass by waiting)."
+  :wait-full, and every pending expectation is an :event one about the case's own jobs (:of-job, or a pattern with
+  :source :job); a :no-event / :count-event may still pass by waiting, a reflex or trigger event may still come."
   [c ids results]
   (and (seq ids) (empty? (:register c)) (not (:wait-full c))
-       (every? #(or (not= :pending (:status %)) (:event (:expect %))) results)))
+       (every? #(or (not= :pending (:status %))
+                    (let [e (:expect %)]
+                      (and (:event e) (or (:of-job e) (= :job (:source (:event e)))))))
+               results)))
 
 (defn end-early
   "results with the pending ones failed: no job was active; saved-s seconds before the case's limit."
@@ -983,7 +987,7 @@
                     evs (events)
                     ;; a stall must not run out the clock of an expectation: judge as of when the gap began
                     results (x/judge-all (:expect c) evs {:t0-ms t0 :now-ms (if stalled? (:gap-start @clock) t) :job-ids ids})
-                    idle (when (and (not stalled?) (early-end? c ids results)) (x/jobs-idle evs ids))
+                    idle (when (and (not stalled?) (early-end? c ids results)) (x/jobs-idle evs (into ids (x/job-ids-in evs))))
                     _ (reset! idle-since (when idle (or @idle-since t)))]
                 (cond
                   stalled? (js/Promise.resolve (stall-results results (:gap @clock)))

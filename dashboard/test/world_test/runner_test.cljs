@@ -808,7 +808,7 @@
 (defn job-ev [kind id & {:as more}]
   (merge {:time-ms 1000100 :source :job :kind kind :context {:job-id id :chain [id]}} more))
 
-(def never-expect [{:event {:kind :never} :within-s 90}])
+(def never-expect [{:event {:source :job :kind :never} :within-s 90}])
 
 (defn watch-case [c events]
   (r/watch-with! (fake-watch-io {} (constantly events)) c 1000000 #{"j1"} (r/stall-clock 1000000)))
@@ -839,6 +839,22 @@
                                (keeps {:register [{:id "t"}] :expect never-expect})
                                (keeps {:expect [{:no-event {:kind :bad} :for-s 4}]})])
           (.then (fn [oks] (is (every? true? oks)) (done)))))))
+
+(deftest early-end-waits-for-an-event-that-is-not-about-the-cases-jobs
+  (async done
+    (let [ended [(job-ev :completed "j1")]
+          trigger {:event {:source :trigger :kind :fired} :within-s 10}
+          keeps (fn [c evs] (.then (watch-case (merge {:limit-s 20} c) evs) (fn [res] (nil? (:ended-early-s (first res))))))]
+      (-> (js/Promise.all #js [(keeps {:expect [trigger]} ended)
+                               (keeps {:expect [{:event {:kind :never} :within-s 10}]} ended)
+                               (keeps {:expect [{:event {:kind :never} :of-job true :within-s 10}]} ended)])
+          (.then (fn [oks] (is (= [true true false] (vec oks))) (done)))))))
+
+(deftest early-end-waits-while-a-job-of-a-trigger-is-active
+  (async done
+    (.then (watch-case {:limit-s 20 :expect never-expect}
+                       [(job-ev :completed "j1") (job-ev :queued "t1")])
+           (fn [res] (is (nil? (:ended-early-s (first res)))) (done)))))
 
 (deftest clear-goals-removes-the-goal-of-a-run-still-in-flight
   (async done

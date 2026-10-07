@@ -135,6 +135,11 @@
       (some-> (get-in e [:data :reason]) name)
       (some-> (get-in e [:data :error]) str)))
 
+(defn job-ids-in
+  "Ids of every job with a lifecycle event in events, whoever submitted it."
+  [events]
+  (into #{} (keep #(when (and (= :job (:source %)) (job-lifecycle (:kind %))) (get-in % [:context :job-id]))) events))
+
 (defn jobs-idle
   "When every job of job-ids has ended (its latest own event is completed, stopped, failed or cancelled): {:state kind
   :why text} of the last one to end; nil while one is queued, running, waiting, not yet seen, or there are no jobs."
