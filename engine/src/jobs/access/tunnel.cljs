@@ -4,6 +4,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.declined :as declined]
+            [jobs.lib.dig-look :as look]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
@@ -305,7 +306,7 @@
         (stair/stop-of (stair/judged-in c in) cells accept)
         (if-let [cell (first (remove #(rules/air ((:block-at in) %)) cut))]
           (or (await (stair/peek! c cell)) (await (dig-cell! c in cell cut accept)))
-          (or (await (stair/settle! c cut))
+          (or (await (look/settle! c cut))
               (let [r (await (stair/walk-into! c :walk next))]
                 (cond
                   (= :continue r) :continue

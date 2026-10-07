@@ -8,6 +8,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
             [jobs.lib.blocks :as blocks]
+            [jobs.lib.dig-look :refer [unknown? look-at! settle! see-round!]]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [engine.path.executor :as executor]
@@ -229,11 +230,6 @@
   [p guess]
   (fn [[x y z]] (when-let [b (u/sensed p {:x x :y y :z z})] (if (true? (.-unknown b)) guess (.-name b)))))
 
-(defn unknown?
-  "Whether the body has not sensed cell [x y z] (loaded, never seen or too old to trust)."
-  [p [x y z]]
-  (true? (some-> (u/sensed p {:x x :y y :z z}) .-unknown)))
-
 (defn rules-in
   "The rules' input at feet: :block-at reads unsensed cells as hidden-guess; :column-at reads them as air (a column
   scanned from the sky down for a stand, jobs.access.tunnel/surface)."
@@ -247,13 +243,6 @@
   [c in]
   (assoc in :unseen? #(unknown? (:primitives c) %)))
 
-(defn ^:async look-at!
-  "Turn the head to cell's centre, so perception glances it and its 6 neighbours; nothing for primitives that do not
-  sense (they read blockAt)."
-  [c [x y z]]
-  (when (some? (.-sensedAt (:primitives c)))
-    (await (ctx/act c :look (clj->js {:pos {:x (+ x 0.5) :y (+ y 0.5) :z (+ z 0.5)}})))))
-
 (defn ^:async look-ahead!
   "Once per step from feet (memory :looked): look at the next cell and the floor under it, at each cut cell still unknown,
   and at the unknown neighbours of the feet and head, so what a player would see of the step is seen when it is judged."
@@ -266,34 +255,6 @@
       (when-let [cell (first cells)]
         (when (unknown? (:primitives c) cell) (await (look-at! c cell)))
         (recur (rest cells))))))
-
-(def flow-delay-ms "One overworld lava flow delay (30 ticks), with a tick or two over." 2000)
-
-(defn ^:async settle!
-  "Before the body steps into the open cut: when a cell beside it is unseen, what is behind it shows only once it flows
-  in. :continue until a flow delay has passed since the last dig, then :again once after a look at each cut cell
-  (memory :settled); nil when nothing is unseen beside the cut or it has been looked at."
-  [c cut]
-  (let [open? (set cut)
-        unseen (some #(unknown? (:primitives c) %) (remove open? (for [o cut d rules/neighbour-deltas] (add o d))))]
-    (cond
-      (not unseen) nil
-      (< (ctx/now c) (+ (:dug-at (ctx/mem c) 0) flow-delay-ms)) :continue
-      (= cut (:settled (ctx/mem c))) nil
-      :else (do (ctx/update-mem! c assoc :settled cut)
-                (loop [cells cut]
-                  (when-let [cell (first cells)] (await (look-at! c cell)) (recur (rest cells))))
-                :again))))
-
-(defn ^:async see-round!
-  "After a dig of cell: look into it, then at each neighbour still unknown, the faces the dig laid open."
-  [c cell]
-  (await (look-at! c cell))
-  (loop [ds rules/neighbour-deltas]
-    (when-let [d (first ds)]
-      (let [n (add cell d)]
-        (when (unknown? (:primitives c) n) (await (look-at! c n))))
-      (recur (rest ds)))))
 
 (defn ^:async peek!
   "Before digging cell: when it is still unknown, look at it once (memory :peeked) and give :again so the step is
