@@ -67,6 +67,24 @@
     (is (false? (holds? (assoc world :time noon) (status! 1 2))) "by day")
     (is (false? (holds? (assoc-in world [:self :isSleeping] true) (status! 1 2))) "asleep itself")))
 
+(defn holds-after?
+  "The :night condition in world after steps: [kind data] writes, each 1 s after the last."
+  [world steps]
+  (let [{:keys [eng clock]} (st/setup {})]
+    (doseq [[kind data] steps]
+      (swap! clock + 1000)
+      (write! eng kind data))
+    (boolean ((:when (get triggers/all :night)) (tu/fake world) (mem/view (:store eng)) {}))))
+
+(deftest a-count-sent-while-the-body-lay-in-bed-counts-the-body-itself
+  (let [world {:time night :blocks roof}
+        slept-and-woke (fn [status] [[:sleep-status status] [:slept {}] [:woke {}]])]
+    (is (false? (holds-after? world (slept-and-woke {:skipping true}))) "the night skipped for its own sleep")
+    (is (false? (holds-after? world (slept-and-woke {:sleeping 1 :needed 2}))) "it was the one asleep")
+    (is (true? (holds-after? world (slept-and-woke {:sleeping 2 :needed 3}))) "someone else asleep too")
+    (is (true? (holds-after? world (conj (slept-and-woke {:sleeping 1 :needed 2}) [:sleep-status {:sleeping 1 :needed 2}])))
+        "a count since it woke")))
+
 (deftest after-a-log-out-for-a-sleeper-no-count-since-the-return-still-counts-as-asleep
   (let [world {:time night :blocks roof}
         out-and-back (fn [eng] ((status! 1 2) eng)

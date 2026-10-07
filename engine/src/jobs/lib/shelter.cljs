@@ -272,14 +272,20 @@
   "Whether someone on the server sleeps tonight, as a player can tell: the latest :sleep-status entry tonight (the
   action bar's count, sent when it changes) counts a sleeper or says the night is skipped; or a sleeping player is
   in sight; or the body is back from a log-out tonight and no count has come since its return (:online): unknown is
-  taken as still asleep."
+  taken as still asleep. A count sent before the body woke from its own sleep tonight counts the body: it then needs
+  another sleeper, and a skipped night tells nothing."
   [p view]
   (let [since (tonight p view)
         status (latest-since view :sleep-status since)
         out (latest-since view :log-out since)
-        back (:t (mem/latest view :online))]
+        back (:t (mem/latest view :online))
+        woke (:t (mem/latest view :woke))
+        slept (:t (latest-since view :slept since))
+        own? (and status woke slept (<= slept woke) (<= (:t status) woke))]
     (boolean (or (and out back (#{"ok" "cut"} (:status (:data out))) (or (nil? status) (< (:t status) back)))
-                 (and status (or (:skipping (:data status)) (pos? (:sleeping (:data status) 0))))
+                 (and status (if own?
+                               (> (:sleeping (:data status) 0) 1)
+                               (or (:skipping (:data status)) (pos? (:sleeping (:data status) 0)))))
                  (seq (sleeping-players p default-player-radius))))))
 
 (defn log-out-for-sleepers?

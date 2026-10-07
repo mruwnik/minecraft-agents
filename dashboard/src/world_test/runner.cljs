@@ -857,6 +857,18 @@
     (.unref timer)
     #(js/clearInterval timer)))
 
+(defn start-natural-sweep!
+  "At night, clears naturally spawned hostiles around the plot (f/natural-hostiles-commands) now and every 5 s until the
+  returned stop fn is called; a no-op stop by day."
+  [cmds]
+  (if (empty? cmds)
+    (fn [])
+    (let [sweep #(.catch (rcon! cmds) (fn [_]))
+          timer (js/setInterval sweep 5000)]
+      (.unref timer)
+      (sweep)
+      #(js/clearInterval timer))))
+
 (defn stall-results
   "Expectation results of a stalled run: the undecided ones become :stalled (the run did not watch them for gap-ms)."
   [results gap-ms]
@@ -998,6 +1010,8 @@
         t-start (atom nil)
         clock (stall-clock (js/Date.now))
         stop-monitor (start-stall-monitor! clock)
+        natural (f/natural-hostiles-commands grid origin rc (contains? #{:night :night-x} (lease/time-phase rc)))
+        stop-sweep (atom (fn []))
         pre-register (atom nil)
         result (fn [m] (merge {:id (:id c) :run run :plot i :origin origin :elapsed-s (/ (- (js/Date.now) started) 1000)} m))]
     (-> (let [phase (lock-phase opts rc)]
@@ -1026,6 +1040,7 @@
                        (.then #(ensure-at-start! {:send rcon! :sleep sleep} origin (:body opts) rc))
                        (.then (fn [why] (when why (throw (js/Error. why)))))
                        (.then #(rcon! (f/clear-hostiles-commands grid origin rc)))
+                       (.then #(reset! stop-sweep (start-natural-sweep! natural)))
                        (.then #(reset! pre-register {:offset (log-cursor (events-file opts)) :from-ms (js/Date.now)}))
                        (.then #(when register (ev/emit! (ev/phase :register)) (put-register! opts register origin)))
                        (.then #(sleep (* 1000 (get-in rc [:body :settle-s]))))
@@ -1061,7 +1076,7 @@
                                     #(when (f/writes-shared? c) (drop-shared! opts))
                                     #(run! (fn [f] (when (fs/existsSync f) (fs/unlinkSync f))) @plan-files)])
                      (.then (constantly r)))))
-        (.finally (fn [] (stop-monitor) (release-time-lock!))))))
+        (.finally (fn [] (stop-monitor) (@stop-sweep) (release-time-lock!))))))
 
 ;; ------------------------------------------------------------------ reporting
 

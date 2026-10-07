@@ -286,6 +286,16 @@
   (is (seq (f/clear-hostiles-commands grid [0 0 0] {})))
   (is (empty? (f/clear-hostiles-commands grid [0 0 0] {:mobs :keep}))))
 
+(deftest night-cases-clear-natural-hostiles-around-the-plot-not-summoned-ones
+  (let [cmds (f/natural-hostiles-commands grid [100 149 200] {:plot {:height 6}} true)]
+    (is (seq cmds))
+    (is (every? #(re-find #"^kill @e\[type=minecraft:[a-z_]+,tag=!wt,x=76,y=124,z=176,dx=79,dy=55,dz=79\]$" %) cmds)
+        "the plot box widened by 24 each way, sparing what a runner summoned")
+    (is (some #(re-find #"type=minecraft:skeleton," %) cmds))
+    (is (not-any? #(re-find #"player|type=minecraft:villager|cow|iron_golem|wolf" %) cmds)))
+  (is (empty? (f/natural-hostiles-commands grid [0 0 0] {} false)) "by day")
+  (is (empty? (f/natural-hostiles-commands grid [0 0 0] {:mobs :keep} true)) ":mobs :keep"))
+
 (deftest mobs-problems
   (let [ps #(f/problems (merge {:name "a" :time :day :plot {:height 6} :body {:at [1 0 1]} :act [] :after [] :expect [{:event {:kind :x} :within-s 1}]} %))]
     (is (empty? (ps {:mobs :keep})))

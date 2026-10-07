@@ -22,7 +22,8 @@ runs. The body is stopped (SIGTERM to its own child) and started again (`--fresh
 
 Per run: forceload the plot, kill every non-player entity in it, clear it to air up to `:plot :height`, lay the
 floor; build `:blocks`; write `:plans`; put the body at its start (survival, cleared, healed, fed, inventory,
-effects, spawn point); kill hostiles within 32 blocks; put the `:register`; wait `:settle-s`; kill hostiles again; note
+effects, spawn point); kill hostiles in the plot (at night also natural ones within 24 blocks of it, then every 5 s
+until the case ends); put the `:register`; wait `:settle-s`; kill hostiles again; note
 t0; run `:act` (its `:await` steps, like `:expect`, count from just before the register); poll the log until every
 `:expect` is decided (or `:limit-s`); run the `:after` checks; then `jobs.mjs cancel-all`, kill the plot's
 entities, clear the plot again (so the next restarted body does not start beside this case's hut or bed), put the body on it, clear the body, delete the plans, remove the forceload.
@@ -45,7 +46,7 @@ patterns write `#at [x y z]` (absolute `[x y z]`) or `#xyz [x y z]` (absolute `{
 | `:memory` | `[{:kind :food-source :data {:pos #xyz [x y z] ...}} ...]` (optional `:policy {:cap :ttl}`): entries written into the body's `engine/memory.edn` before it starts (so before the register is put), `:t` = now; appends to the defaults; not with `:keep-memory`. Memory holds what the body has seen: also build the matching block in `:blocks` | `[]` |
 | `:zones` `:places` | `[{:name :min [x y z] :max [x y z] :owner "Other" :allow #{..}}]` / `[{:name :kind :pos [x y z] :note}]`, plot-relative (no `#at`): merged into `worlds/<world>/zones.edn` / `places.json` before the register is put (zone named `wt-<body>-<name>`, marker `:by wt-<body>`; marker names are shared by every shard: write `$tag` (the body's lowercase tag) into them, also in job specs), the runner waits (up to 4 s) for the body's `world.reloaded` event, and removed after the case on every exit path (this body's leftovers also at start); edits take the agent tools' `<file>.lock` | `[]` |
 | `:keep-memory` | `true`: the body's `engine/memory.edn` is not deleted before this case, and when a case follows another in the same register group the body is not restarted (it goes on with the memory it has); for cases that test memory across runs | `false` (every case starts a restarted body with its `memory.edn` deleted) |
-| `:mobs` | `:keep`: the runner does not kill hostile mobs within 32 blocks of the plot before `:act` (each run, `--repeat` too); for danger cases that rely on mobs already there | absent (hostiles near the plot are killed) |
+| `:mobs` | `:keep`: the runner does not kill hostile mobs in or (at night) near the plot (each run, `--repeat` too); for danger cases that rely on mobs already there | absent (hostiles near the plot are killed) |
 | `:plot` | `{:height 2..31 :floor "block"}`; `:length` (x, 16..1024) and `:width` (z, 16..64) make a large plot, leased from 16 lanes south of the grid (z 20704 + 96 j, never overlapping it; setup clears the lane's full 64-wide floor first); keep each `:blocks` fill under 32768 blocks | `{:height 16 :floor "stone"}`, 32x32 |
 | `:blocks` | `[:fill a b "block" (:hollow/:outline/...)]`, `[:set p "block[state]"]` | `[]` |
 | `:plans` | plan maps (`:id`, `:parts`); written as `worlds/<world>/plans/test-<body>-<id>.edn`, deleted after; `"$body"` anywhere in a plan or job spec becomes the running body (plan `:metadata :by`); a job-spec string `"$plan:<id>"` becomes that plan's id | `[]` |

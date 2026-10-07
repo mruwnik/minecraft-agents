@@ -351,6 +351,28 @@
     (let [box (box-selector grid origin (get-in c [:plot :height] 6))]
       (vec (for [t hostile-types] (str "kill @e[type=minecraft:" t "," box "]"))))))
 
+(def natural-hostile-types
+  "Hostile mob types that spawn by themselves in the dark overworld."
+  ["zombie" "zombie_villager" "husk" "drowned" "skeleton" "stray" "bogged" "spider" "creeper" "enderman" "witch" "slime"
+   "phantom"])
+
+(def natural-margin
+  "How far around the plot a night case clears naturally spawned hostiles: beyond a skeleton's 16-block line of fire."
+  24)
+
+(defn natural-hostiles-commands
+  "At night (night?), one kill per natural hostile type in the plot's box widened by natural-margin, never one a runner
+  summoned (tag wt): mobs spawned on the dark plots around would answer the body's hostile reflex. None by day or with
+  :mobs :keep."
+  [grid [ox oy oz] c night?]
+  (if (or (not night?) (= :keep (:mobs c)))
+    []
+    (let [[sx sz] (dims grid)
+          m natural-margin
+          box (str "x=" (- ox m) ",y=" (- (dec oy) m) ",z=" (- oz m) ",dx=" (+ (dec sx) (* 2 m))
+                   ",dy=" (+ (inc (get-in c [:plot :height] 6)) (* 2 m)) ",dz=" (+ (dec sz) (* 2 m)))]
+      (vec (for [t natural-hostile-types] (str "kill @e[type=minecraft:" t ",tag=!wt," box "]"))))))
+
 (defn setup-commands
   "Forceload the plot, kill every non-player entity in it, clear it to air and lay the floor (a large plot first drops
   the floor of its whole lane width)."
