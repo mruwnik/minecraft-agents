@@ -11,6 +11,7 @@
             [engine.registry :as registry]
             [jobs.survival.recover-drops :as recover-drops]
             [engine.scenario :as scenario]
+            [engine.settings :as settings]
             [engine.senses :as senses]
             [engine.single :as single]
             [engine.takeover :as takeover]
@@ -160,6 +161,13 @@
   [{:keys [fresh? upgrade?] :as opts} {:keys [root cfg plan stale state-dir events-max-bytes]} release]
   (let [engine-file (path/join (:engine-dir cfg) "engine.edn")
         _ (offsets/set-root! root)
+        ;; the settings files; their problems wait here until the engine exists to emit them
+        settings-events (atom [])
+        _ (settings/load! {:specs (merge registry/settings settings/settings)
+                           :world-file (path/join (bodies/worlds-dir state-dir) (:world cfg) "settings.edn")
+                           :body-file (path/join (bodies/body-dir state-dir (:world cfg) (:agent opts)) "settings.edn")
+                           :body (:agent opts)
+                           :emit #(swap! settings-events conj %)})
         _ (when (and fresh? (fs/existsSync engine-file)) (fs/unlinkSync engine-file))
         restoring? (fs/existsSync engine-file)
         create-primitives (.-createPrimitives ((createRequire (str root "/")) "./js/primitives.mjs"))
@@ -182,6 +190,7 @@
         base-eng (core/create {:primitives p :jobs registry/jobs :triggers (body-triggers) :dir (:engine-dir cfg)
                                :body (:username cfg) :max-event-bytes events-max-bytes :world world})
         _ (reset! eng-ref base-eng)
+        _ (run! #(core/emit! base-eng %) @settings-events)
         _ (trigger-api/restore-conditions! base-eng)
         _ (boot-scenario! base-eng {:plan plan :stale stale :restoring? restoring? :upgrade? upgrade?})
         seen (entity-observations/start! p {:world (:world cfg) :body (:agent opts)})

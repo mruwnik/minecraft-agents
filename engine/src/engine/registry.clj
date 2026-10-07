@@ -129,6 +129,23 @@
                (job-files dir)))
     []))
 
+(defn settings-namespaces
+  "Every namespace under jobs/ and triggers/ (helper files included) that defines a top-level `settings`, in
+  path order."
+  []
+  (vec (for [dir-fn [jobs-dir triggers-dir]
+             :let [dir (dir-fn)]
+             :when dir
+             f (job-files dir)
+             :let [forms (read-forms f)]
+             :when (contains? (defined-names forms) 'settings)]
+         (expected-ns dir f))))
+
+(defmacro settings-registry
+  "{ns-symbol ns/settings} for every namespace that declares a top-level `settings` map of its keys."
+  []
+  (into {} (map (fn [ns] [(list 'quote ns) (symbol (str ns) "settings")])) (settings-namespaces)))
+
 (defmacro job-registry
   "{ns-symbol {:check :round :doc :args}} for every job namespace under jobs/."
   []
