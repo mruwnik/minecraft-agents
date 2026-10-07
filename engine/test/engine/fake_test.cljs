@@ -1071,4 +1071,10 @@
     {"0,60,0" "stone"} [0 66 0] 20 [[0 61 0] 18]           ; 5 cells: 2 damage
     {"0,60,0" "stone" "0,63,0" "oak_sapling"} [0 65 0] 20 [[0 61 0] 19] ; a sapling does not stop it: 4 cells, 1 damage
     {"0,63,0" "stone"} [0 64 0] 20 [[0 64 0] 20]           ; standing: stays
-    {} [0 64 0] 20 [[0 64 0] 20]))                          ; a void: stays
+    {} [0 64 0] 20 [[0 64 0] 20]                            ; a void: stays
+    {"0,50,0" "stone" "0,51,0" "water" "0,52,0" "water" "0,53,0" "water"} [0 60 0] 20 [[0 53 0] 20] ; water: lands in its top cell, no damage
+    {"0,50,0" "stone" "0,51,0" "water" "0,52,0" "water"} [0 52 0] 20 [[0 52 0] 20]    ; in water: floats
+    {"0,50,0" "stone" "0,51,0" "lava"} [0 60 0] 20 [[0 51 0] 20]                      ; lava holds too
+    {"0,50,0" "stone" "0,51,0" "ladder" "0,52,0" "ladder"} [0 52 0] 20 [[0 52 0] 20]  ; on a ladder: holds
+    {"0,50,0" "stone" "0,52,0" "vine"} [0 56 0] 20 [[0 52 0] 20]                      ; a vine catches the fall
+    {"0,50,0" "stone" "0,51,0" "scaffolding"} [0 51 0] 20 [[0 51 0] 20]))             ; scaffolding holds

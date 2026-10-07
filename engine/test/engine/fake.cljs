@@ -259,18 +259,24 @@
         (assoc-in [:self :inWater] (= here "water"))
         (update :self #(cond-> % (= here "water") (assoc :onFire false))))))
 
+(def holds-body #"^(water|lava|ladder|scaffolding|vine|.*_vine|.*_vines|cobweb)$")
+
 (defn fall
-  "Gravity: a body over a cell without a collision box (air, a sapling, tall grass) drops to the first cell with a solid
-  block under it (up to 64 down; over a void or fluid it stays); a drop of more than 3 cells costs one health per extra cell."
+  "Gravity: a body over a cell without a collision box (air, a sapling, tall grass) drops until a solid block is under it
+  (up to 64 down; over a void it stays); a drop of more than 3 cells costs one health per extra cell. Water, lava, a
+  ladder, scaffolding, a vine or a cobweb in the cell it falls into stop it there with no damage; one it is in holds it."
   [w]
   (let [[x y z] (body-pos w)
         [cx cz] [(js/Math.floor x) (js/Math.floor z)]
-        soft? #(let [b (block-name w [cx (dec %) cz])] (or (contains? no-shape b) (boolean (re-find no-box-see-through b))))
-        floor (when (soft? y) (first (filter (complement soft?) (range (dec y) (- y 64) -1))))]
-    (if (or (nil? floor) (#{"water" "lava"} (block-name w [cx (dec floor) cz])))
+        at #(block-name w [cx % cz])
+        soft? #(let [b (at (dec %))] (or (contains? no-shape b) (boolean (re-find no-box-see-through b))))
+        landing (fn [cell] (cond (re-find holds-body (at cell)) [cell false]
+                                 (not (soft? cell)) [cell true]))
+        [floor hurt?] (when (or (soft? y) (re-find holds-body (at y))) (some landing (range y (- y 64) -1)))]
+    (if (or (nil? floor) (= floor y))
       w
       (-> w (assoc-in [:self :pos 1] floor)
-          (update-in [:self :health] #(max 0 (- % (max 0 (- y floor 3)))))))))
+          (update-in [:self :health] #(if hurt? (max 0 (- % (max 0 (- y floor 3)))) %))))))
 
 (defn step-toward [from to maxd]
   (let [f (/ maxd (dist from to))]
