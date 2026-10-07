@@ -281,11 +281,11 @@
 
 (defn pit-site?
   "Whether feet cell f looks like a place a pit can be dug, by what a player sees from the surface: standing room, dry
-  ground, no fluid beside it. How deep the ground goes is left to dig-in, which stops a bad site."
+  ground the carried tools dig, no fluid beside it. How deep the ground goes is left to dig-in, which stops a bad site."
   [p {:keys [x y z] :as f}]
   (let [at (fn [dy] (u/block-name p {:x x :y (+ y dy) :z z}))
         below {:x x :y (dec y) :z z}]
-    (and (sh/solid? (at -1)) (not (sh/solid? (at 0))) (not (sh/solid? (at 1)))
+    (and (sh/solid? (at -1)) (tools/can-harvest? p (at -1)) (not (sh/solid? (at 0))) (not (sh/solid? (at 1)))
          (not (dig-in/wet? p f)) (not (dig-in/wet? p {:x x :y (inc y) :z z}))
          (not (dig-in/wet? p below))
          (not (dig-in/lateral-fluid p below)))))

@@ -331,7 +331,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (st/setup {:time night :blocks st/ground})
+        (let [{:keys [eng p seen]} (st/setup {:time night :blocks st/ground :inventory [{:name "iron_pickaxe" :count 1}]})
               mid (atom nil)]
           (st/refuse-placing! p)
           (st/dawn-after! p 4 (fn [n] (when (= n 2) (reset! mid (:reason (core/holding eng "j1"))))))
@@ -429,6 +429,12 @@
   (let [p (tu/fake {:blocks (into {} (for [x (range -2 3) z (range -2 3)] [(str x ",63," z) "dirt"]))})]
     (is (night/pit-site? p {:x 1 :y 64 :z 1}) "one layer of dirt shows nothing against a pit; dig-in finds out")
     (is (not (night/pit-site? p {:x 9 :y 64 :z 9})) "no ground to stand on")))
+
+(deftest a-pit-site-needs-ground-the-carried-tools-dig
+  (let [stone (into {} (for [x (range -2 3) z (range -2 3)] [(str x ",63," z) "stone"]))
+        site {:x 1 :y 64 :z 1}]
+    (is (not (night/pit-site? (tu/fake {:blocks stone}) site)) "no pickaxe: stone cannot be dug")
+    (is (night/pit-site? (tu/fake {:blocks stone :inventory [{:name "iron_pickaxe" :count 1}]}) site))))
 
 ;; ------------------------------------------------------------------ a niche in a hillside
 
