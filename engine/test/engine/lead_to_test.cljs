@@ -96,6 +96,32 @@
           (is (finished? s))
           (is (= :lagging (:reason (done-event s)))))))))
 
+(deftest a-lagging-cow-is-waited-for-in-a-declared-hold-for-about-max-wait-ms
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [clock seen p] :as s} (setup {:floor tu/walk-floor :inventory lead :entities [(cow 1 3 {:trail 9})]})
+              now #(+ @clock (* call-ms (.-length (.-calls (.-world p)))))
+              t0 (now)
+              _ (await (submit s {} 1))
+              holds (filterv #(and (= :holding (:kind %)) (= "waiting-for-animal" (some-> (:reason %) name))) @seen)
+              waited (- (now) t0)]
+          (is (= :lagging (:reason (done-event s))))
+          (is (seq holds) "the wait is a declared hold")
+          (is (<= lead-to/max-wait-ms waited) "the cow was waited for the whole bound")
+          (is (< waited (+ lead-to/max-wait-ms 3000)) "and given up soon after it"))))))
+
+(deftest a-tie-walk-that-cannot-arrive-ends-unreachable-with-the-cow-still-led
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [post {"10,64,5" "oak_fence"}
+              near (vec (for [x (range 7 14) z (range 2 9) :when (not= [10 5] [x z])] (str x ",64," z)))
+              s (await (scenario {:fence {:x 10 :y 64 :z 5}} {:inventory lead :blocks post :entities [(cow 1 3)] :unreachable near} 14))]
+          (is (finished? s))
+          (is (= :unreachable (:reason (done-event s))))
+          (is (true? (:still-led (done-event s)))))))))
+
 (deftest gathers-a-trailing-cow-to-the-spot-before-letting-it-go
   (async done
     (tu/run-async done

@@ -29,16 +29,24 @@
       (hiding-seen? s) :hiding
       :else (do (await (js/Promise. (fn [resolve] (js/setTimeout resolve 10)))) (recur)))))
 
+(def tick-timeout-ms
+  "Wall time one tick may take before the test fails: a stuck tick would hang it (a bound against a hang, not a speed check)."
+  20000)
+
 (defn ^:async respond!
   "Run respond-to-hostile over the gap test's doorway cell with the given spec until the job ends or the body hides
-  (a hold that is then cancelled): up to six ticks; the setup map."
+  (a hold that is then cancelled): up to six ticks, each given tick-timeout-ms to end or hide, else the test fails; the setup map."
   [spec]
   (let [{:keys [eng] :as s} (g/setup (:zones spec []) (merge {:entities [g/pit-skeleton] :blocks (merge wide-ground g/pit g/shell) :act-ms 1000} (dissoc spec :zones)))]
     (core/submit! eng '(jobs.survival.respond-to-hostile) {})
     (loop [i 0]
       (when (and (< i 6) (not (hiding-seen? s)))
         (let [stop (atom false)
-              r (await (js/Promise.race [(core/tick! eng) (hiding! s stop)]))]
+              timer (atom nil)
+              r (try (await (js/Promise.race [(core/tick! eng) (hiding! s stop)
+                                              (js/Promise. (fn [_ reject]
+                                                             (reset! timer (js/setTimeout #(reject (js/Error. "respond-to-hostile tick did not return")) tick-timeout-ms))))]))
+                     (finally (js/clearTimeout @timer)))]
           (reset! stop true)
           (when (= :hiding r) (core/cancel! eng "j1"))
           (recur (inc i)))))
