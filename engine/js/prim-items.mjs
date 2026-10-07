@@ -103,25 +103,54 @@ export function createItems (env) {
   // With `slot`, throws exactly that slot's whole stack (env.bot.toss would take from whichever slot it finds first).
   // Throws carried items in the direction the body looks (it does not look anywhere itself); the stacks of the item
   // are summed, so a count may span several slots.
+  // With `watchS` (up to 1.5) it then waits that long, or until all of it is taken, and adds `takenBy`: {collector uuid
+  // count} of the tossed item picked up by anyone (a receipt of who took it).
+  const watchPickups = async (ctx, a, count, throwIt) => {
+    const takenBy = {}
+    const taken = () => Object.values(takenBy).reduce((sum, n) => sum + n, 0)
+    const onCollect = (collector, collected) => {
+      const stack = collected?.getDroppedItem?.()
+      if (stack?.name !== a.item || !collector?.uuid) return
+      takenBy[collector.uuid] = (takenBy[collector.uuid] ?? 0) + stack.count
+    }
+    env.bot.on('playerCollect', onCollect)
+    try {
+      await throwIt()
+      const deadline = Date.now() + Math.min(a.watchS, 1.5) * 1000 * timeScale
+      while (taken() < count && Date.now() < deadline) {
+        await sleepMs(Math.max(1, Math.min(20, deadline - Date.now())))
+        ctx.alive()
+      }
+    } finally {
+      env.bot.removeListener('playerCollect', onCollect)
+    }
+    return takenBy
+  }
   const toss = async (token, a = {}) => {
     if (!isOwner(token)) throw cutError()
     need(typeof a.item === 'string', 'toss needs item, an item name')
     need(a.slot === undefined || a.slot === null || isNum(a.slot), 'toss slot must be a number')
-    return act(token, { boundS: 2 }, async ctx => {
+    need(a.watchS === undefined || (isNum(a.watchS) && a.watchS >= 0), 'toss watchS must be a number of seconds')
+    const tossed = async (ctx, count, throwIt) => {
+      if (!a.watchS) {
+        await throwIt()
+        ctx.alive()
+        return { status: 'tossed', count }
+      }
+      const takenBy = await watchPickups(ctx, a, count, throwIt)
+      return { status: 'tossed', count, takenBy }
+    }
+    return act(token, { boundS: a.watchS ? 2 + Math.min(a.watchS, 1.5) : 2 }, async ctx => {
       if (isNum(a.slot)) {
         const stack = env.bot.inventory.slots[a.slot]
         if (!stack || stack.name !== a.item) return { status: 'no-item', count: 0 }
-        await env.bot.tossStack(stack)
-        ctx.alive()
-        return { status: 'tossed', count: stack.count }
+        return tossed(ctx, stack.count, () => env.bot.tossStack(stack))
       }
       const total = inventory().filter(i => i.name === a.item).reduce((sum, i) => sum + i.count, 0)
       const count = Math.min(a.count ?? total, total)
       const type = env.bot.registry.itemsByName[a.item]?.id
       if (count <= 0 || type === undefined) return { status: 'no-item', count: 0 }
-      await env.bot.toss(type, null, count)
-      ctx.alive()
-      return { status: 'tossed', count }
+      return tossed(ctx, count, () => env.bot.toss(type, null, count))
     })
   }
 

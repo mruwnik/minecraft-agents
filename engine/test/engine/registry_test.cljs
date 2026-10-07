@@ -12,18 +12,19 @@
      jobs.combat.attack jobs.animals.breed jobs.animals.shear jobs.animals.cull jobs.animals.tend jobs.animals.pen-check jobs.animals.shut-gate jobs.animals.leash jobs.animals.unleash jobs.animals.lead-to jobs.survival.recover-drops jobs.survival.restore-broken jobs.maintenance.shut-doors jobs.storage.make-room
      jobs.animals.herd
      jobs.forestry.fell-tree jobs.forestry.collect-drops jobs.forestry.plant-sapling
-     jobs.forestry.harvest-wood jobs.forestry.maintain jobs.forestry.prepare jobs.storage.deposit jobs.storage.withdraw jobs.storage.kit jobs.items.craft jobs.items.give jobs.items.wear jobs.items.equip jobs.items.bake jobs.farm.till jobs.farm.fertilize jobs.farm.compost jobs.build.clear-box jobs.farm.find-spot jobs.farm.harvest jobs.farm.plant jobs.farm.tend
+     jobs.forestry.harvest-wood jobs.forestry.maintain jobs.forestry.prepare jobs.storage.deposit jobs.storage.withdraw jobs.storage.kit jobs.items.craft jobs.items.give jobs.items.wear jobs.items.equip jobs.items.bake jobs.farm.till jobs.farm.fertilize jobs.farm.compost jobs.build.clear-box jobs.build.path jobs.farm.find-spot jobs.farm.harvest jobs.farm.plant jobs.farm.tend
      jobs.apiary.harvest
      jobs.apiary.guard
      jobs.apiary.maintain
      jobs.village.trade
+     jobs.village.feed
      jobs.items.smelt
      jobs.items.enchant jobs.items.obtain jobs.items.get-tool jobs.items.fetch-limits
      jobs.build.from-plan jobs.build.pen jobs.build.rail-line
      jobs.access.pillar
      jobs.explore.search jobs.explore.look
      jobs.combat.hunt jobs.gather.get-seeds jobs.gather.mine
-     jobs.movement.go-to jobs.movement.pace jobs.movement.look-around jobs.movement.follow jobs.movement.leave-vehicle jobs.movement.mount jobs.movement.linger-near jobs.survival.block-arrow-gap
+     jobs.movement.go-to jobs.movement.path-preview jobs.movement.pace jobs.movement.look-around jobs.movement.follow jobs.movement.leave-vehicle jobs.movement.mount jobs.movement.linger-near jobs.survival.block-arrow-gap
      jobs.time.wait-for-day jobs.time.wait-for-dusk jobs.debug.notify jobs.debug.walk-plan jobs.debug.access-check
      jobs.access.stair jobs.access.tunnel jobs.access.toggle jobs.farm.tidy
      jobs.access.cleanup jobs.access.leave-tunnel jobs.access.clear-path

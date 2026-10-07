@@ -2156,6 +2156,25 @@ test('toss does not look anywhere itself', async () => {
   assert.deepEqual(names(bot).filter(n => n === 'lookAt' || n === 'look'), [])
 })
 
+test('toss with watchS reports who picked the drop up, by uuid, and ends once all of it is taken', async () => {
+  const { bot, p } = rig(world)
+  const done = p.toss('t1', { item: 'bread', count: 2, watchS: 1.5 })
+  setTimeout(() => bot.emit('playerCollect', { uuid: 'v1' }, { getDroppedItem: () => ({ name: 'bread', count: 2 }) }), 5)
+  assert.deepEqual(await done, { status: 'tossed', count: 2, takenBy: { v1: 2 } })
+})
+
+test('toss with watchS counts only the item tossed and gives an empty receipt when nobody takes it', async () => {
+  const { bot, p } = rig(world, 0.01)
+  const done = p.toss('t1', { item: 'bread', count: 1, watchS: 0.5 })
+  setTimeout(() => bot.emit('playerCollect', { uuid: 'v1' }, { getDroppedItem: () => ({ name: 'stick', count: 1 }) }), 1)
+  assert.deepEqual(await done, { status: 'tossed', count: 1, takenBy: {} })
+})
+
+test('toss without watchS has no receipt', async () => {
+  const { p } = rig(world)
+  assert.deepEqual(await p.toss('t1', { item: 'bread', count: 1 }), { status: 'tossed', count: 1 })
+})
+
 // ---- the picked-up body event ----
 
 const pickup = (bot, collector, dropped) => bot.emit('playerCollect', collector, { getDroppedItem: () => dropped })
