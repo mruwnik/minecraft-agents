@@ -74,6 +74,16 @@ out=$(MC_TEST_TIMEOUT_S=2 timeout 30 "$T/repo/tools/test-engine" engine.hang-tes
 check "hung run message" "$(grep -c 'TIMEOUT, killed after 2 s' <<<"$out")" 1
 out=$(timeout 30 "$T/repo/tools/test-engine" engine.nope-test 2>&1); check "missing ns rc" "$?" 2
 check "missing ns message" "$(grep -c 'not in the :test bundle' <<<"$out")" 1
+# a failed compile that printed an ERROR / undeclared warning is retried (up to 2x); other failures, usage and busy exits are not
+printf '#!/bin/sh\necho "npx $*" >> "%s/npx.log"\nn=$(wc -l < "%s/npx.log")\n[ "$n" -ge "$OK_AT" ] && exit 0\necho "------ WARNING #1 - :undeclared-var ---"\n' "$T" "$T" > "$T/bin/npx"
+: > "$T/npx.log"; out=$(OK_AT=3 MC_COMPILE_RETRY_S=0 timeout 30 "$T/repo/tools/test-engine" engine.a-test 2>&1); check "retry: clears on 3rd try rc" "$?" 0
+check "retry: compiled 3 times" "$(wc -l < "$T/npx.log")" 3
+check "retry: says why" "$(grep -c 'foreign edit in flight' <<<"$out")" 2
+: > "$T/npx.log"; OK_AT=99 MC_COMPILE_RETRY_S=0 timeout 30 "$T/repo/tools/test-engine" engine.a-test >/dev/null 2>&1; check "retry: gives up rc" "$?" 1
+check "retry: gave up after 3 tries" "$(wc -l < "$T/npx.log")" 3
+printf '#!/bin/sh\necho "npx $*" >> "%s/npx.log"\necho "plain failure"\nexit 1\n' "$T" > "$T/bin/npx"
+: > "$T/npx.log"; MC_COMPILE_RETRY_S=0 timeout 30 "$T/repo/tools/test-engine" engine.a-test >/dev/null 2>&1; check "no retry without ERROR/undeclared output" "$(wc -l < "$T/npx.log")" 1
+printf '#!/bin/sh\necho "npx $*" >> "%s/npx.log"\n' "$T" > "$T/bin/npx"
 # --golden whose run fails exits with that failure, never falling through to the normal path
 out=$(timeout 30 "$T/repo/tools/test-engine" --golden 2>&1); rc=$?
 check "golden failure no fall-through" "$(grep -c 'not in the :test bundle' <<<"$out")" 0

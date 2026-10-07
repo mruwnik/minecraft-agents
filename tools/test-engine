@@ -8,6 +8,19 @@
 # Why not JS: a thin shell wrapper; runs node with --max-old-space-size=4096.
 set -u
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# compile_retry <build>: tools/compile, retried up to 2x after MC_COMPILE_RETRY_S (default 50) s when the failure printed an ERROR or an undeclared-var/ns warning (another agent's half-edited file usually clears in about a minute). Exit 2/75 (usage, busy) and failures without such output are not retried.
+compile_retry() {
+  local out rc=0 try
+  out="$(mktemp)"; trap 'rm -f "$out"' RETURN
+  for try in 0 1 2; do
+    "$repo/tools/compile" "$1" "$2" 2>&1 | tee "$out"; rc=${PIPESTATUS[0]}
+    case "$rc" in 0|2|75) return "$rc";; esac
+    [ "$try" = 2 ] && return "$rc"
+    grep -qE 'ERROR|WARNING #[0-9]+ - :undeclared-(var|ns)' "$out" || return "$rc"
+    echo "test-engine: compile failed, foreign edit in flight? retrying in ${MC_COMPILE_RETRY_S:-50} s ($((try + 1))/2)" >&2
+    sleep "${MC_COMPILE_RETRY_S:-50}"
+  done
+}
 [ $# -ge 1 ] || { echo "usage: tools/test-engine <ns>... | --full | --changed [<git-rev>]" >&2; exit 2; }
 if [ "$1" = "--changed" ]; then
   sel="$(node "$repo/tools/changed-tests.mjs" "${2:-HEAD}")" || exit $?
@@ -26,7 +39,7 @@ if [ "$1" = "--changed" ]; then
 fi
 if [ "$1" = "--golden" ]; then
   [ "${TEST_EVENTS:-}" = 1 ] && echo '@@test {"event":"phase","name":"compiling"}'
-  "$repo/tools/compile" engine test-golden || exit $?
+  compile_retry engine test-golden || exit $?
   # one 'tests' slot with the golden need from res-slot.json (kinds.tests.goldenMb)
   need="$(node -e 'console.log(require(process.argv[1]).kinds.tests.goldenMb)' "$repo/tools/res-slot.json")"
   cd "$repo/engine" && "$repo/tools/res-slot" tests --need "$need" -- sh -c 'node --max-old-space-size=4096 out/test-golden.cjs && exec node --test --test-reporter=../tools/test-events-reporter.mjs js/path/bench.golden.mjs'
@@ -37,6 +50,6 @@ if [ "$1" = "--full" ]; then
   shift; exec node "$repo/tools/test-shards.mjs" "$@"
 fi
 [ "${TEST_EVENTS:-}" = 1 ] && echo '@@test {"event":"phase","name":"compiling"}'
-"$repo/tools/compile" engine test || exit $?
+compile_retry engine test || exit $?
 [ "${TEST_EVENTS:-}" = 1 ] && echo '@@test {"event":"phase","name":"testing"}'
 exec node "$repo/tools/test-run.mjs" "$@"
