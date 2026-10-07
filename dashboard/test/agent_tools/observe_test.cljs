@@ -689,6 +689,24 @@
       (.mkdirSync fs (.join path dir "obs.lock"))
       (is (= "EOBSERVERBUSY" (try (observe-lock/acquire! dir "obs") nil (catch :default e (.-code e))))))))
 
+(deftest acquire-reclaims-a-lock-whose-pid-was-reused
+  (with-lock-dir
+    (fn [dir]
+      (let [lock (.join path dir "obs.lock")]
+        (.mkdirSync fs lock)
+        (.writeFileSync fs (.join path lock "pid") (str (.-pid js/process)))
+        (.writeFileSync fs (.join path lock "start") "1")
+        (let [release (observe-lock/acquire! dir "obs")]
+          (is (= (observe-lock/process-start-time (.-pid js/process)) (.readFileSync fs (.join path lock "start") "utf8")))
+          (release))))))
+
+(deftest acquire-refuses-a-lock-held-by-the-live-process-that-recorded-its-start
+  (with-lock-dir
+    (fn [dir]
+      (let [release (observe-lock/acquire! dir "obs")]
+        (is (= "EOBSERVERBUSY" (try (observe-lock/acquire! dir "obs") nil (catch :default e (.-code e)))))
+        (release)))))
+
 (defn kill-failing [code] (fn [_] (throw (doto (js/Error. "kill") (aset "code" code)))))
 
 (deftest a-process-owned-by-another-user-counts-as-alive

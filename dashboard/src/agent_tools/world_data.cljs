@@ -405,46 +405,72 @@
          items (vec (take limit (drop offset rows)))]
      (cond-> {:total (count rows) :items items}
        (< (+ offset (count items)) (count rows)) (assoc :next-offset (+ offset (count items)))))))
+(defn- stat-sig [file]
+  (try (let [st (.statSync fs file)] [(.-mtimeMs st) (.-size st) (.-ino st)])
+       (catch :default e (if (= "ENOENT" (.-code e)) nil (throw e)))))
+(defn- source-fingerprint
+  "Stat signature of every file scan reads, plus the ledger and the pending-write files: equal fingerprints mean a
+  scan would find nothing new."
+  [ctx]
+  (let [listed (fn [dir] (try (sort (filter #(str/ends-with? % ".edn") (array-seq (.readdirSync fs dir))))
+                              (catch :default e (if (= "ENOENT" (.-code e)) [] (throw e)))))
+        files (concat (map #(.join path (:world-dir ctx) %) ["places.json" "zones.edn" "claims.edn"])
+                      (map #(.join path (:plans-dir ctx) %) (listed (:plans-dir ctx)))
+                      (map #(.join path (:blueprint-dir ctx) %) (listed (:blueprint-dir ctx)))
+                      [(.join path (:blueprint-dir ctx) ".agent-pending.edn") (.join path (:metadata-dir ctx) "pending.edn")
+                       (ledger-file ctx)])]
+    (mapv (fn [f] [f (stat-sig f)]) files)))
+(defonce ^:private scanned-fingerprints (atom {}))
+
+(defn- changes-since [l cursor limit filters]
+  (let [oldest (or (:seq (first (:events l))) (inc (:seq l))) end (select-keys l [:stream :seq])]
+    (cond
+      (nil? cursor) {:cursor end :total 0 :items []}
+      (or (not= (:stream cursor) (:stream l)) (not (js/Number.isSafeInteger (:seq cursor)))
+          (< (:seq cursor) (dec oldest)) (> (:seq cursor) (:seq l)))
+      {:ok false :reason :cursor-gap :cursor end :oldest-seq oldest}
+      :else
+      (let [available (filterv #(> (:seq %) (:seq cursor)) (:events l))
+            matching? #(pos? (:total (query [%] (assoc filters :limit 1))))
+            [through more?] (loop [events available selected #{}]
+                              (if-let [e (first events)]
+                                (if-not (matching? e) (recur (next events) selected)
+                                  (let [key (object-key (:kind e) (:id e))]
+                                    (if (and (not (selected key)) (>= (count selected) limit))
+                                      [(dec (:seq e)) true] (recur (next events) (conj selected key)))))
+                                [(:seq l) false]))
+            grouped (reduce (fn [{:keys [order values]} e]
+                              (if (or (> (:seq e) through) (not (matching? e))) {:order order :values values}
+                                (let [key (object-key (:kind e) (:id e)) prior (get values key)]
+                                  {:order (if prior order (conj order key))
+                                   :values (assoc values key (assoc e :changes (inc (or (:changes prior) 0))))})))
+                            {:order [] :values {}} available)
+            items (mapv (fn [key] (update (update (update (get (:values grouped) key) :kind keyword) :op keyword) :source keyword)) (:order grouped))]
+        (cond-> {:cursor {:stream (:stream l) :seq through}
+                 :total (count (set (map #(object-key (:kind %) (:id %)) (filter matching? available)))) :items items}
+          more? (assoc :more? true))))))
+
 (defn read-changes
+  "Changes after `cursor`. A poll whose sources are unchanged since the last locked scan reads the ledger without
+  the global lock and without rescanning."
   ([ctx] (read-changes ctx {}))
   ([ctx {:keys [cursor limit] :or {limit 10} :as opts}]
    (.then (js/Promise.resolve)
      (fn []
        (when-not (and (js/Number.isInteger limit) (<= 1 limit 100)) (throw (fail :invalid-page "limit must be 1..100")))
-       (let [filters (dissoc opts :cursor :limit)]
+       (let [filters (dissoc opts :cursor :limit)
+             unchanged? (let [seen (get @scanned-fingerprints (ledger-file ctx))]
+                          (and seen (= seen (source-fingerprint ctx))))]
          (query [] (assoc filters :limit limit))
-         (transaction ctx
-           (fn [l]
-             (let [scanned (scan ctx l)
-                   _ (when (or (not= scanned l) (not (.existsSync fs (ledger-file ctx))))
-                       (atomic-text (ledger-file ctx) (str (write-edn scanned) "\n")))
-                   l scanned
-                   oldest (or (:seq (first (:events l))) (inc (:seq l))) end (select-keys l [:stream :seq])]
-               (cond
-                 (nil? cursor) {:cursor end :total 0 :items []}
-                 (or (not= (:stream cursor) (:stream l)) (not (js/Number.isSafeInteger (:seq cursor)))
-                     (< (:seq cursor) (dec oldest)) (> (:seq cursor) (:seq l)))
-                 {:ok false :reason :cursor-gap :cursor end :oldest-seq oldest}
-                 :else
-                 (let [available (filterv #(> (:seq %) (:seq cursor)) (:events l))
-                       matching? #(pos? (:total (query [%] (assoc filters :limit 1))))
-                       [through more?] (loop [events available selected #{}]
-                                         (if-let [e (first events)]
-                                           (if-not (matching? e) (recur (next events) selected)
-                                             (let [key (object-key (:kind e) (:id e))]
-                                               (if (and (not (selected key)) (>= (count selected) limit))
-                                                 [(dec (:seq e)) true] (recur (next events) (conj selected key)))))
-                                           [(:seq l) false]))
-                       grouped (reduce (fn [{:keys [order values]} e]
-                                         (if (or (> (:seq e) through) (not (matching? e))) {:order order :values values}
-                                           (let [key (object-key (:kind e) (:id e)) prior (get values key)]
-                                             {:order (if prior order (conj order key))
-                                              :values (assoc values key (assoc e :changes (inc (or (:changes prior) 0))))})))
-                                       {:order [] :values {}} available)
-                       items (mapv (fn [key] (update (update (update (get (:values grouped) key) :kind keyword) :op keyword) :source keyword)) (:order grouped))]
-                   (cond-> {:cursor {:stream (:stream l) :seq through}
-                            :total (count (set (map #(object-key (:kind %) (:id %)) (filter matching? available)))) :items items}
-                     more? (assoc :more? true))))))))))))
+         (if unchanged?
+           (changes-since (load-ledger ctx) cursor limit filters)
+           (transaction ctx
+             (fn [l]
+               (let [scanned (scan ctx l)
+                     _ (when (or (not= scanned l) (not (.existsSync fs (ledger-file ctx))))
+                         (atomic-text (ledger-file ctx) (str (write-edn scanned) "\n")))]
+                 (swap! scanned-fingerprints assoc (ledger-file ctx) (source-fingerprint ctx))
+                 (changes-since scanned cursor limit filters))))))))))
 (defn raw-bound
   ([value] (raw-bound value 65536))
   ([value max-size]

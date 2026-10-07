@@ -73,6 +73,179 @@
   (cond-> (array-map :wake :attention :requests (:changed changes))
     (:more changes) (assoc :more? true)))
 
+(declare step)
+
+(defn- read!
+  "GET `endpoint` from the body's events socket as EDN, within the wait's deadline."
+  [{:keys [request get! signal deadline]} endpoint]
+  (js-await [response (get! (:socket-path request) endpoint
+                            {:signal signal :timeout-ms (max 1 (min request-timeout-ms (- @deadline (js/Date.now))))})]
+    (when-not (and (= 200 (:status response)) (http/edn-response? (:content-type response)))
+      (throw (coded (if (= 404 (:status response)) "EOBSERVEUNAVAILABLE" "EBADRESPONSE") (:text response))))
+    (data/read-edn (:text response))))
+
+(defn- aborted? [{:keys [signal]}] (and signal (aget signal "aborted")))
+
+(defn- job-history [{:keys [request get! signal deadline] :as w} result]
+  (if (and (= :job-finished (:wake result)) (not (contains? result :history)))
+    (-> (job-results/read! get! (:socket-path request) (:job result) {:signal signal :deadline @deadline})
+        (.then #(with-history result %))
+        (.catch (fn [error] (if (aborted? w) (throw error) (with-history result {})))))
+    (js/Promise.resolve result)))
+
+(defn- save! [{:keys [ephemeral? file deaths st]}]
+  (when-not ephemeral? (checkpoint! file (assoc @st :cancelled (:cancelled @deaths)))))
+
+(defn- finish!
+  "Deliver `result` (with the running summary and, for a finished job, its history), then move the checkpoint."
+  [{:keys [summary deliver st] :as w} result]
+  (when (aborted? w) (throw (coded "ABORT_ERR" "cancelled")))
+  (js-await [result (job-history w result)]
+    (let [output (summary-result @summary result)]
+      (js-await [_ (js/Promise.resolve (deliver output))]
+        (save! w)
+        output))))
+
+(defn- timeout! [{:keys [summary] :as w}]
+  (finish! w (if (seq (:counts @summary)) (array-map :wake :timeout) (array-map :wake :timeout :changed false))))
+
+(defn- reset-with-status! [w reason]
+  (js-await [status (read! w "/status")]
+    (finish! w (array-map :wake :reset :reason reason :status (compact-status status)))))
+
+(defn- recovered-later?
+  "The batch is one page: look at the following pages for the body coming back."
+  [w event page]
+  (letfn [(from [after pages]
+            (js-await [p (read! w (events-query (:stream-id page) after 256))]
+              (let [evs (:events p)]
+                (cond (some recovered? evs) true
+                      (or (empty? evs) (zero? pages) (:gap? p)) false
+                      :else (from (:seq (last evs)) (dec pages))))))]
+    (from (:seq event) 8)))
+
+(defn- continue-event [{:keys [st deaths summary opts body] :as w} event more later page]
+  (when (and (= :attention (:source event)) (= :resolved (:kind event)))
+    (let [id (id-str (:request-id event))
+          drop-id (fn [m] (into (empty m) (remove (fn [[k _]] (= id (id-str k)))) m))]
+      (swap! st update :seen dissoc id)
+      (swap! st update-in [:snap :outstanding] #(drop-id (or % {})))))
+  (if (and (= :system (:source event)) (#{:started :restored} (:kind event)))
+    (js-await [snap (read! w "/snapshot")]
+      ;; The restart wake says nothing of the events skipped before it (old jobs); the
+      ;; watched jobs are looked up in the history on the next call.
+      (reset! summary {:counts {} :items [] :more false})
+      (swap! deaths dissoc :cancelled)
+      (swap! st assoc :snap snap :cursor (:cursor snap) :seen {} :pending [] :lookup true)
+      (finish! w (array-map :wake :reset :reason :engine-restarted)))
+    (let [failed? (= :reconnect-failed (:kind event))
+          _ (swap! deaths track-deaths event)
+          dead-jobs (death-jobs @deaths event)
+          _ (swap! deaths clear-reported event)
+          immediate (when-not (and failed? (stale-reconnect? event later))
+                      (some-> (classify event opts body) (with-death-jobs dead-jobs)))
+          skip! (fn [] (swap! summary collect event dead-jobs) (more))]
+      (cond
+        (nil? immediate) (skip!)
+        (and failed? (empty? later) (< (:seq event) (:latest-seq page)))
+        (js-await [back? (recovered-later? w event page)]
+          (if back? (skip!) (finish! w immediate)))
+        :else (finish! w immediate)))))
+
+(defn- process-events [{:keys [st deadline opts] :as w} page events]
+  (if (empty? events)
+    (cond
+      (>= (js/Date.now) @deadline) (timeout! w)
+      (< (:seq (:cursor @st)) (:latest-seq page)) (step w)
+      :else (js-await [_ (delay! (min (:poll-ms opts) (max 1 (- @deadline (js/Date.now)))) (:signal w))]
+              (step w)))
+    (let [event (first events)
+          more #(process-events w page (rest events))]
+      (swap! st assoc :cursor {:stream-id (:stream-id page) :seq (:seq event)})
+      (if (= :required (:attention event))
+        (js-await [snap (read! w "/snapshot")]
+          (swap! st assoc :snap snap)
+          (let [update (attention-changes (:outstanding snap) (:seen @st))]
+            (swap! st assoc :seen (:seen update))
+            (if (seq (:changed update))
+              (finish! w (attention-wake update))
+              (continue-event w event more (rest events) page))))
+        (continue-event w event more (rest events) page)))))
+
+(defn- poll [{:keys [st deaths] :as w}]
+  (let [{:keys [cursor]} @st]
+    (js-await [page (read! w (events-query (:stream-id cursor) (:seq cursor) 256))]
+      (if (:gap? page)
+        (do (swap! st assoc :cursor (:cursor page) :seen {})
+            (swap! deaths dissoc :cancelled)
+            (reset-with-status! w :event-gap))
+        (process-events w page (:events page))))))
+
+(defn- after-lookup [{:keys [st deadline opts] :as w}]
+  (swap! st assoc :lookup false)
+  (swap! st update :pending (fn [pending] (filterv #(some #{(:job %)} (:watch opts)) pending)))
+  (if-let [pending (seq (:pending @st))]
+    (do (swap! st assoc :pending (vec (rest pending)))
+        (finish! w (first pending)))
+    (if (>= (js/Date.now) @deadline)
+      (timeout! w)
+      (poll w))))
+
+(defn- lookup-history [{:keys [request get! signal deadline st]}]
+  (job-results/history! get! (:socket-path request)
+                        {:signal signal :deadline @deadline
+                         :snap (assoc (:snap @st) :cursor (:cursor @st))}))
+
+(defn- step [{:keys [st deaths opts generation body watching?] :as w}]
+  (let [changes (attention-changes (:outstanding (:snap @st)) (:seen @st))]
+    (swap! st assoc :seen (:seen changes))
+    (cond
+      (seq (:changed changes)) (finish! w (attention-wake changes))
+
+      (and (:lookup @st) watching?)
+      (js-await [history (lookup-history w)]
+        (let [unavailable (unavailable-jobs (:events history) (:cursor @st) generation opts (:snap @st))]
+          (cond
+            (:gap? history)
+            (do (swap! st assoc :lookup false)
+                (swap! deaths dissoc :cancelled)
+                (finish! w (array-map :wake :reset :reason :history-unavailable)))
+
+            (seq unavailable)
+            (do (swap! st assoc :lookup false)
+                (finish! w (array-map :wake :reset :reason :history-unavailable :jobs unavailable
+                                      :history-window job-results/history-limit)))
+
+            :else
+            (do (swap! st assoc :pending (-> (recent-results (:events history) (:cursor @st) generation opts body)
+                                             (with-projections history generation)))
+                (after-lookup w)))))
+
+      :else (after-lookup w))))
+
+(defn- start-wait
+  "Read the first snapshot, set up the wait's state from the saved checkpoint and run the loop."
+  [{:keys [request ephemeral? file dir opts st deaths timeout-finish deadline] :as w}]
+  (let [saved (when-not ephemeral? (saved-checkpoint file))]
+    (when (and (not ephemeral?) (> (observer-count dir) 64)) (throw (coded "EOBSERVERLIMIT" "observer limit")))
+    (vreset! deadline (+ (js/Date.now) (:timeout-ms opts)))
+    (js-await [snap (read! w "/snapshot")]
+      (let [generation (:generation-id snap)
+            seen-now (if ephemeral? (into {} (map (fn [[id r]] [(id-str id) (signature r)])) (:outstanding snap)) {})
+            w (assoc w :generation generation :body (or (:body snap) (:agent request)) :watching? (boolean (seq (:watch opts))))]
+        (reset! st {:cursor (or (:cursor saved) (:cursor snap)) :generation generation
+                    :seen (or (:seen saved) seen-now) :lookup (or (nil? saved) (true? (:lookup saved)))
+                    :pending (vec (:pending saved)) :snap snap})
+        (reset! deaths {:names (instance-names snap) :cancelled (vec (:cancelled saved))})
+        (when-not saved
+          (save! (assoc w :st (atom (select-keys @st [:cursor :generation :seen :lookup])))))
+        (vreset! timeout-finish #(timeout! w))
+        (if (and saved (not= (:generation saved) generation))
+          (do (swap! st assoc :cursor (:cursor snap) :seen {} :pending [] :lookup true)
+              (swap! deaths dissoc :cancelled)
+              (reset-with-status! w :engine-restarted))
+          (step w))))))
+
 (defn wait-observe
   "Wait for the next thing worth reporting: a promise of the result map. get! is (get! socket-path path options) and
   answers a promise of {:status :content-type :text}; deliver is called with the result before the checkpoint
@@ -85,165 +258,15 @@
           dir (.join path (bodies/worlds-dir (:state request)) (:world request) "observers" (:agent request))
           ephemeral? (:ephemeral request)
           release (if ephemeral? (fn []) (acquire! dir (:observer opts)))
-          file (.join path dir (str (:observer opts) ".edn"))
-          deaths (atom {})
-          save! #(when-not ephemeral? (checkpoint! file (assoc % :cancelled (:cancelled @deaths))))
-          seen-now (fn [snap] (if ephemeral? (into {} (map (fn [[id r]] [(id-str id) (signature r)])) (:outstanding snap)) {}))
-          aborted? #(and signal (aget signal "aborted"))
-          deadline (volatile! nil)
           timeout-finish (volatile! nil)
-          st (atom nil)
-          summary (atom {:counts {} :items [] :more false})
-          read! (fn [endpoint]
-                  (js-await [response (get! (:socket-path request) endpoint
-                                            {:signal signal :timeout-ms (max 1 (min request-timeout-ms (- @deadline (js/Date.now))))})]
-                    (when-not (and (= 200 (:status response)) (http/edn-response? (:content-type response)))
-                      (throw (coded (if (= 404 (:status response)) "EOBSERVEUNAVAILABLE" "EBADRESPONSE") (:text response))))
-                    (data/read-edn (:text response))))
-          job-history (fn [result]
-                        (if (and (= :job-finished (:wake result)) (not (contains? result :history)))
-                          (-> (job-results/read! get! (:socket-path request) (:job result) {:signal signal :deadline @deadline})
-                              (.then #(with-history result %))
-                              (.catch (fn [error] (if (aborted?) (throw error) (with-history result {})))))
-                          (js/Promise.resolve result)))
-          finish! (fn [result]
-                    (when (aborted?) (throw (coded "ABORT_ERR" "cancelled")))
-                    (js-await [result (job-history result)]
-                      (let [output (summary-result @summary result)]
-                        (js-await [_ (js/Promise.resolve (deliver output))]
-                          (save! @st)
-                          output))))
-          timeout! (fn [] (finish! (if (seq (:counts @summary)) (array-map :wake :timeout) (array-map :wake :timeout :changed false))))
-          reset-with-status! (fn [reason]
-                               (js-await [status (read! "/status")]
-                                 (finish! (array-map :wake :reset :reason reason :status (compact-status status)))))]
+          w {:request request :get! get! :signal signal :deliver deliver :opts opts :dir dir :ephemeral? ephemeral?
+             :file (.join path dir (str (:observer opts) ".edn"))
+             :deaths (atom {}) :st (atom nil) :summary (atom {:counts {} :items [] :more false})
+             :deadline (volatile! nil) :timeout-finish timeout-finish}]
       (-> (js/Promise.resolve nil)
-          (.then
-           (fn []
-             (let [saved (when-not ephemeral? (saved-checkpoint file))]
-               (when (and (not ephemeral?) (> (observer-count dir) 64)) (throw (coded "EOBSERVERLIMIT" "observer limit")))
-               (vreset! deadline (+ (js/Date.now) (:timeout-ms opts)))
-               (js-await [snap (read! "/snapshot")]
-                 (let [generation (:generation-id snap)
-                       lookup (or (nil? saved) (true? (:lookup saved)))]
-                   (reset! st {:cursor (or (:cursor saved) (:cursor snap)) :generation generation
-                               :seen (or (:seen saved) (seen-now snap)) :lookup lookup :pending (vec (:pending saved)) :snap snap})
-                   (reset! deaths {:names (instance-names snap) :cancelled (vec (:cancelled saved))})
-                   (when-not saved
-                     (save! (select-keys @st [:cursor :generation :seen :lookup])))
-                   (vreset! timeout-finish timeout!)
-                   (if (and saved (not= (:generation saved) generation))
-                     (do (swap! st assoc :cursor (:cursor snap) :seen {} :pending [] :lookup true)
-                         (swap! deaths dissoc :cancelled)
-                         (reset-with-status! :engine-restarted))
-                     (let [body (or (:body snap) (:agent request))
-                           watching? (seq (:watch opts))]
-                       (letfn [(poll []
-                                 (let [{:keys [cursor]} @st]
-                                   (js-await [page (read! (events-query (:stream-id cursor) (:seq cursor) 256))]
-                                     (if (:gap? page)
-                                       (do (swap! st assoc :cursor (:cursor page) :seen {})
-                                           (swap! deaths dissoc :cancelled)
-                                           (reset-with-status! :event-gap))
-                                       (process-events page (:events page))))))
-                               (process-events [page events]
-                                 (if (empty? events)
-                                   (cond
-                                     (>= (js/Date.now) @deadline) (timeout!)
-                                     (< (:seq (:cursor @st)) (:latest-seq page)) (step)
-                                     :else (js-await [_ (delay! (min (:poll-ms opts) (max 1 (- @deadline (js/Date.now)))) signal)]
-                                             (step)))
-                                   (let [event (first events)
-                                         more #(process-events page (rest events))]
-                                     (swap! st assoc :cursor {:stream-id (:stream-id page) :seq (:seq event)})
-                                     (if (= :required (:attention event))
-                                       (js-await [snap (read! "/snapshot")]
-                                         (swap! st assoc :snap snap)
-                                         (let [update (attention-changes (:outstanding snap) (:seen @st))]
-                                           (swap! st assoc :seen (:seen update))
-                                           (if (seq (:changed update))
-                                             (finish! (attention-wake update))
-                                             (continue-event event more (rest events) page))))
-                                       (continue-event event more (rest events) page)))))
-                               (continue-event [event more later page]
-                                 (when (and (= :attention (:source event)) (= :resolved (:kind event)))
-                                   (let [id (id-str (:request-id event))
-                                         drop-id (fn [m] (into (empty m) (remove (fn [[k _]] (= id (id-str k)))) m))]
-                                     (swap! st update :seen dissoc id)
-                                     (swap! st update-in [:snap :outstanding] #(drop-id (or % {})))))
-                                 (if (and (= :system (:source event)) (#{:started :restored} (:kind event)))
-                                   (js-await [snap (read! "/snapshot")]
-                                     ;; The restart wake says nothing of the events skipped before it (old jobs); the
-                                     ;; watched jobs are looked up in the history on the next call.
-                                     (reset! summary {:counts {} :items [] :more false})
-                                     (swap! deaths dissoc :cancelled)
-                                     (swap! st assoc :snap snap :cursor (:cursor snap) :seen {} :pending [] :lookup true)
-                                     (finish! (array-map :wake :reset :reason :engine-restarted)))
-                                   (let [failed? (= :reconnect-failed (:kind event))
-                                         _ (swap! deaths track-deaths event)
-                                         dead-jobs (death-jobs @deaths event)
-                                         _ (swap! deaths clear-reported event)
-                                         immediate (when-not (and failed? (stale-reconnect? event later))
-                                                     (some-> (classify event opts body) (with-death-jobs dead-jobs)))
-                                         skip! (fn [] (swap! summary collect event dead-jobs) (more))]
-                                     (cond
-                                       (nil? immediate) (skip!)
-                                       (and failed? (empty? later) (< (:seq event) (:latest-seq page)))
-                                       (js-await [back? (recovered-later? event page)]
-                                         (if back? (skip!) (finish! immediate)))
-                                       :else (finish! immediate)))))
-                               (recovered-later? [event page]
-                                 ;; the batch is one page: look at the following pages for the body coming back
-                                 (letfn [(from [after pages]
-                                           (js-await [p (read! (events-query (:stream-id page) after 256))]
-                                             (let [evs (:events p)]
-                                               (cond (some recovered? evs) true
-                                                     (or (empty? evs) (zero? pages) (:gap? p)) false
-                                                     :else (from (:seq (last evs)) (dec pages))))))]
-                                   (from (:seq event) 8)))
-                               (after-lookup []
-                                 (swap! st assoc :lookup false)
-                                 (swap! st update :pending
-                                        (fn [pending] (filterv #(some #{(:job %)} (:watch opts)) pending)))
-                                 (if-let [pending (seq (:pending @st))]
-                                   (do (swap! st assoc :pending (vec (rest pending)))
-                                       (finish! (first pending)))
-                                   (if (>= (js/Date.now) @deadline)
-                                     (timeout!)
-                                     (poll))))
-                               (lookup-history []
-                                 (job-results/history! get! (:socket-path request)
-                                                       {:signal signal :deadline @deadline
-                                                        :snap (assoc (:snap @st) :cursor (:cursor @st))}))
-                               (step []
-                                 (let [changes (attention-changes (:outstanding (:snap @st)) (:seen @st))]
-                                   (swap! st assoc :seen (:seen changes))
-                                   (cond
-                                     (seq (:changed changes)) (finish! (attention-wake changes))
-
-                                     (and (:lookup @st) watching?)
-                                     (js-await [history (lookup-history)]
-                                       (let [unavailable (unavailable-jobs (:events history) (:cursor @st) generation opts (:snap @st))]
-                                         (cond
-                                           (:gap? history)
-                                           (do (swap! st assoc :lookup false)
-                                               (swap! deaths dissoc :cancelled)
-                                               (finish! (array-map :wake :reset :reason :history-unavailable)))
-
-                                           (seq unavailable)
-                                           (do (swap! st assoc :lookup false)
-                                               (finish! (array-map :wake :reset :reason :history-unavailable :jobs unavailable
-                                                                   :history-window job-results/history-limit)))
-
-                                           :else
-                                           (do (swap! st assoc :pending (-> (recent-results (:events history) (:cursor @st) generation opts body)
-                                                                            (with-projections history generation)))
-                                               (after-lookup)))))
-
-                                     :else (after-lookup))))]
-                         (step)))))))))
+          (.then #(start-wait w))
           (.catch (fn [error]
-                    (if (and (= "ETIMEDOUT" (code-of error)) @deadline (>= (js/Date.now) @deadline) @timeout-finish)
+                    (if (and (= "ETIMEDOUT" (code-of error)) @(:deadline w) (>= (js/Date.now) @(:deadline w)) @timeout-finish)
                       (@timeout-finish)
                       (throw error))))
           (.finally release)))

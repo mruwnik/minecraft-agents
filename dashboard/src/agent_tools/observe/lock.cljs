@@ -22,13 +22,26 @@
         (catch :default e
           (case (code-of e) "ESRCH" false "EPERM" true (throw e))))))
 
+(defn process-start-time
+  "The process's start time in clock ticks since boot (field 22 of /proc/<pid>/stat) as a string, or nil when it
+  cannot be read (no /proc, or the process is gone). A reused pid has a different one."
+  [pid]
+  (try (let [stat (.readFileSync fs (str "/proc/" pid "/stat") "utf8")
+             ;; the comm field may hold spaces and parens: count fields after the last ')'
+             after (subs stat (inc (.lastIndexOf stat ")")))]
+         (nth (str/split (str/trim after) #"\s+") 19 nil))
+       (catch :default _ nil)))
+
 (defn lock-owner-gone?
-  "True when the lock dir at `dir` belongs to nobody: its pid is dead, or it never got a pid and is old."
+  "True when the lock dir at `dir` belongs to nobody: its pid is dead or was reused by another process (the start
+  time recorded beside the pid differs), or it never got a pid and is old."
   [dir]
   (let [pid (try (js/Number (.readFileSync fs (.join path dir "pid") "utf8")) (catch :default _ nil))
-        pid? (and pid (js/Number.isInteger pid) (not= 0 pid))]
+        pid? (and pid (js/Number.isInteger pid) (not= 0 pid))
+        recorded (try (.readFileSync fs (.join path dir "start") "utf8") (catch :default _ nil))]
     (if pid?
-      (not (process-alive? pid))
+      (or (not (process-alive? pid))
+          (and recorded (let [now (process-start-time pid)] (and now (not= now recorded)))))
       (>= (- (js/Date.now) (.-mtimeMs (.statSync fs dir))) pidless-lock-stale-ms))))
 
 (defn take-reclaim-mutex!
@@ -77,7 +90,9 @@
            (try (reclaim-stale-lock! lock)
                 (catch :default e
                   (throw (if (= "EEXIST" (code-of e)) (busy) e))))))
-    (try (.writeFileSync fs (.join path lock "pid") (str (.-pid js/process)) #js {:mode private-file-mode})
+    (try (when-let [start (process-start-time (.-pid js/process))]
+           (.writeFileSync fs (.join path lock "start") start #js {:mode private-file-mode}))
+         (.writeFileSync fs (.join path lock "pid") (str (.-pid js/process)) #js {:mode private-file-mode})
          (catch :default error
            (throw (if (= "ENOENT" (code-of error)) (busy) error))))
     #(.rmSync fs lock #js {:recursive true :force true})))

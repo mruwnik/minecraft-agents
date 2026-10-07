@@ -27,6 +27,26 @@
                       (.rmSync fs dir #js {:recursive true :force true})
                       (done)))))))
 
+(deftest an-unchanged-poll-takes-no-global-lock-and-sees-later-edits
+  (async done
+    (let [{:keys [dir ctx]} (fixture-ctx)
+          global-lock (.join path (:blueprint-dir ctx) ".agent-transactions.lock")
+          zones (.join path (:world-dir ctx) "zones.edn")
+          cursor (atom nil)]
+      (-> (data/read-changes ctx)
+          (.then (fn [r] (reset! cursor (:cursor r))
+                   (.writeFileSync fs global-lock (str (.-pid js/process) "\nheld"))
+                   (data/read-changes ctx {:cursor @cursor})))
+          (.then (fn [r] (is (= [] (:items r)) "poll answered while the global lock is held")
+                   (.rmSync fs global-lock)
+                   (.writeFileSync fs zones "[{:name \"z1\" :min [0 0 0] :max [1 1 1]}]")
+                   (data/read-changes ctx {:cursor @cursor})))
+          (.then (fn [r] (is (= 1 (count (:items r))) "an external edit is still found")))
+          (.catch (fn [e] (is (nil? e) (str e))))
+          (.finally (fn []
+                      (.rmSync fs dir #js {:recursive true :force true})
+                      (done)))))))
+
 (defn message-of [thunk]
   (try (thunk) nil (catch :default e (.-message e))))
 
