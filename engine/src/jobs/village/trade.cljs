@@ -159,7 +159,7 @@
                                      {:pos (u/pos-of (.-pos e)) :range reach :leg-s chase-timeout-s :escalate false :warn false}))]
         (cond
           (= :continue r) :continue
-          (= :done r) :again
+          (let [res (ctx/child-result c :walk)] (and (= :done r) (or (:arrived res) (:leg res)))) :again
           :else (give-up! c "unreachable" "cannot reach the villager"))))))
 
 (defn ^:async round

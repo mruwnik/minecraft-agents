@@ -4,7 +4,7 @@
 (def doc
   "Walk a, b, a, b (:laps times each), one jobs.movement.go-to call per leg (doors :shut). One call is the whole run.
   Ends stopped :leg-unfinished (warn :leg-unfinished with the target and go-to's reason) when a leg does not arrive,
-  and yields (:continue) while go-to waits on the world.
+  and yields (:continue) while go-to waits on the world. A cut run starts again from leg a (no lap count is kept).
   Points are [x y z] or {:x :y :z}; a bad one is refused at submit (:type :pos).
   A harmless long job, for showing that a reflex cuts a running one.")
 

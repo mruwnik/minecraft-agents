@@ -9,7 +9,7 @@
   player is, doors :shut) until in range. A player out of sight is walked to where they were last seen.
   Ends with a result {:reason ...}:
   - \"lost\" (info follow.lost, with :last-seen): the player was out of sight for :lost-s.
-  - \"unreachable\" (warn follow.unreachable): three walks in a row go-to gave up on (counted per round).
+  - \"unreachable\" (warn follow.unreachable): a walk go-to gave up on (it retries itself).
   - \"out-of-range\" (warn follow.out-of-range): three walks in a row that arrived or got closer but left the body out of range.
   - \"absent\" (info follow.absent): the player was never seen within 2 s of the first round
     (the grace lets the world's entities arrive).
@@ -26,7 +26,8 @@
 (def absent-grace-ms 2000)
 (def idle-ms 500)
 (def walk-leg-s 5)
-(def max-blocked 3)
+(def max-blocked "One go-to give-up ends the job: go-to already retries." 1)
+(def max-out 3)
 (def head-height 1.6)
 (def last-seen-reach 1)
 
@@ -70,7 +71,7 @@
 (defn ^:async walk!
   "Walk to pos within range with go-to calls (:leg-s legs while the player moves, then pos is read again with
   target-now, which returns nil when the target is out of sight). The counts are per call: a walk that did not arrive
-  counts as blocked when go-to stopped; the third in a row ends the job (warn follow.unreachable, result
+  counts as blocked when go-to stopped; the first ends the job (warn follow.unreachable, result
   {:reason \"unreachable\"}); three legs that got closer but left the body out of range of where the target stands now
   end it (warn follow.out-of-range). :continue (in range, out of sight, or go-to waiting) or :done."
   ([c pos range] (walk! c pos range (constantly pos) nil))
@@ -85,7 +86,7 @@
            out (next-out out blocked (u/self-pos c) (or now pos) range)]
        (cond
          (= :continue r) :continue
-         (>= out max-blocked)
+         (>= out max-out)
          (do (ctx/emit! c :follow.out-of-range :warn {:text (str "still out of range of " (:player (:args c)))})
              (finish! c {:reason "out-of-range"}))
 

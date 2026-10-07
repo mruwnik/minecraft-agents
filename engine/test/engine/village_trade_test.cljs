@@ -73,8 +73,8 @@
 (defn ^:async trade
   "Run the job on a world of entities and inventory, after (prepare p); [result p seen]."
   ([world args] (trade world args identity))
-  ([{:keys [entities inventory]} args prepare]
-   (let [{:keys [eng p seen]} (start {:world {:entities entities :inventory inventory}})
+  ([{:keys [entities inventory unreachable]} args prepare]
+   (let [{:keys [eng p seen]} (start {:world (cond-> {:entities entities :inventory inventory} unreachable (assoc :unreachable unreachable))})
          _ (prepare p)
          result (await (child-outcome eng job (merge {:villager "v-1" :buy "bread"} args) 80))]
      [result p seen])))
@@ -312,3 +312,13 @@
           (swap! clock + 700)
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng)))))))))
+
+(deftest an-unreachable-villager-ends-stopped-unreachable
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result _ seen] (await (trade {:entities [(villager [(bread {})] {:pos {:x 30 :y 64 :z 0}})] :inventory [{:name "emerald" :count 3}]
+                                             :unreachable ["30,64,0"]}
+                                            {}))]
+          (is (= {:bought 0 :paid {} :item "bread" :status :stopped :reason "unreachable"} result))
+          (is (contains? (kinds seen) :trade.gave-up)))))))
