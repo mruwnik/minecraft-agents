@@ -382,4 +382,7 @@
     (is (= ["farm-north" "hut" "mine"] (names {:near {:x 0 :y 64 :z 0}})) "nearest first")
     (is (= ["farm-north"] (names {:near {:x 0 :y 64 :z 0} :limit 1})))
     (is (= 10 (count (world/find-markers (repeat 50 near-marker) {}))) "default limit 10")
-    (is (= [] (names {:text "nothing"})))))
+    (is (= [] (names {:text "nothing"})))
+    (is (= 50 (count (world/find-markers (repeat 80 near-marker) {:limit 500}))) "limit capped at 50")
+    (is (= 3 (count (world/find-markers (repeat 80 near-marker) {:limit 3}))))
+    (is (= ["mine" "farm-north" "hut"] (names {:near {:x 0}})) "a :near without x y z is ignored")))

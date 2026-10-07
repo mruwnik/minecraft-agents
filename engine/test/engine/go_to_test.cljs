@@ -734,7 +734,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[place reason] [[:nowhere :unknown-place] ["Bad Name" :bad-name]]]
+        (doseq [[place reason] [[:nowhere :unknown-place] ["Bad Name" :unknown-place] ["" :bad-name]
+                                      [(apply str (repeat 101 "a")) :bad-name] [5 :bad-name]]]
           (let [{:keys [out p seen]} (await (go-place! {:home {:x 10 :y 64 :z 0}} {:place place}))]
             (is (= reason (:reason @out)) (str place))
             (is (= :stopped (:status @out)))
@@ -863,3 +864,23 @@
           (is (= :unknown-place (:reason @out)))
           (is (re-find #"shared" (:text @out)))
           (is (= [0 64 0] (at p))))))))
+
+(def north-farm {:name "North Farm" :kind "farm" :x 10 :y 64 :z 0})
+
+(deftest go-to-reaches-a-shared-marker-with-free-text-name
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [place ["North Farm" "north farm" "NORTH FARM"]]
+          (let [{:keys [out p]} (await (go-marker! {} [north-farm] {:place place :range 0}))]
+            (is (= {:arrived true} @out) place)
+            (is (= [10 64 0] (at p)))))))))
+
+(deftest go-to-matches-a-shared-marker-name-exactly-before-any-case
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [ms [{:name "hut" :x 5 :y 64 :z 0} {:name "Hut" :x 10 :y 64 :z 0}]
+              {:keys [out p]} (await (go-marker! {} ms {:place "Hut" :range 0}))]
+          (is (= {:arrived true} @out))
+          (is (= [10 64 0] (at p))))))))

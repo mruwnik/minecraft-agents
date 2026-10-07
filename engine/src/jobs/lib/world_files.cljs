@@ -371,11 +371,13 @@
   (first (filter #(= name (:name %)) (markers w))))
 
 (def default-marker-limit 10)
+(def max-marker-limit 50)
 
 (defn find-markers
   "A bounded search of markers (a vector of maps, one pass, no file read): {:text :kind :near {:x :y :z} :limit}. :text matches
   name, kind or note as a case-insensitive substring, :kind the kind exactly (case-insensitive). With :near the nearest come
-  first (by distance in x z and y). At most :limit (default 10) are returned."
+  first (by distance in x z and y; a :near without numeric x y z is ignored). At most :limit (default 10, 50 at most) are
+  returned. Marker coordinates are as given (no dimension)."
   [markers {:keys [text kind near limit]}]
   (let [low #(some-> % str str/lower-case)
         t (low text)
@@ -383,8 +385,9 @@
         has? (fn [m] (some #(some-> (low %) (str/includes? t)) [(:name m) (:kind m) (:note m)]))
         dist (fn [m] (let [dx (- (:x m) (:x near)) dy (- (:y m) (:y near)) dz (- (:z m) (:z near))]
                        (+ (* dx dx) (* dy dy) (* dz dz))))
+        near (when (every? #(number? (% near)) [:x :y :z]) near)
         hits (filter #(and (or (nil? t) (has? %)) (or (nil? k) (= k (low (:kind %))))) markers)]
-    (vec (take (or limit default-marker-limit) (if near (sort-by dist hits) hits)))))
+    (vec (take (min max-marker-limit (or limit default-marker-limit)) (if near (sort-by dist hits) hits)))))
 
 (defn live-claims
   "The claims that are :active (keyword or text) and whose :until is after now (ms)."

@@ -1,5 +1,6 @@
 (ns jobs.movement.go-to
-  (:require [engine.ctx :as ctx]
+  (:require [clojure.string :as str]
+            [engine.ctx :as ctx]
             [engine.memory :as mem]
             [jobs.lib.reach :as reach]
             [jobs.lib.util :as u]
@@ -258,20 +259,31 @@
                             (await (esc/escalate! c pos nil)))
       :else (await (walk! c pos (:range (:args c)) (some-> (:doors (:args c)) keyword))))))
 
+(defn shared-marker
+  "The shared marker called s: the exact name first, else the first whose name matches in any case; nil when none."
+  [c s]
+  (or (known/marker c s)
+      (let [low (str/lower-case s)]
+        (first (filter #(= low (some-> (:name %) str/lower-case)) (known/markers c))))))
+
 (defn target
-  "{:pos {:x :y :z}} to walk to: the recorded position of :place when given, else :pos; else a refusal."
+  "{:pos {:x :y :z}} to walk to: the recorded position of :place when given (the body's own place of that name, else the
+  shared marker of that name, any 1 to 100 characters, exact then in any case), else :pos; else a refusal."
   [c]
   (let [{:keys [place pos]} (:args c)]
     (if (nil? place)
       (places/parse-pos pos)
       (let [named (places/parse-name place)
             there (when-not (:reason named) (mem/place (ctx/view c) (:name named)))
-            shared (when-not (or (:reason named) there) (known/marker c (name (:name named))))]
+            s (cond (keyword? place) (when (nil? (namespace place)) (name place)) (string? place) place)
+            bad (when-not (and s (<= 1 (count s) 100))
+                  (places/refusal :bad-name (str "a place name is 1 to 100 characters; got " (pr-str place))))
+            shared (when-not (or there bad) (shared-marker c s))]
         (cond
-          (:reason named) named
           there (places/parse-pos there)
+          bad bad
           shared (places/parse-pos [(:x shared) (:y shared) (:z shared)])
-          :else (places/refusal :unknown-place (str "no place called " (name (:name named)) " is recorded in memory or among the shared markers")))))))
+          :else (places/refusal :unknown-place (str "no place called " s " is recorded in memory or among the shared markers")))))))
 
 (defn ^:async round
   "One whole attempt: step! until it arrives, gives up, or waits on a child (:continue), with pace! between steps. A
