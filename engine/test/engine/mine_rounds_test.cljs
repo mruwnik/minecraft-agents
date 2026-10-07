@@ -73,3 +73,83 @@
           (is (m/finished? s) "ended in one tick")
           (is (= 1 (count (m/events-of s :mine.mend-failed))))
           (is (>= 6 (count (m/calls s "place"))) "bounded"))))))
+
+(defn ^:async resume-after-cut
+  "Submit a dirt job, cut it with cut!, restart over the same dir and run on; the restarted setup."
+  [cut!]
+  (let [dir (tu/tmp-dir)
+        s (m/start {:world {:blocks m/floor} :dir dir})]
+    (cut! s)
+    (core/submit! (:eng s) (m/spec {:block "dirt" :count 3 :mend false}) {})
+    (await (m/run-ticks s 1))
+    (let [again (m/start {:p (:p s) :dir dir :clock (:clock s)})]
+      (await (m/run-ticks again 40))
+      {:cut s :again again})))
+
+(deftest a-cut-after-the-dig-books-it-once-and-does-not-dig-the-cell-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [dir (tu/tmp-dir)
+              s (m/start {:world {:blocks m/floor} :dir dir})
+              k (atom 0)
+              live (atom (:eng s))
+              cut! (fn [] (core/shutdown! @live) (js/Promise.reject (core/cut-error)))]
+          (.override (.-world (:p s)) "dig"
+                     (fn [token a impl]
+                       (case (swap! k inc)
+                         1 (.then (impl token a) (fn [_] (cut!)))
+                         2 (cut!)
+                         (impl token a))))
+          (core/submit! (:eng s) (m/spec {:block "dirt" :count 3 :mend false}) {})
+          (await (m/run-ticks s 1))
+          (is (some? (:digging (m/job-mem s))) "the cut left the dig written")
+          (let [first-cell (first (m/dug-cells s))
+                again (m/start {:p (:p s) :dir dir :clock (:clock s)})]
+            (reset! live (:eng again))
+            (await (m/run-ticks again 1))
+            (let [mem (m/job-mem again)]
+              (is (= first-cell (:dug-at mem)) "the dig of the first cell is booked"))
+            (await (m/run-ticks again 1))
+            (let [more (m/dug-cells again)]
+              (is (= 1 (count (filter #(= first-cell %) more))) "the cell is not dug again"))))))))
+
+(deftest a-cut-before-the-dig-clears-the-flag-and-digs-the-cell-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [again]} (await (resume-after-cut #(tu/shutdown-at! % "dig" 1)))
+              cells (m/dug-cells again)]
+          (is (m/finished? again))
+          (is (= :count (:reason (m/done-event again))))
+          (is (= 4 (count cells)) "the undone dig was repeated")
+          (is (= 2 (count (filter #(= (first cells) %) cells))) "the cut one and its repeat")
+          (is (= 3 (get (m/inv again) "dirt"))))))))
+
+(def torch-tunnel {:block "iron_ore" :count 1 :direction "east" :tunnel-length 12 :mend false})
+(def coal-stick [{:name "iron_pickaxe" :count 1} {:name "coal" :count 1} {:name "stick" :count 1}])
+
+(deftest a-torch-craft-that-makes-nothing-is-not-retried
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (m/start {:world (m/torch-world coal-stick)})]
+          (.override (.-world (:p s)) "craft" (fn [_ _ _] (js/Promise.resolve #js {:status "failed" :reason "no-recipe"})))
+          (core/submit! (:eng s) (m/spec torch-tunnel) {})
+          (await (m/run-ticks s 60))
+          (is (m/finished? s))
+          (is (= :tunnel-length (:reason (m/done-event s))))
+          (is (>= 3 (count (m/calls s "craft"))) "bounded: the craft is given up, not retried each round"))))))
+
+(deftest a-collect-that-ends-with-nothing-gained-is-booked-and-does-not-loop
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (m/start {:world {:blocks (m/cells "stone" [4 5 6 7 8 9] [64] [0]) :drops {"stone" "cobblestone"}
+                                  :inventory m/pickaxe :unreachable ["5,64,2"]}})]
+          (m/drop-away! (:p s) [5 64 2])
+          (core/submit! (:eng s) (m/spec {:block "stone" :count 4 :dry-digs 2 :mend false}) {})
+          (await (m/run-ticks s 60))
+          (is (m/finished? s))
+          (is (= :no-drops (:reason (m/done-event s))) "nothing came in, so the digs ran dry")
+          (is (= 2 (m/dig-count s))))))))
