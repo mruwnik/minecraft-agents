@@ -344,3 +344,17 @@
                (is (= {:first? true} res))
                (is (= ["waiting for time lock (day) held by 1 (x)"] @told))
                (done))))))
+(deftest a-poll-gap-far-over-the-poll-interval-is-a-stall
+  (is (false? (r/stalled? 1000 1500)))
+  (is (false? (r/stalled? 1000 (+ 1000 r/stall-gap-ms))))
+  (is (true? (r/stalled? 1000 (+ 1001 r/stall-gap-ms)))))
+
+(deftest a-stalled-run-turns-undecided-expectations-and-a-failure-inconclusive
+  (let [expects [{:status :pass} {:status :pending}]
+        marked (r/stall-results expects 6400000)]
+    (is (= [:pass :stalled] (mapv :status marked)))
+    (is (re-find #"6400" (:evidence (second marked))))
+    (is (= :inconclusive (:status (r/mark-stalled {:status :fail :expects marked}))))
+    (is (re-find #"stalled" (:why (r/mark-stalled {:status :fail :expects marked}))))
+    (is (= :fail (:status (r/mark-stalled {:status :fail :expects [{:status :fail}]}))))
+    (is (= :pass (:status (r/mark-stalled {:status :pass :expects [{:status :pass}]}))))))

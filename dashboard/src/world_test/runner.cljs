@@ -588,16 +588,41 @@
   [register? before-register settled]
   (if register? before-register settled))
 
+(def stall-gap-ms
+  "A gap between two polls (every 500 ms) this long means the runner was not running (host suspended, process stopped)."
+  60000)
+
+(defn stalled? [last-ms now-ms] (> (- now-ms last-ms) stall-gap-ms))
+
+(defn stall-results
+  "Expectation results of a stalled run: the undecided ones become :stalled (the run did not watch them for gap-ms)."
+  [results gap-ms]
+  (mapv #(if (= :pending (:status %))
+           (assoc % :status :stalled :evidence (str "runner stalled " (js/Math.round (/ gap-ms 1000)) " s while watching"))
+           %)
+        results))
+
+(defn mark-stalled
+  "A failed result with a :stalled expectation becomes :inconclusive: the stall, not the job, ended the watch."
+  [r]
+  (if (and (= :fail (:status r)) (some #(= :stalled (:status %)) (:expects r)))
+    (assoc r :status :inconclusive :why "runner stalled during the case (host suspended or process stopped)")
+    r))
+
 (defn watch!
   "Polls the log until every expectation is decided or the case's limit; resolves to the judged results. window: see
   watch-window; events before t0 count when the window starts earlier."
   [opts c {offset :offset from :from-ms} t0 ids]
-  (let [limit (+ t0 (* 1000 (max (:limit-s c) (+ 2 (x/deadline-s (:expect c))))))]
+  (let [limit (+ t0 (* 1000 (max (:limit-s c) (+ 2 (x/deadline-s (:expect c))))))
+        last-poll (atom (js/Date.now))]
     (letfn [(poll []
               (let [now (js/Date.now)
+                    gap (- now @last-poll)
+                    _ (reset! last-poll now)
                     events (filterv #(>= (:time-ms % 0) from) (read-events-from (events-file opts) offset))
                     results (x/judge-all (:expect c) events {:t0-ms t0 :now-ms now :job-ids ids})]
                 (cond
+                  (stalled? (- now gap) now) (js/Promise.resolve (stall-results results gap))
                   (x/failed? results) (js/Promise.resolve (x/stop-early results))
                   (or (x/decided? results) (> now limit))
                   (js/Promise.resolve (mapv #(if (= :pending (:status %)) (assoc % :status :fail :evidence "undecided at the case's limit") %) results))
@@ -715,8 +740,9 @@
                                                       (fn [expects]
                                                         (.then (after-checks! opts origin rc)
                                                                (fn [afters]
-                                                                 (result {:status (if (and (x/passed? expects) (every? :pass? afters)) :pass :fail)
-                                                                          :expects expects :afters afters})))))))))))))))
+                                                                 (mark-stalled
+                                                                  (result {:status (if (and (x/passed? expects) (every? :pass? afters)) :pass :fail)
+                                                                           :expects expects :afters afters}))))))))))))))))
         (.catch (fn [e] (result {:status :error :why (.-message e)})))
         (.then (fn [r]
                  (if (and @t-start (= :fail (:status r)))
