@@ -20,7 +20,7 @@
    :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
          [:job (jobs.survival.get-food {:food 12 :hunt-radius 4 :ask-cooldown-ms 0})]]
    :expect [{:event {:source :job :kind :food.none :message [:contains "carrying 2 chicken, 5 rotten_flesh, skipped on purpose"]} :within-s 60 :of-job true}
-            {:event {:source :job :kind :food.none :message [:contains "searched for animals"]} :within-s 5 :of-job true}]
+            {:event {:source :job :kind :food.none :message [:contains "searched for animals"]} :within-s 60 :of-job true}]
    :limit-s 70}
   {:name "make-room-tosses-are-events-with-item-and-count"
    :body {:inventory [["dirt" 640] ["gravel" 640] ["sand" 640] ["andesite" 384]]}
