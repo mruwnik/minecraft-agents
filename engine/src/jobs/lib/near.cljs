@@ -1,5 +1,5 @@
 (ns jobs.lib.near
-  "One round of walking toward a cell, as jobs.movement.go-to and the jobs' walk-near! do it: plan from where the body stands
+  "One round of walking toward a cell, as jobs.movement.go-to and go-near! do it: plan from where the body stands
   within the executor's abilities (jobs.lib.walk), follow the plan once, opening shut doors, gates and trapdoors by the
   :doors policy (jobs.lib.pass), and write the :moved memory entry the stuck trigger and jobs.maintenance.unstick read.
   Its own namespace because jobs.lib.walk and jobs.lib.pass require jobs.lib.util."
@@ -143,44 +143,13 @@
   [pos]
   (:pos (places/parse-pos pos)))
 
-(defn ^:async walk-near!
-  "Walk until the body's cell is within range cells of pos's cell (u/within?). Does nothing when it already is.
-  One round of plan and walk (walk-round!, at most 60 s). Resolves to:
-  - :there
-  - :partial: ended more than 1 closer, call again
-  - :blocked: a pos that is neither [x y z] nor {:x :y :z} (refused, :bad-pos event), no path, a walk that got no nearer, or a body with no pathWorld sensing (booked as a failed walk)
-  opts:
-  - :doors, the door policy of jobs.lib.pass. Default :shut (open a shut door, gate or trapdoor on the way, pass,
-    shut it again). A job that works gates itself passes :never (a shut one is a wall).
-  - :timeout-s bounds each steer (default walk-timeout-s). A job chasing a mob or a villager passes a short one, so it
-    aims again at where the target is.
-  - :dangers false: plan straight past known dangers (a walk up to the hostile it fights); by default the plan keeps
-    away from them (jobs.lib.threats/planner-dangers).
-  - :tolls, cells the plan prices (jobs.lib.toll-cells/walk-tolls: planted cells and other bodies' zones). :zone-tolls true
-    adds the other bodies' zone cells (none when the job's :ignore-zones? is set), for a job that respects zones.
-  A partial plan never takes a step the body cannot undo (a drop of 2 or 3, a gap jump down; walk-round! :one-way nil).
-  The target is something the body can see, so a missing way is not past a cliff, and an unreachable target (a cow on
-  an island) must not lead the body off a ledge."
-  ([c pos range] (walk-near! c pos range nil))
-  ([c pos range {:keys [doors timeout-s dangers tolls zone-tolls] :or {doors :shut timeout-s walk-timeout-s dangers true}}]
-   (let [cell (cell-of pos)]
-     (cond
-       (nil? cell) (do (ctx/emit! c :refused :warn {:reason :bad-pos :text (:message (places/parse-pos pos))})
-                       :blocked)
-       (u/within? (u/self-pos c) cell range) :there
-       (nil? (wworld/path-world (:primitives c))) (do (ctx/note-walk! c "blocked" 0) :blocked)
-       :else (case (:status (await (walk-round! c cell range {:doors doors :timeout-s timeout-s :one-way nil :dangers dangers :tolls tolls :zone-tolls zone-tolls})))
-               "arrived" :there
-               "partial" :partial
-               :blocked)))))
-
 (defn ^:async go-near!
-  "walk-near! as a jobs.movement.go-to child in slot :walk, so a body shut in escalates (pillar, stair, dig a way out and
-  put back) where walk-near! would give up. Resolves to :there, :partial (the child waits on the world: yield and call
-  again; also a :leg-s leg that got nearer) or :blocked (it gave up or declined). opts: :doors, :dangers, :tolls,
-  :zone-tolls as walk-near!, :escalate (default true), :leg-s (a leg of at most that many s, :partial when it got nearer, for a
-  caller chasing something that moves; replaces walk-near!'s :timeout-s), :look-round (default true; false for a caller that keeps moving),
-  :one-way (go-to's arg, default :closed here: no drop the body cannot climb back, as walk-near!; not the :one-way key of a give-up
+  "Walk until the body's cell is within range cells of pos's cell (u/within?), as a jobs.movement.go-to child in slot :walk,
+  so a body shut in escalates (pillar, stair, dig a way out and put back). Resolves to :there, :partial (the child waits on the world: yield and call
+  again; also a :leg-s leg that got nearer) or :blocked (it gave up or declined). opts: :doors (jobs.lib.pass policy, default :shut; a job that works gates itself passes :never), :dangers (false: plan
+  straight past known dangers), :tolls (cells the plan prices), :zone-tolls (true adds other bodies' zone cells), :escalate (default true), :leg-s (a leg of at most that many s, :partial when it got nearer, for a
+  caller chasing something that moves; default one 60 s steer), :look-round (default true; false for a caller that keeps moving),
+  :one-way (go-to's arg, default :closed here: no drop the body cannot climb back; not the :one-way key of a give-up
   result), always :retry false (the job counts its own tries); :ignore-zones? comes from the job's args."
   ([c pos range] (go-near! c pos range nil))
   ([c pos range {:keys [doors dangers tolls zone-tolls escalate leg-s look-round one-way] :or {doors :shut dangers true escalate true look-round true one-way :closed}}]

@@ -1,6 +1,6 @@
 (ns jobs.lib.util
   "Helpers the library jobs share: reading positions off JS, distances, the
-  inventory and bounded failure counting. Walking in reach is jobs.lib.near/walk-near!."
+  inventory and bounded failure counting. Walking in reach is jobs.lib.near/go-near!."
   (:require [engine.ctx :as ctx]))
 
 (def max-failures 3)

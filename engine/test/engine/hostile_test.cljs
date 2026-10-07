@@ -459,7 +459,7 @@
 ;; ------------------------------------------------------- unreachable hostiles
 
 (defn walks-to
-  "How many walks went to pos's x and z: walk-near! walks (their :moved entries) and moveTo calls."
+  "How many walks went to pos's x and z: go-near! walks (their :moved entries) and moveTo calls."
   [{:keys [p eng]} pos]
   (+ (count (filter #(and (= (:x pos) (:x %)) (= (:z pos) (:z %))) (tu/walked-to eng)))
      (count (filter #(let [a (.. % -args -pos)] (and (= (:x pos) (.-x a)) (= (:z pos) (.-z a)))) (calls p "moveTo")))))

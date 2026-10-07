@@ -1,6 +1,6 @@
 (ns engine.stuck-giveup-test
   "The stuck trigger counts only moves that show the body held where it stands (a walk that carried the body away, or
-  moves made somewhere else, are not); walk-near! does not take a drop it cannot climb back toward a target it cannot
+  moves made somewhere else, are not); go-near! does not take a drop it cannot climb back toward a target it cannot
   reach; unstick ends once a body that was enclosed is out, though the goal stays out of reach."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
@@ -39,14 +39,14 @@
     (mem/write! (:store eng) :unwedge-blocked {:cell {:x 5 :y 64 :z 0} :why "x"} {:cap 10 :ttl 600000})
     (is (true? ((:when (get triggers/all :stuck)) p (mem/view (:store eng)) {})))))
 
-;; ------------------------------------------------------------------ walk-near! and a drop it cannot climb back
+;; ------------------------------------------------------------------ go-near! and a drop it cannot climb back
 
 (def cliff-island
   "A plateau (feet 64) to x 10, a 3-drop to a floor (feet 61) that runs to the loaded edge at x 47, and on it a stone
   pillar at x 47 (the last loaded column) whose top (feet 67) no walk reaches."
   (merge (floor -2 -3 10 3) (floor 60 11 -3 47 3) (box 47 61 0 47 66 0 "stone")))
 
-(deftest walk-near-does-not-drop-off-a-cliff-toward-a-target-it-cannot-reach
+(deftest go-near-does-not-drop-off-a-cliff-toward-a-target-it-cannot-reach
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -56,7 +56,7 @@
 
 (deftest pace-toward-an-unreachable-leg-goes-down-the-cliff-like-go-to-and-stops-with-a-warn
   ;; pace is go-to (:escalate false): the drop is go-to's policy (go-to-goes-down-a-cliff-whose-foot-runs-into-unloaded-land),
-  ;; unlike walk-near! above; the run ends stopped :leg-unfinished at the foot, on loaded floor
+  ;; unlike go-near! above; the run ends stopped :leg-unfinished at the foot, on loaded floor
   (async done
     (tu/run-async done
       (fn ^:async t []

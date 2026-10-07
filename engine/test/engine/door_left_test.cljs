@@ -71,7 +71,7 @@
 (defn walker [args]
   {:check (constantly true)
    :round (fn ^:async walk-round [c]
-            (await (apply near/walk-near! c args))
+            (await (apply near/go-near! c (tu/as-near args)))
             :done)})
 
 (defn setup

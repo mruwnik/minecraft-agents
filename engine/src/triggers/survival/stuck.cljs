@@ -1,7 +1,7 @@
 (ns triggers.survival.stuck
   "The stuck trigger and the condition the unstick job shares with it.
   Both read the :moved entries: engine.core/act writes one after every moveTo, jobs.lib.near one after every walk
-  (go-to and walk-near!).
+  (go-to and go-near!).
     A move is bad only when it did not carry the body anywhere. A walk that took the body away, whatever its status,
     shows the body is free.
     An entry with :no-path true is a walk that found no way to its goal. That is evidence about the goal, not the

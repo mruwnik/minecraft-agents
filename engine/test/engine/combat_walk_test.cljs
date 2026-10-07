@@ -1,5 +1,5 @@
 (ns engine.combat-walk-test
-  "jobs.combat.attack walks with the engine walker (jobs.lib.near/walk-near!, doors :shut), so a body inside its doored
+  "jobs.combat.attack walks with the engine walker (jobs.lib.near/go-near!, doors :shut), so a body inside its doored
   hut leaves through the door instead of getting noPath from the raw pathfinder; and the stuck trigger counts a walk that
   found no path only when the body is enclosed (jobs.lib.reach/enclosed?), not when the goal alone is out of reach."
   (:require [cljs.test :refer [deftest is async]]

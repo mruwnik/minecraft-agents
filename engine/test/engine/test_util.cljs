@@ -53,7 +53,7 @@
 
 (defn fake-on-floor
   "fake with stone at y 63 under the walk-floor rectangle (or the spec's :floor), in the columns the spec's :blocks leave
-  empty: the ground the walks of jobs that use jobs.lib.near/walk-near! need, without touching ground a test built.
+  empty: the ground the walks of jobs that use jobs.lib.near/go-near! need, without touching ground a test built.
   The spec's :floor-block lays another block than stone (a test that digs stone needs a floor it does not dig)."
   [spec]
   (let [built (into #{} (map (fn [k] (let [[x _ z] (.split (name k) ",")] [x z]))) (keys (:blocks spec)))
@@ -87,7 +87,7 @@
 
 (defn short-walks!
   "Make the fake's walks end early, as a steer that timed out after ticks ticks (the fake walks about 0.2 blocks a tick):
-  a walk-near! toward a target farther than that ends :partial. Only the first n walks when n is given."
+  a go-near! toward a target farther than that ends :partial. Only the first n walks when n is given."
   ([p ticks] (short-walks! p ticks js/Infinity))
   ([p ticks n]
    (let [walks (atom 0)]
@@ -184,3 +184,9 @@
                             (await (orig c pos range opts))))
     (try (await (f))
          (finally (aset near/go-near! k orig)))))
+
+(defn as-near
+  "The go-near! arguments [pos range opts] for walk-style args [pos range opts]: :timeout-s becomes :leg-s, no escalation."
+  [[pos range opts]]
+  [pos range (cond-> (merge {:escalate false} (dissoc opts :timeout-s))
+               (:timeout-s opts) (assoc :leg-s (:timeout-s opts)))])

@@ -1,5 +1,5 @@
 (ns engine.path-near-test
-  "jobs.lib.near/walk-near!, the jobs' one-walk helper, over the path planner and the executor against the fake world."
+  "jobs.lib.near/go-near!, the jobs' one-walk helper (no escalation), over the path planner and the executor against the fake world."
   (:require [cljs.test :refer [deftest is async]]
             [engine.registry :as registry]
             [engine.core :as core]
@@ -15,15 +15,15 @@
 (def flat (floor -2 -3 40 3))
 
 (defn walker
-  "A job whose one round is one walk-near! with args, the return kept in out."
+  "A job whose one round is one go-near! with args, the return kept in out."
   [out args]
   {:check (constantly true)
    :round (fn ^:async walk-round [c]
-            (reset! out (await (apply near/walk-near! c args)))
+            (reset! out (await (apply near/go-near! c (tu/as-near args))))
             :done)})
 
 (defn ^:async walk!
-  "Run one walk-near! (args after c) over world; {:eng :p :out}."
+  "Run one go-near! (args after c) over world; {:eng :p :out}."
   ([world args] (walk! world args identity))
   ([world args prep]
    (let [clock (atom 1000000)
@@ -130,15 +130,15 @@
 ;; ---------------------------------------------------------------- walks and the backoff
 
 (defn repeat-walker
-  "A job whose every round is one walk-near! with args, then :continue."
+  "A job whose every round is one go-near! with args, then :continue."
   [args]
   {:check (constantly true)
    :round (fn ^:async repeat-round [c]
-            (await (apply near/walk-near! c args))
+            (await (apply near/go-near! c (tu/as-near args)))
             :continue)})
 
 (defn ^:async walk-rounds!
-  "Run walk-near! with args as the round of job j1, over world, for n ticks at one instant; {:eng :p}."
+  "Run go-near! with args as the round of job j1, over world, for n ticks at one instant; {:eng :p}."
   [world args prep n]
   (let [clock (atom 1000000)
         [_ sink] (tu/legacy-capture-sink)
@@ -167,8 +167,9 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (await (walk-rounds! {:blocks long-floor} [{:x 390 :y 64 :z 0} 0]
                                                    #(doto % (tu/short-walks! 250)) 3))]
-          (is (= ["partial" "partial" "partial"] (mapv :status (moved eng))))
-          (is (< 140 (first (at p))) "three walks of 50 blocks or more")
+          (is (<= 3 (count (moved eng))) "at least one cut walk a round")
+          (is (every? #{"partial" "arrived"} (map :status (moved eng))) "a cut walk is partial, never blocked")
+          (is (< 140 (first (at p))) "three rounds of 50 blocks or more")
           (is (not (backing-off? eng)))
           (is (zero? (:fruitless (core/backoff-entry eng "j1") 0))))))))
 
@@ -196,13 +197,13 @@
 (def gateless-pen
   (merge (floor -40 -40 60 40) (apply dissoc (box 10 64 -4 18 64 4 "oak_fence") (keys (box 11 64 -3 17 64 3 "x")))))
 
-(deftest walk-near-a-gateless-fence-pen-ends-blocked-goal-enclosed
+(deftest go-near-a-gateless-fence-pen-ends-blocked-goal-enclosed
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [outs (atom [])
               rounds (atom [])
-              ;; walk-near! until it is not :partial (a partial walk to the fence, the nearest the body gets), each time
+              ;; go-near! until it is not :partial (a partial walk to the fence, the nearest the body gets), each time
               ;; with the round's own result
               job {:check (constantly true)
                    :round (fn ^:async round [c]
