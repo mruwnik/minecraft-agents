@@ -13,7 +13,7 @@
           [:fill [14 0 12] [22 0 12] "oak_fence"]
           [:fill [15 0 12] [15 0 12] "air"] [:fill [17 0 12] [17 0 12] "air"] [:fill [19 0 12] [19 0 12] "air"] [:fill [21 0 12] [21 0 12] "air"]
           [:set [16 0 8] "oak_fence_gate[facing=south,open=true]"]]
- :body {:at [17.5 0 14.5]}
+ :body {:at [17.5 0 14.5] :yaw 180}
  :expect [{:event {:source :job :kind :shut-gate.gave-up :data {:cell #at [16 0 8]}} :within-s 60}]
  :after [[:block [16 0 8] "oak_fence_gate[open=true]"]]
  :limit-s 90}

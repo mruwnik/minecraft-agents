@@ -7,7 +7,7 @@
   :blocks [[:fill [18 0 13] [24 0 19] "oak_fence"]
            [:fill [19 0 14] [23 0 18] "air"]
            [:set [18 0 16] "oak_fence_gate[facing=east,open=false]"]]
-  :body {:at [12.5 0 16.5] :inventory [["lead" 4]]}
+  :body {:at [12.5 0 16.5] :yaw 270 :inventory [["lead" 4]]}
   :limit-s 300}
  :cases
  [{:name "shut-gate-one-cow-brought"

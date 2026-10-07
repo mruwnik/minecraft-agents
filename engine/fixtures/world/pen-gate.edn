@@ -1,6 +1,7 @@
 ;; The pen-gate reflex and jobs.animals.shut-gate: it shuts a PLANNED fence gate that stands open with the body away
 ;; (4 s, more than 2 and at most 8 blocks off), and leaves every other gate alone. Fence line z=12, x 10..22, gates at
-;; [13 0 12] and [19 0 12], both open; the body at [16.5 0 16.5], 5 blocks from each.
+;; [13 0 12] and [19 0 12], both open; the body at [16.5 0 16.5], 5 blocks from each, facing north (:yaw 180): the
+;; reflex reads only gates it has seen, and the default view faces south.
 ;; Should-succeed: both planned gates shut; with one planned, only that one.
 ;; Should-fail (left alone): no plan, body standing in the gate, gate beyond the radius, gate walled into stone (gave up).
 {:defaults
@@ -11,7 +12,7 @@
   :blocks [[:fill [10 0 12] [22 0 12] "oak_fence"]
            [:set [13 0 12] "oak_fence_gate[facing=south,open=true]"]
            [:set [19 0 12] "oak_fence_gate[facing=south,open=true]"]]
-  :body {:at [16.5 0 16.5]}
+  :body {:at [16.5 0 16.5] :yaw 180}
   :limit-s 60}
  :cases
  [{:name "both-planned-gates-shut"
@@ -39,7 +40,7 @@
    :plans [{:id "pen" :parts [{:id "gate" :cells [#at [2 0 28]] :want [:any "oak_fence_gate"]}]}]
    :blocks [[:fill [13 0 12] [13 0 12] "oak_fence"] [:fill [19 0 12] [19 0 12] "oak_fence"]
             [:set [2 0 28] "oak_fence_gate[facing=south,open=true]"]]
-   :body {:at [16.5 0 8.5]}
+   :body {:at [16.5 0 8.5] :yaw 0}
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :pen-gate}} :for-s 20}]
    :after [[:block [2 0 28] "oak_fence_gate[open=true]"]]}
   {:name "gate-walled-into-stone-gives-up"

@@ -140,6 +140,9 @@
       (is (some #{"give ProbeFixture bread 3"} body))
       (is (some #{"effect give ProbeFixture resistance 3600 4 true"} body))
       (is (= "clear ProbeFixture" (second body))))
+    (is (some #{"tp ProbeFixture 20016.5 150 20016.5 180 0"}
+              (f/body-commands origin "ProbeFixture" (assoc-in glass [:body :yaw] 180)))
+        "a case may turn the body (yaw, degrees: 0 south, 180 north) so it can see what lies behind the default view")
     (is (= "summon skeleton 20022.5 150 20016.5 {Tags:[\"wt\"],PersistenceRequired:1b,NoAI:1b}"
            (f/summon-command origin (first (:act open)))))
     (is (= "summon cow 20001.5 150 20001.5 {Tags:[\"wt\"],PersistenceRequired:1b}" (f/summon-command origin [:summon "cow" [1.5 0 1.5]])))

@@ -337,13 +337,13 @@
         (resolve-tags register origin)))
 
 (defn body-commands
-  "Put the body at its start: on the plot, survival, healed and fed, its inventory and effects as the case says."
+  "Put the body at its start (facing :yaw, 0 = south, 180 = north): on the plot, survival, healed and fed, its inventory and effects as the case says."
   [origin body c]
-  (let [{:keys [at inventory effects spawnpoint]} (:body c)]
+  (let [{:keys [at yaw inventory effects spawnpoint]} (:body c)]
     (-> [(str "gamemode survival " body)
          (str "clear " body)
          (str "effect clear " body)
-         (str "tp " body " " (xyz-str (abs-pos origin at)) " 0 0")
+         (str "tp " body " " (xyz-str (abs-pos origin at)) " " (or yaw 0) " 0")
          (str "effect give " body " minecraft:instant_health 1 10 true")
          (str "effect give " body " minecraft:saturation 1 10 true")]
         (into (for [[item n] inventory] (str "give " body " " item " " (or n 1))))

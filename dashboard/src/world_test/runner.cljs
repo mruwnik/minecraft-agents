@@ -637,8 +637,8 @@
   the tp up to 3 times. Resolves to nil when it stands there, else to the failure message. io: {:send cmds->promise of
   replies, :sleep ms->promise}."
   [{:keys [send sleep]} origin body c]
-  (let [{:keys [at]} (:body c)
-        tp (str "tp " body " " (f/xyz-str (f/abs-pos origin at)) " 0 0")]
+  (let [{:keys [at yaw]} (:body c)
+        tp (str "tp " body " " (f/xyz-str (f/abs-pos origin at)) " " (or yaw 0) " 0")]
     (letfn [(check [retries]
               (.then (send [(f/start-check-command body)])
                      (fn [[reply]]

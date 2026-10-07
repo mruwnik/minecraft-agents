@@ -9,7 +9,7 @@
   :blocks [[:fill [10 0 12] [22 0 12] "oak_fence"]
            [:set [16 0 12] "oak_fence_gate[facing=south,open=true]"]]
   :plans [{:id "pen" :parts [{:id "gate" :cells [#at [16 0 12]] :want [:any "oak_fence_gate"]}]}]
-  :body {:at [16.5 0 18.5]}
+  :body {:at [16.5 0 18.5] :yaw 180}
   :limit-s 90}
  :cases
  [{:name "cow-in-gate-wanders-off"
