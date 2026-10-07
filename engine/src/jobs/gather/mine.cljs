@@ -166,8 +166,8 @@
            (let [cell (around pos f)
                  seen (look/seen-block p cell)]
              (cond
-               (own? cell) (u/block-name p cell)
-               (and (= [0 1 0] f) (= "lava" (u/block-name p cell))) "lava"
+               (own? cell) (u/seen-name p cell)
+               (and (= [0 1 0] f) (= "lava" (u/seen-name p cell))) "lava"
                (not (:unknown seen)) (:name seen))))
          faces)))
 
@@ -230,14 +230,31 @@
               true))))
 
 
+(defn ground-pos
+  "The cells of the 5x5 under start at y-1 and y-2."
+  [start]
+  (for [dy [-1 -2] dx (range -2 3) dz (range -2 3)] (around start [dx dy dz])))
+
 (defn snapshot
-  "The solid cells of the 5x5 under the start at y-1 and y-2, as {:pos :name}."
+  "The solid cells of the 5x5 under the start at y-1 and y-2 that the body sees (the cells under them it learns as it digs
+  them: book-ground!), as {:pos :name}."
   [c start]
-  (vec (for [dy [-1 -2] dx (range -2 3) dz (range -2 3)
-             :let [pos (around start [dx dy dz])
-                   name (u/block-name (:primitives c) pos)]
+  (vec (for [pos (ground-pos start)
+             :let [name (u/seen-name (:primitives c) pos)]
              :when (and name (not (not-solid name)))]
          {:pos pos :name name})))
+
+(defn book-ground!
+  "A cell of the ground footprint that the snapshot did not see, about to be dug: the block is known now, so record it for
+  the mend."
+  [c pos]
+  (let [{:keys [start ground]} (ctx/mem c)
+        cell (select-keys pos [:x :y :z])
+        name (u/seen-name (:primitives c) cell)]
+    (when (and (:mend (:args c)) start name (not (not-solid name))
+               (some #{cell} (ground-pos start))
+               (not-any? #(= cell (:pos %)) ground))
+      (ctx/update-mem! c update :ground (fnil conj []) {:pos cell :name name}))))
 
 (defn finish!
   "Emit the outcome, hand it to the parent and end the job."
@@ -356,12 +373,13 @@
   [c]
   (when-let [pos (:digging (ctx/mem c))]
     (ctx/update-mem! c dissoc :digging)
-    (when (air (u/block-name (:primitives c) pos))
+    (when (air (u/seen-name (:primitives c) pos))
       (dug-booked! c pos))))
 
 (defn ^:async dig-cell!
   "Dig pos with a jobs.blocks.dig child: this job's rules judged the cell, the hazards it accepts are the child's."
   [c pos]
+  (book-ground! c pos)
   (await (blocks/dig-cell! c pos {:accept #{:fluid-adjacent :falling-block :under-feet} :ignore-zones? (boolean (:ignore-zones? (:args c)))})))
 
 (defn ^:async dig! [c pos]
@@ -394,7 +412,7 @@
   "Why the tunnel may not take cell pos (a fluid in it, lava or unwanted water beside it seen, not loaded), else nil:
   {:reason r :at cell}, the cell being the offending one (the lava beside pos, not pos itself). Faces never seen are no hazard."
   [c pos]
-  (let [own (u/block-name (:primitives c) pos)
+  (let [own (u/seen-name (:primitives c) pos)
         beside (map (fn [f n] [(around pos f) n]) faces (face-names c pos))
         beside-of (fn [n] (some (fn [[cell nm]] (when (= n nm) cell)) beside))]
     (cond
@@ -441,7 +459,7 @@
   [c cells]
   (loop [cells cells]
     (if-let [pos (first cells)]
-      (let [block (u/block-name (:primitives c) pos)
+      (let [block (u/seen-name (:primitives c) pos)
             _ (await (tools/equip! c block))
             v (access/may-dig? (rules-in c) pos)
             verdict (access/judge v (:accept (:args c)))
@@ -535,7 +553,7 @@
   [c branch]
   (let [p (:primitives c)
         {:keys [tunnel]} (ctx/mem c)
-        block-at (fn [[x y z]] (u/block-name p {:x x :y y :z z}))
+        block-at (fn [[x y z]] (u/seen-name p {:x x :y y :z z}))
         {:keys [dir site]} (if branch (branch-site tunnel (cell-of (u/self-pos c))) {:dir (headings (:heading tunnel)) :site (step-cell tunnel (dec (:steps tunnel)))})
         choice (when site (torch/torch-at dir [(:x site) (:y site) (:z site)]
                                           (placement/eye (u/self-pos c)) block-at))
@@ -588,7 +606,7 @@
         t (or (:tunnel m) {:origin (cell-of (u/self-pos c)) :heading (:heading m) :steps 0})
         _ (when-not (:tunnel m) (ctx/update-mem! c assoc :tunnel t))
         {:keys [steps stop heading]} t
-        name-at #(u/block-name (:primitives c) %)
+        name-at #(u/seen-name (:primitives c) %)
         from (step-cell t steps)
         next (step-cell t (inc steps))
         cut [(update next :y inc) next]
@@ -597,9 +615,12 @@
       stop (to-mend! c (tunnel-reason stop))
       (>= steps (:tunnel-length (:args c))) (end! c :tunnel-length nil)
       (not (await (step-to! c from))) (end! c :walk-failed from)
+      (and (look/unseen? (:primitives c) cut) (not= next (:glanced m)))
+      (do (ctx/update-mem! c assoc :glanced next)
+          (await (glance! c [(headings heading)]))
+          :again)
       (torch-due? c) (await (torch-step! c false))
       hazard (end! c (:reason hazard) (:at hazard) next)
-      (not (rules/solid-floor? name-at (update next :y dec))) (end! c :no-floor next)
       :else (let [_ (await (watch/watch! c {:risky? true :before-dig (first (remove #(air (name-at %)) cut))}))
                   r (await (cut! c (remove #(air (name-at %)) cut)))]
               (cond
@@ -607,10 +628,12 @@
                 (not= :ok r) (end! c r next)
                 :else
                 (do (await (glance! c [(headings heading)]))
-                    (if (await (step-to! c next))
+                    (cond
+                      (not (rules/solid-floor? name-at (update next :y dec))) (end! c :no-floor next)
+                      (await (step-to! c next))
                       (do (ctx/update-mem! c #(-> % (update-in [:tunnel :steps] inc) (assoc :looked next)))
                           :again)
-                      (end! c :walk-failed next))))))))
+                      :else (end! c :walk-failed next))))))))
 
 ;; ------------------------------------------------------------------ the dig phase
 
@@ -620,7 +643,7 @@
   [c pos]
   (let [p (:primitives c)
         {:keys [x y z]} (u/self-pos c)
-        kind-at (fn [x y z] (reach-lib/arrow-kind-of (u/block-at p {:x x :y y :z z})))]
+        kind-at (fn [x y z] (reach-lib/arrow-kind-of (u/seen-block p {:x x :y y :z z})))]
     (reach-lib/ray-clear? kind-at
                           [(+ (js/Math.floor x) 0.5) (+ y game/eye-height) (+ (js/Math.floor z) 0.5)]
                           [(+ (:x pos) 0.5) (+ (:y pos) 0.25) (+ (:z pos) 0.5)])))
@@ -731,7 +754,7 @@
   [c]
   (let [{:keys [descent start]} (ctx/mem c)
         way-y (when (pos? (:steps descent 0)) (js/Math.floor (:y start)))]
-    (filterv #(let [name (u/block-name (:primitives c) (:pos %))]
+    (filterv #(let [name (u/seen-name (:primitives c) (:pos %))]
                 (and name (or (air name) (= "water" name))
                      (or (nil? way-y) (>= (:y (:pos %)) way-y))))
              (:ground (ctx/mem c)))))
@@ -925,11 +948,13 @@
           :done)
 
       (nil? (:phase m))
-      (let [now (carried c)
+      (let [faced (facing (:primitives c))
+            _ (await (look/survey! c))
+            now (carried c)
             start (cell-of (u/self-pos c))]
         (ctx/update-mem! c assoc
                          :goal (+ now (:count (:args c))) :start start :failures 0 :dry 0 :last-carried now
-                         :heading (or heading (facing (:primitives c)))
+                         :heading (or heading faced)
                          :ground (if (:mend (:args c)) (snapshot c start) [])
                          :phase :dig)
         :again)

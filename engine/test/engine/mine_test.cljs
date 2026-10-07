@@ -136,7 +136,7 @@
           (await (run-ticks s 1))
           (let [m (job-mem s)]
             (is (= {:x 0 :y 64 :z 0} (:start m)))
-            (is (= 50 (count (:ground m))))
+            (is (= 25 (count (:ground m)))) ; the 5x5 layer under the start in view; the one below is learnt as it is dug
             (is (= :dig (:phase m)))
             (is (= 4 (:goal m)))
             (is (= 1 (dig-count s)) "the snapshot is in memory when the first dig is cut")))))))
@@ -153,7 +153,7 @@
           (is (pos? (dig-count s)))
           (is (not (finished? s)))
           (let [again (start {:p (:p s) :dir dir})]
-            (is (= 50 (count (:ground (core/job-memory (:eng again) "j1")))))
+            (is (<= 25 (count (:ground (core/job-memory (:eng again) "j1")))) "the seen layer, and cells booked as they were dug")
             (await (run-ticks again 80))
             (is (finished? again))
             (is (every? #(= "dirt" %) (for [x (range -2 3) y [62 63] z (range -2 3)] (block-at s x y z))))))))))

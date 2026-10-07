@@ -105,6 +105,11 @@
 (defn leaves? [n] (str/ends-with? n "_leaves"))
 (def wet-names #{"water" "lava" "bubble_column"})
 
+(defn seen-at
+  "The block-at of stand-cell for primitives p: [x y z] -> the name seen or remembered, nil when unknown."
+  [p]
+  (fn [[bx by bz]] (u/seen-name p {:x bx :y by :z bz})))
+
 (defn stand-cell
   "Where a body could stand in column x z near feet height y, read top down from y+12 through open cells and
   leaves to the first other block: {:y feet} when the two cells above it are open, else {:fail :wet} (a fluid),
@@ -217,7 +222,7 @@
         origin [((:origin m) 0) ((:origin m) 2)]
         tried (into (set (:tried m)) (map (fn [{[x _ z] :pos}] [x z])) (:deferred m))
         p (:primitives c)
-        block-at (fn [[bx by bz]] (u/block-name p {:x bx :y by :z bz}))]
+        block-at (seen-at p)]
     (loop [[pt & more] (candidates c m) reads 0 acc {:tried [] :failed [] :skipped 0 :unloaded (vec (:deferred m))}]
       (cond
         (nil? pt) acc
