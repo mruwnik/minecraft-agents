@@ -297,6 +297,11 @@ test('physicsMs is 50 without the tick-rate shim and the shim interval with it',
   assert.equal(p.physicsMs(), 25)
 })
 
+test('worldAge reads the age without the self snapshot', () => {
+  const { p } = rig(world)
+  assert.equal(p.worldAge(), 1234)
+})
+
 test('self reports the body in the contract shape', () => {
   const { p } = rig(world)
   const s = p.self()

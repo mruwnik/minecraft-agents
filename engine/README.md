@@ -97,6 +97,7 @@ nobody may act. `isOwner(token)` reports whether a token is current.
 | method | returns |
 |---|---|
 | `self()` | `{username, pos, health, food, foodSaturation, oxygen, onFire, inWater, inLava, onGround, chunkLoaded, settling, isSleeping, vehicle, effects, experience, dimension, timeOfDay, isDay, raining, thundering, players, held, equipment, inventory}` |
+| `worldAge()` | the world age in game ticks (`null` offline); a cheap read of what `self()` carries, used for memory `:age` |
 | `entities({radius=16, kind?, names?, ids?, max=32})` | `[{id, name, kind, pos, distance, visible?, ...}]` by distance; `kind` is `hostile`, `passive`, `player`, `item` or `other`; passive mobs and villagers are listed only with a clear line of sight; hostiles, items and players are listed regardless and carry `visible` (a player counts as `sleeping` only in sight) |
 | `blockAt(pos)` | `{name, pos, age?, properties?}`, or `null` when the chunk is not loaded |
 
@@ -468,7 +469,7 @@ HTTP over `worlds/<world>/agents/<name>/engine/events.sock` (mode 0600; all bodi
 | `GET /events?stream-id=&after=&limit=` | an event page after a cursor, with gap indication |
 | `POST /attention/resolve` | `{:request-id :reason :handled}`; does not retry or cancel its job |
 | `POST /chat` | one public line or whisper, sharing the chat limits |
-| `GET /status?limit=` | compact body/job/attention projection (includes `:died` while a death is under 5 minutes old; supplied by recover-drops through the status extras main passes to event-api/create) |
+| `GET /status?limit=` | compact body/job/attention projection (includes `:died` while a death is under 6000 game ticks of world age old; supplied by recover-drops through the status extras main passes to event-api/create) |
 | `GET /inventory` | carried stacks and worn equipment (with a short enchants list), read-only |
 | `GET /job?id=` | one job's parsed spec, args, state, linked requests |
 | `GET /catalog?kind=jobs\|triggers&prefix=` / `kind=job\|trigger&name=` | names page / one description |
@@ -610,7 +611,7 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 | `survival.dig-niche` | Cut a 2-deep 1x2 niche from a standing cell beside a solid face within 16 (standing cells it has seen only), plug the opening from inside; ends `{:pos :door}` or stopped (`:no-site`, `:no-tool` (stone without a pickaxe; `:fetch`, default true, gets one first), `:refused` (every face would dig or plug another's zone, claim or plan; `:ignore-zones?` lifts it), `:unreachable`, `:dig-failed`, `:no-blocks`, `:place-failed`, `:no-progress`) |
 | `survival.block-arrow-gap` | Stop a ranged mob's arrows at a gap in the body's cover without moving: fills the seen open cell within `:reach` (3) that cuts most of the line from the mob's eye to the body (nearest first; needs a solid neighbour; an open door is shut), until no ranged mob within `:radius` (16) has a line of fire. Declines `:no-ranged-danger`; with no block carried it fetches one (`:fetch`, default true); ends `{:placed [cells]}` or stopped (`:no-blocks`, `:refused` (zone, claim or plan; `:ignore-zones?` lifts it), `:no-gap`, `:place-failed`, `:no-progress`) |
 | `survival.sleep`, `survival.dig-in`, `survival.log-out` | Walk to a known bed and sleep; roof the body in (one call: walls, a plug or a pit; ends `{:pos :mode :roof}` or stopped with the site's reason; `:ignore-zones?` and `:enclose` (walls only, for a body under an overhang) on dig-in); leave the server for a stint and wait for the sleep count. Helpers: `dig-in-cells` (the cells and placing), `dig-in-leave` (`leave!`, `climb!`) |
-| `survival.recover-drops` | After death, one run is the whole trip: holds `:respawning` then `:settling`, weighs the drops' value against the trip's danger (`jobs.lib.cost`), walks, collects. Never `:continue`; ends `:declined` with a `recover-drops.declined` event whose `:reason` is `:danger` (mob and place) or `:unreachable` |
+| `survival.recover-drops` | After death, one run is the whole trip within the despawn window (6000 game ticks of world age): holds `:respawning` then `:settling`, weighs the drops' value against the trip's danger (`jobs.lib.cost`), walks, collects. Never `:continue`; ends `:declined` with a `recover-drops.declined` event whose `:reason` is `:danger` (mob and place) or `:unreachable` |
 | `survival.restore-broken` | Puts back what a job broke in another's zone, and the holes go-to's escalation dug; one run over every cell |
 | `survival.unwedge` | Steps out of a full block at the feet cell, else digs it, all in one run (stopped + warn `unwedge.blocked` for bedrock or three failed digs); `:ignore-zones?` lifts the zone check |
 | `maintenance.shut-doors` | Shut every door a walk left open in one run (stopped `:left` with the reasons when any stays open) |

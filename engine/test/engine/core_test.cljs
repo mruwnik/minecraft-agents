@@ -1881,3 +1881,11 @@
     (.emit (.-world p) #js {:kind "physics-stalled" :pos #js {:x 0 :y 64 :z 0} :ms 2100})
     (is (= [:physics-stalled]
            (->> @seen (filter #(= :body (:source %))) (mapv :kind))))))
+
+(deftest memory-view-reads-the-world-age-without-a-self-snapshot
+  (let [{:keys [eng p]} (setup {:self {:worldAge 740}})
+        self-calls (atom 0)
+        self-fn (.-self p)]
+    (set! (.-self p) (fn [] (swap! self-calls inc) (self-fn)))
+    (is (= 740 (:age (mem/view (:store eng)))))
+    (is (zero? @self-calls))))

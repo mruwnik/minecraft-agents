@@ -925,6 +925,7 @@
               "isOffline" (fn [] (:offline @state))
               "isSettling" (fn [] (and (not (:offline @state)) (:settling @state)))
               "self" (fn [] (if (:offline @state) #js {:status "offline"} (self-view @state)))
+              "worldAge" (fn [] (get-in @state [:self :worldAge]))
               "entities"
               (fn [a]
                 (let [{:keys [radius kind names ids max] :or {radius 16 max 32}} (js->clj (or a #js {}) :keywordize-keys true)

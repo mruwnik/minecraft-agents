@@ -130,5 +130,8 @@ export function createSense (env) {
     const block = env.bot.blockAt(vec(pos))
     return block ? blockInfo(block) : null
   }
-  return { self, entities, blockAt, isSettling, settleFromNow, rememberSelf, lastKnown, columnLoaded }
+  // The world age in game ticks, read without building the self snapshot (memory reads call it); null while offline
+  const worldAge = () => isOffline() ? null : (env.bot.time.age ?? null)
+
+  return { self, worldAge, entities, blockAt, isSettling, settleFromNow, rememberSelf, lastKnown, columnLoaded }
 }

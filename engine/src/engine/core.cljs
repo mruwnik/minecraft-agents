@@ -213,7 +213,7 @@
                                     :stdout? true :now now :pos-fn #(self-pos primitives)}))
         store (mem/open dir {:now now
                              :world-time #(or (.-timeOfDay (.self primitives)) nil)
-                             :world-age #(or (.-worldAge (.self primitives)) nil)
+                             :world-age #(.worldAge primitives)
                              :live-jobs #(set (keys (:instances @st)))})
         eng {:primitives primitives :jobs jobs :triggers triggers :dir dir :now now :events ev
              :store store
