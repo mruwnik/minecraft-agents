@@ -594,6 +594,30 @@
 
 (defn stalled? [last-ms now-ms] (> (- now-ms last-ms) stall-gap-ms))
 
+(defn stall-clock
+  "A clock for one case: {:last ms of the latest tick, :gap the longest gap between two ticks, :gap-start when it began}."
+  [now-ms]
+  (atom {:last now-ms :gap 0 :gap-start now-ms}))
+
+(defn tick!
+  "Records a tick at now-ms in the stall clock."
+  [clock now-ms]
+  (swap! clock (fn [{:keys [last gap gap-start]}]
+                 (let [g (- now-ms last)]
+                   (if (> g gap)
+                     {:last now-ms :gap g :gap-start last}
+                     {:last now-ms :gap gap :gap-start gap-start})))))
+
+(defn clock-stalled? [clock] (> (:gap @clock) stall-gap-ms))
+
+(defn start-stall-monitor!
+  "Ticks the clock every 500 ms until the returned stop fn is called, so a gap anywhere in the case (build, lock wait,
+  steps), not only inside watch!, shows."
+  [clock]
+  (let [timer (js/setInterval #(tick! clock (js/Date.now)) 500)]
+    (.unref timer)
+    #(js/clearInterval timer)))
+
 (defn stall-results
   "Expectation results of a stalled run: the undecided ones become :stalled (the run did not watch them for gap-ms)."
   [results gap-ms]
@@ -603,32 +627,42 @@
         results))
 
 (defn mark-stalled
-  "A failed result with a :stalled expectation becomes :inconclusive: the stall, not the job, ended the watch."
+  "A failed result with a :stalled expectation becomes :inconclusive: the stall, not the job, ended the watch. A real
+  :fail among the expectations keeps the case failed."
   [r]
-  (if (and (= :fail (:status r)) (some #(= :stalled (:status %)) (:expects r)))
+  (if (and (= :fail (:status r))
+           (some #(= :stalled (:status %)) (:expects r))
+           (not-any? #(= :fail (:status %)) (:expects r)))
     (assoc r :status :inconclusive :why "runner stalled during the case (host suspended or process stopped)")
     r))
 
-(defn watch!
-  "Polls the log until every expectation is decided or the case's limit; resolves to the judged results. window: see
-  watch-window; events before t0 count when the window starts earlier."
-  [opts c {offset :offset from :from-ms} t0 ids]
-  (let [limit (+ t0 (* 1000 (max (:limit-s c) (+ 2 (x/deadline-s (:expect c))))))
-        last-poll (atom (js/Date.now))]
+(defn watch-with!
+  "Polls until every expectation is decided or the case's limit; resolves to the judged results. io: {:now :sleep
+  :events (events from the window start)}. clock: the case's stall clock; a gap over stall-gap-ms in it ends the watch
+  with the undecided expectations :stalled."
+  [{:keys [now sleep events]} c t0 ids clock]
+  (let [limit (+ t0 (* 1000 (max (:limit-s c) (+ 2 (x/deadline-s (:expect c))))))]
     (letfn [(poll []
-              (let [now (js/Date.now)
-                    gap (- now @last-poll)
-                    _ (reset! last-poll now)
-                    events (filterv #(>= (:time-ms % 0) from) (read-events-from (events-file opts) offset))
-                    results (x/judge-all (:expect c) events {:t0-ms t0 :now-ms now :job-ids ids})]
+              (let [t (now)
+                    _ (tick! clock t)
+                    stalled? (clock-stalled? clock)
+                    ;; a stall must not run out the clock of an expectation: judge as of when the gap began
+                    results (x/judge-all (:expect c) (events) {:t0-ms t0 :now-ms (if stalled? (:gap-start @clock) t) :job-ids ids})]
                 (cond
-                  (stalled? (- now gap) now) (js/Promise.resolve (stall-results results gap))
+                  stalled? (js/Promise.resolve (stall-results results (:gap @clock)))
                   (x/failed? results) (js/Promise.resolve (x/stop-early results))
-                  (or (x/decided? results) (> now limit))
+                  (or (x/decided? results) (> t limit))
                   (js/Promise.resolve (mapv #(if (= :pending (:status %)) (assoc % :status :fail :evidence "undecided at the case's limit") %) results))
                   :else
                   (.then (sleep 500) poll))))]
       (poll))))
+
+(defn watch!
+  "watch-with! on the body's event log. window: see watch-window; events before t0 count when the window starts earlier."
+  [opts c {offset :offset from :from-ms} t0 ids clock]
+  (watch-with! {:now js/Date.now :sleep sleep
+                :events #(filterv (fn [e] (>= (:time-ms e 0) from)) (read-events-from (events-file opts) offset))}
+               c t0 ids clock))
 
 (defn after-checks! [opts origin c]
   (let [cmds (mapv #(f/after-command origin (:body opts) (f/case-grid c) c %) (:after c))]
@@ -691,31 +725,35 @@
     (attempt 3)))
 
 (defn hold-phase!
-  "Resolves to ok? once this process holds the time lock, the first holder has put the world in the phase (first-set!,
-  resolving to ok?) and start! (the body start) has run. The body starts under the lock, so it never comes up while
-  another runner's body sleeps (its sleep-status would make a night job log out for the whole case)."
-  [{:keys [acquire! first-set! start!]}]
-  (.then (acquire!)
-         (fn [held]
+  "Resolves to ok? once stop! (the previous body goes offline, before the wait so it cannot sleep or act meanwhile),
+  this process holds the time lock, the first holder has put the world in the phase (first-set!, resolving to ok?) and
+  start! (the body start) has run. The body starts under the lock, so it never comes up while another runner's body
+  sleeps (its sleep-status would make a night job log out for the whole case)."
+  [{:keys [stop! acquire! first-set! start!]}]
+  (.then (stop!)
+         (fn [_] (.then (acquire!) (fn [held]
            (.then (if (:first? held) (first-set!) (js/Promise.resolve true))
-                  (fn [ok] (.then (start!) (fn [_] ok)))))))
+                  (fn [ok] (.then (start!) (fn [_] ok)))))))))
 
 (defn run-case!
-  "One run of case c on plot i (leased by the caller); start! (a thunk to a promise) starts or keeps the body once the time
-  lock is held. Resolves to a result map. register: the entries to put on the body once it stands in
+  "One run of case c on plot i (leased by the caller); stop! (a thunk to a promise) stops the previous body before the
+  time lock is waited for, start! starts or keeps the body once the lock is held. Resolves to a result map. register: the entries to put on the body once it stands in
   the built plot (the body was just started with none), nil when it keeps the register it has."
-  [opts c i run register start!]
+  [opts c i run register stop! start!]
   (let [grid (f/case-grid c)
         origin (f/plot-origin grid i)
         rc (f/resolve-tags c origin)
         started (js/Date.now)
         plan-files (atom [])
         t-start (atom nil)
+        clock (stall-clock (js/Date.now))
+        stop-monitor (start-stall-monitor! clock)
         pre-register (atom nil)
         result (fn [m] (merge {:id (:id c) :run run :plot i :origin origin :elapsed-s (/ (- (js/Date.now) started) 1000)} m))]
     (-> (let [phase (lock-phase opts rc)]
           (hold-phase!
-           {:acquire! #(acquire-time-lock! phase (str (:id c) (if (= :any phase) " runs under the current time" " depends on the time of day")))
+           {:stop! stop!
+            :acquire! #(acquire-time-lock! phase (str (:id c) (if (= :any phase) " runs under the current time" " depends on the time of day")))
             :first-set! (fn []
                           (-> (if (= :any phase) true (time-ok! opts (if (lease/time-phase rc) rc (assoc rc :time :day))))
                               (.then (fn [ok]
@@ -747,7 +785,7 @@
                                       window (watch-window (some? register) @pre-register {:offset (log-cursor (events-file opts)) :from-ms t0})]
                                   (-> (run-steps! opts origin rc (:offset window) (:from-ms window))
                                       (.then (fn [ids]
-                                               (.then (watch! opts rc window t0 ids)
+                                               (.then (watch! opts rc window t0 ids clock)
                                                       (fn [expects]
                                                         (.then (after-checks! opts origin rc)
                                                                (fn [afters]
@@ -767,7 +805,7 @@
                      (.then #(rcon! (f/cleanup-commands grid origin (:body opts) rc)))
                      (.then (fn [_] (run! #(when (fs/existsSync %) (fs/unlinkSync %)) @plan-files) r))
                      (.catch (fn [_] (run! #(when (fs/existsSync %) (fs/unlinkSync %)) @plan-files) r)))))
-        (.finally release-time-lock!))))
+        (.finally (fn [] (stop-monitor) (release-time-lock!))))))
 
 ;; ------------------------------------------------------------------ reporting
 
@@ -857,10 +895,10 @@
                                                              memory (when (seq (:memory c))
                                                                       (f/memory-seed (:memory (f/resolve-tags c (f/plot-origin (f/case-grid c) i))) (js/Date.now)))]
                                                          (-> (run-case! opts c i run (when-not (= :keep plan) register)
+                                                                        #(if (= :keep plan) (js/Promise.resolve nil) (stop-body! opts))
                                                                         #(if (= :keep plan)
                                                                            (js/Promise.resolve nil)
-                                                                           (-> (stop-body! opts)
-                                                                               (.then (fn [] (when-not (= :restart-keep plan) (reset-last-plot! opts))))
+                                                                           (-> (if (= :restart-keep plan) (js/Promise.resolve nil) (reset-last-plot! opts))
                                                                                (.then (fn [] (start-body! opts register (= :restart-keep plan) memory))))))
                                                              (.then (fn [r] (report! r) (swap! results conj (assoc r :file (:file c))) (write-results! opts @results) (report-fixtures!)))
                                                              (.finally #(release-plot! i))))))))

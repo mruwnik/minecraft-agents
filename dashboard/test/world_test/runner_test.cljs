@@ -345,19 +345,57 @@
                (is (= ["waiting for time lock (day) held by 1 (x)"] @told))
                (done))))))
 
-(deftest the-body-starts-only-after-the-time-lock-is-held-and-the-phase-set
+(deftest the-previous-body-stops-before-the-time-lock-wait-and-the-new-one-starts-under-the-lock
   (let [calls (atom [])
-        io (fn [first?] {:acquire! (fn [] (swap! calls conj :acquire) (js/Promise.resolve {:first? first?}))
+        io (fn [first?] {:stop! (fn [] (swap! calls conj :stop) (js/Promise.resolve nil))
+                         :acquire! (fn [] (swap! calls conj :acquire) (js/Promise.resolve {:first? first?}))
                          :first-set! (fn [] (swap! calls conj :set) (js/Promise.resolve true))
                          :start! (fn [] (swap! calls conj :start) (js/Promise.resolve nil))})]
     (async done
       (-> (r/hold-phase! (io true))
-          (.then (fn [ok] (is (true? ok)) (is (= [:acquire :set :start] @calls)) (reset! calls [])
+          (.then (fn [ok] (is (true? ok)) (is (= [:stop :acquire :set :start] @calls)) (reset! calls [])
                    (r/hold-phase! (io false))))
-          (.then (fn [ok] (is (true? ok)) (is (= [:acquire :start] @calls)) (reset! calls [])
+          (.then (fn [ok] (is (true? ok)) (is (= [:stop :acquire :start] @calls)) (reset! calls [])
                    (r/hold-phase! (assoc (io true) :acquire! #(js/Promise.reject (js/Error. "no rcon"))))))
-          (.catch (fn [e] (is (= "no rcon" (.-message e))) (is (= [] @calls))))
+          (.then (fn [_] (is false "hold-phase! must reject when acquire! rejects")))
+          (.catch (fn [e] (is (= "no rcon" (.-message e))) (is (= [:stop] @calls))))
           (.then done)))))
+
+(defn fake-watch-io
+  "A fake clock: now advances by 500 per sleep, plus the jumps (a map sleep-number -> extra ms)."
+  [jumps events]
+  (let [t (atom 1000000) n (atom 0)]
+    {:now (fn [] @t)
+     :sleep (fn [_] (swap! n inc) (swap! t + 500 (get jumps @n 0)) (js/Promise.resolve nil))
+     :events (fn [] (events @t))}))
+
+(deftest watch-ends-stalled-when-the-clock-jumps-between-polls
+  (async done
+    (let [c {:limit-s 100 :expect [{:event {:kind :never} :within-s 90}]}
+          clock (r/stall-clock 1000000)]
+      (.then (r/watch-with! (fake-watch-io {2 (* 2 r/stall-gap-ms)} (constantly [])) c 1000000 #{} clock)
+             (fn [res]
+               (is (= [:stalled] (mapv :status res)))
+               (done))))))
+
+(deftest watch-ends-stalled-when-the-gap-came-before-its-first-poll
+  (async done
+    (let [c {:limit-s 100 :expect [{:event {:kind :never} :within-s 90}]}
+          clock (r/stall-clock 1000000)]
+      (r/tick! clock (+ 1000000 (* 2 r/stall-gap-ms)))
+      (.then (r/watch-with! (fake-watch-io {} (constantly [])) c 1000000 #{} clock)
+             (fn [res]
+               (is (= [:stalled] (mapv :status res)))
+               (done))))))
+
+(deftest watch-without-a-gap-runs-to-the-limit-as-a-fail
+  (async done
+    (let [c {:limit-s 3 :expect [{:event {:kind :never} :within-s 1}]}
+          clock (r/stall-clock 1000000)]
+      (.then (r/watch-with! (fake-watch-io {} (constantly [])) c 1000000 #{} clock)
+             (fn [res]
+               (is (= [:fail] (mapv :status res)))
+               (done))))))
 
 (deftest a-poll-gap-far-over-the-poll-interval-is-a-stall
   (is (false? (r/stalled? 1000 1500)))
@@ -372,4 +410,5 @@
     (is (= :inconclusive (:status (r/mark-stalled {:status :fail :expects marked}))))
     (is (re-find #"stalled" (:why (r/mark-stalled {:status :fail :expects marked}))))
     (is (= :fail (:status (r/mark-stalled {:status :fail :expects [{:status :fail}]}))))
+    (is (= :fail (:status (r/mark-stalled {:status :fail :expects [{:status :fail} {:status :stalled}]}))))
     (is (= :pass (:status (r/mark-stalled {:status :pass :expects [{:status :pass}]}))))))
