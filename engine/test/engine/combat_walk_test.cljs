@@ -68,7 +68,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (ut/setup {:noPath ["5,64,0"]})]
-          (core/submit! eng '(jobs.movement.pace {:a {:x 5 :y 64 :z 0} :b {:x 5 :y 64 :z 0} :laps 1}) {})
+          (core/submit! eng '(jobs.movement.go-to {:pos {:x 5 :y 64 :z 0} :range 1 :escalate false}) {})
           (await (core/tick! eng))
           (is (true? (:no-path (first (ut/moved eng)))) "moveTo answered noPath"))
         (let [{:keys [eng]} (ut/setup {:self {:pos ut/at5} :floor tu/walk-floor})]

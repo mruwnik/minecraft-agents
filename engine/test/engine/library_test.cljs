@@ -699,35 +699,6 @@
     (is (= [:hostile-near :night :hungry] (mapv :trigger (:register s))) "the night above food")
     (is (= '[jobs.forestry.harvest-wood jobs.storage.deposit] (mapv first (:queue s))))))
 
-;; ---------------------------------------------------------------------- pace
-
-(def pace-args {:a {:x 5 :y 64 :z 0} :b {:x 10 :y 64 :z 0} :laps 3})
-
-(defn move-xs [eng] (mapv :x (tu/walked-to eng)))
-
-(deftest pace-walks-all-laps-a-b-a-b-in-one-call
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng]} (setup {})]
-          (core/submit! eng (list 'jobs.movement.pace pace-args) {})
-          (await (core/tick! eng))
-          (is (= [5 10 5 10 5 10] (move-xs eng)))
-          (is (= [] (:list (core/state eng))) "done in the one round"))))))
-
-(deftest pace-ends-stopped-with-a-warn-when-a-leg-does-not-arrive
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen]} (setup {:noPath ["10,64,0"]})]
-          (core/submit! eng (list 'jobs.movement.pace pace-args) {})
-          (await (core/tick! eng))
-          (is (= [5 10] (take 2 (move-xs eng))) "ends at the blocked leg")
-          (is (= [] (:list (core/state eng))) "done at once, not round after round")
-          (is (= [{:to {:x 10 :y 64 :z 0} :status "unreachable"}]
-                 (->> @seen (filter #(= :leg-unfinished (:kind %)))
-                      (mapv #(select-keys % [:to :status :reason]))))))))))
-
 ;; ------------------------------------------------------------- look-around
 
 (deftest look-around-looks-once-and-records-when
@@ -777,13 +748,6 @@
     (is (= look-timer-45 (first (:register s))))
     (is (= (:register base) (rest (:register s))))
     (is (= (:queue base) (:queue s)))))
-
-(deftest pace-cuts-scenario-puts-a-look-timer-first-and-queues-pace
-  (let [s (scenario/parse (fs/readFileSync "scenarios/pace-cuts.edn" "utf8"))]
-    (is (= [] (scenario/problems registry/jobs with-conditions s)))
-    (is (= [:look-timer nil nil] (mapv :id (:register s))))
-    (is (= [nil :hostile-near :hungry] (mapv :trigger (:register s))))
-    (is (= '[jobs.movement.pace] (mapv first (:queue s))))))
 
 (deftest fell-tree-keeps-walking-on-a-partial-move-instead-of-digging
   (async done

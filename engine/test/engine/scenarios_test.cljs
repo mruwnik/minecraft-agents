@@ -67,26 +67,6 @@
           (is (= "oak_sapling" (.-name (.blockAt p #js {:x 4 :y 64 :z 0}))) "replanted")
           (is (not-any? #(or (= :required (:attention %)) (#{:failed :error} (:kind %))) @seen)))))))
 
-(deftest pace-cuts-runs-on-the-fake-and-the-reflex-cuts-pace
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p seen clock]} (boot "scenarios/pace-cuts.edn" {:self {:pos {:x -78 :y 69 :z -40}}})
-              world (.-world p)]
-          (await (core/tick! eng))
-          (is (= ["jobs.movement.look-around"] (vec (names-started seen))) "the look timer fires at once")
-          (let [release (.hold world "moveTo")
-                pacing (core/tick! eng)]
-            (swap! clock + 21000)
-            (let [looking (core/tick! eng)]
-              (release)
-              (await pacing)
-              (await looking)))
-          (is (some #(= [:job :cut] [(:source %) (:kind %)]) @seen) "the reflex cut the pace round")
-          (await (run-ticks eng clock 30 1000))
-          (is (= [] (:list (core/state eng))) "pace resumes and finishes its rounds")
-          (is (not-any? #(or (= :required (:attention %)) (#{:failed :error} (:kind %))) @seen)))))))
-
 (defn fired [seen]
   (keep #(when (= [:reflex :fired] [(:source %) (:kind %)]) (:reflex %)) @seen))
 

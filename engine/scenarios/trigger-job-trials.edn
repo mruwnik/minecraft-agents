@@ -23,7 +23,7 @@
 ;; -- case from live-ProbeDrive-2
 ;; ;; ProbeView takeover live test: pacing only, no reflexes, on the pad at -3500 64 3495.
 ;; {:register []
-;;  :queue [(jobs.movement.pace {:a {:x -3505 :y 64 :z 3495} :b {:x -3495 :y 64 :z 3495} :laps 3000})]}
+;;  :queue [(repeat (jobs.movement.look-around))]}
 ;; -- case from live-ProbeFight-1
 ;; ;; ProbeFight trigger test: hostile-near against notify.
 ;; {:register [{:trigger :hostile-near :args {:radius 8}
@@ -68,7 +68,7 @@
 ;; ;; ProbeMove live test: pace between two points 30 blocks apart (8 rounds of 3 laps).
 ;; {:register []
 ;;  :queue [(seq (jobs.movement.look-around {:every-ms 3000})
-;;               (jobs.movement.pace {:a {:x 2860 :y 161 :z 3250} :b {:x 2890 :y 161 :z 3250}}))]}
+;;               (jobs.movement.go-to {:pos {:x 2860 :y 161 :z 3250}}))]}
 ;; -- case from live-ProbeMove-4
 ;; ;; ProbeMove live test: wait-for-day held at the head of the list, look-around queued behind it,
 ;; ;; and a :burning reflex reporting through jobs.debug.notify (does a reflex still cut in while it waits?).

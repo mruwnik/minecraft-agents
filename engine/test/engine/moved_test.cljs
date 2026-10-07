@@ -41,7 +41,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup {:floor [-2 -2 8 2]})]
-          (core/submit! eng '(jobs.movement.pace {:a {:x 5 :y 64 :z 0} :b {:x 5 :y 64 :z 0} :laps 1}) {})
+          (core/submit! eng '(jobs.movement.go-to {:pos {:x 5 :y 64 :z 0} :range 1 :escalate false}) {})
           (await (core/tick! eng))
           (is (= [{:from {:x 0 :y 64 :z 0} :to {:x 4 :y 64 :z 0} :status "arrived" :target at5}]
                  (moved eng)) "the walker arrives within range of the target")
@@ -52,7 +52,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:unreachable ["5,64,0"]})]
-          (core/submit! eng '(jobs.movement.pace {:a {:x 5 :y 64 :z 0} :b {:x 5 :y 64 :z 0} :laps 1}) {})
+          (core/submit! eng '(jobs.movement.go-to {:pos {:x 5 :y 64 :z 0} :range 1 :escalate false}) {})
           (await (core/tick! eng))
           (is (= (repeat 3 {:from {:x 0 :y 64 :z 0} :to {:x 0 :y 64 :z 0} :status "blocked" :target at5 :no-path true})
                  (moved eng)) "go-to walks three times before it gives up"))))))

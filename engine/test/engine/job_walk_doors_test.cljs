@@ -59,11 +59,11 @@
       (fn ^:async t []
         (await (leaves-through-the-door! {:entities [steve]} '(jobs.movement.follow {:player "Steve"})))))))
 
-(deftest pace-from-inside-a-hut
+(deftest go-to-from-inside-a-hut
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (leaves-through-the-door! {} '(jobs.movement.pace {:a {:x 5 :y 64 :z 7} :b {:x 5 :y 64 :z 9} :laps 1})))))))
+        (await (leaves-through-the-door! {} '(jobs.movement.go-to {:pos {:x 5 :y 64 :z 7} :range 1})))))))
 
 (deftest harvest-from-inside-a-hut
   (async done

@@ -16,18 +16,18 @@
     nil                 nil
     [js/NaN 64 3]       nil))
 
-(deftest pace-walks-toward-vector-points
+(deftest go-to-walks-toward-vector-points
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (ut/setup {:self {:pos ut/at5} :floor tu/walk-floor})]
-          (core/submit! eng '(jobs.movement.pace {:a [5 64 3] :b [5 64 0] :laps 1}) {})
+          (core/submit! eng '(jobs.movement.go-to {:pos [5 64 3]}) {})
           (await (core/tick! eng))
-          (is (= {:x 5 :y 64 :z 3} (:target (first (ut/moved eng)))) "the leg went to a, not the origin"))))))
+          (is (= {:x 5 :y 64 :z 3} (:target (first (ut/moved eng)))) "the walk went to the point, not the origin"))))))
 
-(deftest pace-refuses-a-bad-point-at-submit
+(deftest go-to-refuses-a-bad-point-at-submit
   (doseq [bad [[5 64] "x" {:x 1 :y 2}]]
     (let [{:keys [eng]} (ut/setup {:self {:pos ut/at5} :floor tu/walk-floor})]
-      (is (thrown-with-msg? js/Error #":a must be \[x y z\]"
-                            (core/submit! eng (list 'jobs.movement.pace {:a bad :b [5 64 0]}) {}))
+      (is (thrown-with-msg? js/Error #":pos must be \[x y z\]"
+                            (core/submit! eng (list 'jobs.movement.go-to {:pos bad}) {}))
           (pr-str bad)))))
