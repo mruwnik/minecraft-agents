@@ -142,11 +142,15 @@
   p)
 
 (defn ^:async pit-round
-  "The retreat over a plain with a skeleton beside, the body having seen only the surface; {:p primitives :kinds event kinds}."
+  "The retreat over a plain with a skeleton beside, the body having seen only the surface; {:p primitives :kinds event
+  kinds :stood the block names of every cell the body's feet were in :feet-y where it ends}."
   [world args]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         raw (tu/fake-on-floor (assoc world :entities [{:id 9 :name "skeleton" :kind "hostile" :pos {:x 1 :y 64 :z 1} :health 20}]))
+        stood (atom #{})
+        _ (add-watch (fake/state raw) ::stood
+                     (fn [_ _ _ w] (swap! stood conj (fake/block-name w (mapv js/Math.floor (fake/body-pos w))))))
         p (perception/wrap raw (perception/create (fake-raw/create raw) {:now (fn [] @clock)}))
         now (tu/act-clock clock p 1000)
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
@@ -158,53 +162,91 @@
       (swap! (fake/state raw) assoc :entities [])
       (swap! clock + 300000)
       (await r))
-    {:p p :kinds (set (map :kind @seen))}))
+    {:p p :kinds (set (map :kind @seen)) :stood @stood :feet-y (js/Math.floor (second (:pos (fake/self raw))))}))
 
 (defn block-at [p x y z] (.-name (.blockAt p #js {:x x :y y :z z})))
 
-(deftest a-3-deep-pit-reports-lava-its-first-dig-lays-open-below
+(def deep-cells
+  "Every cell a 3-deep pit from (-1 64 -1) may dig or drop onto: its own column and the side column (0 _ -1)."
+  (for [x [-1 0] y [62 61 60]] [x y -1]))
+
+(deftest a-pit-never-drops-the-body-into-lava-under-a-dug-cell
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [r (await (pit-round (plain-world {(key-of -1 62 -1) "lava"} false) {}))]
-          (is (= [[-1 63 -1]] (calls (:p r) "dig")) "one cell dug, the lava showed")
-          (is ((:kinds r) :shelter_seal_failed) "the body sank into the lava: the failed seal is said"))))))
+        (doseq [[x y z] (remove #{[0 62 -1] [-1 60 -1]} deep-cells)]
+          (let [r (await (pit-round (plain-world {(key-of x y z) "lava"} false) {}))]
+            (is (not ((:stood r) "lava")) (str "lava at " [x y z] ": the body never stands in it"))
+            (is (not ((:kinds r) :shelter_seal_failed)) (str "lava at " [x y z] ": sealed while the body stood above it"))
+            (is (not= "lava" (block-at (:p r) x y z)) (str "lava at " [x y z] ": filled before the drop"))
+            (is ((:kinds r) :retreat_sealed) (str "lava at " [x y z] ": hidden in the pit"))))))))
 
-(deftest a-3-deep-pit-leaves-lava-alone-when-asked
+(deftest lava-no-dig-lays-open-is-left-and-the-body-hides
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [r (await (pit-round (plain-world {(key-of -1 62 -1) "lava"} false) {:on-lava :stop}))]
-          (is (= [[-1 63 -1]] (calls (:p r) "dig")) "no second cell is dug")
-          (is (= "lava" (block-at (:p r) -1 62 -1)) "the lava is left")
-          (is (not ((:kinds r) :shelter_seal_failed)) "no seal tried"))))))
+        (let [r (await (pit-round (plain-world {(key-of -1 60 -1) "lava"} false) {}))]
+          (is (not ((:stood r) "lava")) "the body never stands in it")
+          (is (= "lava" (block-at (:p r) -1 60 -1)) "under the start column's last floor, never opened")
+          (is ((:kinds r) :retreat_sealed) "hidden in the pit"))))))
 
-(deftest a-3-deep-pit-stops-at-water-its-first-dig-shows
+(deftest lava-under-the-first-dug-cell-with-no-block-to-fill-it-stops-the-pit-before-the-drop
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [r (await (pit-round (plain-world {(key-of -1 62 -1) "water"} false) {}))]
-          (is (= [[-1 63 -1]] (calls (:p r) "dig")) "dug once, the water showed"))))))
+        (let [r (await (pit-round (plain-world {(key-of 0 62 -1) "lava"} false) {}))]
+          (is (not ((:stood r) "lava")) "the body never stands in it")
+          (is ((:kinds r) :shelter_seal_failed) "nothing carried and the first drop not taken yet: the failed seal is said")
+          (is (= "lava" (block-at (:p r) 0 62 -1)) "the lava is left")
+          (is (not-any? #{[0 62 -1] [-1 62 -1]} (calls (:p r) "dig")) "the pit goes no deeper"))))))
 
-(deftest a-3-deep-pit-stops-at-a-seen-open-side-wall
+(deftest a-2-deep-pit-never-drops-the-body-into-lava
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [cell [[0 62 0] [1 62 0] [0 61 0] [1 61 0]]]
+          (let [r (await (pit-round (plain-world {(apply key-of cell) "lava"} true) {}))]
+            (is (not ((:stood r) "lava")) (str "lava at " cell ": the body never stands in it"))
+            (is (not ((:kinds r) :shelter_seal_failed)) (str "lava at " cell ": sealed while the body stood above it"))))))))
+
+(deftest a-pit-leaves-lava-alone-when-asked-and-never-enters-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[x y z] deep-cells]
+          (let [r (await (pit-round (plain-world {(key-of x y z) "lava"} false) {:on-lava :stop}))]
+            (is (not ((:stood r) "lava")) (str "lava at " [x y z] ": the body never stands in it"))
+            (is (= "lava" (block-at (:p r) x y z)) "the lava is left")
+            (is (not ((:kinds r) :shelter_seal_failed)) "no seal tried")))))))
+
+(deftest a-pit-stops-at-water-before-the-body-drops-into-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[x y z] deep-cells]
+          (let [r (await (pit-round (plain-world {(key-of x y z) "water"} false) {}))]
+            (is (not-any? #(<= (second %) y) (calls (:p r) "dig")) (str "water at " [x y z] ": the pit stops when it shows"))))))))
+
+(deftest a-pit-stops-at-a-seen-open-side-wall
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [r (await (pit-round (plain-world {(key-of -1 63 0) "air"} false) {}))]
-          (is (= [[-1 63 -1]] (calls (:p r) "dig")) "dug once, the open wall showed"))))))
+          (is (not-any? #(< (second %) 63) (calls (:p r) "dig")) "nothing dug below the level the open wall showed at"))))))
 
-(deftest a-2-deep-pit-reports-lava-below-the-first-cell
+(deftest a-pit-in-plain-rock-hides-the-body-three-down
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [r (await (pit-round (plain-world {(key-of 0 62 0) "lava"} true) {}))]
-          (is ((:kinds r) :shelter_seal_failed) "the body sank into the lava: the failed seal is said"))))))
+        (let [r (await (pit-round (plain-world {} false) {}))]
+          (is ((:kinds r) :retreat_sealed) "hidden in the pit")
+          (is (= 61 (:feet-y r)) "three down"))))))
 
-(deftest a-3-deep-pit-reports-lava-the-body-sinks-into
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (doseq [y [62 61 60]]
-          (let [r (await (pit-round (plain-world {(key-of -1 y -1) "lava"} false) {}))]
-            (is (= "lava" (block-at (:p r) -1 y -1)) "the body fell into it: nothing can be placed in its own cell")
-            (is ((:kinds r) :shelter_seal_failed) "the failed seal is said")))))))
+(deftest a-zigzag-pit-digs-beside-the-body-and-drops-onto-floors-it-can-see
+  (let [{:keys [steps plugs roof]} (dig-cells/pit-steps (cell 0 64 0) [1 0] 2)]
+    (is (= [[(cell 1 63 0)] [(cell 0 63 0) (cell 0 62 0)]] (mapv :dig steps)) "no dig under the feet")
+    (is (= [(cell 1 63 0) (cell 0 62 0)] (mapv :to steps)))
+    (is (= [(cell 1 62 0) (cell 0 61 0)] (mapv :floor steps)) "each floor 2 under the feet of the cell dropped from, in the other column")
+    (is (= [(cell 1 63 0)] plugs) "the side cell beside the head")
+    (is (= (cell 0 64 0) roof)))
+  (is (= [[(cell 0 63 0)] [(cell 0 62 0)]] (mapv :dig (:steps (dig-cells/pit-steps (cell 0 64 0) nil 2)))) "straight down"))

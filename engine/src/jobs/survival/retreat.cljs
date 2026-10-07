@@ -38,8 +38,9 @@
      - pillar up 3 (jobs.access.pillar, the carried block with the most, at least 3). Needs a solid floor and free cells above.
        Not against a ranged mob. Every block goes to the scaffold ledger (purpose :pillar) for jobs.access.cleanup.
      - back off: a step of up to 2 cells in any of 8 directions that gains at least a block on the hostile.
-     - dig down and plug: dig-in's pit, then a carried or dug block over the head (ledger purpose :retreat-plug).
-       The pit is 2 deep under a solid side, else 3.
+     - dig down and plug: a pit 2 deep under a solid side, else 3, then carried or dug blocks beside and over the head
+       (ledger purpose :retreat-plug). It never drops onto a floor it has not seen solid: it zigzags over an open side
+       column, digging beside the body and looking down the open column first; straight down only onto known floors.
        Every cell must be solid, harvestable with what is carried, with no fluid beside and solid under it.
      - side pocket: with no block to seal with, dig a pocket beside the body (feet and head cell, solid on every other side,
        harvestable with what is carried), step in and seal the way in with the dug blocks (the seal option again).

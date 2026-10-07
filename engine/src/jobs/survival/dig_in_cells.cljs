@@ -239,6 +239,23 @@
       (supported? p start) {:roof start :depth 2}
       (supported? p below) {:roof below :depth 3})))
 
+(defn pit-steps
+  "The drops of a pit dug depth deep from start, as {:steps [{:dig cells to open, top first; :to the feet cell dropped
+  into; :floor the cell under it}] :plugs :roof}. With no side it goes straight down (each dig is under the feet).
+  With side [dx dz] it zigzags between start's column and the side's, so every dig is beside or below-beside the body
+  and the floor of each drop shows through the open column before the drop: the body's eye sees a side column's
+  cells down to 2 under its feet. :plugs is the side column's cell beside the head at the bottom; :roof is over the head."
+  [{:keys [x y z]} side depth]
+  (let [[dx dz] side
+        col (fn [i yy] (if (odd? i) {:x (+ x dx) :y yy :z (+ z dz)} {:x x :y yy :z z}))
+        bottom (- y depth)]
+    {:steps (mapv (fn [i] {:dig (if (and side (> i 1)) [(col i (- y i -1)) (col i (- y i))] [(col (if side i 0) (- y i))])
+                           :to (col (if side i 0) (- y i))
+                           :floor (col (if side i 0) (- y i 1))})
+                  (range 1 (inc depth)))
+     :plugs (if side [(col (inc depth) (inc bottom))] [])
+     :roof (col (if side depth 0) (+ bottom 2))}))
+
 (def room-limit
   "Most cells a closed room may have (the flood from the feet stops there and the room counts as open)."
   256)
