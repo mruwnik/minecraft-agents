@@ -223,13 +223,14 @@
   bare one has its sapling carried. With the plan unworkable, never."
   [c]
   (let [field (planned c)]
-    (boolean
-     (and (not (:trouble field))
-          (let [classes (classes-of c (:trees field))]
-            (note-cells! c classes)
-            (or (:begun (ctx/mem c))
-                (seq (ripe-cells c classes))
-                (seq (plantable c (owed-cells c classes)))))))))
+    (if (:trouble field)
+      (ctx/wait c {:reason :plan-trouble :why (:trouble field)})
+      (let [classes (classes-of c (:trees field))]
+        (note-cells! c classes)
+        (or (boolean (or (:begun (ctx/mem c))
+                         (seq (ripe-cells c classes))
+                         (seq (plantable c (owed-cells c classes)))))
+            (ctx/wait c {:reason :nothing-to-do}))))))
 
 ;; ------------------------------------------------------------------ steps
 

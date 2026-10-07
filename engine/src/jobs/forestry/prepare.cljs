@@ -102,12 +102,13 @@
   unless a cell is still receding from a dam."
   [c]
   (let [field (field/planned c)]
-    (boolean
-     (and (not (:trouble field))
-          (let [states (field/assessments c field)
-                work (field/todo c states)]
-            (note-cells! c states (empty? work))
-            (or (seq work) (and (:begun (ctx/mem c)) (not (receding? states)))))))))
+    (if (:trouble field)
+      (ctx/wait c {:reason :plan-trouble :why (:trouble field)})
+      (let [states (field/assessments c field)
+            work (field/todo c states)]
+        (note-cells! c states (empty? work))
+        (or (boolean (or (seq work) (and (:begun (ctx/mem c)) (not (receding? states)))))
+            (ctx/wait c {:reason :nothing-to-do}))))))
 
 ;; ------------------------------------------------------------------ steps
 
