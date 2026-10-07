@@ -1,3 +1,4 @@
+// Why JavaScript: predicate over Mineflayer block objects (boundingBox), called per block by raw-world.mjs and the sense primitives.
 // What blocks sight, per block.
 
 // What stops the eye, shared by the entity check (prim-sense canSee) and block memory (raw-world sightTable): a full

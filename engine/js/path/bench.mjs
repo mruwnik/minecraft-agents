@@ -1,3 +1,4 @@
+// Why JavaScript: dev benchmark harness that loads the mineflayer-pathfinder baseline and reads chunk files; no engine behaviour.
 // Repeatable pathfinding benchmark: `freeze` copies the chunk files and picks the queries once, `run` plans them
 // with a chosen planner adapter (./bench-NAME.mjs; bench-baseline.mjs is the mineflayer-pathfinder one), so results do not move when the live world does.
 //   node engine/js/path/bench.mjs freeze --world claude [--out dir]

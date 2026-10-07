@@ -1,3 +1,4 @@
+// Why JavaScript: dev script comparing two bench result files from bench.mjs; no engine behaviour.
 // Compare two bench result files per query set: status counts, timing, disagreements and path lengths.
 //   node engine/js/path/bench-compare.mjs a-results.json b-results.json
 import fs from 'node:fs'

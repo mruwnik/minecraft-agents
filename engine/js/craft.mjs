@@ -1,3 +1,4 @@
+// Why JavaScript: drives Mineflayer's recipe, window and inventory calls, which are callback/promise based and mutate bot state.
 // Crafting for a body: one batch at a time, never walks. See engine/README.md "Primitives: implementation notes".
 // The traps this knows about: a server that silently drops a craft (the count never rises), a full inventory
 // (the result would be lost), items left in the 2x2 grid, and recipes that differ only in the wood they use.

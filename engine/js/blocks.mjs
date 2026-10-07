@@ -1,3 +1,4 @@
+// Why JavaScript: predicates called per block by the Mineflayer-side primitives (prim-dig, prim-move) and engine.fake.
 // Block names the game replaces when something is placed into their cell (fire, grass, snow layers), so placing
 // treats such a cell as free. Shared by primitives.mjs and engine.fake. `grass` is the pre-1.20.3 name of short_grass.
 const REPLACEABLE = new Set(['fire', 'soul_fire', 'short_grass', 'tall_grass', 'grass', 'snow',

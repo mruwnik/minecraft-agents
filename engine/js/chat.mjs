@@ -1,3 +1,4 @@
+// Why JavaScript: the Mineflayer chat and message calls and the refusal listener; the rules live in engine.chat.
 // Chat and whisper: send one line, then listen briefly for the server's refusal (a system line only this body sees;
 // an unsigned /tell looks sent otherwise).
 // The rules (cleaning, empty, slash, player name, length budget) live in engine.chat/validate, which gate! and direct!

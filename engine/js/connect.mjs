@@ -1,3 +1,4 @@
+// Why JavaScript: creates the Mineflayer client and loads its pathfinder plugin, a library boundary with no logic.
 // Makes the mineflayer bot for a body: creates the client, loads the pathfinder, resolves once spawned. engine.main
 // reads config.json and world.json itself and hands the connection settings to createPrimitives. Nothing here runs on
 // import: no connection is made until connectBot is called.

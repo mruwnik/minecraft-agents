@@ -1,3 +1,4 @@
+// Why JavaScript: adapter around mineflayer-pathfinder's own planner for the benchmark.
 // Planner adapter: mineflayer-pathfinder's own A* and Movements, configured like engine/js/connect.mjs,
 // reading blocks from a snapshot through a fake bot.
 import { createRequire } from 'node:module'
