@@ -79,7 +79,8 @@
   mine.tunnel-end {:reason (:tunnel-length :lava :water :fluid :no-floor :not-loaded :refused :dig-failed
   :walk-failed) :heading :length :at :next}. :at is the offending cell, :next the line cell it stopped before.
 
-  Torches: the strip tunnel hangs a torch (jobs.access.tunnel/torch-at: a wall torch in the head cell, else a floor
+  Torches: a dig of seen ore that takes the body 4+ blocks off the tunnel line hangs one torch there the same way
+  (none within 4 of an earlier branch torch). The strip tunnel hangs a torch (jobs.access.tunnel/torch-at: a wall torch in the head cell, else a floor
   torch) behind the body at its first step, then every :torch-interval steps, and at the cut's end when none hangs
   within 4 blocks of it; 0 hangs none. Torches are the body's own and stay: nothing takes them back. Under 2
   carried with a coal or charcoal and a stick, the torch craft is run as a child (4 torches). With no torch and
@@ -495,37 +496,72 @@
 (defn end-torch-due? [c]
   (and (pos? (or (:torch-interval (:args c)) 0)) (on-line? c) (>= (torch-gap c) end-torch-gap)))
 
+(def branch-gap "A dig this far from the tunnel line (and from any torch hung on a branch) gets a torch of its own." 4)
+
+(defn line-dist
+  "The distance from cell to the nearest cell of the tunnel dug so far."
+  [tunnel cell]
+  (apply min (map #(u/dist cell (step-cell tunnel %)) (range (inc (:steps tunnel 0))))))
+
+(defn branch-torch-due?
+  "Whether the body stands off the tunnel line by branch-gap or more with no branch torch within that of it."
+  [c]
+  (let [{:keys [tunnel branch-torches]} (ctx/mem c)
+        here (cell-of (u/self-pos c))]
+    (and (some? tunnel) (pos? (or (:torch-interval (:args c)) 0))
+         (>= (line-dist tunnel here) branch-gap)
+         (every? #(>= (u/dist here %) branch-gap) branch-torches))))
+
+(defn booked!
+  "Book the torch step done: a tunnel torch at the tunnel's length, a branch one at the body's cell."
+  [c branch]
+  (if branch
+    (ctx/update-mem! c update :branch-torches (fnil conj []) (cell-of (u/self-pos c)))
+    (ctx/update-mem! c assoc :torch-at (get-in (ctx/mem c) [:tunnel :steps]))))
+
 (defn left-out!
-  "Book the torch step done at this length, with an info event of the reason."
-  [c cell reason]
-  (ctx/update-mem! c assoc :torch-at (get-in (ctx/mem c) [:tunnel :steps]))
+  "Book the torch step done, with an info event of the reason."
+  [c cell reason branch]
+  (booked! c branch)
   (ctx/emit! c :mine.torch-left-out :info {:cell cell :reason reason
                                            :text (str "mine hung no torch" (some->> cell (str/join ",") (str " at ")) ": " (name reason))}))
 
-(defn ^:async hang-torch!
-  "Hang a torch on the cell behind the body."
+(defn branch-site
+  "{:dir :site} for a torch on a branch: the run goes away from the tunnel along the axis it is farthest off on, the
+  site is the cell behind the body."
   [c]
+  (let [{:keys [tunnel]} (ctx/mem c)
+        here (cell-of (u/self-pos c))
+        near (apply min-key #(u/dist here %) (map #(step-cell tunnel %) (range (inc (:steps tunnel 0)))))
+        dx (- (:x here) (:x near))
+        dz (- (:z here) (:z near))
+        dir (if (>= (js/Math.abs dx) (js/Math.abs dz)) [(js/Math.sign dx) 0] [0 (js/Math.sign dz)])]
+    {:dir dir :site (-> here (update :x - (first dir)) (update :z - (second dir)))}))
+
+(defn ^:async hang-torch!
+  "Hang a torch on the cell behind the body (a branch: behind it on its way off the tunnel)."
+  [c branch]
   (let [p (:primitives c)
         {:keys [tunnel]} (ctx/mem c)
         block-at (fn [[x y z]] (u/block-name p {:x x :y y :z z}))
-        site (step-cell tunnel (dec (:steps tunnel)))
-        choice (torch/torch-at (headings (:heading tunnel)) [(:x site) (:y site) (:z site)]
+        {:keys [dir site]} (if branch (branch-site c) {:dir (headings (:heading tunnel)) :site (step-cell tunnel (dec (:steps tunnel)))})
+        choice (torch/torch-at dir [(:x site) (:y site) (:z site)]
                                (from-plan/eye (u/self-pos c)) block-at)
         cell (:cell choice)
         reason (cond (:refused choice) (:refused choice)
                      (not (gate/allowed? c :mine.declined "mine" :place (zipmap [:x :y :z] cell))) :refused)]
     (if reason
-      (left-out! c cell reason)
+      (left-out! c cell reason branch)
       (let [r (await (ctx/act c :place (clj->js {:pos (zipmap [:x :y :z] cell) :item "torch"
                                                  :click (from-plan/js-click (:click choice))})))]
-        (ctx/update-mem! c assoc :torch-at (:steps tunnel))
+        (if branch (booked! c branch) (ctx/update-mem! c assoc :torch-at (:steps tunnel)))
         (when-not (or (= "placed" (.-status r)) (torch/torch-blocks (block-at cell)))
-          (left-out! c cell :place-failed))))))
+          (left-out! c cell :place-failed branch))))))
 
 (defn ^:async torch-step!
-  "One round of the tunnel's torch: craft more when under 2 are carried and coal or charcoal and a stick are, say so
-  once with none to hang, else hang one. :continue."
-  [c]
+  "One round of a torch (the tunnel's, or a branch's when branch): craft more when under 2 are carried and coal or
+  charcoal and a stick are, say so once with none to hang, else hang one. :continue."
+  [c branch]
   (let [m (ctx/mem c)
         n (torch/torches-carried (:primitives c))]
     (cond
@@ -538,16 +574,17 @@
       (zero? n)
       (do (when-not (:no-torches-said m)
             (ctx/emit! c :mine.no-torches :info {:text "mine has no torches and nothing to craft them from: the tunnel stays dark"}))
-          (ctx/update-mem! c assoc :no-torches-said true :torch-at (get-in m [:tunnel :steps]))
+          (ctx/update-mem! c assoc :no-torches-said true)
+          (booked! c branch)
           :continue)
 
-      :else (do (await (hang-torch! c)) :continue))))
+      :else (do (await (hang-torch! c branch)) :continue))))
 
 (defn ^:async end!
   "tunnel-end!, after a torch at the cut's end when one is due."
   [c stop at & [next]]
   (if (end-torch-due? c)
-    (await (torch-step! c))
+    (await (torch-step! c false))
     (tunnel-end! c stop at next)))
 
 (defn ^:async tunnel-round!
@@ -566,7 +603,7 @@
       stop (to-mend! c (tunnel-reason stop))
       (>= steps (:tunnel-length (:args c))) (end! c :tunnel-length nil)
       (not (await (step-to! c from))) (end! c :walk-failed from)
-      (torch-due? c) (await (torch-step! c))
+      (torch-due? c) (await (torch-step! c false))
       hazard (end! c (:reason hazard) (:at hazard) next)
       (not (rules/solid-floor? name-at (update next :y dec))) (end! c :no-floor next)
       :else (let [_ (await (watch/watch! c {:risky? true :before-dig (first (remove #(air (name-at %)) cut))}))
@@ -677,6 +714,7 @@
                     (cond
                       (= :blocked walked) (do (skip-failed! c pos) :continue)
                       (= :partial walked) (partial! c pos)
+                      (branch-torch-due? c) (await (torch-step! c true))
                       :else (do (ctx/update-mem! c dissoc :partials :partial-pos)
                                 (await (watch/watch! c {:before-dig pos}))
                                 (await (dig! c pos)))))

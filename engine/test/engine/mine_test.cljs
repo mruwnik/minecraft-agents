@@ -1045,6 +1045,34 @@
           (is (= 22 (:steps (:tunnel (done-event s)))) "the tunnel went on")
           (is (= :tunnel-length (:reason (done-event s)))))))))
 
+;; an open room beside the tunnel's 5th..10th cells, ore on its far wall: unseen until the tunnel reaches it
+(def side-room (merge (cells "air" (range 4 12) [64 65] (range 1 10)) {"10,64,8" "iron_ore"}))
+
+(defn side-torch-cells
+  "The cells of torches standing off the tunnel line (z 3..9, y 64..65, x 4..11)."
+  [s]
+  (vec (for [x (range 4 12) y [64 65] z (range 3 10)
+             :when (#{"torch" "wall_torch"} (block-at s x y z))]
+         [x y z])))
+
+(deftest a-dig-of-seen-ore-4-or-more-off-the-tunnel-hangs-a-torch-there
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "iron_ore" :count 1 :direction "east" :tunnel-length 12 :mend false}
+                                 (assoc (torch-world torches8) :blocks (merge long-rock side-room)) 200))]
+          (is (some #{[10 64 8]} (dug-cells s)) "the ore was dug")
+          (is (seq (side-torch-cells s)) "a torch hangs on the branch"))))))
+
+(deftest a-branch-dig-with-no-torch-leaves-the-branch-dark-and-still-digs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "iron_ore" :count 1 :direction "east" :tunnel-length 12 :mend false}
+                                 (assoc (torch-world pickaxe) :blocks (merge long-rock side-room)) 200))]
+          (is (some #{[10 64 8]} (dug-cells s)))
+          (is (empty? (side-torch-cells s))))))))
+
 ;; ------------------------------------------------------------------ honest ends, soil, fetching the pickaxe
 
 (defn ^:async as-child
