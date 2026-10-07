@@ -1,0 +1,97 @@
+(ns jobs.movement.path-preview
+  (:require [engine.ctx :as ctx]
+            [jobs.lib.near :as near]
+            [jobs.lib.walk :as walk]
+            [jobs.lib.walk.plan :as wplan]
+            [jobs.lib.walk.world :as wworld]
+            [jobs.movement.go-to :as go-to]
+            [jobs.movement.go-to.result :as end]))
+
+(def doc
+  "Dry run of a go-to: plan the route to :pos (or :place) from where the body stands, with the policy, costs, dangers and
+  tolls go-to plans with, and report it. Nothing is walked, opened or dug. One round, one plan (a search of any length, in
+  slices that yield), then :done.
+  Takes the go-to args :pos :place :range :doors :dangers :dark :tolls :drop-cost :one-way, same defaults.
+  Returns {:status :completed :found true :length :seconds :summary :steps :moves :doors :waypoints}: length is the horizontal
+  blocks, seconds the planner's cost in seconds (tolls, dark and danger costs not included), summary its words (drops, swims,
+  doors), steps the step count, moves a count of each move kind (:drop :jump :open ...), doors the cells [x y z] it
+  would open, waypoints the cells [x y z] where the route turns or changes move kind, ending at the goal's end of the plan.
+  A route that only gets nearer (a partial plan) or none is {:status :stopped :found false :reason (the planner's, as
+  go-to's :why; :abilities with :kind) :near} plus :partial {the same fields up to where it ends} when there is one.
+  A bad :pos, :tolls or :drop-cost, or a body without pathWorld sensing, is {:status :stopped :found false :reason
+  :bad-pos|:bad-tolls|:bad-drop-cost|:unsupported :text}.")
+
+(def args
+  {:pos {:doc "target position [x y z] or {:x :y :z}" :type :pos :default nil}
+   :place {:doc "name of a place in body memory (:home, :bed, ...) to preview the walk to instead of :pos" :default nil}
+   :range {:doc "how close counts as there, in cells" :default 1}
+   :doors {:doc "as go-to: :shut or :leave-open let the route open doors, gates and trapdoors; :never makes them walls" :default :shut}
+   :dangers {:doc "false: plan straight past known dangers; true: keep away from them" :default true}
+   :dark {:doc "false: plan dark cells like lit ones" :default true}
+   :tolls {:doc "cells to cross only as a last resort, [{:x :y :z :factor}]" :default nil}
+   :drop-cost {:doc "number: scales the cost of a drop; false: no drop of 2 or 3 at all" :default 1}
+   :one-way {:doc ":closed takes no drop of 2 or 3 or gap jump down that the body cannot climb back; :open (default) takes one toward unloaded land" :default :open}})
+
+(defn check [_c] true)
+
+(defn waypoints
+  "The cells [x y z] of steps where the heading or the move kind changes, and of the last step."
+  [steps]
+  (let [cell (fn [s] [(:x s) (:y s) (:z s)])
+        dir (fn [a b] [(compare (:px b) (:px a)) (compare (:pz b) (:pz a))])]
+    (if (< (count steps) 2)
+      (mapv cell steps)
+      (let [pairs (map vector steps (rest steps) (drop 2 steps))
+            turns (for [[a b nx] pairs
+                        :when (or (not= (dir a b) (dir b nx)) (not= (:move b) (:move nx)))]
+                    (cell b))]
+        (vec (concat turns [(cell (peek steps))]))))))
+
+(defn route
+  "The report of a plan's steps and planner path: length, seconds, summary, steps, moves, doors, waypoints."
+  [steps ^js path]
+  {:length (walk/path-length steps)
+   :seconds (/ (js/Math.round (* 10 (.-seconds (.-cost path)))) 10)
+   :summary (.-summary path)
+   :steps (count steps)
+   :moves (dissoc (frequencies (map :move (rest steps))) :walk)
+   :doors (vec (distinct (for [s steps o (:opens s)] [(:x o) (:y o) (:z o)])))
+   :waypoints (waypoints steps)})
+
+(defn u-dist [c to] (js/Math.round (js/Math.hypot (- (:x to) (:x (wworld/body-cell c))) (- (:z to) (:z (wworld/body-cell c))))))
+
+(defn report
+  "The job's result for a plan (jobs.lib.near/plan!)."
+  [c plan to policy]
+  (let [{:keys [r steps status]} plan
+        no (wplan/no-walk plan 0 policy)
+        here (u-dist c to)]
+    (cond
+      (and (nil? no) (= "found" status)) (assoc (route steps (.-path r)) :status :completed :found true)
+      (nil? no) {:status :stopped :found false :reason :partial :near here :partial (route steps (.-path r))}
+      :else (assoc (dissoc no :replans) :status :stopped :found false :near here))))
+
+(defn ^:async round [c]
+  (let [{:keys [doors range dangers dark tolls drop-cost one-way]} (:args c)
+        parsed (go-to/target c)
+        pos (:pos parsed)
+        tolls-problem (wworld/tolls-problem tolls)]
+    (cond
+      (:reason parsed) (end/refuse! c parsed)
+      (not (or (nil? drop-cost) (false? drop-cost) (and (number? drop-cost) (js/isFinite drop-cost) (>= drop-cost 0))))
+      (end/refuse! c {:reason :bad-drop-cost :message (str ":drop-cost must be a number >= 0 or false, got " (pr-str drop-cost))})
+      tolls-problem (end/refuse! c {:reason :bad-tolls :message tolls-problem})
+      (nil? (wworld/path-world (:primitives c)))
+      (end/refuse! c {:reason :unsupported :message "the body cannot sense the world for path planning"})
+      :else
+      (let [doors (or doors :shut)
+            policy (cond-> (wworld/body-policy c)
+                     (not= :never doors) (update :moves conj :open)
+                     (some? drop-cost) (assoc :drop-cost drop-cost))
+            plan (await (near/plan! c [(:x pos) (:y pos) (:z pos)] (or range 1) doors policy [] false
+                                    (when-not (= :closed one-way) :open) nil true
+                                    (not (false? dangers)) nil (not (false? dark)) tolls))
+            result (report c plan pos policy)]
+        (ctx/result! c result)
+        (ctx/emit! c :path-preview :info (assoc (dissoc result :partial) :text (if (:found result) (str "route: " (:summary result)) (str "no route: " (name (:reason result))))))
+        :done))))

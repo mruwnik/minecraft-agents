@@ -70,9 +70,10 @@
 
 (defn ^:async plan-from!
   "Plan from the body's cell to the goal in wide-box, within limits (the planner's options.limits, nil for none): the
-  planner's JS result, searched in slices (run-plan!) with the event loop run between them."
-  [c pw to range weight limits]
-  (await (run-plan! c (.-snapshot pw) (plan-query c to range) (plan-options pw weight limits wide-box))))
+  planner's JS result, searched in slices (run-plan!) with the event loop run between them; policy's :drop-cost as with-drops."
+  ([c pw to range weight limits] (plan-from! c pw to range weight limits nil))
+  ([c pw to range weight limits policy]
+   (await (run-plan! c (.-snapshot pw) (plan-query c to range) (with-drops (plan-options pw weight limits wide-box) policy)))))
 
 (defn path-steps
   "The executor's steps for a planner path over pw: corner free sides and hops, high corners and gap ceilings marked."
@@ -111,10 +112,10 @@
   but a search without the limits finds one, also :beyond, the executor's refusal of that path: no path within abilities,
   and the kind of step that would have made one."
   [c pw to range weight policy]
-  (let [r (await (plan-from! c pw to range weight (executor/planner-limits policy (wworld/solid-fn pw))))
+  (let [r (await (plan-from! c pw to range weight (executor/planner-limits policy (wworld/solid-fn pw)) policy))
         within (within-of pw r)]
     (if (beyond-needed? r)
-      (with-beyond within pw policy (await (plan-from! c pw to range weight nil)))
+      (with-beyond within pw policy (await (plan-from! c pw to range weight nil policy)))
       within)))
 
 (defn dry-end
