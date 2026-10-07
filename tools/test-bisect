@@ -15,7 +15,10 @@ repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 self="$repo/tools/test-bisect"
 wt_sh="${TEST_BISECT_WORKTREE_SH:-$repo/tools/integration-worktree.sh}"
 jesc() { sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g; s/\x1b/\\u001b/g' | awk 'BEGIN{ORS="\\n"}1' | sed 's/\\n$//'; }
-emit() { [ "${TEST_EVENTS:-}" = 1 ] && printf '@@test %s\n' "$1"; return 0; }
+# say: a line for the caller's stdout. A bisect step's own stdout is the run log, so it writes straight to the caller's stdout (BISECT_OUT, an fd
+# opened by the main run): no relay, nothing lost; without it (the final re-run) the line goes to the step's stdout.
+say() { if [ -n "${BISECT_OUT:-}" ]; then printf '%s\n' "$1" >&"$BISECT_OUT"; else printf '%s\n' "$1"; fi; }
+emit() { [ "${TEST_EVENTS:-}" = 1 ] && say "@@test $1"; return 0; }
 event() { emit "{\"event\":\"phase\",\"name\":\"$(printf %s "$1" | jesc)\"}"; }
 # result <name> <outcome> [message]
 result() { emit "{\"event\":\"result\",\"name\":\"$(printf %s "$1" | jesc)\",\"outcome\":\"$2\",\"message\":\"$(printf %s "${3:-}" | jesc)\"}"; }
@@ -32,8 +35,8 @@ if [ "${1:-}" = --step ]; then
   legacy=0; grep -q 'res-slot" compile --' "$wt/tools/compile" 2>/dev/null && legacy=1
   # run in the background and wait, so INT/TERM interrupts the wait at once (the trap below kills the command and stops the legacy servers)
   cmd=""
-  slotted() { if [ $legacy = 1 ]; then "$repo/tools/res-slot" server -- "$@" & else "$@" & fi; cmd=$!; wait $cmd; local r=$?; cmd=""; return $r; }
-  stop_legacy() { [ $legacy = 1 ] || return 0; for p in engine dashboard; do "$wt/tools/compile" $p --stop >/dev/null 2>&1; done; }
+  slotted() { if [ $legacy = 1 ]; then "$repo/tools/res-slot" server -- "$@" 9>&- & else "$@" 9>&- & fi; cmd=$!; wait $cmd; local r=$?; cmd=""; return $r; }
+  stop_legacy() { [ $legacy = 1 ] || return 0; for p in engine dashboard; do "$wt/tools/compile" $p --stop >/dev/null 2>&1 9>&-; done; }
   trap '[ -n "$cmd" ] && kill "$cmd" 2>/dev/null; stop_legacy; exit 130' INT TERM
   # done: report the step's result and progress, then exit with its code
   done_step() { stop_legacy; result "$rname" "$1"; emit "{\"event\":\"progress\",\"done\":$n,\"total\":$total,\"unit\":\"steps\"}"; exit "$2"; }
@@ -45,7 +48,7 @@ if [ "${1:-}" = --step ]; then
     tries=$((tries + 1)); sleep "${TEST_BISECT_RETRY_SLEEP:-20}"
   done
   why="$(tail -n 3 "$log" | tr '\n' ' ' | cut -c1-300)"
-  [ $rc -eq 0 ] || { [ $rc -eq 75 ] && echo "step $n $rev: compile busy, skipped ($why)" || echo "step $n $rev: compile failed, skipped ($why)"; done_step skipped 125; }
+  [ $rc -eq 0 ] || { [ $rc -eq 75 ] && say "step $n $rev: compile busy, skipped ($why)" || say "step $n $rev: compile failed, skipped ($why)"; done_step skipped 125; }
   event "step $n/$total $rev: testing"
   tries=0
   while true; do
@@ -55,11 +58,11 @@ if [ "${1:-}" = --step ]; then
   done
   echo "$rc" > "$BISECT_WORK/rc-$rev"
   case $rc in
-    0) echo "step $n $rev: good"; done_step passed 0;;
-    2|124) echo "step $n $rev: skipped (exit $rc: namespace missing or timeout)"; done_step skipped 125;;
-    75|137|143) echo "step $n $rev: skipped (exit $rc: busy slot or killed, not a verdict)"; done_step skipped 125;;
-    1) echo "step $n $rev: bad"; echo "$rc" > "$BISECT_WORK/bad-$rev"; done_step failed 1;;
-    *) echo "step $n $rev: bad (exit $rc)"; echo "$rc" > "$BISECT_WORK/bad-$rev"; done_step failed 1;;
+    0) say "step $n $rev: good"; done_step passed 0;;
+    2|124) say "step $n $rev: skipped (exit $rc: namespace missing or timeout)"; done_step skipped 125;;
+    75|137|143) say "step $n $rev: skipped (exit $rc: busy slot or killed, not a verdict)"; done_step skipped 125;;
+    1) say "step $n $rev: bad"; echo "$rc" > "$BISECT_WORK/bad-$rev"; done_step failed 1;;
+    *) say "step $n $rev: bad (exit $rc)"; echo "$rc" > "$BISECT_WORK/bad-$rev"; done_step failed 1;;
   esac
 fi
 
@@ -78,7 +81,7 @@ bad_sha="$(git -C "$repo" rev-parse --verify -q "$bad^{commit}")" || { echo "tes
 good_sha="$(git -C "$repo" rev-parse --verify -q "$good^{commit}")" || { echo "test-bisect: unknown rev $good" >&2; exit 2; }
 
 work="$(mktemp -d "${TMPDIR:-/tmp}/mc-bisect-XXXXXX")"
-wt="$work/wt"; child=""; tailpid=""; relay=""
+wt="$work/wt"; child=""
 cleanup() {
   # TERM the bisect's whole group (own session): each step's trap stops its legacy servers; wait for that before the worktree goes
   # (git bisect may exit before its step scripts do, so wait for the whole group, at most 120 s)
@@ -86,8 +89,6 @@ cleanup() {
     kill -TERM -- "-$child" 2>/dev/null; wait "$child" 2>/dev/null
     for _ in $(seq 1 1200); do kill -0 -- "-$child" 2>/dev/null || break; sleep 0.1; done
   fi
-  [ -n "$tailpid" ] && kill "$tailpid" 2>/dev/null
-  [ -n "$relay" ] && kill "$relay" 2>/dev/null
   [ -d "$wt" ] && "$wt_sh" --remove "$wt" >/dev/null 2>&1
   git -C "$repo" worktree prune
   rm -rf "$work"
@@ -116,16 +117,12 @@ done
 cd "$wt" || exit 2
 git bisect start "$bad_sha" "$good_sha" >/dev/null || exit 2
 echo "test-bisect: ${nss[*]} between $(git rev-parse --short "$good_sha") (good) and $(git rev-parse --short "$bad_sha") (bad)"
-# the relay reads up to an @@end line written after the bisect ends, so no output is lost to a tail --pid exit race
-BISECT_WORK="$work" setsid git bisect run "$self" --step "${nss[@]}" > "$work/run.log" 2>&1 &
+# the steps write their step and @@test lines straight to this stdout (fd 9); run.log keeps only the bisect's own output
+exec 9>&1
+BISECT_OUT=9 BISECT_WORK="$work" setsid git bisect run "$self" --step "${nss[@]}" > "$work/run.log" 2>&1 9>&9 &
 child=$!
-exec 3< <(exec tail -n +1 -f "$work/run.log")
-tailpid=$!
-sed -u -n -E '/^@@end$/q; /^(step |@@test )/p' <&3 &
-relay=$!
 wait $child; child=""
-printf '\n@@end\n' >> "$work/run.log"  # own line even when the run died mid-line
-wait $relay; kill "$tailpid" 2>/dev/null; exec 3<&-; tailpid=""; relay=""
+exec 9>&-
 
 first="$(git bisect log | sed -n 's/^# first .\{0,1\}bad.\{0,1\} commit: \[\([0-9a-f]*\)\].*/\1/p' | tail -n1)"
 if [ -z "$first" ]; then
@@ -133,7 +130,7 @@ if [ -z "$first" ]; then
 fi
 short="$(git rev-parse --short "$first")"
 if [ ! -e "$work/bad-$short" ]; then
-  git checkout -q --detach "$first" && BISECT_WORK="$work" "$self" --step "${nss[@]}" >/dev/null
+  git checkout -q --detach "$first" && BISECT_OUT= BISECT_WORK="$work" "$self" --step "${nss[@]}" >/dev/null
   [ -e "$work/bad-$short" ] || { result "INCONCLUSIVE $short" error "no failing verdict (never tested, skipped or passing)"; echo "INCONCLUSIVE: $short has no failing verdict (never tested, skipped or passing), so it is not named"; exit 1; }
 fi
 echo "FIRST BAD: $(git log -1 --format='%h %s' "$first")"

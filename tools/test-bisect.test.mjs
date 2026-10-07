@@ -63,8 +63,8 @@ test('adjacent revs: the bad rev itself is the answer (never tested during the b
 test('killed by TERM mid-run: the worktree is still removed', () => {
   const { d, shas } = fakeRepo()
   try {
-    const p = spawnSync('sh', ['-c', `"${d}/tools/test-bisect" engine.a-test --good ${shas[0]} --bad ${shas[5]} & p=$!; sleep 3; kill -TERM $p; wait $p; echo rc=$?`], {
-      cwd: d, encoding: 'utf8', env: { ...process.env, BISECT_SLOW: '1', TEST_BISECT_WORKTREE_SH: join(d, 'tools/wt.sh'), WT_LOG: join(d, 'wt.log'), TMPDIR: d }, timeout: 60000 })
+    const p = spawnSync('sh', ['-c', `"${d}/tools/test-bisect" engine.a-test --good ${shas[0]} --bad ${shas[5]} & p=$!; until [ -s "${d}/compile.log" ]; do sleep 0.1; done; kill -TERM $p; wait $p; echo rc=$?`], {
+      cwd: d, encoding: 'utf8', env: { ...process.env, BISECT_SLOW: '1', COMPILE_LOG: join(d, 'compile.log'), TEST_BISECT_WORKTREE_SH: join(d, 'tools/wt.sh'), WT_LOG: join(d, 'wt.log'), TMPDIR: d }, timeout: 60000 })
     assert.match(p.stdout, /rc=130/)
     assert.equal(sh(d, 'git', 'worktree', 'list').split('\n').length, 1)
   } finally { rmSync(d, { recursive: true, force: true }) }
@@ -80,19 +80,10 @@ test('a run killed mid-line (no trailing newline in the log) still ends, with no
   } finally { rmSync(d, { recursive: true, force: true }) }
 })
 
-test('INT/TERM mid-run leaves no tail -f process on the run log', () => {
-  const { d, shas } = fakeRepo()
-  try {
-    const p = spawnSync('sh', ['-c', `"${d}/tools/test-bisect" engine.a-test --good ${shas[0]} --bad ${shas[5]} & p=$!; sleep 3; kill -TERM $p; wait $p; echo rc=$?; sleep 1; ps -eo args | grep -F "tail -n +1 -f ${d}" | grep -v grep; echo end`], {
-      cwd: d, encoding: 'utf8', env: { ...process.env, BISECT_SLOW: '1', TEST_BISECT_WORKTREE_SH: join(d, 'tools/wt.sh'), WT_LOG: join(d, 'wt.log'), TMPDIR: d }, timeout: 60000 })
-    assert.match(p.stdout, /rc=130\nend\n$/)
-  } finally { rmSync(d, { recursive: true, force: true }) }
-})
-
 test('a legacy step killed by TERM mid-compile still stops the legacy shadow servers', () => {
   const { d, shas } = fakeRepo({ legacyUpTo: 5 })
   try {
-    const p = spawnSync('sh', ['-c', `"${d}/tools/test-bisect" engine.a-test --good ${shas[0]} --bad ${shas[5]} & p=$!; sleep 3; kill -TERM $p; wait $p; echo rc=$?`], {
+    const p = spawnSync('sh', ['-c', `"${d}/tools/test-bisect" engine.a-test --good ${shas[0]} --bad ${shas[5]} & p=$!; until [ -s "${d}/compile.log" ]; do sleep 0.1; done; kill -TERM $p; wait $p; echo rc=$?`], {
       cwd: d, encoding: 'utf8', env: { ...process.env, BISECT_SLOW: '1', COMPILE_LOG: join(d, 'compile.log'), TEST_BISECT_WORKTREE_SH: join(d, 'tools/wt.sh'), WT_LOG: join(d, 'wt.log'), TMPDIR: d }, timeout: 60000 })
     assert.match(p.stdout, /rc=130/)
     const calls = readFileSync(join(d, 'compile.log'), 'utf8')
