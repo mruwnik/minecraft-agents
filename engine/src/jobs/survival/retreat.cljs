@@ -3,7 +3,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
-            [jobs.lib.reach :as reach]
+            [jobs.lib.danger :as danger-q]
             [jobs.lib.shelter :as sh]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
@@ -140,7 +140,7 @@
           (not-any? combat/creeper? hostiles)
           (<= (cost/fight-damage {:weapon (combat/best-weapon p weapons)
                                   :equipment (cost/equipment-of (.-equipment self))
-                                  :mobs (map (fn [e] {:name (.-name e) :distance (reach/mob-distance p e) :hits 0}) hostiles)})
+                                  :mobs (map (fn [e] {:name (.-name e) :distance (danger-q/mob-distance p e) :hits 0}) hostiles)})
               (- (.-health self) reserve))))))
 
 (defn back-off-target
@@ -168,7 +168,7 @@
 (defn ^:async back-off!
   "Step back from threat (back-off-target): :again, nil when there is no such cell or the walk is blocked."
   [c threat]
-  (when-let [target (back-off-target (block-at-fn (:primitives c)) (u/self-pos c) (reach/mob-pos (:primitives c) threat)
+  (when-let [target (back-off-target (block-at-fn (:primitives c)) (u/self-pos c) (danger-q/mob-pos (:primitives c) threat)
                                      (keep (comp :pos :data) (ctx/entries c :hazard)))]
     (if-not (await (step! c :back-off target 0))
       (do (flight/tried! c :back-off) nil)
@@ -214,7 +214,7 @@
   nothing is left to eat or a bite fails."
   [c threat]
   (when (and (not (:ate (ctx/mem c)))
-             (>= (reach/mob-distance (:primitives c) threat) (:eat-gap (:args c))))
+             (>= (danger-q/mob-distance (:primitives c) threat) (:eat-gap (:args c))))
     (let [r (await (ctx/call-child c :eat 'jobs.survival.eat {:until 20 :max-bites 1}))]
       (when (or (= :declined r) (:reason (ctx/child-result c :eat)))
         (ctx/update-mem! c assoc :ate true)))))
@@ -281,7 +281,7 @@
         p (:primitives c)
         threats (flight/look! c)
         threat (first threats)
-        door (when threat (door-to-shut c (reach/mob-pos p threat)))
+        door (when threat (door-to-shut c (danger-q/mob-pos p threat)))
         stuck (fn ^:async stuck [why]
                 (if (empty? (near-hostiles c)) (await (wait-far! c)) (await (cornered! c why))))]
     (cond
@@ -293,7 +293,7 @@
       :else
       (let [_ (await (eat-on-the-run! c threat))
             from (u/self-pos c)
-            target (walk/choose-target (block-at-fn p) from (mapv #(reach/mob-pos p %) threats) (home-pos c)
+            target (walk/choose-target (block-at-fn p) from (mapv #(danger-q/mob-pos p %) threats) (home-pos c)
                                   (keep (comp :pos :data) (ctx/entries c :hazard)) step)]
         (if (nil? target)
           (await (stuck "no open way away from the hostile"))

@@ -5,6 +5,7 @@
             [jobs.lib.fetch :as fetch]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
+            [jobs.lib.danger :as danger-q]
             [jobs.lib.reach :as reach]
             [jobs.lib.result :as r]
             [jobs.lib.shelter :as sh]
@@ -18,7 +19,7 @@
   line of fire through. The body stays where it is and places blocks in the open cells near it, seen ones only, that cross the
   arrows' line (jobs.lib.reach/line-of-fire?: from the mob's eye to the body's eye and its middle), the cell nearest
   the body first, one that ends the line alone before one that blocks half of it. A mob that was only heard is
-  taken at the rough spot its direction and band give (jobs.lib.reach/mob-pos). A door, gate or trapdoor standing
+  taken at the rough spot its direction and band give (jobs.lib.danger/mob-pos). A door, gate or trapdoor standing
   open in the way is shut, not walled over (jobs.survival.dig-in-cells/place-all!).
   Declines (waiting) with :no-ranged-danger when no ranged mob within :radius has a line of fire.
   With none of :blocks carried it fetches one (:fetch, default true; jobs.lib.fetch, jobs.items.obtain) before it stops :no-blocks.
@@ -46,7 +47,7 @@
 (defn ranged-dangers
   "The ranged mobs within radius with a line of fire to the body, nearest first."
   [c]
-  (filterv combat/ranged? (reach/dangers (:primitives c) (:radius (:args c)) {:ranged-radius (:radius (:args c))} {})))
+  (filterv combat/ranged? (danger-q/dangers (:primitives c) (:radius (:args c)) {:ranged-radius (:radius (:args c))} {})))
 
 (defn clear-rays
   "How many of the two arrow rays from the mob at mob-pos to the body at body-pos cross no :solid cell of kind-at."
@@ -112,7 +113,7 @@
             seen-solid? #(let [b (look/seen-block p %)] (and b (not (:unknown b)) (solid/solid? (:name b))))
             allowed? #(and (not (contains? skip %)) (supported? seen-solid? %))
             permitted? #(not (access/trespass-refusal in :place %))
-            mob (reach/mob-pos p (first dangers))
+            mob (danger-q/mob-pos p (first dangers))
             body (u/pos-of (.-pos (.self p)))
             cells (candidates (sh/feet p) within)
             cell (plug-cell kind-at cells mob body #(and (allowed? %) (permitted? %)))]

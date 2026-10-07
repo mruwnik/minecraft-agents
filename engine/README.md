@@ -113,12 +113,12 @@ Notes:
   unloaded cell never blocks). Raw entity lists go through `js/live-entities.mjs` (drops bare, never-spawned entities, picked-up drops and mobs that died).
 - Blocks carry `age` for crops (wheat/carrots/potatoes ripe at 7, beetroots 3, sweet berries from 2) and, with
   `properties`, every block state (integers as numbers, booleans and enum names as they are).
-- **Hostile trigger rule.** `:hostile-near` holds only for a real danger within its radius (`jobs.lib.reach/danger?`): a
+- **Hostile trigger rule.** `:hostile-near` holds only for a real danger within its radius (`jobs.lib.danger/danger?`): a
   melee mob the body knows of that has a walkable way to the body, or a ranged mob (skeleton and the like) with a line of
   fire (in a tunnel: solid overhead and both sides along an axis, it must be seen, not only heard). A mob walled in or fenced in (fences, walls and shut gates are 1.5 high, never stepped onto), across a deep trench, or with the body sealed in is no danger. "Knows of" comes from perception's
   mob memory (`engine.perception`): heard within 16 blocks (not a silent creeper), or seen (clear line, within 48, in the
   view cone or heard, and lit; in the dark only within 4). A creeper with a lit fuse hisses (`fusing`) and is heard. A heard
-  mob is judged at its rough spot (direction, band: near 4, far 16, derived from `obs/near-band`; `reach/mob-pos`, `mob-distance`), never its exact place. `retreat` and `respond-to-hostile` use the
+  mob is judged at its rough spot (direction, band: near 4, far 16, derived from `obs/near-band`; `danger/mob-pos`, `mob-distance`), never its exact place. `retreat` and `respond-to-hostile` use the
   same danger rules.
   A hostile that cannot hurt the body firing the response is a trigger bug, not a job bug.
 
@@ -644,7 +644,7 @@ Helpers shared by jobs (not jobs): `jobs.lib.watch` (`watch/watch!` between acts
 was known recently, the body turns to look behind it so a creeper from behind is noticed (a heard mob gives only a direction and band); used by mine, fell-tree,
 from-plan, attack, fight-back, herd), `jobs.lib.worth/item-worth`, `jobs.lib.cost` (pure cost calculators),
 `jobs.lib.escape/choose`, `jobs.lib.tools/equip-for!` (cheapest carried tool that harvests the block; reflex digs use
-the fastest), `jobs.lib.declined`, `jobs.lib.reach` (danger checks), `jobs.lib.tidy`, `jobs.lib.step-off` (a go-to hop to the nearest standable non-hazard cell (no campfire, no foreign zone via zone-ok) off a cell the body stands in).
+the fastest), `jobs.lib.declined`, `jobs.lib.danger` (danger checks), `jobs.lib.reach` (walk and arrow searches), `jobs.lib.reach.proofs`, `jobs.lib.tidy`, `jobs.lib.step-off` (a go-to hop to the nearest standable non-hazard cell (no campfire, no foreign zone via zone-ok) off a cell the body stands in).
 
 ## Path planner
 

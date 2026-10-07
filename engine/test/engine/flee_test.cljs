@@ -14,7 +14,7 @@
             [engine.triggers :as triggers]
             [jobs.lib.result :as r]
             [jobs.lib.cost :as cost]
-            [jobs.lib.reach :as reach]
+            [jobs.lib.danger :as danger-q]
             [jobs.lib.threats :as threats]
             [jobs.survival.retreat :as retreat]
             [jobs.survival.retreat-flight :as retreat-flight]
@@ -179,7 +179,7 @@
 
 (deftest the-step-gap-is-the-nearest-hostile-however-they-are-ordered
   (let [p (tu/fake-on-floor {:floor big-floor :entities [(zombie 1 20 {}) (zombie 2 6 {})]})
-        hostiles (vec (reach/known-hostiles p 30 {:ranged-radius 30}))]
+        hostiles (vec (danger-q/known-hostiles p 30 {:ranged-radius 30}))]
     (is (= 2 (count hostiles)))
     (is (= 6 (retreat-flight/nearest-gap p hostiles)))
     (is (= 6 (retreat-flight/nearest-gap p (vec (reverse hostiles)))))
@@ -208,7 +208,7 @@
   [out]
   {:check (constantly true)
    :round (fn ^:async backer-round [c]
-            (let [threat (first (reach/known-hostiles (:primitives c) 30 {:ranged-radius 30}))
+            (let [threat (first (danger-q/known-hostiles (:primitives c) 30 {:ranged-radius 30}))
                   r (await (retreat/back-off! c threat))]
               (reset! out {:r r :tried (retreat-flight/tried? c :back-off)})
               :done))})

@@ -2,6 +2,7 @@
   "The state of one flight (jobs.survival.retreat): the tried options and sweeps, who still chases, and the flight's end."
   (:require [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
+            [jobs.lib.danger :as danger-q]
             [jobs.lib.reach :as reach]
             [jobs.lib.result :as r]
             [jobs.lib.threats :as threats]
@@ -21,7 +22,7 @@
 (defn near-known
   "The hostiles p can be said to know within radius (ranged ones within ranged-radius), the dead skipped."
   [p dead radius ranged-radius]
-  (remove #(contains? dead (.-id %)) (reach/known-hostiles p radius {:ranged-radius ranged-radius})))
+  (remove #(contains? dead (.-id %)) (danger-q/known-hostiles p radius {:ranged-radius ranged-radius})))
 
 (defn count-sweep
   "mem with one more sweep of every option failed."
@@ -50,7 +51,7 @@
   "Blocks from the body to the nearest of hostiles, nil with none."
   [p hostiles]
   (when (seq hostiles)
-    (apply min (map #(reach/mob-distance p %) hostiles))))
+    (apply min (map #(danger-q/mob-distance p %) hostiles))))
 
 (defn no-gain?
   "Whether the flight went n steps without a gain."
@@ -76,14 +77,14 @@
   "What stopped-chasing needs of hostile e (a JS entity; visible: a clear line from the eye, whichever way the body
   faces). A way: a walkable way to the body, or for a ranged mob a line of fire (a shut door takes both)."
   [p e]
-  {:mob (.-name e) :distance (reach/mob-distance p e) :in-line? (true? (.-visible e))
-   :way? (or (reach/walkable-way? p (reach/mob-pos p e) (u/pos-of (.-pos (.self p))))
-             (and (combat/ranged? e) (reach/danger? p e {:sight? false})))})
+  {:mob (.-name e) :distance (danger-q/mob-distance p e) :in-line? (true? (.-visible e))
+   :way? (or (reach/walkable-way? p (danger-q/mob-pos p e) (u/pos-of (.-pos (.self p))))
+             (and (combat/ranged? e) (danger-q/danger? p e {:sight? false})))})
 
 (defn known-chasers
   "The hostiles the body knows of (seen or heard, or remembered where last sensed) within the longest follow range."
   [p]
-  (reach/known-hostiles p threats/max-follow-range {}))
+  (danger-q/known-hostiles p threats/max-follow-range {}))
 
 (def resume-gap-ms "A flight cut for longer than this starts its clocks afresh when it resumes." 5000)
 
@@ -112,7 +113,7 @@
         dead (set (dead-ids c))
         live (remove #(dead (.-id %)) (known-chasers p))
         listed (into {} (map (juxt #(.-id %) identity)) live)
-        joining (remove #(dead (.-id %)) (reach/dangers p radius {:ranged-radius ranged-radius} {:sight? false}))
+        joining (remove #(dead (.-id %)) (danger-q/dangers p radius {:ranged-radius ranged-radius} {:sight? false}))
         chasers (merge (:chasers (ctx/mem c)) (into {} (map (juxt #(.-id %) #(chaser-entry p % now))) joining))
         judged (for [[id ch] chasers
                      :let [e (listed id)
@@ -124,7 +125,7 @@
     (ctx/update-mem! c #(-> %
                             (assoc :chasers (into {} (map (juxt :id :ch)) on))
                             (update :fled (fnil into []) (map (fn [{:keys [ch why]}] (assoc ch :ended why))) off)))
-    (sort-by #(reach/mob-distance p %) (map :e on))))
+    (sort-by #(danger-q/mob-distance p %) (map :e on))))
 
 (defn end-flight!
   "Write a :threat entry per mob fled (jobs.lib.threats; one per mob, its last way out) and end the flight: done with

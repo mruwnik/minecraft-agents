@@ -9,7 +9,7 @@
                                             wearing? seconds-since distance-to blocks-near unknown]]
             [engine.memory :as mem]
             [jobs.lib.util :as u]
-            [jobs.lib.reach :as reach]
+            [jobs.lib.danger :as danger-q]
             [jobs.lib.shelter :as sh]
             [triggers.survival.burning :as burning]
             [triggers.survival.suffocating :as suffocating]
@@ -45,7 +45,7 @@
              :read (online (fn [_ s] (boolean-or-unknown (.-isDay s))))}
    'hostile-near {:args [:number] :type :boolean :cost :cheap
                   :doc "a real danger (as the hostile-near trigger: a mob that can reach the body, or a ranged one with a line of fire) is within that many blocks"
-                  :read (online (fn [p _ radius] (reach/danger-near? p radius radius)))}
+                  :read (online (fn [p _ radius] (danger-q/danger-near? p radius radius)))}
    'in-water {:args [] :type :boolean :cost :cheap :doc "the body is in water"
               :read (online (fn [_ s] (boolean-or-unknown (.-inWater s))))}
    'burning {:args [] :type :boolean :cost :cheap

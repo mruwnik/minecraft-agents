@@ -3,7 +3,7 @@
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
             [jobs.lib.pace :as pace]
-            [jobs.lib.reach :as reach]
+            [jobs.lib.danger :as danger-q]
             [jobs.lib.result :as r]
             [jobs.lib.shelter :as sh]
             [jobs.lib.threats :as threats]
@@ -40,13 +40,13 @@
 (def hostile-policy {:cap 50 :ttl (* 60 60 1000)})
 
 (defn near
-  "The hostiles that count: ones the body has seen (jobs.lib.reach/known-hostiles), melee within :radius and ranged
+  "The hostiles that count: ones the body has seen (jobs.lib.danger/known-hostiles), melee within :radius and ranged
   within :ranged-radius. One behind a wall cannot reach or shoot the body, so
   it is left alone, as is one with no walkable way to the body (jobs.lib.reach),
   as the hostile-near trigger does."
   [c]
   (let [{:keys [radius ranged-radius]} (:args c)]
-    (reach/dangers (:primitives c) radius {:ranged-radius ranged-radius} {})))
+    (danger-q/dangers (:primitives c) radius {:ranged-radius ranged-radius} {})))
 
 
 (def other {:fight :flee :flee :fight})
@@ -66,10 +66,10 @@
     (ctx/update-mem! c assoc :logged true)))
 
 (defn mob-of
-  "What fight-damage needs of hostile e: its name, distance (jobs.lib.reach/mob-distance: a heard one by its band) and
+  "What fight-damage needs of hostile e: its name, distance (jobs.lib.danger/mob-distance: a heard one by its band) and
   the hits fight-back has landed on it (struck, its :struck entry, or nil)."
   [p struck e]
-  (cond-> {:name (.-name e) :distance (reach/mob-distance p e) :hits (:hits struck 0)}
+  (cond-> {:name (.-name e) :distance (danger-q/mob-distance p e) :hits (:hits struck 0)}
     (number? (:health struck)) (assoc :health (:health struck))))
 
 (defn ^:async respond [c near]

@@ -4,6 +4,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
             [jobs.lib.pace :as pace]
+            [jobs.lib.danger :as danger-q]
             [jobs.lib.reach :as reach]
             [jobs.lib.util :as u]
             [triggers.survival.died :as died]
@@ -18,11 +19,11 @@
   Every :declined emits recover-drops.declined with a :reason (:danger with :mob and :mob-pos, :unreachable) and a text.
   It ends :declined, without acting, while a real danger is within :danger-radius, so a reflex can deal with it
   (the died trigger fires it again), and when go-to does not arrive; the despawn window ends it :abandoned.
-  A real danger is a mob that can reach the body, or a ranged one with a line of fire (jobs.lib.reach/nearest-danger).
+  A real danger is a mob that can reach the body, or a ranged one with a line of fire (jobs.lib.danger/nearest-danger).
   Decision: skips when the value of what was carried is at most the fetch cost plus :margin.
   - Value: jobs.lib.cost/item-value (with :value-overrides), plus 5 per level of experience.
   - Cost: a trip of 10, 0.3 per block of straight distance, and 10 per point of route danger (jobs.lib.cost/route-danger)
-    past the hostiles the body knows of (seen or heard, jobs.lib.reach/known-hostiles; :danger-overrides, after armour).
+    past the hostiles the body knows of (seen or heard, jobs.lib.danger/known-hostiles; :danger-overrides, after armour).
   - Infinite when lava, fire or the void took the pile, or the walk would end after the despawn.
   A fetch emits recover-drops.fetching. A skip emits recover-drops.decided. Both texts give the value, the cost and their parts.
   Fetch: walks to the death point (jobs.movement.go-to), then collects (passes, up to 3) the pile's items it can see within :collect-radius
@@ -143,7 +144,7 @@
         worth (cost/item-value inventory :overrides (overrides-arg c :value-overrides))
         route (when pos (cost/straight-route kind-at here pos))
         threat (if route
-                 (cost/route-danger (game/version-of p) kind-at route (reach/seen-hostiles p) (.-equipment (.self p)) :overrides (overrides-arg c :danger-overrides))
+                 (cost/route-danger (game/version-of p) kind-at route (danger-q/seen-hostiles p) (.-equipment (.self p)) :overrides (overrides-arg c :danger-overrides))
                  {:danger 0 :mobs []})
         fetch (cost/fetch-cost {:distance (when pos (u/dist here pos)) :danger (:danger threat) :elapsed-ms elapsed :cause cause})]
     (cond-> {:value (+ (:value worth) (* xp-per-level (or (:level experience) 0)))
@@ -248,12 +249,12 @@
 (defn threatened?
   "The nearest real danger within :danger-radius, or nil."
   [c]
-  (reach/nearest-danger (:primitives c) (:danger-radius (:args c)) {} {}))
+  (danger-q/nearest-danger (:primitives c) (:danger-radius (:args c)) {} {}))
 
 (defn danger-fields
-  "{:mob :mob-pos} of the danger m: its place when seen, else the rough spot its band gives (jobs.lib.reach/mob-pos)."
+  "{:mob :mob-pos} of the danger m: its place when seen, else the rough spot its band gives (jobs.lib.danger/mob-pos)."
   [p m]
-  {:mob (.-name m) :mob-pos (reach/mob-pos p m)})
+  {:mob (.-name m) :mob-pos (danger-q/mob-pos p m)})
 
 (defn decline-danger!
   "End :declined for the danger m: its name and place are in the event."

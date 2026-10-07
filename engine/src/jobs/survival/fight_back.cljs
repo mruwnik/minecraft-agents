@@ -1,14 +1,14 @@
 (ns jobs.survival.fight-back
   (:require [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
-            [jobs.lib.reach :as reach]
+            [jobs.lib.danger :as danger-q]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]))
 
 (def doc
   "Equip the best weapon, walk up to the nearest hostile within :range and hit it, at most one swing per :attack-gap-ms.
-  Only a hostile the body has seen is fought: one only heard is judged by its direction and band (jobs.lib.reach), never
+  Only a hostile the body has seen is fought: one only heard is judged by its direction and band (jobs.lib.danger), never
   walked to or hit; the body turns toward it and the job declines, so the retreat takes over.
   A hostile more than :leash blocks from the point the job started at is not chased (the job declines, so the retreat takes over).
   Declines when health is below :min-health.
@@ -52,7 +52,7 @@
   [c]
   (let [{:keys [range ranged-range skip]} (:args c)
         dead (into (set skip) (:killed (ctx/mem c)))
-        all (->> (reach/known-hostiles (:primitives c) range {:ranged-radius (max range ranged-range)})
+        all (->> (danger-q/known-hostiles (:primitives c) range {:ranged-radius (max range ranged-range)})
                  (remove #(contains? dead (.-id %)))
                  (remove #(and (combat/ranged? %) (not (.-visible %)))))]
     (into (filterv #(.-visible %) all) (remove #(.-visible %)) all)))
@@ -60,7 +60,7 @@
 (defn targets
   "The hostiles in range the body has seen, within the leash and not given up on, nearest first."
   [c]
-  (->> (in-range c) (filter reach/seen-only?) (filter #(in-leash? c %)) (remove #(given-up? c %))))
+  (->> (in-range c) (filter danger-q/seen-only?) (filter #(in-leash? c %)) (remove #(given-up? c %))))
 
 (defn check [c]
   (and (>= (.-health (.self (:primitives c))) (:min-health (:args c)))
@@ -127,8 +127,8 @@
     (cond
       (and last-attack (< (.-health (.self p)) min-health)) :declined
       (and last-attack (< (.-health (.self p)) (:health0 (ctx/mem c)))) :continue
-      (nil? target) (if-let [heard (first (remove reach/seen-only? (in-range c)))]
-                      (do (await (ctx/act c :look (let [{:keys [x y z]} (reach/mob-pos p heard)] #js {:pos #js {:x x :y (+ 1 y) :z z}})))
+      (nil? target) (if-let [heard (first (remove danger-q/seen-only? (in-range c)))]
+                      (do (await (ctx/act c :look (let [{:keys [x y z]} (danger-q/mob-pos p heard)] #js {:pos #js {:x x :y (+ 1 y) :z z}})))
                           :declined)
                       (if (seq (in-range c)) :declined :done))
       (and last-attack (< (- (ctx/now c) last-attack) attack-gap-ms)) (do (await (combat/wait-gap! c last-attack attack-gap-ms)) :again)

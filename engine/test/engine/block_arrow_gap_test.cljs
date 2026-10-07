@@ -5,7 +5,7 @@
             [engine.events :as events]
             [engine.registry :as registry]
             [engine.test-util :as tu]
-            [jobs.lib.reach :as reach]
+            [jobs.lib.danger :as danger-q]
             [jobs.lib.util :as u]
             [jobs.lib.world-files :as ew]
             [jobs.survival.block-arrow-gap :as gap]))
@@ -44,7 +44,7 @@
       (await (core/tick! eng))
       (recur (inc i)))))
 
-(defn shot-at [p] (reach/dangers p 16 {:ranged-radius 16} {}))
+(defn shot-at [p] (danger-q/dangers p 16 {:ranged-radius 16} {}))
 (defn cobble [p] (some #(when (= "cobblestone" (:name %)) (:count %)) (u/inventory p)))
 (defn block-at [p [x y z]] (.-name (.blockAt p #js {:x x :y y :z z})))
 (defn failed [seen] (some #(when (= :block_arrow_gap_failed (:kind %)) %) @seen))

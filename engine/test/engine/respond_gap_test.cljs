@@ -5,7 +5,7 @@
             [engine.core :as core]
             [engine.memory :as mem]
             [engine.test-util :as tu]
-            [jobs.lib.reach :as reach]
+            [jobs.lib.danger :as danger-q]
             [jobs.survival.respond-to-hostile :as respond]))
 
 (def pickaxe {:name "iron_pickaxe" :count 1})
@@ -77,7 +77,7 @@
   "gap-wanted? for the body of a doorway cell setup with the spec, the dangers it sees."
   [spec tried?]
   (let [{:keys [p]} (g/setup [] (merge {:entities [g/pit-skeleton] :blocks (merge g/ground g/pit g/shell)} spec))
-        hs (reach/dangers p 16 {:ranged-radius 16} {})]
+        hs (danger-q/dangers p 16 {:ranged-radius 16} {})]
     (respond/gap-wanted? {:primitives p} hs tried?)))
 
 (deftest the-gap-is-wanted-only-with-cover-blocks-a-digging-tool-and-ranged-mobs-alone

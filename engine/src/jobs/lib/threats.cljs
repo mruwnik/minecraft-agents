@@ -8,7 +8,7 @@
             [engine.entity-observations :as obs]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
-            [jobs.lib.reach :as reach]
+            [jobs.lib.danger :as danger-q]
             [jobs.lib.util :as u]))
 
 (def follow-ranges
@@ -30,12 +30,12 @@
   "Where the body knows mob e of primitives p to be: {:pos} for one it has seen, else (heard only) what a sound tells,
   {:direction :band :from} (obs/rough-hearing from the body's place), never the exact place."
   [p e]
-  (if (reach/seen-only? e)
+  (if (danger-q/seen-only? e)
     {:pos (u/pos-of (.-pos e))}
     (let [from (u/pos-of (.-pos (.self p)))]
       (assoc (obs/rough-hearing from (u/pos-of (.-pos e))) :from from))))
 
-(def rough-pos reach/rough-pos)
+(def rough-pos danger-q/rough-pos)
 
 (defn mob-key [e] (or (.-uuid e) (.-id e)))
 
@@ -61,7 +61,7 @@
 
 ;; ---------------------------------------------------------------- dangers for the planner
 
-(def sensed-radius "Blocks out to which a sensed real danger (jobs.lib.reach/dangers) is costed." 24)
+(def sensed-radius "Blocks out to which a sensed real danger (jobs.lib.danger/dangers) is costed." 24)
 
 (defn body-of [p]
   (let [self (.self p)]
@@ -69,11 +69,11 @@
      :weapon (combat/best-weapon p combat/default-weapons) :pos (u/pos-of (.-pos self))}))
 
 (defn sensed-mobs
-  "The real dangers primitives p senses within sensed-radius (jobs.lib.reach/dangers: seen or heard, with a way to the body
+  "The real dangers primitives p senses within sensed-radius (jobs.lib.danger/dangers: seen or heard, with a way to the body
   or a line of fire; never x-ray), as [{:key :name :pos}]."
   [p]
-  (mapv (fn [e] {:key (mob-key e) :name (.-name e) :pos (reach/mob-pos p e)})
-        (reach/dangers p sensed-radius {:ranged-radius sensed-radius})))
+  (mapv (fn [e] {:key (mob-key e) :name (.-name e) :pos (danger-q/mob-pos p e)})
+        (danger-q/dangers p sensed-radius {:ranged-radius sensed-radius})))
 
 (defn known-dangers
   "danger-list of the body of primitives p: sensed-mobs and the remembered :threat entries' data."

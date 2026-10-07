@@ -6,7 +6,9 @@
   (:require [cljs.test :refer [deftest is]]
             [engine.fake :as fake]
             [engine.fake.raw-world :as fake-raw]
+            [jobs.lib.danger :as danger-q]
             [jobs.lib.reach :as reach]
+            [jobs.lib.reach.proofs :as proofs]
             [engine.perception :as perception]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
@@ -32,8 +34,8 @@
 (defn remove-mob! [p id] (swap! (fake/state p) update :entities (fn [es] (filterv #(not= id (:id %)) es))))
 (defn later! [clock ms] (swap! clock + ms))
 
-(defn danger-ids [p] (mapv #(.-id %) (reach/dangers p 8 {:ranged-radius 16} {})))
-(defn nearest-id [p] (some-> (reach/nearest-danger p 8 {:ranged-radius 16} {}) .-id))
+(defn danger-ids [p] (mapv #(.-id %) (danger-q/dangers p 8 {:ranged-radius 16} {})))
+(defn nearest-id [p] (some-> (danger-q/nearest-danger p 8 {:ranged-radius 16} {}) .-id))
 (defn hostile-near? [p] ((:when (:hostile-near triggers/all)) p {} (:args (:hostile-near triggers/all))))
 
 (def hidden-spot
@@ -52,7 +54,7 @@
     (is (= [] (danger-ids p)))
     (is (nil? (nearest-id p)))
     (is (false? (hostile-near? p)) "the trigger does not fire")
-    (is (nil? (reach/nearest-danger p 8 {} {:sight? false})) "unknown even without the sight test")))
+    (is (nil? (danger-q/nearest-danger p 8 {} {:sight? false})) "unknown even without the sight test")))
 
 (deftest the-raw-primitives-still-count-every-mob
   (let [{:keys [raw]} (rig {:entities [(mob 1 "creeper" 0 -2)]})]
@@ -111,7 +113,7 @@
 
 (deftest recover-drops-weighs-only-known-hostiles
   (let [{:keys [p]} (rig {:entities [(mob 1 "creeper" 0 -2) (mob 2 "zombie" 0 5)]})]
-    (is (= [2] (mapv #(.-id %) (reach/seen-hostiles p))))))
+    (is (= [2] (mapv #(.-id %) (danger-q/seen-hostiles p))))))
 
 ;; ---- blocks from state ids
 
@@ -132,8 +134,8 @@
   (let [mobs [(mob 1 "zombie" 6 0) (mob 2 "zombie" 0 6)]
         [open-p open-calls] (with-raw-world (tu/fake {:self {:pos body} :floor [-20 -20 20 20] :entities mobs}))
         [sealed-p sealed-calls] (with-raw-world (tu/fake {:self {:pos body} :floor [-20 -20 20 20] :blocks sealed :entities mobs}))]
-    (is (= [1 2] (sort (map #(.-id %) (reach/dangers open-p 8 {} {:sight? false})))))
-    (is (= [] (reach/dangers sealed-p 8 {} {:sight? false})))
+    (is (= [1 2] (sort (map #(.-id %) (danger-q/dangers open-p 8 {} {:sight? false})))))
+    (is (= [] (danger-q/dangers sealed-p 8 {} {:sight? false})))
     (is (false? (reach/enclosed? open-p)))
     (is (= 0 @open-calls @sealed-calls) "no blockAt")))
 
@@ -150,20 +152,20 @@
                     :entities [(assoc (mob 1 "zombie" 6 0) :visible true) rim]})]
     (is (false? (reach/walkable-way? p {:x 6.5 :y 64 :z 0.5} body)) "the pit is closed")
     (is (true? (reach/walkable-way? p {:x 6.5 :y 67 :z 1.5} body)) "the rim walks down")
-    (is (= [2] (mapv #(.-id %) (reach/dangers p 8 {} {:sight? false})))
+    (is (= [2] (mapv #(.-id %) (danger-q/dangers p 8 {} {:sight? false})))
         "the pit's cells, proved dead by the first mob, do not hide the second mob's way")))
 
 (deftest the-mobs-of-one-sealed-pocket-share-one-proof
   (let [pocket (merge (tu/box -6 64 4 6 66 10 "stone") (tu/box -5 64 5 5 65 9 "air"))
         mobs (for [i (range 6)] (mob (inc i) "zombie" (- i 3) 7))
         p (tu/fake {:self {:pos body} :floor [-20 -20 20 20] :blocks pocket :entities mobs})
-        pr (reach/query-proofs p)
+        pr (danger-q/query-proofs p)
         kind-at (reach/lookup p)]
     (is (every? false? (map #(reach/walkable-way? p (:pos %) body) mobs)) "each is walled in")
-    (is (false? (reach/proved-way? kind-at pr [-3 64 7] [0 64 0])))
+    (is (false? (proofs/proved-way? kind-at pr [-3 64 7] [0 64 0])))
     (let [dead (.-size (.-dead pr))]
       (is (pos? dead))
-      (is (false? (reach/proved-way? kind-at pr [2 64 7] [0 64 0])) "settled by the proof")
+      (is (false? (proofs/proved-way? kind-at pr [2 64 7] [0 64 0])) "settled by the proof")
       (is (= dead (.-size (.-dead pr))) "no new cell searched"))))
 
 ;; ---- light (card 01b5462f): a mob in the dark is seen only close up

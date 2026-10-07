@@ -1,5 +1,5 @@
 (ns jobs.lib.cost.danger
-  "Danger of mobs the body knows (an input, e.g. jobs.lib.reach/known-hostiles; no world entity reads): route-danger, the
+  "Danger of mobs the body knows (an input, e.g. jobs.lib.danger/known-hostiles; no world entity reads): route-danger, the
   expected damage of walking a route past them (recover-drops' fetch cost), and danger-rate / danger-list, the hp a
   go-to planner costs near a known danger (its options.dangers).
 

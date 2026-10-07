@@ -9,6 +9,7 @@
             [jobs.lib.escape :as escape]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.pace :as pace]
+            [jobs.lib.danger :as danger-q]
             [jobs.lib.reach :as reach]
             [jobs.lib.shelter :as sh]
             [jobs.lib.threats :as threats]
@@ -33,7 +34,7 @@
 (defn hostile-cells
   "The cells the hostiles within radius overlap: no block goes there."
   [p radius]
-  (set (mapcat #(hitbox-cells (reach/mob-pos p %)) (reach/known-hostiles p radius {}))))
+  (set (mapcat #(hitbox-cells (danger-q/mob-pos p %)) (danger-q/known-hostiles p radius {}))))
 
 (defn occupied? [c cell] (contains? (:seal-occupied (ctx/mem c)) cell))
 
@@ -256,8 +257,8 @@
         {:keys [ranged-radius]} (:args c)
         reach-of (fn [e] (cond-> (threats/follow-range (.-name e)) (combat/ranged? e) (max ranged-radius)))
         known (flight/near-known p (set (flight/dead-ids c)) threats/max-follow-range ranged-radius)]
-    (boolean (some #(and (<= (reach/mob-distance p %) (reach-of %))
-                         (reach/walkable-way? p (reach/mob-pos p %) anchor #{} open))
+    (boolean (some #(and (<= (danger-q/mob-distance p %) (reach-of %))
+                         (reach/walkable-way? p (danger-q/mob-pos p %) anchor #{} open))
                    known))))
 
 (defn ^:async hide-hold!

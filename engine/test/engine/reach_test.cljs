@@ -3,6 +3,7 @@
   Their answers, and that one query reads each block at most once (a query over several mobs shares its reads)."
   (:require [cljs.test :refer [deftest is]]
             [jobs.access.stair :as stair]
+            [jobs.lib.danger :as danger-q]
             [jobs.lib.reach :as reach]
             [jobs.movement.go-to.result :as end]
             [engine.test-util :as tu]))
@@ -61,14 +62,14 @@
 
 (deftest dangers-and-nearest-danger-of-mobs-that-can-reach
   (let [p (tu/fake {:self {:pos body} :floor [-20 -20 20 20] :entities mobs})]
-    (is (= [1 2 3] (sort (map #(.-id %) (reach/dangers p 8 {} {:sight? false})))))
-    (is (some? (reach/nearest-danger p 8 {} {:sight? false})))
-    (is (= 2 (some-> (reach/nearest-danger p 8 {} {:sight? false :skip #{1 3}}) .-id)) "skip leaves those out")))
+    (is (= [1 2 3] (sort (map #(.-id %) (danger-q/dangers p 8 {} {:sight? false})))))
+    (is (some? (danger-q/nearest-danger p 8 {} {:sight? false})))
+    (is (= 2 (some-> (danger-q/nearest-danger p 8 {} {:sight? false :skip #{1 3}}) .-id)) "skip leaves those out")))
 
 (deftest no-danger-to-a-sealed-body
   (let [p (tu/fake {:self {:pos body} :floor [-20 -20 20 20] :blocks walls :entities mobs})]
-    (is (= [] (reach/dangers p 8 {} {:sight? false})))
-    (is (nil? (reach/nearest-danger p 8 {} {:sight? false})))))
+    (is (= [] (danger-q/dangers p 8 {} {:sight? false})))
+    (is (nil? (danger-q/nearest-danger p 8 {} {:sight? false})))))
 
 (deftest one-walk-search-reads-each-block-once
   (let [[p reads] (counting (tu/fake {:self {:pos body} :floor [-20 -20 20 20] :blocks walls}))]
@@ -77,10 +78,10 @@
 
 (deftest a-danger-query-over-several-mobs-reads-each-block-once
   (let [[p reads] (counting (tu/fake {:self {:pos body} :floor [-20 -20 20 20] :blocks walls :entities mobs}))]
-    (is (= [] (reach/dangers p 8 {} {:sight? false})))
+    (is (= [] (danger-q/dangers p 8 {} {:sight? false})))
     (is (= 1 (most-reads reads)) "the mobs' searches share the blocks they read"))
   (let [[p reads] (counting (tu/fake {:self {:pos body} :floor [-20 -20 20 20] :blocks walls :entities mobs}))]
-    (is (nil? (reach/nearest-danger p 8 {} {:sight? false})))
+    (is (nil? (danger-q/nearest-danger p 8 {} {:sight? false})))
     (is (= 1 (most-reads reads)))))
 
 (deftest enclosed-reads-each-block-once
@@ -108,15 +109,15 @@
   (let [skel {:id 9 :name "skeleton" :kind "hostile" :pos {:x 6.5 :y 64 :z 0.5}}
         p (tu/fake {:self {:pos body} :floor [-20 -20 20 20] :blocks (ring "oak_fence") :entities [(assoc (zed 1 6 0) :visible true)]})
         q (tu/fake {:self {:pos body} :floor [-20 -20 20 20] :blocks (ring "oak_fence") :entities [skel]})]
-    (is (= [] (reach/dangers p 8 {} {:sight? false})))
-    (is (= [9] (map #(.-id %) (reach/dangers q 16 {:ranged-radius 16} {:sight? false}))))))
+    (is (= [] (danger-q/dangers p 8 {} {:sight? false})))
+    (is (= [9] (map #(.-id %) (danger-q/dangers q 16 {:ranged-radius 16} {:sight? false}))))))
 
 (deftest a-mob-walks-through-plants-a-body-stands-behind
   (doseq [name ["wheat" "poppy" "sugar_cane" "kelp" "soul_torch" "oak_sapling"]]
     (let [plants (into {} (map (fn [[k _]] [k name])) walls)
           p (tu/fake {:self {:pos body} :floor [-20 -20 20 20] :blocks plants :entities [(zed 1 6 0)]})]
       (is (true? (reach/walkable-way? p {:x 6.5 :y 64 :z 0.5} body)) name)
-      (is (= [1] (map #(.-id %) (reach/dangers p 8 {} {:sight? false}))) name))))
+      (is (= [1] (map #(.-id %) (danger-q/dangers p 8 {} {:sight? false}))) name))))
 
 ;; ---------------------------------------------------------------- the cell a body on a block's edge stands on
 
@@ -187,7 +188,7 @@
 
 (defn danger-ids [blocks mob]
   (let [p (tu/fake {:self {:pos body} :floor [-20 -20 20 20] :blocks blocks :entities [mob]})]
-    (map #(.-id %) (reach/dangers p 16 {:ranged-radius 16} {}))))
+    (map #(.-id %) (danger-q/dangers p 16 {:ranged-radius 16} {}))))
 
 (def heard-skel {:id 9 :name "skeleton" :kind "hostile" :seen false :heard true :pos {:x 0.5 :y 64 :z 8.5}})
 (def seen-skel (assoc heard-skel :seen true :heard false))
