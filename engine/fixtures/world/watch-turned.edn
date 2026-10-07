@@ -2,6 +2,8 @@
 ;; and emits {:name :band :direction} (no pos or distance). Hearing is distance only (16), no line needed; the turn memory is 5 s per mob, so
 ;; one mob gives one event per 5 s. Mobs are NoAI (they never move or attack). The stone box is sealed: nothing is seen. The tunnel case plugs the tunnel so the zombie is only heard.
 ;; go-to watches on arrival (body at 20.5 20.5), so mobs sit within 16 of the arrival cell, not of the start.
+;; The two no-turn cases go to the plot middle: hearing ignores walls, so a hostile in a neighbouring plot (they run at once) within 16 of the arrival cell
+;; would turn the body; from the middle every neighbour plot is 16 or more away.
 ;; Passive mobs and mobs beyond 16 are not in the body's mob memory, so no event. Flood (no second event within 5 s)
 ;; is read from the event log timestamps by hand (the runner counts no events).
 {:defaults
@@ -30,11 +32,11 @@
    :limit-s 40}
   {:name "zombie-beyond-hearing-no-turn"
    :act [[:summon "zombie" [31.5 0 0.5] "{NoAI:1b}"]
-         [:job (jobs.movement.go-to {:pos #xyz [20 0 20] :range 0})]]
+         [:job (jobs.movement.go-to {:pos #xyz [16 0 16] :range 0})]]
    :expect [{:no-event {:kind :watch.turned} :for-s 15}]
-   :after [[:body-near [20.5 0 20.5] 1.5]]}
+   :after [[:body-near [16.5 0 16.5] 1.5]]}
   {:name "cow-heard-behind-wall-no-turn"
    :act [[:summon "cow" [5.5 0 20.5] "{NoAI:1b}"]
-         [:job (jobs.movement.go-to {:pos #xyz [20 0 20] :range 0})]]
+         [:job (jobs.movement.go-to {:pos #xyz [16 0 16] :range 0})]]
    :expect [{:no-event {:kind :watch.turned} :for-s 15}]
-   :after [[:body-near [20.5 0 20.5] 1.5]]}]}
+   :after [[:body-near [16.5 0 16.5] 1.5]]}]}
