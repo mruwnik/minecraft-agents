@@ -9,6 +9,7 @@
             [engine.test-util :as tu]
             [engine.registry :as registry]
             [jobs.lib.access.approach :as approach]
+            [jobs.lib.fetch :as fetch]
             [jobs.lib.ledger :as ledger]
             [engine.memory :as mem]))
 
@@ -115,3 +116,35 @@
               w (first (kinds s :fell-tree.declined))]
           (is (= :no-base (:reason w)))
           (is (= 1 (count (kinds s :fell-tree.declined)))))))))
+
+(def chest-at "-2,64,3")
+
+(defn chest-world [stock]
+  (assoc tall :inventory [] :blocks (assoc (:blocks tall) chest-at "chest") :containers {chest-at stock}))
+
+(defn dirt-in-chest [{:keys [p]}]
+  (some #(when (= "dirt" (:name %)) (:count %)) (get-in @(fake/state p) [:containers [-2 64 3]])))
+
+(deftest a-fetch-plan-for-a-need-asks-for-the-count
+  (let [o {:what #{:item} :how #{:chest} :depth 2}]
+    (is (= {:any-of ["dirt" "cobblestone"] :count 4} (:args (fetch/plan-for {:reason :need :any-of ["dirt" "cobblestone"] :count 4} o))))
+    (is (= {:item "dirt" :count 3} (:args (fetch/plan-for {:reason :need :item "dirt" :count 3} o))))))
+
+(deftest too-few-blocks-for-the-pillar-are-fetched-from-a-seen-chest-by-default
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (fell (chest-world [{:name "dirt" :count 20}]) {:radius 10} 300))
+              {:keys [p out]} s]
+          (is (= {:base {:x 6 :y 64 :z 0}} out))
+          (is (= (set (range 64 72)) (set (dug-ys p))) "every log dug")
+          (is (> (- 20 (dirt-in-chest s)) 1) "the chest gave the pillar's height, not one block")
+          (is (= [] (pillar-cells p)) "no pillar block left"))))))
+
+(deftest fetch-false-waits-for-the-blocks-and-leaves-the-chest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (fell (chest-world [{:name "dirt" :count 20}]) {:radius 10 :fetch false} 80))]
+          (is (= :not-done (:out s)))
+          (is (= 20 (dirt-in-chest s))))))))

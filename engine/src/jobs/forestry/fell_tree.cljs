@@ -5,6 +5,7 @@
             [jobs.access.pillar :as pillar]
             [jobs.lib.access :as access]
             [jobs.lib.access.approach :as approach]
+            [jobs.lib.fetch :as fetch]
             [jobs.lib.gate :as gate]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.look :as look]
@@ -28,7 +29,8 @@
   the stand or the pillar base for the highest logs, the body walks there (go-to), builds the pillar
   (jobs.access.pillar, every block in the scaffold ledger), digs the logs in reach top-down, then jobs.access.cleanup
   takes the pillar back before the tree counts as felled (the same cleanup runs when a round starts with this job's
-  scaffold still open). With no dirt or cobblestone carried it waits (check) with :reason :need (:any-of the two,
+  scaffold still open). With too few dirt or cobblestone carried it fetches the height in blocks (jobs.lib.fetch,
+  unless :fetch is false); else, or when the fetch failed, it waits (check) with :reason :need (:any-of the two,
   :count the height). A tree whose pillar a zone, claim or footprint refuses (warn fell-tree.declined, :reason
   :refused; other refusals warn with their :reason), or that has no ground or stand to reach it from, counts as unreachable,
   and so does one whose pillar digs no log. A cleanup that leaves the scaffold open is a failed round (tree_blocked
@@ -49,6 +51,7 @@
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :default nil}
    :spare-own-builds {:doc "a log in a plan this body made is not felled; false: it may be" :default true}
    :accept {:doc "dig hazards (jobs.lib.access.rules) taken: a set of :fluid-adjacent :falling-block :under-feet" :default #{:fluid-adjacent :falling-block :under-feet}}
+   :fetch {:doc "get the dirt or cobblestone a pillar needs (jobs.lib.fetch): true, a set of kinds or a map of limits; false waits :need" :default true}
    :pillar? {:doc "fell a log out of reach of the ground from a pillar (blocks placed, then taken back); false: such a tree is left" :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
@@ -214,14 +217,17 @@
   (ctx/update-mem! c update :pillar assoc :phase :clean :failed true)
   :continue)
 
-(defn carries-block? [c]
-  (some? (pillar/item-to-use nil (pillar/carried (:primitives c)))))
+(defn blocks-carried
+  "How many of the pillar items (dirt, cobblestone) are carried."
+  [c]
+  (let [have (pillar/carried (:primitives c))]
+    (reduce + (map #(get have % 0) pillar-items))))
 
 (defn pillar-problem
-  "The wait {:reason :need :any-of :count} while a planned pillar is not begun and no block to build it is carried."
+  "The wait {:reason :need :any-of :count} while a planned pillar is not begun and fewer blocks than its height are carried."
   [c]
   (let [{:keys [phase plan]} (:pillar (ctx/mem c))]
-    (when (and (= :walk phase) (:height plan) (not (carries-block? c)))
+    (when (and (= :walk phase) (:height plan) (< (blocks-carried c) (:height plan)))
       {:reason :need :any-of pillar-items :count (:height plan)})))
 
 (defn ^:async start-pillar!
@@ -324,7 +330,9 @@
 
       (not chosen) :continue
 
-      (:pillar (ctx/mem c)) (await (pillar-round! c (tree-logs c radius)))
+      (:pillar (ctx/mem c))
+      (or (await (fetch/fetch! c 'jobs.forestry.fell-tree pillar-problem))
+          (if (pillar-problem c) :continue (await (pillar-round! c (tree-logs c radius)))))
 
       :else
       (let [logs (tree-logs c radius)]
@@ -349,7 +357,7 @@
   (let [m (ctx/mem c)
         {:keys [radius species]} (:args c)]
     (if-let [w (pillar-problem c)]
-      (ctx/wait c w)
+      (fetch/check c 'jobs.forestry.fell-tree w)
       (or (boolean (or (:column m)
                      (seq (:unreachable m))
                      (first (candidates c radius species))
