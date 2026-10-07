@@ -217,16 +217,15 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[kid want] [[nil {:r :again :tried false}]
-                            [{:check (constantly true)
-                              :round (fn ^:async no-leg [c] (ctx/result! c {:arrived false :reason :unreachable}) :done)}
-                             {:r nil :tried true}]]]
+        (doseq [[label go-to want] [["walks" {} {:r :again :tried false}]
+                                    ["gives up" {'jobs.movement.go-to {:check (constantly true)
+                                                                       :round (fn ^:async no-leg [c] (ctx/result! c {:arrived false :reason :unreachable}) :done)}}
+                                     {:r nil :tried true}]]]
           (let [out (atom nil)
                 s (setup {:entities [(zombie 7 2 {})]})
-                s (cond-> (assoc-in s [:eng :jobs 'backer] (backer out))
-                    kid (assoc-in [:eng :jobs 'jobs.movement.go-to] kid))]
+                s (update-in (assoc-in s [:eng :jobs 'backer] (backer out)) [:eng :jobs] merge go-to)]
             (await (run-job! s 'backer {}))
-            (is (= want @out) (str "go-to " (if kid "gives up" "walks")))))))))
+            (is (= want @out) (str "go-to " label))))))))
 
 (deftest every-option-failing-in-two-sweeps-in-a-row-is-cannot-escape
   (is (not (retreat-flight/cannot-escape? (retreat-flight/count-sweep {}))))

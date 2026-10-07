@@ -821,9 +821,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[why entry fires-again?]
-                [["the default: fired again at once" {:trigger :hostile-near :args {:radius 10}} true]
-                 ["the agent's own cooldown" {:trigger :hostile-near :args {:radius 10} :persistence :cooldown :cooldown-s 30} false]]]
+        (doseq [[why entry fired]
+                [["the default: fired again at once" {:trigger :hostile-near :args {:radius 10}} 2]
+                 ["the agent's own cooldown" {:trigger :hostile-near :args {:radius 10} :persistence :cooldown :cooldown-s 30} 1]]]
           (let [{:keys [eng seen clock]} (setup {:inventory sword
                                                  :entities [(assoc (zombie 1 3 0) :health 5 :visible true)
                                                             (assoc (zombie 2 0 7) :visible true)]})]
@@ -832,7 +832,7 @@
             (is (= [:done] (mapv :outcome (reflex-ended seen))) (str why ": the near zombie killed, the one at 7 is beyond the job's 4"))
             (swap! clock + 1000)
             (await (core/tick! eng))
-            (is (= (if fires-again? 2 1) (count (reflex-fired seen))) why)))))))
+            (is (= fired (count (reflex-fired seen))) why)))))))
 
 (deftest a-hostile-reflex-cut-by-a-higher-one-fires-again-while-the-danger-stands
   (async done
