@@ -3,7 +3,8 @@
             [jobs.lib.gate :as gate]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
-            [jobs.lib.near :as near]))
+            [jobs.lib.near :as near]
+            [jobs.lib.toll-cells :as tc]))
 
 (def doc
   "Feed a composter what a farm cannot use and collect the bone meal it makes.
@@ -132,7 +133,7 @@
               (finish! c {:level level}))
 
             :else
-            (let [w (await (near/walk-near! c pos 3))]
+            (let [w (await (near/walk-near! c pos 3 {:tolls (tc/walk-tolls c (near/cell-of pos))}))]
               (case w
                 :partial :continue
                 :blocked (strike! c level)

@@ -5,6 +5,7 @@
             [jobs.lib.gate :as gate]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
+            [jobs.lib.toll-cells :as tc]
             [jobs.lib.world :as known]))
 
 (def doc
@@ -177,7 +178,7 @@
 
         :else
         (let [[target _] (nearest c cands)
-              w (await (near/walk-near! c target 3))]
+              w (await (near/walk-near! c target 3 {:tolls (tc/walk-tolls c (near/cell-of target))}))]
           (case w
             :partial :continue
             :blocked (do (bump! c target :unreachable) :continue)

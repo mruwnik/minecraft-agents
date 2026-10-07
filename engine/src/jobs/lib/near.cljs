@@ -151,18 +151,19 @@
     aims again at where the target is.
   - :dangers false: plan straight past known dangers (a walk up to the hostile it fights); by default the plan keeps
     away from them (jobs.lib.threats/planner-dangers).
+  - :tolls, cells the plan prices (jobs.lib.toll-cells/walk-tolls: planted cells and other bodies' zones).
   A partial plan never takes a step the body cannot undo (a drop of 2 or 3, a gap jump down; walk-round! :one-way nil).
   The target is something the body can see, so a missing way is not past a cliff, and an unreachable target (a cow on
   an island) must not lead the body off a ledge."
   ([c pos range] (walk-near! c pos range nil))
-  ([c pos range {:keys [doors timeout-s dangers] :or {doors :shut timeout-s walk-timeout-s dangers true}}]
+  ([c pos range {:keys [doors timeout-s dangers tolls] :or {doors :shut timeout-s walk-timeout-s dangers true}}]
    (let [cell (cell-of pos)]
      (cond
        (nil? cell) (do (ctx/emit! c :refused :warn {:reason :bad-pos :text (:message (places/parse-pos pos))})
                        :blocked)
        (u/within? (u/self-pos c) cell range) :there
        (nil? (walk/path-world (:primitives c))) (do (ctx/note-walk! c "blocked" 0) :blocked)
-       :else (case (:status (await (walk-round! c cell range {:doors doors :timeout-s timeout-s :one-way nil :dangers dangers})))
+       :else (case (:status (await (walk-round! c cell range {:doors doors :timeout-s timeout-s :one-way nil :dangers dangers :tolls tolls})))
                "arrived" :there
                "partial" :partial
                :blocked)))))

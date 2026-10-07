@@ -656,7 +656,7 @@ the recorded pins (`planner_{bench,options,goals,courses}_golden.cljs`, `js/path
 
 - `jobs.lib.walk` plans and walks one round (`plan-walk`, `walk-to!`, `follow!`). `engine.path.executor` steers a plan
   tick by tick. `jobs.lib.near` (`walk-round!` for go-to, `walk-near!` for walks to something visible) opens and
-  re-shuts doors via `jobs.lib.pass`; go-to's `:shut-also` shuts doors in or next to another owner's zone. `jobs.lib.targets/nearest!` finds the soonest-reachable of many targets in one
+  re-shuts doors via `jobs.lib.pass`; go-to's `:shut-also` shuts doors in or next to another owner's zone. The farm jobs' walks (till, plant, harvest, fertilize, compost, tidy) pass `:tolls` from `jobs.lib.toll-cells/walk-tolls`: the crops and farmland the body has seen near the walk and other owners' zone cells, crossed only when the way round is much longer. `jobs.lib.targets/nearest!` finds the soonest-reachable of many targets in one
   bounded, resumable search (used by `fell-tree` and `mine`).
 - A search is bounded per round (about 100 ms) and resumable; a search that needs more rounds walks toward where it has
   got to, or waits. A start closed in the loaded world, with the goal unloaded, ends `start-enclosed` (not `goal-unloaded`); a goal proved walled in or cut off while the start's own land is walled in too (a small forward drain, no cliff) ends `start-enclosed`. An enclosed goal is found by a small backward flood before any walking (`goal-enclosed`; a late flood that ends on a region with a cliff edge says `goal-cut-off`, an island or deck across a drop, which go-to treats alike; `options.preFlood`, default 256 cells), and go-to keeps its flood between searches toward one goal (`goalFloodMemo`).

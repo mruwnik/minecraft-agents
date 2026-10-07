@@ -6,6 +6,7 @@
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
+            [jobs.lib.toll-cells :as tc]
             [plan.shape :as shape]
             [jobs.lib.world :as known]))
 
@@ -242,7 +243,7 @@
   "Walk to within 3 of the stray; a walk that is blocked, or ends out of reach, counts a failure."
   [c {:keys [pos] :as stray}]
   (let [give-up (:give-up (:args c))
-        w (await (near/walk-near! c (pos-map pos) 3))]
+        w (await (near/walk-near! c (pos-map pos) 3 {:tolls (tc/walk-tolls c (near/cell-of pos))}))]
     (when (= :blocked w)
       (ctx/update-mem! c count-fail stray :unreachable give-up))
     (when (and (= :there w) (not (in-reach? c pos)))

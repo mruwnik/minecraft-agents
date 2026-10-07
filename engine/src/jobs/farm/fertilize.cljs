@@ -5,7 +5,8 @@
             [jobs.lib.util :as u]
             [jobs.lib.crops :as crops]
             [jobs.lib.look :as look]
-            [jobs.lib.near :as near]))
+            [jobs.lib.near :as near]
+            [jobs.lib.toll-cells :as tc]))
 
 (def doc
   "Use bone meal on unripe crops: the crop at :at, or the unripe crops within :radius, nearest first.
@@ -101,7 +102,7 @@
         :done)
     (let [target (first todo)
           refuse! #(ctx/update-mem! c update :refused (fnil conj #{}) target)
-          w (await (near/walk-near! c target 3))]
+          w (await (near/walk-near! c target 3 {:tolls (tc/walk-tolls c (near/cell-of target))}))]
       (case w
         :partial :continue
         :blocked (do (refuse!) :continue)
