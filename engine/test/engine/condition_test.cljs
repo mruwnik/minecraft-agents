@@ -337,7 +337,7 @@
       '(= (distance-to (place :home)) 5) true
       '(daytime) false
       '(hostile-near 4) true
-      '(hostile-near 2) true ; the unseen skeleton two blocks away has a line of fire
+      '(hostile-near 2) false ; the skeleton is only heard: its band (about 4 blocks), not its exact place, is judged
       '(in-water) true
       '(burning) false
       '(suffocating) false
