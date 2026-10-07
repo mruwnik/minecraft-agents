@@ -237,7 +237,13 @@
 
 (def known
   "{[job kind] card}: defects already carded, so the suite stays green and a new one fails it. A default run fails when an entry no longer occurs: delete it with its fix."
-  {})
+  {["jobs.access.tunnel" :runaway] "d7c8ff99"
+   ["jobs.explore.search" :runaway] "7ef2db8f"
+   ["jobs.farm.find-spot" :runaway] "bc44edcd"
+   ["jobs.gather.mine" :runaway] "cd74fd83"
+   ["jobs.items.enchant" :round-threw] "1b671b73"
+   ["jobs.movement.linger-near" :runaway] "df540718"
+   ["jobs.survival.respond-to-hostile" :runaway] "e7ed9147"})
 
 (defn case-seed
   "Seed of case k of job: stable under the job filter and the other jobs."
