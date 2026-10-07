@@ -247,6 +247,10 @@
   "Debug tools: not jobs a body runs for itself."
   #{'jobs.debug.access-check 'jobs.debug.notify 'jobs.debug.walk-plan})
 
+(def known-cases
+  "Cases per job of the run that found the entries of known: a narrower run may miss them."
+  50)
+
 (def known
   "{[job kind] card}: defects already carded, so the suite stays green and a new one fails it. A default run fails when an entry no longer occurs: delete it with its fix."
   {["jobs.access.tunnel" :runaway] "d7c8ff99"
@@ -338,9 +342,9 @@
        (str/join "\n")))
 
 (defn full-run?
-  "True when opts and env make the run cover the default cases of every job, so a known entry that did not occur is stale."
+  "True when opts and env make the run cover the default cases of every job at least as wide as the run that found the known entries (known-cases), so a known entry that did not occur is stale."
   [{:keys [only n base wrong-untyped?] kase :case}]
-  (and (nil? only) (nil? kase) (>= n 10) (= 1 base) (not wrong-untyped?) (not extreme?)))
+  (and (nil? only) (nil? kase) (>= n known-cases) (= 1 base) (not wrong-untyped?) (not extreme?)))
 
 (deftest every-job-handles-generated-inputs-honestly
   (async done
@@ -354,6 +358,10 @@
             (println "known" job kind (count ds) (pr-str (:detail (first ds)))))
           (is (empty? fresh) (str (count fresh) " defect(s) across " (count (group-by (juxt :job :kind) fresh)) " job/kind pairs:\n" (summary fresh)))
           (is (empty? stale) (str "known entries that no longer occur (card fixed? delete them): " (pr-str (map (juxt identity known) stale)))))))))
+
+(deftest full-run-needs-as-many-cases-as-found-the-known-entries
+  (is (not (full-run? {:n 10 :base 1})))
+  (is (full-run? {:n known-cases :base 1})))
 
 (deftest rng-is-deterministic-per-seed
   (is (= (repeatedly 5 (rng 42)) (repeatedly 5 (rng 42))))
