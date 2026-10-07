@@ -256,6 +256,56 @@
      :plugs (if side [(col (inc depth) (inc bottom))] [])
      :roof (col (if side depth 0) (+ bottom 2))}))
 
+(declare rock-solid?)
+
+(defn known-solid?
+  "Whether the body has sensed cell and it is solid: a floor it may drop onto (a guess never is)."
+  [p cell]
+  (solid/solid? (u/seen-name p cell)))
+
+(defn open-cell?
+  "Whether the body sees cell open: sensed, not solid and dry."
+  [p cell]
+  (let [n (u/seen-name p cell)]
+    (and (some? n) (not (solid/solid? n)) (not (wet? p cell)))))
+
+(defn roof-held?
+  "Whether a block placed at roof has a side to be placed against other than open (the pit's open cell beside it): a
+  seen full cube, or rock read under the ground."
+  [p roof open]
+  (boolean (some (fn [[dx dz]]
+                   (let [n (assoc roof :x (+ (:x roof) dx) :z (+ (:z roof) dz))]
+                     (and (not= n open) (or (:full-cube? (u/seen-facts p n)) (and (nil? (u/seen-name p n)) (rock-solid? p n))))))
+                 sides)))
+
+(defn pit-shapes
+  "The pits that may be dug from feet (pit-steps), straight first: straight down only when the body knows the
+  floor under every drop (it cannot see under the block it stands on), else a zigzag over each open side, 2 deep under a
+  roof with a side to hold it, else 3."
+  [p feet side-ok?]
+  (let [straight (when-let [{:keys [depth]} (dig-plan p feet)]
+                   (let [shape (pit-steps feet nil depth)]
+                     (when (every? #(known-solid? p (:floor %)) (:steps shape)) shape)))
+        zigzag (for [[dx dz :as side] sides
+                     :let [b (assoc feet :x (+ (:x feet) dx) :z (+ (:z feet) dz))
+                           depth (cond (roof-held? p feet b) 2
+                                       (roof-held? p (update b :y dec) (update feet :y dec)) 3)]
+                     :when (and depth (side-ok? b))]
+                 (pit-steps feet side depth))]
+    (remove nil? (cons straight zigzag))))
+
+(defn ^:async collect-pit-drops!
+  "Pick up the placeable drops of the pit's digs (memory :pit-drops) that lie in the body's column at or over its feet:
+  they fall to it, so taking them never moves the body off the floor it stands on."
+  [c {:keys [x y z]}]
+  (let [here? (fn [{cell :cell}] (and (= x (:x cell)) (= z (:z cell)) (>= (:y cell) y)))
+        drops (filter here? (:pit-drops (ctx/mem c)))]
+    (loop [[d & more] drops]
+      (when d
+        (await (ctx/act c :collect #js {:id (:id d)}))
+        (recur more)))
+    (ctx/update-mem! c update :pit-drops #(vec (remove here? %)))))
+
 (def room-limit
   "Most cells a closed room may have (the flood from the feet stops there and the room counts as open)."
   256)

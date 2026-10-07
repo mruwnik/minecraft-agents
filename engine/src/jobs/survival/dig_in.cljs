@@ -31,6 +31,10 @@
   - :enclose: walls mode only, for a body under an overhang or in a cave: the walls it needs, else stopped :no-blocks.
   - dig: digs a pit two deep (three on flat ground, where the start cell has no solid side to roof against),
     then places one block at the roof cell from a carried or dug block.
+    The body never drops onto a floor it has not seen solid (it cannot see under the block it stands on): straight down
+    only when every floor is known, else it zigzags between its column and an open side column (every dig beside or
+    below-beside it, lava a dig lays open sealed while it stands above), plugs the side cell by its head, then roofs.
+    With no such pit it stops :no-floor.
     It digs only where the block under is solid, the feet and head cells are dry, and no fluid borders the cell
     (water, lava, bubble column, kelp, seagrass, or a waterlogged block), nor the roof cell or the cell above it
     (:fluid-above).
@@ -231,35 +235,117 @@
                                 :done)))))
                 (fail-site! c :dig-failed (str "cannot dig down: " (.-status r))))))))
 
+(defn ^:async dig-pit-cell!
+  "Dig one cell of the zigzag pit (its placeable drops noted for dig-cells/collect-pit-drops!), look at what it laid open,
+  seal lava it shows (:on-lava :seal) while the body stands above, and let it settle: nil, or :done (a stop) when the dig
+  fails or fluid shows in or beside the cell."
+  [c cell]
+  (let [p (:primitives c)
+        {:keys [blocks on-lava]} (:args c)
+        v [(:x cell) (:y cell) (:z cell)]
+        name (dig-cells/rock-name p cell)]
+    (if (and (nil? (lb/pick c blocks)) (not (tools/can-harvest? p name)))
+      (do (remember-material! c {:pos (:roof (ctx/mem c)) :needs name})
+          (ctx/emit! c :dig_in_failed :warn {:text (str "cannot harvest " name "; nothing to roof the pit with, so not digging")})
+          :done)
+      (let [_ (await (tools/equip-for! c name {:fast true}))
+            r (await (tidy/dig! c cell true))]
+        (if (not= "dug" (.-status r))
+          (fail-site! c :dig-failed (str "cannot dig down: " (.-status r)))
+          (do (u/progress! c)
+              (ctx/update-mem! c assoc :dug-at (ctx/now c))
+              (ctx/update-mem! c update :pit-drops (fnil into [])
+                               (for [d (array-seq (.-drops r)) :when (some #{(.-name d)} blocks)] {:id (.-id d) :cell cell}))
+              (await (look/see-round! c v))
+              (await (look/wait-settled! c [v]))
+              (when-let [lavas (when (= :seal on-lava) (seq (dig-cells/lava-around p cell dig-cells/around-deltas)))]
+                (await (dig-cells/seal-lava! c blocks lavas))
+                (await (look/look-at! c v)))
+              (when-let [fluid (first (filter #(dig-cells/wet? p %) [cell (update cell :y inc) (update cell :y dec)]))]
+                (remember-failed-site! c :fluid-adjacent)
+                (ctx/emit! c :dig_in_failed :warn {:text (str (u/seen-name p fluid) " in or beside the dug cell; not going on")})
+                :done)))))))
+
+(defn ^:async zigzag-round
+  "One step down the pit when its floor is not known (the shape's :plugs are set): dig the next drop's cells, all beside
+  or below-beside the body (dig-cells/pit-steps), and step into it only once the floor under it is seen solid (the eye
+  sees the other column's cells down to 2 under the feet). Stops (done) :no-floor when that floor is seen not solid."
+  [c]
+  (let [p (:primitives c)
+        {:keys [start shape]} (ctx/mem c)
+        feet (sh/feet p)
+        steps (:steps shape)
+        at (first (keep-indexed #(when (= feet %2) %1) (cons start (map :to steps))))]
+    (when at (await (dig-cells/collect-pit-drops! c feet)))
+    (if (nil? at)
+      (fail-site! c :left-pit "the body left the pit's cells")
+      (let [{:keys [dig to floor]} (nth steps at)
+            cell (first (remove #(dig-cells/open-cell? p %) dig))
+            _ (when (and cell (look/unknown? p [(:x cell) (:y cell) (:z cell)])) (await (look/look-at! c [(:x cell) (:y cell) (:z cell)])))]
+        (cond
+          (and cell (dig-cells/wet? p cell))
+          (do (remember-failed-site! c :hazard-below)
+              (ctx/emit! c :dig_in_failed :warn {:text (str (u/seen-name p cell) " in the cell to dig; not digging")})
+              :done)
+          (and cell (not (dig-cells/rock-solid? p cell)))
+          (do (remember-failed-site! c :no-floor)
+              (ctx/emit! c :dig_in_failed :warn {:text "open air where the pit would go; not digging"})
+              :done)
+          cell (or (await (dig-pit-cell! c cell)) :continue)
+          :else
+          (let [fv [(:x floor) (:y floor) (:z floor)]
+                _ (when (look/unknown? p fv) (await (look/look-at! c fv)))]
+            (if-not (dig-cells/known-solid? p floor)
+              (do (remember-failed-site! c :no-floor)
+                  (ctx/emit! c :dig_in_failed :warn {:text (str (or (u/seen-name p floor) "an unseen cell") " under the hole; not stepping into it")})
+                  :done)
+              (let [before (:y feet)
+                    ;; raw moveTo kept: a step into the cell the job dug, range 0.5, inside its own pit; the planner has no standable goal there.
+                    r (await (ctx/act c :moveTo (clj->js {:pos to :range 0.5})))]
+                (if (< (:y (sh/feet p)) before)
+                  (do (u/progress! c) :continue)
+                  (fail-site! c :descent-stalled (str "cannot descend into the pit: " (.-status r))))))))))))
+
 (defn ^:async roof-round
-  "In the pit: place one block at the cell the body started in."
+  "In the pit: place one block at each plug cell (a zigzag pit's side cell beside the head), then at the roof cell."
   [c]
   (let [{:keys [blocks]} (:args c)
-        item (lb/pick c blocks)
-        roof (:roof (ctx/mem c))]
+        p (:primitives c)
+        {:keys [roof shape]} (ctx/mem c)
+        cell (or (first (remove #(dig-cells/sealed? p %) (:plugs shape))) roof)
+        item (lb/pick c blocks)]
     (if (nil? item)
       (do (remember-material! c {:pos roof}) :done)
-      (let [r (await (tidy/place! c roof item true))]
+      (let [r (await (tidy/place! c cell item true))]
         (cond
           (#{"placed" "occupied"} (.-status r))
-          (do (when (= "placed" (.-status r)) (ctx/update-mem! c update :placed (fnil conj #{}) roof))
-              :done)
+          (do (when (= "placed" (.-status r)) (ctx/update-mem! c update :placed (fnil conj #{}) cell))
+              (if (= cell roof) :done :continue))
           (dig-cells/keep-waiting! c :mob-since r) :yield
           :else (fail-site! c :roof-failed (str "cannot roof the pit: " (.-status r) (dig-cells/mob-text r))))))))
 
 (defn mode-choice
   "[mode refusal] for the shelter from start: the first of :plug (only with a room-plug cell), :walls (only when
   walls-ok?) and :dig whose cells are all permitted, else the first of them with its refusal (nil when permitted).
-  dig-plan is the pit's {:roof :depth}, nil when it cannot be roofed (the start cell's rules are then checked)."
+  dig-plan is the pit's {:roof :depth} (and :cells, the cells it digs, when they are not the column under start), nil when it cannot be roofed (the start cell's rules are then checked)."
   [c start walls-cells walls-ok? dig-plan plug]
   (let [in (access/rules-input c)
-        {:keys [roof depth]} (or dig-plan {:roof start :depth 2})
+        {:keys [roof depth cells]} (or dig-plan {:roof start :depth 2})
         walls-v (some #(access/trespass-refusal in :place %) walls-cells)
-        dig-v (or (some #(access/trespass-refusal in :dig %) (map #(update start :y - %) (range 1 (inc depth))))
+        dig-v (or (some #(access/trespass-refusal in :dig %) (or cells (map #(update start :y - %) (range 1 (inc depth)))))
                   (access/trespass-refusal (assoc in :feet nil) :place roof))
         plug-v (when plug (access/trespass-refusal (assoc in :feet nil) :place plug))
         options (cond-> [] plug (conj [:plug plug-v]) walls-ok? (conj [:walls walls-v]) :always (conj [:dig dig-v]))]
     (or (first (filter (comp nil? second) options)) (first options))))
+
+(defn refused-column
+  "The straight pit under start when the body sees a hazard in it or not solid under it: kept, so the descent refuses it
+  with its reason (a thin floor, water) rather than a zigzag hiding that. nil otherwise."
+  [p start {:keys [depth]}]
+  (let [shape (dig-cells/pit-steps start nil depth)
+        bad? (fn [cell] (let [n (u/seen-name p cell)] (and n (or (not (solid/solid? n)) (dig-cells/wet? p cell)))))]
+    (when (some bad? (mapcat (fn [{:keys [dig floor]}] (conj dig floor)) (:steps shape)))
+      shape)))
 
 (defn choose-mode
   "Record in job memory how this shelter is built, once. Chosen again only when the body leaves a dig-mode column.
@@ -270,13 +356,18 @@
   (let [p (:primitives c)
         {:keys [mode roof]} (ctx/mem c)
         {:keys [x z] :as start} (sh/feet p)
-        moved (and (= :dig mode) (not (and (= x (:x roof)) (= z (:z roof)))))]
-    (when moved (ctx/update-mem! c dissoc :mode :roof :target-y))
+        moved (and (= :dig mode) (not (contains? (:cols (ctx/mem c)) [x z])))]
+    (when moved (ctx/update-mem! c dissoc :mode :roof :target-y :shape :cols :pit-drops))
     (when (or moved (not mode))
       (let [cells (dig-cells/open-cells p start)
             have (reduce + (map :count (lb/carried c (:blocks (:args c)))))
             enclose (:enclose (:args c))
             plan (when-not enclose (dig-cells/dig-plan p start))
+            shape (when plan (or (refused-column p start plan)
+                                 (first (dig-cells/pit-shapes p start #(every? (partial dig-cells/open-cell? p) [% (update % :y inc)])))))
+            plan (if shape
+                   (assoc plan :roof (:roof shape) :cells (mapcat :dig (:steps shape)))
+                   plan)
             plug (when (and (pos? have) (not enclose)) (dig-cells/room-plug p start (:roof-height (:args c))))
             [chosen refusal] (if enclose
                                [(if (>= have (count cells)) :walls :no-blocks)
@@ -289,8 +380,10 @@
           (= :walls chosen) (ctx/update-mem! c #(cond-> (assoc % :mode :walls)
                                                   (dig-cells/shaft-top p start) (assoc :start {:x x :y (dig-cells/shaft-top p start) :z z})))
           (nil? plan) (ctx/update-mem! c assoc :mode :no-roof-support)
-          :else (ctx/update-mem! c assoc :mode :dig :roof (:roof plan) :start start
-                                 :target-y (- (:y start) (:depth plan))))))))
+          (nil? shape) (ctx/update-mem! c assoc :mode :no-floor)
+          :else (ctx/update-mem! c assoc :mode :dig :roof (:roof shape) :start start :shape shape
+                                 :cols (into #{[x z]} (map (comp (juxt :x :z) :to) (:steps shape)))
+                                 :target-y (:y (:to (peek (:steps shape))))))))))
 
 (defn futile-entry-here?
   "Whether any :dig-in-futile entry, whatever its reason, lies within futile-radius of the body."
@@ -341,6 +434,14 @@
   (ctx/emit! c :dig_in_failed :warn {:text "nothing solid beside the roof cell to place against; not digging a pit"})
   :done)
 
+(defn no-floor-round
+  "No pit can be dug whose floor the body sees or knows solid (straight down needs every floor known, a zigzag a seen
+  open side column): do not dig, since the drop would be onto an unseen cell."
+  [c]
+  (remember-failed-site! c :no-floor)
+  (ctx/emit! c :dig_in_failed :warn {:text "no floor the body sees solid under a pit; not digging down"})
+  :done)
+
 (defn ^:async plug-round
   "In a closed room: place one block in the hole of the roof over the body (:plug)."
   [c]
@@ -364,8 +465,9 @@
       (= :plug mode) (await (plug-round c))
       (= :walls mode) (await (walls-round c))
       (= :no-roof-support mode) (no-roof-round c)
+      (= :no-floor mode) (no-floor-round c)
       (= :no-blocks mode) (do (remember-material! c {:pos (sh/feet (:primitives c))}) :done)
-      (> (:y (sh/feet (:primitives c))) target-y) (await (descend-round c))
+      (> (:y (sh/feet (:primitives c))) target-y) (await (if (seq (:plugs (:shape (ctx/mem c)))) (zigzag-round c) (descend-round c)))
       :else (await (roof-round c)))))
 
 (defn end!

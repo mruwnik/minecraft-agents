@@ -175,53 +175,16 @@
   "The block a dug block drops, where it is another (an unlisted one drops itself)."
   {"grass_block" "dirt" "stone" "cobblestone" "deepslate" "cobbled_deepslate" "podzol" "dirt" "mycelium" "dirt"})
 
-(defn known-solid?
-  "Whether the body has sensed cell and it is solid: a floor it may drop onto (a guess never is)."
-  [p cell]
-  (solid/solid? (u/seen-name p cell)))
-
-(defn open-cell?
-  "Whether the body sees cell open: sensed, not solid and dry."
-  [p cell]
-  (let [n (u/seen-name p cell)]
-    (and (some? n) (not (solid/solid? n)) (not (dig-cells/wet? p cell)))))
-
 (defn side-open?
   "Whether the side column at feet height (cell and the one over it) is seen open, dry and free of hostiles: a way to
   look down the zigzag pit's next column and step into it."
   [c cell]
   (let [p (:primitives c)
         mobs (hostile-cells p (:radius (:args c) 0))]
-    (every? #(and (open-cell? p %) (not (mobs %))) [cell (update cell :y inc)])))
-
-(defn roof-held?
-  "Whether a block placed at roof has a side to be placed against other than open (the pit's open cell beside it): a
-  seen full cube, or rock read under the ground."
-  [p roof open]
-  (boolean (some (fn [[dx dz]]
-                   (let [n (assoc roof :x (+ (:x roof) dx) :z (+ (:z roof) dz))]
-                     (and (not= n open) (or (:full-cube? (u/seen-facts p n)) (and (nil? (u/seen-name p n)) (dig-cells/rock-solid? p n))))))
-                 dig-cells/sides)))
-
-(defn pit-shapes
-  "The pits that may be dug from feet (dig-cells/pit-steps), straight first: straight down only when the body knows the
-  floor under every drop (it cannot see under the block it stands on), else a zigzag over each open side, 2 deep under a
-  roof with a side to hold it, else 3."
-  [c feet]
-  (let [p (:primitives c)
-        straight (when-let [{:keys [depth]} (dig-cells/dig-plan p feet)]
-                   (let [shape (dig-cells/pit-steps feet nil depth)]
-                     (when (every? #(known-solid? p (:floor %)) (:steps shape)) shape)))
-        zigzag (for [[dx dz :as side] dig-cells/sides
-                     :let [b (assoc feet :x (+ (:x feet) dx) :z (+ (:z feet) dz))
-                           depth (cond (roof-held? p feet b) 2
-                                       (roof-held? p (update b :y dec) (update feet :y dec)) 3)]
-                     :when (and depth (side-open? c b))]
-                 (dig-cells/pit-steps feet side depth))]
-    (remove nil? (cons straight zigzag))))
+    (every? #(and (dig-cells/open-cell? p %) (not (mobs %))) [cell (update cell :y inc)])))
 
 (defn pit-plan
-  "A pit to dig down from feet and plug over the head (pit-shapes): {:steps :plugs :roof :target-y}, or nil: every cell
+  "A pit to dig down from feet and plug over the head (dig-cells/pit-shapes): {:steps :plugs :roof :target-y}, or nil: every cell
   to dig solid (rock the body has not looked into reads stone, dig-cells/rock-name), no fluid in or beside it,
   harvestable with what is carried, solid under the bottom, and a block to plug with carried or dug."
   [c feet]
@@ -236,7 +199,7 @@
                        (every? #(tools/can-harvest? p %) names)
                        (dig-cells/rock-solid? p (:floor (peek steps)))
                        (or (lb/pick c blocks) (some (set blocks) (map #(get drop-of % %) names))))))]
-    (when-let [shape (first (filter fits? (pit-shapes c feet)))]
+    (when-let [shape (first (filter fits? (dig-cells/pit-shapes (:primitives c) feet #(side-open? c %))))]
       (assoc shape :target-y (:y (:to (peek (:steps shape))))))))
 
 (defn cell-vec [{:keys [x y z]}] [x y z])
@@ -406,20 +369,8 @@
           :else (do (dig-cells/forget-wait! c :seal-mob-since)
                     (await (abandon-refuge! c))))))))
 
-(defn ^:async collect-pit-drops!
-  "Pick up the placeable drops of the pit's digs (memory :pit-drops) that lie in the body's column at or over its feet:
-  they fall to it, so taking them never moves the body off the floor it stands on."
-  [c {:keys [x y z]}]
-  (let [here? (fn [{cell :cell}] (and (= x (:x cell)) (= z (:z cell)) (>= (:y cell) y)))
-        drops (filter here? (:pit-drops (ctx/mem c)))]
-    (loop [[d & more] drops]
-      (when d
-        (await (ctx/act c :collect #js {:id (:id d)}))
-        (recur more)))
-    (ctx/update-mem! c update :pit-drops #(vec (remove here? %)))))
-
 (defn ^:async dig-pit-cell!
-  "Dig one cell of the pit (its placeable drops noted for collect-pit-drops!), look at what it laid open and let it
+  "Dig one cell of the pit (its placeable drops noted for dig-cells/collect-pit-drops!), look at what it laid open and let it
   settle: :again, or the refuge abandoned when the dig fails, lays open fluid or a cave (lava is sealed first,
   lays-open?), or the cell fills again."
   [c cell keep]
@@ -435,7 +386,7 @@
                            (for [d (array-seq (.-drops r)) :when (blocks (.-name d))] {:id (.-id d) :cell cell}))
           (await (look/see-round! c v))
           (await (look/wait-settled! c [v]))
-          (if (or (await (lays-open? c [cell] keep)) (not (open-cell? p cell)))
+          (if (or (await (lays-open? c [cell] keep)) (not (dig-cells/open-cell? p cell)))
             (await (abandon-refuge! c))
             :again)))))
 
@@ -449,22 +400,22 @@
         at (first (keep-indexed #(when (= feet %2) %1) (cons anchor (map :to steps))))
         keep (into #{anchor (update anchor :y inc) roof}
                    (concat plugs (mapcat :dig steps) (mapcat (fn [{:keys [to]}] [to (update to :y inc)]) steps)))]
-    (when at (await (collect-pit-drops! c feet)))
+    (when at (await (dig-cells/collect-pit-drops! c feet)))
     (cond
       (nil? at) (await (abandon-refuge! c))
       (= at (count steps)) (await (plug! c refuge))
       :else
       (let [{:keys [dig to floor]} (nth steps at)
-            cell (first (remove #(open-cell? p %) dig))
+            cell (first (remove #(dig-cells/open-cell? p %) dig))
             under? (= cell (update feet :y dec))]
         (when (and cell (look/unknown? p (cell-vec cell))) (await (look/look-at! c (cell-vec cell))))
         (cond
           (and cell (not (dig-cells/rock-solid? p cell))) (await (abandon-refuge! c))
-          (and under? (not (known-solid? p floor))) (await (abandon-refuge! c))
+          (and under? (not (dig-cells/known-solid? p floor))) (await (abandon-refuge! c))
           cell (await (dig-pit-cell! c cell keep))
           :else
           (do (when (look/unknown? p (cell-vec floor)) (await (look/look-at! c (cell-vec floor))))
-              (if (known-solid? p floor)
+              (if (dig-cells/known-solid? p floor)
                 ;; raw moveTo kept: a drop into the body's own pit, as dig-in's descent; the planner has no standable goal there.
                 (do (await (ctx/act c :moveTo (clj->js {:pos to :range 0.5})))
                     (if (= to (sh/feet p)) :again (await (abandon-refuge! c))))

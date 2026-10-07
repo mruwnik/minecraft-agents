@@ -74,7 +74,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p seen]} (await (run-pit! {:blocks ground}))]
-          (is (= [[0 64 0] [0 63 0] [0 62 0]] (digs p)))
+          (is (= [[1 64 0] [0 64 0] [0 63 0] [1 63 0] [1 62 0]] (digs p)) "zigzag: no dig under the feet")
           (is (= 62 (feet-y p)))
           (is (empty? (filter #(= :dig_in_failed (:kind %)) @seen))))))))
 
@@ -91,18 +91,18 @@
                  r)))
   p)
 
-(defn ^:async run-hover! [spec]
-  (await (tick-out! (setup (hover-over-digs! (await (see-surface! (sensing spec)))) 'jobs.survival.dig-in {}))))
+(defn ^:async run-hover! [spec & [args]]
+  (await (tick-out! (setup (hover-over-digs! (await (see-surface! (sensing spec)))) 'jobs.survival.dig-in (or args {})))))
 
-(deftest lava-seen-under-the-hole-is-not-stepped-into
+(deftest lava-seen-under-the-hole-is-not-stepped-into-when-it-is-left-unsealed
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p] :as s} (await (run-hover! {:blocks (assoc ground "0,62,0" "lava")}))]
-          (is (= [[0 64 0] [0 63 0]] (digs p)) "the cell over the lava is not dug")
+        (let [{:keys [p] :as s} (await (run-hover! {:blocks (assoc ground "0,62,0" "lava")} {:on-lava :stop}))]
+          (is (= [[1 64 0] [0 64 0] [0 63 0]] (digs p)) "the body drops no further than the side column")
           (is (= 64 (feet-y p)))
           (is (= 1 (count (failed s))))
-          (is (re-find #"lava under the hole" (str (:text (first (failed s)))))))))))
+          (is (re-find #"lava" (str (:text (first (failed s)))))))))))
 
 (deftest air-seen-under-the-hole-is-not-stepped-into
   (async done
@@ -117,7 +117,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p] :as s} (await (run-hover! {:blocks ground}))]
-          (is (= [[0 64 0] [0 63 0] [0 62 0]] (digs p)))
+          (is (= [[1 64 0] [0 64 0] [0 63 0] [1 63 0] [1 62 0]] (digs p)) "zigzag: no dig under the feet")
           (is (= 62 (feet-y p)))
           (is (empty? (failed s))))))))
 
@@ -171,3 +171,31 @@
           (is (not-any? #{{:x 0 :y 63 :z 0}} (map :pos (calls p "place"))) "nothing placed into the lava")
           (is (= 64 (feet-y p)))
           (is (re-find #"lava" (str (:text (first (failed s)))))))))))
+
+(defn ^:async run-watched!
+  "A pit dug on what the body saw of the surface, with every block name its feet were in noted: {:p :stood :seen}."
+  [spec args]
+  (let [raw (tu/fake (merge {:self {:pos {:x 0 :y 65 :z 0}} :inventory kit :time 14000} spec))
+        stood (atom #{})
+        _ (add-watch (fake/state raw) ::stood
+                     (fn [_ _ _ w] (swap! stood conj (fake/block-name w (mapv js/Math.floor (fake/body-pos w))))))
+        p (perception/wrap raw (perception/create (fake-raw/create raw) {:now (constantly 1000000)}))
+        s (await (tick-out! (setup (await (see-surface! p)) 'jobs.survival.dig-in args)))]
+    (assoc s :stood @stood)))
+
+(deftest a-pit-never-drops-the-body-onto-lava-it-has-not-seen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[x y z] [[0 62 0] [1 63 0] [1 62 0] [1 61 0]]]
+          (let [{:keys [stood]} (await (run-watched! {:blocks (assoc ground (str x "," y "," z) "lava")} {}))]
+            (is (not (stood "lava")) (str "lava at " [x y z] ": the body never stands in it"))))))))
+
+(deftest a-pit-over-rock-roofs-the-body-in-three-down-by-looking-before-it-drops
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p out]} (await (run-watched! {:blocks ground} {}))]
+          (is (map? @out) "ends with a result")
+          (is (= 62 (feet-y p)) "three down")
+          (is (seq (calls p "place")) "roofed"))))))
