@@ -727,3 +727,31 @@
     (tunnel/approach {:block-at air :zones [] :footprints #{} :ledger #{} :ways nil :ignore-zones? true}
                      [4 64 4] [0 65 0] 64 #{})
     (is (< @reads 40000))))
+
+(deftest a-fetch-child-that-ends-done-while-the-no-tool-stop-persists-does-not-spin
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [n (atom 0)
+              orig ctx/call-child
+              orig-res ctx/child-result
+              prep (fn [p]
+                     (let [world (.-world p)
+                           k (atom 0)]
+                       (.override world "steer"
+                                  (fn ^:async f [token a impl]
+                                    (let [r (await (impl token a))]
+                                      (when (= 3 (swap! k inc))
+                                        (swap! (.-state world) assoc :inventory []))
+                                      r)))))]
+          (set! ctx/call-child (fn [c slot job args]
+                                 (if (= :fetch slot)
+                                   (do (swap! n inc) (js/Promise.resolve :done))
+                                   (orig c slot job args))))
+          (set! ctx/child-result (fn [c slot] (if (= :fetch slot) {:status :done} (orig-res c slot))))
+          (try
+            (let [s (setup {:blocks (assoc ground "6,57,0" "iron_ore")} {:target [6 57 0]} prep)]
+              (await (tick-n! s 60))
+              (is (= :not-solved (:failed (first (events-of s :fetch.failed)))) "the repeat is told :not-solved"))
+            (finally (set! ctx/call-child orig) (set! ctx/child-result orig-res)))
+          (is (<= 1 @n 2) (str "fetch child calls " @n)))))))
