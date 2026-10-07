@@ -981,3 +981,48 @@
           (is @looked)
           (is (= "air" (.-name (.blockAt p (tu/pos 0 68 0)))) "dug once seen")
           (is (= [[:completed nil]] (ended seen))))))))
+
+;; ---------------------------------------------------------------- sensing: look up the own column before the air search
+
+(deftest drowning-in-a-dark-column-looks-up-and-swims-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4} :blocks (merge water-column walls)})
+              looked (atom false)]
+          (stub-seen! p (fn [[_ y]] (or @looked (<= y 65))))
+          (.override (.-world p) "look" (fn [_ _ _] (reset! looked true) #js {:status "ok"}))
+          (await (one-run! eng cap-args))
+          (is @looked)
+          (is (some #{"swim"} (call-names p)) "swam up the lit-by-looking column")
+          (is (= [[:completed nil]] (ended seen))))))))
+
+(deftest drowning-in-a-column-that-stays-unseen-swims-up-anyway
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4} :blocks (merge water-column walls (into {} (for [y (range 64 68)] [(str "1," y ",0") "stone"])))})]
+          (stub-seen! p (fn [[_ y]] (<= y 65)))
+          (await (one-run! eng cap-args))
+          (is (some #{"swim"} (call-names p)) "an unseen column is swum up, as a player does")
+          (is (= [[:stopped :no_land_in_range]] (ended seen)) "surfaced, then no land in the sealed world: not :no_air"))))))
+
+(deftest a-seen-cap-is-not-swum-into
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4} :blocks (capped-world "obsidian")})]
+          (await (one-run! eng cap-args))
+          (is (not-any? #{"swim"} (call-names p)) "a seen cap blocks the swim fallback")
+          (is (= [[:stopped :no_air]] (ended seen))))))))
+
+(deftest step-cell-and-leg-target-skip-cells-never-seen
+  (let [world (merge {"0,64,0" "water" "0,65,0" "air" "0,66,0" "air" "1,64,0" "water" "1,65,0" "air" "1,66,0" "air"
+                      "1,63,0" "stone"}
+                     (into {} (for [x (range 8 20)] [(str x ",64,0") "water"])))
+        p (:p (setup {:self {:inWater true :oxygen 20} :blocks world}))
+        pos {:x 0 :y 64 :z 0}]
+    (is (some? (b/step-cell p pos 2 nil)) "seen: a step cell is found")
+    (stub-seen! p (constantly false))
+    (is (nil? (b/step-cell p pos 2 nil)) "never seen: none")
+    (is (nil? (b/leg-target p pos pos [1 0] {:leg-length 12 :swim-range 96 :reach 10})))))

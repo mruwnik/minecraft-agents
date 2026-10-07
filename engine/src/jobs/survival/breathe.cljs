@@ -145,9 +145,9 @@
   "A feet cell on land: feet and head air, and a solid block below (anything
   but air, water, lava, fire or magma; an unloaded cell is not land)."
   [p cell]
-  (let [feet (u/block-name p cell)
-        head (u/block-name p (update cell :y inc))
-        below (u/block-name p (update cell :y dec))]
+  (let [feet (u/seen-name p cell)
+        head (u/seen-name p (update cell :y inc))
+        below (u/seen-name p (update cell :y dec))]
     (boolean (and feet head below
                   (breath/air? feet) (breath/air? head)
                   (not (breath/air? below)) (not (contains? unsafe-below below))))))
@@ -177,7 +177,7 @@
   [p cell]
   (some (fn [[dx dz]]
           (let [n (-> cell (update :x + dx) (update :z + dz))
-                at (fn [dy] (u/block-name p (update n :y + dy)))]
+                at (fn [dy] (u/seen-name p (update n :y + dy)))]
             (and (passable-water-or-air? (at 0)) (passable-water-or-air? (at 1))
                  (or (= "water" (at -1)) (= "water" (at -2))))))
         [[1 0] [-1 0] [0 1] [0 -1]]))
@@ -198,24 +198,63 @@
           (filter #(and (land-cell? p %) (keep? p %)))
           first))))
 
-(defn ^:async swim-up!
-  "Drowning: swim up the own column when it reaches air, else walk (through
-  water, at the feet's height) to the nearest column that does. True when the
-  action succeeded; :no-air when there is no air in reach; nil when the move failed (failure counted)."
-  [c]
+(defn ^:async look-column!
+  "Look up the column x z from fy, one look per cell not yet seen, until a seen cell that is neither water nor air or
+  reach cells are done (at most reach + 1 looks; with first-only? one look, at the first unseen cell). A look glances
+  the cell and its neighbours, so cells in the dark are learned."
+  [c x z fy reach first-only?]
+  (loop [k 0]
+    (when (<= k (inc reach))
+      (let [cell {:x x :y (+ fy k) :z z}
+            p (:primitives c)]
+        (if (access/unknown? p [x (:y cell) z])
+          (do (await (access/look-at! c [x (:y cell) z]))
+              (when-not first-only? (recur (inc k))))
+          (when (passable-water-or-air? (u/seen-name p cell))
+            (recur (inc k))))))))
+
+(defn column-open?
+  "No cell seen over the feet cell up to reach is a block: what is not seen is not a cap, so a drowning body may swim up it."
+  [p x z fy reach]
+  (every? (fn [k] (let [n (u/seen-name p {:x x :y (+ fy k) :z z})] (or (nil? n) (passable-water-or-air? n))))
+          (range (inc (inc reach)))))
+
+(defn ^:async find-air!
+  "The nearest air target after looking: up the own column first, then once at each other column in radius (the first
+  cell not seen there); nil if none."
+  [c pos]
   (let [{:keys [radius reach]} (:args c)
+        p (:primitives c)
+        fx (js/Math.floor (:x pos)) fy (js/Math.floor (:y pos)) fz (js/Math.floor (:z pos))]
+    (await (look-column! c fx fz fy reach false))
+    (or (nearest-air p pos radius reach)
+        (do (doseq [[dx dz] (rest (columns radius))]
+              (await (look-column! c (+ fx dx) (+ fz dz) fy reach true)))
+            (nearest-air p pos radius reach)))))
+
+(defn ^:async swim-up!
+  "Drowning: look, then swim up the own column when it reaches air, else walk (through
+  water, at the feet's height) to the nearest column that does. With no air seen and no block seen over the own
+  column, swim up anyway: a body in the dark learns by moving, as a player does. True when the action succeeded; :no-air
+  when there is no air in reach; nil when the move failed (failure counted)."
+  [c]
+  (let [{:keys [reach]} (:args c)
         p (:primitives c)
         pos (u/self-pos c)
         fx (js/Math.floor (:x pos))
         fy (js/Math.floor (:y pos))
         fz (js/Math.floor (:z pos))
-        target (nearest-air p pos radius reach)]
+        target (await (find-air! c pos))
+        swim! (fn ^:async f []
+                (let [surfaced? (= "surfaced" (status (await (ctx/act c :swim #js {}))))]
+                  (when surfaced? (ctx/update-mem! c assoc :surfaced true))
+                  surfaced?))]
     (cond
+      (and (nil? target) (column-open? p fx fz fy reach))
+      (or (await (swim!)) :no-air)
+
       (nil? target) :no-air
-      (surface-in-column p fx fz fy reach)
-      (let [surfaced? (= "surfaced" (status (await (ctx/act c :swim #js {}))))]
-        (when surfaced? (ctx/update-mem! c assoc :surfaced true))
-        surfaced?)
+      (surface-in-column p fx fz fy reach) (await (swim!))
 
       :else
       ;; raw moveTo kept: an emergency step to air or out of water (range 0), where the planner may have no standable cell; no time for a plan.
@@ -235,9 +274,9 @@
         fy (js/Math.floor (.. self -pos -y))
         fz (js/Math.floor (.. self -pos -z))
         fits? (fn [cell]
-                (let [feet (u/block-name p cell)
-                      head (u/block-name p (update cell :y inc))
-                      below (u/block-name p (update cell :y dec))]
+                (let [feet (u/seen-name p cell)
+                      head (u/seen-name p (update cell :y inc))
+                      below (u/seen-name p (update cell :y dec))]
                   (and feet head below
                        (not (breath/suffocates? p cell)) (not (breath/suffocates? p (update cell :y inc)))
                        (not (contains? harmful-in-cell feet)) (not (contains? harmful-in-cell head))
@@ -379,7 +418,7 @@
     (some (fn [k]
             (let [x (+ fx (* hx k)) z (+ fz (* hz k))
                   cell (when (<= (hdist {:x x :z z} start) swim-range) (surface-in-column p x z fy reach))]
-              (when (and cell (= "water" (u/block-name p cell))) cell)))
+              (when (and cell (= "water" (u/seen-name p cell))) cell)))
           (range leg-length (dec min-leg) -1))))
 
 (defn ^:async go!
@@ -416,9 +455,9 @@
         own {:x (js/Math.floor (:x self)) :y (js/Math.floor (:y self)) :z (js/Math.floor (:z self))}]
     (->> (for [[dx dz] (columns radius) dy [0 -1]] {:x (+ fx dx) :y (+ fy dy) :z (+ fz dz)})
          (remove #(or (= own %) (contains? (set failed) %)))
-         (filter #(and (= "water" (u/block-name p %))
-                       (breath/air? (u/block-name p (update % :y inc)))
-                       (breath/air? (u/block-name p (update % :y + 2)))
+         (filter #(and (= "water" (u/seen-name p %))
+                       (breath/air? (u/seen-name p (update % :y inc)))
+                       (breath/air? (u/seen-name p (update % :y + 2)))
                        (blocks/support? p %)))
          first)))
 
