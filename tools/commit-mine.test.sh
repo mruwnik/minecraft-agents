@@ -139,6 +139,11 @@ check "moved file path mode: index clean" "$(git diff --cached --name-only)" ""
 check "moved file path mode: ledger counts both sides" "$(tail -1 .git/commit-ledger.jsonl | jq -r '.insertions + .deletions')" 242
 check "moved file path mode: ledger lists both paths" "$(tail -1 .git/commit-ledger.jsonl | jq -r '.paths | sort | join(" ")')" "mv_new.txt mv_new2.txt"
 check "moved file path mode: printed stat shows both files" "$(grep -c '2 files changed' <<<"$out")" 1
+# A hand-built patch may list files in any order: git's path order is not required.
+printf 'a\n' > ord_a.txt; printf 'b\n' > ord_b.txt; git add ord_a.txt ord_b.txt; git commit -q -m ord
+echo a2 >> ord_a.txt; echo b2 >> ord_b.txt
+git diff ord_a.txt > ord_a.patch; git diff ord_b.txt > ord_b.patch; cat ord_b.patch ord_a.patch > ord.patch
+out=$(tools/commit-mine --card abcd1234 -m "$C ord" --hunks ord.patch --expect-hunks 2 ord_a.txt ord_b.txt 2>&1); check "hunks out of path order exit" "$?" 0
 # Deleted files: staged (git rm) or not, many, a whole directory, mixed with an edit.
 mkdir -p gone/sub; for i in $(seq 1 120); do echo $i > gone/f$i.txt; done; echo s > gone/sub/s.txt; seq 1 5 > e.txt
 git add gone e.txt; git commit -q -m gone

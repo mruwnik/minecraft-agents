@@ -212,8 +212,9 @@ patch_sig() { # "<file>\t<+/- line>" for every changed line inside a hunk, from 
   awk '/^diff --git /{f=$4; sub(/^b\//,"",f); inh=0; next} /^@@/{inh=1; next} inh && /^[-+]/{print f "\t" $0}'
 }
 if [ -n "$hunks" ]; then
-  want="$(patch_sig < "$hunks")"
-  got="$(git diff --cached --no-renames -U0 | patch_sig)"
+  by_file() { LC_ALL=C sort -s -t "$(printf '\t')" -k1,1; } # file order is git's, not the patch's; lines keep their order
+  want="$(patch_sig < "$hunks" | by_file)"
+  got="$(git diff --cached --no-renames -U0 | patch_sig | by_file)"
   [ "$want" = "$got" ] || die "staged diff differs from the patch (it must hold exactly the patch's changed lines); nothing committed" 7
 else
   staged_total="$(count_staged)"
