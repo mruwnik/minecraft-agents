@@ -333,7 +333,7 @@
   (let [p (:primitives c)
         block-at (escape/block-at-of p)
         at [(:x cell) (:y cell) (:z cell)]
-        args {:pos at :any-of escape/pillar-items}
+        args {:pos at :any-of escape/pillar-items :fetch false}
         item (place/chosen c escape/pillar-items)
         refused (= :not-allowed (:reason (blocks/child-wait c :step 'jobs.blocks.place args)))
         l (ledger/reconcile (ledger/open-entries (ctx/view c)) block-at)]

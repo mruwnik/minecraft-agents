@@ -726,7 +726,7 @@
       (let [slot (keyword (str "dig-out-" i))
             _ (update-leave! c assoc :heading (:heading attempt))
             r (await (ctx/call-child c slot 'jobs.access.stair
-                                     (merge {:dir :up :heading (:heading attempt) :ignore-zones? (or (:ignore-zones? attempt) (:ignore-zones? (:args c)))}
+                                     (merge {:dir :up :heading (:heading attempt) :fetch false :ignore-zones? (or (:ignore-zones? attempt) (:ignore-zones? (:args c)))}
                                             (if start {:y (:y start)} {:steps 1}))))
             res (when (= :done r) (ctx/child-result c slot))]
         (when (and res (:ignore-zones? attempt)) (note-trespass! c (:dug res)))

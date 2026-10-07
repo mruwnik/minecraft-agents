@@ -39,7 +39,7 @@
   then waits: :unreachable (the walk failed twice or the dig is out of reach), a zone or hazard that appeared during
   the call, or a tool still missing after the fetch (:no-tool). The caller decides whether to try again.
 
-  :fetch (default false; jobs.lib.fetch): a :no-tool wait is not waited out. The check passes and the call runs
+  :fetch (default true; jobs.lib.fetch; false waits :no-tool): a :no-tool wait is not waited out. The check passes and the call runs
   jobs.items.get-tool for the block (child :fetch) until a tool is carried, then digs. A fetch that fails is
   remembered for :fail-minutes; meanwhile the check waits :no-tool with {:fetch {:failed reason ...}}.")
 
@@ -51,7 +51,7 @@
    :on-fluid {:doc ":wait: a block beside a fluid that :accept does not take waits :hazard; :fail: the job ends at once, reason :fluid-adjacent, with a :hint" :default :wait}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
-   :fetch {:doc "get a missing tool instead of waiting :no-tool (jobs.lib.fetch): true, a set of kinds or a map of limits" :default false}})
+   :fetch {:doc "get a missing tool instead of waiting :no-tool (jobs.lib.fetch): true, a set of kinds or a map of limits" :default true}})
 
 (def collect-radius 8)
 

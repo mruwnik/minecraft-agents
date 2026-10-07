@@ -73,7 +73,7 @@
   "One dig child call on the cell being dug (:digging {:cell :block :collect}, kept until the child ends, so a resumed
   call goes on with it). :again, :continue while the child waits on the world, or :done."
   [c {:keys [cell block collect]}]
-  (let [args {:pos cell :collect collect :ignore-zones? (:ignore-zones? (:args c))}
+  (let [args {:pos cell :collect collect :fetch false :ignore-zones? (:ignore-zones? (:args c))}
         done! (fn [] (ctx/update-mem! c dissoc :digging))]
     (cond
       (escape/protected? block) (finish! c :protected {:cell cell :block block})

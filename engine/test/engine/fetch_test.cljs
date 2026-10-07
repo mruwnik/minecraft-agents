@@ -115,6 +115,42 @@
           (is (= 1 (count (events-of s :fetch.started))))
           (is (= 1 (count (events-of s :fetch.done)))))))))
 
+;; the default call (no :fetch) fetches: dig, place and stair
+(deftest dig-by-default-fetches-a-pickaxe
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (world pickaxe-stock) [own-zone])]
+          (core/submit! (:eng s) (dig-spec {}) {})
+          (await (run-ticks s 40))
+          (is (= "air" (block-at s 2 64 3)))
+          (is (= 1 (count (events-of s :fetch.done)))))))))
+
+(deftest place-by-default-fetches-the-block
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (world {chest-at [{:name "cobblestone" :count 5}]}) [own-zone])]
+          (core/submit! (:eng s) (list 'jobs.blocks.place {:pos [1 64 1] :item "cobblestone"}) {})
+          (await (run-ticks s 40))
+          (is (= "cobblestone" (block-at s 1 64 1)))
+          (is (= 1 (count (events-of s :fetch.done)))))))))
+
+(deftest stair-by-default-fetches-a-pickaxe
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:self {:pos {:x 0 :y 64 :z 0}}
+                        :blocks {"0,61,1" "andesite" "0,62,1" "andesite" "0,63,1" "stone" "0,64,1" "stone" "0,65,1" "stone"
+                                 "-3,64,2" "chest"}
+                        :containers {"-3,64,2" [{:name "wooden_pickaxe" :count 1}]}
+                        :drops {"stone" "cobblestone"}}
+                       [own-zone])]
+          (core/submit! (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 1}) {})
+          (await (run-ticks s 60))
+          (is (= "air" (block-at s 0 64 1)))
+          (is (= 1 (count (events-of s :fetch.done)))))))))
+
 (deftest dig-and-place-fetch-and-act-in-one-call
   (async done
     (tu/run-async done
@@ -137,7 +173,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world pickaxe-stock) [own-zone])
-              id (core/submit! (:eng s) (dig-spec {}) {})]
+              id (core/submit! (:eng s) (dig-spec {:fetch false}) {})]
           (await (run-ticks s 10))
           (is (= :no-tool (:reason (core/waiting (:eng s) id))))
           (is (empty? (inspects s)))
@@ -302,7 +338,7 @@
                         :containers {"-3,64,2" [{:name "wooden_pickaxe" :count 1}]}
                         :drops {"stone" "cobblestone"}}
                        [own-zone])
-              id (core/submit! (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 1}) {})]
+              id (core/submit! (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 1 :fetch false}) {})]
           (await (run-ticks s 10))
           (is (= :no-tool (:reason (core/waiting (:eng s) id))))
           (is (empty? (inspects s))))))))

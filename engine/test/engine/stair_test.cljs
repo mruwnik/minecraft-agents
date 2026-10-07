@@ -517,7 +517,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p] :as s} (await (stair! {:blocks ground :inventory []} east (fn [_])))]
+        (let [{:keys [out p] :as s} (await (stair! {:blocks ground :inventory []} (assoc east :fetch false) (fn [_])))]
           (is (= :not-done @out) "the child declines: its parent waits")
           (is (= :no-tool (:reason (waiting s))))
           (is (= "pickaxe" (:tool (waiting s))))

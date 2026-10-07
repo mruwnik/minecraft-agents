@@ -308,7 +308,7 @@
           (fruitless! c :no-table-spot)
           (do (ctx/update-mem! c assoc-in [:craft :step] step)
               (ctx/update-mem! c assoc-in [:craft :spot] spot)
-              (let [r (await (ctx/call-child c :place 'jobs.blocks.place {:item (:item step) :pos spot}))]
+              (let [r (await (ctx/call-child c :place 'jobs.blocks.place {:item (:item step) :pos spot :fetch false}))]
                 (if (= :continue r)
                   :continue
                   (let [res (ctx/child-result c :place)]

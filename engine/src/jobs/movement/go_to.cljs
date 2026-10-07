@@ -221,7 +221,7 @@
   [{:keys [step] :as e} tag ignore-zones?]
   (case step
     :pillar ['jobs.access.pillar {:height (:height e) :item (:item e) :ignore-zones? ignore-zones?}]
-    :stair ['jobs.access.stair {:dir :up :heading (:heading e) :steps (:steps e) :note tag :ignore-zones? ignore-zones?}]
+    :stair ['jobs.access.stair {:dir :up :heading (:heading e) :steps (:steps e) :note tag :fetch false :ignore-zones? ignore-zones?}]
     :clear-path ['jobs.access.clear-path {:heading (:heading e) :note tag :ignore-zones? ignore-zones?}]
     :approach ['jobs.movement.go-to {:pos (zipmap [:x :y :z] (:pos e)) :range 0 :escalate false}]))
 
@@ -415,7 +415,7 @@
     (if (nil? e)
       (do (restore-done! c) :again)
       (let [{:keys [cell was any-of]} e
-            args {:pos cell :any-of any-of}
+            args {:pos cell :any-of any-of :fetch false}
             done! (fn [k entry]
                     (ctx/update-mem! c #(-> % (update :restore-seen (fnil conj #{}) cell) (update k (fnil conj []) entry)))
                     :again)

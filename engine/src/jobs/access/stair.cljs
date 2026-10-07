@@ -55,7 +55,7 @@
   Hands over {:status :done|:stopped :reason kw :steps n :at [x y z] :dug [{:cell :block}]} plus detail (:cell
   :hazards :zone :walk ...), also as a stair.done info or stair.stopped warn event.
 
-  :fetch (default false; jobs.lib.fetch): the :no-tool wait is not waited out; the call runs jobs.items.get-tool
+  :fetch (default true; jobs.lib.fetch; false waits :no-tool): the :no-tool wait is not waited out; the call runs jobs.items.get-tool
   for the block (child :fetch) first, then walks back to the cell it stood on (child :fetch-back) and goes on. A
   parent's stair child does not fetch.")
 
@@ -67,7 +67,7 @@
    :accept {:doc "hazards taken: #{:water :lava :falling-block :under-feet}" :default #{}}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
    :note {:doc "a map: each cell dug is written to the tidy ledger at once with it (jobs.lib.escape/note-hole!; go-to's escalation)" :default nil}
-   :fetch {:doc "get a missing pickaxe instead of waiting :no-tool (jobs.lib.fetch): true, a set of kinds or a map of limits" :default false}})
+   :fetch {:doc "get a missing pickaxe instead of waiting :no-tool (jobs.lib.fetch): true, a set of kinds or a map of limits" :default true}})
 
 (def headings {:north [0 -1] :south [0 1] :east [1 0] :west [-1 0]})
 (def rises {:down -1 :up 1})

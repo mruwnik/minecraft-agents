@@ -76,9 +76,9 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= {:reason :need :item "cobblestone" :pos at}
-               (await (bd/waiting-after (bd/setup {:self body}) (list job {:pos at :item "cobblestone"}) 3))))
+               (await (bd/waiting-after (bd/setup {:self body}) (list job {:pos at :item "cobblestone" :fetch false}) 3))))
         (is (= {:reason :need :any-of ["cobblestone" "dirt"] :pos at}
-               (await (bd/waiting-after (bd/setup {:self body}) (list job {:pos at :any-of ["cobblestone" "dirt"]}) 3))))))))
+               (await (bd/waiting-after (bd/setup {:self body}) (list job {:pos at :any-of ["cobblestone" "dirt"] :fetch false}) 3))))))))
 
 (deftest a-solid-block-in-the-cell-ends-occupied
   (async done

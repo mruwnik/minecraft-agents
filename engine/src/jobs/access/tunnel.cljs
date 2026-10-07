@@ -335,7 +335,7 @@
   [c {:keys [heading dir] :as plan} k]
   (let [cells (line-cells plan)
         r (await (declined/call-child! c :stair 'jobs.access.stair
-                                 {:dir dir :heading heading :y ((cells (segment-end plan k)) 1)
+                                 {:dir dir :heading heading :fetch false :y ((cells (segment-end plan k)) 1)
                                   :accept (set (:accept (:args c))) :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
     (if (not= :done r)
       (if (= :declined r) :declined :continue)

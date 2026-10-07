@@ -34,7 +34,7 @@
   or other cell reason that appeared during the call, or an item still missing after the fetch (:need). The caller
   decides whether to try again.
 
-  :fetch (default false; jobs.lib.fetch): a :need wait is not waited out. The call runs jobs.items.obtain for one
+  :fetch (default true; jobs.lib.fetch; false waits :need): a :need wait is not waited out. The call runs jobs.items.obtain for one
   of the item (child :fetch), then place. A failed fetch is remembered for :fail-minutes; meanwhile the check waits
   :need with {:fetch {:failed reason ...}}.")
 
@@ -44,7 +44,7 @@
    :any-of {:doc "block items, the first carried one is placed (instead of :item)" :default nil}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
-   :fetch {:doc "get the missing block item instead of waiting :need (jobs.lib.fetch): true, a set of kinds or a map of limits" :default false}})
+   :fetch {:doc "get the missing block item instead of waiting :need (jobs.lib.fetch): true, a set of kinds or a map of limits" :default true}})
 
 (defn wanted [{:keys [item any-of]}]
   (vec (if item [item] any-of)))
