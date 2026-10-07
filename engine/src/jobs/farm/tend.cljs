@@ -94,7 +94,7 @@
   ["wheat_seeds" "beetroot_seeds" "melon_seeds" "pumpkin_seeds" "carrot" "potato" "wheat" "beetroot" "melon_slice"
    "melon" "pumpkin" "poisonous_potato" "hay_block" "cocoa_beans"])
 
-(def crop-names (set (keys harvest/ripe-age)))
+(def crop-names (set (keys crops/ripe-age)))
 
 ;; ------------------------------------------------------------------ pure helpers
 
@@ -180,8 +180,8 @@
 (defn unripe-in-box
   "The unripe crop cells of the box, read around its centre."
   [p box mid R]
-  (->> (crops/seen-crops p (keys fertilize/ripe-age) (+ R (u/dist (u/pos-of (.-pos (.self p))) mid)) 4096)
-       (filter #(some-> (:age %) (< (fertilize/ripe-age (:name %)))))
+  (->> (crops/seen-crops p (keys crops/ripe-age) (+ R (u/dist (u/pos-of (.-pos (.self p))) mid)) 4096)
+       (filter #(some-> (:age %) (< (crops/ripe-age (:name %)))))
        (map :pos)
        (filter #(in-box? box %))
        vec))
@@ -283,11 +283,11 @@
 
 (defn unripe-planned
   "The planned cells holding their crop, not yet ripe."
-  [p crops]
+  [p cells]
   (filterv (fn [[pos crop]]
              (let [b (u/block-at p pos)]
-               (and b (= crop (.-name b)) (some-> (.-age b) (< (harvest/ripe-age crop))))))
-           crops))
+               (and b (= crop (.-name b)) (some-> (.-age b) (< (crops/ripe-age crop))))))
+           cells))
 
 (defn wrong-crops
   "[{:pos :found :want}] of the crop cells that hold a crop of another kind."
@@ -300,8 +300,8 @@
 
 (defn seed-reserve
   "{seed count}: twice the planned cells of each crop."
-  [crops]
-  (into {} (for [[crop n] (frequencies (vals crops))] [(harvest/seed-of crop) (* 2 n)])))
+  [cells]
+  (into {} (for [[crop n] (frequencies (vals cells))] [(crops/seed-of crop) (* 2 n)])))
 
 (defn note-refused!
   "One farm-tend.refused warn per job when the rules refuse the hoe on untilled ground cells of the plan for a

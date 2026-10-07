@@ -2,6 +2,7 @@
   (:require [clojure.string :as str]
             [jobs.farm.permit :as permit]
             [engine.ctx :as ctx]
+            [jobs.lib.crops :as crops]
             [jobs.lib.gate :as gate]
             [jobs.lib.util :as u]
             [jobs.farm.harvest :as harvest]
@@ -64,7 +65,7 @@
         carried #(get counts % 0)]
     (if seed
       (when (pos? (carried seed)) seed)
-      (->> (vals harvest/seed-of)
+      (->> (vals crops/seed-of)
            (filter #(pos? (carried %)))
            (sort-by #(- (carried %)))
            first))))
@@ -74,10 +75,7 @@
 (defn count-fail
   "Count a fail of kind k (:fails or :walk-fails) on the cell at pos; the cell is skipped at the max-fails-th."
   [m k pos]
-  (let [n (inc (or (:n (first (filter #(= pos (:pos %)) (k m)))) 0))]
-    (if (>= n max-fails)
-      (update m :skipped (fnil conj []) pos)
-      (update m k (fn [entries] (conj (vec (remove #(= pos (:pos %)) entries)) {:pos pos :n n}))))))
+  (crops/count-entry m k pos max-fails #(update %1 :skipped (fnil conj []) %2)))
 
 (defn owes?
   "A box is given and the run has started, or a bare cell that is not skipped exists and a seed is carried.
@@ -163,7 +161,7 @@
   (when (permit/ok? c (:plan (:args c)) :sow pos)
     (let [r (await (ctx/act c :place (clj->js {:pos pos :item seed})))]
       (case (.-status r)
-        ("placed" "occupied") (ctx/update-mem! c harvest/inc-in :planted)
+        ("placed" "occupied") (ctx/update-mem! c crops/inc-in :planted)
         "no-item" nil
         (ctx/update-mem! c count-fail :fails pos)))))
 
@@ -226,7 +224,7 @@
   (when (seq (sowable-cells c [cell]))
     (let [r (await (ctx/act c :place (clj->js {:pos (update cell :y inc) :item seed})))]
       (case (.-status r)
-        ("placed" "occupied") (do (ctx/update-mem! c harvest/inc-in :planted) nil)
+        ("placed" "occupied") (do (ctx/update-mem! c crops/inc-in :planted) nil)
         "no-item" :no-seed
         (do (ctx/update-mem! c count-fail :fails cell) nil)))))
 

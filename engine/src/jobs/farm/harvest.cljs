@@ -48,9 +48,9 @@
    :part {:doc "with :plan, only the cells of this part" :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
-(def ripe-age {"wheat" 7 "carrots" 7 "potatoes" 7 "beetroots" 3})
+(def ripe-age crops/ripe-age)
 
-(def seed-of {"wheat" "wheat_seeds" "carrots" "carrot" "potatoes" "potato" "beetroots" "beetroot_seeds"})
+(def seed-of crops/seed-of)
 
 (def collect-items ["wheat" "wheat_seeds" "carrot" "potato" "poisonous_potato" "beetroot" "beetroot_seeds"])
 
@@ -176,10 +176,7 @@
 (defn fail-debt
   "Count a refused place on the debt at pos; the cell is bare once it has failed max-place-fails times."
   [m pos]
-  (let [fails (inc (or (:fails (first (filter #(= pos (:pos %)) (:replant m)))) 0))]
-    (if (>= fails max-place-fails)
-      (bare-debt m pos)
-      (update m :replant (fn [debts] (mapv #(if (= pos (:pos %)) (assoc % :fails fails) %) debts))))))
+  (crops/count-debt m :fails pos max-place-fails bare-debt))
 
 (def failed-reach 3.0)
 
@@ -198,20 +195,14 @@
 (defn walk-fail-crop
   "Count a blocked walk to the crop at pos in :walk-fails [{:pos :n}]; the crop is skipped at the max-walk-fails-th."
   [m pos]
-  (let [n (inc (or (:n (first (filter #(= pos (:pos %)) (:walk-fails m)))) 0))]
-    (if (>= n max-walk-fails)
-      (skip-crop m pos)
-      (update m :walk-fails (fn [entries] (conj (vec (remove #(= pos (:pos %)) entries)) {:pos pos :n n}))))))
+  (crops/count-entry m :walk-fails pos max-walk-fails skip-crop))
 
 (defn walk-fail-debt
   "Count a blocked walk to the debt at pos; the cell is bare at the max-walk-fails-th."
   [m pos]
-  (let [n (inc (or (:walk-fails (first (filter #(= pos (:pos %)) (:replant m)))) 0))]
-    (if (>= n max-walk-fails)
-      (bare-debt m pos)
-      (update m :replant (fn [debts] (mapv #(if (= pos (:pos %)) (assoc % :walk-fails n) %) debts))))))
+  (crops/count-debt m :walk-fails pos max-walk-fails bare-debt))
 
-(defn inc-in [m k] (update m k (fnil inc 0)))
+(def inc-in crops/inc-in)
 
 (defn sort-debts
   "{:owed [debts to plant] :gone [pos no longer to plant] :bare [pos with no farmland]} for the debts, read off p."

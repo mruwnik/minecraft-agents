@@ -25,7 +25,7 @@
    :fetch {:doc "get missing bone meal (jobs.lib.fetch): true, a set of kinds or a map of limits; false waits :need instead" :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
-(def ripe-age {"wheat" 7 "carrots" 7 "potatoes" 7 "beetroots" 3})
+(def ripe-age crops/ripe-age)
 
 (defn age-of
   "The age of a block result from the primitives, or nil."
