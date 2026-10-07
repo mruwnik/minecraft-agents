@@ -129,7 +129,8 @@
   admitted to report {:short {}} (a parent reads it), and its first round
   then ends at once without walking or inspecting."
   [c]
-  (boolean (deposit/chest-of (ctx/view c) (:args c))))
+  (or (boolean (deposit/chest-of (ctx/view c) (:args c)))
+      (ctx/wait c {:reason :no-chest})))
 
 (defn give-up!
   "u/fail!, and when it gives up hand the parent the reason and what is short."

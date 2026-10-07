@@ -78,3 +78,17 @@
   (are [args reason] (= reason (waiting-reason 'jobs.survival.log-out args))
     {} :not-night
     {:offline-allowed false} :offline-forbidden))
+
+(deftest access-farm-forestry-storage-checks-say-why-they-decline
+  (are [job args reason] (= reason (waiting-reason job args))
+    'jobs.access.cleanup {} :nothing-to-do
+    'jobs.farm.harvest {:plan "nope"} :plan-trouble
+    'jobs.farm.plant {:plan "nope"} :plan-trouble
+    'jobs.farm.plant {:box box} :nothing-to-do
+    'jobs.farm.tend {:plan "nope"} :plan-trouble
+    'jobs.farm.tend {:box box} :nothing-to-do
+    'jobs.farm.tidy {:plan "nope"} :plan-trouble
+    'jobs.forestry.maintain {:plan "nope"} :plan-trouble
+    'jobs.forestry.prepare {:plan "nope"} :plan-trouble
+    'jobs.storage.kit {} :no-chest
+    'jobs.storage.make-room {:free 1} :enough-room))

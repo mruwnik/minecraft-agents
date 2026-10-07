@@ -335,8 +335,9 @@
 (defn check
   "Fewer than :free slots are free, or the job has acted and has yet to end (a cut run resumes)."
   [c]
-  (boolean (or (< (u/free-slots (:primitives c)) (:free (:args c)))
-               (:acted (ctx/mem c)))))
+  (or (boolean (or (< (u/free-slots (:primitives c)) (:free (:args c)))
+                   (:acted (ctx/mem c))))
+      (ctx/wait c {:reason :enough-room})))
 
 (defn tossed-summary
   "The done event's fields: what was tossed ([{:item :count}]) and a text saying so."
