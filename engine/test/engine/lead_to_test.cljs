@@ -688,3 +688,8 @@
           (is (false? (gate-open? s)) "the gate is shut behind the cow and the body")
           (is (empty? (filter #(false? (:shut? %)) (map :data (mem/entries (mem/view (:store (:eng s))) :opened))))
               "no open-on-purpose entry is left"))))))
+
+(deftest shut-radius-covers-every-opened-gate
+  (let [e #(hash-map :cell {:x % :y 64 :z 0})]
+    (is (= 16 (lead-to/shut-radius {:x 0 :y 64 :z 0} [(e 3)])) "never below the default")
+    (is (= 41 (lead-to/shut-radius {:x 0 :y 64 :z 0} [(e 3) (e 40)])) "a gate 40.5 away")))

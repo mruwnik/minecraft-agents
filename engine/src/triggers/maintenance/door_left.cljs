@@ -10,6 +10,7 @@
   memory), never through a wall."
   (:require [jobs.lib.click :as click]
             [jobs.lib.look :as look]
+            [clojure.string :as str]
             [engine.memory :as mem]
             [jobs.lib.pass :as pass]))
 
@@ -42,8 +43,14 @@
     (when (and name (= :openable (click/kind-of name)) (click/reached? :open properties))
       {:cell cell :column (pass/column-of cell properties)})))
 
+(defn owner-live?
+  "Whether the root job of the walk id `by` (\"j4\" for \"j4/walk\") still has job memory in the view."
+  [view by]
+  (some? (mem/latest view (mem/job-kind (first (str/split (str by) #"/"))))))
+
 (defn left-open
-  "The blocks the walker opened to shut again (:opened entries in view, not those a :leave-open walk left on purpose) that
+  "The blocks the walker opened to shut again (:opened entries in view, not those a :leave-open walk of a job that still
+  lives left on purpose) that
   stand open, whose entry is at least open-ms old, within radius of the body: [{:cell :column :by :dist}] nearest first,
   one per cell. read is open-block or seen-open-block."
   ([p view args open-ms] (left-open p view args open-ms open-block))
@@ -52,7 +59,7 @@
       (->> (mem/entries view :opened)
            (filter (fn [{:keys [t]}] (>= (- (:now view) t) open-ms)))
            (map :data)
-           (remove #(false? (:shut? %)))
+           (remove #(and (false? (:shut? %)) (owner-live? view (:by %))))
            (keep (fn [{:keys [cell by]}]
                    (when-let [o (read p cell)]
                      (assoc o :by by :dist (distance self cell)))))

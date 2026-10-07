@@ -57,11 +57,19 @@
     (aset p "seenBlockAt" (fn [pos] #js {:name "oak_fence_gate" :properties #js {:open "false"} :pos pos :age-ms 5000}))
     (is (false? (holds? p)) "last seen shut, opened unseen: the last seen state counts")))
 
-(deftest a-block-a-walk-left-open-on-purpose-is-not-the-triggers-business
+(defn with-owner
+  "view with job memory for the root job j1 (it lives)."
+  [view]
+  (update view :data mem/add-entry (mem/job-kind "j1") {:t 0 :data {:args {} :children {}}} {:cap 1 :ttl :forever}))
+
+(deftest a-block-a-live-walk-left-open-on-purpose-is-not-the-triggers-business
   (let [p (tu/seeing-all (tu/fake (gate-world true 9 0)))
-        holds? #(dl/door-left p (view-with 60000 0 %) (:args (:door-left triggers/all)) nil)]
-    (is (false? (holds? {:shut? false})) "a :leave-open walk's entry")
-    (is (true? (holds? {})))))
+        holds? #(dl/door-left p % (:args (:door-left triggers/all)) nil)]
+    (is (false? (holds? (with-owner (view-with 60000 0 {:shut? false})))) "a :leave-open walk's entry, its job lives")
+    (is (true? (holds? (view-with 60000 0 {:shut? false}))) "the job is gone (cancelled): the gate is a leftover")
+    (is (true? (holds? (view-with 60000 0 {:shut? false :by "j1/walk"}))) "a child id of a gone job")
+    (is (false? (holds? (with-owner (view-with 60000 0 {:shut? false :by "j1/walk"})))) "a child id of a live job")
+    (is (true? (holds? (view-with 60000 0 {}))))))
 
 (deftest the-trigger-is-registered-with-the-job-that-shuts-doors
   (is (= dl/door-left (:when (:door-left triggers/all))))

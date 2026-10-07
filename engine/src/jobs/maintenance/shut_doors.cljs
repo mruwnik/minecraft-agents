@@ -10,7 +10,7 @@
   triggers.maintenance.door-left).
   Only blocks with an :opened entry count (written by jobs.lib.pass when a walk opens a block, dropped when it
   shuts it), whatever their age. A block the walker did not open is never touched. Blocks a :leave-open walk left
-  open on purpose are left alone.
+  open on purpose are left alone while that walk's job lives (once it is gone, they count).
   One run shuts them all, nearest first. For each it walks within :reach (a jobs.movement.go-to child, doors :never:
   it opens nothing on the way), then shuts it as the walker does (pass/shut-column!). An animal in the cell is waited
   out, never pushed. A block that cannot be reached, that the body stands in the column of, or that is not shut after
