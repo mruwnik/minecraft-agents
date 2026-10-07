@@ -166,6 +166,8 @@
   (fs/writeFileSync file text)
   (let [t (+ 60 (rand-int 1000) (/ (.-mtimeMs (fs/statSync file)) 1000))] (fs/utimesSync file t t)))
 
+(defn unreloaded [seen] (remove #(= :world.reloaded (:kind %)) @seen))
+
 (defn later! [clock w] (swap! clock + 3000) (world/zones w))
 
 (deftest a-missing-zone-file-is-never-read-with-one-warn-naming-it
@@ -181,7 +183,21 @@
     (is (= [] (world/zones w)))
     (write-zones! file (pr-str [farm-zone]))
     (is (= [farm-zone] (later! clock w)))
-    (is (= [] @seen))))
+    (is (= [] (unreloaded seen)))))
+
+(defn reloads [seen] (filter #(= :world.reloaded (:kind %)) @seen))
+
+(deftest a-re-read-zone-file-emits-a-debug-reload-and-an-unchanged-one-does-not
+  (let [{:keys [file clock seen w]} (zone-reader)]
+    (write-zones! file (pr-str [farm-zone]))
+    (world/zones w)
+    (is (= [[:debug [file]]] (map (juxt :level :files) (reloads seen))))
+    (later! clock w)
+    (later! clock w)
+    (is (= 1 (count (reloads seen))))
+    (write-zones! file (pr-str [(assoc farm-zone :name "pen")]))
+    (later! clock w)
+    (is (= 2 (count (reloads seen))))))
 
 (deftest a-broken-edit-keeps-the-last-good-zones-with-one-warn-until-fixed
   (let [{:keys [file clock seen w]} (zone-reader)]
@@ -192,17 +208,17 @@
     (is (= [farm-zone] (later! clock w)))
     (is (= [{:kind :world.zones-unreadable :level :warn :path file :kept true
              :error "zone farm: :owner must be a non-empty string"}]
-           (map #(select-keys % [:kind :level :path :kept :error]) @seen)))
+           (map #(select-keys % [:kind :level :path :kept :error]) (unreloaded seen))))
     (write-zones! file (pr-str [(assoc farm-zone :name "pen")]))
     (is (= "pen" (:name (first (later! clock w)))))
-    (is (= 1 (count @seen)))))
+    (is (= 1 (count (unreloaded seen))))))
 
 (deftest a-zone-file-broken-from-the-start-is-never-read-until-fixed
   (let [{:keys [file clock seen w]} (zone-reader)]
     (write-zones! file "[{:name ")
     (is (nil? (world/zones w)))
     (is (nil? (later! clock w)))
-    (is (= [false] (map :kept @seen)))
+    (is (= [false] (map :kept (unreloaded seen))))
     (write-zones! file (pr-str [farm-zone]))
     (is (= [farm-zone] (later! clock w)))))
 
@@ -213,7 +229,7 @@
     (fs/unlinkSync file)
     (is (nil? (later! clock w)))
     (is (nil? (later! clock w)))
-    (is (= [:world.zones-missing] (map :kind @seen)))))
+    (is (= [:world.zones-missing] (map :kind (unreloaded seen))))))
 
 (deftest a-world-from-data-has-no-zones-unless-given
   (let [w (world/of-data {} {})]
@@ -328,6 +344,16 @@
 (defn later-markers! [clock w] (swap! clock + 3000) (world/markers w))
 
 (defn write-markers! [file text] (write-zones! file text))
+
+(deftest a-re-read-markers-file-emits-a-debug-reload-and-an-unchanged-one-does-not
+  (let [{:keys [file clock seen w]} (marker-reader)]
+    (write-zones! file (js/JSON.stringify (clj->js [a-marker])))
+    (world/markers w)
+    (later-markers! clock w)
+    (is (= [[:debug [file]]] (map (juxt :level :files) (reloads seen))))
+    (write-zones! file (js/JSON.stringify (clj->js [])))
+    (later-markers! clock w)
+    (is (= 2 (count (reloads seen))))))
 
 (deftest a-missing-markers-file-is-no-markers-without-a-warn
   (let [{:keys [clock seen w]} (marker-reader)]

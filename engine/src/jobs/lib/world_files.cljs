@@ -9,6 +9,7 @@
 
   A world is {:state atom :said atom :opts {...}}. Jobs ask through jobs.lib.world (plan, zones, claims), which
   answers from memory.
+    A re-read zones.edn or places.json emits a :debug world.reloaded naming the files.
     The files are stat-ed again at most every :every-ms, lazily, by the first read after that.
     Only files whose stamp (modification time and size) changed are read and parsed again.
     A file that turns unreadable or invalid keeps its last good copy and warns once
@@ -199,6 +200,13 @@
    :text (str (name what) " " id " cannot be read (" error ")"
               (if kept "; the last good copy is still used" "; it was never readable"))})
 
+(defn reloaded-event
+  "The :debug event for zone or markers files whose stamp changed (so they were read again), or nil."
+  [files]
+  (when (seq files)
+    {:source :system :kind :world.reloaded :level :debug :files (vec files)
+     :text (str "re-read " (str/join ", " files))}))
+
 (defn refresh!
   "Stat the files when due and fold in what changed; emits a warn per newly broken file. A world without
   files (of-data) is never refreshed."
@@ -229,6 +237,10 @@
           (doseq [[kind [_ warns]] results
                   warn warns]
             ((:emit opts) (warn-event (get kinds kind) warn)))
+          (when-let [ev (reloaded-event (cond-> []
+                                          (and file (not= (:stamp zone-entry) (:stamp (:zones old))) (:stamp zone-entry)) (conj file)
+                                          (and markers-file (not= (:stamp markers-entry) (:stamp (:markers old))) (:stamp markers-entry)) (conj markers-file)))]
+            ((:emit opts) ev))
           (when zone-warn
             ((:emit opts) (zones-warn-event file zone-warn)))
           (when markers-warn
