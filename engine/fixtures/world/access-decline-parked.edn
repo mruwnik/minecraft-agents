@@ -40,7 +40,8 @@
             {:event {:source :job :kind :leave-tunnel.escape} :within-s 150 :of-job true}]
    :limit-s 170}
   ;; the control: a toggle that can never succeed is NOT parked for ever; its own decline ends the herd (:short, a few
-  ;; rounds). After the gate opens it is swapped for an iron trapdoor, which ignores a hand (toggle :needs-redstone).
+  ;; rounds). Once the cow is released inside the pen the gate is swapped for an iron trapdoor, which ignores a hand (toggle
+  ;; :needs-redstone); swapped earlier it hid the cow behind it and the herd ended :lost before any toggle.
   {:name "herd-stuck-gate-ends-through-its-own-give-up"
    :tags [:herd :animals]
    :plot {:floor "grass_block" :height 16}
@@ -50,7 +51,7 @@
    :body {:at [12.5 0 16.5] :inventory [["lead" 4]]}
    :act [[:summon "cow" [10.5 0 18.5]] [:wait-s 2]
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]
-         [:await {:source :job :kind :toggle.done :data {:wanted :open}} 60]
+         [:await {:source :job :kind :unleash.done :data {:reason :unleashed}} 90]
          [:rcon "execute positioned $X $Y $Z run setblock ~18 ~ ~16 iron_trapdoor[open=true]"]]
    :expect [{:event {:source :job :kind :toggle.declined :data {:reason :needs-redstone}} :within-s 120 :of-job true}
             {:event {:source :job :kind :herd.done :data {:reason :short}} :within-s 120 :of-job true}
