@@ -193,6 +193,8 @@ use-on, furnace, enchant) have the details. The fake has the same sensing fields
 built-in recipe table, and instant, deterministic behaviour (`moveTo` jumps to the target, `offline` waits
 `ms * spec.offlineScale`).
 
+`engine.job-fuzz-test` runs every registered job on seeded random args and worlds and fails on a throwing check or round, a plain-false decline, a stop without reason or a sync runaway; carded defects sit in its `known` map. `FUZZ_JOB`, `FUZZ_SEED`, `FUZZ_CASES`, `FUZZ_TRACE`, `FUZZ_EXTREME`, `FUZZ_WRONG_TYPES` replay or widen a run.
+
 ## Jobs
 
 A job is a namespace under `src/jobs/` exporting `check` and `round`, and optionally `doc` and `args`. The
