@@ -10,14 +10,19 @@
   - door-beside?: whether a door or gate borders the cells the body can walk to (a way out go-to handles).
   - choose: the escalation for a body here and a goal.
   Cells are [x y z]. block-at maps a cell to its block name (nil when not loaded)."
-  (:require [jobs.lib.access.rules :as rules]
+  (:require [engine.settings :as settings]
+            [jobs.lib.access.rules :as rules]
             [jobs.lib.blocks :as b]
             [jobs.lib.reach :as reach]
             [jobs.lib.shelter :as sh]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.util :as u]))
 
-(def max-depth 8)
+(def settings
+  {::max-depth {:default 8 :doc "How deep an escape digs or climbs at most." :type :int :min 1}
+   ::max-door {:default 3 :doc "The longest run of doors an escape path may pass." :type :int :min 1}})
+
+(defn max-depth [] (settings/get settings ::max-depth))
 
 (def wall-search-radius
   "How far (blocks along x and along z) wall-spot looks."
@@ -82,7 +87,7 @@
 (defn pit-depth
   "Levels up from the feet, 0, 1, ..., walled on at least three sides, at most max-depth."
   [block-at feet]
-  (count (take-while #(walled-at? block-at (up feet %)) (range max-depth))))
+  (count (take-while #(walled-at? block-at (up feet %)) (range (max-depth)))))
 
 (defn stair-cuts
   "The cells a stair up along dir ([dx dz]) cuts from feet in n steps, step by step (jobs.access.stair/step-cells)."
@@ -205,7 +210,7 @@
     (when (seq have)
       (let [[item n] (apply max-key val have)] {:item item :count n}))))
 
-(def max-door 3)
+(defn max-door [] (settings/get settings ::max-door))
 
 (defn door-spot
   "The nearest cell (breadth-first through standable cells, within wall-search-radius) other than feet from which a
@@ -218,7 +223,7 @@
                                  (<= (js/Math.abs (- z hz)) wall-search-radius)))
         kind-at (reach/lookup p)
         standable? (fn [[x y z]] (reach/standable-cell? p {:x x :y y :z z} kind-at))
-        ok? (fn [cell] (when-let [gap (door block-at cell dir max-door)] (every? diggable (:cells gap))))]
+        ok? (fn [cell] (when-let [gap (door block-at cell dir (max-door))] (every? diggable (:cells gap))))]
     (loop [queue #queue [feet] seen #{feet}]
       (when-let [cell (peek queue)]
         (if (and (not= cell feet) (ok? cell))
@@ -249,12 +254,12 @@
          depth (pit-depth block-at feet)
          {:keys [item count]} (pillar-item p)
          pillar-blocks? (and (not (skip :pillar)) (pos? depth) item (>= count depth))
-         rise (if (pos? depth) depth (min max-depth (max 0 (- (second goal) (second feet)))))
+         rise (if (pos? depth) depth (min (max-depth) (max 0 (- (second goal) (second feet)))))
          stair (when (and (not (skip :stair)) (pos? rise))
                  (stair-heading block-at feet
                                 (remove #(skip [:stair (heading-names %)]) (distinct (cond->> cardinals dir (cons dir))))
                                 rise may-dig? own?))
-         gap (when (and dir (not (skip :clear-path))) (door block-at feet dir max-door))
+         gap (when (and dir (not (skip :clear-path))) (door block-at feet dir (max-door)))
          spot (delay (when (and dir (not (skip :approach)) (walled-side? block-at feet))
                        (door-spot p feet dir #(diggable? block-at may-dig? own? %))))]
      (cond

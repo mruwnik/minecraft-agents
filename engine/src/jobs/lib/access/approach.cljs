@@ -23,14 +23,20 @@
 
   Ranking: walking a block costs 1, placing a block pillar-cost. A stand needs no placement, so any stand wins over a
   pillar."
-  (:require [jobs.lib.access.rules :as rules]
+  (:require [engine.settings :as settings]
+            [jobs.lib.access.rules :as rules]
             [jobs.lib.util :as u]))
 
-(def default-radius 3)
+(def settings
+  {::default-radius {:default 3 :doc "Blocks round a target an approach cell is searched." :type :int :min 1}
+   ::max-radius {:default 5 :doc "The most that radius may be." :type :int :min 1}
+   ::default-max-height {:default 10 :doc "How high above the body an approach may climb." :type :int :min 1}})
 
-(def max-radius 5)
+(defn default-radius [] (settings/get settings ::default-radius))
 
-(def default-max-height 10)
+(defn max-radius [] (settings/get settings ::max-radius))
+
+(defn default-max-height [] (settings/get settings ::default-max-height))
 
 (def pillar-cost
   "Walking cost of placing one block: it takes a jump and a placement, about two steps."
@@ -125,11 +131,11 @@
 (defn plan
   "See the namespace docstring."
   [{:keys [targets block-at radius] :as in}]
-  (let [in (assoc in :max-height (or (:max-height in) default-max-height))]
+  (let [in (assoc in :max-height (or (:max-height in) (default-max-height)))]
     (if (some #(nil? (block-at %)) targets)
       {:reason :not-loaded}
-      (loop [r (or radius default-radius)]
+      (loop [r (or radius (default-radius))]
         (let [res (plan-at-radius in r)]
-          (if (and (:reason res) (< r max-radius))
+          (if (and (:reason res) (< r (max-radius)))
             (recur (inc r))
             res))))))

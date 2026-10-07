@@ -1,5 +1,6 @@
 (ns jobs.gather.mine
-  (:require [jobs.lib.blocks :as blocks]
+  (:require [engine.game :as game]
+            [jobs.lib.blocks :as blocks]
             [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
@@ -621,7 +622,7 @@
         {:keys [x y z]} (u/self-pos c)
         kind-at (fn [x y z] (reach-lib/arrow-kind-of (u/block-at p {:x x :y y :z z})))]
     (reach-lib/ray-clear? kind-at
-                          [(+ (js/Math.floor x) 0.5) (+ y reach-lib/eye-height) (+ (js/Math.floor z) 0.5)]
+                          [(+ (js/Math.floor x) 0.5) (+ y game/eye-height) (+ (js/Math.floor z) 0.5)]
                           [(+ (:x pos) 0.5) (+ (:y pos) 0.25) (+ (:z pos) 0.5)])))
 
 (defn in-line

@@ -19,15 +19,23 @@
   Leaks: with a :box, any step out of it. Without one, the fill runs into open
   ground until :max-cells and the way out is read off the walk to its far end
   (an open gate, a gap or a ridge climbed over). A leaky pen is refilled with
-  those cells walled off, so :inside and :gates are the pen's own.")
+  those cells walled off, so :inside and :gates are the pen's own."
+  (:require [engine.settings :as settings]))
+
+(def settings
+  {::max-drop {:default 3.0 :doc "Blocks a penned animal may drop when it walks." :type :number :min 0}
+   ::body-height {:default 1.4 :doc "Height of an animal's box a pen needs clear." :type :number :min 0}
+   ::gate-scan {:default 600 :doc "The most cells searched for gates when the flood was cut short." :type :int :min 1}
+   ::max-seals {:default 4 :doc "Rounds of leaks shut when planning a pen." :type :int :min 0}
+   ::max-listed {:default 12 :doc "Leaks listed in a pen report." :type :int :min 1}})
 
 (def step-up 1.0)
-(def max-drop 3.0)
-(def body-height 1.4)
+(defn max-drop [] (settings/get settings ::max-drop))
+(defn body-height [] (settings/get settings ::body-height))
 (def eps 1e-6)
 (def default-max-cells 2000)
-(def gate-scan 600)
-(def max-seals 4)
+(defn gate-scan [] (settings/get settings ::gate-scan))
+(defn max-seals [] (settings/get settings ::max-seals))
 
 ;; ------------------------------------------------------------------ what a block is to an animal
 
@@ -132,13 +140,13 @@
   (and c
        (not (:hazard? c))
        (not (:unloaded? c))
-       (clear? world x z (+ y (:hi c)) (+ y (:hi c) body-height))))
+       (clear? world x z (+ y (:hi c)) (+ y (:hi c) (body-height)))))
 
 (defn reach
   "Where an animal standing at height s steps into column x z: {:top :perch?}, or nil."
   [{:keys [cell] :as world} x z s]
   (let [highest (js/Math.floor (+ s step-up eps))
-        lowest (js/Math.floor (- s max-drop 1 eps))]
+        lowest (js/Math.floor (- s (max-drop) 1 eps))]
     (loop [y highest]
       (when (>= y lowest)
         (let [c (cell x y z)
@@ -147,8 +155,8 @@
             (recur (dec y))
             (when (and (not (:hazard? c))
                        (not (:unloaded? c))
-                       (>= t (- s max-drop eps))
-                       (clear? world x z t (+ (max s t) body-height)))
+                       (>= t (- s (max-drop) eps))
+                       (clear? world x z t (+ (max s t) (body-height))))
               {:top t :perch? (> (:hi c) 1)})))))))
 
 (def orthogonal [[1 0] [-1 0] [0 1] [0 -1]])
@@ -332,7 +340,7 @@
   [opts first-leaks]
   (loop [sealed #{} leaks first-leaks n 0]
     (let [real (remove #(= :unloaded (:why %)) leaks)]
-      (when (and (seq real) (not-any? #(= :climb (:why %)) real) (< n max-seals))
+      (when (and (seq real) (not-any? #(= :climb (:why %)) real) (< n (max-seals)))
         (let [sealed (into sealed (map (fn [{{:keys [x y z]} :pos}] [x y z])) real)
               {:keys [fill leaks]} (analyse (assoc opts :sealed sealed))]
           (if (:truncated? fill)
@@ -366,17 +374,17 @@
                     shut (:order shut)
                     :else [])]
         (answer closed? reason (set cells) leaks
-                (gates-near world (if (and truncated? (not shut)) (take gate-scan order) cells)))))))
+                (gates-near world (if (and truncated? (not shut)) (take (gate-scan) order) cells)))))))
 
 (defn in-pen?
   "True when position pos ({:x :y :z}, floats) is on a feet cell of the pen's inside."
   [{:keys [inside]} {:keys [x y z]}]
   (contains? inside [(js/Math.floor x) (js/Math.floor (+ y 0.01)) (js/Math.floor z)]))
 
-(def max-listed 12)
+(defn max-listed [] (settings/get settings ::max-listed))
 
 (defn summary
   "The answer as the event and result carry it: the cells counted, the leaks capped."
   [{:keys [closed? reason inside leaks gates]}]
-  (cond-> {:closed? closed? :reason reason :cells (count inside) :leaks (vec (take max-listed leaks)) :gates gates}
-    (> (count leaks) max-listed) (assoc :leaks-total (count leaks))))
+  (cond-> {:closed? closed? :reason reason :cells (count inside) :leaks (vec (take (max-listed) leaks)) :gates gates}
+    (> (count leaks) (max-listed)) (assoc :leaks-total (count leaks))))

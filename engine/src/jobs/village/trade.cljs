@@ -184,9 +184,9 @@
                             (let [r (await (step! c))]
                               (cond
                                 (map? r) (let [[reason text] (:retry r)]
-                                           (if (< (swap! fails inc) u/max-failures)
+                                           (if (< (swap! fails inc) (u/max-failures))
                                              :again
-                                             (do (ctx/emit! c :trade.gave-up :warn {:tries u/max-failures :reason reason :text text})
+                                             (do (ctx/emit! c :trade.gave-up :warn {:tries (u/max-failures) :reason reason :text text})
                                                  (finish! c {:status :stopped :reason reason}))))
                                 (= :again r) (do (reset! fails 0) :again)
                                 :else r)))))))

@@ -2,9 +2,13 @@
   "The food table, read from minecraft-data's foods for the version the body is connected with (hunger points and saturation),
   and the three short judgement lists on top of it: harmful, precious and named-only foods. The data names
   mob and fish buckets as foods (they are not eaten); those are left out."
-  (:require ["minecraft-data" :as minecraft-data]
+  (:require [engine.settings :as settings]
+            ["minecraft-data" :as minecraft-data]
             [clojure.string :as str]
             [engine.game :as game]))
+
+(def settings
+  {::low-health {:default 10 :doc "Below this health (of 20) precious food is eaten unnamed." :type :int :min 0}})
 
 (def table-for
   "{item name {:points :saturation}} for every food minecraft-data lists for a version (memoised)."
@@ -29,7 +33,7 @@
   "Foods with an effect worse than hunger (a teleport, random effects): eaten only when named."
   #{"chorus_fruit" "suspicious_stew"})
 
-(def low-health "Below this health (of 20) precious food is eaten unnamed." 10)
+(defn low-health [] (settings/get settings ::low-health))
 
 (defn food? [item] (contains? (table) item))
 
@@ -80,7 +84,7 @@
   [health item]
   (and (edible? item)
        (not (contains? named-only item))
-       (or (not (contains? precious item)) (< health low-health))))
+       (or (not (contains? precious item)) (< health (low-health)))))
 
 (defn carries-food?
   "Whether the sensed self carries something a meal would eat."

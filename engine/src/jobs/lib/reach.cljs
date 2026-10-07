@@ -4,7 +4,8 @@
   enclosed? (the body shut in) and ray-clear?/line-of-fire? (a ray from a ranged mob's eye to the body's eye or centre
   that no arrow-stopping block crosses). jobs.lib.reach.proofs shares walk proofs between the mobs of one query;
   jobs.lib.danger decides which known mobs are real dangers."
-  (:require [clojure.string :as str]
+  (:require [engine.game :as game]
+            [clojure.string :as str]
             [engine.entity-observations :as obs]
             [engine.sight :as sight]
             [jobs.lib.combat :as combat]
@@ -122,7 +123,6 @@
           (keyword-identical? :solid (kind-at x (dec y) z))
           (not (hazard-blocks (some-> below .-name)))))))
 
-(def hitbox-half 0.3)
 
 (defn overlap [a0 a1 c] (max 0 (- (min a1 (inc c)) (max a0 c))))
 
@@ -141,9 +141,9 @@
                   #(standable-cell? p %))]
     (if (stands? centre)
       centre
-      (or (->> (for [cx (range (js/Math.floor (- x hitbox-half)) (inc (js/Math.floor (+ x hitbox-half))))
-                     cz (range (js/Math.floor (- z hitbox-half)) (inc (js/Math.floor (+ z hitbox-half))))
-                     :let [area (* (overlap (- x hitbox-half) (+ x hitbox-half) cx) (overlap (- z hitbox-half) (+ z hitbox-half) cz))]
+      (or (->> (for [cx (range (js/Math.floor (- x game/hitbox-half)) (inc (js/Math.floor (+ x game/hitbox-half))))
+                     cz (range (js/Math.floor (- z game/hitbox-half)) (inc (js/Math.floor (+ z game/hitbox-half))))
+                     :let [area (* (overlap (- x game/hitbox-half) (+ x game/hitbox-half) cx) (overlap (- z game/hitbox-half) (+ z game/hitbox-half) cz))]
                      :when (and (pos? area) (not (and (== cx (:x centre)) (== cz (:z centre)))))]
                  [area cx cz])
                (sort-by (fn [[area cx cz]] [(- area) cx cz]))
@@ -387,7 +387,6 @@
       (re-find arrow-passes name) :open
       :else :solid)))
 
-(def eye-height 1.62)
 
 (defn ray-clear?
   "Whether the segment from a to b ([x y z] numbers) crosses no :solid cell of kind-at (start and end cells do not
@@ -399,6 +398,6 @@
   "Whether a ranged mob at mob-pos ({:x :y :z}, feet) has a clear arrow line to the body at body-pos (feet): a ray
   from the mob's eye to the body's eye or centre."
   [arrow-at mob-pos body-pos]
-  (let [from [(:x mob-pos) (+ (:y mob-pos) eye-height) (:z mob-pos)]
+  (let [from [(:x mob-pos) (+ (:y mob-pos) game/eye-height) (:z mob-pos)]
         bx (:x body-pos) bz (:z body-pos)]
-    (boolean (some #(ray-clear? arrow-at from [bx (+ (:y body-pos) %) bz]) [eye-height 0.9]))))
+    (boolean (some #(ray-clear? arrow-at from [bx (+ (:y body-pos) %) bz]) [game/eye-height 0.9]))))

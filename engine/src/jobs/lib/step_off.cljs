@@ -1,12 +1,16 @@
 (ns jobs.lib.step-off
   "Leaving a cell the body stands in so something can be put or dug there: one go-to to the nearest cell within two
   blocks that can be stood on and is no hazard, never the column of the cell itself."
-  (:require [engine.ctx :as ctx]
+  (:require [engine.settings :as settings]
+            [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.reach :as reach]
             [jobs.lib.util :as u]))
 
-(def reach-blocks 2)
+(def settings
+  {::reach-blocks {:default 2 :doc "Blocks a step-off moves the body away." :type :int :min 1}})
+
+(defn reach-blocks [] (settings/get settings ::reach-blocks))
 
 (defn hazard-at?
   "Whether the feet or head cell holds fire, lava or another block a body must not stand in."
@@ -23,7 +27,7 @@
   "The cells {:x :y :z} to stand on within reach (default two) blocks (feet one down, level or one up) of the column of cell, nearest
   first, level before a step. Left out: standable-cell? says no, a hazard at feet or head, a member of avoid (a set of
   [x y z]), or one ok? (a fn of the cell, default all) refuses."
-  [p {:keys [x y z]} {:keys [avoid ok? reach] :or {avoid #{} ok? (constantly true) reach reach-blocks}}]
+  [p {:keys [x y z]} {:keys [avoid ok? reach] :or {avoid #{} ok? (constantly true) reach (reach-blocks)}}]
   (let [r (range (- reach) (inc reach))]
     (->> (for [dx r dz r dy [0 1 -1]
                :when (not (and (zero? dx) (zero? dz)))]

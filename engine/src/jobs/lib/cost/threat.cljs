@@ -3,18 +3,23 @@
   deals over some seconds of exposure after the body's armour (jobs.lib.cost.armour).
   A creeper is one blast of 43 (:explosion) however long the exposure; a ranged mob shoots (:projectile); any other
   hits at its mob-dps (3 if unknown) once a second (:melee). Endermen and zombified piglins only fight when provoked."
-  (:require ["minecraft-data" :as minecraft-data]
+  (:require [engine.settings :as settings]
+            ["minecraft-data" :as minecraft-data]
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.cost.armour :as armour]))
+
+(def settings
+  {::creeper-blast {:default 43 :doc "Damage a creeper's blast is costed at." :type :int :min 0}
+   ::provoked-share {:default 0.1 :doc "What a provoked-only mob's threat counts for when it is met, not fought." :type :number :min 0}})
 
 (def mob-dps
   "Damage a mob deals per second while it can hit the body (normal difficulty). Unknown mobs count as 3."
   {"zombie" 3 "husk" 3 "drowned" 3 "zombie_villager" 3 "skeleton" 2 "stray" 2 "bogged" 2 "spider" 2 "cave_spider" 3
    "witch" 3 "pillager" 2 "vindicator" 8 "slime" 2 "silverfish" 1 "endermite" 2 "phantom" 2 "enderman" 7})
 
-(def creeper-blast 43)
+(defn creeper-blast [] (settings/get settings ::creeper-blast))
 (def provoked-only #{"enderman" "zombified_piglin"})
-(def provoked-share "What a provoked-only mob's threat counts for when it is met, not fought." 0.1)
+(defn provoked-share [] (settings/get settings ::provoked-share))
 
 (defn hostile?
   "Whether mob {:name :kind} is hostile for minecraft-data version: its entity type \"hostile\" (or category
@@ -34,7 +39,7 @@
   "{:threat :hits} of mob-name over seconds of exposure, before armour."
   [mob-name seconds]
   (if (= "creeper" mob-name)
-    {:threat creeper-blast :hits 1}
+    {:threat (creeper-blast) :hits 1}
     {:threat (* seconds (get mob-dps mob-name 3)) :hits seconds}))
 
 (defn mob-hurt

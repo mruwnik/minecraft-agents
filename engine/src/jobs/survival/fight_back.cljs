@@ -33,8 +33,8 @@
 (defn given-up?
   "Whether the walk towards hostile e has been blocked, or swings at it done no damage, u/max-failures times."
   [c e]
-  (or (>= (get-in (ctx/mem c) [:blocked (.-id e)] 0) u/max-failures)
-      (>= (get-in (ctx/mem c) [:no-damage (.-id e)] 0) u/max-failures)))
+  (or (>= (get-in (ctx/mem c) [:blocked (.-id e)] 0) (u/max-failures))
+      (>= (get-in (ctx/mem c) [:no-damage (.-id e)] 0) (u/max-failures))))
 
 (defn start-of
   "Where the job started: the first round's position (the current one before it)."
@@ -74,7 +74,7 @@
   [c target]
   (let [n (inc (get-in (ctx/mem c) [:blocked (.-id target)] 0))]
     (ctx/update-mem! c assoc-in [:blocked (.-id target)] n)
-    (when (= n u/max-failures)
+    (when (= n (u/max-failures))
       (ctx/emit! c :fight_unreachable :warn {:text (str "cannot reach the " (.-name target) ", giving up on it")}))))
 
 (defn note-hit!
@@ -95,7 +95,7 @@
         (note-hit! c target result))
     (let [n (inc (get-in (ctx/mem c) [:no-damage (.-id target)] 0))]
       (ctx/update-mem! c assoc-in [:no-damage (.-id target)] n)
-      (when (= n u/max-failures)
+      (when (= n (u/max-failures))
         (ctx/emit! c :fight_no_damage :warn {:text (str "swings at the " (.-name target) " do no damage, giving up on it")})))))
 
 (def chase-timeout-s

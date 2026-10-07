@@ -24,7 +24,8 @@
     An entry is {:stamp [mtime size] :value v :error text}: :value the last good copy, :error the current file's
     trouble. The zone entry is {:missing true} while there is no file.
     :area-claims holds the claims file, :markers the markers file. :claims and :footprints are the plans' cells, by plan and by cell."
-  (:require ["fs" :as fs]
+  (:require [engine.settings :as settings]
+            ["fs" :as fs]
             ["path" :as path]
             [clojure.string :as str]
             [engine.file-sync :as fsync]
@@ -32,7 +33,12 @@
             [plan.parse :as parse]
             [plan.shape :as shape]))
 
-(def default-every-ms 3000)
+(def settings
+  {::default-every-ms {:default 3000 :doc "How often a world file is re-read, in ms." :type :int :min 0}
+   ::default-marker-limit {:default 10 :doc "Markers a world file listing returns by default." :type :int :min 1}
+   ::max-marker-limit {:default 50 :doc "The most markers a listing may ask for." :type :int :min 1}})
+
+(defn default-every-ms [] (settings/get settings ::default-every-ms))
 
 ;; ------------------------------------------------------------------ pure bookkeeping
 
@@ -257,7 +263,7 @@
   {:state (atom {:plans {} :blueprints {}})
    :said (atom #{})
    :derived (atom {})
-   :opts (assoc opts :now (or now js/Date.now) :every-ms (or every-ms default-every-ms))})
+   :opts (assoc opts :now (or now js/Date.now) :every-ms (or every-ms (default-every-ms)))})
 
 (defn data-state [plans blueprints]
   (expand-all {:plans (update-vals plans (fn [p] {:value p}))
@@ -382,8 +388,8 @@
   [w name]
   (first (filter #(= name (:name %)) (markers w))))
 
-(def default-marker-limit 10)
-(def max-marker-limit 50)
+(defn default-marker-limit [] (settings/get settings ::default-marker-limit))
+(defn max-marker-limit [] (settings/get settings ::max-marker-limit))
 
 (defn find-markers
   "A bounded search of markers (a vector of maps, one pass, no file read): {:text :kind :near {:x :y :z} :limit}. :text matches
@@ -399,7 +405,7 @@
                        (+ (* dx dx) (* dy dy) (* dz dz))))
         near (when (every? #(number? (% near)) [:x :y :z]) near)
         hits (filter #(and (or (nil? t) (has? %)) (or (nil? k) (= k (low (:kind %))))) markers)]
-    (vec (take (min max-marker-limit (or limit default-marker-limit)) (if near (sort-by dist hits) hits)))))
+    (vec (take (min (max-marker-limit) (or limit (default-marker-limit))) (if near (sort-by dist hits) hits)))))
 
 (defn live-claims
   "The claims that are :active (keyword or text) and whose :until is after now (ms)."

@@ -31,7 +31,7 @@
            (and (nil? item)
                 (not (contains? foods/named-only name))
                 (or allow-bad (not (contains? foods/harmful name)))
-                (or (not (contains? foods/precious name)) (< health foods/low-health))))))
+                (or (not (contains? foods/precious name)) (< health (foods/low-health)))))))
 
 (defn best-food
   "The name of the carried item to eat, or nil: the common foods by most hunger points then most saturation, then

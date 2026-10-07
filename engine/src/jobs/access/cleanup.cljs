@@ -1,5 +1,6 @@
 (ns jobs.access.cleanup
-  (:require [jobs.access.stair :as stair]
+  (:require [engine.game :as game]
+            [jobs.access.stair :as stair]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
@@ -66,7 +67,6 @@
    :reach {:doc "cells whose centre is this close to the eye are dug from where the body stands, in blocks" :default u/bucket-reach}
    :give-up {:doc "walks ending out of reach, or failed digs, after which a cell is held" :default 2}})
 
-(def eye-height 1.62)
 
 (def walk-range 3)
 
@@ -175,7 +175,7 @@
 
 (defn eye-of [c]
   (let [{:keys [x y z]} (u/self-pos c)]
-    [x (+ y eye-height) z]))
+    [x (+ y game/eye-height) z]))
 
 (defn inputs
   "next-step's input now: entries to work on, the whole ledger l for the rules."

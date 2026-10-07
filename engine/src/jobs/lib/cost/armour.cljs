@@ -4,7 +4,11 @@
   piece and 3 a netherite piece.
   Equipment: {part {:name :enchants [{:name :lvl}]}} for head torso legs feet, as cljs (keyword or string keys) or JS;
   other slots never count."
-  (:require [clojure.string :as str]))
+  (:require [engine.settings :as settings]
+            [clojure.string :as str]))
+
+(def settings
+  {::max-fall {:default 16 :doc "The longest drop in blocks ever allowed." :type :int :min 1}})
 
 (def armour-by-piece
   "Armour points of each worn piece, by material and slot."
@@ -74,7 +78,7 @@
   (* (max 0 (js/Math.ceil (- blocks 3)))
      (- 1 (/ (epf (:enchants (armour-stats equipment)) :fall) 25))))
 
-(def max-fall "The longest drop in blocks ever allowed." 16)
+(defn max-fall [] (settings/get settings ::max-fall))
 
 (defn fall-profile
   "How a body {:health :equipment :damage-budget} takes drops: {:fall-factor the share of the usual fall damage left (1:
@@ -83,4 +87,4 @@
   [{:keys [equipment damage-budget]}]
   (let [budget (or damage-budget 0)]
     {:fall-factor (fall-damage equipment 4)
-     :max-drop (or (last (take-while #(<= (fall-damage equipment %) budget) (range 4 (inc max-fall)))) 3)}))
+     :max-drop (or (last (take-while #(<= (fall-damage equipment %) budget) (range 4 (inc (max-fall))))) 3)}))

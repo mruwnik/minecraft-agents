@@ -1,13 +1,18 @@
 (ns jobs.lib.trees
   "Helpers the forestry jobs (jobs.forestry.*) share: finding trees, the
   replant debts in body memory, saplings. Not a job namespace."
-  (:require [clojure.string :as str]
+  (:require [engine.settings :as settings]
+            [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]))
 
+(def settings
+  {::leaf-reach {:default 3.5 :doc "Blocks within which a leaf block counts as part of a tree." :type :number :min 0}
+   ::max-logs {:default 1024 :doc "The most logs one scan reads." :type :int :min 1}})
+
 (def default-radius 16)
-(def leaf-reach 3.5)
+(defn leaf-reach [] (settings/get settings ::leaf-reach))
 (def max-partials
   "Consecutive partial walks toward one tree before it counts as unreachable."
   3)
@@ -24,7 +29,7 @@
 (defn leaves-name? [n] (boolean (some-> n (str/ends-with? "_leaves"))))
 (defn species-of [log-name] (str/replace log-name #"_log$" ""))
 
-(def max-logs "The most logs one scan reads." 1024)
+(defn max-logs [] (settings/get settings ::max-logs))
 (def max-leaves
   "The most leaves one scan reads: their own cap, so a dense forest's far trees keep theirs."
   4096)
@@ -35,7 +40,7 @@
   (mapv #(select-keys % [:name :pos]) (look/seen-blocks p {:radius radius :max max :match match :live? true})))
 
 (defn scan-logs [p radius species]
-  (scan p radius (if species #(= % (str species "_log")) log-name?) max-logs))
+  (scan p radius (if species #(= % (str species "_log")) log-name?) (max-logs)))
 
 (defn find-trees
   "The log columns whose top log has leaves close by, nearest first (lazily), each as
@@ -46,7 +51,7 @@
         columns (group-by (fn [{:keys [pos]}] [(:x pos) (:z pos)]) logs)
         tree? (fn [col]
                 (let [top (apply max-key #(get-in % [:pos :y]) col)]
-                  (some #(<= (u/dist (:pos top) (:pos %)) leaf-reach) leaves)))]
+                  (some #(<= (u/dist (:pos top) (:pos %)) (leaf-reach)) leaves)))]
     (keep (fn [[x z :as k]]
             (let [col (get columns k)]
               (when (tree? col)

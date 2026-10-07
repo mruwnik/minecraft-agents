@@ -18,20 +18,31 @@
   The clock is body memory (kind :watched), shared by a parent and its child.
   Only headings with a clear line at feet and eye height are looked at.
   It never turns back; the job's next act aims itself. A body with no perception does nothing."
-  (:require [engine.ctx :as ctx]
+  (:require [engine.settings :as settings]
+            [engine.ctx :as ctx]
             [engine.entity-observations :as obs]
             [engine.perception :as perception]
             [jobs.lib.look :as look]))
 
-(def alert-radius 24)
-(def alert-ms 30000)
-(def default-every-ms 3000)
-(def default-alert-every-ms 2000)
-(def long-dig-ms 2000)
-(def dig-gap-ms 1000)
+(def settings
+  {::alert-radius {:default 24 :doc "Blocks within which a known mob makes the place :alert." :type :int :min 1}
+   ::alert-ms {:default 30000 :doc "A known mob seen longer ago than this does not alert, in ms." :type :int :min 0}
+   ::default-every-ms {:default 3000 :doc "How often a job looks round for danger by default, in ms." :type :int :min 0}
+   ::default-alert-every-ms {:default 2000 :doc "How often a job looks round while the place is :alert, in ms." :type :int :min 0}
+   ::long-dig-ms {:default 2000 :doc "A dig longer than this is looked up from, in ms." :type :int :min 0}
+   ::dig-gap-ms {:default 1000 :doc "Gap between looks during a long dig, in ms." :type :int :min 0}
+   ::hearing-radius {:default 16 :doc "Blocks within which a heard mob counts." :type :int :min 1}
+   ::probe-distance {:default 3 :doc "Blocks ahead a look probes." :type :int :min 1}})
+
+(defn alert-radius [] (settings/get settings ::alert-radius))
+(defn alert-ms [] (settings/get settings ::alert-ms))
+(defn default-every-ms [] (settings/get settings ::default-every-ms))
+(defn default-alert-every-ms [] (settings/get settings ::default-alert-every-ms))
+(defn long-dig-ms [] (settings/get settings ::long-dig-ms))
+(defn dig-gap-ms [] (settings/get settings ::dig-gap-ms))
 (def turn-gap-ms 5000)
-(def hearing-radius 16)
-(def probe-distance 3)
+(defn hearing-radius [] (settings/get settings ::hearing-radius))
+(defn probe-distance [] (settings/get settings ::probe-distance))
 
 (def memory-policy {:cap 1 :ttl 600000})
 (def turn-policy {:cap 20 :ttl turn-gap-ms})
@@ -51,7 +62,7 @@
     (array-seq (f))))
 
 (defn alert? [c]
-  (boolean (some #(and (<= (.-distance ^js %) alert-radius) (<= (.-ageMs ^js %) alert-ms)) (known-mobs c))))
+  (boolean (some #(and (<= (.-distance ^js %) (alert-radius)) (<= (.-ageMs ^js %) (alert-ms))) (known-mobs c))))
 
 (defn risk
   "The risk of this place now: :alert, :risky or :quiet. opts: :risky? the job says it is risky whatever the light."
@@ -80,7 +91,7 @@
   "Whether the eye has a clear line three blocks along [dx dz] at eye and at feet height."
   [raw table ^js eye [dx dz]]
   (let [ox (.-x eye) oy (.-y eye) oz (.-z eye)
-        clear? (fn [y] (perception/line-clear? raw table ox y oz (+ ox (* probe-distance dx)) y (+ oz (* probe-distance dz))))]
+        clear? (fn [y] (perception/line-clear? raw table ox y oz (+ ox (* (probe-distance) dx)) y (+ oz (* (probe-distance) dz))))]
     (and (clear? oy) (clear? (- oy 1.1)))))
 
 (defn open-headings [c]
@@ -107,7 +118,7 @@
   "Known mobs heard now and not seen, not yet turned to in the last 5 s."
   [c]
   (let [turned (set (map (comp :id :data) (ctx/entries c :watch-turned)))]
-    (filter #(and (.-heard ^js %) (not (.-seen ^js %)) (<= (.-distance ^js %) hearing-radius)
+    (filter #(and (.-heard ^js %) (not (.-seen ^js %)) (<= (.-distance ^js %) (hearing-radius))
                   (not (turned (.-id ^js %))))
             (known-mobs c))))
 
@@ -116,11 +127,11 @@
   [c level {:keys [every-ms alert-ms before-dig]} open]
   (let [last (last-scan c)
         age (if last (- (ctx/now c) (:t last)) js/Infinity)
-        interval (if (= :alert level) (or alert-ms default-alert-every-ms) (or every-ms default-every-ms))]
+        interval (if (= :alert level) (or alert-ms (default-alert-every-ms)) (or every-ms (default-every-ms)))]
     (boolean
      (or (>= age interval)
-         (and (> (count open) (get-in last [:data :open] 0)) (> age dig-gap-ms))
-         (and before-dig (> age dig-gap-ms) (>= (or (dig-ms c before-dig) 0) long-dig-ms))))))
+         (and (> (count open) (get-in last [:data :open] 0)) (> age (dig-gap-ms)))
+         (and before-dig (> age (dig-gap-ms)) (>= (or (dig-ms c before-dig) 0) (long-dig-ms)))))))
 
 (defn sample!
   "The known mobs whose ids are not in before (a set), nearest first."

@@ -571,7 +571,7 @@
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))))
           (is (= :stuck (stopped-reason seen)))
-          (is (= u/max-failures @go-tos) "each failed go-to counts once")
+          (is (= (u/max-failures) @go-tos) "each failed go-to counts once")
           (is (= 1 (count (calls p "moveTo"))) "after a blocked step, later passes go straight to go-to")
           (is (re-find #"walled in" (:text (first (of-kind seen :extinguish_stuck))))))))))
 

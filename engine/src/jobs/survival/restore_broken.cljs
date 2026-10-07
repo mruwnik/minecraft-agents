@@ -139,7 +139,7 @@
             (do (tidy/forget-cell! c cell)
                 (ctx/update-mem! c update :restored (fnil conj []) cell)
                 (ctx/update-mem! c update :seen (fnil conj #{}) cell))
-            (when (>= (inc tries) tidy/max-tries)
+            (when (>= (inc tries) (tidy/max-tries))
               (skip! c e :gave-up)))))))
 
 (defn report!
@@ -194,7 +194,7 @@
       (= :occupied (why-not c e)) (do (await (step-clear! c e waiting)) :again)
       (why-not c e) (do (skip! c e (why-not c e)) :again)
       (tidy/unreachable? (:primitives c) e (:reach a)) (do (skip! c e :unreachable) :again)
-      (>= (:tries e) tidy/max-tries) (do (skip! c e :gave-up) :again)
+      (>= (:tries e) (tidy/max-tries)) (do (skip! c e :gave-up) :again)
       (or (seals-body? c e) (seals-others? c e waiting)) (do (skip! c e :seals) :again)
       :else (do (await (restore-one! c e (:reach a))) :again))))
 

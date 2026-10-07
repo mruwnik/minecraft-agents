@@ -5,11 +5,15 @@
   Candidates are the mobs the body knows of (known-hostiles): the perception's mob memory, seen or heard. A heard one
   is judged by its direction and band (mob-pos), never its exact place.
   The mobs of one query share block reads (reach/lookup) and walk proofs (reach.proofs)."
-  (:require [engine.entity-observations :as obs]
+  (:require [engine.settings :as settings]
+            [engine.entity-observations :as obs]
             [jobs.lib.combat :as combat]
             [jobs.lib.reach :as reach]
             [jobs.lib.reach.proofs :as proofs]
             [jobs.lib.util :as u]))
+
+(def settings
+  {::known-scan {:default 64 :doc "Blocks out to which the mobs a distance filter weighs are fetched." :type :int :min 1}})
 
 (defn seen-mob?
   "Whether the body has seen or heard hostile e: the seen or heard flag of a known-hostiles entry, else (raw entity)
@@ -64,7 +68,7 @@
     (.-distance e)
     (u/dist (u/pos-of (.-pos (.self p))) (mob-pos p e))))
 
-(def known-scan "Blocks out to which the mobs a distance filter weighs are fetched." 64)
+(defn known-scan [] (settings/get settings ::known-scan))
 
 (defn known-hostiles
   "The hostiles the body knows of within radius (ranged ones within :ranged-radius), nearest first; a heard one by
@@ -72,7 +76,7 @@
   [p radius {:keys [ranged-radius]}]
   (let [rr (or ranged-radius radius)
         within (fn [e] (<= (mob-distance p e) (if (combat/ranged? e) rr radius)))]
-    (->> (combat/known-or-raw p (max known-scan radius rr))
+    (->> (combat/known-or-raw p (max (known-scan) radius rr))
          (filter within)
          (sort-by #(mob-distance p %))
          vec)))

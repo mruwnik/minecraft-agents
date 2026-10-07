@@ -6,18 +6,23 @@
   {:cell [x y z] :action :dig|:place :was block-before :now block-after :zone/:claim/:plan :tries n :job id}.
   :job is the top-level job that recorded it; the :tidy-pending trigger waits until that job has ended.
   jobs.survival.restore-broken puts the cells back when the body is safe. Best effort, never at the cost of safety."
-  (:require [engine.ctx :as ctx]
+  (:require [engine.settings :as settings]
+            [engine.game :as game]
+            [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.reach :as reach]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]))
 
+(def settings
+  {::max-tries {:default 3 :doc "Tries to tidy one cell before it is left." :type :int :min 1}})
+
 (def tidy-policy
   "Body memory policy of the :tidy entries: they outlive a restart for six hours."
   {:cap 100 :ttl (* 6 60 60 1000)})
 
-(def max-tries 3)
+(defn max-tries [] (settings/get settings ::max-tries))
 
 (def reported-policy
   "Body memory policy of :tidy-reported, the cells still waiting when restore-broken last ended."
@@ -34,16 +39,14 @@
 
 (defn block-now [p cell] (u/block-name p (zipmap [:x :y :z] cell)))
 
-(def half-width 0.3)
-(def body-height 1.8)
 
 (defn body-cells
   "The cells [x y z] the body's hitbox (0.6 wide, 1.8 tall, at pos {:x :y :z} its feet) intersects."
   [{:keys [x y z]}]
   (let [span (fn [lo hi] (range (js/Math.floor lo) (inc (js/Math.floor (- hi 1e-9)))))]
-    (set (for [i (span (- x half-width) (+ x half-width))
-               j (span y (+ y body-height))
-               k (span (- z half-width) (+ z half-width))]
+    (set (for [i (span (- x game/hitbox-half) (+ x game/hitbox-half))
+               j (span y (+ y game/body-height))
+               k (span (- z game/hitbox-half) (+ z game/hitbox-half))]
            [i j k]))))
 
 (defn in-body?
@@ -109,7 +112,7 @@
 (defn restorable?
   "Whether entry e is worth a restore try now: fewer than max-tries tries and nothing in the way (why-not)."
   [p {:keys [tries] :as e}]
-  (and (< tries max-tries) (nil? (why-not p e))))
+  (and (< tries (max-tries)) (nil? (why-not p e))))
 
 (defn tried-record
   "The :tried stamp of an entry a run just counted a try on: the time, the body's feet (here {:x :y :z}) and whether the

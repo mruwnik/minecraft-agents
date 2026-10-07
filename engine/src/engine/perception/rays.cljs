@@ -1,9 +1,10 @@
 (ns engine.perception.rays
   "Sight: the view cone, the sight pass that casts rays from the eye into block memory, and keeping memory current
   after block changes and touches."
-  (:require [engine.sight :as sight]
+  (:require [engine.game :as game]
+            [engine.sight :as sight]
             [engine.perception.light :refer [darken-now max-light table-now]]
-            [engine.perception.store :refer [eye-height new-stamp! record! store-of]]))
+            [engine.perception.store :refer [new-stamp! record! store-of]]))
 
 ;; ---- the view cone
 
@@ -287,18 +288,16 @@
           (record! st (store-of st (.-dimension eye)) x y z id ((:now opts)))
           id)))))
 
-(def hitbox-half 0.3)
-(def hitbox-height 1.8)
 (def feel-margin 0.1)
 
 (defn in-reach?
   "Whether the cell [x y z] could be touched by a body with its feet at (fx fy fz), whatever its collision shape: over the
   hitbox column (grown by feel-margin) or at most one cell below the feet. Cheap, so callers test it before reading state."
   [fx fy fz [x y z]]
-  (let [r (+ hitbox-half feel-margin)]
+  (let [r (+ game/hitbox-half feel-margin)]
     (and (< x (+ fx r)) (> (inc x) (- fx r))
          (< z (+ fz r)) (> (inc z) (- fz r))
-         (< y (+ fy hitbox-height feel-margin))
+         (< y (+ fy game/body-height feel-margin))
          (>= y (dec (js/Math.floor fy))))))
 
 (defn touches?
@@ -308,20 +307,20 @@
   [fx fy fz [x y z :as pos] top]
   (and (in-reach? fx fy fz pos)
        (let [over? (fn [c lo hi] (and (< c hi) (> (inc c) lo)))]
-         (or (over? y (- fy feel-margin) (+ fy hitbox-height feel-margin))
+         (or (over? y (- fy feel-margin) (+ fy game/body-height feel-margin))
              (and (< y fy) (>= (+ y top) (- fy feel-margin)))))))
 
 (defn felt?
   "touches? for the body whose eye is `eye` (feet at the eye less eye-height)."
   [^js eye pos top]
-  (touches? (.-x eye) (- (.-y eye) eye-height) (.-z eye) pos top))
+  (touches? (.-x eye) (- (.-y eye) game/eye-height) (.-z eye) pos top))
 
 (defn feel!
   "The state id of a cell the body touches (felt?), in any light; memory takes it. Nil for any other cell, an unloaded
   one, or offline."
   [{:keys [raw opts st]} [x y z :as pos]]
   (let [^js st st ^js eye (.eye ^js raw)]
-    (when (and eye (in-reach? (.-x eye) (- (.-y eye) eye-height) (.-z eye) pos))
+    (when (and eye (in-reach? (.-x eye) (- (.-y eye) game/eye-height) (.-z eye) pos))
       (let [id (.stateAt ^js raw x y z)]
         (when (and (>= id 0) (felt? eye pos (.-top ^js (.stateInfo ^js raw id))))
           (new-stamp! st)

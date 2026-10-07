@@ -282,7 +282,7 @@
   [c text]
   (if-not (u/count-fail! c)
     :again
-    (do (ctx/emit! c :extinguish_stuck :warn {:tries u/max-failures :text text})
+    (do (ctx/emit! c :extinguish_stuck :warn {:tries (u/max-failures) :text text})
         (result/stop! c :stuck text))))
 
 (defn ^:async move!

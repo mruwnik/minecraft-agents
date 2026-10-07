@@ -4,27 +4,33 @@
   threat-policy. The third flight from one mob (same :key, uuid else id) within the ttl warns hostile.chased.
   planner-dangers: the known dangers go-to's searches cost (the planner's options.dangers), costed by
   jobs.lib.cost/danger-list."
-  (:require [engine.ctx :as ctx]
+  (:require [engine.settings :as settings]
+            [engine.ctx :as ctx]
             [engine.entity-observations :as obs]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.util :as u]))
 
+(def settings
+  {::default-follow-range {:default 16 :doc "Blocks a mob of unknown kind notices the body from." :type :int :min 1}
+   ::chased-flights {:default 3 :doc "Flights from one mob within the ttl that tell the agent." :type :int :min 1}
+   ::sensed-radius {:default 24 :doc "Blocks out to which a sensed real danger is costed." :type :int :min 1}})
+
 (def follow-ranges
   "Blocks a mob keeps chasing its target out to (vanilla follow_range attribute)."
   {"zombie" 35 "husk" 35 "drowned" 35 "zombie_villager" 35 "zombified_piglin" 35
    "enderman" 64 "pillager" 32 "vindicator" 12 "evoker" 12 "blaze" 48 "ghast" 100})
 
-(def default-follow-range 16)
+(defn default-follow-range [] (settings/get settings ::default-follow-range))
 
-(defn follow-range [mob-name] (get follow-ranges mob-name default-follow-range))
+(defn follow-range [mob-name] (get follow-ranges mob-name (default-follow-range)))
 
 (def max-follow-range (apply max (vals follow-ranges)))
 
 (def threat-policy {:cap 20 :ttl (* 5 60 1000)})
 
-(def chased-flights "Flights from one mob within the ttl that tell the agent." 3)
+(defn chased-flights [] (settings/get settings ::chased-flights))
 
 (defn place-of
   "Where the body knows mob e of primitives p to be: {:pos} for one it has seen, else (heard only) what a sound tells,
@@ -52,7 +58,7 @@
         place (select-keys t [:pos :direction :band :from])]
     (ctx/remember! c :threat (merge {:mob mob :id id :uuid uuid :key k :ended ended} place) threat-policy)
     (let [n (flights c k)]
-      (when (= chased-flights n)
+      (when (= (chased-flights) n)
         (ctx/emit! c :hostile.chased :warn
                    (merge {:mob mob :id id :flights n}
                           (select-keys place [:pos :direction :band])
@@ -61,7 +67,7 @@
 
 ;; ---------------------------------------------------------------- dangers for the planner
 
-(def sensed-radius "Blocks out to which a sensed real danger (jobs.lib.danger/dangers) is costed." 24)
+(defn sensed-radius [] (settings/get settings ::sensed-radius))
 
 (defn body-of [p]
   (let [self (.self p)]
@@ -73,7 +79,7 @@
   or a line of fire; never x-ray), as [{:key :name :pos}]."
   [p]
   (mapv (fn [e] {:key (mob-key e) :name (.-name e) :pos (danger-q/mob-pos p e)})
-        (danger-q/dangers p sensed-radius {:ranged-radius sensed-radius})))
+        (danger-q/dangers p (sensed-radius) {:ranged-radius (sensed-radius)})))
 
 (defn known-dangers
   "danger-list of the body of primitives p: sensed-mobs and the remembered :threat entries' data."

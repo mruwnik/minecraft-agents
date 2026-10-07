@@ -1,7 +1,8 @@
 (ns jobs.lib.walk.world
   "The walk driver's view of the world: the primitives' pathWorld and the decorations the walks plan over (walls, dangers, dark,
   avoided and tolled cells), the executor policy of the body and the cell it stands in."
-  (:require [engine.path.executor :as executor]
+  (:require [engine.settings :as settings]
+            [engine.path.executor :as executor]
             [engine.path.blocks :as blocks]
             [engine.path.planner-tuned :as planner]
             [engine.path.space :as space]
@@ -9,6 +10,9 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
             [jobs.lib.threats :as threats]))
+
+(def settings
+  {::default-food {:default 20 :doc "The food a walk counts on when it has neither a :food arg nor a body food: fed (nothing caps the damage)." :type :int :min 0}})
 
 (defn path-world
   "The primitives' pathWorld sensing (a snapshot over the world) with the planner's block table and free-space module, nil when
@@ -132,13 +136,13 @@
   (let [snapshot (.-snapshot pw) tops (.-top (.-table pw))]
     (fn [x y z] (pos? (aget tops (.stateAt snapshot x y z))))))
 
-(def default-food "The food a walk counts on when it has neither a :food arg nor a body food: fed (nothing caps the damage)." 20)
+(defn default-food [] (settings/get settings ::default-food))
 
 (defn food-of
   "The food level (0-20) the walk counts on: the job's :food arg (a number), else default-food. go-to fills the arg with the body's own food (jobs.movement.go-to/step!); the walk does not read the body."
   [c]
   (let [food (:food (:args c))]
-    (if (number? food) food default-food)))
+    (if (number? food) food (default-food))))
 
 (defn damage-body
   "The body's {:health :absorption :food :on-fire :effects} for jobs.lib.cost/damage-budget; the food is the job's (food-of)."

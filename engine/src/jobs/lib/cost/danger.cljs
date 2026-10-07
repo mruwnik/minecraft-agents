@@ -9,11 +9,20 @@
 
   danger-rate: mob-hurt over 1 s x stance factor (:flee x4, :fight x0.1), at most max-rate: hp a second (the factors, the cap and
   danger-shape are go-to options, danger-opts), which the planner prices at go-to's hp price (:hp-seconds x health-scale) like a drop's damage."
-  (:require [jobs.lib.cost.armour :as armour]
+  (:require [engine.settings :as settings]
+            [jobs.lib.cost.armour :as armour]
             [jobs.lib.cost.fight :as fight]
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.reach :as reach]
             [jobs.lib.util :as u]))
+
+(def settings
+  {::max-fire-checks {:default 8 :doc "Route cells a ranged mob's line of fire is tried to, nearest first." :type :int :min 1}
+   ::default-radius {:default 16 :doc "Blocks out to which a sensed or remembered mob costs a route." :type :int :min 1}
+   ::close {:default 2 :doc "Blocks within which a mob is close." :type :int :min 0}
+   ::exposure-s {:default 3 :doc "Seconds a body is exposed to a mob on a route." :type :int :min 0}
+   ::snap-span {:default 4 :doc "How far up or down a straight route looks for ground in each column." :type :int :min 0}})
+
 
 ;; ---------------------------------------------------------------- reading inputs
 
@@ -32,7 +41,7 @@
 
 ;; ---------------------------------------------------------------- reach
 
-(def max-fire-checks "Route cells a ranged mob's line of fire is tried to, nearest first." 8)
+(defn max-fire-checks [] (settings/get settings ::max-fire-checks))
 
 (defn centre [{:keys [x y z]}] {:x (+ (js/Math.floor x) 0.5) :y (js/Math.floor y) :z (+ (js/Math.floor z) 0.5)})
 
@@ -47,15 +56,15 @@
   [kind-at {:keys [name pos]} near-cells]
   (if (= :projectile (threat/damage-type name))
     (let [eye (update pos :y + 1.6)]
-      (boolean (some #(line-clear? kind-at eye (update (centre %) :y + 1.5)) (take max-fire-checks near-cells))))
+      (boolean (some #(line-clear? kind-at eye (update (centre %) :y + 1.5)) (take (max-fire-checks) near-cells))))
     (let [{:keys [x y z]} (first near-cells)]
       (reach/way? kind-at (reach/cell-of pos) [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]))))
 
 ;; ---------------------------------------------------------------- route danger
 
-(def default-radius 16)
-(def close 2)
-(def exposure-s 3)
+(defn default-radius [] (settings/get settings ::default-radius))
+(defn close [] (settings/get settings ::close))
+(defn exposure-s [] (settings/get settings ::exposure-s))
 
 (defn route-danger
   "{:danger total :mobs [{:name :pos :distance :weight :threat :danger} ...]} of walking route ([{:x :y :z}] cells)
@@ -63,7 +72,7 @@
   worst first. version: the minecraft-data version; kind-at: jobs.lib.reach/lookup. Options: :overrides, :radius (16).
   See the ns doc."
   [version kind-at route mobs equipment & {:keys [overrides radius]}]
-  (let [radius (or radius default-radius)
+  (let [radius (or radius (default-radius))
         overrides (into {} (map (fn [[k o]] [(if (keyword? k) (name k) (str k)) o])) overrides)
         stats (armour/armour-stats equipment)
         route (vec route)
@@ -77,17 +86,17 @@
                                       (sort-by first))
                            d (ffirst cells)]
                      :when d
-                     :let [weight (if (<= d close) 1 (/ (- radius d) (- radius close)))
-                           share (if (contains? threat/provoked-only (:name m)) threat/provoked-share 1)
+                     :let [weight (if (<= d (close)) 1 (/ (- radius d) (- radius (close))))
+                           share (if (contains? threat/provoked-only (:name m)) (threat/provoked-share) 1)
                            threat-fn #(* share ((override-fn (get overrides (:name m))) %))
-                           threat (threat-fn (:threat (threat/base-threat (:name m) exposure-s)))]
+                           threat (threat-fn (:threat (threat/base-threat (:name m) (exposure-s))))]
                      :when (and (pos? weight) (pos? threat) (reaches? kind-at m (map second cells)))
-                     :let [hurt (threat/mob-hurt stats (:name m) exposure-s threat-fn)]]
+                     :let [hurt (threat/mob-hurt stats (:name m) (exposure-s) threat-fn)]]
                  {:name (:name m) :pos (:pos m) :distance d :weight weight :threat threat :danger (* weight hurt)}))
         rows (vec (sort-by :danger > rows))]
     {:danger (reduce + 0 (map :danger rows)) :mobs rows}))
 
-(def snap-span "How far up or down a straight route looks for ground in each column." 4)
+(defn snap-span [] (settings/get settings ::snap-span))
 
 (defn straight-route
   "The cells [{:x :y :z}] one a block from the cell of from to the cell of to on a straight line, each put on the
@@ -99,7 +108,7 @@
         n (max (js/Math.abs (- tx fx)) (js/Math.abs (- tz fz)))
         ground (fn [x prev z]
                  (or (some #(when (reach/standable? kind-at x % z) %)
-                           (cons prev (mapcat (fn [k] [(+ prev k) (- prev k)]) (range 1 (inc snap-span)))))
+                           (cons prev (mapcat (fn [k] [(+ prev k) (- prev k)]) (range 1 (inc (snap-span))))))
                      prev))]
     (if (zero? n)
       [{:x fx :y fy :z fz}]

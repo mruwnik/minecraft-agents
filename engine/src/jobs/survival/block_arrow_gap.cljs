@@ -1,5 +1,6 @@
 (ns jobs.survival.block-arrow-gap
-  (:require [jobs.lib.blocks :as lb]
+  (:require [engine.game :as game]
+            [jobs.lib.blocks :as lb]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.combat :as combat]
@@ -43,7 +44,7 @@
 
 (def max-steps "Rounds one call takes at most." 12)
 
-(def ray-heights "Heights above the body's feet the arrows are aimed at." [reach/eye-height 0.9])
+(def ray-heights "Heights above the body's feet the arrows are aimed at." [game/eye-height 0.9])
 
 (defn ranged-dangers
   "The ranged mobs within radius with a line of fire to the body, nearest first."
@@ -53,7 +54,7 @@
 (defn clear-rays
   "How many of the two arrow rays from the mob at mob-pos to the body at body-pos cross no :solid cell of kind-at."
   [kind-at mob-pos body-pos]
-  (let [from [(:x mob-pos) (+ (:y mob-pos) reach/eye-height) (:z mob-pos)]]
+  (let [from [(:x mob-pos) (+ (:y mob-pos) game/eye-height) (:z mob-pos)]]
     (count (filter #(reach/ray-clear? kind-at from [(:x body-pos) (+ (:y body-pos) %) (:z body-pos)]) ray-heights))))
 
 (defn candidates

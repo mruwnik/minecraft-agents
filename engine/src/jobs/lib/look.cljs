@@ -3,7 +3,8 @@
   then down at the floor ahead) with a sight pass after each look, so what lies beside or behind it enters
   perception's memory. Nothing is sensed through walls: jobs read blocks and entities through the seen-* helpers here
   (memory of what the body saw, players, hostiles it saw or heard), never through blocks/entities as a scan."
-  (:require [clojure.string :as str]
+  (:require [engine.game :as game]
+            [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.util :as u]
             [engine.perception :as perception]
@@ -40,7 +41,7 @@
   floor ahead."
   [eye [dx dz]]
   [{:x (+ (:x eye) (* 4 dx)) :y (:y eye) :z (+ (:z eye) (* 4 dz))}
-   {:x (+ (:x eye) (* 1.5 dx)) :y (- (:y eye) 1.8) :z (+ (:z eye) (* 1.5 dz))}])
+   {:x (+ (:x eye) (* 1.5 dx)) :y (- (:y eye) game/body-height) :z (+ (:z eye) (* 1.5 dz))}])
 
 (defn see!
   "A sight pass now, so what the last look faced is in memory before the next decision."
@@ -52,7 +53,7 @@
   "Look along each of dirs ([dx dz]), level and down, a sight pass after each look."
   [c dirs]
   (let [{:keys [x y z]} (cell-of (u/self-pos c))
-        eye {:x (+ x 0.5) :y (+ y 1.62) :z (+ z 0.5)}]
+        eye {:x (+ x 0.5) :y (+ y game/eye-height) :z (+ z 0.5)}]
     (loop [points (mapcat #(glances eye %) dirs)]
       (when-let [pt (first points)]
         (await (ctx/act c :look (clj->js {:pos pt})))

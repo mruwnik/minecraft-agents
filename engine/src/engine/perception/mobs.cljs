@@ -2,7 +2,7 @@
   "Mob memory: the hostiles the body has seen or heard (see engine.perception)."
   (:require [engine.perception.light :refer [table-now]]
             [engine.perception.rays :refer [basis in-cone?]]
-            [engine.perception.store :refer [eye-height]]))
+            [engine.game :as game]))
 
 (def silent-mobs "Hostiles that make no sound while they stalk: known only once seen, or while fusing (hissing)." #{"creeper"})
 
@@ -94,7 +94,7 @@
         now ((:now opts))]
     (if-not eye
       #js []
-      (let [fx (.-x eye) fy (- (.-y eye) eye-height) fz (.-z eye)
+      (let [fx (.-x eye) fy (- (.-y eye) game/eye-height) fz (.-z eye)
             out (into-array
                  (for [^js m (es6-iterator-seq (.values (.-mobs ^js st)))]
                    (let [^js live (.get sensed (.-id m))

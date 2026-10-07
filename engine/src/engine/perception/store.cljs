@@ -2,12 +2,12 @@
   "Block memory: per dimension and 16^3 section, the state ids and seen times of the cells the body has seen, capped by
   forgetting the least recently seen section; and reading it back (seen-block, seen-blocks).
   A cell holding a mutable state (fluid, door, gate, trapdoor, fire: `mutable-id?`) also keeps its seen time to the ms,
-  in the section's :fine map (not saved to file).")
+  in the section's :fine map (not saved to file)."
+  (:require [engine.game :as game]))
 
 (def section-bytes 12288) ; ids (8192) and per-cell seen times (4096)
 (def minute-ms 60000)
 (def max-seen-radius 64)
-(def eye-height 1.62)
 
 (defn section-key [cx sy cz]
   (+ (* (+ (* (+ cx 2097152) 4194304) (+ cz 2097152)) 256) (+ sy 128)))
@@ -141,7 +141,7 @@
     (if-not eye
       []
       (let [radius (min radius max-seen-radius)
-            fx (.-x eye) fy (- (.-y eye) eye-height) fz (.-z eye)
+            fx (.-x eye) fy (- (.-y eye) game/eye-height) fz (.-z eye)
             wanted? (cond names (set names) match match :else (constantly true))
             by-id (js/Map.)
             ok? (fn [id] (if (.has by-id id)

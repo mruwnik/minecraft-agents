@@ -3,7 +3,8 @@
   the crops and farmland the body has seen near the walk, and the cells of zones that are not the body's (zone-walk-tolls, for walks that ignore crops). Only what the
   body knows (memory of what it saw, the zone list) is tolled. The planner looks a toll up per node in a map, so the lists
   are bounded here, not there."
-  (:require [engine.ctx :as ctx]
+  (:require [engine.settings :as settings]
+            [engine.ctx :as ctx]
             [jobs.lib.access.zones :as zones]
             [jobs.lib.cost :as cost]
             [jobs.lib.crops :as crops]
@@ -11,17 +12,21 @@
             [jobs.lib.util :as u]
             [jobs.lib.world :as world]))
 
+(def settings
+  {::margin {:default 8 :doc "Blocks round the walk's ends and between them that get tolls." :type :int :min 0}
+   ::max-cells {:default 8000 :doc "The most cells one toll list holds (the farm and the zone list each)." :type :int :min 1}})
+
 (def farm-names (conj (vec (keys crops/ripe-age)) "farmland"))
 
-(def margin "Blocks round the walk's ends and between them that get tolls." 8)
+(defn margin [] (settings/get settings ::margin))
 
-(def max-cells "The most cells one list holds (the farm and the zone list each)." 8000)
+(defn max-cells [] (settings/get settings ::max-cells))
 
 (defn farm-cells
   "The feet cells [x y z] over the crops and farmland the body has seen within radius of it: a crop's own cell, and for
   farmland its own cell (a body walks on it with its feet in the block) and the one above (so at most max-cells)."
   [p radius]
-  (->> (look/seen-blocks p {:names farm-names :radius (min 64 radius) :max (quot max-cells 2) :live? true})
+  (->> (look/seen-blocks p {:names farm-names :radius (min 64 radius) :max (quot (max-cells) 2) :live? true})
        (mapcat (fn [{:keys [name pos]}]
                  (let [cell [(:x pos) (:y pos) (:z pos)]]
                    (if (= "farmland" name) [cell (update cell 1 inc)] [cell]))))
@@ -33,8 +38,8 @@
   [a b]
   (let [lo (fn [k] (js/Math.floor (min (k a) (k b))))
         hi (fn [k] (js/Math.floor (max (k a) (k b))))]
-    {:min [(- (lo :x) margin) (- (lo :y) 2) (- (lo :z) margin)]
-     :max [(+ (hi :x) margin) (+ (hi :y) 3) (+ (hi :z) margin)]}))
+    {:min [(- (lo :x) (margin)) (- (lo :y) 2) (- (lo :z) (margin))]
+     :max [(+ (hi :x) (margin)) (+ (hi :y) 3) (+ (hi :z) (margin))]}))
 
 (defn clip
   "{:min [x y z] :max [x y z]} of zone (a box) inside the window, nil when they do not meet."
@@ -67,7 +72,7 @@
   (let [columns (for [{[x0 y0 z0] :min [x1 y1 z1] :max} boxes
                       x (range x0 (inc x1)) z (range z0 (inc z1))]
                   [(segment-distance a b (+ x 0.5) (+ z 0.5)) x z y0 y1])]
-    (loop [[[_ x z y0 y1] & more] (sort-by first columns) left max-cells out []]
+    (loop [[[_ x z y0 y1] & more] (sort-by first columns) left (max-cells) out []]
       (if (or (nil? x) (< left (inc (- y1 y0))))
         out
         (recur more (- left (inc (- y1 y0))) (into out (map (fn [y] [x y z])) (range y0 (inc y1))))))))
@@ -81,10 +86,10 @@
         boxes (->> (world/zones c)
                    (filter #(zones/foreign-owner? (:owner %) self))
                    (keep #(clip % win)))]
-    (if (<= (reduce + (map volume boxes)) max-cells)
+    (if (<= (reduce + (map volume boxes)) (max-cells))
       (vec (mapcat box-cells boxes))
       (do (ctx/warn-once! c :zone-cells :toll-cells.capped
-                          {:text (str "other bodies' zones cover more than " max-cells " cells near the walk; only the ones nearest the way are tolled")})
+                          {:text (str "other bodies' zones cover more than " (max-cells) " cells near the walk; only the ones nearest the way are tolled")})
           (nearest-columns boxes a b)))))
 
 (defn zone-walk-tolls
@@ -100,6 +105,6 @@
   [c pos]
   (when pos
     (let [from (u/self-pos c)
-          radius (+ margin (js/Math.ceil (u/dist from pos)))
+          radius (+ (margin) (js/Math.ceil (u/dist from pos)))
           tolls (into (cost/farm-tolls (farm-cells (:primitives c) radius)) (zone-walk-tolls c pos))]
       (not-empty tolls))))

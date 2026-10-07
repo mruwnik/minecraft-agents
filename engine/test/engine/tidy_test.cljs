@@ -288,7 +288,7 @@
            [(assoc with-stone :entities [zombie]) [[:tidy dug]] false "unsafe: hostile"]
            [(assoc with-stone :entities [(assoc-in zombie [:pos :x] 5)] :blocks (into {} (for [x [2 3] y [64 65 66]] [(str x "," y ",0") "stone"]))) [[:tidy dug]] true "a walled-off hostile is no danger"]
            [with-stone [] false "no entries"]
-           [with-stone [[:tidy (assoc dug :tries tidy/max-tries)] reported] false "given up and reported"]
+           [with-stone [[:tidy (assoc dug :tries (tidy/max-tries))] reported] false "given up and reported"]
            [(assoc with-stone :unloaded ["0,65,0"]) [[:tidy dug]] false "cell not loaded"]]]
     (is (= expected (holds? world memory)) why)))
 

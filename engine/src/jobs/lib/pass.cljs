@@ -18,7 +18,8 @@
   (shut-leftovers!), or the door-left trigger (triggers.maintenance.door-left) does, with jobs.maintenance.shut-doors.
   A block that stays open (an animal stands in its cell, so the walker waits and tries again but never pushes; or the
   click did nothing) keeps its entry and gets one :door-left-open warn."
-  (:require [jobs.lib.click :as click]
+  (:require [engine.settings :as settings]
+            [jobs.lib.click :as click]
             [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
             [jobs.lib.util :as u]
@@ -26,11 +27,18 @@
             [jobs.lib.walk :as walk]
             [jobs.lib.walk.world :as wworld]))
 
+(def settings
+  {::shut-waits {:default 4 :doc "Tries to shut a block with an animal in its cell, after the first." :type :int :min 0}
+   ::shut-wait-ms {:default 500 :doc "Wait between those tries, in ms." :type :int :min 0}
+   ::leftover-reach {:default 4 :doc "A leftover :opened entry is shut when the body is this near." :type :int :min 0}
+   ::await-polls {:default 6 :doc "Reads of a door a button or plate was to open." :type :int :min 1}
+   ::await-poll-ms {:default 100 :doc "Wait between those reads, in ms." :type :int :min 0}})
+
 (def opened-policy {:cap 50 :ttl :forever})
 
-(def shut-waits "tries to shut a block with an animal in its cell, after the first" 4)
-(def shut-wait-ms 500)
-(def leftover-reach "a leftover :opened entry is shut when the body is this near" 4)
+(defn shut-waits [] (settings/get settings ::shut-waits))
+(defn shut-wait-ms [] (settings/get settings ::shut-wait-ms))
+(defn leftover-reach [] (settings/get settings ::leftover-reach))
 
 ;; ---------------------------------------------------------------- pure
 
@@ -145,8 +153,8 @@
       (loop [n 0]
         (cond
           (seq (animals-in c col))
-          (if (< n shut-waits)
-            (do (await (ctx/act c :wait #js {:ms shut-wait-ms})) (recur (inc n)))
+          (if (< n (shut-waits))
+            (do (await (ctx/act c :wait #js {:ms (shut-wait-ms)})) (recur (inc n)))
             (left-open! c cell :animal-in-the-way))
 
           :else
@@ -167,8 +175,8 @@
               (recur (rest todo) kept)))
         kept))))
 
-(def await-polls "reads of a door a button or plate was to open" 6)
-(def await-poll-ms 100)
+(defn await-polls [] (settings/get settings ::await-polls))
+(defn await-poll-ms [] (settings/get settings ::await-poll-ms))
 
 (defn ^:async await-open!
   "Read the block at cell back every await-poll-ms, up to await-polls times, until it is open: {:result :was-open} (it shuts
@@ -178,8 +186,8 @@
     (let [b (block-at c cell)]
       (cond
         (and b (click/reached? :open (click/props-of b))) {:result :was-open}
-        (>= n await-polls) {:result :stuck}
-        :else (do (await (ctx/act c :wait #js {:ms await-poll-ms})) (recur (inc n)))))))
+        (>= n (await-polls)) {:result :stuck}
+        :else (do (await (ctx/act c :wait #js {:ms (await-poll-ms)})) (recur (inc n)))))))
 
 (defn ^:async work-activator!
   "Open the door at cell through its opener o, {:via \"button\" :at cell}: the button is pressed, a lever is pulled on (and
@@ -256,7 +264,7 @@
         (let [b (block-at c cell)
               col (column-of cell (click/props-of b))]
           (when (and shut?
-                     (<= (u/dist (u/self-pos c) cell) leftover-reach)
+                     (<= (u/dist (u/self-pos c) cell) (leftover-reach))
                      (not (in-column? col (wworld/body-cell c))))
             (await (shut-column! c col)))
           (recur (rest todo)))))))

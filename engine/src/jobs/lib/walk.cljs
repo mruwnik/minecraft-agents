@@ -2,7 +2,8 @@
   "The walk driver: plan from the body's cell to a goal within the executor's abilities, follow the plan with steer, plan
   again when the body ends off it. Jobs that walk (jobs.debug.walk-plan, the stair, tunnel and cleanup jobs) call this
   namespace; walk-to! is the whole loop, the other functions are its pieces; the pieces live in jobs.lib.walk.plan (planning), .search (the budgeted search a round), .watch (the look-ahead) and .world (the pathWorld and its decorations)."
-  (:require [engine.ctx :as ctx]
+  (:require [engine.settings :as settings]
+            [engine.ctx :as ctx]
             [engine.path.executor :as executor]
             [jobs.lib.util :as u]
             [jobs.lib.walk.plan :as wplan]
@@ -10,8 +11,14 @@
             [jobs.lib.walk.watch :as wwatch]
             [jobs.lib.walk.world :as wworld]))
 
-(def max-timeout-s 120)
-(def max-settle-waits 20)
+(def settings
+  {::max-timeout-s {:default 120 :doc "The longest a walk call may run, in seconds." :type :int :min 1}
+   ::max-settle-waits {:default 20 :doc "Waits for the body to settle after a step before the walk goes on." :type :int :min 0}
+   ::centre-tolerance {:default 0.2 :doc "How near (blocks, each axis) a centring nudge ends to its target." :type :number :min 0}
+   ::centre-max-ticks {:default 30 :doc "Ticks a centring nudge walks before it gives up." :type :int :min 1}})
+
+(defn max-timeout-s [] (settings/get settings ::max-timeout-s))
+(defn max-settle-waits [] (settings/get settings ::max-settle-waits))
 (def default-weight 1.2)
 (def held-in
   "Blocks at the feet that hold a body still enough to plan from: climbables, and water (it swims from there)."
@@ -30,7 +37,7 @@
   [c]
   (let [p (:primitives c)]
     (loop [n 0]
-      (when (and (< n max-settle-waits) (not (grounded? p)))
+      (when (and (< n (max-settle-waits)) (not (grounded? p)))
         (await (ctx/act c :wait #js {:ms 100}))
         (recur (inc n))))))
 
@@ -49,11 +56,11 @@
   "The act args of one walk. decide is not enumerable: the engine's act wrapper writes (js->clj args) into
   an event, and a function there would break the event stream."
   [timeout-s decide]
-  (doto (js-obj "timeoutS" (min max-timeout-s timeout-s))
+  (doto (js-obj "timeoutS" (min (max-timeout-s) timeout-s))
     (js/Object.defineProperty "decide" #js {:value decide})))
 
-(def centre-tolerance "How near (blocks, each axis) a centring nudge ends to its target." 0.2)
-(def centre-max-ticks "Ticks a centring nudge walks before it gives up." 30)
+(defn centre-tolerance [] (settings/get settings ::centre-tolerance))
+(defn centre-max-ticks [] (settings/get settings ::centre-max-ticks))
 
 (defn centre-decider
   "A steer decide function that walks straight at [tx tz], done within centre-tolerance of it or after centre-max-ticks."
@@ -61,8 +68,8 @@
   (let [ticks (volatile! 0)]
     (fn [js-pose]
       (let [dx (- tx (.-x js-pose)) dz (- tz (.-z js-pose))]
-        (if (or (and (<= (js/Math.abs dx) centre-tolerance) (<= (js/Math.abs dz) centre-tolerance))
-                (>= (vswap! ticks inc) centre-max-ticks))
+        (if (or (and (<= (js/Math.abs dx) (centre-tolerance)) (<= (js/Math.abs dz) (centre-tolerance)))
+                (>= (vswap! ticks inc) (centre-max-ticks)))
           #js {:done true}
           #js {:controls #js {:forward true} :yaw (js/Math.atan2 (- dx) (- dz))})))))
 

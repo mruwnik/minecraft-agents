@@ -14,7 +14,8 @@
     wall torches and ladders hang on the block behind them, looking into it
   Anything else is placed plainly. A usable neighbour (chest, table, door ...) is clicked only when nothing else
   gives the state, and then sneaking. Directions are mineflayer's: yaw 0 looks north, pi/2 west; pitch -pi/2 down."
-  (:require [clojure.string :as str]
+  (:require [engine.game :as game]
+            [clojure.string :as str]
             [jobs.lib.util :as u]
             [shadow.resource :as rc]))
 
@@ -233,7 +234,7 @@
   (let [want (if (string? want) {:block want} want)]
     (decide (family (:block want)) want cell {:eye eye :block-at block-at})))
 
-(defn eye [body] {:x (:x body) :y (+ (:y body) u/eye-height) :z (:z body)})
+(defn eye [body] {:x (:x body) :y (+ (:y body) game/eye-height) :z (:z body)})
 
 (defn js-click [{:keys [against cursor] :as click}]
   (merge (select-keys click [:yaw :pitch :sneak])

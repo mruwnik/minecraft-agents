@@ -15,7 +15,11 @@
                    leather gear
     junk        0  everything else (seeds, dirt, cobblestone, saplings,
                    sticks, flowers, unknown names)"
-  (:require [jobs.lib.cost :as cost]))
+  (:require [engine.settings :as settings]
+            [jobs.lib.cost :as cost]))
+
+(def settings
+  {::enchanted-worth {:default 25 :doc "What an enchanted item is worth on top of its base." :type :int :min 0}})
 
 (def prices
   "make-room's prices, [[regex price] ...] in priority order (first match wins; unmatched items cost 0). A price is per
@@ -29,9 +33,9 @@
    [#"^(stone|wooden|golden)_(pickaxe|axe|shovel|hoe|sword)$" 1 :per-stack]
    [#"^leather" 1 :per-stack]])
 
-(def enchanted-worth 25)
+(defn enchanted-worth [] (settings/get settings ::enchanted-worth))
 
 (defn item-worth
   "The worth of one inventory entry ({:name :count? ...}); a missing :count counts as 1."
   [item]
-  (:value (cost/item-value [item] :prices prices :else 0 :enchanted enchanted-worth)))
+  (:value (cost/item-value [item] :prices prices :else 0 :enchanted (enchanted-worth))))

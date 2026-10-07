@@ -1,10 +1,15 @@
 (ns jobs.lib.util
   "Helpers the library jobs share: reading positions off JS, distances, the
   inventory and bounded failure counting. Walking in reach is jobs.lib.near/go-near!."
-  (:require [engine.ctx :as ctx]
+  (:require [engine.settings :as settings]
+            [engine.game :as game]
+            [engine.ctx :as ctx]
             [engine.perception.rays :as rays]))
 
-(def max-failures 3)
+(def settings
+  {::max-failures {:default 3 :doc "Failures in a row a retrying helper takes before it gives up." :type :int :min 1}})
+
+(defn max-failures [] (settings/get settings ::max-failures))
 
 (defn ^:async untimed!
   "Await (thunk), then move mem :started (the job's :timeout-s start) on by the time it took: :timeout-s bounds the
@@ -102,7 +107,6 @@
 (defn dist [a b]
   (js/Math.hypot (- (:x a) (:x b)) (- (:y a) (:y b)) (- (:z a) (:z b))))
 
-(def eye-height 1.62)
 
 (def eye-reach
   "Eye-to-centre distance within which a block is dug or placed without walking: a margin under the primitives' 4.5."
@@ -114,7 +118,7 @@
   "Distance from the eye of a body at feet position here to the centre of cell (a [x y z] vector or an {:x :y :z} map)."
   [here cell]
   (let [[x y z] (if (vector? cell) cell [(:x cell) (:y cell) (:z cell)])]
-    (dist {:x (:x here) :y (+ (:y here) eye-height) :z (:z here)} {:x (+ x 0.5) :y (+ y 0.5) :z (+ z 0.5)})))
+    (dist {:x (:x here) :y (+ (:y here) game/eye-height) :z (:z here)} {:x (+ x 0.5) :y (+ y 0.5) :z (+ z 0.5)})))
 
 (defn within?
   "True when the floored cells of a and b are within range, the measure moveTo's arrival uses."
@@ -149,12 +153,12 @@
   [c]
   (let [tries (inc (:failures (ctx/mem c) 0))]
     (ctx/update-mem! c assoc :failures tries)
-    (>= tries max-failures)))
+    (>= tries (max-failures))))
 
 (defn fail!
   "Count a failed round in a row (progress! resets). Returns :continue until max-failures in a row, then emits a warn of kind and returns :done."
   [c kind text]
   (if-not (count-fail! c)
     :continue
-    (do (ctx/emit! c kind :warn {:tries max-failures :text text})
+    (do (ctx/emit! c kind :warn {:tries (max-failures) :text text})
         :done)))

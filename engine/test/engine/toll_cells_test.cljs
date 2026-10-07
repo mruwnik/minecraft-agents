@@ -107,7 +107,7 @@
                                          (await (tc/walk-tolls c {:x 40 :y 64 :z 40})))))
               cells (set (map (juxt :x :y :z) tolls))
               warns (filter #(= "toll-cells.capped" (name (:kind %))) @(:seen w))]
-          (is (<= (count tolls) tc/max-cells))
+          (is (<= (count tolls) (tc/max-cells)))
           (is (contains? cells [38 64 38]) "the goal end of the line is tolled, not just the low x")
           (is (contains? cells [12 64 12]) "the start end too")
           (is (= 1 (count warns))))))))

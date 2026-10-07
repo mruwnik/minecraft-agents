@@ -318,7 +318,7 @@
   [c pos why]
   (let [n (inc (get-in (ctx/mem c) [:fails pos] 0))]
     (ctx/update-mem! c assoc-in [:fails pos] n)
-    (when (>= n u/max-failures)
+    (when (>= n (u/max-failures))
       (leave! c pos why))))
 
 (defn settle-debts!

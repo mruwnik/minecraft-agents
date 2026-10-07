@@ -15,7 +15,8 @@
 
   Also body memory :fetch/stock: what a chest held when last looked into or moved from (withdraw, deposit, kit,
   obtain), so obtain goes first to a chest known to hold the item and skips one known not to."
-  (:require [engine.ctx :as ctx]
+  (:require [engine.settings :as settings]
+            [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
             [jobs.lib.declined :as declined]
@@ -23,6 +24,12 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
             [engine.memory :as mem]))
+
+(def settings
+  {::max-fetch-calls {:default 400 :doc "Fetch rounds of one fetch! before it gives the round back with :continue." :type :int :min 1}
+   ::chest-radius {:default 32 :doc "Blocks round the body searched for a chest holding the item." :type :int :min 1}
+   ::view-age-ms {:default 10000 :doc "A chest view older than this is read again, in ms." :type :int :min 0}})
+
 
 ;; ------------------------------------------------------------------ the option and its limits
 
@@ -267,7 +274,7 @@
              (= back (feet c)) (do (ctx/update-mem! c dissoc :fetch-return) nil)
              :else (await (walk-back! c back))))))))
 
-(def max-fetch-calls "Fetch rounds of one fetch! before it gives the round back with :continue." 400)
+(defn max-fetch-calls [] (settings/get settings ::max-fetch-calls))
 
 (defn ^:async fetch!
   "The fetch part of a whole attempt: step! (problem c) again, a pace! between, until nothing is due any more (the
@@ -281,7 +288,7 @@
       (cond
         (nil? r) nil
         (#{:done :continue} r) r
-        (and (< n max-fetch-calls) (ctx/alive? c)) (do (await (pace/pace!)) (recur (inc n)))
+        (and (< n (max-fetch-calls)) (ctx/alive? c)) (do (await (pace/pace!)) (recur (inc n)))
         :else :continue))))
 
 (defn ^:async fetch-untimed!
@@ -293,7 +300,7 @@
 ;; ------------------------------------------------------------------ chests: seen ones and their stock
 
 (def container-names ["chest" "trapped_chest" "barrel"])
-(def chest-radius 32)
+(defn chest-radius [] (settings/get settings ::chest-radius))
 (def stock-kind :fetch/stock)
 (def stock-policy {:cap 64 :ttl (* 30 60 1000)})
 
@@ -324,7 +331,7 @@
       (let [n (+ (get items name 0) delta)]
         (ctx/remember! c stock-kind {:pos cell :items (if (pos? n) (assoc items name n) (dissoc items name))} stock-policy)))))
 
-(def view-age-ms 10000)
+(defn view-age-ms [] (settings/get settings ::view-age-ms))
 
 (defn seen-chests
   "The containers the body has seen (perception's seenBlocks, never x-ray) within chest-radius, as {:x :y :z},
@@ -333,7 +340,7 @@
   [c]
   (let [p (:primitives c)
         me (u/self-pos c)]
-    (->> (look/seen-blocks p {:names container-names :radius chest-radius :max 32 :live? true :live-within-ms view-age-ms})
+    (->> (look/seen-blocks p {:names container-names :radius (chest-radius) :max 32 :live? true :live-within-ms (view-age-ms)})
          (map :pos)
          (sort-by #(u/dist me %)))))
 

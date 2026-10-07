@@ -12,21 +12,21 @@
 
   Wedged: the feet cell holds such a full block, e.g. sand that fell on the body. Farmland, slabs, snow layers, soul
   sand, paths, plants and fluids never do. The eye cell is the suffocating trigger's business."
-  (:require [engine.memory :as mem]
+  (:require [engine.game :as game]
+            [engine.memory :as mem]
             [jobs.lib.util :as u]))
 
 (def default-min-oxygen 12)
 
 (defn air? [block-name] (contains? #{"air" "cave_air" "void_air"} block-name))
 
-(def eye-height 1.62)
 
 (defn eye-cell
   "The cell holding the eyes of a body whose feet are at self's pos. The feet
   are not at an integer y on farmland, slabs, paths or soul sand."
   [self]
   {:x (js/Math.floor (.. self -pos -x))
-   :y (js/Math.floor (+ (.. self -pos -y) eye-height))
+   :y (js/Math.floor (+ (.. self -pos -y) game/eye-height))
    :z (js/Math.floor (.. self -pos -z))})
 
 (defn suffocates-here?

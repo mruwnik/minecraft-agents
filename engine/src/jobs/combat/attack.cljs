@@ -131,7 +131,7 @@
   [c target]
   (let [n (inc (get-in (ctx/mem c) [:fails (.-id target)] 0))]
     (ctx/update-mem! c assoc-in [:fails (.-id target)] n)
-    (when (>= n u/max-failures) (give-up! c target :unreachable))))
+    (when (>= n (u/max-failures)) (give-up! c target :unreachable))))
 
 (defn reset-fails!
   "A landed swing is progress: target's failure count starts again at 0."

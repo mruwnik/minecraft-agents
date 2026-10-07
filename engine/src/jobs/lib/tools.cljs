@@ -1,9 +1,16 @@
 (ns jobs.lib.tools
   "Which carried tool suits a block."
-  (:require [clojure.string :as str]
+  (:require [engine.settings :as settings]
+            [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.util :as u]))
+
+(def settings
+  {::low-fraction {:default 0.1 :doc "A tool at or under this fraction of its durability is low." :type :number :min 0}
+   ::wear-settle-ms {:default 250 :doc "Wait for the inventory to show a tool breaking, in ms." :type :int :min 0}
+   ::wear-settle-tries {:default 3 :doc "Times to wait for the break to show." :type :int :min 0}
+   ::quick-clear-ms {:default 1500 :doc "A block that carried tools or the bare hand break within this is cleared without a tool." :type :int :min 0}})
 
 (def shovel-blocks
   #{"dirt" "grass_block" "sand" "red_sand" "gravel" "clay" "soul_sand" "soul_soil" "mud" "snow_block"
@@ -60,7 +67,7 @@
   [items block-name harvest-tools]
   (:name (suited-item items block-name harvest-tools)))
 
-(def low-fraction "A tool at or under this fraction of its durability is low." 0.1)
+(defn low-fraction [] (settings/get settings ::low-fraction))
 
 (defn wear-event
   "What changed between prev (the tool last held) and now (the carried tools of that name; nil for none). Both are
@@ -68,7 +75,7 @@
   is at the low fraction of its durability and prev has not told of it (:low-seen), else nil."
   [prev now]
   (when prev
-    (let [low? (fn [t] (and (:durability t) (:max t) (<= (:durability t) (* low-fraction (:max t)))))]
+    (let [low? (fn [t] (and (:durability t) (:max t) (<= (:durability t) (* (low-fraction) (:max t)))))]
       (cond
         (< (:n now 0) (:n prev 1)) (when (<= (or (:durability prev) 0) 20) :tool-broke)
         (and (low? now) (not (:low-seen prev))) :tool-low))))
@@ -85,8 +92,8 @@
         worn (first (sort-by #(or (:durability %) js/Infinity) same))]
     (assoc (select-keys worn [:name :durability :max]) :n (count same))))
 
-(def wear-settle-ms "A tool one or two uses from breaking: the inventory may lag the dig; wait this long, up to" 250)
-(def wear-settle-tries "this many times, for the break to show." 3)
+(defn wear-settle-ms [] (settings/get settings ::wear-settle-ms))
+(defn wear-settle-tries [] (settings/get settings ::wear-settle-tries))
 
 (defn ^:async note-wear!
   "Emit :tool.low or :tool.broke (agent-facing, :warn) when the tool picked last time wore out since; ends with a
@@ -101,8 +108,8 @@
         [now ev] (loop [tries 0]
                    (let [now (when prev (wear-snapshot p prev))
                          ev (wear-event prev now)]
-                     (if (and about-to-break? (not= ev :tool-broke) (< tries wear-settle-tries))
-                       (do (await (ctx/act c :wait #js {:ms wear-settle-ms}))
+                     (if (and about-to-break? (not= ev :tool-broke) (< tries (wear-settle-tries)))
+                       (do (await (ctx/act c :wait #js {:ms (wear-settle-ms)}))
                            (recur (inc tries)))
                        [now ev])))]
     (when ev
@@ -156,7 +163,7 @@
   [p block-name]
   (nil? (harvest-need (map :name (u/inventory p)) (some-> (.harvestTools p block-name) js->clj))))
 
-(def quick-clear-ms "A block that carried tools or the bare hand break within this is cleared without a tool." 1500)
+(defn quick-clear-ms [] (settings/get settings ::quick-clear-ms))
 
 (defn clear-ms
   "The least time in ms the bare hand or any carried item takes to break block-name (primitive clearTime; a block name the registry does not know counts as 0, free)."
@@ -173,7 +180,7 @@
   hand; stone, ore and a cobweb do not. A job that wants the drop (mine) asks can-harvest? alone."
   [p block-name]
   (and (not (can-harvest? p block-name))
-       (> (clear-ms p block-name) quick-clear-ms)))
+       (> (clear-ms p block-name) (quick-clear-ms))))
 
 (defn hand-better?
   "Whether the body should dig block bare-handed: it is not a pickaxe block, no tool of its kind is carried, and a

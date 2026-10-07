@@ -63,7 +63,7 @@
   (let [block-at (escape/block-at-of p)
         cells (case step
                 :stair (escape/stair-cuts feet (escape/heading-dirs heading) steps)
-                :clear-path (:cells (escape/door block-at feet (escape/heading-dirs heading) escape/max-door))
+                :clear-path (:cells (escape/door block-at feet (escape/heading-dirs heading) (escape/max-door)))
                 nil)]
     (vec (for [cell cells :let [n (block-at cell)] :when (escape/solid? n)] {:cell cell :block n}))))
 

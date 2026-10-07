@@ -127,7 +127,7 @@
   [c pos reason]
   (let [n (inc (get-in (ctx/mem c) [:fails pos] 0))]
     (ctx/update-mem! c assoc-in [:fails pos] n)
-    (when (>= n u/max-failures)
+    (when (>= n (u/max-failures))
       (skip! c pos reason))
     :again))
 
