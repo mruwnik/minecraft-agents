@@ -170,7 +170,7 @@
   "{job reason}: jobs whose rounds legitimately outlast the fuzzer's caps (the fake world's time is frozen), so a cut-off is no defect."
   {'jobs.survival.night "a night round waits for dawn, which the fake world's frozen clock never brings"
    'jobs.survival.retreat "flight keeps moving while the danger lasts, and the fake danger never goes"
-   'jobs.survival.respond-to-hostile "a round is a whole flight (it calls retreat), and the frozen fake mob never closes or leaves; this also hides the real retreat ping-pong of card 0ec013bb: delete the entry when that is fixed"})
+   'jobs.survival.respond-to-hostile "a round is a whole flight (it calls retreat), and the frozen fake mob never closes or leaves; still hit the act cap after 0ec013bb's fix (FUZZ_JOB=jobs.survival.respond-to-hostile FUZZ_SEED=1 FUZZ_CASES=50 FUZZ_CASE=16): delete when it no longer does"})
 
 (def progress-window "Rounds over which a change in the fake world counts as progress, not a spin." 3)
 
@@ -264,7 +264,7 @@
 
 (def known
   "{[job kind] card}: defects already carded, so the suite stays green and a new one fails it. A default run fails when an entry no longer occurs: delete it with its fix."
-  {["jobs.gather.mine" :runaway] "cd74fd83"})
+  {})
 
 (defn case-seed
   "Seed of case k of job: stable under the job filter and the other jobs."
