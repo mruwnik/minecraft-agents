@@ -17,7 +17,7 @@ import { missingPatches, missingRequired } from './deps-check.mjs'
 import { wrapBlockAt } from './offset-shapes.mjs'
 import { say } from './chat.mjs'
 import vec3 from 'vec3'
-import { MONSTER_RANGE, DAMAGE_FRESH_MS, OFFLINE_DEFAULT_MS, OFFLINE_MAX_MS, RECONNECT_TRIES, RECONNECT_RETRY_MS, RECONNECT_BACKOFF_FIRST_MS, RECONNECT_BACKOFF_MAX_MS, WORLD_TIMEOUT_MS, PHYSICS_STALL_MS, STALL_POLL_MS, SETTLE_MS, TELEPORT_BLOCKS, BODY_HALF_WIDTH, WAIT_MAX_MS, weatherOf, mcToMineflayerLook, mineflayerToMcLook, sleepMs, waitForWorld, xyz, isNum, vec, cutError, badArgs, isCut, failed, need, entityKind, attempt, sleepStatusOf, droppedItem, itemCounts } from './prim-base.mjs'
+import { DAMAGE_FRESH_MS, OFFLINE_DEFAULT_MS, OFFLINE_MAX_MS, RECONNECT_TRIES, RECONNECT_RETRY_MS, RECONNECT_BACKOFF_FIRST_MS, RECONNECT_BACKOFF_MAX_MS, WORLD_TIMEOUT_MS, PHYSICS_STALL_MS, STALL_POLL_MS, SETTLE_MS, TELEPORT_BLOCKS, BODY_HALF_WIDTH, WAIT_MAX_MS, mcToMineflayerLook, mineflayerToMcLook, sleepMs, waitForWorld, xyz, isNum, vec, cutError, badArgs, isCut, failed, need, attempt, sleepStatusOf, droppedItem, itemCounts } from './prim-base.mjs'
 import { createWalk } from './prim-walk.mjs'
 import { createSense } from './prim-sense.mjs'
 import { createMove } from './prim-move.mjs'
@@ -79,9 +79,6 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     mainHand: gearView(bot.heldItem)
   })
   const countsNow = () => itemCounts(inventory())
-  const hostilesNear = () => liveEntities(bot)
-    .filter(e => e !== bot.entity && entityKind(e) === 'hostile')
-    .filter(e => Math.hypot(e.position.x - bot.entity.position.x, e.position.z - bot.entity.position.z) <= MONSTER_RANGE && Math.abs(e.position.y - bot.entity.position.y) <= 5)
 
   // Runs `body(ctx)` as one call owned by `token`. The call ends the moment the owner changes (rejects with cut), or
   // when its time bound passes (resolves onTimeout(), default {status: 'timeout'} plus `inventoryChange` {item: delta}
@@ -119,7 +116,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     })
   }
 
-  const env = { get bot () { return bot }, timeScale, settleMs, act, isOwner, here, eye, inventory, standingCell, countsNow, hostilesNear, isOffline, equipment }
+  const env = { get bot () { return bot }, timeScale, settleMs, act, isOwner, here, eye, inventory, standingCell, countsNow, isOffline, equipment }
   Object.assign(env, createWalk(env), createSense(env))
   const { stopWalking, lookNow } = env
   const { self, entities, blockAt, isSettling, settleFromNow, rememberSelf, lastKnown, columnLoaded } = env
@@ -241,8 +238,9 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       const { at, ...fields } = last
       return fields
     }
-    const weatherNow = () => weatherOf(target)
-    let weather = weatherNow()
+    // raw levels; engine.senses turns them into weather-changed when raining or thundering flips
+    const levelsNow = () => ({ rain: target.rainState ?? 0, thunder: target.thunderState ?? 0 })
+    let levels = levelsNow()
     const handlers = {
       physicsTick: () => { lastTick = Date.now(); stalled = false; lastPos = target.entity.position.clone(); if (++ticks % 20 === 0) remember() },
       health: () => {
@@ -272,10 +270,10 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       playerJoined: player => { if (player?.username && player.username !== target.username) emit({ kind: 'player-joined', player: player.username }) },
       playerLeft: player => { if (player?.username && player.username !== target.username) emit({ kind: 'player-left', player: player.username }) },
       weatherUpdate: () => {
-        const now = weatherNow()
-        if (now.raining === weather.raining && now.thundering === weather.thundering) return
-        weather = now
-        emit({ kind: 'weather-changed', ...now })
+        const now = levelsNow()
+        if (now.rain === levels.rain && now.thunder === levels.thunder) return
+        levels = now
+        emit({ kind: 'weather-levels', ...now })
       },
       playerCollect: (collector, collected) => {
         if (collector !== target.entity) return

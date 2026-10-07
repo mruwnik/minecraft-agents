@@ -10,6 +10,7 @@
             [engine.registry :as registry]
             [jobs.survival.recover-drops :as recover-drops]
             [engine.scenario :as scenario]
+            [engine.senses :as senses]
             [engine.single :as single]
             [engine.takeover :as takeover]
             [engine.trigger-api :as trigger-api]
@@ -172,7 +173,8 @@
         ;; what the body has seen (engine.perception); BODY_PERCEPTION=0 runs without it
         per (when (and (.-rawWorld raw-p) (not= "0" (.. js/process -env -BODY_PERCEPTION)))
               (perception/create (.-rawWorld raw-p) {}))
-        p (if per (perception/wrap raw-p per) raw-p)
+        sensed (senses/wrap raw-p (.-rawWorld raw-p))
+        p (if per (perception/wrap sensed per) sensed)
         world (open-world {:state-dir state-dir :world (:world cfg) :agent (:agent opts) :root root
                            :emit (fn [e] (some-> @eng-ref (core/emit! e)))})
         base-eng (core/create {:primitives p :jobs registry/jobs :triggers (body-triggers) :dir (:engine-dir cfg)

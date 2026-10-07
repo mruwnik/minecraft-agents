@@ -39,7 +39,7 @@ const acting = [
   { name: 'enchant', args: { pos: at(1, 64, 2), op: 'offers', item: 'bread' }, hang: 'openEnchantmentTable', cleanup: null, timeout: 'failed' },
   { name: 'equip', args: { item: 'bread' }, hang: 'equip', cleanup: null, timeout: 'timeout' },
   { name: 'toss', args: { item: 'cobblestone' }, hang: 'toss', cleanup: null, timeout: 'timeout' },
-  { name: 'eat', args: {}, hang: 'consume', cleanup: 'deactivateItem', timeout: 'timeout' },
+  { name: 'eat', args: { item: 'bread' }, hang: 'consume', cleanup: 'deactivateItem', timeout: 'timeout' },
   { name: 'attack', args: { id: 8 }, hang: 'attack', cleanup: null, timeout: 'timeout' },
   { name: 'interact', args: { id: 8, item: 'bread' }, hang: 'equip', cleanup: null, timeout: 'timeout' },
   { name: 'unequip', args: {}, hang: 'unequip', cleanup: null, timeout: 'timeout', over: { held: { name: 'bread', count: 2 } } },
@@ -174,14 +174,14 @@ const statuses = [
   ['toss', { item: 'sword' }, {}, 'no-item'],
   ['toss', { item: 'cobblestone', count: 0 }, {}, 'no-item'],
   ['toss', { item: 'cobblestone' }, {}, 'tossed'],
-  ['eat', {}, { items: [] }, 'no-food'],
-  ['eat', {}, { food: 20 }, 'full'],
-  ['eat', {}, {}, 'ate'],
+  ['eat', { item: 'bread' }, { items: [] }, 'no-food'],
+  ['eat', { item: 'bread' }, { food: 20 }, 'full'],
+  ['eat', { item: 'bread' }, {}, 'ate'],
   ['attack', { id: 99 }, {}, 'gone'],
   ['attack', { id: 8 }, { entities: { 8: { id: 8, name: 'zombie', type: 'hostile', position: at(9, 64, 0), height: 1.9 } } }, 'out-of-reach'],
   ['sleep', { pos: at(9, 64, 9) }, {}, 'missing'],
-  ['sleep', { pos: at(2, 64, 1) }, { timeOfDay: 1000 }, 'not-night'],
-  ['sleep', { pos: at(2, 64, 1) }, { entities: { 8: { id: 8, name: 'zombie', type: 'hostile', position: at(2, 64, 0) } } }, 'monsters-near'],
+  ['sleep', { pos: at(2, 64, 1), notNight: true }, {}, 'not-night'],
+  ['sleep', { pos: at(2, 64, 1), monstersNear: true }, {}, 'monsters-near'],
   ['sleep', { pos: at(2, 64, 1), }, { entities: {} }, 'sleeping'],
   ['inspectContainer', { pos: at(9, 64, 9) }, {}, 'missing'],
   ['inspectContainer', { pos: at(3, 64, 0) }, {}, 'ok'],
@@ -293,8 +293,8 @@ test('trade with an unknown villager uuid resolves gone', async () => {
 test('self reports the body in the contract shape', () => {
   const { p } = rig(world)
   const s = p.self()
-  assert.deepEqual(Object.keys(s).sort(), ['chunkLoaded', 'dimension', 'effects', 'equipment', 'experience', 'food', 'foodSaturation', 'health', 'held', 'inLava', 'inWater', 'inventory', 'isDay', 'isSleeping', 'onFire', 'onGround', 'oxygen', 'players', 'pos', 'raining', 'settling', 'thundering', 'timeOfDay', 'username', 'vehicle'])
-  assert.equal(s.isDay, false)
+  assert.deepEqual(Object.keys(s).sort(), ['chunkLoaded', 'dimension', 'effects', 'equipment', 'experience', 'food', 'foodSaturation', 'health', 'held', 'inLava', 'inWater', 'inventory', 'isSleeping', 'onFire', 'onGround', 'oxygen', 'players', 'pos', 'rainState', 'settling', 'thunderState', 'timeOfDay', 'username', 'vehicle'])
+  assert.equal(s.timeOfDay, 15000)
   assert.deepEqual(s.inventory[0], { name: 'bread', count: 2, slot: 36 })
 })
 
@@ -306,20 +306,13 @@ test('self lists the other players in the player list (the tab list), not the bo
   assert.deepEqual(p.self().players, [])
 })
 
-for (const [rainState, thunderState, isRaining, raining, thundering] of [
-  [0, 0, false, false, false],
-  [0.15, 0, false, false, false],
-  [0.5, 0, false, true, false],
-  [1, 1, false, true, true],
-  [0.1, 1, false, false, false],
-  [0, 0, true, false, false],
-]) {
-  test(`self reports the weather for rain ${rainState} thunder ${thunderState} isRaining ${isRaining}`, () => {
-    const { bot, p } = rig(world)
-    Object.assign(bot, { rainState, thunderState, isRaining })
-    assert.deepEqual([p.self().raining, p.self().thundering], [raining, thundering])
-  })
-}
+test('self reports the raw rain and thunder levels (engine.senses derives raining and thundering)', () => {
+  const { bot, p } = rig(world)
+  Object.assign(bot, { rainState: 0.5, thunderState: 0.25 })
+  assert.deepEqual([p.self().rainState, p.self().thunderState], [0.5, 0.25])
+  Object.assign(bot, { rainState: undefined, thunderState: undefined })
+  assert.deepEqual([p.self().rainState, p.self().thunderState], [0, 0])
+})
 
 test('entities carry baby and uuid for a mob', () => {
   const calf = { id: 9, name: 'cow', type: 'passive', uuid: 'u-9', position: at(2, 64, 0), height: 1.4, metadata: { 8: true } }
@@ -431,21 +424,17 @@ test('body events: another player joining or leaving is reported, the body itsel
   assert.deepEqual(seen, [{ kind: 'player-joined', player: 'Ann' }, { kind: 'player-left', player: 'Ann' }])
 })
 
-test('body events: weather-changed fires when raining or thundering flips, not on level wiggles', () => {
+test('body events: weather-levels carries the raw levels when they change (engine.senses decides what flips)', () => {
   const { bot, p } = rig(world)
   const seen = []
   p.onBodyEvent(e => seen.push(e))
   const set = (rainState, thunderState) => { Object.assign(bot, { rainState, thunderState }); bot.emit('weatherUpdate') }
   set(0.1, 0)
-  set(0.5, 0)
-  set(0.6, 0.5)
+  set(0.1, 0)
   set(0.6, 1)
-  set(0.3, 1)
-  set(0, 0)
-  assert.deepEqual(seen.filter(e => e.kind === 'weather-changed'), [
-    { kind: 'weather-changed', raining: true, thundering: false },
-    { kind: 'weather-changed', raining: true, thundering: true },
-    { kind: 'weather-changed', raining: false, thundering: false }])
+  assert.deepEqual(seen.filter(e => e.kind.startsWith('weather')), [
+    { kind: 'weather-levels', rain: 0.1, thunder: 0 },
+    { kind: 'weather-levels', rain: 0.6, thunder: 1 }])
 })
 
 const sleepBar = (key, ...counts) => ({ translate: key, with: counts.map(n => ({ text: String(n) })), toString: () => key })
@@ -552,23 +541,17 @@ for (const [label, entityFlags, blocks, expected] of liquidCases) {
   })
 }
 
-test('entities tells sleeping players from standing ones and gives usernames', () => {
+test('entities tells lying players from standing ones and gives usernames', () => {
   const player = (id, pose) => ({ id, type: 'player', name: 'player', username: `P${id}`, position: at(id, 64, 0), metadata: pose === undefined ? [] : [0, 0, 0, 0, 0, 0, pose] })
   const p = withBot(bot => { bot.entities = { 1: player(1, 2), 2: player(2, 0), 3: player(3) } }, { ...world, blocks: {} })
   const found = p.entities({ kind: 'player' })
-  assert.deepEqual(found.map(e => [e.username, e.sleeping]), [['P1', true], ['P2', false], ['P3', false]])
+  assert.deepEqual(found.map(e => [e.username, e.lyingDown]), [['P1', true], ['P2', false], ['P3', false]])
 })
 
-test('entities lists a player behind a wall with visible false, and counts a sleeper there as not seen asleep', () => {
-  const player = (id, x) => ({ id, type: 'player', name: 'player', username: `P${id}`, position: at(x, 64, 0), metadata: [0, 0, 0, 0, 0, 0, 2] })
-  const p = withBot(bot => { bot.entities = { 1: player(1, 1), 5: player(5, 5) } }, { ...world, blocks: { ...world.blocks, '2,65,0': 'stone' } })
-  assert.deepEqual(p.entities({ kind: 'player' }).map(e => [e.username, e.sleeping, e.visible]), [['P1', true, true], ['P5', false, false]])
-})
-
-test('a player asleep in a bed is seen over the foot of the bed', () => {
+test('a player lying in a bed reports lyingDown and the low height the sight line aims at', () => {
   const sleeper = { id: 5, type: 'player', name: 'player', username: 'P5', position: at(5, 64.6875, 0), height: 0.2, metadata: [0, 0, 0, 0, 0, 0, 2] }
   const p = withBot(bot => { bot.entities = { 5: sleeper } }, { ...world, blocks: { '4,64,0': 'red_bed', '5,64,0': 'red_bed' } })
-  assert.deepEqual(p.entities({ kind: 'player' }).map(e => e.sleeping), [true])
+  assert.deepEqual(p.entities({ kind: 'player' }).map(e => [e.lyingDown, e.height]), [[true, 0.2]])
 })
 
 test('entities finds the pose index through the registry', () => {
@@ -576,12 +559,12 @@ test('entities finds the pose index through the registry', () => {
     bot.registry = { ...bot.registry, ...keysFor(['shared_flags', 'pose']) }
     bot.entities = { 1: { id: 1, type: 'player', name: 'player', username: 'A', position: at(1, 64, 0), metadata: [0, 2] } }
   })
-  assert.equal(p.entities({})[0].sleeping, true)
+  assert.equal(p.entities({})[0].lyingDown, true)
 })
 
-test('entities does not put sleeping or username on mobs', () => {
+test('entities does not put lyingDown or username on mobs, and gives no sight fields', () => {
   const [zombie] = rig(world).p.entities({ kind: 'hostile' })
-  assert.deepEqual(Object.keys(zombie).sort(), ['distance', 'hittable', 'id', 'kind', 'name', 'pos', 'visible'])
+  assert.deepEqual(Object.keys(zombie).sort(), ['distance', 'height', 'id', 'kind', 'name', 'pos'])
 })
 
 const mobCases = [
@@ -1416,7 +1399,7 @@ const rejecting = [
   { name: 'place', args: { pos: at(1, 64, 0), item: 'cobblestone' }, call: 'placeBlock', message: 'No block has been placed' },
   { name: 'equip', args: { item: 'bread' }, call: 'equip', message: 'cannot equip' },
   { name: 'toss', args: { item: 'cobblestone' }, call: 'toss', message: 'cannot toss' },
-  { name: 'eat', args: {}, call: 'consume', message: 'Consuming cancelled due to calling bot.consume() again' },
+  { name: 'eat', args: { item: 'bread' }, call: 'consume', message: 'Consuming cancelled due to calling bot.consume() again' },
   { name: 'attack', args: { id: 8 }, call: 'attack', message: 'invalid entity' },
   { name: 'look', args: { pos: at(1, 64, 1) }, call: 'lookAt', message: 'look failed' },
   { name: 'transfer', args: { pos: at(3, 64, 0), direction: 'deposit', item: 'cobblestone', count: 2 }, call: 'deposit', message: 'Server rejected transaction' },
@@ -1468,76 +1451,6 @@ test('scooping where there is no liquid is missing, pouring into a solid is occu
 test('a bucket not carried is no-item', async () => {
   const { p } = bucketRig({ blocks: {}, item: 'bread', onActivate: () => {} })
   assert.equal((await p.place('t1', { pos: at(1, 64, 0), item: 'water_bucket' })).status, 'no-item')
-})
-
-// ---- line of sight: entities reports `visible` for hostiles ----
-
-const wall = Object.fromEntries([2, 3].flatMap(x => [-1, 0].flatMap(z => [64, 65, 66].map(y => [`${x},${y},${z}`, 'stone']))))
-const zombieAt5 = { 9: { id: 9, name: 'zombie', type: 'hostile', position: at(5, 64, 0), height: 1.9, health: 20 } }
-
-test('a hostile behind a two-thick wall is not visible, and is once the wall is gone', () => {
-  const behind = rig({ blocks: wall, entities: zombieAt5 }).p.entities({ kind: 'hostile' })
-  assert.equal(behind.length, 1)
-  assert.equal(behind[0].visible, false)
-  const open = rig({ blocks: {}, entities: zombieAt5 }).p.entities({ kind: 'hostile' })
-  assert.equal(open[0].visible, true)
-})
-
-test('a hostile seen across a diagonal is blocked by a pillar on the line', () => {
-  const pillar = Object.fromEntries([64, 65, 66].map(y => ['2,' + y + ',2', 'stone']))
-  const e = { 9: { id: 9, name: 'zombie', type: 'hostile', position: at(4, 64, 4), height: 1.9 } }
-  assert.equal(rig({ blocks: pillar, entities: e }).p.entities({ kind: 'hostile' })[0].visible, false)
-})
-
-test('glass and unloaded cells do not block sight', () => {
-  const glass = Object.fromEntries([64, 65].map(y => ['2,' + y + ',0', 'glass']))
-  assert.equal(rig({ blocks: glass, entities: zombieAt5 }).p.entities({ kind: 'hostile' })[0].visible, true)
-})
-
-test('only hostiles carry visible', () => {
-  const { p } = rig({ blocks: {}, entities: { ...zombieAt5, 7: { id: 7, name: "cow", type: "passive", position: at(5, 64, 1) } } })
-test('a dropped item behind a wall is not visible, and is once the wall is gone', () => {
-  const item = { 7: { id: 7, name: 'item', type: 'object', position: at(5, 64, 0), getDroppedItem: () => ({ name: 'stick', count: 1 }) } }
-  assert.equal(rig({ blocks: wall, entities: item }).p.entities({ kind: 'item' })[0].visible, false)
-  assert.equal(rig({ entities: item }).p.entities({ kind: 'item' })[0].visible, true)
-})
-
-  assert.equal('visible' in p.entities({ kind: 'passive' })[0], false)
-})
-
-test('a cow seen through a fence or an open fence gate is listed: a player sees past the rails', () => {
-  const cow = { 11: { id: 11, name: 'cow', type: 'passive', position: at(5, 64, 0), height: 1.4 } }
-  const line = name => Object.fromEntries([2, 3].map(x => [`${x},64,0`, name]))
-  const listed = name => rig({ blocks: line(name), entities: cow }).p.entities({ names: ['cow'] }).length
-  assert.deepEqual(['oak_fence', 'oak_fence_gate', 'iron_bars'].map(listed), [1, 1, 1])
-  assert.equal(listed('stone'), 0)
-})
-
-test('a sheep and a villager behind a wall are not listed, a player is (visible false); all listed once the wall is gone', () => {
-  const others = {
-    11: { id: 11, name: 'sheep', type: 'passive', position: at(5, 64, 0), height: 1.3 },
-    12: { id: 12, name: 'villager', type: 'passive', position: at(5, 64, 0.5), height: 1.95 },
-    13: { id: 13, type: 'player', username: 'Ann', position: at(5, 64, -0.5), height: 1.8, metadata: [] }
-  }
-  assert.deepEqual(rig({ blocks: wall, entities: others }).p.entities({}).map(e => [e.id, e.visible]), [[13, false]])
-  assert.deepEqual(rig({ blocks: {}, entities: others }).p.entities({}).map(e => e.id).sort(), [11, 12, 13])
-})
-
-// the stub's blocks carry no collision shapes: give the solid ones their shapes for the melee check
-const withShapes = (r, shapesByName) => {
-  const blockAt = r.bot.blockAt
-  r.bot.blockAt = v => { const b = blockAt(v); return b && { ...b, shapes: shapesByName[b.name] ?? [[0, 0, 0, 1, 1, 1]] } }
-  return r
-}
-const hittableFrom = (r, id = 9) => r.p.entities({ kind: 'hostile' }).find(e => e.id === id).hittable
-
-test('hittable: a wall of full cubes blocks the swing, a fence post the line passes over does not, beyond 6 blocks it is absent', () => {
-  const fence = { 'oak_fence': [[0.375, 0, 0.375, 0.625, 1.5, 0.625]] }
-  assert.equal(hittableFrom(withShapes(rig({ blocks: wall, entities: zombieAt5 }), {})), false)
-  assert.equal(hittableFrom(withShapes(rig({ blocks: { '2,64,0': 'oak_fence' }, entities: zombieAt5 }), fence)), true)
-  assert.equal(hittableFrom(withShapes(rig({ blocks: {}, entities: zombieAt5 }), {})), true)
-  const far = { 9: { id: 9, name: 'zombie', type: 'hostile', position: at(8, 64, 0), height: 1.9 } }
-  assert.equal('hittable' in rig({ blocks: wall, entities: far }).p.entities({ kind: 'hostile' })[0], false)
 })
 
 test('wait resolves ok after its time, scaled by timeScale', async () => {

@@ -96,6 +96,15 @@ test('eye is the head position and look in mineflayer radians, null offline', ()
   assert.deepEqual([raw.eye(), offline.eye()], [{ x: 1.5, y: 65.62, z: 2.5, yaw: 1, pitch: -0.5, dimension: 'overworld' }, null])
 })
 
+test('shapesAt gives the collision boxes of a solid block, none for a non-solid or an unloaded cell', () => {
+  const { bot } = makeBot()
+  const cube = [[0, 0, 0, 1, 1, 1]]
+  const blocks = { '3,70,4': { boundingBox: 'block', shapes: cube }, '3,71,4': { boundingBox: 'empty', shapes: [] } }
+  bot.blockAt = v => blocks[`${v.x},${v.y},${v.z}`] ?? null
+  const raw = createRawWorld({ getBot: () => bot })
+  assert.deepEqual([raw.shapesAt(3, 70, 4), raw.shapesAt(3, 71, 4), raw.shapesAt(40, 70, 4)], [cube, [], []])
+})
+
 test('sightTable blocks sight for full blocks, not for glass, water, grass or torches', () => {
   const table = sightTable(registry)
   assert.deepEqual(['stone', 'diamond_ore', 'oak_leaves', 'glass', 'water', 'short_grass', 'torch', 'air'].map(n => table[id(n)]),

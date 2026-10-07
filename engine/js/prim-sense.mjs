@@ -1,17 +1,17 @@
 // Why JavaScript: Mineflayer boundary; the one adapter that calls Mineflayer and the pathfinder, with tick-bound policy that lives inside their event loops.
-// Sensing for the primitives: self, entities, blockAt and the settling state of a body.
+// Sensing for the primitives: self, entities, blockAt and the settling state of a body. Raw values only: engine.senses
+// derives isDay, raining, thundering, visible, hittable and sleeping and drops what a player would not see.
 
-import { lineClear, rayClear, blocksSight } from './sight.mjs'
 import { stateProperties } from './use-on.mjs'
 import { mobFields } from './interact.mjs'
 import { professionOf, villagerData } from './villager.mjs'
 import { leashFields } from './leash.mjs'
 import { liveEntities } from './live-entities.mjs'
 import { vehicleFields, selfVehicle } from './vehicle.mjs'
-import { weatherOf, DEFAULT_RADIUS, HIT_RANGE, xyz, dist, cell, vec, entityKind, burning, lyingDown, droppedItem } from './prim-base.mjs'
+import { DEFAULT_RADIUS, xyz, dist, cell, vec, entityKind, burning, lyingDown, droppedItem } from './prim-base.mjs'
 
 export function createSense (env) {
-  const { here, eye, inventory, isOffline, equipment, timeScale, settleMs } = env
+  const { here, inventory, isOffline, equipment, timeScale, settleMs } = env
   // ---- sensing ----
 
   // Settling: connected but the senses are not trustworthy yet (entities arrive after the chunks, there is no signal
@@ -55,7 +55,6 @@ export function createSense (env) {
   const lastKnown = () => isOffline() ? lastSelf : null
 
   const readSelf = () => {
-    const timeOfDay = env.bot.time.timeOfDay
     return {
       username: env.bot.username,
       pos: here(),
@@ -74,11 +73,12 @@ export function createSense (env) {
       effects: effects(),
       experience: { level: env.bot.experience?.level ?? 0, points: env.bot.experience?.points ?? 0, progress: env.bot.experience?.progress ?? 0 },
       dimension: env.bot.game?.dimension,
-      timeOfDay,
-      isDay: timeOfDay < 12542 || timeOfDay > 23460,
+      timeOfDay: env.bot.time.timeOfDay,
+      // the raw levels; engine.senses derives isDay, raining and thundering
+      rainState: env.bot.rainState ?? 0,
+      thunderState: env.bot.thunderState ?? 0,
       // the other players in the server's player list (what the tab list shows a player)
       players: Object.keys(env.bot.players ?? {}).filter(name => name !== env.bot.username),
-      ...weatherOf(env.bot),
       held: env.bot.heldItem?.name ?? null,
       equipment: equipment(),
       inventory: inventory().map(i => {
@@ -88,19 +88,6 @@ export function createSense (env) {
     }
   }
 
-  // An unloaded cell never blocks, so a threat is not hidden by a gap in the map.
-  const cellBlocksSight = p => blocksSight(env.bot.blockAt(vec(p)))
-  // eye to the middle of the entity; the walk is bounded by that segment, which the caller keeps within its radius
-  const canSee = e => lineClear(eye(), { x: e.position.x, y: e.position.y + (e.height ?? 1.8) / 2, z: e.position.z }, cellBlocksSight)
-
-  // collision boxes of a cell, for melee: a block's shapes when it is solid; an unloaded cell has none
-  const shapesAt = p => {
-    const block = env.bot.blockAt(vec(p))
-    return block?.boundingBox === 'block' ? block.shapes ?? [] : []
-  }
-  const canHit = e => [0.2, (e.height ?? 1.8) / 2, (e.height ?? 1.8) - 0.1].some(dy =>
-    rayClear(eye(), { x: e.position.x, y: e.position.y + dy, z: e.position.z }, shapesAt))
-
   const entities = ({ radius = DEFAULT_RADIUS, kind, names, ids, max = 32 } = {}) => {
     if (isOffline()) return []
     const me = here()
@@ -108,9 +95,6 @@ export function createSense (env) {
       .filter(e => e !== env.bot.entity && e.position)
       .map(e => ({ e, distance: dist(me, e.position), kind: entityKind(e) }))
       .filter(({ e, distance, kind: k }) => distance <= radius && (!kind || k === kind) && (!names || names.includes(e.name ?? e.username)) && (!ids || ids.includes(e.id)))
-      // like a player: a passive mob or a villager behind a wall is not listed. Hostiles, items and players stay
-      // listed with `visible` (players show through walls in the game, nametags); sleeping needs sight
-      .filter(({ e, kind: k }) => k === 'hostile' || k === 'item' || k === 'player' || canSee(e))
       .sort((a, b) => a.distance - b.distance)
       .slice(0, max)
       .map(({ e, distance, kind: k }) => ({
@@ -123,10 +107,9 @@ export function createSense (env) {
         ...(e.name === 'villager' && { profession: professionOf(villagerData(env.bot, e).villagerProfession) }),
         ...(k !== 'item' && k !== 'player' && leashFields(env.bot, e)),
         ...(k !== 'item' && vehicleFields(env.bot, e)),
-        ...((k === 'hostile' || k === 'item' || k === 'player') && { visible: canSee(e) }),
-        ...(k !== 'item' && distance <= HIT_RANGE && { hittable: canHit(e) }),
+        ...(e.height !== undefined && { height: e.height }),
         ...(k === 'item' && { item: droppedItem(env.bot, e) }),
-        ...(k === 'player' && { username: e.username, sleeping: lyingDown(env.bot, e) && canSee(e) }),
+        ...(k === 'player' && { username: e.username, lyingDown: lyingDown(env.bot, e) }),
         ...(e.name === 'creeper' && { creeper: true })
       }))
   }

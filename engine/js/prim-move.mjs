@@ -50,7 +50,7 @@ class GoalSurfaceHop extends goals.GoalNearXZ {
 }
 
 export function createMove (env) {
-  const { act, isOwner, here, eye, inventory, standingCell, hostilesNear, timeScale, lookNow, centreBody, walk } = env
+  const { act, isOwner, here, eye, inventory, standingCell, timeScale, lookNow, centreBody, walk } = env
   // ---- acting ----
 
   const moveTo = async (token, a = {}) => {
@@ -237,9 +237,9 @@ export function createMove (env) {
       const block = env.bot.blockAt(vec(p))
       if (!block || !block.name.endsWith('_bed')) return { status: 'missing' }
       if (dist(eye(), center(p)) > REACH) return { status: 'unreachable' }
-      const { timeOfDay } = env.bot.time
-      if (timeOfDay < 12542 || timeOfDay > 23460) return { status: 'not-night' }
-      if (hostilesNear().length > 0) return { status: 'monsters-near' }
+      // engine.senses decides these two from what the body senses and passes them in
+      if (a.notNight) return { status: 'not-night' }
+      if (a.monstersNear) return { status: 'monsters-near' }
       ctx.onAbort(() => leaveBed(env.bot))
       ctx.alive()
       const failure = await env.bot.sleep(block).then(() => null, err => err)

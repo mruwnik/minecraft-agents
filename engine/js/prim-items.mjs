@@ -181,15 +181,12 @@ export function createItems (env) {
     need(a.levelCost === undefined || Number.isInteger(a.levelCost), 'enchant levelCost must be an integer')
     return act(token, { boundS: 15 }, ctx => enchantVisit(env.bot, ctx, { ...a, pos: cell(a.pos) }, { reach: REACH, distanceTo: p => dist(eye(), center(p)), timeScale }))
   }
-  const bestFood = () => inventory()
-    .filter(i => env.bot.registry.foodsByName?.[i.name])
-    .sort((a, b) => env.bot.registry.foodsByName[b.name].foodPoints - env.bot.registry.foodsByName[a.name].foodPoints)[0]
-
   const eat = async (token, a = {}) => {
     if (!isOwner(token)) throw cutError()
+    need(typeof a.item === 'string' && a.item !== '', 'eat needs item, the name of what to eat')
     const startFood = env.bot.food
-    return act(token, { boundS: 5, onTimeout: () => env.bot.food > startFood ? { status: 'ate', item: a.item ?? null, food: env.bot.food } : { status: 'timeout' } }, async ctx => {
-      const item = a.item ? inventory().find(i => i.name === a.item) : bestFood()
+    return act(token, { boundS: 5, onTimeout: () => env.bot.food > startFood ? { status: 'ate', item: a.item, food: env.bot.food } : { status: 'timeout' } }, async ctx => {
+      const item = inventory().find(i => i.name === a.item)
       if (!item) return { status: 'no-food' }
       if (env.bot.food >= 20) return { status: 'full' }
       ctx.onAbort(() => env.bot.deactivateItem())

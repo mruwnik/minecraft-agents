@@ -6,14 +6,7 @@ import vec3 from 'vec3'
 const { Vec3 } = vec3
 export const REACH = 4.5
 export const ATTACK_REACH = 3.5
-export const MONSTER_RANGE = 8
 export const DROP_RADIUS = 2
-export const RAIN_LEVEL = 0.2 // vanilla client: raining above this rain level, thundering above THUNDER_LEVEL while raining
-export const THUNDER_LEVEL = 0.9
-export const weatherOf = bot => {
-  const raining = (bot.rainState ?? 0) > RAIN_LEVEL
-  return { raining, thundering: raining && (bot.thunderState ?? 0) > THUNDER_LEVEL }
-}
 export const DROP_WAIT_S = 1
 export const DIG_MARGIN_S = 5 // slack over the expected dig time (latency, a tick of lag)
 export const POLL_MS = 50
@@ -24,7 +17,6 @@ export const SETTLE_CAP_MS = 1500 // ...or this long in all
 export const CONTAINER = /chest|barrel|shulker_box|furnace|smoker|hopper|dispenser|dropper|brewing_stand/
 export const DESTS = ['hand', 'off-hand', 'head', 'torso', 'legs', 'feet']
 export const DEFAULT_RADIUS = 16
-export const HIT_RANGE = 6 // melee reach checked by entities: hittable is reported within it
 export const KINDS = ['hostile', 'passive', 'player', 'item', 'other']
 export const OFFLINE_DEFAULT_MS = 5 * 60 * 1000
 export const OFFLINE_MAX_MS = 10 * 60 * 1000

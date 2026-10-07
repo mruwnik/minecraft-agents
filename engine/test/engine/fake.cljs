@@ -33,10 +33,11 @@
             [engine.fake.unequip :as unequip]
             [engine.fake.use-on :as use-on]
             [engine.game :as game]
+            [engine.senses :as senses]
+            [engine.sight :as sight]
             [engine.fake.node :as node]))
 
 ;; The JS modules the real primitives share with the fake (why they are not ported: they are the real ones).
-(def sight (delay (node/require-here "./js/sight.mjs")))
 (def blocks-mod (delay (node/require-here "./js/blocks.mjs")))
 (def chat-mod (delay (node/require-here "./js/chat.mjs")))
 (def vehicle-mod (delay (node/require-here "./js/vehicle.mjs")))
@@ -53,7 +54,7 @@
 (def craft-reach 4.5)
 (def entity-height 1.8)
 (def item-middle 0.125) ; a drop rests on its cell floor, 0.25 high (the real entity aims at height/2 above its feet)
-(def hit-range 6)
+(def hit-range senses/hit-range)
 (def fake-body-id -1)
 (def offline-default-ms (* 5 60 1000))
 (def offline-max-ms (* 10 60 1000))
@@ -86,7 +87,6 @@
    :dimension "overworld"})
 (def equipment-parts ["head" "torso" "legs" "feet" "offHand"])
 
-(defn day-at? [t] (or (< t 12542) (> t 23460)))
 
 ;; ---- JS boundary
 
@@ -571,7 +571,7 @@
 
 (defn sleep [w {:keys [pos]}]
   (cond
-    (day-at? (:time w)) [w {:status "not-night"}]
+    (senses/day-at? (:time w)) [w {:status "not-night"}]
     (not (str/ends-with? (block-name w pos) "_bed")) [w {:status "missing"}]
     (not (near? w pos)) [w {:status "unreachable"}]
     ;; the night is skipped at once and the server wakes the body at morning; with others awake it lies in bed
@@ -646,7 +646,6 @@
 
 (defn eye-point [w [x y z]] #js {:x (+ x 0.5) :y y :z (+ z 0.5)})
 
-(defn cell-of [c] [(.-x c) (.-y c) (.-z c)])
 
 (defn can-see?
   "A cell with a block that is not see-through stops the eye; unknown cells and unloaded ones do not. The eye aims at the
@@ -654,21 +653,21 @@
   [w e]
   (let [[sx sy sz] (body-pos w) [ex ey ez] (:pos e)
         middle (if (= "item" (:kind e)) item-middle body-middle)
-        blocks-sight (fn [c] (let [cell (cell-of c)] (and (not (sight-passes? (block-name w cell))) (not ((:unloaded w) cell)))))]
-    (.lineClear ^js @sight #js {:x (+ (js/Math.floor sx) 0.5) :y (+ sy eye) :z (+ (js/Math.floor sz) 0.5)} #js {:x (+ ex 0.5) :y (+ ey middle) :z (+ ez 0.5)} blocks-sight)))
+        blocks-sight (fn [x y z] (let [cell [x y z]] (and (not (sight-passes? (block-name w cell))) (not ((:unloaded w) cell)))))]
+    (sight/line-clear (+ (js/Math.floor sx) 0.5) (+ sy eye) (+ (js/Math.floor sz) 0.5) (+ ex 0.5) (+ ey middle) (+ ez 0.5) blocks-sight)))
 
 (defn can-hit?
   "A melee swing needs a clear line from the eye to some point of the target's hitbox; blocks by name."
   [w e]
   (let [[sx sy sz] (body-pos w) [ex ey ez] (:pos e)
-        shapes-at (fn [c]
-                    (let [cell (cell-of c) block (block-name w cell)]
+        shapes-at (fn [x y z]
+                    (let [cell [x y z] block (block-name w cell)]
                       (cond
-                        (or (no-shape block) ((:unloaded w) cell)) #js []
-                        (str/ends-with? block "_fence") #js [(to-array fence-post)]
-                        (= block "glass_pane") #js [(to-array pane-post)]
-                        :else #js [#js [0 0 0 1 1 1]])))]
-    (boolean (some #(.rayClear ^js @sight #js {:x (+ sx 0.5) :y (+ sy eye) :z (+ sz 0.5)} #js {:x (+ ex 0.5) :y (+ ey %) :z (+ ez 0.5)} shapes-at)
+                        (or (no-shape block) ((:unloaded w) cell)) []
+                        (str/ends-with? block "_fence") [fence-post]
+                        (= block "glass_pane") [pane-post]
+                        :else [[0 0 0 1 1 1]])))]
+    (boolean (some #(sight/ray-clear (+ sx 0.5) (+ sy eye) (+ sz 0.5) (+ ex 0.5) (+ ey %) (+ ez 0.5) shapes-at)
                    [0.2 (/ entity-height 2) (- entity-height 0.1)]))))
 
 (defn entity-view [w e]
@@ -687,7 +686,7 @@
                   {:username (:username s) :pos (:pos s) :settling (:settling w)
                    :vehicle (some-> (vehicle-of w) (update :uuid identity))
                    :experience (:experience s)
-                   :timeOfDay (:time w) :isDay (day-at? (:time w)) :players (:players w) :raining (:raining w) :thundering (:thundering w)
+                   :timeOfDay (:time w) :isDay (senses/day-at? (:time w)) :players (:players w) :raining (:raining w) :thundering (:thundering w)
                    :held (:held s) :equipment (equipment-view w) :inventory (with-slots (:inventory w))}))))
 
 ;; ---- the world object's helpers for tests
