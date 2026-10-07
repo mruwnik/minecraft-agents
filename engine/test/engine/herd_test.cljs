@@ -65,6 +65,8 @@
 
 (defn setup [w] (clock-on-wait! (h/setup w)))
 
+(defn setup-zoned [w x] (clock-on-wait! (h/setup w 0 (h/zone-store x "Miles"))))
+
 (defn ^:async run-ticks
   [{:keys [eng clock]} n]
   (dotimes [_ n]
@@ -1061,3 +1063,14 @@
             (await (run-ticks s 60))
             (is (= clicked (clicked-ids s)) (pr-str extra))
             (is (= reasons (mapv :reason (events-of s :leash.declined))) (pr-str extra))))))))
+
+(deftest a-pen-gate-in-anothers-zone-is-not-herded-into-unless-ignored
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[extra reason declined]
+                [[{} :refused [:refused]] [{:ignore-zones? true} :brought []]]]
+          (let [s (submit! (setup-zoned (world {:entities [(cow 1 4 3)]}) 10) (merge {:target 1} extra))]
+            (await (run-ticks s 400))
+            (is (= reason (:reason (done-event s))) (pr-str extra))
+            (is (= declined (mapv :reason (events-of s :herd.declined))) (pr-str extra))))))))

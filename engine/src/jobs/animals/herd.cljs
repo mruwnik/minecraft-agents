@@ -4,6 +4,7 @@
             [jobs.lib.animals :as animals]
             [jobs.lib.apiary :as apiary]
             [jobs.lib.declined :as declined]
+            [jobs.lib.gate :as gate]
             [jobs.animals.pen :as pen]
             [jobs.lib.util :as u]
             [jobs.lib.watch :as watch]
@@ -24,6 +25,8 @@
   - :no-gate: no usable gate. The gate is :gate, else the pen's gate nearest the body. It needs pen floor on
     one side and free floor straight across (a corner gate has none). The four cells straight out from the gate
     must be free floor too (:why :no-approach).
+  - :refused: the gate stands in another owner's zone or claim, or in a plan's footprint (or no zone list was read;
+    warn herd.declined once). :ignore-zones? true skips the check.
   - :too-shallow: fewer than 5 pen cells in a line inward from the gate.
   - :full: adults already on the pen's cells make :target.
 
@@ -74,7 +77,7 @@
   when the pen holds :target or is :full, or when some animals were brought (a partial run, :short or another reason);
   when none was brought it fails with the reason, after the result and herd.done were given.
 
-  Zones: the leash child refuses an animal standing in another owner's zone or claim (see jobs.animals.leash);
+  Zones: the leash child also refuses an animal standing in another owner's zone or claim (see jobs.animals.leash);
   :ignore-zones? true is passed to it.")
 
 (def args
@@ -444,6 +447,7 @@
         (cond
           (#{:no-start :unloaded} (:reason answer)) (finish! c :no-pen)
           (nil? chosen) (finish! c :no-gate)
+          (not (gate/allowed? c :herd.declined "herd" :place gate)) (finish! c :refused)
           (not (approach-free? (:primitives c) (cell gate) in out)) (finish! c :no-gate {:why :no-approach})
           (seq leaks) (finish! c :leaky {:leaks (vec (take 12 leaks))})
           (>= inside target) (finish! c :full)

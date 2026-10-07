@@ -179,3 +179,18 @@
           (is (finished? s))
           (is (= :unleashed (:reason (done-event s))))
           (is (<= 2 @waits)))))))
+
+(deftest unleash-follows-zones-and-claims
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[owner extra freed declined]
+                [["Fake" {} ["u1" "u2"] []]
+                 ["Miles" {} ["u2"] [:refused]]
+                 ["Miles" {:ignore-zones? true} ["u1" "u2"] []]
+                 [nil {} [] [:no-zones]]]]
+          (let [s (h/setup {:entities [(led 1 3) (led 2 1)]} 0 (h/zone-store 3 owner))]
+            (core/submit! (:eng s) (list 'jobs.animals.unleash extra) {})
+            (await (run-ticks s 12 700))
+            (is (= freed (vec (sort (:freed (done-event s))))) (pr-str owner extra))
+            (is (= declined (mapv :reason (events-of s :unleash.declined))) (pr-str owner extra))))))))

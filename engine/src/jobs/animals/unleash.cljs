@@ -32,7 +32,10 @@
   - :timeout: :timeout-s from the first round (no collecting).
   - With nothing freed: :unreachable if one was given up as unreachable, else :refused (others given up) or
     :none.
-  - It also ends after three fruitless rounds in a row.")
+  - It also ends after three fruitless rounds in a row.
+
+  Zones: an animal standing in another owner's zone or claim, or in a plan's footprint, is left on its lead (warn
+  unleash.declined once, :reason :refused, or :no-zones when no zone list was read). :ignore-zones? true skips the check.")
 
 (def args
   {:mob {:doc "the animal's name, such as \"cow\"; any animal when nil" :default nil}
@@ -40,7 +43,8 @@
    :radius {:doc "animals within this many blocks count" :default 8}
    :walk-timeout-s {:doc "bound of one walk towards the click" :default 5}
    :timeout-s {:doc "seconds from the first round before the job gives up" :default 30}
-   :collect {:doc "pick up the leads afterwards" :default true}})
+   :collect {:doc "pick up the leads afterwards" :default true}
+   :ignore-zones? animals/ignore-zones-arg})
 
 (def reach 3)
 (def max-in-row 3)
@@ -90,10 +94,11 @@
   (let [{:keys [animal]} (:args c)
         {:keys [freed given-up]} (ctx/mem c)
         skip (into (set freed) (keys given-up))]
-    (filterv #(and (animals/leashed? %)
-                   (or (nil? animal) (= animal (animals/key-of %)))
-                   (not (contains? skip (animals/key-of %))))
-             (animals-in-radius c))))
+    (->> (animals-in-radius c)
+         (filterv #(and (animals/leashed? %)
+                        (or (nil? animal) (= animal (animals/key-of %)))
+                        (not (contains? skip (animals/key-of %)))))
+         (animals/allowed c :unleash.declined "unleash" :take))))
 
 (defn knot-of
   "The leash_knot entity the animal is tied to, or nil when it is not seen."

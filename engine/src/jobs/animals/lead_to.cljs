@@ -380,7 +380,8 @@
 (defn ^:async let-go! [c]
   (set-phase! c :release)
   (let [r (await (ctx/call-child c :unleash 'jobs.animals.unleash {:mob (:mob (:args c)) :animal (:animal (ctx/mem c))
-                                                                    :radius (:watch-radius (:args c))}))]
+                                                                    :radius (:watch-radius (:args c))
+                                                                    :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
     (if-not (= :done r)
       :continue
       (let [reason (:reason (ctx/child-result c :unleash))]
