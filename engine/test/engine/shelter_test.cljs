@@ -483,7 +483,7 @@
           (is (= 1 (count (calls p "dig"))) "no second dig")
           (is (= [] (calls p "place")))
           (is (= 1 (count (emitted seen :dig_in_failed))))
-          (is (re-find #"nothing to roof the pit with" (:text (first (emitted seen :dig_in_failed)))))
+          (is (re-find #"air under the hole" (:text (first (emitted seen :dig_in_failed)))) "the air floor shows after the one dig")
           (is (= [] (:list (core/state eng))) "ended"))))))
 
 (deftest dig-in-roofs-with-a-carried-log
@@ -1140,7 +1140,7 @@
               eng (update eng :triggers assoc :always-shelter always-shelter)]
           (core/register-reflex! eng {:trigger :always-shelter})
           (await (tick-n eng 6))
-          (is (= [{:pos {:x 0 :y 63 :z 0}}] (entries eng :dig-in-futile)))
+          (is (= [{:pos {:x 1 :y 63 :z 0} :reason :no-floor}] (entries eng :dig-in-futile)))
           (await (tick-nights eng clock 3))
           (is (= 1 (count (calls p "dig"))) "the hold does not dig again")
           (is (= [] (declined-events seen :always-shelter))))))))

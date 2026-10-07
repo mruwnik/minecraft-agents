@@ -8,6 +8,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.dig-look :as look]
             [jobs.survival.dig-in-cells :as dig-cells]
+            [jobs.survival.retreat-refuge :as refuge]
             [jobs.lib.result :as result]
             [jobs.lib.shelter :as sh]
             [jobs.lib.solid :as solid]
@@ -275,6 +276,7 @@
         {:keys [start shape]} (ctx/mem c)
         feet (sh/feet p)
         steps (:steps shape)
+        here (first (filter #(dig-cells/wet? p %) [feet (update feet :y inc)]))
         at (first (keep-indexed #(when (= feet %2) %1) (cons start (map :to steps))))]
     (when at (await (dig-cells/collect-pit-drops! c feet)))
     (if (nil? at)
@@ -283,6 +285,14 @@
             cell (first (remove #(dig-cells/open-cell? p %) dig))
             _ (when (and cell (look/unknown? p [(:x cell) (:y cell) (:z cell)])) (await (look/look-at! c [(:x cell) (:y cell) (:z cell)])))]
         (cond
+          here
+          (do (remember-failed-site! c :fluid-here)
+              (ctx/emit! c :dig_in_failed :warn {:text (str (u/seen-name p here) " where the body stands; not digging down")})
+              :done)
+          (and cell (dig-cells/lateral-fluid p cell))
+          (do (remember-failed-site! c :fluid-adjacent)
+              (ctx/emit! c :dig_in_failed :warn {:text (str (dig-cells/lateral-fluid p cell) " beside the cell to dig; not opening the pit")})
+              :done)
           (and cell (dig-cells/wet? p cell))
           (do (remember-failed-site! c :hazard-below)
               (ctx/emit! c :dig_in_failed :warn {:text (str (u/seen-name p cell) " in the cell to dig; not digging")})
@@ -318,6 +328,12 @@
       (do (remember-material! c {:pos roof}) :done)
       (let [r (await (tidy/place! c cell item true))]
         (cond
+          (and (= "occupied" (.-status r)) (not= cell roof) (not (dig-cells/sealed? p cell)))
+          (let [_ (ctx/update-mem! c update :plug-occupied (fnil inc 0))
+                n (:plug-occupied (ctx/mem c))]
+            (if (< n max-refusals)
+              :continue
+              (fail-site! c :roof-failed (str "cannot seal the pit: the plug cell is occupied by " (or (u/seen-name p cell) "a block") " that does not seal"))))
           (#{"placed" "occupied"} (.-status r))
           (do (when (= "placed" (.-status r)) (ctx/update-mem! c update :placed (fnil conj #{}) cell))
               (if (= cell roof) :done :continue))
@@ -339,15 +355,35 @@
     (or (first (filter (comp nil? second) options)) (first options))))
 
 (defn refused-column
-  "The straight pit under start when the body sees a hazard in it or not solid under it: kept, so the descent refuses it
-  with its reason (a thin floor, water) rather than a zigzag hiding that. nil otherwise."
+  "The straight pit under start when the body sees a hazard in the first cell to dig or not solid under it: kept, so the
+  descent refuses it with its reason (a thin floor, water) rather than a zigzag hiding that. A bad cell deeper down
+  leaves the pit to the zigzag, which never digs under the feet onto a floor it has not seen. nil otherwise."
   [p start {:keys [depth]}]
   (let [shape (dig-cells/pit-steps start nil depth)
         bad? (fn [cell] (let [n (u/seen-name p cell)] (and n (or (not (solid/solid? n)) (dig-cells/wet? p cell)))))]
-    (when (some bad? (mapcat (fn [{:keys [dig floor]}] (conj dig floor)) (:steps shape)))
+    (when (some bad? (let [{:keys [dig floor]} (first (:steps shape))] (conj dig floor)))
       shape)))
 
-(defn choose-mode
+(def side-mob-radius "Blocks out to which a hostile in a side column rules it out." 8)
+
+(defn side-ok?
+  "Whether the side column at feet height (cell and the one over it) is seen open, dry and free of hostiles."
+  [p cell]
+  (let [mobs (refuge/hostile-cells p side-mob-radius)]
+    (every? #(and (dig-cells/open-cell? p %) (not (mobs %))) [cell (update cell :y inc)])))
+
+(defn ^:async find-shape!
+  "The pit to dig from start (refused-column, else the first of dig-cells/pit-shapes), or nil. With none, the body looks
+  at the side column cells it has not sensed (look/look-unknown!) and tries once more."
+  [c start plan]
+  (let [p (:primitives c)
+        find #(or (refused-column p start plan) (first (dig-cells/pit-shapes p start (partial side-ok? p))))]
+    (or (find)
+        (do (await (look/look-unknown! c (for [[dx dz] dig-cells/sides, dy [0 1]]
+                                           [(+ (:x start) dx) (+ (:y start) dy) (+ (:z start) dz)])))
+            (find)))))
+
+(defn ^:async choose-mode
   "Record in job memory how this shelter is built, once. Chosen again only when the body leaves a dig-mode column.
   :walls stores :mode, and :start at the shaft top when the body is at the bottom of a 1x1 shaft.
   :dig stores :roof, :start and :target-y. :plug stores the one cell to fill.
@@ -363,8 +399,7 @@
             have (reduce + (map :count (lb/carried c (:blocks (:args c)))))
             enclose (:enclose (:args c))
             plan (when-not enclose (dig-cells/dig-plan p start))
-            shape (when plan (or (refused-column p start plan)
-                                 (first (dig-cells/pit-shapes p start #(every? (partial dig-cells/open-cell? p) [% (update % :y inc)])))))
+            shape (when plan (await (find-shape! c start plan)))
             plan (if shape
                    (assoc plan :roof (:roof shape) :cells (mapcat :dig (:steps shape)))
                    plan)
@@ -459,7 +494,7 @@
           :else (fail-site! c :plug-failed (str "cannot mend the roof: " (.-status r) (dig-cells/mob-text r))))))))
 
 (defn ^:async step [c]
-  (choose-mode c)
+  (await (choose-mode c))
   (let [{:keys [mode target-y]} (ctx/mem c)]
     (cond
       (= :plug mode) (await (plug-round c))
@@ -525,7 +560,7 @@
   site fails, a timer between steps. A place refused for a mob in the cell yields :continue and is retried
   (dig-cells/mob-wait-ms), then fails naming the mob."
   [c]
-  (ctx/update-mem! c dissoc :stop)
+  (ctx/update-mem! c dissoc :stop :plug-occupied)
   (loop [i 0]
     (let [r (if (< i max-steps) (await (step c)) (do (stop-reason! c :no-progress) :done))]
       (case r
