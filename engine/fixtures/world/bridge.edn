@@ -1,0 +1,40 @@
+;; Card 973c6b31: jobs.access.bridge builds a 1-wide row over a gap and jobs.access.cleanup takes it back.
+;; A 5-wide, 1-deep pit at x 9..13 (floor cells y -1 turned to air) between the body's ground at x 8 and ground from x 14.
+;; Should succeed: bridge 5 (bridge.done :built 5, body on the far ground side), then cleanup removes the row.
+;; Should fail: a foreign plan footprint on the row (:footprint, nothing placed), no blocks with :fetch false (waits
+;; :too-few-blocks), stone at head height ahead (:blocked, nothing placed).
+{:defaults
+ {:tags [:access :jobs]
+  :time :any
+  :plot {:height 12}
+  :blocks [[:fill [9 -1 16] [13 -1 16] "air"]]
+  :body {:at [8.5 0 16.5] :inventory [["dirt" 8]] :effects [["resistance" 600 4]]}
+  :limit-s 120}
+ :cases
+ [{:name "bridges-five-then-cleanup-removes-it"
+   :act [[:job (jobs.access.bridge {:heading :east :length 5 :ignore-zones? true})]
+         [:await {:source :job :kind :bridge.done} 60]
+         [:job (jobs.access.cleanup {:job :all :ignore-zones? true})]]
+   :expect [{:event {:source :job :kind :bridge.done :data {:built 5}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :cleanup.done :data {:removed 5}} :within-s 100}]
+   :after [[:not-block [9 -1 16] "dirt"] [:not-block [11 -1 16] "dirt"] [:not-block [13 -1 16] "dirt"]
+           [:body-near [11.5 0 16.5] 6]]}
+  {:name "foreign-footprint-on-the-row-places-nothing"
+   :plans [{:id "foreign" :metadata {:by "SomeoneElse"}
+            :parts [{:id "row" :box [#at [9 -1 16] #at [13 -1 16]] :want "stone"}]}]
+   :act [[:job (jobs.access.bridge {:heading :east :length 5})]]
+   :expect [{:event {:source :job :kind :bridge.gave-up :data {:reason :footprint :built 0}} :within-s 40 :of-job true}]
+   :after [[:not-block [9 -1 16] "dirt"]]
+   :limit-s 50}
+  {:name "no-blocks-without-fetch-waits-too-few"
+   :body {:inventory []}
+   :act [[:job (jobs.access.bridge {:heading :east :length 5 :fetch false :ignore-zones? true})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :too-few-blocks :short 5}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :bridge.done} :for-s 30 :until {:source :job :kind :waiting :data {:reason :too-few-blocks :short 5}}}]
+   :limit-s 40}
+  {:name "low-ceiling-ahead-is-blocked"
+   :blocks [[:set [9 1 16] "stone"]]
+   :act [[:job (jobs.access.bridge {:heading :east :length 5 :ignore-zones? true})]]
+   :expect [{:event {:source :job :kind :bridge.gave-up :data {:reason :blocked :built 0}} :within-s 40 :of-job true}]
+   :after [[:not-block [9 -1 16] "dirt"]]
+   :limit-s 50}]}
