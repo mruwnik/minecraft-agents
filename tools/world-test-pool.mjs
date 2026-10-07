@@ -99,6 +99,8 @@ export const parseListed = (text) => {
   }
   return m
 }
+// the units that have at least one listed case (all of them without a listing)
+export const unitsWithCases = (units, listed) => (listed ? units.filter((u) => listed.has(u)) : units)
 const emitLine = (e) => { if (process.env.TEST_EVENTS) console.log(`@@test ${JSON.stringify(e)}`) }
 export const mergeText = (forms) => `[${forms.join('\n ')}]`
 
@@ -290,14 +292,16 @@ export const main = async (args) => {
   const p = parsePoolArgs(args)
   const byStem = new Map(fixtureFiles(p.paths).map((f) => [path.basename(f, '.edn'), f]))
   const previous = p.durations.filter((f) => fs.existsSync(f)).map((f) => fs.readFileSync(f, 'utf8'))
-  const units = unitOrder([...byStem.keys()], previous)
+  const script = path.join(here, 'world-test.mjs')
+  const listing = listCases(script, p)
+  const listed = listing === null ? null : parseListed(listing)
+  const units = unitsWithCases(unitOrder([...byStem.keys()], previous), listed)
   const cores = os.cpus().length
   const workers = workerSpecs(poolCap({ bodies: p.bodies, maxParallel: p.maxParallel, availableMb: availableMb(), floorMb: slotConfig().floorMb, needMb: slotConfig().kinds.body.needMb, bodyMax: bodyCap() }), bodyCap(), p.prefix, p.firstPlot)
   const reaper = createReaper((f) => fs.rmSync(f, { force: true }))
   process.on('exit', reaper.reap)
   for (const [sig, code] of [['SIGINT', 130], ['SIGTERM', 143]]) process.on(sig, () => { reaper.reap(); process.exit(code) })
   console.error(`world-test pool: ${units.length} fixture files on ${workers.length} bodies (${workers.map((w) => w.body).join(' ')})`)
-  const script = path.join(here, 'world-test.mjs')
   const runUnit = async (unit) => {
     const tmp = `${p.results ?? path.join(process.env.TMPDIR ?? '/tmp', 'world-test-pool')}.${process.pid}.${unit.worker.body}.edn`
     let code
@@ -311,10 +315,9 @@ export const main = async (args) => {
     fs.rmSync(tmp, { force: true })
     return { code, text }
   }
-  const listing = listCases(script, p)
   const total = listing === null ? null : countListed(listing, repeatOf(p))
   if (total !== null) emitLine({ event: 'plan', total })
-  const r = await runPool({ listed: listing === null ? null : parseListed(listing), repeat: repeatOf(p), units, workers, runUnit, retries: p.retries, total, known: knownFailures(previous), emit: emitLine, load: () => os.loadavg()[0], cores })
+  const r = await runPool({ listed, repeat: repeatOf(p), units, workers, runUnit, retries: p.retries, total, known: knownFailures(previous), emit: emitLine, load: () => os.loadavg()[0], cores })
   if (p.results) fs.writeFileSync(p.results, r.text)
   const sums = splitForms(r.text).map(summarize)
   const count = (st) => sums.filter((s) => s.status === st).length

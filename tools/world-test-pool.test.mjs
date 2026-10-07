@@ -1,7 +1,7 @@
 // Why JavaScript: node --test file for tools/world-test-pool.mjs.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { splitForms, summarize, unitOrder, parsePoolArgs, workerSpecs, runPool, mergeText, poolCap, createReaper, countListed, listArgs, knownFailures, parseListed } from './world-test-pool.mjs'
+import { splitForms, summarize, unitOrder, parsePoolArgs, workerSpecs, runPool, mergeText, poolCap, createReaper, countListed, listArgs, knownFailures, parseListed, unitsWithCases } from './world-test-pool.mjs'
 
 const form = (id, status, secs = 1, extra = '') =>
   `{:plot 0, :file "${id.split('/')[0]}", :expects [{:status :pass, :evidence "a } \\" {"}], :status :${status}, :id "${id}", :elapsed-s ${secs}${extra}}`
@@ -284,4 +284,10 @@ test('runPool: listed cases missing from a unit that ended with partial results 
   const listed = new Map([['a', ['a/c1', 'a/c2']]])
   const r = await runPool({ units: ['a'], workers: workerSpecs(2, 19, 'P', 0), runUnit: fakeRunner(() => ({ code: 1, text: vec(form('a/c1', 'pass')) }), []), listed, total: 2 })
   assert.deepEqual(splitForms(r.text).map((f) => { const s = summarize(f); return [s.id, s.status] }), [['a/c1', 'pass'], ['a/c2', 'error']])
+})
+
+test('unitsWithCases: a fixture file with no listed case (none in the phase, or all unchanged) gets no unit; no listing keeps all', () => {
+  const listed = parseListed('a/x  nil\nc/z  nil\n')
+  assert.deepEqual(unitsWithCases(['a', 'b', 'c'], listed), ['a', 'c'])
+  assert.deepEqual(unitsWithCases(['a', 'b'], null), ['a', 'b'])
 })
