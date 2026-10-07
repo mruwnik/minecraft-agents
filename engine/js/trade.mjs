@@ -3,32 +3,18 @@
 // and never judges whether a trade is worth it.
 import vec3 from 'vec3'
 import { mobFields } from './interact.mjs'
+import { professionOf, villagerData } from './villager.mjs'
 
-const DATA_FALLBACK = 18
+export { professionOf }
+
 const OPEN_WAIT_MS = 3000
 const QUIET_MS = 150
 const SETTLE_MAX_MS = 2000
 const POLL_MS = 25
 const TRADE_WAIT_MS = 4000
 const DEFAULT_STACK = 64
-const PROFESSIONS = 'none armorer butcher cartographer cleric farmer fisherman fletcher leatherworker librarian mason nitwit shepherd toolsmith weaponsmith'.split(' ')
 
 const middle = e => vec3(e.position.x, e.position.y + (e.height ?? 1) / 2, e.position.z)
-
-// villager_data holds the profession as a registry index (number) or as a namespaced name
-export const professionOf = raw => {
-  if (raw == null) return 'unemployed'
-  const name = typeof raw === 'number' ? PROFESSIONS[raw] : typeof raw === 'string' ? raw.replace(/^minecraft:/, '') : undefined
-  if (name === undefined) return 'unknown'
-  return name === 'none' ? 'unemployed' : name
-}
-
-// The server leaves villager_data out for a villager whose data is the default (plains, no profession, level 1)
-const DEFAULT_DATA = { villagerProfession: undefined, level: 1 }
-const villagerData = (bot, e) => {
-  const at = bot.registry?.entitiesByName?.[e.name]?.metadataKeys?.indexOf('villager_data')
-  return e.metadata?.[at >= 0 ? at : DATA_FALLBACK] ?? DEFAULT_DATA
-}
 
 // the reason a villager has nothing to trade, or null
 const noOffersWhy = (profession, baby) => baby ? 'baby' : ['unemployed', 'nitwit'].includes(profession) ? profession : null

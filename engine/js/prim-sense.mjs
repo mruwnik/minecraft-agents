@@ -4,6 +4,7 @@
 import { lineClear, rayClear, blocksSight } from './sight.mjs'
 import { stateProperties } from './use-on.mjs'
 import { mobFields } from './interact.mjs'
+import { professionOf, villagerData } from './villager.mjs'
 import { leashFields } from './leash.mjs'
 import { liveEntities } from './live-entities.mjs'
 import { vehicleFields, selfVehicle } from './vehicle.mjs'
@@ -119,6 +120,7 @@ export function createSense (env) {
         pos: xyz(e.position),
         distance,
         ...(k !== 'item' && k !== 'player' && mobFields(env.bot, e)),
+        ...(e.name === 'villager' && { profession: professionOf(villagerData(env.bot, e).villagerProfession) }),
         ...(k !== 'item' && k !== 'player' && leashFields(env.bot, e)),
         ...(k !== 'item' && vehicleFields(env.bot, e)),
         ...((k === 'hostile' || k === 'item' || k === 'player') && { visible: canSee(e) }),

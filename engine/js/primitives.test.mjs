@@ -330,6 +330,16 @@ test('entities carry baby and uuid for a mob', () => {
   assert.equal('baby' in p.entities({}).find(e => e.id === 8), false)
 })
 
+test('entities name a villager profession from its villager_data', () => {
+  const villager = (id, data) => ({ id, name: 'villager', type: 'passive', position: at(2, 64, 0), height: 1.95, ...(data && { metadata: { 9: data } }) })
+  const bot = stubBot({ ...world, entities: { ...world.entities, 12: villager(12, { villagerProfession: 5, level: 2 }), 13: villager(13, { villagerProfession: 'minecraft:librarian' }), 14: villager(14), 15: villager(15, { villagerProfession: 0 }) } })
+  bot.registry.entitiesByName = { villager: { metadataKeys: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'baby', 'villager_data'] } }
+  const p = createPrimitivesFromBot(bot, { timeScale: SCALE })
+  const found = id => p.entities({}).find(e => e.id === id)
+  assert.deepEqual([12, 13, 14, 15].map(id => found(id).profession), ['farmer', 'librarian', 'unemployed', 'unemployed'])
+  assert.equal('profession' in found(8), false)
+})
+
 test('entities say whether a mob is on a lead and whether the body holds it', () => {
   const cow = id => ({ id, name: 'cow', type: 'passive', position: at(2, 64, 0), height: 1.4 })
   const bot = stubBot({ ...world, entities: { ...world.entities, 9: cow(9), 10: cow(10), 11: cow(11) } })

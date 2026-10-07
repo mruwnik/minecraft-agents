@@ -107,7 +107,7 @@ Notes:
   mineflayer's stale `bot.vehicle` and moves riders with their mount). `isDay` is `timeOfDay < 12542 || timeOfDay > 23460`.
 - `chunkLoaded` false means the column under the body is not loaded (physics then emits no tick). `settling` is true while
   the body is connected but its senses are not yet trustworthy.
-- Entities: items carry `item {name, count}`; players `username`, `sleeping` (only in sight); mobs `uuid`, `baby`, sheep `sheared`; leashed
+- Entities: items carry `item {name, count}`; players `username`, `sleeping` (only in sight); mobs `uuid`, `baby`, villagers `profession` (`unemployed` when none), sheep `sheared`; leashed
   mobs `leashed`, `leashedToMe`, `leashHolder`; riders `passengers` and `vehicle`. Creepers carry `creeper: true`. Every
   hostile carries `visible` (a raycast from the eye to the entity's middle; glass, fences, gates, iron bars, water, fire and the like do not block, an
   unloaded cell never blocks). Raw entity lists go through `js/live-entities.mjs` (drops bare, never-spawned entities, picked-up drops and mobs that died).
