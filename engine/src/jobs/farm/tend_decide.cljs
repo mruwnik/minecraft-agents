@@ -36,7 +36,7 @@
   (cond
     (zero? bare) {:skip :no-bare}
     (not seed) {:skip :no-seed}
-    :else {:call {:slot :plant :job (jobs :plant) :args (if plan {:plan plan :part part} {:box box})}}))
+    :else {:call {:slot :plant :job (jobs :plant) :args (if plan {:plan plan :part part :fetch false} {:box box :fetch false})}}))
 
 (defn decide-fertilize
   [{:keys [fertilize]} {:keys [meal unripe mid radius]}]

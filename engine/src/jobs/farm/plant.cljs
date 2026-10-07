@@ -3,6 +3,7 @@
             [jobs.farm.permit :as permit]
             [engine.ctx :as ctx]
             [jobs.lib.crops :as crops]
+            [jobs.lib.fetch :as fetch]
             [jobs.lib.gate :as gate]
             [jobs.lib.util :as u]
             [jobs.farm.harvest :as harvest]
@@ -10,6 +11,7 @@
 
 (def doc
   "Sow the bare farmland of a :box. A cell is bare when (x, min.y, z) is farmland and the block above is air.
+  A missing seed is fetched (jobs.lib.fetch, child :fetch) before the run starts, unless :fetch is false; the check then waits :need.
   The seed is :seed, else the carried seed with the largest stack. Carrots and potatoes are sown only above the
   food reserve (jobs.lib.cost/food-reserve); harvest replants its own cut cells whatever the
   reserve. That pick is kept while it is carried, so one run sows one crop.
@@ -35,6 +37,7 @@
    :reach {:doc "cells whose centre is this close to the eye (place accepts 4.5) are planted without walking, in blocks" :default 4.2}
    :plan {:doc "id of a plan of the body's world whose crop cells are the field (then :box and :seed are not used)" :default nil}
    :part {:doc "with :plan, only the cells of this part" :default nil}
+   :fetch {:doc "get a missing seed (jobs.lib.fetch): true, a set of kinds or a map of limits; false waits :need" :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
 (def max-fails 3)
@@ -73,6 +76,8 @@
 
 (declare planned sowing)
 
+(def job-sym 'jobs.farm.plant)
+
 (defn count-fail
   "Count a fail of kind k (:fails or :walk-fails) on the cell at pos; the cell is skipped at the max-fails-th."
   [m k pos]
@@ -88,19 +93,55 @@
             (and (seq (bare-cells p (:box args) (:skipped m)))
                  (pick-seed (:seed args) (u/inventory p)))))))
 
+(defn need-of
+  "The :need wait for n seeds of a set of item names (non-empty)."
+  [seeds n]
+  (if (= 1 (count seeds))
+    {:reason :need :item (first seeds) :count n}
+    {:reason :need :any-of (vec (sort seeds)) :count n}))
+
 (defn plan-check
-  "A plan that can be worked and either a started run or a sowable cell."
+  "A plan that can be worked and either a started run or a sowable cell. Otherwise waits :need (a seed the plan wants
+  is not carried, fetched when :fetch allows) or the gate's wait / :nothing-to-do."
   [c field]
-  (cond
-    (:trouble field) (ctx/wait c {:reason :plan-trouble :why (:trouble field)})
-    (or (:started (ctx/mem c)) (seq (:ready (sowing c (:cells field))))) true
-    :else (gate/wait-unless-set c {:reason :nothing-to-do})))
+  (if (:trouble field)
+    (ctx/wait c {:reason :plan-trouble :why (:trouble field)})
+    (let [{:keys [ready short]} (when-not (:started (ctx/mem c)) (sowing c (:cells field)))]
+      (cond
+        (:started (ctx/mem c)) true
+        (seq ready) true
+        (seq short) (fetch/check c job-sym (need-of short (count (harvest/planned-bare (:primitives c) (:cells field)))))
+        :else (gate/wait-unless-set c {:reason :nothing-to-do})))))
 
 (defn sowable-cells
   "The ground cells of cells whose sowing (the cell above) the job may do; one warn when some are refused."
   [c cells]
   (let [ok (set (gate/allowed c :plant.declined "plant" :sow (map #(update % :y inc) cells)))]
     (filterv #(ok (update % :y inc)) cells)))
+
+(defn seed-need
+  "The :need wait for n of the named seed, or of any seed."
+  [seed n]
+  (if seed
+    {:reason :need :item seed :count n}
+    {:reason :need :any-of (vec (distinct (vals crops/seed-of))) :count n}))
+
+(defn problem
+  "The :need wait for a missing seed before the run has started (box: bare cells and none carried; plan: no cell
+  ready and a seed short), else nil."
+  [c]
+  (let [m (ctx/mem c)
+        p (:primitives c)]
+    (when-not (:started m)
+      (if (:plan (:args c))
+        (let [field (planned c)
+              {:keys [ready short]} (when (:cells field) (sowing c (:cells field)))]
+          (when (and (empty? ready) (seq short))
+            (need-of short (count (harvest/planned-bare p (:cells field))))))
+        (let [{:keys [box seed]} (:args c)
+              bare (when box (bare-cells p box (:skipped m)))]
+          (when (and (seq bare) (not (pick-seed seed (u/inventory p))))
+            (seed-need seed (count bare))))))))
 
 (defn box-check
   "A started run, or a bare cell that zones and claims let the job sow with a carried seed. Otherwise waits with
@@ -114,7 +155,7 @@
       (:started m) true
       (empty? bare) (ctx/wait c {:reason :nothing-to-do})
       (not (pick-seed seed (u/inventory p)))
-      (ctx/wait c (if seed {:reason :need :item seed} {:reason :need :any-of (vec (distinct (vals crops/seed-of)))}))
+      (fetch/check c job-sym (seed-need seed (count bare)))
       :else (or (boolean (seq (sowable-cells c bare)))
                 (gate/wait-unless-set c {:reason :nothing-to-do})))))
 
@@ -277,8 +318,10 @@
             :continue))))))
 
 (defn ^:async round [c]
-  (let [field (planned c)]
+  (let [field (planned c)
+        fetched (when (problem c) (await (fetch/fetch! c job-sym problem)))]
     (cond
+      fetched fetched
       (nil? field) (await (box-round c))
       (:trouble field) :declined
       :else (await (plan-round c field)))))

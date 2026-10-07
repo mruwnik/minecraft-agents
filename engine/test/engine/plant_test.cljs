@@ -7,6 +7,8 @@
             [engine.events :as events]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
+            [engine.hostile-test :as h]
+            [engine.perception :as perception]
             [jobs.lib.world-files :as ew]
             [jobs.farm.plant :as plant]))
 
@@ -303,12 +305,43 @@
         (is (= [:refused] (await (waiting-reasons {:box (box 2 2 3 2)} (inv "wheat_seeds" 6) [[2 64 2] [3 64 2]]))))
         (is (= [:refused] (await (waiting-reasons {:plan "mix"} (inv "wheat_seeds" 6) [[2 64 2] [3 64 2]]))))))))
 
-(deftest no-seed-waits-with-a-need-and-no-seed-waits-nothing-without-bare-cells
+(deftest no-seed-with-fetch-false-waits-need-in-box-and-plan-mode
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= [:need] (await (waiting-reasons {:box (box 2 2 3 2)} [] []))))
+        (is (= [:need] (await (waiting-reasons {:box (box 2 2 3 2) :fetch false} [] []))))
+        (is (= [:need] (await (waiting-reasons {:plan "mix" :fetch false} [] []))))
         (is (= [:nothing-to-do] (await (waiting-reasons {:box (box 8 8 9 9)} (inv "wheat_seeds" 6) []))))))))
+
+(def seed-chest "-2,64,3")
+
+(defn ^:async seeing-plant
+  "Plant over two farmland cells in a world with a chest holding seeds, the body seeing through perception; n ticks."
+  [args n]
+  (let [s (h/setup-seeing {:blocks (assoc (farmland (range 2 4) [2]) seed-chest "chest")
+                           :containers {seed-chest [{:name "wheat_seeds" :count 6}]}} nil)]
+    (perception/pass! (aget (:p s) "perception"))
+    (core/submit! (:eng s) (list job (merge {:ignore-zones? true} args)) {})
+    (dotimes [_ n]
+      (swap! (:clock s) + 700)
+      (await (core/tick! (:eng s))))
+    s))
+
+(deftest plant-fetches-seeds-from-a-seen-chest-by-default
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (seeing-plant {:box (box 2 2 3 2)} 120))]
+          (is (= "wheat" (block-at p 2 64 2)))
+          (is (= "wheat" (block-at p 3 64 2))))))))
+
+(deftest plant-fetch-false-leaves-the-seed-chest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (seeing-plant {:box (box 2 2 3 2) :fetch false} 12))]
+          (is (empty? (calls p "place")))
+          (is (= "chest" (block-at p -2 64 3))))))))
 
 (deftest ignore-zones-sows-cells-shared-with-another-plan
   (async done
