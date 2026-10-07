@@ -21,7 +21,7 @@
   the check (one warn leave-tunnel.declined).
 
   Torches first. For each torch that still stands, deepest first, the body walks to the cell after its site
-  (jobs.debug.walk-plan as a child). It asks jobs.lib.access.rules/may-dig?. A refusal books the torch as left
+  (a go-to child). It asks jobs.lib.access.rules/may-dig?. A refusal books the torch as left
   with that reason and is never forced. Otherwise the scaffold ledger entry is marked :removing, the torch is
   dug and the entry dropped once the cell is air. A cell still holding the torch is left :dig-failed. The drops
   are then collected (jobs.forestry.collect-drops, radius 3).
@@ -150,10 +150,10 @@
   "Walk to cell: :continue while the walk waits on the world, :again once there. A walk that did not arrive starts the escape (the way out
   does not need the tunnel's stair); once out, giveup is called with the walk instead."
   [c cell giveup]
-  (let [r (await (tunnel/walk-to! c :walk cell))]
+  (let [r (await (stair/walk-into! c :walk cell))]
     (cond
       (= :continue r) :continue
-      (and (= :arrived (:status r)) (= cell (feet-of c))) :again
+      (and (:arrived r) (= cell (feet-of c))) :again
       (:escaped (ctx/mem c)) (giveup r)
       :else (do (ctx/update-mem! c assoc :escape {:i 0 :cell cell :walk r :results []})
                 :again))))

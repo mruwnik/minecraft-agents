@@ -21,7 +21,7 @@
   The check waits (:no-tool, :no-free-slot) when the next dig lacks a pickaxe or room for the drop.
 
   A step cuts three cells, top first, so the body can walk one block forward and one down (or up) with full
-  headroom. Then the body walks into the step (jobs.debug.walk-plan). Before cutting the next step it plans the
+  headroom. Then the body walks into the step (a go-to child). Before cutting the next step it plans the
   way back to the stair's first cell on a fresh pathWorld. The way must be whole and walkable by the executor
   (no gap, door or swim), else the stair stops :no-way-back.
 
@@ -351,17 +351,24 @@
             (do (ctx/update-mem! c update :bridged (fnil conj #{}) floor)
                 :again))))))
 
+(defn ^:async walk-into!
+  "Walk the body into cell [x y z] with a go-to child in slot (no escalation: the dig is this job's own): :continue
+  while it walks, else the child's result."
+  [c slot cell]
+  (if (= :done (await (ctx/call-child c slot 'jobs.movement.go-to {:pos cell :range 0 :escalate false})))
+    (ctx/child-result c slot)
+    :continue))
+
 (defn ^:async step!
   "Walk into the cut step. :again, :continue while the walk waits, or a stop map."
   [c next-feet]
-  (let [w (await (ctx/call-child c :walk 'jobs.debug.walk-plan {:to next-feet}))
-        r (when (= :done w) (ctx/child-result c :walk))]
+  (let [r (await (walk-into! c :walk next-feet))]
     (cond
-      (= :continue w) :continue
-      (and (= :arrived (:status r)) (= next-feet (feet-of c)))
+      (= :continue r) :continue
+      (and (:arrived r) (= next-feet (feet-of c)))
       (do (ctx/emit! c :stair.step :info {:at next-feet :text (str "stepped to " (pr-str next-feet))})
           :again)
-      :else {:reason :step-failed :cell next-feet :walk (or r {:status w})})))
+      :else {:reason :step-failed :cell next-feet :walk r})))
 
 (defn ^:async work!
   "One bounded piece of the stair from the body's place on it: check the way back, dig one cell or take the step."

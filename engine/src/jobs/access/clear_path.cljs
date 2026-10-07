@@ -13,7 +13,7 @@
   - Never digs a door, gate, trapdoor, bed, container, sign or an unbreakable block.
   - Each cell is a jobs.blocks.dig child (zones, claims, hazards and tools are its rules). It picks up the drop
     (:collect) when there is room for it, so the block can be put back; with no room it digs on and leaves it.
-  - Then it walks into the cell beyond (jobs.debug.walk-plan).
+  - Then it walks into the cell beyond (a go-to child).
   One call is the whole door; it yields :continue only while a dig child waits on the world.
   Ends with {:status :done|:stopped :reason :dug [{:cell :block}] :at [x y z] :through [x y z]}, also as a
   clear-path.done info or clear-path.stopped warn event. Stops: :bad-args, :no-door (no such wall here),
@@ -101,12 +101,11 @@
             :else (finish! c :dig-failed {:cell cell :block block :dig (select-keys res [:reason :status])})))))))
 
 (defn ^:async step-through! [c through]
-  (let [w (await (ctx/call-child c :walk 'jobs.debug.walk-plan {:to through}))
-        r (when (= :done w) (ctx/child-result c :walk))]
+  (let [r (await (stair/walk-into! c :walk through))]
     (cond
-      (= :continue w) :continue
-      (and (= :arrived (:status r)) (= through (stair/feet-of c))) (finish! c :done {})
-      :else (finish! c :step-failed {:cell through :walk (if r (select-keys r [:status :reason :why]) {:status w})}))))
+      (= :continue r) :continue
+      (and (:arrived r) (= through (stair/feet-of c))) (finish! c :done {})
+      :else (finish! c :step-failed {:cell through :walk (select-keys r [:status :reason :why :arrived])}))))
 
 (defn ^:async next!
   "One piece of the door: plan it, dig a cell or step through. :again, :continue (a child waits) or :done."

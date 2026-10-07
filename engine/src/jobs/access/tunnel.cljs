@@ -40,7 +40,7 @@
   :cave-below :no-floor :fluid-in-cut :undercuts-way :not-loaded :no-zones). :too-far: no line fits within :max-length.
   :no-approach: the headings differ, with :headings giving each one's reason.
 
-  Then the body walks to the entry (jobs.debug.walk-plan; failing: :walk-in-failed) and the stair child cuts
+  Then the body walks to the entry (a go-to child; failing: :walk-in-failed) and the stair child cuts
   and walks its steps. Each run step is judged again right before each dig (:hazard :zone :no-tool
   :inventory-full :refills :dig-failed). Before each further run step, and at the stand, the way back to the
   entry is planned on a fresh pathWorld and must be whole and walkable, else :no-way-back and the body stays
@@ -284,13 +284,6 @@
   [end feet heading run]
   (first (filter #(= feet (ahead end heading %)) (range 0 (inc run)))))
 
-(defn ^:async walk-to!
-  "Walk to cell with a walk-plan child in slot: :continue while it walks, else the child's result."
-  [c slot cell]
-  (if (= :done (await (ctx/call-child c slot 'jobs.debug.walk-plan {:to cell})))
-    (ctx/child-result c slot)
-    :continue))
-
 (defn ^:async dig-cell!
   "stair/dig! with :again for a dug cell (more to do), else a stop map."
   [c in cell cut accept]
@@ -307,10 +300,10 @@
     (or (stair/stop-of in cells accept)
         (if-let [cell (first (remove #(rules/air ((:block-at in) %)) cut))]
           (await (dig-cell! c in cell cut accept))
-          (let [r (await (walk-to! c :walk next))]
+          (let [r (await (stair/walk-into! c :walk next))]
             (cond
               (= :continue r) :continue
-              (and (= :arrived (:status r)) (= next (feet-of c)))
+              (and (:arrived r) (= next (feet-of c)))
               (do (ctx/emit! c :tunnel.step :info {:at next :text (str "tunnel step to " (pr-str next))}) :again)
               :else {:reason :step-failed :cell next :walk r}))))))
 
@@ -440,10 +433,10 @@
               stop
               (do (ctx/update-mem! c assoc :checked (+ steps j))
                   (if (= feet stand) (await (open-over-target! c feet)) (await (run-step! c feet)))))
-          :else (let [r (await (walk-to! c :in entry))]
+          :else (let [r (await (stair/walk-into! c :in entry))]
                   (cond
                     (= :continue r) :continue
-                    (and (= :arrived (:status r)) (= entry (feet-of c))) :again
+                    (and (:arrived r) (= entry (feet-of c))) :again
                     :else {:reason :walk-in-failed :cell entry :walk r :outside true}))))))
 
 (defn way-out
@@ -460,7 +453,7 @@
   (let [{:keys [stop plan way-out]} (ctx/mem c)
         keep? (:keep (:args c))
         r (if keep?
-            (await (walk-to! c :out (:entry plan)))
+            (await (stair/walk-into! c :out (:entry plan)))
             (let [k (await (declined/call-child! c :out 'jobs.access.leave-tunnel
                                            (cond-> {:tunnel way-out :ignore-zones? (boolean (:ignore-zones? (:args c)))}
                                              (some? (:fetch (:args c))) (assoc :fetch (:fetch (:args c))))))]

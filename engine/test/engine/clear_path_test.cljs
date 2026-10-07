@@ -19,7 +19,8 @@
   "Run clear-path over world (stub: a replacement round for jobs.blocks.dig, or nil) as a child, :east :max-thick 3
   unless args says otherwise; its result."
   ([world stub] (run-door world stub {:heading :east :max-thick 3}))
-  ([world stub args]
+  ([world stub args] (run-door world stub args nil))
+  ([world stub args rounds]
    (let [clock (atom 1000000)
          [_ sink] (tu/legacy-capture-sink)
          p (tu/fake world)
@@ -30,7 +31,8 @@
                             (when (= :done r) (reset! out (ctx/child-result c :kid)))
                             r))}
          jobs (cond-> (assoc registry/jobs 'recording-parent parent)
-                stub (assoc 'jobs.blocks.dig (assoc (get registry/jobs 'jobs.blocks.dig) :round stub)))
+                stub (assoc 'jobs.blocks.dig (assoc (get registry/jobs 'jobs.blocks.dig) :round stub))
+                rounds (as-> js (reduce-kv (fn [m k round] (assoc m k (assoc (get m k) :round round))) js rounds)))
          eng (core/create {:primitives p :jobs jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                            :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
      (core/submit! eng '(recording-parent) {})
@@ -82,6 +84,20 @@
           (is (= [:done :done [3 64 0]] [(:status r) (:reason r) (:through r)]) (pr-str r))
           (is (= 4 (count (:dug r))) "two blocks high, two thick")
           (is (= [3 64 0] (:at r))))))))
+
+(deftest the-step-through-is-a-go-to-child
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [asked (atom nil)
+              go-to (fn ^:async refusing-go-to [c]
+                      (reset! asked (:args c))
+                      (ctx/result! c {:arrived false :status :stopped :reason :unreachable})
+                      :done)
+              r (await (run-door (assoc wall :inventory [{:name "wooden_pickaxe" :count 1}]) nil
+                                 {:heading :east :max-thick 3} {'jobs.movement.go-to go-to}))]
+          (is (= [:stopped :step-failed] [(:status r) (:reason r)]) (pr-str r))
+          (is (= [{:x 3 :y 64 :z 0} 0 false] ((juxt :pos :range :escalate) @asked)) (pr-str @asked)))))))
 
 (deftest open-ground-ahead-is-no-door
   (async done
