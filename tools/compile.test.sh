@@ -25,6 +25,7 @@ C="$T/repo/tools/compile"
 timeout 20 "$C" engine test >/dev/null 2>&1; check "plain compile rc" "$?" 0
 check "stub npx ran" "$(grep -c 'shadow-cljs compile test' "$T/npx.log")" 1
 timeout 20 "$C" dashboard test >/dev/null 2>&1; check "dashboard test is the :dashboard-test build" "$(grep -c "shadow-cljs compile dashboard-test" "$T/npx.log")" 1
+timeout 20 "$C" dashboard ui --output-dir out/public/js.new >/dev/null 2>&1; check "--output-dir passes a :output-dir config merge" "$(grep -c 'shadow-cljs compile ui --config-merge {:output-dir "out/public/js.new"}' "$T/npx.log")" 1
 
 # an undeclared-var / undeclared-ns warning fails the build; other warnings do not
 printf '#!/bin/sh\necho "npx $*" >> "%s/npx.log"\necho "$WARN"\n' "$T" > "$T/bin/npx"

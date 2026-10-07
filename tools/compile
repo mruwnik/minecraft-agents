@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # tools/compile <engine|dashboard> <build>... [--priority] [--release]
 # tools/compile <engine|dashboard> --stop
+#   --output-dir DIR  build into DIR instead of the build's :output-dir (shadow-cljs --config-merge; relative to dashboard/).
 # Both project words use the one shadow-cljs project in dashboard/ (engine builds write to engine/out); `dashboard test` is the :dashboard-test build.
 #
 # Every cljs compile in this repo goes through here: it queues on /tmp/mc-compile.lock (the machine-wide compile lock, taken
@@ -31,15 +32,17 @@ lock=${MC_COMPILE_LOCK:-/tmp/mc-compile.lock}   # env overrides are for tools/co
 queue=${MC_COMPILE_QUEUE:-/tmp/mc-compile.queue}
 MIN_START_MB=${MC_COMPILE_MIN_START_MB:-3500}
 
-usage() { echo "usage: tools/compile <engine|dashboard> <build>... [--priority] [--release] | <engine|dashboard> --stop" >&2; exit 2; }
+usage() { echo "usage: tools/compile <engine|dashboard> <build>... [--priority] [--release] [--output-dir DIR] | <engine|dashboard> --stop" >&2; exit 2; }
 
 [ $# -ge 2 ] || usage
 project=$1; shift
 case "$project" in engine|dashboard) ;; *) usage ;; esac
 dir="$repo/dashboard"   # one shadow-cljs project (dashboard/shadow-cljs.edn) holds both; one server per checkout
-lane=1; verb=compile; stop=0; builds=()
-for a in "$@"; do
+lane=1; verb=compile; stop=0; builds=(); extra=()
+while [ $# -gt 0 ]; do
+  a=$1; shift
   case "$a" in
+    --output-dir) [ $# -gt 0 ] || usage; extra=(--config-merge "{:output-dir \"$1\"}"); shift ;;
     --priority) lane=0 ;;
     --release) verb=release ;;
     --stop) stop=1 ;;
@@ -148,7 +151,7 @@ cd "$dir" || exit 1
 touch .shadow-cljs/last-use; echo $$ > .shadow-cljs/last-use.compiling  # keeps the idle watcher off while compiling and for the idle time after
 # the server (and any detached child) must not inherit the lock fd
 out=$(mktemp)
-npx shadow-cljs "$verb" "${builds[@]}" 9>&- 2>&1 | tee "$out"
+npx shadow-cljs "$verb" "${builds[@]}" "${extra[@]}" 9>&- 2>&1 | tee "$out"
 code=${PIPESTATUS[0]}
 # shadow-cljs only warns on a call to a missing var or namespace (a moved function): the build passes and the job throws at run time.
 if [ "$code" = 0 ] && grep -qE 'WARNING #[0-9]+ - :undeclared-(var|ns)' "$out"; then

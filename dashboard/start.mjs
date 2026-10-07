@@ -5,11 +5,11 @@
 // {type:"restart"}, sent by POST /api/restart) builds FIRST while the old server keeps running; only a good build replaces it.
 // Ctrl-C stops both; a server exit nobody asked for ends the launcher with the server's exit code.
 import { spawn } from 'node:child_process'
-import { readFileSync, readdirSync, writeFileSync, mkdirSync } from 'node:fs'
+import { readFileSync, readdirSync, writeFileSync, mkdirSync, existsSync, rmSync, renameSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
-  initial, onRestartRequest, onBuildDone, onServerExit, onQuit, buildSteps, buildOutcome, stopsBuild, stepCommand, parseMemAvailableMb, enoughMemory, minMemoryMb, terminateGroup, launcherStatus, queuePosition, groupPids,
+  initial, onRestartRequest, onBuildDone, onServerExit, onQuit, buildSteps, buildOutcome, stopsBuild, stepCommand, parseMemAvailableMb, enoughMemory, minMemoryMb, terminateGroup, launcherStatus, queuePosition, groupPids, uiBuildDir, promoteUi,
 } from './js/launcher.mjs'
 
 const dir = dirname(fileURLToPath(import.meta.url))
@@ -78,7 +78,8 @@ const runStep = (step) => new Promise((resolve) => {
 })
 
 // Resolves true on a good build. Compiles go through tools/compile (compile lock, shared shadow-cljs server). Steps run in buildSteps order and
-// stop at the first failed required step, so a failed ui build leaves out/server.cjs as it was; the optional viewer step
+// stop at the first failed required step, so a failed ui build leaves out/server.cjs as it was; the ui is built into a temp dir and swapped in
+// only when the required steps passed; the optional viewer step
 // runs last and a failure of it is only a warning.
 const runBuild = async () => {
   const mb = availableMb()
@@ -88,11 +89,14 @@ const runBuild = async () => {
     return false
   }
   const codes = []
+  rmSync(join(dir, uiBuildDir), { recursive: true, force: true })
   for (const step of buildSteps) {
     codes.push(await runStep(step))
     if (state.quitting || stopsBuild(step, codes[codes.length - 1])) break
   }
   const { ok, failed, warned } = buildOutcome(codes)
+  if (ok && !state.quitting) promoteUi({ existsSync: (p) => existsSync(join(dir, p)), rmSync: (p, o) => rmSync(join(dir, p), o), renameSync: (a, b) => renameSync(join(dir, a), join(dir, b)) })
+  else rmSync(join(dir, uiBuildDir), { recursive: true, force: true })
   warned.forEach((step) => say(`warning: the ${step} build failed; the dashboard goes on without it`))
   if (!ok) say(`build failed at the ${failed} step`)
   done = { seq: done.seq + 1, last: ok ? 'ok' : 'failed', failed }

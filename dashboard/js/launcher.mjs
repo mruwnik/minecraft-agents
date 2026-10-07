@@ -18,9 +18,23 @@ const optionalSteps = ['viewer']
 // dashboard's shadow-cljs server; --priority because the owner waits for these (build-cljs.mjs goes through the same
 // wrapper itself, only when it builds).
 export const stepCommand = (step) =>
-  step === 'viewer'
-    ? ['node', ['../tools/view/build-cljs.mjs', '--priority']]
-    : ['../tools/compile', ['dashboard', step, '--priority']]
+  step === 'viewer' ? ['node', ['../tools/view/build-cljs.mjs', '--priority']] :
+  step === 'ui' ? ['../tools/compile', ['dashboard', step, '--priority', '--output-dir', uiBuildDir]] :
+  ['../tools/compile', ['dashboard', step, '--priority']]
+
+// The ui is built beside the live dir (shadow-cljs.edn :ui :output-dir) and swapped in only after the server step passes, so a
+// failed server step leaves the old ui next to the old server. Paths are relative to the dashboard dir.
+export const uiDir = 'out/public/js'
+export const uiBuildDir = `${uiDir}.new`
+
+// fs: {existsSync, rmSync, renameSync}. The old dir goes aside first so the live path is missing only for one rename.
+export const promoteUi = (fs) => {
+  const old = `${uiDir}.old`
+  fs.rmSync(old, { recursive: true, force: true })
+  if (fs.existsSync(uiDir)) fs.renameSync(uiDir, old)
+  fs.renameSync(uiBuildDir, uiDir)
+  fs.rmSync(old, { recursive: true, force: true })
+}
 
 // whether the run stops after this step: a required step failed
 export const stopsBuild = (step, code) => code !== 0 && !optionalSteps.includes(step)

@@ -3,7 +3,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   initial, onRestartRequest, onBuildDone, onServerExit, onQuit, buildSteps, buildOutcome, stopsBuild, stepCommand, parseMemAvailableMb, enoughMemory, minMemoryMb,
-  terminateGroup, launcherStatus, restartVerdict, queuePosition, restartDeadline, groupPids,
+  terminateGroup, launcherStatus, restartVerdict, queuePosition, restartDeadline, groupPids, uiDir, uiBuildDir, promoteUi,
 } from './launcher.mjs'
 
 test('a request while idle starts a build', () => {
@@ -114,7 +114,7 @@ for (const [step, code, expected] of [
 
 for (const [step, expected] of [
   ['viewer', ['node', ['../tools/view/build-cljs.mjs', '--priority']]],
-  ['ui', ['../tools/compile', ['dashboard', 'ui', '--priority']]],
+  ['ui', ['../tools/compile', ['dashboard', 'ui', '--priority', '--output-dir', uiBuildDir]]],
   ['server', ['../tools/compile', ['dashboard', 'server', '--priority']]]
 ]) {
   test(`stepCommand ${step}`, () => assert.deepEqual(stepCommand(step), expected))
@@ -201,4 +201,31 @@ test('restartDeadline restarts the wait while the build is queued and keeps it o
   assert.equal(restartDeadline(q, { now: 1000, deadline: 500, waitMs: 360 }), 1360)
   assert.equal(restartDeadline({ ...q, queued: null }, { now: 1000, deadline: 1200, waitMs: 360 }), 1200)
   assert.equal(restartDeadline(null, { now: 1000, deadline: 1200, waitMs: 360 }), 1200)
+})
+
+test('the ui builds beside the live dir, never into it', () => {
+  assert.notEqual(uiBuildDir, uiDir)
+  assert.equal(uiBuildDir.startsWith(`${uiDir}.`), true)
+})
+
+const fakeFs = (present) => {
+  const calls = []
+  return {
+    calls,
+    existsSync: (p) => present.includes(p),
+    rmSync: (p) => calls.push(['rm', p]),
+    renameSync: (a, b) => calls.push(['mv', a, b]),
+  }
+}
+
+test('promoteUi swaps the new ui into place and drops the old one', () => {
+  const fs = fakeFs([uiDir, uiBuildDir])
+  promoteUi(fs)
+  assert.deepEqual(fs.calls, [['rm', `${uiDir}.old`], ['mv', uiDir, `${uiDir}.old`], ['mv', uiBuildDir, uiDir], ['rm', `${uiDir}.old`]])
+})
+
+test('promoteUi without an old ui just moves the new one in', () => {
+  const fs = fakeFs([uiBuildDir])
+  promoteUi(fs)
+  assert.deepEqual(fs.calls, [['rm', `${uiDir}.old`], ['mv', uiBuildDir, uiDir], ['rm', `${uiDir}.old`]])
 })
