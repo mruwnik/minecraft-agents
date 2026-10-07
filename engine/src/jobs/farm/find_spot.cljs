@@ -7,7 +7,7 @@
 
 (def doc
   "Pick where a :w x :h farm would go. Ranks patches by flatness first, then water within 4,
-  open sky and nearness to :center. It tries patches nearest-first and stops once :limit flat open-sky ones are found.
+  open sky and nearness to :center. It tries patches nearest-first and stops once :limit flat open-sky ones are found (with water within 4, when water is in range).
   A patch of 8 or more is tried at every fourth corner. Reads blocks only: it never digs or marks anything.
   A scan reads at most about 30000 blocks, then settles for the best spots so far.
   With :walk true it then walks to the best spot.
@@ -97,7 +97,7 @@
             (recur (inc y)))))))
 
 (defn patch-ring
-  "How many cells out from from the centre of the patch with NW corner x z lies (the larger of its x and z offsets, rounded up)."
+  "How many cells out from the centre of the patch with NW corner x z lies (the larger of its x and z offsets, rounded up)."
   [{:keys [w h]} from x z]
   (long (js/Math.ceil (max (js/Math.abs (- (+ x (/ (dec w) 2)) (:x from)))
                            (js/Math.abs (- (+ z (/ (dec h) 2)) (:z from)))))))
@@ -118,9 +118,9 @@
          (group-by (fn [[x z]] (patch-ring a from x z))))))
 
 (defn good?
-  "A spot that needs no earthwork under open sky: nothing nearer can improve much on it."
-  [{:keys [level sky]}]
-  (and sky (= 100 level)))
+  "A spot that needs no earthwork under open sky, and water within 4 when any water is in range: nothing nearer can improve much on it."
+  [wet-needed? {:keys [level sky water-share]}]
+  (and sky (= 100 level) (or (not wet-needed?) (pos? water-share))))
 
 (defn scan-rows
   "Scan patches ring by ring (nearest the centre first) from (:next-ring state)
@@ -162,7 +162,7 @@
                          (take limit)
                          vec)]
           (cond
-            (and (= limit (count found)) (every? good? found)) {:next-ring (inc r) :found found :done true :reads @reads}
+            (and (= limit (count found)) (every? (partial good? (seq waters)) found)) {:next-ring (inc r) :found found :done true :reads @reads}
             (>= @reads budget) {:next-ring (inc r) :found found :done false :reads @reads}
             :else (recur (rest rs) found)))))))
 

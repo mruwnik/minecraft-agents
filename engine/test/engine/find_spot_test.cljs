@@ -320,3 +320,9 @@
   (let [[reads spots] (scan-reads {} [0 64 0] {:w 16 :h 16 :range 48 :depth 7 :limit 3})]
     (is (empty? spots))
     (is (< reads 20000) (str reads " reads"))))
+
+(deftest a-pond-off-centre-beats-dry-ground-by-the-centre
+  (let [world (merge (tu/box -30 62 -30 30 63 30 "grass_block") (tu/box 15 63 0 17 63 2 "water"))
+        a {:w 5 :h 5 :range 24 :depth 12 :limit 3}
+        [_ spots] (scan-reads world [0 64 0] a)]
+    (is (pos? (:water-share (first spots))) "the best spot has water within 4")))
