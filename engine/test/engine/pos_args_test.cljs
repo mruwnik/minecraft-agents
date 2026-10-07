@@ -21,7 +21,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (ut/setup {:self {:pos ut/at5} :floor tu/walk-floor})]
-          (core/submit! eng '(jobs.movement.pace {:a [5 64 3] :b [5 64 0] :laps 1 :rounds 1}) {})
+          (core/submit! eng '(jobs.movement.pace {:a [5 64 3] :b [5 64 0] :laps 1}) {})
           (await (core/tick! eng))
           (is (= {:x 5 :y 64 :z 3} (:target (first (ut/moved eng)))) "the leg went to a, not the origin"))))))
 

@@ -1,20 +1,21 @@
 (ns jobs.village.trade
   (:require [engine.ctx :as ctx]
             [jobs.lib.util :as u]
-            [jobs.lib.near :as near]))
+            [jobs.lib.pace :as pace]))
 
 (def doc
-  "Buy :count of :buy from the villager with uuid :villager. Each round is one bounded step: find the villager
-  within 48 blocks, walk within 2 of it, read its offers (prices move between visits), choose and buy.
+  "Buy :count of :buy from the villager with uuid :villager. One call is the whole purchase: find the villager
+  within 48 blocks, walk within 2 of it (jobs.movement.go-to legs of 15 s), read its offers (prices move between visits),
+  choose and buy. It yields (:continue) only while go-to waits on the world.
   Of the offers that give :buy and are not sold out, those whose price (the adjusted count of the first cost
   stack) is within :max-price (nil: no limit) are kept. The cheapest is taken, the lowest index on a tie.
   :count is items wanted. An offer gives several per trade, so it buys ceil(remaining / items per trade) trades
   and may overshoot a little.
   Result: {:bought n :paid {item n} :item :buy}. n counts the items actually gained. Success is info trade.done.
-  A give-up adds :reason and warns trade.gave-up. A partial purchase stays bought and paid.
+  A give-up ends stopped with :reason and warns trade.gave-up. A partial purchase stays bought and paid.
   :reason is one of:
   - \"gone\" (not listed within 48, also a non-villager entity under the uuid), \"not-villager\".
-  - \"unreachable\" (walk blocked, or still out of reach after three tries).
+  - \"unreachable\" (walk blocked, or still out of reach after three tries in the call).
   - \"no-offers\" (unemployed, nitwit, baby, or an empty window), \"window\" (did not open three times: busy
     villager), \"no-offer\" (nothing gives :buy), \"sold-out\".
   - \"price\" (every open offer is dearer than :max-price; :price is the cheapest seen).
@@ -52,17 +53,15 @@
     :done))
 
 (defn give-up!
-  "Warn and finish with a reason."
+  "Warn and end stopped with a reason."
   [c reason text]
   (ctx/emit! c :trade.gave-up :warn {:reason reason :text text})
-  (finish! c {:reason reason}))
+  (finish! c {:status :stopped :reason reason}))
 
-(defn fail-up!
-  "u/fail!, and when it gives up finish with the reason."
-  [c reason text]
-  (let [r (u/fail! c :trade.gave-up text)]
-    (when (= :done r) (finish! c {:reason reason}))
-    r))
+(defn retry
+  "A step that failed but may be tried again: counted per call, the third in a row gives up (warn trade.gave-up)."
+  [reason text]
+  {:retry [reason text]})
 
 (defn done!
   "Info and finish with the counts."
@@ -95,7 +94,7 @@
 
 (defn bought!
   "Book what a buy gained and paid (measured by the primitive), then finish
-  when enough was bought, give up by what stopped it, or go round again."
+  when enough was bought, give up by what stopped it, or :again (a retry when it stopped short for no reason)."
   [c r]
   (let [{:keys [buy count]} (:args c)
         gained (or (aget (.-gained r) buy) 0)
@@ -103,11 +102,11 @@
     (ctx/update-mem! c (fn [m] (-> m
                                    (update :bought (fnil + 0) gained)
                                    (update :paid #(merge-with + % (js->clj (.-paid r)))))))
-    (when (pos? gained) (u/progress! c))
     (cond
       (>= (:bought (ctx/mem c) 0) count) (done! c)
       (contains? stopped-reason stopped) (give-up! c (stopped-reason stopped) (str "stopped buying: " stopped))
-      :else (fail-up! c "incomplete" "a buy stopped short"))))
+      (pos? gained) :again
+      :else (retry "incomplete" "a buy stopped short"))))
 
 (defn ^:async buy!
   "Buy the trades still wanted of the chosen offer and handle the outcome."
@@ -124,11 +123,11 @@
       "gone" (give-up! c "gone" "the villager is gone")
       "cannot" (if (= "sold-out" (.-reason r))
                  (give-up! c "sold-out" "sold out")
-                 (fail-up! c "no-such-offer" "the offers changed"))
-      (fail-up! c (str (.-reason r)) (str "trade " status " " (.-reason r))))))
+                 (retry "no-such-offer" "the offers changed"))
+      (retry (str (.-reason r)) (str "trade " status " " (.-reason r))))))
 
 (defn ^:async trade!
-  "Read the offers and buy from the chosen one, or give up."
+  "Read the offers and buy from the chosen one: :done, :again or a retry."
   [c]
   (let [{:keys [villager buy max-price]} (:args c)
         r (await (ctx/act c :trade (clj->js {:villager villager :op "offers"})))
@@ -138,15 +137,15 @@
              (if offer
                (await (buy! c offer))
                (do (ctx/emit! c :trade.gave-up :warn {:reason reason :text (str "no purchase: " reason)})
-                   (finish! c (cond-> {:reason reason} price (assoc :price price))))))
+                   (finish! c (cond-> {:status :stopped :reason reason} price (assoc :price price))))))
       "gone" (give-up! c "gone" "the villager is gone")
       "cannot" (give-up! c (if (= "not-villager" (.-reason r)) "not-villager" "no-offers") (str "cannot trade: " (.-reason r)))
-      "out-of-reach" (fail-up! c "unreachable" "out of reach of the villager")
-      (fail-up! c "window" "the trade window did not open"))))
+      "out-of-reach" (retry "unreachable" "out of reach of the villager")
+      (retry "window" "the trade window did not open"))))
 
-(defn ^:async round
-  "One bounded step: finish when enough is bought, else find and reach the
-  villager, then read the offers and buy."
+(defn ^:async step!
+  "Finish when enough is bought, else find the villager, walk within reach with one go-to leg (it wanders), then read
+  the offers and buy. :again, :continue (go-to yields), :done or a retry."
   [c]
   (let [{:keys [villager count]} (:args c)
         p (:primitives c)
@@ -154,8 +153,27 @@
     (cond
       (>= (:bought (ctx/mem c) 0) count) (done! c)
       (nil? e) (give-up! c "gone" "the villager is not here")
+      (u/within? (u/self-pos c) (u/pos-of (.-pos e)) reach) (await (trade! c))
       :else
-      (case (await (near/walk-near! c (u/pos-of (.-pos e)) reach {:timeout-s chase-timeout-s}))
-        :partial :continue
-        :blocked (give-up! c "unreachable" "cannot reach the villager")
-        (await (trade! c))))))
+      (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to
+                                     {:pos (u/pos-of (.-pos e)) :range reach :leg-s chase-timeout-s :escalate false :warn false}))]
+        (cond
+          (= :continue r) :continue
+          (= :done r) :again
+          :else (give-up! c "unreachable" "cannot reach the villager"))))))
+
+(defn ^:async round
+  "One call is the whole purchase: steps (with a pace between) until it ends; a retry counts failures in a row, reset by
+  a buy, and the third gives up. Yields only while go-to waits on the world."
+  [c]
+  (let [fails (atom 0)]
+    (await (pace/steps! c (fn ^:async trade-step []
+                            (let [r (await (step! c))]
+                              (cond
+                                (map? r) (let [[reason text] (:retry r)]
+                                           (if (< (swap! fails inc) u/max-failures)
+                                             :again
+                                             (do (ctx/emit! c :trade.gave-up :warn {:tries u/max-failures :reason reason :text text})
+                                                 (finish! c {:status :stopped :reason reason}))))
+                                (= :again r) (do (reset! fails 0) :again)
+                                :else r)))))))

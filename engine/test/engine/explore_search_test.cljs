@@ -122,6 +122,17 @@
           (is (some #(= [:searched ["diamond_block"]] ((juxt :kind :what) %)) ns))
           (is (nil? (event-of s :search.not-found))))))))
 
+(deftest the-whole-search-is-one-round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup {:blocks diamond})]
+          (core/submit! (:eng s) (list 'jobs.explore.search {:target "diamond_block"}) {})
+          (swap! (:clock s) + 700)
+          (await (core/tick! (:eng s)))
+          (is (finished? s) "legs walked and the ore found in one round")
+          (is (= :found (:reason (event-of s :search.done)))))))))
+
 (deftest an-entity-target-is-found-and-noted-by-its-uuid
   (async done
     (tu/run-async done
@@ -150,7 +161,12 @@
     (tu/run-async done
       (fn ^:async t []
         (let [legs (await (search! {:target "diamond_block" :max-legs 2} {}))
-              timed (await (search! {:target "diamond_block" :timeout-s 2} {}))]
+              timed (await (search! {:target "diamond_block" :timeout-s 2} {} nil
+                                    (fn [{:keys [p clock]}]
+                                      (.override (.-world p) "look"
+                                                 (fn ^:async f [token args impl]
+                                                   (swap! clock + 1000)
+                                                   (await (impl token args)))))))]
           (is (= [:legs 2] ((juxt :why #(get-in % [:coverage :legs])) (event-of legs :search.not-found))))
           (is (= :time (:why (event-of timed :search.not-found)))))))))
 

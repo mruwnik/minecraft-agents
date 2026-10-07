@@ -1,16 +1,15 @@
 (ns jobs.movement.follow
   (:require [engine.ctx :as ctx]
-            [jobs.lib.util :as u]
-            [jobs.lib.near :as near]))
+            [jobs.lib.util :as u]))
 
 (def doc
   "Keep the body within :range of the player :player, who must be within :radius to be seen.
-  Each round: a player in range is looked at (the head) and waited on for 500 ms.
-  One farther off is walked to (engine walker, doors :shut, 5 s per walk).
-  A player out of sight is walked to where they were last seen.
+  A player in range is looked at (the head) and waited on for 500 ms, then the job yields (:continue): it is an
+  ongoing watch. One farther off is walked to in one round (jobs.movement.go-to legs of 5 s, re-aimed at where the
+  player is, doors :shut) until in range. A player out of sight is walked to where they were last seen.
   Ends with a result {:reason ...}:
   - \"lost\" (info follow.lost, with :last-seen): the player was out of sight for :lost-s.
-  - \"unreachable\" (warn follow.unreachable): three blocked walks in a row.
+  - \"unreachable\" (warn follow.unreachable): three walks in a row go-to gave up on (counted per round).
   - \"out-of-range\" (warn follow.out-of-range): three walks in a row that arrived or got closer but left the body out of range.
   - \"absent\" (info follow.absent): the player was never seen within 2 s of the first round
     (the grace lets the world's entities arrive).
@@ -26,7 +25,7 @@
 
 (def absent-grace-ms 2000)
 (def idle-ms 500)
-(def walk-timeout-s 5)
+(def walk-leg-s 5)
 (def max-blocked 3)
 (def head-height 1.6)
 (def last-seen-reach 1)
@@ -62,33 +61,40 @@
   [out blocked self now range]
   (if (or (pos? blocked) (u/within? self now range)) 0 (inc out)))
 
-(defn ^:async walk!
-  "Walk to pos within range (the target's position is read again after the walk for the range check). :arrived and :partial reset the blocked count;
-  anything else counts, and the third in a row ends the job (warn
-  follow.unreachable, result {:reason \"unreachable\"}). :continue or :done."
-  ([c pos range] (walk! c pos range (constantly pos)))
-  ([c pos range target-now]
-  (let [r (await (near/walk-near! c pos range {:doors :shut :timeout-s walk-timeout-s}))
-        blocked (if (contains? #{:there :partial} r) 0 (inc (:blocked (ctx/mem c) 0)))
-        now (or (target-now) pos)
-        out (next-out (:out-of-range (ctx/mem c) 0) blocked (u/self-pos c) now range)]
-    (ctx/update-mem! c assoc :blocked blocked :out-of-range out)
-    (cond
-      (>= out max-blocked)
-      (do (ctx/emit! c :follow.out-of-range :warn {:text (str "still out of range of " (:player (:args c)))})
-          (ctx/result! c {:reason "out-of-range"})
-          :done)
-
-      (< blocked max-blocked) :continue
-      :else (do (ctx/emit! c :follow.unreachable :warn {:text (str "cannot reach " (:player (:args c)))})
-                (ctx/result! c {:reason "unreachable"})
-                :done)))))
-
 (defn finish!
   "Hand the parent result and return :done."
   [c result]
   (ctx/result! c result)
   :done)
+
+(defn ^:async walk!
+  "Walk to pos within range with go-to calls (:leg-s legs while the player moves, then pos is read again with
+  target-now, which returns nil when the target is out of sight). The counts are per call: a walk that did not arrive
+  counts as blocked when go-to stopped; the third in a row ends the job (warn follow.unreachable, result
+  {:reason \"unreachable\"}); three legs that got closer but left the body out of range of where the target stands now
+  end it (warn follow.out-of-range). :continue (in range, out of sight, or go-to waiting) or :done."
+  ([c pos range] (walk! c pos range (constantly pos) nil))
+  ([c pos range target-now leg-s]
+   (loop [pos pos blocked 0 out 0]
+     (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to
+                                    (cond-> {:pos pos :range range :doors :shut :escalate false :warn false}
+                                      leg-s (assoc :leg-s leg-s))))
+           res (ctx/child-result c :walk)
+           blocked (if (and (= :done r) (or (:arrived res) (:leg res))) 0 (inc blocked))
+           now (target-now)
+           out (next-out out blocked (u/self-pos c) (or now pos) range)]
+       (cond
+         (= :continue r) :continue
+         (>= out max-blocked)
+         (do (ctx/emit! c :follow.out-of-range :warn {:text (str "still out of range of " (:player (:args c)))})
+             (finish! c {:reason "out-of-range"}))
+
+         (>= blocked max-blocked)
+         (do (ctx/emit! c :follow.unreachable :warn {:text (str "cannot reach " (:player (:args c)))})
+             (finish! c {:reason "unreachable"}))
+
+         (or (nil? now) (u/within? (u/self-pos c) now range)) :continue
+         :else (recur now blocked out))))))
 
 (defn ^:async follow-seen!
   "The player stands at pos: look and wait when in range, else walk."
@@ -97,7 +103,8 @@
     (do (await (look-at-head! c pos))
         (await (idle! c)))
     (await (walk! c pos (:range (:args c))
-                  #(find-player (:primitives c) (:player (:args c)) (:radius (:args c)))))))
+                  #(find-player (:primitives c) (:player (:args c)) (:radius (:args c)))
+                  walk-leg-s))))
 
 (defn ^:async follow-unseen!
   "The player is out of sight at now, seen last at seen-t at last-seen."

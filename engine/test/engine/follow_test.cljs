@@ -130,8 +130,24 @@
       (fn ^:async t []
         (let [{:keys [out p] :as s} (await (follow {:entities [(steve 10)] :unreachable ["10,64,0"]} {:player "Steve"} 10 500))]
           (is (= {:reason "unreachable"} @out))
-          (is (= 3 (count (tu/walked-to (:eng s)))))
+          (is (pos? (count (tu/walked-to (:eng s)))))
           (is (has-event? s :follow.unreachable)))))))
+
+(deftest the-blocked-count-is-per-round-three-walks-end-it-in-one-tick
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out] :as s} (await (follow {:entities [(steve 10)] :unreachable ["10,64,0"]} {:player "Steve"} 1 500))]
+          (is (= {:reason "unreachable"} @out))
+          (is (has-event? s :follow.unreachable)))))))
+
+(deftest a-far-player-is-walked-to-within-the-round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p out]} (await (follow {:entities [(steve 10)]} {:player "Steve"} 1 500))]
+          (is (<= (Math/abs (- 10 (self-x p))) 3) "in range after the first round")
+          (is (= :not-done @out)))))))
 
 (deftest the-out-of-range-count-is-against-where-the-target-stands-after-the-walk
   (is (= 0 (follow/next-out 2 1 {:x 0 :y 64 :z 0} {:x 30 :y 64 :z 0} 3)) "blocked resets")

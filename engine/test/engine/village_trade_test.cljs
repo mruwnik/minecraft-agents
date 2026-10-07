@@ -154,23 +154,23 @@
         (await (wait-all
                 [{:label "sells out mid-buy"
                   :world {:entities [(villager [(bread {:maxUses 2})]) ] :inventory [{:name "emerald" :count 10}]}
-                  :args {:count 5} :want {:bought 2 :paid {"emerald" 2} :item "bread" :reason "sold-out"}
+                  :args {:count 5} :want {:bought 2 :paid {"emerald" 2} :item "bread" :status :stopped :reason "sold-out"}
                   :have {"emerald" 8 "bread" 2} :kind :trade.gave-up}
                  {:label "sold out from the start"
                   :world {:entities [(villager [(bread {:maxUses 2 :uses 2})])] :inventory [{:name "emerald" :count 10}]}
-                  :args {} :want {:bought 0 :paid {} :item "bread" :reason "sold-out"}
+                  :args {} :want {:bought 0 :paid {} :item "bread" :status :stopped :reason "sold-out"}
                   :have {"emerald" 10} :kind :trade.gave-up}
                  {:label "no payment"
                   :world {:entities [(villager [(bread {})])]}
-                  :args {} :want {:bought 0 :paid {} :item "bread" :reason "payment-short"}
+                  :args {} :want {:bought 0 :paid {} :item "bread" :status :stopped :reason "payment-short"}
                   :have {} :kind :trade.gave-up}
                  {:label "partial payment"
                   :world {:entities [(villager [(bread {})])] :inventory [{:name "emerald" :count 2}]}
-                  :args {:count 3} :want {:bought 2 :paid {"emerald" 2} :item "bread" :reason "payment-short"}
+                  :args {:count 3} :want {:bought 2 :paid {"emerald" 2} :item "bread" :status :stopped :reason "payment-short"}
                   :have {"bread" 2} :kind :trade.gave-up}
                  {:label "no room"
                   :world {:entities [(villager [(bread {})])] :inventory (into [{:name "emerald" :count 5}] (fillers 35))}
-                  :args {} :want {:bought 0 :paid {} :item "bread" :reason "no-room"}
+                  :args {} :want {:bought 0 :paid {} :item "bread" :status :stopped :reason "no-room"}
                   :have (into {"emerald" 5} (map (fn [i] [(:name i) 1])) (fillers 35)) :kind :trade.gave-up}]))))))
 
 (deftest the-price-limit-is-the-adjusted-price-of-the-first-stack
@@ -181,7 +181,7 @@
                 [{:label "over the limit"
                   :world {:entities [(villager [(bread {:cost [{:item "emerald" :count 4}]}) (bread {:cost [{:item "emerald" :count 3}]})])]
                           :inventory [{:name "emerald" :count 10}]}
-                  :args {:max-price 2} :want {:bought 0 :paid {} :item "bread" :reason "price" :price 3}
+                  :args {:max-price 2} :want {:bought 0 :paid {} :item "bread" :status :stopped :reason "price" :price 3}
                   :have {"emerald" 10} :kind :trade.gave-up}
                  {:label "at the limit"
                   :world {:entities [(villager [(bread {:cost [{:item "emerald" :count 3}]})])]
@@ -196,19 +196,19 @@
         (await (wait-all
                 [{:label "not in the world"
                   :world {:entities []}
-                  :args {} :want {:bought 0 :paid {} :item "bread" :reason "gone"} :have {} :kind :trade.gave-up}
+                  :args {} :want {:bought 0 :paid {} :item "bread" :status :stopped :reason "gone"} :have {} :kind :trade.gave-up}
                  {:label "a cow under the uuid is not listed as a villager"
                   :world {:entities [{:id 2 :name "cow" :kind "passive" :uuid "v-1" :pos {:x 1 :y 64 :z 0}}]}
-                  :args {} :want {:bought 0 :paid {} :item "bread" :reason "gone"} :have {} :kind :trade.gave-up}
+                  :args {} :want {:bought 0 :paid {} :item "bread" :status :stopped :reason "gone"} :have {} :kind :trade.gave-up}
                  {:label "unemployed"
                   :world {:entities [(villager [] {:profession nil})]}
-                  :args {} :want {:bought 0 :paid {} :item "bread" :reason "no-offers"} :have {} :kind :trade.gave-up}
+                  :args {} :want {:bought 0 :paid {} :item "bread" :status :stopped :reason "no-offers"} :have {} :kind :trade.gave-up}
                  {:label "nothing for the item"
                   :world {:entities [(villager [{:cost [{:item "emerald" :count 1}] :gives {:item "apple" :count 1}}])]}
-                  :args {} :want {:bought 0 :paid {} :item "bread" :reason "no-offer"} :have {} :kind :trade.gave-up}
+                  :args {} :want {:bought 0 :paid {} :item "bread" :status :stopped :reason "no-offer"} :have {} :kind :trade.gave-up}
                  {:label "busy villager, the window never opens"
                   :world {:entities [(villager [(bread {})] {:busy true})] :inventory [{:name "emerald" :count 3}]}
-                  :args {} :want {:bought 0 :paid {} :item "bread" :reason "window"} :have {"emerald" 3} :kind :trade.gave-up}]))))))
+                  :args {} :want {:bought 0 :paid {} :item "bread" :status :stopped :reason "window"} :have {"emerald" 3} :kind :trade.gave-up}]))))))
 
 (deftest a-far-villager-is-walked-to
   (async done
@@ -228,16 +228,26 @@
         (let [dir (tu/tmp-dir)
               a (start {:world {:entities [(villager [(bread {})])] :inventory [{:name "emerald" :count 10}]} :dir dir})
               p (:p a)
-              once (atom true)]
+              once (atom true)
+              cut (atom false)]
           (.override (.-world p) "trade"
                      (fn ^:async f [token args impl]
-                       (if (and (= "buy" (.-op args)) @once)
+                       (cond
+                         (and (= "buy" (.-op args)) @once)
                          (do (reset! once false)
                              (await (impl token (js/Object.assign #js {} args #js {:times 1}))))
-                         (await (impl token args)))))
+
+                         (and (= "offers" (.-op args)) (not @once) (not @cut))
+                         (do (reset! cut true)
+                             (core/shutdown! (:eng a))
+                             (await (js/Promise. (fn [_ _]))))
+
+                         :else (await (impl token args)))))
           (core/submit! (:eng a) (list job {:villager "v-1" :buy "bread" :count 3}) {})
-          (await (run-until (:eng a) #(= 1 (:bought (core/job-memory % "j1"))) 20))
-          (is (= 1 (:bought (core/job-memory (:eng a) "j1"))))
+          (swap! clock + 700)
+          (core/tick! (:eng a))
+          (await (js/Promise. (fn [ok] (js/setTimeout ok 50))))
+          (is (= 1 (:bought (core/job-memory (:eng a) "j1"))) "the first buy was booked before the cut")
           (let [b (start {:p p :dir dir})]
             (await (run-until-empty (:eng b) 40))
             (is (= {"emerald" 7 "bread" 3} (inv p)) "three loaves in all, none bought twice")))))))
@@ -278,6 +288,27 @@
         (let [ops (atom [])
               [result p] (await (trade {:entities [(villager [(bread {})] {:busy true})] :inventory [{:name "emerald" :count 3}]} {}
                                        #(.override (.-world %) "trade" (trade-ops ops false))))]
-          (is (= {:bought 0 :paid {} :item "bread" :reason "window"} result))
+          (is (= {:bought 0 :paid {} :item "bread" :status :stopped :reason "window"} result))
           (is (= ["offers" "offers" "offers"] @ops))
           (is (= {"emerald" 3} (inv p))))))))
+
+(deftest a-whole-purchase-is-one-round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (start {:world {:entities [(villager [(bread {})] {:pos {:x 30 :y 64 :z 0}})] :inventory [{:name "emerald" :count 5}]}})]
+          (core/submit! eng (list job {:villager "v-1" :buy "bread" :count 2}) {})
+          (swap! clock + 700)
+          (await (core/tick! eng))
+          (is (= [] (:list (core/state eng))) "walk, offers and both buys in one round")
+          (is (= {"emerald" 3 "bread" 2} (inv p))))))))
+
+(deftest a-busy-villager-gives-up-in-one-round-stopped
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (start {:world {:entities [(villager [(bread {})] {:busy true})] :inventory [{:name "emerald" :count 3}]}})]
+          (core/submit! eng (list job {:villager "v-1" :buy "bread"}) {})
+          (swap! clock + 700)
+          (await (core/tick! eng))
+          (is (= [] (:list (core/state eng)))))))))

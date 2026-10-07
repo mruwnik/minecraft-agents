@@ -1,72 +1,72 @@
 ;; trade primitive live case 141: adjusted price above :max-price 20 (NBT 10 would pass, real 33 must not): expect reason price
 {:register []
- :queue [(seq (jobs.movement.pace {:a {:x 9500 :y 100 :z 9000} :b {:x 9500 :y 100 :z 8994} :laps 1 :rounds 1}) (jobs.village.trade {:villager "00002329-0000-000e-0000-000000000001" :buy "bread" :count 1 :max-price 20}))]}
+ :queue [(seq (jobs.movement.pace {:a {:x 9500 :y 100 :z 9000} :b {:x 9500 :y 100 :z 8994} :laps 1}) (jobs.village.trade {:villager "00002329-0000-000e-0000-000000000001" :buy "bread" :count 1 :max-price 20}))]}
 ;; ---- other cases of this feature: swap the commented form in for the active one above ----
 ;; -- case from live-ProbeDummy-trade-1
 ;; ;; trade primitive live case 1: buy 3 bread for 1 emerald each (pace first so entities are loaded)
 ;; {:register []
-;;  :queue [(seq (jobs.movement.pace {:a {:x 9500 :y 100 :z 9000} :b {:x 9500 :y 100 :z 8994} :laps 1 :rounds 1}) (jobs.village.trade {:villager "00002329-0000-0001-0000-000000000001" :buy "bread" :count 3}))]}
+;;  :queue [(seq (jobs.movement.pace {:a {:x 9500 :y 100 :z 9000} :b {:x 9500 :y 100 :z 8994} :laps 1}) (jobs.village.trade {:villager "00002329-0000-0001-0000-000000000001" :buy "bread" :count 3}))]}
 ;; -- case from live-ProbeDummy-trade-2
 ;; ;; trade primitive live case 2: offer with two cost stacks: 2 emerald + 1 paper for 1 cooked_beef, ask 2
 ;; {:register []
-;;  :queue [(seq (jobs.movement.pace {:a {:x 9500 :y 100 :z 9000} :b {:x 9500 :y 100 :z 8994} :laps 1 :rounds 1}) (jobs.village.trade {:villager "00002329-0000-0002-0000-000000000001" :buy "cooked_beef" :count 2}))]}
+;;  :queue [(seq (jobs.movement.pace {:a {:x 9500 :y 100 :z 9000} :b {:x 9500 :y 100 :z 8994} :laps 1}) (jobs.village.trade {:villager "00002329-0000-0002-0000-000000000001" :buy "cooked_beef" :count 2}))]}
 ;; -- case from live-ProbeDummy-trade-3
 ;; ;; trade primitive live case 3: offer sells out mid-buy: maxUses 2, ask 5; run twice
 ;; {:register []
-;;  :queue [(seq (jobs.movement.pace {:a {:x 9500 :y 100 :z 9000} :b {:x 9500 :y 100 :z 8994} :laps 1 :rounds 1}) (jobs.village.trade {:villager "00002329-0000-0003-0000-000000000001" :buy "bread" :count 5}))]}
+;;  :queue [(seq (jobs.movement.pace {:a {:x 9500 :y 100 :z 9000} :b {:x 9500 :y 100 :z 8994} :laps 1}) (jobs.village.trade {:villager "00002329-0000-0003-0000-000000000001" :buy "bread" :count 5}))]}
 ;; -- case from live-ProbeDummy-trade-4
 ;; ;; trade primitive live case 4: payment short: 2 emeralds (then 0), offer 1 emerald each, ask 5
 ;; {:register []
-;;  :queue [(seq (jobs.movement.pace {:a {:x 9500 :y 100 :z 9000} :b {:x 9500 :y 100 :z 8994} :laps 1 :rounds 1}) (jobs.village.trade {:villager "00002329-0000-0004-0000-000000000001" :buy "bread" :count 5}))]}
+;;  :queue [(seq (jobs.movement.pace {:a {:x 9500 :y 100 :z 9000} :b {:x 9500 :y 100 :z 8994} :laps 1}) (jobs.village.trade {:villager "00002329-0000-0004-0000-000000000001" :buy "bread" :count 5}))]}
 ;; -- case from live-ProbeDummy-trade-5
 ;; ;; trade primitive live case 5: price over max-price: offer costs 5 emeralds, :max-price 3, expect reason price
 ;; {:register []
-;;  :queue [(seq (jobs.movement.pace {:a {:x 9500 :y 100 :z 9000} :b {:x 9500 :y 100 :z 8994} :laps 1 :rounds 1}) (jobs.village.trade {:villager "00002329-0000-0005-0000-000000000001" :buy "bread" :count 1 :max-price 3}))]}
+;;  :queue [(seq (jobs.movement.pace {:a {:x 9500 :y 100 :z 9000} :b {:x 9500 :y 100 :z 8994} :laps 1}) (jobs.village.trade {:villager "00002329-0000-0005-0000-000000000001" :buy "bread" :count 1 :max-price 3}))]}
 ;; -- case from live-ProbeDummy-trade-6
 ;; ;; trade primitive live case 6: inventory full: 35 junk stacks + emeralds, villager gives bread; expect reason no-room
 ;; {:register []
-;;  :queue [(seq (jobs.movement.pace {:a {:x 9500 :y 100 :z 9000} :b {:x 9500 :y 100 :z 8994} :laps 1 :rounds 1}) (jobs.village.trade {:villager "00002329-0000-0001-0000-000000000001" :buy "bread" :count 3}))]}
+;;  :queue [(seq (jobs.movement.pace {:a {:x 9500 :y 100 :z 9000} :b {:x 9500 :y 100 :z 8994} :laps 1}) (jobs.village.trade {:villager "00002329-0000-0001-0000-000000000001" :buy "bread" :count 3}))]}
 ;; -- case from live-ProbeDummy-trade-7
 ;; ;; trade primitive live case 7: villager behind a glass box (7x7 inside, body cannot get within 3.5): expect unreachable
 ;; {:register []
-;;  :queue [(seq (jobs.movement.pace {:a {:x 9500 :y 100 :z 9000} :b {:x 9500 :y 100 :z 8994} :laps 1 :rounds 1}) (jobs.village.trade {:villager "00002329-0000-0007-0000-000000000001" :buy "bread" :count 1}))]}
+;;  :queue [(seq (jobs.movement.pace {:a {:x 9500 :y 100 :z 9000} :b {:x 9500 :y 100 :z 8994} :laps 1}) (jobs.village.trade {:villager "00002329-0000-0007-0000-000000000001" :buy "bread" :count 1}))]}
 ;; -- case from live-ProbeDummy-trade-8
 ;; ;; trade primitive live case 8: uuid of a NoAI cow, not a villager: expect gone or not-villager
 ;; {:register []
-;;  :queue [(seq (jobs.movement.pace {:a {:x 9500 :y 100 :z 9000} :b {:x 9500 :y 100 :z 8994} :laps 1 :rounds 1}) (jobs.village.trade {:villager "00002329-0000-0008-0000-000000000001" :buy "bread" :count 1}))]}
+;;  :queue [(seq (jobs.movement.pace {:a {:x 9500 :y 100 :z 9000} :b {:x 9500 :y 100 :z 8994} :laps 1}) (jobs.village.trade {:villager "00002329-0000-0008-0000-000000000001" :buy "bread" :count 1}))]}
 ;; -- case from live-ProbeDummy-trade-9
 ;; ;; trade primitive live case 9: unemployed villager with no offers: expect no-offers
 ;; {:register []
-;;  :queue [(seq (jobs.movement.pace {:a {:x 9500 :y 100 :z 9000} :b {:x 9500 :y 100 :z 8994} :laps 1 :rounds 1}) (jobs.village.trade {:villager "00002329-0000-0009-0000-000000000001" :buy "bread" :count 1}))]}
+;;  :queue [(seq (jobs.movement.pace {:a {:x 9500 :y 100 :z 9000} :b {:x 9500 :y 100 :z 8994} :laps 1}) (jobs.village.trade {:villager "00002329-0000-0009-0000-000000000001" :buy "bread" :count 1}))]}
 ;; -- case from live-ProbeDummy-trade-10
 ;; ;; trade primitive live case 10: villager 40 blocks away is killed by RCON while the body walks to it: expect gone
 ;; {:register []
-;;  :queue [(seq (jobs.movement.pace {:a {:x 9500 :y 100 :z 9000} :b {:x 9500 :y 100 :z 8994} :laps 1 :rounds 1}) (jobs.village.trade {:villager "00002329-0000-000d-0000-000000000001" :buy "bread" :count 1}))]}
+;;  :queue [(seq (jobs.movement.pace {:a {:x 9500 :y 100 :z 9000} :b {:x 9500 :y 100 :z 8994} :laps 1}) (jobs.village.trade {:villager "00002329-0000-000d-0000-000000000001" :buy "bread" :count 1}))]}
 ;; -- case from live-ProbeDummy-trade-14
 ;; ;; trade primitive live case 14: adjusted price: NBT cost 10 emeralds, demand 4, multiplier 0.5, special 3 gives realPrice 33; ask 1
 ;; {:register []
-;;  :queue [(seq (jobs.movement.pace {:a {:x 9500 :y 100 :z 9000} :b {:x 9500 :y 100 :z 8994} :laps 1 :rounds 1}) (jobs.village.trade {:villager "00002329-0000-000e-0000-000000000001" :buy "bread" :count 1}))]}
+;;  :queue [(seq (jobs.movement.pace {:a {:x 9500 :y 100 :z 9000} :b {:x 9500 :y 100 :z 8994} :laps 1}) (jobs.village.trade {:villager "00002329-0000-000e-0000-000000000001" :buy "bread" :count 1}))]}
 ;; -- case from live-ProbeDummy-trade-15
 ;; ;; trade primitive live case 15: plain high price: NBT cost 30 emeralds, no adjustment, ask 1
 ;; {:register []
-;;  :queue [(seq (jobs.movement.pace {:a {:x 9500 :y 100 :z 9000} :b {:x 9500 :y 100 :z 8994} :laps 1 :rounds 1}) (jobs.village.trade {:villager "00002329-0000-000f-0000-000000000001" :buy "bread" :count 1}))]}
+;;  :queue [(seq (jobs.movement.pace {:a {:x 9500 :y 100 :z 9000} :b {:x 9500 :y 100 :z 8994} :laps 1}) (jobs.village.trade {:villager "00002329-0000-000f-0000-000000000001" :buy "bread" :count 1}))]}
 ;; -- case from live-ProbeDummy-trade-16
 ;; ;; trade primitive live case 16: fresh adjusted villager (first open): NBT 10, demand 4, mult 0.5, special 3, ask 1
 ;; {:register []
-;;  :queue [(seq (jobs.movement.pace {:a {:x 9500 :y 100 :z 9000} :b {:x 9500 :y 100 :z 8994} :laps 1 :rounds 1}) (jobs.village.trade {:villager "00002329-0000-0010-0000-000000000001" :buy "bread" :count 1}))]}
+;;  :queue [(seq (jobs.movement.pace {:a {:x 9500 :y 100 :z 9000} :b {:x 9500 :y 100 :z 8994} :laps 1}) (jobs.village.trade {:villager "00002329-0000-0010-0000-000000000001" :buy "bread" :count 1}))]}
 ;; -- case from live-ProbeDummy-trade-55
 ;; ;; trade primitive live case 55: price at the limit: offer costs 5 emeralds, :max-price 5, expect it buys
 ;; {:register []
-;;  :queue [(seq (jobs.movement.pace {:a {:x 9500 :y 100 :z 9000} :b {:x 9500 :y 100 :z 8994} :laps 1 :rounds 1}) (jobs.village.trade {:villager "00002329-0000-0005-0000-000000000001" :buy "bread" :count 1 :max-price 5}))]}
+;;  :queue [(seq (jobs.movement.pace {:a {:x 9500 :y 100 :z 9000} :b {:x 9500 :y 100 :z 8994} :laps 1}) (jobs.village.trade {:villager "00002329-0000-0005-0000-000000000001" :buy "bread" :count 1 :max-price 5}))]}
 ;; -- case from live-ProbeDummy-trade-91
 ;; ;; trade primitive live case 91: baby villager with a profession and offers: expect no-offers
 ;; {:register []
-;;  :queue [(seq (jobs.movement.pace {:a {:x 9500 :y 100 :z 9000} :b {:x 9500 :y 100 :z 8994} :laps 1 :rounds 1}) (jobs.village.trade {:villager "00002329-0000-000a-0000-000000000001" :buy "bread" :count 1}))]}
+;;  :queue [(seq (jobs.movement.pace {:a {:x 9500 :y 100 :z 9000} :b {:x 9500 :y 100 :z 8994} :laps 1}) (jobs.village.trade {:villager "00002329-0000-000a-0000-000000000001" :buy "bread" :count 1}))]}
 ;; -- case from live-ProbeDummy-trade-92
 ;; ;; trade primitive live case 92: unemployed villager of desert type (villager_data is sent): expect no-offers
 ;; {:register []
-;;  :queue [(seq (jobs.movement.pace {:a {:x 9500 :y 100 :z 9000} :b {:x 9500 :y 100 :z 8994} :laps 1 :rounds 1}) (jobs.village.trade {:villager "00002329-0000-000b-0000-000000000001" :buy "bread" :count 1}))]}
+;;  :queue [(seq (jobs.movement.pace {:a {:x 9500 :y 100 :z 9000} :b {:x 9500 :y 100 :z 8994} :laps 1}) (jobs.village.trade {:villager "00002329-0000-000b-0000-000000000001" :buy "bread" :count 1}))]}
 ;; -- case from live-ProbeDummy-trade-93
 ;; ;; trade primitive live case 93: nitwit villager: expect no-offers
 ;; {:register []
-;;  :queue [(seq (jobs.movement.pace {:a {:x 9500 :y 100 :z 9000} :b {:x 9500 :y 100 :z 8994} :laps 1 :rounds 1}) (jobs.village.trade {:villager "00002329-0000-000c-0000-000000000001" :buy "bread" :count 1}))]}
+;;  :queue [(seq (jobs.movement.pace {:a {:x 9500 :y 100 :z 9000} :b {:x 9500 :y 100 :z 8994} :laps 1}) (jobs.village.trade {:villager "00002329-0000-000c-0000-000000000001" :buy "bread" :count 1}))]}

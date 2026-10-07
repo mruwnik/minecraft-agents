@@ -2,6 +2,7 @@
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.look :as look]
+            [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
             [engine.notes :as notes]))
 
@@ -11,7 +12,8 @@
 
   Each step looks around (blocks and entities with those names within :scan-radius), writes what it saw as
   :seen notes and the spot as a :searched note (engine.notes), and ends when :count are found. Otherwise it
-  chooses the next leg and walks it with jobs.movement.go-to as a child (range 2), one child round per round.
+  chooses the next leg and walks it with jobs.movement.go-to as a child (range 2). One call is the whole search: look, leg, look, leg ... until it ends;
+  it yields (:continue) only while go-to waits on the world or for leg columns to load.
 
   Legs are :spacing apart: :spiral rings round the origin, or :outward ahead along :heading, then the sides. A
   leg is never tried twice and never goes beyond :max-distance (XZ) of the origin. It is skipped (:skipped)
@@ -226,7 +228,8 @@
                   :else (assoc (update acc :tried conj pt) :leg [(pt 0) sy (pt 1)])))))))
 
 (defn ^:async walk!
-  "One go-to round toward the leg; on its end book the leg arrived or failed."
+  "One go-to call toward the leg; on its end book the leg arrived or failed. :continue when go-to yields, else :again
+  (or :done when the failed legs in a row end the search)."
   [c]
   (let [[x y z] (:leg (ctx/mem c))
         r (await (ctx/call-child c :leg 'jobs.movement.go-to {:pos {:x x :y y :z z} :range 2 :escalate false}))]
@@ -236,7 +239,7 @@
             in-row (if arrived 0 (inc (:failed-in-row (ctx/mem c) 0)))]
         (ctx/update-mem! c (fn [m] (cond-> (assoc (dissoc m :leg) :failed-in-row in-row)
                                      (not arrived) (update :failed (fnil conj []) {:pos [x y z] :reason :unreachable}))))
-        (if (>= in-row max-failed-in-row) (finish! c :not-found :stuck) :continue)))))
+        (if (>= in-row max-failed-in-row) (finish! c :not-found :stuck) :again)))))
 
 (defn ^:async step!
   "Look round; end when enough is found or the legs are used up, else start the next leg."
@@ -272,7 +275,9 @@
   (let [{:keys [pattern heading]} (:args c)]
     (not (and (patterns (keyword pattern)) (headings (keyword heading))))))
 
-(defn ^:async round [c]
+(defn ^:async search-step!
+  "One pass: end, walk the leg under way, or look and start the next leg. :again goes on, else a round result."
+  [c]
   (ctx/update-mem! c (fn [m] (cond-> m (nil? (:origin m)) (assoc :origin (here c) :started (ctx/now c)))))
   (let [{:keys [leg started]} (ctx/mem c)]
     (cond
@@ -280,3 +285,6 @@
       (>= (- (ctx/now c) started) (* 1000 (:timeout-s (:args c)))) (finish! c :not-found :time)
       leg (await (walk! c))
       :else (await (step! c)))))
+
+(defn ^:async round [c]
+  (await (pace/steps! c #(search-step! c))))

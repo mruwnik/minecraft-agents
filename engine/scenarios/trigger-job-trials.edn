@@ -23,7 +23,7 @@
 ;; -- case from live-ProbeDrive-2
 ;; ;; ProbeView takeover live test: pacing only, no reflexes, on the pad at -3500 64 3495.
 ;; {:register []
-;;  :queue [(jobs.movement.pace {:a {:x -3505 :y 64 :z 3495} :b {:x -3495 :y 64 :z 3495} :laps 3 :rounds 1000})]}
+;;  :queue [(jobs.movement.pace {:a {:x -3505 :y 64 :z 3495} :b {:x -3495 :y 64 :z 3495} :laps 3000})]}
 ;; -- case from live-ProbeFight-1
 ;; ;; ProbeFight trigger test: hostile-near against notify.
 ;; {:register [{:trigger :hostile-near :args {:radius 8}
@@ -206,11 +206,11 @@
 ;; ;; pacing between two points on the test pad.
 ;; {:register [{:trigger :stuck :job (jobs.debug.notify {:text "stuck fired"})}
 ;;             {:trigger :died :job (jobs.debug.notify {:text "died fired"})}]
-;;  :queue [(jobs.movement.pace {:a {:x -2020 :y 68 :z -2030} :b {:x -2040 :y 68 :z -2030} :laps 1 :rounds 10000})]}
+;;  :queue [(jobs.movement.pace {:a {:x -2020 :y 68 :z -2030} :b {:x -2040 :y 68 :z -2030} :laps 10000})]}
 ;; -- case from live-probestuck-3
 ;; ;; ProbeStuck: the real unstick job under the stuck trigger, pacing on the pad.
 ;; {:register [{:trigger :stuck :job (jobs.maintenance.unstick)}]
-;;  :queue [(jobs.movement.pace {:a {:x -2020 :y 68 :z -2030} :b {:x -2040 :y 68 :z -2030} :laps 1 :rounds 10000})]}
+;;  :queue [(jobs.movement.pace {:a {:x -2020 :y 68 :z -2030} :b {:x -2040 :y 68 :z -2030} :laps 10000})]}
 ;; -- case from live-probestuck-4
 ;; ;; ProbeStuck: the real recover-drops job under the died trigger, idling.
 ;; {:register [{:trigger :died :job (jobs.survival.recover-drops {:collect-radius 6})}]
@@ -218,8 +218,8 @@
 ;; -- case from live-probestuck-5
 ;; ;; ProbeStuck: unstick on the fixed build (default 5 min quiet), pacing on the pad.
 ;; {:register [{:trigger :stuck :job (jobs.maintenance.unstick)}]
-;;  :queue [(jobs.movement.pace {:a {:x -2020 :y 68 :z -2030} :b {:x -2040 :y 68 :z -2030} :laps 1 :rounds 10000})]}
+;;  :queue [(jobs.movement.pace {:a {:x -2020 :y 68 :z -2030} :b {:x -2040 :y 68 :z -2030} :laps 10000})]}
 ;; -- case from live-probestuck-6
 ;; ;; ProbeStuck: unstick with a 15 s quiet period so scenarios can follow each other.
 ;; {:register [{:trigger :stuck :args {:quiet-ms 15000} :job (jobs.maintenance.unstick {:quiet-ms 15000})}]
-;;  :queue [(jobs.movement.pace {:a {:x -2020 :y 68 :z -2030} :b {:x -2040 :y 68 :z -2030} :laps 1 :rounds 10000})]}
+;;  :queue [(jobs.movement.pace {:a {:x -2020 :y 68 :z -2030} :b {:x -2040 :y 68 :z -2030} :laps 10000})]}
