@@ -20,7 +20,9 @@
 
 (def usage
   (str "usage: node tools/world-test.mjs [fixture.edn|dir ...] [--tag T] [--match TEXT] [--repeat N] [--body NAME]\n"
-       "         [--world claude] [--first-plot I] [--card ID] [--allow-time --time-log FILE] [--results FILE] [--stop-on-fail] [--list] [--check]\n"
+       "         [--world claude] [--first-plot I] [--card ID] [--allow-time --time-log FILE] [--results FILE] [--phase day|night|night-exclusive] [--stop-on-fail] [--list] [--check]\n"
+       "--phase runs only the cases of that time class (case level; :any and untimed cases, and :day, count as day; a case whose first :time-set step is\n"
+       "night counts as night): run day, then night, then night-exclusive so the time lock never flips mid-pass.\n"
        "--check only loads and validates the fixtures (no body, no server): one result per case, exit 1 on a parse error or problem.\n"
        "Runs world fixtures (default dir engine/fixtures/world) on the reserved plot grid x/z 20000..20640, y 150 (large plots: lanes south of it, to z 22240).\n"
        "--allow-time lets a case that needs night or day set the time (each set appended to --time-log); without it\n"
@@ -41,6 +43,9 @@
       (= a "--world") (recur more (assoc opts :world b))
       (= a "--first-plot") (recur more (assoc opts :first-plot (js/Number b)))
       (= a "--time-log") (recur more (assoc opts :time-log b))
+      (= a "--phase") (if (#{"day" "night" "night-exclusive"} b)
+                        (recur more (assoc opts :phase b))
+                        (throw (js/Error. (str "--phase must be day, night or night-exclusive, not " b))))
       (= a "--card") (recur more (assoc opts :card b))
       (= a "--results") (recur more (assoc opts :results b))
       (= a "--stop-on-fail") (recur (rest all) (assoc opts :stop-on-fail true))
@@ -82,6 +87,14 @@
                      (->> (fs/readdirSync p) (filter #(str/ends-with? % ".edn")) sort (map #(path/join p %)))
                      [p]))
                  paths))))
+
+(defn select-phase
+  "The cases of time class phase (\"day\", \"night\" or \"night-exclusive\"); all of them when phase is nil. A case with no
+  time-bound lock phase (:any, untimed) is day."
+  [cases phase]
+  (if-not phase
+    cases
+    (filterv #(= phase (case (lease/time-phase %) :night "night" :night-x "night-exclusive" "day")) cases)))
 
 (defn load-cases [paths]
   (vec (mapcat #(f/file-cases (fs/readFileSync % "utf8") (path/basename % ".edn")) (fixture-files paths))))
@@ -920,7 +933,7 @@
       (.then (fn []
                (let [opts (parse-args (array-seq argv))
                      final-results (atom nil)
-                     cases (if (:check opts) [] (f/select-cases (load-cases (:paths opts)) opts))
+                     cases (if (:check opts) [] (select-phase (f/select-cases (load-cases (:paths opts)) opts) (:phase opts)))
                      bad (filter :problems cases)]
                  (cond
                    (:check opts) (let [res (check-fixtures (:paths opts))]

@@ -416,3 +416,19 @@
     (is (= :fail (:status (r/mark-stalled {:status :fail :expects [{:status :fail}]}))))
     (is (= :fail (:status (r/mark-stalled {:status :fail :expects [{:status :fail} {:status :stalled}]}))))
     (is (= :pass (:status (r/mark-stalled {:status :pass :expects [{:status :pass}]}))))))
+
+(deftest phase-is-an-option
+  (is (= "night" (:phase (r/parse-args #js ["--phase" "night"]))))
+  (is (nil? (:phase (r/parse-args #js []))))
+  (is (thrown-with-msg? js/Error #"--phase" (r/parse-args #js ["--phase" "dusk"]))))
+
+(deftest select-phase-filters-by-the-time-class-of-each-case
+  (let [cases [{:id "a/day" :time :day} {:id "a/any" :time :any} {:id "a/none"}
+               {:id "a/night" :time :night} {:id "a/nx" :time :night-exclusive}
+               {:id "a/set" :time :any :act [[:time-set 14000]]}
+               {:id "a/any-set" :time :any :act [[:time-set 1000]]}]
+        ids (fn [phase] (mapv :id (r/select-phase cases phase)))]
+    (is (= ["a/day" "a/any" "a/none" "a/any-set"] (ids "day")))
+    (is (= ["a/night" "a/set"] (ids "night")))
+    (is (= ["a/nx"] (ids "night-exclusive")))
+    (is (= (count cases) (count (r/select-phase cases nil))))))
