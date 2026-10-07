@@ -1,9 +1,9 @@
-;; jobs.blocks.dig :on-fluid and jobs.gather.mine :wet (card d5e3748c): stone beside a water source (a sealed one-cell
-;; pocket at [19 0 16], every stone cell touches it), a dry stone at [14 0 16]; bedrock floor so mine sees only that stone.
+;; jobs.blocks.dig :on-fluid and jobs.gather.mine :wet (card d5e3748c): stone beside a water source (a one-cell
+;; pocket at [19 0 16], walled on four sides and open on top so the body sees the water surface; every stone cell touches it), a dry stone at [14 0 16]; bedrock floor so mine sees only that stone.
 {:defaults
  {:tags [:blocks :mine :jobs] :time :any
   :plot {:height 8 :floor "bedrock"}
-  :blocks [[:set [18 0 16] "stone"] [:set [20 0 16] "stone"] [:set [19 1 16] "stone"]
+  :blocks [[:set [18 0 16] "stone"] [:set [20 0 16] "stone"]
            [:set [19 0 15] "stone"] [:set [19 0 17] "stone"] [:set [19 0 16] "water"]]
   :body {:at [16.5 0 16.5] :inventory [["iron_pickaxe" 1]]}}
  :cases
