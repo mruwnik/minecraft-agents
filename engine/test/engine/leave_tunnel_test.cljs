@@ -164,6 +164,13 @@
           (is (= [] (the-ledger eng)))
           (is (= 1 (count (events-of s :leave-tunnel.done)))))))))
 
+(deftest each-torch-is-dug-through-the-dig-job
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (run-out! (setup {:blocks eight-down :inventory (inventory)} {:target [6 57 0]} {})))]
+          (is (= 2 (count (events-of s :blocks.dig.done)))))))))
+
 (deftest nothing-to-fill-with-leaves-the-mouth-open-but-the-torches-taken
   (async done
     (tu/run-async done

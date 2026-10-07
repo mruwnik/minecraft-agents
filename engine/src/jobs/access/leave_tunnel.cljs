@@ -227,12 +227,14 @@
       (book-left! c cell site (:reason verdict))
       (let [l (ledger/reconcile (ledger/open-entries (ctx/view c)) block-at)
             _ (ledger/remember! c (ledger/begin-removal l cell))
-            _ (await (ctx/act c :dig (clj->js {:pos (cell-pos cell)})))]
-        (if-not (rules/air (block-at cell))
-          (book-left! c cell site :dig-failed)
-          (do (ledger/remember! c (ledger/drop-cell l cell))
-              (ctx/update-mem! c #(-> % (update :taken (fnil conj []) cell) (assoc :collect true)))
-              :again))))))
+            outcome (await (blocks/dig-cell! c (cell-pos cell) {:accept #{:fluid-adjacent :falling-block :under-feet}
+                                                                :ignore-zones? true}))]
+        (cond
+          (= :continue outcome) :continue
+          (not (rules/air (block-at cell))) (book-left! c cell site :dig-failed)
+          :else (do (ledger/remember! c (ledger/drop-cell l cell))
+                    (ctx/update-mem! c #(-> % (update :taken (fnil conj []) cell) (assoc :collect true)))
+                    :again))))))
 
 (defn ^:async collect!
   "Pick the dropped torches up near the body; the flag clears when the pick-up ends (done, or it cannot run)."
