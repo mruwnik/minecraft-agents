@@ -1,5 +1,6 @@
 (ns jobs.survival.dig-niche
   (:require [clojure.string]
+            [engine.settings :as settings]
             [jobs.lib.blocks :as lb]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
@@ -25,8 +26,8 @@
   at each opening cell (feet, then head) from the blocks the dig dropped or carried ones.
   Needs a tool that harvests the face (a pickaxe for stone): :fetch (default true; jobs.lib.fetch) runs jobs.items.get-tool
   for it, else, or when that fails, it stops :no-tool.
-  Declines (waiting) with :day or :already-sealed. Ends done {:pos :door [feet head cells plugged]} with a :shelter entry {:pos :door} (jobs.survival.dig-in-leave/leave! digs
-  the door out by day), or stopped :no-site, :no-tool, :refused (every site would dig or plug another's zone, claim or plan footprint), :unreachable, :dig-failed, :no-blocks, :place-failed (a mob in the door cell is retried 20 times first), :no-progress (over max-steps rounds), or :fluid / :open-shell (what a dug cell
+  Declines (waiting) with :day or :already-sealed (not while it is cutting: a niche in progress is roofed). Ends done {:pos :door [feet head cells plugged]} with a :shelter entry {:pos :door} (jobs.survival.dig-in-leave/leave! digs
+  the door out by day), or stopped :no-site, :no-tool, :refused (every site would dig or plug another's zone, claim or plan footprint), :unreachable, :dig-failed, :no-blocks, :place-failed (a mob in the door cell is waited out first, :plug-mob-wait-ticks), :no-progress (over max-steps rounds), or :fluid / :open-shell (what a dug cell
   laid open: fluid in or beside the niche, a shell cell that is not solid). Rock the body has not looked into reads stone
   (dig-in-cells/rock-name); after each dig it looks at the cells laid open and waits a lava flow delay.
   Events: dig-niche.sealed (info).")
@@ -44,7 +45,7 @@
   (let [p (:primitives c)]
     (cond
       (not (sh/night? p)) (ctx/wait c {:reason :day})
-      (sh/roofed? p (:roof-height (:args c))) (ctx/wait c {:reason :already-sealed :pos (sh/feet p)})
+      (and (not (:site (ctx/mem c))) (sh/roofed? p (:roof-height (:args c)))) (ctx/wait c {:reason :already-sealed :pos (sh/feet p)})
       :else true)))
 
 (def max-steps "Rounds one call takes at most." 40)
@@ -168,7 +169,7 @@
 
 (defn fail! [c reason text]
   (let [site (:site (ctx/mem c))]
-    (ctx/update-mem! c dissoc :site :plug-tries)
+    (ctx/update-mem! c dissoc :site :plug-since)
     (ctx/emit! c :dig_niche_failed :warn {:reason reason :site site :text text}))
   (result/stop! c reason text))
 
@@ -192,7 +193,11 @@
           :again)
       (fail! c :dig-failed (str "cannot dig the niche: " (.-status r))))))
 
-(def mob-waits "Plug tries refused for a mob in the door cell before the niche gives up (within max-steps)." 20)
+(def settings
+  {::plug-mob-wait-ticks {:default 200 :doc "Game ticks a plug refused for a mob in the door cell is retried before the niche gives up."
+                          :type :int :min 0}})
+
+(defn plug-mob-wait-ms [] (settings/ticks->ms (settings/get settings ::plug-mob-wait-ticks)))
 
 (defn refusing-mobs
   "The names of the entities a refused place reports near its cell (the mob in the doorway), nil when none."
@@ -205,12 +210,13 @@
       (fail! c :no-blocks "nothing to plug the niche with")
       (let [r (await (tidy/place! c cell item))
             mobs (refusing-mobs r)
-            tries (inc (or (:plug-tries (ctx/mem c)) 0))]
+            now (ctx/now c)
+            since (or (:plug-since (ctx/mem c)) now)]
         (cond
-          (#{"placed" "occupied"} (.-status r)) :again
-          (and mobs (<= tries mob-waits))
-          (do (ctx/update-mem! c assoc :plug-tries tries)
-              :again)
+          (#{"placed" "occupied"} (.-status r)) (do (ctx/update-mem! c dissoc :plug-since) :again)
+          (and mobs (<= (- now since) (plug-mob-wait-ms)))
+          (do (ctx/update-mem! c assoc :plug-since since)
+              :continue)
           :else (fail! c :place-failed
                        (str "cannot plug the niche: " (.-status r)
                             (when mobs (str ", " (clojure.string/join ", " mobs) " stays in the door cell")))))))))

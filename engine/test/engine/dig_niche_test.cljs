@@ -70,7 +70,7 @@
          eng (core/create {:primitives p :jobs registry/jobs :triggers {} :dir (tu/tmp-dir) :now #(deref clock)
                            :world (ew/of-data {} {} zones)
                            :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-     {:eng eng :p p :seen seen})))
+     {:eng eng :p p :seen seen :clock clock})))
 
 (defn ^:async run! [{:keys [eng]} args]
   (core/submit! eng (list 'jobs.survival.dig-niche args) {})
@@ -172,31 +172,42 @@
           (is (= :place-failed (:reason (failed seen))))
           (is (not (contains? (kinds-seen seen) :dig-niche.sealed))))))))
 
-(defn mob-in-door [n]
-  (let [left (atom n)]
-    (fn ^:async f [token a impl]
-      (if (pos? @left)
-        (do (swap! left dec) #js {:status "failed" :reason "Server refused" :refusal #js {:entities #js [#js {:name "zombie" :id 7}]}})
-        (await (impl token a))))))
+(defn mob-in-door-until
+  "A place override refusing with a zombie in the cell while the fake clock is before until-ms."
+  [clock until-ms]
+  (fn ^:async f [token a impl]
+    (if (< @clock until-ms)
+      #js {:status "failed" :reason "Server refused" :refusal #js {:entities #js [#js {:name "zombie" :id 7}]}}
+      (await (impl token a)))))
 
-(deftest a-mob-in-the-door-cell-delays-the-plug-until-it-clears
+(defn ^:async run-timed!
+  "Like run!, the fake clock moving 500 ms a tick."
+  [{:keys [eng clock]} args]
+  (core/submit! eng (list 'jobs.survival.dig-niche args) {})
+  (loop [i 0]
+    (when (and (< i 600) (seq (:list (core/state eng))))
+      (swap! clock + 500)
+      (await (core/tick! eng))
+      (recur (inc i)))))
+
+(deftest a-mob-in-the-door-cell-for-3-s-delays-the-plug-until-it-clears
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p seen] :as s} (setup [] {})]
-          (.override (.-world p) "place" (mob-in-door 3))
-          (await (run! s {}))
+        (let [{:keys [p seen clock] :as s} (setup [] {})]
+          (.override (.-world p) "place" (mob-in-door-until clock (+ @clock 3000)))
+          (await (run-timed! s {}))
           (is (nil? (failed seen)))
           (is (contains? (kinds-seen seen) :dig-niche.sealed))
           (is (= ["cobblestone" "cobblestone"] (mapv #(block-at p %) [[4 64 0] [4 65 0]]))))))))
 
-(deftest a-mob-that-never-leaves-the-door-fails-place-failed-with-the-mob-named
+(deftest a-mob-that-stays-past-the-limit-fails-place-failed-with-the-mob-named
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p seen] :as s} (setup [] {})]
-          (.override (.-world p) "place" (mob-in-door 1000))
-          (await (run! s {}))
+        (let [{:keys [p seen clock] :as s} (setup [] {})]
+          (.override (.-world p) "place" (mob-in-door-until clock (+ @clock 600000)))
+          (await (run-timed! s {}))
           (is (= :place-failed (:reason (failed seen))))
           (is (re-find #"zombie" (:text (failed seen)))))))))
 
