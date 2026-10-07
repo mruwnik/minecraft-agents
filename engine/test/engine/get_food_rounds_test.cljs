@@ -105,6 +105,24 @@
           (is (= [7 7 7 7] (call-args p "attack" "id")) "it looked around before giving up")
           (is (= 7 (food p))))))))
 
+(deftest an-animal-in-view-during-one-glance-only-is-hunted
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:food 2}})
+              look (.-look p)
+              entities (.-entities p)
+              looks (atom 0)
+              spotted (atom false)]
+          (fake/add-entity! p cow)
+          (set! (.-look p) (fn [& args] (swap! looks inc) (.apply look p (to-array args))))
+          (set! (.-entities p) (fn [& args]
+                                 (when (= 3 @looks) (reset! spotted true))
+                                 (if @spotted (.apply entities p (to-array args)) #js [])))
+          (await (one-round! eng {:attack-gap-ms 0}))
+          (is (= [7 7 7 7] (call-args p "attack" "id")) "the cow seen in the middle of the look-around is hunted")
+          (is (= 7 (food p))))))))
+
 (deftest the-attack-child-keeps-the-gap-between-swings
   (async done
     (tu/run-async done

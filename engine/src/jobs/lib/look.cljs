@@ -67,6 +67,20 @@
   (ctx/update-mem! c assoc :looked (cell-of (u/self-pos c)))
   :continue)
 
+(defn ^:async look-around-until!
+  "Look around as look-around! does, but test after each look: stop at the first truthy (f), returned. Entities are
+  sensed only inside the view cone, so what a job wants in view must be checked between looks, not after the last."
+  [c f]
+  (let [{:keys [x y z]} (cell-of (u/self-pos c))
+        eye {:x (+ x 0.5) :y (+ y game/eye-height) :z (+ z 0.5)}]
+    (loop [points (mapcat #(glances eye %) (vals headings))]
+      (if-let [pt (first points)]
+        (do (await (ctx/act c :look (clj->js {:pos pt})))
+            (see! c)
+            (or (f) (recur (rest points))))
+        (do (ctx/update-mem! c assoc :looked (cell-of (u/self-pos c)))
+            nil)))))
+
 (defn looked-here?
   "Whether the job has already looked around from the cell the body stands in."
   [c]

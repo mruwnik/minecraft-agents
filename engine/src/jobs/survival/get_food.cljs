@@ -268,8 +268,7 @@
   [c]
   (or (nearest-animal c)
       (when-not (look/looked-here? c)
-        (await (look/look-around! c))
-        (nearest-animal c))))
+        (await (look/look-around-until! c #(nearest-animal c))))))
 
 (defn ^:async hunt!
   "Kill the nearest food animal (combat.attack) and pick up its drops: :again, or nil when there is none (after a
