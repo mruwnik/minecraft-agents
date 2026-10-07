@@ -1,6 +1,7 @@
 (ns jobs.farm.harvest
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
+            [jobs.lib.cost :as cost]
             [jobs.lib.gate :as gate]
             [jobs.lib.crops :as crops]
             [jobs.lib.look :as look]
@@ -27,7 +28,8 @@
   which seed was there. A restart or reflex in between loses nothing.
   :plan (optionally :part) makes the plan's crop cells the field instead (:radius and :center are then unused).
   The plan is read again every round. A cell is cut only when ripe and holding the crop the plan wants there.
-  Crops outside the plan are left standing. Every planned cell standing bare owes the planned crop's seed (only the cells it cut with :replant-bare false).
+  Crops outside the plan are left standing. A planned cell standing bare is sown unless :replant-bare is false,
+  food seeds only above the food reserve. A cell it cut is always replanted.
   The job declines (one harvest.declined warn naming the plan and the reason) while the plan is missing,
   unreadable or has no crop cells.
   Zones: a crop or bare cell in another owner's zone or claim, or in another plan's footprint, is left alone.
@@ -97,6 +99,25 @@
           (when (and (= "air" (u/block-name p pos)) (= "farmland" (u/block-name p (update pos :y dec))))
             {:pos pos :seed (seed-of crop)}))
         cells))
+
+(defn sowable-counts
+  "{name count} of the carried items that may be sown: food crops only above the food reserve, the rest in full."
+  [inventory]
+  (let [kept (cost/food-reserve inventory)
+        totals (reduce (fn [acc {:keys [name count]}] (update acc name (fnil + 0) count)) {} inventory)]
+    (reduce-kv (fn [acc name n] (assoc acc name (- n (get kept name 0)))) {} totals)))
+
+(defn above-reserve
+  "The debts of bare cells without those whose seed is carried but held back by the food reserve."
+  [inventory debts]
+  (let [carried (into {} (map (juxt :name :count)) inventory)
+        left (volatile! (sowable-counts inventory))]
+    (filterv (fn [{:keys [seed]}]
+               (or (not (pos? (get carried seed 0)))
+                   (when (pos? (get @left seed 0))
+                     (vswap! left update seed dec)
+                     true)))
+             debts)))
 
 (defn sync-debts
   "m with :replant made the debts of bare (those given up as :bare excepted), each keeping the counts of its old debt,
@@ -286,6 +307,7 @@
           given-up (set (:bare (ctx/mem c)))]
       (->> (planned-bare (:primitives c) (:plan-cells c))
            (filter #(and (have (:seed %)) (not (given-up (:pos %)))))
+           (above-reserve (u/inventory (:primitives c)))
            (permitted-debts c)))))
 
 (defn gave-up? [c]
@@ -495,7 +517,8 @@
   [c]
   (when (and (:plan-cells c) (:replant (:args c)))
     (let [m (ctx/mem c)
-          bare (when (:replant-bare (:args c)) (planned-bare (:primitives c) (:plan-cells c)))
+          bare (when (:replant-bare (:args c))
+                 (above-reserve (u/inventory (:primitives c)) (planned-bare (:primitives c) (:plan-cells c))))
           synced (sync-debts m bare)]
       (when (not= (:replant m) (:replant synced))
         (ctx/update-mem! c assoc :replant (:replant synced))))))

@@ -139,3 +139,18 @@
           (let [result (await (h/child-outcome eng h/job {:plan "field"} 200))]
             (is (= #{} (dug p)))
             (is (= 0 (:cut result)))))))))
+
+(deftest a-bare-planned-food-cell-below-the-reserve-stays-bare-while-a-cut-cell-is-replanted
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:blocks (merge (h/field "carrots" 7 [2] [2]) {(h/cell-key 4 63 2) "farmland"})
+                     :ages (h/ages 7 [2] [2])
+                     :inventory [{:name "carrot" :count 15}]
+                     :drops h/wheat-drops}
+              plan {"field" {:id "field" :parts [{:id "row-2" :box [[2 64 2] [5 64 2]] :want {:crop "carrots"}}]}}
+              {:keys [eng p]} (start world plan)
+              result (await (h/child-outcome eng h/job {:plan "field"} 200))]
+          (is (= #{[2 2]} (dug p)))
+          (is (= #{[2 2 "carrot"]} (placed p)))
+          (is (= 1 (:replanted result))))))))

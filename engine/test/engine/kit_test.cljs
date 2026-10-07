@@ -282,3 +282,11 @@
               result (await (child-outcome eng job kit-args 4))]
           (is (= {:gave-up false :short {}} result))
           (is (empty? (.-calls (.-world p))) "no walk, inspect or transfer call"))))))
+
+(deftest kit-craft-short-text-uses-the-chest-counted-food-need
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [result inv]} (await (craft-run {:contents [{:name "bread" :count 5}] :args {:chest chest :tools [] :spare 0}}))]
+          (is (= {:gave-up false :short {:food 7} :missing {:food "wheat"}} result))
+          (is (= {"bread" 5} inv)))))))

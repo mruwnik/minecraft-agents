@@ -295,3 +295,12 @@
           (is (= "wheat" (block-at p 2 64 2)))
           (is (= "wheat" (block-at p 3 64 2)))
           (is (empty? (events-of seen :plant.declined))))))))
+
+(deftest a-box-sows-a-food-crop-only-above-the-reserve-within-one-round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (start (field-world (inv "carrot" 23)))
+              result (await (child-outcome eng job {:box field-box} 100))]
+          (is (= 3 (:planted result)))
+          (is (= {"carrot" 20} (inv-of p))))))))

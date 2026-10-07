@@ -2,7 +2,6 @@
   (:require [clojure.string :as str]
             [jobs.farm.permit :as permit]
             [engine.ctx :as ctx]
-            [jobs.lib.cost :as cost]
             [jobs.lib.gate :as gate]
             [jobs.lib.util :as u]
             [jobs.farm.harvest :as harvest]
@@ -55,9 +54,7 @@
   "{name count} of the carried items that may be sown: food crops (carrots, potatoes) only above the food reserve,
   everything else in full. A cell just harvested is replanted by jobs.farm.harvest and ignores the reserve."
   [inventory]
-  (let [kept (cost/food-reserve inventory)
-        totals (reduce (fn [acc {:keys [name count]}] (update acc name (fnil + 0) count)) {} inventory)]
-    (reduce-kv (fn [acc name n] (assoc acc name (- n (get kept name 0)))) {} totals)))
+  (harvest/sowable-counts inventory))
 
 (defn pick-seed
   "The seed to sow given the inventory: seed when it may be sown, else the largest sowable stack of a known seed;
@@ -189,7 +186,7 @@
 (defn ^:async plan-round [c field]
   (when-not (:started (ctx/mem c))
     (ctx/update-mem! c assoc :started true))
-  (let [{:keys [ready] :as found} (sowing c (:cells field))]
+  (let [{:keys [ready] :as found} (update (sowing c (:cells field)) :ready #(harvest/above-reserve (u/inventory (:primitives c)) %))]
     (if (empty? ready)
       (finish-plan! c found)
       (let [here (u/self-pos c)
@@ -266,7 +263,7 @@
           :partial :continue
           :no-path (do (ctx/update-mem! c count-fail :walk-fails target) :continue)
           :blocked (do (ctx/update-mem! c count-fail :walk-fails target) :continue)
-          (if (= :no-seed (await (plant-all! c (if (seq near) near [target]) seed)))
+          (if (= :no-seed (await (plant-all! c (vec (take (max 1 (get (sowable inventory) seed 0)) (if (seq near) near [target]))) seed)))
             (finish! c :no-seed)
             :continue))))))
 

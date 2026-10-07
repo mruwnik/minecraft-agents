@@ -332,11 +332,11 @@
         (if (keyword? stacks)
           stacks
           (let [inv (u/inventory (:primitives c))
-                still (needs inv a stacks)
-                [mem call] (plan-call (ctx/mem c) a still stacks inv chest)]
+                need (needs inv a stacks)
+                [mem call] (plan-call (ctx/mem c) a need stacks inv chest)]
             (ctx/update-mem! c merge (select-keys mem craft-keys))
             (if (nil? call)
-              (finish-craft! c still nil)
+              (finish-craft! c need nil)
               (let [r (await (ctx/call-child c (:slot call) (:job call) (:args call)))
                     res (when (= :done r) (ctx/child-result c (:slot call)))]
                 (if-not (= :done r)
@@ -344,9 +344,9 @@
                   (let [{:keys [mem end fail]} (absorb mem call res stacks inv)]
                     (ctx/update-mem! c merge (select-keys mem craft-keys))
                     (cond
-                      (= :refused fail) (refused! c res (into {} still))
-                      fail (give-up! c fail (into {} still))
-                      end (finish-craft! c still end)
+                      (= :refused fail) (refused! c res (into {} need))
+                      fail (give-up! c fail (into {} need))
+                      end (finish-craft! c need end)
                       :else (do (u/progress! c) :continue))))))))))))
 
 (defn ^:async round

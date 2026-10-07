@@ -474,3 +474,12 @@
                             {"mix" (plan-of)} 60))]
           (is (= #{[2 64 3]} (dug s)))
           (is (= ["wheat" 7] [(block-at s 2 64 2) (age-at s 2 64 2)])))))))
+
+(deftest plant-over-a-plan-sows-a-food-crop-only-above-the-reserve-within-one-round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[r s] (await (child-result 'jobs.farm.plant {:plan "mix" :part "carrots"} (world-of farmland-all {:inventory [(item "carrot" 21)]})
+                                         {"mix" (plan-of)} [] 20))]
+          (is (= 1 (:planted r)))
+          (is (= 1 (count (placed s)))))))))
