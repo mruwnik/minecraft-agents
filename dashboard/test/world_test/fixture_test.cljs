@@ -143,6 +143,9 @@
     (is (some #{"tp ProbeFixture 20016.5 150 20016.5 180 0"}
               (f/body-commands origin "ProbeFixture" (assoc-in glass [:body :yaw] 180)))
         "a case may turn the body (yaw, degrees: 0 south, 180 north) so it can see what lies behind the default view")
+    (is (some #{"tp ProbeFixture 20016.5 150 20016.5 0 -30"}
+              (f/body-commands origin "ProbeFixture" (assoc-in glass [:body :pitch] -30)))
+        "a case may tilt the body's view (pitch, degrees: 0 level, positive down)")
     (is (= "summon skeleton 20022.5 150 20016.5 {Tags:[\"wt\"],PersistenceRequired:1b,NoAI:1b}"
            (f/summon-command origin (first (:act open)))))
     (is (= "summon cow 20001.5 150 20001.5 {Tags:[\"wt\"],PersistenceRequired:1b}" (f/summon-command origin [:summon "cow" [1.5 0 1.5]])))
@@ -266,9 +269,15 @@
     (is (= {:cap 50 :ttl 3600000} (get-in data [:policies :food-source])))
     (is (= {:entries {} :policies {}} (f/memory-seed nil 5000)))))
 
+(deftest memory-seed-age-s-backdates-an-entry
+  (let [data (f/memory-seed [{:kind :spawn-set :data {} :age-s 7200} {:kind :spawn-set :data {}}] 10000000)]
+    (is (= [2800000 10000000] (mapv :t (get-in data [:entries :spawn-set]))))))
+
 (deftest memory-seed-problems
   (let [ps #(f/problems (merge {:name "a" :time :day :plot {:height 6} :body {:at [1 0 1]} :act [] :after [] :expect [{:event {:kind :x} :within-s 1}]} %))]
     (is (empty? (ps {:memory [{:kind :food-source :data {:pos [1 0 1]}}]})))
+    (is (empty? (ps {:memory [{:kind :bed :data {} :age-s 7200}]})))
+    (is (some #(re-find #":age-s" %) (ps {:memory [{:kind :bed :data {} :age-s "old"}]})))
     (is (some #(re-find #":memory" %) (ps {:memory [{:data {}}]})))
     (is (some #(re-find #":memory" %) (ps {:memory [{:kind :bed :data {}}] :keep-memory true})))))
 

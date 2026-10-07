@@ -107,11 +107,11 @@
 
 (defn memory-seed
   "The body's memory data (what engine/memory.edn holds) for a case's :memory entries, positions already absolute:
-  each {:kind k :data {...}} (optionally :policy {:cap :ttl}) becomes an entry written at now-ms, in order."
+  each {:kind k :data {...}} (optionally :policy {:cap :ttl}, :age-s seconds old) becomes an entry written at now-ms (minus its age), in order."
   [entries now-ms]
-  (reduce (fn [acc {:keys [kind data policy]}]
+  (reduce (fn [acc {:keys [kind data policy age-s]}]
             (-> acc
-                (update-in [:entries kind] (fnil conj []) {:t now-ms :data data})
+                (update-in [:entries kind] (fnil conj []) {:t (- now-ms (* 1000 (or age-s 0))) :data data})
                 (assoc-in [:policies kind] (or policy default-memory-policy))))
           {:entries {} :policies {}}
           entries))
@@ -219,6 +219,8 @@
       (not (#{:day :night :night-exclusive :any} (:time c))) (conj ":time must be :day, :night, :night-exclusive or :any")
       (not (and (int? h) (< 1 h 32))) (conj ":plot :height must be an integer 2..31")
       (not (every? #(and (keyword? (:kind %)) (map? (:data %))) (:memory c))) (conj ":memory entries need a keyword :kind and a map :data")
+      (not (every? #(or (nil? (:age-s %)) (number? (:age-s %))) (:memory c))) (conj ":memory :age-s must be a number of seconds")
+      (not (or (nil? (get-in c [:body :pitch])) (number? (get-in c [:body :pitch])))) (conj ":body :pitch must be a number of degrees")
       (and (seq (:memory c)) (:keep-memory c)) (conj ":memory cannot be combined with :keep-memory")
       (not (every? #(and (string? (:name %)) (not (str/blank? (:name %))) (coords? (:min %)) (coords? (:max %))) (:zones c))) (conj ":zones entries need a :name and :min / :max [x y z]")
       (not (every? #(and (string? (:name %)) (not (str/blank? (:name %))) (coords? (:pos %))) (:places c))) (conj ":places entries need a :name and :pos [x y z]")
@@ -438,13 +440,13 @@
         (resolve-tags register origin)))
 
 (defn body-commands
-  "Put the body at its start (facing :yaw, 0 = south, 180 = north): on the plot, survival, healed and fed, its inventory and effects as the case says."
+  "Put the body at its start (facing :yaw, 0 = south, 180 = north; :pitch, 0 level, positive down): on the plot, survival, healed and fed, its inventory and effects as the case says."
   [origin body c]
-  (let [{:keys [at yaw inventory effects spawnpoint]} (:body c)]
+  (let [{:keys [at yaw pitch inventory effects spawnpoint]} (:body c)]
     (-> [(str "gamemode survival " body)
          (str "clear " body)
          (str "effect clear " body)
-         (str "tp " body " " (xyz-str (abs-pos origin at)) " " (or yaw 0) " 0")
+         (str "tp " body " " (xyz-str (abs-pos origin at)) " " (or yaw 0) " " (or pitch 0))
          (str "effect give " body " minecraft:instant_health 1 10 true")
          (str "effect give " body " minecraft:saturation 1 10 true")]
         (into (for [[item n] inventory] (str "give " body " " item " " (or n 1))))
