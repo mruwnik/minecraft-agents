@@ -745,3 +745,5 @@ node engine/tools/world-changes.mjs --world claude --wait --type claim --observe
   anything; jobs consult them as above.
 - Markers keep the `places.json` format; zones use the strict `zones.edn` schema.
 - `world-changes` keeps a named cursor outside engine state and returns grouped changes (latest 2048; `:cursor-gap` after loss).
+| `paddle` | `{ticks, turn?: 'left'/'right', forward?}` | one stroke of the boat the body is in (the boat is simulated client side, sent as `vehicle_move`; `ticks` at most 40): `ok`, `blocked` (the next forward tick leaves the water), `not-mounted`, `not-a-boat`; result `{pos, yaw, ticks}`; ticks 0 reads the pose |
+| `movement.boat-drive` `{:pos :range :max-strokes :max-s}` | Steers the boat the body is in to the water cell `:pos` with `paddle` strokes (turn toward it, then forward); done within `:range`, info `boat.driven`; waits `:unseen`; stopped `:bad-args`, `:not-aboard`, `:not-a-boat`, `:not-water`, `:blocked` (land in the way), `:timeout`, `:failed` |
