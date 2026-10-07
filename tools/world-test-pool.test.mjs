@@ -1,7 +1,7 @@
 // Why JavaScript: node --test file for tools/world-test-pool.mjs.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { splitForms, summarize, unitOrder, parsePoolArgs, workerSpecs, runPool, mergeText, poolCap, createReaper } from './world-test-pool.mjs'
+import { splitForms, summarize, unitOrder, parsePoolArgs, workerSpecs, runPool, mergeText, poolCap, createReaper, countListed } from './world-test-pool.mjs'
 
 const form = (id, status, secs = 1, extra = '') =>
   `{:plot 0, :file "${id.split('/')[0]}", :expects [{:status :pass, :evidence "a } \\" {"}], :status :${status}, :id "${id}", :elapsed-s ${secs}${extra}}`
@@ -209,4 +209,38 @@ test('createReaper: reap kills every live child by pid and removes its tmp file;
   assert.deepEqual(removed, ['tb.edn'])
   reaper.reap()
   assert.equal(killed.length, 1)
+})
+
+// ---- the @@test view: a fixed total, reruns counted apart, one final status per case
+const eventsOf = async (units, runUnit, total, retries = 1) => {
+  const seen = []
+  await runPool({ units, workers: workerSpecs(2, 19, 'P', 0), runUnit, retries, total, emit: (e) => seen.push(e) })
+  return seen
+}
+const progressOf = (seen) => seen.filter((e) => e.event === 'progress')
+const resultsOf = (seen) => seen.filter((e) => e.event === 'result')
+
+test('countListed: one case per --list line, times --repeat; blank lines are not cases', () => {
+  assert.equal(countListed('a/x  #{:t}\nb/y  nil  PROBLEMS [\"x\"]\n\n', 1), 2)
+  assert.equal(countListed('a/x  nil\n', 3), 3)
+})
+test('runPool events: the total is the one given from the start, in every progress line', async () => {
+  const run = fakeRunner((f) => ({ code: 0, text: vec(form(`${f}/1`, 'pass'), form(`${f}/2`, 'pass')) }), [])
+  const seen = await eventsOf(['a', 'b'], run, 4)
+  assert.deepEqual(progressOf(seen).map((e) => [e.done, e.total, e.retries]), [[1, 4, 0], [2, 4, 0], [3, 4, 0], [4, 4, 0]])
+  assert.equal(resultsOf(seen).length, 4)
+})
+test('runPool events: a case failing and failing again is one failed result, the reruns are counted as retries', async () => {
+  const run = fakeRunner(() => ({ code: 1, text: vec(form('a/c1', 'fail'), form('a/c2', 'pass')) }), [])
+  const seen = await eventsOf(['a'], run, 2, 2)
+  const results = resultsOf(seen)
+  assert.deepEqual(results.map((e) => [e.name, e.outcome]).sort(), [['a/c1#1', 'failed'], ['a/c2#1', 'passed']])
+  const last = progressOf(seen).at(-1)
+  assert.deepEqual([last.done, last.total, last.retries], [2, 2, 2])
+})
+test('runPool events: a failure that passes on the rerun is reported once, as flaky, not as a failure', async () => {
+  const run = fakeRunner((f, match) => match ? { code: 0, text: vec(form('a/c1', 'pass')) } : { code: 1, text: vec(form('a/c1', 'fail')) }, [])
+  const seen = await eventsOf(['a'], run, 1)
+  assert.deepEqual(resultsOf(seen).map((e) => [e.name, e.outcome]), [['a/c1#1', 'flaky']])
+  assert.equal(progressOf(seen).at(-1).retries, 1)
 })
