@@ -43,7 +43,7 @@
   drops (only the item entities that appeared with this dig, by id).
   First, with :on-lava :seal (default), seen lava beside the dug cell (what the dig laid open) is filled with a building
   block from the rim (jobs.lib.lava, a jobs.blocks.place child, event blocks.dig.sealed); the dug cell stays dug. When
-  it cannot be (no block carried, or two places fail) the body steps off the cells beside the lava and the job stops
+  it cannot be (no block carried or fetched (:seal-fetch), or two places fail) the body steps off the cells beside the lava and the job stops
   :lava-unsealed with :cell, :place (:need: no block) and :stepped-away.
 
   Ends with info blocks.dig.done and {:dug true|false :pos :block :reason :collected n}. :reason is :dug or
@@ -66,6 +66,7 @@
    :on-fluid {:doc ":wait: a block beside a fluid that :accept does not take waits :hazard; :fail: the job ends at once, reason :fluid-adjacent, with a :hint" :spec #{:wait :fail} :default :wait}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :spec a/name? :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
+   :seal-fetch {:doc "get a building block to seal lava with when none is carried, whatever :fetch says: true, a set of kinds or a map of limits, false to seal only with a carried block" :spec fetch/option? :default true}
    :fetch {:doc "get a missing tool instead of waiting :no-tool (jobs.lib.fetch): true, a set of kinds or a map of limits" :spec fetch/option? :default true}})
 
 (def collect-radius 8)
@@ -189,7 +190,7 @@
       :else
       (when-let [lavas (seq (lava/exposed (:primitives c) cell))]
         (let [r (await (lava/seal! c :blocks.dig.sealed #(u/seen-name (:primitives c) (zipmap [:x :y :z] %)) (first lavas)
-                                   (select-keys (:args c) [:fetch :ignore-zones?])))]
+                                   {:fetch (:seal-fetch (:args c)) :ignore-zones? (:ignore-zones? (:args c))}))]
           (if (map? r)
             (do (ctx/update-mem! c assoc-in [:dug :unsealed] (assoc r :lavas (vec lavas))) :again)
             r))))))
@@ -245,7 +246,7 @@
           tool (when (and block (not (:dug (ctx/mem c))) (not (b/air block)) (not (b/fluids block))) (needs c block))]
       (cond
         refused (stop! c {:dug false :pos pos :block block :reason :fluid-adjacent :hazards (:hazards refused)
-                          :hint "pass :accept #{:fluid-adjacent} to dig beside water, or :on-fluid :wait to wait for it to drain"})
+                          :hint "pass :accept #{:fluid-adjacent} to dig beside water (:lava-adjacent for seen lava), or :on-fluid :wait to wait for it to drain"})
         r r
         (:dug (ctx/mem c))
         (let [s (await (seal-step! c pos))

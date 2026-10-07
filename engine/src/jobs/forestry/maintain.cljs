@@ -43,7 +43,7 @@
    :part {:doc "only the cells of this part" :spec a/name? :default nil}
    :max-logs {:doc "with :pillar? false, a tree whose column holds more logs than this is too tall to fell from the ground and is left" :spec (a/int-in 1 nil) :default 6}
    :pillar? {:doc "fell a tree too tall for the ground from a pillar (jobs.forestry.fell-tree); false: leave one over :max-logs" :spec boolean? :default true}
-   :accept {:doc "dig hazards (jobs.lib.access.rules) taken: a set of :fluid-adjacent :falling-block"
+   :accept {:doc "dig hazards (jobs.lib.access.rules) taken: a set of :fluid-adjacent :lava-adjacent :falling-block"
             :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent :falling-block}}
    :collect-radius {:doc "how far from where the body stands the drops of a felled tree are collected, in blocks" :spec (a/num-in 0 nil) :default 8}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
@@ -72,8 +72,8 @@
   [c pos]
   (let [v (rules/may-dig? (access-input c pos))
         accept (conj (set (:accept (:args c))) :under-feet)]
-    (when-not (rules/accepts? v accept)
-      (or (:reason v) (:reason (first (remove #(accept (:reason %)) (:hazards v))))))))
+    (when-not (and (:ok v) (every? (comp accept access/hazard-key) (:hazards v)))
+      (or (:reason v) (access/hazard-key (first (remove (comp accept access/hazard-key) (:hazards v))))))))
 
 (defn place-refusal [c pos]
   (let [v (rules/may-place? (access-input c pos))]

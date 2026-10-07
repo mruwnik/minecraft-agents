@@ -5,7 +5,9 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.fake :as fake]
+            [engine.fake.raw-world :as fake-raw]
             [engine.memory :as mem]
+            [engine.perception :as perception]
             [engine.registry :as registry]
             [engine.takeover :as takeover]
             [engine.test-util :as tu :refer [run-until-empty]]
@@ -505,6 +507,58 @@
                 "the body stands off the cells beside the open lava")
             (is (re-find #"lava at \[0 62 0\] not sealed: no block to seal with"
                          (:text (last (filterv #(= :blocks.dig.done (:kind %)) @seen)))))))))))
+
+(defn setup-seeing
+  "setup with the body's sight (engine.perception) over the fake world, one sight pass done: a chest in view is a seen one."
+  [world-spec]
+  (let [clock (atom 1000000)
+        [seen sink] (tu/legacy-capture-sink)
+        raw (tu/fake-on-floor world-spec)
+        p (perception/wrap raw (perception/create (fake-raw/create raw) {:radius 16 :ray-deg 2 :now #(deref clock)}))
+        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                          :world (world/of-data {} {} [])
+                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+    (perception/pass! (aget p "perception"))
+    {:eng eng :p p :seen seen :clock clock}))
+
+(deftest with-no-block-carried-the-seal-fetches-one-from-a-seen-chest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup-seeing {:self body :blocks {"2,64,0" "dirt" "2,64,1" "lava" "2,63,1" "stone" "-2,64,3" "chest"}
+                                             :containers {"-2,64,3" [{:name "cobblestone" :count 5}]}})
+              result (await (child-outcome eng job {:pos [2 64 0] :accept #{:lava-adjacent} :fetch false} 60))]
+          (is (= {:dug true :reason :dug} (select-keys result [:dug :reason])))
+          (is (= "cobblestone" (block-at p {:x 2 :y 64 :z 1})) "the lava is sealed with a fetched block"))))))
+
+(deftest seal-fetch-false-seals-only-with-a-carried-block
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self body :blocks {"0,63,0" "dirt" "0,62,0" "lava" "-2,64,3" "chest"}
+                                      :containers {"-2,64,3" [{:name "cobblestone" :count 5}]}})]
+          (hiding p #(= [0 62 0] %))
+          (let [result (await (child-outcome eng job {:pos under-feet :seal-fetch false} 60))]
+            (is (= {:reason :lava-unsealed :place :need} (select-keys result [:reason :place])))
+            (is (= "lava" (block-at p lava-under)))))))))
+
+(deftest step-away-tries-the-next-cell-when-the-first-walk-fails
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [walks (atom 0)
+              env (setup {:self body :blocks {"0,63,0" "dirt" "0,62,0" "lava"}})
+              go-to (get (:jobs (:eng env)) 'jobs.movement.go-to)
+              round (:round go-to)
+              first-fails (fn ^:async first-walk-fails [c]
+                            (if (and (= "air" (block-at (:p env) under-feet)) (= 1 (swap! walks inc)))
+                              (do (ctx/result! c {:arrived false :why :no-path}) :done)
+                              (await (round c))))
+              env (assoc-in env [:eng :jobs 'jobs.movement.go-to] (assoc go-to :round first-fails))]
+          (hiding (:p env) #(= [0 62 0] %))
+          (let [result (await (child-outcome (:eng env) job {:pos under-feet :seal-fetch false} 40))]
+            (is (= {:reason :lava-unsealed :stepped-away true} (select-keys result [:reason :stepped-away])))
+            (is (= 2 @walks) "the first walk after the dig failed, the next cell was walked to")))))))
 
 (deftest seen-lava-beside-the-block-is-a-lava-adjacent-hazard-not-fluid-adjacent
   (async done

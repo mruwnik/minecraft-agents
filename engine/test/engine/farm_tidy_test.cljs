@@ -368,10 +368,12 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[digs result] (await (run-hazard (assoc (hazard-world [3 64 2 "lava"] [3 63 2 "stone"]) :inventory [{:name "cobblestone" :count 1}])
-                                               {:accept #{:lava-adjacent}}))]
-          (is (= 1 digs))
-          (is (= 1 (:dug result)) "dug, and the lava beside sealed with the carried block"))))))
+        (let [{:keys [eng p]} (start (assoc (hazard-world [3 64 2 "lava"] [3 63 2 "stone"]) :inventory [{:name "cobblestone" :count 1}])
+                                     {"h" hazard-plan})
+              result (await (outcome eng {:plan "h" :accept #{:lava-adjacent}} 200))]
+          (is (= 1 (count (calls p "dig"))))
+          (is (= 1 (:dug result)))
+          (is (= "cobblestone" (block-at p 3 64 2)) "the lava beside is sealed with the carried block"))))))
 
 (deftest a-falling-block-over-the-body-is-refused-by-default-and-dug-when-accepted
   (async done

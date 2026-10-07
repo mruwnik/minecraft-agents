@@ -4,7 +4,9 @@
   Cells are [x y z]."
   (:require [engine.ctx :as ctx]
             [jobs.lib.access.rules :as rules]
+            [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
+            [jobs.lib.dig-look :as dig-look]
             [jobs.lib.step-off :as step-off]
             [jobs.lib.util :as u]))
 
@@ -52,13 +54,37 @@
     (set (for [[x _ z] cells dx [-1 0 1] dz [-1 0 1] y (range (dec (apply min ys)) (+ 3 (apply max ys)))]
            [(+ x dx) y (+ z dz)]))))
 
+(def away-tries "Cells step-away! walks to, one after another, before it gives up; the last walk may escalate." 3)
+
 (defn ^:async step-away!
-  "Walk off the cells beside the open lava and the dug cell (jobs.lib.step-off, zones obeyed, up to 3 blocks).
-  :arrived (also when the body already stands clear), :continue, or {:unreachable why}."
+  "Walk off the cells beside the open lava and the dug cell (jobs.lib.step-off candidates, zones obeyed, up to 3
+  blocks): the nearest free cell first, then the next, up to away-tries cells, the last walk with go-to escalation.
+  Memory :away-to is the cell in hand, :away-tried the cells given up on. :arrived (also when the body already
+  stands clear), :continue, or {:unreachable why}."
   [c dug lavas]
   (let [avoid (near-cells (cons dug lavas))
         {:keys [x y z]} (u/self-pos c)
-        feet [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]]
-    (if (contains? avoid feet)
-      (await (step-off/step-off-zoned! c (zipmap [:x :y :z] feet) {:reach 3 :avoid avoid}))
-      :arrived)))
+        feet [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]
+        feet-cell (zipmap [:x :y :z] feet)]
+    (if-not (contains? avoid feet)
+      :arrived
+      (loop []
+        (let [{:keys [away-to away-tried] :or {away-tried #{}}} (ctx/mem c)
+              _ (when-not away-to
+                  (await (dig-look/look-unknown! c (step-off/floors feet-cell 3))))
+              to (or away-to
+                     (first (remove #(contains? away-tried ((juxt :x :y :z) %))
+                                    (step-off/candidates (:primitives c) feet-cell
+                                                         {:avoid avoid :reach 3 :ok? (step-off/zone-ok (access/rules-input c))}))))]
+          (if-not (and to (< (count away-tried) away-tries))
+            (do (ctx/update-mem! c dissoc :away-to :away-tried)
+                {:unreachable (if to :unreachable :no-cell)})
+            (let [r (await (ctx/call-child c :step-off 'jobs.movement.go-to
+                                           {:pos to :range 0 :escalate (= (inc (count away-tried)) away-tries)}))
+                  res (ctx/child-result c :step-off)]
+              (ctx/update-mem! c assoc :away-to to)
+              (cond
+                (= :continue r) :continue
+                (and (= :done r) (:arrived res)) (do (ctx/update-mem! c dissoc :away-to :away-tried) :arrived)
+                :else (do (ctx/update-mem! c #(-> % (dissoc :away-to) (update :away-tried (fnil conj #{}) ((juxt :x :y :z) to))))
+                          (recur))))))))))

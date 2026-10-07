@@ -431,6 +431,14 @@
           (is (= [] (digs p2)))
           (is (= [{:pos {:x 3 :y 64 :z 0} :reason :refused :why :fluid-adjacent}] (warns seen :forest.left))))))))
 
+(deftest seen-lava-beside-a-log-is-refused-not-unreachable
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p seen]} (await (run (update oak-world :blocks assoc "4,65,0" "lava") {"forest" oak-cell} {:plan "forest"} 40))]
+          (is (= [] (digs p)))
+          (is (= [{:pos {:x 3 :y 64 :z 0} :reason :refused :why :lava-adjacent}] (warns seen :forest.left))))))))
+
 (deftest a-log-that-turns-refused-during-the-felling-stops-the-felling
   (async done
     (tu/run-async done

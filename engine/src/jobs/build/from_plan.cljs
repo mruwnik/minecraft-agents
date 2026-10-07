@@ -461,7 +461,7 @@
               (ctx/update-mem! c count-fail pos :refused (:give-up (:args c)))))
       :refused (ctx/update-mem! c refuse pos (select-keys v [:reason :zone :plan :claim]))
       :hazard (ctx/update-mem! c refuse pos {:reason :hazard
-                                             :hazards (vec (distinct (remove accept (map :reason (:hazards v)))))})
+                                             :hazards (vec (distinct (remove accept (map access/hazard-key (:hazards v)))))})
       nil)))
 
 (defn diggable
