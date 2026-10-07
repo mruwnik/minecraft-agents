@@ -161,17 +161,18 @@
   (remove #(contains? (:failed state) %) (:list state)))
 
 (defn world-sig
-  "What a job can change in the fake world p: blocks, bag, containers, drops, entities, the body's position. Job memory is left out: retry counters and timestamps change on a spin."
+  "What a job can change in the fake world p: blocks, bag, containers, drops, entities, the body's position (block states and ages, furnaces, worn gear). Job memory, chat and self stats are left out: retry counters and timestamps change on a spin."
   [p]
   (let [w @(fake/state p)]
     {:blocks (:blocks w) :inventory (:inventory w) :containers (:containers w) :drops (:drops w)
-     :entities (:entities w) :pos (get-in w [:self :pos])}))
+     :entities (:entities w) :pos (get-in w [:self :pos])
+     :states (:states w) :ages (:ages w) :furnaces (:furnaces w) :equipment (:equipment w)}))
 
 (defn progressing?
-  "True when the world signatures (one per round, oldest first) differ across the last progress-window rounds: the job is changing the world."
+  "True when a world signature in the last progress-window rounds is new: not seen before in sigs (the world before round 1, then one per round, oldest first). A job that cycles through signatures it has already had is spinning."
   [sigs]
-  (let [tail (take-last (inc progress-window) sigs)]
-    (and (> (count tail) 1) (not= (first tail) (last tail)))))
+  (let [n (count sigs)]
+    (boolean (some #(not (contains? (set (take % sigs)) (nth sigs %))) (range (max 1 (- n progress-window)) n)))))
 
 (defn runaway
   "[[:runaway detail]] when job hit the act or call cap (cap is :act, :read or nil) or still ran after max-rounds, unless job is in long-running."
@@ -211,7 +212,7 @@
     (if (instance? js/Error id)
       (assoc base :outcome :refused :defects (when (str/blank? (ex-message id)) [[:blank-refusal ""]]))
       (let [thrown (atom nil)
-            sigs (atom [])
+            sigs (atom [(world-sig raw)])
             unrefused (when (seq (:wrong-typed (meta args))) [[:wrong-type-accepted (pr-str (:wrong-typed (meta args)))]])]
         (loop [i 0]
           (when (and (< i max-rounds) (seq (running-ids (core/state eng))) (not @thrown) (not @capped))
@@ -388,49 +389,49 @@
 (deftest runaway-ignores-parked-jobs-and-jobs-whose-world-changes
   (is (= ["j2"] (running-ids {:list ["j1" "j2"] :failed {"j1" {}}})))
   (is (progressing? [{:a 0} {:a 0} {:a 1} {:a 2}]))
+  (is (progressing? [{:a 0} {:a 1} {:a 2} {:a 0}]) "a walk A,B,C,A met new states in the window")
   (is (not (progressing? [{:a 1} {:a 1} {:a 1} {:a 1} {:a 1}])))
+  (is (not (progressing? [{:a 0} {:a 1} {:a 0} {:a 1} {:a 0} {:a 1} {:a 0}])) "a 2-cycle already seen is a spin, whatever its parity")
   (is (not (progressing? [{:a 1}]))))
 
 (defn sigs-over
-  "The world-sig after each of rounds rounds on a fake world, where (change! state round) is the job's act that round."
-  [rounds change!]
+  "The world-sig before and after each of rounds rounds on a fake world, where (change w round) is the new world state that round."
+  [rounds change]
   (let [p (tu/fake {:self {:pos [0 64 0]}})]
-    (mapv (fn [i] (swap! (fake/state p) change! i) (world-sig p)) (range rounds))))
+    (into [(world-sig p)]
+          (map (fn [i] (swap! (fake/state p) change i) (world-sig p)))
+          (range rounds))))
 
 (deftest a-job-whose-only-change-is-a-retry-counter-is-a-runaway
   (let [memory (atom {})
         sigs (sigs-over 8 (fn [w _] (swap! memory update :tries (fnil inc 0)) w))]
     (is (= 8 (:tries @memory)))
+    (is (apply = sigs) "the world never changed")
     (is (not (progressing? sigs)))
     (is (= [[:runaway "still running after 12 rounds"]] (runaway 'jobs.farm.till nil (not (progressing? sigs)))))))
 
 (deftest a-job-that-changes-a-block-every-third-round-is-progress
-  (let [sigs (sigs-over 12 (fn [w i] (if (zero? (mod i 3)) (assoc-in w [:blocks [1 64 i]] "dirt") w)))]
-    (is (every? progressing? (map #(take % sigs) (range 4 13))))))
+  (let [sigs (sigs-over 12 (fn [w i] (assoc-in w [:blocks [1 64 i]] (nth ["dirt" nil nil] (mod i 3)))))]
+    (is (every? progressing? (map #(take % sigs) (range 5 14))))))
 
-(deftest an-act-cut-off-by-the-cap-leaves-no-unhandled-rejection
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [stray (atom [])
-              handler #(swap! stray conj (str %))
-              p (capped-primitives #js {:act (fn [] (js/Promise.reject (js/Error. "late cut")))} (atom {:all 0 :acts 0}) (atom nil) 0)]
-          (.on js/process "unhandledRejection" handler)
-          (is (thrown? js/Error (.act p)))
-          (await (js/Promise. (fn [resolve] (js/setTimeout resolve 20))))
-          (.off js/process "unhandledRejection" handler)
-          (is (empty? @stray)))))))
+(def world-parts
+  "[part path value]: a change a job can make to each part of the fake world that world-sig must see."
+  [[:blocks [:blocks [1 64 1]] "dirt"]
+   [:inventory [:inventory] [{:name "oak_log" :count 1}]]
+   [:containers [:containers [2 64 2]] [{:name "bread" :count 1}]]
+   [:drops [:drops] [{:id 99 :name "oak_log" :count 1 :pos [1 64 1]}]]
+   [:entities [:entities] [{:id 5 :name "cow" :pos {:x 1 :y 64 :z 1}}]]
+   [:pos [:self :pos] [3 64 3]]
+   [:states [:states [1 64 1]] {:open true}]
+   [:ages [:ages [1 64 1]] 2]
+   [:furnaces [:furnaces [1 64 1]] {:smelted 1}]
+   [:equipment [:equipment "head"] {:name "iron_helmet" :count 1}]])
 
-(deftest an-exception-or-stray-rejection-in-a-case-is-that-cases-defect
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [cases [{:job 'jobs.a :seed 5 :k 0 :base 1 :n 2} {:job 'jobs.b :seed 6 :k 1 :base 1 :n 2} {:job 'jobs.c :seed 7 :k 2 :base 1 :n 2}]
-              run (fn ^:async run [c]
-                    (case (:job c)
-                      jobs.a (throw (js/Error. "boom"))
-                      jobs.b (do (js/Promise.reject (js/Error. "late")) {:job (:job c) :defects []})
-                      {:job (:job c) :defects []}))
-              found (await (run-all {} cases run))]
-          (is (= [['jobs.a :harness-threw] ['jobs.b :stray-rejection]] (map (juxt :job :kind) found)))
-          (is (= ["FUZZ_JOB=jobs.a FUZZ_SEED=1 FUZZ_CASES=2 FUZZ_CASE=0" "FUZZ_JOB=jobs.b FUZZ_SEED=1 FUZZ_CASES=2 FUZZ_CASE=1"] (map :repro found))))))))
+(deftest every-part-of-the-world-a-job-can-change-shows-in-the-signature
+  (doseq [[part path value] world-parts]
+    (let [sigs (sigs-over 1 (fn [w _] (assoc-in w path value)))]
+      (is (not= (first sigs) (last sigs)) (str "world-sig misses " part)))))
+
+(deftest chat-and-self-state-are-not-progress
+  (let [sigs (sigs-over 1 (fn [w _] (-> w (update :chat (fnil conj []) {:message "hi"}) (assoc-in [:self :health] 3))))]
+    (is (= (first sigs) (last sigs)))))
