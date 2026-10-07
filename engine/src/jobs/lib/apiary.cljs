@@ -53,6 +53,11 @@
 (defn block-at-fn [p]
   (fn [pos] (u/block-at p pos)))
 
+(defn seen-block-at-fn
+  "block-at-fn over what the body sees or remembers: nil for a cell it has not seen (look at it or skip it)."
+  [p]
+  (fn [pos] (u/seen-block p pos)))
+
 ;; ------------------------------------------------------------------ guarding
 
 (defn solid?

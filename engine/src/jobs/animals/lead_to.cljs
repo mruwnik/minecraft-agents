@@ -156,7 +156,7 @@
     (or pos fence)))
 
 (defn fence-block? [c]
-  (some-> (u/block-name (:primitives c) (:fence (:args c))) (.endsWith "_fence")))
+  (some-> (u/seen-name (:primitives c) (:fence (:args c))) (.endsWith "_fence")))
 
 (defn animal-now
   "The led animal as the sensing shows it, or nil when it is not seen."

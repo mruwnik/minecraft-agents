@@ -110,7 +110,7 @@
 (defn cut-cell?
   "Whether the stalk block at pos is the second segment of its stand: a stalk under it, none under that."
   [c name {:keys [x y z]}]
-  (let [at #(u/block-name (:primitives c) {:x x :y % :z z})]
+  (let [at #(u/seen-name (:primitives c) {:x x :y % :z z})]
     (and (= name (at (dec y))) (not= name (at (- y 2))))))
 
 (defn source-blocks

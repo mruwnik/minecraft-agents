@@ -78,7 +78,7 @@
 (defn classify
   "The hives as {:todo [pos] :declined {key reason} :ripe n :hives n}: ripe hives not skipped, sorted by the verdict."
   [c hs]
-  (let [block-at (apiary/block-at-fn (:primitives c))
+  (let [block-at (apiary/seen-block-at-fn (:primitives c))
         skipped (:skipped (ctx/mem c) {})
         ripe (->> hs (filter :ripe) (remove #(contains? skipped (apiary/pos-key (:pos %)))))
         verdicts (map (fn [h] [(:pos h) (apiary/hive-verdict block-at (:pos h))]) ripe)]
@@ -136,7 +136,7 @@
 (defn book-harvest!
   "Count the hive at pos as taken when it is no longer ripe; the comb is then collected after shears."
   [c pos tool]
-  (let [level (some-> (u/block-at (:primitives c) pos) .-properties .-honey_level)]
+  (let [level (some-> (u/seen-block (:primitives c) pos) .-properties .-honey_level)]
     (if (< (or level ripe-level) ripe-level)
       (ctx/update-mem! c #(cond-> (-> % (update :harvested (fnil inc 0)) (assoc :strikes 0))
                             (= "shears" tool) (assoc :phase :collect)))
@@ -147,7 +147,7 @@
   [c]
   (when-let [{:keys [pos tool]} (:clicking (ctx/mem c))]
     (ctx/update-mem! c dissoc :clicking)
-    (when (< (or (some-> (u/block-at (:primitives c) pos) .-properties .-honey_level) ripe-level) ripe-level)
+    (when (< (or (some-> (u/seen-block (:primitives c) pos) .-properties .-honey_level) ripe-level) ripe-level)
       (book-harvest! c pos tool))))
 
 ;; the comb pops out of the face clicked: the side the body stands on, so it lies in view (on top, the hive hides it from below)
