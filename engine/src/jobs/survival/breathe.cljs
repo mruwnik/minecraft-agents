@@ -4,6 +4,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.escape :as escape]
+            [jobs.lib.land :as land]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.pace :as pace]
             [jobs.lib.result :as result]
@@ -61,7 +62,7 @@
 
 (def breathe-policy {:cap 20 :ttl (* 60 60 1000)})
 
-(declare unsafe-below go!)
+(declare go!)
 
 (defn land-footing?
   "The support under the feet is solid ground: not air, water, lava, fire or magma, and loaded. It is the cell below
@@ -71,7 +72,7 @@
   (let [y (.. self -pos -y) fy (js/Math.floor y)
         below (u/feel-name p {:x (js/Math.floor (.. self -pos -x)) :y (if (> (- y fy) 0.001) fy (dec fy))
                                :z (js/Math.floor (.. self -pos -z))})]
-    (boolean (and below (not (breath/air? below)) (not (contains? unsafe-below below))))))
+    (boolean (and below (not (breath/air? below)) (not (contains? land/unsafe-below below))))))
 
 (defn on-land?
   "Out of the water and standing on solid ground. A swim or walk that ends on a jump crest against a wall over water
@@ -146,18 +147,10 @@
 
 (defn status [r] (.-status r))
 
-(def unsafe-below #{"water" "lava" "fire" "soul_fire" "magma_block"})
-
 (defn land-cell?
-  "A feet cell on land: feet and head air, and a solid block below (anything
-  but air, water, lava, fire or magma; an unloaded cell is not land)."
+  "A feet cell on land by what is seen (jobs.lib.land); an unloaded cell is not land."
   [p cell]
-  (let [feet (u/seen-name p cell)
-        head (u/seen-name p (update cell :y inc))
-        below (u/seen-name p (update cell :y dec))]
-    (boolean (and feet head below
-                  (breath/air? feet) (breath/air? head)
-                  (not (breath/air? below)) (not (contains? unsafe-below below))))))
+  (land/land-cell? #(u/seen-name p %) cell))
 
 (defn surface-pos
   "pos with y raised to the feet cell at the top of the own water column (surface-in-column), so a body that has
