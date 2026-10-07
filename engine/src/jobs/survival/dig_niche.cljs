@@ -157,7 +157,7 @@
   (result/stop! c reason text))
 
 (defn ^:async go!
-  "One go-to to cell; :continue while it runs, :arrived, or :failed."
+  "One go-to to cell; :continue while it waits, :arrived, or :failed."
   [c slot cell]
   (let [w (await (ctx/call-child c slot 'jobs.movement.go-to {:pos cell :range 0}))]
     (cond (= :continue w) :continue
@@ -169,7 +169,7 @@
         _ (await (tools/equip-for! c (u/block-name p cell) {:fast true}))
         r (await (tidy/dig! c cell))]
     (if (= "dug" (.-status r))
-      (do (await (dig-in/collect-drops! c (:blocks (:args c)) (.-drops r))) :continue)
+      (do (await (dig-in/collect-drops! c (:blocks (:args c)) (.-drops r))) :again)
       (fail! c :dig-failed (str "cannot dig the niche: " (.-status r))))))
 
 (defn ^:async plug-step! [c cell]
@@ -178,7 +178,7 @@
       (fail! c :no-blocks "nothing to plug the niche with")
       (let [r (await (tidy/place! c cell item))]
         (if (#{"placed" "occupied"} (.-status r))
-          :continue
+          :again
           (fail! c :place-failed (str "cannot plug the niche: " (.-status r))))))))
 
 (defn seal!
@@ -205,25 +205,32 @@
         (let [w (some->> (:site (scan* p reach ok? false)) (tool-wait p))
               r (when w (await (fetch/step! c 'jobs.survival.dig-niche w)))]
           (cond
-            r (if (= :again r) :continue r)
+            r r
             w (fail! c :no-tool (str "no tool for the " (:block w) " of the hillside"))
             :else (fail! c :no-site "no hillside or wall to cut a niche into"))))
       (let [_ (ctx/update-mem! c assoc :site site)
             [what cell] (let [s (stage p site)] (if (vector? s) s [s]))]
         (case what
           :walk-to-face (let [r (await (go! c :face (:stand site)))]
-                          (if (= :failed r) (fail! c :unreachable "cannot walk to the hillside") :continue))
+                          (case r
+                            :failed (fail! c :unreachable "cannot walk to the hillside")
+                            :continue :continue
+                            :again))
           :dig (await (dig-step! c cell))
           :walk-in (let [r (await (go! c :in (at (:stand site) (:dir site) 2 0 0)))]
-                     (if (= :failed r) (fail! c :unreachable "cannot step into the niche") :continue))
+                     (case r
+                       :failed (fail! c :unreachable "cannot step into the niche")
+                       :continue :continue
+                       :again))
           :plug (await (plug-step! c cell))
           :sealed (seal! c site))))))
 
 (defn ^:async round
-  "Cut the niche and plug it (see doc), one step at a time with a timer between."
+  "Cut the niche and plug it (see doc), one step at a time with a timer between; :continue (a child waits on the
+  world) is yielded."
   [c]
   (loop [i 0]
     (let [r (if (< i max-steps) (await (step c)) (fail! c :no-progress "the niche took too many steps"))]
-      (if (= :continue r)
+      (if (= :again r)
         (do (await (child/pace!)) (recur (inc i)))
         r))))

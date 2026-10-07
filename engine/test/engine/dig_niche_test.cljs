@@ -2,6 +2,7 @@
   "jobs.survival.dig-niche's choice of site: a solid face with a shell all round, never flat ground, fluid or sand."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.registry :as registry]
             [engine.test-util :as tu]
@@ -218,3 +219,21 @@
         (let [{:keys [seen] :as s} (setup [] {:inventory [] :blocks ground})]
           (await (run! s {}))
           (is (= :no-site (:reason (failed seen)))))))))
+
+(deftest a-waiting-fetch-child-makes-the-niche-yield-not-fail-no-progress
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen] :as s} (setup [] {:inventory []})
+              orig ctx/call-child
+              n (atom 0)]
+          (core/submit! eng (list 'jobs.survival.dig-niche {}) {})
+          (set! ctx/call-child (fn [c slot job args]
+                                 (if (= :fetch slot)
+                                   (do (swap! n inc) (js/Promise.resolve :continue))
+                                   (orig c slot job args))))
+          (try (await (core/tick! eng))
+               (finally (set! ctx/call-child orig)))
+          (is (= 1 @n) "one fetch round per scheduler round, no busy loop")
+          (is (nil? (failed seen)))
+          (is (= 1 (count (:list (core/state eng)))) "the job yielded and is still there"))))))
