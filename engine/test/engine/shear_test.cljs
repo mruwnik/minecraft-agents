@@ -48,6 +48,15 @@
           (is (pos? (count (calls-of s "collect"))))
           (is (empty? (events-of s :shear.gave-up))))))))
 
+(deftest one-call-walks-shears-and-collects
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {} {:inventory shears :entities [(sheep 1 8) (sheep 2 9)]} 1))]
+          (is (finished? s))
+          (is (= :shorn (:reason (done-event s))))
+          (is (= [true true] (world-sheared s))))))))
+
 (deftest count-limits-the-shearing
   (async done
     (tu/run-async done

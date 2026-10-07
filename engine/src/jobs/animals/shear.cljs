@@ -8,7 +8,7 @@
   "Shear the adult sheep within :radius and pick up the wool. A one-shot order that starts and ends itself. The
   check always passes, so a cut job resumes.
 
-  Each round takes the nearest adult sheep not yet shorn or given up on (babies and sheared sheep are
+  One call is the whole run. It takes the nearest adult sheep not yet shorn or given up on (babies and sheared sheep are
   skipped). The body walks to within 3 blocks (doors :shut, each steer bounded by :walk-timeout-s) and uses the
   shears it carries. Sheep are tracked by uuid, by id when it has none.
 
@@ -17,7 +17,7 @@
   failed (:failed).
 
   Shearing stops when :count sheep are shorn (every one in radius when nil), none is left, the shears are gone
-  or three rounds in a row were fruitless. Unless :collect is false it then runs jobs.forestry.collect-drops for
+  or three sheep in a row were fruitless. Unless :collect is false it then runs jobs.forestry.collect-drops for
   the wool in :radius and ends.
 
   Ends with info shear.done and a warn shear.gave-up unless the reason is :shorn. Result {:reason :shorn [keys]
@@ -70,7 +70,7 @@
   (if-not (:collect (:args c))
     (finish! c reason)
     (do (ctx/update-mem! c assoc :phase :collect :reason reason)
-        :continue)))
+        :again)))
 
 (defn sheep-in-radius [c]
   (animals/herd (:primitives c) "sheep" (:radius (:args c))))
@@ -154,7 +154,7 @@
       (await (shear! c sheep)))
     (if (>= (:in-row (ctx/mem c) 0) max-in-row)
       (out-of-sheep! c)
-      :continue)))
+      :again)))
 
 (defn ^:async collect!
   "One round of the pick-up phase; finish with the stored reason when it is done."
@@ -169,7 +169,7 @@
 (defn shears-carried? [c]
   (some #(= "shears" (:name %)) (u/inventory (:primitives c))))
 
-(defn ^:async round [c]
+(defn ^:async step [c]
   (let [now (ctx/now c)
         {:keys [timeout-s] n :count} (:args c)]
     (ctx/update-mem! c update :started #(or % now))
@@ -182,3 +182,10 @@
         (and n (>= (count (:shorn m)) n)) (go-collect! c :shorn)
         (empty? cands) (out-of-sheep! c)
         :else (await (engage! c (first cands)))))))
+
+(defn ^:async round
+  "The whole attempt: loop the steps until one ends or yields."
+  [c]
+  (loop []
+    (let [r (await (step c))]
+      (if (= :again r) (recur) r))))
