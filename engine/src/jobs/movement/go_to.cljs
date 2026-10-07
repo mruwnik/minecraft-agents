@@ -54,7 +54,7 @@
     :escalate false.
   - Gives up with {:status :stopped :arrived false :reason :unreachable :why ... :text words} (the job ends :stopped) and an :unreachable warn: :why is the planner's
     reason (:exhausted, :goal-unloaded (the goal lies in unloaded land and the loaded land leads no nearer), :goal-enclosed, :goal-cut-off, :door-stuck with :cells, :one-way with :near and :one-way ...), or :stuck
-    (:kind the step, :detail the executor's text), :off-plan, :steer-failed, :no-progress or :moved-while-searching; :at is the
+    (:kind the step, :detail the executor's text), :off-plan, :steer-failed, :no-progress, :cut-again (restarted after a cut 3 times, none 2 blocks nearer) or :moved-while-searching; :at is the
     body's feet cell and :near its blocks from the goal. A failed
     escalation adds :escalation {:step :reason ...}, the child's reason or wait.
   - Success is {:arrived true}. The result is also a :result info event.
@@ -273,6 +273,31 @@
                           (-> (dissoc :escalation :escalation-from :planned :holes-before)
                               (assoc :restore-pending true))))))
 
+(def max-cut-restarts
+  "Restarts of a call in a row, each after a cut, that began no nearer the goal (by cut-progress) before it gives up."
+  3)
+
+(def cut-progress
+  "Blocks nearer the goal a restart must begin than the first of the cut ones, else the cuts got nowhere."
+  2)
+
+(defn cut-loop?
+  "Whether dists, the distances to the goal at which the calls restarted after a cut began, show a loop: at least
+  max-cut-restarts of them, none cut-progress nearer than the first (a reflex that sends the body back each time)."
+  [dists]
+  (and (>= (count dists) max-cut-restarts)
+       (< (- (first dists) (apply min dists)) cut-progress)))
+
+(defn note-restart!
+  "Record this call's start in memory: the call is open until it returns (an open one found at the start was cut) and the
+  distances at which cut calls restarted are kept while the cuts go on. The distances so far."
+  [c pos]
+  (let [m (ctx/mem c)
+        dist (u/dist (u/self-pos c) pos)
+        dists (if (:open m) (conj (vec (:cut-dists m)) dist) [])]
+    (ctx/update-mem! c assoc :open true :cut-dists dists)
+    dists))
+
 (defn with-body-food
   "c with the :food arg the caller gave, else the body's own food now (a felt fact): the walk counts on it."
   [c]
@@ -360,10 +385,13 @@
       (end/refuse! c refusal)
 
       :else
-      (do (start-attempt! c pos)
+      (let [dists (note-restart! c pos)]
+        (start-attempt! c pos)
+        (if (cut-loop? dists)
+          (do (ctx/update-mem! c dissoc :open :cut-dists)
+              (await (end/give-up! c pos 0 :cut {:reason :cut-again})))
           (loop []
             (let [r (await (step! c pos))]
               (cond
-                (not= :again r) r
-                (ctx/alive? c) (do (await (pace!)) (recur))
-                :else :continue)))))))
+                (= :again r) (if (ctx/alive? c) (do (await (pace!)) (recur)) :continue)
+                :else (do (ctx/update-mem! c dissoc :open) r)))))))))

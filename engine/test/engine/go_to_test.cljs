@@ -701,6 +701,27 @@
           (is (= (solid flat) (solid (:blocks @(fake/state p)))) "no stair child dug")
           (is (= [] (mem/entries (mem/view (:store eng)) :tidy)) "nothing in the dig ledger"))))))
 
+;; ------------------------------------------------------- a goal a reflex keeps cutting the walk to (card 66863dc4)
+
+(deftest a-call-cut-again-without-getting-nearer-gives-up-after-three-restarts
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        ;; the body starts 10 blocks from the goal; two earlier restarts began there too, and the last call was cut
+        (let [{:keys [out returns eng]} (await (go-returns! {:blocks flat} {:pos [10 64 0] :range 0}
+                                                            {:open true :cut-dists [10 10]}))]
+          (is (= {:arrived false :reason :unreachable :why :cut-again} (select-keys @out [:arrived :reason :why])) (pr-str @out))
+          (is (= [:done] @returns))
+          (is (= [] (moved eng)) "it walked nowhere"))
+        ;; the restarts began farther away than this one: it got nearer, so it walks on
+        (let [{:keys [out]} (await (go-returns! {:blocks flat} {:pos [10 64 0] :range 0}
+                                                {:open true :cut-dists [20 20]}))]
+          (is (= {:arrived true} @out) (pr-str @out)))
+        ;; the last call ended normally: no cut loop
+        (let [{:keys [out]} (await (go-returns! {:blocks flat} {:pos [10 64 0] :range 0}
+                                                {:cut-dists [10 10]}))]
+          (is (= {:arrived true} @out) (pr-str @out)))))))
+
 ;; ------------------------------------------------------- a walker fault at one cell is routed round (card 679d3475)
 
 (def east-yaw (- (/ js/Math.PI 2)))

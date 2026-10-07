@@ -80,6 +80,7 @@
            :stuck (str "the body got stuck" (some->> kind name (str " on ")) (some->> detail (str ": ")))
            :off-plan (or detail "the walk left its plan")
            :steer-failed (str "steering failed" (some->> detail (str ": ")))
+           :cut-again "the walk was cut again and again by something sending the body back, and got no nearer"
            :moved-while-searching "the body was pushed about while the path was searched"
            :needs-health "every way costs more hp than the body may spend and it cannot heal first"
            :one-way "the way back is one-way"
