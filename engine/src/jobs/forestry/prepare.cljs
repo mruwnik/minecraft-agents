@@ -171,7 +171,7 @@
           (let [v (field/dig-verdict c (maintain/cell-vec target))]
             (if (not= :ok v)
               (blocked! c cell v)
-              (let [outcome (await (blocks/dig-cell! c target {:accept #{:fluid-adjacent :falling-block :under-feet}
+              (let [outcome (await (blocks/dig-cell! c target {:accept (set (:accept (:args c)))
                                                                :for-plan (:plan (:args c))
                                                                :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
                 (case outcome

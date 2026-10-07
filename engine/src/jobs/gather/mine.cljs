@@ -137,8 +137,8 @@
    :tunnel-length {:doc "the most blocks the strip tunnel runs in this job, at the body's level; 0: no tunnel, seen blocks only" :default 32}
    :descend-limit {:doc "the most steps of stair down through soil to find stone, when the block is stone-type and none is in sight; 0: never descend" :default 12}
    :torch-interval {:doc "the strip tunnel hangs a torch every this many steps; 0: none" :default 10}
-   :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent :falling-block :under-feet); the lava and :wet rules above still hold"
-            :default #{:fluid-adjacent :falling-block :under-feet}}})
+   :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent :falling-block, :under-feet: the cell under the feet, its floor unseen); the lava and :wet rules above still hold"
+            :default #{:fluid-adjacent :falling-block}}})
 
 (def reach 3)
 (def mend-reach 4)
@@ -204,7 +204,7 @@
         in (rules-in c)
         judged (->> graded
                     (filter #(= :ok (second %)))
-                    (map (fn [[pos]] (let [v (access/may-dig? in pos)] [pos v (access/judge v accept)]))))]
+                    (map (fn [[pos]] (let [v (access/may-dig? in pos)] [pos v (access/judge v (conj (set accept) :under-feet))]))))]
     {:targets (->> judged (filter #(= :ok (nth % 2))) (map first) (sort-by (juxt #(if (ground %) 1 0) #(u/dist here %) #(- (:y %)))) vec)
      :refused (into [] (comp (filter #(= :refused (nth % 2))) (map second)) judged)
      :wet? (boolean (some #(= :wet (second %)) graded))
@@ -380,14 +380,46 @@
   "Dig pos with a jobs.blocks.dig child: this job's rules judged the cell, the hazards it accepts are the child's."
   [c pos]
   (book-ground! c pos)
-  (await (blocks/dig-cell! c pos {:accept #{:fluid-adjacent :falling-block :under-feet} :ignore-zones? (boolean (:ignore-zones? (:args c)))})))
+  (await (blocks/dig-cell! c pos {:accept (set (:accept (:args c))) :ignore-zones? (boolean (:ignore-zones? (:args c)))})))
+
+(defn under-feet-only?
+  "Whether the one hazard of verdict v that :accept does not take is :under-feet."
+  [c v]
+  (= [:under-feet] (vec (distinct (remove (set (:accept (:args c))) (map :reason (:hazards v)))))))
+
+(defn side-stands
+  "The cells beside the one under the body's feet that the body can stand in: open at feet and head, on a floor it has seen."
+  [c]
+  (let [in (rules-in c)
+        [fx fy fz] (:feet in)
+        at (:block-at in)]
+    (filterv (fn [[x y z :as cell]]
+               (and (air (at cell)) (air (at [x (inc y) z]))
+                    (rules/solid-floor? (:floor-at in) [x (dec y) z])))
+             [[(inc fx) fy fz] [(dec fx) fy fz] [fx fy (inc fz)] [fx fy (dec fz)]])))
+
+(defn ^:async step-aside!
+  "Stand beside the cell under the feet, whose floor is unseen, so the dig does not drop the body onto it:
+  :there, :partial (the walk goes on) or :blocked (no cell beside to stand in, or the walk failed)."
+  [c]
+  (let [stands (side-stands c)]
+    (if-let [[x y z] (first stands)]
+      (await (near/go-near! c {:x x :y y :z z} 0 {:zone-tolls true}))
+      :blocked)))
 
 (defn ^:async dig! [c pos]
   (await (tools/equip! c))
   (let [v (access/may-dig? (rules-in c) pos)
         verdict (access/judge v (:accept (:args c)))]
-    (if (not= :ok verdict)
+    (cond
+      (and (= :hazard verdict) (under-feet-only? c v))
+      (let [walked (await (step-aside! c))]
+        (if (= :partial walked)
+          :continue
+          (do (when (= :blocked walked) (refused! c pos v verdict)) :again)))
+      (not= :ok verdict)
       (do (refused! c pos v verdict) :again)
+      :else
       (let [_ (ctx/update-mem! c assoc :digging pos)
             outcome (await (dig-cell! c pos))]
         (when-not (= :continue outcome) (ctx/update-mem! c dissoc :digging))

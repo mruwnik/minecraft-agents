@@ -141,12 +141,23 @@
             (is (= 4 (:goal m)))
             (is (= 1 (dig-count s)) "the snapshot is in memory when the first dig is cut")))))))
 
+;; the fake's collect moves the body onto the drop; a pick-up from beside leaves it where it stands, as a player's does
+(defn keep-body-put!
+  [p]
+  (let [st (fake/state p)]
+    (.override (.-world p) "collect" (fn ^:async f [token a impl]
+                                       (let [at (get-in @st [:self :pos])
+                                             r (await (impl token a))]
+                                         (swap! st assoc-in [:self :pos] at)
+                                         r)))))
+
 (deftest a-restart-still-mends
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [dir (tu/tmp-dir)
               s (start {:world {:blocks floor} :dir dir})]
+          (keep-body-put! (:p s))
           (tu/shutdown-at! s "dig" 3)
           (core/submit! (:eng s) (spec {:block "dirt" :count 4}) {})
           (await (run-ticks s 1))
@@ -709,7 +720,7 @@
         (let [world {:blocks {"3,64,0" "sand" "6,64,0" "sand" "6,64,1" "water"}}
               s (await (scenario {:block "sand" :count 2 :wet true :accept #{} :tunnel-length 0} world 30))]
           (is (= [[3 64 0]] (dug-cells s)))
-          (is (= #{:fluid-adjacent :falling-block :under-feet} (:default (:accept mine/args)))))))))
+          (is (= #{:fluid-adjacent :falling-block} (:default (:accept mine/args)))))))))
 
 ;; ------------------------------------------------------------------ seen targets and the strip tunnel
 
@@ -1386,3 +1397,14 @@
         (let [s (await (scenario {:block "cobweb" :count 2} {:blocks (cells "cobweb" [3 4] [64] [0]) :inventory []} 10))]
           (is (zero? (dig-count s)))
           (is (= ["sword"] (mapv :tool (events-of s :mine.no-tool)))))))))
+
+(deftest never-digs-the-cell-under-the-feet-onto-an-unseen-floor
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "sand" :count 1 :tunnel-length 0}
+                                 {:blocks {"0,63,0" "sand" "0,62,0" "lava"}} 30))]
+          (is (= "lava" (block-at s 0 62 0)))
+          (is (#{{:x 1 :y 64 :z 0} {:x -1 :y 64 :z 0} {:x 0 :y 64 :z 1} {:x 0 :y 64 :z -1}} (:target (first (moved s))))
+              "it steps to the floor beside before the dig, so it does not drop onto the unseen cell below")
+          (is (not (contains? (:default (:accept mine/args)) :under-feet))))))))

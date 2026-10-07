@@ -133,8 +133,9 @@
 (defn dig-hazards
   "Every hazard of digging :cell, as maps {:reason kw ...detail}, in check order. Hazards are reported, never refused:
   the job decides which it accepts. The cell under the body's feet is a hazard unless the cell below it is a known
-  solid floor (not magma) or the cell is in the body's own ledger: stairs, not shafts."
-  [{:keys [block-at cell feet ledger]}]
+  solid floor (not magma) or the cell is in the body's own ledger: stairs, not shafts. The floor is read by
+  :floor-at (a cell not seen is nil) when given, else block-at."
+  [{:keys [block-at floor-at cell feet ledger]}]
   (let [[fx fy fz] feet]
     (vec (concat
           (for [[n at] (fluid-neighbours block-at cell)] {:reason :fluid-adjacent :fluid n :at at})
@@ -142,7 +143,7 @@
                   [(when-let [[n at] (falls-on-body? block-at cell feet)] {:reason :falling-block :block n :at at})
                    (when (and (= cell [fx (dec fy) fz])
                               (not (contains? ledger cell))
-                              (not (solid-floor? block-at (offset cell 0 -1 0))))
+                              (not (solid-floor? (or floor-at block-at) (offset cell 0 -1 0))))
                      {:reason :under-feet})])))))
 
 (defn may-dig?

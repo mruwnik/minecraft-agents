@@ -221,11 +221,13 @@
   (let [in (stair/rules-in c (feet-of c))
         block-at (:block-at in)
         verdict (rules/may-dig? (assoc in :cell cell))]
-    (if-not (:ok verdict)
-      (book-left! c cell site (:reason verdict))
+    (cond
+      (not (:ok verdict)) (book-left! c cell site (:reason verdict))
+      (some #(= :under-feet (:reason %)) (:hazards verdict)) (book-left! c cell site :under-feet)
+      :else
       (let [l (ledger/reconcile (ledger/open-entries (ctx/view c)) block-at)
             _ (ledger/remember! c (ledger/begin-removal l cell))
-            outcome (await (blocks/dig-cell! c (cell-pos cell) {:accept #{:fluid-adjacent :falling-block :under-feet}
+            outcome (await (blocks/dig-cell! c (cell-pos cell) {:accept #{:fluid-adjacent :falling-block}
                                                                 :ignore-zones? true}))]
         (cond
           (= :continue outcome) :continue

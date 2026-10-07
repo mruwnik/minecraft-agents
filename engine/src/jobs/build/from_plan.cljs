@@ -447,7 +447,7 @@
         judged (access/judge v accept)]
     (case judged
       :ok (let [outcome (await (blocks/dig-cell! c (pos-map pos)
-                                                 {:accept #{:fluid-adjacent :falling-block :under-feet}
+                                                 {:accept accept
                                                   :ignore-zones? (boolean (:ignore-zones? (:args c)))
                                                   :for-plan (:plan (:args c))}))]
             (case outcome

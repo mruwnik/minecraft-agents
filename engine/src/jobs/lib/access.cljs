@@ -45,13 +45,20 @@
   [p guess]
   (fn [[x y z]] (when-let [b (u/sensed p {:x x :y y :z z})] (if (true? (.-unknown b)) guess (.-name b)))))
 
+(defn seen-at
+  "A block-at fn [x y z] -> name over what the body has seen, nil for a cell it has not seen or that is not loaded."
+  [p]
+  (fn [[x y z]] (when-let [b (u/sensed p {:x x :y y :z z})] (when-not (true? (.-unknown b)) (.-name b)))))
+
 (defn rules-input
-  "The rules' input without :cell: the blocks (as sensed), the body's feet and zone-input. opts as zone-input."
+  "The rules' input without :cell: the blocks (as sensed), :floor-at (blocks as seen, no guess), the body's feet and
+  zone-input. opts as zone-input."
   ([c] (rules-input c {}))
   ([c opts]
    (let [p (:primitives c)
          {:keys [x y z]} (u/self-pos c)]
      (merge {:block-at (sensed-at p hidden-guess)
+             :floor-at (seen-at p)
              :feet [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]
              :ledger #{}}
             (zone-input c opts)))))
