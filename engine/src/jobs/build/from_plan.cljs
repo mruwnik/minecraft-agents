@@ -22,7 +22,7 @@
   fern, vine, water ...), which a place takes over.
   A cell holding any other wrong block (dirt, leaves, stone ...) is dug first and then placed, when its item is
   carried and the rules allow the dig. The best carried tool is used, or the hand for blocks that need none. A
-  pickaxe block without a pickaxe is given up as :no-tool. A block that could not be dug, or may not be, is listed
+  pickaxe block without a pickaxe is fetched a tool for, else given up as :no-tool. A block that could not be dug, or may not be, is listed
   under :wrong. So is a block that came out of a place in the wrong state (:placed true); it is never dug or placed
   again.
   A door's upper half, a bed's head and a tall plant's upper half are never targets: the lower or foot cell places
@@ -62,8 +62,9 @@
   - while no zone list has been read.
   - before the job has begun, while cells are missing but none of their blocks is carried and none can be fetched.
   Material: while cells wait for an item not carried (and not given up or refused), each round first fetches it (:fetch,
-  jobs.lib.fetch, a jobs.items.obtain child for the missing count); with :fetch false, or once a fetch failed, the build
-  goes on with what is carried and ends :short as before. Tools are not fetched (a pickaxe block is given up :no-tool).")
+  jobs.lib.fetch, a jobs.items.obtain child for the missing count); a pickaxe block to dig without a pickaxe fetches the tool the same way
+  (jobs.items.get-tool). With :fetch false, or once a fetch failed, the build goes on with what is carried and ends
+  :short as before, a pickaxe block given up :no-tool.")
 
 (def args
   {:plan {:doc "id of a plan of the body's world" :default nil}
@@ -71,7 +72,7 @@
    :reach {:doc "cells whose centre is this close to the eye are placed without walking, in blocks" :default 4.2}
    :give-up {:doc "refused places or failed walks after which a cell is given up" :default 3}
    :accept {:doc "fluid hazards of a cell taken: :fluid-adjacent (water beside; placing beside or into water seals and bridges), :lava-adjacent (lava beside; not taken by default: the body stands beside the cell)" :default [:fluid-adjacent]}
-   :fetch {:doc "get the blocks the plan lacks (jobs.lib.fetch): true, a set of kinds or a map of limits; false builds with what is carried" :default true}
+   :fetch {:doc "get the blocks and tools the plan lacks (jobs.lib.fetch): true, a set of kinds or a map of limits; false builds with what is carried" :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
    :sturdy-ground {:doc "a sturdy block on the ground of a rail line (plan.rail/ground) is no wrong block, whatever fill the plan wants there" :default false}})
 
@@ -361,14 +362,29 @@
 
 ;; ------------------------------------------------------------------ check
 
+(defn tool-of
+  "The :no-tool wait for the first open dig whose pickaxe block cannot be dug with what is carried, else nil."
+  [c cells]
+  (let [mem (ctx/mem c)
+        closed (merge (:given-up mem) (:refused mem))
+        names (map :name (u/inventory (:primitives c)))]
+    (some #(when (and (not (contains? closed (:pos %)))
+                      (not (by-hand? (:found %)))
+                      (nil? (tools/best-tool names (:found %))))
+             {:reason :no-tool :block (:found %)})
+          (digging cells))))
+
 (defn need-of
-  "The :need wait for the first item of the open missing cells that is not carried enough, else nil."
+  "The wait of the open cells: the :need for the first item of the missing ones not carried enough, else the
+  :no-tool for a pickaxe block to dig without a tool, else nil."
   [c cells]
   (let [mem (ctx/mem c)
         closed (merge (:given-up mem) (:refused mem))
         open (remove #(contains? closed (:pos %)) (missing cells))
         [item n] (first (shortage open (carried-counts (:primitives c))))]
-    (when item {:reason :need :item item :count n})))
+    (if item
+      {:reason :need :item item :count n}
+      (tool-of c cells))))
 
 (defn problem
   "need-of for the plan as it stands now, nil when the plan is in trouble."

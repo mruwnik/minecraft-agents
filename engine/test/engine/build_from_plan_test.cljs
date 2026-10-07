@@ -610,3 +610,28 @@
         (let [{:keys [result p]} (await (fence-fetch {:fetch false}))]
           (is (= {"oak_fence" 7} (:short result)))
           (is (= 7 (chest-fences p))))))))
+
+(deftest a-missing-pickaxe-is-fetched-from-a-seen-chest-by-default
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [spec {:blocks {"4,64,3" "stone" fence-chest "chest"} :inventory kit
+                    :containers {fence-chest [{:name "stone_pickaxe" :count 1}]}}
+              {:keys [eng p]} (start spec {"pen" (pen-plan)})
+              _ (tu/seeing-all p)
+              result (await (h/child-outcome eng job {:plan "pen"} 300))]
+          (is (= "oak_fence" (block p [4 64 3])))
+          (is (= [] (:wrong result)))
+          (is (= {} (:given-up result))))))))
+
+(deftest fetch-false-gives-up-a-pickaxe-block-as-no-tool-and-leaves-the-chest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [spec {:blocks {"4,64,3" "stone" fence-chest "chest"} :inventory kit
+                    :containers {fence-chest [{:name "stone_pickaxe" :count 1}]}}
+              {:keys [eng p]} (start spec {"pen" (pen-plan)})
+              _ (tu/seeing-all p)
+              result (await (h/child-outcome eng job {:plan "pen" :fetch false} 300))]
+          (is (= {[4 64 3] :no-tool} (:given-up result)))
+          (is (= "stone" (block p [4 64 3]))))))))
