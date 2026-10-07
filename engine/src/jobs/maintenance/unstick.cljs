@@ -1,5 +1,6 @@
 (ns jobs.maintenance.unstick
-  (:require [engine.ctx :as ctx]
+  (:require [jobs.lib.args :as jargs]
+            [engine.ctx :as ctx]
             [jobs.lib.reach :as reach]
             [jobs.lib.result :as result]
             [jobs.lib.util :as u]
@@ -19,11 +20,11 @@
   The check is the stuck trigger's condition (triggers.survival.stuck), or a spell already begun.")
 
 (def args
-  {:n {:doc "bad moves in a row that count as stuck" :default (:n stuck/defaults)}
-   :min-move {:doc "blocks a move must cover to count as progress" :default (:min-move stuck/defaults)}
-   :window-ms {:doc "the newest of the bad moves must be at most this many ms old" :default (:window-ms stuck/defaults)}
-   :quiet-ms {:doc "after giving up, the trigger stays quiet this many ms" :default (:quiet-ms stuck/defaults)}
-   :ignore-zones? {:doc "act regardless of zones and claims (passed to go-to's escalation); the rules of the game allow it" :default false}})
+  {:n {:doc "bad moves in a row that count as stuck" :type :int :min 1 :default (:n stuck/defaults)}
+   :min-move {:doc "blocks a move must cover to count as progress" :type :number :min 0 :default (:min-move stuck/defaults)}
+   :window-ms {:doc "the newest of the bad moves must be at most this many ms old" :type :number :min 0 :default (:window-ms stuck/defaults)}
+   :quiet-ms {:doc "after giving up, the trigger stays quiet this many ms" :type :number :min 0 :default (:quiet-ms stuck/defaults)}
+   :ignore-zones? {:doc "act regardless of zones and claims (passed to go-to's escalation); the rules of the game allow it" :type :bool :default false}})
 
 (def stuck-policy {:cap 10 :ttl (* 60 60 1000)})
 
@@ -55,7 +56,7 @@
     (ctx/remember! c :stuck {:pos pos} stuck-policy)
     (result/stop! c (:why fields) (str "still stuck: " (name (:why fields))))))
 
-(defn check [c]
+(defn check-run [c]
   (or (contains? (ctx/mem c) :goal)
       (boolean (stuck/stuck? (ctx/view c) (:args c)))
       (ctx/wait c {:reason :not-stuck})))
@@ -75,3 +76,12 @@
           (and enclosed (not (reach/enclosed? (:primitives c)))) :done
           :else (give-up! c (merge {:why (if (= :continue r) :yielded (or (:why res) (:reason res) :declined))}
                                    (select-keys res [:escalation :kind :detail]))))))))
+
+(def bad-lists
+  "Args checked by jobs.lib.args."
+  {})
+
+(defn check
+  "check-run once the list args are well formed, else declines :bad-args."
+  [c]
+  (jargs/guard c bad-lists check-run))

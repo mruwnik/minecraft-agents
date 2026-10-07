@@ -1,5 +1,6 @@
 (ns jobs.storage.deposit
-  (:require [clojure.string :as str]
+  (:require [jobs.lib.args :as jargs]
+            [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.cost :as cost]
@@ -30,8 +31,8 @@
   {:chest {:doc "chest position [x y z] or {:x :y :z}; the known :chest place when nil" :type :pos :default nil}
    :items {:doc "item names to put away, in this order (the first name with something to spare goes first); everything but tools and armour when nil" :default nil}
    :keep {:doc "{item-name count}: leave at least this many of the name carried" :default {}}
-   :free {:doc "stop once this many inventory slots are free; all of it when nil" :default nil}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
+   :free {:doc "stop once this many inventory slots are free; all of it when nil" :type :int :min 0 :default nil}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :type :bool :default false}})
 
 (def gear-suffixes ["_pickaxe" "_axe" "_shovel" "_hoe" "_sword" "_helmet" "_chestplate" "_leggings" "_boots"])
 (def gear-names #{"shears" "bow" "crossbow" "fishing_rod" "flint_and_steel" "shield" "trident"})
@@ -69,7 +70,7 @@
        (some (fn [n] (some #(when (= n (:name %)) (pick %)) items)) wanted)
        (some #(when-not (tool? (:name %)) (pick %)) items)))))
 
-(defn check
+(defn check-run
   "A chest is known; else waits with reason :no-chest."
   [c]
   (or (boolean (chest-of (ctx/view c) (:args c)))
@@ -156,3 +157,12 @@
   moves nothing twice) until nothing is left or it stops. :continue only while go-to waits on the world."
   [c]
   (await (pace/steps! c (fn ^:async deposit-step [] (await (step! c))))))
+
+(def bad-lists
+  "Args checked by jobs.lib.args."
+  {:items :names :keep :counts})
+
+(defn check
+  "check-run once the list args are well formed, else declines :bad-args."
+  [c]
+  (jargs/guard c bad-lists check-run))

@@ -1,5 +1,6 @@
 (ns jobs.storage.withdraw
-  (:require [engine.ctx :as ctx]
+  (:require [jobs.lib.args :as jargs]
+            [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.util :as u]
@@ -24,7 +25,7 @@
 (def args
   {:chest {:doc "chest position [x y z] or {:x :y :z}; the known :chest place when nil" :type :pos :default nil}
    :items {:doc "{item-name count}: carry at least this many of each name" :default {}}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :type :bool :default false}})
 
 (defn shortfall
   "[[name n] ...] in the order of items: n is the target minus the total
@@ -35,7 +36,7 @@
        (filter (fn [[_ n]] (pos? n)))
        vec))
 
-(defn check
+(defn check-run
   "A chest is known; else waits with reason :no-chest."
   [c]
   (or (boolean (deposit/chest-of (ctx/view c) (:args c)))
@@ -121,3 +122,12 @@
   waits on the world."
   [c]
   (await (pace/steps! c (fn ^:async withdraw-step [] (await (step! c))))))
+
+(def bad-lists
+  "Args checked by jobs.lib.args."
+  {:items :counts})
+
+(defn check
+  "check-run once the list args are well formed, else declines :bad-args."
+  [c]
+  (jargs/guard c bad-lists check-run))

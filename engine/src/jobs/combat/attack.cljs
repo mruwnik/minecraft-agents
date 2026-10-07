@@ -1,5 +1,6 @@
 (ns jobs.combat.attack
-  (:require [engine.ctx :as ctx]
+  (:require [jobs.lib.args :as jargs]
+            [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
             [jobs.lib.shelter :as sh]
             [jobs.lib.util :as u]
@@ -36,15 +37,15 @@
 
 (def args
   {:targets {:doc "entity ids, player usernames and mob types to kill; a single one may be given bare" :default []}
-   :radius {:doc "targets within this many blocks count" :default 16}
+   :radius {:doc "targets within this many blocks count" :type :number :min 0 :default 16}
    :weapons {:doc "item name substrings that count as weapons" :default combat/default-weapons}
-   :attack-gap-ms {:doc "least time between swings; nil: the held weapon's cooldown" :default nil}
-   :lost-s {:doc "seconds without a target in radius before the job is done" :default 5}
-   :timeout-s {:doc "seconds from the first round before the job gives up" :default 120}
-   :no-damage-hits {:doc "swings in a row that do no damage before a target is given up on" :default 4}
-   :max-hits {:doc "hits without a kill before a target is given up on" :default 40}
-   :walk-timeout-s {:doc "bound of one walk towards a target" :default 5}
-   :absent {:doc ":done ends the job with reason :absent when no target is present after a 2 s grace; :wait makes the check decline until one is" :default :done}})
+   :attack-gap-ms {:doc "least time between swings; nil: the held weapon's cooldown" :type :number :min 0 :default nil}
+   :lost-s {:doc "seconds without a target in radius before the job is done" :type :number :min 0 :default 5}
+   :timeout-s {:doc "seconds from the first round before the job gives up" :type :number :min 0 :default 120}
+   :no-damage-hits {:doc "swings in a row that do no damage before a target is given up on" :type :int :min 1 :default 4}
+   :max-hits {:doc "hits without a kill before a target is given up on" :type :int :min 1 :default 40}
+   :walk-timeout-s {:doc "bound of one walk towards a target" :type :number :min 0 :default 5}
+   :absent {:doc ":done ends the job with reason :absent when no target is present after a 2 s grace; :wait makes the check decline until one is" :type :enum :values [:done :wait] :default :done}})
 
 (def reach 3)
 (def absent-grace-ms
@@ -98,7 +99,7 @@
   (let [given-up (:given-up (ctx/mem c) {})]
     (into [] (remove #(contains? given-up (.-id %))) (present c))))
 
-(defn check [c]
+(defn check-run [c]
   (or (boolean (or (:started (ctx/mem c))
                    (not= :wait (:absent (:args c)))
                    (seq (candidates c))))
@@ -277,3 +278,12 @@
   "The whole fight: steps until the job finishes (cleared, gave up, lost, timeout, absent)."
   [c]
   (await (pace/steps! c #(step c))))
+
+(def bad-lists
+  "Args checked by jobs.lib.args."
+  {:targets :targets :weapons :names})
+
+(defn check
+  "check-run once the list args are well formed, else declines :bad-args."
+  [c]
+  (jargs/guard c bad-lists check-run))

@@ -71,7 +71,7 @@
   Muting :night does not end a running night job: the agent cancels it too.")
 
 (def args
-  {:roof-height {:doc "a solid block within this many blocks above counts as a roof" :default sh/default-roof-height}
+  {:roof-height {:doc "a solid block within this many blocks above counts as a roof" :type :int :min 0 :default sh/default-roof-height}
    :bed-radius {:doc "a remembered bed farther than this is not used" :default sh/default-bed-radius}
    :urgent-bed-radius {:doc "the bed radius once the body is overdue for sleep" :default sh/urgent-bed-radius}
    :roofed-places {:doc "place names walked to at night, when close and the route is lit, before digging in" :default [:home]}

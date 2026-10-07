@@ -1,5 +1,6 @@
 (ns jobs.survival.dig-in
-  (:require [jobs.forestry.trees :as trees]
+  (:require [jobs.lib.args :as jargs]
+            [jobs.forestry.trees :as trees]
             [jobs.lib.tidy :as tidy]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
@@ -64,11 +65,11 @@
   (into building-blocks trees/log-names))
 
 (def args
-  {:roof-height {:doc "a solid block within this many blocks above counts as a roof" :default sh/default-roof-height}
+  {:roof-height {:doc "a solid block within this many blocks above counts as a roof" :type :int :min 0 :default sh/default-roof-height}
    :blocks {:doc "names of the blocks it may place" :default shelter-blocks}
-   :max-places {:doc "placements per step" :default 4}
-   :enclose {:doc "wall in under a roof already overhead: walls only, never a pit; stops :no-blocks when too few blocks are carried" :default false}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
+   :max-places {:doc "placements per step" :type :int :min 1 :default 4}
+   :enclose {:doc "wall in under a roof already overhead: walls only, never a pit; stops :no-blocks when too few blocks are carried" :type :bool :default false}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :type :bool :default false}})
 
 (def shelter-policy {:cap 10 :ttl sh/ms-per-day})
 
@@ -280,7 +281,7 @@
              (:data %))
           (ctx/entries c :dig-in-futile))))
 
-(defn check
+(defn check-run
   "Night, no roof over the body and no futile site here; a decline says why (ctx/wait): :day, :already-sealed, or
   :futile with the failed site's :pos and :reason (none: it needs blocks to roof with)."
   [c]
@@ -386,3 +387,12 @@
       (if (= :continue r)
         (do (await (child/pace!)) (recur (inc i)))
         (end! c)))))
+
+(def bad-lists
+  "Args checked by jobs.lib.args."
+  {:blocks :names})
+
+(defn check
+  "check-run once the list args are well formed, else declines :bad-args."
+  [c]
+  (jargs/guard c bad-lists check-run))

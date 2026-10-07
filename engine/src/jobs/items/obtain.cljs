@@ -1,5 +1,6 @@
 (ns jobs.items.obtain
-  (:require [engine.ctx :as ctx]
+  (:require [jobs.lib.args :as jargs]
+            [engine.ctx :as ctx]
             [jobs.lib.blocks :as b]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.look :as look]
@@ -41,13 +42,13 @@
   plans its whole chain; a gather child fetches its own tools).")
 
 (def args
-  {:item {:doc "the item to get" :default nil}
+  {:item {:doc "the item to get" :type :item :default nil}
    :any-of {:doc "items, any one will do, the first preferred (instead of :item)" :default nil}
-   :count {:doc "how many more than carried at the start, at most 64" :default 1}
+   :count {:doc "how many more than carried at the start, at most 64" :type :int :min 1 :max 64 :default 1}
    :how {:doc "sources to use, a subset of #{:chest :craft :gather}; nil: all" :default nil}
-   :depth {:doc "nested fetches left; nil: the fetch limits (jobs.lib.fetch)" :default nil}
-   :minutes {:doc "time budget from the first round; nil: the fetch limits" :default nil}
-   :fail-minutes {:doc "passed on to nested fetches; nil: the fetch limits" :default nil}
+   :depth {:doc "nested fetches left; nil: the fetch limits (jobs.lib.fetch)" :type :int :min 0 :default nil}
+   :minutes {:doc "time budget from the first round; nil: the fetch limits" :type :number :min 0 :default nil}
+   :fail-minutes {:doc "passed on to nested fetches; nil: the fetch limits" :type :number :min 0 :default nil}
    :chain {:doc "items being fetched above this one (a cycle stops)" :default []}})
 
 (def max-inspections 4)
@@ -229,7 +230,7 @@
              (when (contains? how :craft) [(recipes/lacking version have (first names) n)])
              (when (contains? how :gather) [(unseen-why c names n)])))))
 
-(defn check [c]
+(defn check-run [c]
   (let [a (:args c)
         names (names-of a)]
     (cond
@@ -411,3 +412,12 @@
   "The whole attempt in one call: step! again until the count is carried or it stops; :continue only while a child waits on the world."
   [c]
   (await (pace/steps! c (fn ^:async obtain-step [] (await (step! c))))))
+
+(def bad-lists
+  "Args checked by jobs.lib.args."
+  {:any-of :names :how :names :chain :names})
+
+(defn check
+  "check-run once the list args are well formed, else declines :bad-args."
+  [c]
+  (jargs/guard c bad-lists check-run))

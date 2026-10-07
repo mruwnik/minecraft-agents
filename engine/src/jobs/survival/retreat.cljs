@@ -1,5 +1,6 @@
 (ns jobs.survival.retreat
-  (:require [jobs.lib.click :as click]
+  (:require [jobs.lib.args :as jargs]
+            [jobs.lib.click :as click]
             [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
@@ -58,18 +59,18 @@
   A cell in another's zone is used only as a last resort (retreat.trespass-last-resort warning).")
 
 (def args
-  {:radius {:doc "hostiles within this many blocks start a flight" :default 8}
-   :ranged-radius {:doc "ranged hostiles (skeletons and the like) within this many blocks start a flight" :default 16}
-   :eat-gap {:doc "with at least this many blocks to the nearest hostile, eat a bite per flee step" :default 12}
-   :step {:doc "blocks per walk" :default 6}
-   :home-range {:doc "a flight leans towards the latest :bed or :home only when it lies within this many blocks" :default 64}
+  {:radius {:doc "hostiles within this many blocks start a flight" :type :number :min 0 :default 8}
+   :ranged-radius {:doc "ranged hostiles (skeletons and the like) within this many blocks start a flight" :type :number :min 0 :default 16}
+   :eat-gap {:doc "with at least this many blocks to the nearest hostile, eat a bite per flee step" :type :number :min 0 :default 12}
+   :step {:doc "blocks per walk" :type :number :min 1 :default 6}
+   :home-range {:doc "a flight leans towards the latest :bed or :home only when it lies within this many blocks" :type :number :min 0 :default 64}
    :weapons {:doc "item name substrings that count as weapons, for a cornered fight" :default combat/default-weapons}
-   :reserve {:doc "health a cornered fight must be expected to leave" :default 4}
+   :reserve {:doc "health a cornered fight must be expected to leave" :type :number :min 0 :default 4}
    :blocks {:doc "names of the blocks a cornered body may seal itself in with" :default dig-in/building-blocks}
-   :max-places {:doc "seal placements per step" :default 4}
-   :lost-s {:doc "a mob out of line of sight this many seconds has stopped chasing" :default 4}
-   :quiet-s {:doc "a hidden body keeps its refuge this many seconds after the last danger" :default 30}
-   :no-gain-steps {:doc "flight steps without a new best gap to the nearest chaser before the cornered options are tried" :default 20}})
+   :max-places {:doc "seal placements per step" :type :int :min 1 :default 4}
+   :lost-s {:doc "a mob out of line of sight this many seconds has stopped chasing" :type :number :min 0 :default 4}
+   :quiet-s {:doc "a hidden body keeps its refuge this many seconds after the last danger" :type :number :min 0 :default 30}
+   :no-gain-steps {:doc "flight steps without a new best gap to the nearest chaser before the cornered options are tried" :type :int :min 1 :default 20}})
 
 (def tool-weapons
   "Item name substrings a cornered body with no weapon and no seal swings: any of them beats the fist."
@@ -90,7 +91,7 @@
                  :pos)]
     (when (and pos (<= (u/dist pos (u/self-pos c)) (:home-range (:args c)))) pos)))
 
-(defn check [_c] true)
+(defn check-run [_c] true)
 
 (defn block-at-fn [p]
   (fn [pos] (u/block-name p pos)))
@@ -321,3 +322,12 @@
       (if (= :again r)
         (do (await (pace/pace!)) (recur))
         r))))
+
+(def bad-lists
+  "Args checked by jobs.lib.args."
+  {:weapons :names :blocks :names})
+
+(defn check
+  "check-run once the list args are well formed, else declines :bad-args."
+  [c]
+  (jargs/guard c bad-lists check-run))

@@ -24,9 +24,9 @@
    :item {:doc "a tool item name" :default nil}
    :kind {:doc "a tool kind, e.g. \"pickaxe\" or \"shears\"" :default nil}
    :how {:doc "sources, a subset of #{:chest :craft :gather}; nil: all" :default nil}
-   :depth {:doc "nested fetches left; nil: the fetch limits (jobs.lib.fetch)" :default nil}
-   :minutes {:doc "time budget; nil: the fetch limits" :default nil}
-   :fail-minutes {:doc "passed on to nested fetches; nil: the fetch limits" :default nil}
+   :depth {:doc "nested fetches left; nil: the fetch limits (jobs.lib.fetch)" :type :int :min 0 :default nil}
+   :minutes {:doc "time budget; nil: the fetch limits" :type :number :min 0 :default nil}
+   :fail-minutes {:doc "passed on to nested fetches; nil: the fetch limits" :type :number :min 0 :default nil}
    :chain {:doc "items being fetched above this one" :default []}})
 
 (def tiered #{"pickaxe" "axe" "shovel" "hoe" "sword"})
