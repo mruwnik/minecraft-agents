@@ -338,3 +338,12 @@
           (is (= {:arrived true} @out))
           (is (= 1 (count (moved eng))) "one round")
           (is (= [:mob] (mapv :why (replan-events seen)))))))))
+
+(deftest go-to-a-mob-standing-in-a-1-wide-way-ahead-is-planned-round-before-the-body-is-stuck
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out eng seen]} (await (go! corridors {:pos [16 64 0] :range 0} (fn [p] (on-steer p (fn [_ _ _])))))]
+          (is (= {:arrived true} @out))
+          (is (= 1 (count (moved eng))) "one round")
+          (is (= [:mob] (mapv :why (replan-events seen)))))))))

@@ -636,9 +636,10 @@
   ticks between checks (a check also runs whenever the body reaches a step); min-refresh-ticks: a partial plan is planned
   again at most this often (4 s), planner-share: and the planner gets at most this share of the walk (a slow plan spaces the
   refreshes out); better-by: a refreshed partial plan is taken only when its end is this many blocks nearer the goal; mob-waits
-  and mob-wait-ms: a body stuck behind a mob waits this often this long for it to move on."
+  and mob-wait-ms: a body stuck behind a mob waits this often this long for it to move on; mob-still-ticks: a mob that stands
+  this many ticks (1 s) in a 1-wide way ahead is planned round at once."
   {:window 10 :check-every 5 :min-refresh-ticks 80 :planner-share 0.05 :tick-ms 50 :better-by 2
-   :mob-waits 3 :mob-wait-ms 1000 :mob-reach 2.5})
+   :mob-waits 3 :mob-wait-ms 1000 :mob-reach 2.5 :mob-still-ticks 20})
 
 (def max-watch-replans
   "Replans a look-ahead may start in one follow! (changes, refreshes, mobs); past it the plan is walked unwatched."
@@ -749,23 +750,54 @@
                  (not= (:at frontier-taken) (:at (:frontier-taken old-plan))))
             (<= (+ (near-goal (peek steps) to) (:better-by watch-policy)) (near-goal (peek old-steps) to))))))
 
+(defn one-wide?
+  "Whether the way is 1-wide at cell [x y z]: across the leg from prev to step, both side cells are solid at the feet and
+  over the head, in the solid? of a pathWorld."
+  [solid? prev step [x y z]]
+  (let [along-x? (>= (js/Math.abs (- (:px step) (:px prev))) (js/Math.abs (- (:pz step) (:pz prev))))
+        sides (if along-x? [[0 0 -1] [0 0 1]] [[-1 0 0] [1 0 0]])]
+    (every? (fn [[dx _ dz]] (and (solid? (+ x dx) y (+ z dz)) (solid? (+ x dx) (inc y) (+ z dz)))) sides)))
+
+(defn still-mob-cells
+  "The cells {:x :y :z} (feet and head) of the entities (not items, not the body) that have stood in the same cell of a
+  1-wide leg in the window ahead for mob-still-ticks ticks. seen: an atom {id [cell first-tick]}, kept up to date."
+  [{:keys [mobs seen]} here i2 tick pw]
+  (let [solid? (solid-fn pw)
+        legs (into {} (mapcat (fn [k] (let [prev (nth here (dec k)) step (nth here k)]
+                                        (map (fn [cell] [cell [prev step]]) (step-cells prev step))))
+                              (range (max 1 i2) (min (count here) (+ i2 (:window watch-policy))))))
+        found (into {} (for [^js e (mobs)
+                             :let [pos (.-pos e)
+                                   cell [(js/Math.floor (.-x pos)) (js/Math.floor (.-y pos)) (js/Math.floor (.-z pos))]]
+                             :when (and (not= "item" (.-kind e)) (contains? legs cell))]
+                         [(.-id e) cell]))]
+    (swap! seen (fn [m] (into {} (for [[id cell] found] [id (if (= cell (first (m id))) (m id) [cell tick])]))))
+    (vec (for [[id cell] found
+               :let [[_ t0] (@seen id)]
+               :when (and (>= (- tick t0) (:mob-still-ticks watch-policy)) (apply one-wide? solid? (conj (legs cell) cell)))
+               dy [0 1]]
+           {:x (cell 0) :y (+ dy (cell 1)) :z (cell 2)}))))
+
 (defn watch-stop
   "The look-ahead at one tick: nil, or the done map that stops the walk to plan again: {:status :replan :why :changed :cells}
-  when a cell of the window ahead differs for the planner between the plan's snapshot (base) and a fresh one, else
+  when a cell of the window ahead differs for the planner between the plan's snapshot (base) and a fresh one, {:status
+  :replan :why :mob :cells} (the cells as walls) when a mob has stood in a 1-wide way ahead (still-mob-cells), else
   {:status :replan :why :refresh} for a partial plan due a refresh. Only at a boundary?. steps: the steps walked; i the
-  executor's index before the tick; state its state after; watch {:base :fresh :ahead :skip :status :interval}."
-  [{:keys [base fresh ahead skip status interval]} steps i {i2 :i tick :tick} pose]
-  (when (boundary? steps i i2 tick pose)
+  executor's index before the tick; state its state after; watch {:base :fresh :ahead :skip :status :interval :mobs :seen}."
+  [{:keys [base fresh ahead skip status interval mobs] :as watch} steps i {i2 :i tick :tick} pose]
+(when (boundary? steps i i2 tick pose)
     (let [all (into steps ahead)
           here (assoc all (dec i2) (assoc (nth all (dec i2)) :px (:x pose) :pz (:z pose)))
           ^js now (fresh)
           at [(:x pose) (:y pose) (:z pose)]
+          still (when (and mobs now) (still-mob-cells watch here i2 tick now))
           changed (when now
                     (let [^js bs (.-snapshot base) ^js ns (.-snapshot now) table (.-table base)]
                       (filterv (fn [[x y z]] (not (same-for-planner? table (.stateAt bs x y z) (.stateAt ns x y z))))
                                (remove (or skip #{}) (window-cells here i2 (:window watch-policy))))))]
       (cond
         (seq changed) {:status :replan :why :changed :cells changed :at at :step i2}
+        (seq still) {:status :replan :why :mob :cells still :at at :step i2}
         (refresh-due? status tick interval) {:status :replan :why :refresh :at at :step i2}))))
 
 (defn ^:async walk!
@@ -817,6 +849,7 @@
   skipped, and the refresh interval from the plan's ms."
   [c plan]
   {:base (:pw plan) :fresh #(path-world (:primitives c)) :ahead [] :skip (opens-cells (:steps plan))
+   :mobs #(combat/sensed (:primitives c) {:radius 8 :max 64}) :seen (atom {})
    :status (:status plan) :interval (refresh-ticks (:ms plan))})
 
 (defn mob-cells
@@ -880,6 +913,15 @@
                                         :at (:at done)
                                         :text (str "re-plan " (inc n) " (" (name why) (when kept ", kept the plan") ")")}))]
         (cond
+          (and (= :replan (:status done)) (= :mob (:why done)))
+          (let [t (js/performance.now)
+                fresh (await (plan-fn (:cells done)))
+                plan-ms (- (js/performance.now) t)]
+            (tell! :mob plan-ms false)
+            (if (walkable? fresh)
+              (recur (assoc fresh :ms plan-ms) (:steps fresh) (inc n) ms walked')
+              (recur plan (subvec steps (max 0 (dec k))) max-watch-replans ms walked')))
+
           (= :replan (:status done))
           (let [t (js/performance.now)
                 fresh (await (plan-fn []))
