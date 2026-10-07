@@ -79,7 +79,7 @@
 (defn fall-profile
   "How a body {:health :equipment :damage-budget} takes drops: {:fall-factor the share of the usual fall damage left (1:
   none reduced), :max-drop the longest drop in blocks the planner may take}: the longest (up to max-fall, at least 3)
-  whose fall damage the budget (hp, jobs.lib.cost.health/damage-budget) pays for."
+  whose fall damage the budget (hp: jobs.lib.walk.world passes the survivable-budget, jobs.lib.cost.health) pays for."
   [{:keys [equipment damage-budget]}]
   (let [budget (or damage-budget 0)]
     {:fall-factor (fall-damage equipment 4)

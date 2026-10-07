@@ -247,7 +247,7 @@
           (is (nil? (wplan/no-walk asked 0)))
           (is (= {:at [46 80 8]} (:frontier-taken asked)))
           (is (= [46 80 8] ((juxt :x :y :z) (peek (:steps asked)))))
-          (is (= {:status :no-path :reason :exhausted :replans 0} (wplan/no-walk not-asked 0)))
+          (is (= {:status :no-path :reason :exhausted :replans 0} (dissoc (wplan/no-walk not-asked 0) :damage-refused)))
           (is (nil? (:frontier-taken not-asked))))))))
 
 ;; at the frontier the plan walks nowhere: not back to the walkway's end nearest the goal (x 18), which would swing the
@@ -257,7 +257,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [plan (await (plan-from walkway-to-unloaded [46 80 8] [10 64 8] {:frontier true}))]
-          (is (= {:status :no-path :reason :exhausted :replans 0} (wplan/no-walk plan 0)))
+          (is (= {:status :no-path :reason :exhausted :replans 0} (dissoc (wplan/no-walk plan 0) :damage-refused)))
           (is (nil? (:frontier-taken plan))))))))
 
 ;; a floor x -2..10, z -2..4 cut by a stone wall at x 5 (feet and head): the goal's side is walled in, the planner's

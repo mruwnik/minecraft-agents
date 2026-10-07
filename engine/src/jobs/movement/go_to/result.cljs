@@ -81,6 +81,7 @@
            :off-plan (or detail "the walk left its plan")
            :steer-failed (str "steering failed" (some->> detail (str ": ")))
            :moved-while-searching "the body was pushed about while the path was searched"
+           :needs-health "every way costs more hp than the body may spend and it cannot heal first"
            :one-way "the way back is one-way"
            :door-stuck "a door in the way will not open"
            (str "no path (" (some-> why name) ")")))))

@@ -445,9 +445,10 @@
       (fn ^:async t []
         ;; a walkway (feet 80) x 18..47 at z 8 over a floor x 0..47, z 0..15, with no way down; from x 48 on nothing is
         ;; loaded (the fake never loads more): the first round walks to the frontier, the rest find no new one
+        ;; (:max-damage 7: the walkway is a 16-block drop, which a body over its budget would take: go-to-health-test)
         (let [world {:blocks (merge (box 0 63 0 47 63 15 "stone") (box 18 79 8 47 79 8 "stone"))
                      :self {:pos {:x 18.5 :y 80 :z 8.5}}}
-              {:keys [out eng p]} (await (go! world {:pos [10 64 8] :range 0}))]
+              {:keys [out eng p]} (await (go! world {:pos [10 64 8] :range 0 :max-damage 7}))]
           (is (= {:arrived false :reason :unreachable :why :exhausted} (select-keys @out [:arrived :reason :why])))
           (is (>= (first (at p)) 46) "walked to the frontier")
           (is (= ["partial" "blocked" "blocked" "blocked"] (mapv :status (moved eng)))
@@ -479,7 +480,7 @@
                      :self {:pos {:x 18.5 :y 80 :z 8.5}}}
               {:keys [eng p] :as s} (setup world)
               out (atom :not-done)
-              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out {:pos [10 64 8] :range 0})))]
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out {:pos [10 64 8] :range 0 :max-damage 7})))]
           (reset! wsearch/searches {})
           (set! wsearch/round-budget 64)
           (set! wplan/chunk-expansions 16)
@@ -587,7 +588,7 @@
       (fn ^:async t []
         (let [world {:blocks (merge (box 0 63 0 47 63 15 "stone") (box 18 79 8 47 79 8 "stone"))
                      :self {:pos {:x 18.5 :y 80 :z 8.5}}}
-              {:keys [out returns eng]} (await (go-returns! world {:pos [10 64 8] :range 0}))]
+              {:keys [out returns eng]} (await (go-returns! world {:pos [10 64 8] :range 0 :max-damage 7}))]
           (is (= :exhausted (:why @out)))
           (is (= ["partial" "blocked" "blocked" "blocked"] (mapv :status (moved eng))))
           (is (= [:done] @returns)))))))

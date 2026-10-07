@@ -196,7 +196,8 @@
 (defn no-walk
   "The result of a plan that is not walked, nil when it is: no path within abilities (:beyond), a goal the planner proved
   walled in or cut off by a drop (:goal-enclosed, :goal-cut-off: its partial plan's nearer end gets the body no nearer to arriving), a plan cut at a one-way step with no step left, no path, a plan the policy (default
-  executor/policy) refuses. replans goes in the result."
+  executor/policy) refuses. replans goes in the result; :damage-refused true when the search found no way for want of
+  damage budget (the planner's damageRefused)."
   ([plan replans] (no-walk plan replans executor/policy))
   ([{:keys [r steps beyond status stop searched-out fresh]} replans policy]
    (let [partial? (= "partial" status)]
@@ -211,13 +212,15 @@
        {:status :no-path :reason (keyword (.-reason r)) :replans replans}
 
        searched-out
-       {:status :no-path :reason :exhausted :searched-out true :replans replans}
+       (cond-> {:status :no-path :reason :exhausted :searched-out true :replans replans}
+         (true? (some-> r .-damageRefused)) (assoc :damage-refused true))
 
        (and stop (< (count steps) 2))
        (assoc stop :replans replans)
 
        (or (= "none" status) (and partial? (< (count steps) 2)))
-       {:status :no-path :reason (some-> (.-reason r) keyword) :replans replans}
+       (cond-> {:status :no-path :reason (some-> (.-reason r) keyword) :replans replans}
+         (true? (some-> r .-damageRefused)) (assoc :damage-refused true))
 
        :else
        (some-> (executor/refusal policy steps) (assoc :replans replans))))))

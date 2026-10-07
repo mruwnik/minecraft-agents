@@ -1,0 +1,25 @@
+;; Card 2909cf46 S4: go-to when the damage budget refuses the only way. The same block as go-to-health-stop: a drop of 10 (7 hp of
+;; budget needed, full health only). A hurt body with food waits to heal, then drops; a hungry one with nothing to eat drops over
+;; its budget; a caller's :min-health is never crossed (gives up :needs-health) and a :max-damage 0 never drops.
+{:defaults
+ {:tags [:movement]
+  :time :any
+  :plot {:height 16}
+  :blocks [[:fill [0 0 0] [51 12 0] "stone"] [:fill [0 0 31] [51 12 31] "stone"] [:fill [0 0 0] [0 12 31] "stone"] [:fill [51 0 0] [51 12 31] "stone"]
+           [:fill [1 0 1] [40 9 30] "stone"]]
+  :body {:at [3.5 10 16.5]}
+  :limit-s 180}
+ :cases
+ [{:name "hurt-body-with-food-waits-then-drops"
+   :act [[:rcon "effect give $BODY minecraft:instant_damage 1 0 true"]
+         [:wait-s 1]
+         [:job (jobs.movement.go-to {:pos #at [46 0 16] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :go-to.waiting-health} :within-s 20 :of-job true}
+            {:event {:source :job :kind :result :data {:arrived true}} :within-s 150 :of-job true}]
+   :after [[:body-near [46.5 0 16.5] 2]]}
+  {:name "hurt-body-with-min-health-never-goes-over"
+   :act [[:rcon "effect give $BODY minecraft:instant_damage 1 0 true"]
+         [:wait-s 1]
+         [:job (jobs.movement.go-to {:pos #at [46 0 16] :range 1 :escalate false :min-health 19})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false :why :needs-health}} :within-s 60 :of-job true}]
+   :after [[:body-far [46.5 0 16.5] 4]]}]}

@@ -11,19 +11,25 @@
             [jobs.lib.places :as places]
             [jobs.lib.world :as known]
             [jobs.movement.go-to.escalation :as esc]
+            [jobs.movement.go-to.health :as health]
             [jobs.movement.go-to.result :as end]))
 
 (def doc
   "Walk to :pos ([x y z] or {:x :y :z}, fractions floored to the cell) until the body's cell is within :range cells of
   it (range 0: in that cell, 1: next to it). :place (a name such as :home, set by jobs.memory.set-place) walks to
   that place's recorded position instead of :pos; a name not in memory falls back to the shared marker of that name (jobs.lib.world/marker).
-  - Refused at once, before any walk: a :pos that is not one (:bad-pos), a :place that is not a valid name (:bad-name), a :tolls entry that is not {:x :y :z :factor} of finite numbers (:bad-tolls), a :drop-cost that is not a number >= 0 or false (:bad-drop-cost), a :min-health outside 1-20 (:bad-min-health), a :max-damage below 0 (:bad-max-damage)
+  - Refused at once, before any walk: a :pos that is not one (:bad-pos), a :place that is not a valid name (:bad-name), a :tolls entry that is not {:x :y :z :factor} of finite numbers (:bad-tolls), a :drop-cost that is not a number >= 0 or false (:bad-drop-cost), a :min-health outside 1-20 (:bad-min-health), a :max-damage below 0 (:bad-max-damage), a :hp-seconds that is not above 0 (:bad-hp-seconds)
     or has no recorded position (:unknown-place), a body with no pathWorld sensing (:unsupported). Both give a :refused warn and {:status :stopped :arrived false :reason <it> :text}.
   - One call is one whole attempt: it plans and walks (jobs.lib.walk: slices of about 100 ms of search, walks of at
     most 60 s each) until it arrives or gives up. A search that needs more slices walks on toward where it has got
     to, or not at all while it goes on; every iteration awaits a pace-ms timer. A goal in unloaded land is walked
     toward walk by walk, and to the edge of loaded land when that is the only way on. It returns :continue only while
-    an escalation or put-back child is waiting on the world.
+    an escalation or put-back child, or healing, is waiting on the world.
+  - A drop or plant that costs hp is planned only within a damage budget (jobs.lib.cost/damage-budget: the health over :min-health,
+    default 12, less 1, at most :max-damage). When that budget is why no way was found, the body that can heal waits (info
+    go-to.waiting-health, :continue; it eats a carried food first when hungry), and one that cannot heal or whose healing
+    stalled goes over it, down to 1 hp (info go-to.over-budget). With a :min-health or :max-damage given it does neither and
+    gives up :why :needs-health. See jobs.movement.go-to.health.
   - :dark false plans dark cells like lit ones (default: a dark cell costs twice a lit one, so a lit route up to about 2x
     longer is taken: a cell seen and dark, or one never seen at night; look/dark-fn).
   - :dangers false plans straight past known dangers (default: the plans keep away from them, jobs.lib.threats). :leg-s n
@@ -68,7 +74,8 @@
    :dangers {:doc "false: plan straight past known dangers (a walk up to the hostile being fought); true: keep away from them" :default true}
    :dark {:doc "false: plan dark cells like lit ones; true: a dark cell (seen dark, or unseen at night) costs twice a lit one" :default true}
    :tolls {:doc "cells to cross only as a last resort, [{:x :y :z :factor}]: each costs factor times its own seconds more (jobs.lib.cost farm-tolls, zone-tolls)" :default nil}
-   :min-health {:doc "hp (1-20) a drop or a plant's prick may not take the body below, less a margin of 1 (the walk's damage budget); the body's own floor when absent" :default 12}
+   :min-health {:doc "hp (1-20) a drop or a plant's prick may not take the body below, less a margin of 1 (the walk's damage budget); 12 when absent; a floor the walk never crosses, not even when it goes over its budget" :default nil}
+   :hp-seconds {:doc "seconds an hp costs at full health when the planner weighs a drop or a plant's prick against a longer way (more at low health)" :default 10}
    :max-damage {:doc "hp at most a walk may spend on drops and plants that hurt (0: none), under the :min-health budget" :default nil}
    :drop-cost {:doc "number: scales the cost of a drop (fall seconds and damage; 1 as is, 0 free, 5 dear); false: no drop of 2 or 3 at all. :one-way :closed instead refuses only a drop the body cannot climb back" :default 1}
    :zone-tolls {:doc "true: also toll the cells of other bodies' zones near each walk (jobs.lib.toll-cells/zone-walk-tolls), none with :ignore-zones?; for a job that respects zones" :default false}
@@ -122,7 +129,8 @@
   [result]
   (if (:frontier-known result)
     (cond-> {:status :no-path :reason :exhausted :frontier-known true}
-      (:frontier-target result) (assoc :frontier-target (:frontier-target result)))
+      (:frontier-target result) (assoc :frontier-target (:frontier-target result))
+      (:damage-refused result) (assoc :damage-refused true))
     result))
 
 (defn unloaded-end
@@ -171,8 +179,9 @@
                                        (:why result) (assoc :detail (:why result))))
     (ctx/update-mem! c update :fault-cells #(vec (take-last max-fault-cells (distinct (into (vec %) cells)))))))
 
-(defn ^:async walk! [c pos range doors]
-  (let [from (u/self-pos c)
+(defn ^:async walk! [c0 pos range doors]
+  (let [c (cond-> c0 (:over-budget (ctx/mem c0)) (assoc :over-budget true))
+        from (u/self-pos c)
         d (u/dist from pos)
         pw (wworld/path-world (:primitives c))
         closed? (= :closed (some-> (:one-way (:args c)) keyword))]
@@ -224,7 +233,10 @@
               (end/give-up! c pos (:blocked (ctx/mem c) 0) :searching {:status :no-path :reason :moved-while-searching})))
 
           :else
-          (let [_ (note-fault! c walked)
+          (let [handled (when (health/refused? c result) (await (health/heal-or-drop! c pos range)))]
+           (or (#{:continue :again} handled)
+          (let [result (cond-> result (= :needs-health handled) (assoc :reason :needs-health))
+                _ (note-fault! c walked)
                 progress? (or (< left (dec best)) explored? nearer?)
                 tries (if progress? 0 (inc (:blocked (ctx/mem c) 0)))]
             (ctx/update-mem! c assoc :blocked tries :searching 0 :best (if (< left (dec best)) left best)
@@ -235,7 +247,7 @@
               :again
               (let [unloaded? (wsearch/goal-unloaded? (.-snapshot pw) (mapv #(js/Math.floor (% pos)) [:x :y :z]))
                     ended (if (esc/escalate? c result) result (unloaded-end result unloaded?))]
-                (await (esc/give-up-or-escalate! c pos tries status ended))))))))))
+                (await (esc/give-up-or-escalate! c pos tries status ended))))))))))))
 
 (defn start-attempt!
   "Begin a call from the world, with memory as a hint: the counters of an earlier call (cut, or ended :continue) start
@@ -244,7 +256,7 @@
   [c pos]
   (let [m (ctx/mem c)
         there? (here? c pos (:range (:args c)))]
-    (ctx/update-mem! c #(cond-> (-> % (dissoc :best :fault-cells) (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {}))
+    (ctx/update-mem! c #(cond-> (-> % (dissoc :best :fault-cells :over-budget) (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {}))
                           (and there? (:escalate-now m)) (dissoc :escalate-now)
                           (and there? (:escalation m))
                           (-> (dissoc :escalation :escalation-from :planned :holes-before)
@@ -293,7 +305,7 @@
   [c]
   (let [parsed (target c)
         drop-cost (:drop-cost (:args c))
-        {:keys [min-health max-damage]} (:args c)
+        {:keys [min-health max-damage hp-seconds]} (:args c)
         tolls-problem (wworld/tolls-problem (:tolls (:args c)))]
     (cond
       (:reason parsed) parsed
@@ -303,6 +315,8 @@
       {:reason :bad-min-health :message (str ":min-health must be a number from 1 to 20, got " (pr-str min-health))}
       (not (or (nil? max-damage) (and (number? max-damage) (js/isFinite max-damage) (>= max-damage 0))))
       {:reason :bad-max-damage :message (str ":max-damage must be a number >= 0, got " (pr-str max-damage))}
+      (not (or (nil? hp-seconds) (and (number? hp-seconds) (js/isFinite hp-seconds) (pos? hp-seconds))))
+      {:reason :bad-hp-seconds :message (str ":hp-seconds must be a number above 0, got " (pr-str hp-seconds))}
       tolls-problem {:reason :bad-tolls :message tolls-problem})))
 
 (defn ^:async round

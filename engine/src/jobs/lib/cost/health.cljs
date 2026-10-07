@@ -6,7 +6,9 @@
   damage-budget: the hp a walk may spend on certain damage (drops over 3 blocks, plants that hurt on touch): the health
   and absorption over the floor (:min-health, default 12) less a margin of 1, at most :max-damage; less when the food
   would put the hungry line (jobs.lib.foods/hungry?) over the body after the damage; 0 while burning, poisoned or withered,
-  or with a health or absorption that is not a number."
+  or with a health or absorption that is not a number.
+  survivable-budget: the hp a walk that must arrive may spend: all but 1 (the food cap and the margin dropped), still under
+  a caller's :max-damage, and just the damage-budget when the caller set a :min-health (a floor that is never crossed)."
   (:require [jobs.lib.foods :as foods]))
 
 (def hp-seconds "Seconds one hp costs at full health." 10)
@@ -42,3 +44,11 @@
           cap (when food (food-cap food health))]
       (cond-> (min room (or max-damage js/Infinity))
         cap (min cap)))))
+
+(defn survivable-budget
+  "The hp a walk may spend and leave the body 1: see the ns doc. Same arguments as damage-budget."
+  [{:keys [health absorption on-fire effects] :as body} {:keys [min-health max-damage] :as settings}]
+  (cond
+    min-health (damage-budget body settings)
+    (or on-fire (some ticking-effects effects) (not (js/isFinite health)) (not (js/isFinite (or absorption 0)))) 0
+    :else (min (max 0 (dec (+ health (or absorption 0)))) (or max-damage js/Infinity))))

@@ -44,12 +44,12 @@
     8 1
     5 0))
 
-(deftest the-walk-policy-carries-the-budget-weight-and-longest-drop
+(deftest the-walk-policy-carries-the-budget-weight-and-the-longest-drop-it-survives
   (let [policy (fn [self args] (wworld/body-policy {:primitives (tu/fake {:self self}) :args args}))]
-    (is (= [7 10 10] ((juxt :damage-budget :damage-weight :max-drop) (policy {:health 20 :food 20} {}))))
-    (is (= [3 12.5 6] ((juxt :damage-budget :damage-weight :max-drop) (policy {:health 16 :food 20} {}))))
-    (is (= [1 4] ((juxt :damage-budget :max-drop) (policy {:health 20 :food 20} {:min-health 18}))) "a floor of 18")
-    (is (= 3 (:damage-budget (policy {:health 20 :food 20} {:max-damage 3}))))))
+    (is (= [7 10 16] ((juxt :damage-budget :damage-weight :max-drop) (policy {:health 20 :food 20} {}))))
+    (is (= [3 12.5 16] ((juxt :damage-budget :damage-weight :max-drop) (policy {:health 16 :food 20} {}))))
+    (is (= [1 16] ((juxt :damage-budget :max-drop) (policy {:health 20 :food 20} {:min-health 18}))) "a floor of 18: the drops it refuses are the budget's to refuse")
+    (is (= [3 6] ((juxt :damage-budget :max-drop) (policy {:health 20 :food 20} {:max-damage 3}))))))
 
 (deftest with-drops-passes-the-policys-budget-to-the-planner
   (let [o (wplan/with-drops #js {} {:damage-budget 7 :damage-weight 10 :fall-factor 0.5 :max-drop 10})]
@@ -58,3 +58,29 @@
   (let [o (wplan/with-drops #js {} {:fall-factor 0.5})]
     (is (nil? (.-damageBudget o)) "no budget in the policy: the planner's default"))
   (is (= 1 (.-maxDrop (wplan/with-drops #js {} {:damage-budget 7 :max-drop 10 :drop-cost false}))) "drop-cost false still takes no drop"))
+
+(deftest the-survivable-budget-leaves-one-hp-and-keeps-a-callers-floor
+  (are [body settings budget] (= budget (health/survivable-budget body settings))
+    {:health 14 :food 20} {} 13
+    {:health 14 :food 8} {} 13
+    {:health 20 :absorption 4 :food 20} {} 23
+    {:health 14 :food 20} {:max-damage 2} 2
+    {:health 14 :food 20} {:min-health 12} 1
+    {:health 20 :food 20} {:min-health 18} 1
+    {:health 14 :food 20 :on-fire true} {} 0
+    {:health 1 :food 20} {} 0
+    {:health nil :food 20} {} 0))
+
+(deftest the-walk-policys-hp-price-is-the-callers-seconds-an-hp
+  (let [policy (fn [args] (wworld/body-policy {:primitives (tu/fake {:self {:health 20 :food 20}}) :args args}))]
+    (is (= 10 (:damage-weight (policy {}))) "default")
+    (is (= 25 (:damage-weight (policy {:hp-seconds 25}))))
+    (is (= 25 (:damage-weight (wworld/body-policy {:primitives (tu/fake {:self {:health 10 :food 20}}) :args {:hp-seconds 12.5}})))
+        "the price still rises with low health")))
+
+(deftest the-walk-policy-uses-the-survivable-budget-once-the-call-chose-to-go-over
+  (let [policy (fn [mem args] (wworld/body-policy {:primitives (tu/fake {:self {:health 14 :food 20}}) :args args :over-budget mem}))]
+    (is (= 1 (:damage-budget (policy false {}))))
+    (is (= 13 (:damage-budget (policy true {}))))
+    (is (= 1 (:damage-budget (policy true {:min-health 12}))) "a caller's floor is never crossed")
+    (is (= 2 (:damage-budget (policy true {:max-damage 2}))))))

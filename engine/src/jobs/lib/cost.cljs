@@ -11,7 +11,7 @@
     fight    fight-damage, decide: the damage of a fight with the current kit, :fight or :flee (jobs.lib.cost.fight).
     danger   route-danger, straight-route: the danger of a walk past mobs; stance, danger-rate, danger-list: go-to's
              planner dangers (jobs.lib.cost.danger).
-    health   hp-seconds, health-scale, damage-budget: what an hp costs and how many a walk may spend (jobs.lib.cost.health).
+    health   hp-seconds, health-scale, damage-budget, survivable-budget: what an hp costs and how many a walk may spend (jobs.lib.cost.health).
     food     food-reserve: the food a body keeps carried, 3 days of it (jobs.lib.cost.food).
     value    item-value, fetch-cost, walk-cost: what items are worth, what fetching them or walking costs (jobs.lib.cost.value);
              per-dark, dark-factor: the one price of a dark block, which go-to's planner costs.
@@ -58,6 +58,7 @@
 (def hp-seconds health/hp-seconds)
 (def health-scale health/health-scale)
 (def damage-budget health/damage-budget)
+(def survivable-budget health/survivable-budget)
 
 (def item-value value/item-value)
 (def fetch-cost value/fetch-cost)
