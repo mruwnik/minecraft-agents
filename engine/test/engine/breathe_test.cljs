@@ -167,7 +167,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:self {:inWater true :oxygen 4}
-                                         :blocks (merge water-column walls {"0,68,0" "stone" "1,64,0" "stone"})})]
+                                         :blocks (merge water-column walls {"0,68,0" "oak_planks" "1,64,0" "stone"})})]
           (await (one-run! eng side-args))
           (is (= [] (:list (core/state eng))))
           (is (= [[:stopped :no_air]] (ended seen)))
@@ -802,3 +802,75 @@
               [x] (:cell (first ledger))]
           (is (= [[:completed nil]] ended))
           (is (< x 0) "only a cell with two air above is chosen"))))))
+
+;; ---------------------------------------------------------------- drowning under a ceiling: go-to air, dig a natural cap
+
+(def cap-args "One column out is searched, so the open fake world beyond the walls is not a target." (assoc defaults :radius 1 :air-radius 1))
+
+(defn capped-world
+  "The walled water column capped at y 68 by block, stone beside it up to y 67 with the +x top as land."
+  [block]
+  (merge water-column walls {"0,68,0" block}
+         (into {} (for [y (range 64 68)] [(str "1," y ",0") "stone"]))))
+
+(defn ^:async cap-run!
+  "One breathe run in the capped column; the ending, the fake body, its events and the block reader."
+  [{:keys [block zones args] :or {block "dirt" zones [] args cap-args}}]
+  (let [clock (atom 1000000)
+        [seen sink] (tu/legacy-capture-sink)
+        p (tu/fake {:self {:inWater true :oxygen 4} :blocks (capped-world block)})
+        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                          :world (world-files/of-data {} {} zones)
+                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+    (await (one-run! eng args))
+    {:ended (ended seen) :seen seen :p p :data (stopped-data seen)
+     :block (fn [cell] (.-name (.blockAt p (apply tu/pos cell))))}))
+
+(deftest drowning-under-a-ceiling-goes-to-air-further-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [tunnel (merge (into {} (for [x (range -9 19) z (range -8 9) y [64 65 66]] [(str x "," y "," z) "stone"]))
+                            (into {} (for [x (range 0 10) y [64 65]] [(str x "," y ",0") "water"]))
+                            {"6,66,0" "water"})
+              {:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}} :blocks tunnel})]
+          (await (one-run! eng (assoc defaults :air-radius 8)))
+          (is (= [[:completed nil]] (ended seen)))
+          (is (>= (:y (core/self-pos p)) 67) "out through the pocket, on top of the ceiling")
+          (is (not (.-inWater (.self p)))))))))
+
+(deftest drowning-in-a-column-capped-by-dirt-digs-up-and-gets-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [ended block p]} (await (cap-run! {}))]
+          (is (= [[:completed nil]] ended))
+          (is (= "air" (block [0 68 0])) "the cap is dug")
+          (is (not (.-inWater (.self p)))))))))
+
+(defn ^:async never-dug!
+  "A cap of block: stopped :no_air with :cap why, the block still there, no dig call."
+  [done block why]
+  (tu/run-async done
+    (fn ^:async t []
+      (let [{:keys [ended data p] at :block} (await (cap-run! {:block block}))]
+        (is (= [[:stopped :no_air]] ended))
+        (is (= why (:cap data)))
+        (is (= 1 (:air-radius data)) "the stop says how far it looked")
+        (is (= block (at [0 68 0])))
+        (is (not (some #{"dig"} (call-names p))))))))
+
+(deftest a-cap-that-is-not-natural-is-never-dug
+  (async done (never-dug! done "oak_planks" :not-natural)))
+
+(deftest a-protected-cap-is-never-dug
+  (async done (never-dug! done "chest" :protected)))
+
+(deftest a-cap-in-another-zone-is-dug-as-a-last-resort-with-a-warning
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [ended block seen]} (await (cap-run! {:zones [{:name "keep-out" :min [0 68 0] :max [0 68 0]}]}))]
+          (is (= [[:completed nil]] ended))
+          (is (= "air" (block [0 68 0])))
+          (is (= 1 (count (of-kind seen :breathe.trespass-last-resort)))))))))
