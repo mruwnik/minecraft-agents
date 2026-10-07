@@ -27,8 +27,9 @@
      be walked into to pick up a drop.
 
   Choosing the line: the four headings are tried and, per heading, entry distances 1 to :max-length. A distance
-  fits when the stair's steps are at most the distance less one. Every cell of a fitting line is judged from the
-  loaded blocks before anything is walked or dug, as the stair judges its own steps (jobs.lib.access.rules: zones,
+  fits when the stair's steps are at most the distance less one. Every cell of a fitting line is judged from what
+  the body senses before anything is walked or dug (a cell not seen is taken for stone, and air in an entry column's
+  scan for a stand; it is dug to see, see jobs.access.stair), as the stair judges its own steps (jobs.lib.access.rules: zones,
   other plans' footprints, unloaded; a cut cell that is the floor of a stair this body cut earlier, :undercuts-way,
   from the :stair-way memory; a fluid in a cut; a fluid beside a cut or a falling block over one, taken
   only when named in :accept, default #{}; the next floor solid; the cell under it neither air nor fluid). The
@@ -42,7 +43,8 @@
 
   Then the body walks to the entry (a go-to child; failing: :walk-in-failed) and the stair child cuts
   and walks its steps. Each run step is judged again right before each dig (:hazard :zone :no-tool
-  :inventory-full :refills :dig-failed). Before each further run step, and at the stand, the way back to the
+  :inventory-full :refills :dig-failed). Exposed lava is sealed or stops as the stair's :on-lava says (tunnel.sealed
+  info; :lava-exposed, :lava-unsealed). Before each further run step, and at the stand, the way back to the
   entry is planned on a fresh pathWorld and must be whole and walkable, else :no-way-back and the body stays
   where it is (a kept tunnel; a dead end goes through leave-tunnel below, which digs its own way out).
 
@@ -87,6 +89,7 @@
    :max-length {:doc "longest line, in blocks along the heading from the entry to the target, 1 to 64" :type :int :min 1 :max 64 :default 24}
    :accept {:doc "hazards taken: #{:water :lava :falling-block}" :default #{}}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
+   :on-lava {:doc "exposed lava: :seal (fill it with a building block, then go on) or :stop (jobs.access.stair)" :default :seal}
    :keep {:doc "a tunnel that stays: torches left and the tunnel left open; false (a dead end): torches go into the scaffold ledger for jobs.access.leave-tunnel to take back" :default false}
    :fetch {:doc "get a missing pickaxe instead of waiting :no-tool (jobs.lib.fetch): true, a set of kinds or a map of limits; false waits :no-tool" :default true}})
 
@@ -205,7 +208,7 @@
   "{:plan p} for the shortest valid line along heading, else {:stop s} (the shortest fitting line's stop, or
   :too-far when none fits)."
   [in target heading max-length accept feet]
-  (let [fitting (mapcat #(fits (:block-at in) target heading % max-length feet) (range 1 (inc max-length)))
+  (let [fitting (mapcat #(fits (or (:column-at in) (:block-at in)) target heading % max-length feet) (range 1 (inc max-length)))
         judged (map (fn [p] [p (line-stop in p accept)]) fitting)]
     (if-let [[p] (first (filter (comp nil? second) judged))]
       {:plan p}
@@ -297,9 +300,11 @@
         accept (set (:accept (:args c)))
         in (stair/rules-in c feet)
         {:keys [next cut] :as cells} (run-cells feet (:heading plan))]
-    (or (stair/stop-of in cells accept)
+    (await (stair/look-ahead! c feet next cut))
+    (or (await (stair/lava-step! c :tunnel.sealed (:block-at in) feet cut))
+        (stair/stop-of in cells accept)
         (if-let [cell (first (remove #(rules/air ((:block-at in) %)) cut))]
-          (await (dig-cell! c in cell cut accept))
+          (or (await (stair/peek! c cell)) (await (dig-cell! c in cell cut accept)))
           (let [r (await (stair/walk-into! c :walk next))]
             (cond
               (= :continue r) :continue
@@ -312,12 +317,14 @@
   [c feet]
   (let [accept (set (:accept (:args c)))
         in (stair/rules-in c feet)
-        {:keys [cut] :as cells} (run-cells feet (:heading (:plan (ctx/mem c))))
+        {:keys [next cut] :as cells} (run-cells feet (:heading (:plan (ctx/mem c))))
         over (first cut)]
-    (or (stair/stop-of in cells accept)
+    (await (stair/look-ahead! c feet next cut))
+    (or (await (stair/lava-step! c :tunnel.sealed (:block-at in) feet [over]))
+        (stair/stop-of in cells accept)
         (if (rules/air ((:block-at in) over))
           :reached
-          (await (dig-cell! c in over cut accept))))))
+          (or (await (stair/peek! c over)) (await (dig-cell! c in over cut accept)))))))
 
 (defn line-index
   "The index of feet on the line of cells (0..n), or nil."
@@ -337,7 +344,7 @@
   [c {:keys [heading dir] :as plan} k]
   (let [cells (line-cells plan)
         r (await (declined/call-child! c :stair 'jobs.access.stair
-                                 {:dir dir :heading heading :fetch false :y ((cells (segment-end plan k)) 1)
+                                 {:dir dir :heading heading :fetch false :y ((cells (segment-end plan k)) 1) :on-lava (:on-lava (:args c) :seal)
                                   :accept (set (:accept (:args c))) :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
     (if (not= :done r)
       (if (= :declined r) :declined :continue)

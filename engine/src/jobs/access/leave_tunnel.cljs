@@ -107,7 +107,7 @@
 
 (defn gone-cells
   "The cells of the tunnel's torches that have a ledger entry l and are read as something other than a torch. An
-  unread cell (nil: not loaded) is not gone."
+  unread cell (nil: not loaded or not sensed) is not gone."
   [l tunnel block-at]
   (->> (:torches tunnel)
        (map :cell)
@@ -127,7 +127,7 @@
   [c status reason detail]
   (let [{:keys [tunnel]} (:args c)
         m (ctx/mem c)
-        block-at (:block-at (stair/rules-in c (feet-of c)))
+        block-at (stair/sensed-at (:primitives c) nil)
         stopped? (= :stopped status)
         _ (forget-gone! c tunnel block-at)
         still (when stopped?

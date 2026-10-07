@@ -509,14 +509,18 @@
             (is (= "bedrock" (:block @out)))
             (is (empty? (digs p)))))))))
 
-(deftest lava-for-a-floor-is-never-bridged
+(deftest lava-for-a-floor-is-never-bridged-it-is-exposed-lava
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [inv (conj pick {:name "cobblestone" :count 10})
-              {:keys [out p]} (await (stair! {:blocks (assoc cave-gap "1,65,0" "lava") :inventory inv} up-east (fn [_])))]
-          (is (= :no-floor (:reason @out)))
-          (is (empty? (filter #(= "place" (.-name %)) (.-calls (.-world p))))))))))
+              world (assoc cave-gap "1,65,0" "lava")
+              {:keys [out p]} (await (stair! {:blocks world :inventory inv} up-east (fn [_])))
+              stopped (:out (await (stair! {:blocks world :inventory inv} (assoc up-east :on-lava :stop) (fn [_]))))]
+          (is (= :lava-unsealed (:reason @out)) "beside the feet: sealed, here with nothing to place it against")
+          (is (= :no-support (:place @out)))
+          (is (empty? (filter #(= "place" (.-name %)) (.-calls (.-world p)))))
+          (is (= :lava-exposed (:reason @stopped))))))))
 
 (deftest a-zone-ahead-stops-at-its-edge
   (async done

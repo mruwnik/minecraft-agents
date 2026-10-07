@@ -24,6 +24,10 @@
   way back to the stair's first cell on a fresh pathWorld. The way must be whole and walkable by the executor
   (no gap, door or swim), else the stair stops :no-way-back.
 
+  Cells are read as the body senses them (felt, seen, remembered). A cell it has not seen is taken for stone (dig to
+  see): the stair looks at each step before judging it and at each cell it dug, and the stops below fire on what is
+  then seen.
+
   A step's floor must be solid, the cell under it neither air nor fluid (:cave-below), and everything loaded.
   A floor of air gets a carried building block (blocks/building-blocks, never an ore or valuable) after the
   rules' may-place?. The cell under a placed floor is not judged. With no such block: :no-floor with :filler
@@ -42,6 +46,14 @@
   - :refills: a cell refilled 3 times.
   - :hazard: a hazard not in :accept (below).
   - :off-stair: the body is off the stair line.
+  - :lava-exposed: lava beside an open cell of the step (or in one) with :on-lava :stop.
+  - :lava-unsealed: that lava could not be filled (:on-lava :seal, the default): the place child's outcome in :place,
+    or still lava after max-seals places. The body first steps back to the stair's cell before (:backed-off) and
+    digs no more.
+
+  Exposed lava (beside the feet, the head or an open cut cell, or in one) is filled with a building block
+  (blocks/building-blocks, a jobs.blocks.place child; it fetches one when :fetch allows), sources behind first, one
+  stair.sealed info each; then the stair goes on. Lava seen beside a cell not yet dug is a hazard as below.
 
   Hazards are the rules' (one per fluid beside) plus a falling block over the top cut of the next column.
   :accept is a set of :water :lava :falling-block :under-feet, default #{}. Water beside the cut is not taken
@@ -68,7 +80,8 @@
    :accept {:doc "hazards taken: #{:water :lava :falling-block :under-feet}" :default #{}}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
    :note {:doc "a map: each cell dug is written to the tidy ledger at once with it (jobs.lib.escape/note-hole!; go-to's escalation)" :default nil}
-   :fetch {:doc "get a missing pickaxe instead of waiting :no-tool (jobs.lib.fetch): true, a set of kinds or a map of limits" :default true}})
+   :fetch {:doc "get a missing pickaxe instead of waiting :no-tool (jobs.lib.fetch), and a block to seal lava with: true, a set of kinds or a map of limits" :default true}
+   :on-lava {:doc "exposed lava: :seal (fill it with a building block, then go on) or :stop" :default :seal}})
 
 (def headings {:north [0 -1] :south [0 1] :east [1 0] :west [-1 0]})
 (def rises {:down -1 :up 1})
@@ -202,10 +215,108 @@
   (let [{:keys [x y z]} (reach/standing-cell (:primitives c))]
     [x y z]))
 
-(defn rules-in [c feet]
-  (merge {:block-at (fn [[x y z]] (u/block-name (:primitives c) {:x x :y y :z z})) :feet feet :ledger #{}
-          :ways (ways-of c)}
+(def hidden-guess "What a cell the body has not sensed is taken for: rock, so it is dug to see." "stone")
+
+(defn sensed-at
+  "A block-at fn [x y z] -> name over what the body senses (jobs.lib.util/sensed): guess for a cell it has not sensed,
+  nil when the cell is not loaded (the rules' :not-loaded)."
+  [p guess]
+  (fn [[x y z]] (when-let [b (u/sensed p {:x x :y y :z z})] (if (true? (.-unknown b)) guess (.-name b)))))
+
+(defn rules-in
+  "The rules' input at feet: :block-at reads unsensed cells as hidden-guess; :column-at reads them as air (a column
+  scanned from the sky down for a stand, jobs.access.tunnel/surface)."
+  [c feet]
+  (merge {:block-at (sensed-at (:primitives c) hidden-guess) :column-at (sensed-at (:primitives c) "air")
+          :feet feet :ledger #{} :ways (ways-of c)}
          (access-world c)))
+
+(defn ^:async look-at!
+  "Turn the head to cell's centre, so perception glances it and its 6 neighbours; nothing for primitives that do not
+  sense (they read blockAt)."
+  [c [x y z]]
+  (when (some? (.-sensedAt (:primitives c)))
+    (await (ctx/act c :look (clj->js {:pos {:x (+ x 0.5) :y (+ y 0.5) :z (+ z 0.5)}})))))
+
+(defn unknown?
+  "Whether the body has not sensed cell [x y z] (loaded, never seen or too old to trust)."
+  [p [x y z]]
+  (true? (some-> (u/sensed p {:x x :y y :z z}) .-unknown)))
+
+(defn ^:async look-ahead!
+  "Once per step from feet (memory :looked): look at the next cell, then at each cut cell still unknown, so what a
+  player would see of the step is seen when it is judged."
+  [c feet next cut]
+  (when-not (= [feet next] (:looked (ctx/mem c)))
+    (ctx/update-mem! c assoc :looked [feet next])
+    (await (look-at! c next))
+    (loop [cells cut]
+      (when-let [cell (first cells)]
+        (when (unknown? (:primitives c) cell) (await (look-at! c cell)))
+        (recur (rest cells))))))
+
+(defn ^:async see-round!
+  "After a dig of cell: look into it, then at each neighbour still unknown, the faces the dig laid open."
+  [c cell]
+  (await (look-at! c cell))
+  (loop [ds rules/neighbour-deltas]
+    (when-let [d (first ds)]
+      (let [n (add cell d)]
+        (when (unknown? (:primitives c) n) (await (look-at! c n))))
+      (recur (rest ds)))))
+
+(defn ^:async peek!
+  "Before digging cell: when it is still unknown, look at it once (memory :peeked) and give :again so the step is
+  judged on what shows; else nil."
+  [c cell]
+  (when (and (unknown? (:primitives c) cell) (not= cell (:peeked (ctx/mem c))))
+    (ctx/update-mem! c assoc :peeked cell)
+    (await (look-at! c cell))
+    :again))
+
+(defn exposed-lava
+  "The lava cells a step lays open: lava beside the feet, the head or a cut cell that is open (air or fluid) now,
+  then lava in one of those; sources behind first."
+  [block-at feet cut]
+  (let [open (into [feet (add feet [0 1 0])] (filter #(let [n (block-at %)] (or (rules/air n) (rules/fluids n))) cut))
+        open? (set open)
+        lava? #(= "lava" (block-at %))
+        beside (for [o open d rules/neighbour-deltas :let [n (add o d)] :when (and (not (open? n)) (lava? n))] n)]
+    (distinct (concat beside (filter lava? open)))))
+
+(def max-seals "Places per lava cell before the seal counts as failed." 3)
+
+(defn ^:async seal!
+  "Fill lava cell with a building block (a jobs.blocks.place child, fetching one when the job's :fetch allows). :again
+  once placed (event kind, info), :continue while the child waits on the world, else the stop :lava-unsealed."
+  [c kind block-at cell]
+  (let [tries (get-in (ctx/mem c) [:seals cell] 0)
+        [x y z] cell]
+    (if (>= tries max-seals)
+      {:reason :lava-unsealed :cell cell :tries tries}
+      (do
+        ;; a waiting child is resumed on the same cell: only its first round counts a try
+        (ctx/update-mem! c #(cond-> (assoc % :sealing cell)
+                              (not= cell (:sealing %)) (update-in [:seals cell] (fnil inc 0))))
+        (let [outcome (await (blocks/place-cell! c {:x x :y y :z z} nil
+                                                 {:any-of blocks/building-blocks :fetch (:fetch (:args c))
+                                                  :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+          (if (= :continue outcome)
+            :continue
+            (do (ctx/update-mem! c dissoc :sealing)
+                (if (#{:placed :already} outcome)
+                  (do (ctx/emit! c kind :info {:cell cell :now (block-at cell) :text (str "sealed lava at " (pr-str cell))})
+                      :again)
+                  {:reason :lava-unsealed :cell cell :place outcome}))))))))
+
+(defn ^:async lava-step!
+  "Exposed lava by the job's :on-lava: nil when there is none; :stop gives the stop :lava-exposed, else the first is
+  sealed (seal!, event kind)."
+  [c kind block-at feet cut]
+  (when-let [cell (first (exposed-lava block-at feet cut))]
+    (if (= :stop (:on-lava (:args c)))
+      {:reason :lava-exposed :cell cell :fluid "lava"}
+      (await (seal! c kind block-at cell)))))
 
 (defn target-steps
   "Steps to cut from the args and the start feet, or {:error text}."
@@ -335,6 +446,7 @@
                   (do
                     (ctx/update-mem! c #(-> % (dissoc :counted) (record-dug (:block-at in))))
                     (when-let [tag (when (= :dug outcome) (:note (:args c)))] (escape/note-hole! c tag cell block))
+                    (when (#{:dug :missing} outcome) (await (see-round! c cell)))
                     (case outcome
                       (:dug :missing) :continue
                       {:reason :dig-failed :cell cell :block block :dig outcome})))))))))))
@@ -398,25 +510,47 @@
           (do
             (ctx/update-mem! c assoc :checked i)
             (if (= i target)
-              :finished
+              (or (await (lava-step! c :stair.sealed (:block-at in) feet [])) :finished)
               (let [{:keys [next cut] :as cells} (-> (step-cells feet dir heading)
                                                            (as-> cs (assoc cs :up? (= :up dir)
                                                                  :bridged? (contains? (:bridged (ctx/mem c)) (:floor cs)))))
-                    stop (stop-of in cells accept)]
+                    _ (await (look-ahead! c feet next cut))
+                    stop (or (await (lava-step! c :stair.sealed (:block-at in) feet cut)) (stop-of in cells accept))]
                 (if (and (= :no-floor (:reason stop)) (rules/air (:block stop)))
                   (await (bridge! c in cells))
                   (or stop
                     (if-let [cell (first (remove #(rules/air ((:block-at in) %)) cut))]
-                      (let [r (await (dig! c in cell cut accept))] (case r :continue :again :yield :continue r))
+                      (or (await (peek! c cell))
+                          (let [r (await (dig! c in cell cut accept))] (case r :continue :again :yield :continue r)))
                       (await (step! c next)))))))))))))
 
+(defn back-cell
+  "The stair's cell one step back toward its origin from where the body stands, or nil at the origin or off the line."
+  [c]
+  (let [{:keys [dir heading]} (:args c)
+        {:keys [origin target]} (ctx/mem c)
+        i (when origin (stair-index origin (feet-of c) dir heading target))]
+    (when (and i (pos? i))
+      (add origin (mapv #(* (dec i) %) (delta dir heading))))))
+
+(defn ^:async back-off!
+  "After a failed seal: walk one step back up the stair (a go-to child), then finish with the stop, :backed-off true
+  when the body got there."
+  [c]
+  (let [{:keys [stop cell]} (:backoff (ctx/mem c))
+        r (when cell (await (walk-into! c :back cell)))]
+    (if (= :continue r)
+      :continue
+      (finish! c (:reason stop) (assoc (dissoc stop :reason) :backed-off (boolean (and cell (= cell (feet-of c)))))))))
+
 (defn ^:async next!
-  "One piece of the stair: a fetch round, the start, a dig, a bridge or a step. :again, :continue (a child waits, or
-  the next cell lacks a tool or room with nothing to fetch: the check waits) or :done."
+  "One piece of the stair: a fetch round, the start, a dig, a bridge, a seal or a step. :again, :continue (a child
+  waits, or the next cell lacks a tool or room with nothing to fetch: the check waits) or :done."
   [c]
   (let [m (ctx/mem c)
-        r (await (fetch/step! c 'jobs.access.stair (need c) {:return? true}))]
+        r (when-not (:backoff m) (await (fetch/step! c 'jobs.access.stair (need c) {:return? true})))]
     (cond
+      (:backoff m) (await (back-off! c))
       r r
       (and (:origin m) (need c)) :continue
       (nil? (:origin m))
@@ -431,6 +565,7 @@
         (cond
           (#{:again :continue} r) r
           (= :finished r) (finish! c :done {})
+          (= :lava-unsealed (:reason r)) (do (ctx/update-mem! c assoc :backoff {:stop r :cell (back-cell c)}) :again)
           :else (finish! c (:reason r) (dissoc r :reason)))))))
 
 (defn ^:async round

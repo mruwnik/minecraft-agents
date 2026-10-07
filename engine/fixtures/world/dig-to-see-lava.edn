@@ -1,0 +1,43 @@
+;; Card 3095f34a (Q98 C2a): stair and tunnel read what the body senses. A cell behind stone is unknown and dug to see;
+;; lava the dig lays open is sealed by default (:on-lava :seal), stops with :on-lava :stop, and a seal that cannot be
+;; made backs off one step; water seen in the cut stops :fluid-in-cut. Stone mass x 8..24, z 8..24, y 0..9; the body
+;; stands on top at x 10 and cuts a stair east: step 2 cuts (12 8..10 16), lava or water sits 1 block behind it.
+{:defaults
+ {:tags [:access :mining :lava]
+  :time :any
+  :plot {:height 20}
+  :blocks [[:fill [8 0 8] [24 9 24] "stone"]]
+  :body {:at [10.5 10 16.5] :inventory [["iron_pickaxe" 1] ["cobblestone" 16]] :effects [["resistance" 600 4] ["fire_resistance" 600 0]]}
+  :limit-s 120}
+ :cases
+ [{:name "stair-digs-to-lava-behind-stone-seals-it-and-goes-on"
+   :blocks [[:set [13 8 16] "lava"]]
+   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 3})]]
+   :expect [{:event {:source :job :kind :stair.sealed :data {:cell #at [13 8 16]}} :within-s 90 :of-job true}
+            {:event {:source :job :kind :stair.done :data {:steps 3}} :within-s 110 :of-job true}]
+   :after [[:not-block [13 8 16] "lava"]]}
+  {:name "stair-on-lava-stop-stops-lava-exposed"
+   :blocks [[:set [13 8 16] "lava"]]
+   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 3 :on-lava :stop})]]
+   :expect [{:event {:source :job :kind :stair.stopped :data {:reason :lava-exposed}} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :stair.sealed} :for-s 90 :until {:source :job :kind :stair.stopped}}]}
+  {:name "stair-seal-without-a-block-backs-off-and-digs-no-more"
+   ;; the cut is clay (drops clay balls, no building block), the body carries no block and may not fetch one
+   :blocks [[:fill [11 6 15] [14 10 17] "clay"] [:set [13 8 16] "lava"]]
+   :body {:inventory [["iron_pickaxe" 1]]}
+   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 3 :fetch false})]]
+   :expect [{:event {:source :job :kind :stair.stopped :data {:reason :lava-unsealed :backed-off true}} :within-s 100 :of-job true}]
+   :after [[:block [13 7 16] "clay"]]}
+  {:name "stair-water-behind-stone-stops-fluid-in-cut"
+   :blocks [[:set [12 8 16] "water"]]
+   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 3})]]
+   :expect [{:event {:source :job :kind :stair.stopped :data {:reason :fluid-in-cut}} :within-s 90 :of-job true}]}
+  {:name "tunnel-seals-lava-over-its-target-and-reaches-the-stand"
+   ;; a trench x 8..13, y 6..9 to stand in; the target (15 6 16) has lava over it, hidden behind (14 7 16)
+   :blocks [[:fill [8 6 14] [13 9 18] "air"] [:set [15 6 16] "iron_ore"] [:set [15 7 16] "lava"]]
+   :body {:at [13.5 6 16.5]}
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ -90 0"] [:wait-s 2]
+         [:job (jobs.access.tunnel {:target #at [15 6 16] :max-length 6 :keep true})]]
+   :expect [{:event {:source :job :kind :tunnel.sealed} :within-s 90 :of-job true}
+            {:event {:source :job :kind :tunnel.done} :within-s 110 :of-job true}]
+   :after [[:not-block [15 7 16] "lava"] [:block [15 6 16] "iron_ore"]]}]}
