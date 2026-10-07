@@ -161,7 +161,8 @@
         (let [{:keys [eng p]} (setup {:inventory hoe :blocks {"5,63,0" "dirt"} :unreachable ["5,63,0"]})
               args {:from {:x 5 :y 63 :z 0} :to {:x 5 :y 63 :z 0}}
               result (await (child-outcome eng job args 8))]
-          (is (= {:tilled 0 :skipped {{:x 5 :y 63 :z 0} :unreachable}} result))
+          (is (= {:status :stopped :reason :unreachable :tilled 0 :skipped {{:x 5 :y 63 :z 0} :unreachable}} (dissoc result :text)))
+          (is (re-find #"1 unreachable" (:text result)))
           (is (empty? (calls p "useOn"))))))))
 
 (deftest till-from-a-pit-gets-out-and-tills
@@ -182,7 +183,7 @@
         (let [{:keys [eng p]} (setup {:inventory hoe :blocks {"1,63,1" "dirt"}})
               args {:from {:x 1 :y 63 :z 1} :to {:x 1 :y 63 :z 1}}]
           (.override (.-world p) "useOn" (fn ^:async f [_ _ _] #js {:status "unchanged" :before #js {:name "dirt"} :after #js {:name "dirt"} :consumed 0}))
-          (is (= {:tilled 0 :skipped {{:x 1 :y 63 :z 1} :refused}} (await (child-outcome eng job args 8))))
+          (is (= {:status :stopped :reason :refused :tilled 0 :skipped {{:x 1 :y 63 :z 1} :refused}} (dissoc (await (child-outcome eng job args 8)) :text)))
           (is (= 2 (count (calls p "useOn")))))))))
 
 (deftest till-keeps-its-count-across-a-cut
@@ -235,7 +236,7 @@
         (let [{:keys [eng p]} (setup {:inventory hoe :blocks {"1,63,1" "dirt" "1,64,1" "short_grass"}})
               args {:from {:x 1 :y 63 :z 1} :to {:x 1 :y 63 :z 1}}]
           (.override (.-world p) "dig" (fn ^:async f [_ _ _] #js {:status "unreachable"}))
-          (is (= {:tilled 0 :skipped {{:x 1 :y 63 :z 1} :cover-stuck}} (await (child-outcome eng job args 10))))
+          (is (= {:status :stopped :reason :cover-stuck :tilled 0 :skipped {{:x 1 :y 63 :z 1} :cover-stuck}} (dissoc (await (child-outcome eng job args 10)) :text)))
           (is (= 1 (count (calls p "dig"))) "the dig child remembers the failed reach and waits; it does not dig again from the same cell"))))))
 
 (defn counting-ctx
@@ -336,6 +337,29 @@
                               {:x 1 :y 63 :z 2} :no-hoe {:x 2 :y 63 :z 2} :no-hoe}}
                    (dissoc result :text)))
             (is (re-find #"no hoe" (:text result)))))))))
+
+(deftest till-of-only-not-tillable-cells-stops-not-tillable
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory hoe :blocks {"1,63,1" "stone" "2,63,1" "stone"}})
+              args {:from {:x 1 :y 63 :z 1} :to {:x 2 :y 63 :z 1}}
+              result (await (child-outcome eng job args 8))]
+          (is (= :stopped (:status result)))
+          (is (= :not-tillable (:reason result)))
+          (is (re-find #"2 not-tillable" (:text result)))
+          (is (empty? (calls p "useOn"))))))))
+
+(deftest till-of-mixed-skips-with-nothing-tilled-stops-nothing-tilled
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:inventory hoe :blocks {"1,63,1" "stone" "5,63,1" "dirt"} :unreachable ["5,63,1"]})
+              args {:from {:x 1 :y 63 :z 1} :to {:x 5 :y 63 :z 1}}
+              result (await (child-outcome eng job args 8))]
+          (is (= :stopped (:status result)))
+          (is (= :nothing-tilled (:reason result)))
+          (is (re-find #"4 not-tillable, 1 unreachable" (:text result))))))))
 
 (deftest till-with-no-hoe-and-nothing-to-fetch-stops-no-hoe
   (async done
