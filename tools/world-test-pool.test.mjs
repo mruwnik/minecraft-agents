@@ -1,7 +1,7 @@
 // Why JavaScript: node --test file for tools/world-test-pool.mjs.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { splitForms, summarize, unitOrder, parsePoolArgs, workerSpecs, runPool, mergeText, poolCap, createReaper, countListed, listArgs } from './world-test-pool.mjs'
+import { splitForms, summarize, unitOrder, parsePoolArgs, workerSpecs, runPool, mergeText, poolCap, createReaper, countListed, listArgs, knownFailures } from './world-test-pool.mjs'
 
 const form = (id, status, secs = 1, extra = '') =>
   `{:plot 0, :file "${id.split('/')[0]}", :expects [{:status :pass, :evidence "a } \\" {"}], :status :${status}, :id "${id}", :elapsed-s ${secs}${extra}}`
@@ -249,4 +249,20 @@ test('runPool events: a failure that passes on the rerun is reported once, as fl
 test('listArgs: the --list call gets the paths and the case-selecting flags the children get', () => {
   const p = parsePoolArgs(['dir', '--bodies', '4', '--phase', 'night', '--tag', 'air', '--match', 'dive', '--repeat', '2'])
   assert.deepEqual(listArgs(p), ['dir', '--phase', 'night', '--tag', 'air', '--match', 'dive', '--repeat', '2', '--list'])
+})
+
+test('knownFailures: ids whose last recorded result was a fail; a later pass or flaky clears them, an error is not one', () => {
+  const older = vec(form('a/c1', 'fail'), form('a/c2', 'fail'), form('a/c3', 'fail'), form('a/c4', 'error'))
+  const newer = vec(form('a/c2', 'pass'), form('a/c3', 'flaky'))
+  assert.deepEqual([...knownFailures([older, newer])], ['a/c1'])
+})
+test('runPool: a failed case that is a known failure is not rerun, is marked :known-failure true and counted as skipped', async () => {
+  const log = []
+  const run = fakeRunner(() => ({ code: 1, text: vec(form('a/c1', 'fail'), form('a/c2', 'fail')) }), log)
+  const r = await runPool({ units: ['a'], workers: workerSpecs(2, 19, 'P', 0), runUnit: run, retries: 2, known: new Set(['a/c1']) })
+  assert.deepEqual(log.map((l) => l.match), [null, 'a/c2', 'a/c2'], 'only c2 is rerun')
+  assert.equal(r.skipped, 1)
+  const forms = splitForms(r.text)
+  assert.match(forms.find((f) => summarize(f).id === 'a/c1'), /:known-failure true/)
+  assert.doesNotMatch(forms.find((f) => summarize(f).id === 'a/c2'), /:known-failure/)
 })

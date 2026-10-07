@@ -12,6 +12,7 @@
 // With TEST_EVENTS=1 the pool prints the @@test lines itself (children print none): a plan with the total of all listed cases up front
 // (world-test --list), one result per case with its final status (a rerun that also fails is one failure), and progress lines
 // {done, total, retries} (reruns are counted in retries only).
+// A failed case whose last result in the --durations files was also a fail is a known failure: no rerun, :known-failure true in its result.
 //   --retry-failed N the pool owns retries (children never get it): a failed case (not an error or inconclusive one, as in the single-body runner)
 //                     is rerun up to N times (default 1; exactly its --match-id, one run) on a different body when the pool has one; a pass is :flaky.
 import fs from 'node:fs'
@@ -78,6 +79,7 @@ const withStatus = (formText, status, extra) => {
   const e = entries(formText).find((x) => x.key === ':status')
   return `${formText.slice(0, e.start)}:${status}${formText.slice(e.end, -1)} ${extra}}`
 }
+const withExtra = (formText, extra) => `${formText.slice(0, -1)} ${extra}}`
 const OUTCOMES = { pass: 'passed', fail: 'failed', error: 'error', skipped: 'skipped', flaky: 'flaky' }
 const resultEvent = (formText) => {
   const s = summarize(formText)
@@ -147,18 +149,25 @@ export const createReaper = (rm) => {
 
 // ---- scheduling
 const failed = (s) => s.status === 'fail'
+// ids whose last recorded result (the texts in order, later ones win) is a fail: a rerun tells nothing new about them
+export const knownFailures = (previousTexts) => {
+  const last = new Map()
+  for (const text of previousTexts) for (const f of splitForms(text)) { const s = summarize(f); last.set(s.id, s.status) }
+  return new Set([...last].filter(([, st]) => st === 'fail').map(([id]) => id))
+}
 const errorForm = (file, why) => `{:id ${JSON.stringify(file)}, :file ${JSON.stringify(file)}, :status :error, :evidence ${JSON.stringify(why)}}`
 
 // units: file stems; runUnit({file, match, worker}) -> promise of {code, text|null} (text = the child's results vector).
 // Resolves to {text, code}: one merged results vector, code 0 when every case passed or was flaky.
 // total/emit (both optional): emit gets the @@test events of the run: one result per case when its status is final (a failure still
 // to be rerun is not final), and a progress {done, total, retries} after each; reruns are counted in retries, never in done or total.
-export const runPool = async ({ units, workers, runUnit, retries = 1, load = () => 0, cores = 1, total = null, emit = () => {}, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) => {
+export const runPool = async ({ units, workers, runUnit, retries = 1, load = () => 0, cores = 1, total = null, known = new Set(), emit = () => {}, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) => {
   const queue = units.map((file) => ({ file, match: null, avoid: null }))
   const done = new Map() // `id#run` (or file when the unit died) -> form text, in first-seen order
   let busy = 0
   let finals = 0
   let reruns = 0
+  let skipped = 0
   let wake = []
   const notify = () => { const w = wake; wake = []; w.forEach((r) => r()) }
   const take = (worker) => {
@@ -196,7 +205,8 @@ export const runPool = async ({ units, workers, runUnit, retries = 1, load = () 
       return
     }
     for (const { form, s } of forms) {
-      if (failed(s) && retries > 0) { done.set(key(s), form); rerun({ ...retryJob, match: s.id, run: s.run, attempt: 1, firstForm: form }) }
+      if (failed(s) && retries > 0 && known.has(s.id)) { skipped++; settle(key(s), withExtra(form, ':known-failure true')) }
+      else if (failed(s) && retries > 0) { done.set(key(s), form); rerun({ ...retryJob, match: s.id, run: s.run, attempt: 1, firstForm: form }) }
       else settle(key(s), form)
     }
   }
@@ -218,7 +228,7 @@ export const runPool = async ({ units, workers, runUnit, retries = 1, load = () 
   }
   await Promise.all(workers.map(loop))
   const forms = [...done.values()]
-  return { text: mergeText(forms), code: forms.length && forms.every((f) => ['pass', 'flaky'].includes(summarize(f).status)) ? 0 : 1 }
+  return { skipped, text: mergeText(forms), code: forms.length && forms.every((f) => ['pass', 'flaky'].includes(summarize(f).status)) ? 0 : 1 }
 }
 
 // ---- the real thing
@@ -277,10 +287,10 @@ export const main = async (args) => {
   }
   const total = listTotal(script, p)
   if (total !== null) emitLine({ event: 'plan', total })
-  const r = await runPool({ units, workers, runUnit, retries: p.retries, total, emit: emitLine, load: () => os.loadavg()[0], cores })
+  const r = await runPool({ units, workers, runUnit, retries: p.retries, total, known: knownFailures(previous), emit: emitLine, load: () => os.loadavg()[0], cores })
   if (p.results) fs.writeFileSync(p.results, r.text)
   const sums = splitForms(r.text).map(summarize)
   const count = (st) => sums.filter((s) => s.status === st).length
-  console.error(`world-test pool: ${sums.length} cases, ${count('pass')} pass, ${count('flaky')} flaky, ${sums.length - count('pass') - count('flaky')} not passing`)
+  console.error(`world-test pool: ${sums.length} cases, ${count('pass')} pass, ${count('flaky')} flaky, ${sums.length - count('pass') - count('flaky')} not passing${r.skipped ? `; ${r.skipped} known failures not rerun (failed in the --durations results)` : ''}`)
   return r.code
 }
