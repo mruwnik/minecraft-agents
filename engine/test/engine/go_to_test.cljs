@@ -205,15 +205,17 @@
           (is (= 64 (js/Math.floor (second (at (:p no))))) "no drop: still on the plateau")
           (is (= 61 (js/Math.floor (second (at (:p dear))))) "a dear drop is still the only way"))))))
 
-(deftest go-to-takes-a-four-block-drop-only-with-feather-falling
+(deftest go-to-takes-a-four-block-drop-within-the-damage-budget
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [cliff (merge (floor -2 -3 10 3) (floor 59 11 -3 47 3))
               plain (await (go! {:blocks cliff} {:pos [120 60 0] :escalate false}))
+              none (await (go! {:blocks cliff} {:pos [120 60 0] :escalate false :max-damage 0}))
               boots (await (go! {:blocks cliff :equipment {:feet {:name "iron_boots" :enchants [{:name "feather_falling" :lvl 4}]}}}
                                 {:pos [120 60 0] :escalate false}))]
-          (is (= 64 (js/Math.floor (second (at (:p plain))))) "plain body: no 4-block drop")
+          (is (= 60 (js/Math.floor (second (at (:p plain))))) "plain body: 1 hp is within the budget")
+          (is (= 64 (js/Math.floor (second (at (:p none))))) ":max-damage 0: no 4-block drop")
           (is (= 60 (js/Math.floor (second (at (:p boots))))) "feather falling IV: it drops"))))))
 
 (deftest go-to-drop-cost-false-still-takes-a-one-block-step-down
@@ -241,6 +243,25 @@
         (doseq [ok [0 2 false]]
           (let [{:keys [out]} (await (go! {:blocks flat} {:pos [6 64 0] :drop-cost ok}))]
             (is (= {:arrived true} @out) (pr-str ok))))))))
+
+(deftest go-to-refuses-a-bad-min-health-or-max-damage-with-a-reason
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[k bad reason] [[:min-health 0 :bad-min-health] [:min-health 21 :bad-min-health] [:min-health "x" :bad-min-health]
+                                [:max-damage -1 :bad-max-damage] [:max-damage "x" :bad-max-damage]]]
+          (let [{:keys [eng p] :as s} (setup {:blocks flat})
+                out (atom :not-done)
+                eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent
+                                            (recording-parent out {:pos [6 64 0] k bad})))]
+            (core/submit! eng '(recording-parent) {})
+            (await (tick-out! eng 10))
+            (is (= {:status :stopped :arrived false :reason reason} (select-keys @out [:status :arrived :reason])) (pr-str [k bad]))
+            (is (= [0 64 0] (at p)))
+            (is (= [reason] (mapv :reason (events-of s :refused))))))
+        (doseq [args [{:min-health 1} {:min-health 20} {:max-damage 0} {:max-damage 5.5}]]
+          (let [{:keys [out]} (await (go! {:blocks flat} (assoc args :pos [6 64 0])))]
+            (is (= {:arrived true} @out) (pr-str args))))))))
 
 (deftest go-to-accepts-doors
   (async done

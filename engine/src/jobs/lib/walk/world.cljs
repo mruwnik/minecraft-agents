@@ -131,13 +131,26 @@
   (let [snapshot (.-snapshot pw) tops (.-top (.-table pw))]
     (fn [x y z] (pos? (aget tops (.stateAt snapshot x y z))))))
 
+(defn damage-budget
+  "The hp the body may spend walking now (jobs.lib.cost/damage-budget): its health, food and effects, and the job's
+  :min-health and :max-damage args (go-to's)."
+  [c]
+  (let [self (.self (:primitives c))]
+    (cost/damage-budget {:health (.-health self) :absorption (.-absorption self) :food (.-food self) :on-fire (.-onFire self)
+                         :effects (map #(.-name %) (array-seq (.-effects self)))}
+                        (select-keys (:args c) [:min-health :max-damage]))))
+
 (defn body-policy
   "executor/policy for the body: with food 6 or less the client does not sprint, so :sprint is false (a corner jump past
-  a high block is then refused). :max-drop and :fall-factor follow its fall enchantments and health (jobs.lib.cost/fall-profile)."
+  a high block is then refused). :damage-budget (hp, damage-budget) and :damage-weight (seconds an hp costs at its health)
+  price the damage of a walk; :max-drop and :fall-factor follow its fall enchantments and that budget (jobs.lib.cost/fall-profile)."
   [c]
   (let [self (.self (:primitives c))
-        food (.-food self)]
-    (cond-> (merge executor/policy (cost/fall-profile {:health (.-health self) :equipment (cost/equipment-of (.-equipment self))}))
+        food (.-food self)
+        budget (damage-budget c)]
+    (cond-> (merge executor/policy
+                   (cost/fall-profile {:damage-budget budget :equipment (cost/equipment-of (.-equipment self))})
+                   {:damage-budget budget :damage-weight (* cost/hp-seconds (cost/health-scale (.-health self)))})
       (and (number? food) (<= food 6)) (assoc :sprint false))))
 
 (defn body-cell

@@ -60,15 +60,15 @@
 
 (defn with-drops
   "options (the planner's, a JS object) with the policy's :drop-cost: a number is the planner's costs.dropFactor (nil: as
-  it is), false takes no drop of 2 or 3 (maxDrop 1). Otherwise the body's fall enchantments set maxDrop (:max-drop) and
-  scale the damage (:fall-factor times the number)."
+  it is), false takes no drop of 2 or 3 (maxDrop 1). The policy's :max-drop is maxDrop, its :fall-factor fallFactor, and
+  :damage-budget and :damage-weight the planner's damageBudget and damageWeight (none: the planner's defaults)."
   [^js options policy]
-  (let [k (:drop-cost policy)
-        factor (* (or (:fall-factor policy) 1) (if (number? k) k 1))]
-    (when-let [m (:max-drop policy)] (unchecked-set options "maxDrop" m))
+  (let [k (:drop-cost policy)]
+    (doseq [[opt key] [["maxDrop" :max-drop] ["fallFactor" :fall-factor] ["damageBudget" :damage-budget] ["damageWeight" :damage-weight]]]
+      (when-some [v (get policy key)] (unchecked-set options opt v)))
     (cond
       (false? k) (doto options (unchecked-set "maxDrop" 1))
-      (not= 1 factor) (doto options (unchecked-set "costs" #js {:dropFactor factor}))
+      (and (number? k) (not= 1 k)) (doto options (unchecked-set "costs" #js {:dropFactor k}))
       :else options)))
 
 (defn ^:async plan-from!

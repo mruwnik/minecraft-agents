@@ -1,0 +1,53 @@
+(ns engine.cost-health-test
+  "jobs.lib.cost.health: what an hp costs and how many a walk may spend, and how the walk policy and go-to pass them on."
+  (:require [cljs.test :refer [deftest is are async]]
+            [engine.test-util :as tu]
+            [jobs.lib.cost :as cost]
+            [jobs.lib.cost.health :as health]
+            [jobs.lib.walk.plan :as wplan]
+            [jobs.lib.walk.world :as wworld]))
+
+(deftest an-hp-costs-ten-seconds-more-the-nearer-the-floor
+  (is (= 10 health/hp-seconds))
+  (are [hp scale] (= scale (health/health-scale hp))
+    20 1
+    10 2
+    5 4
+    1 4
+    0 4)
+  (is (= 10 cost/per-danger) "the fetch price of a point of damage is the same figure"))
+
+(deftest the-budget-is-the-health-over-the-floor-less-a-margin
+  (are [body settings budget] (= budget (health/damage-budget body settings))
+    {:health 20 :food 20} {} 7
+    {:health 16 :food 20} {} 3
+    {:health 13 :food 20} {} 0
+    {:health 10 :food 20} {} 0
+    {:health 20 :food 20} {:max-damage 3} 3
+    {:health 20 :food 20} {:min-health 18} 1
+    {:health 20 :absorption 4 :food 20} {} 11
+    {:health 20 :food 20 :on-fire true} {} 0
+    {:health 20 :food 20 :effects ["poison"]} {} 0
+    {:health 20 :food 20 :effects ["speed"]} {} 7))
+
+(deftest the-budget-leaves-the-body-fed-enough-not-to-go-hungry-after-the-drop
+  (are [food budget] (= budget (health/damage-budget {:health 20 :food food} {}))
+    18 7
+    12 5
+    8 1
+    5 0))
+
+(deftest the-walk-policy-carries-the-budget-weight-and-longest-drop
+  (let [policy (fn [self args] (wworld/body-policy {:primitives (tu/fake {:self self}) :args args}))]
+    (is (= [7 10 10] ((juxt :damage-budget :damage-weight :max-drop) (policy {:health 20 :food 20} {}))))
+    (is (= [3 12.5 6] ((juxt :damage-budget :damage-weight :max-drop) (policy {:health 16 :food 20} {}))))
+    (is (= [1 4] ((juxt :damage-budget :max-drop) (policy {:health 20 :food 20} {:min-health 18}))) "a floor of 18")
+    (is (= 3 (:damage-budget (policy {:health 20 :food 20} {:max-damage 3}))))))
+
+(deftest with-drops-passes-the-policys-budget-to-the-planner
+  (let [o (wplan/with-drops #js {} {:damage-budget 7 :damage-weight 10 :fall-factor 0.5 :max-drop 10})]
+    (is (= [7 10 0.5 10] [(.-damageBudget o) (.-damageWeight o) (.-fallFactor o) (.-maxDrop o)]))
+    (is (nil? (.-costs o)) "the fall factor is no longer folded into dropFactor"))
+  (let [o (wplan/with-drops #js {} {:fall-factor 0.5})]
+    (is (nil? (.-damageBudget o)) "no budget in the policy: the planner's default"))
+  (is (= 1 (.-maxDrop (wplan/with-drops #js {} {:damage-budget 7 :max-drop 10 :drop-cost false}))) "drop-cost false still takes no drop"))

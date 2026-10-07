@@ -17,7 +17,7 @@
   "Walk to :pos ([x y z] or {:x :y :z}, fractions floored to the cell) until the body's cell is within :range cells of
   it (range 0: in that cell, 1: next to it). :place (a name such as :home, set by jobs.memory.set-place) walks to
   that place's recorded position instead of :pos; a name not in memory falls back to the shared marker of that name (jobs.lib.world/marker).
-  - Refused at once, before any walk: a :pos that is not one (:bad-pos), a :place that is not a valid name (:bad-name), a :tolls entry that is not {:x :y :z :factor} of finite numbers (:bad-tolls), a :drop-cost that is not a number >= 0 or false (:bad-drop-cost)
+  - Refused at once, before any walk: a :pos that is not one (:bad-pos), a :place that is not a valid name (:bad-name), a :tolls entry that is not {:x :y :z :factor} of finite numbers (:bad-tolls), a :drop-cost that is not a number >= 0 or false (:bad-drop-cost), a :min-health outside 1-20 (:bad-min-health), a :max-damage below 0 (:bad-max-damage)
     or has no recorded position (:unknown-place), a body with no pathWorld sensing (:unsupported). Both give a :refused warn and {:status :stopped :arrived false :reason <it> :text}.
   - One call is one whole attempt: it plans and walks (jobs.lib.walk: slices of about 100 ms of search, walks of at
     most 60 s each) until it arrives or gives up. A search that needs more slices walks on toward where it has got
@@ -68,6 +68,8 @@
    :dangers {:doc "false: plan straight past known dangers (a walk up to the hostile being fought); true: keep away from them" :default true}
    :dark {:doc "false: plan dark cells like lit ones; true: a dark cell (seen dark, or unseen at night) costs twice a lit one" :default true}
    :tolls {:doc "cells to cross only as a last resort, [{:x :y :z :factor}]: each costs factor times its own seconds more (jobs.lib.cost farm-tolls, zone-tolls)" :default nil}
+   :min-health {:doc "hp (1-20) a drop or a plant's prick may not take the body below, less a margin of 1 (the walk's damage budget); the body's own floor when absent" :default 12}
+   :max-damage {:doc "hp at most a walk may spend on drops and plants that hurt (0: none), under the :min-health budget" :default nil}
    :drop-cost {:doc "number: scales the cost of a drop (fall seconds and damage; 1 as is, 0 free, 5 dear); false: no drop of 2 or 3 at all. :one-way :closed instead refuses only a drop the body cannot climb back" :default 1}
    :zone-tolls {:doc "true: also toll the cells of other bodies' zones near each walk (jobs.lib.toll-cells/zone-walk-tolls), none with :ignore-zones?; for a job that respects zones" :default false}
    :leg-s {:doc "walk one leg of at most this many seconds (0.1 to 120), then end {:arrived false :leg true} so the caller can re-aim at a moving target; nil: the whole way" :type :number :min 0.1 :max 120 :default nil}
@@ -291,11 +293,16 @@
   [c]
   (let [parsed (target c)
         drop-cost (:drop-cost (:args c))
+        {:keys [min-health max-damage]} (:args c)
         tolls-problem (wworld/tolls-problem (:tolls (:args c)))]
     (cond
       (:reason parsed) parsed
       (not (or (nil? drop-cost) (false? drop-cost) (and (number? drop-cost) (js/isFinite drop-cost) (>= drop-cost 0))))
       {:reason :bad-drop-cost :message (str ":drop-cost must be a number >= 0 or false, got " (pr-str drop-cost))}
+      (not (or (nil? min-health) (and (number? min-health) (<= 1 min-health 20))))
+      {:reason :bad-min-health :message (str ":min-health must be a number from 1 to 20, got " (pr-str min-health))}
+      (not (or (nil? max-damage) (and (number? max-damage) (js/isFinite max-damage) (>= max-damage 0))))
+      {:reason :bad-max-damage :message (str ":max-damage must be a number >= 0, got " (pr-str max-damage))}
       tolls-problem {:reason :bad-tolls :message tolls-problem})))
 
 (defn ^:async round

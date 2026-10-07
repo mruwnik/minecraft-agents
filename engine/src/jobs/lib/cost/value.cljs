@@ -31,6 +31,7 @@
   group one."
   (:require ["minecraft-data" :as minecraft-data]
             [clojure.string :as str]
+            [jobs.lib.cost.health :as health]
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.foods :as foods]
             [engine.game :as game]))
@@ -226,7 +227,7 @@
 (def dark-factor
   "The planner's extra cost of a dark cell as a share of its own seconds (options.dark.factor): per-dark over per-block."
   (/ per-dark per-block))
-(def per-danger "One expected point of damage (jobs.lib.cost/route-danger): about 10 s of healing and risk." 10)
+(def per-danger "One expected point of damage (jobs.lib.cost/route-danger): what an hp costs (jobs.lib.cost.health)." health/hp-seconds)
 (def walk-blocks-per-s "Walking speed with slack for detours (4.3 flat out, 1.5x the way)." 2.9)
 (def lethal-causes ["lava" "fire" "burn" "void" "out_of_world"])
 

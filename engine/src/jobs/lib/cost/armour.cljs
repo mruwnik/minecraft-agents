@@ -74,16 +74,13 @@
   (* (max 0 (js/Math.ceil (- blocks 3)))
      (- 1 (/ (epf (:enchants (armour-stats equipment)) :fall) 25))))
 
-(def harmless-fall "hp of fall damage a drop may cost and still be taken as a jump." 1.5)
-(def max-fall "The longest drop in blocks ever allowed." 8)
+(def max-fall "The longest drop in blocks ever allowed." 16)
 
 (defn fall-profile
-  "How a body {:health :equipment} takes drops: {:fall-factor the share of the usual fall damage left (1: none
-  reduced), :max-drop the longest drop in blocks the planner may take}: 3 as usual, more only when fall enchantments
-  keep the damage within harmless-fall and 3 under the health (up to max-fall)."
-  [{:keys [health equipment]}]
-  (let [factor (fall-damage equipment 4)
-        cap (min harmless-fall (- (or health 20) 3))
-        safe (when (< factor 1)
-               (last (take-while #(<= (fall-damage equipment %) cap) (range 4 (inc max-fall)))))]
-    {:fall-factor factor :max-drop (or safe 3)}))
+  "How a body {:health :equipment :damage-budget} takes drops: {:fall-factor the share of the usual fall damage left (1:
+  none reduced), :max-drop the longest drop in blocks the planner may take}: the longest (up to max-fall, at least 3)
+  whose fall damage the budget (hp, jobs.lib.cost.health/damage-budget) pays for."
+  [{:keys [equipment damage-budget]}]
+  (let [budget (or damage-budget 0)]
+    {:fall-factor (fall-damage equipment 4)
+     :max-drop (or (last (take-while #(<= (fall-damage equipment %) budget) (range 4 (inc max-fall)))) 3)}))

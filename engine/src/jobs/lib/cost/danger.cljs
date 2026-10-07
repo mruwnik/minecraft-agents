@@ -10,6 +10,7 @@
   danger-rate: mob-hurt over 1 s x stance factor (:flee x4, :fight x0.1) x 20 / health (at most 4), at most max-rate."
   (:require [jobs.lib.cost.armour :as armour]
             [jobs.lib.cost.fight :as fight]
+            [jobs.lib.cost.health :as health]
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.reach :as reach]
             [jobs.lib.util :as u]))
@@ -132,7 +133,7 @@
   (min max-rate
        (* (threat/mob-hurt (armour/armour-stats equipment) mob-name 1)
           (get stances (stance body mob-name))
-          (min 4 (/ 20 (max 1 health))))))
+          (health/health-scale health))))
 
 (defn danger-of [body kind {:keys [name pos]}]
   (merge {:x (:x pos) :y (:y pos) :z (:z pos) :rate (danger-rate body name) :mob name}

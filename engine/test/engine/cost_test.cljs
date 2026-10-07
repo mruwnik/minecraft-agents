@@ -89,10 +89,12 @@
   (is (= 0.52 (round2 (cost/fall-damage (ff-boots 4) 4))) "feather falling IV: 12 of 25 off")
   (is (< (cost/fall-damage (enchanted iron-8 "protection") 5) 2) "protection counts"))
 
-(deftest fall-profile-allows-longer-drops-only-when-enchants-make-them-harmless
-  (is (= {:max-drop 3 :fall-factor 1} (cost/fall-profile {:health 20 :equipment iron-set})))
-  (is (= {:max-drop 5 :fall-factor 0.52} (update (cost/fall-profile {:health 20 :equipment (ff-boots 4)}) :fall-factor round2)))
-  (is (= 3 (:max-drop (cost/fall-profile {:health 3 :equipment (ff-boots 4)}))) "no extra drop when health is low"))
+(deftest fall-profile-takes-the-longest-drop-the-budget-pays-for
+  (is (= {:max-drop 3 :fall-factor 1} (cost/fall-profile {:health 20 :equipment iron-set :damage-budget 0})))
+  (is (= {:max-drop 10 :fall-factor 1} (cost/fall-profile {:health 20 :equipment iron-set :damage-budget 7})))
+  (is (= 16 (:max-drop (cost/fall-profile {:health 20 :equipment iron-set :damage-budget 99}))) "never over 16")
+  (is (= {:max-drop 12 :fall-factor 0.52} (update (cost/fall-profile {:health 20 :equipment (ff-boots 4) :damage-budget 5}) :fall-factor round2))
+      "feather falling stretches the same budget"))
 
 (deftest the-fight-reserve-has-one-default
   (is (= cost/default-reserve (:default (:reserve retreat/args))) "retreat's :reserve default is the cost's"))

@@ -33,7 +33,7 @@
                         _ (when walked ; a walk: the next call begins a new search from where it got to
                             (swap! (fake/state p) assoc-in [:self :pos] [(+ x 0.5) 64 (+ z 0.5)])
                             (reset! wsearch/searches {}))
-                        plan (await (walk/plan-walk! c (.pathWorld p) [20 71 20] 0 walk/default-weight {:budget 300}))]
+                        plan (await (walk/plan-walk! c (.pathWorld p) [20 71 20] 0 walk/default-weight {:budget 300 :policy (assoc (wworld/body-policy c) :max-drop 3 :damage-budget 0)}))]
                     (if (= "searching" (.-reason (:r plan)))
                       (recur (inc i) (some? (:steps plan)))
                       (.-reason (:r plan))))))]

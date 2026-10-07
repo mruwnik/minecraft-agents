@@ -623,7 +623,7 @@
       (fn ^:async t []
         (let [world (merge {:self {:pos {:x 5 :y 64 :z 0}}} {:blocks room-and-deck})
               {:keys [out seen]} (await (run-job! world {:pos [8 71 0] :range 0}))
-              {off :out} (await (run-job! world {:pos [8 71 0] :range 0 :escalate false}))]
+              {off :out} (await (run-job! world {:pos [8 71 0] :range 0 :escalate false :max-damage 0}))]
           (is (= :goal-cut-off (:why @off)) "without escalation the planner's verdict is cut-off")
           (is (seq (events-of seen :go-to.escalated)) "shut in: it escalates")
           (is (= :unreachable (:reason @out))))))))

@@ -178,7 +178,7 @@
         (with-redefs [jobs.movement.go-to/max-searching 2
                       wsearch/round-budget 1000]
           (let [{:keys [out]} (await (go! {:blocks high-deck-floor :self {:pos {:x 20.5 :y 64 :z 20.5}}}
-                                          {:pos [20 71 20] :range 1 :escalate false}))]
+                                          {:pos [20 71 20] :range 1 :escalate false :max-damage 0}))]
             (is (= {:arrived false :reason :unreachable :why :goal-cut-off} (select-keys @out [:arrived :reason :why]))
                 (str "result " @out))))))))
 
@@ -201,7 +201,7 @@
 
 (defn ^:async small-deck-cut-off! [blocks]
   (let [{:keys [out eng p]} (await (go! {:blocks blocks :self {:pos {:x 2.5 :y 64 :z 16.5}}}
-                                        {:pos [17 75 17] :range 1 :escalate false}))]
+                                        {:pos [17 75 17] :range 1 :escalate false :max-damage 0}))]
     (is (= {:arrived false :reason :unreachable :why :goal-cut-off} (select-keys @out [:arrived :reason :why]))
         (str "result " @out))
     (is (< (dist-to (at p) [2.5 64 16.5]) 3)
