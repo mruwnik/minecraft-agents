@@ -213,11 +213,15 @@
         steps)))
 
 (defn with-bounces
-  "Add :bounce to each :drop step that lands on a bouncing block (slime): bounce? is a fn [x y z] -> bool, asked for the
-  landing cell and the block under it."
+  "Add :bounce to each :drop step that lands on a bouncing block (slime), with :pad the pad's radius round the landing cell:
+  1 when the 8 blocks round that block bounce too, else 0. bounce? is a fn [x y z] -> bool, asked for the landing cell and
+  the block under it."
   [steps bounce?]
   (mapv (fn [{:keys [x y z move] :as s}]
-          (cond-> s (and (= :drop move) (or (bounce? x y z) (bounce? x (dec y) z))) (assoc :bounce true)))
+          (let [py (cond (not= :drop move) nil (bounce? x y z) y (bounce? x (dec y) z) (dec y))]
+            (cond-> s
+              py (assoc :bounce true
+                        :pad (if (every? (fn [[dx dz]] (bounce? (+ x dx) py (+ z dz))) (for [dx [-1 0 1] dz [-1 0 1]] [dx dz])) 1 0)))))
         steps))
 
 ;; ---------------------------------------------------------------- what the planner may plan
@@ -374,17 +378,25 @@
            :climb-down (<= y (+ sy (:arrive-y policy)))
            (<= (Math/abs (- y sy)) (:arrive-y policy))))))
 
+(defn contact?
+  "The body touches the ground at the height of a :bounce drop: its bounce has begun (off-pad? tells whether on the pad)."
+  [policy step {:keys [y on-ground]}]
+  (boolean (and (:bounce step) on-ground (<= (Math/abs (- y (stand-y step))) (:arrive-y policy)))))
+
 (defn advance
   "The index to walk to after this pose: past the last reached of the current step and the lookahead,
-  never beyond the last step. In the air over a gap, or bouncing on a :bounce drop, nothing is skipped."
+  never beyond the last step. In the air over a gap, or bouncing on a :bounce drop, nothing is skipped; the lookahead stops
+  at a :bounce drop, which becomes current at its contact."
   [policy {:keys [steps i]} {:keys [on-ground] :as pose}]
   (let [last-i (dec (count steps))
-        hi (min last-i (+ i (:lookahead policy)))
+        bounce-i (first (filter #(:bounce (nth steps %)) (range (inc i) (inc (min last-i (+ i (:lookahead policy)))))))
+        hi (or bounce-i (min last-i (+ i (:lookahead policy))))
         hit (last (filter #(reached? policy (nth steps %) pose) (range i (inc hi))))
         step (nth steps i)]
     (cond
       (and (= :gap (:move step)) (not on-ground)) i
       (and (:bounce step) (not (reached? policy step pose))) i
+      (and bounce-i (not= hit bounce-i) (contact? policy (nth steps bounce-i) pose)) bounce-i
       (nil? hit) i
       :else (min last-i (inc hit)))))
 
@@ -413,15 +425,11 @@
         (and (not in-water) (< y (- (min y1 y2) (:off-plan-below policy))))
         (> y (+ (max y1 y2) (:off-plan-above policy))))))
 
-(defn contact?
-  "The body touches the ground at the height of a :bounce drop: its bounce has begun (off-pad? tells whether on the pad)."
-  [policy step {:keys [y on-ground]}]
-  (boolean (and (:bounce step) on-ground (<= (Math/abs (- y (stand-y step))) (:arrive-y policy)))))
-
 (defn off-pad?
-  "Bouncing on a :bounce drop, the feet have left the landing block's column (half the body's width round its cell)."
-  [policy {sx :x sz :z} {:keys [x z]}]
-  (let [reach (+ 0.5 (:body-half policy))]
+  "Bouncing on a :bounce drop, the feet have left the pad's columns (:pad cells round the landing cell, plus half the body's
+  width)."
+  [policy {sx :x sz :z :keys [pad]} {:keys [x z]}]
+  (let [reach (+ 0.5 (or pad 0) (:body-half policy))]
     (or (> (Math/abs (- x (+ sx 0.5))) reach) (> (Math/abs (- z (+ sz 0.5))) reach))))
 
 (defn settle-bounce
@@ -592,7 +600,8 @@
         settled (settle-bounce policy (assoc state :tick n) pose)
         i (advance policy settled pose)
         state' (cond-> settled
-                 (not= i (:i state)) (-> (assoc :i i :since n) (dissoc :landed)))
+                 (not= i (:i state)) (-> (assoc :i i :since n) (dissoc :landed)
+                                         (cond-> (contact? policy (nth (:steps settled) i) pose) (assoc :landed n))))
         {:keys [steps since landed]} state'
         at [x y z]
         step (nth steps i)

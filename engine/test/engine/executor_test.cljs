@@ -844,7 +844,7 @@
 
 (def slime-drop
   "Off a ledge 10 high onto a slime pad at x 2 (the drop step is marked :bounce), then on along the ground."
-  [(step 0 74 0 :start) (step 1 74 0 :walk) (step 2 64 0 :drop {:bounce true}) (step 3 64 0 :walk) (step 4 64 0 :walk)])
+  [(step 0 74 0 :start) (step 1 74 0 :walk) (step 2 64 0 :drop {:bounce true :pad 1}) (step 3 64 0 :walk) (step 4 64 0 :walk)])
 
 (defn run-poses
   "The tick results for poses fed one after another from state st."
@@ -855,6 +855,12 @@
   (let [steps [(step 0 74 0 :start) (step 1 64 0 :drop) (step 2 64 0 :walk) (step 3 60 0 :drop) (step 4 60 1 :drop {:h 9})]
         bounce? (fn [x y z] (contains? #{[1 63 0] [2 63 0] [4 60 1]} [x y z]))]
     (is (= [nil true nil nil true] (map :bounce (ex/with-bounces steps bounce?))))))
+
+(deftest with-bounces-records-the-pad
+  (let [pad (set (for [x (range 1 4) z (range -1 2)] [x 63 z]))
+        steps [(step 0 74 0 :start) (step 2 64 0 :drop) (step 1 64 0 :drop) (step 2 63 0 :drop {:h 9})]
+        bounce? (fn [x y z] (contains? pad [x y z]))]
+    (is (= [nil 1 0 1] (map :pad (ex/with-bounces steps bounce?))) "a 3x3 pad round the support: 1, a pad edge: 0")))
 
 (deftest a-bounce-drop-is-not-reached-at-contact
   (let [r (ex/tick p (state-at slime-drop 2 :tick 30 :since 10) (pose 2.5 64 0.5 {:vy 0.8}))]
@@ -885,7 +891,7 @@
 (deftest bouncing-off-the-pad-is-off-plan
   (let [rs (run-poses (state-at slime-drop 2 :tick 30 :since 10)
                       [(pose 2.5 64 0.5 {:vy 0.8})
-                       (pose 3.9 67 0.5 {:vy 0.3 :on-ground false})])]
+                       (pose 4.4 67 0.5 {:vy 0.3 :on-ground false})])]
     (is (= :off-plan (:status (:done (last rs)))))))
 
 (deftest drifting-within-the-pad-is-on-plan
@@ -895,9 +901,9 @@
     (is (nil? (:done (last rs))))))
 
 (deftest the-bounce-wait-is-bounded
-  (let [bouncing (fn [n] (if (even? n) (pose 2.5 64 0.5 {:vy 0.5}) (pose 2.5 65 0.5 {:vy 0.2 :on-ground false})))
-        wait (:bounce-max-ticks p)
-        rs (vec (run-poses (state-at slime-drop 2 :tick 30 :since 10) (map bouncing (range (+ wait 3)))))]
+  (let [wait (:bounce-max-ticks p)
+        bouncing (take (+ wait 3) (cycle [(pose 2.5 64 0.5 {:vy 0.5}) (pose 2.5 65 0.5 {:vy 0.2 :on-ground false})]))
+        rs (vec (run-poses (state-at slime-drop 2 :tick 30 :since 10) bouncing))]
     (is (every? nil? (map :done (take wait rs))))
     (is (every? #{2} (map (comp :i :state) (take wait rs))))
     (is (= 3 (:i (:state (peek rs)))))
@@ -907,6 +913,32 @@
   (let [steps (assoc-in slime-drop [2 :bounce] nil)]
     (is (= 3 (:i (:state (ex/tick p (state-at steps 2 :tick 30 :since 10) (pose 2.5 64 0.5 {:vy 0.8}))))))))
 
-(deftest landing-beside-the-pad-cell-is-off-plan
-  (let [r (ex/tick p (state-at slime-drop 2 :tick 30 :since 10) (pose 3.9 64 0.5 {:vy 0.8}))]
-    (is (= :off-plan (:status (:done r))))))
+(deftest landing-on-another-pad-cell-is-on-plan-and-off-the-pad-is-off-plan
+  (are [pad x z off?] (= off? (= :off-plan (:status (:done (ex/tick p (state-at (assoc-in slime-drop [2 :pad] pad) 2 :tick 30 :since 10)
+                                                                      (pose x 64 z {:vy 0.8}))))))
+    1 3.9 0.5  false
+    1 1.1 -0.6 false
+    1 4.4 0.5  true
+    1 2.5 1.9  false
+    1 2.5 -1.4 true
+    0 3.9 0.5  true))
+
+;; the ledge step was never reached (the body left it early): the bounce step still takes over at contact, it is not
+;; skipped by the lookahead, and its bounce is waited out
+(deftest a-bounce-step-is-not-skipped-from-the-ledge
+  (are [x] (let [rs (run-poses (state-at slime-drop 1 :tick 30 :since 10)
+                               [(pose x 64 0.5 {:vy 0.8})
+                                (pose x 68 0.5 {:vy 0.4 :on-ground false})
+                                (pose x 64 0.5 {:vy -0.6})])]
+             (and (every? nil? (map :done rs))
+                  (every? #{2} (map (comp :i :state) rs))))
+    2.5
+    3.3
+    1.2))
+
+(deftest a-bounce-reached-from-the-ledge-runs-no-stuck-clock
+  (let [wait (:bounce-max-ticks p)
+        bouncing (take (dec wait) (cycle [(pose 3.3 64 0.5 {:vy 0.5}) (pose 3.3 65 0.5 {:vy 0.2 :on-ground false})]))
+        rs (run-poses (state-at slime-drop 1 :tick 30 :since 10) bouncing)]
+    (is (every? nil? (map :done rs)))
+    (is (every? #{2} (map (comp :i :state) rs)))))
