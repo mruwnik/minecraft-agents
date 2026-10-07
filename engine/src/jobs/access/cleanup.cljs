@@ -34,6 +34,10 @@
   - Else walk to within 3 of the nearest (jobs.movement.go-to as a child, :escalate false: never digging a way).
   - Else finish.
 
+  A body standing on a ledger row (a bridge) never digs the last way back to firm ground: that cell is :stranding.
+  With nothing else to dig it walks to the ground at the row's end (go-to, range 0, 3 tries) and digs the rest from
+  there.
+
   The body's own column is dug only from on top: the block under the feet when the cell below is solid floor
   (the body falls one block and lands). Deeper cells wait for the descent (:under-body). Over a hole it stops
   (:no-floor-below).
@@ -95,6 +99,33 @@
                       (open? block-at (rules/offset side 0 1 0)) (open? block-at (rules/offset side 0 2 0))))))
          [[1 0] [-1 0] [0 1] [0 -1]])))
 
+(defn row-exit
+  "The stand cell of firm ground beside the ledger row the body's floor belongs to, or nil: the floor cell under feet
+  must be a ledger cell, the row is the ledger cells joined at that height (the cell without ignored), the ground a
+  neighbour that is no ledger cell and solid floor."
+  [{:keys [feet block-at ledger]} without]
+  (let [[fx fy fz] feet
+        floor [fx (dec fy) fz]
+        in-row? #(and (contains? ledger %) (not= % without))
+        around (fn [[x y z]] (map (fn [[dx dz]] [(+ x dx) y (+ z dz)]) [[1 0] [-1 0] [0 1] [0 -1]]))]
+    (when (contains? ledger floor)
+      (loop [todo [floor] seen #{floor}]
+        (when-let [cell (first todo)]
+          (let [ns (around cell)
+                ground (first (filter #(and (not (contains? ledger %)) (rules/solid-floor? block-at %)) ns))
+                fresh (remove seen (filter in-row? ns))]
+            (if ground
+              (update ground 1 inc)
+              (recur (into (rest todo) fresh) (into seen fresh)))))))))
+
+(defn stranding?
+  "True when digging cell would cut the body off from firm ground it can reach over its row now."
+  [{:keys [feet] :as in} cell]
+  (let [[fx fy fz] feet]
+    (and (not= cell [fx (dec fy) fz])
+         (some? (row-exit in nil))
+         (nil? (row-exit in cell)))))
+
 (defn blocker
   "Why entry e cannot be dug now, as {:reason ...detail}, or nil. in: {:feet :block-at :zones :footprints :ledger
   :accept :can-clear? (block name -> whether the body can clear it now, by hand or a carried tool; absent: always)}."
@@ -110,6 +141,7 @@
       {:reason :no-floor-below :block (block-at below)}
       (and (= cell [fx (dec fy) fz]) (not (exit-after-dig? block-at cell)))
       {:reason :no-exit}
+      (stranding? in cell) {:reason :stranding}
       :else
       (let [v (rules/may-dig? (-> (select-keys in [:block-at :feet :zones :footprints :claims :self :now :ignore-zones? :ledger])
                                   (update :footprints #(into {} (remove (comp (:own-plans in #{}) val)) %))
@@ -122,8 +154,9 @@
 (defn next-step
   "The next step over entries (each holding its item, or unloaded), from {:feet :eye [x y z] :block-at :entries
   :ledger #{cells} :zones :footprints :accept :reach :held {cell {:reason ...}}}: {:step :dig :cell :item},
-  {:step :walk :cell} or {:step :finish :open [{:cell :item :reason ...}]}. Held cells are given up for this run."
-  [{:keys [entries eye reach held] :as in}]
+  {:step :walk :cell}, {:step :retreat :to stand} (only :stranding cells are left, and :retreats is under 3) or
+  {:step :finish :open [{:cell :item :reason ...}]}. Held cells are given up for this run."
+  [{:keys [entries eye reach held retreats] :as in}]
   (let [judged (map (fn [e] [e (or (held (:cell e)) (blocker in e))]) entries)
         ready (map first (remove second judged))
         d #(distance eye (centre (:cell %)))
@@ -133,6 +166,8 @@
       (seq near) (let [e (first (sort-by (juxt #(- (get (:cell %) 1)) d) near))]
                    {:step :dig :cell (:cell e) :item (:item e)})
       (seq far) {:step :walk :cell (:cell (first (sort-by d far)))}
+      (and (< (or retreats 0) 3) (some (comp #{:stranding} :reason second) judged) (row-exit in nil))
+      {:step :retreat :to (row-exit in nil)}
       :else {:step :finish :open (mapv (fn [[e why]] (merge {:cell (:cell e) :item (:item e)} why)) judged)})))
 
 ;; ------------------------------------------------------------------ reading the world
@@ -150,7 +185,7 @@
            {:feet (stair/feet-of c) :eye (eye-of c) :block-at (escape/block-at-of (:primitives c)) :entries entries
             :can-clear? #(not (tools/needs-tool-to-clear? (:primitives c) %))
             :ledger (ledger/cells l) :zones zones :accept (set accept) :reach reach
-            :held (:held (ctx/mem c) {})})))
+            :held (:held (ctx/mem c) {}) :retreats (:retreats (ctx/mem c) 0)})))
 
 (defn bad-job? [job] (not (or (nil? job) (= :all job) (string? job))))
 
@@ -223,6 +258,15 @@
       (ctx/update-mem! c count-fail cell {:reason :out-of-reach :walk status} (:give-up (:args c))))
     :again))
 
+(defn ^:async retreat!
+  "Walk to the ground at the end of the row the body stands on (go-to, range 0, no digging); counts a try."
+  [c {:keys [to]}]
+  (let [[x y z] to
+        r (await (ctx/call-child c :retreat 'jobs.movement.go-to {:pos {:x x :y y :z z} :range 0 :escalate false
+                                                                  :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+    (when-not (= :continue r) (ctx/update-mem! c update :retreats (fnil inc 0)))
+    :again))
+
 (defn collect-radius [c removed]
   (let [{:keys [x y z]} (u/self-pos c)]
     (min max-collect-radius
@@ -293,6 +337,7 @@
     (case (:step step)
       :dig (await (dig! c step))
       :walk (await (walk! c step))
+      :retreat (await (retreat! c step))
       (if (and (:collect m) (seq (:removed m)))
         (await (collect! c (:removed m)))
         (finish! c (:open step))))))

@@ -153,6 +153,32 @@
 
 ;; ------------------------------------------------------------------ against the fake world
 
+(defn row-world
+  "A pit (air at y 62 and 63) from x 1 to 3 with stone either side and the given row cells as dirt at y 63."
+  [row-xs]
+  (fn [[x y z]]
+    (cond
+      (and (<= 1 x 3) (= z 0) (= y 63) (some #{x} row-xs)) "dirt"
+      (and (<= 1 x 3) (<= -2 z 2) (<= y 63)) "air"
+      (< y 64) "stone"
+      :else "air")))
+
+(defn row-entries [xs] (mapv #(entry [% 63 0] :purpose :bridge) xs))
+
+(deftest on-a-bridge-it-never-digs-the-way-back-to-the-ground
+  (let [s (step :feet [2 64 0] :entries (row-entries [1 2 3]) :block-at (row-world [1 2 3]))]
+    (is (= {:step :dig :cell [1 63 0]} (select-keys s [:step :cell])) "one side may go while the other holds")
+    (let [s (step :feet [2 64 0] :entries (row-entries [2 3]) :block-at (row-world [2 3]))]
+      (is (= {:step :retreat :to [4 64 0]} s) "x 3 is the way back: not dug, the body goes to the ground first"))))
+
+(deftest a-pillar-top-is-no-bridge
+  (let [cells (pillar-cells [0 64 0] 3)]
+    (is (= :dig (:step (step :feet [0 67 0] :entries (mapv entry cells) :block-at (column-world cells)))))))
+
+(deftest off-the-bridge-the-row-is-dug-nearest-first
+  (let [s (step :feet [0 64 0] :entries (row-entries [1 2 3]) :block-at (row-world [1 2 3]))]
+    (is (= [:dig [1 63 0]] ((juxt :step :cell) s)))))
+
 (def job 'jobs.access.cleanup)
 
 (defn cell-key [[x y z]] (str x "," y "," z))
@@ -573,3 +599,22 @@
         (let [{:keys [calls open]} (await (walk-run {:status :stopped :arrived false :reason :unreachable :why :door-stuck}))]
           (is (= 2 (count calls)))
           (is (= [:out-of-reach] open)))))))
+
+(deftest a-bridge-over-a-pit-is-taken-back-and-the-body-ends-on-the-ground
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [blocks (into {} (for [x (range -2 8) z (range -2 3) y (range 60 64)
+                                    :let [v (row-world [1 2 3])]
+                                    :when (not= "air" (v [x y z]))]
+                                [(cell-key [x y z]) (v [x y z])]))
+              {:keys [eng p out seen] :as s} (setup {:self {:x 2.5 :y 64 :z 0.5} :blocks blocks
+                                                     :entries (row-entries [1 2 3])})]
+          (core/submit! eng '(recording-parent) {})
+          (await (ticks s eng 80))
+          (is (every? nil? (map #(block p [% 63 0]) [1 2 3])))
+          (is (= [] (the-ledger eng)))
+          (is (= [] (:open @out)))
+          (is (#{[0 64 0] [4 64 0]} (feet p)) "on the ground, not in the pit")
+          (is (= 3 (count (:removed @out)))))))))
+
