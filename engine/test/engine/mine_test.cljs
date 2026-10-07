@@ -450,6 +450,33 @@
           (is (= :count (:reason (done-event s))))
           (is (empty? (events-of s :mine.gave-up))))))))
 
+(defn with-random
+  "Run async f with js/Math.random pinned to r, restored after."
+  [r f]
+  (let [orig js/Math.random]
+    (set! js/Math.random (fn [] r))
+    (-> (f) (.finally (fn [] (set! js/Math.random orig))))))
+
+(deftest nearer-intact-block-is-dug-first
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [r [0 0.5 0.999]]
+          (let [s (await (with-random r
+                           #(scenario {:block "stone" :count 6 :dry-digs 1}
+                                      {:blocks (merge (cells "stone" [4 5 6 7 8 9] [64] [0]) (cells floor-block [4 5 6 7 8 9] [63] [0])) :drops {"stone" "cobblestone"} :inventory [{:name "iron_pickaxe" :count 1}]} 80)))
+                order (mapv first (dug-cells s))]
+            (is (= [4 5] (take 2 order)) (str "random " r))
+            (is (= :count (:reason (done-event s))) (str "random " r))
+            (is (empty? (events-of s :mine.gave-up)))))))))
+
+(deftest drop-in-line-is-blocked-by-an-intact-block-between
+  (let [p (tu/fake-on-floor {:blocks (cells "stone" [4 5] [64] [0]) :floor-block floor-block})
+        c {:primitives p}]
+    (is (true? (mine/drop-in-line? c {:x 4 :y 64 :z 0})))
+    (is (false? (mine/drop-in-line? c {:x 5 :y 64 :z 0})))
+    (is (true? (mine/drop-in-line? c {:x 5 :y 64 :z 3})))))
+
 ;; ------------------------------------------------------------------ the mend must not eat the count
 
 (def pickaxe [{:name "iron_pickaxe" :count 1}])

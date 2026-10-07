@@ -51,7 +51,8 @@
   4. Dig the nearest target by walking (one bounded search, jobs.lib.targets, going on next round; a seen
      block out of every stand's reach is passed over; when the search finds none reachable, the nearest in a straight
      line is tried; targets over the ground snapshot come last, so the floor
-     under the start is dug last; targets whose drop lies in a clear line from the eye come first, and a body whose line is blocked walks to within 1 when it can). Walk within 3: blocked skips the target and counts a failure, partial tries
+     under the start is dug last; targets whose drop lies in a clear line from the eye come first, and a body
+     whose line is blocked walks to within 1 when it can). Walk within 3: blocked skips the target and counts a failure, partial tries
      again and the third partial in a row skips it. The best carried tool is equipped. Dug resets the failures
      and starts collecting. Missing does nothing. Cannot (bedrock) skips without a failure. Anything else skips
      and counts one.
