@@ -287,6 +287,15 @@ calls job code only through `engine.hooks`, named in `src/jobs/hooks.edn` (world
 `engine.notes` is what bodies saw (`worlds/<world>/notes/<body>.edn`, each body writes only its own file;
 `notes/notes`, `notes/note!`). `engine.chat` holds the chat limits (at least 1 s between lines, at most 5 in 30 s, per body).
 
+## Settings
+
+Tuning numbers live in one global map, read by anyone. A namespace under `jobs/` or `triggers/` declares its keys in a top-level `(def settings {::wait-ms {:default 5000 :doc "..." :type :int :min 0}})` (the job arg spec shape; the key's namespace is the declaring one, `:engine.<area>/<name>` in `engine.settings`). `engine.registry/settings` gathers them at compile time, helper files included.
+
+- Read `(settings/get settings ::wait-ms)` with the namespace's own map (a typo throws); never inside a top-level `def`.
+- Layers, low to high: the code `:default`, `worlds/<world>/settings.edn` (`:world`), `worlds/<world>/agents/<Name>/settings.edn` (`:body`). Files are EDN maps `{key value}`, read at body start (`settings/load!` again reloads).
+- A bad value, unknown key or unreadable file keeps the lower layer and emits one `settings.bad` `:info` event naming the key and file.
+- `(settings/resolved)` gives `{key {:value :layer :doc}}`. One body per process: `load!` throws for a second one. Tests wrap in `settings/with-settings {key value} f`.
+
 ## Memory
 
 One EDN store per body: `worlds/<world>/agents/<name>/engine/memory.edn`, `{:entries {kind [entry]} :policies {kind policy}}`.
