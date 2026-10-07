@@ -264,6 +264,24 @@
           (is (= 3 (count (calls p "attack"))) "the fight stops after three useless swings")
           (is (pos? (count (tu/walked-to eng))) "and the body retreats"))))))
 
+(deftest respond-does-not-stop-no-response-while-the-fight-costs-health
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:health 20} :inventory sword :entities [(zombie 7 1 0)]})
+              hits (atom 0)
+              hurting {:check (constantly true)
+                       :round (fn ^:async hurt-yield [_c]
+                                (swap! hits inc)
+                                (fake/swap-self! p update :health dec)
+                                (when (= 6 @hits) (swap! (fake/state p) assoc :entities []))
+                                :continue)}
+              eng (assoc-in eng [:jobs 'jobs.survival.fight-back] hurting)]
+          (core/submit! eng respond {})
+          (dotimes [_ 3] (await (core/tick! eng)))
+          (is (<= 6 @hits) "the fight went on past three hurt-yields")
+          (is (not-any? #(= "no_response" (name (:kind %))) @seen) "a fight that costs health is a response"))))))
+
 ;; ----------------------------------------------------------------- retreat
 
 (def retreat '(jobs.survival.retreat))

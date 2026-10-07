@@ -25,7 +25,7 @@
   Done once no real danger (as the hostile-near trigger, jobs.lib.reach, in sight) is within :radius
   (:ranged-radius for ranged mobs) and the retreat is not hiding (sealed in, up a pillar or down a pit).
   A child that stops (a retreat that cannot escape) stops it with that cause; three calls in a row that change
-  neither the body's cell nor the dangers near stop it :no_response; never :continue.
+  neither the body's cell, its health nor the dangers near stop it :no_response; never :continue.
   Memory: writes one :hostile entry {:mob :decision} plus :pos (seen) or :direction :band :from (heard only) per encounter.
   A danger reflex: never backed off.")
 
@@ -140,9 +140,11 @@
   3)
 
 (defn signature
-  "What a call may change: the body's cell and the ids of the dangers near."
+  "What a call may change: the body's cell, its health (a fight that costs health is a response) and the ids of the
+  dangers near."
   [c hs]
-  {:cell (let [{:keys [x y z]} (u/self-pos c)] [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)])
+  {:health (.-health (.self (:primitives c)))
+   :cell (let [{:keys [x y z]} (u/self-pos c)] [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)])
    :ids (set (map #(.-id %) hs))})
 
 (defn ^:async round
