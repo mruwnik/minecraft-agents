@@ -51,6 +51,8 @@
                 '(jobs.movement.boat-drive {:pos [1 63 1] :max-strokes "text"})
                 '(jobs.movement.boat-drive {:pos [1 63 1] :max-strokes 0})
                 '(jobs.movement.boat-drive {:pos [1 63 1] :max-s "120"})
+                '(jobs.movement.boat-land {:radius "far"})
+                '(jobs.movement.boat-land {:max-spots 0})
                 '(jobs.items.obtain {:item 3})
                 '(jobs.items.obtain {:item "stick" :count 0})
                 '(jobs.storage.deposit {:free "text"})
