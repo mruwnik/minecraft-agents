@@ -166,11 +166,11 @@
                    {:name "dirt" :count 40 :slot 1}
                    {:name "gravel" :count 9 :slot 2}
                    {:name "stick" :count 3 :slot 3}
-                   {:name "flint" :count 3 :slot 4}]
+                   {:name "poppy" :count 3 :slot 4}]
         order (fn [recency] (names-of (mr/toss-order inventory {} recency 5)))]
-    (is (= ["dirt" "gravel" "stick" "flint" "oak_log"] (order {})) "junk blocks first (bigger stack first), then worth 0 by count (3, 3 by slot)")
-    (is (= ["dirt" "gravel" "flint" "stick" "oak_log"] (order {"stick" 100})) "the one picked up most recently goes last of its worth")
-    (is (= ["dirt" "gravel" "stick" "flint" "oak_log"] (order {"flint" 100 "gravel" 50 "dirt" 50}))
+    (is (= ["dirt" "gravel" "stick" "poppy" "oak_log"] (order {})) "junk blocks first (bigger stack first), then by worth: stick and poppy equal (3, 3 by slot), the log dearer")
+    (is (= ["dirt" "gravel" "poppy" "stick" "oak_log"] (order {"stick" 100})) "the one picked up most recently goes last of its worth")
+    (is (= ["dirt" "gravel" "stick" "poppy" "oak_log"] (order {"poppy" 100 "gravel" 50 "dirt" 50}))
         "stick has no pick-up (0): before the picked-up names; later pick-ups after earlier ones")))
 
 (deftest toss-order-throws-junk-blocks-first-and-keeps-coal-and-ores-below-their-worth
@@ -181,17 +181,17 @@
                    {:name "granite" :count 64 :slot 4}
                    {:name "iron_ore" :count 5 :slot 5}
                    {:name "diamond" :count 2 :slot 6}]]
-    (is (= ["cobbled_deepslate" "granite" "tuff" "iron_ore"]
-           (names-of (mr/toss-order inventory {} {} 1)))
-        "junk blocks first, whole stacks before partial; coal (1) and raw copper (12) are worth keeping")
-    (is (= ["cobbled_deepslate" "granite" "tuff" "iron_ore" "coal"]
-           (names-of (mr/toss-order inventory {} {} 2)))
-        "raised :toss-below lets the stack of coal go")))
+    (is (= ["cobbled_deepslate" "granite" "tuff"]
+           (names-of (mr/toss-order inventory {} {} 3)))
+        "junk blocks first, whole stacks before partial; coal and raw copper are worth keeping")
+    (is (= ["cobbled_deepslate" "granite" "tuff" "iron_ore" "raw_copper" "coal"]
+           (names-of (mr/toss-order inventory {} {} 8)))
+        "raised :toss-below lets the stacks of raw copper and coal go")))
 
 (deftest toss-order-orders-by-recency-before-count
-  (let [inventory [{:name "stick" :count 9 :slot 0} {:name "flint" :count 3 :slot 1}]]
-    (is (= ["stick" "flint"] (names-of (mr/toss-order inventory {} {"stick" 1 "flint" 2} 5))))
-    (is (= ["flint" "stick"] (names-of (mr/toss-order inventory {} {"stick" 2 "flint" 1} 5))))))
+  (let [inventory [{:name "item_b" :count 9 :slot 0} {:name "item_a" :count 3 :slot 1}]]
+    (is (= ["item_b" "item_a"] (names-of (mr/toss-order inventory {} {"item_b" 1 "item_a" 2} 5))))
+    (is (= ["item_a" "item_b"] (names-of (mr/toss-order inventory {} {"item_b" 2 "item_a" 1} 5))))))
 
 (deftest toss-order-skips-protected-food-and-stacks-worth-max-or-more
   (let [inventory [{:name "iron_pickaxe" :count 1 :slot 0}
@@ -199,10 +199,10 @@
                    {:name "oak_log" :count 4 :slot 2}
                    {:name "diamond" :count 1 :slot 3}
                    {:name "dirt" :count 4 :slot 4}]]
-    (is (= ["dirt"] (names-of (mr/toss-order inventory {} {} 1))))
+    (is (= ["dirt"] (names-of (mr/toss-order inventory {} {} 0.5))))
     (is (= ["dirt" "oak_log"] (names-of (mr/toss-order inventory {} {} 2))))
     (is (= [] (names-of (mr/toss-order inventory {} {} 0))))
-    (is (= ["dirt" "oak_log" "diamond"] (names-of (mr/toss-order inventory {} {} 100))))))
+    (is (= ["dirt" "oak_log" "diamond"] (names-of (mr/toss-order inventory {} {} 1000))))))
 
 (deftest toss-order-never-cuts-into-a-floor
   (let [stacks (fn [& counts] (vec (map-indexed (fn [i c] {:name "cobblestone" :count c :slot i}) counts)))]
@@ -325,9 +325,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:inventory (vec (concat [{:name "oak_log" :count 5}] (same "diamond_pickaxe" 31 1) [{:name "item_a" :count 1} {:name "item_b" :count 1}]))})]
+        (let [{:keys [eng p seen]} (setup {:inventory (vec (concat [{:name "coal" :count 5}] (same "diamond_pickaxe" 31 1) [{:name "item_a" :count 1} {:name "item_b" :count 1}]))})]
           (await (run-reflex eng {:toss-below 2} {}))
-          (is (= ["item_a" "item_b"] (mapv #(arg-of "item" %) (calls p "toss"))) "worth 0 before the worth-1 oak_log; stops at 4 free")
+          (is (= ["item_a" "item_b"] (mapv #(arg-of "item" %) (calls p "toss"))) "the coal is kept; stops at 4 free")
           (is (= 32 (stack-count p)))
           (is (>= 1 (Math/abs (- -4 (:x (feet p))))) "then it walks 4 blocks back from where it threw, against the throw direction")
           (is (= 0 (:z (feet p))))
@@ -395,12 +395,12 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:inventory (same "oak_log" 36 5) :entities [diamond-on-ground]})]
+        (let [{:keys [eng p seen]} (setup {:inventory (same "coal" 36 5) :entities [diamond-on-ground]})]
           (await (run-reflex eng {} {}))
-          (is (= [["oak_log" 5]] (mapv (juxt #(arg-of "item" %) #(arg-of "count" %)) (calls p "toss"))) "one oak_log stack")
+          (is (= [["coal" 5]] (mapv (juxt #(arg-of "item" %) #(arg-of "count" %)) (calls p "toss"))) "one coal stack")
           (is (= [70] (mapv #(arg-of "id" %) (calls p "collect"))))
           (is (= 1 (get (inv p) "diamond")))
-          (is (= 36 (stack-count p)) "35 oak_log stacks and the diamond")
+          (is (= 36 (stack-count p)) "35 coal stacks and the diamond")
           (is (not (declined? seen)))
           (is (= [:short] (mapv :reason (of-kind seen :make-room.stopped))) "a swap with nothing more to toss is still short")
           (is (contains? (event-kinds seen) :make-room.swapped)))))))
@@ -476,8 +476,8 @@
           (is (empty? (:list (core/state eng))) "the job ended"))))))
 
 (deftest torches-are-never-tossed
-  (let [inventory [{:name "torch" :count 16 :slot 0} {:name "flint" :count 3 :slot 1}]]
-    (is (= ["flint"] (names-of (mr/toss-order inventory {} {} 1))))))
+  (let [inventory [{:name "torch" :count 16 :slot 0} {:name "poppy" :count 3 :slot 1}]]
+    (is (= ["poppy"] (names-of (mr/toss-order inventory {} {} 2))))))
 
 ;; ------------------------------------------------------------------ one round is one whole attempt
 

@@ -7,7 +7,6 @@
             [jobs.lib.shelter :as sh]
             [jobs.lib.util :as u]
             [engine.memory :as mem]
-            [jobs.lib.worth :as value]
             [jobs.lib.pace :as pace]
             [jobs.lib.child :as child]
             [jobs.lib.result :as res]
@@ -31,7 +30,7 @@
      :chest-unusable for ten minutes and the job goes on without it.
   2. With no slot free and an item lying within :swap-radius that is worth more than the cheapest throwable
      stack, that stack is thrown away from the item and the item is collected.
-  3. Without a usable chest, the stack of least worth is thrown. A stack qualifies when jobs.lib.worth/item-worth is
+  3. Without a usable chest, the stack of least worth is thrown. A stack qualifies when item-worth is
      below :toss-below, and it is thrown whole and only while the name's floor stays carried. Cheapest first,
      then the one picked up longest ago (:picked-up entries), then the smaller stack. The body turns to the first
      of the four directions with two free cells ahead at eye level and tosses.
@@ -53,7 +52,7 @@
    :chest-range {:doc "the known :chest place is used only within this distance" :default 32}
    :keep-food {:doc "food items kept carried (best food by points first); the body's food reserve (jobs.lib.cost/food-reserve) when nil" :default nil}
    :keep-blocks {:doc "building blocks kept carried (dig-in's list, in its order)" :default 64}
-   :toss-below {:doc "a stack is tossed to make room only when its jobs.lib.worth/item-worth is below this" :default 1}
+   :toss-below {:doc "a stack is tossed to make room only when its item-worth (jobs.lib.cost/item-value per item, seconds of work) is below this: dirt, cobblestone, rotten flesh and seeds go; ores, fuel, tools and food stay" :default 3}
    :swap-radius {:doc "when no slot is free, a dropped item worth more than some carried stack within this radius is swapped in" :default 8}
    :away {:doc "after tossing, walk this far away from where the items were thrown" :default 4}
    :max-steps {:doc "safety: stop (:stalled, warn make-room.stalled) after this many deposit calls, swaps and tosses in one run" :default 40}
@@ -65,12 +64,23 @@
   "The spot of a toss, in body memory: a cut reflex loses its job memory, the refire still walks away from it."
   {:cap 1 :ttl 120000})
 
+(defn item-worth
+  "The worth of one item of an inventory entry ({:name :count? ...}): its jobs.lib.cost/item-value per item."
+  [item]
+  (/ (:value (cost/item-value [item])) (max 1 (or (:count item) 1))))
+
 (def tool-like #{"bucket" "water_bucket" "lava_bucket"})
 
 (def junk-blocks
   "Plain blocks a player throws first when the bag is full."
   #{"dirt" "coarse_dirt" "cobblestone" "cobbled_deepslate" "deepslate" "stone" "granite" "diorite" "andesite"
     "tuff" "gravel" "netherrack" "sand" "red_sand" "calcite" "dripstone_block"})
+
+(defn stack-worth
+  "item-worth, but 0 for a plain junk block: crafted-only ones (cobbled_deepslate) have no source in the item base and
+  would price above the toss line."
+  [item]
+  (if (contains? junk-blocks (:name item)) 0 (item-worth item)))
 
 (def cardinals [[1 0] [-1 0] [0 1] [0 -1]])
 
@@ -134,7 +144,7 @@
   (let [totals (totals inventory)
         budgets (into {} (map (fn [[n total]] [n (- total (get keep n 0))])) totals)
         candidates (->> inventory
-                        (map #(assoc (select-keys % [:name :count :slot]) :worth (value/item-worth %) :junk (contains? junk-blocks (:name %))))
+                        (map #(assoc (select-keys % [:name :count :slot]) :worth (stack-worth %) :junk (contains? junk-blocks (:name %))))
                         (remove #(or (protected? (:name %)) (foods/edible? (:name %))))
                         (filter #(< (:worth %) max-worth))
                         (sort-by (fn [s] (if (:junk s)
@@ -151,7 +161,7 @@
   "Distinct carried names, not protected, whose total exceeds their keep, in
   the order to put them away: least worth keeping first. Names without a floor
   (keep 0) before names with one (food, building blocks), then the lowest
-  jobs.lib.worth/item-worth among the name's stacks, then when the name was last
+  item-worth among the name's stacks, then when the name was last
   picked up (recency {name t}; never is 0, oldest first), then its lowest slot
   (the stack's index when it has no :slot)."
   [inventory keep recency]
@@ -159,7 +169,7 @@
         stacks (map-indexed (fn [i s] (assoc s :slot (or (:slot s) i))) inventory)
         order-key (fn [[n ss]]
                     [(if (pos? (get keep n 0)) 1 0)
-                     (apply min (map value/item-worth ss))
+                     (apply min (map stack-worth ss))
                      (get recency n 0)
                      (apply min (map :slot ss))])]
     (->> stacks
@@ -319,7 +329,7 @@
   more than a throwable stack, or nil."
   [c {:keys [inventory keep recency]}]
   (some (fn [g]
-          (let [worth (value/item-worth g)]
+          (let [worth (stack-worth g)]
             (when-let [stack (first (toss-order inventory keep recency worth))]
               {:item (assoc g :worth worth) :stack stack})))
         (ground-items c (:swap-radius (:args c)))))

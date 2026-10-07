@@ -34,7 +34,7 @@
 
   Prices ([[regex price] ...], first match wins) set the worth of one item by name pattern, with :else the price of
   items no pattern matches, and :enchanted the worth of a stack with :enchants or :nbt: a job that ranks items its own
-  way (make-room's keep tiers) passes its own table, and the durability and enchantment terms do not apply to a priced
+  way passes its own table, and the durability and enchantment terms do not apply to a priced
   item. A row [regex price :per-stack] prices the whole stack, not each item."
   (:require ["minecraft-data" :as minecraft-data]
             [clojure.string :as str]
