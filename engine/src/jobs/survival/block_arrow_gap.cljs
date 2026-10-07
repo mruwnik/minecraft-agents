@@ -2,7 +2,6 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.combat :as combat]
-            [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
             [jobs.lib.result :as r]
@@ -22,7 +21,8 @@
   carried that :blocks names), :refused (every cell that would help is another's zone, claim or plan; :ignore-zones?
   lifts it), :no-gap (a line of fire stays and no open cell within :reach would end it), :place-failed or
   :no-progress (over max-steps rounds).
-  Does not fight, flee or walk: respond-to-hostile and retreat own that. What it placed is read back as the body saw it.
+  Does not fight, flee or walk: respond-to-hostile and retreat own that.
+  What it placed is what place-all! reports placed (the body trusts its own place, not a view that may lag).
   Filling a doorway can shut the body in: the blocks are the building blocks dig-in shelters with, and a shut-in body
   gets out as from its own shelter (go-to escalation digs a door, dig-in leave).
   Events: block-arrow-gap.closed (info), block_arrow_gap_failed (warning).")
@@ -76,12 +76,6 @@
         best (first (sort-by second scored))]
     (when (and best (< (second best) now)) (first best))))
 
-(defn seen-kind
-  "What cell is to an arrow as the body last saw it (a cell never seen is open)."
-  [p cell]
-  (let [b (look/seen-block p cell)]
-    (reach/arrow-kind-of (when-not (:unknown b) (some-> b clj->js)))))
-
 (defn fail! [c reason text]
   (ctx/emit! c :block_arrow_gap_failed :warn {:reason reason :text text})
   (r/stop! c reason text))
@@ -112,9 +106,7 @@
           :else (let [status (await (dig-in/place-all! c blocks [cell]))]
                   (if (not= :ok status)
                     (fail! c :place-failed (str "cannot place at the gap: " status))
-                    (do (if (= :open (seen-kind p cell))
-                          (ctx/update-mem! c update :skip (fnil conj #{}) cell)
-                          (ctx/update-mem! c update :placed (fnil conj []) cell))
+                    (do (ctx/update-mem! c update :skip (fnil conj #{}) cell)
                         :again))))))))
 
 (defn check

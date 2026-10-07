@@ -120,13 +120,13 @@
           (await (run-job! s {:reach 0}))
           (is (= :no-gap (:reason (failed seen)))))))))
 
-(deftest the-placed-cell-is-read-through-perception
+(deftest a-placed-cell-perception-has-not-caught-up-with-still-counts-as-placed
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p] :as s} (setup [] {:entities [pit-skeleton] :blocks (merge ground pit shell)})
-              seen-reads (atom 0)
-              seen-block-at (aget p "seenBlockAt")]
-          (aset p "seenBlockAt" (fn [pos] (swap! seen-reads inc) (seen-block-at pos)))
+        (let [{:keys [p seen] :as s} (setup [] {:entities [pit-skeleton] :blocks (merge ground pit shell)})]
+          (aset p "seenBlockAt" (fn [pos] #js {:unknown true :pos pos}))
           (await (run-job! s {}))
-          (is (pos? @seen-reads) "the result of the placing is read as perceived, not from the raw world"))))))
+          (is (nil? (failed seen)) "a successful place is not undone by a lagging view")
+          (is (= 1 (count (:placed (some #(when (= :block-arrow-gap.closed (:kind %)) %) @seen)))) "the placed cell is reported")
+          (is (= 7 (cobble p)) "the cell is not filled twice"))))))
