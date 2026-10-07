@@ -1,0 +1,29 @@
+;; Card 40ac095a: jobs.movement.cross-water crosses a lake by boat (boat-launch, boat-drive, boat-land) and takes the boat back.
+;; Should-succeed: a given far-shore land cell (boat.landed, boat recovered); an auto-chosen far shore; :recover false leaves the boat afloat.
+;; Should-fail: a given cell that is no shore (:no-far-shore); no shore :min-cross away (:no-far-shore); no water within :radius of the body (:not-water).
+;; The lake is x 12..22, z 4..28 (11 wide); the body starts on the west bank.
+{:defaults
+ {:tags [:boats :movement :cross-water] :time :any
+  :plot {:height 8 :floor "stone"}
+  :body {:at [10.5 0 16.5] :inventory [["oak_boat" 1]]}
+  :blocks [[:fill [12 -1 4] [22 -1 28] "water"]]
+  :limit-s 200}
+ :cases
+ [{:name "cross-to-the-given-far-shore-and-recover"
+   :act [[:job (jobs.movement.cross-water {:pos [23 0 16]})]]
+   :expect [{:event {:source :job :kind :boat.landed :data {:recovered true}} :within-s 150 :of-job true}]}
+  {:name "cross-to-an-auto-chosen-far-shore"
+   :act [[:job (jobs.movement.cross-water {})]]
+   :expect [{:event {:source :job :kind :boat.landed :data {:recovered true}} :within-s 150 :of-job true}]}
+  {:name "cross-without-taking-the-boat-back"
+   :act [[:job (jobs.movement.cross-water {:pos [23 0 16] :recover false})]]
+   :expect [{:event {:source :job :kind :boat.landed :data {:recovered false}} :within-s 150 :of-job true}]}
+  {:name "given-cell-is-no-shore"
+   :act [[:job (jobs.movement.cross-water {:pos [17 0 16]})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-far-shore}} :within-s 30 :of-job true}]}
+  {:name "no-shore-far-enough"
+   :act [[:job (jobs.movement.cross-water {:min-cross 60})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-far-shore}} :within-s 30 :of-job true}]}
+  {:name "no-water-within-radius"
+   :act [[:job (jobs.movement.cross-water {:pos [23 0 16] :radius 1})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :not-water}} :within-s 30 :of-job true}]}]}
