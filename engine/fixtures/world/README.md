@@ -57,7 +57,7 @@ patterns write `#at [x y z]` (absolute `[x y z]`) or `#xyz [x y z]` (absolute `{
 
 Act steps: `[:summon "type" p "{NBT}"]` (the runner adds `Tags:["wt"]` and `PersistenceRequired`), `[:job (spec) [:now]]`
 (submitted with `engine/tools/jobs.mjs`; its id joins the run's jobs), `[:wait-s n]`, `[:await pattern s]` (wait for an
-event since t0, error after s), `[:kill-body]`, `[:time-set ticks]` (needs `--allow-time`), `[:rcon "text"]` (with
+event since t0, error after s), `[:kill-body]`, `[:time-set ticks]` (needs `--allow-time`), `[:restart-body]` (stops the body, starts it keeping memory and position, puts the register again), `[:cli "tool" [args] pattern?]` (runs `engine/tools/<tool>.mjs` with `$body $world $job` filled in; the printed EDN must match the pattern, else exit 0), `[:http op arg pattern?]` (`:submit spec [flags]`, `:cancel id`, `:cancel-all`, `:take {:who :why :idle-s}`, `:release {:who}` through jobs.mjs / drive.mjs; the manual lease is force-released after the run), `[:rcon "text"]` (with
 `$BODY $X $Y $Z $BOX` = the body, the plot origin and the plot box; every `@e` selector must be a plot box, e.g. `kill @e[type=zombie,$BOX]`).
 
 Expectations: `{:event pattern :within-s n}` passes when a matching event is logged within n s of t0;
@@ -68,7 +68,7 @@ members, `[:> n] [:>= n] [:< n] [:<= n]` numbers, `[:near p r]` a position withi
 `[:not p]`, `[:any]` anything present; a vector of patterns matches a sequence of that length; else equality.
 
 After checks: `[:block p "block[state]"]` and `[:not-block p "block"]` (`execute if block`), `[:body-near p r]` and `[:body-far p r]` (body within / at least r blocks from p),
-`[:item "name" n-or-[:>= n]]` (count in the body's inventory), `[:entities "selector args" [a b] n-or-[:>= n]]`
+`[:item "name" n-or-[:>= n]]` (count in the body's inventory), `[:memory pattern]` and `[:file "path" pattern]` (the body's `engine/memory.edn` / a file under its directory, read as EDN, must match the pattern), `[:entities "selector args" [a b] n-or-[:>= n]]`
 (entities in the box a..b, e.g. `"type=cow,tag=wt"`).
 
 What does not fit: natural terrain (forests, caves, far walks, unloaded land) stays in the go-to soak; cases needing

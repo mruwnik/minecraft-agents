@@ -209,7 +209,9 @@
 
 (deftest body-refs-resolve-to-the-running-body
   (is (= {:id "w" :metadata {:by "ProbeX"}} (f/resolve-body-refs {:id "w" :metadata {:by "$body"}} "ProbeX")))
-  (is (= {:metadata {:by "Other"}} (f/resolve-body-refs {:metadata {:by "Other"}} "ProbeX"))))
+  (is (= {:metadata {:by "Other"}} (f/resolve-body-refs {:metadata {:by "Other"}} "ProbeX")))
+  (is (= {:place "camp-wt-probex" :by "x ProbeX"} (f/resolve-body-refs {:place "camp-$tag" :by "x $body"} "ProbeX"))
+      "$tag (the lowercase shared tag) and $body inside a string"))
 
 (deftest after-block-checks-floor-fractional-coordinates
   (is (= "execute if block 20001 150 20002 air" (f/after-command [20000 150 20000] "B" {} {} [:block [1.5 0 2.5] "air"])))
@@ -389,3 +391,41 @@
     (is (some #(re-find #":zones" %) (ps {:zones [{:name "z" :min [0 0] :max [1 1 1]}]})))
     (is (some #(re-find #":places" %) (ps {:places [{:pos [0 0 0]}]})))
     (is (some #(re-find #":places" %) (ps {:places [{:name "p" :pos [0 0]}]})))))
+
+(deftest cli-and-http-steps-become-tool-argv
+  (let [argv #(f/step-argv "B" "claude" % "j7")]
+    (is (= ["engine/tools/plans.mjs" "check" "--body" "B" "--world" "claude"]
+           (argv [:cli "plans" ["check" "--body" "$body" "--world" "$world"]])))
+    (is (= ["engine/tools/drive.mjs" "B" "take" "--world" "claude" "--who" "wt" "--why" "t"]
+           (argv [:http :take {:who "wt" :why "t"}])))
+    (is (= ["engine/tools/drive.mjs" "B" "release" "--world" "claude" "--who" "wt"] (argv [:http :release {:who "wt"}])))
+    (is (= ["engine/tools/jobs.mjs" "B" "--world" "claude" "cancel" "j7"] (argv [:http :cancel "$job"])))
+    (is (= ["engine/tools/jobs.mjs" "B" "--world" "claude" "submit" "(jobs.x {:a 1})" "--next"]
+           (argv [:http :submit '(jobs.x {:a 1}) [:next]])))))
+
+(deftest a-tool-answer-is-judged-by-its-edn-and-exit-code
+  (is (:pass? (f/judge-reply {:ok true} 0 "{:ok true :id \"j1\"}")))
+  (is (:pass? (f/judge-reply {:ok false :reason :job-not-found} 1 "{:ok false :reason :job-not-found}")) "a refusal is matched, not an error")
+  (is (not (:pass? (f/judge-reply {:ok true} 1 "{:ok false}"))))
+  (is (not (:pass? (f/judge-reply {:ok true} 0 "not edn {"))))
+  (is (:pass? (f/judge-reply nil 0 "anything")) "without a pattern the exit code decides")
+  (is (not (:pass? (f/judge-reply nil 1 "boom")))))
+
+(deftest file-and-memory-after-checks-read-the-body-files
+  (is (= "engine/memory.edn" (f/after-file [:memory {:deaths [:any]}])))
+  (is (= "engine/x.edn" (f/after-file [:file "engine/x.edn" {}])))
+  (is (nil? (f/after-file [:block [0 0 0] "air"])))
+  (is (:pass? (f/judge-file-after [:memory {:deaths [{:dimension "overworld"} {:dimension "overworld"}]}]
+                                  "{:deaths [{:dimension \"overworld\" :cause :x} {:dimension \"overworld\"}]}")))
+  (is (not (:pass? (f/judge-file-after [:memory {:deaths [{} {}]}] "{:deaths [{}]}"))))
+  (is (not (:pass? (f/judge-file-after [:memory {:deaths [:any]}] nil))) "a missing file fails with a reason")
+  (is (not (:pass? (f/judge-file-after [:file "a" {}] "{:bad")))))
+
+(deftest cli-http-restart-steps-and-file-checks-validate
+  (let [ps #(f/problems (merge {:name "x" :time :day :plot {:height 16} :body {:at [0 0 0]} :expect [{:event {} :within-s 1}]} %))]
+    (is (empty? (ps {:act [[:restart-body] [:cli "plans" ["check"] {:ok true}] [:http :take {:who "w"}] [:http :cancel "j1" {:ok true}]]
+                     :after [[:memory {:deaths [:any]}] [:file "engine/a.edn" {}]]})))
+    (is (some #(re-find #":act steps" %) (ps {:act [[:http :bogus]]})))
+    (is (some #(re-find #":act steps" %) (ps {:act [[:cli "no/such" []]]})))
+    (is (some #(re-find #":act steps" %) (ps {:act [[:cli "plans" "check"]]})))
+    (is (some #(re-find #":after" %) (ps {:after [[:file 7 {}]]})))))

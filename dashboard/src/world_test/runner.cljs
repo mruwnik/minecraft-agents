@@ -715,11 +715,30 @@
                   (.then (rcon! [text]) #(.then (sleep (* 1000 every-s)) tick)))))]
       (tick))))
 
+(declare put-register!)
+
+(defn restart-body!
+  "Stops this runner's body and starts it again keeping engine/memory.edn, seen.bin and the world position; the case's
+  register is put again (the restart drops engine.edn)."
+  [opts origin c]
+  (-> (stop-body! opts)
+      (.then #(start-body! opts nil true nil))
+      (.then #(when (seq (:register c)) (put-register! opts (:register c) origin)))))
+
+(defn tool-step!
+  "Runs a :cli or :http step: the tool's answer must pass f/judge-reply or the step throws."
+  [opts step last-job]
+  (.then (exec-file (f/step-argv (:body opts) (:world opts) step last-job))
+         (fn [{:keys [code out]}]
+           (let [{:keys [pass? evidence]} (f/judge-reply (f/step-pattern step) code out)]
+             (when-not pass? (throw (js/Error. (str (pr-str (vec (take 2 step))) " step: " evidence))))))))
+
 (defn run-steps!
   "Runs the act steps in order; resolves to the set of submitted job ids. :await and :rcon-until see events from
   offset/since (the watch window: a trigger firing inside the settle counts, as it does for :expect)."
   [opts origin c offset t0]
-  (let [box (f/box-selector (f/case-grid c) origin (get-in c [:plot :height]))]
+  (let [box (f/box-selector (f/case-grid c) origin (get-in c [:plot :height]))
+        last-job (atom nil)]
    (reduce (fn [p [op a b :as step]]
             (.then p (fn [ids]
                        (case op
@@ -732,7 +751,10 @@
                                           (fn [ok] (if ok ids (throw (js/Error. "a :time-set step needs --allow-time")))))
                          :await (.then (await-event opts offset a t0 (* 1000 b))
                                        (fn [ev] (if ev ids (throw (js/Error. (str ":await " (pr-str a) " timed out after " b " s"))))))
-                         :job (.then (submit-job! opts (f/resolve-body-refs (f/resolve-plan-refs a (plan-prefix opts)) (:body opts)) (vec (map #(str "--" (name %)) b))) #(conj ids %))))))
+                         :restart-body (.then (restart-body! opts origin c) (constantly ids))
+                         (:cli :http) (.then (tool-step! opts step @last-job) (constantly ids))
+                         :job (.then (submit-job! opts (f/resolve-body-refs (f/resolve-plan-refs a (plan-prefix opts)) (:body opts)) (vec (map #(str "--" (name %)) b)))
+                                     (fn [id] (reset! last-job id) (conj ids id)))))))
           (js/Promise.resolve #{})
           (:act c))))
 
@@ -818,11 +840,22 @@
                 :events #(filterv (fn [e] (>= (:time-ms e 0) from)) (read-events-from (events-file opts) offset))}
                c t0 ids clock))
 
+(defn judge-file-check
+  "Result of a :memory / :file check: reads the file under the body's directory."
+  [opts check]
+  (let [file (path/join (body-dir opts) (f/after-file check))]
+    (f/judge-file-after check (when (fs/existsSync file) (fs/readFileSync file "utf8")))))
+
 (defn after-checks! [opts origin c]
-  (let [cmds (mapv #(f/after-command origin (:body opts) (f/case-grid c) c %) (:after c))]
+  (let [checks (:after c)
+        file? (comp some? f/after-file)
+        rcon-checks (vec (remove file? checks))
+        cmds (mapv #(f/after-command origin (:body opts) (f/case-grid c) c %) rcon-checks)]
     (.then (rcon! cmds)
            (fn [replies]
-             (let [results (mapv #(f/judge-after origin %1 %2) (:after c) replies)
+             (let [judged (map vector rcon-checks (map #(f/judge-after origin %1 %2) rcon-checks replies))
+                   by-check (into {} (map (fn [[chk r]] [chk r])) judged)
+                   results (mapv (fn [chk] (if (file? chk) (judge-file-check opts chk) (by-check chk))) checks)
                    probes (mapv #(when (:stray? %) (f/entity-probe-command origin (:check %))) results)]
                (.then (rcon! (keep identity probes))
                       (fn [dumps]
@@ -957,7 +990,10 @@
                                                                     (some-> @pre-register :offset (as-> off (woke? (read-events-from (events-file opts) off))))))))
                    r)))
         (.then (fn [r]
-                 (-> (exec-file ["engine/tools/jobs.mjs" (:body opts) "--world" (:world opts) "cancel-all"])
+                 (-> (if (some #(#{:cli :http} (first %)) (:act c))
+                       (exec-file ["engine/tools/drive.mjs" (:body opts) "release" "--force" "--world" (:world opts)])
+                       (js/Promise.resolve nil))
+                     (.then #(exec-file ["engine/tools/jobs.mjs" (:body opts) "--world" (:world opts) "cancel-all"]))
                      (.then #(rcon! (f/cleanup-commands grid origin (:body opts) rc)))
                      (.then (fn [_] (when (or (seq (:zones c)) (seq (:places c))) (drop-shared! opts))))
                      (.then (fn [_] (run! #(when (fs/existsSync %) (fs/unlinkSync %)) @plan-files) r))

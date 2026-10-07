@@ -5,7 +5,8 @@
   engine/fixtures/world/README.md."
   (:require [cljs.reader :as reader]
             [clojure.string :as str]
-            [clojure.walk :as walk]))
+            [clojure.walk :as walk]
+            [world-test.expect :as x]))
 
 ;; ------------------------------------------------------------------ the plot grid
 
@@ -176,8 +177,18 @@
         kept (.filter arr (fn [m] (not= tag (.-by m))))]
     (if (= (.-length kept) (.-length arr)) text (markers-text kept))))
 
-(def step-kinds #{:summon :rcon :rcon-until :job :wait-s :await :kill-body :time-set})
-(def after-kinds #{:block :not-block :body-near :body-far :item :entities})
+(def step-kinds #{:summon :rcon :rcon-until :job :wait-s :await :kill-body :time-set :restart-body :cli :http})
+(def after-kinds #{:block :not-block :body-near :body-far :item :entities :memory :file})
+(def http-ops #{:submit :cancel :cancel-all :take :release})
+(def cli-tools #{"jobs" "drive" "plans" "map" "world" "say" "time" "triggers" "entities" "observe" "workspace" "blueprints"})
+
+(defn step-problem?
+  "Whether an :act step has a kind or shape the runner cannot run (kinds without extra shape are only checked by name)."
+  [[op a b]]
+  (case op
+    :cli (not (and (cli-tools a) (vector? b) (every? string? b)))
+    :http (not (http-ops a))
+    (not (step-kinds op))))
 
 (defn unbounded-selectors
   "The :rcon / :rcon-until commands of the act steps with an @e selector that is not a box (no dx= or $BOX), bare or
@@ -211,9 +222,9 @@
       (not (every? #(and (string? (:name %)) (not (str/blank? (:name %))) (coords? (:min %)) (coords? (:max %))) (:zones c))) (conj ":zones entries need a :name and :min / :max [x y z]")
       (not (every? #(and (string? (:name %)) (not (str/blank? (:name %))) (coords? (:pos %))) (:places c))) (conj ":places entries need a :name and :pos [x y z]")
       (not (vector? (get-in c [:body :at]))) (conj ":body :at must be [x y z]")
-      (some #(not (step-kinds (first %))) (:act c)) (conj (str ":act steps must be one of " (sort step-kinds)))
+      (some step-problem? (:act c)) (conj (str ":act steps must be one of " (sort step-kinds)))
       (seq (unbounded-selectors c)) (conj "an @e selector must be bounded to the plot: use $BOX (x,y,z,dx,dy,dz), not distance")
-      (some #(not (after-kinds (first %))) (:after c)) (conj (str ":after checks must be one of " (sort after-kinds)))
+      (some #(not (and (after-kinds (first %)) (or (not= :file (first %)) (string? (second %))))) (:after c)) (conj (str ":after checks must be one of " (sort after-kinds)))
       (and (empty? (:expect c)) (empty? (:after c))) (conj "the case checks nothing: it needs an :expect or :after")
       (and (empty? (:after c)) (seq (:expect c)) (not-any? #(or (:event %) (:from-event %)) (:expect c)))
       (conj "the case has no positive anchor: silence on an empty log passes; add an :event expectation, :from-event or an :after check")
@@ -488,7 +499,8 @@
     :not-block (str "execute if block " (xyz-str (block-pos origin (first args))) " " (second args))
     (:body-near :body-far) (str "data get entity " body " Pos")
     :item (str "execute if items entity " body " container.* " (first args))
-    :entities (str "execute if entity " (entities-selector origin args))))
+    :entities (str "execute if entity " (entities-selector origin args))
+    nil))
 
 (defn entity-probe-command
   "The RCON command that dumps one entity matching a failed :entities check (nil for other checks)."
@@ -567,3 +579,57 @@
                    [(boolean (and d (ok? d (second args)))) (if d (str "distance " (.toFixed d 2)) reply)]))]
     {:check check :pass? (first result) :evidence (second result)
      :stray? (boolean (and (= op :entities) (not (first result)) n (not (too-few? (nth args 2) n))))}))
+
+;; ------------------------------------------------------------------ tool steps and file checks
+
+(defn http-argv
+  "The agent-tool arguments of an [:http op arg ...] step: jobs.mjs for submit/cancel (arg: the spec and flags / the job
+  id), drive.mjs for the manual lease (arg: {:who :why :idle-s})."
+  [body world [_ op arg flags]]
+  (let [opt (fn [k] (when-let [v (get arg k)] [(str "--" (name k)) (str v)]))]
+    (case op
+      :submit (into ["engine/tools/jobs.mjs" body "--world" world "submit" (pr-str arg)] (map #(str "--" (name %)) flags))
+      :cancel ["engine/tools/jobs.mjs" body "--world" world "cancel" arg]
+      :cancel-all ["engine/tools/jobs.mjs" body "--world" world "cancel-all"]
+      :take (into ["engine/tools/drive.mjs" body "take" "--world" world] (mapcat opt [:who :why :idle-s]))
+      :release (into ["engine/tools/drive.mjs" body "release" "--world" world] (opt :who)))))
+
+(defn step-argv
+  "The node arguments of a :cli or :http step; \"$body\", \"$world\" and \"$job\" (the last submitted job id) are filled in."
+  [body world [op tool args :as step] last-job]
+  (let [fill (fn [v] (case v "$body" body "$world" world "$job" last-job v))
+        argv (if (= :cli op)
+               (into [(str "engine/tools/" tool ".mjs")] args)
+               (http-argv body world (walk/postwalk fill step)))]
+    (if (= :cli op) (mapv fill argv) argv)))
+
+(defn step-pattern
+  "The answer pattern of a :cli or :http step, nil when it has none."
+  [[op a :as step]]
+  (case op :cli (nth step 3 nil) :http (nth step (if (= :submit a) 4 3) nil) nil))
+
+(defn judge-reply
+  "Pass or fail of a tool's answer: with a pattern, the EDN printed must match it (a refusal with exit 1 can be the wanted
+  answer); without one, exit code 0. {:pass? :evidence}."
+  [pattern code out]
+  (if (nil? pattern)
+    {:pass? (zero? code) :evidence (str "exit " code ": " (str/trim (str out)))}
+    (let [value (try (read-edn out) (catch :default _ ::unreadable))]
+      (cond
+        (= ::unreadable value) {:pass? false :evidence (str "answer is not EDN: " (str/trim (str out)))}
+        (x/matches? pattern value) {:pass? true :evidence (pr-str value)}
+        :else {:pass? false :evidence (str "answer " (pr-str value) " does not match " (pr-str pattern))}))))
+
+(defn after-file
+  "The file (relative to the body's directory under the world's agents/) a :memory or :file check reads, nil for other checks."
+  [[op & args]]
+  (case op :memory "engine/memory.edn" :file (first args) nil))
+
+(defn judge-file-after
+  "Pass or fail of a :memory / :file check from the file's text (nil: missing): its EDN must match the pattern."
+  [[op & args :as check] text]
+  (let [pattern (if (= op :memory) (first args) (second args))
+        r (if (nil? text)
+            {:pass? false :evidence (str (after-file check) " does not exist")}
+            (judge-reply pattern 0 text))]
+    (assoc r :check check)))
