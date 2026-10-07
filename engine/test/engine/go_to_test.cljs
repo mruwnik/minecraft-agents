@@ -703,24 +703,72 @@
 
 ;; ------------------------------------------------------- a goal a reflex keeps cutting the walk to (card 66863dc4)
 
-(deftest a-call-cut-again-without-getting-nearer-gives-up-after-three-restarts
+(defn cut-seed
+  "Memory of an earlier call of this session left open at goal [10 64 0] after cuts."
+  [m]
+  (merge {:open go-to/session-id :goal {:x 10 :y 64 :z 0}} m))
+
+(deftest a-call-cut-again-sent-back-from-its-closest-approach-gives-up-after-three-cuts
   (async done
     (tu/run-async done
       (fn ^:async t []
-        ;; the body starts 10 blocks from the goal; two earlier restarts began there too, and the last call was cut
+        ;; the body is 10 from the goal; it got to 3 before, and was sent back twice already: this is the third
         (let [{:keys [out returns eng]} (await (go-returns! {:blocks flat} {:pos [10 64 0] :range 0}
-                                                            {:open true :cut-dists [10 10]}))]
+                                                            (cut-seed {:closest 3 :ref 3 :cuts 2})))]
           (is (= {:arrived false :reason :unreachable :why :cut-again} (select-keys @out [:arrived :reason :why])) (pr-str @out))
           (is (= [:done] @returns))
           (is (= [] (moved eng)) "it walked nowhere"))
-        ;; the restarts began farther away than this one: it got nearer, so it walks on
+        ;; two cuts so far: this one walks on
         (let [{:keys [out]} (await (go-returns! {:blocks flat} {:pos [10 64 0] :range 0}
-                                                {:open true :cut-dists [20 20]}))]
+                                                (cut-seed {:closest 3 :ref 3 :cuts 1})))]
+          (is (= {:arrived true} @out) (pr-str @out)))
+        ;; the closest approach improved 2 blocks since the count began: it clears
+        (let [{:keys [out]} (await (go-returns! {:blocks flat} {:pos [10 64 0] :range 0}
+                                                (cut-seed {:closest 1 :ref 3 :cuts 2})))]
+          (is (= {:arrived true} @out) (pr-str @out)))
+        ;; a different goal in the same slot starts afresh
+        (let [{:keys [out]} (await (go-returns! {:blocks flat} {:pos [10 64 0] :range 0}
+                                                (cut-seed {:goal {:x 30 :y 64 :z 0} :closest 3 :ref 3 :cuts 2})))]
+          (is (= {:arrived true} @out) (pr-str @out)))
+        ;; left open by an earlier run of the engine: not a cut
+        (let [{:keys [out]} (await (go-returns! {:blocks flat} {:pos [10 64 0] :range 0}
+                                                (cut-seed {:open "old-run" :closest 3 :ref 3 :cuts 2})))]
           (is (= {:arrived true} @out) (pr-str @out)))
         ;; the last call ended normally: no cut loop
         (let [{:keys [out]} (await (go-returns! {:blocks flat} {:pos [10 64 0] :range 0}
-                                                {:cut-dists [10 10]}))]
+                                                (dissoc (cut-seed {:closest 3 :ref 3 :cuts 2}) :open)))]
           (is (= {:arrived true} @out) (pr-str @out)))))))
+
+(deftest a-trip-cut-four-times-in-place-still-arrives
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        ;; cut during the search each time, the body never moving: no cut sent it back, so the fifth call arrives
+        (let [paces (atom 0)]
+          (await
+           (with-small-budget! paces
+             (fn ^:async cut-run []
+               (let [{:keys [eng p] :as s} (setup joined-world)
+                     out (atom :not-done)
+                     returns (atom [])
+                     eng (assoc eng :jobs (assoc (:jobs eng) 'returns-parent
+                                                 (returns-parent out returns {:pos [6 64 0] :range 0} nil)))]
+                 (core/submit! eng '(returns-parent) {})
+                 (loop [n 0 running (core/tick! eng)]
+                   (when (< n 4)
+                     (let [target (+ @paces 2)]
+                       (loop [i 0]
+                         (when (and (< @paces target) (< i 400))
+                           (await (js/Promise. (fn [r] (js/setTimeout r 5))))
+                           (recur (inc i)))))
+                     (takeover/take! eng {:who "claude" :why "cut"})
+                     (await running)
+                     (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
+                     (recur (inc n) (core/tick! eng))))
+                 (await (tick-out! eng 10))
+                 (is (= {:arrived true} @out) (pr-str @out))
+                 (is (= [6 64 0] (at p)))
+                 (is (= [] (events-of s :unreachable))))))))))))
 
 ;; ------------------------------------------------------- a walker fault at one cell is routed round (card 679d3475)
 
