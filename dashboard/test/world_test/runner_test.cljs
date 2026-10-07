@@ -251,3 +251,26 @@
   (is (thrown-with-msg? js/Error #"--time-log" (r/parse-args #js ["--allow-time"])))
   (is (true? (:allow-time (r/parse-args #js ["--allow-time" "--time-log" "f.log"]))))
   (is (nil? (:allow-time (r/parse-args #js [])))))
+
+(deftest check-reports-one-result-per-case-and-names-broken-files
+  (let [dir (fs/mkdtempSync (path/join (os/tmpdir) "wt-check-"))
+        good (str "{:name \"ok\" :plot {:height 4} :body {:at [1 1 1]} :time :any\n"
+                  " :expect [{:event :x :within-s 5}]}")
+        no-check "{:name \"empty\" :plot {:height 4} :body {:at [1 1 1]} :time :any}"
+        spit! (fn [n s] (fs/writeFileSync (path/join dir n) s))]
+    (spit! "a-good.edn" good)
+    (spit! "b-empty.edn" no-check)
+    (spit! "c-broken.edn" "{:name \"x\" :plot {")
+    (let [res (r/check-fixtures [dir])
+          by-id (into {} (map (juxt :id identity)) res)]
+      (fs/rmSync dir #js {:recursive true :force true})
+      (is (= 3 (count res)))
+      (is (= :pass (:status (by-id "a-good/ok"))))
+      (is (= :fail (:status (by-id "b-empty/empty"))))
+      (is (re-find #"checks nothing" (:why (by-id "b-empty/empty"))))
+      (is (= :fail (:status (by-id "c-broken"))) "a file that does not parse is one failed result naming it")
+      (is (= 1 (r/check-exit-code res)))
+      (is (= 0 (r/check-exit-code [{:status :pass}]))))))
+
+(deftest check-is-an-option
+  (is (true? (:check (r/parse-args #js ["--check"])))))

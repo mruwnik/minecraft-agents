@@ -83,12 +83,12 @@ whose repo path is this checkout, override with `CARD_REPO`). `CARD_AUTHOR` sets
 
 ### world-test.mjs
 
-    node tools/world-test.mjs [fixture.edn|dir ...] [--tag T] [--match TEXT] [--repeat N] [--body NAME] [--world claude] [--first-plot I] [--card ID] [--results FILE] [--list] [--allow-time --time-log F]
+    node tools/world-test.mjs [fixture.edn|dir ...] [--tag T] [--match TEXT] [--repeat N] [--body NAME] [--world claude] [--first-plot I] [--card ID] [--results FILE] [--list] [--check] [--allow-time --time-log F]
 
 Runs world fixtures (live cases as EDN, `engine/fixtures/world/`, format in its README) on a reserved plot grid
 (x/z 20000..20640, y 150) with one probe body (`ProbeFixture` by default): builds each case's plot, starts the body
 per register, runs the act, judges expectations from the body's event log plus RCON checks, cleans up, prints PASS/FAIL
-with evidence. Logic in cljs (`dashboard/src/world_test/`), compiled ahead of time: `tools/compile dashboard world-test`.
+with evidence. `--check` only loads and validates the fixtures (no body, server or slot): one result per case, exit 1 on a parse error or problem. Logic in cljs (`dashboard/src/world_test/`), compiled ahead of time: `tools/compile dashboard world-test`.
 
 ### cart-sample.mjs
 

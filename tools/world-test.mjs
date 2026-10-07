@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Why JavaScript: thin entry point; the runner is cljs (dashboard/src/world_test/runner.cljs), run from the
 // ahead-of-time compiled bundle dashboard/out/world-test.cjs (build it with: tools/compile dashboard world-test).
-//   node tools/world-test.mjs [fixture.edn|dir ...] [--tag T] [--match TEXT] [--repeat N] [--body NAME] [--world W] [--first-plot I] [--card ID] [--results FILE] [--list] [--allow-time --time-log F]
+//   node tools/world-test.mjs [fixture.edn|dir ...] [--tag T] [--match TEXT] [--repeat N] [--body NAME] [--world W] [--first-plot I] [--card ID] [--results FILE] [--list] [--check] [--allow-time --time-log F]
 import fs from 'node:fs'
 import path from 'node:path'
 import { createRequire } from 'node:module'
@@ -15,7 +15,7 @@ if (!fs.existsSync(bundle)) {
 }
 // A second run on the same --body is refused (exit 75, like a busy slot). One body slot for the whole run (a run keeps one probe body at a time, restarted per case). It re-executes itself under tools/res-slot; --allow-time takes no further slot (the phase-shared time lock serialises day against night across runs).
 const args = process.argv.slice(2)
-if (!process.env.WORLD_TEST_SLOT_HELD && !args.includes('--list')) {
+if (!process.env.WORLD_TEST_SLOT_HELD && !args.includes('--list') && !args.includes('--check')) {
   const claimDir = process.env.RES_SLOT_DIR ?? '/tmp/mc-res', body = bodyName(args)
   const claim = claimBody(claimDir, body, process.pid, (pid) => { try { process.kill(pid, 0); return true } catch (e) { return e.code === 'EPERM' } })
   if (!claim.ok) { console.error(`world-test: ${claim.why}`); process.exit(75) }

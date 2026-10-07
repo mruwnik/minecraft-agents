@@ -20,7 +20,8 @@
 
 (def usage
   (str "usage: node tools/world-test.mjs [fixture.edn|dir ...] [--tag T] [--match TEXT] [--repeat N] [--body NAME]\n"
-       "         [--world claude] [--first-plot I] [--card ID] [--allow-time --time-log FILE] [--results FILE] [--stop-on-fail] [--list]\n"
+       "         [--world claude] [--first-plot I] [--card ID] [--allow-time --time-log FILE] [--results FILE] [--stop-on-fail] [--list] [--check]\n"
+       "--check only loads and validates the fixtures (no body, no server): one result per case, exit 1 on a parse error or problem.\n"
        "Runs world fixtures (default dir engine/fixtures/world) on the reserved plot grid x/z 20000..20640, y 150 (large plots: lanes south of it, to z 22240).\n"
        "--allow-time lets a case that needs night or day set the time (each set appended to --time-log); without it\n"
        "such a case is skipped. A case that depends on the time of day holds a time lock shared by phase (day cases together,\n"
@@ -45,6 +46,7 @@
       (= a "--stop-on-fail") (recur (rest all) (assoc opts :stop-on-fail true))
       (= a "--allow-time") (recur (rest all) (assoc opts :allow-time true))
       (= a "--list") (recur (rest all) (assoc opts :list true))
+      (= a "--check") (recur (rest all) (assoc opts :check true))
       (str/starts-with? a "--") (throw (js/Error. (str "unknown option " a)))
       :else (recur (rest all) (update opts :paths conj a)))))
 
@@ -83,6 +85,20 @@
 
 (defn load-cases [paths]
   (vec (mapcat #(f/file-cases (fs/readFileSync % "utf8") (path/basename % ".edn")) (fixture-files paths))))
+
+(defn check-fixtures
+  "Loads every fixture file without a server: one {:id :run :status :why} per case (a file that does not parse is one
+  failed result named by its stem)."
+  [paths]
+  (vec (mapcat (fn [file]
+                 (let [stem (path/basename file ".edn")]
+                   (try (map (fn [c] (cond-> {:id (:id c) :run 1 :status (if (:problems c) :fail :pass)}
+                                       (:problems c) (assoc :why (str/join "; " (:problems c)))))
+                             (f/file-cases (fs/readFileSync file "utf8") stem))
+                        (catch :default e [{:id stem :run 1 :status :fail :why (str file ": " (.-message e))}]))))
+               (fixture-files paths))))
+
+(defn check-exit-code [results] (if (every? #(= :pass (:status %)) results) 0 1))
 
 ;; ------------------------------------------------------------------ the event log
 
@@ -776,9 +792,16 @@
       (.then (fn []
                (let [opts (parse-args (array-seq argv))
                      final-results (atom nil)
-                     cases (f/select-cases (load-cases (:paths opts)) opts)
+                     cases (if (:check opts) [] (f/select-cases (load-cases (:paths opts)) opts))
                      bad (filter :problems cases)]
                  (cond
+                   (:check opts) (let [res (check-fixtures (:paths opts))]
+                                   (ev/emit! (ev/plan res 1))
+                                   (run! (fn [r] (ev/emit! (ev/result r))
+                                           (when-not (= :pass (:status r)) (log! (:id r) ": " (:why r))))
+                                         res)
+                                   (log! "world-test --check: " (count res) " cases, " (count (remove #(= :pass (:status %)) res)) " failed")
+                                   (check-exit-code res))
                    (:list opts) (do (run! #(log! (:id %) "  " (pr-str (:tags %)) (when (:problems %) (str "  PROBLEMS " (:problems %)))) cases) 0)
                    (empty? cases) (do (log! "no cases selected") 2)
                    (seq bad) (do (run! #(log! (:id %) ": " (str/join "; " (:problems %))) bad) 2)
