@@ -59,8 +59,8 @@
 (a/defargs args
   {:plan {:doc "id of a plan of the body's world; its tree cells are the planting spots" :spec a/name? :default nil}
    :part {:doc "only the cells of this part" :spec a/name? :default nil}
-   :accept {:doc "dig hazards (jobs.lib.access.rules) taken: a set of :fluid-adjacent :falling-block :under-feet; lava beside is :lava-adjacent and never taken by default"
-            :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block :under-feet}) :default #{:fluid-adjacent}}
+   :accept {:doc "dig hazards (jobs.lib.access.rules) taken: a set of :fluid-adjacent :falling-block; lava beside is :lava-adjacent and never taken by default"
+            :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent}}
    :headroom {:doc "{species cells} overriding the table of growth space above a planted cell (the cell included)" :spec (a/map-of a/name? (a/int-in 1 nil)) :default {}}
    :collect-radius {:doc "how far from where the body stands the drops are collected, in blocks" :spec (a/num-in 0 nil) :default 8}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})

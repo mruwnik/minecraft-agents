@@ -49,7 +49,7 @@
    :part {:doc "only the cells of this part" :spec a/name? :default nil}
    :reach {:doc "as jobs.build.from-plan" :spec (a/num-in 0 nil) :default u/eye-reach}
    :give-up {:doc "as jobs.build.from-plan" :spec (a/int-in 1 nil) :default 3}
-   :accept {:doc "as jobs.build.from-plan" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block :under-feet}) :default [:fluid-adjacent]}
+   :accept {:doc "as jobs.build.from-plan" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default [:fluid-adjacent]}
    :all-carried {:doc "start only while every item still to place is carried (false: build what is carried)" :spec boolean? :default true}
    :fix {:doc "times a rail whose settled shape is wrong is dug and placed again, then given up as :shape (0 or false: given up at once)" :spec (a/or-of (a/int-in 0 nil) false?) :default 1}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})

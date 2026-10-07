@@ -57,7 +57,7 @@
      line is tried; targets over the ground snapshot come last, so the floor
      under the start is dug last, the block under the feet after all others; a block under the feet whose floor
      is unseen is dug from a cell beside it (the jobs.blocks.dig child), never from above, and skipped when there is
-     none; targets whose drop lies in a clear line from the eye come first, and a body
+     none (info mine.refused, no failure); targets whose drop lies in a clear line from the eye come first, and a body
      whose line is blocked walks to within 1 when it can). Walk within 3: blocked skips the target and counts a failure, partial tries
      again and the third partial in a row skips it. The best carried tool is equipped. Dug resets the failures
      and starts collecting. Missing does nothing. Cannot (bedrock) skips without a failure. Anything else skips
@@ -141,7 +141,7 @@
    :descend-limit {:doc "the most steps of stair down through soil to find stone, when the block is stone-type and none is in sight; 0: never descend" :spec (a/int-in 0 nil) :default 12}
    :torch-interval {:doc "the strip tunnel hangs a torch every this many steps; 0: none" :spec (a/int-in 0 nil) :default 10}
    :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent :falling-block); the lava and :wet rules above still hold"
-            :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block :under-feet}) :default #{:fluid-adjacent :falling-block}}})
+            :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent :falling-block}}})
 
 (def reach 3)
 (def mend-reach 4)
@@ -399,6 +399,7 @@
           :dug (dug-booked! c pos)
           :missing nil
           :cannot (skip! c pos)
+          :refused (refused! c pos v :hazard)
           (do (skip! c pos) (ctx/update-mem! c update :failures (fnil inc 0))))
         (if (= :continue outcome) :continue :again)))))
 

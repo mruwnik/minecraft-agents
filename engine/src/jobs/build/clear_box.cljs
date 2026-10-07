@@ -30,8 +30,8 @@
    :to {:doc "opposite box corner (inclusive); at most 400 cells" :spec ::a/pos :default nil}
    :keep {:doc "extra block names to leave alone" :spec (a/coll-of a/name?) :default []}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
-   :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent :falling-block :under-feet)"
-            :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block :under-feet}) :default #{:fluid-adjacent :falling-block}}})
+   :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent :falling-block)"
+            :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent :falling-block}}})
 
 (def max-cells 400)
 (def max-tries 2)

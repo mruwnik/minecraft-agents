@@ -14,7 +14,7 @@
 (def doc
   "Dig the one block at :pos ([x y z] or {:x :y :z}) and pick up what it dropped, as a player would. One call is the
   whole attempt: fetch a missing tool (:fetch), walk into reach (one jobs.movement.go-to call), dig, pick up the
-  drops (jobs.forestry.collect-drops). It yields :continue only when a child waits on the world.
+  drops (jobs.forestry.collect-drops: a drop in the dug hole only from a seen solid safe floor). It yields :continue only when a child waits on the world.
 
   The check waits with a reason (ctx/wait; job.waiting and observe show it) and never digs when:
   - {:reason :not-allowed :pos :by :zone|:claim|:footprint|:no-zones ...}: zones, claims or another plan's
@@ -24,7 +24,7 @@
     With :on-fluid :fail a :fluid-adjacent hazard ends the job instead (see below).
   - {:reason :hazard :pos :hazards [:under-feet] :why :no-side-stand}: the block is under the feet with no seen solid
     floor below it, and no cell beside (jobs.lib.step-off, within 1 block) to dig it from. The wait lasts while the
-    body stands where it found none.
+    body stands where it found none and still sees none.
   - {:reason :no-tool :needs item :block name}: with :need-drop, no carried tool harvests the block
     (tools/can-harvest?). :needs is the cheapest tool that does.
   - {:reason :inventory-full :pos}: with :collect, no free slot and no carried stack of the block's drop to
@@ -80,12 +80,21 @@
         (pos? (u/free-slots p))
         (boolean (some #(and (drops (:name %)) (< (:count %) 64)) (u/inventory p))))))
 
+(defn stand-beside?
+  "Whether the body sees a cell beside its column (jobs.lib.step-off, reach 1, zones obeyed) to stand on now."
+  [c]
+  (let [[x y z] (b/feet-cell c)]
+    (boolean (seq (step-off/candidates (:primitives c) {:x x :y y :z z}
+                                       {:reach 1 :ok? (step-off/zone-ok (access/rules-input c))})))))
+
 (defn no-stand-wait
   "The wait reason for a dig under the feet that found no cell beside to stand on (memory m), while the body still
-  stands where it looked. Once the body has moved, nil (it looks again)."
+  stands where it looked and (when it found no cell, not a failed walk) sees none now. Once the body has moved or a
+  cell beside has come free, nil (it looks again)."
   [c m pos v]
   (when-let [{:keys [from why]} (:no-stand m)]
-    (when (and (access/under-feet? v) (not (contains? (set (:accept (:args c))) :under-feet)) (= from (b/feet-cell c)))
+    (when (and (access/under-feet? v) (not (contains? (set (:accept (:args c))) :under-feet)) (= from (b/feet-cell c))
+               (or why (not (stand-beside? c))))
       (cond-> {:reason :hazard :pos pos :hazards [:under-feet] :why :no-side-stand}
         why (assoc :walk why)))))
 

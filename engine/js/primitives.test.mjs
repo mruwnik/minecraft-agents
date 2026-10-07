@@ -1039,6 +1039,21 @@ test('collect: an item lying a block below beside the body is walked to, not wai
   assert.equal(result.status, 'collected')
 })
 
+// The walk plans on the raw world: it never drops more than a block on the way, so it does not land on a floor never seen.
+test('collect: the walk to an item never drops more than one block, and the movements keep their own cap after', async () => {
+  const drops = []
+  const { bot, p } = dropRig([1.5, 63, 0.5], (b, goal) => {
+    drops.push(b.pathfinder.movements.maxDropDown)
+    b.entity.position = new Vec3(goal.x + 0.5, 63, goal.z + 0.5)
+    pickUp(b)
+  })
+  bot.pathfinder.movements = { maxDropDown: 4 }
+  const result = await p.collect('t1', { id: 7 })
+  assert.equal(result.status, 'collected')
+  assert.deepEqual(drops, [1])
+  assert.equal(bot.pathfinder.movements.maxDropDown, 4)
+})
+
 test('collect: an item the body cannot get within reach of after the re-approaches ends unreachable out-of-reach', async () => {
   const { p, goals } = dropRig([4.5, 64, 0.5], () => {})
   const result = await p.collect('t1', { id: 7 })

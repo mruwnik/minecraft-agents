@@ -60,7 +60,7 @@
    :dry-digs {:doc "digs in a row that brought no new item before giving up" :spec (a/int-in 1 nil) :default 40}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
    :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent :falling-block)"
-            :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block :under-feet}) :default #{:falling-block}}})
+            :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:falling-block}}})
 
 (def reach 3)
 

@@ -525,7 +525,7 @@
           (is (= :count (:reason (done-event s))))
           (is (pos? (count items)) "the mend placed")
           (is (every? #{"dirt"} items) "never the cobblestone")
-          (is (<= 2 (get (inv s) "cobblestone")) "a drop left in a shaft may come in later"))))))
+          (is (= 2 (get (inv s) "cobblestone"))))))))
 
 (deftest a-mend-that-spends-the-count-ends-spent-on-mend
   (async done
@@ -915,7 +915,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start {:world {:blocks {"5,64,0" "iron_ore"} :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270}})]
-          (drop-away! (:p s) [8 62 0])
+          (drop-away! (:p s) [8 64 0])
           (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :tunnel-length 0 :collect-radius 3}) {})
           (await (run-ticks s 30))
           (is (= 1 (get (inv s) "raw_iron")))
@@ -1388,16 +1388,27 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start {:world {:blocks {"0,63,0" "sand" "0,62,0" "lava"} :drops {"sand" []} ; the drop burns in the lava
+        (let [s (start {:world {:blocks {"0,63,0" "sand" "0,62,0" "lava"}
                                 :inventory [{:name "cobblestone" :count 2}]}})
-              low (atom [])]
-          (add-watch (fake/state (:p s)) ::low (fn [_ _ _ w] (let [[_ y] (get-in w [:self :pos])]
-                                                               (when (< y 64) (swap! low conj (get-in w [:self :pos]))))))
+              ys (atom [])]
+          (add-watch (fake/state (:p s)) ::ys (fn [_ _ _ w] (swap! ys conj (second (get-in w [:self :pos])))))
           (core/submit! (:eng s) (spec {:block "sand" :count 1 :tunnel-length 0}) {})
           (await (run-ticks s 30))
           (is (= "lava" (block-at s 0 62 0)))
           (is (= [[0 63 0]] (dug-cells s)) "the sand is dug, from beside")
-          (is (empty? @low) "the body never drops into the sand's cell, over the lava")
+          (is (every? #(>= % 64) @ys) "the body never steps into the sand's cell, over the lava, not even for the drop")
+          (is (not= "air" (block-at s 0 63 0)) "the hole over the lava is mended")
+          (is (zero? (get (inv s) "sand" 0)) "the drop is left in the hole")
           (is (#{{:x 1 :y 64 :z 0} {:x -1 :y 64 :z 0} {:x 0 :y 64 :z 1} {:x 0 :y 64 :z -1}} (:target (first (moved s))))
               "it steps to the floor beside before the dig, so it does not drop onto the unseen cell below")
           (is (not (contains? (:default (:accept mine/args)) :under-feet))))))))
+
+(deftest a-cell-under-the-feet-with-no-side-stand-is-a-refusal-not-a-failure
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "sand" :count 1 :tunnel-length 0 :max-failures 1 :mend false}
+                                 {:floor [0 0 0 0] :blocks {"0,63,0" "sand" "0,62,0" "stone"}} 20))]
+          (is (empty? (dug-cells s)) "a pillar top is never dug from on top")
+          (is (= [{:x 0 :y 63 :z 0}] (mapv :pos (events-of s :mine.refused))))
+          (is (not= :failures (:reason (done-event s))) "no dig failure is booked"))))))

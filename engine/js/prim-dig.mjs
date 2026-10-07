@@ -282,7 +282,8 @@ export function createDig (env) {
         inReachSince = null
         if (approaches >= MAX_APPROACHES) return result('unreachable', 'out-of-reach')
         const p = item.position
-        const { reached } = await walk(ctx, new goals.GoalNear(p.x, p.y, p.z, approaches === 0 ? 1 : 0), { stall: false })
+        // never more than a block down on the way: the walk plans on the raw world, so a deeper drop lands on a floor never seen
+        const { reached } = await walk(ctx, new goals.GoalNear(p.x, p.y, p.z, approaches === 0 ? 1 : 0), { stall: false, maxDropDown: 1 })
         approaches++
         if (!reached && liveEntity(env.bot, id)) return result('unreachable')
       }

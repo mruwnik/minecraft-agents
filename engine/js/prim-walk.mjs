@@ -94,8 +94,12 @@ export function createWalk (env) {
     }
   }
   // A goto is rejected by our own setGoal(null) when a step-up starts; that is not a failure, the walk re-issues it.
-  const walk = async (ctx, goal, { stall = true } = {}) => {
+  // maxDropDown caps the drops of this walk's path (the movements' own, 4 by default, comes back after it).
+  const walk = async (ctx, goal, { stall = true, maxDropDown } = {}) => {
     const walking = env.bot
+    const movements = walking.pathfinder.movements
+    const dropDown = movements?.maxDropDown
+    if (movements && maxDropDown !== undefined) movements.maxDropDown = maxDropDown
     ctx.onAbort(() => stopWalking(walking))
     let path = null
     let onStuck = () => {}
@@ -145,6 +149,7 @@ export function createWalk (env) {
       clearInterval(poll)
       walking.off('path_update', onUpdate)
       walking.off('path_reset', onReset)
+      if (movements && maxDropDown !== undefined) movements.maxDropDown = dropDown
       stopWalking(walking)
     }
   }

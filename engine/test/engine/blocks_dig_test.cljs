@@ -407,3 +407,63 @@
           (is (= :no-side-stand (:why (await (waiting-after env (list job {:pos under-feet}) 3)))))
           (is (empty? (calls (:p env) "dig")))
           (is (= [0 64 0] (vec (map js/Math.floor (:pos (fake/self (:p env)))))) "it does not step onto the unseen floor"))))))
+
+;; ------------------------------------------------------------------ the drop in the dug hole
+
+(defn heights
+  "Record in ys the body's feet y at every change of the fake world."
+  [p ys]
+  (add-watch (fake/state p) ::heights (fn [_ _ _ w] (swap! ys conj (second (get-in w [:self :pos]))))))
+
+(defn left-drops [seen] (filterv #(= :collect-drops.left (:kind %)) @seen))
+
+(deftest a-drop-in-a-hole-over-lava-is-left-and-the-body-never-steps-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self body :blocks {"0,63,0" "dirt" "0,62,0" "lava"}})
+              ys (atom [])]
+          (heights p ys)
+          (let [result (await (child-outcome eng job {:pos under-feet :accept #{:fluid-adjacent}} 20))]
+            (is (= {:dug true :reason :dug :collected 0} (select-keys result [:dug :reason :collected])))
+            (is (every? #(>= % 64) @ys) "the body never steps into the hole")
+            (is (= [{:pos under-feet :reason :unsafe-floor}] (mapv #(select-keys % [:pos :reason]) (left-drops seen))))
+            (is (zero? (carried p "dirt")) "the drop is left")))))))
+
+(deftest a-drop-over-a-cave-opening-is-left
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self body :blocks {"0,63,0" "dirt" "0,62,0" "air" "0,61,0" "air"}})
+              ys (atom [])]
+          (heights p ys)
+          (let [result (await (child-outcome eng job {:pos under-feet} 20))]
+            (is (= {:dug true :collected 0} (select-keys result [:dug :collected])))
+            (is (every? #(>= % 64) @ys) "no walk down into the cave")
+            (is (= [:unsafe-floor] (mapv :reason (left-drops seen))))))))))
+
+(deftest a-drop-on-a-seen-stone-floor-is-picked-up-from-inside-the-hole
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self body :blocks {"0,63,0" "dirt" "0,62,0" "stone"}})]
+          (hiding p #(= [0 62 0] %))
+          (let [result (await (child-outcome eng job {:pos under-feet} 20))]
+            (is (= {:dug true :collected 1} (select-keys result [:dug :collected])))
+            (is (= 1 (carried p "dirt")))
+            (is (= 63 (second (get-in @(fake/state p) [:self :pos]))) "it stepped into the hole for the drop")
+            (is (empty? (left-drops seen)))))))))
+
+(deftest the-no-side-stand-wait-ends-once-a-cell-beside-can-be-stood-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (setup {:self body :floor [0 0 0 0] :blocks {"0,63,0" "dirt" "0,62,0" "stone"}})
+              p (:p env)]
+          (hiding p #(= [0 62 0] %))
+          (is (= :no-side-stand (:why (await (waiting-after env (list job {:pos under-feet}) 3)))))
+          (swap! (fake/state p) fake/put-block [1 63 0] "stone")
+          (swap! (:clock env) + 700)
+          (await (core/tick! (:eng env)))
+          (is (= "air" (block-at p under-feet)) "the body stepped beside and dug")
+          (is (= 1 (count (calls p "dig")))))))))

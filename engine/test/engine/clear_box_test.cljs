@@ -173,7 +173,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [args {:from {:x 1 :y 63 :z 1} :to {:x 2 :y 63 :z 1}}
-              {:keys [eng p]} (setup {:blocks {"1,63,1" "dirt" "2,63,1" "dirt"}
+              {:keys [eng p]} (setup {:blocks {"1,63,1" "dirt" "2,63,1" "dirt" "1,62,1" "stone" "2,62,1" "stone"}
                                       :self {:pos {:x 1.5 :y 64 :z 1.5}}})
               result (await (child-outcome eng job args 20))]
           (is (= {:dug 2 :skipped {} :kept 0 :fluids {}} result))
@@ -273,7 +273,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:blocks eight})
+        (let [{:keys [eng p]} (setup {:blocks (merge eight {"1,63,1" "stone" "2,63,1" "stone" "1,63,2" "stone" "2,63,2" "stone"})}) ; a drop in the dug box is picked up from its floor
               result (await (child-outcome eng job box 40))
               carried (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p)))]
           (is (= 8 (:dug result)))

@@ -60,10 +60,10 @@
   waits a lava flow delay since the last dig and looks at the cut once more. Lava seen beside a cell not yet dug is a hazard as below.
 
   Hazards are the rules' (one per fluid beside) plus a falling block over the top cut of the next column.
-  :accept is a set of :water :lava :falling-block :under-feet, default #{}. Water beside the cut is not taken
+  :accept is a set of :water :lava :falling-block, default #{}. Water beside the cut is not taken
   by default (it can flow into the cut and onto the body's cell, which the walker cannot leave). Lava never is
-  in practice, and a falling block would land on the body or refill the cut. :under-feet never comes up, since
-  the stair never digs the block it stands on.
+  in practice, and a falling block would land on the body or refill the cut. The stair never digs the block it
+  stands on.
 
   One call cuts the whole stair; it yields :continue only while a fetch or walk child waits on the world, or after
   max-steps digs, steps and fetch rounds. The body's cell is the progress: a resumed call finds its step from where
@@ -81,7 +81,7 @@
    :heading {:doc ":north :east :south or :west" :spec #{:north :east :south :west} :default nil}
    :steps {:doc "steps to cut; or give :y" :spec (a/int-in 1 nil) :default nil}
    :y {:doc "feet height to end at, instead of :steps" :spec (a/num-in nil nil) :default nil}
-   :accept {:doc "hazards taken: #{:water :lava :falling-block :under-feet}" :spec (a/coll-of #{:water :lava :falling-block :under-feet}) :default #{}}
+   :accept {:doc "hazards taken: #{:water :lava :falling-block}" :spec (a/coll-of #{:water :lava :falling-block}) :default #{}}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
    :note {:doc "a map: each cell dug is written to the tidy ledger at once with it (jobs.lib.escape/note-hole!; go-to's escalation)" :spec map? :default nil}
    :fetch {:doc "get a missing pickaxe instead of waiting :no-tool (jobs.lib.fetch), and a block to seal lava with: true, a set of kinds or a map of limits" :spec fetch/option? :default true}
