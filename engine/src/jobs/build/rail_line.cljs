@@ -133,9 +133,9 @@
   (vec (sort (keep #(when (and (= "redstone_block" (shape/want-block (:want %))) (= :wrong (:answer %))) (:pos %))
                    cells))))
 
-(defn ready?
-  "Whether a line that is not sound may be begun: no redstone block cell taken by ground, nothing refused, and with
-  :all-carried everything certainly needed carried."
+(defn not-ready
+  "Why a line that is not sound may not be begun, as a wait reason {:reason kw :why text}, or nil when it may: no
+  redstone block cell taken by ground, nothing refused, and with :all-carried everything certainly needed carried."
   [c cells]
   (let [{:keys [plan part all-carried]} (:args c)
         blocked (blocked-sources cells)
@@ -144,32 +144,30 @@
         carried (build/carried-counts (:primitives c))
         short (short-of owed carried)]
     (cond
-      (seq blocked) (do (decline! c {:reason :source-blocked :cells blocked
-                                     :text (str "a redstone block cannot go at " (str/join ", " (map pr-str blocked))
-                                                ": the cell holds ground and this job never digs; put a torch or lever in the plan, "
-                                                "or lay the line on a raised bed")})
-                        false)
-      (seq no) (do (decline! c {:reason :refused :refused no
-                                :text (str "cells refused: " (str/join ", " (map #(str (pr-str (:pos %)) " " (name (:reason %))) no)))})
-                   false)
+      (seq blocked) (let [text (str "a redstone block cannot go at " (str/join ", " (map pr-str blocked))
+                                    ": the cell holds ground and this job never digs; put a torch or lever in the plan, "
+                                    "or lay the line on a raised bed")]
+                      (decline! c {:reason :source-blocked :cells blocked :text text})
+                      {:reason :source-blocked :why text})
+      (seq no) (let [text (str "cells refused: " (str/join ", " (map #(str (pr-str (:pos %)) " " (name (:reason %))) no)))]
+                 (decline! c {:reason :refused :refused no :text text})
+                 {:reason :refused :why text})
       (and all-carried (seq short))
-      (do (ctx/warn-once! c [plan :short] :rail-build.short
-                          {:plan plan :part part :short short :up-to (up-to-of owed carried)
-                           :text (str "rail build of " plan " waits: short of " (build/shortage-text short))})
-          false)
-      :else true)))
+      (let [text (str "short of " (build/shortage-text short))]
+        (ctx/warn-once! c [plan :short] :rail-build.short
+                        {:plan plan :part part :short short :up-to (up-to-of owed carried)
+                         :text (str "rail build of " plan " waits: " text)})
+        {:reason :short :why text}))))
 
 ;; ------------------------------------------------------------------ check
 
 (defn check [c]
   (let [{:keys [cells trouble]} (planned c)]
     (cond
-      trouble (ctx/wait c {:reason :plan-trouble :why (:reason trouble)})
+      trouble (ctx/wait c {:reason :plan-trouble :why (:text trouble)})
       (not (declined/check c)) false
-      (or (:phase (ctx/mem c))
-          (sound? c cells)
-          (ready? c cells)) true
-      :else (ctx/wait c {:reason :not-ready}))))
+      (or (:phase (ctx/mem c)) (sound? c cells)) true
+      :else (if-let [why (not-ready c cells)] (ctx/wait c why) true))))
 
 ;; ------------------------------------------------------------------ rounds
 

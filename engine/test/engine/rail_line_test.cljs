@@ -94,6 +94,7 @@
      :declined (mapv #(select-keys % [:plan :reason :why :refused :cells]) (h/events-of seen :rail-build.declined))
      :texts (mapv :text (h/events-of seen :rail-build.declined))
      :short (mapv :short (h/events-of seen :rail-build.short))
+     :waits (mapv #(select-keys % [:reason :why :text]) (h/events-of seen :waiting))
      :warns (count (filter #(re-find #"^(rail-)?build\." (name (:kind %))) @seen))}))
 
 (def holed-plan
@@ -522,3 +523,20 @@
           (is (= ["east_west" "south_west" "north_south"] (mapv #(shape-of p %) [[18 64 0] [19 64 0] [19 64 1]])))
           (is (= 1 (count (h/events-of seen :rail-build.done))))
           (is (empty? (:list (core/state eng)))))))))
+
+;; ---------------------------------------------------------------- the wait reason
+
+(deftest the-wait-reason-is-the-one-ready-found-not-a-default
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[world plans zones reason text]
+                [[(spec "stone" 63 (kit {:power :block})) {"line" (line-plan {:power :block})} [] :source-blocked #"redstone block"]
+                 [(spec "stone" 63 (kit {})) {"line" (line-plan {}) "other" {:id "other" :parts [{:id "o" :cells [[7 64 0]] :want "stone"}]}} [] :refused #"footprint"]
+                 [(spec "stone" 63 (kit {} {"powered_rail" -2})) {"line" (line-plan {})} [] :short #"powered_rail 2"]
+                 [(spec "stone" 63 (kit {})) {"line" (line-plan {})} :none :plan-trouble #"no zone list"]
+                 [(spec "stone" 63 (kit {})) {} [] :plan-trouble #"no such plan"]]]
+          (let [r (await (declines world plans {:plan "line"} zones))
+                w (first (:waits r))]
+            (is (= reason (:reason w)) (str reason))
+            (is (re-find text (str (:why w))) (str reason " " (pr-str w)))))))))
