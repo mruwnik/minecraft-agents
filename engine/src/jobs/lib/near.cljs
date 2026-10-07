@@ -177,10 +177,13 @@
 (defn ^:async go-near!
   "walk-near! as a jobs.movement.go-to child in slot :walk, so a body shut in escalates (pillar, stair, dig a way out and
   put back) where walk-near! would give up. Resolves to :there, :partial (the child waits on the world: yield and call
-  again) or :blocked (it gave up or declined). opts: :doors, :dangers, :tolls, :zone-tolls as walk-near!, :escalate
-  (default true), always :retry false (the job counts its own tries); :ignore-zones? comes from the job's args. No :timeout-s: go-to's walks are its own."
+  again; also a :leg-s leg that got nearer) or :blocked (it gave up or declined). opts: :doors, :dangers, :tolls,
+  :zone-tolls as walk-near!, :escalate (default true), :leg-s (a leg of at most that many s, :partial when it got nearer, for a
+  caller chasing something that moves; replaces walk-near!'s :timeout-s), :look-round (default true; false for a caller that keeps moving),
+  :one-way (go-to's arg, default :closed here: no drop the body cannot climb back, as walk-near!; not the :one-way key of a give-up
+  result), always :retry false (the job counts its own tries); :ignore-zones? comes from the job's args."
   ([c pos range] (go-near! c pos range nil))
-  ([c pos range {:keys [doors dangers tolls zone-tolls escalate] :or {doors :shut dangers true escalate true}}]
+  ([c pos range {:keys [doors dangers tolls zone-tolls escalate leg-s look-round one-way] :or {doors :shut dangers true escalate true look-round true one-way :closed}}]
    (let [cell (cell-of pos)]
      (cond
        (nil? cell) (do (ctx/emit! c :refused :warn {:reason :bad-pos :text (:message (places/parse-pos pos))})
@@ -188,8 +191,11 @@
        (u/within? (u/self-pos c) cell range) :there
        :else (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to
                                             {:pos cell :range range :doors doors :dangers dangers :tolls tolls :zone-tolls (boolean zone-tolls)
-                                             :escalate escalate :warn false :retry false :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+                                             :escalate escalate :leg-s leg-s :look-round look-round :one-way one-way :warn false :retry false :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
                (case r
                  :continue :partial
-                 :done (if (:arrived (ctx/child-result c :walk)) :there :blocked)
+                 :done (let [res (ctx/child-result c :walk)]
+                         (cond (:arrived res) :there
+                               (:leg res) :partial
+                               :else :blocked))
                  :blocked))))))

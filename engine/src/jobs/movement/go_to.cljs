@@ -69,6 +69,7 @@
    :tolls {:doc "cells to cross only as a last resort, [{:x :y :z :factor}]: each costs factor times its own seconds more (jobs.lib.cost farm-tolls, zone-tolls)" :default nil}
    :zone-tolls {:doc "true: also toll the cells of other bodies' zones near each walk (jobs.lib.toll-cells/zone-walk-tolls), none with :ignore-zones?; for a job that respects zones" :default false}
    :leg-s {:doc "walk one leg of at most this many seconds, then end {:arrived false :leg true} so the caller can re-aim at a moving target; nil: the whole way" :default nil}
+   :one-way {:doc "arg, not the :one-way key of a give-up result: :closed takes no drop of 2 or 3 or gap jump down that the body cannot climb back, and walks to no frontier of loaded land (a walk to something visible); :open (default) takes one when the land past it runs on into unloaded land" :default :open}
    :retry {:doc "false: a walk that got no nearer gives up at once instead of walking again (up to 3 times), for a caller that re-aims itself" :default true}
    :look-round {:doc "false: no look round on arrival, for a caller that keeps moving" :default true}
    :warn {:doc "false: a give-up or refusal is an info event, not a warn, for a caller that reports the failure itself"
@@ -161,7 +162,8 @@
 (defn ^:async walk! [c pos range doors]
   (let [from (u/self-pos c)
         d (u/dist from pos)
-        pw (wworld/path-world (:primitives c))]
+        pw (wworld/path-world (:primitives c))
+        closed? (= :closed (some-> (:one-way (:args c)) keyword))]
     (cond
       (here? c pos range)
       (if (:restore-pending (ctx/mem c)) (esc/restore-next! c) (arrived! c))
@@ -171,10 +173,11 @@
 
       :else
       (let [_ (forget-known-land! c)
-            {walked :result status :status to :to} (await (near/walk-round! c pos range {:doors doors :explore true
+            {walked :result status :status to :to} (await (near/walk-round! c pos range {:doors doors :explore (not closed?)
                                                                                           :dangers (not (false? (:dangers (:args c))))
                                                                                           :dark (not (false? (:dark (:args c))))
                                                                                           :timeout-s (or (:leg-s (:args c)) near/walk-timeout-s)
+                                                                                          :one-way (when-not closed? :open)
                                                                                           :shut-also (shut-foreign c)
                                                                                           :budget wsearch/round-budget
                                                                                           :avoid (set (:fault-cells (ctx/mem c)))

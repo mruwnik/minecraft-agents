@@ -182,6 +182,14 @@
           (is (= 64 (js/Math.floor (second (at p)))) "still on the plateau")
           (is (< (first (at p)) 11)))))))
 
+(deftest go-to-one-way-closed-takes-no-drop-it-cannot-climb-back
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cliff (merge (floor -2 -3 10 3) (floor 60 11 -3 47 3))
+              {:keys [p]} (await (go! {:blocks cliff} {:pos [120 61 0] :one-way :closed :escalate false}))]
+          (is (= 64 (js/Math.floor (second (at p)))) "still on the plateau"))))))
+
 (deftest go-to-accepts-doors
   (async done
     (tu/run-async done
