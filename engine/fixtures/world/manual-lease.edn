@@ -1,0 +1,21 @@
+;; Card 32418fdc: manual control is a lease over the body's control socket. While it is held a plain submitted job stays queued
+;; (no go-to result); releasing it lets the job run and arrive. Without the lease the same job arrives at once (control case).
+{:defaults
+ {:tags [:movement :manual]
+  :time :any
+  :plot {:height 8}
+  :body {:at [4.5 0 16.5]}
+  :limit-s 80}
+ :cases
+ [{:name "queued-job-waits-for-release"
+   :act [[:http :take {:who "wt" :why "fixture" :idle-s 60} {:ok true}]
+         [:job (jobs.movement.go-to {:pos #at [20 0 16] :range 1})]
+         [:wait-s 12]
+         [:http :release {:who "wt"} {:ok true}]]
+   :expect [{:no-event {:source :job :kind :result} :for-s 10}
+            {:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
+   :after [[:body-near [20.5 0 16.5] 2]]}
+  {:name "no-lease-arrives-at-once"
+   :act [[:job (jobs.movement.go-to {:pos #at [20 0 16] :range 1})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 30 :of-job true}]
+   :after [[:body-near [20.5 0 16.5] 2]]}]}

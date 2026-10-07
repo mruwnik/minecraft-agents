@@ -1,0 +1,19 @@
+;; Cards 32c238bd, f7a80e5c: core records every :died in memory.edn :deaths (pos, dimension, cause), also with no triggers registered.
+;; two-deaths-two-entries: two kills, two entries. restart-keeps-one-entry: a restart (memory kept) adds no duplicate.
+{:defaults
+ {:tags [:survival :death :memory]
+  :time :any
+  :plot {:height 8}
+  :body {:at [10.5 0 10.5] :spawnpoint [4 0 4]}
+  :limit-s 90}
+ :cases
+ [{:name "two-deaths-two-entries"
+   :act [[:wait-s 1] [:kill-body] [:await {:source :body :kind :respawned} 30]
+         [:wait-s 2] [:kill-body] [:await {:source :body :kind :respawned} 30] [:wait-s 3]]
+   :expect [{:event {:source :body :kind :respawned} :within-s 60}]
+   :after [[:memory {:deaths [{:pos [:any]} {:pos [:any]}]}]]}
+  {:name "restart-keeps-one-entry"
+   :act [[:wait-s 1] [:kill-body] [:await {:source :body :kind :respawned} 30] [:wait-s 3]
+         [:restart-body]]
+   :expect [{:event {:source :body :kind :respawned} :within-s 60}]
+   :after [[:memory {:deaths [{:pos [:any]}]}]]}]}
