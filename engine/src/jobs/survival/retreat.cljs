@@ -1,5 +1,6 @@
 (ns jobs.survival.retreat
-  (:require [jobs.lib.blocks :as lb]
+  (:require [jobs.lib.access :as access]
+            [jobs.lib.blocks :as lb]
             [jobs.lib.args :as jargs]
             [jobs.lib.click :as click]
             [engine.ctx :as ctx]
@@ -97,9 +98,16 @@
 (defn check-run [_c] true)
 
 (defn block-at-fn
-  "pos -> the block name the body sees or remembers there; nil (open, as unloaded: the walk finds out) when unknown."
+  "pos -> the block name the body sees or remembers there. A cell it has not seen reads as rock (the cells behind it
+  are no free way) unless seen open air is right under it (the sky over a seen open cell); nil (open: the walk finds
+  out) when the cell is not loaded."
   [p]
-  (fn [pos] (u/seen-name p pos)))
+  (let [at (access/sensed-at p access/hidden-guess)]
+    (fn [{:keys [x y z] :as pos}]
+      (let [name (at [x y z])
+            under (u/seen-name p {:x x :y (dec y) :z z})]
+        (when-not (and (some? name) (nil? (u/seen-name p pos)) (some? under) (walk/passable? under))
+          name)))))
 
 (defn ^:async fight!
   "Fight back with the best of weapons (the fist when none is carried) whatever

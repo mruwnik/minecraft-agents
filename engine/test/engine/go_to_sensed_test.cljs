@@ -17,7 +17,8 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.vehicle :as vehicle]
             [jobs.movement.go-to.escalation :as esc]
-            [jobs.survival.retreat :as retreat]))
+            [jobs.survival.retreat :as retreat]
+            [jobs.survival.retreat-walk :as walk]))
 
 (defn sensed-only
   "Wrapped fake primitives for spec, lit, whose raw blockAt throws. rawWorld stays, as on the body: go-to's planner
@@ -117,11 +118,12 @@
     (is (true? (reach/standable-cell? w {:x 0 :y 64 :z 2} (fn [_ y _] (if (= y 63) :solid :open))))
         "kind-at decides feet and head; the floor read only for hazards")))
 
-(deftest retreat-reads-an-unseen-cell-as-not-known
+(deftest retreat-reads-an-unseen-cell-as-rock
   (let [{:keys [w]} (sensed-only (wall-east 1 {"2,64,0" "stone"}))
         block-at (retreat/block-at-fn w)]
     (is (= "stone" (block-at {:x 1 :y 65 :z 0})))
-    (is (nil? (block-at {:x 2 :y 64 :z 0})) "behind the wall")))
+    (is (= "stone" (block-at {:x 2 :y 64 :z 0})) "behind the wall: unseen is taken for rock, never a free way")
+    (is (zero? (walk/open-cells block-at {:x 0 :y 64 :z 0} [0 1] 3)) "no flight into the unseen rock")))
 
 (deftest vehicle-dry-cell-reads-what-the-body-sees
   (let [{:keys [w]} (sensed-only (wall-east 1))]
