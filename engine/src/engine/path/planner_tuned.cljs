@@ -44,6 +44,12 @@
      more, in g and in cost.darkSeconds (see darkOf; jobs.lib.look builds at).
    - options.tolls {cells}: cells is a Map of cell-key (planner/cell-key) to a factor: entering such a cell costs factor
      times its own seconds more, in g and in cost.darkSeconds (the caller's price of a cell; no zone knowledge here).
+   - options.damageBudget (Infinity): the most hp of certain damage a path may take (falls over 3 blocks, plants that hurt on
+     touch); a move over it is refused, and a search that finds nothing for that reason says damageRefused true. options.maxDrop
+     is still the length of the longest fall. options.damageWeight (riskWeight): seconds an hp of that damage costs.
+     options.fallFactor (1) scales a fall's damage (feather falling, protection); options.landing, a Map of state id to the
+     factor of the fall damage onto that block (hay 0.2), a negative one: no fall over 3 onto it. result.cost.damage is the
+     path's damage, a step's damage its own.
    - options.costs.dropFactor (1): scales the fall seconds and fall damage of every drop on land (0: free); options.maxDrop
      (3) refuses a drop of more than that many blocks (1: none of 2 or 3). go-to's :drop-cost sets them.
    - options.stopAtEdge: with the goal unloaded, the search ends at the first node it expands at the loaded edge (edgeStop)
@@ -258,7 +264,12 @@
      dark-at dark-factor
      (when (some? dark-at) (js/Float64Array. TABLE)) (when (some? dark-at) (js/Uint8Array. TABLE)) (js/Float64Array. cap)
      ;; tolls
-     (when (some? tolls) (.-cells tolls)))))
+     (when (some? tolls) (.-cells tolls))
+     ;; damage-budget damage-weight fall-factor land-factors
+     (option options "damageBudget" js/Infinity) (option options "damageWeight" (option options "riskWeight" 2)) (option options "fallFactor" 1)
+     (.-landing options)
+     ;; dmgs move-dmg enter-dmg cur-dmg damage-refused
+     (js/Float64Array. cap) 0 0 0 false)))
 
 ;; the body's hitbox reaches this far from its centre in x and z
 (def ^:const HITBOX-HALF 0.3)

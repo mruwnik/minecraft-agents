@@ -77,6 +77,8 @@
                           :px (+ x (if tight (/ (bit-and (bit-shift-right shape 5) 31) 16) 0.5))
                           :pz (+ z (if tight (/ (bit-and (bit-shift-right shape 10) 31) 16) 0.5))}]
             (when ^boolean (.isWater s x (aget (.-ys s) i) z) (unchecked-set step "swim" true))
+            (let [dmg (- (aget (.-dmgs s) i) (if (neg? (aget (.-parents s) i)) 0 (aget (.-dmgs s) (aget (.-parents s) i))))]
+              (when (pos? dmg) (unchecked-set step "damage" dmg)))
             (when (pos? (aget (.-opens s) i)) (unchecked-set step "opens" (aget ^js (.-open-lists s) (dec (aget (.-opens s) i)))))
             (let [p (aget (.-parents s) i)
                   wall (.hatchWall s x (aget (.-ys s) i) z)]
@@ -158,6 +160,7 @@
           swum (js/Math.round (sum-hypot (.filter legs (fn [^js leg] (let [^js st (aget leg 0) m (.-move st)]
                                                                        (or (== m MOVE-SWIM) (and (== m MOVE-CORNER) (true? (unchecked-get st "swim")))))))))
           lowest (- (.-c-air-supply s) (aget (.-peaks s) node))
+          fall-hp (.reduce steps (fn [sum ^js st] (if (and (== (.-move st) MOVE-DROP) (some? (unchecked-get st "damage"))) (+ sum (unchecked-get st "damage")) sum)) 0)
           gaps (.-length (.filter legs (fn [^js leg] (== (.-move ^js (aget leg 0)) MOVE-GAP))))
           slides (count-steps steps 0 (fn [^js st _] (true? (.-corner st))))
           gap-ups (.-length (.filter legs (fn [^js leg] (let [^js st (aget leg 0) ^js p (aget leg 1)] (and (== (.-move st) MOVE-GAP) (> (stand16 st) (stand16 p)))))))
@@ -170,7 +173,7 @@
       (.apply (.-push parts) parts (.climbRuns s legs))
       (.apply (.-push parts) parts (.openRuns s steps))
       (.push parts (some-of ups "1 step up" " steps up"))
-      (.push parts (when (== (.-length falls) 1) (str "1 drop of " (aget falls 0))))
+      (.push parts (when (== (.-length falls) 1) (str "1 drop of " (aget falls 0) (if (pos? fall-hp) (str " (" (/ (js/Math.round (* 10 fall-hp)) 10) " hp)") ""))))
       (.push parts (when (> (.-length falls) 1) (str (.-length falls) " drops, deepest " (max-of falls))))
       (.push parts (when (== (.-length splashes) 1) (str "drops " (aget splashes 0) " into water")))
       (.push parts (when (> (.-length splashes) 1) (str (.-length splashes) " drops into water, deepest " (max-of splashes))))
@@ -186,6 +189,7 @@
           n (.-length steps)
           cost #js {:seconds (aget (.-secs s) node)
                     :risk (aget (.-risks s) node)
+                    :damage (aget (.-dmgs s) node)
                     :darkSeconds (aget (.-darks s) node)
                     :maxDrop (loop [k 1 best 0]
                                (if (< k n)
@@ -233,7 +237,8 @@
            :known ^js (.-known-new s)
            :edges ^js (.-edges-new s)
            :searchedOut ^boolean (.-searched-out s)
-           :limited ^boolean (.-limit-refused s)}))
+           :limited ^boolean (.-limit-refused s)
+           :damageRefused (and ^boolean (.-damage-refused s) (not (identical? status "found")))}))
 
   ;; ends the search if it is not over; an exhausted search that turned a ladder away at a gap, or a swim move for lack of air,
   ;; says so

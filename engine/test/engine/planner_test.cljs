@@ -24,7 +24,7 @@
     (is (= [12 64 2] (last-cell r)))
     (is (= 11 (count (cells r))))
     (is (< (js/Math.abs (- (cost r :seconds) (/ 10 4.317))) 0.01))
-    (is (= {:seconds 0 :risk 0 :maxDrop 0 :jumps 0 :climbed 0 :opens 0 :waterSeconds 0 :darkSeconds 0 :airMin 15 :waterDrop 0}
+    (is (= {:seconds 0 :risk 0 :damage 0 :maxDrop 0 :jumps 0 :climbed 0 :opens 0 :waterSeconds 0 :darkSeconds 0 :airMin 15 :waterDrop 0}
            (assoc (get-in r [:path :cost]) :seconds 0)))
     (is (and (> (:expanded r) 0) (>= (:ms r) 0)))))
 
@@ -375,7 +375,7 @@
   (let [w (world {:fill [[4 64 -2 6 64 40 "stone"] [7 61 -2 40 63 40 "air"]]})
         r (run w (near 9 61 2) {:maxDrop 6})]
     (is (= "found" (:status r)))
-    (is (= "7 blocks, 1 step up, 1 drop of 4" (get-in r [:path :summary])))))
+    (is (= "7 blocks, 1 step up, 1 drop of 4 (1 hp)" (get-in r [:path :summary])))))
 
 (deftest summary-lava-beside-the-path-counts-the-risk-and-is-named
   (let [w (world {:fill [[4 64 -2 6 65 1 "stone"] [4 64 3 6 64 40 "lava"]]})

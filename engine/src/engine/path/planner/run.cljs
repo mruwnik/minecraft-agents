@@ -198,12 +198,14 @@
             (set! (.-move-air s) (aget d 12))
             (set! (.-move-peak s) (aget d 13))
             (set! (.-move-water s) (aget d 14))
+            (set! (.-move-dmg s) (aget d 15))
             (.consider s x y z (aget d 3) (aget d 4) p (aget d 6) (aget d 7) (aget d 8) (aget d 9) (aget d 10))))))
     (set! (.-replaying s) false)
     (set! (.-move-open s) 0)
     (set! (.-move-air s) 0)
     (set! (.-move-peak s) 0)
-    (set! (.-move-water s) 0))
+    (set! (.-move-water s) 0)
+    (set! (.-move-dmg s) 0))
 
   ;; After a late flood with budget: one that ran out of it (and neither leaked nor met the start) is due again
   ;; after FLOOD-SPACING times the expansions, with FLOOD-GROWTH times the budget (at most max-nodes). That keeps its

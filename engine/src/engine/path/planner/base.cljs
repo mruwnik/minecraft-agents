@@ -97,6 +97,7 @@
 (def ^:const BODY-BLOCKS 1.8)
 (def ^:const REGIONS 16) ; regions of one cell that can be nodes (4 bits of the key)
 (def ^:const AIR-STEP 1) ; seconds of air that make an arrival at a node already reached worth a record of its own
+(def ^:const DMG-STEP 1) ; hp of damage that make an arrival at a node already reached worth a record of its own (a finite budget)
 (def ^:const TABLE 8192) ; slots of the direct-mapped tight-cell caches
 (def ^:const FLOOD-TABLE 65536) ; slots of the direct-mapped cache of the goal flood's stand heights
 (def ^:const FLOOD-MEMO 40000) ; cells whose moves the flood keeps (flood-moves) before it starts the memo afresh
@@ -117,7 +118,6 @@
     (.set bigger array)
     bigger))
 
-(defn fall-damage [fall16] (js/Math.max 0 (js/Math.ceil (- (/ fall16 16) FREE-FALL))))
 
 (defn cell-key
   "one number for a cell, the key of options.avoid.cells: x and z within 2^20 of 0, y within 512"

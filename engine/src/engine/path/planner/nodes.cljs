@@ -1,6 +1,6 @@
 (ns engine.path.planner.nodes
   "Search methods: the goal test and heuristic, and node storage (hash, heap, recording an arrival, refused moves)."
-  (:require [engine.path.planner.base :refer [AIR-STEP AVOID-CLIMB AVOID-OPEN AVOID-WATER HALF JUMP-UP MOVE-CLIMB-UP MOVE-DROP MOVE-GAP MOVE-OPEN MOVE-SWIM REGIONS SPAN SQRT2 WALK-S cell-key grown next-pow2]]
+  (:require [engine.path.planner.base :refer [AIR-STEP AVOID-CLIMB DMG-STEP AVOID-OPEN AVOID-WATER HALF JUMP-UP MOVE-CLIMB-UP MOVE-DROP MOVE-GAP MOVE-OPEN MOVE-SWIM REGIONS SPAN SQRT2 WALK-S cell-key grown next-pow2]]
             [engine.path.planner.search :refer [Search]]))
 
 (set! *warn-on-infer* true)
@@ -100,6 +100,7 @@
     (set! (.-parents s) (grown (.-parents s) (.-cap s)))
     (set! (.-secs s) (grown (.-secs s) (.-cap s)))
     (set! (.-risks s) (grown (.-risks s) (.-cap s)))
+    (set! (.-dmgs s) (grown (.-dmgs s) (.-cap s)))
     (set! (.-darks s) (grown (.-darks s) (.-cap s)))
     (set! (.-airs s) (grown (.-airs s) (.-cap s)))
     (set! (.-peaks s) (grown (.-peaks s) (.-cap s)))
@@ -190,6 +191,7 @@
     (aset (.-parents s) node parent-node)
     (aset (.-secs s) node sec)
     (aset (.-risks s) node risk)
+    (aset (.-dmgs s) node (.-cur-dmg s))
     (aset (.-darks s) node dark)
     (aset (.-airs s) node (.-move-air s))
     (aset (.-peaks s) node (js/Math.max (aget (.-peaks s) parent-node) (.-move-peak s)))
@@ -224,6 +226,7 @@
         (and (or (== move MOVE-GAP) (== move MOVE-DROP)) (== (aget (.-tbl-farmland s) (.stateAt ^js (.-snapshot s) x y z)) 1)) nil
         (and ^boolean (.-returnable s) (not ^boolean (.-replaying s)) ^boolean (.holdsBack s x y z h move parent-node dsec drisk slow-to corner shape)) nil
         ^boolean (.refusedKind s (.-limit-kinds s) x y z move) (do (set! (.-limit-refused s) true) nil)
+        (and (pos? (.-move-dmg s)) (> (+ (aget (.-dmgs s) parent-node) (.-move-dmg s)) (.-damage-budget s))) (do (set! (.-damage-refused s) true) nil)
         :else
         (let [drisk (if (pos? (.-n-dangers s)) (+ drisk (.dangerRisk s x y z dsec)) drisk)
               extra (if ^boolean (.-avoiding s) (.avoidCost s x y z move dsec drisk) 0)
@@ -237,17 +240,25 @@
                   risk (+ (aget (.-risks s) parent-node) drisk)
                   ;; an alternative's search orders by its penalised cost; secs and risks stay the true cost of the walk
                   dark (+ (aget (.-darks s) parent-node) ddark)
-                  g (if ^boolean (.-avoiding s) (+ (aget (.-gs s) parent-node) dsec (* (.-risk-weight s) drisk) extra ddark) (+ sec (* (.-risk-weight s) risk) dark))]
+                  dmg (+ (aget (.-dmgs s) parent-node) (.-move-dmg s))
+                  ;; the price of certain damage over what risk already charges for it
+                  dpay (* (- (.-damage-weight s) (.-risk-weight s)) (.-move-dmg s))
+                  g (if ^boolean (.-avoiding s)
+                      (+ (aget (.-gs s) parent-node) dsec (* (.-risk-weight s) drisk) extra ddark dpay)
+                      (+ sec (* (.-risk-weight s) risk) dark (* (- (.-damage-weight s) (.-risk-weight s)) dmg)))]
+              (set! (.-cur-dmg s) dmg)
               (if (== found -1)
                 (.insertNode s x y z h move parent-node sec risk dark g slow-to corner shape region key slot)
                 (let [d-air (- (.-move-air s) (aget (.-airs s) found))
+                      ;; (a search without a budget keeps one record per node)
+                      d-dmg (if (< (.-damage-budget s) js/Infinity) (- dmg (aget (.-dmgs s) found)) 0)
                       g-found (aget (.-gs s) found)]
                   (cond
-                    (and (< g g-found) (<= d-air AIR-STEP))
+                    (and (< g g-found) (<= d-air AIR-STEP) (<= d-dmg DMG-STEP))
                     (when-not (== (aget (.-heap-pos s) found) -2)
                       (.relax s found x z h move parent-node sec risk dark g slow-to corner shape))
 
-                    (or (< g g-found) (< d-air (- AIR-STEP)))
+                    (or (< g g-found) (< d-air (- AIR-STEP)) (< d-dmg (- DMG-STEP)))
                     (.insertNode s x y z h move parent-node sec risk dark g slow-to corner shape region key slot)
 
                     :else nil)))))))))
@@ -262,7 +273,7 @@
     (cond
       (== move MOVE-GAP) (< (+ (* y 16) h) (.stand16 s parent-node))
       (== move MOVE-DROP) (do (when-not (> (- (.stand16 s parent-node) (+ (* y 16) h)) JUMP-UP)
-                                (.push ^js (.-held s) #js [x y z h move parent-node dsec drisk slow-to corner shape (.-move-open s) (.-move-air s) (.-move-peak s) (.-move-water s)]))
+                                (.push ^js (.-held s) #js [x y z h move parent-node dsec drisk slow-to corner shape (.-move-open s) (.-move-air s) (.-move-peak s) (.-move-water s) (.-move-dmg s)]))
                               true)
       :else false))
 

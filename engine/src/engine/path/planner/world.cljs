@@ -257,6 +257,7 @@
               leaf (== (aget (.-tbl-dripleaf s) (.-support s)) 1)]
           (set! (.-enter-risk s) (+ (.-touch s) (if (== hz DAMAGE-STAND) 1 0) (if ^boolean (.lavaNear s x y z) LAVA-ADJACENT 0)
                               (if leaf (.-c-dripleaf-risk s) 0) (.besideMagma s x y z)))
+          (set! (.-enter-dmg s) (+ (.-touch s) (if (== hz DAMAGE-STAND) 1 0)))
           (set! (.-enter-slow s) (if (== hz SLOW) 1 0))
           (set! (.-enter-extra s) (if leaf (.-c-dripleaf s) 0))
           h)))))

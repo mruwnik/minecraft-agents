@@ -1,6 +1,6 @@
 (ns engine.path.planner.moves
   "Search methods: the moves out of a node: walks, diagonals, jumps, drops, gap jumps and climbing."
-  (:require [engine.path.planner.base :refer [ARC ARC-UP BODY CLIMB-TRAP-SHUT CORNER-S GAP-PIT-RISK GAP-S GAP-UP-S GRID HAZARD-SLIDE-RISK JUMP-S JUMP-UP LAVA MOVE-CLIMB-DOWN MOVE-CLIMB-UP MOVE-CORNER MOVE-DIAGONAL MOVE-DROP MOVE-EXIT MOVE-GAP MOVE-JUMP MOVE-JUMP-CLIMB MOVE-OPEN MOVE-SWIM MOVE-WALK SLOW-EXTRA SNAP SPRINT-S SQRT2 STEP UNLOADED WALK-S WATER WHOLE fall-damage]]
+  (:require [engine.path.planner.base :refer [ARC ARC-UP BODY CLIMB-TRAP-SHUT CORNER-S GAP-PIT-RISK GAP-S GAP-UP-S GRID HAZARD-SLIDE-RISK JUMP-S JUMP-UP LAVA MOVE-CLIMB-DOWN MOVE-CLIMB-UP MOVE-CORNER MOVE-DIAGONAL MOVE-DROP MOVE-EXIT MOVE-GAP MOVE-JUMP MOVE-JUMP-CLIMB MOVE-OPEN MOVE-SWIM MOVE-WALK SLOW-EXTRA SNAP SPRINT-S SQRT2 STEP UNLOADED WALK-S WATER WHOLE FREE-FALL]]
             [engine.path.planner.search :refer [Search]]))
 
 (set! *warn-on-infer* true)
@@ -45,6 +45,18 @@
             (.tightMove s i x y z h region c x2 y2 z2 0 MOVE-DROP sec (.swimRisk s x2 y2 z2) 0 SNAP 0)
             (.edge s x2 y2 z2 0 MOVE-DROP i sec (.swimRisk s x2 y2 z2) 0 0 0))))))
 
+  ;; the hp a fall of fall16 (1/16 blocks) onto the block `id` (the support of the landing) takes: over FREE-FALL blocks, scaled by the block's landing factor
+  ;; (options.landing), the fall factor and the drop factor; -1 when the block takes no fall over FREE-FALL (a negative factor)
+  (dropDamage [s id fall16]
+    (let [over (- (/ fall16 16) FREE-FALL)]
+      (if (<= over 0)
+        0
+        (let [land (if (some? (.-land-factors s)) (.get ^js (.-land-factors s) id) nil)
+              f (if (some? land) land 1)]
+          (if (neg? f)
+            -1
+            (* (.-c-drop-factor s) (.-fall-factor s) (js/Math.ceil (* over f))))))))
+
   ;; walk off an edge into the first standable cell below the neighbour column, or into water of any depth up to maxWaterDrop
   ;; (the fall is cancelled there). A tight cell at either end: the body falls straight down from the crossing point, which
   ;; the masks must leave free all the way (a climbable below is grabbed as it falls past, so it takes any position).
@@ -59,16 +71,20 @@
               (let [h1 (.landing s x2 y2 z2)]
                 (if (neg? h1)
                   (when-not (pos? (aget (.-tbl-top s) id)) (recur (dec y2)))
-                  (let [tight-drop (or tight-src ^boolean (.isTight s x2 y2 z2))
-                        fall (- h0 (+ (* y2 16) h1))]
-                    (when-not (> fall (* (.-max-drop s) 16))
+                  (let [sup (.-support s)
+                        tight-drop (or tight-src ^boolean (.isTight s x2 y2 z2))
+                        fall (- h0 (+ (* y2 16) h1))
+                        dmg (.dropDamage s sup fall)]
+                    (when-not (or (> fall (* (.-max-drop s) 16)) (neg? dmg))
                       (let [sec (+ (* WALK-S (+ 1 (* SLOW-EXTRA (+ slow-from (.-enter-slow s)))))
                                    (* (.-c-drop-factor s) 0.25 (js/Math.sqrt (/ (js/Math.max 0 fall) 16)))
                                    (.-enter-extra s))]
+                        (set! (.-move-dmg s) (+ dmg (.-enter-dmg s)))
                         (if tight-drop
-                          (.tightMove s i x y z h region c x2 y2 z2 h1 MOVE-DROP sec (+ (.-enter-risk s) (* (.-c-drop-factor s) (fall-damage fall))) (.-enter-slow s)
+                          (.tightMove s i x y z h region c x2 y2 z2 h1 MOVE-DROP sec (+ (.-enter-risk s) dmg) (.-enter-slow s)
                                       SNAP (if ^boolean (.climbHere s x2 y2 z2) GRID 0))
-                          (.edge s x2 y2 z2 h1 MOVE-DROP i sec (+ (.-enter-risk s) (* (.-c-drop-factor s) (fall-damage fall))) (.-enter-slow s) 0 0)))))))))))))
+                          (.edge s x2 y2 z2 h1 MOVE-DROP i sec (+ (.-enter-risk s) dmg) (.-enter-slow s) 0 0))
+                        (set! (.-move-dmg s) 0))))))))))))
 
   ;; where a gap jump lands: level, else one up (when the higher arc is clear), else one down; `gap-y` is the cell's y
   (gapLanding [s lx y lz ^boolean up]
@@ -123,9 +139,11 @@
                                          ;; (the goal flood expands cells nothing reached: i is -1, the takeoff a plain walk)
                                          (not (true? (^js (.-limit-gap s) x y z (- h0 (* y 16)) (if (neg? i) MOVE-WALK (aget (.-moves s) i)) lx ly lz h1)))
                                          (do (set! (.-limit-refused s) true) true)))
+                        (set! (.-move-dmg s) (.-enter-dmg s))
                         (.edge s lx ly lz h1 MOVE-GAP i
                                (+ (* (inc n) SPRINT-S) GAP-S (if (pos? delta) GAP-UP-S 0) (.-enter-extra s))
-                               (+ (.-enter-risk s) risk) (.-enter-slow s) 0 0))))
+                               (+ (.-enter-risk s) risk) (.-enter-slow s) 0 0)
+                        (set! (.-move-dmg s) 0))))
                   (recur (inc n) hole pit up-arc)))))))))
 
   (expandCardinal [s x y z h slow-from i region c h0 ^boolean tight-src ^boolean climbing]
@@ -146,10 +164,12 @@
                      (or (not walks) (<= delta 0) tight-src climbing ^boolean (.clear s x z (+ h0 BODY) (+ (* y2 16) h1 BODY))))
             (let [sec (+ (if walks walk (+ walk JUMP-S)) (.-enter-extra s))
                   move (if walks MOVE-WALK MOVE-JUMP)]
+              (set! (.-move-dmg s) (.-enter-dmg s))
               (if (or tight-src ^boolean (.tightAt s x2 y2 z2))
                 (.tightMove s i x y z h region c x2 y2 z2 h1 move sec (.-enter-risk s) (.-enter-slow s)
                             (if (and climbing (> delta STEP)) GRID SNAP) SNAP)
-                (.edge s x2 y2 z2 h1 move i sec (.-enter-risk s) (.-enter-slow s) 0 0)))))
+                (.edge s x2 y2 z2 h1 move i sec (.-enter-risk s) (.-enter-slow s) 0 0))
+              (set! (.-move-dmg s) 0))))
         (if (>= (.swimAt s x2 y z2) 0)
           ;; water ahead at our level: walk in and swim
           (when-not ^boolean (.magmaTrap s x2 y z2)
@@ -199,14 +219,17 @@
                              (true? (^js (.-limit-corner s) x y z (- h0 (* y 16)) x2 y2 z2 h1))
                              (do (set! (.-limit-refused s) true) false)))
                 (let [walk (+ (* WALK-S SQRT2 (+ 1 (* SLOW-EXTRA (+ slow-from (.-enter-slow s))))) (* slide CORNER-S))
-                      brushed (+ (.sideTouch s x2 z lo hi) (.sideTouch s x z2 lo hi)
+                      touched (+ (.sideTouch s x2 z lo hi) (.sideTouch s x z2 lo hi))
+                      brushed (+ touched
                                  ;; a slide over a hole onto lava or fire (the open side is x2 z when sb holds the corner)
                                  (if (== slide 1)
                                    (* HAZARD-SLIDE-RISK (if (zero? sa) (.slideHoleRisk s x2 z lo) (.slideHoleRisk s x z2 lo)))
                                    0))]
+                  (set! (.-move-dmg s) (+ (.-enter-dmg s) touched))
                   (.edge s x2 y2 z2 h1
                          (cond jump MOVE-JUMP (== slide 1) MOVE-CORNER :else MOVE-DIAGONAL)
-                         i (+ (if jump (+ walk JUMP-S) walk) (.-enter-extra s)) (+ (.-enter-risk s) brushed) (.-enter-slow s) slide 0)))))))))
+                         i (+ (if jump (+ walk JUMP-S) walk) (.-enter-extra s)) (+ (.-enter-risk s) brushed) (.-enter-slow s) slide 0)
+                  (set! (.-move-dmg s) 0)))))))))
 
   ;; region -1: every region of a tight cell (the goal flood does not know which one it comes from)
   (expandMoves [s x y z h slow-from i region]
@@ -284,10 +307,13 @@
             (let [h3 (.landing s x y3 z)]
               (if (neg? h3)
                 (when-not (pos? (aget (.-tbl-top s) id)) (recur (dec y3)))
-                (let [fall (- from16 (+ (* y3 16) h3))]
-                  (when-not (> fall (* (.-max-drop s) 16))
+                (let [dmg (.dropDamage s (.-support s) (- from16 (+ (* y3 16) h3)))
+                      fall (- from16 (+ (* y3 16) h3))]
+                  (when-not (or (> fall (* (.-max-drop s) 16)) (neg? dmg))
+                    (set! (.-move-dmg s) (+ dmg (.-enter-dmg s)))
                     (.verticalMove s i x y z h region y3 h3 MOVE-DROP (* (.-c-drop-factor s) 0.25 (js/Math.sqrt (/ fall 16)))
-                                   (+ (.-enter-risk s) (* (.-c-drop-factor s) (fall-damage fall))) (.-enter-slow s)))))))))))
+                                   (+ (.-enter-risk s) dmg) (.-enter-slow s))
+                    (set! (.-move-dmg s) 0))))))))))
 
   ;; from the floor, a jump puts the feet into a climbable one block up
   (jumpClimb [s i x y z h region]

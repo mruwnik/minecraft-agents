@@ -675,7 +675,7 @@ the recorded pins (`planner_{bench,options,goals,courses}_golden.cljs`, `js/path
 - Risks are priced rather than banned: gap jumps over pits, corner slides over lava or fire, time near known dangers
   (`options.dangers`: the walks of `jobs.lib.near` pass the sensed real dangers and remembered `:threat` spots of
   `jobs.lib.threats`, dear when the hostile reflex would flee the mob, cheap when it would fight; `go-near!`
-  `:dangers false` for a walk up to the mob fought). Darkness is priced too (`options.dark`: a dark cell costs twice its seconds more; `jobs.lib.look/dark-fn`: seen and dark, or unseen at night). The caller's own cells are priced by `options.tolls` (a Map of cell key to factor; the planner knows no zones or crops). Farmland is never fallen onto: no drop or gap jump lands on it, and no diagonal
+  `:dangers false` for a walk up to the mob fought). Darkness is priced too (`options.dark`: a dark cell costs twice its seconds more; `jobs.lib.look/dark-fn`: seen and dark, or unseen at night). The caller's own cells are priced by `options.tolls` (a Map of cell key to factor; the planner knows no zones or crops). Certain damage (falls over 3 blocks, plants that hurt on touch) is summed per path: `options.damageBudget` (hp, default none) refuses a move over it (`damageRefused` when nothing is found for that reason), `damageWeight` prices an hp in seconds, `fallFactor` and `landing` (Map of block state to fall factor) shape a fall; `cost.damage` and a step's `damage` report it. Farmland is never fallen onto: no drop or gap jump lands on it, and no diagonal
   passes a pit floored with it. The planner
   takes `options.limits` for what the walker can do.
 

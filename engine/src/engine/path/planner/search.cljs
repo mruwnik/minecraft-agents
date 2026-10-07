@@ -115,4 +115,11 @@
    ;; 2 dark) and the seconds of dark cells on the path to each node
    ^js dark-at dark-factor ^js dark-keys ^js dark-flags ^:mutable darks
    ;; options.tolls.cells (nil: none): a Map of cell-key to the factor of the cell's own seconds it costs more (see tollOf)
-   ^js tolls])
+   ^js tolls
+   ;; the damage budget (options.damageBudget hp, nil-free: Infinity for none), the price of an hp of certain damage in seconds
+   ;; (options.damageWeight), the factor of a fall's damage (options.fallFactor) and options.landing (Map of state id to the factor
+   ;; of the fall damage onto that block, negative: no drop over 3 onto it; nil: 1 for every block)
+   damage-budget damage-weight fall-factor ^js land-factors
+   ;; certain damage so far to each node; what the move being made adds (set around its edge, 0 otherwise); what the last landing
+   ;; adds (plants touched, a hurting floor); the total of the node being recorded; a move was refused for the budget
+   ^:mutable dmgs ^:mutable move-dmg ^:mutable enter-dmg ^:mutable cur-dmg ^:mutable ^boolean damage-refused])
