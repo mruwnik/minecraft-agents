@@ -433,19 +433,24 @@
   (try (fs/unlinkSync (time-entry-file (.-pid js/process))) (catch :default _ nil)))
 
 (defn acquire-time-lock!
-  "Resolves to {:first? bool} when this process holds the time lock for phase (:day or :night), logging who it waits for
-  (once per holder set). Holders of the same phase share it."
+  "Resolves to {:first? bool} when this process holds the time lock for phase (:day, :night or :any), logging who it waits
+  for (once per holder set). Holders of the same phase share it; :any joins the phase that holds, else the world's."
   [phase what]
   (let [pid (.-pid js/process)
         ops (time-lock-dir-ops)
-        seq (js/Date.now)]
+        seq (js/Date.now)
+        world-phase (fn [] (if (= :any phase)
+                             (.then (rcon! ["time query day"]) (fn [[reply]] (if (night? (daytime (or reply ""))) :night :day)))
+                             (js/Promise.resolve :day)))]
     (letfn [(attempt [told]
-              (let [r (lease/try-share ops pid phase seq)]
-                (if (:held r)
-                  (js/Promise.resolve {:first? (:first? r)})
-                  (do (when-not (= told (:waiting-on r))
-                        (log! "waiting for time lock (" (name phase) ") held by " (str/join "," (:waiting-on r)) " (" what ")"))
-                      (.then (sleep 2000) #(attempt (:waiting-on r)))))))]
+              (.then (world-phase)
+                     (fn [wp]
+                       (let [r (lease/try-share ops pid phase seq wp)]
+                         (if (:held r)
+                           {:first? (:first? r)}
+                           (do (when-not (= told (:waiting-on r))
+                                 (log! "waiting for time lock (" (name phase) ") held by " (str/join "," (:waiting-on r)) " (" what ")"))
+                               (.then (sleep 2000) #(attempt (:waiting-on r)))))))))]
       (attempt nil))))
 
 (defn with-time-lock!
@@ -647,10 +652,9 @@
         pre-register (atom nil)
         _ (note-last-plot! opts origin grid)
         result (fn [m] (merge {:id (:id c) :run run :plot i :origin origin :elapsed-s (/ (- (js/Date.now) started) 1000)} m))]
-    (-> (if-let [phase (lease/time-phase rc)]
-          (acquire-time-lock! phase (str (:id c) " depends on the time of day"))
-          (js/Promise.resolve nil))
-        (.then (fn [held] (if (or (nil? held) (:first? held)) (time-ok! opts rc) true)))
+    (-> (let [phase (lease/time-phase rc)]
+          (.then (acquire-time-lock! (or phase :any) (str (:id c) (if phase " depends on the time of day" " runs under the current time")))
+                 (fn [held] (if (and phase (:first? held)) (time-ok! opts rc) true))))
         (.then (fn [ok]
                  (if-not ok
                    (result {:status :skipped :why (str "needs " (name (:time rc)) " (no --allow-time)")})

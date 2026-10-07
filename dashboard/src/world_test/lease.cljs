@@ -60,6 +60,15 @@
   [ticks]
   (let [t (mod ticks 24000)] (if (and (>= t 13000) (< t 23000)) :night :day)))
 
+(defn effective-phase
+  "The phase a request takes: its own, or for :any (a case that does not depend on the time of day) the phase the
+  holders hold, else world-phase."
+  [entries pid phase world-phase]
+  (if-not (= :any phase)
+    phase
+    (or (some (fn [[p e]] (when (and (not= p pid) (= :hold (:state e))) (:phase e))) entries)
+        world-phase)))
+
 (defn decide
   "entries: {pid {:phase :state (:hold or :want) :seq}} of live processes. -> {:held true :first? bool} when pid may
   hold phase now (every holder shares the phase and no waiter of the other phase is older), else {:waiting-on pids}.
@@ -79,15 +88,18 @@
   "One attempt at the time lock shared by phase: any number of processes may hold the same phase together; the other
   phase waits for all of them, and once it waits, new holders of the current phase queue behind it. Dead processes'
   entries are dropped. dir: {:guard (thunk -> its result, run exclusively) :entries (-> {pid entry}) :put! (pid entry)
-  :remove! (pid) :alive? (pid -> bool)}. seq: when this process began waiting (keeps its place in the queue)."
-  [{:keys [guard entries put! remove! alive?]} pid phase seq]
-  (guard
-   (fn []
-     (let [live (into {} (filter (fn [[p _]] (or (= p pid) (alive? p)))) (entries))
-           _ (run! remove! (remove live (keys (entries))))
-           r (decide live pid phase seq)]
-       (put! pid {:phase phase :state (if (:held r) :hold :want) :seq seq})
-       r))))
+  :remove! (pid) :alive? (pid -> bool)}. seq: when this process began waiting (keeps its place in the queue). phase :any
+  (a time-independent case) joins the holders' phase, else world-phase (:day or :night), and waits like a holder of it."
+  ([dir pid phase seq] (try-share dir pid phase seq :day))
+  ([{:keys [guard entries put! remove! alive?]} pid phase seq world-phase]
+   (guard
+    (fn []
+      (let [live (into {} (filter (fn [[p _]] (or (= p pid) (alive? p)))) (entries))
+            _ (run! remove! (remove live (keys (entries))))
+            phase (effective-phase live pid phase world-phase)
+            r (decide live pid phase seq)]
+        (put! pid {:phase phase :state (if (:held r) :hold :want) :seq seq})
+        r)))))
 
 (defn time-phase
   "The phase (:day, :night or :night-x) whose time lock case c holds: its :time, else the phase of its first :time-set step; nil

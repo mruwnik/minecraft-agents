@@ -215,3 +215,38 @@
 (deftest the-time-is-set-only-when-a-phase-group-starts-so-each-set-is-logged-once
   (let [files (atom {10 (hold :day)})]
     (is (false? (:first? (l/try-share (fake-share files #{10 11}) 11 :day 5))) "joining a held phase sets nothing")))
+
+(deftest a-time-independent-case-joins-the-phase-that-holds
+  (let [files (atom {10 (hold :night)})]
+    (is (= {:held true :first? false} (l/try-share (fake-share files #{10 11}) 11 :any 5 :day)))
+    (is (= :night (:phase (get @files 11))))
+    (is (= :hold (:state (get @files 11))))))
+
+(deftest a-time-independent-case-takes-the-world-phase-when-nobody-holds
+  (let [files (atom {})]
+    (is (= {:held true :first? true} (l/try-share (fake-share files #{11}) 11 :any 5 :night)))
+    (is (= :night (:phase (get @files 11))))))
+
+(deftest a-waiting-setter-of-the-other-phase-drains-the-joiners
+  (let [files (atom {10 (hold :day) 11 (want :night 5)})
+        d (fake-share files #{10 11 12})]
+    (is (= {:waiting-on [11]} (l/try-share d 12 :any 9 :day)))
+    (is (= :want (:state (get @files 12))))
+    (swap! files dissoc 10)
+    (is (= {:held true :first? true} (l/try-share d 11 :night 5)))
+    (is (= {:held true :first? false} (l/try-share d 12 :any 9 :day)) "the joiner follows the new phase")
+    (is (= :night (:phase (get @files 12))))))
+
+(deftest a-time-independent-case-waits-for-an-exclusive-night-holder
+  (let [files (atom {10 (hold :night-x)})]
+    (is (= {:waiting-on [10]} (l/try-share (fake-share files #{10 11}) 11 :any 5 :day)))))
+
+(deftest a-setter-waits-for-time-independent-holders
+  (let [files (atom {10 (hold :day)})]
+    (is (= {:held true :first? false} (l/try-share (fake-share files #{10 11}) 11 :any 5 :day)))
+    (is (= {:waiting-on [10 11]} (l/try-share (fake-share files #{10 11 12}) 12 :night 6)))))
+
+(deftest a-dead-time-independent-holder-is-reclaimed
+  (let [files (atom {10 (hold :day)})]
+    (is (= {:held true :first? true} (l/try-share (fake-share files #{11}) 11 :any 5 :night)))
+    (is (= #{11} (set (keys @files))))))
