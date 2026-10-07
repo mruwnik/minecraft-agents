@@ -46,7 +46,7 @@
           (let [{:keys [eng p]} (setup {:containers stock} (some-> zone vector))
                 result (await (child-outcome eng 'jobs.storage.withdraw (merge {:chest chest :items {"bread" 8}} extra) 12))]
             (is (= taken? (pos? (count (calls p "transfer")))) (pr-str [zone extra]))
-            (is (= (if taken? {:gave-up false :short {}} refused) result) (pr-str [zone extra]))))))))
+            (is (= ({true {:gave-up false :short {}} false refused} taken?) result) (pr-str [zone extra]))))))))
 
 (deftest withdraw-from-a-foreign-chest-warns-and-never-inspects-its-way-in
   (async done
@@ -81,7 +81,7 @@
           (let [{:keys [eng p]} (setup {:containers {"10,64,0" []} :inventory [{:name "dirt" :count 5}]} [zone])
                 result (await (child-outcome eng 'jobs.storage.deposit (merge {:chest chest} extra) 12))]
             (is (= put? (pos? (count (calls p "transfer")))) (pr-str [zone extra]))
-            (is (= (if put? {:gave-up false} refused) result) (pr-str [zone extra]))))))))
+            (is (= ({true {:gave-up false} false refused} put?) result) (pr-str [zone extra]))))))))
 
 ;; ------------------------------------------------------------------ the parents propagate :refused
 
@@ -156,4 +156,4 @@
             (core/submit! eng (list 'jobs.items.smelt (merge {:furnace {:x 1 :y 64 :z 0} :item "raw_iron" :count 3} extra)) {})
             (await (run-until-empty eng 3))
             (is (= touched? (pos? (count (calls p "furnace")))) (pr-str [zone extra]))
-            (is (= (if touched? [] ["refused"]) (mapv :reason (events-of seen :smelt.gave-up))) (pr-str [zone extra]))))))))
+            (is (= ({true [] false ["refused"]} touched?) (mapv :reason (events-of seen :smelt.gave-up))) (pr-str [zone extra]))))))))
