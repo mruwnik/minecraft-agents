@@ -3,6 +3,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.hostile-test :as h]
+            [engine.perception :as perception]
             [engine.fake :as fake]
             [engine.test-util :as tu]))
 
@@ -168,3 +169,38 @@
               (swap! (:clock s) + 700)
               (await (core/tick! eng)))
             (is (= reason (:reason (done-event s))) (pr-str owner))))))))
+
+(def chest-at "-2,64,3")
+
+(defn chest-world [stock]
+  {:blocks {chest-at "chest"} :containers {chest-at stock} :entities [(sheep 1 2)]})
+
+(defn ^:async seeing-scenario
+  "As scenario, the body seeing through perception (a chest must be seen to be fetched from)."
+  [args world n]
+  (let [s (h/setup-seeing world nil)]
+    (perception/pass! (aget (:p s) "perception"))
+    (core/submit! (:eng s) (list 'jobs.animals.shear args) {})
+    (await (run-ticks s n 700))
+    s))
+
+(defn shears-in-chest [{:keys [p]}]
+  (some #(when (= "shears" (:name %)) (:count %)) (get-in @(fake/state p) [:containers [-2 64 3]])))
+
+(deftest shears-are-fetched-from-a-seen-chest-by-default
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (seeing-scenario {} (chest-world [{:name "shears" :count 1}]) 120))]
+          (is (finished? s))
+          (is (= :shorn (:reason (done-event s))))
+          (is (nil? (shears-in-chest s))))))))
+
+(deftest fetch-false-ends-no-shears-and-leaves-the-chest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (seeing-scenario {:fetch false} (chest-world [{:name "shears" :count 1}]) 12))]
+          (is (finished? s))
+          (is (= :no-shears (:reason (done-event s))))
+          (is (= 1 (shears-in-chest s))))))))

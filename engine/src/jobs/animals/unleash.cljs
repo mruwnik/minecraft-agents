@@ -15,7 +15,7 @@
   - An animal on this body's lead is clicked itself. It counts when the sensing then shows it off the lead
     (checked for up to 1.5 s).
   - An animal tied to a knot: the knot is clicked. That removes the knot and hands every animal tied to it to
-    this body's lead, and the next round takes the lead off. An animal tied to a knot the sensing cannot see is
+    this body's lead, and the next step takes the lead off. An animal tied to a knot the sensing cannot see is
     given up on (:no-knot).
 
   An animal is given up on when its walk is blocked or two clicks were out of reach (:unreachable), the click
@@ -26,10 +26,10 @@
   leads in :radius.
 
   Ends with info unleash.done and a warn unleash.gave-up unless the reason is :unleashed. Result {:reason :freed
-  [keys] :given-up {key reason} :collected n :leads n}. :collected is the leads gained since the first round,
+  [keys] :given-up {key reason} :collected n :leads n}. :collected is the leads gained since the call began,
   :leads the leads carried at the end. Reasons:
   - :unleashed: some animal was freed.
-  - :timeout: :timeout-s from the first round (no collecting).
+  - :timeout: :timeout-s from the start of the call (no collecting).
   - With nothing freed: :unreachable if one was given up as unreachable, else :refused (others given up) or
     :none.
   - It also ends after three fruitless animals in a row.
@@ -42,7 +42,7 @@
    :animal {:doc "uuid (or id) of the one animal to free; any when nil" :default nil}
    :radius {:doc "animals within this many blocks count" :default 8}
    :walk-timeout-s {:doc "bound of one walk towards the click" :default 5}
-   :timeout-s {:doc "seconds from the first round before the job gives up" :default 30}
+   :timeout-s {:doc "seconds from the start of the call before the job gives up" :default 30}
    :collect {:doc "pick up the leads afterwards" :default true}
    :ignore-zones? animals/ignore-zones-arg})
 
@@ -60,7 +60,7 @@
   (reduce + (map :count (filter #(= "lead" (:name %)) (u/inventory (:primitives c))))))
 
 (defn finish!
-  "Emit the outcome, hand it to the parent and end the job. :collected is the leads gained since the first round,
+  "Emit the outcome, hand it to the parent and end the job. :collected is the leads gained since the call began,
   so a lead picked up the moment it dropped counts too."
   [c reason]
   (let [m (ctx/mem c)

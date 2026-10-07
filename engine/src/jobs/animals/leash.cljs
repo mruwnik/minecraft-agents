@@ -1,6 +1,7 @@
 (ns jobs.animals.leash
   (:require [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
+            [jobs.lib.fetch :as fetch]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]))
 
@@ -10,7 +11,7 @@
 
   One call is the whole run. It takes the nearest animal that is not on anyone's lead, not given up on and not in :skip (uuids or
   ids). The body walks to within 3 blocks (doors :shut, each steer bounded by :walk-timeout-s) and uses the lead
-  it carries. The use counts only when the sensing then shows the animal on this body's lead. Animals are
+  it carries (fetching one first when none is carried and an animal waits, jobs.lib.fetch, unless :fetch is false). The use counts only when the sensing then shows the animal on this body's lead. Animals are
   tracked by uuid, by id when it has none.
 
   An animal is given up on when its walk is blocked or two attempts were out of reach (:unreachable), nothing
@@ -20,8 +21,8 @@
   Ends with info leash.done and a warn leash.gave-up unless the reason is :leashed. Result {:reason :animal key
   :id entity-id :given-up {key reason}}. Reasons:
   - :leashed: an animal is on the lead.
-  - :no-lead: no lead carried, or the server found none.
-  - :timeout: :timeout-s from the first round.
+  - :no-lead: no lead carried (and none fetched), or the server found none.
+  - :timeout: :timeout-s from the start of the call.
   - When no candidate is left: :unreachable if one was given up as unreachable, else :refused (others given
     up, or the zone rules refused the animals; :no-zones when no zone list was read), :all-leashed (animals present but all led) or :none.
   - The same reasons after three fruitless animals in a row.
@@ -34,7 +35,8 @@
    :radius {:doc "animals within this many blocks count" :default 8}
    :skip {:doc "keys (uuids, else ids) of animals never to leash" :default []}
    :walk-timeout-s {:doc "bound of one walk towards the animal" :default 5}
-   :timeout-s {:doc "seconds from the first round before the job gives up" :default 30}
+   :timeout-s {:doc "seconds from the start of the call before the job gives up" :default 30}
+   :fetch {:doc "get a lead when none is carried (jobs.lib.fetch): true, a set of kinds or a map of limits; false ends :no-lead" :default true}
    :ignore-zones? animals/ignore-zones-arg})
 
 (def reach 3)
@@ -140,6 +142,21 @@
 (defn lead-carried? [c]
   (some #(= "lead" (:name %)) (u/inventory (:primitives c))))
 
+(defn problem
+  "The need wait for a lead while none is carried and an animal waits, else nil."
+  [c]
+  (when (and (not (lead-carried? c)) (seq (candidates c)))
+    {:reason :need :item "lead"}))
+
+(defn ^:async no-lead!
+  "No lead carried: fetch one when :fetch allows and an animal waits, else end :no-lead. Resolves to :again once it
+  arrived, else the round's result."
+  [c]
+  (if-not (and (fetch/opts c 'jobs.animals.leash) (problem c))
+    (finish! c :no-lead nil)
+    (or (await (fetch/fetch! c 'jobs.animals.leash problem))
+        (if (problem c) (finish! c :no-lead nil) :again))))
+
 (defn ^:async step [c]
   (let [now (ctx/now c)
         {:keys [timeout-s]} (:args c)]
@@ -148,7 +165,7 @@
           cands (candidates c)]
       (cond
         (>= (- now (:started m)) (* 1000 timeout-s)) (finish! c :timeout nil)
-        (not (lead-carried? c)) (finish! c :no-lead nil)
+        (not (lead-carried? c)) (await (no-lead! c))
         (empty? cands) (finish! c (none-reason c) nil)
         :else (await (engage! c (first cands)))))))
 

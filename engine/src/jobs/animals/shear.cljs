@@ -1,6 +1,7 @@
 (ns jobs.animals.shear
   (:require [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
+            [jobs.lib.fetch :as fetch]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]))
 
@@ -10,22 +11,22 @@
 
   One call is the whole run. It takes the nearest adult sheep not yet shorn or given up on (babies and sheared sheep are
   skipped). The body walks to within 3 blocks (doors :shut, each steer bounded by :walk-timeout-s) and uses the
-  shears it carries. Sheep are tracked by uuid, by id when it has none.
+  shears it carries (fetching them first when none are carried and sheep wait, jobs.lib.fetch, unless :fetch is false). Sheep are tracked by uuid, by id when it has none.
 
   A sheep is given up on when its walk is blocked or two shearings were out of reach (:unreachable), nothing
   happened (:no-effect: already sheared), it vanished (:gone), the server said it cannot (:cannot) or the use
   failed (:failed).
 
   Shearing stops when :count sheep are shorn (every one in radius when nil), none is left, the shears are gone
-  or three sheep in a row were fruitless. Unless :collect is false it then runs jobs.forestry.collect-drops for
+  or three sheep in a row were fruitless (no shears are fetched while nothing is left to shear). Unless :collect is false it then runs jobs.forestry.collect-drops for
   the wool in :radius and ends.
 
   Ends with info shear.done and a warn shear.gave-up unless the reason is :shorn. Result {:reason :shorn [keys]
   :given-up {key reason} :collected n}. Reasons:
   - :shorn: the count was reached, or the sheep ran out after some were shorn.
   - :shears-broke: the shears were gone after some were shorn.
-  - :timeout: :timeout-s from the first round (no collecting).
-  - :no-shears: none carried and none shorn.
+  - :timeout: :timeout-s from the start of the call (no collecting).
+  - :no-shears: none carried (and none fetched) and none shorn.
   - With nothing shorn: :unreachable if one was given up as unreachable, else :refused (or :no-zones) when the
     zone rules refused every candidate, else :all-sheared (adults present but all sheared) or :none.
 
@@ -36,8 +37,9 @@
   {:count {:doc "sheep to shear; every one in radius when nil" :default nil}
    :radius {:doc "sheep within this many blocks count" :default 16}
    :walk-timeout-s {:doc "bound of one walk towards a sheep" :default 5}
-   :timeout-s {:doc "seconds from the first round before the job gives up" :default 120}
+   :timeout-s {:doc "seconds from the start of the call before the job gives up" :default 120}
    :collect {:doc "pick up the wool afterwards" :default true}
+   :fetch {:doc "get shears when none are carried (jobs.lib.fetch): true, a set of kinds or a map of limits; false ends :no-shears" :default true}
    :ignore-zones? animals/ignore-zones-arg})
 
 (def reach 3)
@@ -169,6 +171,22 @@
 (defn shears-carried? [c]
   (some #(= "shears" (:name %)) (u/inventory (:primitives c))))
 
+(defn problem
+  "The need wait for shears while none are carried and an unsheared sheep waits, else nil."
+  [c]
+  (when (and (not (shears-carried? c)) (not= :collect (:phase (ctx/mem c))) (seq (candidates c)))
+    {:reason :need :item "shears"}))
+
+(defn ^:async no-shears!
+  "No shears carried: fetch them when :fetch allows and a sheep waits, else end (collecting what was shorn). Resolves
+  to :again once they arrived, else the round's result."
+  [c]
+  (let [end! #(if (seq (:shorn (ctx/mem c))) (go-collect! c :shears-broke) (finish! c :no-shears))]
+    (if-not (and (fetch/opts c 'jobs.animals.shear) (problem c))
+      (end!)
+      (or (await (fetch/fetch! c 'jobs.animals.shear problem))
+          (if (problem c) (end!) :again)))))
+
 (defn ^:async step [c]
   (let [now (ctx/now c)
         {:keys [timeout-s] n :count} (:args c)]
@@ -178,7 +196,7 @@
       (cond
         (>= (- now (:started m)) (* 1000 timeout-s)) (finish! c :timeout)
         (= :collect (:phase m)) (await (collect! c))
-        (not (shears-carried? c)) (if (seq (:shorn m)) (go-collect! c :shears-broke) (finish! c :no-shears))
+        (not (shears-carried? c)) (await (no-shears! c))
         (and n (>= (count (:shorn m)) n)) (go-collect! c :shorn)
         (empty? cands) (out-of-sheep! c)
         :else (await (engage! c (first cands)))))))

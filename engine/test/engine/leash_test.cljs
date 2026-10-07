@@ -4,6 +4,7 @@
             [engine.core :as core]
             [engine.fake :as fake]
             [engine.hostile-test :as h]
+            [engine.perception :as perception]
             [engine.test-util :as tu]))
 
 (defn cow [id x & [more]]
@@ -169,3 +170,38 @@
               (swap! (:clock s) + 700)
               (await (core/tick! eng)))
             (is (= reason (:reason (done-event s))) (pr-str owner))))))))
+
+(def chest-at "-2,64,3")
+
+(defn chest-world [stock]
+  {:blocks {chest-at "chest"} :containers {chest-at stock} :entities [(cow 1 2)]})
+
+(defn ^:async seeing-scenario
+  "As scenario, the body seeing through perception (a chest must be seen to be fetched from)."
+  [args world n]
+  (let [s (h/setup-seeing world nil)]
+    (perception/pass! (aget (:p s) "perception"))
+    (core/submit! (:eng s) (list 'jobs.animals.leash (merge {:mob "cow"} args)) {})
+    (await (run-ticks s n 700))
+    s))
+
+(defn leads-in-chest [{:keys [p]}]
+  (some #(when (= "lead" (:name %)) (:count %)) (get-in @(fake/state p) [:containers [-2 64 3]])))
+
+(deftest a-lead-is-fetched-from-a-seen-chest-by-default
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (seeing-scenario {} (chest-world [{:name "lead" :count 2}]) 120))]
+          (is (finished? s))
+          (is (= :leashed (:reason (done-event s))))
+          (is (= [1] (on-lead s))))))))
+
+(deftest fetch-false-ends-no-lead-and-leaves-the-chest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (seeing-scenario {:fetch false} (chest-world [{:name "lead" :count 2}]) 12))]
+          (is (finished? s))
+          (is (= :no-lead (:reason (done-event s))))
+          (is (= 2 (leads-in-chest s))))))))

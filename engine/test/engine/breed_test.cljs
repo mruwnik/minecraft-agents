@@ -4,6 +4,7 @@
             [engine.backoff :as backoff]
             [engine.core :as core]
             [engine.hostile-test :as h]
+            [engine.perception :as perception]
             [jobs.lib.animals :as animals]
             [engine.memory :as mem]
             [engine.takeover :as takeover]
@@ -431,3 +432,39 @@
               (swap! (:clock s) + 700)
               (await (core/tick! eng)))
             (is (= reason (:reason (done-event s))) (pr-str owner))))))))
+
+(def chest-at "-2,64,3")
+
+(defn chest-world [stock]
+  {:blocks {chest-at "chest"} :containers {chest-at stock}
+   :entities [(cow 1 2) (cow 2 3)]})
+
+(defn ^:async seeing-scenario
+  "As scenario, the body seeing through perception (a chest must be seen to be fetched from)."
+  [args world n]
+  (let [s (h/setup-seeing world nil)]
+    (perception/pass! (aget (:p s) "perception"))
+    (core/submit! (:eng s) (list 'jobs.animals.breed args) {})
+    (await (run-ticks s n 700))
+    s))
+
+(defn wheat-in-chest [{:keys [p]}]
+  (some #(when (= "wheat" (:name %)) (:count %)) (get-in @(fake/state p) [:containers [-2 64 3]])))
+
+(deftest wheat-is-fetched-from-a-seen-chest-by-default
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (seeing-scenario {:mob "cow"} (chest-world [{:name "wheat" :count 10}]) 120))]
+          (is (finished? s))
+          (is (= :fed (:reason (done-event s))))
+          (is (= 8 (wheat-in-chest s)) "two wheat taken for two cows"))))))
+
+(deftest fetch-false-ends-no-food-and-leaves-the-chest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (seeing-scenario {:mob "cow" :fetch false} (chest-world [{:name "wheat" :count 10}]) 12))]
+          (is (finished? s))
+          (is (= :no-food (:reason (done-event s))))
+          (is (= 10 (wheat-in-chest s))))))))

@@ -25,9 +25,9 @@
   animals stay alive and still count as adults, so they still breed.
   Reasons:
   - :count: :killed reached :count (nil: no cap).
-  - :keep: at most :keep adults remain. The census is live every round, so the last :keep are never taken.
+  - :keep: at most :keep adults remain. The census is live at every step, so the last :keep are never taken.
   - :unreachable: no candidate is left, some were skipped (warn cull.gave-up).
-  - :none: no candidate on two rounds in a row, with a 1 s wait between (warn cull.gave-up); :refused (or
+  - :none: no candidate on two looks in a row, with a 1 s wait between (warn cull.gave-up); :refused (or
     :no-zones) instead when the zone rules refused the adults.
   - :gave-up: too many skips in a row.
 
