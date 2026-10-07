@@ -325,7 +325,7 @@
           (:collect m)
           (and (cutting? c) (seq (ripe-of c (:skipped m))))
           (and (not field) (blind? c))) true
-      :else (ctx/wait c {:reason :nothing-to-do}))))
+      :else (gate/wait-unless-set c {:reason :nothing-to-do}))))
 
 ;; ------------------------------------------------------------------ steps
 

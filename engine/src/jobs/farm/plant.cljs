@@ -26,7 +26,8 @@
   the plan is missing, unreadable, has no crop cells, or no zone list has been read.
   Box mode zones: a cell in another owner's zone or claim, or in a plan's footprint, is left bare. If every
   cell is refused the job ends with :none. The job warns plant.declined once, with :reason :refused (or
-  :no-zones when no zone list was read). :ignore-zones? true skips the check, so cells shared with another plan are sown too.")
+  :no-zones when no zone list was read). The check waits :need (seed) when none is carried, :nothing-to-do when no cell
+  is bare, :refused / :no-zones when zones refuse. :ignore-zones? true skips the check, so cells shared with another plan are sown too.")
 
 (def args
   {:box {:doc "the field: {:min {:x :y :z} :max {:x :y :z}}, inclusive; the ground layer is y = (:y :min); required (without it the check declines)" :default nil}
@@ -93,7 +94,7 @@
   (cond
     (:trouble field) (ctx/wait c {:reason :plan-trouble :why (:trouble field)})
     (or (:started (ctx/mem c)) (seq (:ready (sowing c (:cells field))))) true
-    :else (ctx/wait c {:reason :nothing-to-do})))
+    :else (gate/wait-unless-set c {:reason :nothing-to-do})))
 
 (defn sowable-cells
   "The ground cells of cells whose sowing (the cell above) the job may do; one warn when some are refused."
@@ -102,13 +103,20 @@
     (filterv #(ok (update % :y inc)) cells)))
 
 (defn box-check
-  "owes?, and unless the run has started a bare cell that zones and claims let the job sow."
+  "A started run, or a bare cell that zones and claims let the job sow with a carried seed. Otherwise waits with
+  :nothing-to-do (no bare cell), :need (no seed carried) or the gate's :refused / :no-zones."
   [c]
-  (let [{:keys [box] :as a} (:args c)
-        m (ctx/mem c)]
-    (or (and (owes? (:primitives c) a m)
-             (boolean (or (:started m) (seq (sowable-cells c (bare-cells (:primitives c) box (:skipped m)))))))
-        (ctx/wait c {:reason :nothing-to-do}))))
+  (let [{:keys [box seed]} (:args c)
+        p (:primitives c)
+        m (ctx/mem c)
+        bare (when box (bare-cells p box (:skipped m)))]
+    (cond
+      (:started m) true
+      (empty? bare) (ctx/wait c {:reason :nothing-to-do})
+      (not (pick-seed seed (u/inventory p)))
+      (ctx/wait c (if seed {:reason :need :item seed} {:reason :need :any-of (vec (distinct (vals crops/seed-of)))}))
+      :else (or (boolean (seq (sowable-cells c bare)))
+                (gate/wait-unless-set c {:reason :nothing-to-do})))))
 
 (defn check [c]
   (if (:plan (:args c))

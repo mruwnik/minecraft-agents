@@ -287,6 +287,29 @@
           (is (= "air" (block-at p 2 64 2)))
           (is (= [[:refused ["other"]]] (mapv (juxt :reason :plans) declined))))))))
 
+(defn ^:async waiting-reasons
+  "The :reason of every job.waiting event after submitting args over a field of 2 cells, with other-cells claimed by another plan."
+  [args seeds other-cells]
+  (let [{:keys [eng seen]} (start {:blocks (farmland (range 2 4) [2]) :inventory seeds :floor tu/walk-floor}
+                                  (ew/of-data (shared-plans other-cells) {} []))]
+    (core/submit! eng (list job args) {})
+    (await (run-until-empty eng 6))
+    (distinct (map :reason (events-of seen :waiting)))))
+
+(deftest a-wait-the-gate-set-is-not-overwritten-by-nothing-to-do
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= [:refused] (await (waiting-reasons {:box (box 2 2 3 2)} (inv "wheat_seeds" 6) [[2 64 2] [3 64 2]]))))
+        (is (= [:refused] (await (waiting-reasons {:plan "mix"} (inv "wheat_seeds" 6) [[2 64 2] [3 64 2]]))))))))
+
+(deftest no-seed-waits-with-a-need-and-no-seed-waits-nothing-without-bare-cells
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= [:need] (await (waiting-reasons {:box (box 2 2 3 2)} [] []))))
+        (is (= [:nothing-to-do] (await (waiting-reasons {:box (box 8 8 9 9)} (inv "wheat_seeds" 6) []))))))))
+
 (deftest ignore-zones-sows-cells-shared-with-another-plan
   (async done
     (tu/run-async done
