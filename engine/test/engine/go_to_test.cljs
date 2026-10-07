@@ -380,6 +380,18 @@
           (is (= ["partial" "blocked" "blocked" "blocked"] (mapv :status (moved eng)))
               "the walk to the frontier is progress"))))))
 
+;; the same walkway, the goal in land never loaded: the far side was never seen, so that is the reason, not :exhausted
+(deftest go-to-gives-up-goal-unloaded-when-the-loaded-land-is-exhausted
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        ;; a floor of 2x2 cells and nothing loaded from z 2 on, the goal in the unloaded land
+        (let [world {:blocks (box 0 63 0 1 63 1 "stone")
+                     :unloaded (keys (box 0 60 2 1 70 40 "x"))
+                     :self {:pos {:x 0.5 :y 64 :z 0.5}}}
+              {:keys [out]} (await (go! world {:pos [0 64 30] :range 0}))]
+          (is (= {:arrived false :reason :unreachable :why :goal-unloaded} (select-keys @out [:arrived :reason :why]))))))))
+
 ;; the same walkway with searches that take several rounds (live: soak j29/j30, a walled walkway at y 100 whose goal lies
 ;; below its middle). The walk to the frontier is refreshed on the way, and every search from the frontier is unfinished at
 ;; first: an unfinished search's nearest node (back on the walkway, over the goal) must not win over the frontier, or the

@@ -44,7 +44,7 @@
     jobs.access.cleanup. Its children's walks never escalate. Jobs that must not change the world on the way pass
     :escalate false.
   - Gives up with {:status :stopped :arrived false :reason :unreachable :why ... :text words} (the job ends :stopped) and an :unreachable warn: :why is the planner's
-    reason (:exhausted, :goal-enclosed, :goal-cut-off, :door-stuck with :cells, :one-way with :near and :one-way ...), or :stuck
+    reason (:exhausted, :goal-unloaded (the goal lies in unloaded land and the loaded land leads no nearer), :goal-enclosed, :goal-cut-off, :door-stuck with :cells, :one-way with :near and :one-way ...), or :stuck
     (:kind the step, :detail the executor's text), :off-plan, :steer-failed, :no-progress or :moved-while-searching; :at is the
     body's feet cell and :near its blocks from the goal. A failed
     escalation adds :escalation {:step :reason ...}, the child's reason or wait.
@@ -119,6 +119,14 @@
   (if (:frontier-known result)
     (cond-> {:status :no-path :reason :exhausted :frontier-known true}
       (:frontier-target result) (assoc :frontier-target (:frontier-target result)))
+    result))
+
+(defn unloaded-end
+  "A fruitless round's result as go-to gives it up when the goal cell reads unloaded: a search that ran out of loaded land
+  (:exhausted) or a partial plan walked to its end (:off-plan :partial) says :goal-unloaded, the far side was never seen."
+  [result unloaded?]
+  (if (and unloaded? (or (= :exhausted (:reason result)) (and (= :off-plan (:status result)) (:partial result))))
+    {:status :no-path :reason :goal-unloaded}
     result))
 
 (defn foreign?
@@ -220,7 +228,9 @@
             (when (and progress? (:restore-pending (ctx/mem c))) (esc/restore-next! c))
             (if (and (if (false? (:retry (:args c))) progress? (< tries max-blocked)) (not (#{:goal-enclosed :goal-cut-off} (:reason result))))
               :again
-              (await (esc/give-up-or-escalate! c pos tries status result)))))))))
+              (let [unloaded? (wsearch/goal-unloaded? (.-snapshot pw) (mapv #(js/Math.floor (% pos)) [:x :y :z]))
+                    ended (if (esc/escalate? c result) result (unloaded-end result unloaded?))]
+                (await (esc/give-up-or-escalate! c pos tries status ended))))))))))
 
 (defn start-attempt!
   "Begin a call from the world, with memory as a hint: the counters of an earlier call (cut, or ended :continue) start

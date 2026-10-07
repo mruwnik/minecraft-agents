@@ -74,6 +74,7 @@
            :goal-cut-off "the goal is cut off by a drop: no walkable way leads to it"
            :start-enclosed "the body is shut in and nothing it can walk reaches out"
            :exhausted "no walkable way leads there from here"
+           :goal-unloaded "the goal lies in land that is not loaded and the loaded land leads no nearer"
            :no-progress "the walk ended no nearer"
            :stuck (str "the body got stuck" (some->> kind name (str " on ")) (some->> detail (str ": ")))
            :off-plan (or detail "the walk left its plan")
