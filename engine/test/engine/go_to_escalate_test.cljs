@@ -344,7 +344,7 @@
               {:keys [out p seen]} (await (run-job! (merge in-room {:blocks room}) 'jobs.movement.go-to
                                                 {:pos [8 64 0] :range 1} zones))]
           (is (= false (:arrived @out)))
-          (is (= {:step :none :why :no-dig} (:escalation @out)) "the wall is another owner's")
+          (is (= {:step :none :why :zone} (:escalation @out)) "the wall is another owner's")
           (is (empty? (events-of seen :go-to.escalated)))
           (is (empty? (calls p "dig"))))))))
 
@@ -372,6 +372,19 @@
           (is (= {:step :none :why :no-headroom} (:escalation @out)))
           (is (empty? (events-of seen :go-to.escalated)))
           (is (empty? (calls p "jumpPlace")))
+          (is (empty? (calls p "dig"))))))))
+
+(deftest go-to-roofed-pit-in-another-s-zone-names-the-zone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [zones [{:name "vault" :owner "Miles" :min [-3 60 -3] :max [3 70 3]}]
+              {:keys [out p seen]} (await (run-job! (merge in-pit {:blocks (assoc pit "0,63,0" "dirt")
+                                                                   :inventory [{:name "dirt" :count 5}]})
+                                                'jobs.movement.go-to {:pos [10 64 0] :range 1} zones))]
+          (is (= false (:arrived @out)))
+          (is (= {:step :none :why :zone} (:escalation @out)))
+          (is (empty? (events-of seen :go-to.escalated)))
           (is (empty? (calls p "dig"))))))))
 
 (deftest go-to-never-refills-a-stair-while-the-body-is-still-shut-in

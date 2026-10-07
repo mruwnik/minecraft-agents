@@ -95,8 +95,12 @@
   (let [{:keys [tries status result]} (:give-up (ctx/mem c))
         n (inc (:escalations (ctx/mem c) 0))
         feet (end/feet-cell c)
-        e (escape/choose (:primitives c) feet (mapv #(js/Math.floor (% pos)) [:x :y :z]) (may-dig-fn c)
-                       {:own? (own-placed-fn c) :skip (:skipped-steps (ctx/mem c) #{})})]
+        goal (mapv #(js/Math.floor (% pos)) [:x :y :z])
+        opts {:own? (own-placed-fn c) :skip (:skipped-steps (ctx/mem c) #{})}
+        e (escape/choose (:primitives c) feet goal (may-dig-fn c) opts)
+        e (if (and (= :none (:step e)) (not= :none (:step (escape/choose (:primitives c) feet goal (constantly true) opts))))
+            {:step :none :why :zone}
+            e)]
     (cond
       (> n max-escalations) (end/give-up! c pos tries status result {:escalation {:step :spent :n max-escalations}})
       (= :none (:step e)) (end/give-up! c pos tries status result {:escalation (or failed e)})
