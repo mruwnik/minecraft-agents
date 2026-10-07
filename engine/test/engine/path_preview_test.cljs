@@ -161,3 +161,31 @@
 
 (deftest the-food-arg-defaults-to-the-body-not-to-20
   (is (nil? (get-in pp/args [:food :default]))))
+
+(defn pond
+  "Land at y 63 from x 0 to 20 and z -10 to 10, with a pond of water over x 5-15 and z -8 to 8 (stone beneath at y 61)."
+  []
+  (merge (floor 0 -10 20 10) (box 0 61 -10 20 61 10 "stone") (box 5 62 -8 15 63 8 "water")))
+
+(deftest a-swim-price-flips-the-route-across-a-pond
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [route (fn ^:async route [costs] (:out (await (preview (pond) (cond-> {:pos [20 64 1] :range 0} costs (assoc :costs costs))))))
+              dear (await (route {:swim-h 5}))
+              default (await (route nil))
+              cheap (await (route {:swim-h 0.25}))]
+          (is (every? :found [dear default cheap]))
+          (is (nil? (re-find #"swims" (:summary dear))) "dear water: the way round on land")
+          (is (nil? (re-find #"swims" (:summary default))) "the default price: land is quicker too")
+          (is (re-find #"swims" (:summary cheap)) "cheap water: straight across")
+          (is (< (:seconds cheap) (:seconds default))))))))
+
+(deftest a-swim-price-under-the-walk-floor-is-refused
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [costs [{:swim-h 0.1} {:exit 0}]]
+          (let [{:keys [out]} (await (preview (pond) {:pos [20 64 1] :range 0 :costs costs}))]
+            (is (= :bad-costs (:reason out)) (pr-str costs))
+            (is (false? (:found out)))))))))
