@@ -25,7 +25,7 @@
 (defn ^:async scenario
   "Submit the job with args in a world; run n ticks 700 ms apart; the setup map."
   [args world n]
-  (let [s (h/setup world)]
+  (let [s (h/setup world 50)]
     (core/submit! (:eng s) (spec args) {})
     (dotimes [_ n]
       (swap! (:clock s) + 700)
@@ -59,6 +59,15 @@
           (is (= {:killed 4 :remaining 2 :babies 0 :reason :keep :skipped []}
                  (select-keys (done-event s) [:killed :remaining :babies :reason :skipped])))
           (is (finished? s)))))))
+
+(deftest one-call-kills-the-surplus-and-collects
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:keep 2} {:inventory h/sword :entities (mapv #(cow % (+ 2 %)) (range 1 5))} 1))]
+          (is (finished? s))
+          (is (= :keep (:reason (done-event s))))
+          (is (= 2 (get (inv s) "beef"))))))))
 
 (deftest the-check-declines-without-a-surplus
   (is (declines? {:keep 2} [(cow 1 3) (cow 2 4) (calf 3 2) (calf 4 2) (calf 5 2)]) "two adults and three calves")
