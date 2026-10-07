@@ -14,6 +14,7 @@
             [engine.triggers :as triggers]
             [jobs.lib.result :as r]
             [jobs.lib.cost :as cost]
+            [jobs.lib.reach :as reach]
             [jobs.lib.threats :as threats]
             [jobs.survival.retreat :as retreat]))
 
@@ -166,6 +167,38 @@
     (is (= {:best-gap 7 :since-gain 0 :sweeps 0} (step {:best-gap 5 :since-gain 2 :sweeps 1} 7)) "a gain resets both")
     (is (retreat/no-gain? {:since-gain 3} 3))
     (is (not (retreat/no-gain? {:since-gain 2} 3)))))
+
+(deftest a-step-with-no-hostile-near-is-no-gap-sample
+  (is (= {:best-gap 9 :since-gain 0 :sweeps 1} (retreat/note-gap {:best-gap 9 :since-gain 4 :sweeps 1} nil))
+      "the flight is succeeding: no-gain count resets, best gap and sweeps stay")
+  (is (= {:since-gain 0} (retreat/note-gap {} nil)) "no best gap is invented from nothing")
+  (is (= {:best-gap 6 :since-gain 0 :sweeps 0} (retreat/note-gap (retreat/note-gap {} nil) 6))))
+
+(deftest the-step-gap-is-the-nearest-hostile-however-they-are-ordered
+  (let [p (tu/fake-on-floor {:floor big-floor :entities [(zombie 1 20 {}) (zombie 2 6 {})]})
+        hostiles (vec (reach/known-hostiles p 30 {:ranged-radius 30}))]
+    (is (= 2 (count hostiles)))
+    (is (= 6 (retreat/nearest-gap p hostiles)))
+    (is (= 6 (retreat/nearest-gap p (vec (reverse hostiles)))))
+    (is (nil? (retreat/nearest-gap p [])))))
+
+(def sweeper
+  "A job that runs retreat's blocked! until it ends the job."
+  {:check (constantly true)
+   :round (fn ^:async sweeper-round [c]
+            (loop [n 1]
+              (let [r (await (retreat/blocked! c "test"))]
+                (if (= :again r) (recur (inc n)) r))))})
+
+(deftest blocked-twice-in-a-row-stops-cannot-escape
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (assoc-in (setup {}) [:eng :jobs 'sweeper] sweeper)]
+          (core/submit! eng '(sweeper) {})
+          (await (core/tick! eng))
+          (is (= [] (:list (core/state eng))) "two failed sweeps end the job")
+          (is (= 1 (count (filter #(= :retreat_blocked (:kind %)) @seen))) "warned once"))))))
 
 (deftest every-option-failing-in-two-sweeps-in-a-row-is-cannot-escape
   (is (not (retreat/cannot-escape? (retreat/count-sweep {}))))
