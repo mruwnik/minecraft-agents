@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Differ board helper (HTTP API; the differ UI has no auth).
 # Usage:
+#   tools/card help                        print this header
 #   tools/card id <prefix|title words...>   print the full card id
 #   tools/card show <id|prefix>             title, status, worker, last 3 notes
 #   tools/card note <id> <text>             add a note
@@ -97,8 +98,10 @@ case "$cmd" in
       esac
     done
     [ ${#words[@]} -ge 1 ] || die "usage: create <title words> [-d desc] [-p prio] [-t tag,tag]"
+    [[ "${words[0]}" != -* ]] || die "create: title must not start with '-' (got '${words[0]}'; see 'card help')"
     [[ "$prio" =~ ^-?[0-9]+$ ]] || die "create: priority must be an integer, got '$prio'"
     create_card "${words[*]}" "$desc" "$prio" "$tags"
     ;;
+  help|-h|--help) sed -n '2,/^set -/p' "$0" | sed '$d' ;;
   *) die "usage: card id|show|note|move|claim|create ... (see header of $0)" ;;
 esac

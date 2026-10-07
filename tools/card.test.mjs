@@ -92,3 +92,20 @@ test('id: title words still resolve when no id starts with them', async () => {
   assert.equal(r.code, 0, r.err)
   assert.equal(r.out.trim(), 'd5993c1c-0000-0000-0000-000000000000')
 })
+
+test('create refuses a title starting with a dash and sends nothing', async () => {
+  const r = await runCard(['create', '--help'], created)
+  assert.notEqual(r.code, 0)
+  assert.equal(r.requests.length, 0)
+  assert.match(r.err, /title/)
+})
+
+for (const flag of ['help', '-h', '--help']) {
+  test(`${flag} prints the usage header and sends nothing`, async () => {
+    const r = await runCard([flag], created)
+    assert.equal(r.code, 0, r.err)
+    assert.equal(r.requests.length, 0)
+    assert.match(r.out, /^# Differ board helper/m)
+    assert.match(r.out, /tools\/card create/)
+  })
+}
