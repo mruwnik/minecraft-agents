@@ -205,6 +205,32 @@
           (is (= 64 (js/Math.floor (second (at (:p no))))) "no drop: still on the plateau")
           (is (= 61 (js/Math.floor (second (at (:p dear))))) "a dear drop is still the only way"))))))
 
+(deftest go-to-drop-cost-false-still-takes-a-one-block-step-down
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [steps (merge (floor -2 -3 10 3) (floor 62 11 -3 47 3))
+              {:keys [p]} (await (go! {:blocks steps} {:pos [120 63 0] :drop-cost false :escalate false}))]
+          (is (= 63 (js/Math.floor (second (at p)))) "a 1-block step-down is no drop"))))))
+
+(deftest go-to-refuses-a-bad-drop-cost-with-a-reason
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [bad [-1 "x" true]]
+          (let [{:keys [eng p] :as s} (setup {:blocks flat})
+                out (atom :not-done)
+                eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent
+                                            (recording-parent out {:pos [6 64 0] :drop-cost bad})))]
+            (core/submit! eng '(recording-parent) {})
+            (await (tick-out! eng 10))
+            (is (= {:status :stopped :arrived false :reason :bad-drop-cost} (select-keys @out [:status :arrived :reason])) (pr-str bad))
+            (is (= [0 64 0] (at p)))
+            (is (= [:bad-drop-cost] (mapv :reason (events-of s :refused))))))
+        (doseq [ok [0 2 false]]
+          (let [{:keys [out]} (await (go! {:blocks flat} {:pos [6 64 0] :drop-cost ok}))]
+            (is (= {:arrived true} @out) (pr-str ok))))))))
+
 (deftest go-to-accepts-doors
   (async done
     (tu/run-async done

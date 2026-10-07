@@ -16,7 +16,7 @@
   "Walk to :pos ([x y z] or {:x :y :z}, fractions floored to the cell) until the body's cell is within :range cells of
   it (range 0: in that cell, 1: next to it). :place (a name such as :home, set by jobs.memory.set-place) walks to
   that place's recorded position instead of :pos; a name not in memory falls back to the shared marker of that name (jobs.lib.world/marker).
-  - Refused at once, before any walk: a :pos that is not one (:bad-pos), a :place that is not a valid name (:bad-name), a :tolls entry that is not {:x :y :z :factor} of finite numbers (:bad-tolls)
+  - Refused at once, before any walk: a :pos that is not one (:bad-pos), a :place that is not a valid name (:bad-name), a :tolls entry that is not {:x :y :z :factor} of finite numbers (:bad-tolls), a :drop-cost that is not a number >= 0 or false (:bad-drop-cost)
     or has no recorded position (:unknown-place), a body with no pathWorld sensing (:unsupported). Both give a :refused warn and {:status :stopped :arrived false :reason <it> :text}.
   - One call is one whole attempt: it plans and walks (jobs.lib.walk: slices of about 100 ms of search, walks of at
     most 60 s each) until it arrives or gives up. A search that needs more slices walks on toward where it has got
@@ -279,10 +279,14 @@
   [c]
   (let [parsed (target c)
         pos (:pos parsed)
-        tolls-problem (wworld/tolls-problem (:tolls (:args c)))]
+        tolls-problem (wworld/tolls-problem (:tolls (:args c)))
+        drop-cost (:drop-cost (:args c))]
     (cond
       (:reason parsed)
       (end/refuse! c parsed)
+
+      (not (or (nil? drop-cost) (false? drop-cost) (and (number? drop-cost) (js/isFinite drop-cost) (>= drop-cost 0))))
+      (end/refuse! c {:reason :bad-drop-cost :message (str ":drop-cost must be a number >= 0 or false, got " (pr-str drop-cost))})
 
       tolls-problem
       (end/refuse! c {:reason :bad-tolls :message tolls-problem})
