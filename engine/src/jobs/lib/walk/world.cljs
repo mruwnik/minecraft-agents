@@ -5,6 +5,7 @@
             [engine.path.blocks :as blocks]
             [engine.path.planner-tuned :as planner]
             [engine.path.space :as space]
+            [engine.ctx :as ctx]
             [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
             [jobs.lib.threats :as threats]))
@@ -146,11 +147,18 @@
     {:health (.-health self) :absorption (.-absorption self) :food (food-of c) :on-fire (.-onFire self)
      :effects (map #(.-name %) (array-seq (.-effects self)))}))
 
-(defn damage-budget
-  "The hp the body may spend walking now (jobs.lib.cost/damage-budget): its health, food and effects, and the job's
-  :min-health and :max-damage args (go-to's); with the ctx's :over-budget (go-to chose to go over it) the survivable-budget."
+(defn walk-settings
+  "The {:min-health :max-damage} the walk keeps: the body's memory :walk-settings entry (jobs.memory.remember, a long :ttl-s, :cap 1),
+  each overridden by the job's arg (go-to's) when given."
   [c]
-  ((if (:over-budget c) cost/survivable-budget cost/damage-budget) (damage-body c) (select-keys (:args c) [:min-health :max-damage])))
+  (let [body (if (:view c) (select-keys (:data (ctx/latest c :walk-settings)) [:min-health :max-damage]) {})]
+    (into body (remove (comp nil? val)) (select-keys (:args c) [:min-health :max-damage]))))
+
+(defn damage-budget
+  "The hp the body may spend walking now (jobs.lib.cost/damage-budget): its health, food and effects, and the walk-settings
+  :min-health and :max-damage (the job's args over the body's setting); with the ctx's :over-budget (go-to chose to go over it) the survivable-budget."
+  [c]
+  ((if (:over-budget c) cost/survivable-budget cost/damage-budget) (damage-body c) (walk-settings c)))
 
 (defn body-policy
   "executor/policy for the body: with the walk's food (food-of) 6 or less the client does not sprint, so :sprint is false (a corner jump past
@@ -162,7 +170,7 @@
   (let [self (.self (:primitives c))
         food (food-of c)]
     (cond-> (merge executor/policy
-                   (cost/fall-profile {:damage-budget (cost/survivable-budget (damage-body c) (select-keys (:args c) [:max-damage]))
+                   (cost/fall-profile {:damage-budget (cost/survivable-budget (damage-body c) (select-keys (walk-settings c) [:max-damage]))
                                        :equipment (cost/equipment-of (.-equipment self))})
                    {:damage-budget (damage-budget c)
                     :damage-weight (* (or (:hp-seconds (:args c)) cost/hp-seconds) (cost/health-scale (.-health self)))

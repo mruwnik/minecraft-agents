@@ -44,7 +44,7 @@
 (defn refused?
   "Whether the damage budget is why result found no way, and the caller left the budget to go-to (no :max-damage)."
   [c result]
-  (boolean (and (:damage-refused result) (nil? (:max-damage (:args c))))))
+  (boolean (and (:damage-refused result) (nil? (:max-damage (wworld/walk-settings c))))))
 
 (def heal-gap-ms "A wait for health older than this is a new one (the call may have been cut or ended)." 10000)
 
@@ -87,7 +87,8 @@
   when there is none. A refusal of the budget in a search that finds no whole way anyway (:damage-refused is only a move the
   budget turned away) is no reason to heal."
   [c pos range]
-  (let [{:keys [drop-cost max-damage]} (:args c)
+  (let [{:keys [drop-cost]} (:args c)
+        {:keys [max-damage]} (wworld/walk-settings c)
         policy (cond-> (assoc (wworld/body-policy c) :damage-budget (cost/survivable-budget (wworld/damage-body c) {:max-damage max-damage}))
                  (some? drop-cost) (assoc :drop-cost drop-cost))
         within (await (wplan/plan-within! c (wworld/path-world (:primitives c)) [(:x pos) (:y pos) (:z pos)] range walk/default-weight policy))
@@ -114,7 +115,7 @@
   does not exist either (the budget is not why); else heal (heal!, :continue), or go over the budget (:again), or :needs-health
   when that is not allowed (a :min-health, or already over) and healing is no more."
   [c pos range]
-  (let [{:keys [min-health]} (:args c)
+  (let [{:keys [min-health]} (wworld/walk-settings c)
         planned (await (probe! c pos range))]
     (when planned
       (let [now (ctx/now c)
