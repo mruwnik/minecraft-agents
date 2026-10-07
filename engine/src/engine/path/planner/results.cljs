@@ -159,7 +159,7 @@
           splashes (.filter (.map (.filter legs (fn [^js leg] (let [^js st (aget leg 0)] (and (== (.-move st) MOVE-DROP) ^boolean (.isWater s (.-x st) (.-y st) (.-z st)))))) depth) deep?)
           swum (js/Math.round (sum-hypot (.filter legs (fn [^js leg] (let [^js st (aget leg 0) m (.-move st)]
                                                                        (or (== m MOVE-SWIM) (and (== m MOVE-CORNER) (true? (unchecked-get st "swim")))))))))
-          lowest (- (.-c-air-supply s) (aget (.-peaks s) node))
+          lowest (js/Math.max 0 (- (.-c-air-supply s) (aget (.-peaks s) node))) ; a grace lets the peak pass the supply
           fall-hp (.reduce steps (fn [sum ^js st] (if (and (== (.-move st) MOVE-DROP) (some? (unchecked-get st "damage"))) (+ sum (unchecked-get st "damage")) sum)) 0)
           gaps (.-length (.filter legs (fn [^js leg] (== (.-move ^js (aget leg 0)) MOVE-GAP))))
           slides (count-steps steps 0 (fn [^js st _] (true? (.-corner st))))
@@ -205,7 +205,7 @@
                                  (recur (inc k) (+ total (if (some? opened) (.-length opened) 0))))
                                total))
                     :waterSeconds (aget (.-wsecs s) node)
-                    :airMin (- (.-c-air-supply s) (aget (.-peaks s) node))
+                    :airMin (js/Math.max 0 (- (.-c-air-supply s) (aget (.-peaks s) node)))
                     :waterDrop (loop [k 1 best 0]
                                  (if (< k n)
                                    (let [^js st (aget steps k) ^js p (aget steps (dec k))]

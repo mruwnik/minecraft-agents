@@ -237,6 +237,16 @@
   (is (not (found? (run-up (column 40) 40))))
   (is (found? (run-up (column 40) 40 {:costs {:airGrace 10}}))))
 
+;; the grace's seconds are free seconds, not air: under Respiration they do not stretch. A dive of B seconds passes when
+;; (B - grace) * drain <= limit, not B * drain <= limit + grace.
+(deftest grace-seconds-are-not-scaled-by-the-drain
+  (let [b (- (:airSupply costs) (cost (run-up (column 40) 40 {:costs {:airLimit 100}}) :airMin)) ; the dive's air seconds
+        drain 0.25 grace 10
+        right (fn [limit] (run-up (column 40) 40 {:costs {:airLimit limit :airDrain drain :airGrace grace}}))]
+    (is (< grace b) "the dive is longer than the grace")
+    (is (found? (right (+ (* (- b grace) drain) 0.5))) "just enough air after the free seconds")
+    (is (not (found? (right (- (* (- b grace) drain) 0.5)))) "the free seconds are not worth grace / drain of air")))
+
 (deftest drain-scales-the-lowest-air-reading
   (let [full (cost (run-up (column 20) 20) :airMin)
         half (cost (run-up (column 20) 20 {:costs {:airDrain 0.5}}) :airMin)]

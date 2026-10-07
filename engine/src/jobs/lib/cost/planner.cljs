@@ -1,7 +1,7 @@
 (ns jobs.lib.cost.planner
   "The prices go-to's :costs may override, in seconds: the planner's per-move costs (engine.path.planner.base/DEFAULT-COSTS
   holds the defaults, which apply to every price left out). A drop's price is go-to's :drop-cost, a hurt hp's :hp-seconds.
-  Left out: airSupply and airLimit (the body's breath, a fact, not a price), airDrain and airGrace (its gear, see air-profile) and dropFactor (:drop-cost)."
+  Left out: airSupply and airLimit (the body's breath, a fact, not a price), airDrain and airGrace (its helmet, see air-profile) and dropFactor (:drop-cost)."
   (:require [engine.path.blocks :as blocks]
             [jobs.lib.cost.armour :as armour]
             [engine.path.planner.base :as base]))
@@ -23,18 +23,16 @@
    :max-water-drop "maxWaterDrop" :dripleaf "dripleaf" :dripleaf-risk "dripleafRisk"})
 
 (defn air-profile
-  "{:air-drain :air-grace} of the body's gear and effects, a key only where it differs from no gear. equipment: self's
-  :equipment (cljs or JS); effects: self's [{:name :duration (ticks)}]. Respiration n drains 1/(n+1) a second (the expected
-  value); a turtle helmet gives 10 s and Water Breathing or Conduit Power the seconds left, in which the air does not drain."
-  [equipment effects]
+  "{:air-drain :air-grace} of the body's helmet, a key only where it differs from no gear. equipment: self's :equipment
+  (cljs or JS). Respiration n drains 1/(n+1) a second (the expected value); a turtle helmet gives each dive 10 s in which
+  the air does not drain. Effects are left out: a sensed duration never counts down, and Water Breathing is one pool the
+  walk to a dive uses up (Conduit Power lasts ~13 s once out of the conduit's range)."
+  [equipment]
   (let [head (get (armour/equipment-of equipment) "head")
-        respiration (->> (:enchants head) (some #(when (= "respiration" (:name %)) (:level %))))
-        free (cond-> (keep #(when (#{"water_breathing" "conduit_power"} (:name %)) (/ (or (:duration %) 0) 20)) effects)
-               (= "turtle_helmet" (:name head)) (conj 10))
-        grace (apply max 0 free)]
+        respiration (->> (:enchants head) (some #(when (= "respiration" (:name %)) (:level %))))]
     (cond-> {}
       (pos? (or respiration 0)) (assoc :air-drain (/ 1 (inc respiration)))
-      (pos? grace) (assoc :air-grace grace))))
+      (= "turtle_helmet" (:name head)) (assoc :air-grace 10))))
 
 (defn air-costs
   "The planner's options.costs airDrain and airGrace (a JS object) for a policy's :air-drain and :air-grace, those it has."

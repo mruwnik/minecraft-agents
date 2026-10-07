@@ -103,7 +103,7 @@
       (if (>= h 0) h (.swimAt s x y z))))
 
   ;; One swim or exit edge. The caller calls swimBegin, makes the edge (`base` + `extra` seconds) if it says true,
-  ;; then calls swimEnd. `base` seconds of swimming count for the air (times costs.airDrain, the expected drain: 1/(Respiration+1); airGrace adds free seconds to the limit: turtle helmet 10, Water Breathing or Conduit Power what is left), `extra` seconds of current do not.
+  ;; then calls swimEnd. `base` seconds of swimming count for the air (times costs.airDrain, the expected drain: 1/(Respiration+1); airGrace free seconds a dive, turtle helmet 10, add airGrace * airDrain to the limit), `extra` seconds of current do not.
   ;; src-sub: the body starts the move with its head in water. target-water: it ends in a water cell. A move that
   ;; ends with the head out of water breathes AIR-REFILL times its seconds back, none on the move in from under water.
   (swimBegin [s i ^boolean target-water x2 y2 z2 base extra ^boolean src-sub]
