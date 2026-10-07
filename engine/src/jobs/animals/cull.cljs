@@ -13,7 +13,7 @@
   adults. The check waits (:too-few) while :keep or fewer adults are in the bound. A started job always passes,
   so a cut job resumes.
 
-  Each round does one of these:
+  One call is the whole run, a loop of these:
   - With a target: the attack child fights it. It is booked killed, or skipped when attack gave up or lost it.
     :max-skips skips in a row end the job :gave-up (warn cull.gave-up).
   - After a kill: collect-drops picks up :drops (nil: the kind's entry in jobs.combat.hunt/drops, else every
@@ -137,7 +137,7 @@
       :else (do (hunt/book-outcome! c target)
                 (if (>= (:skips (ctx/mem c) 0) max-skips)
                   (give-up! c :gave-up)
-                  :continue)))))
+                  :again)))))
 
 (defn ^:async collect!
   "One round of the collect-drops child; done collecting when it is."
@@ -145,8 +145,9 @@
   (let [{:keys [mob collect-radius] :as a} (:args c)
         r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops
                                  {:radius collect-radius :filter (or (:drops a) (get hunt/drops mob))}))]
-    (when (= :done r) (ctx/update-mem! c dissoc :collecting))
-    :continue))
+    (if (= :done r)
+      (do (ctx/update-mem! c dissoc :collecting) :again)
+      :continue)))
 
 (defn ^:async search!
   "Nothing to attack: wait and look once more, then end :none."
@@ -156,9 +157,9 @@
     (if (>= misses 2)
       (give-up! c (or (animals/refusal c) :none))
       (do (await (ctx/act c :wait #js {:ms 1000}))
-          :continue))))
+          :again))))
 
-(defn ^:async round [c]
+(defn ^:async step [c]
   (let [now (ctx/now c)
         {:keys [keep] wanted :count} (:args c)]
     (ctx/update-mem! c update :started #(or % now))
@@ -176,3 +177,10 @@
               (nil? next-target) (await (search! c))
               :else (do (ctx/update-mem! c assoc :target (.-id next-target) :misses 0)
                         (await (attack! c))))))))))
+
+(defn ^:async round
+  "The whole attempt: loop the steps until one ends or yields."
+  [c]
+  (loop []
+    (let [r (await (step c))]
+      (if (= :again r) (recur) r))))
