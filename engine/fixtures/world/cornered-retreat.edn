@@ -1,6 +1,7 @@
 ;; Cornered retreat (card af4935b9, fix 540c61e5, hand-tested in the live-cornered run): a body at the closed end of a 1-wide
 ;; tunnel with a hostile coming along it seals itself in with carried blocks, else fights with the pickaxe, else the fist;
-;; it never places a block into the mob; on open ground it just walks away. Mobs are NoAI (they never hurt), helmeted
+;; it never places a block into the mob; on open ground it just walks away. The pickaxe case lines the tunnel with obsidian
+;; (a stone pickaxe digs none): with stone about it the body would dig a pit or pocket and hide instead of fight. Mobs are NoAI (they never hurt), helmeted
 ;; (no sun burn); the fight cases judge by the mob dying.
 ;; Stone mass x 2..30, z 10..22, y 0..4; tunnel 1x2 along z 16 from x 5 (closed end, body) to x 30.
 {:defaults
@@ -20,6 +21,9 @@
    :after [[:block [6 0 16] "cobblestone"] [:block [6 1 16] "cobblestone"] [:body-near [5.5 0 16.5] 1.5]]
    :limit-s 60}
   {:name "pickaxe-fight-when-no-blocks"
+   :plot {:floor "obsidian"}
+   :blocks [[:fill [4 0 15] [30 2 15] "obsidian"] [:fill [4 0 17] [30 2 17] "obsidian"]
+            [:fill [5 2 16] [30 2 16] "obsidian"] [:fill [4 0 16] [4 2 16] "obsidian"]]
    :body {:inventory [["stone_pickaxe" 1]]}
    :act [[:summon "zombie" [9.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:no-event {:source :job :kind :retreat_blocked} :for-s 40}]
