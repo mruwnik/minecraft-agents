@@ -148,7 +148,7 @@
 (defn dig-outcome
   "What one round of a jobs.blocks.dig child (its return r, result res, the reason its check waits with) means for the
   cell: :dug, :missing (nothing there), :continue (the child waits on the world), :refused (a zone, claim, plan or
-  hazard), :unreachable, :cannot, or the failed dig's :reason (:failed, :fluid-adjacent ...)."
+  hazard), :unreachable, :cannot, or the failed dig's primitive status (a keyword) or :reason (:fluid-adjacent ...)."
   [r res waits]
   (case r
     :continue :continue
@@ -157,7 +157,7 @@
       :dug :dug
       :already-clear :missing
       (:cannot :fluid) :cannot
-      (or (:reason res) :failed))))
+      (or (some-> (:primitive res) keyword) (:reason res) :failed))))
 
 (defn ^:async dig-cell!
   "Dig the one block at pos with a jobs.blocks.dig child in slot :dig (args merged over: no drops collected, no tool
@@ -188,7 +188,7 @@
 (defn place-outcome
   "What one round of a jobs.blocks.place child (its return r, result res, the reason its check waits with) means for the
   cell: :placed, :already (it holds the block), :continue, :refused (a zone, claim or plan), :need (the item is not
-  carried), :no-support, :unreachable, :occupied, or the failed place's :reason (:failed, :clear-failed ...)."
+  carried), :no-support, :unreachable, :occupied, or the failed place's primitive status (a keyword) or :reason (:clear-failed ...)."
   [r res waits]
   (case r
     :continue :continue
@@ -201,7 +201,7 @@
       :placed :placed
       :already :already
       :occupied :occupied
-      (or (:reason res) :failed))))
+      (or (some-> (:primitive res) keyword) (:reason res) :failed))))
 
 (defn ^:async place-cell!
   "Place item at pos with a jobs.blocks.place child in slot :place (args merged over: no fetch) and say what came of it

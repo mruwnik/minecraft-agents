@@ -36,7 +36,7 @@
   Ends with info blocks.dig.done and {:dug true|false :pos :block :reason :collected n}. :reason is :dug or
   :already-clear (air there, nothing done): done. Stopped ({:status :stopped}, :dug false): :fluid (a fluid is not
   dug), :fluid-adjacent (:on-fluid :fail, with :hazards and a :hint), :cannot (bedrock and the like), :bad-args (with
-  a blocks.dig.declined warn), or :failed (the primitive refused: a timeout, with its :status). Declined, the check
+  a blocks.dig.declined warn), or :failed (the primitive refused: a timeout, with its status as :primitive). Declined, the check
   then waits: :unreachable (the walk failed twice or the dig is out of reach), a zone or hazard that appeared during
   the call, or a tool still missing after the fetch (:no-tool). The caller decides whether to try again.
 
@@ -148,7 +148,7 @@
       "missing" (finish! c {:dug false :pos pos :block block :reason :already-clear})
       "cannot" (stop! c {:dug false :pos pos :block block :reason :cannot})
       "unreachable" :unreachable
-      (stop! c {:dug false :pos pos :block block :reason :failed :status status}))))
+      (stop! c {:dug false :pos pos :block block :reason :failed :primitive status}))))
 
 (def max-walks "Failed walks of one call before it declines :unreachable." 2)
 (def max-steps "Walks, digs and fetches of one call before it gives the round back with :continue." 12)

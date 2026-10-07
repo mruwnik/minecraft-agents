@@ -1,6 +1,7 @@
 (ns jobs.forestry.maintain
   (:require [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
+            [jobs.lib.blocks :as blocks]
             [jobs.lib.access :as access]
             [jobs.forestry.trees :as forestry]
             [jobs.lib.util :as u]
@@ -361,14 +362,16 @@
           (if-let [why (place-refusal c pos)]
             (do (leave! c pos :refused :why why)
                 :again)
-            (do (await (ctx/act c :equip (clj->js {:item item})))
-                (let [r (await (ctx/act c :place (clj->js {:pos pos :item item})))]
-                  (case (.-status r)
-                    "placed" (do (ctx/update-mem! c bump :planted)
-                                 (ctx/forget-where! c forestry/replant-kind #(= pos (:pos %))))
-                    ("no-item" "occupied") (fail-plant! c pos (keyword (.-status r)))
-                    (fail-plant! c pos :failed))
-                  :again))))))))
+            (let [outcome (await (blocks/place-cell! c pos item {:for-plan (:plan (:args c))
+                                                                 :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+              (case outcome
+                :continue :continue
+                (:placed :already) (do (ctx/update-mem! c bump :planted)
+                                       (ctx/forget-where! c forestry/replant-kind #(= pos (:pos %)))
+                                       :again)
+                (:no-item :occupied) (do (fail-plant! c pos outcome) :again)
+                :need (do (fail-plant! c pos :no-item) :again)
+                (do (fail-plant! c pos :failed) :again)))))))))
 
 (defn finish!
   "Step 5: say what was done and be done."

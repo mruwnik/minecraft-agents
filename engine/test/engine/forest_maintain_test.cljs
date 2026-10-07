@@ -205,6 +205,15 @@
           (is (= [] (lt/debts eng)) "fell-tree's replant debt is cleared by the planting")
           (is (= 1 (count (h/events-of seen :forest.done)))))))))
 
+(deftest every-sapling-goes-in-through-the-place-job
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (start oak-world {"forest" oak-cell})]
+          (await (tu/child-outcome eng job {:plan "forest"} 200))
+          (is (= 1 (count (places p))))
+          (is (= 1 (count (h/events-of seen :blocks.place.done)))))))))
+
 (deftest a-large-planned-tree-is-felled-and-replanted-cell-by-cell
   (async done
     (tu/run-async done

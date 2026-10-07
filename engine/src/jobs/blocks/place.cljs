@@ -30,7 +30,7 @@
   Ends with info blocks.place.done and {:placed true|false :pos :item :reason}. :reason is :placed or :already
   (the cell holds the block: nothing done): done. Stopped ({:status :stopped}, :placed false): :occupied (another
   block fills the cell), :clear-failed (the plant could not be dug), :bad-args (with a blocks.place.declined
-  warn) or :failed (the primitive refused, with its :status). Declined, the check then waits: :unreachable (the walk failed twice or the place is out of reach), a zone
+  warn) or :failed (the primitive refused, with its status as :primitive). Declined, the check then waits: :unreachable (the walk failed twice or the place is out of reach), a zone
   or other cell reason that appeared during the call, or an item still missing after the fetch (:need). The caller
   decides whether to try again.
 
@@ -165,7 +165,7 @@
     (case status
       "placed" (finish! c {:placed true :pos pos :item item :reason :placed})
       "unreachable" :unreachable
-      (stop! c {:placed false :pos pos :item item :reason :failed :status status}))))
+      (stop! c {:placed false :pos pos :item item :reason :failed :primitive status}))))
 
 (def max-walks "Failed walks of one call before it declines :unreachable." 2)
 (def max-steps "Walks, clears and fetches of one call before it gives the round back with :continue." 12)
