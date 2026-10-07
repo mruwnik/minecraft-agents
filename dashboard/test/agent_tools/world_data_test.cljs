@@ -47,6 +47,30 @@
                       (.rmSync fs dir #js {:recursive true :force true})
                       (done)))))))
 
+(deftest an-edit-landing-during-a-scan-is-found-by-the-next-poll
+  (async done
+    (let [{:keys [dir ctx]} (fixture-ctx)
+          zones (.join path (:world-dir ctx) "zones.edn")
+          real-scan data/scan
+          cursor (atom nil)]
+      (-> (data/read-changes ctx)
+          (.then (fn [r] (reset! cursor (:cursor r))
+                   ;; a source change that adds no object, so the next poll scans
+                   (.writeFileSync fs (.join path (:world-dir ctx) "claims.edn") "[]")
+                   (set! data/scan (fn [c l]
+                                     (let [scanned (real-scan c l)]
+                                       (.writeFileSync fs zones "[{:name \"z1\" :min [0 0 0] :max [1 1 1]}]")
+                                       scanned)))
+                   (data/read-changes ctx {:cursor @cursor})))
+          (.then (fn [r] (reset! cursor (:cursor r))
+                   (data/read-changes ctx {:cursor @cursor})))
+          (.then (fn [r] (is (= 1 (count (:items r))) "the edit made during the scan is not recorded as seen")))
+          (.catch (fn [e] (is (nil? e) (str e))))
+          (.finally (fn []
+                      (set! data/scan real-scan)
+                      (.rmSync fs dir #js {:recursive true :force true})
+                      (done)))))))
+
 (defn message-of [thunk]
   (try (thunk) nil (catch :default e (.-message e))))
 

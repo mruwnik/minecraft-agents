@@ -466,10 +466,14 @@
            (changes-since (load-ledger ctx) cursor limit filters)
            (transaction ctx
              (fn [l]
-               (let [scanned (scan ctx l)
+               (let [before (source-fingerprint ctx)
+                     scanned (scan ctx l)
                      _ (when (or (not= scanned l) (not (.existsSync fs (ledger-file ctx))))
-                         (atomic-text (ledger-file ctx) (str (write-edn scanned) "\n")))]
-                 (swap! scanned-fingerprints assoc (ledger-file ctx) (source-fingerprint ctx))
+                         (atomic-text (ledger-file ctx) (str (write-edn scanned) "\n")))
+                     ledger (ledger-file ctx)]
+                 ;; sources are stamped before the scan reads them; only the ledger (our own write) is stamped after
+                 (swap! scanned-fingerprints assoc ledger
+                        (mapv (fn [[f sig :as entry]] (if (= f ledger) [f (stat-sig ledger)] entry)) before))
                  (changes-since scanned cursor limit filters))))))))))
 (defn raw-bound
   ([value] (raw-bound value 65536))
