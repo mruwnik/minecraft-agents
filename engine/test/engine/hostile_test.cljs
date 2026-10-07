@@ -840,3 +840,19 @@
         [bx] (let [pos (.-pos (.self p))] [(.-x pos)])]
     (is (= "zombie" (:mob f)))
     (is (= (+ bx 4) (:x (:mob-pos f))) "the rough spot 4 east, not the exact 3")))
+
+(deftest fight-back-looks-toward-the-heard-mob-not-a-seen-one-past-the-leash
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory sword
+                                      :entities [(zombie 7 -10 0) (assoc (zombie 8 3 0) :visible false)]})
+              looks (atom [])
+              args {:range 12 :ranged-range 16 :leash 0 :min-health 8 :weapons [] :skip [] :attack-gap-ms 600}
+              c {:primitives p :args args :view #(mem/view (:store eng)) :root nil :slots []
+                 :now (constantly 0) :update-mem (fn [_ _] nil)
+                 :act (fn [k a] (when (= :look k) (swap! looks conj a)) (js/Promise.resolve nil))}
+              r (await ((:round (get registry/jobs 'jobs.survival.fight-back)) c))]
+          (is (= :declined r) "the seen zombie is past the leash, the heard one is never fought")
+          (is (= 1 (count @looks)))
+          (is (pos? (.-x (.-pos (first @looks)))) "the look points east at the heard mob, not west at the seen one"))))))

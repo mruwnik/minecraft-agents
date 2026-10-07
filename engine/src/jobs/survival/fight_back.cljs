@@ -123,10 +123,10 @@
         last-attack (:last-attack (ctx/mem c))]
     (when-not (:start (ctx/mem c)) (ctx/update-mem! c assoc :start (u/self-pos c)))
     (cond
-      (nil? target) (if-let [heard (first (in-range c))]
+      (nil? target) (if-let [heard (first (remove reach/seen-only? (in-range c)))]
                       (do (await (ctx/act c :look (let [{:keys [x y z]} (reach/mob-pos p heard)] #js {:pos #js {:x x :y (+ 1 y) :z z}})))
                           :declined)
-                      :done)
+                      (if (seq (in-range c)) :declined :done))
       (and last-attack (< (- (ctx/now c) last-attack) attack-gap-ms)) (do (await (watch/watch! c {})) :continue)
       :else
       (do (await (combat/equip-best! c (combat/best-weapon p weapons)))
