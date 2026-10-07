@@ -21,7 +21,7 @@
     a cap within 3 blocks over the head when it is natural (jobs.lib.escape/natural?), not protected and not sand or gravel,
     one cell a pass, at most 3 digs (zones respected, trespass only as a last resort). Kelp, seagrass and upward bubble columns
     count as water; a downward (drag) bubble column is never swum into or crossed by a side step or a straight walk (nor
-    its corner cut); a go-to child's planner prices one (go-to :costs :drag-column) and routes round it. Air is looked for only in cells the body has seen or looked at (perception memory), never through
+    its corner cut); a go-to child's planner rides one to its bottom and swims back up, so it routes round one when it can. Air is looked for only in cells the body has seen or looked at (perception memory), never through
     stone: it looks up the own column first, and when no block is seen over it (a dark column learns nothing) swims
     up it at once; only a seen block over the own column sends the looks to the neighbour columns.
   - Enclosed (head cell holds a suffocating block, see jobs.lib.breath): step to a side cell with room

@@ -177,7 +177,7 @@
                   tight (or tight-src ^boolean (.tightAt s x2 y z2))
                   base (.-c-swim-h s)
                   extra (if (== (aget (.-tbl-flowing s) (.stateAt ^js (.-snapshot s) x2 y z2)) 1) (.-c-current s) 0)
-                  sec (+ base extra (.dragPrice s x2 y z2))]
+                  sec (+ base extra)]
               (when ^boolean (.swimBegin s i true x2 y z2 base extra false)
                 (if tight
                   (.tightMove s i x y z h region c x2 y z2 0 MOVE-SWIM sec risk 0 SNAP SNAP)

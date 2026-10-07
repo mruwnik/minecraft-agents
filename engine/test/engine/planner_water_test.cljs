@@ -140,9 +140,9 @@
     (is (> slow (+ base 10)))))
 
 (deftest default-water-costs-are-the-stated-ones
-  (is (= {:swimH 0.5 :swimUp 0.3 :swimDown 0.35 :exit 0.6 :current 0.3 :bubbleUp 0.08 :bubbleDown 0.12 :dragColumn 30
+  (is (= {:swimH 0.5 :swimUp 0.3 :swimDown 0.35 :exit 0.6 :current 0.3 :bubbleUp 0.08 :bubbleDown 0.12
           :airSupply 15 :airLimit 12 :maxWaterDrop 64 :dripleaf 0.2}
-         (select-keys costs [:swimH :swimUp :swimDown :exit :current :bubbleUp :bubbleDown :dragColumn :airSupply :airLimit
+         (select-keys costs [:swimH :swimUp :swimDown :exit :current :bubbleUp :bubbleDown :airSupply :airLimit
                              :maxWaterDrop :dripleaf]))))
 
 (deftest start-in-the-water-way-out-is-an-exit
@@ -440,25 +440,52 @@
     (is (found? r))
     (is (re-find #"magma column down" (summary r)))))
 
-;; ---- a drag column across a channel ----
+;; ---- a drag column: a fast forced descent to its bottom ----
 
 (defn channel
-  "A 1-wide water channel x 3..9 (y 64..66, z 1) in stone, air over it, no bank to climb out onto; a bubble column (drag as given) across it at x 6."
-  [drag]
-  (world [[2 64 0 10 69 2 "stone"]
-          [3 64 1 9 66 1 "water"]
-          [3 67 1 9 69 1 "air"]
-          [6 63 1 6 63 1 (if drag "magma_block" "soul_sand")]
-          [6 64 1 6 66 1 "bubble_column" {:drag drag}]]))
+  "A 1-wide water channel x 3..9 (y 64..63+depth, z 1) in stone, air over it, no bank to climb out onto; a bubble column
+  (drag as given) across it at x 6."
+  ([drag] (channel drag 3))
+  ([drag depth]
+   (let [top (+ 63 depth)]
+     (world [[2 64 0 10 (+ top 3) 2 "stone"]
+             [3 64 1 9 top 1 "water"]
+             [3 (inc top) 1 9 (+ top 3) 1 "air"]
+             [6 63 1 6 63 1 (if drag "magma_block" "soul_sand")]
+             [6 64 1 6 top 1 "bubble_column" {:drag drag}]]))))
 
-(deftest a-drag-column-across-a-channel-is-crossed-only-at-its-price
-  (let [goal (near 9 66 1 0)
-        from {:x 3 :y 66 :z 1}
-        through (run (channel true) from goal)]
-    (is (found? through) "with no other way the dragging column is crossed")
-    (is (>= (cost through :seconds) (:dragColumn costs)) "at the dragColumn price")
-    (is (< (cost (run (channel true) from goal {:costs {:dragColumn 0}}) :seconds) (:dragColumn costs)) "a caller may lower it")
-    (is (< (cost (run (channel false) from goal) :seconds) (:dragColumn costs)) "a lifting column costs nothing extra")))
+(defn in-column [r] (filterv #(= [6 1] [(:x %) (:z %)]) (steps r)))
+(defn leaves-column-at [r] (some (fn [[a b]] (when (and (= [6 1] [(:x a) (:z a)]) (not= [6 1] [(:x b) (:z b)])) [a b]))
+                                 (partition 2 1 (steps r))))
+
+(deftest a-drag-column-across-a-channel-is-ridden-to-its-bottom
+  (let [r (run (channel true) {:x 3 :y 66 :z 1} (near 9 66 1 0))
+        [out next] (leaves-column-at r)]
+    (is (found? r) "with no other way the dragging column is crossed")
+    (is (= 64 (:y out) (:y next)) "the body leaves it only at its bottom, over the magma")
+    (is (= [66 65 64] (mapv :y (in-column r))) "pulled down a block at a time, never sideways or up inside it")
+    (is (re-find #"magma column down" (summary r)))))
+
+(deftest a-drag-column-descent-costs-bubble-down-a-block
+  (let [from {:x 3 :y 66 :z 1}
+        goal (near 9 66 1 0)
+        ridden (run (channel true) from goal)
+        dear (run (channel true) from goal {:costs {:bubbleDown 1.12}})]
+    (is (< (cost ridden :seconds) 15) "no flat price")
+    (is (= [66 65 64] (mapv :y (in-column ridden))) "a fast descent is ridden")
+    (is (= [64] (mapv :y (in-column dear))) "a dear one is swum down beside it, the column crossed at its bottom")))
+
+(deftest a-body-in-a-drag-column-goes-down-first
+  (let [r (run (channel true) {:x 6 :y 66 :z 1} (near 9 66 1 0))]
+    (is (found? r))
+    (is (= 64 (:y (first (leaves-column-at r)))))))
+
+(deftest a-drag-column-whose-swim-back-up-is-out-of-breath-is-not-crossed
+  (let [from {:x 3 :y 108 :z 1}
+        goal (near 9 108 1 0)]
+    (is (not (found? (run (channel true 45) from goal))) "44 blocks back up under water is over the air limit")
+    (is (found? (run (channel true 45) from goal {:costs {:airLimit 20}})) "a caller with more breath crosses it")
+    (is (found? (run (channel false 45) from goal)) "a lifting column is swum across")))
 
 (defn wide-channel
   "channel 3 wide (z 0..2), a dragging column in its middle row only at x 6."
@@ -472,8 +499,7 @@
 (deftest a-drag-column-with-a-way-round-is-swum-round
   (let [r (run (wide-channel) {:x 3 :y 66 :z 1} (near 9 66 1 0))]
     (is (found? r))
-    (is (not-any? #(= [6 1] [(:x %) (:z %)]) (steps r)) "never in the dragging column")
-    (is (< (cost r :seconds) (:dragColumn costs)) "the way round pays no drag price")))
+    (is (not-any? #(= [6 1] [(:x %) (:z %)]) (steps r)) "never in the dragging column")))
 
 (defn drag-corner
   "Water x 3..5 at z 0 and x 6..9 at z 1 in stone, air over the water; a dragging column at (6, z 0): the only ways from one
@@ -487,8 +513,21 @@
           [6 63 0 6 63 0 "magma_block"]
           [6 64 0 6 66 0 "bubble_column" {:drag true}]]))
 
-(deftest a-diagonal-swim-brushing-a-drag-column-pays-its-price
-  (let [from {:x 3 :y 66 :z 0}
-        goal (near 9 66 1 0)]
-    (is (>= (cost (run (drag-corner) from goal) :seconds) (:dragColumn costs)))
-    (is (< (cost (run (drag-corner) from goal {:costs {:dragColumn 0}}) :seconds) (:dragColumn costs)))))
+(deftest a-diagonal-swim-never-brushes-a-drag-column
+  (let [r (run (drag-corner) {:x 3 :y 66 :z 0} (near 9 66 1 0))
+        pairs (partition 2 1 (steps r))]
+    (is (found? r))
+    (is (not-any? (fn [[a b]] (and (= [5 0] [(:x a) (:z a)]) (= [6 1] [(:x b) (:z b)]))) pairs) "no diagonal past the column")
+    (is (some #(= [6 64 0] (xyz %)) (steps r)) "the way is down the column and out at its bottom")))
+
+(deftest a-drop-into-a-drag-column-top-rides-it-to-the-bottom
+  (let [snapshot (world [[2 64 0 10 72 2 "stone"]
+                         [3 64 1 9 66 1 "water"]
+                         [3 67 1 9 72 1 "air"]
+                         [5 64 1 5 68 1 "stone"]
+                         [6 63 1 6 63 1 "magma_block"]
+                         [6 64 1 6 66 1 "bubble_column" {:drag true}]])
+        r (run snapshot {:x 5 :y 69 :z 1} (near 9 66 1 0))]
+    (is (found? r) "off the pillar into the column's top")
+    (is (= [66 65 64] (mapv :y (in-column r))))
+    (is (= 64 (:y (first (leaves-column-at r)))))))

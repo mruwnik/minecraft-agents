@@ -41,24 +41,11 @@
    "east48" (partial shift-east 48)
    "xz" planar})
 
-(def sealed-by-the-obstacle
-  "sample courses whose start lane is sealed by the course's obstacle between glass walls, so a goal east of the lane
-  answers start-enclosed (the JS planner: goal-unloaded); the other samples reach open ground and keep the recorded reason"
-  #{"door-closed" "iron-button" "plate-door" "gate-airlock" "ladder-up" "lad-trap-closed" "bubble-up" "water20-up"
-    "drop8-water" "lake20" "lake20-wade" "cocoa-a2-both-feethead" "fence-diag" "top-slabs" "lava-walkway" "dripleaf"
-    "portal" "rand50-we" "tunnel-corner" "stairs-slabs" "drop12" "gap4" "iron-door"})
-
-(def sealed-goals
-  "per goal variant, the sample courses allowed to answer start-enclosed"
-  {"east400" (into sealed-by-the-obstacle #{"ladder-down" "magma-down" "waterfall-down"})
-   "east48" sealed-by-the-obstacle})
-
 (deftest goal-variants-agree-with-the-js-planner
   (doseq [[variant make] goal-variants]
     (is (= [] (disagreements (samples)
                              (fn [name] (let [{:keys [snapshot query]} (make (course-query name))] (pf/plan snapshot query)))
-                             (fn [name] (get-in @recorded [:goals (keyword (str name "|" variant))]))
-                             (sealed-goals variant #{})))
+                             (fn [name] (get-in @recorded [:goals (keyword (str name "|" variant))]))))
         variant)))
 
 (deftest a-goal-in-an-unloaded-column-ends-in-goal-unloaded-on-some-courses

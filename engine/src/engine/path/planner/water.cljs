@@ -169,10 +169,8 @@
                   (.verticalMove s i x y z 0 region y2 0 move (+ base extra) risk 0)
                   (.swimEnd s)))))))))
 
-  ;; the price of a sideways move at level y into or past the cell (x, y, z): dragColumn for a dragging column (it pulls the
-  ;; body down to its magma floor), unless the goal is well below it (the magma-down route); 0 otherwise
-  (dragPrice [s x y z]
-    (if (and (== (aget (.-tbl-bubble s) (.stateAt s x y z)) 2) (not (< (.-goal-y s) (- y 1)))) (.-c-drag-column s) 0))
+  (dragAt [s x y z]
+    (== (aget (.-tbl-bubble s) (.stateAt s x y z)) 2))
 
   ;; a sideways swim move into the water cell beside (x, y, z)
   (swimSideways [s i x y z region c x2 z2 ^boolean tight-src ^boolean src-sub]
@@ -180,7 +178,7 @@
           tight (or tight-src ^boolean (.tightAt s x2 y z2))
           base (.-c-swim-h s)
           extra (.currentAt s x2 y z2)
-          sec (+ base extra (.dragPrice s x2 y z2))]
+          sec (+ base extra)]
       (when ^boolean (.swimBegin s i true x2 y z2 base extra src-sub)
         (if tight
           (.tightMove s i x y z 0 region c x2 y z2 0 MOVE-SWIM sec risk 0 SNAP SNAP)
@@ -215,19 +213,18 @@
               hi (+ lo BODY)
               sa (.side s (+ x dx) z lo hi)
               sb (.side s x (+ z dz) lo hi)]
-          (when-not (or (== sa 2) (== sb 2) (and (== sa 1) (== sb 1)))
+          ;; the body brushes both side cells: a dragging column there would pull it in
+          (when-not (or (== sa 2) (== sb 2) (and (== sa 1) (== sb 1)) ^boolean (.dragAt s x2 y z) ^boolean (.dragAt s x y z2))
             (let [slide (+ sa sb)
                   risk (.swimRisk s x2 y z2)
                   base (+ (* (.-c-swim-h s) SQRT2) (* slide CORNER-S))
-                  extra (.currentAt s x2 y z2)
-                  ;; the body brushes both side cells: a dragging column there pulls it in as well
-                  drag (js/Math.max (.dragPrice s x2 y z2) (.dragPrice s x2 y z) (.dragPrice s x y z2))]
+                  extra (.currentAt s x2 y z2)]
               (when ^boolean (.swimBegin s i true x2 y z2 base extra src-sub)
-                (.edge s x2 y z2 0 (if (zero? slide) MOVE-SWIM MOVE-CORNER) i (+ base extra drag) risk 0 slide 0)
+                (.edge s x2 y z2 0 (if (zero? slide) MOVE-SWIM MOVE-CORNER) i (+ base extra) risk 0 slide 0)
                 (.swimEnd s))))))))
 
   ;; a node floating in water: up, down, sideways and onto the bank; sideways moves and exits may cross tight cells (masks), a
-  ;; diagonal never does
+  ;; diagonal never does. A dragging column pulls the body down to its bottom (over the magma): above that its one move is down.
   (expandSwim [s x y z i region]
     (let [tight-src ^boolean (.tightAt s x y z)
           src-b (aget (.-tbl-bubble s) (.stateAt s x y z))
@@ -235,28 +232,29 @@
           src-surface (if src-sub (.surfaceY s x y z) y)]
       (.swimVertical s x y z i region src-b src-sub 1)
       (.swimVertical s x y z i region src-b src-sub -1)
-      ;; Out of the water onto a bank. A floating body gets out onto land whose stand height is at most the water's
-      ;; top face + 1/16 (flush, or a 15/16 top), never onto land one higher. A body standing on a floor in water 1
-      ;; deep is not floating: it walks and jumps out by the ordinary rules.
-      (let [top-water ^boolean (.isWater s x (inc y) z)
-            near-surface (or (not top-water) (not ^boolean (.isWater s x (+ y 2) z)))
-            yt (if top-water (inc y) y)
-            last-ty (if near-surface (js/Math.max y (inc yt)) y)
-            max-stand (+ (* (inc yt) 16) EXIT-SLACK)
-            wading ^boolean (.standsInWater s x y z)]
-        (loop [c 0]
-          (when (< c 4)
-            (let [x2 (+ x (aget (.-adx s) c))
-                  z2 (+ z (aget (.-adz s) c))]
-              (cond
-                (>= (.swimAt s x2 y z2) 0)
-                (when-not ^boolean (.refuses s x2 y z2 src-surface)
-                  (.swimSideways s i x y z region c x2 z2 tight-src src-sub))
-                wading (.wadeOut s i x y z region c x2 z2 tight-src)
-                :else (.swimExit s i x y z region c x2 z2 tight-src src-sub last-ty max-stand)))
-            (recur (inc c)))))
-      (when-not tight-src
-        (loop [c 4]
-          (when (< c 8)
-            (.swimDiagonal s i x y z c src-sub src-surface)
-            (recur (inc c))))))))
+      (when-not (and (== src-b 2) (>= (.swimAt s x (dec y) z) 0))
+        ;; Out of the water onto a bank. A floating body gets out onto land whose stand height is at most the water's
+        ;; top face + 1/16 (flush, or a 15/16 top), never onto land one higher. A body standing on a floor in water 1
+        ;; deep is not floating: it walks and jumps out by the ordinary rules.
+        (let [top-water ^boolean (.isWater s x (inc y) z)
+              near-surface (or (not top-water) (not ^boolean (.isWater s x (+ y 2) z)))
+              yt (if top-water (inc y) y)
+              last-ty (if near-surface (js/Math.max y (inc yt)) y)
+              max-stand (+ (* (inc yt) 16) EXIT-SLACK)
+              wading ^boolean (.standsInWater s x y z)]
+          (loop [c 0]
+            (when (< c 4)
+              (let [x2 (+ x (aget (.-adx s) c))
+                    z2 (+ z (aget (.-adz s) c))]
+                (cond
+                  (>= (.swimAt s x2 y z2) 0)
+                  (when-not ^boolean (.refuses s x2 y z2 src-surface)
+                    (.swimSideways s i x y z region c x2 z2 tight-src src-sub))
+                  wading (.wadeOut s i x y z region c x2 z2 tight-src)
+                  :else (.swimExit s i x y z region c x2 z2 tight-src src-sub last-ty max-stand)))
+              (recur (inc c)))))
+        (when-not tight-src
+          (loop [c 4]
+            (when (< c 8)
+              (.swimDiagonal s i x y z c src-sub src-surface)
+              (recur (inc c)))))))))

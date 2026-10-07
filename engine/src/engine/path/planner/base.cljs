@@ -58,7 +58,6 @@
   "every cost the policy might want to change, in seconds; options.costs overrides"
   #js {:climbUp 0.43 :climbDown 0.33 :jumpClimb 0.5 :open 1.0 :openRedstone 1.5 :openLever 6 :openPlate 0 :besideMagmaColumn 1
        :swimH 0.5 :swimUp 0.3 :swimDown 0.35 :exit 0.6 :current 0.3 :bubbleUp 0.08 :bubbleDown 0.12
-       :dragColumn 30
        :airSupply 15 :airLimit 12 :maxWaterDrop 64 :dripleaf 0.2 :dripleafRisk 0.5
        :dropFactor 1})
 

@@ -4,6 +4,7 @@
   see (unloaded, or out of the search's span)."
   (:require [cljs.test :refer [deftest is are]]
             [engine.path.planner-tuned :as planner]
+            [engine.planner-fixture :as pf]
             [engine.test-util :as tu :refer [box floor]]))
 
 (defn plan-over
@@ -103,14 +104,31 @@
           options [{:maxNodes 1} {:preFlood 0 :floodAfter 0}]]
     (is (not (false-proofs (:reason (plan-over spec goal options)))) (pr-str goal options))))
 
-;; water is a way in the flood follows (see a-sealed-platform-holding-a-pool-is-cut-off); a bubble column it cannot, and a
-;; wall cell of water is a way in the search takes
+;; water is a way in the flood follows (see a-sealed-platform-holding-a-pool-is-cut-off), and a wall cell of water is a way
+;; in the search takes
 (deftest water-on-the-way-in-is-never-enclosed
   (are [spec goal options] (not (false-proofs (:reason (plan-over spec goal options))))
     (way-in {"5,64,0" "water"}) [7 64 0] {:maxNodes 1}
-    (way-in {"5,64,0" "water"}) [7 64 0] {:preFlood 0 :floodAfter 0}
-    (up-to-deck "bubble_column") [6 67 0] {:maxNodes 1}
-    (up-to-deck "bubble_column") [6 67 0] {:preFlood 0 :floodAfter 0}))
+    (way-in {"5,64,0" "water"}) [7 64 0] {:preFlood 0 :floodAfter 0}))
+
+(defn deck-over-bubbles
+  "up-to-deck's deck with a bubble column (lifting over soul sand, or dragging over magma) as its only way up (the fake
+  world's path snapshot knows no bubble column props)."
+  [drag]
+  (pf/snapshot {:fill [[-2 60 -2 12 63 4 "stone"] [2 66 -1 8 66 1 "stone"] [3 64 -1 3 66 -1 "stone"]
+                       [3 63 0 3 63 0 (if drag "magma_block" "soul_sand")] [3 64 0 3 66 0 "bubble_column" {:drag drag}]]}))
+
+(defn reason-over-bubbles [drag options]
+  (:reason (pf/plan (deck-over-bubbles drag) {:from {:x 0 :y 64 :z 0} :goal {:kind "near" :x 6 :y 67 :z 0 :range 0}} options)))
+
+;; a lifting column is a way in the flood cannot follow; a dragging one pulls the body down to its bottom, so its top cell is
+;; no way onto the deck
+(deftest a-deck-up-a-bubble-column-is-enclosed-only-when-the-column-drags
+  (are [drag options proved] (= proved (= "goal-enclosed" (reason-over-bubbles drag options)))
+    false {:maxNodes 1} false
+    false {:preFlood 0 :floodAfter 0} false
+    true {:maxNodes 1} true
+    true {:preFlood 0 :floodAfter 0} true))
 
 ;; the search never enters cobweb or powder snow (AVOID): behind them the goal is walled in, and the flood says so
 (deftest a-way-in-the-search-refuses-is-enclosed
