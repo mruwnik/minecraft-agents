@@ -316,12 +316,15 @@
           (is (= [] (the-ledger eng)))
           (is (= 3 (count (:removed @out)))))))))
 
-(deftest a-ledger-block-on-an-unseen-cell-is-never-dug
-  (let [p (d/sensing {:blocks d/ground})
-        cell [5 60 0]
-        s (step :feet [0 65 0] :entries [(entry cell)] :block-at (access/sensed-at p blocks/hidden-guess))]
-    (is (true? (look/unknown? p cell)))
-    (is (not= :dig (:step s)) "an unseen cell reads as rock, not as the body's own block: no dig")))
+(deftest an-unseen-cell-reads-as-the-hidden-guess-and-a-seen-one-as-its-block
+  (let [p (d/sensing {:blocks (assoc d/ground "0,64,0" "dirt")})
+        block-at (access/sensed-at p blocks/hidden-guess)]
+    (is (true? (look/unknown? p [3 64 0])))
+    (is (= blocks/hidden-guess (block-at [3 64 0])) "unseen: the guess, not the entry's block")
+    (.feel p (clj->js {:x 0 :y 64 :z 0}))
+    (.glance p (clj->js {:x 0 :y 64 :z 0}))
+    (is (false? (look/unknown? p [0 64 0])))
+    (is (= "dirt" (block-at [0 64 0])))))
 
 (deftest a-swapped-or-vanished-cell-is-never-dug-and-its-entry-dropped-with-a-note
   (async done
