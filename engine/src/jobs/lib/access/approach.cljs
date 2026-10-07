@@ -7,7 +7,7 @@
     :targets    set of [x y z] cells that must all be within reach of the eye
     :feet       the body's feet cell
     :reach      eye-to-centre distance a target is worked from (the caller's constant, e.g. dig-reach)
-    :radius     columns searched around the targets, default 3; widened to max-radius only when nothing is found
+    :radius     columns searched around the targets, default 3; widened to max-radius whenever nothing usable is found
     :max-height tallest pillar considered, default 10
 
   Output, the first that applies:
@@ -16,8 +16,10 @@
                           from the base up (jobs.access.pillar), :stand is the feet cell on top
     {:reason :not-loaded} a target is not loaded
     {:reason :no-base}    no ground to pillar from within the radius
-    {:reason :zone}       every base is refused by zones, claims or footprints
+    {:reason :zone}       every base up to max-radius is refused by zones, claims or footprints
     {:reason :no-stand}   ground and permission exist but no column gives a stand (headroom, too tall)
+
+  A :stand cell is not zone-checked: walking there is go-to's business.
 
   Ranking: walking a block costs 1, placing a block pillar-cost. A stand needs no placement, so any stand wins over a
   pillar."
@@ -128,6 +130,6 @@
       {:reason :not-loaded}
       (loop [r (or radius default-radius)]
         (let [res (plan-at-radius in r)]
-          (if (and (:reason res) (< r max-radius) (not= :zone (:reason res)))
+          (if (and (:reason res) (< r max-radius))
             (recur (inc r))
             res))))))

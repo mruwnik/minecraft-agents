@@ -57,3 +57,22 @@
   {:block-at (constantly "air")} :no-base
   {:block-at (fn [p] (when-not (= p [0 72 0]) "air"))} :not-loaded
   {:max-height 2} :no-stand)
+
+(def inner-zone {:name "z" :owner "other" :allow #{} :min [-3 0 -3] :max [3 100 3]})
+
+(deftest a-zone-over-radius-3-widens-to-a-free-base
+  (let [p (:pillar (plan :zones [inner-zone]))]
+    (is (some? p))
+    (is (= 4 (apply max (map #(js/Math.abs %) [(first (:base p)) (nth (:base p) 2)]))))))
+
+(deftest a-zone-over-radius-3-widens-to-a-stand-at-4
+  (is (= [[4 68 0]] (:stand (plan :targets #{[0 70 0]} :feet [4 68 0] :zones [inner-zone]
+                                  :block-at (world {[4 0] 67}))))))
+
+(deftest a-claim-refuses-like-a-zone
+  (let [claim {:id "c" :owner "other" :status :active :until 100 :min [-20 0 -20] :max [20 100 20]}]
+    (is (= {:reason :zone} (plan :claims [claim] :now 0)))))
+
+(deftest a-claim-over-radius-3-widens-to-a-free-base
+  (let [claim {:id "c" :owner "other" :status :active :until 100 :min [-3 0 -3] :max [3 100 3]}]
+    (is (some? (:pillar (plan :claims [claim] :now 0))))))
