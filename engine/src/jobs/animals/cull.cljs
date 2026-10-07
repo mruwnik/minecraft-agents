@@ -3,7 +3,7 @@
             [jobs.lib.animals :as animals]
             [jobs.lib.combat :as combat]
             [jobs.lib.util :as u]
-            [jobs.combat.hunt :as hunt]))
+            [jobs.lib.hunting :as hunting]))
 
 (def doc
   "Thin a herd of one kind (:mob) down to :keep adults and collect the drops.
@@ -16,7 +16,7 @@
   One call is the whole run, a loop of these:
   - With a target: the attack child fights it. It is booked killed, or skipped when attack gave up or lost it.
     :max-skips skips in a row end the job :gave-up (warn cull.gave-up).
-  - After a kill: collect-drops picks up :drops (nil: the kind's entry in jobs.combat.hunt/drops, else every
+  - After a kill: collect-drops picks up :drops (nil: the kind's entry in jobs.lib.hunting/drops, else every
     item within :collect-radius).
   - Otherwise it picks the next candidate: adults in the bound not skipped, those that are not unhittable first
     (an animal behind a wall comes last), then nearest first. The target stays until killed or given up on.
@@ -126,6 +126,7 @@
     (finish! c reason)))
 
 (defn attack-opts
+  "Options for hunting.attack!: a search around the reach; yields while waiting, ends with :gave-up."
   [c]
   {:radius (+ (reach c) 16) :waiting :continue :give-up #(give-up! % :gave-up)})
 
@@ -140,18 +141,18 @@
     (ctx/update-mem! c update :started #(or % now))
     (let [{:keys [target collecting killed skipped]} (ctx/mem c)]
       (if target
-        (await (hunt/attack! c (attack-opts c)))
+        (await (hunting/attack! c (attack-opts c)))
         (if collecting
-          (await (hunt/collect! c :continue))
+          (await (hunting/collect! c :continue))
           (let [adults (:adults (census c))
                 next-target (first (candidates c adults))]
             (cond
               (and wanted (>= (or killed 0) wanted)) (finish! c :count)
               (<= (count adults) keep) (finish! c :keep)
               (and (nil? next-target) (seq skipped)) (give-up! c :unreachable)
-              (nil? next-target) (await (hunt/search! c none!))
+              (nil? next-target) (await (hunting/search! c none!))
               :else (do (ctx/update-mem! c assoc :target (.-id next-target) :misses 0)
-                        (await (hunt/attack! c (attack-opts c)))))))))))
+                        (await (hunting/attack! c (attack-opts c)))))))))))
 
 (defn ^:async round
   "The whole attempt: loop the steps until one ends or yields."

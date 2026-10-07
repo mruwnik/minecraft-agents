@@ -1,6 +1,7 @@
 (ns jobs.combat.hunt
   (:require [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
+            [jobs.lib.hunting :as hunting]
             [jobs.lib.shelter :as sh]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]))
@@ -24,24 +25,6 @@
   Ends with info hunt.done and the result {:killed n :reason r :spared s :remaining m}.
   :spared is the kills asked for and not made because of the pair rule (0 unless :keep ended it).
   :remaining is the adults of the kind in range at the end.")
-
-(def raw-meats
-  {"beef" "cooked_beef" "porkchop" "cooked_porkchop" "mutton" "cooked_mutton"
-   "chicken" "cooked_chicken" "rabbit" "cooked_rabbit"})
-
-(def wool-colors
-  ["white" "orange" "magenta" "light_blue" "yellow" "lime" "pink" "gray"
-   "light_gray" "cyan" "purple" "blue" "brown" "green" "red" "black"])
-
-(def drops
-  "What each huntable kind drops, raw and cooked meat included, by mob name."
-  (let [raw {"cow" ["beef" "leather"]
-             "mooshroom" ["beef" "leather"]
-             "pig" ["porkchop"]
-             "sheep" (into ["mutton"] (map #(str % "_wool")) wool-colors)
-             "chicken" ["chicken" "feather"]
-             "rabbit" ["rabbit" "rabbit_hide" "rabbit_foot"]}]
-    (update-vals raw (fn [items] (into items (keep raw-meats) items)))))
 
 (def args
   {:mob {:doc "mob type name of the animals to hunt" :default "cow"}
@@ -117,56 +100,10 @@
                                             (sh/shelter-hint c)))
     (finish! c :gave-up)))
 
-(defn book-outcome!
-  "Book the attack child's result for target: a kill, or a skipped animal. Then
-  start collecting."
-  [c target]
-  (let [killed? (some #{target} (:killed (ctx/child-result c :attack)))]
-    (ctx/update-mem! c (fn [m]
-                         (-> (if killed?
-                               (-> m (update :killed (fnil inc 0)) (assoc :skips 0))
-                               (-> m (update :skipped (fnil conj []) target) (update :skips (fnil inc 0))))
-                             (dissoc :target)
-                             (assoc :collecting true))))))
-
 (defn attack-opts
+  "Options for hunting.attack!: a wide search around the ask; ends the job after too many skips."
   [c]
   {:radius (+ (:radius (:args c)) 8) :waiting :yield :give-up give-up!})
-
-(defn ^:async attack!
-  "Call the attack child on the target (a whole fight); books its end. opts: :radius (search radius of the child),
-  :waiting (what to return while it waits on the world), :give-up (fn of c, called after too many skips in a row).
-  Shared with jobs.animals.cull."
-  [c {:keys [radius waiting give-up]}]
-  (let [target (:target (ctx/mem c))
-        r (await (ctx/call-child c :attack 'jobs.combat.attack
-                                 {:targets [target] :radius radius :weapons (:weapons (:args c)) :lost-s 1 :absent :done}))]
-    (cond
-      (not= :done r) waiting
-      :else (do (book-outcome! c target)
-                (if (>= (:skips (ctx/mem c) 0) (:max-skips (:args c)))
-                  (give-up c)
-                  :again)))))
-
-(defn ^:async collect!
-  "Call the collect-drops child; done collecting when it is, else waiting (what to return while it waits on the world)."
-  [c waiting]
-  (let [{:keys [mob collect-radius] :as a} (:args c)
-        r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops
-                                 {:radius collect-radius :filter (or (:drops a) (get drops mob))}))]
-    (if (= :done r)
-      (do (ctx/update-mem! c dissoc :collecting) :again)
-      waiting)))
-
-(defn ^:async search!
-  "Nothing to attack: wait and look once more, then end with (end! c)."
-  [c end!]
-  (let [misses (inc (:misses (ctx/mem c) 0))]
-    (ctx/update-mem! c assoc :misses misses)
-    (if (>= misses 2)
-      (end! c)
-      (do (await (ctx/act c :wait #js {:ms 1000}))
-          :again))))
 
 (defn ^:async step
   "One step: attack the target, collect, finish, or pick the next target. :again, :yield (a child is waiting on the world) or :done."
@@ -178,13 +115,13 @@
     (let [{:keys [target collecting killed]} (ctx/mem c)
           next-target (first (candidates c))]
       (cond
-        target (await (attack! c (attack-opts c)))
-        collecting (await (collect! c :yield))
+        target (await (hunting/attack! c (attack-opts c)))
+        collecting (await (hunting/collect! c :yield))
         (>= (or killed 0) wanted) (finish! c :count)
         (<= (count (present c)) keep) (finish! c :keep)
-        (nil? next-target) (await (search! c #(finish! % :none)))
+        (nil? next-target) (await (hunting/search! c #(finish! % :none)))
         :else (do (ctx/update-mem! c assoc :target (.-id next-target) :misses 0)
-                  (await (attack! c (attack-opts c))))))))
+                  (await (hunting/attack! c (attack-opts c))))))))
 
 (defn ^:async round
   "The whole hunt: steps until it ends; yields only while a child waits on the world."

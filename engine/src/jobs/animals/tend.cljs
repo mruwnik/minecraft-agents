@@ -5,7 +5,7 @@
             [jobs.lib.steps :as steps]
             [jobs.lib.util :as u]
             [jobs.animals.cull :as cull]
-            [jobs.combat.hunt :as hunt]))
+            [jobs.lib.hunting :as hunting]))
 
 (def doc
   "Keep one pen of one kind of animal in order. The pen is :box. One run is one pass over five steps in this
@@ -51,13 +51,13 @@
    :deposit 'jobs.storage.deposit})
 
 (def extra-produce
-  "What a kind gives besides what jobs.combat.hunt/drops lists."
+  "What a kind gives besides what jobs.lib.hunting/drops lists."
   {"chicken" ["egg"]})
 
 (defn produce
   "The item names a kind of animal yields."
   [mob]
-  (into (vec (get hunt/drops mob)) (get extra-produce mob)))
+  (into (vec (get hunting/drops mob)) (get extra-produce mob)))
 
 (defn to-store
   "The carried item names that are produce and exceed their keep."
