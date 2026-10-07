@@ -142,3 +142,19 @@
           (await (run-ticks s 6 2000))
           (is (= :stopped (:status @(:out s))))
           (is (false? (:lingered @(:out s)))))))))
+
+(deftest walking-time-does-not-count-towards-the-wait
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [stub (scripted-go-to [:fail :fail :arrive])
+              holder (atom nil)
+              s (setup {} {:pos {:x 10 :y 64 :z 0} :range 1 :wait-s 2}
+                       {'jobs.movement.go-to (assoc stub :round (fn [c] ((:round stub) (assoc c :s @holder))))})]
+          (reset! holder s)
+          (await (run-ticks s 3 5000))
+          (is (= :not-done @(:out s)) "ten seconds of failed walking and an arrival: nothing waited yet")
+          (await (run-ticks s 2 5000))
+          (is (= :not-done @(:out s)) "one second in range of the two asked for")
+          (await (run-ticks s 6 500))
+          (is (= {:lingered true :reason "waited"} @(:out s)) "two seconds held in range ends it"))))))
