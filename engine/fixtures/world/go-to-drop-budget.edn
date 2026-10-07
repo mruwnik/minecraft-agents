@@ -1,6 +1,7 @@
 ;; Card 410c5e19: go-to's walking damage budget with the default :max-damage. A stone block y 0..9 fills x 1..15 (the body on top at
 ;; feet y 10, x 8.5), walls all round, the goal on the floor east of its edge at x 22: a drop of 10, which a full-health fed body may
-;; take (7 hp of budget). Landings: plain floor, water (no damage), lava (never). Health 16 has a budget of 3, so no drop past 6.
+;; take (7 hp of budget). Landings: plain floor, water (no damage), lava (never; the goal is a stone pillar in the lava, so only
+;; the landing can refuse). :min-health 14 leaves a budget of 5 at full health (regeneration cannot race it), so no drop past 6.
 {:defaults
  {:tags [:movement]
   :time :any
@@ -21,16 +22,15 @@
             {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 60 :until {:source :job :kind :result}}]
    :after [[:body-near [22.5 0 16.5] 3]]}
   {:name "lava-landing-is-never-dropped-into"
-   :blocks [[:fill [16 0 1] [30 0 30] "lava"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :escalate false})]]
+   :blocks [[:fill [16 0 1] [30 0 30] "lava"] [:fill [22 0 16] [22 0 16] "stone"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [22 1 16] :range 1 :escalate false})]]
    :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 60 :of-job true}
-            {:no-event {:source :body :kind :hurt :data {:causes ["lava" "fall"]}} :for-s 60 :until {:source :job :kind :result}}]
-   :after [[:body-far [22.5 0 16.5] 4]]}
-  {:name "health-16-does-not-take-the-10-drop"
-   :act [[:rcon "damage $BODY 4 minecraft:generic"] [:wait-s 2]
-         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :escalate false})]]
+            {:no-event {:source :body :kind :hurt} :for-s 60 :until {:source :job :kind :result}}]
+   :after [[:body-far [22.5 1 16.5] 4]]}
+  {:name "min-health-14-does-not-take-the-10-drop"
+   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :escalate false :min-health 14})]]
    :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 60 :of-job true}
-            {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 60 :until {:source :job :kind :result}}]
+            {:no-event {:source :body :kind :hurt} :for-s 60 :until {:source :job :kind :result}}]
    :after [[:body-far [22.5 0 16.5] 4]]}
   {:name "max-damage-0-does-not-take-the-10-drop"
    :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :escalate false :max-damage 0})]]
