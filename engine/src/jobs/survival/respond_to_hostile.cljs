@@ -1,5 +1,6 @@
 (ns jobs.survival.respond-to-hostile
-  (:require [engine.ctx :as ctx]
+  (:require [jobs.lib.blocks :as lb]
+            [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
             [jobs.lib.pace :as pace]
@@ -8,9 +9,7 @@
             [jobs.lib.shelter :as sh]
             [jobs.lib.threats :as threats]
             [jobs.lib.tools :as tools]
-            [jobs.lib.util :as u]
-            [jobs.survival.dig-in :as dig-in]
-            [jobs.survival.dig-in-cells :as dig-cells]))
+            [jobs.lib.util :as u]))
 
 (def doc
   "A hostile is near: fight it (jobs.survival.fight-back, best weapon equipped) when the odds are fair,
@@ -111,7 +110,7 @@
     (boolean (and (not tried?)
                   (every? combat/ranged? hs)
                   (covered? p)
-                  (dig-cells/pick c dig-in/building-blocks)
+                  (lb/pick c lb/building-blocks)
                   (tools/can-harvest? p "stone")))))
 
 (defn ^:async gap!

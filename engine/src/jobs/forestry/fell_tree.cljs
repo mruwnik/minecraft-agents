@@ -9,7 +9,7 @@
             [jobs.lib.gate :as gate]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.look :as look]
-            [jobs.forestry.trees :refer [scan-logs tree-near trees-near tree-at logs-at unreachable-set debts replant-kind
+            [jobs.lib.trees :refer [scan-logs tree-near trees-near tree-at logs-at unreachable-set debts replant-kind
                                           replant-policy default-radius max-partials dig-reach log-name?]]
             [jobs.lib.util :as u]
             [jobs.lib.walk :as walk]

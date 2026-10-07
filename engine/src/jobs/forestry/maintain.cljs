@@ -3,7 +3,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.access :as access]
-            [jobs.forestry.trees :as forestry]
+            [jobs.lib.trees :as forestry]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]

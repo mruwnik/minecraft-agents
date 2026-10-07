@@ -15,9 +15,7 @@
             [jobs.lib.reach :as reach-lib]
             [jobs.lib.look :as look :refer [cell-of headings heading-name facing glance! look-around!]]
             [jobs.lib.torch :as torch]
-            [jobs.build.from-plan :as from-plan]
-            [jobs.survival.dig-in :as dig-in]
-            [jobs.survival.dig-in-cells :as dig-cells]
+            [jobs.lib.placement :as placement]
             [jobs.lib.world :as known]))
 
 (def doc
@@ -141,16 +139,6 @@
    :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent :falling-block :under-feet); the lava and :wet rules above still hold"
             :default #{:fluid-adjacent :falling-block :under-feet}}})
 
-(def ores
-  {"coal_ore" "coal" "iron_ore" "raw_iron" "copper_ore" "raw_copper" "gold_ore" "raw_gold"
-   "diamond_ore" "diamond" "redstone_ore" "redstone" "lapis_ore" "lapis_lazuli" "emerald_ore" "emerald"})
-
-(def drop-item
-  (merge {"stone" "cobblestone" "grass_block" "dirt" "deepslate" "cobbled_deepslate"
-          "clay" "clay_ball" "snow_block" "snowball"}
-         ores
-         (into {} (map (fn [[k v]] [(str "deepslate_" k) v])) ores)))
-
 (def reach 3)
 (def mend-reach 4)
 (def max-mend-failures 6)
@@ -158,15 +146,10 @@
 (def not-solid #{"air" "cave_air" "water" "lava" "short_grass" "tall_grass"})
 (def faces [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])
 
-(defn item-name
-  "The item the mined block drops."
-  [{:keys [block item]}]
-  (or item (get drop-item block) block))
-
 (defn carried
   "Total of the item carried over all stacks."
   [c]
-  (let [item (item-name (:args c))]
+  (let [item (blocks/item-name (:args c))]
     (transduce (comp (filter #(= item (:name %))) (map :count)) + 0 (u/inventory (:primitives c)))))
 
 (defn around [{:keys [x y z]} [dx dy dz]] {:x (+ x dx) :y (+ y dy) :z (+ z dz)})
@@ -298,22 +281,6 @@
 
 (defn skip! [c pos] (ctx/update-mem! c update :skipped (fnil conj []) pos))
 
-(defn hand-better?
-  "Whether the body should dig block bare-handed: it is not a pickaxe block, no tool of its kind is carried, and a
-  pickaxe is held (soil by hand, never wearing the pickaxe out on it)."
-  [p block]
-  (let [held (.-held (.self p))]
-    (boolean (and block held (str/ends-with? held "_pickaxe") (not= "pickaxe" (tools/tool-kind block))
-                  (nil? (tools/pick p block))))))
-
-(defn ^:async equip!
-  "Hold the best carried tool for block (the mined block when not given)."
-  ([c] (equip! c (:block (:args c))))
-  ([c block]
-   (await (tools/equip-for! c block))
-   (when (hand-better? (:primitives c) block)
-     (await (ctx/act c :unequip #js {})))))
-
 (defn drop-radius
   "The entity search radius that covers :collect-radius around the last dug cell, seen from the body: the body
   stands up to its reach from the cell and the drop may have fallen further."
@@ -330,7 +297,7 @@
   {[x y z] count}."
   ([c] (left-behind c (drop-radius c)))
   ([c radius]
-  (let [item (item-name (:args c))]
+  (let [item (blocks/item-name (:args c))]
     (into {}
           (comp (filter #(= item (some-> (.-item %) .-name)))
                 (map (fn [e] [(access/cell (cell-of (u/pos-of (.-pos e)))) (or (some-> (.-item e) .-count) 1)])))
@@ -358,7 +325,7 @@
 
 (defn ^:async collect! [c]
   (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops
-                                 {:radius (drop-radius c) :filter [(item-name (:args c))]}))]
+                                 {:radius (drop-radius c) :filter [(blocks/item-name (:args c))]}))]
     (when (not= :continue r)
       (await (note-left! c))
       (let [now (carried c)]
@@ -397,7 +364,7 @@
   (await (blocks/dig-cell! c pos {:accept #{:fluid-adjacent :falling-block :under-feet} :ignore-zones? (boolean (:ignore-zones? (:args c)))})))
 
 (defn ^:async dig! [c pos]
-  (await (equip! c))
+  (await (tools/equip! c))
   (let [v (access/may-dig? (rules-in c) pos)
         verdict (access/judge v (:accept (:args c)))]
     (if (not= :ok verdict)
@@ -474,7 +441,7 @@
   (loop [cells cells]
     (if-let [pos (first cells)]
       (let [block (u/block-name (:primitives c) pos)
-            _ (await (equip! c block))
+            _ (await (tools/equip! c block))
             v (access/may-dig? (rules-in c) pos)
             verdict (access/judge v (:accept (:args c)))
             _ (when (and (= :ok verdict) (= block (:block (:args c)))) (ctx/update-mem! c assoc :digging pos))
@@ -570,7 +537,7 @@
         block-at (fn [[x y z]] (u/block-name p {:x x :y y :z z}))
         {:keys [dir site]} (if branch (branch-site tunnel (cell-of (u/self-pos c))) {:dir (headings (:heading tunnel)) :site (step-cell tunnel (dec (:steps tunnel)))})
         choice (when site (torch/torch-at dir [(:x site) (:y site) (:z site)]
-                                          (from-plan/eye (u/self-pos c)) block-at))
+                                          (placement/eye (u/self-pos c)) block-at))
         cell (:cell choice)
         reason (cond (nil? site) :no-site
                      (:refused choice) (:refused choice)
@@ -578,7 +545,7 @@
     (if reason
       (left-out! c cell reason branch)
       (let [r (await (ctx/act c :place (clj->js {:pos (zipmap [:x :y :z] cell) :item "torch"
-                                                 :click (from-plan/js-click (:click choice))})))]
+                                                 :click (placement/js-click (:click choice))})))]
         (if branch (booked! c branch) (ctx/update-mem! c assoc :torch-at (:steps tunnel)))
         (when-not (or (= "placed" (.-status r)) (torch/torch-blocks (block-at cell)))
           (left-out! c cell :place-failed branch))))))
@@ -773,9 +740,9 @@
   mined item, then the item itself when it is a block (the mend must not eat the count)."
   [c]
   (let [{:keys [block] :as a} (:args c)
-        item (item-name a)
-        own (when (or (some #{item} dig-in/building-blocks) (= item block)) [item])]
-    (dig-cells/pick c (concat (remove #{item} dig-in/building-blocks) own))))
+        item (blocks/item-name a)
+        own (when (or (some #{item} blocks/building-blocks) (= item block)) [item])]
+    (blocks/pick c (concat (remove #{item} blocks/building-blocks) own))))
 
 (defn mend-target
   "The owed cell to fill next: not the body's feet or head, lowest y first, then nearest."

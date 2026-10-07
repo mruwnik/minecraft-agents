@@ -10,8 +10,6 @@
             [jobs.lib.util :as u]
             [jobs.access.stair :as stair]
             [jobs.access.tunnel :as tunnel]
-            [jobs.gather.mine :as mine]
-            [jobs.survival.dig-in :as dig-in]
             [jobs.lib.world :as known]))
 
 (def doc
@@ -87,10 +85,10 @@
   [carried block spare]
   (let [have? (set carried)
         spare? (set spare)
-        drop (mine/item-name {:block block})
-        placeable? #(or (= % block) (some #{%} dig-in/building-blocks))]
+        drop (blocks/item-name {:block block})
+        placeable? #(or (= % block) (some #{%} blocks/building-blocks))]
     (or (when (and (have? drop) (not (spare? drop)) (placeable? drop)) drop)
-        (first (filter #(and (have? %) (not (spare? %))) dig-in/building-blocks))
+        (first (filter #(and (have? %) (not (spare? %))) blocks/building-blocks))
         (first (filter #(and (have? %) (placeable? %)) spare)))))
 
 (defn feet-of [c] (stair/feet-of c))

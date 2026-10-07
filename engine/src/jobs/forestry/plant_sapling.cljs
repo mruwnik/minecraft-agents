@@ -2,7 +2,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.gate :as gate]
-            [jobs.forestry.trees :refer [debts target-of sapling-for sapling-of log-name? replant-kind species]
+            [jobs.lib.trees :refer [debts target-of sapling-for sapling-of log-name? replant-kind species]
              :rename {species all-species}]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]

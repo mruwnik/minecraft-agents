@@ -1,5 +1,6 @@
 (ns jobs.storage.make-room
-  (:require [clojure.string :as str]
+  (:require [jobs.lib.blocks :as lb]
+            [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
@@ -11,7 +12,6 @@
             [jobs.lib.child :as child]
             [jobs.lib.result :as res]
             [jobs.lib.storage :as storage]
-            [jobs.survival.dig-in :as dig-in]
             [jobs.lib.foods :as foods]))
 
 (def doc
@@ -109,7 +109,7 @@
         food-floors (if keep-food
                       (shared-floors food totals keep-food)
                       (select-keys (cost/food-reserve inventory) food))
-        blocks (filter #(contains? totals %) dig-in/building-blocks)]
+        blocks (filter #(contains? totals %) lb/building-blocks)]
     (merge (zipmap names (repeat 0))
            (select-keys totals (filter protected? names))
            food-floors

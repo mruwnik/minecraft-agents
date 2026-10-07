@@ -1,5 +1,6 @@
 (ns jobs.survival.night
-  (:require [clojure.set :as set]
+  (:require [jobs.lib.blocks :as lb]
+            [clojure.set :as set]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.child :as child]
@@ -463,7 +464,7 @@
         solid? (into #{} (map (comp key-of :pos)) solids)
         seen-free? (fn [cell] (and (not (solid? (key-of cell)))
                                    (not (:unknown (look/seen-block p cell)))))
-        have (reduce + (map :count (dig-cells/carried c dig-in/shelter-blocks)))
+        have (reduce + (map :count (lb/carried c dig-in/shelter-blocks)))
         up (fn [{:keys [x y z]} dy] {:x x :y (+ y dy) :z z})
         sealed? (fn [cell] (and (solid? (key-of cell)) (dig-cells/sealed? p cell)))]
     (->> solids

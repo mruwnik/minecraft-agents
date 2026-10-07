@@ -3,10 +3,10 @@
   the body carries."
   (:require [clojure.string :as str]
             [jobs.lib.access.rules :as rules]
-            [jobs.forestry.trees :as forestry]
+            [jobs.lib.trees :as forestry]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
-            [jobs.farm.tidy :as tidy]
+            [jobs.lib.tidy-rules :as tidy]
             [jobs.forestry.maintain :as maintain]))
 
 (def headroom-table

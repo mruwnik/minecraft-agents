@@ -1,4 +1,4 @@
-(ns jobs.forestry.trees
+(ns jobs.lib.trees
   "Helpers the forestry jobs (jobs.forestry.*) share: finding trees, the
   replant debts in body memory, saplings. Not a job namespace."
   (:require [clojure.string :as str]

@@ -1,7 +1,7 @@
 (ns engine.trees-test
-  "jobs.forestry.trees: the sapling item of each species."
+  "jobs.lib.trees: the sapling item of each species."
   (:require [cljs.test :refer [deftest is are]]
-            [jobs.forestry.trees :as trees]))
+            [jobs.lib.trees :as trees]))
 
 (deftest sapling-of-names-the-item-each-species-is-planted-with
   (are [species item] (= item (trees/sapling-of species))

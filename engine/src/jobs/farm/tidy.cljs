@@ -1,12 +1,11 @@
 (ns jobs.farm.tidy
   (:require [clojure.string :as str]
-            [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
-            [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
+            [jobs.lib.tidy-rules :as tr]
             [jobs.lib.toll-cells :as tc]
             [plan.shape :as shape]
             [jobs.lib.world :as known]))
@@ -51,41 +50,10 @@
 
 ;; ------------------------------------------------------------------ access
 
-(defn access-world
-  "The social half of the rules' input, read now (jobs.lib.access/zone-input): zones nil when the zone file was never
-  read, claims, footprints of every plan but this one, the body's name, the clock and the job's :ignore-zones? arg."
-  [c]
-  (access/zone-input c {:except (:plan (:args c)) :ignore-zones? (:ignore-zones? (:args c))}))
-
-;; ------------------------------------------------------------------ the rule, pure
-
-(def fluids #{"water" "lava" "bubble_column"})
-
-(def lights
-  #"(^|_)(torch|lantern|candle)$|^(campfire|soul_campfire|end_rod|sea_lantern|glowstone|shroomlight|jack_o_lantern)$")
-
-(def containers
-  #{"chest" "trapped_chest" "ender_chest" "barrel" "hopper" "dispenser" "dropper" "furnace" "blast_furnace" "smoker"
-    "crafting_table" "composter" "brewing_stand" "enchanting_table" "cauldron" "water_cauldron" "grindstone" "loom"
-    "smithing_table" "stonecutter" "cartography_table" "fletching_table" "lectern" "bell" "jukebox" "note_block"
-    "beacon" "conduit" "lodestone" "respawn_anchor" "spawner" "beehive" "bee_nest" "flower_pot" "decorated_pot"
-    "anvil" "chipped_anvil" "damaged_anvil" "crafter" "chiseled_bookshelf"})
-
-(def owned #"_bed$|_sign$|_banner$|_head$|_skull$|_shulker_box$|^shulker_box$")
-
 (def crop-blocks
   #{"wheat" "carrots" "potatoes" "beetroots" "melon_stem" "pumpkin_stem" "attached_melon_stem" "attached_pumpkin_stem"
     "melon" "pumpkin" "sugar_cane" "bamboo" "bamboo_sapling" "sweet_berry_bush" "nether_wart" "cocoa" "torchflower_crop"
     "pitcher_crop"})
-
-(defn keep-why
-  "Why a block is never dug (:fluid :light :container :owned), or nil."
-  [n]
-  (cond
-    (fluids n) :fluid
-    (re-find lights n) :light
-    (containers n) :container
-    (or (re-find owned n) (str/ends-with? n "_shulker_box")) :owned))
 
 (defn crop-want? [want] (and (map? want) (contains? want :crop)))
 (defn tree-want? [want] (and (map? want) (contains? want :tree)))
@@ -100,7 +68,7 @@
       (tree-want? want) nil
       (and (crop-want? want) (contains? (shape/crop-names (:crop want)) n)) nil
       (or (= :clear want) (= :headroom want) (crop-want? want))
-      (if-let [why (keep-why n)]
+      (if-let [why (tr/keep-why n)]
         [:kept why]
         (cond
           (= "farmland" n) :wrong
@@ -135,20 +103,6 @@
           {:dig [] :kept [] :wrong []}
           cells))
 
-(defn hazard-reason
-  "The reason a dig hazard is accepted by: lava beside is :lava-adjacent, kept apart from water."
-  [{:keys [reason fluid]}]
-  (if (and (= :fluid-adjacent reason) (= "lava" fluid)) :lava-adjacent reason))
-
-(defn judge-verdict
-  "What to do with the may-dig? verdict v: :dig, :skip (not loaded), [:refuse {:reason ...}] or [:hazard [reasons]]."
-  [v accept]
-  (cond
-    (= :not-loaded (:reason v)) :skip
-    (not (:ok v)) [:refuse (select-keys v [:reason :zone :claim :plan])]
-    (rules/accepts? (update v :hazards (fn [hs] (mapv #(assoc % :reason (hazard-reason %)) hs))) accept) :dig
-    :else [:hazard (mapv hazard-reason (:hazards v))]))
-
 (defn plan-trouble
   "Why a plan answer cannot be worked (the cells in part), or nil."
   [answer part]
@@ -158,26 +112,6 @@
     (not-any? #(or (nil? part) (= part (:part %))) (:cells answer)) "no cells"))
 
 ;; ------------------------------------------------------------------ reading the world
-
-(defn world-block
-  "The block at [x y z] in plan.shape's shape: nil when unloaded, else {:name n} with :state when it has properties."
-  [p [x y z]]
-  (when-let [b (u/block-at p {:x x :y y :z z})]
-    (cond-> {:name (.-name b)}
-      (.-properties b) (assoc :state (js->clj (.-properties b) :keywordize-keys true)))))
-
-(defn feet-of [c]
-  (let [{:keys [x y z]} (u/self-pos c)]
-    [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]))
-
-(defn permit
-  "The may-dig? verdict for pos now: zones and footprints read afresh, the body's feet where they are."
-  [c pos]
-  (let [p (:primitives c)]
-    (rules/may-dig? (merge {:block-at (fn [cell] (:name (world-block p cell))) :cell pos :feet (feet-of c) :ledger #{}}
-                           (access-world c)))))
-
-(defn decide [c pos] (judge-verdict (permit c pos) (:accept (:args c))))
 
 (defn in-reach? [c pos] (<= (u/eye-dist (u/self-pos c) pos) (:reach (:args c))))
 
@@ -191,7 +125,7 @@
   (let [{:keys [plan part]} (:args c)
         answer (known/plan c plan)
         trouble (or (plan-trouble answer part)
-                    (let [{:keys [zones ignore-zones?]} (access-world c)]
+                    (let [{:keys [zones ignore-zones?]} (tr/access-world c)]
                       (when (and (nil? zones) (not ignore-zones?)) "no zone list has been read")))]
     (if-not trouble
       {:answer answer}
@@ -226,7 +160,7 @@
   "Dig the stray (a blocks.dig child) after asking the access rules once more; a refusal, a failure or a dig that did nothing is booked."
   [c {:keys [pos] :as stray}]
   (let [give-up (:give-up (:args c))
-        d (decide c pos)]
+        d (tr/decide c pos)]
     (cond
       (and (vector? d) (= :refuse (first d))) (ctx/update-mem! c refuse stray (second d))
       (not= :dig d) nil
@@ -263,7 +197,7 @@
   chunk went away since it was read is dropped from both (the next round reads the strays again)."
   [c todo]
   (reduce (fn [acc stray]
-            (let [d (decide c (:pos stray))]
+            (let [d (tr/decide c (:pos stray))]
               (cond
                 (= :dig d) (update acc :ready conj stray)
                 (= :skip d) acc
@@ -352,7 +286,7 @@
     (if trouble
       :declined
       (let [cells (work-cells (:cells answer) (:part (:args c)))
-            found (strays cells #(world-block (:primitives c) %))
+            found (strays cells #(tr/world-block (:primitives c) %))
             _ (settle-digging! c found)
             m (ctx/mem c)
             refused (set (map :pos (:refused m)))

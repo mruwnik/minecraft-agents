@@ -1,5 +1,6 @@
 (ns jobs.survival.retreat
-  (:require [jobs.lib.args :as jargs]
+  (:require [jobs.lib.blocks :as lb]
+            [jobs.lib.args :as jargs]
             [jobs.lib.click :as click]
             [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
@@ -8,7 +9,6 @@
             [jobs.lib.shelter :as sh]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
-            [jobs.survival.dig-in :as dig-in]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.retreat-flight :as flight]
             [jobs.survival.retreat-refuge :as refuge]
@@ -66,7 +66,7 @@
    :home-range {:doc "a flight leans towards the latest :bed or :home only when it lies within this many blocks" :type :number :min 0 :default 64}
    :weapons {:doc "item name substrings that count as weapons, for a cornered fight" :default combat/default-weapons}
    :reserve {:doc "health a cornered fight must be expected to leave" :type :number :min 0 :default cost/default-reserve}
-   :blocks {:doc "names of the blocks a cornered body may seal itself in with" :default dig-in/building-blocks}
+   :blocks {:doc "names of the blocks a cornered body may seal itself in with" :default lb/building-blocks}
    :max-places {:doc "seal placements per step" :type :int :min 1 :default 4}
    :lost-s {:doc "a mob out of line of sight this many seconds has stopped chasing" :type :number :min 0 :default 4}
    :quiet-s {:doc "a hidden body keeps its refuge this many seconds after the last danger" :type :number :min 0 :default 30}

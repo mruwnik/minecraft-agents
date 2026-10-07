@@ -5,7 +5,7 @@
             [engine.library-test :as lt]
             [engine.apiary-harvest-test :as ah]
             [engine.test-util :as tu]
-            [jobs.forestry.trees :as trees]
+            [jobs.lib.trees :as trees]
             [jobs.lib.apiary :as apiary]))
 
 (defn crowned-tree

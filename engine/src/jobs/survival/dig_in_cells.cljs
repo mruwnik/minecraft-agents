@@ -1,7 +1,8 @@
 (ns jobs.survival.dig-in-cells
   "The cells a shelter fills and the placing of blocks into them (read from the world, placed, shut): jobs.survival.dig-in
   and jobs.survival.retreat use them."
-  (:require [jobs.lib.click :as click]
+  (:require [jobs.lib.blocks :as lb]
+            [jobs.lib.click :as click]
             [jobs.lib.tidy :as tidy]
             [engine.ctx :as ctx]
             [jobs.lib.shelter :as sh]
@@ -19,14 +20,6 @@
   [p cell]
   (let [b (u/block-facts p cell)]
     (boolean (and b (or (hazards (:name b)) (:waterlogged? b))))))
-
-(defn carried
-  "The carried [{:name :count}] whose name is in blocks, in the order of blocks."
-  [c blocks]
-  (let [have (into {} (map (juxt :name :count)) (u/inventory (:primitives c)))]
-    (vec (for [b blocks :let [n (get have b 0)] :when (pos? n)] {:name b :count n}))))
-
-(defn pick [c blocks] (:name (first (carried c blocks))))
 
 (defn lateral-fluid
   "The name of the first wet? side neighbour of the cell, or nil."
@@ -111,7 +104,7 @@
   An open door, gate or trapdoor is shut (shut-open!), never placed into or dug. One that stays open goes in :occupied."
   [c blocks cells]
   (loop [cells cells]
-    (let [item (pick c blocks)
+    (let [item (lb/pick c blocks)
           cell (first cells)]
       (cond
         (empty? cells) :ok

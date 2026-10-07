@@ -15,6 +15,7 @@
   Anything else is placed plainly. A usable neighbour (chest, table, door ...) is clicked only when nothing else
   gives the state, and then sneaking. Directions are mineflayer's: yaw 0 looks north, pi/2 west; pitch -pi/2 down."
   (:require [clojure.string :as str]
+            [jobs.lib.util :as u]
             [shadow.resource :as rc]))
 
 (def pi js/Math.PI)
@@ -231,3 +232,9 @@
   [want cell eye block-at]
   (let [want (if (string? want) {:block want} want)]
     (decide (family (:block want)) want cell {:eye eye :block-at block-at})))
+
+(defn eye [body] {:x (:x body) :y (+ (:y body) u/eye-height) :z (:z body)})
+
+(defn js-click [{:keys [against cursor] :as click}]
+  (merge (select-keys click [:yaw :pitch :sneak])
+         {:against (zipmap [:x :y :z] against) :cursor (zipmap [:x :y :z] cursor)}))

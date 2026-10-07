@@ -6,6 +6,7 @@
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.fake.raw-world :as fake-raw]
+            [jobs.lib.blocks :as lb]
             [jobs.lib.tools :as tools]
             [engine.memory :as mem]
             [engine.perception :as perception]
@@ -318,8 +319,8 @@
           (is (= :count (:reason (done-event s)))))))))
 
 (deftest the-drop-table-and-tools
-  (is (= "cobblestone" (mine/drop-item "stone")))
-  (is (= "raw_iron" (mine/drop-item "deepslate_iron_ore")))
+  (is (= "cobblestone" (lb/drop-item "stone")))
+  (is (= "raw_iron" (lb/drop-item "deepslate_iron_ore")))
   (is (= "shovel" (tools/tool-kind "sand")))
   (is (= "axe" (tools/tool-kind "oak_log")))
   (is (= "pickaxe" (tools/tool-kind "stone"))))

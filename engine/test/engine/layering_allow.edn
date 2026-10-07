@@ -1,42 +1,12 @@
 [
- {:from jobs.access.leave-tunnel :to jobs.gather.mine :rule :job-requires-other-family-job
-  :why "S4: equip!/item-name/eye/js-click move to jobs.lib tools/blocks/click"}
- {:from jobs.access.leave-tunnel :to jobs.survival.dig-in :rule :job-requires-other-family-job
-  :why "S4: building-blocks/pick move to jobs.lib.blocks"}
- {:from jobs.access.stair :to jobs.gather.mine :rule :job-requires-other-family-job
-  :why "S4: equip!/item-name/eye/js-click move to jobs.lib tools/blocks/click"}
- {:from jobs.access.stair :to jobs.survival.dig-in :rule :job-requires-other-family-job
-  :why "S4: building-blocks/pick move to jobs.lib.blocks"}
- {:from jobs.access.stair :to jobs.survival.dig-in-cells :rule :helper-required-cross-family
-  :why "S4: building-blocks/pick move to jobs.lib.blocks"}
- {:from jobs.access.tunnel :to jobs.build.from-plan :rule :job-requires-other-family-job
-  :why "S4: equip!/item-name/eye/js-click move to jobs.lib tools/blocks/click"}
  {:from jobs.animals.herd-run :to triggers.animals.pen-gate :rule :job-requires-trigger
   :why "S1/S5: sensing fn shared with its trigger moves to jobs.lib"}
  {:from jobs.animals.shut-gate :to triggers.animals.pen-gate :rule :job-requires-trigger
   :why "S1/S5: sensing fn shared with its trigger moves to jobs.lib"}
  {:from jobs.forestry.fell-tree :to jobs.access.pillar :rule :job-requires-other-family-job
   :why "layering E/F (6b05372f, 24ac6454): pillar helpers or child call"}
- {:from jobs.forestry.prepare-field :to jobs.farm.tidy :rule :job-requires-other-family-job
-  :why "S4: tidy fns move to jobs.lib.tidy"}
- {:from jobs.forestry.prepare-rule :to jobs.farm.tidy :rule :job-requires-other-family-job
-  :why "S4: tidy fns move to jobs.lib.tidy"}
- {:from jobs.gather.mine :to jobs.build.from-plan :rule :job-requires-other-family-job
-  :why "S4: equip!/item-name/eye/js-click move to jobs.lib tools/blocks/click"}
- {:from jobs.gather.mine :to jobs.survival.dig-in :rule :job-requires-other-family-job
-  :why "S4: building-blocks/pick move to jobs.lib.blocks"}
- {:from jobs.gather.mine :to jobs.survival.dig-in-cells :rule :helper-required-cross-family
-  :why "S4: building-blocks/pick move to jobs.lib.blocks"}
- {:from jobs.items.obtain :to jobs.gather.mine :rule :job-requires-other-family-job
-  :why "S4: equip!/item-name/eye/js-click move to jobs.lib tools/blocks/click"}
- {:from jobs.lib.blocks :to jobs.forestry.trees :rule :lib-requires-job
-  :why "S4: trees is helper-only, moves to jobs.lib.trees"}
  {:from jobs.storage.kit :to jobs.items.craft :rule :job-requires-other-family-job
   :why "layering E/F (6b05372f): craft nearest-table to jobs.lib"}
- {:from jobs.storage.make-room :to jobs.survival.dig-in :rule :job-requires-other-family-job
-  :why "S4: building-blocks/pick move to jobs.lib.blocks"}
- {:from jobs.survival.dig-in :to jobs.forestry.trees :rule :helper-required-cross-family
-  :why "S4: trees is helper-only, moves to jobs.lib.trees"}
  {:from jobs.survival.get-food :to triggers.survival.hungry :rule :job-requires-trigger
   :why "S1/S5: sensing fn shared with its trigger moves to jobs.lib"}
  {:from jobs.survival.night :to triggers.survival.hungry :rule :job-requires-trigger

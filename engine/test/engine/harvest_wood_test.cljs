@@ -9,7 +9,7 @@
             [engine.test-util :as tu]
             [jobs.forestry.harvest-wood :as hw]
             [jobs.forestry.plant-sapling :as ps]
-            [jobs.forestry.trees :as trees]))
+            [jobs.lib.trees :as trees]))
 
 (def harvest '(jobs.forestry.harvest-wood {:species "oak" :radius 10}))
 

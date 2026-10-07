@@ -13,7 +13,7 @@
             [jobs.lib.world-files :as world]
             [jobs.forestry.fell-tree :as fell-tree]
             [jobs.forestry.maintain :as maintain]
-            [jobs.forestry.trees :as trees]
+            [jobs.lib.trees :as trees]
             [jobs.lib.pace :as pace]
             [plan.shape :as shape]))
 

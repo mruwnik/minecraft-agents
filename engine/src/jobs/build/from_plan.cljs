@@ -78,7 +78,6 @@
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
    :sturdy-ground {:doc "a sturdy block on the ground of a rail line (plan.rail/ground) is no wrong block, whatever fill the plan wants there" :default false}})
 
-(def eye-height 1.62)
 
 ;; ------------------------------------------------------------------ pure helpers
 
@@ -118,8 +117,6 @@
           along (+ (* sx dx) (* sz dz))
           across (js/Math.abs (+ (* sz dx) (* sx dz)))]
       (and (pos? along) (>= along across)))))
-
-(defn eye [body] {:x (:x body) :y (+ (:y body) eye-height) :z (:z body)})
 
 (defn body-cells [{:keys [x y z]}]
   (let [fx (js/Math.floor x) fy (js/Math.floor y) fz (js/Math.floor z)]
@@ -295,7 +292,7 @@
   to click beside it is refused :no-support (it waits for a neighbour; the primitive would answer no-support)."
   [c {:keys [pos want item]}]
   (let [block-at (partial world-block (:primitives c))
-        h (placement/click (block-want want item) pos (eye (u/self-pos c)) block-at)]
+        h (placement/click (block-want want item) pos (placement/eye (u/self-pos c)) block-at)]
     (if (or (:click h) (:refused h) (supported? block-at pos))
       h
       (assoc h :refused :no-support))))
@@ -307,10 +304,6 @@
   (let [decided (map (juxt identity #(how c %)) todo)]
     (ctx/update-mem! c assoc :unplaceable (into {} (keep (fn [[cell d]] (when (:refused d) [(:pos cell) (:refused d)]))) decided))
     (into [] (keep (fn [[cell d]] (when-not (:refused d) (assoc cell :click (:click d))))) decided)))
-
-(defn js-click [{:keys [against cursor] :as click}]
-  (merge (select-keys click [:yaw :pitch :sneak])
-         {:against (zipmap [:x :y :z] against) :cursor (zipmap [:x :y :z] cursor)}))
 
 (defn placed-block
   "The block a place result reports, in plan.shape's shape, or nil."
@@ -429,7 +422,7 @@
       :else
       (let [_ (ctx/update-mem! c assoc :placing pos)
             r (await (ctx/act c :place (clj->js (cond-> {:pos (zipmap [:x :y :z] pos) :item item}
-                                                  (:click h) (assoc :click (js-click (:click h)))))))
+                                                  (:click h) (assoc :click (placement/js-click (:click h)))))))
             wrong (misplaced want item (placed-block r))
             give-up (:give-up (:args c))]
         (case (.-status r)

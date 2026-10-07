@@ -1,7 +1,8 @@
 (ns jobs.survival.retreat-refuge
   "A cornered body's refuges (jobs.survival.retreat): sealed in with blocks, up a pillar, down a pit or in a side pocket,
   and the hiding in them."
-  (:require [engine.ctx :as ctx]
+  (:require [jobs.lib.blocks :as lb]
+            [engine.ctx :as ctx]
             [jobs.access.pillar :as pillar]
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
@@ -45,7 +46,7 @@
   open iron door, is remembered in :seal-occupied and never tried again this flight."
   [c cells]
   (loop [cells cells]
-    (let [item (dig-cells/pick c (:blocks (:args c)))
+    (let [item (lb/pick c (:blocks (:args c)))
           cell (first cells)]
       (cond
         (empty? cells) :ok
@@ -93,7 +94,7 @@
       (empty? open) :sealed
       (empty? cells) (unfillable)
       (some (hostile-cells p radius) cells) :failed
-      (nil? (dig-cells/pick c blocks)) :failed
+      (nil? (lb/pick c blocks)) :failed
       :else
       (do (when (off-centre? p) (await (centre! c)))
           (access/trespass! c "retreat" (some #(access/trespass-refusal (access/rules-input c) :place %) cells))
@@ -123,7 +124,7 @@
 (defn pillar-item
   "The carried :blocks block with the most, when it is at least pillar-height; else nil."
   [c]
-  (->> (dig-cells/carried c (:blocks (:args c)))
+  (->> (lb/carried c (:blocks (:args c)))
        (filter #(>= (:count %) pillar-height))
        (sort-by :count >)
        first
@@ -181,7 +182,7 @@
                (not-any? #(dig-cells/lateral-fluid p %) cells)
                (every? #(tools/can-harvest? p %) names)
                (sh/solid-at? p (update feet :y - (inc depth)))
-               (or (dig-cells/pick c blocks) (some (set blocks) (map #(get drop-of % %) names))))
+               (or (lb/pick c blocks) (some (set blocks) (map #(get drop-of % %) names))))
       {:roof roof :target-y (- (:y feet) depth)})))
 
 (defn ^:async pit!
@@ -212,7 +213,7 @@
                (not-any? dig-cells/hazards names)
                (not-any? #(dig-cells/lateral-fluid p %) [lo hi])
                (every? #(tools/can-harvest? p %) names)
-               (or (dig-cells/pick c blocks) (some (set blocks) (map #(get drop-of % %) names))))
+               (or (lb/pick c blocks) (some (set blocks) (map #(get drop-of % %) names))))
       [lo hi])))
 
 (defn ^:async pocket!
@@ -295,7 +296,7 @@
   "Place a carried block over the head at roof, ledgered as :retreat-plug."
   [c {:keys [roof] :as refuge}]
   (let [p (:primitives c)
-        item (dig-cells/pick c (:blocks (:args c)))
+        item (lb/pick c (:blocks (:args c)))
         cell [(:x roof) (:y roof) (:z roof)]]
     (if (nil? item)
       (await (abandon-refuge! c))

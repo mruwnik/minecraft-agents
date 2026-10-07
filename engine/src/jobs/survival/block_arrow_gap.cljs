@@ -1,5 +1,6 @@
 (ns jobs.survival.block-arrow-gap
-  (:require [engine.ctx :as ctx]
+  (:require [jobs.lib.blocks :as lb]
+            [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.combat :as combat]
             [jobs.lib.fetch :as fetch]
@@ -118,7 +119,7 @@
             cells (candidates (sh/feet p) within)
             cell (plug-cell kind-at cells mob body #(and (allowed? %) (permitted? %)))]
         (cond
-          (nil? (dig-cells/pick c blocks)) (or (await (fetch/step! c 'jobs.survival.block-arrow-gap {:reason :need :any-of (vec blocks)}))
+          (nil? (lb/pick c blocks)) (or (await (fetch/step! c 'jobs.survival.block-arrow-gap {:reason :need :any-of (vec blocks)}))
                                             (fail! c :no-blocks "no block to stop the arrows with"))
           (nil? cell) (if (plug-cell kind-at cells mob body allowed?)
                         (fail! c :refused "every cell that would stop the arrows is another's (zone, claim or plan)")

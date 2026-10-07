@@ -1,5 +1,6 @@
 (ns jobs.survival.dig-niche
-  (:require [engine.ctx :as ctx]
+  (:require [jobs.lib.blocks :as lb]
+            [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.child :as child]
             [jobs.lib.fetch :as fetch]
@@ -175,7 +176,7 @@
       (fail! c :dig-failed (str "cannot dig the niche: " (.-status r))))))
 
 (defn ^:async plug-step! [c cell]
-  (let [item (dig-cells/pick c (:blocks (:args c)))]
+  (let [item (lb/pick c (:blocks (:args c)))]
     (if (nil? item)
       (fail! c :no-blocks "nothing to plug the niche with")
       (let [r (await (tidy/place! c cell item))]

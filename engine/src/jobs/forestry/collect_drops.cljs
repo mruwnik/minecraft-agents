@@ -2,7 +2,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
-            [jobs.forestry.trees :refer [default-radius]]))
+            [jobs.lib.trees :refer [default-radius]]))
 
 (def doc
   "Collect the nearest matching dropped item, in one call, until none is left within :radius of where the job began (the work area: a walk to an item

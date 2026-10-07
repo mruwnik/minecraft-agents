@@ -174,3 +174,19 @@
   [p block-name]
   (and (not (can-harvest? p block-name))
        (> (clear-ms p block-name) quick-clear-ms)))
+
+(defn hand-better?
+  "Whether the body should dig block bare-handed: it is not a pickaxe block, no tool of its kind is carried, and a
+  pickaxe is held (soil by hand, never wearing the pickaxe out on it)."
+  [p block]
+  (let [held (.-held (.self p))]
+    (boolean (and block held (str/ends-with? held "_pickaxe") (not= "pickaxe" (tool-kind block))
+                  (nil? (pick p block))))))
+
+(defn ^:async equip!
+  "Hold the best carried tool for block (the mined block when not given)."
+  ([c] (equip! c (:block (:args c))))
+  ([c block]
+   (await (equip-for! c block))
+   (when (hand-better? (:primitives c) block)
+     (await (ctx/act c :unequip #js {})))))

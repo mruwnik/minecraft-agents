@@ -7,13 +7,41 @@
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
-            [jobs.forestry.trees :as forestry]
+            [jobs.lib.trees :as forestry]
             [jobs.lib.util :as u]
             [jobs.lib.places :as places]
             [engine.game :as game]))
 
 (def air #{"air" "cave_air" "void_air"})
 (def fluids #{"water" "lava" "bubble_column"})
+
+(def ores
+  {"coal_ore" "coal" "iron_ore" "raw_iron" "copper_ore" "raw_copper" "gold_ore" "raw_gold"
+   "diamond_ore" "diamond" "redstone_ore" "redstone" "lapis_ore" "lapis_lazuli" "emerald_ore" "emerald"})
+
+(def drop-item
+  (merge {"stone" "cobblestone" "grass_block" "dirt" "deepslate" "cobbled_deepslate"
+          "clay" "clay_ball" "snow_block" "snowball"}
+         ores
+         (into {} (map (fn [[k v]] [(str "deepslate_" k) v])) ores)))
+
+(defn item-name
+  "The item the mined block drops."
+  [{:keys [block item]}]
+  (or item (get drop-item block) block))
+
+(def building-blocks
+  ["dirt" "cobblestone" "cobbled_deepslate" "stone" "andesite" "diorite" "granite" "netherrack"
+   "oak_planks" "spruce_planks" "birch_planks" "jungle_planks" "acacia_planks" "dark_oak_planks"
+   "mangrove_planks" "cherry_planks"])
+
+(defn carried
+  "The carried [{:name :count}] whose name is in blocks, in the order of blocks."
+  [c blocks]
+  (let [have (into {} (map (juxt :name :count)) (u/inventory (:primitives c)))]
+    (vec (for [b blocks :let [n (get have b 0)] :when (pos? n)] {:name b :count n}))))
+
+(defn pick [c blocks] (:name (first (carried c blocks))))
 
 (def flowers
   #{"dandelion" "poppy" "blue_orchid" "allium" "azure_bluet" "red_tulip" "orange_tulip" "white_tulip" "pink_tulip"

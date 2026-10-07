@@ -13,10 +13,7 @@
             [engine.path.executor :as executor]
             [jobs.lib.walk :as walk]
             [jobs.lib.walk.world :as wworld]
-            [jobs.lib.walk.plan :as wplan]
-            [jobs.survival.dig-in :as dig-in]
-            [jobs.survival.dig-in-cells :as dig-cells]
-            [jobs.gather.mine :as mine]))
+            [jobs.lib.walk.plan :as wplan]))
 
 (def doc
   "Dig a 1-wide stair :down or :up along :heading from where the body stands, :steps steps or to feet height :y.
@@ -28,7 +25,7 @@
   (no gap, door or swim), else the stair stops :no-way-back.
 
   A step's floor must be solid, the cell under it neither air nor fluid (:cave-below), and everything loaded.
-  A floor of air gets a carried building block (dig-in/building-blocks, never an ore or valuable) after the
+  A floor of air gets a carried building block (blocks/building-blocks, never an ore or valuable) after the
   rules' may-place?. The cell under a placed floor is not judged. With no such block: :no-floor with :filler
   :none. A lava or water floor is never bridged.
 
@@ -281,7 +278,7 @@
         (cond
           (nil? block) nil
           (no-tool? p block) {:reason :no-tool :tool (tools/needed-kind p block) :block block}
-          (not (room-for? p (mine/item-name {:block block}))) {:reason :no-free-slot :block block})))))
+          (not (room-for? p (blocks/item-name {:block block}))) {:reason :no-free-slot :block block})))))
 
 (defn refusal
   "Before anything is cut: the stop of the first step when a zone, claim or plan refuses its cut, else nil."
@@ -315,10 +312,10 @@
       (>= tries max-cell-digs) {:reason :refills :cell cell :block block}
       (unbreakable block) {:reason :unbreakable :cell cell :block block}
       (no-tool? p block) {:reason :no-tool :cell cell :block block :tool (tools/needed-kind p block)}
-      (not (room-for? p (mine/item-name {:block block}))) {:reason :inventory-full :cell cell :block block}
+      (not (room-for? p (blocks/item-name {:block block}))) {:reason :inventory-full :cell cell :block block}
       :else
       (do
-        (await (mine/equip! c block))
+        (await (tools/equip! c block))
         (let [v (cell-verdict (assoc in :cell cell) cut)
               block ((:block-at in) cell)]
           (cond
@@ -341,12 +338,12 @@
 (defn ^:async bridge!
   "Place carried filler on the missing floor of the step. :again, or a stop map."
   [c in {:keys [floor]}]
-  (let [item (dig-cells/pick c dig-in/building-blocks)
+  (let [item (blocks/pick c blocks/building-blocks)
         verdict (rules/may-place? (assoc in :cell floor))
         [x y z] floor]
     (cond
       (nil? item) {:reason :no-floor :cell floor :block ((:block-at in) floor) :filler :none
-                   :why (str "no floor and no filler block carried (" (str/join ", " (take 4 dig-in/building-blocks)) " ...)")}
+                   :why (str "no floor and no filler block carried (" (str/join ", " (take 4 blocks/building-blocks)) " ...)")}
       (not (:ok verdict)) (assoc (dissoc verdict :ok) :cell floor)
       :else
       (do (await (ctx/act c :place #js {:pos #js {:x x :y y :z z} :item item}))

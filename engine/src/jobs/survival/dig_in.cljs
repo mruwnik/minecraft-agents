@@ -1,6 +1,7 @@
 (ns jobs.survival.dig-in
-  (:require [jobs.lib.args :as jargs]
-            [jobs.forestry.trees :as trees]
+  (:require [jobs.lib.blocks :as lb]
+            [jobs.lib.args :as jargs]
+            [jobs.lib.trees :as trees]
             [jobs.lib.tidy :as tidy]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
@@ -55,14 +56,9 @@
   Plug mode adds :room true. A shelter sealed again where the latest entry stood keeps that entry's :start and :door.
   Leaving is jobs.survival.dig-in-leave/leave!, which jobs.survival.night calls by day.")
 
-(def building-blocks
-  ["dirt" "cobblestone" "cobbled_deepslate" "stone" "andesite" "diorite" "granite" "netherrack"
-   "oak_planks" "spruce_planks" "birch_planks" "jungle_planks" "acacia_planks" "dark_oak_planks"
-   "mangrove_planks" "cherry_planks"])
-
 (def shelter-blocks
-  "What dig-in places: the building blocks, then logs (jobs.forestry.trees/log-names; worth more, a last resort)."
-  (into building-blocks trees/log-names))
+  "What dig-in places: the building blocks, then logs (jobs.lib.trees/log-names; worth more, a last resort)."
+  (into lb/building-blocks trees/log-names))
 
 (def args
   {:roof-height {:doc "a solid block within this many blocks above counts as a roof" :type :int :min 0 :default sh/default-roof-height}
@@ -167,7 +163,7 @@
       (do (remember-failed-site! c :no-floor)
           (ctx/emit! c :dig_in_failed :warn {:text (str (or under "an unloaded cell") " under the floor; not digging through it")})
           :done)
-      (and (sh/solid-at? p below) (nil? (dig-cells/pick c blocks)) (not (tools/can-harvest? p name)))
+      (and (sh/solid-at? p below) (nil? (lb/pick c blocks)) (not (tools/can-harvest? p name)))
       (do (remember-material! c {:pos (:roof (ctx/mem c)) :needs name})
           (ctx/emit! c :dig_in_failed :warn
                      {:text (str "cannot harvest " name " without a "
@@ -187,7 +183,7 @@
                 (let [placeable (some #(some #{(.-name %)} blocks) (array-seq (.-drops r)))]
                   (u/progress! c)
                   (await (dig-cells/collect-drops! c blocks (.-drops r)))
-                  (if (or placeable (some? (dig-cells/pick c blocks)))
+                  (if (or placeable (some? (lb/pick c blocks)))
                     :continue
                     (do (remember-material! c {:pos (:roof (ctx/mem c))})
                         (ctx/emit! c :dig_in_failed :warn {:text "nothing to roof the pit with"})
@@ -198,7 +194,7 @@
   "In the pit: place one block at the cell the body started in."
   [c]
   (let [{:keys [blocks]} (:args c)
-        item (dig-cells/pick c blocks)
+        item (lb/pick c blocks)
         roof (:roof (ctx/mem c))]
     (if (nil? item)
       (do (remember-material! c {:pos roof}) :done)
@@ -235,7 +231,7 @@
     (when moved (ctx/update-mem! c dissoc :mode :roof :target-y))
     (when (or moved (not mode))
       (let [cells (dig-cells/open-cells p start)
-            have (reduce + (map :count (dig-cells/carried c (:blocks (:args c)))))
+            have (reduce + (map :count (lb/carried c (:blocks (:args c)))))
             enclose (:enclose (:args c))
             plan (when-not enclose (dig-cells/dig-plan p start))
             plug (when (and (pos? have) (not enclose)) (dig-cells/room-plug p start (:roof-height (:args c))))
@@ -272,7 +268,7 @@
   harvests it; unsafe or inaccessible sites (a :reason) cannot."
   [c]
   (let [here (u/self-pos c)
-        have-blocks (seq (dig-cells/carried c (:blocks (:args c))))
+        have-blocks (seq (lb/carried c (:blocks (:args c))))
         retry? (fn [{:keys [reason needs]}]
                  (and (not reason)
                       (or have-blocks (and needs (tools/can-harvest? (:primitives c) needs)))))]
@@ -306,7 +302,7 @@
   "In a closed room: place one block in the hole of the roof over the body (:plug)."
   [c]
   (let [{:keys [blocks]} (:args c)
-        item (dig-cells/pick c blocks)
+        item (lb/pick c blocks)
         plug (:plug (ctx/mem c))]
     (if (nil? item)
       (fail-site! c :plug-failed "cannot mend the roof: no-item")

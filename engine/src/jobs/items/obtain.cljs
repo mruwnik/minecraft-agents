@@ -5,7 +5,6 @@
             [jobs.lib.fetch :as fetch]
             [jobs.lib.look :as look]
             [jobs.items.recipes :as recipes]
-            [jobs.gather.mine :as mine]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.items.craft :as craft]
@@ -120,7 +119,7 @@
   ([item] (material-blocks game/default-version item))
   ([version item]
    (when (contains? (recipes/stone-materials version) item)
-    (let [bs (set (for [[b d] mine/drop-item :when (= d item)] b))]
+    (let [bs (set (for [[b d] b/drop-item :when (= d item)] b))]
       (if (seq bs) bs #{item})))))
 
 (defn gather-plan

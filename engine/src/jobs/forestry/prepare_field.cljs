@@ -5,7 +5,7 @@
             [engine.ctx :as ctx]
             [jobs.forestry.prepare-rule :as rule]
             [jobs.lib.util :as u]
-            [jobs.farm.tidy :as tidy]
+            [jobs.lib.tidy-rules :as tidy]
             [jobs.forestry.maintain :as maintain]
             [jobs.lib.world :as known]))
 

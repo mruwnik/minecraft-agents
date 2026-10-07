@@ -4,7 +4,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
             [jobs.lib.result :as result]
-            [jobs.forestry.trees :refer [default-radius drop-filter debts near-debt? sapling-for]]))
+            [jobs.lib.trees :refer [default-radius drop-filter debts near-debt? sapling-for]]))
 
 (def doc
   "Fell a tree, collect what dropped and replant. Runs three child jobs in turn, each called once and run to its end:

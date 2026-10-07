@@ -9,7 +9,7 @@
             [jobs.lib.util :as u]
             [jobs.lib.torch :as torch]
             [jobs.access.stair :as stair]
-            [jobs.build.from-plan :as from-plan]
+            [jobs.lib.placement :as placement]
             [jobs.lib.world :as known]))
 
 (def doc
@@ -378,7 +378,7 @@
   [c in plan s]
   (let [p (:primitives c)
         block-at (:block-at in)
-        choice (torch-choice plan s (from-plan/eye (u/self-pos c)) block-at)
+        choice (torch-choice plan s (placement/eye (u/self-pos c)) block-at)
         cell (:cell choice)
         verdict (when cell (rules/may-place? (assoc in :cell cell)))
         reason (cond (zero? (torch/torches-carried p)) :no-torches
@@ -391,7 +391,7 @@
                                     {:cell cell :item (:block choice) :before "air" :job (:id c) :purpose :tunnel-torch})
             _ (when-not keep? (ledger/remember! c intended))
             r (await (ctx/act c :place (clj->js {:pos (zipmap [:x :y :z] cell) :item "torch"
-                                                 :click (from-plan/js-click (:click choice))})))
+                                                 :click (placement/js-click (:click choice))})))
             held? (or (= "placed" (.-status r)) (torch-blocks (block-at cell)))]
         (when-not keep? (ledger/remember! c (if held? (ledger/confirm intended cell) (ledger/reconcile intended block-at))))
         (when-not held? (book-unlit! c plan s :place-failed cell))
