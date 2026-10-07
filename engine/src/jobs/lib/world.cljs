@@ -45,3 +45,8 @@
   "The shared marker called name (text), or nil."
   [ctx name]
   (world/marker (:world (:engine ctx)) name))
+
+(defn find-markers
+  "A bounded search of the shared markers: {:text :kind :near {:x :y :z} :limit} (see jobs.lib.world-files/find-markers)."
+  [ctx query]
+  (world/find-markers (markers ctx) query))

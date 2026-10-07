@@ -15,7 +15,7 @@
 (def doc
   "Walk to :pos ([x y z] or {:x :y :z}, fractions floored to the cell) until the body's cell is within :range cells of
   it (range 0: in that cell, 1: next to it). :place (a name such as :home, set by jobs.memory.set-place) walks to
-  that place's recorded position instead of :pos.
+  that place's recorded position instead of :pos; a name not in memory falls back to the shared marker of that name (jobs.lib.world/marker).
   - Refused at once, before any walk: a :pos that is not one (:bad-pos), a :place that is not a valid name (:bad-name), a :tolls entry that is not {:x :y :z :factor} of finite numbers (:bad-tolls)
     or has no recorded position (:unknown-place), a body with no pathWorld sensing (:unsupported). Both give a :refused warn and {:status :stopped :arrived false :reason <it> :text}.
   - One call is one whole attempt: it plans and walks (jobs.lib.walk: slices of about 100 ms of search, walks of at
@@ -265,11 +265,13 @@
     (if (nil? place)
       (places/parse-pos pos)
       (let [named (places/parse-name place)
-            there (when-not (:reason named) (mem/place (ctx/view c) (:name named)))]
+            there (when-not (:reason named) (mem/place (ctx/view c) (:name named)))
+            shared (when-not (or (:reason named) there) (known/marker c (name (:name named))))]
         (cond
           (:reason named) named
-          (nil? there) (places/refusal :unknown-place (str "no place called " (name (:name named)) " is recorded in memory"))
-          :else (places/parse-pos there))))))
+          there (places/parse-pos there)
+          shared (places/parse-pos [(:x shared) (:y shared) (:z shared)])
+          :else (places/refusal :unknown-place (str "no place called " (name (:name named)) " is recorded in memory or among the shared markers")))))))
 
 (defn ^:async round
   "One whole attempt: step! until it arrives, gives up, or waits on a child (:continue), with pace! between steps. A

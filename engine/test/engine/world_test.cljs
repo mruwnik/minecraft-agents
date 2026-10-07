@@ -369,3 +369,17 @@
     (is (= a-marker (world/marker w "hut"))))
   (is (= [] (world/markers nil)))
   (is (nil? (world/marker nil "hut"))))
+
+(def far-marker {:name "mine" :kind "mine" :x 500 :y 12 :z 500 :note "iron seam"})
+(def near-marker {:name "farm-north" :kind "farm" :x 10 :y 64 :z 10})
+
+(deftest markers-are-searched-by-name-kind-or-note-nearest-first-and-bounded
+  (let [ms [far-marker near-marker a-marker]
+        names #(mapv :name (world/find-markers ms %))]
+    (is (= ["mine"] (names {:text "iron"})) "note")
+    (is (= ["farm-north"] (names {:text "FARM"})) "name and kind, any case")
+    (is (= ["mine"] (names {:kind "mine"})))
+    (is (= ["farm-north" "hut" "mine"] (names {:near {:x 0 :y 64 :z 0}})) "nearest first")
+    (is (= ["farm-north"] (names {:near {:x 0 :y 64 :z 0} :limit 1})))
+    (is (= 10 (count (world/find-markers (repeat 50 near-marker) {}))) "default limit 10")
+    (is (= [] (names {:text "nothing"})))))

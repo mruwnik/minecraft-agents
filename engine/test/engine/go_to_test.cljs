@@ -13,6 +13,9 @@
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.search :as wsearch]
             [jobs.lib.threats :as threats]
+            ["fs" :as fs]
+            ["path" :as path]
+            [jobs.lib.world-files :as world-files]
             [engine.takeover :as takeover]
             [engine.test-util :as tu :refer [box floor]]
             [engine.triggers :as triggers]
@@ -23,7 +26,8 @@
 
 (defn setup
   "A world key :light [sky block] makes the body see through perception, in that light everywhere."
-  [world]
+  ([world] (setup world nil))
+  ([world shared]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         raw (tu/fake (merge {:self {:pos start}} (dissoc world :light)))
@@ -31,9 +35,10 @@
         p (if (:light world)
             (perception/wrap raw (perception/create (fake-raw/create raw) {:radius 16 :ray-deg 2 :now #(deref clock)}))
             raw)
-        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
-                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    {:eng eng :p p :seen seen}))
+        eng (core/create (cond-> {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                                  :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}
+                           shared (assoc :world shared)))]
+    {:eng eng :p p :seen seen})))
 
 (defn recording-parent
   "A parent that runs go-to with args as its child and keeps the child's result in out."
@@ -788,3 +793,47 @@
         (doseq [[food sprint] [[0 false] [6 false] [7 true] [20 true]]]
           (let [s (await (go! {:blocks flat :self {:pos {:x 0.5 :y 64 :z 0.5} :food food}} {:pos [5 64 0] :range 0}))]
             (is (= [sprint] (distinct (map :sprint (events-of s :planned)))) (str "food " food))))))))
+
+(defn ^:async go-marker!
+  "Run go-to over flat with the places in memory and a shared places.json holding markers; {:out :p :seen}."
+  [places markers args]
+  (let [dir (tu/tmp-dir)
+        file (path/join dir "places.json")
+        _ (fs/writeFileSync file (js/JSON.stringify (clj->js markers)))
+        w (world-files/open {:plans-dir (path/join dir "plans") :blueprint-dir (path/join dir "bps")
+                             :zones-file (path/join dir "zones.edn")
+                             :emit (fn [_])})
+        {:keys [eng] :as s} (setup {:blocks flat} w)
+        out (atom :not-done)
+        eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out args)))]
+    (doseq [[k pos] places] (mem/write! (:store eng) k {:pos pos} mem/place-policy))
+    (core/submit! eng '(recording-parent) {})
+    (await (tick-out! eng 30))
+    (assoc s :out out)))
+
+(def hut {:name "hut" :kind "base" :x 10 :y 64 :z 0})
+
+(deftest go-to-walks-to-a-shared-marker-by-name
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (go-marker! {} [hut] {:place :hut :range 0}))]
+          (is (= {:arrived true} @out))
+          (is (= [10 64 0] (at p))))))))
+
+(deftest go-to-prefers-the-bodys-own-place-over-a-shared-marker
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (go-marker! {:hut {:x 5 :y 64 :z 0}} [hut] {:place :hut :range 0}))]
+          (is (= {:arrived true} @out))
+          (is (= [5 64 0] (at p))))))))
+
+(deftest go-to-refuses-a-name-neither-memory-nor-markers-know
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (go-marker! {} [hut] {:place :mine}))]
+          (is (= :unknown-place (:reason @out)))
+          (is (re-find #"shared" (:text @out)))
+          (is (= [0 64 0] (at p))))))))
