@@ -23,6 +23,49 @@
    :expect [{:event {:source :job :kind :fetch.started} :within-s 20 :of-job true}
             {:event {:source :job :kind #{:fetch.done :fetch.failed}} :within-s 160 :of-job true}
             {:no-event {:source :job :kind :failed} :for-s 20}]}
+  {:name "already-planted-spot-clears-debt"
+   ;; card f3248d31: the same sapling already on the spot counts as planted (place says occupied) and the debt is forgotten
+   :blocks [[:set [20 0 14] "oak_sapling"]]
+   :memory [{:kind :forestry/replant :data {:pos #xyz [20 0 14] :species "oak"}}]
+   :body {:inventory [["oak_sapling" 1]]}
+   :act [[:job (jobs.forestry.plant-sapling {:at #at [20 0 14] :species "oak"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 50 :of-job true}
+            {:no-event {:source :job :kind :plant_blocked} :for-s 50 :until {:source :job :kind :completed}}]
+   :after [[:block [20 0 14] "oak_sapling"]]}
+  {:name "stone-on-spot-fails-plant-blocked"
+   ;; card f3248d31 should-fail: a foreign block on the spot still fails (debt kept)
+   :blocks [[:set [20 0 14] "stone"]]
+   :memory [{:kind :forestry/replant :data {:pos #xyz [20 0 14] :species "oak"}}]
+   :body {:inventory [["oak_sapling" 1]]}
+   :act [[:job (jobs.forestry.plant-sapling {:at #at [20 0 14] :species "oak"})]]
+   :expect [{:event {:source :job :kind :plant_blocked :level :warn} :within-s 60 :of-job true}]
+   :after [[:block [20 0 14] "stone"]]}
+  {:name "mangrove-propagule-fetched-and-planted"
+   ;; card f3248d31: the sapling kind is the species' own (mangrove_propagule), fetched from a seen chest
+   :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:mangrove_propagule\",count:2}]}"]]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+         [:job (jobs.forestry.plant-sapling {:at #at [20 0 14] :species "mangrove"})]]
+   :expect [{:event {:source :job :kind :fetch.started} :within-s 20 :of-job true}
+            {:event {:source :job :kind :fetch.done} :within-s 60 :of-job true}
+            {:event {:source :job :kind :completed} :within-s 80 :of-job true}]
+   :after [[:block [20 0 14] "mangrove_propagule"]]}
+  {:name "leaves-bound-far-leaves-stay"
+   ;; card bfb29b54: the sapling gather breaks at most about 60 leaves (:dry-digs), so far leaves of a big cluster remain
+   :limit-s 200
+   :blocks [[:fill [8 0 19] [26 3 29] "oak_leaves[persistent=true]"]]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+         [:job (jobs.forestry.plant-sapling {:at #at [20 0 14] :species "oak"})]]
+   :expect [{:event {:source :job :kind :fetch.started} :within-s 20 :of-job true}
+            {:event {:source :job :kind #{:fetch.done :fetch.failed}} :within-s 190 :of-job true}]
+   :after [[:block [26 3 29] "oak_leaves"]]}
+  {:name "leaves-in-foreign-plan-untouched"
+   ;; card bfb29b54 should-fail: leaves inside another owner's plan footprint are not broken
+   :blocks [[:fill [14 0 19] [18 1 21] "oak_leaves[persistent=true]"]]
+   :plans [{:id "z" :metadata {:by "SomeoneElse"} :parts [{:id "z" :box [#at [13 0 18] #at [19 2 22]] :want "oak_leaves"}]}]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+         [:job (jobs.forestry.plant-sapling {:at #at [20 0 14] :species "oak"})]]
+   :expect [{:no-event {:source :job :kind :completed} :for-s 40}]
+   :after [[:block [14 0 19] "oak_leaves"] [:block [16 1 20] "oak_leaves"] [:not-block [20 0 14] "oak_sapling"]]}
   {:name "no-source-waits-no-sapling"
    :act [[:job (jobs.forestry.plant-sapling {:at #at [20 0 14] :species "oak"})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-sapling :species "oak"}} :within-s 40 :of-job true}

@@ -66,4 +66,29 @@
    :act [[:job (jobs.items.get-tool {:item "stone_pickaxe"})]]
    :limit-s 150
    :expect [{:event {:source :job :level :warn :kind :stopped :data {:reason :no-source}} :within-s 140 :of-job true}]
+   :after [[:item "stone_pickaxe" 0]]},
+  {:name "deepslate-cave-stone-pick"
+   ;; card fd6e381b: no stone seen, deepslate seen: the stone pickaxe is made from cobbled_deepslate
+   :blocks [[:fill [20 0 15] [24 3 17] "deepslate"]]
+   :body {:inventory [["wooden_pickaxe" 1] ["stick" 4] ["oak_planks" 8]]}
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 0"] [:wait-s 2]
+         [:job (jobs.items.get-tool {:item "stone_pickaxe"})]]
+   :limit-s 150
+   :expect [{:event {:source :job :kind :completed} :within-s 140 :of-job true}]
+   :after [[:item "stone_pickaxe" 1]]}
+  {:name "stone-and-deepslate-mines-stone"
+   ;; card fd6e381b: with both seen the commonest material, cobblestone, is mined
+   :blocks [[:fill [20 0 15] [22 3 17] "stone"] [:fill [24 0 15] [26 3 17] "deepslate"]]
+   :body {:inventory [["wooden_pickaxe" 1] ["stick" 4] ["oak_planks" 8]]}
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 0"] [:wait-s 2]
+         [:job (jobs.items.get-tool {:item "stone_pickaxe"})]]
+   :limit-s 150
+   :expect [{:event {:source :job :kind :completed} :within-s 140 :of-job true}]
+   :after [[:item "stone_pickaxe" 1] [:item "cobbled_deepslate" 0]]}
+  {:name "no-material-seen-waits-no-source"
+   ;; card fd6e381b should-fail: no cobblestone/deepslate/blackstone seen: waits :no-source naming cobblestone
+   :body {:inventory [["wooden_pickaxe" 1] ["stick" 4] ["oak_planks" 8]]}
+   :act [[:job (jobs.items.get-tool {:item "stone_pickaxe"})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-source :why [:contains "cobblestone"]}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-source}}}]
    :after [[:item "stone_pickaxe" 0]]}]}
