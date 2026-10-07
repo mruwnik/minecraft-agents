@@ -645,7 +645,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [status ["no-item" "occupied"]
+        (doseq [status ["no-item" "occupied" "no-support"]
                 [label spec] [["soil" (world {"3,63,0" "stone"} (item "dirt" 1) (item "oak_sapling" 1) (item "stone_pickaxe" 1))]
                               ["dam" (apply wet-world {"3,64,0" 1 "2,64,0" 0} sapling-and-dirt)]]]
           (let [s (start spec {"forest" one-cell})]

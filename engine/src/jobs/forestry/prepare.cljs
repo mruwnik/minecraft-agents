@@ -205,7 +205,7 @@
                       :continue :continue
                       (:placed :already) (do (ctx/update-mem! c #(-> % (bump :soiled) (update :holes disj (maintain/cell-vec under))))
                                              :again)
-                      (:need :no-item :occupied) (do (count-cell-fail! c pos (if (= :need outcome) :no-item outcome)) :again)
+                      (:need :no-item :occupied :no-support) (do (count-cell-fail! c pos (if (= :need outcome) :no-item outcome)) :again)
                       (do (count-cell-fail! c pos :failed) :again))))))))))
 
 (def recede-ms "How long a flow is given to recede after its source was dammed." 10000)
@@ -232,7 +232,7 @@
                     (case outcome
                       :continue :continue
                       (:placed :already) (do (ctx/update-mem! c dammed) :again)
-                      (:need :no-item :occupied) (do (count-cell-fail! c pos (if (= :need outcome) :no-item outcome)) :again)
+                      (:need :no-item :occupied :no-support) (do (count-cell-fail! c pos (if (= :need outcome) :no-item outcome)) :again)
                       (do (count-cell-fail! c pos :failed) :again))))))))))
 
 (defn ^:async plant!
