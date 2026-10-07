@@ -287,6 +287,8 @@
     (is (false? (r/time-disturbed? c 1000 1000 300000 false)) "a stopped daylight cycle is no jump")
     (is (false? (r/time-disturbed? c 1000 4240 180000 false)) "18 TPS over 3 min is no jump")
     (is (false? (r/time-disturbed? c 1000 1000 30000 false)) "no movement")
+    (is (false? (r/time-disturbed? c 1000 2800 30000 false 60)) "30 s at 60 TPS = 1800 ticks")
+    (is (true? (r/time-disturbed? c 1000 2800 30000 false)) "the same advance at 20 TPS is a jump")
     (is (true? (r/time-disturbed? c 1000 6000 30000 false)) "forward jump")
     (is (true? (r/time-disturbed? c 6000 1000 300000 false)) "back jump after a stopped cycle")
     (is (false? (r/time-disturbed? {:act [[:time-set 14000]]} 1000 14000 30000 false)) "the case set it itself")
