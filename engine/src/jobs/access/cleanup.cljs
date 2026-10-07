@@ -161,9 +161,10 @@
     (and (nil? (known/zones c)) (not (:ignore-zones? (:args c))))
     (do (ctx/warn-once! c :no-zones :cleanup.declined
                         {:reason "no zone list has been read" :text "cleanup declines: no zone list has been read"})
-        false)
+        (ctx/wait c {:reason :no-zones}))
     (:started (ctx/mem c)) true
-    :else (boolean (seq (ledger/offered (ctx/view c) (escape/block-at-of (:primitives c)) (:job (:args c)))))))
+    :else (or (boolean (seq (ledger/offered (ctx/view c) (escape/block-at-of (:primitives c)) (:job (:args c)))))
+              (ctx/wait c {:reason :nothing-to-do}))))
 
 ;; ------------------------------------------------------------------ steps
 
