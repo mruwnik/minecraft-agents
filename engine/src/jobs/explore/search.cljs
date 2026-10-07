@@ -10,10 +10,10 @@
   "Look for :count things named :target (a block or entity name, or several) by walking legs from where the job
   starts (the origin).
 
-  Each step looks around (blocks and entities with those names within :scan-radius), writes what it saw as
-  :seen notes and the spot as a :searched note (engine.notes), and ends when :count are found. Otherwise it
-  chooses the next leg and walks it with jobs.movement.go-to as a child (range 2). One call is the whole search: look, leg, look, leg ... until it ends;
-  it yields (:continue) only while go-to waits on the world or for leg columns to load.
+  Each step looks around (blocks and entities with those names within :scan-radius), notes what it saw (:seen) and
+  the spot (:searched) (engine.notes), and ends when :count are found. Otherwise it walks the next leg with
+  jobs.movement.go-to as a child (range 2). One call is the whole search; it yields (:continue) only while go-to waits
+  on the world or for leg columns to load.
 
   Legs are :spacing apart: :spiral rings round the origin, or :outward ahead along :heading, then the sides. A
   leg is never tried twice and never goes beyond :max-distance (XZ) of the origin. It is skipped (:skipped)
@@ -22,8 +22,8 @@
 
   A leg needs a standing cell in its column within 12 of the feet, read top down through leaves. An unloaded,
   wet or standless column is recorded failed (:not-loaded, :wet, :no-surface, :unseen) and the next candidate is tried
-  in the same round. A loaded column not yet seen (:unseen) is walked toward in steps of up to 12 blocks (a leg
-  that does not retire the candidate) and looked at again; within 3 blocks of it, it is recorded failed. An unloaded column is not tried but looked at again later. When only unloaded ones are
+  in the same round. A loaded column not yet seen (:unseen) is walked toward in steps of up to 12 blocks (not
+  counted in :max-legs) and looked at again; within 3 blocks of it, it is recorded failed. An unloaded column is not tried but looked at again later. When only unloaded ones are
   left the round ends and the check declines for 2 s, up to :load-wait-s (a body just logged in has no chunks
   yet), then the search ends :not-loaded. A walk go-to gives up on is recorded :unreachable. Three of those in
   a row end the search (:stuck).
@@ -231,7 +231,8 @@
 
 (defn choose-leg
   "{:leg [x y z] (or nil when none is left) :tried [points looked at] :failed [{:pos :reason}] :skipped n
-  :unloaded [{:pos :reason :not-loaded}] :more true when stand-cap cells were read and candidates may be left}; an
+  :unloaded [{:pos :reason :not-loaded}] :step true when :leg is only a step toward an unseen column (it is no leg
+  walked) :more true when stand-cap cells were read and candidates may be left}; an
   unloaded column is not tried, so a later round looks again (m's :deferred ones are kept out of this sweep)."
   [c m names ns]
   (let [{:keys [max-distance]} (:args c)
@@ -250,7 +251,7 @@
                     failed {:pos [(pt 0) y (pt 1)] :reason fail}
                     step (when (= :unseen fail) (step-toward block-at (here c) (pt 0) (pt 1)))]
                 (cond
-                  step (assoc acc :leg step)
+                  step (assoc acc :leg step :step true)
                   (= :not-loaded fail) (recur more (inc reads) (update acc :unloaded conj failed))
                   fail (recur more (inc reads) (-> acc (update :tried conj pt) (update :failed conj failed)))
                   :else (assoc (update acc :tried conj pt) :leg [(pt 0) sy (pt 1)])))))))
@@ -282,7 +283,7 @@
     (cond
       (>= (count found) want) (finish! c :found nil)
       (>= (:legs m 0) max-legs) (finish! c :not-found :legs)
-      :else (let [{:keys [leg tried failed skipped unloaded more]} (choose-leg c m names ns)
+      :else (let [{:keys [leg step tried failed skipped unloaded more]} (choose-leg c m names ns)
                   now (ctx/now c)
                   waited (- now (:waiting-since m now))]
               (ctx/update-mem! c (fn [m] (-> m
@@ -291,7 +292,7 @@
                                              (update :skipped (fnil + 0) skipped)
                                              (assoc :deferred (when (and more (not leg)) unloaded)))))
               (cond
-                leg (do (ctx/update-mem! c (fn [m] (-> m (dissoc :waiting-since) (assoc :leg leg) (update :legs (fnil inc 0)))))
+                leg (do (ctx/update-mem! c (fn [m] (-> m (dissoc :waiting-since) (assoc :leg leg) (update :legs (fnil + 0) (if step 0 1)))))
                         (await (walk! c)))
                 more :again
                 (empty? unloaded) (finish! c :not-found :distance)

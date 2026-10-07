@@ -1027,6 +1027,18 @@
           (is (empty? (events-of s :mine.no-torches)))
           (is (= :tunnel-length (:reason (done-event s)))))))))
 
+;; the glance at the support before a torch is for support not yet seen: all is seen here, so hanging adds no looks
+(deftest a-torch-on-seen-support-is-hung-without-a-glance
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [run (fn [inv] (scenario {:block "iron_ore" :count 1 :direction "east" :tunnel-length 22 :mend false}
+                                      (torch-world inv) 200))
+              lit (await (run torches8))
+              dark (await (run pickaxe))]
+          (is (= [0 10 20] (torch-xs lit)))
+          (is (= (count (calls dark "look")) (count (calls lit "look")))))))))
+
 (deftest the-torch-interval-is-an-arg
   (async done
     (tu/run-async done

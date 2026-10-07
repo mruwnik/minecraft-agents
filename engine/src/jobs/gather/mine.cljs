@@ -550,15 +550,16 @@
 
 (defn ^:async hang-torch!
   "Hang a torch on the cell behind the body (a branch: behind it on its way off the tunnel), after a glance at it and
-  its side walls so the support is seen."
+  its side walls when the support is not yet seen."
   [c branch]
   (let [p (:primitives c)
         {:keys [tunnel]} (ctx/mem c)
         block-at (fn [[x y z]] (u/seen-name p {:x x :y y :z z}))
         {:keys [dir site]} (if branch (branch-site tunnel (cell-of (u/self-pos c))) {:dir (headings (:heading tunnel)) :site (step-cell tunnel (dec (:steps tunnel)))})
-        _ (when site (let [[dx dz] dir] (await (glance! c [[(- dx) (- dz)] [(- dz) dx] [dz (- dx)]]))))
-        choice (when site (torch/torch-at dir [(:x site) (:y site) (:z site)]
-                                          (placement/eye (u/self-pos c)) block-at))
+        pick (fn [] (when site (torch/torch-at dir [(:x site) (:y site) (:z site)] (placement/eye (u/self-pos c)) block-at)))
+        choice (or (let [c0 (pick)] (when-not (:refused c0) c0))
+                   (when site (let [[dx dz] dir] (await (glance! c [[(- dx) (- dz)] [(- dz) dx] [dz (- dx)]]))))
+                   (pick))
         cell (:cell choice)
         reason (cond (nil? site) :no-site
                      (:refused choice) (:refused choice)
