@@ -54,3 +54,13 @@
     (is (= (walk/tolls-key tolled) (walk/tolls-key (walk/with-tolls pw (cost/zone-tolls [[6 64 1] [5 64 0]])))))
     (is (= 2 (.-size (.-cells (.-tolls (walk/plan-options tolled 1 nil nil))))))
     (is (= (walk/tolls-key tolled) (walk/tolls-key (walk/with-dangers tolled nil))) "other costs keep the tolls")))
+
+(deftest tolls-problem-names-a-malformed-entry
+  (is (nil? (walk/tolls-problem nil)))
+  (is (nil? (walk/tolls-problem [])))
+  (is (nil? (walk/tolls-problem [{:x 1 :y 64 :z 2 :factor 3}])))
+  (doseq [bad [{:x 1 :y 64 :z 2} {:x 1 :y 64 :z 2 :factor nil} {:x 1 :y 64 :z 2 :factor "3"}
+               {:x 1 :y 64 :z 2 :factor js/NaN} {:x 1 :y 64 :z 2 :factor -1} {:x 1 :y 64 :factor 3}
+               {:x 1 :y 64 :z js/Infinity :factor 3} [1 64 2] nil]]
+    (is (string? (walk/tolls-problem [bad])) (pr-str bad)))
+  (is (string? (walk/tolls-problem {:x 1 :y 64 :z 2 :factor 3})) "not a sequence"))

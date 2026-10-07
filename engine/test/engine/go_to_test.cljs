@@ -187,6 +187,20 @@
           (let [{:keys [out]} (await (go! {:blocks flat} {:pos [6 64 0] :doors doors}))]
             (is (= {:arrived true} @out) (str doors))))))))
 
+(deftest go-to-refuses-malformed-tolls-with-a-reason
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup {:blocks flat})
+              out (atom :not-done)
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent
+                                          (recording-parent out {:pos [6 64 0] :tolls [{:x 3 :y 64 :z 0}]})))]
+          (core/submit! eng '(recording-parent) {})
+          (await (tick-out! eng 10))
+          (is (= {:status :stopped :arrived false :reason :bad-tolls} (select-keys @out [:status :arrived :reason])))
+          (is (= [0 64 0] (at p)))
+          (is (= [:bad-tolls] (mapv :reason (events-of s :refused)))))))))
+
 (deftest go-to-without-path-sensing-says-unsupported
   (async done
     (tu/run-async done

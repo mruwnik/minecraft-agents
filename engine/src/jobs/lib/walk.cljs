@@ -198,6 +198,17 @@
            :avoid #js {:kinds 0 :factor avoid-factor :list sorted
                        :cells (js/Set. (clj->js (mapv (fn [[x y z]] (planner/cell-key x y z)) sorted)))}})))
 
+(defn tolls-problem
+  "Why tolls is not a usable go-to :tolls (nil or a sequence of {:x :y :z :factor}, finite numbers, factor not negative), else nil."
+  [tolls]
+  (let [finite? #(and (number? %) (js/isFinite %))
+        ok? #(and (map? %) (every? (comp finite? %) [:x :y :z :factor]) (>= (:factor %) 0))]
+    (cond
+      (nil? tolls) nil
+      (not (sequential? tolls)) (str "tolls is a list of {:x :y :z :factor}; got " (pr-str tolls))
+      :else (when-let [[bad] (seq (remove ok? tolls))]
+              (str "a toll is {:x :y :z :factor} of finite numbers, factor 0 or more; got " (pr-str bad))))))
+
 (defn with-tolls
   "pw whose plans cost the cells of tolls ([{:x :y :z :factor}], jobs.lib.cost farm-tolls and zone-tolls) factor times their
   own seconds more (the planner's options.tolls; none: pw)."

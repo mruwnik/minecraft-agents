@@ -18,7 +18,7 @@
   "Walk to :pos ([x y z] or {:x :y :z}, fractions floored to the cell) until the body's cell is within :range cells of
   it (range 0: in that cell, 1: next to it). :place (a name such as :home, set by jobs.memory.set-place) walks to
   that place's recorded position instead of :pos.
-  - Refused at once, before any walk: a :pos that is not one (:bad-pos), a :place that is not a valid name (:bad-name)
+  - Refused at once, before any walk: a :pos that is not one (:bad-pos), a :place that is not a valid name (:bad-name), a :tolls entry that is not {:x :y :z :factor} of finite numbers (:bad-tolls)
     or has no recorded position (:unknown-place), a body with no pathWorld sensing (:unsupported). Both give a :refused warn and {:status :stopped :arrived false :reason <it> :text}.
   - One call is one whole attempt: it plans and walks (jobs.lib.walk: slices of about 100 ms of search, walks of at
     most 60 s each) until it arrives or gives up. A search that needs more slices walks on toward where it has got
@@ -602,9 +602,16 @@
   cut ends it at once (ctx/alive? per iteration, else at the next memory write or act, which throws)."
   [c]
   (let [parsed (target c)
-        pos (:pos parsed)]
-    (if (:reason parsed)
+        pos (:pos parsed)
+        tolls-problem (walk/tolls-problem (:tolls (:args c)))]
+    (cond
+      (:reason parsed)
       (refuse! c parsed)
+
+      tolls-problem
+      (refuse! c {:reason :bad-tolls :message tolls-problem})
+
+      :else
       (do (start-attempt! c pos)
           (loop []
             (let [r (await (step! c pos))]
