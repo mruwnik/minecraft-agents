@@ -299,47 +299,10 @@ test('too far: unreachable carries reason too-far and the eye-to-centre distance
   assert.deepEqual([r.status, r.reason, r.distance], ['unreachable', 'too-far', want])
 })
 
-test('a block behind solid stone is unreachable (no-line) and never clicked', async () => {
-  const blocks = { '3,64,0': 'dirt', '2,64,0': 'stone', '2,65,0': 'stone' }
-  const { bot, p } = rig({ blocks })
-  const r = await p.useOn('t1', { pos: at(3, 64, 0), item: 'diamond_hoe' })
+test('noLine from the senses refuses with no-line and never clicks', async () => {
+  const { bot, p } = rig({ blocks: { '3,64,0': 'dirt' } })
+  const r = await p.useOn('t1', { pos: at(3, 64, 0), item: 'diamond_hoe', noLine: true })
   assert.deepEqual([r.status, r.reason, r.consumed], ['unreachable', 'no-line', 0])
-  assert.equal(calls(bot, 'activateBlock').length, 0)
-})
-
-test('a block behind glass is refused: glass has a full outline', async () => {
-  const blocks = { '3,64,0': 'dirt', '2,64,0': 'glass', '2,65,0': 'glass' }
-  const { bot, p } = rig({ blocks })
-  const r = await p.useOn('t1', { pos: at(3, 64, 0), item: 'diamond_hoe' })
-  assert.deepEqual([r.status, r.reason], ['unreachable', 'no-line'])
-  assert.equal(calls(bot, 'activateBlock').length, 0)
-})
-
-const leaf = [[0, 0, 0.4, 1, 1, 0.6]] // a closed door's thin leaf
-
-test('a door lower half is clicked although its closed upper half stands in the line', async () => {
-  const blocks = { '1,64,0': 'oak_door', '1,65,0': 'oak_door' }
-  const props = { '1,64,0': { half: 'lower' }, '1,65,0': { half: 'upper' } }
-  const shapes = { '1,64,0': leaf, '1,65,0': leaf }
-  const { bot, p } = rig({ blocks, props, shapes, pos: [2.5, 64, 0.5], onUseBlock: () => { props['1,64,0'] = { half: 'lower', open: 'true' } } })
-  const r = await p.useOn('t1', { pos: at(1, 64, 0) })
-  assert.equal(calls(bot, 'activateBlock').length, 1)
-  assert.equal(r.status, 'used')
-})
-
-test('a gate beside a wall is clicked from the open side', async () => {
-  const blocks = { '1,64,0': 'oak_fence_gate', '1,64,1': 'stone', '1,65,1': 'stone', '2,64,0': 'stone' }
-  const { bot, p } = rig({ blocks })
-  await p.useOn('t1', { pos: at(1, 64, 0) })
-  assert.equal(calls(bot, 'activateBlock').length, 1)
-})
-
-test('a gate walled in on every side is refused (no-line) and never clicked', async () => {
-  const blocks = { '3,64,0': 'oak_fence_gate' }
-  for (const [x, y, z] of [[2, 64, 0], [2, 65, 0], [2, 63, 0], [3, 65, 0], [3, 63, 0], [3, 64, 1], [3, 64, -1], [4, 64, 0]]) blocks[key(x, y, z)] = 'stone'
-  const { bot, p } = rig({ blocks })
-  const r = await p.useOn('t1', { pos: at(3, 64, 0) })
-  assert.deepEqual([r.status, r.reason], ['unreachable', 'no-line'])
   assert.equal(calls(bot, 'activateBlock').length, 0)
 })
 

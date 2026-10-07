@@ -89,6 +89,39 @@
                                       (<= (js/Math.abs (- (.-y pos) (.-y me))) monster-height))))
                    (array-seq (.entities p #js {:kind "hostile" :radius (+ monster-range monster-height) :max max-listed}))))))
 
+;; ---- useOn line
+
+(def inset 0.02)
+(def full-box #js [0 0 0 1 1 1])
+
+(defn- aim-points
+  "Where a click could land on the block at (px py pz): the centre and the face centres (pulled inside) of each box,
+  nearest to the eye first."
+  [px py pz boxes ^js eye]
+  (let [pts (for [^js b boxes
+                  :let [[x0 y0 z0 x1 y1 z1] (array-seq b)
+                        cx (/ (+ x0 x1) 2) cy (/ (+ y0 y1) 2) cz (/ (+ z0 z1) 2)]
+                  [x y z] [[cx cy cz] [(+ x0 inset) cy cz] [(- x1 inset) cy cz] [cx (+ y0 inset) cz]
+                           [cx (- y1 inset) cz] [cx cy (+ z0 inset)] [cx cy (- z1 inset)]]]
+              [(+ px x) (+ py y) (+ pz z)])
+        dist (fn [[x y z]] (js/Math.hypot (- x (.-x eye)) (- y (.-y eye)) (- z (.-z eye))))]
+    (sort-by dist pts)))
+
+(defn no-line?
+  "True when the eye's ray reaches no part of the block at p ({:x :y :z}) before another block's shape; the target's
+  own other half (same name, adjacent, beds also sideways) never blocks."
+  [^js p ^js raw ^js eye ^js pos]
+  (let [px (js/Math.floor (.-x pos)) py (js/Math.floor (.-y pos)) pz (js/Math.floor (.-z pos))
+        name-at (fn [x y z] (some-> (.blockAt p #js {:x x :y y :z z}) .-name))
+        target (name-at px py pz)
+        partner? (fn [x y z] (and (= 1 (+ (js/Math.abs (- x px)) (js/Math.abs (- y py)) (js/Math.abs (- z pz))))
+                                  (or (not= y py) (boolean (re-find #"_bed$|^respawn_anchor$" (or target ""))))
+                                  (= (name-at x y z) target)))
+        shapes-at (fn [x y z] (if (partner? x y z) #js [] (let [s (.shapesAt raw x y z)] (if (pos? (alength s)) s #js []))))
+        boxes (let [s (.shapesAt raw px py pz)] (if (pos? (alength s)) s #js [full-box]))]
+    (not-any? (fn [[tx ty tz]] (sight/ray-clear (.-x eye) (.-y eye) (.-z eye) tx ty tz shapes-at))
+              (aim-points px py pz boxes eye))))
+
 (defn wrap
   "The primitives object p with self, entities, sleep and onBodyEvent as the contract has them (README.md): derived from
   what p reports raw, over the raw world (engine/js/raw-world.mjs's shape: eye, stateAt, sightTable, shapesAt)."
@@ -111,6 +144,13 @@
                   flags #js {:notNight (and online? (day-at? (.-timeOfDay s)))
                              :monstersNear (and online? (monsters-near? p s))}]
               (.sleep p token (js/Object.assign #js {} a flags)))))
+    (aset out "useOn"
+          (fn [token a]
+            (let [^js eye (.eye raw)
+                  ^js pos (some-> a .-pos)
+                  flags (when (and eye pos (number? (.-x pos)) (number? (.-y pos)) (number? (.-z pos)))
+                          #js {:noLine (no-line? p raw eye pos)})]
+              (.useOn p token (js/Object.assign #js {} a flags)))))
     (aset out "onBodyEvent"
           (fn [listener]
             (let [now (fn [] (let [^js s (self-view (.self p))] {:raining (boolean (.-raining s)) :thundering (boolean (.-thundering s))}))

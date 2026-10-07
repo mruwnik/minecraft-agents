@@ -35,6 +35,8 @@
              :entities (fn [a] (swap! seen assoc :entities-args a)
                            (into-array (filter #(or (nil? (.-kind a)) (= (.-kind a) (.-kind %))) entities)))
              :sleep (fn [token a] (swap! seen assoc :sleep a) (js/Promise.resolve #js {:status "sleeping"}))
+             :useOn (fn [token a] (swap! seen assoc :use-on a) (js/Promise.resolve #js {:status "used"}))
+             :blockAt (fn [pos] #js {:name "dirt"})
              :onBodyEvent (fn [l] (reset! listener l) (fn []))
              :rawWorld (raw-world blocks unloaded)}}))
 
@@ -94,6 +96,17 @@
     (is (:monstersNear (flags {:timeOfDay 14000 :pos {:x 0.5 :y 64 :z 0.5}} [(ent 1 "zombie" "hostile" 5.5)])))
     (is (not (:monstersNear (flags {:timeOfDay 14000 :pos {:x 0.5 :y 64 :z 0.5}} [(ent 1 "zombie" "hostile" 12.5)]))))
     (is (not (:monstersNear (flags {:timeOfDay 14000 :pos {:x 0.5 :y 64 :z 0.5}} [(ent 1 "cow" "passive" 2.5)]))))))
+
+(deftest use-on-line-comes-from-the-senses
+  (let [no-line (fn [blocks]
+                  (let [{:keys [p seen]} (stub {:self {:timeOfDay 6000} :blocks blocks})
+                        w (senses/wrap p (.-rawWorld p))]
+                    (.useOn ^js w "t" #js {:pos (at 3 64 0) :item "diamond_hoe"})
+                    (.-noLine ^js (:use-on @seen))))
+        wall {[1 64 0] :block [1 65 0] :block [2 64 0] :block [2 65 0] :block}]
+    (is (= true (no-line wall)) "stone between the eye and the block: no line")
+    (is (= false (no-line {})) "open air: a line")
+    (is (= false (no-line {[4 64 0] :block})) "a block behind the target does not block the line")))
 
 (deftest weather-event-fires-when-raining-or-thundering-flips
   (let [{:keys [p listener]} (stub {:self {:timeOfDay 6000 :rainState 0 :thunderState 0}})

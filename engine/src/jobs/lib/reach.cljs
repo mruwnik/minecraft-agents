@@ -390,7 +390,7 @@
 
 (defn ray-clear?
   "Whether the segment from a to b ([x y z] numbers) crosses no :solid cell of kind-at (start and end cells do not
-  count). Same cell walk as engine/js/sight.mjs lineClear."
+  count). Same cell walk as engine.sight/line-clear."
   [kind-at [ax ay az] [bx by bz]]
   (let [dx (- bx ax) dy (- by ay) dz (- bz az)
         end-x (js/Math.floor bx) end-y (js/Math.floor by) end-z (js/Math.floor bz)
