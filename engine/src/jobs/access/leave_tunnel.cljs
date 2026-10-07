@@ -127,7 +127,7 @@
   [c status reason detail]
   (let [{:keys [tunnel]} (:args c)
         m (ctx/mem c)
-        block-at (stair/sensed-at (:primitives c) nil)
+        block-at (access/sensed-at (:primitives c) nil)
         stopped? (= :stopped status)
         _ (forget-gone! c tunnel block-at)
         still (when stopped?

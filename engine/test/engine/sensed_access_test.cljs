@@ -6,12 +6,13 @@
             [engine.dig-to-see-test :as d]
             [engine.test-util :as tu]
             [jobs.lib.access :as access]
+            [jobs.lib.dig-look :as look]
             [jobs.lib.blocks :as b]
             [jobs.lib.ledger :as ledger]))
 
 (deftest a-cell-whose-neighbours-are-all-unseen-has-no-support
   (let [p (d/sensing {:blocks (dissoc d/ground "5,60,0")})]
-    (is (true? (access/unknown? p [5 59 0])) "inside the rock, nothing is known")
+    (is (true? (look/unknown? p [5 59 0])) "inside the rock, nothing is known")
     (is (false? (b/support? p {:x 5 :y 60 :z 0})) "unseen faces are not solid to place against")
     (is (true? (b/support? p {:x 0 :y 65 :z 0})) "the floor under the feet is felt")))
 
@@ -28,4 +29,4 @@
                                              {:pos {:x 1 :y 64 :z 0} :ignore-zones? true}))]
           (is (true? (:dug @out)))
           (is (some #{{:x 1 :y 64 :z 0}} (d/digs p)))
-          (is (false? (access/unknown? p [1 63 0])) "the dug cell's neighbours are looked at"))))))
+          (is (false? (look/unknown? p [1 63 0])) "the dug cell's neighbours are looked at"))))))

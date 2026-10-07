@@ -7,6 +7,7 @@
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
+            [jobs.lib.dig-look :as look]
             [jobs.lib.trees :as forestry]
             [jobs.lib.util :as u]
             [jobs.lib.places :as places]
@@ -137,7 +138,7 @@
 (defn unseen-near?
   "Whether the body has not sensed the cell pos or one of its six neighbours."
   [p {:keys [x y z]}]
-  (boolean (some #(access/unknown? p %) (cons [x y z] (map (fn [[dx dy dz]] [(+ x dx) (+ y dy) (+ z dz)]) neighbours)))))
+  (boolean (some #(look/unknown? p %) (cons [x y z] (map (fn [[dx dy dz]] [(+ x dx) (+ y dy) (+ z dz)]) neighbours)))))
 
 (defn to-see?
   "Whether the job has yet to look at pos: the body has not sensed it or a face of it, and has not turned to it (memory
@@ -151,7 +152,7 @@
   [c pos]
   (when (to-see? c pos)
     (ctx/update-mem! c #(assoc (fresh-mem % pos) :looked pos))
-    (await (access/look-at! c (cell pos)))))
+    (await (look/look-at! c (cell pos)))))
 
 (def cell-reasons
   "Wait reasons about the cell that can appear mid-call (a zone added, a block moved in): the call declines."

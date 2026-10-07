@@ -43,18 +43,6 @@
   [p guess]
   (fn [[x y z]] (when-let [b (u/sensed p {:x x :y y :z z})] (if (true? (.-unknown b)) guess (.-name b)))))
 
-(defn unknown?
-  "Whether the body has not sensed cell [x y z] (loaded, never seen)."
-  [p [x y z]]
-  (true? (some-> (u/sensed p {:x x :y y :z z}) .-unknown)))
-
-(defn ^:async look-at!
-  "Turn the head to cell's centre, so perception glances it and its 6 neighbours; nothing for primitives that do not
-  sense (they read blockAt)."
-  [c [x y z]]
-  (when (some? (.-sensedAt (:primitives c)))
-    (await (ctx/act c :look (clj->js {:pos {:x (+ x 0.5) :y (+ y 0.5) :z (+ z 0.5)}})))))
-
 (defn rules-input
   "The rules' input without :cell: the blocks (as sensed), the body's feet and zone-input. opts as zone-input."
   ([c] (rules-input c {}))

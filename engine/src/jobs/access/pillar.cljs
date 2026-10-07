@@ -3,6 +3,7 @@
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
+            [jobs.lib.dig-look :as look]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
@@ -241,8 +242,8 @@
   [c]
   (let [feet (pl/feet-cell c)]
     (doseq [cell [(up feet 1) (up feet 2)]]
-      (when (access/unknown? (:primitives c) cell)
-        (await (access/look-at! c cell))))))
+      (when (look/unknown? (:primitives c) cell)
+        (await (look/look-at! c cell))))))
 
 (defn ^:async step!
   "One block of the pillar (or its end): :again, :continue while a recentring go-to waits, or :done."

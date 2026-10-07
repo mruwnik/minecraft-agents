@@ -14,6 +14,7 @@
             [engine.triggers :as triggers]
             [jobs.access.stair :as stair]
             [jobs.access.tunnel :as tunnel]
+            [jobs.lib.access :as access]
             [jobs.lib.util :as u]
             [jobs.lib.world-files :as world]))
 
@@ -72,10 +73,10 @@
 
 (deftest a-cell-behind-stone-reads-the-callers-guess
   (let [p (sensing {:blocks (assoc ground "3,63,0" "lava") :unloaded #{"40,64,0"}})
-        guessed (stair/sensed-at p "stone")]
+        guessed (access/sensed-at p "stone")]
     (is (= "stone" (guessed [0 64 0])) "felt: under the feet")
     (is (= "stone" (guessed [3 63 0])) "lava behind stone is not known")
-    (is (nil? ((stair/sensed-at p nil) [3 63 0])))
+    (is (nil? ((access/sensed-at p nil) [3 63 0])))
     (is (true? (.-unknown (u/sensed p {:x 3 :y 63 :z 0}))))
     (is (nil? (guessed [40 64 0])) "unloaded is nil whatever the guess")))
 

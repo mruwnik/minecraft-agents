@@ -13,6 +13,10 @@
             [engine.triggers :as triggers]
             [triggers.access.scaffold-left :as scaffold-left]
             [jobs.lib.world-files :as world]
+            [jobs.lib.access :as access]
+            [jobs.lib.blocks :as blocks]
+            [engine.dig-to-see-test :as d]
+            [jobs.lib.dig-look :as look]
             [jobs.access.cleanup :as cleanup]))
 
 ;; ------------------------------------------------------------------ the step
@@ -311,6 +315,13 @@
           (is (every? nil? (map #(block p %) cells)))
           (is (= [] (the-ledger eng)))
           (is (= 3 (count (:removed @out)))))))))
+
+(deftest a-ledger-block-on-an-unseen-cell-is-never-dug
+  (let [p (d/sensing {:blocks d/ground})
+        cell [5 60 0]
+        s (step :feet [0 65 0] :entries [(entry cell)] :block-at (access/sensed-at p blocks/hidden-guess))]
+    (is (true? (look/unknown? p cell)))
+    (is (not= :dig (:step s)) "an unseen cell reads as rock, not as the body's own block: no dig")))
 
 (deftest a-swapped-or-vanished-cell-is-never-dug-and-its-entry-dropped-with-a-note
   (async done

@@ -2,6 +2,7 @@
   (:require [jobs.access.pillar :as pillar]
             [jobs.lib.pillar :as pl]
             [jobs.lib.access :as access]
+            [jobs.lib.dig-look :as look]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.access.rules :as rules]
@@ -29,7 +30,7 @@
   variant is not used: the body stands at the block's centre, so it does not step off the edge.
 
   The check waits (:too-few-blocks, with :short) when blocks are missing at the start; run short part way, it gives up
-  :too-few-blocks. Every give-up ends the job, so a parent running it as a child reads the result.
+  :too-few-blocks; a cell ahead still unsensed after the look gives up :unseen. Every give-up ends the job, so a parent running it as a child reads the result.
 
   Ends with {:status :done|:gave-up :reason :placed [[x y z] ...] :built n :length n}. :placed are this job's confirmed
   blocks, nearest first. Events: bridge.done (info) and bridge.gave-up (warn, with :reason and by reason :at :block
@@ -141,7 +142,7 @@
   (let [p (:primitives c)
         {:keys [heading length item]} (:args c)]
     (merge (pillar/access-inputs c)
-           {:feet feet :start (or (:start (ctx/mem c)) feet) :heading heading :length length :block-at (access/sensed-at p "air") :unknown? #(access/unknown? p %)
+           {:feet feet :start (or (:start (ctx/mem c)) feet) :heading heading :length length :block-at (access/sensed-at p "air") :unknown? #(look/unknown? p %)
             :carried (pl/carried p) :item item :ledger (ledger/cells l)})))
 
 (defn need
@@ -219,8 +220,8 @@
   "Look at each unsensed stand and head cell ahead of the feet, so a bridge never steps onto a cell it has not seen."
   [c feet]
   (doseq [cell [(ahead feet (:heading (:args c)) 1 0) (ahead feet (:heading (:args c)) 1 1)]]
-    (when (access/unknown? (:primitives c) cell)
-      (await (access/look-at! c cell)))))
+    (when (look/unknown? (:primitives c) cell)
+      (await (look/look-at! c cell)))))
 
 (defn ^:async step!
   "One block of the bridge (or its end): :again, :continue while a go-to waits, or :done."

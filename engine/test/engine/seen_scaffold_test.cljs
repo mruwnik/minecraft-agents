@@ -5,7 +5,7 @@
             [engine.dig-to-see-test :as d]
             [engine.test-util :as tu]
             [jobs.access.bridge :as bridge]
-            [jobs.lib.access :as access]
+            [jobs.lib.dig-look :as look]
             [jobs.lib.blocks :as b]))
 
 (defn looks [p] (d/calls p "look"))
@@ -34,7 +34,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [p (d/sensing {:blocks d/ground})]
-          (is (true? (access/unknown? p [0 67 0])) "the cell two above the head is unsensed at the start")
+          (is (true? (look/unknown? p [0 67 0])) "the cell two above the head is unsensed at the start")
           (let [{:keys [out]} (await (d/run! {:blocks d/ground} 'jobs.access.pillar {:height 2 :ignore-zones? true}))]
             (is (= :done (:status @out)))
             (is (= 2 (:built @out)))))))))
@@ -44,7 +44,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [p (d/sensing {:blocks d/ground})]
-          (is (true? (access/unknown? p [1 65 0])))
+          (is (true? (look/unknown? p [1 65 0])))
           (let [{:keys [out p]} (await (d/run! {:blocks d/ground} 'jobs.access.bridge {:heading :east :length 1 :ignore-zones? true}))]
             (is (= :done (:status @out)))
             (is (some #(= {:x 1.5 :y 65.5 :z 0.5} (:pos %)) (looks p)))))))))
@@ -64,7 +64,7 @@
       (fn ^:async t []
         (let [{:keys [p]} (await (d/run! {:blocks (assoc d/ground "2,64,0" "water")} 'jobs.blocks.dig
                                          {:pos {:x 1 :y 64 :z 0} :ignore-zones? true}))]
-          (is (false? (access/unknown? p [2 64 0])) "the look at the target shows the water beside it")
+          (is (false? (look/unknown? p [2 64 0])) "the look at the target shows the water beside it")
           (is (empty? (d/digs p)) "and the default waits on it instead of letting it flow in"))))))
 
 (deftest dig-accepting-water-beside-goes-ahead

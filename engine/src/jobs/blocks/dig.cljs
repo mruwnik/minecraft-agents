@@ -2,6 +2,7 @@
   (:require [jobs.lib.args :as jargs]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
+            [jobs.lib.dig-look :as look]
             [jobs.lib.blocks :as b]
             [jobs.lib.child :as child]
             [jobs.lib.fetch :as fetch]
@@ -140,7 +141,7 @@
   (await (tools/equip-for! c block))
   (let [r (await (tidy/dig! c pos))
         status (.-status r)
-        _ (when (= "dug" status) (await (access/look-at! c (b/cell pos))))
+        _ (when (= "dug" status) (await (look/look-at! c (b/cell pos))))
         ids (vec (keep #(.-id %) (array-seq (or (.-drops r) #js []))))]
     (case status
       "dug" (if (and (:collect (:args c)) (seq ids))

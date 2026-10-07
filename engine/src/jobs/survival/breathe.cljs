@@ -2,6 +2,7 @@
   (:require [jobs.lib.tidy :as tidy]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
+            [jobs.lib.dig-look :as look]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.escape :as escape]
             [jobs.lib.land :as land]
@@ -236,8 +237,8 @@
     (when (<= k (inc reach))
       (let [cell {:x x :y (+ fy k) :z z}
             p (:primitives c)]
-        (if (access/unknown? p [x (:y cell) z])
-          (do (await (access/look-at! c [x (:y cell) z]))
+        (if (look/unknown? p [x (:y cell) z])
+          (do (await (look/look-at! c [x (:y cell) z]))
               (when-not first-only? (recur (inc k))))
           (when (passable-water-or-air? (seen-water-name p cell))
             (recur (inc k))))))))
@@ -365,8 +366,8 @@
   (loop [k 0]
     (when (<= k 3)
       (let [cell (update head :y + k)]
-        (when (access/unknown? (:primitives c) [(:x cell) (:y cell) (:z cell)])
-          (await (access/look-at! c [(:x cell) (:y cell) (:z cell)])))
+        (when (look/unknown? (:primitives c) [(:x cell) (:y cell) (:z cell)])
+          (await (look/look-at! c [(:x cell) (:y cell) (:z cell)])))
         (recur (inc k))))))
 
 (defn ^:async go-air!

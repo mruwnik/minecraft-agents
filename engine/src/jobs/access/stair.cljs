@@ -222,19 +222,11 @@
   (let [{:keys [x y z]} (reach/standing-cell (:primitives c))]
     [x y z]))
 
-(def hidden-guess "What a cell the body has not sensed is taken for: rock, so it is dug to see." "stone")
-
-(defn sensed-at
-  "A block-at fn [x y z] -> name over what the body senses (jobs.lib.util/sensed): guess for a cell it has not sensed,
-  nil when the cell is not loaded (the rules' :not-loaded)."
-  [p guess]
-  (fn [[x y z]] (when-let [b (u/sensed p {:x x :y y :z z})] (if (true? (.-unknown b)) guess (.-name b)))))
-
 (defn rules-in
   "The rules' input at feet: :block-at reads unsensed cells as hidden-guess; :column-at reads them as air (a column
   scanned from the sky down for a stand, jobs.access.tunnel/surface)."
   [c feet]
-  (merge {:block-at (sensed-at (:primitives c) hidden-guess) :column-at (sensed-at (:primitives c) "air")
+  (merge {:block-at (access/sensed-at (:primitives c) blocks/hidden-guess) :column-at (access/sensed-at (:primitives c) "air")
           :feet feet :ledger #{} :ways (ways-of c)}
          (access-world c)))
 
