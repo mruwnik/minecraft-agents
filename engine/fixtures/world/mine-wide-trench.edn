@@ -10,7 +10,7 @@
   :blocks [[:fill [2 -6 8] [30 6 24] "stone"] [:fill [16 0 16] [19 1 16] "air"]
            [:fill [20 -4 16] [21 1 16] "air"] [:set [22 0 16] "iron_ore"]]
   :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1] ["cobblestone" 16]] :effects [["resistance" 600 4]]}
-  :act [[:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 8})]]
+  :act [[:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 8 :radius 8})]]
   :limit-s 110}
  :cases
  [{:name "dark-ore-3-blocks-from-the-cut-end-is-seen-and-dug"

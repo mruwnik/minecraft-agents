@@ -26,12 +26,12 @@
    :expect [{:event {:source :job :kind :blocks.dig.done :data {:dug true :reason :dug}} :within-s 60 :of-job true}]
    :after [[:block [14 0 16] "air"] [:item "cobblestone" [:>= 1]]]}
   {:name "mine-only-wet-stone-says-wet-skipped"
-   :act [[:job (jobs.gather.mine {:block "stone" :count 1 :tunnel-length 0})]]
+   :act [[:job (jobs.gather.mine {:block "stone" :count 1 :tunnel-length 0 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.done :data {:got 0 :reason :wet :wet-skipped [:>= 1]}} :within-s 90 :of-job true}]
    :after [[:block [18 0 16] "stone"]]
    :limit-s 100}
   {:name "mine-wet-stone-no-descent-says-wet-skipped"
-   :act [[:job (jobs.gather.mine {:block "stone" :count 1 :tunnel-length 0 :descend-limit 0})]]
+   :act [[:job (jobs.gather.mine {:block "stone" :count 1 :tunnel-length 0 :descend-limit 0 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.done :data {:got 0 :reason :wet :wet-skipped [:>= 1]}} :within-s 60 :of-job true}]
    :after [[:block [18 0 16] "stone"]]
    :limit-s 70}
@@ -41,13 +41,13 @@
    :after [[:block [18 0 16] "stone"]]
    :limit-s 140}
   {:name "mine-wet-true-digs"
-   :act [[:job (jobs.gather.mine {:block "stone" :count 1 :tunnel-length 0 :wet true})]]
+   :act [[:job (jobs.gather.mine {:block "stone" :count 1 :tunnel-length 0 :wet true :radius 8})]]
    :expect [{:event {:source :job :kind :mine.done :data {:got [:>= 1]}} :within-s 120 :of-job true}]
    :after [[:item "cobblestone" [:>= 1]]]
    :limit-s 140}
   {:name "mine-dry-stone-beside-wet-digs-dry"
    :blocks [[:set [14 0 16] "stone"]]
-   :act [[:job (jobs.gather.mine {:block "stone" :count 1 :tunnel-length 0})]]
+   :act [[:job (jobs.gather.mine {:block "stone" :count 1 :tunnel-length 0 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.done :data {:got [:>= 1]}} :within-s 120 :of-job true}]
    :after [[:not-block [14 0 16] "stone"] [:item "cobblestone" [:>= 1]]]
    :limit-s 140}]}

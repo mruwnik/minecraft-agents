@@ -15,7 +15,7 @@
  :cases
  [{:name "shallow-pit-drop-collected"
    :blocks [[:set [20 0 16] "iron_ore"] [:set [20 -1 16] "air"]]
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 8})]]
+   :act [[:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.done :data {:got 1}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :mine.left-behind} :for-s 120 :until {:source :job :kind :mine.done :data {:got 1}}}]
    :after [[:item "raw_iron" 1] [:body-near [16.5 0 16.5] 1.5]]
@@ -24,7 +24,7 @@
    ;; the ore stands across a 1-wide, 5-deep trench in the line: seen from the start, dug from the cut's end (2 away),
    ;; its drop lies on the far side in plain view and cannot be reached
    :blocks [[:fill [20 -4 16] [20 1 16] "air"] [:set [21 0 16] "iron_ore"]]
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 8})]]
+   :act [[:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.left-behind} :within-s 60 :of-job true}
             {:event {:source :job :kind :mine.done} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :mine.not-home} :for-s 90 :until {:source :job :kind :mine.done}}]

@@ -92,28 +92,28 @@
   {:name "mine-spares-own-plan-cells-by-default-a"
    :plans [{:id "o" :metadata {:by "ProbeOwnPlan"} :parts [{:id "o" :cells [#at [20 0 16]] :want [:any "iron_ore"]}]}]
    :blocks [[:fill [2 0 8] [30 6 24] "stone"] [:fill [16 0 16] [16 1 16] "air"] [:set [20 0 16] "iron_ore"]]
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 8})]]
+   :act [[:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.done :data {:got 0}} :within-s 100 :of-job true}]
    :after [[:block [20 0 16] "iron_ore"]]
    :limit-s 120}
   {:name "mine-spares-own-plan-cells-by-default-b"
    :plans [{:id "o" :metadata {:by "ProbeOwnPlan"} :parts [{:id "o" :cells [#at [19 0 16]] :want [:any "coal_ore"]}]}]
    :blocks [[:fill [2 0 8] [30 6 24] "stone"] [:fill [16 0 16] [16 1 16] "air"] [:set [19 0 16] "coal_ore"]]
-   :act [[:job (jobs.gather.mine {:block "coal_ore" :count 1 :direction :east :tunnel-length 8})]]
+   :act [[:job (jobs.gather.mine {:block "coal_ore" :count 1 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.done :data {:got 0}} :within-s 100 :of-job true}]
    :after [[:block [19 0 16] "coal_ore"]]
    :limit-s 120}
   {:name "mine-digs-own-plan-cells-when-not-spared-a"
    :plans [{:id "o" :metadata {:by "ProbeOwnPlan"} :parts [{:id "o" :cells [#at [20 0 16]] :want [:any "iron_ore"]}]}]
    :blocks [[:fill [2 0 8] [30 6 24] "stone"] [:fill [16 0 16] [16 1 16] "air"] [:set [20 0 16] "iron_ore"]]
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 8 :spare-own-builds false})]]
+   :act [[:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 8 :spare-own-builds false :radius 8})]]
    :expect [{:event {:source :job :kind :mine.done :data {:got 1}} :within-s 100 :of-job true}]
    :after [[:item "raw_iron" 1]]
    :limit-s 120}
   {:name "mine-digs-own-plan-cells-when-not-spared-b"
    :plans [{:id "o" :metadata {:by "ProbeOwnPlan"} :parts [{:id "o" :cells [#at [19 0 16]] :want [:any "coal_ore"]}]}]
    :blocks [[:fill [2 0 8] [30 6 24] "stone"] [:fill [16 0 16] [16 1 16] "air"] [:set [19 0 16] "coal_ore"]]
-   :act [[:job (jobs.gather.mine {:block "coal_ore" :count 1 :direction :east :tunnel-length 8 :spare-own-builds false})]]
+   :act [[:job (jobs.gather.mine {:block "coal_ore" :count 1 :direction :east :tunnel-length 8 :spare-own-builds false :radius 8})]]
    :expect [{:event {:source :job :kind :mine.done :data {:got 1}} :within-s 100 :of-job true}]
    :after [[:item "coal" 1]]
    :limit-s 120}]}

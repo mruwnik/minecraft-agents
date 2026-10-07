@@ -8,21 +8,21 @@
   :limit-s 60}
  :cases
  [{:name "no-torch-ore-6-away-unseen"
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 0})]]
+   :act [[:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 0 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.done :data {:got 0}} :within-s 40 :of-job true}]
    :after [[:block [25 0 16] "iron_ore"]]}
   {:name "offhand-torch-sees-and-digs-ore-6-away"
    :act [[:rcon "item replace entity $BODY weapon.offhand with torch"] [:wait-s 2]
-         [:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 0})]]
+         [:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 0 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.done} :within-s 50 :of-job true}]
    :after [[:not-block [25 0 16] "iron_ore"]]}
   {:name "offhand-soul-torch-sees-and-digs-ore-6-away"
    :act [[:rcon "item replace entity $BODY weapon.offhand with soul_torch"] [:wait-s 2]
-         [:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 0})]]
+         [:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 0 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.done} :within-s 50 :of-job true}]
    :after [[:not-block [25 0 16] "iron_ore"]]}
   {:name "mainhand-torch-sees-and-digs-ore-6-away"
    :act [[:rcon "item replace entity $BODY inventory.0 with stone_pickaxe"] [:rcon "item replace entity $BODY weapon.mainhand with torch"] [:wait-s 2]
-         [:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 0})]]
+         [:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 0 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.done} :within-s 50 :of-job true}]
    :after [[:not-block [25 0 16] "iron_ore"]]}]}

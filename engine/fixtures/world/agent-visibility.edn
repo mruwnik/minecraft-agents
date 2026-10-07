@@ -10,7 +10,7 @@
    :plot {:height 6}
    :blocks [[:fill [8 0 8] [30 3 24] "stone"] [:fill [16 0 16] [16 1 16] "air"]]
    :body {:inventory [["iron_pickaxe" 1] ["cobblestone" 8]]}
-   :act [[:job (jobs.gather.mine {:block "coal_ore" :count 1 :direction "east" :tunnel-length 4 :collect-radius 2})]]
+   :act [[:job (jobs.gather.mine {:block "coal_ore" :count 1 :direction "east" :tunnel-length 4 :collect-radius 2 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.done :data {:tunnel {:steps 4 :heading [:any] :walked-back? true :end [:any] :back-at [:any]}}}
              :within-s 150 :of-job true}]
    :limit-s 160}

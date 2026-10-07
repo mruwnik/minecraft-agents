@@ -13,40 +13,40 @@
  [{:name "surface-stone-mined-a"
    :blocks [[:fill [20 0 14] [26 2 18] "stone"]]
    :body {:inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.gather.mine {:block "stone" :count 4 :direction :east :tunnel-length 8})]]
+   :act [[:job (jobs.gather.mine {:block "stone" :count 4 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.done :data {:got [:>= 4]}} :within-s 100 :of-job true}]
    :after [[:item "cobblestone" [:>= 4]]]}
   {:name "surface-stone-mined-b"
    :blocks [[:fill [18 0 16] [24 3 16] "stone"]]
    :body {:inventory [["iron_pickaxe" 1]]}
-   :act [[:job (jobs.gather.mine {:block "stone" :count 3 :direction :east :tunnel-length 8})]]
+   :act [[:job (jobs.gather.mine {:block "stone" :count 3 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.done :data {:got [:>= 3]}} :within-s 100 :of-job true}]
    :after [[:item "cobblestone" [:>= 3]]]}
   {:name "no-pickaxe-none-fetchable-ends-no-tool"
    :blocks [[:fill [20 0 14] [26 2 18] "stone"]]
    :body {:inventory []}
-   :act [[:job (jobs.gather.mine {:block "stone" :count 4 :direction :east :tunnel-length 8})]]
+   :act [[:job (jobs.gather.mine {:block "stone" :count 4 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.done :data {:got 0 :reason :no-tool}} :within-s 100 :of-job true}]
    :after [[:block [20 0 16] "stone"] [:item "cobblestone" 0]]}
   {:name "soil-only-surface-with-pickaxe-stops-got-0"
    :plot {:floor "dirt"}
    :blocks [[:fill [0 -1 0] [31 5 31] "dirt"] [:fill [10 0 14] [22 6 18] "air"]]
    :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.gather.mine {:block "stone" :count 4 :direction :east :tunnel-length 8 :descend-limit 0})]]
+   :act [[:job (jobs.gather.mine {:block "stone" :count 4 :direction :east :tunnel-length 8 :descend-limit 0 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.done :data {:got 0}} :within-s 100 :of-job true}]
    :after [[:item "stone_pickaxe[minecraft:damage=0]" [:>= 1]]]}
   {:name "soil-4-deep-over-stone-stairs-down-and-mines"
    :plot {:floor "dirt"}
    :blocks [[:fill [0 -9 0] [31 -5 31] "stone"] [:fill [0 -4 0] [31 -1 31] "dirt"] [:fill [0 -4 0] [31 6 0] "dirt"] [:fill [0 -4 31] [31 6 31] "dirt"] [:fill [0 -4 0] [0 6 31] "dirt"] [:fill [31 -4 0] [31 6 31] "dirt"]]
    :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.gather.mine {:block "stone" :count 4 :direction :east :tunnel-length 8})]]
+   :act [[:job (jobs.gather.mine {:block "stone" :count 4 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.done :data {:reason :count :got [:>= 4]}} :within-s 110 :of-job true}]
    :after [[:item "cobblestone" [:>= 4]] [:item "stone_pickaxe[minecraft:damage=4]" [:>= 1]] [:body-near [16.5 0 16.5] 2]]}
   {:name "soil-deeper-than-limit-ends-no-stone-found"
    :plot {:floor "dirt"}
    :blocks [[:fill [0 -12 0] [31 -1 31] "dirt"] [:fill [0 -4 0] [31 6 0] "dirt"] [:fill [0 -4 31] [31 6 31] "dirt"] [:fill [0 -4 0] [0 6 31] "dirt"] [:fill [31 -4 0] [31 6 31] "dirt"]]
    :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.gather.mine {:block "stone" :count 4 :direction :east :tunnel-length 8 :descend-limit 4})]]
+   :act [[:job (jobs.gather.mine {:block "stone" :count 4 :direction :east :tunnel-length 8 :descend-limit 4 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.done :data {:got 0 :reason :no-stone-found}} :within-s 110 :of-job true}
             {:event {:source :job :kind :stopped :data {:status :stopped :text [:contains "dug down"]}} :within-s 110 :of-job true}
             {:event {:source :job :kind :stopped :data {:text [:contains "found no stone"]}} :within-s 110 :of-job true}]

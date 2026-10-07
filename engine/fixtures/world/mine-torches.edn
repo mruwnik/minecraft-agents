@@ -8,7 +8,7 @@
   :plot {:height 12}
   :blocks [[:fill [0 0 8] [31 6 24] "stone"] [:fill [2 0 16] [2 1 16] "air"]]
   :body {:at [2.5 0 16.5] :inventory [["stone_pickaxe" 1] ["cobblestone" 16]] :effects [["resistance" 600 4]]}
-  :act [[:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 25})]]
+  :act [[:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 25 :radius 3})]]
   :limit-s 200}
  :cases
  [{:name "torches-in-the-bag-hang-at-steps-1-11-21-and-the-end"

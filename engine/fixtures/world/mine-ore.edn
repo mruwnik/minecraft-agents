@@ -10,14 +10,14 @@
  :cases
  [{:name "in-line-ore-collected"
    :blocks [[:set [20 0 16] "iron_ore"]]
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 8})]]
+   :act [[:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.done :data {:got 1}} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :mine.left-behind} :for-s 100 :until {:source :job :kind :mine.done :data {:got 1}}}]
    :after [[:item "raw_iron" 1] [:not-block [20 0 16] "iron_ore"]]
    :limit-s 120}
   {:name "ore-in-line-twice"
    :blocks [[:set [19 0 16] "iron_ore"] [:set [22 0 16] "iron_ore"]]
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :count 2 :direction :east :tunnel-length 10})]]
+   :act [[:job (jobs.gather.mine {:block "iron_ore" :count 2 :direction :east :tunnel-length 10 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.done :data {:got 2}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :mine.left-behind} :for-s 120 :until {:source :job :kind :mine.done :data {:got 2}}}]
    :after [[:item "raw_iron" 2]]
@@ -26,7 +26,7 @@
    ;; ores not in the tunnel's line and with no face to the tunnel (never seen): the run ends at the tunnel length with
    ;; nothing, and the ores stand
    :blocks [[:set [18 0 14] "iron_ore"] [:set [19 3 16] "iron_ore"] [:set [20 0 18] "iron_ore"]]
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 5})]]
+   :act [[:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 5 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.done :data {:got 0 :reason :tunnel-length}} :within-s 100 :of-job true}]
    :after [[:block [18 0 14] "iron_ore"] [:block [19 3 16] "iron_ore"] [:block [20 0 18] "iron_ore"]]
    :limit-s 120}]}
