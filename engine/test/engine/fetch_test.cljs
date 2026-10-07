@@ -361,6 +361,53 @@
           (is (seq (events-of s :fetch.failed)))
           (is (nil? (:fetch-return (core/job-memory (:eng s) id))) (pr-str (core/job-memory (:eng s) id))))))))
 
+(deftest a-fetch-child-that-ends-done-without-solving-the-need-fails-the-fetch-instead-of-spinning
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:self {:pos {:x 0 :y 64 :z 0}}
+                        :blocks {"0,61,1" "andesite" "0,62,1" "andesite" "0,63,1" "stone" "0,64,1" "stone" "0,65,1" "stone"}}
+                       [own-zone])
+              n (atom 0)
+              orig ctx/call-child
+              orig-res ctx/child-result]
+          (set! ctx/call-child (fn [c slot job args]
+                                 (if (= :fetch slot)
+                                   (do (swap! n inc) (js/Promise.resolve :done))
+                                   (orig c slot job args))))
+          (set! ctx/child-result (fn [c slot] (if (= :fetch slot) {:status :done} (orig-res c slot))))
+          (try
+            (core/submit! (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 1 :fetch true}) {})
+            (await (run-ticks s 6))
+            (finally (set! ctx/call-child orig) (set! ctx/child-result orig-res)))
+          (is (< @n 20) (str "fetch child calls " @n))
+          (let [f (first (events-of s :fetch.failed))]
+            (is (= :not-solved (:failed f)) (pr-str f))
+            (is (string? (:why f)))))))))
+
+(defn with-fake-mem
+  "Run (f c mem-atom) with ctx/mem and ctx/update-mem! on an atom and ctx/emit! dropped."
+  [f]
+  (let [m (atom {})
+        orig-mem ctx/mem orig-update ctx/update-mem! orig-emit ctx/emit!]
+    (set! ctx/mem (fn [_] @m))
+    (set! ctx/update-mem! (fn [_ g & args] (apply swap! m g args)))
+    (set! ctx/emit! (fn [& _] nil))
+    (try (f {} m)
+         (finally (set! ctx/mem orig-mem) (set! ctx/update-mem! orig-update) (set! ctx/emit! orig-emit)))))
+
+(deftest repeat-done-is-an-identical-wait-after-a-done-fetch-child
+  (with-fake-mem
+    (fn [c m]
+      (let [key [:tool "oak_leaves"] w {:reason :no-tool :block "oak_leaves"}]
+        (is (not (fetch/repeat-done? c key w)) "nothing fetched yet")
+        (fetch/mark-done! c key w)
+        (is (fetch/repeat-done? c key w) "same key, same wait")
+        (is (not (fetch/repeat-done? c key (assoc w :block "stone"))) "another wait is progress")
+        (is (not (fetch/repeat-done? c [:tool "stone"] w)) "another key is progress")
+        (fetch/settle! c)
+        (is (not (fetch/repeat-done? c key w)) "settle! clears the mark: the same wait back fetches again")))))
+
 (deftest stair-without-fetch-waits-no-tool
   (async done
     (tu/run-async done

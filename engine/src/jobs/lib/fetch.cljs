@@ -118,7 +118,7 @@
 (defn shown
   "The :fetch field of a wait whose fetch failed."
   [f]
-  (into {} (remove (comp nil? val)) (select-keys f [:failed :item :any-of :block :tried :chain])))
+  (into {} (remove (comp nil? val)) (select-keys f [:failed :why :item :any-of :block :tried :chain])))
 
 ;; ------------------------------------------------------------------ check and round
 
@@ -148,11 +148,20 @@
                 (when-not (failure c (:key pl))
                   (assoc pl :opts o :wait w)))))))
 
+;; :fetched [key wait] in job memory: the last fetch that ended :done and the wait it was for. The same wait
+;; straight after means the child did not solve it.
+(defn repeat-done? [c key wait]
+  (= [key wait] (:fetched (ctx/mem c))))
+
+(defn mark-done! [c key wait]
+  (ctx/update-mem! c assoc :fetched [key wait]))
+
 (defn settle!
   "For a round with nothing to fetch: a fetch under way whose need went away (the thing arrived before the fetch job
   ended, e.g. in its withdraw) is told done (info fetch.done) and its child memory dropped, so a later fetch starts
   fresh."
   [c]
+  (ctx/update-mem! c dissoc :fetched)
   (when-let [key (:fetching (ctx/mem c))]
     (ctx/update-mem! c #(-> % (dissoc :fetching) (update :children dissoc :fetch)))
     (ctx/emit! c :fetch.done :info {:key key :text (str "fetched " (pr-str (second key)))})))
@@ -189,9 +198,9 @@
   [c {:keys [key opts wait args]} res]
   (let [f (merge (select-keys args [:item :any-of :block])
                  {:key key :until (+ (ctx/now c) (* 60000 (:fail-minutes opts))) :failed (:reason res :failed)}
-                 (select-keys res [:tried :chain]))]
+                 (select-keys res [:tried :chain :why]))]
     (ctx/remember! c failed-kind f failed-policy)
-    (ctx/update-mem! c #(-> % (dissoc :fetching :fetch-return) (update :children dissoc :fetch)))
+    (ctx/update-mem! c #(-> % (dissoc :fetching :fetched :fetch-return) (update :children dissoc :fetch)))
     (ctx/emit! c :fetch.failed :warn (assoc (shown f) :for (:reason wait)
                                             :text (str "could not fetch " (or (:item args) (:block args) (pr-str (:any-of args)))
                                                        ": " (name (:failed f)))))
@@ -215,6 +224,7 @@
           pl (assoc pl :args args)]
       (when-not (= key (:fetching (ctx/mem c)))
         (ctx/update-mem! c #(cond-> (assoc % :fetching key)
+                              (not= key (first (:fetched %))) (dissoc :fetched)
                               (and (:return? pl) (not (:fetch-return %))) (assoc :fetch-return (feet c))))
         (ctx/emit! c :fetch.started :info {:for (:reason (:wait pl)) :job job :args (:args pl)
                                            :text (str "fetching " (or (:item args) (:block args) (pr-str (:any-of args)))
@@ -226,6 +236,7 @@
           (let [res (ctx/child-result c :fetch)]
             (if (= :done (:status res))
               (do (ctx/update-mem! c dissoc :fetching)
+                  (mark-done! c key (:wait pl))
                   (ctx/emit! c :fetch.done :info (merge {:for (:reason (:wait pl)) :text (str "fetched for " (name (:reason (:wait pl))))}
                                                         (select-keys res [:got :item :tool])))
                   :again)
@@ -240,7 +251,10 @@
   ([c job w] (step! c job w nil))
   ([c job w {:keys [return?]}]
    (if-let [pl (due c job w)]
-     (await (round! c (assoc pl :return? return?)))
+     (if (repeat-done? c (:key pl) (:wait pl))
+       (fail! c pl {:reason :not-solved
+                    :why (str "fetched " (pr-str (second (:key pl))) " but the need is unchanged")})
+       (await (round! c (assoc pl :return? return?))))
      (do (settle! c)
          (let [back (:fetch-return (ctx/mem c))]
            (cond
