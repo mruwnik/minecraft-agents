@@ -26,15 +26,16 @@
           (is (= 1 (get (m/inv s) "raw_iron")))
           (is (= [0 64 0] (m/feet s))))))))
 
-(deftest mine-stairs-down-to-stone-in-one-round
+(deftest mine-stairs-down-to-stone-once-the-lava-flow-delay-has-passed
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (m/start {:world {:blocks (m/soil-over-stone 63 59) :drops m/cobble :inventory [{:name "stone_pickaxe" :count 1}]}})]
           (fake/swap-self! (:p s) assoc :held "stone_pickaxe")
           (core/submit! (:eng s) (m/spec {:block "stone" :count 2 :direction "east" :tunnel-length 4 :mend false}) {})
-          (await (m/run-ticks s 1))
-          (is (m/finished? s) "ended after one tick")
+          ;; after a dig the stair yields :continue until a flow delay has passed (the fake clock moves 700 ms a tick)
+          (await (m/run-ticks s 14))
+          (is (m/finished? s) "ended once the flow delay passed")
           (is (= :count (:reason (m/done-event s)))))))))
 
 (deftest mine-hangs-torches-in-one-round
