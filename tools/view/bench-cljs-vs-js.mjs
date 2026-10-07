@@ -4,7 +4,7 @@
 //   V2 (8d0327d9): hub scheduling (dueScenes, nextDueAt, planFrame, eventCache, stream key), the column window (moveWindow,
 //      slotKey) and the scene (pose following, upload selection under budget, frame params): ./bench-old/hub-schedule.mjs and
 //      ./bench-old/scene.mjs against view.schedule, view.window and view.scene.
-//   V1 (2db6cef8): pose interpolation and drive key rules: ./bench-old/interp.mjs and drive-keys.mjs against view.interp, view.drive.
+//   V1 (2db6cef8): pose interpolation: ./bench-old/interp.mjs against view.interp.
 // The JS originals are verbatim copies under ./bench-old (see their headers); the cljs side is the release build of the :viewer-bench
 // shadow-cljs build (advanced optimisations, the :viewer build's compiler options), so build it first:
 //   tools/compile dashboard viewer-bench --release
@@ -15,7 +15,6 @@ import { performance } from 'node:perf_hooks'
 import { setImmediate as tick } from 'node:timers/promises'
 import * as jsHub from './bench-old/hub-schedule.mjs'
 import * as jsInterp from './bench-old/interp.mjs'
-import * as jsKeys from './bench-old/drive-keys.mjs'
 import * as jsScene from './bench-old/scene.mjs'
 import * as cljs from '../../dashboard/out/viewer-bench/viewer-bench.mjs'
 import { cameraBasis } from './web/camera.mjs'
@@ -196,32 +195,15 @@ const interpBench = (impl, api) => {
   record('V1 interp', 'sample (60 Hz, 12 entities)', impl, sampleUs)
 }
 
-// ---- V1: drive keys ----
-const keysBench = (impl, api) => {
-  const codes = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'ShiftLeft', 'KeyR', 'ArrowLeft', 'ArrowUp', 'KeyQ', 'Escape', 'KeyG']
-  const manual = { who: 'bob', why: 'repairs' }
-  const dropArgs = { driving: true, reply: { ok: true, offline: false, reason: null, manual }, me: 'bob', startedGen: 3, currentGen: 3 }
-  const batchOf = f => i => { for (let k = 0; k < 100; k++) f(i, k) }
-  const opts = { samples: 3000, batch: 100 }
-  record('V1 keys', 'controlFor (key burst)', impl, measure(batchOf((i, k) => use(api.controlFor(codes[(i + k) % 12]))), opts))
-  record('V1 keys', 'lookStepFor', impl, measure(batchOf((i, k) => use(api.lookStepFor(codes[(i + k) % 12]))), opts))
-  record('V1 keys', 'mouseLook', impl, measure(batchOf((i, k) => use(api.mouseLook(k - 50, i % 7))), opts))
-  const a = { dyaw: 1, dpitch: 2 }
-  record('V1 keys', 'mergeLook', impl, measure(batchOf((i, k) => use(api.mergeLook(a, { dyaw: k, dpitch: i }))), opts))
-  record('V1 keys', 'shouldDrop', impl, measure(batchOf(() => use(api.shouldDrop(dropArgs))), opts))
-  record('V1 keys', 'bannerText', impl, measure(batchOf(() => use(api.bannerText(manual, 'bob'))), opts))
-}
-
-const jsApi = { ...jsHub, ...jsInterp, ...jsKeys, ...jsScene }
+const jsApi = { ...jsHub, ...jsInterp, ...jsScene }
 // the cljs functions take positional arguments where the JS ones took an object; thin adapters, one call each
 const cljsApi = {
   ...cljs,
   planFrame: (targets, now, budgetMs) => cljs.planFrame(targets, now, budgetMs, () => 0.4),
   moveWindow: ({ ccx, ccz, radius, columns, owners }) => cljs.moveWindow(ccx, ccz, radius, columns, owners),
-  shouldDrop: cljs.shouldDrop,
   streamKey: scenes => cljs.streamKey(scenes.map(s => s.agent), scenes.map(s => s.radius))
 }
-const jsFns = { ...jsApi, planFrame: (targets, now, budgetMs) => jsHub.planFrame({ entries: targets, now, budgetMs, run: () => 0.4 }), shouldDrop: jsKeys.shouldDrop }
+const jsFns = { ...jsApi, planFrame: (targets, now, budgetMs) => jsHub.planFrame({ entries: targets, now, budgetMs, run: () => 0.4 }) }
 
 const main = async () => {
   for (let round = 0; round < ROUNDS; round++) {
@@ -230,7 +212,6 @@ const main = async () => {
       cacheBench(impl, api)
       windowBench(impl, api, 12, 'moveWindow (radius 12, walk)')
       interpBench(impl, api)
-      keysBench(impl, api)
     }
     for (const radius of [4, 12]) {
       await sceneBench('js', jsMakeScene, radius, `radius ${radius}`)

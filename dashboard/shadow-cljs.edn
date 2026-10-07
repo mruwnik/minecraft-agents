@@ -163,19 +163,8 @@
                                         viewHub view.hub/view-hub
                                         createSceneCore view.scene/create-scene
                                         decodePriority view.scene/decode-priority
-                                        controlFor view.drive/control-for
-                                        lookStepFor view.drive/look-step-for
-                                        mouseLook view.drive/mouse-look
-                                        mergeLook view.drive/merge-look
-                                        bannerText view.drive/banner-text
-                                        serialQueue view.drive/serial-queue
                                         whoFrom view.drive/who-from
-                                        shouldTakeOnClick view.drive/should-take-on-click
-                                        shouldReleaseOnEscape view.drive/should-release-on-escape
-                                        leaveAction view.drive/leave-action
                                         withTimeout view.drive/with-timeout
-                                        isStale view.drive/is-stale
-                                        shouldDrop view.drive/should-drop
                                         createDriver view.takeover/create-driver
                                         isAgentKey view.takeover/agent-key?}}}
            :compiler-options {:infer-externs :auto}}
@@ -192,13 +181,7 @@
                                                     streamKey view.schedule/stream-key
                                                     eventCache view.bench/event-cache
                                                     moveWindow view.window/move-window
-                                                    slotKey view.window/slot-key
-                                                    controlFor view.drive/control-for
-                                                    lookStepFor view.drive/look-step-for
-                                                    mouseLook view.drive/mouse-look
-                                                    mergeLook view.drive/merge-look
-                                                    bannerText view.drive/banner-text
-                                                    shouldDrop view.drive/should-drop}}}
+                                                    slotKey view.window/slot-key}}}
                  :compiler-options {:infer-externs :auto}}
   :ui {:target :browser
        :output-dir "out/public/js"
