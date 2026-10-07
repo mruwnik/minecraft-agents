@@ -772,7 +772,8 @@
                                  (rock-world {"5,64,0" "lava"}) 80))]
           (is (every? #(< (first %) 5) (dug-cells s)) "no cut into the lava the glance showed")
           (is (= :tunnel-stopped (:reason (done-event s))))
-          (is (= [{:reason :lava :at [5 64 0] :next [5 64 0]}] (map #(select-keys % [:reason :at :next]) (tunnel-ends s))))
+          (is (= [{:reason :lava :at [5 64 0] :next [4 64 0]}] (map #(select-keys % [:reason :at :next]) (tunnel-ends s)))
+              "the dig child sees the lava beside the next cell and refuses it; the stop names the lava")
           (is (= "lava" (block-at s 5 64 0))))))))
 
 (deftest the-tunnel-length-bound-ends-the-job-with-a-reason
@@ -1394,11 +1395,10 @@
           (add-watch (fake/state (:p s)) ::ys (fn [_ _ _ w] (swap! ys conj (second (get-in w [:self :pos])))))
           (core/submit! (:eng s) (spec {:block "sand" :count 1 :tunnel-length 0}) {})
           (await (run-ticks s 30))
-          (is (= "lava" (block-at s 0 62 0)))
+          (is (= "cobblestone" (block-at s 0 62 0)) "the lava the dig laid open is sealed from the rim")
           (is (= [[0 63 0]] (dug-cells s)) "the sand is dug, from beside")
-          (is (every? #(>= % 64) @ys) "the body never steps into the sand's cell, over the lava, not even for the drop")
+          (is (every? #(>= % 63) @ys) "the body never goes down to the lava")
           (is (not= "air" (block-at s 0 63 0)) "the hole over the lava is mended")
-          (is (zero? (get (inv s) "sand" 0)) "the drop is left in the hole")
           (is (#{{:x 1 :y 64 :z 0} {:x -1 :y 64 :z 0} {:x 0 :y 64 :z 1} {:x 0 :y 64 :z -1}} (:target (first (moved s))))
               "it steps to the floor beside before the dig, so it does not drop onto the unseen cell below")
           (is (not (contains? (:default (:accept mine/args)) :under-feet))))))))

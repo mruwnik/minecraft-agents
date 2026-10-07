@@ -6,6 +6,7 @@
             [engine.ctx :as ctx]
             [engine.takeover :as takeover]
             [engine.events :as events]
+            [engine.blocks-dig-test :as bd]
             [engine.harvest-test :as h]
             [engine.registry :as registry]
             [engine.test-util :as tu]
@@ -750,3 +751,17 @@
               result (await (tu/child-outcome eng job {:plan "floor"} 200))]
           (is (= [] (:refused result)) "the floor under it is unseen: not a hazard to refuse, a dig to make from beside")
           (is (= "oak_planks" (block p [0 63 0]))))))))
+
+;; ---------------------------------------------------------------- lava a dig lays open
+
+(deftest a-clear-cell-over-hidden-lava-is-dug-and-the-lava-under-it-sealed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (start {:blocks (assoc ground "3,63,3" "dirt" "3,62,3" "lava" "3,61,3" "stone")
+                                      :inventory [{:name "cobblestone" :count 2}] :self {:pos {:x 4 :y 64 :z 3}}}
+                                     {"house" {:id "house" :parts [{:id "door" :cells [[3 63 3]] :want :clear}]}})]
+          (bd/hiding p #(= [3 62 3] %))
+          (await (tu/child-outcome eng job {:plan "house"} 200))
+          (is (= "air" (block p [3 63 3])) "the plan's cell stays clear")
+          (is (= "cobblestone" (block p [3 62 3])) "the lava under it is sealed"))))))

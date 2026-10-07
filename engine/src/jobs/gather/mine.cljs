@@ -633,7 +633,7 @@
                   r (await (cut! c (remove #(air (name-at %)) cut)))]
               (cond
                 (= :continue r) :continue
-                (not= :ok r) (end! c r next)
+                (not= :ok r) (if-let [h (some #(cut-hazard c %) cut)] (end! c (:reason h) (:at h) next) (end! c r next))
                 :else
                 (do (await (glance! c [(headings heading)]))
                     (cond

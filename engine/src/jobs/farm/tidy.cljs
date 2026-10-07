@@ -170,7 +170,7 @@
       (do
         (ctx/update-mem! c assoc :digging pos :collect true)
         (let [;; decide has judged the hazards, lava apart from water
-              dig-args {:for-plan (:plan (:args c)) :accept #{:fluid-adjacent :falling-block}
+              dig-args {:for-plan (:plan (:args c)) :accept (into #{:fluid-adjacent :falling-block} (filter #{:lava-adjacent}) (:accept (:args c)))
                         :ignore-zones? (:ignore-zones? (:args c))}
               outcome (await (blocks/dig-cell! c (pos-map pos) dig-args))]
           (when-not (= :continue outcome) (ctx/update-mem! c dissoc :digging))

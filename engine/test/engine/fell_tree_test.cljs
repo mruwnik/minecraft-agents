@@ -2,6 +2,7 @@
   "jobs.forestry.fell-tree from a pillar: a trunk too tall to reach from the ground is felled from a pillar that is
   taken back (jobs.access.pillar, jobs.access.cleanup) before the job ends."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.blocks-dig-test :as bd]
             [engine.fake :as fake]
             [engine.forest-maintain-test :as fm]
             [engine.harvest-test :as h]
@@ -148,3 +149,15 @@
         (let [s (await (fell (chest-world [{:name "dirt" :count 20}]) {:radius 10 :fetch false} 80))]
           (is (= :not-done (:out s)))
           (is (= 20 (dirt-in-chest s))))))))
+
+(deftest a-log-over-hidden-lava-is-dug-and-the-lava-sealed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (fm/start {:blocks (assoc (lt/tree 6 0 "oak" 3) "6,63,0" "lava")
+                           :inventory [{:name "cobblestone" :count 2}]} {})
+              p (:p s)]
+          (bd/hiding p #(= [6 63 0] %))
+          (await (tu/child-outcome (:eng s) 'jobs.forestry.fell-tree {:radius 10} 200))
+          (is (= "air" (h/block-at p 6 64 0)) "the bottom log is dug")
+          (is (= "cobblestone" (h/block-at p 6 63 0)) "the lava under it is sealed"))))))

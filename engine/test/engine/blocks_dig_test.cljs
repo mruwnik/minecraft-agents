@@ -287,7 +287,7 @@
                                #(fake/set-block! % [12 65 0] "lava"))
               r (await (waiting-after env (list job {:pos [12 64 0]}) 2))]
           (is (= {:reason :hazard :pos {:x 12 :y 64 :z 0}} (select-keys r [:reason :pos])))
-          (is (some #{:fluid-adjacent} (:hazards r)))
+          (is (some #{:lava-adjacent} (:hazards r)))
           (is (empty? (calls (:p env) "dig")) "walked, then refused: nothing dug"))))))
 
 (defn ^:async cut-at-act-then-resume
@@ -424,7 +424,7 @@
         (let [{:keys [eng p seen]} (setup {:self body :blocks {"0,63,0" "dirt" "0,62,0" "lava"}})
               ys (atom [])]
           (heights p ys)
-          (let [result (await (child-outcome eng job {:pos under-feet :accept #{:fluid-adjacent}} 20))]
+          (let [result (await (child-outcome eng job {:pos under-feet :accept #{:lava-adjacent} :on-lava :leave} 20))]
             (is (= {:dug true :reason :dug :collected 0} (select-keys result [:dug :reason :collected])))
             (is (every? #(>= % 64) @ys) "the body never steps into the hole")
             (is (= [{:pos under-feet :reason :unsafe-floor}] (mapv #(select-keys % [:pos :reason]) (left-drops seen))))
@@ -467,3 +467,85 @@
           (await (core/tick! (:eng env)))
           (is (= "air" (block-at p under-feet)) "the body stepped beside and dug")
           (is (= 1 (count (calls p "dig")))))))))
+
+;; ------------------------------------------------------------------ lava the dig lays open
+
+(def lava-under {:x 0 :y 62 :z 0})
+(def cobble [{:name "cobblestone" :count 2}])
+
+(defn sealed-events [seen] (filterv #(= :blocks.dig.sealed (:kind %)) @seen))
+
+(deftest hidden-lava-under-the-dug-cell-is-sealed-and-the-dug-cell-stays-dug
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self body :blocks {"0,63,0" "dirt" "0,62,0" "lava" "0,61,0" "stone"} :inventory cobble})
+              ys (atom [])]
+          (hiding p #(= [0 62 0] %))
+          (heights p ys)
+          (let [result (await (child-outcome eng job {:pos under-feet} 30))]
+            (is (= {:dug true :reason :dug} (select-keys result [:dug :reason])))
+            (is (= "air" (block-at p under-feet)) "the dug cell is not refilled")
+            (is (= "cobblestone" (block-at p lava-under)) "the lava under it is sealed")
+            (is (= [{:cell [0 62 0]}] (mapv #(select-keys % [:cell]) (sealed-events seen))))
+            (is (every? #(>= % 63) @ys) "the body never went down to the lava")))))))
+
+(deftest with-no-block-to-seal-with-the-dig-stops-lava-unsealed-and-the-body-steps-away
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self body :blocks {"0,63,0" "dirt" "0,62,0" "lava"}})]
+          (hiding p #(= [0 62 0] %))
+          (let [result (await (child-outcome eng job {:pos under-feet} 30))
+                [x _ z] (get-in @(fake/state p) [:self :pos])]
+            (is (= {:status :stopped :dug true :reason :lava-unsealed :cell [0 62 0] :place :need :stepped-away true}
+                   (select-keys result [:status :dug :reason :cell :place :stepped-away])))
+            (is (= "lava" (block-at p lava-under)))
+            (is (>= (max (js/Math.abs (js/Math.floor x)) (js/Math.abs (js/Math.floor z))) 2)
+                "the body stands off the cells beside the open lava")
+            (is (re-find #"lava at \[0 62 0\] not sealed: no block to seal with"
+                         (:text (last (filterv #(= :blocks.dig.done (:kind %)) @seen)))))))))))
+
+(deftest seen-lava-beside-the-block-is-a-lava-adjacent-hazard-not-fluid-adjacent
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (setup {:self body :blocks {"2,64,0" "dirt" "2,64,1" "lava"}})]
+          (is (= {:reason :hazard :pos at :hazards [:lava-adjacent]}
+                 (await (waiting-after env (list job {:pos [2 64 0] :accept #{:fluid-adjacent}}) 2))))
+          (is (empty? (calls (:p env) "dig"))))))))
+
+(deftest seen-lava-taken-with-lava-adjacent-is-sealed-after-the-dig
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self body :blocks {"2,64,0" "dirt" "2,64,1" "lava" "2,63,1" "stone"} :inventory cobble})
+              result (await (child-outcome eng job {:pos [2 64 0] :accept #{:lava-adjacent}} 30))]
+          (is (= {:dug true :reason :dug} (select-keys result [:dug :reason])))
+          (is (= ["air" "cobblestone"] (mapv #(block-at p %) [at {:x 2 :y 64 :z 1}]))))))))
+
+(deftest on-lava-leave-leaves-the-lava-to-the-caller
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self body :blocks {"0,63,0" "dirt" "0,62,0" "lava" "0,61,0" "stone"} :inventory cobble})]
+          (hiding p #(= [0 62 0] %))
+          (let [result (await (child-outcome eng job {:pos under-feet :on-lava :leave} 30))]
+            (is (= {:dug true :reason :dug} (select-keys result [:dug :reason])))
+            (is (= "lava" (block-at p lava-under)))
+            (is (empty? (calls p "place")))))))))
+
+(deftest after-a-failed-step-off-walk-a-new-cell-beside-ends-the-wait
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [walks (atom 0)
+              env (failing-walks (setup {:self body :floor [1 0 1 0] :blocks {"0,63,0" "dirt" "0,62,0" "stone"}}) walks)
+              p (:p env)]
+          (hiding p #(= [0 62 0] %))
+          (is (= {:why :no-side-stand :walk :no-path} (select-keys (await (waiting-after env (list job {:pos under-feet}) 3)) [:why :walk])))
+          (is (= 1 @walks) "the wait holds while nothing beside has changed")
+          (swap! (fake/state p) fake/put-block [-1 63 0] "stone")
+          (swap! (:clock env) + 700)
+          (await (core/tick! (:eng env)))
+          (is (= 2 @walks) "a cell beside that came free is tried"))))))

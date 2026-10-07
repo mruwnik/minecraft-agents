@@ -6,6 +6,7 @@
             [jobs.lib.blocks :as b]
             [jobs.lib.child :as child]
             [jobs.lib.fetch :as fetch]
+            [jobs.lib.lava :as lava]
             [jobs.lib.step-off :as step-off]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.tools :as tools]
@@ -20,8 +21,8 @@
   - {:reason :not-allowed :pos :by :zone|:claim|:footprint|:no-zones ...}: zones, claims or another plan's
     footprint refuse the dig (jobs.lib.access). :for-plan's own footprint does not. :ignore-zones? skips the
     rule.
-  - {:reason :hazard :pos :hazards [kw ..]}: a dig hazard not in :accept (:fluid-adjacent :falling-block).
-    With :on-fluid :fail a :fluid-adjacent hazard ends the job instead (see below).
+  - {:reason :hazard :pos :hazards [kw ..]}: a dig hazard not in :accept (:fluid-adjacent water, :lava-adjacent seen
+    lava, :falling-block). With :on-fluid :fail a fluid hazard ends the job instead (see below).
   - {:reason :hazard :pos :hazards [:under-feet] :why :no-side-stand}: the block is under the feet with no seen solid
     floor below it, and no cell beside (jobs.lib.step-off, within 1 block) to dig it from. The wait lasts while the
     body stands where it found none and still sees none.
@@ -40,9 +41,13 @@
   In reach it holds the best carried tool (tools/equip-for!) and digs through jobs.lib.tidy/dig!, so a dig of
   another's block with :ignore-zones? is recorded for jobs.survival.restore-broken. With :collect it picks up the
   drops (only the item entities that appeared with this dig, by id).
+  First, with :on-lava :seal (default), seen lava beside the dug cell (what the dig laid open) is filled with a building
+  block from the rim (jobs.lib.lava, a jobs.blocks.place child, event blocks.dig.sealed); the dug cell stays dug. When
+  it cannot be (no block carried, or two places fail) the body steps off the cells beside the lava and the job stops
+  :lava-unsealed with :cell, :place (:need: no block) and :stepped-away.
 
   Ends with info blocks.dig.done and {:dug true|false :pos :block :reason :collected n}. :reason is :dug or
-  :already-clear (air there, nothing done): done. Stopped ({:status :stopped}, :dug false): :fluid (a fluid is not
+  :already-clear (air there, nothing done): done. Stopped ({:status :stopped}, :dug true): :lava-unsealed. :dug false: :fluid (a fluid is not
   dug), :fluid-adjacent (:on-fluid :fail, with :hazards and a :hint), :cannot (bedrock and the like), :bad-args (with
   a blocks.dig.declined warn), or :failed (the primitive refused: a timeout, with its status as :primitive). Declined, the check
   then waits: :unreachable (the walk failed twice or the dig is out of reach), a zone or hazard that appeared during
@@ -56,7 +61,8 @@
   {:pos {:doc "the block to dig, [x y z] or {:x :y :z}" :spec ::a/pos :default nil}
    :collect {:doc "pick up what the dig dropped (needs a free slot)" :spec boolean? :default true}
    :need-drop {:doc "wait :no-tool when no carried tool harvests the block; false digs anyway and the drop is lost (clearing)" :spec boolean? :default true}
-   :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent :falling-block; :under-feet digs a block under the feet from on top instead of from beside)" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block :under-feet}) :default #{}}
+   :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent water, :lava-adjacent seen lava, :falling-block; :under-feet digs a block under the feet from on top instead of from beside)" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block :under-feet}) :default #{}}
+   :on-lava {:doc ":seal: seen lava beside the dug cell is filled with a building block (jobs.lib.lava); :leave: the caller deals with it (stair, tunnel)" :spec #{:seal :leave} :default :seal}
    :on-fluid {:doc ":wait: a block beside a fluid that :accept does not take waits :hazard; :fail: the job ends at once, reason :fluid-adjacent, with a :hint" :spec #{:wait :fail} :default :wait}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :spec a/name? :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
@@ -80,21 +86,21 @@
         (pos? (u/free-slots p))
         (boolean (some #(and (drops (:name %)) (< (:count %) 64)) (u/inventory p))))))
 
-(defn stand-beside?
-  "Whether the body sees a cell beside its column (jobs.lib.step-off, reach 1, zones obeyed) to stand on now."
+(defn stands-beside
+  "The cells beside the body's column (jobs.lib.step-off, reach 1, zones obeyed) it sees it can stand on now."
   [c]
   (let [[x y z] (b/feet-cell c)]
-    (boolean (seq (step-off/candidates (:primitives c) {:x x :y y :z z}
-                                       {:reach 1 :ok? (step-off/zone-ok (access/rules-input c))})))))
+    (set (step-off/candidates (:primitives c) {:x x :y y :z z}
+                              {:reach 1 :ok? (step-off/zone-ok (access/rules-input c))}))))
 
 (defn no-stand-wait
   "The wait reason for a dig under the feet that found no cell beside to stand on (memory m), while the body still
-  stands where it looked and (when it found no cell, not a failed walk) sees none now. Once the body has moved or a
-  cell beside has come free, nil (it looks again)."
+  stands where it looked and sees no cell beside it had not seen then (after a failed walk: none but those it failed
+  on). Once the body has moved or a cell beside has come free, nil (it looks again)."
   [c m pos v]
-  (when-let [{:keys [from why]} (:no-stand m)]
+  (when-let [{:keys [from why stands]} (:no-stand m)]
     (when (and (access/under-feet? v) (not (contains? (set (:accept (:args c))) :under-feet)) (= from (b/feet-cell c))
-               (or why (not (stand-beside? c))))
+               (every? (or stands #{}) (stands-beside c)))
       (cond-> {:reason :hazard :pos pos :hazards [:under-feet] :why :no-side-stand}
         why (assoc :walk why)))))
 
@@ -123,7 +129,7 @@
                             (when (and collect (not (room? p block)))
                               {:reason :inventory-full :pos pos}))))
               :hazard {:reason :hazard :pos pos
-                       :hazards (into [] (comp (map :reason) (remove (set accept))) (:hazards v))}
+                       :hazards (into [] (comp (map access/hazard-key) (remove (set accept))) (:hazards v))}
               :not-loaded {:reason :not-loaded :pos pos}
               (or (b/not-allowed pos v) {:reason (:reason v) :pos pos}))))))))
 
@@ -131,7 +137,7 @@
   "With :on-fluid :fail, the hazard wait of a block beside a fluid, else nil."
   [c]
   (let [r (problem c)]
-    (when (and (= :fail (:on-fluid (:args c))) (= :hazard (:reason r)) (some #{:fluid-adjacent} (:hazards r)))
+    (when (and (= :fail (:on-fluid (:args c))) (= :hazard (:reason r)) (some #{:fluid-adjacent :lava-adjacent} (:hazards r)))
       r)))
 
 (defn check [c]
@@ -141,8 +147,13 @@
 
 (defn finish!
   [c result]
-  (let [text (str (if (:dug result) "dug " "did not dig ") (or (:block result) "") " at " (pr-str (b/cell (:pos result)))
-                  (when-not (:dug result) (str ": " (name (:reason result)))))]
+  (let [{:keys [cell place]} result
+        text (str (if (:dug result) "dug " "did not dig ") (or (:block result) "") " at " (pr-str (b/cell (:pos result)))
+                  (cond
+                    (= :lava-unsealed (:reason result))
+                    (str ": lava at " (pr-str cell) " not sealed: " (if (= :need place) "no block to seal with" (name (or place :tries)))
+                         (when-not (:stepped-away result) "; could not step away"))
+                    (not (:dug result)) (str ": " (name (:reason result)))))]
     (ctx/emit! c :blocks.dig.done :info (assoc result :text text))
     (ctx/result! c result)
     :done))
@@ -162,9 +173,30 @@
       (finish! c {:dug true :pos pos :block block :reason :dug
                   :collected (if (= :done r) (:collected (ctx/child-result c :collect) 0) 0)}))))
 
+(defn ^:async seal-step!
+  "One step after a dig with :on-lava :seal: nil when no seen lava borders the dug cell, :again once one lava cell is
+  sealed, :continue while a child waits on the world, :done once the job stopped :lava-unsealed (after the body
+  stepped off the cells beside the lava). Re-reads the world each step; memory [:dug :unsealed] holds a failed seal."
+  [c pos]
+  (let [{:keys [block unsealed]} (:dug (ctx/mem c))
+        cell (b/cell pos)]
+    (cond
+      unsealed (let [r (await (lava/step-away! c cell (:lavas unsealed)))]
+                 (if (= :continue r)
+                   :continue
+                   (stop! c (merge {:dug true :pos pos :block block :stepped-away (= :arrived r)} (dissoc unsealed :lavas)))))
+      (not= :seal (:on-lava (:args c))) nil
+      :else
+      (when-let [lavas (seq (lava/exposed (:primitives c) cell))]
+        (let [r (await (lava/seal! c :blocks.dig.sealed #(u/seen-name (:primitives c) (zipmap [:x :y :z] %)) (first lavas)
+                                   (select-keys (:args c) [:fetch :ignore-zones?])))]
+          (if (map? r)
+            (do (ctx/update-mem! c assoc-in [:dug :unsealed] (assoc r :lavas (vec lavas))) :again)
+            r))))))
+
 (defn ^:async dig!
-  "Hold the best tool and dig; book the outcome. Resolves to :done (finished), :collect (dug, drops to pick up) or
-  :unreachable (the primitive says out of reach)."
+  "Hold the best tool and dig; book the outcome. Resolves to :done (finished), :collect (dug: lava to seal, drops to
+  pick up) or :unreachable (the primitive says out of reach)."
   [c pos block]
   (await (tools/equip-for! c block))
   (let [r (await (tidy/dig! c pos))
@@ -172,9 +204,7 @@
         _ (when (= "dug" status) (await (look/look-at! c (b/cell pos))))
         ids (vec (keep #(.-id %) (array-seq (or (.-drops r) #js []))))]
     (case status
-      "dug" (if (and (:collect (:args c)) (seq ids))
-              (do (ctx/update-mem! c assoc :dug {:block block :ids ids}) :collect)
-              (finish! c {:dug true :pos pos :block block :reason :dug :collected 0}))
+      "dug" (do (ctx/update-mem! c assoc :dug {:block block :ids ids}) :collect)
       "missing" (finish! c {:dug false :pos pos :block block :reason :already-clear})
       "cannot" (stop! c {:dug false :pos pos :block block :reason :cannot})
       "unreachable" :unreachable
@@ -193,7 +223,7 @@
     (if (keyword? r)
       r
       (let [why (:unreachable r)]
-        (ctx/update-mem! c assoc :no-stand (cond-> {:from (b/feet-cell c)} (not= :no-cell why) (assoc :why why)))
+        (ctx/update-mem! c assoc :no-stand (cond-> {:from (b/feet-cell c) :stands (stands-beside c)} (not= :no-cell why) (assoc :why why)))
         :declined))))
 
 (defn unreachable!
@@ -217,7 +247,14 @@
         refused (stop! c {:dug false :pos pos :block block :reason :fluid-adjacent :hazards (:hazards refused)
                           :hint "pass :accept #{:fluid-adjacent} to dig beside water, or :on-fluid :wait to wait for it to drain"})
         r r
-        (:dug (ctx/mem c)) (await (collect! c pos))
+        (:dug (ctx/mem c))
+        (let [s (await (seal-step! c pos))
+              {:keys [block ids]} (:dug (ctx/mem c))]
+          (cond
+            (= :again s) (recur fails (inc steps))
+            s s
+            (and (:collect (:args c)) (seq ids)) (await (collect! c pos))
+            :else (finish! c {:dug true :pos pos :block block :reason :dug :collected 0})))
         (b/air block) (finish! c {:dug false :pos pos :block block :reason :already-clear})
         (b/fluids block) (stop! c {:dug false :pos pos :block block :reason :fluid})
         tool :declined

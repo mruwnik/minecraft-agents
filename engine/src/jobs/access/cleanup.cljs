@@ -237,7 +237,8 @@
         (await (tools/equip-tool! c item {:fast true}))
         (ledger/remember! c (ledger/begin-removal l cell))
         (let [[x y z] cell
-              outcome (await (blocks/dig-cell! c {:x x :y y :z z} {:accept #{:fluid-adjacent :falling-block :under-feet}
+              outcome (await (blocks/dig-cell! c {:x x :y y :z z} {:accept (into #{:fluid-adjacent :falling-block :under-feet}
+                                                                         (filter #{:lava-adjacent}) (:accept (:args c)))
                                                                    :ignore-zones? true}))]
           (when (and under? (not= :continue outcome)) (await (walk/settle! c)))
           (cond

@@ -451,7 +451,8 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[args expected walks?] [[{:count 1} [] zero?]
-                                        [{:count 1 :accept #{:fluid-adjacent}} [[9 64 0]] pos?]]]
+                                        [{:count 1 :accept #{:fluid-adjacent}} [] zero?]
+                                        [{:count 1 :accept #{:lava-adjacent}} [[9 64 0]] pos?]]]
           (let [s (await (scenario args {:blocks {"9,64,0" "short_grass" "9,64,1" "lava"} :drops seed-drops} 20))]
             (is (= expected (dug-cells s)))
             (is (walks? (count (tu/walked-to (:eng s)))))))))))

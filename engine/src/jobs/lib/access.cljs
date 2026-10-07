@@ -91,14 +91,19 @@
   [v]
   (boolean (some #(= :under-feet (:reason %)) (:hazards v))))
 
+(defn hazard-key
+  "The :accept key of a dig hazard: seen lava beside is :lava-adjacent, kept apart from water (:fluid-adjacent)."
+  [{:keys [reason fluid]}]
+  (if (and (= :fluid-adjacent reason) (= "lava" fluid)) :lava-adjacent reason))
+
 (defn judge
-  "What a dig job does with verdict v given the hazards it accepts:
+  "What a dig job does with verdict v given the hazards it accepts (keyed by hazard-key):
   :ok (dig), :refused (zone, claim or another plan's footprint: leave the cell for good), :hazard (a hazard not
   accepted), :no-zones (no zone list: dig nothing now), :not-loaded, or another reason from the rules.
   :under-feet is never refused here: jobs.blocks.dig digs that cell from beside it."
   [v accept]
   (cond
-    (rules/accepts? v (conj (set accept) :under-feet)) :ok
+    (and (:ok v) (every? (comp (conj (set accept) :under-feet) hazard-key) (:hazards v))) :ok
     (:ok v) :hazard
     (#{:zone :claim :footprint} (:reason v)) :refused
     :else (:reason v)))

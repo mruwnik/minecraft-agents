@@ -6,6 +6,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.escape :as escape]
             [jobs.lib.fetch :as fetch]
+            [jobs.lib.lava :as lava]
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
             [jobs.lib.blocks :as blocks]
@@ -280,39 +281,14 @@
         beside (for [o open d rules/neighbour-deltas :let [n (add o d)] :when (and (not (open? n)) (lava? n))] n)]
     (distinct (concat beside (filter lava? open)))))
 
-(def max-seals "Places per lava cell (a seal and one reseal) before the seal counts as failed." 2)
-
-(defn ^:async seal!
-  "Fill lava cell with a building block (a jobs.blocks.place child, fetching one when the job's :fetch allows). :again
-  once placed (event kind, info), :continue while the child waits on the world, else the stop :lava-unsealed."
-  [c kind block-at cell]
-  (let [tries (get-in (ctx/mem c) [:seals cell] 0)
-        [x y z] cell]
-    (if (>= tries max-seals)
-      {:reason :lava-unsealed :cell cell :tries tries}
-      (do
-        ;; a waiting child is resumed on the same cell: only its first round counts a try
-        (ctx/update-mem! c #(cond-> (assoc % :sealing cell)
-                              (not= cell (:sealing %)) (update-in [:seals cell] (fnil inc 0))))
-        (let [outcome (await (blocks/place-cell! c {:x x :y y :z z} nil
-                                                 {:any-of blocks/building-blocks :fetch (:fetch (:args c))
-                                                  :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
-          (if (= :continue outcome)
-            :continue
-            (do (ctx/update-mem! c dissoc :sealing)
-                (if (#{:placed :already} outcome)
-                  (do (ctx/emit! c kind :info {:cell cell :now (block-at cell) :text (str "sealed lava at " (pr-str cell))})
-                      :again)
-                  {:reason :lava-unsealed :cell cell :place outcome}))))))))
-
 (defn ^:async lava-step!
   "Exposed lava by the job's :on-lava: nil when there is none; :stop gives the stop :lava-exposed, else the first is
-  sealed (seal!, event kind)."
+  sealed (jobs.lib.lava/seal!, event kind)."
   [c kind block-at feet cut]
   (when-let [cell (first (exposed-lava block-at feet cut))]
     (if (= :stop (:on-lava (:args c)))
       {:reason :lava-exposed :cell cell :fluid "lava"}
-      (await (seal! c kind block-at cell)))))
+      (await (lava/seal! c kind block-at cell {:fetch (:fetch (:args c)) :ignore-zones? (:ignore-zones? (:args c))})))))
 
 (defn target-steps
   "Steps to cut from the args and the start feet, or {:error text}."
@@ -435,8 +411,8 @@
               (ctx/update-mem! c #(cond-> (assoc % :digging {:cell cell :block block} :counted cell)
                                     (not= cell (:counted %)) (update-in [:tries cell] (fnil inc 0))))
               (let [[x y z] cell
-                    outcome (await (blocks/dig-cell! c {:x x :y y :z z} {:accept #{:fluid-adjacent :falling-block}
-                                                                         :ignore-zones? true}))]
+                    outcome (await (blocks/dig-cell! c {:x x :y y :z z} {:accept #{:fluid-adjacent :lava-adjacent :falling-block}
+                                                                         :on-lava :leave :ignore-zones? true}))]
                 (if (= :continue outcome)
                   :yield
                   (do

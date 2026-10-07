@@ -7,6 +7,7 @@
             [engine.events :as events]
             [engine.takeover :as takeover]
             [engine.fake :as fake]
+            [engine.blocks-dig-test :as bd]
             [engine.test-util :as tu :refer [run-until-empty child-outcome]]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
@@ -340,3 +341,17 @@
           (is (= [:continue :continue :continue :continue :continue] (:rs @seen*)))
           (is (= {} (:skipped @seen*)) "a briefly unloaded cell is not skipped")
           (is (= {} (:tries @seen*))))))))
+
+;; ------------------------------------------------------------------ lava a dig lays open
+
+(deftest clear-box-seals-hidden-lava-a-dig-lays-open-under-a-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:blocks {"1,63,1" "dirt" "1,62,1" "lava" "1,61,1" "stone"} :inventory [{:name "cobblestone" :count 2}]
+                                      :self {:pos {:x 3.5 :y 64 :z 1.5}}})]
+          (bd/hiding p #(= [1 62 1] %))
+          (let [result (await (child-outcome eng job {:from {:x 1 :y 63 :z 1} :to {:x 1 :y 63 :z 1}} 30))]
+            (is (= 1 (:dug result)))
+            (is (= ["air" "cobblestone"] (mapv #(block-at p %) [{:x 1 :y 63 :z 1} {:x 1 :y 62 :z 1}]))
+                "the cell stays cleared and the lava under it is sealed")))))))
