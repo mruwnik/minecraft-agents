@@ -7,7 +7,8 @@
             [engine.harvest-test :as h]
             [engine.test-util :as tu]
             [jobs.lib.world-files :as world]
-            [jobs.forestry.prepare :as prepare]))
+            [jobs.forestry.prepare :as prepare]
+            [jobs.forestry.prepare-rule :as rule]))
 
 (def job 'jobs.forestry.prepare)
 
@@ -56,12 +57,12 @@
 ;; ------------------------------------------------------------------ pure
 
 (deftest a-tree-grows-through-air-leaves-saplings-and-plants-only
-  (are [name free] (= free (prepare/tree-free? name))
+  (are [name free] (= free (rule/tree-free? name))
     "air" true "cave_air" true "oak_leaves" true "short_grass" true "tall_grass" true "poppy" true "snow" true
     "vine" true "birch_sapling" true "stone" false "dirt" false "oak_log" false "oak_planks" false "water" false))
 
 (deftest headroom-is-the-species-table-and-the-argument-overrides-it
-  (are [species over expected] (= expected (prepare/headroom-of species over))
+  (are [species over expected] (= expected (rule/headroom-of species over))
     "oak" nil 7
     "birch" nil 8
     "oak" {"oak" 3} 3
@@ -69,14 +70,14 @@
     "mangrove" nil nil))
 
 (deftest only-natural-ground-is-replaced
-  (are [name natural] (= natural (prepare/natural-ground? name))
+  (are [name natural] (= natural (rule/natural-ground? name))
     "stone" true "sand" true "gravel" true "cobblestone" true "deepslate" true "sandstone" true
     "oak_planks" false "oak_log" false "chest" false "white_wool" false "dirt" false "water" false))
 
 (defn levels-at [m] (fn [pos] (get m pos)))
 
 (deftest upstream-walks-a-stream-back-to-its-source
-  (are [levels start source] (= source (prepare/upstream (levels-at levels) start))
+  (are [levels start source] (= source (rule/upstream (levels-at levels) start))
     {[0 64 0] 0} [0 64 0] [0 64 0]
     {[0 64 0] 0 [1 64 0] 1 [2 64 0] 2} [2 64 0] [0 64 0]
     {[0 66 0] 0 [0 65 0] 8 [0 64 0] 8} [0 64 0] [0 66 0]
@@ -88,7 +89,7 @@
     {[2 64 0] 2} [2 64 0] nil))
 
 (deftest upstream-gives-up-after-sixteen-steps
-  (are [top source] (= source (prepare/upstream (levels-at (into {[0 top 0] 0} (map (fn [y] [[0 y 0] 8])) (range 64 top))) [0 64 0]))
+  (are [top source] (= source (rule/upstream (levels-at (into {[0 top 0] 0} (map (fn [y] [[0 y 0] 8])) (range 64 top))) [0 64 0]))
     80 [0 80 0]
     81 nil))
 

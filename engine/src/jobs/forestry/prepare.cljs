@@ -1,16 +1,13 @@
 (ns jobs.forestry.prepare
-  (:require [clojure.string :as str]
-            [jobs.lib.access.rules :as rules]
-            [engine.ctx :as ctx]
+  (:require [engine.ctx :as ctx]
             [jobs.forestry.trees :as forestry]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
             [jobs.lib.step-off :as step-off]
             [jobs.lib.access :as access]
-            [jobs.farm.tidy :as tidy]
             [jobs.forestry.maintain :as maintain]
-            [jobs.lib.world :as known]))
+            [jobs.forestry.prepare-field :as field]))
 
 (def doc
   "Get the planting spots of a forest plan ready. A spot is a planned tree cell (want {:tree species}); the cell
@@ -66,246 +63,6 @@
    :collect-radius {:doc "how far from where the body stands the drops are collected, in blocks" :default 8}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
-;; ------------------------------------------------------------------ the rule, pure
-
-(def headroom-table
-  {"oak" 7 "birch" 8 "spruce" 9 "jungle" 13 "acacia" 10 "dark_oak" 10 "pale_oak" 10 "cherry" 9})
-
-(defn headroom-of
-  "Cells of growth space for species (the planted cell included): the override, else the table, nil for a species
-  not supported."
-  [species over]
-  (or (get over species) (get headroom-table species)))
-
-(def tree-plants
-  #{"short_grass" "tall_grass" "fern" "large_fern" "dead_bush" "snow" "vine" "glow_lichen" "dandelion" "poppy"
-    "blue_orchid" "allium" "azure_bluet" "red_tulip" "orange_tulip" "white_tulip" "pink_tulip" "oxeye_daisy"
-    "cornflower" "lily_of_the_valley" "torchflower" "sunflower" "lilac" "rose_bush" "peony" "pink_petals"
-    "wildflowers" "leaf_litter" "short_dry_grass" "tall_dry_grass" "bush" "firefly_bush"})
-
-(defn tree-free?
-  "Whether a tree's growth may take the place of the block: air, leaves, saplings, plants, snow, vines."
-  [n]
-  (boolean (or (rules/air n) (str/ends-with? n "_leaves") (str/ends-with? n "_sapling") (tree-plants n))))
-
-(def natural-names
-  #{"stone" "cobblestone" "deepslate" "cobbled_deepslate" "andesite" "diorite" "granite" "tuff" "calcite" "sand"
-    "red_sand" "gravel" "sandstone" "red_sandstone" "clay" "mud" "snow_block" "mycelium" "terracotta" "dirt_path"})
-
-(defn natural-ground?
-  "Whether the block is ground nobody built: replaced by dirt when it is under a planted cell."
-  [n]
-  (contains? natural-names n))
-
-(def soil-preference ["dirt" "grass_block" "coarse_dirt" "podzol"])
-
-(defn soil-item
-  "The soil block of species' soil carried (carried: a set of names), dirt first, or nil."
-  [carried species]
-  (first (filter #(and (carried %) ((maintain/soil-for species) %)) soil-preference)))
-
-(defn plant-like? [n]
-  (boolean (re-find #"(_sapling|_propagule|_fungus)$" n)))
-
-(defn own-cell
-  "{:state ...} when the block in the planned cell settles it (unloaded, growing, grown, wrong), else nil."
-  [p pos species]
-  (let [n (u/block-name p pos)]
-    (cond
-      (nil? n) {:state :unloaded}
-      (= n (forestry/sapling-of species)) {:state :growing}
-      (= n (str species "_log")) {:state :grown}
-      (or (plant-like? n) (forestry/log-name? n) (tidy/keep-why n)) {:state :wrong :found n})))
-
-(defn growth-space
-  "{:state :cramped :at :block} for the lowest block above the planted cell a tree cannot grow through, {:state
-  :unloaded} when a cell of it is not loaded, else nil."
-  [p pos species over]
-  (some (fn [dy]
-          (let [at (update pos :y + dy)
-                n (u/block-name p at)]
-            (cond
-              (nil? n) {:state :unloaded}
-              (not (tree-free? n)) {:state :cramped :at (maintain/cell-vec at) :block n})))
-        (range 1 (headroom-of species over))))
-
-(defn soil-state
-  "{:state ...} for the ground under the planted cell: nil when it is soil the species takes, else :soil-dig (natural
-  ground, dirt carried), :soil-place (the hole this job dug, dirt carried), :no-soil with :why, or :unloaded."
-  [p pos species {:keys [planned holes carried]}]
-  (let [under (maintain/down pos)
-        n (u/block-name p under)
-        dirt (soil-item carried species)
-        no-dirt {:state :no-soil :why :no-dirt}]
-    (cond
-      (nil? n) {:state :unloaded}
-      ((maintain/soil-for species) n) nil
-      (and (contains? holes (maintain/cell-vec under)) (rules/air n)) (if dirt {:state :soil-place :item dirt} no-dirt)
-      (planned (maintain/cell-vec under)) {:state :no-soil :why :planned}
-      (rules/air n) {:state :no-soil :why :hollow}
-      (rules/fluids n) {:state :no-soil :why :fluid}
-      (tidy/keep-why n) {:state :no-soil :why :kept}
-      (not (natural-ground? n)) {:state :no-soil :why :other-block}
-      dirt {:state :soil-dig :block n :item dirt}
-      :else no-dirt)))
-
-(def max-upstream "How many cells upstream the walk to a source goes." 16)
-
-(defn upstream-cells
-  "The water cells the cell at level l is fed from, the best first: the cell above for falling water, else the
-  neighbours on its level with a lower level (a falling one too, for level 1), lowest first."
-  [level-at [x y z] l]
-  (if (>= l 8)
-    (filter level-at [[x (inc y) z]])
-    (->> rules/neighbour-deltas
-         (filter (fn [[_ dy _]] (zero? dy)))
-         (keep (fn [[dx _ dz]]
-                 (let [q [(+ x dx) y (+ z dz)]
-                       ql (level-at q)]
-                   (when (and ql (or (< ql l) (and (= l 1) (>= ql 8)))) [ql q]))))
-         (sort-by first)
-         (map second))))
-
-(defn upstream
-  "The [x y z] of the source reached by walking upstream from start, or nil: level-at maps an [x y z] to the level of
-  the water there (0 source, 1-7 flowing, 8+ falling), nil for anything else; at most max-upstream steps, no cell twice."
-  [level-at start]
-  (loop [pos (vec start) n 0 seen #{}]
-    (let [l (level-at pos)
-          next-pos (when (and l (pos? l) (< n max-upstream) (not (seen pos))) (first (upstream-cells level-at pos l)))]
-      (cond
-        (nil? l) nil
-        (zero? l) pos
-        next-pos (recur next-pos (inc n) (conj seen pos))))))
-
-(defn water-level
-  "The level of the water at pos (a number), nil for any other block, unloaded, or water without a level."
-  [p pos]
-  (let [b (u/block-at p pos)]
-    (when (= "water" (some-> b .-name))
-      (let [l (some-> b .-properties .-level)]
-        (when (number? l) l)))))
-
-(defn wet-state
-  "{:state ...} of a planned cell holding water: :fill (the source is in the cell and no source lies beside it),
-  :dam (the source is at :target: upstream, or beside a source cell, which would flood back once dug), both with the
-  :item to place and the :source, or :wet with :why :untraced / :no-dirt."
-  [p pos species carried]
-  (let [l (water-level p pos)
-        cell (maintain/cell-vec pos)
-        level-at (fn [[x y z]] (water-level p {:x x :y y :z z}))
-        beside (when (and l (zero? l))
-                 (let [[x y z] cell]
-                   (->> rules/neighbour-deltas
-                        (filter (fn [[_ dy _]] (zero? dy)))
-                        (map (fn [[dx _ dz]] [(+ x dx) y (+ z dz)]))
-                        (filter #(= 0 (level-at %)))
-                        first)))
-        source (cond (nil? l) nil
-                     beside beside
-                     (zero? l) cell
-                     :else (upstream level-at cell))
-        dirt (soil-item carried species)]
-    (cond
-      (nil? source) {:state :wet :why :untraced}
-      (nil? dirt) {:state :wet :why :no-dirt :source source}
-      (= source cell) {:state :fill :target pos :source source :item dirt}
-      :else {:state :dam :target (zipmap [:x :y :z] source) :source source :item dirt})))
-
-(declare assess-open)
-
-(defn assess
-  "{:state ...} of one planned cell: :unsupported, :unloaded, :growing, :grown, :wrong (:found), :cramped (:at :block),
-  :fill / :dam / :wet (:why :source) for water in the cell, :clear (:block: a stray to dig), :soil-dig, :soil-place,
-  :no-soil (:why), :no-tool (:block: a dig no carried tool harvests; snow, whose drop is a snowball, is dug anyway), :plant (:item) or :short."
-  [p pos species world]
-  (let [r (assess-open p pos species world)
-        dug (when (#{:clear :soil-dig} (:state r)) (:block r))]
-    (if (and dug (not= "snow" dug) (not (tools/can-harvest? p dug)))
-      {:state :no-tool :block dug}
-      r)))
-
-(defn assess-open
-  "assess before the tool rule."
-  [p pos species {:keys [carried over] :as world}]
-  (let [n (u/block-name p pos)
-        sapling (forestry/sapling-of species)]
-    (or (when-not (headroom-of species over) {:state :unsupported})
-        (when (= "water" n) (wet-state p pos species carried))
-        (own-cell p pos species)
-        (growth-space p pos species over)
-        (when-not (rules/air n) {:state :clear :block n})
-        (soil-state p pos species world)
-        (if (carried sapling) {:state :plant :item sapling} {:state :short}))))
-
-(def steps #{:fill :dam :clear :soil-dig :soil-place :plant})
-
-;; ------------------------------------------------------------------ reading the field
-
-(def skip-kind :forestry/prepare-skip)
-
-(def skip-policy {:cap 100 :ttl (* 10 60 1000)})
-
-(defn skipped
-  "{pos data} of the cells skipped for a while (body memory)."
-  [c]
-  (into {} (map (fn [e] [(:pos (:data e)) (:data e)])) (ctx/entries c skip-kind)))
-
-(defn planned
-  "{:trees {pos species} :planned #{[x y z]}} for the plan, or {:trouble text} (warned once per reason)."
-  [c]
-  (let [{:keys [plan part]} (:args c)
-        answer (known/plan c plan)
-        trees (maintain/tree-cells answer part)
-        trouble (or (maintain/plan-trouble answer trees)
-                    (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) "no zone list"))]
-    (if-not trouble
-      {:trees trees :planned (set (map (comp vec :pos) (:cells answer)))}
-      (do (ctx/warn-once! c [plan trouble] :prepare.declined
-                          {:plan plan :part part :reason trouble
-                           :text (str "prepare declines plan " plan (when part (str " part " part)) ": " trouble)})
-          {:trouble trouble}))))
-
-(declare place-verdict)
-
-(defn settle-wet
-  "The assessed cell with a water state checked against what is known now: a :fill / :dam the access rules refuse is
-  :wet with the reason, and an untraced cell still receding from a dam is :receding."
-  [c {:keys [state why pos] :as cell}]
-  (let [v (when (#{:fill :dam} state) (place-verdict c (maintain/cell-vec (:target cell))))
-        until (get (:recede (ctx/mem c)) pos)]
-    (cond
-      (vector? v) (assoc cell :state :wet :why (second v))
-      (and (= :wet state) (= :untraced why) until (> until (ctx/now c))) (assoc cell :state :receding :until until)
-      :else cell)))
-
-(defn assessments
-  "{pos {:pos :species :state ...}} of every planned tree cell, read now."
-  [c {:keys [trees planned]}]
-  (let [m (ctx/mem c)
-        world {:planned planned
-               :holes (set (:holes m))
-               :carried (maintain/carried-names (:primitives c))
-               :over (:headroom (:args c))}]
-    (into {} (map (fn [[pos species]]
-                    [pos (settle-wet c (assoc (assess (:primitives c) pos species world) :pos pos :species species))]))
-          trees)))
-
-(defn todo
-  "The cells with a step to take, not skipped, nearest to the body first."
-  [c states]
-  (let [skip (skipped c)
-        here (u/self-pos c)]
-    (->> (vals states)
-         (filter #(and (steps (:state %)) (not (contains? skip (:pos %)))))
-         (sort-by #(u/dist here (:pos %))))))
-
-(defn in-column?
-  "Whether the body stands in the column of pos."
-  [c pos]
-  (let [[x _ z] (maintain/feet-cell c)]
-    (and (= x (:x pos)) (= z (:z pos)))))
-
 ;; ------------------------------------------------------------------ notes
 
 (defn note-cells!
@@ -344,44 +101,20 @@
   "Passes while a step can be taken on a planned cell, and once the job has begun (its finishing round must run)
   unless a cell is still receding from a dam."
   [c]
-  (let [field (planned c)]
+  (let [field (field/planned c)]
     (boolean
      (and (not (:trouble field))
-          (let [states (assessments c field)
-                work (todo c states)]
+          (let [states (field/assessments c field)
+                work (field/todo c states)]
             (note-cells! c states (empty? work))
             (or (seq work) (and (:begun (ctx/mem c)) (not (receding? states)))))))))
-
-;; ------------------------------------------------------------------ access
-
-(defn dig-verdict
-  "What the access rules say of digging the cell pos: :ok, :wait (not loaded) or [:refuse reason]."
-  [c pos]
-  (let [d (tidy/decide c pos)]
-    (cond
-      (= :dig d) :ok
-      (= :skip d) :wait
-      (= :refuse (first d)) [:refuse (:reason (second d))]
-      :else [:refuse (first (second d))])))
-
-(defn place-verdict
-  "What the access rules say of placing at the cell pos: :ok, :wait (not loaded, or the body in it) or [:refuse reason]."
-  [c pos]
-  (let [p (:primitives c)
-        v (rules/may-place? (merge {:block-at (fn [[x y z]] (u/block-name p {:x x :y y :z z})) :cell pos
-                                    :feet (maintain/feet-cell c) :ledger #{}}
-                                   (tidy/access-world c)))]
-    (cond
-      (:ok v) :ok
-      (#{:not-loaded :own-body} (:reason v)) :wait
-      :else [:refuse (:reason v)])))
 
 ;; ------------------------------------------------------------------ steps
 
 (defn skip!
   "Leave the cell for a while and say why, once."
   [c pos reason]
-  (ctx/remember! c skip-kind {:pos pos :reason reason} skip-policy)
+  (ctx/remember! c field/skip-kind {:pos pos :reason reason} field/skip-policy)
   (ctx/warn-once! c [:refused pos reason] :prepare.refused
                   {:pos pos :reason reason
                    :text (str "prepare leaves " (pr-str (maintain/cell-vec pos)) " alone: " (name reason))}))
@@ -421,7 +154,7 @@
     (cond
       (= :partial w) :continue
       (= :blocked w) (fail! c cell :unreachable)
-      (and column? (in-column? c cell)) (await (step-off! c cell))
+      (and column? (field/in-column? c cell)) (await (step-off! c cell))
       :else nil)))
 
 (defn ^:async equip-for!
@@ -432,11 +165,11 @@
 (defn ^:async dig!
   "Dig the block at target (a cell the planned cell owes work on). on-dug is called with c when it went."
   [c cell target block column? on-dug]
-  (let [v (dig-verdict c (maintain/cell-vec target))]
+  (let [v (field/dig-verdict c (maintain/cell-vec target))]
     (if (vector? v)
       (blocked! c cell v)
       (or (await (ready! c cell target column?))
-          (let [v (dig-verdict c (maintain/cell-vec target))]
+          (let [v (field/dig-verdict c (maintain/cell-vec target))]
             (if (not= :ok v)
               (blocked! c cell v)
               (do (await (equip-for! c block))
@@ -460,11 +193,11 @@
   "Fill the hole under the planned cell with the carried soil. :continue."
   [c {:keys [pos item]}]
   (let [under (maintain/down pos)
-        v (place-verdict c (maintain/cell-vec under))]
+        v (field/place-verdict c (maintain/cell-vec under))]
     (if (vector? v)
       (blocked! c pos v)
       (or (await (ready! c pos under true))
-          (let [v (place-verdict c (maintain/cell-vec under))]
+          (let [v (field/place-verdict c (maintain/cell-vec under))]
             (if (not= :ok v)
               (blocked! c pos v)
               (do (await (ctx/act c :equip (clj->js {:item item})))
@@ -483,12 +216,12 @@
   [c {:keys [pos target item state]}]
   (let [at (maintain/cell-vec target)
         fill? (= :fill state)
-        v (place-verdict c at)]
+        v (field/place-verdict c at)]
     (if (vector? v)
       (blocked! c pos v)
-      (or (when (in-column? c target) (await (step-off! c pos)))
+      (or (when (field/in-column? c target) (await (step-off! c pos)))
           (await (ready! c pos target fill?))
-          (let [v (place-verdict c at)]
+          (let [v (field/place-verdict c at)]
             (if (not= :ok v)
               (blocked! c pos v)
               (do (await (ctx/act c :equip (clj->js {:item item})))
@@ -504,11 +237,11 @@
 (defn ^:async plant!
   "Plant the carried sapling in the planned cell with jobs.forestry.plant-sapling as a child. :continue."
   [c {:keys [pos species item]}]
-  (let [v (place-verdict c (maintain/cell-vec pos))]
+  (let [v (field/place-verdict c (maintain/cell-vec pos))]
     (if (vector? v)
       (blocked! c pos v)
       (or (await (ready! c pos pos true))
-          (let [v (place-verdict c (maintain/cell-vec pos))]
+          (let [v (field/place-verdict c (maintain/cell-vec pos))]
             (if (not= :ok v)
               (blocked! c pos v)
               (do (await (ctx/call-child c :plant 'jobs.forestry.plant-sapling
@@ -551,7 +284,7 @@
   [c states]
   (by-pos (concat (keep (fn [[pos data]]
                           (when (contains? states pos) {:pos (maintain/cell-vec pos) :reason (:reason data)}))
-                        (skipped c))
+                        (field/skipped c))
                   (state-list states :unsupported (fn [{:keys [pos]}] {:pos (maintain/cell-vec pos) :reason :unsupported-species})))))
 
 (defn finish!
@@ -577,14 +310,14 @@
     :done))
 
 (defn ^:async round [c]
-  (let [field (planned c)]
+  (let [field (field/planned c)]
     (if (:trouble field)
       :declined
       (do
         (when-not (:begun (ctx/mem c))
           (ctx/update-mem! c assoc :begun true))
-        (let [states (assessments c field)
-              work (todo c states)
+        (let [states (field/assessments c field)
+              work (field/todo c states)
               target (first work)
               owed (:collect (ctx/mem c))]
           (note-cells! c states (empty? work))
