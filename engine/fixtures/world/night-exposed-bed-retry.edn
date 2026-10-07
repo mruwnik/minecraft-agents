@@ -4,6 +4,8 @@
 ;; Open ground: stone floor, torches around, no roof and no blocks to build one. Hut cases: stone shell x 8..16, z 8..16.
 ;; sleep_failed uses a NoAI zombie next to the bed (a block-state occupied=true bed is skipped without a sleep call, see
 ;; bed-occupied-rule); the zombie is killed after the warn and the 5-minute entry must expire before the next sleep (long case).
+;; The failed sleep in the closed hut ends the night job :roofed, so the long case registers the :night trigger: it holds again
+;; once the entry has expired (a bed to use) and runs the next sleep.
 ;; The exposed-with-no-bed case counts shelter.exposed warns by hand: exactly one in the log after the run.
 ;; Needs night: run with --allow-time --time-log <the shared time log>, one case per call (--match).
 {:defaults
@@ -53,6 +55,7 @@
   {:name "monster-near-sleep-failed-then-slept-after-entry-expires"
    :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
             [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]]
+   :register [{:trigger :night}]
    :body {:at [13.5 0 13.5]}
    :act [[:summon "zombie" [14.5 0 11.5] "{NoAI:1b,Silent:1b}"]
          [:rcon "execute positioned $X $Y $Z run setblock ~10 ~ ~12 red_bed[facing=east,part=foot]"]
