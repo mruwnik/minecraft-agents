@@ -671,6 +671,23 @@
                 :else (.then (sleep 250) poll)))]
       (poll))))
 
+(defn write-plans-settled!
+  "Writes the case's plans, then resolves to their files once the body logged world.reloaded for every one (it reads
+  them lazily, so a job submitted at once would see the previous case's plan of the same id); throws after
+  shared-settle-ms without."
+  [opts c]
+  (if (empty? (:plans c))
+    (js/Promise.resolve [])
+    (let [cursor (log-cursor (events-file opts))
+          since (js/Date.now)
+          files (write-plans! opts c)]
+      (-> (await-reload! opts cursor since (mapv path/basename files) (:shared-settle-ms opts shared-settle-ms))
+          (.then (fn [ok]
+                   (when-not ok
+                     (throw (js/Error. (str "the body logged no world.reloaded for the plans within "
+                                            (:shared-settle-ms opts shared-settle-ms) " ms"))))
+                   files))))))
+
 (defn with-shared-files!
   "Returns a thunk that runs thunk (-> promise) while holding the agent tools' own lock (<file>.lock) on each of files
   in turn, so an edit of zones.edn or places.json cannot lose a tool's write or be lost to it."
@@ -1085,7 +1102,8 @@
                               (fn [[reply]] (reset! t-start {:ticks (daytime (or reply "")) :ms (js/Date.now)})))
                        (.then (fn [] (ev/emit! (ev/phase :setup)) (build-plot! {:send rcon! :sleep sleep} grid origin rc)))
                        (.then (fn [why] (when why (throw (js/Error. why)))))
-                       (.then #(reset! plan-files (write-plans! opts rc)))
+                       (.then #(write-plans-settled! opts rc))
+                       (.then #(reset! plan-files %))
                        (.then #(seed-shared! opts origin c))
                        (.then #(rcon! (f/body-commands origin (:body opts) rc)))
                        (.then #(ensure-at-start! {:send rcon! :sleep sleep} origin (:body opts) rc))

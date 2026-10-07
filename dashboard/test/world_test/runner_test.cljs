@@ -703,3 +703,39 @@
         bad (remove #(= :pass (:status %)) res)]
     (is (seq res))
     (is (empty? bad) (str (count bad) " fixture cases fail: " (pr-str (map (juxt :id :why) (take 5 bad)))))))
+
+(deftest write-plans-settled-waits-for-the-body-to-re-read-each-plan-file
+  (async done
+    (-> (with-body-dir
+          (fn [opts _]
+            (let [plans (r/plans-dir opts)
+                  c {:plans [{:id "z" :parts []} {:id "y" :parts []}]}
+                  logged (atom nil)]
+              (fs/mkdirSync plans #js {:recursive true})
+              (js/setTimeout #(log-reload! opts [(path/join plans "test-b-z.edn")]) 300)
+              (js/setTimeout (fn [] (reset! logged (js/Date.now)) (log-reload! opts [(path/join plans "test-b-y.edn")])) 900)
+              (.then (r/write-plans-settled! opts c)
+                     (fn [files] {:files files :at (js/Date.now) :logged @logged})))))
+        (.then (fn [{:keys [files at logged]}]
+                 (is (= ["test-b-z.edn" "test-b-y.edn"] (map path/basename files)))
+                 (is (some? logged) "resolved only after the last plan was re-read")
+                 (is (>= at logged))))
+        (.catch (fn [e] (is false (.-message e))))
+        (.finally done))))
+
+(deftest write-plans-settled-fails-loudly-when-the-body-never-re-reads
+  (async done
+    (-> (with-body-dir
+          (fn [opts _]
+            (fs/mkdirSync (r/plans-dir opts) #js {:recursive true})
+            (r/write-plans-settled! (assoc opts :shared-settle-ms 300) {:plans [{:id "z" :parts []}]})))
+        (.then (fn [v] (is false (str "should have thrown, got " v))))
+        (.catch (fn [e] (is (re-find #"world.reloaded for the plans" (.-message e)) (.-message e))))
+        (.finally done))))
+
+(deftest write-plans-settled-has-nothing-to-wait-for-without-plans
+  (async done
+    (-> (with-body-dir (fn [opts _] (r/write-plans-settled! opts {})))
+        (.then (fn [v] (is (= [] v))))
+        (.catch (fn [e] (is false (.-message e))))
+        (.finally done))))

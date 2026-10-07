@@ -9,7 +9,7 @@
 
   A world is {:state atom :said atom :opts {...}}. Jobs ask through jobs.lib.world (plan, zones, claims), which
   answers from memory.
-    A re-read zones.edn or places.json emits a :debug world.reloaded naming the files.
+    A re-read zones.edn, places.json or plan file emits a :debug world.reloaded naming the files.
     The files are stat-ed again at most every :every-ms, lazily, by the first read after that.
     Only files whose stamp (modification time and size) changed are read and parsed again.
     A file that turns unreadable or invalid keeps its last good copy and warns once
@@ -214,6 +214,13 @@
     {:source :system :kind :world.reloaded :level :debug :files (vec files)
      :text (str "re-read " (str/join ", " files))}))
 
+(defn changed-files
+  "Paths in dir of the entries whose stamp differs between old and new (read again)."
+  [dir old new]
+  (vec (for [[id {:keys [stamp]}] (sort-by key new)
+             :when (not= stamp (:stamp (get old id)))]
+         (path/join dir (str id ".edn")))))
+
 (defn refresh!
   "Stat the files when due and fold in what changed; emits a warn per newly broken file. A world without
   files (of-data) is never refreshed."
@@ -244,7 +251,7 @@
           (doseq [[kind [_ warns]] results
                   warn warns]
             ((:emit opts) (warn-event (get kinds kind) warn)))
-          (when-let [ev (reloaded-event (cond-> []
+          (when-let [ev (reloaded-event (cond-> (changed-files (:plans-dir opts) (:plans old) plans)
                                           (and file (not= (:stamp zone-entry) (:stamp (:zones old))) (:stamp zone-entry)) (conj file)
                                           (and markers-file (not= (:stamp markers-entry) (:stamp (:markers old))) (:stamp markers-entry)) (conj markers-file)))]
             ((:emit opts) ev))

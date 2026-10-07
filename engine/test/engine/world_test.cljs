@@ -89,6 +89,10 @@
     (fs/writeFileSync file text)
     (let [t (+ 60 (/ (.-mtimeMs (fs/statSync file)) 1000))] (fs/utimesSync file t t))))
 
+(defn unreloaded [seen] (remove #(= :world.reloaded (:kind %)) @seen))
+
+(defn reloads [seen] (filter #(= :world.reloaded (:kind %)) @seen))
+
 (deftest the-reader-sees-plans-and-blueprints-of-the-folder
   (let [{:keys [plans bps w]} (reader)]
     (write! plans "field" (pr-str wheat))
@@ -117,15 +121,15 @@
     (dotimes [_ 3] (swap! clock + 5000) (world/plan w "field"))
     (is (= wheat (:plan (world/plan w "field"))))
     (is (re-find #"unreadable EDN" (:error (world/plan w "field"))))
-    (is (= 1 (count @seen)))
+    (is (= 1 (count (unreloaded seen))))
     (is (= {:source :system :kind :world.plan-unreadable :level :warn :plan "field" :kept true}
-           (select-keys (first @seen) [:source :kind :level :plan :kept])))))
+           (select-keys (first (unreloaded seen)) [:source :kind :level :plan :kept])))))
 
 (deftest a-plan-broken-from-the-start-is-reported-broken
   (let [{:keys [plans seen w]} (reader)]
     (write! plans "field" "{:id \"other\" :parts []}")
     (is (re-find #"file name" (:broken (world/plan w "field"))))
-    (is (= [false] (map :kept @seen)))))
+    (is (= [false] (map :kept (unreloaded seen))))))
 
 (deftest a-deleted-plan-is-missing-and-a-missing-folder-has-no-plans
   (let [{:keys [plans clock w]} (reader)]
@@ -166,8 +170,6 @@
   (fs/writeFileSync file text)
   (let [t (+ 60 (rand-int 1000) (/ (.-mtimeMs (fs/statSync file)) 1000))] (fs/utimesSync file t t)))
 
-(defn unreloaded [seen] (remove #(= :world.reloaded (:kind %)) @seen))
-
 (defn later! [clock w] (swap! clock + 3000) (world/zones w))
 
 (deftest a-missing-zone-file-is-never-read-with-one-warn-naming-it
@@ -185,8 +187,6 @@
     (is (= [farm-zone] (later! clock w)))
     (is (= [] (unreloaded seen)))))
 
-(defn reloads [seen] (filter #(= :world.reloaded (:kind %)) @seen))
-
 (deftest a-re-read-zone-file-emits-a-debug-reload-and-an-unchanged-one-does-not
   (let [{:keys [file clock seen w]} (zone-reader)]
     (write-zones! file (pr-str [farm-zone]))
@@ -198,6 +198,20 @@
     (write-zones! file (pr-str [(assoc farm-zone :name "pen")]))
     (later! clock w)
     (is (= 2 (count (reloads seen))))))
+
+(deftest a-re-read-plan-file-emits-a-debug-reload-naming-it-and-an-unchanged-one-does-not
+  (let [{:keys [plans clock seen w]} (reader)
+        file (path/join plans "field.edn")]
+    (write! plans "field" (pr-str wheat))
+    (world/plan w "field")
+    (is (= [[file]] (map :files (reloads seen))))
+    (swap! clock + 3000)
+    (world/plan w "field")
+    (is (= 1 (count (reloads seen))))
+    (touch-later! plans "field" (pr-str (assoc wheat :by "Ann")))
+    (swap! clock + 3000)
+    (world/plan w "field")
+    (is (= [[file] [file]] (map :files (reloads seen))))))
 
 (deftest a-broken-edit-keeps-the-last-good-zones-with-one-warn-until-fixed
   (let [{:keys [file clock seen w]} (zone-reader)]
