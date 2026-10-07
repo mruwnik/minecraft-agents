@@ -230,10 +230,30 @@
 
 (def glance-reach "Blocks along a direction to the feet cell a glance looks at." 3)
 
+(def glance-memory "Most glanced cells a flight remembers." 24)
+
+(defn unseen-before-wall?
+  "Whether a cell the body has not sensed lies in the columns along d from the first, up to glance-reach or the first
+  column whose seen feet or head cell blocks the way (the cells behind it cannot change the walk)."
+  [p from d y]
+  (loop [k 1]
+    (when (<= k glance-reach)
+      (let [[x z] (walk/column-along from d k)
+            open-floor? (walk/floorless? (u/seen-name p {:x x :y (dec y) :z z}))
+            unknown (some #(dig-look/unknown? p [x % z]) (range (if open-floor? (- y 2) (dec y)) (+ y 2)))
+            blocked? (some (fn [yy] (and (not (dig-look/unknown? p [x yy z]))
+                                         (not (walk/passable? (u/seen-name p {:x x :y yy :z z})))))
+                           [y (inc y)])]
+        (cond
+          unknown true
+          blocked? false
+          :else (recur (inc k)))))))
+
 (defn ^:async glance-away!
   "Turn to look along each glance-turns direction from dir ([ux uz]) with a cell the body has not sensed in its first
-  glance-reach columns (feet, head, floor, and under an open floor the cell below), at the feet cell glance-reach
-  blocks along, as a player turns round before running: at most three looks, a sight pass after each."
+  glance-reach columns (feet, head, floor, and under an open floor the cell below; not past a seen wall), at the feet
+  cell glance-reach blocks along, as a player turns round before running: at most three looks, a sight pass after
+  each, none at a cell already glanced this flight."
   [c dir]
   (let [p (:primitives c)
         from (u/self-pos c)
@@ -241,14 +261,12 @@
     (loop [[turn & more] glance-turns]
       (when turn
         (let [d (walk/rotate dir turn)
-              unseen? (some (fn [k] (let [[x z] (walk/column-along from d k)
-                                          open-floor? (walk/floorless? (u/seen-name p {:x x :y (dec y) :z z}))]
-                                      (some #(dig-look/unknown? p [x % z]) (range (if open-floor? (- y 2) (dec y)) (+ y 2)))))
-                            (range 1 (inc glance-reach)))]
-          (when unseen?
-            (let [[gx gz] (walk/column-along from d glance-reach)]
-              (await (dig-look/look-at! c [gx y gz]))
-              (look/see! c)))
+              [gx gz] (walk/column-along from d glance-reach)
+              cell [gx y gz]]
+          (when (and (not (some #{cell} (:glanced (ctx/mem c)))) (unseen-before-wall? p from d y))
+            (ctx/update-mem! c update :glanced #(vec (take-last glance-memory (conj (vec %) cell))))
+            (await (dig-look/look-at! c cell))
+            (look/see! c))
           (recur more))))))
 
 (defn ^:async flight-target!

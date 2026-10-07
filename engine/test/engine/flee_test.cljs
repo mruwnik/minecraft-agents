@@ -475,3 +475,36 @@
               s (assoc-in s [:eng :jobs 'targeter] (targeter out))]
           (await (run-job! s 'targeter {:step 6}))
           (is (nil? @out) (str "the cave behind its rock wall is no way: " (pr-str @out))))))))
+
+(defn looks [raw] (count (filter #(= "look" (.-name %)) (.-calls (.-world raw)))))
+
+(deftest a-flight-in-a-seen-tunnel-looks-once-per-direction-not-every-step
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [counts (atom [])
+              raw-atom (atom nil)
+              job {:check (constantly true)
+                   :round (fn ^:async twice [c]
+                            (let [threats (danger-q/known-hostiles (:primitives c) 30 {:ranged-radius 30})]
+                              (dotimes [_ 3]
+                                (await (retreat/flight-target! c threats))
+                                (swap! counts conj (looks @raw-atom)))
+                              :done))}
+              s (setup-sensed {:blocks long-tunnel :entities [(zombie 7 8 {})]})
+              _ (reset! raw-atom (:raw s))
+              s (assoc-in s [:eng :jobs 'twice] job)]
+          (await (run-job! s 'twice {:step 6}))
+          (is (pos? (first @counts)) "the first step looks at the walls")
+          (is (= 1 (count (distinct @counts))) (str "later steps look at nothing again: " @counts)))))))
+
+(deftest a-night-open-field-flight-with-unlit-cells-still-flees-far
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [raw seen out]} (await (run-job! (setup-sensed {:light-default [0 0] :entities [(zombie 7 5 {:chase {:speed 0.7}})]})
+                                                      'jobs.survival.retreat {}))
+              names (set (map #(.-name %) (.-calls (.-world raw))))]
+          (is (< (first (body-pos raw)) -30) (str "fled far west: " (pr-str out)))
+          (is (not (contains? names "attack")) "never fights")
+          (is (empty? (filter #(= :retreat_blocked (:kind %)) @seen))))))))
