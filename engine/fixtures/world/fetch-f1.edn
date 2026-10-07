@@ -20,7 +20,7 @@
   {:name "dig-without-fetch-waits-no-tool"
    :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:wooden_pickaxe\",count:1}]}"]]
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
-         [:job (jobs.blocks.dig {:pos #at [18 0 19]})]]
+         [:job (jobs.blocks.dig {:pos #at [18 0 19] :fetch false})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-tool}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :fetch.started} :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-tool}}}
             {:no-event {:source :action :kind :started :data {:name "inspectContainer"}} :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-tool}}}]
