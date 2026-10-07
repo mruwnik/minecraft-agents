@@ -216,17 +216,78 @@
           (is (< (first (at p)) 5) "the body stays on its side")
           (is (zero? (clicks p))))))))
 
-(deftest an-iron-door-with-a-button-beside-it-is-still-a-wall-for-now
+(def iron-doors {"5,64,0" "iron_door" "5,65,0" "iron_door"})
+(def iron-states {"5,64,0" {:open false :half "lower" :facing "east"} "5,65,0" {:open false :half "upper" :facing "east"}})
+(def button-cell "4,65,-1")
+(def plate-cell "4,64,0")
+
+(defn iron-world
+  "Flat land, the hut wall at x 5 with an iron door at z 0, the body at x 0, and extra spec keys."
+  [blocks states & {:as spec}]
+  (merge {:self {:pos {:x 0 :y 64 :z 0}}
+          :blocks (merge flat hut-wall iron-doors blocks)
+          :states (merge iron-states states)}
+         spec))
+
+(defn button-world [& {:as spec}]
+  (apply iron-world {button-cell "stone_button"} {button-cell {:face "wall" :facing "west" :powered false}}
+         (mapcat identity spec)))
+
+(deftest an-iron-door-with-a-button-beside-it-opens-and-the-body-passes
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [w {:self {:pos {:x 0 :y 64 :z 0}}
-                 :blocks (merge flat hut-wall {"5,64,0" "iron_door" "5,65,0" "iron_door" "4,65,-1" "stone_button"})
-                 :states {"5,64,0" {:open false :half "lower" :facing "east"} "5,65,0" {:open false :half "upper" :facing "east"}
-                          "4,65,-1" {:face "wall" :facing "west" :powered false}}}
+        (let [{:keys [out p]} (await (go! (button-world :wires {button-cell ["5,64,0"]}) {:pos [10 64 0] :range 0}))]
+          (is (= {:arrived true} @out))
+          (is (> (first (at p)) 5) "through the door")
+          (is (= 1 (clicks p)) "one click, on the button"))))))
+
+(deftest an-iron-door-with-a-pressure-plate-in-front-of-it-opens-and-the-body-passes
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (iron-world {plate-cell "stone_pressure_plate"} {} :wires {plate-cell ["5,64,0"]})
               {:keys [out p]} (await (go! w {:pos [10 64 0] :range 0}))]
+          (is (= {:arrived true} @out))
+          (is (> (first (at p)) 5))
+          (is (zero? (clicks p)) "the body's weight is the press"))))))
+
+(deftest a-button-not-wired-to-the-door-leaves-it-stuck
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (go! (button-world) {:pos [10 64 0] :range 0}))]
           (is (= {:arrived false :reason :unreachable} (select-keys @out [:arrived :reason])))
           (is (< (first (at p)) 5) "the body stays on its side")
+          (is (pos? (clicks p)) "pressed, nothing opened"))))))
+
+(deftest a-button-the-hand-cannot-reach-leaves-the-door-stuck
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (button-world :wires {button-cell ["5,64,0"]} :unreachable [button-cell])
+              {:keys [out p]} (await (go! w {:pos [10 64 0] :range 0}))]
+          (is (= {:arrived false :reason :unreachable} (select-keys @out [:arrived :reason])))
+          (is (< (first (at p)) 5)))))))
+
+(deftest a-button-door-that-shuts-itself-later-is-passed-in-time
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (button-world :wires {button-cell ["5,64,0"]} :pulseMoves 20)
+              {:keys [out p]} (await (go! w {:pos [10 64 0] :range 0}))]
+          (is (= {:arrived true} @out))
+          (is (> (first (at p)) 5))
+          (is (= 1 (clicks p)) "no second press needed"))))))
+
+(deftest a-lever-door-stays-a-wall
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (iron-world {"4,65,-1" "lever"} {"4,65,-1" {:face "wall" :facing "west" :powered false}}
+                            :wires {"4,65,-1" ["5,64,0"]})
+              {:keys [out p]} (await (go! w {:pos [10 64 0] :range 0}))]
+          (is (= {:arrived false :reason :unreachable} (select-keys @out [:arrived :reason])))
           (is (zero? (clicks p))))))))
 
 (def iron-room

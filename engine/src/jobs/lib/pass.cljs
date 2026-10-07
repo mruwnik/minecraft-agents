@@ -1,5 +1,5 @@
 (ns jobs.lib.pass
-  "Walking a plan that opens doors, gates and trapdoors by hand. The plan is cut at each step that opens something.
+  "Walking a plan that opens doors, gates and trapdoors by hand, or iron doors by a button or plate. The plan is cut at each step that opens something.
   The walk goes up to the step before it, the block is clicked open with an empty hand (jobs.lib.click) and read
   back, and the walk goes on. Once the body is out of the opened block's column the walker shuts it again, if its
   policy says so. The executor's tick never sees an :opens step.
@@ -167,15 +167,48 @@
               (recur (rest todo) kept)))
         kept))))
 
+(def await-polls "reads of a door a button or plate was to open" 6)
+(def await-poll-ms 100)
+
+(defn ^:async await-open!
+  "Read the block at cell back every await-poll-ms, up to await-polls times, until it is open: {:result :was-open} (it shuts
+  itself again, so there is no entry to keep) or {:result :stuck}."
+  [c cell]
+  (loop [n 0]
+    (let [b (block-at c cell)]
+      (cond
+        (and b (click/reached? :open (click/props-of b))) {:result :was-open}
+        (>= n await-polls) {:result :stuck}
+        :else (do (await (ctx/act c :wait #js {:ms await-poll-ms})) (recur (inc n)))))))
+
+(defn ^:async work-activator!
+  "Open the door at cell through its opener o, {:via \"button\" :at cell}: the button is pressed, a plate is the body's weight
+  (the walk stops on it), then the door is read back. Same results as await-open!. A door a hand can open, behind a plate,
+  is opened by hand when the plate did not."
+  [c cell {:keys [via at]} shut?]
+  (let [name (some-> (block-at c at) .-name)
+        door (block-at c cell)
+        pressed (when (and (= "button" via) (not (some-> door click/props-of (->> (click/reached? :open)))))
+                  (if (= :button (click/kind-of name))
+                    (:outcome (await (click/click! c at :press name)))
+                    :unchanged))
+        r (if (#{nil :changed} pressed) (await (await-open! c cell)) {:result :stuck})]
+    (if (and (= :stuck (:result r)) (= "plate" via) (= :openable (click/kind-of (some-> (block-at c cell) .-name))))
+      (await (open-block! c cell shut?))
+      r)))
+
 (defn ^:async open-all!
-  "Open each block of cells (a step's :opens), the walker's policy doors and shut-also deciding which it will shut again:
-  {:pending the columns to shut, :stuck the cells that would not open}."
+  "Open each block of cells (a step's :opens: a hand opens it, or its :via button or plate does), the walker's policy doors and
+  shut-also deciding which it will shut again: {:pending the columns to shut, :stuck the cells that would not open}.
+  What a button or plate opened shuts itself, so it has no column to shut."
   [c cells doors shut-also]
   (loop [todo cells pending [] stuck []]
     (if-let [o (first todo)]
       (let [cell (select-keys o [:x :y :z])
             will-shut? (shut? doors shut-also cell)
-            {:keys [result column]} (await (open-block! c cell will-shut?))]
+            {:keys [result column]} (await (if (:via o)
+                                             (work-activator! c cell o will-shut?)
+                                             (open-block! c cell will-shut?)))]
         (recur (rest todo)
                (cond-> pending (and (= :opened result) will-shut?) (conj column))
                (cond-> stuck (= :stuck result) (conj cell))))

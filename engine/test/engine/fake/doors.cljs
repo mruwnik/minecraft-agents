@@ -35,12 +35,47 @@
       (select-keys (get-in w [:states pos]) path-keys)
       {})))
 
-(defn flip-open
-  "World with `open` flipped on the block at pos and, for a door, on its other half."
-  [w [x y z :as pos]]
+(defn set-open
+  "World with `open` set to value on the block at pos and, for a door, on its other half."
+  [w [x y z :as pos] open]
   (let [name (get-in w [:blocks pos])
-        open (not (get-in w [:states pos :open]))
         other (if (= "upper" (get-in w [:states pos :half])) [x (dec y) z] [x (inc y) z])
         cells (cond-> [pos]
                 (and (re-find #"_door$" (or name "")) (= name (get-in w [:blocks other]))) (conj other))]
     (reduce #(assoc-in %1 [:states %2 :open] open) w cells)))
+
+(defn flip-open
+  "World with `open` flipped on the block at pos and, for a door, on its other half."
+  [w pos]
+  (set-open w pos (not (get-in w [:states pos :open]))))
+
+;; Wiring: world :wires {activator-pos [door-pos ...]} says which doors a button or plate works. A button opens them (and
+;; shuts them again after :pulse-moves steer ticks when the world has that); a plate opens them while the body stands on
+;; it and for :plate-hold ticks after.
+(def plate-hold 15)
+
+(defn set-wired
+  "World with the doors wired to the activator at pos open or shut, and the activator powered as open says."
+  [w pos open]
+  (as-> (assoc-in w [:states pos :powered] open) w
+    (reduce #(set-open %1 %2 open) w (get-in w [:wires pos]))))
+
+(defn press
+  "World after a button at pos is pressed: powered, its wired doors open, and a timer to shut them when :pulse-moves is set."
+  [w pos]
+  (cond-> (set-wired w pos true)
+    (:pulse-moves w) (assoc-in [:timers pos] (:pulse-moves w))))
+
+(defn tick-wires
+  "World after one steer tick with the body in cell: a plate under it opens its doors; timers run down and shut theirs."
+  [w cell]
+  (let [w (reduce (fn [w pos]
+                    (if (and (re-find #"_pressure_plate$" (get-in w [:blocks pos] "")) (= pos cell))
+                      (-> (set-wired w pos true) (assoc-in [:timers pos] plate-hold))
+                      w))
+                  w (keys (:wires w)))]
+    (reduce (fn [w [pos n]]
+              (if (> n 1)
+                (assoc-in w [:timers pos] (dec n))
+                (-> (update w :timers dissoc pos) (set-wired pos false))))
+            w (:timers w))))

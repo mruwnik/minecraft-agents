@@ -22,18 +22,20 @@
   60)
 
 (defn iron-cells
-  "The cells {:x :y :z} among the blocks the steps open that a hand cannot open: iron doors and iron trapdoors."
+  "The cells {:x :y :z} among the blocks the steps open that the walker cannot work: iron doors and trapdoors with no button
+  or plate (:via) to press, and those a lever works."
   [c steps]
   (vec (distinct (for [s steps o (:opens s)
                        :let [cell (select-keys o [:x :y :z])]
-                       :when (= :iron (click/kind-of (some-> (pass/block-at c cell) .-name)))]
+                       :when (and (= :iron (click/kind-of (some-> (pass/block-at c cell) .-name)))
+                                  (not (#{"button" "plate"} (:via o))))]
                    cell))))
 
 (defn door-stuck [cells] {:status :no-path :reason :door-stuck :cells cells})
 
 (defn ^:async plan!
   "Plan from where the body stands over a fresh pathWorld (the live one copies a section the first time it reads it, so an
-  old one is stale), with walls read as stone; with doors other than :never, the iron doors the plan would open are walls
+  old one is stale), with walls read as stone; with doors other than :never, the iron doors the plan would open by hand or lever are walls
   too (planned again without them). A one-way step (a drop of 2 or 3, a gap jump down) is taken when the land past it runs
   on into unloaded land (walk/plan-walk! :one-way :open) when one-way is :open: a far goal past a cliff is walked on to; a
   loaded pit is never entered. With one-way nil a partial plan ends at the nearest node the body can come back from. With
@@ -69,7 +71,7 @@
   sees the way change, a partial plan is due a refresh, or a mob is in the way of a stuck body; each replan is a :replan
   info event {:why :ms :kept :replans :at}): the walk's result map (jobs.lib.walk), or the no-path result of a plan that
   is not walked. Every plan reads a fresh pathWorld; the caller has checked there is one. Each steer is bounded by timeout-s.
-  With doors other than :never, a plan may open blocks (iron ones are walls); one that will not open is a wall for one more
+  With doors other than :never, a plan may open blocks (iron ones are, unless a button or plate works them); one that will not open is a wall for one more
   plan, then the result is :no-path :door-stuck. Before and after the walk, the blocks this job opened and left (a cut
   round, a walk that ended in a doorway) are shut when within reach (pass/shut-leftovers!); farther ones, and those a cut
   leaves, are the door-left trigger's (triggers.maintenance.door-left). With explore (go-to), a search that ran out of loaded land

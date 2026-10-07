@@ -311,5 +311,7 @@
                                      (if (:body-hitbox @state)
                                        [(:x @body) (floor (:y @body)) (:z @body)]
                                        [(floor (:x @body)) (floor (:y @body)) (floor (:z @body))]))
+                              (when (seq (:wires @state))
+                                (swap! state doors/tick-wires (get-in @state [:self :pos])))
                               (js/setImmediate tick))))))]
          (js/setImmediate tick))))))

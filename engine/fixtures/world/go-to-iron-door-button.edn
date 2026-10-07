@@ -1,0 +1,32 @@
+;; Card bbb1d345: an iron door worked from inside by a button or plate. Same hut as go-to-iron-door-cell.edn; goal outside south.
+;; Hut: stone hollow x 14..18, z 14..18, y 0..3; iron door in its south wall at [16 1 18].
+{:defaults
+ {:tags [:movement :access]
+  :plot {:height 8}
+  :blocks [[:fill [8 0 8] [26 0 26] "stone"] [:fill [14 0 14] [18 3 18] "stone" :hollow]
+           [:set [16 1 18] "iron_door[facing=north,half=lower,open=false]"]
+           [:set [16 2 18] "iron_door[facing=north,half=upper,open=false]"]]
+  :body {:at [16.5 1 15.5] :inventory [["stone_pickaxe" 1]]}
+  :limit-s 200 :time :any}
+ :cases
+ [{:name "stone-button-inside-opens-and-arrives"
+   :blocks [[:set [15 2 17] "stone_button[face=wall,facing=north]"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [16 1 22] :range 1})]]
+   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 90 :of-job true}]
+   :after [[:body-near [16.5 1 22.5] 2]]}
+  {:name "oak-button-inside-opens-and-arrives"
+   :blocks [[:set [15 2 17] "oak_button[face=wall,facing=north]"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [16 1 22] :range 1})]]
+   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 90 :of-job true}]
+   :after [[:body-near [16.5 1 22.5] 2]]}
+  {:name "pressure-plate-inside-opens-and-arrives"
+   :blocks [[:set [16 1 17] "stone_pressure_plate"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [16 1 22] :range 1})]]
+   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 90 :of-job true}]
+   :after [[:body-near [16.5 1 22.5] 2]]}
+  {:name "control-button-outside-only-escalates"
+   :blocks [[:set [15 2 19] "stone_button[face=wall,facing=south]"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [16 1 22] :range 1})]]
+   :expect [{:event {:source :job :kind :go-to.escalated} :within-s 90 :of-job true}
+            {:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 180 :of-job true}]
+   :after [[:body-near [16.5 1 22.5] 2]]}]}

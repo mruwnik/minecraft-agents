@@ -2,7 +2,7 @@
   "The fake world the cljs tests drive: the primitives object of README.md over one atom of cljs world data, never a
   server. (create spec) takes the spec as a cljs map (the keys createFake took: :self :time :players :raining :blocks
   {\"x,y,z\" name} :entities :inventory :equipment :containers :drops :recipes :unreachable :noPath :swimFails
-  :mountFails :dismountFails :skipNight :settles :offlineScale :ages :states :unloaded :furnaces :enchantTables) and
+  :mountFails :dismountFails :skipNight :settles :offlineScale :ages :states :wires :pulseMoves :unloaded :furnaces :enchantTables) and
   returns the JS object the engine's primitives are: methods taking (token, args) and returning promises of JS
   contract results, plus `world` (hold, override, calls, emit, setTime, advance, setRaining, settle, respawn, die,
   state).
@@ -184,6 +184,8 @@
          :unloaded (cell-set (:unloaded spec))
          :ages (cells (:ages spec) identity)
          :states (cells (:states spec) identity)
+         :wires (cells (:wires spec) #(mapv parse-cell %))
+         :pulse-moves (:pulseMoves spec)
          :entities (mapv entity-in (:entities spec))
          :inventory (vec (:inventory spec))
          :equipment (string-keys (:equipment spec))
