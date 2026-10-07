@@ -52,6 +52,8 @@
      path's damage, a step's damage its own.
    - options.costs.dropFactor (1): scales the fall seconds and fall damage of every drop on land (0: free); options.maxDrop
      (3) refuses a drop of more than that many blocks (1: none of 2 or 3). go-to's :drop-cost sets them.
+   - options.costs.airUsed (0): seconds of air the body has used at the start (a plan made mid-dive); go-to's body-policy
+     sets it from the oxygen when the head is under water.
    - options.stopAtEdge: with the goal unloaded, the search ends at the first node it expands at the loaded edge (edgeStop)
      and names it as its frontier, not after searching all loaded land. go-to's budgeted searches set it (walk.search/new-search)."
   (:require [engine.path.planner.base :as base :refer [OCTILE-SLACK REGIONS TABLE WHOLE next-pow2]]
@@ -144,6 +146,15 @@
           (aset b 5 (js/Math.max (aget b 5) (+ (aget a (+ o 2)) r))))))
     b))
 
+;; The air a swim may use up to: airLimit, plus the free grace seconds' worth (airGrace * airDrain). A plan made mid-dive
+;; (airUsed, the air the body used before it, above 0) always keeps the margin (airSupply - airLimit) to reach air.
+(defn- air-limit [^js costs]
+  (let [limit (+ (unchecked-get costs "airLimit") (* (unchecked-get costs "airGrace") (unchecked-get costs "airDrain")))
+        used (unchecked-get costs "airUsed")]
+    (if (pos? used)
+      (js/Math.max limit (+ used (- (unchecked-get costs "airSupply") (unchecked-get costs "airLimit"))))
+      limit)))
+
 (defn- search-from ^Search [^js snapshot ^js query ^js options]
   (let [^js table (.-table options)
         ^js from (.-from query)
@@ -210,7 +221,7 @@
      (unchecked-get costs "openRedstone") (unchecked-get costs "openLever") (unchecked-get costs "openPlate") (unchecked-get costs "besideMagmaColumn")
      (unchecked-get costs "swimH") (unchecked-get costs "swimUp") (unchecked-get costs "swimDown")
      (unchecked-get costs "exit") (unchecked-get costs "current") (unchecked-get costs "bubbleUp") (unchecked-get costs "bubbleDown")
-     (unchecked-get costs "airSupply") (+ (unchecked-get costs "airLimit") (* (unchecked-get costs "airGrace") (unchecked-get costs "airDrain"))) (unchecked-get costs "airDrain") (unchecked-get costs "maxWaterDrop")
+     (unchecked-get costs "airSupply") (air-limit costs) (unchecked-get costs "airDrain") (unchecked-get costs "maxWaterDrop")
      (unchecked-get costs "dripleaf") (unchecked-get costs "dripleafRisk") (unchecked-get costs "dropFactor")
      (unchecked-get costs "walkS") (unchecked-get costs "sprintS")
      ;; search box
@@ -309,13 +320,21 @@
         (js/Object.assign #js {} query #js {:from (js/Object.assign #js {} from #js {:x x :z z})})
         query))))
 
+(defn- with-start-air
+  "search with its start node (node 0) having used options.costs.airUsed seconds of air (a plan made mid-dive)."
+  ^Search [^Search search ^js options]
+  (let [used (or-else (some-> (.-costs options) (unchecked-get "airUsed")) 0)]
+    (aset (.-airs search) 0 used)
+    (aset (.-peaks search) 0 used)
+    search))
+
 (defn- new-search
   "The search of query, its start moved off the edge of a block (start-query); initialised (init again is harmless)."
   ^Search [^js snapshot ^js query ^js options]
   (let [^Search search (search-from snapshot query options)]
     (.init search)
     (let [q (start-query search query)]
-      (if (identical? q query) search (search-from snapshot q options)))))
+      (with-start-air (if (identical? q query) search (search-from snapshot q options)) options))))
 
 (defn- clean-options
   "The options of the returnable search behind a one-way step of search: options.returnable, no goal flood, no stop at

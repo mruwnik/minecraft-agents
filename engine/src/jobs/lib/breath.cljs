@@ -42,13 +42,18 @@
   (let [b (u/sensed p cell)]
     (boolean (and b (or (true? (.-unknown b)) (.-fullCube b))))))
 
+(defn head-under?
+  "Whether the body is in water with its eye cell not air (an unfelt cell counts as water): its breath runs."
+  [p]
+  (let [self (.self p)]
+    (boolean (and (.-inWater self) (not (air? (or (u/feel-name p (eye-cell self)) "water")))))))
+
 (defn situation
   "Why the body at p is suffocating, :drowning or :enclosed, or nil."
   [p min-oxygen]
-  (let [self (.self p)
-        head (u/feel-name p (eye-cell self))]
+  (let [self (.self p)]
     (cond
-      (and (.-inWater self) (< (.-oxygen self) min-oxygen) (not (air? (or head "water")))) :drowning
+      (and (< (.-oxygen self) min-oxygen) (head-under? p)) :drowning
       (suffocates-here? p (eye-cell self)) :enclosed
       :else nil)))
 

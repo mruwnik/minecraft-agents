@@ -7,6 +7,7 @@
             [engine.path.planner-tuned :as planner]
             [engine.path.space :as space]
             [engine.ctx :as ctx]
+            [jobs.lib.breath :as breath]
             [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
             [jobs.lib.threats :as threats]))
@@ -194,7 +195,9 @@
   a high block is then refused). :damage-budget (hp, damage-budget) and :damage-weight (seconds an hp costs at its health)
   price the damage of a walk, :danger-cap the total hp a second its known dangers cost (jobs.lib.cost/danger-cap, more when the job's :danger-max-rate is) (the job's :hp-seconds arg: the seconds an hp costs at full health, default jobs.lib.cost/hp-seconds);
   :max-drop and :fall-factor follow its fall enchantments and the longest drop it survives (the survivable-budget under the job's :max-damage,
-  whatever the budget: a drop the budget refuses is a refusal the planner reports as :damageRefused, jobs.lib.cost/fall-profile)."
+  whatever the budget: a drop the budget refuses is a refusal the planner reports as :damageRefused, jobs.lib.cost/fall-profile).
+  :air-drain and :air-grace follow the helmet (jobs.lib.cost/air-profile); with the head under water :air-used is the air
+  its oxygen says it has used, and there is no grace (it may be spent on this dive)."
   [c]
   (let [self (.self (:primitives c))
         food (food-of c)]
@@ -206,6 +209,7 @@
                     :damage-weight (* (or (:hp-seconds (:args c)) cost/hp-seconds) (cost/health-scale (.-health self)))
                     :danger-cap (max cost/danger-cap (or (:danger-max-rate (:args c)) 0))}
                    (when-some [landing (:landing (:args c))] {:landing landing}))
+      (breath/head-under? (:primitives c)) (-> (dissoc :air-grace) (assoc :air-used (cost/air-used (.-oxygen self))))
       (and (number? food) (<= food 6)) (assoc :sprint false)
       (= :walk (gait c)) (assoc :sprint false :gait :walk)
       (= :sneak (gait c)) (assoc :sprint false :gait :sneak))))

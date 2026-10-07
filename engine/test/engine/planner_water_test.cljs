@@ -247,6 +247,31 @@
     (is (found? (right (+ (* (- b grace) drain) 0.5))) "just enough air after the free seconds")
     (is (not (found? (right (- (* (- b grace) drain) 0.5)))) "the free seconds are not worth grace / drain of air")))
 
+;; a body that plans again mid-dive: costs.airUsed is the air it has already used (seconds). Start at the foot of an open
+;; 6-deep shaft (x 11); a sealed tunnel (x 12..23, y 64..65) leads to a second shaft (x 24) beside the goal, and the way up
+;; walks round by z 20 to it
+(def dive-or-up
+  (world [[10 64 -2 26 72 22 "stone"]
+          [11 64 1 11 69 1 "water"] [11 70 1 11 71 1 "air"]
+          [12 64 1 23 65 1 "water"]
+          [24 64 1 24 69 1 "water"] [24 70 1 25 71 1 "air"]
+          [11 70 2 11 71 20 "air"] [12 70 20 24 71 20 "air"] [24 70 2 24 71 19 "air"]]))
+(def dive-start {:x 11 :y 64 :z 1})
+(def dive-goal (near 25 70 1 0))
+
+(deftest a-plan-started-mid-dive-counts-the-air-already-used
+  (let [fresh (run dive-or-up dive-start dive-goal {:goalFlood 0})
+        low (run dive-or-up dive-start dive-goal {:goalFlood 0 :costs {:airUsed 10}})]
+    (is (found? fresh))
+    (is (re-find #"lowest air" (summary fresh)) "full air: the tunnel")
+    (is (> (- (:airSupply costs) (cost fresh :airMin)) 5) "the dive takes more than 5 s of air")
+    (is (found? low) "5 s of air left: the way up")
+    (is (> (cost low :seconds) (cost fresh :seconds)))
+    (is (>= (cost low :airMin) 2) "it keeps the margin")))
+
+(deftest a-plan-started-past-the-air-limit-still-swims-up
+  (is (found? (run dive-or-up dive-start dive-goal {:goalFlood 0 :costs {:airUsed 14}}))))
+
 (deftest drain-scales-the-lowest-air-reading
   (let [full (cost (run-up (column 20) 20) :airMin)
         half (cost (run-up (column 20) 20 {:costs {:airDrain 0.5}}) :airMin)]

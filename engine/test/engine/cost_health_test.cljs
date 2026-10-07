@@ -98,3 +98,17 @@
     (is (= 0.5 (:air-drain (policy {:health 20 :food 20} {:head {:name "iron_helmet" :enchants [{:name "respiration" :level 1}]}}))))
     (is (= 10 (:air-grace (policy {:health 20 :food 20} {:head {:name "turtle_helmet"}}))))
     (is (nil? (:air-grace (policy {:health 20 :food 20 :effects [{:name "water_breathing" :duration 300}]}))) "a sensed effect's duration goes stale")))
+
+;; head under water: the plan starts with the air already used ((20 - oxygen) * 0.75 s) and no turtle grace (it may be spent)
+(deftest body-policy-starts-a-submerged-plan-with-the-air-used
+  (let [policy (fn [self blocks & [equipment]]
+                 (wworld/body-policy {:primitives (tu/fake {:self (merge {:health 20 :food 20} self) :blocks blocks :equipment equipment}) :args {}}))
+        column {"0,64,0" "water" "0,65,0" "water" "0,66,0" "water"}
+        surface {"0,64,0" "water"}
+        turtle {:head {:name "turtle_helmet"}}]
+    (is (= 11.25 (:air-used (policy {:inWater true :oxygen 5} column))))
+    (is (nil? (:air-grace (policy {:inWater true :oxygen 20} column turtle))) "under water: no grace")
+    (is (= 10 (:air-grace (policy {:inWater true :oxygen 5} surface turtle))) "head out: as before")
+    (is (nil? (:air-used (policy {:inWater true :oxygen 5} surface))))
+    (is (nil? (:air-used (policy {:inWater false :oxygen 20} {}))))
+    (is (= 11.25 (.. (wplan/with-drops #js {} {:air-used 11.25}) -costs -airUsed)) "go-to hands it to the planner")))

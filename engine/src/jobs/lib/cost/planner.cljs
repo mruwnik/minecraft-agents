@@ -1,7 +1,7 @@
 (ns jobs.lib.cost.planner
   "The prices go-to's :costs may override, in seconds: the planner's per-move costs (engine.path.planner.base/DEFAULT-COSTS
   holds the defaults, which apply to every price left out). A drop's price is go-to's :drop-cost, a hurt hp's :hp-seconds.
-  Left out: airSupply and airLimit (the body's breath, a fact, not a price), airDrain and airGrace (its helmet, see air-profile) and dropFactor (:drop-cost)."
+  Left out: airSupply, airLimit and airUsed (the body's breath, a fact, not a price), airDrain and airGrace (its helmet, see air-profile) and dropFactor (:drop-cost)."
   (:require [engine.path.blocks :as blocks]
             [jobs.lib.cost.armour :as armour]
             [engine.path.planner.base :as base]))
@@ -34,12 +34,19 @@
       (pos? (or respiration 0)) (assoc :air-drain (/ 1 (inc respiration)))
       (= "turtle_helmet" (:name head)) (assoc :air-grace 10))))
 
+(defn air-used
+  "The seconds of air a body with oxygen (0-20 bubbles, 15 s; unknown: full) has used."
+  [oxygen]
+  (if (number? oxygen) (* (- 20 oxygen) 0.75) 0))
+
 (defn air-costs
-  "The planner's options.costs airDrain and airGrace (a JS object) for a policy's :air-drain and :air-grace, those it has."
+  "The planner's options.costs airDrain, airGrace and airUsed (a JS object) for a policy's :air-drain, :air-grace and
+  :air-used, those it has."
   [policy]
   (let [o #js {}]
     (when-some [d (:air-drain policy)] (unchecked-set o "airDrain" d))
     (when-some [g (:air-grace policy)] (unchecked-set o "airGrace" g))
+    (when-some [u (:air-used policy)] (unchecked-set o "airUsed" u))
     o))
 
 (defn planner-costs-problem
