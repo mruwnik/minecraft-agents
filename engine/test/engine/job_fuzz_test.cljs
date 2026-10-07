@@ -3,7 +3,8 @@
   small random worlds (no ground, empty bags, absent targets). A job is honest when no round throws, no check throws,
   a declining check or a stop carries a :reason, and the job ends or waits within a bounded number of rounds and calls.
   A failure prints job, seed and args; FUZZ_JOB=<ns> FUZZ_SEED=<n> FUZZ_CASES=<n> replay or widen a run, FUZZ_TRACE=1 names
-  every case as it starts (a sync hang names its case last), FUZZ_EXTREME=1 adds huge numbers.
+  every case as it starts (a sync hang names its case last), FUZZ_CASE=<k> runs only case k of a job, FUZZ_EXTREME=1 adds huge numbers.
+  A case seed is FUZZ_SEED + a hash of the job name + 104729 * k, so it does not depend on the other jobs or on FUZZ_JOB.
   FUZZ_WRONG_TYPES=1 also feeds wrong-typed values to args with no :type (a report of type gaps, not part of the default)."
   (:require [cljs.test :refer [deftest is async]]
             [clojure.string :as str]
@@ -108,25 +109,25 @@
 ;; ---- running one case
 
 (def call-cap "Acts allowed per round (the fake clock moves 50 ms with each)." 1500)
-(def read-cap "Calls allowed since the last act: a loop over reads never awaits, so only a count stops it." 150000)
-(def round-ms "Wall time one round may run before its next act ends it: a harness cut-off, not a verdict (a whole-night round never ends on the fake world frozen time)." 500)
+(def long-running-cap "Acts allowed per round for a job in long-running: its cut-off is expected, so stop early." 200)
+(def read-cap "Calls allowed since the last act: a loop over reads never awaits, so only a count stops it." 60000)
 (def max-rounds 12)
 
 (defn capped-primitives
   "p with every act (a call returning a promise) counted in calls (reset before each round); past the cap one throws, so a loop that never ends fails instead of hanging."
-  [p calls hit]
+  [p calls hit act-cap]
   (js/Proxy. p #js {:get (fn [t k]
                            (let [v (aget t k)]
                              (if (fn? v)
                                (fn [& args]
                                  (when (> (:all (swap! calls update :all inc)) read-cap)
-                                   (reset! hit true)
+                                   (reset! hit :read)
                                    (throw (js/Error. "fuzz: call cap (runaway job)")))
                                  (let [r (.apply v t (to-array args))]
                                    (when (and r (fn? (.-then r)))
                                      (swap! calls assoc :all 0))
-                                   (when (and r (fn? (.-then r)) (or (> (:acts (swap! calls update :acts inc)) call-cap)
-                                                                     (> (- (js/Date.now) (:t0 @calls)) round-ms)))
+                                   (when (and r (fn? (.-then r)) (> (:acts (swap! calls update :acts inc)) act-cap))
+                                     (reset! hit :act)
                                      (throw (js/Error. "fuzz: act cap (runaway job)")))
                                    r))
                                v)))}))
@@ -134,18 +135,35 @@
 (defn event-reason [e] (or (:reason e) (get-in e [:data :reason])))
 
 (defn declared-failure?
-  "A round that threw an ex-info on purpose (the job says why it failed, README: a throw is a failure), not a stray JS error."
+  "A round that threw one of the jobs' own ex-info on purpose (README: a throw is a failure): the messages of clear-box/cells, till/cells and herd-run, not a library error or a stray JS error."
   [text]
-  (str/starts-with? (str text) "#error {:message"))
+  (boolean (re-find #"^#error \{:message \"(clear-box (needs|covers)|till (needs|covers)|herd brought none)" (str text))))
 
-(defn act-cap? [text] (str/includes? (str text) "fuzz: act cap"))
+(defn act-cap? [text] (str/includes? (str text) "(runaway job)"))
+
+(defn declared-wait?
+  "True when the job said why it waits (a :waiting event with a :reason): a yield, not a runaway."
+  [events]
+  (boolean (some #(and (= :job (:source %)) (= :waiting (:kind %)) (event-reason %)) events)))
+
+(def long-running
+  "{job reason}: jobs whose rounds legitimately outlast the fuzzer's caps (the fake world's time is frozen), so a cut-off is no defect."
+  {'jobs.survival.night "a night round waits for dawn, which the fake world's frozen clock never brings"
+   'jobs.survival.retreat "flight keeps moving while the danger lasts, and the fake danger never goes"})
+
+(defn runaway
+  "[[:runaway detail]] when job hit the act or call cap (cap is :act, :read or nil) or still ran after max-rounds, unless job is in long-running."
+  [job cap still-listed?]
+  (when-not (contains? long-running job)
+    (cond
+      (= :act cap) [[:runaway "act cap hit"]]
+      (= :read cap) [[:runaway "call cap hit"]]
+      still-listed? [[:runaway (str "still running after " max-rounds " rounds")]])))
 
 (defn defects
-  "Defect keywords (with detail) for the events and final state of a case. Hitting the act cap is not one: a round may be a
-  whole night or flight, and the fake world's time does not pass for it."
-  [events state capped?]
+  "Defect keywords (with detail) for the events and final state of a case; runaway cut-offs are reported by runaway."
+  [events state]
   (concat
-   (when capped? [[:runaway "call cap"]])
    (for [[_ f] (:failed state) :when (not (or (act-cap? (:error f)) (declared-failure? (:error f))))] [:round-threw (str (:error f))])
    (for [e events :when (and (= :system (:source e)) (= :error (:kind e)) (not (act-cap? (:text e))))] [:check-threw (:text e)])
    (for [e events :when (and (= :job (:source e)) (= :waiting (:kind e)) (= :not-ready (event-reason e))
@@ -153,18 +171,18 @@
    (for [e events :when (and (= :job (:source e)) (= :stopped (:kind e)) (nil? (event-reason e)))] [:stopped-without-reason (:text e)])))
 
 (defn ^:async run-case
-  "Run job once for seed: {:job :seed :args :world :outcome (:refused/:ran) :defects [[kind detail]]}."
-  [job entry seed wrong-untyped?]
+  "Run one case ({:job :entry :seed :wrong-untyped?}): {:job :seed :args :outcome (:refused/:ran) :defects [[kind detail]]}."
+  [{:keys [job entry seed wrong-untyped?]}]
   (let [r (rng seed)
         args (gen-args r entry wrong-untyped?)
         {:keys [spec ground]} (gen-world r)
         clock (atom 1000000)
-        calls (atom {:all 0 :acts 0 :t0 (js/Date.now)})
-        capped (atom false)
+        calls (atom {:all 0 :acts 0})
+        capped (atom nil)
         [seen sink] (tu/legacy-capture-sink)
         raw (tu/fake spec)
         now (tu/act-clock clock raw 50)
-        eng (core/create {:primitives (capped-primitives raw calls capped) :jobs registry/jobs :triggers {} :dir (tu/tmp-dir) :now now
+        eng (core/create {:primitives (capped-primitives raw calls capped (if (contains? long-running job) long-running-cap call-cap)) :jobs registry/jobs :triggers {} :dir (tu/tmp-dir) :now now
                           :events (events/make {:body "Fake" :sinks [sink] :now now})})
         base {:job job :seed seed :args args :ground ground}
         id (try (core/submit! eng (list job args) {}) (catch :default e e))]
@@ -173,14 +191,15 @@
       (let [thrown (atom nil)
             unrefused (when (seq (:wrong-typed (meta args))) [[:wrong-type-accepted (pr-str (:wrong-typed (meta args)))]])]
         (loop [i 0]
-          (when (and (< i max-rounds) (seq (:list (core/state eng))) (not @thrown))
+          (when (and (< i max-rounds) (seq (:list (core/state eng))) (not @thrown) (not @capped))
             (swap! clock + 1500)
-            (reset! calls {:all 0 :acts 0 :t0 (js/Date.now)})
+            (reset! calls {:all 0 :acts 0})
             (let [ok? (try (await (core/tick! eng)) true (catch :default e (reset! thrown (str e)) false))]
               (when ok? (recur (inc i))))))
         (assoc base :outcome :ran
                :defects (concat unrefused (when (and @thrown (not (act-cap? @thrown))) [[:tick-threw @thrown]])
-                                (defects @seen (core/state eng) @capped)))))))
+                                (runaway job @capped (and (not @thrown) (seq (:list (core/state eng))) (not (declared-wait? @seen))))
+                                (defects @seen (core/state eng))))))))
 
 ;; ---- the run
 
@@ -192,29 +211,51 @@
   #{'jobs.debug.access-check 'jobs.debug.notify 'jobs.debug.walk-plan})
 
 (def known
-  "{[job kind] card}: defects already carded, so the suite stays green and a new one fails it. Delete an entry with its fix."
+  "{[job kind] card}: defects already carded, so the suite stays green and a new one fails it. A default run fails when an entry no longer occurs: delete it with its fix."
   {["jobs.farm.find-spot" :runaway] "a9fb6a61"
-          ["jobs.farm.find-spot" :tick-threw] "a9fb6a61"
-          ["jobs.survival.dig-niche" :runaway] "a9fb6a61"
-          ["jobs.survival.dig-niche" :tick-threw] "a9fb6a61"
-          ["jobs.movement.go-to" :round-threw] "a9fb6a61"})
+   ["jobs.animals.herd" :runaway] "abd5fa6b"
+   ["jobs.build.clear-box" :runaway] "abd5fa6b"
+   ["jobs.farm.till" :runaway] "abd5fa6b"})
 
-(defn job-cases [wrong-untyped?]
-  (let [only (env "FUZZ_JOB" nil)
-        n (js/parseInt (env "FUZZ_CASES" "10"))
-        base (js/parseInt (env "FUZZ_SEED" "1"))]
-    (for [[i [job entry]] (map-indexed vector (sort-by (comp str key) registry/jobs))
-          :when (and (not (skipped job)) (or (nil? only) (= only (str job))))
-          k (range n)]
-      [job entry (+ base (* 7919 i) (* 104729 k)) wrong-untyped?])))
+(defn case-seed
+  "Seed of case k of job: stable under the job filter and the other jobs."
+  [base job k]
+  (+ base (mod (hash (str job)) 1000003) (* 104729 k)))
 
-(defn ^:async run-all [wrong-untyped?]
-  (loop [todo (job-cases wrong-untyped?) found []]
-    (if-let [[job entry seed w] (first todo)]
-      (let [_ (when (env "FUZZ_TRACE" nil) (println "fuzz" job seed))
-            res (try (await (run-case job entry seed w))
-                     (catch :default e {:job job :seed seed :defects [[:harness-threw (str e)]]}))]
-        (recur (rest todo) (into found (map (fn [[kind detail]] (assoc (select-keys res [:job :seed :args :ground]) :kind kind :detail detail))) (:defects res))))
+(defn job-cases
+  "Cases [{:job :entry :seed :k :base :n :wrong-untyped?}] for the jobs matching :only (nil = all), :n per job or just case :case."
+  [{:keys [only n base wrong-untyped?] kase :case}]
+  (for [[job entry] (sort-by (comp str key) registry/jobs)
+        :when (and (not (skipped job)) (or (nil? only) (= only (str job))))
+        k (if kase [kase] (range n))]
+    {:job job :entry entry :seed (case-seed base job k) :k k :base base :n n :wrong-untyped? wrong-untyped?}))
+
+(defn env-opts [wrong-untyped?]
+  {:only (env "FUZZ_JOB" nil)
+   :n (js/parseInt (env "FUZZ_CASES" "10"))
+   :base (js/parseInt (env "FUZZ_SEED" "1"))
+   :case (some-> (env "FUZZ_CASE" nil) js/parseInt)
+   :wrong-untyped? wrong-untyped?})
+
+(defn repro-line
+  "The env vars that replay case c alone."
+  [{:keys [job base n k wrong-untyped?]}]
+  (str "FUZZ_JOB=" job " FUZZ_SEED=" base " FUZZ_CASES=" n " FUZZ_CASE=" k
+       (when wrong-untyped? " FUZZ_WRONG_TYPES=1") (when extreme? " FUZZ_EXTREME=1")))
+
+(defn stale-known
+  "The keys of known that no defect in found has: their cards are fixed."
+  [known found]
+  (let [seen (into #{} (map (juxt (comp str :job) :kind)) found)]
+    (vec (remove seen (keys known)))))
+
+(defn ^:async run-all [opts]
+  (loop [todo (job-cases opts) found []]
+    (if-let [c (first todo)]
+      (let [_ (when (env "FUZZ_TRACE" nil) (println "fuzz" (:job c) (:seed c)))
+                res (try (await (run-case c))
+                     (catch :default e {:job (:job c) :defects [[:harness-threw (str e)]]}))]
+        (recur (rest todo) (into found (map (fn [[kind detail]] (assoc (select-keys res [:job :args :ground]) :repro (repro-line c) :kind kind :detail detail))) (:defects res))))
       found)))
 
 (defn summary [found]
@@ -223,16 +264,26 @@
        (map (fn [[[job kind] ds]]
               (let [d (first ds)]
                 (str job " " kind " x" (count ds) ": " (pr-str (:detail d))
-                     "\n    repro FUZZ_JOB=" job " FUZZ_SEED=" (:seed d) " FUZZ_CASES=1  args " (pr-str (:args d)) " ground " (:ground d)))))
+                     "\n    repro " (:repro d) "  args " (pr-str (:args d)) " ground " (:ground d)))))
        (str/join "\n")))
+
+(defn full-run?
+  "True when opts and env make the run cover the default cases of every job, so a known entry that did not occur is stale."
+  [{:keys [only n base wrong-untyped?] kase :case}]
+  (and (nil? only) (nil? kase) (>= n 10) (= 1 base) (not wrong-untyped?) (not extreme?)))
 
 (deftest every-job-handles-generated-inputs-honestly
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [found (await (run-all (= "1" (env "FUZZ_WRONG_TYPES" "0"))))
-              fresh (remove #(contains? known [(str (:job %)) (:kind %)]) found)]
-          (is (empty? fresh) (str (count fresh) " defect(s) across " (count (group-by (juxt :job :kind) fresh)) " job/kind pairs:\n" (summary fresh))))))))
+        (let [opts (env-opts (= "1" (env "FUZZ_WRONG_TYPES" "0")))
+              found (await (run-all opts))
+              fresh (remove #(contains? known [(str (:job %)) (:kind %)]) found)
+              stale (when (full-run? opts) (stale-known known found))]
+          (doseq [[[job kind] ds] (sort-by key (group-by (juxt (comp str :job) :kind) (filter #(contains? known [(str (:job %)) (:kind %)]) found)))]
+            (println "known" job kind (count ds) (pr-str (:detail (first ds)))))
+          (is (empty? fresh) (str (count fresh) " defect(s) across " (count (group-by (juxt :job :kind) fresh)) " job/kind pairs:\n" (summary fresh)))
+          (is (empty? stale) (str "known entries that no longer occur (card fixed? delete them): " (pr-str (map (juxt identity known) stale)))))))))
 
 (deftest rng-is-deterministic-per-seed
   (is (= (repeatedly 5 (rng 42)) (repeatedly 5 (rng 42))))
@@ -243,3 +294,45 @@
         gen #(gen-args (rng %) entry false)]
     (is (= (gen 7) (gen 7)))
     (is (some #(seq (:wrong-typed (meta (gen %)))) (range 60)) "some seed puts a wrong value in the typed :pos arg")))
+
+(deftest case-seeds-do-not-depend-on-the-job-filter
+  (let [all (job-cases {:n 3 :base 1})
+        one (job-cases {:n 3 :base 1 :only "jobs.movement.go-to"})]
+    (is (= 3 (count one)))
+    (is (= one (filter #(= 'jobs.movement.go-to (:job %)) all)))))
+
+(deftest repro-line-names-every-env-var-and-replays-the-case
+  (let [c (first (job-cases {:n 4 :base 5 :case 2 :only "jobs.movement.go-to" :wrong-untyped? true}))
+        line (repro-line c)]
+    (is (= 2 (:k c)))
+    (is (str/includes? line "FUZZ_JOB=jobs.movement.go-to FUZZ_SEED=5 FUZZ_CASES=4 FUZZ_CASE=2 FUZZ_WRONG_TYPES=1"))
+    (is (= (:seed c) (:seed (nth (job-cases {:n 4 :base 5 :only "jobs.movement.go-to"}) 2))))
+    (is (= (gen-args (rng (:seed c)) (:entry c) true) (gen-args (rng (:seed c)) (:entry c) true)))))
+
+(deftest stale-known-entries-are-the-ones-not-found
+  (is (= [["a" :x]] (stale-known {["a" :x] "c1" ["b" :y] "c2"} [{:job 'b :kind :y}]))))
+
+(deftest cut-offs-are-runaway-unless-the-job-is-listed-long-running
+  (is (= [[:runaway "act cap hit"]] (runaway 'jobs.farm.till :act false)))
+  (is (= [[:runaway "still running after 12 rounds"]] (runaway 'jobs.farm.till nil true)))
+  (is (empty? (runaway 'jobs.farm.till nil false)))
+  (is (empty? (runaway (first (keys long-running)) :act true))))
+
+(deftest only-the-jobs-own-ex-info-shapes-are-declared-failures
+  (is (declared-failure? "#error {:message \"clear-box needs :from and :to\", :data {}}"))
+  (is (declared-failure? "#error {:message \"till covers 9 cells, at most 4\", :data {:cells 9}}"))
+  (is (not (declared-failure? "#error {:message \"No matching clause: :x\", :data {}}")))
+  (is (not (declared-failure? "TypeError: x is not a function"))))
+
+(deftest a-printed-repro-replays-the-same-case
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [opts {:n 10 :base 1 :only "jobs.animals.herd"}
+              c (nth (job-cases opts) 1)
+              replay (first (job-cases (assoc opts :case 1)))
+              a (await (run-case c))
+              b (await (run-case replay))]
+          (is (= (:seed c) (:seed replay)))
+          (is (= (select-keys a [:args :ground :defects]) (select-keys b [:args :ground :defects])))
+          (is (= [[:runaway "still running after 12 rounds"]] (:defects a))))))))
