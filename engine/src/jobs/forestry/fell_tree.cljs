@@ -30,7 +30,9 @@
   takes the pillar back before the tree counts as felled (the same cleanup runs when a round starts with this job's
   scaffold still open). With no dirt or cobblestone carried it waits (check) with :reason :need (:any-of the two,
   :count the height). A tree whose pillar a zone, claim or footprint refuses (warn fell-tree.declined, :reason
-  :refused), or that has no ground or stand to reach it from, counts as unreachable. :pillar? false leaves such a tree.
+  :refused; other refusals warn with their :reason), or that has no ground or stand to reach it from, counts as unreachable,
+  and so does one whose pillar digs no log. A cleanup that leaves the scaffold open is a failed round (tree_blocked
+  after a few). :pillar? false leaves such a tree.
   Each log is dug by a jobs.blocks.dig child. That child holds the best carried axe and leaves the drop on the
   ground (jobs.forestry.harvest-wood collects it).
   Waits (check) with :reason :no-tree when no tree is in sight, after one look around from where it stands.
@@ -229,8 +231,10 @@
     (cond
       (:stand r) (set-pillar! c {:phase :walk :plan {:stand (first (:stand r))}})
       (:pillar r) (set-pillar! c {:phase :walk :plan (:pillar r)})
-      :else (do (when (= :zone (:reason r))
-                  (ctx/warn-once! c [:pillar-refused] :fell-tree.declined {:reason :refused :why :pillar :text "a zone or plan refuses a pillar by the tree"}))
+      :else (do (ctx/warn-once! c [:pillar-refused] :fell-tree.declined
+                                (if (= :zone (:reason r))
+                                  {:reason :refused :why :pillar :text "a zone or plan refuses a pillar by the tree"}
+                                  {:reason (:reason r) :why :pillar :text (str "no way to reach the high logs: " (name (:reason r)))}))
                 (mark-unreachable! c)))
     :continue))
 
@@ -261,20 +265,28 @@
         in-reach (filter #(<= (u/eye-dist here (:pos %)) dig-reach) logs)
         l (first (sort-by #(- (:y (:pos %))) in-reach))]
     (if-not l
-      (do (ctx/update-mem! c assoc-in [:pillar :phase] :clean) :continue)
+      (do (ctx/update-mem! c update :pillar #(cond-> (assoc % :phase :clean) (not (:dug %)) (assoc :failed true))) :continue)
       (let [r (await (dig-log! c l))]
         (if (= :ok r)
-          (do (u/progress! c) :continue)
+          (do (ctx/update-mem! c assoc-in [:pillar :dug] true) (u/progress! c) :continue)
           (pillar-failed! c))))))
 
+(defn open-scaffold?
+  "Whether this job's scaffold ledger entries are still open (a pillar left by a cut or a restart)."
+  [c]
+  (boolean (some #(ledger/of-instance? (:id c) %) (ledger/open-entries (ctx/view c)))))
+
 (defn ^:async pillar-clean!
-  "Take the pillar back (jobs.access.cleanup child for this job's blocks); then the tree is unreachable when the pillar failed."
+  "Take the pillar back (jobs.access.cleanup child for this job's blocks); then the tree is unreachable when the pillar
+  failed. A cleanup that ends with the ledger still open is a failed round (tried again, tree_blocked after a few)."
   [c {:keys [failed]}]
   (let [r (await (ctx/call-child c :cleanup 'jobs.access.cleanup {:job (:id c)}))]
-    (when-not (= :continue r)
-      (ctx/update-mem! c dissoc :pillar)
-      (when failed (mark-unreachable! c)))
-    :continue))
+    (cond
+      (= :continue r) :continue
+      (open-scaffold? c) (u/fail! c :tree_blocked "cannot take the pillar back")
+      :else (do (ctx/update-mem! c dissoc :pillar)
+                (when failed (mark-unreachable! c))
+                :continue))))
 
 (defn ^:async pillar-round!
   "One round of the pillar: walk to its base (or stand), build it, dig from it, take it back."
@@ -285,11 +297,6 @@
       :build (await (pillar-build! c m))
       :dig (await (pillar-dig! c m logs))
       :clean (await (pillar-clean! c m)))))
-
-(defn open-scaffold?
-  "Whether this job's scaffold ledger entries are still open (a pillar left by a cut or a restart)."
-  [c]
-  (boolean (some #(ledger/of-instance? (:id c) %) (ledger/open-entries (ctx/view c)))))
 
 (defn walk-failed!
   "Book a walk result of :blocked or :partial against the chosen tree."

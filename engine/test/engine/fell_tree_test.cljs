@@ -7,6 +7,8 @@
             [engine.harvest-test :as h]
             [engine.library-test :as lt]
             [engine.test-util :as tu]
+            [engine.registry :as registry]
+            [jobs.lib.access.approach :as approach]
             [jobs.lib.ledger :as ledger]
             [engine.memory :as mem]))
 
@@ -80,3 +82,36 @@
               {:keys [p]} (await (fm/with-zones zones #(fell tall {:radius 10} 80)))]
           (is (= [] (h/calls p "jumpPlace")))
           (is (< (count (dug-ys p)) 8) "the high logs stay"))))))
+
+(defn kinds [{:keys [seen]} kind] (h/events-of seen kind))
+
+(deftest a-cleanup-that-leaves-the-pillar-open-ends-the-job-with-a-warn
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cleanup (assoc (get registry/jobs 'jobs.access.cleanup) :round (fn ^:async f [_] :done))
+              s (with-redefs [registry/jobs (assoc registry/jobs 'jobs.access.cleanup cleanup)]
+                  (await (fell tall {:radius 10} 200)))]
+          (is (not= :not-done (:out s)) "the job ends instead of cleaning for ever")
+          (is (= 1 (count (kinds s :tree_blocked)))))))))
+
+(deftest a-pillar-with-no-log-in-reach-marks-the-tree-unreachable
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls (atom 0)
+              s (with-redefs [approach/plan (fn [_] (swap! calls inc) {:stand [[5 64 0]]})]
+                  (await (fell tall {:radius 10} 200)))]
+          (is (not= :not-done (:out s)))
+          (is (<= @calls 2) "the plan is not made again and again")
+          (is (= 1 (count (kinds s :tree_blocked)))))))))
+
+(deftest a-planner-refusal-other-than-a-zone-warns-with-its-reason
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (with-redefs [approach/plan (fn [_] {:reason :no-base})]
+                  (await (fell tall {:radius 10} 120)))
+              w (first (kinds s :fell-tree.declined))]
+          (is (= :no-base (:reason w)))
+          (is (= 1 (count (kinds s :fell-tree.declined)))))))))
