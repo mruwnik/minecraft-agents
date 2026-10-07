@@ -47,23 +47,15 @@
 
 ;; ---------------------------------------------------------------- the escape, pure
 
-(deftest escape-attempts-go-back-along-the-heading-then-the-others-then-override-zones
+(deftest escape-attempts-go-back-along-the-heading-then-the-others-and-override-zones-only-when-asked
   (are [heading ignore? expected] (= expected (mapv (juxt :heading :ignore-zones?) (leave-tunnel/escape-attempts heading ignore?)))
-    :east false [[:west false] [:north false] [:east false] [:south false]
-                 [:west true] [:north true] [:east true] [:south true]]
+    :east false [[:west false] [:north false] [:east false] [:south false]]
     :north true [[:south true] [:north true] [:east true] [:west true]]))
 
 (deftest the-escape-stair-runs-opposite-to-the-tunnels-own-stair
   (are [line-dir expected] (= expected (leave-tunnel/escape-stair {:dir line-dir} 65))
     :down {:dir :up :y 65}
     :up {:dir :down :y 65}))
-
-(deftest only-an-access-reason-warrants-the-override
-  (are [results expected] (= expected (leave-tunnel/zones-blocked? results))
-    [{:reason :zone} {:reason :no-floor}] true
-    [{:reason :footprint}] true
-    [{:reason :no-floor} {:reason :dig-failed}] false
-    [] false))
 
 ;; ---------------------------------------------------------------- the fake world
 
@@ -279,7 +271,7 @@
           (is (= :done (:status @out)))
           (is (= [] (the-ledger (:eng s))) "every torch was taken or destroyed: no entry is left"))))))
 
-(deftest an-escape-that-overrides-zones-warns
+(deftest an-escape-never-overrides-zones-unless-the-caller-asks
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -287,10 +279,8 @@
               {:keys [out] :as s} (await (run-out! (setup {:blocks eight-down :inventory (inventory) :zones [zone]}
                                                           {:target [6 57 0] :ignore-zones? true} {} :between block-stair!)))
               escapes (events-of s :leave-tunnel.escape)]
-          (is (= :done (:status @out)))
-          (is (= 1 (count escapes)))
-          (is (= [:warn true] ((juxt :level :ignore-zones?) (first escapes)))
-              "the last-resort override is a warn"))))))
+          (is (= [:stopped :walk-failed] ((juxt :status :reason) @out)))
+          (is (not-any? :ignore-zones? escapes) "no attempt ran with :ignore-zones?"))))))
 
 (deftest an-escape-that-respects-zones-is-info
   (async done

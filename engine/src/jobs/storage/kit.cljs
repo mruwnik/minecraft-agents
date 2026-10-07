@@ -168,8 +168,6 @@
   [kind]
   (if (= :food kind) "food" kind))
 
-(defn rkey [k] (if (= "food" k) :food k))
-
 (defn tiers-of
   "The tiers to try, in order; golden is never used."
   [a]

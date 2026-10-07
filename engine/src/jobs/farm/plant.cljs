@@ -10,8 +10,8 @@
 (def doc
   "Sow the bare farmland of a :box. A cell is bare when (x, min.y, z) is farmland and the block above is air.
   The seed is :seed, else the carried seed with the largest stack. Carrots and potatoes are sown only above the
-  food reserve (jobs.lib.cost/food-reserve); harvest replants its own cut cells whatever the reserve. That pick is kept while it is carried,
-  so one run sows one crop.
+  food reserve (jobs.lib.cost/food-reserve); harvest replants its own cut cells whatever the
+  reserve. That pick is kept while it is carried, so one run sows one crop.
   Each round plants the bare cells within :reach, or walks to the nearest. A cell whose place is refused or
   unreachable, or whose walk is blocked, three times is skipped (warn plant.gave-up).
   Result: {:planted n :skipped [cells] :reason r}. :reason is :done, :none (no bare cell), :gave-up (cells

@@ -33,9 +33,8 @@
 
   A walk that does not arrive (stair broken by an explosion or cave-in, a hole in its floor) is not the end. The
   body digs its own way out with jobs.access.stair to the entry's height (opposite the tunnel's :dir), first back along the tunnel's
-  heading, then the other three (leave-tunnel.escape: info, warn when it overrode zones; warn for each stair that stopped). Only when a
-  heading stopped for an access reason (:zone :claim :footprint) does it try them all again with
-  :ignore-zones? as the last resort. The new stair is left as dug, nothing is placed (it is the body's own way out; sealing it risks walling in a body that returns). Once out, torches that
+  heading, then the other three (leave-tunnel.escape: info; warn for each stair that stopped), respecting zones unless the caller passed
+  :ignore-zones?. The new stair is left as dug, nothing is placed (it is the body's own way out; sealing it risks walling in a body that returns). Once out, torches that
   cannot be reached are left (:walk-failed in :left) and the mouth is sealed. If the entry itself is
   unreachable it ends :done :open with :escaped true. If every attempt fails it ends :stopped :walk-failed
   with :escape (the stair results). The ledger entries of torches the stair or the fill destroyed are dropped
@@ -153,20 +152,12 @@
 
 (def opposite {:north :south :south :north :east :west :west :east})
 
-(def access-reasons #{:zone :claim :footprint :no-zones})
-
 (defn escape-attempts
   "The stairs to try, as [{:heading :ignore-zones?}]: back along the tunnel's heading first, then the others, all
-  respecting zones; then, when zones are not ignored already, the same again with :ignore-zones?."
+  respecting zones unless the caller passed :ignore-zones?."
   [heading ignore?]
-  (let [order (distinct (remove nil? (concat [(opposite heading)] [:north :east :south :west])))
-        pass (fn [ig] (mapv (fn [h] {:heading h :ignore-zones? ig}) order))]
-    (if ignore? (pass true) (into (pass false) (pass true)))))
-
-(defn zones-blocked?
-  "Whether every attempt so far stopped, and one of them for an access reason."
-  [results]
-  (boolean (some #(access-reasons (:reason %)) results)))
+  (let [order (distinct (remove nil? (concat [(opposite heading)] [:north :east :south :west])))]
+    (mapv (fn [h] {:heading h :ignore-zones? ignore?}) order)))
 
 (defn escape-stair
   "The stair args out of a tunnel back to the entry's height: the other way than the tunnel's own stair."
@@ -185,7 +176,7 @@
         attempt (get attempts i)
         entry-y (second (first (tunnel/line-cells (:line tunnel))))]
     (cond
-      (or (nil? attempt) (and (:ignore-zones? attempt) (not ignore?) (not (zones-blocked? results))))
+      (nil? attempt)
       (finish! c :stopped :walk-failed {:cell cell :walk walk :escape results})
       :else
       (let [r (await (declined/call-child! c (keyword (str "escape-" i)) 'jobs.access.stair
@@ -196,7 +187,7 @@
           (= :declined r) :declined
           (nil? res) :continue
           (= :done (:status res))
-          (do (ctx/emit! c :leave-tunnel.escape (if (and (:ignore-zones? attempt) (not ignore?)) :warn :info) {:at (feet-of c) :heading (:heading attempt) :ignore-zones? (:ignore-zones? attempt)
+          (do (ctx/emit! c :leave-tunnel.escape :info {:at (feet-of c) :heading (:heading attempt) :ignore-zones? (:ignore-zones? attempt)
                                                       :text (str "leave-tunnel dug its own way out " (name (:heading attempt)))})
               (ctx/update-mem! c #(-> % (dissoc :escape) (assoc :escaped true)))
               :continue)
