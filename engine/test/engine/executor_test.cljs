@@ -842,25 +842,56 @@
 
 ;; a planned drop onto a bouncing block (slime)
 
+(def pad-3x3 (vec (for [dx [-1 0 1] dz [-1 0 1]] [dx dz])))
+
 (def slime-drop
-  "Off a ledge 10 high onto a slime pad at x 2 (the drop step is marked :bounce), then on along the ground."
-  [(step 0 74 0 :start) (step 1 74 0 :walk) (step 2 64 0 :drop {:bounce true :pad 1}) (step 3 64 0 :walk) (step 4 64 0 :walk)])
+  "Off a ledge 10 high onto a 3x3 slime pad round x 2 (the drop step is marked :bounce), then on along the ground."
+  [(step 0 74 0 :start) (step 1 74 0 :walk) (step 2 64 0 :drop {:bounce true :pad pad-3x3 :settle-ticks 110}) (step 3 64 0 :walk)
+   (step 4 64 0 :walk)])
 
 (defn run-poses
   "The tick results for poses fed one after another from state st."
   [st poses]
   (rest (reductions (fn [r ps] (ex/tick p (:state r) ps)) {:state st} poses)))
 
+(def no-wall (fn [_ _ _] false))
+
 (deftest with-bounces-marks-drops-onto-a-bouncing-block
   (let [steps [(step 0 74 0 :start) (step 1 64 0 :drop) (step 2 64 0 :walk) (step 3 60 0 :drop) (step 4 60 1 :drop {:h 9})]
         bounce? (fn [x y z] (contains? #{[1 63 0] [2 63 0] [4 60 1]} [x y z]))]
-    (is (= [nil true nil nil true] (map :bounce (ex/with-bounces steps bounce?))))))
+    (is (= [nil true nil nil true] (map :bounce (ex/with-bounces p steps bounce? no-wall))))))
 
 (deftest with-bounces-records-the-pad
   (let [pad (set (for [x (range 1 4) z (range -1 2)] [x 63 z]))
         steps [(step 0 74 0 :start) (step 2 64 0 :drop) (step 1 64 0 :drop) (step 2 63 0 :drop {:h 9})]
         bounce? (fn [x y z] (contains? pad [x y z]))]
-    (is (= [nil 1 0 1] (map :pad (ex/with-bounces steps bounce?))) "a 3x3 pad round the support: 1, a pad edge: 0")))
+    (is (= [0 9 1 9] (map (comp count :pad) (ex/with-bounces p steps bounce? no-wall)))
+        "a 3x3 pad round the support: its 9 cells; a pad edge with nothing round it: only the landing cell")))
+
+;; a cliff (x 0..4, 10 high over the pad's level 63) whose foot is a 3x3 slime pad x 5..7: the cliff is the pad's west ring
+(def cliff-foot-pad (set (for [x (range 5 8) z (range -1 2)] [x 63 z])))
+(defn cliff-wall [h] (fn [x y _] (and (<= x 4) (<= 63 y (+ 63 h)))))
+(def cliff-foot-drop [(step 3 74 0 :start) (step 4 74 0 :walk) (step 5 64 0 :drop) (step 6 64 0 :walk) (step 8 64 0 :walk)])
+
+(deftest with-bounces-takes-a-cliff-foot-pad
+  (let [bounce? (fn [x y z] (contains? cliff-foot-pad [x y z]))]
+    (is (= #{[0 0] [1 0] [0 -1] [0 1] [1 -1] [1 1]} (set (:pad (nth (ex/with-bounces p cliff-foot-drop bounce? (cliff-wall 10)) 2))))
+        "the cliff side is a wall over the bounce's peak: the pad is every slime cell round the landing")
+    (is (= [[0 0]] (:pad (nth (ex/with-bounces p cliff-foot-drop bounce? (cliff-wall 2)) 2)))
+        "a 2-high wall under a 10-block drop's peak: no pad, only the landing cell")))
+
+(deftest a-bounce-may-drift-onto-the-next-cell-of-a-cliff-foot-pad
+  (let [steps (ex/with-bounces p cliff-foot-drop (fn [x y z] (contains? cliff-foot-pad [x y z])) (cliff-wall 10))
+        done (fn [x z] (:status (:done (ex/tick p (state-at steps 2 :tick 30 :since 10) (pose x 64 z {:vy 0.8})))))]
+    (is (nil? (done 6.5 0.5)) "the next slime cell")
+    (is (nil? (done 6.9 1.4)) "a pad corner cell, over 1.5 from the leg")
+    (is (= :off-plan (done 7.5 0.5)) "beyond the ring round the landing")))
+
+(deftest the-settle-wait-grows-with-the-fall
+  (let [drop-of (fn [fall] (nth (ex/with-bounces p [(step 0 (+ 64 fall) 0 :start) (step 1 64 0 :drop)]
+                                                 (fn [x y z] (= [1 63 0] [x y z])) no-wall) 1))]
+    (is (> (:settle-ticks (drop-of 15)) 116) "a 15-block fall settles 116 ticks after contact")
+    (is (> (:settle-ticks (drop-of 15)) (:settle-ticks (drop-of 10)) 90))))
 
 (deftest a-bounce-drop-is-not-reached-at-contact
   (let [r (ex/tick p (state-at slime-drop 2 :tick 30 :since 10) (pose 2.5 64 0.5 {:vy 0.8}))]
@@ -901,7 +932,7 @@
     (is (nil? (:done (last rs))))))
 
 (deftest the-bounce-wait-is-bounded
-  (let [wait (:bounce-max-ticks p)
+  (let [wait (:settle-ticks (nth slime-drop 2))
         bouncing (take (+ wait 3) (cycle [(pose 2.5 64 0.5 {:vy 0.5}) (pose 2.5 65 0.5 {:vy 0.2 :on-ground false})]))
         rs (vec (run-poses (state-at slime-drop 2 :tick 30 :since 10) bouncing))]
     (is (every? nil? (map :done (take wait rs))))
@@ -916,12 +947,12 @@
 (deftest landing-on-another-pad-cell-is-on-plan-and-off-the-pad-is-off-plan
   (are [pad x z off?] (= off? (= :off-plan (:status (:done (ex/tick p (state-at (assoc-in slime-drop [2 :pad] pad) 2 :tick 30 :since 10)
                                                                       (pose x 64 z {:vy 0.8}))))))
-    1 3.9 0.5  false
-    1 1.1 -0.6 false
-    1 4.4 0.5  true
-    1 2.5 1.9  false
-    1 2.5 -1.4 true
-    0 3.9 0.5  true))
+    pad-3x3  3.9 0.5  false
+    pad-3x3  1.1 -0.6 false
+    pad-3x3  4.4 0.5  true
+    pad-3x3  2.5 1.9  false
+    pad-3x3  2.5 -1.4 true
+    [[0 0]]  3.9 0.5  true))
 
 ;; the ledge step was never reached (the body left it early): the bounce step still takes over at contact, it is not
 ;; skipped by the lookahead, and its bounce is waited out
@@ -937,7 +968,7 @@
     1.2))
 
 (deftest a-bounce-reached-from-the-ledge-runs-no-stuck-clock
-  (let [wait (:bounce-max-ticks p)
+  (let [wait (:settle-ticks (nth slime-drop 2))
         bouncing (take (dec wait) (cycle [(pose 3.3 64 0.5 {:vy 0.5}) (pose 3.3 65 0.5 {:vy 0.2 :on-ground false})]))
         rs (run-poses (state-at slime-drop 1 :tick 30 :since 10) bouncing)]
     (is (every? nil? (map :done rs)))

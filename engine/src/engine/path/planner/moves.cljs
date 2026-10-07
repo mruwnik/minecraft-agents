@@ -1,12 +1,9 @@
 (ns engine.path.planner.moves
   "Search methods: the moves out of a node: walks, diagonals, jumps, drops, gap jumps and climbing."
-  (:require [engine.path.planner.base :refer [ARC ARC-UP BODY CLIMB-TRAP-SHUT CORNER-S GAP-PIT-RISK GAP-S GAP-UP-S GRID HAZARD-SLIDE-RISK JUMP-S JUMP-UP LAVA MOVE-CLIMB-DOWN MOVE-CLIMB-UP MOVE-CORNER MOVE-DIAGONAL MOVE-DROP MOVE-GAP MOVE-JUMP MOVE-JUMP-CLIMB MOVE-OPEN MOVE-SWIM MOVE-WALK SLOW-EXTRA SNAP SQRT2 STEP UNLOADED WATER WHOLE FREE-FALL BOUNCE-S]]
+  (:require [engine.path.planner.base :refer [ARC ARC-UP BODY CLIMB-TRAP-SHUT CORNER-S GAP-PIT-RISK GAP-S GAP-UP-S GRID HAZARD-SLIDE-RISK JUMP-S JUMP-UP LAVA MOVE-CLIMB-DOWN MOVE-CLIMB-UP MOVE-CORNER MOVE-DIAGONAL MOVE-DROP MOVE-GAP MOVE-JUMP MOVE-JUMP-CLIMB MOVE-OPEN MOVE-SWIM MOVE-WALK SLOW-EXTRA SNAP SQRT2 STEP UNLOADED WATER WHOLE FREE-FALL BOUNCE-S pad-cells]]
             [engine.path.planner.search :refer [Search]]))
 
 (set! *warn-on-infer* true)
-
-;; the height a bounce off a slime pad rises to, per block fallen (a 10-block drop bounces about 6.3)
-(def ^:const BOUNCE-PEAK 0.63)
 
 (defn- run-move? [m] (or (== m MOVE-WALK) (== m MOVE-DIAGONAL)))
 
@@ -73,25 +70,15 @@
   (landSeen [s x y z]
     (or (nil? (.-land-seen s)) (true? (.call ^js (.-land-seen s) nil x y z))))
 
-  ;; a bounce off the block at x y z after a fall of fall16 stays on the pad: it and the 8 blocks round it are bouncing blocks
-  ;; or (round it) a wall up to the bounce's peak (BOUNCE-PEAK of the fall) over that level, and the body sees each. A smaller
-  ;; pad or a lower wall lets the bounce carry the body off it.
+  ;; a bounce off the block at x y z after a fall of fall16 stays on the pad (base/pad-cells): it and the 8 blocks round it
+  ;; are bouncing blocks or (round it) walls up to the bounce's peak, and the body sees each
   (bouncePad [s x y z fall16]
-    (loop [c 0]
-      (if (== c 9)
-        true
-        (let [bx (+ x (dec (quot c 3)))
-              bz (+ z (dec (rem c 3)))
-              id (.stateAt s bx y bz)
-              land (if (== id UNLOADED) nil (.get ^js (.-land-factors s) id))
-              pad (or (and (some? land) (neg? land) ^boolean (.landSeen s bx y bz))
-                      (and (not (== c 4)) ^boolean (.wallUp s bx y bz (js/Math.ceil (* BOUNCE-PEAK (/ fall16 16))))))]
-          (when pad (recur (inc c)))))))
-
-  ;; seen blocks with whole collision tops in the k cells over x y z
-  (wallUp [s x y z k]
-    (loop [dy 1]
-      (or (> dy k) (and ^boolean (.wallAt s x (+ y dy) z) (recur (inc dy))))))
+    (some? (pad-cells (fn [bx by bz]
+                        (let [id (.stateAt s bx by bz)
+                              land (if (== id UNLOADED) nil (.get ^js (.-land-factors s) id))]
+                          (and (some? land) (neg? land) ^boolean (.landSeen s bx by bz))))
+                      (fn [bx by bz] (.wallAt s bx by bz))
+                      x y z (/ fall16 16))))
 
   ;; a seen block at x y z with a whole collision top
   (wallAt [s x y z]

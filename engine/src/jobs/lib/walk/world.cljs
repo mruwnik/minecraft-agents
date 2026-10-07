@@ -4,6 +4,7 @@
   (:require [engine.settings :as settings]
             [engine.path.executor :as executor]
             [engine.path.blocks :as blocks]
+            [engine.path.planner.base :as base]
             [engine.path.planner-tuned :as planner]
             [engine.path.space :as space]
             [engine.ctx :as ctx]
@@ -148,6 +149,12 @@
   (let [snapshot (.-snapshot pw)
         ids (set (mapcat #(blocks/state-ids (.-table pw) %) bounce-blocks))]
     (fn [x y z] (contains? ids (.stateAt snapshot x y z)))))
+
+(defn wall-fn
+  "wall? for executor/with-bounces over a pathWorld: the block at x y z has a whole collision top."
+  [pw]
+  (let [snapshot (.-snapshot pw) tops (.-top (.-table pw))]
+    (fn [x y z] (>= (aget tops (.stateAt snapshot x y z)) base/WHOLE))))
 
 (defn default-food [] (settings/get settings ::default-food))
 

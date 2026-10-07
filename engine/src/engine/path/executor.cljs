@@ -15,7 +15,8 @@
 
   What it can walk is stated once, in policy (:moves and the gap rules); planner-limits tells the planner the same, so a
   search never plans a step the refusal below would turn away."
-  (:require [engine.path.planner-tuned :as planner]))
+  (:require [engine.path.planner.base :as base]
+            [engine.path.planner-tuned :as planner]))
 
 (def policy
   "Every number the executor uses, and the step kinds it walks."
@@ -53,7 +54,7 @@
    :gap-past 0.3           ; feet up to this far past the takeoff edge are still held by it (half the body's width)
    :gap-headroom 3         ; free blocks over the takeoff's stand height needed over takeoff and gap cells
    :bounce-settle-vy 0.4   ; a :bounce drop is reached only on the ground with |vy| at most this (the bounce left is under a block)
-   :bounce-max-ticks 100   ; ...or this long after the first contact (the planner prices a 10-block bounce at about 4.4 s)
+   :bounce-margin-ticks 20 ; ...or this long past the settle time of its fall (base/bounce-flight) after the first contact
    :sprint true})
 
 (def door-policy
@@ -213,16 +214,21 @@
         steps)))
 
 (defn with-bounces
-  "Add :bounce to each :drop step that lands on a bouncing block (slime), with :pad the pad's radius round the landing cell:
-  1 when the 8 blocks round that block bounce too, else 0. bounce? is a fn [x y z] -> bool, asked for the landing cell and
-  the block under it."
-  [steps bounce?]
-  (mapv (fn [{:keys [x y z move] :as s}]
-          (let [py (cond (not= :drop move) nil (bounce? x y z) y (bounce? x (dec y) z) (dec y))]
+  "Add :bounce to each :drop step that lands on a bouncing block (slime), with :pad the [dx dz] offsets round the landing
+  cell of the pad's bouncing cells (base/pad-cells, the planner's pad; [[0 0]] when the planner would price no bounce) and
+  :settle-ticks the settle time of the fall from the step before (base/bounce-flight) plus :bounce-margin-ticks. bounce? and
+  wall? (a block with a whole collision top) are fns [x y z] -> bool; bounce? is asked for the landing cell and the block
+  under it."
+  [policy steps bounce? wall?]
+  (vec (map-indexed
+        (fn [i {:keys [x y z move] :as s}]
+          (let [py (cond (or (zero? i) (not= :drop move)) nil (bounce? x y z) y (bounce? x (dec y) z) (dec y))
+                fall (when py (- (stand-y (nth steps (dec i))) (stand-y s)))]
             (cond-> s
               py (assoc :bounce true
-                        :pad (if (every? (fn [[dx dz]] (bounce? (+ x dx) py (+ z dz))) (for [dx [-1 0 1] dz [-1 0 1]] [dx dz])) 1 0)))))
-        steps))
+                        :pad (or (base/pad-cells bounce? wall? x py z fall) [[0 0]])
+                        :settle-ticks (+ (:settle (base/bounce-flight fall)) (:bounce-margin-ticks policy))))))
+        steps)))
 
 ;; ---------------------------------------------------------------- what the planner may plan
 
@@ -416,31 +422,37 @@
 
 ;; ---------------------------------------------------------------- tick
 
-(defn off-plan?
-  "Too far from the leg (previous step's point to the aim), or too far below or above it. Below the leg in water
-  does not count: a body that plunged in comes back up."
-  [policy prev step [ax az] {:keys [x y z in-water]}]
+(defn off-height?
+  "Too far below or above the leg (previous step's stand height to this one's). Below the leg in water does not count: a
+  body that plunged in comes back up."
+  [policy prev step {:keys [y in-water]}]
   (let [y1 (stand-y prev) y2 (stand-y step)]
-    (or (> (dist-to-segment x z (:px prev) (:pz prev) ax az) (:off-plan-xz policy))
-        (and (not in-water) (< y (- (min y1 y2) (:off-plan-below policy))))
+    (or (and (not in-water) (< y (- (min y1 y2) (:off-plan-below policy))))
         (> y (+ (max y1 y2) (:off-plan-above policy))))))
 
+(defn off-plan?
+  "Too far from the leg (previous step's point to the aim), or off-height?."
+  [policy prev step [ax az] {:keys [x z] :as pose}]
+  (or (> (dist-to-segment x z (:px prev) (:pz prev) ax az) (:off-plan-xz policy))
+      (off-height? policy prev step pose)))
+
 (defn off-pad?
-  "Bouncing on a :bounce drop, the feet have left the pad's columns (:pad cells round the landing cell, plus half the body's
-  width)."
+  "Bouncing on a :bounce drop, the feet have left the pad: the columns of its :pad cells (offsets round the landing cell),
+  plus half the body's width."
   [policy {sx :x sz :z :keys [pad]} {:keys [x z]}]
-  (let [reach (+ 0.5 (or pad 0) (:body-half policy))]
-    (or (> (Math/abs (- x (+ sx 0.5))) reach) (> (Math/abs (- z (+ sz 0.5))) reach))))
+  (let [reach (+ 0.5 (:body-half policy))]
+    (not-any? (fn [[dx dz]] (and (<= (Math/abs (- x (+ sx dx 0.5))) reach) (<= (Math/abs (- z (+ sz dz 0.5))) reach)))
+              (or pad [[0 0]]))))
 
 (defn settle-bounce
-  "state with the bounce of its current step tracked: :landed, the tick of the first contact; once :bounce-max-ticks have
-  passed since, the step loses :bounce (reached as any drop) and its no-progress clock starts again."
+  "state with the bounce of its current step tracked: :landed, the tick of the first contact; once the step's :settle-ticks
+  have passed since, the step loses :bounce (reached as any drop) and its no-progress clock starts again."
   [policy {:keys [steps i tick landed] :as state} pose]
   (let [step (nth steps i)]
     (cond
       (not (:bounce step)) (dissoc state :landed)
       (nil? landed) (cond-> state (contact? policy step pose) (assoc :landed tick))
-      (>= (- tick landed) (:bounce-max-ticks policy)) (-> state (update-in [:steps i] dissoc :bounce) (assoc :since tick) (dissoc :landed))
+      (>= (- tick landed) (:settle-ticks step)) (-> state (update-in [:steps i] dissoc :bounce) (assoc :since tick) (dissoc :landed))
       :else state)))
 
 (defn no-progress-ticks [policy step]
@@ -610,8 +622,9 @@
       (arrived? policy steps i pose)
       {:state state' :done {:status :arrived :at at}}
 
-      (and (pos? i) (or (off-plan? policy (nth steps (dec i)) step aim pose)
-                        (and landed (off-pad? policy step pose))))
+      (and (pos? i) (if landed
+                      (or (off-pad? policy step pose) (off-height? policy (nth steps (dec i)) step pose))
+                      (off-plan? policy (nth steps (dec i)) step aim pose)))
       {:state state' :done {:status :off-plan :at at :step i}}
 
       (and (not landed) (> (- n since) (no-progress-ticks policy step)))

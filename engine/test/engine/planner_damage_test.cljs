@@ -3,6 +3,7 @@
   over 3 blocks, a plant's touch) adds up along a path and a move that would take it over the budget is refused; the
   price of an hp is damageWeight. Without the options the planner plans as before."
   (:require [cljs.test :refer [deftest is testing]]
+            [engine.path.planner.base :as base]
             [engine.planner-fixture :as pf :refer [cells moves near run MOVE]]))
 
 (defn cost [r k] (get-in r [:path :cost k]))
@@ -113,6 +114,32 @@
        (near 5 65 2)
        {:maxDrop 16 :damageBudget budget :landing (landing slime-id -1)}
        {:x 4 :y 75 :z 2}))
+
+(deftest the-bounce-peak-and-settle-time-follow-vanilla-physics
+  (testing "a 10-block fall: first peak 6.33, settled (on the pad, |vy| at most 0.4) 90 ticks after the first contact"
+    (is (= 6.33 (/ (js/Math.round (* 100 (:peak (base/bounce-flight 10)))) 100)))
+    (is (= 90 (:settle (base/bounce-flight 10)))))
+  (testing "a 6-block fall peaks at 4.05: the wall must reach 5 (the peak plus a margin)"
+    (is (= 5 (base/bounce-wall 6))))
+  (testing "a 15-block fall takes 116 ticks to settle"
+    (is (= 116 (:settle (base/bounce-flight 15))))))
+
+(defn capped-pad
+  "walled-pad under a 6-block cliff with stone over the ring at the cliff's top level (y 70), so the ring's top is no
+  ledge to step down from into the shaft"
+  [h budget]
+  (run (pf/world {:fill [[0 64 0 4 70 4 "stone"] [6 64 1 6 (+ 64 h) 3 "stone"] [5 64 1 5 (+ 64 h) 1 "stone"]
+                         [5 64 3 5 (+ 64 h) 3 "stone"] [5 64 2 5 64 2 "slime_block"]
+                         [6 70 1 6 70 3 "stone"] [5 70 1 5 70 1 "stone"] [5 70 3 5 70 3 "stone"]]})
+       (near 5 65 2)
+       {:maxDrop 16 :damageBudget budget :landing (landing slime-id -1)}
+       {:x 4 :y 71 :z 2}))
+
+(deftest a-6-block-bounce-needs-a-5-high-wall
+  (testing "4 high: under the 4.05 peak plus the margin, priced as the full fall"
+    (is (true? (:damageRefused (capped-pad 4 0)))))
+  (testing "5 high: the bounce, no damage"
+    (is (= 0 (cost (capped-pad 5 0) :damage)))))
 
 (deftest a-wall-holds-the-bounce-only-up-to-its-peak
   (testing "a shaft walled up to the bounce's peak: the bounce, no damage"

@@ -52,5 +52,6 @@
   (let [{:keys [done steps ys]} (walk tower-over-slime [2 74 0] [12 64 0])
         d (first (filter #(= :drop (:move %)) steps))]
     (is (true? (:bounce d)) (pr-str steps))
+    (is (= 6 (count (:pad d))) "the cliff-foot pad: every slime cell round the landing")
     (is (> (apply max (drop-while #(> % 64.5) ys)) 67) "the body bounced")
     (is (= :arrived (:status done)) (pr-str done))))

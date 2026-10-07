@@ -100,6 +100,7 @@
   [pw ^js path]
   (let [solid? (wworld/solid-fn pw)]
     (executor/with-bounces
+      executor/policy
       (executor/with-gap-ceilings
         executor/policy
         (executor/with-high-corners
@@ -107,7 +108,8 @@
           (executor/with-corner-hops (executor/with-free-sides (with-damage (executor/steps-of (.-steps path)) (.-steps path)) solid?) solid?)
           solid?)
         solid?)
-      (wworld/bounce-fn pw))))
+      (wworld/bounce-fn pw)
+      (wworld/wall-fn pw))))
 
 (defn plan-steps
   "The executor's steps for a found plan r over pw (path-steps of its path)."
