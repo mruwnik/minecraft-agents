@@ -2,6 +2,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.combat :as combat]
+            [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
             [jobs.lib.result :as r]
@@ -11,7 +12,7 @@
 
 (def doc
   "Stop a ranged mob's arrows at a gap in the body's cover: a doorway, window or hole a skeleton (or the like) has a
-  line of fire through. The body stays where it is and places blocks in the open cells near it that cross the
+  line of fire through. The body stays where it is and places blocks in the open cells near it, seen ones only, that cross the
   arrows' line (jobs.lib.reach/line-of-fire?: from the mob's eye to the body's eye and its middle), the cell nearest
   the body first, one that ends the line alone before one that blocks half of it. A mob that was only heard is
   taken at the rough spot its direction and band give (jobs.lib.reach/mob-pos). A door, gate or trapdoor standing
@@ -60,7 +61,8 @@
 (def faces [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])
 
 (defn supported?
-  "Whether a block can be placed at cell: one of its faces touches a solid block (solid-at? takes a cell)."
+  "Whether a block can be placed at cell: one of its faces touches a solid block (solid-at? takes a cell; the job
+  passes what the body has seen)."
   [solid-at? {:keys [x y z]}]
   (boolean (some (fn [[dx dy dz]] (solid-at? {:x (+ x dx) :y (+ y dy) :z (+ z dz)})) faces)))
 
@@ -76,6 +78,16 @@
         best (first (sort-by second scored))]
     (when (and best (< (second best) now)) (first best))))
 
+(defn seen-kind
+  "A function (kind-at x y z): what the body has seen at that cell is to an arrow (:open or :solid), :unseen for a cell
+  it never saw."
+  [p]
+  (fn [x y z]
+    (let [b (look/seen-block p {:x x :y y :z z})]
+      (if (or (nil? b) (:unknown b))
+        :unseen
+        (reach/arrow-kind-of #js {:name (:name b) :properties (clj->js (:properties b))})))))
+
 (defn fail! [c reason text]
   (ctx/emit! c :block_arrow_gap_failed :warn {:reason reason :text text})
   (r/stop! c reason text))
@@ -89,10 +101,11 @@
     (if (empty? dangers)
       (do (ctx/emit! c :block-arrow-gap.closed :info {:placed (vec (:placed (ctx/mem c))) :text "no arrow line to the body"})
           (r/finish! c {:placed (vec (:placed (ctx/mem c)))}))
-      (let [kind-at (reach/lookup p reach/arrow-kind-of)
+      (let [kind-at (seen-kind p)
             in (access/rules-input c)
             skip (:skip (ctx/mem c) #{})
-            allowed? #(and (not (contains? skip %)) (supported? (partial sh/solid-at? p) %))
+            seen-solid? #(let [b (look/seen-block p %)] (and b (not (:unknown b)) (sh/solid? (:name b))))
+            allowed? #(and (not (contains? skip %)) (supported? seen-solid? %))
             permitted? #(not (access/trespass-refusal in :place %))
             mob (reach/mob-pos p (first dangers))
             body (u/pos-of (.-pos (.self p)))

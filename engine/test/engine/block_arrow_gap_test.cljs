@@ -125,8 +125,20 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p seen] :as s} (setup [] {:entities [pit-skeleton] :blocks (merge ground pit shell)})]
-          (aset p "seenBlockAt" (fn [pos] #js {:unknown true :pos pos}))
+          (let [at (.-seenBlockAt p)]
+            (aset p "seenBlockAt" (fn [pos] (let [b (.call at p pos)] (if (= "cobblestone" (.-name b)) #js {:name "air" :pos pos :age-ms 0} b)))))
           (await (run-job! s {}))
           (is (nil? (failed seen)) "a successful place is not undone by a lagging view")
           (is (= 1 (count (:placed (some #(when (= :block-arrow-gap.closed (:kind %)) %) @seen)))) "the placed cell is reported")
           (is (= 7 (cobble p)) "the cell is not filled twice"))))))
+
+(deftest cells-the-body-has-not-seen-are-no-plug-candidates
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p seen] :as s} (setup [] {:entities [pit-skeleton] :blocks (merge ground pit shell)})
+              at (.-seenBlockAt p)]
+          (aset p "seenBlockAt" (fn [pos] (if (>= (.-z pos) 1) #js {:unknown true :pos pos} (.call at p pos))))
+          (await (run-job! s {}))
+          (is (= :no-gap (:reason (failed seen))) "the doorway was never seen, so it is not filled")
+          (is (= 8 (cobble p)) "nothing placed"))))))
