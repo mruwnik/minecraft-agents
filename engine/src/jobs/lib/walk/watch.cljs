@@ -2,6 +2,7 @@
   "The walk driver's look-ahead: the cells and mobs of the way ahead watched while a plan is walked (watch-stop), when a walk may
   stop to plan again, and whether a refreshed plan replaces the old one."
   (:require [engine.hurt :as hurt]
+            [engine.settings :as settings]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost.danger :as danger]
             [jobs.lib.threats :as threats]
@@ -17,7 +18,7 @@
   refreshes out); better-by: a refreshed partial plan is taken only when its end is this many blocks nearer the goal; mob-waits
   and mob-wait-ms: a body stuck behind a mob waits this often this long for it to move on; mob-still-ticks: a mob that stands
   this many ticks (1 s) in a 1-wide way ahead is planned round at once."
-  {:window 10 :check-every 5 :min-refresh-ticks 80 :planner-share 0.05 :tick-ms 50 :better-by 2
+  {:window 10 :check-every 5 :min-refresh-ticks 80 :planner-share 0.05 :better-by 2
    :mob-waits 3 :mob-wait-ms 1000 :mob-reach 2.5 :mob-still-ticks 20})
 
 (def danger-reach
@@ -106,10 +107,12 @@
                       (and (zero? (mod tick (:check-every watch-policy))) (contains? #{:walk :diagonal} target)))))))
 
 (defn refresh-ticks
-  "Ticks between refreshes of a partial plan whose last plan took ms: at least min-refresh-ticks, more for slow plans."
-  [ms]
-  (let [{:keys [min-refresh-ticks planner-share tick-ms]} watch-policy]
-    (max min-refresh-ticks (js/Math.ceil (/ ms (* planner-share tick-ms))))))
+  "Ticks between refreshes of a partial plan whose last plan took ms: at least min-refresh-ticks, more for slow plans.
+  tick-ms is the physics step (engine.settings/physics-ms), 50 when omitted."
+  ([ms] (refresh-ticks ms 50))
+  ([ms tick-ms]
+  (let [{:keys [min-refresh-ticks planner-share]} watch-policy]
+    (max min-refresh-ticks (js/Math.ceil (/ ms (* planner-share tick-ms)))))))
 
 (defn refresh-due?
   "A partial plan walked ticks ticks is due to be planned again after interval ticks; a whole plan never is."
@@ -243,7 +246,7 @@
   (when known (swap! known into (map :key (threats/sensed-mobs (:primitives c)))))
   (cond-> {:base (:pw plan) :fresh #(wworld/path-world (:primitives c)) :ahead [] :skip (opens-cells (:steps plan))
    :mobs #(combat/sensed (:primitives c) {:radius 8 :max 64}) :seen (atom {})
-   :status (:status plan) :interval (refresh-ticks (:ms plan)) :budget #(wworld/damage-budget c)}
+   :status (:status plan) :interval (refresh-ticks (:ms plan) (settings/physics-ms (:primitives c))) :budget #(wworld/damage-budget c)}
     known (assoc :known known :sense #(threats/sensed-mobs (:primitives c))))))
 
 (defn mob-cells

@@ -27,9 +27,12 @@ export function botOptions ({ host, port, username, auth = DEFAULTS.auth, versio
 // Resolves with the bot once it has spawned and the pathfinder has movements that never dig or build and
 // steer clear of hazards (see movements.mjs): a primitive that walks must not quietly break blocks or wade into
 // lava. Rejects when the server refuses, drops the connection or stays silent.
-export function connectBot (params, { timeoutMs = SPAWN_TIMEOUT_MS } = {}) {
+// params.gameClock (game-clock.mjs) is attached to the client before anything can arrive, so the join packet's rate is caught.
+// `create` replaces mineflayer.createBot (tests).
+export function connectBot (params, { timeoutMs = SPAWN_TIMEOUT_MS, create = mineflayer.createBot } = {}) {
   return new Promise((resolve, reject) => {
-    const bot = mineflayer.createBot(botOptions(params))
+    const bot = create(botOptions(params))
+    params.gameClock?.attach(bot._client)
     bot.loadPlugin(pathfinder)
     // Mineflayer does not keep the damage_type registry; primitives names a damage packet's type from it.
     bot._client.on('registry_data', packet => {

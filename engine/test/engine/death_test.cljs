@@ -52,6 +52,15 @@
   (is (true? (died-holds (memory-with 2000 [:recovered 500 {:decision :skip}] died-at respawned-at)))
       "a recovery older than the death does not count"))
 
+(deftest died-trigger-counts-world-ticks-when-the-entries-have-an-age
+  (let [aged (fn [now age]
+               (assoc (memory-with now respawned-at) :age age
+                      :data (-> mem/empty-data
+                                (mem/add-entry :died {:t 1000 :age 100 :data {:pos {:x 20 :y 64 :z 0}}} nil)
+                                (mem/add-entry :respawned {:t 1100 :data {:pos {:x 0 :y 64 :z 0}}} nil))))]
+    (is (true? (died-holds (aged 400000 6099))) "a frozen or slow world: the wall clock is long past, the ticks are not")
+    (is (false? (died-holds (aged 1200 6100))))))
+
 (deftest died-trigger-does-not-hold-after-five-minutes
   (is (true? (died-holds (memory-with (+ 1000 299000) died-at respawned-at))))
   (is (false? (died-holds (memory-with (+ 1000 300000) died-at respawned-at)))))

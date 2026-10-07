@@ -147,3 +147,17 @@
 (deftest ids-render-paths
   (is (= "j1" (mem/path->id "j1" [])))
   (is (= "j1/fell/walk" (mem/path->id "j1" [:fell :walk]))))
+
+(deftest entries-and-the-view-carry-the-world-age-when-known
+  (let [age (atom 500)
+        [s _] (store {:world-age #(deref age)})]
+    (mem/write! s :died {})
+    (reset! age 740)
+    (is (= 500 (:age (mem/latest (mem/view s) :died))))
+    (is (= 740 (:age (mem/view s))))))
+
+(deftest entries-have-no-age-key-without-a-world-age
+  (let [[s _] (store)]
+    (mem/write! s :died {})
+    (is (not (contains? (mem/latest (mem/view s) :died) :age)))
+    (is (nil? (:age (mem/view s))))))

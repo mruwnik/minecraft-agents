@@ -6,10 +6,10 @@
 
 (defn died
   "Holds while the latest :died entry is newer than the latest :recovered
-  entry, younger than 5 minutes and followed by a :respawned entry (a dead
+  entry, younger than the despawn window (6000 game ticks) and followed by a :respawned entry (a dead
   body cannot walk). The recover-drops job writes :recovered."
   [_world memory _args]
   (let [d (body/unrecovered-death memory)]
     (boolean (and d
                   (body/respawned-since? memory d)
-                  (< (- (:now memory) (:t d)) game/despawn-ms)))))
+                  (< (game/ticks-since d memory) game/despawn-ticks)))))

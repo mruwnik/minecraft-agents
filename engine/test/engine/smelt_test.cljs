@@ -1,6 +1,7 @@
 (ns engine.smelt-test
   "jobs.items.smelt: the decisions as plain functions, then against the fake world's furnaces."
   (:require [cljs.test :refer [deftest is are async]]
+            [engine.settings :as settings]
             [engine.registry :as registry]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -720,3 +721,9 @@
           (await (seeing-ticks s 4))
           (is (= 8 (count (calls p "look"))) "four headings, level and down, once")
           (is (= ["no-furnace-seen"] (mapv :reason (of-kind seen :smelt.gave-up)))))))))
+
+(deftest the-wait-counts-game-ticks-at-the-live-rate
+  (settings/set-clock! 40 false :packet)
+  (try
+    (is (= (+ smelt/slack-ms (* 25 600)) (smelt/wait-ms "furnace" {:input {:count 3} :cook {:done 0 :total 200}})))
+    (finally (settings/set-clock! 20 false :assumed))))

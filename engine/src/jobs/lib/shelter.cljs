@@ -2,6 +2,7 @@
   "What the night jobs (night, sleep, log-out, dig-in) and the night trigger share: night and roof tests, the bed to
   use, who sleeps on the server, the shelter entry."
   (:require [engine.ctx :as ctx]
+            [engine.settings :as settings]
             [jobs.lib.solid :as solid]
             [jobs.lib.access.zones :as zones]
             [jobs.lib.util :as u]
@@ -242,23 +243,21 @@
   "The first time of day (ticks) that self().isDay counts as night."
   12542)
 
-(def ms-per-tick 50)
-
 (def morning-margin-ms
   "Extra time away, so a body that logged out until morning comes back after the night has ended."
   2000)
 
 (defn ms-until-morning
-  "Milliseconds until the night ends at time of day t (ticks), plus morning-margin-ms; 0 by day."
+  "Milliseconds (at the live game rate) until the night ends at time of day t (ticks), plus morning-margin-ms; 0 by day."
   [t]
   (if (or (< t dusk-tick) (>= t morning-tick))
     0
-    (+ (* ms-per-tick (- morning-tick t)) morning-margin-ms)))
+    (+ (settings/ticks->ms (- morning-tick t)) morning-margin-ms)))
 
 (defn ms-since-dusk
   "Milliseconds since this night began at time of day t (ticks); 0 by day."
   [t]
-  (if (or (< t dusk-tick) (>= t morning-tick)) 0 (* ms-per-tick (- t dusk-tick))))
+  (if (or (< t dusk-tick) (>= t morning-tick)) 0 (settings/ticks->ms (- t dusk-tick))))
 
 (defn tonight
   "The engine time this night began: entries written since are tonight's."

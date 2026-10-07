@@ -340,7 +340,6 @@
 
 ;; ---------------------------------------------------------------- the cost
 
-(def despawn-ms game/despawn-ms)
 (def trip "Any fetch: turning round, finding the pile, the risk of the place one died at." 10)
 (def per-block "One block walked, there and back about a second of a player's time per 3 blocks." 0.3)
 (def per-dark "One block walked in the dark, on top of per-block: a dark block costs twice a lit one." 0.3)
@@ -369,6 +368,7 @@
   (the walk would end after the despawn), :lethal-cause (lava, fire or the void took the items)."
   [{:keys [distance danger elapsed-ms cause]}]
   (let [elapsed (or elapsed-ms 0)
+        despawn-ms (game/despawn-ms)
         walk-ms (when (number? distance) (* 1000 (/ distance walk-blocks-per-s)))
         reason (cond
                  (nil? walk-ms) :no-position

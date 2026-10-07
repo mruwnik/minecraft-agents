@@ -1,5 +1,6 @@
 (ns jobs.items.smelt
   (:require [engine.ctx :as ctx]
+            [engine.settings :as settings]
             [jobs.lib.access :as access]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
@@ -36,7 +37,6 @@
    :fuel {:doc "fuel item to load; the best carried when nil" :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
-(def tick-ms 50)
 (def slack-ms 2000)
 (def grace-ms 6000)
 (def recheck-ms 6000)
@@ -179,7 +179,7 @@
   [kind state]
   (let [per (cook-ticks kind)
         left (- (* (get-in state [:input :count] 0) per) (get-in state [:cook :done] 0))]
-    (+ slack-ms (* tick-ms (max 0 left)))))
+    (+ slack-ms (settings/ticks->ms (max 0 left)))))
 
 ;; ------------------------------------------------------------------ the check
 
@@ -293,7 +293,7 @@
     (case (:status r)
       "ok" (do (u/progress! c)
                (ctx/emit! c :smelt.loaded :info {:text (str "smelting " target " " item) :item item :count target :fuel (:item fuel)})
-               (wait-until! c (+ slack-ms (* tick-ms target (cook-ticks (:kind state))))))
+               (wait-until! c (+ slack-ms (settings/ticks->ms (* target (cook-ticks (:kind state)))))))
       "busy" (stop! c (if (= "input" (:slot r)) "furnace-busy" "fuel-busy"))
       "no-item" (stop! c "no-item")
       "rejected" (stop! c (if (= "fuel" (:slot r)) "rejected-fuel" "furnace-full"))

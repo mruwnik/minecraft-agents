@@ -290,11 +290,19 @@ test('trade with an unknown villager uuid resolves gone', async () => {
   assert.deepEqual(await p.trade('t1', { villager: 'nobody', op: 'offers' }), { status: 'gone' })
 })
 
+test('physicsMs is 50 without the tick-rate shim and the shim interval with it', () => {
+  const { bot, p } = rig(world)
+  assert.equal(p.physicsMs(), 50)
+  bot.physicsClock = { intervalMs: () => 25 }
+  assert.equal(p.physicsMs(), 25)
+})
+
 test('self reports the body in the contract shape', () => {
   const { p } = rig(world)
   const s = p.self()
-  assert.deepEqual(Object.keys(s).sort(), ['chunkLoaded', 'dimension', 'effects', 'equipment', 'experience', 'food', 'foodSaturation', 'health', 'held', 'inLava', 'inWater', 'inventory', 'isSleeping', 'onFire', 'onGround', 'oxygen', 'players', 'pos', 'rainState', 'settling', 'thunderState', 'timeOfDay', 'username', 'vehicle'])
+  assert.deepEqual(Object.keys(s).sort(), ['chunkLoaded', 'dimension', 'effects', 'equipment', 'experience', 'food', 'foodSaturation', 'health', 'held', 'inLava', 'inWater', 'inventory', 'isSleeping', 'onFire', 'onGround', 'oxygen', 'players', 'pos', 'rainState', 'settling', 'thunderState', 'timeOfDay', 'username', 'vehicle', 'worldAge'])
   assert.equal(s.timeOfDay, 15000)
+  assert.equal(s.worldAge, 1234)
   assert.deepEqual(s.inventory[0], { name: 'bread', count: 2, slot: 36 })
 })
 
@@ -728,7 +736,8 @@ test('offline quits, waits, reconnects with the same params and rebinds every pr
   const result = await p.offline('t1', { ms: 1000 })
   assert.deepEqual(result, { status: 'ok', ms: 1000 })
   assert.equal(bots.length, 2)
-  assert.deepEqual(seenOpts, [opts, opts])
+  assert.deepEqual(seenOpts.map(o => ({ ...o, gameClock: undefined })), [opts, opts].map(o => ({ ...o, gameClock: undefined })))
+  assert.equal(seenOpts[0].gameClock, seenOpts[1].gameClock, 'one game clock over every reconnect')
   assert.deepEqual(acted(bots[0]), ['quit'])
   assert.deepEqual(seen.map(e => e.kind), ['offline', 'online'])
   bots[1].health = 7

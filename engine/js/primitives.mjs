@@ -6,6 +6,7 @@ import './compile-cache.mjs'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { connectBot } from './connect.mjs'
+import { createGameClock } from './game-clock.mjs'
 import { createView } from './view.mjs'
 import { createRawWorld } from './raw-world.mjs'
 import { leaveBed, ensureAwake } from './bed.mjs'
@@ -532,7 +533,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     .map(([name, fn]) => [name, whenUp(fn)]))
   // the raw world engine.perception looks at (stateAt, lightAt, eye, block changes): body-side only, never a job's
   const rawWorld = createRawWorld({ getBot: () => bot, isOffline: () => isOffline() || down, lightOverlay: (cx, cz, s) => view?.lightOverlay?.(cx, cz, s) })
-  return { setOwner, isOwner, drive: driveNow, stopDriving, self, entities, blockAt, harvestTools, digTime, clearTime, pathWorld, ...acting, chatDirect, wait, isOffline, isSettling, lastKnown, offline, onBodyEvent, entityObservation, onEntityDeath, rawWorld, close }
+  return { setOwner, isOwner, drive: driveNow, stopDriving, self, entities, blockAt, harvestTools, digTime, clearTime, pathWorld, ...acting, chatDirect, wait, isOffline, isSettling, lastKnown, offline, onBodyEvent, entityObservation, onEntityDeath, rawWorld, physicsMs: () => bot.physicsClock?.intervalMs() ?? 50, close }
 }
 
 const REPO_ROOT = join(import.meta.dirname, '..', '..')
@@ -546,7 +547,9 @@ export async function createPrimitives ({ view: viewOpts, ...opts }, { connect =
   const required = missingRequired(readFile)
   if (required.length) throw new Error(`refusing to start: dependency patches missing (${required.join(', ')}); run node tools/patch-deps.mjs (an npm install undid them)`)
   const view = viewOpts ? createView(viewOpts) : null
-  const bot = await connect(opts)
+  const gameClock = createGameClock()
+  const connectOpts = { ...opts, gameClock }
+  const bot = await connect(connectOpts)
   // connect's own guards are gone at spawn and bindEvents comes later: a socket error would crash the process and a kick
   // would go unseen, so guard the wait and refuse to start on a bot that already dropped
   let dropped = null
@@ -564,5 +567,6 @@ export async function createPrimitives ({ view: viewOpts, ...opts }, { connect =
   const pending = loaded ? [] : [{ kind: 'world-not-loaded', ms: worldTimeoutMs }]
   const titles = missingPatches(readFile)
   if (titles.length) pending.push({ kind: 'dependency-patches-missing', titles, text: 'run node tools/patch-deps.mjs (an npm install undid them)' })
-  return createPrimitivesFromBot(bot, { timeScale, reconnect: () => connect(opts), view, worldTimeoutMs, settleMs, pending })
+  const prims = createPrimitivesFromBot(bot, { timeScale, reconnect: () => connect(connectOpts), view, worldTimeoutMs, settleMs, pending })
+  return Object.assign(prims, { gameClock })
 }

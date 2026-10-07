@@ -80,7 +80,8 @@
 
 (deftest the-refresh-interval-grows-with-the-plan-time
   (is (= 80 (wwatch/refresh-ticks 3)))
-  (is (= 200 (wwatch/refresh-ticks 500)) "a 500 ms plan: 10 s between refreshes (at most 5 % planning)"))
+  (is (= 200 (wwatch/refresh-ticks 500)) "a 500 ms plan: 10 s between refreshes (at most 5 % planning)")
+  (is (= 400 (wwatch/refresh-ticks 500 25)) "a physics step of 25 ms: twice the ticks for the same time"))
 
 (deftest a-refreshed-plan-replaces-the-old-only-when-clearly-better
   (let [old [(step 0 64 0 :start) (step 10 64 0 :walk)]

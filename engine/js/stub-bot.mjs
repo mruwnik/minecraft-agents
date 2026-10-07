@@ -53,7 +53,7 @@ export function stubBot ({ oxygen = 20, blocks = {}, items = [], worn = [], enti
     entities,
     health: 20,
     food,
-    time: { timeOfDay },
+    time: { timeOfDay, age: 1234 },
     isSleeping: sleeping,
     heldItem: held,
     inventory: { items: () => items, slots: Object.fromEntries([...items, ...worn].map(i => [i.slot, i])), firstEmptyInventorySlot: () => freeSlot },

@@ -2,6 +2,7 @@
   "Surviving the night: the night trigger and the night, sleep,
   log-out and dig-in jobs against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
+            [engine.settings :as settings]
             [engine.registry :as registry]
             [engine.core :as core]
             [engine.events :as events]
@@ -1415,3 +1416,9 @@
           (await (run-until-empty eng 4))
           (is (empty? (calls p "place")))
           (is (= [:already-sealed] (mapv :reason (emitted seen :waiting)))))))))
+
+(deftest ms-until-morning-follows-the-game-rate
+  (settings/set-clock! 40 false :packet)
+  (try
+    (is (= 238525 (sh/ms-until-morning 14000)) "the ticks at 25 ms, plus the same margin")
+    (finally (settings/set-clock! 20 false :assumed))))

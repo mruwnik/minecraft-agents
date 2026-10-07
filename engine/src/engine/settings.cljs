@@ -8,7 +8,8 @@
 
 (def settings
   "The engine's own keys, :engine.<area>/<name>, each {:default :doc :type ...} (the job arg spec shape)."
-  {})
+  {:engine.perception/save-ms {:default 60000 :type :int :min 1000
+                               :doc "How often the body's seen-world file (seen.bin) is saved, in ms of wall clock."}})
 
 (defonce state
   (atom {:body nil :specs {} :values {} :layers {}}))
@@ -95,3 +96,37 @@
         (-> result
             (.then (fn [v] (restore!) v) (fn [e] (restore!) (throw e))))
         (do (restore!) result)))))
+
+;; ---------------------------------------------------------------- the rates
+;; Two rates: the game rate (ticks per second the server runs at, /tick rate; item despawn, smelting and the day
+;; are counted in these ticks) and the physics step (physics-ms, how often the body's physics runs). Wall-clock
+;; timers (the engine tick, JS time scale) are neither and are never converted.
+
+(defonce clock
+  (atom {:rate 20 :frozen false :source :assumed}))
+
+(defn set-clock! [rate frozen source]
+  (reset! clock {:rate rate :frozen (boolean frozen) :source source}))
+
+(defn game-rate "Game ticks per second: the server's last set_ticking_state, else 20." [] (:rate @clock))
+(defn frozen? "True while the server's tick is frozen." [] (:frozen @clock))
+(defn rate-source "Where the game rate comes from: :packet or :assumed (no packet yet)." [] (:source @clock))
+
+(defn ticks->ms "Wall-clock ms n game ticks take at the live game rate." [n] (/ (* n 1000) (game-rate)))
+(defn ms->ticks "Game ticks in ms of wall clock at the live game rate." [ms] (/ (* ms (game-rate)) 1000))
+
+(defn physics-ms
+  "The body's physics step in ms: the primitives' physicsMs (the tick-rate shim's interval), else 50."
+  [p]
+  (if (and p (fn? (.-physicsMs p))) (.physicsMs p) 50))
+
+(defn wire-game-clock!
+  "Follow the JS game clock gc (engine/js/game-clock.mjs): its rate now and after every packet. With no packet yet
+  the rate stays 20, assumed, and emit gets one :info event saying so."
+  [gc emit]
+  (let [sync! (fn [rate frozen source] (set-clock! rate frozen (keyword source)))]
+    (sync! (.-rate gc) (.-frozen gc) (.-source gc))
+    (.onChange gc sync!)
+    (when (= :assumed (rate-source))
+      (emit {:source :system :kind (keyword "game-rate.assumed") :level :info
+             :text "no set_ticking_state packet came since the join; assuming 20 ticks per second"}))))

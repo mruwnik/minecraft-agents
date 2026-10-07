@@ -139,26 +139,29 @@
 
 (defn open
   "Load (or start) the memory under dir and sweep it. Options: :now (ms
-  clock), :world-time (fn, the :wt of new entries), :live-jobs (fn returning
+  clock), :world-time (fn, the :wt of new entries), :world-age (fn, the :age
+  of new entries and of the view: world ticks, which stand still while the tick is frozen), :live-jobs (fn returning
   the set of live instance ids, for the sweep; nil keeps every job kind)."
-  [dir {:keys [now world-time live-jobs] :or {now js/Date.now world-time (constantly nil)}}]
+  [dir {:keys [now world-time world-age live-jobs] :or {now js/Date.now world-time (constantly nil) world-age (constantly nil)}}]
   (let [loaded (or (fsu/read-edn (file dir)) empty-data)]
-    (atom {:dir dir :now now :world-time world-time :live-jobs live-jobs
+    (atom {:dir dir :now now :world-time world-time :world-age world-age :live-jobs live-jobs
            :data (sweep loaded (now) (when live-jobs (live-jobs)))})))
 
 (defn view
-  "A read view of the store now: {:data :now}."
+  "A read view of the store now: {:data :now :age}, :age the world age in game ticks (nil when unknown)."
   [store]
-  (let [{:keys [data now]} @store]
-    {:data data :now (now)}))
+  (let [{:keys [data now world-age]} @store]
+    {:data data :now (now) :age (when world-age (world-age))}))
 
 (defn write!
   "Append an entry with data to kind. policy is optional; see the ns doc."
   ([store kind data] (write! store kind data nil))
   ([store kind data policy]
    (when policy (check-policy! kind policy))
-   (let [{:keys [now world-time]} @store
-         entry {:t (now) :wt (world-time) :data data}]
+   (let [{:keys [now world-time world-age]} @store
+         age (when world-age (world-age))
+         entry (cond-> {:t (now) :wt (world-time) :data data}
+                 age (assoc :age age))]
      (swap! store update :data add-entry kind entry policy)
      entry)))
 
