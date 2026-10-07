@@ -65,7 +65,7 @@
 
 (defn give-up-words
   "The give-up reason in words, for the :text of the :unreachable event and the result: no map dumps."
-  [pos {:keys [why kind detail escalation cut-by]}]
+  [pos {:keys [why kind detail escalation nearest-hostile]}]
   (str "gave up walking to " (if (map? pos) (let [{:keys [x y z]} pos] [x y z]) pos) ": "
        (if escalation
          (str "shut in here; " (escalation-words escalation))
@@ -80,7 +80,7 @@
            :stuck (str "the body got stuck" (some->> kind name (str " on ")) (some->> detail (str ": ")))
            :off-plan (or detail "the walk left its plan")
            :steer-failed (str "steering failed" (some->> detail (str ": ")))
-           :cut-again (str "the walk was cut again and again by " (if cut-by (str "a " cut-by) "something") " sending the body back, and got no nearer")
+           :cut-again (str "the walk was cut again and again, each time with the body sent back, and got no nearer" (when nearest-hostile (str " (nearest hostile: a " nearest-hostile ")")))
            :moved-while-searching "the body was pushed about while the path was searched"
            :needs-health "every way costs more hp than the body may spend and it cannot heal first"
            :one-way "the way back is one-way"

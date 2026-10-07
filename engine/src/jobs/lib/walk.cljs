@@ -94,7 +94,8 @@
 (defn ^:async walk!
   "Follow steps once. [result ms]: the executor's done map, or {:status :stuck ...} on a timeout,
   {:status :failed ...}; ms is the wall time of the steer act. With a watch (see watch-stop), the walk also stops at a step
-  boundary with {:status :replan ...} when the way ahead changed or a partial plan is due a refresh."
+  boundary with {:status :replan ...} when the way ahead changed or a partial plan is due a refresh. (:on-pose c), when
+  set, is called with each tick's pose {:x :y :z ...} (go-to records its approach with it)."
   ([c steps timeout-s] (walk! c steps timeout-s nil))
   ([c steps timeout-s watch]
   (let [policy (wworld/body-policy c)
@@ -102,6 +103,7 @@
         last-done (volatile! nil)
         decide (fn [js-pose]
                  (let [pose (pose-of js-pose)
+                       _ (when-let [on-pose (:on-pose c)] (on-pose pose))
                        i (:i @state)
                        {:keys [state' done controls yaw pitch]}
                        (let [r (executor/tick policy @state pose)]

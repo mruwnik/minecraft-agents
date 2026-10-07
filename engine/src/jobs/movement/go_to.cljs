@@ -2,6 +2,7 @@
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
             [engine.memory :as mem]
+            [engine.settings :as settings]
             [jobs.lib.combat :as combat]
             [jobs.lib.reach :as reach]
             [jobs.lib.util :as u]
@@ -55,7 +56,7 @@
     :escalate false.
   - Gives up with {:status :stopped :arrived false :reason :unreachable :why ... :text words} (the job ends :stopped) and an :unreachable warn: :why is the planner's
     reason (:exhausted, :goal-unloaded (the goal lies in unloaded land and the loaded land leads no nearer), :goal-enclosed, :goal-cut-off, :door-stuck with :cells, :one-way with :near and :one-way ...), or :stuck
-    (:kind the step, :detail the executor's text), :off-plan, :steer-failed, :no-progress, :cut-again (cut 3 times, each sending the body back from its closest approach) or :moved-while-searching; :at is the
+    (:kind the step, :detail the executor's text), :off-plan, :steer-failed, :no-progress, :cut-again (cut 3 times in a row, each restart more than send-back-margin farther than where the cut found the body, with no 2 blocks gained on the closest approach; :nearest-hostile names a guess at the cause) or :moved-while-searching; :at is the
     body's feet cell and :near its blocks from the goal. A failed
     escalation adds :escalation {:step :reason ...}, the child's reason or wait.
   - Success is {:arrived true}. The result is also a :result info event.
@@ -189,6 +190,19 @@
                                        (:why result) (assoc :detail (:why result))))
     (ctx/update-mem! c update :fault-cells #(vec (take-last max-fault-cells (distinct (into (vec %) cells)))))))
 
+(def pose-step "Blocks the body's distance to the goal must change before a walk records it again." 0.5)
+
+(defn approach-recorder
+  "The walk's :on-pose for a call to pos: while the round is alive, writes the body's distance to the goal as :last-dist
+  and the least of them as :closest, each time it changed by pose-step, so a cut walk leaves where the cut found it."
+  [c pos]
+  (let [written (volatile! nil)]
+    (fn [pose]
+      (let [d (u/dist pose pos)]
+        (when (and (or (nil? @written) (>= (js/Math.abs (- @written d)) pose-step)) (ctx/alive? c))
+          (vreset! written d)
+          (ctx/update-mem! c #(assoc % :last-dist d :closest (min d (:closest % d)))))))))
+
 (defn ^:async walk! [c0 pos range doors]
   (let [c (cond-> c0 (:over-budget (ctx/mem c0)) (assoc :over-budget true))
         from (u/self-pos c)
@@ -204,7 +218,7 @@
 
       :else
       (let [_ (forget-known-land! c)
-            {walked :result status :status to :to} (await (near/walk-round! c pos range {:doors doors :explore (not closed?)
+            {walked :result status :status to :to} (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos)) pos range {:doors doors :explore (not closed?)
                                                                                           :dangers (not (false? (:dangers (:args c))))
                                                                                           :dark (not (false? (:dark (:args c))))
                                                                                           :timeout-s (or (:leg-s (:args c)) near/walk-timeout-s)
@@ -251,7 +265,7 @@
                 progress? (or (< left (dec best)) explored? nearer?)
                 tries (if progress? 0 (inc (:blocked (ctx/mem c) 0)))]
             (ctx/update-mem! c assoc :blocked tries :searching 0 :best (if (< left (dec best)) left best)
-                             :closest (min left (:closest (ctx/mem c) left))
+                             :closest (min left (:closest (ctx/mem c) left)) :last-dist left
                              :frontier-best (cond-> fbests frontier (assoc frontier (min fbest (u/dist to fcell))))
                              :target-best (cond-> tbests target (assoc target (min tdist (get tbests target js/Infinity)))))
             (when (and progress? (:restore-pending (ctx/mem c))) (esc/restore-next! c))
@@ -275,32 +289,35 @@
                           (-> (dissoc :escalation :escalation-from :planned :holes-before)
                               (assoc :restore-pending true))))))
 
-(def max-cut-restarts
-  "Cuts in a row, each sending the body back from the closest the call reached, before a call gives up."
-  3)
+(def settings
+  {::max-cut-restarts {:default 3 :doc "Cuts in a row, each sending the body back, before a go-to call gives up :cut-again." :type :int :min 1}
+   ::cut-progress {:default 2 :doc "Blocks a go-to's closest approach to its goal must improve to clear its cut count." :type :number :min 0}
+   ::send-back-margin {:default 3 :doc "Blocks farther from the goal than where the cut found the body a go-to restart must begin to count as sent back (knockback and in-place reflexes stay under it)." :type :number :min 0}})
 
-(def cut-progress
-  "Blocks the closest approach must improve to clear the cut count."
-  2)
+(defn max-cut-restarts [] (settings/get settings ::max-cut-restarts))
+(defn cut-progress [] (settings/get settings ::cut-progress))
+(defn send-back-margin [] (settings/get settings ::send-back-margin))
 
 (def session-id
   "Names this run of the engine: a call left open by an earlier run was not cut, so it counts for nothing."
   (str (js/Date.now) "-" (rand-int 1000000000)))
 
 (defn cut-state
-  "The cut bookkeeping after a call restarts at dist from goal, from m, the call's memory: {:goal :closest :ref :cuts}.
-  A restart counts as a cut only when the earlier call was left open in this session, for the same goal; it counts in
-  :cuts when it begins farther than the closest the goal was approached (a reflex sent the body back; a fight, a meal or a
-  breath in place do not). :cuts clears when :closest has improved cut-progress over :ref, its value at the last clear."
+  "The cut bookkeeping after a call restarts at dist from goal, from m, the call's memory: {:goal :closest :ref :cuts
+  :last-dist}. A restart is a cut only when the earlier call was left open in this session, for the same goal. :cuts
+  starts again at 0 when :closest (the least distance a walk reached) has improved cut-progress over :ref (its value then);
+  a cut adds one when it begins more than send-back-margin farther than :last-dist, where the cut found the body (a reflex
+  sent it back; a meal, a breath, a fight in place or knockback do not, on a detour neither)."
   [m goal dist]
   (let [cut? (and (= session-id (:open m)) (= goal (:goal m)))
         closest (min dist (if cut? (:closest m dist) dist))
         ref (if cut? (:ref m closest) closest)
-        cuts (cond-> (if cut? (:cuts m 0) 0) (and cut? (> dist (:closest m dist))) inc)
-        clear? (>= (- ref closest) cut-progress)]
-    {:goal goal :closest closest :ref (if clear? closest ref) :cuts (if clear? 0 cuts)}))
+        improved? (>= (- ref closest) (cut-progress))
+        sent-back? (and cut? (> dist (+ (:last-dist m dist) (send-back-margin))))]
+    {:goal goal :closest closest :ref (if improved? closest ref) :last-dist dist
+     :cuts (+ (if (and cut? (not improved?)) (:cuts m 0) 0) (if sent-back? 1 0))}))
 
-(defn cut-loop? [{:keys [cuts]}] (>= cuts max-cut-restarts))
+(defn cut-loop? [{:keys [cuts]}] (>= cuts (max-cut-restarts)))
 
 (defn note-restart!
   "Record this call's start in memory: the call is open (this session) until it returns, an open one found at the start
@@ -310,8 +327,9 @@
     (ctx/update-mem! c #(-> % (assoc :open session-id) (merge state)))
     state))
 
-(defn cutter
-  "The name of the nearest hostile the body knows within 16 blocks, the likeliest sender back, else nil."
+(defn nearest-hostile
+  "The name of the nearest hostile the body knows within 16 blocks, a guess at the sender back (the engine does not say
+  which reflex cut), else nil."
   [c]
   (some-> (first (combat/hostiles (:primitives c) 16)) .-name))
 
@@ -405,8 +423,8 @@
       (let [state (note-restart! c pos)]
         (start-attempt! c pos)
         (if (cut-loop? state)
-          (do (ctx/update-mem! c #(-> % (dissoc :open :goal :closest :ref) (assoc :cuts 0)))
-              (await (end/give-up! c pos 0 :cut {:reason :cut-again :cut-by (cutter c)})))
+          (do (ctx/update-mem! c #(-> % (dissoc :open :goal :closest :ref :last-dist) (assoc :cuts 0)))
+              (await (end/give-up! c pos 0 :cut {:reason :cut-again} (some->> (nearest-hostile c) (hash-map :nearest-hostile)))))
           (loop []
             (let [r (await (step! c pos))]
               (cond

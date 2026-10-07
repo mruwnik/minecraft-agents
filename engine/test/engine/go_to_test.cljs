@@ -1,6 +1,7 @@
 (ns engine.go-to-test
   "jobs.movement.go-to over the path planner and the executor, against the fake world."
   (:require [cljs.test :refer [deftest is async]]
+            [clojure.string :as str]
             [engine.registry :as registry]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -704,9 +705,9 @@
 ;; ------------------------------------------------------- a goal a reflex keeps cutting the walk to (card 66863dc4)
 
 (defn cut-seed
-  "Memory of an earlier call of this session left open at goal [10 64 0] after cuts."
+  "Memory of an earlier call of this session left open at goal [10 64 0] after cuts, cut 3 blocks from it."
   [m]
-  (merge {:open go-to/session-id :goal {:x 10 :y 64 :z 0}} m))
+  (merge {:open go-to/session-id :goal {:x 10 :y 64 :z 0} :last-dist 3} m))
 
 (deftest a-call-cut-again-sent-back-from-its-closest-approach-gives-up-after-three-cuts
   (async done
@@ -755,20 +756,123 @@
                                                  (returns-parent out returns {:pos [6 64 0] :range 0} nil)))]
                  (core/submit! eng '(returns-parent) {})
                  (loop [n 0 running (core/tick! eng)]
-                   (when (< n 4)
-                     (let [target (+ @paces 2)]
-                       (loop [i 0]
-                         (when (and (< @paces target) (< i 400))
-                           (await (js/Promise. (fn [r] (js/setTimeout r 5))))
-                           (recur (inc i)))))
-                     (takeover/take! eng {:who "claude" :why "cut"})
+                   (if (>= n 4)
                      (await running)
-                     (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
-                     (recur (inc n) (core/tick! eng))))
+                     (do (let [target (+ @paces 2)]
+                           (loop [i 0]
+                             (when (and (< @paces target) (< i 400))
+                               (await (js/Promise. (fn [r] (js/setTimeout r 5))))
+                               (recur (inc i)))))
+                         (takeover/take! eng {:who "claude" :why "cut"})
+                         (await running)
+                         (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
+                         (recur (inc n) (core/tick! eng)))))
                  (await (tick-out! eng 10))
                  (is (= {:arrived true} @out) (pr-str @out))
                  (is (= [6 64 0] (at p)))
                  (is (= [] (events-of s :unreachable))))))))))))
+
+(deftest cut-state-counts-only-a-restart-sent-back-from-where-the-cut-found-the-body
+  (let [goal {:x 10 :y 64 :z 0}
+        m {:open go-to/session-id :goal goal :closest 4 :ref 4 :cuts 1 :last-dist 4}]
+    (doseq [[why m dist cuts] [["in place (a meal, a breath, a fight)" m 4 1]
+                               ["knockback of half a block" m 4.5 1]
+                               ["in place on a detour, far from the closest" (assoc m :last-dist 12) 12.3 1]
+                               ["sent back 10 blocks" m 14 2]
+                               ["sent back after the closest improved 3: the count starts again" (assoc m :closest 1 :last-dist 1) 11 1]
+                               ["a new goal" (assoc m :goal {:x 30 :y 64 :z 0}) 14 0]
+                               ["left open by another run of the engine" (assoc m :open "old-run") 14 0]
+                               ["the last call returned" (dissoc m :open) 14 0]]]
+      (is (= cuts (:cuts (go-to/cut-state m goal dist))) why))
+    (is (= {:goal goal :closest 1 :ref 1 :cuts 1 :last-dist 11} (go-to/cut-state (assoc m :closest 1 :last-dist 1) goal 11)))
+    (is (= {:goal goal :closest 14 :ref 14 :cuts 0 :last-dist 14} (go-to/cut-state (dissoc m :open) goal 14)))))
+
+(deftest the-cut-again-text-names-the-nearest-hostile-as-a-guess
+  (is (str/includes? (end/give-up-words [10 64 0] {:why :cut-again :nearest-hostile "zombie"}) "nearest hostile: a zombie"))
+  (is (not (str/includes? (end/give-up-words [10 64 0] {:why :cut-again}) "hostile"))))
+
+(defn ^:async cut-cycles!
+  "Run go-to with args under returns-parent over world, cut once for each [pred after!] of cuts: the walk is cut at the
+  first pose (js) pred holds for, then (after! p) moves the body (a reflex) and the engine is released; then ticked out.
+  {:eng :p :seen :out :returns :mems}, mems the go-to's memory after each cut."
+  [world args cuts]
+  (let [{:keys [eng p] :as s} (setup world)
+        out (atom :not-done)
+        returns (atom [])
+        armed (atom nil)
+        eng (assoc eng :jobs (assoc (:jobs eng) 'returns-parent (returns-parent out returns args nil)))
+        id (atom nil)
+        kid-mem (fn [] (mem/job-mem (mem/view (:store eng)) @id [:kid]))]
+    (.override (.-world p) "steer"
+               (fn [token ^js a impl]
+                 (let [decide (.-decide a)
+                       wrapped (fn [pose]
+                                 (when-let [pred @armed]
+                                   (when (pred pose)
+                                     (reset! armed nil)
+                                     (takeover/take! eng {:who "claude" :why "cut"})))
+                                 (decide pose))]
+                   (impl token (js/Object.assign #js {} a #js {:decide wrapped})))))
+    (reset! id (core/submit! eng '(returns-parent) {}))
+    (let [mems (loop [[[pred after!] & more] cuts mems []]
+                 (if-not pred
+                   mems
+                   (do (reset! armed pred)
+                       (await (core/tick! eng))
+                       (after! p)
+                       (let [m (kid-mem)]
+                         (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
+                         (recur more (conj mems m))))))]
+      (await (tick-out! eng 30))
+      (assoc s :eng eng :out out :returns returns :mems mems))))
+
+(defn send-back! [p] (swap! (fake/state p) assoc-in [:self :pos] [0 64 0]))
+
+(deftest a-goal-a-reflex-keeps-sending-the-body-back-from-gives-up-cut-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        ;; the body walks to 4 blocks short of the goal, is cut there and sent back to the start each time (a stationary
+        ;; zombie's flee): the walk records how near it got, so the fourth restart gives up
+        (let [near-goal [#(>= (.-x %) 6) send-back!]
+              {:keys [out returns mems]} (await (cut-cycles! {:blocks flat} {:pos [10 64 0] :range 0} [near-goal near-goal near-goal]))]
+          (is (<= (:closest (first mems)) 4.5) (str "the cut walk recorded its approach: " (pr-str (first mems))))
+          (is (= {:arrived false :reason :unreachable :why :cut-again} (select-keys @out [:arrived :reason :why])) (pr-str @out))
+          (is (str/includes? (:text @out) "sent back") (:text @out))
+          (is (= [:done] @returns) "the cut calls returned nothing; the fourth gave up"))))))
+
+(deftest a-long-bending-trip-cut-three-times-in-place-arrives
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        ;; the way to x 6 runs north to z 59 and back: every cut finds the body farther from the goal than its start, but
+        ;; no reflex moved it, so none counts
+        (let [stay (fn [_])
+              {:keys [out p mems]} (await (cut-cycles! joined-world {:pos [6 64 0] :range 0}
+                                                       [[#(>= (.-z %) 15) stay] [#(>= (.-z %) 30) stay] [#(>= (.-z %) 45) stay]]))]
+          (is (= 3 (count mems)))
+          (is (= {:arrived true} @out) (pr-str @out))
+          (is (= [6 64 0] (at p))))))))
+
+(deftest a-call-that-yields-continue-is-no-longer-open
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [step go-to/step!
+              opens (atom [])
+              {:keys [eng]} (setup {:blocks flat})
+              eng (assoc eng :jobs (assoc (:jobs eng) 'open-parent
+                                          {:check (constantly true)
+                                           :round (fn ^:async open-round [c]
+                                                    (let [r (await (ctx/call-child c :kid 'jobs.movement.go-to {:pos [10 64 0] :range 0}))]
+                                                      (swap! opens conj (get-in (ctx/mem c) [:children :kid :open] :none))
+                                                      r))}))]
+          (set! go-to/step! (fn [_ _] (js/Promise.resolve :continue)))
+          (try
+            (core/submit! eng '(open-parent) {})
+            (await (core/tick! eng))
+            (finally (set! go-to/step! step)))
+          (is (= [:none] @opens) "a :continue return closes the call: the next start is no cut"))))))
 
 ;; ------------------------------------------------------- a walker fault at one cell is routed round (card 679d3475)
 
