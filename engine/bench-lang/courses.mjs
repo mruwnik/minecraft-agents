@@ -20,9 +20,9 @@ const worldCourses = dir => {
     .map(({ id, from, goal }) => ({ id, group: 'world', snapshot, query: { from, goal } }))
 }
 
-// the live tester's courses come from the cljs fixtures (engine.bench-courses in the planner-bench build); run from engine/
-const laneCourses = () => {
-  const build = require(path.join(ROOT, 'engine/out/planner-bench.cjs'))
+// the live tester's courses come from the cljs fixtures (engine.bench-courses, exported by the planner-bench and goto-bench builds); run from engine/
+// A harness passes the build it already loaded: two cljs builds in one process clash (two cljs.core copies).
+const laneCourses = build => {
   return build.courseNames().map(name => {
     const { snapshot, from, goal } = build.courseSnapshot(name)
     return { id: `course-${name}`, group: 'course', snapshot, query: { from, goal } }
@@ -30,4 +30,4 @@ const laneCourses = () => {
 }
 
 // [{ id, group: 'world' | 'course', snapshot, query: { from, goal } }]
-export const loadCourses = (dir = benchDir()) => [...worldCourses(dir), ...laneCourses()]
+export const loadCourses = (dir = benchDir(), build = require(path.join(ROOT, 'engine/out/planner-bench.cjs'))) => [...worldCourses(dir), ...laneCourses(build)]

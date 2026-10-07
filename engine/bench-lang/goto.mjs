@@ -42,21 +42,24 @@ export function summarize (rows) {
   }
 }
 
+// one course: the fastest of `repeat` simulated runs, as a row
+export async function runCourse (build, table, c, repeat) {
+  const pw = { snapshot: c.snapshot, table, space: build.space }
+  const { from, goal } = c.query
+  const start = { x: from.x, y: from.y, z: from.z, px: from.px ?? from.x + 0.5, pz: from.pz ?? from.z + 0.5 }
+  const runs = []
+  for (let k = 0; k < repeat; k++) runs.push(await build.simulate(pw, start, goal, goal.range ?? 0)) // (a promise or not)
+  const run = fastest(runs)
+  return { id: c.id, answer: run.answer, rounds: run.rounds.map(r => ({ ms: +r.ms.toFixed(2), searches: r.searches.map(s => +s.toFixed(2)), status: r.status })) }
+}
+
 async function main (argv) {
   const build = require(path.resolve(flagValue(argv, '--build') ?? path.join(HERE, '../out/goto-bench.cjs')))
   const repeat = Number(flagValue(argv, '--rounds') ?? 3)
   const out = flagValue(argv, '--out')
   const table = build.defaultStateTable()
   const rows = []
-  for (const c of loadCourses()) {
-    const pw = { snapshot: c.snapshot, table, space: build.space }
-    const { from, goal } = c.query
-    const start = { x: from.x, y: from.y, z: from.z, px: from.px ?? from.x + 0.5, pz: from.pz ?? from.z + 0.5 }
-    const runs = []
-    for (let k = 0; k < repeat; k++) runs.push(await build.simulate(pw, start, goal, goal.range ?? 0)) // (a promise or not)
-    const run = fastest(runs)
-    rows.push({ id: c.id, answer: run.answer, rounds: run.rounds.map(r => ({ ms: +r.ms.toFixed(2), searches: r.searches.map(s => +s.toFixed(2)), status: r.status })) })
-  }
+  for (const c of loadCourses(undefined, build)) rows.push(await runCourse(build, table, c, repeat))
   const summary = summarize(rows)
   console.log(JSON.stringify(summary))
   rows.filter(r => r.rounds.some(x => x.ms > 100)).forEach(r => console.log(JSON.stringify(r)))

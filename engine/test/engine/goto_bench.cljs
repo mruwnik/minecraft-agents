@@ -11,9 +11,10 @@
 (def max-rounds 200)
 
 (defn body-at
-  "A ctx whose primitives say the body stands at the step {x y z px pz}."
+  "A ctx whose primitives say a healthy, fed, unarmoured body stands at the step {x y z px pz} (the damage probe reads it)."
   [^js at]
-  {:primitives #js {:self (fn [] #js {:pos #js {:x (.-px at) :y (.-y at) :z (.-pz at)}})}})
+  {:primitives #js {:self (fn [] #js {:pos #js {:x (.-px at) :y (.-y at) :z (.-pz at)}
+                                      :health 20 :absorption 0 :food 20 :onFire false :effects #js [] :equipment #js {}})}})
 
 (defn traced
   "f with each planner/create-plan step longer than 15 ms logged (GOTO_BENCH_TRACE set): the bench's look inside a round."

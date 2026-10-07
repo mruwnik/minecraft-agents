@@ -60,7 +60,9 @@
   :goto-bench {:target :node-library
                :exports {:simulate engine.goto-bench/simulate
                          :defaultStateTable engine.path.blocks/default-state-table
-                         :space engine.path.space/space}
+                         :space engine.path.space/space
+                         :courseNames engine.bench-courses/course-names
+                         :courseSnapshot engine.bench-courses/course-snapshot}
                :output-to "../engine/out/goto-bench.cjs"
                :output-dir "../engine/out/goto-bench"
                :compiler-options {:infer-externs false}}
