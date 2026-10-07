@@ -24,7 +24,7 @@
   Water in the cell is repaired. A source in the cell is filled with carried dirt (the dirt is then dug as a
   stray). A source beside it on its level is dammed first, since it would flood the dug cell back. A flow is
   traced upstream (at most 16 cells) and its source filled. The cell then gets 10 s to recede (the call yields
-  :continue; nothing is polled). Water that cannot be traced, no dirt carried, or a refused source leaves the
+  :continue, then the check waits :receding with :ready-at; nothing is polled). Water that cannot be traced, no dirt carried, or a refused source leaves the
   cell as :wet {:pos :why :source} (warn prepare.wet).
   Never dug, only reported:
   - a stray or natural ground that no carried tool harvests (stone with no pickaxe: slow, nothing drops): result
@@ -109,7 +109,9 @@
             work (field/todo c states)]
         (note-cells! c states (empty? work))
         (or (boolean (or (seq work) (and (:begun (ctx/mem c)) (not (receding? states)))))
-            (ctx/wait c {:reason :nothing-to-do}))))))
+            (if-let [due (seq (vals (:recede (ctx/mem c))))]
+              (ctx/wait c {:reason :receding :ready-at (apply min due)})
+              (ctx/wait c {:reason :nothing-to-do})))))))
 
 ;; ------------------------------------------------------------------ steps
 
@@ -206,7 +208,7 @@
                   (let [r (await (ctx/act c :place (clj->js {:pos under :item item})))]
                     (case (.-status r)
                       "placed" (ctx/update-mem! c #(-> % (bump :soiled) (update :holes disj (maintain/cell-vec under))))
-                      ("no-item" "occupied") nil
+                      ("no-item" "occupied") (fail! c pos (keyword (.-status r)))
                       (fail! c pos :failed))
                     :again))))))))
 
@@ -232,7 +234,7 @@
                                          (not fill?) (update :recede assoc pos (+ (ctx/now c) recede-ms))))]
                     (case (.-status r)
                       "placed" (ctx/update-mem! c dammed)
-                      ("no-item" "occupied") nil
+                      ("no-item" "occupied") (fail! c pos (keyword (.-status r)))
                       (fail! c pos :failed))
                     :again))))))))
 

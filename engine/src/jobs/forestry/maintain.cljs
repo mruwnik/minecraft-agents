@@ -268,7 +268,9 @@
   (let [logs (remaining-logs c pos species)]
     (ctx/update-mem! c (fn [m] (-> m (dissoc :cut) (update :collect (fnil conj []) species))))
     (if (seq logs)
-      (leave! c pos :unreachable)
+      (if-let [bad (column-refusal c logs)]
+        (leave! c pos :refused :why (second bad) :log (first bad))
+        (leave! c pos :unreachable))
       (ctx/update-mem! c bump :felled))))
 
 (defn fell-args
@@ -364,7 +366,7 @@
                   (case (.-status r)
                     "placed" (do (ctx/update-mem! c bump :planted)
                                  (ctx/forget-where! c forestry/replant-kind #(= pos (:pos %))))
-                    ("no-item" "occupied") nil
+                    ("no-item" "occupied") (fail-plant! c pos (keyword (.-status r)))
                     (fail-plant! c pos :failed))
                   :again))))))))
 

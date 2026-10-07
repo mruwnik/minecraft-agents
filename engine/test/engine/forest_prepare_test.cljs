@@ -612,3 +612,27 @@
           (is (= [[9 64 0 "oak_sapling"]] (places p)))
           (is (= "lava" (h/block-at p 3 64 0)))
           (is (= (expect {:cleared 1 :planted 1 :wrong [{:pos [3 64 0] :found "lava" :species "oak"}]}) result)))))))
+
+(deftest a-place-that-finds-no-item-or-an-occupied-cell-is-tried-three-times-then-the-cell-is-skipped
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [status ["no-item" "occupied"]
+                [label spec] [["soil" (world {"3,63,0" "stone"} (item "dirt" 1) (item "oak_sapling" 1) (item "stone_pickaxe" 1))]
+                              ["dam" (apply wet-world {"3,64,0" 1 "2,64,0" 0} sapling-and-dirt)]]]
+          (let [s (start spec {"forest" one-cell})]
+            (.override (.-world (:p s)) "place" (fn ^:async f [_ _ _] #js {:status status}))
+            (core/submit! (:eng s) (list job {:plan "forest"}) {})
+            (await (ticks (:eng s) 8))
+            (is (= 3 (count (places (:p s)))) (str label " " status))
+            (is (= [{:pos {:x 3 :y 64 :z 0} :reason (keyword status)}] (warns (:seen s) :prepare.refused)) (str label " " status))))))))
+
+(deftest a-cell-receding-from-a-dam-waits-until-its-recede-time
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (await (run (apply wet-world {"3,64,0" 1 "2,64,0" 0} sapling-and-dirt) {"forest" one-cell} {:plan "forest"} 6))
+              waits (h/events-of seen :waiting)]
+          (is (listed? eng))
+          (is (= [:receding] (distinct (map :reason waits))))
+          (is (every? number? (map :ready-at waits))))))))

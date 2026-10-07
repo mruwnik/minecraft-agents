@@ -14,6 +14,7 @@
             [jobs.forestry.fell-tree :as fell-tree]
             [jobs.forestry.maintain :as maintain]
             [jobs.forestry.trees :as trees]
+            [jobs.lib.pace :as pace]
             [plan.shape :as shape]))
 
 (def job 'jobs.forestry.maintain)
@@ -433,7 +434,37 @@
           (core/submit! (:eng s) (list job {:plan "forest"}) {})
           (await (ticks (:eng s) 30))
           (is (= [[3 64 0] [3 65 0]] (digs (:p s))) "the logs below the refused third are dug, then the felling stops")
-          (is (= [{:pos {:x 3 :y 64 :z 0} :reason :unreachable}] (warns (:seen s) :forest.left)) "the tree is left standing"))))))
+          (is (= [{:pos {:x 3 :y 64 :z 0} :reason :refused :why :footprint}] (warns (:seen s) :forest.left)) "the tree is left standing"))))))
+
+(deftest a-tree-begun-and-dropped-from-the-plan-before-its-first-dig-is-left-and-its-cell-not-planted
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan (forest-plan ["a" [[3 64 0]] "oak"] ["b" [[9 64 0]] "birch"])
+              {:keys [p eng w]} (start (update oak-world :blocks assoc "9,64,0" "birch_sapling") {"forest" plan})
+              dropped (atom false)]
+          (with-redefs [pace/pace! (fn []
+                                     (when-not @dropped
+                                       (reset! dropped true)
+                                       (world/set-data! w {"forest" (forest-plan ["b" [[9 64 0]] "birch"])} {}))
+                                     (js/Promise.resolve nil))]
+            (core/submit! eng (list job {:plan "forest"}) {})
+            (await (ticks eng 30)))
+          (is @dropped)
+          (is (= [] (vec (.-calls (.-world p)))) "no dig, no place on the cell holding the tree")
+          (is (= "oak_log" (h/block-at p 3 64 0))))))))
+
+(deftest a-place-that-finds-no-item-or-an-occupied-cell-is-tried-three-times-then-the-cell-is-left
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [status ["no-item" "occupied"]]
+          (let [s (start {:blocks (ground [[3 0]]) :inventory [(item "oak_sapling" 1)]} {"forest" oak-cell})]
+            (.override (.-world (:p s)) "place" (fn ^:async f [_ _ _] #js {:status status}))
+            (core/submit! (:eng s) (list job {:plan "forest"}) {})
+            (await (ticks (:eng s) 6))
+            (is (= 3 (count (places (:p s)))) status)
+            (is (= [{:pos {:x 3 :y 64 :z 0} :reason (keyword status)}] (warns (:seen s) :forest.left)) status)))))))
 
 ;; ------------------------------------------------------------------ restart
 
