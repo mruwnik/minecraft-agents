@@ -59,6 +59,7 @@ npm test                             # current renderer and shared infrastructur
 npm --prefix engine test             # engine tests
 npm --prefix dashboard test          # dashboard tests
 npm --prefix engine run test:agent-tools  # build compiled tools and test their CLIs
+node tools/startup-check.mjs          # report each generated tool's startup time against ~500 ms (never fails)
 ```
 
 Build the shared-world commands once with

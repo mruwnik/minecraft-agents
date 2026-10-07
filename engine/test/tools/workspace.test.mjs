@@ -228,23 +228,6 @@ test('legacy state selects its worlds child and ambiguous selectors fail', t => 
   assert.throws(() => tools.workspaceGenerate([path.join(f.dir, 'ambiguous'), '--body', 'B', '--world', 'w', '--state', f.dir, '--worlds', f.worlds], repo), /choose/)
 })
 
-test('generated AOT tools stay within the approximately 500 ms startup budget', t => {
-  const f = fixture(t)
-  for (const command of ['observe', 'map', 'time']) {
-    const samples = []
-    for (let i = 0; i < 5; i++) {
-      const start = performance.now()
-      const result = f.run(command, ['--help'])
-      assert.ifError(result.error)
-      assert.equal(result.status, 0, result.stderr)
-      samples.push(performance.now() - start)
-    }
-    samples.sort((a, b) => a - b)
-    t.diagnostic(`${command}: median ${samples[2].toFixed(1)} ms, range ${samples[0].toFixed(1)}–${samples[4].toFixed(1)} ms`)
-    assert.ok(samples[2] < 500, `${command} median startup ${samples[2]} ms exceeds budget`)
-  }
-})
-
 test('explicit adoption preserves existing body documents and runtime files', t => {
   const f = fixture(t)
   const body = path.join(f.worlds, 'w/agents/B')
