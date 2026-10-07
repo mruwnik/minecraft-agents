@@ -33,7 +33,7 @@
     start only, inside :swim-range of it, at most :max-legs legs (a leg that moved starts afresh at its end).
   Completed when the head is clear and, after a swim, the body stands on solid ground out of the water. Stopped
   :no_blocks when only a step cell was left and no pillar block is carried. Stopped
-  :no_land_in_range (fields :searched :swum :legs :headings-failed :step, one of :no-wall :refused :failed) when every way is spent or the run has gone
+  :no_land_in_range (fields :searched :swum :legs :headings-failed :step, one of :no-wall :no-blocks :refused :failed) when every way is spent or the run has gone
   3 x :swim-range blocks; the searched area (the start and the failed headings) is remembered (:breathe-afloat, 5 min), so a refire there swims no leg the run already did. Stopped
   :no_air (fields :air-radius, :cap why no cap was dug: :no-cap :not-natural :protected :gravity :dig-failed) or
   :no_way_out (with a warn) after three failed tries in the run. It never holds still while afloat.
@@ -397,7 +397,7 @@
                        (when (= :no_blocks reason) ", and no block to step out on"))
                   :searched search-radius :swum (js/Math.round (hdist pos (:start m pos))) :legs (:legs m 0)
                   :headings-failed (count failed)
-                  :step (cond (:step-refused m) :refused (seq (:failed-steps m)) :failed :else :no-wall))))
+                  :step (cond (= :no_blocks reason) :no-blocks (:step-refused m) :refused (seq (:failed-steps m)) :failed :else :no-wall))))
 
 (def max-steps "Step blocks one spot places at most." 2)
 

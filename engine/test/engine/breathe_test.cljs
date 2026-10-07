@@ -769,8 +769,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [ended ledger]} (await (step-run! {}))]
+        (let [{:keys [ended ledger data]} (await (step-run! {}))]
           (is (= [[:stopped :no_blocks]] ended))
+          (is (= :no-blocks (:step data)))
           (is (empty? ledger)))))))
 
 (deftest every-step-cell-in-a-zone-is-refused-and-nothing-is-placed
