@@ -23,7 +23,7 @@
      jobs.access.pillar
      jobs.explore.search jobs.explore.look
      jobs.combat.hunt jobs.gather.get-seeds jobs.gather.mine
-     jobs.movement.go-to jobs.movement.pace jobs.movement.look-around jobs.movement.follow jobs.movement.leave-vehicle
+     jobs.movement.go-to jobs.movement.pace jobs.movement.look-around jobs.movement.follow jobs.movement.leave-vehicle jobs.movement.linger-near jobs.survival.block-arrow-gap
      jobs.time.wait-for-day jobs.time.wait-for-dusk jobs.debug.notify jobs.debug.walk-plan jobs.debug.access-check
      jobs.access.stair jobs.access.tunnel jobs.access.toggle jobs.farm.tidy
      jobs.access.cleanup jobs.access.leave-tunnel jobs.access.clear-path
