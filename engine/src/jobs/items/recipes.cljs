@@ -6,11 +6,18 @@
   A step is {:op :craft :item name :count n :table? bool} or {:op :place :item \"crafting_table\"} (put the table down
   before the first craft that needs one). Ingredients are taken from what is carried first, then crafted; a recipe
   whose ingredients are carried is tried before one that needs more crafts. opts: :table? (a table is at hand: no table
-  steps), :max-depth (nested crafts, default 6). (lacking version have item n) says why a craft cannot start."
+  steps), :max-depth (nested crafts, default 6), :gather? (items that are gatherable? and not carried count as
+  gathered, not crafted: the plan then has :gather {name n}, what must be mined or felled before its crafts can run).
+  (lacking version have item n) says why a craft cannot start."
   (:require ["minecraft-data" :as minecraft-data]
             [clojure.string]))
 
 (def table-item "crafting_table")
+
+(defn gatherable?
+  "Items with no recipe that the body gets by mining or felling: logs, cobblestone, coal."
+  [item]
+  (boolean (or (#{"cobblestone" "coal"} item) (clojure.string/ends-with? item "_log"))))
 
 (defn id-of [x]
   (cond (number? x) x (and (some? x) (number? (.-id x))) (.-id x)))
@@ -52,10 +59,11 @@
         use (min have n)
         st (update-in st [:have item] (fnil - 0) use)
         deficit (- n use)]
-    (if (zero? deficit)
-      st
-      (when-let [st (make rs st item deficit chain depth)]
-        (update-in st [:have item] - deficit)))))
+    (cond
+      (zero? deficit) st
+      (and (:gather? st) (gatherable? item)) (update-in st [:gather item] (fnil + 0) deficit)
+      :else (when-let [st (make rs st item deficit chain depth)]
+              (update-in st [:have item] - deficit)))))
 
 (defn short-count
   "How many of the recipe's ingredients (for batches crafts) the state lacks."
@@ -67,16 +75,19 @@
   [rs st item n chain depth]
   (when (and (pos? depth) (not (chain item)))
     (let [chain (conj chain item)
-          options (sort-by (fn [r] (short-count st r (ceil-div n (:count r)))) (get rs item))]
-      (some (fn [{:keys [needs] :as r}]
-              (let [batches (ceil-div n (:count r))
-                    st' (reduce (fn [st [k v]] (or (acquire rs st k (* v batches) chain (dec depth)) (reduced nil)))
-                                st needs)]
-                (when st'
-                  (-> st'
-                      (update-in [:have item] (fnil + 0) (* batches (:count r)))
-                      (update :steps conj {:op :craft :item item :count (* batches (:count r)) :table? (:table? r)})))))
-            options))))
+          options (sort-by (fn [r] (short-count st r (ceil-div n (:count r)))) (get rs item))
+          try-option (fn [{:keys [needs] :as r}]
+                       (let [batches (ceil-div n (:count r))
+                             st' (reduce (fn [st [k v]] (or (acquire rs st k (* v batches) chain (dec depth)) (reduced nil)))
+                                         st needs)]
+                         (when st'
+                           (-> st'
+                               (update-in [:have item] (fnil + 0) (* batches (:count r)))
+                               (update :steps conj {:op :craft :item item :count (* batches (:count r)) :table? (:table? r)})))))]
+      (if (:gather? st)
+        ;; the option that gathers least (a carried species of log wins over a new one)
+        (first (sort-by #(reduce + 0 (vals (:gather %))) (keep try-option options)))
+        (some try-option options)))))
 
 (defn lacking
   "Why no craft of item (n more) can start, as text: the cheapest recipe's ingredients short of what is carried
@@ -94,14 +105,15 @@
 
 (defn plan
   "See the ns doc."
-  [version have item n {:keys [table? max-depth] :or {max-depth 6}}]
+  [version have item n {:keys [table? max-depth gather?] :or {max-depth 6}}]
   (let [rs (recipes-for version)
-        st0 {:have have :steps []}
+        st0 {:have have :steps [] :gather? gather?}
+        with-gather (fn [pl st] (cond-> pl (seq (:gather st)) (assoc :gather (:gather st))))
         main (make rs st0 item n #{} max-depth)
         needs-table (and main (some :table? (:steps main)) (not table?))]
     (cond
       (nil? main) nil
-      (not needs-table) {:steps (:steps main)}
+      (not needs-table) (with-gather {:steps (:steps main)} main)
       :else (when-let [t (acquire rs st0 table-item 1 #{} max-depth)]
               (when-let [m (make rs t item n #{} max-depth)]
-                {:steps (vec (concat (:steps t) [{:op :place :item table-item}] (subvec (:steps m) (count (:steps t)))))})))))
+                (with-gather {:steps (vec (concat (:steps t) [{:op :place :item table-item}] (subvec (:steps m) (count (:steps t)))))} m))))))

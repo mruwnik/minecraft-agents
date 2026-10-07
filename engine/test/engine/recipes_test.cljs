@@ -36,3 +36,12 @@
 (deftest a-stone-pickaxe-from-cobblestone-and-sticks
   (is (= [[:craft "stone_pickaxe" 1]]
          (shape (plan {"cobblestone" 3 "stick" 2} "stone_pickaxe" 1 {:table? true})))))
+
+(deftest gather-plans-name-the-raw-items-the-chain-lacks
+  (let [p (plan {} "stone_pickaxe" 1 {:gather? true})]
+    (is (= 3 (get-in p [:gather "cobblestone"])))
+    (is (= 2 (reduce + (vals (filter (fn [[k _]] (re-find #"_log$" k)) (:gather p))))) "a table and two sticks: 2 logs")
+    (is (some #(= "stone_pickaxe" (:item %)) (:steps p))))
+  (is (nil? (plan {} "stone_pickaxe" 1)) "without :gather? nothing is assumed")
+  (is (nil? (:gather (plan {"oak_log" 3 "cobblestone" 3} "stone_pickaxe" 1 {:gather? true}))) "nothing lacks")
+  (is (= {"cobblestone" 2} (:gather (plan {"oak_planks" 4 "stick" 2 "cobblestone" 1 "crafting_table" 1} "stone_pickaxe" 1 {:gather? true :table? true})))))

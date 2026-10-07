@@ -647,3 +647,48 @@
           (await (get-tool! s {:block "not_a_block"} 5))
           (is (= 1 (count (events-of s :get-tool.declined))))
           (is (empty? (inspects s))))))))
+
+;; ------------------------------------------------------------------ the gather source
+
+(def tree-blocks
+  (merge (into {} (for [y (range 64 68)] [(str "0," y ",4") "oak_log"]))
+         {"0,68,4" "oak_leaves" "1,67,4" "oak_leaves"}))
+
+(deftest obtain-gathers-logs-then-crafts-the-pickaxe
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (update (bare []) :blocks merge tree-blocks {"1,64,2" "crafting_table"}) [own-zone])]
+          (await (get-tool! s {:kind "pickaxe"} 120))
+          (is (empty? (listed s)))
+          (is (= 1 (get (inv s) "wooden_pickaxe")))
+          (is (seq (calls s "dig")) "a log was felled"))))))
+
+(deftest obtain-gathers-the-cobblestone-a-craft-lacks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (assoc (update (world {}) :blocks merge (into {} (for [x [0 1] z [5 6]] [(str x ",64," z) "stone"]))) :inventory [{:name "wooden_pickaxe" :count 1} {:name "oak_planks" :count 4} {:name "stick" :count 4} {:name "crafting_table" :count 1}]) [own-zone])]
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "stone_pickaxe"}) {})
+          (await (run-ticks s 80))
+          (is (empty? (listed s)))
+          (is (= 1 (get (inv s) "stone_pickaxe"))))))))
+
+(deftest obtain-gather-waits-no-source-when-nothing-is-seen-to-gather
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (bare []) [own-zone])]
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "wooden_pickaxe"}) {})
+          (await (run-ticks s 6))
+          (is (= 1 (count (filter #(= :no-source (:reason %)) (events-of s :waiting)))))
+          (is (re-find #"nothing seen to gather" (:why (first (events-of s :waiting))))))))))
+
+(deftest obtain-gather-is-off-when-how-leaves-it-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (update (bare []) :blocks merge tree-blocks) [own-zone])]
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "wooden_pickaxe" :how #{:craft :chest}}) {})
+          (await (run-ticks s 10))
+          (is (empty? (calls s "dig"))))))))

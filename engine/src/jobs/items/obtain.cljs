@@ -2,6 +2,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.blocks :as b]
             [jobs.lib.fetch :as fetch]
+            [jobs.lib.look :as look]
             [jobs.items.recipes :as recipes]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
@@ -14,7 +15,7 @@
   "Get :count more of :item (or of any of :any-of, in that order of preference) than were carried at the first round.
   The target is booked once, so a cut or restart goes on toward the same count. One child call or act per round.
 
-  Sources, in order (carried, chests and crafting; gathering comes later):
+  Sources, in order (carried, chests, crafting, gathering):
   - Carried: the target is met, done.
   - :chest (in :how): the containers the body has seen (perception's seenBlocks, never x-ray) within 32 blocks,
     still there, whose zone or claim allows :take (an open, unzoned chest does; jobs.lib.access). A chest known
@@ -25,13 +26,17 @@
     planks to sticks to the tool, and a crafting table when the chain needs one and none is seen (crafted, then put
     down on a free cell beside the body with a jobs.blocks.place child). Each step is a jobs.items.craft child. The
     names are tried in order; the first with a plan is made. Three fruitless steps stop it (:tried :craft).
+  - :gather (in :how): what a craft chain lacks that has no recipe (logs, cobblestone, coal; recipes/gatherable?) is
+    felled or mined as one child per round, only what the body has seen: logs by jobs.forestry.harvest-wood,
+    cobblestone and coal by jobs.gather.mine. The crafts follow once the chain is whole (a chain that is craftable now
+    is crafted first). A child that brings in nothing three times stops it (:tried :gather).
   - Nothing else: stopped :no-source with :tried.
 
   The check waits {:reason :no-source :why text :item|:any-of} (:why: what each source lacks) before the first round when nothing is carried enough, no
-  usable chest that might hold it is seen (no exploring) and no craft chain makes it from what is carried. Ends {:status :done :got n :item name} or {:status :stopped
+  usable chest that might hold it is seen (no exploring) and no craft chain makes it from what is carried, and nothing seen to gather what a chain lacks. Ends {:status :done :got n :item name} or {:status :stopped
   :reason r :got n :tried {..}}, r :no-source, :cycle (a wanted name is on :chain), :timeout (:minutes from the first
   round) or :bad-args. :depth is the nesting left for sources that need fetches of their own (not used yet: crafting
-  plans its whole chain).")
+  plans its whole chain; a gather child fetches its own tools).")
 
 (def args
   {:item {:doc "the item to get" :default nil}
@@ -99,6 +104,46 @@
               (assoc pl :item name)))
           names)))
 
+(defn gather-plan
+  "The craft chain for the first of names that has one once the raw items it lacks are gathered, with :gather
+  {name n} when it lacks any, else nil."
+  [c names n]
+  (let [p (:primitives c)
+        have (carried-counts p)
+        version (game/version-of p)]
+    (some (fn [name]
+            (when-let [pl (recipes/plan version have name n {:table? (boolean (or (:table (ctx/mem c)) (craft/nearest-table p craft-radius)))
+                                                           :gather? true})]
+              (assoc pl :item name)))
+          names)))
+
+(defn log? [name] (clojure.string/ends-with? name "_log"))
+
+(defn gather-need
+  "The first raw need of a plan's :gather map, logs first: {:key k :count n :job sym :args {..} :seen fn of a block name: what must have been seen}. A new gather source
+  (saplings from leaves) is one more case here."
+  [gather]
+  (let [logs (reduce + 0 (for [[k v] gather :when (log? k)] v))]
+    (cond
+      (pos? logs) {:key "log" :count logs :job 'jobs.forestry.harvest-wood :seen log? :args {}}
+      (get gather "cobblestone") {:key "cobblestone" :count (get gather "cobblestone") :job 'jobs.gather.mine
+                                  :seen #{"stone"}
+                                  :args {:block "stone" :item "cobblestone" :count (get gather "cobblestone")}}
+      (get gather "coal") {:key "coal" :count (get gather "coal") :job 'jobs.gather.mine
+                           :seen #{"coal_ore"}
+                           :args {:block "coal_ore" :item "coal" :count (get gather "coal")}})))
+
+(defn gather-carried [p {:keys [key]}]
+  (reduce + 0 (for [[k v] (carried-counts p) :when (if (= "log" key) (log? k) (= key k))] v)))
+
+(defn gather-viable?
+  "Whether a chain is craftable once raw items are gathered, and a block for the first raw need has been seen and
+  its child would run."
+  [c names n]
+  (when-let [need (some-> (gather-plan c names n) :gather gather-need)]
+    (and (seq (look/seen-blocks (:primitives c) {:match #((:seen need) %) :radius 16 :max 1}))
+         (boolean (ctx/check-child c :gather (:job need) (:args need))))))
+
 (defn no-source-why
   "Text for the no-source wait: what each allowed source lacks."
   [c names n]
@@ -108,7 +153,8 @@
     (clojure.string/join
      "; "
      (concat (when (contains? how :chest) [(str "no seen chest that may hold " (clojure.string/join "/" names))])
-             (when (contains? how :craft) [(recipes/lacking version have (first names) n)])))))
+             (when (contains? how :craft) [(recipes/lacking version have (first names) n)])
+             (when (contains? how :gather) ["nothing seen to gather what a craft lacks"])))))
 
 (defn check [c]
   (let [a (:args c)
@@ -118,6 +164,7 @@
       (:start (ctx/mem c)) true
       (and (contains? (:how (limits c)) :chest) (seq (candidates c names))) true
       (and (contains? (:how (limits c)) :craft) (craft-plan c names (:count a))) true
+      (and (contains? (:how (limits c)) :gather) (gather-viable? c names (:count a))) true
       :else (ctx/wait c (merge {:reason :no-source :why (no-source-why c names (:count a))} (wanted-fields a))))))
 
 (defn stop! [c reason extra]
@@ -228,6 +275,34 @@
                   :else
                   (fruitless! c (or (:reason res) (when (:short res) {:short (:short res)}) :declined))))))))))
 
+(defn gather-failed! [c why]
+  (let [k (inc (get-in (ctx/mem c) [:gather :fruitless] 0))]
+    (ctx/update-mem! c assoc-in [:gather :fruitless] k)
+    (when (>= k max-fruitless) (tried! c :gather (or why :failed)))
+    :continue))
+
+(defn ^:async gather-step!
+  "One round of the gather source: the child for the first raw item the chain lacks, until it ends."
+  [c names have target]
+  (let [p (:primitives c)
+        need (some-> (gather-plan c names (- target have)) :gather gather-need)]
+    (cond
+      (nil? need) (do (tried! c :gather :no-plan) :continue)
+      (and (not (get-in (ctx/mem c) [:gather :before])) (not (gather-viable? c names (- target have))))
+      (do (tried! c :gather :none-seen) :continue)
+      :else
+      (do (when-not (get-in (ctx/mem c) [:gather :before])
+            (ctx/update-mem! c assoc-in [:gather :before] (gather-carried p need)))
+          (let [r (await (ctx/call-child c :gather (:job need) (:args need)))]
+            (if (= :continue r)
+              :continue
+              (let [res (ctx/child-result c :gather)
+                    before (get-in (ctx/mem c) [:gather :before])]
+                (ctx/update-mem! c update :gather dissoc :before)
+                (if (> (gather-carried p need) before)
+                  (do (ctx/update-mem! c assoc-in [:gather :fruitless] 0) :continue)
+                  (gather-failed! c (or (:reason res) :nothing-gathered))))))))))
+
 (defn ^:async round [c]
   (let [a (:args c)
         names (names-of a)
@@ -258,7 +333,10 @@
               (and unknown (< (:inspected m 0) max-inspections)) (await (inspect! c (:pos unknown)))
               :else (do (tried! c :chest (if (or (seq (:done-chests m)) (pos? (:inspected m 0))) :lacking :none-seen))
                         :continue)))
-          (and (contains? (:how o) :craft) (not (get-in m [:tried :craft])))
+          (and (contains? (:how o) :craft) (not (get-in m [:tried :craft]))
+               (or (not (contains? (:how o) :gather)) (get-in m [:craft :step]) (get-in m [:craft :table-unreachable]) (craft-plan c names (- target have))))
           (await (craft-step! c names have target))
+          (and (contains? (:how o) :gather) (not (get-in m [:tried :gather])))
+          (await (gather-step! c names have target))
           :else (stop! c (if (= :table-unreachable (get-in m [:tried :craft])) :table-unreachable :no-source)
                        {:got got :tried (:tried m)}))))))
