@@ -130,3 +130,24 @@
       (is (= 2 (cost taken :damage)))
       (is (not (crosses-berries? refused)) "a budget of 1 hp cannot take both bushes")
       (is (not (crosses-berries? dear))))))
+
+;; Two openings in a wall and a second wall behind them: the near opening is 2 bushes (2 hp), the far one 1 bush; the way on
+;; is one more bush (z 15 of the back wall). Within budget 2 only the dearer far opening leads on: a node reached by the
+;; cheaper, hurt branch and again by the dearer, unhurt one keeps both records.
+(def two-doors
+  (pf/world {:fill [[10 64 -40 11 66 70 "stone"] [10 64 10 11 66 10 "air"] [10 64 20 10 66 20 "air"] [11 64 20 11 66 20 "air"]
+                    [14 64 -40 14 66 70 "stone"] [14 64 15 14 66 15 "air"]]
+             :blocks [[10 64 10 "sweet_berry_bush"] [11 64 10 "sweet_berry_bush"] [10 64 20 "sweet_berry_bush"] [14 64 15 "sweet_berry_bush"]]}))
+
+(defn two-doors-run [budget]
+  (run two-doors (near 18 64 15) {:damageBudget budget :damageWeight 0} {:x 2 :y 64 :z 10}))
+
+(deftest a-node-keeps-a-record-per-hp-spent
+  (let [roomy (two-doors-run 3)
+        tight (two-doors-run 2)]
+    (is (= "found" (:status roomy)))
+    (is (some #{[10 64 10]} (cells roomy)) "the near opening is the cheaper way")
+    (is (= 3 (cost roomy :damage)))
+    (is (= "found" (:status tight)))
+    (is (= 2 (cost tight :damage)) (pr-str (cells tight)))
+    (is (some #{[10 64 20]} (cells tight)))))
