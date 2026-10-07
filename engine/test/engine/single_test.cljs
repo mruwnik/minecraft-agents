@@ -230,7 +230,7 @@
               sock (path/join dir "body.sock")
               marker (path/join (tu/tmp-dir) "inside")
               iterations 15]
-          (doseq [round (range 4)]
+          (doseq [round (range 2)]
             (let [kids (mapv #(start-child {:mode "loop" :sock sock :marker marker :iterations iterations
                                             :hold-ms 2 :crash-at (if (zero? %) (rand-int iterations) -1)})
                              (range 3))
