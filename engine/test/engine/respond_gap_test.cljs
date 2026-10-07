@@ -3,6 +3,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.block-arrow-gap-test :as g]
             [engine.core :as core]
+            [engine.memory :as mem]
             [engine.test-util :as tu]
             [jobs.lib.reach :as reach]
             [jobs.survival.respond-to-hostile :as respond]))
@@ -15,26 +16,43 @@
   "Ground to flee over: a retreat runs until it is out of line."
   (g/blocks "dirt" [-40 40] [60 63] [-40 40]))
 
-(defn ^:async tick-or-hold!
-  "One tick; :held when it has not returned after a few seconds (a body hiding sealed in holds while a danger stays), the
-  job then cancelled."
-  [eng]
-  (let [timer (atom nil)
-        held (js/Promise. (fn [resolve] (reset! timer (js/setTimeout #(resolve :held) 4000))))
-        r (await (js/Promise.race [(core/tick! eng) held]))]
-    (js/clearTimeout @timer)
-    (when (= :held r) (core/cancel! eng "j1"))
-    r))
+(defn hiding-seen? [{:keys [seen]}]
+  (boolean (some #(and (= :holding (:kind %)) (= "hiding" (some-> (:reason %) name))) @seen)))
+
+(defn ^:async hiding!
+  "Resolves :hiding once the body holds hid in a refuge (a sealed body holds for as long as a danger stays, by design), or
+  :stop once stop is set."
+  [s stop]
+  (loop []
+    (cond
+      @stop :stop
+      (hiding-seen? s) :hiding
+      :else (do (await (js/Promise. (fn [resolve] (js/setTimeout resolve 10)))) (recur)))))
 
 (defn ^:async respond!
-  "Run respond-to-hostile for a few rounds over the gap test's doorway cell with the given spec; stops at a hold."
+  "Run respond-to-hostile over the gap test's doorway cell with the given spec until the job ends or the body hides
+  (a hold that is then cancelled): up to six ticks; the setup map."
   [spec]
   (let [{:keys [eng] :as s} (g/setup (:zones spec []) (merge {:entities [g/pit-skeleton] :blocks (merge wide-ground g/pit g/shell) :act-ms 1000} (dissoc spec :zones)))]
     (core/submit! eng '(jobs.survival.respond-to-hostile) {})
     (loop [i 0]
-      (when (and (< i 6) (not= :held (await (tick-or-hold! eng))))
-        (recur (inc i))))
+      (when (and (< i 6) (not (hiding-seen? s)))
+        (let [stop (atom false)
+              r (await (js/Promise.race [(core/tick! eng) (hiding! s stop)]))]
+          (reset! stop true)
+          (when (= :hiding r) (core/cancel! eng "j1"))
+          (recur (inc i)))))
     s))
+
+(defn decisions
+  "What respond-to-hostile decided at the first danger it logged, once per encounter."
+  [{:keys [eng]}]
+  (mapv (comp :decision :data) (mem/entries (mem/view (:store eng)) :hostile)))
+
+(defn calls
+  "The slots respond-to-hostile called as children, in order (a child's own children not counted)."
+  [{:keys [seen]}]
+  (mapv :slot (filter #(and (= :child_started (:kind %)) (= 2 (count (:chain %)))) @seen)))
 
 (defn placed? [{:keys [seen]}] (contains? (g/kinds-seen seen) :block-arrow-gap.closed))
 
@@ -72,36 +90,41 @@
   (is (not (wanted? {:inventory [cobble8 pickaxe] :blocks (merge g/ground g/pit canopy)} false))))
 
 (defn ^:async no-gap-run
-  "Respond for a few rounds with the spec: it ends (no hang) and the gap job placed nothing."
-  [spec]
+  "Respond with the spec: no gap block is placed, the calls are the expected slots and the usual response is a flight
+  that hides sealed in (hold why hiding) or ends out of line."
+  [spec slots hides?]
   (let [s (await (respond! spec))]
     (is (not (placed? s)))
+    (is (= slots (calls s)))
+    (is (= [:flee] (decisions s)) "a lone skeleton with no weapon: flee")
+    (is (= hides? (hiding-seen? s)))
     s))
 
-(deftest no-pickaxe-no-gap-placed
+(deftest no-pickaxe-no-gap-placed-and-the-body-flees-and-hides
   (async done
     (tu/run-async done
-      (fn ^:async t [] (await (no-gap-run {:inventory [cobble8]}))))))
+      (fn ^:async t [] (await (no-gap-run {:inventory [cobble8]} [:flee] true))))))
 
-(deftest no-blocks-no-gap-placed
+(deftest no-blocks-no-gap-placed-and-the-body-flees-and-hides
   (async done
     (tu/run-async done
-      (fn ^:async t [] (await (no-gap-run {:inventory [pickaxe]}))))))
+      (fn ^:async t [] (await (no-gap-run {:inventory [pickaxe]} [:flee] true))))))
 
-(deftest a-melee-mob-as-well-no-gap-placed
+(deftest a-melee-mob-as-well-no-gap-placed-and-the-body-flees-and-hides
   (async done
     (tu/run-async done
-      (fn ^:async t [] (await (no-gap-run {:inventory [cobble8 pickaxe] :entities [g/pit-skeleton zombie]}))))))
+      (fn ^:async t [] (await (no-gap-run {:inventory [cobble8 pickaxe] :entities [g/pit-skeleton zombie]} [:flee] true))))))
 
-(deftest open-ground-no-gap-placed
+(deftest open-ground-no-gap-placed-and-the-body-flees-out-of-line
   (async done
     (tu/run-async done
-      (fn ^:async t [] (await (no-gap-run {:inventory [cobble8 pickaxe] :blocks (merge wide-ground g/pit canopy)}))))))
+      (fn ^:async t [] (await (no-gap-run {:inventory [cobble8 pickaxe] :blocks (merge wide-ground g/pit canopy)} [:flee] false))))))
 
 (deftest a-gap-that-fails-refused-falls-back-to-the-usual-response
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [seen]} (await (no-gap-run {:inventory [cobble8 pickaxe]
-                                                 :zones [{:name "keep" :owner "Miles" :min [-4 60 -4] :max [4 70 4]}]}))]
+                                                 :zones [{:name "keep" :owner "Miles" :min [-4 60 -4] :max [4 70 4]}]}
+                                                [:gap :flee] true))]
           (is (= :refused (:reason (g/failed seen))) "the gap job ran and placed nothing"))))))
