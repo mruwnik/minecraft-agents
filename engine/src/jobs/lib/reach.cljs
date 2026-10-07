@@ -6,6 +6,7 @@
   jobs.lib.danger decides which known mobs are real dangers."
   (:require [clojure.string :as str]
             [engine.entity-observations :as obs]
+            [engine.sight :as sight]
             [jobs.lib.combat :as combat]
             [jobs.lib.solid :as solid]
             [jobs.lib.util :as u]))
@@ -390,34 +391,9 @@
 
 (defn ray-clear?
   "Whether the segment from a to b ([x y z] numbers) crosses no :solid cell of kind-at (start and end cells do not
-  count). Same cell walk as engine.sight/line-clear."
+  count). The cell walk is engine.sight/line-clear."
   [kind-at [ax ay az] [bx by bz]]
-  (let [dx (- bx ax) dy (- by ay) dz (- bz az)
-        end-x (js/Math.floor bx) end-y (js/Math.floor by) end-z (js/Math.floor bz)
-        sx (js/Math.sign dx) sy (js/Math.sign dy) sz (js/Math.sign dz)
-        tdx (if (zero? dx) js/Infinity (js/Math.abs (/ 1 dx)))
-        tdy (if (zero? dy) js/Infinity (js/Math.abs (/ 1 dy)))
-        tdz (if (zero? dz) js/Infinity (js/Math.abs (/ 1 dz)))
-        cx0 (js/Math.floor ax) cy0 (js/Math.floor ay) cz0 (js/Math.floor az)
-        tmax (fn [d cur a td] (if (zero? d) js/Infinity (* (if (pos? d) (- (inc cur) a) (- a cur)) td)))]
-    (loop [cx cx0 cy cy0 cz cz0
-           tx (tmax dx cx0 ax tdx) ty (tmax dy cy0 ay tdy) tz (tmax dz cz0 az tdz)
-           n (+ (js/Math.abs (- end-x cx0)) (js/Math.abs (- end-y cy0)) (js/Math.abs (- end-z cz0)))]
-      (if (zero? n)
-        true
-        (let [axis (cond (and (<= tx ty) (<= tx tz)) :x (<= ty tz) :y :else :z)
-              t (case axis :x tx :y ty :z tz)]
-          (if (> t 1)
-            true
-            (let [cx' (if (= axis :x) (+ cx sx) cx)
-                  cy' (if (= axis :y) (+ cy sy) cy)
-                  cz' (if (= axis :z) (+ cz sz) cz)]
-              (cond
-                (and (== cx' end-x) (== cy' end-y) (== cz' end-z)) true
-                (keyword-identical? :solid (kind-at cx' cy' cz')) false
-                :else (recur cx' cy' cz'
-                             (if (= axis :x) (+ tx tdx) tx) (if (= axis :y) (+ ty tdy) ty) (if (= axis :z) (+ tz tdz) tz)
-                             (dec n))))))))))
+  (sight/line-clear ax ay az bx by bz (fn [x y z] (keyword-identical? :solid (kind-at x y z)))))
 
 (defn line-of-fire?
   "Whether a ranged mob at mob-pos ({:x :y :z}, feet) has a clear arrow line to the body at body-pos (feet): a ray

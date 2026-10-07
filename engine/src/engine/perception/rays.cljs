@@ -1,7 +1,8 @@
 (ns engine.perception.rays
   "Sight: the view cone, the sight pass that casts rays from the eye into block memory, and keeping memory current
   after block changes and touches."
-  (:require [engine.perception.light :refer [darken-now max-light table-now]]
+  (:require [engine.sight :as sight]
+            [engine.perception.light :refer [darken-now max-light table-now]]
             [engine.perception.store :refer [eye-height new-stamp! record! store-of]]))
 
 ;; ---- the view cone
@@ -247,7 +248,8 @@
   the point's cell blocks sight under `table` (the raw world's sightTable) or is unloaded. No cone and no light rule:
   this answers whether a thing there could be seen by turning to it."
   [^js raw ^js table ox oy oz tx ty tz]
-  (boolean (walk-cells raw table ox oy oz tx ty tz)))
+  (sight/line-clear ox oy oz tx ty tz
+                    (fn [x y z] (let [id (.stateAt raw x y z)] (or (< id 0) (== 1 (aget table id)))))))
 
 (defn on-change!
   "A block changed in the raw world: memory takes the new state only if the body sees the cell now."
