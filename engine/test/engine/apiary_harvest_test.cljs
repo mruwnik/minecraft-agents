@@ -179,6 +179,23 @@
           (is (= :harvested (:reason result)))
           (is (= 6 (carried p "honeycomb"))))))))
 
+(deftest a-hive-behind-the-body-is-found-by-the-look-around
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (-> (world {:inventory (inv "shears" 1)})
+                    (update :blocks assoc "2,64,3" "beehive" "2,63,3" "campfire")
+                    (update :states assoc "2,64,3" {:honey_level 5} "2,63,3" {:lit true}))
+              {:keys [eng p]} (setup w)
+              all-seen (.-seenBlocks p)
+              ;; the second hive comes into memory only once the body has looked about
+              _ (aset p "seenBlocks"
+                      (fn [q] (let [looked? (seq (calls p "look"))]
+                                (.filter (all-seen q) (fn [b] (or looked? (not= 3 (.-z (.-pos b)))))))))
+              result (await (child-outcome eng job {} 60))]
+          (is (= 2 (:harvested result)))
+          (is (= :harvested (:reason result))))))))
+
 (deftest a-box-keeps-the-job-to-its-hives
   (async done
     (tu/run-async done

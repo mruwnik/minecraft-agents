@@ -9,7 +9,7 @@
 
 (def doc
   "Take the honey of the ripe hives (honey_level 5) near a centre, nearest first, at most :max hives, all in one call
-  (:continue only while a walk or the comb pick-up waits on the world). Shears give 3
+  (:continue only while a walk or the comb pick-up waits on the world). It looks around once first. Shears give 3
   honeycomb, a glass bottle gives a honey bottle. After each shears harvest the honeycomb on the ground is
   collected.
   A hive is worked only when it is smoked by vanilla's rule: a lit campfire at most 5 blocks under it with only
@@ -189,7 +189,8 @@
         _ (when-not (:center (ctx/mem c)) (ctx/update-mem! c assoc :center center))
         _ (settle-click! c)
         m (ctx/mem c)
-        _ (when (and (not= :collect (:phase m)) (empty? (hives c center)) (not (look/looked-here? c)))
+        _ (when (and (not= :collect (:phase m)) (not (:surveyed m)))
+            (ctx/update-mem! c assoc :surveyed true)
             (await (look/look-around! c)))]
     (if (= :collect (:phase m))
       (await (collect! c))

@@ -64,6 +64,22 @@
           (is (= 1 (count (kinds seen :apiary.guard-done))))
           (is (empty? (kinds seen :apiary.guard-gave-up))))))))
 
+(deftest a-fire-behind-the-body-is-found-by-the-look-around
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (-> (fire-world {:inventory (inv "white_carpet" 2)})
+                    (update :blocks merge (around 2 64 3) (around 2 63 3) {"2,64,3" "campfire" "2,63,3" "stone"})
+                    (update :states assoc "2,64,3" {:lit true}))
+              {:keys [eng p]} (setup w true)
+              all-seen (.-seenBlocks p)
+              _ (aset p "seenBlocks"
+                      (fn [q] (let [looked? (seq (calls p "look"))]
+                                (.filter (all-seen q) (fn [b] (or looked? (not= 3 (.-z (.-pos b)))))))))
+              result (await (child-outcome eng job {} 60))]
+          (is (= 2 (:carpeted result)))
+          (is (= :guarded (:reason result))))))))
+
 (deftest a-raised-fire-is-sunk-and-carpeted
   (async done
     (tu/run-async done

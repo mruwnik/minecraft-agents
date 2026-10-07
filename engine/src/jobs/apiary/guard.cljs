@@ -3,13 +3,14 @@
             [jobs.lib.apiary :as apiary]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.gate :as gate]
+            [jobs.lib.look :as look]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
             [jobs.lib.step-off :as step-off]))
 
 (def doc
-  "Keep the lit campfires of an apiary in the standard column: the fire one block underground with ground on all
+  "Look around once, then keep the lit campfires of an apiary in the standard column: the fire one block underground with ground on all
   four sides, a carpet on it, then air, then the hive.
   - A raised fire (some side open, so bees fly in sideways) with real walled ground under it is sunk. The carpet
     is taken first, then the fire and the ground block under it are dug out, and a carried campfire is placed
@@ -286,6 +287,9 @@
   (let [center (apiary/center-of c)
         _ (ctx/update-mem! c assoc :started true :center center)
         _ (settle-carpet! c)
+        _ (when-not (:surveyed (ctx/mem c))
+            (ctx/update-mem! c assoc :surveyed true)
+            (await (look/look-around! c)))
         m (ctx/mem c)]
     (cond
       (:collecting m) (await (collect-step! c))
