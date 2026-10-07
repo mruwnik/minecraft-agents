@@ -1,0 +1,22 @@
+;; Card fe086540: the (repeat n e) and (until g e) job expressions. Should-succeed: (repeat 2 look-around) completes after both runs;
+;; (until wait-for-dusk look-around) at night (guard already met) ends without looping. Should-fail: by day the same until keeps
+;; looping, so it has not completed 25 s in (the runner cancels it). Refusal of (repeat 0 e) / one-arg until at submit is unit-tested (expr_test).
+{:defaults
+ {:tags [:scheduler]
+  :plot {:height 8}
+  :body {:at [16.5 0 16.5]}
+  :limit-s 60}
+ :cases
+ [{:name "repeat-two-look-arounds-completes"
+   :time :any
+   :act [[:job (repeat 2 (jobs.movement.look-around {:every-ms 500}))]]
+   :expect [{:event {:source :job :kind :completed :data {:status :completed}} :within-s 40 :of-job true}]}
+  {:name "until-dusk-at-night-ends"
+   :time :night
+   :act [[:job (until (jobs.time.wait-for-dusk) (jobs.movement.look-around {:every-ms 500}))]]
+   :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}]}
+  {:name "until-dusk-by-day-keeps-looping"
+   :time :day
+   :act [[:job (until (jobs.time.wait-for-dusk) (jobs.movement.look-around {:every-ms 500}))]]
+   :expect [{:no-event {:source :job :kind :completed} :for-s 25 :of-job true}]
+   :after [[:body-near [16.5 0 16.5] 3]]}]}

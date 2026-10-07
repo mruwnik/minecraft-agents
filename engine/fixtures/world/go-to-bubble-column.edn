@@ -1,0 +1,26 @@
+;; Card 74c8eba9 (owner Q106): the planner models a bubble column as a forced vertical ride. A 1x1 water column (x 3, z 16, y 0..5) is
+;; walled by stone and sits against a stone platform (x 4..8, z 14..18, top surface y 6). Over soul sand the column lifts, over
+;; magma it drags down; the only way into or out of it is the ride. Should-succeed: lifted from inside the column to the platform
+;; top; dragged from the platform down to the column foot. Should-fail: none (the planner refusal of an up-ride against a drag column
+;; is unit-tested in planner-water).
+{:defaults
+ {:tags [:movement :planner :water]
+  :time :any
+  :plot {:height 12}
+  :blocks [[:fill [2 0 15] [3 5 17] "stone"] [:fill [4 -1 14] [8 5 18] "stone"]
+           [:fill [3 0 16] [3 5 16] "water"]]
+  :body {:effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [{:name "lift-over-soul-sand-up-to-the-platform"
+   :blocks [[:set [3 -1 16] "soul_sand"]]
+   :body {:at [3.5 0 16.5]}
+   :act [[:job (jobs.movement.go-to {:pos #at [6 6 16] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
+   :after [[:body-near [6.5 6 16.5] 3]]}
+  {:name "drag-over-magma-down-from-the-platform"
+   :blocks [[:set [3 -1 16] "magma_block"]]
+   :body {:at [6.5 6 16.5]}
+   :act [[:job (jobs.movement.go-to {:pos #at [3 0 16] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
+   :after [[:body-near [3.5 0 16.5] 2]]}]}
