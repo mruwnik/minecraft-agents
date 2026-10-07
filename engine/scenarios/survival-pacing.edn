@@ -1,7 +1,7 @@
 ;; ProbeDrive live test: the survival register, pacing on the test platform at -3500 64 3500.
 ;; Stay alive and otherwise idle. The reflexes are registered in priority
 ;; order, most urgent first: air, fire, hostiles, health, food, night (shelter, then logging out when another player sleeps), being
-;; stuck, then a death's drops, then a full inventory. Between reflexes the
+;; a death's drops, then a full inventory. Between reflexes the
 ;; body looks around, one look per round, so it visibly idles. A reflex job gets one chance: when its
 ;; round declines or is done it is dropped, and the trigger fires it again once
 ;; its cooldown (counted from the job ending) has passed. Hostiles sit above

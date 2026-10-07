@@ -57,10 +57,6 @@
 ;; ;; Backoff live proof, after, alone: the sealed-box go-to under repeat with the default backoff.
 ;; {:register []
 ;;  :queue [(repeat (jobs.movement.go-to {:pos {:x 1980 :y 101 :z -1979}}))]}
-;; -- case from live-ProbeFight-8
-;; ;; Backoff live proof: unstick gives up in a sealed bedrock pit, then the listed go-to keeps walking into it.
-;; {:register [{:trigger :stuck}]
-;;  :queue [(repeat (jobs.movement.go-to {:pos {:x 1980 :y 101 :z -1979}}))]}
 ;; -- case from live-ProbeMove-2
 ;; ;; ProbeMove live test: one go-to across a hazard course (the tester rewrites :pos per course).
 ;; ;; The look-around first gives the target's chunks time to arrive after login: a go-to started
@@ -196,30 +192,7 @@
 ;; {:register [{:trigger :hungry :persistence :cooldown :cooldown-s 15 :args {:food 6}
 ;;              :job (jobs.survival.get-food {:food 6})}]
 ;;  :queue [(repeat (jobs.movement.look-around))]}
-;; -- case from live-probestuck-1
-;; ;; ProbeStuck trigger tests: :stuck and :died against the notify job only.
-;; {:register [{:trigger :stuck :job (jobs.debug.notify {:text "stuck fired"})}
-;;             {:trigger :died :job (jobs.debug.notify {:text "died fired"})}]
-;;  :queue [(repeat (jobs.movement.look-around))]}
-;; -- case from live-probestuck-2
-;; ;; ProbeStuck trigger tests while walking: :stuck and :died against notify,
-;; ;; pacing between two points on the test pad.
-;; {:register [{:trigger :stuck :job (jobs.debug.notify {:text "stuck fired"})}
-;;             {:trigger :died :job (jobs.debug.notify {:text "died fired"})}]
-;;  :queue [(jobs.movement.pace {:a {:x -2020 :y 68 :z -2030} :b {:x -2040 :y 68 :z -2030} :laps 10000})]}
-;; -- case from live-probestuck-3
-;; ;; ProbeStuck: the real unstick job under the stuck trigger, pacing on the pad.
-;; {:register [{:trigger :stuck :job (jobs.maintenance.unstick)}]
-;;  :queue [(jobs.movement.pace {:a {:x -2020 :y 68 :z -2030} :b {:x -2040 :y 68 :z -2030} :laps 10000})]}
 ;; -- case from live-probestuck-4
 ;; ;; ProbeStuck: the real recover-drops job under the died trigger, idling.
 ;; {:register [{:trigger :died :job (jobs.survival.recover-drops {:collect-radius 6})}]
 ;;  :queue [(repeat (jobs.movement.look-around))]}
-;; -- case from live-probestuck-5
-;; ;; ProbeStuck: unstick on the fixed build (default 5 min quiet), pacing on the pad.
-;; {:register [{:trigger :stuck :job (jobs.maintenance.unstick)}]
-;;  :queue [(jobs.movement.pace {:a {:x -2020 :y 68 :z -2030} :b {:x -2040 :y 68 :z -2030} :laps 10000})]}
-;; -- case from live-probestuck-6
-;; ;; ProbeStuck: unstick with a 15 s quiet period so scenarios can follow each other.
-;; {:register [{:trigger :stuck :args {:quiet-ms 15000} :job (jobs.maintenance.unstick {:quiet-ms 15000})}]
-;;  :queue [(jobs.movement.pace {:a {:x -2020 :y 68 :z -2030} :b {:x -2040 :y 68 :z -2030} :laps 10000})]}

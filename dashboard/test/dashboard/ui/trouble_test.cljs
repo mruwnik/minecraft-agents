@@ -19,9 +19,6 @@
            ["a job in backoff" (body {:signals {:backoffs {"go-to" (- now 10000)}}}) [{:severity :warn :text "backoff: go-to"}]]
            ["backoff keys mixing symbols and keywords" (body {:signals {:backoffs {'jobs.gather.mine 1 :suffocating 2 "go-to" 3}}}) [{:severity :warn :text "backoff: :suffocating, go-to, jobs.gather.mine"}]]
            ["several backoffs list all" (body {:signals {:backoffs {"a" 1 "b" 2}}}) [{:severity :warn :text "backoff: a, b"}]]
-           ["stuck reflex still open" (body {:signals {:stuck-open? true :stuck-t (- now 900000)}}) [{:severity :warn :text "stuck"}]]
-           ["unstick gave up recently" (body {:signals {:stuck-t (- now 100000)}}) [{:severity :warn :text "stuck"}]]
-           ["unstick gave up long ago" (body {:signals {:stuck-t (- now 400000)}}) []]
            ["low health" (body {:hud {:health 6 :food 20}}) [{:severity :danger :text "health 6"}]]
            ["health just above" (body {:hud {:health 7 :food 20}}) []]
            ["fractional health rounds up for display" (body {:hud {:health 5.5 :food 20}}) [{:severity :danger :text "health 6"}]]
@@ -29,10 +26,10 @@
            ["manual takeover is not a trouble" (body {:signals {:takeover? true}}) []]
            ["offline bodies are never in trouble" (body {:up false :signals {:takeover? true :died-t now}}) []]
            ["no hud, no signals" {:name "A" :up true :engine {}} []]
-           ["order: died, health, hurt, backoff, stuck, food"
-            (body {:signals {:takeover? true :died-t now :hurt-t now :backoffs {"x" 1} :stuck-open? true} :hud {:health 2 :food 1}})
+           ["order: died, health, hurt, backoff, food"
+            (body {:signals {:takeover? true :died-t now :hurt-t now :backoffs {"x" 1}} :hud {:health 2 :food 1}})
             [{:severity :danger :text "died 0s ago"} {:severity :danger :text "health 2"}
-             {:severity :warn :text "hurt 0s ago"} {:severity :warn :text "backoff: x"} {:severity :warn :text "stuck"} {:severity :warn :text "food 1"}]]]]
+             {:severity :warn :text "hurt 0s ago"} {:severity :warn :text "backoff: x"} {:severity :warn :text "food 1"}]]]]
     (testing title
       (is (= expected (t/reasons b now))))))
 

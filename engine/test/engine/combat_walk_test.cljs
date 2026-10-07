@@ -7,7 +7,7 @@
             [engine.hut-shelter-test :as hut]
             [jobs.lib.reach :as reach]
             [jobs.lib.threats :as threats]
-                        [engine.shelter-test :as st]
+            [engine.shelter-test :as st]
             [engine.test-util :as tu]
             [engine.moved-test :as ut]))
 

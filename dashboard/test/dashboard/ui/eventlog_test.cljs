@@ -13,7 +13,6 @@
     (ev 2 :body :hurt {}) :combat
     (ev 3 :body :died {}) :combat
     (ev 4 :reflex :fired {} {:context {:reflex-id "flee"}}) :combat
-    (ev 5 :reflex :fired {} {:context {:reflex-id "stuck"}}) :movement
     (ev 6 :job :unreachable {}) :movement
     (ev 7 :action :started {:name "go-to"}) :movement
     (ev 8 :action :started {:name "dig"}) :jobs

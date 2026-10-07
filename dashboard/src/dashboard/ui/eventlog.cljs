@@ -7,8 +7,7 @@
 
 (def combat-kinds #{"hurt" "died" "attack" "attacked" "killed"})
 (def combat-reflexes #{"flee" "fight" "hunt" "defend" "attack"})
-(def movement-kinds #{"unreachable" "stuck" "unstick" "unstick.failed" "moved"})
-(def movement-reflexes #{"stuck" "unstick"})
+(def movement-kinds #{"unreachable" "moved"})
 (def movement-action #"(?i)go[-_]?to|walk|move|path|flee|follow|swim|jump|approach|come")
 
 (defn field-name [x]
@@ -34,7 +33,7 @@
     (cond
       (or (= "chat" s) (contains? #{"chat" "said" "whisper"} k)) :chat
       (or (and (= "body" s) (combat-kinds k)) (= "combat" s) (and (= "reflex" s) (combat-reflexes reflex))) :combat
-      (or (= "movement" s) (movement-kinds k) (and (= "reflex" s) (movement-reflexes reflex))
+      (or (= "movement" s) (movement-kinds k)
           (and (= "action" s) (re-find movement-action (str action)))) :movement
       (contains? #{"job" "action" "reflex"} s) :jobs
       :else :system)))

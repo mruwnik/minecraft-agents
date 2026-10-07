@@ -83,7 +83,7 @@
         (= "reconnect-failed" kind))))
 
 ;; What the trouble rules read, kept even for debug events that never reach :recent:
-;; {:hurt-t :died-t :backoffs {key t} :stuck-t :stuck-open? :takeover? :takeover-who :takeover-t :offline? :online-t}
+;; {:hurt-t :died-t :backoffs {key t} :takeover? :takeover-who :takeover-t :offline? :online-t}
 (defn next-signals [signals e]
   (let [{:keys [source kind t]} e
         backoff-key (or (:name e) (:reflex e) (:job e))]
@@ -95,9 +95,6 @@
       (and (= "body" source) (kind-is? e "died")) (assoc signals :died-t t)
       (and (#{"job" "reflex"} source) (kind-is? e "backoff")) (assoc-in signals [:backoffs backoff-key] t)
       (and (#{"job" "reflex"} source) (kind-is? e "recovered")) (update signals :backoffs dissoc backoff-key)
-      (and (= "reflex" source) (= "stuck" (:reflex e)) (kind-is? e "fired")) (assoc signals :stuck-t t :stuck-open? true)
-      (and (= "reflex" source) (= "stuck" (:reflex e)) (kind-is? e "ended")) (assoc signals :stuck-open? false)
-      (= "unstick.failed" kind) (assoc signals :stuck-t t)
       (and (= "system" source) (kind-is? e "takeover-started" "manual-started")) (assoc signals :takeover? true :takeover-who (:who e) :takeover-t t)
       (and (= "system" source) (kind-is? e "takeover-ended" "manual-ended")) (-> signals (assoc :takeover? false) (dissoc :takeover-who :takeover-t))
       :else signals)))

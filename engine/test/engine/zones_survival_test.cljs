@@ -195,4 +195,3 @@
           (await (run-until-empty (:eng unwedge) 6))
           (is (= 1 (count (calls (:p unwedge) "dig"))) "unwedge digs the feet block")
           (is (= [] (trespass (:seen unwedge) :unwedge.trespass-last-resort))))))))
-

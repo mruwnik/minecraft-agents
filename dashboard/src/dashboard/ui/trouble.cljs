@@ -6,7 +6,6 @@
 
 (def hurt-window-ms 30000)
 (def died-window-ms 300000)
-(def stuck-window-ms 300000)
 (def low-health 6)
 (def low-food 6)
 
@@ -31,15 +30,12 @@
 (defn backoff [{:keys [backoffs]} _ _]
   (when (seq backoffs) (reason :warn (str "backoff: " (str/join ", " (sort-by str (keys backoffs)))))))
 
-(defn stuck [{:keys [stuck-open? stuck-t]} _ now]
-  (when (or stuck-open? (within? now stuck-t stuck-window-ms)) (reason :warn "stuck")))
-
 (defn food [_ hud _]
   (let [f (:food hud)]
     (when (and (number? f) (<= f low-food)) (reason :warn (str "food " (js/Math.ceil f))))))
 
 ;; most severe first; the first one is the card's one-line reason
-(def rules [died health hurt backoff stuck food])
+(def rules [died health hurt backoff food])
 
 (defn reasons
   "The reasons a body is in trouble, [{:severity :danger|:warn :text}], most important first; none for an offline body."

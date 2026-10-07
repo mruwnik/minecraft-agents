@@ -1,6 +1,6 @@
 ;; Stay alive and otherwise idle. The reflexes are registered in priority
 ;; order, most urgent first: air, fire, a block at the feet, hostiles, night (the shelter, and getting out of it by day), food (which heals),
-;; logging out when another player sleeps, being stuck, a door a walk left open, then a death's drops, then a full
+;; logging out when another player sleeps, a door a walk left open, then a death's drops, then a full
 ;; inventory, then the safety nets: scaffold a job left (taken back only once its job is no longer live, so it
 ;; never cuts the job that built it) and trespass digs to restore. Between reflexes the body looks around, one look per round, so it visibly idles. A reflex job that
 ;; declines or is done is dropped, and the trigger fires it again once its cooldown (counted from the job ending)

@@ -97,7 +97,7 @@
            ["ended clears the same reflex"
             [(reflex-ev 1 "fired" "hungry" {}) (reflex-ev 2 "ended" "hungry" {:how "cleared"})] nil]
            ["ended of another reflex leaves it"
-            [(reflex-ev 1 "fired" "hungry" {}) (reflex-ev 2 "ended" "stuck" {:how "dropped"})] "hungry"]
+            [(reflex-ev 1 "fired" "hungry" {}) (reflex-ev 2 "ended" "flee" {:how "dropped"})] "hungry"]
            ["system.started clears it"
             [(reflex-ev 1 "fired" "hungry" {}) (ev 2 {:source "system" :kind "started" :job nil :chain nil})] nil]
            ["changed does not set it" [(reflex-ev 1 "changed" "hungry" {})] nil]]]
@@ -202,15 +202,6 @@
             [(ev 1 {:kind "backoff" :level "warn" :name "go-to"}) (ev 2 {:source "system" :kind "started" :job nil :chain nil})] {}]]]
     (testing title
       (is (= expected (into {} (:backoffs (signals events))))))))
-
-(deftest signals-stuck
-  (doseq [[title events expected]
-          [["the stuck reflex firing" [(reflex-ev 1 "fired" "stuck" {})] {:stuck-open? true :stuck-t (+ t0 1000)}]
-           ["ended closes it" [(reflex-ev 1 "fired" "stuck" {}) (reflex-ev 2 "ended" "stuck" {})] {:stuck-open? false :stuck-t (+ t0 1000)}]
-           ["unstick giving up" [(ev 1 {:kind "unstick.failed" :level "warn"})] {:stuck-t (+ t0 1000)}]
-           ["another reflex is not stuck" [(reflex-ev 1 "fired" "hungry" {})] {}]]]
-    (testing title
-      (is (= expected (select-keys (signals events) [:stuck-open? :stuck-t]))))))
 
 (deftest signals-takeover
   (doseq [[title events expected]
@@ -331,7 +322,7 @@
 (def restart-events
   [{:seq 7567 :time-ms 1791151607738 :source :system :kind :stopping :data {:pos {:x 12.4 :y 63 :z 11.5}}}
    {:seq 7568 :time-ms 1791151610849 :source :system :kind :restored
-    :data {:list [] :register [:stuck :died] :pos {:x 12.4 :y 63 :z 11.5}} :run-id "c4a9f57c"}])
+    :data {:list [] :register [:hungry :died] :pos {:x 12.4 :y 63 :z 11.5}} :run-id "c4a9f57c"}])
 
 (deftest restored-after-stopping-is-up
   (is (:up (view restart-events (+ 1791151610849 1000))))

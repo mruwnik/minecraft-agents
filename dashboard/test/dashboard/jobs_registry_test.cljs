@@ -22,18 +22,18 @@
   (is (= (count reg/entries) (count (set (map :id reg/entries))))))
 
 (deftest triggers-are-listed
-  (let [t (entry "stuck")]
+  (let [t (entry "wedged")]
     (are [k v] (= v (get t k))
       :kind :trigger
       :category "triggers"
-      :name "stuck"
-      :file "engine/src/triggers/survival/stuck.cljs"
-      :job "(jobs.maintenance.unstick)")
+      :name "wedged"
+      :file "engine/src/triggers/survival/wedged.cljs"
+      :job "(jobs.survival.unwedge)")
     (is (string? (:doc t)))
     (is (string? (:ns-doc t)))))
 
 (deftest every-default-trigger-is-listed
-  (is (= #{"suffocating" "burning" "wedged" "hostile-near" "hungry" "night" "stuck" "died" "pen-gate" "door-left"
+  (is (= #{"suffocating" "burning" "wedged" "hostile-near" "hungry" "night" "died" "pen-gate" "door-left"
            "inventory-nearly-full" "scaffold-left" "tidy-pending" "mounted"}
          (set (map :id (filter #(= :trigger (:kind %)) reg/entries))))))
 
