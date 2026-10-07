@@ -1,7 +1,7 @@
 {
   "floorMb": 6144,
   "kinds": {
-    "body": { "needMb": 500, "max": 10 },
+    "body": { "needMb": 400, "max": 20 },
     "tests": { "needMb": 2950, "baseMb": 700, "perNsMb": 40, "goldenMb": 940, "max": 5, "shardMax": 3 },
     "server": { "needMb": 2000, "max": 4 },
     "browser": { "needMb": 600, "max": 2 }
