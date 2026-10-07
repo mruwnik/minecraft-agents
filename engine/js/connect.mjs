@@ -7,6 +7,7 @@ import pf from 'mineflayer-pathfinder'
 import { SafeMovements } from './movements.mjs'
 import { fixDigMaterials } from './dig-materials.mjs'
 import { MC_VERSION } from './path/snapshot.mjs'
+import { tickRatePhysics } from './tick-rate-physics.mjs'
 
 const { pathfinder } = pf
 
@@ -15,10 +16,12 @@ const { pathfinder } = pf
 export const DEFAULTS = { version: MC_VERSION, auth: 'offline', viewDistance: 8 }
 export const SPAWN_TIMEOUT_MS = 60000
 
-// The mineflayer createBot options for a body's connection settings.
-export function botOptions ({ host, port, username, auth = DEFAULTS.auth, version = DEFAULTS.version, viewDistance = DEFAULTS.viewDistance }) {
+// The mineflayer createBot options for a body's connection settings. followTickRate (or MC_FOLLOW_TICK_RATE=1 in the
+// environment) swaps in physics that follows /tick rate, see tick-rate-physics.mjs; off by default.
+export function botOptions ({ host, port, username, auth = DEFAULTS.auth, version = DEFAULTS.version, viewDistance = DEFAULTS.viewDistance, followTickRate = process.env.MC_FOLLOW_TICK_RATE === '1' }) {
   if (version !== MC_VERSION) throw new Error(`minecraft version ${version} is not supported: the planner block table is built for ${MC_VERSION}`)
-  return { host, port, username, auth, version, viewDistance }
+  const options = { host, port, username, auth, version, viewDistance }
+  return followTickRate ? { ...options, plugins: { physics: tickRatePhysics() } } : options
 }
 
 // Resolves with the bot once it has spawned and the pathfinder has movements that never dig or build and

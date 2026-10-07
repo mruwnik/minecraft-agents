@@ -18,3 +18,9 @@ test('botOptions keeps the connection settings', () => {
 test('botOptions refuses a version the planner block table is not built for', () => {
   assert.throws(() => botOptions({ host: 'h', port: 1, username: 'u', version: '1.20.4' }), /not supported/)
 })
+
+test('botOptions swaps in tick-rate physics only when asked', () => {
+  const base = { host: 'h', port: 1, username: 'u' }
+  assert.equal(botOptions({ ...base, followTickRate: false }).plugins, undefined)
+  assert.equal(typeof botOptions({ ...base, followTickRate: true }).plugins.physics, 'function')
+})
