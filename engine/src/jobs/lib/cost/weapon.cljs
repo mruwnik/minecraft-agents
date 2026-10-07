@@ -64,6 +64,10 @@
    "spider" 16 "cave_spider" 12 "creeper" 20 "witch" 26 "pillager" 24 "slime" 16 "silverfish" 8
    "endermite" 8 "phantom" 20 "vindicator" 24 "enderman" 40})
 
+(def passive-max-health
+  "Full health of the common passive animals (what a hunt costs in the item value base)."
+  {"cow" 10 "pig" 10 "sheep" 8 "chicken" 4 "rabbit" 3 "cod" 3 "salmon" 3 "squid" 10})
+
 (def weapon-damage-by-name
   {"wooden_sword" 4 "golden_sword" 4 "stone_sword" 5 "copper_sword" 5 "iron_sword" 6 "diamond_sword" 7 "netherite_sword" 8
    "wooden_axe" 7 "golden_axe" 7 "stone_axe" 9 "copper_axe" 9 "iron_axe" 9 "diamond_axe" 9 "netherite_axe" 10})

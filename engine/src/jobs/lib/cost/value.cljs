@@ -2,23 +2,24 @@
   "What a list of items is worth (item-value) and what fetching them costs (fetch-cost), in one unit: about a second
   of a player's work. recover-drops compares the two; any job may ask what a pile, a chest or a kit is worth.
 
-  The worth of one item is built from minecraft-data for the body's version, never from a hand list:
+  The worth of one item is the cheapest way to obtain it, from minecraft-data for the body's version. Every constant
+  and the few small tables (ore rarity, natural-and-craftable blocks, passive-mob health, rare drop chances) live in
+  default-basis, overridable by :basis (deep-merged). The tables are defaults, not data minecraft-data has.
 
-    natural items  An item a block drops, from a block no crafting recipe makes: hardness (0.1..5) x tool tier x
-                   rarity, taking the cheapest such block.
-                   Tool tier: the weakest tool in the block's harvestTools. None, wood or gold x1, stone or copper x4,
-                   iron x16, diamond or netherite x64.
-                   Rarity: x10 for an ore block (*_ore, ancient_debris).
-                   Examples: dirt 0.5, cobblestone 1.5, a log 2, coal 30, raw iron 120, diamond 480.
-    made items     The cheapest crafting recipe: the ingredients plus 1 for the craft, divided by the result count.
-                   Or smelting, which minecraft-data does not describe, so by name rule (raw_X -> X_ingot,
-                   X -> cooked_X, ancient_debris -> netherite_scrap, cobblestone -> stone, sand -> glass,
-                   clay_ball -> brick): the input plus 2 for fuel and time.
-                   Recipes loop (ingot, block, nugget), so the table is a fixpoint and the cheapest way wins.
-                   Examples: stone pickaxe 6.75, iron ingot 122, diamond pickaxe 1443.
-    no source      Neither dropped nor made (mob and chest loot): 4 x 64 / stack size. A 64-stack is 4 each, a
-                   16-stack 16, an unstackable 256.
-    unknown        A name minecraft-data does not list: unknown-each (1).
+    block        A block's drops (blockLoot, no silk touch, chance at least :min-drop-chance): (dig + find) / drops.
+                 dig = hardness x :hardness-s / the speed of the stone tool (the block's own tier if higher);
+                 find = :terrain, or :ores {ore [find drops]}, or :find-s for a block. Crafted blocks are no source
+                 except :natural ones (granite, clay ...); a block that is no item (redstone_wire) is none.
+    crop         A block with an age state: :farm-s / the age-7 yield.
+    mob          entityLoot of the mobs in weapon/mob-max-health and passive-max-health: (kill + hurt + find) / expected
+                 drops; kill = the stone sword's hits, hurt = :hurt-per-hp x health x :danger, find by hostile or passive.
+    made         The cheapest recipe: the ingredients plus :craft-step, divided by the result count; or smelting by
+                 name rule (raw_X -> X_ingot, X -> cooked_X, ancient_debris -> netherite_scrap, cobblestone -> stone,
+                 sand -> glass, clay_ball -> brick): the input plus :smelt-step. The table is a fixpoint.
+    unused       A sourced item that is no tool, armour, edible food, block or ingredient is worth :junk-share of that.
+    food         An edible food is worth at least its points x :food-point-s.
+    no source    4 x 64 / stack size (a 64-stack 4, a 16-stack 16, an unstackable 256).
+    unknown      A name minecraft-data does not list: unknown-each (1).
 
   Per stack: worth x count (nil counts 1; 0, negative or not a number counts 0), x the durability left (:durability
   against maxDurability, at least 0.1), plus each enchantment (:enchants [{:name :lvl|:level}]) at
@@ -31,8 +32,9 @@
   group one.
 
   Prices ([[regex price] ...], first match wins) set the worth of one item by name pattern, with :else the price of
-  items no pattern matches: a job that ranks items its own way (make-room's keep tiers) passes its own table, and the
-  durability and enchantment terms do not apply to a priced item."
+  items no pattern matches, and :enchanted the worth of a stack with :enchants or :nbt: a job that ranks items its own
+  way (make-room's keep tiers) passes its own table, and the durability and enchantment terms do not apply to a priced
+  item. A row [regex price :per-stack] prices the whole stack, not each item."
   (:require ["minecraft-data" :as minecraft-data]
             [clojure.string :as str]
             [jobs.lib.cost.health :as health]
@@ -41,16 +43,34 @@
             [engine.game :as game]))
 
 (def unknown-each "The worth of one item minecraft-data does not know." 1)
-(def no-source-each "The worth of one item of a 64-stack that no block drops and no recipe makes." 4)
-(def craft-step "Added to a recipe's ingredients: the craft itself." 1)
-(def smelt-step "Added to a smelted item: fuel and furnace time." 2)
-(def ore-rarity 10)
-(def max-hardness 5)
-(def min-hardness 0.1)
+(def no-source-each "The worth of one item of a 64-stack that no block drops, mob drops or recipe makes." 4)
 (def per-enchant-level 30)
 (def min-durability-share 0.1)
 
-(defn tier-factor [tier] (if (<= tier 1) 1 (js/Math.pow 4 (dec tier))))
+(def default-basis
+  "Every constant of the item base; item-value's :basis is deep-merged over it."
+  {:craft-step 1
+   :smelt-step 2
+   :junk-share 0.1
+   :food-point-s 2
+   :farm-s 4
+   :min-drop-chance 0.05
+   :drop-chance {"apple" 0.005 "wheat_seeds" 0.125}
+   :dig {:hardness-s 1.5 :max-hardness 5 :min-s 0.25 :default-tier 2 :speed {1 2 2 4 3 6 4 8}}
+   :find {:terrain 0.1
+          :block {"gilded_blackstone" 300}
+          :ore-by-tier {1 10 2 30 3 300 4 300}
+          :ores {"coal" [10 1.5] "copper" [15 3.5] "iron" [30 1] "lapis" [60 6.5] "redstone" [40 4.5] "gold" [90 1]
+                 "diamond" [300 1.5] "emerald" [900 1] "nether_quartz" [40 1.5] "nether_gold" [60 4]
+                 "ancient_debris" [900 1]}}
+   :natural #{"granite" "diorite" "andesite" "coarse_dirt" "sandstone" "red_sandstone" "mossy_cobblestone" "snow"
+              "clay" "glowstone" "melon" "packed_ice" "blue_ice" "prismarine" "dark_prismarine"}
+   :mob {:weapon "stone_sword" :hurt-per-hp 0.25 :danger {"creeper" 3} :find {:hostile 20 :passive 15}}})
+
+(defn deep-merge [a b]
+  (cond (nil? b) a
+        (and (map? a) (map? b)) (merge-with deep-merge a b)
+        :else b))
 
 (defn smelt-sources
   "{output name input name}: smelting minecraft-data does not describe, by name rule over the item names it has."
@@ -68,6 +88,11 @@
 
 (defn ore-block? [name] (or (str/ends-with? name "_ore") (= "ancient_debris" name)))
 
+(defn ore-key
+  "The :ores key of an ore block (deepslate_diamond_ore -> diamond)."
+  [name]
+  (-> name (str/replace #"^deepslate_" "") (str/replace #"_ore$" "")))
+
 (defn block-tier
   "The weakest harvest tool's tier of block b (0 when it needs none)."
   [md b]
@@ -76,23 +101,88 @@
       0
       (apply min (map (fn [id] (weapon/tool-tier (.-name (aget (.-items md) id)))) tools)))))
 
-(defn natural-values
-  "{item name worth} of what blocks no recipe makes drop: the cheapest such block."
-  [md crafted]
-  (reduce (fn [acc b]
-            (let [hardness (.-hardness b)
-                  drops (.-drops b)]
-              (if (or (not (number? hardness)) (neg? hardness) (crafted (.-name b)) (nil? drops))
-                acc
-                (let [w (* (max min-hardness (min max-hardness hardness))
-                           (tier-factor (block-tier md b))
-                           (if (ore-block? (.-name b)) ore-rarity 1))]
-                  (reduce (fn [acc id]
-                            (if-let [item (aget (.-items md) (if (number? id) id (.-id id)))]
-                              (update acc (.-name item) #(min (or % js/Infinity) w))
-                              acc))
-                          acc (array-seq drops))))))
-          {} (array-seq (.-blocksArray md))))
+(defn mean-range [r] (if r (/ (+ (aget r 0) (aget r 1)) 2) 1))
+
+(defn dig-seconds [md basis b]
+  (let [{:keys [hardness-s max-hardness min-s default-tier speed]} (:dig basis)
+        tier (max default-tier (block-tier md b))]
+    (max min-s (/ (* hardness-s (min max-hardness (.-hardness b))) (get speed tier (get speed default-tier))))))
+
+(defn find-seconds [md basis b]
+  (let [{:keys [terrain block ores ore-by-tier]} (:find basis)
+        name (.-name b)]
+    (cond
+      (contains? block name) (get block name)
+      (ore-block? name) (first (get ores (ore-key name) [(get ore-by-tier (block-tier md b) (apply max (vals ore-by-tier)))]))
+      :else terrain)))
+
+(defn crop? [b loot]
+  (and (some #(= "age" (.-name %)) (some-> (.-states b) array-seq))
+       (some #(some? (.-blockAge %)) (some-> loot .-drops array-seq))))
+
+(defn block-yields
+  "[[item name expected drops per break] ...] of block b: its blockLoot without silk touch (the age-7 entries of a
+  crop, none of a crop's others), or the plain drops; ores take the drop count of the :ores table."
+  [md basis b loot crop]
+  (let [item-name (fn [id] (some-> (aget (.-items md) (if (number? id) id (.-id id))) .-name))
+        ore ((:ores (:find basis)) (ore-key (.-name b)))
+        entries (if loot
+                  (->> (array-seq (.-drops loot))
+                       (remove #(or (.-silkTouch %) (not= (boolean crop) (some? (.-blockAge %)))))
+                       (map (fn [e] [(.-item e) (if crop 1 (get-in basis [:drop-chance (.-item e)] (.-dropChance e)))
+                                     (mean-range (.-stackSizeRange e))])))
+                  (map (fn [id] [(item-name id) 1 1]) (some-> (.-drops b) array-seq)))]
+    (for [[item chance mean] entries
+          :when (and item (>= chance (:min-drop-chance basis)))]
+      [item (if (and ore (ore-block? (.-name b))) (second ore) (* chance mean))])))
+
+(defn block-sources
+  "{item name worth} of what blocks drop: the cheapest way, per item."
+  [md basis crafted]
+  (let [item? #(some? (aget (.-itemsByName md) %))]
+    (reduce (fn [acc b]
+              (let [name (.-name b)
+                    loot (aget (.-blockLoot md) name)
+                    crop (crop? b loot)]
+                (if (or (not (number? (.-hardness b))) (neg? (.-hardness b))
+                        (and (crafted name) (not crop) (not (contains? (:natural basis) name)))
+                        (not (or crop (item? name))))
+                  acc
+                  (let [cost (if crop
+                               (:farm-s basis)
+                               (+ (dig-seconds md basis b) (find-seconds md basis b)))]
+                    (reduce (fn [acc [item n]] (if (pos? n) (update acc item #(min (or % js/Infinity) (/ cost n))) acc))
+                            acc (block-yields md basis b loot crop))))))
+            {} (array-seq (.-blocksArray md)))))
+
+(defn mob-sources
+  "{item name worth} of what mobs drop (entityLoot): the kill, the hurt and the finding, per expected drop."
+  [md basis]
+  (let [{:keys [weapon hurt-per-hp danger find]} (:mob basis)
+        passive weapon/passive-max-health
+        mobs (merge passive weapon/mob-max-health)
+        gap (/ (weapon/attack-gap-ms weapon) 1000)
+        damage (weapon/weapon-damage weapon)]
+    (reduce (fn [acc [mob hp]]
+              (let [kill (* gap (js/Math.ceil (/ hp damage)))
+                    hurt (if (passive mob) 0 (* hurt-per-hp hp (get danger mob 1)))
+                    cost (+ kill hurt (if (passive mob) (:passive find) (:hostile find)))]
+                (reduce (fn [acc e]
+                          (let [n (* (.-dropChance e) (mean-range (.-stackSizeRange e)))]
+                            (if (and (>= (.-dropChance e) (:min-drop-chance basis)) (pos? n))
+                              (update acc (.-item e) #(min (or % js/Infinity) (/ cost n)))
+                              acc)))
+                        acc (some-> (aget (.-entityLoot md) mob) .-drops array-seq))))
+            {} mobs)))
+
+(defn used?
+  "An item that is something: a tool, armour, an edible food, a placeable block or an ingredient."
+  [md ingredients version name]
+  (let [item (aget (.-itemsByName md) name)]
+    (boolean (or (ingredients name)
+                 (number? (some-> item .-maxDurability))
+                 (and (contains? (foods/table-for version) name) (not (contains? foods/harmful name)))
+                 (aget (.-blocksByName md) name)))))
 
 (defn recipe-list
   "[[result-name result-count [ingredient-name ...]] ...] of every crafting recipe."
@@ -120,15 +210,24 @@
 (defn normal-overrides [overrides] (into {} (map (fn [[k o]] [(if (keyword? k) (name k) (str k)) o])) overrides))
 
 (defn build-table
-  "{item name worth} for minecraft-data version with name overrides pinned (overrides: {name override})."
-  [version overrides]
+  "{item name worth} for minecraft-data version with name overrides pinned (overrides: {name override}) and the basis
+  (default-basis with the deep-merged :basis)."
+  [version overrides basis]
   (let [md (minecraft-data version)
+        basis (deep-merge default-basis basis)
         items (array-seq (.-itemsArray md))
         names (map #(.-name %) items)
         recipes (recipe-list md)
         crafted (set (map first recipes))
-        natural (natural-values md crafted)
+        ingredients (set (mapcat #(nth % 2) recipes))
         smelts (smelt-sources names)
+        foods-table (foods/table-for version)
+        food-floor (fn [n] (if (contains? foods/harmful n) 0 (* (:food-point-s basis) (get-in foods-table [n :points] 0))))
+        sourced (merge-with min (block-sources md basis crafted) (mob-sources md basis))
+        natural (into {} (map (fn [[n w]] [n (if (or (crafted n) (contains? smelts n) (used? md ingredients version n))
+                                                  w
+                                                  (* w (:junk-share basis)))]))
+                       sourced)
         by-result (group-by first recipes)
         pinned (into {} (map (fn [[n o]] [n (override-fn o)])) overrides)
         pin (fn [n w] ((get pinned n identity) w))
@@ -136,17 +235,17 @@
         step (fn [table]
                (into {} (map (fn [n]
                                (let [via-recipe (some->> (by-result n)
-                                                         (map (fn [[_ k ins]] (/ (+ craft-step (reduce + (map #(get table % js/Infinity) ins))) k)))
+                                                         (map (fn [[_ k ins]] (/ (+ (:craft-step basis) (reduce + (map #(get table % js/Infinity) ins))) k)))
                                                          (apply min))
-                                     via-smelt (some-> (smelts n) (#(+ smelt-step (get table % js/Infinity))))
+                                     via-smelt (some-> (smelts n) (#(+ (:smelt-step basis) (get table % js/Infinity))))
                                      w (min (get natural n js/Infinity) (or via-recipe js/Infinity) (or via-smelt js/Infinity))]
-                                 [n (pin n w)])))
+                                 [n (pin n (if (js/isFinite w) (max w (food-floor n)) w))])))
                      names))
         start (into {} (map (fn [n] [n (pin n (get natural n js/Infinity))])) names)
         table (loop [t start i 0]
                 (let [t' (step t)]
                   (if (or (= t t') (>= i 60)) t' (recur t' (inc i)))))]
-    (into {} (map (fn [[n w]] [n (if (js/isFinite w) w (pin n (no-source n)))])) table)))
+    (into {} (map (fn [[n w]] [n (if (js/isFinite w) w (pin n (max (no-source n) (food-floor n))))])) table)))
 
 (def table-for (memoize build-table))
 
@@ -184,11 +283,23 @@
                          (* per-enchant-level level (/ 10 (max 1 weight)))))
                      enchants))))
 
+(defn enchanted?
+  "Whether the entry carries a non-empty :enchants or :nbt."
+  [entry]
+  (boolean (some #(seq (get entry %)) [:enchants :nbt])))
+
+(defn price-of
+  "[each stack?] of the first prices row matching name ([regex price] or [regex price :per-stack]), else nil."
+  [prices name]
+  (some (fn [[re p mode]] (when (re-find re name) [p (= :per-stack mode)])) prices))
+
 (defn stack-worth
   "{:name :count :each :value} of one entry; group overrides skip a name that has its own (named, a map)."
-  [version table group-overrides named prices else {:keys [name durability enchants] :as entry}]
+  [version table group-overrides named {:keys [prices else enchanted]} {:keys [name durability enchants] :as entry}]
   (let [n (count-of entry)
-        price (or (some (fn [[re p]] (when (re-find re name) p)) prices) else)
+        [price per-stack] (or (when (and enchanted (enchanted? entry)) [enchanted true])
+                              (price-of prices name)
+                              (when else [else false]))
         md (minecraft-data version)
         item (aget (.-itemsByName md) name)
         base (get table name ((override-fn (get group-overrides "unknown")) unknown-each))
@@ -198,26 +309,29 @@
         share (if (and (number? durability) (number? max-d) (pos? max-d))
                 (max min-durability-share (min 1 (/ durability max-d)))
                 1)
-        each (or price (+ (* grouped share) (enchant-worth version enchants)))]
+        each (cond (nil? price) (+ (* grouped share) (enchant-worth version enchants))
+                   per-stack (/ price (max 1 n))
+                   :else price)]
     {:name name :count n :each each :value (* n each)}))
 
 (defn item-value
   "{:value total :items [{:name :count :each :value} ...]} of items ([{:name :count ...}], inventory or drop shape),
-  main contributors first. Stacks of one name with the same durability and enchantments are added. See the ns doc.
-  Options: :overrides, :prices and :else (see the ns doc), :version (minecraft-data, default the body's). Never throws on odd entries: no name is
-  worth 0, an unknown name unknown-each."
-  [items & {:keys [overrides prices else version]}]
+  main contributors first. Stacks of one name with the same durability, enchantments and :nbt are added. See the ns doc.
+  Options: :overrides, :prices, :else and :enchanted (see the ns doc), :basis (over default-basis), :version
+  (minecraft-data, default the body's). Never throws on odd entries: no name is worth 0, an unknown name unknown-each."
+  [items & {:keys [overrides prices else enchanted version basis]}]
   (let [version (or version @game/version)
         overrides (normal-overrides overrides)
         group-names #{"ore" "tool" "armor" "food" "block" "unknown"}
         group-overrides (select-keys overrides group-names)
         name-overrides (apply dissoc overrides group-names)
-        table (table-for version name-overrides)
+        table (table-for version name-overrides basis)
         named (filter #(string? (:name %)) items)
         merged (map (fn [[k stacks]] (assoc k :count (reduce + 0 (map count-of stacks))))
-                    (group-by #(select-keys % [:name :durability :enchants]) named))
+                    (group-by #(select-keys % [:name :durability :enchants :nbt]) named))
+        opts {:prices prices :else else :enchanted enchanted}
         rows (->> merged
-                  (map #(stack-worth version table group-overrides name-overrides prices else %))
+                  (map #(stack-worth version table group-overrides name-overrides opts %))
                   (filter #(pos? (:count %)))
                   (sort-by :value >)
                   vec)]

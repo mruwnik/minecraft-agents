@@ -18,29 +18,20 @@
   (:require [jobs.lib.cost :as cost]))
 
 (def prices
-  "make-room's prices, [[regex price] ...] in priority order (first match wins; unmatched items cost 0)."
-  [[#"^(diamond|netherite)(_|$)|^(ancient_debris|elytra|totem_of_undying|nether_star|beacon)$|shulker_box$" 25]
-   [#"^iron_(pickaxe|axe|shovel|hoe|sword|helmet|chestplate|leggings|boots)$" 5]
-   [#"^(bow|crossbow|shield|redstone|ender_pearl|golden_apple|emerald|emerald_block)$" 5]
+  "make-room's prices, [[regex price] ...] in priority order (first match wins; unmatched items cost 0). A price is per
+  stack; the metals' rows are per item."
+  [[#"^(diamond|netherite)(_|$)|^(ancient_debris|elytra|totem_of_undying|nether_star|beacon)$|shulker_box$" 25 :per-stack]
+   [#"^iron_(pickaxe|axe|shovel|hoe|sword|helmet|chestplate|leggings|boots)$" 5 :per-stack]
+   [#"^(bow|crossbow|shield|redstone|ender_pearl|golden_apple|emerald|emerald_block)$" 5 :per-stack]
    [#"^(coal_block|iron_block|iron_ingot|gold_ingot|raw_iron)$" 2]
-   [#"^(cooked_.*|bread|apple|carrot|baked_potato|golden_carrot|melon_slice|sweet_berries)$" 1]
-   [#"_(log|planks|wood)$" 1]
-   [#"^(stone|wooden|golden)_(pickaxe|axe|shovel|hoe|sword)$" 1]
-   [#"^leather" 1]])
+   [#"^(cooked_.*|bread|apple|carrot|baked_potato|golden_carrot|melon_slice|sweet_berries)$" 1 :per-stack]
+   [#"_(log|planks|wood)$" 1 :per-stack]
+   [#"^(stone|wooden|golden)_(pickaxe|axe|shovel|hoe|sword)$" 1 :per-stack]
+   [#"^leather" 1 :per-stack]])
 
 (def enchanted-worth 25)
 
-(def per-count "Metals: a stack is worth its count times the price." #"^(coal_block|iron_block|iron_ingot|gold_ingot|raw_iron)$")
-
-(defn enchanted?
-  "Whether the item carries a non-empty :enchants or :nbt."
-  [item]
-  (boolean (some #(seq (get item %)) [:enchants :nbt])))
-
 (defn item-worth
   "The worth of one inventory entry ({:name :count? ...}); a missing :count counts as 1."
-  [{:keys [name count] :as item}]
-  (if (enchanted? item)
-    enchanted-worth
-    (let [each (:each (first (:items (cost/item-value [(assoc item :count 1)] :prices prices :else 0))))]
-      (if (re-find per-count name) (* each (or count 1)) each))))
+  [item]
+  (:value (cost/item-value [item] :prices prices :else 0 :enchanted enchanted-worth)))

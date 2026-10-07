@@ -108,9 +108,50 @@
     (is (= 15 (value [{:name "iron_ingot" :count 3}] :prices prices)) "price per item, times the count")
     (is (= (each "dirt") (value [{:name "dirt"}] :prices prices)) "unmatched items keep the base")))
 
+(deftest a-per-stack-row-prices-the-whole-stack
+  (let [prices [[#"^iron_ingot$" 2] [#"^cobblestone$" 1 :per-stack]]]
+    (is (= 6 (value [{:name "iron_ingot" :count 3}] :prices prices)))
+    (is (= 1 (value [{:name "cobblestone" :count 64}] :prices prices)))
+    (is (= 1 (value [{:name "cobblestone"}] :prices prices)) "a missing count is one")))
+
+(deftest enchanted-stacks-take-the-enchanted-price-and-a-priced-item-ignores-durability
+  (let [opts [:prices [[#"^diamond_pickaxe$" 7]] :else 0 :enchanted 25]]
+    (is (= 25 (apply value [{:name "dirt" :count 5 :enchants [{:name "mending"}]}] opts)))
+    (is (= 25 (apply value [{:name "dirt" :nbt {:x 1}}] opts)))
+    (is (= 0 (apply value [{:name "dirt" :enchants []}] opts)) "an empty :enchants is not enchanted")
+    (is (= 7 (apply value [{:name "diamond_pickaxe" :durability 1}] opts)) "no durability term on a price")
+    (is (= 25 (apply value [{:name "diamond_pickaxe" :enchants [{:name "mending"}]}] opts)))))
+
 (deftest else-prices-every-unmatched-item
   (is (= 0 (value [{:name "dirt"} {:name "mystery_thing"}] :prices [[#"^diamond$" 9]] :else 0)))
   (is (= 9 (value [{:name "diamond"}] :prices [[#"^diamond$" 9]] :else 0))))
+
+(deftest the-base-gives-sane-defaults
+  (is (< (each "granite") (* 2 (each "cobblestone"))) "a natural block a recipe also makes is not its recipe")
+  (are [name] (> (each name) (each "dirt"))
+    "carrot" "redstone" "string" "torch")
+  (is (< (* 3 (each "wheat")) (each "bread") (* 4 (each "wheat"))) "bread is three wheat and a craft")
+  (is (> (each "bread") (each "carrot")))
+  (is (> (each "bone") (each "rotten_flesh")))
+  (is (> (each "gunpowder") (each "bone")))
+  (is (< (each "lapis_lazuli") (each "raw_iron")))
+  (is (< (each "copper_ingot") (each "iron_ingot")))
+  (is (< (each "apple") (each "diamond")) "a 0.5% drop is not sourced from leaves")
+  (is (< (each "cobblestone") (each "coal") (each "raw_iron") (each "diamond"))))
+
+(deftest placed-forms-are-no-free-source-and-no-source-items-keep-the-stack-rule
+  (is (> (each "redstone") 1))
+  (is (= (* v/no-source-each 64) (each "totem_of_undying")) "no source: 4 x 64 / stack of 1"))
+
+(deftest basis-options-change-the-table
+  (is (> (value [{:name "rotten_flesh"}] :basis {:junk-share 1}) (* 5 (each "rotten_flesh"))))
+  (is (> (value [{:name "granite"}] :basis {:natural #{}}) (* 10 (each "granite"))) "the natural set is a default")
+  (is (> (value [{:name "diamond"}] :basis {:find {:ores {"diamond" [600 1.5]}}}) (* 1.9 (each "diamond"))))
+  (is (= (each "coal") (value [{:name "coal"}] :basis {:find {:ores {"diamond" [600 1.5]}}})) "the other ores are kept")
+  (is (not= (value [{:name "diamond"}] :basis {:find {:ores {"diamond" [600 1.5]}}}) (each "diamond"))
+      "two bases, two tables")
+  (is (< (value [{:name "iron_pickaxe"}] :overrides {"iron_ingot" 0} :basis {:junk-share 1}) (each "stone_pickaxe"))
+      "a name override still flows through"))
 
 ;; ---------------------------------------------------------------- fetch-cost
 
