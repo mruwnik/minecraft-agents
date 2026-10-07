@@ -389,3 +389,13 @@
           (is (empty? (of-kind seen :pillar.gave-up)))
           (is (= [0 67 0] (feet p)))
           (is (= (repeat 3 "dirt") (blocks-at p (column base 3)))))))))
+
+(defn stub-body [x z] {:primitives #js {:self (fn [] #js {:pos #js {:x x :y 64 :z z}})}})
+
+(deftest centred-is-true-with-the-body-on-its-start-point
+  (are [pos] (true? (pillar/centred? (stub-body (first pos) (second pos)) [0 0] [0.5 0.5]))
+    [0.5 0.5] [0.6 0.4] [0.69 0.31]))
+
+(deftest centred-is-false-off-the-point-or-the-cell
+  (are [pos] (false? (pillar/centred? (stub-body (first pos) (second pos)) [0 0] [0.5 0.5]))
+    [0.9 0.5] [1.1 0.5] [0.5 -0.1]))
