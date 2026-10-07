@@ -163,12 +163,13 @@
 
 (defn check [c]
   (let [{:keys [cells trouble]} (planned c)]
-    (boolean
-     (and (not trouble)
-          (declined/check c)
-          (or (:phase (ctx/mem c))
-              (sound? c cells)
-              (ready? c cells))))))
+    (cond
+      trouble (ctx/wait c {:reason :plan-trouble :why (:reason trouble)})
+      (not (declined/check c)) false
+      (or (:phase (ctx/mem c))
+          (sound? c cells)
+          (ready? c cells)) true
+      :else (ctx/wait c {:reason :not-ready}))))
 
 ;; ------------------------------------------------------------------ rounds
 

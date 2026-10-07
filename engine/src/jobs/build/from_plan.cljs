@@ -395,20 +395,21 @@
 (defn check [c]
   (let [{:keys [cells trouble]} (planned c)
         p (:primitives c)]
-    (boolean
-     (and (not trouble)
-          (or (:begun (ctx/mem c))
-              (empty? (owed cells))
-              (seq (buildable cells (carried-counts p) {}))
-              (seq (digging cells))
-              (some #(pos? (get (carried-counts p) (:item %) 0)) (unseen cells {}))
-              (when-let [w (need-of c cells)] (some? (fetch/due c 'jobs.build.from-plan w)))
-              (do (ctx/warn-once! c [(:plan (:args c)) :no-items] :build.declined
-                                  (let [reason (str "nothing carried to build with: "
-                                                    (shortage-text (shortage (owed cells) (carried-counts p))))]
-                                    {:plan (:plan (:args c)) :part (:part (:args c)) :reason reason
-                                     :text (str "build declines plan " (:plan (:args c)) ": " reason)}))
-                  false))))))
+    (cond
+      trouble (ctx/wait c {:reason :plan-trouble :why trouble})
+      (or (:begun (ctx/mem c))
+          (empty? (owed cells))
+          (seq (buildable cells (carried-counts p) {}))
+          (seq (digging cells))
+          (some #(pos? (get (carried-counts p) (:item %) 0)) (unseen cells {}))
+          (when-let [w (need-of c cells)] (some? (fetch/due c 'jobs.build.from-plan w)))) true
+      :else
+      (do (ctx/warn-once! c [(:plan (:args c)) :no-items] :build.declined
+                          (let [reason (str "nothing carried to build with: "
+                                            (shortage-text (shortage (owed cells) (carried-counts p))))]
+                            {:plan (:plan (:args c)) :part (:part (:args c)) :reason reason
+                             :text (str "build declines plan " (:plan (:args c)) ": " reason)}))
+          (ctx/wait c {:reason :no-items})))))
 
 ;; ------------------------------------------------------------------ steps
 

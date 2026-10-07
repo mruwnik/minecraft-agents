@@ -98,11 +98,11 @@
 
 (defn check [c]
   (let [{:keys [cells trouble]} (planned c)]
-    (boolean
-     (and (not trouble)
-          (or (:phase (ctx/mem c))
-              (and (not (sound? c cells))
-                   (ctx/check-child c :build 'jobs.build.from-plan (build-args c))))))))
+    (cond
+      trouble (ctx/wait c {:reason :plan-trouble :why trouble})
+      (:phase (ctx/mem c)) true
+      (sound? c cells) (ctx/wait c {:reason :already-sound})
+      :else (boolean (ctx/check-child c :build 'jobs.build.from-plan (build-args c))))))
 
 ;; ------------------------------------------------------------------ rounds
 
