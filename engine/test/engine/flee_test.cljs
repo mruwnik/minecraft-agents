@@ -323,6 +323,16 @@
           (is (= :hidden (:ended out)))
           (is (= [] (:list (core/state eng)))))))))
 
+(deftest a-chaser-beyond-the-radius-that-keeps-its-distance-ends-the-dance-in-a-hold
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p] :as s} (setup {:floor [-8 -8 8 8] :entities [(zombie 7 4 {:pos {:x 4 :y 64 :z 4}})]})
+              _ (js/setTimeout #(swap! (fake/state p) assoc :entities []) 2500)
+              _ (await (run-job! s 'jobs.survival.retreat {}))
+              waits (filterv #(and (= "wait" (.-name %)) (= "cornered" (.. % -args -why))) (.-calls (.-world p)))]
+          (is (seq waits) "no gain against a chaser beyond :radius ends in a cornered hold, not a walk back and forth"))))))
+
 ;; ------------------------------------------------------------------ what the flight senses, resume, the round's bound
 
 (deftest the-flight-judges-chasers-from-what-the-body-knows

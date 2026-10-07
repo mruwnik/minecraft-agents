@@ -301,7 +301,7 @@
                 moved (await (step! c :step target 1))]
             (if-not moved
               (await (stuck "the way away from the hostile is blocked"))
-              (let [gap (flight/nearest-gap p (near-hostiles c))]
+              (let [gap (flight/nearest-gap p threats)]
                 (ctx/update-mem! c #(-> % (dissoc :tried) (flight/note-gap gap)))
                 :again))))))))
 

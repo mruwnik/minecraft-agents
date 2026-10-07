@@ -36,7 +36,7 @@
 
 (defn note-gap
   "mem after a flight step that left the nearest chaser gap blocks off: a gain of a block over the best gap resets the
-  sweeps and the no-gain count, else the count grows. No gap (no hostile near) is no sample: the flight is succeeding,
+  sweeps and the no-gain count, else the count grows. No gap (no chaser left) is no sample: the flight is succeeding,
   the no-gain count resets and the best gap stays."
   [mem gap]
   (let [best (:best-gap mem)]
