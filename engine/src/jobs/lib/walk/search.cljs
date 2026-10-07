@@ -118,7 +118,7 @@
    :goal-unloaded (goal-unloaded? (.-snapshot walled) to)
    :edge-stop (some? known)
    :limited (planner/create-plan (.-snapshot walled) (wplan/plan-query c to range)
-                                 (cond-> (wplan/plan-options walled weight (executor/planner-limits policy (wworld/solid-fn walled)) wplan/wide-box)
+                                 (cond-> (wplan/with-drops (wplan/plan-options walled weight (executor/planner-limits policy (wworld/solid-fn walled)) wplan/wide-box) policy)
                                    flood (doto (unchecked-set "goalFloodMemo" flood))
                                    known (doto (unchecked-set "knownCells" (:cells known))
                                                (unchecked-set "knownEdges" (:edges known))
@@ -153,7 +153,7 @@
           (let [r (.result phase)]
             (if (wplan/beyond-needed? r)
               (recur (assoc search :r r :unlimited (planner/create-plan (.-snapshot walled) (wplan/plan-query c to range)
-                                                                        (cond-> (wplan/plan-options walled weight nil wplan/wide-box)
+                                                                        (cond-> (wplan/with-drops (wplan/plan-options walled weight nil wplan/wide-box) policy)
                                                                           (:edge-stop search) (doto (unchecked-set "stopAtEdge" true)))))
                      used)
               [search (wplan/within-of walled r)]))

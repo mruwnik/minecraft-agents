@@ -58,6 +58,16 @@
                          :dark (.-dark pw) :tolls (.-tolls pw)}
                     (clj->js box)))
 
+(defn with-drops
+  "options (the planner's, a JS object) with the policy's :drop-cost: a number is the planner's costs.dropFactor (nil: as
+  it is), false takes no drop of 2 or 3 (maxDrop 1)."
+  [^js options policy]
+  (let [k (:drop-cost policy)]
+    (cond
+      (false? k) (doto options (unchecked-set "maxDrop" 1))
+      (number? k) (doto options (unchecked-set "costs" #js {:dropFactor k}))
+      :else options)))
+
 (defn ^:async plan-from!
   "Plan from the body's cell to the goal in wide-box, within limits (the planner's options.limits, nil for none): the
   planner's JS result, searched in slices (run-plan!) with the event loop run between them."

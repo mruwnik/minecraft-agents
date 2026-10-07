@@ -214,3 +214,23 @@
     (is (zero? (.-length ^js (.-edges-new s))))
     (.noteOffBand s 1 3 64 0 true)
     (is (= 1 (.-size ^js (.-known-new s))) "the near one does")))
+
+;; ------------------------------------------------------------------ costs.dropFactor and maxDrop 1
+
+(def drop-down [(stone -2 -2 5 6 70) (stone 6 -2 20 6 67)])
+
+(defn drop-seconds [options]
+  (let [r (run drop-down plateau (near 14 67 2) options)]
+    [(:status r) (get-in r [:path :cost :seconds])]))
+
+(deftest a-drop-factor-scales-the-cost-of-a-drop
+  (let [[status base] (drop-seconds {})
+        [_ free] (drop-seconds {:costs {:dropFactor 0}})
+        [_ dear] (drop-seconds {:costs {:dropFactor 10}})]
+    (is (= "found" status))
+    (is (< free base dear))))
+
+(deftest max-drop-1-plans-no-drop-of-2-or-3
+  (let [r (run drop-down plateau (near 14 67 2) {:maxDrop 1})]
+    (is (not= "found" (:status r)))
+    (is (not-any? #(= DROP %) (moves r)))))

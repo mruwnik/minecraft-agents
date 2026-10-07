@@ -44,6 +44,8 @@
      more, in g and in cost.darkSeconds (see darkOf; jobs.lib.look builds at).
    - options.tolls {cells}: cells is a Map of cell-key (planner/cell-key) to a factor: entering such a cell costs factor
      times its own seconds more, in g and in cost.darkSeconds (the caller's price of a cell; no zone knowledge here).
+   - options.costs.dropFactor (1): scales the fall seconds and fall damage of every drop on land (0: free); options.maxDrop
+     (3) refuses a drop of more than that many blocks (1: none of 2 or 3). go-to's :drop-cost sets them.
    - options.stopAtEdge: with the goal unloaded, the search ends at the first node it expands at the loaded edge (edgeStop)
      and names it as its frontier, not after searching all loaded land. go-to's budgeted searches set it (walk.search/new-search)."
   (:require [engine.path.planner.base :as base :refer [OCTILE-SLACK REGIONS TABLE WHOLE next-pow2]]
@@ -202,7 +204,7 @@
      (unchecked-get costs "swimH") (unchecked-get costs "swimUp") (unchecked-get costs "swimDown")
      (unchecked-get costs "exit") (unchecked-get costs "current") (unchecked-get costs "bubbleUp") (unchecked-get costs "bubbleDown")
      (unchecked-get costs "airSupply") (unchecked-get costs "airLimit") (unchecked-get costs "maxWaterDrop")
-     (unchecked-get costs "dripleaf") (unchecked-get costs "dripleafRisk")
+     (unchecked-get costs "dripleaf") (unchecked-get costs "dripleafRisk") (unchecked-get costs "dropFactor")
      ;; search box
      (- (aget bounds 0) margin) (+ (aget bounds 1) margin)
      (- (aget bounds 2) margin) (+ (aget bounds 3) margin)

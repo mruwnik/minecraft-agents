@@ -63,12 +63,12 @@
                         fall (- h0 (+ (* y2 16) h1))]
                     (when-not (> fall (* (.-max-drop s) 16))
                       (let [sec (+ (* WALK-S (+ 1 (* SLOW-EXTRA (+ slow-from (.-enter-slow s)))))
-                                   (* 0.25 (js/Math.sqrt (/ (js/Math.max 0 fall) 16)))
+                                   (* (.-c-drop-factor s) 0.25 (js/Math.sqrt (/ (js/Math.max 0 fall) 16)))
                                    (.-enter-extra s))]
                         (if tight-drop
-                          (.tightMove s i x y z h region c x2 y2 z2 h1 MOVE-DROP sec (+ (.-enter-risk s) (fall-damage fall)) (.-enter-slow s)
+                          (.tightMove s i x y z h region c x2 y2 z2 h1 MOVE-DROP sec (+ (.-enter-risk s) (* (.-c-drop-factor s) (fall-damage fall))) (.-enter-slow s)
                                       SNAP (if ^boolean (.climbHere s x2 y2 z2) GRID 0))
-                          (.edge s x2 y2 z2 h1 MOVE-DROP i sec (+ (.-enter-risk s) (fall-damage fall)) (.-enter-slow s) 0 0)))))))))))))
+                          (.edge s x2 y2 z2 h1 MOVE-DROP i sec (+ (.-enter-risk s) (* (.-c-drop-factor s) (fall-damage fall))) (.-enter-slow s) 0 0)))))))))))))
 
   ;; where a gap jump lands: level, else one up (when the higher arc is clear), else one down; `gap-y` is the cell's y
   (gapLanding [s lx y lz ^boolean up]
@@ -286,8 +286,8 @@
                 (when-not (pos? (aget (.-tbl-top s) id)) (recur (dec y3)))
                 (let [fall (- from16 (+ (* y3 16) h3))]
                   (when-not (> fall (* (.-max-drop s) 16))
-                    (.verticalMove s i x y z h region y3 h3 MOVE-DROP (* 0.25 (js/Math.sqrt (/ fall 16)))
-                                   (+ (.-enter-risk s) (fall-damage fall)) (.-enter-slow s)))))))))))
+                    (.verticalMove s i x y z h region y3 h3 MOVE-DROP (* (.-c-drop-factor s) 0.25 (js/Math.sqrt (/ fall 16)))
+                                   (+ (.-enter-risk s) (* (.-c-drop-factor s) (fall-damage fall))) (.-enter-slow s)))))))))))
 
   ;; from the floor, a jump puts the feet into a climbable one block up
   (jumpClimb [s i x y z h region]

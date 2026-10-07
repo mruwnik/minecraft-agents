@@ -190,6 +190,16 @@
               {:keys [p]} (await (go! {:blocks cliff} {:pos [120 61 0] :one-way :closed :escalate false}))]
           (is (= 64 (js/Math.floor (second (at p)))) "still on the plateau"))))))
 
+(deftest go-to-drop-cost-false-takes-no-drop-and-a-number-keeps-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cliff (merge (floor -2 -3 10 3) (floor 60 11 -3 47 3))
+              no (await (go! {:blocks cliff} {:pos [120 61 0] :drop-cost false :escalate false}))
+              dear (await (go! {:blocks cliff} {:pos [120 61 0] :drop-cost 2 :escalate false}))]
+          (is (= 64 (js/Math.floor (second (at (:p no))))) "no drop: still on the plateau")
+          (is (= 61 (js/Math.floor (second (at (:p dear))))) "a dear drop is still the only way"))))))
+
 (deftest go-to-accepts-doors
   (async done
     (tu/run-async done
