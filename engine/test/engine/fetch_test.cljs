@@ -451,7 +451,7 @@
 
 ;; ------------------------------------------------------------------ the fetch jobs themselves
 
-(deftest a-remembered-chest-out-of-view-is-trusted-a-fresh-one-is-read
+(deftest a-chest-in-view-just-now-is-read-live
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -459,11 +459,18 @@
               chests #(mapv fetch/cell-of (fetch/seen-chests {:primitives (:p s)}))]
           (is (= [[-2 64 3]] (chests)))
           (fake/remove-block! (:p s) [-2 64 3])
-          (is (empty? (chests)) "in view just now: the live block says it is gone")
-          (swap! (fake/state (:p s)) fake/put-block [-2 64 3] "chest")
+          (is (empty? (chests)) "in view just now: the live block says it is gone"))))))
+
+(deftest a-remembered-chest-a-minute-old-is-not-checked-against-the-live-block
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (world {chest-at []}) [own-zone])
+              chests #(mapv fetch/cell-of (fetch/seen-chests {:primitives (:p s)}))]
+          (is (= [[-2 64 3]] (chests)))
           (swap! (:clock s) + 60000)
           (fake/remove-block! (:p s) [-2 64 3])
-          (is (= [[-2 64 3]] (chests)) "a minute old memory is not checked against the live block"))))))
+          (is (= [[-2 64 3]] (chests))))))))
 
 (deftest obtain-with-no-seen-chest-waits-no-source
   (async done
