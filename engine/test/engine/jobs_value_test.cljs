@@ -60,7 +60,8 @@
   (is (= (each "dirt") (value [{:name "dirt" :count nil}]))))
 
 (deftest unknown-items-get-a-small-default
-  (is (= v/unknown-each (each "mystery_thing")))
+  (is (= (:unknown-each v/default-basis) (each "mystery_thing")))
+  (is (= 7 (value [{:name "mystery_thing"}] :basis {:unknown-each 7})) "the unknown worth is in the basis")
   (is (pos? (each "mystery_thing")))
   (is (< (each "mystery_thing") (each "raw_iron"))))
 
@@ -120,6 +121,9 @@
     (is (= 25 (apply value [{:name "dirt" :nbt {:x 1}}] opts)))
     (is (= 0 (apply value [{:name "dirt" :enchants []}] opts)) "an empty :enchants is not enchanted")
     (is (= 7 (apply value [{:name "diamond_pickaxe" :durability 1}] opts)) "no durability term on a price")
+    (is (= 21 (apply value [{:name "diamond_pickaxe" :durability 1 :count 3}] :prices [[#"^diamond_pickaxe$" 21 :per-stack]] (drop 2 opts)))
+        "nor on a per-stack price")
+    (is (< (value [{:name "diamond_pickaxe" :durability 1}]) (value [{:name "diamond_pickaxe"}])) "an unpriced one has it")
     (is (= 25 (apply value [{:name "diamond_pickaxe" :enchants [{:name "mending"}]}] opts)))))
 
 (deftest else-prices-every-unmatched-item
@@ -141,7 +145,19 @@
 
 (deftest placed-forms-are-no-free-source-and-no-source-items-keep-the-stack-rule
   (is (> (each "redstone") 1))
-  (is (= (* v/no-source-each 64) (each "totem_of_undying")) "no source: 4 x 64 / stack of 1"))
+  (is (= (* (:no-source-each v/default-basis) 64) (each "totem_of_undying")) "no source: 4 x 64 / stack of 1")
+  (is (= 640 (value [{:name "totem_of_undying"}] :basis {:no-source-each 10})) "the no-source worth is in the basis"))
+
+(deftest durability-and-enchantment-constants-are-in-the-basis
+  (let [pick [{:name "diamond_pickaxe" :durability 1}]]
+    (is (> (value pick :basis {:min-durability-share 0.5}) (* 4 (value pick))))
+    (is (> (value [{:name "dirt" :enchants [{:name "mending" :lvl 1}]}] :basis {:per-enchant-level 60})
+           (* 1.5 (value [{:name "dirt" :enchants [{:name "mending" :lvl 1}]}]))))))
+
+(deftest hurt-is-a-share-of-the-hp-price-and-enderman-is-dangerous
+  (is (< (each "gunpowder") (value [{:name "gunpowder"}] :basis {:mob {:hurt-hp-per-hp 0.1}})) "the hurt is priced per hp")
+  (is (> (value [{:name "gunpowder"}] :basis {:mob {:hurt-hp-per-hp 0}}) 0))
+  (is (> (each "ender_pearl") (* 1.5 (each "bone"))) "an enderman is a hard fight"))
 
 (deftest basis-options-change-the-table
   (is (> (value [{:name "rotten_flesh"}] :basis {:junk-share 1}) (* 5 (each "rotten_flesh"))))

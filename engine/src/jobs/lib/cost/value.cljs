@@ -7,23 +7,24 @@
   default-basis, overridable by :basis (deep-merged). The tables are defaults, not data minecraft-data has.
 
     block        A block's drops (blockLoot, no silk touch, chance at least :min-drop-chance): (dig + find) / drops.
-                 dig = hardness x :hardness-s / the speed of the stone tool (the block's own tier if higher);
+                 dig = hardness x :hardness-s / the speed of the stone tool (the block's own tier if higher; the base assumes a
+                 tool, never the hand);
                  find = :terrain, or :ores {ore [find drops]}, or :find-s for a block. Crafted blocks are no source
                  except :natural ones (granite, clay ...); a block that is no item (redstone_wire) is none.
     crop         A block with an age state: :farm-s / the age-7 yield.
     mob          entityLoot of the mobs in weapon/mob-max-health and passive-max-health: (kill + hurt + find) / expected
-                 drops; kill = the stone sword's hits, hurt = :hurt-per-hp x health x :danger, find by hostile or passive.
+                 drops; kill = the stone sword's hits, hurt = :hurt-hp-per-hp x health x :danger hp, each at health/hp-seconds, find by hostile or passive.
     made         The cheapest recipe: the ingredients plus :craft-step, divided by the result count; or smelting by
                  name rule (raw_X -> X_ingot, X -> cooked_X, ancient_debris -> netherite_scrap, cobblestone -> stone,
                  sand -> glass, clay_ball -> brick): the input plus :smelt-step. The table is a fixpoint.
     unused       A sourced item that is no tool, armour, edible food, block or ingredient is worth :junk-share of that.
     food         An edible food is worth at least its points x :food-point-s.
-    no source    4 x 64 / stack size (a 64-stack 4, a 16-stack 16, an unstackable 256).
-    unknown      A name minecraft-data does not list: unknown-each (1).
+    no source    :no-source-each (4) x 64 / stack size (a 64-stack 4, a 16-stack 16, an unstackable 256).
+    unknown      A name minecraft-data does not list: :unknown-each (1).
 
   Per stack: worth x count (nil counts 1; 0, negative or not a number counts 0), x the durability left (:durability
-  against maxDurability, at least 0.1), plus each enchantment (:enchants [{:name :lvl|:level}]) at
-  30 x level x 10 / the enchantment's weight. Walking a block costs about 0.3 (fetch-cost).
+  against maxDurability, at least :min-durability-share), plus each enchantment (:enchants [{:name :lvl|:level}]) at
+  :per-enchant-level x level x 10 / the enchantment's weight. Walking a block costs about 0.3 (fetch-cost).
 
   Overrides ({name-or-group value}): a number is the worth of one item, {:times n} multiplies it. A name override
   goes into the table, so what is made of the item follows ({\"iron_ingot\" 0} makes an iron pickaxe worth its
@@ -42,14 +43,13 @@
             [jobs.lib.foods :as foods]
             [engine.game :as game]))
 
-(def unknown-each "The worth of one item minecraft-data does not know." 1)
-(def no-source-each "The worth of one item of a 64-stack that no block drops, mob drops or recipe makes." 4)
-(def per-enchant-level 30)
-(def min-durability-share 0.1)
-
 (def default-basis
   "Every constant of the item base; item-value's :basis is deep-merged over it."
-  {:craft-step 1
+  {:unknown-each 1 ;; the worth of one item minecraft-data does not know
+   :no-source-each 4 ;; one item of a 64-stack that no block, mob or recipe yields
+   :per-enchant-level 30
+   :min-durability-share 0.1
+   :craft-step 1
    :smelt-step 2
    :junk-share 0.1
    :food-point-s 2
@@ -65,7 +65,7 @@
                  "ancient_debris" [900 1]}}
    :natural #{"granite" "diorite" "andesite" "coarse_dirt" "sandstone" "red_sandstone" "mossy_cobblestone" "snow"
               "clay" "glowstone" "melon" "packed_ice" "blue_ice" "prismarine" "dark_prismarine"}
-   :mob {:weapon "stone_sword" :hurt-per-hp 0.25 :danger {"creeper" 3} :find {:hostile 20 :passive 15}}})
+   :mob {:weapon "stone_sword" :hurt-hp-per-hp 0.025 :danger {"creeper" 3 "enderman" 3} :find {:hostile 20 :passive 15}}})
 
 (defn deep-merge [a b]
   (cond (nil? b) a
@@ -158,14 +158,14 @@
 (defn mob-sources
   "{item name worth} of what mobs drop (entityLoot): the kill, the hurt and the finding, per expected drop."
   [md basis]
-  (let [{:keys [weapon hurt-per-hp danger find]} (:mob basis)
+  (let [{:keys [weapon hurt-hp-per-hp danger find]} (:mob basis)
         passive weapon/passive-max-health
         mobs (merge passive weapon/mob-max-health)
         gap (/ (weapon/attack-gap-ms weapon) 1000)
         damage (weapon/weapon-damage weapon)]
     (reduce (fn [acc [mob hp]]
               (let [kill (* gap (js/Math.ceil (/ hp damage)))
-                    hurt (if (passive mob) 0 (* hurt-per-hp hp (get danger mob 1)))
+                    hurt (if (passive mob) 0 (* health/hp-seconds hurt-hp-per-hp hp (get danger mob 1)))
                     cost (+ kill hurt (if (passive mob) (:passive find) (:hostile find)))]
                 (reduce (fn [acc e]
                           (let [n (* (.-dropChance e) (mean-range (.-stackSizeRange e)))]
@@ -231,7 +231,7 @@
         by-result (group-by first recipes)
         pinned (into {} (map (fn [[n o]] [n (override-fn o)])) overrides)
         pin (fn [n w] ((get pinned n identity) w))
-        no-source (into {} (map (fn [i] [(.-name i) (* no-source-each (/ 64 (max 1 (.-stackSize i))))])) items)
+        no-source (into {} (map (fn [i] [(.-name i) (* (:no-source-each basis) (/ 64 (max 1 (.-stackSize i))))])) items)
         step (fn [table]
                (into {} (map (fn [n]
                                (let [via-recipe (some->> (by-result n)
@@ -274,13 +274,13 @@
         (and (number? count) (js/isFinite count) (pos? count)) count
         :else 0))
 
-(defn enchant-worth [version enchants]
+(defn enchant-worth [version basis enchants]
   (let [md (minecraft-data version)]
     (reduce + 0 (map (fn [e]
                        (let [ench (some->> (or (:name e) (:id e)) str (aget (.-enchantmentsByName md)))
                              weight (or (some-> ench .-weight) 10)
                              level (let [l (or (:lvl e) (:level e) 1)] (if (number? l) l 1))]
-                         (* per-enchant-level level (/ 10 (max 1 weight)))))
+                         (* (:per-enchant-level basis) level (/ 10 (max 1 weight)))))
                      enchants))))
 
 (defn enchanted?
@@ -295,21 +295,21 @@
 
 (defn stack-worth
   "{:name :count :each :value} of one entry; group overrides skip a name that has its own (named, a map)."
-  [version table group-overrides named {:keys [prices else enchanted]} {:keys [name durability enchants] :as entry}]
+  [version basis table group-overrides named {:keys [prices else enchanted]} {:keys [name durability enchants] :as entry}]
   (let [n (count-of entry)
         [price per-stack] (or (when (and enchanted (enchanted? entry)) [enchanted true])
                               (price-of prices name)
                               (when else [else false]))
         md (minecraft-data version)
         item (aget (.-itemsByName md) name)
-        base (get table name ((override-fn (get group-overrides "unknown")) unknown-each))
+        base (get table name ((override-fn (get group-overrides "unknown")) (:unknown-each basis)))
         grouped (reduce (fn [w g] ((override-fn (get group-overrides g)) w))
                         base (if (and (contains? table name) (not (contains? named name))) (groups-for version name) []))
         max-d (some-> item .-maxDurability)
         share (if (and (number? durability) (number? max-d) (pos? max-d))
-                (max min-durability-share (min 1 (/ durability max-d)))
+                (max (:min-durability-share basis) (min 1 (/ durability max-d)))
                 1)
-        each (cond (nil? price) (+ (* grouped share) (enchant-worth version enchants))
+        each (cond (nil? price) (+ (* grouped share) (enchant-worth version basis enchants))
                    per-stack (/ price (max 1 n))
                    :else price)]
     {:name name :count n :each each :value (* n each)}))
@@ -318,7 +318,7 @@
   "{:value total :items [{:name :count :each :value} ...]} of items ([{:name :count ...}], inventory or drop shape),
   main contributors first. Stacks of one name with the same durability, enchantments and :nbt are added. See the ns doc.
   Options: :overrides, :prices, :else and :enchanted (see the ns doc), :basis (over default-basis), :version
-  (minecraft-data, default the body's). Never throws on odd entries: no name is worth 0, an unknown name unknown-each."
+  (minecraft-data, default the body's). Never throws on odd entries: no name is worth 0, an unknown name :unknown-each."
   [items & {:keys [overrides prices else enchanted version basis]}]
   (let [version (or version @game/version)
         overrides (normal-overrides overrides)
@@ -326,12 +326,13 @@
         group-overrides (select-keys overrides group-names)
         name-overrides (apply dissoc overrides group-names)
         table (table-for version name-overrides basis)
+        basis (deep-merge default-basis basis)
         named (filter #(string? (:name %)) items)
         merged (map (fn [[k stacks]] (assoc k :count (reduce + 0 (map count-of stacks))))
                     (group-by #(select-keys % [:name :durability :enchants :nbt]) named))
         opts {:prices prices :else else :enchanted enchanted}
         rows (->> merged
-                  (map #(stack-worth version table group-overrides name-overrides opts %))
+                  (map #(stack-worth version basis table group-overrides name-overrides opts %))
                   (filter #(pos? (:count %)))
                   (sort-by :value >)
                   vec)]
