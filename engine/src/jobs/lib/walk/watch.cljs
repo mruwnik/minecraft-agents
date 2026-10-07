@@ -1,7 +1,8 @@
 (ns jobs.lib.walk.watch
   "The walk driver's look-ahead: the cells and mobs of the way ahead watched while a plan is walked (watch-stop), when a walk may
   stop to plan again, and whether a refreshed plan replaces the old one."
-  (:require [engine.hurt :as hurt]
+  (:require [engine.game :as game]
+            [engine.hurt :as hurt]
             [engine.settings :as settings]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost.danger :as danger]
@@ -34,19 +35,17 @@
   "Steps a walk is never stopped before or on: the body is in the air, on a ladder, swimming, or in a gap's run-up."
   #{:gap :climb-up :climb-down :jump-climb :open :swim :swim-up :swim-down :exit})
 
-(def body-half 0.3)
-
 (def fall-margin "Default hp a walk's falls may cost over the plan before it is a mismatch (rounding of the fall)." 1)
 
 (defn step-cells
-  "The cells [x y z] the body passes going from prev to step: the columns its footprint (body-half either side) touches
+  "The cells [x y z] the body passes going from prev to step: the columns its footprint (the hitbox half-width either side) touches
   along the line between their stand points, from the floor under the lower one to two over the higher one's feet."
   [prev step]
   (let [ax (:px prev) az (:pz prev) bx (:px step) bz (:pz step)
         n (max 1 (js/Math.ceil (/ (js/Math.hypot (- bx ax) (- bz az)) 0.25)))
         cols (into #{} (for [k (range (inc n))
                              :let [t (/ k n) x (+ ax (* t (- bx ax))) z (+ az (* t (- bz az)))]
-                             dx [(- body-half) body-half] dz [(- body-half) body-half]]
+                             dx [(- game/hitbox-half) game/hitbox-half] dz [(- game/hitbox-half) game/hitbox-half]]
                          [(js/Math.floor (+ x dx)) (js/Math.floor (+ z dz))]))
         lo (dec (min (:y prev) (:y step)))
         hi (+ 2 (max (:y prev) (:y step)))]

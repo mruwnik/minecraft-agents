@@ -116,6 +116,8 @@
                  {:lo 0 :hi 1 :unloaded? true}))]
     {:block block
      :unloaded unloaded
+     :max-drop (max-drop)
+     :body-height (body-height)
      :cell (fn [x y z]
              (let [k [x y z]
                    known (get @cells k absent)]
@@ -136,17 +138,17 @@
           (range (js/Math.floor bottom) (inc (js/Math.floor (- top eps))))))
 
 (defn standable?
-  [world x z c y]
+  [{:keys [body-height] :as world} x z c y]
   (and c
        (not (:hazard? c))
        (not (:unloaded? c))
-       (clear? world x z (+ y (:hi c)) (+ y (:hi c) (body-height)))))
+       (clear? world x z (+ y (:hi c)) (+ y (:hi c) body-height))))
 
 (defn reach
   "Where an animal standing at height s steps into column x z: {:top :perch?}, or nil."
-  [{:keys [cell] :as world} x z s]
+  [{:keys [cell max-drop body-height] :as world} x z s]
   (let [highest (js/Math.floor (+ s step-up eps))
-        lowest (js/Math.floor (- s (max-drop) 1 eps))]
+        lowest (js/Math.floor (- s max-drop 1 eps))]
     (loop [y highest]
       (when (>= y lowest)
         (let [c (cell x y z)
@@ -155,8 +157,8 @@
             (recur (dec y))
             (when (and (not (:hazard? c))
                        (not (:unloaded? c))
-                       (>= t (- s (max-drop) eps))
-                       (clear? world x z t (+ (max s t) (body-height))))
+                       (>= t (- s max-drop eps))
+                       (clear? world x z t (+ (max s t) body-height)))
               {:top t :perch? (> (:hi c) 1)})))))))
 
 (def orthogonal [[1 0] [-1 0] [0 1] [0 -1]])

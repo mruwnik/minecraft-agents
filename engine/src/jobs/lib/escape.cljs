@@ -20,7 +20,7 @@
 
 (def settings
   {::max-depth {:default 8 :doc "How deep an escape digs or climbs at most." :type :int :min 1}
-   ::max-door {:default 3 :doc "The longest run of doors an escape path may pass." :type :int :min 1}})
+   ::max-door {:default 3 :doc "The thickest wall (blocks) a :clear-path step digs through." :type :int :min 1}})
 
 (defn max-depth [] (settings/get settings ::max-depth))
 
