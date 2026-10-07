@@ -27,7 +27,7 @@
     down on a free cell beside the body with a jobs.blocks.place child). Each step is a jobs.items.craft child. The
     names are tried in order; the first with a plan is made. Three fruitless steps stop it (:tried :craft).
   - :gather (in :how): coal comes from a plain or deepslate ore seen; every raw item a chain lacks must be seen before it starts. A sapling (no recipe) comes from the leaves of its tree the body has seen, broken by
-    jobs.gather.get-seeds (the drop is picked up). What a craft chain lacks that has no recipe (logs, cobblestone, coal; recipes/gatherable?) is
+    jobs.gather.get-seeds (at most 20 leaves, one run; the drop is picked up). What a craft chain lacks that has no recipe (logs, cobblestone, coal; recipes/gatherable?) is
     felled or mined as one child per round, only what the body has seen: logs by jobs.forestry.harvest-wood,
     cobblestone and coal by jobs.gather.mine. The crafts follow once the chain is whole (a chain that is craftable now
     is crafted first). A child that brings in nothing three times stops it (:tried :gather).
@@ -131,6 +131,10 @@
 
 (defn log? [name] (clojure.string/ends-with? name "_log"))
 
+(def sapling-leaf-limit
+  "Leaves broken for one sapling at most (a drop is about 1 in 20); one run, no retries."
+  20)
+
 (defn gather-needs
   "The raw needs of a plan's :gather map, logs first: [{:key k :count n :job sym :args {..} :seen fn of a block name: what must have been seen}]. A new gather source
   is one more case here. Coal is mined from a plain or a deepslate ore: :block is set by with-block."
@@ -138,8 +142,8 @@
   (let [logs (reduce + 0 (for [[k v] gather :when (log? k)] v))]
     (vec (concat
           (for [[sapling n] gather :when (leaves-of sapling)]
-            {:key sapling :count n :job 'jobs.gather.get-seeds :seen #{(leaves-of sapling)}
-             :args {:item sapling :count n :sources [(leaves-of sapling)]}})
+            {:key sapling :count n :job 'jobs.gather.get-seeds :seen #{(leaves-of sapling)} :max-runs 1
+             :args {:item sapling :count n :sources [(leaves-of sapling)] :dry-digs sapling-leaf-limit}})
           (when (pos? logs) [{:key "log" :count logs :job 'jobs.forestry.harvest-wood :seen log? :args {}}])
           (when-let [n (get gather "cobblestone")]
             [{:key "cobblestone" :count n :job 'jobs.gather.mine :seen #{"stone"}
@@ -308,10 +312,10 @@
                   :else
                   (fruitless! c (or (:reason res) (when (:short res) {:short (:short res)}) :declined))))))))))
 
-(defn gather-failed! [c why]
+(defn gather-failed! [c need why]
   (let [k (inc (get-in (ctx/mem c) [:gather :fruitless] 0))]
     (ctx/update-mem! c assoc-in [:gather :fruitless] k)
-    (when (>= k max-fruitless) (tried! c :gather (or why :failed)))
+    (when (>= k (:max-runs need max-fruitless)) (tried! c :gather (or why :failed)))
     :continue))
 
 (defn ^:async gather-step!
@@ -335,7 +339,7 @@
                 (ctx/update-mem! c update :gather dissoc :before :item)
                 (if (> (gather-carried p need) before)
                   (do (ctx/update-mem! c assoc-in [:gather :fruitless] 0) :continue)
-                  (gather-failed! c (or (:reason res) :nothing-gathered))))))))))
+                  (gather-failed! c need (or (:reason res) :nothing-gathered))))))))))
 
 (defn ^:async round [c]
   (let [a (:args c)

@@ -759,3 +759,20 @@
           (is (nil? (get (inv s) "wooden_pickaxe")))
           (let [st (last (events-of s :stopped))]
             (is (= :no-source (:reason st)))))))))
+
+(deftest obtain-sapling-leaf-breaking-is-bounded
+  (let [need (obtain/gather-need {"oak_sapling" 1})]
+    (is (= 20 (:dry-digs (:args need))) "digs per child run")
+    (is (= 1 (:max-runs need)) "one fruitless run ends the source")
+    (is (= obtain/max-fruitless (:max-runs (obtain/gather-need {"cobblestone" 1}) obtain/max-fruitless)))))
+
+(deftest obtain-sapling-does-not-break-leaves-in-another-owners-zone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [leaves {"-2,65,3" "oak_leaves" "-2,66,3" "oak_leaves"}
+              s (start (assoc (update (bare []) :blocks merge leaves) :drops {"oak_leaves" "oak_sapling"}) [own-zone foreign-zone])]
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "oak_sapling"}) {})
+          (await (run-ticks s 60))
+          (is (empty? (calls s "dig")))
+          (is (nil? (get (inv s) "oak_sapling"))))))))
