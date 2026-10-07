@@ -1,7 +1,9 @@
 ;; Breathe under a stone ceiling (cards 221d9783, e8a92f33): the body is put in water, its air runs out, the breathe reflex fires.
 ;; Air is looked for only in the own column and in cells the body has seen, never through stone.
 ;; seen-pocket-is-gone-to: a water tunnel with a ceiling and an air pocket 6 blocks down it, in line of sight: a go-to child (slot :air) takes the body there, the ceiling is not dug.
-;; Shaft cases (1x1 water column, 4 deep, a cap at y 4, an air chimney over it): dirt cap is dug; planks cap stops :no_air :cap :not-natural; sand cap stops :cap :gravity.
+;; The tunnel lies 9+ blocks from the shaft cases (the body remembers the cells of an earlier case on the shared plot); the body faces it (:yaw 270, east), since it sees only its view cone.
+;; Shaft cases (1x1 water column, 4 deep, a cap at y 4, an air chimney over it): dirt cap is dug; planks cap stops :no_air :cap :not-natural.
+;; A sand cap is not a live case: set over water it falls at once (:gravity is in breathe-test).
 ;; unseen-pocket-is-not-chosen: a sealed air pocket 5 blocks off behind stone is never gone to (no :air child); the cap over the shaft is dug instead.
 ;; Live risk: whether the body remembers the water cells of a tunnel it has swum (the seen-pocket case).
 {:defaults
@@ -14,13 +16,13 @@
   :limit-s 70}
  :cases
  [{:name "seen-pocket-is-gone-to"
-   :blocks [[:fill [4 0 15] [24 3 17] "water"]
-            [:fill [12 3 15] [15 3 17] "air"]]
-   :body {:at [6.5 1 16.5]}
+   :blocks [[:fill [4 0 5] [24 3 7] "water"]
+            [:fill [12 3 5] [15 3 7] "air"]]
+   :body {:at [6.5 1 6.5] :yaw 270}
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
             {:event {:source :job :kind :child_started :data {:slot :air}} :within-s 40}
             {:no-event {:source :job :kind :no_air} :for-s 40}]
-   :after [[:body-near [13.5 2 16.5] 4] [:block [8 4 16] "stone"] [:block [13 4 16] "stone"]]}
+   :after [[:body-near [13.5 2 6.5] 4] [:block [8 4 6] "stone"] [:block [13 4 6] "stone"]]}
   ;; should fail (as a go-to): the pocket is behind stone and was never seen, the cap is dug instead
   {:name "unseen-pocket-is-not-chosen"
    :blocks [[:fill [16 0 16] [16 3 16] "water"]
@@ -49,13 +51,4 @@
    :body {:at [16.5 1 16.5]}
    :expect [{:event {:source :job :kind :no_air :data {:cap :not-natural}} :within-s 60}
             {:event {:source :job :kind :stopped :data {:reason :no_air :cap :not-natural}} :within-s 60}]
-   :after [[:block [16 4 16] "oak_planks"]]}
-  ;; should fail: sand would fall into the water when dug from below
-  {:name "sand-cap-stops-gravity"
-   :blocks [[:fill [16 0 16] [16 3 16] "water"]
-            [:set [16 4 16] "sand"]
-            [:fill [16 5 16] [16 8 16] "air"]]
-   :body {:at [16.5 1 16.5]}
-   :expect [{:event {:source :job :kind :no_air :data {:cap :gravity}} :within-s 60}
-            {:event {:source :job :kind :stopped :data {:reason :no_air :cap :gravity}} :within-s 60}]
-   :after [[:block [16 4 16] "sand"]]}]}
+   :after [[:block [16 4 16] "oak_planks"]]}]}
