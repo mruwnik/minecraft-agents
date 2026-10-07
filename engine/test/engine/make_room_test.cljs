@@ -167,7 +167,7 @@
                    {:name "gravel" :count 9 :slot 2}
                    {:name "stick" :count 3 :slot 3}
                    {:name "poppy" :count 3 :slot 4}]
-        order (fn [recency] (names-of (mr/toss-order inventory {} recency 5)))]
+        order (fn [recency] (names-of (mr/toss-order inventory {} recency 20)))]
     (is (= ["dirt" "gravel" "stick" "poppy" "oak_log"] (order {})) "junk blocks first (bigger stack first), then by worth: stick and poppy equal (3, 3 by slot), the log dearer")
     (is (= ["dirt" "gravel" "poppy" "stick" "oak_log"] (order {"stick" 100})) "the one picked up most recently goes last of its worth")
     (is (= ["dirt" "gravel" "stick" "poppy" "oak_log"] (order {"poppy" 100 "gravel" 50 "dirt" 50}))
@@ -200,7 +200,8 @@
                    {:name "diamond" :count 1 :slot 3}
                    {:name "dirt" :count 4 :slot 4}]]
     (is (= ["dirt"] (names-of (mr/toss-order inventory {} {} 0.5))))
-    (is (= ["dirt" "oak_log"] (names-of (mr/toss-order inventory {} {} 2))))
+    (is (= ["dirt"] (names-of (mr/toss-order inventory {} {} 2))) "a log is worth a walk to a tree, not tossed at 2")
+    (is (= ["dirt" "oak_log"] (names-of (mr/toss-order inventory {} {} 20))))
     (is (= [] (names-of (mr/toss-order inventory {} {} 0))))
     (is (= ["dirt" "oak_log" "diamond"] (names-of (mr/toss-order inventory {} {} 1000))))))
 

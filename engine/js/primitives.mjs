@@ -209,7 +209,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     // once a second of physics ticks. Lava and suffocation deaths keep their slots, the live inventory is used then.
     let snapshot = inventoryNow()
     let ticks = 0
-    // What the body stands in, as jobs.lib.worth/lethal-cause? names it. The death message of the server is not used:
+    // What the body stands in, as jobs.lib.cost.value/lethal-cause? names it. The death message of the server is not used:
     // it arrives in a later packet than the death event. Unknown (a mob, a fall, hunger) leaves the cause out.
     const causeNow = () => {
       const pos = target.entity.position

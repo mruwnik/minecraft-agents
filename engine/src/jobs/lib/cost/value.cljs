@@ -9,7 +9,7 @@
     block        A block's drops (blockLoot, no silk touch, chance at least :min-drop-chance): (dig + find) / drops.
                  dig = hardness x :hardness-s / the speed of the stone tool (the block's own tier if higher; the base assumes a
                  tool, never the hand);
-                 find = :terrain, or :ores {ore [find drops]}, or :find-s for a block. Crafted blocks are no source
+                 find = :terrain, :wood for a log, stem or bamboo block, or :ores {ore [find drops]}, or :find-s for a block. Crafted blocks are no source
                  except :natural ones (granite, clay ...); a block that is no item (redstone_wire) is none.
     crop         A block with an age state: :farm-s / the age-7 yield.
     mob          entityLoot of the mobs in weapon/mob-max-health and passive-max-health: (kill + hurt + find) / expected
@@ -58,6 +58,7 @@
    :drop-chance {"apple" 0.005 "wheat_seeds" 0.125}
    :dig {:hardness-s 1.5 :max-hardness 5 :min-s 0.25 :default-tier 2 :speed {1 2 2 4 3 6 4 8}}
    :find {:terrain 0.1
+          :wood 12 ;; a log, stem, hyphae, wood or bamboo block: the walk to a tree
           :block {"gilded_blackstone" 300}
           :ore-by-tier {1 10 2 30 3 300 4 300}
           :ores {"coal" [10 1.5] "copper" [15 3.5] "iron" [30 1] "lapis" [60 6.5] "redstone" [40 4.5] "gold" [90 1]
@@ -108,11 +109,14 @@
         tier (max default-tier (block-tier md b))]
     (max min-s (/ (* hardness-s (min max-hardness (.-hardness b))) (get speed tier (get speed default-tier))))))
 
+(defn wood-block? [name] (boolean (re-find #"(_log|_stem|_wood|_hyphae|^bamboo_block)$" name)))
+
 (defn find-seconds [md basis b]
-  (let [{:keys [terrain block ores ore-by-tier]} (:find basis)
+  (let [{:keys [terrain wood block ores ore-by-tier]} (:find basis)
         name (.-name b)]
     (cond
       (contains? block name) (get block name)
+      (wood-block? name) wood
       (ore-block? name) (first (get ores (ore-key name) [(get ore-by-tier (block-tier md b) (apply max (vals ore-by-tier)))]))
       :else terrain)))
 

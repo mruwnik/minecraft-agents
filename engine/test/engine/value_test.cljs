@@ -33,6 +33,9 @@
     {:name "bread" :count 2}
     {:name "cooked_beef" :count 4}
     {:name "apple" :count 1}
+    {:name "oak_log" :count 20}
+    {:name "oak_planks" :count 20}
+    {:name "crimson_stem" :count 8}
     {:name "stick" :count 1 :enchants [{:id "sharpness" :lvl 1}]}))
 
 (deftest worth-is-per-item-and-a-missing-count-is-one

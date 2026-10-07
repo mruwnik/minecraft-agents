@@ -25,7 +25,7 @@
 (deftest crafted-things-are-worth-their-ingredients
   (is (> (each "stone_pickaxe") (each "cobblestone")))
   (is (> (each "stone_pickaxe") (* 3 (each "cobblestone"))))
-  (is (> (each "diamond_pickaxe") (each "iron_pickaxe") (each "stone_pickaxe") (each "wooden_pickaxe")))
+  (is (> (each "diamond_pickaxe") (each "iron_pickaxe") (each "wooden_pickaxe") (each "stone_pickaxe")) "wood costs a walk to a tree, cobble none")
   (is (> (each "diamond_pickaxe") (* 3 (each "diamond"))))
   (is (> (each "iron_ingot") (each "raw_iron")) "a smelted ingot is its raw ore plus the smelting")
   (is (< (each "oak_planks") (each "oak_log")) "a log makes four planks"))

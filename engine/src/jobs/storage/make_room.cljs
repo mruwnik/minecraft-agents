@@ -52,7 +52,7 @@
    :chest-range {:doc "the known :chest place is used only within this distance" :default 32}
    :keep-food {:doc "food items kept carried (best food by points first); the body's food reserve (jobs.lib.cost/food-reserve) when nil" :default nil}
    :keep-blocks {:doc "building blocks kept carried (dig-in's list, in its order)" :default 64}
-   :toss-below {:doc "a stack is tossed to make room only when its item-worth (jobs.lib.cost/item-value per item, seconds of work) is below this: dirt, cobblestone, rotten flesh and seeds go; ores, fuel, tools and food stay" :default 3}
+   :toss-below {:doc "a stack is tossed to make room only when its item-worth (jobs.lib.cost/item-value per item, seconds of work) is below this: dirt, cobblestone, rotten flesh and seeds go; ores, fuel, tools and food stay" :default 3.2}
    :swap-radius {:doc "when no slot is free, a dropped item worth more than some carried stack within this radius is swapped in" :default 8}
    :away {:doc "after tossing, walk this far away from where the items were thrown" :default 4}
    :max-steps {:doc "safety: stop (:stalled, warn make-room.stalled) after this many deposit calls, swaps and tosses in one run" :default 40}
