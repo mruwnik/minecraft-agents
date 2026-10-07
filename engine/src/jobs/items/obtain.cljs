@@ -22,7 +22,7 @@
     still there, whose zone or claim allows :take (an open, unzoned chest does; jobs.lib.access). A chest known
     to hold a wanted name (body memory :fetch/stock) is withdrawn from (jobs.storage.withdraw child :take); one of
     unknown stock is walked to and looked into, nearest first, at most 4 per obtain; one known not to hold any is
-    skipped. Each chest is withdrawn from once.
+    skipped. Each chest is withdrawn from once. With none usable seen at the first round, one look around first.
   - :craft (in :how): a chain of crafts planned from the recipes (jobs.items.recipes) over what is carried: logs to
     planks to sticks to the tool, and a crafting table when the chain needs one and none is seen (crafted, then put
     down on a free cell beside the body with a jobs.blocks.place child). Each step is a jobs.items.craft child. The
@@ -248,6 +248,15 @@
       (and (contains? (:how (limits c)) :gather) (gather-viable? c names (:count a))) true
       :else (ctx/wait c (merge {:reason :no-source :why (no-source-why c names (:count a))} (wanted-fields a))))))
 
+(defn survey-first?
+  "Before the first round, with chests allowed, none usable seen that might hold one of names and no look around yet:
+  the round looks around first, so a chest behind the body is preferred to a craft or gather."
+  [c names]
+  (and (not (:start (ctx/mem c)))
+       (not (look/surveyed? c))
+       (contains? (:how (limits c)) :chest)
+       (empty? (candidates c names))))
+
 (defn stop! [c reason extra]
   (let [a (:args c)
         res (merge {:status :stopped :reason reason :got (:got extra 0)} (wanted-fields a) extra)]
@@ -387,33 +396,35 @@
     (if-let [e (args-error a)]
       (do (ctx/emit! c :obtain.declined :warn {:reason :bad-args :text (str "items.obtain " e)})
           (stop! c :bad-args {:why e}))
-      (let [_ (when-not (:start (ctx/mem c))
-                (ctx/update-mem! c update :craft dissoc :table-unreachable)
-                (ctx/update-mem! c assoc :start {:have have :target (+ have (min 64 (:count a))) :t now}))
-            {:keys [target t] :as start} (:start (ctx/mem c))
-            got (max 0 (- have (:have start)))
-            o (limits c)
-            m (ctx/mem c)]
-        (cond
-          (some (set (:chain a)) names) (stop! c :cycle {:chain (:chain a)})
-          (>= have target) (do (ctx/result! c {:status :done :got got :item (or (holds (into {} (map (juxt :name :count)) inv) names) (first names))})
-                               :done)
-          (> (- now t) (* 60000 (:minutes o))) (stop! c :timeout {:got got :tried (:tried m)})
-          (and (contains? (:how o) :chest) (not (get-in m [:tried :chest])))
-          (let [cs (candidates c names)
-                known (first (filter :stock cs))
-                unknown (first (remove :stock cs))]
-            (cond
-              known (await (withdraw! c (:pos known) (:stock known) names have))
-              (and unknown (< (:inspected m 0) max-inspections)) (await (inspect! c (:pos unknown)))
-              :else (tried! c :chest (if (or (seq (:done-chests m)) (pos? (:inspected m 0))) :lacking :none-seen))))
-          (and (contains? (:how o) :craft) (not (get-in m [:tried :craft]))
-               (or (not (contains? (:how o) :gather)) (get-in m [:craft :step]) (get-in m [:craft :table-unreachable]) (craft-plan c names (- target have))))
-          (await (craft-step! c names have target))
-          (and (contains? (:how o) :gather) (not (get-in m [:tried :gather])))
-          (await (gather-step! c names have target))
-          :else (stop! c (if (= :table-unreachable (get-in m [:tried :craft])) :table-unreachable :no-source)
-                       {:got got :tried (:tried m)}))))))
+      (if (survey-first? c names)
+        (do (await (look/survey! c)) :again)
+        (let [_ (when-not (:start (ctx/mem c))
+                  (ctx/update-mem! c update :craft dissoc :table-unreachable)
+                  (ctx/update-mem! c assoc :start {:have have :target (+ have (min 64 (:count a))) :t now}))
+              {:keys [target t] :as start} (:start (ctx/mem c))
+              got (max 0 (- have (:have start)))
+              o (limits c)
+              m (ctx/mem c)]
+          (cond
+            (some (set (:chain a)) names) (stop! c :cycle {:chain (:chain a)})
+            (>= have target) (do (ctx/result! c {:status :done :got got :item (or (holds (into {} (map (juxt :name :count)) inv) names) (first names))})
+                                 :done)
+            (> (- now t) (* 60000 (:minutes o))) (stop! c :timeout {:got got :tried (:tried m)})
+            (and (contains? (:how o) :chest) (not (get-in m [:tried :chest])))
+            (let [cs (candidates c names)
+                  known (first (filter :stock cs))
+                  unknown (first (remove :stock cs))]
+              (cond
+                known (await (withdraw! c (:pos known) (:stock known) names have))
+                (and unknown (< (:inspected m 0) max-inspections)) (await (inspect! c (:pos unknown)))
+                :else (tried! c :chest (if (or (seq (:done-chests m)) (pos? (:inspected m 0))) :lacking :none-seen))))
+            (and (contains? (:how o) :craft) (not (get-in m [:tried :craft]))
+                 (or (not (contains? (:how o) :gather)) (get-in m [:craft :step]) (get-in m [:craft :table-unreachable]) (craft-plan c names (- target have))))
+            (await (craft-step! c names have target))
+            (and (contains? (:how o) :gather) (not (get-in m [:tried :gather])))
+            (await (gather-step! c names have target))
+            :else (stop! c (if (= :table-unreachable (get-in m [:tried :craft])) :table-unreachable :no-source)
+                         {:got got :tried (:tried m)})))))))
 
 (defn ^:async round
   "The whole attempt in one call: step! again until the count is carried or it stops; :continue only while a child waits on the world."

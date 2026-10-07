@@ -5,6 +5,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.trees :as forestry]
             [jobs.lib.util :as u]
+            [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
             [jobs.lib.step-off :as step-off]
@@ -20,6 +21,7 @@
   4. Fell the nearest grown tree of the wanted species on a planned cell (jobs.forestry.fell-tree as a child). The
      cell is noted as owing a sapling before the base log is dug, so a restart or plan edit never loses the replant.
   5. Finish. Result: {:felled :planted :left :bare}.
+  With a planned cell never seen, the first round looks around once (and yields) before it decides.
   Cells are read from the plan and the world at every step. A sapling of the wanted species is left to grow.
   Anything else on a planned cell (another species, a block) is left and reported once (forest.foreign). Trees off
   the planned cells are never touched.
@@ -221,6 +223,17 @@
 
 ;; ------------------------------------------------------------------ check
 
+(defn field-cells
+  "The planned tree cells of field and the ground under them, as {:x :y :z}."
+  [field]
+  (mapcat (fn [pos] [pos (update pos :y dec)]) (keys (:trees field))))
+
+(defn ^:async survey-field!
+  "Before the first step, look around once when a cell of field was never seen: :continue when it looked, else nil."
+  [c field]
+  (when (and (not (:begun (ctx/mem c))) (look/unseen? (:primitives c) (field-cells field)))
+    (await (look/survey! c))))
+
 (defn check
   "A started job always passes (its finishing round must run); else a grown tree is ripe on a planned cell, or a
   bare one has its sapling carried. With the plan unworkable, never."
@@ -233,7 +246,7 @@
         (or (boolean (or (:begun (ctx/mem c))
                          (seq (ripe-cells c classes))
                          (seq (plantable c (owed-cells c classes)))))
-            (ctx/wait c {:reason :nothing-to-do}))))))
+            (look/wait-unless-surveyed c {:reason :nothing-to-do} (field-cells field)))))))
 
 ;; ------------------------------------------------------------------ steps
 
@@ -391,16 +404,17 @@
     (if (:trouble field)
       :declined
       (let [trees (:trees field)]
-        (when-not (:begun (ctx/mem c))
-          (ctx/update-mem! c assoc :begun true))
-        (settle-debts! c)
-        (let [classes (classes-of c trees)]
-          (note-cells! c classes)
-          (or (await (collect! c))
-              (when (:cut (ctx/mem c)) (await (fell! c trees classes)))
-              (await (plant! c classes))
-              (await (fell! c trees classes))
-              (finish! c classes)))))))
+        (or (await (survey-field! c field))
+            (do (when-not (:begun (ctx/mem c))
+                  (ctx/update-mem! c assoc :begun true))
+                (settle-debts! c)
+                (let [classes (classes-of c trees)]
+                  (note-cells! c classes)
+                  (or (await (collect! c))
+                      (when (:cut (ctx/mem c)) (await (fell! c trees classes)))
+                      (await (plant! c classes))
+                      (await (fell! c trees classes))
+                      (finish! c classes)))))))))
 
 (def max-steps "Steps of one call before it gives the round back with :continue." 400)
 

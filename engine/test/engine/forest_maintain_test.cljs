@@ -528,3 +528,12 @@
     {:reason :hazard} :refused
     {:reason :unreachable} :unreachable
     {:reason :no-tool} :unreachable))
+
+(deftest a-planned-tree-never-seen-is-looked-at-before-nothing-to-do
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (start oak-world {"forest" oak-cell} (tu/tmp-dir) (tu/seeing-after-look (tu/fake-on-floor oak-world)))
+              result (await (tu/child-outcome eng job {:plan "forest"} 200))]
+          (is (seq (h/calls p "look")))
+          (is (= {:felled 1 :planted 1 :left [] :bare []} result)))))))

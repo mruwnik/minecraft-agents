@@ -459,3 +459,31 @@
                                      [ripe-world "Fake" true] [bare-world "Fake" true]]]
           (is (= start? (await (first-check {} spec [(assoc foreign-zone :owner owner)]))) (pr-str owner)))
         (is (true? (await (first-check {} ripe-world []))) "no zones")))))
+
+(deftest a-field-never-seen-is-looked-at-before-the-run-decides
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup (world (farm "wheat" 7 all-cells [[2 2] [3 2]]) wheat-drops))
+              _ (tu/seeing-after-look (:p s))]
+          (core/submit! (:eng s) (list 'jobs.farm.tend {:box box}) {})
+          (dotimes [_ 80]
+            (swap! (:clock s) + 700)
+            (await (core/tick! (:eng s))))
+          (is (seq (calls s "look")))
+          (is (= #{[2 2] [3 2]} (dug s)))
+          (is (true? (finished? s))))))))
+
+(deftest a-seen-field-with-nothing-to-do-still-waits-after-the-look
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup (world (farm "wheat" 3 all-cells all-cells)))
+              _ (tu/seeing-after-look (:p s))]
+          (core/submit! (:eng s) (list 'jobs.farm.tend {:box box}) {})
+          (dotimes [_ 6]
+            (swap! (:clock s) + 700)
+            (await (core/tick! (:eng s))))
+          (is (seq (calls s "look")))
+          (is (= [:nothing-to-do] (distinct (map :reason (events-of s :waiting)))))
+          (is (empty? (dug s))))))))

@@ -505,6 +505,21 @@
           (is (empty? (listed s)))
           (is (= {"stone_pickaxe" 1} (select-keys (inv s) ["stone_pickaxe" "iron_pickaxe"]))))))))
 
+(deftest obtain-looks-around-for-a-chest-behind-the-body-before-it-crafts
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (-> (world {}) (update :blocks dissoc chest-at) (assoc-in [:blocks "-2,64,-3"] "chest")
+                           (assoc :containers {"-2,64,-3" [{:name "oak_planks" :count 8}]}
+                                  :inventory [{:name "oak_log" :count 2}]))
+                       [own-zone])]
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "oak_planks" :count 4}) {})
+          (await (run-ticks s 30))
+          (is (seq (calls s "look")))
+          (is (empty? (calls s "craft")) "the chest behind the body is used, nothing is crafted")
+          (is (= 4 (get (inv s) "oak_planks")))
+          (is (= 2 (get (inv s) "oak_log"))))))))
+
 (deftest obtain-on-a-cycle-stops
   (async done
     (tu/run-async done

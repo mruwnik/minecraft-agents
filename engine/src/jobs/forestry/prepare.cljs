@@ -2,6 +2,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.trees :as forestry]
             [jobs.lib.blocks :as blocks]
+            [jobs.lib.look :as look]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
@@ -50,7 +51,7 @@
   prepare.wet) and one per species short (prepare.short {:species :missing}). The job wakes when what it lacked
   is carried. A started job runs on to finish.
   The job declines (one prepare.declined warn) while the plan is missing, unreadable or has no tree cells (in
-  :part), and while no zone list is loaded.
+  :part), and while no zone list is loaded. With a planned cell never seen, the first round looks around once first.
   Result: {:cleared :soiled :planted :dammed :short {species missing} :wrong :no-soil :no-tool :cramped :wet :refused},
   info prepare.done.")
 
@@ -110,7 +111,7 @@
         (or (boolean (or (seq work) (and (:begun (ctx/mem c)) (not (receding? states)))))
             (if-let [due (seq (vals (:recede (ctx/mem c))))]
               (ctx/wait c {:reason :receding :ready-at (apply min due)})
-              (ctx/wait c {:reason :nothing-to-do})))))))
+              (look/wait-unless-surveyed c {:reason :nothing-to-do} (maintain/field-cells field))))))))
 
 ;; ------------------------------------------------------------------ steps
 
@@ -314,19 +315,20 @@
   (let [field (field/planned c)]
     (if (:trouble field)
       :declined
-      (do
-        (when-not (:begun (ctx/mem c))
-          (ctx/update-mem! c assoc :begun true))
-        (let [states (field/assessments c field)
-              work (field/todo c states)
-              target (first work)
-              owed (:collect (ctx/mem c))]
-          (note-cells! c states (empty? work))
-          (cond
-            (and owed (or (nil? target) (not= owed (:pos target)))) (await (collect! c))
-            target (await (act! c target))
-            (receding? states) :continue
-            :else (finish! c states)))))))
+      (or (await (maintain/survey-field! c field))
+          (do
+            (when-not (:begun (ctx/mem c))
+              (ctx/update-mem! c assoc :begun true))
+            (let [states (field/assessments c field)
+                  work (field/todo c states)
+                  target (first work)
+                  owed (:collect (ctx/mem c))]
+              (note-cells! c states (empty? work))
+              (cond
+                (and owed (or (nil? target) (not= owed (:pos target)))) (await (collect! c))
+                target (await (act! c target))
+                (receding? states) :continue
+                :else (finish! c states))))))))
 
 (def max-steps "Steps of one call before it gives the round back with :continue." 400)
 

@@ -199,3 +199,29 @@
           (is (= :failed (:skipped (step s :harvest))))
           (is (= {"honey_bottle" 2} (chest-items s)))
           (is (true? (finished? s))))))))
+
+(deftest an-apiary-never-seen-is-looked-at-before-nothing-to-do
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (doto (h/setup (world {:inventory kit})) (-> :p tu/seeing-after-look))]
+          (core/submit! (:eng s) (spec {}) {})
+          (dotimes [_ 60]
+            (swap! (:clock s) + 700)
+            (await (core/tick! (:eng s))))
+          (is (seq (calls s "look")))
+          (is (= 1 (:harvested (step s :harvest))))
+          (is (true? (finished? s))))))))
+
+(deftest an-apiary-with-nothing-to-do-waits-after-one-look
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (doto (h/setup (world {:inventory (inv "shears" 1) :raised? true})) (-> :p tu/seeing-after-look))]
+          (core/submit! (:eng s) (spec {}) {})
+          (dotimes [_ 10]
+            (swap! (:clock s) + 700)
+            (await (core/tick! (:eng s))))
+          (is (= 8 (count (calls s "look"))) "one look around")
+          (is (= [:nothing-to-do] (distinct (map :reason (events-of s :waiting)))))
+          (is (nil? (done-event s))))))))

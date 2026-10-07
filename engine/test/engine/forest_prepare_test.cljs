@@ -664,3 +664,14 @@
           (is (listed? eng))
           (is (= [:receding] (distinct (map :reason waits))))
           (is (every? number? (map :ready-at waits))))))))
+
+(deftest a-planned-cell-never-seen-is-looked-at-before-nothing-to-do
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [spec (world {} (item "oak_sapling" 1))
+              {:keys [eng p]} (start spec {"forest" one-cell} (tu/tmp-dir) (tu/seeing-after-look (tu/fake-on-floor spec)))
+              result (await (tu/child-outcome eng job {:plan "forest"} 300))]
+          (is (seq (h/calls p "look")))
+          (is (= [[3 64 0 "oak_sapling"]] (places p)))
+          (is (= (expect {:planted 1}) result)))))))

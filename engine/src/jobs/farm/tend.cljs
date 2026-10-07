@@ -4,6 +4,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.gate :as gate]
+            [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.steps :as steps]
             [jobs.lib.util :as u]
@@ -37,8 +38,8 @@
   :no-bare, :fertilize-off, :no-bone-meal, :none-unripe, :no-composter, :no-surplus-seed, :no-chest,
   :nothing-to-store or :declined (the child declined).
   A step that ran keeps its summary even if it is skipped later in the same run.
-  The job declines (does nothing) unless the box has at most 2048 cells and some step would run. A started run
-  always continues. A step under way is not re-decided.
+  The job declines (does nothing) unless the box has at most 2048 cells and some step would run (a field partly never
+  seen is looked around once first). A started run always continues. A step under way is not re-decided.
   It ends :done with {:steps {step summary} :field {:crops :bare :untilled}} (info farm-tend.done). :field is
   counted live at the end. Summaries: harvest {:cut :replanted :bare :gave-up}, till {:tilled n}, plant {:planted
   :reason :skipped}, fertilize {:used}, compost {:fed :bone-meal :reason}, deposit {:gave-up :reason}.
@@ -209,13 +210,22 @@
                  (when (:plan (:args c)) (tend-plan/note-short! c (:short f)))
                  (some #(:call (decide/decide % (:args c) f)) decide/steps)))))
 
+(defn field-cells
+  "The cells the run decides from: the box's ground and crop layers, or the plan's crop cells and the ground under them."
+  [c]
+  (if (:plan (:args c))
+    (mapcat (fn [pos] [pos (update pos :y dec)]) (keys (:crops (tend-plan/planned c))))
+    (let [{:keys [min max]} (:box (:args c))]
+      (for [x (range (:x min) (inc (:x max))) z (range (:z min) (inc (:z max))) y [(:y min) (inc (:y min))]]
+        {:x x :y y :z z}))))
+
 (defn check-run [c]
   (let [trouble (when (:plan (:args c)) (:trouble (tend-plan/planned c)))]
     (cond
       trouble (ctx/wait c {:reason :plan-trouble :why trouble})
       (and (not (:plan (:args c))) (not (usable-box? (:box (:args c))))) (ctx/wait c {:reason :no-box})
       (would-run? c) true
-      :else (ctx/wait c {:reason :nothing-to-do}))))
+      :else (look/wait-unless-surveyed c {:reason :nothing-to-do} (field-cells c)))))
 
 ;; ------------------------------------------------------------------ rounds
 
@@ -293,10 +303,14 @@
           (ctx/update-mem! c after-child step (:args call) outcome (when (= :done outcome) (ctx/child-result c step))))
         (if (= :continue outcome) :continue :again)))))
 
-(defn ^:async step [c]
-  (if (and (:plan (:args c)) (:trouble (tend-plan/planned c)))
-    :declined
-    (await (work c))))
+(defn ^:async step
+  "A run over a field partly never seen looks around first and yields (the check decides on what is seen then)."
+  [c]
+  (cond
+    (and (:plan (:args c)) (:trouble (tend-plan/planned c))) :declined
+    (and (not (:todo (ctx/mem c))) (not (look/surveyed? c)) (look/unseen? (:primitives c) (field-cells c)))
+    (await (look/survey! c))
+    :else (await (work c))))
 
 (defn ^:async round
   "The whole run: one child call after another over the six steps until the report is made; :continue only while a

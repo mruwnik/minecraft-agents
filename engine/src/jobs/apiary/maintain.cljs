@@ -2,6 +2,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
             [jobs.lib.apiary :as apiary]
+            [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.steps :as steps]
             [jobs.lib.util :as u]
@@ -25,7 +26,8 @@
   :not-ripe, :no-tool, :unsafe-fire, :not-smoked, :open-fire, :no-target, :at-target, :night, :raining,
   :too-few-adults, :no-food, :no-chest, :nothing-to-store). One that declines is booked {:skipped :declined}
   and one that throws {:skipped :failed :error text}. The pass goes on either way.
-  The job declines (does nothing) unless some step would run. A started run always continues.
+  The job declines (does nothing) unless some step would run, after one look around per run. A started run always
+  continues.
   It ends :done with {:target :bees :steps {step summary}} (info maintain.done), also when every step was
   skipped. Summaries: guard {:sunk :carpeted :reason :left}, harvest {:harvested :reason :declined}, breed {:fed
   :reason}, deposit {:gave-up :reason}.
@@ -163,11 +165,15 @@
                              (when (:ignore-zones? (:args c)) {:ignore-zones? true}))
     (:args decided)))
 
+(defn would-run?
+  "Whether some step would call a child over the facts read now."
+  [c]
+  (let [f (facts c)]
+    (boolean (some #(:call (decide % (:args c) f)) steps))))
+
 (defn check [c]
-  (or (boolean (or (:todo (ctx/mem c))
-                   (let [f (facts c)]
-                     (some #(:call (decide % (:args c) f)) steps))))
-      (ctx/wait c {:reason :nothing-to-do})))
+  (or (boolean (or (:todo (ctx/mem c)) (would-run? c)))
+      (look/wait-unless-surveyed c {:reason :nothing-to-do})))
 
 ;; ------------------------------------------------------------------ the run
 
@@ -203,8 +209,8 @@
       (ctx/update-mem! c booked step {:skipped :failed :error (str e)})
       :failed)))
 
-(defn ^:async step
-  "One piece of the pass: :again after a step ended, :continue while its child waits on the world, :done."
+(defn ^:async pass-step
+  "One piece of the pass itself (see step)."
   [c]
   (let [center (apiary/center-of c)]
     (when-not (:todo (ctx/mem c))
@@ -222,6 +228,14 @@
             :failed :again
             :done (do (ctx/update-mem! c booked step (summary step (ctx/child-result c step))) :again)
             (do (ctx/update-mem! c booked step {:skipped :declined}) :again)))))))
+
+(defn ^:async step
+  "One piece of the pass: :again after a step ended, :continue while its child waits on the world, :done. With
+  nothing to do in sight before the pass, a look around first (:continue: the check decides again)."
+  [c]
+  (if (and (not (:todo (ctx/mem c))) (not (look/surveyed? c)) (not (would-run? c)))
+    (await (look/survey! c))
+    (await (pass-step c))))
 
 (def max-steps "Steps of one call before it gives the round back with :continue." 400)
 

@@ -35,7 +35,6 @@
 
 (deftest apiary-checks-say-why-they-decline
   (are [job reason] (= reason (waiting-reason job {}))
-    'jobs.apiary.maintain :nothing-to-do
     'jobs.apiary.guard :nothing-to-guard))
 
 (deftest build-checks-say-why-they-decline
