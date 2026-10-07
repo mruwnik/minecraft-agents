@@ -3,6 +3,7 @@
             [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
+            [jobs.lib.fetch :as fetch]
             [jobs.lib.gate :as gate]
             [jobs.lib.tools :as tools]
             [jobs.lib.access.rules :as rules]
@@ -29,7 +30,7 @@
 
   Declines and ends early:
   - A pickaxe block (jobs.lib.tools/tool-kind) with no *_pickaxe carried, at the start or later (the pick broke),
-    runs jobs.items.get-tool as a child first. Nothing got: before any dig it ends at once, warn mine.no-tool,
+    runs jobs.items.get-tool as a child first (unless :fetch is false). Nothing got: before any dig it ends at once, warn mine.no-tool,
     {:status :stopped :got 0 :reason :no-tool :tool \"pickaxe\"}; in the dig phase the mend and walk home follow with
     :reason :no-tool. Shovel and axe blocks drop by hand. Soil or wood dug with only a pickaxe held empties the
     hand first (no wear on the pickaxe).
@@ -124,6 +125,7 @@
    :count {:doc "how many more to carry than at the start" :default 8}
    :radius {:doc "seen blocks within this many blocks of the body count" :default 16}
    :wet {:doc "dig blocks that touch water, and tunnel beside water" :default false}
+   :fetch {:doc "get a pickaxe when none is carried (jobs.items.get-tool via jobs.lib.fetch limits): true, a set of kinds or a map of limits; false ends :no-tool" :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
    :spare-own-builds {:doc "a cell of a plan this body made is never a target; false: it may be dug" :default true}
    :mend {:doc "fill the ground under the start again afterwards" :default true}
@@ -905,7 +907,7 @@
   "A pickaxe is owed: run jobs.items.get-tool for the block (child :tool). :continue while it runs and once it has
   got one; else the end: before any dig (no phase) at once, in the dig phase the mend first, with :no-tool."
   [c]
-  (let [r (await (ctx/call-child c :tool 'jobs.items.get-tool {:block (:block (:args c))}))
+  (let [r (when (fetch/opts c 'jobs.gather.mine) (await (ctx/call-child c :tool 'jobs.items.get-tool {:block (:block (:args c))})))
         got? (and (= :done r) (= :done (:status (ctx/child-result c :tool))))]
     (cond
       (= :continue r) :continue

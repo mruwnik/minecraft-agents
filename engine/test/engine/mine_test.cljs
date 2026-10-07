@@ -1190,6 +1190,15 @@
           (is (= {:status :stopped :got 0 :reason :no-tool :tool "pickaxe"} out))
           (is (zero? (dig-count s))))))))
 
+(deftest fetch-false-ends-no-tool-without-asking-get-tool
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [s out fetch]} (await (as-child {:block "stone" :count 1 :fetch false} {:blocks {"3,64,0" "stone"} :drops cobble} "stone_pickaxe" 20))]
+          (is (empty? fetch))
+          (is (= {:status :stopped :got 0 :reason :no-tool :tool "pickaxe"} out))
+          (is (zero? (dig-count s))))))))
+
 (deftest soil-in-the-tunnel-is-not-dug-with-the-pickaxe
   (async done
     (tu/run-async done
