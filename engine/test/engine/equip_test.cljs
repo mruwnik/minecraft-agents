@@ -112,6 +112,8 @@
           (is (nil? (held (:p s))))
           (is (= 1 (count (ft/events-of s :fetch.failed))))
           (is (empty? (ft/events-of s :equip.done)))
+          (is (empty? (ft/events-of s :equip.refused)) "it waits for the item, it does not stop :no-item")
+          (is (= 1 (count (:list (core/state (:eng s))))) "the job is still queued, not finished")
           (let [w (core/waiting (:eng s) id)]
             (is (= :need (:reason w)))
             (is (= "wooden_pickaxe" (:item w)))
