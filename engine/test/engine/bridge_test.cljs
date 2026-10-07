@@ -129,15 +129,38 @@
           (let [d (first (of-kind seen :bridge.done))]
             (is (= (row 5) (:placed d)))))))))
 
+(deftest no-blocks-fetches-them-by-default
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup {:inventory []})]
+          (core/submit! eng (list job {:heading :east :length 5}) {})
+          (await (ticks s eng 4))
+          (is (empty? (calls p "place")))
+          (let [f (first (of-kind seen :fetch.started))]
+            (is (= :need (:for f)))
+            (is (= ["dirt" "cobblestone"] (:any-of (:args f))))
+            (is (= 5 (:count (:args f))))))))))
+
+(deftest running-short-part-way-fetches-the-rest-by-default
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen] :as s} (setup {:inventory [{:name "dirt" :count 2}]})]
+          (core/submit! eng (list job {:heading :east :length 5}) {})
+          (await (ticks s eng 12))
+          (is (= 3 (:count (:args (first (of-kind seen :fetch.started)))))))))))
+
 (deftest too-few-blocks-at-the-start-waits-saying-so
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p] :as s} (setup {:inventory []})
-              id (core/submit! eng (list job {:heading :east :length 5}) {})]
+        (let [{:keys [eng p seen] :as s} (setup {:inventory []})
+              id (core/submit! eng (list job {:heading :east :length 5 :fetch false}) {})]
           (await (ticks s eng 3))
           (is (not (finished? eng)))
           (is (empty? (calls p "place")))
+          (is (empty? (of-kind seen :fetch.started)))
           (is (= :too-few-blocks (:reason (core/waiting eng id)))))))))
 
 (deftest running-short-part-way-builds-what-it-has-and-gives-up-saying-so
@@ -145,7 +168,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup {:inventory [{:name "dirt" :count 2}]})]
-          (core/submit! eng (list job {:heading :east :length 5}) {})
+          (core/submit! eng (list job {:heading :east :length 5 :fetch false}) {})
           (await (ticks s eng 30))
           (is (finished? eng))
           (is (= [2 64 0] (feet p)))
