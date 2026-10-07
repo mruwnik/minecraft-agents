@@ -124,18 +124,29 @@
           (is (= [] (lt/calls p "place")) "nothing placed into an unknown cell")
           (is (= 1 (count (lt/debts eng)))))))))
 
+(defn clear-drops!
+  "Remove every entity (the dropped items) from the fake world."
+  [p]
+  (doseq [e (fake/entities p)]
+    (swap! (fake/state p) update :entities (fn [es] (remove (fn [x] (= (:id e) (:id x))) es)))))
+
+(defn after-last-dig!
+  "Call (f) once the third log of the tree is dug: the felling is over, the collecting not begun."
+  [p f]
+  (let [n (atom 0)]
+    (.override (.-world p) "dig"
+               (fn ^:async dig [token args impl]
+                 (let [r (await (impl token args))]
+                   (when (= 3 (swap! n inc)) (f))
+                   r)))))
+
 (deftest a-body-moved-away-after-the-felling-still-collects-the-drops
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3)})]
+          (after-last-dig! p #(fake/swap-self! p assoc :pos [-30 64 0]))
           (core/submit! eng '(jobs.forestry.harvest-wood {:species "oak" :radius 10}) {})
-          (loop [i 0]
-            (when (and (< i 30) (not= :collect (:phase (core/job-memory eng "j1"))))
-              (await (core/tick! eng))
-              (recur (inc i))))
-          (is (= :collect (:phase (core/job-memory eng "j1"))) "reached the collect phase")
-          (fake/swap-self! p assoc :pos [-30 64 0])
           (await (lt/run-until-empty eng 30))
           (is (= 3 (get (lt/inv p) "oak_log")) "the drops at the tree are fetched, not forgotten")
           (is (= [] (:list (core/state eng)))))))))
@@ -145,12 +156,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3)})]
+          (after-last-dig! p #(clear-drops! p))
           (core/submit! eng '(jobs.forestry.harvest-wood {:species "oak" :radius 10}) {})
-          (loop [i 0]
-            (when (and (< i 30) (not= :collect (:phase (core/job-memory eng "j1"))))
-              (await (core/tick! eng))
-              (recur (inc i))))
-          (doseq [e (fake/entities p)] (swap! (fake/state p) update :entities (fn [es] (remove #(= (:id e) (:id %)) es))))
           (await (lt/run-until-empty eng 30))
           (is (= [:nothing-collected] (mapv :reason (filterv #(= :stopped (:kind %)) @seen))) "no item came in: stopped with a reason, not completed")
           (is (zero? (get (lt/inv p) "oak_log" 0))))))))
@@ -160,13 +167,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3) :inventory [{:name "oak_sapling" :count 1}]})]
+          (after-last-dig! p #(do (clear-drops! p) (fake/add-item! p "oak_log" 3)))
           (core/submit! eng '(jobs.forestry.harvest-wood {:species "oak" :radius 10}) {})
-          (loop [i 0]
-            (when (and (< i 30) (not= :collect (:phase (core/job-memory eng "j1"))))
-              (await (core/tick! eng))
-              (recur (inc i))))
-          (doseq [e (fake/entities p)] (swap! (fake/state p) update :entities (fn [es] (remove #(= (:id e) (:id %)) es))))
-          (fake/add-item! p "oak_log" 3)
           (await (lt/run-until-empty eng 30))
           (is (= [] (filterv #(= :stopped (:kind %)) @seen)) "the logs are in the inventory: not stopped")
           (is (= "oak_sapling" (.-name (.blockAt p #js {:x 3 :y 64 :z 0}))) "the replant is done")
@@ -205,25 +207,23 @@
   (is (= (set (map trees/sapling-of trees/species)) (set ps/saplings)))
   (is (every? (set trees/species) ["oak" "mangrove" "crimson" "warped"])))
 
-(defn ^:async phases-of
-  "The harvest-wood phases (repeats merged) over 40 ticks with one oak of 3 logs and a sapling carried."
-  [args]
-  (let [{:keys [eng]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3) :inventory [{:name "oak_sapling" :count 1}]})]
+(defn ^:async ticks-of
+  "Run harvest-wood with args for n ticks over one oak of 3 logs and a sapling carried: the :stopped events' reasons
+  and whether the job is still listed."
+  [n args]
+  (let [{:keys [eng seen]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3) :inventory [{:name "oak_sapling" :count 1}]})]
     (core/submit! eng (list 'jobs.forestry.harvest-wood args) {})
-    (loop [i 0 seen []]
-      (if (< i 40)
-        (do (await (core/tick! eng))
-            (recur (inc i) (conj seen (:phase (core/job-memory eng "j1")))))
-        (vec (dedupe (remove nil? seen)))))))
+    (await (lt/run-until-empty eng n))
+    [(mapv :reason (filterv #(= :stopped (:kind %)) @seen)) (boolean (seq (:list (core/state eng))))]))
 
 (deftest count-starts-the-next-tree-until-enough-logs-are-carried
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= [:collect :plant :fell] (await (phases-of {:species "oak" :radius 10 :count 5})))
-            "3 logs carried of 5: back to :fell")
-        (is (= [:collect :plant] (await (phases-of {:species "oak" :radius 10 :count 3}))) "enough: the job ends")
-        (is (= [:collect :plant] (await (phases-of {:species "oak" :radius 10}))) "no count: one tree")))))
+        (is (= [[:no-tree] false] (await (ticks-of 2 {:species "oak" :radius 10 :count 5})))
+            "3 logs carried of 5: back to :fell, no tree left: stopped")
+        (is (= [[] false] (await (ticks-of 1 {:species "oak" :radius 10 :count 3}))) "enough: the job ends")
+        (is (= [[] false] (await (ticks-of 1 {:species "oak" :radius 10}))) "no count: one tree")))))
 
 (deftest count-six-fells-two-three-log-trees
   (async done

@@ -14,15 +14,17 @@
             [jobs.lib.util :as u]
             [jobs.lib.walk :as walk]
             [jobs.lib.near :as near]
+            [jobs.lib.pace :as pace]
             [jobs.lib.targets :as targets]))
 
 (def doc
-  "Fell the nearest tree: a log column with leaves near its top. Digs one log a round, lowest first.
+  "Fell the nearest tree: a log column with leaves near its top. One call fells the whole tree, lowest log first; it
+  yields (:continue) only while a child waits on the world.
   The base log's :forestry/replant debt is written before it is dug.
   With :at it fells that one column instead (:radius and :species are then unused).
   The tree is chosen by a bounded search over at most 32 candidates, nearest in a line first (jobs.lib.targets).
   It picks the tree the body walks to soonest, so a walled-off or cliff-top tree is passed over for a reachable
-  one. The search continues over several rounds if needed. If it proves every candidate out of reach, the job
+  one. The search goes on, slice by slice, within the call. If it proves every candidate out of reach, the job
   warns tree_blocked and ends. If it runs out of nodes, it takes the nearest in a line and the walk decides.
   A tree whose walk is blocked, or partial three times in a row, is marked unreachable and the next one is chosen.
   A log still out of reach once the body stands at the foot is felled from a pillar: jobs.lib.access.approach/plan picks
@@ -215,7 +217,7 @@
   "Take back what was built, then count the tree unreachable."
   [c]
   (ctx/update-mem! c update :pillar assoc :phase :clean :failed true)
-  :continue)
+  :again)
 
 (defn blocks-carried
   "How many of the pillar items (dirt, cobblestone) are carried."
@@ -242,7 +244,7 @@
                                   {:reason :refused :why :pillar :text "a zone or plan refuses a pillar by the tree"}
                                   {:reason (:reason r) :why :pillar :text (str "no way to reach the high logs: " (name (:reason r)))}))
                 (mark-unreachable! c)))
-    :continue))
+    :again))
 
 (defn ^:async pillar-walk!
   [c {:keys [plan]}]
@@ -250,7 +252,7 @@
         res (ctx/child-result c :pwalk)]
     (cond
       (= :continue r) :continue
-      (and (= :done r) (:arrived res)) (do (ctx/update-mem! c assoc-in [:pillar :phase] (if (:height plan) :build :dig)) :continue)
+      (and (= :done r) (:arrived res)) (do (ctx/update-mem! c assoc-in [:pillar :phase] (if (:height plan) :build :dig)) :again)
       :else (pillar-failed! c))))
 
 (defn ^:async pillar-build!
@@ -258,7 +260,7 @@
   (let [r (await (ctx/call-child c :pillar 'jobs.access.pillar {:height (:height plan) :ignore-zones? (:ignore-zones? (:args c))}))]
     (cond
       (= :continue r) :continue
-      (and (= :done r) (= :done (:status (ctx/child-result c :pillar)))) (do (ctx/update-mem! c assoc-in [:pillar :phase] :dig) :continue)
+      (and (= :done r) (= :done (:status (ctx/child-result c :pillar)))) (do (ctx/update-mem! c assoc-in [:pillar :phase] :dig) :again)
       :else (pillar-failed! c))))
 
 (defn ^:async pillar-dig!
@@ -271,10 +273,10 @@
         in-reach (filter #(<= (u/eye-dist here (:pos %)) dig-reach) logs)
         l (first (sort-by #(- (:y (:pos %))) in-reach))]
     (if-not l
-      (do (ctx/update-mem! c update :pillar #(cond-> (assoc % :phase :clean) (not (:dug %)) (assoc :failed true))) :continue)
+      (do (ctx/update-mem! c update :pillar #(cond-> (assoc % :phase :clean) (not (:dug %)) (assoc :failed true))) :again)
       (let [r (await (dig-log! c l))]
         (if (= :ok r)
-          (do (ctx/update-mem! c assoc-in [:pillar :dug] true) (u/progress! c) :continue)
+          (do (ctx/update-mem! c assoc-in [:pillar :dug] true) (u/progress! c) :again)
           (pillar-failed! c))))))
 
 (defn open-scaffold?
@@ -292,7 +294,7 @@
       (open-scaffold? c) (u/fail! c :tree_blocked "cannot take the pillar back")
       :else (do (ctx/update-mem! c dissoc :pillar)
                 (when failed (mark-unreachable! c))
-                :continue))))
+                :again))))
 
 (defn ^:async pillar-round!
   "One round of the pillar: walk to its base (or stand), build it, dig from it, take it back."
@@ -305,15 +307,16 @@
       :clean (await (pillar-clean! c m)))))
 
 (defn walk-failed!
-  "Book a walk result of :blocked or :partial against the chosen tree."
+  "Book a walk result of :blocked or :partial against the chosen tree: :again once the tree is given up, :continue
+  while the walk (its child) waits."
   [c r]
   (let [partials (inc (:partials (ctx/mem c) 0))]
     (if (or (= :blocked r) (>= partials max-partials))
-      (mark-unreachable! c)
-      (ctx/update-mem! c assoc :partials partials))
-    :continue))
+      (do (mark-unreachable! c) :again)
+      (do (ctx/update-mem! c assoc :partials partials) :continue))))
 
-(defn ^:async round
+(defn ^:async step
+  "One piece of the felling: :again, :continue (a child waits on the world, or nothing is in sight), :done or a stop."
   [c]
   (let [{:keys [species radius]} (:args c)
         _ (when (and (not (:column (ctx/mem c))) (not (first (candidates c radius species))) (not (look/looked-here? c)))
@@ -322,7 +325,7 @@
             (set-pillar! c {:phase :clean}))
         chosen (or (:column (ctx/mem c)) (await (choose-tree! c radius species)))]
     (cond
-      (= :searching chosen) :continue
+      (= :searching chosen) :again
 
       (and (not chosen) (seq (:unreachable (ctx/mem c))))
       (do (ctx/emit! c :tree_blocked :warn {:text "no reachable tree"})
@@ -344,11 +347,18 @@
             (case r
               :ok (do (ctx/update-mem! c assoc :partials 0)
                       (u/progress! c)
-                      :continue)
+                      :again)
               :high (await (start-pillar! c logs))
               (:partial :blocked) (walk-failed! c r)
-              (:unreachable :cannot :out-of-reach :refused) (do (mark-unreachable! c) :continue)
+              (:unreachable :cannot :out-of-reach :refused) (do (mark-unreachable! c) :again)
               (u/fail! c :tree_blocked (str "cannot dig the tree: " (name r))))))))))
+
+(def max-steps "Pieces of work of one call before it gives the round back with :continue." 400)
+
+(defn ^:async round
+  [c]
+  (let [n (atom 0)]
+    (await (pace/steps! c #(if (< (swap! n inc) max-steps) (step c) :continue)))))
 
 (defn check
   "A tree is chosen, or every candidate was unreachable (the round warns and

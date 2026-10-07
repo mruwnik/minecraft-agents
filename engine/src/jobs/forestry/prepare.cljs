@@ -4,6 +4,7 @@
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
+            [jobs.lib.pace :as pace]
             [jobs.lib.step-off :as step-off]
             [jobs.lib.access :as access]
             [jobs.forestry.maintain :as maintain]
@@ -12,7 +13,7 @@
 (def doc
   "Get the planting spots of a forest plan ready. A spot is a planned tree cell (want {:tree species}); the cell
   is where the sapling goes. The goal per cell: a sapling of the planned species can be planted and can grow there.
-  Each round takes one step on the nearest cell that can still be improved:
+  One call takes steps on the nearest cell that can still be improved, until none is left:
   1. Dig the stray in the cell (grass, flowers, snow, leaves, stone: anything but air, the species' own sapling or
      log, or a thing never dug).
   2. Replace natural ground under the cell (stone, sand, gravel, cobblestone, deepslate ...) with carried dirt. It
@@ -22,8 +23,8 @@
   Bringing saplings and dirt is another job, e.g. (seq (jobs.storage.withdraw ...) (jobs.forestry.prepare ...)).
   Water in the cell is repaired. A source in the cell is filled with carried dirt (the dirt is then dug as a
   stray). A source beside it on its level is dammed first, since it would flood the dug cell back. A flow is
-  traced upstream (at most 16 cells) and its source filled. The cell then gets 10 s to recede (the round returns
-  :declined, nothing is polled). Water that cannot be traced, no dirt carried, or a refused source leaves the
+  traced upstream (at most 16 cells) and its source filled. The cell then gets 10 s to recede (the call yields
+  :continue; nothing is polled). Water that cannot be traced, no dirt carried, or a refused source leaves the
   cell as :wet {:pos :why :source} (warn prepare.wet).
   Never dug, only reported:
   - a stray or natural ground that no carried tool harvests (stone with no pickaxe: slow, nothing drops): result
@@ -121,35 +122,35 @@
                    :text (str "prepare leaves " (pr-str (maintain/cell-vec pos)) " alone: " (name reason))}))
 
 (defn fail!
-  "Count a failed try on the cell; skipped at the third. :continue."
+  "Count a failed try on the cell; skipped at the third. :again."
   [c pos reason]
   (let [n (inc (get-in (ctx/mem c) [:fails pos] 0))]
     (ctx/update-mem! c assoc-in [:fails pos] n)
     (when (>= n u/max-failures)
       (skip! c pos reason))
-    :continue))
+    :again))
 
 (defn blocked!
-  "Book a verdict that is not :ok against the planned cell: a refusal skips it, a wait counts a failure. :continue."
+  "Book a verdict that is not :ok against the planned cell: a refusal skips it, a wait counts a failure. :again."
   [c cell v]
   (if (vector? v)
     (skip! c cell (second v))
     (fail! c cell :not-loaded))
-  :continue)
+  :again)
 
 (defn bump [m k] (update m k (fnil inc 0)))
 
 (defn ^:async step-off!
-  "Walk off the column of pos, which the body stands in (jobs.lib.step-off). :continue."
+  "Walk off the column of pos, which the body stands in (jobs.lib.step-off). :again."
   [c pos]
   (let [r (await (step-off/step-off! c pos {:ok? (step-off/zone-ok (access/rules-input c))}))]
     (when (:unreachable r)
       (fail! c pos :unreachable))
-    :continue))
+    :again))
 
 (defn ^:async ready!
   "Walk within reach of target; with column? also off the column of the planned cell. nil when ready to act, else
-  :continue."
+  :again."
   [c cell target column?]
   (let [w (await (near/go-near! c target 3 {:zone-tolls true}))]
     (cond
@@ -182,7 +183,7 @@
                       "cannot" (skip! c cell :cannot)
                       "unreachable" (fail! c cell :unreachable)
                       (fail! c cell :failed))
-                    :continue))))))))
+                    :again))))))))
 
 (defn dug-stray [pos]
   (fn [c] (ctx/update-mem! c #(-> % (bump :cleared) (assoc :collect pos)))))
@@ -191,7 +192,7 @@
   (fn [c] (ctx/update-mem! c #(-> % (update :holes (fnil conj #{}) (maintain/cell-vec under)) (assoc :collect pos)))))
 
 (defn ^:async soil-place!
-  "Fill the hole under the planned cell with the carried soil. :continue."
+  "Fill the hole under the planned cell with the carried soil. :again."
   [c {:keys [pos item]}]
   (let [under (maintain/down pos)
         v (field/place-verdict c (maintain/cell-vec under))]
@@ -207,13 +208,13 @@
                       "placed" (ctx/update-mem! c #(-> % (bump :soiled) (update :holes disj (maintain/cell-vec under))))
                       ("no-item" "occupied") nil
                       (fail! c pos :failed))
-                    :continue))))))))
+                    :again))))))))
 
 (def recede-ms "How long a flow is given to recede after its source was dammed." 10000)
 
 (defn ^:async place-source!
   "Place the carried soil into the water of a wet cell: the source in the cell (:fill), or the source elsewhere
-  (:dam, after which the cell is receding for recede-ms). :continue."
+  (:dam, after which the cell is receding for recede-ms). :again."
   [c {:keys [pos target item state]}]
   (let [at (maintain/cell-vec target)
         fill? (= :fill state)
@@ -233,10 +234,10 @@
                       "placed" (ctx/update-mem! c dammed)
                       ("no-item" "occupied") nil
                       (fail! c pos :failed))
-                    :continue))))))))
+                    :again))))))))
 
 (defn ^:async plant!
-  "Plant the carried sapling in the planned cell with jobs.forestry.plant-sapling as a child. :continue."
+  "Plant the carried sapling in the planned cell with jobs.forestry.plant-sapling as a child. :again."
   [c {:keys [pos species item]}]
   (let [v (field/place-verdict c (maintain/cell-vec pos))]
     (if (vector? v)
@@ -251,14 +252,14 @@
                   (if (= item (u/block-name (:primitives c) pos))
                     (ctx/update-mem! c bump :planted)
                     (fail! c pos :failed))
-                  :continue)))))))
+                  :again)))))))
 
 (defn ^:async collect!
-  "One collect-drops round while the drops of the digs are owed. :continue."
+  "One collect-drops round while the drops of the digs are owed. :again, :continue while it waits."
   [c]
   (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops {:radius (:collect-radius (:args c))}))]
     (when (= :done r) (ctx/update-mem! c dissoc :collect))
-    :continue))
+    (if (= :continue r) :continue :again)))
 
 (defn ^:async act!
   "The step the cell is owed."
@@ -310,7 +311,7 @@
     (ctx/result! c result)
     :done))
 
-(defn ^:async round [c]
+(defn ^:async step [c]
   (let [field (field/planned c)]
     (if (:trouble field)
       :declined
@@ -325,5 +326,11 @@
           (cond
             (and owed (or (nil? target) (not= owed (:pos target)))) (await (collect! c))
             target (await (act! c target))
-            (receding? states) :declined
+            (receding? states) :continue
             :else (finish! c states)))))))
+
+(def max-steps "Steps of one call before it gives the round back with :continue." 400)
+
+(defn ^:async round [c]
+  (let [n (atom 0)]
+    (await (pace/steps! c #(if (< (swap! n inc) max-steps) (step c) :continue)))))

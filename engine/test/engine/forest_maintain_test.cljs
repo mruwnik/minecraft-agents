@@ -280,7 +280,7 @@
                          r)))
           (await (h/child-outcome (:eng s) job {:plan "forest"} 200))
           (is (= [[3 64 0 "oak_sapling"]] (places (:p s))) "the cut cell is replanted though the plan dropped it")
-          (is (= 2 (count (digs (:p s)))) "the felling is not gone on with once the cell left the plan"))))))
+          (is (= 4 (count (digs (:p s)))) "the felling is one call: the tree begun is felled whole"))))))
 
 (deftest the-check-declines-a-plan-it-cannot-work-with-one-warn
   (async done
@@ -421,20 +421,7 @@
           (is (= [] (digs p2)))
           (is (= [{:pos {:x 3 :y 64 :z 0} :reason :refused :why :fluid-adjacent}] (warns seen :forest.left))))))))
 
-(deftest a-tree-begun-and-dropped-from-the-plan-before-its-first-dig-is-left-and-its-cell-not-planted
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [plan (forest-plan ["a" [[3 64 0]] "oak"] ["b" [[9 64 0]] "birch"])
-              {:keys [p eng w]} (start (update oak-world :blocks assoc "9,64,0" "birch_sapling") {"forest" plan})]
-          (core/submit! eng (list job {:plan "forest"}) {})
-          (await (ticks eng 1))
-          (world/set-data! w {"forest" (forest-plan ["b" [[9 64 0]] "birch"])} {})
-          (await (ticks eng 30))
-          (is (= [] (vec (.-calls (.-world p)))) "no dig, no place on the cell holding the tree")
-          (is (= "oak_log" (h/block-at p 3 64 0))))))))
-
-(deftest a-log-that-turns-refused-between-felling-rounds-stops-the-felling
+(deftest a-log-that-turns-refused-during-the-felling-stops-the-felling
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -445,8 +432,8 @@
                        (await (impl token args))))
           (core/submit! (:eng s) (list job {:plan "forest"}) {})
           (await (ticks (:eng s) 30))
-          (is (= [[3 64 0]] (digs (:p s))) "the first round's log (one a round), then it stops")
-          (is (= [{:pos {:x 3 :y 64 :z 0} :reason :refused :why :footprint}] (warns (:seen s) :forest.left))))))))
+          (is (= [[3 64 0] [3 65 0]] (digs (:p s))) "the logs below the refused third are dug, then the felling stops")
+          (is (= [{:pos {:x 3 :y 64 :z 0} :reason :unreachable}] (warns (:seen s) :forest.left)) "the tree is left standing"))))))
 
 ;; ------------------------------------------------------------------ restart
 

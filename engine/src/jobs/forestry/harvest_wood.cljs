@@ -1,12 +1,13 @@
 (ns jobs.forestry.harvest-wood
   (:require [engine.ctx :as ctx]
             [clojure.string :as str]
+            [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
             [jobs.lib.result :as result]
             [jobs.forestry.trees :refer [default-radius drop-filter debts near-debt? sapling-for]]))
 
 (def doc
-  "Fell a tree, collect what dropped and replant. Runs three child jobs in turn, one child round per round:
+  "Fell a tree, collect what dropped and replant. Runs three child jobs in turn, each called once and run to its end:
   :fell (jobs.forestry.fell-tree), :collect (collect-drops) and :plant (plant-sapling).
   :collect works around the felled tree's base, wherever a reflex has since taken the body; a felling that brings in
   no item at all (the inventory count of the filter's items, before the felling against after the collecting)
@@ -99,10 +100,10 @@
   (let [n (:count (:args c))]
     (and n (< (logs-carried c) n))))
 
-(defn ^:async round
-  "Steps the current phase's child once; when the child is done the phase
-  advances. Done when the :plant child is done. A declined child is
-  :continue (the check normally keeps the round from running at all). The :plant phase with a child that would
+(defn ^:async step
+  "Calls the current phase's child once; when the child is done the phase
+  advances (:again). Done when the :plant child is done. A child that is not done is :continue (it waits on the
+  world; a declined child too, the check normally keeps the round from running at all). The :plant phase with a child that would
   wait (no sapling carried, the spot not clear) is done without it: the replant stays owed."
   [c]
   (let [_ (when-not (:origin (ctx/mem c)) (ctx/update-mem! c assoc :origin (u/self-pos c)))
@@ -132,10 +133,17 @@
       (do (ctx/update-mem! c #(-> % (assoc :phase :fell :tree nil :carried-before nil :origin nil)
                                   (update :felled (fnil inc 0))
                                   (update :children dissoc :fell :collect :plant)))
-          :continue)
+          :again)
       (nil? next-phase) (do (warn-owed! c)
                             (when-let [n (warn-replant-owed! c)] (ctx/result! c {:replant-owed n}))
                             :done)
       :else (do (ctx/update-mem! c assoc :phase next-phase)
                 (when (= :plant next-phase) (ctx/update-mem! c assoc :origin (u/self-pos c)))
-                :continue))))
+                :again))))
+
+(def max-steps "Child calls of one round before it gives the body back with :continue." 400)
+
+(defn ^:async round
+  [c]
+  (let [n (atom 0)]
+    (await (pace/steps! c #(if (< (swap! n inc) max-steps) (step c) :continue)))))

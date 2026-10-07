@@ -5,19 +5,21 @@
             [jobs.forestry.trees :as forestry]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
+            [jobs.lib.pace :as pace]
             [jobs.lib.step-off :as step-off]
             [jobs.lib.world :as known]))
 
 (def doc
   "Keep the trees a forest plan wants (cells wanting {:tree species}; a large tree is four cells).
-  Each round does the first step that applies:
+  One call does the first step that applies, again and again until none is left (:continue only while a child
+  waits on the world):
   1. Collect the drops of a tree just felled.
   2. Go on felling the tree begun.
   3. Plant the planned sapling on a planned cell standing bare (air over soil) or owing one.
   4. Fell the nearest grown tree of the wanted species on a planned cell (jobs.forestry.fell-tree as a child). The
      cell is noted as owing a sapling before the base log is dug, so a restart or plan edit never loses the replant.
   5. Finish. Result: {:felled :planted :left :bare}.
-  Cells are read from the plan and the world every round. A sapling of the wanted species is left to grow.
+  Cells are read from the plan and the world at every step. A sapling of the wanted species is left to grow.
   Anything else on a planned cell (another species, a block) is left and reported once (forest.foreign). Trees off
   the planned cells are never touched.
   A bare cell whose sapling is not carried is skipped, with one forest.no-sapling note. A later run plants it.
@@ -237,14 +239,14 @@
 (defn bump [m k] (update m k (fnil inc 0)))
 
 (defn ^:async collect!
-  "Step 1: one collect-drops round while a sweep is owed."
+  "Step 1: one collect-drops call while a sweep is owed. :again, :continue while it waits."
   [c]
   (when-let [species (:collect (ctx/mem c))]
     (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops
                                    {:radius (:collect-radius (:args c))
                                     :filter (vec (distinct (mapcat forestry/drop-filter species)))}))]
       (when (= :done r) (ctx/update-mem! c dissoc :collect))
-      :continue)))
+      (if (= :continue r) :continue :again))))
 
 (defn fell-slot [pos] (keyword (str "fell-" (:x pos) "-" (:y pos) "-" (:z pos))))
 
@@ -276,7 +278,8 @@
    :accept (:accept (:args c)) :pillar? (:pillar? (:args c)) :ignore-zones? (:ignore-zones? (:args c))})
 
 (defn ^:async fell!
-  "Steps 2 and 4: go on with the tree begun, else begin the nearest ripe one. :continue, or nil with no tree."
+  "Steps 2 and 4: go on with the tree begun, else begin the nearest ripe one. :again, :continue while the fell child
+  waits, or nil with no tree."
   [c trees classes]
   (let [m (ctx/mem c)
         {:keys [pos species] :as cut} (:cut m)]
@@ -285,14 +288,14 @@
       (let [logs (remaining-logs c pos species)
             bad (column-refusal c logs)]
         (cond
-          (not= species (get trees pos)) (do (ctx/update-mem! c dissoc :cut) :continue)
+          (not= species (get trees pos)) (do (ctx/update-mem! c dissoc :cut) :again)
           bad (do (ctx/update-mem! c dissoc :cut)
                   (leave! c pos :refused :why (second bad) :log (first bad))
-                  :continue)
+                  :again)
           :else
           (let [r (await (ctx/call-child c (fell-slot pos) 'jobs.forestry.fell-tree (fell-args c pos species)))]
             (when (not= :continue r) (finished-felling! c pos species))
-            :continue)))
+            (if (= :continue r) :continue :again))))
 
       :else
       (when-let [pos (first (ripe-cells c classes))]
@@ -305,7 +308,7 @@
             :else (ctx/update-mem! c (fn [m] (-> m
                                                 (assoc :cut {:pos pos :species species})
                                                 (update :replant (fnil conj []) {:pos pos :species species}))))))
-        :continue))))
+        :again))))
 
 (defn fail-plant!
   "Count a failed attempt to plant at pos; leave the cell at the third."
@@ -332,16 +335,16 @@
     #{[x y z] [x (inc y) z]}))
 
 (defn ^:async step-off!
-  "Walk off pos, which the body stands on, so a sapling can go there (jobs.lib.step-off). :continue."
+  "Walk off pos, which the body stands on, so a sapling can go there (jobs.lib.step-off). :again."
   [c pos]
   (let [r (await (step-off/step-off! c pos {:ok? (step-off/zone-ok (access/rules-input c))}))]
     (when (:unreachable r)
       (fail-plant! c pos :unreachable))
-    :continue))
+    :again))
 
 (defn ^:async plant!
   "Step 3: plant at the nearest owed cell whose sapling is carried, the cells under the body last (and walking off
-  one when it is the only one). :continue, or nil."
+  one when it is the only one). :again, :continue while the walk waits, or nil."
   [c classes]
   (let [under (body-cells c)
         owed (sort-by #(contains? under (cell-vec (:pos %))) (plantable c (owed-cells c classes)))]
@@ -350,12 +353,12 @@
             w (await (near/go-near! c pos 3 {:zone-tolls true}))]
         (cond
           (= :partial w) :continue
-          (= :blocked w) (do (fail-plant! c pos :unreachable) :continue)
+          (= :blocked w) (do (fail-plant! c pos :unreachable) :again)
           (contains? under (cell-vec pos)) (await (step-off! c pos))
           :else
           (if-let [why (place-refusal c pos)]
             (do (leave! c pos :refused :why why)
-                :continue)
+                :again)
             (do (await (ctx/act c :equip (clj->js {:item item})))
                 (let [r (await (ctx/act c :place (clj->js {:pos pos :item item})))]
                   (case (.-status r)
@@ -363,7 +366,7 @@
                                  (ctx/forget-where! c forestry/replant-kind #(= pos (:pos %))))
                     ("no-item" "occupied") nil
                     (fail-plant! c pos :failed))
-                  :continue))))))))
+                  :again))))))))
 
 (defn finish!
   "Step 5: say what was done and be done."
@@ -378,7 +381,7 @@
     (ctx/result! c result)
     :done))
 
-(defn ^:async round [c]
+(defn ^:async step [c]
   (let [field (planned c)]
     (if (:trouble field)
       :declined
@@ -393,3 +396,9 @@
               (await (plant! c classes))
               (await (fell! c trees classes))
               (finish! c classes)))))))
+
+(def max-steps "Steps of one call before it gives the round back with :continue." 400)
+
+(defn ^:async round [c]
+  (let [n (atom 0)]
+    (await (pace/steps! c #(if (< (swap! n inc) max-steps) (step c) :continue)))))

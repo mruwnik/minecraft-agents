@@ -5,7 +5,8 @@
             [jobs.forestry.trees :refer [debts target-of sapling-for sapling-of log-name? replant-kind species]
              :rename {species all-species}]
             [jobs.lib.util :as u]
-            [jobs.lib.near :as near]))
+            [jobs.lib.near :as near]
+            [jobs.lib.pace :as pace]))
 
 (def doc
   "Plant a sapling at :at, or at the oldest replant debt, and clear that debt. With :bone-meal n it then uses up to
@@ -44,8 +45,8 @@
   (some #(= "bone_meal" (:name %)) (u/inventory p)))
 
 (defn ^:async meal-round
-  "One bone meal use on the planted sapling; done when it grew, the uses are
-  spent or no bone meal is carried."
+  "One bone meal use on the planted sapling: :again; :done when it grew, the uses are spent or no bone meal is
+  carried; :continue while the walk to it waits."
   [c {:keys [pos left]}]
   (let [p (:primitives c)]
     (if (or (zero? left) (not (sapling-at? p pos)) (not (has-meal? p)))
@@ -55,7 +56,7 @@
           :partial :continue
           (do (await (ctx/act c :useOn #js {:pos (clj->js pos) :item "bone_meal" :face "up"}))
               (ctx/update-mem! c update-in [:meal :left] dec)
-              :continue))))))
+              :again))))))
 
 (defn problem
   "The wait {:reason :no-sapling :species} while there is a spot to plant and no matching sapling is carried; else nil.
@@ -100,7 +101,8 @@
       (log-name? (some-> (u/block-at p (:pos t)) .-name)) (ctx/wait c {:reason :log-on-spot :pos (:pos t)})
       :else true)))
 
-(defn ^:async round
+(defn ^:async step
+  "One piece of the planting: :again, :continue (a walk or fetch child waits on the world), :done or a stop."
   [c]
   (let [t (target-of (debts c) (:args c))
         sapling (when t (sapling-for (u/inventory (:primitives c)) (:species t)))
@@ -110,7 +112,8 @@
       meal (await (meal-round c meal))
       (nil? t) :done
       (not (spot-allowed? c (:pos t))) :done
-      (nil? sapling) (or (await (fetch/fetch! c 'jobs.forestry.plant-sapling #(some-> (problem %) fetch-wait))) :continue)
+      (nil? sapling) (or (await (fetch/fetch! c 'jobs.forestry.plant-sapling #(some-> (problem %) fetch-wait)))
+                         (if (problem c) :continue :again))
       :else
       (let [w (await (near/go-near! c (:pos t) 3 {:zone-tolls true}))]
         (case w
@@ -127,8 +130,15 @@
                   (let [n (:bone-meal (:args c))]
                     (ctx/forget-where! c replant-kind #(= (:pos t) (:pos %)))
                     (if (and (pos? n) (has-meal? (:primitives c)))
-                      (do (ctx/update-mem! c assoc :meal {:pos (:pos t) :left n}) :continue)
+                      (do (ctx/update-mem! c assoc :meal {:pos (:pos t) :left n}) :again)
                       :done))
                   (if (and (= "occupied" (.-status r)) (= sapling (u/block-name (:primitives c) (:pos t))))
                     (do (ctx/forget-where! c replant-kind #(= (:pos t) (:pos %))) :done)
                     (u/fail! c :plant_blocked (str "cannot plant: " (.-status r)))))))))))))
+
+(def max-steps "Pieces of work of one call before it gives the round back with :continue." 400)
+
+(defn ^:async round
+  [c]
+  (let [n (atom 0)]
+    (await (pace/steps! c #(if (< (swap! n inc) max-steps) (step c) :continue)))))

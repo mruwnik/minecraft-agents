@@ -78,13 +78,12 @@
         (let [{:keys [eng p]} (setup {:blocks (tree 3 0 "oak" 4)})]
           (core/submit! eng (list 'jobs.forestry.fell-tree {:species "oak" :radius 10}) {})
           (await (core/tick! eng))
-          (is (= [{:x 3 :y 64 :z 0}]
+          (is (= (mapv (fn [y] {:x 3 :y y :z 0}) (range 64 68))
                  (mapv #(js->clj (.-pos (.-args %)) :keywordize-keys true) (calls p "dig")))
-              "one round digs one log, the lowest first")
+              "one round digs the whole tree, the lowest log first")
           (is (= [{:pos {:x 3 :y 64 :z 0} :species "oak"}] (debts eng))
               "the replant debt is committed with the base position")
-          (is (pos? (await (run-until-empty eng 6))))
-          (is (= [] (:list (core/state eng))))
+          (is (= [] (:list (core/state eng))) "the one round ends the job")
           (is (nil? (get (inv p) "oak_log")) "the logs are drops on the ground, not collected")
           (is (= [{:pos {:x 3 :y 64 :z 0} :species "oak"}] (debts eng))
               "the debt is recorded once"))))))
@@ -159,7 +158,7 @@
         (let [{:keys [eng p]} (setup {:blocks (merge (tree 8 0 "oak" 3) (ring 8 0) (tree 20 0 "oak" 3))})]
           (core/submit! eng (list 'jobs.forestry.fell-tree {:radius 30}) {})
           (await (core/tick! eng))
-          (is (= [20] (dig-xs p)) "the first round walks to the reachable tree and digs its base log")
+          (is (= [20 20 20] (dig-xs p)) "the first round walks to the reachable tree and digs its logs")
           (is (every? #(= "arrived" (get-in % [:data :status])) (moved-entries eng)) "no walk toward the walled-off tree"))))))
 
 (deftest fell-tree-with-every-tree-walled-off-warns-without-walking
@@ -595,9 +594,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:blocks (tree 3 0 "oak" 3) :inventory [{:name "oak_sapling" :count 1}]})]
           (core/submit! eng (list 'jobs.forestry.harvest-wood {:species "oak" :radius 10}) {})
-          (await (core/tick! eng))
-          (is (= {:x 3 :z 0} (:column (job-mem eng "j1" [:fell]))) "the child's memory lives under the parent's slot")
-          (is (< (await (run-until-empty eng 20)) 20) "finishes")
+          (is (= 1 (await (run-until-empty eng 20))) "fells, collects and plants in the one round")
           (is (= [] (:list (core/state eng))))
           (is (= 3 (get (inv p) "oak_log")) "logs collected")
           (is (= "oak_sapling" (.-name (.blockAt p #js {:x 3 :y 64 :z 0}))) "replanted at the base")
