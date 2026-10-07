@@ -270,6 +270,18 @@
           (is (= 6 (:collected @out)))
           (is (= 1 (count (of-kind seen :cleanup.done)))))))))
 
+(deftest every-removal-goes-through-the-dig-job
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cells [[0 64 0] [0 65 0] [10 64 0]]
+              {:keys [eng p seen] :as s} (setup {:self {:x 3.5 :y 64 :z 0.5} :blocks (pillar-blocks cells)
+                                                 :entries (mapv entry cells)})]
+          (core/submit! eng '(recording-parent) {})
+          (await (ticks s eng 60))
+          (is (= 3 (count (filter #(= "dig" (.-name %)) (.-calls (.-world p))))))
+          (is (= 3 (count (of-kind seen :blocks.dig.done)))))))))
+
 (deftest a-removed-wall-torch-is-collected-as-the-torch-it-drops
   (async done
     (tu/run-async done

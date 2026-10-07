@@ -5,6 +5,7 @@
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
+            [jobs.lib.blocks :as blocks]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
@@ -225,13 +226,14 @@
         (await (tools/equip-tool! c item {:fast true}))
         (ledger/remember! c (ledger/begin-removal l cell))
         (let [[x y z] cell
-              status (.-status (await (ctx/act c :dig #js {:pos #js {:x x :y y :z z}})))
-              _ (await (tools/note-wear! c))]
-          (when under? (await (walk/settle! c)))
-          (if (#{"dug" "missing"} status)
-            (ctx/update-mem! c assoc :collect true)
-            (ctx/update-mem! c count-fail cell {:reason :dig-failed :dig status} (:give-up (:args c))))
-          :again)))))
+              outcome (await (blocks/dig-cell! c {:x x :y y :z z} {:accept #{:fluid-adjacent :falling-block :under-feet}
+                                                                   :ignore-zones? true}))]
+          (when (and under? (not= :continue outcome)) (await (walk/settle! c)))
+          (cond
+            (= :continue outcome) :continue
+            (#{:dug :missing} outcome) (ctx/update-mem! c assoc :collect true)
+            :else (ctx/update-mem! c count-fail cell {:reason :dig-failed :dig outcome} (:give-up (:args c))))
+          (if (= :continue outcome) :continue :again))))))
 
 (def permanent-why "go-to's :why of a give-up that is a verdict on the cell." #{:abilities :goal-enclosed :goal-cut-off :one-way :goal-not-standable :exhausted})
 
