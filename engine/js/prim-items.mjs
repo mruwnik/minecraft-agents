@@ -51,7 +51,7 @@ export function createItems (env) {
       const block = containerAt(p)
       if (!block) return { status: 'missing' }
       if (dist(eye(), center(p)) > REACH) return { status: 'unreachable' }
-      return withWindow(ctx, block, async win => ({ status: 'ok', items: slots(win.containerItems()) }))
+      return withWindow(ctx, block, async win => ({ status: 'ok', items: slots(win.containerItems()), size: win.inventoryStart, free: win.slots.slice(0, win.inventoryStart).filter(i => !i).length }))
     })
   }
 

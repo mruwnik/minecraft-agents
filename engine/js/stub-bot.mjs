@@ -41,6 +41,8 @@ export function stubBot ({ oxygen = 20, blocks = {}, items = [], worn = [], enti
     const names = { 1: 'bread', 2: 'cobblestone' }
     return Object.assign(win, {
       containerItems: () => containers[pos] ?? [],
+      inventoryStart: 27,
+      slots: Array.from({ length: 27 }, (_, i) => (containers[pos] ?? []).find(it => it.slot === i) ?? null),
       deposit: act('deposit', (type, meta, count) => move(names[type], 1)(type, meta, count)),
       withdraw: act('withdraw', (type, meta, count) => move(names[type], -1)(type, meta, count))
     })

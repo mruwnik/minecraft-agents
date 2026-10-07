@@ -196,6 +196,13 @@ for (const [name, args, over, status] of statuses) {
   })
 }
 
+test('inspectContainer reports the size and the free slots', async () => {
+  const { p } = rig(world)
+  const result = await p.inspectContainer('t1', { pos: at(3, 64, 0) })
+  assert.equal(result.size, 27)
+  assert.equal(result.free, 26)
+})
+
 test(`attack ${JSON.stringify({ id: 8 })} resolves hit`, async t => {
   mockClock(t)
   const { p } = rig({ ...world })

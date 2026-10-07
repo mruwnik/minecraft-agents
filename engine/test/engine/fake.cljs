@@ -490,7 +490,7 @@
     (cond
       (nil? items) [w {:status "missing"}]
       (not (near? w pos)) [w {:status "unreachable"}]
-      :else [w {:status "ok" :items (with-slots items)}])))
+      :else [w {:status "ok" :items (with-slots items) :size 27 :free (max 0 (- 27 (count items)))}])))
 
 (defn transfer [w {:keys [pos direction item count]}]
   (let [items (get-in w [:containers pos])]

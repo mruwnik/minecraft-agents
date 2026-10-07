@@ -133,7 +133,7 @@ Statuses below are the common ones; `reason` and extra fields are in `js/primiti
 | `place` | `{pos, item, click?}` | `placed`, `occupied`, `no-item`, `no-support`, `unreachable`, `failed` (server refused: reason names face, body spot and entities near the cell); buckets pour/scoop at `pos` |
 | `jumpPlace` | `{item, count=1}` (max 8) | `done`, `partial`, `failed` (`no-item`, `no-support`, `no-headroom`, `not-raised`) |
 | `collect` | `{id, timeoutS=10}` | `collected`, `gone`, `unreachable`, `timeout` |
-| `inspectContainer` | `{pos}` | `ok` (`items`), `missing`, `unreachable` |
+| `inspectContainer` | `{pos}` | `ok` (`items`, `size`, `free` slots), `missing`, `unreachable` |
 | `transfer` | `{pos, direction: deposit/withdraw, item, count}` | `ok` (`moved`), `missing`, `unreachable`, `no-item`, `full` |
 | `equip` / `unequip` | `{item, dest='hand'}` / `{}` | `equipped`, `no-item` / `ok`, `empty`, `full` |
 | `toss` | `{item, count?, slot?}` | `tossed`, `no-item` |
