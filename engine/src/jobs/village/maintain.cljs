@@ -171,15 +171,13 @@
     (if-not call
       (finish! c (:report p))
       (let [slot (first (:todo p))
-            begun? (and (:call-args m) (= slot (:call-slot m)))
-            why (when-not begun? (declined-reason c slot call))
             _ (ctx/update-mem! c assoc :call-args call :call-slot slot)
-            r (if why :declined (await (run-child! c slot call)))]
+            r (await (run-child! c slot call))]
         (case r
           :continue :continue
           :failed :again
           :done (do (ctx/update-mem! c booked slot (summary (ctx/child-result c slot))) :again)
-          (do (ctx/update-mem! c booked slot {:skipped :declined :reason (or why (declined-reason c slot call))}) :again))))))
+          (do (ctx/update-mem! c booked slot {:skipped :declined :reason (declined-reason c slot call)}) :again))))))
 
 (def max-steps "Steps of one call before it gives the round back with :continue." 400)
 

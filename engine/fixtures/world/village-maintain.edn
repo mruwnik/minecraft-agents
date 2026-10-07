@@ -16,7 +16,8 @@
    :act [[:summon "villager" [16.5 1 17.5] "{UUID:[I;20261,7,5,1],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
          [:wait-s 3]
          [:job (jobs.village.maintain {:roles [{:profession "librarian" :trade "enchanted_book" :pos #at [16 0 16]}] :radius 16})]]
-   :expect [{:event {:source :job :kind :maintain.done} :within-s 220 :of-job true}
+   :expect [{:event {:source :job :kind :child_started :data {:slot :roll-0}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :maintain.done} :within-s 220 :of-job true}
             {:no-event {:source :job :kind :maintain.done :data {:steps {:roll-0 {:skipped :filled}}}} :for-s 220
              :until {:source :job :kind :maintain.done}}
             {:no-event {:source :job :kind :maintain.done :data {:steps {:roll-0 {:skipped :no-villager}}}} :for-s 220

@@ -172,12 +172,18 @@
           (is (= 1 (count (ran s 'jobs.village.roll))))
           (is (= {:skipped :no-villager} (step s :roll-0))))))))
 
-(deftest a-declined-child-has-its-check-run-once
+(deftest a-passing-child-has-its-check-run-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:plan "p"} (world) {'jobs.build.from-plan (fn [_ _] {:placed 2})}))]
+          (is (= 1 (count (filter #{[:check 'jobs.build.from-plan]} @(:calls s))))))))))
+
+(deftest a-declined-child-has-its-reason-booked
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:plan "p"} (world) {'jobs.build.from-plan {:decline :no-plan-found}}))]
-          (is (= 1 (count (filter #{[:check 'jobs.build.from-plan]} @(:calls s)))))
           (is (= {:skipped :declined :reason :no-plan-found} (step s :repair))))))))
 
 (deftest a-child-that-waits-on-the-world-is-resumed-and-ends-once
