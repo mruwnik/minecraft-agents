@@ -16,7 +16,7 @@
    :plans [{:id "field" :metadata {:by "$body"}
             :parts [{:id "row" :box [#at [10 0 16] #at [11 0 16]] :want {:crop "carrots"}}]}]
    :body {:inventory [["carrot" 5]]}
-   :act [[:job (jobs.farm.harvest {:plan "field"})]]
+   :act [[:job (jobs.farm.harvest {:plan "$plan:field"})]]
    :expect [{:event {:source :job :kind :harvest.done :data {:cut 2 :replanted 2}} :within-s 70 :of-job true}]
    :after [[:block [10 0 16] "carrots[age=0]"] [:block [11 0 16] "carrots[age=0]"]]}
   {:name "harvest-plan-leaves-bare-cells-unsown-below-reserve"
@@ -25,7 +25,7 @@
    :plans [{:id "field" :metadata {:by "$body"}
             :parts [{:id "row" :box [#at [10 0 16] #at [13 0 16]] :want {:crop "carrots"}}]}]
    :body {:inventory [["carrot" 5]]}
-   :act [[:job (jobs.farm.harvest {:plan "field"})]]
+   :act [[:job (jobs.farm.harvest {:plan "$plan:field"})]]
    :expect [{:event {:source :job :kind :harvest.done :data {:cut 2 :replanted 2}} :within-s 70 :of-job true}]
    :after [[:block [10 0 16] "carrots[age=0]"] [:block [11 0 16] "carrots[age=0]"]
            [:block [12 0 16] "air"] [:block [13 0 16] "air"]]}

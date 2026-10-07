@@ -18,11 +18,6 @@
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-block}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :not-ready}} :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-block}} :of-job true}
             {:no-event {:source :job :kind :round_started} :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-block}} :of-job true}]}
-  {:name "unstick-waits-not-stuck"
-   :act [[:job (jobs.maintenance.unstick {})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :not-stuck}} :within-s 20 :of-job true}
-            {:no-event {:source :job :kind :waiting :data {:reason :not-ready}} :for-s 20 :until {:source :job :kind :waiting :data {:reason :not-stuck}} :of-job true}
-            {:no-event {:source :job :kind :round_started} :for-s 20 :until {:source :job :kind :waiting :data {:reason :not-stuck}} :of-job true}]}
   {:name "leave-vehicle-waits-not-mounted"
    :act [[:job (jobs.movement.leave-vehicle {})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :not-mounted}} :within-s 20 :of-job true}

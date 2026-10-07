@@ -20,14 +20,14 @@
   {:name "maintain-fells-the-tall-tree-by-default"
    :plans [{:id "forest" :metadata {:by "$body"}
             :parts [{:id "t" :cells [#at [16 0 16]] :want {:tree "oak"}}]}]
-   :act [[:job (jobs.forestry.maintain {:plan "forest"})]]
+   :act [[:job (jobs.forestry.maintain {:plan "$plan:forest"})]]
    :expect [{:event {:source :job :kind :forest.done} :within-s 190 :of-job true}
             {:no-event {:source :job :kind :forest.left} :for-s 190 :until {:source :job :kind :forest.done}}]
    :after [[:not-block [16 11 16] "oak_log"] [:not-block [16 5 16] "oak_log"]]}
   {:name "maintain-without-pillar-leaves-the-tall-tree"
    :plans [{:id "forest" :metadata {:by "$body"}
             :parts [{:id "t" :cells [#at [16 0 16]] :want {:tree "oak"}}]}]
-   :act [[:job (jobs.forestry.maintain {:plan "forest" :pillar? false})]]
+   :act [[:job (jobs.forestry.maintain {:plan "$plan:forest" :pillar? false})]]
    :expect [{:event {:source :job :kind :forest.left :data {:reason :too-tall}} :within-s 90 :of-job true}]
    :after [[:block [16 11 16] "oak_log"] [:item "dirt" 20]]
    :limit-s 100}]}

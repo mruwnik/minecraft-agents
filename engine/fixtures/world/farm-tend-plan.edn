@@ -15,6 +15,6 @@
   :limit-s 120}
  :cases
  [{:name "just-harvested-cell-replanted-below-the-reserve"
-   :act [[:job (jobs.farm.tend {:plan "field"})]]
+   :act [[:job (jobs.farm.tend {:plan "$plan:field"})]]
    :expect [{:event {:source :job :kind :farm-tend.done :data {:steps {:harvest {:cut 1 :replanted 1}}}} :within-s 100 :of-job true}]
    :after [[:block [10 0 16] "carrots[age=0]"] [:block [11 0 16] "air"] [:block [12 0 16] "air"] [:block [13 0 16] "air"]]}]}

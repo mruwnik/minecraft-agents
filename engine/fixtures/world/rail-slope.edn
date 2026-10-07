@@ -14,7 +14,7 @@
  :cases
  [{:name "builds-the-line-up-the-hillside"
    :body {:inventory [["rail" 25] ["powered_rail" 12] ["redstone_torch" 6] ["cobblestone" 70]]}
-   :act [[:job (jobs.build.rail-line {:plan "line"})]]
+   :act [[:job (jobs.build.rail-line {:plan "$plan:line"})]]
    :expect [{:event {:source :job :kind :rail-build.done} :within-s 400 :of-job true}
             {:no-event {:source :job :kind #{:rail-build.broken :rail-build.declined :build.gave-up}} :for-s 400 :until {:source :job :kind :rail-build.done}}]
    :after [[:block [10 0 16] "rail[shape=east_west]"] [:block [30 8 16] "rail[shape=east_west]"]
@@ -22,7 +22,7 @@
            [:block [22 6 16] "powered_rail[shape=ascending_east]"]]}
   {:name "no-torches-waits-short"
    :body {:inventory [["rail" 25] ["powered_rail" 12] ["cobblestone" 70]]}
-   :act [[:job (jobs.build.rail-line {:plan "line"})]]
+   :act [[:job (jobs.build.rail-line {:plan "$plan:line"})]]
    :expect [{:event {:source :job :kind :rail-build.short} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :rail-build.done} :for-s 30 :until {:source :job :kind :rail-build.short}}]
    :after [[:not-block [10 0 16] "rail"] [:not-block [3 0 16] "rail"]]
