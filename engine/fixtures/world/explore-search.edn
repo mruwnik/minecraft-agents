@@ -1,0 +1,24 @@
+;; Card 7ef2db8f: jobs.explore.search reads at most 48 stand cells per step (no runaway read loop) and keeps its sweep going: legs are
+;; walked one after another until the target comes into the small scan radius. Long grass plot 64 x 32, body at the west end
+;; [8.5 0 16.5], an emerald block 32 east at [40 0 16], :scan-radius 8 so no look sees it from the origin; legs run :outward east.
+;; Should-succeed: spacing 8 and the tightest spacing 4 both end search.done :found within the limit, no error and no :runaway.
+;; (A :spacing below 4 is refused when the job is submitted: typed arg, no log event, unit-covered.)
+{:defaults
+ {:tags [:explore :search] :time :day
+  :plot {:height 8 :floor "grass_block" :length 64 :width 32}
+  :blocks [[:set [40 0 16] "emerald_block"]]
+  :body {:at [8.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 150}
+ :cases
+ [{:name "legs-walked-until-the-target-is-in-scan-range"
+   :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :spacing 8 :scan-radius 8
+                                     :max-distance 60 :max-legs 16 :timeout-s 130})]]
+   :expect [{:event {:source :job :kind :search.done :data {:reason :found :why :found}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :search.not-found} :for-s 140 :until {:source :job :kind :search.done}}
+            {:no-event {:source :system :kind :error} :for-s 60}]}
+  {:name "tightest-spacing-still-ends-found"
+   :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :spacing 4 :scan-radius 8
+                                     :max-distance 60 :max-legs 24 :timeout-s 130})]]
+   :expect [{:event {:source :job :kind :search.done :data {:reason :found :why :found}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :search.not-found} :for-s 140 :until {:source :job :kind :search.done}}
+            {:no-event {:source :system :kind :error} :for-s 60}]}]}

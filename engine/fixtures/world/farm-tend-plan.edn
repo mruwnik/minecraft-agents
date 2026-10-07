@@ -1,0 +1,20 @@
+;; Card 650aad09: jobs.farm.tend in plan mode replants the cell it just harvested even below the food reserve (harvest :replant true,
+;; :replant-bare false); cells that were already bare stay unsown below the reserve (20 carrots = 60 points; 12 carried plus the drops
+;; of one plant stay under it). Plan row: 4 carrot cells [10..13 0 16] on farmland at y -1 (water beside), only [10 0 16] is ripe.
+;; Floor y -1 is the ground layer; no hoe, so the till step is skipped.
+;; Should-succeed: the ripe cell is cut and replanted (carrots[age=0]), harvest summary cut 1 replanted 1. Should-fail (control): the three
+;; bare cells stay bare below the reserve.
+{:defaults
+ {:tags [:farm :tend :food-reserve :jobs]
+  :time :any
+  :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -1 17] [13 -1 17] "water"]
+           [:set [10 0 16] "carrots[age=7]"]]
+  :plans [{:id "field" :metadata {:by "$body"}
+           :parts [{:id "row" :box [#at [10 0 16] #at [13 0 16]] :want {:crop "carrots"}}]}]
+  :body {:at [10.5 0 14.5] :effects [["resistance" 600 4]] :inventory [["carrot" 12]]}
+  :limit-s 120}
+ :cases
+ [{:name "just-harvested-cell-replanted-below-the-reserve"
+   :act [[:job (jobs.farm.tend {:plan "field"})]]
+   :expect [{:event {:source :job :kind :farm-tend.done :data {:steps {:harvest {:cut 1 :replanted 1}}}} :within-s 100 :of-job true}]
+   :after [[:block [10 0 16] "carrots[age=0]"] [:block [11 0 16] "air"] [:block [12 0 16] "air"] [:block [13 0 16] "air"]]}]}

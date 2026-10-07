@@ -1,0 +1,21 @@
+;; Card 8d734336: jobs.farm.find-spot stops its scan after 30000 reads per attempt and settles for the best spots so far (open-air
+;; range 48 once read 1.7M blocks in one call). A 128 x 64 grass plot, body in the middle, :range 48.
+;; Should-succeed: find-spot.found and the job completes within 60 s, no error event. Should-fail: a plot floored with water but for a
+;; 3x3 stone platform (smaller than the 5x5 patch) has no spot: find-spot.none, result :none.
+{:defaults
+ {:tags [:farm :find-spot :jobs] :time :day
+  :plot {:height 8 :floor "grass_block" :length 128 :width 64}
+  :body {:at [64.5 0 32.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [{:name "wide-range-open-grass-finishes-with-spots"
+   :act [[:job (jobs.farm.find-spot {:range 48 :depth 7})]]
+   :expect [{:event {:source :job :kind :find-spot.found} :within-s 60 :of-job true}
+            {:event {:source :job :kind :completed} :within-s 60 :of-job true}
+            {:no-event {:source :system :kind :error} :for-s 30}]}
+  {:name "water-all-round-finds-no-spot"
+   :plot {:floor "water"}
+   :blocks [[:fill [63 -1 31] [65 -1 33] "stone"]]
+   :act [[:job (jobs.farm.find-spot {:range 12 :depth 7})]]
+   :expect [{:event {:source :job :kind :find-spot.none} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :find-spot.found} :for-s 30 :until {:source :job :kind :find-spot.none}}]}]}

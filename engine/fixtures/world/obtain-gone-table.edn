@@ -1,0 +1,25 @@
+;; Card 9af99615: items.obtain's craft plan no longer counts a remembered table once the craft marked it unreachable. A table at
+;; [19 0 16] is seen (yaw 270), the body looks away (yaw 90), the table is removed (memory follows only what is in view), then
+;; jobs.items.get-tool wooden_pickaxe runs. The craft finds no table, marks it, and plans with its own table.
+;; Should-succeed: 7 planks + 4 sticks make a new table and the pickaxe. Should-fail: 3 planks + 2 sticks cannot make a table too:
+;; the job stops :table-unreachable without a pickaxe, not an endless walk to the dead table.
+{:defaults
+ {:tags [:fetch :crafting] :time :any
+  :plot {:height 8}
+  :blocks [[:set [19 0 16] "crafting_table"]]
+  :body {:at [14.5 0 16.5] :settle-s 3 :effects [["resistance" 600 4]]}
+  :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 0"] [:wait-s 3]
+        [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 0"] [:wait-s 2]
+        [:rcon "execute positioned $X $Y $Z run setblock ~19 ~ ~16 air"]
+        [:job (jobs.items.get-tool {:item "wooden_pickaxe"})]]
+  :limit-s 90}
+ :cases
+ [{:name "planks-a-new-table-replaces-the-gone-one"
+   :body {:inventory [["oak_planks" 7] ["stick" 4]]}
+   :expect [{:event {:source :job :kind :completed} :within-s 70 :of-job true}]
+   :after [[:item "wooden_pickaxe" 1]]}
+  {:name "planks-for-the-pickaxe-only-stops-unreachable"
+   :body {:inventory [["oak_planks" 3] ["stick" 2]]}
+   :expect [{:event {:source :job :data {:reason :table-unreachable}} :within-s 70 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 70 :until {:source :job :data {:reason :table-unreachable}}}]
+   :after [[:item "wooden_pickaxe" 0] [:item "oak_planks" 3] [:item "stick" 2]]}]}

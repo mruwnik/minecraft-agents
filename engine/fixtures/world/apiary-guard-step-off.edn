@@ -1,0 +1,22 @@
+;; Card 6b719a5f: jobs.apiary.guard standing in the lit campfire's own cell steps off through jobs.lib.step-off (go-to to the
+;; nearest standable non-hazard cell), not a raw moveTo x+2. Body at the fire's cell [14 0 16] with a stone wall at x+2 (case 1)
+;; or lava at x+2 (case 2): the old hop ran into the wall or the lava.
+;; Should-succeed: the fire is sunk and carpeted (:guarded) and the body ends beside it, never on the lava cell.
+{:defaults
+ {:tags [:apiary :step-off] :time :day
+  :plot {:height 8}
+  :blocks [[:set [14 0 16] "campfire[lit=true]"]]
+  :body {:at [14.5 0 16.5] :settle-s 2
+         :inventory [["iron_pickaxe" 1] ["campfire" 1] ["white_carpet" 1]]
+         :effects [["resistance" 600 4] ["fire_resistance" 600 0]]}
+  :act [[:job (jobs.apiary.guard {:radius 20})]]
+  :expect [{:event {:kind :apiary.guard-done :data {:sunk 1 :carpeted 1 :reason :guarded}} :within-s 100 :of-job true}
+           {:event {:source :job :kind :completed} :within-s 100 :of-job true}]
+  :limit-s 120}
+ :cases
+ [{:name "wall-at-x-plus-2-steps-off-to-a-free-side"
+   :blocks [[:fill [16 0 12] [16 2 20] "stone"]]
+   :after [[:block [14 -1 16] "campfire[lit=true]"] [:not-block [14 0 16] "campfire"]]}
+  {:name "lava-at-x-plus-2-never-ends-on-the-lava"
+   :blocks [[:set [16 0 16] "lava"]]
+   :after [[:block [14 -1 16] "campfire[lit=true]"] [:body-far [16.5 0 16.5] 1.2]]}]}

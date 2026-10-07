@@ -1,0 +1,34 @@
+;; Card 7f784617 (items 1 and 2): jobs.farm.tend box mode counts only ripe/bare/untilled cells the rules allow, so a ripe crop inside
+;; another owner's plan footprint (a plan with no :by this body) keeps no run alive; a hoe that breaks mid-run ends jobs.farm.till
+;; with the cells skipped :no-hoe instead of an endless :continue. Floor y -1 is the ground layer; wheat at y 0, water beside.
+;; Should-succeed: control with an own ripe cell is harvested (cut 1) while the foreign one stays ripe; a hoe with 1 durability left
+;; tills one cell, breaks, and the rest are skipped :no-hoe (till.done).
+;; Should-fail: only the foreign ripe cell: tend waits and cuts nothing (no farm-tend.done).
+{:defaults
+ {:tags [:farm :tend :till :jobs]
+  :time :any
+  :body {:at [10.5 0 14.5] :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [{:name "ripe-cell-in-another-plans-footprint-keeps-tend-waiting"
+   :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -1 17] [13 -1 17] "water"]
+            [:set [10 0 16] "wheat[age=7]"]]
+   :plans [{:id "other" :parts [{:id "f" :cells [#at [10 0 16]] :want [:any "wheat"]}]}]
+   :act [[:job (jobs.farm.tend {:box {:min #xyz [10 -1 16] :max #xyz [13 0 16]}})]]
+   :expect [{:event {:source :job :kind :waiting} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :farm-tend.done} :for-s 30}]
+   :after [[:block [10 0 16] "wheat[age=7]"]]}
+  {:name "own-ripe-cell-harvested-foreign-one-left-standing"
+   :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -1 17] [13 -1 17] "water"]
+            [:set [10 0 16] "wheat[age=7]"] [:set [13 0 16] "wheat[age=7]"]]
+   :plans [{:id "other" :parts [{:id "f" :cells [#at [10 0 16]] :want [:any "wheat"]}]}]
+   :act [[:job (jobs.farm.tend {:box {:min #xyz [10 -1 16] :max #xyz [13 0 16]}})]]
+   :expect [{:event {:source :job :kind :farm-tend.done :data {:steps {:harvest {:cut 1}}}} :within-s 80 :of-job true}]
+   :after [[:block [10 0 16] "wheat[age=7]"] [:not-block [13 0 16] "wheat[age=7]"]]}
+  {:name "till-hoe-breaks-mid-run-rest-skipped-no-hoe"
+   :blocks [[:fill [10 -1 16] [13 -1 16] "dirt"]]
+   :body {:inventory [["wooden_hoe[damage=58]" 1]]}
+   :act [[:job (jobs.farm.till {:from #xyz [10 -1 16] :to #xyz [13 -1 16] :fetch false})]]
+   :expect [{:event {:source :job :kind :till.skipped :data {:reason :no-hoe}} :within-s 70 :of-job true}
+            {:event {:source :job :kind :till.done} :within-s 80 :of-job true}]
+   :after [[:item "wooden_hoe" 0] [:block [10 -1 16] "farmland"]]}]}

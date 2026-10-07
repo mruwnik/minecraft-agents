@@ -1,0 +1,27 @@
+;; Card 5de16da7 (part 2): jobs.build.from-plan fetches a tool for a cell it must dig. A plan wants dirt where stone stands
+;; ([20 0 16]); the body carries dirt but no pickaxe, a seen chest at [14 0 19] holds one (yaw turned by RCON so the first sight
+;; sees it). Should-succeed: fetch.started, fetch.done, the stone is dug and dirt put there (:build.done missing 0).
+;; Should-fail: :fetch false gives the cell up :no-tool (build.gave-up), the stone stays and the chest is untouched.
+{:defaults
+ {:tags [:build :fetch] :time :any
+  :plot {:height 8}
+  :blocks [[:set [20 0 16] "stone"]
+           [:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:stone_pickaxe\",count:1}]}"]]
+  :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["dirt" 4]]}
+  :plans [{:id "wall" :metadata {:by "$body"} :parts [{:id "cell" :cells [#at [20 0 16]] :want "dirt"}]}]
+  :limit-s 120}
+ :cases
+ [{:name "pickaxe-fetched-from-a-seen-chest-then-the-stone-is-replaced"
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+         [:job (jobs.build.from-plan {:plan "$plan:wall"})]]
+   :expect [{:event {:source :job :kind :fetch.started} :within-s 30 :of-job true}
+            {:event {:source :job :kind :fetch.done} :within-s 60 :of-job true}
+            {:event {:source :job :kind :build.done :data {:missing 0}} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :build.gave-up} :for-s 80 :until {:source :job :kind :build.done}}]
+   :after [[:block [20 0 16] "dirt"] [:item "stone_pickaxe" 1]]}
+  {:name "fetch-false-gives-the-cell-up-no-tool"
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+         [:job (jobs.build.from-plan {:plan "$plan:wall" :fetch false})]]
+   :expect [{:event {:source :job :kind :build.gave-up} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :fetch.started} :for-s 40 :until {:source :job :kind :build.gave-up}}]
+   :after [[:block [20 0 16] "stone"] [:item "stone_pickaxe" 0]]}]}

@@ -1,0 +1,45 @@
+;; Cards 84311615, 5d54b1b2: items.obtain's :gather source. Bare body (no items) facing south (yaw 0) at [16.5 0 12.5]; seen to the south:
+;; a crafting table [16 0 18], two oak trees (trunks 5 high, persistent leaves) at x 9 and x 11, z 22, and a stone outcrop
+;; x 20..22 y 0..1 z 22..23. get-tool stone_pickaxe has to fell logs, mine cobblestone (the pickaxe is crafted along the chain) and craft.
+;; Should-succeed: the stone pickaxe is carried. Should-fail: without stone in view the obtain waits :no-source and the text names the
+;; raw need not seen (cobblestone from stone), not the log that is seen; andesite/diorite/granite are no cobblestone source
+;; (only stone drops cobblestone); with nothing in view the text names both needs; :how without :gather has no gather text.
+{:defaults
+ {:tags [:fetch :gather :mining] :time :day
+  :plot {:height 12 :floor "grass_block"}
+  :blocks [[:set [16 0 18] "crafting_table"]]
+  :body {:at [16.5 0 12.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:wait-s 2]
+        [:job (jobs.items.get-tool {:item "stone_pickaxe"})]]
+  :limit-s 90}
+ :cases
+ [{:name "logs-and-stone-in-view-stone-pickaxe-made"
+   :blocks [[:fill [8 4 21] [10 5 23] "oak_leaves[persistent=true]"] [:fill [9 0 22] [9 4 22] "oak_log"]
+            [:fill [10 4 21] [12 5 23] "oak_leaves[persistent=true]"] [:fill [11 0 22] [11 4 22] "oak_log"]
+            [:fill [20 0 22] [22 1 23] "stone"]]
+   :limit-s 280
+   :expect [{:event {:source :job :kind :completed} :within-s 270 :of-job true}]
+   :after [[:item "stone_pickaxe" 1]]}
+  {:name "logs-only-waits-naming-the-unseen-stone"
+   :blocks [[:fill [8 4 21] [10 5 23] "oak_leaves[persistent=true]"] [:fill [9 0 22] [9 4 22] "oak_log"]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-source :why [:contains "cobblestone (from stone)"]}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :waiting :data {:reason :no-source :why [:contains "log,"]}} :for-s 20}]
+   :after [[:item "stone_pickaxe" 0] [:block [9 0 22] "oak_log"]]}
+  {:name "andesite-diorite-granite-are-no-cobblestone-source"
+   :blocks [[:fill [8 4 21] [10 5 23] "oak_leaves[persistent=true]"] [:fill [9 0 22] [9 4 22] "oak_log"]
+            [:fill [20 0 22] [20 1 23] "andesite"] [:fill [21 0 22] [21 1 23] "diorite"] [:fill [22 0 22] [22 1 23] "granite"]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-source :why [:contains "cobblestone (from stone)"]}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-source}}}]
+   :after [[:item "stone_pickaxe" 0] [:item "cobblestone" 0] [:block [20 0 22] "andesite"]]}
+  {:name "nothing-in-view-waits-naming-both-needs"
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-source :why [:contains "log, cobblestone (from stone)"]}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-source}}}]
+   :after [[:item "stone_pickaxe" 0]]}
+  {:name "how-without-gather-waits-no-source-with-no-gather-text"
+   :blocks [[:fill [8 4 21] [10 5 23] "oak_leaves[persistent=true]"] [:fill [9 0 22] [9 4 22] "oak_log"]
+            [:fill [20 0 22] [22 1 23] "stone"]]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:wait-s 2]
+         [:job (jobs.items.get-tool {:item "stone_pickaxe" :how #{:chest :craft}})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-source :why [:not [:contains "nothing seen to gather"]]}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-source}}}]
+   :after [[:item "stone_pickaxe" 0] [:block [20 0 22] "stone"]]}]}

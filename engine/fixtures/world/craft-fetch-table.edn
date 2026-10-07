@@ -1,0 +1,26 @@
+;; Card 5de16da7 (part 1): jobs.items.craft with no crafting table in view fetches one (a crafting_table obtain child) from a
+;; seen chest, puts it down beside the body and crafts. The body stands at the middle facing the chest (yaw turned by RCON so its
+;; first sight sees it); 3 planks + 2 sticks make a wooden pickaxe at a table. The chest is at [14 0 19], no table on the plot.
+;; Should-succeed: fetch.started, fetch.done, the pickaxe is carried. Should-fail: :fetch false ends craft.no-table, no pickaxe.
+{:defaults
+ {:tags [:fetch :crafting] :time :any
+  :plot {:height 8}
+  :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:crafting_table\",count:1}]}"]]
+  :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]
+         :inventory [["oak_planks" 3] ["stick" 2]]}
+  :limit-s 90}
+ :cases
+ [{:name "table-fetched-from-a-seen-chest-and-craft-done"
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+         [:job (jobs.items.craft {:item "wooden_pickaxe"})]]
+   :expect [{:event {:source :job :kind :fetch.started} :within-s 30 :of-job true}
+            {:event {:source :job :kind :fetch.done} :within-s 60 :of-job true}
+            {:event {:source :job :kind :completed} :within-s 80 :of-job true}
+            {:no-event {:source :job :kind :craft.no-table} :for-s 60 :until {:source :job :kind :completed}}]
+   :after [[:item "wooden_pickaxe" 1]]}
+  {:name "fetch-false-ends-no-table"
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+         [:job (jobs.items.craft {:item "wooden_pickaxe" :fetch false})]]
+   :expect [{:event {:source :job :kind :craft.no-table} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :fetch.started} :for-s 30 :until {:source :job :kind :craft.no-table}}]
+   :after [[:item "wooden_pickaxe" 0] [:item "oak_planks" 3]]}]}

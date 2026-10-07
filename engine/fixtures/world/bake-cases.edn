@@ -1,0 +1,25 @@
+;; Card 7e0cfa0f: jobs.items.bake resets its failure count when a withdraw or craft succeeds, not when the chest is read. Store chest
+;; [14 0 20] with 9 wheat and a crafting table [18 0 20] within 8 of it; the body at the middle faces south (yaw 0) so both are seen.
+;; Should-succeed: 3 loaves baked and 3 carried (:keep 3). Should-fail: the table walled in stone (a solid 3x3x3 shell round it) ends with
+;; a bake warn (no-table / craft failed / gave up), no loaf, the wheat back in the chest or carried, and the job ends.
+{:defaults
+ {:tags [:bake :items] :time :any
+  :plot {:height 8}
+  :blocks [[:set [14 0 20] "chest{Items:[{Slot:0b,id:\"minecraft:wheat\",count:9}]}"]]
+  :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 120}
+ :cases
+ [{:name "wheat-baked-into-bread-and-kept"
+   :blocks [[:set [18 0 20] "crafting_table"]]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+         [:job (jobs.items.bake {:chest #xyz [14 0 20] :keep 3})]]
+   :expect [{:event {:source :job :kind :bake.done :data {:baked 3}} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind #{:bake.gave-up :bake.no-table :bake.craft-failed}} :for-s 100 :until {:source :job :kind :bake.done}}]
+   :after [[:item "bread" 3] [:item "wheat" 0]]}
+  {:name "table-walled-in-ends-with-a-warning"
+   :blocks [[:fill [17 0 19] [19 2 21] "stone" :hollow] [:set [18 1 20] "crafting_table"]]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+         [:job (jobs.items.bake {:chest #xyz [14 0 20] :keep 3})]]
+   :expect [{:event {:source :job :kind #{:bake.gave-up :bake.no-table :bake.craft-failed}} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :bake.done :data {:baked [:>= 1]}} :for-s 100 :until {:source :job :kind #{:bake.gave-up :bake.no-table :bake.craft-failed}}}]
+   :after [[:item "bread" 0]]}]}
