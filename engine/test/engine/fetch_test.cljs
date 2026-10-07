@@ -313,6 +313,39 @@
           (let [me (:pos (fake/self (:p s)))]
             (is (= [0 0] [(js/Math.floor (:x me)) (js/Math.floor (:z me))]) "back on the stair line at its origin")))))))
 
+(defn ^:async with-waiting-fetch-child
+  "Run (f counter) with the :fetch child of every job answering :continue (a child waiting on the world); counter
+  counts its rounds."
+  [f]
+  (let [orig ctx/call-child
+        n (atom 0)]
+    (set! ctx/call-child (fn [c slot job args]
+                           (if (= :fetch slot)
+                             (do (swap! n inc) (js/Promise.resolve :continue))
+                             (orig c slot job args))))
+    (try (await (f n))
+         (finally (set! ctx/call-child orig)))))
+
+(deftest a-waiting-fetch-child-makes-the-stair-yield-and-the-fetch-resumes
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:self {:pos {:x 0 :y 64 :z 0}}
+                        :blocks {"0,61,1" "andesite" "0,62,1" "andesite" "0,63,1" "stone" "0,64,1" "stone" "0,65,1" "stone"
+                                 "-3,64,2" "chest"}
+                        :containers {"-3,64,2" [{:name "wooden_pickaxe" :count 1}]}
+                        :drops {"stone" "cobblestone"}}
+                       [own-zone])
+              id (core/submit! (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 1 :fetch true}) {})]
+          (await (with-waiting-fetch-child
+                   (fn ^:async waiting-round [n]
+                     (await (run-ticks s 1))
+                     (is (= 1 @n) "one fetch round per scheduler round, no busy loop")
+                     (is (= 1 (count (listed s))) "the job yielded and is still there"))))
+          (await (run-ticks s 60))
+          (is (= 1 (get (inv s) "wooden_pickaxe")) (pr-str (core/waiting (:eng s) id)))
+          (is (= 1 (count (events-of s :fetch.done)))))))))
+
 (deftest a-failed-fetch-clears-the-return-cell
   (async done
     (tu/run-async done

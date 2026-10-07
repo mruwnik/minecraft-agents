@@ -544,7 +544,6 @@
     (when (and (:fetch-wait (ctx/mem c)) (nil? (:fetching (ctx/mem c))))
       (ctx/update-mem! c dissoc :fetch-wait))
     (cond
-      (= :continue r) :again
       r r
       :else (await (work-round c)))))
 

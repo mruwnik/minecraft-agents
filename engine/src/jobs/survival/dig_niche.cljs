@@ -205,7 +205,7 @@
         (let [w (some->> (:site (scan* p reach ok? false)) (tool-wait p))
               r (when w (await (fetch/step! c 'jobs.survival.dig-niche w)))]
           (cond
-            r r
+            r (if (= :again r) :continue r)
             w (fail! c :no-tool (str "no tool for the " (:block w) " of the hillside"))
             :else (fail! c :no-site "no hillside or wall to cut a niche into"))))
       (let [_ (ctx/update-mem! c assoc :site site)

@@ -402,7 +402,6 @@
   (let [m (ctx/mem c)
         r (await (fetch/step! c 'jobs.access.stair (need c) {:return? true}))]
     (cond
-      (= :continue r) :again
       r r
       (nil? (:origin m))
       (let [feet (feet-of c)

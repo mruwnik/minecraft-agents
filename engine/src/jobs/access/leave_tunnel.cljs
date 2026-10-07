@@ -303,7 +303,6 @@
   [c]
   (let [r (await (fetch/step! c 'jobs.access.leave-tunnel (fetch/booked-wait c) {:return? true}))]
     (cond
-      (= :continue r) :again
       r r
       :else (await (work-round c)))))
 

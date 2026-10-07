@@ -162,13 +162,13 @@
 
 (defn ^:async walk-back!
   "One go-to round (child :fetch-back, range 0) back to the cell the body left to fetch; the mark is dropped once
-  there or when the walk ends (arrived or not: the job judges where it stands). :continue."
+  there or when the walk ends (arrived or not: the job judges where it stands). :continue while go-to waits, else :again."
   [c cell]
   (let [[x y z] cell
         r (await (ctx/call-child c :fetch-back 'jobs.movement.go-to {:pos {:x x :y y :z z} :range 0 :escalate false}))]
     (when-not (= :continue r)
       (ctx/update-mem! c dissoc :fetch-return))
-    :continue))
+    (if (= :continue r) :continue :again)))
 
 (defn booked-wait
   "The wait reason of the child booked by jobs.lib.declined, nil when none is booked or its check passes now."
@@ -184,7 +184,7 @@
     true))
 
 (defn fail!
-  "Book the failed fetch (until now + :fail-minutes), warn fetch.failed, :continue (the check now waits)."
+  "Book the failed fetch (until now + :fail-minutes), warn fetch.failed, :again (the check now waits)."
   [c {:keys [key opts wait args]} res]
   (let [f (merge (select-keys args [:item :any-of :block])
                  {:key key :until (+ (ctx/now c) (* 60000 (:fail-minutes opts))) :failed (:reason res :failed)}
@@ -194,7 +194,7 @@
     (ctx/emit! c :fetch.failed :warn (assoc (shown f) :for (:reason wait)
                                             :text (str "could not fetch " (or (:item args) (:block args) (pr-str (:any-of args)))
                                                        ": " (name (:failed f)))))
-    :continue))
+    :again))
 
 (defn bad!
   "End the job for a bad :fetch arg."
@@ -204,8 +204,8 @@
   :done)
 
 (defn ^:async round!
-  "One round of the fetch in slot :fetch for plan pl (from due). :continue while it runs and after it ends; :done
-  only for a bad :fetch arg."
+  "One round of the fetch in slot :fetch for plan pl (from due). :continue while the child waits on the world, :again
+  after it ended or failed; :done only for a bad :fetch arg."
   [c pl]
   (if (:bad pl)
     (bad! c (:bad pl))
@@ -227,12 +227,13 @@
               (do (ctx/update-mem! c dissoc :fetching)
                   (ctx/emit! c :fetch.done :info (merge {:for (:reason (:wait pl)) :text (str "fetched for " (name (:reason (:wait pl))))}
                                                         (select-keys res [:got :item :tool])))
-                  :continue)
+                  :again)
               (fail! c pl res))))))))
 
 (defn ^:async step!
-  "One round's fetch part for job with wait reason w: runs the due fetch (round!) and returns its round result, or
-  settles a finished one and returns nil (the job does its own work).
+  "One round's fetch part for job with wait reason w: runs the due fetch (round!) and returns its round result
+  (:continue: a child waits on the world, yield; :again: go round again), or settles a finished one and returns nil
+  (the job does its own work).
   opts {:return? true}: a job whose work depends on where the body stands (a stair) first walks back to the cell it
   stood on when the fetch began (child :fetch-back), then goes on."
   ([c job w] (step! c job w nil))
@@ -251,14 +252,15 @@
 (defn ^:async fetch!
   "The fetch part of a whole attempt: step! (problem c) again, a pace! between, until nothing is due any more (the
   thing arrived, or the fetch failed and is booked: nil, the job judges where it stands). Resolves to :done for a bad
-  :fetch arg (the job has ended) and to :continue after max-fetch-calls rounds or a cut."
+  :fetch arg (the job has ended), to :continue while a fetch child waits on the world (state kept: the next round
+  resumes it) and after max-fetch-calls rounds or a cut."
   [c job problem]
   (loop [n 1]
     (let [w (problem c)
           r (await (step! c job w))]
       (cond
         (nil? r) nil
-        (= :done r) :done
+        (#{:done :continue} r) r
         (and (< n max-fetch-calls) (ctx/alive? c)) (do (await (pace/pace!)) (recur (inc n)))
         :else :continue))))
 
