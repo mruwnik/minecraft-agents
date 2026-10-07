@@ -1078,7 +1078,7 @@
             (core/submit! eng '(jobs.survival.dig-in) {})
             (await (run-until-empty eng 8))
             (is (= digs? (boolean (seq (calls p "dig")))) (pr-str inventory))
-            (is (= (if digs? [] [:futile]) (mapv :reason (emitted seen :waiting))) (pr-str inventory))))))))
+            (is (= ({true [] false [:futile]} digs?) (mapv :reason (emitted seen :waiting))) (pr-str inventory))))))))
 
 (deftest shelter-retries-dig-in-at-night-beside-an-unroofed-shelter
   (async done
