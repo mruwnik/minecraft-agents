@@ -291,3 +291,19 @@
           (is (= :lava-unsealed (:reason @out)))
           (is (not= [-1 61 0] (feet p)) "stepped back from the stand beside the lava")
           (is (= "lava" (block-at p [0 62 0]))))))))
+
+(def dirt-room
+  "A sealed dirt room, inside x -2..2, z -2..2, feet y 64, walls one thick, on a stone floor."
+  (merge (stone -6 12 63 63 -6 6)
+         (apply dissoc (into {} (for [x (range -3 4) y (range 64 67) z (range -3 4)] [(str x "," y "," z) "dirt"]))
+                (for [x (range -2 3) z (range -2 3) y [64 65]] (str x "," y "," z)))))
+
+(deftest dig-of-an-unseen-dirt-cell-looks-first-and-needs-no-pickaxe
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (run! {:self {:pos {:x 0 :y 64 :z 0}} :blocks dirt-room :inventory []}
+                                           'jobs.blocks.dig {:pos [3 64 0] :fetch false}))]
+          (is (= :dug (:reason @out)))
+          (is (= "dirt" (:block @out)))
+          (is (some #{{:x 3 :y 64 :z 0}} (digs p))))))))

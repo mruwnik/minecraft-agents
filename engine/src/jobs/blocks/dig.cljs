@@ -74,7 +74,8 @@
         (boolean (some #(and (drops (:name %)) (< (:count %) 64)) (u/inventory p))))))
 
 (defn problem
-  "Why the job cannot run now: a wait reason map (see doc), or nil. Bad args, air and fluids pass: the round ends them."
+  "Why the job cannot run now: a wait reason map (see doc), or nil. Bad args, air and fluids pass: the round ends them.
+  A block still to be looked at (b/to-see?) is only guessed: tool and room are judged once the round has looked."
   [c]
   (let [{:keys [pos error]} (b/parse (:args c))]
     (when-not error
@@ -90,10 +91,11 @@
           (let [v (access/may-dig? (b/rules-in c) pos)]
             (case (access/judge v accept)
               :ok (or (b/unreachable-wait c m pos)
-                      (when-let [{:keys [tool]} (needs c block)]
-                        {:reason :no-tool :needs tool :block block})
-                      (when (and collect (not (room? p block)))
-                        {:reason :inventory-full :pos pos}))
+                      (when-not (b/to-see? c pos)
+                        (or (when-let [{:keys [tool]} (needs c block)]
+                              {:reason :no-tool :needs tool :block block})
+                            (when (and collect (not (room? p block)))
+                              {:reason :inventory-full :pos pos}))))
               :hazard {:reason :hazard :pos pos
                        :hazards (into [] (comp (map :reason) (remove (set accept))) (:hazards v))}
               :not-loaded {:reason :not-loaded :pos pos}
