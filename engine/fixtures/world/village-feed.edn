@@ -12,6 +12,22 @@
          [:job (jobs.village.feed {:villager "00004f24-0000-0007-0000-00010000034b" :count 3})]]
    :expect [{:event {:source :job :kind :feed.done} :within-s 90 :of-job true}]
    :after [[:item "bread" 5]]}
+  ;; cards 7f843e67, 127a31a1: a real villager takes the toss within the 4 s watch (feed.done), and a bread lying near beforehand is not collected
+  {:name "feeds-two-bread-taken-within-4s"
+   :act [[:summon "villager" [16.5 0 16.5] "{NoAI:1b,UUID:[I;20260,7,1,843]}"]
+         [:wait-s 2]
+         [:job (jobs.village.feed {:villager "00004f24-0000-0007-0000-00010000034b" :count 2})]]
+   :expect [{:event {:source :job :kind :feed.done :data {:fed 2}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :feed.gave-up} :for-s 40 :until {:source :job :kind :feed.done}}]
+   :after [[:item "bread" 6] [:entities "type=item" [[0 -1 0] [31 4 31]] 0]]}
+  ;; should stay: a stray bread of someone else lying near before the toss is never collected back
+  {:name "stray-bread-stays"
+   :act [[:summon "item" [14.5 0 20.5] "{Item:{id:\"minecraft:bread\",count:1}}"]
+         [:summon "villager" [16.5 0 16.5] "{NoAI:1b,UUID:[I;20260,7,1,843]}"]
+         [:wait-s 2]
+         [:job (jobs.village.feed {:villager "00004f24-0000-0007-0000-00010000034b" :count 2})]]
+   :expect [{:event {:source :job :kind :feed.done :data {:fed 2}} :within-s 40 :of-job true}]
+   :after [[:item "bread" 6] [:entities "type=item,tag=wt" [[0 -1 0] [31 4 31]] 1]]}
   ;; should fail: the villager is not there
   {:name "absent-villager-is-gone"
    :act [[:job (jobs.village.feed {:villager "00004f24-0000-0007-0000-00010000034b" :count 1})]]
@@ -19,7 +35,7 @@
    :after [[:item "bread" 8]]}
   ;; should fail: a full inventory takes nothing; every drop is collected back
   {:name "full-villager-takes-nothing"
-   :act [[:summon "villager" [16.5 0 16.5] "{NoAI:1b,UUID:[I;20260,7,1,843],Inventory:[{id:"minecraft:bread",count:64} {id:"minecraft:bread",count:64} {id:"minecraft:bread",count:64} {id:"minecraft:bread",count:64} {id:"minecraft:bread",count:64} {id:"minecraft:bread",count:64} {id:"minecraft:bread",count:64} {id:"minecraft:bread",count:64}]}"]
+   :act [[:summon "villager" [16.5 0 16.5] "{NoAI:1b,UUID:[I;20260,7,1,843],Inventory:[{id:\"minecraft:bread\",count:64},{id:\"minecraft:bread\",count:64},{id:\"minecraft:bread\",count:64},{id:\"minecraft:bread\",count:64},{id:\"minecraft:bread\",count:64},{id:\"minecraft:bread\",count:64},{id:\"minecraft:bread\",count:64},{id:\"minecraft:bread\",count:64}]}"]
          [:wait-s 2]
          [:job (jobs.village.feed {:villager "00004f24-0000-0007-0000-00010000034b" :count 2})]]
    :expect [{:event {:source :job :kind :feed.gave-up :data {:reason "not-taken"}} :within-s 90 :of-job true}]

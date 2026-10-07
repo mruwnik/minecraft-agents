@@ -20,6 +20,22 @@
    :act [[:job (jobs.survival.extinguish {:water-radius 6})]]
    :expect [{:no-event {:source :job :kind :extinguish.scoop_failed} :for-s 15}]
    :after [[:not-block [10 0 16] "water"] [:item "water_bucket" 1]]}
+  ;; card fe023f01: reach is eye based (bucket 4.5): 4.3 blocks sideways is eye distance 4.44, scooped without a step
+  {:name "pour-4.3-away-is-scooped-in-place"
+   :blocks [[:set [14 0 16] "water"]]
+   :memory [{:kind :extinguish-pour :data {:pos #xyz [14 0 16]}}]
+   :body {:at [10.2 0 16.5]}
+   :act [[:job (jobs.survival.extinguish {:water-radius 6})]]
+   :expect [{:no-event {:source :job :kind :extinguish.scoop_failed} :for-s 15}]
+   :after [[:not-block [14 0 16] "water"] [:item "water_bucket" 1] [:body-near [10.2 0 16.5] 0.7]]}
+  ;; should fail as an in-place scoop: at 5 blocks (eye distance 5.12) the body walks back first
+  {:name "pour-5-away-walks-back-first"
+   :blocks [[:set [14 0 16] "water"]]
+   :memory [{:kind :extinguish-pour :data {:pos #xyz [14 0 16]}}]
+   :body {:at [9.5 0 16.5]}
+   :act [[:job (jobs.survival.extinguish {:water-radius 6})]]
+   :expect [{:no-event {:source :job :kind :extinguish.scoop_failed} :for-s 15}]
+   :after [[:not-block [14 0 16] "water"] [:item "water_bucket" 1] [:body-near [14.5 0 16.5] 3.5]]}
   {:name "pour-20-away-is-dropped-with-a-warn"
    :blocks [[:set [24 0 16] "water"]]
    :memory [{:kind :extinguish-pour :data {:pos #xyz [24 0 16]}}]

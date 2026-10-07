@@ -1,0 +1,61 @@
+;; Breathe under a stone ceiling (cards 221d9783, e8a92f33): the body is put in water, its air runs out, the breathe reflex fires.
+;; Air is looked for only in the own column and in cells the body has seen, never through stone.
+;; seen-pocket-is-gone-to: a water tunnel with a ceiling and an air pocket 6 blocks down it, in line of sight: a go-to child (slot :air) takes the body there, the ceiling is not dug.
+;; Shaft cases (1x1 water column, 4 deep, a cap at y 4, an air chimney over it): dirt cap is dug; planks cap stops :no_air :cap :not-natural; sand cap stops :cap :gravity.
+;; unseen-pocket-is-not-chosen: a sealed air pocket 5 blocks off behind stone is never gone to (no :air child); the cap over the shaft is dug instead.
+;; Live risk: whether the body remembers the water cells of a tunnel it has swum (the seen-pocket case).
+{:defaults
+ {:tags [:survival :water] :time :any
+  :plot {:height 12}
+  :register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12}
+              :job (jobs.survival.breathe {:min-oxygen 12})}]
+  :blocks [[:fill [0 0 0] [31 8 31] "stone"]]
+  :body {:effects [["resistance" 600 4]] :settle-s 1}
+  :limit-s 70}
+ :cases
+ [{:name "seen-pocket-is-gone-to"
+   :blocks [[:fill [4 0 15] [24 3 17] "water"]
+            [:fill [12 3 15] [15 3 17] "air"]]
+   :body {:at [6.5 1 16.5]}
+   :expect [{:event {:source :reflex :kind :fired} :within-s 30}
+            {:event {:source :job :kind :child_started :data {:slot :air}} :within-s 40}
+            {:no-event {:source :job :kind :no_air} :for-s 40}]
+   :after [[:body-near [13.5 2 16.5] 4] [:block [8 4 16] "stone"] [:block [13 4 16] "stone"]]}
+  ;; should fail (as a go-to): the pocket is behind stone and was never seen, the cap is dug instead
+  {:name "unseen-pocket-is-not-chosen"
+   :blocks [[:fill [16 0 16] [16 3 16] "water"]
+            [:set [16 4 16] "dirt"]
+            [:fill [16 5 16] [16 8 16] "air"]
+            [:fill [21 0 16] [21 2 16] "water"]
+            [:set [21 3 16] "air"]]
+   :body {:at [16.5 1 16.5]}
+   :expect [{:event {:source :reflex :kind :fired} :within-s 30}
+            {:no-event {:source :job :kind :child_started :data {:slot :air}} :for-s 30}
+            {:no-event {:source :job :kind :no_air} :for-s 30}]
+   :after [[:not-block [16 4 16] "dirt"] [:body-near [16.5 3 16.5] 3]]}
+  {:name "dirt-cap-is-dug"
+   :blocks [[:fill [16 0 16] [16 3 16] "water"]
+            [:set [16 4 16] "dirt"]
+            [:fill [16 5 16] [16 8 16] "air"]]
+   :body {:at [16.5 1 16.5]}
+   :expect [{:event {:source :reflex :kind :fired} :within-s 30}
+            {:no-event {:source :job :kind :no_air} :for-s 30}]
+   :after [[:not-block [16 4 16] "dirt"] [:body-near [16.5 3 16.5] 3]]}
+  ;; should fail: a cap the body did not find is a build, never dug
+  {:name "planks-cap-stops-not-natural"
+   :blocks [[:fill [16 0 16] [16 3 16] "water"]
+            [:set [16 4 16] "oak_planks"]
+            [:fill [16 5 16] [16 8 16] "air"]]
+   :body {:at [16.5 1 16.5]}
+   :expect [{:event {:source :job :kind :no_air :data {:cap :not-natural}} :within-s 60}
+            {:event {:source :job :kind :stopped :data {:reason :no_air :cap :not-natural}} :within-s 60}]
+   :after [[:block [16 4 16] "oak_planks"]]}
+  ;; should fail: sand would fall into the water when dug from below
+  {:name "sand-cap-stops-gravity"
+   :blocks [[:fill [16 0 16] [16 3 16] "water"]
+            [:set [16 4 16] "sand"]
+            [:fill [16 5 16] [16 8 16] "air"]]
+   :body {:at [16.5 1 16.5]}
+   :expect [{:event {:source :job :kind :no_air :data {:cap :gravity}} :within-s 60}
+            {:event {:source :job :kind :stopped :data {:reason :no_air :cap :gravity}} :within-s 60}]
+   :after [[:block [16 4 16] "sand"]]}]}

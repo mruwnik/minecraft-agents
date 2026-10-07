@@ -20,6 +20,7 @@
  [{:name "walled-stops-no-land-1"
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
             {:event {:source :reflex :kind :ended :data {:outcome :stopped :reason :no_blocks}} :within-s 80}
+            {:event {:source :job :kind :stopped :data {:reason :no_blocks :step :no-blocks}} :within-s 80}
             {:no-event {:source :job :kind :afloat} :for-s 80 :until {:source :reflex :kind :ended :data {:outcome :stopped :reason :no_blocks}}}
             {:no-event {:source :job :kind :holding :data {:reason :afloat}} :for-s 80 :until {:source :reflex :kind :ended :data {:outcome :stopped :reason :no_blocks}}}
             {:no-event {:source :job :level :warn :kind #{:unreachable :refused}} :for-s 80 :until {:source :reflex :kind :ended :data {:outcome :stopped :reason :no_blocks}}}]
@@ -34,6 +35,7 @@
    :body {:at [13.5 2 17.5]}
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
             {:event {:source :reflex :kind :ended :data {:outcome :stopped :reason :no_blocks}} :within-s 80}
+            {:event {:source :job :kind :stopped :data {:reason :no_blocks :step :no-blocks}} :within-s 80}
             {:no-event {:source :job :kind :afloat} :for-s 80 :until {:source :reflex :kind :ended :data {:outcome :stopped :reason :no_blocks}}}
             {:no-event {:source :job :kind :holding :data {:reason :afloat}} :for-s 80 :until {:source :reflex :kind :ended :data {:outcome :stopped :reason :no_blocks}}}
             {:no-event {:source :job :level :warn :kind #{:unreachable :refused}} :for-s 80 :until {:source :reflex :kind :ended :data {:outcome :stopped :reason :no_blocks}}}]

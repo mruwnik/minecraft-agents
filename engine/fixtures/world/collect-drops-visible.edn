@@ -1,0 +1,30 @@
+;; jobs.forestry.collect-drops sees only visible items (card 917aa5a3, after 6017115f): drops of the body's own dig in a 1-wide
+;; tunnel are all collected (strict: every dug ore's drop is in the inventory); an item in a sealed stone cell is never chased.
+{:defaults
+ {:tags [:forestry :collect-drops :mine :jobs] :time :any
+  :plot {:height 12}
+  :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]}
+  :limit-s 120}
+ :cases
+ [{:name "own-dig-drops-in-tunnel-collected"
+   :blocks [[:fill [2 0 8] [30 6 24] "stone"] [:fill [16 0 16] [16 1 16] "air"]
+            [:set [19 0 16] "iron_ore"] [:set [21 0 16] "iron_ore"] [:set [23 0 16] "iron_ore"]]
+   :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1] ["cobblestone" 16]] :effects [["resistance" 600 4]]}
+   :act [[:job (jobs.gather.mine {:block "iron_ore" :count 3 :direction :east :tunnel-length 10 :radius 8})]]
+   :expect [{:event {:source :job :kind :mine.done :data {:got 3}} :within-s 110 :of-job true}
+            {:no-event {:source :job :kind :mine.left-behind} :for-s 110 :until {:source :job :kind :mine.done :data {:got 3}}}]
+   :after [[:item "raw_iron" 3]]}
+  ;; should stay: the item in the sealed cell is never seen, so it is left; the one in the open is collected
+  {:name "item-behind-wall-left-alone"
+   :blocks [[:fill [20 0 14] [24 3 18] "stone"] [:fill [22 0 16] [22 1 16] "air"]]
+   :act [[:summon "item" [18.5 0 16.5] "{Item:{id:\"minecraft:cobblestone\",count:1}}"]
+         [:summon "item" [22.5 0 16.5] "{Item:{id:\"minecraft:cobblestone\",count:1}}"]
+         [:job (jobs.forestry.collect-drops {:radius 10})]]
+   :expect [{:event {:source :job :kind :completed :data {:status :completed}} :within-s 60 :of-job true}]
+   :after [[:item "cobblestone" 1] [:entities "type=item,tag=wt" [[0 -1 0] [31 4 31]] 1] [:body-far [22.5 0 16.5] 3]]}
+  {:name "only-walled-item-is-not-chased"
+   :blocks [[:fill [20 0 14] [24 3 18] "stone"] [:fill [22 0 16] [22 1 16] "air"]]
+   :act [[:summon "item" [22.5 0 16.5] "{Item:{id:\"minecraft:cobblestone\",count:1}}"]
+         [:job (jobs.forestry.collect-drops {:radius 10})]]
+   :expect [{:no-event {:source :action :kind :started :data {:name "collect"}} :for-s 20}]
+   :after [[:item "cobblestone" 0] [:entities "type=item,tag=wt" [[0 -1 0] [31 4 31]] 1] [:body-near [16.5 0 16.5] 3]]}]}
