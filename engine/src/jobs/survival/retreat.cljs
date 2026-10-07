@@ -441,7 +441,8 @@
   true when the body arrived or got on a leg nearer, false when go-to gave up, waited or was declined."
   [c slot target range]
   (let [r (await (ctx/call-child c slot 'jobs.movement.go-to {:pos target :range range :escalate false
-                                                              :warn false :leg-s flight-timeout-s}))
+                                                              :warn false :leg-s flight-timeout-s
+                                                              :retry false :look-round false}))
         res (when (= :done r) (ctx/child-result c slot))]
     (boolean (or (:arrived res) (:leg res)))))
 

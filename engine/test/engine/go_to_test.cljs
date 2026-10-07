@@ -309,6 +309,27 @@
                                                 #(override-steer! % (fn ^:async f [_ _ _] #js {:status "done"}))))]
           (is (= {:arrived false :reason :unreachable :why :no-progress} (dissoc @out :at :near :text :status))))))))
 
+(deftest go-to-retry-false-ends-a-walk-that-got-no-nearer-at-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[args want] [[{} 3] [{:retry false} 1]]]
+          (let [steers (atom 0)
+                {:keys [out]} (await (go-prepped! {:blocks flat} (merge {:pos [10 64 0] :range 0 :escalate false} args)
+                                                  #(override-steer! % (fn ^:async f [_ _ _] (swap! steers inc) #js {:status "done"}))))]
+            (is (= want @steers) (str "walks for " args))
+            (is (= {:arrived false :reason :unreachable :why :no-progress} (dissoc @out :at :near :text :status :tries))
+                (str "same give-up for " args))))))))
+
+(deftest go-to-look-round-false-skips-the-arrival-look
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [watched (fn [{:keys [eng]}] (mem/entries (mem/view (:store eng)) :watched))
+              dark (await (go! {:blocks flat :light [0 0]} {:pos [10 64 0] :range 1 :look-round false}))]
+          (is (= {:arrived true} @(:out dark)))
+          (is (empty? (watched dark))))))))
+
 (deftest go-to-gives-up-at-once-on-a-walled-in-goal
   (async done
     (tu/run-async done

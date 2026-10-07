@@ -69,6 +69,8 @@
    :dangers {:doc "false: plan straight past known dangers (a walk up to the hostile being fought); true: keep away from them" :default true}
    :dark {:doc "false: plan dark cells like lit ones; true: a dark cell (seen dark, or unseen at night) costs twice a lit one" :default true}
    :leg-s {:doc "walk one leg of at most this many seconds, then end {:arrived false :leg true} so the caller can re-aim at a moving target; nil: the whole way" :default nil}
+   :retry {:doc "false: a walk that got no nearer gives up at once instead of walking again (up to 3 times), for a caller that re-aims itself" :default true}
+   :look-round {:doc "false: no look round on arrival, for a caller that keeps moving" :default true}
    :warn {:doc "false: a give-up or refusal is an info event, not a warn, for a caller that reports the failure itself"
           :default true}
    :ignore-zones? {:doc "act regardless of zones and claims in the escalation (pillar, stair, clear-path); the rules of the game allow it" :default false}})
@@ -104,7 +106,8 @@
 (defn ^:async arrived!
   "Look round once if the place is risky (jobs.lib.watch), then finish: the next job starts facing along the walk."
   [c]
-  (await (watch/watch! c {}))
+  (when-not (false? (:look-round (:args c)))
+    (await (watch/watch! c {})))
   (finish! c {:arrived true}))
 
 (defn feet-cell [c]
@@ -551,7 +554,7 @@
                              :frontier-best (cond-> fbests frontier (assoc frontier (min fbest (u/dist to fcell))))
                              :target-best (cond-> tbests target (assoc target (min tdist (get tbests target js/Infinity)))))
             (when (and progress? (:restore-pending (ctx/mem c))) (restore-next! c))
-            (if (and (< tries max-blocked) (not (#{:goal-enclosed :goal-cut-off} (:reason result))))
+            (if (and (if (false? (:retry (:args c))) progress? (< tries max-blocked)) (not (#{:goal-enclosed :goal-cut-off} (:reason result))))
               :again
               (await (give-up-or-escalate! c pos tries status result)))))))))
 

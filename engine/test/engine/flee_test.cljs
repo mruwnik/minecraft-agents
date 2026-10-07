@@ -118,6 +118,8 @@
           (is (= :far (:ended out)))
           (is (pos? (count @args)) "every flight step is a go-to call")
           (is (every? #(false? (:escalate %)) @args) "a flee never digs or pillars")
+          (is (every? #(and (false? (:retry %)) (false? (:look-round %))) @args)
+              "a step that gains nothing ends at once and never looks round")
           (is (> (fake/dist (body-pos p) (mob-pos p 7)) 35)))))))
 
 (deftest retreat-eats-one-bite-per-flee-step
@@ -153,7 +155,6 @@
               calls #(.-length (.-calls world))]
           (doseq [name ["steer" "moveTo" "wait" "attack" "place" "dig" "equip" "eat"]]
             (.override world name (fn ^:async f [token a impl]
-                                    (when (= 5 (calls)) (swap! clock + 200000))
                                     (when (> (calls) 400) (swap! (fake/state p) assoc :entities []))
                                     (await (impl token a)))))
           (let [{:keys [out]} (await (run-job! s 'jobs.survival.retreat {:no-gain-steps 3}))]
@@ -194,11 +195,36 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (assoc-in (setup {}) [:eng :jobs 'sweeper] sweeper)]
-          (core/submit! eng '(sweeper) {})
-          (await (core/tick! eng))
+        (let [{:keys [eng seen out]} (await (run-job! (assoc-in (setup {}) [:eng :jobs 'sweeper] sweeper) 'sweeper {}))]
           (is (= [] (:list (core/state eng))) "two failed sweeps end the job")
+          (is (= :stopped (:status out)))
+          (is (= :cannot_escape (:reason out)) "the stop reason reaches the caller")
           (is (= 1 (count (filter #(= :retreat_blocked (:kind %)) @seen))) "warned once"))))))
+
+(defn backer
+  "A job that backs off once from the zombie and keeps what back-off! answered and whether the option stays tried."
+  [out]
+  {:check (constantly true)
+   :round (fn ^:async backer-round [c]
+            (let [threat (first (reach/known-hostiles (:primitives c) 30 {:ranged-radius 30}))
+                  r (await (retreat/back-off! c threat))]
+              (reset! out {:r r :tried (retreat/tried? c :back-off)})
+              :done))})
+
+(deftest back-off-steps-away-and-fails-when-the-walk-does
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[kid want] [[nil {:r :again :tried false}]
+                            [{:check (constantly true)
+                              :round (fn ^:async no-leg [c] (ctx/result! c {:arrived false :reason :unreachable}) :done)}
+                             {:r nil :tried true}]]]
+          (let [out (atom nil)
+                s (setup {:entities [(zombie 7 2 {})]})
+                s (cond-> (assoc-in s [:eng :jobs 'backer] (backer out))
+                    kid (assoc-in [:eng :jobs 'jobs.movement.go-to] kid))]
+            (await (run-job! s 'backer {}))
+            (is (= want @out) (str "go-to " (if kid "gives up" "walks")))))))))
 
 (deftest every-option-failing-in-two-sweeps-in-a-row-is-cannot-escape
   (is (not (retreat/cannot-escape? (retreat/count-sweep {}))))
