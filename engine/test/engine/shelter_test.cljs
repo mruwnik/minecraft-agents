@@ -912,6 +912,18 @@
           (is (nil? (core/holder eng)) "the shelter ended at day")
           (is (= 1 (notified seen)) "then the queued job ran"))))))
 
+(deftest a-body-with-no-pickaxe-on-a-stone-floor-at-night-seals-in-above-ground-and-digs-no-pit
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:time night :inventory dirt-stack :blocks (tu/box -30 58 -30 30 63 30 "stone")})
+              mid (mid-night! p 6 #(hash-map :holder (some? (core/holder eng)) :pos (pos-of p)))]
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (tick-n eng 8))
+          (is (= {:holder true :pos {:x 0 :y 64 :z 0}} @mid) "held in place at night, on the surface")
+          (is (= 1 (count (emitted seen :dig-in.sealed))) "walled in with placed blocks")
+          (is (every? #(>= (:y (arg-pos %)) 64) (calls p "dig")) "no dig below the surface: the only digs are the placed wall, taken down by day"))))))
+
 (deftest an-unsheltered-hold-does-not-rerun-a-failing-dig-in
   (async done
     (tu/run-async done

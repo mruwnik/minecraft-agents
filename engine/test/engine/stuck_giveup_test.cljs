@@ -54,6 +54,20 @@
               {:keys [p]} (await (pnt/walk! {:blocks cliff-island} [top 1]))]
           (is (= 64 (js/Math.floor (.-y (.-pos (.self p))))) "still on the plateau"))))))
 
+(deftest pace-toward-an-unreachable-leg-goes-down-the-cliff-like-go-to-and-stops-with-a-warn
+  ;; pace is go-to (:escalate false): the drop is go-to's policy (go-to-goes-down-a-cliff-whose-foot-runs-into-unloaded-land),
+  ;; unlike walk-near! above; the run ends stopped :leg-unfinished at the foot, on loaded floor
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (ut/setup {:self {:pos {:x 0 :y 64 :z 0}} :blocks cliff-island})]
+          (core/submit! eng '(jobs.movement.pace {:a [47 67 0] :b [0 64 0] :laps 1}) {})
+          (await (core/tick! eng))
+          (is (= 61 (js/Math.floor (.-y (.-pos (.self p))))) "down the drop, on the lower floor")
+          (is (= [] (:list (core/state eng))) "the run is over, not retried")
+          (is (= [{:to {:x 47 :y 67 :z 0}}]
+                 (->> @seen (filter #(= :leg-unfinished (:kind %))) (mapv #(select-keys % [:to]))))))))))
+
 ;; ------------------------------------------------------------------ unstick ends once out
 
 (def wide-surface-pit
