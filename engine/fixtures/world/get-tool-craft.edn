@@ -58,10 +58,12 @@
             {:no-event {:source :job :kind :completed} :for-s 40 :until {:source :job :kind :waiting :data {:reason :no-source :why [:contains "no seen chest"]}}}]
    :after [[:item "wooden_pickaxe" 0]]}
   {:name "stone-pick-no-cobble"
-   ;; a dirt floor: with stone to see the chain mines cobblestone itself (fetch by default), so no stone may be in view
+   ;; dirt over bedrock: the chain crafts a wooden pickaxe, gather's stair finds no stone (mine.no-stone-found) three times
+   ;; and the job ends :stopped :no-source; stone anywhere in view would be mined for cobblestone instead (fetch by default)
    :plot {:height 12 :floor "dirt"}
+   :blocks [[:fill [0 -2 0] [32 -2 32] "bedrock"]]
    :body {:inventory [["oak_log" 12] ["stick" 4]]}
    :act [[:job (jobs.items.get-tool {:item "stone_pickaxe"})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :no-source :why [:contains "no seen chest"]}} :within-s 40 :of-job true}
-            {:no-event {:source :job :kind :completed} :for-s 40 :until {:source :job :kind :waiting :data {:reason :no-source :why [:contains "no seen chest"]}}}]
+   :limit-s 150
+   :expect [{:event {:source :job :level :warn :kind :stopped :data {:reason :no-source}} :within-s 140 :of-job true}]
    :after [[:item "stone_pickaxe" 0]]}]}

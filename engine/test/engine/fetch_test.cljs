@@ -608,6 +608,29 @@
               id (await (get-tool! s {:item "stone_pickaxe"} 6))]
           (is (= :no-source (:reason (core/waiting (:eng s) id)))))))))
 
+(deftest a-stone-pickaxe-whose-gather-finds-no-stone-ends-no-source
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (-> (world {}) (update :blocks dissoc chest-at)
+                           (assoc :inventory [{:name "wooden_pickaxe" :count 1} {:name "stick" :count 2} {:name "oak_log" :count 3}]))
+                       [own-zone])
+              n (atom 0)
+              orig ctx/call-child
+              orig-res ctx/child-result
+              no-stone {:status :stopped :reason :no-stone-found}]
+          (set! ctx/call-child (fn [c slot job args]
+                                 (if (= :gather slot)
+                                   (do (swap! n inc) (js/Promise.resolve :done))
+                                   (orig c slot job args))))
+          (set! ctx/child-result (fn [c slot] (if (= :gather slot) no-stone (orig-res c slot))))
+          (try
+            (let [id (await (get-tool! s {:item "stone_pickaxe"} 40))
+                  st (last (events-of s :stopped))]
+              (is (= :no-source (:reason st)) (pr-str st (core/waiting (:eng s) id)))
+              (is (= 3 @n)))
+            (finally (set! ctx/call-child orig) (set! ctx/child-result orig-res))))))))
+
 (deftest crafting-is-off-when-how-leaves-it-out
   (async done
     (tu/run-async done
