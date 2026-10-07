@@ -4,6 +4,7 @@
             ["fs" :as fs]
             ["path" :as path]
             [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.fake :as fake]
             [engine.events :as events]
             [engine.memory :as mem]
@@ -281,6 +282,18 @@
     {} 5000 false
     {:wait-until 6000} 5000 true
     {:wait-until 6000} 6000 false))
+
+(deftest it-states-the-wait-for-chunks-to-load-and-then-passes
+  (let [c {:args {:target "diamond_block"} :wait (atom nil)}]
+    (with-redefs [ctx/mem (constantly {:wait-until 6000})
+                  ctx/now (constantly 5000)]
+      (is (false? (search/check c)))
+      (is (= {:reason :chunks-loading :until 6000} @(:wait c))))
+    (reset! (:wait c) nil)
+    (with-redefs [ctx/mem (constantly {:wait-until 6000})
+                  ctx/now (constantly 6000)]
+      (is (true? (search/check c)))
+      (is (nil? @(:wait c))))))
 
 (deftest ore-the-body-has-not-seen-is-neither-found-nor-noted
   (async done

@@ -26,3 +26,11 @@
     {:name "diamond"} 25
     {:name "cobblestone"} 0
     {:name "stick" :enchants [{}]} 25))
+
+(deftest ores-and-coal-are-worth-keeping-by-the-metals-scale
+  (are [item expected] (= expected (value/item-worth item))
+    {:name "lapis_lazuli" :count 5} 5
+    {:name "raw_copper" :count 12} 12
+    {:name "raw_gold" :count 3} 6
+    {:name "coal" :count 30} 1
+    {:name "charcoal" :count 30} 1))

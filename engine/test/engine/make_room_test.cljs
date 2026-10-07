@@ -173,7 +173,7 @@
     (is (= ["dirt" "gravel" "stick" "flint" "oak_log"] (order {"flint" 100 "gravel" 50 "dirt" 50}))
         "stick has no pick-up (0): before the picked-up names; later pick-ups after earlier ones")))
 
-(deftest toss-order-throws-junk-blocks-before-coal-and-copper-whole-stacks-first
+(deftest toss-order-throws-junk-blocks-first-and-keeps-coal-and-ores-below-their-worth
   (let [inventory [{:name "coal" :count 30 :slot 0}
                    {:name "raw_copper" :count 12 :slot 1}
                    {:name "tuff" :count 20 :slot 2}
@@ -181,12 +181,12 @@
                    {:name "granite" :count 64 :slot 4}
                    {:name "iron_ore" :count 5 :slot 5}
                    {:name "diamond" :count 2 :slot 6}]]
-    (is (= ["cobbled_deepslate" "granite" "tuff" "raw_copper" "coal"]
-           (names-of (mr/toss-order (subvec inventory 0 5) {} {} 1))))
-    (is (= ["cobbled_deepslate" "granite" "tuff" "iron_ore" "raw_copper" "coal"]
-           (names-of (mr/toss-order (subvec inventory 0 6) {} {} 1)))
-        "junk blocks first, whole stacks before partial; then the rest")
-    (is (not-any? #{"diamond"} (names-of (mr/toss-order inventory {} {} 1))))))
+    (is (= ["cobbled_deepslate" "granite" "tuff" "iron_ore"]
+           (names-of (mr/toss-order inventory {} {} 1)))
+        "junk blocks first, whole stacks before partial; coal (1) and raw copper (12) are worth keeping")
+    (is (= ["cobbled_deepslate" "granite" "tuff" "iron_ore" "coal"]
+           (names-of (mr/toss-order inventory {} {} 2)))
+        "raised :toss-below lets the stack of coal go")))
 
 (deftest toss-order-orders-by-recency-before-count
   (let [inventory [{:name "stick" :count 9 :slot 0} {:name "flint" :count 3 :slot 1}]]
@@ -704,4 +704,20 @@
           (core/submit! eng '(jobs.storage.make-room) {})
           (await (tick-out! eng 10))
           (is (zero? @walks) "the old toss site is not walked back to")
+          (is (empty? (spots))))))))
+
+(deftest a-recent-toss-spot-near-the-body-is-walked-away-from-even-when-this-run-tossed-nothing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:inventory (same "diamond" 35 1)})
+              walks (atom 0)
+              go-to {:check (constantly true)
+                     :round (fn ^:async go-to-round [_c] (swap! walks inc) :done)}
+              spots #(mem/entries (mem/view (:store eng)) :make-room-tossed)
+              eng (assoc eng :jobs (assoc (:jobs eng) 'jobs.movement.go-to go-to))]
+          (mem/write! (:store eng) :make-room-tossed {:at {:x 2 :y 64 :z 0} :dir [1 0]} mr/tossed-policy)
+          (core/submit! eng '(jobs.storage.make-room) {})
+          (await (tick-out! eng 10))
+          (is (= 1 @walks) "the items thrown in the last 2 minutes may still lie there: step away once")
           (is (empty? (spots))))))))
