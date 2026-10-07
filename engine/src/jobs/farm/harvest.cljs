@@ -8,13 +8,14 @@
             [jobs.lib.result :as result]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
+            [jobs.lib.pace :as pace]
             [jobs.lib.toll-cells :as tc]
             [jobs.lib.world :as known]))
 
 (def doc
   "Cut the ripe crops within :radius of a centre and replant them, then collect the drops.
   The centre is :center, or the body's position when the job first runs (kept in memory).
-  Each round does the first step that applies:
+  One call is the whole run: it does the first step that applies, again and again, until it finishes:
   1. Replant: seed the bare farmland of cells it cut, from the seeds carried.
   2. Cut the ripe crops, walking to the nearest when out of :reach. A crop it cannot reach is skipped.
      After :give-up such crops it stops cutting (warn harvest.gave-up); replanting and collecting go on.
@@ -27,7 +28,7 @@
   Each cell it cuts is written to memory with its seed before the dig, because bare farmland does not show
   which seed was there. A restart or reflex in between loses nothing.
   :plan (optionally :part) makes the plan's crop cells the field instead (:radius and :center are then unused).
-  The plan is read again every round. A cell is cut only when ripe and holding the crop the plan wants there.
+  The plan is read again every step. A cell is cut only when ripe and holding the crop the plan wants there.
   Crops outside the plan are left standing. A planned cell standing bare is sown unless :replant-bare is false,
   food seeds only above the food reserve. A cell it cut is always replanted.
   The job declines (one harvest.declined warn naming the plan and the reason) while the plan is missing,
@@ -351,11 +352,11 @@
         (ctx/update-mem! c fail-debt pos)))))
 
 (def max-per-round
-  "Most crops one round cuts or plants; the rest wait for the next round."
+  "Most crops one step cuts or plants; the rest wait for the next step."
   8)
 
 (defn ^:async replant!
-  "Step 1: :continue when a seed was planted or a walk made, else nil."
+  "Step 1: :again when a seed was planted or a walk made, else nil."
   [c]
   (let [p (:primitives c)
         owed (drop-settled! c)
@@ -370,10 +371,10 @@
             targets (if (seq near) near [nearest-debt])]
         (case walked
           :partial :continue
-          :blocked (do (ctx/update-mem! c walk-fail-debt (:pos (first targets))) :continue)
+          :blocked (do (ctx/update-mem! c walk-fail-debt (:pos (first targets))) :again)
           (loop [todo (take max-per-round targets)]
             (if (empty? todo)
-              :continue
+              :again
               (do (await (plant-one! c (first todo)))
                   (recur (rest todo))))))))))
 
@@ -409,7 +410,7 @@
     targets))
 
 (defn ^:async cut!
-  "Step 2: :continue when it cut or walked, else nil."
+  "Step 2: :again when it cut or walked, else nil."
   [c]
   (let [p (:primitives c)
         m (ctx/mem c)
@@ -425,20 +426,20 @@
           :partial :continue
           :blocked (do (ctx/update-mem! c walk-fail-crop (first ripe))
                        (warn-gave-up! c)
-                       :continue)
+                       :again)
           (do (ctx/update-mem! c assoc :collect true)
               (loop [todo (take max-per-round (still-planned c targets))]
                 (when (seq todo)
                   (await (cut-cell! c (first todo)))
                   (recur (rest todo))))
               (warn-gave-up! c)
-              :continue))))))
+              :again))))))
 
 (def max-home-fails 3)
 
 (defn ^:async home!
   "Step 2b: a body farther than :radius from the centre with debts or a sweep owed walks back
-  (range radius/2): :continue, or :finish after max-home-fails walks that went nowhere; nil when
+  (range radius/2): :again, or :finish after max-home-fails walks that went nowhere; nil when
   there is nothing to do."
   [c]
   (let [m (ctx/mem c)
@@ -449,8 +450,9 @@
       (if (>= (:home-fails m 0) max-home-fails)
         :finish
         (case (await (walk! c center (quot radius 2)))
-          (:there :partial) :continue
-          (do (ctx/update-mem! c inc-in :home-fails) :continue))))))
+          :there :again
+          :partial :continue
+          (do (ctx/update-mem! c inc-in :home-fails) :again))))))
 
 (defn ^:async collect!
   "Step 3: one collect-drops round while a sweep is owed."
@@ -458,8 +460,8 @@
   (when (:collect (ctx/mem c))
     (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops
                                    {:radius (+ (:radius (:args c)) 4) :filter collect-items}))]
-      (when (= :done r) (ctx/update-mem! c dissoc :collect))
-      :continue)))
+      (when (#{:done :declined} r) (ctx/update-mem! c dissoc :collect))
+      (if (= :continue r) :continue :again))))
 
 (defn lost-cells
   "The planted cells whose block is no longer a crop (nil, an unloaded cell, is not counted)."
@@ -504,7 +506,7 @@
         (ctx/update-mem! c assoc :replant (:replant synced))))))
 
 (defn ^:async work
-  "One round over the field of c."
+  "One step over the field of c: :again after a unit of work, :continue while a walk waits on the world."
   [c]
   (when-not (:center (ctx/mem c))
     (ctx/update-mem! c assoc :center (center-of c)))
@@ -514,12 +516,18 @@
       (let [home (await (home! c))]
         (case home
           :finish (finish! c)
-          :continue :continue
+          (:again :continue) home
           (or (await (collect! c))
               (finish! c))))))
 
-(defn ^:async round [c]
+(defn ^:async step [c]
   (let [field (planned c)]
     (if (:trouble field)
       :declined
       (await (work (with-field c field))))))
+
+(defn ^:async round
+  "The whole attempt: loop the steps (replant, cut, walk home, sweep) until the field is done; :continue only while a
+  walk or the sweep waits on the world."
+  [c]
+  (await (pace/steps! c (fn ^:async s [] (await (step c))))))

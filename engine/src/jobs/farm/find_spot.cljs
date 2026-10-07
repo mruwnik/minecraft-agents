@@ -2,7 +2,8 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
-            [jobs.lib.near :as near]))
+            [jobs.lib.near :as near]
+            [jobs.lib.pace :as pace]))
 
 (def doc
   "Pick where a :w x :h farm would go. Ranks patches by flatness first, then water within 4,
@@ -153,7 +154,7 @@
         found)))
 
 (defn scan-step!
-  "One bounded scan round. :continue while rows remain (state kept in :scan),
+  "One bounded scan slice. :again while rows remain (state kept in :scan),
   else the finished spots (or nil for none)."
   [c a]
   (let [saved (:scan (ctx/mem c))
@@ -163,16 +164,16 @@
     (if (:done r)
       (finish-scan! c a from (:found r))
       (do (ctx/update-mem! c assoc :scan (assoc (select-keys r [:next-x :found]) :from from))
-          :continue))))
+          :again))))
 
-(defn ^:async round
-  "Scan (a bounded slice per round, remembering the spots), then walk to the
+(defn ^:async step
+  "Scan (a bounded slice per step, remembering the spots), then walk to the
   best one if :walk."
   [c]
   (let [a (merge (into {} (map (fn [[k v]] [k (:default v)])) args) (:args c))
         found (or (:spots (ctx/mem c)) (scan-step! c a))]
     (cond
-      (= :continue found) :continue
+      (= :again found) :again
       (nil? found) (do (ctx/result! c {:spot nil :reason :none}) :done)
       :else
       (let [pos (:pos (first found))
@@ -183,3 +184,8 @@
             :partial :continue
             :blocked (do (ctx/result! c (assoc result :walked false :reason :unreachable)) :done)
             (do (ctx/result! c (assoc result :walked true)) :done)))))))
+
+(defn ^:async round
+  "The whole attempt: scan slice after slice, then the walk; :continue only while the walk waits on the world."
+  [c]
+  (await (pace/steps! c (fn ^:async s [] (await (step c))))))

@@ -273,20 +273,26 @@
                               {"mix" (plan-of)} [zone] 60))]
             (is (= hoed (block-at s 2 63 2)) (pr-str extra))))))))
 
-(deftest a-plan-deleted-mid-job-is-not-worked-in-the-next-round
+(deftest a-plan-deleted-mid-job-is-not-worked-in-the-next-step
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (setup (world-of farmland-all {:inventory [(item "wheat_seeds" 6) (item "carrot" 6) (item "bread" 12)]}) {"mix" (plan-of)} [])]
+        (let [s (setup (world-of farmland-all {:inventory [(item "wheat_seeds" 6) (item "carrot" 6) (item "bread" 12)]}) {"mix" (plan-of)} [])
+              deleted (atom false)]
+          (.override (.-world (:p s)) "place"
+                     (fn ^:async f [token args impl]
+                       (when-not @deleted
+                         (reset! deleted true)
+                         (world/set-data! (:w s) {} {}))
+                       (await (impl token args))))
           (core/submit! (:eng s) (list job {:plan "mix"}) {})
           (swap! (:clock s) + 700)
           (await (core/tick! (:eng s)))
           (let [before (count (calls s "place"))]
-            (world/set-data! (:w s) {} {})
             (dotimes [_ 20]
               (swap! (:clock s) + 700)
               (await (core/tick! (:eng s))))
-            (is (< before 4))
+            (is (pos? before))
             (is (= before (count (calls s "place"))) "nothing is placed after the plan was deleted")
             (is (nil? (done-event s)))))))))
 
@@ -332,7 +338,7 @@
           (dotimes [_ 60]
             (swap! (:clock s) + 700)
             (await (core/tick! (:eng s))))
-          (is (> (count @checks) 3))
+          (is (pos? (count @checks)))
           (is (every? true? @checks))
           (is (some? (done-event s))))))))
 

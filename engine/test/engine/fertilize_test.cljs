@@ -59,6 +59,15 @@
           (is (= (count (calls p "useOn")) (:used r)))
           (is (= 4 (:used r))))))))
 
+(deftest fertilize-is-one-call-the-whole-field
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup two-wheat)
+              r (await (child-outcome eng job {} 1))]
+          (is (= 4 (:used r)))
+          (is (= 7 (age p "2,64,0"))))))))
+
 (deftest fertilize-never-targets-a-ripe-crop
   (async done
     (tu/run-async done

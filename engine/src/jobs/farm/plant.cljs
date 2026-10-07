@@ -5,6 +5,7 @@
             [jobs.lib.crops :as crops]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.gate :as gate]
+            [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
             [jobs.farm.harvest :as harvest]
             [jobs.lib.world :as known]))
@@ -15,7 +16,7 @@
   The seed is :seed, else the carried seed with the largest stack. Carrots and potatoes are sown only above the
   food reserve (jobs.lib.cost/food-reserve); harvest replants its own cut cells whatever the
   reserve. That pick is kept while it is carried, so one run sows one crop.
-  Each round plants the bare cells within :reach, or walks to the nearest. A cell whose place is refused or
+  One call plants the bare cells within :reach, walking to the nearest when none is, until the field is done. A cell whose place is refused or
   unreachable, or whose walk is blocked, three times is skipped (warn plant.gave-up).
   Result: {:planted n :skipped [cells] :reason r}. :reason is :done, :none (no bare cell), :gave-up (cells
   were skipped) or :no-seed.
@@ -245,13 +246,13 @@
             walked (when (empty? near) (await (harvest/walk! c (:pos target) 3)))]
         (case walked
           :partial :continue
-          :no-path (do (ctx/update-mem! c count-fail :walk-fails (:pos target)) :continue)
-          :blocked (do (ctx/update-mem! c count-fail :walk-fails (:pos target)) :continue)
+          :no-path (do (ctx/update-mem! c count-fail :walk-fails (:pos target)) :again)
+          :blocked (do (ctx/update-mem! c count-fail :walk-fails (:pos target)) :again)
           (do (loop [todo (if (seq near) near [target])]
                 (when (seq todo)
                   (await (plan-place! c (first todo)))
                   (recur (rest todo))))
-              :continue))))))
+              :again))))))
 
 ;; ------------------------------------------------------------------ steps
 
@@ -311,13 +312,13 @@
             walked (when (empty? near) (await (harvest/walk! c target 3)))]
         (case walked
           :partial :continue
-          :no-path (do (ctx/update-mem! c count-fail :walk-fails target) :continue)
-          :blocked (do (ctx/update-mem! c count-fail :walk-fails target) :continue)
+          :no-path (do (ctx/update-mem! c count-fail :walk-fails target) :again)
+          :blocked (do (ctx/update-mem! c count-fail :walk-fails target) :again)
           (if (= :no-seed (await (plant-all! c (vec (take (max 1 (get (sowable inventory) seed 0)) (if (seq near) near [target]))) seed)))
             (finish! c :no-seed)
-            :continue))))))
+            :again))))))
 
-(defn ^:async round [c]
+(defn ^:async step [c]
   (let [field (planned c)
         fetched (when (problem c) (await (fetch/fetch! c job-sym problem)))]
     (cond
@@ -325,3 +326,9 @@
       (nil? field) (await (box-round c))
       (:trouble field) :declined
       :else (await (plan-round c field)))))
+
+(defn ^:async round
+  "The whole attempt: loop the steps until the field is sown or no seed or cell is left; :continue only while a walk or
+  fetch waits on the world."
+  [c]
+  (await (pace/steps! c (fn ^:async s [] (await (step c))))))

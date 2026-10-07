@@ -6,6 +6,7 @@
             [jobs.lib.gate :as gate]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
+            [jobs.lib.pace :as pace]
             [jobs.lib.toll-cells :as tc]
             [jobs.lib.world :as known]))
 
@@ -165,7 +166,7 @@
     (apply min-key #(u/dist me (first %)) todo)))
 
 (defn ^:async till-step!
-  "Skip what cannot be tilled, else walk to the nearest cell, clear ground cover above it or use the hoe on it."
+  "One step: skip what cannot be tilled, else walk to the nearest cell, clear ground cover above it or use the hoe on it."
   [c]
   (let [p (:primitives c)
         todo (pending c)
@@ -189,32 +190,32 @@
           :done)
 
         (nil? hoe)
-        (do (skip! c (map first cands) :no-hoe) :continue)
+        (do (skip! c (map first cands) :no-hoe) :again)
 
         :else
         (let [[target _] (nearest c cands)
               w (await (near/go-near! c target 3 {:tolls (tc/walk-tolls c (near/cell-of target))}))]
           (case w
             :partial :continue
-            :blocked (do (bump! c target :unreachable) :continue)
+            :blocked (do (bump! c target :unreachable) :again)
             (let [above-pos (update target :y inc)
                   above (u/block-name p above-pos)]
               (cond
                 (not (permitted? c :dig target))
-                (do (skip! c [target] :not-permitted) :continue)
+                (do (skip! c [target] :not-permitted) :again)
 
                 (and (ground-cover above) (not (permitted? c :dig above-pos)))
-                (do (skip! c [target] :not-permitted) :continue)
+                (do (skip! c [target] :not-permitted) :again)
 
                 (ground-cover above)
                 (let [r (await (ctx/call-child c :cover 'jobs.blocks.dig (cover-args c above-pos)))]
                   (when (or (= :declined r)
                             (and (= :done r) (not (#{:dug :already-clear} (:reason (ctx/child-result c :cover))))))
                     (bump! c target :cover-stuck))
-                  :continue)
+                  :again)
 
                 (not (or (nil? above) (air above)))
-                (do (skip! c [target] :covered) :continue)
+                (do (skip! c [target] :covered) :again)
 
                 :else
                 (let [r (await (ctx/act c :useOn #js {:pos (clj->js target) :item hoe :face "up"}))
@@ -226,11 +227,13 @@
                     (= "missing" status) (skip! c [target] :gone)
                     (= "no-item" status) (bump! c target :no-hoe)
                     :else (bump! c target :refused))
-                  :continue)))))))))
+                  :again)))))))))
 
 (defn ^:async round
-  "One bounded step: fetch a hoe when none is carried, skip what cannot be tilled, else walk to the nearest cell,
-  clear ground cover above it or use the hoe on it."
+  "The whole attempt: fetch a hoe when none is carried, then loop the steps (skip what cannot be tilled, walk to the
+  nearest cell, clear ground cover above it or use the hoe on it) until the cells are done; :continue only while a walk
+  or fetch waits on the world."
   [c]
-  (or (await (fetch/fetch! c 'jobs.farm.till problem))
-      (await (till-step! c))))
+  (await (pace/steps! c (fn ^:async s []
+                          (or (await (fetch/fetch! c 'jobs.farm.till problem))
+                              (await (till-step! c)))))))

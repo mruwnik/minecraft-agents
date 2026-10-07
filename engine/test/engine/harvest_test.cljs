@@ -7,6 +7,7 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.fake :as fake]
+            [engine.takeover :as takeover]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
@@ -149,8 +150,15 @@
         (let [dir (tu/tmp-dir)
               a (start {:world wheat-world :dir dir})
               p (:p a)]
+          (.override (.-world p) "dig"
+                     (fn ^:async f [token args impl]
+                       (let [r (await (impl token args))]
+                         (when (= 2 (count (calls p "dig")))
+                           (takeover/take! (:eng a) {:who "claude" :why "cut"}))
+                         r)))
           (core/submit! (:eng a) (list job {}) {})
-          (await (run-until (:eng a) #(pos? (:cut (core/job-memory % "j1") 0)) 20))
+          (await (core/tick! (:eng a)))
+          (is (= 2 (count (calls p "dig"))) "cut after the second dig")
           (is (pos? (count (:replant (core/job-memory (:eng a) "j1")))))
           (let [b (start {:p p :dir dir})]
             (await (run-until-empty (:eng b) 200))
@@ -432,14 +440,12 @@
             (is (= [{:x 3 :y 64 :z 0}] (:bare result)))
             (is (= 3 (count (place-calls-at p 3))))))))))
 
-(deftest a-round-cuts-and-replants-a-bounded-number-of-crops
+(deftest one-call-cuts-and-replants-every-crop-in-reach
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [xs (range 1 4) zs (range -2 3)
-              {:keys [eng p]} (start {:world {:blocks (field "wheat" 7 xs zs) :ages (ages 7 xs zs) :drops wheat-drops}})]
-          (core/submit! eng (list job {}) {})
-          (swap! clock + 700)
-          (await (core/tick! eng))
-          (is (<= (count (calls p "dig")) harvest/max-per-round) "15 ripe crops in reach: one round cuts only some")
-          (is (pos? (count (calls p "dig")))))))))
+              {:keys [eng p]} (start {:world {:blocks (field "wheat" 7 xs zs) :ages (ages 7 xs zs) :drops wheat-drops}})
+              result (await (child-outcome eng job {} 1))]
+          (is (= 15 (count (calls p "dig"))) "15 ripe crops in reach: one call cuts them all, in steps of at most max-per-round")
+          (is (= {:cut 15 :replanted 15 :bare [] :lost [] :gave-up false} result)))))))

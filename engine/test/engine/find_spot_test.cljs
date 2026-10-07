@@ -224,7 +224,7 @@
     (is (= {:x -14 :y 63 :z 0} (:pos (first spots))) "the patch near :center beats the one near the body")
     (is (= [{:x -14 :y 63 :z 0} {:x 2 :y 63 :z 0}] (mapv :pos spots)))))
 
-(deftest scan-is-spread-over-rounds-by-a-read-budget
+(deftest scan-is-one-call-in-slices-of-a-read-budget
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -234,7 +234,6 @@
               expected (scan-at world {:x 0 :y 64 :z 0} a from)
               {:keys [eng p]} (setup {:blocks world})
               reads (atom 0)
-              per-round (atom [])
               orig (.-blockAt p)
               _ (set! (.-blockAt p) (fn [pos] (swap! reads inc) (.call orig p pos)))
               out (atom :not-done)
@@ -249,15 +248,9 @@
               row-reads (* (inc (* 2 (:range a))) (:w a) (+ (* 4 (:depth a)) 9))
               bound (+ fs/read-budget row-reads)]
           (core/submit! eng '(recording-parent) {})
-          (loop [i 0]
-            (when (and (< i 40) (seq (:list (core/state eng))))
-              (reset! reads 0)
-              (await (core/tick! eng))
-              (swap! per-round conj @reads)
-              (recur (inc i))))
-          (is (> (count (filter pos? @per-round)) 1) "more than one round scanned")
-          (is (every? #(<= % bound) @per-round) (str "each round reads at most " bound ": " (pr-str @per-round)))
-          (is (some #(>= % fs/read-budget) @per-round) "a round ran to the budget")
+          (await (core/tick! eng))
+          (is (empty? (:list (core/state eng))) "one call scans the whole range")
+          (is (> @reads bound) (str "the scan read past one slice: " @reads))
           (is (= expected (:spots @out)))
           (is (= (:pos (first expected)) (:spot @out))))))))
 

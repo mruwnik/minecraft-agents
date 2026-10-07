@@ -170,6 +170,16 @@
           (is (pos? (count (tu/walk-calls p))))
           (is (sown p xs [2] "wheat")))))))
 
+(deftest a-wide-field-is-sown-in-one-call
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [xs (range 2 14)
+              {:keys [eng p]} (start {:blocks (farmland xs [2]) :inventory (inv "wheat_seeds" 12) :floor tu/walk-floor})
+              result (await (child-outcome eng job {:box (box 2 2 13 2)} 1))]
+          (is (= {:planted 12 :skipped [] :reason :done} result))
+          (is (sown p xs [2] "wheat")))))))
+
 (deftest nothing-is-planted-outside-the-box-or-on-a-crop
   (async done
     (tu/run-async done

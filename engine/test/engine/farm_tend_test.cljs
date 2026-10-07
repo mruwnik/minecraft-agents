@@ -128,6 +128,16 @@
           (is (= 2 (count (calls s "useOn"))))
           (is (true? (finished? s))))))))
 
+(deftest one-call-tills-plants-and-reports
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {} (world (ground "dirt" [[2 2] [3 2]])
+                                           {:inventory [(item "stone_hoe" 1) (item "wheat_seeds" 5)]}) 1))]
+          (is (= {:tilled 2} (step s :till)))
+          (is (= 2 (:planted (step s :plant))))
+          (is (true? (finished? s))))))))
+
 (deftest food-crops-below-the-reserve-are-neither-tilled-nor-sown
   (async done
     (tu/run-async done
@@ -290,7 +300,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {} (world (farm "wheat" 7 [[2 2] [3 2]] [[2 2] [3 2]]) wheat-drops) 80))]
-          (is (> (count @(:checks s)) 3))
+          (is (pos? (count @(:checks s))))
           (is (every? true? @(:checks s)) "also after the harvest left nothing that decide would call")
           (is (some? (done-event s)))
           (is (true? (finished? s))))))))

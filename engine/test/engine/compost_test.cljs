@@ -73,6 +73,15 @@
           (is (= 3 (carried p "wheat_seeds")))
           (is (= 1 (count (kinds seen :compost.done)))))))))
 
+(deftest compost-is-one-call-the-whole-run
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:inventory (inv "wheat_seeds" 10) :blocks comp-block})
+              result (await (child-outcome eng job {:at at :items ["wheat_seeds"]} 1))]
+          (is (= 1 (:bone-meal result)))
+          (is (= {"wheat_seeds" 7} (:fed result))))))))
+
 (deftest compost-finds-the-nearest-composter-when-not-given
   (async done
     (tu/run-async done

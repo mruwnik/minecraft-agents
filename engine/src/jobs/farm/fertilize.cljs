@@ -6,6 +6,7 @@
             [jobs.lib.crops :as crops]
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
+            [jobs.lib.pace :as pace]
             [jobs.lib.toll-cells :as tc]))
 
 (def doc
@@ -105,18 +106,18 @@
           w (await (near/go-near! c target 3 {:tolls (tc/walk-tolls c (near/cell-of target))}))]
       (case w
         :partial :continue
-        :blocked (do (refuse!) :continue)
+        :blocked (do (refuse!) :again)
         (if-not (gate/allowed? c :fertilize.declined "fertilize" :harvest target)
-          (do (refuse!) :continue)
+          (do (refuse!) :again)
           (let [r (await (ctx/act c :useOn #js {:pos (clj->js target) :item "bone_meal" :face "up"}))]
             (if (= "used" (.-status r))
               (do (ctx/update-mem! c update :used (fnil + 0) (max 1 (or (.-consumed r) 1)))
                   (when (:grass (:args c)) (refuse!)))
               (refuse!))
-            :continue))))))
+            :again))))))
 
-(defn ^:async round
-  "One bounded step: fetch missing bone meal unless :fetch is false (a failed fetch leaves the job waiting), then
+(defn ^:async step
+  "One step: fetch missing bone meal unless :fetch is false (a failed fetch leaves the job waiting), then
   fertilize-one!."
   [c]
   (let [_ (when (and (empty? (targets c)) (not (look/looked-here? c)))
@@ -126,3 +127,9 @@
       fetched fetched
       (problem c) :continue
       :else (await (fertilize-one! c (targets c) (:used (ctx/mem c) 0))))))
+
+(defn ^:async round
+  "The whole attempt: loop the steps until the targets or the bone meal are done; :continue only while a walk or fetch
+  waits on the world."
+  [c]
+  (await (pace/steps! c (fn ^:async s [] (await (step c))))))

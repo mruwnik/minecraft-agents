@@ -4,6 +4,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.gate :as gate]
+            [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
             [jobs.farm.fertilize :as fertilize]
             [jobs.lib.crops :as crops]
@@ -290,7 +291,9 @@
     (assoc child-args :ignore-zones? true)
     child-args))
 
-(defn ^:async work [c]
+(defn ^:async work
+  "One child call, or the report when no step is left: :again after a child ended, :continue while one waits."
+  [c]
   (when-not (:todo (ctx/mem c))
     (ctx/update-mem! c assoc :todo decide/steps :report {} :till-tried #{} :tilled 0))
   (let [{:keys [call] :as p} (next-plan c)]
@@ -302,12 +305,18 @@
             outcome (await (ctx/call-child c step (:job call) (with-zone-opt-out c step (:args call))))]
         (when (#{:done :declined} outcome)
           (ctx/update-mem! c after-child step (:args call) outcome (when (= :done outcome) (ctx/child-result c step))))
-        :continue))))
+        (if (= :continue outcome) :continue :again)))))
 
-(defn ^:async round [c]
+(defn ^:async step [c]
   (if (and (:plan (:args c)) (:trouble (tend-plan/planned c)))
     :declined
     (await (work c))))
+
+(defn ^:async round
+  "The whole run: one child call after another over the six steps until the report is made; :continue only while a
+  child waits on the world."
+  [c]
+  (await (pace/steps! c (fn ^:async s [] (await (step c))))))
 
 (def bad-lists
   "Args checked by jobs.lib.args."

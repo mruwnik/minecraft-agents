@@ -90,6 +90,15 @@
           (is (= 4 (count (calls p "useOn"))))
           (is (= 1 (count (kinds seen :till.done)))))))))
 
+(deftest till-is-one-call-the-whole-box
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory hoe :blocks four})
+              result (await (child-outcome eng job box 1))]
+          (is (= {:tilled 4 :skipped {}} result))
+          (is (= 4 (count (calls p "useOn")))))))))
+
 (deftest till-radius-mode-tills-the-square
   (async done
     (tu/run-async done
@@ -190,11 +199,10 @@
                                  r))}
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
           (core/submit! eng '(recording-parent) {})
-          (await (core/tick! eng))
           (.hold world "useOn")
           (let [running (core/tick! eng)]
             (await (js/Promise. (fn [resolve] (js/setTimeout resolve 20))))
-            (is (= 2 (count (calls p "useOn"))) "one tilled, the second held")
+            (is (= 1 (count (calls p "useOn"))) "the first use held")
             (takeover/take! eng {:who "claude" :why "cut"})
             (await running))
           (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})

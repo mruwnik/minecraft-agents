@@ -4,6 +4,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
+            [jobs.lib.pace :as pace]
             [jobs.lib.toll-cells :as tc]))
 
 (def doc
@@ -86,12 +87,12 @@
     :done))
 
 (defn strike!
-  "Count a failure; :continue until the third in a row, then warn and :done."
+  "Count a failure; :again until the third in a row, then warn and :done."
   [c level]
   (let [strikes (inc (:strikes (ctx/mem c) 0))]
     (ctx/update-mem! c assoc :strikes strikes)
     (if (< strikes 3)
-      :continue
+      :again
       (do (ctx/emit! c :compost.gave-up :warn {:text "the composter keeps refusing, giving up"})
           (finish! c {:level level :reason :gave-up})))))
 
@@ -103,8 +104,8 @@
        (filter #(<= (u/dist at (u/pos-of (.-pos %))) 3))
        first))
 
-(defn ^:async round
-  "One bounded step: collect bone meal lying by the composter, finish when enough
+(defn ^:async step
+  "One step: collect bone meal lying by the composter, finish when enough
   is taken, else walk up, empty a full composter, wait out level 7, or feed it
   the first feedable item. Three failures in a row give up."
   [c]
@@ -125,7 +126,7 @@
           (cond
             meal
             (let [r (await (ctx/act c :collect #js {:id (.-id meal)}))]
-              (if (= "collected" (.-status r)) :continue (strike! c level)))
+              (if (= "collected" (.-status r)) :again (strike! c level)))
 
             (>= taken times)
             (let [fed (:fed mem {})]
@@ -146,7 +147,7 @@
                   (let [r (await (ctx/act c :useOn #js {:pos (clj->js pos) :face "up"}))]
                     (if (= "used" (.-status r))
                       (do (ctx/update-mem! c #(-> % (update :taken (fnil inc 0)) (assoc :strikes 0)))
-                          :continue)
+                          :again)
                       (strike! c level)))
 
                   (= 7 level)
@@ -156,7 +157,7 @@
                       (do (ctx/update-mem! c assoc :waits 0)
                           (strike! c level))
                       (do (ctx/update-mem! c assoc :waits waits)
-                          :continue)))
+                          :again)))
 
                   (empty? todo)
                   (do (ctx/emit! c :compost.done :info {:fed (:fed mem {}) :bone-meal taken :reason :nothing-to-feed
@@ -169,5 +170,10 @@
                         consumed (or (.-consumed r) 0)]
                     (if (pos? consumed)
                       (do (ctx/update-mem! c #(-> % (update-in [:fed name] (fnil + 0) consumed) (assoc :strikes 0)))
-                          :continue)
+                          :again)
                       (strike! c level))))))))))))
+
+(defn ^:async round
+  "The whole attempt: loop the steps until one ends; :continue only while a walk waits on the world."
+  [c]
+  (await (pace/steps! c (fn ^:async s [] (await (step c))))))

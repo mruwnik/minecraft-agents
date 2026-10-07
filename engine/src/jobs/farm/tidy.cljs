@@ -6,6 +6,7 @@
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
+            [jobs.lib.pace :as pace]
             [jobs.lib.toll-cells :as tc]
             [plan.shape :as shape]
             [jobs.lib.world :as known]))
@@ -251,7 +252,7 @@
       (ctx/update-mem! c count-fail stray :unreachable give-up))
     (when (and (= :there w) (not (in-reach? c pos)))
       (ctx/update-mem! c count-fail stray :unreachable give-up))
-    :continue))
+    (if (= :partial w) :continue :again)))
 
 (defn split-by-decision
   "{:ready [strays] :deferred [[stray reasons]]} of the strays; a refused one is booked on the way, a stray whose
@@ -284,7 +285,7 @@
                        (when (seq left)
                          (await (dig-one! c (first left)))
                          (recur (rest left))))
-                     :continue)
+                     :again)
       (seq ready) (await (walk-to! c (nearest c ready)))
       (seq deferred) (let [stray (nearest c (map first deferred))
                            reasons (second (first (filter #(= (:pos stray) (:pos (first %))) deferred)))]
@@ -294,9 +295,9 @@
                                                     (if (>= n (:give-up (:args c)))
                                                       (refuse m stray {:reason :hazard :hazards reasons})
                                                       (assoc-in m [:fails (:pos stray)] n)))))
-                             :continue)
+                             :again)
                          (await (walk-to! c stray))))
-      :else :continue)))
+      :else :again)))
 
 (defn field-radius
   "How far from the body drops can lie: the cells' extent plus 4, at most 48."
@@ -310,7 +311,8 @@
   (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops {:radius (field-radius cells)}))]
     (when (= :done r)
       (ctx/update-mem! c #(-> % (dissoc :collect) (update :collected (fnil + 0) (:collected (ctx/child-result c :collect) 0)))))
-    :continue))
+    (when (= :declined r) (ctx/update-mem! c dissoc :collect))
+    (if (= :continue r) :continue :again)))
 
 (defn finish! [c found]
   (let [m (ctx/mem c)
@@ -333,7 +335,7 @@
     (ctx/result! c result)
     :done))
 
-(defn ^:async round [c]
+(defn ^:async step [c]
   (let [{:keys [answer trouble]} (planned c)]
     (if trouble
       :declined
@@ -346,3 +348,9 @@
           (seq todo) (await (work! c todo))
           (:collect m) (await (collect! c cells))
           :else (finish! c found))))))
+
+(defn ^:async round
+  "The whole attempt: loop the steps (dig, walk, sweep the drops) until no stray is left; :continue only while a walk or
+  the sweep waits on the world."
+  [c]
+  (await (pace/steps! c (fn ^:async s [] (await (step c))))))

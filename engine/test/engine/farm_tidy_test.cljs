@@ -5,6 +5,7 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.registry :as registry]
+            [engine.takeover :as takeover]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as world]
@@ -366,15 +367,14 @@
           (is (= 1 digs2))
           (is (= [] (:refused result2))))))))
 
-(deftest a-refused-hazard-is-tried-three-times-before-it-is-given-up
+(deftest a-refused-hazard-is-given-up-within-one-call
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [seen-fails (atom [])
-              {:keys [eng]} (start (hazard-world [3 64 2 "lava"]) {"h" hazard-plan})
-              _ (core/submit! eng (list job {:plan "h"}) {})]
-          (dotimes [_ 8] (swap! clock + 700) (await (core/tick! eng)) (swap! seen-fails conj (:fails (core/job-memory eng "j1"))))
-          (is (some #(= {[2 64 2] 2} %) @seen-fails)))))))
+        (let [{:keys [eng p]} (start (hazard-world [3 64 2 "lava"]) {"h" hazard-plan})
+              result (await (outcome eng {:plan "h"} 1))]
+          (is (zero? (count (calls p "dig"))))
+          (is (= [:hazard] (map :reason (:refused result)))))))))
 
 (deftest the-plans-own-water-is-never-dug
   (async done
@@ -435,19 +435,22 @@
                                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})
                                          :world (world/of-data {"field" field-plan} {} [])})}))
               a (mk)]
+          (.override (.-world p) "dig"
+                     (fn ^:async f [token args impl]
+                       (let [r (await (impl token args))]
+                         (when (= 2 (count (calls p "dig")))
+                           (takeover/take! (:eng a) {:who "claude" :why "cut"}))
+                         r)))
           (core/submit! (:eng a) (list job {:plan "field"}) {})
-          (loop [i 0]
-            (when (and (< i 30) (< (count (calls p "dig")) 2))
-              (swap! clock + 700)
-              (await (core/tick! (:eng a)))
-              (recur (inc i))))
-          (is (pos? (count (calls p "dig"))))
+          (swap! clock + 700)
+          (await (core/tick! (:eng a)))
+          (is (= 2 (count (calls p "dig"))) "cut after the second dig")
           (let [b (mk)]
             (await (run-until-empty (:eng b) 200))
             (is (= (set strays) (dug p)))
             (is (= (count strays) (count (calls p "dig"))) "no cell was dug twice")
             (is (= 1 (count (of-kind (:seen b) :tidy.done))))
-            (is (= 5 (:dug (:data (first (of-kind (:seen b) :tidy.done))))) "the count keeps what the first run dug")))))))
+            (is (= 4 (:dug (:data (first (of-kind (:seen b) :tidy.done))))) "the count keeps what the first run booked (the dig the cut came with was never read)")))))))
 
 (deftest the-opt-out-needs-no-zone-list
   (async done
