@@ -9,7 +9,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.util :as u]
             [engine.memory :as mem]
-            [jobs.lib.breath :as breath]))
+            [jobs.lib.land :as land]))
 
 (def hold-kind :vehicle-hold)
 (def hold-policy {:cap 8 :ttl (* 24 60 60 1000)})
@@ -47,16 +47,10 @@
   (let [deg (/ (* 180 (js/Math.atan2 (- (- (:x to) (:x from))) (- (:z to) (:z from)))) js/Math.PI)]
     (mod (+ deg 360) 360)))
 
-(def unsafe-below #{"water" "lava" "fire" "soul_fire" "magma_block" "campfire" "soul_campfire"})
-
 (defn dry-cell?
   "A feet cell to step off onto: feet and head air, a block below that is not air or a hazard. Unloaded is not."
   [p cell]
-  (let [feet (u/block-name p cell)
-        head (u/block-name p (update cell :y inc))
-        below (u/block-name p (update cell :y dec))]
-    (boolean (and feet head below (breath/air? feet) (breath/air? head)
-                  (not (breath/air? below)) (not (contains? unsafe-below below))))))
+  (land/land-cell? #(u/block-name p %) cell))
 
 (defn centre [{:keys [x y z]}] {:x (+ x 0.5) :y y :z (+ z 0.5)})
 

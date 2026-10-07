@@ -2,6 +2,7 @@
   "Where a boat can land the body, read only from what the body has seen: a stand cell (feet and head air over a solid, non-fluid,
   non-hazard block) with water at the level of that block beside it and air over the water."
   (:require [jobs.lib.blocks :as b]
+            [jobs.lib.land :as land]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
             [jobs.lib.vehicle :as vehicle]))
@@ -12,11 +13,8 @@
 
 (defn standable?
   "Whether the cell is a seen stand cell: feet and head air, a seen block below that is solid and no hazard."
-  [p {:keys [x y z]}]
-  (let [below (u/seen-name p {:x x :y (dec y) :z z})]
-    (boolean (and (seen-air? p {:x x :y y :z z}) (seen-air? p {:x x :y (inc y) :z z})
-                  below (not (b/air below)) (not (b/fluids below)) (not (b/clearable below))
-                  (not (contains? vehicle/unsafe-below below))))))
+  [p cell]
+  (land/land-cell? #(u/seen-name p %) cell))
 
 (defn water-beside
   "A seen water cell with seen air over it level with the support of land cell (beside it), or nil."

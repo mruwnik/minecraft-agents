@@ -81,20 +81,22 @@
             boat-id (:id (vehicle/vehicle-of (.self p)))]
         (if (empty? spots)
           (result/stop! c :no-shore "no seen shore to land on")
-          (loop [[{:keys [land water]} & more] spots last-fail nil]
+          (loop [[{:keys [land water]} & more] spots fails []]
             (if (nil? land)
-              (result/stop! c (if (= :blocked (:reason last-fail)) :blocked :drive-failed)
-                            (str "could not steer to any of " (count spots) " shore spots")
-                            :cause (some->> last-fail (result/cause-of :drive)))
+              (let [other (some #(when (not= :blocked (:reason %)) %) fails)
+                    shown (or other (peek fails))]
+                (result/stop! c (if other :drive-failed :blocked)
+                              (str "could not steer to any of " (count spots) " shore spots")
+                              :cause (some->> shown (result/cause-of :drive))))
               (let [d (await (drive-to! c water))]
                 (if (= :continue d)
                   :continue
                   (let [{:keys [r res]} d]
                     (if (not= :done r)
-                      (recur more {:reason :drive-failed})
+                      (recur more (conj fails (or res {})))
                       (cond
                         (= :not-aboard (:reason res)) (result/stop! c :not-aboard "the body is not in a boat")
-                        (= :stopped (:status res)) (recur more res)
+                        (= :stopped (:status res)) (recur more (conj fails res))
                         :else
                         (let [lv (await (ctx/call-child c :leave 'jobs.movement.leave-vehicle {:toward (vehicle/centre land)}))
                               lres (ctx/child-result c :leave)]
@@ -105,8 +107,8 @@
                             (= :in-water (:landed lres))
                             (result/stop! c :not-landed "the dismount left the body in water" :land land)
                             :else
-                            (do (ctx/emit! c :boat.landed :info {:land land :boat boat-id :recovered false :text "got off the boat onto the shore"})
-                                (if recover
-                                  (do (ctx/remember! c landed-kind {:job (:root c) :land land :boat boat-id} landed-policy)
-                                      (await (recover! c land boat-id)))
+                            (if recover
+                              (do (ctx/remember! c landed-kind {:job (:root c) :land land :boat boat-id} landed-policy)
+                                  (await (recover! c land boat-id)))
+                              (do (ctx/emit! c :boat.landed :info {:land land :boat boat-id :recovered false :text "got off the boat onto the shore"})
                                   (result/finish! c {:land land :boat boat-id :recovered false})))))))))))))))))
