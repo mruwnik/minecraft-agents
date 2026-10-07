@@ -76,6 +76,17 @@
               r (await (run-door (assoc wall :inventory [{:name "wooden_pickaxe" :count 1}]) stub))]
           (is (= [:refills 8] [(:reason r) (count (:dug r))]) "a cell is dug max-cell-digs times, not max-cell-digs calls"))))))
 
+(deftest a-dig-that-fails-keeps-its-primitive-status-in-dig-failed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [stub (fn ^:async failing-dig [c]
+                     (ctx/result! c {:dug false :reason :failed :primitive "timeout" :status :stopped})
+                     :done)
+              r (await (run-door (assoc wall :inventory [{:name "wooden_pickaxe" :count 1}]) stub))]
+          (is (= [:stopped :dig-failed] [(:status r) (:reason r)]) (pr-str r))
+          (is (= {:reason :failed :primitive "timeout"} (:dig r)) (pr-str r)))))))
+
 (deftest a-wall-with-a-floor-beyond-is-dug-and-walked-through
   (async done
     (tu/run-async done

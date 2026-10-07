@@ -98,7 +98,7 @@
                            (when-let [tag (:note (:args c))] (escape/note-hole! c tag cell block))
                            :again)
             (= :already-clear (:reason res)) (do (done!) :again)
-            :else (finish! c :dig-failed {:cell cell :block block :dig (select-keys res [:reason :status])})))))))
+            :else (finish! c :dig-failed {:cell cell :block block :dig (select-keys res [:reason :primitive])})))))))
 
 (defn ^:async step-through! [c through]
   (let [r (await (stair/walk-into! c :walk through))]
