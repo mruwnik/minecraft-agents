@@ -1,7 +1,7 @@
 (ns jobs.items.enchant
   (:require [engine.ctx :as ctx]
             [jobs.lib.util :as u]
-            [jobs.lib.near :as near]
+            [jobs.lib.pace :as pace]
             [jobs.lib.look :as look]))
 
 (def doc
@@ -19,6 +19,7 @@
   not-enchantable, no-lapis, too-few-levels, no-offer (the :slot has none), no-offer-within-cost,
   inventory-full, enchant-failed (an answer not understood after the call), window (did not open, three times),
   window-stalled, not-confirmed (the item came back unenchanted), offer-changed (three times), unreachable.
+  One call is the whole enchant (it yields :continue only while go-to waits on the world).
   A failed enchant is never repeated, as it may have taken the price. The attempt is written to memory before the
   call. After a restart that finds the item enchanted, the job reports it (:resumed true, enchants unknown).")
 
@@ -80,11 +81,11 @@
   (finish! c (assoc extra :reason reason)))
 
 (defn fail-up!
-  "Count a failed round in a row: :continue until u/max-failures, then give up with the reason."
+  "Count a failed attempt in a row: :again until u/max-failures, then give up with the reason."
   [c reason]
   (if (u/count-fail! c)
     (give-up! c reason {})
-    :continue))
+    :again))
 
 (defn find-table
   "The position of the nearest enchanting table the body has seen within radius, or nil."
@@ -161,14 +162,23 @@
       "unreachable" (fail-up! c "unreachable")
       (fail-up! c "window"))))
 
-(defn ^:async round
-  "One bounded step: find and reach the table, then read the offers and enchant."
+(defn ^:async step!
+  "One piece: find and reach the table (a go-to child), then read the offers and enchant. :again, :continue (go-to
+  waits) or :done."
   [c]
   (let [{:keys [table radius]} (:args c)
         pos (or table (find-table (:primitives c) radius))]
     (if-not pos
       (give-up! c "no-table" {})
-      (case (await (near/walk-near! c pos reach))
-        :partial :continue
-        :blocked (fail-up! c "unreachable")
-        (await (consider! c pos))))))
+      (let [r (if (u/within? (u/self-pos c) pos reach)
+                :done
+                (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos pos :range reach :escalate false :warn false :retry false})))]
+        (cond
+          (= :continue r) :continue
+          (not (or (u/within? (u/self-pos c) pos reach) (:arrived (ctx/child-result c :walk)))) (fail-up! c "unreachable")
+          :else (await (consider! c pos)))))))
+
+(defn ^:async round
+  "The whole enchant in one call: step! again until it is done or stopped."
+  [c]
+  (await (pace/steps! c (fn ^:async enchant-step [] (await (step! c))))))
