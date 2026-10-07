@@ -42,6 +42,8 @@
        Every cell must be solid, harvestable with what is carried, with no fluid beside and solid under it.
      - side pocket: with no block to seal with, dig a pocket beside the body (feet and head cell, solid on every other side,
        harvestable with what is carried), step in and seal the way in with the dug blocks (the seal option again).
+     - The pit and the pocket are dropped when a dig shows fluid or a cave (a seen open cell) in their shell. Lava is first
+       filled with a carried block (:on-lava :seal, the default; :stop leaves it).
      - last of all, fight with the best weapon or tool (pickaxe, shovel, hoe) or the fist.
      Order: fight if it wins, then seal, pillar (not against a ranged mob), back off, pit, pocket, fight.
      Against a creeper back off comes first.
@@ -68,6 +70,7 @@
    :reserve {:doc "health a cornered fight must be expected to leave" :type :number :min 0 :default cost/default-reserve}
    :blocks {:doc "names of the blocks a cornered body may seal itself in with" :default lb/building-blocks}
    :max-places {:doc "seal placements per step" :type :int :min 1 :default 4}
+   :on-lava {:doc ":seal: lava a dig lays open is filled with a carried block; :stop: the pocket or pit is dropped and the lava left" :type :enum :values [:seal :stop] :default :seal}
    :lost-s {:doc "a mob out of line of sight this many seconds has stopped chasing" :type :number :min 0 :default 4}
    :quiet-s {:doc "a hidden body keeps its refuge this many seconds after the last danger" :type :number :min 0 :default 30}
    :no-gain-steps {:doc "flight steps without a new best gap to the nearest chaser before the cornered options are tried" :type :int :min 1 :default 20}})

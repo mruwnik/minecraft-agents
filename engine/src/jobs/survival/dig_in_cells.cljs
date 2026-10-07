@@ -5,6 +5,7 @@
             [jobs.lib.click :as click]
             [jobs.lib.tidy :as tidy]
             [engine.ctx :as ctx]
+            [jobs.lib.access.rules :as rules]
             [jobs.lib.shelter :as sh]
             [jobs.lib.solid :as solid]
             [jobs.lib.tools :as tools]
@@ -29,6 +30,27 @@
           (let [cell {:x (+ x dx) :y y :z (+ z dz)}]
             (when (wet? p cell) (u/seen-name p cell))))
         sides))
+
+(def around-deltas "The cell itself and its six neighbours." (cons [0 0 0] rules/neighbour-deltas))
+
+(def beside-deltas "The cell itself and its four side neighbours." (cons [0 0 0] (map (fn [[dx dz]] [dx 0 dz]) sides)))
+
+(defn lava-around
+  "The seen lava cells among cell shifted by deltas (around-deltas, beside-deltas)."
+  [p cell deltas]
+  (filter #(= "lava" (u/seen-name p %))
+          (for [[dx dy dz] deltas] (assoc cell :x (+ (:x cell) dx) :y (+ (:y cell) dy) :z (+ (:z cell) dz)))))
+
+(defn ^:async seal-lava!
+  "Fill each of the lava cells with a carried block (jobs.lib.blocks/place-cell!, the place child): true when every one
+  is filled (or none is given), false when a block is missing or a placement fails."
+  [c blocks lavas]
+  (loop [[lava & more] lavas]
+    (cond
+      (nil? lava) true
+      (nil? (lb/pick c blocks)) false
+      (not (#{:placed :already} (await (lb/place-cell! c lava (lb/pick c blocks) {:ignore-zones? true})))) false
+      :else (recur more))))
 
 (def mob-proof-shapes
   "Blocks that stop a mob although their collision shape does not fill the cell: fences (1.5 high), walls, panes,

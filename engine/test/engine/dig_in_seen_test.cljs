@@ -137,3 +137,37 @@
               s (await (tick-out! (setup p 'jobs.survival.dig-in {})))]
           (is (= 64 (feet-y p)) "the body stays over the flooded hole")
           (is (re-find #"water" (str (:text (first (failed s)))))))))))
+
+(defn ^:async run-lava-in-hole! [args]
+  (let [p (hover-over-digs! (await (see-surface! (sensing {:blocks ground}))))
+        flowed (atom false)
+        _ (.override (.-world p) "dig"
+                     (fn ^:async f [token a impl]
+                       (let [pos (.-pos (.self p))
+                             at [(.-x pos) (.-y pos) (.-z pos)]
+                             r (await (impl token a))]
+                         (fake/swap-self! p assoc :pos at)
+                         (when (and (= 63 (.-y (.-pos a))) (not @flowed))
+                           (reset! flowed true)
+                           (fake/set-block! p [0 63 0] "lava"))
+                         r)))
+        s (await (tick-out! (setup p 'jobs.survival.dig-in args)))]
+    (assoc s :p p)))
+
+(deftest lava-laid-open-in-the-hole-is-sealed-with-a-carried-block-and-the-pit-goes-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p] :as s} (await (run-lava-in-hole! {}))]
+          (is (some #{{:x 0 :y 63 :z 0}} (map :pos (calls p "place"))) "the lava in the hole is filled")
+          (is (= 62 (feet-y p)) "the hole is dug again and the body went on down")
+          (is (empty? (failed s))))))))
+
+(deftest lava-laid-open-in-the-hole-stops-the-pit-when-asked
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p] :as s} (await (run-lava-in-hole! {:on-lava :stop}))]
+          (is (not-any? #{{:x 0 :y 63 :z 0}} (map :pos (calls p "place"))) "nothing placed into the lava")
+          (is (= 64 (feet-y p)))
+          (is (re-find #"lava" (str (:text (first (failed s)))))))))))

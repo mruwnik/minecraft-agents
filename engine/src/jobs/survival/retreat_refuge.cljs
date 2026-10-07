@@ -225,6 +225,31 @@
   (boolean (or (dig-cells/wet? p cell) (dig-cells/lateral-fluid p cell)
                (dig-cells/wet? p (update cell :y inc)) (dig-cells/wet? p (update cell :y dec)))))
 
+(defn open-shell
+  "The first cell beside, over or under the dug cell, outside keep (the refuge's own cells and the way in), that the body
+  sees not solid: the dig laid open a cave or a gap."
+  [p cell keep]
+  (first (for [[dx dy dz] rules/neighbour-deltas
+               :let [n (assoc cell :x (+ (:x cell) dx) :y (+ (:y cell) dy) :z (+ (:z cell) dz))]
+               :when (and (not (keep n)) (some-> (u/seen-name p n) (as-> nm (not (solid/solid? nm)))))]
+           n)))
+
+(defn ^:async lays-open?
+  "After a dig of the last of cells (those dug so far): whether what the digs laid open rules the refuge out, a fluid or a
+  seen open cell outside keep. Lava is first filled with a carried block (:on-lava :seal, the default); any fluid still
+  shown stops it."
+  [c cells keep]
+  (let [p (:primitives c)
+        {:keys [on-lava blocks]} (:args c)]
+    (when (= :seal on-lava)
+      (loop [[cell & more] cells]
+        (when cell
+          (when-let [lavas (seq (dig-cells/lava-around p cell dig-cells/around-deltas))]
+            (await (dig-cells/seal-lava! c blocks lavas))
+            (await (look/look-at! c [(:x cell) (:y cell) (:z cell)])))
+          (recur more))))
+    (boolean (some #(or (fluid-shown? p %) (open-shell p % keep)) cells))))
+
 (defn ^:async pocket!
   "Dig a side pocket (feet and head cell beside the body, closed on every other side), collecting the blocks, and step
   into it: :again, so the next step seals the way in with them. nil when no side fits or a dig fails."
@@ -248,7 +273,7 @@
               (await (look/see-round! c [(:x cell) (:y cell) (:z cell)]))
               (await (look/wait-settled! c [[(:x cell) (:y cell) (:z cell)]]))
               (await (dig-cells/collect-drops! c (:blocks (:args c)) (.-drops r)))
-              (when-not (fluid-shown? p cell) (recur more)))))))))
+              (when-not (await (lays-open? c (take (- (count cells) (count more)) cells) (into (set cells) [feet (update feet :y inc)]))) (recur more)))))))))
 
 ;; ------------------------------------------------------------------ up a pillar or down a pit
 
@@ -328,6 +353,7 @@
         blocks (:blocks (:args c))
         {:keys [x y z]} (sh/feet p)
         below {:x x :y (dec y) :z z}
+        shaft (for [yy (range (:y below) (:y roof))] {:x x :y yy :z z})
         _ (when (and (look/unknown? p [x (dec y) z]) (> y target-y)) (await (look/look-at! c [x (dec y) z])))]
     (cond
       (not (and (= x (:x roof)) (= z (:z roof)))) (await (abandon-refuge! c))
@@ -339,9 +365,11 @@
           (do (ctx/update-mem! c assoc :dug-at (ctx/now c))
               (await (look/see-round! c [x (dec y) z]))
               (await (look/wait-settled! c [[x (dec y) z]]))
-              (if (or (fluid-shown? p below) (not (solid/solid? (u/block-name-or p {:x x :y (- y 2) :z z} "stone"))))
+              (await (dig-cells/collect-drops! c blocks (.-drops r)))
+              (if (or (await (lays-open? c shaft (conj (set shaft) (select-keys roof [:x :y :z]))))
+                      (not (solid/solid? (u/block-name-or p {:x x :y (- y 2) :z z} "stone"))))
                 (await (abandon-refuge! c))
-                (do (await (dig-cells/collect-drops! c blocks (.-drops r))) :again)))
+                :again))
           (await (abandon-refuge! c))))
       :else
       ;; raw moveTo kept: a drop into the body's own pit, as dig-in's descent; the planner has no standable goal there.

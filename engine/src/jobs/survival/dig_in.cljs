@@ -66,6 +66,7 @@
   {:roof-height {:doc "a solid block within this many blocks above counts as a roof" :type :int :min 0 :default sh/default-roof-height}
    :blocks {:doc "names of the blocks it may place" :default shelter-blocks}
    :max-places {:doc "placements per step" :type :int :min 1 :default 4}
+   :on-lava {:doc ":seal: lava the dig lays open in or beside the hole is filled with a carried block; :stop: the dig is given up (:fluid-adjacent)" :type :enum :values [:seal :stop] :default :seal}
    :enclose {:doc "wall in under a roof already overhead: walls only, never a pit; stops :no-blocks when too few blocks are carried" :type :bool :default false}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :type :bool :default false}})
 
@@ -149,6 +150,10 @@
         under-cell [x (- y 2) z]
         hole {:x x :y (dec y) :z z}
         _ (when (look/unknown? p under-cell) (await (look/look-at! c under-cell)))
+        lavas (when (= :seal (:on-lava (:args c))) (seq (dig-cells/lava-around p hole dig-cells/beside-deltas)))
+        _ (when lavas
+            (await (dig-cells/seal-lava! c (:blocks (:args c)) lavas))
+            (await (look/look-at! c [x (dec y) z])))
         under (u/block-name-or p {:x x :y (- y 2) :z z} "stone")]
     (cond
       (not (solid/solid? under))
