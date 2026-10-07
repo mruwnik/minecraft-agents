@@ -3,6 +3,7 @@
   holes it dug, put them back once the walk is on past them."
   (:require [engine.ctx :as ctx]
             [jobs.lib.blocks :as b]
+            [jobs.lib.dig-look :as dig-look]
             [jobs.lib.escape :as escape]
             [jobs.lib.reach :as reach]
             [jobs.lib.shelter :as sh]
@@ -54,18 +55,20 @@
     (fn [cell block] (contains? placed [(vec cell) block]))))
 
 (defn note-placed! [c cell]
-  (when-let [block (u/block-name (:primitives c) (zipmap [:x :y :z] cell))]
+  (when-let [block (u/seen-name (:primitives c) (zipmap [:x :y :z] cell))]
     (ctx/remember! c :escalation-placed {:cell (vec cell) :block block} placed-policy)))
 
 (defn planned-cells
-  "The solid cells escalation e from feet would cut, [{:cell :block}]: the stair's cuts or clear-path's door."
+  "The solid cells escalation e from feet would cut, [{:cell :block}]: the stair's cuts or clear-path's door, those
+  the body has sensed (the child notes what it digs of the rest)."
   [p {:keys [step heading steps]} feet]
   (let [block-at (escape/block-at-of p)
+        unseen? (escape/unseen-of p)
         cells (case step
                 :stair (escape/stair-cuts feet (escape/heading-dirs heading) steps)
-                :clear-path (:cells (escape/door block-at feet (escape/heading-dirs heading) (escape/max-door)))
+                :clear-path (:cells (escape/door block-at unseen? feet (escape/heading-dirs heading) (escape/max-door)))
                 nil)]
-    (vec (for [cell cells :let [n (block-at cell)] :when (escape/solid? n)] {:cell cell :block n}))))
+    (vec (for [cell cells :let [n (block-at cell)] :when (and (escape/solid? n) (not (unseen? cell)))] {:cell cell :block n}))))
 
 (defn own-holes
   "The ledger entries (jobs.lib.tidy :tidy, body memory) of cells this go-to's escalations dug, lowest first."
@@ -88,6 +91,23 @@
   (doseq [{:keys [cell block]} (distinct dug)]
     (escape/note-hole! c (hole-tag c) cell block)))
 
+(def look-levels
+  "Levels from the feet up whose cells beside the body escalation looks at before it chooses (pit-depth, headroom)."
+  4)
+
+(defn ^:async look-round!
+  "Before choosing: look at each cell beside the body (feet up look-levels) and over its head that it has not sensed,
+  so the choice reads walls it sees; a look shows the cells round the one looked at too. Cells inside rock stay
+  unknown (escape reads them as rock)."
+  [c feet]
+  (let [p (:primitives c)
+        cells (cons (escape/up feet 2)
+                    (for [lvl (range look-levels) d escape/cardinals] (escape/up (escape/ahead feet d 1) lvl)))]
+    (loop [todo cells]
+      (when-let [cell (first todo)]
+        (when (dig-look/unknown? p cell) (await (dig-look/look-at! c cell)))
+        (recur (rest todo))))))
+
 (defn ^:async escalate!
   "Start the next escalation for the give-up kept in memory (:give-up), or give up with it when there is none (or
   with failed, the detail of the escalation that just failed, when there is none left after it)."
@@ -95,6 +115,7 @@
   (let [{:keys [tries status result]} (:give-up (ctx/mem c))
         n (inc (:escalations (ctx/mem c) 0))
         feet (end/feet-cell c)
+        _ (when (<= n max-escalations) (await (look-round! c feet)))
         goal (mapv #(js/Math.floor (% pos)) [:x :y :z])
         opts {:own? (own-placed-fn c) :skip (:skipped-steps (ctx/mem c) #{})}
         e (escape/choose (:primitives c) feet goal (may-dig-fn c) opts)
@@ -200,6 +221,12 @@
     (ctx/update-mem! c #(-> % (dissoc :restore-now :restore-seen :restored :skipped :changed :best)
                             (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {})))))
 
+(defn changed?
+  "Whether hole cell is seen filled (not air); a cell the body does not know is not."
+  [p cell]
+  (let [n (u/seen-name p (zipmap [:x :y :z] cell))]
+    (boolean (and n (not (b/air n))))))
+
 (defn deep-below?
   "Whether cell lies more than 2 below the body's feet: a place walk (range 3) has to go down into the shaft for it."
   [c [_ y _]]
@@ -212,7 +239,7 @@
   [c {:keys [cell]}]
   (let [p (:primitives c)]
     (cond
-      (not (b/air (u/block-name p (zipmap [:x :y :z] cell)))) :changed
+      (changed? p cell) :changed
       (tidy/in-body? p cell) :occupied
       (and (not (reach/enclosed? p)) (reach/enclosed? p #{(vec cell)})) :needed
       (and (not (b/in-reach? c cell)) (deep-below? c cell)) :away)))

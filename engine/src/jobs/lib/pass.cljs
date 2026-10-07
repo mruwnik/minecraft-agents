@@ -22,6 +22,7 @@
             [jobs.lib.click :as click]
             [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
+            [jobs.lib.dig-look :as dig-look]
             [jobs.lib.util :as u]
             [engine.memory :as mem]
             [jobs.lib.walk :as walk]
@@ -92,7 +93,17 @@
 
 ;; ---------------------------------------------------------------- the body's side
 
-(defn block-at [c {:keys [x y z]}] (u/block-at (:primitives c) {:x x :y y :z z}))
+(defn block-at
+  "The block at cell as the body sees or remembers it (JS), nil when unloaded or never seen."
+  [c {:keys [x y z]}]
+  (u/seen-block (:primitives c) {:x x :y y :z z}))
+
+(defn ^:async seen-at!
+  "block-at, after a look at cell when the body has not seen it (a door behind the head)."
+  [c {:keys [x y z] :as cell}]
+  (when (dig-look/unknown? (:primitives c) [x y z])
+    (await (dig-look/look-at! c [x y z])))
+  (block-at c cell))
 
 (defn self-name [c] (.-username (.self (:primitives c))))
 
@@ -106,7 +117,7 @@
   with shut? saying whether the walker will shut it again), {:result :was-open}, or {:result :stuck}: not a block a hand
   opens, or it did not open."
   [c cell shut?]
-  (let [b (block-at c cell)
+  (let [b (await (seen-at! c cell))
         name (some-> b .-name)
         props (click/props-of b)]
     (cond

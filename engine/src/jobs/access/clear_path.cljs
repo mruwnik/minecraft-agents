@@ -1,6 +1,7 @@
 (ns jobs.access.clear-path
   (:require [engine.ctx :as ctx]
             [jobs.lib.blocks :as b]
+            [jobs.lib.dig-look :as dig-look]
             [jobs.access.stair :as stair]
             [jobs.lib.escape :as escape]
             [jobs.lib.pace :as pace]
@@ -9,7 +10,8 @@
 (def doc
   "Dig a door 1 wide and 2 high through the wall straight ahead along :heading, then step through it.
   - The wall is at most :max-thick blocks thick, starts right in front of the body, and has a floor under every
-    row and room for the body beyond it (jobs.lib.escape/door).
+    row and room for the body beyond it (jobs.lib.escape/door). A cell it has not seen is rock; a far side it cannot
+    see is guessed, and once the cells before it are dug it plans on from there with what it sees.
   - Never digs a door, gate, trapdoor, bed, container, sign or an unbreakable block.
   - Each cell is a jobs.blocks.dig child (zones, claims, hazards and tools are its rules). It picks up the drop
     (:collect) when there is room for it, so the block can be put back; with no room it digs on and leaves it.
@@ -56,8 +58,8 @@
         p (:primitives c)]
     (if-not (and dir (pos-int? max-thick))
       (finish! c :bad-args {:why "needs :heading (:north :east :south :west) and :max-thick > 0"})
-      (if-let [{:keys [cells through]} (escape/door (escape/block-at-of p) (stair/feet-of c) dir max-thick)]
-        (do (ctx/update-mem! c assoc :cells cells :through through :dug [])
+      (if-let [{:keys [cells through unseen]} (escape/door (escape/block-at-of p) (escape/unseen-of p) (stair/feet-of c) dir max-thick)]
+        (do (ctx/update-mem! c assoc :cells cells :through through :unseen unseen :from (stair/feet-of c) :dug [])
             :again)
         (finish! c :no-door {:why (str "no wall at most " max-thick " thick with a floor beyond, "
                                        (name (:heading (:args c))) " of " (pr-str (stair/feet-of c)))})))))
@@ -107,21 +109,49 @@
       (and (:arrived r) (= through (stair/feet-of c))) (finish! c :done {})
       :else (finish! c :step-failed {:cell through :walk (select-keys r [:status :reason :why :arrived])}))))
 
-(defn ^:async next!
-  "One piece of the door: plan it, dig a cell or step through. :again, :continue (a child waits) or :done."
+(defn ^:async replan!
+  "The far side was a guess (:unseen) and the cells before it are dug: look at that row's unseen cells (memory
+  :looked-at), then plan on from it with what the body sees (escape/door-from); a row still unseen is taken as
+  guessed. :again, or :done (:no-door)."
   [c]
-  (let [{:keys [cells through]} (ctx/mem c)
+  (let [{:keys [through from]} (ctx/mem c)
+        dir (headings (:heading (:args c)))
+        p (:primitives c)
+        k (+ (js/Math.abs (- (first through) (first from))) (js/Math.abs (- (nth through 2) (nth from 2))))]
+    (if (not= through (:looked-at (ctx/mem c)))
+      (do (ctx/update-mem! c assoc :looked-at through)
+          (loop [cells [(escape/up through 1) through (escape/up through -1)]]
+            (when-let [cell (first cells)]
+              (when (dig-look/unknown? p cell) (await (dig-look/look-at! c cell)))
+              (recur (rest cells))))
+          :again)
+      (let [gap (escape/door-from (escape/block-at-of p) (escape/unseen-of p) from dir (:max-thick (:args c)) k)]
+        (cond
+          (nil? gap) (finish! c :no-door {:why (str "the wall goes on past " (pr-str through) ": thicker than "
+                                                     (:max-thick (:args c)) " or no floor beyond")})
+          (= through (:through gap)) (do (ctx/update-mem! c dissoc :unseen) :again)
+          :else (do (ctx/update-mem! c assoc :cells (:cells gap) :through (:through gap) :unseen (:unseen gap))
+                    :again))))))
+
+(defn ^:async next!
+  "One piece of the door: plan it, dig a cell, plan on past a far side it could not see, or step through. :again,
+  :continue (a child waits) or :done."
+  [c]
+  (let [{:keys [cells through unseen]} (ctx/mem c)
         p (:primitives c)]
     (if-not through
       (await (plan! c))
       (if-let [digging (or (:digging (ctx/mem c))
-                           (when-let [cell (first (remove #(b/air (u/block-name p (zipmap [:x :y :z] %))) cells))]
-                             (let [block (u/block-name p (zipmap [:x :y :z] cell))
+                           (when-let [cell (first (remove #(b/air (u/seen-name p (zipmap [:x :y :z] %))) cells))]
+                             (when (dig-look/unknown? p cell) (await (dig-look/look-at! c cell)))
+                             (let [block (u/block-name-or p (zipmap [:x :y :z] cell) b/hidden-guess)
                                    d {:cell cell :block block :collect (room-for-drop? p block)}]
                                (ctx/update-mem! c assoc :digging d)
                                d)))]
         (await (dig-cell! c digging))
-        (await (step-through! c through))))))
+        (if unseen
+          (await (replan! c))
+          (await (step-through! c through)))))))
 
 (defn ^:async round
   "The whole door: next! until it ends, a pace between pieces."

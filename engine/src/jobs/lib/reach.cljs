@@ -83,7 +83,8 @@
 
 (defn lookup
   "A function (kind-at x y z) giving block-kind (default kind-of) of the block there.
-  Reads state ids from p.rawWorld when there is one (state-lookup), else blockAt once per cell.
+  Reads state ids from p.rawWorld when there is one (state-lookup), else blockAt once per cell: the planner's raw
+  snapshot, as go-to's plans read it.
   One lookup serves one query."
   ([p] (lookup p kind-of))
   ([p block-kind]
@@ -118,7 +119,7 @@
   torch, plant, rail, lava, fire, cactus or water)."
   ([p pos] (standable-cell? p pos (lookup p)))
   ([p {:keys [x y z]} kind-at]
-   (let [below (u/block-at p {:x x :y (dec y) :z z})]
+   (let [below (u/seen-block p {:x x :y (dec y) :z z})]
      (and (passable? kind-at x y z) (passable? kind-at x (inc y) z)
           (keyword-identical? :solid (kind-at x (dec y) z))
           (not (hazard-blocks (some-> below .-name)))))))
@@ -341,7 +342,7 @@
   there is a shut door, else nil. A body standing in the free part of that cell cannot walk through the panel."
   [p kind-at {:keys [x y z]}]
   (when (keyword-identical? :solid (kind-at x y z))
-    (let [b (u/block-at p {:x x :y y :z z})
+    (let [b (u/seen-block p {:x x :y y :z z})
           name (some-> b .-name)]
       (when (and name (str/ends-with? name "_door") (not (open-prop? b)))
         (door-panel-step (some-> b .-properties .-facing))))))

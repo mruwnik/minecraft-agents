@@ -96,8 +96,10 @@
 
 (defn check-run [_c] true)
 
-(defn block-at-fn [p]
-  (fn [pos] (u/block-name p pos)))
+(defn block-at-fn
+  "pos -> the block name the body sees or remembers there; nil (open, as unloaded: the walk finds out) when unknown."
+  [p]
+  (fn [pos] (u/seen-name p pos)))
 
 (defn ^:async fight!
   "Fight back with the best of weapons (the fist when none is carried) whatever

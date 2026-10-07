@@ -11,8 +11,10 @@
   - choose: the escalation for a body here and a goal.
   Cells are [x y z]. block-at maps a cell to its block name (nil when not loaded)."
   (:require [engine.settings :as settings]
+            [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.blocks :as b]
+            [jobs.lib.dig-look :as dig-look]
             [jobs.lib.reach :as reach]
             [jobs.lib.shelter :as sh]
             [jobs.lib.tidy :as tidy]
@@ -50,9 +52,15 @@
 (defn natural? [n] (boolean (and n (re-find natural-blocks n))))
 
 (defn block-at-of
-  "block-at over primitives p."
+  "block-at over what the body at primitives p senses: a cell it has not sensed is rock (access/hidden-guess, so a dig
+  goes ahead and looks), nil when not loaded."
   [p]
-  (fn [[x y z]] (u/block-name p {:x x :y y :z z})))
+  (access/sensed-at p access/hidden-guess))
+
+(defn unseen-of
+  "(unseen? cell): the body at primitives p has not sensed cell (loaded, never seen)."
+  [p]
+  (fn [cell] (dig-look/unknown? p cell)))
 
 (defn add [[x y z] [dx dy dz]] [(+ x dx) (+ y dy) (+ z dz)])
 
@@ -141,23 +149,33 @@
 
 (defn walled-side? [block-at cell] (boolean (some #(solid? (block-at (ahead cell % 1))) cardinals)))
 
-(defn door
-  "A door through a wall straight ahead of feet along dir: {:cells [...] :through cell}, the wall's solid cells at feet
-  and head height (head first, row by row) and the first cell beyond with room for the body and a floor. nil when
-  the cell in front is open, the wall is thicker than max-thick, a row has no floor, or a cell is protected."
-  [block-at feet dir max-thick]
-  (loop [k 1 cells []]
+(defn door-from
+  "door from row k on (rows before it already open): the wall's solid cells from row k and the first row beyond with
+  room for the body and a floor. unseen? (cell -> true for a cell the body has not sensed): a row past the first whose
+  two cells are both unseen is taken for the far side, {:unseen true}: the dig shows it, and the digger goes on with
+  door-from there."
+  [block-at unseen? feet dir max-thick k]
+  (loop [k k cells []]
     (let [row (ahead feet dir k)
           pair [(up row 1) row]
           names (map block-at pair)]
       (cond
         (not (rules/solid-floor? block-at (up row -1))) nil
         (some nil? names) nil
+        (and (> k 1) (every? unseen? pair)) {:cells cells :through row :unseen true}
         (every? passable? names) (when (> k 1) {:cells cells :through row})
         (> k max-thick) nil
         (some protected? names) nil
         (some rules/fluids names) nil
         :else (recur (inc k) (into cells (filter #(solid? (block-at %)) pair)))))))
+
+(defn door
+  "A door through a wall straight ahead of feet along dir: {:cells [...] :through cell}, the wall's solid cells at feet
+  and head height (head first, row by row) and the first cell beyond with room for the body and a floor. nil when
+  the cell in front is open, the wall is thicker than max-thick, a row has no floor, or a cell is protected. With
+  unseen?, a far side the body cannot see is guessed (door-from)."
+  ([block-at feet dir max-thick] (door block-at (constantly false) feet dir max-thick))
+  ([block-at unseen? feet dir max-thick] (door-from block-at unseen? feet dir max-thick 1)))
 
 (defn diggable?
   "Whether an escalation may cut cell: it is open (air or a plant), or natural terrain or a block the body placed
@@ -223,7 +241,8 @@
                                  (<= (js/Math.abs (- z hz)) wall-search-radius)))
         kind-at (reach/lookup p)
         standable? (fn [[x y z]] (reach/standable-cell? p {:x x :y y :z z} kind-at))
-        ok? (fn [cell] (when-let [gap (door block-at cell dir (max-door))] (every? diggable (:cells gap))))]
+        unseen? (unseen-of p)
+        ok? (fn [cell] (when-let [gap (door block-at unseen? cell dir (max-door))] (every? diggable (:cells gap))))]
     (loop [queue #queue [feet] seen #{feet}]
       (when-let [cell (peek queue)]
         (if (and (not= cell feet) (ok? cell))
@@ -259,7 +278,7 @@
                  (stair-heading block-at feet
                                 (remove #(skip [:stair (heading-names %)]) (distinct (cond->> cardinals dir (cons dir))))
                                 rise may-dig? own?))
-         gap (when (and dir (not (skip :clear-path))) (door block-at feet dir (max-door)))
+         gap (when (and dir (not (skip :clear-path))) (door block-at (unseen-of p) feet dir (max-door)))
          spot (delay (when (and dir (not (skip :approach)) (walled-side? block-at feet))
                        (door-spot p feet dir #(diggable? block-at may-dig? own? %))))]
      (cond
@@ -289,7 +308,7 @@
   [c tag cell block]
   (let [p (:primitives c)
         cell (vec cell)]
-    (when (and (not-any? #(= cell (:cell %)) (tidy/entries c)) (b/air (u/block-name p (zipmap [:x :y :z] cell))))
+    (when (and (not-any? #(= cell (:cell %)) (tidy/entries c)) (b/air (u/seen-name p (zipmap [:x :y :z] cell))))
       (tidy/record! c (merge {:cell cell :action :dig :was block :any-of (vec (distinct (cons block (b/drops-of p block))))}
                              tag)
                     "air"))))

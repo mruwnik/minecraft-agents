@@ -48,9 +48,10 @@
     (mod (+ deg 360) 360)))
 
 (defn dry-cell?
-  "A feet cell to step off onto: feet and head air, a block below that is not air or a hazard. Unloaded is not."
+  "A feet cell to step off onto: feet and head air, a block below that is not air or a hazard, as the body sees them.
+  Unloaded or unseen is not."
   [p cell]
-  (land/land-cell? #(u/block-name p %) cell))
+  (land/land-cell? #(u/seen-name p %) cell))
 
 (defn centre [{:keys [x y z]}] {:x (+ x 0.5) :y y :z (+ z 0.5)})
 
