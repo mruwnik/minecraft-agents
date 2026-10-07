@@ -1,0 +1,43 @@
+;; Card 7b34faee: jobs.build.path on a 3x3 grass box (floor y -1). A carried shovel paths it; a shovel in a seen chest is
+;; fetched first; :fetch false without one waits :no-tool; a stone cell is skipped :not-pathable; another body's plan
+;; footprint over the whole box declines :refused and changes nothing.
+{:defaults
+ {:tags [:blocks :build]
+  :plot {:height 12 :floor "grass_block"}
+  :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [{:name "carried-shovel-paths-the-box"
+   :body {:inventory [["stone_shovel" 1]]}
+   :act [[:job (jobs.build.path {:from #at [18 -1 18] :to #at [20 -1 20]})]]
+   :expect [{:event {:source :job :kind :path.done :data {:pathed 9}} :within-s 60 :of-job true}]
+   :after [[:block [18 -1 18] "dirt_path"] [:block [20 -1 20] "dirt_path"]]}
+  {:name "shovel-from-seen-chest-then-paths"
+   :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:stone_shovel\",count:1}]}"]]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
+         [:job (jobs.build.path {:from #at [18 -1 18] :to #at [20 -1 20]})]]
+   :expect [{:event {:source :job :kind :fetch.done} :within-s 60 :of-job true}
+            {:event {:source :job :kind :path.done :data {:pathed 9}} :within-s 80 :of-job true}]
+   :after [[:block [19 -1 19] "dirt_path"]]}
+  {:name "no-shovel-and-no-fetch-waits"
+   :act [[:job (jobs.build.path {:from #at [18 -1 18] :to #at [20 -1 20] :fetch false})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-tool :kind "shovel"}} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind :path.done} :for-s 20}]
+   :after [[:not-block [19 -1 19] "dirt_path"]]}
+  {:name "stone-cell-is-skipped"
+   :body {:inventory [["stone_shovel" 1]]}
+   :blocks [[:set [19 -1 19] "stone"]]
+   :act [[:job (jobs.build.path {:from #at [18 -1 18] :to #at [20 -1 20]})]]
+   :expect [{:event {:source :job :kind :path.skipped :data {:reason :not-pathable}} :within-s 40 :of-job true}
+            {:event {:source :job :kind :path.done :data {:pathed 8 :skipped 1}} :within-s 60 :of-job true}]
+   :after [[:block [19 -1 19] "stone"] [:block [18 -1 18] "dirt_path"]]}
+  {:name "other-bodys-plan-refuses-the-box"
+   :body {:inventory [["stone_shovel" 1]]}
+   :plans [{:id "w" :metadata {:by "SomeoneElse"}
+            :parts [{:id "w" :cells [#at [18 -1 18] #at [19 -1 18] #at [20 -1 18] #at [18 -1 19] #at [19 -1 19] #at [20 -1 19]
+                                     #at [18 -1 20] #at [19 -1 20] #at [20 -1 20]]
+                     :want [:any "cobblestone"]}]}]
+   :act [[:job (jobs.build.path {:from #at [18 -1 18] :to #at [20 -1 20]})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :refused}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :path.done} :for-s 20}]
+   :after [[:not-block [19 -1 19] "dirt_path"]]}]}

@@ -9,6 +9,7 @@
 (def reach 4.5)
 (def max-age {"wheat" 7 "carrots" 7 "potatoes" 7 "beetroots" 3})
 (def tillable #{"dirt" "grass_block" "dirt_path"})
+(def pathable #{"dirt" "grass_block" "coarse_dirt" "podzol" "mycelium" "rooted_dirt"})
 (def compostable
   #{"wheat_seeds" "beetroot_seeds" "melon_seeds" "pumpkin_seeds" "wheat" "carrot" "potato" "beetroot" "apple"
     "melon_slice" "short_grass" "tall_grass" "oak_leaves" "birch_leaves" "spruce_leaves" "kelp" "sweet_berries"
@@ -108,6 +109,10 @@
           (and item (re-find #"_hoe$" item) (tillable here) (not= face "down")
                (not (contains? (:blocks w) (update pos 1 inc))))
           (done (assoc-in w [:blocks pos] "farmland") "used")
+
+          (and item (re-find #"_shovel$" item) (pathable here) (not= face "down")
+               (not (contains? (:blocks w) (update pos 1 inc))))
+          (done (assoc-in w [:blocks pos] "dirt_path") "used")
 
           (and (= item "bone_meal") (max-age here))
           (if (>= (or age 0) (max-age here))
