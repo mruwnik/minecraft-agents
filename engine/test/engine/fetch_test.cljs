@@ -783,6 +783,11 @@
     (is (= #{"deepslate"} (:seen n)))
     (is (= {:block "deepslate" :item "cobbled_deepslate" :count 2} (:args n)))))
 
+(deftest the-stone-materials-are-those-of-the-bodys-version
+  (is (= #{"deepslate"} (obtain/material-blocks "26.1" "cobbled_deepslate")))
+  (is (nil? (obtain/material-blocks "1.16.5" "cobbled_deepslate")) "no deepslate in that version")
+  (is (nil? (:seen (obtain/gather-need {"cobbled_deepslate" 1} "1.16.5")))))
+
 (deftest obtain-mines-seen-deepslate-for-a-stone-pickaxe
   (async done
     (tu/run-async done

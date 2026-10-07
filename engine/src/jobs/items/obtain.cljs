@@ -116,10 +116,11 @@
 (defn material-blocks
   "The blocks mining which gives a stone-material (stone: cobblestone), or nil for any other item. A block
   that drops itself (blackstone) is its own."
-  [item]
-  (when (contains? (recipes/stone-materials game/default-version) item)
+  ([item] (material-blocks game/default-version item))
+  ([version item]
+   (when (contains? (recipes/stone-materials version) item)
     (let [bs (set (for [[b d] mine/drop-item :when (= d item)] b))]
-      (if (seq bs) bs #{item}))))
+      (if (seq bs) bs #{item})))))
 
 (defn gather-plan
   "The craft chain for the first of names that has one once the raw items it lacks are gathered, with :gather
@@ -128,7 +129,7 @@
   (let [p (:primitives c)
         have (carried-counts p)
         version (game/version-of p)
-        seen? #(seq (look/seen-blocks p {:names (vec (material-blocks %)) :radius 16 :max 1}))
+        seen? #(seq (look/seen-blocks p {:names (vec (material-blocks version %)) :radius 16 :max 1}))
         seen (set (filter seen? (recipes/stone-materials version)))
         materials (if (seq seen) seen (recipes/stone-materials version))]
     (some (fn [name]
@@ -150,25 +151,26 @@
 (defn gather-needs
   "The raw needs of a plan's :gather map, logs first: [{:key k :count n :job sym :args {..} :seen fn of a block name: what must have been seen}]. A new gather source
   is one more case here. Coal is mined from a plain or a deepslate ore: :block is set by with-block."
-  [gather]
+  ([gather] (gather-needs gather game/default-version))
+  ([gather version]
   (let [logs (reduce + 0 (for [[k v] gather :when (log? k)] v))]
     (vec (concat
           (for [[sapling n] gather :when (leaves-of sapling)]
             {:key sapling :count n :job 'jobs.gather.get-seeds :seen #{(leaves-of sapling)} :max-runs 1
              :args {:item sapling :count n :sources [(leaves-of sapling)] :dry-digs sapling-leaf-limit}})
           (when (pos? logs) [{:key "log" :count logs :job 'jobs.forestry.harvest-wood :seen log? :args {}}])
-          (for [[k n] gather :when (material-blocks k)]
-            (let [blocks (material-blocks k)]
+          (for [[k n] gather :when (material-blocks version k)]
+            (let [blocks (material-blocks version k)]
               {:key k :count n :job 'jobs.gather.mine :seen blocks
                :args {:block (first (sort blocks)) :item k :count n}}))
           (when-let [n (get gather "coal")]
             [{:key "coal" :count n :job 'jobs.gather.mine :seen #{"coal_ore" "deepslate_coal_ore"}
-              :args {:block "coal_ore" :item "coal" :count n}}])))))
+              :args {:block "coal_ore" :item "coal" :count n}}]))))))
 
 (defn gather-need
   "The first of gather-needs."
-  [gather]
-  (first (gather-needs gather)))
+  ([gather] (first (gather-needs gather)))
+  ([gather version] (first (gather-needs gather version))))
 
 (defn gather-carried [p {:keys [key]}]
   (reduce + 0 (for [[k v] (carried-counts p) :when (if (= "log" key) (log? k) (= key k))] v)))
@@ -189,7 +191,7 @@
   "Whether a chain is craftable once raw items are gathered, and a block for every raw need has been seen and
   the child of the first would run."
   [c names n]
-  (when-let [needs (some-> (gather-plan c names n) :gather gather-needs seq)]
+  (when-let [needs (some-> (gather-plan c names n) :gather (gather-needs (game/version-of (:primitives c))) seq)]
     (and (every? #(seen-of c %) needs)
          (let [need (with-block c (first needs))]
            (boolean (ctx/check-child c :gather (:job need) (:args need)))))))
@@ -197,7 +199,7 @@
 (defn unseen-why
   "Text for the gather source: the raw needs of the chain whose blocks are not seen, or the general text."
   [c names n]
-  (let [unseen (->> (some-> (gather-plan c names n) :gather gather-needs)
+  (let [unseen (->> (some-> (gather-plan c names n) :gather (gather-needs (game/version-of (:primitives c))))
                     (remove #(seen-of c %)))]
     (str "nothing seen to gather what a craft lacks"
          (when (seq unseen)
@@ -351,7 +353,7 @@
   "One round of the gather source: the child for the first raw item the chain lacks, until it ends."
   [c names have target]
   (let [p (:primitives c)
-        need (some->> (some-> (gather-plan c names (- target have)) :gather gather-need) (with-block c))]
+        need (some->> (some-> (gather-plan c names (- target have)) :gather (gather-need (game/version-of p))) (with-block c))]
     (cond
       (nil? need) (do (tried! c :gather :no-plan) :continue)
       (and (not (get-in (ctx/mem c) [:gather :before])) (not (gather-viable? c names (- target have))))
