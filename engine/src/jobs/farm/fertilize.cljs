@@ -102,7 +102,7 @@
         :done)
     (let [target (first todo)
           refuse! #(ctx/update-mem! c update :refused (fnil conj #{}) target)
-          w (await (near/walk-near! c target 3 {:tolls (tc/walk-tolls c (near/cell-of target))}))]
+          w (await (near/go-near! c target 3 {:tolls (tc/walk-tolls c (near/cell-of target))}))]
       (case w
         :partial :continue
         :blocked (do (refuse!) :continue)

@@ -220,18 +220,10 @@
    debts))
 
 (defn ^:async walk!
-  "Walk until within range of pos with the engine walker (one near/walk-round!, doors :shut): :there, :partial (closer,
-  call again), :no-path (the plan found none) or :blocked (no progress, maybe only this time, or no pathWorld sensing)."
+  "Walk until within range of pos (near/go-near!, doors :shut): :there, :partial (closer or an escalation waiting, call
+  again) or :blocked (it gave up, maybe only this time, or no pathWorld sensing)."
   [c pos range]
-  (cond
-    (u/within? (u/self-pos c) pos range) :there
-    (nil? (wworld/path-world (:primitives c))) (do (ctx/note-walk! c "blocked" 0) :blocked)
-    :else (let [{:keys [result status]} (await (near/walk-round! c (near/cell-of pos) range {:doors :shut :tolls (tc/walk-tolls c (near/cell-of pos))}))
-                no-path? (= :no-path (:status result))]
-            (case status
-              "arrived" :there
-              "partial" (if no-path? :no-path :partial)
-              (if no-path? :no-path :blocked)))))
+  (near/go-near! c pos range {:tolls (tc/walk-tolls c (near/cell-of pos))}))
 
 (defn carried-names [p] (set (map :name (u/inventory p))))
 
@@ -379,7 +371,6 @@
             targets (if (seq near) near [nearest-debt])]
         (case walked
           :partial :continue
-          :no-path (do (ctx/update-mem! c bare-debt (:pos (first targets))) :continue)
           :blocked (do (ctx/update-mem! c walk-fail-debt (:pos (first targets))) :continue)
           (loop [todo (take max-per-round targets)]
             (if (empty? todo)
@@ -433,9 +424,6 @@
             targets (if (seq near) near [(first ripe)])]
         (case walked
           :partial :continue
-          :no-path (do (ctx/update-mem! c skip-crop (first ripe))
-                       (warn-gave-up! c)
-                       :continue)
           :blocked (do (ctx/update-mem! c walk-fail-crop (first ripe))
                        (warn-gave-up! c)
                        :continue)

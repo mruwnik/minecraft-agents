@@ -133,7 +133,7 @@
               (finish! c {:level level}))
 
             :else
-            (let [w (await (near/walk-near! c pos 3 {:tolls (tc/walk-tolls c (near/cell-of pos))}))]
+            (let [w (await (near/go-near! c pos 3 {:tolls (tc/walk-tolls c (near/cell-of pos))}))]
               (case w
                 :partial :continue
                 :blocked (strike! c level)

@@ -360,7 +360,7 @@
 (defn ^:async round-at!
   "Reach the furnace, read it, then load (first) or collect."
   [c furnace owed?]
-  (case (await (near/walk-near! c furnace 3 {:zone-tolls true}))
+  (case (await (near/go-near! c furnace 3 {:zone-tolls true}))
     :partial :continue
     :blocked (give-up! c "unreachable")
     (let [state (await (visit! c "read" {}))]

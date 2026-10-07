@@ -188,7 +188,7 @@
 
         :else
         (let [[target _] (nearest c cands)
-              w (await (near/walk-near! c target 3 {:tolls (tc/walk-tolls c (near/cell-of target))}))]
+              w (await (near/go-near! c target 3 {:tolls (tc/walk-tolls c (near/cell-of target))}))]
           (case w
             :partial :continue
             :blocked (do (bump! c target :unreachable) :continue)

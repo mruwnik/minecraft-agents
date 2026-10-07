@@ -8,6 +8,7 @@
             [engine.expr :as expr]
             [engine.takeover :as takeover]
             [engine.fake :as fake]
+            [engine.go-to-escalate-test :as pit-world]
             [engine.hostile-test :as h]
             [engine.memory :as mem]
             [engine.perception :as perception]
@@ -153,6 +154,17 @@
               result (await (child-outcome eng job args 8))]
           (is (= {:tilled 0 :skipped {{:x 5 :y 63 :z 0} :unreachable}} result))
           (is (empty? (calls p "useOn"))))))))
+
+(deftest till-from-a-pit-gets-out-and-tills
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup (merge pit-world/in-pit {:blocks (assoc pit-world/pit "8,63,0" "dirt")
+                                                              :inventory (into hoe [{:name "dirt" :count 5}])}))
+              args {:from {:x 8 :y 63 :z 0} :to {:x 8 :y 63 :z 0}}
+              result (await (child-outcome eng job args 300))]
+          (is (= {:tilled 1 :skipped {}} result))
+          (is (= "farmland" (block-at p {:x 8 :y 63 :z 0}))))))))
 
 (deftest till-skips-a-cell-the-use-refuses-after-two-tries
   (async done

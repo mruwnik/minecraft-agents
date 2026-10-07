@@ -9,6 +9,7 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
+            [jobs.lib.near :as near]
             [jobs.lib.world-files :as ew]))
 
 (defn setup-seeing
@@ -196,17 +197,29 @@
           (is (= :count (:reason @out)))
           (is (>= (:got @out) 2)))))))
 
-(deftest a-partial-walk-skips-the-source-and-the-batch-goes-on
+(deftest a-partial-walk-goes-on-in-the-same-call-and-the-source-is-dug
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p eng] :as s} (setup-seeing {:blocks {"6,64,0" "short_grass" "9,64,0" "short_grass"} :drops seed-drops})]
-          (tu/short-walks! p 8 1) ; the first walk, to the nearer cell at x 6, ends partial
+          (tu/short-walks! p 8 1) ; the first walk, to the nearer cell at x 6, ends partial: go-to walks on
           (core/submit! eng (spec {:count 1}) {})
           (await (run-ticks s 40 700))
-          (is (= [9] (mapv #(.-x (.-pos (.-args %))) (h/calls p "dig"))) "only the reachable cell is dug")
+          (is (= [6 9] (mapv #(.-x (.-pos (.-args %))) (h/calls p "dig"))) "go-to walks on after a short leg, both cells are dug")
           (is (= :count (:reason (done-event s))))
           (is (finished? s)))))))
+
+(deftest a-walk-waiting-on-the-world-is-a-yield-not-a-skipped-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng] :as s} (setup-seeing {:blocks {"6,64,0" "short_grass"} :drops seed-drops})]
+          (with-redefs [near/go-near! (fn ^:async f [_ _ _ _] :partial)]
+            (core/submit! eng (spec {:count 1}) {})
+            (await (run-ticks s 6 700)))
+          (is (zero? (dig-count s)))
+          (is (zero? (:barren (job-mem s) 0)) "no barren round counted")
+          (is (empty? (:skipped (job-mem s))) "the cell is not skipped"))))))
 
 (deftest the-scan-sees-past-skipped-cells
   (async done

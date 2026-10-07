@@ -296,7 +296,7 @@
           (let [result (await (child-outcome eng job {} 100))]
             (is (= {:cut 1 :replanted 1 :bare [] :lost [] :gave-up false} result))))))))
 
-(deftest a-walk-with-no-path-skips-the-crop-at-once
+(deftest a-walk-with-no-path-is-counted-blocked-until-the-crops-are-skipped
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -304,7 +304,6 @@
               {:keys [eng p]} (start {:world {:blocks (zipmap cells (repeat "wheat")) :ages (zipmap cells (repeat 7))
                                               :noPath cells}})
               result (await (child-outcome eng job {:radius 14} 100))]
-          (is (= 4 (count (tu/walked-to eng))))
           (is (zero? (count (calls p "dig"))))
           (is (= {:cut 0 :replanted 0 :bare [] :lost [] :gave-up true} result)))))))
 

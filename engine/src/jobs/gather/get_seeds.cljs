@@ -197,11 +197,13 @@
             [] poss)))
 
 (defn ^:async dig-one!
-  "Walk to pos and dig it: :dug, :missing or :skipped (a blocked or partial walk, a cell the rules no longer permit, or a dig that is neither dug nor missing)."
+  "Walk to pos and dig it: :dug, :missing, :walking (the walk waits on the world: yield) or :skipped (a blocked walk, a cell the rules no longer permit, or a dig that is neither dug nor missing)."
   [c pos]
-  (let [walked (await (near/walk-near! c pos reach {:zone-tolls true}))]
-    (if (contains? #{:blocked :partial} walked)
-      (do (skip! c pos) :skipped)
+  (let [walked (await (near/go-near! c pos reach {:zone-tolls true}))]
+    (cond
+      (= :partial walked) :walking
+      (= :blocked walked) (do (skip! c pos) :skipped)
+      :else
       (let [v (access/may-dig? (access/rules-input c) pos)
             judged (access/judge v (:accept (:args c)))]
         (if (not= :ok judged)
@@ -213,12 +215,14 @@
               :else (do (skip! c pos) :skipped))))))))
 
 (defn ^:async dig-batch!
-  "Dig the positions in order; {:dug n :skipped m} counts."
+  "Dig the positions in order; {:dug n :skipped m} counts, plus :walking true when a walk waits on the world (the rest is left for the next round)."
   [c targets]
   (loop [todo targets counts {:dug 0 :skipped 0}]
     (if-let [pos (first todo)]
       (let [r (await (dig-one! c pos))]
-        (recur (rest todo) (cond-> counts (contains? counts r) (update r inc))))
+        (if (= :walking r)
+          (assoc counts :walking true)
+          (recur (rest todo) (cond-> counts (contains? counts r) (update r inc)))))
       counts)))
 
 (defn ^:async take! [c]
@@ -249,12 +253,14 @@
     :continue))
 
 (defn ^:async dig-round! [c targets]
-  (let [{:keys [dug skipped]} (await (dig-batch! c targets))
+  (let [{:keys [dug skipped walking]} (await (dig-batch! c targets))
         barren (if (zero? (+ dug skipped)) (inc (:barren (ctx/mem c) 0)) 0)]
-    (ctx/update-mem! c assoc :barren barren :collecting true)
-    (if (>= barren 2)
-      (give-up! c :barren)
-      :continue)))
+    (cond
+      (and walking (zero? (+ dug skipped))) :continue
+      :else (do (ctx/update-mem! c assoc :barren barren :collecting true)
+                (if (>= barren 2)
+                  (give-up! c :barren)
+                  :continue)))))
 
 (defn ^:async round [c]
   (when-not (:goal (ctx/mem c))
