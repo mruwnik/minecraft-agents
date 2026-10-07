@@ -207,10 +207,12 @@
                  (some #(:call (decide/decide % (:args c) f)) decide/steps)))))
 
 (defn check [c]
-  (boolean
-   (if (:plan (:args c))
-     (and (not (:trouble (tend-plan/planned c))) (would-run? c))
-     (and (usable-box? (:box (:args c))) (would-run? c)))))
+  (let [trouble (when (:plan (:args c)) (:trouble (tend-plan/planned c)))]
+    (cond
+      trouble (ctx/wait c {:reason :plan-trouble :why trouble})
+      (and (not (:plan (:args c))) (not (usable-box? (:box (:args c))))) (ctx/wait c {:reason :no-box})
+      (would-run? c) true
+      :else (ctx/wait c {:reason :nothing-to-do}))))
 
 ;; ------------------------------------------------------------------ rounds
 

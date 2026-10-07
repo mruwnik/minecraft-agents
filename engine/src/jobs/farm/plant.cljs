@@ -90,8 +90,10 @@
 (defn plan-check
   "A plan that can be worked and either a started run or a sowable cell."
   [c field]
-  (boolean (and (not (:trouble field))
-                (or (:started (ctx/mem c)) (seq (:ready (sowing c (:cells field))))))))
+  (cond
+    (:trouble field) (ctx/wait c {:reason :plan-trouble :why (:trouble field)})
+    (or (:started (ctx/mem c)) (seq (:ready (sowing c (:cells field))))) true
+    :else (ctx/wait c {:reason :nothing-to-do})))
 
 (defn sowable-cells
   "The ground cells of cells whose sowing (the cell above) the job may do; one warn when some are refused."
@@ -104,8 +106,9 @@
   [c]
   (let [{:keys [box] :as a} (:args c)
         m (ctx/mem c)]
-    (and (owes? (:primitives c) a m)
-         (boolean (or (:started m) (seq (sowable-cells c (bare-cells (:primitives c) box (:skipped m)))))))))
+    (or (and (owes? (:primitives c) a m)
+             (boolean (or (:started m) (seq (sowable-cells c (bare-cells (:primitives c) box (:skipped m)))))))
+        (ctx/wait c {:reason :nothing-to-do}))))
 
 (defn check [c]
   (if (:plan (:args c))

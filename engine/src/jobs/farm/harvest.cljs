@@ -327,13 +327,14 @@
   (let [field (planned c)
         c (with-field c field)
         m (ctx/mem c)]
-    (boolean
-     (and (not (:trouble field))
-          (or (:center m)
-              (if field (or (seq (sowable c)) (seq (:replant m))) (seq (:replant m)))
-              (:collect m)
-              (and (cutting? c) (seq (ripe-of c (:skipped m))))
-              (and (not field) (blind? c)))))))
+    (cond
+      (:trouble field) (ctx/wait c {:reason :plan-trouble :why (:trouble field)})
+      (or (:center m)
+          (if field (or (seq (sowable c)) (seq (:replant m))) (seq (:replant m)))
+          (:collect m)
+          (and (cutting? c) (seq (ripe-of c (:skipped m))))
+          (and (not field) (blind? c))) true
+      :else (ctx/wait c {:reason :nothing-to-do}))))
 
 ;; ------------------------------------------------------------------ steps
 

@@ -199,7 +199,10 @@
                            :text (str "tidy declines plan " plan (when part (str " part " part)) ": " trouble)})
           {:trouble trouble}))))
 
-(defn check [c] (not (:trouble (planned c))))
+(defn check [c]
+  (if-let [trouble (:trouble (planned c))]
+    (ctx/wait c {:reason :plan-trouble :why trouble})
+    true))
 
 ;; ------------------------------------------------------------------ steps
 
