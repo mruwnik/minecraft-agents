@@ -20,6 +20,9 @@ const metaIndex = (bot, e, key, fallback) => {
 }
 const hasMetaKey = (bot, e, key) => bot.registry?.entitiesByName?.[e.name]?.metadataKeys?.includes(key) === true
 
+// the dye (0..15, 0 white) of a sheep's wool, or null for another mob
+export const sheepDye = (bot, e) => e.name === 'sheep' ? (e.metadata?.[metaIndex(bot, e, 'wool', WOOL_FALLBACK)] ?? 0) & 0x0f : null
+
 // What a mob shows that a use can change: identity, age and (sheep) shearing. Keys appear only when they apply.
 export const mobFields = (bot, e) => ({
   ...(typeof e.uuid === 'string' && { uuid: e.uuid }),

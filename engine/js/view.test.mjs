@@ -286,6 +286,18 @@ test('a dropped item in the pose names what it holds; a drop the library cannot 
   assert.deepEqual(items, { 2: 'oak_log', 3: undefined, 4: undefined })
 })
 
+test('a baby mob and a dyed sheep show it in the pose; an adult, a sheared-white sheep without the keys and other mobs carry neither', () => {
+  const lamb = entity(2, 12, -3, { name: 'sheep', metadata: [true, 14] })
+  const ewe = entity(3, 12, -3, { name: 'sheep', metadata: [false, 0x10 | 5] })
+  const cow = entity(4, 12, -3, { name: 'cow', metadata: [true] })
+  const bot = fakeBot({ entities: { 2: lamb, 3: ewe, 4: cow } })
+  bot.registry = { ...bot.registry, entitiesByName: { sheep: { metadataKeys: ['baby', 'wool'] }, cow: { metadataKeys: ['baby'] } } }
+  const [a, b, c] = poseSnapshot(bot, { world: 'w', now: 1 }).entities
+  assert.deepEqual([a.baby, a.dye], [true, 14])
+  assert.deepEqual([b.baby, b.dye], [undefined, 5])
+  assert.deepEqual([c.baby, c.dye], [true, undefined])
+})
+
 test('sneaking lowers the eye', () => {
   const bot = fakeBot()
   bot.entity.height = 1.45

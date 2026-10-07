@@ -30,7 +30,7 @@ const FAMILY_OF = Object.fromEntries(Object.entries({
 export const mobFor = (e, eye) => {
   const model = modelFor(e)
   const parts = model
-    ? model.parts.map(p => [...p.box, p.paint, p.layers])
+    ? model.parts.map(p => [...p.box, p.paint, p.layers, p.tint])
     : FAMILIES[FAMILY_OF[e.name] ?? (e.height >= 2 * e.width ? 'biped' : 'blob')]
       .map(([x1, y1, z1, x2, y2, z2, paint]) => [x1 * e.width, y1 * e.height, z1 * e.width, x2 * e.width, y2 * e.height, z2 * e.width, paint])
   const hull = model ? model.hull : [0, 1, 2].map(i => Math.min(...parts.map(p => p[i]))).concat([3, 4, 5].map(i => Math.max(...parts.map(p => p[i]))))
@@ -69,7 +69,10 @@ export const mobPaint = (m, part, face, t, local, images) => {
   if (image) {
     const [u, v] = faceUV(face, (m.eye.x + local.x * t - part[0]) / (part[3] - part[0]), (m.eye.y + local.y * t - part[1]) / (part[4] - part[1]), (m.eye.z + local.z * t - part[2]) / (part[5] - part[2]))
     const at = (Math.min(image.height - 1, Math.floor(clamp01(v) * image.height)) * image.width + Math.min(image.width - 1, Math.floor(clamp01(u) * image.width))) * 4
-    if (image.rgba[at + 3] >= 128) return [image.rgba[at], image.rgba[at + 1], image.rgba[at + 2]]
+    if (image.rgba[at + 3] >= 128) {
+      const tint = part[8] ?? [255, 255, 255]
+      return [0, 1, 2].map(i => Math.round(image.rgba[at + i] * tint[i] / 255))
+    }
   }
   // 'south' is the mob's own front: the ray came in through its +z face
   return m.palette[part[6] === 1 && face === 'south' ? 3 : part[6]]

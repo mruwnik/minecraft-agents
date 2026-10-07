@@ -80,7 +80,7 @@
 (defn by-d ^number [^js a ^js b] (- (.-d a) (.-d b)))
 
 (defn entity-boxes
-  "The nearest 64 entities to the eye as {min, max, color, name, label, item, kind, yaw} boxes relative to origin (name, label, item, kind and yaw are what
+  "The nearest 64 entities to the eye as {min, max, color, name, label, item, kind, yaw, baby, dye} boxes relative to origin (name, label, item, kind, yaw, baby and dye are what
    the browser view's species models, colours and name labels go by)."
   [^js entities ^js origin ^js eye]
   (if (nil? entities)
@@ -103,6 +103,8 @@
                      :name (.-name e)
                      :label (.-username e)
                      :item (.-item e)
+                     :baby (.-baby e)
+                     :dye (.-dye e)
                      :yaw (.-yaw e)
                      :kind (entity-kind e)}))))))
 

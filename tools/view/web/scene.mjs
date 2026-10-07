@@ -18,7 +18,7 @@ export { decodePriority }
 // A mob with a model (web/mob-models.mjs) also carries it, turned to its yaw, and its box becomes the one round the model.
 export const speciesColored = boxes => boxes.map(box => {
   const colored = { ...box, color: paletteFor(box)[0].map(v => v / 255) }
-  const model = modelFor({ name: box.name, height: box.max[1] - box.min[1], yaw: box.yaw })
+  const model = modelFor({ name: box.name, height: box.max[1] - box.min[1], yaw: box.yaw, baby: box.baby, dye: box.dye })
   if (!model) return colored
   const at = { x: (box.min[0] + box.max[0]) / 2, y: box.min[1], z: (box.min[2] + box.max[2]) / 2 }
   return { ...colored, ...worldBox(model, at), model: { parts: model.parts, right: model.right, origin: [at.x, at.y, at.z] } }

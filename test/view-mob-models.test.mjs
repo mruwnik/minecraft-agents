@@ -3,7 +3,7 @@
 // turns to a yaw, and how the software renderers and the WebGL view's tables use them.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { MOBS, FACES, modelFor, modelLayers, sheetsOf, yawBasis, worldBox, faceUV, layerName } from '../tools/view/web/mob-models.mjs'
+import { MOBS, DYES, FACES, modelFor, modelLayers, sheetsOf, yawBasis, worldBox, faceUV, layerName } from '../tools/view/web/mob-models.mjs'
 import { mobFor, mobPaint } from '../tools/view/mob-draw.mjs'
 import { createMobImages } from '../tools/view/mob-textures.mjs'
 import { speciesColored } from '../tools/view/web/scene.mjs'
@@ -110,7 +110,7 @@ const solid = (r, g, b) => ({ width: 16, height: 16, rgba: Uint8Array.from({ len
 test('mobFor: a mob with a model is drawn from its parts with their layers, any other from its family', () => {
   const eye = { x: 0, y: 1, z: 5 }
   const zombie = mobFor({ name: 'zombie', x: 0, y: 0, z: 0, width: 0.6, height: 1.95, yaw: 0 }, eye)
-  assert.equal(zombie.parts[0].length, 8)
+  assert.equal(zombie.parts[0].length, 9)
   assert.equal(zombie.parts[0][7].length, 6)
   const ghast = mobFor({ name: 'ghast', x: 0, y: 0, z: 0, width: 4, height: 4, yaw: 0 }, eye)
   assert.equal(ghast.parts[0].length, 7)
@@ -196,4 +196,50 @@ test('modelUniforms: 64 mobs of the biggest model fit the table', () => {
   const { rot, rows } = modelUniforms(many, layerIndex)
   assert.ok(rows.length / 16 <= MAX_PART_ROWS)
   assert.deepEqual([rot[3] > 0, rot[4 * 63 + 3] > 0], [true, true])
+})
+
+test('a dyed sheep tints its wool body only; an undyed or other mob carries no tint', () => {
+  const red = modelFor({ name: 'sheep', height: 1.3, dye: 14 })
+  assert.deepEqual(red.parts.map(p => p.tint ?? null), [DYES[14], null, null, null, null, null])
+  assert.ok(modelFor({ name: 'sheep', height: 1.3 }).parts.every(p => !p.tint))
+  assert.ok(modelFor({ name: 'cow', height: 1.4, dye: 14 }).parts.every(p => !p.tint))
+})
+
+test('the dye table has sixteen colours, white first', () => {
+  assert.equal(DYES.length, 16)
+  assert.ok(DYES[0].every(v => v > 240))
+})
+
+test('a baby is half the height of an adult with a bigger head for its body', () => {
+  const look = e => {
+    const m = modelFor({ name: 'cow', height: 1.4, ...e })
+    const head = m.parts.find(p => p.paint === 1)
+    return { top: m.hull[4], headRatio: (head.box[4] - head.box[1]) / m.hull[4] }
+  }
+  const [adult, baby] = [look({}), look({ baby: true })]
+  assert.ok(baby.top < 0.8 * adult.top && baby.top > 0.4 * adult.top)
+  assert.ok(baby.headRatio > 1.2 * adult.headRatio)
+})
+
+test('mobPaint: a tinted part multiplies its sheet picture by the dye', () => {
+  const eye = { x: 0, y: 1, z: 5 }
+  const m = mobFor({ name: 'sheep', x: 0, y: 0, z: 0, width: 0.9, height: 1.3, yaw: Math.PI, dye: 14 }, eye)
+  const part = m.parts[0]
+  const local = { x: 0, y: 0, z: -1 }
+  assert.deepEqual(mobPaint(m, part, 'south', 4, local, () => solid(200, 100, 50)), [200 * DYES[14][0] / 255, 100 * DYES[14][1] / 255, 50 * DYES[14][2] / 255].map(Math.round))
+  assert.deepEqual(mobPaint(m, m.parts[1], 'south', 4, local, () => solid(200, 100, 50)), [200, 100, 50])
+})
+
+test('modelUniforms: a tinted part packs its dye as r * 65536 + g * 256 + b in the 15th float, others 0', () => {
+  const layerIndex = new Map(modelLayers().map((n, i) => [n, i]))
+  const [sheep] = speciesColored([{ min: [0, 0, 0], max: [0.9, 1.3, 0.9], name: 'sheep', yaw: 0, dye: 14 }])
+  const { rows } = modelUniforms([sheep], layerIndex)
+  const [r, g, b] = DYES[14]
+  assert.equal(rows[14], r * 65536 + g * 256 + b)
+  assert.equal(rows[16 + 14], 0)
+})
+
+test('speciesColored passes baby and dye on to the model', () => {
+  const [lamb] = speciesColored([{ min: [0, 0, 0], max: [0.45, 0.65, 0.45], name: 'sheep', yaw: 0, dye: 2, baby: true }])
+  assert.deepEqual(lamb.model.parts[0].tint, DYES[2])
 })

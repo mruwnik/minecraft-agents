@@ -1,6 +1,7 @@
 // Why JavaScript: binary/graphics; the view dump's column, light and pose encoding.
 // View dump pose and hud snapshots of the body and what it sees.
 import { liveEntities } from './live-entities.mjs'
+import { mobFields, sheepDye } from './interact.mjs'
 import { VIEW_VERSION } from './view-column.mjs'
 
 export const ENTITY_RANGE = 48
@@ -24,13 +25,15 @@ const droppedName = (bot, e) => {
   } catch { return null }
 }
 
-const entityView = (bot, e, item = droppedName(bot, e)) => ({
+const entityView = (bot, e, item = droppedName(bot, e), baby = mobFields(bot, e).baby === true, dye = sheepDye(bot, e)) => ({
   id: e.id,
   type: e.type ?? null,
   name: e.name ?? null,
   kind: e.kind ?? null,
   ...(e.username ? { username: e.username } : {}),
   ...(item ? { item } : {}),
+  ...(baby ? { baby } : {}),
+  ...(dye === null ? {} : { dye }),
   pos: xyz(e.position),
   yaw: e.yaw ?? 0,
   pitch: e.pitch ?? 0,

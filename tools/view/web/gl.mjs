@@ -43,7 +43,7 @@ const nearestTexture = (gl, target, unit) => {
 
 // The uniforms and the parts table for the entities with models (`model`: {parts: [{box, layers}], right: {x, z}, origin: [x, y, z]}, web/mob-models.mjs):
 // rot per entity as (right x, right z, first row, part count) and org its origin, both zero for a plain box, and `rows` the table, 16 floats a part
-// (see uParts). A model whose faces are not all layers of the texture array, or that no longer fits the table, is drawn as its plain box.
+// (see uParts; the 15th a tint packed r * 65536 + g * 256 + b, 0 none). A model whose faces are not all layers of the texture array, or that no longer fits the table, is drawn as its plain box.
 export const modelUniforms = (entities, layerIndex) => {
   const rot = new Float32Array(MAX_ENTITIES * 4)
   const org = new Float32Array(MAX_ENTITIES * 3)
@@ -53,7 +53,7 @@ export const modelUniforms = (entities, layerIndex) => {
     if (!layers || layers.some(l => l.includes(-1)) || rows.length / 16 + layers.length > MAX_PART_ROWS) return
     rot.set([e.model.right.x, e.model.right.z, rows.length / 16, layers.length], i * 4)
     org.set(e.model.origin, i * 3)
-    e.model.parts.forEach((p, k) => rows.push(...p.box.slice(0, 3), 0, ...p.box.slice(3), p.paint, ...layers[k], 0, 0))
+    e.model.parts.forEach((p, k) => rows.push(...p.box.slice(0, 3), 0, ...p.box.slice(3), p.paint, ...layers[k], p.tint ? p.tint[0] * 65536 + p.tint[1] * 256 + p.tint[2] : 0, 0))
   })
   return { rot, org, rows: Float32Array.from(rows) }
 }

@@ -20,6 +20,8 @@ export const entitiesFromPose = pose => (pose.entities ?? []).filter(e => e.pos)
   y: e.pos.y,
   z: e.pos.z,
   ...(e.item ? { item: e.item } : {}),
+  ...(e.baby ? { baby: true } : {}),
+  ...(e.dye === undefined ? {} : { dye: e.dye }),
   width: e.name === 'item' ? e.width || ITEM_SIZE : e.width || 0.6,
   height: e.name === 'item' ? e.height || ITEM_SIZE : e.height || 1.8,
   yaw: e.yaw ?? 0

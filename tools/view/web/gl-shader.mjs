@@ -51,7 +51,7 @@ uniform vec3 uEntMax[${MAX_ENTITIES}];
 uniform vec3 uEntCol[${MAX_ENTITIES}];
 uniform vec4 uEntRot[${MAX_ENTITIES}]; // a mob with a model: its right (x, z) in the world, then the first row and the count of its parts in uParts (count 0: a plain box)
 uniform vec3 uEntOrg[${MAX_ENTITIES}]; // where its model's origin (feet) is
-uniform sampler2D uParts; // a part per row, 4 texels: box min, box max, layers top bottom south north, layers east west (-1: none)
+uniform sampler2D uParts; // a part per row, 4 texels: box min, box max, layers top bottom south north, layers east west (-1: none), tint (packed rgb, 0 none)
 uniform int uLabelCount;
 uniform vec4 uLabelRect[${MAX_LABELS}]; // x0, y0, x1, y1 in framebuffer pixels from the bottom left
 uniform float uLabelDepth[${MAX_LABELS}]; // a label shows where the terrain and mobs are farther than this
@@ -554,8 +554,10 @@ void main () {
         uv = rightFace ? vec2(f.z, 1.0 - f.y) : vec2(1.0 - f.z, 1.0 - f.y);
         shade = 0.62;
       }
+      float tint = texelFetch(uParts, ivec2(3, row), 0).z;
       float texels = pt * (2.0 * uHalf / uRes.x) * 16.0 * 2.0;
       vec4 px = textureLod(uTex, vec3(clamp(uv, 0.0, 1.0), layer), clamp(log2(max(texels, 1e-6)), 0.0, uLodMax));
+      if (tint > 0.5) px.rgb *= vec3(floor(tint / 65536.0), mod(floor(tint / 256.0), 256.0), mod(tint, 256.0)) / 255.0;
       bestT = pt;
       float pfog = clamp((pt / uDist - 0.6) / 0.4, 0.0, 1.0);
       color = mix((px.a < 0.5 ? uEntCol[i] : px.rgb) * shade * cellColor(ivec3(floor(o + dd * max(pt - 0.01, 0.0)))), sky, pfog);

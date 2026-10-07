@@ -67,3 +67,8 @@ test('pose entities become renderer entities with flat positions', () => {
   const [e] = entitiesFromPose({ entities: [{ id: 1, type: 'hostile', name: 'zombie', kind: 'Hostile mobs', username: undefined, pos: { x: 1, y: 2, z: 3 }, yaw: 0.5, height: 1.95, width: 0.6 }] })
   assert.deepEqual(e, { name: 'zombie', label: 'zombie', kind: 'hostile', x: 1, y: 2, z: 3, width: 0.6, height: 1.95, yaw: 0.5 })
 })
+
+test('pose entities keep the baby flag and the sheep dye for the models', () => {
+  const [e] = entitiesFromPose({ entities: [{ id: 1, type: 'passive', name: 'sheep', pos: { x: 1, y: 2, z: 3 }, yaw: 0, baby: true, dye: 3 }] })
+  assert.deepEqual([e.baby, e.dye], [true, 3])
+})
