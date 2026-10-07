@@ -496,3 +496,15 @@
           (is (zero? (count (calls p "dig"))))
           (is (= :no-crop-seen (:reason result)))
           (is (zero? (:cut result))))))))
+
+(deftest a-ripe-crop-that-reads-unripe-once-in-view-is-skipped-not-cut
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tu/seeing-all (tu/fake-on-floor one-cell))
+              _ (aset p "sensedAt" (fn [pos] #js {:name "wheat" :age 2 :pos pos}))
+              {:keys [eng]} (start {:p p})
+              result (await (child-outcome eng job {} 100))]
+          (is (zero? (count (calls p "dig"))) "the crop read ripe in memory, unripe in view: not cut")
+          (is (zero? (:cut result)))
+          (is (not= :no-crop-seen (:reason result)) "it was a target, then skipped"))))))

@@ -151,6 +151,20 @@
           (is (= 1 (count (h/events-of (:seen s) :tool.broke))))
           (is (= 1 (count (h/events-of (:seen s) :tool.none)))))))))
 
+(deftest a-sapling-the-body-does-not-see-after-the-plant-is-not-counted
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (world {} (item "oak_sapling" 1)) {"forest" one-cell})
+              p (:p s)
+              sensed (.-sensedAt p)]
+          (aset p "sensedAt" (fn [pos] (if (and (seq (places p)) (= 3 (.-x pos)) (= 64 (.-y pos)))
+                                         #js {:name "air" :pos pos}
+                                         (sensed pos))))
+          (let [result (await (tu/child-outcome (:eng s) job {:plan "forest"} 300))]
+            (is (seq (places p)) "the sapling was placed")
+            (is (zero? (:planted result)) "planted counts what is seen, not what the world holds")))))))
+
 (deftest a-bare-cell-over-soil-is-just-planted
   (async done
     (tu/run-async done

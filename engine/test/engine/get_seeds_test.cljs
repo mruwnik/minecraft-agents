@@ -104,6 +104,15 @@
           (await (run-ticks s 10 700))
           (is (zero? (dig-count s))))))))
 
+(deftest no-source-looks-once-and-ends-none
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {} {:blocks {"2,64,0" "dirt"}} 10))]
+          (is (= :none (:reason (done-event s))))
+          (is (= 8 (count (h/calls (:p s) "look"))) "exactly one look-around (8 glances) before concluding there is nothing")
+          (is (zero? (dig-count s))))))))
+
 (deftest the-check-passes-with-only-a-chest
   (async done
     (tu/run-async done
