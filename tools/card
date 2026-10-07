@@ -29,10 +29,14 @@ all_tasks() { api "$URL/api/boards/$(repo_enc)/tasks?show_done=true"; }
 resolve() {
   local q="$*"
   [[ "$q" =~ $UUID_RE ]] && { echo "$q"; return; }
-  local hits
-  hits=$(all_tasks | jq -r --arg q "$q" '
-    .tasks[] | select((.id|startswith($q)) or (.title|ascii_downcase|contains($q|ascii_downcase)))
-    | "\(.id)\t\(.status)\t\(.title)"')
+  local tasks hits
+  tasks=$(all_tasks)
+  # An id prefix is looked up first; titles are searched only when no id starts with the query.
+  hits=$(jq -r --arg q "$q" '
+    .tasks[] | select(.id|startswith($q)) | "\(.id)\t\(.status)\t\(.title)"' <<<"$tasks")
+  [ -n "$hits" ] || hits=$(jq -r --arg q "$q" '
+    .tasks[] | select(.title|ascii_downcase|contains($q|ascii_downcase))
+    | "\(.id)\t\(.status)\t\(.title)"' <<<"$tasks")
   local n
   n=$(printf '%s' "$hits" | grep -c . || true)
   [ "$n" -eq 1 ] || { [ "$n" -eq 0 ] && die "no card matches '$q'"; echo "$hits" >&2; die "$n cards match '$q'"; }

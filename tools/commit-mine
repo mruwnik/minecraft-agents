@@ -306,6 +306,6 @@ stat_text="$(git show --no-renames --stat --format='%h %s' HEAD | sed -n '1,20p'
 printf '%s\n' "$stat_text"
 card_tool="$ROOT/tools/card"
 [ -x "$card_tool" ] || card_tool="$(dirname "$0")/card"
-timeout "${COMMIT_MINE_NOTE_TIMEOUT:-15}" "$card_tool" note "$card" "$stat_text" >/dev/null 2>&1 \
-  || echo "commit-mine: warning: could not post the commit stat to card $card (the commit is done)" >&2
+note_err=$(timeout "${COMMIT_MINE_NOTE_TIMEOUT:-15}" "$card_tool" note "$card" "$stat_text" 2>&1 >/dev/null) \
+  || echo "commit-mine: warning: could not post the commit stat to card $card (the commit is done): $note_err" >&2
 exit 0

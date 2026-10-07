@@ -75,3 +75,20 @@ test('create rejects a non-numeric priority', async () => {
   assert.notEqual(r.code, 0)
   assert.equal(r.requests.length, 0)
 })
+
+test('id: a unique id-prefix match wins over another card whose title names the prefix', async () => {
+  const tasks = { tasks: [
+    { id: '16a76858-0000-0000-0000-000000000000', status: 'pending', title: 'Parent' },
+    { id: 'd5993c1c-0000-0000-0000-000000000000', status: 'pending', title: 'Child (split from 16a76858)' },
+  ] }
+  const r = await runCard(['id', '16a76858'], tasks)
+  assert.equal(r.code, 0, r.err)
+  assert.equal(r.out.trim(), '16a76858-0000-0000-0000-000000000000')
+})
+
+test('id: title words still resolve when no id starts with them', async () => {
+  const tasks = { tasks: [{ id: 'd5993c1c-0000-0000-0000-000000000000', status: 'pending', title: 'Child (split from 16a76858)' }] }
+  const r = await runCard(['id', 'split from'], tasks)
+  assert.equal(r.code, 0, r.err)
+  assert.equal(r.out.trim(), 'd5993c1c-0000-0000-0000-000000000000')
+})
