@@ -62,8 +62,12 @@
 
 (defn ^:async roll
   "Run the job on a world with a lectern at ws-pos; [result p seen]. scripts feed the villager's next offers."
-  [{:keys [entities inventory blocks scripts zones keeps-job?]} args]
-  (let [env (bd/setup {:entities entities :inventory inventory :zones (or zones []) :blocks (merge {ws-key "lectern" "2,63,0" "stone"} blocks)})
+  [{:keys [entities inventory blocks scripts zones keeps-job? self floor wrap]} args]
+  (let [env (cond-> (bd/setup (cond-> {:entities entities :inventory inventory :zones (or zones [])
+                                       :blocks (merge {ws-key "lectern" "2,63,0" "stone"} blocks)}
+                                self (assoc :self self)
+                                floor (assoc :floor floor)))
+              wrap wrap)
         {:keys [p seen]} env
         _ (when-not keeps-job? (rolls-offers! p scripts))
         result (await (child-outcome env (merge {:villager "v-1" :pos ws-pos :item "lectern" :want "enchanted_book"
@@ -209,3 +213,119 @@
                  (select-keys result [:found :rolls :status :reason])))
           (is (= 1 (digs p)))
           (is (= "lectern" (workstation p))))))))
+
+(defn stub-job
+  "env with job replaced by a round that ends done with result."
+  [job-sym result]
+  (fn [env]
+    (let [j (get (:jobs (:eng env)) job-sym)]
+      (assoc-in env [:eng :jobs job-sym] (assoc j :round (fn ^:async stubbed [c] (ctx/result! c result) :done))))))
+
+(def stopped {:status :stopped :reason :no-tool})
+
+(deftest a-dig-child-that-stops-ends-dig-failed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (roll {:entities [(librarian [(offer "paper")])] :wrap (stub-job 'jobs.blocks.dig stopped)} {}))]
+          (is (= {:found false :rolls 0 :status :stopped :reason "dig-failed"} (select-keys result [:found :rolls :status :reason])))
+          (is (= "lectern" (workstation p)) "nothing was broken"))))))
+
+(deftest a-place-child-that-stops-ends-place-failed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p seen] (await (roll {:entities [(vt/villager nil {:profession "unemployed"})]
+                                            :blocks {ws-key "air"}
+                                            :wrap (stub-job 'jobs.blocks.place stopped)} {}))]
+          (is (= {:found false :status :stopped :reason "place-failed"} (select-keys result [:found :status :reason])))
+          (is (= "air" (workstation p)))
+          (is (contains? (vt/kinds seen) :roll.gave-up)))))))
+
+(deftest a-body-on-the-workstation-cell-steps-off-before-placing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (roll {:entities [(vt/villager nil {:profession "unemployed"})]
+                                       :inventory [{:name "lectern" :count 1}]
+                                       :self {:pos {:x 2 :y 64 :z 0}}
+                                       :blocks {ws-key "air"}
+                                       :scripts [[(offer "enchanted_book")]]}
+                                      {}))
+              feet (.-pos (.self p))]
+          (is (= {:found true :rolls 0} (select-keys result [:found :rolls])))
+          (is (= "lectern" (workstation p)))
+          (is (not (and (= 2 (js/Math.floor (.-x feet))) (= 0 (js/Math.floor (.-z feet))))) "the body left the cell"))))))
+
+(deftest a-body-with-nowhere-to-step-off-ends-place-failed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (roll {:entities [(vt/villager nil {:profession "unemployed"})]
+                                       :inventory [{:name "lectern" :count 1}]
+                                       :self {:pos {:x 2 :y 64 :z 0}}
+                                       :floor [2 0 2 0]
+                                       :blocks {ws-key "air"}}
+                                      {}))]
+          (is (= {:found false :status :stopped :reason "place-failed"} (select-keys result [:found :status :reason])))
+          (is (= "air" (workstation p))))))))
+
+(deftest a-villager-out-of-reach-that-cannot-be-walked-to-is-unreachable
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (roll {:entities [(librarian [(offer "paper")] {:pos {:x 20 :y 64 :z 0}})]
+                                       :wrap (stub-job 'jobs.movement.go-to {:arrived false :why :no-path})}
+                                      {}))]
+          (is (= {:found false :rolls 0 :status :stopped :reason "unreachable"} (select-keys result [:found :rolls :status :reason])))
+          (is (zero? (digs p))))))))
+
+(deftest offers-that-cannot-be-read-three-times-end-window
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p seen] (await (roll {:entities [(librarian [(offer "paper")] {:busy true})]} {}))]
+          (is (= {:found false :status :stopped :reason "window"} (select-keys result [:found :status :reason])))
+          (is (zero? (digs p)))
+          (is (contains? (vt/kinds seen) :roll.gave-up)))))))
+
+(defn unemploys-after!
+  "The villager of a world with the workstation broken loses its job lag-ms after the break (seen on the clock), then
+  takes it again with offers when the workstation stands."
+  [{:keys [p clock]} lag-ms offers]
+  (let [state (fake/state p)
+        broke (atom nil)
+        step (fn [_ _ _ _]
+               (let [w @state
+                     stands? (= "lectern" (get-in w [:blocks ws-pos]))
+                     i (first (keep-indexed #(when (= "v-1" (:uuid %2)) %1) (:entities w)))
+                     v (get-in w [:entities i])]
+                 (cond
+                   stands? (do (reset! broke nil)
+                               (when (= "unemployed" (:profession v))
+                                 (swap! state update-in [:entities i] assoc :profession "librarian" :offers offers)))
+                   (nil? @broke) (reset! broke @clock)
+                   (and (>= (- @clock @broke) lag-ms) (not= "unemployed" (:profession v)))
+                   (swap! state update-in [:entities i] assoc :profession "unemployed" :offers nil))))]
+    (add-watch state :lag step)
+    (add-watch clock :lag step)))
+
+(deftest a-villager-that-loses-its-job-within-the-window-is-rolled
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (bd/setup {:entities [(librarian [(offer "paper")])] :blocks {ws-key "lectern" "2,63,0" "stone"}})
+              _ (unemploys-after! env 8000 [(offer "enchanted_book")])
+              result (await (child-outcome env {:villager "v-1" :pos ws-pos :item "lectern" :want "enchanted_book" :claim-s 5} 300))]
+          (is (= {:found true :rolls 1} (select-keys result [:found :rolls])))
+          (is (= "lectern" (workstation (:p env)))))))))
+
+(deftest a-villager-that-loses-its-job-after-the-window-stops-still-employed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (bd/setup {:entities [(librarian [(offer "paper")])] :blocks {ws-key "lectern" "2,63,0" "stone"}})
+              _ (unemploys-after! env 60000 [(offer "enchanted_book")])
+              result (await (child-outcome env {:villager "v-1" :pos ws-pos :item "lectern" :want "enchanted_book" :claim-s 5} 300))]
+          (is (= "still-employed" (:reason result)))
+          (is (= "lectern" (workstation (:p env)))))))))
