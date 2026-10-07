@@ -54,10 +54,11 @@
    - options.costs.dropFactor (1): scales the fall seconds and fall damage of every drop on land (0: free); options.maxDrop
      (3) refuses a drop of more than that many blocks (1: none of 2 or 3). go-to's :drop-cost sets them.
    - options.costs.airUsed (0): seconds of air the body has used at the start (a plan made mid-dive); go-to's body-policy
-     sets it from the oxygen when the head is under water.
+     sets it from the oxygen when the head is under water. Such a plan to a goal with its head in air (to-air?) is never
+     refused for air: each second past the supply is DROWN-HP hp of risk, priced at damageWeight (not held to damageBudget).
    - options.stopAtEdge: with the goal unloaded, the search ends at the first node it expands at the loaded edge (edgeStop)
      and names it as its frontier, not after searching all loaded land. go-to's budgeted searches set it (walk.search/new-search)."
-  (:require [engine.path.planner.base :as base :refer [OCTILE-SLACK REGIONS TABLE WHOLE next-pow2]]
+  (:require [engine.path.planner.base :as base :refer [DROWN-HP OCTILE-SLACK REGIONS TABLE WHOLE next-pow2]]
             [engine.path.planner.search :refer [Search ->Search]]
             [engine.path.planner.world]
             [engine.path.planner.nodes]
@@ -156,6 +157,20 @@
       (js/Math.max limit (+ used (- (unchecked-get costs "airSupply") (unchecked-get costs "airLimit"))))
       limit)))
 
+(defn- to-air?
+  "Whether a plan started with air used (costs.airUsed above 0) goes to air: its one near goal's head cell is loaded and
+  not submerged (air, or a bubble column, which gives air). No swim of such a plan is refused for air (swimBegin)."
+  [^js snapshot ^js query ^js options]
+  (let [^js goal (.-goal query)
+        ^js goals (.-goals query)
+        ^js table (.-table options)]
+    (and (pos? (or-else (some-> (.-costs options) (unchecked-get "airUsed")) 0))
+         (or (nil? goals) (zero? (.-length goals)))
+         (some? goal) (identical? (.-kind goal) "near")
+         (let [id (.stateAt snapshot (.-x goal) (inc (.-y goal)) (.-z goal))]
+           (and (not (== id base/UNLOADED))
+                (or (not (== (aget (.-kind table) id) base/WATER)) (pos? (aget (.-bubble table) id))))))))
+
 (defn- search-from ^Search [^js snapshot ^js query ^js options]
   (let [^js table (.-table options)
         ^js from (.-from query)
@@ -223,7 +238,7 @@
      (unchecked-get costs "swimH") (unchecked-get costs "swimUp") (unchecked-get costs "swimDown")
      (unchecked-get costs "exit") (unchecked-get costs "current") (unchecked-get costs "bubbleUp") (unchecked-get costs "bubbleDown")
      (unchecked-get costs "airSupply") (air-limit costs) (unchecked-get costs "airDrain") (unchecked-get costs "maxWaterDrop")
-     (unchecked-get costs "dripleaf") (unchecked-get costs "dripleafRisk") (unchecked-get costs "dropFactor")
+     (unchecked-get costs "dripleaf") (unchecked-get costs "dripleafRisk") (if (to-air? snapshot query options) (* DROWN-HP risk-scale) 0) (unchecked-get costs "dropFactor")
      (unchecked-get costs "walkS") (unchecked-get costs "sprintS")
      ;; search box
      (- (aget bounds 0) margin) (+ (aget bounds 1) margin)
@@ -242,8 +257,8 @@
      (js/Int32Array. cap) 0 0
      ;; support touch enter-risk enter-slow enter-extra ty gap-y quiet open-mode allow-shut gap-seen air-seen enters-shut
      0 0 0 0 0 0 0 false false false false false false
-     ;; move-air move-peak move-water move-open open-lists activators view
-     0 0 0 0 #js [] (js/Map.) nil
+     ;; move-air move-peak move-water move-drown move-open open-lists activators view
+     0 0 0 0 0 #js [] (js/Map.) nil
      ;; edge-mode seen-edges door-arrival door-here door-through open-x open-y open-z
      0 nil nil nil false 0 0 0
      ;; tight cells

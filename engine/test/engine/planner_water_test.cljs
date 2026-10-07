@@ -272,6 +272,26 @@
 (deftest a-plan-started-past-the-air-limit-still-swims-up
   (is (found? (run dive-or-up dive-start dive-goal {:goalFlood 0 :costs {:airUsed 14}}))))
 
+;; a sealed tunnel (x 11..20, head in water) to an air pocket at x 21: 4.5 s of swimming. A body with 13 s of air used
+;; drowns for the last 3 s of it (the exit counts)
+(def drown-tunnel (world [[10 64 -2 23 68 4 "stone"] [11 64 1 20 65 1 "water"] [21 64 1 21 65 1 "air"]]))
+(def drown-start {:x 11 :y 64 :z 1})
+
+(deftest a-plan-to-air-from-under-water-prices-drowning-not-refuses
+  (let [r (run drown-tunnel drown-start (near 21 64 1 0) {:goalFlood 0 :costs {:airUsed 13}})]
+    (is (found? r) "the swim to air is planned")
+    (is (<= 4 (cost r :risk) 7) "2 hp of risk a second past the supply (about 3 s)")))
+
+(deftest a-plan-to-air-has-no-drowning-risk-with-the-air-to-spare
+  (is (zero? (cost (run drown-tunnel drown-start (near 21 64 1 0) {:goalFlood 0 :costs {:airUsed 2}}) :risk))))
+
+(deftest a-plan-to-air-is-found-over-the-damage-budget
+  (is (found? (run drown-tunnel drown-start (near 21 64 1 0) {:goalFlood 0 :damageBudget 1 :costs {:airUsed 13}}))
+      "no way fits the budget: the fastest way to air still comes back"))
+
+(deftest a-plan-to-a-goal-under-water-keeps-the-air-refusal
+  (is (not (found? (run drown-tunnel drown-start (near 20 64 1 0) {:goalFlood 0 :costs {:airUsed 13}})))))
+
 (deftest drain-scales-the-lowest-air-reading
   (let [full (cost (run-up (column 20) 20) :airMin)
         half (cost (run-up (column 20) 20 {:costs {:airDrain 0.5}}) :airMin)]

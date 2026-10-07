@@ -909,7 +909,7 @@
 (defn ^:async pocket-run!
   "One breathe run in pocket-tunnel with seen? (cell -> bool) stubbed; the ending, the body, its reader and the dig count."
   [seen? blocks]
-  (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 10 :pos {:x 0 :y 64 :z 0}} :blocks blocks})]
+  (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}} :blocks blocks})]
     (stub-seen! p seen?)
     (await (one-run! eng (assoc defaults :air-radius 8)))
     {:ended (ended seen) :p p :data (stopped-data seen)
@@ -1197,7 +1197,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 10 :pos {:x 0 :y 64 :z 0}} :blocks (drag-tunnel)
+        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}} :blocks (drag-tunnel)
                                            :states {"3,64,0" {:drag true} "3,65,0" {:drag true}}})]
           (await (one-run! eng (assoc defaults :air-radius 8)))
           (is (empty? (of-kind seen :no_air)) "the go-to leg routes round the column")
