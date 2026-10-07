@@ -78,7 +78,7 @@ bad_sha="$(git -C "$repo" rev-parse --verify -q "$bad^{commit}")" || { echo "tes
 good_sha="$(git -C "$repo" rev-parse --verify -q "$good^{commit}")" || { echo "test-bisect: unknown rev $good" >&2; exit 2; }
 
 work="$(mktemp -d "${TMPDIR:-/tmp}/mc-bisect-XXXXXX")"
-wt="$work/wt"; child=""
+wt="$work/wt"; child=""; tailpid=""; relay=""
 cleanup() {
   # TERM the bisect's whole group (own session): each step's trap stops its legacy servers; wait for that before the worktree goes
   # (git bisect may exit before its step scripts do, so wait for the whole group, at most 120 s)
@@ -86,6 +86,8 @@ cleanup() {
     kill -TERM -- "-$child" 2>/dev/null; wait "$child" 2>/dev/null
     for _ in $(seq 1 1200); do kill -0 -- "-$child" 2>/dev/null || break; sleep 0.1; done
   fi
+  [ -n "$tailpid" ] && kill "$tailpid" 2>/dev/null
+  [ -n "$relay" ] && kill "$relay" 2>/dev/null
   [ -d "$wt" ] && "$wt_sh" --remove "$wt" >/dev/null 2>&1
   git -C "$repo" worktree prune
   rm -rf "$work"
@@ -122,8 +124,8 @@ tailpid=$!
 sed -u -n -E '/^@@end$/q; /^(step |@@test )/p' <&3 &
 relay=$!
 wait $child; child=""
-echo @@end >> "$work/run.log"
-wait $relay; kill "$tailpid" 2>/dev/null; exec 3<&-
+printf '\n@@end\n' >> "$work/run.log"  # own line even when the run died mid-line
+wait $relay; kill "$tailpid" 2>/dev/null; exec 3<&-; tailpid=""; relay=""
 
 first="$(git bisect log | sed -n 's/^# first .\{0,1\}bad.\{0,1\} commit: \[\([0-9a-f]*\)\].*/\1/p' | tail -n1)"
 if [ -z "$first" ]; then
