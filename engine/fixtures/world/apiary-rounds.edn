@@ -1,0 +1,48 @@
+;; Card bd6f0344 / d4f90a9d: the apiary jobs as whole attempts, one call works every fire or hive.
+;; Should-succeed: two raised fires (one under a carpet, one open) with campfires and a carpet carried are both sunk and
+;; carpeted in one guard call, the dug carpet picked up and put back; two ripe smoked hives both harvested with the comb
+;; collected in one harvest call; nothing ripe -> maintain does not act.
+;; Should-fail: an unsmoked ripe hive is declined (:not-smoked, untouched); no shears or bottle -> :no-tool, hive untouched.
+{:defaults
+ {:tags [:apiary :rounds] :time :day
+  :plot {:height 8}
+  :body {:at [6.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 120}
+ :cases
+ [{:name "guard-sinks-two-raised-fires"
+   :blocks [[:set [14 0 10] "campfire[lit=true]"] [:set [14 1 10] "red_carpet"]
+            [:set [14 0 22] "campfire[lit=true]"]]
+   :body {:inventory [["iron_pickaxe" 1] ["campfire" 2] ["white_carpet" 1]]}
+   :act [[:job (jobs.apiary.guard {:radius 20})]]
+   :expect [{:event {:kind :apiary.guard-done :data {:sunk 2 :carpeted 2 :reason :guarded}} :within-s 100 :of-job true}
+            {:event {:source :job :kind :completed} :within-s 100 :of-job true}]
+   :after [[:block [14 -1 10] "campfire[lit=true]"] [:block [14 -1 22] "campfire[lit=true]"]
+           [:not-block [14 1 10] "red_carpet"] [:item "campfire" 0] [:item "white_carpet" 0]
+           [:item "red_carpet" 0]]}
+  {:name "harvest-takes-two-ripe-hives"
+   :blocks [[:set [14 0 10] "campfire[lit=true]"] [:set [14 1 10] "beehive[honey_level=5]"]
+            [:set [14 0 22] "campfire[lit=true]"] [:set [14 1 22] "beehive[honey_level=5]"]]
+   :body {:inventory [["shears" 1]]}
+   :act [[:job (jobs.apiary.harvest {:radius 20})]]
+   :expect [{:event {:kind :apiary.done :data {:harvested 2 :reason :harvested}} :within-s 100 :of-job true}]
+   :after [[:block [14 1 10] "beehive[honey_level=0]"] [:block [14 1 22] "beehive[honey_level=0]"]
+           [:item "honeycomb" [:>= 6]]]}
+  {:name "maintain-nothing-ripe-does-not-act"
+   :blocks [[:set [14 0 10] "campfire[lit=true]"] [:set [14 1 10] "beehive[honey_level=0]"]]
+   :body {:inventory [["shears" 1] ["campfire" 1] ["white_carpet" 1]]}
+   :act [[:job (jobs.apiary.maintain {:radius 20})]]
+   :expect [{:event {:kind :waiting :data {:reason :nothing-to-do}} :within-s 30 :of-job true}
+            {:no-event {:kind :maintain.done} :for-s 20}]
+   :after [[:block [14 1 10] "beehive[honey_level=0]"] [:item "honeycomb" 0] [:item "white_carpet" 1]]}
+  {:name "harvest-unsmoked-hive-declined"
+   :blocks [[:set [14 1 10] "beehive[honey_level=5]"]]
+   :body {:inventory [["shears" 1]]}
+   :act [[:job (jobs.apiary.harvest {:radius 20})]]
+   :expect [{:event {:kind :apiary.done :data {:reason :not-smoked}} :within-s 60 :of-job true}]
+   :after [[:block [14 1 10] "beehive[honey_level=5]"] [:item "honeycomb" 0]]}
+  {:name "harvest-without-a-tool-is-no-tool"
+   :blocks [[:set [14 0 10] "campfire[lit=true]"] [:set [14 1 10] "beehive[honey_level=5]"]]
+   :body {:inventory [["stick" 1]]}
+   :act [[:job (jobs.apiary.harvest {:radius 20})]]
+   :expect [{:event {:kind :apiary.done :data {:reason :no-tool}} :within-s 60 :of-job true}]
+   :after [[:block [14 1 10] "beehive[honey_level=5]"] [:item "honeycomb" 0]]}]}

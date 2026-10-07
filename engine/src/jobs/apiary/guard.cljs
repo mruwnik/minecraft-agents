@@ -188,10 +188,18 @@
   (ctx/update-mem! c dissoc :sinking)
   (skip! c pos reason))
 
+(defn ^:async collect-step!
+  "Pick up the dug carpet saved in mem :collecting: :continue while the pick-up waits, any other end closes it."
+  [c]
+  (let [r (await (collect-carpet! c (:collecting (ctx/mem c))))]
+    (if (= :continue r)
+      :continue
+      (do (ctx/update-mem! c dissoc :collecting) :again))))
+
 (defn ^:async finish-sink! [c {:keys [carpet]}]
-  (ctx/update-mem! c dissoc :sinking)
+  (ctx/update-mem! c #(cond-> (dissoc % :sinking) carpet (assoc :collecting carpet)))
   (booked! c :sunk)
-  (if (and carpet (= :continue (await (collect-carpet! c carpet)))) :continue :again))
+  (if carpet (await (collect-step! c)) :again))
 
 (def max-sink-steps 8)
 
@@ -274,8 +282,10 @@
         _ (ctx/update-mem! c assoc :started true :center center)
         _ (settle-carpet! c)
         m (ctx/mem c)]
-    (if (:sinking m)
-      (await (resume-sink! c))
+    (cond
+      (:collecting m) (await (collect-step! c))
+      (:sinking m) (await (resume-sink! c))
+      :else
       (let [seen (survey c center)
             target (first (:todo seen))]
         (cond

@@ -246,3 +246,24 @@
           (is (seq @opts))
           (is (every? #(false? (:escalate %)) @opts) "a walk to a hive never digs or pillars")
           (is (empty? (calls p "useOn"))))))))
+
+(defn with-stub-mem [m f]
+  (with-redefs [ctx/mem (fn [c] @(:mem c))
+                ctx/update-mem! (fn [c f & args] (apply swap! (:mem c) f args))]
+    (f)))
+
+(deftest a-cut-before-the-click-landed-books-nothing
+  (let [{:keys [p]} (setup (world {:inventory (inv "shears" 1)}))
+        m (atom {:clicking {:pos {:x 2 :y 64 :z 0} :tool "shears"}})]
+    (with-stub-mem m #(harvest/settle-click! {:primitives p :mem m}))
+    (is (nil? (:clicking @m)))
+    (is (zero? (:harvested @m 0)))
+    (is (nil? (:phase @m)))))
+
+(deftest a-cut-after-the-click-landed-books-it-once
+  (let [{:keys [p]} (setup (-> (world {:inventory (inv "shears" 1)}) (update :states assoc hive {:honey_level 0})))
+        m (atom {:clicking {:pos {:x 2 :y 64 :z 0} :tool "shears"}})
+        c {:primitives p :mem m}]
+    (with-stub-mem m #(do (harvest/settle-click! c) (harvest/settle-click! c)))
+    (is (= 1 (:harvested @m)))
+    (is (= :collect (:phase @m)))))

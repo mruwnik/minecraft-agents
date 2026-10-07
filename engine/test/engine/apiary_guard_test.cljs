@@ -331,3 +331,40 @@
           (is (every? #(false? (:escalate %)) @opts) "a walk to a fire never digs or pillars")
           (is (every? :zone-tolls @opts))
           (is (empty? (calls p "place"))))))))
+
+(deftest a-carpet-pick-up-that-yields-is-called-again-until-it-ends
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (-> (fire-world {:inventory (inv "campfire" 1)}) (open-side "3,64,0") (update :blocks assoc "2,65,0" "red_carpet"))
+              {:keys [eng]} (setup w true)
+              picks (atom 0)
+              result (with-redefs [guard/collect-carpet! (fn ^:async f [_ _] (if (< (swap! picks inc) 3) :continue :done))]
+                       (await (child-outcome eng job {} 80)))]
+          (is (= 3 @picks) "the pick-up child is called again after each :continue, then closes")
+          (is (= 1 (:sunk result))))))))
+
+(defn stub-ctx
+  "A ctx over a fake world whose job memory is the atom m."
+  [p m]
+  {:primitives p :mem m})
+
+(defn with-stub-mem [m f]
+  (with-redefs [ctx/mem (fn [c] @(:mem c))
+                ctx/update-mem! (fn [c f & args] (apply swap! (:mem c) f args))]
+    (f)))
+
+(deftest a-cut-before-the-carpet-lands-books-nothing
+  (let [{:keys [p]} (setup (fire-world {:inventory (inv "white_carpet" 1)}))
+        m (atom {:carpeting {:x 2 :y 64 :z 0}})]
+    (with-stub-mem m #(guard/settle-carpet! (stub-ctx p m)))
+    (is (nil? (:carpeting @m)))
+    (is (zero? (:carpeted @m 0)))))
+
+(deftest a-cut-after-the-carpet-landed-books-it-once
+  (let [{:keys [p]} (setup (-> (fire-world {:inventory (inv "white_carpet" 1)}) (update :blocks assoc "2,65,0" "white_carpet")))
+        m (atom {:carpeting {:x 2 :y 64 :z 0}})
+        c (stub-ctx p m)]
+    (with-stub-mem m #(do (guard/settle-carpet! c) (guard/settle-carpet! c)))
+    (is (nil? (:carpeting @m)))
+    (is (= 1 (:carpeted @m)) "a second settle finds no intent and books nothing more")))
