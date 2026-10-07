@@ -49,3 +49,28 @@
 (deftest a-climb-price-flips-ladder-for-stair
   (is (true? (climbs? {})))
   (is (false? (climbs? {:climb-up 5})) "dear ladder: the long stair"))
+
+(deftest landing-is-checked-by-block-name-and-factor
+  (are [landing ok?] (= ok? (nil? (cost/landing-problem landing)))
+    nil true
+    {} true
+    {"hay_block" 0.2 "slime_block" -1 "water" 0} true
+    {"no_such_block" 1} false
+    {"hay_block" "soft"} false
+    {"hay_block" js/Infinity} false
+    {:hay_block 0.2} false
+    [[:hay_block 1]] false))
+
+(deftest landing-maps-every-state-of-a-block-to-its-factor
+  (let [hay (.stateAt (world {:blocks [[0 70 0 "hay_block"]]}) 0 70 0)
+        slime (.stateAt (world {:blocks [[0 70 0 "slime_block"]]}) 0 70 0)
+        stone (.stateAt (world {:blocks [[0 70 0 "stone"]]}) 0 70 0)
+        m (cost/planner-landing nil)]
+    (is (= [0.2 -1 nil] [(.get m hay) (.get m slime) (.get m stone)]) "hay and slime by default")
+    (is (= [1 nil] [(.get (cost/planner-landing {"hay_block" 1}) hay) (.get (cost/planner-landing {"hay_block" 1}) stone)]))
+    (is (= 0 (.get (cost/planner-landing {"stone" 0}) stone)))))
+
+(deftest with-drops-sets-the-landing-of-the-policy
+  (let [hay (.stateAt (world {:blocks [[0 70 0 "hay_block"]]}) 0 70 0)]
+    (is (= 0.2 (.get (.-landing (wplan/with-drops #js {} {})) hay)) "the default")
+    (is (= 0.5 (.get (.-landing (wplan/with-drops #js {} {:landing {"hay_block" 0.5}})) hay)))))

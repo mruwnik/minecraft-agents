@@ -200,3 +200,10 @@
   (doseq [[tilt floor] [["none" 1] ["unstable" 1] ["partial" 1] ["full" 0]]]
     (testing tilt
       (is (= floor (at "dripleaf" "big_dripleaf" {:tilt tilt :waterlogged false}))))))
+
+(deftest state-ids-lists-every-state-of-a-block-by-name
+  (is (= [(fx/state-id "hay_block" {:axis "y"}) (fx/state-id "hay_block" {:axis "x"}) (fx/state-id "hay_block" {:axis "z"})]
+         (map #(nth (b/state-ids table "hay_block") %) [1 0 2]))) 
+  (is (= 3 (count (b/state-ids table "hay_block"))))
+  (is (= [(fx/state-id "stone" {})] (b/state-ids table "stone")))
+  (is (nil? (b/state-ids table "no_such_block"))))

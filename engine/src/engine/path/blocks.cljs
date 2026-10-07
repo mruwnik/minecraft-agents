@@ -135,7 +135,8 @@
 (defn build-state-table
   "The planner's block table of a prismarine registry: typed arrays indexed by state id (top, base, kind, hazard, stairUp, climb,
   climbName, facing, openable, openState, openKind, doorHalf, activator, attach, floor, special, flowing, bubble, magma,
-  dripleaf, farmland, boxStart, boxCount, boxes, offsetMax, partial), as a JS object."
+  dripleaf, farmland, boxStart, boxCount, boxes, offsetMax, partial, nameIds), as a JS object. nameIds is a Map of block name to
+  its [first last] state id (see state-ids)."
   [registry]
   (let [Block (prismarine-block registry)
         offset-max (.-OFFSET_MAX ^js (offsets/offsets))
@@ -166,7 +167,10 @@
         door-half (js/Uint8Array. size) ;; 1 lower half of a door, 2 upper half
         activator (js/Uint8Array. size)
         attach (js/Uint8Array. size) ;; where a button's or lever's supporting block lies from it: 1 +x, 2 -x, 3 +z, 4 -z, 5 +y, 6 -y
+        name-ids (js/Map.)
         floats #js []]
+    (doseq [^js block blocks]
+      (.set name-ids (.-name block) #js [(.-minStateId block) (.-maxStateId block)]))
     (doseq [block blocks
             id (range (.-minStateId ^js block) (inc (.-maxStateId ^js block)))]
       (let [state (.fromStateId ^js Block id 0)
@@ -221,7 +225,13 @@
     #js {:top top :base base :kind kind :hazard hazard :stairUp stair-up :climb climb :climbName climb-name :facing facing
          :openable openable :openState open-state :openKind open-kind :doorHalf door-half :activator activator :attach attach
          :floor floor :special special :flowing flowing :bubble bubble :magma magma :dripleaf dripleaf :farmland farmland
-         :boxStart box-start :boxCount box-count :boxes (js/Float32Array.from floats) :offsetMax offset-maxes :partial partial}))
+         :boxStart box-start :boxCount box-count :boxes (js/Float32Array.from floats) :offsetMax offset-maxes :partial partial :nameIds name-ids}))
+
+(defn state-ids
+  "Every state id of the block called name in table (build-state-table), nil when there is no such block."
+  [^js table name]
+  (when-some [^js r (.get (.-nameIds table) name)]
+    (range (aget r 0) (inc (aget r 1)))))
 
 (defonce ^:private shared (volatile! nil))
 

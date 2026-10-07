@@ -197,7 +197,8 @@
                                        :equipment (cost/equipment-of (.-equipment self))})
                    {:damage-budget (damage-budget c)
                     :damage-weight (* (or (:hp-seconds (:args c)) cost/hp-seconds) (cost/health-scale (.-health self)))
-                    :danger-cap (max cost/danger-cap (or (:danger-max-rate (:args c)) 0))})
+                    :danger-cap (max cost/danger-cap (or (:danger-max-rate (:args c)) 0))}
+                   (when-some [landing (:landing (:args c))] {:landing landing}))
       (and (number? food) (<= food 6)) (assoc :sprint false))))
 
 (defn body-cell

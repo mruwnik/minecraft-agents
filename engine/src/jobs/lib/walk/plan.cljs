@@ -62,11 +62,13 @@
 (defn with-drops
   "options (the planner's, a JS object) with the policy's :drop-cost: a number is the planner's costs.dropFactor (nil: as
   it is), false takes no drop of 2 or 3 (maxDrop 1). The policy's :max-drop is maxDrop, its :fall-factor fallFactor, and
-  :damage-budget and :damage-weight the planner's damageBudget and damageWeight (none: the planner's defaults)."
+  :damage-budget and :damage-weight the planner's damageBudget and damageWeight (none: the planner's defaults). Its :landing (block
+  name -> damage factor) is the planner's landing over cost/default-landing."
   [^js options policy]
   (let [k (:drop-cost policy)]
     (doseq [[opt key] [["maxDrop" :max-drop] ["fallFactor" :fall-factor] ["damageBudget" :damage-budget] ["damageWeight" :damage-weight] ["dangerCap" :danger-cap]]]
       (when-some [v (get policy key)] (unchecked-set options opt v)))
+    (unchecked-set options "landing" (cost/planner-landing (:landing policy)))
     (when (seq (:costs policy))
       (unchecked-set options "costs" (cost/planner-costs (:costs policy))))
     (cond
