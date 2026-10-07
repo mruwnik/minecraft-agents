@@ -64,9 +64,10 @@
 (deftest landing-maps-every-state-of-a-block-to-its-factor
   (let [hay (.stateAt (world {:blocks [[0 70 0 "hay_block"]]}) 0 70 0)
         slime (.stateAt (world {:blocks [[0 70 0 "slime_block"]]}) 0 70 0)
+        honey (.stateAt (world {:blocks [[0 70 0 "honey_block"]]}) 0 70 0)
         stone (.stateAt (world {:blocks [[0 70 0 "stone"]]}) 0 70 0)
         m (cost/planner-landing nil)]
-    (is (= [0.2 -1 nil] [(.get m hay) (.get m slime) (.get m stone)]) "hay and slime by default")
+    (is (= [0.2 -1 0.2 nil] [(.get m hay) (.get m slime) (.get m honey) (.get m stone)]) "hay, slime and honey by default")
     (is (= [1 nil] [(.get (cost/planner-landing {"hay_block" 1}) hay) (.get (cost/planner-landing {"hay_block" 1}) stone)]))
     (is (= 0 (.get (cost/planner-landing {"stone" 0}) stone)))))
 

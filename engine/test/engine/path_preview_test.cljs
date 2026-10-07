@@ -189,3 +189,8 @@
           (let [{:keys [out]} (await (preview (pond) {:pos [20 64 1] :range 0 :costs costs}))]
             (is (= :bad-costs (:reason out)) (pr-str costs))
             (is (false? (:found out)))))))))
+
+(deftest args-list-the-landing-options
+  (is (contains? pp/args :landing))
+  (is (re-find #":landing" pp/doc))
+  (is (re-find #":bad-landing" pp/doc)))

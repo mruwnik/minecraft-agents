@@ -43,8 +43,8 @@
 
 (def default-landing
   "Block name -> share of a fall's damage a body takes landing on it (go-to's :landing, which overrides entry by entry): hay
-  takes 80% off; a negative factor (slime) takes no drop over 3 onto the block at all, the body bounces off it."
-  {"hay_block" 0.2 "slime_block" -1})
+  and honey take 80% off; a negative factor (slime) takes no drop over 3 onto the block at all, the body bounces off it."
+  {"hay_block" 0.2 "honey_block" 0.2 "slime_block" -1})
 
 (defn landing-problem
   "Why landing is not a usable go-to :landing (nil, or a map of block name to a finite number), else nil."

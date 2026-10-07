@@ -12,7 +12,7 @@
   "Dry run of a go-to: plan the route to :pos (or :place) from where the body stands, with the policy, costs, dangers and
   tolls go-to plans with, and report it. Nothing is walked, opened or dug. One round, one plan (a search of any length, in
   slices that yield), then :done.
-  Takes the go-to args :pos :place :range :doors :dangers :dark :tolls :drop-cost :costs :min-health :max-damage :hp-seconds :food :one-way, same defaults, and the danger prices :flee-factor :fight-factor :danger-max-rate :danger-shape.
+  Takes the go-to args :pos :place :range :doors :dangers :dark :tolls :drop-cost :costs :landing :min-health :max-damage :hp-seconds :food :one-way, same defaults, and the danger prices :flee-factor :fight-factor :danger-max-rate :danger-shape.
   Returns {:status :completed :found true :length :seconds :summary :steps :moves :doors :waypoints}: length is the horizontal
   blocks, seconds the planner's cost in seconds (tolls, dark and danger costs not included), summary its words (drops, swims,
   doors), steps the step count, moves a count of each move kind (:drop :jump :open ...), doors the cells [x y z] it
@@ -20,7 +20,7 @@
   A route that only gets nearer (a partial plan) or none is {:status :stopped :found false :reason (the planner's, as
   go-to's :why; :abilities with :kind) :near} plus :partial {the same fields up to where it ends} when there is one.
   A bad :pos or :place, :tolls, :drop-cost, :min-health, :max-damage or :hp-seconds, or a body without pathWorld sensing, is {:status :stopped :found false :reason
-  :bad-pos|:bad-name|:unknown-place|:bad-tolls|:bad-drop-cost|:bad-costs|:bad-min-health|:bad-max-damage|:bad-hp-seconds|:unsupported :text}.")
+  :bad-pos|:bad-name|:unknown-place|:bad-tolls|:bad-drop-cost|:bad-costs|:bad-landing|:bad-min-health|:bad-max-damage|:bad-hp-seconds|:unsupported :text}.")
 
 (def args
   {:pos {:doc "target position [x y z] or {:x :y :z}" :type :pos :default nil}
@@ -32,6 +32,7 @@
    :tolls {:doc "cells to cross only as a last resort, [{:x :y :z :factor}]" :default nil}
    :drop-cost {:doc "number: scales the cost of a drop; false: no drop of 2 or 3 at all" :default 1}
    :costs {:doc "as go-to :costs" :default nil}
+   :landing {:doc "as go-to :landing: block name -> share of a fall's damage taken landing on it (negative: no drop over 3 onto it)" :default nil}
    :min-health {:doc "go-to's :min-health: the hp the walk may not spend below" :default nil}
    :max-damage {:doc "go-to's :max-damage: at most this many hp spent on drops and plants" :default nil}
    :food {:doc "go-to's :food: the food level (0-20) the damage budget counts on; default the body's own" :default nil}
