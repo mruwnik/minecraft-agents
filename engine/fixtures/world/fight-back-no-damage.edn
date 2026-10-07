@@ -8,9 +8,14 @@
   :body {:at [16.5 0 16.5]}}
  :cases
  [{:name "skeleton-dies-stone-sword"
+   ;; no reflex: one firing the moment the skeleton is summoned knows it by sound only and flees (a heard skeleton is a
+   ;; danger); the job is submitted once the body has seen it, so it decides on its real place
+   :register []
    :body {:inventory [["stone_sword" 1]]}
-   :act [[:summon "skeleton" [18.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
-   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 10}
+   :act [[:summon "skeleton" [18.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:wait-s 3]
+         [:job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})]]
+   :expect [{:event {:source :job :kind :child_started :data {:slot :fight}} :within-s 15}
             {:no-event {:kind :fight_no_damage} :for-s 25}]
    :after [[:entities "type=skeleton,tag=wt" [[0 0 0] [32 4 32]] 0]]
    :limit-s 40}
