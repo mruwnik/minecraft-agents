@@ -2914,6 +2914,15 @@ test('digTime is the held tool time without an item, and the named item time for
   assert.equal(p.digTime(at(2, 64, 0), 'diamond_pickaxe'), 9400)
 })
 
+test('digTime of a named item and clearTime follow the tick rate (physicsClock.digMs)', () => {
+  const { bot, p } = rig(world)
+  bot.physicsClock = { digMs: ms => ms / 2 }
+  bot.registry.itemsByName = { diamond_pickaxe: { id: 7 } }
+  const real = bot.blockAt
+  bot.blockAt = pos => { const b = real(pos); return b && { ...b, digTime: () => 9400 } }
+  assert.equal(p.digTime(at(2, 64, 0), 'diamond_pickaxe'), 4700)
+})
+
 test('digTime is 0 for air and a block that cannot be dug', () => {
   const { bot, p } = rig(world)
   bot.digTime = () => 12000
@@ -2941,6 +2950,15 @@ test('clearTime is the time of the named item or the hand, Infinity for an undig
   assert.equal(p.clearTime('cobweb', 'shears'), 400)
   assert.equal(p.clearTime('bedrock'), Infinity)
   assert.equal(p.clearTime('no_such_block'), 0)
+})
+
+test('clearTime follows the tick rate (physicsClock.digMs)', () => {
+  const { bot, p } = rig(world)
+  bot.registry = registryFor('1.21.8')
+  fixDigMaterials(bot.registry)
+  bot.physicsClock = { digMs: ms => ms / 2 }
+  assert.equal(p.clearTime('snow_block'), 500)
+  assert.equal(p.clearTime('bedrock'), Infinity)
 })
 
 const hurtRig = () => {

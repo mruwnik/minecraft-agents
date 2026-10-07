@@ -33,6 +33,9 @@ export function createDig (env) {
     return (Number.isFinite(ms) ? ms / 1000 : 0) + DIG_MARGIN_S + DROP_WAIT_S
   }
 
+  // block.digTime counts 50 ms a tick; at another server tick rate the shim's clock scales it (bot.digTime is wrapped already)
+  const atRate = ms => env.bot.physicsClock?.digMs(ms) ?? ms
+
   // the expected dig time in ms of the block at pos with the named tool (the held one when item is omitted or held);
   // 0 for air and a block that cannot be dug. Enchantments and effects are left out, so a faster dig is never cut short.
   const digTime = (pos, itemName) => {
@@ -40,7 +43,7 @@ export function createDig (env) {
     if (!block || isAir(block.name) || !block.diggable) return 0
     if (!itemName || itemName === env.bot.heldItem?.name) return env.bot.digTime?.(block) ?? 0
     const type = env.bot.registry?.itemsByName?.[itemName]?.id
-    return block.digTime?.(type, env.bot.game?.gameMode === 'creative', env.bot.entity.isInWater, !env.bot.entity.onGround, [], {}) ?? 0
+    return atRate(block.digTime?.(type, env.bot.game?.gameMode === 'creative', env.bot.entity.isInWater, !env.bot.entity.onGround, [], {}) ?? 0)
   }
 
   // the time in ms to break a block of this name with the named item (the bare hand when omitted); Infinity for a block
@@ -53,7 +56,7 @@ export function createDig (env) {
     const block = blockClass(registry).fromStateId(kind.defaultState, 0)
     if (!block.diggable) return Infinity
     const type = itemName ? registry.itemsByName?.[itemName]?.id : null
-    return block.digTime(type ?? null, false, false, false, [], {})
+    return atRate(block.digTime(type ?? null, false, false, false, [], {}))
   }
 
   // the item names minecraft-data lists as able to harvest a block (its drops are lost otherwise); null when the

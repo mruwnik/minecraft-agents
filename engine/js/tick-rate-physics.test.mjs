@@ -70,3 +70,19 @@ test('dig time is the vanilla ticks at the current rate', async t => {
   client.emit('set_ticking_state', { tick_rate: 40, is_frozen: false })
   assert.equal(bot.physicsClock.digMs(1000), 500)
 })
+
+test('bot.digTime is wrapped by the shim: stock digging loaded first, its time follows the rate', async t => {
+  const { bot, client } = await fakeBot(t)
+  const block = { diggable: true, digTime: () => 1000, material: 'rock', name: 'stone' }
+  const stock = bot.digTime.length >= 0 && bot.digTime(block)
+  assert.equal(Number.isFinite(stock), true)
+  client.emit('set_ticking_state', { tick_rate: 40, is_frozen: false })
+  assert.equal(bot.digTime(block), stock / 2)
+})
+
+test('the shim replaces stock physics: one physics plugin, the shim one, runs', async t => {
+  const { bot, ticks, advance } = await fakeBot(t)
+  assert.equal(typeof bot.physicsClock?.digMs, 'function')
+  advance(1000)
+  assert.equal(ticks.n, 20, 'a stock plugin loaded as well would tick twice')
+})
