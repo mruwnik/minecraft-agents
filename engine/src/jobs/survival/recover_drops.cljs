@@ -56,7 +56,8 @@
   A pile already carried again ends :collected without a collect step.
   Restart-safe: the decision, the baseline of carried items and the phase are kept in a :recover-trip entry keyed to the death.
   A run cut by a higher reflex, or a restarted body, goes on with the same trip.
-  Memory: reads :died, :respawned, :recover-trip. Writes :recovered and :recover-trip.")
+  Warns respawn_away_from_bed once per death when the body respawned over 10 blocks from the bed it slept in.
+  Memory: reads :died, :respawned, :bed, :slept, :recover-trip. Writes :recovered and :recover-trip.")
 
 (def args
   {:margin {:doc "added to the fetch cost before comparing it to the value" :default 0}
@@ -339,6 +340,21 @@
     (finish! c :abandoned (assoc (:decided (ctx/mem c)) :reason (if (:blocked (ctx/mem c)) :unreachable :window-closed)))
     :else (await (trip! c entry))))
 
+(def bed-away-blocks "A respawn farther than this from the bed the body slept in is reported." 10)
+
+(defn warn-away-from-bed!
+  "Once per death: warn when the body respawned far from its known :bed that it slept in (the respawn point was not
+  the bed). Nothing for a bed it never slept in."
+  [c entry]
+  (let [bed (mem/place (ctx/view c) :bed)
+        at (:pos (:data (ctx/latest c :respawned)))]
+    (when (and bed at (not (:bed-checked (ctx/mem c))))
+      (ctx/update-mem! c assoc :bed-checked true)
+      (when (and (some #(= bed (:pos (:data %))) (ctx/entries c :slept))
+                 (> (u/dist bed at) bed-away-blocks))
+        (ctx/emit! c :respawn_away_from_bed :warn
+                   {:bed bed :pos at :text "respawned away from the bed it slept in: the respawn point was not set there"})))))
+
 (defn ^:async round
   "One whole run: wait for the respawn and its settling (declared holds), decide, walk, collect, write :recovered.
   :declined when a danger is within :danger-radius (the hostile reflex acts, the trigger fires again) or the walk
@@ -351,6 +367,7 @@
       (let [waited (or (await (wait-while! c entry :respawning #(not (died/respawned-since? (ctx/view c) entry))))
                        (when (nil? (:decided (ctx/mem c)))
                          (await (wait-while! c entry :settling #(settling? c entry)))))]
+        (when-not (= :declined waited) (warn-away-from-bed! c entry))
         (if (= :declined waited)
           :declined
           (loop []

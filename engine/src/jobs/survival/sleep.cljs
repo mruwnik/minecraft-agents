@@ -19,7 +19,9 @@
   If it was the remembered bed, :bed is overwritten with {:gone true :was pos}, so it no longer reads as a place.
   With a :bed argument the radius is ignored. After sleeping there it is recorded as :bed
   when none is recorded or the recorded one is gone. A live recorded :bed is kept (one place.kept event).
-  Memory: reads :bed and :bed-unreachable. Writes :slept (cap 10, seven in-game days),
+  Warns spawn_not_set when it sleeps and no :spawn-set (the body event for the Respawn point set line) follows, unless one
+  was seen within 3 blocks of the bed before: death would then send the body to the world spawn.
+  Memory: reads :bed, :bed-unreachable and :spawn-set. Writes :slept (cap 10, seven in-game days),
   :bed (see above) and :bed-unreachable {:pos bed} after an unreachable bed (cap 5, ten minutes).")
 
 (def args
@@ -63,10 +65,25 @@
       (ctx/remember! c :bed-unreachable {:pos bed} unreachable-policy))
     r))
 
+(def spawn-near
+  "A :spawn-set entry within this many blocks of a bed is that bed's respawn point."
+  3)
+
+(defn spawn-known?
+  "Whether the body has seen the respawn point set at bed since t0, or earlier (the server says it only when the
+  point changes, so a bed slept in before is silent)."
+  [c bed t0]
+  (boolean (some #(or (>= (:t %) t0)
+                      (some-> (:pos (:data %)) (u/dist bed) (<= spawn-near)))
+                 (ctx/entries c :spawn-set))))
+
 (defn ^:async sleep-at! [c bed]
-  (let [r (await (ctx/act c :sleep (clj->js {:pos bed})))]
+  (let [t0 (ctx/now c)
+        r (await (ctx/act c :sleep (clj->js {:pos bed})))]
     (case (.-status r)
       "sleeping" (do (ctx/remember! c :slept {:pos bed} slept-policy)
+                     (when-not (spawn-known? c bed t0)
+                       (ctx/emit! c :spawn_not_set :warn {:pos bed :text "slept in the bed but the server did not say the respawn point was set"}))
                      (when (:bed (:args c)) (places/offer! c :bed bed))
                      :done)
       "not-night" :done

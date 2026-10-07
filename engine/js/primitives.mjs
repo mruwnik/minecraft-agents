@@ -17,7 +17,7 @@ import { missingPatches, missingRequired } from './deps-check.mjs'
 import { wrapBlockAt } from './offset-shapes.mjs'
 import { say } from './chat.mjs'
 import vec3 from 'vec3'
-import { DAMAGE_FRESH_MS, OFFLINE_DEFAULT_MS, OFFLINE_MAX_MS, RECONNECT_TRIES, RECONNECT_RETRY_MS, RECONNECT_BACKOFF_FIRST_MS, RECONNECT_BACKOFF_MAX_MS, WORLD_TIMEOUT_MS, PHYSICS_STALL_MS, STALL_POLL_MS, SETTLE_MS, TELEPORT_BLOCKS, BODY_HALF_WIDTH, WAIT_MAX_MS, mcToMineflayerLook, mineflayerToMcLook, sleepMs, waitForWorld, xyz, isNum, vec, cutError, badArgs, isCut, failed, need, attempt, sleepStatusOf, droppedItem, itemCounts } from './prim-base.mjs'
+import { DAMAGE_FRESH_MS, OFFLINE_DEFAULT_MS, OFFLINE_MAX_MS, RECONNECT_TRIES, RECONNECT_RETRY_MS, RECONNECT_BACKOFF_FIRST_MS, RECONNECT_BACKOFF_MAX_MS, WORLD_TIMEOUT_MS, PHYSICS_STALL_MS, STALL_POLL_MS, SETTLE_MS, TELEPORT_BLOCKS, BODY_HALF_WIDTH, WAIT_MAX_MS, mcToMineflayerLook, mineflayerToMcLook, sleepMs, waitForWorld, xyz, isNum, vec, cutError, badArgs, isCut, failed, need, attempt, sleepStatusOf, spawnSetMessage, droppedItem, itemCounts } from './prim-base.mjs'
 import { createWalk } from './prim-walk.mjs'
 import { createSense } from './prim-sense.mjs'
 import { createMove } from './prim-move.mjs'
@@ -266,7 +266,13 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       chat: (from, message) => { if (from !== target.username) emit({ kind: 'chat', from, message }) },
       whisper: (from, message) => { if (from !== target.username) emit({ kind: 'whisper', from, message }) },
       wake: () => emit({ kind: 'woke' }),
-      actionBar: msg => { const status = sleepStatusOf(msg); if (status) emit({ kind: 'sleep-status', ...status }) },
+      actionBar: msg => {
+        const status = sleepStatusOf(msg)
+        if (status) emit({ kind: 'sleep-status', ...status })
+        if (spawnSetMessage(msg)) emit({ kind: 'spawn-set', pos: here() })
+      },
+      // mineflayer's reading of the "no home bed or it was obstructed" game event: the respawn point is gone
+      spawnReset: () => emit({ kind: 'spawn-reset' }),
       playerJoined: player => { if (player?.username && player.username !== target.username) emit({ kind: 'player-joined', player: player.username }) },
       playerLeft: player => { if (player?.username && player.username !== target.username) emit({ kind: 'player-left', player: player.username }) },
       weatherUpdate: () => {

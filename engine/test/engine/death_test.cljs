@@ -105,6 +105,37 @@
 
 (def job '(jobs.survival.recover-drops))
 
+(defn emitted [seen kind] (filterv #(= kind (:kind %)) @seen))
+
+(deftest recover-drops-warns-when-the-body-respawned-away-from-the-bed-it-slept-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:floor tu/walk-floor :entities drops})]
+          (mem/write! (:store eng) :bed {:pos {:x 40 :y 64 :z 0}} mem/place-policy)
+          (mem/write! (:store eng) :slept {:pos {:x 40 :y 64 :z 0}} {:cap 10 :ttl 1000000})
+          (die! eng {:pos death-pos :inventory diamonds})
+          (core/submit! eng job {})
+          (await (run-until-empty eng 10))
+          (is (= 1 (count (emitted seen :respawn_away_from_bed))))
+          (is (= :warn (:level (first (emitted seen :respawn_away_from_bed))))))))))
+
+(deftest recover-drops-does-not-warn-near-the-bed-or-without-sleeping-in-it
+  (are [bed slept]
+       (async done
+         (tu/run-async done
+           (fn ^:async t []
+             (let [{:keys [eng seen]} (setup {:floor tu/walk-floor :entities drops})]
+               (mem/write! (:store eng) :bed {:pos bed} mem/place-policy)
+               (when slept (mem/write! (:store eng) :slept {:pos slept} {:cap 10 :ttl 1000000}))
+               (die! eng {:pos death-pos :inventory diamonds})
+               (core/submit! eng job {})
+               (await (run-until-empty eng 10))
+               (is (= [] (emitted seen :respawn_away_from_bed)))))))
+    {:x 3 :y 64 :z 0} {:x 3 :y 64 :z 0}
+    {:x 40 :y 64 :z 0} nil
+    {:x 40 :y 64 :z 0} {:x 90 :y 64 :z 0}))
+
 (deftest recover-drops-skips-a-junk-inventory
   (async done
     (tu/run-async done

@@ -177,7 +177,7 @@ never dig or build; hazards (powder snow, cobweb, magma, campfires) add cost, an
 `primitives.onBodyEvent(listener)` delivers `{kind, ...}` objects: `hurt` (health, food, amount, cause, attacker), `died`
 (pos, inventory, experience, cause), `respawned`, `chat`, `picked-up`, `woke`, `player-joined`/`player-left`, `weather-changed` (raining, thundering), `spawned`,
 `disconnected`, `error`, `reconnect-failed`, `world-not-loaded`, `physics-stalled`, `offline`, `online`, `sleep-status`
-(the action bar's sleep count: `sleeping`, `needed`, or `skipping`). The engine
+(the action bar's sleep count: `sleeping`, `needed`, or `skipping`), `spawn-set` (pos; the "Respawn point set" line) and `spawn-reset` (the bed is gone). The engine
 turns each into a body-memory entry of that kind. `hurt` events are merged into one per second in the event log. A death
 drops every listed job (cancelled `:by :death`) and every reflex job; register entries stay, so a trigger that still
 holds (`died` starts recover-drops) runs its job again.

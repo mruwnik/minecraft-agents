@@ -18,7 +18,7 @@
     :dependency-patches-missing :world-not-loaded :physics-stalled :picked-up
     :restart :moved :slept :fed :hungry :hostile :hazard :looked :recovered :breathe :extinguish :log-out
     :needs-bed :shelter :dig-in-futile :gate-gave-up :no-bake :no-craft :notify :bed-unreachable :chest-unusable
-    :scaffold :heal-ended :recover-trip :sleep-status :bed-placed
+    :scaffold :heal-ended :recover-trip :sleep-status :spawn-set :spawn-reset :bed-placed
     :opened :watched :watch-turned :sleep-failed :bed-place-failed :shelter-trapped :weather-changed})
 
 (def owned-kinds

@@ -143,6 +143,10 @@ export const sleepStatusOf = msg => {
   return Number.isFinite(sleeping) && Number.isFinite(needed) ? { sleeping, needed } : null
 }
 
+// The action bar line a player sees when a bed or anchor sets the respawn point ("Respawn point set"). The server
+// sends it only when the point changes.
+export const spawnSetMessage = msg => msg?.translate === 'block.minecraft.set_spawn'
+
 // getDroppedItem throws or returns null when the library cannot read the slot (it reads one fixed metadata index),
 // so fall back to scanning the metadata for any slot-shaped value.
 export const droppedItem = (bot, e) =>
