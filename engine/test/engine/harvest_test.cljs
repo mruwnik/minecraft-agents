@@ -19,10 +19,10 @@
 
 (defn start
   "An engine over primitives p (made from world when not given) on dir."
-  [{:keys [world p dir shared]}]
+  [{:keys [world p dir shared jobs]}]
   (let [[seen sink] (tu/legacy-capture-sink)
         p (or p (tu/seeing-all (tu/fake-on-floor world)))
-        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (or dir (tu/tmp-dir)) :now #(deref clock)
+        eng (core/create {:primitives p :jobs (or jobs registry/jobs) :triggers triggers/all :dir (or dir (tu/tmp-dir)) :now #(deref clock)
                           :world (or shared (ew/of-data {} {} []))
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen}))
@@ -136,6 +136,25 @@
           (await (run-until-empty eng 200))
           (is (= 9 (count @seen)))
           (is (every? true? @seen)))))))
+
+(deftest a-dig-child-that-waits-leaves-one-debt-per-crop
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls (atom 0)
+              eng-a (atom nil)
+              debts-distinct (atom [])
+              dig (get registry/jobs 'jobs.blocks.dig)
+              waiting (assoc dig :round (fn ^:async waiting-round [c]
+                                          (swap! debts-distinct conj (let [ps (map :pos (:replant (core/job-memory @eng-a "j1")))]
+                                                                       (= (count ps) (count (set ps)))))
+                                          (if (<= (swap! calls inc) 4) :continue (await ((:round dig) c)))))
+              {:keys [eng]} (start {:world wheat-world :jobs (assoc registry/jobs 'jobs.blocks.dig waiting)})]
+          (reset! eng-a eng)
+          (core/submit! eng (list job {}) {})
+          (await (run-until-empty eng 300))
+          (is (> @calls 4) "the child waited four rounds")
+          (is (every? true? @debts-distinct) "a waiting round does not write the debt again"))))))
 
 (deftest a-restart-mid-harvest-still-replants
   (async done
