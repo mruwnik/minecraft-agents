@@ -139,10 +139,12 @@
     {:burn {:left 300 :total 1600}} {:item "raw_iron" :count 1 :fuel nil}))
 
 (deftest a-part-burnt-fuel-covers-the-same-items-in-every-kind
-  (are [kind] (= {:item "raw_iron" :count 1 :fuel nil}
-                 (plan {:carried (inv "raw_iron" 4) :item "raw_iron" :count 4
-                        :state (assoc empty-furnace :kind kind :burn {:left 300 :total 1600})}))
-    "furnace" "blast_furnace"))
+  (let [plan-with (fn [kind burn]
+                    (plan {:carried (inv "raw_iron" 4) :item "raw_iron" :count 4
+                           :state (assoc empty-furnace :kind kind :burn burn)}))]
+    (is (= {:item "raw_iron" :count 1 :fuel nil} (plan-with "furnace" {:left 300 :total 1600})))
+    (is (= (plan-with "furnace" {:left 300 :total 1600})
+           (plan-with "blast_furnace" {:left 150 :total 800})))))
 
 (deftest a-given-fuel-that-is-not-carried-leaves-the-count-to-the-fire-already-burning
   (is (= {:item "raw_iron" :count 3 :fuel nil}

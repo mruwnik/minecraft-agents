@@ -99,7 +99,7 @@
   "How many items the fuel already in the furnace will cook: the burning fuel's bar and the fuel slot."
   [kind state]
   (let [slot (:fuel state)]
-    (+ (js/Math.floor (/ (get-in state [:burn :left] 0) (cook-ticks "furnace")))
+    (+ (js/Math.floor (/ (get-in state [:burn :left] 0) (cook-ticks kind)))
        (if slot (js/Math.floor (* (or (fuel-per-unit kind (:name slot)) 0) (:count slot))) 0))))
 
 (defn pick-fuel
