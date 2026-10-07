@@ -5,6 +5,7 @@
   :time :any
   :plot {:height 12}
   :body {:at [16.5 0 16.5] :settle-s 3}
+  :act [[:rcon "kill @e[type=item,$BOX]"]]
   :limit-s 90}
  :cases
  [{:name "logs-make-pick-and-table"
@@ -41,24 +42,24 @@
   {:name "only-dirt-waits-no-source"
    :body {:inventory [["dirt" 20]]}
    :act [[:job (jobs.items.get-tool {:kind "pickaxe"})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :no-source}} :within-s 20 :of-job true}
-            {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-source}}}]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-source :why [:contains "no seen chest"]}} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-source :why [:contains "no seen chest"]}}}]
    :after [[:item "wooden_pickaxe" 0] [:item "dirt" 20]]}
   {:name "only-dirt-pick-by-item"
    :body {:inventory [["dirt" 5]]}
    :act [[:job (jobs.items.get-tool {:item "wooden_pickaxe"})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :no-source}} :within-s 20 :of-job true}
-            {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-source}}}]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-source :why [:contains "no seen chest"]}} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-source :why [:contains "no seen chest"]}}}]
    :after [[:item "wooden_pickaxe" 0]]}
   {:name "two-logs-no-source"
    :body {:inventory [["oak_log" 2]]}
    :act [[:job (jobs.items.get-tool {:kind "pickaxe"})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :no-source}} :within-s 40 :of-job true}
-            {:no-event {:source :job :kind :completed} :for-s 40 :until {:source :job :kind :waiting :data {:reason :no-source}}}]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-source :why [:contains "no seen chest"]}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 40 :until {:source :job :kind :waiting :data {:reason :no-source :why [:contains "no seen chest"]}}}]
    :after [[:item "wooden_pickaxe" 0]]}
   {:name "stone-pick-no-cobble"
    :body {:inventory [["oak_log" 12] ["stick" 4]]}
    :act [[:job (jobs.items.get-tool {:item "stone_pickaxe"})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :no-source}} :within-s 40 :of-job true}
-            {:no-event {:source :job :kind :completed} :for-s 40 :until {:source :job :kind :waiting :data {:reason :no-source}}}]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-source :why [:contains "no seen chest"]}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 40 :until {:source :job :kind :waiting :data {:reason :no-source :why [:contains "no seen chest"]}}}]
    :after [[:item "stone_pickaxe" 0]]}]}
