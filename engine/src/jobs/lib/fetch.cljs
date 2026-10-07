@@ -262,6 +262,15 @@
         (and (< n max-fetch-calls) (ctx/alive? c)) (do (await (pace/pace!)) (recur (inc n)))
         :else :continue))))
 
+(defn ^:async fetch-untimed!
+  "fetch!, then mem :started (the job's :timeout-s start) moves on by the time the fetch took: :timeout-s bounds the
+  work the job does, not the fetch (which has its own limits)."
+  [c job problem]
+  (let [t0 (ctx/now c)
+        r (await (fetch! c job problem))]
+    (ctx/update-mem! c update :started #(when % (+ % (- (ctx/now c) t0))))
+    r))
+
 ;; ------------------------------------------------------------------ chests: seen ones and their stock
 
 (def container-names ["chest" "trapped_chest" "barrel"])

@@ -25,7 +25,7 @@
   :given-up {key reason} :collected n}. Reasons:
   - :shorn: the count was reached, or the sheep ran out after some were shorn.
   - :shears-broke: the shears were gone after some were shorn.
-  - :timeout: :timeout-s from the start of the call (no collecting).
+  - :timeout: :timeout-s of work, not counting fetching (no collecting).
   - :no-shears: none carried (and none fetched) and none shorn.
   - With nothing shorn: :unreachable if one was given up as unreachable, else :refused (or :no-zones) when the
     zone rules refused every candidate, else :all-sheared (adults present but all sheared) or :none.
@@ -37,7 +37,7 @@
   {:count {:doc "sheep to shear; every one in radius when nil" :default nil}
    :radius {:doc "sheep within this many blocks count" :default 16}
    :walk-timeout-s {:doc "bound of one walk towards a sheep" :default 5}
-   :timeout-s {:doc "seconds from the start of the call before the job gives up" :default 120}
+   :timeout-s {:doc "seconds of working with the animals (not fetching) before the job gives up" :default 120}
    :collect {:doc "pick up the wool afterwards" :default true}
    :fetch {:doc "get shears when none are carried (jobs.lib.fetch): true, a set of kinds or a map of limits; false ends :no-shears" :default true}
    :ignore-zones? animals/ignore-zones-arg})
@@ -184,7 +184,7 @@
   (let [end! #(if (seq (:shorn (ctx/mem c))) (go-collect! c :shears-broke) (finish! c :no-shears))]
     (if-not (and (fetch/opts c 'jobs.animals.shear) (problem c))
       (end!)
-      (or (await (fetch/fetch! c 'jobs.animals.shear problem))
+      (or (await (fetch/fetch-untimed! c 'jobs.animals.shear problem))
           (if (problem c) (end!) :again)))))
 
 (defn ^:async step [c]

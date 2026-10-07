@@ -22,7 +22,7 @@
   :id entity-id :given-up {key reason}}. Reasons:
   - :leashed: an animal is on the lead.
   - :no-lead: no lead carried (and none fetched), or the server found none.
-  - :timeout: :timeout-s from the start of the call.
+  - :timeout: :timeout-s of work, not counting fetching.
   - When no candidate is left: :unreachable if one was given up as unreachable, else :refused (others given
     up, or the zone rules refused the animals; :no-zones when no zone list was read), :all-leashed (animals present but all led) or :none.
   - The same reasons after three fruitless animals in a row.
@@ -35,7 +35,7 @@
    :radius {:doc "animals within this many blocks count" :default 8}
    :skip {:doc "keys (uuids, else ids) of animals never to leash" :default []}
    :walk-timeout-s {:doc "bound of one walk towards the animal" :default 5}
-   :timeout-s {:doc "seconds from the start of the call before the job gives up" :default 30}
+   :timeout-s {:doc "seconds of working with the animals (not fetching) before the job gives up" :default 30}
    :fetch {:doc "get a lead when none is carried (jobs.lib.fetch): true, a set of kinds or a map of limits; false ends :no-lead" :default true}
    :ignore-zones? animals/ignore-zones-arg})
 
@@ -154,7 +154,7 @@
   [c]
   (if-not (and (fetch/opts c 'jobs.animals.leash) (problem c))
     (finish! c :no-lead nil)
-    (or (await (fetch/fetch! c 'jobs.animals.leash problem))
+    (or (await (fetch/fetch-untimed! c 'jobs.animals.leash problem))
         (if (problem c) (finish! c :no-lead nil) :again))))
 
 (defn ^:async step [c]

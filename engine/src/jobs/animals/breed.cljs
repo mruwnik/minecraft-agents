@@ -26,7 +26,7 @@
   Ends with info breed.done and a warn breed.gave-up unless the reason is :fed. Result {:reason :fed [keys]
   :refused [keys] :given-up {key reason} :food item :adults n :babies n :hand}. Reasons:
   - :fed: :count animals were fed.
-  - :timeout: :timeout-s from the start of the call.
+  - :timeout: :timeout-s of work, not counting fetching.
   - :unknown-mob: no breeding food is known for :mob.
   - :bees-indoors: bees at night or in rain.
   - :no-food: none carried (and none fetched), or it ran out.
@@ -50,7 +50,7 @@
    :count {:doc "animals to feed" :default 2}
    :radius {:doc "animals within this many blocks count" :default 16}
    :walk-timeout-s {:doc "bound of one walk towards an animal" :default 5}
-   :timeout-s {:doc "seconds from the start of the call before the job gives up" :default 120}
+   :timeout-s {:doc "seconds of working with the animals (not fetching) before the job gives up" :default 120}
    :fetch {:doc "get breeding food when none is carried (jobs.lib.fetch): true, a set of kinds or a map of limits; false ends :no-food" :default true}
    :ignore-zones? animals/ignore-zones-arg})
 
@@ -234,7 +234,7 @@
   [c]
   (if-not (and (fetch/opts c 'jobs.animals.breed) (problem c))
     (await (finish! c :no-food))
-    (or (await (fetch/fetch! c 'jobs.animals.breed problem))
+    (or (await (fetch/fetch-untimed! c 'jobs.animals.breed problem))
         (if (problem c) (await (finish! c :no-food)) :again))))
 
 (defn ^:async step
