@@ -1,0 +1,33 @@
+;; Cards 8fd2c246 and 8d0a1898: jobs.access.cleanup walks to the scaffold it placed through go-to (:escalate false: never
+;; digging a way) and holds a cell :unreachable only on a permanent verdict. The body pillars 2 cobblestone at x 8, is moved
+;; to x 28 behind a stone wall at x 18 (the wall ring keeps it on the plot), and cleans up. "Walks round" has a gap at the
+;; wall's south end: the body walks round and takes the pillar back. "sealed" has no gap: go-to says unreachable (a permanent
+;; :why), the pillar's cells stay open (cleanup.left) and the wall, which the body could dig with its pickaxe, is never touched.
+;; Transient go-to reasons (door-stuck, budget, moved while searching) count a failure instead and are unit-tested only.
+{:defaults
+ {:tags [:cleanup :access :go-to :jobs]
+  :time :any
+  :plot {:height 12}
+  :blocks [[:fill [0 0 0] [31 5 0] "stone"] [:fill [0 0 31] [31 5 31] "stone"]
+           [:fill [0 0 0] [0 5 31] "stone"] [:fill [31 0 0] [31 5 31] "stone"]]
+  :body {:at [8.5 0 16.5] :inventory [["iron_pickaxe" 1] ["cobblestone" 4]] :effects [["resistance" 900 4]]}
+  :limit-s 150}
+ :cases
+ [{:name "walks-round-a-wall-and-cleans"
+   :blocks [[:fill [18 0 0] [18 5 24] "stone"]]
+   :act [[:job (jobs.access.pillar {:height 2 :item "cobblestone" :ignore-zones? true})]
+         [:await {:source :job :kind :pillar.done} 60]
+         [:rcon "execute positioned $X $Y $Z as $BODY run tp @s ~28.5 ~ ~16.5"]
+         [:job (jobs.access.cleanup {:job :all :ignore-zones? true})]]
+   :expect [{:event {:source :job :kind :cleanup.done :data {:removed 2 :open 0}} :within-s 140 :of-job true}]
+   :after [[:not-block [8 0 16] "cobblestone"] [:not-block [8 1 16] "cobblestone"] [:block [18 0 24] "stone"]]}
+  {:name "sealed-pillar-held-open-and-wall-never-dug"
+   :blocks [[:fill [18 0 0] [18 5 31] "stone"]]
+   :act [[:job (jobs.access.pillar {:height 2 :item "cobblestone" :ignore-zones? true})]
+         [:await {:source :job :kind :pillar.done} 60]
+         [:rcon "execute positioned $X $Y $Z as $BODY run tp @s ~28.5 ~ ~16.5"]
+         [:job (jobs.access.cleanup {:job :all :ignore-zones? true})]]
+   :expect [{:event {:source :job :kind :cleanup.left} :within-s 100 :of-job true}
+            {:event {:source :job :kind :cleanup.done :data {:removed 0 :open [:>= 1]}} :within-s 100 :of-job true}]
+   :after [[:block [8 0 16] "cobblestone"] [:block [8 1 16] "cobblestone"]
+           [:block [18 0 16] "stone"] [:block [18 1 16] "stone"] [:body-far [8.5 0 16.5] 10]]}]}

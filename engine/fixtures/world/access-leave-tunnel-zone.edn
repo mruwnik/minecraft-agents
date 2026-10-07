@@ -1,0 +1,39 @@
+;; Card 70d48082: jobs.access.leave-tunnel's own way out (the escape stair) respects zones and claims unless the caller
+;; passed :ignore-zones?; it no longer retries with :ignore-zones? by itself. The plot is outside every zones.edn box, so another
+;; body's plan footprint over the stone mass stands in for a foreign zone (as in herd-zone.edn). Same tunnel as the
+;; leave-tunnel case of access-decline-parked.edn (stair filled, the walk to the entry fails), the body carries a pickaxe.
+;; Without :ignore-zones? every heading is refused and the job ends :stopped :walk-failed with no escape; with it the stair is dug.
+{:defaults
+ {:tags [:access :mining :jobs]
+  :plot {:height 20}
+  :blocks [[:fill [8 0 8] [24 9 24] "stone"]
+           [:fill [12 9 20] [16 7 20] "air"] [:fill [13 8 20] [15 6 20] "air"] [:fill [12 10 20] [16 8 20] "air"]
+           [:fill [13 8 20] [13 9 20] "stone"]]
+  :plans [{:id "foreign" :metadata {:by "SomeoneElse"}
+           :parts [{:id "mass" :box [#at [8 0 8] #at [24 9 24]] :want "stone"}]}]
+  :body {:at [15.5 6 20.5] :inventory [["cobblestone" 4] ["stone_pickaxe" 1]] :effects [["resistance" 600 4]]}
+  :limit-s 150}
+ :cases
+ [{:name "foreign-footprint-stops-the-escape"
+   :act [[:job (jobs.access.leave-tunnel {:tunnel {:line {:entry #at [11 10 20] :heading :east :dir :down :steps 4 :run 0
+                                                          :stand #at [15 6 20] :target #at [16 6 20]}
+                                                   :dug [{:cell #at [12 9 20] :block "stone"} {:cell #at [13 9 20] :block "stone"}
+                                                         {:cell #at [13 8 20] :block "stone"} {:cell #at [14 9 20] :block "stone"}
+                                                         {:cell #at [14 8 20] :block "stone"} {:cell #at [14 7 20] :block "stone"}
+                                                         {:cell #at [15 8 20] :block "stone"} {:cell #at [15 7 20] :block "stone"}
+                                                         {:cell #at [15 6 20] :block "stone"}]
+                                                   :torches []}})]]
+   :expect [{:event {:source :job :kind :leave-tunnel.stopped :data {:reason :walk-failed}} :within-s 120 :of-job true}
+            {:no-event {:source :job :kind :leave-tunnel.escape} :for-s 120 :until {:source :job :kind :leave-tunnel.stopped} :of-job true}]
+   :after [[:body-far [11.5 10 20.5] 3]]}
+  {:name "ignore-zones-digs-the-escape"
+   :act [[:job (jobs.access.leave-tunnel {:ignore-zones? true
+                                          :tunnel {:line {:entry #at [11 10 20] :heading :east :dir :down :steps 4 :run 0
+                                                          :stand #at [15 6 20] :target #at [16 6 20]}
+                                                   :dug [{:cell #at [12 9 20] :block "stone"} {:cell #at [13 9 20] :block "stone"}
+                                                         {:cell #at [13 8 20] :block "stone"} {:cell #at [14 9 20] :block "stone"}
+                                                         {:cell #at [14 8 20] :block "stone"} {:cell #at [14 7 20] :block "stone"}
+                                                         {:cell #at [15 8 20] :block "stone"} {:cell #at [15 7 20] :block "stone"}
+                                                         {:cell #at [15 6 20] :block "stone"}]
+                                                   :torches []}})]]
+   :expect [{:event {:source :job :kind :leave-tunnel.escape :data {:ignore-zones? true}} :within-s 120 :of-job true}]}]}

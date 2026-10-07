@@ -1,0 +1,24 @@
+;; Card 9ad7560a: cull and tend count animals with one cell-inclusive box test (jobs.lib.animals/in-box?, shared with herd):
+;; an adult at a fractional position in the box's max row or column (x 23.7, z 18.7 in cell 23,18) counts as inside.
+;; Box x 19..23, z 14..18. NoAI cows stand still at exact positions. Two adults in the box with :keep 1: one is culled
+;; (before the fix the max-row cow was not counted, one adult looked like the :keep and nothing was killed). Control: the
+;; second cow in cell 24 (outside the box) is not counted, one adult is the :keep and the cull waits :too-few.
+{:defaults
+ {:tags [:animals :cull :jobs]
+  :time :any
+  :plot {:floor "grass_block"}
+  :body {:at [16.5 0 16.5] :yaw 270 :inventory [["diamond_sword" 1]] :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [{:name "max-row-cow-counts-as-adult"
+   :act [[:summon "cow" [20.5 0 16.5] "{NoAI:1b}"] [:summon "cow" [23.7 0 18.7] "{NoAI:1b}"] [:wait-s 2]
+         [:job (jobs.animals.cull {:mob "cow" :keep 1 :box {:min #xyz [19 0 14] :max #xyz [23 1 18]}})]]
+   :expect [{:event {:source :job :kind :cull.done :data {:reason :keep :killed 1 :remaining 1}} :within-s 70 :of-job true}]
+   :after [[:entities "type=cow,tag=wt" [[16 0 10] [28 2 22]] 1]]}
+  {:name "cow-outside-the-box-not-counted"
+   :act [[:summon "cow" [20.5 0 16.5] "{NoAI:1b}"] [:summon "cow" [24.5 0 16.5] "{NoAI:1b}"] [:wait-s 2]
+         [:job (jobs.animals.cull {:mob "cow" :keep 1 :box {:min #xyz [19 0 14] :max #xyz [23 1 18]}})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :too-few}} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind :cull.done} :for-s 20}]
+   :after [[:entities "type=cow,tag=wt" [[16 0 10] [28 2 22]] 2]]
+   :limit-s 40}]}
