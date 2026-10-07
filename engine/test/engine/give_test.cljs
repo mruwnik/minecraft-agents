@@ -201,7 +201,7 @@
       (fn ^:async t []
         (let [statuses (atom (cycle ["unreachable" "unreachable" "collected"]))
               {:keys [p out] :as s} (await (give (assoc bread :entities [(steve 10)])
-                                                {:player "Steve" :item "bread" :count 5} 80 false
+                                                {:player "Steve" :item "bread" :count 5} 14 false
                                                 (fn [p] (.override (.-world p) "collect"
                                                                    (fn ^:async f [_ _ _]
                                                                      (let [st (first @statuses)]
