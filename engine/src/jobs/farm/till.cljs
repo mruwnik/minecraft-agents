@@ -1,5 +1,6 @@
 (ns jobs.farm.till
-  (:require [engine.ctx :as ctx]
+  (:require [clojure.string :as str]
+            [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.fetch :as fetch]
@@ -23,7 +24,7 @@
   and the footprints of other plans are checked when a cell is chosen and again before the hoe or cover dig.
   The job declines while no zone list has been read, unless :ignore-zones? is true, and before its first round when
   every tillable cell is refused (wait :refused); cells refused later are skipped :not-permitted.
-  Result: {:tilled n :skipped {pos reason}}; with none tilled and a cell skipped :no-hoe it is {:status :stopped :reason :no-hoe}.")
+  Result: {:tilled n :skipped {pos reason}}; with none tilled and cells skipped it is {:status :stopped :reason r}, r the one skip reason or :nothing-tilled when mixed.")
 
 (def args
   {:from {:doc "box corner (inclusive); with :to, any order" :type :pos :default nil}
@@ -165,6 +166,15 @@
   (let [me (u/self-pos c)]
     (apply min-key #(u/dist me (first %)) todo)))
 
+(defn nothing-tilled
+  "Stopped outcome for a run that tilled nothing: the one skip reason, or :nothing-tilled when they are mixed."
+  [skipped]
+  (let [counts (frequencies (vals skipped))
+        reason (if (= 1 (count counts)) (key (first counts)) :nothing-tilled)
+        text (str/join ", " (map (fn [[r n]] (str n " " (name r))) (sort-by (comp name key) counts)))]
+    {:status :stopped :reason reason
+     :text (if (= :no-hoe reason) "no hoe, nothing tilled" (str "nothing tilled: " text))}))
+
 (defn ^:async till-step!
   "One step: skip what cannot be tilled, else walk to the nearest cell, clear ground cover above it or use the hoe on it."
   [c]
@@ -185,8 +195,8 @@
           (ctx/emit! c :till.done :info {:tilled tilled :skipped (count skipped)
                                          :text (str "tilled " tilled ", skipped " (count skipped))})
           (ctx/result! c (cond-> {:tilled tilled :skipped skipped}
-                           (and (zero? tilled) (some #{:no-hoe} (vals skipped)))
-                           (assoc :status :stopped :reason :no-hoe :text "no hoe, nothing tilled")))
+                           (and (zero? tilled) (seq skipped))
+                           (merge (nothing-tilled skipped))))
           :done)
 
         (nil? hoe)
