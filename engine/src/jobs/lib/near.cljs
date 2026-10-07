@@ -10,6 +10,7 @@
             [engine.path.executor :as executor]
             [jobs.lib.pass :as pass]
             [jobs.lib.places :as places]
+            [jobs.lib.toll-cells :as tc]
             [jobs.lib.walk :as walk]))
 
 (def walk-timeout-s
@@ -114,12 +115,13 @@
   "One walk-once! toward the cell pos ({:x :y :z} of whole numbers) from where the body stands (the caller has checked the
   primitives have a pathWorld), with its :moved entry {:from :to :status :target} written and the round booked for the
   backoff as one walk (ctx/note-walk!: the status and the blocks the body moved). opts {:doors :shut-also :timeout-s :explore
-  :one-way :budget :progress :dangers :avoid :dark :tolls}: doors, shut-also (jobs.lib.pass), explore, one-way (default :open: past a drop toward a far goal), budget, progress (default true) and dangers (default true) and avoid as walk-once!, timeout-s the bound of each steer (default walk-timeout-s). {:result :status :from :to}: result
+  :one-way :budget :progress :dangers :avoid :dark :tolls :zone-tolls}: zone-tolls true adds the cells of other bodies' zones to tolls (toll-cells/zone-walk-tolls, none under the job's :ignore-zones?); doors, shut-also (jobs.lib.pass), explore, one-way (default :open: past a drop toward a far goal), budget, progress (default true) and dangers (default true) and avoid as walk-once!, timeout-s the bound of each steer (default walk-timeout-s). {:result :status :from :to}: result
   is the walk's result map, status the entry's (\"partial\" too for a walk to a frontier that moved the body over a block:
   it went where a way may be, not stuck). A round whose plan is still searching (result :searching) walked nowhere and
   failed at nothing: status \"searching\", no :moved entry and no walk booked."
-  [c pos range {:keys [doors shut-also timeout-s explore one-way budget progress dangers avoid dark tolls] :or {timeout-s walk-timeout-s one-way :open progress true dangers true}}]
+  [c pos range {:keys [doors shut-also timeout-s explore one-way budget progress dangers avoid dark tolls zone-tolls] :or {timeout-s walk-timeout-s one-way :open progress true dangers true}}]
   (let [from (u/self-pos c)
+        tolls (if zone-tolls (into (vec tolls) (tc/zone-walk-tolls c pos)) tolls)
         result (await (walk-once! c [(:x pos) (:y pos) (:z pos)] range doors shut-also timeout-s explore one-way budget progress dangers avoid dark tolls))
         to (u/self-pos c)
         status (cond
@@ -151,19 +153,20 @@
     aims again at where the target is.
   - :dangers false: plan straight past known dangers (a walk up to the hostile it fights); by default the plan keeps
     away from them (jobs.lib.threats/planner-dangers).
-  - :tolls, cells the plan prices (jobs.lib.toll-cells/walk-tolls: planted cells and other bodies' zones).
+  - :tolls, cells the plan prices (jobs.lib.toll-cells/walk-tolls: planted cells and other bodies' zones). :zone-tolls true
+    adds the other bodies' zone cells (none when the job's :ignore-zones? is set), for a job that respects zones.
   A partial plan never takes a step the body cannot undo (a drop of 2 or 3, a gap jump down; walk-round! :one-way nil).
   The target is something the body can see, so a missing way is not past a cliff, and an unreachable target (a cow on
   an island) must not lead the body off a ledge."
   ([c pos range] (walk-near! c pos range nil))
-  ([c pos range {:keys [doors timeout-s dangers tolls] :or {doors :shut timeout-s walk-timeout-s dangers true}}]
+  ([c pos range {:keys [doors timeout-s dangers tolls zone-tolls] :or {doors :shut timeout-s walk-timeout-s dangers true}}]
    (let [cell (cell-of pos)]
      (cond
        (nil? cell) (do (ctx/emit! c :refused :warn {:reason :bad-pos :text (:message (places/parse-pos pos))})
                        :blocked)
        (u/within? (u/self-pos c) cell range) :there
        (nil? (walk/path-world (:primitives c))) (do (ctx/note-walk! c "blocked" 0) :blocked)
-       :else (case (:status (await (walk-round! c cell range {:doors doors :timeout-s timeout-s :one-way nil :dangers dangers :tolls tolls})))
+       :else (case (:status (await (walk-round! c cell range {:doors doors :timeout-s timeout-s :one-way nil :dangers dangers :tolls tolls :zone-tolls zone-tolls})))
                "arrived" :there
                "partial" :partial
                :blocked)))))

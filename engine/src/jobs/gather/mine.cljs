@@ -644,7 +644,7 @@
   is blocked from here; a body within reach that cannot get closer digs from there. :there, :partial or :blocked
   (jobs.lib.near/walk-near!)."
   [c pos]
-  (let [walked (await (near/walk-near! c pos (if (drop-in-line? c pos) reach 1)))]
+  (let [walked (await (near/walk-near! c pos (if (drop-in-line? c pos) reach 1) {:zone-tolls true}))]
     (if (and (not= :there walked) (u/within? (u/self-pos c) (cell-of pos) reach))
       :there
       walked)))
@@ -776,7 +776,7 @@
 
 (defn ^:async place! [c pos item]
   (let [walked (if (> (u/dist (u/self-pos c) pos) mend-reach)
-                 (await (near/walk-near! c pos reach))
+                 (await (near/walk-near! c pos reach {:zone-tolls true}))
                  :there)]
     (if (not= :there walked)
       (do (when (= :blocked walked) (mend-fail! c)) :continue)
@@ -869,7 +869,7 @@
         r (if (at-home?)
             :arrived
             (await (ctx/call-child c :home 'jobs.movement.go-to
-                                   {:pos {:x (+ (:x start) 0.5) :y (:y start) :z (+ (:z start) 0.5)} :range 0 :escalate true})))]
+                                   {:pos {:x (+ (:x start) 0.5) :y (:y start) :z (+ (:z start) 0.5)} :range 0 :escalate true :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))})))]
     (if (= :continue r)
       :continue
       (home-done! c (at-home?)))))

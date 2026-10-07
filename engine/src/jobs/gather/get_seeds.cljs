@@ -199,7 +199,7 @@
 (defn ^:async dig-one!
   "Walk to pos and dig it: :dug, :missing or :skipped (a blocked or partial walk, a cell the rules no longer permit, or a dig that is neither dug nor missing)."
   [c pos]
-  (let [walked (await (near/walk-near! c pos reach))]
+  (let [walked (await (near/walk-near! c pos reach {:zone-tolls true}))]
     (if (contains? #{:blocked :partial} walked)
       (do (skip! c pos) :skipped)
       (let [v (access/may-dig? (access/rules-input c) pos)

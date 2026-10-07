@@ -117,7 +117,7 @@
   "The walk to pos: one go-to call (child :walk, range 3), the whole walk. Resolves to :arrived (in reach), :continue
   (go-to waits on the world) or {:unreachable why} (it gave up, or arrived with the block still out of reach)."
   [c pos]
-  (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos pos :range 3 :escalate false}))
+  (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos pos :range 3 :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))
         res (ctx/child-result c :walk)]
     (cond
       (= :continue r) :continue

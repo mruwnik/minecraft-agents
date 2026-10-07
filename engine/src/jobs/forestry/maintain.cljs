@@ -346,7 +346,7 @@
         owed (sort-by #(contains? under (cell-vec (:pos %))) (plantable c (owed-cells c classes)))]
     (when-let [{:keys [pos species]} (first owed)]
       (let [item (forestry/sapling-of species)
-            w (await (near/walk-near! c pos 3))]
+            w (await (near/walk-near! c pos 3 {:zone-tolls true}))]
         (cond
           (= :partial w) :continue
           (= :blocked w) (do (fail-plant! c pos :unreachable) :continue)

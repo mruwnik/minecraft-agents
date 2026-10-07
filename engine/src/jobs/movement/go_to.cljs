@@ -69,6 +69,7 @@
    :dangers {:doc "false: plan straight past known dangers (a walk up to the hostile being fought); true: keep away from them" :default true}
    :dark {:doc "false: plan dark cells like lit ones; true: a dark cell (seen dark, or unseen at night) costs twice a lit one" :default true}
    :tolls {:doc "cells to cross only as a last resort, [{:x :y :z :factor}]: each costs factor times its own seconds more (jobs.lib.cost farm-tolls, zone-tolls)" :default nil}
+   :zone-tolls {:doc "true: also toll the cells of other bodies' zones near each walk (jobs.lib.toll-cells/zone-walk-tolls), none with :ignore-zones?; for a job that respects zones" :default false}
    :leg-s {:doc "walk one leg of at most this many seconds, then end {:arrived false :leg true} so the caller can re-aim at a moving target; nil: the whole way" :default nil}
    :retry {:doc "false: a walk that got no nearer gives up at once instead of walking again (up to 3 times), for a caller that re-aims itself" :default true}
    :look-round {:doc "false: no look round on arrival, for a caller that keeps moving" :default true}
@@ -521,6 +522,7 @@
                                                                                           :budget walk/round-budget
                                                                                           :avoid (set (:fault-cells (ctx/mem c)))
                                                                                           :tolls (:tolls (:args c))
+                                                                                          :zone-tolls (:zone-tolls (:args c))
                                                                                           :progress (empty? (:frontier-best (ctx/mem c)))}))
             result (known-frontier-result walked)
             left (u/dist to pos)

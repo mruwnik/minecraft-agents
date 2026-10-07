@@ -129,7 +129,7 @@
   (let [tpos (u/pos-of (.-pos target))]
     (if (<= (u/dist (u/self-pos c) tpos) reach)
       :there
-      (let [r (await (near/walk-near! c tpos 2 {:doors :shut :timeout-s (:walk-timeout-s (:args c))}))]
+      (let [r (await (near/walk-near! c tpos 2 {:doors :shut :timeout-s (:walk-timeout-s (:args c)) :zone-tolls true}))]
         (case r
           :there :there
           :partial :partial

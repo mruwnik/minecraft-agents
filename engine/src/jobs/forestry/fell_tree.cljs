@@ -82,9 +82,9 @@
   (if (<= (u/eye-dist (u/self-pos c) pos) dig-reach)
     :there
     (let [foot (assoc pos :y (:y (:base (ctx/mem c))))
-          w (await (near/walk-near! c foot 2))]
+          w (await (near/walk-near! c foot 2 {:zone-tolls true}))]
       (if (= :blocked w)
-        (await (near/walk-near! c foot 3))
+        (await (near/walk-near! c foot 3 {:zone-tolls true}))
         w))))
 
 (defn log-dig-args
@@ -246,7 +246,7 @@
 
 (defn ^:async pillar-walk!
   [c {:keys [plan]}]
-  (let [r (await (ctx/call-child c :pwalk 'jobs.movement.go-to {:pos (cell-pos (or (:base plan) (:stand plan))) :range 0 :escalate false}))
+  (let [r (await (ctx/call-child c :pwalk 'jobs.movement.go-to {:pos (cell-pos (or (:base plan) (:stand plan))) :range 0 :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))
         res (ctx/child-result c :pwalk)]
     (cond
       (= :continue r) :continue

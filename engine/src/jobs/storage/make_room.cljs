@@ -293,7 +293,7 @@
   (let [away (:away (:args c))
         [dx dz] dir
         goal {:x (- (:x at) (* away dx)) :y (:y at) :z (- (:z at) (* away dz))}]
-    (let [r (await (ctx/call-child c :away 'jobs.movement.go-to {:pos goal :range 1 :escalate false}))]
+    (let [r (await (ctx/call-child c :away 'jobs.movement.go-to {:pos goal :range 1 :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
       (when (not= :continue r)
         (ctx/forget-where! c :make-room-tossed (constantly true)))
       r)))

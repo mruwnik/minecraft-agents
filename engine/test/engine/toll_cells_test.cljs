@@ -20,12 +20,12 @@
 
 (defn setup [blocks zones]
   (let [clock (atom 1000000)
-        [_ sink] (tu/legacy-capture-sink)
+        [seen sink] (tu/legacy-capture-sink)
         p (tu/seeing-all (tu/fake-on-floor {:floor [-5 -20 45 20] :blocks blocks :self {:pos [0.5 64 0.5]}}))
         eng (core/create {:primitives p :jobs registry/jobs :triggers {} :dir (tu/tmp-dir) :now #(deref clock)
                           :world (ew/of-data {} {} zones)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    {:eng eng :p p}))
+    {:eng eng :p p :seen seen}))
 
 (defn ^:async in-round
   "Run f (a fn of the ctx, may be async) as the round of a one-round job; its value."
@@ -94,3 +94,45 @@
               trail (await (walk-trail (merge wall (strip-blocks -6 6))))]
           (is (seq trail))
           (is (on-strip? trail -6 6)))))))
+
+(defn big-zone [owner] {:name "big" :min [10 60 -50] :max [70 70 50] :owner owner :allow #{}})
+
+(deftest a-zone-over-the-cap-keeps-the-cells-nearest-the-walk-and-warns-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (setup {} [(big-zone "Other")])
+              tolls (await (in-round w (fn ^:async f [c] (await (tc/walk-tolls c {:x 40 :y 64 :z 40}))
+                                         (await (tc/walk-tolls c {:x 40 :y 64 :z 40})))))
+              cells (set (map (juxt :x :y :z) tolls))
+              warns (filter #(= "toll-cells.capped" (name (:kind %))) @(:seen w))]
+          (is (<= (count tolls) tc/max-cells))
+          (is (contains? cells [38 64 38]) "the goal end of the line is tolled, not just the low x")
+          (is (contains? cells [12 64 12]) "the start end too")
+          (is (= 1 (count warns))))))))
+
+(defn ^:async go-to-trail
+  "The [x z] cells the body steered through on a go-to to [40 64 0] with args, a foreign zone across x 19..21, z -6..6."
+  [args]
+  (let [{:keys [p eng]} (setup {} [(zone "Other")])
+        trail (atom [])]
+    (.override (.-world p) "steer"
+               (fn [token a impl]
+                 (let [decide (.-decide a)
+                       logged (fn [pose] (swap! trail conj [(js/Math.floor (.-x pose)) (js/Math.floor (.-z pose))]) (decide pose))]
+                   (impl token (walk/steer-args (.-timeoutS a) logged)))))
+    (core/submit! eng (list 'jobs.movement.go-to (merge {:pos [40 64 0] :range 1 :escalate false} args)) {})
+    (await (tu/tick-until-idle! eng 60))
+    @trail))
+
+(deftest go-to-zone-tolls-bends-round-another-bodys-zone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plain (await (go-to-trail {}))
+              tolled (await (go-to-trail {:zone-tolls true}))
+              ignoring (await (go-to-trail {:zone-tolls true :ignore-zones? true}))]
+          (is (on-strip? plain -5 5) "control: without :zone-tolls the straight way crosses the zone")
+          (is (seq tolled))
+          (is (not (on-strip? tolled -5 5)))
+          (is (on-strip? ignoring -5 5) ":ignore-zones? lifts the tolls"))))))
