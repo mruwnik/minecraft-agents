@@ -493,8 +493,8 @@ lease is not saved; restart or going offline ends it.
   Refusals: `offline`, `settling`, `held-by <who>`, `not-taken`, `not-driver` (`detail {:holder :idle-left-s}`), `bad-args`.
 - Dead-man: untimed controls are released after 1 s without an op. The takeover ends after 15 s of silence by default
   (`--drive-idle-s`, or `idleS` on `take`); `ping` keeps the lease. Timed holds last at most 10 s.
-- `world.mjs submit <move-to|dig|place|use-on|interact|wear|equip>` submits the job of that action (`go-to`, `blocks.dig`, `blocks.place`,
-  `blocks.use-on`, `items.interact`, `items.wear`, `items.equip`) with `:by` = `--who`: under manual control it is the slot job.
+- `world.mjs submit <move-to|dig|place|use-on|interact|wear|equip|mount|dismount>` submits the job of that action (`go-to`, `blocks.dig`, `blocks.place`,
+  `blocks.use-on`, `items.interact`, `items.wear`, `items.equip`, `movement.mount`, `movement.leave-vehicle`) with `:by` = `--who`: under manual control it is the slot job.
 - Rules live in `engine.lease` (pure); `engine.takeover` applies them; `engine/js/control.mjs` is a stateless socket adapter.
 - Events: `system.takeover_started`, `system.takeover_ended` (reason `released`, `forced`, `idle`, `offline`, `shutdown`),
   `system.drive_deadman`.
@@ -574,6 +574,7 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 | `movement.pace` `{:a :b :laps}` | Walks a, b, a, b (go-to per leg) in one call; stopped `:leg-unfinished`; a test job |
 | `movement.follow` `{:player :range :radius}` | Keeps within range of a player: walks (go-to legs) in one round until in range, then yields; give-up counts are per round |
 | `movement.linger-near` `{:pos :range 3 :wait-s}` | Stays within range of a cell for `:wait-s` s spent in range (declared hold `:lingering`; walks back with a go-to child when out of range); hands over `{:lingered true}`, or stopped `:unreachable` after three failed walks back |
+| `movement.mount` `{:id or :name}` | Walks to a boat, raft, minecart or rideable mob and gets on; holds the vehicle while the job lives; stopped `:gone`, `:not-mountable`, `:occupied`, `:hand-full`, `:timeout`, `:unreachable`, `:aboard-other`, `:bad-args` | |
 | `movement.leave-vehicle` | Gets off a boat, minecart or mount (run by `:mounted`; one run, retries inside, stopped when still aboard, fired again after the cooldown) |
 | `time.wait-for-day`, `time.wait-for-dusk` | Done once it is day / evening; waits `:day-not-come` / `:dusk-not-come` |
 

@@ -1,0 +1,48 @@
+;; Card 116b9335: jobs.movement.mount (world.mjs submit mount <id>): walk to a vehicle or mount and get on, then jobs.movement.leave-vehicle.
+;; Should-succeed: boat on land 6 away (walks, mounts); mount a boat in a pool then dismount onto the water (vehicle.left landed :in-water);
+;; saddled pig; mounting twice is :already.
+;; Should-fail: cow (not-mountable), occupied minecart (occupied), no such entity (gone), full inventory with an item in hand (hand-full).
+;; Not a fixture: logout while mounted, the server never seating the body (timeout; unit and fake only).
+{:defaults
+ {:tags [:boats :mount] :time :any
+  :plot {:height 8 :floor "stone"}
+  :body {:at [10.5 0 16.5]}
+  :limit-s 60}
+ :cases
+ [{:name "mount-boat-six-away"
+   :act [[:summon "oak_boat" [16.5 0 16.5] "{}"]
+         [:job (jobs.movement.mount {:name "oak_boat"})]]
+   :expect [{:event {:source :job :kind :vehicle.mounted :data {:vehicle "oak_boat"}} :within-s 40 :of-job true}]}
+  {:name "mount-then-dismount-onto-water"
+   :blocks [[:fill [12 -1 14] [20 -1 18] "water"]]
+   :act [[:summon "oak_boat" [15.5 -1 16.5] "{}"]
+         [:job (jobs.movement.mount {:name "oak_boat"})]
+         [:job (jobs.movement.leave-vehicle {})]]
+   :expect [{:event {:source :job :kind :vehicle.mounted} :within-s 40 :of-job true}
+            {:event {:source :job :kind :vehicle.left :data {:landed :in-water}} :within-s 40 :of-job true}]}
+  {:name "mount-saddled-pig"
+   :act [[:summon "pig" [12.5 0 16.5] "{equipment:{saddle:{id:\"minecraft:saddle\",count:1}}}"]
+         [:job (jobs.movement.mount {:name "pig"})]]
+   :expect [{:event {:source :job :kind :vehicle.mounted :data {:vehicle "pig"}} :within-s 40 :of-job true}]}
+  {:name "mount-twice-is-already"
+   :act [[:summon "oak_boat" [11.5 0 16.5] "{}"]
+         [:job (jobs.movement.mount {:name "oak_boat"})]
+         [:job (jobs.movement.mount {:name "oak_boat"})]]
+   :expect [{:event {:source :job :kind :vehicle.mounted :data {:already true}} :within-s 40 :of-job true}]}
+  {:name "cow-is-not-mountable"
+   :act [[:summon "cow" [12.5 0 16.5]]
+         [:job (jobs.movement.mount {:name "cow"})]]
+   :expect [{:event {:source :job :kind :vehicle.mount_refused :data {:reason :not-mountable}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :vehicle.mounted} :for-s 10}]}
+  {:name "occupied-minecart"
+   :act [[:summon "minecart" [12.5 0 16.5] "{Passengers:[{id:\"minecraft:cow\"}]}"]
+         [:job (jobs.movement.mount {:name "minecart"})]]
+   :expect [{:event {:source :job :kind :vehicle.mount_refused :data {:reason :occupied}} :within-s 40 :of-job true}]}
+  {:name "no-such-entity"
+   :act [[:job (jobs.movement.mount {:name "oak_boat"})]]
+   :expect [{:event {:source :job :kind :vehicle.mount_refused :data {:reason :gone}} :within-s 20 :of-job true}]}
+  {:name "hand-full"
+   :body {:at [10.5 0 16.5] :inventory [["stick" 1] ["coal" 1] ["apple" 1] ["bread" 1] ["carrot" 1] ["potato" 1] ["beetroot" 1] ["iron_ingot" 1] ["gold_ingot" 1] ["diamond" 1] ["emerald" 1] ["redstone" 1] ["lapis_lazuli" 1] ["quartz" 1] ["flint" 1] ["feather" 1] ["string" 1] ["bone" 1] ["arrow" 1] ["egg" 1] ["paper" 1] ["book" 1] ["clay_ball" 1] ["brick" 1] ["snowball" 1] ["slime_ball" 1] ["gunpowder" 1] ["leather" 1] ["sugar" 1] ["wheat_seeds" 1] ["melon_seeds" 1] ["pumpkin_seeds" 1] ["cocoa_beans" 1] ["charcoal" 1] ["glowstone_dust" 1]]}
+   :act [[:summon "oak_boat" [12.5 0 16.5] "{}"]
+         [:job (jobs.movement.mount {:name "oak_boat"})]]
+   :expect [{:event {:source :job :kind :vehicle.mount_refused :data {:reason :hand-full}} :within-s 40 :of-job true}]}]}

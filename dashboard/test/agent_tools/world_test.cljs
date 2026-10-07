@@ -29,7 +29,10 @@
     ["wear" "iron_helmet"] '(jobs.items.wear {:item "iron_helmet"})
     ["wear"] '(jobs.items.wear {})
     ["equip" "iron_pickaxe"] '(jobs.items.equip {:item "iron_pickaxe"})
-    ["equip" "shield" "--hand" "off"] '(jobs.items.equip {:item "shield" :hand "off"})))
+    ["equip" "shield" "--hand" "off"] '(jobs.items.equip {:item "shield" :hand "off"})
+    ["mount" "9"] '(jobs.movement.mount {:id 9})
+    ["mount" "oak_boat"] '(jobs.movement.mount {:name "oak_boat"})
+    ["dismount"] '(jobs.movement.leave-vehicle {})))
 
 (deftest the-request-goes-to-the-jobs-api-as-the-driver
   (let [r (world/request-for ["--world" "w" "Probe" "--state" "/s" "submit" "dig" "1" "64" "2" "--who" "Wren" "--request-id" "r1"])]
@@ -48,6 +51,8 @@
                           [#"not valid for wear" ["--world" "w" "Probe" "submit" "wear" "--ignore-zones"]]
                           [#"not valid for wear" ["--world" "w" "Probe" "submit" "wear" "--hand" "off"]]
                           [#"--hand must be" ["--world" "w" "Probe" "submit" "equip" "shield" "--hand" "left"]]
+                          [#"mount needs one entity-id or entity name" ["--world" "w" "Probe" "submit" "mount"]]
+                          [#"dismount takes no arguments" ["--world" "w" "Probe" "submit" "dismount" "3"]]
                           [#"equip needs one item" ["--world" "w" "Probe" "submit" "equip"]]
                           [#"--doors must be" ["--world" "w" "Probe" "submit" "move-to" "1" "64" "2" "--doors" "smash"]]
                           [#"--request-id must be" ["--world" "w" "Probe" "submit" "dig" "1" "64" "2" "--request-id" "bad id"]]

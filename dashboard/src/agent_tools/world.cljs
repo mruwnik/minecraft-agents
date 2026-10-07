@@ -17,6 +17,7 @@
        "  submit interact <entity-id> [--item <item>]   (jobs.items.interact)\n"
        "  submit wear [<item>]   (jobs.items.wear: a carried armour piece; no item: the best carried piece for each empty or weaker slot)\n"
        "  submit equip <item> [--hand main|off]   (jobs.items.equip: hold a carried item in the main hand or off-hand; refuses a missing item)\n"
+       "  submit mount <entity-id|name> | submit dismount   (jobs.movement.mount: walk to a boat, raft, minecart or rideable mob (by id, or the nearest of a name) and get on; jobs.movement.leave-vehicle: get off)\n"
        "Acquire the body first: drive.mjs take --who NAME --why \"<text>\" --idle-s N, and pass the same --who here.\n"
        "Under manual control the driver's job is the one slot: no other job runs, a new submit replaces the running one, and the body idles after it;\n"
        "jobs.mjs cancel <jID> or drive.mjs stop cancels it. Without manual control (or as another --who) the job joins the normal list.\n"
@@ -33,7 +34,7 @@
 
 (def allowed
   {"move-to" #{:range :doors :no-escalate} "dig" #{:ignore-zones} "place" #{:ignore-zones}
-   "use-on" #{:item :face} "interact" #{:item} "wear" #{} "equip" #{:hand}})
+   "use-on" #{:item :face} "interact" #{:item} "wear" #{} "equip" #{:hand} "mount" #{} "dismount" #{}})
 
 (def doors #{"shut" "leave-open" "never"})
 
@@ -67,6 +68,12 @@
       "equip" (do (when-not (= 1 (count args)) (fail "equip needs one item"))
                   (when-not (contains? #{nil "main" "off"} hand) (fail "--hand must be main or off"))
                   (list 'jobs.items.equip (cond-> {:item (first args)} (some? hand) (assoc :hand hand))))
+      "mount" (do (when-not (= 1 (count args)) (fail "mount needs one entity-id or entity name"))
+                  (list 'jobs.movement.mount (if (re-matches #"[0-9]+" (first args))
+                                               {:id (num (first args) "entity-id")}
+                                               {:name (first args)})))
+      "dismount" (do (when (seq args) (fail "dismount takes no arguments"))
+                     (list 'jobs.movement.leave-vehicle {}))
       "interact" (do (when-not (= 1 (count args)) (fail "interact needs one entity-id"))
                      (list 'jobs.items.interact (cond-> {:id (num (first args) "entity-id")} (seq item) (assoc :item item))))
       (fail (str "unknown action " (or action "undefined"))))))
