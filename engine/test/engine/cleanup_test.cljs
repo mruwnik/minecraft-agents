@@ -644,3 +644,17 @@
           (is (#{[0 64 0] [4 64 0]} (feet p)) "on the ground, not in the pit")
           (is (= 3 (count (:removed @out)))))))))
 
+
+(deftest an-unseen-swapped-cell-is-looked-at-first-and-never-dug
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (d/sensing {:self {:pos {:x 3.5 :y 65 :z 0.5}} :blocks (assoc d/ground "0,65,0" "oak_planks" "2,65,0" "dirt")})
+              _ (.setOwner p "t1")
+              _ (await (.look p "t1" #js {:pos #js {:x 2.5 :y 65.5 :z 0.5}}))
+              s (d/setup p 'jobs.access.cleanup {:ignore-zones? true})]
+          (ledger/write! (:store (:eng s)) [(entry [0 65 0]) (entry [2 65 0])])
+          (await (d/tick-out! s))
+          (is (= [[2 65 0]] (mapv (juxt :x :y :z) (d/digs p))) "only the seen scaffold is dug; the unseen cell is looked at first, found swapped, left")
+          (is (= "oak_planks" (d/block-at p [0 65 0])))
+          (is (= [] (ledger/open-entries (mem/view (:store (:eng s))))) "the entry is dropped once the cell is seen"))))))
