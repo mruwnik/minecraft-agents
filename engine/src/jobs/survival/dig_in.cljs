@@ -128,8 +128,9 @@
     (cond
       (empty? cells) (do (when-not (sh/roofed? p roof-height) (remember-failed-site! c :walls-refused))
                          :done)
+      (= :wait status) :yield
       (= "no-item" status) (do (ctx/update-mem! c dissoc :mode :start) :continue)
-      (not= :ok status) (fail-site! c :walls-failed (str "cannot place a block: " status "; " (open-text open)))
+      (not= :ok status) (fail-site! c :walls-failed (str "cannot place a block: " status (:mob-text (ctx/mem c)) "; " (open-text open)))
       (dig-cells/sealed-in? p :walls roof-height) :done
       :else :continue)))
 
@@ -239,10 +240,12 @@
     (if (nil? item)
       (do (remember-material! c {:pos roof}) :done)
       (let [r (await (tidy/place! c roof item true))]
-        (if (#{"placed" "occupied"} (.-status r))
+        (cond
+          (#{"placed" "occupied"} (.-status r))
           (do (when (= "placed" (.-status r)) (ctx/update-mem! c update :placed (fnil conj #{}) roof))
               :done)
-          (fail-site! c :roof-failed (str "cannot roof the pit: " (.-status r))))))))
+          (dig-cells/keep-waiting! c :mob-since r) :yield
+          :else (fail-site! c :roof-failed (str "cannot roof the pit: " (.-status r) (dig-cells/mob-text r))))))))
 
 (defn mode-choice
   "[mode refusal] for the shelter from start: the first of :plug (only with a room-plug cell), :walls (only when
@@ -347,10 +350,12 @@
     (if (nil? item)
       (fail-site! c :plug-failed "cannot mend the roof: no-item")
       (let [r (await (tidy/place! c plug item true))]
-        (if (#{"placed" "occupied"} (.-status r))
+        (cond
+          (#{"placed" "occupied"} (.-status r))
           (do (when (= "placed" (.-status r)) (ctx/update-mem! c update :placed (fnil conj #{}) plug))
               :done)
-          (fail-site! c :plug-failed (str "cannot mend the roof: " (.-status r))))))))
+          (dig-cells/keep-waiting! c :mob-since r) :yield
+          :else (fail-site! c :plug-failed (str "cannot mend the roof: " (.-status r) (dig-cells/mob-text r))))))))
 
 (defn ^:async step [c]
   (choose-mode c)
@@ -415,14 +420,17 @@
 
 (defn ^:async round
   "One call is a whole attempt: steps (a placement batch, a dig, a descent, the roof) until the body is roofed or the
-  site fails, a timer between steps."
+  site fails, a timer between steps. A place refused for a mob in the cell yields :continue and is retried
+  (dig-cells/mob-wait-ms), then fails naming the mob."
   [c]
   (ctx/update-mem! c dissoc :stop)
   (loop [i 0]
     (let [r (if (< i max-steps) (await (step c)) (do (stop-reason! c :no-progress) :done))]
-      (if (= :continue r)
-        (do (await (child/pace!)) (recur (inc i)))
-        (end! c)))))
+      (case r
+        :continue (do (await (child/pace!)) (recur (inc i)))
+        :yield :continue
+        (do (dig-cells/forget-wait! c :mob-since)
+            (end! c))))))
 
 (def bad-lists
   "Args checked by jobs.lib.args."

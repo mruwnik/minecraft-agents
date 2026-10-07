@@ -1,7 +1,9 @@
 (ns jobs.survival.dig-in-cells
   "The cells a shelter fills and the placing of blocks into them (read from the world, placed, shut): jobs.survival.dig-in
   and jobs.survival.retreat use them."
-  (:require [jobs.lib.blocks :as lb]
+  (:require [clojure.string :as string]
+            [engine.settings :as settings]
+            [jobs.lib.blocks :as lb]
             [jobs.lib.click :as click]
             [jobs.lib.tidy :as tidy]
             [engine.ctx :as ctx]
@@ -115,11 +117,40 @@
         side (or both (first feet-placed))]
     (when side [(at side 0) (at side 1)])))
 
+(def settings
+  {::mob-wait-ticks {:default 200 :doc "Game ticks a shelter's place refused for a mob in its cell is retried before the shelter gives up."
+                     :type :int :min 0}})
+
+(defn mob-wait-ms [] (settings/ticks->ms (settings/get settings ::mob-wait-ticks)))
+
+(defn refusing-mobs
+  "The names of the entities a refused place reports near its cell (the mob in the way), nil when none."
+  [r]
+  (seq (map #(or (.-name %) (.-kind %)) (some-> r .-refusal .-entities))))
+
+(defn mob-text
+  "', <names> stays in the cell' for a refused place r that named mobs, else ''."
+  [r]
+  (if-let [mobs (refusing-mobs r)] (str ", " (string/join ", " mobs) " stays in the cell") ""))
+
+(defn keep-waiting!
+  "Whether a place refused for a mob (r) is still within mob-wait-ms of the first such refusal, kept in job memory under
+  key k (cleared by forget-wait!); false when r names no mob or the wait is over."
+  [c k r]
+  (let [now (ctx/now c)
+        since (or (k (ctx/mem c)) now)]
+    (boolean (when (and (refusing-mobs r) (<= (- now since) (mob-wait-ms)))
+               (ctx/update-mem! c assoc k since)
+               true))))
+
+(defn forget-wait! [c k] (ctx/update-mem! c dissoc k))
+
 (defn full-cube? [c cell]
   (boolean (some-> (u/seen-block (:primitives c) cell) .-fullCube)))
 
 (defn ^:async place-all!
-  "Place blocks at cells in order. Resolves to :ok, or the first status that is not placed or occupied.
+  "Place blocks at cells in order. Resolves to :ok, :wait (a mob stands in the cell: the place was refused and is retried
+  for mob-wait-ms, the caller yields in between), or the first status that is not placed or occupied.
   A cell occupied by a block that fills it is sealed already and goes in :occupied.
   A cell occupied by a block a mob walks through is dug once and placed again.
   If that second try is occupied too, or the dig fails, the cell goes in :occupied and is not tried again.
@@ -145,11 +176,16 @@
 
                   (= "placed" status)
                   (do (ctx/update-mem! c update :placed (fnil conj #{}) cell)
+                      (forget-wait! c :mob-since)
                       (recur (rest cells)))
+
+                  (and (not= "occupied" status) (keep-waiting! c :mob-since r))
+                  :wait
 
                   (not= "occupied" status)
                   (do (when (not= "no-item" status)
                         (ctx/update-mem! c update-in [:refused cell] (fnil inc 0)))
+                      (ctx/update-mem! c assoc :mob-text (mob-text r))
                       status)
 
                   (or (full-cube? c cell) (contains? (:cleared (ctx/mem c) #{}) cell))

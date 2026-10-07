@@ -42,8 +42,8 @@
 (defn occupied? [c cell] (contains? (:seal-occupied (ctx/mem c)) cell))
 
 (defn ^:async place-seal!
-  "Place carried blocks at cells in order. :ok, or :failed at the first
-  placement refused or with nothing left to place. A door, gate or trapdoor standing open is shut instead
+  "Place carried blocks at cells in order. :ok, :wait while a mob stands in a cell (the place is refused and tried again
+  for dig-cells/mob-wait-ms), or :failed at the first placement refused or with nothing left to place. A door, gate or trapdoor standing open is shut instead
   (dig-cells/shut-open!); a cell the place answers occupied (a torch, a chest, a bed: a block the seal leaves alone), or an
   open iron door, is remembered in :seal-occupied and never tried again this flight."
   [c cells]
@@ -55,13 +55,18 @@
         (dig-cells/sealed? (:primitives c) cell) (recur (rest cells))
         (nil? item) :failed
         :else (let [door (await (dig-cells/shut-open! c cell))
-                    status (when-not door (.-status (await (tidy/place! c cell item true))))]
+                    r (when-not door (await (tidy/place! c cell item true)))
+                    status (some-> r .-status)]
                 (cond
-                  (or (= :shut door) (= "placed" status)) (recur (rest cells))
+                  (or (= :shut door) (= "placed" status))
+                  (do (dig-cells/forget-wait! c :seal-mob-since)
+                      (recur (rest cells)))
                   (or (= :open door) (= "occupied" status))
                   (do (ctx/update-mem! c update :seal-occupied (fnil conj #{}) cell)
                       (recur (rest cells)))
-                  :else :failed))))))
+                  (dig-cells/keep-waiting! c :seal-mob-since r) :wait
+                  :else (do (dig-cells/forget-wait! c :seal-mob-since)
+                            :failed)))))))
 
 (defn off-centre?
   "Whether the body's hitbox (0.6 wide) reaches out of its cell into a side cell."
@@ -101,8 +106,9 @@
       (do (when (off-centre? p) (await (centre! c)))
           (access/trespass! c "retreat" (some #(access/trespass-refusal (access/rules-input c) :place %) cells))
           (ctx/update-mem! c update :seal-cells (fnil into #{}) (map (juxt :x :y :z) (take max-places cells)))
-          (if (= :failed (await (place-seal! c (take max-places cells))))
-            (do (flight/tried! c :seal) :failed)
+          (case (await (place-seal! c (take max-places cells)))
+            :failed (do (flight/tried! c :seal) :failed)
+            :wait :again
             (let [left (dig-cells/open-cells p (sh/feet p))]
               (cond
                 (empty? left) :sealed
@@ -342,9 +348,13 @@
             _ (ledger/remember! c l)
             r (await (tidy/place! c roof item true))]
         (ledger/remember! c (ledger/reconcile l (escape/block-at-of p)))
-        (if (= "placed" (.-status r))
-          (hide-now! c refuge "cornered: dug down and plugged the hole until the hostile leaves")
-          (await (abandon-refuge! c)))))))
+        (cond
+          (= "placed" (.-status r))
+          (do (dig-cells/forget-wait! c :seal-mob-since)
+              (hide-now! c refuge "cornered: dug down and plugged the hole until the hostile leaves"))
+          (dig-cells/keep-waiting! c :seal-mob-since r) :again
+          :else (do (dig-cells/forget-wait! c :seal-mob-since)
+                    (await (abandon-refuge! c))))))))
 
 (defn ^:async pit-round!
   "One step of the pit: dig the cell under the feet (collecting the blocks it drops), drop into it, or plug."
