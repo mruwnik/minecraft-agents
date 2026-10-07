@@ -6,7 +6,7 @@
             [jobs.items.recipes :as recipes]
             [jobs.gather.mine :as mine]
             [jobs.lib.util :as u]
-            [jobs.lib.near :as near]
+            [jobs.lib.pace :as pace]
             [jobs.items.craft :as craft]
             [jobs.storage.deposit :as deposit]
             [engine.game :as game]
@@ -14,7 +14,7 @@
 
 (def doc
   "Get :count more of :item (or of any of :any-of, in that order of preference) than were carried at the first round.
-  The target is booked once, so a cut or restart goes on toward the same count. One child call or act per round.
+  The target is booked once, so a cut or restart goes on toward the same count. One call is the whole attempt: it yields (:continue) only while a child waits on the world.
 
   Sources, in order (carried, chests, crafting, gathering):
   - Carried: the target is met, done.
@@ -242,7 +242,7 @@
     (ctx/result! c res)
     :done))
 
-(defn tried! [c k v] (ctx/update-mem! c assoc-in [:tried k] v))
+(defn tried! [c k v] (ctx/update-mem! c assoc-in [:tried k] v) :again)
 
 (defn ^:async withdraw! [c pos items names have]
   (let [name (holds items names)
@@ -251,21 +251,25 @@
                                  {:chest pos :items {name (+ (deposit/carried (u/inventory (:primitives c)) name) need)}}))]
     (when (#{:done :declined} r)
       (ctx/update-mem! c update :done-chests (fnil conj #{}) (fetch/cell-of pos)))
-    :continue))
+    (if (= :continue r) :continue :again)))
 
-(defn ^:async inspect! [c pos]
-  (let [w (await (near/walk-near! c pos 3))
-        cell (fetch/cell-of pos)
-        mark! #(ctx/update-mem! c (fn [m] (-> m (update :done-chests (fnil conj #{}) cell) (update :inspected (fnil inc 0)))))]
-    (case w
-      :partial :continue
-      :blocked (do (mark!) :continue)
+(defn ^:async inspect!
+  "Walk to within 3 of the chest (a go-to child), look into it and book its stock. :continue while go-to waits, else :again."
+  [c pos]
+  (let [cell (fetch/cell-of pos)
+        mark! #(ctx/update-mem! c (fn [m] (-> m (update :done-chests (fnil conj #{}) cell) (update :inspected (fnil inc 0)))))
+        w (when-not (u/within? (u/self-pos c) pos 3)
+            (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos pos :range 3 :escalate false :warn false :retry false})))]
+    (cond
+      (= :continue w) :continue
+      (and w (not (:arrived (ctx/child-result c :walk)))) (do (mark!) :again)
+      :else
       (let [seen (await (ctx/act c :inspectContainer (clj->js {:pos pos})))]
         (if (= "ok" (.-status seen))
           (do (fetch/note-stock! c pos (.-items seen))
-              (ctx/update-mem! c update :inspected (fnil inc 0))
-              :continue)
-          (do (mark!) :continue))))))
+              (ctx/update-mem! c update :inspected (fnil inc 0)))
+          (mark!))
+        :again))))
 
 (def table-offsets [[1 0] [-1 0] [0 1] [0 -1] [1 1] [-1 1] [1 -1] [-1 -1]])
 
@@ -288,7 +292,7 @@
 (defn fruitless! [c why]
   (ctx/update-mem! c update-in [:craft :fruitless] (fnil inc 0))
   (ctx/update-mem! c assoc-in [:craft :why] why)
-  :continue)
+  :again)
 
 (defn ^:async craft-step!
   "One round of the craft source: run the current step of the plan as a child, until it ends."
@@ -298,8 +302,7 @@
                  (some-> (craft-plan c names (- target have)) :steps first))]
     (cond
       (>= (:fruitless mem 0) max-fruitless)
-      (do (tried! c :craft (or (:why mem) :failed))
-          :continue)
+      (tried! c :craft (or (:why mem) :failed))
 
       ;; no plan without the seen table: try that table again (it may be reachable now); fruitless counts bound the retries
       (and (nil? step) (:table-unreachable mem))
@@ -307,7 +310,7 @@
           (fruitless! c :table-unreachable))
 
       (nil? step)
-      (do (tried! c :craft :no-plan) :continue)
+      (tried! c :craft :no-plan)
 
       (= :place (:op step))
       (let [spot (or (:spot mem) (table-spot c))]
@@ -323,7 +326,7 @@
                     (if (and (= :done r) (:placed res))
                       (do (ctx/update-mem! c assoc :table spot)
                           (ctx/update-mem! c update :craft dissoc :table-unreachable)
-                          :continue)
+                          :again)
                       (fruitless! c (or (:reason res) :place-declined)))))))))
 
       :else
@@ -335,11 +338,11 @@
               (let [res (ctx/child-result c :craft)]
                 (ctx/update-mem! c update :craft dissoc :step)
                 (cond
-                  (and (= :done r) (pos? (:made res 0))) :continue
+                  (and (= :done r) (pos? (:made res 0))) :again
 
                   ;; the seen table cannot be reached: plan again without it, so a carried or new table is put down
                   (and (#{"unreachable" "no-table"} (:reason res)) (not (:table-unreachable mem)))
-                  (do (ctx/update-mem! c assoc-in [:craft :table-unreachable] true) :continue)
+                  (do (ctx/update-mem! c assoc-in [:craft :table-unreachable] true) :again)
 
                   :else
                   (fruitless! c (or (:reason res) (when (:short res) {:short (:short res)}) :declined))))))))))
@@ -354,7 +357,7 @@
   (let [k (inc (get-in (ctx/mem c) [:gather :fruitless] 0))]
     (ctx/update-mem! c assoc-in [:gather :fruitless] k)
     (when (>= k (fruitless-limit need r)) (tried! c :gather (or why :failed)))
-    :continue))
+    :again))
 
 (defn ^:async gather-step!
   "One round of the gather source: the child for the first raw item the chain lacks, until it ends."
@@ -362,9 +365,9 @@
   (let [p (:primitives c)
         need (some->> (some-> (gather-plan c names (- target have)) :gather (gather-need (game/version-of p))) (with-block c) (with-count p))]
     (cond
-      (nil? need) (do (tried! c :gather :no-plan) :continue)
+      (nil? need) (tried! c :gather :no-plan)
       (and (not (get-in (ctx/mem c) [:gather :before])) (not (gather-viable? c names (- target have))))
-      (do (tried! c :gather :none-seen) :continue)
+      (tried! c :gather :none-seen)
       :else
       (do (when-not (get-in (ctx/mem c) [:gather :before])
             (ctx/update-mem! c assoc-in [:gather :before] (gather-carried p need))
@@ -376,10 +379,10 @@
                     before (get-in (ctx/mem c) [:gather :before])]
                 (ctx/update-mem! c update :gather dissoc :before :item)
                 (if (> (gather-carried p need) before)
-                  (do (ctx/update-mem! c assoc-in [:gather :fruitless] 0) :continue)
+                  (do (ctx/update-mem! c assoc-in [:gather :fruitless] 0) :again)
                   (gather-failed! c need (or (:reason res) :nothing-gathered) r)))))))))
 
-(defn ^:async round [c]
+(defn ^:async step! [c]
   (let [a (:args c)
         names (names-of a)
         inv (u/inventory (:primitives c))
@@ -407,8 +410,7 @@
             (cond
               known (await (withdraw! c (:pos known) (:stock known) names have))
               (and unknown (< (:inspected m 0) max-inspections)) (await (inspect! c (:pos unknown)))
-              :else (do (tried! c :chest (if (or (seq (:done-chests m)) (pos? (:inspected m 0))) :lacking :none-seen))
-                        :continue)))
+              :else (tried! c :chest (if (or (seq (:done-chests m)) (pos? (:inspected m 0))) :lacking :none-seen))))
           (and (contains? (:how o) :craft) (not (get-in m [:tried :craft]))
                (or (not (contains? (:how o) :gather)) (get-in m [:craft :step]) (get-in m [:craft :table-unreachable]) (craft-plan c names (- target have))))
           (await (craft-step! c names have target))
@@ -416,3 +418,8 @@
           (await (gather-step! c names have target))
           :else (stop! c (if (= :table-unreachable (get-in m [:tried :craft])) :table-unreachable :no-source)
                        {:got got :tried (:tried m)}))))))
+
+(defn ^:async round
+  "The whole attempt in one call: step! again until the count is carried or it stops; :continue only while a child waits on the world."
+  [c]
+  (await (pace/steps! c (fn ^:async obtain-step [] (await (step! c))))))

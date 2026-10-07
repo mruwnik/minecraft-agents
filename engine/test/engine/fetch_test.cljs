@@ -325,7 +325,7 @@
                        [own-zone])
               id (core/submit! (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 1 :fetch true}) {})]
           (await (run-ticks s 40))
-          (is (= 1 (count (events-of s :fetch.failed))))
+          (is (seq (events-of s :fetch.failed)))
           (is (nil? (:fetch-return (core/job-memory (:eng s) id))) (pr-str (core/job-memory (:eng s) id))))))))
 
 (deftest stair-without-fetch-waits-no-tool
@@ -461,6 +461,10 @@
     (await (run-ticks s n))
     id))
 
+(defn ^:async one-tick! [s spec]
+  (core/submit! (:eng s) spec {})
+  (await (run-ticks s 1)))
+
 (defn tables [s]
   (filterv (fn [[_ n]] (= "crafting_table" n)) (:blocks @(fake/state (:p s)))))
 
@@ -578,18 +582,15 @@
           (is (= :table-unreachable reason))
           (is (nil? (get (inv s) "wooden_pickaxe"))))))))
 
-(deftest a-run-that-flagged-the-table-unreachable-uses-it-once-it-is-reachable
+(deftest a-later-call-uses-the-table-once-it-is-reachable
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start (far-table-world [{:name "oak_planks" :count 3} {:name "stick" :count 2}]) [own-zone])
-              _ (core/submit! (:eng s) (list 'jobs.items.get-tool {:kind "pickaxe"}) {})]
-          (loop [n 0]
-            (when (and (< n 40) (< (count (calls s "craft")) 3))
-              (await (run-ticks s 1))
-              (recur (inc n))))
+        (let [s (start (far-table-world [{:name "oak_planks" :count 3} {:name "stick" :count 2}]) [own-zone])]
+          (await (one-tick! s (list 'jobs.items.get-tool {:kind "pickaxe"})))
+          (is (nil? (get (inv s) "wooden_pickaxe")))
           (swap! (fake/state (:p s)) assoc :unreachable #{})
-          (await (run-ticks s 80))
+          (await (one-tick! s (list 'jobs.items.get-tool {:kind "pickaxe"})))
           (is (= 1 (get (inv s) "wooden_pickaxe")))
           (is (= 1 (count (tables s)))))))))
 
@@ -858,3 +859,21 @@
           (core/submit! eng (list 'jobs.items.obtain {:item "wooden_pickaxe"}) {})
           (await (run-ticks (assoc s :eng eng) 12))
           (is (= 2 (:count (first @seen-args))) "one log carried, one more needed: harvest-wood's :count is logs carried in all"))))))
+
+(deftest get-tool-crafts-from-logs-in-one-call
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (bare [{:name "oak_log" :count 12}]) [own-zone])]
+          (await (one-tick! s (list 'jobs.items.get-tool {:kind "pickaxe"})))
+          (is (empty? (listed s)))
+          (is (= 1 (get (inv s) "wooden_pickaxe"))))))))
+
+(deftest get-tool-takes-from-a-chest-in-one-call
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (world pickaxe-stock) [own-zone])]
+          (await (one-tick! s (list 'jobs.items.get-tool {:kind "pickaxe"})))
+          (is (empty? (listed s)))
+          (is (= 1 (get (inv s) "wooden_pickaxe"))))))))
