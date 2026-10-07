@@ -24,7 +24,7 @@
       (some #(when-not (:pass? %) (str "after " (pr-str (:check %)) ": " (:evidence %))) afters)
       why))
 
-(def outcomes {:pass "passed" :fail "failed" :error "error" :skipped "skipped"})
+(def outcomes {:pass "passed" :fail "failed" :error "error" :skipped "skipped" :flaky "flaky"})
 
 (defn result [{:keys [id run status] :as r}]
   (let [m (when-not (= :pass status) (message r))]

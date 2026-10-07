@@ -23,7 +23,7 @@
        "         [--world claude] [--first-plot I] [--card ID] [--allow-time --time-log FILE] [--results FILE] [--phase day|night|night-exclusive] [--retry-failed N] [--stop-on-fail] [--list] [--check]\n"
        "--phase runs only the cases of that time class (case level; :any and untimed cases, and :day, count as day; a case whose first :time-set step is\n"
        "night counts as night): run day, then night, then night-exclusive so the time lock never flips mid-pass.\n"
-       "--retry-failed N reruns each failed case (not errors or inconclusive) up to N times after the batch, on the same body; a pass on a retry is reported :flaky (counted apart, never :pass, exit 0) with the first failure kept under :first-failure.\n"
+       "--retry-failed N reruns each failed case (not errors or inconclusive) up to N times after the batch, on the same body; a pass on a retry is reported :flaky (counted apart, never :pass, exit 0, also the live outcome) with the first failure kept under :first-failure; not combinable with --stop-on-fail.\n"
        "--check only loads and validates the fixtures (no body, no server): one result per case, exit 1 on a parse error or problem.\n"
        "Runs world fixtures (default dir engine/fixtures/world) on the reserved plot grid x/z 20000..20640, y 150 (large plots: lanes south of it, to z 22240).\n"
        "--allow-time lets a case that needs night or day set the time (each set appended to --time-log); without it\n"
@@ -34,6 +34,8 @@
 (defn parse-args [argv]
   (when (and (some #{"--allow-time"} argv) (not (some #{"--time-log"} argv)))
     (throw (js/Error. "--allow-time needs --time-log FILE (every time set is logged there)")))
+  (when (and (some #{"--retry-failed"} argv) (some #{"--stop-on-fail"} argv))
+    (throw (js/Error. "--retry-failed cannot be combined with --stop-on-fail (the batch ends at the first failure, so nothing is retried)")))
   (loop [[a b & more :as all] (vec argv) opts {:paths [] :repeat 1 :body "ProbeFixture" :world "claude" :first-plot 0}]
     (cond
       (empty? all) opts
@@ -894,6 +896,24 @@
   [results]
   (filterv #(= :fail (:status %)) results))
 
+(defn retry-view
+  "A retry result as reported live: a pass is :flaky (the case already reported its failure), a failure stays as it is."
+  [r]
+  (if (= :pass (:status r))
+    (assoc r :status :flaky :why "passed on a retry after an earlier failure")
+    r))
+
+(defn retry-groups
+  "The failed results as register groups of [case run] pairs for run-groups!, in failure order within each register."
+  [by-id failed]
+  (for [[register rs] (group-by #(:register (by-id (:id %))) failed)]
+    [register (for [r rs] [(by-id (:id r)) (:run r)])]))
+
+(defn align-retries
+  "The retry results ({[id run] result}) in the order of failed; a case that did not run again keeps its failure."
+  [failed again]
+  (mapv #(or (again [(:id %) (:run %)]) %) failed))
+
 (defn settle-retries
   "The first failed result r1 after its retry results: the first passing retry makes it :flaky (that retry's data, the
   attempt number under :retry, r1 under :first-failure); else r1 stays failed with :retries counted."
@@ -966,17 +986,16 @@
         by-id (into {} (map (juxt :id identity)) cases)
         rerun! (fn [failed]
                  (let [again (atom {})
-                       groups (for [[register rs] (group-by #(:register (by-id (:id %))) failed)]
-                                [register (for [r rs] [(by-id (:id r)) (:run r)])])]
+                       groups (retry-groups by-id failed)]
                    (log! "world-test: retrying " (count failed) " failed: " (str/join ", " (map #(str (:id %) " #" (:run %)) failed)))
                    (-> (run-groups! opts groups (constantly false)
-                                    (fn [c r] (report! r) (swap! again assoc [(:id c) (:run r)] (assoc r :file (:file c)))))
-                       (.then (fn [] (mapv #(or (@again [(:id %) (:run %)]) %) failed))))))]
+                                    (fn [c r] (report! (retry-view r)) (swap! again assoc [(:id c) (:run r)] (assoc r :file (:file c)))))
+                       (.then (fn [] (align-retries failed @again))))))]
     (reset-body-log! opts)
     (ev/emit! (ev/plan cases (:repeat opts)))
     (-> (run-groups! opts groups #(stop-batch? opts @results) first-pass)
         (.then (fn []
-                 (if (and (:retry-failed opts) (not (:stop-on-fail opts)))
+                 (if (:retry-failed opts)
                    (-> (retry-failed! (:retry-failed opts) @results rerun!)
                        (.then (fn [settled] (reset! results settled) (write-results! opts settled) settled)))
                    @results))))))

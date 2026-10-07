@@ -496,3 +496,24 @@
   (async done
     (-> (r/retry-failed! 0 [{:id "a" :run 1 :status :fail}] (fn [_] (throw (js/Error. "no"))))
         (.then (fn [out] (is (= [:fail] (mapv :status out))) (done))))))
+
+(deftest a-passing-retry-is-reported-flaky-and-a-failing-one-as-it-is
+  (is (= :flaky (:status (r/retry-view {:id "a" :run 1 :status :pass}))))
+  (is (re-find #"retry" (:why (r/retry-view {:id "a" :run 1 :status :pass}))))
+  (is (= {:id "a" :run 1 :status :fail :why "x"} (r/retry-view {:id "a" :run 1 :status :fail :why "x"}))))
+
+(deftest retry-failed-with-stop-on-fail-is-an-error
+  (is (thrown-with-msg? js/Error #"--stop-on-fail" (r/parse-args #js ["--retry-failed" "1" "--stop-on-fail"])))
+  (is (thrown-with-msg? js/Error #"--retry-failed" (r/parse-args #js ["--stop-on-fail" "--retry-failed" "1"]))))
+
+(deftest retry-groups-follow-each-cases-register-keeping-run-numbers
+  (let [by-id {"a" {:id "a" :register :r1} "b" {:id "b" :register :r2} "c" {:id "c" :register :r1}}
+        groups (r/retry-groups by-id [{:id "a" :run 1} {:id "b" :run 2} {:id "c" :run 1} {:id "a" :run 2}])]
+    (is (= [[:r1 [[(by-id "a") 1] [(by-id "c") 1] [(by-id "a") 2]]] [:r2 [[(by-id "b") 2]]]]
+           (mapv (fn [[reg pairs]] [reg (vec pairs)]) groups)))))
+
+(deftest retried-results-map-back-to-the-failed-order
+  (is (= [{:id "a" :run 1 :status :pass} {:id "b" :run 1 :status :fail}]
+         (r/align-retries [{:id "a" :run 1 :status :fail} {:id "b" :run 1 :status :fail}]
+                          {["a" 1] {:id "a" :run 1 :status :pass}})))
+  (is (= [{:id "a" :run 1 :status :fail}] (r/align-retries [{:id "a" :run 1 :status :fail}] {}))))

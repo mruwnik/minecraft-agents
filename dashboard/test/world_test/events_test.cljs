@@ -40,3 +40,8 @@
       (is (= [] (ev/fixtures-done expected [{:file "a" :run 1}])))
       (is (= ["b"] (ev/fixtures-done expected [{:file "a" :run 1} {:file "b" :run 1}])))
       (is (= ["a" "b"] (sort (ev/fixtures-done expected [{:file "a" :run 1} {:file "a" :run 2} {:file "b" :run 1}])))))))
+
+(deftest a-flaky-result-is-its-own-outcome-with-its-why
+  (let [m (ev/result {:id "f/c" :run 1 :status :flaky :why "passed on a retry"})]
+    (is (= "flaky" (:outcome m)))
+    (is (= "passed on a retry" (:message m)))))
