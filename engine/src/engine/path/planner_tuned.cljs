@@ -116,8 +116,8 @@
 
 (defn- danger-array
   "options.dangers ({x y z close radius rate}, at most MAX-DANGERS used) as a Float64Array of DANGER-STRIDE numbers per
-  danger; nil for none."
-  [^js ds]
+  danger, each rate times scale (the damage price of the walk over the risk price, once per plan); nil for none."
+  [^js ds scale]
   (when (and (some? ds) (pos? (.-length ds)))
     (let [n (js/Math.min MAX-DANGERS (.-length ds))
           a (js/Float64Array. (* n DANGER-STRIDE))]
@@ -125,7 +125,7 @@
         (let [^js d (aget ds i)
               o (* i DANGER-STRIDE)]
           (aset a o (.-x d)) (aset a (+ o 1) (.-y d)) (aset a (+ o 2) (.-z d))
-          (aset a (+ o 3) (.-close d)) (aset a (+ o 4) (.-radius d)) (aset a (+ o 5) (.-rate d))))
+          (aset a (+ o 3) (.-close d)) (aset a (+ o 4) (.-radius d)) (aset a (+ o 5) (* scale (.-rate d)))))
       a)))
 
 (defn- danger-box
@@ -170,7 +170,8 @@
         y-high (aget bounds 5)
         cap (js/Math.min max-nodes 1024)
         slots (next-pow2 (* cap 2))
-        ^js dangers (danger-array (.-dangers options))
+        risk-scale (/ (option options "damageWeight" (option options "riskWeight" 2)) (option options "riskWeight" 2))
+        ^js dangers (danger-array (.-dangers options) risk-scale)
         n-dangers (if (some? dangers) (/ (.-length dangers) DANGER-STRIDE) 0)
         ^js dbox (danger-box dangers)
         ^js dark (.-dark options)
@@ -258,7 +259,7 @@
      ;; stop-at-edge edge-node
      (and goal-unloaded (true? (option options "stopAtEdge" false))) -1
      ;; dangers n-dangers danger-cap dbx0 dbx1 dby0 dby1 dbz0 dbz1
-     dangers n-dangers (option options "dangerCap" 4)
+     dangers n-dangers (* risk-scale (option options "dangerCap" 4))
      (aget dbox 0) (aget dbox 1) (aget dbox 2) (aget dbox 3) (aget dbox 4) (aget dbox 5)
      ;; dark-at dark-factor dark-keys dark-flags darks
      dark-at dark-factor

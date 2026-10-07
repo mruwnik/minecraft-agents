@@ -7,7 +7,8 @@
   after armour; weight 1 within 2 blocks of the route, falling to 0 at :radius; counts only if a melee mob can walk to
   the route or a ranged mob has a line of fire to it. Overrides {mob-name number-or-{:times n}}: threat before armour.
 
-  danger-rate: mob-hurt over 1 s x stance factor (:flee x4, :fight x0.1), at most max-rate: hp a second, which the planner prices at go-to's hp price (:hp-seconds x health-scale) like a drop's damage."
+  danger-rate: mob-hurt over 1 s x stance factor (:flee x4, :fight x0.1), at most max-rate: hp a second (the factors, the cap and
+  danger-shape are go-to options, danger-opts), which the planner prices at go-to's hp price (:hp-seconds x health-scale) like a drop's damage."
   (:require [jobs.lib.cost.armour :as armour]
             [jobs.lib.cost.fight :as fight]
             [jobs.lib.cost.threat :as threat]
@@ -120,6 +121,30 @@
 (def stances "Rate factor: :flee from a mob costs the body far more than one it would :fight." {:flee 4 :fight 0.1})
 (def max-rate "hp a second one danger costs at most (the planner caps all of them together at its dangerCap, 4)." 4)
 
+(defn danger-opts
+  "The danger options of go-to's args {:flee-factor :fight-factor :danger-max-rate :danger-shape}, as the {:stances :max-rate
+  :shape} that danger-rate and danger-list take; only the ones given (the rest are the defaults above)."
+  [{:keys [flee-factor fight-factor danger-max-rate danger-shape]}]
+  (let [stances (cond-> {} (some? flee-factor) (assoc :flee flee-factor) (some? fight-factor) (assoc :fight fight-factor))]
+    (cond-> {}
+      (seq stances) (assoc :stances stances)
+      (some? danger-max-rate) (assoc :max-rate danger-max-rate)
+      (some? danger-shape) (assoc :shape danger-shape))))
+
+(defn danger-shape-problem
+  "Why shape (go-to's :danger-shape) is not usable, else nil: a map of :sensed, :remembered or :creeper to {:close :radius}
+  numbers >= 0, close under radius (against what the default has for the term not given)."
+  [shape]
+  (when (some? shape)
+    (or (when-not (map? shape) (str ":danger-shape must be a map, got " (pr-str shape)))
+        (some (fn [[k v]]
+                (let [m (merge (get danger-shape k) v)
+                      ok? #(and (number? %) (js/isFinite %) (>= % 0))]
+                  (cond (not (contains? danger-shape k)) (str ":danger-shape has no " (pr-str k) ", only :sensed :remembered :creeper")
+                        (not (and (map? v) (every? #{:close :radius} (keys v)) (ok? (:close m)) (ok? (:radius m)) (< (:close m) (:radius m))))
+                        (str ":danger-shape " (pr-str k) " must be {:close :radius} numbers >= 0 with :close under :radius, got " (pr-str v)))))
+              shape))))
+
 (defn stance
   "What the hostile reflex would do about mob-name alone (fight/decide): :fight or :flee."
   [{:keys [health equipment weapon]} mob-name]
@@ -127,25 +152,28 @@
                  :damage (fight/fight-damage {:weapon weapon :equipment equipment :mobs [{:name mob-name :distance 0}]})}))
 
 (defn danger-rate
-  "hp a second near mob-name costs body {:health :equipment :weapon} (see the ns doc)."
-  [{:keys [equipment] :as body} mob-name]
-  (min max-rate
-       (* (threat/mob-hurt (armour/armour-stats equipment) mob-name 1)
-          (get stances (stance body mob-name)))))
+  "hp a second near mob-name costs body {:health :equipment :weapon} (see the ns doc). opts: danger-opts (default none)."
+  ([body mob-name] (danger-rate body mob-name nil))
+  ([{:keys [equipment] :as body} mob-name opts]
+   (min (get opts :max-rate max-rate)
+        (* (threat/mob-hurt (armour/armour-stats equipment) mob-name 1)
+           (get (merge stances (:stances opts)) (stance body mob-name))))))
 
-(defn danger-of [body kind {:keys [name pos]}]
-  (merge {:x (:x pos) :y (:y pos) :z (:z pos) :rate (danger-rate body name) :mob name}
-         (get danger-shape (if (= "creeper" name) :creeper kind))))
+(defn danger-of [body kind {:keys [name pos]} {:keys [shape] :as opts}]
+  (let [k (if (= "creeper" name) :creeper kind)]
+    (merge {:x (:x pos) :y (:y pos) :z (:z pos) :rate (danger-rate body name opts) :mob name}
+           (get danger-shape k) (get shape k))))
 
 (defn danger-list
   "The dangers ({:x :y :z :close :radius :rate :mob}) of the sensed mobs [{:key :name :pos}] (nearest first) and the
   remembered :threat entries' data [{:key :mob :pos}] (nearest the body first; one whose :key is sensed now is left out:
-  the sensed place wins), at most max-dangers. body {:health :equipment :weapon :pos}."
-  [body sensed remembered]
+  the sensed place wins), at most max-dangers. body {:health :equipment :weapon :pos}. opts: danger-opts (default none)."
+  ([body sensed remembered] (danger-list body sensed remembered nil))
+  ([body sensed remembered opts]
   (let [now (set (map :key sensed))
         spots (->> remembered
                    (remove #(contains? now (:key %)))
                    (filter :pos)
                    (sort-by #(u/dist (:pos body) (:pos %))))]
-    (vec (take max-dangers (concat (map #(danger-of body :sensed %) sensed)
-                                   (map #(danger-of body :remembered {:name (:mob %) :pos (:pos %)}) spots))))))
+    (vec (take max-dangers (concat (map #(danger-of body :sensed % opts) sensed)
+                                   (map #(danger-of body :remembered {:name (:mob %) :pos (:pos %)} opts) spots)))))))

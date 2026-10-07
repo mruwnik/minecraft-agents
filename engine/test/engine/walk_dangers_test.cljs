@@ -21,7 +21,7 @@
 (defn ^:async plan-past
   "near/plan! from [0 64 0] to [40 64 0] for a body with world spec (merged) and :threat entries remembered first, with
   dangers on or off: the plan's steps."
-  [world remembered dangers]
+  [world remembered dangers & [args]]
   (let [clock (atom 1000000)
         [_ sink] (tu/legacy-capture-sink)
         p (tu/fake-on-floor (merge {:floor [-5 -20 45 20]} world))
@@ -29,7 +29,7 @@
         parent {:check (constantly true)
                 :round (fn ^:async planning-round [c]
                          (doseq [t remembered] (threats/remember! c t))
-                         (reset! out (await (near/plan! c [40 64 0] 0 :never (wworld/body-policy c) [] false nil nil true dangers)))
+                         (reset! out (await (near/plan! (assoc c :args (or args {})) [40 64 0] 0 :never (wworld/body-policy c) [] false nil nil true dangers)))
                          :done)}
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'planning-parent parent)
                           :triggers {} :dir (tu/tmp-dir) :now #(deref clock)
@@ -45,6 +45,20 @@
         (let [steps (await (plan-past {:entities [zombie]} [] true))]
           (is (seq steps))
           (is (>= (nearest steps) 8) (str "nearest " (nearest steps))))))))
+
+(deftest the-danger-options-change-the-plan-and-the-defaults-keep-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plain (await (plan-past {:entities [zombie]} [] true))
+              default (await (plan-past {:entities [zombie]} [] true {:flee-factor 4 :fight-factor 0.1 :danger-max-rate 4}))
+              cheap-flee (await (plan-past {:entities [zombie]} [] true {:flee-factor 0.1}))
+              capped (await (plan-past {:entities [zombie]} [] true {:danger-max-rate 0.2}))
+              narrow (await (plan-past {:entities [zombie]} [] true {:danger-shape {:sensed {:close 1 :radius 3}}}))]
+          (is (= (mapv (juxt :x :z) plain) (mapv (juxt :x :z) default)) "today's values as options: the same plan")
+          (is (< (nearest cheap-flee) (nearest plain)) "a cheaper flee passes nearer")
+          (is (< (nearest capped) (nearest plain)) "a lower cap passes nearer")
+          (is (< (nearest narrow) (nearest plain)) "a narrower danger passes nearer"))))))
 
 (deftest a-sword-passes-nearer-and-dangers-off-goes-straight
   (async done

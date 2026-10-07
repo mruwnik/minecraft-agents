@@ -53,3 +53,22 @@
       "the same with a diamond sword: a fight, cheap")
   (is (= [] (threats/known-dangers (tu/fake-on-floor {:blocks wall :entities [(zombie 1 6 0)]}) []))
       "behind a wall the body never saw it through: not listed (no x-ray)"))
+
+(deftest danger-terms-are-options-and-the-defaults-keep-the-price
+  (let [rate #(cost/danger-rate unarmed "zombie" %)
+        sensed [{:key "a" :name "zombie" :pos {:x 5 :y 64 :z 0}}]
+        shape #(select-keys (first (cost/danger-list unarmed sensed [] %)) [:close :radius :rate])]
+    (is (= (rate nil) (rate {})) "no options: today's rate")
+    (is (= 4 (rate {})) "default 3 dps x 4, capped at 4")
+    (is (= 1.5 (rate {:stances {:flee 0.5}})) "the flee factor scales the rate")
+    (is (< (js/Math.abs (- 0.6 (cost/danger-rate armed "zombie" {:stances {:fight 0.2}}))) 1e-9) "the fight factor")
+    (is (= 2 (rate {:max-rate 2})) "max-rate caps one danger")
+    (is (= 8 (rate {:max-rate 8 :stances {:flee 4}})) "a higher cap lets more through: 12 capped at 8")
+    (is (= {:close 3 :radius 12 :rate 4} (shape nil)) "default shape")
+    (is (= {:close 5 :radius 20 :rate 4} (shape {:shape {:sensed {:close 5 :radius 20}}})) "the shape is an option")
+    (is (= {:close 3 :radius 7 :rate 4} (shape {:shape {:sensed {:radius 7}}})) "a partial shape keeps the other term")))
+
+(deftest go-to-args-name-the-danger-options
+  (is (= {:stances {:flee 2 :fight 0.5} :max-rate 3 :shape {:sensed {:radius 9}}}
+         (cost/danger-opts {:flee-factor 2 :fight-factor 0.5 :danger-max-rate 3 :danger-shape {:sensed {:radius 9}}})))
+  (is (= {} (cost/danger-opts {})) "absent args: defaults apply downstream"))

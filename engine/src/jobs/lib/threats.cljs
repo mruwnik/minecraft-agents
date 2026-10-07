@@ -77,13 +77,13 @@
 
 (defn known-dangers
   "danger-list of the body of primitives p: sensed-mobs and the remembered :threat entries' data."
-  [p remembered]
-  (cost/danger-list (body-of p) (sensed-mobs p) remembered))
+  ([p remembered] (known-dangers p remembered nil))
+  ([p remembered opts] (cost/danger-list (body-of p) (sensed-mobs p) remembered opts)))
 
 (defn planner-dangers
   "The planner's options.dangers for the body of c (JS array, nil for none): known-dangers with the :threat spots its
   flights left."
   [c]
   (let [spots (keep #(when-let [pos (rough-pos (:data %))] (assoc (:data %) :pos pos)) (ctx/entries c :threat))
-        ds (known-dangers (:primitives c) spots)]
+        ds (known-dangers (:primitives c) spots (cost/danger-opts (:args c)))]
     (when (seq ds) (clj->js ds))))

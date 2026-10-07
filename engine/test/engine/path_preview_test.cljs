@@ -10,7 +10,8 @@
             ["fs" :as fs]
             ["path" :as path]
             [engine.test-util :as tu :refer [box floor]]
-            [engine.triggers :as triggers]))
+            [engine.triggers :as triggers]
+            [jobs.movement.path-preview :as pp]))
 
 (def job 'jobs.movement.path-preview)
 
@@ -157,3 +158,6 @@
           (is (= 1 (count reports)) "one plan, one report")
           (is (pos? nodes))
           (is (<= nodes 200000) "the planner's maxNodes bounds the plan: no budgeted rounds, no unbounded search"))))))
+
+(deftest the-food-arg-defaults-to-the-body-not-to-20
+  (is (nil? (get-in pp/args [:food :default]))))

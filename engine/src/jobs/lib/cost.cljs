@@ -52,6 +52,8 @@
 (def straight-route danger/straight-route)
 (def stance danger/stance)
 (def danger-rate danger/danger-rate)
+(def danger-opts danger/danger-opts)
+(def danger-shape-problem danger/danger-shape-problem)
 (def danger-list danger/danger-list)
 (def max-dangers danger/max-dangers)
 

@@ -7,6 +7,8 @@
             [engine.go-to-test :as g]
             [engine.test-util :as tu :refer [floor]]
             [jobs.lib.walk.plan :as wplan]
+            [jobs.lib.walk.watch :as wwatch]
+            [jobs.movement.go-to :as go-to]
             [jobs.movement.go-to.health :as gth]))
 
 (deftest the-way-to-heal-follows-health-food-and-what-is-carried
@@ -147,6 +149,25 @@
             (is (= {:arrived false :reason :bad-hp-seconds} (select-keys @out [:arrived :reason])) (pr-str bad))))
         (let [{:keys [out]} (await (g/go! {:blocks g/flat} {:pos [6 64 0] :hp-seconds 30}))]
           (is (= {:arrived true} @out)))))))
+
+(deftest go-to-refuses-bad-danger-options-and-fall-margin-with-a-reason
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[k reason bad] [[:fall-margin :bad-fall-margin [-1 "x" js/Infinity]]
+                                [:flee-factor :bad-flee-factor [-1 "x" js/Infinity]]
+                                [:fight-factor :bad-fight-factor [-1 "x" js/Infinity]]
+                                [:danger-max-rate :bad-danger-max-rate [0 -1 "x" js/Infinity]]
+                                [:danger-shape :bad-danger-shape ["x" {:sensed {:radius -1}} {:sensed {:close 5 :radius 2}} {:bogus {}}]]]
+                v bad]
+          (let [{:keys [out]} (await (g/go! {:blocks g/flat} {:pos [6 64 0] k v}))]
+            (is (= {:arrived false :reason reason} (select-keys @out [:arrived :reason])) (pr-str k v))))
+        (let [{:keys [out]} (await (g/go! {:blocks g/flat} {:pos [6 64 0] :fall-margin 0 :flee-factor 2 :fight-factor 0 :danger-max-rate 3
+                                                           :danger-shape {:sensed {:radius 9}}}))]
+          (is (= {:arrived true} @out)))))))
+
+(deftest the-fall-margin-default-is-the-one-constant
+  (is (= wwatch/fall-margin (get-in go-to/args [:fall-margin :default]))))
 
 (deftest healing-that-gains-nothing-stalls-after-the-stall-time
   (let [now 1000000

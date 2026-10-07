@@ -6,6 +6,8 @@
             [jobs.lib.util :as u]
             [jobs.lib.watch :as watch]
             [jobs.lib.near :as near]
+            [jobs.lib.cost :as cost]
+            [jobs.lib.walk.watch :as wwatch]
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.walk.search :as wsearch]
             [jobs.lib.places :as places]
@@ -18,7 +20,7 @@
   "Walk to :pos ([x y z] or {:x :y :z}, fractions floored to the cell) until the body's cell is within :range cells of
   it (range 0: in that cell, 1: next to it). :place (a name such as :home, set by jobs.memory.set-place) walks to
   that place's recorded position instead of :pos; a name not in memory falls back to the shared marker of that name (jobs.lib.world/marker).
-  - Refused at once, before any walk: a :pos that is not one (:bad-pos), a :place that is not a valid name (:bad-name), a :tolls entry that is not {:x :y :z :factor} of finite numbers (:bad-tolls), a :drop-cost that is not a number >= 0 or false (:bad-drop-cost), a :min-health outside 1-20 (:bad-min-health), a :max-damage below 0 (:bad-max-damage), a :hp-seconds that is not above 0 (:bad-hp-seconds)
+  - Refused at once, before any walk: a :pos that is not one (:bad-pos), a :place that is not a valid name (:bad-name), a :tolls entry that is not {:x :y :z :factor} of finite numbers (:bad-tolls), a :drop-cost that is not a number >= 0 or false (:bad-drop-cost), a :min-health outside 1-20 (:bad-min-health), a :max-damage below 0 (:bad-max-damage), a :hp-seconds that is not above 0 (:bad-hp-seconds), a :fall-margin, :flee-factor or :fight-factor that is not a number >= 0, a :danger-max-rate not above 0, a :danger-shape that is not {:sensed|:remembered|:creeper {:close :radius}} (:bad-fall-margin :bad-flee-factor :bad-fight-factor :bad-danger-max-rate :bad-danger-shape)
     or has no recorded position (:unknown-place), a body with no pathWorld sensing (:unsupported). Both give a :refused warn and {:status :stopped :arrived false :reason <it> :text}.
   - One call is one whole attempt: it plans and walks (jobs.lib.walk: slices of about 100 ms of search, walks of at
     most 60 s each) until it arrives or gives up. A search that needs more slices walks on toward where it has got
@@ -76,7 +78,11 @@
    :tolls {:doc "cells to cross only as a last resort, [{:x :y :z :factor}]: each costs factor times its own seconds more (jobs.lib.cost farm-tolls, zone-tolls)" :default nil}
    :min-health {:doc "hp (1-20) a drop or a plant's prick may not take the body below, less a margin of 1 (the walk's damage budget); 12 when absent; a floor the walk never crosses, not even when it goes over its budget" :default nil}
    :food {:doc "the food level (0-20) the walk counts on for its damage budget, its sprinting and whether it can heal by waiting (18 or more regenerates); default the body's own" :default nil}
-   :fall-margin {:doc "hp the falls of a walk may cost over the plan before an info go-to damage-mismatch" :default 1}
+   :fall-margin {:doc "hp the falls of a walk may cost over the plan before an info go-to damage-mismatch" :default wwatch/fall-margin}
+   :flee-factor {:doc "danger price: a known mob the body would flee costs this times its hp a second (jobs.lib.cost.danger)" :default 4}
+   :fight-factor {:doc "danger price: a known mob the body would fight costs this times its hp a second" :default 0.1}
+   :danger-max-rate {:doc "danger price: hp a second one known danger costs at most" :default 4}
+   :danger-shape {:doc "danger price: {:sensed|:remembered|:creeper {:close :radius}} blocks, full within :close, none past :radius; only the terms given replace the default (sensed 3 12, remembered 3 16, creeper 4 8)" :default nil}
    :hp-seconds {:doc "seconds an hp costs at full health when the planner weighs a drop or a plant's prick against a longer way (more at low health)" :default 10}
    :max-damage {:doc "hp at most a walk may spend on drops and plants that hurt (0: none), under the :min-health budget" :default nil}
    :drop-cost {:doc "number: scales the cost of a drop (fall seconds and damage; 1 as is, 0 free, 5 dear); false: no drop of 2 or 3 at all. :one-way :closed instead refuses only a drop the body cannot climb back" :default 1}
@@ -316,7 +322,8 @@
   [c]
   (let [parsed (target c)
         drop-cost (:drop-cost (:args c))
-        {:keys [min-health max-damage hp-seconds]} (:args c)
+        {:keys [min-health max-damage hp-seconds fall-margin flee-factor fight-factor danger-max-rate danger-shape]} (:args c)
+        factor? #(or (nil? %) (and (number? %) (js/isFinite %) (>= % 0)))
         tolls-problem (wworld/tolls-problem (:tolls (:args c)))]
     (cond
       (:reason parsed) parsed
@@ -328,6 +335,13 @@
       {:reason :bad-max-damage :message (str ":max-damage must be a number >= 0, got " (pr-str max-damage))}
       (not (or (nil? hp-seconds) (and (number? hp-seconds) (js/isFinite hp-seconds) (pos? hp-seconds))))
       {:reason :bad-hp-seconds :message (str ":hp-seconds must be a number above 0, got " (pr-str hp-seconds))}
+      (not (factor? fall-margin))
+      {:reason :bad-fall-margin :message (str ":fall-margin must be a number >= 0, got " (pr-str fall-margin))}
+      (not (factor? flee-factor)) {:reason :bad-flee-factor :message (str ":flee-factor must be a number >= 0, got " (pr-str flee-factor))}
+      (not (factor? fight-factor)) {:reason :bad-fight-factor :message (str ":fight-factor must be a number >= 0, got " (pr-str fight-factor))}
+      (not (or (nil? danger-max-rate) (and (number? danger-max-rate) (js/isFinite danger-max-rate) (pos? danger-max-rate))))
+      {:reason :bad-danger-max-rate :message (str ":danger-max-rate must be a number above 0, got " (pr-str danger-max-rate))}
+      (cost/danger-shape-problem danger-shape) {:reason :bad-danger-shape :message (cost/danger-shape-problem danger-shape)}
       tolls-problem {:reason :bad-tolls :message tolls-problem})))
 
 (defn ^:async round
