@@ -1,6 +1,5 @@
 (ns jobs.lib.worth
-  "The coarse item worth tiers make-room reads to decide what may be tossed (item-worth). What a pile is worth and what
-  fetching it costs, as recover-drops decides it, is jobs.lib.cost/item-value and fetch-cost (built from minecraft-data).
+  "make-room's own prices for jobs.lib.cost/item-value: coarse keep tiers that decide what may be tossed (item-worth).
 
   Item value, per stack (an inventory entry), first matching rule wins:
 
@@ -15,40 +14,33 @@
     low         1  food, logs, planks, wood, stone/wooden/golden tools,
                    leather gear
     junk        0  everything else (seeds, dirt, cobblestone, saplings,
-                   sticks, flowers, unknown names)")
+                   sticks, flowers, unknown names)"
+  (:require [jobs.lib.cost :as cost]))
 
-(def tier-values {:junk 0 :low 1 :medium 5 :high 25})
+(def prices
+  "make-room's prices, [[regex price] ...] in priority order (first match wins; unmatched items cost 0)."
+  [[#"^(diamond|netherite)(_|$)|^(ancient_debris|elytra|totem_of_undying|nether_star|beacon)$|shulker_box$" 25]
+   [#"^iron_(pickaxe|axe|shovel|hoe|sword|helmet|chestplate|leggings|boots)$" 5]
+   [#"^(bow|crossbow|shield|redstone|ender_pearl|golden_apple|emerald|emerald_block)$" 5]
+   [#"^(coal_block|iron_block|iron_ingot|gold_ingot|raw_iron)$" 2]
+   [#"^(cooked_.*|bread|apple|carrot|baked_potato|golden_carrot|melon_slice|sweet_berries)$" 1]
+   [#"_(log|planks|wood)$" 1]
+   [#"^(stone|wooden|golden)_(pickaxe|axe|shovel|hoe|sword)$" 1]
+   [#"^leather" 1]])
 
-(def metal-each 2)
+(def enchanted-worth 25)
 
-(def rules
-  "Name rules in priority order: {:match regex} plus :tier (the stack's worth is the tier value) or
-  :each (the stack's worth is :each per item)."
-  [{:tier :high :match #"^(diamond|netherite)(_|$)|^(ancient_debris|elytra|totem_of_undying|nether_star|beacon)$|shulker_box$"}
-   {:tier :medium :match #"^iron_(pickaxe|axe|shovel|hoe|sword|helmet|chestplate|leggings|boots)$"}
-   {:tier :medium :match #"^(bow|crossbow|shield|redstone|ender_pearl|golden_apple|emerald|emerald_block)$"}
-   {:each metal-each :match #"^(coal_block|iron_block|iron_ingot|gold_ingot|raw_iron)$"}
-   {:tier :low :match #"^(cooked_.*|bread|apple|carrot|baked_potato|golden_carrot|melon_slice|sweet_berries)$"}
-   {:tier :low :match #"_(log|planks|wood)$"}
-   {:tier :low :match #"^(stone|wooden|golden)_(pickaxe|axe|shovel|hoe|sword)$"}
-   {:tier :low :match #"^leather"}])
+(def per-count "Metals: a stack is worth its count times the price." #"^(coal_block|iron_block|iron_ingot|gold_ingot|raw_iron)$")
 
 (defn enchanted?
   "Whether the item carries a non-empty :enchants or :nbt."
   [item]
   (boolean (some #(seq (get item %)) [:enchants :nbt])))
 
-(defn rule-for
-  "The first rule matching the entry's name, or nil."
-  [{:keys [name]}]
-  (some #(when (re-find (:match %) name) %) rules))
-
 (defn item-worth
   "The worth of one inventory entry ({:name :count? ...}); a missing :count counts as 1."
-  [item]
-  (cond
-    (enchanted? item) (tier-values :high)
-    :else (let [r (rule-for item)]
-            (cond (nil? r) 0
-                  (:each r) (* (:each r) (or (:count item) 1))
-                  :else (tier-values (:tier r))))))
+  [{:keys [name count] :as item}]
+  (if (enchanted? item)
+    enchanted-worth
+    (let [each (:each (first (:items (cost/item-value [(assoc item :count 1)] :prices prices :else 0))))]
+      (if (re-find per-count name) (* each (or count 1)) each))))

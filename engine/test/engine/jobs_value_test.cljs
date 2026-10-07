@@ -101,6 +101,17 @@
     (is (= 24 (:count (first (:items r)))))
     (is (= (:value r) (reduce + (map :value (:items r)))))))
 
+(deftest own-prices-replace-the-base-per-pattern-first-match-wins
+  (let [prices [[#"^iron_" 5] [#"_ingot$" 2]]]
+    (is (= 5 (value [{:name "iron_ingot"}] :prices prices)) "first matching pattern")
+    (is (= 2 (value [{:name "gold_ingot"}] :prices prices)))
+    (is (= 15 (value [{:name "iron_ingot" :count 3}] :prices prices)) "price per item, times the count")
+    (is (= (each "dirt") (value [{:name "dirt"}] :prices prices)) "unmatched items keep the base")))
+
+(deftest else-prices-every-unmatched-item
+  (is (= 0 (value [{:name "dirt"} {:name "mystery_thing"}] :prices [[#"^diamond$" 9]] :else 0)))
+  (is (= 9 (value [{:name "diamond"}] :prices [[#"^diamond$" 9]] :else 0))))
+
 ;; ---------------------------------------------------------------- fetch-cost
 
 (deftest fetch-cost-grows-with-distance-and-danger

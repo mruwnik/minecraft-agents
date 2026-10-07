@@ -28,7 +28,11 @@
   goes into the table, so what is made of the item follows ({\"iron_ingot\" 0} makes an iron pickaxe worth its
   sticks). Group overrides apply to the final worth of their members: \"ore\" (what an ore block drops), \"tool\"
   (has durability, not armour), \"armor\", \"food\", \"block\" (placeable), \"unknown\". A name override beats a
-  group one."
+  group one.
+
+  Prices ([[regex price] ...], first match wins) set the worth of one item by name pattern, with :else the price of
+  items no pattern matches: a job that ranks items its own way (make-room's keep tiers) passes its own table, and the
+  durability and enchantment terms do not apply to a priced item."
   (:require ["minecraft-data" :as minecraft-data]
             [clojure.string :as str]
             [jobs.lib.cost.health :as health]
@@ -182,8 +186,9 @@
 
 (defn stack-worth
   "{:name :count :each :value} of one entry; group overrides skip a name that has its own (named, a map)."
-  [version table group-overrides named {:keys [name durability enchants] :as entry}]
+  [version table group-overrides named prices else {:keys [name durability enchants] :as entry}]
   (let [n (count-of entry)
+        price (or (some (fn [[re p]] (when (re-find re name) p)) prices) else)
         md (minecraft-data version)
         item (aget (.-itemsByName md) name)
         base (get table name ((override-fn (get group-overrides "unknown")) unknown-each))
@@ -193,15 +198,15 @@
         share (if (and (number? durability) (number? max-d) (pos? max-d))
                 (max min-durability-share (min 1 (/ durability max-d)))
                 1)
-        each (+ (* grouped share) (enchant-worth version enchants))]
+        each (or price (+ (* grouped share) (enchant-worth version enchants)))]
     {:name name :count n :each each :value (* n each)}))
 
 (defn item-value
   "{:value total :items [{:name :count :each :value} ...]} of items ([{:name :count ...}], inventory or drop shape),
   main contributors first. Stacks of one name with the same durability and enchantments are added. See the ns doc.
-  Options: :overrides, :version (minecraft-data, default the body's). Never throws on odd entries: no name is
+  Options: :overrides, :prices and :else (see the ns doc), :version (minecraft-data, default the body's). Never throws on odd entries: no name is
   worth 0, an unknown name unknown-each."
-  [items & {:keys [overrides version]}]
+  [items & {:keys [overrides prices else version]}]
   (let [version (or version @game/version)
         overrides (normal-overrides overrides)
         group-names #{"ore" "tool" "armor" "food" "block" "unknown"}
@@ -212,7 +217,7 @@
         merged (map (fn [[k stacks]] (assoc k :count (reduce + 0 (map count-of stacks))))
                     (group-by #(select-keys % [:name :durability :enchants]) named))
         rows (->> merged
-                  (map #(stack-worth version table group-overrides name-overrides %))
+                  (map #(stack-worth version table group-overrides name-overrides prices else %))
                   (filter #(pos? (:count %)))
                   (sort-by :value >)
                   vec)]
