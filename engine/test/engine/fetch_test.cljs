@@ -844,7 +844,8 @@
           (await (run-ticks s 120))
           (is (empty? (listed s)) "the job ended")
           (is (seq (calls s "dig")) "a leaf was broken")
-          (is (= "oak_sapling" (block-at s 4 64 3))))))))
+          (is (= "oak_sapling" (block-at s 4 64 3)))
+          (is (= 1 (count (events-of s :fetch.done))) "the fetch is told done once the sapling is carried"))))))
 
 (deftest obtain-sapling-waits-no-source-without-leaves-seen
   (async done

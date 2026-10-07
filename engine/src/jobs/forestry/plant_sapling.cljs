@@ -105,6 +105,7 @@
   (let [t (target-of (debts c) (:args c))
         sapling (when t (sapling-for (u/inventory (:primitives c)) (:species t)))
         meal (:meal (ctx/mem c))]
+    (when sapling (fetch/settle! c))
     (cond
       meal (await (meal-round c meal))
       (nil? t) :done
