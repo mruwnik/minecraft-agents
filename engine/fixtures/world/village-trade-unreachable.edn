@@ -1,0 +1,27 @@
+;; Card a18281f1: jobs.village.trade ends stopped :unreachable in one call when the villager cannot be reached (it used to
+;; treat go-to's :done give-up as :again and walk about nine times). NoAI villager, fixed UUID as in village-feed.edn, a farmer with
+;; one offer (1 emerald for 6 bread). Should-succeed: a reachable villager sells. Should-fail: a villager in a glass box ends
+;; trade.gave-up "unreachable" and no second walk follows.
+;; One-off (not here): jobs.movement.follow of a player sealed in a box ends follow.unreachable after one go-to give-up, and a
+;; player walking away still ends out-of-range after 3 legs; both need a player.
+{:defaults
+ {:tags [:village :trade :jobs] :time :day
+  :plot {:floor "grass_block" :height 8}
+  :body {:at [10.5 0 16.5] :yaw 270 :settle-s 2 :inventory [["emerald" 8]] :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [{:name "reachable-villager-sells"
+   :act [[:summon "villager" [16.5 0 16.5] "{NoAI:1b,UUID:[I;20260,7,1,843],VillagerData:{profession:\"minecraft:farmer\",level:2,type:\"minecraft:plains\"},Xp:20,Offers:{Recipes:[{buy:{id:\"minecraft:emerald\",count:1},sell:{id:\"minecraft:bread\",count:6},maxUses:12,xp:1}]}}"]
+         [:wait-s 2]
+         [:job (jobs.village.trade {:villager "00004f24-0000-0007-0000-00010000034b" :buy "bread" :count 6})]]
+   :expect [{:event {:source :job :kind :trade.done :data {:bought 6}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :trade.gave-up} :for-s 60 :until {:source :job :kind :trade.done}}]
+   :after [[:item "bread" 6] [:item "emerald" 7]]}
+  {:name "glass-box-villager-is-unreachable-in-one-call"
+   :blocks [[:fill [15 0 15] [17 2 17] "glass" :hollow]]
+   :act [[:summon "villager" [16.5 0 16.5] "{NoAI:1b,UUID:[I;20260,7,1,843],VillagerData:{profession:\"minecraft:farmer\",level:2,type:\"minecraft:plains\"},Xp:20,Offers:{Recipes:[{buy:{id:\"minecraft:emerald\",count:1},sell:{id:\"minecraft:bread\",count:6},maxUses:12,xp:1}]}}"]
+         [:wait-s 2]
+         [:job (jobs.village.trade {:villager "00004f24-0000-0007-0000-00010000034b" :buy "bread" :count 6})]]
+   :expect [{:event {:source :job :kind :trade.gave-up :data {:reason "unreachable"}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :trade.done} :for-s 60 :until {:source :job :kind :trade.gave-up}}]
+   :after [[:item "bread" 0] [:item "emerald" 8]]}]}

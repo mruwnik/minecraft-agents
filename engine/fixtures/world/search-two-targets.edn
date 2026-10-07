@@ -1,0 +1,21 @@
+;; Card eda1e677 (af7aaa87): jobs.explore.search queries each target name separately, so a common name does not fill the
+;; 64-block scan cap and hide a rare one. 70 hay bales (x 1..7, z 1..5, y 0..1; visible, nearest) and one gold block at [28 0 28]
+;; (both within :scan-radius 24 of the body); :count 65 is only reached with 64 hay plus the gold block, never with the old
+;; shared cap (64 hay alone).
+;; Should-succeed: both found, search.done :found at the origin (no legs walked). Should-fail: no target in range ends
+;; search.not-found.
+{:defaults
+ {:tags [:explore :search] :time :day
+  :plot {:height 8 :floor "stone"}
+  :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 60}
+ :cases
+ [{:name "abundant-target-does-not-hide-a-single-one"
+   :blocks [[:fill [1 0 1] [7 1 5] "hay_block"] [:set [28 0 28] "gold_block"]]
+   :act [[:job (jobs.explore.search {:target ["hay_block" "gold_block"] :count 65 :max-legs 2})]]
+   :expect [{:event {:source :job :kind :search.done :data {:reason :found :why :found}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :search.not-found} :for-s 40 :until {:source :job :kind :search.done}}]}
+  {:name "no-target-in-range-not-found"
+   :act [[:job (jobs.explore.search {:target ["diamond_block" "emerald_block"] :count 1 :max-distance 8 :spacing 8 :max-legs 2 :timeout-s 40})]]
+   :expect [{:event {:source :job :kind :search.not-found} :within-s 50 :of-job true}
+            {:no-event {:source :job :kind :search.done} :for-s 50 :until {:source :job :kind :search.not-found}}]}]}

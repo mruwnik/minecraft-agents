@@ -1,0 +1,22 @@
+;; Card eda1e677 (with 87f1d74d): jobs.farm.get-seeds on sugar_cane never cuts a stand of one. With only a height-1 cane in range
+;; it declines once (get-seeds.declined :too-short) and stays queued (nothing is cut); a 3-high stand is cut above its base
+;; and the drop collected.
+;; Should-succeed: 3-high cane cut (get-seeds.done, cane carried, base stays). Should-fail: height-1 cane declines, stays.
+{:defaults
+ {:tags [:gather :get-seeds :cane] :time :day
+  :plot {:height 8 :floor "grass_block"}
+  :body {:at [16.5 0 16.5] :yaw 270 :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 60}
+ :cases
+ [{:name "height-1-cane-declines-too-short"
+   :blocks [[:set [20 -1 14] "sand"] [:set [21 -1 14] "water"] [:set [20 0 14] "sugar_cane"]]
+   :act [[:job (jobs.gather.get-seeds {:item "sugar_cane" :count 1 :radius 16})]]
+   :expect [{:event {:source :job :kind :get-seeds.declined :data {:reason :too-short}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :get-seeds.done} :for-s 30 :until {:source :job :kind :get-seeds.declined}}]
+   :after [[:block [20 0 14] "sugar_cane"] [:item "sugar_cane" 0]]}
+  {:name "three-high-cane-is-cut-above-the-base"
+   :blocks [[:set [20 -1 14] "sand"] [:set [21 -1 14] "water"] [:fill [20 0 14] [20 2 14] "sugar_cane"]]
+   :act [[:job (jobs.gather.get-seeds {:item "sugar_cane" :count 1 :radius 16})]]
+   :expect [{:event {:source :job :kind :get-seeds.done :data {:reason :count}} :within-s 50 :of-job true}
+            {:no-event {:source :job :kind :get-seeds.declined} :for-s 50 :until {:source :job :kind :get-seeds.done}}]
+   :after [[:block [20 0 14] "sugar_cane"] [:item "sugar_cane" [:>= 1]]]}]}

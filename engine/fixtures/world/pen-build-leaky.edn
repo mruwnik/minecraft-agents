@@ -1,0 +1,30 @@
+;; Card eda1e677 (carded 8e79cb89): jobs.build.pen with a plan whose fence ring has a gap (cell [10 0 12] is not in the plan, and
+;; nothing is placed that the plan does not ask for) ends :done with :closed? false, one warn pen-build.leaky naming the leak
+;; (:reason :leak), and no pen-build.done. Should-succeed: the full ring closes (pen-build.done :closed). Should-fail: the gap.
+{:defaults
+ {:tags [:build :pen] :time :any
+  :plot {:height 8 :floor "stone"}
+  :body {:at [12.5 0 12.5] :settle-s 2 :inventory [["oak_fence" 16]] :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [{:name "full-ring-closes"
+   :plans [{:id "ring" :metadata {:by "$body"}
+            :parts [{:id "n" :box [#at [10 0 10] #at [14 0 10]] :want "oak_fence"}
+                    {:id "s" :box [#at [10 0 14] #at [14 0 14]] :want "oak_fence"}
+                    {:id "w" :box [#at [10 0 11] #at [10 0 13]] :want "oak_fence"}
+                    {:id "e" :box [#at [14 0 11] #at [14 0 13]] :want "oak_fence"}]}]
+   :act [[:job (jobs.build.pen {:plan "$plan:ring" :fetch false})]]
+   :expect [{:event {:source :job :kind :pen-build.done} :within-s 80 :of-job true}
+            {:no-event {:source :job :kind :pen-build.leaky} :for-s 80 :until {:source :job :kind :pen-build.done}}]
+   :after [[:block [10 0 12] "oak_fence"]]}
+  {:name "ring-with-a-gap-is-leaky"
+   :plans [{:id "ring" :metadata {:by "$body"}
+            :parts [{:id "n" :box [#at [10 0 10] #at [14 0 10]] :want "oak_fence"}
+                    {:id "s" :box [#at [10 0 14] #at [14 0 14]] :want "oak_fence"}
+                    {:id "w1" :box [#at [10 0 11] #at [10 0 11]] :want "oak_fence"}
+                    {:id "w2" :box [#at [10 0 13] #at [10 0 13]] :want "oak_fence"}
+                    {:id "e" :box [#at [14 0 11] #at [14 0 13]] :want "oak_fence"}]}]
+   :act [[:job (jobs.build.pen {:plan "$plan:ring" :fetch false})]]
+   :expect [{:event {:source :job :kind :pen-build.leaky :data {:reason :leak :leaks [{:why :gap}]}} :within-s 80 :of-job true}
+            {:no-event {:source :job :kind :pen-build.done} :for-s 80 :until {:source :job :kind :pen-build.leaky}}]
+   :after [[:not-block [10 0 12] "oak_fence"] [:item "oak_fence" 1]]}]}

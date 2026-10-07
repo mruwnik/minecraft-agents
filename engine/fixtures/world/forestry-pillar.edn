@@ -1,0 +1,58 @@
+;; Cards b72b070d, e87d918f: jobs.forestry.fell-tree felling a 10-log trunk (x 16, z 16, the top logs out of reach from the ground)
+;; from a pillar. b72b070d: the pillar is taken back (the ledger ends empty) and the job completes, with no round repeating;
+;; a pillar refused by a plan's footprint warns fell-tree.declined and the top log stays. e87d918f: too few blocks carried
+;; fetches the height in dirt or cobblestone from a seen chest (fetch.started, fetch.done) and felling goes on; :fetch false, or
+;; no chest, waits :need.
+;; Should-succeed: dirt carried; dirt fetched from a chest. Should-fail: no blocks (waits :need), :fetch false with a chest
+;; (waits :need, no fetch), no chest (fetch.failed, then :need), a footprint ring that refuses the pillar.
+{:defaults
+ {:tags [:forestry :fell-tree :pillar] :time :any
+  :plot {:height 24 :floor "stone"}
+  :blocks [[:fill [16 0 16] [16 9 16] "oak_log"]
+           [:fill [14 8 14] [18 10 18] "oak_leaves[persistent=true]"]
+           [:fill [16 8 16] [16 9 16] "oak_log"]]
+  :body {:at [16.5 0 22.5] :yaw 180 :settle-s 2 :inventory [["iron_axe" 1]] :effects [["resistance" 600 4]]}
+  :limit-s 150}
+ :cases
+ [{:name "dirt-carried-pillar-felled-and-taken-back"
+   :body {:inventory [["dirt" 16]]}
+   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16]})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 120 :of-job true}
+            {:no-event {:source :job :kind :tree_blocked} :for-s 120 :until {:source :job :kind :completed}}
+            {:no-event {:source :job :kind :fell-tree.declined} :for-s 120 :until {:source :job :kind :completed}}]
+   :after [[:not-block [16 9 16] "oak_log"] [:item "dirt" [:>= 12]]]}
+  {:name "no-blocks-waits-need"
+   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16] :fetch false})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :need}} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 30 :until {:source :job :kind :waiting :data {:reason :need}}}]
+   :after [[:block [16 9 16] "oak_log"] [:item "dirt" 0]]}
+  {:name "no-chest-fetch-fails-then-waits-need"
+   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16]})]]
+   :expect [{:event {:source :job :kind :fetch.failed} :within-s 100 :of-job true}
+            {:event {:source :job :kind :waiting :data {:reason :need}} :within-s 120 :of-job true}]
+   :after [[:block [16 9 16] "oak_log"]]}
+  {:name "chest-dirt-fetched-then-felled"
+   :blocks [[:set [14 0 20] "chest{Items:[{Slot:0b,id:\"minecraft:dirt\",count:64}]}"]]
+   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16]})]]
+   :expect [{:event {:source :job :kind :fetch.started} :within-s 40 :of-job true}
+            {:event {:source :job :kind :fetch.done} :within-s 80 :of-job true}
+            {:event {:source :job :kind :completed} :within-s 140 :of-job true}]
+   :after [[:not-block [16 9 16] "oak_log"] [:item "dirt" [:>= 5]]]}
+  {:name "fetch-false-waits-need-despite-chest"
+   :blocks [[:set [14 0 20] "chest{Items:[{Slot:0b,id:\"minecraft:dirt\",count:64}]}"]]
+   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16] :fetch false})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :need}} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :fetch.started} :for-s 40}]
+   :after [[:block [16 9 16] "oak_log"] [:item "dirt" 0]]}
+  {:name "footprint-ring-refuses-the-pillar"
+   :body {:inventory [["dirt" 16]]}
+   :plans [{:id "ring" :metadata {:by "SomeoneElse"}
+            :parts [{:id "n" :box [#at [11 -1 11] #at [21 1 15]] :want "dirt"}
+                    {:id "s" :box [#at [11 -1 17] #at [21 1 21]] :want "dirt"}
+                    {:id "w" :box [#at [11 -1 16] #at [15 1 16]] :want "dirt"}
+                    {:id "e" :box [#at [17 -1 16] #at [21 1 16]] :want "dirt"}]}]
+   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16]})]]
+   :expect [{:event {:source :job :kind :fell-tree.declined :data {:reason :refused :why :pillar}} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 30 :until {:source :job :kind :fell-tree.declined}}]
+   :after [[:block [16 9 16] "oak_log"] [:item "dirt" 16]]
+   :limit-s 120}]}
