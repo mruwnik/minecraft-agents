@@ -31,6 +31,17 @@
             {:event {:source :action :kind :done :data {:name "place" :status "placed"}} :within-s 70}
             {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 90}]
    :limit-s 100}
+  {:name "carried-bed-in-the-open-is-slept-in-and-picked-up-at-day"
+   :act [[:rcon "give $BODY red_bed 1"]
+         [:job (jobs.survival.night {:flee-radius 0})]
+         [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 90]
+         [:wait-s 3]
+         [:time-set 1000]]
+   :expect [{:event {:source :action :kind :done :data {:name "place" :status "placed"}} :within-s 70}
+            {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 90}
+            {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 150 :of-job true}]
+   :after [[:item "red_bed" 1]]
+   :limit-s 180}
   {:name "no-bed-anywhere-stays-exposed-one-warn"
    :act [[:job (jobs.survival.night {:flee-radius 0})] [:wait-s 60]]
    :expect [{:event {:source :job :kind :shelter.exposed} :within-s 40}
