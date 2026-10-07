@@ -1,8 +1,8 @@
 // Why JavaScript: drives headless Chromium over CDP to look at the WebGL view (browser/GPU).
 // A picture of the browser view's mob models: every mob with a model in a grid on a grass floor, seen from the south and above, all turned to --yaw
 // (radians, default pi: facing the camera; pi/2 faces west). Prints the file written.
-//   node tools/view-mobs-shot.mjs --out file.png [--yaw 3.14159] [--old] [--software] [--only name,name] [--width 1400] [--height 800]
-// --old: serve the table without the models' layers (blockJar null), so every mob is a flat box. --software: the software renderer instead.
+//   node tools/view-mobs-shot.mjs --out file.png [--yaw 3.14159] [--old] [--software] [--baby] [--only name,name] [--width 1400] [--height 800]
+// --baby: every mob a baby. --old: serve the table without the models' layers (blockJar null), so every mob is a flat box. --software: the software renderer instead.
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -17,19 +17,23 @@ import { encodePng } from './view/renderer.mjs'
 import { poseFile } from '../engine/js/view.mjs'
 
 const repo = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
-const { values } = parseArgs({ options: { out: { type: 'string' }, yaw: { type: 'string', default: '3.14159' }, old: { type: 'boolean', default: false }, software: { type: 'boolean', default: false }, width: { type: 'string', default: '1400' }, height: { type: 'string', default: '800' }, only: { type: 'string' } } })
+const { values } = parseArgs({ options: { out: { type: 'string' }, yaw: { type: 'string', default: '3.14159' }, old: { type: 'boolean', default: false }, software: { type: 'boolean', default: false }, baby: { type: 'boolean', default: false }, width: { type: 'string', default: '1400' }, height: { type: 'string', default: '800' }, only: { type: 'string' } } })
 if (!values.out) throw new Error('--out file.png is required')
 const [width, height, yaw] = [Number(values.width), Number(values.height), Number(values.yaw)]
 
 const HEIGHTS = { zombie: 1.95, husk: 1.95, drowned: 1.95, zombified_piglin: 1.95, player: 1.8, piglin: 1.95, piglin_brute: 1.95, skeleton: 1.99, stray: 1.99, wither_skeleton: 2.4, bogged: 1.99, creeper: 1.7, cow: 1.4, mooshroom: 1.4, pig: 0.9, sheep: 1.3, spider: 0.9, cave_spider: 0.5, chicken: 0.7, villager: 1.95, wandering_trader: 1.95, witch: 1.95, enderman: 2.9, illusioner: 1.95, zombie_villager: 1.95, horse: 1.6, skeleton_horse: 1.6, zombie_horse: 1.6, donkey: 1.5, mule: 1.6, wolf: 0.85, cat: 0.7, ocelot: 0.7, fox: 0.7, iron_golem: 2.7, snow_golem: 1.9, blaze: 1.8, slime: 0.52, magma_cube: 0.52, llama: 1.87, trader_llama: 1.87, rabbit: 0.5, goat: 1.3 }
 const PER_ROW = 7
 const FLOOR_Y = 64
-const entities = Object.keys(MOBS).filter(name => !values.only || values.only.split(',').includes(name)).map((name, i) => ({
+const picked = Object.keys(MOBS).filter(name => !values.only || values.only.split(',').includes(name))
+const near = values.only && picked.length <= 4 // --only with a few mobs: seen from close by, the camera in front of the middle of the row
+const STEP = near ? 1.8 : 3.4
+const entities = picked.map((name, i) => ({
   id: i + 1, name, type: name === 'player' ? 'player' : 'hostile', username: name === 'player' ? 'Steve' : undefined,
-  pos: { x: 0.5 + (i % PER_ROW) * 3.4 - 10, y: FLOOR_Y + 1, z: 4 - Math.floor(i / PER_ROW) * 3.8 }, width: 0.6, height: HEIGHTS[name] ?? 1.8, yaw
+  pos: { x: 0.5 + (i % PER_ROW) * STEP - 10, y: FLOOR_Y + 1, z: 4 - Math.floor(i / PER_ROW) * 3.8 }, width: 0.6, height: HEIGHTS[name] ?? 1.8, yaw, ...(values.baby ? { baby: true } : {})
 }))
-const eye = values.only ? { x: -2, y: 68, z: 16 } : { x: 0.5, y: 76, z: 16 }
-const camera = { eye, yaw: 0, pitch: values.only ? -0.35 : -0.62 }
+const centre = entities.reduce((sum, e) => sum + e.pos.x, 0) / (entities.length || 1)
+const eye = near ? { x: centre, y: FLOOR_Y + 2.2, z: 4 + 4.5 } : values.only ? { x: -2, y: 68, z: 16 } : { x: 0.5, y: 76, z: 16 }
+const camera = { eye, yaw: 0, pitch: near ? -0.2 : values.only ? -0.35 : -0.62 }
 
 const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'view-mobs-'))
 try {

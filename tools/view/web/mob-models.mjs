@@ -4,7 +4,7 @@
 // (checked only against the sheets' pictures), limbs are plain boxes, and heads, hats and noses are the only extras.
 //
 // A model is in the mob's own frame in model pixels (16 to a block): x across (+x is the mob's right), y up from the feet, z forward (+z the
-// front), centred on the mob's position. It is scaled so the model's nominal height fits the entity's height (a baby: half of it, with a bigger head), and
+// front), centred on the mob's position. It is scaled so the model's nominal height fits the entity's height (a baby: half of it with a bigger head, or its own model, BABIES), and
 // turned to the entity's yaw. A face's texture is `entity/<sheet>#x,y,w,h`: a region of the sheet, in block-entity-models.mjs's naming, so the
 // texture array of the WebGL view holds each region once (materials.mjs registers them). Regions that are never seen well are shared:
 // the bottom of a box takes its top, a limb takes one region on every face, left limbs take the right limb's.
@@ -39,9 +39,10 @@ const slab = n => ({ top: n.up, bottom: n.up, south: n.north, north: n.north, ea
 const slim = n => ({ top: n.east, bottom: n.east, south: n.north, north: n.north, east: n.east, west: n.east })
 
 const WOOL = 'sheep/sheep_wool' // the sheet whose parts a dye tints
+const WOOL_BABY = 'sheep/sheep_wool_baby'
 
 // paint: 0 body, 1 head, 2 limbs (the entries of the flat palette, web/mobs.mjs, used when a sheet is missing)
-const cube = (from, to, nt, pick, paint, sheet) => ({ from, to, faces: pick(net(nt)), paint, ...(sheet ? { sheet } : {}), ...(sheet === WOOL ? { dyed: true } : {}) })
+const cube = (from, to, nt, pick, paint, sheet) => ({ from, to, faces: pick(net(nt)), paint, ...(sheet ? { sheet } : {}), ...(sheet === WOOL || sheet === WOOL_BABY ? { dyed: true } : {}) })
 
 // ---------------------------------------------------------------- shapes
 const humanoid = ({ headW = 8, armsForward = false, nose = null } = {}) => [
@@ -191,6 +192,30 @@ const zombieVillager = () => [
   ...[[0, 4], [-4, 0]].map(([x0, x1]) => cube([x0, 0, -2], [x1, 12, 2], { u: 0, v: 22, w: 4, h: 12, d: 4 }, limb, 2))
 ]
 
+// Baby shapes: the baby sheets are packed their own way, and their models are built at the baby's own size (in the adult's model pixels, so the
+// scale is the adult's: no halving, no grown head). Each baby is a few boxes, with the limbs sharing one region.
+const babyZombie = () => [
+  cube([-3, 9, -3], [3, 15, 3], { u: 3, v: 3, w: 6, h: 6, d: 6 }, compact, 1),
+  cube([-2, 4, -1], [2, 9, 1], { u: 16, v: 16, w: 4, h: 5, d: 2 }, limb, 0),
+  ...[[2, 4], [-4, -2]].map(([x0, x1]) => cube([x0, 7, -1], [x1, 9, 4], { u: 28, v: 16, w: 2, h: 5, d: 2 }, limb, 2)),
+  ...[[0, 2], [-2, 0]].map(([x0, x1]) => cube([x0, 0, -1], [x1, 4, 1], { u: 0, v: 16, w: 2, h: 4, d: 2 }, limb, 2))
+]
+
+// a calf lying along z: body, head, snout, two horns, four legs
+const babyCow = () => [
+  cube([-4, 6, -6], [4, 12, 6], { u: 0, v: 0, w: 8, h: 6, d: 12 }, slab, 0),
+  cube([-3, 6, 6], [3, 12, 11], { u: 0, v: 18, w: 6, h: 6, d: 5 }, compact, 1),
+  cube([-2, 6, 11], [2, 9, 12], { u: 12, v: 29, w: 4, h: 3, d: 1 }, limb, 1),
+  ...[[-3, -2], [2, 3]].map(([x0, x1]) => cube([x0, 12, 7], [x1, 14, 8], { u: 4, v: 29, w: 1, h: 2, d: 1 }, limb, 1)),
+  ...[[1, 4], [-4, -1]].flatMap(([x0, x1]) => [[3, 6], [-6, -3]].map(([z0, z1]) => cube([x0, 0, z0], [x1, 6, z1], { u: 22, v: 18, w: 3, h: 6, d: 3 }, limb, 2)))
+]
+
+const babySheep = () => [
+  cube([-3, 5, -4.5], [3, 9, 4.5], { u: 0, v: 10, w: 6, h: 4, d: 9 }, slab, 0, WOOL_BABY),
+  cube([-2.5, 5, 3.5], [2.5, 10, 8.5], { u: 0, v: 0, w: 5, h: 5, d: 5 }, compact, 1),
+  ...[[1, 3], [-3, -1]].flatMap(([x0, x1]) => [[2, 4], [-4, -2]].map(([z0, z1]) => cube([x0, 0, z0], [x1, 5, z1], { u: 24, v: 5, w: 2, h: 5, d: 2 }, limb, 2)))
+]
+
 const SHAPES = {
   humanoid: { px: 32, hit: 1.8, parts: humanoid() },
   zombie: { px: 32, hit: 1.95, parts: humanoid({ armsForward: true }) },
@@ -245,6 +270,9 @@ const SHAPES = {
     ...[[1, 3], [-3, -1]].map(([x0, x1]) => cube([x0, 0, -1], [x1, 30, 1], { u: 56, v: 0, w: 2, h: 30, d: 2 }, limb, 2))
   ] }
 }
+SHAPES.zombie_baby = { px: 32, hit: 1.95, parts: babyZombie(), own: true }
+SHAPES.cow_baby = { px: 24, hit: 1.4, parts: babyCow(), own: true }
+SHAPES.sheep_baby = { px: 21, hit: 1.3, parts: babySheep(), own: true }
 SHAPES.witch = { ...SHAPES.villager, parts: [...SHAPES.villager.parts,
   cube([-5, 34, -5], [5, 36, 5], { u: 0, v: 64, w: 10, h: 2, d: 10 }, compact, 1),
   cube([-3.5, 36, -3.5], [3.5, 40, 3.5], { u: 0, v: 76, w: 7, h: 4, d: 7 }, compact, 1),
@@ -300,6 +328,16 @@ export const MOBS = {
   goat: ['goat', 'goat/goat']
 }
 
+// mob name -> [shape, sheet] of a baby with a layout of its own; any other baby is its adult's model scaled (BABY_SIZE, BABY_HEAD)
+export const BABIES = {
+  zombie: ['zombie_baby', 'zombie/zombie_baby'],
+  husk: ['zombie_baby', 'zombie/husk_baby'],
+  drowned: ['zombie_baby', 'zombie/drowned_baby'],
+  cow: ['cow_baby', 'cow/cow_temperate_baby'],
+  mooshroom: ['cow_baby', 'cow/mooshroom_red_baby'],
+  sheep: ['sheep_baby', 'sheep/sheep_baby']
+}
+
 // a sheep's wool by dye index (white, orange, magenta, light blue, yellow, lime, pink, gray, light gray, cyan, purple, blue, brown, green, red, black), rgb
 export const DYES = [[249, 255, 254], [249, 128, 29], [199, 78, 189], [58, 179, 218], [254, 216, 61], [128, 199, 31], [243, 139, 170], [71, 79, 82],
   [157, 157, 151], [22, 156, 156], [137, 50, 184], [60, 68, 170], [131, 84, 50], [94, 124, 22], [176, 46, 38], [29, 29, 33]]
@@ -310,15 +348,17 @@ export const layerName = (sheet, [x, y, w, h]) => `${ENTITY_PREFIX}${sheet}#${x}
 const partsFor = (shape, sheet) => SHAPES[shape].parts.map(({ from, to, faces, paint, sheet: own, dyed }) => ({ from, to, paint, dyed, layers: FACES.map(f => layerName(own ?? sheet, faces[f])) }))
 
 const built = new Map()
-const modelOf = name => {
-  if (!built.has(name)) built.set(name, MOBS[name] ? { ...SHAPES[MOBS[name][0]], parts: partsFor(...MOBS[name]) } : null)
-  return built.get(name)
+const buildModel = ([shape, sheet]) => ({ ...SHAPES[shape], parts: partsFor(shape, sheet) })
+const modelOf = (name, baby = false) => {
+  const key = baby && BABIES[name] ? `${name}#baby` : name
+  if (!built.has(key)) built.set(key, MOBS[name] ? buildModel(key === name ? MOBS[name] : BABIES[name]) : null)
+  return built.get(key)
 }
 
-// every layer name the models use, for the texture array to hold
-export const modelLayers = () => [...new Set(Object.keys(MOBS).flatMap(name => modelOf(name).parts.flatMap(p => p.layers)))]
-// the sheets (under textures/entity) a mob's model reads
-export const sheetsOf = name => modelOf(name) ? [...new Set(modelOf(name).parts.map(p => p.layers.map(l => l.slice(ENTITY_PREFIX.length, l.indexOf('#')))).flat(2))] : []
+// every layer name the models use (babies too), for the texture array to hold
+export const modelLayers = () => [...new Set(Object.keys(MOBS).flatMap(name => [modelOf(name), ...(BABIES[name] ? [modelOf(name, true)] : [])].flatMap(m => m.parts.flatMap(p => p.layers))))]
+// the sheets (under textures/entity) a mob's model reads, its baby's with `baby`
+export const sheetsOf = (name, baby = false) => modelOf(name, baby) ? [...new Set(modelOf(name, baby).parts.map(p => p.layers.map(l => l.slice(ENTITY_PREFIX.length, l.indexOf('#')))).flat(2))] : []
 
 // the mob's right and forward in the world for a yaw (mineflayer's: 0 faces -z, turning left to -x): a model point (x, z) lands at
 // (e.x + x * right.x + z * forward.x, e.z + x * right.z + z * forward.z)
@@ -340,11 +380,12 @@ const bigHeads = parts => {
 // The model of an entity {name, height?, yaw?, baby?, dye?}: {parts: [{box: [x1, y1, z1, x2, y2, z2] in blocks in the mob's frame, paint, layers, tint: rgb | null}], hull: the box
 // round them, right, forward}, or null for a mob with no model.
 export const modelFor = e => {
-  const model = modelOf(e.name)
+  const model = modelOf(e.name, e.baby)
   if (!model) return null
-  const unit = (e.height ?? model.hit) * (e.baby ? BABY_SIZE : 1) / model.px
+  const scaled = e.baby && !model.own
+  const unit = (e.height ?? model.hit) * (scaled ? BABY_SIZE : 1) / model.px
   const tint = DYES[e.dye] ?? null
-  const parts = (e.baby ? bigHeads(model.parts) : model.parts).map(p => ({ box: [...p.from, ...p.to].map(v => v * unit), paint: p.paint, layers: p.layers, tint: p.dyed ? tint : null }))
+  const parts = (scaled ? bigHeads(model.parts) : model.parts).map(p => ({ box: [...p.from, ...p.to].map(v => v * unit), paint: p.paint, layers: p.layers, tint: p.dyed ? tint : null }))
   const hull = [0, 1, 2].map(i => Math.min(...parts.map(p => p.box[i]))).concat([3, 4, 5].map(i => Math.max(...parts.map(p => p.box[i]))))
   return { parts, hull, ...yawBasis(e.yaw ?? 0) }
 }

@@ -3,7 +3,7 @@
 // turns to a yaw, and how the software renderers and the WebGL view's tables use them.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { MOBS, DYES, FACES, modelFor, modelLayers, sheetsOf, yawBasis, worldBox, faceUV, layerName } from '../tools/view/web/mob-models.mjs'
+import { MOBS, BABIES, DYES, FACES, modelFor, modelLayers, sheetsOf, yawBasis, worldBox, faceUV, layerName } from '../tools/view/web/mob-models.mjs'
 import { mobFor, mobPaint } from '../tools/view/mob-draw.mjs'
 import { createMobImages } from '../tools/view/mob-textures.mjs'
 import { speciesColored } from '../tools/view/web/scene.mjs'
@@ -48,7 +48,7 @@ test('a model is scaled to the entity height, so a baby is smaller', () => {
 test('every sheet a model reads is in the jar, and every region lies inside its sheet', { skip }, () => {
   const jar = openJar(jarPath)
   for (const name of Object.keys(MOBS)) {
-    for (const sheet of sheetsOf(name)) assert.ok(jar.has(`assets/minecraft/textures/entity/${sheet}.png`), `${name}: ${sheet}`)
+    for (const sheet of [...sheetsOf(name), ...sheetsOf(name, true)]) assert.ok(jar.has(`assets/minecraft/textures/entity/${sheet}.png`), `${name}: ${sheet}`)
   }
   for (const layer of modelLayers()) {
     const [path, region] = layer.split('#')
@@ -219,6 +219,27 @@ test('a baby is half the height of an adult with a bigger head for its body', ()
   const [adult, baby] = [look({}), look({ baby: true })]
   assert.ok(baby.top < 0.8 * adult.top && baby.top > 0.4 * adult.top)
   assert.ok(baby.headRatio > 1.2 * adult.headRatio)
+})
+
+test('a baby with its own sheet layout is drawn from the baby sheet, not the adult\'s', () => {
+  for (const [name, [, sheet]] of Object.entries(BABIES)) {
+    const layers = modelFor({ name, height: 1, baby: true }).parts.flatMap(p => p.layers)
+    assert.ok(layers.some(l => l.startsWith(`entity/${sheet}#`)), name)
+    assert.ok(layers.every(l => l.includes('_baby#')), `${name}: every region is from a baby sheet`)
+  }
+})
+
+test('the baby zombie\'s head reads the 6x6x6 head net at (3, 3) of its sheet, and its size is the baby\'s own (no 1.5x head grown on the adult)', () => {
+  const m = modelFor({ name: 'zombie', height: 1.95, baby: true })
+  const head = m.parts.find(p => p.paint === 1)
+  assert.equal(head.layers[FACES.indexOf('south')], 'entity/zombie/zombie_baby#9,9,6,6')
+  close(head.box[3] - head.box[0], 6 * 1.95 / 32)
+  assert.ok(m.hull[4] < 0.55 * 1.95)
+})
+
+test('a baby of a mob without a baby layout still reads the adult sheet, half height with a bigger head', () => {
+  const layers = modelFor({ name: 'wolf', height: 0.85, baby: true }).parts.flatMap(p => p.layers)
+  assert.ok(layers.every(l => l.startsWith('entity/wolf/wolf#')))
 })
 
 test('mobPaint: a tinted part multiplies its sheet picture by the dye', () => {
