@@ -5,18 +5,20 @@
   steer is a toy kinematic walker, not physics: every tick (a setImmediate, so tests are fast) it asks decide for
   controls, then moves 0.2 blocks (0.26 sprinting) along the yaw, steps up at most 0.6 (1.25 with jump), drops to the
   next floor at once, and climbs or descends a ladder. A move into a cell holding a fence, gate, wall, pane or bamboo is
-  judged by the body's box against the joined blocks' boxes (path/space.mjs), so a body slips beside a post as in the game. The kinematics are pure functions (body, controls, yaw, world)
+  judged by the body's box against the joined blocks' boxes (engine.path.space), so a body slips beside a post as in the game. The kinematics are pure functions (body, controls, yaw, world)
   -> body. A tick budget of timeout-s * 20 (at most 2400) stands in for the real time bound.
 
   steer! runs the loop against a world atom. It resolves to {:status :done :result r :ticks n}, {:status :timeout
   :pose p} or {:status :failed :reason s} (cljs data; the primitives' JS shapes are made when the fake is wired in),
   and rejects with cut-error when the owner changes. When a walk resolves, (after-walk world from-pos) -> world runs
   once, in place of the fake moveTo's drag of leashed animals and tempted followers (those live in the animals ns); a
-  cut walk runs nothing. path-world builds the planner's snapshot through engine.path.fixture, path/blocks.mjs and
-  path/space.mjs by interop.
+  cut walk runs nothing. path-world builds the planner's snapshot through engine.path.fixture, engine.path.blocks and
+  engine.path.space.
   Test-only; ported from the deleted js/fake-steer.mjs."
   (:require [engine.fake.doors :as doors]
+            [engine.path.blocks :as blocks]
             [engine.path.fixture :as fx]
+            [engine.path.space :as space]
             [engine.fake.node :as node]))
 
 (def max-ticks 2400)
@@ -199,8 +201,6 @@
          (remove #(or (body-cell? %) (contains? (:blocks w) %)))
          (map (fn [pos] [pos "stone"])))))
 
-(def blocks-mod (delay (node/require-here "./js/path/blocks.mjs")))
-(def space (delay (node/require-here "./js/path/space.mjs")))
 
 (defn in-view-fn
   "Whether a cell's chunk column lies within the world's :view-chunks of the body's chunk (always, without it)."
@@ -222,8 +222,8 @@
   (let [entries (filter (in-view-fn w) (concat (:blocks w) (buried w)))
         blocks (map (fn [[[x y z :as pos] name]] [x y z name (doors/path-props w pos)]) entries)]
     {:snapshot (fx/fixture-snapshot {:blocks blocks})
-     :table (.defaultStateTable ^js @blocks-mod)
-     :space @space}))
+     :table (blocks/default-state-table)
+     :space space/space}))
 
 (def path-world-cache
   "The last path-world: [inputs result]. A world is an immutable map, so the snapshot is rebuilt only when a map that
@@ -259,8 +259,8 @@
   [w px y pz]
   (let [[cx cy cz] [(floor px) (floor y) (floor pz)]
         snapshot (fx/fixture-snapshot {:blocks (local-blocks w cx cy cz)})
-        boxes (.boxesNear ^js @space snapshot (.defaultStateTable ^js @blocks-mod) cx cy cz y (+ y height))]
-    (not (.bodyHits ^js @space boxes px pz))))
+        boxes (space/boxes-near snapshot (blocks/default-state-table) cx cy cz y (+ y height))]
+    (not (space/body-hits? boxes px pz))))
 
 ;; --- the tick loop
 

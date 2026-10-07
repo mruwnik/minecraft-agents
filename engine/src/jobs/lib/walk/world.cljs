@@ -2,16 +2,20 @@
   "The walk driver's view of the world: the primitives' pathWorld and the decorations the walks plan over (walls, dangers, dark,
   avoided and tolled cells), the executor policy of the body and the cell it stands in."
   (:require [engine.path.executor :as executor]
+            [engine.path.blocks :as blocks]
             [engine.path.planner-tuned :as planner]
+            [engine.path.space :as space]
             [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
             [jobs.lib.threats :as threats]))
 
 (defn path-world
-  "The primitives' pathWorld sensing, nil when they have none or cannot sense now."
+  "The primitives' pathWorld sensing (a snapshot over the world) with the planner's block table and free-space module, nil when
+  they have none or cannot sense now."
   [p]
   (when (fn? (.-pathWorld p))
-    (.pathWorld p)))
+    (when-let [pw (.pathWorld p)]
+      (js/Object.assign #js {:table (blocks/default-state-table) :space space/space} pw))))
 
 (defn wall-id
   "A state id of a full block with no collision tricks (stone, the first state that is one), of a state table."

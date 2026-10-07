@@ -2,13 +2,14 @@
   "engine/js/path/planner-water.test.mjs against the ClojureScript planner: portals, drops into and out of tight
   cells, water (ponds, drops, columns, breath, exits), the water courses, and magma."
   (:require [cljs.test :refer [deftest is are]]
+            [engine.path.blocks :as blocks]
             [engine.path.courses :as courses]
             [engine.path.fixture :as fx]
             [engine.planner-fixture :as pf]))
 
 (def table @pf/table)
-(def WATER (.-WATER ^js @pf/blocks))
-(def PORTAL (.-PORTAL ^js @pf/blocks))
+(def WATER blocks/WATER)
+(def PORTAL blocks/PORTAL)
 (def MOVE pf/MOVE)
 (def costs pf/default-costs)
 

@@ -1,7 +1,8 @@
 (ns engine.path.fixture
-  "Tiny hand-built worlds for planner tests: a few named blocks in an otherwise empty (air) column set. The snapshot (path/snapshot.mjs), the block table (path/blocks.mjs) and block state ids
-  (prismarine-block) stay interop: they are the JS the planner reads."
-  (:require ["module" :refer [createRequire]]))
+  "Tiny hand-built worlds for planner tests: a few named blocks in an otherwise empty (air) column set. The snapshot (path/snapshot.mjs), block state ids
+  (prismarine-block) stay interop."
+  (:require ["module" :refer [createRequire]]
+            [engine.path.blocks :as blocks]))
 
 ;; not engine.test-util: that requires engine.fake, which requires engine.fake.steer, which requires this
 (def require-here (createRequire (str (js/process.cwd) "/")))
@@ -10,7 +11,6 @@
 (def registry ((require-here "prismarine-registry") MC-VERSION))
 (def Block ((require-here "prismarine-block") registry))
 (def snapshot-mod (require-here "./js/path/snapshot.mjs"))
-(def blocks-mod (require-here "./js/path/blocks.mjs"))
 (def UNLOADED (.-UNLOADED ^js snapshot-mod))
 
 (defn block-by-name [name]
@@ -89,7 +89,7 @@
         :else (full-cube? table id)))))
 
 (defn connect! [snapshot [x0 y0 z0 x1 y1 z1]]
-  (let [table (.defaultStateTable ^js blocks-mod)]
+  (let [table (blocks/default-state-table)]
     (doseq [y (range (dec y0) (+ y1 2)) z (range (dec z0) (+ z1 2)) x (range (dec x0) (+ x1 2))]
       (let [id (.stateAt ^js snapshot x y z)
             family (when-not (= id UNLOADED) (get @family-table id))]

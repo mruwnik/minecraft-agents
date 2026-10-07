@@ -15,9 +15,7 @@ import { performance } from 'node:perf_hooks'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import prismarineRegistry from 'prismarine-registry'
-import { defaultStateTable } from '../js/path/blocks.mjs'
 import { createSnapshot, loadRecordedWorld, UNLOADED } from '../js/path/snapshot.mjs'
-import * as space from '../js/path/space.mjs'
 import { benchDir } from './courses.mjs'
 import { quantile } from './goto.mjs'
 
@@ -34,7 +32,7 @@ const out = flagValue(argv, '--out')
 const build = require(path.join(HERE, '../out/planner-bench.cjs'))
 const registry = prismarineRegistry('26.1')
 const nameOf = id => id === UNLOADED ? 'unloaded' : (registry.blocksByStateId[id]?.name ?? 'unknown')
-const options = extra => ({ table: defaultStateTable(), space, weight: 1.2, margin: 256, yMargin: 96, ...extra })
+const options = extra => ({ table: build.defaultStateTable(), space: build.space, weight: 1.2, margin: 256, yMargin: 96, ...extra })
 const cost = r => r.status === 'found' ? r.path.cost.seconds + 2 * r.path.cost.risk : Infinity
 const time = fn => { const t = performance.now(); const v = fn(); return [performance.now() - t, v] }
 

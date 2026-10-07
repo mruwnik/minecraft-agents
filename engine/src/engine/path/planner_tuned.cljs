@@ -14,7 +14,7 @@
      and an end, or `edge-mode` is switched.
 
    Called through interop, not written in the search: the snapshot (stateAt, sectionHas, hasColumn), the state table's
-   arrays, and the free-space masks of space.mjs (options.space: boxesNear, freeMask, labelRegions).
+   arrays, and the free-space masks of engine.path.space (options.space: boxesNear, freeMask, labelRegions).
 
    Goal sets: query.goals is an array of goals ({kind x y z range}, like query.goal). One search plans to the nearest
    of them by cost. The goal test is the cell in any goal's area, and the heuristic is the least of the goals'

@@ -5,8 +5,6 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
-import { defaultStateTable } from '../js/path/blocks.mjs'
-import * as space from '../js/path/space.mjs'
 
 const require = createRequire(import.meta.url)
 const OUT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../out')
@@ -24,10 +22,10 @@ export const view = ({ status, reason, expanded, path, oneWay, stats: { maskMs, 
 // [{ name, plan(snapshot, query, extraOptions), createSearch(snapshot, query, extraOptions), view(result) }]: the views of two
 // versions' results must be deeply equal
 export function loadVersions () {
-  const table = defaultStateTable() // one table for every version: the snapshot's section flags are cached per table
-  const options = { table, space }
-  const cljs = Object.entries(BUILDS).map(([mode, file]) => {
-    const build = loadBuild(file)
+  const builds = Object.entries(BUILDS).map(([mode, file]) => [mode, loadBuild(file)])
+  // one table for every version (the dev build's): the snapshot's section flags are cached per table
+  const options = { table: builds[0][1].defaultStateTable(), space: builds[0][1].space }
+  const cljs = builds.map(([mode, build]) => {
     return {
       name: `cljs-tuned-${mode}`,
       plan: (snapshot, query, extra) => build.planTuned(snapshot, query, { ...options, ...extra }),

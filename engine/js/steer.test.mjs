@@ -154,17 +154,15 @@ badArgsCases.forEach(([name, a]) => test(`bad args: ${name}`, async () => {
   await assert.rejects(p.steer('t1', a), { code: 'bad-args' })
 }))
 
-test('pathWorld gives the planner a snapshot, table and space over the bot world', () => {
+test('pathWorld gives the planner a snapshot over the bot world', () => {
   const column = new ChunkColumn()
   column.setBlockStateId(new Vec3(3, 70, 4), registry.blocksByName.stone.defaultState)
   const { bot, p } = rig()
   bot.world = { getColumn: (cx, cz) => (cx === 0 && cz === 0 ? column : undefined) }
   bot.game = { minY: -64, height: 384 }
-  const { snapshot, table, space } = p.pathWorld()
+  const { snapshot } = p.pathWorld()
   assert.equal(snapshot.stateAt(3, 70, 4), registry.blocksByName.stone.defaultState)
   assert.equal(snapshot.hasColumn(5, 5), false)
-  assert.ok(table)
-  assert.equal(typeof space, 'object')
 })
 
 test('pathWorld without a bot world is null', () => {

@@ -1,7 +1,7 @@
 (ns engine.path.planner.base
   "The planner's constants (block table codes, move kinds, costs, body sizes, search limits) and small helpers.")
 
-;; block table codes (blocks.mjs) and the snapshot's unloaded marker
+;; block table codes (engine.path.blocks) and the snapshot's unloaded marker
 (def ^:const UNLOADED 0xFFFF)
 (def ^:const OPEN 0)
 (def ^:const WATER 2)

@@ -40,6 +40,8 @@
                             :createSearchTuned engine.path.planner-tuned/create-search
                             :MOVE engine.path.planner-tuned/MOVE
                             :DEFAULT_COSTS engine.path.planner-tuned/DEFAULT-COSTS
+                            :defaultStateTable engine.path.blocks/default-state-table
+                            :space engine.path.space/space
                             :courseNames engine.bench-courses/course-names
                             :courseSnapshot engine.bench-courses/course-snapshot}
                   :output-to "../engine/out/planner-bench.cjs"
@@ -56,7 +58,9 @@
                  :compiler-options {:infer-externs false}}
   ;; The go-to bench (bench-lang/goto.mjs): go-to's round planning over the planner bench's courses.
   :goto-bench {:target :node-library
-               :exports {:simulate engine.goto-bench/simulate}
+               :exports {:simulate engine.goto-bench/simulate
+                         :defaultStateTable engine.path.blocks/default-state-table
+                         :space engine.path.space/space}
                :output-to "../engine/out/goto-bench.cjs"
                :output-dir "../engine/out/goto-bench"
                :compiler-options {:infer-externs false}}
@@ -64,7 +68,9 @@
                           :exports {:planTuned engine.path.planner-tuned/plan
                                     :createSearchTuned engine.path.planner-tuned/create-search
                                     :MOVE engine.path.planner-tuned/MOVE
-                                    :DEFAULT_COSTS engine.path.planner-tuned/DEFAULT-COSTS}
+                                    :DEFAULT_COSTS engine.path.planner-tuned/DEFAULT-COSTS
+                                    :defaultStateTable engine.path.blocks/default-state-table
+                                    :space engine.path.space/space}
                           :output-to "../engine/out/planner-bench-release.cjs"
                           :output-dir "../engine/out/planner-bench-release"
                           :compiler-options {:infer-externs :auto}}

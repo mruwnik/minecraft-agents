@@ -3,14 +3,15 @@
   (engine.path.fixture, engine.path.courses): worlds from fills, plan and create-search taking and returning plain
   cljs data with the JS planner's result field names, and the small builders the JS planner tests use."
   (:require [clojure.string :as str]
+            [engine.path.blocks :as blocks]
             [engine.path.courses :as courses]
             [engine.path.fixture :as fx]
             [engine.path.planner-tuned :as planner]
+            [engine.path.space :as path-space]
             [engine.test-util :as tu]))
 
-(def blocks (delay (tu/require-here "./js/path/blocks.mjs")))
-(def space (delay (tu/require-here "./js/path/space.mjs")))
-(def table (delay (.defaultStateTable ^js @blocks)))
+(def space (delay path-space/space))
+(def table (delay (blocks/default-state-table)))
 
 (defn kebab [s] (keyword (str/lower-case (str/replace s "_" "-"))))
 

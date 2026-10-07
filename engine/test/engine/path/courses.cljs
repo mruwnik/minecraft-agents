@@ -5,9 +5,9 @@
   (:require [cljs.reader :as reader]
             [clojure.string :as str]
             ["fs" :as fs]
+            [engine.path.blocks :as blocks]
             [engine.path.fixture :as fx :refer [UNLOADED require-here]]))
 
-(def blocks-mod (require-here "./js/path/blocks.mjs"))
 
 (def courses-file "test/engine/path/courses.edn")
 
@@ -128,7 +128,7 @@
 (defn drop-unsupported!
   "repeat until nothing more drops: a vine may have been hanging from one that just went"
   [snapshot [x0 y0 z0 x1 y1 z1]]
-  (let [table (.defaultStateTable ^js blocks-mod)]
+  (let [table (blocks/default-state-table)]
     (loop []
       (let [changed (volatile! false)]
         (doseq [y (range y1 (dec y0) -1) z (range z0 (inc z1)) x (range x0 (inc x1))]

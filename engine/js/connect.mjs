@@ -5,7 +5,7 @@ import mineflayer from 'mineflayer'
 import pf from 'mineflayer-pathfinder'
 import { SafeMovements } from './movements.mjs'
 import { fixDigMaterials } from './dig-materials.mjs'
-import { MC_VERSION } from './path/blocks.mjs'
+import { MC_VERSION } from './path/snapshot.mjs'
 
 const { pathfinder } = pf
 

@@ -3,9 +3,11 @@
   physics: plans come from the tuned planner over a fixture snapshot (block states with their properties), the body moves
   by physics over the same blocks (collision half-width 0.31, as every bound bot)."
   (:require [cljs.test :refer [deftest is are]]
+            [engine.path.blocks :as blocks]
             [engine.path.executor :as ex]
             [engine.path.fixture :as fx]
             [engine.path.planner-tuned :as planner]
+            [engine.path.space :as space]
             [engine.test-util :as tu]
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.walk.plan :as wplan]))
@@ -14,9 +16,7 @@
 (def lib (delay {:mc ((tu/require-here "minecraft-data") version)
                  :block ((tu/require-here "prismarine-block") version)
                  :physics (tu/require-here "prismarine-physics")
-                 :vec3 (.-Vec3 (tu/require-here "vec3"))
-                 :blocks (tu/require-here "./js/path/blocks.mjs")
-                 :space (tu/require-here "./js/path/space.mjs")}))
+                 :vec3 (.-Vec3 (tu/require-here "vec3"))}))
 
 (def max-ticks 1200)
 
@@ -55,10 +55,9 @@
 (defn path-world
   "The planner's view of fills: {:snapshot :table :space} as walk-plan reads a pathWorld."
   [fills]
-  (let [{:keys [blocks space]} @lib]
-    #js {:snapshot (fx/fixture-snapshot {:fill fills})
-         :table (.defaultStateTable blocks)
-         :space space}))
+  #js {:snapshot (fx/fixture-snapshot {:fill fills})
+       :table (blocks/default-state-table)
+       :space space/space})
 
 (defn plan
   "The executor's steps from feet cell from to goal over fills, or nil."

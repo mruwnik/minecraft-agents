@@ -1,11 +1,9 @@
 // Why JavaScript: Mineflayer boundary; applies controls and reports pose on the bot.
 // steer: a cljs executor holds the body's controls for a while. Every physics tick `decide(pose)` answers either
 // {done: <plain object>} or {controls: {name: bool}, yaw?, pitch?}; JS only reports the pose and applies the answer.
-// pathWorld: the planner's inputs (snapshot over the live world, block table, space) for one plan.
+// pathWorld: the planner's input from the live world (a snapshot) for one plan; jobs.lib.walk.world adds the block table and space.
 import vec3 from 'vec3'
 import { liveSnapshot } from './path/live-snapshot.mjs'
-import { defaultStateTable } from './path/blocks.mjs'
-import * as space from './path/space.mjs'
 
 const { Vec3 } = vec3
 
@@ -55,7 +53,7 @@ export function createSteer ({ act, getBot, badArgs }) {
   const pathWorld = () => {
     const bot = getBot()
     if (!bot.world) return null
-    return { snapshot: liveSnapshot(bot.world, { minY: bot.game.minY, height: bot.game.height }), table: defaultStateTable(), space }
+    return { snapshot: liveSnapshot(bot.world, { minY: bot.game.minY, height: bot.game.height }) }
   }
 
   const steer = (token, a = {}) => {

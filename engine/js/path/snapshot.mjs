@@ -7,7 +7,8 @@ import { decodeColumnFile, restoreColumn } from '../view.mjs'
 
 export const UNLOADED = 0xFFFF
 const VOLUME = 4096
-const MC_VERSION = '26.1'
+// the planner's block table (engine.path.blocks) is built for this version; a body on another version would plan on the wrong states
+export const MC_VERSION = '26.1'
 
 // two 16-bit halves in one int32: collides only beyond +-32767 chunks (+-524k blocks)
 const keyOf = (cx, cz) => (cx & 0xFFFF) * 65536 + (cz & 0xFFFF)

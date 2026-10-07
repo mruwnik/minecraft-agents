@@ -9,8 +9,6 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { createRequire } from 'node:module'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { defaultStateTable } from '../js/path/blocks.mjs'
-import * as space from '../js/path/space.mjs'
 import { loadCourses } from './courses.mjs'
 
 const require = createRequire(import.meta.url)
@@ -48,10 +46,10 @@ async function main (argv) {
   const build = require(path.resolve(flagValue(argv, '--build') ?? path.join(HERE, '../out/goto-bench.cjs')))
   const repeat = Number(flagValue(argv, '--rounds') ?? 3)
   const out = flagValue(argv, '--out')
-  const table = defaultStateTable()
+  const table = build.defaultStateTable()
   const rows = []
   for (const c of loadCourses()) {
-    const pw = { snapshot: c.snapshot, table, space }
+    const pw = { snapshot: c.snapshot, table, space: build.space }
     const { from, goal } = c.query
     const start = { x: from.x, y: from.y, z: from.z, px: from.px ?? from.x + 0.5, pz: from.pz ?? from.z + 0.5 }
     const runs = []
