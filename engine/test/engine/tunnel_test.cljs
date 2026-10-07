@@ -312,7 +312,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p out] :as s} (setup {:blocks ground :inventory []} {:target [6 57 0]} (fn [_]))]
+        (let [{:keys [p out] :as s} (setup {:blocks ground :inventory []} {:target [6 57 0] :fetch false} (fn [_]))]
           (await (tick-n! s 12))
           (let [n (rounds s)]
             (is (<= n 8) "a few rounds to plan and meet the declined stair")
@@ -477,7 +477,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng id out p seen]} (await (tunnel! {:blocks eight-down :inventory []} {:target [6 57 0]} (fn [_])))
+        (let [{:keys [eng id out p seen]} (await (tunnel! {:blocks eight-down :inventory []} {:target [6 57 0] :fetch false} (fn [_])))
               w (:waiting (job-api/summary eng id))]
           (is (= :not-done @out) "the stair child declined: no result")
           (is (= :no-tool (:reason w)))
@@ -624,7 +624,7 @@
 (defn ^:async fetching-tunnel! [give fetch prep]
   (let [calls (atom [])
         p (tu/fake {:self {:pos {:x 0 :y 65 :z 0}} :inventory [] :blocks ground})
-        s (setup {} {:target [6 57 0] :fetch fetch} prep :p p
+        s (setup {} (cond-> {:target [6 57 0]} (not= :default fetch) (assoc :fetch fetch)) prep :p p
                  :jobs {'jobs.items.get-tool (get-tool-stub calls p give)})
         s (assoc s :id (core/submit! (:eng s) '(recording-parent) {}))]
     (await (tick-out! s))
@@ -649,7 +649,15 @@
           (is (= :no-tool (:reason w)))
           (is (some? (:failed (:fetch w)))))))))
 
-(deftest fetch-off-by-default-never-calls-get-tool
+(deftest a-default-call-fetches-a-missing-pickaxe
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out calls]} (await (fetching-tunnel! "iron_pickaxe" :default (fn [_])))]
+          (is (= 1 (count calls)))
+          (is (= :reached (:reason @out))))))))
+
+(deftest fetch-false-opts-out-and-never-calls-get-tool
   (async done
     (tu/run-async done
       (fn ^:async t []

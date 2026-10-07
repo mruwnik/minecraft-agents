@@ -302,7 +302,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out] :as s} (await (run-out! (setup {:blocks eight-down :inventory (inventory)}
-                                                        {:target [6 57 0]} {} :between drop-pickaxe!)))]
+                                                        {:target [6 57 0]} {:fetch false} :between drop-pickaxe!)))]
           (is (= :not-done @out) "no result: the escape's stair declined")
           (is (= :no-tool (:reason (waiting s))) "the parent waits with the stair's reason")
           (is (= "pickaxe" (:tool (waiting s))))
@@ -314,7 +314,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng clock p out] :as s} (setup {:blocks eight-down :inventory (inventory)}
-                                                     {:target [6 57 0]} {} :between drop-pickaxe!)
+                                                     {:target [6 57 0]} {:fetch false} :between drop-pickaxe!)
               rounds #(count (filter (fn [e] (= :round_started (:kind e))) @(:seen s)))
               tick-n! (fn ^:async tick-n [n] (dotimes [_ n] (swap! clock + 500) (await (core/tick! eng))))]
           (await (ticks-while! s #(not (waiting s))))
@@ -368,3 +368,45 @@
               {:keys [out]} (await (run-out! s))]
           (is (= 1 (count @calls)))
           (is (= :done (:status @out))))))))
+
+(deftest a-default-call-fetches-a-missing-pickaxe-for-the-escape
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls (atom [])
+              body (atom nil)
+              stub {:check (constantly true)
+                    :round (fn ^:async get-tool [c]
+                             (swap! calls conj (:args c))
+                             (fake/add-item! @body "iron_pickaxe" 1)
+                             (ctx/result! c {:status :done :tool "iron_pickaxe"})
+                             :done)
+                    :args {:block {:default nil} :item {:default nil} :kind {:default nil} :how {:default nil} :depth {:default nil}
+                           :minutes {:default nil} :fail-minutes {:default nil} :chain {:default []}}}
+              s (setup {:blocks eight-down :inventory (inventory)} {:target [6 57 0]} {}
+                       :between drop-pickaxe! :jobs {'jobs.items.get-tool stub})
+              _ (reset! body (:p s))
+              {:keys [out]} (await (run-out! s))]
+          (is (= 1 (count @calls)))
+          (is (= :done (:status @out))))))))
+
+(deftest fetch-false-opts-out-and-never-calls-get-tool
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls (atom [])
+              body (atom nil)
+              stub {:check (constantly true)
+                    :round (fn ^:async get-tool [c]
+                             (swap! calls conj (:args c))
+                             (fake/add-item! @body "iron_pickaxe" 1)
+                             (ctx/result! c {:status :done :tool "iron_pickaxe"})
+                             :done)
+                    :args {:block {:default nil} :item {:default nil} :kind {:default nil} :how {:default nil} :depth {:default nil}
+                           :minutes {:default nil} :fail-minutes {:default nil} :chain {:default []}}}
+              s (setup {:blocks eight-down :inventory (inventory)} {:target [6 57 0]} {:fetch false}
+                       :between drop-pickaxe! :jobs {'jobs.items.get-tool stub})
+              _ (reset! body (:p s))
+              {:keys [out]} (await (run-out! s))]
+          (is (empty? @calls))
+          (is (= :not-done @out)))))))

@@ -46,7 +46,7 @@
   those still standing on a stop. Events: leave-tunnel.done (info, :sealed), leave-tunnel.open (warn, :open),
   leave-tunnel.stopped (warn, :walk-failed or :bad-args).
 
-  :fetch (default false; jobs.lib.fetch): the escape stair's missing pickaxe is got with jobs.items.get-tool, then
+  :fetch (default true; false waits :no-tool; jobs.lib.fetch): the escape stair's missing pickaxe is got with jobs.items.get-tool, then
   the body walks back to the cell it stood on and goes on.")
 
 (def args
@@ -54,7 +54,7 @@
    :spare {:doc "items filled with only when nothing else is carried (a caller's own haul)" :default []}
    :reach {:doc "mouth cells whose centre is this close to the eye are filled from the entry, in blocks" :default 4.5}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
-   :fetch {:doc "get a missing pickaxe for the escape instead of waiting :no-tool (jobs.lib.fetch): true, a set of kinds or a map of limits" :default false}})
+   :fetch {:doc "get a missing pickaxe for the escape instead of waiting :no-tool (jobs.lib.fetch): true, a set of kinds or a map of limits; false waits :no-tool" :default true}})
 
 (defn check [c]
   (if (and (nil? (known/zones c)) (not (:ignore-zones? (:args c))))

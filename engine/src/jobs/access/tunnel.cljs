@@ -75,7 +75,7 @@
   from the world. :inside is true when the body is off the entry, on the way in. Also a tunnel.done info or
   tunnel.stopped warn event.
 
-  :fetch (default false; jobs.lib.fetch): a missing pickaxe (the stair's wait, or a :no-tool stop of the run's own
+  :fetch (default true; false waits :no-tool; jobs.lib.fetch): a missing pickaxe (the stair's wait, or a :no-tool stop of the run's own
   digs) is got with jobs.items.get-tool, then the body walks back to the cell it stood on and goes on. The stair
   child does not fetch itself.")
 
@@ -85,7 +85,7 @@
    :accept {:doc "hazards taken: #{:water :lava :falling-block}" :default #{}}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
    :keep {:doc "a tunnel that stays: torches left and the tunnel left open; false (a dead end): torches go into the scaffold ledger for jobs.access.leave-tunnel to take back" :default false}
-   :fetch {:doc "get a missing pickaxe instead of waiting :no-tool (jobs.lib.fetch): true, a set of kinds or a map of limits" :default false}})
+   :fetch {:doc "get a missing pickaxe instead of waiting :no-tool (jobs.lib.fetch): true, a set of kinds or a map of limits; false waits :no-tool" :default true}})
 
 (def heading-order [:north :east :south :west])
 
