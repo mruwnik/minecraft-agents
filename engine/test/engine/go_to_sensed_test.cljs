@@ -103,6 +103,21 @@
           (is (= [:done [3 64 0]] [(:status r) (:through r)]) (pr-str r))
           (is (= 4 (count (:dug r))) "both rows"))))))
 
+(deftest clear-path-in-solid-rock-gives-up-with-a-reason
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [r (await (run-clear-path (assoc (wall-east 8) :inventory [{:name "wooden_pickaxe" :count 1}])))]
+          (is (= [:stopped :no-door] [(:status r) (:reason r)]) (pr-str r))
+          (is (<= (count (:dug r)) 6) "at most max-thick rows of two")
+          (is (string? (:why r))))))))
+
+(deftest a-floor-the-body-has-not-seen-may-be-a-hazard
+  (let [{:keys [w]} (sensed-only (wall-east 1 {"3,63,0" "magma_block"}))
+        kind-at (fn [_ y _] (if (= y 63) :solid :open))]
+    (is (false? (reach/standable-cell? w {:x 3 :y 64 :z 0} kind-at)) "the floor behind the wall is unseen")
+    (is (true? (reach/standable-cell? w {:x 0 :y 64 :z 0} kind-at)) "a seen plain floor")))
+
 (deftest pass-reads-a-door-in-view-and-nothing-behind-stone
   (let [{:keys [w]} (sensed-only {:self {:pos {:x 0.5 :y 64 :z 0.5}} :yaw 270 :pitch 30
                                   :blocks (merge ground {"1,64,0" "oak_door" "2,64,0" "stone" "2,65,0" "stone"
@@ -112,7 +127,7 @@
     (is (nil? (pass/block-at c {:x 3 :y 64 :z 0})) "behind stone: not known")))
 
 (deftest reach-reads-the-door-the-body-stands-in-and-the-floor-it-sees
-  (let [{:keys [w]} (sensed-only {:self {:pos {:x 0.5 :y 64 :z 0.3}} :yaw 0
+  (let [{:keys [w]} (sensed-only {:self {:pos {:x 0.5 :y 64 :z 0.3}} :yaw 0 :pitch 40
                                   :blocks (merge ground {"0,64,0" "iron_door" "0,65,0" "iron_door"})})]
     (is (= [0 1] (reach/panel-step w (constantly :solid) {:x 0 :y 64 :z 0})) "a shut door facing north (its default state)")
     (is (true? (reach/standable-cell? w {:x 0 :y 64 :z 2} (fn [_ y _] (if (= y 63) :solid :open))))
