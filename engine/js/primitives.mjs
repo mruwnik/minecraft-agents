@@ -122,7 +122,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   const { stopWalking, lookNow } = env
   const { self, entities, blockAt, isSettling, settleFromNow, rememberSelf, lastKnown, columnLoaded } = env
   Object.assign(env, createMove(env), createDig(env), createItems(env))
-  const { moveTo, swim, jumpPlace, attack, sleep, look, mount, dismount, dig, place, collect, digTime, clearTime, harvestTools } = env
+  const { moveTo, swim, jumpPlace, attack, sleep, look, mount, dismount, paddle, dig, place, collect, digTime, clearTime, harvestTools } = env
   const { inspectContainer, transfer, equip, toss, craft, furnace, enchant, eat, interact, trade, unequip } = env
 
   // the message arrives validated and cleaned by engine.chat (gate!, direct!); say asserts the last line
@@ -528,7 +528,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     try { return await fn(token, a) } finally { mark() }
   }
 
-  const acting = Object.fromEntries(Object.entries({ moveTo: onFoot(moveTo), dig: marking(dig), place: marking(place), jumpPlace: marking(jumpPlace), collect, inspectContainer, transfer, equip, toss, craft, furnace, enchant, chat, eat, attack, interact, trade, unequip, sleep, look, swim, useOn: marking(useOn), steer: onFoot(steer), mount, dismount })
+  const acting = Object.fromEntries(Object.entries({ moveTo: onFoot(moveTo), dig: marking(dig), place: marking(place), jumpPlace: marking(jumpPlace), collect, inspectContainer, transfer, equip, toss, craft, furnace, enchant, chat, eat, attack, interact, trade, unequip, sleep, look, swim, useOn: marking(useOn), steer: onFoot(steer), mount, dismount, paddle })
     .map(([name, fn]) => [name, whenUp(fn)]))
   // the raw world engine.perception looks at (stateAt, lightAt, eye, block changes): body-side only, never a job's
   const rawWorld = createRawWorld({ getBot: () => bot, isOffline: () => isOffline() || down, lightOverlay: (cx, cz, s) => view?.lightOverlay?.(cx, cz, s) })

@@ -163,3 +163,57 @@ export async function dismountVehicle (bot, ctx, a, { timeScale = 1 } = {}) {
     release()
   }
 }
+
+// Steering a boat. Mounted, Mineflayer runs no physics: the client owns a boat's motion, so a stroke simulates the
+// boat here (a flat kinematic model: BOAT_TURN degrees a tick while a turn key is held, BOAT_SPEED blocks a tick
+// forward, only over water) and sends the result as vehicle_move with the keys as player_input, once a tick.
+export const BOAT_TURN = 4
+export const BOAT_SPEED = 0.2
+export const PADDLE_MAX_TICKS = 40
+const TICK_MS = 50
+
+const mcYawOf = mfYaw => (((180 - mfYaw * 180 / Math.PI) % 360) + 360) % 360
+const mfYawOf = mcYaw => Math.PI - mcYaw * Math.PI / 180
+
+// One tick of the model: pose {x y z yaw (Minecraft degrees)} and keys {turn: 'left'|'right'|null, forward} to the next pose.
+export const boatStep = ({ x, y, z, yaw }, { turn = null, forward = false } = {}) => {
+  const next = (yaw + (turn === 'right' ? BOAT_TURN : turn === 'left' ? -BOAT_TURN : 0) + 360) % 360
+  const rad = next * Math.PI / 180
+  return forward ? { x: x - Math.sin(rad) * BOAT_SPEED, y, z: z + Math.cos(rad) * BOAT_SPEED, yaw: next } : { x, y, z, yaw: next }
+}
+
+const onWater = (bot, { x, y, z }) => bot.blockAt(vec3(Math.floor(x), Math.floor(y), Math.floor(z)))?.name === 'water'
+
+// One stroke: a.ticks (0..PADDLE_MAX_TICKS) ticks with a.turn and a.forward held. Ends 'ok', or 'blocked' when the next tick would
+// leave the water; zero ticks reads the pose. Every key is released on every exit, and by a cut.
+export async function paddleBoat (bot, ctx, a, { timeScale = 1 } = {}) {
+  const boat = bot.vehicle
+  if (!boat) return { status: 'not-mounted' }
+  if (!BOAT.test(boat.name ?? '') && !CHEST_BOAT.test(boat.name ?? '')) return { status: 'not-a-boat' }
+  const ticks = Math.min(Math.max(Math.floor(a.ticks ?? 0), 0), PADDLE_MAX_TICKS)
+  const keys = { turn: a.turn ?? null, forward: Boolean(a.forward) }
+  let pose = { x: boat.position.x, y: boat.position.y, z: boat.position.z, yaw: mcYawOf(boat.yaw ?? Math.PI) }
+  const release = () => bot._client.write('player_input', { inputs: {} })
+  const result = (status, done) => ({ status, pos: { x: pose.x, y: pose.y, z: pose.z }, yaw: pose.yaw, ticks: done })
+  if (ticks === 0) return result('ok', 0)
+  ctx.onAbort(release)
+  let done = 0
+  try {
+    while (done < ticks) {
+      const next = boatStep(pose, keys)
+      if (keys.forward && !onWater(bot, next)) return result('blocked', done)
+      pose = next
+      boat.position = vec3(pose.x, pose.y, pose.z)
+      boat.yaw = mfYawOf(pose.yaw)
+      bot.entity.position = seatPosition(boat, bot.entity)
+      bot._client.write('player_input', { inputs: { forward: keys.forward, left: keys.turn === 'left', right: keys.turn === 'right' } })
+      bot._client.write('vehicle_move', { x: pose.x, y: pose.y, z: pose.z, yaw: pose.yaw, pitch: 0, onGround: false })
+      done++
+      await sleepMs(TICK_MS * timeScale)
+      ctx.alive()
+    }
+    return result('ok', done)
+  } finally {
+    release()
+  }
+}

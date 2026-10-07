@@ -3,7 +3,7 @@
 
 import { isInteractable } from './blocks.mjs'
 import { leaveBed } from './bed.mjs'
-import { mountVehicle, dismountVehicle } from './vehicle.mjs'
+import { mountVehicle, dismountVehicle, paddleBoat } from './vehicle.mjs'
 import vec3 from 'vec3'
 import pf from 'mineflayer-pathfinder'
 import { REACH, ATTACK_REACH, POLL_MS, HURT_WAIT_MS, JUMP_PLACE_MAX, JUMP_PLACE_BLOCK_S, RISE_WAIT_MS, LAND_WAIT_MS, SWIM_DEFAULT_MS, SWIM_MAX_MS, HOP_RANGE, sleepMs, dist, center, isNum, isPos, cell, vec, cutError, failed, need } from './prim-base.mjs'
@@ -271,5 +271,12 @@ export function createMove (env) {
     need(a.pitch == null || isNum(a.pitch), 'dismount pitch must be a number of degrees')
     return act(token, { boundS: 2 }, ctx => dismountVehicle(env.bot, ctx, a, { timeScale }))
   }
-  return { moveTo, swim, jumpPlace, attack, sleep, look, mount, dismount }
+  // One stroke of steering the boat the body is in (vehicle.mjs paddleBoat): `ticks` ticks of turn 'left'|'right' and forward.
+  const paddle = async (token, a = {}) => {
+    if (!isOwner(token)) throw cutError()
+    need(a.ticks == null || isNum(a.ticks), 'paddle ticks must be a number')
+    need(a.turn == null || a.turn === 'left' || a.turn === 'right', "paddle turn must be 'left' or 'right'")
+    return act(token, { boundS: 4 }, ctx => paddleBoat(env.bot, ctx, a, { timeScale }))
+  }
+  return { moveTo, swim, jumpPlace, attack, sleep, look, mount, dismount, paddle }
 }

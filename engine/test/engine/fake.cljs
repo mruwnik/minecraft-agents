@@ -645,6 +645,31 @@
                  (assoc-in [:self :inWater] (= here "water")) (assoc-in [:self :inLava] (= here "lava")))
              {:status "dismounted" :pos pos}])))
 
+(defn paddle
+  "One stroke of steering the boat the body is in: boatStep (the JS model, js/vehicle.mjs) per tick over water; :blocked where the next
+  forward tick would leave the water. The boat's heading is its :yaw (Minecraft degrees, default 0); the body rides along."
+  [w {:keys [ticks turn forward] :or {ticks 0}}]
+  (let [id (get-in w [:self :vehicle])
+        e (find-entity w id)
+        m ^js @vehicle-mod
+        pose-of (fn [pose] {:pos [(.-x pose) (.-y pose) (.-z pose)] :yaw (.-yaw pose)})]
+    (cond
+      (nil? id) [w {:status "not-mounted"}]
+      (not (re-find #"_(boat|raft)$" (str (:name e)))) [w {:status "not-a-boat"}]
+      :else
+      (let [n (min (max (js/Math.floor ticks) 0) (.-PADDLE_MAX_TICKS m))
+            [x y z] (:pos e)]
+        (loop [i 0 pose #js {:x x :y y :z z :yaw (:yaw e 0)} w w]
+          (let [done (fn [status] [w {:status status :pos [(.-x pose) (.-y pose) (.-z pose)] :yaw (.-yaw pose) :ticks i}])
+                next (.boatStep m pose #js {:turn turn :forward (boolean forward)})]
+            (cond
+              (= i n) (done "ok")
+              (and forward (not= "water" (block-name w (mapv #(js/Math.floor %) [(.-x next) (.-y next) (.-z next)])))) (done "blocked")
+              :else (let [{:keys [pos yaw]} (pose-of next)]
+                      (recur (inc i) next
+                             (-> w (animals/update-entity id #(assoc % :pos pos :yaw yaw))
+                                 (assoc-in [:self :pos] pos)))))))))))
+
 ;; ---- reading the world
 
 (defn equipment-view [w]
@@ -770,6 +795,7 @@
                "unequip" (act! (fn [w _] (unequip/unequip w)))
                "mount" (act! mount)
                "dismount" (act! dismount)
+               "paddle" (act! paddle)
                "furnace" (guarded (act! furnace/furnace))
                "enchant" (guarded (act! enchant/enchant))
                "steer" (fn [token a]

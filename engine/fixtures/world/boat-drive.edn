@@ -1,0 +1,35 @@
+;; Card a5793fdc: jobs.movement.boat-drive steers the boat the body is in to a water cell (paddle strokes; the boat is simulated client side).
+;; Should-succeed: launch a carried boat and drive it across the pond (boat.driven); drive a second leg back.
+;; Should-fail: on foot (:not-aboard); the target is stone (:not-water); the target pond is across land (:blocked).
+;; The boat's real speed and turn rate are a model (js/vehicle.mjs BOAT_SPEED, BOAT_TURN): a server that rejects the vehicle moves would show as the boat not moving, :timeout.
+{:defaults
+ {:tags [:boats :movement :boat-drive] :time :any
+  :plot {:height 8 :floor "stone"}
+  :body {:at [10.5 0 16.5] :inventory [["oak_boat" 1]]}
+  :limit-s 120}
+ :cases
+ [{:name "drive-across-the-pond"
+   :blocks [[:fill [12 -1 14] [24 -1 18] "water"]]
+   :act [[:job (jobs.movement.boat-launch {})]
+         [:job (jobs.movement.boat-drive {:pos [23 -1 16]})]]
+   :expect [{:event {:source :job :kind :boat.driven} :within-s 100 :of-job true}]}
+  {:name "drive-there-and-back"
+   :blocks [[:fill [12 -1 14] [24 -1 18] "water"]]
+   :act [[:job (jobs.movement.boat-launch {})]
+         [:job (jobs.movement.boat-drive {:pos [23 -1 16]})]
+         [:job (jobs.movement.boat-drive {:pos [14 -1 15]})]]
+   :expect [{:event {:source :job :kind :boat.driven} :within-s 100 :of-job true}]}
+  {:name "on-foot-is-not-aboard"
+   :blocks [[:fill [12 -1 14] [24 -1 18] "water"]]
+   :act [[:job (jobs.movement.boat-drive {:pos [23 -1 16]})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :not-aboard}} :within-s 30 :of-job true}]}
+  {:name "target-is-not-water"
+   :blocks [[:fill [12 -1 14] [24 -1 18] "water"]]
+   :act [[:job (jobs.movement.boat-launch {})]
+         [:job (jobs.movement.boat-drive {:pos [23 0 16]})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :not-water}} :within-s 60 :of-job true}]}
+  {:name "pond-across-land-is-blocked"
+   :blocks [[:fill [12 -1 14] [24 -1 18] "water"] [:fill [12 -1 24] [24 -1 28] "water"]]
+   :act [[:job (jobs.movement.boat-launch {})]
+         [:job (jobs.movement.boat-drive {:pos [18 -1 26]})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :blocked}} :within-s 100 :of-job true}]}]}
