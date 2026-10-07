@@ -70,3 +70,31 @@
             (is (= [:unseen-cell] (mapv :reason (bd/left-drops seen))))
             (is (seq (filter #(= :sense.looked (:kind %)) @seen)) "it looked before it left the drop")
             (is (empty? (bd/calls p "collect")))))))))
+
+(deftest a-drop-one-column-over-from-the-dug-hole-is-in-the-hole-and-left
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (bd/setup {:self body :blocks {"0,63,0" "air" "1,59,0" "stone"}})]
+          (drop! p [1 60 0] "dirt")
+          (seen-from-above! p)
+          (let [result (await (bd/child-outcome eng job {:radius 6 :holes [[0 63 0]]} 20))]
+            (is (= 0 (:collected result)))
+            (is (= [:too-deep] (mapv :reason (bd/left-drops seen))))
+            (is (not-any? #(and (= :child_started (:kind %)) (= :walk (:slot %))) @seen) "no go-to walk down the hole")
+            (is (empty? (bd/calls p "collect")))))))))
+
+(deftest a-deep-drop-go-to-cannot-reach-is-left-unreachable
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pocket (into {} (for [x [4 5 6] y [56 57 58 59] z [-1 0 1]
+                                    :when (not= [5 58 0] [x y z])]
+                                [(str x "," y "," z) "stone"]))
+              {:keys [eng p seen]} (bd/setup {:self body :blocks pocket})]
+          (drop! p [5 58 0] "dirt")
+          (seen-from-above! p)
+          (let [result (await (bd/child-outcome eng job {:radius 8} 30))]
+            (is (= 0 (:collected result)))
+            (is (= [:unreachable] (mapv :reason (:left result))))
+            (is (= [:unreachable] (mapv :reason (bd/left-drops seen))))))))))

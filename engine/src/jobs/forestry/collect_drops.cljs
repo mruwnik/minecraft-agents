@@ -14,7 +14,7 @@
   does not move it, so drops far away, e.g. other bodies', are never chased).
   An item is tried once; one that is gone, cannot be reached or picked up is skipped.
   An item more than a block lower than the feet is walked to first (a jobs.movement.go-to child, range 1, which prices
-  falls and dangers); one it cannot reach is skipped.
+  falls and dangers); one it cannot reach is left, with a debug collect-drops.left {:reason :unreachable}.
   An item lower than the feet in a hole the caller dug (:holes) is walked to only when it lies one block down at most and
   the body has seen the floor under it solid and safe and the cells round it (no lava, fluid or cave opening, nothing
   hazardous beside it), the walk dropping one block at most; else it is left, with a debug collect-drops.left
@@ -26,7 +26,7 @@
    :filter {:doc "item names to collect; everything when nil" :spec (a/coll-of a/item?) :default nil}
    :near {:doc "{:x :y :z} the work area is centred on, instead of where the body stands when the job begins" :spec ::a/pos :default nil}
    :ids {:doc "entity ids to collect (only those); any item when nil" :spec (a/coll-of number?) :default nil}
-   :holes {:doc "cells the caller dug: an item lower than the feet at or under one of them is in that hole"
+   :holes {:doc "cells the caller dug: an item lower than the feet at or under one of them, or one column beside, is in that hole"
            :spec (a/coll-of a/position?) :default nil}})
 
 (defn check [_c] true)
@@ -61,12 +61,13 @@
 (defn below-feet? [c item] (boolean (and (.-pos item) (< (second (item-cell item)) (feet-y c)))))
 
 (defn in-hole?
-  "Whether item lies lower than the feet in the column of a cell of :holes, at or under it."
+  "Whether item lies lower than the feet at or under a cell of :holes, in its column or one of the eight beside (a drop
+  that fell through the hole lands a column over)."
   [c item]
   (let [[x y z] (when (.-pos item) (item-cell item))]
     (boolean (and (below-feet? c item)
                   (some #(let [{hx :x hy :y hz :z} (a/cell %)]
-                           (and (= x (js/Math.floor hx)) (= z (js/Math.floor hz)) (<= y (js/Math.floor hy))))
+                           (and (<= (abs (- x (js/Math.floor hx))) 1) (<= (abs (- z (js/Math.floor hz))) 1) (<= y (js/Math.floor hy))))
                         (:holes (:args c)))))))
 
 (defn deep? [c item] (boolean (and (.-pos item) (> (- (feet-y c) (second (item-cell item))) 1))))
@@ -137,6 +138,7 @@
               :continue
               (do (cond
                     why (leave! c item why)
+                    (= :unreachable walk) (leave! c item :unreachable)
                     (not= :unreachable walk)
                     (let [r (await (ctx/act c :collect (clj->js (cond-> {:id (.-id item)} hole? (assoc :maxDropDown 1)))))]
                       (ctx/update-mem! c update :collected (fnil + 0) (gained-count r))))

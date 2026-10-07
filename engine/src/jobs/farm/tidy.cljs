@@ -176,7 +176,7 @@
           (when-not (= :continue outcome) (ctx/update-mem! c dissoc :digging))
           (case outcome
             :continue :continue
-            :dug (ctx/update-mem! c update :dug (fnil inc 0))
+            :dug (ctx/update-mem! c #(-> % (update :dug (fnil inc 0)) (update :holes (fnil conj []) (pos-map pos))))
             :missing nil
             :cannot (ctx/update-mem! c refuse stray {:reason :cannot})
             :refused (let [why (:reason (blocks/child-wait c :dig 'jobs.blocks.dig (merge {:collect false :need-drop false :fetch false} dig-args {:pos (pos-map pos)})) :hazard)]
@@ -250,7 +250,7 @@
     (min 48 (+ 4 (js/Math.ceil (apply js/Math.hypot (map - hi lo)))))))
 
 (defn ^:async collect! [c cells]
-  (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops {:radius (field-radius cells)}))]
+  (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops {:radius (field-radius cells) :holes (:holes (ctx/mem c))}))]
     (when (= :done r)
       (ctx/update-mem! c #(-> % (dissoc :collect) (update :collected (fnil + 0) (:collected (ctx/child-result c :collect) 0)))))
     (when (= :declined r) (ctx/update-mem! c dissoc :collect))
@@ -282,7 +282,7 @@
   [c found]
   (when-let [pos (:digging (ctx/mem c))]
     (ctx/update-mem! c (fn [m] (cond-> (dissoc m :digging)
-                                 (not-any? #(= pos (:pos %)) (:dig found)) (update :dug (fnil inc 0)))))))
+                                 (not-any? #(= pos (:pos %)) (:dig found)) (-> (update :dug (fnil inc 0)) (update :holes (fnil conj []) (pos-map pos))))))))
 
 (defn cells-unseen?
   "Whether a cell of the work was never seen (the body has not looked at it), so no stray is known there."

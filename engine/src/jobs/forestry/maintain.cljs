@@ -261,7 +261,8 @@
   (when-let [species (:collect (ctx/mem c))]
     (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops
                                    {:radius (:collect-radius (:args c))
-                                    :filter (vec (distinct (mapcat forestry/drop-filter species)))}))]
+                                    :filter (vec (distinct (mapcat forestry/drop-filter species)))
+                                    :holes (:holes (ctx/mem c))}))]
       (when (= :done r) (ctx/update-mem! c dissoc :collect))
       (if (= :continue r) :continue :again))))
 
@@ -283,7 +284,7 @@
   "The fell child ended: count the tree felled, or leave it when logs of it still stand; collect either way."
   [c pos species]
   (let [logs (remaining-logs c pos species)]
-    (ctx/update-mem! c (fn [m] (-> m (dissoc :cut) (update :collect (fnil conj []) species))))
+    (ctx/update-mem! c (fn [m] (-> m (dissoc :cut) (update :collect (fnil conj []) species) (update :holes (fnil conj []) pos))))
     (if (seq logs)
       (if-let [bad (column-refusal c logs)]
         (leave! c pos :refused :why (second bad) :log (first bad))
