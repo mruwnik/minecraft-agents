@@ -186,7 +186,7 @@
         world (open-world {:state-dir state-dir :world (:world cfg) :agent (:agent opts) :root root
                            :emit (fn [e] (some-> @eng-ref (core/emit! e)))})
         base-eng (core/create {:primitives p :jobs registry/jobs :triggers (body-triggers) :dir (:engine-dir cfg)
-                               :body (:username cfg) :max-event-bytes events-max-bytes :world world})
+                               :body (:username cfg) :world world})
         _ (reset! eng-ref base-eng)
         _ (run! #(core/emit! base-eng %) @settings-events)
         _ (when-let [gc (.-gameClock raw-p)] (settings/wire-game-clock! gc #(core/emit! base-eng %)))
