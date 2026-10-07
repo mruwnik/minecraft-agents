@@ -1,7 +1,7 @@
 (ns jobs.items.bake
   (:require [engine.ctx :as ctx]
             [jobs.lib.util :as u]
-            [jobs.lib.near :as near]
+            [jobs.lib.pace :as pace]
             [jobs.lib.look :as look]
             [jobs.lib.blocks :as b]
             [jobs.storage.deposit :as deposit]))
@@ -12,7 +12,7 @@
   :keep loaves. A shortfall of bread is taken from the chest.
   Only whole loaves are made. At most three stacks of wheat are taken per trip, and empty slots are left for the
   bread. Bread is never tossed: what cannot be put away stays carried.
-  Every round starts from the inventory and the chest, so a cut loses nothing.
+  One call is the whole bake (it yields :continue only while a child waits on the world); every step starts from the inventory and the chest, so a cut loses nothing.
   Ends with {:baked n :deposited n}. No wheat for a loaf is a success (info bake.nothing).
   A stop adds :reason, after a warn (bake.no-table, bake.gave-up, bake.deposit-failed, bake.withdraw-failed,
   bake.craft-failed). :reason is \"no-table\" (before anything was taken), \"unreachable\", \"inventory-full\",
@@ -72,8 +72,9 @@
   "u/fail!, and when it gives up finish with the reason."
   [c text reason]
   (let [r (u/fail! c :bake.gave-up text)]
-    (when (= :done r) (finish! c {:reason reason}))
-    r))
+    (if (= :done r)
+      (finish! c {:reason reason})
+      :again)))
 
 (defn nearest-table
   "The position of the crafting table nearest the chest within radius of it
@@ -123,7 +124,7 @@
 
       (contains? #{:done :continue} r)
       (do (ctx/update-mem! c update :deposited (fnil + 0) (max 0 (- bread (carried (:primitives c) "bread"))))
-          :continue)
+          (if (= :continue r) :continue :again))
 
       (= :declined r) (declined! c :deposit 'jobs.storage.deposit dargs)
 
@@ -141,7 +142,7 @@
       (do (if (:reason out)
             (stop! c :bake.craft-failed (str "cannot craft the bread: " (:reason out))
                    (str "craft " (:reason out)))
-            (do (u/progress! c) :continue))))))
+            (do (u/progress! c) :again))))))
 
 (defn ^:async withdraw!
   "Take the wheat out through the withdraw child, carrying target in all."
@@ -154,7 +155,7 @@
       (and (= :done r) (= :refused (:reason out))) (refused! c :bake.refused out)
       (and (= :done r) (:gave-up out)) (stop! c :bake.withdraw-failed (str "cannot take the wheat out: " (:reason out))
                                               (str "withdraw " (:reason out)))
-      (= :done r) (do (u/progress! c) :continue)
+      (= :done r) (do (u/progress! c) :again)
       (= :declined r) (declined! c :withdraw 'jobs.storage.withdraw wargs)
       :else :continue)))
 
@@ -192,9 +193,7 @@
   (let [p (:primitives c)
         seen (await (ctx/act c :inspectContainer (clj->js {:pos chest})))]
     (if (not= "ok" (.-status seen))
-      (let [r (u/fail! c :bake.gave-up (str "chest " (.-status seen)))]
-        (when (= :done r) (finish! c {:reason (str "chest " (.-status seen))}))
-        r)
+      (give-up! c (str "chest " (.-status seen)) (str "chest " (.-status seen)))
       (let [items (.-items seen)
             wheat (reduce + 0 (map #(.-count %) (filter #(= "wheat" (.-name %)) (array-seq items))))
             target (wheat-target p wheat)
@@ -212,10 +211,10 @@
 
           :else (await (top-up! c chest items)))))))
 
-(defn ^:async round
-  "One bounded step: find the table (walking to the chest to see it, once), put spare bread away, craft carried wheat,
-  else walk to the chest and look in it. The deposit and craft children walk themselves, so the body is not drawn back
-  to the chest between the table and the bread."
+(defn ^:async step!
+  "One piece of the bake: find the table (walking to the chest to see it, once), put spare bread away, craft carried
+  wheat, else walk to the chest and look in it. The deposit and craft children walk themselves, so the body is not
+  drawn back to the chest between the table and the bread. :again, :continue (a child waits) or :done."
   [c]
   (let [p (:primitives c)
         chest (deposit/chest-of (ctx/view c) (:args c))
@@ -225,12 +224,13 @@
         wheat (carried p "wheat")
         spare? (> bread (:keep (:args c)))
         craft? (and (not spare?) (>= wheat 3))
-        w (if (and (:table (ctx/mem c)) (or spare? craft?))
-            :arrived
-            (await (near/walk-near! c chest 3)))]
-    (case w
-      :partial :continue
-      :blocked (give-up! c "cannot reach the chest" "unreachable")
+        walk? (if (and (:table (ctx/mem c)) (or spare? craft?)) false (not (u/within? (u/self-pos c) chest 3)))
+        w (when walk?
+            (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos chest :range 3 :escalate false :warn false :retry false})))]
+    (cond
+      (= :continue w) :continue
+      (and w (not (:arrived (ctx/child-result c :walk)))) (give-up! c "cannot reach the chest" "unreachable")
+      :else
       (let [table (or (:table (ctx/mem c)) (nearest-table p chest (:table-radius (:args c))))]
         (if (nil? table)
           (stop! c :bake.no-table "no crafting table near the chest" "no-table")
@@ -239,3 +239,8 @@
                 spare? (await (deposit-spare! c chest bread))
                 craft? (await (craft-carried! c table wheat))
                 :else (await (inspect! c chest)))))))))
+
+(defn ^:async round
+  "The whole bake in one call: step! again until it is done or stopped."
+  [c]
+  (await (pace/steps! c (fn ^:async bake-step [] (await (step! c))))))

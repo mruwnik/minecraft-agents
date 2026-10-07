@@ -286,3 +286,14 @@
               to-second-craft (vec (take 4 (filter #{"steer" "craft"} names)))]
           (is (= {:baked 5 :deposited 1} result))
           (is (= ["steer" "craft" "steer" "craft"] to-second-craft) "chest, craft (too far), table, craft: no walk back between"))))))
+
+(deftest a-bake-is-one-call
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:containers {"10,64,0" [{:name "wheat" :count 30}]} :blocks beside})
+              id (core/submit! eng (list job {:chest chest :keep 4}) {})]
+          (await (core/tick! eng))
+          (is (empty? (:list (core/state eng))))
+          (is (= {"bread" 4} (inv p)))
+          (is (some? id)))))))
