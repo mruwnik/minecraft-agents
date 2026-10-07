@@ -10,6 +10,9 @@
             [engine.registry :as registry]
             [engine.triggers :as triggers]
             [jobs.animals.herd :as herd]
+            [jobs.animals.herd-pen :as hp]
+            [jobs.animals.herd-run :as hr]
+            [jobs.animals.herd-trip :as ht]
             [jobs.lib.world-files :as ew]
             [plan.shape :as shape]
             [engine.test-util :as tu]))
@@ -124,7 +127,7 @@
     (.override (.-world p) "useOn"
                (fn [token args impl]
                  (swap! log conj {:was-open (gate-open? s)
-                                  :overlapping (count (filter #(herd/overlaps-cell? (pos-map %) 0.45 [10 64 3]) (entities-of s)))
+                                  :overlapping (count (filter #(hp/overlaps-cell? (pos-map %) 0.45 [10 64 3]) (entities-of s)))
                                   :held (count (mem/entries (mem/view (:store eng)) :gate-held))})
                  (impl token args)))
     log))
@@ -764,7 +767,7 @@
 
 (deftest the-escape-census-counts-the-animals-gone-from-the-pen
   (doseq [[before after escaped] [[3 3 0] [3 2 1] [2 0 2] [1 2 0]]]
-    (is (= escaped (herd/escaped-count before after)) (str before " -> " after))))
+    (is (= escaped (hr/escaped-count before after)) (str before " -> " after))))
 
 (deftest a-cow-that-walks-out-through-the-open-gate-during-the-exit-is-counted-escaped
   (async done
@@ -866,11 +869,11 @@
            ["west" g [9 64 3] [11 64 3] [14 13 12 11 10 9 8 7 6 5 4] (repeat 3)]
            ["south" g [10 64 4] [10 64 2] (repeat 10) [-1 0 1 2 3 4 5 6 7 8 9]]
            ["north" g [10 64 2] [10 64 4] (repeat 10) [7 6 5 4 3 2 1 0 -1 -2 -3]]]]
-    (is (= (mapv (fn [x z] [x 64 z]) expected-x expected-z) (herd/axis-cells gc in out 6)) label)))
+    (is (= (mapv (fn [x z] [x 64 z]) expected-x expected-z) (hp/axis-cells gc in out 6)) label)))
 
 (deftest axis-cells-use-at-most-six-pen-cells-and-no-more-than-the-depth
-  (is (= 11 (count (herd/axis-cells g [11 64 3] [9 64 3] 9))) "9 deep: capped at 6 -> 4 + 1 + 6")
-  (is (= 8 (count (herd/axis-cells g [11 64 3] [9 64 3] 3))) "3 deep: 4 + 1 + 3"))
+  (is (= 11 (count (hp/axis-cells g [11 64 3] [9 64 3] 9))) "9 deep: capped at 6 -> 4 + 1 + 6")
+  (is (= 8 (count (hp/axis-cells g [11 64 3] [9 64 3] 3))) "3 deep: 4 + 1 + 3"))
 
 (defn rect [x0 x1 z0 z1] (set (for [x (range x0 (inc x1)) z (range z0 (inc z1))] [x 64 z])))
 
@@ -881,11 +884,11 @@
            ["3x3" (rect 11 13 2 4) 3]
            ["a hole in the line" (disj (rect 11 15 1 5) [13 64 3]) 2]
            ["no cell beside the gate" (rect 12 15 1 5) 0]]]
-    (is (= expected (herd/depth inside g [11 64 3])) label)))
+    (is (= expected (hp/depth inside g [11 64 3])) label)))
 
 (deftest depth-follows-the-facing
-  (is (= 5 (herd/depth (rect 5 9 1 5) g [9 64 3])) "pen west of the gate")
-  (is (= 4 (herd/depth (rect 8 12 4 7) g [10 64 4])) "pen south of the gate"))
+  (is (= 5 (hp/depth (rect 5 9 1 5) g [9 64 3])) "pen west of the gate")
+  (is (= 4 (hp/depth (rect 8 12 4 7) g [10 64 4])) "pen south of the gate"))
 
 (deftest an-entity-overlaps-a-cell-within-half-width-and-a-margin-on-both-axes
   (doseq [[label mob dx dz expected]
@@ -898,11 +901,11 @@
            ["sheep like a cow" "sheep" 1.1 0.0 false]
            ["chicken 0.75 off: inside 0.2 + 0.6" "chicken" 0.75 0.0 true]
            ["chicken 0.85 off" "chicken" 0.85 0.0 false]]]
-    (is (= expected (herd/overlaps-cell? {:x (+ 10.5 dx) :y 64 :z (+ 3.5 dz)} (herd/half-width mob) g)) label)))
+    (is (= expected (hp/overlaps-cell? {:x (+ 10.5 dx) :y 64 :z (+ 3.5 dz)} (hp/half-width mob) g)) label)))
 
 (deftest half-widths-by-mob
   (doseq [[mob expected] [["cow" 0.45] ["mooshroom" 0.45] ["sheep" 0.45] ["goat" 0.45] ["pig" 0.45] ["chicken" 0.2] ["llama" 0.45]]]
-    (is (= expected (herd/half-width mob)) mob)))
+    (is (= expected (hp/half-width mob)) mob)))
 
 (deftest settle-step-reads-the-distance-and-the-movement
   (doseq [[label dist moved waited expected]
@@ -913,7 +916,7 @@
            ["far, not long" 4.4 0.0 5999 :wait]
            ["far, long enough" 4.4 0.0 6000 :pinned]
            ["far and moving, long enough" 5.0 1.0 9000 :pinned]]]
-    (is (= expected (herd/settle-step dist moved waited)) label)))
+    (is (= expected (hp/settle-step dist moved waited)) label)))
 
 (deftest step-in-step-backs-off-twice-retries-from-out-once-then-gives-up
   (doseq [[label _index backs retried expected]
@@ -921,12 +924,12 @@
            ["second pin" 2 1 false :back]
            ["two backs made" 1 2 false :retry-from-out]
            ["two backs made, retried" 1 2 true :give-up]]]
-    (is (= expected (herd/step-in-step backs retried)) label)))
+    (is (= expected (hp/step-in-step backs retried)) label)))
 
 (deftest the-let-go-cell-is-the-pen-cell-farthest-from-the-gate-off-the-axis-when-tied
-  (is (= [15 64 1] (herd/let-go-cell (rect 11 15 1 5) g [11 64 3])) "corners are far, the axis end is not farther: a corner")
-  (is (= [15 64 3] (herd/let-go-cell (rect 11 15 3 3) g [11 64 3])) "a one-wide pen: the far end of the axis")
-  (is (= [16 64 3] (herd/let-go-cell (conj (rect 11 15 1 5) [16 64 3]) g [11 64 3])) "farther on the axis than any off it"))
+  (is (= [15 64 1] (hp/let-go-cell (rect 11 15 1 5) g [11 64 3])) "corners are far, the axis end is not farther: a corner")
+  (is (= [15 64 3] (hp/let-go-cell (rect 11 15 3 3) g [11 64 3])) "a one-wide pen: the far end of the axis")
+  (is (= [16 64 3] (hp/let-go-cell (conj (rect 11 15 1 5) [16 64 3]) g [11 64 3])) "farther on the axis than any off it"))
 
 ;; ------------------------------------------------------------------ the deep release and the retries
 
@@ -951,11 +954,11 @@
 
 (deftest outside-gate-is-the-body-past-the-gate-cell-on-the-out-side
   (doseq [[pos out?] [[{:x 9.5 :z 3.5} true] [{:x 9.9 :z 3.5} true] [{:x 10.5 :z 3.5} false] [{:x 11.5 :z 3.5} false] [{:x 9.5 :z 5.5} true]]]
-    (is (= out? (herd/outside-gate? [10 64 3] [11 64 3] pos)) (str pos))))
+    (is (= out? (hp/outside-gate? [10 64 3] [11 64 3] pos)) (str pos))))
 
 (deftest a-shut-with-the-body-on-the-pen-side-opens-the-gate-again-twice-at-most
   (doseq [[outside? reopens step] [[true 0 :census] [true 2 :census] [false 0 :reopen] [false 1 :reopen] [false 2 :stuck]]]
-    (is (= step (herd/shut-side-step outside? reopens)) (str outside? " " reopens))))
+    (is (= step (hp/shut-side-step outside? reopens)) (str outside? " " reopens))))
 
 (deftest a-pen-cow-on-the-gate-cell-at-the-exit-never-leaves-the-body-inside-a-shut-pen
   (async done
@@ -987,9 +990,9 @@
               "open and shut for the trip, then the hand is emptied, then open and shut to leave"))))))
 
 (deftest an-animal-fetched-twice-and-still-outside-is-never-fetched-again
-  (is (= ["a" "b"] (herd/tired-keys {"a" 2 "b" 3 "c" 1} #{"c"})))
-  (is (= [] (herd/tired-keys {"a" 2 "b" 3} #{"a" "b"})) "in the pen is not skipped by tries")
-  (is (= [] (herd/tired-keys {} #{}))))
+  (is (= ["a" "b"] (ht/tired-keys {"a" 2 "b" 3 "c" 1} #{"c"})))
+  (is (= [] (ht/tired-keys {"a" 2 "b" 3} #{"a" "b"})) "in the pen is not skipped by tries")
+  (is (= [] (ht/tired-keys {} #{}))))
 
 ;; ------------------------------------------------------------------ the survey's new declines
 
