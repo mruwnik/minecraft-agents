@@ -7,6 +7,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
             [jobs.lib.walk :as walk]
+            [jobs.lib.pillar :as pl]
             [jobs.lib.util :as u]))
 
 (def doc
@@ -44,8 +45,6 @@
 
 (def max-height 64)
 
-(def default-items ["dirt" "cobblestone"])
-
 (def purpose :pillar)
 
 (def max-failures 3)
@@ -68,17 +67,12 @@
 
 (defn up [[x y z] n] [x (+ y n) z])
 
-(defn clear?
-  "A cell the body's feet or head can move into: air or a non-fluid replaceable plant."
-  [n]
-  (boolean (and n (rules/replaceable n) (not (rules/fluids n)))))
-
 (defn item-to-use
   "The block to place next: item when carried, without one the first of default-items carried; nil when none."
   [item carried]
   (if item
     (when (pos? (get carried item 0)) item)
-    (first (filter #(pos? (get carried % 0)) default-items))))
+    (first (filter #(pos? (get carried % 0)) pl/default-items))))
 
 (defn permission-refusal
   "The first refusal among cells for permission alone (zone, footprint, no zone list), as the rules' refusal with :at."
@@ -108,7 +102,7 @@
           {:step :done}
           (let [refusal (permission-refusal (map #(up feet %) (range (- top fy))) in)
                 floor (up feet -1)
-                ceiling (first (remove #(clear? (block-at %)) [(up feet 1) (up feet 2)]))
+                ceiling (first (remove #(pl/clear? (block-at %)) [(up feet 1) (up feet 2)]))
                 use (item-to-use item carried)
                 place (rules/may-place? (assoc in :cell feet :feet (up feet 1)))]
             (cond
@@ -120,16 +114,6 @@
               :else {:step :place :cell feet :item use})))))))
 
 ;; ------------------------------------------------------------------ the round
-
-(defn feet-cell
-  "The cell the body's centre is in: the pillar's column is the cell it began in (recentre! walks back to it), not
-  the planner's start cell on a block's edge."
-  [c]
-  (let [{:keys [x y z]} (u/self-pos c)]
-    [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]))
-
-(defn carried [p]
-  (reduce (fn [m {:keys [name count]}] (update m name (fnil + 0) count)) {} (u/inventory p)))
 
 (defn built
   "This job's confirmed pillar cells in ledger l, lowest first."
@@ -164,19 +148,19 @@
   (let [p (:primitives c)
         block-at (escape/block-at-of p)
         l (ledger/reconcile (ledger/open-entries (ctx/view c)) block-at)
-        feet (feet-cell c)
+        feet (pl/feet-cell c)
         {:keys [height item]} (:args c)
         step (next-step (merge (access-inputs c)
                                {:feet feet :base (or (:base (ctx/mem c)) feet) :height height :block-at block-at
-                                :carried (carried p) :item item :ledger (ledger/cells l)}))]
+                                :carried (pl/carried p) :item item :ledger (ledger/cells l)}))]
     (if (= :too-few-blocks (:reason step))
-      (ctx/wait c {:reason :too-few-blocks :short (:short step) :item (or item default-items)})
+      (ctx/wait c {:reason :too-few-blocks :short (:short step) :item (or item pl/default-items)})
       true)))
 
 (defn displaced?
   "True when the body is airborne or outside the column cell [bx _ bz] (a knockback), not merely refused."
   [c [bx _ bz]]
-  (let [[fx _ fz] (feet-cell c)]
+  (let [[fx _ fz] (pl/feet-cell c)]
     (boolean (or (false? (.-onGround (.self (:primitives c)))) (not= [bx bz] [fx fz])))))
 
 (defn ^:async land!
@@ -231,7 +215,7 @@
           (let [settled (ledger/reconcile l block-at)]
             (ledger/remember! c settled)
             (finish! c settled (if (< failures max-failures)
-                                 (give-up :off-column :at (feet-cell c) :detail (.-reason r))
+                                 (give-up :off-column :at (pl/feet-cell c) :detail (.-reason r))
                                  (give-up :place-failed :detail (.-reason r))))))))))
 
 (defn ^:async shoved-back!
@@ -240,14 +224,14 @@
   [c]
   (let [{:keys [stand base counted walking displaced home]} (ctx/mem c)
         [bx _ bz] base
-        [fx _ fz] (feet-cell c)
+        [fx _ fz] (pl/feet-cell c)
         off? (and base home (not (centred? c [bx bz] home)))
         displaced (cond-> (or displaced 0) (and off? (not counted) (not walking)) inc)]
     (ctx/update-mem! c #(-> % (assoc :displaced displaced) (dissoc :counted) (assoc :walking (boolean (and off? (<= displaced max-displacements))))))
     (when (and off? stand (<= displaced max-displacements))
       (let [[x y z] stand
             block-at (escape/block-at-of (:primitives c))
-            top (or (first (filter #(clear? (block-at [x % z])) (range y (+ y 3)))) y)
+            top (or (first (filter #(pl/clear? (block-at [x % z])) (range y (+ y 3)))) y)
             r (await (recentre! c [x top z] home))]
         (when (= :continue r) :continue)))))
 
@@ -261,11 +245,11 @@
           block-at (escape/block-at-of p)
           seen (ledger/open-entries (ctx/view c))
           l (ledger/reconcile seen block-at)
-          feet (feet-cell c)
+          feet (pl/feet-cell c)
           base (or (:base (ctx/mem c)) feet)
           {:keys [height item]} (:args c)
           step (next-step (merge (access-inputs c)
-                                 {:feet feet :base base :height height :block-at block-at :carried (carried p)
+                                 {:feet feet :base base :height height :block-at block-at :carried (pl/carried p)
                                   :item item :ledger (ledger/cells l)}))]
       (when (not= l seen) (ledger/remember! c l))
       (ctx/update-mem! c #(-> % (assoc :base base :stand feet) (update :home (fn [h] (or h (let [{:keys [x z]} (u/self-pos c)] [x z]))))))

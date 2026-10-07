@@ -3,7 +3,7 @@
   and the hiding in them."
   (:require [jobs.lib.blocks :as lb]
             [engine.ctx :as ctx]
-            [jobs.access.pillar :as pillar]
+            [jobs.lib.pillar :as pl]
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.combat :as combat]
@@ -136,7 +136,7 @@
   "Whether a pillar-height pillar fits here: a solid floor, and the head cell and every cell the body rises into free."
   [block-at feet]
   (and (rules/solid-floor? block-at (up feet -1))
-       (every? #(pillar/clear? (block-at (up feet %))) (range 1 (+ 2 pillar-height)))))
+       (every? #(pl/clear? (block-at (up feet %))) (range 1 (+ 2 pillar-height)))))
 
 (defn cell-map [[x y z]] {:x x :y y :z z})
 
@@ -154,7 +154,7 @@
   [c]
   (let [p (:primitives c)
         block-at (escape/block-at-of p)
-        feet (pillar/feet-cell c)
+        feet (pl/feet-cell c)
         item (pillar-item c)]
     (when (and item (pillar-ok? block-at feet))
       (access/trespass! c "retreat" (some #(access/trespass-refusal (access/rules-input c) :place (cell-map (up feet %)))

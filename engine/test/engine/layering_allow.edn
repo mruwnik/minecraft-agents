@@ -1,18 +1,2 @@
 [
- {:from jobs.animals.herd-run :to triggers.animals.pen-gate :rule :job-requires-trigger
-  :why "S1/S5: sensing fn shared with its trigger moves to jobs.lib"}
- {:from jobs.animals.shut-gate :to triggers.animals.pen-gate :rule :job-requires-trigger
-  :why "S1/S5: sensing fn shared with its trigger moves to jobs.lib"}
- {:from jobs.forestry.fell-tree :to jobs.access.pillar :rule :job-requires-other-family-job
-  :why "layering E/F (6b05372f, 24ac6454): pillar helpers or child call"}
- {:from jobs.storage.kit :to jobs.items.craft :rule :job-requires-other-family-job
-  :why "layering E/F (6b05372f): craft nearest-table to jobs.lib"}
- {:from jobs.survival.get-food :to triggers.survival.hungry :rule :job-requires-trigger
-  :why "S1/S5: sensing fn shared with its trigger moves to jobs.lib"}
- {:from jobs.survival.night :to triggers.survival.hungry :rule :job-requires-trigger
-  :why "S1/S5: sensing fn shared with its trigger moves to jobs.lib"}
- {:from jobs.survival.night :to triggers.survival.night :rule :job-requires-trigger
-  :why "S1/S5: sensing fn shared with its trigger moves to jobs.lib"}
- {:from jobs.survival.retreat-refuge :to jobs.access.pillar :rule :job-requires-other-family-job
-  :why "layering E/F (6b05372f, 24ac6454): pillar helpers or child call"}
 ]

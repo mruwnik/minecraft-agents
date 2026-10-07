@@ -8,7 +8,8 @@
             [engine.fake :as fake]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [triggers.animals.pen-gate :as pg]
+            [jobs.lib.pen-gate :as pg]
+            [triggers.animals.pen-gate :as trigger]
             [jobs.lib.world-files :as world]))
 
 ;; ------------------------------------------------------------------ plans
@@ -106,7 +107,7 @@
 
 ;; ------------------------------------------------------------------ the trigger
 
-(def when-gate pg/pen-gate)
+(def when-gate trigger/pen-gate)
 
 (defn fake-at
   "A fake world: the gate of pen-a open or shut, the body at x z."
@@ -154,7 +155,7 @@
     (is (= f7 (holds-over (fake-at true 2 5) (knowledge pen-a) times data)))))
 
 (deftest the-trigger-is-registered-with-the-job-that-shuts-the-gate
-  (is (= pg/pen-gate (:when (:pen-gate triggers/all))))
+  (is (= trigger/pen-gate (:when (:pen-gate triggers/all))))
   (is (= '(jobs.animals.shut-gate) (:job (:pen-gate triggers/all))))
   (is (= :cooldown (:persistence (:pen-gate triggers/all)))))
 

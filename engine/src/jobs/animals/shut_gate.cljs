@@ -4,12 +4,12 @@
             [jobs.lib.util :as u]
             [jobs.lib.pass :as pass]
             [jobs.lib.result :as res]
-            [triggers.animals.pen-gate :as pg]
+            [jobs.lib.pen-gate :as pg]
             [jobs.lib.world :as known]))
 
 (def doc
   "Shut the planned fence gates that stand open. A planned gate is a cell of a plan whose want is a fence gate
-  (triggers.animals.pen-gate/gate-cells). A gate in no plan is never touched.
+  (jobs.lib.pen-gate/gate-cells). A gate in no plan is never touched.
 
   - Without :plan: the open planned gates within :radius of the body. This is the job of the pen-gate trigger,
     which fires for a gate seen open with the body more than 2 blocks away, so a job that holds a gate open on

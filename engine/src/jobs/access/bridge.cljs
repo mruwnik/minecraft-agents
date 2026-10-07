@@ -1,5 +1,6 @@
 (ns jobs.access.bridge
   (:require [jobs.access.pillar :as pillar]
+            [jobs.lib.pillar :as pl]
             [jobs.lib.escape :as escape]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.ledger :as ledger]
@@ -91,7 +92,7 @@
         (let [stand (ahead feet heading 1 0)
               target (ahead feet heading 1 -1)
               refusal (permission-refusal in i)
-              blocked (first (remove #(pillar/clear? (block-at %)) [stand (ahead feet heading 1 1)]))
+              blocked (first (remove #(pl/clear? (block-at %)) [stand (ahead feet heading 1 1)]))
               use (pillar/item-to-use item carried)
               place (rules/may-place? (assoc in :cell target :feet stand))]
           (cond
@@ -139,7 +140,7 @@
         {:keys [heading length item]} (:args c)]
     (merge (pillar/access-inputs c)
            {:feet feet :start (or (:start (ctx/mem c)) feet) :heading heading :length length :block-at (escape/block-at-of p)
-            :carried (pillar/carried p) :item item :ledger (ledger/cells l)})))
+            :carried (pl/carried p) :item item :ledger (ledger/cells l)})))
 
 (defn need
   "The wait reason for the blocks step lacks, or nil: a :need for jobs.lib.fetch."
@@ -148,7 +149,7 @@
     (let [item (:item (:args c))]
       (cond-> {:reason :need :count (:short step)}
         item (assoc :item item)
-        (not item) (assoc :any-of pillar/default-items)))))
+        (not item) (assoc :any-of pl/default-items)))))
 
 (defn check
   "True, or a wait for the blocks a bridge lacks at its start (fetched for unless :fetch is off); every other give-up
@@ -156,10 +157,10 @@
   [c]
   (let [p (:primitives c)
         l (ledger/reconcile (ledger/open-entries (ctx/view c)) (escape/block-at-of p))
-        step (next-step (inputs c l (pillar/feet-cell c)))]
+        step (next-step (inputs c l (pl/feet-cell c)))]
     (cond
       (not= :too-few-blocks (:reason step)) true
-      (nil? (fetch/opts c 'jobs.access.bridge)) (ctx/wait c {:reason :too-few-blocks :short (:short step) :item (or (:item (:args c)) pillar/default-items)})
+      (nil? (fetch/opts c 'jobs.access.bridge)) (ctx/wait c {:reason :too-few-blocks :short (:short step) :item (or (:item (:args c)) pl/default-items)})
       :else (fetch/check c 'jobs.access.bridge (need c step)))))
 
 (defn ^:async place!
@@ -219,7 +220,7 @@
   (let [block-at (escape/block-at-of (:primitives c))
         seen (ledger/open-entries (ctx/view c))
         l (ledger/reconcile seen block-at)
-        feet (pillar/feet-cell c)
+        feet (pl/feet-cell c)
         step (next-step (inputs c l feet))
         fetched (await (fetch/step! c 'jobs.access.bridge (need c step) {:return? true}))]
     (when (not= l seen) (ledger/remember! c l))

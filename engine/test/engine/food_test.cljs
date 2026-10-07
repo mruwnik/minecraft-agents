@@ -9,7 +9,6 @@
             [engine.memory :as mem]
             [engine.test-util :as tu :refer [run-until-empty]]
             [engine.triggers :as triggers]
-            [triggers.survival.hungry :as hungry]
             [jobs.survival.eat :as eat]
             [engine.game :as game]))
 
@@ -326,8 +325,8 @@
   (is (= "cooked_mutton" (eat/best-food [{:name "honey_bottle"} {:name "cooked_mutton"}] false nil 20))))
 
 (deftest golden-apples-are-rare-for-the-top-up-trigger
-  (is (not (hungry/top-up? 16 8 ["golden_apple"])))
-  (is (hungry/top-up? 16 8 ["honey_bottle"])))
+  (is (not (foods/top-up? 16 8 ["golden_apple"])))
+  (is (foods/top-up? 16 8 ["honey_bottle"])))
 
 ;; ---------------------------------------------------------------- get-food
 

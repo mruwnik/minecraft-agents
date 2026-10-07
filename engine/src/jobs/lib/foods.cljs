@@ -53,3 +53,41 @@
   heal, so the more hurt it is the sooner it looks for food. The hungry trigger's line."
   [food health args]
   (< food (min top-up-food (+ (:food args default-food) (- 20 health)))))
+
+;; ------------------------------------------------------------------ eating from the pack (the hungry trigger and get-food)
+
+(def default-health
+  "Below this health (of 20) carried food is eaten up to a full bar: saturation heals fastest on a full bar."
+  7)
+
+(def rare-food
+  "Foods kept for emergencies; never eaten just to top up."
+  precious)
+
+(defn top-up?
+  "Health is below full, food is below top-up-food and a common food is
+  carried (names: the carried item names): eat to regenerate like a player."
+  [food health carried-names]
+  (boolean (and (< health 20) (< food top-up-food)
+                (some #(and (edible? %) (not (rare-food %))) carried-names))))
+
+(defn carried-names [self]
+  (map #(.-name %) (array-seq (.-inventory self))))
+
+(defn eaten-unnamed?
+  "Whether a meal that names no item would eat item at health: food, not harmful, not named-only, and precious only
+  at low health (the rules of jobs.survival.eat)."
+  [health item]
+  (and (edible? item)
+       (not (contains? named-only item))
+       (or (not (contains? precious item)) (< health low-health))))
+
+(defn carries-food?
+  "Whether the sensed self carries something a meal would eat."
+  [self]
+  (boolean (some #(eaten-unnamed? (.-health self) %) (carried-names self))))
+
+(defn eat-now?
+  "Health below :health (default 7), food below 20 and something a meal would eat carried."
+  [self args]
+  (boolean (and (< (.-health self) (:health args default-health)) (< (.-food self) 20) (carries-food? self))))

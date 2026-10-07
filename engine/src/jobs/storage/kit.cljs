@@ -8,7 +8,6 @@
             [jobs.lib.fetch :as fetch]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
-            [jobs.items.craft]
             [jobs.lib.storage :as storage]
             [jobs.storage.withdraw]
             [jobs.lib.foods :as foods]))

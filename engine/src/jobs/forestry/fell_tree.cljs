@@ -2,7 +2,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.watch :as watch]
             [jobs.lib.blocks :as blocks]
-            [jobs.access.pillar :as pillar]
+            [jobs.lib.pillar :as pl]
             [jobs.lib.access :as access]
             [jobs.lib.access.approach :as approach]
             [jobs.lib.fetch :as fetch]
@@ -193,7 +193,7 @@
 
 ;; ------------------------------------------------------------------ the pillar
 
-(def pillar-items pillar/default-items)
+(def pillar-items pl/default-items)
 
 (defn cell-pos [[x y z]] {:x x :y y :z z})
 
@@ -222,7 +222,7 @@
 (defn blocks-carried
   "How many of the pillar items (dirt, cobblestone) are carried."
   [c]
-  (let [have (pillar/carried (:primitives c))]
+  (let [have (pl/carried (:primitives c))]
     (reduce + (map #(get have % 0) pillar-items))))
 
 (defn pillar-problem

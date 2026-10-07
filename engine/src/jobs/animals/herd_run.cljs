@@ -4,7 +4,7 @@
             [jobs.lib.apiary :as apiary]
             [engine.ctx :as ctx]
             [jobs.lib.pen :as pen]
-            [triggers.animals.pen-gate :as pg]
+            [jobs.lib.pen-gate :as pg]
             [jobs.lib.util :as u]))
 
 (def near-pen 16)

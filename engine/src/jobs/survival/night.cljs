@@ -15,8 +15,6 @@
             [jobs.lib.util :as u]
             [engine.memory :as mem]
             [jobs.lib.places :as places]
-            [triggers.survival.night :as night]
-            [triggers.survival.hungry :as hungry]
             [jobs.lib.foods :as foods]
             [jobs.survival.dig-in :as dig-in]
             [jobs.survival.dig-in-cells :as dig-cells]
@@ -91,7 +89,7 @@
   "The night trigger's condition, or job memory :sheltered (a listed night cut before its morning)."
   [c]
   (or (some? (:sheltered (ctx/mem c)))
-      (boolean (night/holds? (:primitives c) (ctx/view c) (:args c) (bed-permit c)))
+      (boolean (sh/night-holds? (:primitives c) (ctx/view c) (:args c) (bed-permit c)))
       (ctx/wait c {:reason :not-night})))
 
 (defn radius [c] (sh/bed-radius (ctx/view c) (:args c)))
@@ -120,7 +118,7 @@
   (let [p (:primitives c)
         self (.self p)
         health (.-health self)
-        best (when (and (not (sh/sleeping? p)) (or (foods/hungry? (.-food self) health {}) (hungry/eat-now? self {})))
+        best (when (and (not (sh/sleeping? p)) (or (foods/hungry? (.-food self) health {}) (foods/eat-now? self {})))
                (eat/best-food (u/inventory p) false nil health))]
     (when best
       (await (ctx/act c :equip #js {:item best}))

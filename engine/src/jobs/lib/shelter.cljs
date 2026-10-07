@@ -339,3 +339,18 @@
     {:inside-own-shelter (:pos entry)
      :hint (str "the body is sealed in its own shelter at [" x " " y " " z "]: the shelter job lets it out by day "
                 "(jobs.survival.night), or run jobs.survival.dig-in leave")}))
+
+(defn night-holds?
+  "Whether the night trigger holds (see triggers.survival.night). permit? decides whether a bed may be used (bed-permit)."
+  [p view args permit?]
+  (let [shelter (:data (mem/latest view :shelter))]
+    (boolean
+     (if (night? p)
+       (and (not (sleeping? p))
+            (or (some? (bed-to-use p view (bed-radius view args) permit?))
+                (bed-place-wanted? p view (bed-radius view args) permit?)
+                (log-out-for-sleepers? p view)
+                (unsafe-night? p (:roof-height args default-roof-height))
+                (some? (in-own-shelter p shelter))))
+       (or (shut-in-by-day? p shelter (:data (mem/latest view :shelter-trapped)))
+           (some? (bed-to-collect p view)))))))

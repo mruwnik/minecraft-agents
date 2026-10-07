@@ -7,7 +7,6 @@
             [jobs.lib.look :as look]
             [jobs.lib.result :as r]
             [jobs.lib.util :as u]
-            [triggers.survival.hungry :as hungry]
             [jobs.lib.foods :as foods]
             [jobs.survival.eat :as eat]))
 
@@ -40,7 +39,7 @@
 
 (def args
   {:food {:doc "hungry below this much food (of 20)" :default foods/default-food}
-   :health {:doc "below this health eat up to a full bar" :default hungry/default-health}
+   :health {:doc "below this health eat up to a full bar" :default foods/default-health}
    :source-radius {:doc "how far away a remembered food source still counts, in blocks" :default 64}
    :hunt-radius {:doc "how far to look for animals and wild crops, in blocks" :default 24}
    :farm-radius {:doc "how far around a known farm to harvest, in blocks" :default 6}
@@ -85,8 +84,8 @@
   [c]
   (let [self (.self (:primitives c))]
     (or (hungry-now? c)
-        (hungry/top-up? (.-food self) (.-health self) (hungry/carried-names self))
-        (hungry/eat-now? self (:args c))
+        (foods/top-up? (.-food self) (.-health self) (foods/carried-names self))
+        (foods/eat-now? self (:args c))
         (boolean (:eating (ctx/mem c)))
         (ctx/wait c {:reason :not-hungry}))))
 
