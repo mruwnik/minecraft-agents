@@ -101,6 +101,24 @@
           (is (= 4 (count (:fed (done-event s)))))
           (is (= 0 (count-of s "wheat"))))))))
 
+;; one call is the whole attempt
+(deftest one-call-feeds-all-and-ends
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:mob "cow" :count 4} {:inventory (wheat 4) :entities (mapv #(cow % 2) [1 2 3 4])} 1))]
+          (is (finished? s))
+          (is (= :fed (:reason (done-event s))))
+          (is (= 4 (count (interacts s)))))))))
+
+(deftest one-call-walks-and-feeds
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:mob "cow"} {:inventory (wheat 2) :entities [(cow 1 8) (cow 2 9)]} 1))]
+          (is (finished? s))
+          (is (= :fed (:reason (done-event s)))))))))
+
 (deftest walks-to-an-animal-out-of-reach
   (async done
     (tu/run-async done

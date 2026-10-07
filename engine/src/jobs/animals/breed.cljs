@@ -8,7 +8,7 @@
   "Feed :count animals of type :mob (such as \"cow\") within :radius so that they breed. A one-shot order that
   ends itself. The check always passes, so a cut job resumes.
 
-  Each round takes the nearest adult not yet fed, refused or given up on. The body walks to within 3 blocks
+  One call is the whole run. It takes the nearest adult not yet fed, refused or given up on. The body walks to within 3 blocks
   (like go-to it opens a shut gate or door on the way and shuts it behind, so a gated pen is entered and its gate
   left shut; a pen with no way in is :unreachable). It then feeds the first breeding
   food of the mob that it carries (jobs.lib.animals/breeding-food: wheat for cows, sheep, goats and
@@ -30,7 +30,7 @@
   - :no-food: none carried, or it ran out.
   - When no candidate is left, or fewer than two adults stand near before the first feeding: :unreachable if one
     was given up as unreachable, else :unpaired (odd number fed), :refused (some refused, none ate; or :no-zones, the zone rules refused the adults) or :too-few.
-  - The same reasons after three fruitless rounds in a row, before the engine would back the job off.
+  - The same reasons after three fruitless animals in a row.
 
   Animals follow a body holding their food, so the hand is given back. Before the first feeding the job notes
   what the hand holds. When it ends it equips that item again if still carried, else empties the hand. :hand is
@@ -167,7 +167,7 @@
 
 (defn ^:async feed!
   "Use food on animal once; book the outcome. Resolves to :no-food when the
-  food is gone, else :continue."
+  food is gone, else :again."
   [c animal food]
   (let [k (animals/key-of animal)
         _ (ctx/update-mem! c assoc :food food)
@@ -191,7 +191,7 @@
                        (when (>= n 2) (give-up! c k :unreachable))
                        (bump-row! c))
       nil)
-    (if (= "no-item" (.-status r)) :no-food :continue)))
+    (if (= "no-item" (.-status r)) :no-food :again)))
 
 (defn ^:async engage!
   "Walk to the animal and feed it; finish when out of food or fruitless three times in a row."
@@ -199,11 +199,11 @@
   (let [walked (await (walk! c animal))
         fed (case walked
               :there (await (feed! c animal food))
-              :continue)]
+              :again)]
     (cond
       (= :no-food fed) (await (finish! c :no-food))
       (>= (:in-row (ctx/mem c) 0) max-in-row) (await (finish! c (out-reason c)))
-      :else :continue)))
+      :else :again)))
 
 (defn bees-indoors?
   [c]
@@ -211,7 +211,9 @@
     (and (= "bee" (:mob (:args c)))
          (or (not (true? (.-isDay s))) (true? (.-raining s))))))
 
-(defn ^:async round [c]
+(defn ^:async step
+  "One walk or feeding, or the end."
+  [c]
   (let [now (ctx/now c)
         {:keys [mob timeout-s] n :count} (:args c)]
     (ctx/update-mem! c update :started #(or % now))
@@ -226,3 +228,10 @@
         (nil? food) (await (finish! c :no-food))
         (or (empty? cands) (and (empty? (:fed m)) (< (count (animals/adults (:primitives c) mob (:radius (:args c)))) 2))) (await (finish! c (out-reason c)))
         :else (await (engage! c (first cands) food))))))
+
+(defn ^:async round
+  "The whole attempt: walk and feed until the job ends."
+  [c]
+  (loop []
+    (let [r (await (step c))]
+      (if (= :again r) (recur) r))))
