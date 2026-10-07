@@ -182,6 +182,20 @@
     (is (= "stray entity zombie at plot [10.5 1 7.25]" (f/describe-entity-reply origin reply)))
     (is (= "stray entity: no data in reply: No entity was found" (f/describe-entity-reply origin "No entity was found")))))
 
+(deftest failed-entities-evidence-is-worded-by-check-kind
+  (let [origin [20000 150 20000]
+        box [[0 -1 0] [32 6 32]]
+        judge (fn [want n] (f/judge-after origin [:entities "type=cow" box want] (str "Count: " n)))
+        few (judge 2 1)
+        over (judge 0 1)]
+    (is (= "expected 2 cow, found 1" (:evidence few)))
+    (is (not (:stray? few)) "too few: no stray to probe")
+    (is (= "expected at least 3 cow, found 1" (:evidence (judge [:>= 3] 1))))
+    (is (= "count 1" (:evidence over)))
+    (is (:stray? over) "too many: probe names the stray")
+    (is (:stray? (judge [:<= 0] 1)))
+    (is (not (:stray? (judge 1 1))) "passing")))
+
 (deftest plan-files-carry-the-runner-prefix
   (is (= "{:id \"test-probefixture-pen\", :parts []}" (f/plan-file-text {:id "pen" :parts []} "test-probefixture-"))))
 

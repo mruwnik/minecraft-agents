@@ -448,6 +448,25 @@
       (case op :>= (>= n v) :> (> n v) :<= (<= n v) :< (< n v) := (= n v)))
     (= want n)))
 
+(defn too-few?
+  "Whether count n misses the :entities expectation want (a number or [op v]) by being under it."
+  [want n]
+  (let [[op v] (if (vector? want) want [:= want])]
+    (case op (:>= :>) true (:<= :<) false := (< n v))))
+
+(defn wanted-type
+  "The entity type a positive type= of the selector names, else \"entities\"."
+  [selector]
+  (or (second (re-find #"(?:^|,)type=([a-z_:]+)" selector)) "entities"))
+
+(defn entities-evidence
+  "Evidence of an :entities check: a missed minimum says what was expected, anything else the count."
+  [[selector _ want] n]
+  (let [[op v] (if (vector? want) want [:= want])]
+    (if (and (not (count-ok? want n)) (too-few? want n))
+      (str "expected " (case op :> "more than " :>= "at least " "") v " " (wanted-type selector) ", found " n)
+      (str "count " n))))
+
 (defn judge-after
   "Pass or fail of one :after check from its command's reply: {:check :pass? :evidence}."
   [origin [op & args :as check] reply]
@@ -459,11 +478,12 @@
                    (= op :block) [(pos? n) reply]
                    (= op :not-block) [(zero? n) reply]
                    (= op :item) [(count-ok? (second args) n) (str "count " n)]
-                   :else [(count-ok? (nth args 2) n) (str "count " n)])
+                   :else [(count-ok? (nth args 2) n) (entities-evidence args n)])
                  (:body-near :body-far)
                  (let [p (reply-pos reply)
                        [x y z] (abs-pos origin (first args))
                        d (when p (js/Math.hypot (- (p 0) x) (- (p 1) y) (- (p 2) z)))
                        ok? (if (= op :body-far) >= <=)]
                    [(boolean (and d (ok? d (second args)))) (if d (str "distance " (.toFixed d 2)) reply)]))]
-    {:check check :pass? (first result) :evidence (second result)}))
+    {:check check :pass? (first result) :evidence (second result)
+     :stray? (boolean (and (= op :entities) (not (first result)) n (not (too-few? (nth args 2) n))))}))

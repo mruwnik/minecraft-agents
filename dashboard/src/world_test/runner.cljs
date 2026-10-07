@@ -579,7 +579,7 @@
     (.then (rcon! cmds)
            (fn [replies]
              (let [results (mapv #(f/judge-after origin %1 %2) (:after c) replies)
-                   probes (mapv #(when-not (:pass? %) (f/entity-probe-command origin (:check %))) results)]
+                   probes (mapv #(when (:stray? %) (f/entity-probe-command origin (:check %))) results)]
                (.then (rcon! (keep identity probes))
                       (fn [dumps]
                         (let [named (zipmap (keep-indexed #(when %2 %1) probes) dumps)]
