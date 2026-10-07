@@ -97,6 +97,16 @@
           (is (lit? p 2 63 0))
           (is (= "white_carpet" (block-name p 2 64 0))))))))
 
+(deftest every-sink-dig-goes-through-the-dig-job
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (-> (fire-world {:inventory (inv "campfire" 1 "white_carpet" 1)}) (open-side "3,64,0"))
+              {:keys [eng p seen]} (setup w)]
+          (await (child-outcome eng job {} 60))
+          (is (= (count (calls p "dig")) (count (kinds seen :blocks.dig.done))))
+          (is (pos? (count (calls p "dig")))))))))
+
 (deftest a-covered-raised-fire-is-sunk-and-its-carpet-put-back
   (async done
     (tu/run-async done

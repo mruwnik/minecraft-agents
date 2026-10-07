@@ -1,6 +1,7 @@
 (ns jobs.apiary.guard
   (:require [engine.ctx :as ctx]
             [jobs.lib.apiary :as apiary]
+            [jobs.lib.blocks :as blocks]
             [jobs.lib.gate :as gate]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
@@ -215,10 +216,12 @@
           :abort (do (abandon! c fire :cannot) :again)
           :dig (if-not (permitted? c :dig pos)
                  (do (abandon! c fire :refused) :again)
-                 (let [status (.-status (await (ctx/act c :dig (clj->js {:pos pos}))))]
-                   (if (contains? #{"dug" "missing"} status)
-                     (recur (inc steps) step)
-                     (do (abandon! c fire (keyword status)) :again))))
+                 (let [outcome (await (blocks/dig-cell! c pos {:accept #{:fluid-adjacent :falling-block :under-feet}
+                                                               :ignore-zones? true}))]
+                   (case outcome
+                     :continue :continue
+                     (:dug :missing) (recur (inc steps) step)
+                     (do (abandon! c fire outcome) :again))))
           :place (if-not (permitted? c :place pos)
                    (do (abandon! c fire :refused) :again)
                    (let [status (.-status (await (ctx/act c :place (clj->js {:pos pos :item item}))))]
