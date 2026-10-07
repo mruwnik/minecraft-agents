@@ -92,6 +92,14 @@
           (is (every? #(= "dirt" %) (for [x (range -2 3) y [62 63] z (range -2 3)] (block-at s x y z))))
           (is (finished? s)))))))
 
+(deftest every-dig-goes-through-the-dig-job
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "sand" :count 6} {:blocks (merge floor sand-patch)} 60))]
+          (is (pos? (dig-count s)))
+          (is (= (dig-count s) (count (events-of s :blocks.dig.done)))))))))
+
 ;; sand on a 5-high stone pillar (in sight, out of every stand's reach) is nearer in a line than sand on the floor (off
 ;; the pillar's line of sight)
 (deftest the-reachable-target-is-walked-to-before-a-nearer-one-out-of-reach

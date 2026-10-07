@@ -1,5 +1,5 @@
 (ns jobs.gather.mine
-  (:require [jobs.lib.tidy :as tidy]
+  (:require [jobs.lib.blocks :as blocks]
             [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
@@ -391,21 +391,27 @@
     (when (air (u/block-name (:primitives c) pos))
       (dug-booked! c pos))))
 
+(defn ^:async dig-cell!
+  "Dig pos with a jobs.blocks.dig child: this job's rules judged the cell, the hazards it accepts are the child's."
+  [c pos]
+  (await (blocks/dig-cell! c pos {:accept #{:fluid-adjacent :falling-block :under-feet} :ignore-zones? (boolean (:ignore-zones? (:args c)))})))
+
 (defn ^:async dig! [c pos]
   (await (equip! c))
   (let [v (access/may-dig? (rules-in c) pos)
         verdict (access/judge v (:accept (:args c)))]
     (if (not= :ok verdict)
-      (refused! c pos v verdict)
+      (do (refused! c pos v verdict) :again)
       (let [_ (ctx/update-mem! c assoc :digging pos)
-            status (.-status (await (tidy/dig! c pos)))]
-        (ctx/update-mem! c dissoc :digging)
-        (cond
-          (= "dug" status) (dug-booked! c pos)
-          (= "missing" status) nil
-          (= "cannot" status) (skip! c pos)
-          :else (do (skip! c pos) (ctx/update-mem! c update :failures (fnil inc 0))))))
-    :again))
+            outcome (await (dig-cell! c pos))]
+        (when-not (= :continue outcome) (ctx/update-mem! c dissoc :digging))
+        (case outcome
+          :continue :continue
+          :dug (dug-booked! c pos)
+          :missing nil
+          :cannot (skip! c pos)
+          (do (skip! c pos) (ctx/update-mem! c update :failures (fnil inc 0))))
+        (if (= :continue outcome) :continue :again)))))
 
 
 (defn skip-failed!
@@ -462,7 +468,7 @@
                                                                   :range 0})))))))
 
 (defn ^:async cut!
-  "Dig the cells in order (equip, rules, tidy): :ok when each is air afterwards, else :refused or :dig-failed. A cut
+  "Dig the cells in order (equip, rules, a blocks.dig child): :ok when each is air afterwards, else :refused or :dig-failed. A cut
   of the mined block is collected like a target."
   [c cells]
   (loop [cells cells]
@@ -472,12 +478,13 @@
             v (access/may-dig? (rules-in c) pos)
             verdict (access/judge v (:accept (:args c)))
             _ (when (and (= :ok verdict) (= block (:block (:args c)))) (ctx/update-mem! c assoc :digging pos))
-            status (when (= :ok verdict) (.-status (await (tidy/dig! c pos))))
-            _ (ctx/update-mem! c dissoc :digging)]
+            outcome (when (= :ok verdict) (await (dig-cell! c pos)))
+            _ (when-not (= :continue outcome) (ctx/update-mem! c dissoc :digging))]
         (cond
           (not= :ok verdict) (do (refused! c pos v verdict) :refused)
-          (not (#{"dug" "missing"} status)) :dig-failed
-          :else (do (when (and (= "dug" status) (= block (:block (:args c))))
+          (= :continue outcome) :continue
+          (not (#{:dug :missing} outcome)) :dig-failed
+          :else (do (when (and (= :dug outcome) (= block (:block (:args c))))
                       (ctx/update-mem! c assoc :collecting true :dug-at (access/cell pos)))
                     (recur (rest cells)))))
       :ok)))
@@ -627,8 +634,10 @@
       (not (rules/solid-floor? name-at (update next :y dec))) (end! c :no-floor next)
       :else (let [_ (await (watch/watch! c {:risky? true :before-dig (first (remove #(air (name-at %)) cut))}))
                   r (await (cut! c (remove #(air (name-at %)) cut)))]
-              (if (not= :ok r)
-                (end! c r next)
+              (cond
+                (= :continue r) :continue
+                (not= :ok r) (end! c r next)
+                :else
                 (do (await (glance! c [(headings heading)]))
                     (if (await (step-to! c next))
                       (do (ctx/update-mem! c #(-> % (update-in [:tunnel :steps] inc) (assoc :looked next)))
