@@ -8,7 +8,7 @@
   "Put a lead on one animal of type :mob (such as \"cow\") within :radius and end. A one-shot order that starts and
   ends itself. The check always passes, so a cut job resumes.
 
-  Each round takes the nearest animal that is not on anyone's lead, not given up on and not in :skip (uuids or
+  One call is the whole run. It takes the nearest animal that is not on anyone's lead, not given up on and not in :skip (uuids or
   ids). The body walks to within 3 blocks (doors :shut, each steer bounded by :walk-timeout-s) and uses the lead
   it carries. The use counts only when the sensing then shows the animal on this body's lead. Animals are
   tracked by uuid, by id when it has none.
@@ -24,7 +24,7 @@
   - :timeout: :timeout-s from the first round.
   - When no candidate is left: :unreachable if one was given up as unreachable, else :refused (others given
     up, or the zone rules refused the animals; :no-zones when no zone list was read), :all-leashed (animals present but all led) or :none.
-  - The same reasons after three fruitless rounds in a row.
+  - The same reasons after three fruitless animals in a row.
 
   Zones: an animal standing in another owner's zone or claim, or in a plan's footprint, is not led (taking it out of the zone) (warn
   leash.declined once, :reason :refused, or :no-zones when no zone list was read). :ignore-zones? true skips the check.")
@@ -135,12 +135,12 @@
     (cond
       reason (finish! c reason led)
       (>= (:in-row (ctx/mem c) 0) max-in-row) (finish! c (none-reason c) nil)
-      :else :continue)))
+      :else :again)))
 
 (defn lead-carried? [c]
   (some #(= "lead" (:name %)) (u/inventory (:primitives c))))
 
-(defn ^:async round [c]
+(defn ^:async step [c]
   (let [now (ctx/now c)
         {:keys [timeout-s]} (:args c)]
     (ctx/update-mem! c update :started #(or % now))
@@ -151,3 +151,10 @@
         (not (lead-carried? c)) (finish! c :no-lead nil)
         (empty? cands) (finish! c (none-reason c) nil)
         :else (await (engage! c (first cands)))))))
+
+(defn ^:async round
+  "The whole attempt: loop the steps until one ends or yields."
+  [c]
+  (loop []
+    (let [r (await (step c))]
+      (if (= :again r) (recur) r))))

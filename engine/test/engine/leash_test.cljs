@@ -46,6 +46,15 @@
           (is (= 1 (count-of s "lead")))
           (is (empty? (events-of s :leash.gave-up))))))))
 
+(deftest one-call-walks-and-leashes
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {} {:inventory lead :entities [(cow 1 7)]} 1))]
+          (is (finished? s))
+          (is (= :leashed (:reason (done-event s))))
+          (is (= [1] (on-lead s))))))))
+
 (deftest a-cow-already-on-a-lead-is-left-alone
   (async done
     (tu/run-async done
