@@ -1,0 +1,36 @@
+;; jobs.village.roll (card 5aff1cbf): re-roll an untraded villager's offers by breaking and placing its workstation (lectern at
+;; 16 0 16). Live-only facts: whether an AI librarian claims the lectern placed again (day only), loses the profession when it
+;; is broken, and whether the trade primitive reads fresh offers each time. Offers do not name an enchantment, so :want is
+;; "enchanted_book" (a first-tier librarian may or may not offer one: the roll ends found or no-match after :tries).
+;; Should-succeed: roll-librarian (day, AI villager beside the lectern; needs a pickaxe/axe-free dig: a lectern breaks by hand).
+;; Should-fail: nitwit, absent villager, a villager of another block cell.
+{:defaults
+ {:tags [:village :jobs]
+  :time :day
+  :plot {:floor "grass_block"}
+  :blocks [[:fill [16 0 16] [16 0 16] "lectern"]]
+  :body {:at [14.5 0 16.5] :yaw 270}
+  :limit-s 240}
+ :cases
+ [{:name "roll-librarian"
+   :act [[:summon "villager" [16.5 1 17.5] "{UUID:[I;20260,7,5,1],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
+         [:wait-s 3]
+         [:job (jobs.village.roll {:villager "00004f24-0000-0007-0000-000500000001" :pos #at [16 0 16] :item "lectern" :want "enchanted_book" :tries 12})]]
+   :expect [{:event {:source :job :kind :roll.done} :within-s 220 :of-job true}]
+   :after [[:block #at [16 0 16] "lectern"]]}
+  {:name "nitwit-cannot-be-rolled"
+   :act [[:summon "villager" [16.5 1 17.5] "{NoAI:1b,UUID:[I;20260,7,5,2],VillagerData:{profession:\"minecraft:nitwit\",level:1,type:\"minecraft:plains\"}}"]
+         [:wait-s 2]
+         [:job (jobs.village.roll {:villager "00004f24-0000-0007-0000-000500000002" :pos #at [16 0 16] :item "lectern" :want "enchanted_book"})]]
+   :expect [{:event {:source :job :kind :roll.gave-up :data {:reason "nitwit"}} :within-s 40 :of-job true}]
+   :after [[:block #at [16 0 16] "lectern"]]}
+  {:name "absent-villager-is-gone"
+   :act [[:job (jobs.village.roll {:villager "00004f24-0000-0007-0000-000500000003" :pos #at [16 0 16] :item "lectern" :want "enchanted_book"})]]
+   :expect [{:event {:source :job :kind :roll.gave-up :data {:reason "gone"}} :within-s 30 :of-job true}]
+   :after [[:block #at [16 0 16] "lectern"]]}
+  {:name "other-block-on-the-cell-is-occupied"
+   :blocks [[:fill [16 0 16] [16 0 16] "stone"]]
+   :act [[:summon "villager" [16.5 1 17.5] "{NoAI:1b,UUID:[I;20260,7,5,4],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
+         [:wait-s 2]
+         [:job (jobs.village.roll {:villager "00004f24-0000-0007-0000-000500000004" :pos #at [16 0 16] :item "lectern" :want "enchanted_book"})]]
+   :expect [{:event {:source :job :kind :roll.gave-up :data {:reason "occupied"}} :within-s 40 :of-job true}]}]}
