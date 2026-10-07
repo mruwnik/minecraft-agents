@@ -587,12 +587,22 @@
 
 (defn note-gap
   "mem after a flight step that left the nearest chaser gap blocks off: a gain of a block over the best gap resets the
-  sweeps and the no-gain count, else the count grows."
+  sweeps and the no-gain count, else the count grows. No gap (no hostile near) is no sample: the flight is succeeding,
+  the no-gain count resets and the best gap stays."
   [mem gap]
   (let [best (:best-gap mem)]
-    (if (or (nil? best) (>= gap (inc best)))
+    (cond
+      (nil? gap) (assoc mem :since-gain 0)
+      (or (nil? best) (>= gap (inc best)))
       (assoc mem :best-gap gap :since-gain 0 :sweeps 0)
+      :else
       (update mem :since-gain (fnil inc 0)))))
+
+(defn nearest-gap
+  "Blocks from the body to the nearest of hostiles, nil with none."
+  [p hostiles]
+  (when (seq hostiles)
+    (apply min (map #(reach/mob-distance p %) hostiles))))
 
 (defn no-gain?
   "Whether the flight went n steps without a gain."
@@ -913,7 +923,7 @@
                 moved (await (step! c :step target 1))]
             (if-not moved
               (await (stuck "the way away from the hostile is blocked"))
-              (let [gap (or (some->> (first (near-hostiles c)) (reach/mob-distance p)) (:ranged-radius (:args c)))]
+              (let [gap (nearest-gap p (near-hostiles c))]
                 (ctx/update-mem! c #(-> % (dissoc :tried) (note-gap gap)))
                 :again))))))))
 
