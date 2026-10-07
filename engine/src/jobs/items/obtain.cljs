@@ -44,7 +44,7 @@
 (def args
   {:item {:doc "the item to get" :type :item :default nil}
    :any-of {:doc "items, any one will do, the first preferred (instead of :item)" :default nil}
-   :count {:doc "how many more than carried at the start, at most 64" :type :int :min 1 :max 64 :default 1}
+   :count {:doc "how many more than carried at the start (counts above 64 are taken as 64)" :type :int :min 1 :default 1}
    :how {:doc "sources to use, a subset of #{:chest :craft :gather}; nil: all" :default nil}
    :depth {:doc "nested fetches left; nil: the fetch limits (jobs.lib.fetch)" :type :int :min 0 :default nil}
    :minutes {:doc "time budget from the first round; nil: the fetch limits" :type :number :min 0 :default nil}

@@ -1,6 +1,5 @@
 (ns jobs.maintenance.unstick
-  (:require [jobs.lib.args :as jargs]
-            [engine.ctx :as ctx]
+  (:require [engine.ctx :as ctx]
             [jobs.lib.reach :as reach]
             [jobs.lib.result :as result]
             [jobs.lib.util :as u]
@@ -56,7 +55,7 @@
     (ctx/remember! c :stuck {:pos pos} stuck-policy)
     (result/stop! c (:why fields) (str "still stuck: " (name (:why fields))))))
 
-(defn check-run [c]
+(defn check [c]
   (or (contains? (ctx/mem c) :goal)
       (boolean (stuck/stuck? (ctx/view c) (:args c)))
       (ctx/wait c {:reason :not-stuck})))
@@ -76,12 +75,3 @@
           (and enclosed (not (reach/enclosed? (:primitives c)))) :done
           :else (give-up! c (merge {:why (if (= :continue r) :yielded (or (:why res) (:reason res) :declined))}
                                    (select-keys res [:escalation :kind :detail]))))))))
-
-(def bad-lists
-  "Args checked by jobs.lib.args."
-  {})
-
-(defn check
-  "check-run once the list args are well formed, else declines :bad-args."
-  [c]
-  (jargs/guard c bad-lists check-run))

@@ -34,6 +34,12 @@
     'jobs.survival.retreat {:weapons true}
     'jobs.survival.retreat {:blocks {:x "a"}}))
 
+(deftest well-formed-list-args-pass-the-guard
+  (are [job args] (= :passed (let [w (check-wait job args)] (if (= :bad-args (:reason w)) w :passed)))
+    'jobs.combat.attack {:targets ["zombie"] :weapons ["sword"]}
+    'jobs.items.obtain {:item "stick" :how #{:chest :craft}}
+    'jobs.storage.deposit {:items ["stick"] :keep {"bread" 3}}))
+
 (deftest scalar-args-are-typed-at-submit
   (doseq [form ['(jobs.blocks.dig {:pos [1 64 1] :collect "text"})
                 '(jobs.blocks.dig {:pos [1 64 1] :on-fluid :sideways})
@@ -43,7 +49,6 @@
                 '(jobs.farm.tend {:till 3})
                 '(jobs.items.obtain {:item 3})
                 '(jobs.items.obtain {:item "stick" :count 0})
-                '(jobs.items.obtain {:item "stick" :count 65})
                 '(jobs.maintenance.unstick {:n {:x "a"}})
                 '(jobs.maintenance.unstick {:n 0})
                 '(jobs.storage.deposit {:free "text"})
@@ -59,6 +64,7 @@
   (doseq [form ['(jobs.blocks.dig {:pos [1 64 1] :on-fluid :fail})
                 '(jobs.combat.attack {:radius 16 :absent :wait})
                 '(jobs.items.obtain {:item "stick" :count 64})
+                '(jobs.items.obtain {:item "stick" :count 100})
                 '(jobs.maintenance.unstick {:n 3})
                 '(jobs.storage.deposit {:free 2})
                 '(jobs.storage.kit {:spare 0})
