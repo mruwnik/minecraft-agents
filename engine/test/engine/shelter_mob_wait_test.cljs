@@ -60,6 +60,29 @@
           (is (some? (failed seen)))
           (is (re-find #"sheep" (:text (failed seen)))))))))
 
+(defn mob-occupied-mob
+  "Place calls: 1 a mob refusal, 2 occupied (the clock then jumps far on), 3 a mob refusal for 3 s more, then real."
+  [clock]
+  (let [k (atom 0) until (atom nil)]
+    (fn ^:async f [token a impl]
+      (case (swap! k inc)
+        1 #js {:status "failed" :refusal #js {:entities #js [#js {:name "sheep" :id 7}]}}
+        2 (do (swap! clock + 600000) #js {:status "occupied"})
+        3 (do (reset! until (+ @clock 3000))
+              #js {:status "failed" :refusal #js {:entities #js [#js {:name "sheep" :id 7}]}})
+        (if (< @clock (or @until 0))
+          #js {:status "failed" :refusal #js {:entities #js [#js {:name "sheep" :id 7}]}}
+          (await (impl token a)))))))
+
+(deftest dig-in-mob-wait-starts-fresh-after-another-outcome
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p seen clock] :as s} (setup {:inventory [{:name "dirt" :count 12}] :blocks floor})]
+          (.override (.-world p) "place" (mob-occupied-mob clock))
+          (await (run-timed! s 'jobs.survival.dig-in))
+          (is (nil? (failed seen)) "a later mob gets the full wait, not the stale first-refusal time"))))))
+
 ;; ------------------------------------------------------------------ the retreat's seal
 
 (defn key-of [x y z] (str x "," y "," z))

@@ -96,12 +96,13 @@
         p (:primitives c)
         open (dig-cells/open-cells p (sh/feet p))
         cells (remove #(occupied? c %) open)
-        unfillable (fn [] (flight/tried! c :seal) :failed)]
+        forget! #(dig-cells/forget-wait! c :seal-mob-since)
+        unfillable (fn [] (forget!) (flight/tried! c :seal) :failed)]
     (cond
-      (empty? open) :sealed
+      (empty? open) (do (forget!) :sealed)
       (empty? cells) (unfillable)
-      (some (hostile-cells p radius) cells) :failed
-      (nil? (lb/pick c blocks)) :failed
+      (some (hostile-cells p radius) cells) (do (forget!) :failed)
+      (nil? (lb/pick c blocks)) (do (forget!) :failed)
       :else
       (do (when (off-centre? p) (await (centre! c)))
           (access/trespass! c "retreat" (some #(access/trespass-refusal (access/rules-input c) :place %) cells))
@@ -111,7 +112,7 @@
             :wait :again
             (let [left (dig-cells/open-cells p (sh/feet p))]
               (cond
-                (empty? left) :sealed
+                (empty? left) (do (forget!) :sealed)
                 (every? #(occupied? c %) left) (unfillable)
                 :else :again)))))))
 
