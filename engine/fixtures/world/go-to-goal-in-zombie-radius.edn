@@ -1,0 +1,13 @@
+;; Card e63a5a14: a go-to whose goal is 4 blocks from a stationary (NoAI, helmeted) zombie, inside the hostile-near radius 8.
+;; Pass: the go-to ends (arrives or fails with a reason) within 115 s, not an endless flee / go-to cycle. Count the cuts by
+;; hand: the :fired hostile-near events in the body's log over the run (a few cycles is fine).
+{:name "goal-inside-zombie-radius"
+ :tags [:movement :hostile]
+ :mobs :keep
+ :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+             :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+ :body {:at [4.5 0 16.5] :effects [["resistance" 900 4]]}
+ :act [[:summon "zombie" [24.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+       [:job (jobs.movement.go-to {:pos #at [20 0 16] :range 1 :escalate false})]]
+ :expect [{:event {:source :job :kind :result} :within-s 115 :of-job true}]
+ :limit-s 120}
