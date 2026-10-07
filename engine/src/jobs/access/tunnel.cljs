@@ -325,7 +325,7 @@
     (or (await (stair/lava-step! c :tunnel.sealed (:block-at in) feet [over]))
         (stair/stop-of (stair/judged-in c in) cells accept)
         (if (rules/air ((:block-at in) over))
-          :reached
+          (or (await (look/settle! c [over])) :reached)
           (or (await (stair/peek! c over)) (await (dig-cell! c in over cut accept)))))))
 
 (defn line-index

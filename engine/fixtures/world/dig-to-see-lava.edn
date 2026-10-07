@@ -41,11 +41,10 @@
    :expect [{:event {:source :job :kind :tunnel.sealed} :within-s 90 :of-job true}
             {:event {:source :job :kind :tunnel.done} :within-s 110 :of-job true}]
    :after [[:not-block [15 7 16] "lava"] [:block [15 6 16] "iron_ore"]]}
-  {:name "stair-lava-beside-a-cut-flows-in-after-the-dig-and-is-sealed-without-fire-resistance"
-   ;; the lava is a block beside the cut cell (12 9 16), unseen; it flows in a flow delay after the dig: the body waits, looks, seals
+  {:name "stair-lava-beside-a-cut-flows-in-after-the-dig-is-sealed-and-the-stair-backs-off"
+   ;; the lava is a block beside the cut cell (12 9 16), unseen; it flows in a flow delay after the dig and again after the reseal: the stair seals twice, then backs off
    :blocks [[:set [12 9 17] "lava"]]
    :body {:effects [["speed" 600 0]]}
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 3})]]
    :expect [{:event {:source :job :kind :stair.sealed} :within-s 90 :of-job true}
-            {:event {:source :job :kind :stair.done} :within-s 110 :of-job true}]
-   :after [[:not-block [12 9 16] "lava"]]}]}
+            {:event {:source :job :kind :stair.stopped :data {:reason :lava-unsealed :backed-off true}} :within-s 110 :of-job true}]}]}

@@ -4,6 +4,7 @@
   stops the job (:on-lava :stop); a seal that fails backs off. The primitives are wrapped; blockAt stays raw."
   (:require [cljs.test :refer [deftest is async]]
             [engine.registry :as registry]
+            [engine.settings :as settings]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
@@ -15,6 +16,7 @@
             [jobs.access.stair :as stair]
             [jobs.access.tunnel :as tunnel]
             [jobs.lib.access :as access]
+            [jobs.lib.dig-look :as dig-look]
             [jobs.lib.util :as u]
             [jobs.lib.world-files :as world]))
 
@@ -193,7 +195,7 @@
           (is (some #{{:x 3 :y 63 :z 0}} (places p)) "the cut cell lava flowed into is sealed")
           (is (pos? (count (events-of s :stair.sealed)))))))))
 
-(deftest stair-lava-that-keeps-flowing-in-is-sealed-once-more-then-the-stair-backs-off
+(deftest stair-lava-beside-the-line-that-keeps-flowing-in-ends-the-stair-backed-off
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -205,6 +207,23 @@
           (is (= :lava-unsealed (:reason @out)))
           (is (= 2 (count seals)) "one seal and one reseal, then no more")
           (is (true? (:backed-off @out))))))))
+
+(deftest the-flow-wait-is-30-ticks-at-the-live-game-rate
+  (let [at (fn [rate] (settings/set-clock! rate false :assumed) (dig-look/flow-delay-ms))
+        slow (at 10)
+        fast (at 20)]
+    (settings/set-clock! 20 false :assumed)
+    (is (>= slow 3000) "30 ticks at 10 TPS take 3 s")
+    (is (< fast slow))))
+
+(deftest tunnel-waits-and-seals-lava-that-flows-into-the-cell-over-the-target
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out in-lava] :as s} (await (flow-run! {:blocks (assoc trench "0,62,1" "lava") :self {:pos {:x -2 :y 61 :z 0}}}
+                                                            #{[0 62 1]} 'jobs.access.tunnel {:target [0 61 0]}))]
+          (is (false? @in-lava) "the body never stood in flowing lava")
+          (is (pos? (count (events-of s :tunnel.sealed)))))))))
 
 (deftest stair-lava-above-a-cut-is-waited-for-too
   (async done

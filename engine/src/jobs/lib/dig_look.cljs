@@ -2,6 +2,7 @@
   "Looking after a dig: a body that digs into rock sees what it laid open only by turning to it. The helpers the digging
   jobs (stair, tunnel, dig-in, retreat) share; memory keys :dug-at and :settled are the calling job's."
   (:require [engine.ctx :as ctx]
+            [engine.settings :as settings]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.util :as u]))
 
@@ -19,7 +20,10 @@
   (when (some? (.-sensedAt (:primitives c)))
     (await (ctx/act c :look (clj->js {:pos {:x (+ x 0.5) :y (+ y 0.5) :z (+ z 0.5)}})))))
 
-(def flow-delay-ms "One overworld lava flow delay (30 ticks), with a tick or two over." 2000)
+(defn flow-delay-ms
+  "One overworld lava flow delay in wall ms: 30 game ticks at the live game rate, with a few ticks over."
+  []
+  (settings/ticks->ms 34))
 
 (defn ^:async settle!
   "Before the body steps into the open cut: when a cell beside it is unseen, what is behind it shows only once it flows
@@ -30,7 +34,7 @@
         unseen (some #(unknown? (:primitives c) %) (remove open? (for [o cut d rules/neighbour-deltas] (add o d))))]
     (cond
       (not unseen) nil
-      (< (ctx/now c) (+ (:dug-at (ctx/mem c) 0) flow-delay-ms)) :continue
+      (< (ctx/now c) (+ (:dug-at (ctx/mem c) 0) (flow-delay-ms))) :continue
       (= cut (:settled (ctx/mem c))) nil
       :else (do (ctx/update-mem! c assoc :settled cut)
                 (loop [cells cut]
