@@ -1,6 +1,7 @@
 (ns jobs.gather.get-seeds
   (:require [engine.ctx :as ctx]
             [jobs.lib.access :as access]
+            [jobs.lib.blocks :as blocks]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
@@ -210,11 +211,14 @@
             judged (access/judge v (:accept (:args c)))]
         (if (not= :ok judged)
           (do (if (= :refused judged) (refuse! c pos v) (skip! c pos)) :skipped)
-          (let [status (.-status (await (ctx/act c :dig (clj->js {:pos pos}))))]
-            (cond
-              (= "dug" status) (do (ctx/update-mem! c #(-> % (update :dry (fnil inc 0)) (assoc :collecting true))) :dug)
-              (= "missing" status) :missing
-              :else (do (skip! c pos) :skipped))))))))
+          (let [outcome (await (blocks/dig-cell! c pos
+                                                 {:accept #{:fluid-adjacent :falling-block :under-feet}
+                                                  :ignore-zones? (:ignore-zones? (:args c))}))]
+            (case outcome
+              :continue :walking
+              :dug (do (ctx/update-mem! c #(-> % (update :dry (fnil inc 0)) (assoc :collecting true))) :dug)
+              :missing :missing
+              (do (skip! c pos) :skipped))))))))
 
 (defn ^:async dig-batch!
   "Dig the positions in order; {:dug n :skipped m} counts, plus :walking true when a walk waits on the world (the rest is left for the next round)."
