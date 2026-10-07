@@ -315,18 +315,17 @@
   (->> (animals-in-sight c) (filter :why) (mapv (fn [{:keys [entity why]}] {:name (.-name entity) :id (.-id entity) :why why}))))
 
 (defn nearby
-  "The mobs of any kind the entity scan lists within :hunt-radius, as {:name :kind :distance}: tells a hunt filter from an
-  empty scan when no animal qualified."
+  "The mobs of any kind the body sees or heard within :hunt-radius, as {:name :kind :distance}: tells a hunt filter from
+  an empty scan when no animal qualified."
   [c]
-  (->> (array-seq (.entities (:primitives c) #js {:radius (:hunt-radius (:args c)) :max 16}))
-       (remove #(#{"item" "player"} (.-kind %)))
-       (mapv (fn [e] {:name (.-name e) :kind (.-kind e) :distance (/ (js/Math.round (* 10 (.-distance e))) 10)}))))
+  (->> (look/seen-entities (:primitives c) {:radius (:hunt-radius (:args c)) :max 16})
+       (remove #(#{"item" "player"} (:kind %)))
+       (mapv (fn [e] {:name (:name e) :kind (:kind e) :distance (/ (js/Math.round (* 10 (:distance e))) 10)}))))
 
-(defn none-text [c]
+(defn none-text [c around]
   (let [{:keys [hunt-radius]} (:args c)
         near (nearest-known-source c)
         passed (passed-over c)
-        around (nearby c)
         wheat (carried-count c "wheat")
         reason (no-bake-reason c)]
     (str "no food: carried none" (harmful-carried-text (u/inventory (:primitives c))) ", searched for animals and ripe crops within " hunt-radius " blocks"
@@ -346,8 +345,9 @@
   "Stop :no-food with a food.none warn and write :hungry, which starts the ask cooldown."
   [c]
   (let [food (food-level c)
-        text (none-text c)]
-    (ctx/emit! c :food.none :warn {:food food :animals (passed-over c) :nearby (nearby c)
+        around (nearby c)
+        text (none-text c around)]
+    (ctx/emit! c :food.none :warn {:food food :animals (passed-over c) :nearby around
                                    :text (str text "; the hungry reflex rests for "
                                               (js/Math.round (/ (:ask-cooldown-ms (:args c)) 60000))
                                               " min unless food is carried, wheat to bake is, or a food source is learned")})
