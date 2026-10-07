@@ -268,6 +268,17 @@
           (is (= [] (:list (core/state eng))))
           (is (= [[:completed nil]] (ended seen))))))))
 
+(deftest surfaced-beside-a-grass-covered-bank-it-lands-on-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4}
+                                           :blocks (merge pool {"2,63,0" "dirt" "2,64,0" "grass_block" "2,65,0" "short_grass"})})]
+          (await (one-run! eng defaults))
+          (is (= {:x 2 :y 65 :z 0} (core/self-pos p)) "stands in the grass on the bank")
+          (is (not (.-inWater (.self p))))
+          (is (= [[:completed nil]] (ended seen))))))))
+
 (deftest surfaced-with-the-rim-two-blocks-above-the-feet-it-still-finds-the-ledge
   (async done
     (tu/run-async done
