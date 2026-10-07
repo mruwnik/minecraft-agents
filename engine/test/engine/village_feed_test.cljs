@@ -7,7 +7,8 @@
             [engine.hostile-test :as h]
             [engine.perception :as perception]
             [engine.registry :as registry]
-            [engine.test-util :as tu]))
+            [engine.test-util :as tu]
+            [jobs.village.feed :as feed]))
 
 (def job 'jobs.village.feed)
 
@@ -157,3 +158,23 @@
           (is (empty? (:list (core/state eng))))
           (is (gave? s :feed.done))
           (is (= 8 (some #(when (= "bread" (:name %)) (:count %)) (get-in @(fake/state p) [:containers [-2 64 3]])))))))))
+
+(deftest clean-up-leaves-a-drop-that-was-lying-before-the-toss
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [other {:id 50 :name "item" :kind "item" :pos {:x 1 :y 64 :z 0} :item {:name "bread" :count 1}}
+              {:keys [p out]} (await (feed {:entities [(villager 2) other] :inventory bread} {:villager "v-1" :count 2} 60
+                                           #(taking % (fn [_] nil))))
+              left (filter #(= "item" (:kind %)) (:entities @(fake/state p)))]
+          (is (= "not-taken" (:reason @out)))
+          (is (= {"bread" 5} (inv p)) "the body's own tosses came back")
+          (is (= [50] (map :id left)) "another's drop stays where it lay"))))))
+
+(deftest a-toss-cut-before-its-receipt-books-what-the-villager-took
+  (are [before now lying took] (= took (feed/took {:before before} now (mapv (fn [n] {:count n}) lying)))
+    5 3 [] 2          ; both thrown, nothing lying: taken
+    5 3 [2] 0         ; both still lying: nothing taken
+    5 3 [1] 1
+    5 5 [] 0          ; the toss never happened
+    5 2 [] 3))

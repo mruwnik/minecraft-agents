@@ -60,13 +60,13 @@
 (def toss-reach 10)
 
 (defn drops
-  "Item entities of name within radius as [{:id :pos}], nearest first; only those within toss-reach of near
+  "Item entities of name within radius as [{:id :pos :count}], nearest first; only those within toss-reach of near
   (a position) when given."
   ([p name radius] (drops p name radius nil))
   ([p name radius near]
    (->> (look/seen-items p {:radius radius :max 32})
         (filter #(= name (some-> (.-item %) .-name)))
-        (mapv (fn [e] {:id (.-id e) :pos (u/pos-of (.-pos e))}))
+        (mapv (fn [e] {:id (.-id e) :pos (u/pos-of (.-pos e)) :count (or (some-> (.-item e) .-count) 1)}))
         (filterv #(or (nil? near) (u/within? near (:pos %) toss-reach))))))
 
 (defn finish!

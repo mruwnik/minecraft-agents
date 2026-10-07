@@ -2170,6 +2170,17 @@ test('toss with watchS counts only the item tossed and gives an empty receipt wh
   assert.deepEqual(await done, { status: 'tossed', count: 1, takenBy: {} })
 })
 
+test('toss with watchS waits past the 2 s pickup delay: a pickup at 2.5 s is reported, and watchS is capped at 5', async () => {
+  const { bot, p } = rig(world, 0.01)
+  const done = p.toss('t1', { item: 'bread', count: 1, watchS: 4 })
+  setTimeout(() => bot.emit('playerCollect', { uuid: 'v1' }, { getDroppedItem: () => ({ name: 'bread', count: 1 }) }), 25)
+  assert.deepEqual(await done, { status: 'tossed', count: 1, takenBy: { v1: 1 } })
+  const late = rig(world, 0.01)
+  const t0 = Date.now()
+  await late.p.toss('t1', { item: 'bread', count: 1, watchS: 60 })
+  assert.ok(Date.now() - t0 < 500, 'watchS 60 ends at the 5 s cap (50 ms at this time scale)')
+})
+
 test('toss without watchS has no receipt', async () => {
   const { p } = rig(world)
   assert.deepEqual(await p.toss('t1', { item: 'bread', count: 1 }), { status: 'tossed', count: 1 })

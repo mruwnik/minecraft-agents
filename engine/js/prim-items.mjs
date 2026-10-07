@@ -103,8 +103,9 @@ export function createItems (env) {
   // With `slot`, throws exactly that slot's whole stack (env.bot.toss would take from whichever slot it finds first).
   // Throws carried items in the direction the body looks (it does not look anywhere itself); the stacks of the item
   // are summed, so a count may span several slots.
-  // With `watchS` (up to 1.5) it then waits that long, or until all of it is taken, and adds `takenBy`: {collector uuid
+  // With `watchS` (up to 5: a thrown item cannot be taken for 2 s) it then waits that long, or until all of it is taken, and adds `takenBy`: {collector uuid
   // count} of the tossed item picked up by anyone (a receipt of who took it).
+  const maxWatchS = 5
   const watchPickups = async (ctx, a, count, throwIt) => {
     const takenBy = {}
     const taken = () => Object.values(takenBy).reduce((sum, n) => sum + n, 0)
@@ -116,7 +117,7 @@ export function createItems (env) {
     env.bot.on('playerCollect', onCollect)
     try {
       await throwIt()
-      const deadline = Date.now() + Math.min(a.watchS, 1.5) * 1000 * timeScale
+      const deadline = Date.now() + Math.min(a.watchS, maxWatchS) * 1000 * timeScale
       while (taken() < count && Date.now() < deadline) {
         await sleepMs(Math.max(1, Math.min(20, deadline - Date.now())))
         ctx.alive()
@@ -140,7 +141,7 @@ export function createItems (env) {
       const takenBy = await watchPickups(ctx, a, count, throwIt)
       return { status: 'tossed', count, takenBy }
     }
-    return act(token, { boundS: a.watchS ? 2 + Math.min(a.watchS, 1.5) : 2 }, async ctx => {
+    return act(token, { boundS: a.watchS ? 2 + Math.min(a.watchS, maxWatchS) : 2 }, async ctx => {
       if (isNum(a.slot)) {
         const stack = env.bot.inventory.slots[a.slot]
         if (!stack || stack.name !== a.item) return { status: 'no-item', count: 0 }

@@ -21,7 +21,8 @@
   - \"not-taken\": three tosses in a row that the villager did not collect (full inventory, not wanted), or the
     toss status when the toss is refused three times, or \"litter\" when the drop cannot be collected back.
   Success is info feed.done. What was fed is booked after each toss, so a cut and restart does not feed twice; a
-  toss cut before its receipt counts as not fed and its drop is collected back.
+  toss cut before its receipt is settled on restart (what left the inventory and does not lie there counts as taken)
+  and its drop is collected back. Drops lying near before the toss are never collected.
   One call is the whole attempt; it yields :continue only while a walk or fetch child waits on the world.")
 
 (def args
@@ -37,7 +38,7 @@
 (def leg-s 5)
 (def max-refused 3)
 (def max-walks 8)
-(def watch-s 1.5)
+(def watch-s 4)
 (def foot-height 0.3)
 (def job 'jobs.village.feed)
 
@@ -122,15 +123,27 @@
           :again)))))
 
 (defn lying
-  "The drops of item near at (the toss spot), nearest first."
-  [c item at]
-  (give/drops (:primitives c) item (:radius (:args c)) at))
+  "The drops of item near at (the toss spot), nearest first, but not the ones with an id in skip (lying there before
+  the toss: not the body's)."
+  [c item at skip]
+  (remove #(contains? skip (:id %)) (give/drops (:primitives c) item (:radius (:args c)) at)))
+
+(defn held
+  "How many of item the body carries."
+  [c item]
+  (transduce (comp (filter #(= item (:name %))) (map :count)) + 0 (u/inventory (:primitives c))))
+
+(defn took
+  "What the villager took of a toss cut before its receipt: the items gone from the inventory since the intent was
+  booked (:before), less those of them still lying as the body's own drops."
+  [{:keys [before]} now own]
+  (max 0 (- (- before now) (transduce (map :count) + 0 own))))
 
 (defn ^:async clean-up!
   "Collect back the drop of the last toss that lies near its spot; each collect that gathers nothing counts through
   u/fail! (the third ends as litter). :again, or :done when it ended."
-  [c {:keys [item at]}]
-  (let [drops (lying c item at)]
+  [c {:keys [item at skip]}]
+  (let [drops (lying c item at skip)]
     (if (empty? drops)
       (do (ctx/update-mem! c dissoc :cleanup) :again)
       (let [r (await (ctx/act c :collect (clj->js {:id (:id (first drops))})))]
@@ -145,13 +158,14 @@
   drop, and a toss it took none of counts as refused."
   [c e item n r]
   (let [by (js->clj (.-takenBy r))
-        got (min n (get by (.-uuid e) 0))]
+        got (min n (get by (.-uuid e) 0))
+        {:keys [at skip]} (:tossing (ctx/mem c))]
     (ctx/update-mem! c #(-> %
                             (dissoc :tossing :walks)
                             (assoc :item item)
                             (update :fed (fnil + 0) got)
                             (assoc :refused (if (pos? got) 0 (inc (:refused % 0))))
-                            (cond-> (< got n) (assoc :cleanup {:item item :at (u/self-pos c)}))))
+                            (cond-> (< got n) (assoc :cleanup {:item item :at at :skip skip}))))
     (u/progress! c)
     :again))
 
@@ -162,7 +176,8 @@
   (let [p (:primitives c)
         n (min (- (:count (:args c)) (fed c)) (get (into {} (map (juxt :name :count)) (u/inventory p)) item 0))
         pos (u/pos-of (.-pos e))]
-    (ctx/update-mem! c assoc :tossing {:item item :at (u/self-pos c)})
+    (ctx/update-mem! c assoc :tossing {:item item :at (u/self-pos c) :before (held c item)
+                                       :skip (into #{} (map :id) (lying c item (u/self-pos c) #{}))})
     (await (ctx/act c :look (clj->js {:pos (update pos :y + foot-height)})))
     (let [r (await (ctx/act c :toss (clj->js {:item item :count n :watchS watch-s})))
           status (.-status r)]
@@ -173,6 +188,18 @@
               (finish! c {:status :stopped :reason status})
               :again))))))
 
+(defn settle!
+  "A restart found a toss without its receipt: what left the inventory and does not lie there as the body's own drop
+  was taken by the villager, so it counts as fed; the rest is cleaned up."
+  [c {:keys [item at skip] :as intent}]
+  (let [got (took intent (held c item) (lying c item at skip))]
+    (ctx/update-mem! c #(-> %
+                            (dissoc :tossing)
+                            (assoc :item item)
+                            (update :fed (fnil + 0) got)
+                            (assoc :cleanup {:item item :at at :skip skip})))
+    :again))
+
 (defn ^:async step!
   "One piece: take back a drop, end, find the villager, fetch food, walk or toss. :again, :continue or :done."
   [c]
@@ -181,7 +208,7 @@
         item (food c)
         e (when-not (or (:tossing m) (:cleanup m) (>= (fed c) count)) (find-villager (:primitives c) villager radius))]
     (cond
-      (:tossing m) (do (ctx/update-mem! c #(-> % (assoc :cleanup (:tossing %)) (dissoc :tossing))) :again)
+      (:tossing m) (settle! c (:tossing m))
       (:cleanup m) (await (clean-up! c (:cleanup m)))
       (>= (fed c) count) (done! c)
       (>= (:refused m 0) max-refused) (stop! c "not-taken" "the villager does not take the food")
