@@ -1,6 +1,6 @@
 (ns jobs.forestry.prepare
   (:require [engine.ctx :as ctx]
-            [jobs.forestry.trees :as forestry]
+            [jobs.lib.trees :as forestry]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
@@ -199,12 +199,14 @@
             (if (not= :ok v)
               (blocked! c pos v)
               (do (await (ctx/act c :equip (clj->js {:item item})))
-                  (let [r (await (ctx/act c :place (clj->js {:pos under :item item})))]
-                    (case (.-status r)
-                      "placed" (ctx/update-mem! c #(-> % (bump :soiled) (update :holes disj (maintain/cell-vec under))))
-                      ("no-item" "occupied") (count-cell-fail! c pos (keyword (.-status r)))
-                      (count-cell-fail! c pos :failed))
-                    :again))))))))
+                  (let [outcome (await (blocks/place-cell! c under item {:for-plan (:plan (:args c))
+                                                                         :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+                    (case outcome
+                      :continue :continue
+                      (:placed :already) (do (ctx/update-mem! c #(-> % (bump :soiled) (update :holes disj (maintain/cell-vec under))))
+                                             :again)
+                      (:need :no-item :occupied) (do (count-cell-fail! c pos (if (= :need outcome) :no-item outcome)) :again)
+                      (do (count-cell-fail! c pos :failed) :again))))))))))
 
 (def recede-ms "How long a flow is given to recede after its source was dammed." 10000)
 

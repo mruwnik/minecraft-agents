@@ -45,6 +45,12 @@
   plants and snow a placement overwrites."
   (into (into air fluids) #{"short_grass" "tall_grass" "fern" "large_fern" "dead_bush" "snow" "vine" "glow_lichen" "leaf_litter" "hanging_roots"}))
 
+(defn no-collision?
+  "True when the placed block item has no collision, so the body may stand in the cell: seeds, saplings, carpets,
+  torches, flowers and crops."
+  [item]
+  (boolean (and item (re-find #"(_seeds|_sapling|_carpet|torch|_tulip|_orchid|_bush|^(wheat|carrot|potato|beetroot|dandelion|poppy|cornflower|azure_bluet|oxeye_daisy|lily_of_the_valley|allium)$)" item))))
+
 (def not-a-floor
   "Non-fluid, non-replaceable names that are no floor to stand on after the block above is gone."
   #{"magma_block" "powder_snow" "cobweb" "fire" "soul_fire" "cactus" "sweet_berry_bush"})

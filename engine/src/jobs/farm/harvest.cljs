@@ -344,11 +344,12 @@
   [c {:keys [pos seed]}]
   (if-not (seq (permitted c :sow [pos]))
     (ctx/update-mem! c bare-debt pos)
-    (let [r (await (ctx/act c :place (clj->js {:pos pos :item seed})))]
-      (case (.-status r)
-        ("placed" "occupied") (ctx/update-mem! c (fn [m] (-> (drop-debt m pos)
-                                                              (inc-in :replanted)
-                                                              (update :planted (fn [cells] (vec (distinct (conj (vec cells) pos))))))))
+    (let [outcome (await (blocks/place-cell! c pos seed {:ignore-zones? true}))]
+      (case outcome
+        :continue :continue
+        (:placed :already :occupied) (ctx/update-mem! c (fn [m] (-> (drop-debt m pos)
+                                                                    (inc-in :replanted)
+                                                                    (update :planted (fn [cells] (vec (distinct (conj (vec cells) pos))))))))
         (ctx/update-mem! c fail-debt pos)))))
 
 (def max-per-round
@@ -375,8 +376,9 @@
           (loop [todo (take max-per-round targets)]
             (if (empty? todo)
               :again
-              (do (await (plant-one! c (first todo)))
-                  (recur (rest todo))))))))))
+              (if (= :continue (await (plant-one! c (first todo))))
+                :continue
+                (recur (rest todo))))))))))
 
 (defn ^:async cut-cell!
   "Write the debt of the crop at pos, dig it (a blocks.dig child; the zone verdict is the job's own) and settle by the outcome."

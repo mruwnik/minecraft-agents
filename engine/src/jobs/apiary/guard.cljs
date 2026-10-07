@@ -144,11 +144,13 @@
   (if-not (permitted? c :place (update pos :y inc))
     (skip! c pos :refused)
     (do (ctx/update-mem! c assoc :carpeting pos)
-        (let [r (await (ctx/act c :place (clj->js {:pos (update pos :y inc) :item item})))]
-          (ctx/update-mem! c dissoc :carpeting)
-          (if (= "placed" (.-status r))
-            (booked! c :carpeted)
-            (skip! c pos (keyword (.-status r))))))))
+        (let [outcome (await (blocks/place-cell! c (update pos :y inc) item {:ignore-zones? true}))]
+          (when-not (= :continue outcome)
+            (ctx/update-mem! c dissoc :carpeting))
+          (case outcome
+            :continue :continue
+            :placed (booked! c :carpeted)
+            (skip! c pos outcome))))))
 
 (defn settle-carpet!
   "A cut left a carpet placing unbooked: book it when the carpet stands."
@@ -249,7 +251,7 @@
         (do (skip! c pos :on-fire) :again)
         (if (= :sink action)
           (await (start-sink! c pos kind))
-          (do (await (carpet! c pos item)) :again))))))
+          (if (= :continue (await (carpet! c pos item))) :continue :again))))))
 
 (defn ^:async resume-sink!
   "A cut left a sink half done: walk back and run its steps again."

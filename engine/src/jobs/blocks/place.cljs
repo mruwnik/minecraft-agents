@@ -1,5 +1,6 @@
 (ns jobs.blocks.place
   (:require [engine.ctx :as ctx]
+            [jobs.lib.access.rules :as rules]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
             [jobs.lib.fetch :as fetch]
@@ -15,7 +16,7 @@
   - {:reason :need :item name :pos} or {:reason :need :any-of [names] :pos}: the item is not carried.
   - {:reason :not-allowed :pos :by :zone|:claim|:footprint|:no-zones ...}: zones, claims or another plan's
     footprint refuse the place. :for-plan's own footprint does not. :ignore-zones? skips the rule.
-  - {:reason :own-body :pos}: the body stands in the cell.
+  - {:reason :own-body :pos}: the body stands in the cell (not for seeds, carpets and the like: no collision).
   - {:reason :no-support :pos}: no solid neighbour to place against.
   - {:reason :unreachable :pos :why kw}: the go-to child gave up. The wait lasts while the body stands where it
     gave up.
@@ -73,9 +74,10 @@
          {:pos pos :collect false :need-drop false :accept #{:fluid-adjacent :falling-block}}))
 
 (defn place-verdict
-  "The rules' place verdict for pos, a plant there counted as gone (it is dug first)."
-  [c pos]
-  (let [in (b/rules-in c)
+  "The rules' place verdict for pos, a plant there counted as gone (it is dug first). A block without collision
+  (seeds, carpet, a sapling: rules/no-collision?) may go where the body stands."
+  [c pos items]
+  (let [in (cond-> (b/rules-in c) (every? rules/no-collision? items) (assoc :feet nil))
         at (b/cell pos)
         block-at (:block-at in)]
     (access/may? (assoc in :block-at (fn [cell] (let [n (block-at cell)] (if (and (= cell at) (b/clearable n)) "air" n))))
@@ -85,7 +87,7 @@
   "The name of the block that fills pos and cannot be replaced (not the item wanted), or nil."
   [c pos items]
   (let [block (u/block-name (:primitives c) pos)
-        v (when block (place-verdict c pos))]
+        v (when block (place-verdict c pos items))]
     (when (and block (not (some #{block} items)) (= :not-replaceable (:reason v))) block)))
 
 (defn problem
@@ -96,7 +98,7 @@
     (when-not error
       (let [p (:primitives c)
             block (u/block-name p pos)
-            v (when block (place-verdict c pos))]
+            v (when block (place-verdict c pos items))]
         (cond
           (nil? block) {:reason :not-loaded :pos pos}
           (some #{block} items) nil

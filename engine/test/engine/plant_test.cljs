@@ -368,3 +368,12 @@
             (is (= :gave-up (:reason result)))
             (is (= 2 (count (:skipped result))))
             (is (= 6 (count (calls p "place"))))))))))
+
+(deftest every-seed-goes-through-the-place-job
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (start (field-world (inv "wheat_seeds" 9)))]
+          (await (child-outcome eng job {:box field-box} 100))
+          (is (= (count (calls p "place")) (count (events-of seen :blocks.place.done))))
+          (is (= 9 (count (events-of seen :blocks.place.done)))))))))

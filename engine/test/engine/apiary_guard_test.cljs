@@ -359,3 +359,11 @@
     (with-stub-mem m #(do (guard/settle-carpet! c) (guard/settle-carpet! c)))
     (is (nil? (:carpeting @m)))
     (is (= 1 (:carpeted @m)) "a second settle finds no intent and books nothing more")))
+
+(deftest the-carpet-goes-through-the-place-job
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup (fire-world {:inventory (inv "white_carpet" 1)}))]
+          (await (child-outcome eng job {} 60))
+          (is (= 1 (count (kinds seen :blocks.place.done)))))))))

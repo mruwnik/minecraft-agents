@@ -197,3 +197,12 @@
               r (await (bd/waiting-after env (list job {:pos [12 64 0] :item "cobblestone"}) 2))]
           (is (= :no-support (:reason r)))
           (is (empty? (bd/calls (:p env) "place")) "walked, then refused: nothing placed"))))))
+
+(deftest a-seed-is-placed-in-the-bodys-own-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (bd/setup {:self body :blocks {"0,63,0" "farmland"} :inventory [{:name "wheat_seeds" :count 2}]})
+              result (await (bd/child-outcome eng job {:pos [0 64 0] :item "wheat_seeds"} 5))]
+          (is (= {:placed true :item "wheat_seeds"} (select-keys result [:placed :item])))
+          (is (= "wheat" (bd/block-at p {:x 0 :y 64 :z 0}))))))))

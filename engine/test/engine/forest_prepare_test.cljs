@@ -170,6 +170,13 @@
             (is (= "dirt" (h/block-at p 3 63 0)) under)
             (is (= (expect {:soiled 1 :planted 1}) result) under)))))))
 
+(deftest the-soil-goes-through-the-place-job
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [seen]} (await (outcome (world {"3,63,0" "stone"} (item "dirt" 1) (item "oak_sapling" 1) (item "stone_pickaxe" 1)) {"forest" one-cell}))]
+          (is (= 1 (count (filter #(and (= :blocks.place.done (:kind %)) (= "dirt" (:item %))) (h/events-of seen :blocks.place.done))))))))))
+
 (deftest without-dirt-the-cell-is-left-and-reported-as-no-soil
   (async done
     (tu/run-async done

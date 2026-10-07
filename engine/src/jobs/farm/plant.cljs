@@ -2,6 +2,7 @@
   (:require [clojure.string :as str]
             [jobs.farm.permit :as permit]
             [engine.ctx :as ctx]
+            [jobs.lib.blocks :as blocks]
             [jobs.lib.crops :as crops]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.gate :as gate]
@@ -212,9 +213,10 @@
   "Place the seed of debt at its cell after asking the rules once more; a failure is counted against the cell."
   [c {:keys [pos seed]}]
   (when (permit/ok? c (:plan (:args c)) :sow pos)
-    (let [r (await (ctx/act c :place (clj->js {:pos pos :item seed})))]
-      (case (.-status r)
-        ("placed" "occupied") (ctx/update-mem! c crops/inc-in :planted)
+    (let [outcome (await (blocks/place-cell! c pos seed {:ignore-zones? true}))]
+      (case outcome
+        :continue :continue
+        (:placed :already :occupied) (ctx/update-mem! c crops/inc-in :planted)
         (ctx/update-mem! c count-fail :fails pos)))))
 
 (defn finish-plan!
@@ -247,10 +249,11 @@
           :partial :continue
           :no-path (do (ctx/update-mem! c count-fail :walk-fails (:pos target)) :again)
           :blocked (do (ctx/update-mem! c count-fail :walk-fails (:pos target)) :again)
-          (do (loop [todo (if (seq near) near [target])]
+          (or (loop [todo (if (seq near) near [target])]
                 (when (seq todo)
-                  (await (plan-place! c (first todo)))
-                  (recur (rest todo))))
+                  (if (= :continue (await (plan-place! c (first todo))))
+                    :continue
+                    (recur (rest todo)))))
               :again))))))
 
 ;; ------------------------------------------------------------------ steps
@@ -274,10 +277,11 @@
   "Place seed on cell and settle by the status: :no-seed when the seed is gone, else nil."
   [c cell seed]
   (when (seq (sowable-cells c [cell]))
-    (let [r (await (ctx/act c :place (clj->js {:pos (update cell :y inc) :item seed})))]
-      (case (.-status r)
-        ("placed" "occupied") (do (ctx/update-mem! c crops/inc-in :planted) nil)
-        "no-item" :no-seed
+    (let [outcome (await (blocks/place-cell! c (update cell :y inc) seed {:ignore-zones? true}))]
+      (case outcome
+        :continue :continue
+        (:placed :already :occupied) (do (ctx/update-mem! c crops/inc-in :planted) nil)
+        (:need :no-item) :no-seed
         (do (ctx/update-mem! c count-fail :fails cell) nil)))))
 
 (defn ^:async plant-all!
@@ -313,8 +317,9 @@
           :partial :continue
           :no-path (do (ctx/update-mem! c count-fail :walk-fails target) :again)
           :blocked (do (ctx/update-mem! c count-fail :walk-fails target) :again)
-          (if (= :no-seed (await (plant-all! c (vec (take (max 1 (get (sowable inventory) seed 0)) (if (seq near) near [target]))) seed)))
-            (finish! c :no-seed)
+          (case (await (plant-all! c (vec (take (max 1 (get (sowable inventory) seed 0)) (if (seq near) near [target]))) seed))
+            :no-seed (finish! c :no-seed)
+            :continue :continue
             :again))))))
 
 (defn ^:async step [c]

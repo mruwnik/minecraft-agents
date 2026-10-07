@@ -440,7 +440,7 @@
           (.override (.-world p) "place" (fn ^:async f [_ _ _] #js {:status "unreachable"}))
           (let [result (await (child-outcome eng job {} 100))]
             (is (= [{:x 3 :y 64 :z 0}] (:bare result)))
-            (is (= 3 (count (place-calls-at p 3))))))))))
+            (is (= 1 (count (place-calls-at p 3))) "blocks.place remembers the unreachable cell while the body stays")))))))
 
 (deftest one-call-cuts-and-replants-every-crop-in-reach
   (async done
@@ -451,3 +451,11 @@
               result (await (child-outcome eng job {} 1))]
           (is (= 15 (count (calls p "dig"))) "15 ripe crops in reach: one call cuts them all, in steps of at most max-per-round")
           (is (= {:cut 15 :replanted 15 :bare [] :lost [] :gave-up false} result)))))))
+(deftest every-replant-goes-through-the-place-job
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (start {:world wheat-world})]
+          (await (child-outcome eng job {} 200))
+          (is (= (count (calls p "place")) (count (events-of seen :blocks.place.done))))
+          (is (= 9 (count (events-of seen :blocks.place.done)))))))))
