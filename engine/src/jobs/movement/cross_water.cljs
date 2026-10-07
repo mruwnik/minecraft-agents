@@ -1,5 +1,6 @@
 (ns jobs.movement.cross-water
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.blocks :as b]
             [jobs.lib.look :as look]
             [jobs.lib.result :as result]
@@ -23,13 +24,13 @@
 
   Never :continue except when a child waits on the world.")
 
-(def args
-  {:pos {:doc "the far-shore land cell to step onto, [x y z] or {:x :y :z}; nil: choose one (see :goal)" :type :pos :default nil}
-   :goal {:doc "with no :pos: pick the seen far shore nearest this cell; nil: the farthest" :type :pos :default nil}
-   :radius {:doc "how far from the body to look for the far shore" :type :number :min 1 :default 24}
-   :min-cross {:doc "an auto-chosen far shore is at least this many blocks from the start" :type :number :min 1 :default 6}
-   :item {:doc "the boat item to launch; nil: the first carried boat or raft, else one is fetched" :default nil}
-   :recover {:doc "take the boat back after landing" :default true}})
+(a/defargs args
+  {:pos {:doc "the far-shore land cell to step onto, [x y z] or {:x :y :z}; nil: choose one (see :goal)" :spec ::a/pos :default nil}
+   :goal {:doc "with no :pos: pick the seen far shore nearest this cell; nil: the farthest" :spec ::a/pos :default nil}
+   :radius {:doc "how far from the body to look for the far shore" :spec (a/num-in 1 nil) :default 24}
+   :min-cross {:doc "an auto-chosen far shore is at least this many blocks from the start" :spec (a/num-in 1 nil) :default 6}
+   :item {:doc "the boat item to launch; nil: the first carried boat or raft, else one is fetched" :spec a/item? :default nil}
+   :recover {:doc "take the boat back after landing" :spec boolean? :default true}})
 
 (def crossing-kind :cross-water)
 (def crossing-policy {:cap 4 :ttl (* 10 60 1000)})

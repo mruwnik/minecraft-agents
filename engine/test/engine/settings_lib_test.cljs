@@ -1,6 +1,7 @@
 (ns engine.settings-lib-test
   "The jobs.lib tuning values are settings: each reads its override at use, and its default is the old constant."
   (:require [cljs.test :refer [deftest is are]]
+            [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.cost.value :as value]
             [jobs.lib.dig-look :as dig-look]
@@ -60,5 +61,5 @@
       (is (= 5000 (:ttl (watch/turn-policy)))))))
 
 (deftest per-block-must-stay-positive
-  (is (some? (settings/spec-problem (:jobs.lib.cost.value/per-block value/settings) 0)) "dark-factor divides by it")
-  (is (nil? (settings/spec-problem (:jobs.lib.cost.value/per-block value/settings) 0.3))))
+  (is (some? (a/problem :jobs.lib.cost.value/per-block 0)) "dark-factor divides by it")
+  (is (nil? (a/problem :jobs.lib.cost.value/per-block 0.3))))

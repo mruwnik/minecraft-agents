@@ -1,6 +1,7 @@
 (ns engine.path-preview-test
   "jobs.movement.path-preview against the fake world: plans like go-to, walks nowhere."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [deftest is are async]]
+            [engine.expr :as expr]
             [engine.registry :as registry]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -94,14 +95,12 @@
           (is (= 1 (count (:waypoints cheap))))
           (is (> (count (:waypoints dear)) 1)))))))
 
-(deftest a-bad-drop-cost-is-refused
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [out]} (await (preview (floor 0 0 3 2) {:pos [2 64 1] :drop-cost -1}))]
-          (is (= :stopped (:status out)))
-          (is (false? (:found out)))
-          (is (= :bad-drop-cost (:reason out))))))))
+(deftest bad-shaped-args-are-refused-at-submit
+  (are [args re] (re-find re (expr/problem registry/jobs (list 'jobs.movement.path-preview args)))
+    {:pos [2 64 1] :drop-cost -1} #":drop-cost must be a number >= 0 or false, got -1"
+    {:pos [5 64 1] :tolls [{:x 1}]} #":tolls must be a list of \{:x :y :z :factor\}"
+    {:pos [20 64 1] :costs {:swim-h 0.1}} #":costs must be a map of planner price name"
+    {:pos [20 64 1] :costs {:exit 0}} #":costs must be a map of planner price name"))
 
 (deftest every-refusal-carries-found-false-and-the-reason
   (async done
@@ -109,11 +108,10 @@
       (fn ^:async t []
         (let [world (floor 0 0 11 2)
               refused (fn ^:async refused [args opts] (:out (await (preview world args opts))))
-              tolls (await (refused {:pos [5 64 1] :tolls [{:x 1}]} nil))
               pos (await (refused {:pos [1 -9999 1]} nil))
               place (await (refused {:place :mine} nil))
               sensing (await (refused {:pos [5 64 1]} {:no-path-world true}))]
-          (doseq [[out reason] [[tolls :bad-tolls] [pos :bad-pos] [place :unknown-place] [sensing :unsupported]]]
+          (doseq [[out reason] [[pos :bad-pos] [place :unknown-place] [sensing :unsupported]]]
             (is (= :stopped (:status out)) (str reason))
             (is (false? (:found out)) (str reason))
             (is (= reason (:reason out)))
@@ -181,16 +179,7 @@
           (is (re-find #"swims" (:summary cheap)) "cheap water: straight across")
           (is (< (:seconds cheap) (:seconds default))))))))
 
-(deftest a-swim-price-under-the-walk-floor-is-refused
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (doseq [costs [{:swim-h 0.1} {:exit 0}]]
-          (let [{:keys [out]} (await (preview (pond) {:pos [20 64 1] :range 0 :costs costs}))]
-            (is (= :bad-costs (:reason out)) (pr-str costs))
-            (is (false? (:found out)))))))))
-
 (deftest args-list-the-landing-options
   (is (contains? pp/args :landing))
   (is (re-find #":landing" pp/doc))
-  (is (re-find #":bad-landing" pp/doc)))
+  (is (re-find #"refused at submit" pp/doc)))

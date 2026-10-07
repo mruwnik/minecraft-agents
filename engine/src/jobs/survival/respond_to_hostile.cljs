@@ -1,5 +1,6 @@
 (ns jobs.survival.respond-to-hostile
-  (:require [jobs.lib.blocks :as lb]
+  (:require [engine.args :as a]
+            [jobs.lib.blocks :as lb]
             [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
@@ -29,12 +30,12 @@
   Memory: writes one :hostile entry {:mob :decision} plus :pos (seen) or :direction :band :from (heard only) per encounter.
   A danger reflex: never backed off.")
 
-(def args
-  {:radius {:doc "hostiles within this many blocks count" :default 8}
-   :ranged-radius {:doc "ranged hostiles (skeletons and the like) within this many blocks count" :default 16}
-   :reserve {:doc "health a fight must be expected to leave" :default 4}
-   :quiet-s {:doc "passed to the retreat: a hidden body keeps its refuge this many seconds after the last danger" :default 30}
-   :weapons {:doc "item name substrings that count as weapons" :default combat/default-weapons}})
+(a/defargs args
+  {:radius {:doc "hostiles within this many blocks count" :spec (a/num-in 0 nil) :default 8}
+   :ranged-radius {:doc "ranged hostiles (skeletons and the like) within this many blocks count" :spec (a/num-in 0 nil) :default 16}
+   :reserve {:doc "health a fight must be expected to leave" :spec (a/num-in 0 20) :default 4}
+   :quiet-s {:doc "passed to the retreat: a hidden body keeps its refuge this many seconds after the last danger" :spec (a/num-in 0 nil) :default 30}
+   :weapons {:doc "item name substrings that count as weapons" :spec (a/coll-of (a/or-of string? keyword?)) :default combat/default-weapons}})
 
 (def hostile-policy {:cap 50 :ttl (* 60 60 1000)})
 

@@ -1,5 +1,6 @@
 (ns jobs.debug.access-check
-  (:require [jobs.lib.access.rules :as rules]
+  (:require [engine.args :as a]
+            [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
             [jobs.lib.util :as u]))
 
@@ -14,17 +15,17 @@
   ok dig verdict may carry :hazards. One :access-check.result event gives the counts of ok and refused digs and
   places. Bad arguments end with {:status :bad-args :reason text}.")
 
-(def args
-  {:cells {:doc "cells [[x y z] ...] to check" :default nil}
-   :from {:doc "box corner [x y z] (inclusive), with :to, instead of :cells" :default nil}
-   :to {:doc "opposite box corner [x y z]; at most 400 cells in all" :default nil}
-   :zones {:doc "zone boxes [{:name :min [x y z] :max [x y z] :allow #{:dig :place}}], nil = no zone list loaded" :default []}
-   :footprints {:doc "cells [[x y z] ...] other plans claim" :default []}
-   :ledger {:doc "cells [[x y z] ...] holding this body's own scaffold blocks" :default []}
-   :claims {:doc "area claims [{:id :owner :status :active :until ms :min :max}] to judge against" :default []}
-   :self {:doc "the name zones and claims are judged for; nil: this body's name" :default nil}
-   :now {:doc "the clock in ms for the claims; nil: the body's clock" :default nil}
-   :ignore-zones? {:doc "judge as a job that acts regardless of zones and claims; the rules of the game allow it" :default false}})
+(a/defargs args
+  {:cells {:doc "cells [[x y z] ...] to check" :spec (a/coll-of a/position?) :default nil}
+   :from {:doc "box corner [x y z] (inclusive), with :to, instead of :cells" :spec a/position? :default nil}
+   :to {:doc "opposite box corner [x y z]; at most 400 cells in all" :spec a/position? :default nil}
+   :zones {:doc "zone boxes [{:name :min [x y z] :max [x y z] :allow #{:dig :place}}], nil = no zone list loaded" :spec (a/coll-of map?) :default []}
+   :footprints {:doc "cells [[x y z] ...] other plans claim" :spec (a/coll-of a/position?) :default []}
+   :ledger {:doc "cells [[x y z] ...] holding this body's own scaffold blocks" :spec (a/coll-of a/position?) :default []}
+   :claims {:doc "area claims [{:id :owner :status :active :until ms :min :max}] to judge against" :spec (a/coll-of map?) :default []}
+   :self {:doc "the name zones and claims are judged for; nil: this body's name" :spec a/name? :default nil}
+   :now {:doc "the clock in ms for the claims; nil: the body's clock" :spec (a/num-in 0 nil) :default nil}
+   :ignore-zones? {:doc "judge as a job that acts regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (def max-cells 400)
 

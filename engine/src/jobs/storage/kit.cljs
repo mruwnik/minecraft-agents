@@ -1,5 +1,5 @@
 (ns jobs.storage.kit
-  (:require [jobs.lib.args :as jargs]
+  (:require [engine.args :as a]
             [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.cost.weapon :as weapon]
@@ -38,15 +38,15 @@
   :missing.
   Every inspect books what the chest holds in body memory :fetch/stock (jobs.lib.fetch).")
 
-(def args
-  {:tools {:doc "tool kinds to carry, e.g. [\"hoe\" \"pickaxe\"]" :default ["hoe"]}
-   :spare {:doc "extra of each tool kind beyond the one in use" :type :int :min 0 :default 1}
-   :food {:doc "how many food items to carry; enough to hold the body's food reserve (jobs.lib.cost/food-reserve) when nil" :type :int :min 0 :default nil}
-   :chest {:doc "chest position; the known :chest place when nil" :type :pos :default nil}
-   :craft {:doc "craft what the chest cannot supply" :type :bool :default true}
-   :craft-tiers {:doc "tool tiers to craft, in order; iron or diamond only when listed" :default ["stone" "wooden"]}
-   :radius {:doc "how far to look for a crafting table" :type :number :min 0 :default 32}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :type :bool :default false}})
+(a/defargs args
+  {:tools {:doc "tool kinds to carry, e.g. [\"hoe\" \"pickaxe\"]" :spec (a/coll-of (a/or-of string? keyword?)) :default ["hoe"]}
+   :spare {:doc "extra of each tool kind beyond the one in use" :spec (a/int-in 0 nil) :default 1}
+   :food {:doc "how many food items to carry; enough to hold the body's food reserve (jobs.lib.cost/food-reserve) when nil" :spec (a/int-in 0 nil) :default nil}
+   :chest {:doc "chest position; the known :chest place when nil" :spec ::a/pos :default nil}
+   :craft {:doc "craft what the chest cannot supply" :spec boolean? :default true}
+   :craft-tiers {:doc "tool tiers to craft, in order; iron or diamond only when listed" :spec (a/coll-of (a/or-of string? keyword?)) :default ["stone" "wooden"]}
+   :radius {:doc "how far to look for a crafting table" :spec (a/num-in 0 nil) :default 32}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (defn kind-of?
   "Does item name belong to tool kind: equal to it or ending in _kind."
@@ -124,7 +124,7 @@
      {:take {} :short {}}
      needs)))
 
-(defn check-run
+(defn check
   "A chest is known. A complete kit is not a false check: the job must stay
   admitted to report {:short {}} (a parent reads it), and its first round
   then ends at once without walking or inspecting."
@@ -402,12 +402,3 @@
   "The whole kit in one call: step! again until it is done or stopped."
   [c]
   (await (pace/steps! c (fn ^:async kit-step [] (await (step! c))))))
-
-(def bad-lists
-  "Args checked by jobs.lib.args."
-  {:tools :names :craft-tiers :names})
-
-(defn check
-  "check-run once the list args are well formed, else declines :bad-args."
-  [c]
-  (jargs/guard c bad-lists check-run))

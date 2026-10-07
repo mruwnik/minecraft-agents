@@ -1,5 +1,6 @@
 (ns jobs.blocks.use-on
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.blocks :as b]))
 
 (def doc
@@ -13,10 +14,10 @@
   Anything else, or a walk that failed twice (:unreachable), is {:status :stopped}. A bad :pos or :face
   is :bad-args with a blocks.use-on.declined warn.")
 
-(def args
-  {:pos {:doc "the block to click, [x y z] or {:x :y :z}" :type :pos :default nil}
-   :item {:doc "the item to hold for the click; nil: the empty hand" :default nil}
-   :face {:doc "the face clicked: up down north south east west" :default "up"}})
+(a/defargs args
+  {:pos {:doc "the block to click, [x y z] or {:x :y :z}" :spec ::a/pos :default nil}
+   :item {:doc "the item to hold for the click; nil: the empty hand" :spec a/item? :default nil}
+   :face {:doc "the face clicked: up down north south east west" :spec #{"up" "down" "north" "south" "east" "west"} :default "up"}})
 
 (def faces #{"up" "down" "north" "south" "east" "west"})
 (def max-walks "Failed walks of one call before it stops :unreachable." 2)

@@ -1,5 +1,6 @@
 (ns jobs.survival.log-out
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.shelter :as sh]))
 
 (def doc
@@ -10,10 +11,10 @@
   Ends with the result {:status :ms}. Status is ok, cut, unsupported or closed.
   Memory: writes :log-out {:ms :status} (cap 10, one in-game day).")
 
-(def args
-  {:offline-allowed {:doc "false forbids logging out" :default true}
-   :offline-ms {:doc "how long to stay away at most; the stint ends at morning" :default 30000}
-   :news-ms {:doc "back at night, how long to wait for the sleep count" :default 3000}})
+(a/defargs args
+  {:offline-allowed {:doc "false forbids logging out" :spec boolean? :default true}
+   :offline-ms {:doc "how long to stay away at most; the stint ends at morning" :spec (a/num-in 0 nil) :default 30000}
+   :news-ms {:doc "back at night, how long to wait for the sleep count" :spec (a/num-in 0 nil) :default 3000}})
 
 (def log-out-policy {:cap 10 :ttl sh/ms-per-day})
 

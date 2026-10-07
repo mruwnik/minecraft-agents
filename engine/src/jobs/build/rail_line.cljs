@@ -1,5 +1,6 @@
 (ns jobs.build.rail-line
-  (:require [clojure.string :as str]
+  (:require [engine.args :as a]
+            [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.declined :as declined]
             [jobs.lib.pace :as pace]
@@ -43,15 +44,15 @@
   the warn's :up-to {item n} counts the unseen cells too. With :all-carried false it builds what is carried.
   Once begun the check stays true. A restart resumes in the phase it was in: the world is the memory.")
 
-(def args
-  {:plan {:doc "id of a plan of the body's world" :default nil}
-   :part {:doc "only the cells of this part" :default nil}
-   :reach {:doc "as jobs.build.from-plan" :default u/eye-reach}
-   :give-up {:doc "as jobs.build.from-plan" :default 3}
-   :accept {:doc "as jobs.build.from-plan" :default [:fluid-adjacent]}
-   :all-carried {:doc "start only while every item still to place is carried (false: build what is carried)" :default true}
-   :fix {:doc "times a rail whose settled shape is wrong is dug and placed again, then given up as :shape (0 or false: given up at once)" :default 1}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
+(a/defargs args
+  {:plan {:doc "id of a plan of the body's world" :spec a/name? :default nil}
+   :part {:doc "only the cells of this part" :spec a/name? :default nil}
+   :reach {:doc "as jobs.build.from-plan" :spec (a/num-in 0 nil) :default u/eye-reach}
+   :give-up {:doc "as jobs.build.from-plan" :spec (a/int-in 1 nil) :default 3}
+   :accept {:doc "as jobs.build.from-plan" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block :under-feet}) :default [:fluid-adjacent]}
+   :all-carried {:doc "start only while every item still to place is carried (false: build what is carried)" :spec boolean? :default true}
+   :fix {:doc "times a rail whose settled shape is wrong is dug and placed again, then given up as :shape (0 or false: given up at once)" :spec (a/or-of (a/int-in 0 nil) false?) :default 1}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 ;; ------------------------------------------------------------------ the plan
 

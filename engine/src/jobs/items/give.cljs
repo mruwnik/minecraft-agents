@@ -1,5 +1,6 @@
 (ns jobs.items.give
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.util :as u]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
@@ -26,13 +27,13 @@
   A cut after the toss leaves the drop where it lies.
   One call is the whole give; it yields :continue only while it waits for the player to appear or to take the drop.")
 
-(def args
-  {:player {:default nil}
-   :item {:default nil}
-   :count {:doc "how many; nil gives everything carried" :default nil}
-   :reach {:doc "toss from within this many blocks" :default 2}
-   :radius {:default 32}
-   :wait-s {:doc "how long a drop may lie before it is taken back" :default 6}})
+(a/defargs args
+  {:player {:spec a/name? :default nil}
+   :item {:spec a/item? :default nil}
+   :count {:doc "how many; nil gives everything carried" :spec (a/int-in 1 nil) :default nil}
+   :reach {:doc "toss from within this many blocks" :spec (a/num-in 0 nil) :default 2}
+   :radius {:spec (a/num-in 0 nil) :default 32}
+   :wait-s {:doc "how long a drop may lie before it is taken back" :spec (a/num-in 0 nil) :default 6}})
 
 (def grace-ms 2000)
 (def idle-ms 500)

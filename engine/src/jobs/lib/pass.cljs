@@ -18,7 +18,8 @@
   (shut-leftovers!), or the door-left trigger (triggers.maintenance.door-left) does, with jobs.maintenance.shut-doors.
   A block that stays open (an animal stands in its cell, so the walker waits and tries again but never pushes; or the
   click did nothing) keeps its entry and gets one :door-left-open warn."
-  (:require [engine.settings :as settings]
+  (:require [engine.args :as a]
+            [engine.settings :as settings]
             [jobs.lib.click :as click]
             [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
@@ -28,12 +29,12 @@
             [jobs.lib.walk :as walk]
             [jobs.lib.walk.world :as wworld]))
 
-(def settings
-  {::shut-waits {:default 4 :doc "Tries to shut a block with an animal in its cell, after the first." :type :int :min 0}
-   ::shut-wait-ms {:default 500 :doc "Wait between those tries, in ms." :type :int :min 0}
-   ::leftover-reach {:default 4 :doc "A leftover :opened entry is shut when the body is this near." :type :int :min 0}
-   ::await-polls {:default 6 :doc "Reads of a door a button or plate was to open." :type :int :min 1}
-   ::await-poll-ms {:default 100 :doc "Wait between those reads, in ms." :type :int :min 0}})
+(a/defargs settings
+  {::shut-waits {:default 4 :doc "Tries to shut a block with an animal in its cell, after the first." :spec (a/int-in 0 nil)}
+   ::shut-wait-ms {:default 500 :doc "Wait between those tries, in ms." :spec (a/int-in 0 nil)}
+   ::leftover-reach {:default 4 :doc "A leftover :opened entry is shut when the body is this near." :spec (a/int-in 0 nil)}
+   ::await-polls {:default 6 :doc "Reads of a door a button or plate was to open." :spec (a/int-in 1 nil)}
+   ::await-poll-ms {:default 100 :doc "Wait between those reads, in ms." :spec (a/int-in 0 nil)}})
 
 (def opened-policy {:cap 50 :ttl :forever})
 

@@ -35,8 +35,6 @@
   [p mob radius]
   (vec (array-seq (.entities p #js {:radius radius :names #js [mob] :max 64}))))
 
-(def ignore-zones-arg
-  {:doc "act regardless of zones and claims; the rules of the game allow it" :default false})
 
 (defn allowed
   "The animals of es (JS entities) the zone rules let the job act on with action (:harvest :take), judged at the cell

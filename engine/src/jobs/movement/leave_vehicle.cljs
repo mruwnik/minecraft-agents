@@ -1,5 +1,6 @@
 (ns jobs.movement.leave-vehicle
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.result :as result]
             [jobs.lib.util :as u]
             [jobs.lib.vehicle :as vehicle]))
@@ -13,11 +14,11 @@
   A failed dismount is retried in the same run, the wait doubling from :wait-ms up to 1 s. After :max-tries it warns vehicle.dismount_failed {:tries :status}
   and ends stopped :dismount-failed, with the body still aboard. Never :continue. The :mounted trigger runs it (cooldown persistence: a body still aboard is tried again 30 s later).")
 
-(def args
-  {:toward {:doc "a position {:x :y :z} to face when getting off (its cell's centre); nil picks a dry cell" :type :pos :default nil}
-   :max-tries {:doc "dismounts tried before giving up" :default 8}
-   :wait-ms {:doc "the wait after the first failed dismount; it doubles per try, at most 1000" :default 50}
-   :radius {:doc "dry cells this many blocks (horizontally) from the vehicle are faced" :default 2}})
+(a/defargs args
+  {:toward {:doc "a position {:x :y :z} to face when getting off (its cell's centre); nil picks a dry cell" :spec ::a/pos :default nil}
+   :max-tries {:doc "dismounts tried before giving up" :spec (a/int-in 1 nil) :default 8}
+   :wait-ms {:doc "the wait after the first failed dismount; it doubles per try, at most 1000" :spec (a/num-in 0 nil) :default 50}
+   :radius {:doc "dry cells this many blocks (horizontally) from the vehicle are faced" :spec (a/num-in 0 nil) :default 2}})
 
 (defn check [c]
   (or (boolean (vehicle/mounted? (:primitives c)))

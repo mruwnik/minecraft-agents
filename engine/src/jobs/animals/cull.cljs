@@ -1,5 +1,6 @@
 (ns jobs.animals.cull
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
             [jobs.lib.combat :as combat]
             [jobs.lib.util :as u]
@@ -34,18 +35,18 @@
   Zones: an adult standing in another owner's zone or claim, or in a plan's footprint, is left alone (warn
   cull.declined once, :reason :refused, or :no-zones when no zone list was read). :ignore-zones? true skips the check.")
 
-(def args
-  {:mob {:doc "mob type name of the animals to thin" :default "cow"}
-   :keep {:doc "adults of the kind to leave alive in the bound (babies do not count)" :default 2}
-   :centre {:doc "nil, or {:x :z}: the bound is :radius blocks (horizontal) around it" :default nil}
-   :radius {:doc "animals within this many blocks of :centre, or of the body when there is no :centre, are the herd" :default 16}
-   :box {:doc "nil, or {:min {:x :y :z} :max {:x :y :z}}: inclusive bound that replaces :centre and :radius" :default nil}
-   :count {:doc "most animals to kill in one run; nil: no cap" :default nil}
-   :collect-radius {:doc "how far around to collect drops after a kill" :default 8}
-   :drops {:doc "item names to collect after a kill; nil: the kind's entry in the drops table, else every item" :default nil}
-   :weapons {:doc "item name substrings that count as weapons" :default combat/default-weapons}
-   :max-skips {:doc "animals skipped in a row before the cull gives up" :default 3}
-   :ignore-zones? animals/ignore-zones-arg})
+(a/defargs args
+  {:mob {:doc "mob type name of the animals to thin" :spec a/name? :default "cow"}
+   :keep {:doc "adults of the kind to leave alive in the bound (babies do not count)" :spec (a/int-in 0 nil) :default 2}
+   :centre {:doc "nil, or {:x :z}: the bound is :radius blocks (horizontal) around it" :spec (a/map-with {:x number? :z number?}) :default nil}
+   :radius {:doc "animals within this many blocks of :centre, or of the body when there is no :centre, are the herd" :spec (a/num-in 0 nil) :default 16}
+   :box {:doc "nil, or {:min {:x :y :z} :max {:x :y :z}}: inclusive bound that replaces :centre and :radius" :spec a/box? :default nil}
+   :count {:doc "most animals to kill in one run; nil: no cap" :spec (a/int-in 1 nil) :default nil}
+   :collect-radius {:doc "how far around to collect drops after a kill" :spec (a/num-in 0 nil) :default 8}
+   :drops {:doc "item names to collect after a kill; nil: the kind's entry in the drops table, else every item" :spec (a/coll-of a/item?) :default nil}
+   :weapons {:doc "item name substrings that count as weapons" :spec (a/coll-of (a/or-of string? keyword?)) :default combat/default-weapons}
+   :max-skips {:doc "animals skipped in a row before the cull gives up" :spec (a/int-in 1 nil) :default 3}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 
 (defn corners
   "The eight corners of a box."

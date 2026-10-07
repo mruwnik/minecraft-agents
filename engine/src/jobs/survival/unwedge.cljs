@@ -1,5 +1,6 @@
 (ns jobs.survival.unwedge
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.pace :as pace]
             [jobs.lib.result :as result]
             [jobs.lib.access :as access]
@@ -20,8 +21,8 @@
   its fire for that cell meanwhile) and ends stopped {:reason :blocked :why}: the body holds still, nothing refires.
   Still wedged after max-passes tries ends stopped :still-wedged. Never :continue.")
 
-(def args
-  {:ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
+(a/defargs args
+  {:ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (defn check [c]
   (or (some? (breath/wedged-cell (:primitives c)))

@@ -1,7 +1,8 @@
 (ns jobs.lib.walk.world
   "The walk driver's view of the world: the primitives' pathWorld and the decorations the walks plan over (walls, dangers, dark,
   avoided and tolled cells), the executor policy of the body and the cell it stands in."
-  (:require [engine.settings :as settings]
+  (:require [engine.args :as a]
+            [engine.settings :as settings]
             [engine.path.executor :as executor]
             [engine.path.blocks :as blocks]
             [engine.path.planner.base :as base]
@@ -14,8 +15,8 @@
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]))
 
-(def settings
-  {::default-food {:default 20 :doc "The food a walk counts on when it has neither a :food arg nor a body food: fed (nothing caps the damage)." :type :int :min 0}})
+(a/defargs settings
+  {::default-food {:default 20 :doc "The food a walk counts on when it has neither a :food arg nor a body food: fed (nothing caps the damage)." :spec (a/int-in 0 nil)}})
 
 (defn path-world
   "The primitives' pathWorld sensing (a snapshot over the world) with the planner's block table and free-space module, nil when

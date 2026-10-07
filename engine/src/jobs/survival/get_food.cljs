@@ -1,5 +1,6 @@
 (ns jobs.survival.get-food
-  (:require [clojure.string :as str]
+  (:require [engine.args :as a]
+            [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.child :as child]
@@ -37,16 +38,16 @@
   Memory: reads :food-source and :hungry. Writes :hungry {:food} (cap 10, one hour) and :no-bake. Job memory (hints for
   this run): :eating (a meal under way), :tried-sources, :skipped-blocks, :skipped-animals.")
 
-(def args
-  {:food {:doc "hungry below this much food (of 20)" :default foods/default-food}
-   :health {:doc "below this health eat up to a full bar" :default foods/default-health}
-   :source-radius {:doc "how far away a remembered food source still counts, in blocks" :default 64}
-   :hunt-radius {:doc "how far to look for animals and wild crops, in blocks" :default 24}
-   :farm-radius {:doc "how far around a known farm to harvest, in blocks" :default 6}
-   :take {:doc "most items to withdraw from a chest in one go" :default 16}
-   :attack-gap-ms {:doc "least time between two swings at an animal, so a swing lands at full strength" :default 600}
-   :ask-cooldown-ms {:doc "after finding nothing, how long before saying so (and searching) again" :default (* 10 60 1000)}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
+(a/defargs args
+  {:food {:doc "hungry below this much food (of 20)" :spec (a/num-in 0 20) :default foods/default-food}
+   :health {:doc "below this health eat up to a full bar" :spec (a/num-in 0 20) :default foods/default-health}
+   :source-radius {:doc "how far away a remembered food source still counts, in blocks" :spec (a/num-in 0 nil) :default 64}
+   :hunt-radius {:doc "how far to look for animals and wild crops, in blocks" :spec (a/num-in 0 nil) :default 24}
+   :farm-radius {:doc "how far around a known farm to harvest, in blocks" :spec (a/num-in 0 nil) :default 6}
+   :take {:doc "most items to withdraw from a chest in one go" :spec (a/int-in 1 nil) :default 16}
+   :attack-gap-ms {:doc "least time between two swings at an animal, so a swing lands at full strength" :spec (a/num-in 0 nil) :default 600}
+   :ask-cooldown-ms {:doc "after finding nothing, how long before saying so (and searching) again" :spec (a/num-in 0 nil) :default (* 10 60 1000)}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (def food-animals #{"cow" "pig" "sheep" "chicken" "rabbit"})
 

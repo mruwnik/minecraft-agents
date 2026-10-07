@@ -2,7 +2,8 @@
   "The walk driver: plan from the body's cell to a goal within the executor's abilities, follow the plan with steer, plan
   again when the body ends off it. Jobs that walk (jobs.debug.walk-plan, the stair, tunnel and cleanup jobs) call this
   namespace; walk-to! is the whole loop, the other functions are its pieces; the pieces live in jobs.lib.walk.plan (planning), .search (the budgeted search a round), .watch (the look-ahead) and .world (the pathWorld and its decorations)."
-  (:require [engine.settings :as settings]
+  (:require [engine.args :as a]
+            [engine.settings :as settings]
             [engine.ctx :as ctx]
             [engine.path.executor :as executor]
             [jobs.lib.util :as u]
@@ -11,11 +12,11 @@
             [jobs.lib.walk.watch :as wwatch]
             [jobs.lib.walk.world :as wworld]))
 
-(def settings
-  {::max-timeout-s {:default 120 :doc "The longest a walk call may run, in seconds." :type :int :min 1}
-   ::max-settle-waits {:default 20 :doc "Waits for the body to settle after a step before the walk goes on." :type :int :min 0}
-   ::centre-tolerance {:default 0.2 :doc "How near (blocks, each axis) a centring nudge ends to its target." :type :number :min 0}
-   ::centre-max-ticks {:default 30 :doc "Ticks a centring nudge walks before it gives up." :type :int :min 1}})
+(a/defargs settings
+  {::max-timeout-s {:default 120 :doc "The longest a walk call may run, in seconds." :spec (a/int-in 1 nil)}
+   ::max-settle-waits {:default 20 :doc "Waits for the body to settle after a step before the walk goes on." :spec (a/int-in 0 nil)}
+   ::centre-tolerance {:default 0.2 :doc "How near (blocks, each axis) a centring nudge ends to its target." :spec (a/num-in 0 nil)}
+   ::centre-max-ticks {:default 30 :doc "Ticks a centring nudge walks before it gives up." :spec (a/int-in 1 nil)}})
 
 (defn max-timeout-s [] (settings/get settings ::max-timeout-s))
 (defn max-settle-waits [] (settings/get settings ::max-settle-waits))

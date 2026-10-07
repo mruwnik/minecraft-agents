@@ -1,5 +1,6 @@
 (ns jobs.access.tunnel
-  (:require [jobs.lib.ledger :as ledger]
+  (:require [engine.args :as a]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
@@ -85,14 +86,14 @@
   digs) is got with jobs.items.get-tool, then the body walks back to the cell it stood on and goes on. The stair
   child fetches only items (a block to seal lava with), not tools.")
 
-(def args
-  {:target {:doc "the buried block [x y z] or {:x :y :z}" :type :pos :default nil}
-   :max-length {:doc "longest line, in blocks along the heading from the entry to the target, 1 to 64" :type :int :min 1 :max 64 :default 24}
-   :accept {:doc "hazards taken: #{:water :lava :falling-block}" :default #{}}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
-   :on-lava {:doc "exposed lava: :seal (fill it with a building block, then go on) or :stop (jobs.access.stair)" :default :seal}
-   :keep {:doc "a tunnel that stays: torches left and the tunnel left open; false (a dead end): torches go into the scaffold ledger for jobs.access.leave-tunnel to take back" :default false}
-   :fetch {:doc "get a missing pickaxe instead of waiting :no-tool (jobs.lib.fetch): true, a set of kinds or a map of limits; false waits :no-tool" :default true}})
+(a/defargs args
+  {:target {:doc "the buried block [x y z] or {:x :y :z}" :spec ::a/pos :default nil}
+   :max-length {:doc "longest line, in blocks along the heading from the entry to the target, 1 to 64" :spec (a/int-in 1 64) :default 24}
+   :accept {:doc "hazards taken: #{:water :lava :falling-block}" :spec (a/coll-of #{:water :lava :falling-block :under-feet}) :default #{}}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
+   :on-lava {:doc "exposed lava: :seal (fill it with a building block, then go on) or :stop (jobs.access.stair)" :spec #{:seal :stop} :default :seal}
+   :keep {:doc "a tunnel that stays: torches left and the tunnel left open; false (a dead end): torches go into the scaffold ledger for jobs.access.leave-tunnel to take back" :spec boolean? :default false}
+   :fetch {:doc "get a missing pickaxe instead of waiting :no-tool (jobs.lib.fetch): true, a set of kinds or a map of limits; false waits :no-tool" :spec fetch/option? :default true}})
 
 (def heading-order [:north :east :south :west])
 

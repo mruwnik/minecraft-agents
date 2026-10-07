@@ -1,5 +1,6 @@
 (ns jobs.movement.mount
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.util :as u]
             [jobs.lib.vehicle :as vehicle]))
 
@@ -16,9 +17,9 @@
   (a mob, with an item in hand that cannot be put away), :timeout (the server never seated the body), :unreachable (the walk failed twice),
   :aboard-other (already on another vehicle), :failed (any other status, with :mount the primitive's).")
 
-(def args
-  {:id {:doc "the entity id of the vehicle or mount (observe entities lists them)" :default nil}
-   :name {:doc "instead of :id: the entity name to mount, the nearest in sight" :default nil}})
+(a/defargs args
+  {:id {:doc "the entity id of the vehicle or mount (observe entities lists them)" :spec (a/int-in 1 nil) :default nil}
+   :name {:doc "instead of :id: the entity name to mount, the nearest in sight" :spec a/name? :default nil}})
 
 (def reach 2.5)
 (def max-walks 2)

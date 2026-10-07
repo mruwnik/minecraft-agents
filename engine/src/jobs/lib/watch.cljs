@@ -18,22 +18,23 @@
   The clock is body memory (kind :watched), shared by a parent and its child.
   Only headings with a clear line at feet and eye height are looked at.
   It never turns back; the job's next act aims itself. A body with no perception does nothing."
-  (:require [engine.settings :as settings]
+  (:require [engine.args :as a]
+            [engine.settings :as settings]
             [engine.ctx :as ctx]
             [engine.entity-observations :as obs]
             [engine.perception :as perception]
             [jobs.lib.look :as look]))
 
-(def settings
-  {::alert-radius {:default 24 :doc "Blocks within which a known mob makes the place :alert." :type :int :min 1}
-   ::alert-ms {:default 30000 :doc "A known mob seen longer ago than this does not alert, in ms." :type :int :min 0}
-   ::default-every-ms {:default 3000 :doc "How often a job looks round for danger by default, in ms." :type :int :min 0}
-   ::default-alert-every-ms {:default 2000 :doc "How often a job looks round while the place is :alert, in ms." :type :int :min 0}
-   ::long-dig-ms {:default 2000 :doc "A dig longer than this is looked up from, in ms." :type :int :min 0}
-   ::turn-gap-ms {:default 5000 :doc "How long a mob the body turned toward is remembered as turned to, in ms." :type :int :min 0}
-   ::dig-gap-ms {:default 1000 :doc "Gap between looks during a long dig, in ms." :type :int :min 0}
-   ::hearing-radius {:default 16 :doc "Blocks within which a heard mob counts." :type :int :min 1}
-   ::probe-distance {:default 3 :doc "Blocks ahead a look probes." :type :int :min 1}})
+(a/defargs settings
+  {::alert-radius {:default 24 :doc "Blocks within which a known mob makes the place :alert." :spec (a/int-in 1 nil)}
+   ::alert-ms {:default 30000 :doc "A known mob seen longer ago than this does not alert, in ms." :spec (a/int-in 0 nil)}
+   ::default-every-ms {:default 3000 :doc "How often a job looks round for danger by default, in ms." :spec (a/int-in 0 nil)}
+   ::default-alert-every-ms {:default 2000 :doc "How often a job looks round while the place is :alert, in ms." :spec (a/int-in 0 nil)}
+   ::long-dig-ms {:default 2000 :doc "A dig longer than this is looked up from, in ms." :spec (a/int-in 0 nil)}
+   ::turn-gap-ms {:default 5000 :doc "How long a mob the body turned toward is remembered as turned to, in ms." :spec (a/int-in 0 nil)}
+   ::dig-gap-ms {:default 1000 :doc "Gap between looks during a long dig, in ms." :spec (a/int-in 0 nil)}
+   ::hearing-radius {:default 16 :doc "Blocks within which a heard mob counts." :spec (a/int-in 1 nil)}
+   ::probe-distance {:default 3 :doc "Blocks ahead a look probes." :spec (a/int-in 1 nil)}})
 
 (defn alert-radius [] (settings/get settings ::alert-radius))
 (defn alert-ms [] (settings/get settings ::alert-ms))

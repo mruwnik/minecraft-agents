@@ -1,19 +1,20 @@
 (ns jobs.explore.look
-  (:require ["minecraft-data" :as minecraft-data] [engine.ctx :as ctx] [engine.game :as game] [jobs.lib.look :as look] [jobs.lib.places :as places]))
+  (:require [engine.args :as a]
+            ["minecraft-data" :as minecraft-data] [engine.ctx :as ctx] [engine.game :as game] [jobs.lib.look :as look] [jobs.lib.places :as places]))
 (def doc
   "Observe the nearby blocks and entities the body has seen, once, without moving or changing the world. Emits
   look.observed, available through observe --wait --watch or observe result after completion. :at inspects one exact
   block as last seen, with properties (a cell never seen is :unknown). Nearby samples are nearest first and bounded;
   :more-blocks?/:more-entities? report extra matches. Nothing is sensed through walls (players are always listed).
   This is sight evidence, not a terrain map. A refused argument ends {:status :stopped :reason :bad-args :text why}.")
-(def args
-  {:radius {:doc "nearby sample radius, 1..32 blocks" :default 16}
-   :block-names {:doc "nil, one block name or a vector/set of up to 16 names" :default nil}
-   :entity-names {:doc "nil, one entity name or a vector/set of up to 16 names" :default nil}
-   :max-blocks {:doc "nearest blocks to return, 0..16; zero skips scan" :default 6}
-   :max-entities {:doc "nearest entities to return, 0..8; zero skips scan" :default 2}
-   :properties? {:doc "include nearby block state properties" :default false}
-   :at {:doc "optional exact block position [x y z] or {:x :y :z}" :type :pos :default nil}})
+(a/defargs args
+  {:radius {:doc "nearby sample radius, 1..32 blocks" :spec (a/num-in 1 32) :default 16}
+   :block-names {:doc "nil, one block name or a vector/set of up to 16 names" :spec (a/or-of a/name? (a/coll-of a/name?)) :default nil}
+   :entity-names {:doc "nil, one entity name or a vector/set of up to 16 names" :spec (a/or-of a/name? (a/coll-of a/name?)) :default nil}
+   :max-blocks {:doc "nearest blocks to return, 0..16; zero skips scan" :spec (a/int-in 0 16) :default 6}
+   :max-entities {:doc "nearest entities to return, 0..8; zero skips scan" :spec (a/int-in 0 8) :default 2}
+   :properties? {:doc "include nearby block state properties" :spec boolean? :default false}
+   :at {:doc "optional exact block position [x y z] or {:x :y :z}" :spec ::a/pos :default nil}})
 (defn check [_] true)
 (defn names [v]
   (cond (nil? v) nil (string? v) [v] (or (vector? v) (set? v)) (vec v) :else ::bad))

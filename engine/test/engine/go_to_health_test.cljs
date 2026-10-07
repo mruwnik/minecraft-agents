@@ -3,8 +3,10 @@
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
             [engine.ctx :as ctx]
+            [engine.expr :as expr]
             [engine.fake :as fake]
             [engine.go-to-test :as g]
+            [engine.registry :as registry]
             [engine.test-util :as tu :refer [floor]]
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.watch :as wwatch]
@@ -140,28 +142,28 @@
           (is (= 60 (y-of p)))
           (is (empty? (g/events-of r :go-to.waiting-health))))))))
 
-(deftest go-to-refuses-a-bad-hp-seconds-with-a-reason
+(defn refusal [args] (expr/problem registry/jobs (list 'jobs.movement.go-to args)))
+
+(deftest go-to-refuses-a-bad-hp-seconds-at-submit
   (async done
     (tu/run-async done
       (fn ^:async t []
         (doseq [bad [0 -1 "x" js/Infinity]]
-          (let [{:keys [out]} (await (g/go! {:blocks g/flat} {:pos [6 64 0] :hp-seconds bad}))]
-            (is (= {:arrived false :reason :bad-hp-seconds} (select-keys @out [:arrived :reason])) (pr-str bad))))
+          (is (re-find #":hp-seconds must be a number above 0" (refusal {:pos [6 64 0] :hp-seconds bad})) (pr-str bad)))
         (let [{:keys [out]} (await (g/go! {:blocks g/flat} {:pos [6 64 0] :hp-seconds 30}))]
           (is (= {:arrived true} @out)))))))
 
-(deftest go-to-refuses-bad-danger-options-and-fall-margin-with-a-reason
+(deftest go-to-refuses-bad-danger-options-and-fall-margin-at-submit
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[k reason bad] [[:fall-margin :bad-fall-margin [-1 "x" js/Infinity]]
-                                [:flee-factor :bad-flee-factor [-1 "x" js/Infinity]]
-                                [:fight-factor :bad-fight-factor [-1 "x" js/Infinity]]
-                                [:danger-max-rate :bad-danger-max-rate [0 -1 "x" js/Infinity]]
-                                [:danger-shape :bad-danger-shape ["x" {:sensed {:radius -1}} {:sensed {:close 5 :radius 2}} {:bogus {}}]]]
+        (doseq [[k bad] [[:fall-margin [-1 "x" js/Infinity]]
+                         [:flee-factor [-1 "x" js/Infinity]]
+                         [:fight-factor [-1 "x" js/Infinity]]
+                         [:danger-max-rate [0 -1 "x" js/Infinity]]
+                         [:danger-shape ["x" {:sensed {:radius -1}} {:sensed {:close 5 :radius 2}} {:bogus {}}]]]
                 v bad]
-          (let [{:keys [out]} (await (g/go! {:blocks g/flat} {:pos [6 64 0] k v}))]
-            (is (= {:arrived false :reason reason} (select-keys @out [:arrived :reason])) (pr-str k v))))
+          (is (re-find (re-pattern (str k " must be ")) (refusal {:pos [6 64 0] k v})) (pr-str k v)))
         (let [{:keys [out]} (await (g/go! {:blocks g/flat} {:pos [6 64 0] :fall-margin 0 :flee-factor 2 :fight-factor 0 :danger-max-rate 3
                                                            :danger-shape {:sensed {:radius 9}}}))]
           (is (= {:arrived true} @out)))))))

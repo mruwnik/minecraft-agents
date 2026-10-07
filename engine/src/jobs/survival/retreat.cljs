@@ -1,7 +1,7 @@
 (ns jobs.survival.retreat
-  (:require [jobs.lib.access :as access]
+  (:require [engine.args :as a]
+            [jobs.lib.access :as access]
             [jobs.lib.blocks :as lb]
-            [jobs.lib.args :as jargs]
             [jobs.lib.click :as click]
             [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
@@ -66,20 +66,20 @@
   Memory: one :threat entry per mob fled (jobs.lib.threats); the third from one mob within 5 min warns hostile.chased.
   A cell in another's zone is used only as a last resort (retreat.trespass-last-resort warning).")
 
-(def args
-  {:radius {:doc "hostiles within this many blocks start a flight" :type :number :min 0 :default 8}
-   :ranged-radius {:doc "ranged hostiles (skeletons and the like) within this many blocks start a flight" :type :number :min 0 :default 16}
-   :eat-gap {:doc "with at least this many blocks to the nearest hostile, eat a bite per flee step" :type :number :min 0 :default 12}
-   :step {:doc "blocks per walk" :type :number :min 1 :default 6}
-   :home-range {:doc "a flight leans towards the latest :bed or :home only when it lies within this many blocks" :type :number :min 0 :default 64}
-   :weapons {:doc "item name substrings that count as weapons, for a cornered fight" :default combat/default-weapons}
-   :reserve {:doc "health a cornered fight must be expected to leave" :type :number :min 0 :default cost/default-reserve}
-   :blocks {:doc "names of the blocks a cornered body may seal itself in with" :default lb/building-blocks}
-   :max-places {:doc "seal placements per step" :type :int :min 1 :default 4}
-   :on-lava {:doc ":seal: lava a dig lays open is filled with a carried block; :stop: the pocket or pit is dropped and the lava left" :type :enum :values [:seal :stop] :default :seal}
-   :lost-s {:doc "a mob out of line of sight this many seconds has stopped chasing" :type :number :min 0 :default 4}
-   :quiet-s {:doc "a hidden body keeps its refuge this many seconds after the last danger" :type :number :min 0 :default 30}
-   :no-gain-steps {:doc "flight steps without a new best gap to the nearest chaser before the cornered options are tried" :type :int :min 1 :default 20}})
+(a/defargs args
+  {:radius {:doc "hostiles within this many blocks start a flight" :spec (a/num-in 0 nil) :default 8}
+   :ranged-radius {:doc "ranged hostiles (skeletons and the like) within this many blocks start a flight" :spec (a/num-in 0 nil) :default 16}
+   :eat-gap {:doc "with at least this many blocks to the nearest hostile, eat a bite per flee step" :spec (a/num-in 0 nil) :default 12}
+   :step {:doc "blocks per walk" :spec (a/num-in 1 nil) :default 6}
+   :home-range {:doc "a flight leans towards the latest :bed or :home only when it lies within this many blocks" :spec (a/num-in 0 nil) :default 64}
+   :weapons {:doc "item name substrings that count as weapons, for a cornered fight" :spec (a/coll-of (a/or-of string? keyword?)) :default combat/default-weapons}
+   :reserve {:doc "health a cornered fight must be expected to leave" :spec (a/num-in 0 nil) :default cost/default-reserve}
+   :blocks {:doc "names of the blocks a cornered body may seal itself in with" :spec (a/coll-of (a/or-of string? keyword?)) :default lb/building-blocks}
+   :max-places {:doc "seal placements per step" :spec (a/int-in 1 nil) :default 4}
+   :on-lava {:doc ":seal: lava a dig lays open is filled with a carried block; :stop: the pocket or pit is dropped and the lava left" :spec #{:seal :stop} :default :seal}
+   :lost-s {:doc "a mob out of line of sight this many seconds has stopped chasing" :spec (a/num-in 0 nil) :default 4}
+   :quiet-s {:doc "a hidden body keeps its refuge this many seconds after the last danger" :spec (a/num-in 0 nil) :default 30}
+   :no-gain-steps {:doc "flight steps without a new best gap to the nearest chaser before the cornered options are tried" :spec (a/int-in 1 nil) :default 20}})
 
 (def tool-weapons
   "Item name substrings a cornered body with no weapon and no seal swings: any of them beats the fist."
@@ -100,7 +100,7 @@
                  :pos)]
     (when (and pos (<= (u/dist pos (u/self-pos c)) (:home-range (:args c)))) pos)))
 
-(defn check-run [_c] true)
+(defn check [_c] true)
 
 (defn block-at-fn
   "pos -> the block name the body sees or remembers there. A cell it has not seen reads as rock (behind the body or a
@@ -390,12 +390,3 @@
       (if (= :again r)
         (do (await (pace/pace!)) (recur))
         r))))
-
-(def bad-lists
-  "Args checked by jobs.lib.args."
-  {:weapons :names :blocks :names})
-
-(defn check
-  "check-run once the list args are well formed, else declines :bad-args."
-  [c]
-  (jargs/guard c bad-lists check-run))

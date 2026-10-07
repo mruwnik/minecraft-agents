@@ -1,15 +1,16 @@
 (ns jobs.lib.step-off
   "Leaving a cell the body stands in so something can be put or dug there: one go-to to the nearest cell within two
   blocks that can be stood on and is no hazard, never the column of the cell itself."
-  (:require [engine.settings :as settings]
+  (:require [engine.args :as a]
+            [engine.settings :as settings]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.reach :as reach]
             [jobs.lib.util :as u]))
 
-(def settings
-  {::reach-blocks {:default 2 :doc "Blocks a step-off moves the body away." :type :int :min 1}})
+(a/defargs settings
+  {::reach-blocks {:default 2 :doc "Blocks a step-off moves the body away." :spec (a/int-in 1 nil)}})
 
 (defn reach-blocks [] (settings/get settings ::reach-blocks))
 

@@ -1,5 +1,6 @@
 (ns jobs.farm.plant
-  (:require [clojure.string :as str]
+  (:require [engine.args :as a]
+            [clojure.string :as str]
             [jobs.farm.permit :as permit]
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as blocks]
@@ -34,14 +35,14 @@
   :no-zones when no zone list was read). The check waits :need (seed) when none is carried, :nothing-to-do when no cell
   is bare, :refused / :no-zones when zones refuse. :ignore-zones? true skips the check, so cells shared with another plan are sown too.")
 
-(def args
-  {:box {:doc "the field: {:min {:x :y :z} :max {:x :y :z}}, inclusive; the ground layer is y = (:y :min); required (without it the check declines)" :default nil}
-   :seed {:doc "item name to plant; the carried seed with the largest count when nil" :default nil}
-   :reach {:doc "cells whose centre is this close to the eye (place accepts 4.5) are planted without walking, in blocks" :default u/eye-reach}
-   :plan {:doc "id of a plan of the body's world whose crop cells are the field (then :box and :seed are not used)" :default nil}
-   :part {:doc "with :plan, only the cells of this part" :default nil}
-   :fetch {:doc "get a missing seed (jobs.lib.fetch): true, a set of kinds or a map of limits; false waits :need" :default true}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
+(a/defargs args
+  {:box {:doc "the field: {:min {:x :y :z} :max {:x :y :z}}, inclusive; the ground layer is y = (:y :min); required (without it the check declines)" :spec a/box? :default nil}
+   :seed {:doc "item name to plant; the carried seed with the largest count when nil" :spec a/item? :default nil}
+   :reach {:doc "cells whose centre is this close to the eye (place accepts 4.5) are planted without walking, in blocks" :spec (a/num-in 0 nil) :default u/eye-reach}
+   :plan {:doc "id of a plan of the body's world whose crop cells are the field (then :box and :seed are not used)" :spec a/name? :default nil}
+   :part {:doc "with :plan, only the cells of this part" :spec a/name? :default nil}
+   :fetch {:doc "get a missing seed (jobs.lib.fetch): true, a set of kinds or a map of limits; false waits :need" :spec fetch/option? :default true}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (def max-fails 3)
 

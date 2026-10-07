@@ -1,5 +1,6 @@
 (ns jobs.forestry.maintain
-  (:require [jobs.lib.access.rules :as rules]
+  (:require [engine.args :as a]
+            [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.access :as access]
@@ -37,15 +38,15 @@
   The job declines (one forest.declined warn naming the plan and the reason) while the plan is missing,
   unreadable or has no tree cells, and while no zone list is loaded.")
 
-(def args
-  {:plan {:doc "id of a plan of the body's world; its tree cells are the forest" :default nil}
-   :part {:doc "only the cells of this part" :default nil}
-   :max-logs {:doc "with :pillar? false, a tree whose column holds more logs than this is too tall to fell from the ground and is left" :default 6}
-   :pillar? {:doc "fell a tree too tall for the ground from a pillar (jobs.forestry.fell-tree); false: leave one over :max-logs" :default true}
+(a/defargs args
+  {:plan {:doc "id of a plan of the body's world; its tree cells are the forest" :spec a/name? :default nil}
+   :part {:doc "only the cells of this part" :spec a/name? :default nil}
+   :max-logs {:doc "with :pillar? false, a tree whose column holds more logs than this is too tall to fell from the ground and is left" :spec (a/int-in 1 nil) :default 6}
+   :pillar? {:doc "fell a tree too tall for the ground from a pillar (jobs.forestry.fell-tree); false: leave one over :max-logs" :spec boolean? :default true}
    :accept {:doc "dig hazards (jobs.lib.access.rules) taken: a set of :fluid-adjacent :falling-block :under-feet"
-            :default #{:fluid-adjacent :falling-block}}
-   :collect-radius {:doc "how far from where the body stands the drops of a felled tree are collected, in blocks" :default 8}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
+            :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block :under-feet}) :default #{:fluid-adjacent :falling-block}}
+   :collect-radius {:doc "how far from where the body stands the drops of a felled tree are collected, in blocks" :spec (a/num-in 0 nil) :default 8}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 ;; ------------------------------------------------------------------ access
 

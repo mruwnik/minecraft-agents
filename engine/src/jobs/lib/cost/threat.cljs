@@ -3,14 +3,15 @@
   deals over some seconds of exposure after the body's armour (jobs.lib.cost.armour).
   A creeper is one blast of 43 (:explosion) however long the exposure; a ranged mob shoots (:projectile); any other
   hits at its mob-dps (3 if unknown) once a second (:melee). Endermen and zombified piglins only fight when provoked."
-  (:require [engine.settings :as settings]
+  (:require [engine.args :as a]
+            [engine.settings :as settings]
             ["minecraft-data" :as minecraft-data]
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.cost.armour :as armour]))
 
-(def settings
-  {::creeper-blast {:default 43 :doc "Damage a creeper's blast is costed at." :type :int :min 0}
-   ::provoked-share {:default 0.1 :doc "What a provoked-only mob's threat counts for when it is met, not fought." :type :number :min 0}})
+(a/defargs settings
+  {::creeper-blast {:default 43 :doc "Damage a creeper's blast is costed at." :spec (a/int-in 0 nil)}
+   ::provoked-share {:default 0.1 :doc "What a provoked-only mob's threat counts for when it is met, not fought." :spec (a/num-in 0 nil)}})
 
 (def mob-dps
   "Damage a mob deals per second while it can hit the body (normal difficulty). Unknown mobs count as 3."

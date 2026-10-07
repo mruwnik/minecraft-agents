@@ -1,5 +1,6 @@
 (ns jobs.animals.shear
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.util :as u]))
@@ -32,14 +33,14 @@
   Zones: a sheep standing in another owner's zone or claim, or in a plan's footprint, is left alone (warn
   shear.declined once, :reason :refused, or :no-zones when no zone list was read). :ignore-zones? true skips the check.")
 
-(def args
-  {:count {:doc "sheep to shear; every one in radius when nil" :default nil}
-   :radius {:doc "sheep within this many blocks count" :default 16}
-   :walk-timeout-s {:doc "bound of one walk towards a sheep" :default 5}
-   :timeout-s {:doc "seconds of working with the animals (not fetching) before the job gives up" :default 120}
-   :collect {:doc "pick up the wool afterwards" :default true}
-   :fetch {:doc "get shears when none are carried (jobs.lib.fetch): true, a set of kinds or a map of limits; false ends :no-shears" :default true}
-   :ignore-zones? animals/ignore-zones-arg})
+(a/defargs args
+  {:count {:doc "sheep to shear; every one in radius when nil" :spec (a/int-in 1 nil) :default nil}
+   :radius {:doc "sheep within this many blocks count" :spec (a/num-in 0 nil) :default 16}
+   :walk-timeout-s {:doc "bound of one walk towards a sheep" :spec (a/num-in 0 nil) :default 5}
+   :timeout-s {:doc "seconds of working with the animals (not fetching) before the job gives up" :spec (a/num-in 0 nil) :default 120}
+   :collect {:doc "pick up the wool afterwards" :spec boolean? :default true}
+   :fetch {:doc "get shears when none are carried (jobs.lib.fetch): true, a set of kinds or a map of limits; false ends :no-shears" :spec fetch/option? :default true}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 
 (def reach 3)
 (def max-in-row 3)

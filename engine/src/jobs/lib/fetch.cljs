@@ -15,7 +15,8 @@
 
   Also body memory :fetch/stock: what a chest held when last looked into or moved from (withdraw, deposit, kit,
   obtain), so obtain goes first to a chest known to hold the item and skips one known not to."
-  (:require [engine.settings :as settings]
+  (:require [engine.args :as a]
+            [engine.settings :as settings]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
@@ -25,10 +26,10 @@
             [jobs.lib.util :as u]
             [engine.memory :as mem]))
 
-(def settings
-  {::max-fetch-calls {:default 400 :doc "Fetch rounds of one fetch! before it gives the round back with :continue." :type :int :min 1}
-   ::chest-radius {:default 32 :doc "Blocks round the body searched for a chest holding the item." :type :int :min 1}
-   ::view-age-ms {:default 10000 :doc "A chest view older than this is read again, in ms." :type :int :min 0}})
+(a/defargs settings
+  {::max-fetch-calls {:default 400 :doc "Fetch rounds of one fetch! before it gives the round back with :continue." :spec (a/int-in 1 nil)}
+   ::chest-radius {:default 32 :doc "Blocks round the body searched for a chest holding the item." :spec (a/int-in 1 nil)}
+   ::view-age-ms {:default 10000 :doc "A chest view older than this is read again, in ms." :spec (a/int-in 0 nil)}})
 
 
 ;; ------------------------------------------------------------------ the option and its limits
@@ -65,6 +66,11 @@
     (set? v) (if (every? kinds v) {:what v} {:error (str ":fetch set holds kinds of " (pr-str kinds))})
     (map? v) (if-let [e (limit-error v)] {:error (str ":fetch " e)} v)
     :else {:error ":fetch is true, false, a set of kinds or a map of limits"}))
+
+(def option?
+  "The spec of a job's :fetch arg."
+  (a/pred "true, false, a set of kinds (:tool :item) or a map of limits {:what :how :depth :minutes :fail-minutes}"
+          #(nil? (:error (parse-arg %)))))
 
 (def limits-kind :fetch/limits)
 

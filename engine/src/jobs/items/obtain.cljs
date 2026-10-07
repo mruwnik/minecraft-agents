@@ -1,5 +1,5 @@
 (ns jobs.items.obtain
-  (:require [jobs.lib.args :as jargs]
+  (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as b]
             [jobs.lib.fetch :as fetch]
@@ -40,15 +40,15 @@
   round) or :bad-args. :depth is the nesting left for sources that need fetches of their own (not used yet: crafting
   plans its whole chain; a gather child fetches its own tools).")
 
-(def args
-  {:item {:doc "the item to get" :type :item :default nil}
-   :any-of {:doc "items, any one will do, the first preferred (instead of :item)" :default nil}
-   :count {:doc "how many more than carried at the start (counts above 64 are taken as 64)" :type :int :min 1 :default 1}
-   :how {:doc "sources to use, a subset of #{:chest :craft :gather}; nil: all" :default nil}
-   :depth {:doc "nested fetches left; nil: the fetch limits (jobs.lib.fetch)" :type :int :min 0 :default nil}
-   :minutes {:doc "time budget from the first round; nil: the fetch limits" :type :number :min 0 :default nil}
-   :fail-minutes {:doc "passed on to nested fetches; nil: the fetch limits" :type :number :min 0 :default nil}
-   :chain {:doc "items being fetched above this one (a cycle stops)" :default []}})
+(a/defargs args
+  {:item {:doc "the item to get" :spec a/item? :default nil}
+   :any-of {:doc "items, any one will do, the first preferred (instead of :item)" :spec (a/coll-of a/item?) :default nil}
+   :count {:doc "how many more than carried at the start (counts above 64 are taken as 64)" :spec (a/int-in 1 nil) :default 1}
+   :how {:doc "sources to use, a subset of #{:chest :craft :gather}; nil: all" :spec (a/coll-of #{:chest :craft :gather}) :default nil}
+   :depth {:doc "nested fetches left; nil: the fetch limits (jobs.lib.fetch)" :spec (a/int-in 0 nil) :default nil}
+   :minutes {:doc "time budget from the first round; nil: the fetch limits" :spec (a/num-in 0 nil) :default nil}
+   :fail-minutes {:doc "passed on to nested fetches; nil: the fetch limits" :spec (a/num-in 0 nil) :default nil}
+   :chain {:doc "items being fetched above this one (a cycle stops)" :spec (a/coll-of a/item?) :default []}})
 
 (def max-inspections 4)
 
@@ -237,7 +237,7 @@
              (when (contains? how :gather) [(unseen-why c names n)])
              (when-let [w (and (contains? how :gather) (pickaxe-why version have names))] [w])))))
 
-(defn check-run [c]
+(defn check [c]
   (let [a (:args c)
         names (names-of a)]
     (cond
@@ -430,12 +430,3 @@
   "The whole attempt in one call: step! again until the count is carried or it stops; :continue only while a child waits on the world."
   [c]
   (await (pace/steps! c (fn ^:async obtain-step [] (await (step! c))))))
-
-(def bad-lists
-  "Args checked by jobs.lib.args."
-  {:any-of :names :how :names :chain :names})
-
-(defn check
-  "check-run once the list args are well formed, else declines :bad-args."
-  [c]
-  (jargs/guard c bad-lists check-run))

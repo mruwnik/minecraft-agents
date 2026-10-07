@@ -1,5 +1,6 @@
 (ns jobs.items.smelt
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.access :as access]
             [jobs.lib.look :as look]
@@ -30,12 +31,12 @@
   - \"refused\" (with :zones, :claims): the furnace is in another owner's zone or claim and does not allow
     :put (loading) or :take (collecting, or the output already there). Nothing is loaded or taken. :ignore-zones? true skips the check.")
 
-(def args
-  {:furnace {:doc "furnace, blast furnace or smoker position [x y z] or {:x :y :z}; when nil the nearest one the body has seen within 32 blocks that cooks :item (or anything carried) is chosen (smelt.furnace says which), or the job ends with no-furnace-seen" :type :pos :default nil}
-   :item {:doc "what to smelt; the first smeltable thing carried when nil" :default nil}
-   :count {:doc "how many; all carried (at most one stack) when nil" :default nil}
-   :fuel {:doc "fuel item to load; the best carried when nil" :default nil}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
+(a/defargs args
+  {:furnace {:doc "furnace, blast furnace or smoker position [x y z] or {:x :y :z}; when nil the nearest one the body has seen within 32 blocks that cooks :item (or anything carried) is chosen (smelt.furnace says which), or the job ends with no-furnace-seen" :spec ::a/pos :default nil}
+   :item {:doc "what to smelt; the first smeltable thing carried when nil" :spec a/item? :default nil}
+   :count {:doc "how many; all carried (at most one stack) when nil" :spec (a/int-in 0 nil) :default nil}
+   :fuel {:doc "fuel item to load; the best carried when nil" :spec a/item? :default nil}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (def slack-ms 2000)
 (def grace-ms 6000)

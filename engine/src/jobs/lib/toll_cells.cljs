@@ -3,7 +3,8 @@
   the crops and farmland the body has seen near the walk, and the cells of zones that are not the body's (zone-walk-tolls, for walks that ignore crops). Only what the
   body knows (memory of what it saw, the zone list) is tolled. The planner looks a toll up per node in a map, so the lists
   are bounded here, not there."
-  (:require [engine.settings :as settings]
+  (:require [engine.args :as a]
+            [engine.settings :as settings]
             [engine.ctx :as ctx]
             [jobs.lib.access.zones :as zones]
             [jobs.lib.cost :as cost]
@@ -12,9 +13,9 @@
             [jobs.lib.util :as u]
             [jobs.lib.world :as world]))
 
-(def settings
-  {::margin {:default 8 :doc "Blocks round the walk's ends and between them that get tolls." :type :int :min 0}
-   ::max-cells {:default 8000 :doc "The most cells one toll list holds (the farm and the zone list each)." :type :int :min 1}})
+(a/defargs settings
+  {::margin {:default 8 :doc "Blocks round the walk's ends and between them that get tolls." :spec (a/int-in 0 nil)}
+   ::max-cells {:default 8000 :doc "The most cells one toll list holds (the farm and the zone list each)." :spec (a/int-in 1 nil)}})
 
 (def farm-names (conj (vec (keys crops/ripe-age)) "farmland"))
 

@@ -1,5 +1,6 @@
 (ns jobs.farm.tidy
-  (:require [clojure.string :as str]
+  (:require [engine.args :as a]
+            [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.look :as look]
@@ -39,14 +40,14 @@
   The job declines (one tidy.declined warn naming the plan and the reason) while the plan is missing, unreadable
   or has no cells (in :part), and while no zone list has been read.")
 
-(def args
-  {:plan {:doc "id of a plan of the body's world" :default nil}
-   :part {:doc "only the cells of this part (and the air above its crop cells)" :default nil}
+(a/defargs args
+  {:plan {:doc "id of a plan of the body's world" :spec a/name? :default nil}
+   :part {:doc "only the cells of this part (and the air above its crop cells)" :spec a/name? :default nil}
    :accept {:doc "dig hazards accepted: :fluid-adjacent (water beside; lava beside is :lava-adjacent and is not accepted by default), :falling-block, :under-feet"
-            :default #{:fluid-adjacent}}
-   :reach {:doc "cells whose centre is this close to the eye are dug without walking, in blocks" :default u/eye-reach}
-   :give-up {:doc "failed walks, failed digs or hazard-blocked tries after which a cell is refused" :default 3}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
+            :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block :under-feet}) :default #{:fluid-adjacent}}
+   :reach {:doc "cells whose centre is this close to the eye are dug without walking, in blocks" :spec (a/num-in 0 nil) :default u/eye-reach}
+   :give-up {:doc "failed walks, failed digs or hazard-blocked tries after which a cell is refused" :spec (a/int-in 1 nil) :default 3}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 
 ;; ------------------------------------------------------------------ access

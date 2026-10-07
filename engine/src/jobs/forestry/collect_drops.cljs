@@ -1,5 +1,6 @@
 (ns jobs.forestry.collect-drops
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
             [jobs.lib.trees :refer [default-radius]]))
@@ -10,11 +11,11 @@
   An item is tried once; one that is gone, cannot be reached or picked up is skipped.
   Result: {:collected n}, the number of items that entered the inventory.")
 
-(def args
-  {:radius {:doc "search radius in blocks" :default default-radius}
-   :filter {:doc "item names to collect; everything when nil" :default nil}
-   :near {:doc "{:x :y :z} the work area is centred on, instead of where the body stands when the job begins" :type :pos :default nil}
-   :ids {:doc "entity ids to collect (only those); any item when nil" :default nil}})
+(a/defargs args
+  {:radius {:doc "search radius in blocks" :spec (a/num-in 0 nil) :default default-radius}
+   :filter {:doc "item names to collect; everything when nil" :spec (a/coll-of a/item?) :default nil}
+   :near {:doc "{:x :y :z} the work area is centred on, instead of where the body stands when the job begins" :spec ::a/pos :default nil}
+   :ids {:doc "entity ids to collect (only those); any item when nil" :spec (a/coll-of number?) :default nil}})
 
 (defn check [_c] true)
 

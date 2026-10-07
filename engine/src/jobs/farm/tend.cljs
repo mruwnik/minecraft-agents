@@ -1,5 +1,5 @@
 (ns jobs.farm.tend
-  (:require [jobs.lib.args :as jargs]
+  (:require [engine.args :as a]
             [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
@@ -63,16 +63,16 @@
   The job declines (one farm-tend.declined warn) while the plan is missing, unreadable, has no crop cells, or no
   zone list has been read. A started run declines in its next round if the plan stops being workable.")
 
-(def args
-  {:box {:doc "the field: {:min {:x :y :z} :max {:x :y :z}}, inclusive; y min is the farmland layer, max y at least min y + 1; at most 2048 cells; required unless :plan is given (without either the check declines)" :default nil}
-   :plan {:doc "id of a plan of the body's world whose crop cells are the field, each cell worked with the crop the plan wants there (then :box is not used)" :default nil}
-   :part {:doc "with :plan, only the cells of this part" :default nil}
-   :till {:doc "hoe untilled dirt and grass in the ground layer when seed and a hoe are carried" :type :bool :default true}
-   :fertilize {:doc "use bone meal on unripe crops" :type :bool :default false}
-   :composter {:doc "composter position {:x :y :z} for seed above the reserve; nil: do not compost" :type :pos :default nil}
-   :chest {:doc "chest position {:x :y :z} for the farm goods; nil: do not store" :type :pos :default nil}
-   :keep {:doc "{item-name count}: how many of an item compost and deposit leave carried, at least the seed reserve" :default {}}
-   :ignore-zones? {:doc "act regardless of zones and claims (passed to harvest, till, plant, fertilize and compost); the rules of the game allow it" :type :bool :default false}})
+(a/defargs args
+  {:box {:doc "the field: {:min {:x :y :z} :max {:x :y :z}}, inclusive; y min is the farmland layer, max y at least min y + 1; at most 2048 cells; required unless :plan is given (without either the check declines)" :spec a/box? :default nil}
+   :plan {:doc "id of a plan of the body's world whose crop cells are the field, each cell worked with the crop the plan wants there (then :box is not used)" :spec a/name? :default nil}
+   :part {:doc "with :plan, only the cells of this part" :spec a/name? :default nil}
+   :till {:doc "hoe untilled dirt and grass in the ground layer when seed and a hoe are carried" :spec boolean? :default true}
+   :fertilize {:doc "use bone meal on unripe crops" :spec boolean? :default false}
+   :composter {:doc "composter position {:x :y :z} for seed above the reserve; nil: do not compost" :spec ::a/pos :default nil}
+   :chest {:doc "chest position {:x :y :z} for the farm goods; nil: do not store" :spec ::a/pos :default nil}
+   :keep {:doc "{item-name count}: how many of an item compost and deposit leave carried, at least the seed reserve" :spec (a/map-of string? number?) :default {}}
+   :ignore-zones? {:doc "act regardless of zones and claims (passed to harvest, till, plant, fertilize and compost); the rules of the game allow it" :spec boolean? :default false}})
 
 (def max-cells 2048)
 
@@ -219,7 +219,7 @@
       (for [x (range (:x min) (inc (:x max))) z (range (:z min) (inc (:z max))) y [(:y min) (inc (:y min))]]
         {:x x :y y :z z}))))
 
-(defn check-run [c]
+(defn check [c]
   (let [trouble (when (:plan (:args c)) (:trouble (tend-plan/planned c)))]
     (cond
       trouble (ctx/wait c {:reason :plan-trouble :why trouble})
@@ -317,12 +317,3 @@
   child waits on the world."
   [c]
   (await (pace/steps! c (fn ^:async s [] (await (step c))))))
-
-(def bad-lists
-  "Args checked by jobs.lib.args."
-  {:box :box :keep :counts})
-
-(defn check
-  "check-run once the list args are well formed, else declines :bad-args."
-  [c]
-  (jargs/guard c bad-lists check-run))

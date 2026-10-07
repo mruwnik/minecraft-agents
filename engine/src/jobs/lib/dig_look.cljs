@@ -1,16 +1,17 @@
 (ns jobs.lib.dig-look
   "Looking after a dig: a body that digs into rock sees what it laid open only by turning to it. The helpers the digging
   jobs (stair, tunnel, dig-in, retreat) share; memory keys :dug-at and :settled are the calling job's."
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.util :as u]))
 
-(def settings
-  {::flow-delay-ticks {:default 34 :type :int :min 1
+(a/defargs settings
+  {::flow-delay-ticks {:default 34 :spec (a/int-in 1 nil)
                        :doc "One overworld lava flow delay (30 game ticks) with a few ticks over, in game ticks."}
-   ::settle-wait-ms {:default 500 :type :int :min 0 :doc "One wait while a flow delay runs (wait-settled!), in ms."}
-   ::settle-waits {:default 6 :type :int :min 0 :doc "Most waits of wait-settled!."}})
+   ::settle-wait-ms {:default 500 :spec (a/int-in 0 nil) :doc "One wait while a flow delay runs (wait-settled!), in ms."}
+   ::settle-waits {:default 6 :spec (a/int-in 0 nil) :doc "Most waits of wait-settled!."}})
 
 (defn flow-delay-ticks [] (settings/get settings ::flow-delay-ticks))
 (defn settle-wait-ms [] (settings/get settings ::settle-wait-ms))

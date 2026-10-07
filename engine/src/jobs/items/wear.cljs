@@ -1,5 +1,6 @@
 (ns jobs.items.wear
-  (:require [jobs.lib.armour :as armour]
+  (:require [engine.args :as a]
+            [jobs.lib.armour :as armour]
             [engine.ctx :as ctx]
             [jobs.lib.util :as u]))
 
@@ -11,8 +12,8 @@
   :reason \"not-armour\" (the item is no armour piece) or \"no-item\" (not carried) comes with warn wear.refused.
   A piece the server does not take gives :reason \"failed\" and :status, warn wear.failed.")
 
-(def args
-  {:item {:doc "the armour piece to wear; nil wears the best carried piece for each slot" :default nil}})
+(a/defargs args
+  {:item {:doc "the armour piece to wear; nil wears the best carried piece for each slot" :spec a/item? :default nil}})
 
 (defn check
   "Always runnable; the item, when given, is checked by the round."

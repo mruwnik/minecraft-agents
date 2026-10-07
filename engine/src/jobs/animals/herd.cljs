@@ -1,5 +1,6 @@
 (ns jobs.animals.herd
-  (:require [jobs.lib.animals :as animals]
+  (:require [engine.args :as a]
+            [jobs.lib.animals :as animals]
             [engine.ctx :as ctx]
             [jobs.lib.declined :as declined]
             [jobs.lib.util :as u]
@@ -76,14 +77,14 @@
   Zones: the leash child also refuses an animal standing in another owner's zone or claim (see jobs.animals.leash);
   :ignore-zones? true is passed to it.")
 
-(def args
-  {:mob {:doc "the animal's name, such as \"cow\"" :default nil}
-   :box {:doc "the pen: {:min {:x :y :z} :max {:x :y :z}}, inclusive, the feet cells of its floor" :default nil}
-   :target {:doc "grown animals of :mob the pen should hold" :default 2}
-   :gate {:doc "the fence gate {:x :y :z} to bring them through; the pen's usable gate nearest the body when nil" :type :pos :default nil}
-   :radius {:doc "animals within this many blocks of the body are fetched" :default 24}
-   :timeout-s {:doc "seconds one animal may take from its lead on until it is let go" :default 180}
-   :ignore-zones? animals/ignore-zones-arg})
+(a/defargs args
+  {:mob {:doc "the animal's name, such as \"cow\"" :spec a/name? :default nil}
+   :box {:doc "the pen: {:min {:x :y :z} :max {:x :y :z}}, inclusive, the feet cells of its floor" :spec a/box? :default nil}
+   :target {:doc "grown animals of :mob the pen should hold" :spec (a/int-in 0 nil) :default 2}
+   :gate {:doc "the fence gate {:x :y :z} to bring them through; the pen's usable gate nearest the body when nil" :spec ::a/pos :default nil}
+   :radius {:doc "animals within this many blocks of the body are fetched" :spec (a/num-in 0 nil) :default 24}
+   :timeout-s {:doc "seconds one animal may take from its lead on until it is let go" :spec (a/num-in 0 nil) :default 180}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 
 (def leading
   "The phases in which the animal is on the lead and the walk is the body's own: watched before each step, bound

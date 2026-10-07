@@ -1,5 +1,6 @@
 (ns jobs.animals.tend
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
             [jobs.lib.look :as look]
             [jobs.lib.steps :as steps]
@@ -34,12 +35,12 @@
   collect-drops look in a radius around the body that covers the box, so animals or items just outside it can
   be fed, sheared or picked up.")
 
-(def args
-  {:mob {:doc "mob type name of the animals in the pen" :default "cow"}
-   :box {:doc "the pen: {:min {:x :y :z} :max {:x :y :z}}, inclusive; required (without it the check declines)" :default nil}
-   :target {:doc "adult herd size wanted; babies count toward it, they grow" :default 4}
-   :chest {:doc "chest position {:x :y :z} for the produce; nil: do not store" :type :pos :default nil}
-   :keep {:doc "{item-name count}: how many of a produce item deposit leaves carried" :default {}}})
+(a/defargs args
+  {:mob {:doc "mob type name of the animals in the pen" :spec a/name? :default "cow"}
+   :box {:doc "the pen: {:min {:x :y :z} :max {:x :y :z}}, inclusive; required (without it the check declines)" :spec a/box? :default nil}
+   :target {:doc "adult herd size wanted; babies count toward it, they grow" :spec (a/int-in 0 nil) :default 4}
+   :chest {:doc "chest position {:x :y :z} for the produce; nil: do not store" :spec ::a/pos :default nil}
+   :keep {:doc "{item-name count}: how many of a produce item deposit leaves carried" :spec (a/map-of string? number?) :default {}}})
 
 (def steps [:breed :cull :shear :collect :deposit])
 

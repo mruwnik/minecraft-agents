@@ -1,5 +1,6 @@
 (ns jobs.build.from-plan
-  (:require [clojure.string :as str]
+  (:require [engine.args :as a]
+            [clojure.string :as str]
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
@@ -68,15 +69,15 @@
   (jobs.items.get-tool). With :fetch false, or once a fetch failed, the build goes on with what is carried and ends
   :short as before, a pickaxe block given up :no-tool.")
 
-(def args
-  {:plan {:doc "id of a plan of the body's world" :default nil}
-   :part {:doc "only the cells of this part" :default nil}
-   :reach {:doc "cells whose centre is this close to the eye are placed without walking, in blocks" :default u/eye-reach}
-   :give-up {:doc "refused places or failed walks after which a cell is given up" :default 3}
-   :accept {:doc "fluid hazards of a cell taken: :fluid-adjacent (water beside; placing beside or into water seals and bridges), :lava-adjacent (lava beside; not taken by default: the body stands beside the cell)" :default [:fluid-adjacent]}
-   :fetch {:doc "get the blocks and tools the plan lacks (jobs.lib.fetch): true, a set of kinds or a map of limits; false builds with what is carried" :default true}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
-   :sturdy-ground {:doc "a sturdy block on the ground of a rail line (plan.rail/ground) is no wrong block, whatever fill the plan wants there" :default false}})
+(a/defargs args
+  {:plan {:doc "id of a plan of the body's world" :spec a/name? :default nil}
+   :part {:doc "only the cells of this part" :spec a/name? :default nil}
+   :reach {:doc "cells whose centre is this close to the eye are placed without walking, in blocks" :spec (a/num-in 0 nil) :default u/eye-reach}
+   :give-up {:doc "refused places or failed walks after which a cell is given up" :spec (a/int-in 1 nil) :default 3}
+   :accept {:doc "fluid hazards of a cell taken: :fluid-adjacent (water beside; placing beside or into water seals and bridges), :lava-adjacent (lava beside; not taken by default: the body stands beside the cell)" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block :under-feet}) :default [:fluid-adjacent]}
+   :fetch {:doc "get the blocks and tools the plan lacks (jobs.lib.fetch): true, a set of kinds or a map of limits; false builds with what is carried" :spec fetch/option? :default true}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
+   :sturdy-ground {:doc "a sturdy block on the ground of a rail line (plan.rail/ground) is no wrong block, whatever fill the plan wants there" :spec boolean? :default false}})
 
 
 ;; ------------------------------------------------------------------ pure helpers

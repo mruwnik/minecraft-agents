@@ -2,6 +2,7 @@
   "Restoring saved state after a restart: reflex jobs dropped, jobs and register entries that no longer
   resolve dropped or stripped of stale args."
   (:require [engine.core.base :refer [emit! empty-state job-of reflex-text remove-listed state trigger-def]]
+            [engine.args :as a]
             [engine.expr :as expr]
             [engine.memory :as mem]
             [clojure.string :as str]))
@@ -38,11 +39,17 @@
        (catch :default e (ex-message e))))
 
 (defn stale-keys
-  "The arg keys of job sym that its registry entry no longer declares, sorted; nil when none."
+  "The arg keys of job sym that its registry entry no longer declares, at any level, sorted; a key of a group is its
+  path [group key]; nil when none."
   [registry sym args]
   (let [entry (get registry sym)]
     (when (contains? entry :args)
-      (seq (sort-by str (remove (set (keys (:args entry))) (keys args)))))))
+      (seq (map (fn [[path _]] (if (next path) path (first path))) (a/unknown (:args entry) args))))))
+
+(defn strip-keys
+  "args without the stale keys ks (keys or [group key] paths)."
+  [args ks]
+  (reduce (fn [m k] (if (vector? k) (update-in m (pop k) dissoc (peek k)) (dissoc m k))) args ks))
 
 (defn strip-form
   "[form' stale] for a job spec form: every leaf's args without the keys its job no longer declares;
@@ -59,7 +66,7 @@
       :else (let [args (first parts)
                   ks (stale-keys registry head args)]
               (if ks
-                [(list head (apply dissoc args ks)) [[head (vec ks)]]]
+                [(list head (strip-keys args ks)) [[head (vec ks)]]]
                 [form []])))))
 
 (defn strip-node
@@ -67,7 +74,7 @@
   [registry node]
   (case (:op node)
     :leaf (let [ks (stale-keys registry (:job node) (:args node))]
-            [(cond-> node ks (update :args #(apply dissoc % ks))) (if ks [[(:job node) (vec ks)]] [])])
+            [(cond-> node ks (update :args strip-keys ks)) (if ks [[(:job node) (vec ks)]] [])])
     :repeat (let [[c stale] (strip-node registry (:child node))] [(assoc node :child c) stale])
     (let [rs (mapv #(strip-node registry %) (:children node))]
       [(assoc node :children (mapv first rs)) (into [] (mapcat second) rs)])))

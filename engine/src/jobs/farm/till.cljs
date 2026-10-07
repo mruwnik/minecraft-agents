@@ -1,5 +1,6 @@
 (ns jobs.farm.till
-  (:require [clojure.string :as str]
+  (:require [engine.args :as a]
+            [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
@@ -26,14 +27,14 @@
   every tillable cell is refused (wait :refused); cells refused later are skipped :not-permitted.
   Result: {:tilled n :skipped {pos reason}}; with none tilled and cells skipped it is {:status :stopped :reason r}, r the one skip reason or :nothing-tilled when mixed.")
 
-(def args
-  {:from {:doc "box corner (inclusive); with :to, any order" :type :pos :default nil}
-   :to {:doc "opposite box corner (inclusive)" :type :pos :default nil}
-   :center {:doc "centre of a square of cells at its y; with :radius" :type :pos :default nil}
-   :radius {:doc "the square covers |dx|,|dz| <= radius, 0 to 7" :type :int :min 0 :max 7 :default nil}
-   :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :default nil}
-   :fetch {:doc "get a hoe when none is carried (jobs.lib.fetch): true, a set of kinds or a map of limits; false waits :no-tool" :default true}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
+(a/defargs args
+  {:from {:doc "box corner (inclusive); with :to, any order" :spec ::a/pos :default nil}
+   :to {:doc "opposite box corner (inclusive)" :spec ::a/pos :default nil}
+   :center {:doc "centre of a square of cells at its y; with :radius" :spec ::a/pos :default nil}
+   :radius {:doc "the square covers |dx|,|dz| <= radius, 0 to 7" :spec (a/int-in 0 7) :default nil}
+   :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :spec a/name? :default nil}
+   :fetch {:doc "get a hoe when none is carried (jobs.lib.fetch): true, a set of kinds or a map of limits; false waits :no-tool" :spec fetch/option? :default true}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (def max-cells 256)
 (def tillable #{"dirt" "grass_block" "dirt_path"})

@@ -1,5 +1,6 @@
 (ns jobs.access.stair
-  (:require [clojure.string :as str]
+  (:require [engine.args :as a]
+            [clojure.string :as str]
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
@@ -75,16 +76,16 @@
   for the block (child :fetch) first, then walks back to the cell it stood on (child :fetch-back) and goes on. A
   parent's stair child does not fetch.")
 
-(def args
-  {:dir {:doc ":down or :up" :default :down}
-   :heading {:doc ":north :east :south or :west" :default nil}
-   :steps {:doc "steps to cut; or give :y" :default nil}
-   :y {:doc "feet height to end at, instead of :steps" :default nil}
-   :accept {:doc "hazards taken: #{:water :lava :falling-block :under-feet}" :default #{}}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
-   :note {:doc "a map: each cell dug is written to the tidy ledger at once with it (jobs.lib.escape/note-hole!; go-to's escalation)" :default nil}
-   :fetch {:doc "get a missing pickaxe instead of waiting :no-tool (jobs.lib.fetch), and a block to seal lava with: true, a set of kinds or a map of limits" :default true}
-   :on-lava {:doc "exposed lava: :seal (fill it with a building block, then go on) or :stop" :default :seal}})
+(a/defargs args
+  {:dir {:doc ":down or :up" :spec #{:down :up} :default :down}
+   :heading {:doc ":north :east :south or :west" :spec #{:north :east :south :west} :default nil}
+   :steps {:doc "steps to cut; or give :y" :spec (a/int-in 1 nil) :default nil}
+   :y {:doc "feet height to end at, instead of :steps" :spec (a/num-in nil nil) :default nil}
+   :accept {:doc "hazards taken: #{:water :lava :falling-block :under-feet}" :spec (a/coll-of #{:water :lava :falling-block :under-feet}) :default #{}}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
+   :note {:doc "a map: each cell dug is written to the tidy ledger at once with it (jobs.lib.escape/note-hole!; go-to's escalation)" :spec map? :default nil}
+   :fetch {:doc "get a missing pickaxe instead of waiting :no-tool (jobs.lib.fetch), and a block to seal lava with: true, a set of kinds or a map of limits" :spec fetch/option? :default true}
+   :on-lava {:doc "exposed lava: :seal (fill it with a building block, then go on) or :stop" :spec #{:seal :stop} :default :seal}})
 
 (def headings {:north [0 -1] :south [0 1] :east [1 0] :west [-1 0]})
 (def rises {:down -1 :up 1})

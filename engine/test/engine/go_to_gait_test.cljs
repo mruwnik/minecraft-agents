@@ -3,9 +3,11 @@
   speed, never sprints, and holds sneak on level steps only (released for drops, gaps, climbs, water, in the air); the body
   setting is the default, the arg wins."
   (:require [cljs.test :refer [deftest is are async]]
+            [engine.expr :as expr]
             [engine.path.planner-tuned :as planner]
             [engine.path-preview-test :as pt]
             [engine.planner-fixture :as pf]
+            [engine.registry :as registry]
             [engine.test-util :as tu :refer [floor box]]
             [jobs.lib.walk :as walk]
             [jobs.lib.walk.world :as wworld]))
@@ -75,12 +77,11 @@
   (is (<= (heuristic-at {:walkS 0.7722007722007722 :sprintS 0.7722007722007722} 2 2) (+ 5 1e-9))
       "sneak: no more than swimming (swimH 0.5 a block)"))
 
-(deftest a-bad-gait-is-refused
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (doseq [bad [:run "walk" 3]]
-          (is (= :bad-gait (:reason (await (preview-out flat {:pos [30 64 1] :gait bad})))) (pr-str bad)))))))
+(deftest a-bad-gait-is-refused-at-submit
+  (doseq [bad [:run "walk" 3]]
+    (is (re-find #":gait must be one of :auto, :sneak, :walk"
+                 (expr/problem registry/jobs (list 'jobs.movement.path-preview {:pos [30 64 1] :gait bad})))
+        (pr-str bad))))
 
 (defn policy [setting args]
   (wworld/body-policy {:primitives (tu/fake {:self {:health 20 :food 20}}) :args args

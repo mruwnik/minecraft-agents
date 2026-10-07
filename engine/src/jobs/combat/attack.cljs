@@ -1,5 +1,5 @@
 (ns jobs.combat.attack
-  (:require [jobs.lib.args :as jargs]
+  (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost.weapon :as weapon]
@@ -36,17 +36,17 @@
   Otherwise the check passes while a target not given up on is within :radius, and always once the job has started.
   Creepers get no special handling. The job does not guard the body's health: the survival register sits above it and cuts it.")
 
-(def args
-  {:targets {:doc "entity ids, player usernames and mob types to kill; a single one may be given bare" :default []}
-   :radius {:doc "targets within this many blocks count" :type :number :min 0 :default 16}
-   :weapons {:doc "item name substrings that count as weapons" :default combat/default-weapons}
-   :attack-gap-ms {:doc "least time between swings; nil: the held weapon's cooldown" :type :number :min 0 :default nil}
-   :lost-s {:doc "seconds without a target in radius before the job is done" :type :number :min 0 :default 5}
-   :timeout-s {:doc "seconds from the first round before the job gives up" :type :number :min 0 :default 120}
-   :no-damage-hits {:doc "swings in a row that do no damage before a target is given up on" :type :int :min 1 :default 4}
-   :max-hits {:doc "hits without a kill before a target is given up on" :type :int :min 1 :default 40}
-   :walk-timeout-s {:doc "bound of one walk towards a target" :type :number :min 0 :default 5}
-   :absent {:doc ":done ends the job with reason :absent when no target is present after a 2 s grace; :wait makes the check decline until one is" :type :enum :values [:done :wait] :default :done}})
+(a/defargs args
+  {:targets {:doc "entity ids, player usernames and mob types to kill; a single one may be given bare" :spec (a/or-of number? string? (a/coll-of (a/or-of number? string?))) :default []}
+   :radius {:doc "targets within this many blocks count" :spec (a/num-in 0 nil) :default 16}
+   :weapons {:doc "item name substrings that count as weapons" :spec (a/coll-of (a/or-of string? keyword?)) :default combat/default-weapons}
+   :attack-gap-ms {:doc "least time between swings; nil: the held weapon's cooldown" :spec (a/num-in 0 nil) :default nil}
+   :lost-s {:doc "seconds without a target in radius before the job is done" :spec (a/num-in 0 nil) :default 5}
+   :timeout-s {:doc "seconds from the first round before the job gives up" :spec (a/num-in 0 nil) :default 120}
+   :no-damage-hits {:doc "swings in a row that do no damage before a target is given up on" :spec (a/int-in 1 nil) :default 4}
+   :max-hits {:doc "hits without a kill before a target is given up on" :spec (a/int-in 1 nil) :default 40}
+   :walk-timeout-s {:doc "bound of one walk towards a target" :spec (a/num-in 0 nil) :default 5}
+   :absent {:doc ":done ends the job with reason :absent when no target is present after a 2 s grace; :wait makes the check decline until one is" :spec #{:done :wait} :default :done}})
 
 (def reach 3)
 (def absent-grace-ms
@@ -101,7 +101,7 @@
   (let [given-up (:given-up (ctx/mem c) {})]
     (into [] (remove #(contains? given-up (.-id %))) (present c))))
 
-(defn check-run [c]
+(defn check [c]
   (or (boolean (or (:started (ctx/mem c))
                    (not= :wait (:absent (:args c)))
                    (seq (candidates c))))
@@ -280,12 +280,3 @@
   "The whole fight: steps until the job finishes (cleared, gave up, lost, timeout, absent)."
   [c]
   (await (pace/steps! c #(step c))))
-
-(def bad-lists
-  "Args checked by jobs.lib.args."
-  {:targets :targets :weapons :names})
-
-(defn check
-  "check-run once the list args are well formed, else declines :bad-args."
-  [c]
-  (jargs/guard c bad-lists check-run))

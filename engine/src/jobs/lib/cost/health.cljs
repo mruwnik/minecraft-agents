@@ -10,13 +10,14 @@
   or with a health or absorption that is not a number.
   survivable-budget: the hp a walk that must arrive may spend: all but 1 (the food cap and the margin dropped), still under
   a caller's :max-damage, and just the damage-budget when the caller set a :min-health (a floor that is never crossed)."
-  (:require [engine.settings :as settings]
+  (:require [engine.args :as a]
+            [engine.settings :as settings]
             [jobs.lib.foods :as foods]))
 
-(def settings
-  {::default-min-health {:default 12 :doc "Health a walk does not spend below." :type :int :min 0}
-   ::margin {:default 1 :doc "hp left over the floor." :type :int :min 0}
-   ::max-scale {:default 4 :doc "The most the price of an hp rises near zero health." :type :int :min 1}})
+(a/defargs settings
+  {::default-min-health {:default 12 :doc "Health a walk does not spend below." :spec (a/int-in 0 nil)}
+   ::margin {:default 1 :doc "hp left over the floor." :spec (a/int-in 0 nil)}
+   ::max-scale {:default 4 :doc "The most the price of an hp rises near zero health." :spec (a/int-in 1 nil)}})
 
 (def hp-seconds "Seconds one hp costs at full health." 10)
 

@@ -1,5 +1,6 @@
 (ns jobs.memory.forget-place
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.places :as places]))
 
 (def doc
@@ -9,8 +10,8 @@
   :bad-name, :reserved-name, :no-such-place (nothing recorded under that name) or :not-a-place (the name holds
   other memory, which is left alone).")
 
-(def args
-  {:name {:doc "the place's name: a keyword or string" :default nil}})
+(a/defargs args
+  {:name {:doc "the place's name: a keyword or string" :spec (a/or-of keyword? string?) :default nil}})
 
 (defn check [_c] true)
 

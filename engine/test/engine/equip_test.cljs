@@ -6,6 +6,7 @@
             [engine.events :as events]
             [engine.fetch-test :as ft]
             [engine.fake :as fake]
+            [engine.expr :as expr]
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]))
@@ -83,12 +84,9 @@
           (is (= :unknown-item (:reason @out)))
           (is (= :stopped (:status @out))))))))
 
-(deftest a-bad-hand-is-refused
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [out]} (await (equip (stacks "dirt") {:item "dirt" :hand "foot"}))]
-          (is (= {:status :stopped :reason :bad-args} (select-keys @out [:status :reason]))))))))
+(deftest a-bad-hand-is-refused-at-submit
+  (is (re-find #"jobs.items.equip :hand must be one of \"main\", \"off\", got \"foot\""
+               (expr/problem registry/jobs '(jobs.items.equip {:item "dirt" :hand "foot"})))))
 
 (deftest a-default-call-gets-a-missing-item-from-a-seen-chest-then-holds-it
   (async done

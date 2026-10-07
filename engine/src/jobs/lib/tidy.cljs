@@ -6,7 +6,8 @@
   {:cell [x y z] :action :dig|:place :was block-before :now block-after :zone/:claim/:plan :tries n :job id}.
   :job is the top-level job that recorded it; the :tidy-pending trigger waits until that job has ended.
   jobs.survival.restore-broken puts the cells back when the body is safe. Best effort, never at the cost of safety."
-  (:require [engine.settings :as settings]
+  (:require [engine.args :as a]
+            [engine.settings :as settings]
             [engine.game :as game]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
@@ -15,8 +16,8 @@
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]))
 
-(def settings
-  {::max-tries {:default 3 :doc "Tries to tidy one cell before it is left." :type :int :min 1}})
+(a/defargs settings
+  {::max-tries {:default 3 :doc "Tries to tidy one cell before it is left." :spec (a/int-in 1 nil)}})
 
 (def tidy-policy
   "Body memory policy of the :tidy entries: they outlive a restart for six hours."

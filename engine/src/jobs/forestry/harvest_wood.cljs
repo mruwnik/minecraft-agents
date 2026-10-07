@@ -1,5 +1,6 @@
 (ns jobs.forestry.harvest-wood
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a] [jobs.lib.fetch :as fetch]
+            [engine.ctx :as ctx]
             [clojure.string :as str]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
@@ -18,13 +19,13 @@
   with :count, :pos, :reason (:no-sapling or :not-planted) and :text. The status stays :completed (the wood is
   the goal); the result is {:replant-owed n} then. With :count, the three phases repeat on the next tree until that many logs are carried; when no tree is left to fell it ends :stopped :no-tree with :got (and :replant-owed, the warnings as at a normal end; waiting for a tree only before the first is felled). A missing sapling is fetched by plant-sapling (a seen chest, or breaking the seen leaves of its tree); when none can be got it stays owed.")
 
-(def args
-  {:species {:doc "log species; any when nil" :default nil}
-   :radius {:doc "search radius in blocks" :default default-radius}
-   :filter {:doc "items to collect; the species' log, sapling, stick and apple when nil" :default nil}
-   :ignore-zones? {:doc "act regardless of zones and claims (passed to the felling and the planting); the rules of the game allow it" :default false}
-   :count {:doc "logs to carry: another tree is felled while fewer of the species' logs (any log when no species) are carried; nil: one tree" :default nil}
-   :fetch {:doc "get a missing sapling (passed to plant-sapling; see its :fetch): true, a set of kinds or a map of limits; false leaves the replant owed" :default true}})
+(a/defargs args
+  {:species {:doc "log species; any when nil" :spec a/name? :default nil}
+   :radius {:doc "search radius in blocks" :spec (a/num-in 0 nil) :default default-radius}
+   :filter {:doc "items to collect; the species' log, sapling, stick and apple when nil" :spec (a/coll-of a/item?) :default nil}
+   :ignore-zones? {:doc "act regardless of zones and claims (passed to the felling and the planting); the rules of the game allow it" :spec boolean? :default false}
+   :count {:doc "logs to carry: another tree is felled while fewer of the species' logs (any log when no species) are carried; nil: one tree" :spec (a/int-in 1 nil) :default nil}
+   :fetch {:doc "get a missing sapling (passed to plant-sapling; see its :fetch): true, a set of kinds or a map of limits; false leaves the replant owed" :spec fetch/option? :default true}})
 
 (defn phases
   "The children in order: [phase job args]; the phase is also the slot. tree is the felled tree's base, if any."

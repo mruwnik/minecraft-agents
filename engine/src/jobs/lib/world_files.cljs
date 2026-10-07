@@ -24,7 +24,8 @@
     An entry is {:stamp [mtime size] :value v :error text}: :value the last good copy, :error the current file's
     trouble. The zone entry is {:missing true} while there is no file.
     :area-claims holds the claims file, :markers the markers file. :claims and :footprints are the plans' cells, by plan and by cell."
-  (:require [engine.settings :as settings]
+  (:require [engine.args :as a]
+            [engine.settings :as settings]
             ["fs" :as fs]
             ["path" :as path]
             [clojure.string :as str]
@@ -33,10 +34,10 @@
             [plan.parse :as parse]
             [plan.shape :as shape]))
 
-(def settings
-  {::default-every-ms {:default 3000 :doc "How often a world file is re-read, in ms." :type :int :min 0}
-   ::default-marker-limit {:default 10 :doc "Markers a world file listing returns by default." :type :int :min 1}
-   ::max-marker-limit {:default 50 :doc "The most markers a listing may ask for." :type :int :min 1}})
+(a/defargs settings
+  {::default-every-ms {:default 3000 :doc "How often a world file is re-read, in ms." :spec (a/int-in 0 nil)}
+   ::default-marker-limit {:default 10 :doc "Markers a world file listing returns by default." :spec (a/int-in 1 nil)}
+   ::max-marker-limit {:default 50 :doc "The most markers a listing may ask for." :spec (a/int-in 1 nil)}})
 
 (defn default-every-ms [] (settings/get settings ::default-every-ms))
 

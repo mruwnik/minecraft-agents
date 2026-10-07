@@ -1,5 +1,6 @@
 (ns jobs.access.cleanup
-  (:require [engine.game :as game]
+  (:require [engine.args :as a]
+            [engine.game :as game]
             [jobs.access.stair :as stair]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.access.rules :as rules]
@@ -60,13 +61,13 @@
   The check declines while nothing is offered. It also declines while no zone list has been read, with one warn
   cleanup.declined.")
 
-(def args
-  {:job {:doc "nil: entries no live job owns; \"jN\": that instance's and its children's; :all: every entry" :default nil}
+(a/defargs args
+  {:job {:doc "nil: entries no live job owns; \"jN\": that instance's and its children's; :all: every entry" :spec (a/or-of #{:all} a/name?) :default nil}
    :accept {:doc "dig hazards accepted: :fluid-adjacent (water beside), :lava-adjacent, :falling-block"
-            :default #{:fluid-adjacent}}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
-   :reach {:doc "cells whose centre is this close to the eye are dug from where the body stands, in blocks" :default u/bucket-reach}
-   :give-up {:doc "walks ending out of reach, or failed digs, after which a cell is held" :default 2}})
+            :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block :under-feet}) :default #{:fluid-adjacent}}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
+   :reach {:doc "cells whose centre is this close to the eye are dug from where the body stands, in blocks" :spec (a/num-in 0 nil) :default u/bucket-reach}
+   :give-up {:doc "walks ending out of reach, or failed digs, after which a cell is held" :spec (a/int-in 1 nil) :default 2}})
 
 
 (def walk-range 3)

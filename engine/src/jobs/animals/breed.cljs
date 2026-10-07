@@ -1,5 +1,6 @@
 (ns jobs.animals.breed
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.util :as u]))
@@ -44,14 +45,14 @@
   Zones: an animal standing in another owner's zone or claim, or in a plan's footprint, is left alone (warn
   breed.declined once, :reason :refused, or :no-zones when no zone list was read). :ignore-zones? true skips the check.")
 
-(def args
-  {:mob {:doc "the mob type to breed, such as \"cow\"" :default nil}
-   :count {:doc "animals to feed" :default 2}
-   :radius {:doc "animals within this many blocks count" :default 16}
-   :walk-timeout-s {:doc "bound of one walk towards an animal" :default 5}
-   :timeout-s {:doc "seconds of working with the animals (not fetching) before the job gives up" :default 120}
-   :fetch {:doc "get breeding food when none is carried (jobs.lib.fetch): true, a set of kinds or a map of limits; false ends :no-food" :default true}
-   :ignore-zones? animals/ignore-zones-arg})
+(a/defargs args
+  {:mob {:doc "the mob type to breed, such as \"cow\"" :spec a/name? :default nil}
+   :count {:doc "animals to feed" :spec (a/int-in 1 nil) :default 2}
+   :radius {:doc "animals within this many blocks count" :spec (a/num-in 0 nil) :default 16}
+   :walk-timeout-s {:doc "bound of one walk towards an animal" :spec (a/num-in 0 nil) :default 5}
+   :timeout-s {:doc "seconds of working with the animals (not fetching) before the job gives up" :spec (a/num-in 0 nil) :default 120}
+   :fetch {:doc "get breeding food when none is carried (jobs.lib.fetch): true, a set of kinds or a map of limits; false ends :no-food" :spec fetch/option? :default true}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 
 (def reach 3)
 (def max-in-row 3)

@@ -1,5 +1,6 @@
 (ns jobs.blocks.place
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
@@ -42,15 +43,15 @@
   of the item (child :fetch), then place. A failed fetch is remembered for :fail-minutes; meanwhile the check waits
   :need with {:fetch {:failed reason ...}}.")
 
-(def args
-  {:pos {:doc "the cell to fill, [x y z] or {:x :y :z}" :type :pos :default nil}
-   :item {:doc "the block item to place" :default nil}
-   :any-of {:doc "block items, the first carried one is placed (instead of :item)" :default nil}
-   :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :default nil}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
-   :clear {:doc "dig a plant, flower or snow layer out of the cell first; false places into what a placement overwrites" :default true}
-   :click {:doc "how to place it ({:against [x y z] :cursor [x y z] :yaw :pitch :sneak}, jobs.lib.placement/click); nil: plainly" :default nil}
-   :fetch {:doc "get the missing block item instead of waiting :need (jobs.lib.fetch): true, a set of kinds or a map of limits" :default true}})
+(a/defargs args
+  {:pos {:doc "the cell to fill, [x y z] or {:x :y :z}" :spec ::a/pos :default nil}
+   :item {:doc "the block item to place" :spec a/item? :default nil}
+   :any-of {:doc "block items, the first carried one is placed (instead of :item)" :spec (a/coll-of a/item?) :default nil}
+   :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :spec a/name? :default nil}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
+   :clear {:doc "dig a plant, flower or snow layer out of the cell first; false places into what a placement overwrites" :spec boolean? :default true}
+   :click {:doc "how to place it ({:against [x y z] :cursor [x y z] :yaw :pitch :sneak}, jobs.lib.placement/click); nil: plainly" :spec map? :default nil}
+   :fetch {:doc "get the missing block item instead of waiting :need (jobs.lib.fetch): true, a set of kinds or a map of limits" :spec fetch/option? :default true}})
 
 (defn wanted [{:keys [item any-of]}]
   (vec (if item [item] any-of)))

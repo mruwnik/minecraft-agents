@@ -1,6 +1,7 @@
 (ns engine.settings-engine-test
   "The engine family's tuning numbers: each keeps today's default and answers to a settings layer."
   (:require [cljs.test :refer [deftest is]]
+            [engine.args :as a]
             [engine.backoff :as backoff]
             [engine.entity-observations :as obs]
             [engine.event-api :as event-api]
@@ -48,7 +49,7 @@
   (doseq [[k spec] all-specs]
     (is (some? (namespace k)))
     (is (seq (:doc spec)) (str k " has a doc"))
-    (is (nil? (settings/spec-problem spec (:default spec))) (str k " default fits its spec"))))
+    (is (nil? (a/problem k (:default spec))) (str k " default fits its spec"))))
 
 (deftest a-layer-overrides-each-key-through-get
   (doseq [[fam specs] families [k spec] specs :let [v (inc (:default spec))]]
@@ -98,11 +99,10 @@
          {:hit-range senses/hit-range :monster-range senses/monster-range :monster-height senses/monster-height})))
 
 (deftest events-max-bytes-is-validated-on-its-setting
-  (let [spec (get events/settings :engine.events/max-bytes)]
-    (doseq [ok [1024 4096 67108864]]
-      (is (nil? (settings/spec-problem spec ok)) (str ok)))
-    (doseq [bad [1023 0 -1 1.5 "4096" nil]]
-      (is (some? (settings/spec-problem spec bad)) (str (pr-str bad))))))
+  (doseq [ok [1024 4096 67108864]]
+    (is (nil? (a/problem :engine.events/max-bytes ok)) (str ok)))
+  (doseq [bad [1023 0 -1 1.5 "4096" nil]]
+    (is (some? (a/problem :engine.events/max-bytes bad)) (str (pr-str bad)))))
 
 (deftest events-make-rejects-a-cap-below-the-minimum
   (is (thrown? js/Error (events/make {:file "/nonexistent/x.ndjson" :max-bytes 1023})))

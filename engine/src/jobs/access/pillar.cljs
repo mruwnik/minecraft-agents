@@ -1,5 +1,6 @@
 (ns jobs.access.pillar
-  (:require [jobs.lib.ledger :as ledger]
+  (:require [engine.args :as a]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
@@ -39,10 +40,10 @@
   :not-on-solid, :zone, :footprint, :no-zones, :not-loaded, :not-replaceable, :off-column (the body left the
   column it started in), :place-failed (3 failed jumps in a row with the body in the column, :detail the primitive's reason) or :bad-args.")
 
-(def args
-  {:height {:doc "blocks to rise, 1 to 64" :default 1}
-   :item {:doc "the block to pillar with; nil: dirt while any is carried, then cobblestone" :default nil}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
+(a/defargs args
+  {:height {:doc "blocks to rise, 1 to 64" :spec (a/int-in 1 64) :default 1}
+   :item {:doc "the block to pillar with; nil: dirt while any is carried, then cobblestone" :spec a/item? :default nil}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (def max-height 64)
 

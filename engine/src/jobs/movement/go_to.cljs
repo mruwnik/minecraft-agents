@@ -1,5 +1,6 @@
 (ns jobs.movement.go-to
-  (:require [clojure.string :as str]
+  (:require [engine.args :as a]
+            [clojure.string :as str]
             [engine.ctx :as ctx]
             [engine.memory :as mem]
             [engine.settings :as settings]
@@ -23,7 +24,8 @@
   "Walk to :pos ([x y z] or {:x :y :z}, fractions floored to the cell) until the body's cell is within :range cells of
   it (range 0: in that cell, 1: next to it). :place (a name such as :home, set by jobs.memory.set-place) walks to
   that place's recorded position instead of :pos; a name not in memory falls back to the shared marker of that name (jobs.lib.world/marker).
-  - Refused at once, before any walk: a :pos that is not one (:bad-pos), a :place that is not a valid name (:bad-name), a :tolls entry that is not {:x :y :z :factor} of finite numbers (:bad-tolls), a :drop-cost that is not a number >= 0 or false (:bad-drop-cost), a :costs that is not a map of known price names to numbers >= 0 (:bad-costs), a :landing that is not a map of block names to numbers (:bad-landing), a :gait that is not :auto, :walk or :sneak (:bad-gait), a :min-health outside 1-20 (:bad-min-health), a :max-damage below 0 (:bad-max-damage), a :hp-seconds that is not above 0 (:bad-hp-seconds), a :fall-margin, :flee-factor or :fight-factor that is not a number >= 0, a :danger-max-rate not above 0, a :danger-shape that is not {:sensed|:remembered|:creeper {:close :radius}} (:bad-fall-margin :bad-flee-factor :bad-fight-factor :bad-danger-max-rate :bad-danger-shape)
+  - Refused at submit (or the caller's call-child throws): an arg its spec refuses, such as a :tolls entry that is not {:x :y :z :factor} of finite numbers, a :drop-cost that is not a number >= 0 or false, a :costs that is not a map of known price names to numbers >= 0, a :landing that is not a map of block names to numbers, a :gait that is not :auto, :walk or :sneak, a :min-health outside 1-20, a :danger-shape that is not {:sensed|:remembered|:creeper {:close :radius}}.
+  - Refused at once, before any walk: a :pos outside the world (:bad-pos), a :place that is not a valid name (:bad-name)
     or has no recorded position (:unknown-place), a body with no pathWorld sensing (:unsupported). Both give a :refused warn and {:status :stopped :arrived false :reason <it> :text}.
   - One call is one whole attempt: it plans and walks (jobs.lib.walk: slices of about 100 ms of search, walks of at
     most 60 s each) until it arrives or gives up. A search that needs more slices walks on toward where it has got
@@ -69,39 +71,39 @@
     owner's zone is always shut again. A door that will not open is a wall for that walk (:door-stuck). Iron
     doors are walls.")
 
-(def args
-  {:pos {:doc "target position [x y z] or {:x :y :z}" :type :pos :default nil}
-   :place {:doc "name of a place in body memory (:home, :bed, ...) to walk to instead of :pos" :default nil}
-   :range {:doc "how close counts as there, in cells" :default 1}
+(a/defargs args
+  {:pos {:doc "target position [x y z] or {:x :y :z}" :spec ::a/pos :default nil}
+   :place {:doc "name of a place in body memory (:home, :bed, ...) to walk to instead of :pos" :spec (a/or-of keyword? string?) :default nil}
+   :range {:doc "how close counts as there, in cells" :spec (a/num-in 0 nil) :default 1}
    :doors {:doc "what to do at shut doors, gates and trapdoors: :shut (open, pass, shut again what the walk opened), :leave-open (open and pass), :never (walls)"
-           :default :shut}
+           :spec #{:shut :leave-open :never} :default :shut}
    :escalate {:doc "when shut in with no way out, pillar, stair or dig a door to get out (and put back what was dug); false: give up"
-              :default true}
-   :dangers {:doc "false: plan straight past known dangers (a walk up to the hostile being fought); true: keep away from them" :default true}
-   :dark {:doc "false: plan dark cells like lit ones; true: a dark cell (seen dark, or unseen at night) costs twice a lit one" :default true}
-   :tolls {:doc "cells to cross only as a last resort, [{:x :y :z :factor}]: each costs factor times its own seconds more (jobs.lib.cost farm-tolls, zone-tolls)" :default nil}
-   :min-health {:doc "hp (1-20) a drop or a plant's prick may not take the body below, less a margin of 1 (the walk's damage budget); 12 when absent; a floor the walk never crosses, not even when it goes over its budget" :default nil}
-   :food {:doc "the food level (0-20) the walk counts on for its damage budget, its sprinting and whether it can heal by waiting (18 or more regenerates); default the body's own" :default nil}
-   :fall-margin {:doc "hp the falls of a walk may cost over the plan before an info go-to damage-mismatch" :default wwatch/fall-margin}
-   :flee-factor {:doc "danger price: a known mob the body would flee costs this times its hp a second (jobs.lib.cost.danger)" :default (:flee cost/danger-stances)}
-   :fight-factor {:doc "danger price: a known mob the body would fight costs this times its hp a second" :default (:fight cost/danger-stances)}
-   :danger-max-rate {:doc "danger price: hp a second one known danger costs at most; above the default it also raises the total of all dangers a second (planner dangerCap)" :default cost/danger-max-rate}
-   :danger-shape {:doc (str "danger price: {:sensed|:remembered|:creeper {:close :radius}} blocks, full within :close, none past :radius; only the terms given replace the default (" (str/join ", " (map (fn [[k {:keys [close radius]}]] (str (name k) " " close " " radius)) cost/danger-default-shape)) ")") :default nil}
-   :hp-seconds {:doc "seconds an hp costs at full health when the planner weighs a drop or a plant's prick against a longer way (more at low health)" :default cost/hp-seconds}
-   :max-damage {:doc "hp at most a walk may spend on drops and plants that hurt (0: none), under the :min-health budget" :default nil}
-   :drop-cost {:doc "number: scales the cost of a drop (fall seconds and damage; 1 as is, 0 free, 5 dear); false: no drop of 2 or 3 at all. :one-way :closed instead refuses only a drop the body cannot climb back" :default 1}
-   :costs {:doc (str "map of price name to seconds, overriding the planner's price of a move (jobs.lib.cost.planner: " (str/join " " (map name (keys cost/planner-names))) "); a price left out keeps the planner's default" ) :default nil}
-   :landing {:doc "map of block name to the share of a fall's damage a landing on it takes (0.2: 80% off), negative: a bounce, no damage but settle time (only onto a pad in view, bouncing blocks or a wall all round, not under :gait :sneak; else the full fall); entries override the defaults hay_block 0.2, honey_block 0.2 and slime_block -1" :default nil}
-   :gait {:doc "how the body walks: :auto (sprints on long straight runs and over gaps, as the walker does), :walk (never sprints: no gap jump over 2 or more), :sneak (slow, never sprints; holds sneak on level steps so it never walks off an edge, lets go for a planned drop, gap, climb or water); nil: the body's :walk-settings :gait, else :auto" :default nil}
-   :goal-danger {:doc "when the goal lies within the full-cost radius of a known mob the body would flee: :wait (walk on; an info goal-in-danger says so once), :end (give up at once, :why :goal-dangerous with the mob)" :default :wait}
-   :zone-tolls {:doc "true: also toll the cells of other bodies' zones near each walk (jobs.lib.toll-cells/zone-walk-tolls), none with :ignore-zones?; for a job that respects zones" :default false}
-   :leg-s {:doc "walk one leg of at most this many seconds (0.1 to 120), then end {:arrived false :leg true} so the caller can re-aim at a moving target; nil: the whole way" :type :number :min 0.1 :max 120 :default nil}
-   :one-way {:doc "arg, not the :one-way key of a give-up result: :closed takes no drop of 2 or 3 or gap jump down that the body cannot climb back, and walks to no frontier of loaded land (a walk to something visible); :open (default) takes one when the land past it runs on into unloaded land" :default :open}
-   :retry {:doc "false: a walk that got no nearer gives up at once instead of walking again (up to 3 times), for a caller that re-aims itself" :default true}
-   :look-round {:doc "false: no look round on arrival, for a caller that keeps moving" :default true}
+              :spec boolean? :default true}
+   :dangers {:doc "false: plan straight past known dangers (a walk up to the hostile being fought); true: keep away from them" :spec boolean? :default true}
+   :dark {:doc "false: plan dark cells like lit ones; true: a dark cell (seen dark, or unseen at night) costs twice a lit one" :spec boolean? :default true}
+   :tolls {:doc "cells to cross only as a last resort, [{:x :y :z :factor}]: each costs factor times its own seconds more (jobs.lib.cost farm-tolls, zone-tolls)" :spec (a/valid-by "a list of {:x :y :z :factor} of finite numbers, :factor >= 0" wworld/tolls-problem) :default nil}
+   :min-health {:doc "hp (1-20) a drop or a plant's prick may not take the body below, less a margin of 1 (the walk's damage budget); 12 when absent; a floor the walk never crosses, not even when it goes over its budget" :spec (a/num-in 1 20) :default nil}
+   :food {:doc "the food level (0-20) the walk counts on for its damage budget, its sprinting and whether it can heal by waiting (18 or more regenerates); default the body's own" :spec (a/num-in 0 20) :default nil}
+   :fall-margin {:doc "hp the falls of a walk may cost over the plan before an info go-to damage-mismatch" :spec (a/num-in 0 nil) :default wwatch/fall-margin}
+   :flee-factor {:doc "danger price: a known mob the body would flee costs this times its hp a second (jobs.lib.cost.danger)" :spec (a/num-in 0 nil) :default (:flee cost/danger-stances)}
+   :fight-factor {:doc "danger price: a known mob the body would fight costs this times its hp a second" :spec (a/num-in 0 nil) :default (:fight cost/danger-stances)}
+   :danger-max-rate {:doc "danger price: hp a second one known danger costs at most; above the default it also raises the total of all dangers a second (planner dangerCap)" :spec a/pos-num? :default cost/danger-max-rate}
+   :danger-shape {:doc (str "danger price: {:sensed|:remembered|:creeper {:close :radius}} blocks, full within :close, none past :radius; only the terms given replace the default (" (str/join ", " (map (fn [[k {:keys [close radius]}]] (str (name k) " " close " " radius)) cost/danger-default-shape)) ")") :spec (a/valid-by "a map of :sensed, :remembered or :creeper to {:close :radius} numbers >= 0, :close under :radius" cost/danger-shape-problem) :default nil}
+   :hp-seconds {:doc "seconds an hp costs at full health when the planner weighs a drop or a plant's prick against a longer way (more at low health)" :spec a/pos-num? :default cost/hp-seconds}
+   :max-damage {:doc "hp at most a walk may spend on drops and plants that hurt (0: none), under the :min-health budget" :spec (a/num-in 0 nil) :default nil}
+   :drop-cost {:doc "number: scales the cost of a drop (fall seconds and damage; 1 as is, 0 free, 5 dear); false: no drop of 2 or 3 at all. :one-way :closed instead refuses only a drop the body cannot climb back" :spec (a/or-of (a/num-in 0 nil) false?) :default 1}
+   :costs {:doc (str "map of price name to seconds, overriding the planner's price of a move (jobs.lib.cost.planner: " (str/join " " (map name (keys cost/planner-names))) "); a price left out keeps the planner's default" ) :spec (a/valid-by "a map of planner price name to a number of seconds >= 0" cost/planner-costs-problem) :default nil}
+   :landing {:doc "map of block name to the share of a fall's damage a landing on it takes (0.2: 80% off), negative: a bounce, no damage but settle time (only onto a pad in view, bouncing blocks or a wall all round, not under :gait :sneak; else the full fall); entries override the defaults hay_block 0.2, honey_block 0.2 and slime_block -1" :spec (a/valid-by "a map of block name to a number" cost/landing-problem) :default nil}
+   :gait {:doc "how the body walks: :auto (sprints on long straight runs and over gaps, as the walker does), :walk (never sprints: no gap jump over 2 or more), :sneak (slow, never sprints; holds sneak on level steps so it never walks off an edge, lets go for a planned drop, gap, climb or water); nil: the body's :walk-settings :gait, else :auto" :spec #{:auto :walk :sneak} :default nil}
+   :goal-danger {:doc "when the goal lies within the full-cost radius of a known mob the body would flee: :wait (walk on; an info goal-in-danger says so once), :end (give up at once, :why :goal-dangerous with the mob)" :spec #{:wait :end "wait" "end"} :default :wait}
+   :zone-tolls {:doc "true: also toll the cells of other bodies' zones near each walk (jobs.lib.toll-cells/zone-walk-tolls), none with :ignore-zones?; for a job that respects zones" :spec boolean? :default false}
+   :leg-s {:doc "walk one leg of at most this many seconds (0.1 to 120), then end {:arrived false :leg true} so the caller can re-aim at a moving target; nil: the whole way" :spec (a/num-in 0.1 120) :default nil}
+   :one-way {:doc "arg, not the :one-way key of a give-up result: :closed takes no drop of 2 or 3 or gap jump down that the body cannot climb back, and walks to no frontier of loaded land (a walk to something visible); :open (default) takes one when the land past it runs on into unloaded land" :spec #{:open :closed} :default :open}
+   :retry {:doc "false: a walk that got no nearer gives up at once instead of walking again (up to 3 times), for a caller that re-aims itself" :spec boolean? :default true}
+   :look-round {:doc "false: no look round on arrival, for a caller that keeps moving" :spec boolean? :default true}
    :warn {:doc "false: a give-up or refusal is an info event, not a warn, for a caller that reports the failure itself"
-          :default true}
-   :ignore-zones? {:doc "act regardless of zones and claims in the escalation (pillar, stair, clear-path); the rules of the game allow it" :default false}})
+          :spec boolean? :default true}
+   :ignore-zones? {:doc "act regardless of zones and claims in the escalation (pillar, stair, clear-path); the rules of the game allow it" :spec boolean? :default false}})
 
 (def max-blocked 3)
 
@@ -295,10 +297,10 @@
                           (-> (dissoc :escalation :escalation-from :planned :holes-before)
                               (assoc :restore-pending true))))))
 
-(def settings
-  {::max-cut-restarts {:default 3 :doc "Cuts in a row, each sending the body back, before a go-to call gives up :cut-again." :type :int :min 1}
-   ::cut-progress {:default 2 :doc "Blocks a go-to's closest approach to its goal must improve to clear its cut count." :type :number :min 0}
-   ::send-back-margin {:default 3 :doc "Blocks farther from the goal than where the cut found the body a go-to restart must begin to count as sent back (knockback and in-place reflexes stay under it)." :type :number :min 0}})
+(a/defargs settings
+  {::max-cut-restarts {:default 3 :doc "Cuts in a row, each sending the body back, before a go-to call gives up :cut-again." :spec (a/int-in 1 nil)}
+   ::cut-progress {:default 2 :doc "Blocks a go-to's closest approach to its goal must improve to clear its cut count." :spec (a/num-in 0 nil)}
+   ::send-back-margin {:default 3 :doc "Blocks farther from the goal than where the cut found the body a go-to restart must begin to count as sent back (knockback and in-place reflexes stay under it)." :spec (a/num-in 0 nil)}})
 
 (defn max-cut-restarts [] (settings/get settings ::max-cut-restarts))
 (defn cut-progress [] (settings/get settings ::cut-progress))

@@ -1,11 +1,12 @@
 (ns jobs.lib.child
   "Run a child job to its end inside the parent's round, for children that still answer :continue per step."
   (:refer-clojure :exclude [run!])
-  (:require [engine.settings :as settings]
+  (:require [engine.args :as a]
+            [engine.settings :as settings]
             [engine.ctx :as ctx]))
 
-(def settings
-  {::default-max-calls {:default 400 :doc "Calls of one run! before it gives the round back with :continue." :type :int :min 1}})
+(a/defargs settings
+  {::default-max-calls {:default 400 :doc "Calls of one run! before it gives the round back with :continue." :spec (a/int-in 1 nil)}})
 
 (def pace-ms "The timer awaited between two calls, so a loop with no act never starves the event loop." 50)
 

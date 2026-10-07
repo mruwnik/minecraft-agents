@@ -1,5 +1,6 @@
 (ns jobs.movement.follow
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.util :as u]))
 
 (def doc
@@ -16,12 +17,12 @@
   - \"timeout\": :timeout-s passed. With :timeout-s nil it follows until cancelled.
   Idling is look and wait, neutral for backoff. A cut leaves nothing to undo. The last-seen position stays in job memory.")
 
-(def args
-  {:player {:doc "username to follow" :default nil}
-   :range {:doc "stay within this many blocks of the player" :default 3}
-   :radius {:doc "how far the player may be and still be seen" :default 64}
-   :lost-s {:doc "give up after the player has been out of sight this long" :default 10}
-   :timeout-s {:doc "stop after this long; nil follows until cancelled" :default nil}})
+(a/defargs args
+  {:player {:doc "username to follow" :spec a/name? :default nil}
+   :range {:doc "stay within this many blocks of the player" :spec (a/num-in 0 nil) :default 3}
+   :radius {:doc "how far the player may be and still be seen" :spec (a/num-in 0 nil) :default 64}
+   :lost-s {:doc "give up after the player has been out of sight this long" :spec (a/num-in 0 nil) :default 10}
+   :timeout-s {:doc "stop after this long; nil follows until cancelled" :spec (a/num-in 0 nil) :default nil}})
 
 (def absent-grace-ms 2000)
 (def idle-ms 500)

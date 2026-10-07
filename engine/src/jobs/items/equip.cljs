@@ -1,5 +1,6 @@
 (ns jobs.items.equip
-  (:require ["minecraft-data" :as minecraft-data]
+  (:require [engine.args :as a]
+            ["minecraft-data" :as minecraft-data]
             [engine.ctx :as ctx]
             [engine.game :as game]
             [jobs.lib.fetch :as fetch]
@@ -12,10 +13,10 @@
   :no-item (not carried), :unknown-item (no such item for the body's version), :bad-args (bad :hand), :failed (the
   server did not take it, with :equip the primitive's status), warn equip.refused.")
 
-(def args
-  {:item {:doc "the item to hold" :default nil}
-   :hand {:doc "\"main\" or \"off\"" :default "main"}
-   :fetch {:doc "get a missing item (jobs.lib.fetch): true, a set of kinds or a map of limits; false stops :no-item instead" :default true}})
+(a/defargs args
+  {:item {:doc "the item to hold" :spec a/item? :default nil}
+   :hand {:doc "\"main\" or \"off\"" :spec #{"main" "off"} :default "main"}
+   :fetch {:doc "get a missing item (jobs.lib.fetch): true, a set of kinds or a map of limits; false stops :no-item instead" :spec fetch/option? :default true}})
 
 (def dests {"main" "hand" "off" "off-hand"})
 (def slots {"main" :mainHand "off" :offHand})

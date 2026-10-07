@@ -1,5 +1,6 @@
 (ns jobs.animals.lead-to
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
             [jobs.lib.blocks :as b]
             [jobs.lib.util :as u]
@@ -65,17 +66,17 @@
   Zones: the leash child refuses an animal standing in another owner's zone or claim (see jobs.animals.leash);
   :ignore-zones? true is passed to it.")
 
-(def args
-  {:mob {:doc "the animal's name, such as \"cow\"" :default nil}
-   :pos {:doc "where to lead it {:x :y :z}; the :fence cell when nil" :type :pos :default nil}
-   :fence {:doc "the fence post {:x :y :z} to tie it to; unleash it at :pos when nil" :type :pos :default nil}
-   :range {:doc "how close to :pos counts as there" :default 2}
-   :radius {:doc "animals within this many blocks are leashed from where the job starts" :default 8}
-   :gather-radius {:doc "without :fence the animal is let go once it is within this many blocks of :pos" :default 3}
-   :gather-tries {:doc "without :fence how many times the body walks on to pull a trailing animal nearer" :default 3}
-   :watch-radius {:doc "how far from the body the led animal is looked for" :default 64}
-   :timeout-s {:doc "seconds from the first round (not the lead fetch) before the job gives up" :default 180}
-   :ignore-zones? animals/ignore-zones-arg})
+(a/defargs args
+  {:mob {:doc "the animal's name, such as \"cow\"" :spec a/name? :default nil}
+   :pos {:doc "where to lead it {:x :y :z}; the :fence cell when nil" :spec ::a/pos :default nil}
+   :fence {:doc "the fence post {:x :y :z} to tie it to; unleash it at :pos when nil" :spec ::a/pos :default nil}
+   :range {:doc "how close to :pos counts as there" :spec (a/num-in 0 nil) :default 2}
+   :radius {:doc "animals within this many blocks are leashed from where the job starts" :spec (a/num-in 0 nil) :default 8}
+   :gather-radius {:doc "without :fence the animal is let go once it is within this many blocks of :pos" :spec (a/num-in 0 nil) :default 3}
+   :gather-tries {:doc "without :fence how many times the body walks on to pull a trailing animal nearer" :spec (a/int-in 0 nil) :default 3}
+   :watch-radius {:doc "how far from the body the led animal is looked for" :spec (a/num-in 0 nil) :default 64}
+   :timeout-s {:doc "seconds from the first round (not the lead fetch) before the job gives up" :spec (a/num-in 0 nil) :default 180}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 
 (def max-ties 2)
 

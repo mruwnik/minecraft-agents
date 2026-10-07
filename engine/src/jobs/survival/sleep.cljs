@@ -1,5 +1,6 @@
 (ns jobs.survival.sleep
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.shelter :as sh]
             [jobs.lib.util :as u]
             [engine.memory :as mem]
@@ -26,10 +27,10 @@
   :spawn-bed {:pos bed} (cap 1, forever),
   :bed (see above) and :bed-unreachable {:pos bed} after an unreachable bed (cap 5, ten minutes).")
 
-(def args
+(a/defargs args
   {:bed-radius {:doc "a remembered bed farther than this many blocks from the body is not used"
-                :default sh/default-bed-radius}
-   :bed {:doc "bed position [x y z] or {:x :y :z} to sleep in instead of the remembered :bed (no radius); it is recorded as :bed when that is unset or gone" :type :pos
+                :spec (a/num-in 0 nil) :default sh/default-bed-radius}
+   :bed {:doc "bed position [x y z] or {:x :y :z} to sleep in instead of the remembered :bed (no radius); it is recorded as :bed when that is unset or gone" :spec ::a/pos
          :default nil}})
 
 (def slept-policy {:cap 10 :ttl (* 7 sh/ms-per-day)})

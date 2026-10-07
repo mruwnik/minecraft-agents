@@ -1,5 +1,6 @@
 (ns jobs.survival.night
-  (:require [jobs.lib.blocks :as lb]
+  (:require [engine.args :as a]
+            [jobs.lib.blocks :as lb]
             [clojure.set :as set]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
@@ -70,15 +71,15 @@
   firing after a cut does not dig a failed site again.
   Muting :night does not end a running night job: the agent cancels it too.")
 
-(def args
-  {:roof-height {:doc "a solid block within this many blocks above counts as a roof" :type :int :min 0 :default sh/default-roof-height}
-   :bed-radius {:doc "a remembered bed farther than this is not used" :default sh/default-bed-radius}
-   :urgent-bed-radius {:doc "the bed radius once the body is overdue for sleep" :default sh/urgent-bed-radius}
-   :roofed-places {:doc "place names walked to at night, when close and the route is lit, before digging in" :default [:home]}
-   :walk-radius {:doc "a roofed place farther than this is not walked to" :default 32}
-   :lit-light {:doc "block light a route cell needs to count as lit (mobs do not spawn at 1+)" :default 1}
-   :max-days-awake {:doc "in-game days without sleep before finding a bed becomes urgent" :default sh/max-days-awake}
-   :flee-radius {:doc "when no shelter can be dug here, how far the night looks for somewhere safer (a known bed or roofed place, a seen cave or overhang to wall in, or seen ground the carried tools dig); 0 never flees" :default 64}})
+(a/defargs args
+  {:roof-height {:doc "a solid block within this many blocks above counts as a roof" :spec (a/int-in 0 nil) :default sh/default-roof-height}
+   :bed-radius {:doc "a remembered bed farther than this is not used" :spec (a/num-in 0 nil) :default sh/default-bed-radius}
+   :urgent-bed-radius {:doc "the bed radius once the body is overdue for sleep" :spec (a/num-in 0 nil) :default sh/urgent-bed-radius}
+   :roofed-places {:doc "place names walked to at night, when close and the route is lit, before digging in" :spec (a/coll-of (a/or-of keyword? string?)) :default [:home]}
+   :walk-radius {:doc "a roofed place farther than this is not walked to" :spec (a/num-in 0 nil) :default 32}
+   :lit-light {:doc "block light a route cell needs to count as lit (mobs do not spawn at 1+)" :spec (a/int-in 0 15) :default 1}
+   :max-days-awake {:doc "in-game days without sleep before finding a bed becomes urgent" :spec (a/num-in 0 nil) :default sh/max-days-awake}
+   :flee-radius {:doc "when no shelter can be dug here, how far the night looks for somewhere safer (a known bed or roofed place, a seen cave or overhang to wall in, or seen ground the carried tools dig); 0 never flees" :spec (a/num-in 0 nil) :default 64}})
 
 (defn bed-permit
   "Whether the body may use a bed (sh/bed-permit over the job's world)."

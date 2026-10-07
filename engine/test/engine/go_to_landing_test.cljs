@@ -2,7 +2,9 @@
   "go-to's :landing (block name -> share of a fall's damage), seen through path-preview (the fake world does not walk deep drops):
   a hay landing is planned where a stone one is not, a caller's entries win, bad ones are refused."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.expr :as expr]
             [engine.path-preview-test :as pt]
+            [engine.registry :as registry]
             [engine.test-util :as tu :refer [floor box]]))
 
 ;; a plateau (feet 64) ending at x 10, an 11-block drop to a floor with feet 53: a stone one beyond x 13, `block` at x 11..13
@@ -28,10 +30,9 @@
         (is (false? (await (found? "hay_block" {:landing {"hay_block" 1}}))) "hay priced as a full fall")
         (is (true? (await (found? "stone" {:landing {"stone" 0}}))) "stone priced as a soft landing")))))
 
-(deftest a-bad-landing-is-refused
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (doseq [bad [{"no_such_block" 0.2} {"hay_block" "soft"} [1]]]
-          (let [{:keys [out]} (await (pt/preview (cliff "stone") (assoc args :landing bad)))]
-            (is (= :bad-landing (:reason out)) (pr-str bad))))))))
+(deftest a-bad-landing-is-refused-at-submit
+  (doseq [job ['jobs.movement.go-to 'jobs.movement.path-preview]
+          bad [{"no_such_block" 0.2} {"hay_block" "soft"} [1]]]
+    (is (re-find #":landing must be a map of block name to a number"
+                 (expr/problem registry/jobs (list job (assoc args :landing bad))))
+        (str job " " (pr-str bad)))))

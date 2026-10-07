@@ -6,6 +6,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.expr :as expr]
             [engine.fake :as fake]
             [engine.memory :as mem]
             [engine.perception :as perception]
@@ -227,56 +228,33 @@
               {:keys [p]} (await (go! {:blocks steps} {:pos [120 63 0] :drop-cost false :escalate false}))]
           (is (= 63 (js/Math.floor (second (at p)))) "a 1-block step-down is no drop"))))))
 
-(deftest go-to-refuses-bad-costs-with-a-reason
+(defn refusal [args] (expr/problem registry/jobs (list 'jobs.movement.go-to args)))
+
+(deftest go-to-refuses-bad-costs-at-submit
   (async done
     (tu/run-async done
       (fn ^:async t []
         (doseq [bad [{:swim-h -1} {:nope 1} [1]]]
-          (let [{:keys [eng p] :as s} (setup {:blocks flat})
-                out (atom :not-done)
-                eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent
-                                            (recording-parent out {:pos [6 64 0] :costs bad})))]
-            (core/submit! eng '(recording-parent) {})
-            (await (tick-out! eng 10))
-            (is (= {:status :stopped :arrived false :reason :bad-costs} (select-keys @out [:status :arrived :reason])) (pr-str bad))
-            (is (= [0 64 0] (at p)))
-            (is (= [:bad-costs] (mapv :reason (events-of s :refused))))))
+          (is (re-find #":costs must be a map of planner price name" (refusal {:pos [6 64 0] :costs bad})) (pr-str bad)))
         (let [{:keys [out]} (await (go! {:blocks flat} {:pos [6 64 0] :costs {:swim-h 2}}))]
           (is (= {:arrived true} @out)))))))
 
-(deftest go-to-refuses-a-bad-drop-cost-with-a-reason
+(deftest go-to-refuses-a-bad-drop-cost-at-submit
   (async done
     (tu/run-async done
       (fn ^:async t []
         (doseq [bad [-1 "x" true]]
-          (let [{:keys [eng p] :as s} (setup {:blocks flat})
-                out (atom :not-done)
-                eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent
-                                            (recording-parent out {:pos [6 64 0] :drop-cost bad})))]
-            (core/submit! eng '(recording-parent) {})
-            (await (tick-out! eng 10))
-            (is (= {:status :stopped :arrived false :reason :bad-drop-cost} (select-keys @out [:status :arrived :reason])) (pr-str bad))
-            (is (= [0 64 0] (at p)))
-            (is (= [:bad-drop-cost] (mapv :reason (events-of s :refused))))))
+          (is (re-find #":drop-cost must be a number >= 0 or false" (refusal {:pos [6 64 0] :drop-cost bad})) (pr-str bad)))
         (doseq [ok [0 2 false]]
           (let [{:keys [out]} (await (go! {:blocks flat} {:pos [6 64 0] :drop-cost ok}))]
             (is (= {:arrived true} @out) (pr-str ok))))))))
 
-(deftest go-to-refuses-a-bad-min-health-or-max-damage-with-a-reason
+(deftest go-to-refuses-a-bad-min-health-or-max-damage-at-submit
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[k bad reason] [[:min-health 0 :bad-min-health] [:min-health 21 :bad-min-health] [:min-health "x" :bad-min-health]
-                                [:max-damage -1 :bad-max-damage] [:max-damage "x" :bad-max-damage]]]
-          (let [{:keys [eng p] :as s} (setup {:blocks flat})
-                out (atom :not-done)
-                eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent
-                                            (recording-parent out {:pos [6 64 0] k bad})))]
-            (core/submit! eng '(recording-parent) {})
-            (await (tick-out! eng 10))
-            (is (= {:status :stopped :arrived false :reason reason} (select-keys @out [:status :arrived :reason])) (pr-str [k bad]))
-            (is (= [0 64 0] (at p)))
-            (is (= [reason] (mapv :reason (events-of s :refused))))))
+        (doseq [[k bad] [[:min-health 0] [:min-health 21] [:min-health "x"] [:max-damage -1] [:max-damage "x"]]]
+          (is (re-find (re-pattern (str k " must be a number")) (refusal {:pos [6 64 0] k bad})) (pr-str [k bad])))
         (doseq [args [{:min-health 1} {:min-health 20} {:max-damage 0} {:max-damage 5.5}]]
           (let [{:keys [out]} (await (go! {:blocks flat} (assoc args :pos [6 64 0])))]
             (is (= {:arrived true} @out) (pr-str args))))))))
@@ -289,19 +267,8 @@
           (let [{:keys [out]} (await (go! {:blocks flat} {:pos [6 64 0] :doors doors}))]
             (is (= {:arrived true} @out) (str doors))))))))
 
-(deftest go-to-refuses-malformed-tolls-with-a-reason
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p seen] :as s} (setup {:blocks flat})
-              out (atom :not-done)
-              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent
-                                          (recording-parent out {:pos [6 64 0] :tolls [{:x 3 :y 64 :z 0}]})))]
-          (core/submit! eng '(recording-parent) {})
-          (await (tick-out! eng 10))
-          (is (= {:status :stopped :arrived false :reason :bad-tolls} (select-keys @out [:status :arrived :reason])))
-          (is (= [0 64 0] (at p)))
-          (is (= [:bad-tolls] (mapv :reason (events-of s :refused)))))))))
+(deftest go-to-refuses-malformed-tolls-at-submit
+  (is (re-find #":tolls must be a list of \{:x :y :z :factor\}" (refusal {:pos [6 64 0] :tolls [{:x 3 :y 64 :z 0}]}))))
 
 (deftest go-to-without-path-sensing-says-unsupported
   (async done
@@ -966,8 +933,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
+        (is (re-find #":place must be a keyword or a string, got 5" (refusal {:place 5})))
         (doseq [[place reason] [[:nowhere :unknown-place] ["Bad Name" :unknown-place] ["" :bad-name]
-                                      [(apply str (repeat 101 "a")) :bad-name] [5 :bad-name]]]
+                                      [(apply str (repeat 101 "a")) :bad-name]]]
           (let [{:keys [out p seen]} (await (go-place! {:home {:x 10 :y 64 :z 0}} {:place place}))]
             (is (= reason (:reason @out)) (str place))
             (is (= :stopped (:status @out)))
@@ -1171,8 +1139,4 @@
           (is (= {:arrived true} @(:out s))))))))
 
 (deftest goal-danger-must-be-wait-or-end
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (await (go! {:blocks flat} {:pos [10 64 0] :goal-danger :bogus}))]
-          (is (= :bad-goal-danger (:reason @(:out s))) (pr-str @(:out s))))))))
+  (is (re-find #":goal-danger must be one of" (refusal {:pos [10 64 0] :goal-danger :bogus}))))

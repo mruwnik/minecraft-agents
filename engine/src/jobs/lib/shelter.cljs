@@ -1,7 +1,8 @@
 (ns jobs.lib.shelter
   "What the night jobs (night, sleep, log-out, dig-in) and the night trigger share: night and roof tests, the bed to
   use, who sleeps on the server, the shelter entry."
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.solid :as solid]
             [jobs.lib.access.zones :as zones]
@@ -10,10 +11,10 @@
             [engine.memory :as mem]
             [jobs.lib.world-files :as world]))
 
-(def settings
-  {::seen-bed-radius {:default 6 :type :int :min 1
+(a/defargs settings
+  {::seen-bed-radius {:default 6 :spec (a/int-in 1 nil)
                       :doc "Blocks (square) within which a bed in the body's room counts as seen."}
-   ::default-player-radius {:default 128 :type :int :min 1
+   ::default-player-radius {:default 128 :spec (a/int-in 1 nil)
                             :doc "Blocks within which a sleeping player counts when the night is skipped."}})
 
 (defn seen-bed-radius [] (settings/get settings ::seen-bed-radius))

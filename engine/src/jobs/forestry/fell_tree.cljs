@@ -1,5 +1,6 @@
 (ns jobs.forestry.fell-tree
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.watch :as watch]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.pillar :as pl]
@@ -46,16 +47,16 @@
   skips the check.
   Result: {:base pos} of the tree it felled, when it did.")
 
-(def args
-  {:species {:doc "log species such as \"oak\"; any when nil" :default nil}
-   :radius {:doc "search radius in blocks" :default default-radius}
-   :at {:doc "{:x :y :z} of a base log: fell that one column, wherever the body is (the radius and species are not used), instead of the nearest tree" :type :pos :default nil}
-   :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :default nil}
-   :spare-own-builds {:doc "a log in a plan this body made is not felled; false: it may be" :default true}
-   :accept {:doc "dig hazards (jobs.lib.access.rules) taken: a set of :fluid-adjacent :falling-block :under-feet" :default #{:fluid-adjacent :falling-block :under-feet}}
-   :fetch {:doc "get the dirt or cobblestone a pillar needs (jobs.lib.fetch): true, a set of kinds or a map of limits; false waits :need" :default true}
-   :pillar? {:doc "fell a log out of reach of the ground from a pillar (blocks placed, then taken back); false: such a tree is left" :default true}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
+(a/defargs args
+  {:species {:doc "log species such as \"oak\"; any when nil" :spec a/name? :default nil}
+   :radius {:doc "search radius in blocks" :spec (a/num-in 0 nil) :default default-radius}
+   :at {:doc "{:x :y :z} of a base log: fell that one column, wherever the body is (the radius and species are not used), instead of the nearest tree" :spec ::a/pos :default nil}
+   :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :spec a/name? :default nil}
+   :spare-own-builds {:doc "a log in a plan this body made is not felled; false: it may be" :spec boolean? :default true}
+   :accept {:doc "dig hazards (jobs.lib.access.rules) taken: a set of :fluid-adjacent :falling-block :under-feet" :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block :under-feet}) :default #{:fluid-adjacent :falling-block :under-feet}}
+   :fetch {:doc "get the dirt or cobblestone a pillar needs (jobs.lib.fetch): true, a set of kinds or a map of limits; false waits :need" :spec fetch/option? :default true}
+   :pillar? {:doc "fell a log out of reach of the ground from a pillar (blocks placed, then taken back); false: such a tree is left" :spec boolean? :default true}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (defn log-allowed?
   "Whether the job may dig the log at pos (one warn per job when refused)."

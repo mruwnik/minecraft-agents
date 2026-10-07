@@ -1,5 +1,6 @@
 (ns jobs.village.maintain
-  (:require [clojure.string :as str]
+  (:require [engine.args :as a]
+            [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.pace :as pace]))
 
@@ -26,12 +27,12 @@
   The job names of breed and roll are used, not their internals: their args are as listed above.
   :ignore-zones? is passed to the repair.")
 
-(def args
-  {:plan {:doc "id of the village plan to repair (jobs.build.from-plan); nil: no repair" :default nil}
-   :target {:doc "villagers wanted (babies count); nil: no breeding" :type :int :min 2 :default nil}
-   :roles {:doc "profession roles to hold: [{:profession name :pos workstation-cell :trade name?}], each rolled when nobody holds it" :default []}
-   :radius {:doc "villagers within this many blocks of the body count" :type :int :min 1 :max 96 :default 48}
-   :ignore-zones? {:doc "act regardless of zones and claims (passed to the repair); the rules of the game allow it" :default false}})
+(a/defargs args
+  {:plan {:doc "id of the village plan to repair (jobs.build.from-plan); nil: no repair" :spec a/name? :default nil}
+   :target {:doc "villagers wanted (babies count); nil: no breeding" :spec (a/int-in 2 nil) :default nil}
+   :roles {:doc "profession roles to hold: [{:profession name :pos workstation-cell :trade name?}], each rolled when nobody holds it" :spec (a/coll-of map?) :default []}
+   :radius {:doc "villagers within this many blocks of the body count" :spec (a/int-in 1 96) :default 48}
+   :ignore-zones? {:doc "act regardless of zones and claims (passed to the repair); the rules of the game allow it" :spec boolean? :default false}})
 
 (def jobs
   {:repair 'jobs.build.from-plan

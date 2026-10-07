@@ -1,5 +1,6 @@
 (ns jobs.survival.restore-broken
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
@@ -27,10 +28,10 @@
   Memory: reads :tidy. Writes :tidy-reported, the cells still waiting, which the :tidy-pending trigger reads
   to warn once per set of cells.")
 
-(def args
-  {:min-health {:doc "least health to restore anything" :default 14}
-   :danger-radius {:doc "a hostile this close postpones restoring" :default 8}
-   :reach {:doc "walk to within this many blocks of a cell" :default 3}})
+(a/defargs args
+  {:min-health {:doc "least health to restore anything" :spec (a/num-in 0 20) :default 14}
+   :danger-radius {:doc "a hostile this close postpones restoring" :spec (a/num-in 0 nil) :default 8}
+   :reach {:doc "walk to within this many blocks of a cell" :spec (a/num-in 0 nil) :default 3}})
 
 (declare skip!)
 

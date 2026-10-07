@@ -1,16 +1,17 @@
 (ns jobs.lib.tools
   "Which carried tool suits a block."
-  (:require [engine.settings :as settings]
+  (:require [engine.args :as a]
+            [engine.settings :as settings]
             [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.util :as u]))
 
-(def settings
-  {::low-fraction {:default 0.1 :doc "A tool at or under this fraction of its durability is low." :type :number :min 0}
-   ::wear-settle-ms {:default 250 :doc "Wait for the inventory to show a tool breaking, in ms." :type :int :min 0}
-   ::wear-settle-tries {:default 3 :doc "Times to wait for the break to show." :type :int :min 0}
-   ::quick-clear-ms {:default 1500 :doc "A block that carried tools or the bare hand break within this is cleared without a tool." :type :int :min 0}})
+(a/defargs settings
+  {::low-fraction {:default 0.1 :doc "A tool at or under this fraction of its durability is low." :spec (a/num-in 0 nil)}
+   ::wear-settle-ms {:default 250 :doc "Wait for the inventory to show a tool breaking, in ms." :spec (a/int-in 0 nil)}
+   ::wear-settle-tries {:default 3 :doc "Times to wait for the break to show." :spec (a/int-in 0 nil)}
+   ::quick-clear-ms {:default 1500 :doc "A block that carried tools or the bare hand break within this is cleared without a tool." :spec (a/int-in 0 nil)}})
 
 (def shovel-blocks
   #{"dirt" "grass_block" "sand" "red_sand" "gravel" "clay" "soul_sand" "soul_soil" "mud" "snow_block"

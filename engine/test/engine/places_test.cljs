@@ -4,6 +4,7 @@
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
             [engine.events :as events]
+            [engine.expr :as expr]
             [engine.job-api :as api]
             [engine.memory :as mem]
             [jobs.lib.places :as places]
@@ -201,13 +202,16 @@
         (doseq [[args reason] [[{:pos [1 64 1]} :bad-name]
                                [{:name "Home Base" :pos [1 64 1]} :bad-name]
                                [{:name :hurt :pos [1 64 1]} :reserved-name]
-                               [{:name :home :pos [1 999 1]} :bad-pos]
-                               [{:name :home :pos [1 64 1] :block 5} :bad-block]
-                               [{:name :home :pos [1 64 1] :block ""} :bad-block]]]
+                               [{:name :home :pos [1 999 1]} :bad-pos]]]
           (let [{:keys [eng seen reasons]} (await (try-job identity set-place args))]
             (is (nil? (place eng :home)) (pr-str args))
             (is (= [reason] reasons) (pr-str args))
             (is (every? string? (mapv :text (events-of seen :place.refused))))))))))
+
+(deftest set-place-refuses-a-block-that-is-no-name-at-submit
+  (doseq [block [5 ""]]
+    (is (re-find #"jobs.memory.set-place :block must be a name \(non-empty string\)"
+                 (expr/problem registry/jobs (list 'jobs.memory.set-place {:name :home :pos [1 64 1] :block block}))))))
 
 (deftest set-place-will-not-overwrite-another-kind-of-memory
   (async done (run-world done {} (fn ^:async t [{:keys [eng seen]}]

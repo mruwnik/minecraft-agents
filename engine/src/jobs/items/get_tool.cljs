@@ -1,5 +1,6 @@
 (ns jobs.items.get-tool
-  (:require ["minecraft-data" :as minecraft-data]
+  (:require [engine.args :as a]
+            ["minecraft-data" :as minecraft-data]
             [engine.ctx :as ctx]
             [engine.game :as game]
             [jobs.lib.blocks :as b]
@@ -19,15 +20,15 @@
   Ends {:status :done :tool name} ({:status :done :needed false} for a block the hand harvests) or {:status :stopped
   :reason r ...} with the obtain's reason and :tried, or :bad-args (also an unknown :block).")
 
-(def args
-  {:block {:doc "a block name: get a tool that harvests it" :default nil}
-   :item {:doc "a tool item name" :default nil}
-   :kind {:doc "a tool kind, e.g. \"pickaxe\" or \"shears\"" :default nil}
-   :how {:doc "sources, a subset of #{:chest :craft :gather}; nil: all" :default nil}
-   :depth {:doc "nested fetches left; nil: the fetch limits (jobs.lib.fetch)" :type :int :min 0 :default nil}
-   :minutes {:doc "time budget; nil: the fetch limits" :type :number :min 0 :default nil}
-   :fail-minutes {:doc "passed on to nested fetches; nil: the fetch limits" :type :number :min 0 :default nil}
-   :chain {:doc "items being fetched above this one" :default []}})
+(a/defargs args
+  {:block {:doc "a block name: get a tool that harvests it" :spec a/name? :default nil}
+   :item {:doc "a tool item name" :spec a/item? :default nil}
+   :kind {:doc "a tool kind, e.g. \"pickaxe\" or \"shears\"" :spec a/name? :default nil}
+   :how {:doc "sources, a subset of #{:chest :craft :gather}; nil: all" :spec (a/coll-of #{:chest :craft :gather}) :default nil}
+   :depth {:doc "nested fetches left; nil: the fetch limits (jobs.lib.fetch)" :spec (a/int-in 0 nil) :default nil}
+   :minutes {:doc "time budget; nil: the fetch limits" :spec (a/num-in 0 nil) :default nil}
+   :fail-minutes {:doc "passed on to nested fetches; nil: the fetch limits" :spec (a/num-in 0 nil) :default nil}
+   :chain {:doc "items being fetched above this one" :spec (a/coll-of a/item?) :default []}})
 
 (def tiered #{"pickaxe" "axe" "shovel" "hoe" "sword"})
 

@@ -1,5 +1,6 @@
 (ns jobs.survival.breathe
-  (:require [jobs.lib.tidy :as tidy]
+  (:require [engine.args :as a]
+            [jobs.lib.tidy :as tidy]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.dig-look :as look]
@@ -42,18 +43,18 @@
   :no_way_out (with a warn) after three failed tries in the run. It never holds still while afloat.
   Memory: one :breathe entry per run.")
 
-(def args
+(a/defargs args
   {:min-oxygen {:doc "oxygen (of 20) below which being in water with the head submerged is drowning"
-                :default breath/default-min-oxygen}
-   :radius {:doc "columns this far sideways are searched for air" :default 2}
-   :reach {:doc "blocks above the feet the search climbs" :default 10}
-   :air-radius {:doc "when no air is near, a go-to child searches for air-reaching water this many blocks sideways, 1 to 32" :type :int :min 1 :max 32 :default 8}
-   :shore-radius {:doc "after surfacing, land this many blocks sideways is swum to" :default 6}
-   :search-radius {:doc "land beyond :shore-radius up to this many blocks sideways is gone to with go-to" :default 48}
-   :leg-length {:doc "blocks one swim leg goes out at most" :default 32}
-   :swim-range {:doc "blocks from the run's start no swim leg goes beyond" :default 96}
-   :max-legs {:doc "swim legs one run makes at most" :default 6}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
+                :spec (a/num-in 0 20) :default breath/default-min-oxygen}
+   :radius {:doc "columns this far sideways are searched for air" :spec (a/num-in 0 nil) :default 2}
+   :reach {:doc "blocks above the feet the search climbs" :spec (a/num-in 0 nil) :default 10}
+   :air-radius {:doc "when no air is near, a go-to child searches for air-reaching water this many blocks sideways, 1 to 32" :spec (a/int-in 1 32) :default 8}
+   :shore-radius {:doc "after surfacing, land this many blocks sideways is swum to" :spec (a/num-in 0 nil) :default 6}
+   :search-radius {:doc "land beyond :shore-radius up to this many blocks sideways is gone to with go-to" :spec (a/num-in 0 nil) :default 48}
+   :leg-length {:doc "blocks one swim leg goes out at most" :spec (a/num-in 0 nil) :default 32}
+   :swim-range {:doc "blocks from the run's start no swim leg goes beyond" :spec (a/num-in 0 nil) :default 96}
+   :max-legs {:doc "swim legs one run makes at most" :spec (a/int-in 1 nil) :default 6}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (def max-cap-digs "Cap digs one run makes at most." 3)
 (def land-tries "Go-to targets one spot tries before it swims a leg." 3)

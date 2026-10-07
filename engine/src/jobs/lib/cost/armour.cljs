@@ -4,11 +4,12 @@
   piece and 3 a netherite piece.
   Equipment: {part {:name :enchants [{:name :lvl}]}} for head torso legs feet, as cljs (keyword or string keys) or JS;
   other slots never count."
-  (:require [engine.settings :as settings]
+  (:require [engine.args :as a]
+            [engine.settings :as settings]
             [clojure.string :as str]))
 
-(def settings
-  {::max-fall {:default 16 :doc "The longest drop in blocks ever allowed." :type :int :min 1}})
+(a/defargs settings
+  {::max-fall {:default 16 :doc "The longest drop in blocks ever allowed." :spec (a/int-in 1 nil)}})
 
 (def armour-by-piece
   "Armour points of each worn piece, by material and slot."

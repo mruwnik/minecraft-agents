@@ -1,7 +1,8 @@
 (ns jobs.survival.dig-in-cells
   "The cells a shelter fills and the placing of blocks into them (read from the world, placed, shut): jobs.survival.dig-in
   and jobs.survival.retreat use them."
-  (:require [clojure.string :as string]
+  (:require [engine.args :as a]
+            [clojure.string :as string]
             [engine.settings :as settings]
             [jobs.lib.blocks :as lb]
             [jobs.lib.click :as click]
@@ -124,9 +125,9 @@
         side (or both (first feet-placed))]
     (when side [(at side 0) (at side 1)])))
 
-(def settings
+(a/defargs settings
   {::mob-wait-ticks {:default 200 :doc "Game ticks a shelter's place refused for a mob in its cell is retried before the shelter gives up."
-                     :type :int :min 0}})
+                     :spec (a/int-in 0 nil)}})
 
 (defn mob-wait-ms [] (settings/ticks->ms (settings/get settings ::mob-wait-ticks)))
 

@@ -1,5 +1,6 @@
 (ns jobs.build.clear-box
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.util :as u]
@@ -24,13 +25,13 @@
   - when no zone list has been read (clear-box.declined {:reason :no-zones}), also in the middle of the job.
   Result: {:dug n :skipped {pos reason} :kept n :fluids {name count}}.")
 
-(def args
-  {:from {:doc "box corner (inclusive); any order; [x y z] or {:x :y :z}" :type :pos :default nil}
-   :to {:doc "opposite box corner (inclusive); at most 400 cells" :type :pos :default nil}
-   :keep {:doc "extra block names to leave alone" :default []}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
+(a/defargs args
+  {:from {:doc "box corner (inclusive); any order; [x y z] or {:x :y :z}" :spec ::a/pos :default nil}
+   :to {:doc "opposite box corner (inclusive); at most 400 cells" :spec ::a/pos :default nil}
+   :keep {:doc "extra block names to leave alone" :spec (a/coll-of a/name?) :default []}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
    :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent :falling-block :under-feet)"
-            :default #{:fluid-adjacent :falling-block}}})
+            :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block :under-feet}) :default #{:fluid-adjacent :falling-block}}})
 
 (def max-cells 400)
 (def max-tries 2)

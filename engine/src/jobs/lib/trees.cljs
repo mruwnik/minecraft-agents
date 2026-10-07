@@ -1,15 +1,16 @@
 (ns jobs.lib.trees
   "Helpers the forestry jobs (jobs.forestry.*) share: finding trees, the
   replant debts in body memory, saplings. Not a job namespace."
-  (:require [engine.settings :as settings]
+  (:require [engine.args :as a]
+            [engine.settings :as settings]
             [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]))
 
-(def settings
-  {::leaf-reach {:default 3.5 :doc "Blocks within which a leaf block counts as part of a tree." :type :number :min 0}
-   ::max-logs {:default 1024 :doc "The most logs one scan reads." :type :int :min 1}})
+(a/defargs settings
+  {::leaf-reach {:default 3.5 :doc "Blocks within which a leaf block counts as part of a tree." :spec (a/num-in 0 nil)}
+   ::max-logs {:default 1024 :doc "The most logs one scan reads." :spec (a/int-in 1 nil)}})
 
 (def default-radius 16)
 (defn leaf-reach [] (settings/get settings ::leaf-reach))

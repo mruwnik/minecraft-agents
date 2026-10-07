@@ -14,17 +14,18 @@
   take and set need an answer from the engine before their reply is complete: request marks them
   :pending :take / :drive and taken / driven finish the job.
   Reply maps use the wire's camelCase keys, so clj->js gives the JSON as sent."
-  (:require [clojure.string :as str]
+  (:require [engine.args :as a]
+            [clojure.string :as str]
             [engine.settings :as settings]))
 
 (def control-order [:forward :back :left :right :jump :sneak :sprint])
 (def controls (set control-order))
 
-(def settings
-  {:engine.lease/max-ms {:default 10000 :type :int :min 1 :doc "The longest timed control a driver may set in one `set`, ms."}
-   :engine.lease/max-idle-s {:default 3600 :type :int :min 1 :doc "The longest idle time a driver may ask for (idleS), s."}
-   :engine.lease/default-release-ms {:default 1000 :type :int :min 1 :doc "Held untimed controls are released this long after the last beat, ms."}
-   :engine.lease/default-idle-ms {:default 15000 :type :int :min 1 :doc "The lease ends after this long without an op from the holder, ms."}})
+(a/defargs settings
+  {:engine.lease/max-ms {:default 10000 :spec (a/int-in 1 nil) :doc "The longest timed control a driver may set in one `set`, ms."}
+   :engine.lease/max-idle-s {:default 3600 :spec (a/int-in 1 nil) :doc "The longest idle time a driver may ask for (idleS), s."}
+   :engine.lease/default-release-ms {:default 1000 :spec (a/int-in 1 nil) :doc "Held untimed controls are released this long after the last beat, ms."}
+   :engine.lease/default-idle-ms {:default 15000 :spec (a/int-in 1 nil) :doc "The lease ends after this long without an op from the holder, ms."}})
 
 (defn setting [k] (settings/get settings (keyword "engine.lease" k)))
 

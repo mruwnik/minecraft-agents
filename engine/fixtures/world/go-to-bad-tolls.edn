@@ -1,6 +1,5 @@
-;; Card e087f44a: go-to refuses a :tolls entry that is not {:x :y :z :factor} of finite numbers (factor 0 or more) as :bad-tolls at
-;; once, before any walk: a :refused warn and a :result {:arrived false :reason :bad-tolls}; the body stays at its start. A well-formed
-;; toll list does not trip the check and the body arrives (the bend itself is covered by the planner tolls unit tests).
+;; Card e087f44a: a well-formed :tolls list does not trip go-to's check and the body arrives. A malformed list is refused
+;; at submit by the spec (job-arg-types-test); the bend itself is covered by the planner tolls unit tests.
 {:defaults
  {:tags [:movement :planner]
   :time :any
@@ -8,25 +7,7 @@
   :body {:at [4.5 0 16.5] :effects [["resistance" 600 4]]}
   :limit-s 60}
  :cases
- [  {:name "toll-without-factor-refused-no-walk"
-   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1 :escalate false :tolls [{:x 3 :y 64 :z 0}]})]]
-   :expect [{:event {:source :job :kind :refused :data {:reason :bad-tolls}} :within-s 15 :of-job true}
-            {:event {:source :job :kind :result :data {:arrived false :reason :bad-tolls}} :within-s 15 :of-job true}
-            {:no-event {:source :action :kind :started :data {:name "steer"}} :for-s 8 :until {:source :job :kind :result} :of-job true}]
-   :after [[:body-near [4.5 0 16.5] 1.5]]}
-  {:name "negative-factor-refused-no-walk"
-   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1 :escalate false :tolls [{:x 3 :y 64 :z 0 :factor -1}]})]]
-   :expect [{:event {:source :job :kind :refused :data {:reason :bad-tolls}} :within-s 15 :of-job true}
-            {:event {:source :job :kind :result :data {:arrived false :reason :bad-tolls}} :within-s 15 :of-job true}
-            {:no-event {:source :action :kind :started :data {:name "steer"}} :for-s 8 :until {:source :job :kind :result} :of-job true}]
-   :after [[:body-near [4.5 0 16.5] 1.5]]}
-  {:name "tolls-not-a-list-refused-no-walk"
-   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1 :escalate false :tolls {:x 3 :y 64 :z 0 :factor 2}})]]
-   :expect [{:event {:source :job :kind :refused :data {:reason :bad-tolls}} :within-s 15 :of-job true}
-            {:event {:source :job :kind :result :data {:arrived false :reason :bad-tolls}} :within-s 15 :of-job true}
-            {:no-event {:source :action :kind :started :data {:name "steer"}} :for-s 8 :until {:source :job :kind :result} :of-job true}]
-   :after [[:body-near [4.5 0 16.5] 1.5]]}
-  {:name "valid-tolls-arrive"
+ [{:name "valid-tolls-arrive"
    :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1 :escalate false :tolls [{:x 0 :y 0 :z 0 :factor 3}]})]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 45 :of-job true}
             {:no-event {:source :job :kind :refused} :for-s 45 :until {:source :job :kind :result :data {:arrived true}} :of-job true}]

@@ -1,5 +1,6 @@
 (ns jobs.items.fetch-limits
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.fetch :as fetch]))
 
 (def doc
@@ -11,14 +12,14 @@
   Refused (warn fetch-limits.refused, result {:ok false :reason :bad-args :text}) for a bad value. Success: info
   fetch-limits.set, result {:ok true :limits {:all {..} :jobs {..}}}.")
 
-(def args
-  {:job {:doc "a job symbol these limits are for; nil: every job" :default nil}
-   :depth {:doc "nested fetches allowed" :default nil}
-   :minutes {:doc "time budget of one fetch, minutes" :default nil}
-   :fail-minutes {:doc "how long a failed fetch is remembered and not tried again, minutes" :default nil}
-   :what {:doc "kinds fetched, a subset of #{:tool :item}" :default nil}
-   :how {:doc "sources used, a subset of #{:chest :craft :gather}" :default nil}
-   :clear {:doc "drop the defaults (of :job, or all) instead" :default false}})
+(a/defargs args
+  {:job {:doc "a job symbol these limits are for; nil: every job" :spec symbol? :default nil}
+   :depth {:doc "nested fetches allowed" :spec (a/int-in 0 nil) :default nil}
+   :minutes {:doc "time budget of one fetch, minutes" :spec (a/num-in 0 nil) :default nil}
+   :fail-minutes {:doc "how long a failed fetch is remembered and not tried again, minutes" :spec (a/num-in 0 nil) :default nil}
+   :what {:doc "kinds fetched, a subset of #{:tool :item}" :spec (a/set-of #{:tool :item}) :default nil}
+   :how {:doc "sources used, a subset of #{:chest :craft :gather}" :spec (a/set-of #{:chest :craft :gather}) :default nil}
+   :clear {:doc "drop the defaults (of :job, or all) instead" :spec boolean? :default false}})
 
 (defn check [_c] true)
 

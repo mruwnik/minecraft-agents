@@ -7,6 +7,7 @@
             [engine.ctx :as ctx]
             [engine.fake :as fake]
             [engine.events :as events]
+            [engine.expr :as expr]
             [engine.memory :as mem]
             [engine.notes :as notes]
             [engine.registry :as registry]
@@ -275,14 +276,11 @@
           (is (every? #(<= (js/Math.hypot (:x %) (:z %)) 40) (walks s)) "no leg beyond :max-distance")
           (is (= :distance (:why (event-of s :search.not-found)))))))))
 
-(deftest an-unknown-pattern-or-heading-ends-it-before-walking
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (doseq [args [{:pattern :zigzag} {:pattern :outward :heading :up}]]
-          (let [s (await (search! (assoc args :target "diamond_block") {}))]
-            (is (= :bad-args (:why (event-of s :search.not-found))) (str args))
-            (is (= [] (walks s)) (str args))))))))
+(deftest an-unknown-pattern-or-heading-is-refused-at-submit
+  (is (re-find #":pattern must be one of :outward, :spiral, got :zigzag"
+               (expr/problem registry/jobs '(jobs.explore.search {:target "diamond_block" :pattern :zigzag}))))
+  (is (re-find #":heading must be one of :east, :north, :south, :west, got :up"
+               (expr/problem registry/jobs '(jobs.explore.search {:target "diamond_block" :pattern :outward :heading :up})))))
 
 (deftest it-declines-without-a-target
   (let [c {:args {:target nil}}]
@@ -353,8 +351,8 @@
     (is (= #{"hay_block" "diamond_block"} seen))))
 
 (deftest spacing-and-distance-are-typed-and-bounded
-  (is (= [:int 4 64] ((juxt :type :min :max) (:spacing search/args))))
-  (is (= [:int 1 128] ((juxt :type :min :max) (:max-distance search/args)))))
+  (is (= '(a/int-in 4 64) (:spec (:spacing search/args))))
+  (is (= '(a/int-in 1 128) (:spec (:max-distance search/args)))))
 
 (deftest one-choice-reads-a-bounded-number-of-stand-cells-and-says-more-is-left
   (let [reads (atom 0)

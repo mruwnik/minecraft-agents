@@ -1,5 +1,6 @@
 (ns jobs.explore.search
-  (:require [clojure.string :as str]
+  (:require [engine.args :as a]
+            [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
@@ -38,21 +39,21 @@
   Memory: :origin :started :legs :scans :found :tried :failed :skipped :farthest :failed-in-row :deferred (unloaded legs set aside while a sweep goes on), and :leg while
   a walk is under way, so a cut or restart resumes it.")
 
-(def args
-  {:target {:doc "a block or entity name, or several (a vector or set)" :default nil}
-   :count {:doc "how many targets end the search" :default 1}
-   :max-distance {:doc "how far (XZ) from the origin a leg may go, 1 to 128" :type :int :min 1 :max 128 :default 96}
-   :pattern {:doc ":spiral (rings round the origin) or :outward (ahead along :heading)" :default :spiral}
-   :heading {:doc ":north, :east, :south or :west, for :outward" :default :north}
-   :spacing {:doc "blocks between legs, 4 to 64" :type :int :min 4 :max 64 :default 16}
-   :scan-radius {:doc "how far round the body each look reaches" :default 24}
-   :max-legs {:doc "legs walked before it gives up" :default 32}
-   :timeout-s {:doc "seconds from the first round before it gives up" :default 600}
-   :use-notes {:doc "targets noted (by any body) within :max-distance count as found" :default true}
-   :seen-ttl-s {:doc "how long a note of a block seen lasts" :default 259200}
-   :entity-ttl-s {:doc "how long a note of an entity seen lasts" :default 600}
-   :searched-ttl-s {:doc "how long a note of searched ground lasts" :default 86400}
-   :load-wait-s {:doc "how long to wait for unloaded leg columns to load when no loaded leg is left" :default 30}})
+(a/defargs args
+  {:target {:doc "a block or entity name, or several (a vector or set)" :spec (a/or-of a/name? (a/coll-of a/name?)) :default nil}
+   :count {:doc "how many targets end the search" :spec (a/int-in 1 nil) :default 1}
+   :max-distance {:doc "how far (XZ) from the origin a leg may go, 1 to 128" :spec (a/int-in 1 128) :default 96}
+   :pattern {:doc ":spiral (rings round the origin) or :outward (ahead along :heading)" :spec #{:spiral :outward} :default :spiral}
+   :heading {:doc ":north, :east, :south or :west, for :outward" :spec #{:north :east :south :west} :default :north}
+   :spacing {:doc "blocks between legs, 4 to 64" :spec (a/int-in 4 64) :default 16}
+   :scan-radius {:doc "how far round the body each look reaches" :spec (a/num-in 0 nil) :default 24}
+   :max-legs {:doc "legs walked before it gives up" :spec (a/int-in 0 nil) :default 32}
+   :timeout-s {:doc "seconds from the first round before it gives up" :spec (a/num-in 0 nil) :default 600}
+   :use-notes {:doc "targets noted (by any body) within :max-distance count as found" :spec boolean? :default true}
+   :seen-ttl-s {:doc "how long a note of a block seen lasts" :spec (a/num-in 0 nil) :default 259200}
+   :entity-ttl-s {:doc "how long a note of an entity seen lasts" :spec (a/num-in 0 nil) :default 600}
+   :searched-ttl-s {:doc "how long a note of searched ground lasts" :spec (a/num-in 0 nil) :default 86400}
+   :load-wait-s {:doc "how long to wait for unloaded leg columns to load when no loaded leg is left" :spec (a/num-in 0 nil) :default 30}})
 
 (def max-failed-in-row 3)
 (def wait-ms 2000)

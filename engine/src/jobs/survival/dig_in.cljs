@@ -1,6 +1,6 @@
 (ns jobs.survival.dig-in
-  (:require [jobs.lib.blocks :as lb]
-            [jobs.lib.args :as jargs]
+  (:require [engine.args :as a]
+            [jobs.lib.blocks :as lb]
             [jobs.lib.trees :as trees]
             [jobs.lib.tidy :as tidy]
             [engine.ctx :as ctx]
@@ -67,13 +67,13 @@
   "What dig-in places: the building blocks, then logs (jobs.lib.trees/log-names; worth more, a last resort)."
   (into lb/building-blocks trees/log-names))
 
-(def args
-  {:roof-height {:doc "a solid block within this many blocks above counts as a roof" :type :int :min 0 :default sh/default-roof-height}
-   :blocks {:doc "names of the blocks it may place" :default shelter-blocks}
-   :max-places {:doc "placements per step" :type :int :min 1 :default 4}
-   :on-lava {:doc ":seal: lava the dig lays open in or beside the hole is filled with a carried block; :stop: the dig is given up (:fluid-adjacent)" :type :enum :values [:seal :stop] :default :seal}
-   :enclose {:doc "wall in under a roof already overhead: walls only, never a pit; stops :no-blocks when too few blocks are carried" :type :bool :default false}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :type :bool :default false}})
+(a/defargs args
+  {:roof-height {:doc "a solid block within this many blocks above counts as a roof" :spec (a/int-in 0 nil) :default sh/default-roof-height}
+   :blocks {:doc "names of the blocks it may place" :spec (a/coll-of a/item?) :default shelter-blocks}
+   :max-places {:doc "placements per step" :spec (a/int-in 1 nil) :default 4}
+   :on-lava {:doc ":seal: lava the dig lays open in or beside the hole is filled with a carried block; :stop: the dig is given up (:fluid-adjacent)" :spec #{:seal :stop} :default :seal}
+   :enclose {:doc "wall in under a roof already overhead: walls only, never a pit; stops :no-blocks when too few blocks are carried" :spec boolean? :default false}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (def shelter-policy {:cap 10 :ttl sh/ms-per-day})
 
@@ -448,7 +448,7 @@
              (:data %))
           (ctx/entries c :dig-in-futile))))
 
-(defn check-run
+(defn check
   "Night, no roof over the body and no futile site here; a decline says why (ctx/wait): :day, :already-sealed, or
   :futile with the failed site's :pos and :reason (none: it needs blocks to roof with)."
   [c]
@@ -568,12 +568,3 @@
         :yield :continue
         (do (dig-cells/forget-wait! c :mob-since)
             (end! c))))))
-
-(def bad-lists
-  "Args checked by jobs.lib.args."
-  {:blocks :names})
-
-(defn check
-  "check-run once the list args are well formed, else declines :bad-args."
-  [c]
-  (jargs/guard c bad-lists check-run))

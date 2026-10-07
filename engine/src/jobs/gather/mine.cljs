@@ -1,5 +1,6 @@
 (ns jobs.gather.mine
-  (:require [engine.game :as game]
+  (:require [engine.args :as a]
+            [engine.game :as game]
             [jobs.lib.blocks :as blocks]
             [clojure.string :as str]
             [engine.ctx :as ctx]
@@ -120,25 +121,25 @@
   and whether the body walked back. :got is how many more are carried than at the start, at least 0. :tunnel is
   {:origin :heading :steps :stop :end :back-at :walked-back?}, :end the cell it ended on before the walk back.")
 
-(def args
-  {:block {:doc "name of the block to mine (required)" :default nil}
-   :item {:doc "the item the block drops; nil: the drop-item table, else the block name" :default nil}
-   :count {:doc "how many more to carry than at the start" :default 8}
-   :radius {:doc "seen blocks within this many blocks of the body count" :default 16}
-   :wet {:doc "dig blocks that touch water, and tunnel beside water" :default false}
-   :fetch {:doc "get a pickaxe when none is carried (jobs.items.get-tool via jobs.lib.fetch limits): true, a set of kinds or a map of limits; false ends :no-tool" :default true}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
-   :spare-own-builds {:doc "a cell of a plan this body made is never a target; false: it may be dug" :default true}
-   :mend {:doc "fill the ground under the start again afterwards" :default true}
-   :collect-radius {:doc "how far around to collect drops after a dig" :default 6}
-   :max-failures {:doc "failures in a row before giving up" :default 3}
-   :dry-digs {:doc "digs in a row after which the carried count of the item did not rise before giving up (:no-drops)" :default 3}
-   :direction {:doc "the strip tunnel's heading: north, south, east or west (n/s/e/w); nil: the way the body faces when the job starts" :default nil}
-   :tunnel-length {:doc "the most blocks the strip tunnel runs in this job, at the body's level; 0: no tunnel, seen blocks only" :default 32}
-   :descend-limit {:doc "the most steps of stair down through soil to find stone, when the block is stone-type and none is in sight; 0: never descend" :default 12}
-   :torch-interval {:doc "the strip tunnel hangs a torch every this many steps; 0: none" :default 10}
+(a/defargs args
+  {:block {:doc "name of the block to mine (required)" :spec a/name? :default nil}
+   :item {:doc "the item the block drops; nil: the drop-item table, else the block name" :spec a/item? :default nil}
+   :count {:doc "how many more to carry than at the start" :spec (a/int-in 0 nil) :default 8}
+   :radius {:doc "seen blocks within this many blocks of the body count" :spec (a/num-in 0 nil) :default 16}
+   :wet {:doc "dig blocks that touch water, and tunnel beside water" :spec boolean? :default false}
+   :fetch {:doc "get a pickaxe when none is carried (jobs.items.get-tool via jobs.lib.fetch limits): true, a set of kinds or a map of limits; false ends :no-tool" :spec fetch/option? :default true}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
+   :spare-own-builds {:doc "a cell of a plan this body made is never a target; false: it may be dug" :spec boolean? :default true}
+   :mend {:doc "fill the ground under the start again afterwards" :spec boolean? :default true}
+   :collect-radius {:doc "how far around to collect drops after a dig" :spec (a/num-in 0 nil) :default 6}
+   :max-failures {:doc "failures in a row before giving up" :spec (a/int-in 1 nil) :default 3}
+   :dry-digs {:doc "digs in a row after which the carried count of the item did not rise before giving up (:no-drops)" :spec (a/int-in 1 nil) :default 3}
+   :direction {:doc "the strip tunnel's heading: north, south, east or west (n/s/e/w); nil: the way the body faces when the job starts" :spec (a/or-of string? keyword?) :default nil}
+   :tunnel-length {:doc "the most blocks the strip tunnel runs in this job, at the body's level; 0: no tunnel, seen blocks only" :spec (a/int-in 0 nil) :default 32}
+   :descend-limit {:doc "the most steps of stair down through soil to find stone, when the block is stone-type and none is in sight; 0: never descend" :spec (a/int-in 0 nil) :default 12}
+   :torch-interval {:doc "the strip tunnel hangs a torch every this many steps; 0: none" :spec (a/int-in 0 nil) :default 10}
    :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent :falling-block, :under-feet: the cell under the feet, its floor unseen); the lava and :wet rules above still hold"
-            :default #{:fluid-adjacent :falling-block}}})
+            :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block :under-feet}) :default #{:fluid-adjacent :falling-block}}})
 
 (def reach 3)
 (def mend-reach 4)

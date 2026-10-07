@@ -1,5 +1,5 @@
 (ns jobs.blocks.dig
-  (:require [jobs.lib.args :as jargs]
+  (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.dig-look :as look]
@@ -45,15 +45,15 @@
   jobs.items.get-tool for the block (child :fetch) until a tool is carried, then digs. A fetch that fails is
   remembered for :fail-minutes; meanwhile the check waits :no-tool with {:fetch {:failed reason ...}}.")
 
-(def args
-  {:pos {:doc "the block to dig, [x y z] or {:x :y :z}" :type :pos :default nil}
-   :collect {:doc "pick up what the dig dropped (needs a free slot)" :type :bool :default true}
-   :need-drop {:doc "wait :no-tool when no carried tool harvests the block; false digs anyway and the drop is lost (clearing)" :type :bool :default true}
-   :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent :falling-block :under-feet)" :default #{}}
-   :on-fluid {:doc ":wait: a block beside a fluid that :accept does not take waits :hazard; :fail: the job ends at once, reason :fluid-adjacent, with a :hint" :type :enum :values [:wait :fail] :default :wait}
-   :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :default nil}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :type :bool :default false}
-   :fetch {:doc "get a missing tool instead of waiting :no-tool (jobs.lib.fetch): true, a set of kinds or a map of limits" :default true}})
+(a/defargs args
+  {:pos {:doc "the block to dig, [x y z] or {:x :y :z}" :spec ::a/pos :default nil}
+   :collect {:doc "pick up what the dig dropped (needs a free slot)" :spec boolean? :default true}
+   :need-drop {:doc "wait :no-tool when no carried tool harvests the block; false digs anyway and the drop is lost (clearing)" :spec boolean? :default true}
+   :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent :falling-block :under-feet)" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block :under-feet}) :default #{}}
+   :on-fluid {:doc ":wait: a block beside a fluid that :accept does not take waits :hazard; :fail: the job ends at once, reason :fluid-adjacent, with a :hint" :spec #{:wait :fail} :default :wait}
+   :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :spec a/name? :default nil}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
+   :fetch {:doc "get a missing tool instead of waiting :no-tool (jobs.lib.fetch): true, a set of kinds or a map of limits" :spec fetch/option? :default true}})
 
 (def collect-radius 8)
 
@@ -108,7 +108,7 @@
     (when (and (= :fail (:on-fluid (:args c))) (= :hazard (:reason r)) (some #{:fluid-adjacent} (:hazards r)))
       r)))
 
-(defn check-run [c]
+(defn check [c]
   (if-let [r (when-not (fluid-refusal c) (problem c))]
     (fetch/check c 'jobs.blocks.dig r)
     true))
@@ -206,12 +206,3 @@
           :done)
       (do (when-not (= pos (:for (ctx/mem c))) (ctx/update-mem! c b/fresh-mem pos))
           (await (attempt! c pos))))))
-
-(def bad-lists
-  "Args checked by jobs.lib.args."
-  {:accept :names})
-
-(defn check
-  "check-run once the list args are well formed, else declines :bad-args."
-  [c]
-  (jargs/guard c bad-lists check-run))

@@ -196,7 +196,7 @@ use-on, furnace, enchant) have the details. The fake has the same sensing fields
 built-in recipe table, and instant, deterministic behaviour (`moveTo` jumps to the target, `offline` waits
 `ms * spec.offlineScale`).
 
-`engine.job-fuzz-test` runs every registered job on seeded random args and worlds and fails on a throwing check or round, a plain-false decline, a stop without reason or a sync runaway; carded defects sit in its `known` map. `FUZZ_JOB`, `FUZZ_SEED`, `FUZZ_CASES`, `FUZZ_TRACE`, `FUZZ_EXTREME`, `FUZZ_WRONG_TYPES` replay or widen a run.
+`engine.job-fuzz-test` runs every registered job on seeded random args and worlds and fails on a throwing check or round, a plain-false decline, a stop without reason or a sync runaway; carded defects sit in its `known` map. `FUZZ_JOB`, `FUZZ_SEED`, `FUZZ_CASES`, `FUZZ_TRACE`, `FUZZ_EXTREME` replay or widen a run.
 
 ## Jobs
 
@@ -205,17 +205,19 @@ namespace follows the path (`src/jobs/forestry/fell_tree.cljs` is `jobs.forestry
 
 ```clojure
 (ns jobs.survival.eat
-  (:require [engine.ctx :as ctx]))
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]))
 
 (def doc "Eat the best food carried.")                       ; optional
-(def args {:item {:doc "the food to eat" :default nil}})     ; optional
+(a/defargs args                                              ; optional
+  {:item {:doc "the food to eat" :default nil :spec a/item?}})
 (defn check [_c] true)                                       ; ctx -> boolean
 (defn ^:async round [c]                                      ; ctx -> :done | :continue | :declined
   (await (ctx/act c :eat #js {}))
   :done)
 ```
 
-An arg may declare `:type` (`:keyword :int :number :bool :string :item :pos`, or `:enum` with `:values`; numbers take `:min`/`:max`); a value that does not fit is refused at submit, naming job, arg, type and value. `:pos` also normalises `[x y z]` to `{:x :y :z}`. No `:type` = unchecked; nil = unset. List and map args (`jobs.lib.args`: names, targets, counts, box) are checked by the job's `check`, which waits `:bad-args` with a `:why`.
+**Args.** `engine.args/defargs` declares args as cljs.spec: every arg has a `:spec`, a predicate of `engine.args` (`int-in`, `num-in`, `pos-num?`, `item?`, `name?`, `position?`, `box?`, `coll-of`, `set-of`, `map-of`, `map-with`, `or-of`, `valid-by`), a set of the allowed values, a core predicate (`boolean?`, `string?`, `keyword?`, `map?` ...) or `::a/pos` (`[x y z]` or `{:x :y :z}`, conformed to `{:x :y :z}`). A group `{:doc :keys {k entry}}` is a nested map of args; a caller's group merges over its defaults key by key. nil = unset. At submit undeclared keys are refused at every level, then the args are conformed; a misfit is refused as one line naming job, key path, what the spec wants and the value (`jobs.x :risk :min-health must be a whole number from 1 to 20, got 30`). A child call (`ctx/call-child`) and a restore conform the same way. A predicate built with `a/pred` carries its want text; the catalog shows each `:spec` as that text. `(a/declare! sym data)` registers a hand-built job's args (tests).
 
 There is no catalog to edit: adding the file adds the job. `engine.registry/jobs` is `{ns-symbol {:check :round :doc :args}}`,
 built at compile time. The build hook `engine.build-hooks/add-job-namespaces` lists every file under `jobs`
@@ -230,7 +232,7 @@ require `engine.registry`.
   the scheduler skips it until `retry!` clears the mark. A reflex job that fails is dropped. A cut is never a failure.
 - A round works at its goal for as long as it can do useful work; `:continue` means yield (nothing useful to do now,
   e.g. waiting for crops or daylight), not "next step". Holding still on purpose is declared with `ctx/hold-still!`.
-- **args**: `{key {:doc :default}}`; the engine merges the spec's args over the defaults. Undeclared keys are refused.
+- **args**: `(a/defargs args {key {:doc :default :spec}})` (Args above); the engine merges the spec's args over the defaults. Undeclared keys are refused.
 
 ### Job expressions
 
@@ -290,7 +292,7 @@ calls job code only through `engine.hooks`, named in `src/jobs/hooks.edn` (world
 
 ## Settings
 
-Tuning numbers live in one global map, read by anyone. A namespace under `jobs/` or `triggers/` declares its keys in a top-level `(def settings {::wait-ms {:default 5000 :doc "..." :type :int :min 0}})` (the job arg spec shape; the key's namespace is the declaring one, `:engine.<area>/<name>` in `engine.settings`). `engine.registry/settings` gathers them at compile time, helper files included. The engine's own keys (`:engine.perception/`, `lease`, `events`, `event-api`, `backoff`, `hurt`, `entities`) sit in the `settings` of their namespaces under `engine/`; `engine.settings-registry/settings` gathers them at compile time and `engine.main` adds its own (the vanilla facts hit range and the sleep monster box are plain constants in `engine.senses`); `(perception/defaults)` and `(backoff/defaults)` read them at use.
+Tuning numbers live in one global map, read by anyone. A namespace under `jobs/` or `triggers/` declares its keys in a top-level `(a/defargs settings {::wait-ms {:default 5000 :doc "..." :spec (a/int-in 0 nil)}})` (engine.args, as job args; a bad value is refused with `(a/problem k v)`; the key's namespace is the declaring one, `:engine.<area>/<name>` in `engine.settings`). `engine.registry/settings` gathers them at compile time, helper files included. The engine's own keys (`:engine.perception/`, `lease`, `events`, `event-api`, `backoff`, `hurt`, `entities`) sit in the `settings` of their namespaces under `engine/`; `engine.settings-registry/settings` gathers them at compile time and `engine.main` adds its own (the vanilla facts hit range and the sleep monster box are plain constants in `engine.senses`); `(perception/defaults)` and `(backoff/defaults)` read them at use.
 
 - Read `(settings/get settings ::wait-ms)` with the namespace's own map (a typo throws); never inside a top-level `def`.
 - Layers, low to high: the code `:default`, `worlds/<world>/settings.edn` (`:world`), `worlds/<world>/agents/<Name>/settings.edn` (`:body`). Files are EDN maps `{key value}`, read at body start (`settings/load!` again reloads).

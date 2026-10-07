@@ -1,5 +1,6 @@
 (ns jobs.debug.notify
-  (:require [clojure.string :as str]
+  (:require [engine.args :as a]
+            [clojure.string :as str]
             [engine.chat :as chat]
             [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]))
@@ -12,10 +13,10 @@
   With :chat? true it also sends the text with engine.chat/say! (commands are refused; the engine rate-limits
   chat). A chat that is not sent is reported as info notify.chat-failed and does not fail the job.")
 
-(def args
-  {:text {:doc "text to report" :default "notify"}
-   :chat? {:doc "also send the text to game chat, when the primitives can" :default false}
-   :to {:doc "whisper the text to this player instead of saying it to all" :default nil}})
+(a/defargs args
+  {:text {:doc "text to report" :spec string? :default "notify"}
+   :chat? {:doc "also send the text to game chat, when the primitives can" :spec boolean? :default false}
+   :to {:doc "whisper the text to this player instead of saying it to all" :spec a/name? :default nil}})
 
 (def hostile-radius 16)
 

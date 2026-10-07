@@ -36,7 +36,8 @@
   items no pattern matches, and :enchanted the worth of a stack with :enchants or :nbt: a job that ranks items its own
   way passes its own table, and the durability and enchantment terms do not apply to a priced
   item. A row [regex price :per-stack] prices the whole stack, not each item."
-  (:require ["minecraft-data" :as minecraft-data]
+  (:require [engine.args :as a]
+            ["minecraft-data" :as minecraft-data]
             [clojure.string :as str]
             [jobs.lib.cost.health :as health]
             [jobs.lib.cost.weapon :as weapon]
@@ -44,14 +45,14 @@
             [engine.game :as game]
             [engine.settings :as settings]))
 
-(def settings
-  {::trip {:default 10 :type :number :min 0
+(a/defargs settings
+  {::trip {:default 10 :spec (a/num-in 0 nil)
            :doc "Any fetch: turning round, finding the pile, the risk of the place one died at, in seconds."}
-   ::per-block {:default 0.3 :type :number :min 0.01
+   ::per-block {:default 0.3 :spec (a/num-in 0.01 nil)
                 :doc "One block walked, there and back about a second of a player's time per 3 blocks."}
-   ::per-dark {:default 0.3 :type :number :min 0
+   ::per-dark {:default 0.3 :spec (a/num-in 0 nil)
                :doc "One block walked in the dark, on top of per-block: a dark block costs twice a lit one."}
-   ::walk-blocks-per-s {:default 2.9 :type :number :min 0.1
+   ::walk-blocks-per-s {:default 2.9 :spec (a/num-in 0.1 nil)
                         :doc "Walking speed with slack for detours (4.3 flat out, 1.5x the way), blocks a second."}})
 
 (def default-basis

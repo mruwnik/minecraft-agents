@@ -1,5 +1,6 @@
 (ns jobs.animals.unleash
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
             [jobs.lib.util :as u]))
 
@@ -36,14 +37,14 @@
   Zones: an animal standing in another owner's zone or claim, or in a plan's footprint, is left on its lead (warn
   unleash.declined once, :reason :refused, or :no-zones when no zone list was read). :ignore-zones? true skips the check.")
 
-(def args
-  {:mob {:doc "the animal's name, such as \"cow\"; any animal when nil" :default nil}
-   :animal {:doc "uuid (or id) of the one animal to free; any when nil" :default nil}
-   :radius {:doc "animals within this many blocks count" :default 8}
-   :walk-timeout-s {:doc "bound of one walk towards the click" :default 5}
-   :timeout-s {:doc "seconds from the start of the call before the job gives up" :default 30}
-   :collect {:doc "pick up the leads afterwards" :default true}
-   :ignore-zones? animals/ignore-zones-arg})
+(a/defargs args
+  {:mob {:doc "the animal's name, such as \"cow\"; any animal when nil" :spec a/name? :default nil}
+   :animal {:doc "uuid (or id) of the one animal to free; any when nil" :spec (a/or-of string? number?) :default nil}
+   :radius {:doc "animals within this many blocks count" :spec (a/num-in 0 nil) :default 8}
+   :walk-timeout-s {:doc "bound of one walk towards the click" :spec (a/num-in 0 nil) :default 5}
+   :timeout-s {:doc "seconds from the start of the call before the job gives up" :spec (a/num-in 0 nil) :default 30}
+   :collect {:doc "pick up the leads afterwards" :spec boolean? :default true}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 
 (def reach 3)
 (def max-in-row 3)

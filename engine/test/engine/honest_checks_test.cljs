@@ -2,6 +2,8 @@
   "A check that declines says why (ctx/wait): the scheduler's job.waiting event carries the reason."
   (:require [cljs.test :refer [deftest is are]]
             [engine.core :as core]
+            [engine.expr :as expr]
+            [engine.registry :as registry]
             [engine.build-from-plan-test :as b]
             [engine.harvest-test :as ht]
             [engine.hostile-test :as h]
@@ -95,7 +97,6 @@
 
 (deftest wear-and-fight-back-say-why-they-decline
   (are [job args reason] (= reason (waiting-reason job args))
-    'jobs.items.wear {:item 5} :bad-args
     'jobs.survival.fight-back {} :no-target))
 
 (deftest survival-and-maintenance-checks-say-why-they-decline
@@ -112,7 +113,8 @@
     'jobs.survival.restore-broken {} :nothing-to-restore
     'jobs.survival.unwedge {} :not-wedged))
 
-(deftest enchant-refuses-a-blank-item-name-with-a-why
-  (are [item] (= [[:bad-args "no item name"]] (mapv (juxt :reason :why) (waiting-event 'jobs.items.enchant {:item item})))
-    ""
-    "  "))
+(deftest a-blank-or-non-string-item-is-refused-at-submit
+  (are [job item] (re-find #":item must be an item name \(non-empty string\)" (expr/problem registry/jobs (list job {:item item})))
+    'jobs.items.enchant ""
+    'jobs.items.enchant "  "
+    'jobs.items.wear 5))

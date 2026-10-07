@@ -1,5 +1,6 @@
 (ns jobs.farm.compost
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.gate :as gate]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
@@ -17,13 +18,13 @@
   :harvest). The job warns compost.declined once, with :reason :refused (or :no-zones when no zone list was read).
   :ignore-zones? true skips the check.")
 
-(def args
-  {:at {:doc "the composter position; the nearest composter within :radius when nil" :type :pos :default nil}
-   :radius {:doc "how far to look for a composter, when :at is nil" :default 16}
-   :items {:doc "item names to feed; every compostable thing carried except seeds and food when nil" :default nil}
-   :keep {:doc "{item count} reserves never fed" :default {}}
-   :times {:doc "bone meal to take before done" :default 1}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
+(a/defargs args
+  {:at {:doc "the composter position; the nearest composter within :radius when nil" :spec ::a/pos :default nil}
+   :radius {:doc "how far to look for a composter, when :at is nil" :spec (a/num-in 0 nil) :default 16}
+   :items {:doc "item names to feed; every compostable thing carried except seeds and food when nil" :spec (a/coll-of a/item?) :default nil}
+   :keep {:doc "{item count} reserves never fed" :spec (a/map-of string? number?) :default {}}
+   :times {:doc "bone meal to take before done" :spec (a/int-in 1 nil) :default 1}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (def compostable
   "Everything a composter accepts, any chance."

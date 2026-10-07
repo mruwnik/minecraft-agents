@@ -11,6 +11,7 @@
             [engine.memory :as mem]
             [engine.perception :as perception]
             [engine.registry :as registry]
+            [engine.expr :as expr]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
@@ -1241,15 +1242,9 @@
           (is (= :no-tool (:reason out)))
           (is (= 1 (count (events-of s :fetch.failed)))))))))
 
-(deftest a-bad-fetch-arg-is-refused-at-check-not-treated-as-true
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [s out fetch]} (await (as-child {:block "stone" :count 1 :fetch "please"} {:blocks {"3,64,0" "stone"} :drops cobble} "stone_pickaxe" 20))]
-          (is (nil? out))
-          (is (empty? fetch))
-          (is (= [:bad-args] (mapv :reason (events-of s :mine.declined))))
-          (is (zero? (dig-count s))))))))
+(deftest a-bad-fetch-arg-is-refused-at-submit-not-treated-as-true
+  (is (re-find #"jobs.gather.mine :fetch must be true, false"
+               (expr/problem registry/jobs '(jobs.gather.mine {:block "stone" :count 1 :fetch "please"})))))
 
 (deftest fetch-false-ends-no-tool-without-asking-get-tool
   (async done

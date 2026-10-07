@@ -1,5 +1,6 @@
 (ns jobs.apiary.harvest
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.apiary :as apiary]
             [jobs.lib.gate :as gate]
             [jobs.lib.look :as look]
@@ -26,13 +27,13 @@
   ends :no-hive) and checked again before the click. The job warns apiary.declined once, with :reason :refused (or
   :no-zones when no zone list was read). :ignore-zones? true skips the check.")
 
-(def args
-  {:with {:doc ":shears, :bottle or :either (shears first when both are carried)" :default :either}
-   :box {:doc "{:from pos :to pos}, hives inside it only; overrides :center and :radius" :default nil}
-   :center {:doc "centre of the search; the body's position when the job first runs when nil" :type :pos :default nil}
-   :radius {:doc "hives within this many blocks of the centre count, when :box is nil" :default 12}
-   :max {:doc "hives to harvest in one run, at most" :default 8}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
+(a/defargs args
+  {:with {:doc ":shears, :bottle or :either (shears first when both are carried)" :spec #{:shears :bottle :either} :default :either}
+   :box {:doc "{:from pos :to pos}, hives inside it only; overrides :center and :radius" :spec (a/map-with {:from a/position? :to a/position?}) :default nil}
+   :center {:doc "centre of the search; the body's position when the job first runs when nil" :spec ::a/pos :default nil}
+   :radius {:doc "hives within this many blocks of the centre count, when :box is nil" :spec (a/num-in 0 nil) :default 12}
+   :max {:doc "hives to harvest in one run, at most" :spec (a/int-in 1 nil) :default 8}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (def ripe-level 5)
 (def reach 3)

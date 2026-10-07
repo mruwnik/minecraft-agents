@@ -35,10 +35,15 @@
         (let [form (reader/read {:eof eof :read-cond :allow :features #{:cljs}} r)]
           (if (identical? eof form) forms (recur (conj forms form))))))))
 
+(defn def-head?
+  "Is sym a defining head: def, defn, defn-, or defargs under any alias (engine.args)?"
+  [sym]
+  (or (#{'def 'defn 'defn-} sym) (and (symbol? sym) (= "defargs" (name sym)))))
+
 (defn defined-names
-  "Names defined at top level with def or defn (any metadata)."
+  "Names defined at top level with def, defn or defargs (any metadata)."
   [forms]
-  (set (keep (fn [f] (when (and (seq? f) (#{'def 'defn 'defn-} (first f)) (symbol? (second f)))
+  (set (keep (fn [f] (when (and (seq? f) (def-head? (first f)) (symbol? (second f)))
                        (second f)))
              forms)))
 
@@ -83,14 +88,14 @@
 ;; Metadata for tooling (the dashboard): what a file declares, without the export checks.
 
 (defn defining?
-  "Is the form a def/defn/defn- of the symbol named n?"
+  "Is the form a def/defn/defn-/defargs of the symbol named n?"
   [n form]
-  (and (seq? form) (#{'def 'defn 'defn-} (first form)) (symbol? (second form)) (= n (name (second form)))))
+  (and (seq? form) (def-head? (first form)) (symbol? (second form)) (= n (name (second form)))))
 
 (defn def-value
-  "The value of (def n value), or nil."
+  "The value of (def n value) or (defargs n doc? value), or nil."
   [n forms]
-  (some->> forms (filter #(and (defining? n %) (= 'def (first %)))) first (drop 2) first))
+  (some->> forms (filter #(and (defining? n %) (not (#{'defn 'defn-} (first %))))) first (drop 2) last))
 
 (defn ns-doc
   "The docstring of the ns form (the first form), or nil."

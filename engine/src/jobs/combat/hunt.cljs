@@ -1,5 +1,6 @@
 (ns jobs.combat.hunt
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
             [jobs.lib.hunting :as hunting]
             [jobs.lib.shelter :as sh]
@@ -26,15 +27,15 @@
   :spared is the kills asked for and not made because of the pair rule (0 unless :keep ended it).
   :remaining is the adults of the kind in range at the end.")
 
-(def args
-  {:mob {:doc "mob type name of the animals to hunt" :default "cow"}
-   :count {:doc "animals to kill" :default 1}
-   :radius {:doc "animals within this many blocks of the body count" :default 24}
-   :keep {:doc "never kill the last this many adults of the kind within :radius (babies do not count); nil: 2 for animals, 0 for hostile mobs; 0 turns the rule off" :default nil}
-   :collect-radius {:doc "how far around to collect drops after a kill" :default 8}
-   :weapons {:doc "item name substrings that count as weapons" :default combat/default-weapons}
-   :drops {:doc "item names to collect after a kill; nil: the kind's entry in the drops table, else every item" :default nil}
-   :max-skips {:doc "animals skipped in a row before the hunt gives up" :default 3}})
+(a/defargs args
+  {:mob {:doc "mob type name of the animals to hunt" :spec a/name? :default "cow"}
+   :count {:doc "animals to kill" :spec (a/int-in 1 nil) :default 1}
+   :radius {:doc "animals within this many blocks of the body count" :spec (a/num-in 0 nil) :default 24}
+   :keep {:doc "never kill the last this many adults of the kind within :radius (babies do not count); nil: 2 for animals, 0 for hostile mobs; 0 turns the rule off" :spec (a/int-in 0 nil) :default nil}
+   :collect-radius {:doc "how far around to collect drops after a kill" :spec (a/num-in 0 nil) :default 8}
+   :weapons {:doc "item name substrings that count as weapons" :spec (a/coll-of (a/or-of string? keyword?)) :default combat/default-weapons}
+   :drops {:doc "item names to collect after a kill; nil: the kind's entry in the drops table, else every item" :spec (a/coll-of a/item?) :default nil}
+   :max-skips {:doc "animals skipped in a row before the hunt gives up" :spec (a/int-in 1 nil) :default 3}})
 
 (defn present
   "The adult entities named :mob within :radius, never players, items or babies

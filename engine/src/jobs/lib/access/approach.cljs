@@ -23,14 +23,15 @@
 
   Ranking: walking a block costs 1, placing a block pillar-cost. A stand needs no placement, so any stand wins over a
   pillar."
-  (:require [engine.settings :as settings]
+  (:require [engine.args :as a]
+            [engine.settings :as settings]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.util :as u]))
 
-(def settings
-  {::default-radius {:default 3 :doc "Blocks round a target an approach cell is searched." :type :int :min 1}
-   ::max-radius {:default 5 :doc "The most that radius may be." :type :int :min 1}
-   ::default-max-height {:default 10 :doc "How high above the body an approach may climb." :type :int :min 1}})
+(a/defargs settings
+  {::default-radius {:default 3 :doc "Blocks round a target an approach cell is searched." :spec (a/int-in 1 nil)}
+   ::max-radius {:default 5 :doc "The most that radius may be." :spec (a/int-in 1 nil)}
+   ::default-max-height {:default 10 :doc "How high above the body an approach may climb." :spec (a/int-in 1 nil)}})
 
 (defn default-radius [] (settings/get settings ::default-radius))
 

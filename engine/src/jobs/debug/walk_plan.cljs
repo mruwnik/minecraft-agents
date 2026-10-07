@@ -1,5 +1,6 @@
 (ns jobs.debug.walk-plan
-  (:require [clojure.set :as set]
+  (:require [engine.args :as a]
+            [clojure.set :as set]
             [engine.ctx :as ctx]
             [jobs.lib.walk :as walk]
             [jobs.lib.walk.world :as wworld]))
@@ -21,11 +22,11 @@
   A cut (manual takeover, a reflex) releases every control at once. A resumed round plans afresh from where the
   body stands.")
 
-(def args
-  {:to {:doc "goal cell [x y z] or {:x :y :z}" :type :pos :default nil}
-   :range {:doc "planner goal range (0: that cell)" :default 0}
-   :timeout-s {:doc "bound of one walk (one plan followed), at most 120" :default 60}
-   :weight {:doc "planner heuristic weight (policy: 1.2)" :default walk/default-weight}})
+(a/defargs args
+  {:to {:doc "goal cell [x y z] or {:x :y :z}" :spec ::a/pos :default nil}
+   :range {:doc "planner goal range (0: that cell)" :spec (a/num-in 0 nil) :default 0}
+   :timeout-s {:doc "bound of one walk (one plan followed), at most 120" :spec (a/num-in 0 120) :default 60}
+   :weight {:doc "planner heuristic weight (policy: 1.2)" :spec (a/num-in 0 nil) :default walk/default-weight}})
 
 (defn check [_c] true)
 

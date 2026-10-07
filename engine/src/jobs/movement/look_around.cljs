@@ -1,5 +1,6 @@
 (ns jobs.movement.look-around
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.util :as u]))
 
 (def doc
@@ -7,8 +8,8 @@
   write a :looked entry to body memory (a condition can read it: (since :looked)),
   then wait :every-ms so an idle body does not spin.")
 
-(def args
-  {:every-ms {:doc "milliseconds to wait after each look" :default 2000}})
+(a/defargs args
+  {:every-ms {:doc "milliseconds to wait after each look" :spec (a/num-in 0 nil) :default 2000}})
 
 (def look-ahead 3)
 

@@ -1,5 +1,6 @@
 (ns jobs.animals.leash
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.util :as u]))
@@ -29,14 +30,14 @@
   Zones: an animal standing in another owner's zone or claim, or in a plan's footprint, is not led (taking it out of the zone) (warn
   leash.declined once, :reason :refused, or :no-zones when no zone list was read). :ignore-zones? true skips the check.")
 
-(def args
-  {:mob {:doc "the animal's name, such as \"cow\"" :default nil}
-   :radius {:doc "animals within this many blocks count" :default 8}
-   :skip {:doc "keys (uuids, else ids) of animals never to leash" :default []}
-   :walk-timeout-s {:doc "bound of one walk towards the animal" :default 5}
-   :timeout-s {:doc "seconds of working with the animals (not fetching) before the job gives up" :default 30}
-   :fetch {:doc "get a lead when none is carried (jobs.lib.fetch): true, a set of kinds or a map of limits; false ends :no-lead" :default true}
-   :ignore-zones? animals/ignore-zones-arg})
+(a/defargs args
+  {:mob {:doc "the animal's name, such as \"cow\"" :spec a/name? :default nil}
+   :radius {:doc "animals within this many blocks count" :spec (a/num-in 0 nil) :default 8}
+   :skip {:doc "keys (uuids, else ids) of animals never to leash" :spec (a/coll-of (a/or-of string? number?)) :default []}
+   :walk-timeout-s {:doc "bound of one walk towards the animal" :spec (a/num-in 0 nil) :default 5}
+   :timeout-s {:doc "seconds of working with the animals (not fetching) before the job gives up" :spec (a/num-in 0 nil) :default 30}
+   :fetch {:doc "get a lead when none is carried (jobs.lib.fetch): true, a set of kinds or a map of limits; false ends :no-lead" :spec fetch/option? :default true}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 
 (def reach 3)
 (def max-in-row 3)

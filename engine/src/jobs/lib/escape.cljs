@@ -10,7 +10,8 @@
   - door-beside?: whether a door or gate borders the cells the body can walk to (a way out go-to handles).
   - choose: the escalation for a body here and a goal.
   Cells are [x y z]. block-at maps a cell to its block name (nil when not loaded)."
-  (:require [engine.settings :as settings]
+  (:require [engine.args :as a]
+            [engine.settings :as settings]
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.blocks :as b]
@@ -20,9 +21,9 @@
             [jobs.lib.tidy :as tidy]
             [jobs.lib.util :as u]))
 
-(def settings
-  {::max-depth {:default 8 :doc "How deep an escape digs or climbs at most." :type :int :min 1}
-   ::max-door {:default 3 :doc "The thickest wall (blocks) a :clear-path step digs through." :type :int :min 1}})
+(a/defargs settings
+  {::max-depth {:default 8 :doc "How deep an escape digs or climbs at most." :spec (a/int-in 1 nil)}
+   ::max-door {:default 3 :doc "The thickest wall (blocks) a :clear-path step digs through." :spec (a/int-in 1 nil)}})
 
 (defn max-depth [] (settings/get settings ::max-depth))
 

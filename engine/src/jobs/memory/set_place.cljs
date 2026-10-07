@@ -1,5 +1,6 @@
 (ns jobs.memory.set-place
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.util :as u]
             [engine.memory :as mem]
             [jobs.lib.places :as places]))
@@ -19,10 +20,10 @@
   To run it on a body that is running: {:op :submit :next? true :spec (jobs.memory.set-place {...})}. The
   outcome is in the event stream.")
 
-(def args
-  {:name {:doc "the place's name: a keyword or string of 1 to 32 lowercase letters, digits and dashes" :default nil}
-   :pos {:doc "[x y z] or {:x :y :z}; nil: where the body stands" :type :pos :default nil}
-   :block {:doc "block name that must stand at or within 1 of :pos (\"bed\" matches any *_bed); the place is recorded at it" :default nil}})
+(a/defargs args
+  {:name {:doc "the place's name: a keyword or string of 1 to 32 lowercase letters, digits and dashes" :spec (a/or-of keyword? string?) :default nil}
+   :pos {:doc "[x y z] or {:x :y :z}; nil: where the body stands" :spec ::a/pos :default nil}
+   :block {:doc "block name that must stand at or within 1 of :pos (\"bed\" matches any *_bed); the place is recorded at it" :spec a/name? :default nil}})
 
 (defn check [_c] true)
 

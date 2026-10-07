@@ -7,6 +7,7 @@
             [engine.events :as events]
             [engine.memory :as mem]
             [engine.registry :as registry]
+            [engine.expr :as expr]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]))
 
@@ -78,12 +79,24 @@
             (await (run-job eng (list remember {:kind :bred-cows :cap 2 :data {:n n}}))))
           (is (= [{:n 2} {:n 3}] (entries eng :bred-cows))))))))
 
+(deftest remember-refuses-badly-shaped-arguments-at-submit
+  (doseq [[args re] [[{:kind "bred-cows"} #":kind must be a keyword"]
+                     [{:kind :bred-cows :data [1 2]} #":data must be a map"]
+                     [{:kind :bred-cows :data "x"} #":data must be a map"]
+                     [{:kind :bred-cows :ttl-s 0} #":ttl-s must be one of :forever or a number above 0"]
+                     [{:kind :bred-cows :ttl-s -5} #":ttl-s must be"]
+                     [{:kind :bred-cows :ttl-s "60"} #":ttl-s must be"]
+                     [{:kind :bred-cows :ttl-s js/NaN} #":ttl-s must be"]
+                     [{:kind :bred-cows :cap 0} #":cap must be a whole number >= 1"]
+                     [{:kind :bred-cows :cap 1.5} #":cap must be"]
+                     [{:kind :bred-cows :cap "2"} #":cap must be"]]]
+    (is (re-find re (expr/problem registry/jobs (list 'jobs.memory.remember args))) (pr-str args))))
+
 (deftest remember-refuses-bad-arguments-as-data-and-writes-nothing
   (async done
     (tu/run-async done
       (fn ^:async t []
         (doseq [[args reason] [[{} :bad-kind]
-                               [{:kind "bred-cows"} :bad-kind]
                                [{:kind :bred/cow} :bad-kind]
                                [{:kind :job/j1} :bad-kind]
                                [{:kind :hurt} :reserved-kind]
@@ -97,16 +110,7 @@
                                [{:kind :watch-turned} :reserved-kind]
                                [{:kind :sleep-failed} :reserved-kind]
                                [{:kind :bed-place-failed} :reserved-kind]
-                               [{:kind :shelter-trapped} :reserved-kind]
-                               [{:kind :bred-cows :data [1 2]} :bad-data]
-                               [{:kind :bred-cows :data "x"} :bad-data]
-                               [{:kind :bred-cows :ttl-s 0} :bad-ttl]
-                               [{:kind :bred-cows :ttl-s -5} :bad-ttl]
-                               [{:kind :bred-cows :ttl-s "60"} :bad-ttl]
-                               [{:kind :bred-cows :ttl-s js/NaN} :bad-ttl]
-                               [{:kind :bred-cows :cap 0} :bad-cap]
-                               [{:kind :bred-cows :cap 1.5} :bad-cap]
-                               [{:kind :bred-cows :cap "2"} :bad-cap]]]
+                               [{:kind :shelter-trapped} :reserved-kind]]]
           (let [{:keys [eng seen]} (setup)]
             (await (run-job eng (list remember args)))
             (is (= [reason] (mapv :reason (events-of seen :memory.refused))) (pr-str args))

@@ -1,5 +1,5 @@
 (ns jobs.storage.deposit
-  (:require [jobs.lib.args :as jargs]
+  (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.cost :as cost]
@@ -27,12 +27,12 @@
   deposit.refused warn and puts nothing in. :ignore-zones? true skips the check.
   Stock: a chest whose stock is booked in body memory :fetch/stock gets what was put in added (jobs.lib.fetch).")
 
-(def args
-  {:chest {:doc "chest position [x y z] or {:x :y :z}; the known :chest place when nil" :type :pos :default nil}
-   :items {:doc "item names to put away, in this order (the first name with something to spare goes first); everything but tools and armour when nil" :default nil}
-   :keep {:doc "{item-name count}: leave at least this many of the name carried" :default {}}
-   :free {:doc "stop once this many inventory slots are free; all of it when nil" :type :int :min 0 :default nil}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :type :bool :default false}})
+(a/defargs args
+  {:chest {:doc "chest position [x y z] or {:x :y :z}; the known :chest place when nil" :spec ::a/pos :default nil}
+   :items {:doc "item names to put away, in this order (the first name with something to spare goes first); everything but tools and armour when nil" :spec (a/coll-of (a/or-of string? keyword?)) :default nil}
+   :keep {:doc "{item-name count}: leave at least this many of the name carried" :spec (a/map-of string? number?) :default {}}
+   :free {:doc "stop once this many inventory slots are free; all of it when nil" :spec (a/int-in 0 nil) :default nil}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (defn to-deposit
   "The next carried stack to put away and how many of it: {:stack s :count n}
@@ -50,7 +50,7 @@
        (some (fn [n] (some #(when (= n (:name %)) (pick %)) items)) wanted)
        (some #(when-not (storage/tool? (:name %)) (pick %)) items)))))
 
-(defn check-run
+(defn check
   "A chest is known; else waits with reason :no-chest."
   [c]
   (or (boolean (storage/chest-of (ctx/view c) (:args c)))
@@ -137,12 +137,3 @@
   moves nothing twice) until nothing is left or it stops. :continue only while go-to waits on the world."
   [c]
   (await (pace/steps! c (fn ^:async deposit-step [] (await (step! c))))))
-
-(def bad-lists
-  "Args checked by jobs.lib.args."
-  {:items :names :keep :counts})
-
-(defn check
-  "check-run once the list args are well formed, else declines :bad-args."
-  [c]
-  (jargs/guard c bad-lists check-run))

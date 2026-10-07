@@ -1,5 +1,6 @@
 (ns jobs.movement.path-preview
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.cost :as cost]
             [jobs.lib.near :as near]
             [jobs.lib.walk :as walk]
@@ -19,30 +20,30 @@
   would open, waypoints the cells [x y z] where the route turns or changes move kind, ending at the goal's end of the plan.
   A route that only gets nearer (a partial plan) or none is {:status :stopped :found false :reason (the planner's, as
   go-to's :why; :abilities with :kind) :near} plus :partial {the same fields up to where it ends} when there is one.
-  A bad :pos or :place, :tolls, :drop-cost, :min-health, :max-damage or :hp-seconds, or a body without pathWorld sensing, is {:status :stopped :found false :reason
-  :bad-pos|:bad-name|:unknown-place|:bad-tolls|:bad-drop-cost|:bad-costs|:bad-landing|:bad-gait|:bad-min-health|:bad-max-damage|:bad-hp-seconds|:unsupported :text}.")
+  An arg its spec refuses (as go-to's) is refused at submit. A :pos outside the world, a bad or unknown :place, or a body
+  without pathWorld sensing, is {:status :stopped :found false :reason :bad-pos|:bad-name|:unknown-place|:unsupported :text}.")
 
-(def args
-  {:pos {:doc "target position [x y z] or {:x :y :z}" :type :pos :default nil}
-   :place {:doc "name of a place in body memory (:home, :bed, ...) to preview the walk to instead of :pos" :default nil}
-   :range {:doc "how close counts as there, in cells" :default 1}
-   :doors {:doc "as go-to: :shut or :leave-open let the route open doors, gates and trapdoors; :never makes them walls" :default :shut}
-   :dangers {:doc "false: plan straight past known dangers; true: keep away from them" :default true}
-   :dark {:doc "false: plan dark cells like lit ones" :default true}
-   :tolls {:doc "cells to cross only as a last resort, [{:x :y :z :factor}]" :default nil}
-   :drop-cost {:doc "number: scales the cost of a drop; false: no drop of 2 or 3 at all" :default 1}
-   :costs {:doc "as go-to :costs" :default nil}
-   :landing {:doc "as go-to :landing: block name -> share of a fall's damage taken landing on it (negative: a bounce, no damage but settle time)" :default nil}
-   :gait {:doc "as go-to :gait: :auto, :walk (no sprint) or :sneak (slow, no sprint); nil: the body's setting, else :auto" :default nil}
-   :min-health {:doc "go-to's :min-health: the hp the walk may not spend below" :default nil}
-   :max-damage {:doc "go-to's :max-damage: at most this many hp spent on drops and plants" :default nil}
-   :food {:doc "go-to's :food: the food level (0-20) the damage budget counts on; default the body's own" :default nil}
-   :hp-seconds {:doc "go-to's :hp-seconds: seconds an hp costs at full health" :default cost/hp-seconds}
-   :flee-factor {:doc "go-to's :flee-factor" :default (:flee cost/danger-stances)}
-   :fight-factor {:doc "go-to's :fight-factor" :default (:fight cost/danger-stances)}
-   :danger-max-rate {:doc "go-to's :danger-max-rate" :default cost/danger-max-rate}
-   :danger-shape {:doc "go-to's :danger-shape" :default nil}
-   :one-way {:doc ":closed takes no drop of 2 or 3 or gap jump down that the body cannot climb back; :open (default) takes one toward unloaded land" :default :open}})
+(a/defargs args
+  {:pos {:doc "target position [x y z] or {:x :y :z}" :spec ::a/pos :default nil}
+   :place {:doc "name of a place in body memory (:home, :bed, ...) to preview the walk to instead of :pos" :spec (a/or-of keyword? string?) :default nil}
+   :range {:doc "how close counts as there, in cells" :spec (a/num-in 0 nil) :default 1}
+   :doors {:doc "as go-to: :shut or :leave-open let the route open doors, gates and trapdoors; :never makes them walls" :spec #{:shut :leave-open :never} :default :shut}
+   :dangers {:doc "false: plan straight past known dangers; true: keep away from them" :spec boolean? :default true}
+   :dark {:doc "false: plan dark cells like lit ones" :spec boolean? :default true}
+   :tolls {:doc "cells to cross only as a last resort, [{:x :y :z :factor}]" :spec (a/valid-by "a list of {:x :y :z :factor} of finite numbers, :factor >= 0" wworld/tolls-problem) :default nil}
+   :drop-cost {:doc "number: scales the cost of a drop; false: no drop of 2 or 3 at all" :spec (a/or-of (a/num-in 0 nil) false?) :default 1}
+   :costs {:doc "as go-to :costs" :spec (a/valid-by "a map of planner price name to a number of seconds >= 0" cost/planner-costs-problem) :default nil}
+   :landing {:doc "as go-to :landing: block name -> share of a fall's damage taken landing on it (negative: a bounce, no damage but settle time)" :spec (a/valid-by "a map of block name to a number" cost/landing-problem) :default nil}
+   :gait {:doc "as go-to :gait: :auto, :walk (no sprint) or :sneak (slow, no sprint); nil: the body's setting, else :auto" :spec #{:auto :walk :sneak} :default nil}
+   :min-health {:doc "go-to's :min-health: the hp the walk may not spend below" :spec (a/num-in 1 20) :default nil}
+   :max-damage {:doc "go-to's :max-damage: at most this many hp spent on drops and plants" :spec (a/num-in 0 nil) :default nil}
+   :food {:doc "go-to's :food: the food level (0-20) the damage budget counts on; default the body's own" :spec (a/num-in 0 20) :default nil}
+   :hp-seconds {:doc "go-to's :hp-seconds: seconds an hp costs at full health" :spec a/pos-num? :default cost/hp-seconds}
+   :flee-factor {:doc "go-to's :flee-factor" :spec (a/num-in 0 nil) :default (:flee cost/danger-stances)}
+   :fight-factor {:doc "go-to's :fight-factor" :spec (a/num-in 0 nil) :default (:fight cost/danger-stances)}
+   :danger-max-rate {:doc "go-to's :danger-max-rate" :spec a/pos-num? :default cost/danger-max-rate}
+   :danger-shape {:doc "go-to's :danger-shape" :spec (a/valid-by "a map of :sensed, :remembered or :creeper to {:close :radius} numbers >= 0, :close under :radius" cost/danger-shape-problem) :default nil}
+   :one-way {:doc ":closed takes no drop of 2 or 3 or gap jump down that the body cannot climb back; :open (default) takes one toward unloaded land" :spec #{:open :closed} :default :open}})
 
 (defn check [_c] true)
 

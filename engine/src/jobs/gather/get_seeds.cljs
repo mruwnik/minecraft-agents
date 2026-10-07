@@ -1,5 +1,6 @@
 (ns jobs.gather.get-seeds
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.util :as u]
@@ -47,19 +48,19 @@
   :no-chest-cell (the :plan has no chest cell), :no-zones (break way with no zone list read), and :too-short
   (cane or bamboo in range but no stand of two or more: the job stays queued, a stand may grow).")
 
-(def args
-  {:item {:doc "the planting material to gather" :default "wheat_seeds"}
-   :count {:doc "how many more to carry than at the start" :default 8}
-   :radius {:doc "source blocks within this many blocks of the body count" :default 16}
-   :sources {:doc "block names to break for the item; nil: the material's own (grass for wheat_seeds)" :default nil}
-   :per-round {:doc "blocks dug per step at most" :default 4}
-   :chest {:doc "chest position: take the item from it instead of breaking blocks" :type :pos :default nil}
-   :plan {:doc "id of a plan: take the item from the chest cell (want \"chest\") of the plan" :default nil}
-   :collect-radius {:doc "how far around to collect drops after a batch" :default 8}
-   :dry-digs {:doc "digs in a row that brought no new item before giving up" :default 40}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
+(a/defargs args
+  {:item {:doc "the planting material to gather" :spec a/item? :default "wheat_seeds"}
+   :count {:doc "how many more to carry than at the start" :spec (a/int-in 0 nil) :default 8}
+   :radius {:doc "source blocks within this many blocks of the body count" :spec (a/num-in 0 nil) :default 16}
+   :sources {:doc "block names to break for the item; nil: the material's own (grass for wheat_seeds)" :spec (a/coll-of a/name?) :default nil}
+   :per-round {:doc "blocks dug per step at most" :spec (a/int-in 1 nil) :default 4}
+   :chest {:doc "chest position: take the item from it instead of breaking blocks" :spec ::a/pos :default nil}
+   :plan {:doc "id of a plan: take the item from the chest cell (want \"chest\") of the plan" :spec a/name? :default nil}
+   :collect-radius {:doc "how far around to collect drops after a batch" :spec (a/num-in 0 nil) :default 8}
+   :dry-digs {:doc "digs in a row that brought no new item before giving up" :spec (a/int-in 1 nil) :default 40}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
    :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent :falling-block :under-feet)"
-            :default #{:falling-block :under-feet}}})
+            :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block :under-feet}) :default #{:falling-block :under-feet}}})
 
 (def reach 3)
 

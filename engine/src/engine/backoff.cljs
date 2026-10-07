@@ -7,14 +7,15 @@
   no round for :first-s seconds; each further fruitless round doubles the wait,
   up to :max-s. Any act with another status is progress and resets everything,
   except neutral acts: they count for neither."
-  (:require [engine.settings :as settings]))
+  (:require [engine.args :as a]
+            [engine.settings :as settings]))
 
-(def settings
-  {:engine.backoff/after {:default 3 :type :int :min 1 :doc "Fruitless rounds in a row before a job gets no round."}
-   :engine.backoff/first-s {:default 1 :type :number :min 0.001 :doc "The first wait, s; each further fruitless round doubles it."}
-   :engine.backoff/max-s {:default 30 :type :number :min 0.001 :doc "The longest wait, s."}
-   :engine.backoff/moved-min {:default 1 :type :number :min 0 :doc "Blocks a failed moveTo must have moved the body to be neutral."}
-   :engine.backoff/walk-moved-min {:default 8 :type :number :min 0
+(a/defargs settings
+  {:engine.backoff/after {:default 3 :spec (a/int-in 1 nil) :doc "Fruitless rounds in a row before a job gets no round."}
+   :engine.backoff/first-s {:default 1 :spec (a/num-in 0.001 nil) :doc "The first wait, s; each further fruitless round doubles it."}
+   :engine.backoff/max-s {:default 30 :spec (a/num-in 0.001 nil) :doc "The longest wait, s."}
+   :engine.backoff/moved-min {:default 1 :spec (a/num-in 0 nil) :doc "Blocks a failed moveTo must have moved the body to be neutral."}
+   :engine.backoff/walk-moved-min {:default 8 :spec (a/num-in 0 nil)
                                    :doc "Blocks a walk round that got no nearer must have moved the body to be neutral: a long way round is not a failure, shuffling on the spot is."}})
 
 (defn defaults

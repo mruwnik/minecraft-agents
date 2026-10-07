@@ -1,5 +1,6 @@
 (ns jobs.animals.pen-check
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.apiary :as apiary]
             [jobs.lib.pen :as pen]))
 
@@ -20,10 +21,10 @@
     its leaks shut, and 0 when shutting up to 4 rounds of them does not close it (a low wall all round).
   - :gates lists every fence gate in or beside those cells with :open?.")
 
-(def args
-  {:at {:doc "feet cell [x y z] or {:x :y :z} of a spot inside the pen (the floor's top, where the animal's feet are)" :type :pos :default nil}
-   :box {:doc "the pen: {:min {:x :y :z} :max {:x :y :z}}, inclusive; a step out of it is a leak" :default nil}
-   :max-cells {:doc "most cells the fill visits before it gives up with :unbounded" :default pen/default-max-cells}})
+(a/defargs args
+  {:at {:doc "feet cell [x y z] or {:x :y :z} of a spot inside the pen (the floor's top, where the animal's feet are)" :spec ::a/pos :default nil}
+   :box {:doc "the pen: {:min {:x :y :z} :max {:x :y :z}}, inclusive; a step out of it is a leak" :spec a/box? :default nil}
+   :max-cells {:doc "most cells the fill visits before it gives up with :unbounded" :spec (a/int-in 1 nil) :default pen/default-max-cells}})
 
 (defn check [c]
   (or (boolean (or (:at (:args c)) (:box (:args c))))

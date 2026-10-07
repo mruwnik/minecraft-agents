@@ -1,13 +1,14 @@
 (ns jobs.lib.util
   "Helpers the library jobs share: reading positions off JS, distances, the
   inventory and bounded failure counting. Walking in reach is jobs.lib.near/go-near!."
-  (:require [engine.settings :as settings]
+  (:require [engine.args :as a]
+            [engine.settings :as settings]
             [engine.game :as game]
             [engine.ctx :as ctx]
             [engine.perception.rays :as rays]))
 
-(def settings
-  {::max-failures {:default 3 :doc "Failures in a row a retrying helper takes before it gives up." :type :int :min 1}})
+(a/defargs settings
+  {::max-failures {:default 3 :doc "Failures in a row a retrying helper takes before it gives up." :spec (a/int-in 1 nil)}})
 
 (defn max-failures [] (settings/get settings ::max-failures))
 

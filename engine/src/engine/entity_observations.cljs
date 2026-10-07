@@ -12,16 +12,17 @@
     the exact place.
   - the body itself is :self.
   Mineflayer tracks far more (mobs deep in the rock under the body). Those are never listed."
-  (:require [clojure.string :as str]
+  (:require [engine.args :as a]
+            [clojure.string :as str]
             [engine.perception :as perception]
             [engine.settings :as settings]
             ["crypto" :as crypto]))
 
-(def settings
-  {:engine.entities/ttl-ms {:default 120000 :type :int :min 1 :doc "What was sensed stays known this long, ms."}
-   :engine.entities/sample-ms {:default 1000 :type :int :min 1 :doc "The entity cache samples the body's senses this often, ms."}
-   :engine.entities/max-entities {:default 10000 :type :int :min 1 :doc "The most entities the cache holds."}
-   :engine.entities/max-snapshot-bytes {:default (* 4 1024 1024) :type :int :min 1024 :doc "The most bytes one /entities snapshot may take."}})
+(a/defargs settings
+  {:engine.entities/ttl-ms {:default 120000 :spec (a/int-in 1 nil) :doc "What was sensed stays known this long, ms."}
+   :engine.entities/sample-ms {:default 1000 :spec (a/int-in 1 nil) :doc "The entity cache samples the body's senses this often, ms."}
+   :engine.entities/max-entities {:default 10000 :spec (a/int-in 1 nil) :doc "The most entities the cache holds."}
+   :engine.entities/max-snapshot-bytes {:default (* 4 1024 1024) :spec (a/int-in 1024 nil) :doc "The most bytes one /entities snapshot may take."}})
 
 (defn setting [k] (settings/get settings (keyword "engine.entities" k)))
 (def silent-types

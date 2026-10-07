@@ -2,13 +2,13 @@
   "The global tuning numbers: layers (code default, world file, body file), validation and provenance.
   See README.md, Settings."
   (:refer-clojure :exclude [get])
-  (:require [cljs.reader :as reader]
-            [engine.expr :as expr]
+  (:require [engine.args :as a]
+            [cljs.reader :as reader]
             ["fs" :as fs]))
 
-(def settings
-  "The engine's own keys, :engine.<area>/<name>, each {:default :doc :type ...} (the job arg spec shape)."
-  {:engine.perception/save-ms {:default 60000 :type :int :min 1000
+(a/defargs settings
+  "The engine's own keys, :engine.<area>/<name>, each {:default :doc :spec} (engine.args, as job args)."
+  {:engine.perception/save-ms {:default 60000 :spec (a/int-in 1000 nil)
                                :doc "How often the body's seen-world file (seen.bin) is saved, in ms of wall clock."}})
 
 (defonce state
@@ -23,11 +23,6 @@
       (throw (ex-info (str "unknown setting " k) {:key k})))
     (let [values (:values @state)]
       (if (contains? values k) (clojure.core/get values k) (:default spec)))))
-
-(defn spec-problem
-  "Why v does not fit spec, or nil. An override is never nil."
-  [spec v]
-  (if (nil? v) "a value, not nil" (expr/type-problem spec v)))
 
 (defn read-layer
   "[:missing], [:ok map] or [:bad why] for a settings file."
@@ -53,7 +48,7 @@
       :bad [values layers (conj events (bad-event file nil data))]
       (reduce-kv (fn [[values layers events] k v]
                    (let [spec (clojure.core/get specs k)
-                         why (if spec (spec-problem spec v) :unknown)]
+                         why (if spec (a/problem k v) :unknown)]
                      (if why
                        [values layers (conj events (bad-event file k (if spec (str "must be " why ", got " (pr-str v)) "unknown key")))]
                        [(assoc values k v) (assoc layers k layer) events])))

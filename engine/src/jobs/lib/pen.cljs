@@ -20,14 +20,15 @@
   ground until :max-cells and the way out is read off the walk to its far end
   (an open gate, a gap or a ridge climbed over). A leaky pen is refilled with
   those cells walled off, so :inside and :gates are the pen's own."
-  (:require [engine.settings :as settings]))
+  (:require [engine.args :as a]
+            [engine.settings :as settings]))
 
-(def settings
-  {::max-drop {:default 3.0 :doc "Blocks a penned animal may drop when it walks." :type :number :min 0}
-   ::body-height {:default 1.4 :doc "Height of an animal's box a pen needs clear." :type :number :min 0}
-   ::gate-scan {:default 600 :doc "The most cells searched for gates when the flood was cut short." :type :int :min 1}
-   ::max-seals {:default 4 :doc "Rounds of leaks shut when planning a pen." :type :int :min 0}
-   ::max-listed {:default 12 :doc "Leaks listed in a pen report." :type :int :min 1}})
+(a/defargs settings
+  {::max-drop {:default 3.0 :doc "Blocks a penned animal may drop when it walks." :spec (a/num-in 0 nil)}
+   ::body-height {:default 1.4 :doc "Height of an animal's box a pen needs clear." :spec (a/num-in 0 nil)}
+   ::gate-scan {:default 600 :doc "The most cells searched for gates when the flood was cut short." :spec (a/int-in 1 nil)}
+   ::max-seals {:default 4 :doc "Rounds of leaks shut when planning a pen." :spec (a/int-in 0 nil)}
+   ::max-listed {:default 12 :doc "Leaks listed in a pen report." :spec (a/int-in 1 nil)}})
 
 (def step-up 1.0)
 (defn max-drop [] (settings/get settings ::max-drop))

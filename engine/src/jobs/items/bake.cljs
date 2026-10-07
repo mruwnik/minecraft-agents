@@ -1,5 +1,6 @@
 (ns jobs.items.bake
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.lib.look :as look]
@@ -19,11 +20,11 @@
   \"chest <status>\", \"deposit <reason>\", \"withdraw <reason>\", \"craft <reason>\", \"<child> declined\" (a child's check failed three rounds in a row) or :refused (a zone or claim
   refuses the chest; bake.refused).")
 
-(def args
-  {:chest {:doc "store chest position [x y z] or {:x :y :z}; the known :chest place when nil" :type :pos :default nil}
-   :keep {:doc "loaves to carry when done" :default 16}
-   :table-radius {:doc "how far from the chest the table may be" :default 8}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
+(a/defargs args
+  {:chest {:doc "store chest position [x y z] or {:x :y :z}; the known :chest place when nil" :spec ::a/pos :default nil}
+   :keep {:doc "loaves to carry when done" :spec (a/int-in 0 nil) :default 16}
+   :table-radius {:doc "how far from the chest the table may be" :spec (a/num-in 0 nil) :default 8}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (def per-trip-max 192)
 (def stack-size 64)

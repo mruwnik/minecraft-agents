@@ -5,6 +5,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.expr :as expr]
             [engine.fake :as fake]
             [engine.fake.raw-world :as fake-raw]
             [jobs.items.craft :as craft]
@@ -268,16 +269,9 @@
           (is (nil? (:fetch (core/waiting (:eng s) id))))
           (is (empty? (inspects s))))))))
 
-(deftest a-bad-fetch-arg-ends-the-job-bad-args
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (start (world pickaxe-stock) [own-zone])]
-          (core/submit! (:eng s) (dig-spec {:fetch "please"}) {})
-          (await (run-ticks s 5))
-          (is (empty? (listed s)))
-          (is (empty? (inspects s)))
-          (is (= 1 (count (events-of s :fetch.bad-args)))))))))
+(deftest a-bad-fetch-arg-is-refused-at-submit
+  (is (re-find #"jobs.blocks.dig :fetch must be true, false, a set of kinds"
+               (expr/problem registry/jobs (dig-spec {:fetch "please"})))))
 
 ;; ------------------------------------------------------------------ place with :fetch
 
@@ -579,9 +573,8 @@
           (await (run-ticks s 4))
           (is (= {:all {:depth 3} :jobs {'jobs.blocks.dig {:minutes 2}}}
                  (fetch/body-limits (mem/view (:store (:eng s))))))
-          (core/submit! (:eng s) (list 'jobs.items.fetch-limits {:depth -2}) {})
-          (await (run-ticks s 2))
-          (is (= 1 (count (events-of s :fetch-limits.refused))))
+          (is (re-find #":depth must be a whole number >= 0, got -2"
+                       (expr/problem registry/jobs (list 'jobs.items.fetch-limits {:depth -2}))))
           (core/submit! (:eng s) (list 'jobs.items.fetch-limits {:clear true}) {})
           (await (run-ticks s 2))
           (is (= {} (fetch/body-limits (mem/view (:store (:eng s)))))))))))

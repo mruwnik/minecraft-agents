@@ -3,7 +3,8 @@
   GET   /snapshot, /status, /inventory, /events, /job, /jobs, /triggers, /catalog
   POST  /jobs and /triggers (changes), /attention/resolve, /chat
   Bodies are limited (a setting, 16 KB). Lists are paged and bounded."
-  (:require [cljs.reader :as reader]
+  (:require [engine.args :as a]
+            [cljs.reader :as reader]
             [engine.core :as core]
             [engine.chat :as chat]
             [engine.expr :as expr]
@@ -18,16 +19,16 @@
             ["path" :as path]))
 
 (def content-type "application/edn; charset=utf-8")
-(def settings
-  {:engine.event-api/max-body-bytes {:default 16384 :type :int :min 1 :doc "The largest request body the API reads, bytes."}
-   :engine.event-api/max-limit {:default 1000 :type :int :min 1 :doc "The most events one /events read returns."}
-   :engine.event-api/status-job-limit {:default 4 :type :int :min 1 :doc "Jobs /status lists by default."}
-   :engine.event-api/attention-limit {:default 4 :type :int :min 1 :doc "Attention items listed by default."}
-   :engine.event-api/catalog-page-limit {:default 20 :type :int :min 1 :doc "Catalog entries a page lists by default."}
-   :engine.event-api/max-catalog-page-limit {:default 64 :type :int :min 1 :doc "The most catalog entries a page may list."}
-   :engine.event-api/catalog-doc-limit {:default 1200 :type :int :min 1 :doc "Characters of a job's doc the catalog shows."}
-   :engine.event-api/inventory-stack-limit {:default 46 :type :int :min 1 :doc "Stacks /inventory lists."}
-   :engine.event-api/enchant-limit {:default 8 :type :int :min 1 :doc "Enchantments listed per item."}})
+(a/defargs settings
+  {:engine.event-api/max-body-bytes {:default 16384 :spec (a/int-in 1 nil) :doc "The largest request body the API reads, bytes."}
+   :engine.event-api/max-limit {:default 1000 :spec (a/int-in 1 nil) :doc "The most events one /events read returns."}
+   :engine.event-api/status-job-limit {:default 4 :spec (a/int-in 1 nil) :doc "Jobs /status lists by default."}
+   :engine.event-api/attention-limit {:default 4 :spec (a/int-in 1 nil) :doc "Attention items listed by default."}
+   :engine.event-api/catalog-page-limit {:default 20 :spec (a/int-in 1 nil) :doc "Catalog entries a page lists by default."}
+   :engine.event-api/max-catalog-page-limit {:default 64 :spec (a/int-in 1 nil) :doc "The most catalog entries a page may list."}
+   :engine.event-api/catalog-doc-limit {:default 1200 :spec (a/int-in 1 nil) :doc "Characters of a job's doc the catalog shows."}
+   :engine.event-api/inventory-stack-limit {:default 46 :spec (a/int-in 1 nil) :doc "Stacks /inventory lists."}
+   :engine.event-api/enchant-limit {:default 8 :spec (a/int-in 1 nil) :doc "Enchantments listed per item."}})
 
 (defn setting [k] (settings/get settings (keyword "engine.event-api" k)))
 
@@ -293,7 +294,7 @@
             (when entry
               {:ok true :kind :job :name sym
                :doc (short-text (:doc entry) (setting "catalog-doc-limit"))
-               :args (bounded-value (:args entry) 0 (volatile! 64))}))
+               :args (bounded-value (a/described sym (:args entry)) 0 (volatile! 64))}))
     "trigger" (let [id (keyword name)
                     entry (get (:triggers eng) id)]
                 (when entry

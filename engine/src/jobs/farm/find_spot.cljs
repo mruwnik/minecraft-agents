@@ -1,5 +1,6 @@
 (ns jobs.farm.find-spot
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
@@ -14,14 +15,14 @@
   Result: {:spot pos-or-nil :spots [...] :walked bool}. A pos is the north-west corner at ground level.
   :reason is :none (no patch found) or :unreachable (walk failed).")
 
-(def args
-  {:w {:doc "patch width (x), 1 to 16" :type :int :min 1 :max 16 :default 5}
-   :h {:doc "patch height (z), 1 to 16" :type :int :min 1 :max 16 :default 5}
-   :range {:doc "patches lie within this many blocks of :center in x and z, 1 to 48" :type :int :min 1 :max 48 :default 24}
-   :center {:doc "where to search from {:x :y :z}; nil is the body's cell" :type :pos :default nil}
-   :depth {:doc "how far above and below the centre's y to look for ground, 1 to 16" :type :int :min 1 :max 16 :default 12}
-   :limit {:doc "how many spots to keep, 1 to 8" :type :int :min 1 :max 8 :default 3}
-   :walk {:doc "walk to the best spot (finding and walking are separate; a parent can walk)" :default false}})
+(a/defargs args
+  {:w {:doc "patch width (x), 1 to 16" :spec (a/int-in 1 16) :default 5}
+   :h {:doc "patch height (z), 1 to 16" :spec (a/int-in 1 16) :default 5}
+   :range {:doc "patches lie within this many blocks of :center in x and z, 1 to 48" :spec (a/int-in 1 48) :default 24}
+   :center {:doc "where to search from {:x :y :z}; nil is the body's cell" :spec ::a/pos :default nil}
+   :depth {:doc "how far above and below the centre's y to look for ground, 1 to 16" :spec (a/int-in 1 16) :default 12}
+   :limit {:doc "how many spots to keep, 1 to 8" :spec (a/int-in 1 8) :default 3}
+   :walk {:doc "walk to the best spot (finding and walking are separate; a parent can walk)" :spec boolean? :default false}})
 
 (def air #{"air" "cave_air" "void_air"})
 (def no-floor #{"water" "lava" "bubble_column" "ice" "frosted_ice" "magma_block" "powder_snow"})

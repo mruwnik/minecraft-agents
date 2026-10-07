@@ -1,5 +1,6 @@
 (ns jobs.farm.harvest
-  (:require [clojure.string :as str]
+  (:require [engine.args :as a]
+            [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.cost :as cost]
@@ -38,17 +39,17 @@
   The job warns harvest.declined once, with :reason :refused (or :no-zones when no zone list was read).
   :ignore-zones? true skips the check.")
 
-(def args
-  {:radius {:doc "how far around the centre to harvest, in blocks" :default 12}
-   :center {:doc "centre of the field; the body's position when the job first runs when nil" :type :pos :default nil}
-   :replant {:doc "replant what was cut" :default true}
-   :replant-bare {:doc "with :plan, also sow the planned cells that stood bare before; false: only the cells this run cut" :default true}
-   :crops {:doc "crop block names to cut; all known crops when nil" :default nil}
-   :give-up {:doc "unreachable crops after which cutting stops" :default 4}
-   :reach {:doc "cells whose centre is this close to the eye (dig and place accept 4.5) are worked without walking, in blocks" :default u/eye-reach}
-   :plan {:doc "id of a plan of the body's world whose crop cells are the field (then :radius and :center are not used)" :default nil}
-   :part {:doc "with :plan, only the cells of this part" :default nil}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
+(a/defargs args
+  {:radius {:doc "how far around the centre to harvest, in blocks" :spec (a/num-in 0 nil) :default 12}
+   :center {:doc "centre of the field; the body's position when the job first runs when nil" :spec ::a/pos :default nil}
+   :replant {:doc "replant what was cut" :spec boolean? :default true}
+   :replant-bare {:doc "with :plan, also sow the planned cells that stood bare before; false: only the cells this run cut" :spec boolean? :default true}
+   :crops {:doc "crop block names to cut; all known crops when nil" :spec (a/coll-of a/name?) :default nil}
+   :give-up {:doc "unreachable crops after which cutting stops" :spec (a/int-in 1 nil) :default 4}
+   :reach {:doc "cells whose centre is this close to the eye (dig and place accept 4.5) are worked without walking, in blocks" :spec (a/num-in 0 nil) :default u/eye-reach}
+   :plan {:doc "id of a plan of the body's world whose crop cells are the field (then :radius and :center are not used)" :spec a/name? :default nil}
+   :part {:doc "with :plan, only the cells of this part" :spec a/name? :default nil}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (def ripe-age crops/ripe-age)
 

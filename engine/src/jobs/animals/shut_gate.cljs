@@ -1,5 +1,6 @@
 (ns jobs.animals.shut-gate
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.animals.herd-run :as hr]
             [jobs.lib.apiary :as apiary]
             [jobs.lib.util :as u]
@@ -31,12 +32,12 @@
   left, stopped :left with warn shut-gate.stopped and {:shut n :left [{:cell [x y z] :reason r}]}. A :plan that is
   missing or unreadable gives one warn shut-gate.declined and {:shut 0 :left [] :declined text}.")
 
-(def args
-  {:plan {:doc "id of a plan whose open gates are all shut; nil: the open planned gates of every active plan within :radius" :default nil}
-   :radius {:doc "without :plan, how far from the body a gate is looked for, in blocks" :default 8}
-   :open-s {:doc "without :plan, seconds to wait before shutting a gate that stands open (0: shut at once)" :default 4}
-   :reach {:doc "walk until within this many cells of the gate (the click reaches 4.5 from the eye)" :default 3}
-   :tries {:doc "failed clicks on one gate before it is given up" :default 3}})
+(a/defargs args
+  {:plan {:doc "id of a plan whose open gates are all shut; nil: the open planned gates of every active plan within :radius" :spec a/name? :default nil}
+   :radius {:doc "without :plan, how far from the body a gate is looked for, in blocks" :spec (a/num-in 0 nil) :default 8}
+   :open-s {:doc "without :plan, seconds to wait before shutting a gate that stands open (0: shut at once)" :spec (a/num-in 0 nil) :default 4}
+   :reach {:doc "walk until within this many cells of the gate (the click reaches 4.5 from the eye)" :spec (a/num-in 0 nil) :default 3}
+   :tries {:doc "failed clicks on one gate before it is given up" :spec (a/int-in 1 nil) :default 3}})
 
 (def quiet-ttl-ms (* 1000 (:quiet-s pg/defaults)))
 

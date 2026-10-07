@@ -1,5 +1,6 @@
 (ns jobs.farm.fertilize
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.gate :as gate]
             [jobs.lib.util :as u]
@@ -18,14 +19,14 @@
   :harvest). The job warns fertilize.declined once, with :reason :refused (or :no-zones when no zone list was read).
   :ignore-zones? true skips the check.")
 
-(def args
-  {:at {:doc "one crop position to fertilize; the crops around the body when nil" :type :pos :default nil}
-   :radius {:doc "crops within this many blocks of the body count, when :at is nil" :default 8}
-   :center {:doc "centre of the radius search; the body's position when nil" :type :pos :default nil}
-   :grass {:doc "fertilize open grass blocks instead of crops" :default false}
-   :max {:doc "bone meal uses, at most" :default 16}
-   :fetch {:doc "get missing bone meal (jobs.lib.fetch): true, a set of kinds or a map of limits; false waits :need instead" :default true}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
+(a/defargs args
+  {:at {:doc "one crop position to fertilize; the crops around the body when nil" :spec ::a/pos :default nil}
+   :radius {:doc "crops within this many blocks of the body count, when :at is nil" :spec (a/num-in 0 nil) :default 8}
+   :center {:doc "centre of the radius search; the body's position when nil" :spec ::a/pos :default nil}
+   :grass {:doc "fertilize open grass blocks instead of crops" :spec boolean? :default false}
+   :max {:doc "bone meal uses, at most" :spec (a/int-in 1 nil) :default 16}
+   :fetch {:doc "get missing bone meal (jobs.lib.fetch): true, a set of kinds or a map of limits; false waits :need instead" :spec fetch/option? :default true}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (def ripe-age crops/ripe-age)
 

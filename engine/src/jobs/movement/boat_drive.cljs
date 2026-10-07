@@ -1,5 +1,6 @@
 (ns jobs.movement.boat-drive
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.blocks :as b]
             [jobs.lib.result :as result]
             [jobs.lib.util :as u]
@@ -18,11 +19,11 @@
 
   Never :continue except for that.")
 
-(def args
-  {:pos {:doc "the water cell to steer to, [x y z] or {:x :y :z}" :type :pos :default nil}
-   :range {:doc "done when the boat is within this many blocks (horizontally) of the middle of the cell" :type :number :min 0 :default 1.5}
-   :max-strokes {:doc "strokes before giving up" :type :int :min 1 :default 80}
-   :max-s {:doc "seconds before giving up" :type :number :min 0 :default 120}})
+(a/defargs args
+  {:pos {:doc "the water cell to steer to, [x y z] or {:x :y :z}" :spec ::a/pos :default nil}
+   :range {:doc "done when the boat is within this many blocks (horizontally) of the middle of the cell" :spec (a/num-in 0 nil) :default 1.5}
+   :max-strokes {:doc "strokes before giving up" :spec (a/int-in 1 nil) :default 80}
+   :max-s {:doc "seconds before giving up" :spec (a/num-in 0 nil) :default 120}})
 
 (def aligned-deg 8)
 (def forward-while-turning-deg 30)

@@ -316,7 +316,7 @@
                                           (is (= :stopped (get-in r [:outcome :status])))
                                           (is (string? (get-in r [:outcome :text])))
                                           (update r :outcome dissoc :status :text)))]
-          ;; wrong shapes (a string, two numbers, a non-number) never get here: :type :pos refuses them at submit and call-child
+          ;; wrong shapes (a string, two numbers, a non-number) never get here: the ::a/pos spec refuses them at submit and call-child
           (is (= refused (await (bare {:pos [9 9999 9]}))) "above the world")
           (is (= refused (await (bare {:pos {:x 1e12 :y 64 :z 9}}))) "far outside the world")
           (is (= refused (await (bare {:pos [9 64 js/Infinity]}))) "not finite")

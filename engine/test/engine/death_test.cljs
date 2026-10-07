@@ -3,9 +3,11 @@
   trigger and the recover-drops job against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
+            [engine.expr :as expr]
             [engine.fake :as fake]
             [engine.library-test :refer [setup calls inv]]
             [engine.memory :as mem]
+            [engine.registry :as registry]
             [engine.takeover :as takeover]
             [engine.test-util :as tu :refer [run-until-empty]]
             [engine.triggers :as triggers]
@@ -610,16 +612,9 @@
           (is (= :skip (:decision (recovered eng))))
           (is (re-find #"zombie" (:text (first (decided-events seen))))))))))
 
-(deftest recover-drops-ignores-overrides-that-are-not-maps-and-says-so
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen]} (setup {:floor tu/walk-floor :entities drops})]
-          (die! eng {:pos death-pos :inventory diamonds})
-          (core/submit! eng (list 'jobs.survival.recover-drops {:value-overrides "lots"}) {})
-          (await (run-until-empty eng 10))
-          (is (= :collected (:decision (recovered eng))))
-          (is (seq (filter #(= :recover-drops.bad-overrides (:kind %)) @seen))))))))
+(deftest recover-drops-refuses-overrides-that-are-not-maps-at-submit
+  (is (re-find #"jobs.survival.recover-drops :value-overrides must be a map of a string to a number or a map, got \"lots\""
+               (expr/problem registry/jobs '(jobs.survival.recover-drops {:value-overrides "lots"})))))
 
 ;; ------------------------------------------- a job does not survive a death
 

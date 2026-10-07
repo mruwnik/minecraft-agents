@@ -1,5 +1,6 @@
 (ns jobs.forestry.plant-sapling
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.gate :as gate]
             [jobs.lib.trees :refer [debts target-of sapling-for sapling-of log-name? replant-kind species]
@@ -20,15 +21,15 @@
   The job warns plant-sapling.declined once, with :reason :refused (or :no-zones when no zone list was read).
   :ignore-zones? true skips the check.")
 
-(def args
-  {:at {:doc "where to plant; the oldest :forestry/replant debt when nil" :type :pos :default nil}
-   :near {:doc "{:x :z}: only replant debts within :within blocks of it are taken; nil: any" :type :pos :default nil}
-   :within {:doc "radius for :near" :default nil}
-   :species {:doc "sapling species; any when nil" :default nil}
-   :bone-meal {:doc "bone meal uses after planting, 0 for none" :default 0}
-   :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :default nil}
-   :fetch {:doc "get a missing sapling (jobs.lib.fetch): true, a set of kinds or a map of limits; false waits :no-sapling" :default true}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
+(a/defargs args
+  {:at {:doc "where to plant; the oldest :forestry/replant debt when nil" :spec ::a/pos :default nil}
+   :near {:doc "{:x :z}: only replant debts within :within blocks of it are taken; nil: any" :spec ::a/pos :default nil}
+   :within {:doc "radius for :near" :spec (a/num-in 0 nil) :default nil}
+   :species {:doc "sapling species; any when nil" :spec a/name? :default nil}
+   :bone-meal {:doc "bone meal uses after planting, 0 for none" :spec (a/int-in 0 nil) :default 0}
+   :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :spec a/name? :default nil}
+   :fetch {:doc "get a missing sapling (jobs.lib.fetch): true, a set of kinds or a map of limits; false waits :no-sapling" :spec fetch/option? :default true}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (defn spot-allowed?
   "Whether the job may plant at pos (one warn per job when refused)."

@@ -2,13 +2,14 @@
   "The food table, read from minecraft-data's foods for the version the body is connected with (hunger points and saturation),
   and the three short judgement lists on top of it: harmful, precious and named-only foods. The data names
   mob and fish buckets as foods (they are not eaten); those are left out."
-  (:require [engine.settings :as settings]
+  (:require [engine.args :as a]
+            [engine.settings :as settings]
             ["minecraft-data" :as minecraft-data]
             [clojure.string :as str]
             [engine.game :as game]))
 
-(def settings
-  {::low-health {:default 10 :doc "Below this health (of 20) precious food is eaten unnamed." :type :int :min 0}})
+(a/defargs settings
+  {::low-health {:default 10 :doc "Below this health (of 20) precious food is eaten unnamed." :spec (a/int-in 0 nil)}})
 
 (def table-for
   "{item name {:points :saturation}} for every food minecraft-data lists for a version (memoised)."

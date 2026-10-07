@@ -1,5 +1,6 @@
 (ns jobs.village.trade
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]))
 
@@ -23,11 +24,11 @@
     primitive's failure reason.
   What was bought and paid is kept across a cut and restart, so a purchase is neither lost nor repeated.")
 
-(def args
-  {:villager {:doc "the villager's entity uuid" :default nil}
-   :buy {:doc "item name to buy" :default nil}
-   :count {:doc "items wanted" :default 1}
-   :max-price {:doc "highest price per trade (first cost stack); nil for no limit" :default nil}})
+(a/defargs args
+  {:villager {:doc "the villager's entity uuid" :spec string? :default nil}
+   :buy {:doc "item name to buy" :spec a/item? :default nil}
+   :count {:doc "items wanted" :spec (a/int-in 1 nil) :default 1}
+   :max-price {:doc "highest price per trade (first cost stack); nil for no limit" :spec (a/int-in 0 nil) :default nil}})
 
 (def search-radius 48)
 (def reach 2)

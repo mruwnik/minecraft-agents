@@ -5,15 +5,16 @@
   Candidates are the mobs the body knows of (known-hostiles): the perception's mob memory, seen or heard. A heard one
   is judged by its direction and band (mob-pos), never its exact place.
   The mobs of one query share block reads (reach/lookup) and walk proofs (reach.proofs)."
-  (:require [engine.settings :as settings]
+  (:require [engine.args :as a]
+            [engine.settings :as settings]
             [engine.entity-observations :as obs]
             [jobs.lib.combat :as combat]
             [jobs.lib.reach :as reach]
             [jobs.lib.reach.proofs :as proofs]
             [jobs.lib.util :as u]))
 
-(def settings
-  {::known-scan {:default 64 :doc "Blocks out to which the mobs a distance filter weighs are fetched." :type :int :min 1}})
+(a/defargs settings
+  {::known-scan {:default 64 :doc "Blocks out to which the mobs a distance filter weighs are fetched." :spec (a/int-in 1 nil)}})
 
 (defn seen-mob?
   "Whether the body has seen or heard hostile e: the seen or heard flag of a known-hostiles entry, else (raw entity)

@@ -1,5 +1,6 @@
 (ns jobs.items.interact
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.util :as u]))
 
 (def doc
@@ -12,9 +13,9 @@
   :unreachable (the walk failed twice). :used is done; anything else is {:status :stopped}. A bad :id is :bad-args
   with an items.interact.declined warn.")
 
-(def args
-  {:id {:doc "the entity id (observe entities lists them)" :default nil}
-   :item {:doc "the item to hold for the click; nil: the empty hand" :default nil}})
+(a/defargs args
+  {:id {:doc "the entity id (observe entities lists them)" :spec (a/int-in 1 nil) :default nil}
+   :item {:doc "the item to hold for the click; nil: the empty hand" :spec a/item? :default nil}})
 
 (def reach 2.5)
 (def max-walks "Failed walks of one call before it stops :unreachable." 2)

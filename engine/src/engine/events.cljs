@@ -1,19 +1,20 @@
 (ns engine.events
   "Canonical EDN event stream, bounded rolling file appender, and local cursor reader."
-  (:require [clojure.string :as str]
+  (:require [engine.args :as a]
+            [clojure.string :as str]
             [cljs.reader :as reader]
             [engine.settings :as settings]
             ["crypto" :as crypto]
             ["fs" :as fs]
             ["path" :as path]))
 
-(def settings
-  {:engine.events/max-bytes {:default (* 64 1024 1024) :type :int :min 1024
+(a/defargs settings
+  {:engine.events/max-bytes {:default (* 64 1024 1024) :spec (a/int-in 1024 nil)
                              :doc "The event log's size cap over the active and rotated segments, bytes."}
-   :engine.events/recent-count {:default 2048 :type :int :min 1 :doc "Events kept in memory for the live reader."}
-   :engine.events/recent-bytes {:default (* 4 1024 1024) :type :int :min 1 :doc "Bytes of events kept in memory for the live reader."}
-   :engine.events/default-page-size {:default 256 :type :int :min 1 :doc "Events a read returns when it names no limit."}
-   :engine.events/max-page-size {:default 2000 :type :int :min 1 :doc "The most events one read returns."}})
+   :engine.events/recent-count {:default 2048 :spec (a/int-in 1 nil) :doc "Events kept in memory for the live reader."}
+   :engine.events/recent-bytes {:default (* 4 1024 1024) :spec (a/int-in 1 nil) :doc "Bytes of events kept in memory for the live reader."}
+   :engine.events/default-page-size {:default 256 :spec (a/int-in 1 nil) :doc "Events a read returns when it names no limit."}
+   :engine.events/max-page-size {:default 2000 :spec (a/int-in 1 nil) :doc "The most events one read returns."}})
 
 (defn setting [k] (settings/get settings (keyword "engine.events" k)))
 

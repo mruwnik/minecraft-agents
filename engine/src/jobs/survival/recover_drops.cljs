@@ -1,5 +1,6 @@
 (ns jobs.survival.recover-drops
-  (:require [clojure.string :as str]
+  (:require [engine.args :as a]
+            [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
@@ -60,12 +61,12 @@
   Warns respawn_away_from_bed once per death when the body respawned over 10 blocks from the bed it slept in.
   Memory: reads :died, :respawned, :bed, :slept, :recover-trip. Writes :recovered and :recover-trip.")
 
-(def args
-  {:margin {:doc "added to the fetch cost before comparing it to the value" :default 0}
-   :value-overrides {:doc "jobs.lib.cost/item-value overrides, a map: item name or group (ore tool armor food block unknown) -> worth of one item, or {:times n}; e.g. {\"raw_iron\" 500}" :default {}}
-   :danger-overrides {:doc "jobs.lib.cost/route-danger overrides, a map: mob name -> threat in points of damage before armour, or {:times n}; e.g. {\"creeper\" 100 \"zombie\" 0}" :default {}}
-   :danger-radius {:doc "a hostile this close makes the job yield without acting" :default 8}
-   :collect-radius {:doc "collect the pile's drops within this many blocks of the death point (a pile on open ground rolls 6-8 out)" :default 10}})
+(a/defargs args
+  {:margin {:doc "added to the fetch cost before comparing it to the value" :spec (a/num-in nil nil) :default 0}
+   :value-overrides {:doc "jobs.lib.cost/item-value overrides, a map: item name or group (ore tool armor food block unknown) -> worth of one item, or {:times n}; e.g. {\"raw_iron\" 500}" :spec (a/map-of string? (a/or-of number? map?)) :default {}}
+   :danger-overrides {:doc "jobs.lib.cost/route-danger overrides, a map: mob name -> threat in points of damage before armour, or {:times n}; e.g. {\"creeper\" 100 \"zombie\" 0}" :spec (a/map-of string? (a/or-of number? map?)) :default {}}
+   :danger-radius {:doc "a hostile this close makes the job yield without acting" :spec (a/num-in 0 nil) :default 8}
+   :collect-radius {:doc "collect the pile's drops within this many blocks of the death point (a pile on open ground rolls 6-8 out)" :spec (a/num-in 0 nil) :default 10}})
 
 (def arrive-range 2)
 (def settle-ms

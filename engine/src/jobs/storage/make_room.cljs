@@ -1,5 +1,6 @@
 (ns jobs.storage.make-room
-  (:require [jobs.lib.blocks :as lb]
+  (:require [engine.args :as a]
+            [jobs.lib.blocks :as lb]
             [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.cost :as cost]
@@ -47,16 +48,16 @@
     :toss-failed after three failed tosses in a row (warn make-room.toss-failed).
   Also emits info make-room.tossed (with :junk) and make-room.swapped.")
 
-(def args
-  {:free {:doc "done once at least this many slots are free (above the trigger's 2, so it does not refire at once)" :default 4}
-   :chest-range {:doc "the known :chest place is used only within this distance" :default 32}
-   :keep-food {:doc "food items kept carried (best food by points first); the body's food reserve (jobs.lib.cost/food-reserve) when nil" :default nil}
-   :keep-blocks {:doc "building blocks kept carried (dig-in's list, in its order)" :default 64}
-   :toss-below {:doc "a stack is tossed to make room only when its item-worth (jobs.lib.cost/item-value per item, seconds of work) is below this: dirt, cobblestone, rotten flesh and seeds go; ores, fuel, tools and food stay" :default 3.2}
-   :swap-radius {:doc "when no slot is free, a dropped item worth more than some carried stack within this radius is swapped in" :default 8}
-   :away {:doc "after tossing, walk this far away from where the items were thrown" :default 4}
-   :max-steps {:doc "safety: stop (:stalled, warn make-room.stalled) after this many deposit calls, swaps and tosses in one run" :default 40}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
+(a/defargs args
+  {:free {:doc "done once at least this many slots are free (above the trigger's 2, so it does not refire at once)" :spec (a/int-in 0 nil) :default 4}
+   :chest-range {:doc "the known :chest place is used only within this distance" :spec (a/num-in 0 nil) :default 32}
+   :keep-food {:doc "food items kept carried (best food by points first); the body's food reserve (jobs.lib.cost/food-reserve) when nil" :spec (a/int-in 0 nil) :default nil}
+   :keep-blocks {:doc "building blocks kept carried (dig-in's list, in its order)" :spec (a/int-in 0 nil) :default 64}
+   :toss-below {:doc "a stack is tossed to make room only when its item-worth (jobs.lib.cost/item-value per item, seconds of work) is below this: dirt, cobblestone, rotten flesh and seeds go; ores, fuel, tools and food stay" :spec (a/num-in 0 nil) :default 3.2}
+   :swap-radius {:doc "when no slot is free, a dropped item worth more than some carried stack within this radius is swapped in" :spec (a/num-in 0 nil) :default 8}
+   :away {:doc "after tossing, walk this far away from where the items were thrown" :spec (a/num-in 0 nil) :default 4}
+   :max-steps {:doc "safety: stop (:stalled, warn make-room.stalled) after this many deposit calls, swaps and tosses in one run" :spec (a/int-in 1 nil) :default 40}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (def unusable-policy {:cap 5 :ttl 600000})
 

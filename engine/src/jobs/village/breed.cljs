@@ -1,5 +1,6 @@
 (ns jobs.village.breed
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a] [jobs.lib.fetch :as fetch]
+            [engine.ctx :as ctx]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]))
 
@@ -21,11 +22,11 @@
   count and goes on. It yields :continue while a feed, walk or the wait is under way; with :fetch off and no food it waits and warns
   breed.waiting once.")
 
-(def args
-  {:target {:doc "villagers wanted in sight (adults and babies)" :type :int :min 2 :max 64 :default nil}
-   :radius {:doc "how far to look for villagers" :type :int :min 1 :max 96 :default 48}
-   :wait-s {:doc "seconds to stay near a fed pair for a birth" :type :int :min 1 :max 600 :default 45}
-   :fetch {:doc "get food when none is carried (jobs.lib.fetch): true, a set of kinds or a map of limits; false waits for food" :default true}})
+(a/defargs args
+  {:target {:doc "villagers wanted in sight (adults and babies)" :spec (a/int-in 2 64) :default nil}
+   :radius {:doc "how far to look for villagers" :spec (a/int-in 1 96) :default 48}
+   :wait-s {:doc "seconds to stay near a fed pair for a birth" :spec (a/int-in 1 600) :default 45}
+   :fetch {:doc "get food when none is carried (jobs.lib.fetch): true, a set of kinds or a map of limits; false waits for food" :spec fetch/option? :default true}})
 
 (def max-fruitless 3)
 (def wait-range 6)

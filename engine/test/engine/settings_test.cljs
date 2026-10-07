@@ -2,6 +2,7 @@
   (:require-macros [engine.registry :refer [settings-registry]])
   (:require [cljs.test :refer [deftest is async]]
             [clojure.string :as str]
+            [engine.args :as a]
             [engine.registry :as registry]
             [engine.settings :as settings]
             [engine.settings-registry :as settings-registry]
@@ -11,8 +12,9 @@
             ["path" :as path]))
 
 (def specs
-  {:jobs.demo/wait-ms {:default 5000 :doc "How long to wait." :type :int :min 0}
-   :jobs.demo/label {:default "a" :doc "A label." :type :string}})
+  (a/declare-settings!
+   {:jobs.demo/wait-ms {:default 5000 :doc "How long to wait." :spec (a/int-in 0 nil)}
+    :jobs.demo/label {:default "a" :doc "A label." :spec string?}}))
 
 (defn write! [dir name text]
   (let [f (path/join dir name)]
@@ -136,18 +138,18 @@
                         :when (not ok)]
                     (str k " declared in " sym))
         dups (for [[k n] (frequencies (map first pairs)) :when (> n 1)] (str k " declared twice"))
-        bad-defaults (for [[k _ spec] pairs :when (settings/spec-problem spec (:default spec))] (str k " default"))]
+        bad-defaults (for [[k _ spec] pairs :when (a/problem k (:default spec))] (str k " default"))]
     (concat misplaced dups bad-defaults)))
 
 (deftest declared-keys-are-in-place-unique-and-fit-their-spec
   (is (empty? (key-problems (merge registry/settings-by-ns settings-registry/settings-by-ns)))))
 
-(def int-key {:default 1 :type :int})
+(def int-key {:default 1 :spec (a/int-in nil nil)})
 
 (deftest key-problems-names-each-kind-of-problem
   (is (= [":jobs.a/x declared in jobs.b"] (key-problems {'jobs.b {:jobs.a/x int-key}})))
   (is (some #{":jobs.a/x declared twice"} (key-problems {'jobs.a {:jobs.a/x int-key} 'jobs.b {:jobs.a/x int-key}})))
-  (is (= [":jobs.a/x default"] (key-problems {'jobs.a {:jobs.a/x {:default "s" :type :int}}}))))
+  (is (= [":jobs.a/x default"] (key-problems {'jobs.a (a/declare-settings! {:jobs.a/x {:default "s" :spec (a/int-in nil nil)}})}))))
 
 (def demo-by-ns (settings-registry "settings_demo"))
 

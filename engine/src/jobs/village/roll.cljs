@@ -1,5 +1,6 @@
 (ns jobs.village.roll
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a] [jobs.lib.fetch :as fetch]
+            [engine.ctx :as ctx]
             [jobs.lib.blocks :as b]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
@@ -27,18 +28,18 @@
   between the break and the placing leaves nothing behind. The workstation stands at :pos when the job ends, except after
   \"place-failed\" or \"dig-failed\" (a child stopped).")
 
-(def args
-  {:villager {:doc "the villager's entity uuid" :type :string :default nil}
-   :pos {:doc "the workstation block, [x y z] or {:x :y :z}" :type :pos :default nil}
-   :item {:doc "the workstation block item name, e.g. lectern; nil: the one of :profession" :type :item :default nil}
-   :profession {:doc "villager profession whose workstation :item defaults to" :type :string :default nil}
-   :want {:doc "item name an offer is to give" :type :item :default nil}
-   :trade {:doc "item name an offer is to give (alias of :want)" :type :item :default nil}
-   :radius {:doc "how far to look for a villager" :type :int :min 1 :max 96 :default 48}
-   :max-price {:doc "highest price (first cost stack); nil for no limit" :default nil}
-   :tries {:doc "rolls (breaks) before giving up" :type :int :min 1 :max 200 :default 20}
-   :claim-s {:doc "seconds to wait for the villager to take the placed workstation" :type :int :min 1 :max 600 :default 60}
-   :fetch {:doc "get the workstation item or a tool when missing (jobs.lib.fetch)" :default true}})
+(a/defargs args
+  {:villager {:doc "the villager's entity uuid" :spec string? :default nil}
+   :pos {:doc "the workstation block, [x y z] or {:x :y :z}" :spec ::a/pos :default nil}
+   :item {:doc "the workstation block item name, e.g. lectern; nil: the one of :profession" :spec a/item? :default nil}
+   :profession {:doc "villager profession whose workstation :item defaults to" :spec string? :default nil}
+   :want {:doc "item name an offer is to give" :spec a/item? :default nil}
+   :trade {:doc "item name an offer is to give (alias of :want)" :spec a/item? :default nil}
+   :radius {:doc "how far to look for a villager" :spec (a/int-in 1 96) :default 48}
+   :max-price {:doc "highest price (first cost stack); nil for no limit" :spec (a/int-in 0 nil) :default nil}
+   :tries {:doc "rolls (breaks) before giving up" :spec (a/int-in 1 200) :default 20}
+   :claim-s {:doc "seconds to wait for the villager to take the placed workstation" :spec (a/int-in 1 600) :default 60}
+   :fetch {:doc "get the workstation item or a tool when missing (jobs.lib.fetch)" :spec fetch/option? :default true}})
 
 (def workstations
   {"librarian" "lectern" "farmer" "composter" "cleric" "brewing_stand" "armorer" "blast_furnace" "butcher" "smoker"

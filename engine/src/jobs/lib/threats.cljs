@@ -4,7 +4,8 @@
   threat-policy. The third flight from one mob (same :key, uuid else id) within the ttl warns hostile.chased.
   planner-dangers: the known dangers go-to's searches cost (the planner's options.dangers), costed by
   jobs.lib.cost/danger-list."
-  (:require [engine.settings :as settings]
+  (:require [engine.args :as a]
+            [engine.settings :as settings]
             [engine.ctx :as ctx]
             [engine.entity-observations :as obs]
             [jobs.lib.combat :as combat]
@@ -12,10 +13,10 @@
             [jobs.lib.danger :as danger-q]
             [jobs.lib.util :as u]))
 
-(def settings
-  {::default-follow-range {:default 16 :doc "Blocks a mob of unknown kind notices the body from." :type :int :min 1}
-   ::chased-flights {:default 3 :doc "Flights from one mob within the ttl that tell the agent." :type :int :min 1}
-   ::sensed-radius {:default 24 :doc "Blocks out to which a sensed real danger is costed." :type :int :min 1}})
+(a/defargs settings
+  {::default-follow-range {:default 16 :doc "Blocks a mob of unknown kind notices the body from." :spec (a/int-in 1 nil)}
+   ::chased-flights {:default 3 :doc "Flights from one mob within the ttl that tell the agent." :spec (a/int-in 1 nil)}
+   ::sensed-radius {:default 24 :doc "Blocks out to which a sensed real danger is costed." :spec (a/int-in 1 nil)}})
 
 (def follow-ranges
   "Blocks a mob keeps chasing its target out to (vanilla follow_range attribute)."

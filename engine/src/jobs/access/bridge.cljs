@@ -1,5 +1,6 @@
 (ns jobs.access.bridge
-  (:require [jobs.access.pillar :as pillar]
+  (:require [engine.args :as a]
+            [jobs.access.pillar :as pillar]
             [jobs.lib.pillar :as pl]
             [jobs.lib.access :as access]
             [jobs.lib.dig-look :as look]
@@ -38,12 +39,12 @@
   clear), :zone, :footprint, :no-zones, :not-loaded, :not-replaceable, :off-line, :place-failed (3 failed places in a
   row, :detail the primitive's reason), :move-failed (3 failed walks onto a placed block) or :bad-args.")
 
-(def args
-  {:heading {:doc ":north :east :south or :west" :default nil}
-   :length {:doc "blocks in the row, 1 to 64" :default 1}
-   :item {:doc "the block to bridge with; nil: dirt while any is carried, then cobblestone" :default nil}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
-   :fetch {:doc "get missing blocks instead of waiting :too-few-blocks (jobs.lib.fetch): true, a set of kinds or a map of limits" :default true}})
+(a/defargs args
+  {:heading {:doc ":north :east :south or :west" :spec #{:north :east :south :west} :default nil}
+   :length {:doc "blocks in the row, 1 to 64" :spec (a/int-in 1 64) :default 1}
+   :item {:doc "the block to bridge with; nil: dirt while any is carried, then cobblestone" :spec a/item? :default nil}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
+   :fetch {:doc "get missing blocks instead of waiting :too-few-blocks (jobs.lib.fetch): true, a set of kinds or a map of limits" :spec fetch/option? :default true}})
 
 (def max-length 64)
 

@@ -1,5 +1,6 @@
 (ns jobs.items.enchant
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.lib.look :as look]
@@ -24,13 +25,13 @@
   A failed enchant is never repeated, as it may have taken the price. The attempt is written to memory before the
   call. After a restart that finds the item enchanted, the job reports it (:resumed true, enchants unknown).")
 
-(def args
-  {:item {:doc "name of the item to enchant, from the inventory" :default nil}
-   :table {:doc "the enchanting table position {:x :y :z}; the nearest within :radius when nil" :type :pos :default nil}
-   :radius {:doc "how far to look for a table" :default 16}
-   :max-level-cost {:doc "highest level cost of an offer to take; nil for no limit" :default nil}
-   :slot {:doc "take exactly offer 1, 2 or 3; nil to choose by :choice" :default nil}
-   :choice {:doc "\"best\" (dearest affordable offer) or \"cheapest\" (lowest level cost affordable)" :default "best"}})
+(a/defargs args
+  {:item {:doc "name of the item to enchant, from the inventory" :spec a/item? :default nil}
+   :table {:doc "the enchanting table position {:x :y :z}; the nearest within :radius when nil" :spec ::a/pos :default nil}
+   :radius {:doc "how far to look for a table" :spec (a/num-in 0 nil) :default 16}
+   :max-level-cost {:doc "highest level cost of an offer to take; nil for no limit" :spec (a/int-in 0 nil) :default nil}
+   :slot {:doc "take exactly offer 1, 2 or 3; nil to choose by :choice" :spec #{1 2 3} :default nil}
+   :choice {:doc "\"best\" (dearest affordable offer) or \"cheapest\" (lowest level cost affordable)" :spec #{"best" "cheapest"} :default "best"}})
 
 (def reach 3)
 

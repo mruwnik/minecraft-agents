@@ -5,14 +5,15 @@
   A failure prints job, seed and args; FUZZ_JOB=<ns> FUZZ_SEED=<n> FUZZ_CASES=<n> replay or widen a run, FUZZ_TRACE=1 names
   every case as it starts (a sync hang names its case last), FUZZ_CASE=<k> runs only case k of a job, FUZZ_EXTREME=1 adds huge numbers.
   A case seed is FUZZ_SEED + a hash of the job name + 104729 * k, so it does not depend on the other jobs or on FUZZ_JOB.
-  FUZZ_WRONG_TYPES=1 also feeds wrong-typed values to args with no :type (a report of type gaps, not part of the default)."
+  Some args get a value their spec refuses: submit must refuse it."
   (:require [cljs.test :refer [deftest is async]]
+            [cljs.spec.alpha :as s]
             [clojure.string :as str]
+            [engine.args :as a]
             [engine.core :as core]
             [engine.events :as events]
             [engine.registry :as registry]
             [engine.test-util :as tu]
-            [engine.expr :as expr]
             [engine.fake :as fake]))
 
 ;; ---- seeded random numbers (mulberry32)
@@ -57,15 +58,16 @@
             (number? default) (into [default (* 2 default) (inc default)]))))
 
 (defn gen-value
-  "A plausible value for arg k of spec, typed by its :type, else by its default and name. wrong? picks a wrong-typed one."
-  [r k {:keys [default type values] :as spec} wrong?]
-  (let [kn (name k)]
+  "A plausible value for arg k (spec key lk), by its :spec form, else by its default and name. wrong? picks one its spec
+  refuses, when wrong-values hold one."
+  [r lk k {:keys [default spec]} wrong?]
+  (let [kn (name k)
+        refused (filterv #(not (s/valid? lk %)) wrong-values)]
     (cond
-      wrong? (pick r (if type (filterv #(if (= :pos type) (nil? (expr/cell %)) (some? (expr/type-problem spec %))) wrong-values) wrong-values))
-      (= :pos type) (gen-pos r)
-      (= :enum type) (pick r (vec values))
-      (= :keyword type) (pick r [:a :b default])
-      (= :int type) (pick r [0 1 -1 7 1000])
+      (and wrong? (seq refused)) (pick r refused)
+      (= ::a/pos spec) (gen-pos r)
+      (set? spec) (pick r (vec spec))
+      (and (seq? spec) (= "int-in" (name (first spec)))) (pick r [0 1 -1 7 1000])
       (number? default) (gen-number r default)
       (boolean? default) (pick r [true false])
       (string? default) (pick r names)
@@ -80,15 +82,16 @@
       :else nil)))
 
 (defn gen-args
-  "Args for entry, each left out with some chance (the default stands). A wrong-typed value goes into args with a :type
-  (the metadata :wrong-typed names them: submit must refuse), and into others only when wrong-untyped?."
-  [r entry wrong-untyped?]
+  "Args for job's entry, each left out with some chance (the default stands). Some get a value their spec refuses (the
+  metadata :wrong-typed names them: submit must refuse)."
+  [r job entry]
   (reduce (fn [acc [k spec]]
-            (if (chance? r 0.35)
+            (if (or (:keys spec) (chance? r 0.35))
               acc
-              (let [wrong? (and (chance? r 0.25) (or (:type spec) wrong-untyped?))]
-                (cond-> (assoc acc k (gen-value r k spec wrong?))
-                  (and wrong? (:type spec)) (vary-meta update :wrong-typed (fnil conj #{}) k)))))
+              (let [lk (keyword (a/level-ns job []) (name k))
+                    v (gen-value r lk k spec (chance? r 0.25))]
+                (cond-> (assoc acc k v)
+                  (not (s/valid? lk v)) (vary-meta update :wrong-typed (fnil conj #{}) k)))))
           {} (:args entry)))
 
 (def ore-ish ["oak_log" "stone" "dirt" "wheat" "water" "grass_block" "iron_ore" "chest" "oak_leaves" "farmland" "sand"])
@@ -213,10 +216,10 @@
    (for [e events :when (and (= :job (:source e)) (= :stopped (:kind e)) (nil? (event-reason e)))] [:stopped-without-reason (:text e)])))
 
 (defn ^:async run-case
-  "Run one case ({:job :entry :seed :wrong-untyped?}): {:job :seed :args :outcome (:refused/:ran) :defects [[kind detail]]}."
-  [{:keys [job entry seed wrong-untyped?]}]
+  "Run one case ({:job :entry :seed}): {:job :seed :args :outcome (:refused/:ran) :defects [[kind detail]]}."
+  [{:keys [job entry seed]}]
   (let [r (rng seed)
-        args (gen-args r entry wrong-untyped?)
+        args (gen-args r job entry)
         {:keys [spec ground]} (gen-world r)
         clock (atom 1000000)
         calls (atom {:all 0 :acts 0})
@@ -271,22 +274,21 @@
   (+ base (mod (hash (str job)) 1000003) (* 104729 k)))
 
 (defn job-cases
-  "Cases [{:job :entry :seed :k :base :n :wrong-untyped?}] for the jobs matching :only (nil = all), :n per job or just case :case."
-  [{:keys [only n base wrong-untyped?] kase :case}]
+  "Cases [{:job :entry :seed :k :base :n}] for the jobs matching :only (nil = all), :n per job or just case :case."
+  [{:keys [only n base] kase :case}]
   (for [[job entry] (sort-by (comp str key) registry/jobs)
         :when (and (not (skipped job)) (or (nil? only) (= only (str job))))
         k (if kase [kase] (range n))]
-    {:job job :entry entry :seed (case-seed base job k) :k k :base base :n n :wrong-untyped? wrong-untyped?}))
+    {:job job :entry entry :seed (case-seed base job k) :k k :base base :n n}))
 
 (defn env-opts
   "Run options from the FUZZ_* variables; getenv is (fn [k default]), the process env by default."
-  ([wrong-untyped?] (env-opts wrong-untyped? env))
-  ([wrong-untyped? getenv]
+  ([] (env-opts env))
+  ([getenv]
    {:only (getenv "FUZZ_JOB" nil)
     :n (js/parseInt (getenv "FUZZ_CASES" "10"))
     :base (js/parseInt (getenv "FUZZ_SEED" "1"))
-    :case (some-> (getenv "FUZZ_CASE" nil) js/parseInt)
-    :wrong-untyped? wrong-untyped?}))
+    :case (some-> (getenv "FUZZ_CASE" nil) js/parseInt)}))
 
 (defn repro-getenv
   "A getenv fn over the K=V pairs of a printed repro line."
@@ -296,9 +298,9 @@
 
 (defn repro-line
   "The env vars that replay case c alone."
-  [{:keys [job base n k wrong-untyped?]}]
+  [{:keys [job base n k]}]
   (str "FUZZ_JOB=" job " FUZZ_SEED=" base " FUZZ_CASES=" n " FUZZ_CASE=" k
-       (when wrong-untyped? " FUZZ_WRONG_TYPES=1") (when extreme? " FUZZ_EXTREME=1")))
+       (when extreme? " FUZZ_EXTREME=1")))
 
 (defn stale-known
   "The keys of known that no defect in found has: their cards are fixed."
@@ -347,14 +349,14 @@
 
 (defn full-run?
   "True when opts and env make the run cover the default cases of every job at least as wide as the run that found the known entries (known-cases), so a known entry that did not occur is stale."
-  [{:keys [only n base wrong-untyped?] kase :case}]
-  (and (nil? only) (nil? kase) (>= n known-cases) (= 1 base) (not wrong-untyped?) (not extreme?)))
+  [{:keys [only n base] kase :case}]
+  (and (nil? only) (nil? kase) (>= n known-cases) (= 1 base) (not extreme?)))
 
 (deftest every-job-handles-generated-inputs-honestly
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [opts (env-opts (= "1" (env "FUZZ_WRONG_TYPES" "0")))
+        (let [opts (env-opts)
               found (await (run-all opts))
               fresh (remove #(contains? known [(str (:job %)) (:kind %)]) found)
               stale (when (full-run? opts) (stale-known known found))]
@@ -373,9 +375,9 @@
 
 (deftest generated-args-repeat-per-seed-and-wrong-types-hit-typed-args
   (let [entry (get registry/jobs 'jobs.movement.go-to)
-        gen #(gen-args (rng %) entry false)]
+        gen #(gen-args (rng %) 'jobs.movement.go-to entry)]
     (is (= (gen 7) (gen 7)))
-    (is (some #(seq (:wrong-typed (meta (gen %)))) (range 60)) "some seed puts a wrong value in the typed :pos arg")))
+    (is (some #(seq (:wrong-typed (meta (gen %)))) (range 60)) "some seed puts a value its spec refuses in an arg")))
 
 (deftest case-seeds-do-not-depend-on-the-job-filter
   (let [all (job-cases {:n 3 :base 1})
@@ -384,12 +386,12 @@
     (is (= one (filter #(= 'jobs.movement.go-to (:job %)) all)))))
 
 (deftest repro-line-names-every-env-var-and-replays-the-case
-  (let [c (first (job-cases {:n 4 :base 5 :case 2 :only "jobs.movement.go-to" :wrong-untyped? true}))
+  (let [c (first (job-cases {:n 4 :base 5 :case 2 :only "jobs.movement.go-to"}))
         line (repro-line c)]
     (is (= 2 (:k c)))
-    (is (str/includes? line "FUZZ_JOB=jobs.movement.go-to FUZZ_SEED=5 FUZZ_CASES=4 FUZZ_CASE=2 FUZZ_WRONG_TYPES=1"))
+    (is (str/includes? line "FUZZ_JOB=jobs.movement.go-to FUZZ_SEED=5 FUZZ_CASES=4 FUZZ_CASE=2"))
     (is (= (:seed c) (:seed (nth (job-cases {:n 4 :base 5 :only "jobs.movement.go-to"}) 2))))
-    (is (= (gen-args (rng (:seed c)) (:entry c) true) (gen-args (rng (:seed c)) (:entry c) true)))))
+    (is (= (gen-args (rng (:seed c)) (:job c) (:entry c)) (gen-args (rng (:seed c)) (:job c) (:entry c))))))
 
 (deftest stale-known-entries-are-the-ones-not-found
   (is (= [["a" :x]] (stale-known {["a" :x] "c1" ["b" :y] "c2"} [{:job 'b :kind :y}]))))
@@ -427,7 +429,7 @@
         (let [opts {:n 10 :base 1 :only "jobs.movement.go-to"}
               c (nth (job-cases opts) 1)
               getenv (repro-getenv (repro-line c))
-              replay-opts (env-opts false getenv)
+              replay-opts (env-opts getenv)
               replay (first (job-cases replay-opts))
               a (await (run-case c))
               b (await (run-case replay))]

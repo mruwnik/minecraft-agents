@@ -9,19 +9,20 @@
 
   danger-rate: mob-hurt over 1 s x stance factor (:flee x4, :fight x0.1), at most max-rate: hp a second (the factors, the cap and
   danger-shape are go-to options, danger-opts), which the planner prices at go-to's hp price (:hp-seconds x health-scale) like a drop's damage."
-  (:require [engine.settings :as settings]
+  (:require [engine.args :as a]
+            [engine.settings :as settings]
             [jobs.lib.cost.armour :as armour]
             [jobs.lib.cost.fight :as fight]
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.reach :as reach]
             [jobs.lib.util :as u]))
 
-(def settings
-  {::max-fire-checks {:default 8 :doc "Route cells a ranged mob's line of fire is tried to, nearest first." :type :int :min 1}
-   ::default-radius {:default 16 :doc "Blocks out to which a sensed or remembered mob costs a route." :type :int :min 1}
-   ::close {:default 2 :doc "Blocks within which a mob is close." :type :int :min 0}
-   ::exposure-s {:default 3 :doc "Seconds a body is exposed to a mob on a route." :type :int :min 0}
-   ::snap-span {:default 4 :doc "How far up or down a straight route looks for ground in each column." :type :int :min 0}})
+(a/defargs settings
+  {::max-fire-checks {:default 8 :doc "Route cells a ranged mob's line of fire is tried to, nearest first." :spec (a/int-in 1 nil)}
+   ::default-radius {:default 16 :doc "Blocks out to which a sensed or remembered mob costs a route." :spec (a/int-in 1 nil)}
+   ::close {:default 2 :doc "Blocks within which a mob is close." :spec (a/int-in 0 nil)}
+   ::exposure-s {:default 3 :doc "Seconds a body is exposed to a mob on a route." :spec (a/int-in 0 nil)}
+   ::snap-span {:default 4 :doc "How far up or down a straight route looks for ground in each column." :spec (a/int-in 0 nil)}})
 
 
 ;; ---------------------------------------------------------------- reading inputs

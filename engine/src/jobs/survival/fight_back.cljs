@@ -1,5 +1,6 @@
 (ns jobs.survival.fight-back
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.util :as u]
@@ -19,14 +20,14 @@
   A killed mob, or one whose id is in :skip, is not swung at again while its corpse is listed.
   Job memory (for the parent): :struck {id {:name :hits :health}} for hits that did damage, and :killed.")
 
-(def args
-  {:range {:doc "hostiles within this many blocks are fought" :default 4}
-   :ranged-range {:doc "ranged hostiles (skeletons and the like) within this many blocks are fought" :default 16}
-   :leash {:doc "hostiles farther than this from where the job started are not chased" :default 20}
-   :min-health {:doc "decline below this health" :default 8}
-   :weapons {:doc "item name substrings that count as weapons" :default combat/default-weapons}
-   :skip {:doc "entity ids already dead: not fought" :default []}
-   :attack-gap-ms {:doc "least time between swings" :default 600}})
+(a/defargs args
+  {:range {:doc "hostiles within this many blocks are fought" :spec (a/num-in 0 nil) :default 4}
+   :ranged-range {:doc "ranged hostiles (skeletons and the like) within this many blocks are fought" :spec (a/num-in 0 nil) :default 16}
+   :leash {:doc "hostiles farther than this from where the job started are not chased" :spec (a/num-in 0 nil) :default 20}
+   :min-health {:doc "decline below this health" :spec (a/num-in 0 20) :default 8}
+   :weapons {:doc "item name substrings that count as weapons" :spec (a/coll-of (a/or-of string? keyword?)) :default combat/default-weapons}
+   :skip {:doc "entity ids already dead: not fought" :spec (a/coll-of number?) :default []}
+   :attack-gap-ms {:doc "least time between swings" :spec (a/num-in 0 nil) :default 600}})
 
 (def reach 3)
 

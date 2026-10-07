@@ -1,5 +1,6 @@
 (ns jobs.survival.dig-niche
-  (:require [clojure.string]
+  (:require [engine.args :as a]
+            [clojure.string]
             [jobs.lib.blocks :as lb]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
@@ -31,12 +32,12 @@
   (dig-in-cells/rock-name); after each dig it looks at the cells laid open and waits a lava flow delay.
   Events: dig-niche.sealed (info).")
 
-(def args
-  {:reach {:doc "how far from the body to look for a face, 1 to 32" :type :int :min 1 :max 32 :default 16}
-   :blocks {:doc "names of the blocks it may place" :default dig-in/shelter-blocks}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
-   :fetch {:doc "get a missing tool (jobs.lib.fetch): true, a set of kinds or a map of limits; false stops :no-tool" :default true}
-   :roof-height {:doc "a solid block within this many blocks above counts as a roof, 1 to 32" :type :int :min 1 :max 32 :default sh/default-roof-height}})
+(a/defargs args
+  {:reach {:doc "how far from the body to look for a face, 1 to 32" :spec (a/int-in 1 32) :default 16}
+   :blocks {:doc "names of the blocks it may place" :spec (a/coll-of a/item?) :default dig-in/shelter-blocks}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
+   :fetch {:doc "get a missing tool (jobs.lib.fetch): true, a set of kinds or a map of limits; false stops :no-tool" :spec fetch/option? :default true}
+   :roof-height {:doc "a solid block within this many blocks above counts as a roof, 1 to 32" :spec (a/int-in 1 32) :default sh/default-roof-height}})
 
 (defn check
   "Night and no roof over the body; a decline says why (ctx/wait): :day or :already-sealed."

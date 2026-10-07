@@ -1,5 +1,6 @@
 (ns jobs.access.toggle
-  (:require [jobs.lib.click :as click]
+  (:require [engine.args :as a]
+            [jobs.lib.click :as click]
             [engine.ctx :as ctx]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
@@ -39,10 +40,10 @@
   :pos :block :wanted :was :now}. The pen-gate trigger may shut a planned pen gate this job opened once the
   body has been more than 2 blocks away for 4 s.")
 
-(def args
-  {:pos {:doc "the block, [x y z] or {:x :y :z}; either half of a door" :type :pos :default nil}
-   :state {:doc ":open or :closed (gate, door, trapdoor), :on or :off (lever), :press (button)" :default nil}
-   :reach {:doc "walk until within this many cells of the block (the click reaches 4.5 from the eye)" :default 3}})
+(a/defargs args
+  {:pos {:doc "the block, [x y z] or {:x :y :z}; either half of a door" :spec ::a/pos :default nil}
+   :state {:doc ":open or :closed (gate, door, trapdoor), :on or :off (lever), :press (button)" :spec (a/or-of #{:open :closed :on :off :press} #{"open" "closed" "on" "off" "press"}) :default nil}
+   :reach {:doc "walk until within this many cells of the block (the click reaches 4.5 from the eye)" :spec (a/num-in 0 nil) :default 3}})
 
 (def valid-states
   {:openable #{:open :closed} :lever #{:on :off} :button #{:press}})

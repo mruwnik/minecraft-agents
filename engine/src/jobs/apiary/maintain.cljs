@@ -1,5 +1,6 @@
 (ns jobs.apiary.maintain
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
             [jobs.lib.apiary :as apiary]
             [jobs.lib.look :as look]
@@ -33,15 +34,15 @@
   :reason}, deposit {:gave-up :reason}.
   :ignore-zones? is passed to guard and harvest, which check zones and claims (see their docs).")
 
-(def args
-  {:box {:doc "the apiary: {:from pos :to pos}; overrides :center and :radius" :default nil}
-   :center {:doc "centre of the apiary; the body's position when the job first runs when nil" :type :pos :default nil}
-   :radius {:doc "hives, fires and bees within this many blocks of the centre count, when :box is nil" :default 12}
-   :with {:doc "harvest tool: :shears, :bottle or :either (shears first)" :default :either}
-   :target {:doc "bees wanted in the area (babies count); nil: no breeding" :default nil}
-   :chest {:doc "chest position {:x :y :z} for the produce; nil: do not store" :type :pos :default nil}
-   :keep {:doc "{item-name count}: how many of honeycomb or honey_bottle deposit leaves carried" :default {}}
-   :ignore-zones? {:doc "act regardless of zones and claims (passed to guard and harvest); the rules of the game allow it" :default false}})
+(a/defargs args
+  {:box {:doc "the apiary: {:from pos :to pos}; overrides :center and :radius" :spec (a/map-with {:from a/position? :to a/position?}) :default nil}
+   :center {:doc "centre of the apiary; the body's position when the job first runs when nil" :spec ::a/pos :default nil}
+   :radius {:doc "hives, fires and bees within this many blocks of the centre count, when :box is nil" :spec (a/num-in 0 nil) :default 12}
+   :with {:doc "harvest tool: :shears, :bottle or :either (shears first)" :spec #{:shears :bottle :either} :default :either}
+   :target {:doc "bees wanted in the area (babies count); nil: no breeding" :spec (a/int-in 0 nil) :default nil}
+   :chest {:doc "chest position {:x :y :z} for the produce; nil: do not store" :spec ::a/pos :default nil}
+   :keep {:doc "{item-name count}: how many of honeycomb or honey_bottle deposit leaves carried" :spec (a/map-of a/item? (a/int-in 0 nil)) :default {}}
+   :ignore-zones? {:doc "act regardless of zones and claims (passed to guard and harvest); the rules of the game allow it" :spec boolean? :default false}})
 
 (def steps [:guard :harvest :breed :deposit])
 

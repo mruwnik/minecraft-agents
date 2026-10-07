@@ -1,5 +1,6 @@
 (ns jobs.access.leave-tunnel
-  (:require [jobs.lib.ledger :as ledger]
+  (:require [engine.args :as a]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
@@ -50,12 +51,12 @@
   :fetch (default true; false waits :no-tool; jobs.lib.fetch): the escape stair's missing pickaxe is got with jobs.items.get-tool, then
   the body walks back to the cell it stood on and goes on.")
 
-(def args
-  {:tunnel {:doc "the result of jobs.access.tunnel (:line :dug :torches)" :default nil}
-   :spare {:doc "items filled with only when nothing else is carried (a caller's own haul)" :default []}
-   :reach {:doc "mouth cells whose centre is this close to the eye are filled from the entry, in blocks" :default u/bucket-reach}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
-   :fetch {:doc "get a missing pickaxe for the escape instead of waiting :no-tool (jobs.lib.fetch): true, a set of kinds or a map of limits; false waits :no-tool" :default true}})
+(a/defargs args
+  {:tunnel {:doc "the result of jobs.access.tunnel (:line :dug :torches)" :spec map? :default nil}
+   :spare {:doc "items filled with only when nothing else is carried (a caller's own haul)" :spec (a/coll-of a/item?) :default []}
+   :reach {:doc "mouth cells whose centre is this close to the eye are filled from the entry, in blocks" :spec (a/num-in 0 nil) :default u/bucket-reach}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
+   :fetch {:doc "get a missing pickaxe for the escape instead of waiting :no-tool (jobs.lib.fetch): true, a set of kinds or a map of limits; false waits :no-tool" :spec fetch/option? :default true}})
 
 (defn check [c]
   (if (and (nil? (known/zones c)) (not (:ignore-zones? (:args c))))

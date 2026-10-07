@@ -1,5 +1,6 @@
 (ns jobs.survival.block-arrow-gap
-  (:require [engine.game :as game]
+  (:require [engine.args :as a]
+            [engine.game :as game]
             [jobs.lib.blocks :as lb]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
@@ -35,12 +36,12 @@
   gets out as from its own shelter (go-to escalation digs a door, dig-in leave).
   Events: block-arrow-gap.closed (info), block_arrow_gap_failed (warning).")
 
-(def args
-  {:radius {:doc "ranged mobs within this many blocks count" :default 16}
-   :reach {:doc "open cells within this many blocks of the body's feet may be filled" :default 3}
-   :blocks {:doc "names of the blocks it may place" :default dig-in/shelter-blocks}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
-   :fetch {:doc "get a missing block (jobs.lib.fetch): true, a set of kinds or a map of limits; false stops :no-blocks" :default true}})
+(a/defargs args
+  {:radius {:doc "ranged mobs within this many blocks count" :spec (a/num-in 0 nil) :default 16}
+   :reach {:doc "open cells within this many blocks of the body's feet may be filled" :spec (a/num-in 0 nil) :default 3}
+   :blocks {:doc "names of the blocks it may place" :spec (a/coll-of a/item?) :default dig-in/shelter-blocks}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
+   :fetch {:doc "get a missing block (jobs.lib.fetch): true, a set of kinds or a map of limits; false stops :no-blocks" :spec fetch/option? :default true}})
 
 (def max-steps "Rounds one call takes at most." 12)
 

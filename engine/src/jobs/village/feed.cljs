@@ -1,5 +1,6 @@
 (ns jobs.village.feed
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
@@ -26,12 +27,12 @@
   before the toss are never collected.
   One call is the whole attempt; it yields :continue only while a walk or fetch child waits on the world.")
 
-(def args
-  {:villager {:doc "the villager's entity uuid" :type :string :default nil}
-   :item {:doc "food to give; nil: the first carried of bread, carrot, potato, beetroot" :type :item :default nil}
-   :count {:doc "how many items the villager is to take" :type :int :min 1 :max 64 :default 1}
-   :radius {:doc "how far to look for the villager" :type :int :min 1 :max 96 :default 48}
-   :fetch {:doc "get food when none is carried (jobs.lib.fetch): true, a set of kinds or a map of limits; false ends :no-food" :default true}})
+(a/defargs args
+  {:villager {:doc "the villager's entity uuid" :spec string? :default nil}
+   :item {:doc "food to give; nil: the first carried of bread, carrot, potato, beetroot" :spec a/item? :default nil}
+   :count {:doc "how many items the villager is to take" :spec (a/int-in 1 64) :default 1}
+   :radius {:doc "how far to look for the villager" :spec (a/int-in 1 96) :default 48}
+   :fetch {:doc "get food when none is carried (jobs.lib.fetch): true, a set of kinds or a map of limits; false ends :no-food" :spec fetch/option? :default true}})
 
 (def foods ["bread" "carrot" "potato" "beetroot"])
 (def wanted (into (set foods) ["wheat" "wheat_seeds" "beetroot_seeds" "torchflower_seeds" "pitcher_pod"]))

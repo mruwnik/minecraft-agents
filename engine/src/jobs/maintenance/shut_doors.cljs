@@ -1,5 +1,6 @@
 (ns jobs.maintenance.shut-doors
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.util :as u]
             [jobs.lib.result :as res]
             [jobs.lib.pass :as pass]
@@ -20,10 +21,10 @@
   Ends done with info shut-doors.done {:shut n :left []} when every block was shut (or none stood open); with any
   left, stopped :left with warn shut-doors.stopped and {:shut n :left [{:cell :reason}]}.")
 
-(def args
-  {:radius {:doc "how far from the body a left block is looked for, in blocks" :default 16}
-   :reach {:doc "walk until within this many cells of the block (a click reaches 4.5 from the eye)" :default 3}
-   :tries {:doc "clicks on one block before it is given up" :default 3}})
+(a/defargs args
+  {:radius {:doc "how far from the body a left block is looked for, in blocks" :spec (a/num-in 0 nil) :default 16}
+   :reach {:doc "walk until within this many cells of the block (a click reaches 4.5 from the eye)" :spec (a/num-in 0 nil) :default 3}
+   :tries {:doc "clicks on one block before it is given up" :spec (a/int-in 1 nil) :default 3}})
 
 ;; the blocks given up in this run are skipped; a later run starts afresh from the world and the :opened entries
 (defn cell-key [{:keys [x y z]}] [x y z])

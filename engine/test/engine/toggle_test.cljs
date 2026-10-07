@@ -5,6 +5,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.expr :as expr]
             [engine.job-api :as job-api]
             [engine.job-api :as job-api]
             [engine.test-util :as tu :refer [run-until-empty]]
@@ -143,7 +144,6 @@
                                          ["oak_door" {:open false} {:pos at :state :on} :bad-state]
                                          ["oak_door" {:open false} {:pos at :state :press} :bad-state]
                                          ["oak_button" {:powered false} {:pos at :state :on} :bad-state]
-                                         ["oak_door" {:open false} {:pos at :state :ajar} :bad-state]
                                          ["oak_door" {:open false} {:pos at} :bad-args]
                                          ["oak_door" {:open false} {:state :open} :bad-args]]]
           (let [{:keys [result p seen]} (await (run (world name from 3 14) args))]
@@ -151,6 +151,10 @@
             (is (empty? (calls p "useOn")) (str name args))
             (is (empty? (tu/walk-calls p)) (str name args ": no walk"))
             (is (= 1 (count (kinds seen :toggle.declined))) (str name args))))))))
+
+(deftest a-state-no-block-has-is-refused-at-submit
+  (is (re-find #"jobs.access.toggle :state must be one of .*, got :ajar"
+               (expr/problem registry/jobs (list 'jobs.access.toggle {:pos at :state :ajar})))))
 
 (deftest an-unloaded-cell-is-declined-not-loaded
   (async done

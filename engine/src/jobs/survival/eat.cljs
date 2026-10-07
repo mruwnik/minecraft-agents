@@ -1,5 +1,6 @@
 (ns jobs.survival.eat
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.foods :as foods]
             [jobs.lib.util :as u]))
 
@@ -14,11 +15,11 @@
   Hands over {:ate bites} and, when a bite fails, :reason :eat-failed.
   Memory: writes :fed {:item :food} for each meal.")
 
-(def args
-  {:item {:doc "the food to eat; the best carried when nil" :default nil}
-   :until {:doc "keep eating while food is below this (of 20)" :default 18}
-   :max-bites {:doc "eat at most this many bites; unlimited when nil" :default nil}
-   :allow-bad {:doc "also eat the harmful foods when nothing else is carried" :default false}})
+(a/defargs args
+  {:item {:doc "the food to eat; the best carried when nil" :spec a/item? :default nil}
+   :until {:doc "keep eating while food is below this (of 20)" :spec (a/num-in 0 nil) :default 18}
+   :max-bites {:doc "eat at most this many bites; unlimited when nil" :spec (a/int-in 1 nil) :default nil}
+   :allow-bad {:doc "also eat the harmful foods when nothing else is carried" :spec boolean? :default false}})
 
 (def fed-policy {:cap 20 :ttl (* 6 60 60 1000)})
 

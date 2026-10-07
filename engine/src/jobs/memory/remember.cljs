@@ -1,5 +1,6 @@
 (ns jobs.memory.remember
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [engine.memory :as mem]
             [jobs.lib.places :as places]))
 
@@ -18,11 +19,11 @@
   :hurt, :slept, :scaffold, or the name of a recorded place), :bad-ttl, :bad-cap, :bad-data (not a map).
   Success: info memory.remembered with :memory-kind, :entry and :policy. Result {:ok true :kind}.")
 
-(def args
-  {:kind {:doc "the memory kind to write: an unnamespaced keyword no engine job writes, e.g. :bred-cows" :default nil}
-   :data {:doc "a map kept in the entry, for jobs that read it back" :default nil}
-   :ttl-s {:doc "seconds the entry is kept (or :forever); nil: the kind's own policy, or the default hour" :default nil}
-   :cap {:doc "entries of the kind kept, the newest; nil: the kind's own policy, or the default 50" :default nil}})
+(a/defargs args
+  {:kind {:doc "the memory kind to write: an unnamespaced keyword no engine job writes, e.g. :bred-cows" :spec keyword? :default nil}
+   :data {:doc "a map kept in the entry, for jobs that read it back" :spec map? :default nil}
+   :ttl-s {:doc "seconds the entry is kept (or :forever); nil: the kind's own policy, or the default hour" :spec (a/or-of #{:forever} a/pos-num?) :default nil}
+   :cap {:doc "entries of the kind kept, the newest; nil: the kind's own policy, or the default 50" :spec (a/int-in 1 nil) :default nil}})
 
 (defn check [_c] true)
 

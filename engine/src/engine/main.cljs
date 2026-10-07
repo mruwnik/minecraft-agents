@@ -1,6 +1,7 @@
 (ns engine.main
   "Entry point: npm run body -- --agent <name> --world <world> --scenario <file> [--fresh] [--upgrade] [--worlds <dir>] [--state-dir <legacy-parent>]"
-  (:require [engine.bodies :as bodies]
+  (:require [engine.args :as a]
+            [engine.bodies :as bodies]
             [engine.core :as core]
             [engine.entity-observations :as entity-observations]
             [engine.fsutil :as fsu]
@@ -27,10 +28,10 @@
             ["module" :refer [createRequire]]
             [engine.hooks :as hooks]))
 
-(def settings
-  {:engine.main/shutdown-limit-ms {:default 5000 :type :int :min 1
+(a/defargs settings
+  {:engine.main/shutdown-limit-ms {:default 5000 :spec (a/int-in 1 nil)
                                    :doc "The signal handler exits after this long even when the body has not stopped, ms."}
-   :engine.game/follow-tick-rate {:default true :type :bool
+   :engine.game/follow-tick-rate {:default true :spec boolean?
                                   :doc "Body physics follows the server's /tick rate (freeze, step, faster or slower); off runs stock 20 TPS physics. Read at body start."}})
 
 (defn parse-args [args]

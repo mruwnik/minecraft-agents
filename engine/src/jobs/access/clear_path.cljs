@@ -1,5 +1,6 @@
 (ns jobs.access.clear-path
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.blocks :as b]
             [jobs.lib.dig-look :as dig-look]
             [jobs.access.stair :as stair]
@@ -24,11 +25,11 @@
   not arrive).
   It does not put the blocks back: jobs.movement.go-to does that once through.")
 
-(def args
-  {:heading {:doc ":north :east :south or :west" :default nil}
-   :max-thick {:doc "the thickest wall it digs through, in blocks" :default 3}
-   :note {:doc "a map: each cell dug is written to the tidy ledger at once with it (jobs.lib.escape/note-hole!; go-to's escalation)" :default nil}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
+(a/defargs args
+  {:heading {:doc ":north :east :south or :west" :spec #{:north :east :south :west} :default nil}
+   :max-thick {:doc "the thickest wall it digs through, in blocks" :spec (a/int-in 0 nil) :default 3}
+   :note {:doc "a map: each cell dug is written to the tidy ledger at once with it (jobs.lib.escape/note-hole!; go-to's escalation)" :spec map? :default nil}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (def headings {:north [0 -1] :south [0 1] :east [1 0] :west [-1 0]})
 

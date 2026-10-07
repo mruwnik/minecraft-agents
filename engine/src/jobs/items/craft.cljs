@@ -1,5 +1,6 @@
 (ns jobs.items.craft
-  (:require [jobs.items.shortfall :as craft]
+  (:require [engine.args :as a]
+            [jobs.items.shortfall :as craft]
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as b]
             [jobs.lib.fetch :as fetch]
@@ -22,12 +23,12 @@
   carried one is put down beside the body, else one is fetched (a crafting_table obtain child) and put down, the same
   way; :fetch false or a failed fetch stops with :reason \"no-table\".")
 
-(def args
-  {:item {:doc "item name to craft" :default nil}
-   :count {:doc "how many more to end up with" :default 1}
-   :table {:doc "crafting table position; the nearest seen within :radius when nil and the recipe needs one" :type :pos :default nil}
-   :radius {:doc "how far to look for a crafting table" :default 32}
-   :fetch {:doc "get an ingredient that runs out (jobs.lib.fetch): true, a set of kinds or a map of limits; false stops :short" :default true}})
+(a/defargs args
+  {:item {:doc "item name to craft" :spec a/item? :default nil}
+   :count {:doc "how many more to end up with" :spec (a/int-in 0 nil) :default 1}
+   :table {:doc "crafting table position; the nearest seen within :radius when nil and the recipe needs one" :spec ::a/pos :default nil}
+   :radius {:doc "how far to look for a crafting table" :spec (a/num-in 0 nil) :default 32}
+   :fetch {:doc "get an ingredient that runs out (jobs.lib.fetch): true, a set of kinds or a map of limits; false stops :short" :spec fetch/option? :default true}})
 
 (defn check
   "An item name is given."

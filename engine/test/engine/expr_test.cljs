@@ -1,6 +1,7 @@
 (ns engine.expr-test
   (:require [cljs.test :refer [deftest is are]]
             [cljs.reader :as reader]
+            [engine.args :as a]
             [engine.expr :as expr]
             [engine.registry :as registry]))
 
@@ -10,10 +11,10 @@
   {'jobs.a {:check (constantly true) :round noop-round
             :args {:n {:doc "n" :default 1} :m {:doc "m" :default 2}}}
    'jobs.p {:check (constantly true) :round noop-round
-            :args {:at {:doc "cell" :type :pos :default nil} :n {:doc "n" :default 1}}}
+            :args (a/declare! 'jobs.p {:at {:doc "cell" :spec ::a/pos :default nil} :n {:doc "n" :spec number? :default 1}})}
    'jobs.t {:check (constantly true) :round noop-round
-            :args {:k {:type :keyword} :i {:type :int} :x {:type :number :min 0 :max 10} :b {:type :bool}
-                   :s {:type :string} :it {:type :item} :e {:type :enum :values [:a :b]} :u {:doc "untyped"}}}
+            :args (a/declare! 'jobs.t {:k {:spec keyword?} :i {:spec (a/int-in nil nil)} :x {:spec (a/num-in 0 10)} :b {:spec boolean?}
+                                       :s {:spec string?} :it {:spec a/item?} :e {:spec #{:a :b}} :u {:doc "any map" :spec map?}})}
    'jobs.b {:check (constantly true) :round noop-round :args nil}
    'jobs.free {:check (constantly true) :round noop-round}})
 
@@ -107,17 +108,17 @@
     :k "wood" #"jobs.t :k must be a keyword, got \"wood\""
     :i 2.5 #"jobs.t :i must be a whole number, got 2.5"
     :i "3" #"jobs.t :i must be a whole number, got \"3\""
-    :x "5" #"jobs.t :x must be a number, got \"5\""
-    :x -1 #"jobs.t :x must be a number >= 0, got -1"
-    :x 11 #"jobs.t :x must be a number <= 10, got 11"
+    :x "5" #"jobs.t :x must be a number from 0 to 10, got \"5\""
+    :x -1 #"jobs.t :x must be a number from 0 to 10, got -1"
+    :x 11 #"jobs.t :x must be a number from 0 to 10, got 11"
     :b 1 #"jobs.t :b must be true or false, got 1"
     :s :x #"jobs.t :s must be a string, got :x"
     :it "" #"jobs.t :it must be an item name \(non-empty string\), got \"\""
     :it :oak_log #"jobs.t :it must be an item name"
-    :e :c #"jobs.t :e must be one of \[:a :b\], got :c"))
+    :e :c #"jobs.t :e must be one of :a, :b, got :c"))
 
 (deftest a-default-of-the-wrong-type-is-refused-too
-  (let [r {'jobs.d {:check (constantly true) :round noop-round :args {:n {:type :int :default "x"}}}}]
+  (let [r {'jobs.d {:check (constantly true) :round noop-round :args (a/declare! 'jobs.d {:n {:spec (a/int-in nil nil) :default "x"}})}}]
     (is (re-find #"jobs.d :n must be a whole number" (try (expr/parse-spec r '(jobs.d)) nil (catch :default e (ex-message e)))))))
 
 (def pos-args
@@ -130,7 +131,7 @@
 
 (deftest real-jobs-take-position-args-as-a-vector-or-a-map-and-refuse-junk-at-submit
   (doseq [[job k] pos-args]
-    (is (= :pos (get-in registry/jobs [job :args k :type])) (str job " " k))
+    (is (= ::a/pos (get-in registry/jobs [job :args k :spec])) (str job " " k))
     (let [args #(:args (expr/parse registry/jobs (list job {k %})))]
       (is (= {:x 1 :y 64 :z -3} (get (args [1 64 -3]) k)) (str job " vector"))
       (is (= (args [1 64 -3]) (args {:x 1 :y 64 :z -3})) (str job " map"))

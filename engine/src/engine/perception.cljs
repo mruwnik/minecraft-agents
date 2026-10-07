@@ -53,7 +53,8 @@
 
   The parts: engine.perception.light (light curve), .store (block memory and reading it), .rays (view cone, sight pass,
   keeping memory current), .mobs (mob memory), .persist (file). This namespace creates, runs and wraps them."
-  (:require [clojure.set :as set]
+  (:require [engine.args :as a]
+            [clojure.set :as set]
             [engine.perception.light :as light]
             [engine.perception.mobs :as mobs]
             [engine.perception.persist :as persist]
@@ -76,30 +77,30 @@
 (def save! persist/save!)
 (def load! persist/load!)
 
-(def settings
+(a/defargs settings
   "The tuning numbers of what the body sees. :engine.perception/save-ms is in engine.settings."
-  {:engine.perception/radius {:default 48 :type :int :min 1 :doc "How far the body looks, in blocks."}
-   :engine.perception/fov {:default 70 :type :number :min 1 :doc "Vertical field of view, degrees (vanilla's default)."}
-   :engine.perception/aspect {:default (/ 16 9) :type :number :min 0.1 :doc "Width over height of the view."}
-   :engine.perception/ray-deg {:default 1 :type :number :min 0.1 :doc "Ray spacing at the centre of the view, degrees."}
-   :engine.perception/pass-ms {:default 1500 :type :int :min 1 :doc "How long one looking pass may take, ms of wall clock."}
-   :engine.perception/step-ms {:default 50 :type :int :min 1 :doc "How long one looking step may take, ms of wall clock."}
-   :engine.perception/idle-ms {:default 3000 :type :int :min 1 :doc "A still body looks again this often when the world around it changed, ms."}
-   :engine.perception/still-ms {:default 30000 :type :int :min 1 :doc "A still body looks again this often when nothing changed (no block or chunk change, same daylight and torch), ms."}
-   :engine.perception/move-blocks {:default 0.5 :type :number :min 0 :doc "Blocks the body moves before it looks again."}
-   :engine.perception/turn-deg {:default 2 :type :number :min 0 :doc "Degrees the body turns before it looks again."}
-   :engine.perception/seeing-min {:default 0.2 :type :number :min 0 :doc "The light level below which a block cannot be made out."}
-   :engine.perception/near {:default 4 :type :number :min 0 :doc "Blocks within which light is not needed to see."}
-   :engine.perception/near-torch {:default 7 :type :number :min 0 :doc "The same, while a torch (or soul torch) is held in either hand."}
-   :engine.perception/cap-bytes {:default (* 32 1024 1024) :type :int :min 12288 :doc "Memory the seen-world sections may use, bytes."}
-   :engine.perception/stats-ms {:default 60000 :type :int :min 1 :doc "How often perception statistics are logged, ms."}
-   :engine.perception/error-every-ms {:default 60000 :type :int :min 1 :doc "How often one repeated perception error is logged, ms."}
-   :engine.perception/mob-ms {:default 250 :type :int :min 1 :doc "A mob sample is taken this often, ms."}
-   :engine.perception/mob-scan {:default 64 :type :number :min 0 :doc "Hostiles within this many blocks of the body are sampled."}
-   :engine.perception/hearing {:default 16 :type :number :min 0 :doc "A mob within this many blocks of the eye is heard."}
-   :engine.perception/dark-sight {:default 4 :type :number :min 0 :doc "A mob standing in the dark is seen only within this many blocks."}
-   :engine.perception/mob-drift {:default 16 :type :number :min 0 :doc "A mob not sensed is forgotten once it could have walked this many blocks."}
-   :engine.perception/mutable-max-ms {:default 10000 :type :int :min 1 :doc "A remembered fluid, door, gate, trapdoor or fire older than this reads unknown, ms."}})
+  {:engine.perception/radius {:default 48 :spec (a/int-in 1 nil) :doc "How far the body looks, in blocks."}
+   :engine.perception/fov {:default 70 :spec (a/num-in 1 nil) :doc "Vertical field of view, degrees (vanilla's default)."}
+   :engine.perception/aspect {:default (/ 16 9) :spec (a/num-in 0.1 nil) :doc "Width over height of the view."}
+   :engine.perception/ray-deg {:default 1 :spec (a/num-in 0.1 nil) :doc "Ray spacing at the centre of the view, degrees."}
+   :engine.perception/pass-ms {:default 1500 :spec (a/int-in 1 nil) :doc "How long one looking pass may take, ms of wall clock."}
+   :engine.perception/step-ms {:default 50 :spec (a/int-in 1 nil) :doc "How long one looking step may take, ms of wall clock."}
+   :engine.perception/idle-ms {:default 3000 :spec (a/int-in 1 nil) :doc "A still body looks again this often when the world around it changed, ms."}
+   :engine.perception/still-ms {:default 30000 :spec (a/int-in 1 nil) :doc "A still body looks again this often when nothing changed (no block or chunk change, same daylight and torch), ms."}
+   :engine.perception/move-blocks {:default 0.5 :spec (a/num-in 0 nil) :doc "Blocks the body moves before it looks again."}
+   :engine.perception/turn-deg {:default 2 :spec (a/num-in 0 nil) :doc "Degrees the body turns before it looks again."}
+   :engine.perception/seeing-min {:default 0.2 :spec (a/num-in 0 nil) :doc "The light level below which a block cannot be made out."}
+   :engine.perception/near {:default 4 :spec (a/num-in 0 nil) :doc "Blocks within which light is not needed to see."}
+   :engine.perception/near-torch {:default 7 :spec (a/num-in 0 nil) :doc "The same, while a torch (or soul torch) is held in either hand."}
+   :engine.perception/cap-bytes {:default (* 32 1024 1024) :spec (a/int-in 12288 nil) :doc "Memory the seen-world sections may use, bytes."}
+   :engine.perception/stats-ms {:default 60000 :spec (a/int-in 1 nil) :doc "How often perception statistics are logged, ms."}
+   :engine.perception/error-every-ms {:default 60000 :spec (a/int-in 1 nil) :doc "How often one repeated perception error is logged, ms."}
+   :engine.perception/mob-ms {:default 250 :spec (a/int-in 1 nil) :doc "A mob sample is taken this often, ms."}
+   :engine.perception/mob-scan {:default 64 :spec (a/num-in 0 nil) :doc "Hostiles within this many blocks of the body are sampled."}
+   :engine.perception/hearing {:default 16 :spec (a/num-in 0 nil) :doc "A mob within this many blocks of the eye is heard."}
+   :engine.perception/dark-sight {:default 4 :spec (a/num-in 0 nil) :doc "A mob standing in the dark is seen only within this many blocks."}
+   :engine.perception/mob-drift {:default 16 :spec (a/num-in 0 nil) :doc "A mob not sensed is forgotten once it could have walked this many blocks."}
+   :engine.perception/mutable-max-ms {:default 10000 :spec (a/int-in 1 nil) :doc "A remembered fluid, door, gate, trapdoor or fire older than this reads unknown, ms."}})
 
 (defn defaults
   "The perception options as set (:save-ms from engine.settings)."

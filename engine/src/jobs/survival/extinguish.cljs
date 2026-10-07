@@ -1,5 +1,6 @@
 (ns jobs.survival.extinguish
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
@@ -36,11 +37,11 @@
   Memory: writes :extinguish {:pos :cause} each pass (cap 20, one hour),
   and lava seen within :scan-radius as :hazard entries (cap 50, six hours) for retreat logic.")
 
-(def args
-  {:water-radius {:doc "on fire, water within this many blocks is walked into" :default 6}
-   :step {:doc "candidate cells lie within this many blocks (horizontally) of the body" :default 4}
-   :scan-radius {:doc "fire, lava and magma within this many blocks count as hazards" :default 8}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
+(a/defargs args
+  {:water-radius {:doc "on fire, water within this many blocks is walked into" :spec (a/num-in 0 nil) :default 6}
+   :step {:doc "candidate cells lie within this many blocks (horizontally) of the body" :spec (a/num-in 0 nil) :default 4}
+   :scan-radius {:doc "fire, lava and magma within this many blocks count as hazards" :spec (a/num-in 0 nil) :default 8}
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (def hazards #{"lava" "fire" "soul_fire" "magma_block" "campfire" "soul_campfire"})
 (def passable #{"air" "cave_air" "water" "short_grass" "tall_grass" "grass" "snow"})

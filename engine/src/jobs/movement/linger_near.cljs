@@ -1,5 +1,6 @@
 (ns jobs.movement.linger-near
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.util :as u]))
 
 (def doc
@@ -15,10 +16,10 @@
   preempted add nothing, and a resume checks the range again before it can end. A cut leaves nothing to undo; a caller whose wait
   ends early cuts the job.")
 
-(def args
-  {:pos {:doc "the place to stay near" :type :pos :default nil}
-   :range {:doc "stay within this many blocks of :pos" :default 3}
-   :wait-s {:doc "seconds to stay" :default nil}})
+(a/defargs args
+  {:pos {:doc "the place to stay near" :spec ::a/pos :default nil}
+   :range {:doc "stay within this many blocks of :pos" :spec (a/num-in 0 nil) :default 3}
+   :wait-s {:doc "seconds to stay" :spec (a/num-in 0 nil) :default nil}})
 
 (def idle-ms 500)
 (def max-blocked 3)

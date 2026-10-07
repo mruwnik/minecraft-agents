@@ -1,5 +1,6 @@
 (ns jobs.movement.boat-launch
-  (:require [clojure.string :as str]
+  (:require [engine.args :as a]
+            [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as b]
             [jobs.lib.look :as look]
@@ -24,14 +25,14 @@
 
   Never :continue except when a child waits on the world.")
 
-(def args
-  {:action {:doc ":launch or :recover" :default :launch}
-   :pos {:doc "launch: the water cell to put the boat on, [x y z] or {:x :y :z}; nil: the nearest suitable water in sight" :type :pos :default nil}
-   :item {:doc "launch: the boat item to place; nil: the first carried boat or raft" :default nil}
-   :board {:doc "launch: get in once it is down" :default true}
-   :id {:doc "recover: the entity id of the boat; nil: the nearest in sight" :default nil}
-   :radius {:doc "how far to look for water or a boat" :default 12}
-   :max-s {:doc "recover: seconds to keep hitting a boat that does not break (bare hands take 5 hits, a boat has no health to read)" :default 15}})
+(a/defargs args
+  {:action {:doc ":launch or :recover" :spec #{:launch :recover} :default :launch}
+   :pos {:doc "launch: the water cell to put the boat on, [x y z] or {:x :y :z}; nil: the nearest suitable water in sight" :spec ::a/pos :default nil}
+   :item {:doc "launch: the boat item to place; nil: the first carried boat or raft" :spec a/item? :default nil}
+   :board {:doc "launch: get in once it is down" :spec boolean? :default true}
+   :id {:doc "recover: the entity id of the boat; nil: the nearest in sight" :spec (a/int-in 1 nil) :default nil}
+   :radius {:doc "how far to look for water or a boat" :spec (a/num-in 0 nil) :default 12}
+   :max-s {:doc "recover: seconds to keep hitting a boat that does not break (bare hands take 5 hits, a boat has no health to read)" :spec (a/num-in 0 nil) :default 15}})
 
 (def default-item "oak_boat")
 (def reach 3)

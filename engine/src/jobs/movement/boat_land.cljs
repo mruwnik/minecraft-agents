@@ -1,5 +1,6 @@
 (ns jobs.movement.boat-land
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [jobs.lib.blocks :as b]
             [jobs.lib.result :as result]
             [jobs.lib.shore :as shore]
@@ -19,11 +20,11 @@
 
   Never :continue except when a child waits on the world.")
 
-(def args
-  {:pos {:doc "the land cell to step onto, [x y z] or {:x :y :z}; nil: the nearest shore in sight" :type :pos :default nil}
-   :radius {:doc "how far from the boat to look for a shore" :type :number :min 1 :default 12}
-   :max-spots {:doc "shore spots tried before giving up :blocked" :type :int :min 1 :default 3}
-   :recover {:doc "take the boat back after landing" :default false}})
+(a/defargs args
+  {:pos {:doc "the land cell to step onto, [x y z] or {:x :y :z}; nil: the nearest shore in sight" :spec ::a/pos :default nil}
+   :radius {:doc "how far from the boat to look for a shore" :spec (a/num-in 1 nil) :default 12}
+   :max-spots {:doc "shore spots tried before giving up :blocked" :spec (a/int-in 1 nil) :default 3}
+   :recover {:doc "take the boat back after landing" :spec boolean? :default false}})
 
 (def landed-kind :boat-land)
 (def landed-policy {:cap 4 :ttl (* 10 60 1000)})

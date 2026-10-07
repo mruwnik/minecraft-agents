@@ -3,7 +3,8 @@
   then down at the floor ahead) with a sight pass after each look, so what lies beside or behind it enters
   perception's memory. Nothing is sensed through walls: jobs read blocks and entities through the seen-* helpers here
   (memory of what the body saw, players, hostiles it saw or heard), never through blocks/entities as a scan."
-  (:require [engine.game :as game]
+  (:require [engine.args :as a]
+            [engine.game :as game]
             [engine.settings :as settings]
             [clojure.string :as str]
             [engine.ctx :as ctx]
@@ -11,12 +12,12 @@
             [engine.perception :as perception]
             [engine.perception.store :as store]))
 
-(def settings
-  {::glance-ahead {:default 4 :type :number :min 0 :doc "How far ahead a level look takes in, in blocks."}
-   ::glance-near {:default 1.5 :type :number :min 0 :doc "How far ahead the look down at the floor takes in, in blocks."}
-   ::dark-light {:default 8 :type :int :min 0 :max 15
+(a/defargs settings
+  {::glance-ahead {:default 4 :spec (a/num-in 0 nil) :doc "How far ahead a level look takes in, in blocks."}
+   ::glance-near {:default 1.5 :spec (a/num-in 0 nil) :doc "How far ahead the look down at the floor takes in, in blocks."}
+   ::dark-light {:default 8 :spec (a/int-in 0 15)
                  :doc "A feet cell under this effective light is dark: hostiles spawn and walk in from it."}
-   ::toss-reach {:default 10 :type :number :min 0 :doc "Blocks within which an item entity counts as the body's toss."}})
+   ::toss-reach {:default 10 :spec (a/num-in 0 nil) :doc "Blocks within which an item entity counts as the body's toss."}})
 
 (defn glance-ahead [] (settings/get settings ::glance-ahead))
 (defn glance-near [] (settings/get settings ::glance-near))
