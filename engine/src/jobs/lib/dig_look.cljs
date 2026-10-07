@@ -46,3 +46,17 @@
       (let [n (add cell d)]
         (when (unknown? (:primitives c) n) (await (look-at! c n))))
       (recur (rest ds)))))
+
+(def settle-wait-ms "One wait while a flow delay runs (wait-settled!)." 500)
+
+(def settle-waits "Most waits of wait-settled!." 6)
+
+(defn ^:async wait-settled!
+  "settle! for a job that holds still while it runs: waits (act :wait) until the flow delay since the last dig has passed
+  and the cut was looked at again, at most settle-waits times. Truthy while settle! still asks for more."
+  [c cut]
+  (loop [i 0]
+    (when (< i settle-waits)
+      (when (await (settle! c cut))
+        (await (ctx/act c :wait #js {:ms settle-wait-ms :why "letting what the dig opened settle"}))
+        (recur (inc i))))))

@@ -6,6 +6,7 @@
             [jobs.lib.tidy :as tidy]
             [engine.ctx :as ctx]
             [jobs.lib.shelter :as sh]
+            [jobs.lib.solid :as solid]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]))
 
@@ -190,6 +191,27 @@
 (def neighbours [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])
 
 (defn shift [{:keys [x y z]} [dx dy dz]] {:x (+ x dx) :y (+ y dy) :z (+ z dz)})
+
+(def rock-depth "How far behind a seen solid face a cell the body has not sensed is taken for rock." 3)
+
+(defn rock-name
+  "The block name at cell as a player reads rock: what the body sees or remembers, else \"stone\" for a loaded cell it has
+  not sensed when a seen solid block lies behind it within rock-depth cells along some axis and no neighbour is seen
+  open (an open neighbour would have shown it). nil when it is not loaded or no seen face is near. The shelter plans
+  (pit, pocket, niche) read the rock they dig through this way, then dig to see (jobs.lib.dig-look)."
+  [p cell]
+  (or (u/seen-name p cell)
+      (when (some-> (u/sensed p cell) .-unknown)
+        (let [name-at (fn [d k] (u/seen-name p (shift cell (mapv #(* k %) d))))]
+          (when (and (every? #(or (nil? %) (solid/solid? %)) (map #(name-at % 1) neighbours))
+                     (some (fn [d] (some solid/solid? (take 1 (remove nil? (map #(name-at d %) (range 1 (inc rock-depth)))))))
+                           neighbours))
+            "stone")))))
+
+(defn rock-solid?
+  "Whether cell is solid rock as the body reads it (rock-name)."
+  [p cell]
+  (solid/solid? (rock-name p cell)))
 
 (defn room-cells
   "The cells reachable from the feet cell through cells that are not room-wall? (six neighbours, the cell plug counted

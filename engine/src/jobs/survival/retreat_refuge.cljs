@@ -11,8 +11,10 @@
             [jobs.lib.ledger :as ledger]
             [jobs.lib.pace :as pace]
             [jobs.lib.danger :as danger-q]
+            [jobs.lib.dig-look :as look]
             [jobs.lib.reach :as reach]
             [jobs.lib.shelter :as sh]
+            [jobs.lib.solid :as solid]
             [jobs.lib.threats :as threats]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.tools :as tools]
@@ -168,20 +170,21 @@
 
 (defn pit-plan
   "{:roof :target-y} for a pit dug down from feet and plugged over the head (dig-cells/dig-plan: 2 deep under a cell with
-  a solid side, else 3), or nil: every cell to dig solid, no fluid in or beside it, harvestable with what is carried,
+  a solid side, else 3), or nil: every cell to dig solid (rock the body has not looked into reads stone,
+  dig-cells/rock-name), no fluid in or beside it, harvestable with what is carried,
   solid under the bottom, and a block to plug with carried or dug."
   [c feet]
   (let [p (:primitives c)
         blocks (:blocks (:args c))
         {:keys [roof depth] :as plan} (dig-cells/dig-plan p feet)
         cells (when plan (map #(update feet :y - %) (range 1 (inc depth))))
-        names (map #(u/seen-name p %) cells)]
+        names (map #(dig-cells/rock-name p %) cells)]
     (when (and plan
-               (every? #(sh/solid-at? p %) cells)
+               (every? #(dig-cells/rock-solid? p %) cells)
                (not-any? dig-cells/hazards names)
                (not-any? #(dig-cells/lateral-fluid p %) cells)
                (every? #(tools/can-harvest? p %) names)
-               (sh/solid-at? p (update feet :y - (inc depth)))
+               (dig-cells/rock-solid? p (update feet :y - (inc depth)))
                (or (lb/pick c blocks) (some (set blocks) (map #(get drop-of % %) names))))
       {:roof roof :target-y (- (:y feet) depth)})))
 
@@ -208,13 +211,19 @@
         walls (concat [(at -1) (at 2)]
                       (for [c [lo hi] [sx sz] dig-cells/sides :when (not= [sx sz] [(- dx) (- dz)])]
                         (assoc c :x (+ (:x c) sx) :z (+ (:z c) sz))))
-        names (map #(u/seen-name p %) [lo hi])]
-    (when (and (every? #(sh/solid-at? p %) (concat [lo hi] walls))
+        names (map #(dig-cells/rock-name p %) [lo hi])]
+    (when (and (every? #(dig-cells/rock-solid? p %) (concat [lo hi] walls))
                (not-any? dig-cells/hazards names)
                (not-any? #(dig-cells/lateral-fluid p %) [lo hi])
                (every? #(tools/can-harvest? p %) names)
                (or (lb/pick c blocks) (some (set blocks) (map #(get drop-of % %) names))))
       [lo hi])))
+
+(defn fluid-shown?
+  "Whether the body sees fluid in a dug cell or beside, over or under it."
+  [p cell]
+  (boolean (or (dig-cells/wet? p cell) (dig-cells/lateral-fluid p cell)
+               (dig-cells/wet? p (update cell :y inc)) (dig-cells/wet? p (update cell :y dec)))))
 
 (defn ^:async pocket!
   "Dig a side pocket (feet and head cell beside the body, closed on every other side), collecting the blocks, and step
@@ -232,11 +241,14 @@
               ;; raw moveTo kept: a step into the body's own pocket, as the pit's drop; the planner has no standable goal there.
               (await (ctx/act c :moveTo (clj->js {:pos (first cells) :range 0.5})))
               :again)
-          (let [_ (await (tools/equip-for! c (u/seen-name p cell) {:fast true}))
+          (let [_ (await (tools/equip-for! c (dig-cells/rock-name p cell) {:fast true}))
                 r (await (tidy/dig! c cell true))]
             (when (= "dug" (.-status r))
+              (ctx/update-mem! c assoc :dug-at (ctx/now c))
+              (await (look/see-round! c [(:x cell) (:y cell) (:z cell)]))
+              (await (look/wait-settled! c [[(:x cell) (:y cell) (:z cell)]]))
               (await (dig-cells/collect-drops! c (:blocks (:args c)) (.-drops r)))
-              (recur more))))))))
+              (when-not (fluid-shown? p cell) (recur more)))))))))
 
 ;; ------------------------------------------------------------------ up a pillar or down a pit
 
@@ -315,15 +327,21 @@
   (let [p (:primitives c)
         blocks (:blocks (:args c))
         {:keys [x y z]} (sh/feet p)
-        below {:x x :y (dec y) :z z}]
+        below {:x x :y (dec y) :z z}
+        _ (when (and (look/unknown? p [x (dec y) z]) (> y target-y)) (await (look/look-at! c [x (dec y) z])))]
     (cond
       (not (and (= x (:x roof)) (= z (:z roof)))) (await (abandon-refuge! c))
       (<= y target-y) (await (plug! c refuge))
-      (sh/solid-at? p below)
-      (let [_ (await (tools/equip-for! c (u/seen-name p below) {:fast true}))
+      (dig-cells/rock-solid? p below)
+      (let [_ (await (tools/equip-for! c (dig-cells/rock-name p below) {:fast true}))
             r (await (tidy/dig! c below true))]
         (if (= "dug" (.-status r))
-          (do (await (dig-cells/collect-drops! c blocks (.-drops r))) :again)
+          (do (ctx/update-mem! c assoc :dug-at (ctx/now c))
+              (await (look/see-round! c [x (dec y) z]))
+              (await (look/wait-settled! c [[x (dec y) z]]))
+              (if (or (fluid-shown? p below) (not (solid/solid? (u/block-name-or p {:x x :y (- y 2) :z z} "stone"))))
+                (await (abandon-refuge! c))
+                (do (await (dig-cells/collect-drops! c blocks (.-drops r))) :again)))
           (await (abandon-refuge! c))))
       :else
       ;; raw moveTo kept: a drop into the body's own pit, as dig-in's descent; the planner has no standable goal there.

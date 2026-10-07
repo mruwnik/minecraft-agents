@@ -120,3 +120,20 @@
           (is (= [[0 64 0] [0 63 0] [0 62 0]] (digs p)))
           (is (= 62 (feet-y p)))
           (is (empty? (failed s))))))))
+
+(deftest fluid-that-flows-into-the-dug-cell-is-seen-and-the-body-does-not-step-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (hover-over-digs! (await (see-surface! (sensing {:blocks ground}))))
+              _ (.override (.-world p) "dig"
+                           (fn ^:async f [token a impl]
+                             (let [pos (.-pos (.self p))
+                                   at [(.-x pos) (.-y pos) (.-z pos)]
+                                   r (await (impl token a))]
+                               (fake/swap-self! p assoc :pos at)
+                               (when (= 63 (.-y (.-pos a))) (fake/set-block! p [0 63 0] "water"))
+                               r)))
+              s (await (tick-out! (setup p 'jobs.survival.dig-in {})))]
+          (is (= 64 (feet-y p)) "the body stays over the flooded hole")
+          (is (re-find #"water" (str (:text (first (failed s)))))))))))

@@ -139,27 +139,27 @@
     (when (some #(look/unknown? (:primitives c) %) cells)
       (await (look/look-at! c [x y z])))))
 
-(def settle-wait-ms "One wait while a flow delay runs (look/settle!), at most settle-waits of them." 500)
-
-(def settle-waits 6)
-
 (defn ^:async hole-round
   "The cell below the feet is dug and the body is about to walk into it (for the drops or to descend): looks at the cell
-  under it. :done (a :no-floor stop) when that is seen not solid, else nil once the flow delay has passed and the
-  cut was looked at again (look/settle!)."
+  under it. :done (a :no-floor or :fluid-adjacent stop) when that is seen not solid or fluid shows in or beside the
+  hole, else nil once the flow delay has passed and the
+  cut was looked at again (look/wait-settled!)."
   [c {:keys [x y z]}]
   (let [p (:primitives c)
         under-cell [x (- y 2) z]
+        hole {:x x :y (dec y) :z z}
         _ (when (look/unknown? p under-cell) (await (look/look-at! c under-cell)))
         under (u/block-name-or p {:x x :y (- y 2) :z z} "stone")]
-    (if (solid/solid? under)
-      (loop [i 0]
-        (when (and (< i settle-waits) (await (look/settle! c [[x (dec y) z]])))
-          (await (ctx/act c :wait #js {:ms settle-wait-ms :why "letting what the dig opened settle"}))
-          (recur (inc i))))
+    (cond
+      (not (solid/solid? under))
       (do (remember-failed-site! c :no-floor)
           (ctx/emit! c :dig_in_failed :warn {:text (str under " under the hole; not stepping into it")})
-          :done))))
+          :done)
+      (or (dig-cells/wet? p hole) (dig-cells/lateral-fluid p hole))
+      (do (remember-failed-site! c :fluid-adjacent)
+          (ctx/emit! c :dig_in_failed :warn {:text (str (or (u/seen-name p hole) "fluid") " in or beside the hole; not stepping into it")})
+          :done)
+      :else (await (look/wait-settled! c [[x (dec y) z]])))))
 
 (defn ^:async descend-round
   "One step down toward the pit: dig the block below the feet, look at what the dig laid open, collect what it dropped,

@@ -3,6 +3,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.child :as child]
+            [jobs.lib.dig-look :as dl]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.look :as look]
             [jobs.lib.result :as result]
@@ -24,7 +25,9 @@
   Needs a tool that harvests the face (a pickaxe for stone): :fetch (default true; jobs.lib.fetch) runs jobs.items.get-tool
   for it, else, or when that fails, it stops :no-tool.
   Declines (waiting) with :day or :already-sealed. Ends done {:pos :door [feet head cells plugged]} with a :shelter entry {:pos :door} (jobs.survival.dig-in-leave/leave! digs
-  the door out by day), or stopped :no-site, :no-tool, :refused (every site would dig or plug another's zone, claim or plan footprint), :unreachable, :dig-failed, :no-blocks, :place-failed or :no-progress (over max-steps rounds).
+  the door out by day), or stopped :no-site, :no-tool, :refused (every site would dig or plug another's zone, claim or plan footprint), :unreachable, :dig-failed, :no-blocks, :place-failed, :no-progress (over max-steps rounds), or :fluid / :open-shell (what a dug cell
+  laid open: fluid in or beside the niche, a shell cell that is not solid). Rock the body has not looked into reads stone
+  (dig-in-cells/rock-name); after each dig it looks at the cells laid open and waits a lava flow delay.
   Events: dig-niche.sealed (info).")
 
 (def args
@@ -71,7 +74,7 @@
   and not falling, every shell cell solid, dry and not a falling block."
   ([p f dir] (niche-ok? p f dir true))
   ([p f dir need-tool?]
-  (let [name #(u/seen-name p %)
+  (let [name #(dig-cells/rock-name p %)
         solid? #(solid/solid? (name %))]
     (and (solid? (at f dir 0 0 -1)) (not (solid? f))
          (not (solid? (at f dir -1 0 0))) (not (solid? (at f dir -1 0 1))) (not (solid? (at f dir 0 0 1)))
@@ -139,7 +142,7 @@
   opening), :walk-to-face, :walk-in, [:plug cell] or :sealed."
   [p {:keys [stand dir]}]
   (let [feet (sh/feet p)
-        solid (first (filter #(sh/solid-at? p %) (dug-cells stand dir)))
+        solid (first (filter #(dig-cells/rock-solid? p %) (dug-cells stand dir)))
         open (remove #(sh/solid-at? p %) (door-cells stand dir))]
     (cond
       (and (= feet (at stand dir 2 0 0)) (not (sh/solid-at? p (at stand dir 2 0 1))))
@@ -150,8 +153,17 @@
 (defn tool-wait
   "The :no-tool wait of the first cell of the site's niche no carried tool harvests, nil when none."
   [p {:keys [stand dir]}]
-  (when-let [cell (first (remove #(tools/can-harvest? p (u/seen-name p %)) (dug-cells stand dir)))]
-    {:reason :no-tool :block (u/seen-name p cell)}))
+  (when-let [cell (first (remove #(tools/can-harvest? p (dig-cells/rock-name p %)) (dug-cells stand dir)))]
+    {:reason :no-tool :block (dig-cells/rock-name p cell)}))
+
+(defn shown-stop
+  "{:reason :text} when what the body sees of the site rules the niche out now: fluid in or round it (a dug cell lays
+  open what lay behind it), or a shell cell seen not solid; nil when nothing shows."
+  [p {:keys [stand dir]}]
+  (if-let [wet (first (filter #(dig-cells/wet? p %) (concat (dug-cells stand dir) (shell-cells stand dir))))]
+    {:reason :fluid :text (str (u/seen-name p wet) " in or beside the niche")}
+    (when-let [open (first (filter #(some-> (u/seen-name p %) (as-> n (not (solid/solid? n)))) (shell-cells stand dir)))]
+      {:reason :open-shell :text (str (u/seen-name p open) " in the shell of the niche")})))
 
 (defn fail! [c reason text]
   (let [site (:site (ctx/mem c))]
@@ -169,10 +181,14 @@
 
 (defn ^:async dig-step! [c cell]
   (let [p (:primitives c)
-        _ (await (tools/equip-for! c (u/seen-name p cell) {:fast true}))
+        _ (await (tools/equip-for! c (dig-cells/rock-name p cell) {:fast true}))
         r (await (tidy/dig! c cell))]
     (if (= "dug" (.-status r))
-      (do (await (dig-cells/collect-drops! c (:blocks (:args c)) (.-drops r))) :again)
+      (do (ctx/update-mem! c assoc :dug-at (ctx/now c))
+          (await (dl/see-round! c [(:x cell) (:y cell) (:z cell)]))
+          (await (dl/wait-settled! c [[(:x cell) (:y cell) (:z cell)]]))
+          (await (dig-cells/collect-drops! c (:blocks (:args c)) (.-drops r)))
+          :again)
       (fail! c :dig-failed (str "cannot dig the niche: " (.-status r))))))
 
 (defn ^:async plug-step! [c cell]
@@ -212,21 +228,24 @@
             w (fail! c :no-tool (str "no tool for the " (:block w) " of the hillside"))
             :else (fail! c :no-site "no hillside or wall to cut a niche into"))))
       (let [_ (ctx/update-mem! c assoc :site site)
+            shown (shown-stop p site)
             [what cell] (let [s (stage p site)] (if (vector? s) s [s]))]
-        (case what
-          :walk-to-face (let [r (await (go! c :face (:stand site)))]
-                          (case r
-                            :failed (fail! c :unreachable "cannot walk to the hillside")
-                            :continue :continue
-                            :again))
-          :dig (await (dig-step! c cell))
-          :walk-in (let [r (await (go! c :in (at (:stand site) (:dir site) 2 0 0)))]
-                     (case r
-                       :failed (fail! c :unreachable "cannot step into the niche")
-                       :continue :continue
-                       :again))
-          :plug (await (plug-step! c cell))
-          :sealed (seal! c site))))))
+        (if shown
+          (fail! c (:reason shown) (:text shown))
+          (case what
+            :walk-to-face (let [r (await (go! c :face (:stand site)))]
+                            (case r
+                              :failed (fail! c :unreachable "cannot walk to the hillside")
+                              :continue :continue
+                              :again))
+            :dig (await (dig-step! c cell))
+            :walk-in (let [r (await (go! c :in (at (:stand site) (:dir site) 2 0 0)))]
+                       (case r
+                         :failed (fail! c :unreachable "cannot step into the niche")
+                         :continue :continue
+                         :again))
+            :plug (await (plug-step! c cell))
+            :sealed (seal! c site)))))))
 
 (defn ^:async round
   "Cut the niche and plug it (see doc), one step at a time with a timer between; :continue (a child waits on the
