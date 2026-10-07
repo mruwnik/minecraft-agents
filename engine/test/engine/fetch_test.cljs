@@ -834,6 +834,18 @@
           (is (pos? (get (inv s) "oak_sapling" 0)))
           (is (seq (calls s "dig")) "a leaf was broken"))))))
 
+(deftest plant-sapling-without-a-chest-breaks-seen-leaves-for-the-sapling-then-plants
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [ground {"0,63,4" "andesite" "1,63,4" "andesite"}
+              s (start (assoc (update (bare []) :blocks merge ground leaf-blocks) :drops {"oak_leaves" "oak_sapling"}) [own-zone])]
+          (core/submit! (:eng s) (list 'jobs.forestry.plant-sapling {:at sapling-spot :species "oak"}) {})
+          (await (run-ticks s 120))
+          (is (empty? (listed s)) "the job ended")
+          (is (seq (calls s "dig")) "a leaf was broken")
+          (is (= "oak_sapling" (block-at s 4 64 3))))))))
+
 (deftest obtain-sapling-waits-no-source-without-leaves-seen
   (async done
     (tu/run-async done
