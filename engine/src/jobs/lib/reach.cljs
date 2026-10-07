@@ -564,7 +564,9 @@
          (or (and (solid? (dec x) y z) (solid? (inc x) y z) (solid? (dec x) (inc y) z) (solid? (inc x) (inc y) z))
              (and (solid? x y (dec z)) (solid? x y (inc z)) (solid? x (inc y) (dec z)) (solid? x (inc y) (inc z)))))))
 
-(def band-distance "Blocks a heard mob's band stands for when a maths needs a place." {:near 4 :far 16})
+(def band-distance
+  "Blocks a heard mob's band stands for when a maths needs a place: half the near band's edge, twice it."
+  {:near (/ obs/near-band 2) :far (* obs/near-band 2)})
 
 (defn rough-pos
   "The place a remembered mob entry stands for: its :pos, else the point its band away from :from toward its

@@ -5,6 +5,8 @@
             [engine.registry :as registry]
             [engine.core :as core]
             [jobs.lib.combat :as combat]
+            [jobs.survival.recover-drops :as recover-drops]
+            [jobs.survival.respond-to-hostile :as respond-to-hostile]
             [jobs.lib.cost :as cost]
             [engine.events :as events]
             [engine.fake :as fake]
@@ -808,3 +810,33 @@
           (await (core/tick! eng))
           (await (core/tick! eng))
           (is (= :hostile-near (:reflex (peek (reflex-fired seen)))) "fired again, fresh, as soon as the fire is out"))))))
+
+;; ------------------------------------------------------- heard mobs: rough spot only
+
+(defn heard-zombie
+  "A zombie 3 blocks east that is only heard (its exact place is 3 away; its rough spot, the near band, is 4)."
+  []
+  (zombie 7 3 0))
+
+(deftest fight-back-never-swings-at-or-walks-to-a-heard-mob
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory sword :entities [(assoc (heard-zombie) :visible false)]})]
+          (core/submit! eng fight {})
+          (is (nil? (core/tick! eng)) "only a heard mob: the job declines, the retreat takes over")
+          (is (zero? (count (calls p "attack"))) "no swing at a mob only heard")
+          (is (zero? (count (tu/walked-to eng))) "no walk to its exact place"))))))
+
+(deftest respond-weighs-a-heard-mob-by-its-rough-distance
+  (let [p (tu/fake-on-floor {:floor flight-floor :entities [(assoc (heard-zombie) :visible false)]})
+        e (first (combat/hostiles p 8))]
+    (is (= 4 (:distance (respond-to-hostile/mob-of p nil e))) "the near band stands for 4 blocks, not the exact 3")))
+
+(deftest recover-drops-logs-a-heard-danger-at-its-rough-spot
+  (let [p (tu/fake-on-floor {:floor flight-floor :entities [(assoc (heard-zombie) :visible false)]})
+        e (first (combat/hostiles p 8))
+        f (recover-drops/danger-fields p e)
+        [bx] (let [pos (.-pos (.self p))] [(.-x pos)])]
+    (is (= "zombie" (:mob f)))
+    (is (= (+ bx 4) (:x (:mob-pos f))) "the rough spot 4 east, not the exact 3")))

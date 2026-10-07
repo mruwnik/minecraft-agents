@@ -1,12 +1,15 @@
 (ns jobs.survival.fight-back
   (:require [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
+            [jobs.lib.reach :as reach]
             [jobs.lib.util :as u]
             [jobs.lib.watch :as watch]
             [jobs.lib.near :as near]))
 
 (def doc
   "Equip the best weapon, walk up to the nearest hostile within :range and hit it, at most one swing per :attack-gap-ms.
+  Only a hostile the body has seen is fought: one only heard is judged by its direction and band (jobs.lib.reach), never
+  walked to or hit; the body turns toward it and the job declines, so the retreat takes over.
   A hostile more than :leash blocks from the point the job started at is not chased (the job declines, so the retreat takes over).
   Declines when health is below :min-health.
   Ends when no hostile is within :range, with the result {:killed [ids]}.
@@ -44,19 +47,20 @@
   (<= (u/dist (start-of c) (u/pos-of (.-pos e))) (:leash (:args c))))
 
 (defn in-range
-  "The hostiles within :range (ranged ones within :ranged-range): the visible
+  "The hostiles within :range (ranged ones within :ranged-range, a heard one by its band): the visible
   ones nearest first, then the hidden melee ones (a ranged mob without a line of fire is no danger)."
   [c]
   (let [{:keys [range ranged-range skip]} (:args c)
-        dead (into (set skip) (:killed (ctx/mem c)))]
-    (->> (combat/hostiles (:primitives c) range {:ranged-radius (max range ranged-range) :sight :prefer})
-         (remove #(contains? dead (.-id %)))
-         (remove #(and (combat/ranged? %) (not (.-visible %)))))))
+        dead (into (set skip) (:killed (ctx/mem c)))
+        all (->> (reach/known-hostiles (:primitives c) range {:ranged-radius (max range ranged-range)})
+                 (remove #(contains? dead (.-id %)))
+                 (remove #(and (combat/ranged? %) (not (.-visible %)))))]
+    (into (filterv #(.-visible %) all) (remove #(.-visible %)) all)))
 
 (defn targets
-  "The hostiles in range, within the leash and not given up on, nearest first."
+  "The hostiles in range the body has seen, within the leash and not given up on, nearest first."
   [c]
-  (->> (in-range c) (filter #(in-leash? c %)) (remove #(given-up? c %))))
+  (->> (in-range c) (filter reach/seen-only?) (filter #(in-leash? c %)) (remove #(given-up? c %))))
 
 (defn check [c]
   (and (>= (.-health (.self (:primitives c))) (:min-health (:args c)))
@@ -119,7 +123,10 @@
         last-attack (:last-attack (ctx/mem c))]
     (when-not (:start (ctx/mem c)) (ctx/update-mem! c assoc :start (u/self-pos c)))
     (cond
-      (nil? target) (if (empty? (in-range c)) :done :declined)
+      (nil? target) (if-let [heard (first (in-range c))]
+                      (do (await (ctx/act c :look (let [{:keys [x y z]} (reach/mob-pos p heard)] #js {:pos #js {:x x :y (+ 1 y) :z z}})))
+                          :declined)
+                      :done)
       (and last-attack (< (- (ctx/now c) last-attack) attack-gap-ms)) (do (await (watch/watch! c {})) :continue)
       :else
       (do (await (combat/equip-best! c (combat/best-weapon p weapons)))

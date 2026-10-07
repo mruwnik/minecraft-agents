@@ -250,12 +250,16 @@
   [c]
   (reach/nearest-danger (:primitives c) (:danger-radius (:args c)) {} {}))
 
+(defn danger-fields
+  "{:mob :mob-pos} of the danger m: its place when seen, else the rough spot its band gives (jobs.lib.reach/mob-pos)."
+  [p m]
+  {:mob (.-name m) :mob-pos (reach/mob-pos p m)})
+
 (defn decline-danger!
   "End :declined for the danger m: its name and place are in the event."
   [c m]
-  (let [pos (u/pos-of (.-pos m))
-        mob (.-name m)]
-    (decline! c :danger (str mob " at " (pr-str pos) " within " (:danger-radius (:args c)) " blocks") {:mob mob :mob-pos pos})))
+  (let [{:keys [mob mob-pos] :as fields} (danger-fields (:primitives c) m)]
+    (decline! c :danger (str mob " at " (pr-str mob-pos) " within " (:danger-radius (:args c)) " blocks") fields)))
 
 (defn ^:async wait-while!
   "Hold still (reason) while (pending?) is true: nil when it clears, else :declined for a danger within

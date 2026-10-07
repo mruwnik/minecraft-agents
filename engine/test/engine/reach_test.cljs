@@ -240,3 +240,17 @@
   (let [far (assoc heard-zed :pos {:x 0.5 :y 64 :z 20.5} :distance 20)]
     (is (= [8] (danger-ids {} far)) "heard far: 16 blocks, inside radius 16")
     (is (= [] (danger-ids {} (assoc far :seen true :heard false))) "seen: 20 blocks, outside")))
+
+(def glass-box
+  "Glass round the cell 7 blocks east of the body (a mob inside cannot walk out)."
+  (into {"7,66,0" "glass" "7,63,0" "glass"}
+        (for [x [6 7 8] z [-1 0 1] y [64 65] :when (not (and (= x 7) (= z 0)))] [(str x "," y "," z) "glass"])))
+
+(def boxed-skel {:id 1 :name "skeleton" :kind "hostile" :pos {:x 7.5 :y 64 :z 0.5}})
+
+(deftest a-heard-ranged-mob-in-a-glass-box-counts-as-a-danger-in-the-open
+  (is (= [1] (danger-ids glass-box (assoc boxed-skel :seen false :heard true)))
+      "heard only: its rough spot is judged, not the box it stands in"))
+
+(deftest a-seen-ranged-mob-in-a-glass-box-is-no-danger
+  (is (= [] (danger-ids glass-box (assoc boxed-skel :seen true :heard false)))))

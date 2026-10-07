@@ -59,11 +59,11 @@
     (ctx/update-mem! c assoc :logged true)))
 
 (defn mob-of
-  "What fight-damage needs of hostile e: its name, distance and the hits fight-back has landed on it."
-  [c e]
-  (let [struck (get-in (ctx/mem c) [:children :fight :struck (.-id e)])]
-    (cond-> {:name (.-name e) :distance (.-distance e) :hits (:hits struck 0)}
-      (number? (:health struck)) (assoc :health (:health struck)))))
+  "What fight-damage needs of hostile e: its name, distance (jobs.lib.reach/mob-distance: a heard one by its band) and
+  the hits fight-back has landed on it (struck, its :struck entry, or nil)."
+  [p struck e]
+  (cond-> {:name (.-name e) :distance (reach/mob-distance p e) :hits (:hits struck 0)}
+    (number? (:health struck)) (assoc :health (:health struck))))
 
 (defn ^:async respond [c near]
   (let [{:keys [reserve weapons] :as a} (:args c)
@@ -74,7 +74,7 @@
                                :reserve reserve
                                :damage (cost/fight-damage {:weapon (combat/best-weapon p weapons)
                                                            :equipment (cost/equipment-of (.-equipment self))
-                                                           :mobs (map #(mob-of c %) near)})})]
+                                                           :mobs (map #(mob-of p (get-in (ctx/mem c) [:children :fight :struck (.-id %)]) %) near)})})]
     (log-encounter! c (first near) decision)
     (ctx/update-mem! c assoc :decision decision)
     (let [result (await (run-child c decision a))]

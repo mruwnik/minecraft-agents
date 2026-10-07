@@ -906,7 +906,7 @@
             (if (= :blocked r)
               (await (stuck "the way away from the hostile is blocked"))
               (let [gap (or (some->> (first (near-hostiles c)) (reach/mob-distance p)) (:ranged-radius (:args c)))]
-                    (ctx/update-mem! c #(-> % (dissoc :tried) (note-gap gap)))
+                (ctx/update-mem! c #(-> % (dissoc :tried) (note-gap gap)))
                 :again))))))))
 
 (defn ^:async round
