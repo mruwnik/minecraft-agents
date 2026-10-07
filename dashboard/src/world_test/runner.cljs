@@ -690,10 +690,21 @@
                              :else (.then (sleep 1000) #(attempt (dec retries)))))))))]
     (attempt 3)))
 
+(defn hold-phase!
+  "Resolves to ok? once this process holds the time lock, the first holder has put the world in the phase (first-set!,
+  resolving to ok?) and start! (the body start) has run. The body starts under the lock, so it never comes up while
+  another runner's body sleeps (its sleep-status would make a night job log out for the whole case)."
+  [{:keys [acquire! first-set! start!]}]
+  (.then (acquire!)
+         (fn [held]
+           (.then (if (:first? held) (first-set!) (js/Promise.resolve true))
+                  (fn [ok] (.then (start!) (fn [_] ok)))))))
+
 (defn run-case!
-  "One run of case c on plot i (leased by the caller before the body starts); resolves to a result map. register: the entries to put on the body once it stands in
+  "One run of case c on plot i (leased by the caller); start! (a thunk to a promise) starts or keeps the body once the time
+  lock is held. Resolves to a result map. register: the entries to put on the body once it stands in
   the built plot (the body was just started with none), nil when it keeps the register it has."
-  [opts c i run register]
+  [opts c i run register start!]
   (let [grid (f/case-grid c)
         origin (f/plot-origin grid i)
         rc (f/resolve-tags c origin)
@@ -701,19 +712,19 @@
         plan-files (atom [])
         t-start (atom nil)
         pre-register (atom nil)
-        _ (note-last-plot! opts origin grid)
         result (fn [m] (merge {:id (:id c) :run run :plot i :origin origin :elapsed-s (/ (- (js/Date.now) started) 1000)} m))]
     (-> (let [phase (lock-phase opts rc)]
-          (.then (acquire-time-lock! phase (str (:id c) (if (= :any phase) " runs under the current time" " depends on the time of day")))
-                 (fn [held]
-                   (if-not (:first? held)
-                     true
-                     (-> (if (= :any phase) true (time-ok! opts (if (lease/time-phase rc) rc (assoc rc :time :day))))
-                         (.then (fn [ok]
-                                  (if (or (not ok) (= :any phase))
-                                    ok
-                                    (.then (confirm-phase! (if (#{:night :night-x} phase) :night :day)) (fn [_] ok)))))
-                         (.then (fn [ok] (mark-phase-set!) ok)))))))
+          (hold-phase!
+           {:acquire! #(acquire-time-lock! phase (str (:id c) (if (= :any phase) " runs under the current time" " depends on the time of day")))
+            :first-set! (fn []
+                          (-> (if (= :any phase) true (time-ok! opts (if (lease/time-phase rc) rc (assoc rc :time :day))))
+                              (.then (fn [ok]
+                                       (if (or (not ok) (= :any phase))
+                                         ok
+                                         (.then (confirm-phase! (if (#{:night :night-x} phase) :night :day)) (fn [_] ok)))))
+                              (.then (fn [ok] (mark-phase-set!) ok))))
+            :start! start!}))
+        (.then (fn [ok] (note-last-plot! opts origin grid) ok))
         (.then (fn [ok]
                  (if-not ok
                    (result {:status :skipped :why (str "needs " (name (:time rc)) " (no --allow-time)")})
@@ -845,12 +856,12 @@
                                                              i (acquire-plot! (max from (:first-plot opts)) end)
                                                              memory (when (seq (:memory c))
                                                                       (f/memory-seed (:memory (f/resolve-tags c (f/plot-origin (f/case-grid c) i))) (js/Date.now)))]
-                                                         (-> (if (= :keep plan)
-                                                               (js/Promise.resolve nil)
-                                                               (-> (stop-body! opts)
-                                                                   (.then #(when-not (= :restart-keep plan) (reset-last-plot! opts)))
-                                                                   (.then #(start-body! opts register (= :restart-keep plan) memory))))
-                                                             (.then #(run-case! opts c i run (when-not (= :keep plan) register)))
+                                                         (-> (run-case! opts c i run (when-not (= :keep plan) register)
+                                                                        #(if (= :keep plan)
+                                                                           (js/Promise.resolve nil)
+                                                                           (-> (stop-body! opts)
+                                                                               (.then (fn [] (when-not (= :restart-keep plan) (reset-last-plot! opts))))
+                                                                               (.then (fn [] (start-body! opts register (= :restart-keep plan) memory))))))
                                                              (.then (fn [r] (report! r) (swap! results conj (assoc r :file (:file c))) (write-results! opts @results) (report-fixtures!)))
                                                              (.finally #(release-plot! i))))))))
                                          (js/Promise.resolve nil)

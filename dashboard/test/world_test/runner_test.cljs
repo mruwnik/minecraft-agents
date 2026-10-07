@@ -344,6 +344,21 @@
                (is (= {:first? true} res))
                (is (= ["waiting for time lock (day) held by 1 (x)"] @told))
                (done))))))
+
+(deftest the-body-starts-only-after-the-time-lock-is-held-and-the-phase-set
+  (let [calls (atom [])
+        io (fn [first?] {:acquire! (fn [] (swap! calls conj :acquire) (js/Promise.resolve {:first? first?}))
+                         :first-set! (fn [] (swap! calls conj :set) (js/Promise.resolve true))
+                         :start! (fn [] (swap! calls conj :start) (js/Promise.resolve nil))})]
+    (async done
+      (-> (r/hold-phase! (io true))
+          (.then (fn [ok] (is (true? ok)) (is (= [:acquire :set :start] @calls)) (reset! calls [])
+                   (r/hold-phase! (io false))))
+          (.then (fn [ok] (is (true? ok)) (is (= [:acquire :start] @calls)) (reset! calls [])
+                   (r/hold-phase! (assoc (io true) :acquire! #(js/Promise.reject (js/Error. "no rcon"))))))
+          (.catch (fn [e] (is (= "no rcon" (.-message e))) (is (= [] @calls))))
+          (.then done)))))
+
 (deftest a-poll-gap-far-over-the-poll-interval-is-a-stall
   (is (false? (r/stalled? 1000 1500)))
   (is (false? (r/stalled? 1000 (+ 1000 r/stall-gap-ms))))

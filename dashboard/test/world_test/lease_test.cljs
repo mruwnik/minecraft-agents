@@ -212,6 +212,49 @@
       (is (= (* n 12) (:done r)) (str "every case ran, seed " seed " n " n))
       (is (every? #{:day :night} (:sets r))))))
 
+(defn simulate-mixed
+  "Like simulate-runners with :day, :night, :night-x and :any cases, the first holder marking the phase set. Returns the
+  number of steps where holders conflicted (both phases, or a :night-x holder with another holder)."
+  [seed n cases]
+  (let [files (atom {}) alive (set (range 1 (inc n)))
+        dir (assoc (fake-share files alive) :guard (fn [f] (f)))
+        world (atom :day) conflicts (atom 0) done (atom 0)
+        kinds [:day :night :night-x :any]
+        st (atom (into {} (map (fn [p] [p {:todo (vec (take cases (map #(nth kinds (mod % 4)) (iterate (fn [x] (mod (+ (* x 7) 3) 11)) (+ p seed))))) :holding nil :seq nil :marked false}]) alive)))
+        rnd (atom seed)
+        next-rnd! (fn [] (swap! rnd #(mod (+ (* % 1103515245) 12345) 2147483648)) (quot @rnd 65536))]
+    (loop [steps 0]
+      (let [active (filter (fn [p] (let [s (@st p)] (or (seq (:todo s)) (:holding s)))) (sort alive))]
+        (when (and (seq active) (< steps 20000))
+          (let [p (nth active (mod (next-rnd!) (count active)))
+                {:keys [todo holding seq] :as s} (@st p)]
+            (cond
+              (and holding (not (:marked s)))
+              (do (l/mark-set dir p) (swap! st assoc-in [p :marked] true))
+              holding
+              (do (swap! files dissoc p) (swap! done inc)
+                  (swap! st assoc p {:todo (rest todo) :holding nil :seq nil :marked false}))
+              :else
+              (let [phase (first todo)
+                    sq (or seq steps)
+                    r (l/try-share dir p phase sq @world)]
+                (if (:held r)
+                  (do (when (:first? r) (reset! world (case phase :night-x :night :any @world phase)))
+                      (swap! st assoc p (assoc s :holding phase :seq sq)))
+                  (swap! st assoc p (assoc s :seq sq)))))
+            (let [held (filter #(= :hold (:state %)) (vals @files))]
+              (when (or (> (count (distinct (map :phase held))) 1)
+                        (and (some #(= :night-x (:phase %)) held) (> (count held) 1)))
+                (swap! conflicts inc)))
+            (recur (inc steps))))))
+    {:conflicts @conflicts :done @done}))
+
+(deftest mixed-day-night-exclusive-and-any-cases-never-conflict
+  (doseq [seed [1 2 3 4 5 6 7 8] n [2 3 8]]
+    (let [r (simulate-mixed seed n 12)]
+      (is (= 0 (:conflicts r)) (str "seed " seed " n " n))
+      (is (= (* n 12) (:done r)) (str "every case ran, seed " seed " n " n)))))
+
 (deftest the-time-is-set-only-when-a-phase-group-starts-so-each-set-is-logged-once
   (let [files (atom {10 (hold :day)})]
     (is (false? (:first? (l/try-share (fake-share files #{10 11}) 11 :day 5))) "joining a held phase sets nothing")))
