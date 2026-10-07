@@ -3,7 +3,7 @@
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
-            [jobs.lib.tidy :as tidy]
+            [jobs.lib.blocks :as blocks]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.lib.watch :as watch]
@@ -449,26 +449,25 @@
 (defn pos-map [pos] (zipmap [:x :y :z] pos))
 
 (defn ^:async dig-one!
-  "Dig the wrong block of the cell with the best carried tool after asking the access rules once more; a refusal is
+  "Dig the wrong block of the cell (a blocks.dig child) after asking the access rules once more; a refusal is
   booked, a failed dig counts a failure, a dug cell counts a dig (given up as :refilled when it keeps coming back)."
   [c {:keys [pos]}]
-  (let [p (:primitives c)
-        v (access/may-dig? (rules-input c) (pos-map pos))
+  (let [v (access/may-dig? (rules-input c) (pos-map pos))
         accept (set (:accept (:args c)))
-        judged (access/judge v accept)
-        n (u/block-name p (pos-map pos))]
+        judged (access/judge v accept)]
     (case judged
-      :ok (let [tool (tools/best-tool (map :name (u/inventory p)) n)]
-            (when (and tool (not= tool (.-held (.self p))))
-              (await (ctx/act c :equip #js {:item tool :dest "hand"})))
-            (let [status (.-status (await (tidy/dig! c (pos-map pos))))]
-              (case status
-                "dug" (ctx/update-mem! c #(let [m (update-in % [:digs pos] (fnil inc 0))]
-                                            (if (>= (get-in m [:digs pos]) (:give-up (:args c)))
-                                              (assoc-in m [:given-up pos] :refilled)
-                                              m)))
-                "missing" (ctx/update-mem! c count-fail pos :missing (:give-up (:args c)))
-                (ctx/update-mem! c count-fail pos :refused (:give-up (:args c))))))
+      :ok (let [outcome (await (blocks/dig-cell! c (pos-map pos)
+                                                 {:accept #{:fluid-adjacent :falling-block :under-feet}
+                                                  :ignore-zones? (boolean (:ignore-zones? (:args c)))
+                                                  :for-plan (:plan (:args c))}))]
+            (case outcome
+              :continue :continue
+              :dug (ctx/update-mem! c #(let [m (update-in % [:digs pos] (fnil inc 0))]
+                                         (if (>= (get-in m [:digs pos]) (:give-up (:args c)))
+                                           (assoc-in m [:given-up pos] :refilled)
+                                           m)))
+              :missing (ctx/update-mem! c count-fail pos :missing (:give-up (:args c)))
+              (ctx/update-mem! c count-fail pos :refused (:give-up (:args c)))))
       :refused (ctx/update-mem! c refuse pos (select-keys v [:reason :zone :plan :claim]))
       :hazard (ctx/update-mem! c refuse pos {:reason :hazard
                                              :hazards (vec (distinct (remove accept (map :reason (:hazards v)))))})
@@ -655,11 +654,12 @@
                            (do (await (place-one! c (first left)))
                                (recur (rest left))))))
                      :again)
-      (seq dig-near) (do (loop [left dig-near]
-                           (when (seq left)
-                             (await (dig-one! c (first left)))
-                             (recur (rest left))))
-                         :again)
+      (seq dig-near) (loop [left dig-near]
+                       (if (seq left)
+                         (if (= :continue (await (dig-one! c (first left))))
+                           :continue
+                           (recur (rest left)))
+                         :again))
       (seq todo) (await (walk-to! c cells (nearest todo)))
       (seq digs) (await (walk-to! c cells (nearest digs)))
       (seq (unseen cells given-up)) (await (walk-to! c cells (nearest (unseen cells given-up))))
