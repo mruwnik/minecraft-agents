@@ -17,8 +17,10 @@
     :reach blocks, else step sideways, at the feet's height, to the nearest column within :radius that does; else a go-to
     child to the nearest air-reaching surface within :air-radius (a failed target is not tried again); else dig up through
     a cap within 3 blocks over the head when it is natural (jobs.lib.escape/natural?), not protected and not sand or gravel,
-    one cell a pass, at most 3 digs (zones respected, trespass only as a last resort). Air is looked for only in the own
-    column and in cells the body has seen (perception memory), never through stone.
+    one cell a pass, at most 3 digs (zones respected, trespass only as a last resort). Kelp, seagrass and bubble columns
+    count as water. Air is looked for only in cells the body has seen or looked at (perception memory), never through
+    stone: it looks up the own column first, and when no block is seen over it (a dark column learns nothing) swims
+    up it at once; only a seen block over the own column sends the looks to the neighbour columns.
   - Enclosed (head cell holds a suffocating block, see jobs.lib.breath): step to a side cell with room
     to stand, once; then dig the head block, the block above it if solid, and step up.
   - Surfaced and still in water: each pass takes the first way left: swim to the nearest shore cell (land with its
@@ -101,8 +103,13 @@
          [dx dz])
        (sort-by (fn [[dx dz]] (+ (* dx dx) (* dz dz))))))
 
+(def swimmable
+  "Fluid and water plants a body swims through as water: kelp, seagrass and a bubble column (it pushes up or down; a
+  body that swims up in it still gets out, which beats digging it as a cap)."
+  #{"water" "kelp" "kelp_plant" "seagrass" "tall_seagrass" "bubble_column"})
+
 (defn passable-water-or-air? [name]
-  (or (breath/air? name) (= "water" name)))
+  (or (breath/air? name) (contains? swimmable name)))
 
 (defn surface-in-column
   "The feet cell in column x z, at or above fy and within reach, whose head
@@ -118,7 +125,7 @@
          (cond
            (not (and feet head (passable-water-or-air? feet))) nil
            (breath/air? head) {:x x :y y :z z}
-           (= "water" head) (recur (inc k))
+           (contains? swimmable head) (recur (inc k))
            :else nil))))))
 
 (defn nearest-air
@@ -220,15 +227,16 @@
           (range (inc (inc reach)))))
 
 (defn ^:async find-air!
-  "The nearest air target after looking: up the own column first, then once at each other column in radius (the first
-  cell not seen there); nil if none."
+  "The nearest air target after looking: up the own column first, then, only when a block is seen over the own column,
+  once at each other column in radius (the first cell not seen there); nil if none."
   [c pos]
   (let [{:keys [radius reach]} (:args c)
         p (:primitives c)
         fx (js/Math.floor (:x pos)) fy (js/Math.floor (:y pos)) fz (js/Math.floor (:z pos))]
     (await (look-column! c fx fz fy reach false))
     (or (nearest-air p pos radius reach)
-        (do (doseq [[dx dz] (rest (columns radius))]
+        (when-not (column-open? p fx fz fy reach)
+          (doseq [[dx dz] (rest (columns radius))]
               (await (look-column! c (+ fx dx) (+ fz dz) fy reach true)))
             (nearest-air p pos radius reach)))))
 

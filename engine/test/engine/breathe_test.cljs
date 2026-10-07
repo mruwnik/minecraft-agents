@@ -1026,3 +1026,61 @@
     (stub-seen! p (constantly false))
     (is (nil? (b/step-cell p pos 2 nil)) "never seen: none")
     (is (nil? (b/leg-target p pos pos [1 0] {:leg-length 12 :swim-range 96 :reach 10})))))
+
+;; ---------------------------------------------------------------- an open own column is swum first; unseen cells are not read
+
+(deftest a-dark-open-own-column-is-swum-without-looking-at-other-columns
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4} :blocks (capped-world "air")})
+              looks (atom [])]
+          (stub-seen! p (fn [[x y z]] (and (zero? x) (zero? z) (<= y 65))))
+          (.override (.-world p) "look" (fn [_ a _]
+                                          (swap! looks conj [(js/Math.floor (.. a -pos -x)) (js/Math.floor (.. a -pos -z))])
+                                          #js {:status "ok"}))
+          (await (one-run! eng (assoc defaults :radius 2 :air-radius 2)))
+          (is (some #{"swim"} (call-names p)) "swam up")
+          (is (every? #{[0 0]} @looks) "only the own column was looked at"))))))
+
+(deftest a-blocked-own-column-looks-at-the-neighbour-columns
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:inWater true :oxygen 4} :blocks (capped-world "obsidian")})
+              looks (atom [])]
+          (stub-seen! p (fn [[x y z]] (and (zero? x) (zero? z) (or (<= y 65) (= y 68)))))
+          (.override (.-world p) "look" (fn [_ a _]
+                                          (swap! looks conj [(js/Math.floor (.. a -pos -x)) (js/Math.floor (.. a -pos -z))])
+                                          #js {:status "ok"}))
+          (await (one-run! eng (assoc defaults :radius 2 :air-radius 1)))
+          (is (some #(not= [0 0] %) @looks) "a seen cap sends the look sideways"))))))
+
+(deftest a-kelp-column-is-swum-up-not-dug
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [blocks (merge (capped-world "air") {"0,65,0" "kelp_plant" "0,66,0" "seagrass" "0,67,0" "kelp"})
+              {:keys [eng p]} (setup {:self {:inWater true :oxygen 4} :blocks blocks})]
+          (await (one-run! eng cap-args))
+          (is (some #{"swim"} (call-names p)) "swam up through the plants"))))))
+
+(deftest a-bubble-column-is-water-for-the-air-search
+  (let [blocks (merge water-column {"0,65,0" "bubble_column" "0,66,0" "tall_seagrass"})
+        p (:p (setup {:self {:inWater true :oxygen 4} :blocks blocks}))]
+    (is (= {:x 0 :y 67 :z 0} (b/surface-in-column p 0 0 64 10)))))
+
+(deftest unseen-cells-are-not-side-land-or-shore-cells
+  (let [world {"1,64,0" "air" "1,65,0" "air" "1,63,0" "stone"
+               "0,64,0" "water" "0,65,0" "air" "0,63,0" "water" "0,62,0" "water"}
+        {:keys [p]} (setup {:self {:inWater true :oxygen 20 :pos {:x 0.5 :y 64 :z 0.5}} :blocks world})
+        self (.self p)
+        cell {:x 1 :y 64 :z 0}
+        shore {:x 1 :y 65 :z 0}]
+    (is (some? (b/side-cell p self)) "seen: a side cell")
+    (is (b/land-cell? p cell) "seen: land")
+    (is (some? (b/shore-cell? p shore)) "seen: shore")
+    (stub-seen! p (constantly false))
+    (is (nil? (b/side-cell p self)) "unseen: no side cell")
+    (is (not (b/land-cell? p cell)) "unseen: no land")
+    (is (not (b/shore-cell? p shore)) "unseen: no shore")))
