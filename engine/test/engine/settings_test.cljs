@@ -72,7 +72,8 @@
       (let [[events _] (load-with nil "{:jobs.demo/wait-ms \"x\" :jobs.demo/nope 1}")]
         (is (= 5000 (settings/get specs :jobs.demo/wait-ms)))
         (is (= #{:jobs.demo/wait-ms :jobs.demo/nope} (set (map :key events))))
-        (is (every? #(= :info (:level %)) events))))))
+        (is (every? #(= :info (:level %)) events))
+        (is (str/ends-with? (:text (first (filter #(= :jobs.demo/nope (:key %)) events))) ":jobs.demo/nope: unknown key; ignored"))))))
 
 (deftest an-unreadable-file-emits-one-info-and-keeps-the-lower-layer
   (settings/with-settings {}

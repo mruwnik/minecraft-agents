@@ -53,9 +53,9 @@
       :bad [values layers (conj events (bad-event file nil data))]
       (reduce-kv (fn [[values layers events] k v]
                    (let [spec (clojure.core/get specs k)
-                         why (if spec (spec-problem spec v) "an unknown key")]
+                         why (if spec (spec-problem spec v) :unknown)]
                      (if why
-                       [values layers (conj events (bad-event file k (str "must be " why (when spec (str ", got " (pr-str v))))))]
+                       [values layers (conj events (bad-event file k (if spec (str "must be " why ", got " (pr-str v)) "unknown key")))]
                        [(assoc values k v) (assoc layers k layer) events])))
                  [values layers events] data))))
 
