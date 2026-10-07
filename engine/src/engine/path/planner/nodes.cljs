@@ -228,7 +228,7 @@
         (let [drisk (if (pos? (.-n-dangers s)) (+ drisk (.dangerRisk s x y z dsec)) drisk)
               extra (if ^boolean (.-avoiding s) (.avoidCost s x y z move dsec drisk) 0)
               ddark (+ (if (some? (.-dark-at s)) (* (.-dark-factor s) dsec (.darkOf s x y z)) 0)
-                       (if (some? (.-tolls s)) (* dsec (or (.get ^js (.-tolls s) (cell-key x y z)) 0)) 0))]
+                       (if (some? (.-tolls s)) (* dsec (.tollOf s x y z)) 0))]
           (when-not (neg? extra)
             (let [key (.keyOf s x y z region)
                   slot (.findSlot s key (bit-and (.hashOf s x y z region) (dec (.-slots s))))
@@ -274,6 +274,11 @@
       (and (not (zero? (bit-and kinds AVOID-WATER))) (or (>= move MOVE-SWIM) ^boolean (.isWater s x y z))) true
       (and (not (zero? (bit-and kinds AVOID-OPEN))) (or (== move MOVE-OPEN) (pos? (.-move-open s)))) true
       :else false))
+
+  ;; the factor of its own seconds the caller's toll (options.tolls) adds to entering x,y,z, 0 for none
+  (tollOf [s x y z]
+    (let [f (.get ^js (.-tolls s) (cell-key x y z))]
+      (if (some? f) f 0)))
 
   ;; what entering x,y,z by `move` adds to its cost in a search for an alternative path: -1 refuses a move of a kind avoided;
   ;; a cell within 1 block of an earlier path costs avoid-factor times its own cost more
