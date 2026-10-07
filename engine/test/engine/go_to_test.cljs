@@ -226,6 +226,23 @@
               {:keys [p]} (await (go! {:blocks steps} {:pos [120 63 0] :drop-cost false :escalate false}))]
           (is (= 63 (js/Math.floor (second (at p)))) "a 1-block step-down is no drop"))))))
 
+(deftest go-to-refuses-bad-costs-with-a-reason
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [bad [{:swim-h -1} {:nope 1} [1]]]
+          (let [{:keys [eng p] :as s} (setup {:blocks flat})
+                out (atom :not-done)
+                eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent
+                                            (recording-parent out {:pos [6 64 0] :costs bad})))]
+            (core/submit! eng '(recording-parent) {})
+            (await (tick-out! eng 10))
+            (is (= {:status :stopped :arrived false :reason :bad-costs} (select-keys @out [:status :arrived :reason])) (pr-str bad))
+            (is (= [0 64 0] (at p)))
+            (is (= [:bad-costs] (mapv :reason (events-of s :refused))))))
+        (let [{:keys [out]} (await (go! {:blocks flat} {:pos [6 64 0] :costs {:swim-h 2}}))]
+          (is (= {:arrived true} @out)))))))
+
 (deftest go-to-refuses-a-bad-drop-cost-with-a-reason
   (async done
     (tu/run-async done

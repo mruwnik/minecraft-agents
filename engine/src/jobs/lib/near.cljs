@@ -79,10 +79,10 @@
   and :frontier-known true when that node lay in land earlier searches knew to their end (wsearch/known-land).
   With budget (go-to), each plan searches at most that many expansions (plan!): a plan still searching is the result
   {:status :searching} (wplan/no-walk), nothing walked; progress false: an unfinished search walks nowhere (plan!).
-  dangers: whether the plans keep away from known dangers (plan!). avoid: cells the plans keep off (plan!). dark: false plans dark cells like lit ones. tolls: cells the plans price (plan!). drop-cost: the policy's :drop-cost (wplan/with-drops: a number scales drops, false takes none of 2 or 3)."
-  [c to range doors shut-also timeout-s explore one-way budget progress dangers & [avoid dark tolls drop-cost]]
+  dangers: whether the plans keep away from known dangers (plan!). avoid: cells the plans keep off (plan!). dark: false plans dark cells like lit ones. tolls: cells the plans price (plan!). drop-cost: the policy's :drop-cost (wplan/with-drops: a number scales drops, false takes none of 2 or 3). costs: the policy's :costs (planner price overrides, cost/planner-costs)."
+  [c to range doors shut-also timeout-s explore one-way budget progress dangers & [avoid dark tolls drop-cost costs]]
   (await (walk/settle! c))
-  (let [policy-of (fn [] (cond-> (wworld/body-policy c) (not= :never doors) (update :moves conj :open) (some? drop-cost) (assoc :drop-cost drop-cost)))
+  (let [policy-of (fn [] (cond-> (wworld/body-policy c) (not= :never doors) (update :moves conj :open) (some? drop-cost) (assoc :drop-cost drop-cost) (some? costs) (assoc :costs costs)))
         announce! (fn [_kind data] (ctx/emit! c :replan :info data))
         walk-fn (fn [steps watch]
                   (if (= :never doors)
@@ -122,14 +122,14 @@
   "One walk-once! toward the cell pos ({:x :y :z} of whole numbers) from where the body stands (the caller has checked the
   primitives have a pathWorld), with its :moved entry {:from :to :status :target} written and the round booked for the
   backoff as one walk (ctx/note-walk!: the status and the blocks the body moved). opts {:doors :shut-also :timeout-s :explore
-  :one-way :budget :progress :dangers :avoid :dark :tolls :zone-tolls :drop-cost}: zone-tolls true adds the cells of other bodies' zones to tolls (toll-cells/zone-walk-tolls, none under the job's :ignore-zones?); doors, shut-also (jobs.lib.pass), explore, one-way (default :open: past a drop toward a far goal), budget, progress (default true) and dangers (default true) and avoid as walk-once!, timeout-s the bound of each steer (default walk-timeout-s). {:result :status :from :to}: result
+  :one-way :budget :progress :dangers :avoid :dark :tolls :zone-tolls :drop-cost :costs}: zone-tolls true adds the cells of other bodies' zones to tolls (toll-cells/zone-walk-tolls, none under the job's :ignore-zones?); doors, shut-also (jobs.lib.pass), explore, one-way (default :open: past a drop toward a far goal), budget, progress (default true) and dangers (default true) and avoid as walk-once!, timeout-s the bound of each steer (default walk-timeout-s). {:result :status :from :to}: result
   is the walk's result map, status the entry's (\"partial\" too for a walk to a frontier that moved the body over a block:
   it went where a way may be, not stuck). A round whose plan is still searching (result :searching) walked nowhere and
   failed at nothing: status \"searching\", no :moved entry and no walk booked."
-  [c pos range {:keys [doors shut-also timeout-s explore one-way budget progress dangers avoid dark tolls zone-tolls drop-cost] :or {timeout-s walk-timeout-s one-way :open progress true dangers true}}]
+  [c pos range {:keys [doors shut-also timeout-s explore one-way budget progress dangers avoid dark tolls zone-tolls drop-cost costs] :or {timeout-s walk-timeout-s one-way :open progress true dangers true}}]
   (let [from (u/self-pos c)
         tolls (if zone-tolls (into (vec tolls) (tc/zone-walk-tolls c pos)) tolls)
-        result (await (walk-once! c [(:x pos) (:y pos) (:z pos)] range doors shut-also timeout-s explore one-way budget progress dangers avoid dark tolls drop-cost))
+        result (await (walk-once! c [(:x pos) (:y pos) (:z pos)] range doors shut-also timeout-s explore one-way budget progress dangers avoid dark tolls drop-cost costs))
         to (u/self-pos c)
         status (cond
                  (= :searching (:status result)) "searching"

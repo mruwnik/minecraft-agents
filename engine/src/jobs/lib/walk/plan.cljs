@@ -4,6 +4,7 @@
   (:require [engine.ctx :as ctx]
             [engine.path.executor :as executor]
             [engine.path.planner-tuned :as planner]
+            [jobs.lib.cost :as cost]
             [jobs.lib.walk.world :as wworld]))
 
 (def wide-box
@@ -66,9 +67,11 @@
   (let [k (:drop-cost policy)]
     (doseq [[opt key] [["maxDrop" :max-drop] ["fallFactor" :fall-factor] ["damageBudget" :damage-budget] ["damageWeight" :damage-weight] ["dangerCap" :danger-cap]]]
       (when-some [v (get policy key)] (unchecked-set options opt v)))
+    (when (seq (:costs policy))
+      (unchecked-set options "costs" (cost/planner-costs (:costs policy))))
     (cond
       (false? k) (doto options (unchecked-set "maxDrop" 1))
-      (and (number? k) (not= 1 k)) (doto options (unchecked-set "costs" #js {:dropFactor k}))
+      (and (number? k) (not= 1 k)) (doto options (unchecked-set "costs" (js/Object.assign (or (.-costs options) #js {}) #js {:dropFactor k})))
       :else options)))
 
 (defn ^:async plan-from!

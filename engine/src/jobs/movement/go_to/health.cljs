@@ -87,10 +87,11 @@
   when there is none. A refusal of the budget in a search that finds no whole way anyway (:damage-refused is only a move the
   budget turned away) is no reason to heal."
   [c pos range]
-  (let [{:keys [drop-cost]} (:args c)
+  (let [{:keys [drop-cost costs]} (:args c)
         {:keys [max-damage]} (wworld/walk-settings c)
         policy (cond-> (assoc (wworld/body-policy c) :damage-budget (cost/survivable-budget (wworld/damage-body c) {:max-damage max-damage}))
-                 (some? drop-cost) (assoc :drop-cost drop-cost))
+                 (some? drop-cost) (assoc :drop-cost drop-cost)
+                 (some? costs) (assoc :costs costs))
         within (await (wplan/plan-within! c (wworld/path-world (:primitives c)) [(:x pos) (:y pos) (:z pos)] range walk/default-weight policy))
         ^js r (:r within)]
     (when (= "found" (.-status r))
