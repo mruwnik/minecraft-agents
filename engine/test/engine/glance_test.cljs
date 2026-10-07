@@ -5,6 +5,7 @@
             [engine.fake :as fake]
             [engine.fake.raw-world :as fake-raw]
             [engine.perception :as perception]
+            [engine.perception.store :as store]
             [engine.test-util :as tu]))
 
 ;; The body stands at [0 64 0], eye at (0.5, 65.62, 0.5), facing south (+z) unless a test turns it.
@@ -53,6 +54,46 @@
     (is (:felt (perception/sensed per [0 63 0])))
     (is (= "dirt" (seen-name per [0 63 0])))
     (is (every? nil? (map #(perception/feel! per %) [[1 64 0] [0 66 0] [1 65 1] [0 62 0]])))))
+
+(defn feel-names [per cells] (mapv #(:name (perception/feel! per %)) cells))
+
+(defn stand-at! [p y] (swap! (fake/state p) assoc-in [:self :pos] [0 y 0]))
+
+(deftest feel-the-floor-under-a-full-block
+  (let [{:keys [per]} (rig {"0,63,0" "dirt" "0,62,0" "gold_block"})]
+    (is (= ["dirt" nil] (feel-names per [[0 63 0] [0 62 0]])))))
+
+(deftest feel-does-not-reach-the-cell-under-a-slab
+  (let [{:keys [p per]} (rig {"0,64,0" "oak_slab" "0,63,0" "gold_block"})]
+    (stand-at! p 64.5)
+    (is (= ["oak_slab" nil] (feel-names per [[0 64 0] [0 63 0]])))))
+
+(deftest feel-the-fence-under-the-feet
+  (let [{:keys [p per]} (rig {"0,64,0" "oak_fence" "0,63,0" "gold_block"})]
+    (stand-at! p 65.5)
+    (is (= ["oak_fence" nil] (feel-names per [[0 64 0] [0 63 0]])))))
+
+(deftest a-falling-body-feels-nothing-below
+  (let [{:keys [p per]} (rig {"0,69,0" "gold_block" "0,68,0" "gold_block"})]
+    (stand-at! p 70.9)
+    (is (= [nil nil] (feel-names per [[0 69 0] [0 68 0]])))))
+
+(deftest a-fluid-cell-after-a-reload-reads-no-newer-than-its-true-time
+  (let [{:keys [per clock]} (rig {"0,65,4" "water"})
+        ^js st (:st per)
+        sec-of #(.get (store/store-of st "overworld") (store/section-key 0 4 0))]
+    (perception/glance! per [0 65 4])
+    (let [fine (store/cell-seen (sec-of) (store/cell-index 0 65 4))]
+      (set! (.-fine ^js (sec-of)) nil)
+      (is (<= (store/cell-seen (sec-of) (store/cell-index 0 65 4)) fine)))))
+
+(deftest a-remembered-air-cell-next-to-remembered-fluid-reads-unknown-after-the-max-age
+  (let [{:keys [p per clock]} (rig {"0,65,4" "lava" "1,65,4" "air" "3,65,4" "air" "4,65,4" "stone"})]
+    (perception/pass! per)
+    (turn! p 180)
+    (swap! clock + 30000)
+    (is (= [{:unknown true :pos [1 65 4]} "air"]
+           [(perception/sensed per [1 65 4]) (:name (perception/sensed per [3 65 4]))]))))
 
 (deftest a-cell-diagonal-behind-a-wall-corner-inside-rock-is-unknown
   (let [{:keys [per]} (rig (merge (tu/box -1 63 -1 1 66 1 "stone") {"0,64,0" "air" "0,65,0" "air" "1,65,1" "lava"}))]

@@ -2,6 +2,7 @@
 // Sensing for the primitives: self, entities, blockAt and the settling state of a body. Raw values only: engine.senses
 // derives isDay, raining, thundering, visible, hittable and sleeping and drops what a player would not see.
 
+import { fullCube } from './block-shape.mjs'
 import { stateProperties } from './use-on.mjs'
 import { mobFields } from './interact.mjs'
 import { professionOf, villagerData } from './villager.mjs'
@@ -113,9 +114,6 @@ export function createSense (env) {
         ...(e.name === 'creeper' && { creeper: true })
       }))
   }
-
-  // a collision shape that fills the whole cell: what a head can be stuck in (slabs, farmland, crops, carpets are not)
-  const fullCube = block => block.boundingBox === 'block' && (block.shapes ?? []).some(([x0, y0, z0, x1, y1, z1]) => x0 <= 0 && y0 <= 0 && z0 <= 0 && x1 >= 1 && y1 >= 1 && z1 >= 1)
 
   // {name, pos}, plus the crop `age` as a number when the block has one, plus all its state `properties` when it has any,
   // plus `fullCube: true` when its collision shape fills the cell

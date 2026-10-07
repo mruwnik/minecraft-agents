@@ -176,12 +176,12 @@
     (assoc (block-of per id pos) :age-ms 0 :felt true)))
 
 (defn remembered
-  "The remembered answer for pos with :age-ms and :visible false; unknown when never seen, or a mutable state older than
-  :mutable-max-ms."
+  "The remembered answer for pos with :age-ms and :visible false; unknown when never seen, or a mutable state, or a
+  non-solid cell beside a remembered fluid, older than :mutable-max-ms."
   [{:keys [opts st] :as per} [x y z :as pos]]
   (let [[id seen-at] (store/remembered st x y z)
         age (when id (- ((:now opts)) seen-at))]
-    (if (or (nil? id) (and (store/mutable-id? st id) (> age (:mutable-max-ms opts))))
+    (if (or (nil? id) (and (> age (:mutable-max-ms opts)) (or (store/mutable-id? st id) (store/beside-fluid? st x y z id))))
       {:unknown true :pos pos}
       (assoc (block-of per id pos) :age-ms age :visible false))))
 

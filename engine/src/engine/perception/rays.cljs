@@ -290,25 +290,26 @@
 (def feel-margin 0.1)
 
 (defn felt?
-  "Whether the body touches the cell (x y z): it overlaps the body's hitbox (0.6 wide, 1.8 tall, feet at the eye less
-  eye-height) grown by feel-margin, or lies under the feet' cell in the hitbox's columns."
-  [^js eye [x y z]]
+  "Whether the body touches the cell (x y z) whose collision shape reaches `top` above its floor: it overlaps the
+  body's hitbox (0.6 wide, 1.8 tall, feet at the eye less eye-height) grown by feel-margin, or is a tall support (a
+  fence) under the feet whose top reaches the feet."
+  [^js eye [x y z] top]
   (let [fx (.-x eye) fz (.-z eye) feet (- (.-y eye) eye-height)
         r (+ hitbox-half feel-margin)
         over? (fn [c lo hi] (and (< c hi) (> (inc c) lo)))]
     (and (over? x (- fx r) (+ fx r))
          (over? z (- fz r) (+ fz r))
          (or (over? y (- feet feel-margin) (+ feet hitbox-height feel-margin))
-             (== y (dec (js/Math.floor feet)))))))
+             (and (< y feet) (>= (+ y top) (- feet feel-margin)))))))
 
 (defn feel!
   "The state id of a cell the body touches (felt?), in any light; memory takes it. Nil for any other cell, an unloaded
   one, or offline."
   [{:keys [raw opts st]} [x y z :as pos]]
   (let [^js st st ^js eye (.eye ^js raw)]
-    (when (and eye (felt? eye pos))
+    (when eye
       (let [id (.stateAt ^js raw x y z)]
-        (when (>= id 0)
+        (when (and (>= id 0) (felt? eye pos (.-top ^js (.stateInfo ^js raw id))))
           (new-stamp! st)
           (record! st (store-of st (.-dimension eye)) x y z id ((:now opts)))
           id)))))

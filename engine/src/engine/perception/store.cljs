@@ -89,6 +89,10 @@
                yes)
              (== k 1))))))
 
+(def fluid-names #{"water" "lava" "bubble_column"})
+
+(def neighbour-offsets [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])
+
 (defn record! [^js st store x y z id now]
   (let [cx (bit-shift-right x 4) sy (bit-shift-right y 4) cz (bit-shift-right z 4)
         key (section-key cx sy cz)
@@ -163,3 +167,13 @@
                                     (.push found #js {:name name :pos [x y z] :distance d :ageMs (- now (cell-seen sec i))})))))))))))
         (.sort found (fn [^js a ^js b] (- (.-distance a) (.-distance b))))
         (into [] (comp (take max) (map (fn [^js r] {:name (.-name r) :pos (.-pos r) :distance (.-distance r) :age-ms (.-ageMs r)}))) found)))))
+
+(defn beside-fluid?
+  "Whether the remembered cell (x y z) with state id holds a non-solid block next to a remembered fluid: fluids flow, so
+  its memory goes stale like a fluid's."
+  [^js st x y z id]
+  (and (= "empty" (.-boundingBox ^js ((.-infoOf st) id)))
+       (some (fn [[dx dy dz]]
+               (when-let [[nid] (remembered st (+ x dx) (+ y dy) (+ z dz))]
+                 (contains? fluid-names (.-name ^js ((.-infoOf st) nid)))))
+             neighbour-offsets)))
