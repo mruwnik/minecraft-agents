@@ -21,7 +21,7 @@
   (fn [jobs]
     (reduce (fn [m j]
               (let [e (get ends j {})]
-                (assoc m j {:check (fn [c] (or (not (:decline e)) (ctx/wait c {:reason (:decline e)})))
+                (assoc m j {:check (fn [c] (swap! calls conj [:check j]) (or (not (:decline e)) (ctx/wait c {:reason (:decline e)})))
                             :round (fn [c]
                                      (swap! calls conj [j (:args c)])
                                      (let [r (if (fn? e) (e c (count (filter #(= j (first %)) @calls))) e)]
@@ -73,7 +73,7 @@
           (is (= [['jobs.village.breed {:target 4 :radius 48}]] (ran s 'jobs.village.breed)))
           (is (= {:skipped :no-transport} (step s :import)))
           (is (true? (finished? s)))
-          (is (= ['jobs.build.from-plan 'jobs.village.breed] (mapv first @(:calls s)))))))))
+          (is (= ['jobs.build.from-plan 'jobs.village.breed] (mapv first (remove #(= :check (first %)) @(:calls s))))))))))
 
 (deftest breed-is-skipped-with-its-reason
   (are [args w reason] (async done
@@ -143,13 +143,42 @@
           (is (nil? (:reason (done-event s))))
           (is (true? (finished? s))))))))
 
-(deftest a-role-without-a-workstation-cell-is-skipped
+(deftest a-role-without-a-workstation-cell-stops-the-pass-with-its-reason
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:roles [{:profession "librarian"}] :plan "p"} (apply world pair) {}))]
           (is (= {:skipped :no-pos} (step s :roll-0)))
-          (is (empty? (ran s 'jobs.village.roll))))))))
+          (is (empty? (ran s 'jobs.village.roll)))
+          (is (= "incomplete" (:reason (done-event s))))
+          (is (re-find #"roll-0 no-pos" (:text (done-event s)))))))))
+
+(deftest a-role-without-a-cell-alone-still-runs-the-pass
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:roles [{:profession "librarian"}]} (apply world pair) {}))]
+          (is (= "incomplete" (:reason (done-event s))))
+          (is (true? (finished? s))))))))
+
+(deftest a-roll-goes-on-only-while-a-villager-is-near
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [leave! (fn [c n]
+                       (swap! (fake/state (:primitives c)) assoc :entities [])
+                       :continue)
+              s (await (scenario {:roles [librarian]} (world (villager 1 3 {:profession "none"})) {'jobs.village.roll leave!}))]
+          (is (= 1 (count (ran s 'jobs.village.roll))))
+          (is (= {:skipped :no-villager} (step s :roll-0))))))))
+
+(deftest a-declined-child-has-its-check-run-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:plan "p"} (world) {'jobs.build.from-plan {:decline :no-plan-found}}))]
+          (is (= 1 (count (filter #{[:check 'jobs.build.from-plan]} @(:calls s)))))
+          (is (= {:skipped :declined :reason :no-plan-found} (step s :repair))))))))
 
 (deftest a-child-that-waits-on-the-world-is-resumed-and-ends-once
   (async done

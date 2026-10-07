@@ -1,7 +1,9 @@
 ;; jobs.village.maintain (card 50460531): one pass over a village; a role is rolled through jobs.village.roll at its :pos.
-;; Live-only facts: whether an AI librarian claims the lectern placed again (day only) and whether the pass ends after the roll.
-;; Should-succeed: role-is-rolled-at-its-cell (day, plains librarian beside the lectern, role needs no matching trade).
-;; Should-fail: a filled role, a role without :pos or with no villager near leaves nothing to do (the job waits :nothing-to-do).
+;; Live-only facts: whether an AI villager claims the lectern placed again (day only) and whether the pass ends after the roll.
+;; Should-succeed: role-is-rolled-at-its-cell (day, unemployed plains villager beside the lectern: the pass starts a roll, which
+;; breaks and places the lectern again; :roll-0 is neither :filled nor :no-villager).
+;; Should-fail: a filled role or no villager near leaves nothing to do (the job waits :nothing-to-do); a role without :pos
+;; ends the pass stopped "incomplete".
 {:defaults
  {:tags [:village :jobs]
   :time :day
@@ -11,21 +13,25 @@
   :limit-s 240}
  :cases
  [{:name "role-is-rolled-at-its-cell"
-   :act [[:summon "villager" [16.5 1 17.5] "{UUID:[I;20261,7,5,1],VillagerData:{profession:\"minecraft:nitwit\",level:1,type:\"minecraft:plains\"}}"]
+   :act [[:summon "villager" [16.5 1 17.5] "{UUID:[I;20261,7,5,1],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
          [:wait-s 3]
          [:job (jobs.village.maintain {:roles [{:profession "librarian" :trade "enchanted_book" :pos #at [16 0 16]}] :radius 16})]]
-   :expect [{:event {:source :job :kind :maintain.done} :within-s 220 :of-job true}]
+   :expect [{:event {:source :job :kind :maintain.done} :within-s 220 :of-job true}
+            {:no-event {:source :job :kind :maintain.done :data {:steps {:roll-0 {:skipped :filled}}}} :for-s 220
+             :until {:source :job :kind :maintain.done}}
+            {:no-event {:source :job :kind :maintain.done :data {:steps {:roll-0 {:skipped :no-villager}}}} :for-s 220
+             :until {:source :job :kind :maintain.done}}]
    :after [[:block #at [16 0 16] "lectern"]]}
   {:name "role-filled-leaves-nothing-to-do"
    :act [[:summon "villager" [16.5 1 17.5] "{NoAI:1b,UUID:[I;20261,7,5,2],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
          [:wait-s 3]
          [:job (jobs.village.maintain {:roles [{:profession "librarian" :pos #at [16 0 16]}] :radius 16})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :nothing-to-do}} :within-s 40 :of-job true}]}
-  {:name "role-without-a-cell-does-nothing"
+  {:name "role-without-a-cell-stops-the-pass"
    :act [[:summon "villager" [16.5 1 17.5] "{NoAI:1b,UUID:[I;20261,7,5,3],VillagerData:{profession:\"minecraft:farmer\",level:1,type:\"minecraft:plains\"}}"]
          [:wait-s 3]
          [:job (jobs.village.maintain {:roles [{:profession "librarian"}] :radius 16})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :nothing-to-do}} :within-s 40 :of-job true}]}
+   :expect [{:event {:source :job :kind :maintain.done :data {:reason "incomplete"}} :within-s 40 :of-job true}]}
   {:name "no-villager-near-is-skipped"
    :act [[:job (jobs.village.maintain {:roles [{:profession "librarian" :pos #at [16 0 16]}] :radius 16})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :nothing-to-do}} :within-s 40 :of-job true}]}]}
