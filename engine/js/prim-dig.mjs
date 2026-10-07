@@ -103,6 +103,30 @@ export function createDig (env) {
 
   const isBucket = name => name === 'bucket' || name.endsWith('_bucket')
   const isLiquid = name => name === 'water' || name === 'lava'
+  const isBoat = name => /_(boat|raft)$/.test(name)
+
+  // A boat is used on the water, not placed as a block: look at the water cell's surface and activate the item; it is
+  // down when the carried count dropped or a boat entity stands within 2 blocks of the cell.
+  const useBoat = async (ctx, item, p) => {
+    const there = env.bot.blockAt(vec(p))
+    if (!there || there.name !== 'water') return { status: 'occupied', block: there?.name }
+    if (dist(eye(), center(p)) > REACH) return { status: 'unreachable' }
+    const count = () => inventory().filter(i => i.name === item.name).reduce((sum, i) => sum + i.count, 0)
+    const before = count()
+    ctx.alive()
+    await env.bot.equip(item, 'hand')
+    ctx.alive()
+    await lookNow(() => env.bot.lookAt(vec({ x: p.x + 0.5, y: p.y + 0.9, z: p.z + 0.5 }), true))
+    ctx.alive()
+    await env.bot.activateItem()
+    const down = () => count() < before || Object.values(env.bot.entities).some(e => isBoat(e.name) && Math.hypot(e.position.x - (p.x + 0.5), e.position.z - (p.z + 0.5)) < 2 && Math.abs(e.position.y - p.y) < 2)
+    const deadline = Date.now() + BUCKET_WAIT_S * 1000 * timeScale
+    while (!down() && Date.now() < deadline) {
+      await sleepMs(POLL_MS * timeScale)
+      ctx.alive()
+    }
+    return down() ? { status: 'placed', block: item.name } : { status: 'failed', reason: 'unchanged' }
+  }
 
   // A bucket is used, not placed: look at the block the liquid goes on (or at the liquid to scoop) and activate the
   // item, then check that the cell p changed within a short bound.
@@ -193,6 +217,10 @@ export function createDig (env) {
       if (isBucket(a.item)) {
         const bucket = inventory().find(i => i.name === a.item)
         return bucket ? useBucket(ctx, bucket, p) : { status: 'no-item' }
+      }
+      if (isBoat(a.item)) {
+        const boat = inventory().find(i => i.name === a.item)
+        return boat ? useBoat(ctx, boat, p) : { status: 'no-item' }
       }
       const there = env.bot.blockAt(vec(p))
       if (there && !isAir(there.name) && !isReplaceable(there.name) && there.name !== 'water' && there.name !== 'lava') return { status: 'occupied', block: there.name }

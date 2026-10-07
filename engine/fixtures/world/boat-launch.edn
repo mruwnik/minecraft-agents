@@ -1,0 +1,40 @@
+;; Card 84100d49: jobs.movement.boat-launch puts a boat on water and boards it (:launch), or breaks one and takes the item back (:recover).
+;; Should-succeed: launch with a boat carried (boat.launched, aboard); :board false leaves it on the water; recover a boat afloat (boat.recovered, item back in the inventory);
+;; recover while aboard (gets off first).
+;; Should-fail: no water in sight (waits :no-water); no boat in sight (recover waits :no-boat); a non-boat :item (stopped :bad-args).
+{:defaults
+ {:tags [:boats :movement :boat-launch] :time :any
+  :plot {:height 8 :floor "stone"}
+  :body {:at [10.5 0 16.5]}
+  :limit-s 90}
+ :cases
+ [{:name "launch-and-board"
+   :body {:inventory [["oak_boat" 1]]}
+   :blocks [[:fill [14 -1 14] [20 -1 18] "water"]]
+   :act [[:job (jobs.movement.boat-launch {})]]
+   :expect [{:event {:source :job :kind :boat.launched :data {:boat "oak_boat"}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :vehicle.mounted} :within-s 60 :of-job true}]}
+  {:name "launch-without-boarding"
+   :body {:inventory [["oak_boat" 1]]}
+   :blocks [[:fill [14 -1 14] [20 -1 18] "water"]]
+   :act [[:job (jobs.movement.boat-launch {:board false})]]
+   :expect [{:event {:source :job :kind :boat.launched} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :vehicle.mounted} :for-s 10}]}
+  {:name "recover-a-boat-afloat"
+   :blocks [[:fill [14 -1 14] [20 -1 18] "water"]]
+   :act [[:summon "oak_boat" [15.5 -1 16.5] "{}"]
+         [:job (jobs.movement.boat-launch {:action :recover})]]
+   :expect [{:event {:source :job :kind :boat.recovered :data {:item "oak_boat"}} :within-s 60 :of-job true}]}
+  {:name "recover-while-aboard"
+   :blocks [[:fill [12 -1 14] [20 -1 18] "water"]]
+   :act [[:summon "oak_boat" [15.5 -1 16.5] "{}"]
+         [:job (jobs.movement.mount {:name "oak_boat"})]
+         [:job (jobs.movement.boat-launch {:action :recover})]]
+   :expect [{:event {:source :job :kind :boat.recovered} :within-s 60 :of-job true}]}
+  {:name "no-water-waits"
+   :body {:inventory [["oak_boat" 1]]}
+   :act [[:job (jobs.movement.boat-launch {})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-water}} :within-s 20 :of-job true}]}
+  {:name "no-boat-to-recover-waits"
+   :act [[:job (jobs.movement.boat-launch {:action :recover})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-boat}} :within-s 20 :of-job true}]}]}

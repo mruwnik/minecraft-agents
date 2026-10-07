@@ -1442,6 +1442,21 @@ test('place with a water bucket looks at the support and activates the item inst
   assert.deepEqual(names(bot).filter(n => ['equip', 'lookAt', 'activateItem', 'placeBlock'].includes(n)), ['equip', 'lookAt', 'activateItem'])
 })
 
+test('place with a boat looks at the water and activates the item; the boat is down when the carried count drops', async () => {
+  const items = [{ name: 'oak_boat', count: 1, slot: 36 }]
+  const { bot, p } = rig({ blocks: { '0,63,0': 'stone', '1,64,0': 'water' }, items, onActivate: () => { items.length = 0 } })
+  assert.deepEqual(await p.place('t1', { pos: at(1, 64, 0), item: 'oak_boat' }), { status: 'placed', block: 'oak_boat' })
+  assert.deepEqual(names(bot).filter(n => ['equip', 'lookAt', 'activateItem', 'placeBlock'].includes(n)), ['equip', 'lookAt', 'activateItem'])
+})
+
+test('a boat on a cell that is not water is occupied, and no boat carried is no-item', async () => {
+  const items = [{ name: 'oak_boat', count: 1, slot: 36 }]
+  const { p } = rig({ blocks: { '0,63,0': 'stone', '1,64,0': 'stone' }, items, onActivate: () => {} })
+  assert.deepEqual(await p.place('t1', { pos: at(1, 64, 0), item: 'oak_boat' }), { status: 'occupied', block: 'stone' })
+  const bare = rig({ blocks: { '1,64,0': 'water' }, items: [], onActivate: () => {} })
+  assert.equal((await bare.p.place('t1', { pos: at(1, 64, 0), item: 'oak_boat' })).status, 'no-item')
+})
+
 test('a bucket that changes nothing resolves failed unchanged within the bound', async () => {
   const { p } = bucketRig({ blocks: {}, item: 'water_bucket', onActivate: () => {} })
   assert.deepEqual(await p.place('t1', { pos: at(1, 64, 0), item: 'water_bucket' }), { status: 'failed', reason: 'unchanged' })

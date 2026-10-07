@@ -409,6 +409,17 @@
         (zero? (carried (:inventory w) "bucket")) [w {:status "no-item"}]
         :else [(-> w (take-one "bucket") (give "water_bucket" 1) (drop-block pos)) {:status "placed" :block "bucket"}])
 
+      (re-find #"_(boat|raft)$" item)   ; a boat is used on water, not placed as a block
+      (cond
+        (not= here "water") [w {:status "occupied" :block here}]
+        (zero? (carried (:inventory w) item)) [w {:status "no-item"}]
+        :else (let [[x y z] pos id (:next-entity-id w)]
+                [(-> w (take-one item)
+                     (update :entities conj {:id id :uuid (str "u-" id) :name item :kind "other" :health 1 :pos [(+ x 0.5) y (+ z 0.5)]
+                                             :drops [{:name item :count 1}]})
+                     (update :next-entity-id inc))
+                 {:status "placed" :block item}]))
+
       (and (not (#{"air" "water" "lava"} here)) (not (replaceable? here))) [w {:status "occupied"}]
       (and (crops item) (not= "farmland" (block-name w (update pos 1 dec)))) (failed)
       (zero? (carried (:inventory w) item)) [w {:status "no-item"}]
