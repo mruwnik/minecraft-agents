@@ -37,6 +37,8 @@
     :now (ctx/now c)
     :ignore-zones? (boolean (if (contains? opts :ignore-zones?) (:ignore-zones? opts) (:ignore-zones? (:args c))))}))
 
+(def hidden-guess "What a cell the body has not sensed is taken for: rock, so a dig goes ahead and looks." "stone")
+
 (defn sensed-at
   "A block-at fn [x y z] -> name over what the body senses (jobs.lib.util/sensed): guess for a cell it has not sensed,
   nil when the cell is not loaded (the rules' :not-loaded)."
@@ -49,7 +51,7 @@
   ([c opts]
    (let [p (:primitives c)
          {:keys [x y z]} (u/self-pos c)]
-     (merge {:block-at (sensed-at p "stone") ; an unsensed cell is taken for rock (jobs.lib.blocks/hidden-guess)
+     (merge {:block-at (sensed-at p hidden-guess)
              :feet [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]
              :ledger #{}}
             (zone-input c opts)))))

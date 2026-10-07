@@ -79,7 +79,7 @@
 
 (defn cell [{:keys [x y z]}] [x y z])
 
-(def hidden-guess "What a cell the body has not sensed is taken for: rock, so a dig goes ahead and looks." "stone")
+(def hidden-guess access/hidden-guess)
 
 (defn target-name
   "The block name at the job's cell pos: nil when not loaded, guess when the body has not sensed it."
