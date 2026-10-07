@@ -4,6 +4,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.registry :as registry]
             [engine.core :as core]
+            [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
             [jobs.survival.recover-drops :as recover-drops]
             [jobs.survival.respond-to-hostile :as respond-to-hostile]
@@ -281,6 +282,24 @@
           (dotimes [_ 3] (await (core/tick! eng)))
           (is (<= 6 @hits) "the fight went on past three hurt-yields")
           (is (not-any? #(= "no_response" (name (:kind %))) @seen) "a fight that costs health is a response"))))))
+
+(deftest respond-does-not-stop-no-response-while-the-fight-lands-hits
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:health 20} :inventory sword :entities [(zombie 7 1 0)]})
+              hits (atom 0)
+              pausing {:check (constantly true)
+                       :round (fn ^:async pause [c]
+                                (swap! hits inc)
+                                (ctx/update-mem! c update-in [:struck 7 :hits] (fnil inc 0))
+                                (when (= 6 @hits) (swap! (fake/state p) assoc :entities []))
+                                :continue)}
+              eng (assoc-in eng [:jobs 'jobs.survival.fight-back] pausing)]
+          (core/submit! eng respond {})
+          (dotimes [_ 3] (await (core/tick! eng)))
+          (is (<= 6 @hits) "the fight went on past three pauses that each landed a hit")
+          (is (not-any? #(= "no_response" (name (:kind %))) @seen) "a landed hit is a response"))))))
 
 ;; ----------------------------------------------------------------- retreat
 
