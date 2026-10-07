@@ -1,0 +1,88 @@
+;; Cards 37bdf872, dd88adcf (a waterlogged ladder, scaffolding or trapdoor head cell is water, not air): ladder shafts 1x1 in a stone mass, the goal on the land at the top beside the shaft.
+;; Should-succeed: a 6 high waterlogged ladder shaft (the climb drains air a little, ~2 s); a 16 high dry ladder (no drowning, no :hurt).
+;; Should-fail: a 14 cell swim then a 28 high waterlogged ladder from full air (about 7 s + 8 s or more with the head wet, vanilla air 15 s): :why :air.
+;; Live risk: whether the body can enter and climb a waterlogged ladder from its own cell (the unit fake could not).
+{:defaults
+ {:tags [:movement :water :air] :time :any
+  :limit-s 120}
+ :cases
+ [
+  ;; waterlogged ladder shaft 6 high, body at its foot: arrives (the climb is wet but short)
+  {:name "wet-ladder-6-high-arrives"
+   :plot {:height 10 :length 16 :width 16}
+   :blocks [[:fill [0 0 0] [15 5 15] "stone"]
+            [:set [8 0 8] "ladder[facing=north,waterlogged=true]"]
+            [:set [8 1 8] "ladder[facing=north,waterlogged=true]"]
+            [:set [8 2 8] "ladder[facing=north,waterlogged=true]"]
+            [:set [8 3 8] "ladder[facing=north,waterlogged=true]"]
+            [:set [8 4 8] "ladder[facing=north,waterlogged=true]"]
+            [:set [8 5 8] "ladder[facing=north,waterlogged=true]"]]
+   :body {:at [8.5 0 8.5] :yaw 180}
+   :act [[:job (jobs.movement.go-to {:pos #at [8 6 7] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 90 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 90 :until {:source :job :kind :result}}]
+   :after [[:body-near [8.5 6 7.5] 3]]}
+  ;; dry ladder 16 high: arrives, no hurt (air refills, a dry shaft costs none)
+  {:name "dry-ladder-16-high-arrives-without-drowning"
+   :plot {:height 20 :length 16 :width 16}
+   :blocks [[:fill [0 0 0] [15 15 15] "stone"]
+            [:set [8 0 8] "ladder[facing=north]"]
+            [:set [8 1 8] "ladder[facing=north]"]
+            [:set [8 2 8] "ladder[facing=north]"]
+            [:set [8 3 8] "ladder[facing=north]"]
+            [:set [8 4 8] "ladder[facing=north]"]
+            [:set [8 5 8] "ladder[facing=north]"]
+            [:set [8 6 8] "ladder[facing=north]"]
+            [:set [8 7 8] "ladder[facing=north]"]
+            [:set [8 8 8] "ladder[facing=north]"]
+            [:set [8 9 8] "ladder[facing=north]"]
+            [:set [8 10 8] "ladder[facing=north]"]
+            [:set [8 11 8] "ladder[facing=north]"]
+            [:set [8 12 8] "ladder[facing=north]"]
+            [:set [8 13 8] "ladder[facing=north]"]
+            [:set [8 14 8] "ladder[facing=north]"]
+            [:set [8 15 8] "ladder[facing=north]"]]
+   :body {:at [8.5 0 8.5] :yaw 180}
+   :act [[:job (jobs.movement.go-to {:pos #at [8 16 7] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 90 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 90 :until {:source :job :kind :result}}]
+   :after [[:body-near [8.5 16 7.5] 3]]}
+  ;; should fail: a 7 s swim then a 28 high waterlogged ladder (about 8 s or more of climb with the head wet): vanilla drowns, so the plan is refused (a dry ladder would refill and be planned)
+  {:name "swim-then-wet-ladder-28-refused"
+   :plot {:height 30 :length 24 :width 16}
+   :blocks [[:fill [3 0 7] [21 27 9] "stone"]
+            [:fill [4 0 8] [18 1 8] "water"]
+            [:fill [4 2 8] [4 3 8] "air"]
+            [:fill [5 2 8] [18 2 8] "glass"]
+            [:set [19 0 8] "ladder[facing=west,waterlogged=true]"]
+            [:set [19 1 8] "ladder[facing=west,waterlogged=true]"]
+            [:set [19 2 8] "ladder[facing=west,waterlogged=true]"]
+            [:set [19 3 8] "ladder[facing=west,waterlogged=true]"]
+            [:set [19 4 8] "ladder[facing=west,waterlogged=true]"]
+            [:set [19 5 8] "ladder[facing=west,waterlogged=true]"]
+            [:set [19 6 8] "ladder[facing=west,waterlogged=true]"]
+            [:set [19 7 8] "ladder[facing=west,waterlogged=true]"]
+            [:set [19 8 8] "ladder[facing=west,waterlogged=true]"]
+            [:set [19 9 8] "ladder[facing=west,waterlogged=true]"]
+            [:set [19 10 8] "ladder[facing=west,waterlogged=true]"]
+            [:set [19 11 8] "ladder[facing=west,waterlogged=true]"]
+            [:set [19 12 8] "ladder[facing=west,waterlogged=true]"]
+            [:set [19 13 8] "ladder[facing=west,waterlogged=true]"]
+            [:set [19 14 8] "ladder[facing=west,waterlogged=true]"]
+            [:set [19 15 8] "ladder[facing=west,waterlogged=true]"]
+            [:set [19 16 8] "ladder[facing=west,waterlogged=true]"]
+            [:set [19 17 8] "ladder[facing=west,waterlogged=true]"]
+            [:set [19 18 8] "ladder[facing=west,waterlogged=true]"]
+            [:set [19 19 8] "ladder[facing=west,waterlogged=true]"]
+            [:set [19 20 8] "ladder[facing=west,waterlogged=true]"]
+            [:set [19 21 8] "ladder[facing=west,waterlogged=true]"]
+            [:set [19 22 8] "ladder[facing=west,waterlogged=true]"]
+            [:set [19 23 8] "ladder[facing=west,waterlogged=true]"]
+            [:set [19 24 8] "ladder[facing=west,waterlogged=true]"]
+            [:set [19 25 8] "ladder[facing=west,waterlogged=true]"]
+            [:set [19 26 8] "ladder[facing=west,waterlogged=true]"]
+            [:set [19 27 8] "ladder[facing=west,waterlogged=true]"]]
+   :body {:at [4.5 1 8.5] :yaw 270}
+   :act [[:job (jobs.movement.go-to {:pos #at [20 28 8] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived false :reason :unreachable :why :air}} :within-s 60 :of-job true}]
+   :after [[:body-near [4.5 1 8.5] 3]]}]}

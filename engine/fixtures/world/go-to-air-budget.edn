@@ -13,8 +13,7 @@
   :body {:at [4.5 1 8.5] :yaw 270 :settle-s 1}
   :limit-s 150}
  :cases
- [
-  ;; dive 10 s, 14 cells with the head out (the air comes back), dive 10 s
+ [  ;; dive 10 s, 14 cells with the head out (the air comes back), dive 10 s
   {:name "surface-stretch-arrives"
    :blocks [[:fill [3 0 7] [61 4 9] "stone"]
             [:fill [4 0 8] [59 1 8] "water"]
@@ -67,6 +66,17 @@
    :act [[:wait-s 8] [:job (jobs.movement.go-to {:pos #at [38 6 8] :range 1 :escalate false})]]
    :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived false :reason :unreachable :why :air-lethal}} :within-s 60 :of-job true}]
    :after [[:body-near [4.5 0 8.5] 8]]}
+  ;; air half spent, the 32 cell tunnel (16 s) would drown lethally but the ridge gap gives a safe walk: it surfaces and walks, no drowning
+  {:name "replan-lethal-shortcut-loses-to-the-walk"
+   :plot {:height 12 :length 44 :width 64}
+   :blocks [[:fill [0 0 0] [43 5 63] "stone"]
+            [:fill [4 0 8] [4 5 8] "water"] [:fill [5 0 8] [36 1 8] "water"] [:fill [37 0 8] [37 5 8] "water"]
+            [:fill [11 6 0] [11 9 58] "bedrock"]]
+   :body {:at [4.5 0 8.5]}
+   :act [[:wait-s 8] [:job (jobs.movement.go-to {:pos #at [38 6 8] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 180 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 180 :until {:source :job :kind :result}}]
+   :after [[:body-near [38.5 6 8.5] 3]]}
   ;; oxygen about 4: the seen pocket 6 cells away is gone to (a few hp of drowning is fine)
   {:name "drowning-body-swims-to-seen-air"
    :plot {:height 8 :length 24 :width 16}
@@ -77,6 +87,15 @@
    :act [[:wait-s 10] [:job (jobs.movement.go-to {:pos #at [12 1 8] :range 1 :escalate false})]]
    :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [12.5 1 8.5] 4]]}
+  ;; should fail: the goal cell is under water with stone over it (its head cell is no air): not a way to air, so a body that has used its 12 s may not swim to it
+  {:name "drowning-body-goal-under-stone-is-not-air"
+   :plot {:height 8 :length 28 :width 16}
+   :blocks [[:fill [3 0 7] [24 4 9] "stone"]
+            [:fill [4 0 8] [20 1 8] "water"]]
+   :body {:at [5.5 0 8.5] :yaw 270 :effects [["resistance" 600 4]]}
+   :act [[:wait-s 11] [:job (jobs.movement.go-to {:pos #at [12 1 8] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived false :reason :unreachable :why :air}} :within-s 60 :of-job true}]
+   :after [[:body-near [5.5 0 8.5] 3]]}
   ;; should fail: the pocket is 36 cells (18 s) away; drowning on the way would be lethal
   {:name "drowning-body-far-air-lethal-refused"
    :plot {:height 8 :length 64 :width 16}

@@ -10,8 +10,7 @@
   :body {:at [4.5 1 8.5] :yaw 270 :settle-s 1}
   :limit-s 150}
  :cases
- [
-  {:name "turtle-respiration3-dive-20s-arrives"
+ [  {:name "turtle-respiration3-dive-20s-arrives"
    :blocks [[:fill [3 0 7] [46 4 9] "stone"]
             [:fill [4 0 8] [45 1 8] "water"]
             [:fill [4 2 8] [4 3 8] "air"] [:fill [45 2 8] [45 3 8] "air"]
@@ -53,6 +52,27 @@
    :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 120 :of-job true}
             {:no-event {:source :body :kind :hurt} :for-s 120 :until {:source :job :kind :result}}]
    :after [[:body-near [45.5 1 8.5] 3]]}
+  ;; turtle only, 18 s: past the 15 s of air, inside the 10 s grace; no drowning
+  {:name "turtle-helmet-dive-18s-arrives"
+   :blocks [[:fill [3 0 7] [42 4 9] "stone"]
+            [:fill [4 0 8] [41 1 8] "water"]
+            [:fill [4 2 8] [4 3 8] "air"] [:fill [41 2 8] [41 3 8] "air"]
+            [:fill [5 2 8] [40 2 8] "glass"]]
+   :act [[:rcon "item replace entity $BODY armor.head with minecraft:turtle_helmet"] [:wait-s 1]
+         [:job (jobs.movement.go-to {:pos #at [41 1 8] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 116 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 116 :until {:source :job :kind :result}}]
+   :after [[:body-near [41.5 1 8.5] 3]]}
+  ;; the dry run of the 18 s turtle dive reports no :drown (the grace drowns nothing)
+  {:name "turtle-helmet-dive-18s-preview-has-no-drown"
+   :blocks [[:fill [3 0 7] [42 4 9] "stone"]
+            [:fill [4 0 8] [41 1 8] "water"]
+            [:fill [4 2 8] [4 3 8] "air"] [:fill [41 2 8] [41 3 8] "air"]
+            [:fill [5 2 8] [40 2 8] "glass"]]
+   :act [[:rcon "item replace entity $BODY armor.head with minecraft:turtle_helmet"] [:wait-s 1]
+         [:job (jobs.movement.path-preview {:pos #at [41 1 8] :range 1})]]
+   :expect [{:event {:source :job :kind :path-preview :data {:found true}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :path-preview :data {:drown [:any]}} :for-s 30 :until {:source :job :kind :path-preview}}]}
   ;; should fail: no gear, 20 s under water against 15 s of air
   {:name "bare-head-dive-20s-refused"
    :blocks [[:fill [3 0 7] [46 4 9] "stone"]
