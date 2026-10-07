@@ -23,13 +23,12 @@
   (let [pw (walk/costed-world {:primitives p} (walk/path-world p) opts)]
     (walk/plan-options pw walk/default-weight nil walk/wide-box)))
 
-(deftest plans-carry-the-dark-test-and-the-night
+(deftest plans-carry-the-dark-test
   (let [p (seen-world 18000)
         ^js dark (.-dark (options-of p {:dark? true}))]
     (is (fn? (.-at dark)))
     (is (= 1 (.-factor dark)) "a dark cell costs twice a lit one")
-    (is (true? (.-night dark)))
-    (is (false? (.-night ^js (.-dark (options-of (seen-world 6000) {:dark? true})))))))
+    (is (nil? (.-night dark)) "the planner no longer takes a night flag")))
 
 (deftest no-dark-cost-when-off-or-without-perception
   (is (nil? (.-dark (options-of (seen-world 18000) {:dark? false}))))

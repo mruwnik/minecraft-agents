@@ -898,7 +898,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen clock]} (setup {:time night :inventory dirt-stack :blocks floor})]
+        (let [{:keys [eng p seen clock]} (setup {:time night :inventory (conj dirt-stack {:name "iron_pickaxe" :count 1}) :blocks floor})]
           (refuse-placing! p)
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
           (core/submit! eng '(jobs.debug.notify {:text "after"}) {})
@@ -919,7 +919,7 @@
         (doseq [[blocks reason] [[{"0,63,0" "stone" "0,62,0" "air"} :no-floor]
                                  [{"0,63,0" "stone" "0,62,0" "water"} :no-floor]
                                  [{"0,63,0" "water"} :hazard-below]]]
-          (let [{:keys [eng p seen]} (setup {:time night :blocks blocks :inventory [{:name "dirt" :count 1}]})
+          (let [{:keys [eng p seen]} (setup {:time night :blocks blocks :inventory [{:name "dirt" :count 1} {:name "iron_pickaxe" :count 1}]})
                 mid (mid-night! p 4 #(count (:list (core/state eng))))]
             (core/submit! eng '(jobs.survival.night) {})
             (await (tick-n eng 3))
@@ -932,7 +932,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:time night :inventory [{:name "dirt" :count 1}]
+        (let [{:keys [eng p seen]} (setup {:time night :inventory [{:name "dirt" :count 1} {:name "iron_pickaxe" :count 1}]
                                            :blocks {"0,63,0" "stone" "0,62,0" "air"}})]
           (core/submit! eng '(jobs.survival.night) {})
           (await (tick-n eng 30))
