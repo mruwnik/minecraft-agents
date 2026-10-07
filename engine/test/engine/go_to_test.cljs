@@ -824,6 +824,17 @@
             (is (= [:abilities :gap-sprint] ((juxt :why :kind) @out)) (str "gap " n " food " food " " (pr-str @out)))
             (is (< (first (at p)) 5) (str "gap " n " food " food " at " (at p)))))))))
 
+(deftest go-to-does-not-jump-a-gap-over-a-4-deep-pit-at-food-0
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [n [2 3]]
+          (let [blocks (merge (box 3 59 -6 26 59 6 "stone") (box 4 63 0 8 63 0 "stone") (box (+ 9 n) 63 0 (+ 13 n) 63 0 "stone"))
+                {:keys [out p]} (await (go! {:blocks blocks :self {:pos {:x 6.5 :y 64 :z 0.5} :food 0}}
+                                            {:pos [(+ 10 n) 64 0] :range 0 :escalate false}))]
+            (is (false? (:arrived @out)) (str "gap " n " " (pr-str @out)))
+            (is (< (first (at p)) 9) (str "gap " n " at " (at p)))))))))
+
 (deftest the-planned-event-says-whether-the-plan-may-sprint
   (async done
     (tu/run-async done
