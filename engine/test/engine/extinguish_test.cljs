@@ -704,3 +704,44 @@
   (let [p (tu/fake {:blocks {"1,64,0" "fire"}})]
     (is (= 1 (count (extinguish/scan (tu/seeing-all p) 8 ["fire"] 8))))
     (is (empty? (extinguish/scan (tu/blind p) 8 ["fire"] 8)))))
+
+;; ------------------------------------------------------------------- what the body has not yet looked at
+
+(defn sees-after-a-look!
+  "p whose seen blocks stay empty until the body has looked (a look call), as a body that has not turned to the floor."
+  [p]
+  (tu/seeing-all p)
+  (let [all (aget p "seenBlocks")]
+    (aset p "seenBlocks" (fn [q] (if (seq (calls p "look")) (all q) #js [])))
+    p))
+
+(deftest lava-beside-the-feet-not-yet-seen-is-looked-for-then-covered
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [clock (atom 1000000)
+              [_ sink] (tu/legacy-capture-sink)
+              p (sees-after-a-look! (tu/fake {:self {:onFire true} :inventory [{:name "cobblestone" :count 4}]
+                                              :blocks (merge (floor 8) {"1,64,0" "lava"})}))
+              eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
+                                :now #(deref clock)
+                                :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+          (core/submit! eng '(jobs.survival.extinguish) {})
+          (await (core/tick! eng))
+          (is (seq (calls p "look")) "it looks round before it decides")
+          (is (= [{:pos {:x 1 :y 64 :z 0} :item "cobblestone"}] (mapv call-args (calls p "place")))))))))
+
+(deftest standing-in-a-fire-block-it-has-not-seen-steps-off-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [clock (atom 1000000)
+              [_ sink] (tu/legacy-capture-sink)
+              p (tu/blind (tu/fake {:self {:onFire true} :blocks (merge (floor 8) {"0,64,0" "fire"})}))
+              eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
+                                :now #(deref clock)
+                                :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+          (core/submit! eng '(jobs.survival.extinguish) {})
+          (await (core/tick! eng))
+          (is (= 1 (count (calls p "moveTo"))) "the flames at its feet are felt: it walks off them, it does not stand")
+          (is (not= {:x 0 :y 64 :z 0} (:pos (call-args (first (calls p "moveTo")))))))))))

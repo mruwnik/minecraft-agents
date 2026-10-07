@@ -26,6 +26,7 @@
   Water also counts powder snow. Not in lava (or in lava once a walk was blocked), with a cover block carried (cobblestone, stone, dirt, ...) it first
   places one on a lava cell next to the feet (side or below) with open air above it, so the body does not step past it. Never sand, gravel or
   other falling blocks, never in another's zone or claim, and at most 3 covers per run.
+  Before each decision from a new cell it looks round (level and down) so the fire at the feet and the lava beside them are seen.
   5. On fire, not in lava, with no water in reach and no hazard within 1.5 blocks, there is nothing useful to do.
      It holds still (:burning-wait): emits info extinguish_wait once, eats when food is under 18 and food is carried
      (to keep regenerating), and waits a second per pass; still burning after 20 seconds ends stopped :still-burning.
@@ -89,6 +90,14 @@
   "The blocks of names the body has seen within radius, nearest first, as {:name :pos}."
   [p radius names max]
   (mapv #(select-keys % [:name :pos]) (look/seen-blocks p {:radius radius :names names :max max})))
+
+(defn feel-feet
+  "scanned plus the fire at the feet cell when the scan lacks it: the body feels the flames it stands in, in view or not."
+  [p pos scanned]
+  (let [feet (u/block-name p pos)]
+    (if (and (contains? hazards feet) (not-any? #(= pos (:pos %)) scanned))
+      (conj scanned {:name feet :pos pos})
+      scanned)))
 
 (defn standable?
   "Feet cell and head cell passable, and the cell below solid, or the feet in water."
@@ -314,7 +323,8 @@
       (let [{:keys [water-radius step scan-radius]} (:args c)
             pos (floor-cell (u/pos-of (.-pos me)))
             lava? (boolean (.-inLava me))
-            scanned (scan p scan-radius hazards 128)
+            _ (when-not (look/looked-here? c) (await (look/look-around! c)))
+            scanned (feel-feet p pos (scan p scan-radius hazards 128))
             water (when-not lava? (first (scan p water-radius water-like 1)))
             pour? (and (not lava?) (has-bucket? p))
             refusal (when pour? (access/trespass-refusal c :place pos))]
