@@ -664,7 +664,7 @@
                    (->> (read-events-from (events-file opts) cursor)
                         (filter #(and (= :world.reloaded (:kind %)) (>= (:time-ms % 0) since-ms)))
                         (mapcat #(get-in % [:data :files]))))
-        done? (fn [] (let [files (reloaded)] (every? (fn [n] (some #(str/ends-with? % n) files)) names)))]
+        done? (fn [] (let [files (reloaded)] (every? (fn [n] (some #(= n (path/basename %)) files)) names)))]
     (letfn [(poll []
               (cond
                 (done?) (js/Promise.resolve true)

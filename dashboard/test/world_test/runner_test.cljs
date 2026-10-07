@@ -652,6 +652,16 @@
         (.catch (fn [e] (is false (.-message e))))
         (.finally done))))
 
+(deftest await-reload-matches-the-exact-file-name
+  (async done
+    (-> (with-body-dir
+          (fn [opts _]
+            (log-reload! opts ["/w/plans/xtest-b-z.edn" "/w/plans/test-c-z.edn"])
+            (r/await-reload! opts {:ino nil :pos 0} 0 ["test-b-z.edn"] 600)))
+        (.then (fn [v] (is (false? v) "another file ending in the name is no reload of it")))
+        (.catch (fn [e] (is false (.-message e))))
+        (.finally done))))
+
 (deftest await-reload-gives-up-at-its-bound-and-ignores-older-events
   (async done
     (-> (with-body-dir

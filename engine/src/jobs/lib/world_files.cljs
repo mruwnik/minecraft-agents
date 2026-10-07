@@ -10,7 +10,7 @@
   A world is {:state atom :said atom :opts {...}}. Jobs ask through jobs.lib.world (plan, zones, claims), which
   answers from memory.
     A re-read zones.edn, places.json or plan file emits a :debug world.reloaded naming the files.
-    The files are stat-ed again at most every :every-ms, lazily, by the first read after that.
+    The files are stat-ed again at most every :every-ms, by a read or by the timer a real body's world runs.
     Only files whose stamp (modification time and size) changed are read and parsed again.
     A file that turns unreadable or invalid keeps its last good copy and warns once
     (world.plan-unreadable, world.blueprint-unreadable, world.zones-unreadable, world.claims-unreadable).
@@ -266,12 +266,22 @@
 
 (defn open
   "A world over the files of :plans-dir and :blueprint-dir and the zone file :zones-file. opts: :now (ms clock),
-  :emit (an event fn), :every-ms."
+  :emit (an event fn), :every-ms. Without :now (a real body) it reads the files at once and again every :every-ms by
+  a timer, so a file written at any time is logged as world.reloaded even when no job reads the world (close! stops it)."
   [{:keys [now every-ms] :as opts}]
-  {:state (atom {:plans {} :blueprints {}})
-   :said (atom #{})
-   :derived (atom {})
-   :opts (assoc opts :now (or now js/Date.now) :every-ms (or every-ms (default-every-ms)))})
+  (let [w {:state (atom {:plans {} :blueprints {}})
+           :said (atom #{})
+           :derived (atom {})
+           :opts (assoc opts :now (or now js/Date.now) :every-ms (or every-ms (default-every-ms)))}]
+    (if (or now (not (:plans-dir opts)))
+      w
+      (do (refresh! w)
+          (assoc w :timer (doto (js/setInterval #(refresh! w) (get-in w [:opts :every-ms])) (.unref)))))))
+
+(defn close!
+  "Stops the world's watch (see open)."
+  [w]
+  (some-> (:timer w) js/clearInterval))
 
 (defn data-state [plans blueprints]
   (expand-all {:plans (update-vals plans (fn [p] {:value p}))

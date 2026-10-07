@@ -1,6 +1,6 @@
 (ns engine.world-test
   "jobs.lib.world-files: the pure bookkeeping without a disk, then the reader over a temp dir."
-  (:require [cljs.test :refer [deftest is are]]
+  (:require [cljs.test :refer [deftest is are async]]
             ["fs" :as fs]
             ["path" :as path]
             [engine.test-util :as tu]
@@ -426,3 +426,23 @@
     (is (= 50 (count (world/find-markers (repeat 80 near-marker) {:limit 500}))) "limit capped at 50")
     (is (= 3 (count (world/find-markers (repeat 80 near-marker) {:limit 3}))))
     (is (= ["mine" "farm-north" "hut"] (names {:near {:x 0}})) "a :near without x y z is ignored")))
+
+;; ------------------------------------------------------------------ the watch
+
+(defn reloaded-names [seen]
+  (set (mapcat #(map path/basename (:files %)) (reloads seen))))
+
+(deftest an-opened-world-reads-its-folder-at-once-and-keeps-watching-without-a-reader
+  (async done
+    (let [plans (tu/tmp-dir)
+          seen (atom [])]
+      (write! plans "before" (pr-str wheat))
+      (let [w (world/open {:plans-dir plans :blueprint-dir (tu/tmp-dir) :every-ms 50 :emit #(swap! seen conj %)})]
+        (is (contains? (reloaded-names seen) "before.edn") "a plan written before the open is logged by the open itself")
+        (write! plans "after" (pr-str huts))
+        (js/setTimeout
+         (fn []
+           (is (contains? (reloaded-names seen) "after.edn") "a plan written later is logged with nobody reading")
+           (world/close! w)
+           (done))
+         400)))))

@@ -284,7 +284,7 @@ the whole chain's round; cancel and done take the subtree. `submit!` is delegati
 Each call emits debug `job.child_started` and `job.child_ended` (`:slot :chain :status :reason`; a stopped result is `:stopped`).
 
 **World knowledge.** `jobs.lib.world-files` reads the plans (`worlds/<world>/plans/<id>.edn`), blueprints
-(`blueprints/<id>.edn`), zones, claims and the shared markers (`places.json`, written by the agent tools only) read-only (`jobs.lib.world/marker`, `find-markers` {:text :kind :near :limit}, 50 at most, default 10; coordinates as given, no dimension), re-stat-ed at most every 3 s; a file that turns invalid keeps its last
+(`blueprints/<id>.edn`), zones, claims and the shared markers (`places.json`, written by the agent tools only) read-only (`jobs.lib.world/marker`, `find-markers` {:text :kind :near :limit}, 50 at most, default 10; coordinates as given, no dimension), re-stat-ed every 3 s by a timer (so a plan written at any time logs `world.reloaded`); a file that turns invalid keeps its last
 good copy and warns once. Jobs read it through `jobs.lib.world` (`plan`, `zones`, `claims`, `markers`, `marker`, `footprints`). The engine
 calls job code only through `engine.hooks`, named in `src/jobs/hooks.edn` (world open and blank).
 `engine.notes` is what bodies saw (`worlds/<world>/notes/<body>.edn`, each body writes only its own file;
