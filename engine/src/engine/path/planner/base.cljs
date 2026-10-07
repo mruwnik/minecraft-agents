@@ -91,22 +91,34 @@
 (def ^:const BOUNCE-S 1.4) ; seconds a body takes to settle on a bouncing block, per square root of the blocks it fell (10 blocks: about 4.4 s)
 (def ^:const BOUNCE-MARGIN 0.5) ; blocks a wall round a slime pad must reach over the bounce's first peak
 
-(defn bounce-flight
-  "A body's bounce on a slime block after a fall of `fall` blocks from rest, in vanilla physics (the fall reverses at
-  contact, then each tick vy = (vy - 0.08) * 0.98, under 0.003 is 0): {:peak the first bounce's height in blocks, :settle
-  the ticks from the first contact until it is on the block with |vy| at most 0.4}. A 10-block fall: 6.33, 90."
+(defn bounce-flight-run
+  "bounce-flight, simulated (no cache). Plain numbers (-1: not yet) keep the loop free of truthiness checks."
   [fall]
-  (loop [n 0 y (max 0 fall) vy 0 contact nil top 0 peak nil]
+  (loop [n 0 y (max 0 fall) vy 0 contact -1 top 0 peak -1]
     (let [ground (<= (+ y vy) 0)
           y' (if ground 0 (+ y vy))
           v (* (- (if (and ground (neg? vy)) (- vy) vy) 0.08) 0.98)
           vy' (if (< (js/Math.abs v) 0.003) 0 v)
-          contact' (or contact (when ground n))
-          top' (if contact' (max top y') 0)
-          peak' (or peak (when (and ground contact (pos? top)) top))]
-      (if (or (> n 2000) (and contact' ground (<= (js/Math.abs vy') 0.4)))
-        {:peak (or peak' top') :settle (- n (or contact' n))}
+          contact' (if (>= contact 0) contact (if ground n -1))
+          top' (if (>= contact' 0) (max top y') 0)
+          peak' (if (>= peak 0) peak (if (and ground (>= contact 0) (pos? top)) top -1))]
+      (if (or (> n 2000) (and (>= contact' 0) ground (<= (js/Math.abs vy') 0.4)))
+        {:peak (if (>= peak' 0) peak' top') :settle (- n (if (>= contact' 0) contact' n))}
         (recur (inc n) y' vy' contact' top' peak')))))
+
+(def ^:private bounce-flights (js/Map.))
+
+(defn bounce-flight
+  "A body's bounce on a slime block after a fall of `fall` blocks from rest, in vanilla physics (the fall reverses at
+  contact, then each tick vy = (vy - 0.08) * 0.98, under 0.003 is 0): {:peak the first bounce's height in blocks, :settle
+  the ticks from the first contact until it is on the block with |vy| at most 0.4}. A 10-block fall: 6.33, 90. Kept per fall."
+  [fall]
+  (let [kept (.get bounce-flights fall)]
+    (if (some? kept)
+      kept
+      (let [flight (bounce-flight-run fall)]
+        (.set bounce-flights fall flight)
+        flight))))
 
 (defn bounce-wall
   "The blocks a wall round a slime pad must reach over the pad's level to hold a bounce after a fall of `fall` blocks: the
@@ -122,12 +134,12 @@
   level. nil when one is neither (the bounce may carry the body off) or x y z does not bounce. bounce? and wall? are fns
   [x y z] -> bool."
   [bounce? wall? x y z fall]
-  (when (bounce? x y z)
+  (when ^boolean (bounce? x y z)
     (let [k (bounce-wall fall)]
       (reduce (fn [cells [dx dz]]
                 (let [bx (+ x dx) bz (+ z dz)]
                   (cond
-                    (bounce? bx y bz) (conj cells [dx dz])
+                    ^boolean (bounce? bx y bz) (conj cells [dx dz])
                     (every? #(wall? bx (+ y %) bz) (range 1 (inc k))) cells
                     :else (reduced nil))))
               [[0 0]] pad-ring))))
