@@ -1,6 +1,6 @@
 ;; jobs.gather.mine and a drop it cannot get (card 79be43a4; the left-behind case not ported in card 8aa80fca). README: drops
 ;; still lying 0.4 s after the collect are reported once (info mine.left-behind) and listed in :left; then the body
-;; walks back to the start cell (info mine.not-home otherwise). It must never end stranded below or beyond: the checks are
+;; walks back to the start cell (otherwise warn mine.not-home, job :stopped :not-home). It must never end stranded: the checks are
 ;; mine.left-behind, mine.done, no mine.not-home, the body at the start cell. Case 1: the ore hangs over a 1-deep pit
 ;; (reachable drop: collected, nothing left). Case 2: the ore stands across a 1-wide 5-deep trench in the line, is dug from
 ;; the cut's end and its drop lies in plain view on the far side, out of reach. (Seen in the probe runs: ore across a

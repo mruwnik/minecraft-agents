@@ -785,7 +785,7 @@
   {:status :replan :why :refresh} for a partial plan due a refresh. Only at a boundary?. steps: the steps walked; i the
   executor's index before the tick; state its state after; watch {:base :fresh :ahead :skip :status :interval :mobs :seen}."
   [{:keys [base fresh ahead skip status interval mobs] :as watch} steps i {i2 :i tick :tick} pose]
-(when (boundary? steps i i2 tick pose)
+  (when (boundary? steps i i2 tick pose)
     (let [all (into steps ahead)
           here (assoc all (dec i2) (assoc (nth all (dec i2)) :px (:x pose) :pz (:z pose)))
           ^js now (fresh)
