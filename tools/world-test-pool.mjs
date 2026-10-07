@@ -2,8 +2,8 @@
 // `world-test.mjs <dir|file ...> --bodies N` runs the fixture files across up to N probe bodies and writes one merged --results file.
 // A unit is one fixture file, run by an ordinary one-body world-test child (own body slot, body claim, plot block). Pool flags:
 //   --bodies N        bodies to use (at most the res-slot body max minus one)
-//   --max-parallel M  children at once (default min(N, max(1, cores/4)): each child is a node process plus a live body)
-// A new child starts only while the 1-minute load average is at most the core count (polled; skipped when nothing is running).
+//   --max-parallel M  children at once (default min(N, body slot max minus one, bodies the memory above the res-slot floor holds at the body slot's needMb))
+// A new child starts only while the 1-minute load average is at most the core count (polled; the first child always starts).
 // SIGINT, SIGTERM and exit kill every child this call spawned (by pid) and delete its temp result file.
 //   --body PREFIX     body names PREFIX + A, B, ... (default ProbePool); each needs a whitelist entry
 //   --first-plot I    first plot of body A; body k starts at I + 20 k
@@ -128,7 +128,9 @@ const bodyLetter = (k) => (k < 26 ? String.fromCharCode(65 + k) : String(k))
 export const workerSpecs = (wanted, cap, prefix, firstPlot) =>
   Array.from({ length: Math.max(1, Math.min(wanted, cap)) }, (_, k) => ({ body: prefix + bodyLetter(k), firstPlot: firstPlot + PLOTS_PER_BODY * k }))
 
-export const poolCap = ({ bodies, cores, maxParallel }) => maxParallel ?? Math.min(bodies, Math.max(1, Math.floor(cores / 4)))
+// bodies at once: --max-parallel, else the bodies asked for, capped by the body slot max and by what the memory above the res-slot floor holds
+export const poolCap = ({ bodies, maxParallel, availableMb, floorMb, needMb, bodyMax }) =>
+  maxParallel ?? Math.max(1, Math.min(bodies, bodyMax, Math.floor((availableMb - floorMb) / needMb)))
 
 // Children alive and their temp files; reap() is idempotent and synchronous so it can run in an 'exit' handler.
 export const createReaper = (rm) => {
@@ -224,7 +226,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const fixtureFiles = (paths) => paths.flatMap((p) => (fs.statSync(p).isDirectory()
   ? fs.readdirSync(p).filter((f) => f.endsWith('.edn')).sort().map((f) => path.join(p, f))
   : [p]))
-const bodyCap = () => Math.max(1, (JSON.parse(fs.readFileSync(path.join(here, 'res-slot.json'), 'utf8')).kinds.body.max ?? 1) - 1)
+const slotConfig = () => JSON.parse(fs.readFileSync(path.join(here, 'res-slot.json'), 'utf8'))
+const bodyCap = () => Math.max(1, (slotConfig().kinds.body.max ?? 1) - 1)
+const availableMb = () => Number(fs.readFileSync('/proc/meminfo', 'utf8').match(/MemAvailable:\s+(\d+)/)[1]) / 1024
 
 // One child per unit: the ordinary one-body entry point (it takes the body slot and the body claim itself). Exit 75 = busy: ask again.
 const spawnChild = (script, pass, { file, match, worker }, tmpResults, reaper) => new Promise((resolve) => {
@@ -250,7 +254,7 @@ export const main = async (args) => {
   const previous = p.durations.filter((f) => fs.existsSync(f)).map((f) => fs.readFileSync(f, 'utf8'))
   const units = unitOrder([...byStem.keys()], previous)
   const cores = os.cpus().length
-  const workers = workerSpecs(poolCap({ bodies: p.bodies, cores, maxParallel: p.maxParallel }), bodyCap(), p.prefix, p.firstPlot)
+  const workers = workerSpecs(poolCap({ bodies: p.bodies, maxParallel: p.maxParallel, availableMb: availableMb(), floorMb: slotConfig().floorMb, needMb: slotConfig().kinds.body.needMb, bodyMax: bodyCap() }), bodyCap(), p.prefix, p.firstPlot)
   const reaper = createReaper((f) => fs.rmSync(f, { force: true }))
   process.on('exit', reaper.reap)
   for (const [sig, code] of [['SIGINT', 130], ['SIGTERM', 143]]) process.on(sig, () => { reaper.reap(); process.exit(code) })

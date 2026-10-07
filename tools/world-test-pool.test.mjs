@@ -164,11 +164,13 @@ test('mergeText: wraps forms in one vector', () => {
   assert.equal(mergeText(['{:a 1}', '{:b 2}']), '[{:a 1}\n {:b 2}]')
 })
 
-test('poolCap: default min(bodies, max(1, cores/4)); --max-parallel overrides', () => {
-  assert.equal(poolCap({ bodies: 19, cores: 16 }), 4)
-  assert.equal(poolCap({ bodies: 2, cores: 16 }), 2)
-  assert.equal(poolCap({ bodies: 5, cores: 2 }), 1)
-  assert.equal(poolCap({ bodies: 19, cores: 16, maxParallel: 9 }), 9)
+test('poolCap: min(bodies, body slot max, bodies the free memory above the floor holds); --max-parallel overrides', () => {
+  const mem = { availableMb: 14000, floorMb: 6000, needMb: 400, bodyMax: 20 }
+  assert.equal(poolCap({ bodies: 16, cores: 16, ...mem }), 16, 'cores do not cap it: 8000 MB / 400 holds 20')
+  assert.equal(poolCap({ bodies: 30, cores: 16, ...mem }), 20, 'the body slot max')
+  assert.equal(poolCap({ bodies: 16, cores: 16, ...mem, availableMb: 8000 }), 5, 'memory: 2000 / 400')
+  assert.equal(poolCap({ bodies: 16, cores: 16, ...mem, availableMb: 5000 }), 1, 'below the floor still runs one')
+  assert.equal(poolCap({ bodies: 19, cores: 16, ...mem, maxParallel: 9 }), 9)
 })
 test('parsePoolArgs: --max-parallel is a pool flag', () => {
   const p = parsePoolArgs(['d', '--max-parallel', '3'])
