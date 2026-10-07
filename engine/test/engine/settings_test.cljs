@@ -182,3 +182,19 @@
         gathered (set (keys settings-registry/settings-by-ns))]
     (is (seq declaring))
     (is (empty? (remove gathered (disj declaring 'engine.registry 'engine.settings-registry 'engine.main))))))
+
+(deftest a-body-file-with-a-low-events-cap-is-bad-and-keeps-the-default
+  (settings/with-settings {}
+    (fn []
+      (let [dir (tu/tmp-dir)
+            events (atom [])
+            specs (merge registry/settings settings-registry/settings)]
+        (write! dir "body.edn" "{:engine.events/max-bytes 1023}")
+        (settings/load! {:specs specs :world-file (path/join dir "none.edn") :body-file (path/join dir "body.edn")
+                         :body "Bob" :emit #(swap! events conj %)})
+        (is (= [:engine.events/max-bytes] (map :key @events)))
+        (is (= 67108864 (settings/get specs :engine.events/max-bytes)))
+        (write! dir "body.edn" "{:engine.events/max-bytes 4096}")
+        (settings/load! {:specs specs :world-file (path/join dir "none.edn") :body-file (path/join dir "body.edn")
+                         :body "Bob" :emit #(swap! events conj %)})
+        (is (= 4096 (settings/get specs :engine.events/max-bytes)))))))
