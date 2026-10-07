@@ -1,0 +1,19 @@
+;; Card 39ebd62c: a body that looks straight ahead (pitch 0) has not seen the floor beside its feet; step-off must glance at
+;; the floors first (jobs.lib.dig-look/look-unknown!), not end :no-cell. jobs.build.clear-box on the cell under the body's feet
+;; makes it step off. Case 2: the floors around are lava except a stone strip east: the body must take the strip.
+{:defaults
+ {:tags [:build :access :movement]
+  :time :any
+  :plot {:height 8}
+  :body {:at [12.5 0 12.5] :pitch 0 :effects [["resistance" 600 4]] :settle-s 3}
+  :limit-s 90}
+ :cases
+ [{:name "steps-off-on-unseen-floor-and-clears-the-cell"
+   :act [[:job (jobs.build.clear-box {:from #at [12 -1 12] :to #at [12 -1 12]})]]
+   :expect [{:event {:source :job :kind :clear-box.done :data {:dug 1}} :within-s 60 :of-job true}]
+   :after [[:block [12 -1 12] "air"]]}
+  {:name "never-steps-onto-lava-floor"
+   :blocks [[:fill [10 -1 10] [14 -1 14] "lava"] [:set [12 -1 12] "stone"] [:fill [12 -1 12] [15 -1 12] "stone"]]
+   :act [[:job (jobs.build.clear-box {:from #at [12 -1 12] :to #at [12 -1 12]})]]
+   :expect [{:event {:source :job :kind :clear-box.done} :within-s 60 :of-job true}]
+   :after [[:not-block [12 -1 12] "stone"] [:body-near [13.5 0 12.5] 3.5]]}]}

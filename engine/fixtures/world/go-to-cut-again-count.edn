@@ -1,0 +1,35 @@
+;; Card 3bb8bfe3: go-to :cut-again counts only cuts that sent the body back with no closest approach gained, keyed to the goal.
+;; Should-fail: the goal 4 blocks from a stationary (NoAI, helmeted) zombie inside the hostile-near radius 8 is cut again and
+;; again: the go-to gives up :cut-again (naming the zombie) after a few hostile-near fires, not an endless cycle.
+;; Should-succeed: a far walk where a zombie is summoned beside the body three times and killed two seconds later (fights in
+;; place, no send-back) still arrives. (Fleeing three times without gain is by design a give-up; the kills keep it short.)
+{:defaults
+ {:tags [:movement :hostile :large]
+  :mobs :keep
+  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+              :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+  :body {:at [4.5 0 16.5] :effects [["resistance" 900 4]]}}
+ :cases
+ [{:name "goal-beside-zombie-gives-up-cut-again"
+   :act [[:summon "zombie" [24.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:job (jobs.movement.go-to {:pos #at [20 0 16] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :unreachable :data {:why :cut-again}} :within-s 115 :of-job true}
+            {:count-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 115 :at-least 2 :at-most 12}]
+   :limit-s 120}
+  {:name "kills-in-place-do-not-count-as-cuts"
+   :plot {:height 12 :length 120 :width 32}
+   :body {:at [1.5 0 16.5]}
+   :act [[:job (jobs.movement.go-to {:pos #at [100 0 16] :range 1 :escalate false})]
+         [:wait-s 6]
+         [:rcon "execute at $BODY run summon zombie ~4 ~ ~ {Tags:[\"wt\"],PersistenceRequired:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:wait-s 2] [:rcon "kill @e[type=zombie,tag=wt,$BOX]"]
+         [:wait-s 4]
+         [:rcon "execute at $BODY run summon zombie ~4 ~ ~ {Tags:[\"wt\"],PersistenceRequired:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:wait-s 2] [:rcon "kill @e[type=zombie,tag=wt,$BOX]"]
+         [:wait-s 4]
+         [:rcon "execute at $BODY run summon zombie ~4 ~ ~ {Tags:[\"wt\"],PersistenceRequired:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:wait-s 2] [:rcon "kill @e[type=zombie,tag=wt,$BOX]"]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 200 :of-job true}
+            {:count-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 40 :at-least 1}]
+   :after [[:body-near [100.5 0 16.5] 3]]
+   :limit-s 220}]}

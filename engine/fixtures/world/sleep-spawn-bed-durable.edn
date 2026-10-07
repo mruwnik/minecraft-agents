@@ -1,0 +1,29 @@
+;; Card 9ca24d15: the respawn bed outlives the 1 h :spawn-set entry (:spawn-bed, forever), so a later night in the same
+;; bed, when the server is silent (the spawn point is already there), gives no spawn_not_set warning; a newer :spawn-reset
+;; invalidates it, and an expired :spawn-set alone is not enough. Needs night: run with --allow-time --time-log <shared log>.
+;; Same hut as night-sleep-in-hut: the bed at [10 0 12], the spawn point set there from the start (the server says nothing).
+{:defaults
+ {:tags [:night :survival :sleep]
+  :time :night-exclusive
+  :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow]
+           [:fill [9 0 9] [15 2 15] "air"]
+           [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]
+           [:set [10 0 12] "red_bed[facing=east,part=foot]"] [:set [11 0 12] "red_bed[facing=east,part=head]"]]
+  :register [{:trigger :night}]
+  :body {:at [13.5 0 13.5] :spawnpoint [10 0 12] :effects [["resistance" 600 4]] :settle-s 2}
+  :act [[:job (jobs.memory.set-place {:name :bed :pos #at [10 0 12]})]
+        [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 90]]
+  :limit-s 150}
+ :cases
+ [{:name "durable-spawn-bed-stays-silent-after-the-spawn-set-expired"
+   :memory [{:kind :spawn-set :data {:pos #xyz [10 0 12]} :age-s 7200}
+            {:kind :spawn-bed :data {:pos #xyz [10 0 12]} :age-s 7200 :policy {:cap 1 :ttl :forever}}]
+   :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 90}
+            {:no-event {:kind :spawn_not_set} :for-s 8 :from-event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}}}]}
+  {:name "expired-spawn-set-alone-warns"
+   :memory [{:kind :spawn-set :data {:pos #xyz [10 0 12]} :age-s 7200}]
+   :expect [{:event {:kind :spawn_not_set} :within-s 90}]}
+  {:name "newer-spawn-reset-invalidates-the-durable-bed"
+   :memory [{:kind :spawn-bed :data {:pos #xyz [10 0 12]} :age-s 7200 :policy {:cap 1 :ttl :forever}}
+            {:kind :spawn-reset :data {:pos #xyz [10 0 12]} :age-s 600}]
+   :expect [{:event {:kind :spawn_not_set} :within-s 90}]}]}

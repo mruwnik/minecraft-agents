@@ -1,0 +1,24 @@
+;; Card f198fa2f: jobs.access.stair looks once more at a floor still unseen once its cut is open before it stops :floor-unseen.
+;; Stone mass x 8..24, z 8..24, y 0..9 (as stair-undercuts-way); a cave pocket (air) holds the cut cells of the step at x 14
+;; so they are open before the stair digs there. The stair goes on through it instead of stopping :floor-unseen. The second
+;; case opens the pocket only after the stair is under way (a delayed reveal: setblock after a wait).
+;; Whether the floor is really unseen at the pocket is the live run's finding; the geometry follows stair-undercuts-way.
+{:defaults
+ {:tags [:access :mining]
+  :time :any
+  :plot {:height 20}
+  :blocks [[:fill [8 0 8] [24 9 24] "stone"]]
+  :body {:at [10.5 10 16.5] :inventory [["iron_pickaxe" 1]] :effects [["resistance" 600 4]]}
+  :limit-s 150}
+ :cases
+ [{:name "stair-through-open-pocket-goes-on"
+   :blocks [[:fill [14 7 16] [14 8 16] "air"]]
+   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 6})]]
+   :expect [{:event {:source :job :kind :stair.done :data {:steps 6}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :stair.stopped :data {:reason :floor-unseen}} :for-s 140 :until {:source :job :kind :stair.done}}]}
+  {:name "pocket-opens-while-the-stair-is-under-way"
+   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 6})]
+         [:wait-s 8]
+         [:rcon "execute positioned $X $Y $Z run fill ~14 ~7 ~16 ~14 ~8 ~16 air"]]
+   :expect [{:event {:source :job :kind :stair.done :data {:steps 6}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :stair.stopped :data {:reason :floor-unseen}} :for-s 140 :until {:source :job :kind :stair.done}}]}]}
