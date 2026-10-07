@@ -8,7 +8,7 @@
 
 (def doc
   "Keep one pen of one kind of animal in order. The pen is :box. One run is one pass over five steps in this
-  order, each a child job run one round at a time. A step under way is not re-decided.
+  order, each a child job called once (a child that yields is called again on the next call). A step under way is not re-decided.
 
   - :breed (jobs.animals.breed, 2 animals): adults plus babies are below :target, at least 2 adults, breeding
     food carried.
@@ -189,7 +189,9 @@
       {:todo (:todo m) :report (:report m) :call call}
       (plan (:todo m) (:args c) (facts c) (:report m)))))
 
-(defn ^:async round [c]
+(defn ^:async step
+  "One step: finish, or one call of the next step's child. :again after it ended (done or declined), :yield while it waits on the world, :done at the end."
+  [c]
   (when-not (:todo (ctx/mem c))
     (ctx/update-mem! c assoc :todo steps :report {}))
   (let [{:keys [call] :as p} (next-plan c)]
@@ -200,7 +202,18 @@
             _ (ctx/update-mem! c assoc :call-args (:args call))
             r (await (ctx/call-child c step (:job call) (:args call)))]
         (case r
-          :done (ctx/update-mem! c #(-> % (update :todo rest) (dissoc :call-args) (assoc-in [:report step] (summary step (ctx/child-result c step)))))
-          :declined (ctx/update-mem! c #(-> % (update :todo rest) (dissoc :call-args) (assoc-in [:report step] {:skipped :declined})))
-          nil)
-        :continue))))
+          :done (do (ctx/update-mem! c #(-> % (update :todo rest) (dissoc :call-args) (assoc-in [:report step] (summary step (ctx/child-result c step)))))
+                    :again)
+          :declined (do (ctx/update-mem! c #(-> % (update :todo rest) (dissoc :call-args) (assoc-in [:report step] {:skipped :declined})))
+                        :again)
+          :yield)))))
+
+(defn ^:async round
+  "The whole pass: each step's child once, until the run ends; yields only while a child waits on the world."
+  [c]
+  (loop []
+    (let [r (await (step c))]
+      (case r
+        :again (recur)
+        :yield :continue
+        r))))

@@ -35,7 +35,7 @@
 (defn ^:async scenario
   "Submit the job with args in a world; run n ticks 700 ms apart; the setup map."
   [args world n]
-  (let [s (h/setup world)]
+  (let [s (h/setup world 50)]
     (core/submit! (:eng s) (spec args) {})
     (dotimes [_ n]
       (swap! (:clock s) + 700)
@@ -58,6 +58,15 @@
           (is (empty? (attacked s)))
           (is (= 2 (get-in (done-event s) [:steps :breed :fed])))
           (is (true? (finished? s))))))))
+
+(deftest one-call-runs-every-step-and-ends
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:target 4} {:inventory [(wheat 4)] :entities [(cow 1 2) (cow 2 3) leather-on-the-ground]} 1))]
+          (is (true? (finished? s)))
+          (is (= 2 (get-in (done-event s) [:steps :breed :fed])))
+          (is (= 1 (get-in (done-event s) [:steps :collect :collected]))))))))
 
 (deftest seven-adults-above-target-four-are-culled-and-the-drops-picked-up
   (async done
