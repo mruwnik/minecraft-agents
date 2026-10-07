@@ -266,7 +266,7 @@
 
 (defn open
   "A world over the files of :plans-dir and :blueprint-dir and the zone file :zones-file. opts: :now (ms clock),
-  :emit (an event fn), :every-ms. Without :now (a real body) it reads the files at once and again every :every-ms by
+  :emit (an event fn), :every-ms. Without :now (a real body) it reads the files right after the open returns (the engine exists by then to take the events) and again every :every-ms by
   a timer, so a file written at any time is logged as world.reloaded even when no job reads the world (close! stops it)."
   [{:keys [now every-ms] :as opts}]
   (let [w {:state (atom {:plans {} :blueprints {}})
@@ -275,7 +275,7 @@
            :opts (assoc opts :now (or now js/Date.now) :every-ms (or every-ms (default-every-ms)))}]
     (if (or now (not (:plans-dir opts)))
       w
-      (do (refresh! w)
+      (do (js/setTimeout #(refresh! w) 0)
           (assoc w :timer (doto (js/setInterval #(refresh! w) (get-in w [:opts :every-ms])) (.unref)))))))
 
 (defn close!

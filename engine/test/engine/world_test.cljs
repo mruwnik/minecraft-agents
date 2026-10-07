@@ -438,10 +438,11 @@
           seen (atom [])]
       (write! plans "before" (pr-str wheat))
       (let [w (world/open {:plans-dir plans :blueprint-dir (tu/tmp-dir) :every-ms 50 :emit #(swap! seen conj %)})]
-        (is (contains? (reloaded-names seen) "before.edn") "a plan written before the open is logged by the open itself")
+        (is (empty? @seen) "open emits nothing itself: a real body's engine does not exist yet")
         (write! plans "after" (pr-str huts))
         (js/setTimeout
          (fn []
+           (is (contains? (reloaded-names seen) "before.edn") "a plan written before the open is logged once the open returned")
            (is (contains? (reloaded-names seen) "after.edn") "a plan written later is logged with nobody reading")
            (world/close! w)
            (done))
