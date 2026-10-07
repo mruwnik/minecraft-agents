@@ -1,5 +1,6 @@
 (ns jobs.forestry.harvest-wood
   (:require [engine.ctx :as ctx]
+            [clojure.string :as str]
             [jobs.lib.util :as u]
             [jobs.lib.result :as result]
             [jobs.forestry.trees :refer [default-radius drop-filter debts near-debt? sapling-for]]))
@@ -14,13 +15,14 @@
   warns harvest-wood.debts-owed with their :count and the :nearest one's :pos.
   Debts within the radius that stay unplanted (no sapling carried, spot refused) warn harvest-wood.replant-owed
   with :count, :pos, :reason (:no-sapling or :not-planted) and :text. The status stays :completed (the wood is
-  the goal); the result is {:replant-owed n} then. A missing sapling is fetched by plant-sapling (a seen chest, a craft); when none can be got it stays owed.")
+  the goal); the result is {:replant-owed n} then. With :count, the three phases repeat on the next tree until that many logs are carried (or no tree can be felled). A missing sapling is fetched by plant-sapling (a seen chest, a craft); when none can be got it stays owed.")
 
 (def args
   {:species {:doc "log species; any when nil" :default nil}
    :radius {:doc "search radius in blocks" :default default-radius}
    :filter {:doc "items to collect; the species' log, sapling, stick and apple when nil" :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims (passed to the felling and the planting); the rules of the game allow it" :default false}
+   :count {:doc "logs to carry: another tree is felled while fewer of the species' logs (any log when no species) are carried; nil: one tree" :default nil}
    :fetch {:doc "get a missing sapling (passed to plant-sapling; see its :fetch): true, a set of kinds or a map of limits; false leaves the replant owed" :default true}})
 
 (defn phases
@@ -84,6 +86,18 @@
          (map :count)
          (reduce + 0))))
 
+(defn logs-carried
+  "How many logs of the species (any log when nil) the body carries."
+  [c]
+  (let [log? (if-let [sp (:species (:args c))] #{(str sp "_log")} #(str/ends-with? % "_log"))]
+    (->> (u/inventory (:primitives c)) (filter #(log? (:name %))) (map :count) (reduce + 0))))
+
+(defn more-trees?
+  "Whether :count asks for more logs than are carried."
+  [c]
+  (let [n (:count (:args c))]
+    (and n (< (logs-carried c) n))))
+
 (defn ^:async round
   "Steps the current phase's child once; when the child is done the phase
   advances. Done when the :plant child is done. A declined child is
@@ -104,6 +118,10 @@
       (not= :done r) :continue
       (and (= :collect phase) (:tree (ctx/mem c)) (not (pos? gained)))
       (result/stop! c :nothing-collected "felled a tree but no drop came into the inventory")
+      (and (nil? next-phase) (more-trees? c))
+      (do (ctx/update-mem! c #(-> % (assoc :phase :fell :tree nil :carried-before nil :origin nil)
+                                  (update :children dissoc :fell :collect :plant)))
+          :continue)
       (nil? next-phase) (do (warn-owed! c) (warn-replant-owed! c) :done)
       :else (do (ctx/update-mem! c assoc :phase next-phase)
                 (when (= :plant next-phase) (ctx/update-mem! c assoc :origin (u/self-pos c)))

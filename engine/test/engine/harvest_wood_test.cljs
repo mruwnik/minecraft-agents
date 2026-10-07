@@ -203,3 +203,23 @@
 (deftest the-sapling-list-is-derived-from-the-species-table
   (is (= (set (map trees/sapling-of trees/species)) (set ps/saplings)))
   (is (every? (set trees/species) ["oak" "mangrove" "crimson" "warped"])))
+
+(defn ^:async phases-of
+  "The harvest-wood phases (repeats merged) over 40 ticks with one oak of 3 logs and a sapling carried."
+  [args]
+  (let [{:keys [eng]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3) :inventory [{:name "oak_sapling" :count 1}]})]
+    (core/submit! eng (list 'jobs.forestry.harvest-wood args) {})
+    (loop [i 0 seen []]
+      (if (< i 40)
+        (do (await (core/tick! eng))
+            (recur (inc i) (conj seen (:phase (core/job-memory eng "j1")))))
+        (vec (dedupe (remove nil? seen)))))))
+
+(deftest count-starts-the-next-tree-until-enough-logs-are-carried
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= [:collect :plant :fell] (await (phases-of {:species "oak" :radius 10 :count 5})))
+            "3 logs carried of 5: back to :fell")
+        (is (= [:collect :plant] (await (phases-of {:species "oak" :radius 10 :count 3}))) "enough: the job ends")
+        (is (= [:collect :plant] (await (phases-of {:species "oak" :radius 10}))) "no count: one tree")))))
