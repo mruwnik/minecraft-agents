@@ -716,3 +716,13 @@
 (deftest an-up-stair-ignores-air-under-its-solid-floor
   (is (nil? (:reason (stop {[1 65 0] "stone" [1 64 0] "cave_air"} #{:water} :dir :up))))
   (is (= :cave-below (:reason (stop {[1 62 0] "cave_air"} #{:water}))) "going down still refuses"))
+
+(deftest leaves-need-no-pickaxe
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [leaves (update-vals ground (constantly "oak_leaves"))
+              {:keys [out p events] :as s} (await (stair! {:blocks leaves :inventory []} east (fn [_])))]
+          (is (= :done (:status @out)))
+          (is (not= :no-tool (:reason (waiting s))))
+          (is (seq (digs p))))))))
