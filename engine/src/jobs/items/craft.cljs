@@ -63,7 +63,7 @@
       (do (ctx/update-mem! c assoc :table table)
           (if (u/within? (u/self-pos c) table 3)
             (if handed? (give-up! c made "unreachable") :again)
-            (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos table :range 3 :escalate false :warn false :retry false}))]
+            (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos table :range 3 :escalate false :warn false :retry false :zone-tolls true}))]
               (cond
                 (= :continue r) :continue
                 (:arrived (ctx/child-result c :walk)) :again

@@ -172,7 +172,7 @@
       (give-up! c "no-table" {})
       (let [r (if (u/within? (u/self-pos c) pos reach)
                 :done
-                (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos pos :range reach :escalate false :warn false :retry false})))]
+                (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos pos :range reach :escalate false :warn false :retry false :zone-tolls true})))]
         (cond
           (= :continue r) :continue
           (not (or (u/within? (u/self-pos c) pos reach) (:arrived (ctx/child-result c :walk)))) (fail-up! c "unreachable")

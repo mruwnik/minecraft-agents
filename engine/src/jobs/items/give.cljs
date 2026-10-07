@@ -88,7 +88,7 @@
   [c pos]
   (let [reach (:reach (:args c))
         r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos pos :range reach :doors :shut :leg-s walk-leg-s
-                                                               :escalate false :warn false :retry false}))
+                                                               :escalate false :warn false :retry false :zone-tolls true}))
         res (when-not (= :continue r) (ctx/child-result c :walk))]
     (if (= :continue r)
       :continue

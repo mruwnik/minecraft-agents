@@ -157,3 +157,12 @@
           (is (seq tolled))
           (is (not (on-strip? tolled -5 5)))
           (is (on-strip? ignoring -5 5) ":ignore-zones? lifts the tolls"))))))
+
+(deftest craft-bends-round-another-bodys-zone-on-its-walk-to-the-table
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [trail (await (job-trail '(jobs.items.craft {:item "bread" :radius 60})
+                                      {:inventory [{:name "wheat" :count 3}] :blocks {"40,64,0" "crafting_table"}}))]
+          (is (seq trail))
+          (is (not (on-strip? trail -5 5))))))))
