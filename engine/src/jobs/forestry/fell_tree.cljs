@@ -82,7 +82,7 @@
   [r res waits]
   (case r
     :continue :ok
-    :declined (if (= :not-allowed (:reason waits)) :refused :unreachable)
+    :declined (if (#{:not-allowed :hazard} (:reason waits)) :refused :unreachable)
     (case (:reason res)
       (:dug :already-clear) :ok
       (:cannot :fluid) :cannot

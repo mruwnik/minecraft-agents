@@ -166,13 +166,13 @@
     #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers dangers :avoid (.-avoid pw) :dark (.-dark pw)}))
 
 (defn with-dark
-  "pw whose plans cost dark cells more (the planner's options.dark): dark is look/dark-fn's {:at :night?} (nil: pw). A dark
+  "pw whose plans cost dark cells more (the planner's options.dark): dark is look/dark-fn's {:at ..} (nil: pw). A dark
   cell costs cost/dark-factor times its own seconds more."
   [pw dark]
   (if (nil? dark)
     pw
     #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers (.-dangers pw) :avoid (.-avoid pw)
-         :dark #js {:at (:at dark) :factor cost/dark-factor :night (:night? dark)}}))
+         :dark #js {:at (:at dark) :factor cost/dark-factor}}))
 
 (defn costed-world
   "pw (the primitives' pathWorld) costed the way go-to plans: with the dangers the body knows of now (dangers?, jobs.lib.threats)

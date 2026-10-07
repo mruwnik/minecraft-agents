@@ -40,7 +40,7 @@
    - options.dangers: known hostiles, an array of {x y z close radius rate} (at most 8): a move adds to its risk rate
      (hp a second) times its seconds within close blocks of a danger's point, falling linearly to 0 at radius; all the
      dangers together add at most options.dangerCap (4) a second (see dangerRisk). jobs.lib.threats builds them.
-   - options.dark {at, factor, night}: a cell that at(x, y, z) calls dark (returns 1) costs factor times its own seconds
+   - options.dark {at, factor}: a cell that at(x, y, z) calls dark (returns 1) costs factor times its own seconds
      more, in g and in cost.darkSeconds (see darkOf; jobs.lib.look builds at).
    - options.stopAtEdge: with the goal unloaded, the search ends at the first node it expands at the loaded edge (edgeStop)
      and names it as its frontier, not after searching all loaded land. go-to's budgeted searches set it (walk/new-search)."

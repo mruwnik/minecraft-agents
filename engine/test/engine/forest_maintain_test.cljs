@@ -487,3 +487,10 @@
 (deftest maintain-hands-its-accept-to-the-fell-child
   (is (= #{:falling-block}
          (:accept (maintain/fell-args {:args {:accept #{:falling-block}}} {:x 3 :y 64 :z 0} "oak")))))
+
+(deftest a-declined-dig-hazard-is-refused-not-unreachable
+  (are [waits out] (= out (fell-tree/outcome :declined nil waits))
+    {:reason :not-allowed} :refused
+    {:reason :hazard} :refused
+    {:reason :unreachable} :unreachable
+    {:reason :no-tool} :unreachable))

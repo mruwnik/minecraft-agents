@@ -266,22 +266,34 @@
       (after-shut! c)
       (set-phase! c :leash))))
 
+(def max-release-declines "How often the unleash child of one animal may decline before the animal is given up on." 3)
+
 (defn ^:async release-step!
   "One round of unleashing (jobs.animals.unleash by key, kept on one animal until that child is done, which
-  includes picking its lead up), the next led animal not yet tried after it; on-done once none is left."
+  includes picking its lead up), the next led animal not yet tried after it; on-done once none is left. A child
+  that declines max-release-declines times gives the animal up as :declined."
   [c on-done]
   (let [m (ctx/mem c)
         k (or (:releasing m) (first (remove (set (:release-tried m)) (led-now c))))]
     (if-not k
       (on-done)
       (do (ctx/update-mem! c assoc :releasing k)
-          (when (= :done (await (ctx/call-child c :unleash 'jobs.animals.unleash
-                                                {:mob (:mob (:args c)) :animal k :radius release-radius})))
-            (let [reason (:reason (ctx/child-result c :unleash))]
+          (let [r (await (ctx/call-child c :unleash 'jobs.animals.unleash
+                                         {:mob (:mob (:args c)) :animal k :radius release-radius}))
+                reason (when (= :done r) (:reason (ctx/child-result c :unleash)))
+                declines (cond-> (:release-declines (ctx/mem c) 0) (= :declined r) inc)]
+            (cond
+              (= :done r)
               (ctx/update-mem! c #(-> %
                                       (update :release-tried (fnil conj []) k)
                                       (cond-> (not= :unleashed reason) (update :unleash-failed assoc k (or reason :refused)))
-                                      (dissoc :releasing)))))
+                                      (dissoc :releasing :release-declines)))
+              (>= declines max-release-declines)
+              (ctx/update-mem! c #(-> %
+                                      (update :release-tried (fnil conj []) k)
+                                      (update :unleash-failed assoc k :declined)
+                                      (dissoc :releasing :release-declines)))
+              :else (ctx/update-mem! c assoc :release-declines declines)))
           :continue))))
 
 ;; ------------------------------------------------------------------ the pen and its gate
@@ -701,7 +713,7 @@
         in? (boolean (and there (pen/in-pen? (read-pen c) there)))
         failed (get (:unleash-failed (ctx/mem c)) k)]
     (ctx/update-mem! c #(-> %
-                            (dissoc :release-tried :releasing :unleash-failed)
+                            (dissoc :release-tried :releasing :release-declines :unleash-failed)
                             (assoc :led [] :animal nil)
                             (cond-> (and in? (not failed) (not (some #{k} (:brought %)))) (update :brought (fnil conj []) k))
                             (cond-> (and (or failed (not in?)) (not (contains? (:given-up %) k)))
@@ -778,7 +790,8 @@
       :shut-back-in (await (go-then! c (axis-cell in-1) :shut-out))
       :give-up-walk (await (go-then! c (axis-cell 1) :give-up-unleash {:given-up (assoc (:given-up m) (:animal m) :jammed)}))
       :give-up-unleash (await (release-step! c #(released! c :exit-out)))
-      :let-go (await (release-step! c #(set-phase! c :shut-gate)))
+      :let-go (await (release-step! c #(do (ctx/update-mem! c dissoc :release-tried :releasing :release-declines :unleash-failed)
+                                          (set-phase! c :shut-gate))))
       ;; a run ending with the body on the pen side goes out first (the exit's own way, then the census ends it)
       :shut-gate (cond
                    (not (gate-open? c)) (after-shut! c)

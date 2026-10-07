@@ -2,6 +2,7 @@
   "jobs.animals.herd against the fake world: a 5x5 pen (fence ring x 10..16, z 0..6) with a gate in its west wall."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.hostile-test :as h]
@@ -713,6 +714,39 @@
           (let [e (done-event s)]
             (is (= [] (:brought e)) "still on the lead: not brought")
             (is (= {"u1" :refused} (:given-up e)) "the unleash child's reason")))))))
+
+(defn ^:async ticks-watching
+  "Tick n times, calling (f job-memory) after each tick."
+  [{:keys [eng clock]} n f]
+  (dotimes [_ n]
+    (when-not (empty? (:list (core/state eng)))
+      (swap! clock + 700)
+      (await (core/tick! eng))
+      (f (core/job-memory eng "j1")))))
+
+(deftest a-lead-let-go-at-the-end-leaves-no-unleash-failure-in-the-memory
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (submit! (setup (world {:entities [(cow 1 4 3)] :states {gate-key {:open false :locked true}}})) {:target 1})
+              stale (atom [])]
+          (refuse-unleash-clicks! s)
+          (await (ticks-watching s 60 #(when (and (= :shut-gate (:phase %)) (:unleash-failed %))
+                                         (swap! stale conj (:unleash-failed %)))))
+          (is (empty? @stale) "released for good once the let-go is done"))))))
+
+(deftest a-release-child-that-declines-is-given-up-after-a-few-rounds
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [orig ctx/call-child
+              s (submit! (setup (world {:entities [(cow 1 4 3)]})) {:target 1})]
+          (set! ctx/call-child (fn [c slot job args] (if (= :unleash slot) (js/Promise.resolve :declined) (orig c slot job args))))
+          (try (await (run-ticks s 400))
+               (finally (set! ctx/call-child orig)))
+          (let [e (done-event s)]
+            (is (some? e) "the run ends")
+            (is (= {"u1" :declined} (:given-up e)))))))))
 
 (deftest the-escape-census-counts-the-animals-gone-from-the-pen
   (doseq [[before after escaped] [[3 3 0] [3 2 1] [2 0 2] [1 2 0]]]

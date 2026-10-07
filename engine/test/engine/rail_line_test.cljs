@@ -4,6 +4,7 @@
             [engine.build-from-plan-test :as b]
             [engine.core :as core]
             [engine.harvest-test :as h]
+            [engine.memory :as mem]
             [jobs.blocks.dig :as dig]
             [jobs.build.rail :as builder]
             [engine.registry :as registry]
@@ -425,10 +426,12 @@
     (tu/run-async done
       (fn ^:async t []
         (let [world (built-line-world l-route {} flat-top {"10,64,1" "water"} {"10,64,0" {:shape "north_south"}})
-              [result _ p] (await (build-route! l-route {} world {:all-carried false :accept [:fluid-adjacent]}))]
+              [result _ p eng] (await (build-route! l-route {} world {:all-carried false :accept [:fluid-adjacent]}))]
           (is (true? (:ok? result)))
           (is (= "east_west" (shape-of p [10 64 0])))
-          (is (= 1 (count (h/calls p "dig")))))))))
+          (is (= 1 (count (h/calls p "dig"))))
+          (is (= {:placed 1 :wrong [] :given-up {}} (select-keys (:built result) [:placed :wrong :given-up])))
+          (is (empty? (mem/entries (mem/view (:store eng)) :tidy)) "the body's own rail is no tidy record"))))))
 
 (defn ^:async with-dig-attempt!
   "Run f with jobs.blocks.dig/attempt! replaced by attempt, restored after."
@@ -443,21 +446,27 @@
     (tu/run-async done
       (fn ^:async t []
         (let [world (built-line-world l-route {} flat-top {} {"10,64,0" {:shape "north_south"}})
-              [result _ _] (await (with-dig-attempt!
+              [result seen p] (await (with-dig-attempt!
                                     (fn [c pos] (dig/finish! c {:dug false :pos pos :block "air" :reason :already-clear}))
                                     #(build-route! l-route {} world {:all-carried false :fix 1})))]
-          (is (nil? (get-in result [:built :given-up [10 64 0]])) (pr-str (:built result))))))))
+          (is (nil? (get-in result [:built :given-up [10 64 0]])) (pr-str (:built result)))
+          (is (= :not-done result) "the build parks with the rail unmended")
+          (is (empty? (h/calls p "dig")) "the dig was never made")
+          (is (empty? (h/events-of seen :rail-build.broken))))))))
 
 (deftest a-declined-dig-child-is-passed-up-and-the-build-parks
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [world (built-line-world l-route {} flat-top {} {"10,64,0" {:shape "north_south"}})
-              [result _ _] (await (with-dig-attempt!
+              [result seen p] (await (with-dig-attempt!
                                     (fn [c _] (dig/unreachable! c :test))
                                     #(build-route! l-route {} world {:all-carried false})))]
           (is (not (true? (:ok? result))))
-          (is (nil? (get-in result [:built :given-up [10 64 0]])) (pr-str result)))))))
+          (is (nil? (get-in result [:built :given-up [10 64 0]])) (pr-str result))
+          (is (= :not-done result) "the build parks, the child's decline passed up")
+          (is (empty? (h/calls p "dig")))
+          (is (empty? (h/events-of seen :rail-build.broken))))))))
 
 (deftest a-rail-that-cannot-come-out-right-is-given-up-as-shape-after-the-fixes-are-spent
   (async done
