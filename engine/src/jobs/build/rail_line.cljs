@@ -8,6 +8,7 @@
             [jobs.build.from-plan :as build]
             [plan.rail :as rail]
             [plan.shape :as shape]
+            [jobs.lib.util :as u]
             [jobs.lib.world :as known]))
 
 (def doc
@@ -45,7 +46,7 @@
 (def args
   {:plan {:doc "id of a plan of the body's world" :default nil}
    :part {:doc "only the cells of this part" :default nil}
-   :reach {:doc "as jobs.build.from-plan" :default 4.2}
+   :reach {:doc "as jobs.build.from-plan" :default u/eye-reach}
    :give-up {:doc "as jobs.build.from-plan" :default 3}
    :accept {:doc "as jobs.build.from-plan" :default [:fluid-adjacent]}
    :all-carried {:doc "start only while every item still to place is carried (false: build what is carried)" :default true}

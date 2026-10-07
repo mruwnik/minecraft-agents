@@ -600,6 +600,8 @@
           (is (= :still-burning (stopped-reason seen)))
           (is (= extinguish/max-passes @go-tos)))))))
 
+(def scoop-edge "Blocks (feet distance) a pour can lie away and still be scooped in place: eye reach 4.5 less the eye height." 4)
+
 (defn ^:async pour-then-flee
   "A cut run poured at the origin, then the body (out of the fire) stands at x blocks away; runs to the end."
   [x]
@@ -619,9 +621,17 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (await (pour-then-flee extinguish/max-scoop-distance))]
+        (let [{:keys [eng p seen]} (await (pour-then-flee scoop-edge))]
           (is (= [] (entries eng :extinguish-pour)))
           (is (= ["water_bucket" "bucket"] (mapv (comp :item call-args) (calls p "place"))))
+          (is (= 0 (count (calls p "moveTo"))) "no walk back")
+          (is (= [] (of-kind seen :extinguish.scoop_failed))))))))
+
+(deftest a-pour-4-3-blocks-away-is-in-bucket-reach-from-the-eye
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p seen]} (await (pour-then-flee 4.3))]
           (is (= 0 (count (calls p "moveTo"))) "no walk back")
           (is (= [] (of-kind seen :extinguish.scoop_failed))))))))
 
@@ -629,10 +639,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (await (pour-then-flee (inc extinguish/max-scoop-distance)))]
+        (let [{:keys [eng p seen]} (await (pour-then-flee (inc scoop-edge)))]
           (is (= [] (entries eng :extinguish-pour)))
           (is (= ["water_bucket" "bucket"] (mapv (comp :item call-args) (calls p "place"))))
-          (is (<= (u/dist (u/pos-of (.-pos (.self p))) {:x 0 :y 64 :z 0}) extinguish/max-scoop-distance) "walked back")
+          (is (<= (u/eye-dist (u/pos-of (.-pos (.self p))) [0 64 0]) u/bucket-reach) "walked back")
           (is (= [] (of-kind seen :extinguish.scoop_failed))))))))
 
 (deftest a-pour-left-at-the-walk-back-limit-is-scooped-and-farther-is-dropped
@@ -659,7 +669,7 @@
                                      (core/submit! (:eng s) '(jobs.survival.extinguish) {})
                                      (await (core/tick! (:eng s)))
                                      (swap! (fake/state (:p s)) assoc-in [:self :onFire] false)
-                                     (swap! (fake/state (:p s)) assoc-in [:self :pos] [(inc extinguish/max-scoop-distance) 64 0])
+                                     (swap! (fake/state (:p s)) assoc-in [:self :pos] [(inc scoop-edge) 64 0])
                                      (await (run-until-empty (:eng s) 3))
                                      s)]
           (is (= [] (:list (core/state eng))) "the run ends")
@@ -671,7 +681,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [far (inc extinguish/max-scoop-distance)
+        (let [far (inc scoop-edge)
               {:keys [eng p seen]} (setup {:self {:onFire true}
                                            :inventory [{:name "water_bucket" :count 2}]
                                            :blocks (floor 40)})

@@ -55,7 +55,7 @@
 (def args
   {:tunnel {:doc "the result of jobs.access.tunnel (:line :dug :torches)" :default nil}
    :spare {:doc "items filled with only when nothing else is carried (a caller's own haul)" :default []}
-   :reach {:doc "mouth cells whose centre is this close to the eye are filled from the entry, in blocks" :default 4.5}
+   :reach {:doc "mouth cells whose centre is this close to the eye are filled from the entry, in blocks" :default u/bucket-reach}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
    :fetch {:doc "get a missing pickaxe for the escape instead of waiting :no-tool (jobs.lib.fetch): true, a set of kinds or a map of limits; false waits :no-tool" :default true}})
 

@@ -64,7 +64,6 @@
 ;; solid blocks that do not fall (sand, gravel and concrete powder would drop into the lava)
 (def cover-blocks ["cobblestone" "stone" "dirt" "netherrack" "cobbled_deepslate" "deepslate" "andesite" "diorite" "granite"])
 
-(def max-scoop-distance "A pour left farther than this (a cut run, then a flight) is walked back to first (a bucket reaches 4.5)." 4)
 (def max-return-distance "A pour left farther than this is dropped with a warn, not walked back to." 16)
 (def max-scoop-return-range "go-to range for the walk back to a pour." 3)
 (def max-pour-waits 8)
@@ -227,14 +226,14 @@
               (await (burning-wait! c pour-wait-ms))
               :again)))
 
-      (and (> (u/dist (u/self-pos c) cell) max-scoop-distance)
+      (and (> (u/eye-dist (u/self-pos c) cell) u/bucket-reach)
            (<= (u/dist (u/self-pos c) cell) max-return-distance)
            (not (:returned (ctx/mem c))))
       (do (ctx/update-mem! c assoc :returned true)
           (await (ctx/call-child c :go 'jobs.movement.go-to {:pos cell :range max-scoop-return-range :escalate false}))
           :again)
 
-      (> (u/dist (u/self-pos c) cell) max-scoop-distance)
+      (> (u/eye-dist (u/self-pos c) cell) u/bucket-reach)
       (do (clear-pour! c)
           (ctx/emit! c :extinguish.scoop_failed :warn
                      {:text (str "left the poured water at " (pr-str cell) ": too far to scoop") :pos cell :status "far"})

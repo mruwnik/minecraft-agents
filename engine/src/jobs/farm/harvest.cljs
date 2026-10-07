@@ -44,7 +44,7 @@
    :replant-bare {:doc "with :plan, also sow the planned cells that stood bare before; false: only the cells this run cut" :default true}
    :crops {:doc "crop block names to cut; all known crops when nil" :default nil}
    :give-up {:doc "unreachable crops after which cutting stops" :default 4}
-   :reach {:doc "cells whose centre is this close to the eye (dig and place accept 4.5) are worked without walking, in blocks" :default 4.2}
+   :reach {:doc "cells whose centre is this close to the eye (dig and place accept 4.5) are worked without walking, in blocks" :default u/eye-reach}
    :plan {:doc "id of a plan of the body's world whose crop cells are the field (then :radius and :center are not used)" :default nil}
    :part {:doc "with :plan, only the cells of this part" :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})

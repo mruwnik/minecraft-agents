@@ -44,7 +44,7 @@
    :part {:doc "only the cells of this part (and the air above its crop cells)" :default nil}
    :accept {:doc "dig hazards accepted: :fluid-adjacent (water beside; lava beside is :lava-adjacent and is not accepted by default), :falling-block, :under-feet"
             :default #{:fluid-adjacent}}
-   :reach {:doc "cells whose centre is this close to the eye are dug without walking, in blocks" :default 4.2}
+   :reach {:doc "cells whose centre is this close to the eye are dug without walking, in blocks" :default u/eye-reach}
    :give-up {:doc "failed walks, failed digs or hazard-blocked tries after which a cell is refused" :default 3}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 

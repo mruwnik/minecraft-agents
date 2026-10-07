@@ -35,7 +35,7 @@
 (def args
   {:box {:doc "the field: {:min {:x :y :z} :max {:x :y :z}}, inclusive; the ground layer is y = (:y :min); required (without it the check declines)" :default nil}
    :seed {:doc "item name to plant; the carried seed with the largest count when nil" :default nil}
-   :reach {:doc "cells whose centre is this close to the eye (place accepts 4.5) are planted without walking, in blocks" :default 4.2}
+   :reach {:doc "cells whose centre is this close to the eye (place accepts 4.5) are planted without walking, in blocks" :default u/eye-reach}
    :plan {:doc "id of a plan of the body's world whose crop cells are the field (then :box and :seed are not used)" :default nil}
    :part {:doc "with :plan, only the cells of this part" :default nil}
    :fetch {:doc "get a missing seed (jobs.lib.fetch): true, a set of kinds or a map of limits; false waits :need" :default true}

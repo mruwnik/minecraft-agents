@@ -71,7 +71,7 @@
 (def args
   {:plan {:doc "id of a plan of the body's world" :default nil}
    :part {:doc "only the cells of this part" :default nil}
-   :reach {:doc "cells whose centre is this close to the eye are placed without walking, in blocks" :default 4.2}
+   :reach {:doc "cells whose centre is this close to the eye are placed without walking, in blocks" :default u/eye-reach}
    :give-up {:doc "refused places or failed walks after which a cell is given up" :default 3}
    :accept {:doc "fluid hazards of a cell taken: :fluid-adjacent (water beside; placing beside or into water seals and bridges), :lava-adjacent (lava beside; not taken by default: the body stands beside the cell)" :default [:fluid-adjacent]}
    :fetch {:doc "get the blocks and tools the plan lacks (jobs.lib.fetch): true, a set of kinds or a map of limits; false builds with what is carried" :default true}

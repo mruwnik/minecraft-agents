@@ -6,6 +6,7 @@
             [jobs.animals.pen-check :as pen-check]
             [jobs.build.from-plan :as build]
             [jobs.lib.pace :as pace]
+            [jobs.lib.util :as u]
             [jobs.lib.world :as known]))
 
 (def doc
@@ -31,7 +32,7 @@
 (def args
   {:plan {:doc "id of a plan of the body's world" :default nil}
    :part {:doc "only the cells of this part" :default nil}
-   :reach {:doc "as jobs.build.from-plan" :default 4.2}
+   :reach {:doc "as jobs.build.from-plan" :default u/eye-reach}
    :give-up {:doc "as jobs.build.from-plan" :default 3}
    :accept {:doc "as jobs.build.from-plan" :default [:fluid-adjacent]}
    :max-cells {:doc "most cells the pen check visits before it gives up with :unbounded" :default pen/default-max-cells}

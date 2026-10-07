@@ -59,7 +59,7 @@
    :accept {:doc "dig hazards accepted: :fluid-adjacent (water beside), :lava-adjacent, :falling-block"
             :default #{:fluid-adjacent}}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
-   :reach {:doc "cells whose centre is this close to the eye are dug from where the body stands, in blocks" :default 4.5}
+   :reach {:doc "cells whose centre is this close to the eye are dug from where the body stands, in blocks" :default u/bucket-reach}
    :give-up {:doc "walks ending out of reach, or failed digs, after which a cell is held" :default 2}})
 
 (def eye-height 1.62)

@@ -47,6 +47,12 @@
 
 (def eye-height 1.62)
 
+(def eye-reach
+  "Eye-to-centre distance within which a block is dug or placed without walking: a margin under the primitives' 4.5."
+  4.2)
+
+(def bucket-reach "Eye-to-centre distance the game accepts for a click, a bucket included." 4.5)
+
 (defn eye-dist
   "Distance from the eye of a body at feet position here to the centre of cell (a [x y z] vector or an {:x :y :z} map)."
   [here cell]

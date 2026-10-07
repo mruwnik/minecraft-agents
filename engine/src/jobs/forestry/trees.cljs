@@ -94,9 +94,7 @@
     (when (some-> n log-name?)
       {:column {:x (:x pos) :z (:z pos)} :base pos :species (species-of n)})))
 
-(def dig-reach
-  "Eye-to-centre distance within which a block is dug without walking (the primitive accepts 4.5)."
-  4.2)
+(def dig-reach u/eye-reach)
 
 (defn unreachable-set [memory]
   (set (map vec (:unreachable memory))))
