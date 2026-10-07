@@ -1,0 +1,22 @@
+;; Card 115846a3 (real zone box): go-to's escalation names the zone when a stair is refused only by another body's zones.edn box
+;; (:escalation {:step :none :why :zone}), not :no-headroom or :no-dig; :ignore-zones? true stairs out and arrives.
+;; Stone mass x 10..22, z 10..22, y 0..2 with a 1x1x2 cell at x 16, z 16 (y 0..1) under a 1-thick roof (y 2): the top feet y is 3.
+{:defaults
+ {:tags [:movement :access :zones]
+  :time :any
+  :plot {:height 12}
+  :blocks [[:fill [10 0 10] [22 2 22] "stone"] [:fill [16 0 16] [16 1 16] "air"]]
+  :zones [{:name "mass" :min [10 0 10] :max [22 2 22] :owner "SomeoneElse"}]
+  :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1]] :effects [["resistance" 600 4]]}
+  :limit-s 150}
+ :cases
+ [{:name "roofed-pit-in-foreign-zone-names-the-zone"
+   :act [[:job (jobs.movement.go-to {:pos #at [20 3 16] :range 1})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false :escalation {:step :none :why :zone}}} :within-s 90 :of-job true}
+            {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 90 :until {:source :job :kind :result :data {:arrived false :escalation {:step :none :why :zone}}}}]
+   :after [[:block [16 2 16] "stone"] [:body-near [16.5 0 16.5] 1.5]]}
+  {:name "roofed-pit-ignore-zones-stairs-out"
+   :act [[:job (jobs.movement.go-to {:pos #at [20 3 16] :range 1 :ignore-zones? true})]]
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 90 :of-job true}
+            {:event {:source :job :kind :result :data {:arrived true}} :within-s 140 :of-job true}]
+   :after [[:body-near [20.5 3 16.5] 2]]}]}

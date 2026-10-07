@@ -1,0 +1,33 @@
+;; Cards 2f7690d4, 914889b0, 0476f985, b2fdd061: go-to :place falls back to a shared marker of places.json (:places seeds it) when memory has
+;; no place of that name: the exact name first, then any case, names with spaces and capitals allowed; the body's own place wins on a clash; an
+;; unknown name is refused (:unknown-place) and the body stays. Marker names are shared by every shard: each case has its own.
+{:defaults
+ {:tags [:movement :memory :places]
+  :time :any
+  :plot {:height 8}
+  :body {:at [4.5 0 16.5] :effects [["resistance" 600 4]]}
+  :limit-s 60}
+ :cases
+ [{:name "marker-with-spaces-and-capitals-arrives"
+   :places [{:name "WT North Farm" :kind "farm" :pos [24 0 16]}]
+   :act [[:job (jobs.movement.go-to {:place "WT North Farm" :range 1})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 45 :of-job true}]
+   :after [[:body-near [24.5 0 16.5] 2]]}
+  {:name "marker-name-in-other-case-arrives"
+   :places [{:name "WT Shed One" :pos [24 0 10]}]
+   :act [[:job (jobs.movement.go-to {:place "wt shed one" :range 1})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 45 :of-job true}]
+   :after [[:body-near [24.5 0 10.5] 2]]}
+  {:name "own-place-wins-over-a-marker-of-the-same-name"
+   :places [{:name "wtcamp" :pos [24 0 26]}]
+   :act [[:job (jobs.memory.set-place {:name :wtcamp :pos #at [24 0 6]})]
+         [:wait-s 2]
+         [:job (jobs.movement.go-to {:place :wtcamp :range 1})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 45 :of-job true}]
+   :after [[:body-near [24.5 0 6.5] 2] [:body-far [24.5 0 26.5] 10]]}
+  {:name "unknown-marker-refused-no-walk"
+   :places [{:name "WT Real Marker" :pos [24 0 16]}]
+   :act [[:job (jobs.movement.go-to {:place "WT Missing Marker" :range 1})]]
+   :expect [{:event {:source :job :kind :refused :data {:reason :unknown-place}} :within-s 15 :of-job true}
+            {:event {:source :job :kind :result :data {:arrived false :reason :unknown-place}} :within-s 15 :of-job true}]
+   :after [[:body-near [4.5 0 16.5] 1.5]]}]}
