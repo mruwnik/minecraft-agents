@@ -18,10 +18,10 @@
   Phases, each by a child job:
   - :leash: jobs.animals.leash (radius :radius).
   - :walk: jobs.movement.go-to to :pos (the :fence cell when no :pos), range :range, in legs of a few blocks along
-    the planned path (one round, no :continue between legs). After each leg the animal is looked at: off the lead
-    :lead-broke; unseen or more than 7 blocks behind, the body waits (the job yields) for it to come into sight or
+    the planned path. One call is the whole run; it yields only while a child waits on the world. After each leg the animal is looked at: off the lead
+    :lead-broke; unseen or more than 7 blocks behind, the body holds still (:waiting-for-animal) for it to come into sight or
     catch up; unseen for 3 s (a ledge or tree can hide it) :lost; more than 10 behind, or still waiting
-    after 20 rounds, :lagging.
+    after 10 s, :lagging.
   - :gather (no :fence only): see below.
   - :arrive: with :fence, walk within 2 of the post and click it with an empty hand (useOn), tried twice.
     Without :fence, jobs.animals.unleash lets the animal go and picks the lead up.
@@ -131,10 +131,10 @@
   (let [oargs {:item "lead" :count 1}
         r (await (ctx/call-child c :obtain 'jobs.items.obtain oargs))]
     (cond
-      (= :continue r) :continue
+      (= :continue r) :yield
       (= :declined r) (do (ctx/update-mem! c assoc :lead-why (some-> (b/child-wait c :obtain 'jobs.items.obtain oargs) :reason name))
                           (finish! c :no-lead))
-      (lead-carried? c) (do (set-phase! c :leash) :continue)
+      (lead-carried? c) (do (set-phase! c :leash) :again)
       :else (do (ctx/update-mem! c assoc :lead-why (some-> (ctx/child-result c :obtain) :reason name))
                 (finish! c :no-lead)))))
 
@@ -143,12 +143,12 @@
         r (await (ctx/call-child c :leash 'jobs.animals.leash
                                  (cond-> {:mob mob :radius radius} (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))]
     (if-not (= :done r)
-      :continue
+      :yield
       (let [res (ctx/child-result c :leash)]
         (if-not (= :leashed (:reason res))
           (finish! c (:reason res))
           (do (ctx/update-mem! c assoc :animal (:animal res) :still-led true :phase :walk)
-              :continue))))))
+              :again))))))
 
 (defn flat-dist [a b]
   (js/Math.hypot (- (:x a) (:x b)) (- (:z a) (:z b))))
@@ -249,9 +249,13 @@
   "The body does not walk on while a seen animal trails it by more than this many blocks: the lead breaks past 10."
   7)
 
-(def max-waits
-  "Rounds spent waiting for an animal to catch up or come into sight before the job gives it up as :lagging."
-  20)
+(def max-wait-ms
+  "Time spent waiting for an animal to catch up or come into sight before the job gives it up as :lagging."
+  10000)
+
+(def wait-look-ms
+  "One look's wait while the body holds still for the animal."
+  250)
 
 (def unseen-lost-ms
   "Time the animal must stay out of sight, from the first look that missed it, before it counts as :lost. A led animal
@@ -277,22 +281,31 @@
               (> d gap) :wait))))))
 
 (defn escort-verdict
-  "escort-problem with the waits counted: :wait becomes :lagging after max-waits in a row, and a clear look resets the count."
+  "escort-problem with the wait timed: :wait becomes :lagging after max-wait-ms of waiting in a row, and a clear look resets the clock."
   [c gap]
   (let [p (escort-problem c gap)
-        n (inc (:waits (ctx/mem c) 0))]
+        now (ctx/now c)
+        since (or (:wait-since (ctx/mem c)) now)]
     (if (= :wait p)
-      (do (ctx/update-mem! c assoc :waits n)
-          (if (> n max-waits) :lagging :wait))
-      (do (ctx/update-mem! c dissoc :waits)
+      (do (ctx/update-mem! c assoc :wait-since since)
+          (if (> (- now since) max-wait-ms) :lagging :wait))
+      (do (ctx/update-mem! c dissoc :wait-since)
           p))))
+
+(defn ^:async wait-for-animal!
+  "Hold still on purpose for one look's wait; the caller then looks again. Always :again."
+  [c]
+  (ctx/hold-still! c :waiting-for-animal)
+  (await (ctx/act c :wait #js {:ms wait-look-ms}))
+  (ctx/hold-still! c nil)
+  :again)
 
 (defn ^:async walk-legs!
   "Walk to target (within range) in short go-to legs in child slot, looking at the animal after each (a pull passes
   follow-reach as gap: it strains the lead on purpose; a plain walk safe-gap). The body does not
   outrun the animal: when it is out of sight or trails too far the walk answers :catching-up and looks again at the next
   round before the next leg. Answer :arrived, :failed (a leg did not arrive), :limit (limit-ms from started passed),
-  :waiting (a leg's child is waiting on the world: the round goes on later), :catching-up or
+  :waiting (a leg's child is waiting on the world: the job yields), :catching-up (the caller waits for the animal) or
   {:problem :lost|:lead-broke|:lagging}."
   [c slot target range started limit-ms gap]
   (let [pre (when (:catching-up (ctx/mem c)) (escort-verdict c gap))]
@@ -322,8 +335,9 @@
 (defn ^:async walk! [c]
   (let [r (await (walk-legs! c :walk (destination c) (:range (:args c)) nil nil safe-gap))]
     (cond
-      (#{:waiting :catching-up} r) :continue
-      (= :arrived r) (do (set-phase! c (if (:fence (:args c)) :arrive :gather)) :continue)
+      (= :waiting r) :yield
+      (= :catching-up r) (await (wait-for-animal! c))
+      (= :arrived r) (do (set-phase! c (if (:fence (:args c)) :arrive :gather)) :again)
       (= :failed r) (finish! c :unreachable)
       :else (do (ctx/update-mem! c assoc :still-led (= :lagging (:problem r)))
                 (finish! c (:problem r))))))
@@ -335,7 +349,7 @@
   (ctx/update-mem! c dissoc :pull-target :pull-started)
   (ctx/update-mem! c update :children dissoc :pull)
   (set-phase! c :arrive)
-  :continue)
+  :again)
 
 (defn ^:async pull! [c target animal-pos]
   (let [now (ctx/now c)
@@ -348,12 +362,13 @@
       :else
       (let [r (await (walk-legs! c :pull target pull-range started (* 1000 pull-timeout-s) follow-reach))]
         (cond
-          (#{:waiting :catching-up} r) :continue
+          (= :waiting r) :yield
+          (= :catching-up r) (await (wait-for-animal! c))
           (map? r) (do (ctx/update-mem! c assoc :still-led (= :lagging (:problem r)))
                        (finish! c (:problem r)))
           :else (do (ctx/update-mem! c dissoc :pull-target :pull-started)
                     (ctx/update-mem! c update :pulls (fnil inc 0))
-                    (if (= :arrived r) :continue (stop-gathering! c d))))))))
+                    (if (= :arrived r) :again (stop-gathering! c d))))))))
 
 (defn ^:async gather!
   "Without :fence: let the animal catch up. A pull in progress is carried on with its stored target;
@@ -366,10 +381,11 @@
         d (flat-dist animal-pos pos)]
     (cond
       pull-target (await (pull! c pull-target animal-pos))
-      (<= d gather-radius) (do (ctx/update-mem! c assoc :gathered true) (set-phase! c :arrive) :continue)
+      (<= d gather-radius) (do (ctx/update-mem! c assoc :gathered true) (set-phase! c :arrive) :again)
       (>= pulls gather-tries) (stop-gathering! c d)
       (and (< settles max-settles) (or (nil? gather-seen) (> (flat-dist gather-seen animal-pos) moved-eps)))
-      (do (ctx/update-mem! c assoc :gather-seen animal-pos :settles (inc settles)) :continue)
+      (do (ctx/update-mem! c assoc :gather-seen animal-pos :settles (inc settles))
+          (await (wait-for-animal! c)))
       :else (let [target (pull-point animal-pos pos gather-radius)]
               (ctx/update-mem! c dissoc :gather-seen)
               (if-not target
@@ -383,7 +399,7 @@
                                                                     :radius (:watch-radius (:args c))
                                                                     :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
     (if-not (= :done r)
-      :continue
+      :yield
       (let [reason (:reason (ctx/child-result c :unleash))]
         (when (= :unleashed reason) (ctx/update-mem! c assoc :still-led false))
         (finish! c reason)))))
@@ -398,7 +414,7 @@
   (let [fence (:fence (:args c))
         near (await (near/walk-near! c fence 2 {:doors :never}))]
     (if-not (= :there near)
-      :continue
+      (if (= :partial near) :again (finish! c :unreachable))
       (let [r (await (ctx/act c :useOn (clj->js {:pos fence})))
             tries (inc (:ties (ctx/mem c) 0))]
         (ctx/update-mem! c assoc :ties tries)
@@ -406,7 +422,7 @@
           (tied? c) (do (ctx/update-mem! c assoc :still-led false :gathered true) (finish! c :tied))
           (>= tries max-ties) (finish! c :tie-failed)
           :else (do (ctx/emit! c :lead-to.tie-retry :info {:status (.-status r) :text "the post did not take the animal, trying once more"})
-                    :continue))))))
+                    :again))))))
 
 (defn ^:async arrive! [c]
   (let [{:keys [gathered gather-dist]} (ctx/mem c)
@@ -420,7 +436,7 @@
                             :text (str "the animal is let go " (some-> distance js/Math.round) " blocks from the spot, not gathered")})
                 (await (let-go! c))))))
 
-(defn ^:async round [c]
+(defn ^:async step [c]
   (let [now (ctx/now c)
         {:keys [timeout-s fence]} (:args c)]
     (ctx/update-mem! c update :started #(or % now))
@@ -430,15 +446,25 @@
       (cond
         (and (nil? phase) fence (not (fence-block? c))) (finish! c :no-fence)
         (>= (- now started) (* 1000 timeout-s)) (finish! c :timeout)
-        (nil? phase) (do (set-phase! c (if (lead-carried? c) :leash :get-lead)) :continue)
+        (nil? phase) (do (set-phase! c (if (lead-carried? c) :leash :get-lead)) :again)
         (= :get-lead phase) (await (get-lead! c))
         (= :leash phase) (await (leash! c))
         (and (#{:gather :arrive} phase) (nil? a)) (if (= :lost (escort-problem c safe-gap))
                                                     (do (ctx/update-mem! c assoc :still-led false) (finish! c :lost))
-                                                    :continue)
+                                                    (await (wait-for-animal! c)))
         (and (#{:walk :gather :arrive} phase) a (not (animals/led-by-me? a))) (do (ctx/update-mem! c assoc :still-led false) (finish! c :lead-broke))
         (= :walk phase) (do (await (watch/watch! c {})) (await (walk! c)))
         (= :gather phase) (do (await (watch/watch! c {})) (await (gather! c a)))
         (= :arrive phase) (await (arrive! c))
         (= :release phase) (await (let-go! c))
         :else (finish! c :lost)))))
+
+(defn ^:async round
+  "The whole attempt: steps until the job ends; yields only while a child waits on the world."
+  [c]
+  (loop []
+    (let [r (await (step c))]
+      (case r
+        :again (recur)
+        :yield :continue
+        r))))

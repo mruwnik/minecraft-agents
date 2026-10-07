@@ -17,6 +17,14 @@
 (def fence {"31,64,0" "oak_fence"})
 (def goal {:x 30 :y 64 :z 0})
 
+(def call-ms
+  "Fake time each primitive call takes: waits inside one call end by the clock."
+  50)
+
+(defn setup
+  ([world] (h/setup world call-ms))
+  ([world _ store] (h/setup world call-ms store)))
+
 (defn ^:async run-ticks
   [{:keys [eng clock]} n step]
   (dotimes [_ n]
@@ -31,7 +39,7 @@
   s)
 
 (defn ^:async scenario [args world n]
-  (await (submit (h/setup (merge {:floor tu/walk-floor} world)) args n)))
+  (await (submit (setup (merge {:floor tu/walk-floor} world)) args n)))
 
 (defn done-event [{:keys [seen]}] (first (filter #(= :lead-to.done (:kind %)) @seen)))
 (defn events-of [{:keys [seen]} kind] (filterv #(= kind (:kind %)) @seen))
@@ -54,6 +62,39 @@
           (is (not (true? (:leashed c))))
           (is (= 1 (count-of s "lead")) "the lead is back in the inventory")
           (is (empty? (events-of s :lead-to.gave-up))))))))
+
+;; one call is the whole attempt
+(deftest one-call-leads-the-cow-and-lets-it-go
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {} {:inventory lead :entities [(cow 1 3)]} 1))]
+          (is (finished? s))
+          (is (= :unleashed (:reason (done-event s)))))))))
+
+(deftest one-call-gathers-a-trailing-cow
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {} {:inventory lead :entities [(cow 1 3 {:trail 6})]} 1))]
+          (is (finished? s))
+          (is (= :unleashed (:reason (done-event s)))))))))
+
+(deftest one-call-ties-the-cow
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:fence {:x 31 :y 64 :z 0}} {:inventory lead :blocks fence :entities [(cow 1 3)]} 1))]
+          (is (finished? s))
+          (is (= :tied (:reason (done-event s)))))))))
+
+(deftest one-call-gives-up-a-lagging-cow
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {} {:inventory lead :entities [(cow 1 3 {:trail 9})]} 1))]
+          (is (finished? s))
+          (is (= :lagging (:reason (done-event s)))))))))
 
 (deftest gathers-a-trailing-cow-to-the-spot-before-letting-it-go
   (async done
@@ -116,7 +157,7 @@
   "A cow that keeps up until the body is within a leg of the spot, then is trail blocks behind the spot (more is
   :break-at). The body would wait for such a cow on the way; at the end it is the gather phase's business."
   [trail more]
-  (let [{:keys [p] :as s} (h/setup {:floor tu/walk-floor :inventory lead :entities [(cow 1 3 {:trail 5})]})]
+  (let [{:keys [p] :as s} (setup {:floor tu/walk-floor :inventory lead :entities [(cow 1 3 {:trail 5})]})]
     (.override (.-world p) "steer"
                (fn [token args impl]
                  (when (<= 26 (first (:pos (fake/self p))))
@@ -203,7 +244,7 @@
       (fn ^:async t []
         ;; go-to's call is a whole attempt: three walks gaining under a block each end it inside one tick, so the
         ;; pull is no longer carried across ticks for the 20 s limit to cut
-        (let [{:keys [p eng] :as s} (h/setup {:floor tu/walk-floor :inventory lead :entities [(cow 1 3 {:trail 6})]})
+        (let [{:keys [p eng] :as s} (setup {:floor tu/walk-floor :inventory lead :entities [(cow 1 3 {:trail 6})]})
               steers (atom 0)
               pull-slot #(get-in (mem/job-mem (mem/view (:store eng)) "j1" []) [:children :pull])]
           (stall-steers-from! p 27 steers)
@@ -219,7 +260,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p] :as s} (h/setup {:floor tu/walk-floor :inventory lead :entities [(cow 1 3 {:trail 6})]})]
+        (let [{:keys [p] :as s} (setup {:floor tu/walk-floor :inventory lead :entities [(cow 1 3 {:trail 6})]})]
           (lose-cow-past! p 29.5)
           (await (submit s {} 40))
           (is (finished? s))
@@ -269,7 +310,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p] :as s} (h/setup {:floor tu/walk-floor :inventory lead :entities [(cow 1 3)]})]
+        (let [{:keys [p] :as s} (setup {:floor tu/walk-floor :inventory lead :entities [(cow 1 3)]})]
           (.override (.-world p) "steer"
                      (fn [token args impl]
                        (let [r (impl token args)]
@@ -293,25 +334,25 @@
 (def animal-at-3 {:x 3 :y 64 :z 0})
 
 (deftest the-reach-check-takes-a-fractional-pull-target-without-throwing
-  (let [s (h/setup {:floor tu/walk-floor :blocks wall-32 :inventory lead})
+  (let [s (setup {:floor tu/walk-floor :blocks wall-32 :inventory lead})
         c {:primitives (:p s)}]
     (is (boolean? (lead-to/path-leaves-reach? c {:x 33.4 :y 64 :z 0.6} animal-at-3)))))
 
 (deftest the-reach-check-judges-a-fractional-target-by-its-walk
-  (let [far (h/setup {:floor tu/walk-floor :blocks wall-32 :inventory lead})
-        near (h/setup {:floor tu/walk-floor :inventory lead})]
+  (let [far (setup {:floor tu/walk-floor :blocks wall-32 :inventory lead})
+        near (setup {:floor tu/walk-floor :inventory lead})]
     (is (true? (lead-to/path-leaves-reach? {:primitives (:p far)} {:x 33.4 :y 64 :z 0.6} animal-at-3)) "detour past the wall end")
     (is (false? (lead-to/path-leaves-reach? {:primitives (:p near)} {:x 9.4 :y 64 :z 0.6} animal-at-3)) "open floor")))
 
 (deftest the-reach-check-plans-to-the-floored-cell
-  (let [s (h/setup {:floor tu/walk-floor :inventory lead})
+  (let [s (setup {:floor tu/walk-floor :inventory lead})
         asked (atom nil)]
     (with-redefs [walk/plan-walk (fn ([_ _ to _ _] (reset! asked to) nil) ([_ _ to _ _ _] (reset! asked to) nil))]
       (lead-to/path-leaves-reach? {:primitives (:p s)} {:x 9794.82 :y 64 :z -3.5} animal-at-3))
     (is (= [9794 64 -4] @asked) "the planner is given whole cells, as go-to gives it")))
 
 (deftest the-reach-check-is-false-when-planning-throws
-  (let [s (h/setup {:floor tu/walk-floor :inventory lead})]
+  (let [s (setup {:floor tu/walk-floor :inventory lead})]
     (with-redefs [walk/plan-walk (fn ([_ _ _ _ _] (throw (js/RangeError. "cannot be converted to a BigInt"))) ([_ _ _ _ _ _] (throw (js/RangeError. "cannot be converted to a BigInt"))))]
       (is (false? (lead-to/path-leaves-reach? {:primitives (:p s)} {:x 33.4 :y 64 :z 0.6} animal-at-3))))))
 
@@ -324,8 +365,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [w {:floor tu/walk-floor :inventory lead :entities [(cow 1 3)]}
-              lit (await (submit (h/setup-seeing w nil) {} 12))
-              dark (await (submit (h/setup-seeing w [0 0]) {} 12))]
+              lit (await (submit (h/setup-seeing w nil call-ms) {} 12))
+              dark (await (submit (h/setup-seeing w [0 0] call-ms) {} 12))]
           (is (empty? (watched lit)))
           (is (seq (watched dark)))
           (is (= :unleashed (:reason (done-event dark)))))))))
@@ -357,7 +398,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p eng clock] :as s} (h/setup {:floor tu/walk-floor :inventory lead :entities [(cow 1 3 {:trail 5})]})]
+        (let [{:keys [p eng clock] :as s} (setup {:floor tu/walk-floor :inventory lead :entities [(cow 1 3 {:trail 5})]})]
           (slow-clock-from! p 28 clock)
           (core/submit! eng (list 'jobs.animals.lead-to {:mob "cow" :pos goal :gather-radius 0}) {})
           (await (run-ticks s 60 700))
@@ -371,31 +412,30 @@
 
 ;; ------------------------------------------------------- a led cow out of sight is not lost (card 0dd5dca8)
 
-(defn ^:async hide-cow-for-legs
-  "A scenario where the cow goes out of sight at the first leg's steer and is back in sight n-hidden ticks later."
-  [n-hidden & [step]]
-  (let [step (or step 700)
-        {:keys [p] :as s} (h/setup {:floor tu/walk-floor :inventory lead :entities [(cow 1 3)]})
-        steers (atom 0)
-        saved (atom nil)]
+(defn hide-cow!
+  "The cow goes out of sight after the first steer for which hide? holds, and is back in sight at the k-th wait after that."
+  [p hide? k]
+  (let [saved (atom nil)
+        waits (atom 0)]
     (.override (.-world p) "steer"
                (fn [token args impl]
                  (let [r (impl token args)]
-                   (when (= 1 (swap! steers inc))
+                   (when (and (nil? @saved) (hide?))
                      (reset! saved (first (:entities @(fake/state p))))
                      (swap! (fake/state p) update :entities subvec 1))
                    r)))
-    (core/submit! (:eng s) (list 'jobs.animals.lead-to {:mob "cow" :pos goal}) {})
-    (loop [hidden 0 i 0]
-      (when (< i (* 80 (quot 700 step)))
-        (await (run-ticks s 1 step))
-        (cond
-          (nil? @saved) (recur 0 (inc i))
-          (= hidden n-hidden) (do (when (empty? (:entities @(fake/state p)))
-                                    (swap! (fake/state p) update :entities conj @saved))
-                                  (recur (inc hidden) (inc i)))
-          :else (recur (inc hidden) (inc i)))))
-    s))
+    (.override (.-world p) "wait"
+               (fn [token args impl]
+                 (when (and @saved (= k (swap! waits inc)))
+                   (swap! (fake/state p) update :entities conj @saved))
+                 (impl token args)))))
+
+(defn ^:async hide-cow-for-legs
+  "One call; the cow goes out of sight at the first leg's steer and is back in sight k waits later."
+  [k]
+  (let [{:keys [p] :as s} (setup {:floor tu/walk-floor :inventory lead :entities [(cow 1 3)]})]
+    (hide-cow! p (constantly true) k)
+    (await (submit s {} 1))))
 
 (deftest a-cow-out-of-sight-for-a-while-is-waited-for-not-lost
   (async done
@@ -404,11 +444,11 @@
         (let [s (await (hide-cow-for-legs 1))]
           (is (= :unleashed (:reason (done-event s)))))))))
 
-(deftest a-cow-out-of-sight-for-three-rounds-within-300-ms-is-not-lost
+(deftest a-cow-out-of-sight-for-two-looks-is-not-lost
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (hide-cow-for-legs 3 100))]
+        (let [s (await (hide-cow-for-legs 2))]
           (is (= :unleashed (:reason (done-event s)))))))))
 
 (deftest a-cow-out-of-sight-for-good-is-lost-and-the-body-did-not-walk-on-without-it
@@ -461,21 +501,11 @@
     (is (= 34 (:x t)) "lead length 6 less radius 3, plus the 1 block the walk's range may leave")))
 
 (defn ^:async hide-cow-after-the-walk
-  "Run the job until its legs reach the spot, hide the cow for n-hidden ticks, then show it again."
-  [n-hidden]
-  (let [{:keys [p] :as s} (h/setup {:floor tu/walk-floor :inventory lead :entities [(cow 1 3 {:trail 1})]})
-        saved (atom nil)]
-    (core/submit! (:eng s) (list 'jobs.animals.lead-to {:mob "cow" :pos goal}) {})
-    (loop [i 0]
-      (when (and (< i 40) (not-any? #(= goal %) (tu/walked-to (:eng s))))
-        (await (run-ticks s 1 700))
-        (recur (inc i))))
-    (reset! saved (first (:entities @(fake/state p))))
-    (swap! (fake/state p) update :entities subvec 1)
-    (await (run-ticks s n-hidden 700))
-    (swap! (fake/state p) update :entities conj @saved)
-    (await (run-ticks s 15 700))
-    s))
+  "One call; the cow goes out of sight once the body is at the spot and is back in sight k waits later."
+  [k]
+  (let [{:keys [p] :as s} (setup {:floor tu/walk-floor :inventory lead :entities [(cow 1 3 {:trail 1})]})]
+    (hide-cow! p #(<= 27 (first (:pos (fake/self p)))) k)
+    (await (submit s {} 1))))
 
 (deftest a-cow-out-of-sight-for-one-look-after-the-walk-is-not-lost
   (async done
@@ -488,7 +518,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (hide-cow-after-the-walk 30))]
+        (let [s (await (hide-cow-after-the-walk 1000))]
           (is (= :lost (:reason (done-event s)))))))))
 
 (deftest crafts-a-lead-when-none-is-carried-then-leads-the-cow
@@ -524,7 +554,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[extra refused? declined] [[{} true [:refused]] [{:ignore-zones? true} false []]]]
-          (let [s (await (submit (h/setup {:floor tu/walk-floor :inventory lead :entities [(cow 1 3)]} 0 (h/zone-store 3 "Miles"))
+          (let [s (await (submit (setup {:floor tu/walk-floor :inventory lead :entities [(cow 1 3)]} 0 (h/zone-store 3 "Miles"))
                                  extra 6))]
             (is (= refused? (= :refused (:reason (done-event s)))) (pr-str extra))
             (is (= declined (mapv :reason (events-of s :leash.declined))) (pr-str extra))))))))
