@@ -298,6 +298,34 @@
 (deftest a-goal-whose-head-cell-is-a-waterlogged-ladder-is-not-air
   (is (not (found? (run (ladder-head true) drown-start (near 21 64 1 0) {:goalFlood 0 :costs {:airUsed 13}})))))
 
+;; a ladder shaft (x 11, from y 64) up to a ledge at x 12: dry, or waterlogged (the head is in water the whole climb)
+(defn ladder-shaft [height waterlogged]
+  (world [[10 64 -2 13 (+ 66 height) 4 "stone"]
+          [11 64 1 11 (+ 63 height) 1 "ladder" {:facing "west" :waterlogged waterlogged}]
+          [11 (+ 64 height) 1 12 (+ 65 height) 1 "air"]]))
+(defn shaft-top [height] (near 12 (+ 64 height) 1 0))
+
+(deftest a-climb-up-a-waterlogged-ladder-drains-the-air
+  (let [r (run (ladder-shaft 16 true) drown-start (shaft-top 16) {:goalFlood 0 :costs {:airUsed 13}})]
+    (is (found? r) "the way to air")
+    (is (> (cost r :drown) 4) "16 blocks of climbing (about 7 s) with 2 s of air left drowns")))
+
+(deftest a-climb-up-a-dry-ladder-breathes
+  (is (zero? (cost (run (ladder-shaft 16 false) drown-start (shaft-top 16) {:goalFlood 0 :costs {:airUsed 13}}) :drown))))
+
+(deftest a-waterlogged-ladder-shaft-past-the-air-limit-is-refused-for-air
+  (let [wet (run (ladder-shaft 40 true) drown-start (shaft-top 40) {:goalFlood 0})]
+    (is (not (found? wet)))
+    (is (= "air" (:reason wet))))
+  (is (found? (run (ladder-shaft 40 false) drown-start (shaft-top 40) {:goalFlood 0}))))
+
+;; a turtle helmet's grace seconds drown nothing: a dive within limit + grace is safe
+(deftest a-dive-within-the-grace-does-not-drown
+  (let [r (run-up (column 56) 56 {:costs {:airGrace 10}})]
+    (is (found? r))
+    (is (not (found? (run-up (column 56) 56))) "the dive is longer than the air limit")
+    (is (zero? (cost r :drown)))))
+
 (deftest a-plan-to-air-is-found-over-the-damage-budget
   (is (found? (run drown-tunnel drown-start (near 21 64 1 0) {:goalFlood 0 :damageBudget 1 :costs {:airUsed 13}}))
       "no way fits the budget: the fastest way to air still comes back"))

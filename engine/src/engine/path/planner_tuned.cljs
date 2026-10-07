@@ -153,8 +153,11 @@
 
 ;; The air a swim may use up to: airLimit, plus the free grace seconds' worth (airGrace * airDrain). A plan made mid-dive
 ;; counts it from the air used (airUsed): past it, no swim with the head under water (unless to-air?).
+;; Drowning starts past the supply plus the same grace (c-air-drown).
+(defn- air-grace [^js costs] (* (unchecked-get costs "airGrace") (unchecked-get costs "airDrain")))
+
 (defn- air-limit [^js costs]
-  (+ (unchecked-get costs "airLimit") (* (unchecked-get costs "airGrace") (unchecked-get costs "airDrain"))))
+  (+ (unchecked-get costs "airLimit") (air-grace costs)))
 
 (defn- to-air?
   "Whether a plan started with air used (costs.airUsed above 0) goes to air: its one near goal's head cell breathes
@@ -236,7 +239,7 @@
      (unchecked-get costs "openRedstone") (unchecked-get costs "openLever") (unchecked-get costs "openPlate") (unchecked-get costs "besideMagmaColumn")
      (unchecked-get costs "swimH") (unchecked-get costs "swimUp") (unchecked-get costs "swimDown")
      (unchecked-get costs "exit") (unchecked-get costs "current") (unchecked-get costs "bubbleUp") (unchecked-get costs "bubbleDown")
-     (unchecked-get costs "airSupply") (air-limit costs) (unchecked-get costs "airDrain") (unchecked-get costs "maxWaterDrop")
+     (unchecked-get costs "airSupply") (air-limit costs) (+ (unchecked-get costs "airSupply") (air-grace costs)) (unchecked-get costs "airDrain") (unchecked-get costs "maxWaterDrop")
      (unchecked-get costs "dripleaf") (unchecked-get costs "dripleafRisk") (to-air? snapshot query options) (unchecked-get costs "dropFactor")
      (unchecked-get costs "walkS") (unchecked-get costs "sprintS")
      ;; search box

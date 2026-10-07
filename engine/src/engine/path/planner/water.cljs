@@ -108,38 +108,46 @@
       (if (>= h 0) h (.swimAt s x y z))))
 
   ;; One swim or exit edge. The caller calls swimBegin, makes the edge (`base` + `extra` seconds) if it says true,
-  ;; then calls swimEnd. `base` seconds of swimming count for the air (times costs.airDrain, the expected drain: 1/(Respiration+1); airGrace free seconds a dive, turtle helmet 10, add airGrace * airDrain to the limit), `extra` seconds of current do not.
-  ;; src-sub: the body starts the move with its head in water. target-water: it ends in a water cell. A move that
-  ;; ends with the head out of water breathes AIR-REFILL times its seconds back, none on the move in from under water.
-  ;; On a way to air from under water (to-air) no move is refused for air: its seconds past the supply drown DROWN-HP hp
-  ;; each (move-drown, which consider adds to the node's drowning and prices; not damage, so no damage budget refuses it).
+  ;; then calls swimEnd. `base` seconds of swimming count for the air (airStep), `extra` seconds of current do not.
+  ;; src-sub: the body starts the move with its head in water. target-water: it ends in a water cell.
   (swimBegin [s i ^boolean target-water x2 y2 z2 base extra ^boolean src-sub]
-    (let [target-sub (and target-water ^boolean (.submerged s x2 y2 z2))
-          air (if (>= i 0) (aget (.-airs s) i) 0)
+    (if ^boolean (.airStep s i (or src-sub (and target-water ^boolean (.submerged s x2 y2 z2))) base (+ base extra))
+      (do (set! (.-move-water s) (+ base extra))
+          true)
+      false))
+
+  ;; The air of a move from node i of `base` seconds (times costs.airDrain, the expected drain: 1/(Respiration+1)) with the
+  ;; head under water (`under`): false when refused for air. Over the air limit (airLimit + airGrace * airDrain: a turtle
+  ;; helmet's 10 free seconds) a move is refused, except on a way to air from under water (to-air): there its seconds past
+  ;; c-air-drown (the supply plus the grace) drown DROWN-HP hp each (move-drown, which consider adds to the node's drowning
+  ;; and prices; not damage, so no damage budget refuses it). A move with the head out breathes AIR-REFILL times its
+  ;; `refill` seconds back.
+  (airStep [s i ^boolean under base refill]
+    (let [air (if (>= i 0) (aget (.-airs s) i) 0)
           use (+ air (* base (.-c-air-drain s)))
-          ^boolean under (or src-sub target-sub)]
+          drown (if (and under (> use (.-c-air-drown s)))
+                  (/ (* DROWN-HP (- use (js/Math.max air (.-c-air-drown s)))) (.-c-air-drain s))
+                  0)]
       (cond
         (and under (> use (.-c-air-limit s)) (not ^boolean (.-to-air s)))
         (do (set! (.-air-seen s) true)
             false)
 
-        (and under ^boolean (.-no-lethal s) (> use (.-c-air-supply s))
-             (>= (+ (if (>= i 0) (aget (.-drowns s) i) 0)
-                    (/ (* DROWN-HP (- use (js/Math.max air (.-c-air-supply s)))) (.-c-air-drain s)))
-                 (.-lethal-hp s)))
+        (and under ^boolean (.-no-lethal s) (> use (.-c-air-drown s))
+             (>= (+ (if (>= i 0) (aget (.-drowns s) i) 0) drown) (.-lethal-hp s)))
         (do (set! (.-lethal-seen s) true)
             false)
 
         :else
-        (do (set! (.-move-air s) (cond
-                                   target-sub use
-                                   src-sub use
-                                   :else (js/Math.max 0 (- air (* AIR-REFILL (+ base extra))))))
+        (do (set! (.-move-air s) (if under use (js/Math.max 0 (- air (* AIR-REFILL refill)))))
             (set! (.-move-peak s) (if under use 0))
-            (set! (.-move-water s) (+ base extra))
-            (when (and under (> use (.-c-air-supply s)))
-              (set! (.-move-drown s) (/ (* DROWN-HP (- use (js/Math.max air (.-c-air-supply s)))) (.-c-air-drain s))))
+            (set! (.-move-drown s) drown)
             true))))
+
+  ;; a move that is not a swim (a climb, a walk, a drop): with the head in a wet cell (a waterlogged ladder, scaffolding
+  ;; or trapdoor) where it starts or ends, its seconds drain the air like a swim's (airStep); else they breathe it back
+  (headAir [s i x y z dsec]
+    (.airStep s i (or ^boolean (.submerged s (aget (.-xs s) i) (aget (.-ys s) i) (aget (.-zs s) i)) ^boolean (.submerged s x y z)) dsec dsec))
 
   (swimEnd [s]
     (set! (.-move-air s) 0)

@@ -1,6 +1,6 @@
 (ns engine.path.planner.nodes
   "Search methods: the goal test and heuristic, and node storage (hash, heap, recording an arrival, refused moves)."
-  (:require [engine.path.planner.base :refer [AIR-REFILL AIR-STEP AVOID-CLIMB DMG-STEP LETHAL-S AVOID-OPEN AVOID-WATER HALF JUMP-UP MOVE-CLIMB-UP MOVE-DROP MOVE-GAP MOVE-OPEN MOVE-SWIM REGIONS SPAN SQRT2 cell-key grown next-pow2]]
+  (:require [engine.path.planner.base :refer [AIR-STEP AVOID-CLIMB DMG-STEP LETHAL-S AVOID-OPEN AVOID-WATER HALF JUMP-UP MOVE-CLIMB-UP MOVE-DROP MOVE-GAP MOVE-OPEN MOVE-SWIM REGIONS SPAN SQRT2 cell-key grown next-pow2]]
             [engine.path.planner.search :refer [Search]]))
 
 (set! *warn-on-infer* true)
@@ -244,6 +244,8 @@
         (and ^boolean (.-returnable s) (not ^boolean (.-replaying s)) ^boolean (.holdsBack s x y z h move parent-node dsec drisk slow-to corner shape)) nil
         ^boolean (.refusedKind s (.-limit-kinds s) x y z move) (do (set! (.-limit-refused s) true) nil)
         (and (pos? (.-move-dmg s)) (> (+ (aget (.-dmgs s) parent-node) (.-move-dmg s)) (.-damage-budget s))) (do (set! (.-damage-refused s) true) nil)
+        ;; a move that is not a swim: its air (headAir)
+        (and (zero? (.-move-water s)) (not ^boolean (.headAir s parent-node x y z dsec))) nil
         :else
         (let [drisk (if (pos? (.-n-dangers s)) (+ drisk (.dangerRisk s x y z dsec)) drisk)
               extra (if ^boolean (.-avoiding s) (.avoidCost s x y z move dsec drisk) 0)
@@ -268,9 +270,6 @@
                          (if (pos? drown) (.drownCost s drown) 0)))]
               (set! (.-cur-dmg s) dmg)
               (set! (.-cur-drown s) drown)
-              ;; a move that is not a swim has the head out of water: it breathes AIR-REFILL times its seconds back
-              (when (zero? (.-move-water s))
-                (set! (.-move-air s) (js/Math.max 0 (- (aget (.-airs s) parent-node) (* AIR-REFILL dsec)))))
               (if (== found -1)
                 (.insertNode s x y z h move parent-node sec risk dark g slow-to corner shape region key slot)
                 (let [d-air (- (.-move-air s) (aget (.-airs s) found))
