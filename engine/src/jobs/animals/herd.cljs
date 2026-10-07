@@ -61,9 +61,8 @@
   animal from its lead on until it is let go. An end with an animal on the lead lets it go where the body
   stands and shuts the gate from the body's side.
 
-  A round ends only in a safe state: gate shut, body outside the pen and the gate cell, nobody on the lead.
-  Between the lead and the shut from outside the round goes on step by step, so no other job interleaves. A
-  cut there is possible. A round that starts unsafe restarts from what it sees: led with the body in the pen
+  One call is the whole run: it ends with the run, never yields. A cut can leave the body unsafe (animal led, gate
+  open, body in the pen); the next call restarts from what it sees: led with the body in the pen
   steps on from the nearest axis cell, led with the body outside goes back and lines up again, nobody led
   with the body in the pen goes out, nobody led with the gate open shuts it.
 
@@ -818,7 +817,7 @@
       :else (do (when lead-phase? (await (watch/watch! c {})))
                 (await (step! c phase))))))
 
-;; ------------------------------------------------------------------ the round: safe at its end
+;; ------------------------------------------------------------------ the round: the whole run
 
 (defn led-by-me
   "The keys of the adults of :mob on this body's lead now, as the world shows them (not the memory)."
@@ -864,12 +863,11 @@
       inside? (set-phase! c :exit {:stepped-back false})
       :else (set-phase! c :shut-gate))))
 
-(def pace-ms "An unsafe step that changed nothing and took less than this is followed by a wait of settle-ms." 100)
+(def pace-ms "A step that changed nothing and took less than this is followed by a wait of settle-ms." 100)
 
 (defn ^:async round
-  "Steps until the run ends or the world is safe again (safe?), so the round never ends in the unsafe stretch. A round
-  that starts unsafe restarts first (restart!). A step that changed no memory and took under pace-ms is followed by a
-  wait, so a step that keeps answering at once never spins."
+  "The whole run: steps until it ends. A round that starts unsafe restarts first (restart!). A step that changed no
+  memory and took under pace-ms is followed by a wait, so a step that keeps answering at once never spins."
   [c]
   (declined/begin! c)
   (ctx/update-mem! c update :started #(or % (ctx/now c)))
@@ -878,9 +876,8 @@
     (let [before (ctx/mem c)
           from (ctx/now c)
           r (await (step-once! c))]
-      (cond
-        (not= :continue r) r
-        (safe? c) :continue
-        :else (do (when (and (= before (ctx/mem c)) (< (- (ctx/now c) from) pace-ms))
-                    (await (ctx/act c :wait #js {:ms settle-ms})))
-                  (recur))))))
+      (if (not= :continue r)
+        r
+        (do (when (and (= before (ctx/mem c)) (< (- (ctx/now c) from) pace-ms))
+              (await (ctx/act c :wait #js {:ms settle-ms})))
+            (recur))))))

@@ -187,6 +187,16 @@
           (is (= [1 1] (mapv :held (remove :was-open @log))) "an entry before each open")
           (is (empty? (held-entries s)) "dropped after the last shut"))))))
 
+(deftest one-call-brings-every-cow-and-ends
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:target 2} {:entities [(cow 1 4 3) (cow 2 5 5)]} 1))]
+          (is (finished? s))
+          (is (= :brought (:reason (done-event s))))
+          (is (every? in-pen? [(cow-of s 1) (cow-of s 2)]))
+          (is (not (gate-open? s))))))))
+
 (deftest the-held-entry-names-the-gate-cell
   (async done
     (tu/run-async done
