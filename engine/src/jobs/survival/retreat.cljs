@@ -65,7 +65,7 @@
    :step {:doc "blocks per walk" :type :number :min 1 :default 6}
    :home-range {:doc "a flight leans towards the latest :bed or :home only when it lies within this many blocks" :type :number :min 0 :default 64}
    :weapons {:doc "item name substrings that count as weapons, for a cornered fight" :default combat/default-weapons}
-   :reserve {:doc "health a cornered fight must be expected to leave" :type :number :min 0 :default 4}
+   :reserve {:doc "health a cornered fight must be expected to leave" :type :number :min 0 :default cost/default-reserve}
    :blocks {:doc "names of the blocks a cornered body may seal itself in with" :default dig-in/building-blocks}
    :max-places {:doc "seal placements per step" :type :int :min 1 :default 4}
    :lost-s {:doc "a mob out of line of sight this many seconds has stopped chasing" :type :number :min 0 :default 4}

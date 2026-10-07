@@ -1,7 +1,8 @@
 (ns engine.cost-test
   "jobs.lib.cost: one armour formula (vanilla's) under every calculator: fight cost, mob threat and the planner's rate."
   (:require [cljs.test :refer [deftest is]]
-            [jobs.lib.cost :as cost]))
+            [jobs.lib.cost :as cost]
+            [jobs.survival.retreat :as retreat]))
 
 (defn round2 [x] (/ (js/Math.round (* 100 x)) 100))
 
@@ -92,3 +93,6 @@
   (is (= {:max-drop 3 :fall-factor 1} (cost/fall-profile {:health 20 :equipment iron-set})))
   (is (= {:max-drop 5 :fall-factor 0.52} (update (cost/fall-profile {:health 20 :equipment (ff-boots 4)}) :fall-factor round2)))
   (is (= 3 (:max-drop (cost/fall-profile {:health 3 :equipment (ff-boots 4)}))) "no extra drop when health is low"))
+
+(deftest the-fight-reserve-has-one-default
+  (is (= cost/default-reserve (:default (:reserve retreat/args))) "retreat's :reserve default is the cost's"))

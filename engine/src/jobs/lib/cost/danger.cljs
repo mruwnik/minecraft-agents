@@ -33,8 +33,6 @@
 
 (def max-fire-checks "Route cells a ranged mob's line of fire is tried to, nearest first." 8)
 
-(defn dist [a b] (js/Math.hypot (- (:x a) (:x b)) (- (:y a) (:y b)) (- (:z a) (:z b))))
-
 (defn centre [{:keys [x y z]}] {:x (+ (js/Math.floor x) 0.5) :y (js/Math.floor y) :z (+ (js/Math.floor z) 0.5)})
 
 (defn line-clear?
@@ -73,7 +71,7 @@
                      :when (and (string? (:name m)) (:pos m)
                                 (or (contains? overrides (:name m)) (threat/hostile? version m)))
                      :let [cells (->> route
-                                      (map (fn [c] [(dist (:pos m) (centre c)) c]))
+                                      (map (fn [c] [(u/dist (:pos m) (centre c)) c]))
                                       (filter #(<= (first %) radius))
                                       (sort-by first))
                            d (ffirst cells)]
@@ -121,12 +119,11 @@
   {:sensed {:close 3 :radius 12} :remembered {:close 3 :radius 16} :creeper {:close 4 :radius 8}})
 (def stances "Rate factor: :flee from a mob costs the body far more than one it would :fight." {:flee 4 :fight 0.1})
 (def max-rate "hp a second one danger costs at most (the planner caps all of them together at its dangerCap, 4)." 4)
-(def reserve "Health a fight must leave (respond-to-hostile's default :reserve)." 4)
 
 (defn stance
   "What the hostile reflex would do about mob-name alone (fight/decide): :fight or :flee."
   [{:keys [health equipment weapon]} mob-name]
-  (fight/decide {:health health :reserve reserve :creeper? (= "creeper" mob-name)
+  (fight/decide {:health health :reserve fight/default-reserve :creeper? (= "creeper" mob-name)
                  :damage (fight/fight-damage {:weapon weapon :equipment equipment :mobs [{:name mob-name :distance 0}]})}))
 
 (defn danger-rate

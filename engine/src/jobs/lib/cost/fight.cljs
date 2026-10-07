@@ -4,6 +4,8 @@
             [jobs.lib.cost.armour :as armour]
             [jobs.lib.cost.threat :as threat]))
 
+(def default-reserve "Health a fight must leave: the hostile reflexes' :reserve default and the planner's stance." 4)
+
 (def walk-speed "Blocks a second a body closes on a mob it walks up to." 4)
 
 (defn fight-damage

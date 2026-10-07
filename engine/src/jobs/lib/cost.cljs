@@ -42,6 +42,7 @@
 (def weapon-rank weapon/weapon-rank)
 (def cheapness weapon/cheapness)
 
+(def default-reserve fight/default-reserve)
 (def fight-damage fight/fight-damage)
 (def decide fight/decide)
 
