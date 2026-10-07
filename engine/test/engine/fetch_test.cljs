@@ -765,9 +765,12 @@
 
 (deftest obtain-sapling-leaf-breaking-is-bounded
   (let [need (obtain/gather-need {"oak_sapling" 1})]
-    (is (= 20 (:dry-digs (:args need))) "digs per child run")
+    (is (= obtain/sapling-leaf-limit (:dry-digs (:args need))) "digs per child run")
     (is (= 1 (:max-runs need)) "one fruitless run ends the source")
     (is (nil? (:max-runs (obtain/gather-need {"cobblestone" 1}))) "other sources use the default bound")))
+
+(deftest sapling-leaf-limit-is-60
+  (is (= 60 obtain/sapling-leaf-limit)))
 
 (deftest a-declined-child-is-not-a-fruitless-run
   (let [sapling (obtain/gather-need {"oak_sapling" 1})]

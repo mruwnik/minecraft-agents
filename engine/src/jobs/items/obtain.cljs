@@ -28,7 +28,7 @@
     down on a free cell beside the body with a jobs.blocks.place child). Each step is a jobs.items.craft child. The
     names are tried in order; the first with a plan is made. Three fruitless steps stop it (:tried :craft).
   - :gather (in :how): coal comes from a plain or deepslate ore seen; every raw item a chain lacks must be seen before it starts. A sapling (no recipe) comes from the leaves of its tree the body has seen, broken by
-    jobs.gather.get-seeds (at most 20 leaves, one run; the drop is picked up). What a craft chain lacks that has no recipe (logs, coal, stone-tool material; recipes/gatherable?, stone-materials) is
+    jobs.gather.get-seeds (at most 60 leaves, one run; the drop is picked up). What a craft chain lacks that has no recipe (logs, coal, stone-tool material; recipes/gatherable?, stone-materials) is
     felled or mined as one child per round, only what the body has seen: logs by jobs.forestry.harvest-wood,
     cobblestone and coal by jobs.gather.mine. The crafts follow once the chain is whole (a chain that is craftable now
     is crafted first). A child that brings in nothing three times stops it (:tried :gather).
@@ -145,7 +145,7 @@
 
 (def sapling-leaf-limit
   "Leaves broken for one sapling at most (a drop is about 1 in 20); one run, no retries."
-  20)
+  60)
 
 (defn gather-needs
   "The raw needs of a plan's :gather map, logs first: [{:key k :count n :job sym :args {..} :seen fn of a block name: what must have been seen}]. A new gather source
