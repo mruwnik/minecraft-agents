@@ -419,6 +419,23 @@ test('body events: another player joining or leaving is reported, the body itsel
   assert.deepEqual(seen, [{ kind: 'player-joined', player: 'Ann' }, { kind: 'player-left', player: 'Ann' }])
 })
 
+test('body events: weather-changed fires when raining or thundering flips, not on level wiggles', () => {
+  const { bot, p } = rig(world)
+  const seen = []
+  p.onBodyEvent(e => seen.push(e))
+  const set = (rainState, thunderState) => { Object.assign(bot, { rainState, thunderState }); bot.emit('weatherUpdate') }
+  set(0.1, 0)
+  set(0.5, 0)
+  set(0.6, 0.5)
+  set(0.6, 1)
+  set(0.3, 1)
+  set(0, 0)
+  assert.deepEqual(seen.filter(e => e.kind === 'weather-changed'), [
+    { kind: 'weather-changed', raining: true, thundering: false },
+    { kind: 'weather-changed', raining: true, thundering: true },
+    { kind: 'weather-changed', raining: false, thundering: false }])
+})
+
 const sleepBar = (key, ...counts) => ({ translate: key, with: counts.map(n => ({ text: String(n) })), toString: () => key })
 
 test('body events: the action bar sleep count is a sleep-status event; other action bar lines are not', () => {

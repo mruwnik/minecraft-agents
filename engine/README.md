@@ -175,7 +175,7 @@ never dig or build; hazards (powder snow, cobweb, magma, campfires) add cost, an
 ### Body events
 
 `primitives.onBodyEvent(listener)` delivers `{kind, ...}` objects: `hurt` (health, food, amount, cause, attacker), `died`
-(pos, inventory, experience, cause), `respawned`, `chat`, `picked-up`, `woke`, `player-joined`/`player-left`, `spawned`,
+(pos, inventory, experience, cause), `respawned`, `chat`, `picked-up`, `woke`, `player-joined`/`player-left`, `weather-changed` (raining, thundering), `spawned`,
 `disconnected`, `error`, `reconnect-failed`, `world-not-loaded`, `physics-stalled`, `offline`, `online`, `sleep-status`
 (the action bar's sleep count: `sleeping`, `needed`, or `skipping`). The engine
 turns each into a body-memory entry of that kind. `hurt` events are merged into one per second in the event log. A death
