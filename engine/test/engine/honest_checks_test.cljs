@@ -97,3 +97,18 @@
   (are [job args reason] (= reason (waiting-reason job args))
     'jobs.items.wear {:item 5} :bad-args
     'jobs.survival.fight-back {} :no-target))
+
+(deftest survival-and-maintenance-checks-say-why-they-decline
+  (are [job args reason] (= reason (waiting-reason job args))
+    'jobs.build.clear-box {} :bad-args
+    'jobs.gather.mine {} :no-block
+    'jobs.maintenance.unstick {} :not-stuck
+    'jobs.movement.leave-vehicle {} :not-mounted
+    'jobs.survival.breathe {} :not-underwater
+    'jobs.survival.extinguish {} :not-burning
+    'jobs.survival.get-food {} :not-hungry
+    'jobs.survival.night {} :not-night
+    'jobs.survival.recover-drops {} :no-drops
+    'jobs.survival.respond-to-hostile {} :no-hostile
+    'jobs.survival.restore-broken {} :nothing-to-restore
+    'jobs.survival.unwedge {} :not-wedged))

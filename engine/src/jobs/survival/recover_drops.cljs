@@ -53,7 +53,9 @@
 (def recovered-policy {:cap 10 :ttl day-ms})
 (def trip-policy {:cap 1 :ttl game/despawn-ms})
 
-(defn check [c] (some? (died/unrecovered-death (ctx/view c))))
+(defn check [c]
+  (or (some? (died/unrecovered-death (ctx/view c)))
+      (ctx/wait c {:reason :no-drops})))
 
 (defn finite [n] (if (js/isFinite n) n :infinite))
 

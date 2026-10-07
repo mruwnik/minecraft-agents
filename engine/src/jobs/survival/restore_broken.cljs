@@ -87,7 +87,9 @@
        (let [p (:primitives c)]
          (and (not (reach/enclosed? p)) (reach/enclosed? p #{(vec cell)})))))
 
-(defn check [c] (boolean (seq (tidy/entries c))))
+(defn check [c]
+  (or (boolean (seq (tidy/entries c)))
+      (ctx/wait c {:reason :nothing-to-restore})))
 
 (defn unsafe?
   "Whether the body should not be busy with other people's blocks now."

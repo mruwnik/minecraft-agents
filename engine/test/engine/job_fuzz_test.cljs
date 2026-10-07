@@ -191,20 +191,13 @@
   "Debug tools: not jobs a body runs for itself."
   #{'jobs.debug.access-check 'jobs.debug.notify 'jobs.debug.walk-plan})
 
-(def plain-false-checks "Card b7fe85d4: the check declines with a plain false." 
-  (into {} (for [j '[jobs.build.clear-box jobs.gather.mine jobs.maintenance.unstick jobs.movement.leave-vehicle jobs.survival.breathe
-                     jobs.survival.extinguish jobs.survival.get-food jobs.survival.night jobs.survival.recover-drops
-                     jobs.survival.respond-to-hostile jobs.survival.restore-broken jobs.survival.unwedge]]
-             [[(str j) :waiting-without-reason] "b7fe85d4"])))
-
 (def known
   "{[job kind] card}: defects already carded, so the suite stays green and a new one fails it. Delete an entry with its fix."
-  (merge plain-false-checks
-         {["jobs.farm.find-spot" :runaway] "a9fb6a61"
+  {["jobs.farm.find-spot" :runaway] "a9fb6a61"
           ["jobs.farm.find-spot" :tick-threw] "a9fb6a61"
           ["jobs.survival.dig-niche" :runaway] "a9fb6a61"
           ["jobs.survival.dig-niche" :tick-threw] "a9fb6a61"
-          ["jobs.movement.go-to" :round-threw] "a9fb6a61"}))
+          ["jobs.movement.go-to" :round-threw] "a9fb6a61"})
 
 (defn job-cases [wrong-untyped?]
   (let [only (env "FUZZ_JOB" nil)

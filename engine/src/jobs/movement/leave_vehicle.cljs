@@ -19,7 +19,9 @@
    :wait-ms {:doc "the wait after the first failed dismount; it doubles per try, at most 1000" :default 50}
    :radius {:doc "dry cells this many blocks (horizontally) from the vehicle are faced" :default 2}})
 
-(defn check [c] (vehicle/mounted? (:primitives c)))
+(defn check [c]
+  (or (boolean (vehicle/mounted? (:primitives c)))
+      (ctx/wait c {:reason :not-mounted})))
 
 (defn vehicle-pos
   "Where the ridden entity is, else the body."

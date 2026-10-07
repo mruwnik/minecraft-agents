@@ -79,7 +79,9 @@
   [c]
   (some-> (ctx/latest c :extinguish-pour) :data :pos))
 
-(defn check [c] (boolean (or (body-burning? c) (poured c))))
+(defn check [c]
+  (or (boolean (or (body-burning? c) (poured c)))
+      (ctx/wait c {:reason :not-burning})))
 
 (defn floor-cell [pos] (into {} (map (fn [[k v]] [k (js/Math.floor v)])) pos))
 

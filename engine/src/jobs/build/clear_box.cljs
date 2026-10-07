@@ -105,11 +105,11 @@
   (boolean (some #(contains? (ctx/mem c) %) [:dug :skipped :tries :target])))
 
 (defn decline-box!
-  "Warn once clear-box.declined {:reason :bad-args} naming the box's problem; false."
+  "Warn once clear-box.declined {:reason :bad-args} naming the box's problem; waits with it."
   [c]
   (let [text (box-error (:args c))]
     (ctx/warn-once! c [:access :bad-args] :clear-box.declined {:reason :bad-args :text text})
-    false))
+    (ctx/wait c {:reason :bad-args :why text})))
 
 (defn check
   "Declines without a zone list, and before the first round when every pending cell is refused."

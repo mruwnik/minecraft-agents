@@ -87,7 +87,8 @@
     (or (hungry-now? c)
         (hungry/top-up? (.-food self) (.-health self) (hungry/carried-names self))
         (hungry/eat-now? self (:args c))
-        (boolean (:eating (ctx/mem c))))))
+        (boolean (:eating (ctx/mem c)))
+        (ctx/wait c {:reason :not-hungry}))))
 
 ;; ------------------------------------------------------------------ sources
 

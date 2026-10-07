@@ -23,7 +23,9 @@
 (def args
   {:ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
 
-(defn check [c] (some? (w/wedged-cell (:primitives c))))
+(defn check [c]
+  (or (some? (w/wedged-cell (:primitives c)))
+      (ctx/wait c {:reason :not-wedged})))
 
 (defn ^:async block!
   "Give up on cell: warn once, remember it so the trigger stays quiet there. Resolves :done, stopped."

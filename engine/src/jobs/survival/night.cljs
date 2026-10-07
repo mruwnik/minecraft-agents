@@ -89,7 +89,8 @@
   "The night trigger's condition, or job memory :sheltered (a listed night cut before its morning)."
   [c]
   (or (some? (:sheltered (ctx/mem c)))
-      (night/holds? (:primitives c) (ctx/view c) (:args c) (bed-permit c))))
+      (boolean (night/holds? (:primitives c) (ctx/view c) (:args c) (bed-permit c)))
+      (ctx/wait c {:reason :not-night})))
 
 (defn radius [c] (sh/bed-radius (ctx/view c) (:args c)))
 

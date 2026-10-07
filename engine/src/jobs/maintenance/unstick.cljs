@@ -57,7 +57,8 @@
 
 (defn check [c]
   (or (contains? (ctx/mem c) :goal)
-      (stuck/stuck? (ctx/view c) (:args c))))
+      (boolean (stuck/stuck? (ctx/view c) (:args c)))
+      (ctx/wait c {:reason :not-stuck})))
 
 (defn ^:async round [c]
   (when-not (contains? (ctx/mem c) :goal)

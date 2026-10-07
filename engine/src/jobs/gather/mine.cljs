@@ -237,7 +237,7 @@
       (ctx/warn-once! c [:fetch :bad-args] :mine.declined {:reason :bad-args :why why :text (str "mine declined: " why)})
       (ctx/wait c {:reason :bad-args :why why}))
     (:phase (ctx/mem c)) true
-    (not (:block (:args c))) false
+    (not (:block (:args c))) (ctx/wait c {:reason :no-block})
     :else (let [{:keys [targets refused]} (scan c)]
             (if (and (empty? targets) (seq refused))
               (access/decline! c :mine.declined "mine" (assoc (access/refusal-fields refused) :reason :refused))

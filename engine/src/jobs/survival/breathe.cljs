@@ -81,7 +81,8 @@
 
 (defn check [c]
   (or (some? (s/situation (:primitives c) (:min-oxygen (:args c))))
-      (surfaced-in-water? c)))
+      (boolean (surfaced-in-water? c))
+      (ctx/wait c {:reason :not-underwater})))
 
 (defn columns
   "Column offsets within radius, the own column first, then by distance."

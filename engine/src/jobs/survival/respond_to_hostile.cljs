@@ -129,7 +129,9 @@
 (defn check
   "A real danger near, or the retreat hiding from one (it says when that is over)."
   [c]
-  (or (hiding? c) (boolean (seq (near c)))))
+  (or (boolean (hiding? c))
+      (boolean (seq (near c)))
+      (ctx/wait c {:reason :no-hostile})))
 
 (defn stopped-child
   "[slot result] of the child that stopped in this round's last call, or nil."
