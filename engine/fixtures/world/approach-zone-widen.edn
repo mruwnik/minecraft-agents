@@ -1,0 +1,36 @@
+;; Card 12f9b3d5: jobs.lib.access.approach/plan widens its search from radius 3 to 5 when every base is refused (it
+;; stopped at 3 on :zone). Seen through jobs.forestry.fell-tree on a 10-log trunk at x 16, z 16 (the top logs are out of
+;; reach from the ground, so the body pillars from a ground base). Another body's plan footprint rings the trunk, leaving
+;; the trunk column itself free (a tree whose base log is refused is no candidate): ring out to radius 3 leaves bases at
+;; radius 4-5, ring out to radius 5 leaves none (fell-tree.declined :refused :why :pillar, the top log stays).
+{:defaults
+ {:tags [:forestry :access :zones]
+  :time :any
+  :plot {:height 24 :floor "grass_block"}
+  :blocks [[:fill [16 0 16] [16 9 16] "oak_log"]
+           [:fill [14 8 14] [18 10 18] "oak_leaves[persistent=true]"]
+           [:fill [16 8 16] [16 9 16] "oak_log"]]
+  :body {:at [16.5 0 22.5] :yaw 180 :inventory [["dirt" 16] ["iron_axe" 1]] :effects [["resistance" 600 4]]}
+  :limit-s 150}
+ :cases
+ [{:name "ring-radius-3-pillars-from-radius-4"
+   :plans [{:id "ring" :metadata {:by "SomeoneElse"}
+            :parts [{:id "n" :box [#at [13 -1 13] #at [19 1 15]] :want "dirt"}
+                    {:id "s" :box [#at [13 -1 17] #at [19 1 19]] :want "dirt"}
+                    {:id "w" :box [#at [13 -1 16] #at [15 1 16]] :want "dirt"}
+                    {:id "e" :box [#at [17 -1 16] #at [19 1 16]] :want "dirt"}]}]
+   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16]})]]
+   :expect [{:event {:source :job :kind :blocks.dig.done :data {:pos [:near #at [16 9 16] 0.5]}} :within-s 120 :of-job true}
+            {:no-event {:source :job :kind :fell-tree.declined} :for-s 120 :until {:source :job :kind :blocks.dig.done}}]
+   :after [[:not-block [16 9 16] "oak_log"]]
+   :limit-s 150}
+  {:name "ring-radius-5-refuses-the-pillar"
+   :plans [{:id "ring" :metadata {:by "SomeoneElse"}
+            :parts [{:id "n" :box [#at [11 -1 11] #at [21 1 15]] :want "dirt"}
+                    {:id "s" :box [#at [11 -1 17] #at [21 1 21]] :want "dirt"}
+                    {:id "w" :box [#at [11 -1 16] #at [15 1 16]] :want "dirt"}
+                    {:id "e" :box [#at [17 -1 16] #at [21 1 16]] :want "dirt"}]}]
+   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16]})]]
+   :expect [{:event {:source :job :kind :fell-tree.declined :data {:reason :refused :why :pillar}} :within-s 90 :of-job true}]
+   :after [[:block [16 9 16] "oak_log"]]
+   :limit-s 120}]}

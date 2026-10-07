@@ -1,0 +1,72 @@
+;; Card 2e17c340: a zone, claim or plan refusal of everything a job would do, seen before any work, is access/decline!
+;; (wait :refused, one <job>.declined warn, nothing dug or tilled): stair, tunnel, till, clear-box. The plot is outside
+;; every zones.edn box, so another body's plan footprint (:metadata :by "SomeoneElse") stands in for the foreign zone.
+;; mine is not here: its refusal is not part of that commit and needs seen ore. Each job has a control with the plan
+;; moved off the work area, which must do the work.
+{:defaults
+ {:tags [:access :zones]
+  :time :any
+  :plot {:height 20 :floor "grass_block"}
+  :body {:at [10.5 0 10.5] :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [{:name "stair-refused"
+   :blocks [[:fill [8 0 8] [24 9 24] "stone"]]
+   :body {:at [16.5 10 16.5] :inventory [["stone_pickaxe" 1]]}
+   :plans [{:id "z" :metadata {:by "SomeoneElse"} :parts [{:id "z" :box [#at [10 2 10] #at [22 11 22]] :want "stone"}]}]
+   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 3})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :refused}} :within-s 30 :of-job true}
+            {:event {:source :job :kind :stair.declined :data {:reason :refused}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :stair.done} :for-s 30 :until {:source :job :kind :waiting :data {:reason :refused}}}]
+   :after [[:block [17 9 16] "stone"]]}
+  {:name "stair-free-outside-the-plan"
+   :blocks [[:fill [8 0 8] [24 9 24] "stone"]]
+   :body {:at [16.5 10 16.5] :inventory [["stone_pickaxe" 1]]}
+   :plans [{:id "z" :metadata {:by "SomeoneElse"} :parts [{:id "z" :box [#at [8 0 8] #at [9 1 9]] :want "stone"}]}]
+   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 3})]]
+   :expect [{:event {:source :job :kind :stair.done} :within-s 80 :of-job true}]
+   :after [[:block [17 9 16] "air"]]}
+  {:name "tunnel-refused"
+   :blocks [[:fill [8 0 8] [24 9 24] "stone"]]
+   :body {:at [16.5 10 16.5] :inventory [["stone_pickaxe" 1] ["torch" 8] ["cobblestone" 8]]}
+   :plans [{:id "z" :metadata {:by "SomeoneElse"} :parts [{:id "z" :box [#at [10 2 10] #at [22 11 22]] :want "stone"}]}]
+   :act [[:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :keep true})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :refused}} :within-s 30 :of-job true}
+            {:event {:source :job :kind :tunnel.declined :data {:reason :refused}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :tunnel.done} :for-s 30 :until {:source :job :kind :waiting :data {:reason :refused}}}]
+   :after [[:block [16 9 16] "stone"] [:block [17 9 16] "stone"]]}
+  {:name "tunnel-free-outside-the-plan"
+   :blocks [[:fill [8 0 8] [24 9 24] "stone"]]
+   :body {:at [16.5 10 16.5] :inventory [["stone_pickaxe" 1] ["torch" 8] ["cobblestone" 8]]}
+   :plans [{:id "z" :metadata {:by "SomeoneElse"} :parts [{:id "z" :box [#at [8 0 8] #at [9 1 9]] :want "stone"}]}]
+   :act [[:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :keep true})]]
+   :expect [{:event {:source :job :kind :tunnel.done} :within-s 120 :of-job true}]
+   :limit-s 150}
+  {:name "till-refused"
+   :body {:at [10.5 0 10.5] :inventory [["iron_hoe" 1]]}
+   :plans [{:id "z" :metadata {:by "SomeoneElse"} :parts [{:id "z" :box [#at [13 -1 13] #at [17 0 17]] :want "farmland"}]}]
+   :act [[:job (jobs.farm.till {:from #at [14 -1 14] :to #at [15 -1 15] :fetch false})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :refused}} :within-s 30 :of-job true}
+            {:event {:source :job :kind :till.declined :data {:reason :refused}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :till.done} :for-s 30 :until {:source :job :kind :waiting :data {:reason :refused}}}]
+   :after [[:block [14 -1 14] "grass_block"] [:block [15 -1 15] "grass_block"]]}
+  {:name "till-free-outside-the-plan"
+   :body {:at [10.5 0 10.5] :inventory [["iron_hoe" 1]]}
+   :plans [{:id "z" :metadata {:by "SomeoneElse"} :parts [{:id "z" :box [#at [26 -1 26] #at [28 0 28]] :want "farmland"}]}]
+   :act [[:job (jobs.farm.till {:from #at [14 -1 14] :to #at [15 -1 15] :fetch false})]]
+   :expect [{:event {:source :job :kind :till.done :data {:tilled [:>= 1]}} :within-s 60 :of-job true}]
+   :after [[:block [14 -1 14] "farmland"]]}
+  {:name "clear-box-refused"
+   :blocks [[:fill [18 0 18] [19 1 19] "dirt"]]
+   :plans [{:id "z" :metadata {:by "SomeoneElse"} :parts [{:id "z" :box [#at [17 0 17] #at [20 2 20]] :want "dirt"}]}]
+   :act [[:job (jobs.build.clear-box {:from #at [18 0 18] :to #at [19 1 19]})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :refused}} :within-s 30 :of-job true}
+            {:event {:source :job :kind :clear-box.declined :data {:reason :refused}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :clear-box.done} :for-s 30 :until {:source :job :kind :waiting :data {:reason :refused}}}]
+   :after [[:block [18 0 18] "dirt"] [:block [19 1 19] "dirt"]]}
+  {:name "clear-box-free-outside-the-plan"
+   :blocks [[:fill [18 0 18] [19 1 19] "dirt"]]
+   :plans [{:id "z" :metadata {:by "SomeoneElse"} :parts [{:id "z" :box [#at [26 0 26] #at [28 2 28]] :want "dirt"}]}]
+   :act [[:job (jobs.build.clear-box {:from #at [18 0 18] :to #at [19 1 19]})]]
+   :expect [{:event {:source :job :kind :clear-box.done :data {:dug [:>= 1]}} :within-s 60 :of-job true}]
+   :after [[:not-block [18 1 18] "dirt"]]}]}

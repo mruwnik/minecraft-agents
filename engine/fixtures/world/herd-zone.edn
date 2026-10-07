@@ -1,0 +1,28 @@
+;; Card 0b95ea50: jobs.animals.herd passes :ignore-zones? on to its unleash child. Same pen as herd-pen.edn; another
+;; body's plan footprint covers the pen interior (the plot is outside every zones.edn box, so a foreign plan stands in
+;; for a foreign zone). The cow is leashed outside the footprint, but unleash takes the animal at a cell inside it.
+;; With :ignore-zones? the cow is let go in the pen and counted; without it unleash declines, the cow stays on the lead
+;; and herd gives up on it (:short, :given-up).
+{:defaults
+ {:tags [:herd :animals :jobs :access]
+  :plot {:floor "grass_block"}
+  :blocks [[:fill [18 0 13] [24 0 19] "oak_fence"]
+           [:fill [19 0 14] [23 0 18] "air"]
+           [:set [18 0 16] "oak_fence_gate[facing=east,open=false]"]]
+  :plans [{:id "foreign" :metadata {:by "SomeoneElse"}
+           :parts [{:id "interior" :box [#at [19 0 14] #at [23 1 18]] :want "dirt"}]}]
+  :body {:at [12.5 0 16.5] :yaw 270 :inventory [["lead" 4]]}
+  :limit-s 300}
+ :cases
+ [{:name "ignore-zones-unleashes-in-foreign-footprint"
+   :act [[:summon "cow" [10.5 0 18.5]]
+         [:wait-s 2]
+         [:job (jobs.animals.herd {:mob "cow" :ignore-zones? true :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
+   :expect [{:event {:source :job :kind :herd.done :data {:reason :brought}} :within-s 240 :of-job true}]
+   :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]]}
+  {:name "foreign-footprint-refuses-unleash"
+   :act [[:summon "cow" [10.5 0 18.5]]
+         [:wait-s 2]
+         [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
+   :expect [{:event {:source :job :kind :unleash.declined :data {:reason :refused}} :within-s 240 :of-job true}
+            {:no-event {:source :job :kind :herd.done :data {:reason :brought}} :for-s 240 :until {:source :job :kind :herd.done}}]}]}

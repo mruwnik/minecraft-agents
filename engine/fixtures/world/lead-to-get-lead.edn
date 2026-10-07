@@ -1,0 +1,24 @@
+;; Card 09c21552: lead-to's :timeout-s does not count the :get-lead fetch (jobs.items.obtain child). No lead carried, a
+;; chest with one 26 blocks east in view, the cow 4 away, :timeout-s 8: the round trip to the chest takes longer than 8 s
+;; yet the cow is led and let go (the clock starts once the lead is in hand). Without a chest anywhere the job ends
+;; :no-lead (a reason, not :timeout).
+{:defaults
+ {:tags [:animals :jobs :fetch :large]
+  :time :any
+  :plot {:floor "grass_block" :length 64 :width 32}
+  :body {:at [4.5 0 16.5] :yaw 270 :effects [["resistance" 900 4]]}
+  :limit-s 150}
+ :cases
+ [{:name "fetch-longer-than-timeout-still-leads"
+   :blocks [[:set [30 0 16] "chest[facing=west]{Items:[{Slot:0b,id:\"minecraft:lead\",count:1}]}"]]
+   :act [[:summon "cow" [8.5 0 18.5]]
+         [:wait-s 4]
+         [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [14 0 16] :timeout-s 8})]]
+   :expect [{:event {:source :job :kind :lead-to.done :data {:reason :unleashed}} :within-s 120 :of-job true}
+            {:no-event {:source :job :kind :lead-to.done :data {:reason :timeout}} :for-s 120 :until {:source :job :kind :lead-to.done}}]
+   :after [[:entities "type=cow,tag=wt" [[8 0 10] [20 2 22]] 1]]}
+  {:name "no-lead-anywhere-ends-no-lead"
+   :act [[:summon "cow" [8.5 0 18.5]]
+         [:wait-s 4]
+         [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [14 0 16] :timeout-s 8})]]
+   :expect [{:event {:source :job :kind :lead-to.done :data {:reason :no-lead}} :within-s 60 :of-job true}]}]}
