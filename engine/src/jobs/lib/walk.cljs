@@ -5,6 +5,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.danger :as danger]
             [jobs.lib.look :as look]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
@@ -656,6 +657,11 @@
   {:window 10 :check-every 5 :min-refresh-ticks 80 :planner-share 0.05 :tick-ms 50 :better-by 2
    :mob-waits 3 :mob-wait-ms 1000 :mob-reach 2.5 :mob-still-ticks 20})
 
+(def danger-reach
+  "Blocks from a step of the way ahead within which a newly sensed danger makes the walk plan again: the radius of a
+  sensed danger's cost (jobs.lib.cost.danger/danger-shape), past which it costs nothing."
+  (get-in danger/danger-shape [:sensed :radius]))
+
 (def max-watch-replans
   "Replans a look-ahead may start in one follow! (changes, refreshes, mobs); past it the plan is walked unwatched."
   12)
@@ -793,13 +799,33 @@
                dy [0 1]]
            {:x (cell 0) :y (+ dy (cell 1)) :z (cell 2)}))))
 
+(defn new-danger-keys
+  "The keys of the sensed dangers ([{:key :pos}], watch :sense) not yet in known that lie within danger-reach of a step
+  from index i on."
+  [sensed known steps i]
+  (let [ahead (subvec (vec steps) (min i (count steps)))]
+    (vec (for [{:keys [key pos]} sensed
+               :when (and (not (contains? known key))
+                          (some (fn [s] (<= (js/Math.hypot (- (:x pos) (:px s)) (- (:z pos) (:pz s))) danger-reach)) ahead))]
+           key))))
+
+(defn danger-stop
+  "The :replan done map for the dangers newly sensed near the way ahead (new-danger-keys; their keys join watch :known), or nil."
+  [{:keys [sense known]} steps i at]
+  (when sense
+    (when-let [ks (seq (new-danger-keys (sense) @known steps i))]
+      (swap! known into ks)
+      {:status :replan :why :danger :at at :step i})))
+
 (defn watch-stop
   "The look-ahead at one tick: nil, or the done map that stops the walk to plan again: {:status :replan :why :changed :cells}
   when a cell of the window ahead differs for the planner between the plan's snapshot (base) and a fresh one, {:status
   :replan :why :mob :cells} (the cells as walls) when a mob has stood in a 1-wide way ahead (still-mob-cells), else
+  {:status :replan :why :danger} when a danger sensed now, not known when the walk began, lies within danger-reach of the
+  way ahead (watch :sense, :known: the keys already planned for, which the stop adds its own to), else
   {:status :replan :why :refresh} for a partial plan due a refresh. Only at a boundary?. steps: the steps walked; i the
   executor's index before the tick; state its state after; watch {:base :fresh :ahead :skip :status :interval :mobs :seen}."
-  [{:keys [base fresh ahead skip status interval mobs] :as watch} steps i {i2 :i tick :tick} pose]
+  [{:keys [base fresh ahead skip status interval mobs sense known] :as watch} steps i {i2 :i tick :tick} pose]
   (when (boundary? steps i i2 tick pose)
     (let [all (into steps ahead)
           here (assoc all (dec i2) (assoc (nth all (dec i2)) :px (:x pose) :pz (:z pose)))
@@ -809,10 +835,12 @@
           changed (when now
                     (let [^js bs (.-snapshot base) ^js ns (.-snapshot now) table (.-table base)]
                       (filterv (fn [[x y z]] (not (same-for-planner? table (.stateAt bs x y z) (.stateAt ns x y z))))
-                               (remove (or skip #{}) (window-cells here i2 (:window watch-policy))))))]
+                               (remove (or skip #{}) (window-cells here i2 (:window watch-policy))))))
+          dstop (when (and (empty? still) (empty? changed)) (danger-stop watch all i2 at))]
       (cond
         (seq changed) {:status :replan :why :changed :cells changed :at at :step i2}
         (seq still) {:status :replan :why :mob :cells still :at at :step i2}
+        dstop dstop
         (refresh-due? status tick interval) {:status :replan :why :refresh :at at :step i2}))))
 
 (defn ^:async walk!
@@ -861,11 +889,15 @@
 
 (defn watch-of
   "The look-ahead for walking plan: its own snapshot as the base, a fresh pathWorld per check, the cells the plan opens
-  skipped, and the refresh interval from the plan's ms."
-  [c plan]
-  {:base (:pw plan) :fresh #(path-world (:primitives c)) :ahead [] :skip (opens-cells (:steps plan))
+  skipped, and the refresh interval from the plan's ms. With known (an atom of danger keys, kept over a follow!'s plans:
+  a mob is planned for once), the dangers sensed now join it and a newly sensed one near the way ahead stops the walk."
+  ([c plan] (watch-of c plan nil))
+  ([c plan known]
+  (when known (swap! known into (map :key (threats/sensed-mobs (:primitives c)))))
+  (cond-> {:base (:pw plan) :fresh #(path-world (:primitives c)) :ahead [] :skip (opens-cells (:steps plan))
    :mobs #(combat/sensed (:primitives c) {:radius 8 :max 64}) :seen (atom {})
-   :status (:status plan) :interval (refresh-ticks (:ms plan))})
+   :status (:status plan) :interval (refresh-ticks (:ms plan))}
+    known (assoc :known known :sense #(threats/sensed-mobs (:primitives c))))))
 
 (defn mob-cells
   "The cells {:x :y :z} (feet and head) of the entities, not items and not the body, that stand on the leg the body is
@@ -910,14 +942,16 @@
   opts: :plan-fn (fn [walls]) -> a plan-walk result (or a promise of one: plan-walk!) from where the body stands now, the
   cells {:x :y :z} read as walls;
   :walk-fn (fn [steps watch]) -> [done ms] (walk! or jobs.lib.pass/walk!); :to the goal cell; :policy for no-walk;
+  :dangers true: a danger newly sensed near the way ahead is planned round once (watch-stop);
   :announce! (fn [:replan data]) per replan, data {:why :ms :kept :replans :at :text}.
   {:done :plan :ms :walked :replans}: done the last walk's done map, or the no-walk result of a replan that has no way; plan
   the plan in force at the end; ms the time in walks; walked the blocks of plan walked."
-  [c plan {:keys [plan-fn walk-fn to policy announce!] :or {policy (body-policy c) announce! (fn [_ _])}}]
-  (let [walkable? (fn [pl] (nil? (no-walk pl 0 policy)))
+  [c plan {:keys [plan-fn walk-fn to policy announce! dangers] :or {policy (body-policy c) announce! (fn [_ _])}}]
+  (let [known (when dangers (atom #{}))
+        walkable? (fn [pl] (nil? (no-walk pl 0 policy)))
         cut-length (fn [steps k] (path-length (subvec steps 0 (min (count steps) (max 1 k)))))]
     (loop [plan plan steps (:steps plan) n 0 ms 0 walked 0]
-      (let [watch (when (< n max-watch-replans) (watch-of c plan))
+      (let [watch (when (< n max-watch-replans) (watch-of c plan known))
             [done wms] (await (walk-fn steps watch))
             ms (+ ms wms)
             k (or (:step done) (count steps))
@@ -936,6 +970,15 @@
             (if (walkable? fresh)
               (recur (assoc fresh :ms plan-ms) (:steps fresh) (inc n) ms walked')
               (recur plan (subvec steps (max 0 (dec k))) max-watch-replans ms walked')))
+
+          (and (= :replan (:status done)) (= :danger (:why done)))
+          (let [t (js/performance.now)
+                fresh (await (plan-fn []))
+                plan-ms (- (js/performance.now) t)]
+            (tell! :danger plan-ms (not (walkable? fresh)))
+            (if (walkable? fresh)
+              (recur (assoc fresh :ms plan-ms) (:steps fresh) (inc n) ms walked')
+              (recur (assoc plan :ms plan-ms) (subvec steps (max 0 (dec k))) (inc n) ms walked')))
 
           (= :replan (:status done))
           (let [t (js/performance.now)

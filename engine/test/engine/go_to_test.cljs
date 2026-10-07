@@ -684,3 +684,36 @@
         (let [{:keys [out p]} (await (go! {:blocks flat} {:pos [35 64 0] :range 0}))]
           (is (= {:arrived true} @out) "without :leg-s the whole way is walked")
           (is (= 35 (first (at p)))))))))
+
+;; a hostile first sensed once the walk is under way (the body faced away at the start, or it came out of the dark): when it
+;; lies within its danger radius of the way still ahead the walk plans again once, so the plan is costed with it
+(deftest go-to-plans-again-once-for-a-hostile-first-sensed-near-the-way-ahead
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [mob {:key "z1" :name "zombie" :pos {:x 20 :y 64 :z 1}}
+              s (with-redefs [threats/sensed-mobs (fn [p] (if (> (first (at p)) 5) [mob] []))]
+                  (await (go! {:blocks flat} {:pos [35 64 0] :range 0})))]
+          (is (= {:arrived true} @(:out s)))
+          (is (= [:danger] (mapv :why (events-of s :replan))) "one replan, for the danger"))))))
+
+(deftest go-to-does-not-plan-again-for-a-hostile-far-from-the-way
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [mob {:key "z1" :name "zombie" :pos {:x 20 :y 64 :z 30}}
+              s (with-redefs [threats/sensed-mobs (fn [p] (if (> (first (at p)) 5) [mob] []))]
+                  (await (go! {:blocks flat} {:pos [35 64 0] :range 0})))]
+          (is (= {:arrived true} @(:out s)))
+          (is (= [] (events-of s :replan))))))))
+
+(deftest go-to-plans-again-for-each-newly-sensed-hostile-only-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [mob (fn [x] {:key "z1" :name "zombie" :pos {:x x :y 64 :z 1}})
+              s (with-redefs [threats/sensed-mobs (fn [p] (let [bx (first (at p))]
+                                                            (cond (> bx 20) [] (> bx 5) [(mob (+ 10 (mod (js/Math.floor bx) 3)))] :else [])))]
+                  (await (go! {:blocks flat} {:pos [35 64 0] :range 0})))]
+          (is (= {:arrived true} @(:out s)))
+          (is (= [:danger] (mapv :why (events-of s :replan))) "a wandering, flickering mob is one mob"))))))

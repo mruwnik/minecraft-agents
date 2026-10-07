@@ -89,7 +89,7 @@
                        (if stuck (door-stuck stuck) no)
                        (let [{done :done last-plan :plan}
                              (await (walk/follow! c plan {:plan-fn #(plan! c to range doors (policy-of) (into walls %) explore one-way (walk/replan-budget budget) progress dangers avoid dark tolls)
-                                                          :walk-fn walk-fn :to to :policy (policy-of) :announce! announce!}))]
+                                                          :walk-fn walk-fn :to to :policy (policy-of) :announce! announce! :dangers dangers}))]
                          (cond
                            (not= :door-stuck (:status done))
                            (cond-> (walk/partial-end done (:status last-plan) to range (:steps last-plan) (:stop last-plan))

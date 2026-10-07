@@ -68,14 +68,17 @@
     {:health (.-health self) :equipment (cost/equipment-of (.-equipment self))
      :weapon (combat/best-weapon p combat/default-weapons) :pos (u/pos-of (.-pos self))}))
 
+(defn sensed-mobs
+  "The real dangers primitives p senses within sensed-radius (jobs.lib.reach/dangers: seen or heard, with a way to the body
+  or a line of fire; never x-ray), as [{:key :name :pos}]."
+  [p]
+  (mapv (fn [e] {:key (mob-key e) :name (.-name e) :pos (reach/mob-pos p e)})
+        (reach/dangers p sensed-radius {:ranged-radius sensed-radius})))
+
 (defn known-dangers
-  "danger-list of the body of primitives p: the real dangers it senses within sensed-radius (jobs.lib.reach/dangers:
-  seen or heard, with a way to the body or a line of fire; never x-ray) and the remembered :threat entries' data."
+  "danger-list of the body of primitives p: sensed-mobs and the remembered :threat entries' data."
   [p remembered]
-  (cost/danger-list (body-of p)
-                    (mapv (fn [e] {:key (mob-key e) :name (.-name e) :pos (reach/mob-pos p e)})
-                          (reach/dangers p sensed-radius {:ranged-radius sensed-radius}))
-                    remembered))
+  (cost/danger-list (body-of p) (sensed-mobs p) remembered))
 
 (defn planner-dangers
   "The planner's options.dangers for the body of c (JS array, nil for none): known-dangers with the :threat spots its
