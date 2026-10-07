@@ -516,6 +516,30 @@
           (is (= 1 (count (tidy-entries eng))) "kept for when the body is out")
           (is (= [[{:cell [2 64 0] :was "stone" :why :seals}]] (mapv :cells (zs/trespass seen :tidy.not-restored)))))))))
 
+(def mid-shaft
+  "A one-wide shaft x 0, z 0 walled by stone at y 65 and 66, the body standing at its feet y 65 on a block at y 64; the
+  cell at y 67 above its head is an open escalation hole."
+  (into {"0,64,0" "stone" "0,68,0" "stone"}
+        (for [y [65 66] [dx dz] [[1 0] [-1 0] [0 1] [0 -1]]] [(cell-key [dx y dz]) "stone"])))
+
+(def escalation-hole {:cell [0 67 0] :action :dig :was "stone" :now "air" :zone "vault" :tries 0 :escalation true :any-of ["stone"]})
+
+(deftest restore-keeps-an-escalation-hole-while-the-body-is-shut-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (assoc with-hitbox :floor [-25 -25 25 25] :blocks mid-shaft :self {:pos [0 65 0]})
+              {:keys [eng p seen]} (restore! world [(zs/whole-zone "Miles")] [escalation-hole])]
+          (is (reach/enclosed? p) "the body is shut in the shaft")
+          (is (not (tidy/in-body? p [0 67 0])) "the hole is clear of the hitbox")
+          (await (zs/run-until-empty eng 30))
+          (is (= [] (zs/calls p "place")) "the hole is the body's way on: not filled")
+          (is (= 1 (count (tidy-entries eng))) "kept for when the body is out")
+          (is (= [[{:cell [0 67 0] :was "stone" :why :shut-in}]] (mapv :cells (zs/trespass seen :tidy.not-restored))))
+          (fake/swap-self! p assoc :pos [2 64 1])
+          (is (not (reach/enclosed? p)) "out on open ground")
+          (is (nil? (tidy/why-not p escalation-hole)) "nothing holds the hole back once the body is out"))))))
+
 (deftest a-sealed-body-restores-the-cell-it-can-reach
   (async done
     (tu/run-async done
