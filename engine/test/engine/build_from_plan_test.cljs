@@ -1,6 +1,7 @@
 (ns engine.build-from-plan-test
   "jobs.build.from-plan placing what a plan wants against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
+            [engine.fake]
             [engine.core :as core]
             [engine.events :as events]
             [engine.harvest-test :as h]
@@ -170,7 +171,7 @@
     (is (= [0 [{:plan "nope" :reason "no such plan"}]] (declines kit-spec {} {:plan "nope"})))
     (is (= [0 [{:plan "pen" :reason "no cells to build"}]] (declines kit-spec {"pen" (pen-plan)} {:plan "pen" :part "nope"})))
     (is (= [0 [{:plan "pen" :reason "nothing carried to build with: oak_fence 7, oak_fence_gate 1, torch 1"}]]
-           (declines {:inventory []} {"pen" (pen-plan)} {:plan "pen"})))))
+           (declines {:inventory []} {"pen" (pen-plan)} {:plan "pen" :fetch false})))))
 
 (deftest a-broken-plan-declines-naming-the-error
   (let [{:keys [eng p seen w]} (start {:inventory kit} {})]
@@ -579,3 +580,33 @@
         p (tu/fake-on-floor {:blocks ground :self {:pos {:x 12.5 :y 64 :z 14.5}}})
         stands (build/ground-stands p [[15 64 10] [14 64 10] [13 64 8] [16 64 12]])]
     (is (= [[15 65 10] [14 64 10] [13 64 8] [16 65 12]] (vec stands)))))
+
+(def fence-chest "-2,64,3")
+
+(defn chest-fences [p] (some #(when (= "oak_fence" (:name %)) (:count %)) (get-in @(engine.fake/state p) [:containers [-2 64 3]])))
+
+(defn ^:async fence-fetch
+  "The pen plan with the gate and torches carried and seven fences in a seen chest; the result and the body."
+  [args]
+  (let [spec {:inventory [{:name "oak_fence_gate" :count 1} {:name "torch" :count 4}]
+              :blocks {fence-chest "chest"} :containers {fence-chest [{:name "oak_fence" :count 7}]}}
+        {:keys [eng p]} (start spec {"pen" (pen-plan)})]
+    (tu/seeing-all p)
+    {:result (await (h/child-outcome eng job (merge {:plan "pen"} args) 300)) :p p}))
+
+(deftest missing-material-is-fetched-from-a-seen-chest-by-default
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [result p]} (await (fence-fetch {}))]
+          (is (every? #(= "oak_fence" (block p %)) ring))
+          (is (= {:placed 9 :missing []} (select-keys result [:placed :missing])))
+          (is (nil? (chest-fences p))))))))
+
+(deftest fetch-false-builds-what-it-can-and-leaves-the-chest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [result p]} (await (fence-fetch {:fetch false}))]
+          (is (= {"oak_fence" 7} (:short result)))
+          (is (= 7 (chest-fences p))))))))

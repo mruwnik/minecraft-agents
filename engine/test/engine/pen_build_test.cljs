@@ -207,7 +207,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (b/start (spec []) {"pen" (ring-plan)} [])]
-          (core/submit! eng (list job {:plan "pen"}) {})
+          (core/submit! eng (list job {:plan "pen" :fetch false}) {})
           (dotimes [_ 4] (swap! h/clock + 700) (await (core/tick! eng)))
           (is (empty? (h/calls p "place")))
           (is (= 1 (count (kinds-of seen :build.declined)))))))))

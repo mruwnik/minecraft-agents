@@ -34,6 +34,7 @@
    :give-up {:doc "as jobs.build.from-plan" :default 3}
    :accept {:doc "as jobs.build.from-plan" :default [:fluid-adjacent]}
    :max-cells {:doc "most cells the pen check visits before it gives up with :unbounded" :default pen/default-max-cells}
+   :fetch {:doc "as jobs.build.from-plan: get the blocks the plan lacks; false builds with what is carried" :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it (passed to jobs.build.from-plan)" :default false}})
 
 ;; ------------------------------------------------------------------ the pen from the plan
@@ -91,7 +92,7 @@
        (:closed? (read-pen c cells))))
 
 (defn build-args [c]
-  (select-keys (:args c) [:plan :part :reach :give-up :accept :ignore-zones?]))
+  (select-keys (:args c) [:plan :part :reach :give-up :accept :fetch :ignore-zones?]))
 
 ;; ------------------------------------------------------------------ check
 

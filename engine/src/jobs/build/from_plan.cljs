@@ -13,6 +13,7 @@
             [jobs.lib.reach :as reach]
             [plan.rail :as rail]
             [plan.shape :as shape]
+            [jobs.lib.fetch :as fetch]
             [jobs.lib.world :as known]))
 
 (def doc
@@ -59,7 +60,10 @@
   The job declines (one build.declined warn naming the plan and the reason):
   - while the plan is missing, unreadable or has no cells to build (in :part).
   - while no zone list has been read.
-  - before the job has begun, while cells are missing but none of their blocks is carried.")
+  - before the job has begun, while cells are missing but none of their blocks is carried and none can be fetched.
+  Material: while cells wait for an item not carried (and not given up or refused), each round first fetches it (:fetch,
+  jobs.lib.fetch, a jobs.items.obtain child for the missing count); with :fetch false, or once a fetch failed, the build
+  goes on with what is carried and ends :short as before. Tools are not fetched (a pickaxe block is given up :no-tool).")
 
 (def args
   {:plan {:doc "id of a plan of the body's world" :default nil}
@@ -67,6 +71,7 @@
    :reach {:doc "cells whose centre is this close to the eye are placed without walking, in blocks" :default 4.2}
    :give-up {:doc "refused places or failed walks after which a cell is given up" :default 3}
    :accept {:doc "fluid hazards of a cell taken: :fluid-adjacent (water beside; placing beside or into water seals and bridges), :lava-adjacent (lava beside; not taken by default: the body stands beside the cell)" :default [:fluid-adjacent]}
+   :fetch {:doc "get the blocks the plan lacks (jobs.lib.fetch): true, a set of kinds or a map of limits; false builds with what is carried" :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
    :sturdy-ground {:doc "a sturdy block on the ground of a rail line (plan.rail/ground) is no wrong block, whatever fill the plan wants there" :default false}})
 
@@ -356,6 +361,21 @@
 
 ;; ------------------------------------------------------------------ check
 
+(defn need-of
+  "The :need wait for the first item of the open missing cells that is not carried enough, else nil."
+  [c cells]
+  (let [mem (ctx/mem c)
+        closed (merge (:given-up mem) (:refused mem))
+        open (remove #(contains? closed (:pos %)) (missing cells))
+        [item n] (first (shortage open (carried-counts (:primitives c))))]
+    (when item {:reason :need :item item :count n})))
+
+(defn problem
+  "need-of for the plan as it stands now, nil when the plan is in trouble."
+  [c]
+  (let [{:keys [cells trouble]} (planned c)]
+    (when-not trouble (need-of c cells))))
+
 (defn check [c]
   (let [{:keys [cells trouble]} (planned c)
         p (:primitives c)]
@@ -366,6 +386,7 @@
               (seq (buildable cells (carried-counts p) {}))
               (seq (digging cells))
               (some #(pos? (get (carried-counts p) (:item %) 0)) (unseen cells {}))
+              (when-let [w (need-of c cells)] (some? (fetch/due c 'jobs.build.from-plan w)))
               (do (ctx/warn-once! c [(:plan (:args c)) :no-items] :build.declined
                                   (let [reason (str "nothing carried to build with: "
                                                     (shortage-text (shortage (owed cells) (carried-counts p))))]
@@ -593,35 +614,41 @@
                      result))
     :done))
 
+(defn ^:async build-step!
+  "One step of the build: place or dig what is in reach, else walk, else finish."
+  [c cells]
+  (let [closed #(merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))
+        todo (placeable c (permitted c (buildable cells (carried-counts (:primitives c)) (closed))))
+        digs (diggable c (digging cells) (closed))
+        given-up (closed)
+        near (in-reach c todo)
+        dig-near (in-dig-reach c digs)
+        nearest #(first (sort-by (fn [cell] (u/dist (u/self-pos c) (zipmap [:x :y :z] (:pos cell)))) %))]
+    (cond
+      (:leave (ctx/mem c)) (await (leave! c))
+      (seq near) (do (await (watch/watch! c {}))
+                     (loop [left near]
+                       (when (seq left)
+                         (if (seals? c (:pos (first left)))
+                           (ctx/update-mem! c #(-> (count-fail % (:pos (first left)) :unreachable (:give-up (:args c)))
+                                                   (assoc :leave (exit-point cells (u/self-pos c)))))
+                           (do (await (place-one! c (first left)))
+                               (recur (rest left))))))
+                     :continue)
+      (seq dig-near) (do (loop [left dig-near]
+                           (when (seq left)
+                             (await (dig-one! c (first left)))
+                             (recur (rest left))))
+                         :continue)
+      (seq todo) (await (walk-to! c cells (nearest todo)))
+      (seq digs) (await (walk-to! c cells (nearest digs)))
+      (seq (unseen cells given-up)) (await (walk-to! c cells (nearest (unseen cells given-up))))
+      :else (finish! c cells))))
+
 (defn ^:async round [c]
-  (let [{:keys [cells trouble]} (planned c)]
+  (let [{:keys [trouble]} (planned c)]
     (if trouble
       :declined
       (do (when-not (:begun (ctx/mem c)) (ctx/update-mem! c assoc :begun true))
-          (let [closed #(merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))
-                todo (placeable c (permitted c (buildable cells (carried-counts (:primitives c)) (closed))))
-                digs (diggable c (digging cells) (closed))
-                given-up (closed)
-                near (in-reach c todo)
-                dig-near (in-dig-reach c digs)
-                nearest #(first (sort-by (fn [cell] (u/dist (u/self-pos c) (zipmap [:x :y :z] (:pos cell)))) %))]
-            (cond
-              (:leave (ctx/mem c)) (await (leave! c))
-              (seq near) (do (await (watch/watch! c {}))
-                             (loop [left near]
-                               (when (seq left)
-                                 (if (seals? c (:pos (first left)))
-                                   (ctx/update-mem! c #(-> (count-fail % (:pos (first left)) :unreachable (:give-up (:args c)))
-                                                           (assoc :leave (exit-point cells (u/self-pos c)))))
-                                   (do (await (place-one! c (first left)))
-                                       (recur (rest left))))))
-                             :continue)
-              (seq dig-near) (do (loop [left dig-near]
-                                   (when (seq left)
-                                     (await (dig-one! c (first left)))
-                                     (recur (rest left))))
-                                 :continue)
-              (seq todo) (await (walk-to! c cells (nearest todo)))
-              (seq digs) (await (walk-to! c cells (nearest digs)))
-              (seq (unseen cells given-up)) (await (walk-to! c cells (nearest (unseen cells given-up))))
-              :else (finish! c cells)))))))
+          (or (await (fetch/fetch! c 'jobs.build.from-plan problem))
+              (await (build-step! c (:cells (planned c)))))))))
