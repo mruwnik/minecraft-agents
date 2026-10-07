@@ -35,8 +35,10 @@ if [ "${1:-}" = --step ]; then
   legacy=0; grep -q 'res-slot" compile --' "$wt/tools/compile" 2>/dev/null && legacy=1
   # run in the background and wait, so INT/TERM interrupts the wait at once (the trap below kills the command and stops the legacy servers)
   cmd=""
-  slotted() { if [ $legacy = 1 ]; then "$repo/tools/res-slot" server -- "$@" 9>&- & else "$@" 9>&- & fi; cmd=$!; wait $cmd; local r=$?; cmd=""; return $r; }
-  stop_legacy() { [ $legacy = 1 ] || return 0; for p in engine dashboard; do "$wt/tools/compile" $p --stop >/dev/null 2>&1 9>&-; done; }
+  # the command does not inherit the relay fd, so a server it leaves running cannot hold the caller's stdout open
+  noout() { [ -z "${BISECT_OUT:-}" ] || exec {BISECT_OUT}>&-; exec "$@"; }
+  slotted() { if [ $legacy = 1 ]; then ( noout "$repo/tools/res-slot" server -- "$@" ) & else ( noout "$@" ) & fi; cmd=$!; wait $cmd; local r=$?; cmd=""; return $r; }
+  stop_legacy() { [ $legacy = 1 ] || return 0; for p in engine dashboard; do ( noout "$wt/tools/compile" $p --stop >/dev/null 2>&1 ); done; }
   trap '[ -n "$cmd" ] && kill "$cmd" 2>/dev/null; stop_legacy; exit 130' INT TERM
   # done: report the step's result and progress, then exit with its code
   done_step() { stop_legacy; result "$rname" "$1"; emit "{\"event\":\"progress\",\"done\":$n,\"total\":$total,\"unit\":\"steps\"}"; exit "$2"; }
@@ -117,12 +119,12 @@ done
 cd "$wt" || exit 2
 git bisect start "$bad_sha" "$good_sha" >/dev/null || exit 2
 echo "test-bisect: ${nss[*]} between $(git rev-parse --short "$good_sha") (good) and $(git rev-parse --short "$bad_sha") (bad)"
-# the steps write their step and @@test lines straight to this stdout (fd 9); run.log keeps only the bisect's own output
-exec 9>&1
-BISECT_OUT=9 BISECT_WORK="$work" setsid git bisect run "$self" --step "${nss[@]}" > "$work/run.log" 2>&1 9>&9 &
+# the steps write their step and @@test lines straight to this stdout (a free fd); run.log keeps only the bisect's own output
+exec {relay}>&1
+BISECT_OUT=$relay BISECT_WORK="$work" setsid git bisect run "$self" --step "${nss[@]}" > "$work/run.log" 2>&1 &
 child=$!
 wait $child; child=""
-exec 9>&-
+exec {relay}>&-
 
 first="$(git bisect log | sed -n 's/^# first .\{0,1\}bad.\{0,1\} commit: \[\([0-9a-f]*\)\].*/\1/p' | tail -n1)"
 if [ -z "$first" ]; then
