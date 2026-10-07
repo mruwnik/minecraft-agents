@@ -1,0 +1,46 @@
+;; Cards ae200abd, f20380bf: respond-to-hostile stops arrows with a block (jobs.survival.block-arrow-gap, once per call, never fetching)
+;; instead of fighting or fleeing, only when every danger near is ranged, the body holds cover (roofed and walled on 3 sides: a doorway
+;; cell, not a canopy), building blocks and a tool that digs stone are carried. Body in a 1x1 cell at [17 0 16] (stone x 16..18, z 15..17,
+;; roof y 2, the east side open: a 2-high doorway), looking east at a NoAI helmeted skeleton 10 blocks away with an arrow line through it.
+;; Should-succeed: a block goes in the doorway (block-arrow-gap.closed), the body stays in its cell, no fetch runs. Should-fail (no
+;; block-arrow-gap.closed): no pickaxe, no block carried, a zombie too, only a canopy over open ground. What the fallback then does (fight or
+;; flee) is not asserted.
+{:defaults
+ {:tags [:survival :hostile :jobs]
+  :time :any
+  :mobs :keep
+  :plot {:height 8}
+  :blocks [[:fill [16 0 15] [18 2 17] "stone"] [:fill [17 0 16] [17 1 16] "air"]]
+  :body {:at [17.5 0 16.5] :yaw 270 :inventory [["cobblestone" 10] ["stone_pickaxe" 1]] :effects [["resistance" 600 4]]}
+  :act [[:summon "skeleton" [27.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+        [:wait-s 2]
+        [:job (jobs.survival.respond-to-hostile {})]]
+  :limit-s 60}
+ :cases
+ [{:name "respond-closes-the-doorway-no-walk"
+   :expect [{:event {:source :job :kind :block-arrow-gap.closed} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :block_arrow_gap_failed} :for-s 40 :until {:source :job :kind :block-arrow-gap.closed} :of-job true}
+            {:no-event {:source :job :kind :fetch.started} :for-s 40 :until {:source :job :kind :block-arrow-gap.closed} :of-job true}]
+   :after [[:body-near [17.5 0 16.5] 1.5] [:item "cobblestone" [:< 10]]]
+   :limit-s 50}
+  {:name "no-pickaxe-no-gap"
+   :body {:inventory [["cobblestone" 10]]}
+   :expect [{:event {:source :job :kind :round_started} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind #{:block-arrow-gap.closed :block_arrow_gap_failed}} :for-s 30 :of-job true}]
+   :limit-s 40}
+  {:name "no-blocks-no-fetch-no-gap"
+   :body {:inventory [["stone_pickaxe" 1]]}
+   :expect [{:event {:source :job :kind :round_started} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind #{:block-arrow-gap.closed :block_arrow_gap_failed :fetch.started}} :for-s 30 :of-job true}]
+   :limit-s 40}
+  {:name "zombie-too-no-gap"
+   :act [[:summon "zombie" [24.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :round_started} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind #{:block-arrow-gap.closed :block_arrow_gap_failed}} :for-s 30 :of-job true}]
+   :limit-s 40}
+  {:name "canopy-in-open-ground-no-gap"
+   :blocks [[:fill [16 0 15] [18 2 17] "air"] [:fill [16 2 15] [18 2 17] "stone"]]
+   :expect [{:event {:source :job :kind :round_started} :within-s 20 :of-job true}
+            {:no-event {:source :job :kind #{:block-arrow-gap.closed :block_arrow_gap_failed}} :for-s 30 :of-job true}]
+   :after [[:not-block [18 1 16] "cobblestone"] [:not-block [18 0 16] "cobblestone"]]
+   :limit-s 40}]}

@@ -1,0 +1,52 @@
+;; Cards dcedd0f5, a9ae340d: at night a body without a bed walks to a close remembered roofed place (:roofed-places [:home], :walk-radius 32)
+;; when the route is lit as far as the body has seen it (block light >= :lit-light on the straight line sampled every 2 blocks;
+;; a cell the body has not seen is not lit), else it digs in where it stands (dig-in.sealed; cobblestone carried). Open ground (64x32 plot,
+;; body at x 4.5, z 16.5); home = a stone slab at y 2 over 3x3 cells (roofed within the default roof height 4), torches beside the line at z 15.
+;; The walk's success is the completed night job with the body at home and no dig-in; failure is dig-in.sealed with the body near its start.
+;; The wall case: a 1-thick stone wall at x 9 (its cell is skipped by the 2-block sampling), a gap at z 0..2, torches behind it light cells the body never saw;
+;; before the sight gate (a9ae340d) the body walked round through the gap, now it digs in. The failed-walk fallback (home behind a wall: walk fails,
+;; :roof-walk-failed, no second walk) is a unit test only (night-test): a walk that cannot arrive is not a stable fixture (go-to escalates).
+;; Needs night: run with --allow-time --time-log <the shared time log>.
+{:defaults
+ {:tags [:night :survival]
+  :time :night
+  :plot {:height 10 :length 64 :width 32}
+  :body {:at [4.5 0 16.5] :effects [["resistance" 600 4]] :inventory [["cobblestone" 16]] :settle-s 4}}
+ :cases
+ [  {:name "lit-route-15-blocks-walks-home"
+   :blocks [[:fill [18 2 15] [20 2 17] "stone"] [:set [8 0 15] "torch"] [:set [13 0 15] "torch"] [:set [18 0 15] "torch"]]
+   :act [[:job (jobs.memory.set-place {:name :home :pos #at [19 0 16]}) [:now]]
+         [:job (jobs.survival.night)]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :dig-in.sealed} :for-s 100 :until {:source :job :kind :completed :data {:name "jobs.survival.night"}} :of-job true}]
+   :after [[:body-near [19.5 0 16.5] 2.5]]
+   :limit-s 110}
+  {:name "lit-route-25-blocks-torches-every-6-walks-home"
+   :blocks [[:fill [28 2 15] [30 2 17] "stone"] [:set [8 0 15] "torch"] [:set [14 0 15] "torch"] [:set [20 0 15] "torch"] [:set [26 0 15] "torch"]]
+   :act [[:job (jobs.memory.set-place {:name :home :pos #at [29 0 16]}) [:now]]
+         [:job (jobs.survival.night)]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :dig-in.sealed} :for-s 100 :until {:source :job :kind :completed :data {:name "jobs.survival.night"}} :of-job true}]
+   :after [[:body-near [29.5 0 16.5] 2.5]]
+   :limit-s 110}
+  {:name "dark-route-digs-in-where-it-stands"
+   :blocks [[:fill [18 2 15] [20 2 17] "stone"]]
+   :act [[:job (jobs.memory.set-place {:name :home :pos #at [19 0 16]}) [:now]]
+         [:job (jobs.survival.night)]]
+   :expect [{:event {:source :job :kind :dig-in.sealed} :within-s 90 :of-job true}]
+   :after [[:body-near [4.5 0 16.5] 3] [:body-far [19.5 0 16.5] 8]]
+   :limit-s 100}
+  {:name "home-beyond-walk-radius-digs-in"
+   :blocks [[:fill [49 2 15] [51 2 17] "stone"] [:set [8 0 15] "torch"] [:set [14 0 15] "torch"] [:set [20 0 15] "torch"] [:set [26 0 15] "torch"] [:set [32 0 15] "torch"] [:set [38 0 15] "torch"] [:set [44 0 15] "torch"] [:set [50 0 15] "torch"]]
+   :act [[:job (jobs.memory.set-place {:name :home :pos #at [50 0 16]}) [:now]]
+         [:job (jobs.survival.night)]]
+   :expect [{:event {:source :job :kind :dig-in.sealed} :within-s 90 :of-job true}]
+   :after [[:body-near [4.5 0 16.5] 3] [:body-far [50.5 0 16.5] 8]]
+   :limit-s 100}
+  {:name "lit-route-behind-a-wall-never-seen-digs-in"
+   :blocks [[:fill [9 0 3] [9 5 31] "stone"] [:fill [18 2 15] [20 2 17] "stone"] [:set [6 0 15] "torch"] [:set [12 0 15] "torch"] [:set [18 0 15] "torch"]]
+   :act [[:job (jobs.memory.set-place {:name :home :pos #at [19 0 16]}) [:now]]
+         [:job (jobs.survival.night)]]
+   :expect [{:event {:source :job :kind :dig-in.sealed} :within-s 90 :of-job true}]
+   :after [[:body-near [4.5 0 16.5] 3] [:body-far [19.5 0 16.5] 8]]
+   :limit-s 100}]}

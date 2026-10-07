@@ -4,6 +4,8 @@
 ;; sight so its cells are seen dark) and a detour along z 24 (about 42 long, torches at x 10..19 only, far enough from
 ;; the rooms that no torch light reaches the direct corridor). The body looks east down the direct corridor. The preview
 ;; reports the route's :length in blocks and never walks: with :dark true the detour, with :dark false the direct one.
+;; Card ea376fb0: the same at night (--allow-time): the night heuristic scale must not hide the lit detour, and a route that is dark
+;; all the way (torches removed) is still found, the shorter direct corridor.
 {:defaults
  {:tags [:movement :planner :dark]
   :time :any
@@ -22,5 +24,16 @@
    :after [[:body-near [2.5 0 16.5] 1]]}
   {:name "dark-false-takes-the-direct-corridor"
    :act [[:job (jobs.movement.path-preview {:pos #at [28 0 16] :range 1 :dark false})]]
+   :expect [{:event {:source :job :kind :path-preview :data {:found true :length [:< 30]}} :within-s 30 :of-job true}]
+   :after [[:body-near [2.5 0 16.5] 1]]}
+  {:name "night-dark-direct-corridor-takes-the-lit-detour"
+   :time :night
+   :act [[:job (jobs.movement.path-preview {:pos #at [28 0 16] :range 1})]]
+   :expect [{:event {:source :job :kind :path-preview :data {:found true :length [:> 35]}} :within-s 30 :of-job true}]
+   :after [[:body-near [2.5 0 16.5] 1]]}
+  {:name "night-all-dark-route-is-still-found"
+   :time :night
+   :blocks [[:set [10 0 24] "air"] [:set [13 0 24] "air"] [:set [16 0 24] "air"] [:set [19 0 24] "air"]]
+   :act [[:job (jobs.movement.path-preview {:pos #at [28 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :path-preview :data {:found true :length [:< 30]}} :within-s 30 :of-job true}]
    :after [[:body-near [2.5 0 16.5] 1]]}]}

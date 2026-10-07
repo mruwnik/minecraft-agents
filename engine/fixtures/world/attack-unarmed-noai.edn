@@ -1,0 +1,19 @@
+;; Card ce5d6a75 (review fixes of the flee/danger work): an explicit attack walks with :dangers false, so an unarmed body goes straight at
+;; the NoAI zombie it was told to kill (the danger cost of go-to would send it round or give up) and ends attack.done :cleared with no
+;; gave-up. Body with no weapon at one end of a 64-long plot, the zombie 40 blocks east. The other review items need a flight clock, a
+;; 300 s wait or a path read by hand (retreat's unseen chasers, resume gap, :still-near, danger-key) and stay unit tests / one-offs.
+{:defaults
+ {:tags [:combat :attack :hostile]
+  :time :any
+  :mobs :keep
+  :plot {:height 8 :length 64 :width 32}
+  :body {:at [4.5 0 16.5] :effects [["resistance" 900 4]]}
+  :limit-s 120}
+ :cases
+ [{:name "unarmed-attack-walks-straight-to-a-noai-zombie"
+   :act [[:summon "zombie" [44.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:wait-s 2]
+         [:job (jobs.combat.attack {:targets "zombie"})]]
+   :expect [{:event {:source :job :kind :attack.done :data {:reason :cleared :given-up {}}} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :attack.gave-up} :for-s 100 :until {:source :job :kind :attack.done} :of-job true}]
+   :after [[:entities "type=zombie,tag=wt" [[0 0 0] [63 5 31]] 0]]}]}

@@ -1,0 +1,29 @@
+;; Card c7fcc5ef: tidy-pending's safety check (tidy/unsafe?) and the hostile-near fact use the trigger's danger definition
+;; (reach/nearest-danger): a mob that can reach the body, or a ranged one with a line of fire. A pending :tidy entry is seeded into
+;; body memory (a dug cobblestone cell, cobblestone carried). A zombie sealed in glass 4 blocks away is no danger: the tidy run goes
+;; ahead and restores the cell. A NoAI skeleton in the open 6 blocks away has a line of fire: tidy-pending never fires.
+;; :mobs :keep: the runner does not clear hostile mobs near the plot before :act.
+{:defaults
+ {:tags [:tidy :tidy-pending :hostile]
+  :time :any
+  :mobs :keep
+  :register [{:trigger :tidy-pending :persistence :cooldown :cooldown-s 10}]
+  :plot {:height 12}
+  :blocks [[:fill [10 0 6] [10 1 6] "cobblestone"] [:set [10 0 6] "air"]]
+  :memory [{:kind :tidy :data {:cell #at [10 0 6] :action :dig :was "cobblestone" :now "air" :tries 0}}]
+  :body {:at [4.5 0 4.5] :inventory [["cobblestone" 4]] :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [{:name "walled-in-zombie-tidy-restores"
+   :blocks [[:fill [7 0 3] [9 2 5] "glass" :hollow]]
+   :act [[:summon "zombie" [8.5 0 4.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :tidy-pending}} :within-s 30}
+            {:event {:source :job :kind :tidy.restored :data {:cells [[:any]]}} :within-s 70}]
+   :after [[:block [10 0 6] "cobblestone"] [:entities "type=zombie,tag=wt" [[7 0 3] [9 2 5]] 1]]
+   :limit-s 80}
+  {:name "skeleton-with-line-of-fire-holds-tidy-off"
+   :act [[:summon "skeleton" [10.5 0 3.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :tidy-pending}} :for-s 30}
+            {:no-event {:source :job :kind :tidy.restored} :for-s 30}]
+   :after [[:block [10 0 6] "air"] [:entities "type=skeleton,tag=wt" [[9 0 2] [12 2 5]] 1]]
+   :limit-s 40}]}

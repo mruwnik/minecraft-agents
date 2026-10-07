@@ -1,0 +1,40 @@
+;; Cards dcd5d858, d249cd40: jobs.access.leave-tunnel of a dead-end tunnel whose way back is cut (the stair cell [13 8..9 20] is stone, so the walk to
+;; the entry fails) digs its own way out with jobs.access.stair (leave-tunnel.escape, info: with no foreign zone nothing is overridden, so never a
+;; warn; the zone-override retry is gone, see access-leave-tunnel-zone.edn) and ends sealed or open. A torch of the tunnel's list whose cell no
+;; longer holds a torch (blown away) is not walked to or taken (:taken []; its ledger entry is dropped, read by the unit tests). The kept-tunnel stop
+;; in place (jobs.access.tunnel :keep true, :no-way-back) needs the way back cut mid-run and is hand-run (the heading of the cut stair is not fixed).
+;; Stone mass x 8..24, z 8..24, y 0..9; tunnel stair filled at its second step, the body in the run with a pickaxe and cobblestone.
+{:defaults
+ {:tags [:access :mining :jobs]
+  :time :any
+  :plot {:height 20}
+  :blocks [[:fill [8 0 8] [24 9 24] "stone"]
+           [:fill [12 9 20] [16 7 20] "air"] [:fill [13 8 20] [15 6 20] "air"] [:fill [12 10 20] [16 8 20] "air"]
+           [:fill [13 8 20] [13 9 20] "stone"]]
+  :body {:at [15.5 6 20.5] :inventory [["cobblestone" 4] ["stone_pickaxe" 1]] :effects [["resistance" 600 4]]}
+  :limit-s 150}
+ :cases
+ [{:name "cut-way-back-digs-own-way-out-info-only"
+   :act [[:job (jobs.access.leave-tunnel {:tunnel {:line {:entry #at [11 10 20] :heading :east :dir :down :steps 4 :run 0
+                                                          :stand #at [15 6 20] :target #at [16 6 20]}
+                                                   :dug [{:cell #at [12 9 20] :block "stone"} {:cell #at [13 9 20] :block "stone"}
+                                                         {:cell #at [13 8 20] :block "stone"} {:cell #at [14 9 20] :block "stone"}
+                                                         {:cell #at [14 8 20] :block "stone"} {:cell #at [14 7 20] :block "stone"}
+                                                         {:cell #at [15 8 20] :block "stone"} {:cell #at [15 7 20] :block "stone"}
+                                                         {:cell #at [15 6 20] :block "stone"}]
+                                                   :torches []}})]]
+   :expect [{:event {:source :job :kind :leave-tunnel.escape :level :info :data {:ignore-zones? false}} :within-s 120 :of-job true}
+            {:event {:source :job :kind #{:leave-tunnel.done :leave-tunnel.open}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :leave-tunnel.escape :level :warn} :for-s 140 :until {:source :job :kind #{:leave-tunnel.done :leave-tunnel.open :leave-tunnel.stopped}} :of-job true}
+            {:no-event {:source :job :kind :leave-tunnel.stopped} :for-s 140 :until {:source :job :kind #{:leave-tunnel.done :leave-tunnel.open}} :of-job true}]}
+  {:name "blown-torch-is-not-taken"
+   :act [[:job (jobs.access.leave-tunnel {:tunnel {:line {:entry #at [11 10 20] :heading :east :dir :down :steps 4 :run 0
+                                                          :stand #at [15 6 20] :target #at [16 6 20]}
+                                                   :dug [{:cell #at [12 9 20] :block "stone"} {:cell #at [13 9 20] :block "stone"}
+                                                         {:cell #at [13 8 20] :block "stone"} {:cell #at [14 9 20] :block "stone"}
+                                                         {:cell #at [14 8 20] :block "stone"} {:cell #at [14 7 20] :block "stone"}
+                                                         {:cell #at [15 8 20] :block "stone"} {:cell #at [15 7 20] :block "stone"}
+                                                         {:cell #at [15 6 20] :block "stone"}]
+                                                   :torches [{:cell #at [14 8 20] :site 3 :block "torch"}]}})]]
+   :expect [{:event {:source :job :kind #{:leave-tunnel.done :leave-tunnel.open} :data {:taken []}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :leave-tunnel.stopped} :for-s 140 :until {:source :job :kind #{:leave-tunnel.done :leave-tunnel.open}} :of-job true}]}]}
