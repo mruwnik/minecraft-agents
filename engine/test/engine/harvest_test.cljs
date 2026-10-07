@@ -112,6 +112,14 @@
           (is (= {"wheat" 9} (inv p)))
           (is (= 1 (count (events-of seen :harvest.done)))))))))
 
+(deftest every-cut-goes-through-the-dig-job
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (start {:world wheat-world})]
+          (await (child-outcome eng job {} 200))
+          (is (= (count (calls p "dig")) (count (events-of seen :blocks.dig.done)))))))))
+
 (deftest only-ripe-wanted-crops-are-cut
   (async done
     (tu/run-async done

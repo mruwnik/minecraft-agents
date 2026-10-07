@@ -1,6 +1,7 @@
 (ns jobs.farm.harvest
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
+            [jobs.lib.blocks :as blocks]
             [jobs.lib.cost :as cost]
             [jobs.lib.gate :as gate]
             [jobs.lib.crops :as crops]
@@ -378,16 +379,18 @@
                   (recur (rest todo))))))))))
 
 (defn ^:async cut-cell!
-  "Write the debt of the crop at pos, dig it, and settle by the status."
+  "Write the debt of the crop at pos, dig it (a blocks.dig child; the zone verdict is the job's own) and settle by the outcome."
   [c pos]
   (when (seq (permitted c (cut-action c) [pos]))
     (let [seed (get seed-of (u/block-name (:primitives c) pos))]
       (when (and (:replant (:args c)) seed)
         (ctx/update-mem! c update :replant (fnil conj []) {:pos pos :seed seed :cut true}))
-      (let [r (await (ctx/act c :dig (clj->js {:pos pos})))]
-        (case (.-status r)
-          "dug" (ctx/update-mem! c inc-in :cut)
-          "missing" nil
+      (let [outcome (await (blocks/dig-cell! c pos {:accept #{:fluid-adjacent :falling-block :under-feet}
+                                                    :ignore-zones? true}))]
+        (case outcome
+          :continue :continue
+          :dug (ctx/update-mem! c inc-in :cut)
+          :missing nil
           (ctx/update-mem! c skip-crop pos))))))
 
 (defn warn-gave-up! [c]
@@ -427,12 +430,14 @@
                        (warn-gave-up! c)
                        :again)
           (do (ctx/update-mem! c assoc :collect true)
-              (loop [todo (take max-per-round (still-planned c targets))]
-                (when (seq todo)
-                  (await (cut-cell! c (first todo)))
-                  (recur (rest todo))))
-              (warn-gave-up! c)
-              :again))))))
+              (let [r (loop [todo (take max-per-round (still-planned c targets))]
+                        (if (empty? todo)
+                          :again
+                          (if (= :continue (await (cut-cell! c (first todo))))
+                            :continue
+                            (recur (rest todo)))))]
+                (warn-gave-up! c)
+                r)))))))
 
 (def max-home-fails 3)
 
