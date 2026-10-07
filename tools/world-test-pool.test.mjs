@@ -1,7 +1,7 @@
 // Why JavaScript: node --test file for tools/world-test-pool.mjs.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { splitForms, summarize, unitOrder, parsePoolArgs, workerSpecs, runPool, mergeText } from './world-test-pool.mjs'
+import { splitForms, summarize, unitOrder, parsePoolArgs, workerSpecs, runPool, mergeText, poolCap, createReaper } from './world-test-pool.mjs'
 
 const form = (id, status, secs = 1, extra = '') =>
   `{:plot 0, :file "${id.split('/')[0]}", :expects [{:status :pass, :evidence "a } \\" {"}], :status :${status}, :id "${id}", :elapsed-s ${secs}${extra}}`
@@ -77,6 +77,8 @@ test('runPool: a failed case reruns once on a different body, by --match; a pass
   const sum = splitForms(r.text).map(summarize)
   assert.deepEqual(sum.map((s) => [s.id, s.status]), [['a/c1', 'pass'], ['a/c2', 'flaky']])
   assert.match(r.text, /:first-failure-body "P[AB]"/)
+  const flaky = splitForms(r.text).find((f) => summarize(f).id === 'a/c2')
+  assert.match(flaky, /:first-failure \{[^]*:status :fail[^]*\}[^]*:first-failure-body/)
   assert.equal(r.code, 0)
 })
 test('runPool: a case failing twice stays failed, exit 1, and is not rerun a third time', async () => {
@@ -117,4 +119,51 @@ test('runPool: inconclusive cases are not rerun and fail the exit code', async (
 })
 test('mergeText: wraps forms in one vector', () => {
   assert.equal(mergeText(['{:a 1}', '{:b 2}']), '[{:a 1}\n {:b 2}]')
+})
+
+test('poolCap: default min(bodies, max(1, cores/4)); --max-parallel overrides', () => {
+  assert.equal(poolCap({ bodies: 19, cores: 16 }), 4)
+  assert.equal(poolCap({ bodies: 2, cores: 16 }), 2)
+  assert.equal(poolCap({ bodies: 5, cores: 2 }), 1)
+  assert.equal(poolCap({ bodies: 19, cores: 16, maxParallel: 9 }), 9)
+})
+test('parsePoolArgs: --max-parallel is a pool flag', () => {
+  const p = parsePoolArgs(['d', '--max-parallel', '3'])
+  assert.equal(p.maxParallel, 3)
+  assert.deepEqual(p.passthrough, [])
+  assert.equal(parsePoolArgs(['d']).maxParallel, null)
+})
+test('runPool: waits (polling) while the load average is above the core count, before starting another child', async () => {
+  const loads = [20, 20, 3, 20, 3, 3, 3, 3, 3, 3]
+  let polls = 0, sleeps = 0
+  const started = []
+  const r = await runPool({
+    units: ['a', 'b'], workers: workerSpecs(2, 19, 'P', 0),
+    runUnit: async ({ file }) => { started.push([file, polls]); await sleepy(); return ok(file) },
+    load: () => { polls++; return loads[Math.min(polls - 1, loads.length - 1)] }, cores: 8,
+    sleep: async () => { sleeps++ },
+  })
+  assert.equal(r.code, 0)
+  assert.equal(started[0][0], 'a')
+  assert.equal(started[0][1], 0, 'nothing running: no wait')
+  assert.equal(started[1][0], 'b')
+  assert.ok(started[1][1] >= 3, 'the second child waited until the load dropped')
+  assert.equal(sleeps, 2)
+})
+test('runPool: a high load never blocks when nothing is running (no livelock)', async () => {
+  const r = await runPool({ units: ['a'], workers: workerSpecs(1, 19, 'P', 0), runUnit: async ({ file }) => ok(file), load: () => 99, cores: 4, sleep: async () => { throw new Error('slept') } })
+  assert.equal(r.code, 0)
+})
+
+test('createReaper: reap kills every live child by pid and removes its tmp file; finished children are left alone', () => {
+  const killed = [], removed = []
+  const reaper = createReaper((f) => removed.push(f))
+  const child = (pid) => ({ pid, kill: (sig) => killed.push([pid, sig]) })
+  const a = reaper.add(child(11), 'ta.edn'), b = reaper.add(child(12), 'tb.edn')
+  reaper.done(a)
+  reaper.reap()
+  assert.deepEqual(killed, [[12, 'SIGTERM']])
+  assert.deepEqual(removed, ['tb.edn'])
+  reaper.reap()
+  assert.equal(killed.length, 1)
 })
