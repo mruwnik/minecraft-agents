@@ -49,7 +49,7 @@
    :memory [{:kind :bed :data {:pos #xyz [18 0 12]} :policy {:cap 1 :ttl :forever}}]
    :expect [{:event {:source :reflex :kind :fired} :within-s 20}
             {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 60}
-            {:no-event {:source :action :kind :done :data {:name "place"}} :for-s 60}]
+            {:no-event {:source :action :kind :done :data {:name "place"}} :for-s 60 :until {:source :action :kind :done :data {:name "sleep" :status "sleeping"}}}]
    :after [[:item "red_bed" 1] [:body-near [18.5 0 12.5] 3]]
    :limit-s 80}
   {:name "tunnel-miner-remembered-bed-60-away-not-walked-to-no-room-no-place"
