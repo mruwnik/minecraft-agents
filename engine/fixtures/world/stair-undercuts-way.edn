@@ -14,7 +14,7 @@
          [:await {:source :job :kind :stair.done} 120]
          [:job (jobs.movement.go-to {:pos #at [10 10 16] :range 1})]]
    :expect [{:event {:source :job :kind :stair.done :data {:steps 6}} :within-s 120 :of-job true}
-            {:event {:source :job :kind :result :data {:arrived true}} :within-s 220 :of-job true}]
+            {:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 220 :of-job true}]
    :limit-s 230
    :after [[:body-near [10.5 10 16.5] 2.5]]}
   {:name "second-stair-under-first-stops-undercuts-way"
@@ -24,7 +24,7 @@
          [:await {:source :job :kind :stair.stopped} 60]
          [:job (jobs.movement.go-to {:pos #at [10 10 16] :range 1})]]
    :expect [{:event {:source :job :kind :stair.stopped :data {:reason :undercuts-way :cell #at [15 4 16]}} :within-s 200 :of-job true}
-            {:event {:source :job :kind :result :data {:arrived true}} :within-s 320 :of-job true}]
+            {:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 320 :of-job true}]
    :limit-s 330
    :after [[:block [15 4 16] "stone"] [:block [14 3 16] "stone"] [:block [16 3 16] "stone"]
            [:body-near [10.5 10 16.5] 2.5]]}]}
