@@ -1073,6 +1073,67 @@
           (is (some #{[10 64 8]} (dug-cells s)))
           (is (empty? (side-torch-cells s))))))))
 
+(defn ^:async branch-torches
+  "The torch cells off the tunnel line (z 2..) after a run digging iron ore at the cells in a side room (air, z 1..the
+  farthest ore, x 4..15), with the run's args."
+  [ores args]
+  (let [zmax (apply max (map last ores))
+        room (merge (cells "air" (range 4 16) [64 65] (range 1 (inc zmax)))
+                    (into {} (for [[x y z] ores] [(str x "," y "," z) "iron_ore"])))
+        s (await (scenario (merge {:block "iron_ore" :count (count ores) :direction "east" :tunnel-length 16 :mend false} args)
+                           (assoc (torch-world torches8) :blocks (merge long-rock room)) 300))]
+    {:dug (dug-cells s)
+     :torches (vec (for [x (range 4 16) y [64 65] z (range 2 (inc zmax))
+                         :when (#{"torch" "wall_torch"} (block-at s x y z))]
+                     [x y z]))}))
+
+(deftest a-dig-3-off-the-tunnel-line-gets-no-torch
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [dug torches]} (await (branch-torches [[5 64 3]] {}))]
+          (is (some #{[5 64 3]} dug) "the ore was dug")
+          (is (empty? torches)))))))
+
+(deftest a-second-branch-dig-within-4-of-the-first-torch-gets-none
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [dug torches]} (await (branch-torches [[10 64 8] [9 64 8]] {}))]
+          (is (every? (set dug) [[10 64 8] [9 64 8]]))
+          (is (= 1 (count torches))))))))
+
+(deftest a-branch-dig-4-or-more-from-the-first-branch-torch-gets-its-own
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [dug torches]} (await (branch-torches [[4 64 8] [15 64 8]] {}))]
+          (is (every? (set dug) [[4 64 8] [15 64 8]]))
+          (is (= 2 (count torches))))))))
+
+(deftest torch-interval-0-hangs-no-branch-torch
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [dug torches]} (await (branch-torches [[10 64 8]] {:torch-interval 0}))]
+          (is (some #{[10 64 8]} dug))
+          (is (empty? torches)))))))
+
+(deftest the-branch-torch-site-is-none-straight-above-or-below-the-tunnel
+  (let [tunnel {:origin {:x 0 :y 64 :z 0} :heading "east" :steps 8}]
+    (is (nil? (mine/branch-site tunnel {:x 5 :y 70 :z 0})) "straight above: no side to hang on")
+    (is (nil? (mine/branch-site tunnel {:x 5 :y 58 :z 0})) "straight below")
+    (is (= {:dir [0 1] :site {:x 5 :y 64 :z 3}} (mine/branch-site tunnel {:x 5 :y 64 :z 4})) "off to the side: the cell behind")))
+
+(deftest the-no-torch-text-names-a-branch
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "iron_ore" :count 1 :direction "east" :tunnel-length 12 :mend false}
+                                 (assoc (torch-world pickaxe) :blocks (merge long-rock side-room)) 200))]
+          (is (= [false true] (mapv #(boolean (re-find #"branch stays dark" (:text %))) (events-of s :mine.no-torches)))
+              (pr-str (mapv :text (events-of s :mine.no-torches)))))))))
+
 ;; ------------------------------------------------------------------ honest ends, soil, fetching the pickaxe
 
 (defn ^:async as-child

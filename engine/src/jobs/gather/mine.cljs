@@ -84,8 +84,8 @@
   torch) behind the body at its first step, then every :torch-interval steps, and at the cut's end when none hangs
   within 4 blocks of it; 0 hangs none. Torches are the body's own and stay: nothing takes them back. Under 2
   carried with a coal or charcoal and a stick, the torch craft is run as a child (4 torches). With no torch and
-  nothing to craft from, one info mine.no-torches and the tunnel goes on dark (it tries again at the next torch
-  step, after more coal or sticks are picked up). A place the rules refuse, or that fails, is an info
+  nothing to craft from, one info mine.no-torches (per tunnel and per branch) and the dig goes on dark (it tries again at the next torch
+  step, after more coal or sticks are picked up). A place the rules refuse, or that fails, or a branch dig straight above or below the line (:no-site), is an info
   mine.torch-left-out {:cell :reason}.
 
   Mend: fills every ground cell that is now air, cave_air or water with the first carried of dig-in's building
@@ -530,15 +530,15 @@
 
 (defn branch-site
   "{:dir :site} for a torch on a branch: the run goes away from the tunnel along the axis it is farthest off on, the
-  site is the cell behind the body."
-  [c]
-  (let [{:keys [tunnel]} (ctx/mem c)
-        here (cell-of (u/self-pos c))
-        near (apply min-key #(u/dist here %) (map #(step-cell tunnel %) (range (inc (:steps tunnel 0)))))
+  site is the cell behind the body; nil when the body is straight above or below the line (no side to run along)."
+  [tunnel here]
+  (let [near (apply min-key #(+ (Math/pow (- (:x here) (:x %)) 2) (Math/pow (- (:z here) (:z %)) 2))
+                    (map #(step-cell tunnel %) (range (inc (:steps tunnel 0)))))
         dx (- (:x here) (:x near))
         dz (- (:z here) (:z near))
         dir (if (>= (js/Math.abs dx) (js/Math.abs dz)) [(js/Math.sign dx) 0] [0 (js/Math.sign dz)])]
-    {:dir dir :site (-> here (update :x - (first dir)) (update :z - (second dir)))}))
+    (when (not= [0 0] dir)
+      {:dir dir :site (-> here (update :x - (first dir)) (update :z - (second dir)))})))
 
 (defn ^:async hang-torch!
   "Hang a torch on the cell behind the body (a branch: behind it on its way off the tunnel)."
@@ -546,11 +546,12 @@
   (let [p (:primitives c)
         {:keys [tunnel]} (ctx/mem c)
         block-at (fn [[x y z]] (u/block-name p {:x x :y y :z z}))
-        {:keys [dir site]} (if branch (branch-site c) {:dir (headings (:heading tunnel)) :site (step-cell tunnel (dec (:steps tunnel)))})
-        choice (torch/torch-at dir [(:x site) (:y site) (:z site)]
-                               (from-plan/eye (u/self-pos c)) block-at)
+        {:keys [dir site]} (if branch (branch-site tunnel (cell-of (u/self-pos c))) {:dir (headings (:heading tunnel)) :site (step-cell tunnel (dec (:steps tunnel)))})
+        choice (when site (torch/torch-at dir [(:x site) (:y site) (:z site)]
+                                          (from-plan/eye (u/self-pos c)) block-at))
         cell (:cell choice)
-        reason (cond (:refused choice) (:refused choice)
+        reason (cond (nil? site) :no-site
+                     (:refused choice) (:refused choice)
                      (not (gate/allowed? c :mine.declined "mine" :place (zipmap [:x :y :z] cell))) :refused)]
     (if reason
       (left-out! c cell reason branch)
@@ -574,9 +575,10 @@
         :continue)
 
       (zero? n)
-      (do (when-not (:no-torches-said m)
-            (ctx/emit! c :mine.no-torches :info {:text "mine has no torches and nothing to craft them from: the tunnel stays dark"}))
-          (ctx/update-mem! c assoc :no-torches-said true)
+      (do (when-not (get-in m [:no-torches-said (boolean branch)])
+            (ctx/emit! c :mine.no-torches :info {:text (str "mine has no torches and nothing to craft them from: the "
+                                                            (if branch "branch" "tunnel") " stays dark")}))
+          (ctx/update-mem! c assoc-in [:no-torches-said (boolean branch)] true)
           (booked! c branch)
           :continue)
 
