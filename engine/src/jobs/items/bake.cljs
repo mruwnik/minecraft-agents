@@ -31,7 +31,8 @@
 (defn check
   "A chest is known."
   [c]
-  (boolean (deposit/chest-of (ctx/view c) (:args c))))
+  (or (boolean (deposit/chest-of (ctx/view c) (:args c)))
+      (ctx/wait c {:reason :no-chest})))
 
 (defn carried
   "How many of name the inventory holds over all stacks."

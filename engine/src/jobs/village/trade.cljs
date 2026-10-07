@@ -40,7 +40,8 @@
   "A villager uuid and an item name are given."
   [c]
   (let [{:keys [villager buy]} (:args c)]
-    (and (string? villager) (string? buy))))
+    (or (and (string? villager) (string? buy))
+        (ctx/wait c {:reason :bad-args :why "needs a villager uuid and an item name"}))))
 
 (defn finish!
   "Hand the parent the counts so far plus extra and return :done."

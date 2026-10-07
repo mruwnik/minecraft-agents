@@ -32,7 +32,8 @@
 (defn check
   "An item name is given."
   [c]
-  (string? (:item (:args c))))
+  (or (string? (:item (:args c)))
+      (ctx/wait c {:reason :bad-args :why "no item name"})))
 
 (defn nearest-table
   "The position of the nearest crafting table the body has seen within radius, or nil."

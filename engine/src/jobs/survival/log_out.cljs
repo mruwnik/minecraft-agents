@@ -19,9 +19,11 @@
 
 (defn check [c]
   (let [p (:primitives c)]
-    (and (not= false (:offline-allowed (:args c)))
-         (sh/night? p)
-         (not (sh/log-out-unsupported? (ctx/view c))))))
+    (cond
+      (= false (:offline-allowed (:args c))) (ctx/wait c {:reason :offline-forbidden})
+      (not (sh/night? p)) (ctx/wait c {:reason :not-night})
+      (sh/log-out-unsupported? (ctx/view c)) (ctx/wait c {:reason :log-out-unsupported})
+      :else true)))
 
 (defn away-ms [c]
   (let [until-morning (sh/ms-until-morning (.-timeOfDay (.self (:primitives c))))]

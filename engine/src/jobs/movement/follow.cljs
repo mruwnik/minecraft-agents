@@ -34,7 +34,8 @@
 (defn check
   "A player name is given."
   [c]
-  (string? (:player (:args c))))
+  (or (string? (:player (:args c)))
+      (ctx/wait c {:reason :bad-args :why "no player name"})))
 
 (defn find-player
   "The position {:x :y :z} of player named name within radius, or nil."

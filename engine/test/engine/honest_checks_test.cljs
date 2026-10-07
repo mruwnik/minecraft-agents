@@ -63,3 +63,18 @@
     'jobs.build.from-plan {:plan "pen" :fetch false} {:inventory []} {"pen" (b/pen-plan)} :no-items
     'jobs.build.pen {:plan "pen"} (pen/spec pen/kit pen/built-pen) {"pen" (pen/ring-plan)} :already-sound
     'jobs.animals.herd {:mob "cow" :box box :target 0} {} {} :at-target))
+
+(deftest bad-argument-checks-say-why-they-decline
+  (are [job reason] (= reason (waiting-reason job {}))
+    'jobs.items.bake :no-chest
+    'jobs.items.craft :bad-args
+    'jobs.items.enchant :bad-args
+    'jobs.items.give :bad-args
+    'jobs.village.trade :bad-args
+    'jobs.movement.follow :bad-args
+    'jobs.movement.linger-near :bad-args))
+
+(deftest log-out-says-why-it-declines
+  (are [args reason] (= reason (waiting-reason 'jobs.survival.log-out args))
+    {} :not-night
+    {:offline-allowed false} :offline-forbidden))

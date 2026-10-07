@@ -45,7 +45,8 @@
   "A player name and an item name are given."
   [c]
   (let [{:keys [player item]} (:args c)]
-    (and (string? player) (string? item))))
+    (or (and (string? player) (string? item))
+        (ctx/wait c {:reason :bad-args :why "needs a player name and an item name"}))))
 
 (defn find-player
   "The position {:x :y :z} of player named name within radius, or nil."

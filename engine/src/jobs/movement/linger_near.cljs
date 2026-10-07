@@ -27,7 +27,8 @@
   "A position and a positive :wait-s are given."
   [c]
   (let [{:keys [pos wait-s]} (:args c)]
-    (and (some? pos) (number? wait-s) (pos? wait-s))))
+    (or (and (some? pos) (number? wait-s) (pos? wait-s))
+        (ctx/wait c {:reason :bad-args :why "needs a position and a positive :wait-s"}))))
 
 (defn finish!
   [c result]
