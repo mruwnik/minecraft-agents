@@ -693,3 +693,17 @@
   (let [e #(hash-map :cell {:x % :y 64 :z 0})]
     (is (= 16 (lead-to/shut-radius {:x 0 :y 64 :z 0} [(e 3)])) "never below the default")
     (is (= 41 (lead-to/shut-radius {:x 0 :y 64 :z 0} [(e 3) (e 40)])) "a gate 40.5 away")))
+
+(def fence-line
+  "A fence line across the lane at x 15, z -4..9; the way round is the open end at z -5."
+  (tu/box 15 64 -4 15 64 9 "oak_fence"))
+
+(deftest a-spot-past-a-fence-line-is-led-round-its-open-end
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:pos {:x 19 :y 64 :z 0}}
+                                 {:floor [-30 -14 40 14] :inventory lead :entities [(cow 1 3)] :blocks fence-line} 80))]
+          (is (finished? s))
+          (is (not= :unreachable (:reason (done-event s))))
+          (is (= :unleashed (:reason (done-event s)))))))))
