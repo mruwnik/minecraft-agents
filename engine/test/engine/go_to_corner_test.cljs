@@ -2,7 +2,7 @@
   "go-to plans with the body's abilities: at food 6 or less (no sprint) a corner jump past a high block is refused."
   (:require [cljs.test :refer [deftest is async]]
             [engine.go-to-test :as g]
-            [jobs.movement.go-to :as go]
+            [jobs.movement.go-to.result :as end]
             [engine.test-util :as tu :refer [box]]))
 
 ;; start (0 64 0) on a one-cell floor; a two-high column at (1 64..65 0), no floor at (0 63 1); landing floor (1 64 1) with air over it:
@@ -28,6 +28,6 @@
 
 (deftest gap-kinds-have-plain-stopped-words
   (doseq [[kind part] [[:gap-sprint "takes a sprint"] [:gap-width "gap"]]]
-    (let [text (go/give-up-words [0 64 0] {:why :abilities :kind kind})]
+    (let [text (end/give-up-words [0 64 0] {:why :abilities :kind kind})]
       (is (re-find (re-pattern part) text) text)
       (is (not (re-find #"move the body cannot make" text)) text))))

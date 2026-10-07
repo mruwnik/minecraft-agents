@@ -4,7 +4,7 @@
   (:require [cljs.test :refer [deftest is]]
             [jobs.access.stair :as stair]
             [jobs.lib.reach :as reach]
-            [jobs.movement.go-to :as go-to]
+            [jobs.movement.go-to.result :as end]
             [engine.test-util :as tu]))
 
 (def body {:x 0.5 :y 64 :z 0.5})
@@ -130,7 +130,7 @@
   (let [p (tu/fake edge-world)]
     (is (= {:x 0 :y 64 :z -9} (reach/standing-cell p)))
     (is (= [0 64 -9] (stair/feet-of {:primitives p})))
-    (is (= [0 64 -9] (go-to/feet-cell {:primitives p})))))
+    (is (= [0 64 -9] (end/feet-cell {:primitives p})))))
 
 (deftest a-body-over-its-own-cell-stands-in-it
   (let [p (tu/fake {:self {:pos {:x 0.5 :y 64 :z -9.5}} :blocks {"0,63,-10" "stone" "0,63,-9" "stone"}})]

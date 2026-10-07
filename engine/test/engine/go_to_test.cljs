@@ -16,7 +16,8 @@
             [engine.takeover :as takeover]
             [engine.test-util :as tu :refer [box floor]]
             [engine.triggers :as triggers]
-            [jobs.movement.go-to :as go-to]))
+            [jobs.movement.go-to :as go-to]
+            [jobs.movement.go-to.result :as end]))
 
 (def start {:x 0 :y 64 :z 0})
 
@@ -253,7 +254,7 @@
            [{:status :failed :reason "controls lost"} {:why :steer-failed :detail "controls lost"}]
            [{:status :failed} {:why :steer-failed}]
            [{:status :arrived :at [1 64 0]} {:why :no-progress}]]]
-    (is (= expected (go-to/give-up-fields result)) (pr-str result))))
+    (is (= expected (end/give-up-fields result)) (pr-str result))))
 
 (defn ^:async go-prepped!
   "go! with (prepare! p) run on the fake primitives before the job starts."
