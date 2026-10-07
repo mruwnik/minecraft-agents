@@ -20,8 +20,10 @@
   With a :bed argument the radius is ignored. After sleeping there it is recorded as :bed
   when none is recorded or the recorded one is gone. A live recorded :bed is kept (one place.kept event).
   Warns spawn_not_set when it sleeps and no :spawn-set (the body event for the Respawn point set line) follows, unless one
-  was seen within 3 blocks of the bed before: death would then send the body to the world spawn.
-  Memory: reads :bed, :bed-unreachable and :spawn-set. Writes :slept (cap 10, seven in-game days),
+  was seen within 3 blocks of the bed before (kept as :spawn-bed, forever, until a later :spawn-reset):
+  death would then send the body to the world spawn.
+  Memory: reads :bed, :bed-unreachable, :spawn-set and :spawn-reset. Writes :slept (cap 10, seven in-game days),
+  :spawn-bed {:pos bed} (cap 1, forever),
   :bed (see above) and :bed-unreachable {:pos bed} after an unreachable bed (cap 5, ten minutes).")
 
 (def args
@@ -69,13 +71,27 @@
   "A :spawn-set entry within this many blocks of a bed is that bed's respawn point."
   3)
 
+(def spawn-bed-policy {:cap 1 :ttl :forever})
+
+(defn spawn-bed-live
+  "The durable :spawn-bed entry unless a :spawn-reset came after it."
+  [c]
+  (let [e (last (ctx/entries c :spawn-bed))
+        reset (last (ctx/entries c :spawn-reset))]
+    (when-not (and e reset (> (:t reset) (:t e)))
+      e)))
+
 (defn spawn-known?
   "Whether the body has seen the respawn point set at bed since t0, or earlier (the server says it only when the
-  point changes, so a bed slept in before is silent)."
+  point changes, so a bed slept in before is silent; :spawn-bed outlives the :spawn-set entry)."
   [c bed t0]
-  (boolean (some #(or (>= (:t %) t0)
-                      (some-> (:pos (:data %)) (u/dist bed) (<= spawn-near)))
-                 (ctx/entries c :spawn-set))))
+  (let [near? #(some-> (:pos (:data %)) (u/dist bed) (<= spawn-near))
+        known? (boolean (or (some #(or (>= (:t %) t0) (near? %))
+                                  (ctx/entries c :spawn-set))
+                            (some-> (spawn-bed-live c) near?)))]
+    (when known?
+      (ctx/remember! c :spawn-bed {:pos bed} spawn-bed-policy))
+    known?))
 
 (defn ^:async sleep-at! [c bed]
   (let [t0 (ctx/now c)
