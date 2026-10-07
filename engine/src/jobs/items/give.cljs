@@ -2,7 +2,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.util :as u]
             [jobs.lib.look :as look]
-            [jobs.lib.near :as near]
+            [jobs.lib.pace :as pace]
             [jobs.storage.deposit :as deposit]))
 
 (def doc
@@ -23,7 +23,8 @@
     its own.
   A toss refused three times in a row, or three collects in a row that change nothing, end through u/fail! (warn give.gave-up)
   with the status or \"litter\" as the reason.
-  A cut after the toss leaves the drop where it lies.")
+  A cut after the toss leaves the drop where it lies.
+  One call is the whole give; it yields :continue only while it waits for the player to appear or to take the drop.")
 
 (def args
   {:player {:default nil}
@@ -35,7 +36,7 @@
 
 (def grace-ms 2000)
 (def idle-ms 500)
-(def walk-timeout-s 5)
+(def walk-leg-s 5)
 (def max-blocked 3)
 (def unseen-ms 3000)
 (def head-height 1.6)
@@ -74,32 +75,36 @@
   :done)
 
 (defn ^:async idle!
-  "A neutral wait, then :continue."
+  "A neutral wait for the world (the player to appear or to take the drop), then :continue: the yield."
   [c]
   (await (ctx/act c :wait #js {:ms idle-ms}))
   :continue)
 
 (defn ^:async walk!
-  "Walk to pos within :reach. :arrived and :partial reset the blocked count;
-  anything else counts, and the third in a row ends the job. An arrival that
-  leaves the body not u/within? reach counts in :out-of-range (reset when within),
-  the third in a row ends as out-of-range. :continue or :done."
+  "Walk to pos within :reach (a go-to child, a leg of walk-leg-s so a moving player is aimed at again). An arrival or a
+  leg resets the blocked count; any other end counts, and the third in a row ends the job. An arrival that leaves the
+  body not u/within? reach counts in :out-of-range (reset when within), the third in a row ends as out-of-range.
+  :again, :continue (go-to waits) or :done."
   [c pos]
   (let [reach (:reach (:args c))
-        r (await (near/walk-near! c pos reach {:doors :shut :timeout-s walk-timeout-s}))
-        blocked (if (contains? #{:there :partial} r) 0 (inc (:blocked (ctx/mem c) 0)))
-        out (if (or (> blocked 0) (u/within? (u/self-pos c) pos reach)) 0 (inc (:out-of-range (ctx/mem c) 0)))]
-    (ctx/update-mem! c assoc :blocked blocked :out-of-range out)
-    (cond
-      (>= out max-blocked)
-      (do (ctx/emit! c :give.out-of-range :warn {:text (str "still out of reach of " (:player (:args c)))})
-          (finish! c {:given 0 :reason "out-of-range"}))
+        r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos pos :range reach :doors :shut :leg-s walk-leg-s
+                                                               :escalate false :warn false :retry false}))
+        res (when-not (= :continue r) (ctx/child-result c :walk))]
+    (if (= :continue r)
+      :continue
+      (let [blocked (if (or (:arrived res) (:leg res)) 0 (inc (:blocked (ctx/mem c) 0)))
+            out (if (or (> blocked 0) (u/within? (u/self-pos c) pos reach)) 0 (inc (:out-of-range (ctx/mem c) 0)))]
+        (ctx/update-mem! c assoc :blocked blocked :out-of-range out)
+        (cond
+          (>= out max-blocked)
+          (do (ctx/emit! c :give.out-of-range :warn {:text (str "still out of reach of " (:player (:args c)))})
+              (finish! c {:given 0 :reason "out-of-range"}))
 
-      (< blocked max-blocked) :continue
+          (< blocked max-blocked) :again
 
-      :else
-      (do (ctx/emit! c :give.unreachable :warn {:text (str "cannot reach " (:player (:args c)))})
-          (finish! c {:given 0 :reason "unreachable"})))))
+          :else
+          (do (ctx/emit! c :give.unreachable :warn {:text (str "cannot reach " (:player (:args c)))})
+              (finish! c {:given 0 :reason "unreachable"})))))))
 
 (defn ^:async toss!
   "In reach: remember the drops already lying, look at the player's head and
@@ -115,10 +120,11 @@
       (if (= "tossed" status)
         (do (ctx/update-mem! c assoc :tossed (.-count r) :tossed-t (ctx/now c) :toss-at (u/self-pos c))
             (u/progress! c)
-            :continue)
+            :again)
         (let [v (u/fail! c :give.gave-up (str "give gave up: " status))]
-          (when (= :done v) (finish! c {:given 0 :reason status}))
-          v)))))
+          (if (= :done v)
+            (finish! c {:given 0 :reason status})
+            :again))))))
 
 (defn returned!
   "The body holds back more of the item: info and finish with what was given."
@@ -133,10 +139,11 @@
   (let [r (await (ctx/act c :collect (clj->js {:id (:id (first lying))})))]
     (ctx/update-mem! c assoc :collecting true)
     (if (= "collected" (.-status r))
-      (do (u/progress! c) :continue)
+      (do (u/progress! c) :again)
       (let [v (u/fail! c :give.gave-up "give gave up: litter")]
-        (when (= :done v) (finish! c {:given given :reason "litter" :returned back}))
-        v))))
+        (if (= :done v)
+          (finish! c {:given given :reason "litter" :returned back})
+          :again)))))
 
 (defn ^:async after-toss!
   "The item was thrown: see whether it was taken, wait, or take it back. An
@@ -200,8 +207,9 @@
       :else
       (await (toss! c pos have)))))
 
-(defn ^:async round
-  "One bounded step: before the toss walk and toss, after it watch the drop."
+(defn ^:async step!
+  "One piece: before the toss walk and toss, after it watch the drop. :again, :continue (waiting for the player or the
+  world) or :done."
   [c]
   (let [now (ctx/now c)
         _ (when-not (contains? (ctx/mem c) :started)
@@ -209,3 +217,12 @@
     (if (some? (:tossed (ctx/mem c)))
       (await (after-toss! c))
       (await (before-toss! c now)))))
+
+(def max-steps "Steps of one call before it gives the round back with :continue." 400)
+
+(defn ^:async round
+  "One call walks, tosses and collects what lies back until the give is done or stopped; it yields while it waits
+  for the player to appear or to take the drop, and after max-steps steps."
+  [c]
+  (let [n (atom 0)]
+    (await (pace/steps! c #(if (< (swap! n inc) max-steps) (step! c) :continue)))))

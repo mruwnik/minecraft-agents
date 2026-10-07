@@ -259,3 +259,11 @@
           (is (= {:given 5} @out) "the player took the toss; the stray bread is not it")
           (is (empty? (calls p "collect")) "the body does not walk to the stray")
           (is (has-event? s :give.done)))))))
+
+(deftest the-walk-and-the-toss-are-one-call
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup (assoc bread :entities [(steve 10)]) {:player "Steve" :item "bread" :count 5})]
+          (await (core/tick! eng))
+          (is (= 1 (count (calls p "toss")))))))))
