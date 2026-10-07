@@ -1,0 +1,38 @@
+;; jobs.village.breed (card bd3f06ad): feed two adult villagers (fixed UUIDs, NoAI so they stay) and count births.
+;; Live-only facts: NoAI villagers may not breed (breeding needs AI and a free bed), so the births case may need AI villagers with beds built in the plot.
+{:defaults
+ {:tags [:village :jobs]
+  :plot {:floor "grass_block"}
+  :body {:at [10.5 0 16.5] :yaw 270 :inventory [["bread" 8]]}
+  :limit-s 240}
+ :cases
+ [;; should succeed: target already met by the villagers in sight, nothing is fed
+  {:name "met-target-feeds-nothing"
+   :act [[:summon "villager" [16.5 0 16.5] "{NoAI:1b,UUID:[I;20260,7,2,1]}"]
+         [:summon "villager" [16.5 0 18.5] "{NoAI:1b,UUID:[I;20260,7,2,2]}"]
+         [:wait-s 2]
+         [:job (jobs.village.breed {:target 2})]]
+   :expect [{:event {:source :job :kind :breed.done :data {:births 0}} :within-s 30 :of-job true}]
+   :after [[:item "bread" 8]]}
+  ;; should succeed: two fed adults with beds make a child (needs AI villagers; beds are placed by the setup)
+  {:name "pair-with-beds-breeds"
+   :blocks [[:set [14 0 14] "red_bed[part=foot,facing=north]"] [:set [14 0 13] "red_bed[part=head,facing=north]"] [:set [18 0 14] "red_bed[part=foot,facing=north]"] [:set [18 0 13] "red_bed[part=head,facing=north]"]]
+   :act [[:summon "villager" [16.5 0 16.5] "{UUID:[I;20260,7,2,1]}"]
+         [:summon "villager" [16.5 0 18.5] "{UUID:[I;20260,7,2,2]}"]
+         [:wait-s 2]
+         [:job (jobs.village.breed {:target 3 :wait-s 60})]]
+   :expect [{:event {:source :job :kind :breed.done} :within-s 200 :of-job true}]}
+  ;; should fail: a single adult has nobody to pair with
+  {:name "one-adult-is-no-pair"
+   :act [[:summon "villager" [16.5 0 16.5] "{NoAI:1b,UUID:[I;20260,7,2,1]}"]
+         [:wait-s 2]
+         [:job (jobs.village.breed {:target 3})]]
+   :expect [{:event {:source :job :kind :breed.gave-up :data {:reason "no-pair"}} :within-s 30 :of-job true}]
+   :after [[:item "bread" 8]]}
+  ;; should fail: NoAI villagers never breed, so the attempt ends without a birth
+  {:name "noai-pair-no-births"
+   :act [[:summon "villager" [16.5 0 16.5] "{NoAI:1b,UUID:[I;20260,7,2,1]}"]
+         [:summon "villager" [16.5 0 18.5] "{NoAI:1b,UUID:[I;20260,7,2,2]}"]
+         [:wait-s 2]
+         [:job (jobs.village.breed {:target 3 :wait-s 20})]]
+   :expect [{:event {:source :job :kind :breed.gave-up :data {:reason "no-births"}} :within-s 200 :of-job true}]}]}

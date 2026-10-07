@@ -72,6 +72,7 @@
     'jobs.items.give :bad-args
     'jobs.village.trade :bad-args
     'jobs.village.feed :bad-args
+    'jobs.village.breed :bad-args
     'jobs.movement.follow :bad-args
     'jobs.movement.linger-near :bad-args))
 
