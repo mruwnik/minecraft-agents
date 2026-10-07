@@ -120,8 +120,8 @@
                                            :want [:any "stone"]}]}]
    :body {:inventory [["stone_pickaxe" 1]]}
    :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived false :escalation {:step :none :why :no-dig}}} :within-s 90 :of-job true}
-            {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 90 :until {:source :job :kind :result :data {:arrived false :escalation {:step :none :why :no-dig}}}}]
+   :expect [{:event {:source :job :kind :result :data {:arrived false :escalation {:step :none :why :zone}}} :within-s 90 :of-job true}
+            {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 90 :until {:source :job :kind :result :data {:arrived false :escalation {:step :none :why :zone}}}}]
    :after [[:block [17 1 16] "stone"] [:body-near [16.5 0 16.5] 1]]}
   {:name "trapped-again-digs-its-own-cobble"
    ;; the first stair out is put back with cobblestone (what stone drops); the body is moved into the shaft again and the
