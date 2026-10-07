@@ -51,7 +51,7 @@
                                   (wplan/plan-options (wworld/costed-world c pw {:dangers? dangers :dark? dark}) walk/default-weight
                                                       (executor/planner-limits policy (wworld/solid-fn pw))
                                                       (assoc wplan/wide-box :maxNodes max-nodes))
-                                  policy)))})
+                                  policy (wworld/landing-seen (:primitives c)))))})
 
 (defn answer
   "The answer of a search that is over, from its planner result r: {:status :found :target :index :cost} (cost in

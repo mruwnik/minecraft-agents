@@ -87,6 +87,32 @@
     (testing "onto stone: the full fall"
       (is (= 7 (cost (on "stone" 10) :damage))))))
 
+;; the cliff of landing-factors-set-the-fall-damage over a stone floor (x 5..9) with a slime pad on it: a 10-block drop
+;; from (4 75 2) lands at (5 65 2), the pad's x 4 side is the cliff wall
+(defn pad-drop [pad budget & [options]]
+  (run (pf/world {:fill [[0 64 0 4 74 4 "stone"] [5 64 0 9 64 4 "stone"] pad]}) (near 6 65 2)
+       (merge {:maxDrop 16 :damageBudget budget :landing (landing slime-id -1)} options)
+       {:x 4 :y 75 :z 2}))
+
+(def wide-pad [5 64 1 7 64 3 "slime_block"])
+
+(deftest a-bounce-needs-a-pad-it-stays-on
+  (testing "slime round the landing (or the wall): the bounce, no damage"
+    (is (= 0 (cost (pad-drop wide-pad 0) :damage))))
+  (testing "a 1x1 pad: the bounce may carry the body onto the stone beside it, priced as the full fall"
+    (is (true? (:damageRefused (pad-drop [5 64 2 5 64 2 "slime_block"] 0))))
+    (is (= 7 (cost (pad-drop [5 64 2 5 64 2 "slime_block"] 10) :damage))))
+  (testing "stone at the pad's level beside the landing: no bounce price"
+    (is (true? (:damageRefused (pad-drop [5 64 2 7 64 3 "slime_block"] 0))))))
+
+(deftest a-bounce-needs-a-pad-the-body-sees
+  (testing "options.landingSeen says every pad cell is seen: the bounce"
+    (is (= 0 (cost (pad-drop wide-pad 0 {:landingSeen (fn [_ _ _] true)}) :damage))))
+  (testing "a pad cell not seen now: the full fall"
+    (is (true? (:damageRefused (pad-drop wide-pad 0 {:landingSeen (fn [x _ z] (not (and (== x 6) (== z 3))))})))))
+  (testing "no pad cell seen"
+    (is (= 7 (cost (pad-drop wide-pad 10 {:landingSeen (fn [_ _ _] false)}) :damage)))))
+
 (deftest water-drops-stay-free
   (let [r (run (pf/world {:fill [[0 64 0 4 83 4 "stone"] [5 63 0 7 64 4 "water"]]}) (near 6 63 2)
                {:maxDrop 3 :damageBudget 0}

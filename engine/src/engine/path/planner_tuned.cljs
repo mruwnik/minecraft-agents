@@ -48,8 +48,9 @@
      touch); a move over it is refused, and a search that finds nothing for that reason says damageRefused true. options.maxDrop
      is still the length of the longest fall. options.damageWeight (riskWeight): seconds an hp of that damage costs.
      options.fallFactor (1) scales a fall's damage (feather falling, protection); options.landing, a Map of state id to the
-     factor of the fall damage onto that block (hay 0.2), a negative one: a bounce (no damage, BOUNCE-S settle seconds). result.cost.damage is the
-     path's damage, a step's damage its own.
+     factor of the fall damage onto that block (hay 0.2), a negative one: a bounce (no damage, BOUNCE-S settle seconds) when the
+     8 blocks round the landing's are bouncing ones or a wall (else the full fall) and options.landingSeen (fn x y z, nil: all)
+     says the body sees each now. result.cost.damage is the path's damage, a step's damage its own.
    - options.costs.dropFactor (1): scales the fall seconds and fall damage of every drop on land (0: free); options.maxDrop
      (3) refuses a drop of more than that many blocks (1: none of 2 or 3). go-to's :drop-cost sets them.
    - options.costs.airUsed (0): seconds of air the body has used at the start (a plan made mid-dive); go-to's body-policy
@@ -278,9 +279,9 @@
      (when (some? dark-at) (js/Float64Array. TABLE)) (when (some? dark-at) (js/Uint8Array. TABLE)) (js/Float64Array. cap)
      ;; tolls
      (when (some? tolls) (.-cells tolls))
-     ;; damage-budget damage-weight fall-factor land-factors
+     ;; damage-budget damage-weight fall-factor land-factors land-seen
      (option options "damageBudget" js/Infinity) (option options "damageWeight" (option options "riskWeight" 2)) (option options "fallFactor" 1)
-     (.-landing options)
+     (.-landing options) (.-landingSeen options)
      ;; dmgs move-dmg enter-dmg cur-dmg damage-refused
      (js/Float64Array. cap) 0 0 0 false)))
 

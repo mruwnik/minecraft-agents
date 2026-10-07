@@ -42,24 +42,51 @@
             (.tightMove s i x y z h region c x2 y2 z2 0 MOVE-DROP sec (.swimRisk s x2 y2 z2) 0 SNAP 0)
             (.edge s x2 y2 z2 0 MOVE-DROP i sec (.swimRisk s x2 y2 z2) 0 0 0))))))
 
-  ;; the hp a fall of fall16 (1/16 blocks) onto the block `id` (the support of the landing) takes: over FREE-FALL blocks, scaled by the block's landing factor
-  ;; (options.landing), the fall factor and the drop factor; a negative factor is a bouncing block: no damage (see bounceS)
-  (dropDamage [s id fall16]
+  ;; the hp a fall of fall16 (1/16 blocks) takes onto a block of landing factor f (landFactor): over FREE-FALL blocks, scaled
+  ;; by f, the fall factor and the drop factor; a negative f is a bounce: no damage (see bounceS)
+  (dropDamage [s f fall16]
     (let [over (- (/ fall16 16) FREE-FALL)]
-      (if (<= over 0)
+      (if (or (<= over 0) (neg? f))
         0
-        (let [land (if (some? (.-land-factors s)) (.get ^js (.-land-factors s) id) nil)
-              f (if (some? land) land 1)]
-          (if (neg? f)
-            0
-            (* (.-c-drop-factor s) (.-fall-factor s) (js/Math.ceil (* over f))))))))
+        (* (.-c-drop-factor s) (.-fall-factor s) (js/Math.ceil (* over f))))))
 
-  ;; the seconds a fall of fall16 onto the block `id` costs to bounce away on a block with a negative landing factor, else 0
-  (bounceS [s id fall16]
-    (let [land (if (some? (.-land-factors s)) (.get ^js (.-land-factors s) id) nil)]
-      (if (and (some? land) (neg? land) (> fall16 (* FREE-FALL 16)))
-        (* BOUNCE-S (js/Math.sqrt (/ fall16 16)))
-        0)))
+  ;; the seconds a fall of fall16 onto a block of landing factor f takes to bounce away when f is negative, else 0
+  (bounceS [s f fall16]
+    (if (and (neg? f) (> fall16 (* FREE-FALL 16)))
+      (* BOUNCE-S (js/Math.sqrt (/ fall16 16)))
+      0))
+
+  ;; the landing factor (options.landing, 1 when none) of `sup`, the support of a landing in the cell x y z (the cell's own
+  ;; block, else the one under it): a negative one (a bounce) only on a pad the bounce stays on (bouncePad), else 1, the full fall
+  (landFactor [s sup x y z]
+    (let [land (if (some? (.-land-factors s)) (.get ^js (.-land-factors s) sup) nil)]
+      (cond
+        (nil? land) 1
+        (and (neg? land) (not ^boolean (.bouncePad s x (if (== (.stateAt s x y z) sup) y (dec y)) z))) 1
+        :else land)))
+
+  ;; the body sees the block at x y z now (options.landingSeen; none: every block)
+  (landSeen [s x y z]
+    (or (nil? (.-land-seen s)) (true? (.call ^js (.-land-seen s) nil x y z))))
+
+  ;; a bounce off the block at x y z stays on the pad: it and the 8 blocks round it are bouncing blocks or (round it) a wall
+  ;; 2 high over that level, and the body sees each. A smaller pad lets the bounce carry the body off it.
+  (bouncePad [s x y z]
+    (loop [c 0]
+      (if (== c 9)
+        true
+        (let [bx (+ x (dec (quot c 3)))
+              bz (+ z (dec (rem c 3)))
+              id (.stateAt s bx y bz)
+              land (if (== id UNLOADED) nil (.get ^js (.-land-factors s) id))
+              pad (or (and (some? land) (neg? land) ^boolean (.landSeen s bx y bz))
+                      (and (not (== c 4)) ^boolean (.wallAt s bx (inc y) bz) ^boolean (.wallAt s bx (+ y 2) bz)))]
+          (when pad (recur (inc c)))))))
+
+  ;; a seen block at x y z with a whole collision top
+  (wallAt [s x y z]
+    (let [id (.stateAt s x y z)]
+      (and (not (== id UNLOADED)) (>= (aget (.-tbl-top s) id) WHOLE) ^boolean (.landSeen s x y z))))
 
   ;; walk off an edge into the first standable cell below the neighbour column, or into water of any depth up to maxWaterDrop
   ;; (the fall is cancelled there). A tight cell at either end: the body falls straight down from the crossing point, which
@@ -77,11 +104,12 @@
                   (let [sup (.-support s)
                         tight-drop (or tight-src ^boolean (.isTight s x2 y2 z2))
                         fall (- h0 (+ (* y2 16) h1))
-                        dmg (.dropDamage s sup fall)]
-                    (when-not (or (> fall (* (.-max-drop s) 16)) (neg? dmg))
+                        f (.landFactor s sup x2 y2 z2)
+                        dmg (.dropDamage s f fall)]
+                    (when-not (> fall (* (.-max-drop s) 16))
                       (let [sec (+ (* (.-c-walk-s s) (+ 1 (* SLOW-EXTRA (+ slow-from (.-enter-slow s)))))
                                    (* (.-c-drop-factor s) 0.25 (js/Math.sqrt (/ (js/Math.max 0 fall) 16)))
-                                   (.bounceS s sup fall)
+                                   (.bounceS s f fall)
                                    (.-enter-extra s))]
                         (set! (.-move-dmg s) (+ dmg (.-enter-dmg s)))
                         (if tight-drop
@@ -318,11 +346,13 @@
             (let [h3 (.landing s x y3 z)]
               (if (neg? h3)
                 (when-not (pos? (aget (.-tbl-top s) id)) (recur (dec y3)))
-                (let [dmg (.dropDamage s (.-support s) (- from16 (+ (* y3 16) h3)))
-                      fall (- from16 (+ (* y3 16) h3))]
-                  (when-not (or (> fall (* (.-max-drop s) 16)) (neg? dmg))
+                (let [sup (.-support s)
+                      fall (- from16 (+ (* y3 16) h3))
+                      f (.landFactor s sup x y3 z)
+                      dmg (.dropDamage s f fall)]
+                  (when-not (> fall (* (.-max-drop s) 16))
                     (set! (.-move-dmg s) (+ dmg (.-enter-dmg s)))
-                    (.verticalMove s i x y z h region y3 h3 MOVE-DROP (+ (* (.-c-drop-factor s) 0.25 (js/Math.sqrt (/ fall 16))) (.bounceS s (.-support s) fall))
+                    (.verticalMove s i x y z h region y3 h3 MOVE-DROP (+ (* (.-c-drop-factor s) 0.25 (js/Math.sqrt (/ fall 16))) (.bounceS s f fall))
                                    (+ (.-enter-risk s) dmg) (.-enter-slow s))
                     (set! (.-move-dmg s) 0))))))))))
 

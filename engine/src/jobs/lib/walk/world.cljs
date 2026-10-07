@@ -10,7 +10,8 @@
             [jobs.lib.breath :as breath]
             [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
-            [jobs.lib.threats :as threats]))
+            [jobs.lib.threats :as threats]
+            [jobs.lib.util :as u]))
 
 (def settings
   {::default-food {:default 20 :doc "The food a walk counts on when it has neither a :food arg nor a body food: fed (nothing caps the damage)." :type :int :min 0}})
@@ -221,3 +222,18 @@
     {:x (js/Math.floor (.-x pos)) :y (js/Math.floor (.-y pos)) :z (js/Math.floor (.-z pos))}))
 
 (defn body-name [c] (.-username (.self (:primitives c))))
+
+(defn landing-seen
+  "The planner's options.landingSeen for the body of primitives p: (fn [x y z]) true when the body sees or feels the block
+  there now, so a bounce is priced only on a pad in view (a remembered or unknown block is not); nil without a perception."
+  [p]
+  (when (some? (.-sensedAt p))
+    (let [memo (js/Map.)]
+      (fn [x y z]
+        (let [k (str x "," y "," z)]
+          (if (.has memo k)
+            (.get memo k)
+            (let [^js b (u/sensed p {:x x :y y :z z})
+                  seen (boolean (and b (or (true? (.-visible b)) (true? (.-felt b)))))]
+              (.set memo k seen)
+              seen)))))))

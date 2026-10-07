@@ -63,13 +63,15 @@
   "options (the planner's, a JS object) with the policy's :drop-cost: a number is the planner's costs.dropFactor (nil: as
   it is), false takes no drop of 2 or 3 (maxDrop 1). The policy's :max-drop is maxDrop, its :fall-factor fallFactor, and
   :damage-budget and :damage-weight the planner's damageBudget and damageWeight (none: the planner's defaults). Its :landing (block
-  name -> damage factor) is the planner's landing over cost/default-landing. Its :gait (:walk, :sneak), or :sprint false (:walk), sets the costs walkS and sprintS under the :costs; its :air-drain, :air-grace and :air-used the costs airDrain, airGrace and airUsed."
-  [^js options policy]
+  name -> damage factor) is the planner's landing over cost/default-landing (no bounce under :gait :sneak), seen (wworld/landing-seen) its landingSeen. Its :gait (:walk, :sneak), or :sprint false (:walk), sets the costs walkS and sprintS under the :costs; its :air-drain, :air-grace and :air-used the costs airDrain, airGrace and airUsed."
+  ([options policy] (with-drops options policy nil))
+  ([^js options policy seen]
   (let [k (:drop-cost policy)
         gait (or (:gait policy) (when (false? (:sprint policy)) :walk))]
     (doseq [[opt key] [["maxDrop" :max-drop] ["fallFactor" :fall-factor] ["damageBudget" :damage-budget] ["damageWeight" :damage-weight] ["dangerCap" :danger-cap]]]
       (when-some [v (get policy key)] (unchecked-set options opt v)))
-    (unchecked-set options "landing" (cost/planner-landing (:landing policy)))
+    (unchecked-set options "landing" (cost/planner-landing (:landing policy) gait))
+    (when (some? seen) (unchecked-set options "landingSeen" seen))
     (when (or (seq (:costs policy)) (contains? #{:walk :sneak} gait) (:air-drain policy) (:air-grace policy) (:air-used policy))
       (unchecked-set options "costs" (js/Object.assign (cost/gait-costs gait)
                                                        (cost/air-costs policy)
@@ -77,14 +79,14 @@
     (cond
       (false? k) (doto options (unchecked-set "maxDrop" 1))
       (and (number? k) (not= 1 k)) (doto options (unchecked-set "costs" (js/Object.assign (or (.-costs options) #js {}) #js {:dropFactor k})))
-      :else options)))
+      :else options))))
 
 (defn ^:async plan-from!
   "Plan from the body's cell to the goal in wide-box, within limits (the planner's options.limits, nil for none): the
   planner's JS result, searched in slices (run-plan!) with the event loop run between them; policy's :drop-cost as with-drops."
   ([c pw to range weight limits] (plan-from! c pw to range weight limits nil))
   ([c pw to range weight limits policy]
-   (await (run-plan! c (.-snapshot pw) (plan-query c to range) (with-drops (plan-options pw weight limits wide-box) policy)))))
+   (await (run-plan! c (.-snapshot pw) (plan-query c to range) (with-drops (plan-options pw weight limits wide-box) policy (wworld/landing-seen (:primitives c)))))))
 
 (defn with-damage
   "steps (of js-steps) with the hp each is planned to cost (:damage, the planner's step damage) where it costs any."

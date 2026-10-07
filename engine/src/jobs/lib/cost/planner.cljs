@@ -107,11 +107,13 @@
                   landing))))
 
 (defn planner-landing
-  "The planner's options.landing (a Map of state id to damage factor) for the go-to :landing map over default-landing."
-  [landing]
-  (let [table (blocks/default-state-table)
-        m (js/Map.)]
-    (doseq [[k v] (merge default-landing landing)
-            id (blocks/state-ids table k)]
-      (.set m id v))
-    m))
+  "The planner's options.landing (a Map of state id to damage factor) for the go-to :landing map over default-landing. Under
+  the :sneak gait a negative factor is 1: a sneaking body does not bounce, it takes the full fall."
+  ([landing] (planner-landing landing nil))
+  ([landing gait]
+   (let [table (blocks/default-state-table)
+         m (js/Map.)]
+     (doseq [[k v] (merge default-landing landing)
+             id (blocks/state-ids table k)]
+       (.set m id (if (and (= :sneak gait) (neg? v)) 1 v)))
+     m)))

@@ -3,7 +3,8 @@
   (:require [cljs.test :refer [deftest is are]]
             [engine.planner-fixture :as pf :refer [near world run]]
             [jobs.lib.cost :as cost]
-            [jobs.lib.walk.plan :as wplan]))
+            [jobs.lib.walk.plan :as wplan]
+            [jobs.lib.walk.world :as wworld]))
 
 (deftest costs-are-checked-by-name-and-value
   (are [costs ok?] (= ok? (nil? (cost/planner-costs-problem costs)))
@@ -75,6 +76,24 @@
   (let [hay (.stateAt (world {:blocks [[0 70 0 "hay_block"]]}) 0 70 0)]
     (is (= 0.2 (.get (.-landing (wplan/with-drops #js {} {})) hay)) "the default")
     (is (= 0.5 (.get (.-landing (wplan/with-drops #js {} {:landing {"hay_block" 0.5}})) hay)))))
+
+(deftest a-sneaking-body-takes-the-full-fall-on-slime
+  (let [slime (.stateAt (world {:blocks [[0 70 0 "slime_block"]]}) 0 70 0)
+        hay (.stateAt (world {:blocks [[0 70 0 "hay_block"]]}) 0 70 0)]
+    (is (= [1 0.2] [(.get (cost/planner-landing nil :sneak) slime) (.get (cost/planner-landing nil :sneak) hay)]) "sneak stops the bounce")
+    (is (= -1 (.get (cost/planner-landing nil :walk) slime)))
+    (is (= 1 (.get (.-landing (wplan/with-drops #js {} {:gait :sneak})) slime)))))
+
+(deftest with-drops-passes-the-landing-sight
+  (let [seen (fn [_ _ _] true)]
+    (is (= seen (.-landingSeen (wplan/with-drops #js {} {} seen))))
+    (is (nil? (.-landingSeen (wplan/with-drops #js {} {}))))))
+
+(deftest landing-seen-takes-what-the-body-sees-or-feels-now
+  (let [answers {0 #js {:visible true} 1 #js {:felt true} 2 #js {:visible false :ageMs 5000} 3 #js {:unknown true} 4 nil}
+        seen (wworld/landing-seen #js {:sensedAt (fn [^js pos] (get answers (.-x pos)))})]
+    (is (= [true true false false false] (mapv #(seen % 64 0) (range 5))) "seen, felt; remembered, unknown, unloaded are not")
+    (is (nil? (wworld/landing-seen #js {})) "no perception: nil, the planner reads the snapshot")))
 
 (deftest air-profile-follows-the-helmet
   (are [equipment expected] (= expected (cost/air-profile equipment))
