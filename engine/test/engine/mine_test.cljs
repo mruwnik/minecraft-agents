@@ -1156,8 +1156,11 @@
           (fake/swap-self! (:p s) assoc :held "stone_pickaxe")
           (core/submit! (:eng s) (spec {:block "stone" :count 2 :direction "east" :tunnel-length 4 :mend false}) {})
           (await (run-ticks s 200))
-          (is (= :count (:reason (done-event s))))
-          (is (<= 2 (get (inv s) "cobblestone" 0)))
+          (is (<= 2 (get (inv s) "cobblestone" 0)) "the ore is kept")
+          (is (= :not-home (:reason (done-event s))) "the walk home from the stair is blocked: the end says so")
+          (is (= :count (:dig-reason (done-event s))) "the earlier reason is kept")
+          (is (= :warn (:level (done-event s))))
+          (is (= :warn (:level (first (events-of s :mine.not-home)))))
           (let [names (mapv #(.-name %) (.-calls (.-world (:p s))))
                 soil-digs (filter #(< 59 (nth % 1)) (dug-cells s))]
             (is (seq soil-digs) "it dug soil")

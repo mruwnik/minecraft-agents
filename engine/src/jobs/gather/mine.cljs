@@ -101,8 +101,8 @@
   target off the ground remains in :radius. Otherwise it ends :spent-on-mend, keeping the earlier reason in
   :dig-reason.
 
-  Every job ends, after the mend, by walking back to the cell it started on (info mine.not-home when the walk
-  does not arrive).
+  Every job ends, after the mend, by walking back to the cell it started on (warn mine.not-home when the walk
+  does not arrive; the job then ends {:status :stopped :reason :not-home}, the ore kept, :dig-reason the earlier reason).
 
   Zones and plans (jobs.lib.access.rules, through jobs.lib.access): a target must be a dig the rules permit,
   with only :accept hazards, when chosen and again right before the dig. A cell in a zone that bars :dig, or in
@@ -111,7 +111,7 @@
   first round the check declines. In the job the tunnel goes on (with :tunnel-length 0 the dig phase ends
   :refused). One warn mine.declined per job names the zones and plans ({:reason :refused :zones :plans}).
 
-  Hands over {:got n :reason r} (with :status :stopped when :got is 0: never completed) plus
+  Hands over {:got n :reason r} (with :status :stopped when :got is 0 or the walk home failed, :reason :not-home: never completed) plus
   :dig-reason, :resumes, :tunnel and :left when set; info mine.done with
   :mended, the cells filled. With reason :wet (also when a tunnel dug nothing and seen blocks were skipped for water), :wet-skipped counts the seen blocks left for water beside them. Its text says the reason, :got and :mended, and for a tunnel its length, heading, end cell
   and whether the body walked back. :got is how many more are carried than at the start, at least 0. :tunnel is
@@ -255,7 +255,7 @@
         why (cond-> {} dig-reason (assoc :dig-reason dig-reason) (= :no-stone-found reason) (assoc :descent descent) (= :wet reason) (assoc :wet-skipped (or wet-skipped 0)) resumes (assoc :resumes resumes)
               (pos? (:steps tunnel 0)) (assoc :tunnel (-> tunnel (select-keys [:origin :heading :steps :stop :end :back-at :walked-back?]) (update :origin access/cell)))
               (seq left) (assoc :left (mapv (fn [[pos n]] {:pos pos :count n}) left)))]
-    (ctx/emit! c :mine.done :info (merge {:got got :reason reason :mended (or mended 0)
+    (ctx/emit! c :mine.done (if (= :not-home reason) :warn :info) (merge {:got got :reason reason :mended (or mended 0)
                                           :text (str "mine done: " (name reason) ", got " got ", mended " (or mended 0)
                                                      (when (= :no-stone-found reason) (str "; dug down " (:steps descent 0) " blocks through soil, found no stone"))
                                                      (when (= :wet reason) (str "; " (or wet-skipped 0) " seen blocks beside water skipped, pass :wet true to dig them"))
@@ -266,8 +266,10 @@
                                                               (str ", walked back to " (str/join "," back-at))
                                                               ", did not get back to its origin"))))}
                                          why))
-    (ctx/result! c (merge (when (zero? got) {:status :stopped :text (str "mine got nothing: " (name reason)
-                                                                       (when (= :no-stone-found reason) (str "; dug down " (:steps descent 0) " blocks through soil, found no stone")))})
+    (ctx/result! c (merge (cond
+                            (zero? got) {:status :stopped :text (str "mine got nothing: " (name reason)
+                                                                     (when (= :no-stone-found reason) (str "; dug down " (:steps descent 0) " blocks through soil, found no stone")))}
+                            (= :not-home reason) {:status :stopped :text (str "mine got " got " but did not get back to its start")})
                           {:got got :reason reason} why))
     :done))
 
@@ -851,7 +853,8 @@
   [c arrived?]
   (ctx/update-mem! c update :tunnel assoc :walked-back? (boolean arrived?) :back-at (access/cell (cell-of (u/self-pos c))))
   (when-not arrived?
-    (ctx/emit! c :mine.not-home :info {:to (access/cell (:start (ctx/mem c))) :at (access/cell (cell-of (u/self-pos c)))
+    (ctx/update-mem! c #(assoc % :reason :not-home :dig-reason (or (:dig-reason %) (:reason %))))
+    (ctx/emit! c :mine.not-home :warn {:to (access/cell (:start (ctx/mem c))) :at (access/cell (cell-of (u/self-pos c)))
                                        :text (str "mine did not get back to " (str/join "," (access/cell (:start (ctx/mem c)))))}))
   (when (seq (:left (ctx/mem c))) (still-left! c))
   (finish! c))
@@ -871,7 +874,7 @@
 
 (defn ^:async home-round!
   "The last step of every normal run: back to the cell it started on (moveTo; go-to after a descent), whatever the
-  digging left open behind it; an info mine.not-home when the walk did not arrive. The job ends either way."
+  digging left open behind it; a warn mine.not-home when the walk did not arrive (the job ends :stopped :not-home). The job ends either way."
   [c]
   (let [{:keys [start descent homing]} (ctx/mem c)]
     (when-not homing
