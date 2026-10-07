@@ -370,3 +370,15 @@
               result (await (child-outcome eng job {:box field-box} 100))]
           (is (= 3 (:planted result)))
           (is (= {"carrot" 20} (inv-of p))))))))
+
+(deftest a-planned-cell-whose-place-answers-no-item-three-times-is-skipped
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (start {:blocks (farmland (range 2 4) [2]) :inventory (inv "wheat_seeds" 6) :floor tu/walk-floor}
+                                     (ew/of-data (shared-plans []) {} []))]
+          (.override (.-world p) "place" (fn ^:async f [_ _ _] #js {:status "no-item"}))
+          (let [result (await (child-outcome eng job {:plan "mix"} 100))]
+            (is (= :gave-up (:reason result)))
+            (is (= 2 (count (:skipped result))))
+            (is (= 6 (count (calls p "place"))))))))))

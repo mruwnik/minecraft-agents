@@ -153,8 +153,7 @@
           (.override (.-world p) "dig"
                      (fn ^:async f [token args impl]
                        (let [r (await (impl token args))]
-                         (when (= 2 (count (calls p "dig")))
-                           (takeover/take! (:eng a) {:who "claude" :why "cut"}))
+                         ((get {2 #(takeover/take! (:eng a) {:who "claude" :why "cut"})} (count (calls p "dig")) (constantly nil)))
                          r)))
           (core/submit! (:eng a) (list job {}) {})
           (await (core/tick! (:eng a)))
@@ -206,8 +205,7 @@
                      (fn ^:async f [token args impl]
                        (let [r (await (impl token args))
                              pos (.-pos args)]
-                         (when (= 3 (.-z pos))
-                           (fake/set-block! p [(.-x pos) 63 (.-z pos)] "dirt"))
+                         ((get {3 #(fake/set-block! p [(.-x pos) 63 (.-z pos)] "dirt")} (.-z pos) (constantly nil)))
                          r)))
           (let [result (await (child-outcome eng job {} 100))]
             (is (= {:cut 2 :replanted 1 :bare [{:x 2 :y 64 :z 3}] :lost [] :gave-up false} result))))))))
@@ -289,6 +287,16 @@
             (is (= {:cut 1 :replanted 0 :bare [{:x 3 :y 64 :z 0}] :lost [] :gave-up false} result))
             (is (= 3 (count (place-calls-at p 3))))
             (is (= [] (:list (core/state eng))))))))))
+
+(deftest a-place-answered-no-item-leaves-the-cell-bare-after-three-tries
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (start {:world one-cell})]
+          (.override (.-world p) "place" (fn ^:async f [_ _ _] #js {:status "no-item"}))
+          (let [result (await (child-outcome eng job {} 100))]
+            (is (= {:cut 1 :replanted 0 :bare [{:x 3 :y 64 :z 0}] :lost [] :gave-up false} result))
+            (is (= 3 (count (place-calls-at p 3))))))))))
 
 (def far-cell
   {:blocks (field "wheat" 7 [8] [0]) :ages (ages 7 [8] [0]) :drops wheat-drops})

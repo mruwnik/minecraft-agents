@@ -215,7 +215,6 @@
     (let [r (await (ctx/act c :place (clj->js {:pos pos :item seed})))]
       (case (.-status r)
         ("placed" "occupied") (ctx/update-mem! c crops/inc-in :planted)
-        "no-item" nil
         (ctx/update-mem! c count-fail :fails pos)))))
 
 (defn finish-plan!

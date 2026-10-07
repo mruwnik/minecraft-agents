@@ -438,8 +438,7 @@
           (.override (.-world p) "dig"
                      (fn ^:async f [token args impl]
                        (let [r (await (impl token args))]
-                         (when (= 2 (count (calls p "dig")))
-                           (takeover/take! (:eng a) {:who "claude" :why "cut"}))
+                         ((get {2 #(takeover/take! (:eng a) {:who "claude" :why "cut"})} (count (calls p "dig")) (constantly nil)))
                          r)))
           (core/submit! (:eng a) (list job {:plan "field"}) {})
           (swap! clock + 700)
@@ -450,7 +449,7 @@
             (is (= (set strays) (dug p)))
             (is (= (count strays) (count (calls p "dig"))) "no cell was dug twice")
             (is (= 1 (count (of-kind (:seen b) :tidy.done))))
-            (is (= 4 (:dug (:data (first (of-kind (:seen b) :tidy.done))))) "the count keeps what the first run booked (the dig the cut came with was never read)")))))))
+            (is (= 5 (:dug (:data (first (of-kind (:seen b) :tidy.done))))) "the dig the cut came with is counted from the world after the restart")))))))
 
 (deftest the-opt-out-needs-no-zone-list
   (async done

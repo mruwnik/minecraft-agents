@@ -348,7 +348,6 @@
         ("placed" "occupied") (ctx/update-mem! c (fn [m] (-> (drop-debt m pos)
                                                               (inc-in :replanted)
                                                               (update :planted (fn [cells] (vec (distinct (conj (vec cells) pos))))))))
-        "no-item" nil
         (ctx/update-mem! c fail-debt pos)))))
 
 (def max-per-round

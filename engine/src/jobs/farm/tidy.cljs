@@ -235,9 +235,11 @@
       (let [tool (tools/best-tool (map :name (u/inventory p)) block)]
         (when (and tool (not= tool (.-held (.self p))))
           (await (ctx/act c :equip #js {:item tool :dest "hand"})))
+        (ctx/update-mem! c assoc :digging pos :collect true)
         (let [status (.-status (await (ctx/act c :dig (clj->js {:pos (pos-map pos)}))))]
+          (ctx/update-mem! c dissoc :digging)
           (case status
-            "dug" (ctx/update-mem! c #(-> % (update :dug (fnil inc 0)) (assoc :collect true)))
+            "dug" (ctx/update-mem! c update :dug (fnil inc 0))
             "missing" nil
             "cannot" (ctx/update-mem! c refuse stray {:reason :cannot})
             "unreachable" (ctx/update-mem! c count-fail stray :unreachable give-up)
@@ -335,12 +337,20 @@
     (ctx/result! c result)
     :done))
 
+(defn settle-digging!
+  "A dig the last run was in when it was cut: counted as dug once its stray is gone from the world."
+  [c found]
+  (when-let [pos (:digging (ctx/mem c))]
+    (ctx/update-mem! c (fn [m] (cond-> (dissoc m :digging)
+                                 (not-any? #(= pos (:pos %)) (:dig found)) (update :dug (fnil inc 0)))))))
+
 (defn ^:async step [c]
   (let [{:keys [answer trouble]} (planned c)]
     (if trouble
       :declined
       (let [cells (work-cells (:cells answer) (:part (:args c)))
             found (strays cells #(world-block (:primitives c) %))
+            _ (settle-digging! c found)
             m (ctx/mem c)
             refused (set (map :pos (:refused m)))
             todo (remove #(refused (:pos %)) (:dig found))]
