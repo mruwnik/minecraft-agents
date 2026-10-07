@@ -218,6 +218,13 @@
            (str ": " (clojure.string/join ", " (for [{:keys [key seen]} unseen]
                                                   (if (set? seen) (str key " (from " (clojure.string/join "/" (sort seen)) ")") key))))))))
 
+(defn pickaxe-why
+  "For a stone material wanted with no pickaxe carried: that it needs one, and what crafting the cheapest lacks; else nil."
+  [version have names]
+  (when (and (some #(material-blocks version %) names)
+             (not-any? (fn [[k v]] (and (pos? v) (clojure.string/ends-with? k "_pickaxe"))) have))
+    (str "mining it needs a pickaxe, none carried; " (recipes/lacking version have "wooden_pickaxe" 1))))
+
 (defn no-source-why
   "Text for the no-source wait: what each allowed source lacks."
   [c names n]
@@ -228,7 +235,8 @@
      "; "
      (concat (when (contains? how :chest) [(str "no seen chest that may hold " (clojure.string/join "/" names))])
              (when (contains? how :craft) [(recipes/lacking version have (first names) n)])
-             (when (contains? how :gather) [(unseen-why c names n)])))))
+             (when (contains? how :gather) [(unseen-why c names n)])
+             (when-let [w (and (contains? how :gather) (pickaxe-why version have names))] [w])))))
 
 (defn check-run [c]
   (let [a (:args c)

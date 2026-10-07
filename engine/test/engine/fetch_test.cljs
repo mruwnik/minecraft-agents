@@ -477,6 +477,15 @@
           (is (re-find #"no seen chest that may hold dirt" (:why (first (events-of s :waiting)))))
           (is (re-find #"no recipe makes dirt" (:why (first (events-of s :waiting))))))))))
 
+(deftest obtain-cobblestone-wait-names-the-missing-pickaxe
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (-> (world {}) (update :blocks dissoc chest-at)) [own-zone])]
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "cobblestone" :count 3}) {})
+          (await (run-ticks s 5))
+          (is (re-find #"pickaxe" (:why (first (events-of s :waiting))))))))))
+
 (deftest obtain-craft-wait-names-the-short-ingredient
   (async done
     (tu/run-async done
