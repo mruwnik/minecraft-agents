@@ -48,7 +48,7 @@
   Every reason but :tied and :unleashed ends the job :stopped with a :text.
   - :unreachable: the walk gave up (the animal is still on the lead).
   - :tie-failed: the post did not take the animal (still on the lead).
-  - :timeout: :timeout-s from the first round (a cut walk leaves the animal on the lead).
+  - :timeout: :timeout-s from the first round, not counting the lead fetch (a cut walk leaves the animal on the lead).
   - :no-fence.
   - :no-lead: no lead carried and obtain could not get one (the :text says why).
   - The reason of jobs.animals.leash (:no-lead, :none, :unreachable, :refused, :all-leashed, :timeout) when no
@@ -66,7 +66,7 @@
    :gather-radius {:doc "without :fence the animal is let go once it is within this many blocks of :pos" :default 3}
    :gather-tries {:doc "without :fence how many times the body walks on to pull a trailing animal nearer" :default 3}
    :watch-radius {:doc "how far from the body the led animal is looked for" :default 64}
-   :timeout-s {:doc "seconds from the first round before the job gives up" :default 180}
+   :timeout-s {:doc "seconds from the first round (not the lead fetch) before the job gives up" :default 180}
    :ignore-zones? animals/ignore-zones-arg})
 
 (def max-ties 2)
@@ -137,6 +137,14 @@
       (lead-carried? c) (do (set-phase! c :leash) :again)
       :else (do (ctx/update-mem! c assoc :lead-why (some-> (ctx/child-result c :obtain) :reason name))
                 (finish! c :no-lead)))))
+
+(defn ^:async get-lead-untimed!
+  "get-lead!, then mem :started moves on by the time the round took: :timeout-s bounds the leading, not the fetch."
+  [c]
+  (let [t0 (ctx/now c)
+        r (await (get-lead! c))]
+    (ctx/update-mem! c update :started #(when % (+ % (- (ctx/now c) t0))))
+    r))
 
 (defn ^:async leash! [c]
   (let [{:keys [mob radius]} (:args c)
@@ -447,7 +455,7 @@
         (and (nil? phase) fence (not (fence-block? c))) (finish! c :no-fence)
         (>= (- now started) (* 1000 timeout-s)) (finish! c :timeout)
         (nil? phase) (do (set-phase! c (if (lead-carried? c) :leash :get-lead)) :again)
-        (= :get-lead phase) (await (get-lead! c))
+        (= :get-lead phase) (await (get-lead-untimed! c))
         (= :leash phase) (await (leash! c))
         (and (#{:gather :arrive} phase) (nil? a)) (if (= :lost (escort-problem c safe-gap))
                                                     (do (ctx/update-mem! c assoc :still-led false) (finish! c :lost))

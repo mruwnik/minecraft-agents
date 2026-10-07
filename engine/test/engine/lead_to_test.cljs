@@ -562,6 +562,23 @@
           (is (= 2 (get (fetch-test/inv s) "lead")) "the crafted pair is carried, the cow let go")
           (is (empty? (fetch-test/events-of s :lead-to.gave-up))))))))
 
+(deftest a-lead-fetch-longer-than-timeout-s-does-not-end-timeout
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (fetch-test/start {:self {:pos {:x 0 :y 64 :z 0}}
+                                   :recipes {"lead" {:count 2 :needs {"string" 5} :table true}}
+                                   :inventory [{:name "string" :count 5} {:name "oak_planks" :count 4}]
+                                   :entities [(cow 1 3)]}
+                                  [])]
+          (.override (.-world (:p s)) "craft"
+                     (fn [token a impl] (swap! (:clock s) + 10000) (impl token a)))
+          (core/submit! (:eng s) (list 'jobs.animals.lead-to {:mob "cow" :pos goal :timeout-s 3}) {})
+          (await (fetch-test/run-ticks s 60))
+          (is (empty? (fetch-test/listed s)))
+          (is (empty? (filter #(= :timeout (:reason %)) (fetch-test/events-of s :lead-to.gave-up))))
+          (is (= 2 (get (fetch-test/inv s) "lead"))))))))
+
 (deftest no-lead-and-no-way-to-get-one-stops-no-lead-at-once
   (async done
     (tu/run-async done

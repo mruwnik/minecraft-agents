@@ -224,9 +224,15 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:timeout-s 3} {:inventory lead :entities [(cow 1 60)]} 30))]
+        (let [s (h/setup {:inventory lead :entities [(cow 1 3)]})]
+          (.override (.-world (:p s)) "interact"
+                     (fn [_token _args _impl]
+                       (swap! (:clock s) + 10000)
+                       (js/Promise.resolve #js {:status "out-of-reach"})))
+          (core/submit! (:eng s) (list 'jobs.animals.leash {:mob "cow" :timeout-s 3}) {})
+          (await (run-ticks s 30 700))
           (is (finished? s))
-          (is (not= :leashed (:reason (done-event s)))))))))
+          (is (= :timeout (:reason (done-event s)))))))))
 
 (deftest no-fetch-when-no-animal-is-near
   (async done
