@@ -8,7 +8,8 @@
             [engine.events :as events]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [jobs.movement.follow :as follow]))
+            [jobs.movement.follow :as follow]
+            [jobs.movement.go-to :as go-to]))
 
 (def job 'jobs.movement.follow)
 
@@ -124,21 +125,22 @@
         (let [{:keys [out]} (await (follow {} {:player "Steve"} 2 500))]
           (is (= :not-done @out)))))))
 
-(deftest three-blocked-walks-are-unreachable
+(deftest one-blocked-go-to-is-unreachable
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p] :as s} (await (follow {:entities [(steve 10)] :unreachable ["10,64,0"]} {:player "Steve"} 10 500))]
           (is (= {:reason "unreachable"} @out))
-          (is (pos? (count (tu/walked-to (:eng s)))))
+          (is (= go-to/max-blocked (count (tu/walked-to (:eng s)))) "one go-to call (its own tries), then give up")
           (is (has-event? s :follow.unreachable)))))))
 
-(deftest the-blocked-count-is-per-round-three-walks-end-it-in-one-tick
+(deftest one-blocked-go-to-ends-it-in-one-tick
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out] :as s} (await (follow {:entities [(steve 10)] :unreachable ["10,64,0"]} {:player "Steve"} 1 500))]
           (is (= {:reason "unreachable"} @out))
+          (is (= go-to/max-blocked (count (tu/walked-to (:eng s)))) "one go-to call (its own tries), then give up")
           (is (has-event? s :follow.unreachable)))))))
 
 (deftest a-far-player-is-walked-to-within-the-round
