@@ -3,10 +3,12 @@
   per hit. The adapter reports each health loss as a raw body event (amount, health, food and what a normal client
   knows: the attacker entity from the damage packet, the damage type name, the block cause lava/fire/void); this
   namespace names the cause and does the merging."
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            [engine.settings :as settings]))
 
-
-(def default-window-ms 1000)
+(def settings
+  {:engine.hurt/window-ms {:default 1000 :type :int :min 1
+                           :doc "Hits within this long of the first merge into one :hurt event, ms."}})
 
 (def type-causes
   "Damage type name (minecraft:damage_type) -> the cause the event names."
@@ -28,7 +30,7 @@
       (:cause m)
       (get type-causes (some-> (:damageType m) (str/replace #"^minecraft:" "")))))
 
-(defn new-state [] (atom {:window-ms default-window-ms :pending nil}))
+(defn new-state [] (atom {:window-ms (settings/get settings :engine.hurt/window-ms) :pending nil}))
 
 (defn set-window!
   "Set the merge window of an engine's hurt state (ms)."

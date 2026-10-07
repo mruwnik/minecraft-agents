@@ -289,7 +289,7 @@ calls job code only through `engine.hooks`, named in `src/jobs/hooks.edn` (world
 
 ## Settings
 
-Tuning numbers live in one global map, read by anyone. A namespace under `jobs/` or `triggers/` declares its keys in a top-level `(def settings {::wait-ms {:default 5000 :doc "..." :type :int :min 0}})` (the job arg spec shape; the key's namespace is the declaring one, `:engine.<area>/<name>` in `engine.settings`). `engine.registry/settings` gathers them at compile time, helper files included.
+Tuning numbers live in one global map, read by anyone. A namespace under `jobs/` or `triggers/` declares its keys in a top-level `(def settings {::wait-ms {:default 5000 :doc "..." :type :int :min 0}})` (the job arg spec shape; the key's namespace is the declaring one, `:engine.<area>/<name>` in `engine.settings`). `engine.registry/settings` gathers them at compile time, helper files included. The engine's own keys (`:engine.perception/`, `lease`, `events`, `event-api`, `backoff`, `hurt`, `senses`, `entities`, `main`) sit in the `settings` of their namespaces and are merged in `engine.main`; `(perception/defaults)` and `(backoff/defaults)` read them at use.
 
 - Read `(settings/get settings ::wait-ms)` with the namespace's own map (a typo throws); never inside a top-level `def`.
 - Layers, low to high: the code `:default`, `worlds/<world>/settings.edn` (`:world`), `worlds/<world>/agents/<Name>/settings.edn` (`:body`). Files are EDN maps `{key value}`, read at body start (`settings/load!` again reloads).
@@ -300,7 +300,7 @@ Tuning numbers live in one global map, read by anyone. A namespace under `jobs/`
 
 One EDN store per body: `worlds/<world>/agents/<name>/engine/memory.edn`, `{:entries {kind [entry]} :policies {kind policy}}`.
 
-- An **entry** is `{:t wall-clock-ms :wt world-time :data ...}`, newest last. **Kinds** are an open vocabulary: `:hurt`, `:died`,
+- An **entry** is `{:t wall-clock-ms :wt world-time :age world-ticks :data ...}` (`:age` when known), newest last. **Kinds** are an open vocabulary: `:hurt`, `:died`,
   `:chat`, `:restart`, `:bed`, `:chest`, `:home`, `:looked`, `:moved`, `:picked-up`, `:fed`, `:slept`, `:shelter`, `:threat`,
   `:tidy`, `:scaffold`, `:forestry/replant`, `:job/j7`, and so on. Body events become entries of their kind; every start
   appends `:restart`.
@@ -454,7 +454,7 @@ The engine writes one EDN map per line to stdout and `worlds/<world>/agents/<nam
 `docs/event-stream.md`. Fields: `:seq`, `:generation-id`, `:time-ms`, `:source`, `:kind`, `:context` (job id, child chain,
 round, reflex id, action-call id), `:data`, `:message`, `:attention` (omitted/`:none`, `:notice`, `:required`),
 `:request-id`. Required attention requests stay in saved state until explicitly resolved. The log keeps 64 MiB across
-`events.edn` and `.1` to `.3` (`--events-max-bytes` or `engine.events.maxBytes`); a cursor is `{:stream-id :seq}` and a
+`events.edn` and `.1` to `.3` (setting `:engine.events/max-bytes`, min 1024); a cursor is `{:stream-id :seq}` and a
 rotated-away cursor gets an explicit gap.
 
 A job that ends with a result of `:status :stopped` gets a `:stopped` warn event; its text is the result's `:text` (clipped to 200 chars), else `stopped: <reason>`.
@@ -540,7 +540,7 @@ code 3 when that body is already running (it binds `engine/body.sock` first). If
 and register are restored as they are (a manual slot job is ended, `stopped` reason `restart`); `--fresh` discards saved engine state (memory is kept). The scenario is validated
 before connecting; on a restart an unknown trigger in it is skipped with a warn and an attention request, and scenario triggers the
 body never had are offered in one attention request: `triggers upgrade [ids]` adds them (`--upgrade` at start adds all), `triggers
-decline [ids]` never offers them again; ids not in the offer come back under `:ignored` with a reason. Other flags: `--worlds <dir>`, `--drive-idle-s <s>`, `--events-max-bytes <n>`.
+decline [ids]` never offers them again; ids not in the offer come back under `:ignored` with a reason. Other flags: `--worlds <dir>`, `--drive-idle-s <s>`.
 
 `survival.edn` lists the survival triggers and queues `(repeat (jobs.movement.look-around))`.
 `woodcutter-cuts.edn` registers an ad hoc `:look-timer` condition to cut a long job on a schedule.

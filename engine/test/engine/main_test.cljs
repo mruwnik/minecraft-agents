@@ -11,24 +11,17 @@
             ["path" :as path]))
 
 (deftest parse-args-reads-flags
-  (is (= {:agent "Claude" :world "claude" :scenario "s.edn" :fresh? true :upgrade? false :state-dir nil :drive-idle-s 15 :events-max-bytes nil}
+  (is (= {:agent "Claude" :world "claude" :scenario "s.edn" :fresh? true :upgrade? false :state-dir nil :drive-idle-s 15}
          (main/parse-args ["--agent" "Claude" "--world" "claude" "--scenario" "s.edn" "--fresh"])))
-  (is (= {:agent nil :world nil :scenario nil :fresh? false :upgrade? false :state-dir "/x" :drive-idle-s 15 :events-max-bytes nil}
+  (is (= {:agent nil :world nil :scenario nil :fresh? false :upgrade? false :state-dir "/x" :drive-idle-s 15}
          (main/parse-args ["--state-dir" "/x"])))
-  (is (= 5 (:drive-idle-s (main/parse-args ["--drive-idle-s" "5"]))))
-  (is (= "4096" (:events-max-bytes (main/parse-args ["--events-max-bytes" "4096"]))))
-  (is (= "" (:events-max-bytes (main/parse-args ["--events-max-bytes"]))))
-  (is (= 67108864 (main/event-cap nil nil)))
-  (is (= 4096 (main/event-cap "4096" nil)))
-  (is (nil? (main/event-cap "1e6" nil)))
-  (is (nil? (main/event-cap "1023" nil)))
-  (is (nil? (main/event-cap nil 1.5))))
+  (is (= 5 (:drive-idle-s (main/parse-args ["--drive-idle-s" "5"])))))
 
 (declare agent-state-dir)
 
 (deftest load-agent-reads-config-and-world
   (let [dir (agent-state-dir)]
-    (is (= {:username "Bob" :host "h" :port 7 :world "w" :events-max-bytes nil :view-distance nil
+    (is (= {:username "Bob" :host "h" :port 7 :world "w" :view-distance nil
             :engine-dir (path/join dir "worlds" "w" "agents" "Bob" "engine")}
            (main/load-agent dir "w" "Bob")))
     (is (= :no-config (:error (main/load-agent dir "w" "Nobody"))))

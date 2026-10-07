@@ -2,7 +2,7 @@
   "The engine's private HTTP API on a local Unix socket (mode 0600). The wire format is EDN.
   GET   /snapshot, /status, /inventory, /events, /job, /jobs, /triggers, /catalog
   POST  /jobs and /triggers (changes), /attention/resolve, /chat
-  Bodies are limited to 16 KB. Lists are paged and bounded."
+  Bodies are limited (a setting, 16 KB). Lists are paged and bounded."
   (:require [cljs.reader :as reader]
             [engine.core :as core]
             [engine.chat :as chat]
@@ -10,6 +10,7 @@
             [engine.events :as events]
             [engine.job-api :as job-api]
             [engine.memory :as mem]
+            [engine.settings :as settings]
             [engine.trigger-api :as trigger-api]
             ["fs" :as fs]
             ["http" :as http]
@@ -17,8 +18,19 @@
             ["path" :as path]))
 
 (def content-type "application/edn; charset=utf-8")
-(def max-body-bytes 16384)
-(def max-limit 1000)
+(def settings
+  {:engine.event-api/max-body-bytes {:default 16384 :type :int :min 1 :doc "The largest request body the API reads, bytes."}
+   :engine.event-api/max-limit {:default 1000 :type :int :min 1 :doc "The most events one /events read returns."}
+   :engine.event-api/status-job-limit {:default 4 :type :int :min 1 :doc "Jobs /status lists by default."}
+   :engine.event-api/attention-limit {:default 4 :type :int :min 1 :doc "Attention items listed by default."}
+   :engine.event-api/catalog-page-limit {:default 20 :type :int :min 1 :doc "Catalog entries a page lists by default."}
+   :engine.event-api/max-catalog-page-limit {:default 64 :type :int :min 1 :doc "The most catalog entries a page may list."}
+   :engine.event-api/catalog-doc-limit {:default 1200 :type :int :min 1 :doc "Characters of a job's doc the catalog shows."}
+   :engine.event-api/inventory-stack-limit {:default 46 :type :int :min 1 :doc "Stacks /inventory lists."}
+   :engine.event-api/enchant-limit {:default 8 :type :int :min 1 :doc "Enchantments listed per item."}})
+
+(defn setting [k] (settings/get settings (keyword "engine.event-api" k)))
+
 (def reasons #{:handled :condition-recovered})
 
 (defn respond! [res status value]
@@ -35,7 +47,7 @@
            size (atom 0)]
        (.on req "data" (fn [chunk]
                          (swap! size + (.-length chunk))
-                         (if (> @size max-body-bytes)
+                         (if (> @size (setting "max-body-bytes"))
                            (reject (js/Error. "body too large"))
                            (swap! chunks conj chunk))))
        (.on req "end" (fn []
@@ -82,15 +94,8 @@
      :settling (core/settling? eng)
      :cursor (events/cursor (:events eng))}))
 
-(def status-job-limit 4)
-(def attention-limit 4)
-(def catalog-page-limit 20)
-(def max-catalog-page-limit 64)
-(def catalog-doc-limit 1200)
-(def inventory-stack-limit 46)
 (def armour-slots #{:head :torso :legs :feet})
 (def equipment-slots [:head :torso :legs :feet :offHand :mainHand])
-(def enchant-limit 8)
 
 (defn short-text [x n]
   (when (string? x) (subs x 0 (min n (count x)))))
@@ -108,7 +113,7 @@
 (defn equipment-item [item]
   (when (and (map? item) (string? (:name item)))
     (cond-> {:name (short-text (:name item) 80)}
-      (seq (:enchants item)) (assoc :enchants (->> (:enchants item) (keep enchant-entry) (take enchant-limit) vec))
+      (seq (:enchants item)) (assoc :enchants (->> (:enchants item) (keep enchant-entry) (take (setting "enchant-limit")) vec))
       (and (integer? (:count item)) (pos? (:count item))) (assoc :count (:count item))
       (and (number? (:durability item)) (not (neg? (:durability item)))) (assoc :durability (:durability item)))))
 
@@ -127,14 +132,14 @@
       {:ok false :reason :offline :offline (core/away eng)}
       (let [self (or known (js->clj (.self (:primitives eng)) :keywordize-keys true))
           all-stacks (or (:inventory self) [])
-          stacks (->> all-stacks (take inventory-stack-limit) (keep inventory-stack) vec)
+          stacks (->> all-stacks (take (setting "inventory-stack-limit")) (keep inventory-stack) vec)
           equipment (into {} (keep (fn [slot]
                                      (if-let [item (equipment-item (get-in self [:equipment slot]))]
                                        [slot item]
                                        (when (armour-slots slot) [slot :empty])))) equipment-slots)]
       (cond-> {:ok true :inventory stacks}
         (seq equipment) (assoc :equipment equipment)
-        (> (count all-stacks) inventory-stack-limit) (assoc :more? true)
+        (> (count all-stacks) (setting "inventory-stack-limit")) (assoc :more? true)
         offline? (assoc :last-known true :offline (core/away eng)))))))
 
 (defn bounded-value
@@ -212,12 +217,12 @@
                     (when-let [id (:resume s)] {:id id}))
         current-id (:id current)
         manual @(:manual eng)
-        limit (or requested-limit status-job-limit)
+        limit (or requested-limit (setting "status-job-limit"))
         queue-count (count (:list s))
         queue (mapv #(job-summary s % (core/waiting eng %) (:id (core/running eng))) (take limit (:list s)))
         attention (->> (:attention s)
                        (sort-by (fn [[id req]] [(- (or (:updated-at req) 0)) id]))
-                       (take attention-limit)
+                       (take (setting "attention-limit"))
                        (mapv attention-summary))]
     (merge
      {:body (.-username self)
@@ -251,10 +256,10 @@
                                (sort-by key)
                                (mapv (fn [[id failure]]
                                        {:id id :error (short-text (:error failure) 240)})))]
-               {:total (count failed) :items (->> failed (take attention-limit) vec)
-                :more? (> (count failed) attention-limit)})
+               {:total (count failed) :items (->> failed (take (setting "attention-limit")) vec)
+                :more? (> (count failed) (setting "attention-limit"))})
      :outstanding {:total (count (:attention s)) :items attention
-                   :more? (> (count (:attention s)) attention-limit)}}
+                   :more? (> (count (:attention s)) (setting "attention-limit"))}}
      (let [view (mem/view (:store eng))]
        (into {} (keep (fn [[k f]] (when-let [v (f view)] [k v]))) extras))))))
 
@@ -287,7 +292,7 @@
                 entry (get (:jobs eng) sym)]
             (when entry
               {:ok true :kind :job :name sym
-               :doc (short-text (:doc entry) catalog-doc-limit)
+               :doc (short-text (:doc entry) (setting "catalog-doc-limit"))
                :args (bounded-value (:args entry) 0 (volatile! 64))}))
     "trigger" (let [id (keyword name)
                     entry (get (:triggers eng) id)]
@@ -371,7 +376,7 @@
                           (respond! res (if (:ok view) 200 503) view))
 
                         (and (= method "GET") (= pathname "/status"))
-                        (let [limit (number-param (.-searchParams url) "limit" status-job-limit 32)]
+                        (let [limit (number-param (.-searchParams url) "limit" (setting "status-job-limit") 32)]
                           (if (and limit (pos? limit))
                             (respond! res 200 (status eng limit status-extras))
                             (bad! res 400 :bad-query)))
@@ -379,7 +384,7 @@
                         (and (= method "GET") (= pathname "/job"))
                         (let [params (.-searchParams url)
                               id (.get params "id")
-                              limit (number-param params "limit" attention-limit 32)]
+                              limit (number-param params "limit" (setting "attention-limit") 32)]
                           (if (and id (re-matches #"j[0-9]+" id) limit (pos? limit))
                             (if-let [detail (job-detail eng id limit)]
                               (respond! res 200 detail)
@@ -391,7 +396,7 @@
                               kind (.get params "kind")
                               name (.get params "name")
                               prefix (or (.get params "prefix") "")
-                              limit (number-param params "limit" catalog-page-limit max-catalog-page-limit)
+                              limit (number-param params "limit" (setting "catalog-page-limit") (setting "max-catalog-page-limit"))
                               offset (number-param params "offset" 0 10000)
                               exact? (contains? #{"job" "trigger"} kind)
                               list? (contains? #{"jobs" "triggers"} kind)
@@ -423,7 +428,7 @@
                         (let [params (.-searchParams url)
                               stream-id (.get params "stream-id")
                               after (number-param params "after" nil js/Number.MAX_SAFE_INTEGER)
-                              limit (number-param params "limit" 200 max-limit)]
+                              limit (number-param params "limit" 200 (setting "max-limit"))]
                           (if (and stream-id (some? after) (some? limit) (pos? limit))
                             (respond! res 200 (events/read-after (:events eng)
                                                                   {:stream-id stream-id :after after :limit limit}))

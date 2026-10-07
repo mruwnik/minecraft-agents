@@ -6,9 +6,23 @@
   (a failure status below). After :after fruitless rounds in a row the job gets
   no round for :first-s seconds; each further fruitless round doubles the wait,
   up to :max-s. Any act with another status is progress and resets everything,
-  except neutral acts: they count for neither.")
+  except neutral acts: they count for neither."
+  (:require [engine.settings :as settings]))
 
-(def defaults {:after 3 :first-s 1 :max-s 30})
+(def settings
+  {:engine.backoff/after {:default 3 :type :int :min 1 :doc "Fruitless rounds in a row before a job gets no round."}
+   :engine.backoff/first-s {:default 1 :type :number :min 0.001 :doc "The first wait, s; each further fruitless round doubles it."}
+   :engine.backoff/max-s {:default 30 :type :number :min 0.001 :doc "The longest wait, s."}
+   :engine.backoff/moved-min {:default 1 :type :number :min 0 :doc "Blocks a failed moveTo must have moved the body to be neutral."}
+   :engine.backoff/walk-moved-min {:default 8 :type :number :min 0
+                                   :doc "Blocks a walk round that got no nearer must have moved the body to be neutral: a long way round is not a failure, shuffling on the spot is."}})
+
+(defn defaults
+  "The engine-wide backoff {:after :first-s :max-s} as set."
+  []
+  {:after (settings/get settings :engine.backoff/after)
+   :first-s (settings/get settings :engine.backoff/first-s)
+   :max-s (settings/get settings :engine.backoff/max-s)})
 
 (def failure-statuses
   "Act statuses that count as a failure; every other status is progress."
@@ -25,15 +39,6 @@
   as a :walk; breathe's steer that holds the body still is a wait."
   #{:look :wait :equip :steer})
 
-(def moved-min
-  "Blocks a failed moveTo must have moved the body to be neutral."
-  1)
-
-(def walk-moved-min
-  "Blocks a walk round that got no nearer must have moved the body to be
-  neutral: a long way round is not a failure, shuffling on the spot is."
-  8)
-
 (defn neutral?
   "Whether an act is neutral (counts for neither side). Neutral when:
   - the act is in neutral-acts,
@@ -43,18 +48,18 @@
   An arrival is progress. A walk with no path, or one that got nowhere, is a failure."
   [act status moved]
   (or (contains? neutral-acts act)
-      (and (= :moveTo act) (failure? status) (some? moved) (>= moved moved-min))
+      (and (= :moveTo act) (failure? status) (some? moved) (>= moved (settings/get settings :engine.backoff/moved-min)))
       (and (= :walk act)
            (or (= "partial" status)
-               (and (failure? status) (some? moved) (>= moved walk-moved-min))))))
+               (and (failure? status) (some? moved) (>= moved (settings/get settings :engine.backoff/walk-moved-min)))))))
 
 (defn validate!
   "Throws unless cfg is nil, false (off) or a map of :after :first-s :max-s to positive numbers."
   [cfg]
   (when-not (or (nil? cfg) (false? cfg)
                 (and (map? cfg)
-                     (every? (fn [[k v]] (and (contains? defaults k) (number? v) (pos? v))) cfg)))
-    (throw (ex-info (str ":backoff must be false or a map of " (pr-str (keys defaults))
+                     (every? (fn [[k v]] (and (contains? (defaults) k) (number? v) (pos? v))) cfg)))
+    (throw (ex-info (str ":backoff must be false or a map of " (pr-str (keys (defaults)))
                          " to positive numbers, not " (pr-str cfg))
                     {:backoff cfg}))))
 
@@ -65,9 +70,9 @@
   [& levels]
   (reduce (fn [cfg l]
             (cond (false? l) false
-                  (map? l) (merge (or cfg defaults) l)
+                  (map? l) (merge (or cfg (defaults)) l)
                   :else cfg))
-          defaults levels))
+          (defaults) levels))
 
 ;; ------------------------------------------------------------------ one round
 

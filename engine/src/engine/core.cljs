@@ -47,6 +47,7 @@
             [engine.fsutil :as fsu]
             [engine.memory :as mem]
             [engine.hooks :as hooks]
+            [engine.settings :as settings]
             ["crypto" :as crypto]
             ["path" :as path]
             [engine.game :as game]))
@@ -192,7 +193,7 @@
     :idle-s            seconds with no act and no declared hold before job.idle (10)
     :sweep-ms          memory sweep interval (60000)
     :stats-ms          memory.save-stats interval (60000)
-    :max-event-bytes   event log size cap (64 MiB)"
+    :max-event-bytes   event log size cap (setting :engine.events/max-bytes, 64 MiB)"
   [{:keys [primitives jobs triggers dir now events body idle-s sweep-ms stats-ms world
            max-event-bytes
            backoff backoff-alert-ms]
@@ -208,7 +209,7 @@
         st (atom initial-state)
         ev (or events (events/make {:file (path/join dir "events.edn")
                                     :generation-id (:generation-id initial-state)
-                                    :max-bytes (or max-event-bytes 67108864)
+                                    :max-bytes (or max-event-bytes (settings/get events/settings :engine.events/max-bytes))
                                     :stdout? true :now now :pos-fn #(self-pos primitives)}))
         store (mem/open dir {:now now
                              :world-time #(or (.-timeOfDay (.self primitives)) nil)

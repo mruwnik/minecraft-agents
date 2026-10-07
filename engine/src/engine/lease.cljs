@@ -14,14 +14,19 @@
   take and set need an answer from the engine before their reply is complete: request marks them
   :pending :take / :drive and taken / driven finish the job.
   Reply maps use the wire's camelCase keys, so clj->js gives the JSON as sent."
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            [engine.settings :as settings]))
 
 (def control-order [:forward :back :left :right :jump :sneak :sprint])
 (def controls (set control-order))
-(def max-ms 10000)
-(def max-idle-s 3600)
-(def default-release-ms 1000)
-(def default-idle-ms 15000)
+
+(def settings
+  {:engine.lease/max-ms {:default 10000 :type :int :min 1 :doc "The longest timed control a driver may set in one `set`, ms."}
+   :engine.lease/max-idle-s {:default 3600 :type :int :min 1 :doc "The longest idle time a driver may ask for (idleS), s."}
+   :engine.lease/default-release-ms {:default 1000 :type :int :min 1 :doc "Held untimed controls are released this long after the last beat, ms."}
+   :engine.lease/default-idle-ms {:default 15000 :type :int :min 1 :doc "The lease ends after this long without an op from the holder, ms."}})
+
+(defn setting [k] (settings/get settings (keyword "engine.lease" k)))
 
 (def beat-ops
   "The ops that keep the lease (each restarts the one heartbeat clock)."
@@ -81,8 +86,8 @@
       (str msg " with numbers"))))
 
 (defn ms-error [ms]
-  (when-not (and (integer? ms) (<= 1 ms max-ms))
-    (str "ms must be an integer 1.." max-ms)))
+  (when-not (and (integer? ms) (<= 1 ms (setting "max-ms")))
+    (str "ms must be an integer 1.." (setting "max-ms"))))
 
 (defn validate-set [req]
   (or (when (contains? req :controls) (controls-error (:controls req)))
@@ -98,14 +103,14 @@
 (defn ending [lease reason now]
   [[:release (:who lease) reason (- now (:since lease))]])
 
-(defn valid-idle-s? [v] (and (number? v) (<= 1 v max-idle-s)))
+(defn valid-idle-s? [v] (and (number? v) (<= 1 v (setting "max-idle-s"))))
 
 (defn take-op [lease req now world opts]
   (let [{:keys [who why idleS]} req]
     (cond
       (not (and (string? who) (not= "" who))) (result lease (bad-args "who is required"))
       (and (contains? req :idleS) (not (valid-idle-s? idleS)))
-      (result lease (bad-args (str "idleS must be a number 1.." max-idle-s)))
+      (result lease (bad-args (str "idleS must be a number 1.." (setting "max-idle-s"))))
 
       (and lease (= who (:who lease)))
       (let [l (touch (cond-> lease (contains? req :idleS) (assoc :idle-ms (* 1000 idleS))) "take" now opts)]
@@ -119,7 +124,7 @@
       (let [why (if (string? why) why "")
             l {:who who :why why :since now :controls all-false :deadlines {} :yaw nil :pitch nil
                :last-beat now :deadman? false
-               :idle-ms (if (contains? req :idleS) (* 1000 idleS) (:idle-ms opts default-idle-ms))}]
+               :idle-ms (if (contains? req :idleS) (* 1000 idleS) (:idle-ms opts (setting "default-idle-ms")))}]
         (assoc (result l (ok {:manual (view l now)}) [[:take who why]]) :pending :take)))))
 
 (defn with-driver [f]
@@ -211,7 +216,7 @@
     (nil? lease) {:lease nil :effects []}
     (:offline world) {:lease nil :effects (ending lease "offline" now)}
     (>= (- now (:last-beat lease)) (:idle-ms lease)) {:lease nil :effects (ending lease "idle" now)}
-    :else (expire-holds lease now (:release-ms opts default-release-ms))))
+    :else (expire-holds lease now (:release-ms opts (setting "default-release-ms")))))
 
 (defn close
   "Effects that end a held lease for shutdown."

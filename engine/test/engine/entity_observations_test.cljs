@@ -5,6 +5,7 @@
             [engine.fake :as fake]
             [engine.fake.raw-world :as fake-raw]
             [engine.perception :as perception]
+            [engine.settings :as settings]
             [engine.test-util :as tu]
             [engine.takeover :as takeover]))
 
@@ -213,10 +214,11 @@
       (is (= 2 (:count result)))
       (is (true? (:truncated? result)))
       (is (= 2 (:dropped result))))
-    (with-redefs [seen/max-snapshot-bytes 1100]
-      (let [result (seen/snapshot c 0)]
-        (is (= 0 (:count result)))
-        (is (true? (:truncated? result)))))
+    (settings/with-settings {:engine.entities/max-snapshot-bytes 1100}
+      (fn []
+        (let [result (seen/snapshot c 0)]
+          (is (= 0 (:count result)))
+          (is (true? (:truncated? result))))))
     (is (false? (:truncated? (seen/snapshot c 120000))))))
 
 (deftest endpoint-returns-edn-without-a-manual-lease

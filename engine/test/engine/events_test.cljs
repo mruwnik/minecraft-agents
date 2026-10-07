@@ -207,8 +207,8 @@
     (let [restarted (events/make {:file file :generation-id "g"})
           recent (:recent @restarted)]
       (is (= 3000 (:seq (last recent))))
-      (is (= events/recent-count (count recent)))
-      (is (= (range (inc (- 3000 events/recent-count)) 3001) (mapv :seq recent)))
+      (is (= (events/setting "recent-count") (count recent)))
+      (is (= (range (inc (- 3000 (events/setting "recent-count"))) 3001) (mapv :seq recent)))
       (is (= (:seq (last (:recent @first-run))) (:seq (last recent))))
       (is (pos? (:recent-byte-count @restarted))))))
 

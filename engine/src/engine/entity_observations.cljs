@@ -14,12 +14,16 @@
   Mineflayer tracks far more (mobs deep in the rock under the body). Those are never listed."
   (:require [clojure.string :as str]
             [engine.perception :as perception]
+            [engine.settings :as settings]
             ["crypto" :as crypto]))
 
-(def ttl-ms 120000)
-(def sample-ms 1000)
-(def max-entities 10000)
-(def max-snapshot-bytes (* 4 1024 1024))
+(def settings
+  {:engine.entities/ttl-ms {:default 120000 :type :int :min 1 :doc "What was sensed stays known this long, ms."}
+   :engine.entities/sample-ms {:default 1000 :type :int :min 1 :doc "The entity cache samples the body's senses this often, ms."}
+   :engine.entities/max-entities {:default 10000 :type :int :min 1 :doc "The most entities the cache holds."}
+   :engine.entities/max-snapshot-bytes {:default (* 4 1024 1024) :type :int :min 1024 :doc "The most bytes one /entities snapshot may take."}})
+
+(defn setting [k] (settings/get settings (keyword "engine.entities" k)))
 (def silent-types
   "Entity types that make no sound a player would hear through a wall."
   #{"item" "experience_orb" "arrow" "spectral_arrow" "painting" "item_frame" "glow_item_frame" "armor_stand"
@@ -78,9 +82,9 @@
 (defn open
   "A cache. :sense (fn [source e]) is the perception rule for what is not a hostile mob; :known (fn [] known-mobs rows)
   is perception's mob memory, the only source of hostile mobs; by default (no perception) only the body itself."
-  [{:keys [world body now cap known] sense-fn :sense :or {now js/Date.now cap max-entities}}]
+  [{:keys [world body now cap known] sense-fn :sense :or {now js/Date.now cap (setting "max-entities")}}]
   {:state (atom {:entities {} :online? false :available? true :dropped 0 :overflow-until 0})
-   :opts {:world world :body body :now now :cap (min max-entities (max 1 cap))
+   :opts {:world world :body body :now now :cap (min (setting "max-entities") (max 1 cap))
           :sense (or sense-fn (partial sense nil)) :known known
           :session (.randomUUID crypto)}
    :connections (js/WeakMap.) :objects (js/WeakMap.) :dead (js/WeakSet.) :next-id (atom 0)})
@@ -121,7 +125,7 @@
     (merge (entity-identity store source e)
            {:type (entity-type e) :id (when (integer? (.-id e)) (.-id e)) :world (get-in store [:opts :world])
             :dimension dim :observed-at (- now (if entry (or (.-ageMs entry) 0) 0))
-            :expires-at (+ (- now (if entry (or (.-ageMs entry) 0) 0)) ttl-ms)
+            :expires-at (+ (- now (if entry (or (.-ageMs entry) 0) 0)) (setting "ttl-ms"))
             :sense how}
            ;; Heard only: a player hears roughly where, not the exact place.
            (if (= :heard how)
@@ -161,7 +165,7 @@
     (swap! (:state store)
            (fn [state]
              (cond-> (assoc state :entities kept :online? online? :available? true)
-               (pos? dropped) (assoc :dropped dropped :overflow-until (+ now ttl-ms)))))
+               (pos? dropped) (assoc :dropped dropped :overflow-until (+ now (setting "ttl-ms"))))))
     nil))
 
 (defn dead!
@@ -185,7 +189,7 @@
   (loop [[entity & more] entities bytes 1024 kept []]
     (if entity
       (let [n (.byteLength js/Buffer (pr-str entity) "utf8")]
-        (if (> (+ bytes n 1) max-snapshot-bytes)
+        (if (> (+ bytes n 1) (setting "max-snapshot-bytes"))
           {:entities kept :dropped (inc (count more))}
           (recur more (+ bytes n 1) (conj kept entity))))
       {:entities kept :dropped 0})))
@@ -201,9 +205,9 @@
          bounded (bounded-entities values)
          dropped (+ (:dropped bounded) (if (> (:overflow-until state) now) (:dropped state) 0))]
      {:ok true :world (get-in store [:opts :world]) :body (get-in store [:opts :body])
-      :now now :ttl-ms ttl-ms :online? (:online? state)
+      :now now :ttl-ms (setting "ttl-ms") :online? (:online? state)
       :entities (:entities bounded) :count (count (:entities bounded)) :cached-count (count values)
-      :cap (get-in store [:opts :cap]) :snapshot-cap-bytes max-snapshot-bytes
+      :cap (get-in store [:opts :cap]) :snapshot-cap-bytes (setting "max-snapshot-bytes")
       :truncated? (pos? dropped) :dropped dropped})))
 
 (defn request [store method]
@@ -231,6 +235,6 @@
                         (.onEntityDeath primitives #(dead! store %)) (fn []))
                       (catch :default _ (fn [])))]
     (sample!)
-    (let [timer (js/setInterval sample! sample-ms)]
+    (let [timer (js/setInterval sample! (setting "sample-ms"))]
       (.unref timer)
       (assoc store :stop (fn [] (js/clearInterval timer) (unlisten))))))

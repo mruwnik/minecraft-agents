@@ -54,7 +54,7 @@
 (def craft-reach 4.5)
 (def entity-height 1.8)
 (def item-middle 0.125) ; a drop rests on its cell floor, 0.25 high (the real entity aims at height/2 above its feet)
-(def hit-range senses/hit-range)
+(def hit-range (get-in senses/settings [:engine.senses/hit-range :default]))
 (def fake-body-id -1)
 (def offline-default-ms (* 5 60 1000))
 (def offline-max-ms (* 10 60 1000))

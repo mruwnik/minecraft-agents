@@ -3,13 +3,17 @@
   The primitives give timeOfDay, rainState and thunderState, entities with their height and lying flag, and the raw world
   gives cells (stateAt, sightTable, shapesAt, eye); wrap derives isDay, raining, thundering, visible, hittable and
   sleeping from them, lists only what a player would see, and passes the sleep preconditions down."
-  (:require [engine.sight :as sight]))
+  (:require [engine.settings :as settings]
+            [engine.sight :as sight]))
 
 (def rain-level 0.2)   ;; vanilla client: raining above this rain level, thundering above thunder-level while raining
 (def thunder-level 0.9)
-(def hit-range 6)      ;; melee reach checked by entities: hittable is reported within it
-(def monster-range 8)  ;; sleep refuses with a hostile within this many blocks (level) and 5 vertically
-(def monster-height 5)
+(def settings
+  {:engine.senses/hit-range {:default 6 :type :number :min 0 :doc "Melee reach checked by entities: hittable is reported within it, blocks."}
+   :engine.senses/monster-range {:default 8 :type :number :min 0 :doc "Sleep refuses with a hostile within this many blocks, level."}
+   :engine.senses/monster-height {:default 5 :type :number :min 0 :doc "... and within this many blocks vertically."}})
+
+(defn setting [k] (settings/get settings (keyword "engine.senses" k)))
 (def default-height 1.8)
 (def max-listed 1000000)
 
@@ -74,7 +78,7 @@
        (take max)
        (map (fn [[^js e k see?]]
               (when (#{"hostile" "item" "player"} k) (aset e "visible" see?))
-              (when (and (not= k "item") (<= (.-distance e) hit-range)) (aset e "hittable" (can-hit? raw eye e)))
+              (when (and (not= k "item") (<= (.-distance e) (setting "hit-range"))) (aset e "hittable" (can-hit? raw eye e)))
               (when (= k "player") (aset e "sleeping" (boolean (and (.-lyingDown e) see?))))
               (js-delete e "lyingDown")
               (js-delete e "height")
@@ -85,9 +89,9 @@
   [^js p ^js s]
   (let [^js me (.-pos s)]
     (boolean (some (fn [^js e] (let [^js pos (.-pos e)]
-                                 (and (<= (js/Math.hypot (- (.-x pos) (.-x me)) (- (.-z pos) (.-z me))) monster-range)
-                                      (<= (js/Math.abs (- (.-y pos) (.-y me))) monster-height))))
-                   (array-seq (.entities p #js {:kind "hostile" :radius (+ monster-range monster-height) :max max-listed}))))))
+                                 (and (<= (js/Math.hypot (- (.-x pos) (.-x me)) (- (.-z pos) (.-z me))) (setting "monster-range"))
+                                      (<= (js/Math.abs (- (.-y pos) (.-y me))) (setting "monster-height")))))
+                   (array-seq (.entities p #js {:kind "hostile" :radius (+ (setting "monster-range") (setting "monster-height")) :max max-listed}))))))
 
 ;; ---- useOn line
 

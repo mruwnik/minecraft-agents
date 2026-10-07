@@ -5,6 +5,10 @@
             [engine.entity-observations :as entity-observations]
             [engine.fsutil :as fsu]
             [engine.event-api :as event-api]
+            [engine.backoff :as backoff]
+            [engine.events :as events]
+            [engine.hurt :as hurt]
+            [engine.lease :as lease]
             [engine.notes :as notes]
             [engine.path.offsets :as offsets]
             [engine.perception :as perception]
@@ -22,9 +26,13 @@
             ["module" :refer [createRequire]]
             [engine.hooks :as hooks]))
 
+(def settings
+  {:engine.main/shutdown-limit-ms {:default 5000 :type :int :min 1
+                                   :doc "The signal handler exits after this long even when the body has not stopped, ms."}})
+
 (defn parse-args [args]
   (loop [[a b & more :as all] args
-         opts {:agent nil :world nil :scenario nil :fresh? false :upgrade? false :state-dir nil :drive-idle-s 15 :events-max-bytes nil}]
+         opts {:agent nil :world nil :scenario nil :fresh? false :upgrade? false :state-dir nil :drive-idle-s 15}]
     (cond
       (empty? all) opts
       (= a "--agent") (recur more (assoc opts :agent b))
@@ -33,18 +41,9 @@
       (= a "--state-dir") (recur more (assoc opts :state-dir b))
       (= a "--worlds") (recur more (assoc opts :worlds b))
       (= a "--drive-idle-s") (recur more (assoc opts :drive-idle-s (js/parseFloat b)))
-      (= a "--events-max-bytes") (recur more (assoc opts :events-max-bytes (or b "")))
       (= a "--fresh") (recur (rest all) (assoc opts :fresh? true))
       (= a "--upgrade") (recur (rest all) (assoc opts :upgrade? true))
       :else (recur (rest all) opts))))
-
-(def default-events-max-bytes 67108864)
-
-(defn event-cap [override configured]
-  (let [raw (cond (some? override) override (some? configured) configured :else default-events-max-bytes)
-        valid-text? (or (number? raw) (and (string? raw) (re-matches #"[0-9]+" raw)))
-        n (if (string? raw) (js/Number raw) raw)]
-    (when (and valid-text? (js/Number.isSafeInteger n) (<= 1024 n)) n)))
 
 (defn load-agent
   "Config for agent in world under state-dir: {:username :host :port :world :engine-dir}, or {:error kw :text}.
@@ -60,7 +59,6 @@
              :host (:host world)
              :port (:port world)
              :world world-name
-             :events-max-bytes (get-in config [:engine :events :maxBytes])
              :view-distance (:viewDistance config)
              :engine-dir (path/join dir "engine")})))
 
@@ -85,13 +83,12 @@
   "Everything run needs before connecting, or {:error text}. On a restart (a saved engine.edn, no --fresh) a scenario
   entry naming an unknown trigger is left out and returned as :stale [{:id :message}]; any other scenario problem,
   and any problem on a first start, is an error."
-  [{:keys [agent world scenario state-dir worlds engine-root events-max-bytes fresh?]}]
+  [{:keys [agent world scenario state-dir worlds engine-root fresh?]}]
   (let [root (or engine-root (js/process.cwd))
         state-dir (bodies/storage-root {:state state-dir :worlds worlds} (path/resolve root ".."))
         prims-file (path/join root "js" "primitives.mjs")
         names-ok? (and (string? agent) (string? world) (re-matches bodies/name-re agent) (re-matches bodies/name-re world))
         cfg (when names-ok? (load-agent state-dir world agent))
-        max-bytes (when-not (:error cfg) (event-cap events-max-bytes (:events-max-bytes cfg)))
         read (when (and scenario (fs/existsSync scenario)) (scenario/read-file scenario))
         restoring? (and (not fresh?) (not (:error cfg)) cfg (fs/existsSync (path/join (:engine-dir cfg) "engine.edn")))
         full-plan (scenario/with-defaults read)
@@ -110,10 +107,9 @@
       (not names-ok?) {:error "--agent and --world take names of letters, digits, _ and -"}
       (:error cfg) {:error (:text cfg)}
       (not (fs/existsSync prims-file)) {:error (missing-primitives-message prims-file)}
-      (nil? max-bytes) {:error "engine: --events-max-bytes and engine.events.maxBytes must be safe integers >= 1024"}
       (and scenario (nil? read)) {:error (str "no scenario file " scenario)}
       (seq issues) {:error (str "scenario problems: " (pr-str issues) "; fix or remove them in " scenario)}
-      :else {:root root :cfg cfg :plan plan :stale stale :state-dir state-dir :events-max-bytes max-bytes})))
+      :else {:root root :cfg cfg :plan plan :stale stale :state-dir state-dir})))
 
 (defn ^:async start-control!
   "Serve the manual-control socket under the engine dir; resolves to the control, or nil (with an
@@ -158,12 +154,14 @@
 (defn ^:async start
   "Open the body's files, log in and run, once the one-process guard is held (release frees it).
   Resolves to {:engine eng :stop f}."
-  [{:keys [fresh? upgrade?] :as opts} {:keys [root cfg plan stale state-dir events-max-bytes]} release]
+  [{:keys [fresh? upgrade?] :as opts} {:keys [root cfg plan stale state-dir]} release]
   (let [engine-file (path/join (:engine-dir cfg) "engine.edn")
         _ (offsets/set-root! root)
         ;; the settings files; their problems wait here until the engine exists to emit them
         settings-events (atom [])
-        _ (settings/load! {:specs (merge registry/settings settings/settings)
+        _ (settings/load! {:specs (merge registry/settings settings/settings perception/settings lease/settings events/settings
+                                    event-api/settings backoff/settings hurt/settings senses/settings
+                                    entity-observations/settings settings)
                            :world-file (path/join (bodies/worlds-dir state-dir) (:world cfg) "settings.edn")
                            :body-file (path/join (bodies/body-dir state-dir (:world cfg) (:agent opts)) "settings.edn")
                            :body (:agent opts)
@@ -225,12 +223,10 @@
           (await (.close p))
           (throw e))))))
 
-(def shutdown-limit-ms 5000)
-
 (defn shutdown-handler
   "The signal handler: stops the body, then exits once stop has finished (memory saved) or after limit-ms, whichever
   comes first, and also when stop fails. A second signal returns the first one's promise: stop runs once."
-  ([stop exit!] (shutdown-handler stop exit! shutdown-limit-ms))
+  ([stop exit!] (shutdown-handler stop exit! (settings/get settings :engine.main/shutdown-limit-ms)))
   ([stop exit! limit-ms]
    (let [running (atom nil)]
      (fn []

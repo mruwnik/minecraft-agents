@@ -2,17 +2,23 @@
   "Canonical EDN event stream, bounded rolling file appender, and local cursor reader."
   (:require [clojure.string :as str]
             [cljs.reader :as reader]
+            [engine.settings :as settings]
             ["crypto" :as crypto]
             ["fs" :as fs]
             ["path" :as path]))
 
-(def default-max-bytes (* 64 1024 1024))
-(def min-max-bytes 1024)
+(def settings
+  {:engine.events/max-bytes {:default (* 64 1024 1024) :type :int :min 1024
+                             :doc "The event log's size cap over the active and rotated segments, bytes."}
+   :engine.events/recent-count {:default 2048 :type :int :min 1 :doc "Events kept in memory for the live reader."}
+   :engine.events/recent-bytes {:default (* 4 1024 1024) :type :int :min 1 :doc "Bytes of events kept in memory for the live reader."}
+   :engine.events/default-page-size {:default 256 :type :int :min 1 :doc "Events a read returns when it names no limit."}
+   :engine.events/max-page-size {:default 2000 :type :int :min 1 :doc "The most events one read returns."}})
+
+(defn setting [k] (settings/get settings (keyword "engine.events" k)))
+
+(def min-max-bytes (get-in settings [:engine.events/max-bytes :min]))
 (def segment-count 4) ; active + three rotated segments
-(def recent-count 2048)
-(def recent-bytes (* 4 1024 1024))
-(def default-page-size 256)
-(def max-page-size 2000)
 
 (defn random-id [] (.randomUUID crypto))
 
@@ -131,7 +137,7 @@
         segments))
 
 (defn bounded-page-size [n]
-  (if (and (integer? n) (pos? n)) (min n max-page-size) default-page-size))
+  (if (and (integer? n) (pos? n)) (min n (setting "max-page-size")) (setting "default-page-size")))
 
 (defn bytes-of [text]
   (js/Buffer.byteLength text "utf8"))
@@ -266,8 +272,8 @@
         (let [r (assoc @stream :recent (conj (:recent @stream) full)
                                :recent-byte-count (+ (:recent-byte-count @stream) line-bytes))]
           (let [r (loop [s r]
-                    (if (or (> (count (:recent s)) recent-count)
-                            (> (:recent-byte-count s) recent-bytes))
+                    (if (or (> (count (:recent s)) (setting "recent-count"))
+                            (> (:recent-byte-count s) (setting "recent-bytes")))
                       (let [first-event (first (:recent s))
                             first-bytes (bytes-of (str (pr-str first-event) "\n"))]
                         (recur (-> s
@@ -313,7 +319,7 @@
   :now, and :stream-id for tests. File-backed streams use events.edn plus
   atomically replaced events.edn.meta.edn metadata."
   [{:keys [file generation-id max-bytes stdout? sinks pos-fn now stream-id]
-    :or {max-bytes default-max-bytes now js/Date.now pos-fn (constantly nil)
+    :or {max-bytes (setting "max-bytes") now js/Date.now pos-fn (constantly nil)
          sinks []}}]
   (ensure-valid-max-bytes! max-bytes)
   (when file
@@ -336,7 +342,7 @@
                                      {:file file :bytes retained-bytes :max-bytes max-bytes})))
         run-id (random-id)
         {recent :records recent-byte-count :bytes}
-        (if file (tail-records file recent-bytes recent-count) {:records [] :bytes 0})
+        (if file (tail-records file (setting "recent-bytes") (setting "recent-count")) {:records [] :bytes 0})
         sinks (cond-> (vec sinks)
                 stdout? (conj #(.write js/process.stdout (str (pr-str %) "\n"))))]
     (atom {:file file :metadata-file (when file (metadata-file file))
