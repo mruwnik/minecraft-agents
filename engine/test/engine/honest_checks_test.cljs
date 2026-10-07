@@ -92,3 +92,8 @@
     'jobs.forestry.prepare {:plan "nope"} :plan-trouble
     'jobs.storage.kit {} :no-chest
     'jobs.storage.make-room {:free 1} :enough-room))
+
+(deftest wear-and-fight-back-say-why-they-decline
+  (are [job args reason] (= reason (waiting-reason job args))
+    'jobs.items.wear {:item 5} :bad-args
+    'jobs.survival.fight-back {} :no-target))

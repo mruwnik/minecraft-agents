@@ -18,7 +18,8 @@
   "Always runnable; the item, when given, is checked by the round."
   [c]
   (let [item (:item (:args c))]
-    (or (nil? item) (string? item))))
+    (or (nil? item) (string? item)
+        (ctx/wait c {:reason :bad-args :why "the item must be an armour piece name"}))))
 
 (defn ^:async round
   [c]

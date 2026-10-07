@@ -63,8 +63,11 @@
   (->> (in-range c) (filter danger-q/seen-only?) (filter #(in-leash? c %)) (remove #(given-up? c %))))
 
 (defn check [c]
-  (and (>= (.-health (.self (:primitives c))) (:min-health (:args c)))
-       (boolean (seq (targets c)))))
+  (let [health (.-health (.self (:primitives c)))]
+    (cond
+      (< health (:min-health (:args c))) (ctx/wait c {:reason :low-health :health health :min (:min-health (:args c))})
+      (empty? (targets c)) (ctx/wait c {:reason :no-target})
+      :else true)))
 
 (defn note-blocked!
   "Count a blocked walk towards target; warn once when it is given up on."
