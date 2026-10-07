@@ -264,13 +264,13 @@
    "breeze" "wither_skeleton" "blaze" "ghast" "hoglin" "zoglin" "piglin_brute"])
 
 (defn clear-hostiles-commands
-  "One kill per hostile type within 32 blocks of the plot's centre; none when the case has :mobs :keep."
+  "One kill per hostile type inside the plot's box (never a radius: it reaches the neighbouring plots' mobs); none when
+  the case has :mobs :keep."
   [grid origin c]
   (if (= :keep (:mobs c))
     []
-    (let [[sx sz] (dims grid)
-          [x y z] (abs-pos origin [(quot sx 2) 0 (quot sz 2)])]
-      (vec (for [t hostile-types] (str "kill @e[type=minecraft:" t ",x=" x ",y=" y ",z=" z ",distance=..32]"))))))
+    (let [box (box-selector grid origin (get-in c [:plot :height] 6))]
+      (vec (for [t hostile-types] (str "kill @e[type=minecraft:" t "," box "]"))))))
 
 (defn setup-commands
   "Forceload the plot, kill every non-player entity in it, clear it to air and lay the floor (a large plot first drops

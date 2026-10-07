@@ -270,13 +270,14 @@
     (is (some #(re-find #":memory" %) (ps {:memory [{:data {}}]})))
     (is (some #(re-find #":memory" %) (ps {:memory [{:kind :bed :data {}}] :keep-memory true})))))
 
-(deftest clear-hostiles-kills-only-hostile-types-near-the-plot
+(deftest clear-hostiles-kills-only-hostile-types-in-the-plot-box
   (let [cmds (f/clear-hostiles-commands grid [100 149 200] {:plot {:height 6}})]
     (is (seq cmds))
-    (is (every? #(re-find #"^kill @e\[type=minecraft:[a-z_]+,x=116,y=149,z=216,distance=\.\.32\]$" %) cmds))
+    (is (every? #(re-find #"^kill @e\[type=minecraft:[a-z_]+,x=100,y=148,z=200,dx=\d+,dy=7,dz=\d+\]$" %) cmds))
     (is (some #(re-find #"type=minecraft:enderman," %) cmds))
     (is (some #(re-find #"type=minecraft:spider," %) cmds))
     (is (some #(re-find #"type=minecraft:zombie," %) cmds))
+    (is (not-any? #(re-find #"distance" %) cmds))
     (is (not-any? #(re-find #"player|type=minecraft:villager|cow|iron_golem|wolf" %) cmds))))
 
 (deftest mobs-keep-is-the-opt-out
