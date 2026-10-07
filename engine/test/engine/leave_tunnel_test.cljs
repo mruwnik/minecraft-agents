@@ -88,7 +88,7 @@
   "An engine over the fake world; a recording parent runs the tunnel as a child, calls between with the body, then runs
   leave-tunnel with its result and leave-args, keeping both results in :tun and :out. :p and :dir restart over an
   earlier engine's world and state."
-  [spec targs largs & {:keys [dir p between]}]
+  [spec targs largs & {:keys [dir p between jobs]}]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         p' (or p (tu/fake (merge {:self {:pos {:x 0 :y 65 :z 0}} :drops drops} (dissoc spec :zones))))
@@ -110,7 +110,7 @@
                                  (when between (between p'))
                                  (ctx/update-mem! c assoc :tunnel (select-keys res [:line :dug :torches]))))
                              :continue)))}
-        eng (core/create {:primitives p' :jobs (assoc registry/jobs 'recording-parent parent)
+        eng (core/create {:primitives p' :jobs (merge registry/jobs {'recording-parent parent} jobs)
                           :triggers triggers/all :dir (or dir (tu/tmp-dir)) :now #(deref clock) :world w
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     (let [id (when-not p
@@ -347,3 +347,24 @@
           (dotimes [_ 5] (swap! clock + 500) (await (core/tick! eng)))
           (is (= [:stopped :bad-args] ((juxt :status :reason) @out)))
           (is (= 1 (count (filter #(= :leave-tunnel.stopped (:kind %)) @seen)))))))))
+
+(deftest a-missing-pickaxe-is-fetched-for-the-escape-with-fetch
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls (atom [])
+              body (atom nil)
+              stub {:check (constantly true)
+                    :round (fn ^:async get-tool [c]
+                             (swap! calls conj (:args c))
+                             (fake/add-item! @body "iron_pickaxe" 1)
+                             (ctx/result! c {:status :done :tool "iron_pickaxe"})
+                             :done)
+                    :args {:block {:default nil} :item {:default nil} :kind {:default nil} :how {:default nil} :depth {:default nil}
+                           :minutes {:default nil} :fail-minutes {:default nil} :chain {:default []}}}
+              s (setup {:blocks eight-down :inventory (inventory)} {:target [6 57 0]} {:fetch true}
+                       :between drop-pickaxe! :jobs {'jobs.items.get-tool stub})
+              _ (reset! body (:p s))
+              {:keys [out]} (await (run-out! s))]
+          (is (= 1 (count @calls)))
+          (is (= :done (:status @out))))))))

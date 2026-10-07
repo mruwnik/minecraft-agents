@@ -177,7 +177,7 @@
                          (let [r (await (ctx/call-child c :kid job args))]
                            (when (= :done r) (reset! out (ctx/child-result c :kid)))
                            r))}
-        eng (core/create {:primitives p :jobs (assoc registry/jobs 'recording-parent parent)
+        eng (core/create {:primitives p :jobs (merge registry/jobs {'recording-parent parent} (:jobs opts))
                           :triggers triggers/all :dir (or dir (tu/tmp-dir)) :now #(deref clock) :world w
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     (prep p)
@@ -582,3 +582,54 @@
           (is (= 7 (carried p "torch")) "the torch stays")
           (is (= 10 (carried p "cobblestone")))
           (is (= ["torch"] (distinct (map #(if (lit-blocks (block-at p (:cell %))) "torch" "gone") (:torches res))))))))))
+
+;; ---------------------------------------------------------------- :fetch
+
+(defn get-tool-stub
+  "A jobs.items.get-tool that records its args in calls and hands over give (a pickaxe name) or, when nil, stops :no-source."
+  [calls p give]
+  {:check (constantly true)
+   :round (fn ^:async get-tool [c]
+            (swap! calls conj (:args c))
+            (if give
+              (do (fake/add-item! p give 1) (ctx/result! c {:status :done :tool give}))
+              (ctx/result! c {:status :stopped :reason :no-source}))
+            :done)
+   :args {:block {:default nil} :item {:default nil} :kind {:default nil} :how {:default nil} :depth {:default nil}
+          :minutes {:default nil} :fail-minutes {:default nil} :chain {:default []}}})
+
+(defn ^:async fetching-tunnel! [give fetch prep]
+  (let [calls (atom [])
+        p (tu/fake {:self {:pos {:x 0 :y 65 :z 0}} :inventory [] :blocks ground})
+        s (setup {} {:target [6 57 0] :fetch fetch} prep :p p
+                 :jobs {'jobs.items.get-tool (get-tool-stub calls p give)})
+        s (assoc s :id (core/submit! (:eng s) '(recording-parent) {}))]
+    (await (tick-out! s))
+    (assoc s :calls @calls)))
+
+(deftest a-missing-pickaxe-is-fetched-then-the-tunnel-is-cut
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out calls]} (await (fetching-tunnel! "iron_pickaxe" true (fn [_])))]
+          (is (= 1 (count calls)))
+          (is (= :reached (:reason @out))))))))
+
+(deftest a-pickaxe-that-cannot-be-fetched-leaves-the-tunnel-waiting-no-tool
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng id out calls]} (await (fetching-tunnel! nil true (fn [_])))
+              w (:waiting (job-api/summary eng id))]
+          (is (= 1 (count calls)) "tried once, not again")
+          (is (= :not-done @out))
+          (is (= :no-tool (:reason w)))
+          (is (some? (:failed (:fetch w)))))))))
+
+(deftest fetch-off-by-default-never-calls-get-tool
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [calls out]} (await (fetching-tunnel! "iron_pickaxe" false (fn [_])))]
+          (is (empty? calls))
+          (is (= :not-done @out)))))))

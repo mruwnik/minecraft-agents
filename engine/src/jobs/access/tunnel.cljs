@@ -4,6 +4,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.declined :as declined]
+            [jobs.lib.fetch :as fetch]
             [jobs.lib.util :as u]
             [jobs.lib.torch :as torch]
             [jobs.access.stair :as stair]
@@ -71,21 +72,26 @@
   [{:cell :block}] :inside bool :keep bool :line {:entry :heading :dir :steps :run :stand :target} :torches
   [{:cell :site :block}] :unlit [{:cell :site :reason}]} plus detail. :torches are those standing now, read
   from the world. :inside is true when the body is off the entry, on the way in. Also a tunnel.done info or
-  tunnel.stopped warn event.")
+  tunnel.stopped warn event.
+
+  :fetch (default false; jobs.lib.fetch): a missing pickaxe (the stair's wait, or a :no-tool stop of the run's own
+  digs) is got with jobs.items.get-tool, then the body walks back to the cell it stood on and goes on. The stair
+  child does not fetch itself.")
 
 (def args
   {:target {:doc "the buried block [x y z]" :default nil}
    :max-length {:doc "longest line, in blocks along the heading from the entry to the target" :default 24}
    :accept {:doc "hazards taken: #{:water :lava :falling-block}" :default #{}}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
-   :keep {:doc "a tunnel that stays: torches left and the tunnel left open; false (a dead end): torches go into the scaffold ledger for jobs.access.leave-tunnel to take back" :default false}})
+   :keep {:doc "a tunnel that stays: torches left and the tunnel left open; false (a dead end): torches go into the scaffold ledger for jobs.access.leave-tunnel to take back" :default false}
+   :fetch {:doc "get a missing pickaxe instead of waiting :no-tool (jobs.lib.fetch): true, a set of kinds or a map of limits" :default false}})
 
 (def heading-order [:north :east :south :west])
 
 (defn check [c]
   (if (and (nil? (known/zones c)) (not (:ignore-zones? (:args c))))
     (access/decline! c :tunnel.declined "tunnel" {:reason :no-zones})
-    (declined/check c)))
+    (fetch/declined-check c 'jobs.access.tunnel)))
 
 (defn ahead
   "The cell n along heading from cell, same height."
@@ -464,7 +470,15 @@
               :continue)
           (finish! c (:reason a) (dissoc a :reason)))))))
 
-(defn ^:async round [c]
+(defn fetch-for-stop!
+  "A :no-tool stop the fetch can cure: remember the wait so the next rounds fetch for it; :continue. Nil when not."
+  [c stop]
+  (let [w {:reason :no-tool :block (:block stop)}]
+    (when (and (= :no-tool (:reason stop)) (fetch/due c 'jobs.access.tunnel w))
+      (ctx/update-mem! c assoc :fetch-wait w)
+      :continue)))
+
+(defn ^:async work-round [c]
   (declined/begin! c)
   (let [m (ctx/mem c)]
     (cond
@@ -474,4 +488,12 @@
               (cond
                 (#{:continue :declined} r) r
                 (= :reached r) (finish! c :reached {})
-                :else (stop! c r))))))
+                :else (or (fetch-for-stop! c r) (stop! c r)))))))
+
+(defn ^:async round
+  "The fetch part first (the stair's booked wait, or the stop's remembered one), then the work."
+  [c]
+  (let [r (await (fetch/step! c 'jobs.access.tunnel (or (fetch/booked-wait c) (:fetch-wait (ctx/mem c))) {:return? true}))]
+    (when (and (:fetch-wait (ctx/mem c)) (nil? (:fetching (ctx/mem c))))
+      (ctx/update-mem! c dissoc :fetch-wait))
+    (or r (await (work-round c)))))

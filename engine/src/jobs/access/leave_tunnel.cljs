@@ -4,6 +4,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.declined :as declined]
+            [jobs.lib.fetch :as fetch]
             [jobs.lib.util :as u]
             [jobs.access.stair :as stair]
             [jobs.access.tunnel :as tunnel]
@@ -43,18 +44,22 @@
   Result {:status :done|:stopped :reason :sealed|:open|:walk-failed|:bad-args :at [x y z] :taken [cells] :left
   [{:cell :site :reason}] :filled [cells] :open [{:cell :reason}]}. :left holds torches not taken, including
   those still standing on a stop. Events: leave-tunnel.done (info, :sealed), leave-tunnel.open (warn, :open),
-  leave-tunnel.stopped (warn, :walk-failed or :bad-args).")
+  leave-tunnel.stopped (warn, :walk-failed or :bad-args).
+
+  :fetch (default false; jobs.lib.fetch): the escape stair's missing pickaxe is got with jobs.items.get-tool, then
+  the body walks back to the cell it stood on and goes on.")
 
 (def args
   {:tunnel {:doc "the result of jobs.access.tunnel (:line :dug :torches)" :default nil}
    :spare {:doc "items filled with only when nothing else is carried (a caller's own haul)" :default []}
    :reach {:doc "mouth cells whose centre is this close to the eye are filled from the entry, in blocks" :default 4.5}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}})
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false}
+   :fetch {:doc "get a missing pickaxe for the escape instead of waiting :no-tool (jobs.lib.fetch): true, a set of kinds or a map of limits" :default false}})
 
 (defn check [c]
   (if (and (nil? (known/zones c)) (not (:ignore-zones? (:args c))))
     (access/decline! c :leave-tunnel.declined "leave-tunnel" {:reason :no-zones})
-    (declined/check c)))
+    (fetch/declined-check c 'jobs.access.leave-tunnel)))
 
 (def faces [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])
 
@@ -270,7 +275,7 @@
       (empty? todo) (finish! c :done (if (empty? (:open m)) :sealed :open) {})
       :else (await (fill! c (first (sort-by (juxt #(% 1) #(- (u/eye-dist body %))) todo)))))))
 
-(defn ^:async round [c]
+(defn ^:async work-round [c]
   (declined/begin! c)
   (let [{:keys [tunnel]} (:args c)
         m (ctx/mem c)
@@ -281,3 +286,9 @@
       (:collect m) (await (collect! c))
       (seq torches) (await (take-torch! c (first torches)))
       :else (await (seal! c)))))
+
+(defn ^:async round
+  "The fetch part first (the escape stair's booked wait), then the work."
+  [c]
+  (let [r (await (fetch/step! c 'jobs.access.leave-tunnel (fetch/booked-wait c) {:return? true}))]
+    (or r (await (work-round c)))))
