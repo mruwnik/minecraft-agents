@@ -277,11 +277,27 @@
           (no-tool? p block) {:reason :no-tool :tool "pickaxe" :block block}
           (not (room-for? p (mine/item-name {:block block}))) {:reason :no-free-slot :block block})))))
 
-(defn check
-  "True, or a wait for what the next dig lacks (see need). Only for a stair that is itself listed: as a child (leave-tunnel,
-  tunnel, dig-in) it runs and stops with the same reason in its result, which its parent reads."
+(defn refusal
+  "Before anything is cut: the stop of the first step when a zone, claim or plan refuses its cut, else nil."
   [c]
-  (if-let [lack (need c)] (fetch/check c 'jobs.access.stair lack) true))
+  (let [{:keys [dir heading]} (:args c)
+        {:keys [origin target]} (ctx/mem c)
+        feet (feet-of c)]
+    (when (and (or (nil? origin) (and (= feet origin) (empty? (:dug (ctx/mem c)))))
+               (rises dir) (headings heading))
+      (let [in (rules-in c feet)
+            cells (-> (step-cells feet dir heading) (assoc :up? (= :up dir)))
+            stop (stop-of in cells (set (:accept (:args c))))]
+        (when (#{:zone :claim :footprint} (:reason stop)) stop)))))
+
+(defn check
+  "True, or a wait for what the next dig lacks (see need), or :refused when a zone, claim or plan refuses the first
+  step. As a child (leave-tunnel, tunnel, dig-in) it runs and stops with the same reason in its result, which its
+  parent reads."
+  [c]
+  (if-let [stop (refusal c)]
+    (access/decline! c :stair.declined "stair" (assoc (access/refusal-fields [stop]) :reason :refused))
+    (if-let [lack (need c)] (fetch/check c 'jobs.access.stair lack) true)))
 
 (defn ^:async dig!
   "Equip the best tool, check the cell again, write the intent and dig it. :continue (dug, go on), or a stop map."

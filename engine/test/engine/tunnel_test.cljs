@@ -278,12 +278,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[spec args reason]
-                [[{:blocks (assoc ground "6,57,0" "iron_ore") :zones [{:name "test-zone" :min [6 57 0] :max [6 57 0]}]}
-                  {:target [6 57 0]} :zone]
-                 [{:blocks (assoc ground "6,57,0" "iron_ore")
-                   :plans {"wall" {:id "wall" :parts [{:id "w" :cells [[6 57 0]] :want "stone"}]}}}
-                  {:target [6 57 0]} :footprint]
-                 [{:blocks ground} {:target [6 57 0] :max-length 6} :too-far]
+                [[{:blocks ground} {:target [6 57 0] :max-length 6} :too-far]
                  [{:blocks (merge ground (into {} (for [x (range -12 13) z (range -3 4)] [(str x ",55," z) "air"])))}
                   {:target [6 57 0]} :cave-below]
                  [{:blocks ground} {:target [6 57]} :bad-args]]]
@@ -297,6 +292,22 @@
 
 (defn ^:async tick-n! [{:keys [eng clock]} n]
   (dotimes [_ n] (swap! clock + 500) (await (core/tick! eng))))
+
+(deftest a-line-refused-on-every-heading-waits-refused-and-ends-no-result
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [spec [{:blocks (assoc ground "6,57,0" "iron_ore") :zones [{:name "test-zone" :min [6 57 0] :max [6 57 0]}]}
+                      {:blocks (assoc ground "6,57,0" "iron_ore")
+                       :plans {"wall" {:id "wall" :parts [{:id "w" :cells [[6 57 0]] :want "stone"}]}}}]]
+          (let [{:keys [out p] :as s} (setup spec {:target [6 57 0]} (fn [_]))]
+            (await (tick-n! s 6))
+            (is (= :not-done @out) "no :stopped result")
+            (is (= 1 (count (:list (core/state (:eng s))))) "stays listed")
+            (is (= 0 (rounds s)) "no round ran")
+            (is (= 1 (count (filter #(and (= :waiting (:kind %)) (= :refused (:reason %))) @(:seen s)))) "told once")
+            (is (empty? (digs p)))
+            (is (= [0 65 0] (feet p)))))))))
 
 (deftest a-tunnel-without-a-pickaxe-waits-without-rounds-and-resumes-when-given-one
   (async done

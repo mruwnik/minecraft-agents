@@ -279,7 +279,7 @@
               {:keys [out] :as s} (await (run-out! (setup {:blocks eight-down :inventory (inventory) :zones [zone]}
                                                           {:target [6 57 0] :ignore-zones? true} {} :between block-stair!)))
               escapes (events-of s :leave-tunnel.escape)]
-          (is (= [:stopped :walk-failed] ((juxt :status :reason) @out)))
+          (is (= :not-done @out) "the refused escape stair declines: the job waits")
           (is (not-any? :ignore-zones? escapes) "no attempt ran with :ignore-zones?"))))))
 
 (deftest an-escape-that-respects-zones-is-info

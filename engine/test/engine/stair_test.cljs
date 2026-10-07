@@ -475,6 +475,17 @@
           (is (= 2 (:steps @out)))
           (is (not-any? #(<= 3 (:x %)) (digs p))))))))
 
+(deftest a-first-step-wholly-in-a-zone-declines-and-digs-nothing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [zone {:name "garden" :min [1 50 -2] :max [6 70 2]}
+              {:keys [out p] :as s} (await (stair! {:blocks ground :zones [zone]} (assoc east :steps 5) (fn [_])))]
+          (is (= :not-done @out) "no result: the parent waits")
+          (is (= :refused (:reason (waiting s))))
+          (is (= ["garden"] (:zones (waiting s))))
+          (is (empty? (digs p))))))))
+
 (deftest no-zone-list-stops-before-any-dig
   (async done
     (tu/run-async done
@@ -674,7 +685,7 @@
       (fn ^:async t []
         (doseq [[owner extra status] [["Fake" {} :done]
                                       ["fake" {} :done]
-                                      ["Miles" {} :stopped]
+                                      ["Miles" {} nil]
                                       ["Miles" {:ignore-zones? true} :done]]]
           (let [{:keys [out]} (await (stair! {:blocks ground :zones [(assoc around-the-cut :owner owner)]}
                                              (merge east extra) (fn [_])))]

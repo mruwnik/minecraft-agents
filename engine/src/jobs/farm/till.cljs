@@ -1,6 +1,7 @@
 (ns jobs.farm.till
   (:require [engine.ctx :as ctx]
             [jobs.lib.access :as access]
+            [jobs.lib.access.rules :as rules]
             [jobs.lib.gate :as gate]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
@@ -16,7 +17,8 @@
   digs).
   With :for-plan (the id of the plan the cells belong to) that plan's own footprint does not refuse a cell. Zones
   and the footprints of other plans are checked when a cell is chosen and again before the hoe or cover dig.
-  The job declines while no zone list has been read, unless :ignore-zones? is true.
+  The job declines while no zone list has been read, unless :ignore-zones? is true, and before its first round when
+  every tillable cell is refused (wait :refused); cells refused later are skipped :not-permitted.
   Result: {:tilled n :skipped {pos reason}}.")
 
 (def args
@@ -74,19 +76,49 @@
   [c action pos]
   (gate/allowed? c :till.declined "till" action pos {:except (:for-plan (:args c))}))
 
+(defn started?
+  "Whether a round has left anything in memory (tilled, skipped or tried a cell)."
+  [c]
+  (boolean (some #(contains? (ctx/mem c) %) [:tilled :skipped :tries])))
+
+(defn survey
+  "Walks cs in order, reading each cell once, and stops at the first cell the job may work. {:todo? any cell not
+  farmland and not skipped, :work? a tillable cell no zone, claim or plan refuses, :verdicts [refusals]}. Without
+  refuse (a function from pos to a refusal or nil) no cell counts as refused."
+  [c cs refuse]
+  (let [skipped (:skipped (ctx/mem c) {})
+        p (:primitives c)]
+    (reduce (fn [acc pos]
+              (let [n (when-not (contains? skipped pos) (u/block-name p pos))
+                    v (when (and (not (contains? skipped pos)) (not= "farmland" n) (or (nil? n) (tillable n))) (when refuse (refuse pos)))]
+                (cond
+                  (contains? skipped pos) acc
+                  (= "farmland" n) acc
+                  v (-> acc (assoc :todo? true) (update :verdicts conj v))
+                  (or (nil? n) (tillable n)) (reduced (assoc acc :todo? true :work? true))
+                  :else (assoc acc :todo? true))))
+            {:verdicts []} cs)))
+
 (defn check
   "True when nothing is pending (the round can finish), false without a hoe, and false while no zone list has been
-  read (unless :ignore-zones?). Bad args pass, so the round throws them. Walks the cells lazily and stops at the first one
+  read (unless :ignore-zones?). Before the first round it also declines when every tillable cell is refused by a
+  zone, claim or plan. Bad args pass, so the round throws them. Walks the cells lazily and stops at the first one
   that needs work, reading each cell at most once."
   [c]
-  (let [skipped (:skipped (ctx/mem c) {})
-        p (:primitives c)
-        cs (try (cells (:args c))
+  (let [cs (try (cells (:args c))
                 (catch :default _ nil))
-        todo? (some #(not (or (contains? skipped %) (= "farmland" (u/block-name p %)))) cs)]
+        in (access/zone-input c {:except (:for-plan (:args c))})
+        refuse (when-not (or (started? c) (:ignore-zones? in))
+                 (fn [pos] (let [v (rules/social-verdict :dig (assoc in :cell (access/cell pos)))]
+                             (when (gate/refused? v) v))))]
     (and (or (:ignore-zones? (:args c)) (some? (known/zones c))
              (access/decline! c :till.declined "till" {:reason :no-zones}))
-         (or (nil? todo?) (some? (hoe-of p)) (ctx/wait c :no-hoe)))))
+         (let [{:keys [todo? work? verdicts]} (survey c cs refuse)]
+           (cond
+             (and (seq verdicts) (not work?))
+             (access/decline! c :till.declined "till" (assoc (access/refusal-fields verdicts) :reason :refused))
+
+             :else (or (not todo?) (some? (hoe-of (:primitives c))) (ctx/wait c :no-hoe)))))))
 
 (defn skip!
   "Record the cells as skipped with reason and emit one :till.skipped each."

@@ -34,7 +34,8 @@
   target's own column counts as a last run step. The shortest valid line wins. Among equals one that leaves the
   floor under the body's start uncut wins, then the entry nearest the body.
 
-  No valid line stops before any walk or dig with the reason all judged lines share (:zone :footprint :hazard
+  Every line refused by a zone, claim or plan declines the check (wait :refused, one warn tunnel.declined). Else no
+  valid line stops before any walk or dig with the reason all judged lines share (:hazard
   :cave-below :no-floor :fluid-in-cut :undercuts-way :not-loaded :no-zones). :too-far: no line fits within :max-length.
   :no-approach: the headings differ, with :headings giving each one's reason.
 
@@ -88,10 +89,6 @@
 
 (def heading-order [:north :east :south :west])
 
-(defn check [c]
-  (if (and (nil? (known/zones c)) (not (:ignore-zones? (:args c))))
-    (access/decline! c :tunnel.declined "tunnel" {:reason :no-zones})
-    (fetch/declined-check c 'jobs.access.tunnel)))
 
 (defn ahead
   "The cell n along heading from cell, same height."
@@ -469,6 +466,23 @@
     (do (ctx/update-mem! c assoc :stop stop :way-out (way-out c)) :continue)))
 
 (defn bad-target? [t] (not (and (vector? t) (= 3 (count t)) (every? int? t))))
+
+(defn refusal
+  "While no line is chosen: the approach's stop when every heading is refused by a zone, claim or plan, else nil."
+  [c]
+  (let [{:keys [target max-length accept]} (:args c)
+        a (when-not (or (:plan (ctx/mem c)) (bad-target? target))
+            (approach (dissoc (stair/rules-in c (feet-of c)) :feet) target (feet-of c) max-length (set accept)))]
+    (when (contains? #{:zone :footprint :claim} (:reason a)) a)))
+
+(defn check
+  "Declines without a zone list and while every line is refused (wait :refused); then the fetch check."
+  [c]
+  (if (and (nil? (known/zones c)) (not (:ignore-zones? (:args c))))
+    (access/decline! c :tunnel.declined "tunnel" {:reason :no-zones})
+    (if-let [a (refusal c)]
+      (access/decline! c :tunnel.declined "tunnel" (assoc (access/refusal-fields [a]) :reason :refused))
+      (fetch/declined-check c 'jobs.access.tunnel))))
 
 (defn choose!
   "Judge the lines and keep the best, or finish with why there is none."

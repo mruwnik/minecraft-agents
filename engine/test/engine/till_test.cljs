@@ -268,6 +268,20 @@
           (is (empty? (calls p "useOn")))
           (is (= [:no-zones] (mapv :reason (kinds seen :till.declined)))))))))
 
+(deftest a-box-wholly-in-anothers-zone-declines-once-and-stays-listed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:inventory hoe :blocks four}
+                                          (ew/of-data {} {} [{:name "farm" :min [1 60 1] :max [2 70 2] :owner "Miles"}]))]
+          (core/submit! eng (list job box) {})
+          (await (run-until-empty eng 5))
+          (is (= 1 (count (:list (core/state eng)))) "waits, does not end")
+          (is (empty? (calls p "useOn")))
+          (is (empty? (kinds seen :till.done)))
+          (is (= [{:reason :refused :zones ["farm"]}]
+                 (mapv #(select-keys % [:reason :zones]) (kinds seen :till.declined)))))))))
+
 (deftest a-cover-dug-in-anothers-zone-with-the-opt-out-is-recorded-for-tidying
   (async done
     (tu/run-async done
