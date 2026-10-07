@@ -19,7 +19,8 @@ const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const engine = path.join(repo, 'engine')
 
 // The failing shard's output for stdout: its tail only (the whole text is in the kept log).
-export const failureDump = (out, max = 20000) => out.length <= max ? out : `...(cut, ${out.length - max} chars before)\n${out.slice(-max)}`
+// @@test lines are left out: the live forwarder already passed them on, and a copy in the dump would be counted again as results.
+export const failureDump = (all, max = 20000, out = all.split('\n').filter((l) => !l.includes('@@test ')).join('\n')) => out.length <= max ? out : `...(cut, ${out.length - max} chars before)\n${out.slice(-max)}`
 
 const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(path.join(dir, e.name)) : [path.join(dir, e.name)])
 

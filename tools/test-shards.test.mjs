@@ -146,6 +146,11 @@ test('failureDump: long output is cut to its tail, short output kept whole', () 
   assert.ok(d.length < 200 && d.endsWith('TAIL'))
 })
 
+test('failureDump: drops @@test event lines (already forwarded live; a copy would count every result twice)', () => {
+  const out = 'Testing a\n@@test {"event":"result","name":"a/b","outcome":"passed"}\nFAIL in (c)\n@@test {"event":"progress","done":1,"total":2,"unit":"namespaces"}\n'
+  assert.equal(failureDump(out), 'Testing a\nFAIL in (c)\n')
+})
+
 test('readPrior: a missing, empty or half-written timings file is no prior timings', () => {
   const d = fs.mkdtempSync(path.join(process.env.TMPDIR || '/tmp', 'shards-prior-'))
   try {
