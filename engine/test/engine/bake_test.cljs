@@ -292,8 +292,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:containers {"10,64,0" [{:name "wheat" :count 30}]} :blocks beside})
-              id (core/submit! eng (list job {:chest chest :keep 4}) {})]
-          (await (core/tick! eng))
+              result (await (child-outcome eng job {:chest chest :keep 4} 1))]
           (is (empty? (:list (core/state eng))))
           (is (= {"bread" 4} (inv p)))
-          (is (some? id)))))))
+          (is (= {:baked 10 :deposited 6} result)))))))

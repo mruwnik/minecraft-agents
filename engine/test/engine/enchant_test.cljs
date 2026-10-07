@@ -287,3 +287,14 @@
                                (await (impl token args))))
               _ (await (run-until-empty eng 10))]
           (is (= {:slot 3 :level-cost 5 :xp 5 :lapis 9} (:attempt @held))))))))
+
+(deftest an-enchant-is-one-call
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (start (assoc table-world :blocks {"20,64,0" "enchanting_table"}))
+              result (await (child-outcome eng ['jobs.items.enchant {:item "diamond_sword" :radius 40}] 1))]
+          (is (empty? (:list (core/state eng))))
+          (is (seq (tu/walk-calls p)))
+          (is (true? (:enchanted result)))
+          (is (= ["offers" "enchant"] (ops p))))))))

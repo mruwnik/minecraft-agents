@@ -268,10 +268,7 @@
   "fetch!, then mem :started (the job's :timeout-s start) moves on by the time the fetch took: :timeout-s bounds the
   work the job does, not the fetch (which has its own limits)."
   [c job problem]
-  (let [t0 (ctx/now c)
-        r (await (fetch! c job problem))]
-    (ctx/update-mem! c update :started #(when % (+ % (- (ctx/now c) t0))))
-    r))
+  (u/untimed! c #(fetch! c job problem)))
 
 ;; ------------------------------------------------------------------ chests: seen ones and their stock
 

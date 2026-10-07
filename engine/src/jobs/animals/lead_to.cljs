@@ -138,14 +138,6 @@
       :else (do (ctx/update-mem! c assoc :lead-why (some-> (ctx/child-result c :obtain) :reason name))
                 (finish! c :no-lead)))))
 
-(defn ^:async get-lead-untimed!
-  "get-lead!, then mem :started moves on by the time the round took: :timeout-s bounds the leading, not the fetch."
-  [c]
-  (let [t0 (ctx/now c)
-        r (await (get-lead! c))]
-    (ctx/update-mem! c update :started #(when % (+ % (- (ctx/now c) t0))))
-    r))
-
 (defn ^:async leash! [c]
   (let [{:keys [mob radius]} (:args c)
         r (await (ctx/call-child c :leash 'jobs.animals.leash
@@ -455,7 +447,7 @@
         (and (nil? phase) fence (not (fence-block? c))) (finish! c :no-fence)
         (>= (- now started) (* 1000 timeout-s)) (finish! c :timeout)
         (nil? phase) (do (set-phase! c (if (lead-carried? c) :leash :get-lead)) :again)
-        (= :get-lead phase) (await (get-lead-untimed! c))
+        (= :get-lead phase) (await (u/untimed! c #(get-lead! c)))
         (= :leash phase) (await (leash! c))
         (and (#{:gather :arrive} phase) (nil? a)) (if (= :lost (escort-problem c safe-gap))
                                                     (do (ctx/update-mem! c assoc :still-led false) (finish! c :lost))

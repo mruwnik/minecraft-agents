@@ -5,6 +5,15 @@
 
 (def max-failures 3)
 
+(defn ^:async untimed!
+  "Await (thunk), then move mem :started (the job's :timeout-s start) on by the time it took: :timeout-s bounds the
+  work the job does, not a fetch inside it. Returns the thunk's result."
+  [c thunk]
+  (let [t0 (ctx/now c)
+        r (await (thunk))]
+    (ctx/update-mem! c update :started #(when % (+ % (- (ctx/now c) t0))))
+    r))
+
 (defn block-at
   "The block at cell pos (a cljs or JS {x y z}) as the JS object, or nil when the chunk is not loaded."
   [p pos]
