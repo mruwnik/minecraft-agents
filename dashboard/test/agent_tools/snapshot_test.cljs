@@ -132,8 +132,13 @@
               {:type "cow" :id 2 :sense :seen :pos {:x 3 :y 64 :z 4}}
               {:type "player" :id 3 :sense :seen :username "Ann" :pos {:x 5 :y 64 :z 6}}
               {:type "wolf" :id 4 :sense :seen :self? true :pos {:x 0 :y 64 :z 0}}]
-        {:keys [entities]} (snap/perceived rows)]
+        {:keys [entities]} (snap/perceived rows "26.1")]
     (is (= [["zombie" "hostile"] ["cow" nil] ["player" "player"]] (map (juxt :name :type) entities)))))
+
+(deftest perceived-hostility-follows-the-bodys-version
+  (let [rows [{:type "warden" :id 1 :sense :seen :pos {:x 1 :y 64 :z 2}}]]
+    (is (= ["hostile"] (map :type (:entities (snap/perceived rows "26.1")))))
+    (is (= [nil] (map :type (:entities (snap/perceived rows "1.16.5")))))))
 
 (defn capture-stdout [f]
   (let [out (atom "") write (.-write (.-stdout js/process))]
