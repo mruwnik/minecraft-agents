@@ -74,7 +74,7 @@
   (let [skipped (:skipped (ctx/mem c) {})]
     (->> (cells (:args c))
          (remove #(contains? skipped %))
-         (map (fn [pos] [pos (u/block-name (:primitives c) pos)]))
+         (map (fn [pos] [pos (u/seen-name (:primitives c) pos)]))
          (remove (fn [[_ n]] (= "farmland" n)))
          vec)))
 
@@ -96,7 +96,7 @@
   (let [skipped (:skipped (ctx/mem c) {})
         p (:primitives c)]
     (reduce (fn [acc pos]
-              (let [n (when-not (contains? skipped pos) (u/block-name p pos))
+              (let [n (when-not (contains? skipped pos) (u/seen-name p pos))
                     v (when (and (not (contains? skipped pos)) (not= "farmland" n) (or (nil? n) (tillable n))) (when refuse (refuse pos)))]
                 (cond
                   (contains? skipped pos) acc
@@ -209,7 +209,7 @@
             :partial :continue
             :blocked (do (bump! c target :unreachable) :again)
             (let [above-pos (update target :y inc)
-                  above (u/block-name p above-pos)]
+                  above (u/seen-name p above-pos)]
               (cond
                 (not (permitted? c :dig target))
                 (do (skip! c [target] :not-permitted) :again)

@@ -19,7 +19,7 @@
   ([c plan action pos] (permit c plan action pos {}))
   ([c plan action pos opts]
    (let [p (:primitives c)
-         in (merge {:block-at (fn [[x y z]] (u/block-name p {:x x :y y :z z})) :cell (cell-of pos) :feet (feet-of c)
+         in (merge {:block-at (fn [[x y z]] (u/seen-name p {:x x :y y :z z})) :cell (cell-of pos) :feet (feet-of c)
                     :ledger #{}}
                    (access/zone-input c (assoc opts :except plan)))]
      (case action

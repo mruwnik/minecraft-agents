@@ -54,8 +54,8 @@
         y (:y min)]
     (->> (for [x (range (:x min) (inc (:x max))) z (range (:z min) (inc (:z max)))] {:x x :y y :z z})
          (remove skipped)
-         (filter #(and (= "farmland" (u/block-name p %))
-                       (= "air" (u/block-name p (update % :y inc))))))))
+         (filter #(and (= "farmland" (u/seen-name p %))
+                       (= "air" (u/seen-name p (update % :y inc))))))))
 
 (defn sowable
   "{name count} of the carried items that may be sown: food crops (carrots, potatoes) only above the food reserve,

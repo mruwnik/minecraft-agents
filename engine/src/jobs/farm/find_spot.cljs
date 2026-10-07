@@ -130,7 +130,7 @@
   this call."
   [p {:keys [w h range depth limit] :as a} from {:keys [next-ring found]} budget]
   (let [reads (volatile! 0)
-        name-fn (fn [pos] (vswap! reads inc) (u/block-name p pos))
+        name-fn (fn [pos] (vswap! reads inc) (u/seen-name p pos))
         waters (->> (look/seen-blocks p {:names ["water"] :radius (+ range w h 4) :max 4096 :live? true})
                     (into #{} (map (fn [{{:keys [x y z]} :pos}] [x y z]))))
         memo (fn [f] (let [cache (volatile! {})]

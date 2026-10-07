@@ -135,7 +135,7 @@
   [p {:keys [min max]}]
   (vec (for [x (range (:x min) (inc (:x max))) z (range (:z min) (inc (:z max)))
              :let [pos {:x x :y (:y min) :z z}]]
-         {:pos pos :name (u/block-name p pos) :above (u/block-name p (update pos :y inc))})))
+         {:pos pos :name (u/seen-name p pos) :above (u/seen-name p (update pos :y inc))})))
 
 (defn unripe-in-box
   "The unripe crop cells of the box, read around its centre."
@@ -192,7 +192,7 @@
         {:keys [min max] :as box} (:box (:args c))
         above (inc (:y min))]
     {:crops (count (for [x (range (:x min) (inc (:x max))) z (range (:z min) (inc (:z max)))
-                         :when (crop-names (u/block-name p {:x x :y above :z z}))]
+                         :when (crop-names (u/seen-name p {:x x :y above :z z}))]
                      1))
      :bare (count (plant/bare-cells p box []))
      :untilled (count (filter stock/untilled? (ground-layer p box)))}))

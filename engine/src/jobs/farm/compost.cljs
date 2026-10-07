@@ -113,7 +113,7 @@
         {:keys [times items at] reserve :keep} (:args c)
         mem (ctx/mem c)
         pos (or (:composter mem) (when at (when (composter-allowed? c at) at)) (when-not at (nearest-composter c)))
-        block (when pos (u/block-at p pos))]
+        block (when pos (u/seen-block p pos))]
     (if-not (and pos block (= "composter" (.-name block)))
       (do (ctx/emit! c :compost.no-composter :warn {:text "no composter to feed"})
           (finish! c {:reason :no-composter}))

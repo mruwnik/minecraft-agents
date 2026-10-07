@@ -57,13 +57,13 @@
 (defn ground-cell
   "{:pos :name :above} of a ground cell."
   [p pos]
-  {:pos pos :name (u/block-name p pos) :above (u/block-name p (update pos :y inc))})
+  {:pos pos :name (u/seen-name p pos) :above (u/seen-name p (update pos :y inc))})
 
 (defn unripe-planned
   "The planned cells holding their crop, not yet ripe."
   [p cells]
   (filterv (fn [[pos crop]]
-             (let [b (u/block-at p pos)]
+             (let [b (u/seen-block p pos)]
                (and b (= crop (.-name b)) (some-> (.-age b) (< (crops/ripe-age crop))))))
            cells))
 
@@ -71,7 +71,7 @@
   "[{:pos :found :want}] of the crop cells that hold a crop of another kind."
   [p crops]
   (vec (keep (fn [[{:keys [x y z]} crop]]
-               (let [found (u/block-name p {:x x :y y :z z})]
+               (let [found (u/seen-name p {:x x :y y :z z})]
                  (when (and found (tidy/crop-blocks found) (not (contains? (shape/crop-names crop) found)))
                    {:pos [x y z] :found found :want (shape/want-text {:crop crop})})))
              crops)))
@@ -151,7 +151,7 @@
         {:keys [answer crops]} (planned c)
         crops (or crops {})
         have (set (map :name (u/inventory p)))]
-    {:crops (count (filter (fn [[pos crop]] (contains? (shape/crop-names crop) (u/block-name p pos))) crops))
+    {:crops (count (filter (fn [[pos crop]] (contains? (shape/crop-names crop) (u/seen-name p pos))) crops))
      :bare (count (harvest/planned-bare p crops))
      :untilled (count (filter #(stock/untilled? (ground-cell p %)) (keys (ground-cells answer crops))))
      :wrong (wrong-crops p crops)

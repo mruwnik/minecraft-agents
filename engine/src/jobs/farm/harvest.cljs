@@ -79,7 +79,7 @@
 (defn ripe-at?
   "Whether p shows crop ripe at pos (nil, an unloaded cell, is not)."
   [p pos crop]
-  (let [b (u/block-at p pos)]
+  (let [b (u/seen-block p pos)]
     (boolean (and b (= crop (.-name b)) (some-> (.-age b) (>= (ripe-age crop)))))))
 
 (defn planned-ripe
@@ -98,7 +98,7 @@
   "Debts {:pos :seed} of the planned cells standing bare: air over farmland."
   [p cells]
   (keep (fn [[pos crop]]
-          (when (and (= "air" (u/block-name p pos)) (= "farmland" (u/block-name p (update pos :y dec))))
+          (when (and (= "air" (u/seen-name p pos)) (= "farmland" (u/seen-name p (update pos :y dec))))
             {:pos pos :seed (seed-of crop)}))
         cells))
 
@@ -211,11 +211,11 @@
   [p debts]
   (reduce
    (fn [acc {:keys [pos] :as debt}]
-     (let [here (u/block-name p pos)]
+     (let [here (u/seen-name p pos)]
        (cond
          (nil? here) (update acc :owed conj debt)
          (not= "air" here) (update acc :gone conj pos)
-         (not= "farmland" (u/block-name p (below pos))) (update acc :bare conj pos)
+         (not= "farmland" (u/seen-name p (below pos))) (update acc :bare conj pos)
          :else (update acc :owed conj debt))))
    {:owed [] :gone [] :bare []}
    debts))
@@ -384,7 +384,7 @@
   "Write the debt of the crop at pos, dig it (a blocks.dig child; the zone verdict is the job's own) and settle by the outcome."
   [c pos]
   (when (seq (permitted c (cut-action c) [pos]))
-    (let [seed (get seed-of (u/block-name (:primitives c) pos))]
+    (let [seed (get seed-of (u/seen-name (:primitives c) pos))]
       (when (and (:replant (:args c)) seed)
         (ctx/update-mem! c update :replant (fnil conj []) {:pos pos :seed seed :cut true}))
       (let [outcome (await (blocks/dig-cell! c pos {:accept #{:fluid-adjacent :falling-block :under-feet}
@@ -472,7 +472,7 @@
 (defn lost-cells
   "The planted cells whose block is no longer a crop (nil, an unloaded cell, is not counted)."
   [p planted]
-  (filterv #(let [n (u/block-name p %)] (and n (not (ripe-age n)))) planted))
+  (filterv #(let [n (u/seen-name p %)] (and n (not (ripe-age n)))) planted))
 
 (defn finish!
   "Step 4: the debts still owed and the planted cells that are no longer crops are bare; warn, report and be done."

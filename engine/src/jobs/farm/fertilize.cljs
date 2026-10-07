@@ -47,7 +47,7 @@
   (->> (look/seen-blocks p {:names ["grass_block"] :radius reach :max 4096 :live? true})
        (map :pos)
        (filter #(<= (u/dist mid %) radius))
-       (filter #(= "air" (u/block-name p (update % :y inc))))))
+       (filter #(= "air" (u/seen-name p (update % :y inc))))))
 
 (defn targets
   "The positions to fertilize (unripe crops, or open grass with :grass), nearest first, minus the refused ones."
@@ -60,9 +60,9 @@
         reach (+ radius (u/dist me mid))
         found (cond
                 grass (if at
-                        (if (and (= "grass_block" (u/block-name p at)) (= "air" (u/block-name p (update at :y inc)))) [at] [])
+                        (if (and (= "grass_block" (u/seen-name p at)) (= "air" (u/seen-name p (update at :y inc)))) [at] [])
                         (open-grass p mid radius reach))
-                at (let [b (u/block-at p at)]
+                at (let [b (u/seen-block p at)]
                      (if (unripe? b) [at] []))
                 :else
                 (->> (crops/seen-crops p (keys ripe-age) reach 4096)

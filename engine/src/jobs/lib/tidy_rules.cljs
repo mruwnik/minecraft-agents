@@ -54,7 +54,7 @@
 (defn world-block
   "The block at [x y z] in plan.shape's shape: nil when unloaded, else {:name n} with :state when it has properties."
   [p [x y z]]
-  (when-let [b (u/block-at p {:x x :y y :z z})]
+  (when-let [b (u/seen-block p {:x x :y y :z z})]
     (cond-> {:name (.-name b)}
       (.-properties b) (assoc :state (js->clj (.-properties b) :keywordize-keys true)))))
 
