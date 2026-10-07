@@ -212,3 +212,20 @@
 
 (deftest go-to-a-small-sealed-deck-with-a-pool-is-cut-off-without-walking
   (async done (tu/run-async done (fn ^:async t [] (await (small-deck-cut-off! small-deck-pool))))))
+
+;; ---- a long tour: no cap on frontier walks while a frontier is unspent ----
+
+;; the goal on a walkway (y 80) 40 blocks from the body's start, the only stair up at the walkway's far west end, 600
+;; blocks off: every frontier on the way lies farther from the goal than the last, 4 or more legs of a tour with a loaded
+;; land 1 chunk round the body; go-to arrives rather than giving up after 3 legs that got no nearer
+(deftest go-to-tours-frontiers-away-from-the-goal-to-a-far-stair
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [blocks (merge (box -616 63 9 47 63 9 "stone")
+                            (box -600 79 8 47 79 8 "stone")
+                            (apply merge (for [i (range 1 16)] (box (- -600 i) (- 79 i) 8 (- -600 i) (- 79 i) 8 "stone"))))
+              {:keys [out eng p]} (await (go! {:blocks blocks :self {:pos {:x 40.5 :y 64 :z 9.5}} :viewChunks 1}
+                                              {:pos [0 80 8] :range 1}))]
+          (is (= {:arrived true} (select-keys @out [:arrived]))
+              (str "result " @out " at " (at p) (mapv (juxt :status :to) (moved eng)))))))))
