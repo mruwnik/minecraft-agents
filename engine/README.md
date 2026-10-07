@@ -9,7 +9,7 @@ How the parts fit:
 - **Primitives** are the only way to sense or act on the bot. Sensing is sync and cheap. Acting is async and needs an
   ownership token.
 - A **job** is a goal-achiever: a namespace with a `check` (can it usefully run now?) and a `round` (do one bounded piece).
-  Jobs compose through job expressions (`seq`, `any`, `repeat`, `hold`) and call child jobs.
+  Jobs compose through job expressions (`seq`, `any`, `repeat`, `until`, `hold`) and call child jobs.
 - A **trigger** is an exception handler: when its condition holds, the register fires a one-off **reflex job**, which cuts
   whatever is running. Jobs are goals; triggers are reflexes. Never mix the two.
 - The **scheduler** ticks every 250 ms, picks the next round, and cuts by rotating the ownership token.
@@ -240,6 +240,8 @@ Wherever a job is named (scenarios, register entries, `submit!`, `do-now!`, the 
 | `(seq e1 e2 ...)` | run children in order, one child round per round |
 | `(any e1 e2 ...)` | each round, call the first child whose check passes |
 | `(repeat e)` | when the child is done, start it fresh; never done |
+| `(repeat n e)` | the same, done after `n` runs |
+| `(until g e)` | repeat `e`; done at the top of a round once `g`'s check passes (`g` never runs), e.g. `(until (jobs.time.wait-for-dusk) e)`; a daily routine is `(repeat (seq (jobs.time.wait-for-day) ... (jobs.time.wait-for-dusk)))` |
 | `(hold e)` | like `e`, but the list entry holds the body; around a whole spec only, not in a register entry |
 
 An unknown symbol, a wrong arity, an undeclared arg, a bad position arg (`[x y z]` or `{:x :y :z}`) or a nested `hold`

@@ -6,13 +6,15 @@
     (seq e1 e2 ...)                     children in order
     (any e1 e2 ...)                     the first child whose check passes
     (repeat e)                          e again, fresh, each time it is done
+    (repeat n e)                        the same, done after n runs (n a positive integer)
+    (until g e)                         e repeated, done once g's check passes
     (hold e)                            e, holding the body; top level only
 
   Nodes: {:op :leaf :job sym :args map}, {:op :seq|:any :children [node]},
-  {:op :repeat :child node}. They are plain EDN, so they persist."
+  {:op :repeat :child node :times n?}, {:op :until :children [guard child]}. They are plain EDN, so they persist."
   (:require [clojure.string :as str]))
 
-(def combinators #{'seq 'any 'repeat 'hold})
+(def combinators #{'seq 'any 'repeat 'until 'hold})
 
 (defn defaults
   "The default args of a registry entry: {k default} from its :args spec."
@@ -101,10 +103,21 @@
       (= 'hold head)
       (fail "hold is only allowed around a whole job spec, not inside one" form)
 
+      (and (= 'repeat head) (= 1 n))
+      {:op :repeat :child (parse-form registry (first parts))}
+
+      (and (= 'repeat head) (= 2 n))
+      (if (pos-int? (first parts))
+        {:op :repeat :times (first parts) :child (parse-form registry (second parts))}
+        (fail "repeat takes an optional count (a positive integer) and a job spec" form))
+
       (= 'repeat head)
-      (if (= 1 n)
-        {:op :repeat :child (parse-form registry (first parts))}
-        (fail "repeat takes exactly one job spec" form))
+      (fail "repeat takes exactly one job spec, after an optional count" form)
+
+      (= 'until head)
+      (if (= 2 n)
+        {:op :until :children (mapv #(parse-form registry %) parts)}
+        (fail "until takes a guard job spec and a job spec" form))
 
       (#{'seq 'any} head)
       (if (pos? n)
@@ -113,7 +126,7 @@
 
       (not (contains? registry head))
       (fail (str "unknown job or combinator " head "; jobs are namespaces under jobs/,"
-                 " combinators are seq, any, repeat and hold")
+                 " combinators are seq, any, repeat, until and hold")
             form)
 
       (> n 1) (fail (str head " takes at most one args map") form)
@@ -162,8 +175,8 @@
 
 (defn label
   "A short printable name of a node: the job symbol, or the combinator form."
-  [{:keys [op job children child]}]
+  [{:keys [op job children child times]}]
   (case op
     :leaf (str job)
-    :repeat (str "(repeat " (label child) ")")
+    :repeat (str "(repeat " (when times (str times " ")) (label child) ")")
     (str "(" (name op) " " (str/join " " (map label children)) ")")))

@@ -1537,6 +1537,31 @@
     (core/submit! eng '(repeat (gated)) {})
     (is (nil? (core/tick! eng)))))
 
+(deftest repeat-with-a-count-is-done-after-that-many-runs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (expr-setup)]
+          (core/submit! eng '(repeat 2 (twice)) {})
+          (dotimes [_ 3] (await (core/tick! eng)))
+          (is (= ["j1"] (listed eng)) "one run to go")
+          (await (core/tick! eng))
+          (is (= [] (listed eng)) "done after the second run"))))))
+
+(deftest until-runs-its-child-while-the-guard-check-fails-and-is-done-when-it-passes
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (expr-setup)]
+          (reset! flag-b false)
+          (core/submit! eng '(until (twice-b) (twice)) {})
+          (dotimes [_ 5] (await (core/tick! eng)))
+          (is (= ["j1"] (listed eng)) "the guard has not passed: the child repeats")
+          (is (= 1 (child-n eng "j1" [:c1])) "the third run is in its first round")
+          (reset! flag-b true)
+          (await (core/tick! eng))
+          (is (= [] (listed eng)) "done once the guard's check passes"))))))
+
 (deftest hold-makes-the-list-entry-hold-the-body
   (async done
     (tu/run-async done

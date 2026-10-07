@@ -31,6 +31,13 @@
                               {:op :repeat :child {:op :any :children [{:op :leaf :job 'jobs.b :args {}}]}}]}
          (expr/parse reg '(seq (jobs.b) (repeat (any (jobs.b))))))))
 
+(deftest repeat-takes-a-count-and-until-a-guard
+  (is (= {:op :repeat :times 3 :child {:op :leaf :job 'jobs.b :args {}}} (expr/parse reg '(repeat 3 (jobs.b)))))
+  (is (= {:op :until :children [{:op :leaf :job 'jobs.a :args {:n 1 :m 2}} {:op :leaf :job 'jobs.b :args {}}]}
+         (expr/parse reg '(until (jobs.a) (jobs.b)))))
+  (is (= "(repeat 3 jobs.b)" (expr/label (expr/parse reg '(repeat 3 (jobs.b))))))
+  (is (= "(until jobs.a jobs.b)" (expr/label (expr/parse reg '(until (jobs.a) (jobs.b)))))))
+
 (deftest hold-is-a-flag-on-the-top
   (is (= {:node {:op :leaf :job 'jobs.b :args {}} :hold? true} (expr/parse-spec reg '(hold (jobs.b)))))
   (is (= {:node {:op :leaf :job 'jobs.b :args {}} :hold? false} (expr/parse-spec reg '(jobs.b)))))
@@ -43,7 +50,11 @@
   (is (re-find #"unknown job or combinator jobs.nope" (problem '(jobs.nope))))
   (is (re-find #"unknown job or combinator map" (problem '(map (jobs.a)))))
   (is (re-find #"hold is only allowed" (problem '(seq (hold (jobs.a))))))
-  (is (re-find #"repeat takes exactly one" (problem '(repeat (jobs.a) (jobs.b)))))
+  (is (re-find #"repeat takes an optional count" (problem (quote (repeat (jobs.a) (jobs.b))))))
+  (is (re-find #"repeat takes exactly one" (problem (quote (repeat 2 (jobs.a) (jobs.b))))))
+  (is (re-find #"repeat takes an optional count" (problem '(repeat 0 (jobs.a)))))
+  (is (re-find #"repeat takes an optional count" (problem '(repeat :x (jobs.a)))))
+  (is (re-find #"until takes a guard" (problem '(until (jobs.a)))))
   (is (re-find #"hold takes exactly one" (problem '(hold))))
   (is (re-find #"unknown job or combinator backoff" (problem '(backoff {} (jobs.a)))) "listed jobs have no backoff")
   (is (re-find #"seq takes at least one" (problem '(seq))))

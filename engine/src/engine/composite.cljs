@@ -51,16 +51,35 @@
 
 (defn repeat-def
   "The child in slot :c0; when it is done call-child drops its memory, so the
-  next call starts it fresh, and :runs counts the runs. Never done. Check:
-  the child's check. Declined when the child declines, so it never spins."
-  [kid]
+  next call starts it fresh, and :runs counts the runs. Never done, or done
+  after times runs. Check: the child's check. Declined when the child declines,
+  so it never spins."
+  [kid times]
   (let [[def args] kid]
     {:check (fn [c] (boolean (ctx/check-child c (slot 0) def args)))
      :round (fn ^:async repeat-round [c]
               (let [r (await (ctx/call-child c (slot 0) def args))]
                 (when (= :done r)
                   (ctx/update-mem! c update :runs (fnil inc 0)))
-                (if (= :declined r) :declined :continue)))}))
+                (cond
+                  (= :declined r) :declined
+                  (and times (= :done r) (>= (:runs (ctx/mem c)) times)) :done
+                  :else :continue)))}))
+
+(defn until-def
+  "Guard in slot :c0, child in :c1, which repeats like repeat's. Done at the
+  top of a round once the guard's check passes (the guard itself never runs).
+  Check: the guard's or the child's. Declined when the child declines."
+  [guard kid]
+  (let [[gdef gargs] guard
+        [def args] kid
+        reached? (fn [c] (boolean (ctx/check-child c (slot 0) gdef gargs)))]
+    {:check (fn [c] (or (reached? c) (boolean (ctx/check-child c (slot 1) def args))))
+     :round (fn ^:async until-round [c]
+              (if (reached? c)
+                :done
+                (let [r (await (ctx/call-child c (slot 1) def args))]
+                  (if (= :declined r) :declined :continue))))}))
 
 (defn job
   "[def args] for node: a registry job with its args, or a combinator."
@@ -70,4 +89,5 @@
       :leaf (expr/leaf registry (:job node) (:args node))
       :seq [(seq-def (kids (:children node))) {}]
       :any [(any-def (kids (:children node))) {}]
-      :repeat [(repeat-def (job registry (:child node))) {}])))
+      :repeat [(repeat-def (job registry (:child node)) (:times node)) {}]
+      :until (let [[g k] (kids (:children node))] [(until-def g k) {}]))))
