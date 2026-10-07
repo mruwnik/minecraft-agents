@@ -97,6 +97,23 @@
     {} {:fail :no-surface}
     {:unloaded true} {:fail :not-loaded}))
 
+(deftest a-column-out-of-view-is-unseen-and-the-search-steps-toward-it
+  (let [seen (fn [[x y z]] (cond (> x 8) :unseen (= y 63) "grass_block" :else "air"))]
+    (is (= {:fail :unseen} (search/stand-cell seen 20 0 64)))
+    (is (= [6 64 0] (search/step-toward seen [0 64 0] 20 0)) "12 is out of view, so the 6 block step")
+    (is (= [6 64 0] (search/step-toward (fn [_] :unseen) [0 64 0] 20 0)) "all unseen: 6 blocks at feet height")
+    (is (nil? (search/step-toward (fn [_] :unseen) [0 64 0] 3 0)))))
+
+(deftest ore-beyond-the-view-is-walked-toward-and-found-after-looking
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (search! {:target "diamond_block" :max-distance 48 :max-legs 64} {:blocks {"40,64,0" "diamond_block"} :cone? true}))
+              e (event-of s :search.done)]
+          (is (= nil (event-of s :search.not-found)))
+          (is (= [{:what "diamond_block" :pos [40 64 0]}] (:found e)))
+          (is (seq (walks s))))))))
+
 ;; ------------------------------------------------------------------ the job
 
 (deftest a-target-in-sight-is-found-without-walking

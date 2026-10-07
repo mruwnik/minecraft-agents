@@ -31,9 +31,9 @@
     (is (empty? (owed (wrapped blocks true))) "behind stone: not judged owed")
     (is (= 1 (count (owed (wrapped blocks false)))) "seen air: owed")))
 
-(deftest explore-stand-reader-is-nil-for-an-unseen-cell
+(deftest explore-stand-reader-never-reads-an-unseen-cell-as-its-block
   (let [blocks {"0,64,4" "stone"}]
-    (is (nil? ((search/seen-at (wrapped blocks true)) [0 64 4])))
+    (is (= :unseen ((search/seen-at (wrapped blocks true)) [0 64 4])))
     (is (= "stone" ((search/seen-at (wrapped blocks false)) [0 64 4])))))
 
 (deftest build-world-block-needs-sight

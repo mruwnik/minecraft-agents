@@ -21,8 +21,9 @@
   radius.
 
   A leg needs a standing cell in its column within 12 of the feet, read top down through leaves. An unloaded,
-  wet or standless column is recorded failed (:not-loaded, :wet, :no-surface) and the next candidate is tried
-  in the same round. An unloaded column is not tried but looked at again later. When only unloaded ones are
+  wet or standless column is recorded failed (:not-loaded, :wet, :no-surface, :unseen) and the next candidate is tried
+  in the same round. A loaded column not yet seen (:unseen) is walked toward in steps of up to 12 blocks (a leg
+  that does not retire the candidate) and looked at again; within 3 blocks of it, it is recorded failed. An unloaded column is not tried but looked at again later. When only unloaded ones are
   left the round ends and the check declines for 2 s, up to :load-wait-s (a body just logged in has no chunks
   yet), then the search ends :not-loaded. A walk go-to gives up on is recorded :unreachable. Three of those in
   a row end the search (:stuck).
@@ -106,14 +107,18 @@
 (def wet-names #{"water" "lava" "bubble_column"})
 
 (defn seen-at
-  "The block-at of stand-cell for primitives p: [x y z] -> the name seen or remembered, nil when unknown."
+  "The block-at of stand-cell for primitives p: [x y z] -> the name seen or remembered, :unseen for a loaded cell
+  never seen, nil when the chunk is not loaded."
   [p]
-  (fn [[bx by bz]] (u/seen-name p {:x bx :y by :z bz})))
+  (fn [[bx by bz]]
+    (let [pos {:x bx :y by :z bz}]
+      (or (u/seen-name p pos) (when (u/sensed p pos) :unseen)))))
 
 (defn stand-cell
   "Where a body could stand in column x z near feet height y, read top down from y+12 through open cells and
   leaves to the first other block: {:y feet} when the two cells above it are open, else {:fail :wet} (a fluid),
-  {:fail :not-loaded} (an unloaded cell on the way) or {:fail :no-surface}. block-at: [x y z] -> name or nil."
+  {:fail :not-loaded} (an unloaded cell on the way), {:fail :unseen} (a loaded cell not yet seen) or {:fail :no-surface}.
+  block-at: [x y z] -> name, :unseen or nil."
   [block-at x z y]
   (let [y0 (js/Math.floor y)]
     (loop [h (+ y0 reach)]
@@ -122,6 +127,7 @@
         (let [n (block-at [x h z])]
           (cond
             (nil? n) {:fail :not-loaded}
+            (= :unseen n) {:fail :unseen}
             (or (open? n) (leaves? n)) (recur (dec h))
             (wet-names n) {:fail :wet}
             (and (open? (block-at [x (inc h) z])) (open? (block-at [x (+ h 2) z]))) {:y (inc h)}
@@ -212,6 +218,17 @@
 
 (def stand-cap "Stand cells one choice reads; past it :more says candidates are left for the next step." 48)
 
+(defn step-toward
+  "Where to walk toward the unseen column [x z] from the body at [bx y bz]: the seen stand cell on the line 12, 6 or 3
+  blocks out, else the 6 or 3 block point at feet height (far ground is seldom in view), nil when within 3. A player
+  walks toward ground out of view and looks again."
+  [block-at [bx y bz] x z]
+  (let [d (xz-dist [bx bz] [x z])
+        at (fn [k] (let [f (/ k d)] [(js/Math.round (+ bx (* f (- x bx)))) (js/Math.round (+ bz (* f (- z bz))))]))
+        near (filter #(< % d) [12 6 3])]
+    (or (some (fn [k] (let [[sx sz] (at k) {sy :y} (stand-cell block-at sx sz y)] (when sy [sx sy sz]))) near)
+        (when-let [k (first (filter #(<= % 6) near))] (let [[sx sz] (at k)] [sx y sz])))))
+
 (defn choose-leg
   "{:leg [x y z] (or nil when none is left) :tried [points looked at] :failed [{:pos :reason}] :skipped n
   :unloaded [{:pos :reason :not-loaded}] :more true when stand-cap cells were read and candidates may be left}; an
@@ -230,8 +247,10 @@
         (or (tried pt) (> (xz-dist pt origin) max-distance) (= pt [ox oz])) (recur more reads acc)
         (some #(notes/covers? % pt names) ns) (recur more reads (-> acc (update :tried conj pt) (update :skipped inc)))
         :else (let [{sy :y fail :fail} (stand-cell block-at (pt 0) (pt 1) y)
-                    failed {:pos [(pt 0) y (pt 1)] :reason fail}]
+                    failed {:pos [(pt 0) y (pt 1)] :reason fail}
+                    step (when (= :unseen fail) (step-toward block-at (here c) (pt 0) (pt 1)))]
                 (cond
+                  step (assoc acc :leg step)
                   (= :not-loaded fail) (recur more (inc reads) (update acc :unloaded conj failed))
                   fail (recur more (inc reads) (-> acc (update :tried conj pt) (update :failed conj failed)))
                   :else (assoc (update acc :tried conj pt) :leg [(pt 0) sy (pt 1)])))))))
