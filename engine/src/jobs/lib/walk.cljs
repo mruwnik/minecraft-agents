@@ -147,7 +147,8 @@
   "Walk plan (a plan-walk! result) and plan again from the body's cell, in the same call, whenever the walk stops for it:
   the look-ahead saw the way change (:changed: the new plan is walked), a partial plan is due a refresh (:refresh: the new
   plan is walked only when take-refresh? says it is clearly better, else the rest of the old one), or the body is stuck with
-  a mob in its way (:mob: wait, plan round it). At most max-watch-replans; past that the plan is walked unwatched.
+  a mob in its way (:mob: wait, plan round it). A replan that proves the goal cut off or enclosed ends the call with that
+  no-walk. At most max-watch-replans; past that the plan is walked unwatched.
   opts: :plan-fn (fn [walls]) -> a plan-walk! result (or a promise of one: plan-walk!) from where the body stands now, the
   cells {:x :y :z} read as walls;
   :walk-fn (fn [steps watch]) -> [done ms] (walk! or jobs.lib.pass/walk!); :to the goal cell; :policy for no-walk;
@@ -158,6 +159,7 @@
   [c plan {:keys [plan-fn walk-fn to policy announce! dangers] :or {policy (wworld/body-policy c) announce! (fn [_ _])}}]
   (let [known (when dangers (atom #{}))
         walkable? (fn [pl] (nil? (wplan/no-walk pl 0 policy)))
+        proved-none? (fn [pl] (contains? #{:goal-cut-off :goal-enclosed} (:reason (wplan/no-walk pl 0 policy))))
         cut-length (fn [steps k] (path-length (subvec steps 0 (min (count steps) (max 1 k)))))]
     (loop [plan plan steps (:steps plan) n 0 ms 0 walked 0]
       (let [watch (when (< n wwatch/max-watch-replans) (wwatch/watch-of c plan known))
@@ -185,9 +187,10 @@
                 fresh (await (plan-fn []))
                 plan-ms (- (js/performance.now) t)]
             (tell! :danger plan-ms (not (walkable? fresh)))
-            (if (walkable? fresh)
-              (recur (assoc fresh :ms plan-ms) (:steps fresh) (inc n) ms walked')
-              (recur (assoc plan :ms plan-ms) (subvec steps (max 0 (dec k))) (inc n) ms walked')))
+            (cond
+              (walkable? fresh) (recur (assoc fresh :ms plan-ms) (:steps fresh) (inc n) ms walked')
+              (proved-none? fresh) (finish (wplan/no-walk fresh 0 policy) fresh walked')
+              :else (recur (assoc plan :ms plan-ms) (subvec steps (max 0 (dec k))) (inc n) ms walked')))
 
           (= :replan (:status done))
           (let [t (js/performance.now)
@@ -195,11 +198,13 @@
                 plan-ms (- (js/performance.now) t)
                 fresh (assoc fresh :ms plan-ms)]
             (if (= :refresh (:why done))
-              (let [take? (and (walkable? fresh) (wwatch/take-refresh? steps fresh to plan))]
-                (tell! :refresh plan-ms (not take?))
-                (if take?
-                  (recur fresh (:steps fresh) (inc n) ms walked')
-                  (recur (assoc plan :ms plan-ms) (subvec steps (max 0 (dec k))) (inc n) ms walked')))
+              (let [take? (and (walkable? fresh) (wwatch/take-refresh? steps fresh to plan))
+                    none? (proved-none? fresh)]
+                (tell! :refresh plan-ms (not (or take? none?)))
+                (cond
+                  take? (recur fresh (:steps fresh) (inc n) ms walked')
+                  none? (finish (wplan/no-walk fresh 0 policy) fresh walked')
+                  :else (recur (assoc plan :ms plan-ms) (subvec steps (max 0 (dec k))) (inc n) ms walked')))
               (do (tell! :changed plan-ms false)
                   (if (walkable? fresh)
                     (recur fresh (:steps fresh) (inc n) ms walked')

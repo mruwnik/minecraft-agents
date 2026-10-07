@@ -8,6 +8,7 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.memory :as mem]
+            [engine.path.executor :as executor]
             [engine.path.fixture :as fx]
             [jobs.lib.walk :as walk]
             [jobs.lib.walk.search :as wsearch]
@@ -349,3 +350,57 @@
           (is (= {:arrived true} @out))
           (is (= 1 (count (moved eng))) "one round")
           (is (= [:mob] (mapv :why (replan-events seen)))))))))
+
+;; ---------------------------------------------------------------- follow! replans
+
+(defn line [n] (mapv #(step % 64 0 (if (zero? %) :start :walk)) (range n)))
+
+(defn follow-with
+  "follow! over a partial 3-step plan whose first walk ends in a replan for why; the fresh plan is fresh (status, reason,
+  steps). {:done :walks}: walks the number of walk-fn calls."
+  [why fresh-status reason fresh-steps]
+  (let [walks (atom 0)
+        fresh {:status fresh-status :r #js {:reason reason} :steps fresh-steps :ms 5}
+        plan {:status "partial" :r #js {} :steps (line 3) :ms 5}
+        walk-fn (fn [steps _watch]
+                  (js/Promise.resolve
+                   (if (= 1 (swap! walks inc))
+                     [{:status :replan :why why :step 1 :at [1 64 0]} 1]
+                     [{:status :arrived :at [(:x (peek steps)) 64 0]} 1])))
+        c {:primitives (tu/fake-on-floor {:floor [-5 -5 20 5]})}]
+    (-> (walk/follow! c plan {:plan-fn (fn [_] (js/Promise.resolve fresh)) :walk-fn walk-fn :to [9 64 0]
+                              :policy executor/policy})
+        (.then (fn [r] (assoc r :walks @walks))))))
+
+(deftest a-danger-replan-that-proves-the-goal-cut-off-ends-the-walk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [r (await (follow-with :danger "partial" "goal-cut-off" (line 3)))]
+          (is (= 1 (:walks r)) "no second walk")
+          (is (= {:status :no-path :reason :goal-cut-off} (select-keys (:done r) [:status :reason]))))))))
+
+(deftest a-refresh-replan-that-proves-the-goal-enclosed-ends-the-walk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [r (await (follow-with :refresh "partial" "goal-enclosed" (line 3)))]
+          (is (= 1 (:walks r)))
+          (is (= :goal-enclosed (:reason (:done r)))))))))
+
+(deftest a-danger-or-refresh-replan-that-finds-a-full-route-keeps-walking
+  (doseq [why [:danger :refresh]]
+    (async done
+      (tu/run-async done
+        (fn ^:async t []
+          (let [r (await (follow-with why "found" nil (line 10)))]
+            (is (= 2 (:walks r)) (str why))
+            (is (= :arrived (:status (:done r))))))))))
+
+(deftest a-danger-replan-with-no-route-for-another-reason-keeps-the-old-plan
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [r (await (follow-with :danger "none" nil []))]
+          (is (= 2 (:walks r)))
+          (is (= :arrived (:status (:done r)))))))))
