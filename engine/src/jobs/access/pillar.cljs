@@ -3,6 +3,7 @@
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
+            [jobs.lib.blocks :as blocks]
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
             [jobs.lib.walk :as walk]
@@ -55,10 +56,6 @@
 (def land-step-ms 50)
 
 (def land-max-steps 20)
-
-(def hidden-guess
-  "What a cell the body has not sensed is taken for: rock, so no step rests on or climbs into what it has not seen."
-  "stone")
 
 (defn access-inputs
   "The zones, claims, footprints, the body's name, the clock and the job's :ignore-zones? arg, as jobs.lib.access.rules
@@ -149,7 +146,7 @@
   whose parent reads the result."
   [c]
   (let [p (:primitives c)
-        block-at (access/sensed-at p hidden-guess)
+        block-at (access/sensed-at p blocks/hidden-guess)
         l (ledger/reconcile (ledger/open-entries (ctx/view c)) (access/sensed-at p nil))
         feet (pl/feet-cell c)
         {:keys [height item]} (:args c)
@@ -239,14 +236,23 @@
             r (await (recentre! c [x top z] home))]
         (when (= :continue r) :continue)))))
 
+(defn ^:async look-up!
+  "Look at each unsensed cell of the two above the feet (once), so an unseen ceiling is not taken for rock."
+  [c]
+  (let [feet (pl/feet-cell c)]
+    (doseq [cell [(up feet 1) (up feet 2)]]
+      (when (access/unknown? (:primitives c) cell)
+        (await (access/look-at! c cell))))))
+
 (defn ^:async step!
   "One block of the pillar (or its end): :again, :continue while a recentring go-to waits, or :done."
   [c]
   (await (land! c))
+  (await (look-up! c))
   (if (= :continue (await (shoved-back! c)))
     :continue
     (let [p (:primitives c)
-          block-at (access/sensed-at p hidden-guess)
+          block-at (access/sensed-at p blocks/hidden-guess)
           seen (ledger/open-entries (ctx/view c))
           l (ledger/reconcile seen (access/sensed-at p nil))
           feet (pl/feet-cell c)

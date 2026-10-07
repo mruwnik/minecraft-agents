@@ -21,7 +21,7 @@
   Before each step it checks:
   - the whole rest of the row is permitted (no zone that bars :place, no other plan's footprint, a zone list loaded)
   - the body stands on a solid block, on the row's line at the start height
-  - the two cells ahead at body height are clear (headroom)
+  - the two cells ahead at body height are clear (headroom) and sensed (looked at first)
   - a block is carried: :item, or without it dirt while any is carried, then cobblestone
   - the cell ahead is loaded and passes jobs.lib.access.rules/may-place?
 
@@ -78,7 +78,7 @@
 
 (defn next-step
   "The next step of a bridge, from {:feet :start :heading :length :block-at :carried {name count} :item :zones
-  :footprints :ledger #{cells}}: {:step :done}, {:step :move :to stand}, {:step :place :cell :item} or {:step :give-up
+  :footprints :ledger #{cells} :unknown? fn of a cell}: {:step :done}, {:step :move :to stand}, {:step :place :cell :item} or {:step :give-up
   :reason ...}."
   [{:keys [feet start heading length block-at carried item] :as in}]
   (if-not (and (int? length) (<= 1 length max-length) (contains? headings heading))
@@ -92,6 +92,7 @@
         (let [stand (ahead feet heading 1 0)
               target (ahead feet heading 1 -1)
               refusal (permission-refusal in i)
+              unseen (first (filter (or (:unknown? in) (constantly false)) [stand (ahead feet heading 1 1)]))
               blocked (first (remove #(pl/clear? (block-at %)) [stand (ahead feet heading 1 1)]))
               use (pillar/item-to-use item carried)
               place (rules/may-place? (assoc in :cell target :feet stand))]
@@ -99,6 +100,7 @@
             refusal (pillar/refusal->give-up refusal)
             (not (rules/solid-floor? block-at (ahead feet heading 0 -1))) (pillar/give-up :not-on-solid :at (ahead feet heading 0 -1))
             blocked (pillar/give-up :blocked :at blocked :block (block-at blocked))
+            unseen (pillar/give-up :unseen :at unseen)
             (rules/solid-floor? block-at target) {:step :move :to stand}
             (nil? use) (pillar/give-up :too-few-blocks :short (- length i))
             (not (:ok place)) (pillar/refusal->give-up (assoc place :at target))
@@ -139,7 +141,7 @@
   (let [p (:primitives c)
         {:keys [heading length item]} (:args c)]
     (merge (pillar/access-inputs c)
-           {:feet feet :start (or (:start (ctx/mem c)) feet) :heading heading :length length :block-at (access/sensed-at p "air")
+           {:feet feet :start (or (:start (ctx/mem c)) feet) :heading heading :length length :block-at (access/sensed-at p "air") :unknown? #(access/unknown? p %)
             :carried (pl/carried p) :item item :ledger (ledger/cells l)})))
 
 (defn need
@@ -213,10 +215,18 @@
         (if (= :continue r) :continue :again))
       (finish! c l step))))
 
+(defn ^:async look-ahead!
+  "Look at each unsensed stand and head cell ahead of the feet, so a bridge never steps onto a cell it has not seen."
+  [c feet]
+  (doseq [cell [(ahead feet (:heading (:args c)) 1 0) (ahead feet (:heading (:args c)) 1 1)]]
+    (when (access/unknown? (:primitives c) cell)
+      (await (access/look-at! c cell)))))
+
 (defn ^:async step!
   "One block of the bridge (or its end): :again, :continue while a go-to waits, or :done."
   [c]
   (await (pillar/land! c))
+  (await (look-ahead! c (pl/feet-cell c)))
   (let [block-at (access/sensed-at (:primitives c) nil)
         seen (ledger/open-entries (ctx/view c))
         l (ledger/reconcile seen block-at)
