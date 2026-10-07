@@ -573,7 +573,7 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 | `movement.look-around` `{:every-ms 2000}` | Faces a random point; writes `:looked` |
 | `movement.pace` `{:a :b :laps :rounds}` | Walks a, b, a, b; a test job |
 | `movement.follow` `{:player :range :radius}` | Keeps within range of a player |
-| `movement.linger-near` `{:pos :range 3 :wait-s}` | Stays within range of a cell for `:wait-s` s (declared hold `:lingering`; walks back with a go-to child when out of range); hands over `{:lingered true}`, or stopped `:unreachable` after three failed walks back |
+| `movement.linger-near` `{:pos :range 3 :wait-s}` | Stays within range of a cell for `:wait-s` s spent in range (declared hold `:lingering`; walks back with a go-to child when out of range); hands over `{:lingered true}`, or stopped `:unreachable` after three failed walks back |
 | `movement.leave-vehicle` | Gets off a boat, minecart or mount (run by `:mounted`; one run, retries inside, stopped when still aboard, fired again after the cooldown) |
 | `time.wait-for-day`, `time.wait-for-dusk` | Done once it is day / evening; waits `:day-not-come` / `:dusk-not-come` |
 
