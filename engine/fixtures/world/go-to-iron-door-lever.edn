@@ -1,0 +1,65 @@
+;; Cards bbb1d345, feb4ab48, 44664ffe: iron doors worked from the near side by a button or a lever on a stone wall across the plot at x 16.
+;; Door at [16 0 16] (two blocks high); the body 6 west, the goal 6 east. The control sits on a wall block next to the door, on the body's side.
+;; A button (stone 1 s, wood 1.5 s) is pressed and the door shuts itself; a lever is pulled once and left on, the door stays open.
+;; A lever is a last resort: a button beats a nearer lever, a walk-round under 6 s extra beats a lever, :doors :never keeps it a wall.
+{:defaults
+ {:tags [:movement :access :door] :time :any
+  :plot {:height 8}
+  :blocks [[:fill [16 0 0] [16 3 31] "stone"] [:fill [0 0 0] [31 3 0] "stone"] [:fill [0 0 31] [31 3 31] "stone"]
+           [:fill [0 0 0] [0 3 31] "stone"] [:fill [31 0 0] [31 3 31] "stone"]
+           [:set [16 0 16] "iron_door[facing=east,half=lower,open=false]"] [:set [16 1 16] "iron_door[facing=east,half=upper,open=false]"]]
+  :body {:at [10.5 0 16.5] :effects [["resistance" 600 4]]}
+  :limit-s 100}
+ :cases
+ [{:name "stone-button-pressed-and-arrives"
+   :blocks [[:set [15 1 15] "stone_button[face=wall,facing=west]"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1})]]
+   :expect [{:event {:source :action :kind :done :data {:name "useOn"}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
+   :after [[:body-near [22.5 0 16.5] 2]]}
+  {:name "wood-button-pressed-and-arrives"
+   :blocks [[:set [15 1 15] "oak_button[face=wall,facing=west]"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1})]]
+   :expect [{:event {:source :action :kind :done :data {:name "useOn"}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
+   :after [[:body-near [22.5 0 16.5] 2]]}
+  {:name "button-beats-a-nearer-lever"
+   ;; the lever [15 0 15] is next to the door and nearer the body's cell in front of it than the button [15 1 17]; both work the door
+   :blocks [[:set [15 0 15] "lever[face=wall,facing=west,powered=false]"] [:set [15 1 17] "stone_button[face=wall,facing=west]"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1})]]
+   :expect [{:event {:source :action :kind :done :data {:name "useOn"}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
+   :after [[:block [15 0 15] "lever[powered=false]"] [:body-near [22.5 0 16.5] 2]]}
+  {:name "lever-only-pulled-once-and-door-left-open"
+   :blocks [[:set [15 0 15] "lever[face=wall,facing=west,powered=false]"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1})]]
+   :expect [{:event {:source :action :kind :done :data {:name "useOn"}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
+   :after [[:block [15 0 15] "lever[powered=true]"] [:block [16 0 16] "iron_door[half=lower,open=true]"] [:body-near [22.5 0 16.5] 2]]}
+  {:name "second-pass-through-the-open-lever-door-clicks-nothing"
+   ;; the state the case above leaves: lever on, door open
+   :blocks [[:set [15 0 15] "lever[face=wall,facing=west,powered=true]"]
+            [:set [16 0 16] "iron_door[facing=east,half=lower,open=true,powered=true]"] [:set [16 1 16] "iron_door[facing=east,half=upper,open=true,powered=true]"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}
+            {:no-event {:source :action :kind :done :data {:name "useOn"}} :for-s 60 :until {:source :job :kind :result}}]
+   :after [[:block [15 0 15] "lever[powered=true]"] [:body-near [22.5 0 16.5] 2]]}
+  {:name "short-walk-round-beats-the-lever"
+   ;; a gap in the wall 4 blocks south: well under 6 s extra, so the lever is not pulled
+   :blocks [[:fill [16 0 20] [16 1 20] "air"] [:set [15 0 15] "lever[face=wall,facing=west,powered=false]"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}
+            {:no-event {:source :action :kind :done :data {:name "useOn"}} :for-s 60 :until {:source :job :kind :result}}]
+   :after [[:block [15 0 15] "lever[powered=false]"] [:block [16 0 16] "iron_door[half=lower,open=false]"] [:body-near [22.5 0 16.5] 2]]}
+  {:name "doors-never-keeps-the-lever-door-a-wall"
+   :blocks [[:set [15 0 15] "lever[face=wall,facing=west,powered=false]"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :doors :never :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 60 :of-job true}
+            {:no-event {:source :action :kind :done :data {:name "useOn"}} :for-s 20 :until {:source :job :kind :result}}]
+   :after [[:block [15 0 15] "lever[powered=false]"] [:block [16 0 16] "iron_door[half=lower,open=false]"] [:body-far [22.5 0 16.5] 4]]}
+  {:name "button-not-wired-to-the-door-stays-shut"
+   ;; the button [15 1 14] sits on a wall block that does not touch the door: nothing opens it
+   :blocks [[:set [15 1 14] "stone_button[face=wall,facing=west]"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 90 :of-job true}]
+   :after [[:block [16 0 16] "iron_door[half=lower,open=false]"] [:body-far [22.5 0 16.5] 4]]}]}

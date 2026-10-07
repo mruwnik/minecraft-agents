@@ -1,0 +1,21 @@
+;; jobs.movement.path-preview (cards b34b1359, ee7d7b5e, 6a1a0fc3): the dry run follows the body's fall policy like go-to.
+;; A 5 high platform, the body on top, the goal on the floor past its edge, no other way down: feather falling IV finds the
+;; 5 block drop, plain boots do not (found false). The body never moves.
+{:defaults
+ {:tags [:movement] :time :any
+  :plot {:height 14}
+  :blocks [[:fill [0 0 0] [31 9 0] "stone"] [:fill [0 0 31] [31 9 31] "stone"] [:fill [0 0 0] [0 9 31] "stone"] [:fill [31 0 0] [31 9 31] "stone"]
+           [:fill [1 0 1] [15 4 30] "stone"]]
+  :body {:at [8.5 5 16.5]}
+  :limit-s 40}
+ :cases
+ [{:name "preview-finds-a-5-drop-with-feather-falling"
+   :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots[enchantments={feather_falling:4}]"] [:wait-s 2]
+         [:job (jobs.movement.path-preview {:pos #at [22 0 16] :range 1})]]
+   :expect [{:event {:source :job :kind :result :data {:found true}} :within-s 30 :of-job true}]
+   :after [[:body-near [8.5 5 16.5] 1]]}
+  {:name "preview-finds-no-5-drop-in-plain-boots"
+   :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots"] [:wait-s 2]
+         [:job (jobs.movement.path-preview {:pos #at [22 0 16] :range 1})]]
+   :expect [{:event {:source :job :kind :result :data {:found false}} :within-s 30 :of-job true}]
+   :after [[:body-near [8.5 5 16.5] 1]]}]}

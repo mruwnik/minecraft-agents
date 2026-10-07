@@ -1,0 +1,54 @@
+;; Card 6a1a0fc3: how far a go-to drops follows the body's fall enchantments and health (jobs.lib.cost/fall-profile).
+;; A platform N high fills x 1..15 of the plot, the body on top at x 8.5, the goal on the floor east of its edge, walls all round.
+;; Feather falling IV keeps a 4 or 5 block drop within 1.5 hp (it takes it), not 6; plain boots take 3 at most; health 2 takes 3 at most.
+;; The ramp cases have steps down at z 28..30 (x 13..15), so a body that will not drop walks round.
+{:defaults
+ {:tags [:movement] :time :any
+  :plot {:height 14}
+  :blocks [[:fill [0 0 0] [31 9 0] "stone"] [:fill [0 0 31] [31 9 31] "stone"] [:fill [0 0 0] [0 9 31] "stone"] [:fill [31 0 0] [31 9 31] "stone"]]
+  :body {:at [8.5 4 16.5]}
+  :limit-s 90}
+ :cases
+ [{:name "feather-falling-iv-takes-a-4-drop"
+   :blocks [[:fill [1 0 1] [15 3 30] "stone"]]
+   :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots[enchantments={feather_falling:4}]"] [:wait-s 2]
+         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
+   :after [[:body-near [22.5 0 16.5] 2]]}
+  {:name "feather-falling-iv-takes-a-5-drop"
+   :body {:at [8.5 5 16.5]}
+   :blocks [[:fill [1 0 1] [15 4 30] "stone"]]
+   :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots[enchantments={feather_falling:4}]"] [:wait-s 2]
+         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
+   :after [[:body-near [22.5 0 16.5] 2]]}
+  {:name "feather-falling-iv-refuses-a-6-drop"
+   :body {:at [8.5 6 16.5]}
+   :blocks [[:fill [1 0 1] [15 5 30] "stone"]]
+   :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots[enchantments={feather_falling:4}]"] [:wait-s 2]
+         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 30 :until {:source :job :kind :result}}]
+   :after [[:body-far [22.5 0 16.5] 4]]}
+  {:name "plain-boots-refuse-a-4-drop"
+   :blocks [[:fill [1 0 1] [15 3 30] "stone"]]
+   :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots"] [:wait-s 2]
+         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 30 :until {:source :job :kind :result}}]
+   :after [[:body-far [22.5 0 16.5] 4]]}
+  {:name "plain-boots-walk-round-a-4-drop-by-the-ramp"
+   :blocks [[:fill [1 0 1] [15 3 30] "stone"] [:fill [13 3 28] [15 3 30] "air"] [:fill [14 2 28] [15 2 30] "air"] [:fill [15 1 28] [15 1 30] "air"]]
+   :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots"] [:wait-s 2]
+         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 80 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 80 :until {:source :job :kind :result}}]
+   :after [[:body-near [22.5 0 16.5] 2]]}
+  {:name "feather-falling-iv-low-health-takes-no-4-drop"
+   ;; instant damage 6 + 12 hp leaves 2 hp: a drop must keep 3 hp under the health, so none beyond 3
+   :blocks [[:fill [1 0 1] [15 3 30] "stone"]]
+   :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots[enchantments={feather_falling:4}]"]
+         [:rcon "effect give $BODY minecraft:instant_damage 1 0 true"] [:rcon "effect give $BODY minecraft:instant_damage 1 1 true"] [:wait-s 1]
+         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 60 :of-job true}]
+   :after [[:body-far [22.5 0 16.5] 4]]}]}
