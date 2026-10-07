@@ -397,6 +397,12 @@
                            v))
                  form))
 
+(defn resolve-body-refs
+  "Replaces every \"$body\" string in form with the name of the body running the case, so a plan's :metadata :by
+  names its own maker whatever probe body runs it."
+  [form body]
+  (walk/postwalk (fn [v] (if (= v "$body") body v)) form))
+
 ;; ------------------------------------------------------------------ after checks
 
 (defn entities-selector
@@ -411,8 +417,8 @@
   "The RCON command whose reply answers one :after check (positions plot-relative)."
   [origin body grid c [op & args]]
   (case op
-    :block (str "execute if block " (xyz-str (abs-pos origin (first args))) " " (second args))
-    :not-block (str "execute if block " (xyz-str (abs-pos origin (first args))) " " (second args))
+    :block (str "execute if block " (xyz-str (block-pos origin (first args))) " " (second args))
+    :not-block (str "execute if block " (xyz-str (block-pos origin (first args))) " " (second args))
     (:body-near :body-far) (str "data get entity " body " Pos")
     :item (str "execute if items entity " body " container.* " (first args))
     :entities (str "execute if entity " (entities-selector origin args))))

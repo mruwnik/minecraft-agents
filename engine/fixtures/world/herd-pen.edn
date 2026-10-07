@@ -20,7 +20,7 @@
   {:name "planned-pen-gate-left-alone"
    :tags [:herd :animals :triggers]
    :register [{:trigger :pen-gate}]
-   :plans [{:id "pen"
+   :plans [{:id "pen" :metadata {:by "$body"}
             :parts [{:id "fence" :outline [#at [18 0 13] #at [24 0 19]] :want [:any "oak_fence"]}
                     {:id "gate" :cells [#at [18 0 16]] :want [:any "oak_fence_gate"]}]}]
    :act [[:summon "cow" [10.5 0 18.5]]
@@ -36,7 +36,7 @@
    :tags [:animals :triggers]
    :register [{:trigger :pen-gate}]
    :blocks [[:set [18 0 16] "oak_fence_gate[facing=east,open=true]"]]
-   :plans [{:id "pen"
+   :plans [{:id "pen" :metadata {:by "$body"}
             :parts [{:id "fence" :outline [#at [18 0 13] #at [24 0 19]] :want [:any "oak_fence"]}
                     {:id "gate" :cells [#at [18 0 16]] :want [:any "oak_fence_gate"]}]}]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :pen-gate}} :within-s 30}

@@ -1,6 +1,6 @@
-;; Card 853d6c89: the body's own plan (:metadata :by = the body, run with --body ProbeOwnPlan) does not refuse its own explicit work
+;; Card 853d6c89: the body's own plan (:metadata :by "$body" = the running body) does not refuse its own explicit work
 ;; (blocks.dig/place, stair, go-to's stair out); another body's plan still refuses :footprint; mine spares own-plan cells unless
-;; :spare-own-builds false. Run: node tools/world-test.mjs engine/fixtures/world/own-plan-footprint.edn --body ProbeOwnPlan
+;; :spare-own-builds false. Run: node tools/world-test.mjs engine/fixtures/world/own-plan-footprint.edn --body <any probe body>
 ;; Pit: stone mass x 10..22, z 10..22, y 0..3, 1x1 shaft at [16 y 16]; wall cells of the shaft in a plan.
 {:defaults
  {:tags [:build :access] :time :any
@@ -9,7 +9,7 @@
   :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1]] :effects [["resistance" 600 4]]}}
  :cases
  [{:name "own-plan-dig-and-place-a" :body {:inventory [["stone_pickaxe" 1] ["dirt" 8]]}
-   :plans [{:id "w" :metadata {:by "ProbeOwnPlan"}
+   :plans [{:id "w" :metadata {:by "$body"}
             :parts [{:id "w" :cells [#at [20 0 18] #at [20 1 18] #at [21 0 18] #at [21 1 18]] :want [:any "dirt"]}]}]
    :blocks [[:set [20 1 18] "dirt"]]
    :act [[:job (jobs.blocks.dig {:pos #at [20 1 18]})] [:job (jobs.blocks.place {:item "dirt" :pos #at [21 0 18]})]]
@@ -19,7 +19,7 @@
    :after [[:block [20 1 18] "air"] [:block [21 0 18] "dirt"]]
    :limit-s 90}
   {:name "own-plan-dig-and-place-b" :body {:inventory [["stone_pickaxe" 1] ["dirt" 8]]}
-   :plans [{:id "w" :metadata {:by "ProbeOwnPlan"}
+   :plans [{:id "w" :metadata {:by "$body"}
             :parts [{:id "w" :cells [#at [12 0 12] #at [12 1 12] #at [13 0 12] #at [14 0 12]] :want [:any "dirt"]}]}]
    :blocks [[:set [12 0 12] "dirt"]]
    :act [[:job (jobs.blocks.place {:item "dirt" :pos #at [13 0 12]})] [:job (jobs.blocks.dig {:pos #at [12 0 12]})]]
@@ -46,7 +46,7 @@
    :after [[:block [20 0 18] "air"]]
    :limit-s 60}
   {:name "shut-in-own-walls-go-to-stairs-out-a"
-   :plans [{:id "hut" :metadata {:by "ProbeOwnPlan"}
+   :plans [{:id "hut" :metadata {:by "$body"}
             :parts [{:id "wall" :cells [#at [17 0 16] #at [17 1 16] #at [17 2 16] #at [17 3 16]
                                         #at [15 0 16] #at [15 1 16] #at [15 2 16] #at [15 3 16]
                                         #at [16 0 17] #at [16 1 17] #at [16 2 17] #at [16 3 17]
@@ -60,7 +60,7 @@
    :after [[:body-near [20.5 4 16.5] 2]]
    :limit-s 200}
   {:name "shut-in-own-walls-go-to-stairs-out-b"
-   :plans [{:id "hut" :metadata {:by "ProbeOwnPlan"}
+   :plans [{:id "hut" :metadata {:by "$body"}
             :parts [{:id "wall" :cells [#at [17 0 16] #at [17 1 16] #at [17 2 16] #at [17 3 16]
                                         #at [15 0 16] #at [15 1 16] #at [15 2 16] #at [15 3 16]
                                         #at [16 0 17] #at [16 1 17] #at [16 2 17] #at [16 3 17]
@@ -74,7 +74,7 @@
    :after [[:body-near [12.5 4 16.5] 2]]
    :limit-s 200}
   {:name "stair-through-own-plan-wall"
-   :plans [{:id "hut" :metadata {:by "ProbeOwnPlan"}
+   :plans [{:id "hut" :metadata {:by "$body"}
             :parts [{:id "wall" :cells [#at [17 0 16] #at [17 1 16] #at [17 2 16] #at [17 3 16]] :want [:any "stone"]}]}]
    :blocks [[:fill [10 0 10] [22 3 22] "stone"] [:fill [16 0 16] [16 3 16] "air"]]
    :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 1})]]
@@ -86,32 +86,32 @@
             :parts [{:id "wall" :cells [#at [17 0 16] #at [17 1 16] #at [17 2 16] #at [17 3 16]] :want [:any "stone"]}]}]
    :blocks [[:fill [10 0 10] [22 3 22] "stone"] [:fill [16 0 16] [16 3 16] "air"]]
    :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 1})]]
-   :expect [{:event {:source :job :kind :stair.stopped :data {:reason :footprint}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :stair.declined :data {:reason :refused}} :within-s 60 :of-job true}]
    :after [[:block [17 1 16] "stone"]]
    :limit-s 90}
   {:name "mine-spares-own-plan-cells-by-default-a"
-   :plans [{:id "o" :metadata {:by "ProbeOwnPlan"} :parts [{:id "o" :cells [#at [20 0 16]] :want [:any "iron_ore"]}]}]
+   :plans [{:id "o" :metadata {:by "$body"} :parts [{:id "o" :cells [#at [20 0 16]] :want [:any "iron_ore"]}]}]
    :blocks [[:fill [2 0 8] [30 6 24] "stone"] [:fill [16 0 16] [16 1 16] "air"] [:set [20 0 16] "iron_ore"]]
    :act [[:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.done :data {:got 0}} :within-s 100 :of-job true}]
    :after [[:block [20 0 16] "iron_ore"]]
    :limit-s 120}
   {:name "mine-spares-own-plan-cells-by-default-b"
-   :plans [{:id "o" :metadata {:by "ProbeOwnPlan"} :parts [{:id "o" :cells [#at [19 0 16]] :want [:any "coal_ore"]}]}]
+   :plans [{:id "o" :metadata {:by "$body"} :parts [{:id "o" :cells [#at [19 0 16]] :want [:any "coal_ore"]}]}]
    :blocks [[:fill [2 0 8] [30 6 24] "stone"] [:fill [16 0 16] [16 1 16] "air"] [:set [19 0 16] "coal_ore"]]
    :act [[:job (jobs.gather.mine {:block "coal_ore" :count 1 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.done :data {:got 0}} :within-s 100 :of-job true}]
    :after [[:block [19 0 16] "coal_ore"]]
    :limit-s 120}
   {:name "mine-digs-own-plan-cells-when-not-spared-a"
-   :plans [{:id "o" :metadata {:by "ProbeOwnPlan"} :parts [{:id "o" :cells [#at [20 0 16]] :want [:any "iron_ore"]}]}]
+   :plans [{:id "o" :metadata {:by "$body"} :parts [{:id "o" :cells [#at [20 0 16]] :want [:any "iron_ore"]}]}]
    :blocks [[:fill [2 0 8] [30 6 24] "stone"] [:fill [16 0 16] [16 1 16] "air"] [:set [20 0 16] "iron_ore"]]
    :act [[:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 8 :spare-own-builds false :radius 8})]]
    :expect [{:event {:source :job :kind :mine.done :data {:got 1}} :within-s 100 :of-job true}]
    :after [[:item "raw_iron" 1]]
    :limit-s 120}
   {:name "mine-digs-own-plan-cells-when-not-spared-b"
-   :plans [{:id "o" :metadata {:by "ProbeOwnPlan"} :parts [{:id "o" :cells [#at [19 0 16]] :want [:any "coal_ore"]}]}]
+   :plans [{:id "o" :metadata {:by "$body"} :parts [{:id "o" :cells [#at [19 0 16]] :want [:any "coal_ore"]}]}]
    :blocks [[:fill [2 0 8] [30 6 24] "stone"] [:fill [16 0 16] [16 1 16] "air"] [:set [19 0 16] "coal_ore"]]
    :act [[:job (jobs.gather.mine {:block "coal_ore" :count 1 :direction :east :tunnel-length 8 :spare-own-builds false :radius 8})]]
    :expect [{:event {:source :job :kind :mine.done :data {:got 1}} :within-s 100 :of-job true}]

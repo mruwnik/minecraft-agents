@@ -204,6 +204,14 @@
          (f/resolve-plan-refs '(jobs.forestry.prepare {:plan "$plan:wood"}) "test-probex-")))
   (is (= {:plan "other"} (f/resolve-plan-refs {:plan "other"} "test-probex-"))))
 
+(deftest body-refs-resolve-to-the-running-body
+  (is (= {:id "w" :metadata {:by "ProbeX"}} (f/resolve-body-refs {:id "w" :metadata {:by "$body"}} "ProbeX")))
+  (is (= {:metadata {:by "Other"}} (f/resolve-body-refs {:metadata {:by "Other"}} "ProbeX"))))
+
+(deftest after-block-checks-floor-fractional-coordinates
+  (is (= "execute if block 20001 150 20002 air" (f/after-command [20000 150 20000] "B" {} {} [:block [1.5 0 2.5] "air"])))
+  (is (= "execute if block 20011 150 20011 dirt" (f/after-command [20000 150 20000] "B" {} {} [:not-block [11.5 0 11.5] "dirt"]))))
+
 (deftest body-start-plan-gives-each-case-clean-memory
   (is (= :restart-clean (f/body-start-plan {} true)))
   (is (= :restart-clean (f/body-start-plan {} false)))

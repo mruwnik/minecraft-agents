@@ -535,7 +535,7 @@
 (defn write-plans! [opts c]
   (doall (for [plan (:plans c)]
            (let [file (path/join (plans-dir opts) (str (plan-prefix opts) (:id plan) ".edn"))]
-             (fs/writeFileSync file (f/plan-file-text plan (plan-prefix opts)))
+             (fs/writeFileSync file (f/plan-file-text (f/resolve-body-refs plan (:body opts)) (plan-prefix opts)))
              file))))
 
 (defn submit-job!
@@ -578,7 +578,7 @@
                                           (fn [ok] (if ok ids (throw (js/Error. "a :time-set step needs --allow-time")))))
                          :await (.then (await-event opts offset a t0 (* 1000 b))
                                        (fn [ev] (if ev ids (throw (js/Error. (str ":await " (pr-str a) " timed out after " b " s"))))))
-                         :job (.then (submit-job! opts (f/resolve-plan-refs a (plan-prefix opts)) (vec (map #(str "--" (name %)) b))) #(conj ids %))))))
+                         :job (.then (submit-job! opts (f/resolve-body-refs (f/resolve-plan-refs a (plan-prefix opts)) (:body opts)) (vec (map #(str "--" (name %)) b))) #(conj ids %))))))
           (js/Promise.resolve #{})
           (:act c))))
 
