@@ -45,7 +45,7 @@
    - options.tolls {cells}: cells is a Map of cell-key (planner/cell-key) to a factor: entering such a cell costs factor
      times its own seconds more, in g and in cost.darkSeconds (the caller's price of a cell; no zone knowledge here).
    - options.stopAtEdge: with the goal unloaded, the search ends at the first node it expands at the loaded edge (edgeStop)
-     and names it as its frontier, not after searching all loaded land. go-to's budgeted searches set it (walk/new-search)."
+     and names it as its frontier, not after searching all loaded land. go-to's budgeted searches set it (walk.search/new-search)."
   (:require [engine.path.planner.base :as base :refer [OCTILE-SLACK REGIONS TABLE WHOLE next-pow2]]
             [engine.path.planner.search :refer [Search ->Search]]
             [engine.path.planner.world]
