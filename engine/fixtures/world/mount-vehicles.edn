@@ -15,7 +15,8 @@
          [:job (jobs.movement.mount {:name "oak_boat"})]]
    :expect [{:event {:source :job :kind :vehicle.mounted :data {:vehicle "oak_boat"}} :within-s 40 :of-job true}]}
   {:name "mount-then-dismount-onto-water"
-   :blocks [[:fill [12 -1 14] [20 -1 18] "water"]]
+   :blocks [[:fill [12 -2 14] [20 -2 18] "stone"]
+            [:fill [12 -1 14] [20 -1 18] "water"]]
    :act [[:summon "oak_boat" [15.5 -1 16.5] "{}"]
          [:job (jobs.movement.mount {:name "oak_boat"})]
          [:job (jobs.movement.leave-vehicle {})]]
