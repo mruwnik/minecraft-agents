@@ -8,6 +8,9 @@
             [jobs.lib.walk :as walk]
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.reach :as reach]
+            [jobs.lib.pass :as pass]
+            [engine.memory :as mem]
+            [clojure.string :as str]
             [jobs.lib.places :as places]))
 
 (def doc
@@ -41,6 +44,9 @@
   this is a failure: the animal is let go where it is, with a warn
   lead-to.gather-short (:distance from :pos) and :gathered false. :gathered is true when the animal was within
   :gather-radius, or tied.
+
+  The legs let doors and gates stay open for the animal to follow; when the leading ends, in any outcome, a
+  jobs.maintenance.shut-doors child shuts the ones the legs opened.
 
   Ends with info lead-to.done and a warn lead-to.gave-up unless the reason is :tied or :unleashed. Result
   {:reason :animal key :still-led bool :at pos :gathered bool}. Reasons:
@@ -95,8 +101,8 @@
       :no-lead (str "no lead carried and none could be got" (some->> (:lead-why (ctx/mem c)) (str ": ")))
       (str "leading stopped: " (name reason)))))
 
-(defn finish!
-  "Emit the outcome, hand it to the parent and end the job. Any reason but :tied and :unleashed is a stop."
+(defn conclude!
+  "Emit the outcome, hand it to the parent and end the job."
   [c reason]
   (let [m (ctx/mem c)
         ok? (#{:tied :unleashed} reason)
@@ -110,6 +116,32 @@
       (ctx/emit! c :lead-to.gave-up :warn {:reason reason :text (stop-text c reason)}))
     (ctx/result! c (cond-> result (not ok?) (assoc :status :stopped :text (stop-text c reason))))
     :done))
+
+(defn finish!
+  "End the leading with reason: the gates its walks left open are shut first (close-up!), then conclude!. Any reason but
+  :tied and :unleashed is a stop."
+  [c reason]
+  (ctx/update-mem! c assoc :ending reason)
+  :again)
+
+(defn walk-entries
+  "The :opened entries written by this job's go-to legs."
+  [c]
+  (filterv #(str/starts-with? (str (:by %)) (str (:id c) "/")) (map :data (mem/entries (ctx/view c) :opened))))
+
+(defn ^:async close-up!
+  "Shut the gates the :leave-open legs left open (the animal followed through them): their entries become shut-able and a
+  jobs.maintenance.shut-doors child shuts them. :yield while that child waits, else the job concludes."
+  [c]
+  (let [mine (walk-entries c)]
+    (doseq [e mine :when (false? (:shut? e))]
+      (ctx/forget-where! c :opened #(= (:cell e) (:cell %)))
+      (ctx/remember! c :opened (assoc e :shut? true) pass/opened-policy))
+    (if (empty? mine)
+      (conclude! c (:ending (ctx/mem c)))
+      (if (= :done (await (ctx/call-child c :shut 'jobs.maintenance.shut-doors {})))
+        (conclude! c (:ending (ctx/mem c)))
+        :yield))))
 
 (defn destination [c]
   (let [{:keys [pos fence]} (:args c)]
@@ -459,6 +491,7 @@
           a (when animal (animal-now c))]
       (when a (ctx/update-mem! c dissoc :unseen-since))
       (cond
+        (:ending (ctx/mem c)) (await (close-up! c))
         (and (nil? phase) fence (not (fence-block? c))) (finish! c :no-fence)
         (>= (- now started) (* 1000 timeout-s)) (finish! c :timeout)
         (nil? phase) (do (set-phase! c (if (lead-carried? c) :leash :get-lead)) :again)

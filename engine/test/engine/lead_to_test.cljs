@@ -669,3 +669,22 @@
           (is (seq opts))
           (is (every? #(and (false? (:escalate %)) (= :never (:doors %)) (:zone-tolls %)) opts))
           (is (= :tied (:reason (done-event s)))))))))
+
+(def gate-wall
+  "A fence across the lane at x 15 (floor under it) with a shut gate at z 0."
+  (merge (tu/box 15 63 -10 15 63 10 "stone") (tu/box 15 64 -10 15 64 10 "oak_fence") {"15,64,0" "oak_fence_gate"}))
+
+(defn gate-open? [{:keys [p]}]
+  (:open (js->clj (.-properties (.blockAt p #js {:x 15 :y 64 :z 0})) :keywordize-keys true)))
+
+(deftest a-gate-the-walk-opened-is-shut-again-when-the-leading-ends
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {} {:inventory lead :entities [(cow 1 3)] :blocks gate-wall
+                                     :states {"15,64,0" {:open false :facing "east"}}} 40))]
+          (is (finished? s))
+          (is (some? (done-event s)))
+          (is (false? (gate-open? s)) "the gate is shut behind the cow and the body")
+          (is (empty? (filter #(false? (:shut? %)) (map :data (mem/entries (mem/view (:store (:eng s))) :opened))))
+              "no open-on-purpose entry is left"))))))
