@@ -10,7 +10,7 @@ const tools = dirname(fileURLToPath(import.meta.url))
 const sh = (cwd, ...a) => execFileSync(a[0], a.slice(1), { cwd, encoding: 'utf8' }).trim()
 
 // Fake repo: tools/compile fails while file BROKEN exists, tools/test-engine fails (printing a FAIL line) while file BAD exists.
-const COMPILE = '#!/bin/sh\n[ -n "$COMPILE_LOG" ] && echo "compile $*" >> "$COMPILE_LOG"\n[ -n "$BISECT_SLOW" ] && [ "$2" != --stop ] && sleep 30\n[ "$2" = --stop ] && [ -n "$COMPILE_LOG" ] && { sleep 2; echo "stop-done $1" >> "$COMPILE_LOG"; }\n[ -n "$FAKE_COMPILE_BUSY_N" ] && { n=$(cat "$(dirname "$0")/../c.busy" 2>/dev/null || echo 0); echo $((n + 1)) > "$(dirname "$0")/../c.busy"; [ "$n" -lt "$FAKE_COMPILE_BUSY_N" ] && { echo "no free compile slot"; exit 75; }; }\n[ -e "$(dirname "$0")/../BROKEN" ] && { echo "boom: undeclared var"; exit 1; }\nexit 0\n'
+const COMPILE = '#!/bin/sh\n[ -n "$ENV_LOG" ] && echo "$1|$RES_SLOT_DIR|$(cat "$RES_SLOT_CONFIG" 2>/dev/null)" >> "$ENV_LOG"\n[ -n "$COMPILE_LOG" ] && echo "compile $*" >> "$COMPILE_LOG"\n[ -n "$BISECT_SLOW" ] && [ "$2" != --stop ] && sleep 30\n[ "$2" = --stop ] && [ -n "$COMPILE_LOG" ] && { sleep 2; echo "stop-done $1" >> "$COMPILE_LOG"; }\n[ -n "$FAKE_COMPILE_BUSY_N" ] && { n=$(cat "$(dirname "$0")/../c.busy" 2>/dev/null || echo 0); echo $((n + 1)) > "$(dirname "$0")/../c.busy"; [ "$n" -lt "$FAKE_COMPILE_BUSY_N" ] && { echo "no free compile slot"; exit 75; }; }\n[ -e "$(dirname "$0")/../BROKEN" ] && { echo "boom: undeclared var"; exit 1; }\nexit 0\n'
 const TEST_ENGINE = '#!/bin/sh\n[ "$1" = engine.nope-test ] && exit 2\n[ -n "$FAKE_TE_BUSY_N" ] && { n=$(cat "$(dirname "$0")/../te.busy" 2>/dev/null || echo 0); echo $((n + 1)) > "$(dirname "$0")/../te.busy"; [ "$n" -lt "$FAKE_TE_BUSY_N" ] && exit 75; }\n[ -n "$FAKE_TE_RC" ] && exit "$FAKE_TE_RC"\nif [ -e "$(dirname "$0")/../BAD" ]; then if [ -n "$FAKE_TE_CTRL" ]; then printf "FAIL in (a-test\\t\\033[31mred\\033[0m)\\n"; else echo "FAIL in (a-test)"; fi; exit "${FAKE_TE_BADRC:-1}"; fi\nexit 0\n'
 // the main checkout's res-slot: logs "<kind> -- <cmd>" to RES_LOG, then runs cmd
 const RES_SLOT = '#!/bin/sh\n[ -n "$RES_LOG" ] && echo "$*" >> "$RES_LOG"\nshift 2\nexec "$@"\n'
@@ -206,6 +206,22 @@ test('a commit whose compile still uses the retired compile slot kind runs under
     assert.equal(calls.filter((l) => l === 'compile engine test').length > wrapped.length, true, 'a modern step compiled unwrapped: ' + calls.join(' | '))
     assert.equal(calls.filter((l) => l === 'compile engine --stop').length, wrapped.length, calls.join(' | '))
     assert.equal(calls.filter((l) => l === 'compile dashboard --stop').length, wrapped.length, calls.join(' | '))
+  } finally { rmSync(d, { recursive: true, force: true }) }
+})
+
+test('a legacy step runs its commands with a private res-slot dir and a permissive config, so its own compile slot is not a second slot; a modern step sees neither', () => {
+  const { d, shas } = fakeRepo({ legacyUpTo: 2 })
+  try {
+    const r = run(d, ['engine.a-test', '--good', shas[0], '--bad', shas[5]], { RES_LOG: join(d, 'res.log'), ENV_LOG: join(d, 'env.log') })
+    assert.equal(r.status, 0, r.stdout + r.stderr)
+    const rows = readFileSync(join(d, 'env.log'), 'utf8').trim().split('\n').map((l) => l.split('|'))
+    const legacy = rows.filter((c) => c[1])
+    assert.ok(legacy.length >= 1, rows.join(' ; '))
+    for (const [, dir, cfg] of legacy) {
+      assert.notEqual(dir, '/tmp/mc-res')
+      assert.equal(JSON.parse(cfg).floorMb, 0)
+    }
+    assert.ok(rows.some((c) => c[0] === 'engine' && !c[1] && !c[2]), 'a modern step must not see the override: ' + rows.join(' ; '))
   } finally { rmSync(d, { recursive: true, force: true }) }
 })
 

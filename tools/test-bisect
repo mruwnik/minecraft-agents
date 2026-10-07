@@ -5,7 +5,7 @@
 # Verdicts per step: pass = good, test failure = bad, compile failure / namespace missing / timeout / busy slot / killed (75, 137, 143) = skipped (exit 125).
 # Worktree setup waits for a free server slot (retry every TEST_BISECT_RETRY_SLEEP s, default 20, up to TEST_BISECT_SLOT_WAIT s, default 1800), then exits 75.
 # A busy step (75) is retried up to TEST_BISECT_BUSY_RETRIES times (default 30, same sleep); a commit that still cannot be run is never named: INCONCLUSIVE, exit 1.
-# Steps at commits before ef81c1c6 (retired 2-slot `compile` kind, no idle exit) run under main's res-slot `server` slot and stop their servers at the step's end; later commits are untouched.
+# Steps at commits before ef81c1c6 (retired 2-slot `compile` kind, no idle exit) run under main's res-slot `server` slot and stop their servers at the step's end (their own nested `compile` slot is made a no-op with a private RES_SLOT_DIR and a floor-less RES_SLOT_CONFIG); later commits are untouched.
 # The per-step explicit compile stays: test-engine passes a compile failure on as a plain exit 1, which would score bad.
 # Defaults: bad = HEAD, good = HEAD~20. Prints the first bad commit, its failing tests and the step count. TEST_EVENTS=1: @@test plan, phase, result and progress lines per step and a verdict result.
 # The worktree (and its shadow servers) is removed on exit, error, INT and TERM.
@@ -37,8 +37,14 @@ if [ "${1:-}" = --step ]; then
   cmd=""
   # the command does not inherit the relay fd, so a server it leaves running cannot hold the caller's stdout open
   noout() { [ -z "${BISECT_OUT:-}" ] || exec {BISECT_OUT}>&-; exec "$@"; }
-  slotted() { if [ $legacy = 1 ]; then ( noout "$repo/tools/res-slot" server -- "$@" ) & else ( noout "$@" ) & fi; cmd=$!; wait $cmd; local r=$?; cmd=""; return $r; }
-  stop_legacy() { [ $legacy = 1 ] || return 0; for p in engine dashboard; do ( noout "$wt/tools/compile" $p --stop >/dev/null 2>&1 ); done; }
+  # the old res-slot reads RES_SLOT_DIR/RES_SLOT_CONFIG: a private dir and a config with no floor make the commit's own nested `compile` slot a no-op
+  legacy_env=(env "RES_SLOT_DIR=$BISECT_WORK/res" "RES_SLOT_CONFIG=$BISECT_WORK/res-slot.json")
+  if [ $legacy = 1 ]; then
+    mkdir -p "$BISECT_WORK/res"
+    echo '{"floorMb":0,"kinds":{"body":{"needMb":1,"max":99},"tests":{"needMb":1,"baseMb":0,"perNsMb":0,"goldenMb":0,"max":99,"shardMax":99},"compile":{"needMb":1,"max":99},"browser":{"needMb":1,"max":99},"time":{"needMb":1,"max":99}}}' > "$BISECT_WORK/res-slot.json"
+  fi
+  slotted() { if [ $legacy = 1 ]; then ( noout "$repo/tools/res-slot" server -- "${legacy_env[@]}" "$@" ) & else ( noout "$@" ) & fi; cmd=$!; wait $cmd; local r=$?; cmd=""; return $r; }
+  stop_legacy() { [ $legacy = 1 ] || return 0; for p in engine dashboard; do ( noout "${legacy_env[@]}" "$wt/tools/compile" $p --stop >/dev/null 2>&1 ); done; }
   trap '[ -n "$cmd" ] && kill "$cmd" 2>/dev/null; stop_legacy; exit 130' INT TERM
   # done: report the step's result and progress, then exit with its code
   done_step() { stop_legacy; result "$rname" "$1"; emit "{\"event\":\"progress\",\"done\":$n,\"total\":$total,\"unit\":\"steps\"}"; exit "$2"; }
