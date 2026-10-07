@@ -119,7 +119,8 @@
   spot is wider: the mob has moved on from it."
   {:sensed {:close 3 :radius 12} :remembered {:close 3 :radius 16} :creeper {:close 4 :radius 8}})
 (def stances "Rate factor: :flee from a mob costs the body far more than one it would :fight." {:flee 4 :fight 0.1})
-(def max-rate "hp a second one danger costs at most (the planner caps all of them together at its dangerCap, 4)." 4)
+(def max-rate "hp a second one danger costs at most." 4)
+(def danger-cap "hp a second all known dangers together cost at most (the planner's dangerCap); a larger :danger-max-rate raises it." 4)
 
 (defn danger-opts
   "The danger options of go-to's args {:flee-factor :fight-factor :danger-max-rate :danger-shape}, as the {:stances :max-rate

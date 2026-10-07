@@ -78,6 +78,13 @@
     (is (= 25 (:damage-weight (wworld/body-policy {:primitives (tu/fake {:self {:health 10 :food 20}}) :args {:hp-seconds 12.5}})))
         "the price still rises with low health")))
 
+(deftest a-danger-max-rate-above-the-default-raises-the-planners-total-cap
+  (let [policy (fn [args] (wworld/body-policy {:primitives (tu/fake {:self {:health 20 :food 20}}) :args args}))
+        cap (fn [args] (.-dangerCap (wplan/with-drops #js {} (policy args))))]
+    (is (= 4 (cap {})) "default")
+    (is (= 4 (cap {:danger-max-rate 2})) "a lower rate leaves the total cap")
+    (is (= 8 (cap {:danger-max-rate 8})))))
+
 (deftest the-walk-policy-uses-the-survivable-budget-once-the-call-chose-to-go-over
   (let [policy (fn [mem args] (wworld/body-policy {:primitives (tu/fake {:self {:health 14 :food 20}}) :args args :over-budget mem}))]
     (is (= 1 (:damage-budget (policy false {}))))

@@ -155,7 +155,7 @@
 (defn body-policy
   "executor/policy for the body: with the walk's food (food-of) 6 or less the client does not sprint, so :sprint is false (a corner jump past
   a high block is then refused). :damage-budget (hp, damage-budget) and :damage-weight (seconds an hp costs at its health)
-  price the damage of a walk (the job's :hp-seconds arg: the seconds an hp costs at full health, default jobs.lib.cost/hp-seconds);
+  price the damage of a walk, :danger-cap the total hp a second its known dangers cost (jobs.lib.cost/danger-cap, more when the job's :danger-max-rate is) (the job's :hp-seconds arg: the seconds an hp costs at full health, default jobs.lib.cost/hp-seconds);
   :max-drop and :fall-factor follow its fall enchantments and the longest drop it survives (the survivable-budget under the job's :max-damage,
   whatever the budget: a drop the budget refuses is a refusal the planner reports as :damageRefused, jobs.lib.cost/fall-profile)."
   [c]
@@ -165,7 +165,8 @@
                    (cost/fall-profile {:damage-budget (cost/survivable-budget (damage-body c) (select-keys (:args c) [:max-damage]))
                                        :equipment (cost/equipment-of (.-equipment self))})
                    {:damage-budget (damage-budget c)
-                    :damage-weight (* (or (:hp-seconds (:args c)) cost/hp-seconds) (cost/health-scale (.-health self)))})
+                    :damage-weight (* (or (:hp-seconds (:args c)) cost/hp-seconds) (cost/health-scale (.-health self)))
+                    :danger-cap (max cost/danger-cap (or (:danger-max-rate (:args c)) 0))})
       (and (number? food) (<= food 6)) (assoc :sprint false))))
 
 (defn body-cell

@@ -56,6 +56,10 @@
 (def danger-shape-problem danger/danger-shape-problem)
 (def danger-list danger/danger-list)
 (def max-dangers danger/max-dangers)
+(def danger-stances danger/stances)
+(def danger-max-rate danger/max-rate)
+(def danger-cap danger/danger-cap)
+(def danger-default-shape danger/danger-shape)
 
 (def hp-seconds health/hp-seconds)
 (def health-scale health/health-scale)

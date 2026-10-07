@@ -1,5 +1,6 @@
 (ns jobs.movement.path-preview
   (:require [engine.ctx :as ctx]
+            [jobs.lib.cost :as cost]
             [jobs.lib.near :as near]
             [jobs.lib.walk :as walk]
             [jobs.lib.walk.plan :as wplan]
@@ -33,10 +34,10 @@
    :min-health {:doc "go-to's :min-health: the hp the walk may not spend below" :default nil}
    :max-damage {:doc "go-to's :max-damage: at most this many hp spent on drops and plants" :default nil}
    :food {:doc "go-to's :food: the food level (0-20) the damage budget counts on; default the body's own" :default nil}
-   :hp-seconds {:doc "go-to's :hp-seconds: seconds an hp costs at full health" :default 10}
-   :flee-factor {:doc "go-to's :flee-factor" :default 4}
-   :fight-factor {:doc "go-to's :fight-factor" :default 0.1}
-   :danger-max-rate {:doc "go-to's :danger-max-rate" :default 4}
+   :hp-seconds {:doc "go-to's :hp-seconds: seconds an hp costs at full health" :default cost/hp-seconds}
+   :flee-factor {:doc "go-to's :flee-factor" :default (:flee cost/danger-stances)}
+   :fight-factor {:doc "go-to's :fight-factor" :default (:fight cost/danger-stances)}
+   :danger-max-rate {:doc "go-to's :danger-max-rate" :default cost/danger-max-rate}
    :danger-shape {:doc "go-to's :danger-shape" :default nil}
    :one-way {:doc ":closed takes no drop of 2 or 3 or gap jump down that the body cannot climb back; :open (default) takes one toward unloaded land" :default :open}})
 

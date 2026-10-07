@@ -64,7 +64,7 @@
   :damage-budget and :damage-weight the planner's damageBudget and damageWeight (none: the planner's defaults)."
   [^js options policy]
   (let [k (:drop-cost policy)]
-    (doseq [[opt key] [["maxDrop" :max-drop] ["fallFactor" :fall-factor] ["damageBudget" :damage-budget] ["damageWeight" :damage-weight]]]
+    (doseq [[opt key] [["maxDrop" :max-drop] ["fallFactor" :fall-factor] ["damageBudget" :damage-budget] ["damageWeight" :damage-weight] ["dangerCap" :danger-cap]]]
       (when-some [v (get policy key)] (unchecked-set options opt v)))
     (cond
       (false? k) (doto options (unchecked-set "maxDrop" 1))
