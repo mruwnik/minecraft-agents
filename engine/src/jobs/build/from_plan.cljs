@@ -319,12 +319,14 @@
     {:name (.-name b) :state (js->clj (.-properties b) :keywordize-keys true)}))
 
 (defn misplaced
-  "The text of what was placed (the want's state keys only) when block does not hold want, else nil."
+  "The text of what was placed (the want's state keys only) when block does not hold want, else nil. A rail's shape
+  and power settle as its neighbours land, so the place result is judged by the rail's name alone."
   [want item block]
-  (when (and block (= :wrong (shape/judge want block)))
-    (let [wanted (block-want want item)
-          ks (when (map? wanted) (keys (dissoc wanted :block)))]
-      (shape/want-text (into {:block (:name block)} (select-keys (:state block) ks))))))
+  (let [wanted (block-want want item)
+        want (if (rail/rail-name? (shape/want-block wanted)) (shape/want-block wanted) want)]
+    (when (and block (= :wrong (shape/judge want block)))
+      (let [ks (when (map? wanted) (keys (dissoc wanted :block)))]
+        (shape/want-text (into {:block (:name block)} (select-keys (:state block) ks)))))))
 
 (defn missing
   "The cells to place: empty (or holding a replaceable block), with an item; never a companion half."

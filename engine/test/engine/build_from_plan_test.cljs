@@ -715,3 +715,10 @@
           (takeover/release! eng {:who "claude" :reason "released" :held-ms 5})
           (await (h/run-until-empty eng 40))
           (is (= 9 (:placed @out))))))))
+
+(deftest a-rail-shape-in-the-place-result-is-no-misplacement
+  (are [want block text] (= text (build/misplaced want "rail" block))
+    {:block "rail" :shape "south_east"} {:name "rail" :state {:shape "north_south"}} nil
+    {:block "powered_rail" :shape "north_south" :powered true} {:name "powered_rail" :state {:shape "north_south" :powered "false"}} nil
+    {:block "rail" :shape "south_east"} {:name "stone"} "stone"
+    {:block "lever" :facing "north"} {:name "lever" :state {:facing "south"}} "lever[facing=south]"))
