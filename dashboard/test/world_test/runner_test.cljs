@@ -517,3 +517,7 @@
          (r/align-retries [{:id "a" :run 1 :status :fail} {:id "b" :run 1 :status :fail}]
                           {["a" 1] {:id "a" :run 1 :status :pass}})))
   (is (= [{:id "a" :run 1 :status :fail}] (r/align-retries [{:id "a" :run 1 :status :fail}] {}))))
+
+(deftest changed-since-pass-is-an-option
+  (is (true? (:changed-since-pass (r/parse-args #js ["--changed-since-pass"]))))
+  (is (nil? (:changed-since-pass (r/parse-args #js [])))))

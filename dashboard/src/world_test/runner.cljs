@@ -13,6 +13,7 @@
             [clojure.string :as str]
             [dashboard.rcon :as rcon]
             [world-test.build :as build]
+            [world-test.changed :as chg]
             [world-test.events :as ev]
             [world-test.expect :as x]
             [world-test.fixture :as f]
@@ -20,9 +21,10 @@
 
 (def usage
   (str "usage: node tools/world-test.mjs [fixture.edn|dir ...] [--tag T] [--match TEXT] [--repeat N] [--body NAME]\n"
-       "         [--world claude] [--first-plot I] [--card ID] [--allow-time --time-log FILE] [--results FILE] [--phase day|night|night-exclusive] [--retry-failed N] [--stop-on-fail] [--list] [--check]\n"
+       "         [--world claude] [--first-plot I] [--card ID] [--allow-time --time-log FILE] [--results FILE] [--phase day|night|night-exclusive] [--retry-failed N] [--changed-since-pass] [--stop-on-fail] [--list] [--check]\n"
        "--phase runs only the cases of that time class (case level; :any and untimed cases, and :day, count as day; a case whose first :time-set step is\n"
        "night counts as night): run day, then night, then night-exclusive so the time lock never flips mid-pass.\n"
+       "--changed-since-pass skips a fixture file that passed fully at a recorded revision (every run passes record it, in .claude/world-test-passes.edn) when no file of the jobs and triggers it uses (and what their source names) changed since, tracked or untracked; any engine, js, trigger-default or runner change, or a change to the fixture file, runs it.\n"
        "--retry-failed N reruns each failed case (not errors or inconclusive) up to N times after the batch, on the same body; a pass on a retry is reported :flaky (counted apart, never :pass, exit 0, also the live outcome) with the first failure kept under :first-failure; not combinable with --stop-on-fail.\n"
        "--check only loads and validates the fixtures (no body, no server): one result per case, exit 1 on a parse error or problem.\n"
        "Runs world fixtures (default dir engine/fixtures/world) on the reserved plot grid x/z 20000..20640, y 150 (large plots: lanes south of it, to z 22240).\n"
@@ -52,6 +54,7 @@
       (= a "--retry-failed") (if (re-matches #"\d+" (str b))
                                (recur more (assoc opts :retry-failed (js/Number b)))
                                (throw (js/Error. (str "--retry-failed needs a count, not " b))))
+      (= a "--changed-since-pass") (recur (rest all) (assoc opts :changed-since-pass true))
       (= a "--card") (recur more (assoc opts :card b))
       (= a "--results") (recur more (assoc opts :results b))
       (= a "--stop-on-fail") (recur (rest all) (assoc opts :stop-on-fail true))
@@ -101,6 +104,67 @@
   (if-not phase
     cases
     (filterv #(= phase (case (lease/time-phase %) :night "night" :night-x "night-exclusive" "day")) cases)))
+
+(def pass-record-path ".claude/world-test-passes.edn")
+
+(defn git-out
+  "Output lines of git args in the repo; nil when git fails."
+  [args]
+  (try (->> (str/split-lines (str (cp/execFileSync "git" (clj->js args) #js {:cwd (repo) :encoding "utf8" :maxBuffer (* 64 1024 1024)})))
+            (remove str/blank?) vec)
+       (catch :default _ nil)))
+
+(defn head-rev [] (first (git-out ["rev-parse" "HEAD"])))
+
+(defn changed-since
+  "Repo paths changed in the tree since rev (committed, uncommitted, untracked); nil when git cannot say."
+  [rev]
+  (let [tracked (git-out ["diff" "--name-only" rev]) untracked (git-out ["ls-files" "--others" "--exclude-standard"])]
+    (when (and tracked untracked) (into tracked untracked))))
+
+(defn read-pass-record []
+  (let [file (repo-path pass-record-path)]
+    (try (if (fs/existsSync file) (reader/read-string (fs/readFileSync file "utf8")) {}) (catch :default _ {}))))
+
+(defn source-texts
+  "{repo-relative path text} of every job and trigger source."
+  []
+  (let [walk (fn walk [dir]
+               (mapcat (fn [e] (let [p (path/join dir (.-name e))]
+                                 (cond (.isDirectory e) (walk p) (str/ends-with? (.-name e) ".cljs") [p] :else [])))
+                       (fs/readdirSync (repo-path dir) #js {:withFileTypes true})))]
+    (into {} (map (fn [p] [p (fs/readFileSync (repo-path p) "utf8")])) (concat (walk "engine/src/jobs") (walk "engine/src/triggers")))))
+
+(defn fixture-dir-texts
+  "{stem text} of the fixture files under paths."
+  [paths]
+  (into {} (map (fn [f] [(path/basename f ".edn") (fs/readFileSync f "utf8")])) (fixture-files paths)))
+
+(defn select-changed
+  "Cases of the fixture files that are stale since their recorded pass (see world-test.changed)."
+  [cases paths]
+  (let [stale (chg/stale-stems {:fixtures (fixture-dir-texts paths) :record (read-pass-record) :src (source-texts)
+                                :dir "engine/fixtures/world" :changed-since changed-since})
+        kept (filterv #(contains? stale (:file %)) cases)]
+    (log! "world-test: --changed-since-pass skips " (- (count (distinct (map :file cases))) (count (distinct (map :file kept))))
+          " unchanged fixture file(s)")
+    kept))
+
+(defn record-passes!
+  "Records the HEAD revision for every fixture file of all-cases whose every run passed, when its code is not changed since HEAD."
+  [opts all-cases paths results]
+  (let [expected (into {} (map (fn [[k n]] [k (* n (:repeat opts))])) (frequencies (map :file all-cases)))
+        passed (chg/passed-stems expected results)
+        rev (head-rev)]
+    (when (and rev (seq passed))
+      (let [stale (chg/stale-stems {:fixtures (select-keys (fixture-dir-texts paths) passed)
+                                    :record (zipmap passed (repeat rev)) :src (source-texts)
+                                    :dir "engine/fixtures/world" :changed-since changed-since})
+            clean (remove stale passed)
+            file (repo-path pass-record-path)]
+        (when (seq clean)
+          (fs/mkdirSync (path/dirname file) #js {:recursive true})
+          (fs/writeFileSync file (pr-str (merge (read-pass-record) (zipmap clean (repeat rev))))))))))
 
 (defn load-cases [paths]
   (vec (mapcat #(f/file-cases (fs/readFileSync % "utf8") (path/basename % ".edn")) (fixture-files paths))))
@@ -1007,7 +1071,9 @@
       (.then (fn []
                (let [opts (parse-args (array-seq argv))
                      final-results (atom nil)
-                     cases (if (:check opts) [] (select-phase (f/select-cases (load-cases (:paths opts)) opts) (:phase opts)))
+                     all-cases (if (:check opts) [] (load-cases (:paths opts)))
+                     cases (if (:check opts) [] (select-phase (f/select-cases all-cases opts) (:phase opts)))
+                     cases (if (and (:changed-since-pass opts) (not (:list opts))) (select-changed cases (:paths opts)) cases)
                      bad (filter :problems cases)]
                  (cond
                    (:check opts) (let [res (check-fixtures (:paths opts))]
@@ -1033,6 +1099,7 @@
                                   (.then (fn [results]
                                            (reset! final-results results)
                                            (write-results! opts results)
+                                           (record-passes! opts all-cases (:paths opts) results)
                                            (let [n (frequencies (map :status results))]
                                              (log! "world-test: " (count results) " runs, " (n :pass 0) " passed, " (n :fail 0) " failed, "
                                                    (n :error 0) " errors, " (n :flaky 0) " flaky, " (n :skipped 0) " skipped, " (n :inconclusive 0) " inconclusive")
