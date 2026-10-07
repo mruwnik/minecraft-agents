@@ -1190,6 +1190,24 @@
           (is (= {:status :stopped :got 0 :reason :no-tool :tool "pickaxe"} out))
           (is (zero? (dig-count s))))))))
 
+(deftest a-failed-pickaxe-fetch-is-booked-through-the-fetch-lib
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [s out]} (await (as-child {:block "stone" :count 1} {:blocks {"3,64,0" "stone"} :drops cobble} nil 20))]
+          (is (= :no-tool (:reason out)))
+          (is (= 1 (count (events-of s :fetch.failed)))))))))
+
+(deftest a-bad-fetch-arg-is-refused-at-check-not-treated-as-true
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [s out fetch]} (await (as-child {:block "stone" :count 1 :fetch "please"} {:blocks {"3,64,0" "stone"} :drops cobble} "stone_pickaxe" 20))]
+          (is (nil? out))
+          (is (empty? fetch))
+          (is (= [:bad-args] (mapv :reason (events-of s :mine.declined))))
+          (is (zero? (dig-count s))))))))
+
 (deftest fetch-false-ends-no-tool-without-asking-get-tool
   (async done
     (tu/run-async done

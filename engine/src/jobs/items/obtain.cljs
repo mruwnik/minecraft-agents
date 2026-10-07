@@ -30,7 +30,7 @@
   - :gather (in :how): coal comes from a plain or deepslate ore seen; every raw item a chain lacks must be seen before it starts. A sapling (no recipe) comes from the leaves of its tree the body has seen, broken by
     jobs.gather.get-seeds (at most 60 leaves, one run; the drop is picked up). What a craft chain lacks that has no recipe (logs, coal, stone-tool material; recipes/gatherable?, stone-materials) is
     felled or mined as one child per round, only what the body has seen: logs by jobs.forestry.harvest-wood,
-    cobblestone and coal by jobs.gather.mine. The crafts follow once the chain is whole (a chain that is craftable now
+    cobblestone and coal by jobs.gather.mine (with :fetch false: the chain crafts the pickaxe, and mine asking get-tool for it would loop back into obtain). The crafts follow once the chain is whole (a chain that is craftable now
     is crafted first). A child that brings in nothing three times stops it (:tried :gather).
   - Nothing else: stopped :no-source with :tried.
 
@@ -162,10 +162,10 @@
           (for [[k n] gather :when (material-blocks version k)]
             (let [blocks (material-blocks version k)]
               {:key k :count n :job 'jobs.gather.mine :seen blocks
-               :args {:block (first (sort blocks)) :item k :count n}}))
+               :args {:block (first (sort blocks)) :item k :count n :fetch false}}))
           (when-let [n (get gather "coal")]
             [{:key "coal" :count n :job 'jobs.gather.mine :seen #{"coal_ore" "deepslate_coal_ore"}
-              :args {:block "coal_ore" :item "coal" :count n}}]))))))
+              :args {:block "coal_ore" :item "coal" :count n :fetch false}}]))))))
 
 (defn gather-need
   "The first of gather-needs."

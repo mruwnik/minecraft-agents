@@ -232,6 +232,10 @@
 (defn check [c]
   (cond
     (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) (access/decline! c :mine.declined "mine" {:reason :no-zones})
+    (:error (fetch/opts c 'jobs.gather.mine))
+    (let [why (:error (fetch/opts c 'jobs.gather.mine))]
+      (ctx/warn-once! c [:fetch :bad-args] :mine.declined {:reason :bad-args :why why :text (str "mine declined: " why)})
+      (ctx/wait c {:reason :bad-args :why why}))
     (:phase (ctx/mem c)) true
     (not (:block (:args c))) false
     :else (let [{:keys [targets refused]} (scan c)]
@@ -903,15 +907,20 @@
   (ctx/result! c {:status :stopped :got 0 :reason :no-tool :tool "pickaxe"})
   :done)
 
-(defn ^:async fetch-pickaxe!
-  "A pickaxe is owed: run jobs.items.get-tool for the block (child :tool). :continue while it runs and once it has
-  got one; else the end: before any dig (no phase) at once, in the dig phase the mend first, with :no-tool."
+(defn tool-problem
+  "The :no-tool wait for the block while no pickaxe is carried, else nil."
   [c]
-  (let [r (when (fetch/opts c 'jobs.gather.mine) (await (ctx/call-child c :tool 'jobs.items.get-tool {:block (:block (:args c))})))
-        got? (and (= :done r) (= :done (:status (ctx/child-result c :tool))))]
+  (when (no-tool? c) {:reason :no-tool :block (:block (:args c))}))
+
+(defn ^:async fetch-pickaxe!
+  "A pickaxe is owed: jobs.lib.fetch runs jobs.items.get-tool for the block (failures are booked, limits apply).
+  :continue while it runs and once it has got one; else the end: before any dig (no phase) at once, in the dig phase
+  the mend first, with :no-tool."
+  [c]
+  (let [r (await (fetch/fetch! c 'jobs.gather.mine tool-problem))]
     (cond
-      (= :continue r) :continue
-      got? :continue
+      r r
+      (not (no-tool? c)) :continue
       (nil? (:phase (ctx/mem c))) (no-tool! c)
       :else (do (ctx/emit! c :mine.no-tool :warn {:tool "pickaxe" :text (str "mine has no pickaxe for " (:block (:args c)) " and could not get one")})
                 (to-mend! c :no-tool)))))

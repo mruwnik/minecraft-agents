@@ -633,7 +633,7 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 
 **Fetching what a job lacks** (`jobs.lib.fetch`): `blocks.dig`, `blocks.place`, `access.stair`, `access.tunnel`, `access.leave-tunnel` and `items.equip` take `:fetch`
 (default true; `false` waits or stops with the reason). Go-to's escalation children, clear-path's digs, the stairs and places
-of leave-tunnel, tunnel, dig-in and breathe, and obtain's table place pass `:fetch false`; `gather.mine`'s stair passes true. `true` allows every kind (`:tool :item`) and source (`:chest :craft :gather`); a
+of leave-tunnel, tunnel, dig-in and breathe, obtain's table place and its gather mines pass `:fetch false`; `gather.mine`'s stair passes true. `true` allows every kind (`:tool :item`) and source (`:chest :craft :gather`); a
 set narrows the kinds; a map gives limits `{:what :how :depth :minutes :fail-minutes}` (built-in, the job's default, the
 body's defaults from `items.fetch-limits`, then the call's arg; later wins). A fetchable wait (`:no-tool`, `:need`) then runs
 `items.get-tool` or `items.obtain` as child `:fetch` (info `fetch.started`, `fetch.done`). A failed fetch writes

@@ -847,11 +847,15 @@
     (is (= 1 (obtain/fruitless-limit sapling :done)))
     (is (= obtain/max-fruitless (obtain/fruitless-limit sapling :declined)) "a child that could not start broke no leaves")))
 
+(deftest gather-mines-never-fetch-a-pickaxe-themselves
+  (is (false? (get-in (obtain/gather-need {"cobblestone" 1}) [:args :fetch])))
+  (is (false? (get-in (obtain/gather-need {"coal" 1}) [:args :fetch]))))
+
 (deftest gather-needs-mine-the-block-that-drops-the-material
   (is (= #{"stone"} (:seen (obtain/gather-need {"cobblestone" 1}))))
   (let [n (obtain/gather-need {"cobbled_deepslate" 2})]
     (is (= #{"deepslate"} (:seen n)))
-    (is (= {:block "deepslate" :item "cobbled_deepslate" :count 2} (:args n)))))
+    (is (= {:block "deepslate" :item "cobbled_deepslate" :count 2 :fetch false} (:args n)))))
 
 (deftest the-stone-materials-are-those-of-the-bodys-version
   (is (= #{"deepslate"} (obtain/material-blocks "26.1" "cobbled_deepslate")))
