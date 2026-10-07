@@ -88,15 +88,28 @@
         (await (run-child c (other decision) a))
         result))))
 
+(def cover-sides
+  "Of the four sides of the body's cell, how many must be walled (feet and head cell solid) for it to hold cover: a
+  doorway leaves one open."
+  3)
+
+(defn covered?
+  "Whether the body is roofed and walled on cover-sides sides, as a cell with a doorway is (a canopy or overhang is not)."
+  [p]
+  (let [{:keys [x y z]} (sh/feet p)
+        walled? (fn [[dx dz]] (every? #(sh/solid-at? p {:x (+ x dx) :y (+ y %) :z (+ z dz)}) [0 1]))]
+    (and (sh/roofed? p sh/default-roof-height)
+         (<= cover-sides (count (filter walled? [[1 0] [-1 0] [0 1] [0 -1]]))))))
+
 (defn gap-wanted?
-  "Whether to stop arrows with a block rather than fight or flee: only ranged mobs near, the body roofed, building blocks
+  "Whether to stop arrows with a block rather than fight or flee: only ranged mobs near, the body in cover (covered?), building blocks
   carried and a tool that digs stone (the way out of a sealed doorway), and the gap job not yet tried
   (tried?)."
   [c hs tried?]
   (let [p (:primitives c)]
     (boolean (and (not tried?)
                   (every? combat/ranged? hs)
-                  (sh/roofed? p sh/default-roof-height)
+                  (covered? p)
                   (dig-in/pick c dig-in/building-blocks)
                   (tools/can-harvest? p "stone")))))
 

@@ -30,10 +30,11 @@
          p (tu/seeing-all (tu/fake (merge {:offlineScale 0.0001 :self {:pos {:x 0.5 :y 64 :z 0.5}}
                                            :blocks (merge ground shell) :entities [skeleton]
                                            :inventory [{:name "cobblestone" :count 8}]}
-                                          spec)))
-         eng (core/create {:primitives p :jobs registry/jobs :triggers {} :dir (tu/tmp-dir) :now #(deref clock)
+                                          (dissoc spec :act-ms))))
+         now (tu/act-clock clock p (:act-ms spec 0))
+         eng (core/create {:primitives p :jobs registry/jobs :triggers {} :dir (tu/tmp-dir) :now now
                            :world (ew/of-data {} {} zones)
-                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+                           :events (events/make {:body "Fake" :sinks [sink] :now now})})]
      {:eng eng :p p :seen seen})))
 
 (defn ^:async run-job! [{:keys [eng]} args]
