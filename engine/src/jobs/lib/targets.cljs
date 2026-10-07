@@ -25,7 +25,7 @@
 
 (def proof-reasons
   "Planner reasons of a search that ran out of land to search: no target is reachable within the box and abilities."
-  #{:exhausted :box :ladder-gap :air})
+  #{:exhausted :box :ladder-gap :air :air-lethal})
 
 (defonce ^{:doc "The unfinished search of each [body tag]: {:key :t :plan}. key is [body cell, targets, range]; t when
   it began (ms); plan the planner's create-plan."}

@@ -129,4 +129,6 @@
    ;; drowning (to-air only): its hp so far to each node, the hp of the node being recorded, options.drownPrices (the seconds
    ;; the first k hp cost, nil: damage-weight each) and options.health (drowning to it is lethal, see drownCost), and
    ;; options.airSeen (fn x y z: the body has seen or felt that block; nil: every block, see breathes)
-   ^:mutable drowns ^:mutable cur-drown ^js drown-prices lethal-hp ^js air-known])
+   ^:mutable drowns ^:mutable cur-drown ^js drown-prices lethal-hp ^js air-known
+   ;; costs.lethalAir off (the default): a swim whose drowning reaches lethal-hp is refused (lethal-seen, reason "air-lethal")
+   ^boolean no-lethal ^:mutable ^boolean lethal-seen])

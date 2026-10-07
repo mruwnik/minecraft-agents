@@ -247,6 +247,7 @@
     (when-not ^boolean (.-finished s) (.finish s "budget"))
     (cond
       (and (identical? (.-reason s) "exhausted") ^boolean (.-gap-seen s)) (set! (.-reason s) "ladder-gap")
+      (and (identical? (.-reason s) "exhausted") ^boolean (.-lethal-seen s)) (set! (.-reason s) "air-lethal")
       (and (identical? (.-reason s) "exhausted") ^boolean (.-air-seen s)) (set! (.-reason s) "air")))
 
   ;; the first one-way step on the way to the node nearest the goal, -1 when there is none or the result has no partial end

@@ -134,7 +134,7 @@
 
 (defn build-state-table
   "The planner's block table of a prismarine registry: typed arrays indexed by state id (top, base, kind, hazard, stairUp, climb,
-  climbName, facing, openable, openState, openKind, doorHalf, activator, attach, floor, special, flowing, bubble, magma,
+  climbName, facing, openable, openState, openKind, doorHalf, activator, attach, floor, special, flowing, bubble, wet, magma,
   dripleaf, farmland, boxStart, boxCount, boxes, offsetMax, partial, nameIds), as a JS object. nameIds is a Map of block name to
   its [first last] state id (see state-ids)."
   [registry]
@@ -158,6 +158,7 @@
         floor (js/Uint8Array. size) ;; height a body can stand on, 1/16 of the cell: the top, but none for a ladder
         flowing (js/Uint8Array. size) ;; water that is not a source: it pushes the body
         bubble (js/Uint8Array. size) ;; bubble column: 1 lifts (drag=false, over soul sand), 2 drags down (drag=true, over magma)
+        wet (js/Uint8Array. size) ;; water in the cell: water itself or a waterlogged block (eyes in it drain air even when it has collision)
         magma (js/Uint8Array. size) ;; a magma block: a body must not end its route on it
         dripleaf (js/Uint8Array. size) ;; a big dripleaf leaf with collision: a floor that tilts under a body
         farmland (js/Uint8Array. size) ;; farmland: a body landing on it from a jump or a fall tramples it to dirt
@@ -209,6 +210,7 @@
         (aset floor id (cond (= name "scaffolding") WHOLE (zero? (aget climb-name id)) (aget top id) :else 0))
         (aset flowing id (if (and (= name "water") (not= (js/Number (prop props "level")) 0)) 1 0))
         (aset bubble id (if (= name "bubble_column") (if (true? (prop props "drag")) 2 1) 0))
+        (aset wet id (if (or (= (aget kind id) WATER) (true? (prop props "waterlogged"))) 1 0))
         (aset magma id (if (= name "magma_block") 1 0))
         (aset farmland id (if (= name "farmland") 1 0))
         ;; (a magma bubble column is special too: the cells beside it cost risk, which a search only looks for where one is near)
@@ -224,7 +226,7 @@
           (aset stair-up id (get STAIR-UP (prop props "facing") 0)))))
     #js {:top top :base base :kind kind :hazard hazard :stairUp stair-up :climb climb :climbName climb-name :facing facing
          :openable openable :openState open-state :openKind open-kind :doorHalf door-half :activator activator :attach attach
-         :floor floor :special special :flowing flowing :bubble bubble :magma magma :dripleaf dripleaf :farmland farmland
+         :floor floor :special special :flowing flowing :bubble bubble :wet wet :magma magma :dripleaf dripleaf :farmland farmland
          :boxStart box-start :boxCount box-count :boxes (js/Float32Array.from floats) :offsetMax offset-maxes :partial partial :nameIds name-ids}))
 
 (defn state-ids

@@ -64,7 +64,7 @@
   #js {:climbUp 0.43 :climbDown 0.33 :jumpClimb 0.5 :open 1.0 :openRedstone 1.5 :openLever 6 :openPlate 0 :besideMagmaColumn 1
        :swimH 0.5 :swimUp 0.3 :swimDown 0.35 :exit 0.6 :current 0.3 :bubbleUp 0.08 :bubbleDown 0.12
        :airSupply 15 :airLimit 12 :airDrain 1 :airGrace 0 :airUsed 0 :maxWaterDrop 64 :dripleaf 0.2 :dripleafRisk 0.5
-       :dropFactor 1
+       :dropFactor 1 :lethalAir 0
        :walkS WALK-S :sprintS SPRINT-S})
 
 (def ^:const BODY 29) ; 1.8 blocks in 1/16, rounded up
@@ -199,8 +199,9 @@
 
 (defn breathable?
   "Whether a head in the block of state id (table: the block table) breathes: open, a climbable or an openable block, or
-  a bubble column (vanilla drains no air with the eyes in one); not a solid block, water or lava."
+  a bubble column (vanilla drains no air with the eyes in one); not a solid block, water (a waterlogged block too) or lava."
   [^js table id]
   (and (not (== id UNLOADED))
        (let [k (aget (.-kind table) id)]
-         (or (== k OPEN) (== k CLIMB) (== k OPENABLE) (pos? (aget (.-bubble table) id))))))
+         (or (pos? (aget (.-bubble table) id))
+             (and (zero? (aget (.-wet table) id)) (or (== k OPEN) (== k CLIMB) (== k OPENABLE)))))))

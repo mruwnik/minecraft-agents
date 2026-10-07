@@ -470,7 +470,7 @@
   "One go-to child call to target: true when it reports arrival. A call that waits or is declined is a failed try
   (go-to with :escalate false waits on nothing)."
   [c slot target range]
-  (let [r (await (ctx/call-child c slot 'jobs.movement.go-to {:pos target :range range :escalate false :warn false}))]
+  (let [r (await (ctx/call-child c slot 'jobs.movement.go-to {:pos target :range range :escalate false :warn false :costs {:lethal-air 1}}))]
     (and (= :done r) (boolean (:arrived (ctx/child-result c slot))))))
 
 (defn stop-afloat!

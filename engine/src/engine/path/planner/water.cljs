@@ -30,10 +30,10 @@
     (and (breathable? (.-table s) (.stateAt s x (inc y) z))
          (or (nil? (.-air-known s)) (true? ((.-air-known s) x (inc y) z)))))
 
-  ;; head in water that is not a bubble column: the breath runs
+  ;; head in water (a waterlogged block too) that is not a bubble column: the breath runs
   (submerged [s x y z]
     (let [head (.stateAt s x (inc y) z)]
-      (and (not (== head UNLOADED)) (== (aget (.-tbl-kind s) head) WATER) (zero? (aget (.-tbl-bubble s) head)))))
+      (and (not (== head UNLOADED)) (pos? (aget (.-wet (.-table s)) head)) (zero? (aget (.-tbl-bubble s) head)))))
 
   ;; Dominance: a submerged sideways move in open water is never better than swimming at the surface over it. A cell's column
   ;; is open when its water reaches plain air; then surfaceY is the top water cell, else NONE. Cached per cell.
@@ -118,9 +118,19 @@
           air (if (>= i 0) (aget (.-airs s) i) 0)
           use (+ air (* base (.-c-air-drain s)))
           ^boolean under (or src-sub target-sub)]
-      (if (and under (> use (.-c-air-limit s)) (not ^boolean (.-to-air s)))
+      (cond
+        (and under (> use (.-c-air-limit s)) (not ^boolean (.-to-air s)))
         (do (set! (.-air-seen s) true)
             false)
+
+        (and under ^boolean (.-no-lethal s) (> use (.-c-air-supply s))
+             (>= (+ (if (>= i 0) (aget (.-drowns s) i) 0)
+                    (/ (* DROWN-HP (- use (js/Math.max air (.-c-air-supply s)))) (.-c-air-drain s)))
+                 (.-lethal-hp s)))
+        (do (set! (.-lethal-seen s) true)
+            false)
+
+        :else
         (do (set! (.-move-air s) (cond
                                    target-sub use
                                    src-sub use

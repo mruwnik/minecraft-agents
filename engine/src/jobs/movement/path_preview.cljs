@@ -14,7 +14,7 @@
   tolls go-to plans with, and report it. Nothing is walked, opened or dug. One round, one plan (a search of any length, in
   slices that yield), then :done.
   Takes the go-to args :pos :place :range :doors :dangers :dark :tolls :drop-cost :costs :landing :gait :min-health :max-damage :hp-seconds :food :one-way, same defaults, and the danger prices :flee-factor :fight-factor :danger-max-rate :danger-shape.
-  Returns {:status :completed :found true :length :seconds :summary :steps :moves :doors :waypoints}: length is the horizontal
+  Returns {:status :completed :found true :length :seconds :summary :steps :moves :doors :waypoints (:drown hp where it drowns)}: length is the horizontal
   blocks, seconds the planner's cost in seconds (tolls, dark and danger costs not included), summary its words (drops, swims,
   doors), steps the step count, moves a count of each move kind (:drop :jump :open ...), doors the cells [x y z] it
   would open, waypoints the cells [x y z] where the route turns or changes move kind, ending at the goal's end of the plan.
@@ -61,15 +61,16 @@
         (vec (concat turns [(cell (peek steps))]))))))
 
 (defn route
-  "The report of a plan's steps and planner path: length, seconds, summary, steps, moves, doors, waypoints."
+  "The report of a plan's steps and planner path: length, seconds, summary, steps, moves, doors, waypoints, and :drown (hp) where the plan drowns."
   [steps ^js path]
-  {:length (walk/path-length steps)
+  (cond-> {:length (walk/path-length steps)
    :seconds (/ (js/Math.round (* 10 (.-seconds (.-cost path)))) 10)
    :summary (.-summary path)
    :steps (count steps)
    :moves (dissoc (frequencies (map :move (rest steps))) :walk)
    :doors (vec (distinct (for [s steps o (:opens s)] [(:x o) (:y o) (:z o)])))
-   :waypoints (waypoints steps)})
+   :waypoints (waypoints steps)}
+    (pos? (or (.-drown (.-cost path)) 0)) (assoc :drown (/ (js/Math.round (* 10 (.-drown (.-cost path)))) 10))))
 
 (defn u-dist
   "The horizontal distance in blocks, rounded, from the body to the goal cell to."

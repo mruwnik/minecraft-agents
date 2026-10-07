@@ -57,7 +57,7 @@
      sets it from the oxygen when the head is under water. Such a plan to a goal with its head in seen air (to-air?) is never
      refused for air and ends with the head in air (options.airSeen, fn x y z: the body has seen or felt that block, nil: all): each second past the supply drowns DROWN-HP hp (result cost.drown; not
      damage, so no damageBudget), the first k hp costing options.drownPrices[k] seconds (nil: damageWeight each); drowning
-     to options.health (20) is lethal and costs LETHAL-S more, so a lethal plan comes back only when no other does. Any
+     to options.health (20) is lethal: refused (reason air-lethal) unless options.costs.lethalAir is 1 (go-to :costs :lethal-air, breathe's), then it costs LETHAL-S more, so a lethal plan comes back only when no other does. Any
      other plan swims no further than airLimit from airUsed.
    - options.stopAtEdge: with the goal unloaded, the search ends at the first node it expands at the loaded edge (edgeStop)
      and names it as its frontier, not after searching all loaded land. go-to's budgeted searches set it (walk.search/new-search)."
@@ -299,7 +299,8 @@
      ;; dmgs move-dmg enter-dmg cur-dmg damage-refused
      (js/Float64Array. cap) 0 0 0 false
      ;; drowns cur-drown drown-prices lethal-hp air-known
-     (js/Float64Array. cap) 0 (.-drownPrices options) (option options "health" 20) (.-airSeen options))))
+     (js/Float64Array. cap) 0 (.-drownPrices options) (option options "health" 20) (.-airSeen options)
+     (not (pos? (or-else (unchecked-get costs "lethalAir") 0))) false)))
 
 ;; the body's hitbox reaches this far from its centre in x and z
 (def ^:const HITBOX-HALF 0.3)

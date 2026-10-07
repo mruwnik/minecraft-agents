@@ -284,8 +284,19 @@
     (is (< 4 (cost r :drown) 7) "2 hp a second past the supply (about 3 s)")
     (is (zero? (cost r :risk)) "drowning is its own cost, not risk")))
 
-(deftest a-plan-to-air-has-no-drowning-risk-with-the-air-to-spare
-  (is (zero? (cost (run drown-tunnel drown-start (near 21 64 1 0) {:goalFlood 0 :costs {:airUsed 2}}) :risk))))
+(deftest a-plan-to-air-has-no-drowning-with-the-air-to-spare
+  (is (zero? (cost (run drown-tunnel drown-start (near 21 64 1 0) {:goalFlood 0 :costs {:airUsed 2}}) :drown))))
+
+;; the goal's head cell is a ladder above the air pocket: dry, or waterlogged (the eyes are in water, the air drains)
+(defn ladder-head [waterlogged]
+  (world [[10 64 -2 23 68 4 "stone"] [11 64 1 20 65 1 "water"] [21 64 1 21 65 1 "air"]
+          [21 65 1 21 65 1 "ladder" {:facing "west" :waterlogged waterlogged}]]))
+
+(deftest a-goal-whose-head-cell-is-a-dry-ladder-is-air
+  (is (found? (run (ladder-head false) drown-start (near 21 64 1 0) {:goalFlood 0 :costs {:airUsed 13}}))))
+
+(deftest a-goal-whose-head-cell-is-a-waterlogged-ladder-is-not-air
+  (is (not (found? (run (ladder-head true) drown-start (near 21 64 1 0) {:goalFlood 0 :costs {:airUsed 13}})))))
 
 (deftest a-plan-to-air-is-found-over-the-damage-budget
   (is (found? (run drown-tunnel drown-start (near 21 64 1 0) {:goalFlood 0 :damageBudget 1 :costs {:airUsed 13}}))
@@ -323,12 +334,13 @@
                   [11 70 2 11 71 2 "air"]]
            walkway (into [[11 70 2 11 71 20 "air"] [12 70 20 52 71 20 "air"] [52 70 2 52 71 19 "air"]]))))
 (defn toll-walk [] {:cells (js/Map. #js [#js [(planner/cell-key 30 70 20) 3000]])})
-(def at-health-10 {:goalFlood 0 :health 10 :damageWeight 20 :costs {:airUsed 12.5}})
+(def at-health-10 {:goalFlood 0 :health 10 :damageWeight 20 :costs {:airUsed 12.5 :lethalAir 1}})
 
 (deftest a-lethal-way-to-air-loses-to-a-long-safe-one
   (let [r (run (lethal-dive true) dive-start (near 53 70 1 0) (assoc at-health-10 :tolls (toll-walk)))]
     (is (found? r))
     (is (some #(= 20 (:z %)) (steps r)) "the long way round")
+    (is (some? (cost r :drown)) "the plan reports its drowning")
     (is (< (cost r :drown) 10) "not drowned")))
 
 (deftest a-lethal-way-to-air-is-planned-when-it-is-the-only-one
@@ -336,6 +348,15 @@
     (is (found? r))
     (is (>= (cost r :drown) 10) "it drowns: still the only way")
     (is (< (cost r :drown) 20) "the least drowning: a breath at the top first")))
+
+(deftest a-lethal-way-to-air-is-refused-unless-the-caller-allows-it
+  (let [r (run (lethal-dive false) dive-start (near 53 70 1 0) (assoc-in at-health-10 [:costs :lethalAir] 0))]
+    (is (not (found? r)))
+    (is (= "air-lethal" (:reason r)))))
+
+(deftest a-lethal-way-to-air-is-refused-by-default
+  (let [r (run (lethal-dive false) dive-start (near 53 70 1 0) (update at-health-10 :costs dissoc :lethalAir))]
+    (is (= "air-lethal" (:reason r)))))
 
 (deftest drain-scales-the-lowest-air-reading
   (let [full (cost (run-up (column 20) 20) :airMin)

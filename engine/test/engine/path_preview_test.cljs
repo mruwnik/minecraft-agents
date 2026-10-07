@@ -183,3 +183,9 @@
   (is (contains? pp/args :landing))
   (is (re-find #":landing" pp/doc))
   (is (re-find #"refused at submit" pp/doc)))
+
+(deftest a-route-reports-the-hp-its-drowning-costs
+  (let [steps [{:x 0 :y 64 :z 0 :move :walk} {:x 1 :y 64 :z 0 :move :swim}]
+        path (fn [drown] #js {:seconds 2 :summary "" :cost #js {:seconds 2 :drown drown}})]
+    (is (= 4.5 (:drown (pp/route steps (path 4.5)))))
+    (is (not (contains? (pp/route steps (path 0)) :drown)))))
