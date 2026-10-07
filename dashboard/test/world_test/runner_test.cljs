@@ -663,3 +663,22 @@
                    (is (= ["rcon: data get entity Bob SpawnX -> Bob has the data {SpawnX: 3}"] @logged))))
           (.catch (fn [e] (is false (.-message e))))
           (.finally done)))))
+
+(deftest check-fails-an-unknown-act-op-and-a-repeated-case-name
+  (let [dir (fs/mkdtempSync (path/join (os/tmpdir) "wt-check-"))
+        case-str (fn [n op] (str "{:name \"" n "\" :plot {:height 4} :body {:at [1 1 1]} :time :any :act [[" op " 1]]"
+                                 " :expect [{:event :x :within-s 5}]}"))
+        spit! (fn [n s] (fs/writeFileSync (path/join dir n) s))]
+    (spit! "a-op.edn" (case-str "bad" ":no-such-op"))
+    (spit! "b-dup.edn" (str "{:cases [" (case-str "same" ":wait-s") " " (case-str "same" ":wait-s") "]}"))
+    (let [res (r/check-fixtures [dir])]
+      (fs/rmSync dir #js {:recursive true :force true})
+      (is (= [:fail] (distinct (map :status (filter #(= "a-op/bad" (:id %)) res)))))
+      (is (some #(and (= "b-dup/same" (:id %)) (= :fail (:status %)) (re-find #"repeated" (:why %))) res)
+          "a case name used twice in one file fails"))))
+
+(deftest every-real-world-fixture-parses-and-validates
+  (let [res (r/check-fixtures ["../engine/fixtures/world"])
+        bad (remove #(= :pass (:status %)) res)]
+    (is (seq res))
+    (is (empty? bad) (str (count bad) " fixture cases fail: " (pr-str (map (juxt :id :why) (take 5 bad)))))))

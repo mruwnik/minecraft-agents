@@ -189,9 +189,12 @@
   [paths]
   (vec (mapcat (fn [file]
                  (let [stem (path/basename file ".edn")]
-                   (try (map (fn [c] (cond-> {:id (:id c) :run 1 :status (if (:problems c) :fail :pass)}
-                                       (:problems c) (assoc :why (str/join "; " (:problems c)))))
-                             (f/file-cases (fs/readFileSync file "utf8") stem))
+                   (try (let [cases (f/file-cases (fs/readFileSync file "utf8") stem)
+                              repeated (set (keep (fn [[id n]] (when (< 1 n) id)) (frequencies (map :id cases))))]
+                          (map (fn [c] (let [ps (cond-> (vec (:problems c)) (repeated (:id c)) (conj "case name repeated in the file"))]
+                                         (cond-> {:id (:id c) :run 1 :status (if (seq ps) :fail :pass)}
+                                           (seq ps) (assoc :why (str/join "; " ps)))))
+                               cases))
                         (catch :default e [{:id stem :run 1 :status :fail :why (str file ": " (.-message e))}]))))
                (fixture-files paths))))
 
