@@ -282,7 +282,8 @@
       (on-done)
       (do (ctx/update-mem! c assoc :releasing k)
           (let [r (await (ctx/call-child c :unleash 'jobs.animals.unleash
-                                         {:mob (:mob (:args c)) :animal k :radius release-radius}))
+                                         (cond-> {:mob (:mob (:args c)) :animal k :radius release-radius}
+                                           (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))
                 reason (when (= :done r) (:reason (ctx/child-result c :unleash)))
                 declines (cond-> (:release-declines (ctx/mem c) 0) (= :declined r) inc)]
             (cond
@@ -447,7 +448,7 @@
         (cond
           (#{:no-start :unloaded} (:reason answer)) (finish! c :no-pen)
           (nil? chosen) (finish! c :no-gate)
-          (not (gate/allowed? c :herd.declined "herd" :place gate)) (finish! c :refused)
+          (not (gate/allowed? c :herd.declined "herd" :place gate {:own-plans-ok? true})) (finish! c :refused)
           (not (approach-free? (:primitives c) (cell gate) in out)) (finish! c :no-gate {:why :no-approach})
           (seq leaks) (finish! c :leaky {:leaks (vec (take 12 leaks))})
           (>= inside target) (finish! c :full)

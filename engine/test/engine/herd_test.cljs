@@ -10,6 +10,8 @@
             [engine.registry :as registry]
             [engine.triggers :as triggers]
             [jobs.animals.herd :as herd]
+            [jobs.lib.world-files :as ew]
+            [plan.shape :as shape]
             [engine.test-util :as tu]))
 
 (def job 'jobs.animals.herd)
@@ -1074,3 +1076,26 @@
             (await (run-ticks s 400))
             (is (= reason (:reason (done-event s))) (pr-str extra))
             (is (= declined (mapv :reason (events-of s :herd.declined))) (pr-str extra))))))))
+
+(def pen-zone (ew/of-data {} {} [{:name "farm" :owner "Miles" :min [11 60 1] :max [15 70 5]}]))
+
+(deftest ignore-zones-reaches-the-unleash-child
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (submit! (clock-on-wait! (h/setup (world {:entities [(cow 1 4 3)]}) 0 pen-zone)) {:target 1 :ignore-zones? true})]
+          (await (run-ticks s 400))
+          (is (= :brought (:reason (done-event s))))
+          (is (= [] (on-lead s)) "let go in the pen")
+          (is (empty? (events-of s :unleash.declined))))))))
+
+(deftest a-gate-in-the-bodys-own-plan-is-used-another-bodys-plan-refuses
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "pen" :parts [{:id "gate" :cells [[10 64 3]] :want "oak_fence_gate"}]}]
+          (doseq [[by reason] [["Fake" :brought] ["Miles" :refused]]]
+            (let [store (ew/of-data {"pen" (shape/with-author plan by)} {} [])
+                  s (submit! (clock-on-wait! (h/setup (world {:entities [(cow 1 4 3)]}) 0 store)) {:target 1})]
+              (await (run-ticks s 400))
+              (is (= reason (:reason (done-event s))) by))))))))
