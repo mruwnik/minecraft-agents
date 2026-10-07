@@ -166,11 +166,11 @@
   (into (first (body-setting c)) (remove (comp nil? val)) (select-keys (:args c) [:min-health :max-damage])))
 
 (defn warn-bad-settings!
-  "A :warn walk-settings.bad event naming the keys of the body's setting that are ignored; go-to calls it once per attempt."
+  "An :info walk-settings.bad event naming the keys of the body's setting that are ignored; go-to calls it once per attempt."
   [c]
   (let [bad (second (body-setting c))]
     (when (seq bad)
-      (ctx/emit! c :walk-settings.bad :warn
+      (ctx/emit! c :walk-settings.bad :info
                  {:keys bad :text (str "the body's :walk-settings " (pr-str bad) " is out of range (:min-health 1-20, :max-damage >= 0); ignored")}))))
 
 (defn damage-budget

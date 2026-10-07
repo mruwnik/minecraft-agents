@@ -41,7 +41,7 @@
                             (wworld/warn-bad-settings! c)
                             (and (= kept (wworld/walk-settings c))
                                  (= bad (mapv (comp :keys #(nth % 2)) @emitted))
-                                 (every? #(= [:walk-settings.bad :warn] (subvec % 0 2)) @emitted)))
+                                 (every? #(= [:walk-settings.bad :info] (subvec % 0 2)) @emitted)))
     {:min-health 0} {} [[:min-health]]
     {:min-health 21 :max-damage 3} {:max-damage 3} [[:min-health]]
     {:min-health "12"} {} [[:min-health]]
