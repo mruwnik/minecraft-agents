@@ -1,0 +1,26 @@
+;; jobs.village.feed (card 7f843e67): toss food to one villager (a fixed UUID, NoAI so it stays) and confirm it took it by the
+;; toss receipt. Live-only facts: whether a NoAI villager collects thrown food, and whether the toss lands on it from 2 blocks.
+{:defaults
+ {:tags [:village :jobs]
+  :plot {:floor "grass_block"}
+  :body {:at [10.5 0 16.5] :yaw 270 :inventory [["bread" 8]]}
+  :limit-s 120}
+ :cases
+ [{:name "feeds-three-bread"
+   :act [[:summon "villager" [16.5 0 16.5] "{NoAI:1b,UUID:[I;20260,7,1,843]}"]
+         [:wait-s 2]
+         [:job (jobs.village.feed {:villager "00004f24-0000-0007-0000-00010000034b" :count 3})]]
+   :expect [{:event {:source :job :kind :feed.done} :within-s 90 :of-job true}]
+   :after [[:item "bread" 5]]}
+  ;; should fail: the villager is not there
+  {:name "absent-villager-is-gone"
+   :act [[:job (jobs.village.feed {:villager "00004f24-0000-0007-0000-00010000034b" :count 1})]]
+   :expect [{:event {:source :job :kind :feed.gave-up :data {:reason "gone"}} :within-s 30 :of-job true}]
+   :after [[:item "bread" 8]]}
+  ;; should fail: a full inventory takes nothing; every drop is collected back
+  {:name "full-villager-takes-nothing"
+   :act [[:summon "villager" [16.5 0 16.5] "{NoAI:1b,UUID:[I;20260,7,1,843],Inventory:[{id:"minecraft:bread",count:64} {id:"minecraft:bread",count:64} {id:"minecraft:bread",count:64} {id:"minecraft:bread",count:64} {id:"minecraft:bread",count:64} {id:"minecraft:bread",count:64} {id:"minecraft:bread",count:64} {id:"minecraft:bread",count:64}]}"]
+         [:wait-s 2]
+         [:job (jobs.village.feed {:villager "00004f24-0000-0007-0000-00010000034b" :count 2})]]
+   :expect [{:event {:source :job :kind :feed.gave-up :data {:reason "not-taken"}} :within-s 90 :of-job true}]
+   :after [[:item "bread" 8]]}]}
