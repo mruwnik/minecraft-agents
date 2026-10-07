@@ -1,7 +1,7 @@
 (ns jobs.forestry.prepare
   (:require [engine.ctx :as ctx]
             [jobs.forestry.trees :as forestry]
-            [jobs.lib.tools :as tools]
+            [jobs.lib.blocks :as blocks]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
@@ -160,14 +160,9 @@
       (and column? (field/in-column? c cell)) (await (step-off! c cell))
       :else nil)))
 
-(defn ^:async equip-for!
-  "Hold the carried tool that suits the block, when there is one."
-  [c block]
-  (tools/equip-for! c block))
-
 (defn ^:async dig!
-  "Dig the block at target (a cell the planned cell owes work on). on-dug is called with c when it went."
-  [c cell target block column? on-dug]
+  "Dig the block at target (a cell the planned cell owes work on) with a blocks.dig child. on-dug is called with c when it went."
+  [c cell target column? on-dug]
   (let [v (field/dig-verdict c (maintain/cell-vec target))]
     (if (vector? v)
       (blocked! c cell v)
@@ -175,16 +170,16 @@
           (let [v (field/dig-verdict c (maintain/cell-vec target))]
             (if (not= :ok v)
               (blocked! c cell v)
-              (do (await (equip-for! c block))
-                  (let [r (await (ctx/act c :dig (clj->js {:pos target})))
-                        _ (await (tools/note-wear! c))]
-                    (case (.-status r)
-                      "dug" (on-dug c)
-                      "missing" nil
-                      "cannot" (skip! c cell :cannot)
-                      "unreachable" (count-cell-fail! c cell :unreachable)
-                      (count-cell-fail! c cell :failed))
-                    :again))))))))
+              (let [outcome (await (blocks/dig-cell! c target {:accept #{:fluid-adjacent :falling-block :under-feet}
+                                                               :for-plan (:plan (:args c))
+                                                               :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+                (case outcome
+                  :continue :continue
+                  :dug (do (on-dug c) :again)
+                  :missing :again
+                  :cannot (do (skip! c cell :cannot) :again)
+                  :unreachable (do (count-cell-fail! c cell :unreachable) :again)
+                  (do (count-cell-fail! c cell :failed) :again)))))))))
 
 (defn dug-stray [pos]
   (fn [c] (ctx/update-mem! c #(-> % (bump :cleared) (assoc :collect pos)))))
@@ -267,9 +262,9 @@
   [c {:keys [state pos block] :as cell}]
   (case state
     (:fill :dam) (await (place-source! c cell))
-    :clear (await (dig! c pos pos block false (dug-stray pos)))
+    :clear (await (dig! c pos pos false (dug-stray pos)))
     :soil-dig (let [under (maintain/down pos)]
-                (await (dig! c pos under block true (dug-ground pos under))))
+                (await (dig! c pos under true (dug-ground pos under))))
     :soil-place (await (soil-place! c cell))
     :plant (await (plant! c cell))))
 

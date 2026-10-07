@@ -106,6 +106,14 @@
             (is (= "oak_sapling" (h/block-at p 3 64 0)) stray)
             (is (= (expect {:cleared 1 :planted 1}) result) stray)))))))
 
+(deftest every-dig-goes-through-the-dig-job
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p seen]} (await (outcome (world {"3,64,0" "short_grass"} (item "oak_sapling" 1)) {"forest" one-cell}))]
+          (is (= [[3 64 0]] (digs p)))
+          (is (= 1 (count (h/events-of seen :blocks.dig.done)))))))))
+
 (deftest a-stone-stray-or-ground-needing-a-pickaxe-is-not-dug-by-hand
   (async done
     (tu/run-async done
