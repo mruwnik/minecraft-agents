@@ -3,10 +3,10 @@
   matching event comes within :within-s seconds of the act's start; a :no-event one passes when none comes for
   :for-s seconds (events before :from-s seconds after the start are ignored). Patterns are partial: a map matches a map holding at least its keys (recursively), a set matches
   any of its members, [:> n] [:>= n] [:< n] [:<= n] compare numbers, [:near [x y z] r] a position ({:x :y :z} or
-  [x y z]) within r blocks, [:contains \"text\"] a substring, [:not p] the opposite of p, [:any] anything present;
+  [x y z]) within r blocks, [:contains \"text\"] a substring, [:has p] a list with at least one element matching p (other elements and the length are free; a plain vector pattern needs the same length), [:not p] the opposite of p, [:any] anything present;
   anything else matches by equality.")
 
-(def ops #{:> :>= :< :<= :near :contains :not :any})
+(def ops #{:> :>= :< :<= :near :contains :has :not :any})
 
 (defn op-pattern? [p] (and (vector? p) (keyword? (first p)) (ops (first p))))
 
@@ -26,6 +26,7 @@
         :any (some? value)
         :not (not (matches? a value))
         :contains (and (string? value) (.includes value a))
+        :has (and (sequential? value) (boolean (some #(matches? a %) value)))
         :near (let [p (as-xyz value) q (as-xyz a)]
                 (boolean (and p q (<= (js/Math.hypot (- (p 0) (q 0)) (- (p 1) (q 1)) (- (p 2) (q 2))) b))))
         (and (number? value)

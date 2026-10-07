@@ -463,6 +463,13 @@
   (is (nil? (f/argv-gap ["engine/tools/jobs.mjs" "B" "cancel" "j1"])))
   (is (some? (f/argv-gap (f/step-argv "B" "claude" [:http :cancel "$job"] nil)))))
 
+(deftest argv-gap-names-which-placeholder-is-unfilled
+  (let [step [:cli "jobs" ["cancel" "$event-job"]]
+        gap (fn [step last-job event-job] (f/argv-gap (f/step-argv "B" "w" step last-job event-job) step last-job event-job))]
+    (is (re-find #"\$event-job" (gap step "j1" nil)))
+    (is (re-find #"\$job" (gap [:cli "jobs" ["cancel" "$job"]] nil "j2")))
+    (is (nil? (gap step "j1" "j3")))))
+
 (deftest until-step-polls-a-file-or-tool-check
   (let [ps #(f/step-problem? %)]
     (is (not (ps [:until [:memory {:entries {}}] 20])))

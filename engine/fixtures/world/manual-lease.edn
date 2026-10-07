@@ -1,5 +1,5 @@
 ;; Card 32418fdc: manual control is a lease over the body's control socket. While it is held a plain submitted job stays queued
-;; (the job list shows it :queued); releasing it lets the job run and arrive. Without the lease the same job arrives at once (control case).
+;; (no result, the job list still shows it :queued); releasing it lets the job run and arrive. Without the lease the same job arrives at once (control case).
 {:defaults
  {:tags [:movement :manual]
   :time :any
@@ -10,9 +10,12 @@
  [{:name "queued-job-waits-for-release"
    :act [[:http :take {:who "wt" :why "fixture" :idle-s 60} {:ok true}]
          [:job (jobs.movement.go-to {:pos #at [20 0 16] :range 1})]
-         [:until [:cli "jobs" [] {:items [{:status :queued}]}] 20]
+         ;; absence needs a window: the job must still be :queued after it (a job is :queued before its first tick too)
+         [:wait-s 8]
+         [:cli "jobs" [] {:items [:has {:status :queued}]}]
          [:http :release {:who "wt"} {:ok true}]]
-   :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
+   :expect [{:no-event {:source :job :kind :result} :for-s 8}
+            {:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [20.5 0 16.5] 2]]}
   {:name "no-lease-arrives-at-once"
    :act [[:job (jobs.movement.go-to {:pos #at [20 0 16] :range 1})]]

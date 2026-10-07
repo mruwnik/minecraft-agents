@@ -722,7 +722,7 @@
   "Runs a :cli or :http step: the tool's answer must pass f/judge-reply or the step throws. Resolves to the tool's output."
   [opts step last-job event-job]
   (let [argv (f/step-argv (:body opts) (:world opts) step last-job event-job)]
-    (if-let [why (f/argv-gap argv)]
+    (if-let [why (f/argv-gap argv step last-job event-job)]
       (js/Promise.reject (js/Error. (str (pr-str (vec (take 2 step))) " step: " why)))
       (.then (exec-file argv)
              (fn [{:keys [code out]}]

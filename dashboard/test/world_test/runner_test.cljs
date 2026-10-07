@@ -566,3 +566,36 @@
           (.then (fn [] (is (= [:cancel :rcon :drop] @ran))))
           (.catch (fn [e] (is false (.-message e))))
           (.finally done)))))
+
+(defn with-body-dir
+  "Calls (f body-dir-path) with WORLD_TEST_REPO pointing at a temp repo, then removes it and restores the variable."
+  [f]
+  (let [repo (fs/mkdtempSync (path/join (os/tmpdir) "wt-until-"))
+        old (.. js/process -env -WORLD_TEST_REPO)
+        opts {:body "B" :world "w"}]
+    (set! (.. js/process -env -WORLD_TEST_REPO) repo)
+    (fs/mkdirSync (r/body-dir opts) #js {:recursive true})
+    (-> (f opts (r/body-dir opts))
+        (.finally (fn []
+                    (if old (set! (.. js/process -env -WORLD_TEST_REPO) old) (js-delete (.-env js/process) "WORLD_TEST_REPO"))
+                    (fs/rmSync repo #js {:recursive true :force true}))))))
+
+(deftest until-step-passes-on-a-later-poll
+  (async done
+    (-> (with-body-dir
+          (fn [opts dir]
+            (js/setTimeout #(fs/writeFileSync (path/join dir "ready.edn") "{:ok true}") 700)
+            (.then (r/until-step! opts [:file "ready.edn" {:ok true}] 10 nil nil) (constantly :passed))))
+        (.then (fn [v] (is (= :passed v))))
+        (.catch (fn [e] (is false (.-message e))))
+        (.finally done))))
+
+(deftest until-step-times-out-with-the-last-evidence
+  (async done
+    (-> (with-body-dir
+          (fn [opts _] (.then (r/until-step! opts [:file "never.edn" {:ok true}] 1 nil nil) (constantly :passed))))
+        (.then (fn [v] (is false (str "should have thrown, got " v))))
+        (.catch (fn [e]
+                  (is (re-find #":until \[:file \"never.edn\"\] not met after 1 s" (.-message e)))
+                  (is (re-find #"never.edn does not exist" (.-message e)))))
+        (.finally done))))

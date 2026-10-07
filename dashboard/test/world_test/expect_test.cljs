@@ -18,10 +18,13 @@
     {:data {:pos [:near [20016 150 20016] 1]}} fired
     {:data {:gate [:near [1 2 3] 0]}} herd-done
     {:message [:contains "herd"]} herd-done
+    [:has {:status :queued}] [{:status :done} {:status :queued :id "j1"}]
     {:data {:reason [:not :failed]}} herd-done
     {:data {:gate [:any]}} herd-done
     [1 2 3] [1 2 3])
   (are [pattern value] (not (x/matches? pattern value))
+    [:has {:status :queued}] [{:status :done}]
+    [:has {:status :queued}] []
     {:kind :ended} fired
     {:context {:reflex-id :pen-gate}} fired
     {:data {:inside [:> 1]}} herd-done

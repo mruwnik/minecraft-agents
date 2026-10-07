@@ -619,9 +619,14 @@
        (http-argv body world (walk/postwalk fill step))))))
 
 (defn argv-gap
-  "Why argv cannot run (a \"$job\" placeholder had no job to fill it), nil when it can."
-  [argv]
-  (when (some nil? argv) "$job is used before any job was submitted"))
+  "Why argv cannot run (a placeholder had no value to fill it), nil when it can. With the step and the two ids it names the
+  placeholder: \"$event-job\" (no awaited event had a job) or \"$job\" (no job submitted)."
+  ([argv] (argv-gap argv nil nil nil))
+  ([argv step last-job event-job]
+   (when (some nil? argv)
+     (if (and (nil? event-job) (str/includes? (pr-str step) "$event-job"))
+       "$event-job is used before an awaited event had a job"
+       "$job is used before any job was submitted"))))
 
 (defn submitted-id
   "The job id jobs.mjs submit printed, nil when it printed a refusal."
