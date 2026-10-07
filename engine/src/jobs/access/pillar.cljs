@@ -1,6 +1,5 @@
 (ns jobs.access.pillar
-  (:require [jobs.lib.escape :as escape]
-            [jobs.lib.ledger :as ledger]
+  (:require [jobs.lib.ledger :as ledger]
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
@@ -56,6 +55,10 @@
 (def land-step-ms 50)
 
 (def land-max-steps 20)
+
+(def hidden-guess
+  "What a cell the body has not sensed is taken for: rock, so no step rests on or climbs into what it has not seen."
+  "stone")
 
 (defn access-inputs
   "The zones, claims, footprints, the body's name, the clock and the job's :ignore-zones? arg, as jobs.lib.access.rules
@@ -146,8 +149,8 @@
   whose parent reads the result."
   [c]
   (let [p (:primitives c)
-        block-at (escape/block-at-of p)
-        l (ledger/reconcile (ledger/open-entries (ctx/view c)) block-at)
+        block-at (access/sensed-at p hidden-guess)
+        l (ledger/reconcile (ledger/open-entries (ctx/view c)) (access/sensed-at p nil))
         feet (pl/feet-cell c)
         {:keys [height item]} (:args c)
         step (next-step (merge (access-inputs c)
@@ -198,8 +201,9 @@
 (defn ^:async place!
   "Write the intent, jump-place one block, confirm it when the cell shows it. Three failed jumps in a row give up;
   a failure with the body shoved off or airborne is a knockback and does not count towards the three."
-  [c l block-at {:keys [cell item]}]
-  (let [l (ledger/intend l {:cell cell :item item :before (block-at cell) :job (:id c) :purpose purpose})
+  [c l {:keys [cell item]}]
+  (let [block-at (access/sensed-at (:primitives c) nil)
+        l (ledger/intend l {:cell cell :item item :before (block-at cell) :job (:id c) :purpose purpose})
         _ (ledger/remember! c l)
         r (await (ctx/act c :jumpPlace #js {:item item :count 1}))]
     (if (pos? (or (.-placed r) 0))
@@ -230,7 +234,7 @@
     (ctx/update-mem! c #(-> % (assoc :displaced displaced) (dissoc :counted) (assoc :walking (boolean (and off? (<= displaced max-displacements))))))
     (when (and off? stand (<= displaced max-displacements))
       (let [[x y z] stand
-            block-at (escape/block-at-of (:primitives c))
+            block-at (access/sensed-at (:primitives c) "air")
             top (or (first (filter #(pl/clear? (block-at [x % z])) (range y (+ y 3)))) y)
             r (await (recentre! c [x top z] home))]
         (when (= :continue r) :continue)))))
@@ -242,9 +246,9 @@
   (if (= :continue (await (shoved-back! c)))
     :continue
     (let [p (:primitives c)
-          block-at (escape/block-at-of p)
+          block-at (access/sensed-at p hidden-guess)
           seen (ledger/open-entries (ctx/view c))
-          l (ledger/reconcile seen block-at)
+          l (ledger/reconcile seen (access/sensed-at p nil))
           feet (pl/feet-cell c)
           base (or (:base (ctx/mem c)) feet)
           {:keys [height item]} (:args c)
@@ -254,7 +258,7 @@
       (when (not= l seen) (ledger/remember! c l))
       (ctx/update-mem! c #(-> % (assoc :base base :stand feet) (update :home (fn [h] (or h (let [{:keys [x z]} (u/self-pos c)] [x z]))))))
       (if (= :place (:step step))
-        (await (place! c l block-at step))
+        (await (place! c l step))
         (finish! c l step)))))
 
 (defn ^:async round

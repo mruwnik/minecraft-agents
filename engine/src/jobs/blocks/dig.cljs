@@ -79,7 +79,7 @@
     (when-not error
       (let [m (b/mem-for c pos)
             p (:primitives c)
-            block (u/block-name p pos)
+            block (b/target-name p pos b/hidden-guess)
             {:keys [accept collect]} (:args c)]
         (cond
           (:dug m) nil
@@ -140,6 +140,7 @@
   (await (tools/equip-for! c block))
   (let [r (await (tidy/dig! c pos))
         status (.-status r)
+        _ (when (= "dug" status) (await (access/look-at! c (b/cell pos))))
         ids (vec (keep #(.-id %) (array-seq (or (.-drops r) #js []))))]
     (case status
       "dug" (if (and (:collect (:args c)) (seq ids))
@@ -165,7 +166,8 @@
   [c pos]
   (loop [fails 0 steps 0]
     (let [p (:primitives c)
-          block (u/block-name p pos)
+          _ (await (b/see-target! c pos))
+          block (b/target-name p pos b/hidden-guess)
           refused (fluid-refusal c)
           r (when-not (or refused (:dug (ctx/mem c))) (await (fetch/fetch! c 'jobs.blocks.dig problem)))
           tool (when (and block (not (:dug (ctx/mem c))) (not (b/air block)) (not (b/fluids block))) (needs c block))]

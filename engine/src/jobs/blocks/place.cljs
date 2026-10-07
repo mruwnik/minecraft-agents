@@ -89,14 +89,16 @@
   [c pos items]
   (let [in (cond-> (b/rules-in c) (every? #(rules/no-collision? (game/version-of (:primitives c)) %) items) (assoc :feet nil))
         at (b/cell pos)
-        block-at (:block-at in)]
-    (access/may? (assoc in :block-at (fn [cell] (let [n (block-at cell)] (if (and (= cell at) (clears? c n)) "air" n))))
+        p (:primitives c)
+        block-at (:block-at in)
+        read (fn [cell] (if (= cell at) (b/target-name p pos "air") (block-at cell)))]
+    (access/may? (assoc in :block-at (fn [cell] (let [n (read cell)] (if (and (= cell at) (clears? c n)) "air" n))))
                  :place pos)))
 
 (defn occupied-by
   "The name of the block that fills pos and cannot be replaced (not the item wanted), or nil."
   [c pos items]
-  (let [block (u/block-name (:primitives c) pos)
+  (let [block (b/target-name (:primitives c) pos "air")
         v (when block (place-verdict c pos items))]
     (when (and block (not (some #{block} items)) (= :not-replaceable (:reason v))) block)))
 
@@ -107,7 +109,7 @@
   (let [{:keys [pos items error]} (parse (:args c))]
     (when-not error
       (let [p (:primitives c)
-            block (u/block-name p pos)
+            block (b/target-name p pos "air")
             v (when block (place-verdict c pos items))]
         (cond
           (nil? block) {:reason :not-loaded :pos pos}
@@ -118,7 +120,7 @@
           (= :not-replaceable (:reason v)) nil
           (not (:ok v)) {:reason (:reason v) :pos pos}
           :else (or (when-let [n (needs c items)] (assoc n :reason :need :pos pos))
-                    (when-not (b/support? p pos) {:reason :no-support :pos pos})
+                    (when-not (or (b/support? p pos) (b/unseen-near? p pos)) {:reason :no-support :pos pos})
                     (b/unreachable-wait c (b/mem-for c pos) pos)
                     (when (clears? c block) (b/child-wait c :clear 'jobs.blocks.dig (clear-args c pos)))))))))
 
@@ -180,11 +182,12 @@
   out of reach is tried once more, then the job declines :unreachable."
   [c pos items]
   (loop [fails 0 steps 0]
-    (let [block (u/block-name (:primitives c) pos)
+    (let [_ (await (b/see-target! c pos))
+          block (b/target-name (:primitives c) pos "air")
           full (occupied-by c pos items)
           already (some #{block} items)
           r (when-not (or full already) (await (fetch/fetch! c 'jobs.blocks.place problem)))
-          block (if r block (u/block-name (:primitives c) pos))]
+          block (if r block (b/target-name (:primitives c) pos "air"))]
       (cond
         full (stop! c {:placed false :pos pos :item (first items) :reason :occupied :block full})
         r r

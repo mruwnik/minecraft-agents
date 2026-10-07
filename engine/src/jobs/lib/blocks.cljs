@@ -78,6 +78,29 @@
 
 (defn cell [{:keys [x y z]}] [x y z])
 
+(def hidden-guess "What a cell the body has not sensed is taken for: rock, so a dig goes ahead and looks." "stone")
+
+(defn target-name
+  "The block name at the job's cell pos: nil when not loaded, guess when the body has not sensed it."
+  [p pos guess]
+  ((access/sensed-at p guess) (cell pos)))
+
+(defn rules-in
+  "The rules input for this job: zones, claims, every plan's footprint but :for-plan's and the
+  body's own plans', and :ignore-zones?. A cell the body has not sensed reads as stone (dig to see)."
+  [c]
+  (assoc (access/rules-input c {:except (:for-plan (:args c)) :own-plans-ok? true})
+         :block-at (access/sensed-at (:primitives c) hidden-guess)))
+
+(def social #{:zone :claim :footprint :no-zones})
+
+(defn not-allowed
+  "The wait reason for a verdict v refused by a zone, claim, plan footprint or missing zone list:
+  {:reason :not-allowed :pos :by kw} plus whichever of :zone :claim :plan :owner refused. nil for any other verdict."
+  [pos v]
+  (when (contains? social (:reason v))
+    (merge {:reason :not-allowed :pos pos :by (:reason v)} (select-keys v [:zone :claim :plan :owner]))))
+
 (defn feet-cell
   "The body's feet cell [x y z]."
   [c]
@@ -89,21 +112,6 @@
   forestry/dig-reach, a margin under the primitive's 4.5)."
   [c pos]
   (<= (u/eye-dist (u/self-pos c) pos) forestry/dig-reach))
-
-(defn rules-in
-  "The rules input for this job: zones, claims, every plan's footprint but :for-plan's and the
-  body's own plans', and :ignore-zones?."
-  [c]
-  (access/rules-input c {:except (:for-plan (:args c)) :own-plans-ok? true}))
-
-(def social #{:zone :claim :footprint :no-zones})
-
-(defn not-allowed
-  "The wait reason for a verdict v refused by a zone, claim, plan footprint or missing zone list:
-  {:reason :not-allowed :pos :by kw} plus whichever of :zone :claim :plan :owner refused. nil for any other verdict."
-  [pos v]
-  (when (contains? social (:reason v))
-    (merge {:reason :not-allowed :pos pos :by (:reason v)} (select-keys v [:zone :claim :plan :owner]))))
 
 (defn unreachable-wait
   "The wait reason {:reason :unreachable :pos :why} for the failed walk remembered in memory m, while the body still
@@ -123,6 +131,27 @@
   "This job's memory as it is for pos (see fresh-mem), without writing it."
   [c pos]
   (fresh-mem (ctx/mem c) pos))
+
+(def neighbours [[0 -1 0] [1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 1 0]])
+
+(defn unseen-near?
+  "Whether the body has not sensed the cell pos or one of its six neighbours."
+  [p {:keys [x y z]}]
+  (boolean (some #(access/unknown? p %) (cons [x y z] (map (fn [[dx dy dz]] [(+ x dx) (+ y dy) (+ z dz)]) neighbours)))))
+
+(defn to-see?
+  "Whether the job has yet to look at pos: the body has not sensed it or a face of it, and has not turned to it (memory
+  :looked)."
+  [c pos]
+  (and (unseen-near? (:primitives c) pos) (not= pos (:looked (mem-for c pos)))))
+
+(defn ^:async see-target!
+  "Turn the head to the job's cell pos once when it has yet to be looked at (to-see?), so the next read is of what is
+  there."
+  [c pos]
+  (when (to-see? c pos)
+    (ctx/update-mem! c #(assoc (fresh-mem % pos) :looked pos))
+    (await (access/look-at! c (cell pos)))))
 
 (def cell-reasons
   "Wait reasons about the cell that can appear mid-call (a zone added, a block moved in): the call declines."
@@ -203,13 +232,12 @@
   (let [carried (set (map :name (u/inventory (:primitives c))))]
     (first (filter carried items))))
 
-(def neighbours [[0 -1 0] [1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 1 0]])
-
 (defn support?
-  "Whether a neighbour of pos is a block to place against (not air, a fluid or a plant)."
+  "Whether a neighbour of pos is a block to place against (not air, a fluid or a plant); a face the body has not
+  seen is not one."
   [p {:keys [x y z]}]
   (boolean (some (fn [[dx dy dz]]
-                   (let [n (u/block-name p {:x (+ x dx) :y (+ y dy) :z (+ z dz)})]
+                   (let [n (u/seen-name p {:x (+ x dx) :y (+ y dy) :z (+ z dz)})]
                      (and n (not (air n)) (not (fluids n)) (not (clearable n)))))
                  neighbours)))
 

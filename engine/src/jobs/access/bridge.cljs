@@ -1,7 +1,7 @@
 (ns jobs.access.bridge
   (:require [jobs.access.pillar :as pillar]
             [jobs.lib.pillar :as pl]
-            [jobs.lib.escape :as escape]
+            [jobs.lib.access :as access]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.access.rules :as rules]
@@ -139,7 +139,7 @@
   (let [p (:primitives c)
         {:keys [heading length item]} (:args c)]
     (merge (pillar/access-inputs c)
-           {:feet feet :start (or (:start (ctx/mem c)) feet) :heading heading :length length :block-at (escape/block-at-of p)
+           {:feet feet :start (or (:start (ctx/mem c)) feet) :heading heading :length length :block-at (access/sensed-at p "air")
             :carried (pl/carried p) :item item :ledger (ledger/cells l)})))
 
 (defn need
@@ -156,7 +156,7 @@
   stays with the round."
   [c]
   (let [p (:primitives c)
-        l (ledger/reconcile (ledger/open-entries (ctx/view c)) (escape/block-at-of p))
+        l (ledger/reconcile (ledger/open-entries (ctx/view c)) (access/sensed-at p nil))
         step (next-step (inputs c l (pl/feet-cell c)))]
     (cond
       (not= :too-few-blocks (:reason step)) true
@@ -217,7 +217,7 @@
   "One block of the bridge (or its end): :again, :continue while a go-to waits, or :done."
   [c]
   (await (pillar/land! c))
-  (let [block-at (escape/block-at-of (:primitives c))
+  (let [block-at (access/sensed-at (:primitives c) nil)
         seen (ledger/open-entries (ctx/view c))
         l (ledger/reconcile seen block-at)
         feet (pl/feet-cell c)
