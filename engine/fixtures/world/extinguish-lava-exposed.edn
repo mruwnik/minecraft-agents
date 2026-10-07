@@ -8,7 +8,10 @@
   :blocks [[:fill [8 0 8] [24 0 24] "stone"]
            [:set [16 0 16] "netherrack"]
            [:set [17 0 16] "air"] [:set [15 0 16] "air"] [:set [16 0 15] "air"] [:set [16 0 17] "air"]
-           [:set [18 1 16] "stone"] [:set [14 1 16] "stone"] [:set [16 1 14] "stone"] [:set [16 1 18] "stone"]]
+           [:set [18 1 16] "stone"] [:set [14 1 16] "stone"] [:set [16 1 14] "stone"] [:set [16 1 18] "stone"]
+           ;; walls beside the source: its flow cannot reach the cells beside the feet, so lava there (a legitimate
+           ;; extra cover) cannot make the count depend on flow timing
+           [:set [17 1 15] "stone"] [:set [17 1 17] "stone"]]
   :body {:at [16.5 1 16.5] :effects [["resistance" 600 4]] :inventory [["cobblestone" 8]] :settle-s 2}
   :act [[:rcon "execute at $BODY run setblock ~1 ~ ~ lava"]
         [:rcon "execute at $BODY run setblock ~ ~ ~ fire"]
