@@ -1436,7 +1436,7 @@
                      run-start (atom nil)
                      all-cases (if (:check opts) [] (load-cases (:paths opts)))
                      cases (if (:check opts) [] (select-phase (f/select-cases all-cases opts) (:phase opts)))
-                     cases (if (and (:changed-since-pass opts) (not (:list opts))) (select-changed cases (:paths opts)) cases)
+                     cases (if (:changed-since-pass opts) (select-changed cases (:paths opts)) cases)
                      bad (filter :problems cases)]
                  (cond
                    (:check opts) (let [res (check-fixtures (:paths opts))]

@@ -88,6 +88,17 @@ const resultEvent = (formText) => {
 }
 // the cases a `world-test --list` printed (one line each), times the repeat count
 export const countListed = (text, repeat = 1) => text.split('\n').filter((l) => l.trim()).length * repeat
+// the cases a `world-test --list` printed, by fixture stem (the id's part before the slash), in order
+export const parseListed = (text) => {
+  const m = new Map()
+  for (const line of text.split('\n')) {
+    const id = line.trim().split(/\s+/)[0]
+    if (!id) continue
+    const stem = id.split('/')[0]
+    m.set(stem, [...(m.get(stem) ?? []), id])
+  }
+  return m
+}
 const emitLine = (e) => { if (process.env.TEST_EVENTS) console.log(`@@test ${JSON.stringify(e)}`) }
 export const mergeText = (forms) => `[${forms.join('\n ')}]`
 
@@ -155,13 +166,13 @@ export const knownFailures = (previousTexts) => {
   for (const text of previousTexts) for (const f of splitForms(text)) { const s = summarize(f); last.set(s.id, s.status) }
   return new Set([...last].filter(([, st]) => st === 'fail').map(([id]) => id))
 }
-const errorForm = (file, why) => `{:id ${JSON.stringify(file)}, :file ${JSON.stringify(file)}, :status :error, :evidence ${JSON.stringify(why)}}`
+const errorForm = (file, why, id = file) => `{:id ${JSON.stringify(id)}, :file ${JSON.stringify(file)}, :status :error, :evidence ${JSON.stringify(why)}}`
 
 // units: file stems; runUnit({file, match, worker}) -> promise of {code, text|null} (text = the child's results vector).
 // Resolves to {text, code}: one merged results vector, code 0 when every case passed or was flaky.
 // total/emit (both optional): emit gets the @@test events of the run: one result per case when its status is final (a failure still
 // to be rerun is not final), and a progress {done, total, retries} after each; reruns are counted in retries, never in done or total.
-export const runPool = async ({ units, workers, runUnit, retries = 1, load = () => 0, cores = 1, total = null, known = new Set(), emit = () => {}, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) => {
+export const runPool = async ({ units, workers, runUnit, retries = 1, load = () => 0, cores = 1, total = null, known = new Set(), listed = null, repeat = 1, emit = () => {}, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) => {
   const queue = units.map((file) => ({ file, match: null, avoid: null }))
   const done = new Map() // `id#run` (or file when the unit died) -> form text, in first-seen order
   let busy = 0
@@ -175,15 +186,29 @@ export const runPool = async ({ units, workers, runUnit, retries = 1, load = () 
     return i < 0 ? null : queue.splice(i, 1)[0]
   }
   const key = (s) => `${s.id}#${s.run}`
+  const settled = new Set()
   const settle = (k, form) => { // a case's final status
+    settled.add(k)
     done.set(k, form)
     emit(resultEvent(form))
     emit({ event: 'progress', done: ++finals, total: total ?? finals, unit: 'cases', retries: reruns })
   }
+  // one error per listed case and run of file that is not settled yet (a unit that died); nothing without a listing
+  const settleMissing = (file, why) => {
+    for (const id of listed?.get(file) ?? []) {
+      for (let run = 1; run <= repeat; run++) {
+        if (!settled.has(`${id}#${run}`) && !done.has(`${id}#${run}`)) settle(`${id}#${run}`, withRun(errorForm(file, why, id), run))
+      }
+    }
+  }
   const rerun = (j) => { reruns++; queue.push(j) }
   const record = (job, worker, res) => {
     const retryJob = { file: job.file, avoid: worker.body, retry: { body: worker.body } }
-    if (!res.text && job.retry) { settle(job.file, errorForm(job.file, `the run exited ${res.code} with no results (twice)`)); return }
+    if (!res.text && job.retry) {
+      const why = `the run exited ${res.code} with no results (twice)`
+      if (listed?.has(job.file)) { done.delete(job.file); settleMissing(job.file, why) } else settle(job.file, errorForm(job.file, why))
+      return
+    }
     if (!res.text) {
       rerun({ ...retryJob, match: null })
       done.set(job.file, errorForm(job.file, `the run exited ${res.code} with no results`))
@@ -193,6 +218,7 @@ export const runPool = async ({ units, workers, runUnit, retries = 1, load = () 
     if (job.retry && job.match === null) { // a whole-file rerun replaces the placeholder error
       done.delete(job.file)
       forms.forEach(({ form, s }) => settle(key(s), form))
+      settleMissing(job.file, `the run exited ${res.code} before this case ran`)
       return
     }
     if (job.retry) { // a case rerun (one run of one case): a pass is flaky, a failure is rerun until the retries are spent
@@ -209,6 +235,7 @@ export const runPool = async ({ units, workers, runUnit, retries = 1, load = () 
       else if (failed(s) && retries > 0) { done.set(key(s), form); rerun({ ...retryJob, match: s.id, run: s.run, attempt: 1, firstForm: form }) }
       else settle(key(s), form)
     }
+    settleMissing(job.file, `the run exited ${res.code} before this case ran`)
   }
   const loop = async (worker) => {
     for (;;) {
@@ -253,11 +280,10 @@ const spawnChild = (script, pass, { file, match, worker }, tmpResults, reaper) =
 // every case of the fixture files as the children will select them (--list needs no world); null when the listing fails
 // the --list call selects cases with the same paths and flags (--phase, --tag, --match, ...) the children get
 export const listArgs = (p) => [...p.paths, ...p.passthrough, '--list']
-const listTotal = (script, p) => {
+const repeatOf = (p) => { const at = p.passthrough.indexOf('--repeat'); return at < 0 ? 1 : Number(p.passthrough[at + 1]) }
+const listCases = (script, p) => {
   const r = spawnSync(process.execPath, [script, ...listArgs(p)], { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 })
-  if (r.status !== 0) return null
-  const at = p.passthrough.indexOf('--repeat')
-  return countListed(r.stdout, at < 0 ? 1 : Number(p.passthrough[at + 1]))
+  return r.status === 0 ? r.stdout : null
 }
 
 export const main = async (args) => {
@@ -285,9 +311,10 @@ export const main = async (args) => {
     fs.rmSync(tmp, { force: true })
     return { code, text }
   }
-  const total = listTotal(script, p)
+  const listing = listCases(script, p)
+  const total = listing === null ? null : countListed(listing, repeatOf(p))
   if (total !== null) emitLine({ event: 'plan', total })
-  const r = await runPool({ units, workers, runUnit, retries: p.retries, total, known: knownFailures(previous), emit: emitLine, load: () => os.loadavg()[0], cores })
+  const r = await runPool({ listed: listing === null ? null : parseListed(listing), repeat: repeatOf(p), units, workers, runUnit, retries: p.retries, total, known: knownFailures(previous), emit: emitLine, load: () => os.loadavg()[0], cores })
   if (p.results) fs.writeFileSync(p.results, r.text)
   const sums = splitForms(r.text).map(summarize)
   const count = (st) => sums.filter((s) => s.status === st).length

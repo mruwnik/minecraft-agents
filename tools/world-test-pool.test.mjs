@@ -1,7 +1,7 @@
 // Why JavaScript: node --test file for tools/world-test-pool.mjs.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { splitForms, summarize, unitOrder, parsePoolArgs, workerSpecs, runPool, mergeText, poolCap, createReaper, countListed, listArgs, knownFailures } from './world-test-pool.mjs'
+import { splitForms, summarize, unitOrder, parsePoolArgs, workerSpecs, runPool, mergeText, poolCap, createReaper, countListed, listArgs, knownFailures, parseListed } from './world-test-pool.mjs'
 
 const form = (id, status, secs = 1, extra = '') =>
   `{:plot 0, :file "${id.split('/')[0]}", :expects [{:status :pass, :evidence "a } \\" {"}], :status :${status}, :id "${id}", :elapsed-s ${secs}${extra}}`
@@ -265,4 +265,23 @@ test('runPool: a failed case that is a known failure is not rerun, is marked :kn
   const forms = splitForms(r.text)
   assert.match(forms.find((f) => summarize(f).id === 'a/c1'), /:known-failure true/)
   assert.doesNotMatch(forms.find((f) => summarize(f).id === 'a/c2'), /:known-failure/)
+})
+
+test('parseListed: the --list lines grouped by fixture stem, in order, PROBLEMS lines too', () => {
+  const m = parseListed('a/x  #{:t}\na/y  nil\nb/z  nil  PROBLEMS ["x"]\n\n')
+  assert.deepEqual([...m], [['a', ['a/x', 'a/y']], ['b', ['b/z']]])
+})
+test('runPool: a unit that dies twice settles one error per listed case (and run), so done reaches the total', async () => {
+  const listed = new Map([['a', ['a/c1', 'a/c2', 'a/c3']]])
+  const seen = []
+  const r = await runPool({ units: ['a'], workers: workerSpecs(2, 19, 'P', 0), runUnit: fakeRunner(() => ({ code: 1, text: null }), []), listed, repeat: 2, total: 6, emit: (e) => seen.push(e) })
+  assert.deepEqual(splitForms(r.text).map((f) => { const s = summarize(f); return [s.id, s.run, s.status] }).sort(),
+    [['a/c1', 1, 'error'], ['a/c1', 2, 'error'], ['a/c2', 1, 'error'], ['a/c2', 2, 'error'], ['a/c3', 1, 'error'], ['a/c3', 2, 'error']])
+  assert.equal(progressOf(seen).at(-1).done, 6)
+  assert.equal(resultsOf(seen).length, 6)
+})
+test('runPool: listed cases missing from a unit that ended with partial results settle as errors', async () => {
+  const listed = new Map([['a', ['a/c1', 'a/c2']]])
+  const r = await runPool({ units: ['a'], workers: workerSpecs(2, 19, 'P', 0), runUnit: fakeRunner(() => ({ code: 1, text: vec(form('a/c1', 'pass')) }), []), listed, total: 2 })
+  assert.deepEqual(splitForms(r.text).map((f) => { const s = summarize(f); return [s.id, s.status] }), [['a/c1', 'pass'], ['a/c2', 'error']])
 })
