@@ -8,7 +8,8 @@
 # Why not JS: a thin shell wrapper; runs node with --max-old-space-size=4096.
 set -u
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# compile_retry <build>: tools/compile, retried up to 2x after MC_COMPILE_RETRY_S (default 50) s when the failure printed an ERROR or an undeclared-var/ns warning (another agent's half-edited file usually clears in about a minute). Exit 2/75 (usage, busy) and failures without such output are not retried.
+# compile_retry <build>: tools/compile, retried up to 2x when the failure printed an ERROR or an undeclared-var/ns warning (another agent's half-edited file). When the output names the failing files ("File: <path>:l:c"), it polls them every MC_COMPILE_POLL_S (5) s up to MC_COMPILE_RETRY_S (50) s: a changed file retries at once, none changed fails at once; without a named file it just sleeps the full time. Exit 2/75 (usage, busy) and failures without such output are not retried.
+stamps() { stat -c '%Y.%s' "$@" 2>&1; }
 compile_retry() {
   local out rc=0 try
   out="$(mktemp)"; trap 'rm -f "$out"' RETURN
@@ -17,8 +18,17 @@ compile_retry() {
     case "$rc" in 0|2|75) return "$rc";; esac
     [ "$try" = 2 ] && return "$rc"
     grep -qE 'ERROR|WARNING #[0-9]+ - :undeclared-(var|ns)' "$out" || return "$rc"
-    echo "test-engine: compile failed, foreign edit in flight? retrying in ${MC_COMPILE_RETRY_S:-50} s ($((try + 1))/2)" >&2
-    sleep "${MC_COMPILE_RETRY_S:-50}"
+    mapfile -t files < <(awk '/ERROR|WARNING #[0-9]+ - :undeclared-(var|ns)/ {w=1; next} w && /^ File: / {sub(/^ File: /, ""); sub(/:[0-9]+:[0-9]+$/, ""); print; w=0}' "$out" | sort -u)
+    echo "test-engine: compile failed, foreign edit in flight? waiting up to ${MC_COMPILE_RETRY_S:-50} s ($((try + 1))/2)" >&2
+    if [ ${#files[@]} -eq 0 ]; then sleep "${MC_COMPILE_RETRY_S:-50}"; continue; fi
+    before="$(stamps "${files[@]}")"; waited=0
+    while [ "$(stamps "${files[@]}")" = "$before" ]; do
+      if [ "$waited" -ge "${MC_COMPILE_RETRY_S:-50}" ]; then
+        echo "test-engine: the failing file did not change; not a foreign edit (${files[*]})" >&2
+        return "$rc"
+      fi
+      sleep "${MC_COMPILE_POLL_S:-5}"; waited=$((waited + ${MC_COMPILE_POLL_S:-5}))
+    done
   done
 }
 [ $# -ge 1 ] || { echo "usage: tools/test-engine <ns>... | --full | --changed [<git-rev>]" >&2; exit 2; }

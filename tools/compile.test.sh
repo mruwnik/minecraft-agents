@@ -81,6 +81,14 @@ check "retry: compiled 3 times" "$(wc -l < "$T/npx.log")" 3
 check "retry: says why" "$(grep -c 'foreign edit in flight' <<<"$out")" 2
 : > "$T/npx.log"; OK_AT=99 MC_COMPILE_RETRY_S=0 timeout 30 "$T/repo/tools/test-engine" engine.a-test >/dev/null 2>&1; check "retry: gives up rc" "$?" 1
 check "retry: gave up after 3 tries" "$(wc -l < "$T/npx.log")" 3
+# a named failing file ("File: path:l:c"): changed during the wait -> retried at once; unchanged -> fails after the wait, no retry
+: > "$T/bad.cljs"
+printf '#!/bin/sh\necho "npx $*" >> "%s/npx.log"\nn=$(wc -l < "%s/npx.log")\n[ "$n" -ge "$OK_AT" ] && exit 0\necho "------ WARNING #1 - :undeclared-var ---"\necho " File: %s/bad.cljs:3:4"\n' "$T" "$T" "$T" > "$T/bin/npx"
+: > "$T/npx.log"; ( sleep 1; echo x >> "$T/bad.cljs" ) & out=$(OK_AT=2 MC_COMPILE_RETRY_S=20 MC_COMPILE_POLL_S=1 timeout 30 "$T/repo/tools/test-engine" engine.a-test 2>&1); check "named file changed: retried rc" "$?" 0
+check "named file changed: compiled twice" "$(wc -l < "$T/npx.log")" 2
+: > "$T/npx.log"; out=$(OK_AT=99 MC_COMPILE_RETRY_S=2 MC_COMPILE_POLL_S=1 timeout 30 "$T/repo/tools/test-engine" engine.a-test 2>&1); check "named file unchanged: rc" "$?" 1
+check "named file unchanged: no retry" "$(wc -l < "$T/npx.log")" 1
+check "named file unchanged: says so" "$(grep -c 'did not change; not a foreign edit' <<<"$out")" 1
 printf '#!/bin/sh\necho "npx $*" >> "%s/npx.log"\necho "plain failure"\nexit 1\n' "$T" > "$T/bin/npx"
 : > "$T/npx.log"; MC_COMPILE_RETRY_S=0 timeout 30 "$T/repo/tools/test-engine" engine.a-test >/dev/null 2>&1; check "no retry without ERROR/undeclared output" "$(wc -l < "$T/npx.log")" 1
 printf '#!/bin/sh\necho "npx $*" >> "%s/npx.log"\n' "$T" > "$T/bin/npx"
