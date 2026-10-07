@@ -203,7 +203,6 @@
 
 ;; ------------------------------------------------------------------ light
 
-
 (defn sky-subtract
   "What the sky's light is reduced by now (0 at noon, 11 at a clear midnight): time of day, rain and thunder of raw."
   [raw]
@@ -228,7 +227,8 @@
     (when-let [raw (:raw per)]
       (let [^js st (:st per)
             subtract (sky-subtract raw)
-            night? (< (- 15 subtract) (dark-light))
+            dark (dark-light)
+            night? (< (- 15 subtract) dark)
             unseen (if night? 1 0)
             ^js sections (store/store-of st (.-dim st))]
         {:night? night?
@@ -237,8 +237,7 @@
                  (if (or (nil? sec) (zero? (aget (.-ids sec) (store/cell-index x y z))))
                    unseen
                    (let [packed (.lightAt ^js raw x y z)]
-                     (if (or (pos? (bit-and packed 15)) (>= (- (bit-shift-right packed 4) subtract) (dark-light))) 0 1)))))}))))
-
+                     (if (or (pos? (bit-and packed 15)) (>= (- (bit-shift-right packed 4) subtract) dark)) 0 1)))))}))))
 
 (defn drops
   "Item entities of name within radius as [{:id :pos :count}], nearest first; only those within toss-reach of near

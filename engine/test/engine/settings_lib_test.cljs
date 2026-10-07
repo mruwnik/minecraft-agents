@@ -58,3 +58,7 @@
       (is (< (js/Math.abs (- 2 (value/dark-factor))) 1e-9) "per-dark over per-block")
       (is (= (settings/ticks->ms 40) (dig-look/flow-delay-ms)))
       (is (= 5000 (:ttl (watch/turn-policy)))))))
+
+(deftest per-block-must-stay-positive
+  (is (some? (settings/spec-problem (:jobs.lib.cost.value/per-block value/settings) 0)) "dark-factor divides by it")
+  (is (nil? (settings/spec-problem (:jobs.lib.cost.value/per-block value/settings) 0.3))))

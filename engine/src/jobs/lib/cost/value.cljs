@@ -47,7 +47,7 @@
 (def settings
   {::trip {:default 10 :type :number :min 0
            :doc "Any fetch: turning round, finding the pile, the risk of the place one died at, in seconds."}
-   ::per-block {:default 0.3 :type :number :min 0
+   ::per-block {:default 0.3 :type :number :min 0.01
                 :doc "One block walked, there and back about a second of a player's time per 3 blocks."}
    ::per-dark {:default 0.3 :type :number :min 0
                :doc "One block walked in the dark, on top of per-block: a dark block costs twice a lit one."}
