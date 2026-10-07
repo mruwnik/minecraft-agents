@@ -73,6 +73,15 @@
   [p pos guess]
   (or (seen-name p pos) guess))
 
+(defn seen-facts
+  "seen-block as cljs facts {:name :full-cube? :waterlogged?}, or nil when the cell is unloaded or unknown."
+  [p pos]
+  (when-let [b (seen-block p pos)]
+    (let [logged (some-> b .-properties .-waterlogged)]
+      {:name (.-name b)
+       :full-cube? (boolean (.-fullCube b))
+       :waterlogged? (or (true? logged) (= "true" logged))})))
+
 (defn block-facts
   "What a cell holds as cljs facts {:name :full-cube? :waterlogged?} (full-cube?: its collision shape fills the cell), or
   nil when the chunk is not loaded."

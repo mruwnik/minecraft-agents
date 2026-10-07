@@ -186,7 +186,7 @@
         roof (:roof-height (:args c))
         {:keys [x y z]} (sh/feet p)
         in (access/rules-input c)
-        air? #(#{"air" "cave_air"} (u/block-name p %))
+        air? #(#{"air" "cave_air"} (u/seen-name p %))
         free? (fn [pos] (and (air? pos) (sh/solid-at? p (update pos :y dec))))
         covered? (fn [pos] (or (not roofed?) (some #(sh/solid-at? p (update pos :y + %)) (range 1 (inc roof)))))
         permitted? #(and (nil? (access/trespass-refusal in :place %)) (not (sh/doorway? p %)))
@@ -218,7 +218,7 @@
   [c pos]
   (loop [tries 0]
     (cond
-      (.endsWith (or (u/block-name (:primitives c) pos) "") "_bed") true
+      (.endsWith (or (u/seen-name (:primitives c) pos) "") "_bed") true
       (<= 4 tries) false
       :else (do (await (ctx/act c :wait #js {:ms 250}))
                 (recur (inc tries))))))
@@ -287,7 +287,7 @@
   "Whether feet cell f looks like a place a pit can be dug, by what a player sees from the surface: standing room, dry
   ground the carried tools dig, no fluid beside it. How deep the ground goes is left to dig-in, which stops a bad site."
   [p {:keys [x y z] :as f}]
-  (let [at (fn [dy] (u/block-name p {:x x :y (+ y dy) :z z}))
+  (let [at (fn [dy] (u/seen-name p {:x x :y (+ y dy) :z z}))
         below {:x x :y (dec y) :z z}]
     (and (solid/solid? (at -1)) (tools/can-harvest? p (at -1)) (not (solid/solid? (at 0))) (not (solid/solid? (at 1)))
          (not (dig-cells/wet? p f)) (not (dig-cells/wet? p {:x x :y (inc y) :z z}))

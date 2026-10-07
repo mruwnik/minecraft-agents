@@ -103,7 +103,7 @@
                      (when (:bed (:args c)) (places/offer! c :bed bed))
                      :done)
       "not-night" :done
-      "missing" (if (nil? (u/block-name (:primitives c) bed))
+      "missing" (if (nil? (u/sensed (:primitives c) bed))
                   (u/fail! c :bed_unloaded "bed chunk not loaded yet")
                   (do (if (= bed (mem/place (ctx/view c) :bed))
                         (do (ctx/remember! c :bed {:gone true :was bed} mem/place-policy)

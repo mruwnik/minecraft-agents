@@ -175,7 +175,7 @@
         blocks (:blocks (:args c))
         {:keys [roof depth] :as plan} (dig-cells/dig-plan p feet)
         cells (when plan (map #(update feet :y - %) (range 1 (inc depth))))
-        names (map #(u/block-name p %) cells)]
+        names (map #(u/seen-name p %) cells)]
     (when (and plan
                (every? #(sh/solid-at? p %) cells)
                (not-any? dig-cells/hazards names)
@@ -208,7 +208,7 @@
         walls (concat [(at -1) (at 2)]
                       (for [c [lo hi] [sx sz] dig-cells/sides :when (not= [sx sz] [(- dx) (- dz)])]
                         (assoc c :x (+ (:x c) sx) :z (+ (:z c) sz))))
-        names (map #(u/block-name p %) [lo hi])]
+        names (map #(u/seen-name p %) [lo hi])]
     (when (and (every? #(sh/solid-at? p %) (concat [lo hi] walls))
                (not-any? dig-cells/hazards names)
                (not-any? #(dig-cells/lateral-fluid p %) [lo hi])
@@ -232,7 +232,7 @@
               ;; raw moveTo kept: a step into the body's own pocket, as the pit's drop; the planner has no standable goal there.
               (await (ctx/act c :moveTo (clj->js {:pos (first cells) :range 0.5})))
               :again)
-          (let [_ (await (tools/equip-for! c (u/block-name p cell) {:fast true}))
+          (let [_ (await (tools/equip-for! c (u/seen-name p cell) {:fast true}))
                 r (await (tidy/dig! c cell true))]
             (when (= "dug" (.-status r))
               (await (dig-cells/collect-drops! c (:blocks (:args c)) (.-drops r)))
@@ -301,7 +301,7 @@
     (if (nil? item)
       (await (abandon-refuge! c))
       (let [l (ledger/intend (ledger/open-entries (ctx/view c))
-                             {:cell cell :item item :before (u/block-name p roof) :job (:id c) :purpose :retreat-plug})
+                             {:cell cell :item item :before (u/seen-name p roof) :job (:id c) :purpose :retreat-plug})
             _ (ledger/remember! c l)
             r (await (tidy/place! c roof item true))]
         (ledger/remember! c (ledger/reconcile l (escape/block-at-of p)))
@@ -320,7 +320,7 @@
       (not (and (= x (:x roof)) (= z (:z roof)))) (await (abandon-refuge! c))
       (<= y target-y) (await (plug! c refuge))
       (sh/solid-at? p below)
-      (let [_ (await (tools/equip-for! c (u/block-name p below) {:fast true}))
+      (let [_ (await (tools/equip-for! c (u/seen-name p below) {:fast true}))
             r (await (tidy/dig! c below true))]
         (if (= "dug" (.-status r))
           (do (await (dig-cells/collect-drops! c blocks (.-drops r))) :again)

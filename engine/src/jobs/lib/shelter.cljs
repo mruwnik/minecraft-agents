@@ -23,7 +23,7 @@
 (defn feet [p] (solid/cell (u/self-pos {:primitives p})))
 
 
-(defn solid-at? [p pos] (solid/solid? (u/block-name p pos)))
+(defn solid-at? [p pos] (solid/solid? (u/seen-name p pos)))
 
 (defn roofed?
   "Whether a solid block lies within height blocks straight above the feet cell."
@@ -79,7 +79,7 @@
 (defn walkable-at?
   "Whether the cell at pos is one a body stands or walks in: not solid, or a bed."
   [p pos]
-  (let [n (u/block-name p pos)]
+  (let [n (u/seen-name p pos)]
     (and (some? n) (or (not (solid/solid? n)) (.endsWith n "_bed")))))
 
 (defn doorway?
@@ -96,7 +96,7 @@
   "Whether the bed at pos is occupied as a player sees it: the bed block's occupied state, or another player lying within
   a block of it (a bed is two cells)."
   [p {:keys [x y z] :as pos}]
-  (let [b (u/block-at p pos)
+  (let [b (u/seen-block p pos)
         props (when b (or (.-properties b) (some-> (.-getProperties b) (.call b))))
         me (.-username (.self p))]
     (boolean (or (true? (some-> props .-occupied))
@@ -131,7 +131,7 @@
   (let [{:keys [x y z] :as start} (feet p)]
     (loop [queue [start] seen #{start}]
       (when-let [pos (first queue)]
-        (let [named (u/block-name p pos)]
+        (let [named (u/seen-name p pos)]
           (if (and (some? named) (.endsWith named "_bed") (not= pos start) (permit? pos))
             pos
             (let [next (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
@@ -214,7 +214,7 @@
   [p view]
   (when-not (night? p)
     (let [pos (:pos (:data (mem/latest view :bed-placed)))]
-      (when (and pos (.endsWith (or (u/block-name p pos) "") "_bed"))
+      (when (and pos (.endsWith (or (u/seen-name p pos) "") "_bed"))
         pos))))
 
 (defn bed

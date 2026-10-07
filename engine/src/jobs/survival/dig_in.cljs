@@ -140,15 +140,16 @@
         p (:primitives c)
         {:keys [x y z]} (sh/feet p)
         below {:x x :y (dec y) :z z}
-        name (u/block-name p below)
-        under (u/block-name p {:x x :y (- y 2) :z z})
+        name (u/seen-name p below)
+        ;; two below solid ground a player assumes rock; a cell the body saw or remembers answers for itself
+        under (u/block-name-or p {:x x :y (- y 2) :z z} "stone")
         fluid (dig-cells/lateral-fluid p below)
         here (first (filter #(dig-cells/wet? p %) [{:x x :y y :z z} {:x x :y (inc y) :z z}]))
         roof (:roof (ctx/mem c))
         over (when roof (first (filter #(dig-cells/wet? p %) [roof (update roof :y inc)])))]
     (cond
       here (do (remember-failed-site! c :fluid-here)
-               (ctx/emit! c :dig_in_failed :warn {:text (str (u/block-name p here) " where the body stands; not digging down")})
+               (ctx/emit! c :dig_in_failed :warn {:text (str (u/seen-name p here) " where the body stands; not digging down")})
                :done)
       fluid (do (remember-failed-site! c :fluid-adjacent)
                 (ctx/emit! c :dig_in_failed :warn {:text (str fluid " beside the descent cell; not opening the pit")})
@@ -157,11 +158,11 @@
                          (ctx/emit! c :dig_in_failed :warn {:text (str name " below the body; not digging down")})
                          :done)
       over (do (remember-failed-site! c :fluid-above)
-               (ctx/emit! c :dig_in_failed :warn {:text (str (u/block-name p over) " at or above the roof cell; not digging further")})
+               (ctx/emit! c :dig_in_failed :warn {:text (str (u/seen-name p over) " at or above the roof cell; not digging further")})
                :done)
       (and (sh/solid-at? p below) (not (solid/solid? under)))
       (do (remember-failed-site! c :no-floor)
-          (ctx/emit! c :dig_in_failed :warn {:text (str (or under "an unloaded cell") " under the floor; not digging through it")})
+          (ctx/emit! c :dig_in_failed :warn {:text (str under " under the floor; not digging through it")})
           :done)
       (and (sh/solid-at? p below) (nil? (lb/pick c blocks)) (not (tools/can-harvest? p name)))
       (do (remember-material! c {:pos (:roof (ctx/mem c)) :needs name})

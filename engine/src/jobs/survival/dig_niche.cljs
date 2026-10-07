@@ -71,7 +71,7 @@
   and not falling, every shell cell solid, dry and not a falling block."
   ([p f dir] (niche-ok? p f dir true))
   ([p f dir need-tool?]
-  (let [name #(u/block-name p %)
+  (let [name #(u/seen-name p %)
         solid? #(solid/solid? (name %))]
     (and (solid? (at f dir 0 0 -1)) (not (solid? f))
          (not (solid? (at f dir -1 0 0))) (not (solid? (at f dir -1 0 1))) (not (solid? (at f dir 0 0 1)))
@@ -93,7 +93,7 @@
   "Cheap per-cell part of niche-ok?: dry standing room the body has seen (no hollow it only knows from the data) on
   solid ground, whatever the direction."
   [p f]
-  (let [solid? #(solid/solid? (u/block-name p %))
+  (let [solid? #(solid/solid? (u/seen-name p %))
         up (assoc f :y (inc (:y f)))
         unseen? #(:unknown (look/seen-block p %))]
     (and (not (unseen? f)) (not (unseen? up)) (solid? (assoc f :y (dec (:y f)))) (not (solid? f)) (not (solid? up))
@@ -150,8 +150,8 @@
 (defn tool-wait
   "The :no-tool wait of the first cell of the site's niche no carried tool harvests, nil when none."
   [p {:keys [stand dir]}]
-  (when-let [cell (first (remove #(tools/can-harvest? p (u/block-name p %)) (dug-cells stand dir)))]
-    {:reason :no-tool :block (u/block-name p cell)}))
+  (when-let [cell (first (remove #(tools/can-harvest? p (u/seen-name p %)) (dug-cells stand dir)))]
+    {:reason :no-tool :block (u/seen-name p cell)}))
 
 (defn fail! [c reason text]
   (let [site (:site (ctx/mem c))]
@@ -169,7 +169,7 @@
 
 (defn ^:async dig-step! [c cell]
   (let [p (:primitives c)
-        _ (await (tools/equip-for! c (u/block-name p cell) {:fast true}))
+        _ (await (tools/equip-for! c (u/seen-name p cell) {:fast true}))
         r (await (tidy/dig! c cell))]
     (if (= "dug" (.-status r))
       (do (await (dig-cells/collect-drops! c (:blocks (:args c)) (.-drops r))) :again)

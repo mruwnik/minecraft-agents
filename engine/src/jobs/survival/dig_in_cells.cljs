@@ -18,7 +18,7 @@
 (defn wet?
   "Whether the cell holds a fluid: a hazards block, or a waterlogged one."
   [p cell]
-  (let [b (u/block-facts p cell)]
+  (let [b (u/seen-facts p cell)]
     (boolean (and b (or (hazards (:name b)) (:waterlogged? b))))))
 
 (defn lateral-fluid
@@ -26,7 +26,7 @@
   [p {:keys [x y z]}]
   (some (fn [[dx dz]]
           (let [cell {:x (+ x dx) :y y :z (+ z dz)}]
-            (when (wet? p cell) (u/block-name p cell))))
+            (when (wet? p cell) (u/seen-name p cell))))
         sides))
 
 (def mob-proof-shapes
@@ -37,7 +37,7 @@
 (defn open-openable
   "The block at cell when it is a door, gate or trapdoor (wooden, copper or iron) standing open, else nil."
   [p cell]
-  (let [b (u/block-at p cell)]
+  (let [b (u/seen-block p cell)]
     (when (and b (#{:openable :iron} (click/kind-of (.-name b))) (click/reached? :open (click/props-of b)))
       b)))
 
@@ -47,7 +47,7 @@
   plates, buttons, levers, carpets, torches, plants, slabs and stairs let a mob walk or step through (or leave a gap
   it fits through), so they are not sealed; nor is an unloaded cell."
   [p cell]
-  (let [b (u/block-at p cell)]
+  (let [b (u/seen-block p cell)]
     (boolean (and b
                   (not (open-openable p cell))
                   (or (.-fullCube b) (re-find mob-proof-shapes (.-name b)))))))
@@ -93,7 +93,7 @@
     (when side [(at side 0) (at side 1)])))
 
 (defn full-cube? [c cell]
-  (boolean (some-> (u/block-at (:primitives c) cell) .-fullCube)))
+  (boolean (some-> (u/seen-block (:primitives c) cell) .-fullCube)))
 
 (defn ^:async place-all!
   "Place blocks at cells in order. Resolves to :ok, or the first status that is not placed or occupied.
@@ -134,7 +134,7 @@
                       (recur (rest cells)))
 
                   :else
-                  (let [_ (await (tools/equip-for! c (u/block-name (:primitives c) cell) {:fast true}))
+                  (let [_ (await (tools/equip-for! c (u/seen-name (:primitives c) cell) {:fast true}))
                         d (await (tidy/dig! c cell true))]
                     (ctx/update-mem! c update :cleared (fnil conj #{}) cell)
                     (when (not= "dug" (.-status d))
@@ -160,7 +160,7 @@
   "Whether a block placed in cell has a side neighbour to be placed against: one whose collision shape fills its cell
   (full-cube?; the place step needs a collision box, so a flower or a crop is no support)."
   [p {:keys [x y z]}]
-  (boolean (some (fn [[dx dz]] (:full-cube? (u/block-facts p {:x (+ x dx) :y y :z (+ z dz)}))) sides)))
+  (boolean (some (fn [[dx dz]] (:full-cube? (u/seen-facts p {:x (+ x dx) :y y :z (+ z dz)}))) sides)))
 
 (defn dig-plan
   "{:roof :depth} for a pit dug from start: the roof goes at start when a side of it is solid (the pit is 2 deep), else
@@ -183,7 +183,7 @@
 (defn room-wall?
   "Whether a cell bounds a room against mobs: sealed?, and not an openable door, gate or trapdoor standing open."
   [p cell]
-  (let [b (u/block-at p cell)]
+  (let [b (u/seen-block p cell)]
     (and (sealed? p cell)
          (not (and (= :openable (click/kind-of (.-name b))) (click/reached? :open (click/props-of b)))))))
 
@@ -201,7 +201,7 @@
       (cond
         (> (count seen) room-limit) nil
         (< room-reach (max (js/Math.abs (- x fx)) (js/Math.abs (- y fy)) (js/Math.abs (- z fz)))) nil
-        (nil? (u/block-at p cell)) nil
+        (nil? (u/seen-block p cell)) nil
         :else (let [next (for [d neighbours
                                :let [n (shift cell d)]
                                :when (and (not (seen n)) (not= n plug) (not (room-wall? p n)))]
@@ -212,7 +212,7 @@
 (defn door-of?
   "Whether a cell next to one of the room's cells holds a door, gate or trapdoor a hand opens: the room's way out."
   [p cells]
-  (boolean (some (fn [cell] (some #(= :openable (click/kind-of (u/block-name p (shift cell %)))) neighbours)) cells)))
+  (boolean (some (fn [cell] (some #(= :openable (click/kind-of (u/seen-name p (shift cell %)))) neighbours)) cells)))
 
 (defn room-plug
   "In a closed room with a door whose roof has a hole over the body: the cell to mend, the lowest of y+2 ..

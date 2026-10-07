@@ -72,7 +72,7 @@
   (let [p (:primitives c)
         cell (first (filter #(sh/solid-at? p %) door))]
     (if cell
-      (let [_ (await (tools/equip-for! c (u/block-name p cell) {:fast true}))
+      (let [_ (await (tools/equip-for! c (u/seen-name p cell) {:fast true}))
             r (await (tidy/dig! c cell))]
         (if (= "dug" (.-status r))
           :continue
