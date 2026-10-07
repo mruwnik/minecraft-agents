@@ -9,6 +9,7 @@
             [jobs.lib.watch :as watch]
             [jobs.lib.near :as near]
             [jobs.lib.cost :as cost]
+            [jobs.lib.threats :as threats]
             [jobs.lib.walk.watch :as wwatch]
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.walk.search :as wsearch]
@@ -36,6 +37,7 @@
     gives up :why :needs-health. See jobs.movement.go-to.health.
   - :dark false plans dark cells like lit ones (default: a dark cell costs twice a lit one, so a lit route up to about 2x
     longer is taken: a cell seen and dark, or one never seen at night; look/dark-fn).
+  - :goal-danger :end gives up at once (:why :goal-dangerous, :mob, :mob-pos, :mob-distance) when the goal lies within the full-cost radius of a known mob the body would flee; :wait (default) walks on, an info goal-in-danger says so.
   - :dangers false plans straight past known dangers (default: the plans keep away from them, jobs.lib.threats). :leg-s n
     walks one leg of at most n s and, when it got more than 1 block nearer, ends {:arrived false :leg true} (job :done)
     for a caller chasing a moving target to call again; a leg that got no nearer goes on as any round.
@@ -91,6 +93,7 @@
    :costs {:doc (str "map of price name to seconds, overriding the planner's price of a move (jobs.lib.cost.planner: " (str/join " " (map name (keys cost/planner-names))) "); a price left out keeps the planner's default" ) :default nil}
    :landing {:doc "map of block name to the share of a fall's damage a landing on it takes (0.2: 80% off), negative: no drop over 3 onto it; entries override the defaults hay_block 0.2, honey_block 0.2 and slime_block -1" :default nil}
    :gait {:doc "how the body walks: :auto (sprints on long straight runs and over gaps, as the walker does), :walk (never sprints: no gap jump over 2 or more), :sneak (slow, never sprints; holds sneak on level steps so it never walks off an edge, lets go for a planned drop, gap, climb or water); nil: the body's :walk-settings :gait, else :auto" :default nil}
+   :goal-danger {:doc "when the goal lies within the full-cost radius of a known mob the body would flee: :wait (walk on; an info goal-in-danger says so once), :end (give up at once, :why :goal-dangerous with the mob)" :default :wait}
    :zone-tolls {:doc "true: also toll the cells of other bodies' zones near each walk (jobs.lib.toll-cells/zone-walk-tolls), none with :ignore-zones?; for a job that respects zones" :default false}
    :leg-s {:doc "walk one leg of at most this many seconds (0.1 to 120), then end {:arrived false :leg true} so the caller can re-aim at a moving target; nil: the whole way" :type :number :min 0.1 :max 120 :default nil}
    :one-way {:doc "arg, not the :one-way key of a give-up result: :closed takes no drop of 2 or 3 or gap jump down that the body cannot climb back, and walks to no frontier of loaded land (a walk to something visible); :open (default) takes one when the land past it runs on into unloaded land" :default :open}
@@ -416,26 +419,50 @@
       tolls-problem {:reason :bad-tolls :message tolls-problem}
       costs-problem {:reason :bad-costs :message costs-problem}
       landing-problem {:reason :bad-landing :message landing-problem}
-      gait-problem {:reason :bad-gait :message gait-problem})))
+      gait-problem {:reason :bad-gait :message gait-problem}
+      (not (contains? #{nil :wait :end} (some-> (:goal-danger (:args c)) keyword)))
+      {:reason :bad-goal-danger :message (str ":goal-danger must be :wait or :end, got " (pr-str (:goal-danger (:args c))))})))
+
+(defn goal-danger
+  "The nearest known mob the body would flee (sensed or remembered, jobs.lib.threats/known-dangers) that has the cell pos
+  within its full-cost radius, as {:mob :mob-pos :mob-distance}, else nil."
+  [c pos]
+  (let [p (:primitives c)
+        spots (keep #(when-let [at (threats/rough-pos (:data %))] (assoc (:data %) :pos at)) (ctx/entries c :threat))
+        body (threats/body-of p)]
+    (->> (threats/known-dangers p spots (cost/danger-opts (:args c)))
+         (keep (fn [{:keys [mob close] :as d}]
+                 (let [dist (u/dist pos d)]
+                   (when (and (<= dist close) (= :flee (cost/stance body mob)))
+                     {:mob mob :mob-pos (select-keys d [:x :y :z]) :mob-distance (js/Math.round dist)}))))
+         (sort-by :mob-distance)
+         first)))
+
+(defn ^:async run-steps!
+  "step! until it arrives, gives up, or waits on a child (:continue), with pace! between steps."
+  [c pos]
+  (loop []
+    (let [r (await (step! c pos))]
+      (cond
+        (= :again r) (if (ctx/alive? c) (do (await (pace!)) (recur)) :continue)
+        :else (do (swap! approaches dissoc (:id c)) (ctx/update-mem! c dissoc :open) r)))))
 
 (defn ^:async round
   "One whole attempt: step! until it arrives, gives up, or waits on a child (:continue), with pace! between steps. A
-  cut ends it at once (ctx/alive? per iteration, else at the next memory write or act, which throws)."
+  cut ends it at once (ctx/alive? per iteration, else at the next memory write or act, which throws). A goal inside a
+  fled mob's radius ends it at once under :goal-danger :end, else says so once."
   [c]
   (let [refusal (args-refusal c)
         pos (:pos (target c))]
-    (cond
-      refusal
+    (if refusal
       (end/refuse! c refusal)
-
-      :else
       (let [state (note-restart! c pos)]
         (start-attempt! c pos)
         (if (cut-loop? state)
           (do (ctx/update-mem! c #(-> % (dissoc :open :goal :closest :ref :last-dist) (assoc :cuts 0)))
               (await (end/give-up! c pos 0 :cut {:reason :cut-again} (some->> (nearest-hostile c) (hash-map :nearest-hostile)))))
-          (loop []
-            (let [r (await (step! c pos))]
-              (cond
-                (= :again r) (if (ctx/alive? c) (do (await (pace!)) (recur)) :continue)
-                :else (do (swap! approaches dissoc (:id c)) (ctx/update-mem! c dissoc :open) r)))))))))
+          (let [danger (goal-danger c pos)]
+            (when danger (ctx/emit! c :goal-in-danger :info (assoc danger :target pos)))
+            (if (and danger (= :end (some-> (:goal-danger (:args c)) keyword)))
+              (await (end/give-up! c pos 0 :goal-dangerous {:reason :goal-dangerous} danger))
+              (await (run-steps! c pos)))))))))

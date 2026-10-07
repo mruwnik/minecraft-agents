@@ -1135,3 +1135,44 @@
               {:keys [out p]} (await (go-marker! {} ms {:place "Hut" :range 0}))]
           (is (= {:arrived true} @out))
           (is (= [10 64 0] (at p))))))))
+
+;; a goal inside the full-cost zone of a known mob the body would flee: :goal-danger :wait (default) walks on and says so
+;; once; :end gives up at once with :why :goal-dangerous
+(def goal-zombie {:key "z1" :name "zombie" :pos {:x 11 :y 64 :z 1}})
+
+(deftest goal-danger-end-gives-up-at-once-naming-the-mob
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (with-redefs [threats/sensed-mobs (constantly [goal-zombie])]
+                  (await (go! {:blocks flat} {:pos [10 64 0] :range 0 :goal-danger :end})))]
+          (is (= {:arrived false :reason :unreachable :why :goal-dangerous} (select-keys @(:out s) [:arrived :reason :why])) (pr-str @(:out s)))
+          (is (= "zombie" (:mob @(:out s))))
+          (is (str/includes? (:text @(:out s)) "zombie") (:text @(:out s)))
+          (is (= [0 64 0] (at (:p s))) "the body did not walk"))))))
+
+(deftest goal-danger-wait-is-the-default-and-walks-on-with-an-info
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [args [{:pos [10 64 0] :range 0} {:pos [10 64 0] :range 0 :goal-danger :wait}]]
+          (let [s (with-redefs [threats/sensed-mobs (constantly [goal-zombie])]
+                    (await (go! {:blocks flat} args)))]
+            (is (= {:arrived true} @(:out s)) (pr-str args))
+            (is (= 1 (count (events-of s :goal-in-danger))))))))))
+
+(deftest goal-danger-end-ignores-a-mob-far-from-the-goal
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [far (assoc goal-zombie :pos {:x 11 :y 64 :z 30})
+              s (with-redefs [threats/sensed-mobs (constantly [far])]
+                  (await (go! {:blocks flat} {:pos [10 64 0] :range 0 :goal-danger :end})))]
+          (is (= {:arrived true} @(:out s))))))))
+
+(deftest goal-danger-must-be-wait-or-end
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (go! {:blocks flat} {:pos [10 64 0] :goal-danger :bogus}))]
+          (is (= :bad-goal-danger (:reason @(:out s))) (pr-str @(:out s))))))))
