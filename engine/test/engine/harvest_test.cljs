@@ -485,7 +485,7 @@
         cells [{:x 1 :y 64 :z 1} {:x 2 :y 64 :z 1} {:x 3 :y 64 :z 1}]]
     (is (= [{:x 1 :y 64 :z 1}] (harvest/still-ripe p cells)) "unripe and missing crops are dropped")))
 
-(deftest a-ripe-crop-that-reads-unripe-after-the-walk-is-skipped
+(deftest a-crop-that-reads-as-air-is-not-a-target
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -494,4 +494,5 @@
               {:keys [eng]} (start {:p p})
               result (await (child-outcome eng job {} 100))]
           (is (zero? (count (calls p "dig"))))
-          (is (= {:cut 0 :replanted 0 :bare [] :lost [] :gave-up false} result)))))))
+          (is (= :no-crop-seen (:reason result)))
+          (is (zero? (:cut result))))))))

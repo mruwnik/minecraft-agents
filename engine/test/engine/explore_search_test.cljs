@@ -315,20 +315,20 @@
           (is (= 1 (count (:found e))))
           (is (some #(= :seen (:kind %)) (file-notes s))))))))
 
-(deftest a-scan-does-not-note-ore-mined-since-it-was-seen
+(deftest a-scan-notes-ore-it-last-saw-until-a-look-corrects-it
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (search! {:target "diamond_block" :max-distance 20 :max-legs 0}
                                 {:blocks {"0,64,5" "diamond_block"} :cone? true}
                                 400 (fn [{:keys [p]}]
-                                      ;; mined after the body's last look, before sense reads memory: no sight pass corrects it
+                                      ;; mined after the body's last look, before sense reads memory: the body cannot know
                                       (let [seen-blocks (aget p "seenBlocks")]
                                         (aset p "seenBlocks" (fn [q]
                                                                (fake/set-block! p {:x 0 :y 64 :z 5} "air")
                                                                (seen-blocks q)))))))]
-          (is (nil? (event-of s :search.done)))
-          (is (not-any? #(= :seen (:kind %)) (file-notes s))))))))
+          (is (some? (event-of s :search.done)) "no sight pass corrected it: memory still says ore")
+          (is (some #(= :seen (:kind %)) (file-notes s))))))))
 
 (deftest a-name-with-many-sightings-does-not-fill-the-scan-cap-for-the-others
   (let [p (tu/seeing-all (tu/fake {:blocks (merge (tu/box 1 64 1 10 64 7 "hay_block") {"14,64,0" "diamond_block"})}))

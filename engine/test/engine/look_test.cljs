@@ -99,11 +99,12 @@
     (is (empty? (look/seen-blocks p {:names ["iron_ore"] :live? true})))))
 
 (deftest live-within-checks-only-cells-seen-that-recently
-  (let [p (seeing {:blocks {"0,64,2" "iron_ore"}})
-        q {:names ["iron_ore"] :live? true}]
-    (change-unseen! p [0 64 2])
-    (is (empty? (look/seen-blocks p (assoc q :live-within-ms 600000))) "seen just now: checked, gone")
-    (is (= 1 (count (look/seen-blocks p (assoc q :live-within-ms -1)))) "older than the window: trusted")))
+  (let [gone (fn [window]
+               (let [p (seeing {:blocks {"0,64,2" "iron_ore"}})]
+                 (change-unseen! p [0 64 2])
+                 (look/seen-blocks p {:names ["iron_ore"] :live? true :live-within-ms window})))]
+    (is (empty? (gone 600000)) "seen just now: checked, gone")
+    (is (= 1 (count (gone -1))) "older than the window: trusted")))
 
 (defn hostile-ids [p o]
   (set (map :id (filter #(= "hostile" (:kind %)) (look/seen-entities p o)))))

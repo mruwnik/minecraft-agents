@@ -19,6 +19,7 @@
             [jobs.gather.get-seeds :as seeds]
             [jobs.lib.access :as access]
             [jobs.lib.apiary :as apiary]
+            [jobs.lib.look :as look]
             [jobs.lib.tidy-rules :as tidy-rules]
             [jobs.lib.util :as u]))
 
@@ -123,3 +124,7 @@
         classify (fn [w] (select-keys (apiary-harvest/classify (job-ctx w {}) [{:pos cell :ripe true}]) [:todo :declined]))]
     (is (= {:todo [] :declined {"0,64,4" :not-smoked}} (classify (wrapped blocks true))) "unseen fire: not smoked")
     (is (= {:todo [cell] :declined {}} (classify (wrapped blocks false))))))
+
+(deftest live-seen-blocks-check-through-the-senses-not-raw-blockat
+  (let [q {:names ["grass_block"] :radius 8 :live? true}]
+    (is (= 1 (count (look/seen-blocks (wrapped {"0,63,4" "grass_block"} false) q))) "in view: still there")))

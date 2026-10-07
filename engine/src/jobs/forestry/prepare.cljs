@@ -249,7 +249,7 @@
               (do (await (ctx/call-child c :plant 'jobs.forestry.plant-sapling
                                 {:at pos :species species :for-plan (:plan (:args c))
                                  :ignore-zones? (:ignore-zones? (:args c))}))
-                  (if (= item (u/block-name (:primitives c) pos))
+                  (if (= item (u/seen-name (:primitives c) pos))
                     (ctx/update-mem! c bump :planted)
                     (count-cell-fail! c pos :failed))
                   :again)))))))

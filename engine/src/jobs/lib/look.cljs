@@ -151,7 +151,7 @@
                    (let [pos (u/pos-of (.-pos b))]
                      (when (or (not live?)
                              (and live-within-ms (> (aget b "age-ms") live-within-ms))
-                             (= (.-name b) (u/block-name p pos)))
+                             (= (.-name b) (u/seen-name p pos)))
                        (cond-> {:name (.-name b) :pos pos :age-ms (aget b "age-ms")}
                          properties? (assoc :properties (some-> (.call (aget p "seenBlockAt") p (clj->js pos)) .-properties
                                                                 (js->clj :keywordize-keys true))))))))
