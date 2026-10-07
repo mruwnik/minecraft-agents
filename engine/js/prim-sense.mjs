@@ -7,7 +7,7 @@ import { mobFields } from './interact.mjs'
 import { leashFields } from './leash.mjs'
 import { liveEntities } from './live-entities.mjs'
 import { vehicleFields, selfVehicle } from './vehicle.mjs'
-import { RAIN_LEVEL, THUNDER_LEVEL, DEFAULT_RADIUS, HIT_RANGE, xyz, dist, isAir, cell, vec, entityKind, burning, lyingDown, droppedItem } from './prim-base.mjs'
+import { weatherOf, DEFAULT_RADIUS, HIT_RANGE, xyz, dist, cell, vec, entityKind, burning, lyingDown, droppedItem } from './prim-base.mjs'
 
 export function createSense (env) {
   const { here, eye, inventory, isOffline, equipment, timeScale, settleMs } = env
@@ -77,8 +77,7 @@ export function createSense (env) {
       isDay: timeOfDay < 12542 || timeOfDay > 23460,
       // the other players in the server's player list (what the tab list shows a player)
       players: Object.keys(env.bot.players ?? {}).filter(name => name !== env.bot.username),
-      raining: (env.bot.rainState ?? 0) > RAIN_LEVEL,
-      thundering: (env.bot.rainState ?? 0) > RAIN_LEVEL && (env.bot.thunderState ?? 0) > THUNDER_LEVEL,
+      ...weatherOf(env.bot),
       held: env.bot.heldItem?.name ?? null,
       equipment: equipment(),
       inventory: inventory().map(i => {
