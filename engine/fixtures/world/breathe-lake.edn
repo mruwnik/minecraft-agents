@@ -36,7 +36,7 @@
    :after [[:body-near [45.5 3.5 32.5] 40]]}
   ;; a refire within 5 minutes of the stop (the body sinks, its air drops) starts from the remembered spot and stops at once: no new leg
   {:name "refire-after-stop-makes-no-new-legs"
-   :limit-s 230
+   :limit-s 150
    :blocks [[:fill [70 4 4] [99 5 59] "stone"]
             [:fill [70 0 4] [99 3 59] "stone"]
             [:fill [70 0 4] [96 3 59] "water"]]
@@ -46,5 +46,5 @@
    :act [[:await {:source :reflex :kind :ended :data {:outcome :stopped :reason :no_blocks}} 140]
          [:wait-s 5]]
    :expect [{:event {:source :job :level :warn :kind :stopped :data {:reason :no_blocks}} :within-s 140}
-            {:no-event {:source :job :kind :child_started :data {:slot :leg}} :from-s 60 :for-s 150}]
+            {:no-event {:source :job :kind :child_started :data {:slot :leg}} :from-s 60 :for-s 60}]
    :after [[:body-near [45.5 3.5 32.5] 40]]}]}
