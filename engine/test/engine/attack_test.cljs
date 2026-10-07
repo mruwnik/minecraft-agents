@@ -496,3 +496,14 @@
           (is (= :cleared (:reason (done-event s))))
           (is (every? true? (map #(boolean (some (fn [c] (= "wait" (.-name c))) (subvec calls %1 %2))) idx (rest idx)))
               "between two swings the call waits out the gap"))))))
+
+(deftest the-walks-to-a-target-are-short-legs-that-never-escalate
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls* (atom [])
+              s (await (tu/with-near-spy calls* (fn ^:async b [] (await (scenario {:targets [7]} {:floor tu/walk-floor :inventory h/sword :entities [(zed 7 10)]} 3)))))
+              opts (map #(nth % 2) @calls*)]
+          (is (seq opts))
+          (is (every? #(and (false? (:escalate %)) (= 5 (:leg-s %)) (false? (:look-round %)) (false? (:dangers %)) (= :shut (:doors %))) opts)
+              "a moving target is chased in legs, never dug or pillared toward"))))))

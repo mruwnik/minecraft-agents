@@ -11,7 +11,7 @@
   A target is an entity id (a number), a player's username, or a mob type such as \"zombie\"
   (every mob of that name within :radius). Players match only by username. Items never match. The body never targets itself.
   One call is the whole fight: it takes the nearest target not given up on, holds the best weapon carried, walks within
-  reach (jobs.lib.near/walk-near!, doors :shut, each walk bounded by :walk-timeout-s) and swings, again and again until
+  reach (jobs.lib.near/go-near!, doors :shut, each leg bounded by :walk-timeout-s) and swings, again and again until
   it ends. Swings at most once per :attack-gap-ms (nil: the held weapon's cooldown); the rest of the gap is spent looking
   round and waiting.
   It does not swing when the entity's `hittable` sensing is false (no clear line to its hitbox, for example glass).
@@ -160,13 +160,13 @@
         (>= (get hits id 0) max-hits) (give-up! c target :too-many-hits)))))
 
 (defn ^:async walk!
-  "Walk within reach of target when further than reach (near/walk-near! range 2, doors :shut, each steer bounded by
+  "Walk within reach of target when further than reach (near/go-near! range 2, doors :shut, each leg bounded by
   :walk-timeout-s). Resolves to :there (no walk needed), :arrived (the walk got within range), :partial or :blocked."
   [c target]
   (let [tpos (u/pos-of (.-pos target))]
     (if (<= (u/dist (u/self-pos c) tpos) reach)
       :there
-      (case (await (near/walk-near! c tpos 2 {:doors :shut :timeout-s (:walk-timeout-s (:args c)) :dangers false}))
+      (case (await (near/go-near! c tpos 2 {:doors :shut :leg-s (:walk-timeout-s (:args c)) :dangers false :escalate false :look-round false}))
         :there :arrived
         :partial :partial
         :blocked))))
@@ -190,7 +190,7 @@
 (defn ^:async close-in!
   "Walk right up to a target that cannot be hit from here, and count a failure."
   [c target]
-  (await (near/walk-near! c (u/pos-of (.-pos target)) 1 {:doors :shut :timeout-s (:walk-timeout-s (:args c)) :dangers false}))
+  (await (near/go-near! c (u/pos-of (.-pos target)) 1 {:doors :shut :leg-s (:walk-timeout-s (:args c)) :dangers false :escalate false :look-round false}))
   (fail! c target))
 
 (defn ^:async swing-or-close-in!

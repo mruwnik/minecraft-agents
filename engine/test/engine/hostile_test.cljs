@@ -210,6 +210,17 @@
           (is (every? #(<= % 15) (map #(.-timeoutS (.-args %)) (calls p "steer"))) "a short walk: it aims again at the mob")
           (is (pos? (count (calls p "attack")))))))))
 
+(deftest fight-back-chases-in-legs-that-never-escalate
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls* (atom [])
+              _ (await (tu/with-near-spy calls* (fn ^:async b [] (await (first-round-ms '(jobs.survival.fight-back {:range 6}) {:inventory sword :entities [(zombie 5 0)]} 20)))))
+              opts (map #(nth % 2) @calls*)]
+          (is (seq opts))
+          (is (every? #(and (false? (:escalate %)) (= 10 (:leg-s %)) (false? (:look-round %)) (false? (:dangers %))) opts)
+              "a moving mob is chased in legs, never dug or pillared toward"))))))
+
 (deftest fight-back-declines-when-hurt-or-nothing-is-near
   (async done
     (tu/run-async done
