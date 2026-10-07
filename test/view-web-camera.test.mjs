@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { directionFor, cameraBasis, rayDir } from '../tools/view/web/camera.mjs'
+import { directionFor, cameraBasis, rayDir } from '../tools/view/web/cljs/viewer.mjs'
 import { directionFor as rendererDirectionFor, makeGrid, render } from '../tools/view/renderer.mjs'
 
 const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-9, `${msg}: ${a} vs ${b}`)

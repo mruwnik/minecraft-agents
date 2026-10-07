@@ -5,9 +5,8 @@ import os from 'node:os'
 import path from 'node:path'
 import { makeChunkClass } from '../tools/view/columns.mjs'
 import { decodeColumnFile, restoreColumn } from '../engine/js/view.mjs'
-import { cameraBasis } from '../tools/view/web/camera.mjs'
+import { cameraBasis, faceRegion } from '../tools/view/web/cljs/viewer.mjs'
 import { decodeLight, decodeSections } from '../tools/view/web/decode.mjs'
-import { faceRegion } from '../tools/view/project.mjs'
 import { FIXTURE, STATES, biomeId, blockNameAt, lightAt, writeFixture } from '../tools/view/fixture.mjs'
 
 const Chunk = makeChunkClass('26.1')

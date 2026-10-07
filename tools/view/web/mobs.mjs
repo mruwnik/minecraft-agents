@@ -146,7 +146,7 @@ export const LABEL_MARGIN = 1 // cells round the text
 export const LABEL_CELLS_HIGH = 7 + 2 * LABEL_MARGIN
 export const labelWidth = (text, h) => (text.length * 6 - 1 + 2 * LABEL_MARGIN) * h / LABEL_CELLS_HIGH
 
-// project(p) for a camera basis (web/camera.mjs cameraBasis) in a width x height picture; p is relative to the eye.
+// project(p) for a camera basis (view.camera/camera-basis) in a width x height picture; p is relative to the eye.
 // The same maths as the software renderer's cameraFor().project. null behind the eye.
 export const projectorFor = ({ forward, right, up, half }, width, height) => p => {
   const f = p.x * forward.x + p.y * forward.y + p.z * forward.z

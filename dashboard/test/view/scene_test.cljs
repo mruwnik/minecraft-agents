@@ -57,7 +57,7 @@
                            :world (fake-world calls) :decoder (fake-decoder decode calls)
                            :tables #js {:ensure (fn [_] (js/Promise.resolve #js {}))}
                            :fetch (or fetch (fake-fetch column-status urls)) :retryMs 1
-                           :cameraBasis (fn [cam] cam) :sceneTime (fn [_ _] #js {:time 0 :rain 0}) :skyDarken (fn [_ _] 0)}))
+                           :sceneTime (fn [_ _] #js {:time 0 :rain 0}) :skyDarken (fn [_ _] 0)}))
 
 (defn pose [x z] #js {:mtime (js/Date.now) :pose #js {:t (js/Date.now) :status "online" :world "w" :mcVersion "1.21" :eye #js {:x x :y 70 :z z} :yaw 0 :pitch 0}})
 
@@ -275,7 +275,7 @@
                     (scene/create-scene #js {:agent "w/Bob" :radius 1 :interp false :ownStream false
                                              :world (fake-world (volatile! [])) :decoder (fake-decoder :now (volatile! []))
                                              :tables #js {:ensure (fn [_] (js/Promise.resolve #js {}))}
-                                             :cameraBasis (fn [cam] cam) :sceneTime (fn [_ _] #js {:time 0 :rain 0}) :skyDarken (fn [_ _] 0)}))]
+                                             :sceneTime (fn [_ _] #js {:time 0 :rain 0}) :skyDarken (fn [_ _] 0)}))]
       (.feed s "pose" (pose 8 8))
       (-> (after-ticks 10)
           (.then (fn []

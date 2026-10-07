@@ -1,4 +1,4 @@
-// Why JavaScript: WebGL/browser; camera data a shader takes, browser-safe with no imports.
+// Why JavaScript: verbatim copy of the JS camera the viewer used before view.camera (cljs), kept as the bench's baseline.
 // The camera of tools/view/renderer.mjs (cameraFor, non-panorama) as data a shader can take. Browser-safe, no imports.
 // mineflayer's convention: yaw 0 faces north (-z) and grows turning left; pitch > 0 looks up.
 export const directionFor = (yaw, pitch) => ({

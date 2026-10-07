@@ -17,7 +17,6 @@ import * as jsHub from './bench-old/hub-schedule.mjs'
 import * as jsInterp from './bench-old/interp.mjs'
 import * as jsScene from './bench-old/scene.mjs'
 import * as cljs from '../../dashboard/out/viewer-bench/viewer-bench.mjs'
-import { cameraBasis } from './web/camera.mjs'
 import { sceneTime, skyDarken } from './web/shading.mjs'
 
 const args = process.argv.slice(2)
@@ -159,7 +158,7 @@ globalThis.fetch = fakeFetch // the original scene.mjs calls the global fetch
 const jsMakeScene = radius => jsScene.createScene({ agent: 'w/Bob', radius, interp: true, ownStream: false, renderer: { createWorld: fakeWorld, finish () {} }, decoder: fakeDecoder() })
 const cljsMakeScene = radius => cljs.createSceneCore({
   agent: 'w/Bob', radius, interp: true, ownStream: false, world: fakeWorld(), decoder: fakeDecoder(), tables: { ensure: () => Promise.resolve({}) },
-  fetch: fakeFetch, cameraBasis, sceneTime, skyDarken
+  fetch: fakeFetch, sceneTime, skyDarken
 })
 
 // ---- V1: pose interpolation ----

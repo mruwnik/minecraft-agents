@@ -166,7 +166,14 @@
                                         whoFrom view.drive/who-from
                                         withTimeout view.drive/with-timeout
                                         createDriver view.takeover/create-driver
-                                        isAgentKey view.takeover/agent-key?}}}
+                                        isAgentKey view.takeover/agent-key?
+                                        directionFor view.camera/js-direction-for
+                                        cameraBasis view.camera/js-camera-basis
+                                        rayDir view.camera/js-ray-dir
+                                        projectPoint view.camera/js-project-point
+                                        faceRegion view.camera/js-face-region
+                                        regionStats view.stats/js-region-stats
+                                        luminance view.stats/js-luminance}}}
            :compiler-options {:infer-externs :auto}}
   ;; The same viewer namespaces plus the hot functions the :viewer build does not export, release-optimized, for
   ;; tools/view/bench-cljs-vs-js.mjs: `shadow-cljs release viewer-bench`. Not shipped.

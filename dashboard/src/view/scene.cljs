@@ -4,19 +4,20 @@
    within the fetch and decode limits, and says where the camera is. It does not draw: the page (app.mjs) or the hub
    (view.hub) calls frame(now) and draws the returned params with renderer.draw(scene.world, params).
 
-   The GL world, the decoder pool, the block tables and the camera and shading maths are JS; scene.mjs hands them in.
+   The GL world, the decoder pool, the block tables and the shading maths are JS; scene.mjs hands them in.
    frame, drew and the upload step run every animation frame, so they are written in the tuned style (see view.interp):
    JS Maps, Sets, arrays and objects mutated in place, no persistent data.
 
      createScene({agent, radius, fov, interp, world, decoder, tables, baseUrl, maxDist, urlParams, finishForLatency,
-                  ownStream, finish, cameraBasis, sceneTime, skyDarken, fetch})
+                  ownStream, finish, sceneTime, skyDarken, fetch})
        -> {id, agent, radius, fov, world, metrics, interp, frame, drew, stats, close, pose, hud, counts, isReady, feed}
 
    options: interp (boolean, default true); ownStream (default true: the scene opens /pose/<world>/<name> itself; false: whoever
    owns a shared /poses stream passes each event of this agent to feed(event, data), as the hub does, because a browser allows
    only 6 HTTP/1.1 connections per origin); finishForLatency (finish(), gl.finish, before stamping latencies: the single-view
    page's measurement; off for many scenes); urlParams (?time / ?rain overrides for sceneTime); fetch (default js/fetch)."
-  (:require [view.interp :as interp]
+  (:require [view.camera :as camera]
+            [view.interp :as interp]
             [view.schedule :as s]
             [view.window :as w]))
 
@@ -172,7 +173,6 @@
         finish-for-latency (option options "finishForLatency" false)
         own-stream (option options "ownStream" true)
         finish (option options "finish" (fn []))
-        camera-basis (.-cameraBasis options)
         scene-time (.-sceneTime options)
         sky-darken (.-skyDarken options)
         fetch-url (option options "fetch" (fn [url] (js/fetch url))) ; not `fetch`: that local would shadow js/fetch
@@ -441,7 +441,7 @@
                                                     :rain (or-default (.-rain shown) (.-rain pose))}
                                                url-params)]
                          #js {:eye #js {:x (- (.-x eye) ox) :y (- (.-y eye) oy) :z (- (.-z eye) oz)}
-                              :basis (camera-basis #js {:yaw (.-yaw cam) :pitch (.-pitch cam) :fov fov})
+                              :basis (camera/js-camera-basis #js {:yaw (.-yaw cam) :pitch (.-pitch cam) :fov fov})
                               :dist max-dist
                               :darken (sky-darken (.-time t) (.-rain t))
                               :slotOff #js {:x (* 16 (w/modulo (- (.-ccx st) radius) N)) :z (* 16 (w/modulo (- (.-ccz st) radius) N))}

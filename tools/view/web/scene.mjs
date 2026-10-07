@@ -6,7 +6,6 @@
 //   renderer.draw(scene.world, { ...scene.frame(now, { camera }), width, height }); scene.drew()
 //
 // decoder: createDecoder with priority: decodePriority (the pool is shared, so it asks the scenes which job is nearest).
-import { cameraBasis } from './camera.mjs'
 import { createSceneCore, decodePriority } from './cljs/viewer.mjs'
 import { skyDarken, sceneTime } from './shading.mjs'
 import { paletteFor } from './mobs.mjs'
@@ -33,7 +32,6 @@ export const createScene = ({ renderer, decoder, baseUrl = '', debugLevel = 0, .
     world: renderer.createWorld(),
     tables: tablesFor(renderer, { decoder, baseUrl, debugLevel }),
     finish: () => renderer.finish(),
-    cameraBasis,
     sceneTime,
     skyDarken
   })

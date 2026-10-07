@@ -4,7 +4,7 @@
 // One scene of the browser view: follows an agent's pose over server-sent events, keeps a toroidal window of chunk columns
 // (fetch, decode on the shared pool, upload into its own GL world) and says where the camera is. It does not draw: the page
 // (app.mjs) or the hub (hub.mjs) calls frame(now) and draws the returned params with renderer.draw(scene.world, params).
-import { cameraBasis } from '../web/camera.mjs'
+import { cameraBasis } from './camera.mjs'
 import { poseInterpolator } from '../../../dashboard/out/viewer-bench/viewer-bench.mjs'
 import { skyDarken, sceneTime } from '../web/shading.mjs'
 import { tablesFor } from './tables-stub.mjs'
