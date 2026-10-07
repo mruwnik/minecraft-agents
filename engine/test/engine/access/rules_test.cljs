@@ -197,6 +197,6 @@
 
 (deftest no-collision-from-the-placed-blocks-shape
   (are [item] (rules/no-collision? "1.21.4" item)
-    "wheat_seeds" "oak_sapling" "white_carpet" "torch" "sugar_cane" "nether_wart" "brown_mushroom" "pink_petals" "carrot" "melon_seeds")
+    "wheat_seeds" "oak_sapling" "white_carpet" "torch" "sugar_cane" "nether_wart" "brown_mushroom" "pink_petals" "carrot" "melon_seeds" "rail" "powered_rail" "lever")
   (are [item] (not (rules/no-collision? "1.21.4" item))
-    "cobblestone" "wheat" "sand" "soul_torch_holder" "oak_planks" nil))
+    "cobblestone" "wheat" "sand" "soul_torch_holder" "oak_planks" "wheat_seeds_item" nil))

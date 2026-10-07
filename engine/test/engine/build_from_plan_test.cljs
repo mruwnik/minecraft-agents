@@ -134,7 +134,7 @@
                          (await (impl token args)))))
           (let [result (await (tu/child-outcome eng job {:plan "pen"} 200))]
             (is (= 3 (count (filter #(= [4 64 3] (first %)) (places p)))))
-            (is (= {[4 64 3] :refused} (:given-up result)))
+            (is (= {[4 64 3] :no-support} (:given-up result)))
             (is (= 8 (:placed result)))
             (is (= 1 (count (h/events-of seen :build.gave-up))))))))))
 

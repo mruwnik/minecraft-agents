@@ -425,7 +425,7 @@
                     (ctx/update-mem! c #(cond-> (update (dissoc % :placing) :placed (fnil inc 0))
                                           wrong (assoc-in [:misplaced pos] wrong))))
           :already (ctx/update-mem! c dissoc :placing)
-          (:occupied :need :no-item) (ctx/update-mem! c #(count-fail (dissoc % :placing) pos (if (= :need outcome) :no-item outcome) give-up))
+          (:occupied :need :no-item :no-support :unreachable) (ctx/update-mem! c #(count-fail (dissoc % :placing) pos (if (= :need outcome) :no-item outcome) give-up))
           (ctx/update-mem! c #(count-fail (dissoc % :placing) pos :refused give-up)))))))
 
 (defn settle-placing!
