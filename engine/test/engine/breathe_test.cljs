@@ -5,6 +5,8 @@
             [engine.events :as events]
             [engine.memory :as mem]
             [engine.registry :as registry]
+            [jobs.lib.ledger :as ledger]
+            [jobs.lib.world-files :as world-files]
             [jobs.survival.breathe :as b]
             [engine.fake :as fake]
             [engine.takeover :as takeover]
@@ -720,3 +722,83 @@
           (is (>= (count (filter #(= :suffocating (:reflex %)) (reflex-events :fired))) 2) "breathe fired again")
           (is (= {:x 2 :y 65 :z 0} (core/self-pos p)) "the refire re-read the world and landed on the ledge")
           (is (not (.-inWater (.self p)))))))))
+
+(def step-args "Shore swim and go-to look 2 blocks out; no leg fits the pond." small-args)
+
+(defn walled-pond
+  "Water y 64 and 65 over a stone floor at y 63, x and z within 2, a stone ring at distance 3 up to y 66; extra overrides."
+  [extra]
+  (merge (into {} (for [x (range -2 3) z (range -2 3)
+                        [y n] [[63 "stone"] [64 "water"] [65 "water"]]]
+                    [(str x "," y "," z) n]))
+         (into {} (for [x (range -3 4) z (range -3 4) y (range 63 67)
+                        :when (= 3 (max (js/Math.abs x) (js/Math.abs z)))]
+                    [(str x "," y "," z) "stone"]))
+         extra))
+
+(defn ^:async step-run!
+  "One breathe run in the walled pond with inventory and zones; the ending, the ledger and the body."
+  [{:keys [inventory zones blocks args] :or {inventory [] zones [] args step-args}}]
+  (let [clock (atom 1000000)
+        [seen sink] (tu/legacy-capture-sink)
+        p (tu/fake {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}} :blocks (walled-pond blocks) :inventory inventory})
+        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                          :world (world-files/of-data {} {} zones)
+                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+    (await (one-run! eng args))
+    {:ended (ended seen) :seen seen :p p :data (stopped-data seen)
+     :ledger (ledger/open-entries (mem/view (:store eng)))
+     :block (fn [cell] (get (:blocks @(fake/state p)) cell))}))
+
+(deftest a-walled-pond-is-left-on-a-placed-block-in-the-ledger
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [ended p ledger block]} (await (step-run! {:inventory [{:name "dirt" :count 4}]}))
+              [e & more] ledger
+              [x y z] (:cell e)]
+          (is (= [[:completed nil]] ended))
+          (is (empty? more) "one step block")
+          (is (= [:breathe-step :placed "dirt"] ((juxt :purpose :state :item) e)))
+          (is (= "dirt" (block [x y z])))
+          (is (< (max (js/Math.abs x) (js/Math.abs z)) 3) "inside the wall ring")
+          (is (not (.-inWater (.self p))))
+          (is (= (inc y) (js/Math.floor (:y (core/self-pos p)))) "standing on the block"))))))
+
+(deftest a-walled-pond-without-blocks-stops-no_blocks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [ended ledger]} (await (step-run! {}))]
+          (is (= [[:stopped :no_blocks]] ended))
+          (is (empty? ledger)))))))
+
+(deftest every-step-cell-in-a-zone-is-refused-and-nothing-is-placed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [ended ledger data p]} (await (step-run! {:inventory [{:name "dirt" :count 4}]
+                                                              :zones [{:name "keep-out" :min [-3 60 -3] :max [3 70 3]}]}))]
+          (is (= [[:stopped :no_land_in_range]] ended))
+          (is (= :refused (:step data)))
+          (is (empty? ledger))
+          (is (empty? (filterv #(= "place" (.-name %)) (array-seq (.. p -world -calls))))))))))
+
+(deftest reachable-land-in-range-never-places-a-step-block
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [ended ledger]} (await (step-run! {:inventory [{:name "dirt" :count 4}]
+                                                       :blocks {"3,66,0" "air"}}))]
+          (is (= [[:completed nil]] ended))
+          (is (empty? ledger)))))))
+
+(deftest a-cell-under-an-overhang-is-never-a-step-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [roof (into {} (for [x (range 0 3) z (range -2 3)] [(str x ",67," z) "stone"]))
+              {:keys [ended ledger]} (await (step-run! {:inventory [{:name "dirt" :count 4}] :blocks roof}))
+              [x] (:cell (first ledger))]
+          (is (= [[:completed nil]] ended))
+          (is (< x 0) "only a cell with two air above is chosen"))))))

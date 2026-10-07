@@ -1,7 +1,11 @@
 (ns jobs.survival.breathe
   (:require [jobs.lib.tidy :as tidy]
             [engine.ctx :as ctx]
+            [jobs.blocks.place :as place]
             [jobs.lib.access :as access]
+            [jobs.lib.blocks :as blocks]
+            [jobs.lib.escape :as escape]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.pace :as pace]
             [jobs.lib.result :as result]
             [jobs.lib.util :as u]
@@ -17,10 +21,14 @@
   - Surfaced and still in water: each pass takes the first way left: swim to the nearest shore cell (land with its
     rim at most one block above the water) within :shore-radius, another direction after each failed swim; a go-to
     child onto land within :search-radius (at most 3 targets per spot, a failed target excludes its direction);
-    then a swim leg, a go-to to the farthest loaded surface water 8..:leg-length blocks out, outward from the run's
+    then a step block: with a carried pillar block (jobs.lib.escape/pillar-items), one placed (jobs.blocks.place child,
+    zones respected) in the nearest top water cell within :shore-radius that has support and two air cells above,
+    written to the scaffold ledger (purpose :breathe-step, for jobs.access.cleanup), at most 2 per spot; the next
+    pass's shore swim climbs onto it; then a swim leg, a go-to to the farthest loaded surface water 8..:leg-length blocks out, outward from the run's
     start only, inside :swim-range of it, at most :max-legs legs (a leg that moved starts afresh at its end).
   Completed when the head is clear and, after a swim, the body stands on solid ground out of the water. Stopped
-  :no_land_in_range (fields :searched :swum :legs :headings-failed) when every way is spent or the run has gone
+  :no_blocks when only a step cell was left and no pillar block is carried. Stopped
+  :no_land_in_range (fields :searched :swum :legs :headings-failed :step, one of :no-wall :refused :failed) when every way is spent or the run has gone
   3 x :swim-range blocks; the searched area (the start and the failed headings) is remembered (:breathe-afloat, 5 min), so a refire there swims no leg the run already did. Stopped
   :no_air or :no_way_out (with a warn) after three failed tries in the run. It never holds still while afloat.
   Memory: one :breathe entry per run.")
@@ -286,17 +294,59 @@
     (and (= :done r) (boolean (:arrived (ctx/child-result c slot))))))
 
 (defn stop-afloat!
-  "Every way out of the water is spent: remember the spot's failed headings and stop :no_land_in_range."
-  [c]
+  "Every way out of the water is spent: remember the spot's failed headings and stop with reason (:no_land_in_range, or
+  :no_blocks when a step cell was left and no block to place)."
+  [c reason]
   (let [{:keys [search-radius swim-range]} (:args c)
         m (ctx/mem c)
         pos (u/self-pos c)
         failed (:failed-headings m #{})]
-    (ctx/remember! c :breathe-afloat {:pos pos :start (:start m pos) :reason :no_land_in_range :headings (vec failed)} afloat-policy)
-    (result/stop! c :no_land_in_range
-                  (str "afloat; no land within " search-radius " blocks or a swim of " swim-range)
+    (ctx/remember! c :breathe-afloat {:pos pos :start (:start m pos) :reason reason :headings (vec failed)} afloat-policy)
+    (result/stop! c reason
+                  (str "afloat; no land within " search-radius " blocks or a swim of " swim-range
+                       (when (= :no_blocks reason) ", and no block to step out on"))
                   :searched search-radius :swum (js/Math.round (hdist pos (:start m pos))) :legs (:legs m 0)
-                  :headings-failed (count failed))))
+                  :headings-failed (count failed)
+                  :step (cond (:step-refused m) :refused (seq (:failed-steps m)) :failed :else :no-wall))))
+
+(def max-steps "Step blocks one spot places at most." 2)
+
+(defn step-cell
+  "The nearest top water cell within radius of the body that a step block can go in: water with two air cells above it
+  and a neighbour to place against; not the body's own cell, not a failed one (a seq of cells). nil if none."
+  [p pos radius failed]
+  (let [fx (js/Math.floor (:x pos)) fy (js/Math.floor (:y pos)) fz (js/Math.floor (:z pos))
+        self (u/pos-of (.-pos (.self p)))
+        own {:x (js/Math.floor (:x self)) :y (js/Math.floor (:y self)) :z (js/Math.floor (:z self))}]
+    (->> (for [[dx dz] (columns radius) dy [0 -1]] {:x (+ fx dx) :y (+ fy dy) :z (+ fz dz)})
+         (remove #(or (= own %) (contains? (set failed) %)))
+         (filter #(and (= "water" (u/block-name p %))
+                       (s/air? (u/block-name p (update % :y inc)))
+                       (s/air? (u/block-name p (update % :y + 2)))
+                       (place/support? p %)))
+         first)))
+
+(defn ^:async step!
+  "Place a pillar block in cell with a jobs.blocks.place child; the scaffold ledger gets the intent first and the
+  settled entry after. :again either way; a refused or failed cell is not tried again."
+  [c cell]
+  (let [p (:primitives c)
+        block-at (escape/block-at-of p)
+        at [(:x cell) (:y cell) (:z cell)]
+        args {:pos at :any-of escape/pillar-items}
+        item (place/chosen c escape/pillar-items)
+        refused (= :not-allowed (:reason (blocks/child-wait c :step 'jobs.blocks.place args)))
+        l (ledger/reconcile (ledger/open-entries (ctx/view c)) block-at)]
+    (if refused
+      (ctx/update-mem! c #(-> % (assoc :step-refused true) (update :failed-steps (fnil conj []) cell)))
+      (let [intended (ledger/intend l {:cell at :item item :before (block-at at) :job (:id c) :purpose :breathe-step})
+            _ (ledger/remember! c intended)
+            r (await (ctx/call-child c :step 'jobs.blocks.place args))]
+        (ledger/remember! c (ledger/reconcile intended block-at))
+        (if (and (= :done r) (= item (block-at at)))
+          (ctx/update-mem! c update :steps (fnil inc 0))
+          (ctx/update-mem! c update :failed-steps (fnil conj []) cell))))
+    :again))
 
 (defn ^:async land-by-go-to!
   "A go-to child onto land at target. :done when the body then stands on land, else :again (target excluded)."
@@ -333,6 +383,8 @@
         in-budget? (< (:travelled m 0) (* 3 swim-range))
         land (when (and in-budget? (< (:land-tries m 0) land-tries))
                (nearest-land p pos search-radius (:failed-land m) (constantly true)))
+        stepcell (when (< (:steps m 0) max-steps) (step-cell p pos shore-radius (:failed-steps m)))
+        carried? (boolean (escape/pillar-item p))
         legs (when (and in-budget? (< (:legs m 0) max-legs))
                (some (fn [h] (when-let [t (leg-target p pos (:start m) h (:args c))] [h t]))
                      (legal-headings pos (:start m) (:failed-headings m #{}))))]
@@ -345,8 +397,10 @@
               :again)))
 
       land (await (land-by-go-to! c land))
+      (and stepcell carried?) (await (step! c stepcell))
       legs (await (swim-leg! c (first legs) (second legs)))
-      :else (stop-afloat! c))))
+      stepcell (stop-afloat! c :no_blocks)
+      :else (stop-afloat! c :no_land_in_range))))
 
 (defn note!
   "Write the :breathe entry once per job instance."
