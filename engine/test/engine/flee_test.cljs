@@ -104,6 +104,21 @@
                  (mapv #(select-keys % [:mob :id :uuid :ended]) (threat-entries eng))) "one :threat entry")
           (is (= {:cap 20 :ttl 300000} (mem/policy (mem/view (:store eng)) :threat))))))))
 
+(deftest flight-steps-walk-through-a-go-to-child-that-never-escalates
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup {:entities [(zombie 7 5 {:chase {:speed 0.7}})]})
+              real (get registry/jobs 'jobs.movement.go-to)
+              args (atom [])
+              wrapped (assoc real :round (fn ^:async spy [c] (swap! args conj (:args c)) (await ((:round real) c))))
+              s (assoc-in s [:eng :jobs 'jobs.movement.go-to] wrapped)
+              {:keys [p out]} (await (run-job! s 'jobs.survival.retreat {}))]
+          (is (= :far (:ended out)))
+          (is (pos? (count @args)) "every flight step is a go-to call")
+          (is (every? #(false? (:escalate %)) @args) "a flee never digs or pillars")
+          (is (> (fake/dist (body-pos p) (mob-pos p 7)) 35)))))))
+
 (deftest retreat-eats-one-bite-per-flee-step
   (async done
     (tu/run-async done

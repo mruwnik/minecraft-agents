@@ -12,7 +12,6 @@
             [jobs.lib.tidy :as tidy]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
-            [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
             [jobs.lib.result :as r]
             [jobs.lib.threats :as threats]
@@ -28,7 +27,7 @@
   Each step, in this order:
   1. A door, gate or trapdoor standing open within a hand's reach and nearer the nearest chaser than the body is shut
      with one click (retreat.door-shut info). Each door is clicked at most once a flight.
-  2. Walks a short step (:step blocks) away from all chasers (nearer ones weigh more) with the engine walker (jobs.lib.near/walk-near!),
+  2. Walks a short step (:step blocks) away from all chasers (nearer ones weigh more) with a go-to child (:escalate false),
      leaning toward the latest :bed or :home when it is within :home-range and not through the hostiles, avoiding :hazard positions.
      When a wall blocks the way away it turns up to 120 degrees towards open ground (at least 2 clear cells).
      Eats one bite a step (up to food 20) when the nearest chaser is at least :eat-gap blocks away and food is carried.
@@ -437,12 +436,21 @@
          (sort-by #(- (u/dist % threat)))
          first)))
 
+(defn ^:async step!
+  "One flee step to target as a go-to child (a flee never digs or pillars: :escalate false; known dangers stay costed):
+  true when the body arrived or got on a leg nearer, false when go-to gave up, waited or was declined."
+  [c slot target range]
+  (let [r (await (ctx/call-child c slot 'jobs.movement.go-to {:pos target :range range :escalate false
+                                                              :warn false :leg-s flight-timeout-s}))
+        res (when (= :done r) (ctx/child-result c slot))]
+    (boolean (or (:arrived res) (:leg res)))))
+
 (defn ^:async back-off!
   "Step back from threat (back-off-target): :again, nil when there is no such cell or the walk is blocked."
   [c threat]
   (when-let [target (back-off-target (block-at-fn (:primitives c)) (u/self-pos c) (reach/mob-pos (:primitives c) threat)
                                      (keep (comp :pos :data) (ctx/entries c :hazard)))]
-    (if (= :blocked (await (near/walk-near! c target 0 {:timeout-s flight-timeout-s})))
+    (if-not (await (step! c :back-off target 0))
       (do (tried! c :back-off) nil)
       :again)))
 
@@ -902,8 +910,8 @@
         (if (nil? target)
           (await (stuck "no open way away from the hostile"))
           (let [_ (when (:cornered (ctx/mem c)) (ctx/update-mem! c dissoc :cornered))
-                r (await (near/walk-near! c target 1 {:timeout-s flight-timeout-s}))]
-            (if (= :blocked r)
+                moved (await (step! c :step target 1))]
+            (if-not moved
               (await (stuck "the way away from the hostile is blocked"))
               (let [gap (or (some->> (first (near-hostiles c)) (reach/mob-distance p)) (:ranged-radius (:args c)))]
                 (ctx/update-mem! c #(-> % (dissoc :tried) (note-gap gap)))
