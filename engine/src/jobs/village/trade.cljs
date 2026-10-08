@@ -1,5 +1,6 @@
 (ns jobs.village.trade
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]))
@@ -30,8 +31,11 @@
    :count {:doc "items wanted" :spec (a/int-in 1 nil) :default 1}
    :max-price {:doc "highest price per trade (first cost stack); nil for no limit" :spec (a/int-in 0 nil) :default nil}})
 
-(def search-radius 48)
-(def reach 2)
+(a/defargs settings
+  {::search-radius {:default 48 :doc "Blocks within which a trader is looked for." :spec (a/int-in 0 nil)}
+   ::reach {:default 2 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}})
+(defn search-radius [] (settings/get settings ::search-radius))
+(defn reach [] (settings/get settings ::reach))
 
 (def chase-timeout-s
   "Bound of one walk toward the villager: it wanders, so the walk aims again at where it is now this often."
@@ -75,7 +79,7 @@
 (defn find-villager
   "The entity named villager with uuid within the search radius, or nil."
   [p uuid]
-  (->> (array-seq (.entities p #js {:radius search-radius :names #js ["villager"]}))
+  (->> (array-seq (.entities p #js {:radius (search-radius) :names #js ["villager"]}))
        (filter #(= uuid (.-uuid %)))
        first))
 
@@ -167,10 +171,10 @@
     (cond
       (>= (:bought (ctx/mem c) 0) count) (done! c)
       (nil? e) (give-up! c "gone" "the villager is not here")
-      (u/within? (u/self-pos c) (u/pos-of (.-pos e)) reach) (await (trade! c))
+      (u/within? (u/self-pos c) (u/pos-of (.-pos e)) (reach)) (await (trade! c))
       :else
       (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to
-                                     {:pos (u/pos-of (.-pos e)) :range reach :leg-s chase-timeout-s :escalate false :warn false}))]
+                                     {:pos (u/pos-of (.-pos e)) :range (reach) :leg-s chase-timeout-s :escalate false :warn false}))]
         (cond
           (= :continue r) :continue
           (let [res (ctx/child-result c :walk)] (and (= :done r) (or (:arrived res) (:leg res)))) :again

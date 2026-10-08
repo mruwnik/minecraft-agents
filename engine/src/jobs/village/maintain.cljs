@@ -1,5 +1,6 @@
 (ns jobs.village.maintain
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.pace :as pace]))
@@ -180,8 +181,10 @@
           :done (do (ctx/update-mem! c booked slot (summary (ctx/child-result c slot))) :again)
           (do (ctx/update-mem! c booked slot {:skipped :declined :reason (declined-reason c slot call)}) :again))))))
 
-(def max-steps "Steps of one call before it gives the round back with :continue." 400)
+(a/defargs settings
+  {::max-steps {:default 400 :doc "Steps of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}})
+(defn max-steps [] (settings/get settings ::max-steps))
 
 (defn ^:async round [c]
   (let [n (atom 0)]
-    (await (pace/steps! c #(if (< (swap! n inc) max-steps) (step c) :continue)))))
+    (await (pace/steps! c #(if (< (swap! n inc) (max-steps)) (step c) :continue)))))

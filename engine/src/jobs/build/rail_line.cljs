@@ -1,5 +1,6 @@
 (ns jobs.build.rail-line
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.declined :as declined]
@@ -219,7 +220,9 @@
 
 (defn break-text [{:keys [pos why]}] (str (name why) " " (pr-str pos)))
 
-(def max-breaks 12)
+(a/defargs settings
+  {::max-breaks {:default 12 :doc "Blocks broken for one rail line before it gives up." :spec (a/int-in 0 nil)}})
+(defn max-breaks [] (settings/get settings ::max-breaks))
 
 (defn finish!
   "Prove the line, emit the outcome, hand the answer to the parent and end."
@@ -234,10 +237,10 @@
       (ctx/emit! c :rail-build.done :info {:plan plan :cells rails :placed (:placed built)
                                            :text (str "rail line " plan " is sound, " rails " rails, placed " (:placed built))})
       (ctx/emit! c :rail-build.broken :warn
-                 {:plan plan :breaks (vec (take max-breaks (:breaks proof))) :breaks-total (count (:breaks proof))
+                 {:plan plan :breaks (vec (take (max-breaks) (:breaks proof))) :breaks-total (count (:breaks proof))
                   :refused (:refused built) :given-up (:given-up built) :short (:short built)
                   :text (str "rail line " plan " is broken: "
-                             (str/join ", " (map break-text (take max-breaks (:breaks proof))))
+                             (str/join ", " (map break-text (take (max-breaks) (:breaks proof))))
                              (when (seq left) (str "; " left)))}))
     (ctx/result! c (assoc proof :built built))
     :done))

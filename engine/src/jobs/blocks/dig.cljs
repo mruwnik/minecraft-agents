@@ -1,5 +1,6 @@
 (ns jobs.blocks.dig
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.dig-look :as look]
@@ -70,7 +71,11 @@
    :seal-fetch {:doc "get a building block to seal lava with when none is carried, whatever :fetch says: true, a set of kinds or a map of limits, false to seal only with a carried block" :spec fetch/option? :default true}
    :fetch {:doc "get a missing tool instead of waiting :no-tool (jobs.lib.fetch): true, a set of kinds or a map of limits" :spec fetch/option? :default true}})
 
-(def collect-radius 8)
+(a/defargs settings
+  {::collect-radius {:default 8 :doc "Blocks within which dropped items are collected after a dig." :spec (a/int-in 0 nil)}
+   ::max-walks {:default 2 :doc "Failed walks of one call before it declines :unreachable." :spec (a/int-in 0 nil)}
+   ::max-steps {:default 12 :doc "Walks, digs and fetches of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}})
+(defn collect-radius [] (settings/get settings ::collect-radius))
 
 (defn needs
   "What the body lacks to dig block-name with these args: {:tool item} or nil."
@@ -169,7 +174,7 @@
   "Pick up the dug block's drops (jobs.forestry.collect-drops child, called until it ends); finish when it has."
   [c pos]
   (let [{:keys [block ids]} (:dug (ctx/mem c))
-        r (await (child/run! c :collect 'jobs.forestry.collect-drops {:radius collect-radius :ids ids :holes [pos]}))]
+        r (await (child/run! c :collect 'jobs.forestry.collect-drops {:radius (collect-radius) :ids ids :holes [pos]}))]
     (if (= :continue r)
       :continue
       (finish! c {:dug true :pos pos :block block :reason :dug
@@ -213,8 +218,8 @@
       "unreachable" :unreachable
       (stop! c {:dug false :pos pos :block block :reason :failed :primitive status}))))
 
-(def max-walks "Failed walks of one call before it declines :unreachable." 2)
-(def max-steps "Walks, digs and fetches of one call before it gives the round back with :continue." 12)
+(defn max-walks [] (settings/get settings ::max-walks))
+(defn max-steps [] (settings/get settings ::max-steps))
 
 (defn ^:async step-aside!
   "The block to dig is under the feet with no seen solid floor below: step off the column to a cell beside it within
@@ -261,13 +266,13 @@
         (b/air block) (finish! c {:dug false :pos pos :block block :reason :already-clear})
         (b/fluids block) (stop! c {:dug false :pos pos :block block :reason :fluid})
         tool :declined
-        (>= steps max-steps) :continue
+        (>= steps (max-steps)) :continue
         (not (b/in-reach? c pos))
         (let [w (await (b/walk! c pos))]
           (cond
             (= :continue w) :continue
             (= :arrived w) (recur fails (inc steps))
-            (>= (inc fails) max-walks) (unreachable! c (:unreachable w))
+            (>= (inc fails) (max-walks)) (unreachable! c (:unreachable w))
             :else (recur (inc fails) (inc steps))))
         (b/refused-now c (problem c)) :declined
         (and (access/under-feet? (access/may-dig? (b/rules-in c) pos)) (not (contains? (set (:accept (:args c))) :under-feet)))

@@ -1,5 +1,6 @@
 (ns jobs.build.path
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
@@ -37,11 +38,14 @@
    :fetch {:doc "get a shovel when none is carried (jobs.lib.fetch): true, a set of kinds or a map of limits; false waits :no-tool" :spec fetch/option? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
-(def max-cells 256)
+(a/defargs settings
+  {::max-cells {:default 256 :doc "Cells one call looks at before it gives the round back." :spec (a/int-in 0 nil)}
+   ::max-tries {:default 2 :doc "Attempts before the job gives up." :spec (a/int-in 0 nil)}})
+(defn max-cells [] (settings/get settings ::max-cells))
 (def pathable #{"grass_block" "dirt" "coarse_dirt" "podzol" "mycelium" "rooted_dirt"})
 (def ground-cover #{"short_grass" "tall_grass" "fern" "large_fern" "dead_bush" "snow"})
 (def air #{"air" "cave_air" "void_air"})
-(def max-tries 2)
+(defn max-tries [] (settings/get settings ::max-tries))
 (def no-shovel {:reason :no-tool :kind "shovel"})
 
 (defn span [a b] (range (min a b) (inc (max a b))))
@@ -57,8 +61,8 @@
                                                    (- (:z center) radius) (+ (:z center) radius)]
                               :else (throw (ex-info "path needs :from and :to, or :center and :radius" {})))
         n (* (span-size xa xb) (span-size ya yb) (span-size za zb))]
-    (when (> n max-cells)
-      (throw (ex-info (str "path covers " n " cells, at most " max-cells) {:cells n})))
+    (when (> n (max-cells))
+      (throw (ex-info (str "path covers " n " cells, at most " (max-cells)) {:cells n})))
     (vec (for [x (span xa xb) y (span ya yb) z (span za zb)] {:x x :y y :z z}))))
 
 (defn shovel-of
@@ -125,7 +129,7 @@
   "Count a failed try on pos; at max-tries skip it with reason."
   [c pos reason]
   (let [n (inc (get-in (ctx/mem c) [:tries pos] 0))]
-    (if (>= n max-tries)
+    (if (>= n (max-tries))
       (skip! c [pos] reason)
       (ctx/update-mem! c assoc-in [:tries pos] n))))
 

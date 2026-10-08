@@ -1,5 +1,6 @@
 (ns jobs.village.roll
-  (:require [engine.args :as a] [jobs.lib.fetch :as fetch]
+  (:require [engine.settings :as settings]
+            [engine.args :as a] [jobs.lib.fetch :as fetch]
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as b]
             [jobs.lib.util :as u]
@@ -46,9 +47,13 @@
    "cartographer" "cartography_table" "fisherman" "barrel" "fletcher" "fletching_table" "leatherworker" "cauldron"
    "mason" "stonecutter" "shepherd" "loom" "toolsmith" "smithing_table" "weaponsmith" "grindstone"})
 
-(def reach 2)
-(def leg-s 15)
-(def unemploy-s "Seconds to wait for the villager to lose its job after the break, then place anyway." 20)
+(a/defargs settings
+  {::reach {:default 2 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
+   ::leg-s {:default 15 :doc "Seconds one walk leg may take." :spec (a/int-in 0 nil)}
+   ::unemploy-s {:default 20 :doc "Seconds to wait for the villager to lose its job after the break, then place anyway." :spec (a/int-in 0 nil)}})
+(defn reach [] (settings/get settings ::reach))
+(defn leg-s [] (settings/get settings ::leg-s))
+(defn unemploy-s [] (settings/get settings ::unemploy-s))
 
 (defn item-of
   "The workstation item: :item, else the one of :profession."
@@ -108,7 +113,7 @@
   "One go-to leg toward the villager at pos. :again, :continue or the stop."
   [c pos]
   (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to
-                                 {:pos pos :range reach :leg-s leg-s :escalate false :warn false}))]
+                                 {:pos pos :range (reach) :leg-s (leg-s) :escalate false :warn false}))]
     (cond
       (= :continue r) :continue
       (let [res (ctx/child-result c :walk)] (and (= :done r) (or (:arrived res) (:leg res)))) :again
@@ -203,7 +208,7 @@
       (cond
         (not (:broken (ctx/mem c))) (do (stamp! c :broken) :again)
         ;; the workstation is gone: wait for the villager to lose the job, then place it back
-        (and e (not= "unemployed" profession) (< (waited-s c :broken) unemploy-s)) :continue
+        (and e (not= "unemployed" profession) (< (waited-s c :broken) (unemploy-s))) :continue
         (and e (not= "unemployed" profession) (not (:stale (ctx/mem c)))) (do (ctx/update-mem! c assoc :stale true) :again)
         (on-cell? c pos) (await (clear-cell! c pos))
         :else (await (place! c)))
@@ -219,7 +224,7 @@
           (if (> (waited-s c :placed) claim-s)
             (stop! c "no-claim" "the villager took no job")
             :continue))
-      (not (u/within? (u/self-pos c) (u/pos-of (.-pos e)) reach)) (await (walk! c (u/pos-of (.-pos e))))
+      (not (u/within? (u/self-pos c) (u/pos-of (.-pos e)) (reach))) (await (walk! c (u/pos-of (.-pos e))))
       :else
       (let [r (await (read-offers! c))]
         (cond

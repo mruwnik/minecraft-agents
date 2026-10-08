@@ -1,5 +1,6 @@
 (ns jobs.explore.search
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.look :as look]
@@ -55,9 +56,14 @@
    :searched-ttl-s {:doc "how long a note of searched ground lasts" :spec (a/num-in 0 nil) :default 86400}
    :load-wait-s {:doc "how long to wait for unloaded leg columns to load when no loaded leg is left" :spec (a/num-in 0 nil) :default 30}})
 
-(def max-failed-in-row 3)
-(def wait-ms 2000)
-(def reach 12)
+(a/defargs settings
+  {::max-failed-in-row {:default 3 :doc "Failed attempts in a row before the search gives up." :spec (a/int-in 0 nil)}
+   ::wait-ms {:default 2000 :doc "How long the search waits for the world to settle, in ms." :spec (a/int-in 0 nil)}
+   ::reach {:default 12 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
+   ::stand-cap {:default 48 :doc "Stand cells one choice reads; past it :more says candidates are left for the next step." :spec (a/int-in 0 nil)}})
+(defn max-failed-in-row [] (settings/get settings ::max-failed-in-row))
+(defn wait-ms [] (settings/get settings ::wait-ms))
+(defn reach [] (settings/get settings ::reach))
 (def headings {:north [0 -1] :east [1 0] :south [0 1] :west [-1 0]})
 
 ;; ------------------------------------------------------------------ pure
@@ -121,8 +127,8 @@
   block-at: [x y z] -> name, :unseen or nil."
   [block-at x z y]
   (let [y0 (js/Math.floor y)]
-    (loop [h (+ y0 reach)]
-      (if (< h (- y0 reach))
+    (loop [h (+ y0 (reach))]
+      (if (< h (- y0 (reach)))
         {:fail :no-surface}
         (let [n (block-at [x h z])]
           (cond
@@ -216,7 +222,7 @@
       (outward-points [x z] (keyword heading) spacing)
       (spiral-points [ox oz] spacing max-distance))))
 
-(def stand-cap "Stand cells one choice reads; past it :more says candidates are left for the next step." 48)
+(defn stand-cap [] (settings/get settings ::stand-cap))
 
 (defn step-toward
   "Where to walk toward the unseen column [x z] from the body at [bx y bz]: the seen stand cell on the line 12, 6 or 3
@@ -244,7 +250,7 @@
     (loop [[pt & more] (candidates c m) reads 0 acc {:tried [] :failed [] :skipped 0 :unloaded (vec (:deferred m))}]
       (cond
         (nil? pt) acc
-        (>= reads stand-cap) (assoc acc :more true)
+        (>= reads (stand-cap)) (assoc acc :more true)
         (or (tried pt) (> (xz-dist pt origin) max-distance) (= pt [ox oz])) (recur more reads acc)
         (some #(notes/covers? % pt names) ns) (recur more reads (-> acc (update :tried conj pt) (update :skipped inc)))
         :else (let [{sy :y fail :fail} (stand-cell block-at (pt 0) (pt 1) y)
@@ -268,7 +274,7 @@
             in-row (if arrived 0 (inc (:failed-in-row (ctx/mem c) 0)))]
         (ctx/update-mem! c (fn [m] (cond-> (assoc (dissoc m :leg) :failed-in-row in-row)
                                      (not arrived) (update :failed (fnil conj []) {:pos [x y z] :reason :unreachable}))))
-        (if (>= in-row max-failed-in-row) (finish! c :not-found :stuck) :again)))))
+        (if (>= in-row (max-failed-in-row)) (finish! c :not-found :stuck) :again)))))
 
 (defn ^:async step!
   "Look round; end when enough is found or the legs are used up, else start the next leg."
@@ -297,7 +303,7 @@
                 more :again
                 (empty? unloaded) (finish! c :not-found :distance)
                 (< waited (* 1000 (:load-wait-s (:args c))))
-                (do (ctx/update-mem! c assoc :waiting-since (- now waited) :wait-until (+ now wait-ms))
+                (do (ctx/update-mem! c assoc :waiting-since (- now waited) :wait-until (+ now (wait-ms)))
                     :continue)
                 :else (do (ctx/update-mem! c update :failed (fnil into []) unloaded)
                           (finish! c :not-found :not-loaded)))))))

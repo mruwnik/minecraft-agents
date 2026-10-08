@@ -1,5 +1,6 @@
 (ns jobs.village.feed
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.pace :as pace]
@@ -36,13 +37,21 @@
 
 (def foods ["bread" "carrot" "potato" "beetroot"])
 (def wanted (into (set foods) ["wheat" "wheat_seeds" "beetroot_seeds" "torchflower_seeds" "pitcher_pod"]))
-(def reach 2)
-(def leg-s 5)
-(def max-refused 3)
-(def max-walks 8)
-(def watch-s 4)
-(def foot-height 0.3)
-(def settle-reach 4)
+(a/defargs settings
+  {::reach {:default 2 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
+   ::leg-s {:default 5 :doc "Seconds one walk leg may take." :spec (a/int-in 0 nil)}
+   ::max-refused {:default 3 :doc "Refusals before the job gives up on the animal." :spec (a/int-in 0 nil)}
+   ::max-walks {:default 8 :doc "Failed walks of one call before it stops :unreachable." :spec (a/int-in 0 nil)}
+   ::watch-s {:default 4 :doc "Seconds the body watches the animal after acting." :spec (a/int-in 0 nil)}
+   ::foot-height {:default 0.3 :doc "Height of an animal's feet above its position, in blocks." :spec (a/num-in 0 nil)}
+   ::settle-reach {:default 4 :doc "Reach once the animal has settled, in blocks." :spec (a/int-in 0 nil)}})
+(defn reach [] (settings/get settings ::reach))
+(defn leg-s [] (settings/get settings ::leg-s))
+(defn max-refused [] (settings/get settings ::max-refused))
+(defn max-walks [] (settings/get settings ::max-walks))
+(defn watch-s [] (settings/get settings ::watch-s))
+(defn foot-height [] (settings/get settings ::foot-height))
+(defn settle-reach [] (settings/get settings ::settle-reach))
 (def job 'jobs.village.feed)
 
 (defn fed [c] (:fed (ctx/mem c) 0))
@@ -113,7 +122,7 @@
   "One go-to leg to the villager at pos. A leg or arrival resets the blocked count, anything else counts (the third in a
   row ends unreachable); the legs since the last toss are bounded by max-walks. :again, :continue or :done."
   [c pos]
-  (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos pos :range reach :leg-s leg-s :doors :shut
+  (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos pos :range (reach) :leg-s (leg-s) :doors :shut
                                                                :escalate false :warn false :retry false :zone-tolls true}))]
     (if (= :continue r)
       :continue
@@ -121,7 +130,7 @@
             ok? (or (:arrived res) (:leg res))
             _ (ctx/update-mem! c #(-> % (assoc :blocked (if ok? 0 (inc (:blocked % 0)))) (update :walks (fnil inc 0))))
             m (ctx/mem c)]
-        (if (or (>= (:blocked m 0) 3) (>= (:walks m 0) max-walks))
+        (if (or (>= (:blocked m 0) 3) (>= (:walks m 0) (max-walks)))
           (stop! c "unreachable" "cannot get within reach of the villager")
           :again)))))
 
@@ -190,8 +199,8 @@
     (ctx/update-mem! c assoc :tossing {:item item :at (u/self-pos c) :before (held c item)
                                        :t (ctx/now c)
                                        :skip (into {} (map (juxt :id :count)) (lying c item (u/self-pos c) {}))})
-    (await (ctx/act c :look (clj->js {:pos (update pos :y + foot-height)})))
-    (let [r (await (ctx/act c :toss (clj->js {:item item :count n :watchS watch-s})))
+    (await (ctx/act c :look (clj->js {:pos (update pos :y + (foot-height))})))
+    (let [r (await (ctx/act c :toss (clj->js {:item item :count n :watchS (watch-s)})))
           status (.-status r)]
       (if (= "tossed" status)
         (tossed! c e item (.-count r) r)
@@ -222,15 +231,15 @@
         item (food c)
         e (when-not (or (:tossing m) (:cleanup m) (>= (fed c) count)) (find-villager (:primitives c) villager radius))]
     (cond
-      (:tossing m) (if (u/within? (u/self-pos c) (:at (:tossing m)) settle-reach)
+      (:tossing m) (if (u/within? (u/self-pos c) (:at (:tossing m)) (settle-reach))
                      (settle! c (:tossing m))
                      (await (walk! c (:at (:tossing m)))))
       (:cleanup m) (await (clean-up! c (:cleanup m)))
       (>= (fed c) count) (done! c)
-      (>= (:refused m 0) max-refused) (stop! c "not-taken" "the villager does not take the food")
+      (>= (:refused m 0) (max-refused)) (stop! c "not-taken" "the villager does not take the food")
       (nil? e) (stop! c "gone" "the villager is not here")
       (nil? item) (await (fetch-food! c))
-      (u/within? (u/self-pos c) (u/pos-of (.-pos e)) reach) (await (toss! c e item))
+      (u/within? (u/self-pos c) (u/pos-of (.-pos e)) (reach)) (await (toss! c e item))
       :else (await (walk! c (u/pos-of (.-pos e)))))))
 
 (defn ^:async round

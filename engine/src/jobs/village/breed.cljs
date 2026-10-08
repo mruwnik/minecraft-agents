@@ -1,5 +1,6 @@
 (ns jobs.village.breed
-  (:require [engine.args :as a] [jobs.lib.fetch :as fetch]
+  (:require [engine.settings :as settings]
+            [engine.args :as a] [jobs.lib.fetch :as fetch]
             [engine.ctx :as ctx]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]))
@@ -28,8 +29,11 @@
    :wait-s {:doc "seconds to stay near a fed pair for a birth" :spec (a/int-in 1 600) :default 45}
    :fetch {:doc "get food when none is carried (jobs.lib.fetch): true, a set of kinds or a map of limits; false waits for food" :spec fetch/option? :default true}})
 
-(def max-fruitless 3)
-(def wait-range 6)
+(a/defargs settings
+  {::max-fruitless {:default 3 :doc "Rounds without progress before the job gives up." :spec (a/int-in 0 nil)}
+   ::wait-range {:default 6 :doc "Blocks within which the body waits for a pair to breed." :spec (a/int-in 0 nil)}})
+(defn max-fruitless [] (settings/get settings ::max-fruitless))
+(defn wait-range [] (settings/get settings ::wait-range))
 (def job 'jobs.village.breed)
 
 (defn check
@@ -140,7 +144,7 @@
   "Stay near the fed pair; when the wait ends count the births. :again or :continue."
   [c seen]
   (let [m (ctx/mem c)
-        r (await (ctx/call-child c :wait 'jobs.movement.linger-near {:pos (:at m) :range wait-range :wait-s (:wait-s (:args c))}))]
+        r (await (ctx/call-child c :wait 'jobs.movement.linger-near {:pos (:at m) :range (wait-range) :wait-s (:wait-s (:args c))}))]
     (if (not= :done r)
       :continue
       (let [born (born c seen)]
@@ -159,7 +163,7 @@
     (cond
       (>= (:pop seen) (:target (:args c))) (done! c seen)
       (:waiting m) (await (wait! c seen))
-      (>= (:fruitless m 0) max-fruitless) (stop! c seen "no-births" "three attempts without a birth")
+      (>= (:fruitless m 0) (max-fruitless)) (stop! c seen "no-births" "three attempts without a birth")
       (:pair m) (await (feed-pair! c vs seen))
       :else (choose! c vs seen))))
 

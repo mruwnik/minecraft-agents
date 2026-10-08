@@ -1,5 +1,6 @@
 (ns jobs.debug.access-check
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
             [jobs.lib.util :as u]))
@@ -27,7 +28,9 @@
    :now {:doc "the clock in ms for the claims; nil: the body's clock" :spec (a/num-in 0 nil) :default nil}
    :ignore-zones? {:doc "judge as a job that acts regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
-(def max-cells 400)
+(a/defargs settings
+  {::max-cells {:default 400 :doc "Cells one call looks at before it gives the round back." :spec (a/int-in 0 nil)}})
+(defn max-cells [] (settings/get settings ::max-cells))
 
 (defn check [_c] true)
 
@@ -43,8 +46,8 @@
     (seq cells) (vec cells)
     (and (= 3 (count from)) (= 3 (count to)))
     (let [n (* (count (span (from 0) (to 0))) (count (span (from 1) (to 1))) (count (span (from 2) (to 2))))]
-      (if (> n max-cells)
-        {:error (str "box covers " n " cells, at most " max-cells)}
+      (if (> n (max-cells))
+        {:error (str "box covers " n " cells, at most " (max-cells))}
         (box-cells from to)))
     :else {:error "give :cells or a box :from/:to"}))
 

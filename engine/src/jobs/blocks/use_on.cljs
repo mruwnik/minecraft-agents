@@ -1,5 +1,6 @@
 (ns jobs.blocks.use-on
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as b]))
 
@@ -20,7 +21,9 @@
    :face {:doc "the face clicked: up down north south east west" :spec #{"up" "down" "north" "south" "east" "west"} :default "up"}})
 
 (def faces #{"up" "down" "north" "south" "east" "west"})
-(def max-walks "Failed walks of one call before it stops :unreachable." 2)
+(a/defargs settings
+  {::max-walks {:default 2 :doc "Failed walks of one call before it stops :unreachable." :spec (a/int-in 0 nil)}})
+(defn max-walks [] (settings/get settings ::max-walks))
 
 (defn check [_c] true)
 
@@ -43,7 +46,7 @@
         (let [w (when-not (b/in-reach? c pos) (await (b/walk! c pos)))]
           (cond
             (= :continue w) :continue
-            (map? w) (if (>= (inc fails) max-walks)
+            (map? w) (if (>= (inc fails) (max-walks))
                        (finish! c {:status :stopped :used false :pos pos :item item :face face :reason :unreachable :why (:unreachable w)})
                        (recur (inc fails)))
             :else

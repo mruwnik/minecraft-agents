@@ -1,5 +1,6 @@
 (ns jobs.build.clear-box
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
@@ -33,8 +34,11 @@
    :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent :falling-block)"
             :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent :falling-block}}})
 
-(def max-cells 400)
-(def max-tries 2)
+(a/defargs settings
+  {::max-cells {:default 400 :doc "Cells one call looks at before it gives the round back." :spec (a/int-in 0 nil)}
+   ::max-tries {:default 2 :doc "Attempts before the job gives up." :spec (a/int-in 0 nil)}})
+(defn max-cells [] (settings/get settings ::max-cells))
+(defn max-tries [] (settings/get settings ::max-tries))
 (def air #{"air" "cave_air" "void_air"})
 (def fluids #{"water" "lava" "bubble_column"})
 (def kept-pattern
@@ -49,8 +53,8 @@
     (not (and from to)) "clear-box needs :from and :to"
     :else (let [[a b] [from to]
                 n (* (count (span (:x a) (:x b))) (count (span (:y a) (:y b))) (count (span (:z a) (:z b))))]
-            (when (> n max-cells)
-              (str "clear-box covers " n " cells, at most " max-cells)))))
+            (when (> n (max-cells))
+              (str "clear-box covers " n " cells, at most " (max-cells))))))
 
 (defn cells
   "The cells [{:x :y :z} ...] of the box :from/:to. Throws ex-info for a
@@ -146,7 +150,7 @@
 
 (defn bump! [c pos reason]
   (let [n (inc (get-in (ctx/mem c) [:tries pos] 0))]
-    (if (>= n max-tries)
+    (if (>= n (max-tries))
       (skip! c pos reason)
       (ctx/update-mem! c assoc-in [:tries pos] n))))
 

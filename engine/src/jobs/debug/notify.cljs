@@ -1,5 +1,6 @@
 (ns jobs.debug.notify
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [clojure.string :as str]
             [engine.chat :as chat]
             [engine.ctx :as ctx]
@@ -18,7 +19,9 @@
    :chat? {:doc "also send the text to game chat, when the primitives can" :spec boolean? :default false}
    :to {:doc "whisper the text to this player instead of saying it to all" :spec a/name? :default nil}})
 
-(def hostile-radius 16)
+(a/defargs settings
+  {::hostile-radius {:default 16 :doc "Blocks within which a hostile mob is reported." :spec (a/int-in 0 nil)}})
+(defn hostile-radius [] (settings/get settings ::hostile-radius))
 
 (def notify-policy {:cap 20 :ttl 600000})
 
@@ -27,7 +30,7 @@
   [p]
   (let [s (.self p)
         pos (.-pos s)
-        hostiles (count (combat/known-or-raw p hostile-radius))]
+        hostiles (count (combat/known-or-raw p (hostile-radius)))]
     (str "health " (.-health s) ", food " (.-food s) ", oxygen " (.-oxygen s)
          ", on-fire " (boolean (.-onFire s))
          ", pos " (js/Math.round (.-x pos)) " " (js/Math.round (.-y pos)) " " (js/Math.round (.-z pos))

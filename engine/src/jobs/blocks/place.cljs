@@ -1,5 +1,6 @@
 (ns jobs.blocks.place
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.access :as access]
@@ -174,8 +175,11 @@
       "unreachable" :unreachable
       (stop! c {:placed false :pos pos :item item :reason :failed :primitive status}))))
 
-(def max-walks "Failed walks of one call before it declines :unreachable." 2)
-(def max-steps "Walks, clears and fetches of one call before it gives the round back with :continue." 12)
+(a/defargs settings
+  {::max-walks {:default 2 :doc "Failed walks of one call before it declines :unreachable." :spec (a/int-in 0 nil)}
+   ::max-steps {:default 12 :doc "Walks, clears and fetches of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}})
+(defn max-walks [] (settings/get settings ::max-walks))
+(defn max-steps [] (settings/get settings ::max-steps))
 
 (defn unreachable!
   "Remember why the cell cannot be reached from here; the check waits on it while the body stays. :declined."
@@ -198,7 +202,7 @@
         full (stop! c {:placed false :pos pos :item (first items) :reason :occupied :block full})
         r r
         already (finish! c {:placed false :pos pos :item block :reason :already})
-        (>= steps max-steps) :continue
+        (>= steps (max-steps)) :continue
         (clears? c block)
         (let [w (await (clear! c pos items))]
           (cond (= :cleared w) (recur fails (inc steps))
@@ -208,7 +212,7 @@
           (cond
             (= :continue w) :continue
             (= :arrived w) (recur fails (inc steps))
-            (>= (inc fails) max-walks) (unreachable! c (:unreachable w))
+            (>= (inc fails) (max-walks)) (unreachable! c (:unreachable w))
             :else (recur (inc fails) (inc steps))))
         (nil? (b/chosen c items))
         :declined
