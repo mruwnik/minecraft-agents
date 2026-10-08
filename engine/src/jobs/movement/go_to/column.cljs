@@ -1,15 +1,22 @@
 (ns jobs.movement.go-to.column
-  "go-to's goal y. A column goal ([x z] or {:x :z}, no y) stands on the ground of that column nearest the body's feet. A
-  y with no standable cell within the range is re-aimed to its column's standable cell nearest it, at most :y-slack
-  blocks off. Cells read as the body sees or remembers them; a cell it never saw reads from the world the plans read
-  (the raw world with :unknown off, nothing with :unknown on). A column with no ground known keeps a stand-in y (the
-  body's feet, or the given y) and go-to walks toward it, aimed again every step: an unseen column resolves on approach."
+  "go-to's goal y. A column goal ([x z] or {:x :z}, no y) stands on the ground of that column nearest the body's feet,
+  read from seen cells only, over the whole build height. A column with no ground seen aims provisionally at its
+  topmost stand open to the sky (the surface a player assumes; read from the world the plans read, so not with
+  :unknown on), else keeps a stand-in y (the body's feet); go-to aims again every step, so it resolves from seen cells
+  on approach; a provisional one it first walks to within approach-range of. A y with no standable cell within the
+  range is re-aimed to its column's standable cell nearest it, at most :y-slack blocks off (seen cells, an unseen one
+  from the world the plans read)."
   (:require [engine.args :as a]
             [jobs.lib.places :as places]
             [jobs.lib.reach :as reach]
             [jobs.lib.util :as u]))
 
-(def column-reach "Blocks above and below the body's feet a column goal looks for ground in." 64)
+(def approach-range
+  "Blocks from a column's provisional cell go-to first walks to while no ground of it is seen, and looks: a guess out of
+  reach (a floating block, a tree's leaves) does not stop it short of seeing the column."
+  8)
+
+(def top-y "The highest feet y a column goal looks for ground at (the head cell above is the build limit's last)." (- places/max-y 2))
 
 (defn column-xz
   "[x z] of a column pos ([x z] or {:x :z} with no :y), else nil."
@@ -36,15 +43,22 @@
         (reach/hazard-blocks (.-name b)) :hazard
         :else (reach/kind-of b)))
 
+(defn seen-kind-at
+  "(fn [x y z]) -> kind of the block the body of primitives p sees or remembers there, :unknown when never seen (or when
+  p senses nothing)."
+  [p]
+  (if (some? (.-sensedAt p))
+    (fn [x y z] (kind (u/seen-block p {:x x :y y :z z})))
+    (constantly :unknown)))
+
 (defn kind-at
-  "(fn [x y z]) -> kind of the block the body of primitives p sees or remembers there; an unseen one from the raw world
-  (reach/lookup) when raw?, else :unknown."
+  "(fn [x y z]) -> as seen-kind-at; an unseen cell from the raw world (reach/lookup) when raw?."
   [p raw?]
-  (let [raw (when raw? (reach/lookup p kind))
-        sensing? (some? (.-sensedAt p))]
-    (fn [x y z]
-      (let [k (if sensing? (kind (u/seen-block p {:x x :y y :z z})) :unknown)]
-        (if (and raw (keyword-identical? :unknown k)) (raw x y z) k)))))
+  (let [seen (seen-kind-at p)
+        raw (when raw? (reach/lookup p kind))]
+    (if raw
+      (fn [x y z] (let [k (seen x y z)] (if (keyword-identical? :unknown k) (raw x y z) k)))
+      seen)))
 
 (defn free? [k] (or (keyword-identical? :open k) (keyword-identical? :water k)))
 
@@ -56,30 +70,31 @@
          (or (keyword-identical? :water feet) (keyword-identical? :solid (kind-at x (dec y) z))))))
 
 (defn ground
-  "The y within reach of y (nearest first, the higher of two) where the column x z stands, else nil."
-  [kind-at x z y within]
-  (some (fn [d] (cond (stands? kind-at x (+ y d) z) (+ y d)
-                      (and (pos? d) (stands? kind-at x (- y d) z)) (- y d)))
-        (range 0 (inc within))))
+  "The y from lo to hi nearest y (the higher of two) where the column x z stands, else nil."
+  [kind-at x z y lo hi]
+  (some (fn [d] (let [up (+ y d) down (- y d)]
+                  (cond (and (<= up hi) (stands? kind-at x up z)) up
+                        (and (pos? d) (>= down lo) (stands? kind-at x down z)) down)))
+        (range 0 (inc (max (- hi y) (- y lo))))))
 
-(defn stands-near?
-  "Whether a cell within range (a sphere, as the planner's goal test) of pos stands."
-  [kind-at {:keys [x y z]} radius]
-  (let [r (js/Math.ceil radius)]
-    (boolean (some (fn [[dx dy dz]] (stands? kind-at (+ x dx) (+ y dy) (+ z dz)))
-                   (for [dx (range (- r) (inc r)) dy (range (- r) (inc r)) dz (range (- r) (inc r))
-                         :when (<= (+ (* dx dx) (* dy dy) (* dz dz)) (* radius radius))]
-                     [dx dy dz])))))
+(defn sky-ground
+  "The feet y of the column x z's topmost stand open to the sky (every cell above it free), else nil."
+  [kind-at x z]
+  (when-let [h (first (remove #(free? (kind-at x % z)) (range (inc top-y) (dec places/min-y) -1)))]
+    (when (stands? kind-at x (inc h) z) (inc h))))
 
 (defn aim
-  "{:pos cell} go-to walks to for goal ({:x :y :z}, or {:x :z} for a column), with :resolved true when the y was
-  chosen here. body-y: the body's feet y; slack: the :y-slack arg; raw?: whether unseen cells read from the raw world."
-  [p {:keys [x y z] :as goal} radius slack body-y raw?]
-  (let [ka (kind-at p raw?)]
-    (cond
-      (nil? y) (let [g (ground ka x z body-y column-reach)]
-                 (cond-> {:pos {:x x :y (or g body-y) :z z}} g (assoc :resolved true)))
-      (or (zero? slack) (stands-near? ka goal radius)) {:pos goal}
-      :else (if-let [g (ground ka x z y slack)]
-              {:pos (assoc goal :y g) :resolved true}
-              {:pos goal}))))
+  "{:pos cell} go-to walks to for goal ({:x :y :z}, or {:x :z} for a column): :resolved true when the y was chosen here,
+  :provisional too when a column's y is its unseen surface (sky-ground). body-y: the body's feet y; slack: the :y-slack
+  arg; raw?: whether unseen cells read from the raw world. A y goal comes here only once the planner found no cell in
+  its range stands."
+  [p {:keys [x y z] :as goal} slack body-y raw?]
+  (if (nil? y)
+    (if-let [g (ground (seen-kind-at p) x z body-y places/min-y top-y)]
+      {:pos {:x x :y g :z z} :resolved true}
+      (if-let [s (when raw? (sky-ground (reach/lookup p kind) x z))]
+        {:pos {:x x :y s :z z} :resolved true :provisional true}
+        {:pos {:x x :y body-y :z z}}))
+    (if-let [g (when (pos? slack) (ground (kind-at p raw?) x z y (- y slack) (+ y slack)))]
+      {:pos (assoc goal :y g) :resolved true}
+      {:pos goal})))

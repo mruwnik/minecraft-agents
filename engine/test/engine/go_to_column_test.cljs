@@ -2,7 +2,8 @@
   "jobs.movement.go-to's column goals ([x z], y left out) and its re-aim of a y with nothing standable in range."
   (:require [cljs.test :refer [deftest is async]]
             [engine.go-to-test :as gt :refer [go! at events-of refusal]]
-            [engine.test-util :as tu :refer [box floor]]))
+            [engine.test-util :as tu :refer [box floor]]
+            [jobs.movement.go-to.column :as column]))
 
 (def flat (floor -2 -3 40 3))
 
@@ -104,3 +105,55 @@
   (is (re-find #":pos must be \[x y z\]" (refusal {:pos [10]})))
   (is (re-find #":pos must be \[x y z\]" (refusal {:pos {:x 1 :y 2}})))
   (is (re-find #":y-slack must be a whole number" (refusal {:pos [10 64 0] :y-slack -1}))))
+
+(defn hiding
+  "p (tu/fake over blocks) that sees every cell but those hidden? [x y z] answers true for (unknown, never seen)."
+  [blocks hidden?]
+  (let [p (tu/fake {:blocks blocks})]
+    (aset p "sensedAt" (fn [pos] (if (hidden? [(.-x pos) (.-y pos) (.-z pos)]) #js {:unknown true} (.blockAt p pos))))
+    p))
+
+;; a hill at x 28..32 with its ground at feet 75, a cave in it at feet 60 (nearer feet 64 than the ground is)
+(def hill-with-cave
+  (merge flat (box 28 40 -3 32 74 3 "stone") (box 30 60 0 30 61 0 "air")))
+
+(defn column-hidden-below [y] (fn [[x cy z]] (and (= [30 0] [x z]) (< cy y))))
+
+(deftest an-unseen-column-aims-at-its-ground-open-to-the-sky-never-a-hidden-cave
+  (let [p (hiding hill-with-cave (column-hidden-below 75))]
+    (is (= {:pos {:x 30 :y 75 :z 0} :resolved true :provisional true} (column/aim p {:x 30 :z 0} 4 64 true))
+        "the top open to the sky, as a player sees it from above")
+    (is (= {:pos {:x 30 :y 64 :z 0}} (column/aim p {:x 30 :z 0} 4 64 false))
+        ":unknown on reads no unseen cell: the stand-in")))
+
+(deftest a-seen-column-picks-its-seen-ground-nearest-the-feet
+  (let [p (hiding hill-with-cave (constantly false))]
+    (is (= {:pos {:x 30 :y 60 :z 0} :resolved true} (column/aim p {:x 30 :z 0} 4 64 true))
+        "the cave was seen: it is the ground nearest the feet")))
+
+(deftest a-column-far-above-or-below-the-feet-resolves
+  (let [p (hiding flat (constantly false))]
+    (doseq [feet [-50 200]]
+      (is (= {:pos {:x 10 :y 64 :z 0} :resolved true} (column/aim p {:x 10 :z 0} 4 feet true)) (str "feet " feet)))))
+
+(deftest a-column-goal-is-aimed-again-when-it-comes-into-view
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        ;; a lone block floats at y 70 over x 30: out of sight, the column aims at its top (71, out of reach); once
+        ;; seen, at its ground under it (64), nearer the feet
+        (let [floating (merge flat (box 30 70 0 30 70 0 "stone"))
+              {:keys [out p] :as s} (await (go! {:blocks floating :light [15 0]} {:pos [30 0] :range 0}))]
+          (is (= {:arrived true :resolved {:x 30 :y 64 :z 0}} @out) (pr-str @out))
+          (is (= [30 64 0] (mapv #(js/Math.floor %) (at p))))
+          (is (= [{:x 30 :y 71 :z 0} {:x 30 :y 64 :z 0}] (mapv :to (events-of s :goal-resolved)))
+              "said again when the target changed"))))))
+
+(deftest a-column-stand-in-arrival-carries-the-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        ;; the column x 3 has no floor at all: no ground, the stand-in (the feet y) is within range from the start
+        (let [holed (apply dissoc flat (for [z (range -3 4)] (str "3,63," z)))
+              {:keys [out]} (await (go! {:blocks holed} {:pos [3 0] :range 4}))]
+          (is (= {:arrived true :resolved {:x 3 :y 64 :z 0}} @out) (pr-str @out)))))))

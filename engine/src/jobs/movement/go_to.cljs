@@ -33,8 +33,8 @@
 
 (def doc
   "Walk to :pos ([x y z] or {:x :y :z}, fractions floored to the cell) until the body's cell is within :range cells of
-  it (a sphere; range 0: in that cell, 1: next to it). :pos [x z] or {:x :z} (no y) walks to the ground of that column
-  nearest the body's feet; a y the planner finds no standable cell within :range of is re-aimed once to its column's
+  it (a sphere; range 0: in that cell, 1: next to it). :pos [x z] or {:x :z} (no y) walks to the seen ground of that
+  column nearest the body's feet (unseen: first to within 8 of its topmost ground open to the sky, then looks); a y the planner finds no standable cell within :range of is re-aimed once to its column's
   ground nearest it, at most :y-slack blocks off (info goal-resolved {:goal :to}); see jobs.movement.go-to.column. A
   column whose ground is not made out is looked at after a fruitless walk (at most 3 a call). A cell over a short floor (farmland, a path, a bottom slab) stands for that
   block's own cell, where the body's feet are. :place (a name such as :home, set by jobs.memory.set-place) walks to
@@ -96,7 +96,7 @@
     escalation adds :escalation {:step :reason ...}, the child's reason or wait.
   - Under water with no way to the goal in the air left (:air), it first walks to the nearest air it sees or finds by
     looking (jobs.movement.go-to.air, info go-to.surfacing, at most 3 a call) and plans again.
-  - Success is {:arrived true}, with :resolved the cell when go-to chose the y. The result is also a :result info event.
+  - Success is {:arrived true}, with :resolved the cell when go-to chose the y (a column's stand-in too). The result is also a :result info event.
   - Every walk writes a :moved memory entry {:from :to :status :target} (arrived, partial or blocked) for
     the stuck trigger.
   - :doors (jobs.lib.pass): :shut (default) opens a shut door, gate or trapdoor with an empty hand, passes and
@@ -329,20 +329,35 @@
 (defn aimed
   "{:pos cell :resolved bool} to walk to for goal (target's :pos; no :y for a column), jobs.movement.go-to.column/aim."
   [c goal]
-  (let [{:keys [range y-slack unknown]} (:args c)]
-    (column/aim (:primitives c) goal (or range 1) (or y-slack 4) (js/Math.floor (:y (u/self-pos c))) (not unknown))))
+  (let [{:keys [y-slack unknown]} (:args c)]
+    (column/aim (:primitives c) goal (or y-slack 4) (js/Math.floor (:y (u/self-pos c))) (not unknown))))
 
 (def max-column-looks "Looks a call takes at a column goal whose ground it has not made out, one after a fruitless walk." 3)
 
 (defn ^:async look-at-column!
-  "A column goal with no ground made out yet (mem :column-open) after a fruitless walk: look at its stand-in cell, at most
-  max-column-looks a call; true when it looked (goal-pos aims again from what it saw)."
+  "A column goal with no ground made out yet (mem :column-open) after a fruitless walk or within reach of its guess:
+  look at its cell at the body's feet y, then one above (a look glances the cell and its neighbours: the ground nearest
+  the feet), then its aimed cell, at most max-column-looks a call; true when it looked (goal-pos aims again from what it
+  saw)."
   [c pos]
-  (let [n (:column-looks (ctx/mem c) 0)]
+  (let [n (:column-looks (ctx/mem c) 0)
+        feet (js/Math.floor (:y (u/self-pos c)))]
     (when (and (:column-open (ctx/mem c)) (< n max-column-looks))
       (ctx/update-mem! c assoc :column-looks (inc n))
-      (await (sense/look-at! c (mapv #(js/Math.floor (% pos)) [:x :y :z])))
+      (await (sense/look-at! c [(js/Math.floor (:x pos)) (nth [feet (inc feet)] n (js/Math.floor (:y pos))) (js/Math.floor (:z pos))]))
       true)))
+
+(defn ^:async arrive!
+  "Within range of pos: done, but for a column whose ground is only guessed (mem :column-open :guess) walked to within
+  column/approach-range of it: it looks at it (look-at-column!), its looks spent it walks on within the :range arg (mem
+  :column-near)."
+  [c pos]
+  (let [m (ctx/mem c)]
+    (cond
+      (:restore-pending m) (esc/restore-next! c)
+      (or (not= :guess (:column-open m)) (:column-near m)) (arrived! c)
+      (await (look-at-column! c pos)) :again
+      :else (do (ctx/update-mem! c assoc :column-near true) :again))))
 
 (defn ^:async walk! [c0 pos range doors]
   (let [c (cond-> c0 (:over-budget (ctx/mem c0)) (assoc :over-budget true))
@@ -352,7 +367,7 @@
         closed? (= :closed (some-> (:one-way (:args c)) keyword))]
     (cond
       (here? c pos range)
-      (if (:restore-pending (ctx/mem c)) (esc/restore-next! c) (arrived! c))
+      (await (arrive! c pos))
 
       (nil? pw)
       (end/refuse! c {:reason :unsupported :message "the body cannot sense the world for path planning"})
@@ -394,7 +409,7 @@
             nearer? (boolean (and target (< tdist (dec (get tbests target js/Infinity)))))]
         (cond
           (= "arrived" status)
-          (if (:restore-pending (ctx/mem c)) (esc/restore-next! c) (arrived! c))
+          (await (arrive! c pos))
 
           (and (:leg-s (:args c)) (< left (dec d)))
           (end/finish! c {:arrived false :leg true})
@@ -451,7 +466,7 @@
   (let [m (ctx/mem c)
         there? (here? c pos (:range (:args c)))]
     (wworld/warn-bad-settings! c)
-    (ctx/update-mem! c #(cond-> (-> % (dissoc :best :fault-cells :over-budget :off-hand-tried :air-looked :air-relooks :surfacings :column-looks) (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {}))
+    (ctx/update-mem! c #(cond-> (-> % (dissoc :best :fault-cells :over-budget :off-hand-tried :air-looked :air-relooks :surfacings :column-looks :column-near) (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {}))
                           (not (:fetching m)) (dissoc :torch-fetched :fetched)
                           (and there? (:escalate-now m)) (dissoc :escalate-now)
                           (and there? (:escalation m))
@@ -532,7 +547,8 @@
       (:escalate-now m) (do (ctx/update-mem! c dissoc :escalate-now)
                             (await (esc/escalate! c pos nil)))
       :else (or (when (:fetching m) (await (fetch/step! c 'jobs.movement.go-to torch-need)))
-                (await (walk! c pos (:range (:args c)) (some-> (:doors (:args c)) keyword)))))))
+                (await (walk! c pos (cond-> (:range (:args c)) (and (= :guess (:column-open m)) (not (:column-near m))) (max column/approach-range))
+                              (some-> (:doors (:args c)) keyword)))))))
 
 (defn shared-marker
   "The shared marker called s: the exact name first, else the first whose name matches in any case; nil when none."
@@ -570,16 +586,22 @@
 (defn goal-pos
   "The cell go-to plans to this step for goal: aimed when a column, or once the planner found no cell in range of its y
   stands (mem :re-aim), then as the planner stands (wworld/stand-goal). A y chosen for the
-  goal that differs from the last one chosen is an info goal-resolved {:goal :to} (mem :aimed)."
+  goal that differs from the last one chosen is an info goal-resolved {:goal :to} (mem :said); the cell aimed at, a
+  column's stand-in too, is mem :aimed (the result's :resolved). A column not resolved from seen cells is :column-open
+  (:guess for its unseen surface, :stand-in for no ground known)."
   [c goal]
   (when goal
-    (let [{:keys [pos resolved]} (if (or (nil? (:y goal)) (:re-aim (ctx/mem c))) (aimed c goal) {:pos goal})
-          open? (and (nil? (:y goal)) (not resolved))]
-      (when (not= open? (boolean (:column-open (ctx/mem c))))
-        (ctx/update-mem! c assoc :column-open open?))
-      (when (not= (when resolved pos) (:aimed (ctx/mem c)))
-        (ctx/update-mem! c assoc :aimed (when resolved pos))
-        (when resolved (ctx/emit! c :goal-resolved :info {:goal goal :to pos})))
+    (let [column? (nil? (:y goal))
+          {:keys [pos resolved provisional]} (if (or column? (:re-aim (ctx/mem c))) (aimed c goal) {:pos goal})
+          open (when column? (cond provisional :guess (not resolved) :stand-in))
+          aimed-at (when (or resolved column?) pos)]
+      (when (not= open (:column-open (ctx/mem c)))
+        (ctx/update-mem! c assoc :column-open open))
+      (when (not= aimed-at (:aimed (ctx/mem c)))
+        (ctx/update-mem! c assoc :aimed aimed-at))
+      (when (and resolved (not= pos (:said (ctx/mem c))))
+        (ctx/update-mem! c assoc :said pos)
+        (ctx/emit! c :goal-resolved :info {:goal goal :to pos}))
       (wworld/stand-goal (wworld/path-world (:primitives c) (:unknown c)) pos))))
 
 (defn goal-danger
