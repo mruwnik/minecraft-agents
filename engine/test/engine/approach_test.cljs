@@ -76,3 +76,10 @@
 (deftest a-claim-over-radius-3-widens-to-a-free-base
   (let [claim {:id "c" :owner "other" :status :active :until 100 :min [-3 0 -3] :max [3 100 3]}]
     (is (some? (:pillar (plan :claims [claim] :now 0))))))
+
+(deftest an-unseen-floor-is-no-stand
+  (let [guessed (world {[1 0] 66})
+        seen (fn [[_ y _ :as p]] (when (<= y 63) (guessed p)))
+        r (plan :block-at guessed :floor-at seen)]
+    (is (nil? (:stand r)))
+    (is (some? (:pillar r)))))

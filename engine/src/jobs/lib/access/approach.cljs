@@ -4,6 +4,7 @@
 
   Input, one map: the rules input of jobs.lib.access.rules (:block-at :zones :footprints :claims :self :now
   :ignore-zones?) plus
+    :floor-at   optional block-at over cells as seen (no guess): a stand or base floor must be seen solid; default :block-at
     :targets    set of [x y z] cells that must all be within reach of the eye
     :feet       the body's feet cell
     :reach      eye-to-centre distance a target is worked from (the caller's constant, e.g. dig-reach)
@@ -50,10 +51,10 @@
     (boolean (and n (rules/replaceable n) (not (rules/fluids n))))))
 
 (defn standing-cell?
-  "Feet and head cells passable over a solid floor."
-  [block-at [x y z]]
+  "Feet and head cells passable over a solid floor. The floor is read from floor-at (cells as seen, no guess)."
+  [block-at floor-at [x y z]]
   (and (passable? block-at [x y z]) (passable? block-at [x (inc y) z])
-       (rules/solid-floor? block-at [x (dec y) z])))
+       (rules/solid-floor? floor-at [x (dec y) z])))
 
 (defn in-reach?
   "Every target within reach of the eye of a body standing at the middle of the feet cell."
@@ -80,9 +81,9 @@
 
 (defn stands
   "Standing cells with every target in reach, nearest to feet first."
-  [{:keys [block-at targets reach feet]} cols ys]
+  [{:keys [block-at floor-at targets reach feet]} cols ys]
   (->> (for [[x z] cols y ys :let [c [x y z]]
-             :when (and (not (contains? targets c)) (standing-cell? block-at c) (in-reach? reach targets c))]
+             :when (and (not (contains? targets c)) (standing-cell? block-at (or floor-at block-at) c) (in-reach? reach targets c))]
          c)
        (sort-by (juxt #(dist3 feet %) identity))))
 
@@ -100,9 +101,9 @@
 (defn base-plans
   "Every pillar over a ground cell of cols, as {:base :height :stand :cost :refusal}. A base with no workable height
   carries the refusal of its last try."
-  [{:keys [block-at targets reach feet max-height] :as in} cols ys]
+  [{:keys [block-at floor-at targets reach feet max-height] :as in} cols ys]
   (for [[x z] cols y ys :let [base [x y z]]
-        :when (and (not (contains? targets base)) (standing-cell? block-at base))
+        :when (and (not (contains? targets base)) (standing-cell? block-at (or floor-at block-at) base))
         :let [tries (for [n (range 1 (inc max-height))
                           :let [stand [x (+ y n) z]]
                           :when (in-reach? reach targets stand)]
