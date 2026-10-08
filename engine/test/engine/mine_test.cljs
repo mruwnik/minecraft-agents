@@ -998,6 +998,48 @@
           (is (= [[{:pos [5 64 2] :count 1}]] (map :items (events-of s :mine.left-behind))))
           (is (= [{:pos [5 64 2] :count 1}] (:left (done-event s)))))))))
 
+(deftest a-drop-out-of-sight-from-where-it-was-dug-is-walked-to-and-collected
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks {"3,64,0" "iron_ore"} :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270}})
+              p (:p s)
+              near-dug? (fn [w] (let [[x y z] (fake/body-pos w)] (<= (+ (* (- (js/Math.floor x) 3) (- (js/Math.floor x) 3)) (* (- y 64) (- y 64)) (* (js/Math.floor z) (js/Math.floor z))) 1)))]
+          ;; dug from where it stands (within reach), the drop lies out of sight in a pocket; beside the dug cell it is in sight
+          (.override (.-world p) "dig"
+                     (fn [token args impl]
+                       (.then (impl token args)
+                              (fn [r]
+                                (swap! (fake/state p) update :entities (fn [es] (mapv #(if (= "item" (:kind %)) (assoc % :visible false) %) es)))
+                                r))))
+          (doseq [walk ["moveTo" "steer"]]
+            (.override (.-world p) walk
+                       (fn [token args impl]
+                         (.then (impl token args)
+                                (fn [r]
+                                  (when (near-dug? @(fake/state p))
+                                    (swap! (fake/state p) update :entities (fn [es] (mapv #(assoc % :visible true) es))))
+                                  r)))))
+          (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :tunnel-length 0}) {})
+          (await (run-ticks s 30))
+          (is (= 1 (get (inv s) "raw_iron")) "the body walked beside the dug cell and picked the drop up")
+          (is (= :count (:reason (done-event s))))
+          (is (empty? (events-of s :mine.gave-up))))))))
+
+(deftest a-mine-that-ends-short-of-its-count-is-stopped-not-completed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "stone" :count 5 :tunnel-length 0 :descend-limit 0}
+                                 {:blocks (merge (cells "stone" [4 5] [64] [0]) (cells floor-block [4 5] [63] [0])) :drops {"stone" "cobblestone"} :inventory pickaxe} 60))
+              stopped (first (events-of s :stopped))]
+          (is (= 2 (get (inv s) "cobblestone")))
+          (is (= 2 (:got (done-event s))))
+          (is (finished? s))
+          (is (empty? (events-of s :completed)) "2 of 5 is not completed")
+          (is (some? stopped))
+          (is (re-find #"mine got 2 of 5: none" (pr-str stopped))))))))
+
 (deftest drops-picked-up-a-moment-later-are-not-left-behind
   (async done
     (tu/run-async done

@@ -57,7 +57,7 @@
 
   One call runs these steps in order, again and again until the job ends (it yields with :continue only while a child or
   a walk waits on the world, and after 400 steps):
-  1. Collecting: after a dig the body glances at the dug cell, the cell under it and unsensed cells further down (once per cell), then the collect-drops child gathers the item within :collect-radius. The count is the
+  1. Collecting: after a dig the body glances at the dug cell, the cell under it and unsensed cells further down (once per cell), then the collect-drops child gathers the item within :collect-radius; when none came in, the body walks within 1 of the dug cell once and collects again. The count is the
      inventory's, never the dig's report. Drops of the item still lying afterwards (out of reach) are reported
      once each, info mine.left-behind {:items [{:pos :count}]}. The result's :left is re-checked after the walk
      home and keeps only drops still lying then.
@@ -133,7 +133,7 @@
   first round the check declines. In the job the tunnel goes on (with :tunnel-length 0 the dig phase ends
   :refused). One warn mine.declined per job names the zones and plans ({:reason :refused :zones :plans}).
 
-  Hands over {:got n :reason r} (with :status :stopped when :got is 0 or the walk home failed, :reason :not-home: never completed) plus
+  Hands over {:got n :reason r} (with :status :stopped when :got is short of :count (text: mine got n of m: reason) or the walk home failed, :reason :not-home: never completed) plus
   :dig-reason, :resumes, :tunnel and :left when set; info mine.done with
   :mended, the cells filled; its text (and the result's text when :got is 0) names the stair's steps and the tunnel's length,
   heading and height (\"; stair down 48 steps; tunnel 32 blocks east at y 16\"); :descent {:steps :stop} is in the result after any descent. With reason :wet (also when a tunnel dug nothing and seen blocks were skipped for water), :wet-skipped counts the seen blocks left for water beside them. Its text says the reason, :got and :mended, and for a tunnel its length, heading, end cell
@@ -347,7 +347,8 @@
                             (zero? got) {:status :stopped :text (str "mine got nothing: " (name reason)
                                                                      (when (= :no-stone-found reason) (str "; dug down " (:steps descent 0) " blocks through soil, found no stone"))
                                                                      (dug-text m reason))}
-                            (= :not-home reason) {:status :stopped :text (str "mine got " got " but did not get back to its start")})
+                            (= :not-home reason) {:status :stopped :text (str "mine got " got " but did not get back to its start")}
+                            (< got (:count (:args c))) {:status :stopped :text (str "mine got " got " of " (:count (:args c)) ": " (name reason) (dug-text m reason))})
                           {:got got :reason reason} why))
     :done))
 
@@ -420,12 +421,24 @@
       (await (dig-look/look-at! c (update dug 1 dec)))
       (await (dig-look/look-unknown! c (map #(update dug 1 - %) [2 3 4]))))))
 
+(defn ^:async walk-to-drop!
+  "A dig whose drop did not come in: once per dug cell, walk within 1 of it (near/go-near!, no escalation), where a drop
+  out of sight or out of reach from the dig spot is seen and picked up. :walked (collect again), :partial (go-to waits)
+  or nil (no walk: it came in, the cell was walked to already, or the walk was blocked)."
+  [c]
+  (let [{:keys [dug-at drop-walked last-carried]} (ctx/mem c)]
+    (when (and dug-at (not= dug-at drop-walked) (<= (carried c) (or last-carried 0)))
+      (let [w (await (near/go-near! c (zipmap [:x :y :z] dug-at) 1 {:zone-tolls true :escalate false}))]
+        (when-not (= :partial w) (ctx/update-mem! c assoc :drop-walked dug-at))
+        (case w :partial :partial :there :walked nil)))))
+
 (defn ^:async collect! [c]
   (await (look-for-drop! c))
   (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops
                                  (cond-> {:radius (drop-radius c) :filter [(blocks/item-name (:args c))] :dig true}
-                                   (:dug-at (ctx/mem c)) (assoc :holes [(:dug-at (ctx/mem c))]))))]
-    (when (not= :continue r)
+                                   (:dug-at (ctx/mem c)) (assoc :holes [(:dug-at (ctx/mem c))]))))
+        w (when (not= :continue r) (await (walk-to-drop! c)))]
+    (when (and (not= :continue r) (nil? w))
       (await (note-left! c))
       (let [now (carried c)]
         (ctx/update-mem! c (fn [m]
@@ -433,7 +446,7 @@
                                  (dissoc :collecting)
                                  (assoc :dry (if (> now (:last-carried m 0)) 0 (inc (:dry m 0)))
                                         :last-carried now))))))
-    (if (= :continue r) :continue :again)))
+    (if (or (= :continue r) (= :partial w)) :continue :again)))
 
 (defn refused!
   "The rules refused pos (verdict v) right before the dig, no failure: a hazard skips it; a zone or a plan keeps it
