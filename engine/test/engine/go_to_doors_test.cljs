@@ -481,3 +481,32 @@
                                                  i))
                                   (.-calls (.-world p)))]
           (is (seq looks) "a look at the door's cell after the press"))))))
+
+;; ------------------------------------------------------------------ a goal whose range takes in the doorway
+
+(deftest a-walk-whose-range-takes-in-the-doorway-ends-past-the-door-and-shuts-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p eng]} (await (go! (hut-world {:x 0 :y 64 :z 0}) {:pos [7 64 0] :range 2}))]
+          (is (= {:arrived true} @out))
+          (is (not= 5 (js/Math.floor (first (at p)))) "the walk does not end in the doorway")
+          (is (= [false false] (mapv #(open? p %) [[5 64 0] [5 65 0]])) "both halves shut")
+          (is (= [] (opened eng))))))))
+
+(deftest a-walk-to-the-doorway-itself-arrives-there
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (go! (hut-world {:x 0 :y 64 :z 0}) {:pos [5 64 0] :range 0}))]
+          (is (= {:arrived true} @out))
+          (is (= 5 (js/Math.floor (first (at p)))) "no other stand is in range: the body stays in the doorway"))))))
+
+(deftest leave-open-ends-in-the-doorway-its-range-takes-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (go! (hut-world {:x 0 :y 64 :z 0}) {:pos [7 64 0] :range 2 :doors :leave-open}))]
+          (is (= {:arrived true} @out))
+          (is (= 5 (js/Math.floor (first (at p)))) "no step on: the door stays open anyway")
+          (is (= [true true] (mapv #(open? p %) [[5 64 0] [5 65 0]]))))))))

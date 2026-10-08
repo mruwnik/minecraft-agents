@@ -10,7 +10,8 @@
   - :never: the plan has no such step.
   :shut-also (a fn of cell [x y z]) shuts a block whatever the policy when it says so: go-to's passes one for blocks in
   or next to another owner's zone, so a pass through somebody's pen lets nothing out. The walker only shuts a block it
-  found shut, never one that was open already.
+  found shut, never one that was open already. A walk that arrives in the doorway of a block it opened to shut steps to
+  a cell beside it still in range (jobs.lib.near/step-out!) so the block can be shut; with none, it stays.
 
   Every block the walker opens gets an :opened memory entry {:cell {:x :y :z} :by job-id :t ms :shut? bool} before the
   click (:shut? false: the policy leaves it open). The entry is dropped when the block is shut.
@@ -35,13 +36,15 @@
    ::shut-wait-ms {:default 500 :doc "Wait between those tries, in ms." :spec (a/int-in 0 nil)}
    ::leftover-reach {:default 4 :doc "A leftover :opened entry is shut when the body is this near." :spec (a/int-in 0 nil)}
    ::await-polls {:default 6 :doc "Reads of a door a button or plate was to open." :spec (a/int-in 1 nil)}
-   ::await-poll-ms {:default 100 :doc "Wait between those reads, in ms." :spec (a/int-in 0 nil)}})
+   ::await-poll-ms {:default 100 :doc "Wait between those reads, in ms." :spec (a/int-in 0 nil)}
+   ::step-out-budget {:default 2000 :doc "Search expansions of the plan off a doorway a walk ended in (jobs.lib.near)." :spec (a/int-in 1 nil)}})
 
 (def opened-policy {:cap 50 :ttl :forever})
 
 (defn shut-waits [] (settings/get settings ::shut-waits))
 (defn shut-wait-ms [] (settings/get settings ::shut-wait-ms))
 (defn leftover-reach [] (settings/get settings ::leftover-reach))
+(defn step-out-budget [] (settings/get settings ::step-out-budget))
 
 ;; ---------------------------------------------------------------- pure
 
@@ -283,6 +286,19 @@
             (if (seq stuck)
               [{:status :door-stuck :cells stuck :at (body-at c)} ms]
               (recur (update steps k dissoc :opens) e (into pending opened) ms))))))))
+
+(defn standing-in-opened
+  "The columns of the blocks this job opened to shut again (:opened entries, :shut? true) that stand open with the body in
+  them: a walk that ended in a doorway."
+  [c]
+  (let [here (wworld/body-cell c)]
+    (vec (for [{:keys [cell by shut?]} (map :data (mem/entries (ctx/view c) :opened))
+               :when (and shut? (= (:id c) by))
+               :let [b (block-at c cell)
+                     props (click/props-of b)
+                     col (column-of cell props)]
+               :when (and b (= :openable (click/kind-of (.-name b))) (click/reached? :open props) (in-column? col here))]
+           col))))
 
 (defn ^:async shut-leftovers!
   "At the start of a round: shut the blocks an earlier round of this job opened and left (a walk cut between the open and the

@@ -93,6 +93,28 @@
     (some :unseen-floor (:steps plan)) (assoc :unseen-floors true)))
 
 (defn ^:async walk-once!
+(defn ^:async step-out!
+  "A walk that arrived in a doorway it opened to shut again (pass/standing-in-opened) steps to a cell beside it, out of
+  its column and still within range of to, so shut-leftovers! can shut the door: those cells nearest the goal first, one
+  plan of at most pass/step-out-budget expansions each, the first found walked. With none, the body stays where it
+  arrived."
+  [c to range doors shut-also timeout-s policy]
+  (let [cols (pass/standing-in-opened c)
+        {:keys [x y z]} (wworld/body-cell c)
+        goal (zipmap [:x :y :z] to)
+        cells (when (seq cols)
+                (->> [[1 0] [-1 0] [0 1] [0 -1]]
+                     (map (fn [[dx dz]] {:x (+ x dx) :y y :z (+ z dz)}))
+                     (remove (fn [cell] (some #(pass/in-column? % cell) cols)))
+                     (filter #(u/within? % goal range))
+                     (sort-by #(u/dist % goal))))]
+    (loop [[cell & more] cells]
+      (when cell
+        (let [{:keys [status steps]} (await (plan! c [(:x cell) (:y cell) (:z cell)] 0 doors policy [] nil nil (pass/step-out-budget) false true))]
+          (if (and (= "found" status) (> (count steps) 1))
+            (await (pass/walk! c steps {:timeout-s timeout-s :doors doors :shut-also shut-also}))
+            (recur more)))))))
+
   "Plan from where the body stands and follow the plan (walk/follow!: planned again in the same round when the look-ahead
   sees the way change, a partial plan is due a refresh, or a mob is in the way of a stuck body; each replan is a :replan
   info event {:why :ms :kept :replans :at}): the walk's result map (jobs.lib.walk), or the no-path result of a plan that
@@ -135,6 +157,8 @@
                            :else (recur (into walls (:cells done)) (:cells done)))))))]
       ;; however the walk ended, what it opened and could not shut yet (the body was in its column) is shut when in reach
       (when-not (= :never doors) (await (pass/shut-leftovers! c)))
+      (when (and (not= :never doors) (= :arrived (:status result)))
+        (await (step-out! c to range doors shut-also timeout-s (policy-of))))
       result)))
 
 (defn move-status
