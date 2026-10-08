@@ -1,6 +1,8 @@
 (ns jobs.survival.dig-in
   (:require [engine.settings :as settings]
             [engine.args :as a]
+            [clojure.string :as str]
+            [jobs.lib.cost :as cost]
             [jobs.lib.blocks :as lb]
             [jobs.lib.trees :as trees]
             [jobs.lib.tidy :as tidy]
@@ -55,7 +57,8 @@
   Every end with no roof over the body leaves a :dig-in-futile {:pos :reason} entry,
   and the check declines while one lies within 8 blocks. An entry with no :reason (a lack of blocks or tools)
   is retried once blocks are carried or a carried tool harvests the block.
-  Events: dig-in.sealed when it placed blocks and the world shows the body shut in
+  Walls need blocks worth at most :wall-value each; dearer ones (logs, planks) wall the body in only when no pit can be dug.
+  Events: dig-in.sealed when it placed blocks and the world shows the body shut in, with :spent {item count} (its text names them)
   (a warning when :resealed, meaning the latest :shelter entry was already at this cell),
   else dig-in.unsealed (warning) naming the cells still open.
   Memory: reads :dig-in-futile. Writes :dig-in-futile (cap 5, ten minutes)
@@ -72,10 +75,16 @@
 (a/defargs args
   {:roof-height {:doc "a solid block within this many blocks above counts as a roof" :spec (a/int-in 0 nil) :default sh/default-roof-height}
    :blocks {:doc "names of the blocks it may place" :spec (a/coll-of a/item?) :default shelter-blocks}
+   :wall-value {:doc "a block worth more than this each (jobs.lib.cost/item-value; dirt 0.35, cobblestone 0.85, stone 2.85, planks 3.4, log 12.8) walls the body in only when no pit can be dug" :spec (a/num-in 0 nil) :default 3}
    :max-places {:doc "placements per step" :spec (a/int-in 1 nil) :default 4}
    :on-lava {:doc ":seal: lava the dig lays open in or beside the hole is filled with a carried block; :stop: the dig is given up (:fluid-adjacent)" :spec #{:seal :stop} :default :seal}
    :enclose {:doc "wall in under a roof already overhead: walls only, never a pit; stops :no-blocks when too few blocks are carried" :spec boolean? :default false}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
+
+(defn cheap-blocks
+  "The blocks worth at most max-value each by jobs.lib.cost/item-value."
+  [blocks max-value]
+  (filterv #(<= (:value (cost/item-value [{:name % :count 1}])) max-value) blocks))
 
 (def shelter-policy {:cap 10 :ttl sh/ms-per-day})
 
@@ -342,7 +351,7 @@
               :continue
               (fail-site! c :roof-failed (str "cannot seal the pit: the plug cell is occupied by " (or (u/seen-name p cell) "a block") " that does not seal"))))
           (#{"placed" "occupied"} (.-status r))
-          (do (when (= "placed" (.-status r)) (ctx/update-mem! c update :placed (fnil conj #{}) cell))
+          (do (when (= "placed" (.-status r)) (dig-cells/note-placed! c cell item))
               (if (= cell roof) :done :continue))
           (dig-cells/keep-waiting! c :mob-since r) :yield
           :else (fail-site! c :roof-failed (str "cannot roof the pit: " (.-status r) (dig-cells/mob-text r))))))))
@@ -404,6 +413,7 @@
     (when (or moved (not mode))
       (let [cells (dig-cells/open-cells p start)
             have (reduce + (map :count (lb/carried c (:blocks (:args c)))))
+            cheap (reduce + (map :count (lb/carried c (cheap-blocks (:blocks (:args c)) (:wall-value (:args c))))))
             enclose (:enclose (:args c))
             plan (when-not enclose (await (sense/decide! c ::dig-plan #(dig-cells/dig-plan p start))))
             shape (when plan (await (find-shape! c start plan)))
@@ -414,7 +424,7 @@
             [chosen refusal] (if enclose
                                [(if (>= have (count cells)) :walls :no-blocks)
                                 (some #(access/trespass-refusal (access/rules-input c) :place %) cells)]
-                               (mode-choice c start cells (>= have (count cells)) plan plug))]
+                               (mode-choice c start cells (or (>= cheap (count cells)) (and (nil? shape) (>= have (count cells)))) plan plug))]
         (access/trespass! c "dig-in" refusal)
         (cond
           (= :no-blocks chosen) (ctx/update-mem! c assoc :mode :no-blocks)
@@ -495,7 +505,7 @@
       (let [r (await (tidy/place! c plug item true))]
         (cond
           (#{"placed" "occupied"} (.-status r))
-          (do (when (= "placed" (.-status r)) (ctx/update-mem! c update :placed (fnil conj #{}) plug))
+          (do (when (= "placed" (.-status r)) (dig-cells/note-placed! c plug item))
               :done)
           (dig-cells/keep-waiting! c :mob-since r) :yield
           :else (fail-site! c :plug-failed (str "cannot mend the roof: " (.-status r) (dig-cells/mob-text r))))))))
@@ -511,6 +521,9 @@
       (= :no-blocks mode) (do (remember-material! c {:pos (sh/feet (:primitives c))}) :done)
       (> (:y (sh/feet (:primitives c))) target-y) (await (if (seq (:plugs (:shape (ctx/mem c)))) (zigzag-round c) (descend-round c)))
       :else (await (roof-round c)))))
+
+(defn spent-text [spent]
+  (str/join ", " (map (fn [[item n]] (str n " " item)) (sort-by (comp - val) spent))))
 
 (defn end!
   "The call's end: a :dig-in-futile entry when unroofed, the sealed/unsealed event, the :shelter entry; then the result:
@@ -528,6 +541,7 @@
                (:roof (ctx/mem c)))
         door (when (= :walls (:mode (ctx/mem c))) (dig-cells/door placed feet))
         start (when (#{:dig :walls} (:mode (ctx/mem c))) (:start (ctx/mem c)))
+        spent (:spent (ctx/mem c) {})
         prev (:data (ctx/latest c :shelter))
         resealed (= feet (:pos prev))
         start (or start (when resealed (:start prev)))
@@ -540,12 +554,12 @@
                                ", but the world still shows " (open-text open) (when (empty? open) " (no roof)"))})))
     (when (and (seq placed) (dig-cells/sealed-in? p judged (:roof-height (:args c))))
       (ctx/emit! c :dig-in.sealed (if resealed :warn :info)
-                 {:pos feet :placed (vec placed) :resealed resealed
+                 {:pos feet :placed (vec placed) :resealed resealed :spent spent
                   :text (str (cond
                                (= :plug mode) "mended the roof of a closed room over the body: "
                                resealed "sealed the shelter again: "
                                :else "sealed in for the night: ")
-                             "placed " (count placed) " blocks at " (pr-str (mapv (juxt :x :y :z) placed))
+                             "placed " (count placed) " blocks (" (spent-text spent) ") at " (pr-str (mapv (juxt :x :y :z) placed))
                              ". At night an open shelter is closed again; it is left by day")}))
     (ctx/remember! c :shelter (cond-> {:pos feet :state :built}
                                 (contains? placed roof) (assoc :roof roof)

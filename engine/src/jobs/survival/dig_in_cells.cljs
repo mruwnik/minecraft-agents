@@ -158,6 +158,11 @@
 (defn full-cube? [c cell]
   (boolean (some-> (u/seen-block (:primitives c) cell) .-fullCube)))
 
+(defn note-placed!
+  "Job memory: cell is a placed cell, and one more of item is spent (:spent {item count}, which the sealed event reports)."
+  [c cell item]
+  (ctx/update-mem! c #(-> % (update :placed (fnil conj #{}) cell) (update-in [:spent item] (fnil inc 0)))))
+
 (defn ^:async place-all!
   "Place blocks at cells in order. Resolves to :ok, :wait (a mob stands in the cell: the place was refused and is retried
   for mob-wait-ms, the caller yields in between), or the first status that is not placed or occupied.
@@ -186,7 +191,7 @@
                       (recur (rest cells)))
 
                   (= "placed" status)
-                  (do (ctx/update-mem! c update :placed (fnil conj #{}) cell)
+                  (do (note-placed! c cell item)
                       (forget-wait! c :mob-since)
                       (recur (rest cells)))
 
