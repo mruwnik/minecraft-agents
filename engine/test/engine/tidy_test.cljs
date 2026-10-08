@@ -660,3 +660,54 @@
     (is (<= (:floods many) 3) "the body's enclosure is flooded once a pass, not once per escalation entry")
     (is (= (:searches few) (:searches many)) "walk searches do not grow with the number of entries")
     (is (= (:floods few) (:floods many)))))
+
+(def two-fields
+  "Two open fields (x -45..-7 and 9..45) joined by one roofed tunnel at z 0 through a stone wall (x -6..8, y 64 to 66),
+  the wall holding sealed one-wide pockets at z -4, -2, 2 and 4 (x -3..5): each side is larger than a search's node
+  budget, so a walk that cannot get through runs it out."
+  (into {} (for [x (range -6 9) z (range -20 21) y [64 65 66]
+                 :when (not (and (#{64 65} y) (= 0 z)))
+                 :when (not (and (#{64 65} y) (#{-4 -2 2 4} z) (<= -3 x 5)))]
+             [(cell-key [x y z]) "stone"])))
+
+(def two-fields-world (assoc with-hitbox :floor [-45 -20 45 20] :blocks two-fields))
+
+(defn tunnel-holes
+  "Escalation holes along the tunnel of two-fields (from x -6), then in the far field."
+  [tunnel far]
+  (vec (concat (for [x (range -6 (+ -6 tunnel))] (assoc escalation-hole :cell [x 64 0]))
+               (for [i (range far)] (assoc escalation-hole :cell [(+ 12 (mod i 6)) 64 (- (quot i 6) 2)])))))
+
+(defn count-work
+  "Run f counting the walk searches, the cells they expand and the block lookups it makes:
+  {:result :searches :nodes :lookups}."
+  [f]
+  (let [searches (atom 0)
+        nodes (atom 0)
+        lookups (atom 0)
+        search reach/search
+        lookup reach/lookup
+        forward reach/forward
+        backward reach/backward
+        result (with-redefs [reach/search (fn [& xs] (swap! searches inc) (apply search xs))
+                             reach/forward (fn [& xs] (swap! nodes inc) (apply forward xs))
+                             reach/backward (fn [& xs] (swap! nodes inc) (apply backward xs))
+                             reach/lookup (fn ([p] (swap! lookups inc) (lookup p reach/kind-of))
+                                            ([p kind] (swap! lookups inc) (lookup p kind)))]
+                 (f))]
+    {:result result :searches @searches :nodes @nodes :lookups @lookups}))
+
+(deftest a-pass-decision-in-cramped-terrain-expands-a-bounded-number-of-cells
+  (let [{:keys [p]} (setup (assoc two-fields-world :self {:pos [-10 64 0]}) [(zs/whole-zone "Miles")])
+        {:keys [result nodes]} (count-work #(restore-broken/decide {:primitives p :args {:min-health 14 :danger-radius 8 :reach 3}}
+                                                                   (tunnel-holes 5 16)))]
+    (is (= :restore (first result)) "a seal search that runs out of budget is no seal")
+    (is (<= nodes 12000) (str nodes " cells expanded"))))
+
+(deftest a-step-clear-cell-in-cramped-terrain-runs-a-bounded-number-of-searches
+  (let [p (tu/fake (assoc two-fields-world :self {:pos [1 64 0]}))
+        waiting (tunnel-holes 15 0)
+        {:keys [result searches lookups]} (count-work #(restore-broken/clear-cell {:primitives p} (dug-cell [1 64 0]) waiting))]
+    (is (nil? result) "no clear cell: the tunnel is reserved and the pockets are sealed")
+    (is (<= searches 6) (str searches " walk searches"))
+    (is (= 1 lookups) "one block lookup")))

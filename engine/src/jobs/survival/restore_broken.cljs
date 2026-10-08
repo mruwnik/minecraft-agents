@@ -41,6 +41,8 @@
   {::step-radius {:default 4 :doc "Blocks around the body in which a standing cell is looked for." :spec (a/int-in 0 nil)}
    ::max-others-checked {:default 12 :doc "Other broken cells checked per pass for a standing cell." :spec (a/int-in 0 nil)}
    ::max-candidates-checked {:default 4 :doc "Waiting cells checked per pass for one whose put-back seals no other." :spec (a/int-in 1 nil)}
+   ::max-search-cells {:default 6000 :doc "Cells the walk searches of one pass decision expand at most; a search that would pass it answers unknown." :spec (a/int-in 0 nil)}
+   ::max-step-cells-checked {:default 3 :doc "Nearest standable cells checked for a walk when stepping clear of a cell." :spec (a/int-in 1 nil)}
    ::max-passes {:default 100 :doc "Steps in one run before it stops." :spec (a/int-in 0 nil)}})
 (defn step-radius [] (settings/get settings ::step-radius))
 
@@ -50,11 +52,15 @@
   [reserved [x y z]]
   (not-any? reserved (for [dx [-1 0 1] dz [-1 0 1] dy [0 1]] [(+ x dx) (+ y dy) (+ z dz)])))
 
+(defn max-step-cells-checked [] (settings/get settings ::max-step-cells-checked))
+
 (defn clear-cell
-  "The nearest standable cell within step-radius of the body that the body can walk to, and where its hitbox is clear
-  of the cell of entry e and of every entry of waiting (still to be restored), or nil."
+  "The nearest standable cell within step-radius of the body where its hitbox is clear of the cell of entry e and of
+  every entry of waiting (still to be restored), if the body can walk to it (only the max-step-cells-checked nearest
+  are searched, over one block lookup), or nil."
   [c {:keys [cell]} waiting]
   (let [p (:primitives c)
+        kind-at (reach/lookup p)
         here (u/self-pos c)
         floor (fn [k] (js/Math.floor (k here)))
         [x y z] [(floor :x) (floor :y) (floor :z)]
@@ -65,34 +71,54 @@
                     dy (range -1 3)
                     :let [pos {:x (+ x dx) :y (+ y dy) :z (+ z dz)}]
                     :when (halo-clear? reserved [(:x pos) (:y pos) (:z pos)])
-                    :when (reach/standable-cell? p pos)]
+                    :when (reach/standable-cell? p pos kind-at)]
                 pos)]
     (->> cands
          (sort-by #(u/dist here (centre %)))
-         (filter #(reach/walkable-way? p here %))
-         first)))
+         (take (max-step-cells-checked))
+         (some #(when (reach/way? kind-at (reach/cell-of here) (reach/cell-of %)) %)))))
 
 (defn max-others-checked [] (settings/get settings ::max-others-checked))
 (defn max-candidates-checked [] (settings/get settings ::max-candidates-checked))
+(defn max-search-cells [] (settings/get settings ::max-search-cells))
 
 (defn probe
-  "What the checks of one pass decision share, so its work does not grow with the entries waiting: one block lookup,
-  the body's enclosure (flooded at most once) and whether the body walks to each other cell now (searched at most
-  once)."
+  "What the checks of one pass decision share, so its work does not grow with the entries waiting or the terrain: one
+  block lookup, the body's enclosure (flooded at most once), whether the body walks to each other cell now (searched
+  at most once), each cell's seal answer, and max-search-cells cells for all its walk searches."
   [c]
   (let [p (:primitives c)]
     {:kind-at (reach/lookup p)
      :enclosed (delay (reach/enclosed? p))
-     :reaches (volatile! {})}))
+     :reaches (volatile! {})
+     :seals (volatile! {})
+     :cells-left (volatile! (max-search-cells))}))
+
+(defn search
+  "reach/search over the probe's allowance: :budget (unknown) without searching once fewer than a full search's cells
+  are left, each cell expanded counted against it. step: reach/forward or reach/backward."
+  [{:keys [cells-left]} step kind-at from to]
+  (if (< @cells-left reach/node-budget)
+    :budget
+    (reach/search (fn [x y z] (vswap! cells-left dec) (step kind-at x y z)) from to)))
+
+(defn way?
+  "reach/way? over the probe's searches: a forward search, settled by a backward one when it runs out of budget;
+  unknown counts as a way."
+  [pr kind-at from to]
+  (case (search pr reach/forward kind-at from to)
+    :found true
+    :closed false
+    (not= :closed (search pr reach/backward kind-at to from))))
 
 (defn reaches-now?
   "Whether the body's walk search finds cell now within its budget (an unknown answer is no: such a cell is too far
   to judge a seal by)."
-  [c {:keys [kind-at reaches]} cell]
+  [c {:keys [kind-at reaches] :as pr} cell]
   (let [hit (get @reaches cell)]
     (if (some? hit)
       hit
-      (let [v (= :found (reach/search (partial reach/forward kind-at) (reach/cell-of (u/self-pos c)) cell))]
+      (let [v (= :found (search pr reach/forward kind-at (reach/cell-of (u/self-pos c)) cell))]
         (vswap! reaches assoc cell v)
         v))))
 
@@ -101,17 +127,22 @@
   now (the body must be able to walk next to a cell to place a block in it). pr: the pass's probe."
   [c {:keys [cell action] :as e} waiting pr]
   (when (= :dig action)
-    (let [p (:primitives c)
-          kind-at (:kind-at pr)
-          [cx cy cz] cell
-          filled (fn [x y z] (if (and (== x cx) (== y cy) (== z cz)) :solid (kind-at x y z)))
-          here (reach/cell-of (u/self-pos c))
-          others (->> waiting
-                      (remove #(= cell (:cell %)))
-                      (filter #(and (= :dig (:action %)) (nil? (tidy/why-not p % (:enclosed pr)))))
-                      (take (max-others-checked)))]
-      (boolean (some #(and (reaches-now? c pr (:cell %))
-                           (not (reach/way? filled here (:cell %)))) others)))))
+    (let [hit (get @(:seals pr) cell)]
+      (if (some? hit)
+        hit
+        (let [p (:primitives c)
+              kind-at (:kind-at pr)
+              [cx cy cz] cell
+              filled (fn [x y z] (if (and (== x cx) (== y cy) (== z cz)) :solid (kind-at x y z)))
+              here (reach/cell-of (u/self-pos c))
+              others (->> waiting
+                          (remove #(= cell (:cell %)))
+                          (filter #(and (= :dig (:action %)) (nil? (tidy/why-not p % (:enclosed pr)))))
+                          (take (max-others-checked)))
+              v (boolean (some #(and (reaches-now? c pr (:cell %))
+                                     (not (way? pr filled here (:cell %)))) others))]
+          (vswap! (:seals pr) assoc cell v)
+          v)))))
 
 (defn seals-body?
   "Whether putting back the dug block of e would shut the body itself in: it has room to walk now and would not with
