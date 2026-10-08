@@ -733,6 +733,27 @@
                                                 (dissoc (cut-seed {:closest 3 :ref 3 :cuts 2}) :open)))]
           (is (= {:arrived true} @out) (pr-str @out)))))))
 
+(deftest a-hostile-that-keeps-coming-back-spends-the-cut-resets-and-the-call-gives-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        ;; three cuts with the sender gone from the way clear the count (a reset); once max-cut-resets (2) are spent the
+        ;; next full set of cuts gives up even with no hostile near the way
+        (let [{:keys [out]} (await (go-returns! {:blocks flat} {:pos [10 64 0] :range 0}
+                                                (cut-seed {:closest 3 :ref 3 :cuts 2 :resets 2})))]
+          (is (= {:arrived false :reason :unreachable :why :cut-again} (select-keys @out [:arrived :reason :why])) (pr-str @out))
+          (is (str/includes? (:text @out) "resets") (:text @out)))
+        (let [{:keys [out]} (await (go-returns! {:blocks flat} {:pos [10 64 0] :range 0}
+                                                (cut-seed {:closest 3 :ref 3 :cuts 2 :resets 1})))]
+          (is (= {:arrived true} @out) (pr-str @out)))))))
+
+(deftest cut-state-carries-the-reset-count-of-the-same-goal-only
+  (let [goal {:x 10 :y 64 :z 0}
+        m {:open go-to/session-id :goal goal :closest 4 :ref 4 :cuts 1 :last-dist 4 :resets 2}]
+    (is (= 2 (:resets (go-to/cut-state m goal 4))))
+    (is (= 0 (:resets (go-to/cut-state (assoc m :goal {:x 30 :y 64 :z 0}) goal 4))))
+    (is (= 0 (:resets (go-to/cut-state (assoc m :open "old-run") goal 4))))))
+
 (deftest a-trip-cut-four-times-in-place-still-arrives
   (async done
     (tu/run-async done
@@ -777,8 +798,8 @@
                                ["left open by another run of the engine" (assoc m :open "old-run") 14 0]
                                ["the last call returned" (dissoc m :open) 14 0]]]
       (is (= cuts (:cuts (go-to/cut-state m goal dist))) why))
-    (is (= {:goal goal :closest 1 :ref 1 :cuts 1 :last-dist 11} (go-to/cut-state (assoc m :closest 1 :last-dist 1) goal 11)))
-    (is (= {:goal goal :closest 14 :ref 14 :cuts 0 :last-dist 14} (go-to/cut-state (dissoc m :open) goal 14)))))
+    (is (= {:goal goal :closest 1 :ref 1 :cuts 1 :last-dist 11 :resets 0} (go-to/cut-state (assoc m :closest 1 :last-dist 1) goal 11)))
+    (is (= {:goal goal :closest 14 :ref 14 :cuts 0 :last-dist 14 :resets 0} (go-to/cut-state (dissoc m :open) goal 14)))))
 
 (deftest the-hostiles-near-the-way-are-the-known-ones-within-the-hostile-near-radius-of-it
   ;; the way runs from the start [0 64 0] to [20 64 0]; melee within 8 of it count, ranged within 16, nearest the way first

@@ -14,7 +14,9 @@
             [jobs.lib.util :as u]))
 
 (a/defargs settings
-  {::known-scan {:default 64 :doc "Blocks out to which the mobs a distance filter weighs are fetched." :spec (a/int-in 1 nil)}})
+  {::hostile-radius {:default 8 :doc "Blocks within which a known hostile mob that can reach the body counts as a danger (the hostile-near trigger and go-to's cut check read it)." :spec (a/int-in 0 nil)}
+   ::ranged-radius {:default 16 :doc "Blocks within which a known ranged mob with a line of fire counts as a danger." :spec (a/int-in 0 nil)}
+   ::known-scan {:default 64 :doc "Blocks out to which the mobs a distance filter weighs are fetched." :spec (a/int-in 1 nil)}})
 
 (defn seen-mob?
   "Whether the body has seen or heard hostile e: the seen or heard flag of a known-hostiles entry, else (raw entity)
@@ -70,6 +72,8 @@
     (u/dist (u/pos-of (.-pos (.self p))) (mob-pos p e))))
 
 (defn known-scan [] (settings/get settings ::known-scan))
+(defn hostile-radius [] (settings/get settings ::hostile-radius))
+(defn ranged-radius [] (settings/get settings ::ranged-radius))
 
 (defn known-hostiles
   "The hostiles the body knows of within radius (ranged ones within :ranged-radius), nearest first; a heard one by

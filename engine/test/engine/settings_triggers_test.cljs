@@ -5,6 +5,7 @@
             [engine.registry :as registry]
             [engine.settings :as settings]
             [engine.test-util :as tu]
+            [jobs.lib.danger :as danger-q]
             [triggers.storage.inventory-nearly-full :as nearly-full]
             [triggers.survival.hostile-near :as hostile-near]
             [triggers.survival.hungry :as hungry]
@@ -12,8 +13,6 @@
 
 (def defaults-then
   {:triggers.storage.inventory-nearly-full/free 2
-   :triggers.survival.hostile-near/radius 8
-   :triggers.survival.hostile-near/ranged-radius 16
    :triggers.survival.hungry/bake-wheat 3
    :triggers.survival.hungry/rest-s 600
    :triggers.survival.tidy-pending/retry-s 120})
@@ -36,11 +35,11 @@
     (is (false? (nearly-full/inventory-nearly-full full nil {:free 1})) "an entry's own :free still wins")))
 
 (deftest a-layer-moves-the-accessors
-  (settings/with-settings {:triggers.survival.hostile-near/radius 5 :triggers.survival.hostile-near/ranged-radius 6
+  (settings/with-settings {:jobs.lib.danger/hostile-radius 5 :jobs.lib.danger/ranged-radius 6
                            :triggers.survival.hungry/bake-wheat 4 :triggers.survival.hungry/rest-s 7
                            :triggers.survival.tidy-pending/retry-s 9}
     (fn []
-      (is (= [5 6] [(hostile-near/hostile-radius) (hostile-near/ranged-radius)]))
+      (is (= [5 6] [(danger-q/hostile-radius) (danger-q/ranged-radius)]))
       (is (= [4 7] [(hungry/bake-wheat) (hungry/default-rest-s)]))
       (is (= 9 (tidy-pending/retry-s))))))
 

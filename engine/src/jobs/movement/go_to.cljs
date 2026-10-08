@@ -28,8 +28,7 @@
             [jobs.movement.go-to.escalation :as esc]
             [jobs.movement.go-to.health :as health]
             [jobs.movement.go-to.result :as end]
-            [jobs.movement.go-to.torch :as torch]
-            [triggers.survival.hostile-near :as hostile-near]))
+            [jobs.movement.go-to.torch :as torch]))
 
 (def doc
   "Walk to :pos ([x y z] or {:x :y :z}, fractions floored to the cell) until the body's cell is within :range cells of
@@ -428,9 +427,11 @@
 (a/defargs settings
   {::max-cut-restarts {:default 3 :doc "Cuts in a row, each sending the body back, before a go-to call gives up :cut-again." :spec (a/int-in 1 nil)}
    ::cut-progress {:default 2 :doc "Blocks a go-to's closest approach to its goal must improve to clear its cut count." :spec (a/num-in 0 nil)}
+   ::max-cut-resets {:default 2 :doc "Times a go-to clears its cut count at a restart that knows of no hostile near the way, per goal; after that a full set of cuts gives up :cut-again whatever is near." :spec (a/int-in 0 nil)}
    ::send-back-margin {:default 3 :doc "Blocks farther from the goal than where the cut found the body a go-to restart must begin to count as sent back (knockback and in-place reflexes stay under it)." :spec (a/num-in 0 nil)}})
 
 (defn max-cut-restarts [] (settings/get settings ::max-cut-restarts))
+(defn max-cut-resets [] (settings/get settings ::max-cut-resets))
 (defn cut-progress [] (settings/get settings ::cut-progress))
 (defn send-back-margin [] (settings/get settings ::send-back-margin))
 
@@ -451,7 +452,8 @@
         improved? (>= (- ref closest) (cut-progress))
         sent-back? (and cut? (> dist (+ (:last-dist m dist) (send-back-margin))))]
     {:goal goal :closest closest :ref (if improved? closest ref) :last-dist dist
-     :cuts (+ (if (and cut? (not improved?)) (:cuts m 0) 0) (if sent-back? 1 0))}))
+     :cuts (+ (if (and cut? (not improved?)) (:cuts m 0) 0) (if sent-back? 1 0))
+     :resets (if cut? (:resets m 0) 0)}))
 
 (defn cut-loop? [{:keys [cuts]}] (>= cuts (max-cut-restarts)))
 
@@ -469,7 +471,7 @@
   "The hostiles the body knows of (seen, heard or remembered) within the hostile-near trigger's radius (ranged ones its
   ranged radius) of the way still ahead to pos, nearest the way first: what may send the body back again."
   [c pos]
-  (danger-q/hostiles-near-way (:primitives c) pos (hostile-near/hostile-radius) {:ranged-radius (hostile-near/ranged-radius)}))
+  (danger-q/hostiles-near-way (:primitives c) pos (danger-q/hostile-radius) {:ranged-radius (danger-q/ranged-radius)}))
 
 (defn nearest-hostile
   "The name of the hostile nearest the way ahead to pos, else of the nearest the body knows within 16 blocks, a guess
@@ -568,14 +570,17 @@
     (if refusal
       (end/refuse! c refusal)
       (let [state (note-restart! c pos)
-            cycle? (and (cut-loop? state) (seq (way-hostiles c pos)))]
+            spent? (and (cut-loop? state) (>= (:resets state) (max-cut-resets)))
+            cycle? (and (cut-loop? state) (or spent? (seq (way-hostiles c pos))))]
         (await (torch/return-torch! c))
         (start-attempt! c pos)
         (when (and (cut-loop? state) (not cycle?))
-          (ctx/update-mem! c assoc :cuts 0 :ref (:closest state)))
+          (ctx/update-mem! c assoc :cuts 0 :ref (:closest state) :resets (inc (:resets state))))
         (if cycle?
           (do (ctx/update-mem! c #(-> % (dissoc :open :goal :closest :ref :last-dist) (assoc :cuts 0)))
-              (await (end/give-up! c pos 0 :cut {:reason :cut-again} (some->> (nearest-hostile c pos) (hash-map :nearest-hostile)))))
+              (await (end/give-up! c pos 0 :cut {:reason :cut-again} (cond-> {}
+                                                                         spent? (assoc :resets-spent true)
+                                                                         (nearest-hostile c pos) (assoc :nearest-hostile (nearest-hostile c pos))))))
           (let [danger (goal-danger c pos)]
             (when danger (ctx/emit! c :goal-in-danger :info (assoc danger :target pos)))
             (if (and danger (= :end (some-> (:goal-danger (:args c)) keyword)))
