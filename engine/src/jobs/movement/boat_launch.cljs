@@ -12,7 +12,7 @@
   "Put a boat on the water and get in it (:action :launch, the default), or take one back (:action :recover).
 
   Launch: the boat item is :item, else the first carried boat or raft; none carried is fetched (jobs.blocks.place :fetch, oak_boat).
-  The water cell is :pos, else the nearest water in sight (:radius) that has air above it and a solid block beside it.
+  The water cell is :pos, else the nearest water in sight (:radius) that has air above it and room round it for the boat (no bank block within a cell).
   jobs.blocks.place puts the boat down (it walks into reach); then, with :board, jobs.movement.mount boards it.
   The check waits (:no-water) while no such water is in sight. Ends {:status :done :id :boat name :pos :boarded bool}, info boat.launched, or
   {:status :stopped :reason r}: :bad-args, :aboard (already on a vehicle), :need (no boat and none to fetch), :refused (zone, claim),
@@ -51,22 +51,28 @@
          (filter #(and (boat-name? (:name %)) (:pos %)))
          (sort-by #(u/dist me (:pos %))))))
 
-(defn shore-water?
-  "Whether the water cell has air above and a solid block beside it (a place against it has something to click)."
+(def ring
+  "The 8 horizontal neighbours: a boat is 1.375 wide, so its box reaches into all of them."
+  [[1 0] [-1 0] [0 1] [0 -1] [1 1] [1 -1] [-1 1] [-1 -1]])
+
+(defn solid-name? [n] (boolean (and n (not (b/air n)) (not (b/fluids n)) (not (b/clearable n)))))
+
+(defn clear-water?
+  "Whether a boat fits on the water cell: air above it and no solid block (seen) round it at the water's level or the one
+  above, where the bank top would reach the boat's box and the server refuses the place."
   [p {:keys [x y z]}]
   (and (= "air" (u/seen-name p {:x x :y (inc y) :z z}))
-       (some (fn [[dx dz]]
-               (let [n (u/seen-name p {:x (+ x dx) :y y :z (+ z dz)})]
-                 (and n (not (b/air n)) (not (b/fluids n)) (not (b/clearable n)))))
-             [[1 0] [-1 0] [0 1] [0 -1]])))
+       (not-any? (fn [[dx dz]]
+                   (some #(solid-name? (u/seen-name p {:x (+ x dx) :y % :z (+ z dz)})) [y (inc y)]))
+                 ring)))
 
 (defn find-water
-  "The nearest water cell in sight that a boat can be put on from the shore, or nil."
+  "The nearest water cell in sight that has room for a boat, or nil."
   [c]
   (let [p (:primitives c)]
     (->> (look/seen-blocks p {:names ["water"] :radius (:radius (:args c)) :max 128 :live? true})
          (map :pos)
-         (filter #(shore-water? p %))
+         (filter #(clear-water? p %))
          first)))
 
 (defn launch-pos [c]

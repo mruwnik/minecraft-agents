@@ -48,6 +48,19 @@
         (let [{:keys [res]} (await (run {:blocks pond :inventory [boat-item]} {:pos [4 63 0] :board false}))]
           (is (= {:x 4 :y 63 :z 0} (:pos res))))))))
 
+(def big-pond
+  "A pond at x 3..7, z -2..2 in the stone floor (y 63): the ring of cells beside the bank has a bank block within a boat's width."
+  (into {} (for [x (range 3 8) z (range -2 3)] [(str x ",63," z) "water"])))
+
+(deftest the-boat-goes-where-it-clears-the-bank
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [res]} (await (run {:blocks big-pond :inventory [boat-item]} {:board false}))
+              {:keys [x z]} (:pos res)]
+          (is (= :done (:status res)) (pr-str res))
+          (is (and (<= 4 x 6) (<= -1 z 1)) (str "a cell with water all round it: " (pr-str (:pos res)))))))))
+
 (deftest no-water-in-sight-waits
   (async done
     (tu/run-async done

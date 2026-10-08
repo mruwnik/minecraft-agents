@@ -9,14 +9,13 @@
             [jobs.movement.cross-water :as cw]))
 
 (def lake
-  "A channel of water at y 63 at x 4, z -3..3 in the stone floor: the near bank is x 3, the far bank x 5 (the fake dismount steps one block on
-  from the boat, so a wider lake would drop the body into water)."
-  (into {} (for [z (range -3 4)] [(str "4,63," z) "water"])))
+  "Water at y 63 at x 4..6, z -3..3 in the stone floor: the near bank is x 3, the far bank x 7 (a boat needs room round it: no bank block beside its cell)."
+  (into {} (for [x (range 4 7) z (range -3 4)] [(str x ",63," z) "water"])))
 
 (def boat-item {:name "oak_boat" :count 1})
-(def far {:x 5 :y 64 :z 0})
+(def far {:x 7 :y 64 :z 0})
 
-(def world {:blocks lake :inventory [boat-item]})
+(def world {:blocks lake :inventory [boat-item] :dismountDry true})
 
 (defn ^:async run [world args]
   (let [{:keys [eng p seen]} (lt/setup world)
@@ -25,8 +24,7 @@
 
 (defn aboard? [p] (some? (:vehicle (js->clj (.self p) :keywordize-keys true))))
 
-(def wide "Water at y 63 at x 4..6, z -3..3: the far bank is x 7."
-   (into {} (for [x (range 4 7) z (range -3 4)] [(str x ",63," z) "water"])))
+(def wide "The lake again." lake)
 
 (def aboard-world
   "The body in a boat on the wide lake (a placed boat in the fake has no dismount cell: the recover leg needs one on the bank)."
@@ -52,7 +50,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [res p seen]} (await (run world {:pos [5 64 0] :recover false}))]
+        (let [{:keys [res p seen]} (await (run world {:pos [7 64 0] :recover false}))]
           (is (= :done (:status res)) (pr-str res))
           (is (false? (:recovered res)))
           (is (= far (:land res)))
@@ -63,9 +61,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [res]} (await (run world {:min-cross 4}))]
+        (let [{:keys [res]} (await (run world {:min-cross 4 :recover false}))]
           (is (= :done (:status res)) (pr-str res))
-          (is (= 5 (:x (:land res))) "a cell on the far side"))))))
+          (is (= 7 (:x (:land res))) "a cell on the far side"))))))
 
 (deftest stops-with-the-reason
   (async done
@@ -74,8 +72,8 @@
         (doseq [[label w args reason]
                 [["a given cell that is no shore" world {:pos [9 64 0]} :no-far-shore]
                  ["no shore far enough" world {:min-cross 60} :no-far-shore]
-                 ["no water within :radius of the body" world {:pos [5 64 0] :radius 1} :not-water]
-                 ["no boat and none to fetch" (dissoc world :inventory) {:pos [5 64 0]} :no-boat]]]
+                 ["no water within :radius of the body" world {:pos [7 64 0] :radius 1} :not-water]
+                 ["no boat and none to fetch" (dissoc world :inventory) {:pos [7 64 0]} :no-boat]]]
           (let [{:keys [res]} (await (run w args))]
             (is (= {:status :stopped :reason reason} (select-keys res [:status :reason])) (pr-str [label res]))))))))
 
@@ -83,14 +81,14 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (lt/setup (assoc world :unloaded ["5,64,0"]))]
-          (core/submit! eng '(jobs.movement.cross-water {:pos [5 64 0]}) {})
+        (let [{:keys [eng seen]} (lt/setup (assoc world :unloaded ["7,64,0"]))]
+          (core/submit! eng '(jobs.movement.cross-water {:pos [7 64 0]}) {})
           (await (tu/run-until-empty eng 3))
           (is (= [:unseen] (mapv :reason (filterv #(= :waiting (:kind %)) @seen)))))))))
 
 (deftest far-shore-prefers-the-far-side
   (let [{:keys [p]} (lt/setup world)]
-    (is (= 5 (:x (:land (cw/far-spot p {:x 0 :y 64 :z 0} {:radius 24 :min-cross 4})))))))
+    (is (= 7 (:x (:land (cw/far-spot p {:x 0 :y 64 :z 0} {:radius 24 :min-cross 4})))))))
 
 (def two-channels
   "Water at x 4 and x 9, z -3..3: land at x 5..8 between them, a far bank at x 10."
@@ -142,27 +140,26 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [res]} (await (run-saved (assoc world :self {:pos [5.5 64 0.5]}) far))]
+        (let [{:keys [res]} (await (run-saved (assoc world :self {:pos [7.5 64 0.5]}) far))]
           (is (= :done (:status res)) (pr-str res))
           (is (= far (:land res)))
           (is (false? (:recovered res))))))))
 
-(deftest launches-from-foot-and-reports-a-failed-recover
-  ;; the fake's placed boat drops nothing, so the pick-up fails: the crossing still lands, then says why the boat stayed
+(deftest lands-and-reports-a-failed-recover
+  ;; the boat drops nothing, so the pick-up fails: the crossing still lands, then says why the boat stayed
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [res seen]} (await (run world {:pos [5 64 0]}))]
+        (let [{:keys [res seen]} (await (run (assoc-in aboard-world [:entities 0 :drops] []) {:pos [7 64 0]}))]
           (is (= {:status :stopped :reason :recover-failed} (select-keys res [:status :reason])) (pr-str res))
           (is (= :not-collected (get-in res [:cause :cause :reason])) (pr-str res))
-          (is (some #(= :boat.launched (:kind %)) @seen))
           (is (some #(= :boat.landed (:kind %)) @seen)))))))
 
 (deftest no-boat-carries-the-launch-cause
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [res]} (await (run (dissoc world :inventory) {:pos [5 64 0]}))]
+        (let [{:keys [res]} (await (run (dissoc world :inventory) {:pos [7 64 0]}))]
           (is (= :no-boat (:reason res)) (pr-str res))
           (is (= {:child :launch :reason :need} (select-keys (:cause res) [:child :reason])) (pr-str res)))))))
 
@@ -175,7 +172,7 @@
                                                  (assoc-in [:blocks "-2,64,3"] "chest")
                                                  (assoc :containers {"-2,64,3" [boat-item]}
                                                         :zones [{:name "home" :min [-6 60 -6] :max [12 70 6] :owner "Fake"}]))
-                                             {:pos [5 64 0] :recover false}))]
+                                             {:pos [7 64 0] :recover false}))]
           (is (= :done (:status res)) (pr-str res))
           (is (some #(= :fetch.done (:kind %)) @seen))
           (is (some #(= :boat.launched (:kind %)) @seen)))))))
@@ -186,6 +183,6 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (lt/setup world)
               _ (tu/seeing-after-look p)
-              res (await (tu/child-outcome eng 'jobs.movement.cross-water {:min-cross 4} 200))]
+              res (await (tu/child-outcome eng 'jobs.movement.cross-water {:min-cross 4 :recover false} 200))]
           (is (some #(= "look" (.-name %)) (.-calls (.-world p))))
           (is (= :done (:status res)) (pr-str res)))))))

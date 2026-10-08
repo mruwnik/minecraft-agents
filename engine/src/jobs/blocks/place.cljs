@@ -20,7 +20,7 @@
   - {:reason :not-allowed :pos :by :zone|:claim|:footprint|:no-zones ...}: zones, claims or another plan's
     footprint refuse the place. :for-plan's own footprint does not. :ignore-zones? skips the rule.
   - {:reason :own-body :pos}: the body stands in the cell (not for seeds, carpets and the like: no collision).
-  - {:reason :no-support :pos}: no solid neighbour to place against.
+  - {:reason :no-support :pos}: no solid neighbour to place against (not for boats).
   - {:reason :unreachable :pos :why kw}: the go-to child gave up. The wait lasts while the body stands where it
     gave up.
   - {:reason :not-loaded :pos}.
@@ -103,6 +103,11 @@
         v (when block (place-verdict c pos items))]
     (when (and block (not (some #{block} items)) (= :not-replaceable (:reason v))) block)))
 
+(defn boats?
+  "Whether every item is a boat or raft: it is used on the water, so it needs no block beside the cell."
+  [items]
+  (every? #(re-find #"_(boat|raft)$" %) items))
+
 (defn problem
   "Why the job cannot run now: a wait reason map (see doc), or nil. Bad args and a cell already holding the block
   pass: the round ends them."
@@ -121,7 +126,7 @@
           (= :not-replaceable (:reason v)) nil
           (not (:ok v)) {:reason (:reason v) :pos pos}
           :else (or (when-let [n (needs c items)] (assoc n :reason :need :pos pos))
-                    (when-not (or (b/support? p pos) (b/unseen-near? p pos)) {:reason :no-support :pos pos})
+                    (when-not (or (boats? items) (b/support? p pos) (b/unseen-near? p pos)) {:reason :no-support :pos pos})
                     (b/unreachable-wait c (b/mem-for c pos) pos)
                     (when (clears? c block) (b/child-wait c :clear 'jobs.blocks.dig (clear-args c pos)))))))))
 

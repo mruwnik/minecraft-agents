@@ -2,7 +2,7 @@
   "The fake world the cljs tests drive: the primitives object of README.md over one atom of cljs world data, never a
   server. (create spec) takes the spec as a cljs map (the keys createFake took: :self :time :players :raining :blocks
   {\"x,y,z\" name} :entities :inventory :equipment :containers :drops :recipes :unreachable :noPath :swimFails
-  :mountFails :dismountFails :skipNight :settles :offlineScale :ages :states :wires :pulseMoves :unloaded :furnaces :enchantTables) and
+  :mountFails :dismountFails :dismountDry :skipNight :settles :offlineScale :ages :states :wires :pulseMoves :unloaded :furnaces :enchantTables) and
   returns the JS object the engine's primitives are: methods taking (token, args) and returning promises of JS
   contract results, plus `world` (hold, override, calls, emit, setTime, advance, setRaining, settle, respawn, die,
   state).
@@ -199,6 +199,7 @@
          :swim-fails (:swimFails spec false)
          :mount-fails (:mountFails spec false)
          :dismount-fails (:dismountFails spec false)
+         :dismount-dry (:dismountDry spec false)
          :next-entity-id 1000
          :offline false
          :controls {}
@@ -639,7 +640,10 @@
   (let [id (get-in w [:self :vehicle])
         e (find-entity w id)
         from (or (:pos e) (body-pos w))
-        pos (or (:dismount-at e) (update from 0 inc))
+        beside (fn [[dx dz]] (-> from (update 0 + dx) (update 2 + dz)))
+        dry (fn [pos] (not= "water" (block-name w (mapv #(js/Math.floor %) pos))))
+        dry-side (when (:dismount-dry w) (first (filter dry (for [n [1 2 3] d [[1 0] [-1 0] [0 1] [0 -1]]] (beside (mapv #(* n %) d))))))   ; :dismountDry: the nearest dry cell on a side (up to 3), not always +x
+        pos (or (:dismount-at e) dry-side (update from 0 inc))
         here (block-name w (mapv #(js/Math.floor %) pos))
         left (fn [passengers] (not-empty (filterv #(not= fake-body-id %) passengers)))]
     (cond
