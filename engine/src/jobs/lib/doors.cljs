@@ -58,9 +58,9 @@
            (filter (fn [{:keys [t]}] (>= (- (:now view) t) open-ms)))
            (map :data)
            (remove #(and (false? (:shut? %)) (owner-live? view (:by %))))
-           (keep (fn [{:keys [cell by]}]
+           (keep (fn [{:keys [cell by fails]}]
                    (when-let [o (read p cell)]
-                     (assoc o :by by :dist (distance self cell)))))
+                     (assoc o :by by :fails (or fails 0) :dist (distance self cell)))))
            (filter #(<= (:dist %) radius))
            (sort-by :dist)
            (reduce (fn [acc o] (if (some #(= (:cell o) (:cell %)) acc) acc (conj acc o))) [])))))

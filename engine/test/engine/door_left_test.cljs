@@ -170,6 +170,46 @@
           (is (= 1 (count (filter #(= :shut-doors.gave-up (:kind %)) @seen))))
           (is (= [] (opened eng)) "the entry is dropped, so the trigger does not fire for it again"))))))
 
+(deftest a-gate-whose-clicks-fail-keeps-its-entry-and-is-retried-then-dropped-after-the-last-try
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup (gate-world true 8 0))
+              gave-up #(filter (fn [e] (= :shut-doors.gave-up (:kind e))) @seen)
+              run! (fn ^:async f []
+                     (core/submit! eng '(jobs.maintenance.shut-doors) {})
+                     (await (tick-until s #(empty? (:list (core/state eng))) 80)))]
+          (remember-opened! s)
+          (.override (.-world p) "useOn" (fn ^:async f [_token _args _impl] #js {:status "unchanged"}))
+          (await (run!))
+          (is (open? p gate-cell))
+          (is (= [gate-cell] (mapv :cell (opened eng))) "the failed shut keeps the entry")
+          (is (= 1 (:fails (first (opened eng)))))
+          (is (= :warn (:level (first (gave-up)))) "told once")
+          (await (run!))
+          (is (= 2 (:fails (first (opened eng)))))
+          (is (= :info (:level (second (gave-up)))) "repeat tries are info")
+          (doseq [_ (range 3)] (await (run!)))
+          (is (= [] (opened eng)) "dropped after the last try")
+          (is (= :warn (:level (last (gave-up)))) "told again when it is dropped"))))))
+
+(deftest a-gate-that-failed-once-is-shut-by-a-later-run
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p] :as s} (setup (gate-world true 8 0))
+              run! (fn ^:async f []
+                     (core/submit! eng '(jobs.maintenance.shut-doors) {})
+                     (await (tick-until s #(empty? (:list (core/state eng))) 80)))]
+          (remember-opened! s)
+          (.override (.-world p) "useOn" (fn ^:async f [_token _args _impl] #js {:status "unchanged"}))
+          (await (run!))
+          (is (open? p gate-cell))
+          (.override (.-world p) "useOn" (fn ^:async f [token args impl] (await (impl token args))))
+          (await (run!))
+          (is (not (open? p gate-cell)))
+          (is (= [] (opened eng))))))))
+
 (deftest a-walk-records-whether-it-will-shut-what-it-opens
   (async done
     (tu/run-async done

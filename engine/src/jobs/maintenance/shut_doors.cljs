@@ -15,16 +15,18 @@
   One run shuts them all, nearest first. For each it walks within :reach (a jobs.movement.go-to child, doors :never:
   it opens nothing on the way), then shuts it as the walker does (pass/shut-column!). An animal in the cell is waited
   out, never pushed. A block that cannot be reached, that the body stands in the column of, or that is not shut after
-  :tries clicks is given up with one warn (shut-doors.gave-up) and its entry dropped, so the trigger leaves it. A
-  block the body stands in the column of, or whose walk was interrupted (:walk-interrupted, info only), is left and
-  keeps its entry, stamped afresh so the trigger waits :open-s again: a later run shuts it.
+  :tries clicks fails this run (shut-doors.gave-up, warn the first time); its entry is kept, stamped afresh so the
+  trigger waits :open-s and a later run tries again, until :attempts runs have failed: then it is dropped with a last
+  warn. A block that cannot be reached is dropped at once. A block the body stands in the column of, or whose walk was
+  interrupted (:walk-interrupted, info only), is left and keeps its entry the same way.
   Ends done with info shut-doors.done {:shut n :left []} when every block was shut (or none stood open); with any
   left, stopped :left with warn shut-doors.stopped and {:shut n :left [{:cell :reason}]}.")
 
 (a/defargs args
   {:radius {:doc "how far from the body a left block is looked for, in blocks" :spec (a/num-in 0 nil) :default 16}
    :reach {:doc "walk until within this many cells of the block (a click reaches 4.5 from the eye)" :spec (a/num-in 0 nil) :default 3}
-   :tries {:doc "clicks on one block before it is given up" :spec (a/int-in 1 nil) :default 3}})
+   :tries {:doc "clicks on one block before the run leaves it" :spec (a/int-in 1 nil) :default 3}
+   :attempts {:doc "runs whose clicks failed before a block is dropped for good" :spec (a/int-in 1 nil) :default 5}})
 
 ;; the blocks given up in this run are skipped; a later run starts afresh from the world and the :opened entries
 (defn cell-key [{:keys [x y z]}] [x y z])
@@ -44,10 +46,6 @@
       (and (= :done r) (:arrived (ctx/child-result c :walk))) nil
       :else :unreachable)))
 
-(def keep-entry
-  "Reasons that leave the :opened entry: the block may well be shut by a later run."
-  #{:standing-in :walk-interrupted})
-
 (defn ^:async shut-once!
   "Shut the target: nil when shut, else the reason it stays open."
   [c {:keys [cell column dist]}]
@@ -63,16 +61,22 @@
           :else :shut-failed)))))
 
 (defn give-up!
-  "Record why the target stays open. A kept entry is stamped afresh (the trigger waits :open-s again); a walk that was
-  interrupted is not a failure, so it only gets an info."
-  [c {:keys [cell by]} reason]
-  (let [k (cell-key cell)]
-    (if (keep-entry reason)
-      (do (ctx/forget-where! c :opened #(= cell (:cell %)))
-          (ctx/remember! c :opened {:cell cell :by by :t (ctx/now c) :shut? true} pass/opened-policy))
-      (ctx/forget-where! c :opened #(= cell (:cell %))))
-    (ctx/emit! c :shut-doors.gave-up (if (= :walk-interrupted reason) :info :warn)
-               {:cell k :reason reason :text (str "the block at " k " stays open: " (name reason))})
+  "Record why the target stays open. :standing-in, :walk-interrupted and a first few :shut-failed keep the entry,
+  stamped afresh (the trigger waits :open-s again; a failed shut counts in :fails). A walk that was interrupted is not a
+  failure, so it only gets an info, as does a repeat failure that keeps its entry."
+  [c {:keys [cell by fails]} reason]
+  (let [k (cell-key cell)
+        fails' (if (= :shut-failed reason) (inc fails) fails)
+        keep? (case reason
+                (:standing-in :walk-interrupted) true
+                :shut-failed (< fails' (:attempts (:args c)))
+                false)]
+    (ctx/forget-where! c :opened #(= cell (:cell %)))
+    (when keep?
+      (ctx/remember! c :opened {:cell cell :by by :t (ctx/now c) :shut? true :fails fails'} pass/opened-policy))
+    (ctx/emit! c :shut-doors.gave-up (if (or (= :walk-interrupted reason) (and keep? (pos? fails))) :info :warn)
+               {:cell k :reason reason :text (str "the block at " k " stays open: " (name reason)
+                                                  (when (and (= :shut-failed reason) keep?) ", will try again later"))})
     {:cell k :reason reason}))
 
 (defn finish! [c shut left]
