@@ -55,6 +55,10 @@
     (:uuid e) (assoc :uuid (:uuid e))
     (:username e) (assoc :username (:username e))
     (some? (:visible e)) (assoc :visible? (:visible e))))
+(defn placed?
+  "A hostile only heard (never seen) is a sound, not a sighting: the look lists it no more than it lists a block behind a wall."
+  [e]
+  (or (not= "hostile" (:kind e)) (not (contains? e :seen)) (:seen e)))
 (defn observe [p {:keys [radius block-names entity-names max-blocks max-entities properties? at]}]
   (let [self (.self p)
         blocks (if (pos? max-blocks)
@@ -62,7 +66,7 @@
                                        block-names (assoc :names block-names) (not block-names) (assoc :all? true)))
                  [])
         entities (if (pos? max-entities)
-                   (look/seen-entities p (cond-> {:radius radius :max (inc max-entities)} entity-names (assoc :names entity-names)))
+                   (filterv placed? (look/seen-entities p (cond-> {:radius radius :max (inc max-entities)} entity-names (assoc :names entity-names))))
                    [])
         exact (when at (look/seen-block p at))]
     (cond-> {:center (pos (.-pos self)) :radius radius :scope :seen

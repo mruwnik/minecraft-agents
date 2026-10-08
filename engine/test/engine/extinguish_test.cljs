@@ -751,6 +751,8 @@
               eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
                                 :now #(deref clock)
                                 :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+          ;; the fire is unseen, but the ground within two blocks of the feet is in view
+          (aset p "sensedAt" (fn [pos] (if (<= (js/Math.abs (.-x pos)) 2) (.blockAt p pos) #js {:unknown true :pos pos})))
           (core/submit! eng '(jobs.survival.extinguish) {})
           (await (core/tick! eng))
           (is (= 1 (count (calls p "moveTo"))) "the flames at its feet are felt: it walks off them, it does not stand")
@@ -770,3 +772,21 @@
             (is (= {:x 0 :y 64 :z 0} (:feet e)))
             (is (= #{{:x 1 :y 64 :z 0} {:x 5 :y 64 :z 5}} (set (:lava e))))
             (is (= #{:no-cover-item} (set (map :reason (:refused e)))))))))))
+
+(deftest burning-in-a-shut-room-never-walks-to-a-cell-it-has-not-seen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [clock (atom 1000000)
+              [seen sink] (tu/legacy-capture-sink)
+              p (tu/seeing-all (tu/fake {:self {:onFire true} :blocks (merge (floor 8) (cells "fire" [64] [0] [0]))}))
+              eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
+                                :now #(deref clock)
+                                :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})
+              inside? (fn [pos] (and (<= -1 (.-x pos) 1) (<= -1 (.-z pos) 1)))
+              read (.-sensedAt p)]
+          ;; the room is the 3x3 round the body; the open floor beyond its walls was never seen
+          (aset p "sensedAt" (fn [pos] (if (inside? pos) (read pos) #js {:unknown true :pos pos})))
+          (core/submit! eng '(jobs.survival.extinguish) {})
+          (await (core/tick! eng))
+          (is (= [] (calls p "moveTo")) "no walk to a cell behind the wall"))))))

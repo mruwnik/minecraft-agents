@@ -102,11 +102,11 @@
       scanned)))
 
 (defn standable?
-  "Feet cell and head cell passable, and the cell below solid, or the feet in water."
+  "Feet cell and head cell passable, and the cell below solid, or the feet in water; all three seen (never a cell behind a wall)."
   [p pos]
-  (let [feet (u/block-name p pos)
-        head (u/block-name p (offset pos 0 1 0))
-        below (u/block-name p (offset pos 0 -1 0))]
+  (let [feet (u/seen-name p pos)
+        head (u/seen-name p (offset pos 0 1 0))
+        below (u/seen-name p (offset pos 0 -1 0))]
     (and (contains? passable feet)
          (contains? passable head)
          (or (= "water" feet)

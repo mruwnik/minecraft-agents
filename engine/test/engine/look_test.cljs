@@ -5,6 +5,7 @@
             [engine.fake.raw-world :as fake-raw]
             [engine.perception :as perception]
             [engine.test-util :as tu]
+            [jobs.explore.look :as explore-look]
             [jobs.lib.look :as look]))
 
 (defn seeing
@@ -165,3 +166,10 @@
 (deftest dark-fn-says-whether-the-sky-is-dark
   (is (true? (:night? (look/dark-fn (seeing {:time midnight})))))
   (is (false? (:night? (look/dark-fn (seeing {:time day}))))))
+
+(deftest explore-look-lists-a-seen-hostile-not-one-only-heard-behind-a-wall
+  (let [p (seeing {:blocks wall
+                   :entities [{:id 7 :name "zombie" :kind "hostile" :pos [0 64 5]}
+                              {:id 8 :name "zombie" :kind "hostile" :pos [6 64 0]}]})
+        r (explore-look/observe p (explore-look/options {:entity-names ["zombie"] :max-blocks 0}))]
+    (is (= [[0 64 5]] (mapv :pos (:entities r))))))
