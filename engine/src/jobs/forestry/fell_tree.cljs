@@ -14,6 +14,7 @@
             [jobs.lib.ledger :as ledger]
             [jobs.lib.look :as look]
             [jobs.lib.loose :as loose]
+            [jobs.lib.trip :as trip]
             [jobs.lib.trees :refer [axe-worth-fetching? axe-fetch-limits scan-logs tree-near trees-near tree-at logs-at unreachable-set debts replant-kind
                                           replant-policy default-radius max-partials dig-reach log-name? log-names]]
             [jobs.lib.util :as u]
@@ -51,6 +52,8 @@
   Before the first log of a tree big enough for an axe to pay (jobs.lib.trees/axe-worth-fetching?) with none carried it
   fetches one (jobs.items.get-tool, a seen chest or crafted) unless :fetch is false or lacks :tool; a failed fetch is
   warned (fetch.failed) and the tree is chopped by hand.
+  Before the first log, a carried axe that is the last of its kind and worn gets a spare (jobs.lib.trip/tool-ready!,
+  unless :fetch is false or lacks :tool).
   Each log is dug by a jobs.blocks.dig child. That child holds the best carried axe and leaves the drop on the
   ground (jobs.forestry.harvest-wood collects it).
   Waits (check) with :reason :no-tree when no tree is in sight, after one look around from where it stands.
@@ -487,7 +490,9 @@
                 :done))
           (if-let [f (do (when (and (zero? (:dug (ctx/mem c) 0)) (not (:first-logs (ctx/mem c))))
                            (ctx/update-mem! c assoc :first-logs (count logs)))
-                         (await (fetch/fetch! c 'jobs.forestry.fell-tree #(axe-problem % logs))))]
+                         (or (await (fetch/fetch! c 'jobs.forestry.fell-tree #(axe-problem % logs)))
+                             (when (and (zero? (:dug (ctx/mem c) 0)) (axe-carried? c))
+                               (await (trip/tool-ready! c (:name (first logs)))))))]
             f
             (let [_ (when-let [low (lower-base (ctx/mem c) logs)] (rebase! c low))
                   _ (await (watch/watch! c {:before-dig (:pos (first logs))}))

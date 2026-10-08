@@ -97,6 +97,14 @@
 (defn wear-settle-ms [] (settings/get settings ::wear-settle-ms))
 (defn wear-settle-tries [] (settings/get settings ::wear-settle-tries))
 
+(def told-kind "Body memory kind of the tools told low (:name, :durability), so a later job does not tell it again." :tool.low-told)
+
+(defn low-told?
+  "Whether this tool (snapshot) was told low already and has not been replaced: an entry of its name at or above its durability."
+  [c snap]
+  (boolean (some #(and (= (:name snap) (:name (:data %))) (>= (:durability (:data %) 0) (:durability snap 0)))
+                 (ctx/entries c told-kind))))
+
 (defn ^:async note-wear!
   "Emit :tool.low or :tool.broke (agent-facing, :warn) when the tool picked last time wore out since; ends with a
   :tool.none warning when no tool of its kind is left. :tool-wear is then renewed (cleared after a break) so an event
@@ -117,6 +125,9 @@
     (when ev
       (ctx/emit! c (if (= ev :tool-broke) :tool.broke :tool.low) :warn
                  {:tool (:name prev) :durability (:durability now) :left (:n now)})
+      (if (= ev :tool-broke)
+        (ctx/forget-where! c told-kind #(= (:name prev) (:name %)))
+        (ctx/remember! c told-kind {:name (:name prev) :durability (:durability now)} {:cap 20 :ttl :forever}))
       (when (and (= ev :tool-broke) (zero? (:n now))
                  (not-any? #(str/ends-with? (:name %) (str "_" (last (str/split (:name prev) #"_")))) (u/inventory p)))
         (ctx/emit! c :tool.none :warn {:tool (:name prev)})))
@@ -140,8 +151,10 @@
          tool (:name item)]
      (when tool
        (ctx/update-mem! c assoc :tool-wear
-                        (cond-> (wear-snapshot p item)
-                          (and (= tool (:name (:tool-wear (ctx/mem c)))) (:low-seen (:tool-wear (ctx/mem c)))) (assoc :low-seen true))))
+                        (let [snap (wear-snapshot p item)]
+                          (cond-> snap
+                            (or (and (= tool (:name (:tool-wear (ctx/mem c)))) (:low-seen (:tool-wear (ctx/mem c))))
+                                (low-told? c snap)) (assoc :low-seen true)))))
      (when (and tool (not= tool (.-held (.self p))))
        (await (ctx/act c :equip #js {:item tool :dest "hand"})))))
 

@@ -483,3 +483,25 @@
           (is (some #(and (= :deferred (:kind %)) (= :hungry (:reflex %))) @seen) "hunger was held off")
           (is (not-any? #(and (= :fired (:kind %)) (= :hungry (:reflex %))) @seen))
           (is (= [[:tree :comfort] [:pillar :urgent]] (sections-opened seen))))))))
+
+;; ------------------------------------------------------------------ a worn last axe gets a spare first
+
+(def worn-axe {:name "stone_axe" :count 1 :durability 10 :max-durability 131})
+
+(deftest a-worn-last-axe-gets-a-spare-from-a-seen-chest-before-the-tree-is-felled
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (fell (axe-world [worn-axe] [{:name "stone_axe" :count 1}]) {:radius 10} 400))]
+          (is (= 8 (:logs (:out s))))
+          (is (= 1 (count (kinds s :tool.spare))))
+          (is (= 2 (get (lt/inv (:p s)) "stone_axe"))))))))
+
+(deftest a-worn-last-axe-with-fetch-off-gets-no-spare
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (fell (axe-world [worn-axe] [{:name "stone_axe" :count 1}]) {:radius 10 :fetch false} 400))]
+          (is (= 8 (:logs (:out s))))
+          (is (empty? (kinds s :tool.spare)))
+          (is (empty? (kinds s :tool.no-spare))))))))

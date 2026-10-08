@@ -1,6 +1,7 @@
 (ns engine.spare-test
   "jobs.lib.trip/tool-ready!: a stair that would dig with the last worn pickaxe gets a spare first, or says why not."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.blocks-dig-test :as bd]
             [engine.stair-test :as st]
             [engine.test-util :as tu]))
 
@@ -46,3 +47,13 @@
               s (await (st/stair! (assoc spare-chest :inventory [worn-iron]) east tu/seeing-all))]
           (is (= :done (:status @(:out s))))
           (is (= ["stone_pickaxe"] (map :tool (st/events-of s :tool.spare)))))))))
+
+(deftest a-low-tool-is-told-once-across-digs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (bd/setup {:self bd/body :blocks {"2,64,0" "stone" "2,64,1" "stone"}
+                                            :inventory [worn]})]
+          (await (bd/child-outcome eng 'jobs.blocks.dig {:pos [2 64 0]} 10))
+          (await (bd/child-outcome eng 'jobs.blocks.dig {:pos [2 64 1]} 10))
+          (is (= 1 (count (filter #(= :tool.low (:kind %)) @seen)))))))))
