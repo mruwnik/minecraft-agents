@@ -4,10 +4,12 @@
   setting is the default, the arg wins."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.expr :as expr]
+            [engine.path.executor :as ex]
             [engine.path.planner-tuned :as planner]
             [engine.path-preview-test :as pt]
             [engine.planner-fixture :as pf]
             [engine.registry :as registry]
+            [engine.stairs-physics-test :as sp]
             [engine.test-util :as tu :refer [floor box]]
             [jobs.lib.walk :as walk]
             [jobs.lib.walk.world :as wworld]))
@@ -133,3 +135,34 @@
     :walk :climb-down ground false
     :walk :walk (assoc ground :on-scaffolding true) false
     :sneak :walk (assoc ground :on-scaffolding true) false))
+
+;; a scaffolding tower 4 high (feet 64..67) on a stone floor, the goal 5 east on the floor: walked in prismarine-physics
+;; through walk/decide-tick, the pose as the steer reports it (on-climbable: a climbable at the feet; on-scaffolding: at
+;; or under them)
+(def tower [[-2 63 -2 12 63 6 "stone" {}] [2 64 2 2 67 2 "scaffolding" {:distance 0 :bottom false}]])
+
+(defn walk-tower [gait]
+  (let [{:keys [mc physics]} @sp/lib
+        world (sp/world-of tower)
+        phys ((.-Physics physics) mc world)
+        _ (set! (.-playerHalfWidth phys) 0.31)
+        steps (sp/plan tower [2 68 2] [7 64 2])
+        bot (sp/bot-at [2 68 2])
+        name-at (fn [x y z] (.-name (.getBlock ^js world (.floored (.offset (.-position (.-entity bot)) x y z)))))
+        env {:policy (assoc ex/policy :gait gait) :steps steps}]
+    (loop [t 0 state (walk/start-state steps {:x 2.5 :z 2.5})]
+      (let [pose (assoc (sp/pose-of bot)
+                        :on-climbable (= "scaffolding" (name-at 0 0 0))
+                        :on-scaffolding (or (= "scaffolding" (name-at 0 0 0)) (= "scaffolding" (name-at 0 -1 0))))
+            [state' {:keys [done controls yaw]}] (walk/decide-tick env state pose)]
+        (if (or done (>= t 1200))
+          (assoc (select-keys done [:status :why]) :at [(:x pose) (:y pose) (:z pose)])
+          (do (set! (.-yaw (.-entity bot)) yaw)
+              (.apply (.simulatePlayer phys (new (.-PlayerState physics) bot (clj->js controls)) world) bot)
+              (recur (inc t) state')))))))
+
+;; inside the tower the body stands on the scaffolding under it (on the ground, in a climbable): a step off the tower is
+;; walked, not held for a fall that never comes
+(deftest a-scaffolding-tower-is-walked-down-under-every-gait
+  (doseq [gait [:sneak :walk :auto]]
+    (is (= :arrived (:status (walk-tower gait))) (pr-str gait (walk-tower gait)))))

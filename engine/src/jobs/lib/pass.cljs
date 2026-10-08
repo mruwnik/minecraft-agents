@@ -191,9 +191,11 @@
 (defn await-poll-ms [] (settings/get settings ::await-poll-ms))
 
 (defn ^:async await-open!
-  "Read the block at cell back every await-poll-ms, up to await-polls times, until it is open: {:result :was-open} (it shuts
-  itself again, so there is no entry to keep) or {:result :stuck}."
-  [c cell]
+  "Turn to the block at cell (a press turned the head to the button) and read it back every await-poll-ms, up to
+  await-polls times, until it is open: {:result :was-open} (it shuts itself again, so there is no entry to keep) or
+  {:result :stuck}."
+  [c {:keys [x y z] :as cell}]
+  (await (dig-look/look-at! c [x y z]))
   (loop [n 0]
     (let [b (block-at c cell)]
       (cond
@@ -206,8 +208,8 @@
   left on, so the door stays open), a plate is the body's weight (the walk stops on it), then the door is read back. Same results as await-open!. A door a hand can open, behind a plate,
   is opened by hand when the plate did not."
   [c cell {:keys [via at]} shut?]
-  (let [name (some-> (block-at c at) .-name)
-        door (block-at c cell)
+  (let [name (some-> (await (seen-at! c at)) .-name)
+        door (await (seen-at! c cell))
         pressed (when (and (#{"button" "lever"} via) (not (some-> door click/props-of (->> (click/reached? :open)))))
                   (if (= (keyword via) (click/kind-of name))
                     (:outcome (await (click/click! c at (if (= "lever" via) :on :press) name)))

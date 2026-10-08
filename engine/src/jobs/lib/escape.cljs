@@ -263,6 +263,16 @@
           (let [nbrs (->> cardinals (map #(ahead cell % 1)) (filter #(and (not (seen %)) (near? %) (standable? %))))]
             (recur (into (pop queue) nbrs) (into seen nbrs))))))))
 
+(defn door-back
+  "For a body in the free part of a shut door's cell feet (the door's own block hides the room from its eye): the cell
+  on the free side, to step back to and look round from, when it is open; else nil."
+  [p [x y z]]
+  (let [kind-at (reach/lookup p)]
+    (when-let [[dx dz] (reach/panel-step p kind-at {:x x :y y :z z})]
+      (let [back [(- x dx) y (- z dz)]]
+        (when (and (reach/passable? kind-at (- x dx) y (- z dz)) (reach/passable? kind-at (- x dx) (inc y) (- z dz)))
+          back)))))
+
 (def heading-dirs (into {} (map (fn [[k v]] [v k])) heading-names))
 
 (defn choose
@@ -275,7 +285,8 @@
     goal is above, at most max-depth), every cell of its cut diggable?.
   - {:step :clear-path :heading kw}: a wall at most max-door thick straight toward the goal, with floor beyond,
     every cell diggable?.
-  - {:step :approach :pos cell}: no side of the body's cell is solid: walk to wall-spot first.
+  - {:step :approach :pos cell}: no side of the body's cell is solid: walk to wall-spot first; in the free part of a
+    shut door's cell with no door-spot in sight, step back off the panel (door-back).
   - {:step :none :why kw}: none of these. :why :no-headroom: a pit the carried blocks would pillar out of but for
     the block over the head; :no-dig: nothing natural and allowed to dig; :no-wall: no wall to walk to."
   ([p feet goal] (choose p feet goal (constantly true)))
@@ -293,7 +304,8 @@
                                 rise may-dig? own?))
          gap (when (and dir (not (skip :clear-path))) (door block-at (unseen-of p) feet dir (max-door)))
          spot (delay (when (and dir (not (skip :approach)) (walled-side? block-at feet))
-                       (door-spot p feet dir #(diggable? block-at may-dig? own? %))))]
+                       (door-spot p feet dir #(diggable? block-at may-dig? own? %))))
+         back (delay (when-not (skip :approach) (door-back p feet)))]
      (cond
        (and pillar-blocks? (passable? (block-at (up feet 2))))
        {:step :pillar :height depth :item item}
@@ -306,6 +318,9 @@
 
        @spot
        {:step :approach :pos @spot}
+
+       @back
+       {:step :approach :pos @back}
 
        (and (not (skip :approach)) (not (walled-side? block-at feet)))
        (if-let [spot (wall-spot p feet dir)] {:step :approach :pos spot} {:step :none :why :no-wall})

@@ -43,12 +43,12 @@
     (and (= x fx) (= z fz) (<= low (inc fy)) (<= fy high))))
 
 (defn ^:async click!
-  "Click the block at pos once with an empty hand, then read it again. Returns {:outcome :facts ...}, facts
+  "Click the block at pos once with an empty hand, then read it again as the body sees it. Returns {:outcome :facts ...}, facts
   being {:block :was :now}. outcome is one of:
   - :changed, the block is now in state
   - :unchanged, the click moved nothing
   - :wrong-way, it moved, but not to state
-  - :gone, with :why :missing (not there) or :unloaded (can no longer be read)
+  - :gone, with :why :missing (not there) or :unloaded (can no longer be read or seen)
   - :no-room, the hand cannot be emptied
   - :unreachable, out of reach
   - :refused, the click was turned away (:status and :reason are the primitive's)"
@@ -57,7 +57,7 @@
         status (.-status r)
         before (js->clj (some-> r .-before .-properties) :keywordize-keys true)
         after (js->clj (some-> r .-after .-properties) :keywordize-keys true)
-        b (u/block-at (:primitives c) pos)
+        b (u/seen-block (:primitives c) pos)
         now (props-of b)
         facts {:block block :was before :now now}
         out (fn [outcome & {:as more}] (merge {:outcome outcome :facts facts} more))]

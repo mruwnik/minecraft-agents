@@ -150,21 +150,28 @@
           :else (let [{:keys [out done] gstate' :gstate} (wsight/control gate steps k (:i exec') gstate pose base)]
                   [(assoc state :exec exec' :gate gstate') (if done {:done done} out)]))))))
 
+(defn standing-pose
+  "pose with :on-climbable off for a body on the ground in scaffolding: it stands on the scaffolding under it, so the
+  executor walks a step off the tower instead of holding for a fall that never comes."
+  [{:keys [on-ground on-scaffolding] :as pose}]
+  (cond-> pose (and on-ground on-scaffolding) (assoc :on-climbable false)))
+
 (defn decide-tick
   "One tick of a walk, pure: [state' out] for the pose, out {:done map} or {:controls :yaw :pitch} (with :warn, a gate
   breach). state {:exec :gate} holds the executor's and the gate's state. env {:policy :steps :watch-stop :gate}:
   watch-stop (fn [i state' pose]) the look-ahead's done map or nil; gate (nil: off) {:see :plain? :floors :opts} for
   jobs.lib.walk.sight."
   [{:keys [policy steps watch-stop gate] :as env} {:keys [exec] :as state} pose]
-  (if gate
-    (gate-tick env state pose)
-    (let [i (:i exec)
-          {exec' :state :keys [done controls yaw pitch]} (executor/tick policy exec pose)
-          done (or done (when watch-stop (watch-stop i exec' pose)))
-          state' (assoc state :exec exec')]
-      [state' (if done
-                {:done done}
-                {:controls (gait-controls policy exec' pose controls) :yaw yaw :pitch pitch})])))
+  (let [pose (standing-pose pose)]
+    (if gate
+      (gate-tick env state pose)
+      (let [i (:i exec)
+            {exec' :state :keys [done controls yaw pitch]} (executor/tick policy exec pose)
+            done (or done (when watch-stop (watch-stop i exec' pose)))
+            state' (assoc state :exec exec')]
+        [state' (if done
+                  {:done done}
+                  {:controls (gait-controls policy exec' pose controls) :yaw yaw :pitch pitch})]))))
 
 (defn gate-env
   "The floor gate's env for walking steps (jobs.lib.walk.sight), nil when no step has an unseen floor. see: what the body

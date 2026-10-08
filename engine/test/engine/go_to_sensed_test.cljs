@@ -7,6 +7,7 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.fake :as fake]
+            [engine.go-to-doors-test :as gd]
             [engine.memory :as mem]
             [jobs.lib.util :as u]
             [engine.fake.raw-world :as fake-raw]
@@ -475,3 +476,41 @@
           (core/submit! eng '(torch-parent) {})
           (loop [i 0] (when (and (< i 20) (seq (:list (core/state eng)))) (await (core/tick! eng)) (recur (inc i))))
           (is (= 4 @torches) "all four torches are in the inventory while the child runs"))))))
+
+;; the button sits on the wall north of the line, out of the body's view as it walks east to the door: it is looked at
+;; before the press, and the press reads the button back as the body sees it
+(deftest go-to-looks-at-a-button-it-has-not-seen-before-it-presses-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (run-go-to (gd/button-world :wires {gd/button-cell ["5,64,0"]}) {:pos [10 64 0] :range 0}))]
+          (is (= {:arrived true} out))
+          (is (= 1 (gd/clicks p)) "one click, on the button"))))))
+
+(def iron-hut
+  "A stone hut (hollow x -2..2, z -2..2, y 63..66; inside x -1..1, z -1..1, feet 64) on a stone floor x -8..10, z -8..10,
+  a shut iron door in its south wall at [0 64 2] (facing north: the panel fills the cell's south side)."
+  (merge (box -8 62 -8 10 62 10 "stone") (box -8 63 -8 10 63 10 "stone")
+         (apply dissoc (box -2 64 -2 2 66 2 "stone") (for [x (range -1 2) z (range -1 2) y [64 65]] (str x "," y "," z)))
+         {"0,64,2" "iron_door" "0,65,2" "iron_door"}))
+
+(deftest go-to-from-the-free-part-of-an-iron-door-cell-it-sees-digs-out-and-arrives
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out seen]} (await (run-go-to {:self {:pos {:x 0.5 :y 64 :z 2.4}} :blocks iron-hut
+                                                    :inventory [{:name "stone_pickaxe" :count 1}]}
+                                                   {:pos [0 64 6] :range 1}))]
+          (is (= {:arrived true} out) (pr-str out))
+          (is (seq (steps seen))))))))
+
+(deftest go-to-out-of-an-iron-door-hut-it-sees-digs-out-and-arrives
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out seen]} (await (run-go-to {:self {:pos {:x 0.5 :y 64 :z -0.5}} :blocks iron-hut
+                                                    :inventory [{:name "stone_pickaxe" :count 1}]}
+                                                   {:pos [0 64 6] :range 1}))]
+          (is (= {:arrived true} out) (pr-str out))
+          (is (seq (steps seen))))))))
+
