@@ -67,3 +67,20 @@
 
 (deftest wool-is-gathered-for-a-bed
   (is (= {"white_wool" 1} (:gather (plan {"white_wool" 2 "oak_planks" 3 "crafting_table" 1} "white_bed" 1 {:gather? true :table? true})))))
+
+(def smelt-opts {:smelts {"iron_ingot" ["raw_iron"]} :raw #{"raw_iron"}})
+
+(deftest a-smelt-product-is-a-smelt-step-from-its-input
+  (is (= [[:smelt "iron_ingot" 3]] (shape (plan {"raw_iron" 3} "iron_ingot" 3 smelt-opts))))
+  (is (nil? (plan {"raw_iron" 3} "iron_ingot" 3)) "without :smelts no furnace step is planned")
+  (is (nil? (plan {} "iron_ingot" 3 smelt-opts)) "no raw iron carried and no :gather?: no plan"))
+
+(deftest an-iron-chestplate-from-nothing-gathers-raw-iron-then-smelts-and-crafts
+  (let [p (plan {} "iron_chestplate" 1 (assoc smelt-opts :gather? true))]
+    (is (= 8 (get-in p [:gather "raw_iron"])))
+    (is (= [:smelt "iron_ingot" 8] (first (filter #(= :smelt (first %)) (shape p)))))
+    (is (= [:craft "iron_chestplate" 1] (last (shape p))))))
+
+(deftest a-gathered-chain-prefers-no-furnace
+  (is (= {"coal" 1} (:gather (plan {"stick" 1} "torch" 4 {:gather? true :smelts {"charcoal" ["oak_log"]}})))
+      "coal is gathered rather than a log smelted to charcoal"))

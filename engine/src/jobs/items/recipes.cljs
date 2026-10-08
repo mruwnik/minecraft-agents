@@ -8,7 +8,9 @@
   whose ingredients are carried is tried before one that needs more crafts. opts: :table? (a table is at hand: no table
   steps), :max-depth (nested crafts, default 6), :gather? (items that are gatherable? and not carried count as
   gathered, not crafted: the plan then has :gather {name n}, what must be mined or felled before its crafts can run),
-  :materials (the stone-materials that count as gatherable, default all; the cheapest recipe among them wins).
+  :materials (the stone-materials that count as gatherable, default all; the cheapest recipe among them wins),
+  :raw (more items that count as gathered: ore drops), :smelts ({product [input ..]}: a product is also made by a
+  step {:op :smelt :item product :count n :input name}, one input per item; without it no smelt is planned).
   (lacking version have item n) says why a craft cannot start."
   (:require ["minecraft-data" :as minecraft-data]
             [clojure.string]))
@@ -68,6 +70,11 @@
 
 (declare make)
 
+(defn gathered?
+  "Whether item counts as gathered, not crafted, in plan state st."
+  [st item]
+  (boolean (and (:gather? st) (or (gatherable? item) (contains? (:materials st) item) (contains? (:raw st) item)))))
+
 (defn acquire
   "State st with n of item taken from what is carried, the rest crafted; nil when it cannot be had."
   [rs st item n chain depth]
@@ -77,7 +84,7 @@
         deficit (- n use)]
     (cond
       (zero? deficit) st
-      (and (:gather? st) (or (gatherable? item) (contains? (:materials st) item))) (update-in st [:gather item] (fnil + 0) deficit)
+      (gathered? st item) (update-in st [:gather item] (fnil + 0) deficit)
       :else (when-let [st (make rs st item deficit chain depth)]
               (update-in st [:have item] - deficit)))))
 
@@ -91,7 +98,8 @@
   [rs st item n chain depth]
   (when (and (pos? depth) (not (chain item)))
     (let [chain (conj chain item)
-          options (sort-by (fn [r] (short-count st r (ceil-div n (:count r)))) (get rs item))
+          smelts (for [input (get (:smelts st) item)] {:count 1 :needs {input 1} :smelt input})
+          options (sort-by (fn [r] (short-count st r (ceil-div n (:count r)))) (concat (get rs item) smelts))
           try-option (fn [{:keys [needs] :as r}]
                        (let [batches (ceil-div n (:count r))
                              st' (reduce (fn [st [k v]] (or (acquire rs st k (* v batches) chain (dec depth)) (reduced nil)))
@@ -99,10 +107,13 @@
                          (when st'
                            (-> st'
                                (update-in [:have item] (fnil + 0) (* batches (:count r)))
-                               (update :steps conj {:op :craft :item item :count (* batches (:count r)) :table? (:table? r)})))))]
+                               (update :steps conj (if (:smelt r)
+                                                     {:op :smelt :item item :count (* batches (:count r)) :input (:smelt r)}
+                                                     {:op :craft :item item :count (* batches (:count r)) :table? (:table? r)}))))))]
       (if (:gather? st)
-        ;; the option that gathers least (a carried species of log wins over a new one)
-        (first (sort-by (juxt #(reduce + 0 (vals (:gather %))) #(reduce + 0 (map (:ranks st) (keys (:gather %))))) (keep try-option options)))
+        ;; the option with fewest smelts (a furnace needs fuel and time), then that gathers least (a carried species of log wins over a new one)
+        (first (sort-by (juxt #(count (filter (comp #{:smelt} :op) (:steps %))) #(reduce + 0 (vals (:gather %))) #(reduce + 0 (map (:ranks st) (keys (:gather %)))))
+                        (keep try-option options)))
         (some try-option options)))))
 
 (defn lacking
@@ -122,13 +133,15 @@
 
 (defn plan
   "See the ns doc."
-  [version have item n {:keys [table? max-depth gather? materials] :or {max-depth 6}}]
+  [version have item n {:keys [table? max-depth gather? materials raw smelts] :or {max-depth 6}}]
   (let [rs (recipes-for version)
-        st0 {:have have :steps [] :gather? gather? :materials (or materials (stone-materials version)) :ranks (material-ranks version)}
+        st0 {:have have :steps [] :gather? gather? :materials (or materials (stone-materials version)) :ranks (material-ranks version)
+             :raw (set raw) :smelts smelts}
         with-gather (fn [pl st] (cond-> pl (seq (:gather st)) (assoc :gather (:gather st))))
         main (make rs st0 item n #{} max-depth)
         needs-table (and main (some :table? (:steps main)) (not table?))]
     (cond
+      (gathered? st0 item) {:steps [] :gather {item n}}
       (nil? main) nil
       (not needs-table) (with-gather {:steps (:steps main)} main)
       :else (when-let [t (acquire rs st0 table-item 1 #{} max-depth)]
