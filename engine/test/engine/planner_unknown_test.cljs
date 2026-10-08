@@ -46,8 +46,12 @@
   (is (= {:cell 0.1 :floor 0.3 :peek-s 0.7 :aim-s 0.1} cost/unknown-prices)))
 
 (deftest off-plans-as-before
-  (let [w (line [0 63 "stone"] [1 63 U] [2 63 "stone"])]
-    (is (= (dissoc (run w (pf/near 2 64 2) {}) :ms) (dissoc (run w (pf/near 2 64 2) {:unknown nil}) :ms)))))
+  (let [w (line [0 63 "stone"] [1 63 U] [2 63 "stone"])
+        off (run w (pf/near 2 64 2) {})]
+    (is (= [[0 64 2] [2 64 2]] (pf/cells off)) "void_air is air: a gap jump over it")
+    (is (= (:gap pf/MOVE) (:move (last-step off))))
+    (is (= (dissoc off :ms) (dissoc (run (line [0 63 "stone"] [2 63 "stone"]) (pf/near 2 64 2) {}) :ms)) "as over plain air")
+    (is (= (dissoc off :ms) (dissoc (run w (pf/near 2 64 2) {:unknown nil}) :ms)))))
 
 ;; ---- phantom floors ----
 
@@ -101,6 +105,15 @@
   (testing "seeLit 0: still dark"
     (is (not (found? (run drop-2 (pf/near 1 62 2) (unk {:seeDepth 1 :seeLit (fn [_ _ _] 0)})))))))
 
+(deftest a-lit-drop-is-seen-only-as-deep-as-the-peek-sees
+  ;; floor-sight-pin-test: the walk's worst peek stop (x .87) sees a lit floor to d 5
+  (let [deep (fn [d] (pf/snapshot {:blocks [[0 63 2 "stone"] [1 (- 63 d) 2 U]] :fill [[0 40 2 0 62 2 "stone"]]}))
+        opts (merge {:maxDrop 12} (unk {:seeDepth 1 :seeLit (fn [_ _ _] 1)}))]
+    (is (found? (run (deep 5) (pf/near 1 (- 64 5) 2) opts)) "d 5")
+    (let [r (run (deep 6) (pf/near 1 (- 64 6) 2) opts)]
+      (is (not (found? r)) "d 6")
+      (is (true? (:darkRefused r))))))
+
 (deftest no-descent-into-unseen-land
   (let [w (line [0 63 "stone"] [1 62 U] [1 61 U] [1 60 "stone"])]
     (is (found? (run w (pf/near 1 61 2) {})) "off: void_air is air, a drop of 3")
@@ -127,8 +140,8 @@
   (let [deep (fn [d] (pf/snapshot {:blocks [[0 63 2 "stone"] [1 (- 63 d) 2 U]] :fill [[0 40 2 0 62 2 "stone"]]}))
         goal (fn [d] (pf/near 1 (- 64 d) 2))
         deep-opts {:maxDrop 12}]
-    (is (found? (run (deep 10) (goal 10) (merge deep-opts (lights {})))) "d 10")
-    (doseq [[why w g opts] [["d 11" (deep 11) (goal 11) (merge deep-opts (lights {}))]
+    (is (found? (run (deep 5) (goal 5) (merge deep-opts (lights {})))) "d 5")
+    (doseq [[why w g opts] [["d 6: past what the peek sees of a lit floor" (deep 6) (goal 6) (merge deep-opts (lights {}))]
                             ["the takeoff's floor is no torch base" drop-2 (pf/near 1 62 2) (lights {:torchBase (js/Uint8Array. 1)})]
                             ["lightOk says no" drop-2 (pf/near 1 62 2) (lights {:lightOk (fn [_ _ _] false)})]
                             ["a torch failed there" drop-2 (pf/near 1 62 2) (lights {:noLight (js/Set. [(planner/cell-key 0 64 2)])})]
@@ -156,6 +169,65 @@
     (let [r (run (pool U) (pf/near 5 64 2) (unk {}) start)]
       (is (not (found? r)))
       (is (true? (:unseenRefused r))))))
+
+(deftest a-phantom-after-a-climb-is-refused
+  ;; a ladder at x 1 (on a wall at z 3) up to y 67; the step off it east onto (2 67), whose floor (2 66) is the
+  ;; top of a stone column
+  (let [shaft (fn [top] (pf/snapshot {:fill [[0 63 2 0 63 2 "stone"] [1 63 3 1 68 3 "stone"] [2 63 2 2 65 2 "stone"]
+                                             [1 64 2 1 67 2 "ladder" {:facing "north"}]]
+                                      :blocks [[2 66 2 top]]}))]
+    (is (found? (run (shaft "stone") (pf/near 2 67 2) (unk {}))) "a seen floor")
+    (let [r (run (shaft U) (pf/near 2 67 2) (unk {}))]
+      (is (not (found? r)))
+      (is (true? (:unseenRefused r))))))
+
+(deftest a-swim-over-an-unseen-bed-is-planned
+  (let [pond (fn [bed] (pf/snapshot {:fill [[0 62 2 5 62 2 "stone"] [0 63 2 5 63 2 "water"]]
+                                     :blocks [[2 62 2 bed] [3 62 2 bed] [6 63 2 "stone"]]}))
+        start {:x 0 :y 63 :z 2}]
+    (is (found? (run (pond "stone") (pf/near 6 64 2) (unk {}) start)) "a seen bed")
+    (let [r (run (pond U) (pf/near 6 64 2) (unk {}) start)]
+      (is (found? r))
+      (is (not (:unseenRefused r)))
+      (is (some #{[2 63 2]} (pf/cells r))))))
+
+(deftest a-drop-into-water-over-an-unseen-bed-is-planned
+  (let [w (line [0 63 "stone"] [1 62 "water"] [1 61 U])
+        r (run w (pf/near 1 62 2) (unk {:seeDepth 0}))]
+    (is (found? r))
+    (is (= (:drop pf/MOVE) (:move (last-step r))))
+    (is (not (:darkRefused r)))))
+
+(deftest a-gap-jump-over-a-refused-phantom-floor
+  (testing "the phantom stand after a gap jump is refused, so the body jumps over it to the seen floor beyond"
+    (let [w (line [0 63 "stone"] [1 63 "stone"] [3 63 "stone"] [4 63 U] [5 63 "stone"])
+          r (run w (pf/near 5 64 2) (unk {}))]
+      (is (found? r))
+      (is (= [[0 64 2] [1 64 2] [3 64 2] [5 64 2]] (pf/cells r)))
+      (is (= (:gap pf/MOVE) (:move (last-step r))))))
+  (testing "a missed floor: jumped over"
+    (let [w (line [0 63 "stone"] [1 63 U] [2 63 "stone"])
+          r (run w (pf/near 2 64 2) (unk {:missed (js/Set. [(planner/cell-key 1 63 2)])}))]
+      (is (found? r))
+      (is (= [[0 64 2] [2 64 2]] (pf/cells r)))))
+  (testing "two phantom cells: a gap of two"
+    (let [w (line [0 63 "stone"] [1 63 U] [2 63 U] [3 63 "stone"])
+          r (run w (pf/near 3 64 2) (unk {:missed (js/Set. [(planner/cell-key 1 63 2) (planner/cell-key 2 63 2)])}))]
+      (is (found? r))
+      (is (= [[0 64 2] [3 64 2]] (pf/cells r))))))
+
+(deftest a-walk-through-a-closed-gate-onto-a-phantom-floor-is-checkable
+  ;; (a gate or door is crossed by a walk that opens it; MOVE-OPEN is the climb through a shut trapdoor)
+  (let [w (line [0 63 "stone"] [1 63 U] [1 64 "oak_fence_gate" {:facing "east" :open "false"}])
+        r (run w (pf/near 1 64 2) (unk {}))]
+    (is (found? r))
+    (is (not (:unseenRefused r)))
+    (is (= (:walk pf/MOVE) (:move (last-step r))))))
+
+(deftest a-water-takeoff-is-not-lightable
+  (let [w (fn [feet] (line [0 63 "stone"] [0 64 feet] [1 61 U]))]
+    (is (found? (run (w "air") (pf/near 1 62 2) (lights {}))) "a dry takeoff")
+    (is (not (found? (run (w "water") (pf/near 1 62 2) (lights {}) {:x 0 :y 64 :z 2}))))))
 
 (deftest a-phantom-after-a-drop-is-allowed
   (let [w (line [0 63 "stone"] [1 62 "stone"] [2 62 U])]

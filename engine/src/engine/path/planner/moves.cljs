@@ -151,7 +151,9 @@
         (when (<= n 3)
           (let [gx (+ x (* dx n))
                 gz (+ z (* dz n))]
-            (when-not (and (> n 1) (or (>= (.landing s gx y gz) 0) (>= (.landing s gx (inc y) gz) 0)))
+            ;; (a phantom floor, options.unknown, is no landing: the jump may pass over it)
+            (when-not (and (> n 1) (or (and (>= (.landing s gx y gz) 0) (not ^boolean (.phantomAt s gx y gz)))
+                                       (and (>= (.landing s gx (inc y) gz) 0) (not ^boolean (.phantomAt s gx (inc y) gz)))))
               (when ^boolean (.clear s gx gz h0 (+ h0 ARC))
                 (let [up-arc (and up-arc ^boolean (.clear s gx gz h0 (+ h0 ARC-UP)))
                       hole (js/Math.max hole (.holeRisk s gx y gz))
@@ -207,7 +209,11 @@
                 (.tightMove s i x y z h region c x2 y2 z2 h1 move sec (.-enter-risk s) (.-enter-slow s)
                             (if (and climbing (> delta STEP)) GRID SNAP) SNAP)
                 (.edge s x2 y2 z2 h1 move i sec (.-enter-risk s) (.-enter-slow s) 0 0))
-              (set! (.-move-dmg s) 0))))
+              (set! (.-move-dmg s) 0)))
+          ;; a level phantom floor (options.unknown) may be refused: the body may also jump over it
+          (when (and (== y2 y) (not tight-src) (not ^boolean (.-open-mode s)) ^boolean (.phantomAt s x2 y z2)
+                     ^boolean (.clear s x2 z2 h0 (+ h0 BODY)))
+            (.expandGap s i x y z c h0)))
         (if (>= (.swimAt s x2 y z2) 0)
           ;; water ahead at our level: walk in and swim
           (let [risk (.swimRisk s x2 y z2)

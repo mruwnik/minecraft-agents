@@ -2,13 +2,13 @@
   "Search methods: cells the body has not seen (options.unknown, see engine.path.planner-tuned). Such a cell reads as
   void_air, air to the body. A stand on an unseen floor (a phantom floor, standPlain reads it as unk-floor-id) is allowed
   only where the walk can stop on the takeoff to check it first and can see it from there, and it is priced."
-  (:require [engine.path.planner.base :refer [FREE-FALL MOVE-CLIMB-UP MOVE-CORNER MOVE-DIAGONAL MOVE-DROP MOVE-GAP MOVE-JUMP MOVE-JUMP-CLIMB MOVE-SWIM MOVE-WALK OPEN TABLE UNLOADED WHOLE cell-key]]
+  (:require [engine.path.planner.base :refer [FREE-FALL MOVE-CLIMB-UP MOVE-CORNER MOVE-DIAGONAL MOVE-DROP MOVE-GAP MOVE-JUMP MOVE-JUMP-CLIMB MOVE-OPEN MOVE-SWIM MOVE-WALK OPEN TABLE UNLOADED WATER WHOLE cell-key]]
             [engine.path.planner.search :refer [Search]]))
 
 (set! *warn-on-infer* true)
 
-(def ^:const SEE-LIT-DEPTH 15) ; the deepest drop a lit landing is seen over from the peek (design v3.2 0.5)
-(def ^:const LIGHT-DEPTH 10) ; the deepest drop a torch at the takeoff lights the landing of well enough to see it
+(def ^:const SEE-LIT-DEPTH 5) ; the deepest drop a lit landing is seen over from the walk's worst peek stop (x .87, floor-sight-pin-test)
+(def ^:const LIGHT-DEPTH 5) ; the deepest drop a torch at the takeoff lights the landing of so it is seen (as SEE-LIT-DEPTH)
 
 (extend-type Search
   Object
@@ -20,14 +20,17 @@
   (missedAt [s x y z]
     (and (some? ^js (.-missed s)) (true? (.has ^js (.-missed s) (cell-key x y z)))))
 
-  ;; does the node at x y z stand on a phantom floor: its floor is unseen and it stands on its floor (not in a climbable,
-  ;; not on its own cell's low block, not in a door's lower half, whose floor a door implies)?
+  ;; does the node at x y z stand on a phantom floor: its floor is unseen and it stands on its floor (not in water, which
+  ;; holds the body up, not in a climbable, not on its own cell's low block, not in a door's lower half, whose floor a door
+  ;; implies)?
   (phantomAt [s x y z]
-    (and ^boolean (.isUnknown s (.stateAt ^js (.-snapshot s) x (dec y) z))
+    (and (>= (.-unk-id s) 0)
+         ^boolean (.isUnknown s (.stateAt ^js (.-snapshot s) x (dec y) z))
          (let [id (.stateAt s x y z)
                t (aget (.-tbl-top s) id)
                cl (aget (.-tbl-climb s) id)]
-           (and (not (and (pos? t) (zero? (aget (.-tbl-base s) id)) (< t WHOLE)))
+           (and (not (== (aget (.-tbl-kind s) id) WATER))
+                (not (and (pos? t) (zero? (aget (.-tbl-base s) id)) (< t WHOLE)))
                 (not (and (not (zero? cl)) ^boolean (.climbCell s cl id x y z)))
                 (not (== (aget (.-tbl-door-half s) id) 1))))))
 
@@ -54,10 +57,11 @@
            (and (> fall (* FREE-FALL 16)) (neg? (.landFactor s sup x y z fall))))))
 
   ;; Can the walk stop on node p's stand before `move` takes it onto a phantom floor, to check the floor? The move is a walk,
-  ;; diagonal, corner slide, jump or drop, and p was reached by none of a gap jump, a climb, a swim, an exit or a bounce (the
-  ;; start stands still).
+  ;; diagonal, corner slide, jump, drop or open, and p was reached by none of a gap jump, a climb, a swim, an exit or a
+  ;; bounce (the start stands still).
   (gateCheckable [s move p]
-    (and (or (== move MOVE-WALK) (== move MOVE-DIAGONAL) (== move MOVE-CORNER) (== move MOVE-JUMP) (== move MOVE-DROP))
+    (and (or (== move MOVE-WALK) (== move MOVE-DIAGONAL) (== move MOVE-CORNER) (== move MOVE-JUMP) (== move MOVE-DROP)
+             (== move MOVE-OPEN))
          (let [m (aget (.-moves s) p)]
            (and (not (== m MOVE-GAP)) (not (and (>= m MOVE-CLIMB-UP) (<= m MOVE-JUMP-CLIMB))) (< m MOVE-SWIM)
                 (not ^boolean (.bounceArrival s p))))))
