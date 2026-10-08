@@ -816,13 +816,6 @@
              (:resolved (aimed c goal)))
     (ctx/update-mem! c assoc :re-aim true)))
 
-(defn ^:async run-steps!
-  "step! until it arrives, gives up, or waits on a child (:continue), with pace! between steps; goal aimed again each
-  step (goal-pos), so a column seen on the way resolves."
-  [c goal]
-  (loop []
-    (let [r (await (step! c (goal-pos c goal)))]
-      (cond
 (def night-wait-ms "The wait a child call takes before it yields :continue while night-wait holds." 1000)
 
 (defn night-wait
@@ -850,6 +843,13 @@
   "One whole attempt: step! until it arrives, gives up, or waits on a child (:continue), with pace! between steps. A
   cut ends it at once (ctx/alive? per iteration, else at the next memory write or act, which throws). A goal inside a
   fled mob's radius ends it at once under :goal-danger :end, else says so once. With :unknown, the attempt's mask spec
+(defn ^:async run-steps!
+  "step! until it arrives, gives up, or waits on a child (:continue), with pace! between steps; goal aimed again each
+  step (goal-pos), so a column seen on the way resolves."
+  [c goal]
+  (loop []
+    (let [r (await (step! c (goal-pos c goal)))]
+      (cond
   (wworld/unknown-spec: one missed Set for all its plans) rides on c as :unknown."
   [c0]
   (let [u (:unknown (:args c0))

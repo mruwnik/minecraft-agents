@@ -339,15 +339,6 @@
   [c]
   (in-own-shelter (:primitives c) (:data (ctx/latest c :shelter))))
 
-(def trapped-policy
-  "Policy of the :shelter-trapped entries written when leave! found no way out: up to 3, five minutes."
-  {:cap 3 :ttl 300000})
-
-(defn shut-in-by-day?
-  "By day: the body is shut in its own shelter (data) and no :shelter-trapped entry (data) says leave! found no way
-  out of this cell. Never at night."
-  [p shelter trapped]
-  (boolean (and (not (night? p))
 (declare shut-in-room?)
 
 (defn walk-leaves-shelter?
@@ -378,6 +369,15 @@
   [c]
   (when-let [{{:keys [x y z]} :pos :as entry} (sheltered-in c)]
     {:inside-own-shelter (:pos entry)
+(def trapped-policy
+  "Policy of the :shelter-trapped entries written when leave! found no way out: up to 3, five minutes."
+  {:cap 3 :ttl 300000})
+
+(defn shut-in-by-day?
+  "By day: the body is shut in its own shelter (data) and no :shelter-trapped entry (data) says leave! found no way
+  out of this cell. Never at night."
+  [p shelter trapped]
+  (boolean (and (not (night? p))
      :hint (str "the body is sealed in its own shelter at [" x " " y " " z "]: the shelter job lets it out by day "
                 "(jobs.survival.night), or run jobs.survival.dig-in leave")}))
 
