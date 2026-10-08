@@ -980,6 +980,19 @@
           (is (empty? (listed s)))
           (is (pos? (get (inv s) "torch" 0))))))))
 
+(deftest obtain-digs-dirt-from-seen-grass-when-nothing-else-has-it
+  ;; a pillar fetch (any-of dirt/cobblestone) on grassland: the dirt under seen grass is dug by hand
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (assoc (update (world {}) :blocks merge {"1,63,5" "grass_block" "2,63,5" "grass_block" "3,63,5" "grass_block"})
+                              :drops {"grass_block" "dirt"}
+                              :inventory []) [own-zone])]
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:any-of ["dirt" "cobblestone"] :count 2}) {})
+          (await (run-ticks s 80))
+          (is (empty? (events-of s :waiting)))
+          (is (<= 2 (get (inv s) "dirt" 0))))))))
+
 (deftest obtain-gather-that-brings-in-nothing-stops-no-source-with-tried
   (async done
     (tu/run-async done
