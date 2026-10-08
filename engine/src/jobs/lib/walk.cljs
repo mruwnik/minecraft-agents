@@ -5,10 +5,12 @@
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [engine.ctx :as ctx]
+            [engine.path.blocks :as blocks]
             [engine.path.executor :as executor]
             [jobs.lib.util :as u]
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.search :as wsearch]
+            [jobs.lib.walk.sight :as wsight]
             [jobs.lib.walk.watch :as wwatch]
             [jobs.lib.walk.world :as wworld]))
 
@@ -112,6 +114,76 @@
                                   (contains? sneak-moves (:move step)) (not (executor/water-step? step)))))
       scaffold-down? (assoc :sneak true))))
 
+(defn prefix
+  "The executor's steps when step k is a pending gate (nil: none): steps up to the takeoff k-1, grown from the executor's
+  own (which may have changed a step in place) as gates resolve."
+  [exec-steps steps k]
+  (let [n (if k k (count steps))]
+    (if (<= n (count exec-steps))
+      (subvec exec-steps 0 n)
+      (into exec-steps (subvec steps (count exec-steps) n)))))
+
+(defn gate-tick
+  "decide-tick with the floor gate (jobs.lib.walk.sight): a body standing on a pending floor ends the walk :pushed; the
+  pending floors are sensed (a plain one resolves, another ends :changed); the executor gets the steps up to the first
+  pending gate's takeoff, its arrival there and its stuck clock do not end the walk; the gate's controller holds the body."
+  [{:keys [policy steps watch-stop gate]} {:keys [exec] :as state} pose]
+  (let [i (:i exec)
+        at [(:x pose) (:y pose) (:z pose)]
+        before (wsight/pending steps (:resolved (:gate state) #{}) i)]
+    (if-let [cell (wsight/breach steps before pose)]
+      [state {:done {:status :replan :why :pushed :cells [cell] :at at :step before}
+              :warn {:cell cell :step before :at at}}]
+      (let [{:keys [k gstate done]} (wsight/sense gate steps (:gate state) i pose)
+            exec (assoc exec :steps (prefix (:steps exec) steps k))
+            {exec' :state edone :done :keys [controls yaw pitch]} (executor/tick policy exec pose)
+            held? (and k (= (:i exec') (dec k)))
+            edone (when-not (and held? (#{:arrived :stuck} (:status edone))) edone)
+            done (or done edone (when watch-stop (watch-stop i exec' pose)))
+            base {:controls (gait-controls policy exec' pose controls) :yaw yaw :pitch pitch}]
+        (cond
+          done [(assoc state :exec exec' :gate gstate) {:done done}]
+          (nil? k) [(assoc state :exec exec' :gate gstate) base]
+          :else (let [{:keys [out done] gstate' :gstate} (wsight/control gate steps k (:i exec') gstate pose base)]
+                  [(assoc state :exec exec' :gate gstate') (if done {:done done} out)]))))))
+
+(defn decide-tick
+  "One tick of a walk, pure: [state' out] for the pose, out {:done map} or {:controls :yaw :pitch} (with :warn, a gate
+  breach). state {:exec :gate} holds the executor's and the gate's state. env {:policy :steps :watch-stop :gate}:
+  watch-stop (fn [i state' pose]) the look-ahead's done map or nil; gate (nil: off) {:see :plain? :floors :opts} for
+  jobs.lib.walk.sight."
+  [{:keys [policy steps watch-stop gate] :as env} {:keys [exec] :as state} pose]
+  (if gate
+    (gate-tick env state pose)
+    (let [i (:i exec)
+          {exec' :state :keys [done controls yaw pitch]} (executor/tick policy exec pose)
+          done (or done (when watch-stop (watch-stop i exec' pose)))
+          state' (assoc state :exec exec')]
+      [state' (if done
+                {:done done}
+                {:controls (gait-controls policy exec' pose controls) :yaw yaw :pitch pitch})])))
+
+(defn gate-env
+  "The floor gate's env for walking steps (jobs.lib.walk.sight), nil when no step has an unseen floor. see: what the body
+  knows of a cell now, else what a glance at it shows (nil: still unknown); plain?: a full block the planner reads as
+  stone (the floor a phantom floor was planned as); floors: the known block name of a cell (the controller's friction)."
+  [p steps]
+  (when (some :unseen-floor steps)
+    (let [table (blocks/default-state-table)
+          stone (first (blocks/state-ids table "stone"))
+          known (fn [[x y z]] (let [b (u/sensed p {:x x :y y :z z})] (when-not (or (nil? b) (true? (.-unknown b))) b)))]
+      {:see (fn [[x y z :as cell]] (or (known cell) (when (fn? (.-glance p)) (.glance p #js {:x x :y y :z z}))))
+       :plain? (fn [^js b] (boolean (and (true? (.-fullCube b))
+                                         (when-let [id (first (blocks/state-ids table (.-name b)))]
+                                           (wwatch/same-for-planner? table stone id)))))
+       :floors (fn [cell] (some-> (known cell) .-name))
+       :opts (wsight/gate-opts)})))
+
+(defn start-state
+  "The decide-tick state for walking steps from the body at pose {:x :z}."
+  [steps pose]
+  {:exec (executor/start steps 0 pose)})
+
 (defn ^:async walk!
   "Follow steps once. [result ms]: the executor's done map, or {:status :stuck ...} on a timeout,
   {:status :failed ...}; ms is the wall time of the steer act. With a watch (see watch-stop), the walk also stops at a step
@@ -119,21 +191,21 @@
   set, is called with each tick's pose {:x :y :z ...} (go-to records its approach with it)."
   ([c steps timeout-s] (walk! c steps timeout-s nil))
   ([c steps timeout-s watch]
-  (let [policy (wworld/body-policy c)
-        state (volatile! (executor/start steps 0 (let [pos (.-pos (.self (:primitives c)))] {:x (.-x pos) :z (.-z pos)})))
+  (let [gate (gate-env (:primitives c) steps)
+        watch (cond-> watch (and watch gate) (update :skip (fnil into #{}) (wsight/floor-cells steps)))
+        env {:policy (wworld/body-policy c) :steps steps :gate gate
+             :watch-stop (when watch (fn [i exec' pose] (wwatch/watch-stop watch steps i exec' pose)))}
+        state (volatile! (start-state steps (let [pos (.-pos (.self (:primitives c)))] {:x (.-x pos) :z (.-z pos)})))
         last-done (volatile! nil)
         decide (fn [js-pose]
                  (let [pose (pose-of js-pose)
                        _ (when-let [on-pose (:on-pose c)] (on-pose pose))
-                       i (:i @state)
-                       {:keys [state' done controls yaw pitch]}
-                       (let [r (executor/tick policy @state pose)]
-                         {:state' (:state r) :done (:done r) :controls (:controls r) :yaw (:yaw r) :pitch (:pitch r)})
-                       done (or done (when watch (wwatch/watch-stop watch steps i state' pose)))]
+                       [state' {:keys [done controls yaw pitch warn]}] (decide-tick env @state pose)]
                    (vreset! state state')
+                   (when warn (ctx/emit! c :gate-breach :warn warn))
                    (if done
                      (do (vreset! last-done done) #js {:done (clj->js done)})
-                     #js {:controls (clj->js (gait-controls policy state' pose controls)) :yaw yaw :pitch pitch})))
+                     #js {:controls (clj->js controls) :yaw yaw :pitch pitch})))
         t (js/Date.now)
         r (await (ctx/act c :steer (steer-args timeout-s decide)))
         ms (- (js/Date.now) t)]
@@ -240,7 +312,8 @@
               :else (recur (assoc plan :ms plan-ms) (subvec steps (max 0 (dec k))) (inc n) ms walked' kept-damage)))
 
           (= :replan (:status done))
-          (let [t (js/performance.now)
+          (let [_ (wsight/note-missed! (:pw plan) done)
+                t (js/performance.now)
                 fresh (await (plan-fn []))
                 plan-ms (- (js/performance.now) t)
                 fresh (assoc fresh :ms plan-ms)]

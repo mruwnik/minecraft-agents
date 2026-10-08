@@ -5,6 +5,7 @@
             [engine.path.executor :as executor]
             [engine.path.planner-tuned :as planner]
             [jobs.lib.cost :as cost]
+            [jobs.lib.walk.sight :as wsight]
             [jobs.lib.walk.world :as wworld]))
 
 (def wide-box
@@ -97,22 +98,37 @@
   (mapv (fn [s ^js js] (cond-> s (some? (unchecked-get js "damage")) (assoc :damage (unchecked-get js "damage"))))
         steps (array-seq js-steps)))
 
+(defn unknown-floor-fn
+  "With a mask on pw's snapshot (.unknown, its unseen cells read as the mask's id): a fn [x y z] true for a floor cell the
+  mask hides under a stand that stands on its floor (not in a door's lower half or a climbable, whose floor the planner
+  does not ask for); nil without a mask."
+  [^js pw]
+  (when-let [^js u (some-> pw .-snapshot .-unknown)]
+    (let [^js snapshot (.-snapshot pw) ^js table (.-table pw) id (.-id u)]
+      (fn [x y z]
+        (let [own (.stateAt snapshot x (inc y) z)]
+          (and (== id (.stateAt snapshot x y z))
+               (not (== 1 (aget (.-doorHalf table) own)))
+               (zero? (aget (.-climb table) own))))))))
+
 (defn path-steps
   "The executor's steps for a planner path over pw: corner free sides and hops, high corners, gap ceilings and drops onto a
-  bouncing block marked, and the planned damage of each."
+  bouncing block marked, the planned damage of each, and over a masked snapshot the unseen floors (jobs.lib.walk.sight)."
   [pw ^js path]
-  (let [solid? (wworld/solid-fn pw)]
-    (executor/with-bounces
-      executor/policy
-      (executor/with-gap-ceilings
-        executor/policy
-        (executor/with-high-corners
-          executor/policy
-          (executor/with-corner-hops (executor/with-free-sides (with-damage (executor/steps-of (.-steps path)) (.-steps path)) solid?) solid?)
-          solid?)
-        solid?)
-      (wworld/bounce-fn pw)
-      (wworld/wall-fn pw))))
+  (let [solid? (wworld/solid-fn pw)
+        unknown-floor? (unknown-floor-fn pw)
+        steps (executor/with-bounces
+                executor/policy
+                (executor/with-gap-ceilings
+                  executor/policy
+                  (executor/with-high-corners
+                    executor/policy
+                    (executor/with-corner-hops (executor/with-free-sides (with-damage (executor/steps-of (.-steps path)) (.-steps path)) solid?) solid?)
+                    solid?)
+                  solid?)
+                (wworld/bounce-fn pw)
+                (wworld/wall-fn pw))]
+    (cond-> steps unknown-floor? (wsight/mark-steps unknown-floor?))))
 
 (defn plan-steps
   "The executor's steps for a found plan r over pw (path-steps of its path)."

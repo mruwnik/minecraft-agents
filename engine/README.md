@@ -698,6 +698,7 @@ the recorded pins (`planner_{bench,options,goals,courses}_golden.cljs`, `js/path
   passes a pit floored with it. The planner
   takes `options.limits` for what the walker can do.
 - `options.unknown` (off by default, nobody passes it yet): void_air cells are unseen, air to the body; a stand on an unseen floor is allowed only after a move the walk can stop before and where it can be seen (`seeDepth`, `seeLit`, or a torch: `lightCost`, step `light`), else `darkRefused`/`darkBest` or `unseenRefused`; priced by `jobs.lib.cost/unknown-prices`; no proof rests on an unseen cell.
+- The floor gate (`jobs.lib.walk.sight`, on only for a plan over a masked snapshot, whose steps carry `:unseen-floor`): the executor gets the steps up to the takeoff of the first floor still unseen; the walk glances at that floor each tick and a stop controller (prismarine's own physics) holds the body at the takeoff's edge, looking at it. Seen plain: walk on; seen otherwise: `:replan :changed`; still unseen once still: `:replan :unseen`, the floor joins the mask's `missed`; a body on it anyway (a push): `:replan :pushed` and a `gate-breach` warn. Physics bench: `test/engine/walk_gate_physics_test.cljs`.
 
 ## Agent command-line tools
 
