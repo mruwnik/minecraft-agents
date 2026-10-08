@@ -1,6 +1,6 @@
 ;; Card 6a1a0fc3: how far a go-to drops follows the body's fall enchantments and health (jobs.lib.cost/fall-profile).
 ;; A platform N high fills x 1..15 of the plot, the body on top at x 8.5, the goal on the floor east of its edge, walls all round.
-;; Feather falling IV keeps a 4 or 5 block drop within 1.5 hp (it takes it), not 6; plain boots take 3 at most; at health 2 go-to heals or goes over its budget, then takes the 4 drop.
+;; The cases cap the walk's :max-damage (default budget at full health is 7 hp, which pays for a 6 drop): 1.5 hp for feather falling IV, which takes a 4 or 5 block drop, not 6 (1.56 hp); 0.5 hp for plain boots, which take 3 at most; at health 2 go-to heals or goes over its budget, then takes the 4 drop.
 ;; The ramp cases have steps down at z 28..30 (x 13..15), so a body that will not drop walks round.
 {:defaults
  {:tags [:movement] :time :any
@@ -12,35 +12,35 @@
  [{:name "feather-falling-iv-takes-a-4-drop"
    :blocks [[:fill [1 0 1] [15 3 30] "stone"]]
    :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots[enchantments={feather_falling:4}]"] [:wait-s 2]
-         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :escalate false})]]
+         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :escalate false :max-damage 1.5})]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [22.5 0 16.5] 2]]}
   {:name "feather-falling-iv-takes-a-5-drop"
    :body {:at [8.5 5 16.5]}
    :blocks [[:fill [1 0 1] [15 4 30] "stone"]]
    :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots[enchantments={feather_falling:4}]"] [:wait-s 2]
-         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :escalate false})]]
+         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :escalate false :max-damage 1.5})]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [22.5 0 16.5] 2]]}
   {:name "feather-falling-iv-refuses-a-6-drop"
    :body {:at [8.5 6 16.5]}
    :blocks [[:fill [1 0 1] [15 5 30] "stone"]]
    :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots[enchantments={feather_falling:4}]"] [:wait-s 2]
-         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :escalate false})]]
+         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :escalate false :max-damage 1.5})]]
    :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 60 :of-job true}
             {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 30 :until {:source :job :kind :result}}]
    :after [[:body-far [22.5 0 16.5] 4]]}
   {:name "plain-boots-refuse-a-4-drop"
    :blocks [[:fill [1 0 1] [15 3 30] "stone"]]
    :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots"] [:wait-s 2]
-         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :escalate false})]]
+         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :escalate false :max-damage 0.5})]]
    :expect [{:event {:source :job :kind :result :data {:arrived false}} :within-s 60 :of-job true}
             {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 30 :until {:source :job :kind :result}}]
    :after [[:body-far [22.5 0 16.5] 4]]}
   {:name "plain-boots-walk-round-a-4-drop-by-the-ramp"
    :blocks [[:fill [1 0 1] [15 3 30] "stone"] [:fill [13 3 28] [15 3 30] "air"] [:fill [14 2 28] [15 2 30] "air"] [:fill [15 1 28] [15 1 30] "air"]]
    :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots"] [:wait-s 2]
-         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :escalate false})]]
+         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :escalate false :max-damage 0.5})]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 80 :of-job true}
             {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 80 :until {:source :job :kind :result}}]
    :after [[:body-near [22.5 0 16.5] 2]]}
