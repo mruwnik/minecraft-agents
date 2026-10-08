@@ -275,7 +275,8 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory [{:name "wheat" :count 3} {:name "crafting_table" :count 1}]})
               result (await (child-outcome eng job {:item "bread"} 40))]
-          (is (= {:made 1} result))
+          (is (= {:made 1 :spent {"crafting_table" 1}} (select-keys result [:made :spent])))
+          (is (re-find #"^used 1 crafting_table \(crafting table at \[" (:text result)))
           (is (= 1 (get (inv p) "bread")))
           (is (nil? (get (inv p) "crafting_table"))))))))
 
@@ -286,7 +287,7 @@
         (let [{:keys [eng p]} (setup {:inventory [{:name "wheat" :count 3}] :blocks {"-2,64,3" "chest"}
                                       :containers {"-2,64,3" [{:name "crafting_table" :count 1}]}})
               result (await (child-outcome eng job {:item "bread"} 120))]
-          (is (= {:made 1} result))
+          (is (= {:made 1 :spent {"crafting_table" 1}} (select-keys result [:made :spent])))
           (is (= 1 (get (inv p) "bread"))))))))
 
 (deftest craft-fetch-false-without-a-table-stops-no-table

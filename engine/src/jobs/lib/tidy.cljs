@@ -13,6 +13,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.reach :as reach]
+            [jobs.lib.spent :as spent]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]))
 
@@ -153,5 +154,7 @@
   ([c pos item last-resort? click]
    (let [pend (when (noting? c last-resort?) (pending c :place pos))
          r (await (ctx/act c :place (clj->js (cond-> {:pos pos :item item} click (assoc :click click)))))]
-     (when (= "placed" (.-status r)) (record! c pend item))
+     (when (= "placed" (.-status r))
+       (spent/note! c item pos)
+       (record! c pend item))
      r)))

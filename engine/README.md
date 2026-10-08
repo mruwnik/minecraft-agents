@@ -587,6 +587,7 @@ them: `act!` and the primitives check neither, and a job may ignore them. The he
   (animals, apiary harvest, compost, fertilize, sowing, sapling planting) also work in its footprint; till, path and mine place do not.
 - **Tidying** (`jobs.lib.tidy`): a dig or place that breaks another's block is noted as a `:tidy` memory entry.
   `jobs.survival.restore-broken` puts the cells back when the body is safe; the `:tidy-pending` trigger starts it.
+- **Placed items** (`jobs.lib.spent`): `tidy/place!` logs each placed block; craft (table), dig-niche and retreat report `:spent {item n}`, `:spent-at` and a "used 7 oak_log (... at ...)" text.
 
 ## Job library
 

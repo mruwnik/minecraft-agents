@@ -12,6 +12,7 @@
             [jobs.lib.result :as result]
             [jobs.lib.shelter :as sh]
             [jobs.lib.solid :as solid]
+            [jobs.lib.spent :as spent]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
@@ -213,10 +214,14 @@
   [c {:keys [stand dir]}]
   (let [p (:primitives c)
         feet (sh/feet p)
-        door (door-cells stand dir)]
+        door (door-cells stand dir)
+        placed (spent/log c)]
     (ctx/remember! c :shelter {:pos feet :state :built :door door} dig-in/shelter-policy)
-    (ctx/emit! c :dig-niche.sealed :info {:pos feet :door door :text "shut in a niche in the hillside for the night"})
-    (result/finish! c {:pos feet :door door})))
+    (ctx/emit! c :dig-niche.sealed :info (merge {:pos feet :door door
+                                                 :text (str "shut in a niche in the hillside for the night"
+                                                            (some->> (spent/text placed "niche plug") (str ": ")))}
+                                                (spent/summary placed)))
+    (result/finish! c (merge {:pos feet :door door} (spent/summary placed)))))
 
 (defn ^:async step [c]
   (let [p (:primitives c)

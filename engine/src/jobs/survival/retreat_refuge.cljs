@@ -17,6 +17,7 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.shelter :as sh]
             [jobs.lib.solid :as solid]
+            [jobs.lib.spent :as spent]
             [jobs.lib.threats :as threats]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.tools :as tools]
@@ -359,7 +360,9 @@
 
 (defn hide-now! [c refuge text]
   (ctx/update-mem! c assoc :refuge (assoc refuge :hidden true))
-  (ctx/emit! c :retreat_sealed :warn {:text text :pos (sh/feet (:primitives c))})
+  (let [placed (spent/log c)]
+    (ctx/emit! c :retreat_sealed :warn (merge {:text (str text (some->> (spent/text placed "refuge") (str "; "))) :pos (sh/feet (:primitives c))}
+                                              (when (seq placed) (spent/summary placed)))))
   :again)
 
 (defn ^:async pillar-round!

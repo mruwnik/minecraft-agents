@@ -93,6 +93,9 @@
           (await (run! s {}))
           (is (nil? (failed seen)))
           (is (contains? (kinds-seen seen) :dig-niche.sealed))
+          (let [e (some #(when (= :dig-niche.sealed (:kind %)) %) @seen)]
+            (is (= {"cobblestone" 2} (:spent e)))
+            (is (re-find #"used 2 cobblestone \(niche plug at \[4 64 0\]" (:text e))))
           (is (= ["air" "air"] (mapv #(block-at p %) [[5 64 0] [5 65 0]])) "inner cells dug")
           (is (= ["cobblestone" "cobblestone"] (mapv #(block-at p %) [[4 64 0] [4 65 0]])) "opening plugged with the dropped blocks"))))))
 

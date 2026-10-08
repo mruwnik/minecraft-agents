@@ -7,6 +7,7 @@
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.lib.look :as look]
+            [jobs.lib.spent :as spent]
             [jobs.lib.storage :as storage]))
 
 (def doc
@@ -14,7 +15,7 @@
   nearest within :radius, walking there when out of reach.
   The count carried at the start is kept in memory and the target is that plus :count, so a cut or a partial
   batch loses nothing.
-  Ends with {:made n}, the number of items gained. When it stops short it adds :short {name n} (an ingredient ran
+  Ends with {:made n}, the number of items gained (plus :spent, :spent-at and a :text when it put a table down). When it stops short it adds :short {name n} (an ingredient ran
   out) or :reason (\"no-table\", \"not-a-table\", \"unreachable\", \"full\", the cannot reason, or the failed
   status), after a warn, and its status is stopped. One call is the whole craft: it walks (a go-to child) and crafts
   again until the count is carried or it stops; it yields only while go-to waits on the world.
@@ -44,7 +45,10 @@
 (defn finish!
   "Hand the parent a result, made so far plus extra (a stop when extra is not empty: :status :stopped), and return :done."
   [c made extra]
-  (ctx/result! c (cond-> (merge {:made made} extra) (seq extra) (assoc :status :stopped)))
+  (let [placed (spent/log c)]
+    (ctx/result! c (cond-> (merge {:made made} extra)
+                     (seq extra) (assoc :status :stopped)
+                     (seq placed) (merge (spent/summary placed) {:text (spent/text placed "crafting table")}))))
   :done)
 
 (defn give-up!
@@ -111,6 +115,7 @@
           (do (ctx/update-mem! c dissoc :table-spot)
               (when (and (= :done r) (:placed (ctx/child-result c :place)))
                 (ctx/update-mem! c #(-> % (assoc :table spot) (dissoc :want-table)))
+                (spent/note! c "crafting_table" spot)
                 :again)))))))
 
 (defn ^:async table-fetch!
