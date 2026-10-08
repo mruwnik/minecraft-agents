@@ -277,3 +277,64 @@
                 y (get-in @(fake/state p) [:self :pos 1])]
             (is (= 3 (:logs out)))
             (is (<= y 65) "the body ends on the ground, not up on the leaves")))))))
+
+;; ------------------------------------------------------------------ an axe is sourced when none is carried
+
+(defn axe-world
+  "The tall tree, dirt carried, and a chest holding stock."
+  [carried stock]
+  (assoc tall :inventory (into [{:name "dirt" :count 20}] carried)
+         :blocks (assoc (:blocks tall) chest-at "chest") :containers {chest-at stock}))
+
+(defn chest-axes [{:keys [p]}]
+  (->> (get-in @(fake/state p) [:containers [-2 64 3]]) (filter #(= "iron_axe" (:name %))) (map :count) (reduce + 0)))
+
+(deftest a-seen-chest-axe-is-fetched-before-a-big-tree-is-felled
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (fell (axe-world [] [{:name "iron_axe" :count 1}]) {:radius 10} 400))]
+          (is (= 8 (:logs (:out s))) "the tree is felled")
+          (is (= 0 (chest-axes s)) "the chest gave its axe")
+          (is (= 1 (get (lt/inv (:p s)) "iron_axe"))))))))
+
+(deftest fetch-false-chops-by-hand-and-leaves-the-axe-in-the-chest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (fell (axe-world [] [{:name "iron_axe" :count 1}]) {:radius 10 :fetch false} 400))]
+          (is (= 8 (:logs (:out s))))
+          (is (= 1 (chest-axes s))))))))
+
+(deftest a-carried-axe-is-not-fetched-for
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (fell (axe-world [{:name "stone_axe" :count 1}] [{:name "iron_axe" :count 1}]) {:radius 10} 400))]
+          (is (= 8 (:logs (:out s))))
+          (is (= 1 (chest-axes s)) "the chest was left alone"))))))
+
+(deftest a-fetch-kinds-set-without-tools-chops-by-hand
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (fell (axe-world [] [{:name "iron_axe" :count 1}]) {:radius 10 :fetch #{:item}} 400))]
+          (is (= 8 (:logs (:out s))))
+          (is (= 1 (chest-axes s))))))))
+
+(deftest a-failed-axe-fetch-still-fells-the-tree-by-hand-and-says-so
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (fell (axe-world [] []) {:radius 10} 400))]
+          (is (= 8 (:logs (:out s))) "felled without an axe")
+          (is (= 1 (count (kinds s :fetch.failed)))))))))
+
+(deftest a-small-tree-is-chopped-by-hand-without-a-fetch
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (assoc (axe-world [] [{:name "iron_axe" :count 1}]) :blocks (assoc (lt/tree 6 0 "oak" 2) chest-at "chest"))
+              s (await (fell w {:radius 10} 300))]
+          (is (= 2 (:logs (:out s))))
+          (is (= 1 (chest-axes s))))))))

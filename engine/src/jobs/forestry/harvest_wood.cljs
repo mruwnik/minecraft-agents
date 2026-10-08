@@ -17,7 +17,7 @@
   warns harvest-wood.debts-owed with their :count and the :nearest one's :pos.
   Debts within the radius that stay unplanted (no sapling carried, spot refused) warn harvest-wood.replant-owed
   with :count, :pos, :reason (:no-sapling or :not-planted) and :text. The status stays :completed (the wood is
-  the goal); the result is {:replant-owed n} then. With :count, the three phases repeat on the next tree until that many logs are carried; when no tree is left to fell it ends :stopped :no-tree with :got (and :replant-owed, the warnings as at a normal end; waiting for a tree only before the first is felled). A missing sapling is fetched by plant-sapling (a seen chest, or breaking the seen leaves of its tree); when none can be got it stays owed.")
+  the goal); the result is {:replant-owed n} then. With :count, the three phases repeat on the next tree until that many logs are carried; when no tree is left to fell it ends :stopped :no-tree with :got (and :replant-owed, the warnings as at a normal end; waiting for a tree only before the first is felled). With no axe carried, fell-tree fetches one for a big tree (:fetch). A missing sapling is fetched by plant-sapling (a seen chest, or breaking the seen leaves of its tree); when none can be got it stays owed.")
 
 (a/defargs args
   {:species {:doc "log species; any when nil" :spec a/name? :default nil}
@@ -25,12 +25,13 @@
    :filter {:doc "items to collect; the species' log, sapling, stick and apple when nil" :spec (a/coll-of a/item?) :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims (passed to the felling and the planting); the rules of the game allow it" :spec boolean? :default false}
    :count {:doc "logs to carry: another tree is felled while fewer of the species' logs (any log when no species) are carried; nil: one tree" :spec (a/int-in 1 nil) :default nil}
-   :fetch {:doc "get a missing sapling (passed to plant-sapling; see its :fetch): true, a set of kinds or a map of limits; false leaves the replant owed" :spec fetch/option? :default true}})
+   :fetch {:doc "get a missing sapling or an axe (passed to plant-sapling and fell-tree; see their :fetch): true, a set of kinds or a map of limits; false leaves the replant owed" :spec fetch/option? :default true}})
 
 (defn phases
   "The children in order: [phase job args]; the phase is also the slot. tree is the felled tree's base, if any."
   [{:keys [species radius filter ignore-zones? fetch]} origin tree]
-  [[:fell 'jobs.forestry.fell-tree {:species species :radius radius :ignore-zones? ignore-zones?}]
+  [[:fell 'jobs.forestry.fell-tree (cond-> {:species species :radius radius :ignore-zones? ignore-zones?}
+                                     (some? fetch) (assoc :fetch fetch))]
    [:collect 'jobs.forestry.collect-drops {:radius radius :filter (or filter (drop-filter species)) :want-items (if species [(str species "_log")] trees/log-names) :near tree :search radius}]
    [:plant 'jobs.forestry.plant-sapling (cond-> {:species species :ignore-zones? ignore-zones? :near origin :within radius}
                                          (some? fetch) (assoc :fetch fetch))]])

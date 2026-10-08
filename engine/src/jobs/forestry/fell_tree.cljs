@@ -1,5 +1,6 @@
 (ns jobs.forestry.fell-tree
-  (:require [engine.args :as a]
+  (:require [clojure.string :as str]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.watch :as watch]
@@ -11,7 +12,7 @@
             [jobs.lib.gate :as gate]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.look :as look]
-            [jobs.lib.trees :refer [scan-logs tree-near trees-near tree-at logs-at unreachable-set debts replant-kind
+            [jobs.lib.trees :refer [axe-worth-fetching? axe-fetch-limits scan-logs tree-near trees-near tree-at logs-at unreachable-set debts replant-kind
                                           replant-policy default-radius max-partials dig-reach log-name?]]
             [jobs.lib.util :as u]
             [jobs.lib.walk :as walk]
@@ -42,6 +43,9 @@
   :refused; other refusals warn with their :reason), or that has no ground or stand to reach it from, counts as unreachable,
   and so does one whose pillar digs no log. A cleanup that leaves the scaffold open is a failed round (tree_blocked
   after a few). :pillar? false leaves such a tree.
+  Before the first log of a tree big enough for an axe to pay (jobs.lib.trees/axe-worth-fetching?) with none carried it
+  fetches one (jobs.items.get-tool, a seen chest or crafted) unless :fetch is false or lacks :tool; a failed fetch is
+  warned (fetch.failed) and the tree is chopped by hand.
   Each log is dug by a jobs.blocks.dig child. That child holds the best carried axe and leaves the drop on the
   ground (jobs.forestry.harvest-wood collects it).
   Waits (check) with :reason :no-tree when no tree is in sight, after one look around from where it stands.
@@ -58,7 +62,7 @@
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :spec a/name? :default nil}
    :spare-own-builds {:doc "a log in a plan this body made is not felled; false: it may be" :spec boolean? :default true}
    :accept {:doc "dig hazards (jobs.lib.access.rules) taken: a set of :fluid-adjacent :lava-adjacent :falling-block" :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent :falling-block}}
-   :fetch {:doc "get the dirt or cobblestone a pillar needs (jobs.lib.fetch): true, a set of kinds or a map of limits; false waits :need" :spec fetch/option? :default true}
+   :fetch {:doc "get an axe when none is carried, and the dirt or cobblestone a pillar needs (jobs.lib.fetch): true, a set of kinds or a map of limits; false chops by hand and waits :need for a pillar" :spec fetch/option? :default true}
    :pillar? {:doc "fell a log out of reach of the ground from a pillar (blocks placed, then taken back); false: such a tree is left" :spec boolean? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
@@ -355,6 +359,18 @@
       (do (mark-unreachable! c) :again)
       (do (ctx/update-mem! c assoc :partials partials) :continue))))
 
+(defn axe-carried? [c]
+  (boolean (some #(str/ends-with? (:name %) "_axe") (u/inventory (:primitives c)))))
+
+(defn axe-problem
+  "The wait {:reason :no-tool :kind \"axe\"} before the first log of a tree an axe pays for, while none is carried
+  (and while its fetch runs); nil otherwise."
+  [c logs]
+  (when (and (zero? (:dug (ctx/mem c) 0))
+             (not (axe-carried? c))
+             (or (:fetching (ctx/mem c)) (axe-worth-fetching? (count logs))))
+    {:reason :no-tool :kind "axe" :limits (axe-fetch-limits)}))
+
 (defn ^:async step
   "One piece of the felling: :again, :continue (a child waits on the world, or nothing is in sight), :done or a stop."
   [c]
@@ -384,17 +400,19 @@
             :continue
             (do (ctx/result! c {:base (:base (ctx/mem c)) :logs (:dug (ctx/mem c) 0)})
                 :done))
-          (let [_ (when-let [low (lower-base (ctx/mem c) logs)] (rebase! c low))
-                _ (await (watch/watch! c {:before-dig (:pos (first logs))}))
-                r (await (dig-log! c (first logs)))]
-            (case r
-              :ok (do (ctx/update-mem! c assoc :partials 0)
-                      (u/progress! c)
-                      :again)
-              :high (await (start-pillar! c logs))
-              (:partial :blocked) (walk-failed! c r)
-              (:unreachable :cannot :out-of-reach :refused) (do (mark-unreachable! c) :again)
-              (u/fail! c :tree_blocked (str "cannot dig the tree: " (name r))))))))))
+          (if-let [f (await (fetch/fetch! c 'jobs.forestry.fell-tree #(axe-problem % logs)))]
+            f
+            (let [_ (when-let [low (lower-base (ctx/mem c) logs)] (rebase! c low))
+                  _ (await (watch/watch! c {:before-dig (:pos (first logs))}))
+                  r (await (dig-log! c (first logs)))]
+              (case r
+                :ok (do (ctx/update-mem! c assoc :partials 0)
+                        (u/progress! c)
+                        :again)
+                :high (await (start-pillar! c logs))
+                (:partial :blocked) (walk-failed! c r)
+                (:unreachable :cannot :out-of-reach :refused) (do (mark-unreachable! c) :again)
+                (u/fail! c :tree_blocked (str "cannot dig the tree: " (name r)))))))))))
 
 (def max-steps "Pieces of work of one call before it gives the round back with :continue." 400)
 

@@ -150,10 +150,11 @@
       :else true)))
 
 (defn due
-  "What the round of job should fetch for wait reason w (nil when none): the plan with the limits as :opts."
+  "What the round of job should fetch for wait reason w (nil when none): the plan with the limits as :opts (w's :limits
+  tighten them, for an optional fetch)."
   [c job w]
   (when w
-    (let [o (opts c job)]
+    (let [o (some-> (opts c job) (merge (:limits w)))]
       (cond
         (nil? o) nil
         :else (when-let [pl (plan-for w o)]

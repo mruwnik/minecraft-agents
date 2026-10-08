@@ -5,14 +5,23 @@
             [engine.settings :as settings]
             [clojure.string :as str]
             [engine.ctx :as ctx]
+            [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
   {::leaf-reach {:default 3.5 :doc "Blocks within which a leaf block counts as part of a tree." :spec (a/num-in 0 nil)}
+   ::axe-saved-s {:default 1.5 :doc "Seconds an axe saves on one log over bare hands (3 s by hand, 1.5 s with a wooden axe)." :spec (a/num-in 0 nil)}
+   ::axe-fetch-minutes {:default 1 :doc "The longest an axe is fetched for, in minutes (an axe is a speed-up: chests and crafting only)." :spec (a/num-in 0.1 nil)}
    ::max-logs {:default 1024 :doc "The most logs one scan reads." :spec (a/int-in 1 nil)}})
 
 (def default-radius 16)
+
+(defn axe-worth-fetching?
+  "Whether an axe pays for felling n logs: the seconds it saves beat a fetch trip (the axe itself lasts for later trees)."
+  [n]
+  (> (* n (settings/get settings ::axe-saved-s)) (cost/trip)))
+(defn axe-fetch-limits [] {:how #{:chest :craft} :minutes (settings/get settings ::axe-fetch-minutes)})
 (defn leaf-reach [] (settings/get settings ::leaf-reach))
 (def max-partials
   "Consecutive partial walks toward one tree before it counts as unreachable."
