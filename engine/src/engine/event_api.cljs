@@ -302,10 +302,14 @@
        (into {} (keep (fn [[k f]] (when-let [v (f view)] [k v]))) extras))))))
 
 (defn results
-  "The recorded outcomes (see engine.core.base/results) of the job ids given, without the order counter."
+  "The recorded outcomes (see engine.core.base/results) of the job ids given, without the order counter; a job
+  that is listed now has none (a record under its id is an older job's)."
   [eng ids]
-  {:ok true :generation-id (:generation-id (core/state eng))
-   :results (into {} (keep (fn [id] (when-let [r (get (core/recent-results eng) id)] [id (dissoc r :n)]))) ids)})
+  (let [s (core/state eng)]
+    {:ok true :generation-id (:generation-id s)
+     :results (into {} (keep (fn [id] (when-let [r (and (not (get-in s [:instances id])) (get (core/recent-results eng) id))]
+                                        [id (dissoc r :n)])))
+                    ids)}))
 
 (defn job-detail
   "One listed job with its bounded spec and args, status, wait reason, failure and attention requests; a finished job

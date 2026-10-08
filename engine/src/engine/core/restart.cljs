@@ -9,9 +9,9 @@
 
 (defn restore
   "Saved state after a restart: the in-flight round is lost (its job resumes
-  first); reflex jobs and the manual slot job (the lease is not saved) are dropped."
+  first); the legacy :recent-results key is dropped (results.edn holds the record); reflex jobs and the manual slot job (the lease is not saved) are dropped."
   [saved]
-  (let [s (merge empty-state saved)
+  (let [s (merge empty-state (dissoc saved :recent-results))
         reflex-ids (keep (fn [[id inst]] (when (:reflex inst) id)) (:instances s))
         slot-ids (set (keep (fn [[id inst]] (when (:slot? inst) id)) (:instances s)))
         current (:current s)]

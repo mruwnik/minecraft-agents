@@ -170,7 +170,9 @@
                            :body-file (path/join (bodies/body-dir state-dir (:world cfg) (:agent opts)) "settings.edn")
                            :body (:agent opts)
                            :emit #(swap! settings-events conj %)})
-        _ (when (and fresh? (fs/existsSync engine-file)) (fs/unlinkSync engine-file))
+        results-file (path/join (:engine-dir cfg) "results.edn")
+        _ (when fresh?
+            (doseq [f [engine-file results-file]] (when (fs/existsSync f) (fs/unlinkSync f))))
         restoring? (fs/existsSync engine-file)
         create-primitives (.-createPrimitives ((createRequire (str root "/")) "./js/primitives.mjs"))
         eng-ref (atom nil)

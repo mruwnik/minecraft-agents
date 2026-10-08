@@ -1921,6 +1921,20 @@
             (is (not (contains? (reader/read-string (.readFileSync fs (path/join dir "engine.edn") "utf8")) :recent-results)))
             (finally (swap! settings/state update :values dissoc key))))))))
 
+(deftest ended-job-records-survive-a-restart
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng dir]} (setup)]
+          (core/submit! eng '(walk {:pos {:x 3 :y 64 :z 0}}) {})
+          (await (core/tick! eng))
+          (let [[again _] (restore-with dir registry triggers)]
+            (is (= :completed (get-in (core/recent-results again) ["j1" :status]))
+                "results.edn is read back when the engine restarts")))))))
+
+(deftest restore-drops-a-legacy-recent-results-key
+  (is (not (contains? (core/restore {:list [] :recent-results {"j1" {:status :completed}}}) :recent-results))))
+
 (deftest reflex-ends-are-kept-apart-from-listed-jobs-and-carry-the-job-name
   (async done
     (tu/run-async done

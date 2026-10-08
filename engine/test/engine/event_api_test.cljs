@@ -433,6 +433,14 @@
            (:results (event-api/results eng ["j5" "j6"])))
         "the listing answers for the asked ids only, without the order counter")))
 
+(deftest results-leave-out-ids-that-are-running-now
+  (let [eng (status-engine #js {:isOffline (fn [] false) :isSettling (fn [] false)
+                                :self (fn [] #js {:username "Probe"})}
+                           {} nil)]
+    (reset! (:results eng) {"j1" {:name "old" :status :completed :result {} :ended-at 7 :n 1}})
+    (swap! (:state eng) assoc-in [:instances "j1"] {:spec '(walk)})
+    (is (= {} (:results (event-api/results eng ["j1"]))) "a stale record never answers for a live job id")))
+
 (defn seen-engine [rows calls]
   {:primitives #js {:seenBlocks (fn [q] (swap! calls conj (js->clj q :keywordize-keys true))
                                   (clj->js rows))}})
