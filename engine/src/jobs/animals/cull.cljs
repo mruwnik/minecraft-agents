@@ -49,9 +49,9 @@
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 
 (defn corners
-  "The eight corners of a box."
+  "The eight corners of a box of cells: the far corners are the outer edges of the max cells."
   [{lo :min hi :max}]
-  (for [x [(:x lo) (:x hi)] y [(:y lo) (:y hi)] z [(:z lo) (:z hi)]]
+  (for [x [(:x lo) (inc (:x hi))] y [(:y lo) (inc (:y hi))] z [(:z lo) (inc (:z hi))]]
     {:x x :y y :z z}))
 
 (defn reach
