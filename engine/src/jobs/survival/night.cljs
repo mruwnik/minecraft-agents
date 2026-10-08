@@ -36,7 +36,8 @@
     night with no shelter.
   - asleep: hold (:sleeping).
   - roofed and sheltered (slept, dug in, or shut in its own latest :shelter): a log-out stint while someone else sleeps,
-    else hold (:sheltered).
+    else hold (:sheltered) while the trigger would still fire (a bed to use, a sleeper), else the job ends: a body
+    that is safe leaves the queue to run (the morning's trigger lets it out).
   - a bed (sh/bed-to-use: seen, or remembered within :bed-radius, :urgent-bed-radius once :max-days-awake days without
     sleep; never an occupied one or one given up on): jobs.survival.sleep on it. A sleep that ends without sleeping writes
     :sleep-failed (5 minutes, shelter.sleep_failed warn).
@@ -743,7 +744,10 @@
       (sh/sleeping? p) (do (when-not (= :slept sheltered) (sheltered! c :slept)) (await (hold! c :sleeping)))
       (and roofed (or (#{:slept :dug-in} sheltered) (dig-leave/sheltered-in c)))
       (do (when-not sheltered (sheltered! c :dug-in))
-          (if (log-out-wanted? c) (await (log-out-step c)) (await (hold! c :sheltered))))
+          (cond
+            (log-out-wanted? c) (await (log-out-step c))
+            (sh/night-holds? p (ctx/view c) (:args c) (bed-permit c)) (await (hold! c :sheltered))
+            :else (end-night! c)))
       :else
       (let [bed (await (sense/decide! c ::bed #(sh/bed-to-use p (ctx/view c) (radius c) (bed-permit c))))]
         (cond

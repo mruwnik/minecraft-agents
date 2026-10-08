@@ -4,6 +4,7 @@
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.reach :as reach]
             [jobs.lib.solid :as solid]
             [jobs.lib.access.zones :as zones]
             [jobs.lib.util :as u]
@@ -352,6 +353,16 @@
      :hint (str "the body is sealed in its own shelter at [" x " " y " " z "]: the shelter job lets it out by day "
                 "(jobs.survival.night), or run jobs.survival.dig-in leave")}))
 
+(def room-roof-height
+  "How high above the feet a roof may be and still make the closed room around the body a shelter."
+  16)
+
+(defn shut-in-room?
+  "Whether the body stands in a closed room (reach/closed-room?) with a roof over it within room-roof-height blocks:
+  safe from the night though the roof is above :roof-height."
+  [p]
+  (and (roofed? p room-roof-height) (reach/closed-room? p (feet p))))
+
 (defn night-holds?
   "Whether the night trigger holds (see triggers.survival.night). permit? decides whether a bed may be used (bed-permit)."
   [p view args permit?]
@@ -362,7 +373,7 @@
             (or (some? (bed-to-use p view (bed-radius view args) permit?))
                 (bed-place-wanted? p view (bed-radius view args) permit?)
                 (log-out-for-sleepers? p view)
-                (unsafe-night? p (:roof-height args default-roof-height))
-                (some? (in-own-shelter p shelter))))
+                (and (unsafe-night? p (:roof-height args default-roof-height))
+                     (not (shut-in-room? p)))))
        (or (shut-in-by-day? p shelter (:data (mem/latest view :shelter-trapped)))
            (some? (bed-to-collect p view)))))))

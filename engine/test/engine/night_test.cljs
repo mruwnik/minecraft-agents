@@ -55,6 +55,18 @@
         "given up on")
     (is (false? (holds? {:time night :blocks roof} (fn [_]))) "roofed, no bed, nobody asleep")))
 
+(def closed-hut
+  "A 3x3 room around the body with walls to y 69 and a roof at y 70 (out of :roof-height's reach), floor at y 63."
+  (into {} (for [x (range -2 3) z (range -2 3) y (range 63 71)
+                 :let [wall? (or (= 2 (Math/abs x)) (= 2 (Math/abs z)))]
+                 :when (or wall? (= y 63) (= y 70))]
+             [(str x "," y "," z) "stone"])))
+
+(deftest a-body-already-safe-at-night-does-not-hold
+  (is (false? (holds? {:time night :blocks closed-hut} (fn [_]))) "shut in a high closed room")
+  (is (true? (holds? {:time night :blocks (dissoc closed-hut "0,70,0")} (fn [_]))) "a hole in the roof: not shut in")
+  (is (true? (holds? {:time night :blocks {}} (fn [_]))) "outside"))
+
 (deftest night-holds-for-a-sleeper-the-action-bar-counts-tonight
   (let [world {:time night :blocks roof}]
     (is (true? (holds? world (status! 1 2))))
@@ -297,25 +309,19 @@
   "Dirt from y 60 to 63 over x -14..14, z -2..2: pit sites a relocation can reach."
   (into {} (for [x (range -14 15) z (range -2 3) y (range 60 64)] [(str x "," y "," z) "dirt"])))
 
-(deftest the-night-is-one-round-that-holds-until-morning
+(deftest the-night-ends-once-the-body-is-dug-in-and-the-queue-runs
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (st/setup {:time night :inventory st/dirt-stack :blocks st/floor})
-              mid (atom nil)]
-          (st/dawn-after! p 4 (fn [n] (when (= n 2)
-                                     (reset! mid {:holding (some-> (core/holder eng) :id (->> (core/holding eng)) :reason)
-                                                  :notified (st/notified seen)
-                                                  :places (count (st/calls p "place"))}))))
+        (let [{:keys [eng p seen]} (st/setup {:time night :inventory st/dirt-stack :blocks st/floor})]
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
           (core/submit! eng '(jobs.debug.notify {:text "after"}) {})
-          (await (core/tick! eng))
-          (is (= {:holding :sheltered :notified 0 :places 10} @mid) "walled in, a declared hold, the queue waits")
-          (is (= 1 (fired seen)))
-          (is (not= {:x 0 :y 64 :z 0} (st/pos-of p)) "one round: by its end it is day and the body stepped out")
           (await (st/tick-n eng 4))
-          (is (= 1 (fired seen)) "not fired again")
-          (is (= 1 (st/notified seen)) "then the queued job ran"))))))
+          (is (= {:holder false :notified 1 :places 10}
+                 {:holder (some? (core/holder eng)) :notified (st/notified seen) :places (count (st/calls p "place"))})
+              "walled in and safe: no hold, the queued job ran at night")
+          (is (= {:x 0 :y 64 :z 0} (st/pos-of p)) "still in the shelter")
+          (is (= 1 (fired seen)) "not fired again while safe"))))))
 
 (deftest at-night-a-respawned-body-shelters-before-it-recovers-its-drops
   (async done
@@ -515,10 +521,10 @@
         (let [{:keys [eng p seen]} (st/setup {:time night :blocks hillside :floor [-2 -2 8 2] :inventory [{:name "iron_pickaxe" :count 1}]})
               mid (atom nil)]
           (st/refuse-cell! p [0 63 0])
-          (st/dawn-after! p 4 (fn [n] (when (= n 2) (reset! mid {:at (st/pos-of p) :reason (:reason (core/holding eng "j1"))}))))
           (core/submit! eng '(jobs.survival.night) {})
           (await (core/tick! eng))
-          (is (= {:at {:x 5 :y 64 :z -1} :reason :sheltered} @mid) "shut in at the end of the niche (the stair out of the failed pit went north), a declared hold")
+          (reset! mid {:at (st/pos-of p) :holder (some? (core/holder eng))})
+          (is (= {:at {:x 5 :y 64 :z -1} :holder false} @mid) "shut in at the end of the niche (the stair out of the failed pit went north), safe: not held")
           (is (= #{{:x 4 :y 64 :z -1} {:x 4 :y 65 :z -1}}
                  (set (filterv #(= 4 (:x %)) (mapv st/arg-pos (st/calls p "place")))))
               "the opening, feet and head, plugged")
@@ -531,7 +537,6 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (st/setup {:time night :blocks hillside :floor [-2 -2 8 2] :inventory [{:name "iron_pickaxe" :count 1}]})]
           (st/refuse-cell! p [0 63 0])
-          (st/dawn-after! p 4)
           (let [r (await (tu/child-outcome eng 'jobs.survival.night {} 40))]
             (is (= :dug-in (:night r)) (pr-str r))
             (is (= 2 (reduce + (vals (:spent r)))) (pr-str r))

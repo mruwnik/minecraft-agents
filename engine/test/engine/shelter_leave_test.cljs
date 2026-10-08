@@ -35,7 +35,7 @@
         _ (write! (shelter-entry :built))
         view (mem/view (:store eng))]
     (is (true? (fires? {:time st/noon :blocks {"0,66,0" "stone"}} view)) "day, roofed in its own shelter")
-    (is (true? (fires? {:time st/night :blocks {"0,66,0" "stone"}} view)) "at night it holds the body in it")
+    (is (false? (fires? {:time st/night :blocks {"0,66,0" "stone"}} view)) "at night a body already in it is safe: the queue runs")
     (is (false? (fires? {:time st/noon} view)) "not shut in: nothing overhead")
     (is (false? (fires? {:time st/noon :blocks {"0,66,0" "stone"} :self {:pos {:x 3 :y 64 :z 0}}} view)) "elsewhere than the shelter")
     (is (false? (fires? {:time st/noon :blocks {"0,66,0" "stone"}} (mem/view (:store (:eng (st/setup {}))))))

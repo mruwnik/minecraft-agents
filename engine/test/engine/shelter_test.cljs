@@ -61,6 +61,16 @@
       (await (core/tick! eng))
       (recur (inc i)))))
 
+;; a body that is safe is not held: the night ends, and a test brings the day itself
+(defn ^:async night-then-day
+  "Tick eng n times of night, keep (f) from then, set the day and tick m more times; the kept value."
+  [eng p n f m]
+  (await (tick-n eng n))
+  (let [kept (f)]
+    (.setTime (.-world p) noon)
+    (await (tick-n eng m))
+    kept))
+
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
 
 (defn arg-pos [call] (js->clj (.-pos (.-args call)) :keywordize-keys true))
@@ -104,7 +114,7 @@
 ;; ------------------------------------------------------------------ trigger
 
 (defn fires? [world args]
-  (boolean ((:when (get triggers/all :night)) (tu/fake world) {} args)))
+  (boolean ((:when (get triggers/all :night)) (tu/fake-on-floor world) {} args)))
 
 (deftest night-holds-at-night-in-the-open
   (are [world args held] (= held (fires? world args))
@@ -186,46 +196,15 @@
 
 (def own-shelter {:pos {:x 0 :y 64 :z 0} :roof {:x 0 :y 66 :z 0} :state :built})
 
-(deftest night-holds-at-night-while-shut-in-its-own-shelter
+(deftest night-does-not-hold-at-night-while-shut-in-its-own-shelter
   (let [{:keys [eng]} (setup {})
         holds? (fn [world] (boolean ((:when (get triggers/all :night)) (tu/fake world) (mem/view (:store eng)) {})))]
     (mem/write! (:store eng) :shelter own-shelter {:cap 10 :ttl day-ms})
-    (is (holds? {:time night :blocks {"0,66,0" "stone"}}) "the night's work is not done: the shelter holds the body")
+    (is (not (holds? {:time night :blocks {"0,66,0" "stone"}})) "shut in at night is safe: the queue runs")
     (is (not (holds? {:time night :blocks {"0,66,0" "stone"} :self {:isSleeping true}})) "asleep")
     (is (holds? {:time noon :blocks {"0,66,0" "stone"}}) "by day it lets the body out")
     (is (not (holds? {:time night :blocks {"0,66,0" "stone" "3,66,0" "stone"} :self {:pos {:x 3 :y 64 :z 0}}}))
         "roofed elsewhere, out of its shelter")))
-
-;; A shelter cut after it dug in (a higher reflex) is fired again by night and holds from its first round,
-;; eating as it holds, rather than ending :done and leaving the night to the hungry reflex.
-(deftest a-fresh-shelter-in-its-own-shelter-holds-the-night-and-eats
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:time night :blocks {"0,66,0" "stone"} :self {:food 4}
-                                           :inventory [{:name "bread" :count 2}]})]
-          (mem/write! (:store eng) :shelter own-shelter {:cap 10 :ttl day-ms})
-          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night} {:trigger :hungry}]}"))
-          (let [mid (atom nil)]
-            (dawn-after! p 3 (fn [n] (when (= n 2)
-                                       (reset! mid {:fired (mapv :reflex (filterv #(= [:reflex :fired] [(:source %) (:kind %)]) @seen))
-                                                    :ate (count (emitted seen :shelter.ate))
-                                                    :ended (count (filterv #(= [:reflex :ended :night] [(:source %) (:kind %) (:reflex %)]) @seen))}))))
-            (await (tick-n eng 1))
-            (is (= [:night] (:fired @mid)) "the shelter holds; the hungry reflex below it does not get the body")
-            (is (pos? (:ate @mid)) "the shelter ate while holding")
-            (is (zero? (:ended @mid)) "held through the night in one round")))))))
-
-(deftest a-held-shelter-eats-below-the-health-line-though-not-hungry
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen]} (setup {:time night :blocks {"0,66,0" "stone"} :self {:food 19 :health 5}
-                                         :inventory [{:name "bread" :count 2}]})]
-          (mem/write! (:store eng) :shelter own-shelter {:cap 10 :ttl day-ms})
-          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
-          (await (tick-n eng 2))
-          (is (seq (emitted seen :shelter.ate)) "below 7 hp it eats up to a full bar"))))))
 
 ;; -------------------------------------------------------------------- sleep
 
@@ -787,13 +766,13 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:time night :inventory dirt-stack :blocks floor :entities [awake]})
-              mid (mid-night! p 2 #(hash-map :places (count (calls p "place")) :digs (count (calls p "dig"))
-                                             :holder (some? (core/holder eng)) :notified (notified seen)))]
-          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
-          (core/submit! eng '(jobs.debug.notify {:text "after"}) {})
-          (await (tick-n eng 6))
-          (is (= {:places 10 :digs 0 :holder true :notified 0} @mid)
-              "dug in; the shelter reflex holds the body at night; the queued job does not start before day")
+              _ (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
+              _ (core/submit! eng '(jobs.debug.notify {:text "after"}) {})
+              mid (await (night-then-day eng p 4 #(hash-map :places (count (calls p "place")) :digs (count (calls p "dig"))
+                                                            :holder (some? (core/holder eng)) :notified (notified seen))
+                                         6))]
+          (is (= {:places 10 :digs 0 :holder false :notified 1} mid)
+              "dug in and safe: the night does not hold the body, the queued job ran at night")
           (is (= [:built] (mapv :state (entries eng :shelter))))
           (is (nil? (core/holder eng)) "the shelter ended at day")
           (is (not= {:x 0 :y 64 :z 0} (pos-of p)) "the body stepped out of its walls")
@@ -808,11 +787,10 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:time night :blocks ground})
-              mid (mid-night! p 2 #(hash-map :y (:y (pos-of p)) :holder (some? (core/holder eng)) :notified (notified seen)))]
-          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
-          (core/submit! eng '(jobs.debug.notify {:text "after"}) {})
-          (await (tick-n eng 6))
-          (is (= {:y 61 :holder true :notified 0} @mid) "in the pit, held at night")
+              _ (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
+              _ (core/submit! eng '(jobs.debug.notify {:text "after"}) {})
+              mid (await (night-then-day eng p 4 #(hash-map :y (:y (pos-of p)) :holder (some? (core/holder eng)) :notified (notified seen)) 6))]
+          (is (= {:y 61 :holder false :notified 1} mid) "in the pit, safe: the queued job ran at night")
           (is (nil? (core/holder eng)) "the shelter ended at day")
           (is (>= (:y (pos-of p)) 64) "the body stands on the surface, out of the pit")
           (is (empty? (emitted seen :shelter.failed)) "out: done, not failed")
@@ -827,9 +805,8 @@
         (let [{:keys [eng p seen]} (setup {:time night :blocks stone-ground :inventory [{:name "dirt" :count 1}]})]
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
           (core/submit! eng '(jobs.debug.notify {:text "after"}) {})
-          (let [mid (mid-night! p 2 #(hash-map :pit (< (:y (pos-of p)) 64) :notified (notified seen)))]
-            (await (tick-n eng 6))
-            (is (= {:pit true :notified 0} @mid) "in the pit, held at night"))
+          (let [mid (await (night-then-day eng p 4 #(hash-map :pit (< (:y (pos-of p)) 64) :notified (notified seen)) 6))]
+            (is (= {:pit true :notified 1} mid) "in the pit, safe: the queued job ran at night"))
           (is (seq (emitted seen :dig-in.trapped)) "no pickaxe for the stone stair: trapped")
           (let [[w & more] (emitted seen :shelter.failed)]
             (is (empty? more) "one warn")
@@ -845,8 +822,7 @@
         (let [{:keys [eng p seen]} (setup {:time night :blocks ground})]
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
           (core/submit! eng '(jobs.debug.notify {:text "after"}) {})
-          (dawn-after! p 3 (fn [n] (when (= n 2) (fake/add-entity! p {:id 7 :name "zombie" :kind "hostile" :pos {:x 2 :y 64 :z 0}}))))
-          (await (tick-n eng 6))
+          (await (night-then-day eng p 4 #(fake/add-entity! p {:id 7 :name "zombie" :kind "hostile" :pos {:x 2 :y 64 :z 0}}) 6))
           (is (>= (:y (pos-of p)) 64) "out of the pit: a hostile is the hostile reflex's business, not the shelter's")
           (is (nil? (core/holder eng)) "no hold: the shelter ended")
           (is (empty? (emitted seen :dig-in.staying)))
@@ -978,10 +954,9 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:time night :inventory dirt-stack :blocks (tu/box -30 58 -30 30 63 30 "stone")})
-              mid (mid-night! p 6 #(hash-map :holder (some? (core/holder eng)) :pos (pos-of p)))]
-          (core/submit! eng '(jobs.survival.night) {})
-          (await (tick-n eng 8))
-          (is (= {:holder true :pos {:x 0 :y 64 :z 0}} @mid) "held in place at night, on the surface")
+              _ (core/submit! eng '(jobs.survival.night) {})
+              mid (await (night-then-day eng p 8 #(hash-map :holder (some? (core/holder eng)) :pos (pos-of p)) 2))]
+          (is (= {:holder false :pos {:x 0 :y 64 :z 0}} mid) "in place at night, on the surface, not held")
           (is (= 1 (count (emitted seen :dig-in.sealed))) "walled in with placed blocks")
           (is (every? #(>= (:y (arg-pos %)) 64) (calls p "dig")) "no dig below the surface: the only digs are the placed wall, taken down by day"))))))
 
