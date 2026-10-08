@@ -37,9 +37,11 @@
   :cells, :one-way's :near and :one-way); a walk that got stuck says :stuck, the :move it was stuck on as :kind and the
   executor's :why text as :detail; one that left its plan says :off-plan; a failed steer says :steer-failed with its reason
   as :detail; a walk that ended with the body no nearer says :no-progress. A body sealed in its own dig-in shelter adds
-  :inside-own-shelter (its cell) and a :hint (the shelter job lets it out by day, or run dig-in leave)."
+  :inside-own-shelter (its cell) and a :hint (the shelter job lets it out by day, or run dig-in leave). A failed waypoint
+  walk of the call (go-to's mem :waypoint-why) rides along as :waypoint-why."
   [{:keys [status reason kind move step] :as result}]
-  (case status
+  (merge
+   (case status
     :stuck (cond-> {:why :stuck}
              move (assoc :kind move)
              (:why result) (assoc :detail (:why result)))
@@ -50,7 +52,8 @@
     (cond
       (or reason (= :no-path status)) (merge {:why (if reason (keyword reason) :no-path)}
                                              (select-keys result [:kind :cells :near :one-way :dark-best :torches]))
-      :else {:why :no-progress})))
+      :else {:why :no-progress}))
+   (select-keys result [:waypoint-why])))
 
 (def kind-words
   {:corner-jump "needs a sprint jump past a corner and food is too low"
@@ -77,7 +80,7 @@
 
 (defn give-up-words
   "The give-up reason in words, for the :text of the :unreachable event and the result: no map dumps."
-  [pos {:keys [why kind detail escalation nearest-hostile resets-spent mob mob-distance explored torches]}]
+  [pos {:keys [why kind detail escalation nearest-hostile resets-spent mob mob-distance explored torches waypoint-why]}]
   (str "gave up walking to " (if (map? pos) (let [{:keys [x y z]} pos] [x y z]) pos) ": "
        (if escalation
          (str "shut in here; " (escalation-words escalation))
@@ -108,7 +111,8 @@
                                      :none "; it has no torch to light them and fetches none"
                                      :fetch-failed "; it has no torch to light them and could not fetch any"
                                      ""))
-           (str "no path (" (some-> why name) ")")))))
+           (str "no path (" (some-> why name) ")")))
+       (when waypoint-why (str "; a waypoint walk toward it failed: " (name waypoint-why)))))
 
 (defn warn-level [c] (if (false? (:warn (:args c))) :info :warn))
 

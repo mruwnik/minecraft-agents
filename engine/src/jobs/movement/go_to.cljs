@@ -40,7 +40,7 @@
   :pos (jobs.lib.aim), and a search that finds no such stand gives up :why :out-of-sight. :pos [x z] or {:x :z} (no y) walks to the seen ground of that
   column nearest the body's feet (unseen: first to within 8 of a height estimated from the seen columns around it, then looks); a y the planner finds no standable cell within :range of, or under :unknown a y seen in the ground with no seen stand within :range (asked before the first walk, pre-aim!), is re-aimed once to its column's
   ground nearest it, at most :y-slack blocks off and never past a solid (info goal-resolved {:goal :to}); see jobs.movement.go-to.column. A
-  column whose ground is not made out is looked at after a fruitless walk (at most 3 a call). A cell over a short floor (farmland, a path, a bottom slab) stands for that
+  column whose ground is not made out is looked at after a fruitless walk (at most 3 a call); with no stand in reach of its guess it walks to seen stands toward it (column/waypoint, off the line past a cliff), until ::max-waypoint-misses bring it no nearer. A cell over a short floor (farmland, a path, a bottom slab) stands for that
   block's own cell, where the body's feet are. :place (a name such as :home, set by jobs.memory.set-place) walks to
   that place's recorded position instead of :pos; a name not in memory falls back to the shared marker of that name (jobs.lib.world/marker).
   - Refused at submit (or the caller's call-child throws): an arg its spec refuses, such as a :tolls entry that is not {:x :y :z :factor} of finite numbers, a :drop-cost that is not a number >= 0 or false, a :costs that is not a map of known price names to numbers >= 0, a :landing that is not a map of block names to numbers, a :gait that is not :auto, :walk or :sneak, a :min-health outside 1-20, a :danger-shape that is not {:sensed|:remembered|:creeper {:close :radius}}.
@@ -174,7 +174,10 @@
    ::surface-air {:default 7.5 :doc "Seconds of air left under which a go-to whose head is under water and whose search goes on (no walk) swims to air first: a body holding still in water sinks while it thinks." :spec (a/num-in 0 nil)}
    ::wet-restarts {:default 2 :doc "Times a go-to's search under water may begin afresh (no walk) after its first slice before it swims to air first and plans from there." :spec (a/int-in 0 nil)}
    ::dry-radius {:default 6 :doc "Blocks from the body an arrival in water reads for a dry stand (also within :range of the goal)." :spec (a/num-in 0 nil)}
-   ::dry-walk-rounds {:default 3 :doc "Walk rounds (search slices or walks) the walk on from an arrival in water to a dry stand takes at most." :spec (a/int-in 1 nil)}})
+   ::dry-walk-rounds {:default 3 :doc "Walk rounds (search slices or walks) the walk on from an arrival in water to a dry stand takes at most." :spec (a/int-in 1 nil)}
+   ::max-waypoint-misses {:default 3 :doc "Waypoint walks toward a column goal whose ground is only guessed that a call takes while they bring the body no nearer it." :spec (a/int-in 0 nil)}
+   ::waypoint-gain {:default 2 :doc "Blocks (across) a waypoint must lie nearer a guessed column goal than the body, and a waypoint walk must bring the body nearer, not to be a miss." :spec (a/num-in 1 nil)}
+   ::way-looks {:default [[6 1] [3 4]] :doc "The looks taken in turn before each waypoint walk: [blocks ahead toward the goal, blocks under the feet] (ahead and a little down: a slope up; close and steeply down: a slope or drop below an edge)." :spec (a/coll-of (a/pred "a pair [ahead down] of numbers >= 0" #(and (sequential? %) (= 2 (count %)) (every? (fn [n] (and (number? n) (>= n 0))) %))))}})
 
 (defn max-cut-restarts [] (settings/get settings ::max-cut-restarts))
 (defn max-cut-resets [] (settings/get settings ::max-cut-resets))
@@ -185,6 +188,9 @@
 (defn wet-restarts [] (settings/get settings ::wet-restarts))
 (defn dry-radius [] (settings/get settings ::dry-radius))
 (defn dry-walk-rounds [] (settings/get settings ::dry-walk-rounds))
+(defn max-waypoint-misses [] (settings/get settings ::max-waypoint-misses))
+(defn waypoint-gain [] (settings/get settings ::waypoint-gain))
+(defn way-looks [] (settings/get settings ::way-looks))
 
 (def max-fault-cells "Cells a call keeps its plans away from (the walker's faults: fault-cells), the oldest dropped." 8)
 
@@ -436,13 +442,11 @@
       (await (sense/look-at! c (assoc cell 1 (nth (vec (distinct (if (:column-open (ctx/mem c)) [feet (inc feet)] [(nth cell 1) feet (inc feet)]))) n (nth cell 1)))))
       true)))
 
-(def max-waypoint-misses "Waypoint walks (guess-waypoint) a call takes that bring the body no nearer its column goal." 3)
-
 (defn waypoint-due?
-  "Whether a column goal is only guessed (mem :column-open :guess) and fewer than max-waypoint-misses waypoint walks were
-  fruitless."
+  "Whether a column goal is only guessed (mem :column-open :guess) and fewer than ::max-waypoint-misses waypoint walks
+  were fruitless."
   [c]
-  (and (= :guess (:column-open (ctx/mem c))) (< (:waypoint-misses (ctx/mem c) 0) max-waypoint-misses)))
+  (and (= :guess (:column-open (ctx/mem c))) (< (:waypoint-misses (ctx/mem c) 0) (max-waypoint-misses))))
 
 (defn guess-waypoint
   "For a column goal whose guess has no stand in reach (waypoint-due?): a seen stand to walk to toward it
@@ -450,22 +454,18 @@
   [c pos]
   (when (waypoint-due? c)
     (let [{:keys [x y z]} (u/self-pos c)]
-      (column/waypoint (column/seen-kind-at (:primitives c)) (:x pos) (:z pos) (mapv #(js/Math.floor %) [x y z])))))
-
-(def way-looks
-  "The looks look-along! takes, in turn, before each waypoint walk: [blocks ahead toward the goal, blocks under the feet]
-  (ahead and a little down: a slope up; close and steeply down: a slope or drop below an edge)."
-  [[6 1] [3 4]])
+      (column/waypoint (column/seen-kind-at (:primitives c)) (:x pos) (:z pos) (mapv #(js/Math.floor %) [x y z]) (waypoint-gain)))))
 
 (defn ^:async look-along!
-  "Before a waypoint walk (waypoint-due?): the next of way-looks not yet taken since the last waypoint walk (mem
+  "Before a waypoint walk (waypoint-due?): the next of ::way-looks not yet taken since the last waypoint walk (mem
   :way-looks), at the cell that far along the line to pos and that far under the feet; true when it looked."
   [c pos]
   (let [n (:way-looks (ctx/mem c) 0)
         {:keys [x y z]} (u/self-pos c)
-        h (js/Math.hypot (- (:x pos) x) (- (:z pos) z))]
-    (when (and (waypoint-due? c) (< n (count way-looks)) (> h 2))
-      (let [[ahead down] (nth way-looks n)
+        h (js/Math.hypot (- (:x pos) x) (- (:z pos) z))
+        looks (vec (way-looks))]
+    (when (and (waypoint-due? c) (< n (count looks)) (> h 2))
+      (let [[ahead down] (nth looks n)
             k (/ (min ahead (- h 1)) h)]
         (ctx/update-mem! c assoc :way-looks (inc n))
         (await (sense/look-at! c (mapv #(js/Math.floor %) [(+ x (* k (- (:x pos) x))) (- y down) (+ z (* k (- (:z pos) z)))])))
@@ -473,13 +473,19 @@
 
 (defn ^:async walk-waypoint!
   "Walk to way (guess-waypoint) on the way to pos: from there the body sees more of the land toward pos and goal-pos
-  aims again. A walk that brings it no 2 blocks nearer pos (across) is a miss (mem :waypoint-misses). :again."
+  aims again. The walk keeps the call's approach (approach-recorder, mem :closest and :last-dist), so a cut during it
+  sees the progress. A walk that brings it less than ::waypoint-gain nearer pos (across) is a miss (mem
+  :waypoint-misses); a walk refused or failed for a reason (needs-health, no torch, a dark drop, ...) is kept as mem
+  :waypoint-why (end/give-up-fields), which a give-up of the call names. :again."
   [c pos way opts]
   (let [across #(js/Math.hypot (- (:x pos) (:x %)) (- (:z pos) (:z %)))
-        before (across (u/self-pos c))]
-    (await (near/walk-round! c way 1 (dissoc opts :progress)))
-    (ctx/update-mem! c dissoc :way-looks)
-    (when-not (< (across (u/self-pos c)) (dec before))
+        before (across (u/self-pos c))
+        {:keys [result status]} (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos)) way 1 (dissoc opts :progress)))
+        left (u/dist (u/self-pos c) pos)
+        why (when-not (#{"arrived" "partial" "searching"} status) (:why (end/give-up-fields result)))]
+    (ctx/update-mem! c #(cond-> (-> % (dissoc :way-looks) (assoc :last-dist left :closest (min left (:closest % left))))
+                          (and why (not= :no-progress why)) (assoc :waypoint-why why)))
+    (when (> (across (u/self-pos c)) (- before (waypoint-gain)))
       (ctx/update-mem! c update :waypoint-misses (fnil inc 0)))
     :again))
 
@@ -650,7 +656,8 @@
               :again
               (let [unloaded? (wsearch/goal-unloaded? (.-snapshot pw) (mapv #(js/Math.floor (% pos)) [:x :y :z]))
                     result (dark-end c result)
-                    ended (if (esc/escalate? c result) result (sight-end c pos (unloaded-end result unloaded?)))]
+                    ended (cond-> (if (esc/escalate? c result) result (sight-end c pos (unloaded-end result unloaded?)))
+                            (:waypoint-why (ctx/mem c)) (assoc :waypoint-why (:waypoint-why (ctx/mem c))))]
                 (await (esc/give-up-or-escalate! c pos tries status ended))))))))))))
 
 (defn start-attempt!
@@ -661,7 +668,7 @@
   (let [m (ctx/mem c)
         there? (here? c pos (:range (:args c)))]
     (wworld/warn-bad-settings! c)
-    (ctx/update-mem! c #(cond-> (-> % (dissoc :best :fault-cells :over-budget :off-hand-tried :air-looked :air-relooks :surfacings :column-looks :column-near :waypoint-misses :way-looks :dry-tried :in-water :wet-fresh :wet-surfacings) (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {}))
+    (ctx/update-mem! c #(cond-> (-> % (dissoc :best :fault-cells :over-budget :off-hand-tried :air-looked :air-relooks :surfacings :column-looks :column-near :waypoint-misses :waypoint-why :way-looks :dry-tried :in-water :wet-fresh :wet-surfacings) (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {}))
                           (not (:fetching m)) (dissoc :torch-fetched :fetched)
                           (and there? (:escalate-now m)) (dissoc :escalate-now)
                           (and there? (:escalation m))

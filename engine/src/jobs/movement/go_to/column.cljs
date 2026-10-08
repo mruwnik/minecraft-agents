@@ -97,19 +97,35 @@
             (for [d (range 1 (inc approach-range)) [dx dz] [[1 0] [-1 0] [0 1] [0 -1] [1 1] [1 -1] [-1 1] [-1 -1]]] [d dx dz]))
       body-y))
 
+(def off-line-radius "Blocks round the body an off-line waypoint is looked for (about what a body sees of the land)." 16)
+
+(def off-line-cone "The most an off-line waypoint's bearing may turn from the column's, in degrees." 60)
+
 (defn waypoint
   "A cell to walk to toward the column x z from the body's feet [bx by bz] when its estimate has no stand in reach: the
-  seen ground (nearest by, within estimate-reach; a head cell not seen counts as open, as a seen slope's air) of the
-  column on the straight line from the body to x z that is nearest x z and at least 2 blocks nearer it than the body,
-  else nil."
-  [kind-at x z [bx by bz]]
-  (let [h (js/Math.hypot (- x bx) (- z bz))
-        ux (/ (- bx x) (max h 1))
-        uz (/ (- bz z) (max h 1))
-        ka (fn [cx cy cz] (let [k (kind-at cx cy cz)]
-                            (if (and (keyword-identical? :unknown k) (free? (kind-at cx (dec cy) cz))) :open k)))]
-    (some (fn [[cx cz]] (when-let [g (ground ka cx cz by (- by estimate-reach) (+ by estimate-reach))] {:x cx :y g :z cz}))
-          (distinct (for [k (range 1 (- h 1))] [(js/Math.floor (+ x 0.5 (* k ux))) (js/Math.floor (+ z 0.5 (* k uz)))])))))
+  seen ground (nearest by, within estimate-reach; a head cell not seen counts as open, as a seen slope's air) at least
+  gain blocks (default 2) nearer x z across than the body: of the column on the straight line from the body to x z
+  nearest x z, else (a cliff face on the line, its top unseen) of any column within off-line-radius of the body and
+  off-line-cone of the line, the one nearest x z; else nil."
+  ([kind-at x z feet] (waypoint kind-at x z feet 2))
+  ([kind-at x z [bx by bz] gain]
+   (let [h (js/Math.hypot (- x bx) (- z bz))
+         ux (/ (- bx x) (max h 1))
+         uz (/ (- bz z) (max h 1))
+         ka (fn [cx cy cz] (let [k (kind-at cx cy cz)]
+                             (if (and (keyword-identical? :unknown k) (free? (kind-at cx (dec cy) cz))) :open k)))
+         stand (fn [[cx cz]] (when-let [g (ground ka cx cz by (- by estimate-reach) (+ by estimate-reach))] {:x cx :y g :z cz}))
+         across (fn [[cx cz]] (js/Math.hypot (- x cx) (- z cz)))
+         cos-max (js/Math.cos (* off-line-cone (/ js/Math.PI 180)))
+         in-cone? (fn [[cx cz]] (let [dx (- cx bx) dz (- cz bz) d (js/Math.hypot dx dz)]
+                                  (and (pos? d) (>= (/ (+ (* dx (- x bx)) (* dz (- z bz))) (* d (max h 1))) cos-max))))
+         r off-line-radius]
+     (or (some stand (distinct (for [k (range 1 (inc (- h gain)))] [(js/Math.floor (+ x 0.5 (* k ux))) (js/Math.floor (+ z 0.5 (* k uz)))])))
+         (some stand (sort-by (juxt across (fn [[cx cz]] (js/Math.hypot (- cx bx) (- cz bz))))
+                              (for [cx (range (- bx r) (+ bx r 1)) cz (range (- bz r) (+ bz r 1))
+                                    :let [col [cx cz]]
+                                    :when (and (<= (across col) (- h gain)) (in-cone? col))]
+                                col)))))))
 
 (defn aim
   "{:pos cell} go-to walks to for goal ({:x :y :z}, or {:x :z} for a column): :resolved true when the y was chosen here,
