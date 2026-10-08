@@ -336,13 +336,14 @@
                       [[] #{}] leaks))))
 
 (defn analyse
-  "One fill: {:world :fill :leaks} with the leaks found (the unloaded cells too); nil when there is no start."
+  "One fill: {:world :fill :leaks} with the leaks found (the unloaded cells too); nil when there is no start and no
+  unloaded cell was read looking for one."
   [{:keys [block-at at box max-cells sealed]}]
   (let [world (make-world block-at sealed)
         seeds (cond
                 at (seeds-at world at)
                 box (seeds-in-box world box))]
-    (when (seq seeds)
+    (when (or (seq seeds) (seq @(:unloaded world)))
       (let [{:keys [seen exits truncated?] end :last :as fill} (fill world seeds box max-cells)
             found (cond
                     (seq exits) (keep #(leak-at world (conj (path-to seen (:from %)) {:key (:to %) :s (:top %)}) true) exits)
@@ -371,14 +372,14 @@
   starts the fill and a step out of it is a leak), :max-cells (default 2000).
   Returns {:closed? :reason :inside :leaks :gates}.
   :reason is nil when closed, else :leak, :unbounded (more than :max-cells reached and no way out pinned down; give
-  a :box for exact crossings), :unloaded (a needed cell was not loaded) or :no-start.
+  a :box for exact crossings), :unloaded (a needed cell was not loaded or seen, the start's floor too) or :no-start (the start is no floor).
   :inside is a set of [x y z] feet cells. For a leaky pen without a box it is what the pen encloses with its leaks
   shut, or empty when that does not close it.
   :leaks is [{:pos {:x :y :z} :why}], :why one of :open-gate :gap :climb :open :unloaded."
   [{:keys [max-cells] :or {max-cells default-max-cells} :as opts}]
   (let [opts (assoc opts :max-cells max-cells :sealed #{})
         {:keys [world fill leaks]} (analyse opts)]
-    (if-not world
+    (if (or (not world) (and (empty? (:order fill)) (empty? leaks)))
       (answer false :no-start #{} [] [])
       (let [{:keys [order truncated?]} fill
             real? (some #(not= :unloaded (:why %)) leaks)

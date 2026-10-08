@@ -5,9 +5,9 @@
             [engine.ctx :as ctx]
             [jobs.lib.declined :as declined]
             [jobs.lib.gate :as gate]
-            [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.lib.pen :as pen]
+            [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
             [jobs.animals.herd-run :refer [adults animal-now approach-range box-centre cell cell-pos drop-gate! end! finish! gate-cell gate-open? hold-gate! in-pen-adults max-reopens near-pen orthogonal out-1 read-pen set-phase! settle-ms shut-failed!]]))
 
@@ -162,8 +162,7 @@
         (finish! c :unreachable)
         :continue)
       (contains? looked (cell unk)) (finish! c :no-pen)
-      :else (do (await (ctx/act c :look (clj->js {:pos (centre unk)})))
-                (look/see! c)
+      :else (do (await (sense/look-at! c (cell unk)))
                 (ctx/update-mem! c update :looked-pen (fnil conj []) (cell unk))
                 :continue))))
 
@@ -192,7 +191,7 @@
       (if (= :blocked (await (near/go-near! c centre approach-range {:doors :never :escalate false})))
         (finish! c :unreachable)
         :continue)
-      (let [answer (read-pen c)]
+      (let [answer (await (sense/decide! c ::pen #(read-pen c) {:retry? #(= :unloaded (:reason %))}))]
         (if (= :unloaded (:reason answer))
           (await (check-unknown! c answer))
           (survey-pen! c answer))))))

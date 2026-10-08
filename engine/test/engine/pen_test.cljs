@@ -236,6 +236,17 @@
     {:x 2 :y 63 :z 2}
     {:x -1 :y 64 :z 2}))
 
+(deftest an-unseen-start-floor-answers-unloaded-not-no-start
+  (let [r (check fence-ring {:at {:x 2 :y 64 :z 2}} )
+        unseen (assoc fence-ring [2 63 2] :unloaded)
+        r2 (check unseen)
+        all-unseen (into {} (for [x (range 0 5) z (range 0 5) y [63 64 65]] [[x y z] :unloaded]))
+        r3 (pen/check {:block-at (block-at-from all-unseen) :box {:min {:x 0 :y 64 :z 0} :max {:x 4 :y 64 :z 4}}})]
+    (is (true? (:closed? r)))
+    (is (= :unloaded (:reason r2)) "the floor under the start was never seen: not a missing floor")
+    (is (= :unloaded (:reason r3)) "a box of unseen cells: nothing to start from, but not :no-start")
+    (is (seq (:leaks r3)) "the unseen cells are listed so a caller can look at them")))
+
 ;; ------------------------------------------------------------------ a box says what the pen is meant to be
 
 (def box {:min {:x 0 :y 64 :z 0} :max {:x 4 :y 64 :z 4}})

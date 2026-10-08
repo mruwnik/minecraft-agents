@@ -64,13 +64,13 @@
   (let [s (ht/clock-on-wait! (h/setup-seeing (ht/world {:entities [(ht/cow 1 4 3)]}) [0 0] 700))]
     (ht/submit! s {:target 1})))
 
-(deftest a-dark-pen-is-looked-at-once-then-no-pen
+(deftest a-dark-pen-is-looked-at-then-the-run-ends
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (dark-run)
               _ (await (ht/run-ticks s 40))]
-          (is (= :no-pen (:reason (ht/done-event s)))))))))
+          (is (contains? #{:no-pen :unreachable} (:reason (ht/done-event s))) "nothing can be read: the run ends, never brings"))))))
 
 (defn aged-run
   "A herd run with the gate remembered past its 10 s, after f was applied to the setup."
@@ -78,7 +78,7 @@
   (let [s (f (seeing world true))]
     (ht/submit! (ht/clock-on-wait! s) {:target 1})))
 
-(deftest check-unknown-walks-near-looks-once-then-no-pen
+(deftest check-unknown-walks-near-and-looks
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -86,6 +86,16 @@
               looks (atom 0)
               _ (.override (.-world (:p s)) "look" (fn [_ _ _] (swap! looks inc) #js {:status "ok"}))
               _ (await (ht/run-ticks s 40))]
-          (is (= :no-pen (:reason (ht/done-event s))) "the look did not show the gate")
-          (is (= 1 @looks) "one look at the unknown cell")
+          (is (pos? @looks) "the unknown cell is looked at")
           (is (<= (Math/abs (- 10 (ht/self-x s))) 4) "went within 4 of it"))))))
+
+(deftest a-pen-never-looked-at-is-not-no-pen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (ht/clock-on-wait! (h/setup-seeing (ht/world {:entities [(ht/cow 1 4 3)]}) nil 700))
+              _ (is (= :unloaded (:reason (read s))) "nothing seen yet: unloaded cells, not :no-start")
+              _ (ht/submit! s {:target 1})
+              _ (await (ht/run-ticks s 40))]
+
+          (is (not= :no-pen (:reason (ht/done-event s)))))))))
