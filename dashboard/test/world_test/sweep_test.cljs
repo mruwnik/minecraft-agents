@@ -28,6 +28,33 @@
     (is (every? #(some #{"ids.txt"} (:argv %)) ps))
     (is (every? #(some #{"engine/fixtures/world/x.edn"} (:argv %)) ps))))
 
+(defn- repo-root []
+  (let [fs (js/require "fs") path (js/require "path")]
+    (loop [d (js/process.cwd)]
+      (cond
+        (.existsSync fs (.join path d "tools" "world-test-pool.mjs")) d
+        (= d (.dirname path d)) (throw (js/Error. "repo root not found"))
+        :else (recur (.dirname path d))))))
+
+(defn- pool-parse
+  "argv -> the real tools/world-test-pool.mjs parsePoolArgs of it (run in a node child: the pool is an ES module)."
+  [argv]
+  (let [cp (js/require "child_process")
+        code "import(process.argv[1]).then((m) => console.log(JSON.stringify(m.parsePoolArgs(JSON.parse(process.argv[2])))))"
+        out (.execFileSync cp "node" #js ["-e" code (str "file://" (repo-root) "/tools/world-test-pool.mjs") (js/JSON.stringify (clj->js argv))]
+                           #js {:encoding "utf8"})]
+    (js->clj (js/JSON.parse out) :keywordize-keys true)))
+
+(deftest argv-parses-with-the-real-pool-parser
+  (doseq [[cli paths durs] [[["--durations" "a.edn" "b.edn"] ["engine/fixtures/world"] ["a.edn" "b.edn"]]
+                            [["--durations" "a.edn" "--match-ids" "ids.txt" "x/y.edn"] ["x/y.edn"] ["a.edn"]]
+                            [[] ["engine/fixtures/world"] []]]
+          ps (s/passes (s/parse-args (into ["--dir" "/d"] cli)))
+          :let [p (pool-parse (:argv ps))]]
+    (is (= paths (:paths p)) (str (:name ps) " paths"))
+    (is (= durs (:durations p)) (str (:name ps) " durations"))
+    (is (= (:results ps) (:results p)))))
+
 (deftest counts-from-a-results-vector
   (is (= {:pass 2 :fail 1 :flaky 1 :error 0 :total 4}
          (s/counts "[{:id \"a\" :status :pass} {:id \"b\" :status :pass} {:id \"c\" :status :fail} {:id \"d\" :status :flaky}]")))

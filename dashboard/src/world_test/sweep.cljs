@@ -33,8 +33,10 @@
                             (recur rest-args (update o :durations into files)))
       :else (recur more (update o :paths conj a)))))
 
+(def default-path "engine/fixtures/world")
+
 (defn passes
-  "Options -> the three passes [{:name :argv :results :time-log}] in order; argv is for tools/world-test.mjs."
+  "Options -> the three passes [{:name :argv :results :time-log}] in order; argv is for tools/world-test.mjs. The fixture paths (default engine/fixtures/world) come before the flags: the pool reads every word after --durations as a durations file."
   [{:keys [dir bodies min-bodies retry-failed night-batches durations match-ids paths] :or {dir "."}}]
   (for [pass [:day :night :night-exclusive]
         :let [n (name pass)
@@ -44,12 +46,11 @@
                      (= pass :day) ["--bodies" bodies "--min-bodies" min-bodies]
                      :else ["--bodies" bodies])]]
     {:name pass :results results
-     :argv (vec (concat ["--phase" n] pool
+     :argv (vec (concat ["--phase" n] pool (or (seq paths) [default-path])
                         ["--allow-time" "--time-log" (str dir "/time-log-" n ".txt") "--results" results
                          "--retry-failed" retry-failed]
                         (when (seq durations) (cons "--durations" durations))
-                        (when match-ids ["--match-ids" match-ids])
-                        paths))}))
+                        (when match-ids ["--match-ids" match-ids])))}))
 
 (defn counts
   "Results vector text (or nil) -> {:pass :fail :flaky :error ... :total}."
