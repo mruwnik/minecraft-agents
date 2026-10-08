@@ -201,3 +201,19 @@
         (settings/load! {:specs specs :world-file (path/join dir "none.edn") :body-file (path/join dir "body.edn")
                          :body "Bob" :emit #(swap! events conj %)})
         (is (= 4096 (settings/get specs :engine.events/max-bytes)))))))
+
+(deftest js-specs-and-reader-follow-a-reload
+  (settings/with-settings {}
+   (fn []
+  (let [js (settings/js-specs #js {"prim/demo-ms" #js {:default 50 :spec #js ["int-in" 1 nil] :doc "A demo wait."}})
+        dir (tu/tmp-dir)
+        load! #(settings/load! {:specs js :body "Bob" :world-file (write! dir "world.edn" %) :body-file nil :emit (fn [_])})]
+    (is (= {:default 50 :doc "A demo wait."} (select-keys (:prim/demo-ms js) [:default :doc])))
+    (load! "{}")
+    (let [read (settings/js-reader)]
+      (is (= 50 (read "prim/demo-ms")))
+      (is (nil? (read "prim/unknown")))
+      (load! "{:prim/demo-ms 7}")
+      (is (= 7 (read "prim/demo-ms")) "a reload reaches the reader at its next call")
+      (load! "{:prim/demo-ms 0}")
+      (is (= 50 (read "prim/demo-ms")) "a value outside the spec keeps the default"))))))

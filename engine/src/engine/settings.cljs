@@ -24,6 +24,26 @@
     (let [values (:values @state)]
       (if (contains? values k) (clojure.core/get values k) (:default spec)))))
 
+(defn js-specs
+  "{key spec} of the JavaScript primitives' tuning numbers, registered as settings: specs is the SPECS object of
+  js/settings.mjs, whose entries {default, spec: [kind lo hi], doc} become the engine.args shape."
+  [specs]
+  (a/declare-settings!
+   (into {} (map (fn [[k {:keys [default spec doc]}]]
+                   (let [[kind lo hi] spec
+                         [make sym] (case kind "int-in" [a/int-in 'int-in] "num-in" [a/num-in 'num-in])]
+                     [(keyword k) {:default default :spec (make lo hi) :doc doc :form (list sym lo hi)}])))
+         (js->clj specs :keywordize-keys true))))
+
+(defn js-reader
+  "The reader the primitives get (key string -> live value, nil for a key not declared): it reads the state at each
+  call, so a reload reaches the JavaScript at its next use."
+  []
+  (fn [k]
+    (let [specs (:specs @state)
+          kw (keyword k)]
+      (when (contains? specs kw) (get specs kw)))))
+
 (defn read-layer
   "[:missing], [:ok map] or [:bad why] for a settings file."
   [file]

@@ -164,7 +164,8 @@
         _ (offsets/set-root! root)
         ;; the settings files; their problems wait here until the engine exists to emit them
         settings-events (atom [])
-        _ (settings/load! {:specs (merge registry/settings settings-registry/settings settings)
+        js-settings (settings/js-specs (.-SPECS ((createRequire (str root "/")) "./js/settings.mjs")))
+        _ (settings/load! {:specs (merge registry/settings settings-registry/settings settings js-settings)
                            :world-file (path/join (bodies/worlds-dir state-dir) (:world cfg) "settings.edn")
                            :body-file (path/join (bodies/body-dir state-dir (:world cfg) (:agent opts)) "settings.edn")
                            :body (:agent opts)
@@ -179,6 +180,7 @@
                           (core/emit! eng (-> (js->clj e :keywordize-keys true)
                                               (update :kind keyword) (update :source keyword) (update :level keyword)))))
         raw-p (await (create-primitives (doto (connect-options cfg)
+                                             (unchecked-set "settings" (settings/js-reader))
                                              (unchecked-set "view" #js {:stateDir (clj->js state-dir) :agent (:agent opts) :world (:world cfg)
                                                                         :onEvent on-view-event}))))
         ;; what the body has seen (engine.perception); BODY_PERCEPTION=0 runs without it
