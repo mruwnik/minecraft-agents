@@ -237,9 +237,11 @@
                   slow-to (.-enter-slow s)
                   tight (or tight-src ^boolean (.tightAt s x2 y2 z2))]
               (when ^boolean (.swimBegin s i false x2 y2 z2 base 0 src-sub)
+                (set! (.-move-dmg s) (.-enter-dmg s))
                 (if tight
                   (.tightMove s i x y z 0 region c x2 y2 z2 h1 MOVE-EXIT (+ base 0) risk slow-to SNAP SNAP)
                   (.edge s x2 y2 z2 h1 MOVE-EXIT i (+ base 0) risk slow-to 0 0))
+                (set! (.-move-dmg s) 0)
                 (.swimEnd s))))
           (recur (inc y2))))))
 

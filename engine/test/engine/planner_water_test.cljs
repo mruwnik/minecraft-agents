@@ -875,3 +875,12 @@
   (is (>= (planner/lethal-seconds 2 2 8 0 nil 0 0 #js [0 1e3 2e3]) (* 1e6 2 1e3)) "2 hp a second at 1000 s an hp")
   (is (js/isFinite (planner/lethal-seconds 2 2 js/Infinity 0 (js/Map. #js [#js [1 js/Infinity]]) 0 0 nil)))
   (is (js/isFinite (planner/lethal-seconds 0 0 js/NaN 0 nil 0 0 nil)) "riskWeight 0: a NaN danger cap"))
+
+(def bush-bank (world [[10 61 -2 20 63 40 "water"] [21 64 -2 21 64 40 "sweet_berry_bush"]]))
+
+(deftest a-swim-exit-into-a-berry-bush-counts-its-damage
+  (let [taken (run bush-bank from2 (near 26 64 2) {:damageBudget 5 :damageWeight 1})
+        refused (run bush-bank from2 (near 26 64 2) {:damageBudget 0 :damageWeight 1})]
+    (is (found? taken))
+    (is (pos? (cost taken :damage)))
+    (is (not (found? refused)))))
