@@ -185,6 +185,7 @@
         ^js metrics (new-metrics)
         ;; the scene's state, mutated in place
         ^js st #js {:pose nil
+                    :lamp 0 ; block light of a torch the body holds (from the pose event), lighting the view around the eye
                     :hud nil
                     :table nil ; the version's block table; null until loaded, and for a scene whose version the renderer refused
                     :dims nil ; {height, minY}
@@ -378,6 +379,7 @@
                    (let [^js pose (.-pose data)
                          mtime (.-mtime data)]
                      (set! (.-pose st) pose)
+                     (set! (.-lamp st) (or (.-lamp data) 0))
                      (set! (.-pendingMtime st) mtime)
                      (.push interp pose (js/Date.now))
                      (when (some? (.-eye pose))
@@ -446,6 +448,7 @@
                               :basis (camera/js-camera-basis #js {:yaw (.-yaw cam) :pitch (.-pitch cam) :fov fov})
                               :dist max-dist
                               :darken (sky-darken (.-time t) (.-rain t))
+                              :lamp (or (.-lamp st) 0)
                               :slotOff #js {:x (* 16 (w/modulo (- (.-ccx st) radius) N)) :z (* 16 (w/modulo (- (.-ccz st) radius) N))}
                               :entities (entity-boxes (or-default (.-entities shown) (.-entities pose)) #js {:x ox :y oy :z oz} eye)}))))
 

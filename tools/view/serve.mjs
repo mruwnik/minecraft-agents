@@ -10,6 +10,7 @@ import { createDriveProxy } from './drive-proxy.mjs'
 import { SEVERITIES, severityOf } from './block-issues.mjs'
 import { biomeTable } from './biome-colors.mjs'
 import { createBlockScanner, classifyReal, findClientJar } from './block-scan.mjs'
+import { heldLamp } from './renderer.mjs'
 import { bodyDir, listBodies, worldsDir } from '../../engine/js/bodies.mjs'
 
 const NAME = /^[A-Za-z0-9_-]+$/
@@ -208,7 +209,7 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
       }
       return () => (running = running.then(check))
     }
-    const checkPose = watchFile('pose.json', 'pose', (mtime, value) => ({ mtime, sentAt: Date.now(), pose: value }), value => { pose = value })
+    const checkPose = watchFile('pose.json', 'pose', (mtime, value) => ({ mtime, sentAt: Date.now(), pose: value, lamp: heldLamp(value) }), value => { pose = value })
     const checkHud = watchFile('hud.json', 'hud', (mtime, value) => ({ mtime, hud: value }))
 
     // a self-rescheduling loop never overlaps itself, and stops for good once the client is gone

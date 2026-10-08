@@ -36,6 +36,7 @@ uniform sampler2DArray uTex;
 uniform float uLodMax;
 uniform vec2 uRes;
 uniform vec3 uEye;
+uniform float uLamp; // block light of a torch held at the eye (0 none), less 1 per block of distance
 uniform vec3 uFwd;
 uniform vec3 uRight;
 uniform vec3 uUp;
@@ -94,7 +95,8 @@ vec2 cellLight (ivec3 c) {
   if (c.y < 0) return vec2(0.0);
   if (!inWindow(c) || sectionFlag(c) == 0u) return vec2(15.0, 0.0);
   uint v = texelFetch(uLightTex, wrapCell(c), 0).r;
-  return vec2(float(v >> 4), float(v & 15u));
+  float held = uLamp > 0.0 ? max(0.0, uLamp - distance(vec3(c) + 0.5, uEye)) : 0.0;
+  return vec2(float(v >> 4), max(float(v & 15u), held));
 }
 
 // a full opaque cube: what occludes ambient light

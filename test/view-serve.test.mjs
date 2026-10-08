@@ -172,6 +172,16 @@ test('SSE sends the pose and hud on connect, then a pose event on change', async
   writeAt(path.join(viewDir, 'pose.json'), JSON.stringify(pose), 1000)
 })
 
+test('SSE pose events carry lamp: the light of a torch held in either hand, 0 otherwise', async () => {
+  const response = await get('/pose/w1/Bob?radius=2')
+  setTimeout(() => writeAt(path.join(viewDir, 'pose.json'), JSON.stringify({ ...pose, t: 7, offHand: 'torch' }), 2500), 100)
+  const events = await collect(response, { ms: 1500, done: es => es.filter(e => e.event === 'pose').length >= 2 })
+  const poses = events.filter(e => e.event === 'pose')
+  assert.equal(poses[0].data.lamp, 0)
+  assert.equal(poses[1].data.lamp, 14)
+  writeAt(path.join(viewDir, 'pose.json'), JSON.stringify(pose), 1000)
+})
+
 test('SSE sends column events for changed columns inside the radius only', async () => {
   const response = await get('/pose/w1/Bob?radius=2')
   setTimeout(() => {

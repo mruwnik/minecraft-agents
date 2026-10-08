@@ -45,3 +45,9 @@ test('the fragment shader declares highp for float sampler2D, which holds the el
   const source = fs.readFileSync(new URL('../tools/view/web/gl-shader.mjs', import.meta.url), 'utf8')
   assert.ok(source.includes('precision highp sampler2D;'))
 })
+
+test('the fragment shader lights cells by the held lamp: uLamp, less one per block from the eye', () => {
+  const source = fs.readFileSync(new URL('../tools/view/web/gl-shader.mjs', import.meta.url), 'utf8')
+  assert.match(source, /uniform float uLamp;/)
+  assert.match(source, /uLamp - distance\(/)
+})

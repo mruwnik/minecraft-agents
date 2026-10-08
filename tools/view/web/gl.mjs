@@ -159,7 +159,7 @@ export function createRenderer (canvasOrGl) {
   const debugInfo = gl.getExtension('WEBGL_debug_renderer_info')
   const renderer = debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)
   const program = link(gl)
-  const uniform = Object.fromEntries(['uBlocks', 'uCoarse', 'uMats', 'uInfo', 'uElems', 'uElemBase', 'uTintGroups', 'uTintConst', 'uTex', 'uLodMax', 'uRes', 'uEye', 'uFwd', 'uRight', 'uUp', 'uHalf', 'uSize', 'uSlotOff', 'uDist', 'uDarken', 'uDebug', 'uLightTex', 'uBiomes', 'uBiomeColors', 'uHasBiomeColors', 'uEntCount', 'uEntMin', 'uEntMax', 'uEntCol', 'uEntRot', 'uEntOrg', 'uParts', 'uLabelCount', 'uLabelRect', 'uLabelDepth', 'uLabelAt', 'uLabelDist', 'uLabels']
+  const uniform = Object.fromEntries(['uBlocks', 'uCoarse', 'uMats', 'uInfo', 'uElems', 'uElemBase', 'uTintGroups', 'uTintConst', 'uTex', 'uLodMax', 'uRes', 'uEye', 'uLamp', 'uFwd', 'uRight', 'uUp', 'uHalf', 'uSize', 'uSlotOff', 'uDist', 'uDarken', 'uDebug', 'uLightTex', 'uBiomes', 'uBiomeColors', 'uHasBiomeColors', 'uEntCount', 'uEntMin', 'uEntMax', 'uEntCol', 'uEntRot', 'uEntOrg', 'uParts', 'uLabelCount', 'uLabelRect', 'uLabelDepth', 'uLabelAt', 'uLabelDist', 'uLabels']
     .map(name => [name, gl.getUniformLocation(program, name)]))
   gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1)
   gl.bindVertexArray(gl.createVertexArray())
@@ -351,7 +351,7 @@ export function createRenderer (canvasOrGl) {
 
   // eye is relative to the window origin; entities are {min, max, color} in the same space; width/height (default: the canvas size)
   // are the viewport drawn at the framebuffer's bottom-left
-  const draw = (world, { eye, basis, dist, darken, slotOff, entities, width = canvas.width, height = canvas.height }) => {
+  const draw = (world, { eye, basis, dist, darken, lamp = 0, slotOff, entities, width = canvas.width, height = canvas.height }) => {
     const size = world.size()
     const labels = boxLabels({ boxes: entities, eye, basis, width, height, dist })
     const labelKey = labels.map(l => l.text).join('\n')
@@ -395,6 +395,7 @@ export function createRenderer (canvasOrGl) {
     gl.uniform2i(uniform.uSlotOff, slotOff.x, slotOff.z)
     gl.uniform1f(uniform.uDist, dist)
     gl.uniform1f(uniform.uDarken, darken)
+    gl.uniform1f(uniform.uLamp, lamp)
     gl.uniform1i(uniform.uDebug, debug ? 1 : 0)
     gl.uniform1i(uniform.uEntCount, count)
     gl.uniform3fv(uniform.uEntMin, flat('min'))
