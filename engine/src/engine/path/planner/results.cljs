@@ -77,6 +77,7 @@
                           :px (+ x (if tight (/ (bit-and (bit-shift-right shape 5) 31) 16) 0.5))
                           :pz (+ z (if tight (/ (bit-and (bit-shift-right shape 10) 31) 16) 0.5))}]
             (when ^boolean (.isWater s x (aget (.-ys s) i) z) (unchecked-set step "swim" true))
+            (when (== (aget (.-lights s) i) 1) (unchecked-set step "light" true))
             (let [dmg (- (aget (.-dmgs s) i) (if (neg? (aget (.-parents s) i)) 0 (aget (.-dmgs s) (aget (.-parents s) i))))]
               (when (pos? dmg) (unchecked-set step "damage" dmg)))
             (when (pos? (aget (.-opens s) i)) (unchecked-set step "opens" (aget ^js (.-open-lists s) (dec (aget (.-opens s) i)))))
@@ -215,9 +216,11 @@
                                    best))}]
       #js {:steps steps :cost cost :summary (.summarize s steps node)}))
 
-  ;; Did the search run out of land with no node at the loaded edge: the start's region is closed in the loaded world?
+  ;; Did the search run out of land with no node at the loaded edge: the start's region is closed in the loaded world? Not
+  ;; when it refused an unseen floor (options.unknown): the way out may lie there.
   (startEnclosed [s]
     (and (identical? (.-reason s) "exhausted") (== (.-edge-node s) -1)
+         (not ^boolean (.-dark-refused s)) (not ^boolean (.-unseen-refused s))
          (loop [i 0]
            (cond
              (>= i (.-n-nodes s)) true
@@ -227,7 +230,8 @@
   (outcome [s status why path one-way]
     (let [frontier (when-not (identical? status "found") (.frontierOf s))
           why (if (and (identical? why "goal-unloaded") ^boolean (.startEnclosed s)) "start-enclosed" why)]
-      #js {:status status
+      (.withUnknown s
+       #js {:status status
            :reason why
            :ms (.-elapsed s)
            :expanded (.-expanded s)
@@ -239,7 +243,17 @@
            :edges ^js (.-edges-new s)
            :searchedOut ^boolean (.-searched-out s)
            :limited ^boolean (.-limit-refused s)
-           :damageRefused (and ^boolean (.-damage-refused s) (not (identical? status "found")))}))
+           :damageRefused (and ^boolean (.-damage-refused s) (not (identical? status "found")))})))
+
+  ;; with options.unknown, the result says whether a phantom floor was refused: darkRefused (unseeable; darkBest {x y z h}
+  ;; the refused stand nearest the goal, h its distance) and unseenRefused (no stop to check it first)
+  (withUnknown [s ^js r]
+    (when (>= (.-unk-id s) 0)
+      (set! (.-darkRefused r) ^boolean (.-dark-refused s))
+      (set! (.-darkBest r) (when ^boolean (.-dark-refused s)
+                             #js {:x (.-dark-best-x s) :y (.-dark-best-y s) :z (.-dark-best-z s) :h (.-dark-best-d s)}))
+      (set! (.-unseenRefused r) ^boolean (.-unseen-refused s)))
+    r)
 
   ;; ends the search if it is not over; an exhausted search that turned a ladder away at a gap, or a swim move for lack of air,
   ;; says so

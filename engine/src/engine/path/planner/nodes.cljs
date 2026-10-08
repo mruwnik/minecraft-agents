@@ -107,6 +107,7 @@
     (set! (.-drown-runs s) (grown (.-drown-runs s) (.-cap s)))
     (set! (.-drown-closed s) (grown (.-drown-closed s) (.-cap s)))
     (set! (.-darks s) (grown (.-darks s) (.-cap s)))
+    (set! (.-lights s) (grown (.-lights s) (.-cap s)))
     (set! (.-airs s) (grown (.-airs s) (.-cap s)))
     (set! (.-peaks s) (grown (.-peaks s) (.-cap s)))
     (set! (.-wsecs s) (grown (.-wsecs s) (.-cap s)))
@@ -201,6 +202,7 @@
     (aset (.-drown-runs s) node (.-move-run s))
     (aset (.-drown-closed s) node (.-move-closed s))
     (aset (.-darks s) node dark)
+    (aset (.-lights s) node (.-move-light s))
     (aset (.-airs s) node (.-move-air s))
     (aset (.-peaks s) node (js/Math.max (aget (.-peaks s) parent-node) (.-move-peak s)))
     (aset (.-wsecs s) node (+ (aget (.-wsecs s) parent-node) (.-move-water s)))
@@ -252,6 +254,8 @@
         ;; a gap jump or a drop never lands on farmland: a landing after a fall of over 0.5 blocks tramples it (a farmland node
         ;; is the farmland's own cell; a jump up one block falls about 0.3 from the top of its arc, so it may land there)
         (and (or (== move MOVE-GAP) (== move MOVE-DROP)) (== (aget (.-tbl-farmland s) (.stateAt ^js (.-snapshot s) x y z)) 1)) nil
+        ;; options.unknown: a phantom floor the walk cannot check first or see (also sets move-unk and move-light)
+        (and (>= (.-unk-id s) 0) ^boolean (.unseenRefuses s x y z move parent-node dsec)) nil
         (and ^boolean (.-returnable s) (not ^boolean (.-replaying s)) ^boolean (.holdsBack s x y z h move parent-node dsec drisk slow-to corner shape)) nil
         ^boolean (.refusedKind s (.-limit-kinds s) x y z move) (do (set! (.-limit-refused s) true) nil)
         (and (pos? (.-move-dmg s)) (> (+ (aget (.-dmgs s) parent-node) (.-move-dmg s)) (.-damage-budget s))) (do (set! (.-damage-refused s) true) nil)
@@ -265,7 +269,8 @@
         (let [drisk (if (pos? (.-n-dangers s)) (+ drisk (.dangerRisk s x y z dsec)) drisk)
               extra (if ^boolean (.-avoiding s) (.avoidCost s x y z move dsec drisk) 0)
               ddark (+ (if (some? (.-dark-at s)) (* (.-dark-factor s) dsec (.darkOf s x y z)) 0)
-                       (if (some? (.-tolls s)) (* dsec (.tollOf s x y z)) 0))]
+                       (if (some? (.-tolls s)) (* dsec (.tollOf s x y z)) 0)
+                       (.-move-unk s))]
           (when-not (neg? extra)
             (let [key (.keyOf s x y z region)
                   slot (.findSlot s key (bit-and (.hashOf s x y z region) (dec (.-slots s))))

@@ -175,7 +175,8 @@
                 (if ^boolean (.fits s x y z (+ (* y 16) t) id) t -1))))
 
         :else
-        (let [below (.stateAt s x (dec y) z)]
+        ;; (an unseen floor, options.unknown, reads as unk-floor-id: a phantom floor, judged in consider)
+        (let [below (let [b (.stateAt s x (dec y) z)] (if (== b (.-unk-id s)) (.-unk-floor-id s) b))]
           (if (== below UNLOADED)
             -1
             (let [tb (aget (.-tbl-floor s) below)
@@ -201,21 +202,21 @@
             ^boolean (.lavaAt s (+ x (aget (.-adx s) c)) (dec y) (+ z (aget (.-adz s) c)))) true
         :else (recur (inc c)))))
 
-  ;; 1 when a fall through this column ends in lava or beyond a safe drop, else 0
+  ;; 1 when a fall through this column ends in lava or beyond a safe drop, else 0 (an unseen cell ends the look as unloaded land)
   (holeRisk [s x y z]
     (loop [k 1]
       (if (> k (inc FREE-FALL))
         1
         (let [id (.stateAt s x (- y k) z)]
           (cond
-            (== id UNLOADED) 0
+            (or (== id UNLOADED) (== id (.-unk-id s))) 0
             (== (aget (.-tbl-kind s) id) LAVA) 1
             (or (pos? (aget (.-tbl-top s) id)) (== (aget (.-tbl-kind s) id) WATER)) 0
             :else (recur (inc k)))))))
 
   ;; 1 when the side column x z of a corner slide whose body's feet are at lo (1/16 absolute) has no floor and lava or a
   ;; block to avoid or that hurts to stand on (fire, powder snow, cobweb, magma, a lit campfire) under the hole within a
-  ;; safe drop, else 0. A floor (collision), water or unloaded land ends the look.
+  ;; safe drop, else 0. A floor (collision), water, unloaded land or an unseen cell ends the look.
   (slideHoleRisk [s x z lo]
     (let [top-y (bit-shift-right (dec lo) 4)]
       (loop [k 0]
@@ -223,16 +224,16 @@
           0
           (let [id (.stateAt s x (- top-y k) z)]
             (cond
-              (== id UNLOADED) 0
+              (or (== id UNLOADED) (== id (.-unk-id s))) 0
               (or (== (aget (.-tbl-kind s) id) LAVA) (== (aget (.-tbl-hazard s) id) HAZARD-AVOID) (== (aget (.-tbl-hazard s) id) DAMAGE-STAND)) 1
               (or (pos? (aget (.-tbl-top s) id)) (== (aget (.-tbl-kind s) id) WATER)) 0
               :else (recur (inc k))))))))
 
   ;; A body that falls into the cell under a gap cell x y z cannot jump back out: the cell two below is open too (no
-  ;; collision, not water), so the floor is two or more blocks down
+  ;; collision, not water, seen), so the floor is two or more blocks down
   (pitBelow [s x y z]
     (let [id (.stateAt s x (- y 2) z)]
-      (and (not= id UNLOADED) (zero? (aget (.-tbl-top s) id)) (not= (aget (.-tbl-kind s) id) WATER))))
+      (and (not= id UNLOADED) (not= id (.-unk-id s)) (zero? (aget (.-tbl-top s) id)) (not= (aget (.-tbl-kind s) id) WATER))))
 
   ;; A body standing level with a magma bubble column (or at the surface cell beside it, when it stands on the bank above)
   ;; can slip into it. Costs risk. `quiet` says no section near the cell holds such a column.

@@ -1,0 +1,129 @@
+(ns engine.path.planner.unknown
+  "Search methods: cells the body has not seen (options.unknown, see engine.path.planner-tuned). Such a cell reads as
+  void_air, air to the body. A stand on an unseen floor (a phantom floor, standPlain reads it as unk-floor-id) is allowed
+  only where the walk can stop on the takeoff to check it first and can see it from there, and it is priced."
+  (:require [engine.path.planner.base :refer [FREE-FALL MOVE-CLIMB-UP MOVE-CORNER MOVE-DIAGONAL MOVE-DROP MOVE-GAP MOVE-JUMP MOVE-JUMP-CLIMB MOVE-SWIM MOVE-WALK OPEN TABLE UNLOADED WHOLE cell-key]]
+            [engine.path.planner.search :refer [Search]]))
+
+(set! *warn-on-infer* true)
+
+(def ^:const SEE-LIT-DEPTH 15) ; the deepest drop a lit landing is seen over from the peek (design v3.2 0.5)
+(def ^:const LIGHT-DEPTH 10) ; the deepest drop a torch at the takeoff lights the landing of well enough to see it
+
+(extend-type Search
+  Object
+
+  ;; is the state id an unseen cell's?
+  (isUnknown [s id] (== id (.-unk-id s)))
+
+  ;; is the floor cell x y z one the walk looked for and could not see (options.unknown.missed)?
+  (missedAt [s x y z]
+    (and (some? ^js (.-missed s)) (true? (.has ^js (.-missed s) (cell-key x y z)))))
+
+  ;; does the node at x y z stand on a phantom floor: its floor is unseen and it stands on its floor (not in a climbable,
+  ;; not on its own cell's low block, not in a door's lower half, whose floor a door implies)?
+  (phantomAt [s x y z]
+    (and ^boolean (.isUnknown s (.stateAt ^js (.-snapshot s) x (dec y) z))
+         (let [id (.stateAt s x y z)
+               t (aget (.-tbl-top s) id)
+               cl (aget (.-tbl-climb s) id)]
+           (and (not (and (pos? t) (zero? (aget (.-tbl-base s) id)) (< t WHOLE)))
+                (not (and (not (zero? cl)) ^boolean (.climbCell s cl id x y z)))
+                (not (== (aget (.-tbl-door-half s) id) 1))))))
+
+  ;; the unseen cells among the feet and head cells at x y z
+  (unknownCells [s x y z]
+    (+ (if ^boolean (.isUnknown s (.stateAt ^js (.-snapshot s) x y z)) 1 0)
+       (if ^boolean (.isUnknown s (.stateAt ^js (.-snapshot s) x (inc y) z)) 1 0)))
+
+  ;; is the cell, its floor or its head cell unseen, or its floor missed? A proof (the goal flood) must not rest on it.
+  (unknownNear [s x y z]
+    (and (>= (.-unk-id s) 0)
+         (or ^boolean (.isUnknown s (.stateAt ^js (.-snapshot s) x y z))
+             ^boolean (.isUnknown s (.stateAt ^js (.-snapshot s) x (dec y) z))
+             ^boolean (.isUnknown s (.stateAt ^js (.-snapshot s) x (inc y) z))
+             ^boolean (.missedAt s x (dec y) z))))
+
+  ;; did node p's way in end with the body bouncing on a pad (a drop whose landing factor is a bounce)?
+  (bounceArrival [s p]
+    (and (== (aget (.-moves s) p) MOVE-DROP) (some? (.-land-factors s)) (>= (aget (.-parents s) p) 0)
+         (let [x (aget (.-xs s) p) y (aget (.-ys s) p) z (aget (.-zs s) p)
+               own (.stateAt s x y z)
+               sup (if (pos? (aget (.-tbl-top s) own)) own (.stateAt s x (dec y) z))
+               fall (- (.stand16 s (aget (.-parents s) p)) (.stand16 s p))]
+           (and (> fall (* FREE-FALL 16)) (neg? (.landFactor s sup x y z fall))))))
+
+  ;; Can the walk stop on node p's stand before `move` takes it onto a phantom floor, to check the floor? The move is a walk,
+  ;; diagonal, corner slide, jump or drop, and p was reached by none of a gap jump, a climb, a swim, an exit or a bounce (the
+  ;; start stands still).
+  (gateCheckable [s move p]
+    (and (or (== move MOVE-WALK) (== move MOVE-DIAGONAL) (== move MOVE-CORNER) (== move MOVE-JUMP) (== move MOVE-DROP))
+         (let [m (aget (.-moves s) p)]
+           (and (not (== m MOVE-GAP)) (not (and (>= m MOVE-CLIMB-UP) (<= m MOVE-JUMP-CLIMB))) (< m MOVE-SWIM)
+                (not ^boolean (.bounceArrival s p))))))
+
+  ;; 1 when the caller's test (options.unknown.seeLit) calls the landing x y z lit enough to see its floor from the peek,
+  ;; else 0; cached as darkOf
+  (seeLitOf [s x y z]
+    (let [key (inc (.keyOf s x y z 0))
+          slot (bit-and (.hashOf s x y z 0) (dec TABLE))]
+      (if (== (aget (.-see-keys s) slot) key)
+        (- (aget (.-see-flags s) slot) 1)
+        (let [lit (if (== (.call ^js (.-see-lit s) nil x y z) 1) 1 0)]
+          (aset (.-see-keys s) slot key)
+          (aset (.-see-flags s) slot (inc lit))
+          lit))))
+
+  ;; a cell the body knows is air (seen, empty, no water)
+  (knownAir [s x y z]
+    (let [id (.stateAt ^js (.-snapshot s) x y z)]
+      (and (not (== id UNLOADED)) (not ^boolean (.isUnknown s id)) (== (aget (.-tbl-kind s) id) OPEN)
+           (zero? (aget (.-tbl-top s) id)) (zero? (aget ^js (.-wet ^js (.-table s)) id)))))
+
+  ;; Can the floor of a drop of d from node p be seen once the body is at the peek? Within see-depth, or within
+  ;; SEE-LIT-DEPTH when the landing's air is known and the caller calls it lit.
+  (seeable [s x y z d]
+    (or (<= d (.-see-depth s))
+        (and (some? (.-see-lit s)) (<= d SEE-LIT-DEPTH) ^boolean (.knownAir s x y z) (== (.seeLitOf s x y z) 1))))
+
+  ;; Can a torch at node p's stand light a drop of d? Torches are on (light-cost), d is at most LIGHT-DEPTH, p's feet cell
+  ;; is known air on a torch base (options.unknown.torchBase), the caller allows it there (lightOk) and no torch failed there.
+  (lightable [s p d]
+    (and (>= (.-light-cost s) 0) (<= d LIGHT-DEPTH) (some? (.-torch-base s))
+         (let [x (aget (.-xs s) p) y (aget (.-ys s) p) z (aget (.-zs s) p)
+               floor (.stateAt ^js (.-snapshot s) x (dec y) z)]
+           (and ^boolean (.knownAir s x y z)
+                (not (== floor UNLOADED)) (== (aget ^js (.-torch-base s) floor) 1)
+                (or (nil? (.-light-ok s)) (true? (.call ^js (.-light-ok s) nil x y z)))
+                (not (and (some? ^js (.-no-light s)) (true? (.has ^js (.-no-light s) (cell-key x y z)))))))))
+
+  ;; a phantom floor refused for want of sight: the refused stand nearest the goal is kept (result darkBest)
+  (darkRefuse [s x y z]
+    (set! (.-dark-refused s) true)
+    (let [d (.distanceTo s x z)]
+      (when (< d (.-dark-best-d s))
+        (set! (.-dark-best-d s) d)
+        (set! (.-dark-best-x s) x)
+        (set! (.-dark-best-y s) y)
+        (set! (.-dark-best-z s) z))))
+
+  ;; True when the move from node p into x y z is refused for options.unknown: its stand is on a phantom floor that the walk
+  ;; cannot stop to check first (unseen-refused), was missed, or cannot be seen and not lit (dark-refused). Else sets what it
+  ;; costs (move-unk, seconds: cell per unseen feet or head cell and floor for a phantom floor, both times dsec, and a peek
+  ;; over a drop or an aim at a level or up one, and light-cost when a torch must light it) and move-light.
+  (unseenRefuses [s x y z move p dsec]
+    (set! (.-move-light s) 0)
+    (let [cells (* dsec (.-unk-cell s) (.unknownCells s x y z))]
+      (if-not ^boolean (.phantomAt s x y z)
+        (do (set! (.-move-unk s) cells)
+            false)
+        (let [d (js/Math.max 0 (- (aget (.-ys s) p) y))
+              priced (+ cells (* dsec (.-unk-floor s)) (if (pos? d) (.-peek-s s) (.-aim-s s)))]
+          (cond
+            (not ^boolean (.gateCheckable s move p)) (do (set! (.-unseen-refused s) true) true)
+            ^boolean (.missedAt s x (dec y) z) (do (.darkRefuse s x y z) true)
+            ^boolean (.seeable s x y z d) (do (set! (.-move-unk s) priced) false)
+            ^boolean (.lightable s p d) (do (set! (.-move-unk s) (+ priced (.-light-cost s)))
+                                            (set! (.-move-light s) 1)
+                                            false)
+            :else (do (.darkRefuse s x y z) true)))))))

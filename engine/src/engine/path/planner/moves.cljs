@@ -88,11 +88,12 @@
   ;; walk off an edge into the first standable cell below the neighbour column, or into water of any depth up to maxWaterDrop
   ;; (the fall is cancelled there). A tight cell at either end: the body falls straight down from the crossing point, which
   ;; the masks must leave free all the way (a climbable below is grabbed as it falls past, so it takes any position).
+  ;; No fall goes into an unseen cell (options.unknown): it is the phantom floor of the landing above it.
   (expandDrop [s i x y z h region c x2 z2 h0 slow-from ^boolean tight-src]
     (loop [y2 (dec y)]
       (when (>= y2 (- y (.-c-max-water-drop s) 1))
         (let [id (.stateAt s x2 y2 z2)]
-          (when-not (or (== id UNLOADED) (== (aget (.-tbl-kind s) id) LAVA) ^boolean (.avoids s id x2 y2 z2))
+          (when-not (or (== id UNLOADED) (== id (.-unk-id s)) (== (aget (.-tbl-kind s) id) LAVA) ^boolean (.avoids s id x2 y2 z2))
             (if (== (aget (.-tbl-kind s) id) WATER)
               (.dropIntoWater s i x y z h region c x2 y2 z2 h0 slow-from tight-src)
               (let [h1 (.landing s x2 y2 z2)]
@@ -331,7 +332,7 @@
           (.verticalMove s i x y z h region (dec y) h2 (if ^boolean (.-enters-shut s) MOVE-OPEN MOVE-CLIMB-DOWN) sec (.-enter-risk s) (.-enter-slow s))
           (set! (.-move-open s) 0))
         (let [free (.stateAt s x (dec y) z)]
-          (when-not (or (== free UNLOADED) (pos? (aget (.-tbl-top s) free)) (== (aget (.-tbl-kind s) free) WATER) (== (aget (.-tbl-kind s) free) LAVA)
+          (when-not (or (== free UNLOADED) (== free (.-unk-id s)) (pos? (aget (.-tbl-top s) free)) (== (aget (.-tbl-kind s) free) WATER) (== (aget (.-tbl-kind s) free) LAVA)
                         ^boolean (.avoids s free x (dec y) z))
             (.fallThrough s i x y z h region (+ (* y 16) h)))))))
 
@@ -339,7 +340,7 @@
     (loop [y3 (- y 2)]
       (when (>= y3 (- y (.-max-drop s) 1))
         (let [id (.stateAt s x y3 z)]
-          (when-not (or (== id UNLOADED) (== (aget (.-tbl-kind s) id) LAVA) (== (aget (.-tbl-kind s) id) WATER) ^boolean (.avoids s id x y3 z))
+          (when-not (or (== id UNLOADED) (== id (.-unk-id s)) (== (aget (.-tbl-kind s) id) LAVA) (== (aget (.-tbl-kind s) id) WATER) ^boolean (.avoids s id x y3 z))
             (let [h3 (.landing s x y3 z)]
               (if (neg? h3)
                 (when-not (pos? (aget (.-tbl-top s) id)) (recur (dec y3)))

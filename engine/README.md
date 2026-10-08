@@ -697,6 +697,7 @@ the recorded pins (`planner_{bench,options,goals,courses}_golden.cljs`, `js/path
   `:dangers false` for a walk up to the mob fought). Darkness is priced too (`options.dark`: a dark cell costs twice its seconds more; `jobs.lib.look/dark-fn`: seen and dark, or unseen at night). The caller's own cells are priced by `options.tolls` (a Map of cell key to factor; the planner knows no zones or crops). Certain damage (falls over 3 blocks, hurting plants) sums per path: `options.damageBudget` (hp) refuses a move over it (`damageRefused`), `damageWeight` prices an hp, `fallFactor`/`landing` shape a fall; `cost.damage` reports it. Farmland is never fallen onto: no drop or gap jump lands on it, and no diagonal
   passes a pit floored with it. The planner
   takes `options.limits` for what the walker can do.
+- `options.unknown` (off by default, nobody passes it yet): void_air cells are unseen, air to the body; a stand on an unseen floor is allowed only after a move the walk can stop before and where it can be seen (`seeDepth`, `seeLit`, or a torch: `lightCost`, step `light`), else `darkRefused`/`darkBest` or `unseenRefused`; priced by `jobs.lib.cost/unknown-prices`; no proof rests on an unseen cell.
 
 ## Agent command-line tools
 

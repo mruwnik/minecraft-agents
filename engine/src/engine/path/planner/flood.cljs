@@ -26,7 +26,9 @@
             (> dy r) (recur (inc dx) (- r) (- r))
             (> dz r) (recur dx (inc dy) (- r))
             (and (<= (+ (* dx dx) (* dy dy) (* dz dz)) (* (.-goal-range s) (.-goal-range s)))
-                 (>= (.nodeH s (+ (.-goal-x s) dx) (+ (.-goal-y s) dy) (+ (.-goal-z s) dz)) 0)) false
+                 (or (>= (.nodeH s (+ (.-goal-x s) dx) (+ (.-goal-y s) dy) (+ (.-goal-z s) dz)) 0)
+                     ;; an unseen goal cell (options.unknown) may be standable
+                     ^boolean (.unknownNear s (+ (.-goal-x s) dx) (+ (.-goal-y s) dy) (+ (.-goal-z s) dz)))) false
             :else (recur dx dy (inc dz)))))))
 
   ;; a bubble column lifts and drags in ways the flood does not enumerate: meeting one marks the flood leaked
@@ -53,7 +55,8 @@
               (dotimes [r (.floodRegions s x y z (.nodeH s x y z))]
                 (.add seen (.keyOf s x y z r))
                 (.push queue x y z r))
-              (.leakBubble s x y z))
+              (.leakBubble s x y z)
+              (when ^boolean (.unknownNear s x y z) (set! (.-leaked s) true)))
             (recur dx dy (inc dz)))))))
 
   ;; the flood's nodes in a cell standing at h: one per region of a tight cell, as the search's nodes are (the strips either
@@ -63,11 +66,13 @@
       (js/Math.min REGIONS (.-length (.-regs ^js (.shapeOf s x y z (+ (* y 16) h)))))
       1))
 
-  ;; a cell the flood cannot see into: out of the span, or in a column the snapshot has not loaded
+  ;; a cell the flood cannot see into: out of the span, in a column the snapshot has not loaded, or (options.unknown) the
+  ;; cell, its floor or its head cell unseen or its floor missed: no proof rests on what the body has not seen
   (unseen [s x y z]
     (or (not ^boolean (.inSpan s x z))
         (and (== (.stateAt ^js (.-snapshot s) x y z) UNLOADED)
-             (false? (.hasColumn ^js (.-snapshot s) (bit-shift-right x 4) (bit-shift-right z 4))))))
+             (false? (.hasColumn ^js (.-snapshot s) (bit-shift-right x 4) (bit-shift-right z 4))))
+        ^boolean (.unknownNear s x y z)))
 
   ;; the cell's stand height as the search can reach it: as it stands, or with a closed door, gate or trapdoor in its column
   ;; read as open (the opening pass makes nodes the body only fits in once something is opened)

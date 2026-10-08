@@ -59,6 +59,17 @@
      damage, so no damageBudget), the first k hp costing options.drownPrices[k] seconds (nil: damageWeight each); drowning
      with the plan's certain damage to options.health (20) is lethal, each air-out (under since the last breath) counting its 2 hp hits as ceil(seconds + costs.drownSlack (1)): refused (reason air-lethal) unless options.costs.lethalAir is 1 (go-to :costs :lethal-air, breathe's), then it costs LETHAL-S (times the dearest second the caller's prices allow) more, so a lethal plan comes back only when no other does. Any
      other plan swims no further than airLimit from airUsed.
+   - options.unknown (nil: off, every loaded cell as it is) {id floorId cell floor seeDepth seeLit peekS aimS lightCost lightOk
+     torchBase missed noLight}: a cell of state id (void_air) is one the body has not seen, air to the body. A stand on such a
+     floor is a phantom floor (read as floorId, stone): allowed only after a move the walk can stop before (walk, diagonal,
+     corner, jump, drop; not after a gap, climb, swim, exit or bounce: else result unseenRefused) and only where it can be
+     seen: a drop of d (level and up: 0) within seeDepth, or within 15 over known air that seeLit(x, y, z) calls lit (1), or
+     lit by a torch (lightCost seconds, the step's light true) from a takeoff whose feet are known air on a torchBase floor
+     (Uint8Array by state id), d at most 10, lightOk(x, y, z) not false and not in noLight; else result darkRefused and
+     darkBest {x y z h}. A floor in missed is never seen. The floor under a door's lower half is implied. Each unseen feet or
+     head cell costs cell, a phantom floor floor, times the move's seconds, and peekS a drop onto it, aimS a level or up step
+     (in cost.darkSeconds; jobs.lib.cost/unknown-prices). No fall goes into an unseen cell, risk looks stop there, and no
+     goal-enclosed, goal-not-standable or start-enclosed proof rests on one. missed and noLight are Sets of cell-key.
    - options.stopAtEdge: with the goal unloaded, the search ends at the first node it expands at the loaded edge (edgeStop)
      and names it as its frontier, not after searching all loaded land. go-to's budgeted searches set it (walk.search/new-search)."
   (:require [engine.path.planner.base :as base :refer [OCTILE-SLACK REGIONS TABLE WHOLE next-pow2]]
@@ -74,7 +85,8 @@
             [engine.path.planner.run]
             [engine.path.planner.results]
             [engine.path.planner.danger]
-            [engine.path.planner.dark]))
+            [engine.path.planner.dark]
+            [engine.path.planner.unknown]))
 
 (set! *warn-on-infer* true)
 
@@ -193,10 +205,22 @@
 ;; the seconds a lethal plan costs (Search lethal-s): LETHAL-S times the dearest second the caller's prices allow (a walk
 ;; at the danger cap through its dearest toll, in the dark, avoided, an hp of risk and of damage a second), so no toll,
 ;; danger rate or weight makes a plan that does not kill cost more than one that does
-(defn- lethal-seconds [risk-weight damage-weight danger-cap dark-factor ^js tolls avoid-factor]
+(defn- lethal-seconds [risk-weight damage-weight danger-cap dark-factor ^js tolls avoid-factor unknown-factor]
   (let [toll (if (some? tolls) (reduce max 0 (es6-iterator-seq (.values tolls))) 0)]
     (* base/LETHAL-S (+ 1 avoid-factor)
-       (+ 1 toll dark-factor (* risk-weight danger-cap) risk-weight damage-weight))))
+       (+ 1 toll dark-factor unknown-factor (* risk-weight danger-cap) risk-weight damage-weight))))
+
+(defn- first-id [^js table name] (aget (.get (.-nameIds table) name) 0))
+
+(defn- unknown-factor
+  "The most options.unknown adds to a second of walking (for lethal-seconds): two unseen cells and a phantom floor, and the
+  dearest of a peek, an aim and a torch over the shortest move (a sprinted block); 0 when off."
+  [^js unknown ^js costs]
+  (if (nil? unknown)
+    0
+    (+ (* 2 (or-else (.-cell unknown) 0)) (or-else (.-floor unknown) 0)
+       (/ (+ (js/Math.max (or-else (.-peekS unknown) 0) (or-else (.-aimS unknown) 0)) (js/Math.max 0 (or-else (.-lightCost unknown) 0)))
+          (js/Math.min (unchecked-get costs "walkS") (unchecked-get costs "sprintS"))))))
 
 (defn- search-from ^Search [^js snapshot ^js query ^js options]
   (let [^js table (.-table options)
@@ -231,7 +255,10 @@
         ^js dark (.-dark options)
         ^js tolls (.-tolls options)
         dark-at (when (some? dark) (.-at dark))
-        dark-factor (if (some? dark) (or-else (.-factor dark) 1) 0)]
+        dark-factor (if (some? dark) (or-else (.-factor dark) 1) 0)
+        ^js unknown (.-unknown options)
+        unk (some? unknown)
+        see-lit (when unk (.-seeLit unknown))]
     (->Search
      ;; the world
      snapshot table (.-space options)
@@ -333,7 +360,20 @@
      (js/Float64Array. cap) (js/Float64Array. cap) 0 0
      (let [rw (option options "riskWeight" 2)]
        (lethal-seconds rw (option options "damageWeight" rw) (* risk-scale (option options "dangerCap" 4)) dark-factor
-                       (when (some? tolls) (.-cells tolls)) (if (some? avoid) (or-else (.-factor avoid) 0) 0))))))
+                       (when (some? tolls) (.-cells tolls)) (if (some? avoid) (or-else (.-factor avoid) 0) 0)
+                       (unknown-factor unknown costs)))
+     ;; unk-id unk-floor-id unk-cell unk-floor see-depth see-lit peek-s aim-s light-cost light-ok torch-base missed no-light
+     (if unk (or-else (.-id unknown) (first-id table "void_air")) -1)
+     (if unk (or-else (.-floorId unknown) (first-id table "stone")) 0)
+     (if unk (or-else (.-cell unknown) 0) 0) (if unk (or-else (.-floor unknown) 0) 0)
+     (if unk (or-else (.-seeDepth unknown) 0) 0) see-lit
+     (if unk (or-else (.-peekS unknown) 0) 0) (if unk (or-else (.-aimS unknown) 0) 0)
+     (if unk (or-else (.-lightCost unknown) -1) -1) (when unk (.-lightOk unknown)) (when unk (.-torchBase unknown))
+     (when unk (.-missed unknown)) (when unk (.-noLight unknown))
+     ;; see-keys see-flags
+     (when (some? see-lit) (js/Float64Array. TABLE)) (when (some? see-lit) (js/Uint8Array. TABLE))
+     ;; move-unk move-light lights dark-refused unseen-refused dark-best-x dark-best-y dark-best-z dark-best-d
+     0 0 (js/Uint8Array. cap) false false 0 0 0 js/Infinity)))
 
 ;; the body's hitbox reaches this far from its centre in x and z
 (def ^:const HITBOX-HALF 0.3)
