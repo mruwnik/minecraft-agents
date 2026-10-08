@@ -15,6 +15,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.placement :as placement]
             [jobs.lib.reach :as reach]
+            [jobs.lib.spent :as spent]
             [plan.rail :as rail]
             [plan.shape :as shape]
             [jobs.lib.fetch :as fetch]
@@ -422,7 +423,8 @@
             give-up (:give-up (:args c))]
         (case outcome
           :continue :continue
-          :placed (let [wrong (misplaced want item (:block (ctx/child-result c :place)))]
+          :placed (let [wrong (misplaced want item (:block (ctx/child-result c :place)))
+                        _ (spent/note! c item pos)]
                     (ctx/update-mem! c #(cond-> (update (dissoc % :placing) :placed (fnil inc 0))
                                           wrong (assoc-in [:misplaced pos] wrong))))
           :already (ctx/update-mem! c dissoc :placing)
@@ -611,8 +613,10 @@
       (ctx/emit! c :build.wrong :warn {:plan plan :cells wrong
                                        :text (str "build of " plan " left " (count wrong) " wrong blocks: "
                                                   (cells-text wrong #(str (pr-str (:pos %)) " " (:found %))))}))
-    (ctx/emit! c :build.done :info {:plan plan :placed (:placed result) :missing (count left)
-                                    :text (str "build of " plan " done: placed " (:placed result) ", still missing " (count left))})))
+    (ctx/emit! c :build.done :info (merge {:plan plan :placed (:placed result) :missing (count left)
+                                           :text (str "build of " plan " done: placed " (:placed result) ", still missing " (count left)
+                                                      (some->> (spent/text (spent/log c) "plan") (str "; ")))}
+                                          (some-> (spent/log c) spent/summary)))))
 
 (defn fetch-failed-text
   "The booked failed fetches of the short items, in words: 'could not fetch birch_log: no-source (why)'."
@@ -638,7 +642,8 @@
     (cond-> result (seq fails) (assoc :fetch-failed fails))))
 
 (defn finish! [c cells]
-  (let [result (assoc-fetch-failed c (summary c cells (ctx/mem c) (:sturdy-ground (:args c))))]
+  (let [result (merge (assoc-fetch-failed c (summary c cells (ctx/mem c) (:sturdy-ground (:args c))))
+                      (some-> (spent/log c) spent/summary))]
     (announce! c result)
     (ctx/result! c (if (seq (:missing result))
                      (assoc result :status :stopped :reason :incomplete :text (stopped-text (:plan (:args c)) result))
