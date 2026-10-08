@@ -175,9 +175,19 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup (world dirt-down))
-              r (await (tu/child-outcome eng 'jobs.items.pick-up-loose {} 20))]
-          (is (= :not-done r))
+              eng (update-in eng [:triggers :loose-items] assoc :when (constantly true))]
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :loose-items}]}"))
+          (dotimes [_ 4] (await (core/tick! eng)))
           (is (= [12] (into [] (mapcat (comp :ids :data)) (mem/entries (mem/view (:store eng)) loose/left-kind)))))))))
+
+(deftest a-listed-job-with-nothing-worth-it-says-why-it-waits
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup (world dirt-down))]
+          (core/submit! eng '(jobs.items.pick-up-loose) {})
+          (dotimes [_ 3] (await (core/tick! eng)))
+          (is (= [:nothing-worth-it] (mapv :reason (filterv #(= :waiting (:kind %)) @seen)))))))))
 
 (deftest register-args-cut-the-running-job-at-most-once
   (async done

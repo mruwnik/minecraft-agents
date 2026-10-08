@@ -22,7 +22,11 @@
    :value {:doc "jobs.lib.cost item-value options (:overrides :prices ...)" :spec map? :default nil}
    :cost {:doc "jobs.lib.cost detour-cost options (:per-block :per-climb)" :spec map? :default nil}})
 
-(defn check [_c] true)
+(defn check
+  "A listed run waits, saying so, while nothing seen is worth it; the reflex never asks."
+  [c]
+  (or (seq (loose/candidates (:primitives c) (ctx/view c) (:world (:engine c)) (:args c) (:root c)))
+      (ctx/wait c {:reason :nothing-worth-it})))
 
 (defn names-of [items] (vec (distinct (keep #(some-> (.-item %) .-name) items))))
 
