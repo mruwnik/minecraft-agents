@@ -18,7 +18,7 @@
   An item lower than the feet in a hole the caller dug (:holes) is walked to only when it lies one block down at most and
   the body has seen the floor under it solid and safe and the cells round it (no lava, fluid or cave opening, nothing
   hazardous beside it), the walk dropping one block at most; else it is left, with a debug collect-drops.left
-  {:pos :reason :unseen-floor|:unseen-cell|:unsafe-floor|:too-deep}.
+  {:pos :reason :unseen-floor|:unseen-cell|:unsafe-floor|:too-deep}. A drop still falling is judged at rest.
   Result: {:collected n}, the number of items that entered the inventory, with :left [{:pos :reason}] for those.")
 
 (a/defargs args
@@ -71,6 +71,20 @@
                         (:holes (:args c)))))))
 
 (defn deep? [c item] (boolean (and (.-pos item) (> (- (feet-y c) (second (item-cell item))) 1))))
+
+(def max-settle-waits 10)
+
+(defn settling?
+  "Whether a hole drop is still moving: its cell differs from the one noted for its id in job memory (noted now, at most
+  max-settle-waits times); judged where it comes to rest, not mid-fall."
+  [c item]
+  (let [id (.-id item)
+        cell (item-cell item)
+        {:keys [cell-seen n] :or {n 0}} (get-in (ctx/mem c) [:settle id])
+        moving? (and (not= cell cell-seen) (< n max-settle-waits))]
+    (when moving?
+      (ctx/update-mem! c assoc-in [:settle id] {:cell-seen cell :n (inc n)}))
+    moving?))
 
 (defn hole-problem
   "Why the body must not walk down to item, in a dug hole: :too-deep (more than one block down), :unseen-floor (the
@@ -132,9 +146,10 @@
                                (not (ctx/alive? c)) (assoc :reason :cut)))
               :done)
           (let [hole? (in-hole? c item)
-                why (when hole? (await (hole-problem! c item)))
+                moving? (and hole? (settling? c item))
+                why (when (and hole? (not moving?)) (await (hole-problem! c item)))
                 walk (when (and (not hole?) (deep? c item)) (await (walk-down! c item)))]
-            (if (= :continue walk)
+            (if (or moving? (= :continue walk))
               :continue
               (do (cond
                     why (leave! c item why)

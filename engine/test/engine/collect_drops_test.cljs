@@ -98,3 +98,27 @@
             (is (= 0 (:collected result)))
             (is (= [:unreachable] (mapv :reason (:left result))))
             (is (= [:unreachable] (mapv :reason (bd/left-drops seen))))))))))
+
+(defn falling-first!
+  "The first entities() answer shows every item one block higher, as a drop still falling into the hole."
+  [p]
+  (let [entities (.bind (.-entities p) p)
+        calls (atom 0)]
+    (aset p "entities"
+          (fn [opts]
+            (let [es (entities opts)]
+              (when (= 1 (swap! calls inc))
+                (doseq [e (array-seq es) :when (.-pos e)] (aset (.-pos e) "y" (inc (.-y (.-pos e))))))
+              es)))))
+
+(deftest a-drop-still-falling-into-a-cave-opening-is-judged-where-it-comes-to-rest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (bd/setup {:self body :blocks {"0,63,0" "air" "0,62,0" "air" "0,61,0" "stone"}})]
+          (drop! p [0 62 0] "dirt")
+          (falling-first! p)
+          (let [result (await (bd/child-outcome eng job {:radius 6 :holes [[0 63 0]]} 20))]
+            (is (= 0 (:collected result)))
+            (is (= [:too-deep] (mapv :reason (bd/left-drops seen))))
+            (is (empty? (bd/calls p "collect")))))))))

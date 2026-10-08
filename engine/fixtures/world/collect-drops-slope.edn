@@ -1,6 +1,7 @@
 ;; Card 2329b1bb: a drop 2 or more blocks below the feet on seen open ground is walked to (go-to prices the fall), not left
 ;; :too-deep; only an item in a hole the caller dug (:holes) keeps the strict one-block rule. High platform x 8..14 (top cell y 2,
-;; the body at y 3); the drop lies on the ground at (20 0 16), 3 below the feet.
+;; the body at y 3); the drop lies on the ground at (22 0 16), 3 below the feet, far enough past the slope's last step (17..18,
+;; top y 1) that the line from the eye clears it (at 20 it was hidden, and nothing seen was left to collect).
 {:defaults
  {:tags [:forestry :collect-drops :movement]
   :time :any
@@ -11,7 +12,7 @@
  :cases
  [{:name "drop-3-down-a-slope-collected"
    :blocks [[:fill [15 0 8] [16 1 24] "stone"] [:fill [17 0 8] [18 0 24] "stone"]]
-   :act [[:summon "item" [20.5 0 16.5] "{Item:{id:\"minecraft:cobblestone\",count:1}}"]
+   :act [[:summon "item" [22.5 0 16.5] "{Item:{id:\"minecraft:cobblestone\",count:1}}"]
          [:job (jobs.forestry.collect-drops {:radius 12})]]
    :expect [{:event {:source :job :kind :completed :data {:status :completed}} :within-s 80 :of-job true}
             {:no-event {:source :job :level :debug :kind :collect-drops.left} :for-s 60 :until {:source :job :kind :completed}}]
