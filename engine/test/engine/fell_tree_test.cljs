@@ -10,7 +10,9 @@
             [engine.test-util :as tu]
             [engine.registry :as registry]
             [jobs.lib.access.approach :as approach]
+            [jobs.items.obtain :as obtain]
             [jobs.lib.fetch :as fetch]
+            [jobs.lib.trees :refer [axe-fetch-limits]]
             [jobs.lib.ledger :as ledger]
             [engine.memory :as mem]))
 
@@ -51,7 +53,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p out]} (await (fell tall {:radius 10} 200))]
-          (is (= {:base {:x 6 :y 64 :z 0} :logs 8} out))
+          (is (= {:base {:x 6 :y 64 :z 0} :logs 8 :axe :none-found} out))
           (is (= (set (range 64 72)) (set (dug-ys p))) "every log dug")
           (is (pos? (count (h/calls p "jumpPlace"))) "a pillar was built")
           (is (= [] (ledger/open-entries (mem/view (:store eng)))) "ledger empty")
@@ -194,7 +196,7 @@
       (fn ^:async t []
         (let [s (await (fell (chest-world [{:name "dirt" :count 20}]) {:radius 10} 300))
               {:keys [p out]} s]
-          (is (= {:base {:x 6 :y 64 :z 0} :logs 8} out))
+          (is (= {:base {:x 6 :y 64 :z 0} :logs 8 :axe :none-found} out))
           (is (= (set (range 64 72)) (set (dug-ys p))) "every log dug")
           (is (> (- 20 (dirt-in-chest s)) 1) "the chest gave the pillar's height, not one block")
           (is (= [] (pillar-cells p)) "no pillar block left"))))))
@@ -256,7 +258,7 @@
                          (fake/set-block! p [6 64 0] "oak_log"))
                        (await (impl token args))))
           (let [out (await (tu/child-outcome (:eng s) 'jobs.forestry.fell-tree {:radius 10} 100))]
-            (is (= {:base {:x 6 :y 64 :z 0} :logs 3} out) "the stump log is the base")
+            (is (= {:base {:x 6 :y 64 :z 0} :logs 3 :axe :skipped-small-tree} out) "the stump log is the base")
             (is (= [{:pos {:x 6 :y 64 :z 0} :species "oak"}] (lt/debts (:eng s))) "the replant is on the ground, not on the log above it")))))))
 
 (deftest a-body-left-up-in-the-leaves-after-the-felling-comes-down-to-the-ground
@@ -338,3 +340,34 @@
               s (await (fell w {:radius 10} 300))]
           (is (= 2 (:logs (:out s))))
           (is (= 1 (chest-axes s))))))))
+
+(deftest a-wait-limits-only-tighten-the-callers
+  (is (= {:how #{:chest :craft} :minutes 0.2} (select-keys (fetch/tighten {:how #{:chest :craft} :minutes 0.2} {:how #{:chest :craft} :minutes 1}) [:how :minutes])) "shorter minutes win")
+  (is (= {:how #{:chest} :minutes 1} (select-keys (fetch/tighten {:how #{:chest} :minutes 10} {:how #{:chest :craft} :minutes 1}) [:how :minutes])) "the caller's sources stay a subset")
+  (is (= #{:chest} (:how (fetch/tighten {:how #{:chest :craft :gather}} {:how #{:chest}}))) "the wait's sources cut the caller's")
+  (is (= #{:chest} (:how (fetch/tighten {:how #{:chest}} {:how #{:chest :craft}}))) "a wait never adds a source")
+  (is (= 3 (:minutes (fetch/tighten {:minutes 3} {:how #{:chest}}))) "keys the wait lacks are the caller's"))
+
+(deftest a-gathered-log-need-fetches-no-axe
+  (let [need (first (obtain/gather-needs {"oak_log" 3}))]
+    (is (= 'jobs.forestry.harvest-wood (:job need)))
+    (is (= #{:item} (:fetch (:args need))) "an axe fetch inside a gather would gather logs again")))
+
+(deftest the-axe-wait-plans-a-chest-or-craft-get-tool-and-no-gather
+  (let [lim (fetch/tighten (merge fetch/built-in {}) (axe-fetch-limits))
+        pl (fetch/plan-for {:reason :no-tool :kind "axe"} lim)]
+    (is (= 'jobs.items.get-tool (:job pl)))
+    (is (= "axe" (:kind (:args pl))))
+    (is (= #{:chest :craft} (:how lim)) "no :gather: felling logs for the axe would come back to fell-tree")
+    (is (= 1 (:minutes lim)))))
+
+(deftest the-result-says-why-no-axe-was-used
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [off (await (fell (axe-world [] [{:name "iron_axe" :count 1}]) {:radius 10 :fetch false} 400))
+              none (await (fell (axe-world [] []) {:radius 10} 400))
+              small (await (fell (assoc (axe-world [] []) :blocks (lt/tree 6 0 "oak" 2)) {:radius 10} 300))]
+          (is (= :skipped-fetch-off (:axe (:out off))))
+          (is (= :none-found (:axe (:out none))))
+          (is (= :skipped-small-tree (:axe (:out small)))))))))

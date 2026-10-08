@@ -53,7 +53,8 @@
   own), is not a candidate. A later log that turns out refused makes the tree count as unreachable. The job warns
   fell-tree.declined once, with :reason :refused (or :no-zones when no zone list was read). :ignore-zones? true
   skips the check.
-  Result: {:base pos :logs n} of the tree it felled, when it did: n logs dug.")
+  Result: {:base pos :logs n :axe why} of the tree it felled, when it did: n logs dug; :axe is :carried, :skipped-fetch-off,
+  :skipped-small-tree or :none-found (fetch failed: chopped by hand).")
 
 (a/defargs args
   {:species {:doc "log species such as \"oak\"; any when nil" :spec a/name? :default nil}
@@ -371,6 +372,15 @@
              (or (:fetching (ctx/mem c)) (axe-worth-fetching? (count logs))))
     {:reason :no-tool :kind "axe" :limits (axe-fetch-limits)}))
 
+(defn axe-status
+  "Why the tree was felled with or without an axe: :carried, :skipped-fetch-off, :skipped-small-tree or :none-found."
+  [c]
+  (cond
+    (axe-carried? c) :carried
+    (not (contains? (:what (fetch/opts c 'jobs.forestry.fell-tree)) :tool)) :skipped-fetch-off
+    (not (axe-worth-fetching? (:first-logs (ctx/mem c) 0))) :skipped-small-tree
+    :else :none-found))
+
 (defn ^:async step
   "One piece of the felling: :again, :continue (a child waits on the world, or nothing is in sight), :done or a stop."
   [c]
@@ -398,9 +408,11 @@
         (if (empty? logs)
           (if (= :continue (await (come-down! c)))
             :continue
-            (do (ctx/result! c {:base (:base (ctx/mem c)) :logs (:dug (ctx/mem c) 0)})
+            (do (ctx/result! c {:base (:base (ctx/mem c)) :logs (:dug (ctx/mem c) 0) :axe (axe-status c)})
                 :done))
-          (if-let [f (await (fetch/fetch! c 'jobs.forestry.fell-tree #(axe-problem % logs)))]
+          (if-let [f (do (when (and (zero? (:dug (ctx/mem c) 0)) (not (:first-logs (ctx/mem c))))
+                           (ctx/update-mem! c assoc :first-logs (count logs)))
+                         (await (fetch/fetch! c 'jobs.forestry.fell-tree #(axe-problem % logs))))]
             f
             (let [_ (when-let [low (lower-base (ctx/mem c) logs)] (rebase! c low))
                   _ (await (watch/watch! c {:before-dig (:pos (first logs))}))

@@ -16,7 +16,8 @@
 
   Also body memory :fetch/stock: what a chest held when last looked into or moved from (withdraw, deposit, kit,
   obtain), so obtain goes first to a chest known to hold the item and skips one known not to."
-  (:require [engine.args :as a]
+  (:require [clojure.set :as set]
+            [engine.args :as a]
             [engine.settings :as settings]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
@@ -149,12 +150,19 @@
       f (ctx/wait c (assoc w :fetch (shown f)))
       :else true)))
 
+(defn tighten
+  "Limits o tightened by a wait's limits l: the sources both allow, the shorter :minutes; other keys of l fill in."
+  [o l]
+  (cond-> (merge l o)
+    (and (:how l) (:how o)) (assoc :how (set/intersection (:how l) (:how o)))
+    (and (:minutes l) (:minutes o)) (assoc :minutes (min (:minutes l) (:minutes o)))))
+
 (defn due
   "What the round of job should fetch for wait reason w (nil when none): the plan with the limits as :opts (w's :limits
   tighten them, for an optional fetch)."
   [c job w]
   (when w
-    (let [o (some-> (opts c job) (merge (:limits w)))]
+    (let [o (some-> (opts c job) (tighten (:limits w)))]
       (cond
         (nil? o) nil
         :else (when-let [pl (plan-for w o)]

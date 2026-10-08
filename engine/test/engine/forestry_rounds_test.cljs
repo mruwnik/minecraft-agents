@@ -13,7 +13,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (fm/start {:blocks (lt/tree 3 0 "oak" 4)} {})
               out (await (tu/child-outcome eng 'jobs.forestry.fell-tree {:radius 10} 1))]
-          (is (= {:base {:x 3 :y 64 :z 0} :logs 4} out))
+          (is (= {:base {:x 3 :y 64 :z 0} :logs 4 :axe :skipped-small-tree} out))
           (is (= 4 (count (digs p)))))))))
 
 (deftest harvest-wood-fells-collects-and-replants-in-one-round
