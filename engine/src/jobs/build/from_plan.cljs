@@ -136,6 +136,12 @@
                  (for [d [1 2] [sx sz] diagonal] [(+ x (* d sx)) y (+ z (* d sz))]))
          (remove #(or (planned %) (planned (update % 1 inc)))))))
 
+(defn stand-y
+  "The feet height to look for stands at: the body's when within 3 of the cell's (it stands on the same level), else
+  the cell's (a body deep underground aims for the site, not for its own depth)."
+  [body-y cell-y]
+  (if (<= (js/Math.abs (- body-y cell-y)) 3) body-y cell-y))
+
 (defn ground-stands
   "The stand cells of cands ([x y z], from stand-cells) put on the ground: each takes the nearest feet height (y, then one
   up, one down, two down) where a body can stand (jobs.lib.reach/standable-cell?); one with none is dropped. When none
@@ -361,16 +367,18 @@
           (digging cells))))
 
 (defn need-of
-  "The wait of the open cells: the :need for the first item of the missing ones not carried enough that a fetch is
-  due for (else the first), else the :no-tool for a pickaxe block to dig without a tool, else nil."
+  "The wait of the open cells: the first of the :need waits (items not carried enough) and the :no-tool wait (a
+  pickaxe block to dig without a tool) that a fetch is due for, else the first :need, else the :no-tool, else nil."
   [c cells]
   (let [mem (ctx/mem c)
         closed (merge (:given-up mem) (:refused mem))
         open (remove #(contains? closed (:pos %)) (missing cells))
         waits (map (fn [[item n]] {:reason :need :item item :count n}) (shortage open (carried-counts (:primitives c))))]
-    (or (first (filter #(fetch/due c 'jobs.build.from-plan %) waits))
-        (first waits)
-        (tool-of c cells))))
+    (let [tool (tool-of c cells)
+          all (cond-> (vec waits) tool (conj tool))]
+      (or (first (filter #(fetch/due c 'jobs.build.from-plan %) all))
+          (first waits)
+          tool))))
 
 (defn problem
   "need-of for the plan as it stands now, nil when the plan is in trouble."
@@ -542,7 +550,7 @@
         planned (set (map :pos cells))
         bad (set (:bad-stands (ctx/mem c)))
         facing (when-not (or (:click cell) (:dig? cell)) (facing-of (:want cell)))
-        stands (remove bad (ground-stands (:primitives c) (stand-cells (:pos cell) (js/Math.floor (:y body)) facing planned)))
+        stands (remove bad (ground-stands (:primitives c) (stand-cells (:pos cell) (stand-y (js/Math.floor (:y body)) (second (:pos cell))) facing planned)))
         stand (first (sort-by #(u/dist body (zipmap [:x :y :z] %)) stands))
         give-up (:give-up (:args c))]
     (if-not stand

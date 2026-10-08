@@ -830,3 +830,42 @@
           (is (= #{"oak_fence"} (set (keys (:fetch-failed result)))))
           (is (= :stopped (:status result)))
           (is (re-find #"could not fetch oak_fence: no-source" (:text result)) (:text result)))))))
+
+(deftest a-failed-item-fetch-does-not-hold-back-the-pickaxe-fetch
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [spec {:inventory [{:name "oak_fence_gate" :count 1} {:name "oak_fence" :count 2}]
+                    :blocks {"4,64,3" "stone" fence-chest "chest"}
+                    :containers {fence-chest [{:name "stone_pickaxe" :count 1}]}}
+              {:keys [eng p seen]} (start spec {"pen" (pen-plan)})
+              _ (tu/seeing-all p)
+              result (await (tu/child-outcome eng job {:plan "pen" :fetch {:explore false}} 300))]
+          (is (contains? (:fetch-failed result) "oak_fence") (pr-str result))
+          (is (some #(re-find #"tool for stone" (:text %)) (h/events-of seen :fetch.started)) "the pickaxe fetch is not held back")
+          (is (= {} (:given-up result))))))))
+
+(deftest the-default-fetch-explores-for-what-is-short
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [orig ctx/call-child
+              seen (atom [])
+              spec {:inventory [{:name "oak_fence_gate" :count 1}]}
+              {:keys [eng p]} (start spec {"pen" (pen-plan)})]
+          (tu/seeing-all p)
+          (set! ctx/call-child (fn [c slot j args]
+                                 (when (= 'jobs.items.obtain j) (swap! seen conj args))
+                                 (orig c slot j args)))
+          (try
+            (await (tu/child-outcome eng job {:plan "pen"} 300))
+            (finally (set! ctx/call-child orig)))
+          (is (some #(and (= "oak_fence" (:item %)) (true? (:explore %))) @seen) (pr-str @seen)))))))
+
+(deftest stand-height-is-the-bodys-near-the-cell-and-the-cells-when-far-above-or-below
+  (are [body cell stand] (= stand (build/stand-y body cell))
+    64 64 64
+    62 64 62
+    67 64 67
+    48 64 64
+    80 64 64))
