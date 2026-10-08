@@ -4,6 +4,7 @@
 ;; Should-succeed: control with an own ripe cell is harvested (cut 1) while the foreign one stays ripe; a hoe with 1 durability left
 ;; tills one cell, breaks, and the rest are skipped :no-hoe (till.done).
 ;; Should-fail: only the foreign ripe cell: tend waits and cuts nothing (no farm-tend.done).
+;; The till case stands at x 9.5 so cell x 10 is strictly nearest (at 10.5 cells 10 and 11 tie and the one tilled before the hoe breaks is arbitrary).
 {:defaults
  {:tags [:farm :tend :till :jobs]
   :time :any
@@ -27,7 +28,7 @@
    :after [[:block [10 0 16] "wheat[age=7]"] [:not-block [13 0 16] "wheat[age=7]"]]}
   {:name "till-hoe-breaks-mid-run-rest-skipped-no-hoe"
    :blocks [[:fill [10 -1 16] [13 -1 16] "dirt"]]
-   :body {:inventory [["wooden_hoe[damage=58]" 1]]}
+   :body {:at [9.5 0 14.5] :inventory [["wooden_hoe[damage=58]" 1]]}
    :act [[:job (jobs.farm.till {:from #xyz [10 -1 16] :to #xyz [13 -1 16] :fetch false})]]
    :expect [{:event {:source :job :kind :till.skipped :data {:reason :no-hoe}} :within-s 70 :of-job true}
             {:event {:source :job :kind :till.done} :within-s 80 :of-job true}]
