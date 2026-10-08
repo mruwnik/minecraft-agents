@@ -150,7 +150,7 @@ const acceptFor = texture => {
 }
 
 // Terrain (or sky) for rows rowStart <= py < rowEnd into rgba and depth; returns the band's pixels with terrain closer than NEAR.
-export function renderBand ({ grid, info, texture, eye, timeOfDay, rain = 0, width, height, maxDist = 64, rgba, depth, rowStart, rowEnd, ...camera }) {
+export function renderBand ({ grid, info, texture, eye, timeOfDay, rain = 0, lamp = 0, width, height, maxDist = 64, rgba, depth, rowStart, rowEnd, ...camera }) {
   const cam = cameraFor({ ...camera, width, height })
   const light = daylight(timeOfDay)
   const table = lightTable(timeOfDay, rain)
@@ -170,7 +170,7 @@ export function renderBand ({ grid, info, texture, eye, timeOfDay, rain = 0, wid
       let b = skyB
       if (hit) {
         if (hit.t < NEAR) nearPixels++
-        const byte = hitLight(grid, hit)
+        const byte = hitLight(grid, hit, lamp)
         const lit = table[byte]
         // fog fades toward the sky only as far as the sky reaches the hit: a dark cave stays dark far off
         const fog = (hit.t / maxDist) ** 2 * (byte >> 4) / 15

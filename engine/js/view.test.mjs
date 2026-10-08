@@ -1447,3 +1447,15 @@ test('physics ticks jittering by 10 ms give no pose gap of 150 ms (cap sits unde
   assert.ok(gaps.length > 100)
   assert.ok(Math.max(...gaps) < 140, `max gap ${Math.max(...gaps)}`)
 })
+
+test('the pose carries the names held in the main hand and the off hand, null when empty', () => {
+  const bot = fakeBot({})
+  bot.heldItem = { name: 'torch' }
+  bot.inventory = { slots: { 45: { name: 'shield' } } }
+  const pose = poseSnapshot(bot, { world: 'w', now: 1 })
+  assert.deepEqual([pose.held, pose.offHand], ['torch', 'shield'])
+  bot.heldItem = null
+  bot.inventory = { slots: [] }
+  const empty = poseSnapshot(bot, { world: 'w', now: 1 })
+  assert.deepEqual([empty.held, empty.offHand], [null, null])
+})

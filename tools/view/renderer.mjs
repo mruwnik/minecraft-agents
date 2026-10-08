@@ -283,11 +283,16 @@ const FACE_NORMAL = { top: [0, 1, 0], bottom: [0, -1, 0], east: [1, 0, 0], west:
 const brighter = (a, b) => (Math.max(a >> 4, b >> 4) << 4) | Math.max(a & 15, b & 15)
 // The light a hit face shows: the brighter of its own cell and the cell across the face (an opaque block stores 0, so
 // its face takes the air's light; a slab, torch or plant keeps its own).
-export const hitLight = (grid, hit) => {
+// `lamp`: the block light of a torch held at the eye (heldLamp), one less per block of the ray's length.
+export const hitLight = (grid, hit, lamp = 0) => {
   const own = lightByte(grid, hit.x, hit.y, hit.z)
   const n = FACE_NORMAL[hit.face]
-  return n ? brighter(own, lightByte(grid, hit.x + n[0], hit.y + n[1], hit.z + n[2])) : own
+  const seen = n ? brighter(own, lightByte(grid, hit.x + n[0], hit.y + n[1], hit.z + n[2])) : own
+  return lamp ? brighter(seen, Math.max(0, Math.round(lamp - hit.t))) : seen
 }
+// a torch or soul torch in either hand lights like a placed one (14), covering perception's 7-block near-torch sight
+export const HELD_TORCH_LIGHT = 14
+export const heldLamp = pose => [pose.held, pose.offHand].some(n => n === 'torch' || n === 'soul_torch') ? HELD_TORCH_LIGHT : 0
 // the light at an entity: the cell around the middle of its height
 export const entityLight = (grid, e) => lightByte(grid, Math.floor(e.x), Math.floor(e.y + e.height / 2), Math.floor(e.z))
 
@@ -345,7 +350,7 @@ const screenRect = (project, eye, box, width, height) => {
 // {name, kind?, x, y, z, width, height, yaw?}, drawn as their family's parts. Returns {width,height,rgba,seen} where `seen` lists the entities
 // that actually ended up on screen (not hidden behind blocks) with the pixel they are centred on and the box of pixels
 // they cover.
-export function render ({ grid, info, texture, eye, entities = [], timeOfDay, rain = 0, width, height, maxDist = 64, mobPictures = mobImage, ...camera }) {
+export function render ({ grid, info, texture, eye, entities = [], timeOfDay, rain = 0, lamp = 0, width, height, maxDist = 64, mobPictures = mobImage, ...camera }) {
   const cam = cameraFor({ ...camera, width, height })
   const light = daylight(timeOfDay)
   const table = lightTable(timeOfDay, rain)
@@ -423,7 +428,7 @@ export function render ({ grid, info, texture, eye, entities = [], timeOfDay, ra
         b = base[2] * FACE_SHADE[nearestFace] * lit[2]
       } else if (hit) {
         if (hit.t < NEAR) nearPixels++
-        const byte = hitLight(grid, hit)
+        const byte = hitLight(grid, hit, lamp)
         const lit = table[byte]
         // fog fades toward the sky only as far as the sky reaches the hit: a dark cave stays dark far off
         const fog = (hit.t / maxDist) ** 2 * (byte >> 4) / 15

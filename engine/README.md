@@ -741,7 +741,7 @@ node engine/tools/jobs.mjs Bob --world test submit '(jobs.movement.go-to {:pos {
 node engine/tools/triggers.mjs Bob --world test list | show hungry | upgrade [ids] | decline [ids] | add hungry --trigger hungry | mute hungry --for 10m | unmute | move X --before Y | reset X --property position | remove X
 node engine/tools/triggers.mjs Bob --world test put near-home --when '(< (inventory "bread") 8)' --job '(jobs.movement.look-around)' --persistence cooldown --cooldown-s 30
 node engine/tools/say.mjs Bob --world test [--to Steve] "message"       # chat, shares the engine's rate limits
-node engine/tools/snapshot.mjs Bob --world test [--yaw 90 --pitch -20 --look-at X,Y,Z]   # PNG of its view: draws its seen entities, prints :heard and :light
+node engine/tools/snapshot.mjs Bob --world test [--yaw 90 --pitch -20 --look-at X,Y,Z]   # PNG of its view: draws its seen entities, prints :heard and :light; a torch held in either hand lights it (14, less 1 per block)
 node engine/tools/time.mjs --world test clock | dawn --timeout 1200   # world time from a fresh observer pose
 node engine/tools/goal.mjs Bob --world test ["fence the pen" [--by NAME] | --clear]   # the goal line the dashboard shows (agents/Bob/goal.edn)
 ```

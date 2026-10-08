@@ -65,3 +65,19 @@ test('a mob in the unlit pocket is drawn darker than the same mob in daylight an
   assert.deepEqual([d.light.sky, d.light.block, l.light.sky, l.light.block], [0, 0, 15, 0])
   assert.ok(luminance(inLight.png, l.px, l.py) > 2 * luminance(inDark.png, d.px, d.py))
 })
+
+// a torch held in either hand lights what the eye looks at: block light 14 at the eye, one less per block of distance
+const NEAR_EYE = { x: 6.5, y: 66.62, z: 8 }
+const lookNear = held => renderView({ world: WORLD, agentName: AGENT, stateDir, width: W, height: H, pose: { ...basePose, eye: NEAR_EYE, ...held }, override: { yaw: 0, pitch: 0 }, aim: true })
+
+test('a torch held in the off hand or the main hand lights the dark wall in front of the eye; no torch leaves it dark', () => {
+  const none = lookNear({})
+  assert.equal(none.center.name, 'stone')
+  assert.equal(none.center.light.block, 0)
+  for (const held of [{ offHand: 'torch' }, { held: 'soul_torch' }]) {
+    const lit = lookNear(held)
+    assert.ok(lit.center.light.block >= 7, `${JSON.stringify(held)} gives block light ${lit.center.light.block}`)
+    assert.ok(centre(lit) > 2 * centre(none), `lit ${centre(lit)} dark ${centre(none)}`)
+  }
+  assert.equal(lookNear({ offHand: 'stone' }).center.light.block, 0)
+})

@@ -62,7 +62,9 @@ export function poseSnapshot (bot, { world, now }) {
     onGround: Boolean(self.onGround),
     entities: liveEntities(bot).filter(e => e !== self && e.position && near(e.position, p)).map(e => entityView(bot, e)),
     timeOfDay: bot.time?.timeOfDay ?? null,
-    rain: bot.rainState ?? 0
+    rain: bot.rainState ?? 0,
+    held: bot.heldItem?.name ?? null,
+    offHand: bot.inventory?.slots?.[45]?.name ?? null
   }
 }
 
