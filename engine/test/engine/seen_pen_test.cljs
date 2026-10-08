@@ -59,7 +59,7 @@
     (is (= :shut (hr/gate-state (:p (seeing {} false)) cell)) "a real gate in view")))
 
 (defn dark-run
-  "A herd run in a pitch-dark pen: nothing can be read."
+  "A herd run in a pitch-dark pen: a cell is made out only within 4 blocks (perception's near)."
   []
   (let [s (ht/clock-on-wait! (h/setup-seeing (ht/world {:entities [(ht/cow 1 4 3)]}) [0 0] 700))]
     (ht/submit! s {:target 1})))
@@ -70,7 +70,8 @@
       (fn ^:async t []
         (let [s (dark-run)
               _ (await (ht/run-ticks s 40))]
-          (is (= :no-pen (:reason (ht/done-event s))) "nothing can be read: the run ends :no-pen, never :unreachable, never brings"))))))
+          (is (seq (ht/events-of s :sense.looked)) "the dark cells are walked near and looked at")
+          (is (= :brought (:reason (ht/done-event s))) "within 4 blocks no light is needed: read up close, the run brings, never :unreachable"))))))
 
 (defn aged-run
   "A herd run with the gate remembered past its 10 s, after f was applied to the setup."

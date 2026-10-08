@@ -67,3 +67,16 @@
     ;; lava on all four sides: the start is sealed in, so go-to escalates
     [[1 64 4 1 64 4 "lava"] [3 64 4 3 64 4 "lava"] [2 64 5 2 64 5 "lava"] [2 64 3 2 64 3 "lava"]]
     (near 8 64 8) ["none" "start-enclosed"]))
+
+(def fence-line "a fence line along z 6, x 10..16: each cell's post leaves a free sliver north and south of it" [10 64 6 16 64 6 "oak_fence"])
+
+(defn side-of-line
+  "which side of the post the path's points in the line's cells (x 10..16) and beside it lie: :north (z < 6.375), :south (z > 6.625)"
+  [r]
+  (set (for [{:keys [x z pz]} (get-in r [:path :steps]) :when (and (<= 10 x 16) (<= 5 z 7))] (cond (< pz 6.375) :north (> pz 6.625) :south :else :post))))
+
+(deftest start-in-a-fence-cell-plans-from-the-sliver-the-body-is-in
+  ;; the body in a fence cell stands on one side of the post; a plan from the other sliver walks it into the post
+  (are [pz side] (= ["found" #{side}] ((juxt :status side-of-line) (run (world {:fill [fence-line]}) (near 4 64 3) {} {:x 13 :y 64 :z 6 :px 13.5 :py 64 :pz pz})))
+    6.9375 :south
+    6.0625 :north))

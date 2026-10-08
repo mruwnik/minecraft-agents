@@ -732,7 +732,7 @@
 (defn self-view [w]
   (let [s (:self w)]
     (to-js (merge (dissoc s :vehicle :held :pos :experience)
-                  {:username (:username s) :pos (:pos s) :settling (:settling w)
+                  {:username (:username s) :pos (or (steer/sub-pos w) (:pos s)) :settling (:settling w)
                    :vehicle (some-> (vehicle-of w) (update :uuid identity))
                    :experience (:experience s)
                    :timeOfDay (:time w) :isDay (senses/day-at? (:time w)) :players (:players w) :raining (:raining w) :thundering (:thundering w)

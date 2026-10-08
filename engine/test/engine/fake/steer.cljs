@@ -5,7 +5,7 @@
   steer is a toy kinematic walker, not physics: every tick (a setImmediate, so tests are fast) it asks decide for
   controls, then moves 0.2 blocks (0.26 sprinting) along the yaw, steps up at most 0.6 (1.25 with jump), drops to the
   next floor at once, and climbs or descends a ladder. A move into a cell holding a fence, gate, wall, pane or bamboo is
-  judged by the body's box against the joined blocks' boxes (engine.path.space), so a body slips beside a post as in the game. The kinematics are pure functions (body, controls, yaw, world)
+  judged by the body's box against the joined blocks' boxes (engine.path.space), so a body slips beside a post as in the game; without :body-hitbox the position kept is the cell, or :sub-pos beside a post (sub-pos). The kinematics are pure functions (body, controls, yaw, world)
   -> body. A tick budget of timeout-s * 20 (at most 2400) stands in for the real time bound.
 
   steer! runs the loop against a world atom. It resolves to {:status :done :result r :ticks n}, {:status :timeout
@@ -213,10 +213,18 @@
      :yaw yaw
      :t (js/Date.now)}))
 
+(defn sub-pos
+  "Non-hitbox mode: the body's true [x y z] where its cell's centre is inside a block (beside a fence post, against a shut
+  gate), kept while the body is still in that cell; nil else."
+  [w]
+  (let [[x y z :as sub] (:sub-pos w)]
+    (when (and sub (= [(floor x) y (floor z)] (get-in w [:self :pos]))) sub)))
+
 (defn start-body [w]
   (let [[x y z] (get-in w [:self :pos])
+        [sx _ sz] (sub-pos w)
         mid (if (:body-hitbox w) identity #(+ (floor %) 0.5))]    ; hitbox mode: the position is the true one; else the cell's centre
-    {:x (mid x) :y y :z (mid z) :vx 0 :vy 0 :vz 0 :collided false}))
+    {:x (or sx (mid x)) :y y :z (or sz (mid z)) :vx 0 :vy 0 :vz 0 :collided false}))
 
 ;; --- the planner's view of the world
 
@@ -313,6 +321,13 @@
 
 ;; --- the tick loop
 
+(defn sub-of
+  "The :sub-pos to keep for body (sub-pos): its true position when its cell's centre is not clear for it, else nil."
+  [w {:keys [x y z]}]
+  (let [[cx cy cz] [(floor x) (floor y) (floor z)]]
+    (when (and (narrow-cell? w cx cy cz) (not (body-clear? w (+ cx 0.5) y (+ cz 0.5))))
+      [x cy z])))
+
 (defn decide-safely [decide pose]
   (try
     (or (decide pose) {})
@@ -360,6 +375,8 @@
                                      (if (:body-hitbox @state)
                                        [(:x @body) (floor (:y @body)) (:z @body)]
                                        [(floor (:x @body)) (floor (:y @body)) (floor (:z @body))]))
+                              (when-not (:body-hitbox @state)
+                                (swap! state assoc :sub-pos (sub-of @state @body)))
                               (when (seq (:wires @state))
                                 (swap! state doors/tick-wires (get-in @state [:self :pos])))
                               (js/setImmediate tick))))))]
