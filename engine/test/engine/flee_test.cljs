@@ -4,6 +4,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.ctx :as ctx]
             [engine.registry :as registry]
+            [engine.settings :as settings]
             [engine.core :as core]
             [engine.events :as events]
             [engine.fake :as fake]
@@ -520,6 +521,31 @@
           (is (> (fake/dist (body-pos raw) (mob-pos raw 9)) 16)
               (str "the flight ends only once the creeper really stopped chasing, not while it follows unseen: "
                    (pr-str out) " body " (body-pos raw) " creeper " (mob-pos raw 9))))))))
+
+(deftest short-flights-of-one-chain-add-up-from-the-chains-first-place
+  (let [start {:x 0 :y 64 :z 0}]
+    (is (= start (retreat-flight/chain-origin {:data {:from start}} {:x 10 :y 64 :z 0}))
+        "a flight soon after another measures from where the chain began")
+    (is (= {:x 10 :y 64 :z 0} (retreat-flight/chain-origin nil {:x 10 :y 64 :z 0}))
+        "no earlier flight: from where this one began")))
+
+(deftest short-flights-in-a-row-tell-the-agent-once-their-sum-is-far
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup {:entities [(zombie 7 4 {:chase {:speed 0.7 :follow 6}})]})
+              fled (fn [r] (filterv #(= :hostile.fled (:kind %)) @(:seen r)))
+              r1 (await (settings/with-settings {:jobs.survival.retreat-flight/far-flight 50}
+                          #(run-job! s 'jobs.survival.retreat {})))
+              n1 (count (fled r1))
+              bp (body-pos (:p s))
+              _ (swap! (fake/state (:p s)) update :entities (fn [es] (filterv #(not= 7 (:id %)) es)))
+              _ (fake/add-entity! (:p s) (zombie 7 (+ (first bp) 4) {:chase {:speed 0.7 :follow 6}}))
+              r2 (await (settings/with-settings {:jobs.survival.retreat-flight/far-flight 50}
+                          #(run-job! r1 'jobs.survival.retreat {})))]
+          (is (= 0 n1) "the first flight alone is under far-flight")
+          (is (= 1 (count (fled r2))) "the second adds up past it, measured from the chain's start")
+          (is (> (:distance (first (fled r2))) 50)))))))
 
 (deftest a-far-flight-tells-the-agent-where-the-body-went-and-why
   (is (nil? (retreat-flight/fled-notice {:x 0 :y 64 :z 0} {:x -10 :y 64 :z 0} [{:mob "zombie" :id 7}] :far 16))

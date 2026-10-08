@@ -14,6 +14,7 @@
 (a/defargs settings
   {::wait-ms {:default 1000 :doc "One hold of a hidden or cornered body before it looks again." :spec (a/int-in 0 nil)}
    ::far-flight {:default 16 :doc "Blocks a flight must move the body to tell the agent (hostile.fled)." :spec (a/num-in 0 nil)}
+   ::chain-window-ms {:default 60000 :doc "Flights this close together (end to end) add up to one move for hostile.fled." :spec (a/int-in 0 nil)}
    ::resume-gap-ms {:default 5000 :doc "A flight cut for longer than this starts its clocks afresh when it resumes." :spec (a/int-in 0 nil)}})
 (defn wait-ms [] (settings/get settings ::wait-ms))
 
@@ -164,6 +165,12 @@
 
 (defn far-flight [] (settings/get settings ::far-flight))
 
+(defn chain-origin
+  "Where the chain of flights ending at `to` began: the :from of the previous flight's entry (not yet told), else `to`'s
+  own start `from`."
+  [prev from]
+  (or (:from (:data prev)) from))
+
 (defn fled-notice
   "Pure: the hostile.fled fields for a flight that moved the body from `from` to `to` ({:x :y :z}) away from the mobs
   fled ([{:mob :id}]), ended why; nil when it moved less than far blocks."
@@ -188,8 +195,12 @@
         why (or ended (:ended (peek (vec fled))) :none)
         ids (mapv :id all)]
     (doseq [t all] (threats/remember! c t))
-    (when-let [n (fled-notice (:flight-from (ctx/mem c)) (u/self-pos c) all why (far-flight))]
-      (ctx/emit! c :hostile.fled :warn n))
+    (let [origin (chain-origin (ctx/latest c :flight) (:flight-from (ctx/mem c)))
+          n (fled-notice origin (u/self-pos c) all why (far-flight))]
+      (ctx/forget-where! c :flight (constantly true))
+      (if n
+        (ctx/emit! c :hostile.fled :warn n)
+        (when origin (ctx/remember! c :flight {:from origin} {:cap 1 :ttl (settings/get settings ::chain-window-ms)}))))
     (ctx/update-mem! c dissoc :chasers :fled :look-back :looked-back)
     (if (= :cannot-escape ended)
       (r/stop! c :cannot_escape "every way of escaping failed twice in a row" :fled ids)
