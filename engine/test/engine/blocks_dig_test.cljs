@@ -560,6 +560,27 @@
             (is (= {:reason :lava-unsealed :stepped-away true} (select-keys result [:reason :stepped-away])))
             (is (= 2 @walks) "the first walk after the dig failed, the next cell was walked to")))))))
 
+(deftest step-away-ends-when-a-failed-walk-left-the-body-clear-of-the-lava
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [walks (atom 0)
+              env (setup {:self body :blocks {"0,63,0" "dirt" "0,62,0" "lava"}})
+              go-to (get (:jobs (:eng env)) 'jobs.movement.go-to)
+              round (:round go-to)
+              moves-then-fails (fn ^:async moves-then-fails [c]
+                                 (if (= "air" (block-at (:p env) under-feet))
+                                   (do (swap! walks inc)
+                                       (swap! (fake/state (:p env)) assoc-in [:self :pos] [3 64 0])
+                                       (ctx/result! c {:arrived false :why :no-path})
+                                       :done)
+                                   (await (round c))))
+              env (assoc-in env [:eng :jobs 'jobs.movement.go-to] (assoc go-to :round moves-then-fails))]
+          (hiding (:p env) #(= [0 62 0] %))
+          (let [result (await (child-outcome (:eng env) job {:pos under-feet :seal-fetch false} 40))]
+            (is (= {:reason :lava-unsealed :stepped-away true} (select-keys result [:reason :stepped-away])))
+            (is (= 1 @walks) "the body stands clear after the first walk: no second walk")))))))
+
 (deftest seen-lava-beside-the-block-is-a-lava-adjacent-hazard-not-fluid-adjacent
   (async done
     (tu/run-async done

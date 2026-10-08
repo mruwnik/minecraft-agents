@@ -65,32 +65,34 @@
   :all-walks-failed :walk why} (cells were tried; why is the last go-to's)."
   [c dug lavas]
   (let [avoid (near-cells (cons dug lavas))
-        {:keys [x y z]} (u/self-pos c)
-        feet [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]
-        feet-cell (zipmap [:x :y :z] feet)]
-    (if-not (contains? avoid feet)
-      :arrived
-      (loop [why nil]
-        (let [{:keys [away-to away-escalate away-tried] :or {away-tried #{}}} (ctx/mem c)
-              _ (when-not away-to
-                  (await (dig-look/look-unknown! c (step-off/floors feet-cell 3))))
-              left (when-not away-to
-                     (remove #(contains? away-tried ((juxt :x :y :z) %))
-                             (step-off/candidates (:primitives c) feet-cell
-                                                  {:avoid avoid :reach 3 :ok? (step-off/zone-ok (access/rules-input c))})))
-              to (or away-to (first left))
-              escalate (if away-to
-                         away-escalate
-                         (or (= (inc (count away-tried)) away-tries) (empty? (rest left))))]
-          (if-not (and to (< (count away-tried) away-tries))
-            (do (ctx/update-mem! c dissoc :away-to :away-escalate :away-tried)
-                (if (seq away-tried) {:unreachable :all-walks-failed :walk why} {:unreachable :no-cell}))
-            (let [_ (ctx/update-mem! c assoc :away-to to :away-escalate escalate)
-                  r (await (ctx/call-child c :step-off 'jobs.movement.go-to {:pos to :range 0 :escalate escalate}))
-                  res (ctx/child-result c :step-off)]
-              (cond
-                (= :continue r) :continue
-                (and (= :done r) (:arrived res)) (do (ctx/update-mem! c dissoc :away-to :away-escalate :away-tried) :arrived)
-                :else (do (ctx/update-mem! c #(-> % (dissoc :away-to :away-escalate)
-                                                  (update :away-tried (fnil conj #{}) ((juxt :x :y :z) to))))
-                          (recur (or (:why res) r)))))))))))
+        clear! (fn [] (ctx/update-mem! c dissoc :away-to :away-escalate :away-tried :away-why))]
+    (loop []
+      (let [{:keys [x y z]} (u/self-pos c)
+            feet [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]
+            feet-cell (zipmap [:x :y :z] feet)]
+        (if-not (contains? avoid feet)
+          (do (clear!) :arrived)
+          (let [{:keys [away-to away-escalate away-tried away-why] :or {away-tried #{}}} (ctx/mem c)
+                _ (when-not away-to
+                    (await (dig-look/look-unknown! c (step-off/floors feet-cell 3))))
+                left (when-not away-to
+                       (remove #(contains? away-tried ((juxt :x :y :z) %))
+                               (step-off/candidates (:primitives c) feet-cell
+                                                    {:avoid avoid :reach 3 :ok? (step-off/zone-ok (access/rules-input c))})))
+                to (or away-to (first left))
+                escalate (if away-to
+                           away-escalate
+                           (or (= (inc (count away-tried)) away-tries) (empty? (rest left))))]
+            (if-not (and to (< (count away-tried) away-tries))
+              (do (clear!)
+                  (if (seq away-tried) {:unreachable :all-walks-failed :walk away-why} {:unreachable :no-cell}))
+              (let [_ (ctx/update-mem! c assoc :away-to to :away-escalate escalate)
+                    r (await (ctx/call-child c :step-off 'jobs.movement.go-to {:pos to :range 0 :escalate escalate}))
+                    res (ctx/child-result c :step-off)]
+                (cond
+                  (= :continue r) :continue
+                  (and (= :done r) (:arrived res)) (do (clear!) :arrived)
+                  :else (do (ctx/update-mem! c #(-> % (dissoc :away-to :away-escalate)
+                                                    (assoc :away-why (or (:why res) r))
+                                                    (update :away-tried (fnil conj #{}) ((juxt :x :y :z) to))))
+                            (recur)))))))))))
