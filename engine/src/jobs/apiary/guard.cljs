@@ -1,5 +1,6 @@
 (ns jobs.apiary.guard
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.apiary :as apiary]
             [jobs.lib.blocks :as blocks]
@@ -48,8 +49,13 @@
         place (set (gate/allowed c :apiary.guard-declined "apiary guard" :place (map #(update (:pos %) :y inc) fires)))]
     (filterv #(and (dig (:pos %)) (place (update (:pos %) :y inc))) fires)))
 
-(def reach 3)
-(def max-strikes 3)
+(a/defargs settings
+  {::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
+   ::max-strikes {:default 3 :doc "Strikes at one target before the job gives up on it." :spec (a/int-in 0 nil)}
+   ::max-sink-steps {:default 8 :doc "Steps of the sink walk before it gives up." :spec (a/int-in 0 nil)}
+   ::max-steps {:default 400 :doc "Steps of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}})
+(defn reach [] (settings/get settings ::reach))
+(defn max-strikes [] (settings/get settings ::max-strikes))
 
 ;; ------------------------------------------------------------------ the plan
 
@@ -205,7 +211,7 @@
   (booked! c :sunk)
   (if carpet (await (collect-step! c)) :again))
 
-(def max-sink-steps 8)
+(defn max-sink-steps [] (settings/get settings ::max-sink-steps))
 
 (defn ^:async sink!
   "Run the steps of the sink in mem :sinking until the lowered fire stands."
@@ -214,7 +220,7 @@
         block-at (apiary/block-at-fn (:primitives c))]
     (loop [steps 0 prev nil]
       (let [{:keys [op pos item] :as step} (next-step block-at s)]
-        (case (if (or (= step prev) (>= steps max-sink-steps)) :stuck op)
+        (case (if (or (= step prev) (>= steps (max-sink-steps))) :stuck op)
           :stuck (do (abandon! c fire :cannot) :again)
           :done (await (finish-sink! c s))
           :abort (do (abandon! c fire :cannot) :again)
@@ -246,7 +252,7 @@
 (defn ^:async work!
   "Walk to the fire, stand clear of its cell and do the action once."
   [c {:keys [pos action kind item]}]
-  (let [w (await (near/go-near! c pos reach {:zone-tolls true :escalate false}))]
+  (let [w (await (near/go-near! c pos (reach) {:zone-tolls true :escalate false}))]
     (case w
       :partial :continue
       :blocked (do (skip! c pos :unreachable) :again)
@@ -260,7 +266,7 @@
   "A cut left a sink half done: walk back and run its steps again."
   [c]
   (let [{:keys [fire]} (:sinking (ctx/mem c))
-        w (await (near/go-near! c fire reach {:zone-tolls true :escalate false}))]
+        w (await (near/go-near! c fire (reach) {:zone-tolls true :escalate false}))]
     (case w
       :partial :continue
       :blocked (do (abandon! c fire :unreachable) :again)
@@ -298,12 +304,12 @@
             target (first (:todo seen))]
         (cond
           (>= (actions m) (:max (:args c))) (finish! c :limit seen)
-          (>= (:strikes m 0) max-strikes) (finish! c :gave-up seen)
+          (>= (:strikes m 0) (max-strikes)) (finish! c :gave-up seen)
           (nil? target) (finish! c (end-reason m seen) seen)
           :else (await (work! c target)))))))
 
-(def max-steps "Steps of one call before it gives the round back with :continue." 400)
+(defn max-steps [] (settings/get settings ::max-steps))
 
 (defn ^:async round [c]
   (let [n (atom 0)]
-    (await (pace/steps! c #(if (< (swap! n inc) max-steps) (step c) :continue)))))
+    (await (pace/steps! c #(if (< (swap! n inc) (max-steps)) (step c) :continue)))))

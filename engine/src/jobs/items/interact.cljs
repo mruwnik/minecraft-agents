@@ -1,5 +1,6 @@
 (ns jobs.items.interact
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.util :as u]))
 
@@ -17,8 +18,11 @@
   {:id {:doc "the entity id (observe entities lists them)" :spec (a/int-in 1 nil) :default nil}
    :item {:doc "the item to hold for the click; nil: the empty hand" :spec a/item? :default nil}})
 
-(def reach 2.5)
-(def max-walks "Failed walks of one call before it stops :unreachable." 2)
+(a/defargs settings
+  {::reach {:default 2.5 :doc "How near the body stands to act on its target, in blocks." :spec (a/num-in 0 nil)}
+   ::max-walks {:default 2 :doc "Failed walks of one call before it stops :unreachable." :spec (a/int-in 0 nil)}})
+(defn reach [] (settings/get settings ::reach))
+(defn max-walks [] (settings/get settings ::max-walks))
 
 (defn check [_c] true)
 
@@ -48,13 +52,13 @@
               e (entity-of p id)]
           (cond
             (nil? e) (stop! c id item :gone)
-            (> (u/dist (u/self-pos c) (u/pos-of (.-pos e))) reach)
+            (> (u/dist (u/self-pos c) (u/pos-of (.-pos e))) (reach))
             (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos (u/pos-of (.-pos e)) :range 2 :escalate false}))
                   res (ctx/child-result c :walk)]
               (cond
                 (= :continue r) :continue
                 (and (= :done r) (:arrived res)) (recur fails)
-                (>= (inc fails) max-walks) (stop! c id item :unreachable {:why (:reason res)})
+                (>= (inc fails) (max-walks)) (stop! c id item :unreachable {:why (:reason res)})
                 :else (recur (inc fails))))
             :else
             (let [r (await (ctx/act c :interact (clj->js (cond-> {:id id} item (assoc :item item)))))

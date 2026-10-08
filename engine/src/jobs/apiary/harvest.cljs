@@ -1,5 +1,7 @@
 (ns jobs.apiary.harvest
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [jobs.lib.game-facts :as facts]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.apiary :as apiary]
             [jobs.lib.gate :as gate]
@@ -35,15 +37,19 @@
    :max {:doc "hives to harvest in one run, at most" :spec (a/int-in 1 nil) :default 8}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
-(def ripe-level 5)
-(def reach 3)
-(def max-strikes 3)
+(a/defargs settings
+  {::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
+   ::max-strikes {:default 3 :doc "Strikes at one target before the job gives up on it." :spec (a/int-in 0 nil)}
+   ::comb-waits {:default 10 :doc "Rounds a shears harvest waits for its comb to show before it goes on without." :spec (a/int-in 0 nil)}
+   ::max-steps {:default 400 :doc "Steps of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}})
+(defn reach [] (settings/get settings ::reach))
+(defn max-strikes [] (settings/get settings ::max-strikes))
 (def tool-item {:shears "shears" :bottle "glass_bottle"})
 (def hive-names #js ["beehive" "bee_nest"])
 
 ;; ------------------------------------------------------------------ the world
 
-(defn ripe? [b] (>= (or (get-in b [:properties :honey_level]) 0) ripe-level))
+(defn ripe? [b] (>= (or (get-in b [:properties :honey_level]) 0) facts/ripe-level))
 
 (defn hive-allowed?
   "Whether the job may take honey from the hive at pos (one warn per job when refused)."
@@ -123,7 +129,7 @@
 
 ;; ------------------------------------------------------------------ rounds
 
-(def comb-waits "Rounds a shears harvest waits for its comb to show before it goes on without." 10)
+(defn comb-waits [] (settings/get settings ::comb-waits))
 
 (defn ^:async collect!
   "Pick up the honeycomb lying about, then go back to the hives. :continue while the pick-up waits, and for up to
@@ -137,14 +143,14 @@
       (ctx/update-mem! c update :collected (fnil + 0) got))
     (cond
       (= :continue r) :continue
-      (and (= :done r) (zero? got) (< waits comb-waits)) (do (ctx/update-mem! c assoc :comb-waits (inc waits)) :continue)
+      (and (= :done r) (zero? got) (< waits (comb-waits))) (do (ctx/update-mem! c assoc :comb-waits (inc waits)) :continue)
       :else (do (ctx/update-mem! c #(-> % (dissoc :phase) (assoc :comb-waits 0))) :again))))
 
 (defn book-harvest!
   "Count the hive at pos as taken when it is no longer ripe; the comb is then collected after shears."
   [c pos tool]
   (let [level (some-> (u/seen-block (:primitives c) pos) .-properties .-honey_level)]
-    (if (< (or level ripe-level) ripe-level)
+    (if (< (or level facts/ripe-level) facts/ripe-level)
       (ctx/update-mem! c #(cond-> (-> % (update :harvested (fnil inc 0)) (assoc :strikes 0))
                             (= "shears" tool) (assoc :phase :collect)))
       (skip! c pos :no-effect))))
@@ -154,7 +160,7 @@
   [c]
   (when-let [{:keys [pos tool]} (:clicking (ctx/mem c))]
     (ctx/update-mem! c dissoc :clicking)
-    (when (< (or (some-> (u/seen-block (:primitives c) pos) .-properties .-honey_level) ripe-level) ripe-level)
+    (when (< (or (some-> (u/seen-block (:primitives c) pos) .-properties .-honey_level) facts/ripe-level) facts/ripe-level)
       (book-harvest! c pos tool))))
 
 ;; the comb pops out of the face clicked: the side the body stands on, so it lies in view (on top, the hive hides it from below)
@@ -170,7 +176,7 @@
 (defn ^:async harvest!
   "Walk to the hive and use the tool once; book the outcome."
   [c pos tool]
-  (let [w (await (near/go-near! c pos reach {:zone-tolls true :escalate false}))]
+  (let [w (await (near/go-near! c pos (reach) {:zone-tolls true :escalate false}))]
     (case w
       :partial :continue
       :blocked (do (skip! c pos :unreachable) :again)
@@ -180,7 +186,7 @@
                 #js {:status "refused"})
             level (some-> r .-after .-properties .-honey_level)]
         (ctx/update-mem! c dissoc :clicking)
-        (if (and (= "used" (.-status r)) (< (or level ripe-level) ripe-level))
+        (if (and (= "used" (.-status r)) (< (or level facts/ripe-level) facts/ripe-level))
           (book-harvest! c pos tool)
           (skip! c pos (keyword (if (= "used" (.-status r)) "no-effect" (.-status r)))))
         :again))))
@@ -205,14 +211,14 @@
             pos (first (:todo seen))]
         (cond
           (>= (:harvested m 0) (:max (:args c))) (finish! c :limit seen)
-          (>= (:strikes m 0) max-strikes) (finish! c :gave-up seen)
+          (>= (:strikes m 0) (max-strikes)) (finish! c :gave-up seen)
           (nil? pos) (finish! c (idle-reason m seen) seen)
           (nil? tool) (finish! c :no-tool seen)
           :else (do (ctx/update-mem! c assoc :tool tool)
                     (await (harvest! c pos tool))))))))
 
-(def max-steps "Steps of one call before it gives the round back with :continue." 400)
+(defn max-steps [] (settings/get settings ::max-steps))
 
 (defn ^:async round [c]
   (let [n (atom 0)]
-    (await (pace/steps! c #(if (< (swap! n inc) max-steps) (step c) :continue)))))
+    (await (pace/steps! c #(if (< (swap! n inc) (max-steps)) (step c) :continue)))))

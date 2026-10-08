@@ -1,5 +1,6 @@
 (ns jobs.items.give
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.util :as u]
             [jobs.lib.look :as look]
@@ -35,12 +36,20 @@
    :radius {:spec (a/num-in 0 nil) :default 32}
    :wait-s {:doc "how long a drop may lie before it is taken back" :spec (a/num-in 0 nil) :default 6}})
 
-(def grace-ms 2000)
-(def idle-ms 500)
-(def walk-leg-s 5)
-(def max-blocked 3)
-(def unseen-ms 3000)
-(def head-height 1.6)
+(a/defargs settings
+  {::grace-ms {:default 2000 :doc "How long the job waits before it acts on what it sees, in ms." :spec (a/int-in 0 nil)}
+   ::idle-ms {:default 500 :doc "Wait while there is nothing to do, in ms." :spec (a/int-in 0 nil)}
+   ::walk-leg-s {:default 5 :doc "Seconds one walk leg may take." :spec (a/int-in 0 nil)}
+   ::max-blocked {:default 3 :doc "Blocked attempts before the job gives up." :spec (a/int-in 0 nil)}
+   ::unseen-ms {:default 3000 :doc "How long a target may stay unseen before it counts as gone, in ms." :spec (a/int-in 0 nil)}
+   ::head-height {:default 1.6 :doc "Height of a player's head above its position, in blocks." :spec (a/num-in 0 nil)}
+   ::max-steps {:default 400 :doc "Steps of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}})
+(defn grace-ms [] (settings/get settings ::grace-ms))
+(defn idle-ms [] (settings/get settings ::idle-ms))
+(defn walk-leg-s [] (settings/get settings ::walk-leg-s))
+(defn max-blocked [] (settings/get settings ::max-blocked))
+(defn unseen-ms [] (settings/get settings ::unseen-ms))
+(defn head-height [] (settings/get settings ::head-height))
 
 (defn check
   "A player name and an item name are given."
@@ -67,7 +76,7 @@
 (defn ^:async idle!
   "A neutral wait for the world (the player to appear or to take the drop), then :continue: the yield."
   [c]
-  (await (ctx/act c :wait #js {:ms idle-ms}))
+  (await (ctx/act c :wait #js {:ms (idle-ms)}))
   :continue)
 
 (defn ^:async walk!
@@ -77,7 +86,7 @@
   :again, :continue (go-to waits) or :done."
   [c pos]
   (let [reach (:reach (:args c))
-        r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos pos :range reach :doors :shut :leg-s walk-leg-s
+        r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos pos :range reach :doors :shut :leg-s (walk-leg-s)
                                                                :escalate false :warn false :retry false :zone-tolls true}))
         res (when-not (= :continue r) (ctx/child-result c :walk))]
     (if (= :continue r)
@@ -86,11 +95,11 @@
             out (if (or (> blocked 0) (u/within? (u/self-pos c) pos reach)) 0 (inc (:out-of-range (ctx/mem c) 0)))]
         (ctx/update-mem! c assoc :blocked blocked :out-of-range out)
         (cond
-          (>= out max-blocked)
+          (>= out (max-blocked))
           (do (ctx/emit! c :give.out-of-range :warn {:text (str "still out of reach of " (:player (:args c)))})
               (finish! c {:given 0 :reason "out-of-range"}))
 
-          (< blocked max-blocked) :again
+          (< blocked (max-blocked)) :again
 
           :else
           (do (ctx/emit! c :give.unreachable :warn {:text (str "cannot reach " (:player (:args c)))})
@@ -104,7 +113,7 @@
         p (:primitives c)
         n (if count (min count have) have)]
     (ctx/update-mem! c assoc :before (set (map :id (look/drops p item radius))) :had have)
-    (await (ctx/act c :look (clj->js {:pos (update pos :y + head-height)})))
+    (await (ctx/act c :look (clj->js {:pos (update pos :y + (head-height))})))
     (let [r (await (ctx/act c :toss (clj->js {:item item :count n})))
           status (.-status r)]
       (if (= "tossed" status)
@@ -152,7 +161,7 @@
       (and (pos? back) (not collecting))
       (returned! c given back)
 
-      (and (empty? lying) (not seen-drop) (< since unseen-ms))
+      (and (empty? lying) (not seen-drop) (< since (unseen-ms)))
       (await (idle! c))
 
       (and (empty? lying) (not seen-drop))
@@ -184,7 +193,7 @@
       (do (ctx/emit! c :give.no-item :warn {:text (str "no " item " to give")})
           (finish! c {:given 0 :reason "no-item"}))
 
-      (and (nil? pos) (< (- now (:started (ctx/mem c))) grace-ms))
+      (and (nil? pos) (< (- now (:started (ctx/mem c))) (grace-ms)))
       (await (idle! c))
 
       (nil? pos)
@@ -208,11 +217,11 @@
       (await (after-toss! c))
       (await (before-toss! c now)))))
 
-(def max-steps "Steps of one call before it gives the round back with :continue." 400)
+(defn max-steps [] (settings/get settings ::max-steps))
 
 (defn ^:async round
   "One call walks, tosses and collects what lies back until the give is done or stopped; it yields while it waits
   for the player to appear or to take the drop, and after max-steps steps."
   [c]
   (let [n (atom 0)]
-    (await (pace/steps! c #(if (< (swap! n inc) max-steps) (step! c) :continue)))))
+    (await (pace/steps! c #(if (< (swap! n inc) (max-steps)) (step! c) :continue)))))

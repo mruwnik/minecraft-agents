@@ -1,5 +1,7 @@
 (ns jobs.items.bake
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [jobs.lib.game-facts :as facts]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
@@ -26,8 +28,9 @@
    :table-radius {:doc "how far from the chest the table may be" :spec (a/num-in 0 nil) :default 8}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
-(def per-trip-max 192)
-(def stack-size 64)
+(a/defargs settings
+  {::per-trip-max {:default 192 :doc "Items carried to the furnace in one trip." :spec (a/int-in 0 nil)}})
+(defn per-trip-max [] (settings/get settings ::per-trip-max))
 
 (defn check
   "A chest is known."
@@ -98,10 +101,10 @@
   (let [cw (carried p "wheat")
         free (u/free-slots p)
         reserved (if (pos? (carried p "bread")) 1 2)
-        room (+ (* stack-size (- free reserved)) (mod (- cw) stack-size))]
+        room (+ (* facts/stack-size (- free reserved)) (mod (- cw) facts/stack-size))]
     (if (< free reserved)
       0
-      (min (* 3 (quot (+ chest-wheat cw) 3)) per-trip-max (+ cw room)))))
+      (min (* 3 (quot (+ chest-wheat cw) 3)) (per-trip-max) (+ cw room)))))
 
 (defn declined!
   "A child declined (its check failed): count it as a failed round, with the child's wait reason, and finish when that

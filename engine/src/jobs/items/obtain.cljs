@@ -1,5 +1,6 @@
 (ns jobs.items.obtain
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as b]
             [jobs.lib.fetch :as fetch]
@@ -50,7 +51,11 @@
    :fail-minutes {:doc "passed on to nested fetches; nil: the fetch limits" :spec (a/num-in 0 nil) :default nil}
    :chain {:doc "items being fetched above this one (a cycle stops)" :spec (a/coll-of a/item?) :default []}})
 
-(def max-inspections 4)
+(a/defargs settings
+  {::max-inspections {:default 4 :doc "Looks at a place before the search for it gives up." :spec (a/int-in 0 nil)}
+   ::craft-radius {:default 32 :doc "Blocks within which a crafting table is looked for." :spec (a/int-in 0 nil)}
+   ::max-fruitless {:default 3 :doc "Rounds without progress before the job gives up." :spec (a/int-in 0 nil)}})
+(defn max-inspections [] (settings/get settings ::max-inspections))
 
 (defn names-of [{:keys [item any-of]}]
   (vec (if item [item] any-of)))
@@ -87,7 +92,7 @@
                 {:pos pos :stock items})))
           (fetch/usable-chests c))))
 
-(def craft-radius 32)
+(defn craft-radius [] (settings/get settings ::craft-radius))
 
 (defn carried-counts [p]
   (reduce (fn [acc {:keys [name count]}] (update acc name (fnil + 0) count)) {} (u/inventory p)))
@@ -99,7 +104,7 @@
         have (carried-counts p)
         mem (ctx/mem c)
         table? (and (not (get-in mem [:craft :table-unreachable]))
-                    (boolean (or (:table mem) (craft/nearest-table p craft-radius))))
+                    (boolean (or (:table mem) (craft/nearest-table p (craft-radius)))))
         version (game/version-of p)]
     (some (fn [name]
             (when-let [pl (recipes/plan version have name n {:table? table?})]
@@ -137,7 +142,7 @@
               (when (or (= name (get-in (ctx/mem c) [:gather :item]))
                         (seq (look/seen-blocks p {:match #(= leaves %) :radius 16 :max 1})))
                 {:steps [] :gather {name n} :item name})
-              (when-let [pl (recipes/plan version have name n {:table? (boolean (or (:table (ctx/mem c)) (craft/nearest-table p craft-radius)))
+              (when-let [pl (recipes/plan version have name n {:table? (boolean (or (:table (ctx/mem c)) (craft/nearest-table p (craft-radius))))
                                                            :gather? true :materials materials})]
                 (assoc pl :item name))))
           names)))
@@ -300,7 +305,7 @@
           (mark!))
         :again))))
 
-(def max-fruitless 3)
+(defn max-fruitless [] (settings/get settings ::max-fruitless))
 
 (defn fruitless! [c why]
   (ctx/update-mem! c update-in [:craft :fruitless] (fnil inc 0))
@@ -314,7 +319,7 @@
         step (or (:step mem)
                  (some-> (craft-plan c names (- target have)) :steps first))]
     (cond
-      (>= (:fruitless mem 0) max-fruitless)
+      (>= (:fruitless mem 0) (max-fruitless))
       (tried! c :craft (or (:why mem) :failed))
 
       ;; no plan without the seen table: try that table again (it may be reachable now); fruitless counts bound the retries
@@ -364,7 +369,7 @@
   "Fruitless runs that end the gather source: the need's :max-runs, but only for a run that happened; a child that
   was declined (:declined: it could not start) broke nothing and counts against the default."
   [need r]
-  (if (= :declined r) max-fruitless (:max-runs need max-fruitless)))
+  (if (= :declined r) (max-fruitless) (:max-runs need (max-fruitless))))
 
 (defn gather-failed! [c need why r]
   (let [k (inc (get-in (ctx/mem c) [:gather :fruitless] 0))]
@@ -424,7 +429,7 @@
                   unknown (first (remove :stock cs))]
               (cond
                 known (await (withdraw! c (:pos known) (:stock known) names have))
-                (and unknown (< (:inspected m 0) max-inspections)) (await (inspect! c (:pos unknown)))
+                (and unknown (< (:inspected m 0) (max-inspections))) (await (inspect! c (:pos unknown)))
                 :else (tried! c :chest (if (or (seq (:done-chests m)) (pos? (:inspected m 0))) :lacking :none-seen))))
             (and (contains? (:how o) :craft) (not (get-in m [:tried :craft]))
                  (or (not (contains? (:how o) :gather)) (get-in m [:craft :step]) (get-in m [:craft :table-unreachable]) (craft-plan c names (- target have))))

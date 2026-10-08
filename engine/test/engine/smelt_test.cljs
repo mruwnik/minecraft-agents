@@ -182,10 +182,10 @@
     {} :done))
 
 (deftest the-wait-is-the-cook-time-left-plus-a-margin
-  (is (= (+ smelt/slack-ms (* 50 600)) (smelt/wait-ms "furnace" {:input {:count 3} :cook {:done 0 :total 200}})))
-  (is (= (+ smelt/slack-ms (* 50 (- 300 120))) (smelt/wait-ms "smoker" {:input {:count 3} :cook {:done 120 :total 100}})))
-  (is (= (+ smelt/slack-ms (* 50 150)) (smelt/wait-ms "blast_furnace" {:input {:count 2} :cook {:done 50 :total 100}})))
-  (is (= (+ smelt/slack-ms (* 50 600)) (smelt/wait-ms "furnace" {:input {:count 3} :cook nil})) "no bar: the whole cook"))
+  (is (= (+ (smelt/slack-ms) (* 50 600)) (smelt/wait-ms "furnace" {:input {:count 3} :cook {:done 0 :total 200}})))
+  (is (= (+ (smelt/slack-ms) (* 50 (- 300 120))) (smelt/wait-ms "smoker" {:input {:count 3} :cook {:done 120 :total 100}})))
+  (is (= (+ (smelt/slack-ms) (* 50 150)) (smelt/wait-ms "blast_furnace" {:input {:count 2} :cook {:done 50 :total 100}})))
+  (is (= (+ (smelt/slack-ms) (* 50 600)) (smelt/wait-ms "furnace" {:input {:count 3} :cook nil})) "no bar: the whole cook"))
 
 ;; ------------------------------------------------------------------ the check
 
@@ -725,5 +725,5 @@
 (deftest the-wait-counts-game-ticks-at-the-live-rate
   (settings/set-clock! 40 false :packet)
   (try
-    (is (= (+ smelt/slack-ms (* 25 600)) (smelt/wait-ms "furnace" {:input {:count 3} :cook {:done 0 :total 200}})))
+    (is (= (+ (smelt/slack-ms) (* 25 600)) (smelt/wait-ms "furnace" {:input {:count 3} :cook {:done 0 :total 200}})))
     (finally (settings/set-clock! 20 false :assumed))))

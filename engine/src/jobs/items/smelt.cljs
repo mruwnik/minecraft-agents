@@ -1,5 +1,6 @@
 (ns jobs.items.smelt
-  (:require [engine.args :as a]
+  (:require [jobs.lib.game-facts :as facts]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.access :as access]
@@ -38,11 +39,15 @@
    :fuel {:doc "fuel item to load; the best carried when nil" :spec a/item? :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
-(def slack-ms 2000)
-(def grace-ms 6000)
-(def recheck-ms 6000)
-(def slot-max 64)
-(def seen-radius 32)
+(a/defargs settings
+  {::slack-ms {:default 2000 :doc "Slack added to a wait for the furnace, in ms." :spec (a/int-in 0 nil)}
+   ::grace-ms {:default 6000 :doc "How long a furnace may look unlit after a load before it counts as stuck, in ms." :spec (a/int-in 0 nil)}
+   ::recheck-ms {:default 6000 :doc "How often the furnace is looked at again, in ms." :spec (a/int-in 0 nil)}
+   ::seen-radius {:default 32 :doc "Blocks within which a furnace counts as seen." :spec (a/int-in 0 nil)}})
+(defn slack-ms [] (settings/get settings ::slack-ms))
+(defn grace-ms [] (settings/get settings ::grace-ms))
+(defn recheck-ms [] (settings/get settings ::recheck-ms))
+(defn seen-radius [] (settings/get settings ::seen-radius))
 
 ;; ------------------------------------------------------------------ what burns and what cooks
 
@@ -134,7 +139,7 @@
           (:give-up picked) picked
           (and slot (not= (:name slot) name)) {:give-up "fuel-busy"}
           :else (let [per (fuel-per-unit kind name)
-                      units (min (js/Math.ceil (/ deficit per)) (carried-count carried name) (- slot-max (:count slot 0)))
+                      units (min (js/Math.ceil (/ deficit per)) (carried-count carried name) (- facts/slot-max (:count slot 0)))
                       covered (- (js/Math.floor (+ existing (* units per))) e)
                       n' (max 0 (min n covered))]
                   (if (and (pos? n) (zero? n'))
@@ -151,7 +156,7 @@
         have (carried-count carried item)
         input (:input state)
         e (if (= item (:name input)) (:count input) 0)
-        room (- slot-max e)
+        room (- facts/slot-max e)
         wanted (cond target (max 0 (- target e)) :else (min (or count have) have room))
         n (if target (min wanted have) wanted)]
     (cond
@@ -180,7 +185,7 @@
   [kind state]
   (let [per (cook-ticks kind)
         left (- (* (get-in state [:input :count] 0) per) (get-in state [:cook :done] 0))]
-    (+ slack-ms (settings/ticks->ms (max 0 left)))))
+    (+ (slack-ms) (settings/ticks->ms (max 0 left)))))
 
 ;; ------------------------------------------------------------------ the check
 
@@ -200,7 +205,7 @@
   (let [names (if item [item] (map :name (carried c)))
         kinds (filter (fn [kind] (some #(smelts? kind %) names)) (keys cook-ticks))
         ok? (if (or item (seq kinds)) (set kinds) furnace-block?)]
-    (->> (look/seen-blocks (:primitives c) {:names furnace-block? :radius seen-radius :max 16 :live? true})
+    (->> (look/seen-blocks (:primitives c) {:names furnace-block? :radius (seen-radius) :max 16 :live? true})
          (some #(when (ok? (:name %)) (:pos %))))))
 
 (defn needs-attention?
@@ -238,7 +243,7 @@
   "Remember when to look again and end the round."
   [c ms]
   (let [now (ctx/now c)]
-    (ctx/update-mem! c assoc :ready-at (+ now ms) :unlit-from (+ now grace-ms))
+    (ctx/update-mem! c assoc :ready-at (+ now ms) :unlit-from (+ now (grace-ms)))
     :continue))
 
 (defn finish!
@@ -294,7 +299,7 @@
     (case (:status r)
       "ok" (do (u/progress! c)
                (ctx/emit! c :smelt.loaded :info {:text (str "smelting " target " " item) :item item :count target :fuel (:item fuel)})
-               (wait-until! c (+ slack-ms (settings/ticks->ms (* target (cook-ticks (:kind state)))))))
+               (wait-until! c (+ (slack-ms) (settings/ticks->ms (* target (cook-ticks (:kind state)))))))
       "busy" (stop! c (if (= "input" (:slot r)) "furnace-busy" "fuel-busy"))
       "no-item" (stop! c "no-item")
       "rejected" (stop! c (if (= "fuel" (:slot r)) "rejected-fuel" "furnace-full"))
@@ -345,7 +350,7 @@
     :take (let [r (await (take! c))]
             (cond
               (= "full" (:status r)) (stop! c "inventory-full")
-              (:input r) (wait-until! c recheck-ms)
+              (:input r) (wait-until! c (recheck-ms))
               :else (do (ctx/emit! c :smelt.done :info {:text (str "smelted " (:got (ctx/mem c))) :smelted (:got (ctx/mem c))})
                         (finish! c {}))))
     :wait (wait-until! c (wait-ms (:kind state) state))

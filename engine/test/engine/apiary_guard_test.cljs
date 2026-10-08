@@ -335,7 +335,7 @@
                      (fn ^:async f [_ _ _]
                        (if (< (swap! digs inc) 50) #js {:status "dug"} #js {:status "failed"})))
           (await (child-outcome eng job {} 60))
-          (is (<= 1 (count (calls p "dig")) guard/max-sink-steps)))))))
+          (is (<= 1 (count (calls p "dig")) (guard/max-sink-steps))))))))
 
 (deftest a-sink-digs-the-ground-below-before-the-fire
   (let [cells {{:x 2 :y 64 :z 0} "campfire" {:x 2 :y 63 :z 0} "stone"}

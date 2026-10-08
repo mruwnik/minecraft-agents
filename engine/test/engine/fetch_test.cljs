@@ -1011,7 +1011,7 @@
 (deftest a-declined-child-is-not-a-fruitless-run
   (let [sapling (obtain/gather-need {"oak_sapling" 1})]
     (is (= 1 (obtain/fruitless-limit sapling :done)))
-    (is (= obtain/max-fruitless (obtain/fruitless-limit sapling :declined)) "a child that could not start broke no leaves")))
+    (is (= (obtain/max-fruitless) (obtain/fruitless-limit sapling :declined)) "a child that could not start broke no leaves")))
 
 (deftest gather-mines-fetch-a-pickaxe-without-gathering
   (is (= obtain/mine-fetch (get-in (obtain/gather-need {"cobblestone" 1}) [:args :fetch])))

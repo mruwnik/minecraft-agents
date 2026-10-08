@@ -1,5 +1,6 @@
 (ns jobs.items.enchant
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
@@ -33,7 +34,9 @@
    :slot {:doc "take exactly offer 1, 2 or 3; nil to choose by :choice" :spec #{1 2 3} :default nil}
    :choice {:doc "\"best\" (dearest affordable offer) or \"cheapest\" (lowest level cost affordable)" :spec #{"best" "cheapest"} :default "best"}})
 
-(def reach 3)
+(a/defargs settings
+  {::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}})
+(defn reach [] (settings/get settings ::reach))
 
 (defn check
   "A non-blank item name is given."
@@ -176,12 +179,12 @@
       (if (look/surveyed? c)
         (give-up! c "no-table" {})
         (do (await (look/survey! c)) :again)) ; a table behind the body is not seen until it looks
-      (let [r (if (u/within? (u/self-pos c) pos reach)
+      (let [r (if (u/within? (u/self-pos c) pos (reach))
                 :done
-                (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos pos :range reach :escalate false :warn false :retry false :zone-tolls true})))]
+                (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos pos :range (reach) :escalate false :warn false :retry false :zone-tolls true})))]
         (cond
           (= :continue r) :continue
-          (not (or (u/within? (u/self-pos c) pos reach) (:arrived (ctx/child-result c :walk)))) (fail-up! c "unreachable")
+          (not (or (u/within? (u/self-pos c) pos (reach)) (:arrived (ctx/child-result c :walk)))) (fail-up! c "unreachable")
           :else (await (consider! c pos)))))))
 
 (defn ^:async round
