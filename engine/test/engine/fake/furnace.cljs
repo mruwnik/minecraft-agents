@@ -20,7 +20,9 @@
 (def cook-ticks {"furnace" 200 "blast_furnace" 100 "smoker" 100})
 ;; a blast furnace and a smoker burn fuel twice as fast as they cook twice as fast: an item costs the same fuel in all three
 (def burn-rate {"furnace" 1 "blast_furnace" 2 "smoker" 2})
-(def fuel-ticks {"coal" 1600 "charcoal" 1600 "coal_block" 16000 "blaze_rod" 2400 "oak_planks" 300 "oak_log" 300 "stick" 100})
+(def fuel-ticks
+  (into {"coal" 1600 "charcoal" 1600 "coal_block" 16000 "blaze_rod" 2400 "stick" 100}
+        (for [wood ["oak" "spruce" "birch" "jungle" "acacia" "dark_oak"] kind ["planks" "log"]] [(str wood "_" kind) 300])))
 
 (def empty-furnace {:input nil :fuel nil :output nil :burn 0 :burn-total 0 :cook 0})
 

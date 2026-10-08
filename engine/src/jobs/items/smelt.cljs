@@ -23,7 +23,7 @@
   woken round that finds the cook unfinished waits again from the furnace's own bars.
   What is owed is kept in memory before the load, so a restart or cut neither loses the output nor loads twice.
   With :fetch (default true; jobs.lib.fetch) what is missing is fetched first by obtain children: the input, the
-  fuel (the :fuel item, else :fetch-fuels in that order of preference, one coal for 8 items), and, when no furnace
+  fuel (the :fuel item, else coal or charcoal, else planks of any wood, sized by what one item of it smelts), and, when no furnace
   is seen, a furnace (a carried one is put down beside the body, else one is fetched and put down). A fetch that
   finds nothing leaves the reason below (no-item, no-fuel, no-furnace-seen). :fetch false skips all of it.
   Result: {:smelted n :wanted n}: :wanted is the count this job loaded and :smelted what came of it; input
@@ -50,15 +50,15 @@
   {::slack-ms {:default 2000 :doc "Slack added to a wait for the furnace, in ms." :spec (a/int-in 0 nil)}
    ::grace-ms {:default 6000 :doc "How long a furnace may look unlit after a load before it counts as stuck, in ms." :spec (a/int-in 0 nil)}
    ::recheck-ms {:default 6000 :doc "How often the furnace is looked at again, in ms." :spec (a/int-in 0 nil)}
-   ::fetch-fuels {:default ["coal" "charcoal" "oak_planks"] :doc "Fuel items fetched when :fuel is nil, the first preferred." :spec (a/coll-of a/item?)}
-   ::fuel-per-coal {:default 8 :doc "Items one fetched fuel item is counted to smelt, to size the fuel fetch." :spec (a/int-in 1 nil)}
+   ::fetch-fuels {:default ["coal" "charcoal"] :doc "Fuel items fetched first when :fuel is nil, the first preferred." :spec (a/coll-of a/item?)}
+   ::fetch-wood-fuels {:default ["oak_planks" "spruce_planks" "birch_planks" "jungle_planks" "acacia_planks" "dark_oak_planks"] :doc "Fuel items fetched when the ::fetch-fuels fetch found too little, the first preferred." :spec (a/coll-of a/item?)}
    ::seen-radius {:default 32 :doc "Blocks within which a furnace counts as seen." :spec (a/int-in 0 nil)}})
 (defn slack-ms [] (settings/get settings ::slack-ms))
 (defn grace-ms [] (settings/get settings ::grace-ms))
 (defn recheck-ms [] (settings/get settings ::recheck-ms))
 (defn seen-radius [] (settings/get settings ::seen-radius))
 (defn fetch-fuels [] (settings/get settings ::fetch-fuels))
-(defn fuel-per-coal [] (settings/get settings ::fuel-per-coal))
+(defn fetch-wood-fuels [] (settings/get settings ::fetch-wood-fuels))
 
 ;; ------------------------------------------------------------------ what burns and what cooks
 
@@ -465,12 +465,15 @@
       (case (:fetch-stage (ctx/mem c))
         :input (let [need (- n (carried-count (carried c) item))]
                  (when (pos? need) {:reason :need :item item :count need}))
-        :fuel (let [need (js/Math.ceil (/ (- n (fuel-capacity c item)) (fuel-per-coal)))
-                    fuel (:fuel (:args c))]
-                (when (pos? need)
-                  (if fuel
-                    {:reason :need :item fuel :count need}
-                    {:reason :need :any-of (fetch-fuels) :count need})))
+        (:fuel :wood-fuel)
+        (let [fuel (:fuel (:args c))
+              names (cond fuel [fuel] (= :fuel (:fetch-stage (ctx/mem c))) (fetch-fuels) :else (fetch-wood-fuels))
+              short (- n (fuel-capacity c item))
+              need (js/Math.ceil (/ short (fuel-per-unit "furnace" (first names))))]
+          (when (and (pos? short) (not (and fuel (= :wood-fuel (:fetch-stage (ctx/mem c))))))
+            (if fuel
+              {:reason :need :item fuel :count need}
+              {:reason :need :any-of names :count need})))
         nil))))
 
 (defn ^:async fetch-stages!
@@ -478,7 +481,7 @@
   waits, :done for a bad :fetch arg, else nil."
   [c]
   (when (and (fetch/opts c 'jobs.items.smelt) (nil? (:owed (ctx/mem c))))
-    (loop [[stage & more] (remove #(contains? (:fetch-done (ctx/mem c)) %) [:input :fuel])]
+    (loop [[stage & more] (remove #(contains? (:fetch-done (ctx/mem c)) %) [:input :fuel :wood-fuel])]
       (when stage
         (ctx/update-mem! c assoc :fetch-stage stage)
         (let [r (await (fetch/fetch! c 'jobs.items.smelt stage-problem))]

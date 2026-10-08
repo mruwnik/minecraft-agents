@@ -872,3 +872,31 @@
           (is (= "no-fuel" (:reason (first (await (fetched-run {:blocks {pos-key "furnace"} :inventory [{:name "raw_iron" :count 5}]} furnace))))))
           (is (= "no-item" (:reason (first (await (fetched-run {:blocks {pos-key "furnace"} :inventory [{:name "coal" :count 3}]} furnace))))))
           (is (= "no-furnace-seen" (:reason (first (await (fetched-run {:inventory iron-and-coal} {:item "raw_iron" :count 3})))))))))))
+
+(deftest missing-fuel-falls-back-to-any-wood
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:blocks {pos-key "furnace" "-2,64,3" "chest"} :inventory [{:name "raw_iron" :count 8}]
+                     :containers {"-2,64,3" [{:name "birch_planks" :count 8}]}}
+              [r _p] (await (fetched-run world {:furnace {:x 1 :y 64 :z 0} :item "raw_iron" :count 8}))]
+          (is (= {:smelted 8 :wanted 8} r)))))))
+
+(deftest carried-logs-of-any-wood-are-the-fuel
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:blocks {pos-key "furnace"} :inventory [{:name "raw_iron" :count 8} {:name "birch_log" :count 6}]}
+              [r _p] (await (fetched-run world {:furnace {:x 1 :y 64 :z 0} :item "raw_iron" :count 8}))]
+          (is (= {:smelted 8 :wanted 8} r)))))))
+
+(deftest a-furnace-is-crafted-from-carried-cobblestone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[r p] (await (fetched-run {:blocks {"-2,64,3" "crafting_table"}
+                                         :recipes {"furnace" {:count 1 :needs {"cobblestone" 8} :table true}}
+                                         :inventory (conj iron-and-coal {:name "cobblestone" :count 8})}
+                                        {:item "raw_iron" :count 3}))]
+          (is (= {:smelted 3 :wanted 3} r))
+          (is (= 1 (count (furnaces-at p)))))))))
