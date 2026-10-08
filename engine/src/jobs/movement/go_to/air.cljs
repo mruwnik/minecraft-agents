@@ -12,13 +12,22 @@
 
 (def air-radius "Columns this far sideways are read for air when the looks found none nearer (breathe's :air-radius default)." 8)
 
+(defn ^:async swim-up-blind!
+  "No air known and nothing seen over the own column: swim up it, as breathe does in the dark (a body learns by moving).
+  True when the swim surfaced or rose; nil otherwise."
+  [c pos]
+  (let [fy (js/Math.floor (:y pos))
+        r (await (ctx/act c :swim #js {}))
+        y (js/Math.floor (:y (u/self-pos c)))]
+    (or (= "surfaced" (.-status r)) (> y fy))))
+
 (defn ^:async surface!
   "A round refused :air with the head under water: the planner refuses a swim past the air limit unless the goal is a
   way to air, so a far goal leaves the body under water. Look for air (up the own column first, then the columns beside
   it, breathe/find-air!), else read seen air within air-radius, and walk one round (near/walk-round! with walk-opts) to
   that surface cell, range 0: a way to air, whose drowning is priced, not refused. At most max-surfacings a call (mem
   :surfacings). True when it walked there or on (the caller plans again); nil when the head is out, the tries are spent
-  or no air is known."
+  or no air is known and the own column is not open (a block seen over it). With no air known and the own column open, swims up it blind (one swim)."
   [c walk-opts]
   (let [p (:primitives c)
         n (:surfacings (ctx/mem c) 0)]
@@ -26,8 +35,13 @@
       (let [pos (u/self-pos c)
             target (or (await (breathe/find-air! (assoc c :args look-args) pos))
                        (breathe/nearest-air p pos air-radius (:reach look-args) nil false))]
-        (when target
-          (ctx/update-mem! c assoc :surfacings (inc n))
-          (ctx/emit! c :go-to.surfacing :info {:at target :text (str "short of air: swimming up to " [(:x target) (:y target) (:z target)] " first")})
-          (let [{:keys [status]} (await (near/walk-round! c target 0 walk-opts))]
-            (contains? #{"arrived" "partial" "searching"} status)))))))
+        (if-not target
+          (when (breathe/column-open? p (js/Math.floor (:x pos)) (js/Math.floor (:z pos)) (js/Math.floor (:y pos)) (:reach look-args))
+            (ctx/update-mem! c assoc :surfacings (inc n))
+            (ctx/emit! c :go-to.surfacing :info {:text "short of air, nothing seen above: swimming up blind"})
+            (await (swim-up-blind! c pos)))
+          (do
+            (ctx/update-mem! c assoc :surfacings (inc n))
+            (ctx/emit! c :go-to.surfacing :info {:at target :text (str "short of air: swimming up to " [(:x target) (:y target) (:z target)] " first")})
+            (let [{:keys [status]} (await (near/walk-round! c target 0 walk-opts))]
+              (contains? #{"arrived" "partial" "searching"} status))))))))

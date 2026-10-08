@@ -60,3 +60,13 @@
                                              {:pos [38 70 8] :range 1 :escalate false}))]
           (is (= :air (:why @out)) (str "result " @out))
           (is (<= 69 (second (gt/at p))) (str "it swam up for air: at " (gt/at p))))))))
+
+;; the same shaft in the dark: looking teaches nothing, so it swims up its own column blind, as breathe does
+(deftest a-body-short-of-air-in-a-dark-shaft-swims-up-blind
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [oxygen [6 5]]
+          (let [{:keys [out p]} (await (gt/go! {:self {:pos [4.5 64 8.5] :inWater true :oxygen oxygen :pitch 0} :blocks shaft :light [0 0]}
+                                               {:pos [8 70 8] :range 1 :escalate false}))]
+            (is (true? (:arrived @out)) (str "at oxygen " oxygen ": result " @out " at " (gt/at p)))))))))
