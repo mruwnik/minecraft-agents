@@ -73,8 +73,8 @@ export const SPECS = {
   'raw-world/epoch-range': { default: 50, spec: ['int-in', 0, null], doc: "A block update or chunk change this near the body (a little over the sight radius) moves epoch, in blocks." },
   'view/relight-range': { default: 64, spec: ['int-in', 0, null], doc: "A block change farther than this from the body is not relit for the view overlay (a little over the sight radius), in blocks." },
   'view/relight-backlog-max': { default: 4096, spec: ['int-in', 1, null], doc: "Most block changes waiting to be relit; beyond it only the ones nearest the body are kept." },
-  'view/dirty-columns-max': { default: 256, spec: ['int-in', 1, null], doc: "Most columns remembered with block changes still to relit when the body comes near; the oldest column loses its view overlay instead." },
-  'view/dirty-points-max': { default: 64, spec: ['int-in', 1, null], doc: "Most block changes remembered per column for a later relight; a column over it loses its view overlay instead." },
+  'view/dirty-columns-max': { default: 256, spec: ['int-in', 1, null], doc: "Most columns remembered with block changes still to relit when the body comes near; the farthest column loses its view overlay instead." },
+  'view/dirty-points-max': { default: 64, spec: ['int-in', 1, null], doc: "Most block changes remembered per column for a later relight; a column over it is relit whole instead." },
   'raw-world/light-ttl-ms': { default: 1000, spec: ['int-in', 0, null], doc: "A light copy is re-read after this long, in ms." },
 }
 

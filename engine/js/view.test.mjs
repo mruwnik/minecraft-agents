@@ -1043,15 +1043,27 @@ test('relight: a point trimmed off the backlog is relit later, nearer the body',
   assert.equal(view.lightOverlay(7, 0, (65 + 64) >> 4)?.block[torchCell()], 14)
 })
 
-test('relight: a column with more far changes than the dirty bound drops its overlay instead', async () => {
-  const { view, torch, bot } = torchWorld({ relightRange: 50, relightBudgetMs: 1e9, dirtyPointsMax: 1 }, new Vec3(110.5, 65, 10.5))
+test('relight: a column with more far changes than the dirty bound is relit whole when the body comes near', async () => {
+  const { view, torch, bot } = torchWorld({ relightRange: 50, relightBudgetMs: 1e9, dirtyPointsMax: 1 })
   torch(120)
+  torch(121)
+  await view.flushColumns()
+  await view.idle()
+  assert.equal(view.lightOverlay(7, 0, (65 + 64) >> 4), undefined)
+  bot.entity.position = new Vec3(110.5, 65, 10.5)
   await view.flushColumns()
   await view.idle()
   assert.equal(view.lightOverlay(7, 0, (65 + 64) >> 4)?.block[torchCell()], 14)
-  bot.entity.position = new Vec3(8.5, 65, 10.5)
-  torch(121)
-  torch(122)
+})
+
+test('relight: over the dirty column bound the farthest column is forgotten, the nearer one is relit', async () => {
+  const { view, torch, bot } = torchWorld({ relightRange: 50, relightBudgetMs: 1e9, dirtyColumnsMax: 1 })
+  torch(120)
+  torch(88)
+  bot.entity.position = new Vec3(110.5, 65, 10.5)
+  await view.flushColumns()
+  await view.idle()
+  assert.equal(view.lightOverlay(5, 0, (65 + 64) >> 4)?.block[torchCell()], 14)
   assert.equal(view.lightOverlay(7, 0, (65 + 64) >> 4), undefined)
 })
 

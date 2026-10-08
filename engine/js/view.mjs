@@ -148,7 +148,7 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
   let mcVersion = null
   const pending = new Set()
   const overlays = new Map()
-  const dirty = new Map() // column key -> Map of block changes waiting for the body to come near (null: over the bound)
+  const dirty = new Map() // column key -> Map of block changes waiting for the body to come near (true: over the point bound, the whole column)
   let changes = new Map()
   const inflight = new Set()
   const running = new Set()
@@ -209,34 +209,46 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
 
   // Changes not relit yet (beyond relight-range, or trimmed off the backlog), by column. The overlay would keep the
   // server's load-time light there, so they are relit once the body comes near. Bounded: a column over its point bound
-  // or the oldest column over the column bound loses its overlay instead (the server light is read there).
+  // is remembered as a whole (true, no points) and relit section by section; over the column bound the farthest
+  // column is forgotten and loses its overlay (the server light is read there).
   const defer = p => {
     const key = `${p.x >> 4},${p.z >> 4}`
-    const pointsMax = dirtyPointsMax ?? setting('view/dirty-points-max')
-    const columnsMax = dirtyColumnsMax ?? setting('view/dirty-columns-max')
-    const forget = k => { dirty.set(k, null); overlays.delete(k) } // null: over the bound, nothing to relight
     const points = dirty.get(key)
-    if (points === null) return
+    if (points === true) return
     if (!points) {
       dirty.set(key, new Map())
-      if (dirty.size > columnsMax) {
-        const oldest = [...dirty.keys()].find(k => k !== key)
-        if (dirty.get(oldest)) { overlays.delete(oldest); markColumn(...oldest.split(',').map(Number)) }
-        dirty.delete(oldest)
-      }
+      forgetFarthest(key)
     }
     const mine = dirty.get(key)
     mine.set(`${p.x},${p.y},${p.z}`, { x: p.x, y: p.y, z: p.z })
-    if (mine.size > pointsMax) forget(key)
+    if (mine.size > (dirtyPointsMax ?? setting('view/dirty-points-max'))) dirty.set(key, true)
+  }
+  const forgetFarthest = keep => {
+    if (dirty.size <= (dirtyColumnsMax ?? setting('view/dirty-columns-max'))) return
+    const at = bot?.entity?.position
+    const far = k => { const [cx, cz] = k.split(',').map(Number); return at ? (cx * 16 + 8 - at.x) ** 2 + (cz * 16 + 8 - at.z) ** 2 : 0 }
+    const victim = [...dirty.keys()].filter(k => k !== keep).reduce((a, b) => far(b) > far(a) ? b : a)
+    dirty.delete(victim)
+    overlays.delete(victim)
+    markColumn(...victim.split(',').map(Number))
+  }
+  // a whole dirty column: one point at the middle of each section holding blocks (the box around it covers the column)
+  const columnPoints = (target, cx, cz) => {
+    const column = target.world.getColumn(cx, cz)
+    if (!column) return []
+    const sections = Math.ceil(column.worldHeight / 16)
+    return Array.from({ length: sections }, (_, s) => s)
+      .filter(s => columnStateSection(column, s).some(id => id !== 0))
+      .map(s => ({ x: cx * 16 + 8, y: column.minY + s * 16 + 8, z: cz * 16 + 8 }))
   }
   // move the dirty columns now within range of the body back into the relight backlog
-  const requeueNear = at => {
+  const requeueNear = (target, at) => {
     const range = relightRange ?? setting('view/relight-range')
     for (const [key, points] of [...dirty]) {
       const [cx, cz] = key.split(',').map(Number)
       if ((cx * 16 + 8 - at.x) ** 2 + (cz * 16 + 8 - at.z) ** 2 > range ** 2) continue
       dirty.delete(key)
-      for (const [k, p] of points ?? []) changes.set(k, p)
+      for (const p of points === true ? columnPoints(target, cx, cz) : points.values()) changes.set(`${p.x},${p.y},${p.z}`, p)
     }
   }
 
@@ -245,7 +257,7 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
   const relight = target => {
     const blocked = new Set()
     const at = target.entity?.position
-    if (at && dirty.size) requeueNear(at)
+    if (at && dirty.size) requeueNear(target, at)
     if (!changes.size) return blocked
     const start = performance.now()
     // nearest the body first: perception reads light through the overlay, so what the body can see must not wait behind a far backlog
