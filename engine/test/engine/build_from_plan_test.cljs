@@ -514,6 +514,20 @@
           (is (empty? (h/calls q "dig")))
           (is (= {:placed 1 :wrong [] :given-up {}} (select-keys litter [:placed :wrong :given-up]))))))))
 
+(deftest a-wrong-block-where-the-item-is-not-carried-counts-as-short-and-says-so
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p seen] (await (fence-run {"4,64,3" "dirt"}
+                                                [{:name "oak_fence_gate" :count 1} {:name "torch" :count 1}]
+                                                {} {}))
+              wrong (first (h/events-of seen :build.wrong))]
+          (is (= "dirt" (block p [4 64 3])))
+          (is (= {"oak_fence" 7} (:short result)) "the dirt cell counts with the empty ones")
+          (is (some #{[4 64 3]} (:missing result)))
+          (is (= [{:pos [4 64 3] :found "dirt" :want "oak_fence" :short true}] (:wrong result)))
+          (is (re-find #"oak_fence \(short\)" (:text wrong))))))))
+
 (deftest every-wrong-cell-is-listed-and-the-event-text-is-never-clipped
   (async done
     (tu/run-async done

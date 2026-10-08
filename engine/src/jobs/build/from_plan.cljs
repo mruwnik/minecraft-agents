@@ -264,14 +264,22 @@
           (let [wrong? (= :wrong answer)
                 loose? (and wrong? (rules/replaceable found))
                 extra? (and (= :extra answer) (not (rules/replaceable found)))
-                digs? (and (or extra? (and wrong? (not loose?) item (contains? carried item)))
-                           (not (contains? misplaced pos))
-                           (not (clear-box/kept? [] found)))]
+                dug? #(and (not (contains? misplaced pos))
+                           (not (clear-box/kept? [] found)))
+                digs? (and (or extra? (and wrong? (not loose?) item (contains? carried item))) (dug?))
+                short? (and wrong? (not loose?) item (not (contains? carried item)) (dug?))]
             (cond-> cell
+              short? (assoc :short? true)
               (companion? want) (assoc :companion true)
               loose? (assoc :answer :missing)
               digs? (assoc :dig? true))))
         cells))
+
+(defn kept-ground
+  "The predicate of cells that stay unlisted as wrong: with sturdy-ground, ground of a rail line holding a sturdy block."
+  [c cells sturdy-ground]
+  (let [ground (when sturdy-ground (rail/ground cells))]
+    (fn [{:keys [pos]}] (and (contains? ground pos) (rail/sturdy? (world-block (:primitives c) pos))))))
 
 (defn planned
   "{:cells judged} for the plan in the args, or {:trouble text} (warned once per reason)."
@@ -280,7 +288,9 @@
         answer (known/plan c plan)
         cells (when (and answer (not (:broken answer)))
                 (let [carried (set (keys (carried-counts (:primitives c))))]
-                  (prepared (judged (:primitives c) answer part carried) carried (:misplaced (ctx/mem c) {}))))
+                  (let [cells (prepared (judged (:primitives c) answer part carried) carried (:misplaced (ctx/mem c) {}))
+                        kept? (kept-ground c cells (:sturdy-ground (:args c)))]
+                    (mapv #(if (and (:short? %) (kept? %)) (dissoc % :short?) %) cells))))
         trouble (or (plan-trouble answer cells)
                     (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) "no zone list has been read"))]
     (if-not trouble
@@ -340,10 +350,15 @@
   [cells given-up]
   (filterv #(and (nil? (:found %)) (or (:item %) (= :clear (:want %))) (not (:companion %)) (not (contains? given-up (:pos %)))) cells))
 
-(defn owed
-  "The cells still to build: missing, wrong to dig, or unseen."
+(defn short-wrong
+  "The cells holding a wrong block that cannot be dug yet: the body carries none of the item."
   [cells]
-  (-> (missing cells) (into (digging cells)) (into (unseen cells {}))))
+  (filterv :short? cells))
+
+(defn owed
+  "The cells still to build: missing, wrong to dig, wrong and short of the item, or unseen."
+  [cells]
+  (-> (missing cells) (into (digging cells)) (into (short-wrong cells)) (into (unseen cells {}))))
 
 (defn buildable
   "The missing cells this body can work on: item carried, not given up, the cell below not itself owed."
@@ -372,7 +387,7 @@
   [c cells]
   (let [mem (ctx/mem c)
         closed (merge (:given-up mem) (:refused mem))
-        open (remove #(contains? closed (:pos %)) (missing cells))
+        open (remove #(contains? closed (:pos %)) (into (missing cells) (short-wrong cells)))
         waits (map (fn [[item n]] {:reason :need :item item :count n}) (shortage open (carried-counts (:primitives c))))]
     (let [tool (tool-of c cells)
           all (cond-> (vec waits) tool (conj tool))]
@@ -570,22 +585,17 @@
           (ctx/update-mem! c count-fail (:pos cell) :unreachable give-up))
         (if (= :partial w) :continue :again)))))
 
-(defn kept-ground
-  "The predicate of cells that stay unlisted as wrong: with sturdy-ground, ground of a rail line holding a sturdy block."
-  [c cells sturdy-ground]
-  (let [ground (when sturdy-ground (rail/ground cells))]
-    (fn [{:keys [pos]}] (and (contains? ground pos) (rail/sturdy? (world-block (:primitives c) pos))))))
-
 (defn summary
   "What a build of cells left, from the job memory m: {:placed :missing :short :given-up :wrong :refused}."
   [c cells m sturdy-ground]
   (let [kept? (kept-ground c cells sturdy-ground)
         left (owed cells)
         given-up (merge (select-keys (:unplaceable m) (map :pos left)) (:given-up m {}))
-        wrong (mapv (fn [{:keys [pos found want]}]
+        wrong (mapv (fn [{:keys [pos found want short?]}]
                       (if-let [placed (get-in m [:misplaced pos])]
                         {:pos pos :found placed :want (shape/want-text want) :placed true}
-                        {:pos pos :found found :want (shape/want-text want)}))
+                        (cond-> {:pos pos :found found :want (shape/want-text want)}
+                          short? (assoc :short true))))
                     (filter #(and (#{:wrong :extra} (:answer %)) (not (kept? %))) cells))
         refused (->> (:refused m) (sort-by key) (mapv (fn [[pos why]] (assoc why :pos pos))))]
     {:placed (:placed m 0) :missing (mapv :pos left) :short (shortage left (carried-counts (:primitives c)))
@@ -620,7 +630,8 @@
     (when (seq wrong)
       (ctx/emit! c :build.wrong :warn {:plan plan :cells wrong
                                        :text (str "build of " plan " left " (count wrong) " wrong blocks: "
-                                                  (cells-text wrong #(str (pr-str (:pos %)) " " (:found %))))}))
+                                                  (cells-text wrong #(str (pr-str (:pos %)) " " (:found %)
+                                                                          (when (:short %) (str ", needs " (:want %) " (short)")))))}))
     (ctx/emit! c :build.done :info (merge {:plan plan :placed (:placed result) :missing (count left)
                                            :text (str "build of " plan " done: placed " (:placed result) ", still missing " (count left)
                                                       (some->> (spent/text (spent/log c) "plan") (str "; ")))}
