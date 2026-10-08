@@ -9,6 +9,8 @@
 #   must cover every file in the patch (else exit 3, listing the others); N must equal the patch's
 #   hunk count (else exit 5). The patch must have zero context (`git diff -U0`, else exit 9): cut it to your own
 #   changed lines (a neighbour's edit in the same run of lines is a changed line in your hunk: delete it).
+#   Keep each hunk's header as git printed it (its old-side start must stay; the rest is rebuilt). Headers are checked
+#   against HEAD's lines: a hunk whose '-' lines are not at that place, or that overlaps another, is refused (exit 10).
 #   The tool prints every changed line of every hunk; check them.
 #   Optional: --approved-core <card-id> (takes the id of the card holding the owner's approval; needed for engine-core paths).
 #   Optional: --owner-said <card-id> (the owner said to commit docs/ or .claude/ paths, which are refused otherwise).
@@ -72,7 +74,7 @@ is_allowed() { local f="$1" a; for a in "${allowed[@]}"; do [ "$f" = "$a" ] || [
 
 # Hunks mode: the patch may touch only the given paths, and the hunk count must be confirmed.
 if [ -n "$hunks" ]; then
-  patch_files="$(git apply --numstat -z "$hunks" | tr '\0' '\n' | awk -F'\t' 'NF>=3{print $3}')"
+  patch_files="$(git apply --numstat --recount -z "$hunks" | tr '\0' '\n' | awk -F'\t' 'NF>=3{print $3}')"
   stray=()
   while IFS= read -r f; do
     [ -n "$f" ] || continue
@@ -100,6 +102,48 @@ if [ -n "$hunks" ]; then
   fi
   echo "commit-mine: committing $hunk_total hunk(s):" >&2; echo "$hunk_list" >&2
 fi
+
+# Rewrite a zero-context patch so every header is exact: git places a zero-context hunk by its NEW-side line, which is wrong
+# once a foreign hunk above was cut out. The old-side start is the only number to trust (it does not move when another
+# hunk is dropped): it is checked against HEAD's lines, the counts are recounted, the new-side starts are rebuilt.
+# A hunk whose '-' lines are not HEAD's lines at that position, or that overlaps the one before it, is refused (exit 10).
+normalize_patch() { # $1 = patch in, $2 = patch out
+  awk -v out="$2" '
+    function fail(m) { print "commit-mine: " m > "/dev/stderr"; bad = 1; exit 10 }
+    function loadhead(path,   cmd, l) {
+      delete head; nhead = 0
+      if (path == "/dev/null") return
+      cmd = "git show \"HEAD:" path "\" 2>/dev/null"
+      while ((cmd | getline l) > 0) head[++nhead] = l
+      close(cmd)
+    }
+    function flush(   i, k, p, c, olds, news) {
+      if (!inh) return
+      olds = 0; news = 0
+      for (i = 1; i <= nl_; i++) { t = substr(body[i], 1, 1); if (t == "-") olds++; else if (t == "+") news++ }
+      p = (hold == 0) ? ha + 1 : ha
+      if (p < nextfree) fail(file ": hunk at old line " p " overlaps the hunk before it (nothing committed)")
+      if (p - 1 + olds > nhead) fail(file ": hunk at old line " p " runs past the end of HEAD (" nhead " lines) (nothing committed)")
+      k = 0
+      for (i = 1; i <= nl_; i++) if (substr(body[i], 1, 1) == "-") {
+        k++
+        if (substr(body[i], 2) != head[p - 1 + k]) fail(file ": hunk header says old line " ha ", but its removed line \"" substr(body[i], 2) "\" is not HEAD line " (p - 1 + k) " (\"" head[p - 1 + k] "\"): the patch no longer matches HEAD; rebuild it from a fresh git diff -U0 (nothing committed)")
+      }
+      c = (news == 0) ? p - 1 + off : p + off
+      print "@@ -" (olds == 0 ? p - 1 : p) (olds == 1 ? "" : "," olds) " +" c (news == 1 ? "" : "," news) " @@" > out
+      for (i = 1; i <= nl_; i++) print body[i] > out
+      off += news - olds; nextfree = p + olds; inh = 0; nl_ = 0
+    }
+    /^diff --git /{ flush(); print > out; file = $4; sub(/^b\//, "", file); off = 0; nextfree = 1; nhead = 0; next }
+    /^--- /{ if (!inh) { print > out; path = substr($0, 5); if (path != "/dev/null") sub(/^a\//, "", path); loadhead(path); next } }
+    /^@@ /{ flush()
+      h = $2; sub(/^-/, "", h); split(h, a_, ","); ha = a_[1] + 0; hold = (index(h, ",") ? a_[2] + 0 : 1)
+      inh = 1; nl_ = 0; next }
+    inh { body[++nl_] = $0; next }
+    { print > out }
+    END { if (!bad) flush() }
+  ' "$1"
+}
 
 flags=()
 # Engine-core gate (before locking).
@@ -153,10 +197,12 @@ cleanup() {
   exit $rc
 }
 unstage() {
-  if [ -n "$hunks" ]; then git apply --cached -R --unidiff-zero --recount "$hunks" 2>/dev/null || true; return; fi
+  if [ -n "$hunks" ]; then [ ! -f "$LOCK/norm.patch" ] || git apply --cached -R --unidiff-zero "$LOCK/norm.patch" 2>/dev/null || true; return; fi
   local p; for p in "${paths[@]}"; do git restore --staged -- "$p" 2>/dev/null || true; done
 }
 trap cleanup EXIT INT TERM HUP
+
+numstat_lines() { awk -F'\t' '{ if ($1 == "-") t += 1; else t += $1 + $2 } END{print t+0}'; }
 
 # Path mode commits whole files, which sweeps in other agents' uncommitted hunks.
 # Require the caller to state how many hunks `git diff <paths>` shows (untracked file = 1).
@@ -165,7 +211,6 @@ if [ -z "$hunks" ]; then
     git diff HEAD --no-renames -- "${paths[@]}" | awk '/^diff --git /{f=$4; sub(/^b\//,"",f)} /^@@/{n[f]++} /^Binary files/{n[f]++} END{for(k in n)print n[k], k}'
     git ls-files --others --exclude-standard -- "${paths[@]}" | awk '{print 1, $0}'
   }
-  numstat_lines() { awk -F'\t' '{ if ($1 == "-") t += 1; else t += $1 + $2 } END{print t+0}'; }
   count_lines() { # added+deleted lines in the working tree for the given paths (untracked files count their lines)
     {
       git diff HEAD --no-renames --numstat -- "${paths[@]}"
@@ -198,13 +243,18 @@ if [ -n "$hunks" ] && ! git diff --cached --quiet; then
   die "index is not clean (staged: $(git diff --cached --name-only | tr '\n' ' ')); someone staged outside the lock. Retry later" 3
 fi
 
+# Hunks mode: apply the patch with exact headers (see normalize_patch); a patch that does not match HEAD is refused.
+if [ -n "$hunks" ]; then
+  normalize_patch "$hunks" "$LOCK/norm.patch" || { rm -f "$LOCK/norm.patch"; exit 10; }
+fi
+
 # Test-only seam: a command run after the checks and before staging (simulates another agent editing).
 [ -z "${COMMIT_MINE_TEST_BEFORE_STAGE:-}" ] || eval "$COMMIT_MINE_TEST_BEFORE_STAGE"
 
 # Stage.
 staged_by_me=1
 if [ -n "$hunks" ]; then
-  git apply --cached --unidiff-zero --recount "$hunks"
+  git apply --cached --unidiff-zero "$LOCK/norm.patch"
 else
   # Only what differs from the index: a pathspec that matches nothing (all deleted and already staged by git rm) makes git add fail.
   git ls-files -m -d -o --exclude-standard -z -- "${paths[@]}" > "$LOCK/todo"
@@ -221,6 +271,13 @@ if [ -n "$hunks" ]; then
   want="$(patch_sig < "$hunks" | by_file)"
   got="$(git diff --cached --no-renames -U0 | patch_sig | by_file)"
   [ "$want" = "$got" ] || die "staged diff differs from the patch (it must hold exactly the patch's changed lines); nothing committed" 7
+  # Backstop: the staged file must lie between HEAD and the working tree (HEAD->staged plus staged->tree is no more than
+  # HEAD->tree), else a line landed in the wrong place or a line the tree never had went in.
+  lines_of() { git diff --minimal --no-renames --numstat "$@" -- "${allowed[@]}" | numstat_lines; }
+  if [ -n "$(git ls-files --others --exclude-standard -- "${allowed[@]}")" ]; then :; else
+    direct="$(lines_of HEAD)"; via="$(( $(lines_of --cached) + $(lines_of) ))"
+    [ "$direct" = "$via" ] || die "the staged file is not between HEAD and the working tree ($via changed lines via the index, $direct directly): a hunk landed in the wrong place or the tree changed meanwhile; nothing committed" 7
+  fi
 else
   staged_total="$(count_staged)"
   [ "$staged_total" = "$total" ] || die "staged $staged_total line(s) but $total were confirmed: a file changed while committing; nothing committed. Recheck 'git diff' and rerun" 7

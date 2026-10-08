@@ -307,4 +307,38 @@ check "neighbour row not in HEAD" "$(git show HEAD:README.md | grep -c foreign)"
 check "neighbour row still in working tree" "$(grep -c foreign README.md)" 1
 check "changed lines printed" "$(grep -c '3 mine' <<<"$out")" 1
 git checkout -q README.md; rm -f ctx.patch row.patch
+# Hunks mode with a foreign hunk cut out of the patch: my hunks land where git diff put them, in HEAD's coordinates.
+seq 1 20 > fo.txt; git add fo.txt; git commit -q -m fo
+sed -e '3a FOREIGN1\nFOREIGN2' -e '15a MINE' -e 's/^18$/18-mine/' fo.txt > fo.new; cp fo.new fo.txt; rm fo.new
+git diff -U0 fo.txt | awk '/^@@ -3,0/{skip=1;next} /^@@/{skip=0} !skip' > fo.patch
+out=$(tools/commit-mine --card abcd1234 -m "$C fo" --hunks fo.patch --expect-hunks 2 fo.txt 2>&1); check "foreign hunk above, dropped: exit" "$?" 0
+check "foreign hunk above, dropped: add lands after line 15" "$(git show HEAD:fo.txt | sed -n '15,17p' | tr '\n' ' ')" "15 MINE 16 "
+check "foreign hunk above, dropped: edit lands on 18" "$(git show HEAD:fo.txt | grep -c '^18-mine$')" 1
+check "foreign hunk above, dropped: foreign not in HEAD" "$(git show HEAD:fo.txt | grep -c FOREIGN)" 0
+check "foreign hunk above, dropped: foreign still in tree" "$(grep -c FOREIGN fo.txt)" 2
+check "foreign hunk above, dropped: tree minus HEAD is only foreign" "$(git diff -U0 fo.txt | grep -c '^[-+][A-Z0-9]')" 2
+git checkout -q fo.txt
+# Delete-only and replace hunks below a dropped foreign hunk, plus a dropped hunk below mine.
+seq 1 30 > fd.txt; git add fd.txt; git commit -q -m fd
+sed -e '2d' -e '10,11d' -e 's/^20$/20m/' -e '25a TAIL-FOREIGN' fd.txt > fd.new; cp fd.new fd.txt; rm fd.new
+git diff -U0 fd.txt | awk '/^@@ -2 /{skip=1;next} /^@@ -25,0/{skip=1;next} /^@@/{skip=0} !skip' > fd.patch
+tools/commit-mine --card abcd1234 -m "$C fd" --hunks fd.patch --expect-hunks 2 fd.txt >/dev/null 2>&1; check "delete and replace hunks exit" "$?" 0
+check "delete and replace: committed diff is mine only" "$(git show --format= -U0 HEAD | grep '^[-+][0-9]' | tr '\n' ' ')" "-10 -11 -20 +20m "
+git checkout -q fd.txt
+# Adjacent foreign line in one merged hunk, header left stale by a hand cut: refused loudly, nothing staged.
+seq 1 12 > ad.txt; git add ad.txt; git commit -q -m ad
+seq 1 12 | sed 's/^5$/five-foreign/;s/^6$/six-mine/' > ad.txt; before=$(git rev-parse HEAD)
+printf 'diff --git a/ad.txt b/ad.txt\n--- a/ad.txt\n+++ b/ad.txt\n@@ -5,2 +5,2 @@\n-6\n+six-mine\n' > ad.patch
+out=$(tools/commit-mine --card abcd1234 -m "$C ad" --hunks ad.patch --expect-hunks 1 ad.txt 2>&1); check "stale header exit" "$?" 10
+check "stale header: HEAD unchanged" "$(git rev-parse HEAD)" "$before"
+check "stale header: index clean" "$(git diff --cached --name-only)" ""
+check "stale header: message says why" "$(grep -c 'not HEAD line' <<<"$out")" 1
+# Overlapping hunks are refused.
+printf 'diff --git a/ad.txt b/ad.txt\n--- a/ad.txt\n+++ b/ad.txt\n@@ -5,2 +5,2 @@\n-5\n-6\n+x\n+y\n@@ -6 +6 @@\n-6\n+z\n' > ov.patch
+out=$(tools/commit-mine --card abcd1234 -m "$C ov" --hunks ov.patch --expect-hunks 2 ad.txt 2>&1); check "overlapping hunks exit" "$?" 10
+check "overlapping hunks: message" "$(grep -c overlaps <<<"$out")" 1
+# A patch cut from an older HEAD (a removed line that is no longer there) is refused.
+printf 'diff --git a/ad.txt b/ad.txt\n--- a/ad.txt\n+++ b/ad.txt\n@@ -9 +9 @@\n-nine\n+NINE\n' > old.patch
+tools/commit-mine --card abcd1234 -m "$C old" --hunks old.patch --expect-hunks 1 ad.txt >/dev/null 2>&1; check "patch from other base exit" "$?" 10
+git checkout -q ad.txt; rm -f fo.patch fd.patch ad.patch ov.patch old.patch
 exit $fail
