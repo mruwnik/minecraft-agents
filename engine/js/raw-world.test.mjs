@@ -110,10 +110,10 @@ test('shapesAt gives the collision boxes of a solid block, none for a non-solid 
   assert.deepEqual([raw.shapesAt(3, 70, 4), raw.shapesAt(3, 71, 4), raw.shapesAt(40, 70, 4)], [cube, [], []])
 })
 
-test('sightTable blocks sight for full blocks, not for glass, water, grass or torches', () => {
+test('sightTable blocks sight for full blocks, not for leaves, glass, water, grass or torches', () => {
   const table = sightTable(registry)
   assert.deepEqual(['stone', 'diamond_ore', 'oak_leaves', 'glass', 'water', 'short_grass', 'torch', 'air'].map(n => table[id(n)]),
-    [1, 1, 1, 0, 0, 0, 0, 0])
+    [1, 1, 0, 0, 0, 0, 0, 0])
 })
 
 test('sightTable lets sight pass fences, fence gates and iron bars', () => {
