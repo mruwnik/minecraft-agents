@@ -151,6 +151,12 @@
                          (fn [e] (is (re-find #"timed out" (.-message e))))))
           (.finally (fn [] (cleanup) (done)))))))
 
+(deftest a-reload-await-after-a-tool-step-ignores-reloads-from-before-it
+  (is (= 5000 (r/await-since {:kind :world.reloaded} 1000 5000)))
+  (is (= 1000 (r/await-since {:kind :world.reloaded} 1000 nil)) "no tool step before it")
+  (is (= 1000 (r/await-since {:kind :slept} 1000 5000)) "other events keep the case window")
+  (is (= 9000 (r/await-since {:kind :world.reloaded} 9000 5000))))
+
 (deftest the-exit-code-is-zero-only-when-every-case-ran-and-passed
   (is (= 0 (r/exit-code [{:status :pass} {:status :pass}])))
   (is (= 1 (r/exit-code [{:status :pass} {:status :fail}])))

@@ -256,6 +256,12 @@
                        (read-from file 0)))
           (vec (concat (mapcat #(read-from % 0) live) (read-from file 0))))))))
 
+(defn await-since
+  "The time an :await counts events from: t0, but a :world.reloaded await after a :cli/:http step (cli-ms, when that step
+  began) counts from the step, so a reload from before the tool wrote (the body's start, an earlier edit) cannot satisfy it."
+  [pattern t0 cli-ms]
+  (if (and cli-ms (= :world.reloaded (:kind pattern))) (max t0 cli-ms) t0))
+
 (defn await-event
   "Polls the log from offset until an event matching pattern with :time-ms >= since-ms comes; resolves to it or nil
   after limit-ms."
@@ -918,7 +924,8 @@
   [opts origin c offset t0]
   (let [box (f/box-selector (f/case-grid c) origin (get-in c [:plot :height]))
         last-job (atom nil)
-        event-job (atom nil)]
+        event-job (atom nil)
+        cli-ms (atom nil)]
    (reduce (fn [p [op a b :as step]]
             (.then p (fn [ids]
                        (case op
@@ -929,11 +936,11 @@
                          :wait-s (.then (sleep (* 1000 a)) (constantly ids))
                          :time-set (.then (set-time! opts a (str (:id c) " step"))
                                           (fn [ok] (if ok ids (throw (js/Error. "a :time-set step needs --allow-time")))))
-                         :await (.then (await-event opts offset a t0 (* 1000 b))
+                         :await (.then (await-event opts offset a (await-since a t0 @cli-ms) (* 1000 b))
                                        (fn [ev] (if ev (do (reset! event-job (get-in ev [:context :job-id])) ids) (throw (js/Error. (str ":await " (pr-str a) " timed out after " b " s"))))))
                          :restart-body (.then (restart-body! opts origin c) (constantly ids))
                          :until (.then (until-step! opts a b @last-job @event-job) (constantly ids))
-                         (:cli :http) (.then (tool-step! opts step @last-job @event-job)
+                         (:cli :http) (.then (do (reset! cli-ms (js/Date.now)) (tool-step! opts step @last-job @event-job))
                                              (fn [out] (if-let [id (and (= [:http :submit] (take 2 step)) (f/submitted-id out))]
                                                          (do (reset! last-job id) (conj ids id))
                                                          ids)))
