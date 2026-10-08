@@ -76,11 +76,10 @@
          (l/center-view {:scale 2 :origin-x 0 :origin-z 0} 100 -20 120 40))))
 
 (deftest clock-text
-  (doseq [[clock expected] [[{:day 3 :timeOfDay 0} "day 3 06:00 (day)"]
-                            [{:day 3 :time-of-day 18000} "day 3 00:00 (night)"]
-                            [{:day 1 :timeOfDay 13000} "day 1 19:00 (night)"]
-                            [{:day true :timeOfDay 7277} "13:16 (day)"]
-                            [{:day false :timeOfDay 100} "06:06 (night)"]
+  (doseq [[clock expected] [[{:ok true :time-of-day 7277 :day? true} "13:16 (day)"]
+                            [{:ok true :time-of-day 13398 :day? false} "19:23 (night)"]
+                            [{:ok true :time-of-day 18000 :day? false} "00:00 (night)"]
+                            [{:ok false :reason :time-unknown} "no clock"]
                             [nil "no clock"]]]
     (is (= expected (l/clock-text clock)))))
 

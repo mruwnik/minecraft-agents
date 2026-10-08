@@ -1,6 +1,7 @@
 (ns dashboard.server.files
   "Paths, file reading and the world list the dashboard server reads from."
-  (:require [engine.bodies :as bodies]
+  (:require [agent-tools.time :as time]
+            [engine.bodies :as bodies]
             [dashboard.engine-events :as ee]
             ["fs" :as fs]
             ["path" :as path]
@@ -76,7 +77,7 @@
              :places (worlds/readable-places (read-json (.join path dir "places.json") []))
              :zones (:zones overlays)
              :map-errors (:errors overlays)
-             :clock (read-json (.join path dir "clock.json") nil)}))
+             :clock (time/clock {:world n :world-dir dir} (js/Date.now))}))
         (world-names)))
 
 ;; the name only ever comes out of the directory listing, never from the query

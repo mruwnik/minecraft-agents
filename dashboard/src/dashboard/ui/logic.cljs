@@ -70,16 +70,16 @@
          :origin-x (- x (/ width 2 (:scale view)))
          :origin-z (- z (/ height 2 (:scale view)))))
 
-(defn clock-text [clock]
-  (if-not (map? clock)
+(defn clock-text
+  "clock: the agent-tools.time result (:ok, :time-of-day, :day?)."
+  [clock]
+  (if-not (:ok clock)
     "no clock"
-    (let [t (or (:timeOfDay clock) (:time-of-day clock) 0)
+    (let [t (:time-of-day clock)
           hour (mod (+ (quot t 1000) 6) 24)
           minute (js/Math.floor (* 60 (/ (mod t 1000) 1000)))
-          pad (fn [n] (if (< n 10) (str "0" n) (str n)))
-          day-no (when (number? (:day clock)) (str "day " (:day clock) " "))
-          daytime? (if (boolean? (:day clock)) (:day clock) (< (mod t 24000) 13000))]
-      (str day-no (pad hour) ":" (pad minute) (if daytime? " (day)" " (night)")))))
+          pad (fn [n] (if (< n 10) (str "0" n) (str n)))]
+      (str (pad hour) ":" (pad minute) (if (:day? clock) " (day)" " (night)")))))
 
 (defn clock-ms-text [t]
   (if-not (number? t)
