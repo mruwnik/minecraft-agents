@@ -28,7 +28,8 @@
   counted in :max-legs) and looked at again; within 3 blocks of it, it is recorded failed. An unloaded column is not tried but looked at again later. When only unloaded ones are
   left the round ends and the check declines for 2 s, up to :load-wait-s (a body just logged in has no chunks
   yet), then the search ends :not-loaded. A walk go-to gives up on is recorded :unreachable. Three of those in
-  a row end the search (:stuck).
+  a row end the search (:stuck). A leg whose goal lies by a mob the body would flee is not walked (go-to :goal-danger
+  :end): it is recorded :goal-dangerous, no stuck walk.
 
   With :use-notes, live :seen notes of a target within :max-distance count as found (:noted true, :by), unless the body
   sees another block at that cell now.
@@ -277,13 +278,15 @@
   (or :done when the failed legs in a row end the search)."
   [c]
   (let [[x y z] (:leg (ctx/mem c))
-        r (await (ctx/call-child c :leg 'jobs.movement.go-to {:pos {:x x :y y :z z} :range 2 :escalate false}))]
+        r (await (ctx/call-child c :leg 'jobs.movement.go-to {:pos {:x x :y y :z z} :range 2 :escalate false
+                                                              :goal-danger :end}))]
     (if-not (= :done r)
       :continue
-      (let [arrived (:arrived (ctx/child-result c :leg))
-            in-row (if arrived 0 (inc (:failed-in-row (ctx/mem c) 0)))]
+      (let [{:keys [arrived why]} (ctx/child-result c :leg)
+            dangerous? (= :goal-dangerous why)
+            in-row (cond arrived 0 dangerous? (:failed-in-row (ctx/mem c) 0) :else (inc (:failed-in-row (ctx/mem c) 0)))]
         (ctx/update-mem! c (fn [m] (cond-> (assoc (dissoc m :leg) :failed-in-row in-row)
-                                     (not arrived) (update :failed (fnil conj []) {:pos [x y z] :reason :unreachable}))))
+                                     (not arrived) (update :failed (fnil conj []) {:pos [x y z] :reason (if dangerous? :goal-dangerous :unreachable)}))))
         (if (>= in-row (max-failed-in-row)) (finish! c :not-found :stuck) :again)))))
 
 (defn ^:async step!

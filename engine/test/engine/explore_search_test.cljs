@@ -15,6 +15,7 @@
             [engine.perception :as perception]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
+            [jobs.lib.threats :as threats]
             [jobs.lib.world-files :as world]
             [jobs.explore.search :as search]))
 
@@ -257,6 +258,21 @@
           (is (<= (get-in e [:coverage :scans]) 17) "a look every 2 s while waiting, not every tick")
           (is (= 4 (count (get-in e [:coverage :failed]))))
           (is (= [] (walks s))))))))
+
+;; a leg whose goal lies by a mob the body would flee is not walked: go-to gives it up (:goal-danger :end), it is recorded
+;; :goal-dangerous and does not count as a stuck walk
+(deftest a-leg-by-a-dangerous-mob-is-recorded-and-not-walked
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [zombie {:key "z1" :name "zombie" :pos {:x 17 :y 64 :z 1}}
+              s (with-redefs [threats/sensed-mobs (constantly [zombie])]
+                  (await (search! {:target "diamond_block" :max-distance 20} {})))
+              e (event-of s :search.not-found)]
+          (is (= :distance (:why e)) (pr-str e))
+          (is (some #{{:pos [16 64 0] :reason :goal-dangerous}} (get-in e [:coverage :failed])) (pr-str (:coverage e)))
+          (is (not-any? #(= {:x 16 :z 0} (select-keys % [:x :z])) (walks s)) "the leg by the zombie is never walked to")
+          (is (= 3 (count (walks s)))))))))
 
 (deftest three-failed-legs-in-a-row-end-it-stuck
   (async done

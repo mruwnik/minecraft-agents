@@ -148,6 +148,22 @@
           (is (= 1 (count (filter #(= :retreat_sealed (:kind %)) @seen))) "one notice that it walled itself in")
           (is (= [] (:list (core/state eng))) "done once the skeleton is gone"))))))
 
+;; low on health in a skeleton's line of fire with no covered way to walk: it hides (seals itself in) instead of fleeing
+;; through the arrows; at full health it flees
+(deftest a-body-low-on-health-in-a-skeletons-line-of-fire-seals-in-instead-of-running
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (fn [health] {:self {:pos [0.5 64 0.5] :health health} :inventory [{:name "cobblestone" :count 20}]
+                                  :entities [(assoc (skeleton 6.5 64 0.5) :visible true)]})
+              {:keys [p while-hidden]}
+              (await (hidden-round retreat (world 8) 1000 (fn [{:keys [p]}] {:places (count (calls p "place"))})))]
+          (is (<= 4 (:places while-hidden)) "walled in where it stood")
+          (is (= [0 64 0] (mapv js/Math.floor (:pos (fake/self p)))) "no flight through the line of fire")
+          (let [{:keys [eng p]} (await (first-round retreat (world 20)))]
+            (is (< (:x (first-move eng)) 0) "at full health it runs")
+            (is (zero? (count (calls p "place"))))))))))
+
 (deftest a-seal-in-anothers-zone-is-recorded-for-tidying
   (async done
     (tu/run-async done

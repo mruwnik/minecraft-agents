@@ -3,6 +3,7 @@
   over a block-at fn)."
   (:require [engine.args :as a]
             [engine.settings :as settings]
+            [jobs.lib.reach :as reach]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
@@ -151,19 +152,40 @@
          (and (>= then now)
               (or (> open min-open) (>= (- then now) 2))))))
 
+(defn wet?
+  "Whether a walker in feet cell swims there: water at its feet, or as its floor (it sinks into it)."
+  [block-at {:keys [x y z]}]
+  (or (= "water" (block-at {:x x :y y :z z})) (= "water" (block-at {:x x :y (dec y) :z z}))))
+
+(defn walk-time
+  "Blocks of walking cells take: a wet? one counts swim-factor."
+  [block-at cells swim-factor]
+  (reduce + 0 (map #(if (wet? block-at %) swim-factor 1) cells)))
+
+(defn out-of-fire?
+  "Whether no ranged mob at mob-positions (feet) has a line of fire to a body standing in feet cell end
+  (jobs.lib.reach/line-of-fire? over arrow-at, an arrow-kind lookup: leaves stop arrows)."
+  [arrow-at mob-positions {:keys [x y z]}]
+  (not-any? #(reach/line-of-fire? arrow-at % {:x (+ x 0.5) :y y :z (+ z 0.5)}) mob-positions))
+
 (defn choose-target
-  "The walk target, a feet cell: the end of the first direction, turning away
-  from the preferred one as needed, that avoids every hazard and is open for a
-  full step; else the most open one that is still worth walking (see
-  worth?). nil when cornered."
-  [block-at from threats home hazards step]
-  (let [dir (direction from threats home)
-        options (->> turns
-                     (map #(rotate dir %))
-                     (map (fn [d] (let [cells (walk-cells block-at from d step)]
-                                    {:open (count cells) :dir d :end (peek cells)})))
-                     (remove #(near-hazard? hazards from (point-along from (:dir %) step)))
-                     (filter #(worth? from threats %)))
-        pick (or (first (filter #(>= (:open %) step) options))
-                 (last (sort-by :open options)))]
-    (:end pick)))
+  "The walk target, a feet cell, among the directions (turns from the preferred one) that avoid every hazard and are
+  worth walking (see worth?): first one whose end (covered? true: out of a ranged mob's line of fire) gives cover, a
+  full step before a short one; else the full step that takes least time (walk-time: a swim is slow), turn order
+  breaking ties; else the most open. nil when cornered. opts {:swim-factor (default 1) :covered? (end -> bool)}."
+  ([block-at from threats home hazards step] (choose-target block-at from threats home hazards step nil))
+  ([block-at from threats home hazards step {:keys [swim-factor covered?] :or {swim-factor 1}}]
+   (let [dir (direction from threats home)
+         options (->> turns
+                      (map #(rotate dir %))
+                      (map (fn [d] (let [cells (walk-cells block-at from d step)]
+                                     {:open (count cells) :dir d :end (peek cells)
+                                      :time (walk-time block-at cells swim-factor)})))
+                      (remove #(near-hazard? hazards from (point-along from (:dir %) step)))
+                      (filter #(worth? from threats %)))
+         full? #(>= (:open %) step)
+         pick (or (when covered?
+                    (first (filter #(covered? (:end %)) (sort-by (juxt (complement full?) :time) options))))
+                  (first (sort-by :time (filter full? options)))
+                  (last (sort-by (juxt :open (comp - :time)) options)))]
+     (:end pick))))

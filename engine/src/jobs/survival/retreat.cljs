@@ -10,6 +10,7 @@
             [jobs.lib.danger :as danger-q]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.look :as look]
+            [jobs.lib.reach :as reach]
             [jobs.lib.shelter :as sh]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
@@ -30,9 +31,13 @@
   2. Walks a short step (:step blocks) away from all chasers (nearer ones weigh more) with a go-to child (:escalate false),
      leaning toward the latest :bed or :home when it is within :home-range and not through the hostiles, avoiding :hazard positions.
      When a wall blocks the way away it turns up to 120 degrees towards open ground (at least 2 clear cells).
+     It prefers, in this order: a step whose end is out of every ranged chaser's line of fire (cover: leaves stop arrows),
+     the full step that takes least time (a swim block costs :swim-factor), the most open.
      It first looks away and to either side where it has not seen the ground (at most 3 looks); a cell still unseen
      reads as rock.
      Eats one bite a step (up to food 20) when the nearest chaser is at least :eat-gap blocks away and food is carried.
+  Low on health (at most :hide-health) in a ranged chaser's line of fire with no covered step, it takes cover where it
+  stands first: seal in, else dig down and plug, else a side pocket (as below); none of them possible, it walks on.
   3. Cornered (no open direction worth a walk, or the walk is blocked; checked afresh every step) with no hostile within
      :radius: holds a second (wait, why cornered) and looks again; after :no-gain-steps such steps or holds with no gain the flight ends :keeps-off. With one within :radius: takes the safest option it has not yet failed.
      - fight (jobs.survival.fight-back) only when jobs.lib.cost/fight-damage leaves :reserve health. Never against a creeper.
@@ -80,6 +85,8 @@
    :on-lava {:doc ":seal: lava a dig lays open is filled with a carried block; :stop: the pocket or pit is dropped and the lava left" :spec #{:seal :stop} :default :seal}
    :lost-s {:doc "a mob out of line of sight this many seconds has stopped chasing" :spec (a/num-in 0 nil) :default 4}
    :quiet-s {:doc "a hidden body keeps its refuge this many seconds after the last danger" :spec (a/num-in 0 nil) :default 30}
+   :swim-factor {:doc "blocks of walking a block of swimming costs a flight; nil: jobs.lib.cost/swim-factor of the boots" :spec (a/num-in 1 nil) :default nil}
+   :hide-health {:doc "at or under this health, in a ranged chaser's line of fire with no covered step, take cover where it stands before walking on" :spec (a/num-in 0 20) :default 12}
    :no-gain-steps {:doc "flight steps without a new best gap to the nearest chaser before the cornered options are tried" :spec (a/int-in 1 nil) :default 20}})
 
 (def tool-weapons
@@ -273,16 +280,51 @@
             (look/see! c))
           (recur more))))))
 
+(defn cover-fn
+  "(feet cell -> whether it is out of every ranged threat's line of fire), nil when no threat is ranged."
+  [p threats]
+  (when-let [ranged (seq (filter combat/ranged? threats))]
+    (let [arrow-at (reach/lookup p reach/arrow-kind-of)
+          at (mapv #(danger-q/mob-pos p %) ranged)]
+      #(walk/out-of-fire? arrow-at at %))))
+
+(defn swim-factor
+  "The flight's price of a swim block: :swim-factor, else jobs.lib.cost/swim-factor of the boots worn."
+  [c]
+  (or (:swim-factor (:args c)) (cost/swim-factor (.-equipment (.self (:primitives c))))))
+
 (defn ^:async flight-target!
-  "The walk target away from threats (walk/choose-target over what the body sees, after glance-away!), nil when none."
-  [c threats]
-  (let [p (:primitives c)
-        from (u/self-pos c)
-        threat-pos (mapv #(danger-q/mob-pos p %) threats)
-        home (home-pos c)]
-    (await (glance-away! c (walk/direction from threat-pos home)))
-    (walk/choose-target (block-at-fn p) from threat-pos home (keep (comp :pos :data) (ctx/entries c :hazard))
-                        (:step (:args c)))))
+  "The walk target away from threats (walk/choose-target over what the body sees, after glance-away!; cover from the
+  ranged ones first, a swim slow), nil when none. covered? as cover-fn (given so the caller shares one)."
+  ([c threats] (await (flight-target! c threats (cover-fn (:primitives c) threats))))
+  ([c threats covered?]
+   (let [p (:primitives c)
+         from (u/self-pos c)
+         threat-pos (mapv #(danger-q/mob-pos p %) threats)
+         home (home-pos c)]
+     (await (glance-away! c (walk/direction from threat-pos home)))
+     (walk/choose-target (block-at-fn p) from threat-pos home (keep (comp :pos :data) (ctx/entries c :hazard))
+                         (:step (:args c)) {:swim-factor (swim-factor c) :covered? covered?}))))
+
+(defn ^:async take-cover!
+  "Seal in, else dig down and plug, else a side pocket (refuge), the first not failed this sweep: its step's result, nil
+  when none can be taken."
+  [c]
+  (loop [[option & more] [:seal :pit :pocket]]
+    (when option
+      (let [r (when-not (flight/tried? c option)
+                (case option
+                  :seal (await (refuge/hide! c))
+                  :pit (await (refuge/pit! c))
+                  :pocket (await (refuge/pocket! c))))]
+        (if (some? r) r (recur more))))))
+
+(defn exposed-low?
+  "Whether the body is at or under :hide-health with a ranged threat's line of fire on it (covered? false at its feet)."
+  [c covered?]
+  (boolean (and covered?
+                (<= (.-health (.self (:primitives c))) (:hide-health (:args c)))
+                (not (covered? (sh/feet (:primitives c)))))))
 
 (defn ^:async eat-on-the-run!
   "One bite a flee step, with the nearest hostile at least :eat-gap away; none for the rest of the flight once
@@ -372,9 +414,14 @@
       door (await (shut-door! c door))
       :else
       (let [_ (await (eat-on-the-run! c threat))
-            target (await (flight-target! c threats))]
-        (if (nil? target)
-          (await (stuck "no open way away from the hostile"))
+            covered? (cover-fn p threats)
+            target (await (flight-target! c threats covered?))
+            cover (when (and (exposed-low? c covered?) (not (and target (covered? target))))
+                    (await (take-cover! c)))]
+        (cond
+          (some? cover) cover
+          (nil? target) (await (stuck "no open way away from the hostile"))
+          :else
           (let [_ (when (:cornered (ctx/mem c)) (ctx/update-mem! c dissoc :cornered))
                 moved (await (step! c :step target 1))]
             (if-not moved
