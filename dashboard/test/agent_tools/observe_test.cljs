@@ -398,6 +398,15 @@
     (is (= 1 (get-in summary [:counts :tossed])))
     (is (= {:event :make-room.tossed :item "coal" :count 4} (first (:items summary))))))
 
+(deftest an-event-older-than-the-cutoff-is-only-counted-in-the-summary
+  (let [old (assoc (notice "j132/dig-in" :dig-in.unsealed "NOT sealed in") :time-ms 1000)
+        fresh (assoc (notice "j140/dig-in" :dig-in.unsealed "NOT sealed in") :time-ms 9000)
+        summary (-> {:counts {} :items [] :more false}
+                    (observe-status/collect old nil 5000)
+                    (observe-status/collect fresh nil 5000))]
+    (is (= {:notices 2} (:counts summary)))
+    (is (= ["j140/dig-in"] (mapv :job (:items summary))))))
+
 (defn plain-job-event [kind id data] {:source :job :kind kind :context {:job-id id} :data data})
 
 (deftest a-death-names-the-jobs-it-cancelled

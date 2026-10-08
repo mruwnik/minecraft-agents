@@ -240,7 +240,7 @@
 ;; submit --wait
 
 (defn event-of [n source kind context & [extra]]
-  (merge {:seq n :generation-id "g" :time-ms n :source source :kind kind :context context} extra))
+  (merge {:seq n :generation-id "g" :time-ms (js/Date.now) :source source :kind kind :context context} extra))
 
 (defn waiting-engine
   "A fake engine whose event stream is the atom events; POST /jobs answers the job j7."

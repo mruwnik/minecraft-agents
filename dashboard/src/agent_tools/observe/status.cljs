@@ -330,10 +330,16 @@
     :else (let [i (first (keep-indexed (fn [i item] (when (routine-item? item) i)) items))]
             (when i (into (subvec items 0 i) (subvec items (inc i)))))))
 
+(def old-event-ms
+  "An event this much older than the wait is backlog from before the observer last looked: counted, not listed."
+  (* 10 60 1000))
+
 (defn collect
-  "Fold one routine event into the bounded quiet summary {:counts :items :more}; jobs are the ones a death cancelled."
+  "Fold one routine event into the bounded quiet summary {:counts :items :more}; jobs are the ones a death cancelled.
+  An event stamped before `cutoff-ms` only adds to the counts."
   ([summary e] (collect summary e nil))
-  ([summary e jobs]
+  ([summary e jobs] (collect summary e jobs nil))
+  ([summary e jobs cutoff-ms]
   (let [{:keys [source kind]} e
         d (or (:data e) {})
         category (cond
@@ -346,7 +352,8 @@
     (if-not category
       summary
       (let [summary (update-in summary [:counts category] #(min 1000000 (inc (or % 0))))]
-        (if-let [items (room-for (:items summary) (key-category? category))]
+        (if-let [items (when-not (and cutoff-ms (some-> (:time-ms e) (< cutoff-ms)))
+                         (room-for (:items summary) (key-category? category)))]
           (assoc summary :more (or (:more summary) (< (count items) (count (:items summary)))) :items (conj items
                   (with-meta (clean-pairs :event (:kind e) :job (when-not (= :reflexes category) (get-in e [:context :job-id]))
                                :reflex (get-in e [:context :reflex-id]) :by (some-> (:by d) name) :why (some-> (:why d) name) :item (clip (:item d) 80) :count (:count d)
