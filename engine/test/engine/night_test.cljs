@@ -952,3 +952,43 @@
             (is (< (.indexOf names "look") (.indexOf names "place")) "the room was looked at before the bed went down")
             (is (not= -1 (.indexOf names "look"))))
           (is (empty? (st/emitted seen :shelter.bed_place_failed))))))))
+
+;; ------------------------------------------------------------------ cooking while held
+
+(defn held-with-raw-beef
+  "A held (exposed, nothing to build with) night, food 5, 4 raw beef and coal; a furnace at furnace-pos. The clock moves 20 s a hold."
+  [furnace-pos]
+  (let [clock (atom 1000000)
+        [seen sink] (tu/legacy-capture-sink)
+        p (tu/seeing-all (tu/fake {:offlineScale 0.0001 :floor tu/walk-floor :time night
+                                   :blocks (assoc st/ground furnace-pos "furnace") :self {:food 5}
+                                   :inventory [{:name "beef" :count 4} {:name "coal" :count 2}]}))
+        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
+                          :now #(deref clock)
+                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+    (st/refuse-placing! p)
+    (st/dawn-after! p 12 (fn [_] (swap! clock + 20000)))
+    {:eng eng :p p :seen seen}))
+
+(defn furnace-ops [p]
+  (mapv #(.-op (.-args %)) (filter #(= "furnace" (.-name %)) (.-calls (.-world p)))))
+
+(deftest a-held-hungry-body-cooks-raw-beef-at-a-furnace-in-the-room
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (held-with-raw-beef "2,64,0")]
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (core/tick! eng))
+          (is (some #{"take"} (furnace-ops p)) "the cooked beef was taken")
+          (is (> (.-food (.self p)) 5) "and eaten"))))))
+
+(deftest a-held-hungry-body-eats-raw-beef-when-the-furnace-is-far
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (held-with-raw-beef "40,64,0")]
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (core/tick! eng))
+          (is (= [] (furnace-ops p)) "no walk out to a furnace at night")
+          (is (> (.-food (.self p)) 5) "ate raw"))))))

@@ -22,9 +22,9 @@
   :health; fed, it ends {:food n}. Still hungry, it takes the first way that has something to do, then eats again:
   1. No food carried but 3 or more wheat: bake bread (the craft job, enough loaves for the hunger, within 32 blocks of
      a table). A failed bake is remembered as :no-bake for 10 minutes and the ladder goes on.
-  1b. Raw food carried (chicken, beef ...) with a furnace or smoker seen within ::cook-radius (16) or remembered (the :furnace place, within ::cook-far-radius 64), or no furnace but enough raw food
+  1b. Raw food carried (chicken, beef ...) with a furnace or smoker seen or remembered (the :furnace place) within ::cook-far-radius (64), or no furnace but enough raw food
      to pay for making one (jobs.lib.cost/cook-worth?): cook it (the smelt job, which fetches a furnace and fuel, waiting out the cook in
-     the round), then eat it. Done before eating unless starving (food 0) or a danger is sensed. Not at night nor while the night
+     the round), then eat it. Done before eating unless a danger is sensed or food is 0 and health would not outlast the cook plus ::cook-margin-hp. Not at night nor while the night
      handler holds. A failed cook is remembered as :no-cook for 10 minutes.
   2. The newest :food-source entry {:pos :kind} within :source-radius, reached by go-to:
      :farm: dig its mature crops (blocks.dig, which collects the drops). It does not replant.
@@ -84,13 +84,18 @@
    ::reach {:default 3 :doc "How near a food source the body stands to use it, in blocks." :spec (a/int-in 0 nil)}
    ::explore {:default {:max-distance 64 :max-legs 12 :timeout-s 120} :doc "jobs.explore.search options of the search for food (:explore true)." :spec map?}
    ::eat-bad-food {:default foods/default-food :doc "At this much food or less the last resort eats harmful food carried (rotten flesh); above it harmful food is not food." :spec (a/num-in 0 20)}
-   ::cook-radius {:default 16 :doc "Blocks within which a seen furnace or smoker counts for cooking raw food carried." :spec (a/int-in 0 nil)}
-   ::cook-far-radius {:default 64 :doc "Blocks within which the furnace the body remembers (:furnace place, one it put down) counts for cooking, seen or not." :spec (a/int-in 0 nil)}
+   ::cook-far-radius {:default 64 :doc "Blocks within which a furnace or smoker the body has seen (perception's memory) or the one it remembers (:furnace place) counts for cooking." :spec (a/int-in 0 nil)}
+   ::shelter-cook-reach {:default 5 :doc "Blocks within which a furnace counts for cooking while the night handler holds the body in its shelter." :spec (a/int-in 0 nil)}
+   ::starve-s-per-hp {:default 4 :doc "Seconds of starvation (food 0) that cost one hp." :spec (a/num-in 0 nil)}
+   ::cook-s-per-item {:default 10 :doc "Seconds a furnace takes to cook one raw food, to tell whether health outlasts a cook at food 0." :spec (a/num-in 0 nil)}
+   ::cook-margin-hp {:default 3 :doc "Hp health must exceed the starvation over the expected cook by, else the body eats raw at food 0." :spec (a/num-in 0 nil)}
    ::furnace-cost {:default 8 :doc "Hunger points a furnace to make and place is counted to cost when cooking is weighed against eating raw." :spec (a/num-in 0 nil)}
    ::place-cost {:default 2 :doc "Hunger points putting down a furnace already carried is counted to cost." :spec (a/num-in 0 nil)}
    ::walk-cost {:default 0.2 :doc "Hunger points one block of walking to a furnace is counted to cost." :spec (a/num-in 0 nil)}
    ::cook-kinds {:default #{"chicken" "beef" "porkchop" "mutton" "rabbit" "cod" "salmon" "potato"} :doc "Raw foods the cook step puts in a furnace." :spec (a/set-of a/item?)}
    ::max-ways {:default 12 :doc "Ways one round tries without getting fed before it stops :still-hungry." :spec (a/int-in 0 nil)}})
+(defn shelter-cook-reach [] (settings/get settings ::shelter-cook-reach))
+
 (defn drop-radius [] (settings/get settings ::drop-radius))
 
 (def no-bake-policy {:cap 1 :ttl (* 10 60 1000)})
@@ -101,7 +106,6 @@
 
 (defn max-ways [] (settings/get settings ::max-ways))
 
-(defn cook-radius [] (settings/get settings ::cook-radius))
 
 (defn cook-kinds [] (settings/get settings ::cook-kinds))
 
@@ -470,20 +474,35 @@
   [c]
   (filter #(contains? (cook-kinds) (:name %)) (u/inventory (:primitives c))))
 
+(defn seen-cooker
+  "The nearest furnace or smoker the body has seen within radius (perception's memory, still there), as a position, or nil."
+  [c radius]
+  (->> (look/seen-blocks (:primitives c) {:names #{"furnace" "smoker"} :radius radius :max 8 :live? true})
+       first :pos))
+
 (defn nearest-cooker
-  "The nearest furnace or smoker seen within ::cook-radius, else the furnace the body remembers (the :furnace place)
-  within ::cook-far-radius, as a position, or nil."
+  "The nearest furnace or smoker seen within ::cook-far-radius, else the furnace the body remembers (the :furnace
+  place) within it, as a position, or nil."
   [c]
-  (or (->> (look/seen-blocks (:primitives c) {:names #{"furnace" "smoker"} :radius (cook-radius) :max 8 :live? true})
-           first :pos)
-      (let [known (mem/place (ctx/view c) :furnace)]
-        (when (and known (<= (u/dist (u/self-pos c) known) (settings/get settings ::cook-far-radius)))
-          known))))
+  (let [far (settings/get settings ::cook-far-radius)]
+    (or (seen-cooker c far)
+        (let [known (mem/place (ctx/view c) :furnace)]
+          (when (and known (<= (u/dist (u/self-pos c) known) far))
+            known)))))
+
+(defn starving-too-soon?
+  "At food 0, health cannot outlast the starvation over the expected cook (::cook-s-per-item per raw food carried,
+  at ::starve-s-per-hp) plus ::cook-margin-hp."
+  [c]
+  (let [cook-s (* (settings/get settings ::cook-s-per-item) (reduce + (map :count (raw-carried c))))
+        lost (/ cook-s (settings/get settings ::starve-s-per-hp))]
+    (<= (.-health (.self (:primitives c))) (+ lost (settings/get settings ::cook-margin-hp)))))
 
 (defn rushed?
-  "No time to cook: starvation is ticking (food 0) or a real danger is sensed near."
+  "No time to cook: a real danger is sensed near, or food is 0 and health would not outlast the cook (starving-too-soon?)."
   [c]
-  (boolean (or (<= (food-level c) 0) (seq (threats/sensed-mobs (:primitives c))))))
+  (boolean (or (seq (threats/sensed-mobs (:primitives c)))
+               (and (<= (food-level c) 0) (starving-too-soon? c)))))
 
 (defn worth-cooking?
   "Cooking the raw food carried beats eating it now (jobs.lib.cost/cook-worth?): the walk to the furnace known, or
@@ -513,11 +532,13 @@
   (boolean (and (can-cook? c) (or (:cooking (ctx/mem c)) (worth-cooking? c)))))
 
 (defn ^:async cook!
-  "Way 1b: smelt the raw food carried (the smelt job, fuel as it takes it) in the furnace in sight; the cooking wait is
-  spent in the round. :again when it ended, :continue while it goes on, else nil with :no-cook remembered."
-  [c]
+  "Way 1b: smelt the raw food carried (the smelt job, fuel as it takes it) in the furnace known (or the given one);
+  the cooking wait is spent in the round. :again when it ended, :continue while it goes on, else nil with :no-cook
+  remembered."
+  ([c] (await (cook! c nil)))
+  ([c cooker]
   (let [{:keys [name count]} (or (first (raw-carried c)) (:cooking (ctx/mem c)))
-        furnace (or (:furnace (:cooking (ctx/mem c))) (nearest-cooker c))
+        furnace (or (:furnace (:cooking (ctx/mem c))) cooker (nearest-cooker c))
         args (cond-> {:item name :count count} furnace (assoc :furnace furnace))
         _ (ctx/update-mem! c assoc :cooking {:name name :count count :furnace furnace})]
     (loop [n 0]
@@ -534,7 +555,7 @@
                     (let [reason (or (:reason res) "short")]
                       (ctx/remember! c :no-cook {:reason reason} no-bake-policy)
                       (ctx/emit! c :food.no-cook :info {:text (str "cannot cook " name ": " reason)})
-                      nil))))))))
+                      nil)))))))))
 
 ;; ------------------------------------------------------------------ round
 

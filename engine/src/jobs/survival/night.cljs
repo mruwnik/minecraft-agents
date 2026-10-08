@@ -26,6 +26,7 @@
             [jobs.survival.dig-in-leave :as dig-leave]
             [jobs.survival.dig-niche :as dig-niche]
             [jobs.survival.eat :as eat]
+            [jobs.survival.get-food :as get-food]
             [jobs.survival.retreat :as retreat]))
 
 (def doc
@@ -122,15 +123,28 @@
   "How long one hold waits before the night looks again (the wait primitive does not wake a sleeping body)."
   5000)
 
+(defn ^:async cooking-in-shelter?
+  "Raw food carried and a furnace or smoker seen within get-food's ::shelter-cook-reach, or a cook under way, and the
+  cook not rushed (get-food/rushed?) nor failed lately: run it (get-food/cook!). True while it goes on (do not eat
+  raw), nil when it ended (the cooked food is eaten next) or none is possible."
+  [c]
+  (let [cooker (when (and (seq (get-food/raw-carried c))
+                          (zero? (ctx/count-in c :no-cook get-food/no-bake-ms)))
+                 (get-food/seen-cooker c (get-food/shelter-cook-reach)))]
+    (when (and (or cooker (:cooking (ctx/mem c))) (not (get-food/rushed? c)))
+      (= :continue (await (get-food/cook! c cooker))))))
+
 (defn ^:async eat-if-hungry!
   "The hungry reflex (below night in the shipped registers) cannot reach a held body, so a hold eats one carried
-  food (jobs.survival.eat's choice) when the hungry trigger's condition holds (hungry?, or eat-now? below 7 hp).
-  A sleeping body does not eat."
+  food (jobs.survival.eat's choice) when the hungry trigger's condition holds (hungry?, or eat-now? below 7 hp),
+  after cooking raw food at a furnace within reach of the shelter (cooking-in-shelter?). A sleeping body does not eat."
   [c]
   (let [p (:primitives c)
         self (.self p)
         health (.-health self)
-        best (when (and (not (sh/sleeping? p)) (or (foods/hungry? (.-food self) health {}) (foods/eat-now? self {})))
+        hungry (and (not (sh/sleeping? p)) (or (foods/hungry? (.-food self) health {}) (foods/eat-now? self {})))
+        cooking (when hungry (await (cooking-in-shelter? c)))
+        best (when (and hungry (not cooking))
                (eat/best-food (u/inventory p) false nil health))]
     (when best
       (await (ctx/act c :equip #js {:item best}))
