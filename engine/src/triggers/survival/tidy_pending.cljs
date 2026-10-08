@@ -15,13 +15,17 @@
   Entries in an unloaded cell wait until the body is near.
   Persistence is :cooldown (10 s), not :stop. A run cut short by a backoff leaves entries pending, so the condition
   stays true and a :stop latch would never clear. The retries are bounded: each try counts toward max-tries."
-  (:require [jobs.lib.tidy :as tidy]
+  (:require [engine.args :as a]
+            [engine.settings :as settings]
+            [jobs.lib.tidy :as tidy]
             [jobs.lib.util :as u]
             [engine.memory :as mem]))
 
 (def defaults {:min-health 14 :danger-radius 8 :reach 3 :move-far 8})
 
-(def retry-s 120)
+(a/defargs settings
+  {::retry-s {:default 120 :doc "Seconds before a try the run counted is retried while the body stays near it." :spec (a/int-in 0 nil)}})
+(defn retry-s [] (settings/get settings ::retry-s))
 
 (defn airborne? [p] (false? (.-onGround (.self p))))
 
@@ -33,7 +37,7 @@
   (boolean
    (and (:t tried)
         (= can (:can tried))
-        (<= 0 (- now (:t tried)) (dec (* 1000 retry-s)))
+        (<= 0 (- now (:t tried)) (dec (* 1000 (retry-s))))
         (< (js/Math.hypot (- (:x here) (:x tried)) (- (:z here) (:z tried))) move-far)
         (< (js/Math.abs (- (:y here) (:y tried))) move-far))))
 

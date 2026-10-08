@@ -483,7 +483,8 @@
   (is (holds? {:entities [(skeleton 1 13 0)]} {:radius 8 :ranged-radius 16}) "a skeleton at 13")
   (is (not (holds? {:entities [(zombie 13 0)]} {:radius 8 :ranged-radius 16})) "a zombie at 13 is beyond 8")
   (is (not (holds? {:entities [(skeleton 1 13 0)]} {:radius 8 :ranged-radius 10})) "beyond the ranged radius")
-  (is (= 16 (:ranged-radius (:args (:hostile-near triggers/all)))) "16 by default"))
+  (is (holds? {:entities [(skeleton 1 13 0)]} {}) "a skeleton at 13 with the default ranged radius (16)")
+  (is (not (holds? {:entities [(skeleton 1 17 0)]} {})) "a skeleton at 17 is beyond the default"))
 
 (defn arrow-wall
   "Blocks of name at x 3 across z -3..3 for each y in ys, except the cells in gaps ([y z])."

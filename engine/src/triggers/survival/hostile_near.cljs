@@ -1,13 +1,17 @@
 (ns triggers.survival.hostile-near
   "The hostile-near trigger: a real danger is near."
-  (:require [jobs.lib.danger :as danger-q]
+  (:require [engine.args :as a]
+            [engine.settings :as settings]
+            [jobs.lib.danger :as danger-q]
             [jobs.lib.body :as body]))
 
-(def hostile-radius 8)
+(a/defargs settings
+  {::radius {:default 8 :doc "Blocks within which a known hostile mob that can reach the body counts as a danger." :spec (a/int-in 0 nil)}
+   ::ranged-radius {:default 16 :doc "Blocks within which a known ranged mob with a line of fire counts as a danger." :spec (a/int-in 0 nil)}})
+(defn hostile-radius [] (settings/get settings ::radius))
+(defn ranged-radius [] (settings/get settings ::ranged-radius))
 
-(def ranged-radius 16)
-
-(def defaults {:radius hostile-radius :ranged-radius ranged-radius})
+(def defaults {})
 
 (defn hostile-near
   "Holds when a real danger is near. A danger is either:
@@ -22,5 +26,5 @@
   An agent may set :persistence :cooldown with :cooldown-s, or :backoff, in its own entry."
   [world memory args]
   (boolean (and (not (body/dead? memory))
-                (danger-q/danger-near? world (:radius args hostile-radius) (:ranged-radius args ranged-radius)
+                (danger-q/danger-near? world (:radius args (hostile-radius)) (:ranged-radius args (ranged-radius))
                                        {:sight? (:visible-only args true)}))))
