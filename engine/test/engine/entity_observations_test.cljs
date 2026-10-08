@@ -5,6 +5,7 @@
             [engine.fake :as fake]
             [engine.fake.raw-world :as fake-raw]
             [engine.perception :as perception]
+            [engine.senses :as senses]
             [engine.settings :as settings]
             [engine.test-util :as tu]
             [engine.takeover :as takeover]))
@@ -56,6 +57,14 @@
         "in a dark room in front: the cow is only heard, the drop is not made out")
     (is (= {"player" :self "cow" :heard}
            (listed (rig {:blocks (tu/box 5 64 -3 5 69 3 "stone")}) [(mob 2 "cow" 64 12.5 0.5)])) "through a wall: heard")))
+
+(deftest no-sight-rays-are-cast-at-an-entity-beyond-sight-range
+  (let [r (rig {}) calls (atom 0) real senses/can-see?]
+    (with-redefs [senses/can-see? (fn [& args] (swap! calls inc) (apply real args))]
+      (listed r [(mob 2 "cow" 64 0.5 200.5)])
+      (is (= 0 @calls) "out of range: no rays")
+      (listed r [(mob 3 "cow" 64 0.5 10.5)])
+      (is (pos? @calls) "in range: rays"))))
 
 (deftest a-mob-seen-only-past-a-corner-of-its-box-is-seen-as-senses-sees-it
   (let [cow (doto (mob 2 "cow" 64 1.6 3.5) (aset "width" 0.6))

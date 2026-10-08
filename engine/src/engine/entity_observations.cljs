@@ -15,6 +15,7 @@
   (:require [engine.args :as a]
             [clojure.string :as str]
             [engine.perception :as perception]
+            [engine.perception.mobs :as mobs]
             [engine.senses :as senses]
             [engine.settings :as settings]
             ["crypto" :as crypto]))
@@ -67,7 +68,10 @@
       (and source (identical? e (.-entity source))) :self
       (or (nil? eye) (nil? p) (nil? table) (zero? (.-length table))) nil
       :else
-      (perception/sense-thing per eye p (senses/can-see? raw eye #js {:pos p :height (.-height e) :width (.-width e)})
+      (perception/sense-thing per eye p
+                              (and (<= (js/Math.hypot (- (.-x p) (.-x eye)) (- (+ (.-y p) mobs/mob-middle) (.-y eye)) (- (.-z p) (.-z eye)))
+                                       (:radius (:opts per)))
+                                   (senses/can-see? raw eye #js {:pos p :height (.-height e) :width (.-width e)}))
                               (boolean (silent-types (entity-type e)))))))
 
 (defn known-sense

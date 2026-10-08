@@ -101,6 +101,8 @@
     [false nil {:after 2}] {:after 2 :first-s 1 :max-s 30}
     [false nil {:progress #{"busy"}}] false
     [false {:failure #{"ok"}} {:neutral #{"x"}}] false
+    [false nil {:max-s 10}] false
+    [false nil {:first-s 2}] false
     [false {:progress #{"busy"}} {:after 2}] {:after 2 :first-s 1 :max-s 30}))
 
 (deftest a-walk-partial-follows-a-declaration-and-is-neutral-otherwise
@@ -137,6 +139,9 @@
     {:since 0 :until 1000} 0 true
     {:since 0 :alerted 0} 299999 false
     {:since 0 :alerted 0} 300000 true))
+
+(deftest validate-names-the-status-in-two-classes
+  (is (thrown-with-msg? js/Error #"in more than one class: #\{\"busy\"\}" (backoff/validate! {:progress #{"busy"} :failure #{"busy"}}))))
 
 (deftest validate-accepts-maps-of-positive-numbers-and-false
   (are [cfg] (nil? (backoff/validate! cfg))
