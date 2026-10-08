@@ -3,6 +3,7 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
+            [jobs.lib.look :as look]
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.shelter :as sh]
             [jobs.lib.util :as u]
@@ -31,7 +32,7 @@
   - :gave-up: every target seen was killed or given up on, and one was given up on.
   - :lost: some target was neither killed nor given up on.
   - :timeout: :timeout-s after the first round (attack.timeout warning).
-  - :absent: no target was present after a 2 s grace for the world's entities to arrive.
+  - :absent: no target was present after a 2 s grace for the world's entities to arrive and a look round (a far one is sensed only in view).
   :absent :done (the default) lets the job start and end with :absent, so {:targets [123 \"zombie\"]} is a one-shot order.
   :absent :wait makes the check decline until a target is present, so {:targets \"zombie\" :absent :wait} repeated is a standing guard.
   Otherwise the check passes while a target not given up on is within :radius, and always once the job has started.
@@ -268,9 +269,10 @@
       (cond
         (>= (- now started) (* 1000 timeout-s)) (finish! c :timeout)
         (and (empty? targets) (seq (present c))) (finish! c :gave-up)
-        (and (empty? targets) (empty? seen)) (if (>= (- now started) absent-grace-ms)
-                                               (finish! c :absent)
-                                               (await (wait! c 500)))
+        (and (empty? targets) (empty? seen)) (cond
+                                               (< (- now started) absent-grace-ms) (await (wait! c 500))
+                                               (await (look/survey-until! c #(seq (candidates c)))) :again
+                                               :else (finish! c :absent))
         (empty? targets) (if (>= (- now (or last-seen started)) (* 1000 lost-s))
                            (finish! c (settled-reason c))
                            (await (wait! c 1000)))

@@ -5,6 +5,11 @@
             [engine.hostile-test :as h]
             [engine.fake :as fake]
             [engine.memory :as mem]
+            [engine.perception :as perception]
+            [engine.fake.raw-world :as fake-raw]
+            [engine.registry :as registry]
+            [engine.events :as events]
+            [engine.triggers :as triggers]
             [engine.test-util :as tu]
             [jobs.combat.attack :as attack]))
 
@@ -356,7 +361,8 @@
             (is (finished? s) (str targets))
             (is (= :absent (:reason (done-event s))) (str targets))
             (is (= 1 (count (events-of s :attack.done))) (str targets))
-            (is (every? #(zero? (count (h/calls p %))) ["equip" "moveTo" "look" "attack"]) (str targets))
+            (is (every? #(zero? (count (h/calls p %))) ["equip" "moveTo" "attack"]) (str targets))
+            (is (pos? (count (h/calls p "look"))) (str targets " turned before ending absent"))
             (is (pos? (count (h/calls p "wait"))) (str targets))))))))
 
 (deftest a-target-arriving-within-the-grace-is_attacked
@@ -481,6 +487,31 @@
                                  {:inventory h/sword :entities [(ent 8 "cow" "passive" 3)]} 3))]
           (is (empty? (watched s)))
           (is (= [8] (distinct (attacked s)))))))))
+
+;; ------------------------------------------------------- a far target out of the view cone (card 62a8df01)
+
+(defn ^:async scenario-far-sight
+  "As scenario-seeing, over a perception that sees 48 blocks (a far target is known only once it is in the view cone)."
+  [args world n]
+  (let [clock (atom 1000000)
+        [seen sink] (tu/legacy-capture-sink)
+        raw (tu/fake-on-floor (merge {:floor h/flight-floor} world))
+        now (tu/act-clock clock raw 20)
+        p (perception/wrap raw (perception/create (fake-raw/create raw) {:radius 48 :ray-deg 2 :now now}))
+        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
+                          :events (events/make {:body "Fake" :sinks [sink] :now now})})
+        s {:eng eng :p p :seen seen :clock clock}]
+    (core/submit! eng (spec args) {})
+    (await (run-ticks s n 700))
+    s))
+
+(deftest a-target-far-behind-the-view-cone-is-looked-for-before-the-job-ends-absent
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario-far-sight {:targets ["zombie"] :radius 48} {:inventory h/sword :entities [(zed 7 30)]} 12))]
+          (is (not= :absent (:reason (done-event s))))
+          (is (seq (attacked s))))))))
 
 ;; ------------------------------------------------------- one fight per call (card 96dccacc)
 
