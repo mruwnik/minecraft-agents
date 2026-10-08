@@ -198,6 +198,11 @@
     (assoc-in need [:args :count] (+ (gather-carried p need) (:count need)))
     need))
 
+(defn gather-slot
+  "The child slot of a gather need: one per source, since a slot's memory outlives its job while it runs and another job must not start over it."
+  [need]
+  (keyword (str "gather-" (:key need))))
+
 (defn gather-viable?
   "Whether a chain is craftable once raw items are gathered, and a block for every raw need has been seen and
   the child of the first would run."
@@ -205,7 +210,7 @@
   (when-let [needs (some-> (gather-plan c names n) :gather (gather-needs (game/version-of (:primitives c))) seq)]
     (and (every? #(seen-of c %) needs)
          (let [need (with-block c (first needs))]
-           (boolean (ctx/check-child c :gather (:job need) (:args need)))))))
+           (boolean (ctx/check-child c (gather-slot need) (:job need) (:args need)))))))
 
 (defn unseen-why
   "Text for the gather source: the raw needs of the chain whose blocks are not seen, or the general text."
@@ -377,10 +382,10 @@
       (do (when-not (get-in (ctx/mem c) [:gather :before])
             (ctx/update-mem! c assoc-in [:gather :before] (gather-carried p need))
             (ctx/update-mem! c assoc-in [:gather :item] (:key need)))
-          (let [r (await (ctx/call-child c :gather (:job need) (:args need)))]
+          (let [r (await (ctx/call-child c (gather-slot need) (:job need) (:args need)))]
             (if (= :continue r)
               :continue
-              (let [res (ctx/child-result c :gather)
+              (let [res (ctx/child-result c (gather-slot need))
                     before (get-in (ctx/mem c) [:gather :before])]
                 (ctx/update-mem! c update :gather dissoc :before :item)
                 (if (> (gather-carried p need) before)

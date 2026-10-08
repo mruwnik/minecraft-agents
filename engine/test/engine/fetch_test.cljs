@@ -670,10 +670,10 @@
               orig-res ctx/child-result
               no-stone {:status :stopped :reason :no-stone-found}]
           (set! ctx/call-child (fn [c slot job args]
-                                 (if (= :gather slot)
+                                 (if (= :gather-cobblestone slot)
                                    (do (swap! n inc) (js/Promise.resolve :done))
                                    (orig c slot job args))))
-          (set! ctx/child-result (fn [c slot] (if (= :gather slot) no-stone (orig-res c slot))))
+          (set! ctx/child-result (fn [c slot] (if (= :gather-cobblestone slot) no-stone (orig-res c slot))))
           (try
             (let [id (await (get-tool! s {:item "stone_pickaxe"} 40))
                   st (last (events-of s :stopped))]
@@ -981,6 +981,13 @@
     (is (= obtain/sapling-leaf-limit (:dry-digs (:args need))) "digs per child run")
     (is (= 1 (:max-runs need)) "one fruitless run ends the source")
     (is (nil? (:max-runs (obtain/gather-need {"cobblestone" 1}))) "other sources use the default bound")))
+
+(deftest each-gather-source-has-its-own-child-slot
+  ;; a child slot's memory outlives its job while it runs: mine started over harvest-wood's :phase ended :count with nothing and a half tunnel
+  (let [slot #(obtain/gather-slot (obtain/gather-need %))]
+    (is (not= (slot {"oak_log" 2}) (slot {"cobblestone" 1})))
+    (is (not= (slot {"cobblestone" 1}) (slot {"coal" 1})))
+    (is (= (slot {"cobblestone" 1}) (slot {"cobblestone" 3})) "the same source keeps its slot between rounds")))
 
 (deftest sapling-leaf-limit-is-60
   (is (= 60 obtain/sapling-leaf-limit)))
