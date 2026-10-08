@@ -28,9 +28,19 @@
   {:level (or (:level xp) 0)
    :percent (js/Math.round (* 100 (max 0 (min 1 (or (:progress xp) 0)))))})
 
+(defn durability-percent
+  "Whole percent of durability left for a damaged item, nil for an undamaged or non-damageable one."
+  [{:keys [durability maxDurability]}]
+  (when (and (number? durability) (number? maxDurability) (pos? maxDurability) (< durability maxDurability))
+    (js/Math.round (* 100 (/ durability maxDurability)))))
+
 (defn slot [by-slot n]
-  (if-let [{:keys [name count]} (get by-slot n)]
-    {:slot n :name name :count count :label (items/label name) :title (items/title name count) :icon (items/icon-src name)}
+  (if-let [{:keys [name count durability maxDurability] :as item} (get by-slot n)]
+    (let [pct (durability-percent item)]
+      {:slot n :name name :count count :label (items/label name)
+       :title (str (items/title name count) (when pct (str " " durability "/" maxDurability)))
+       :icon (items/icon-src name)
+       :durability-percent pct})
     {:slot n :empty? true}))
 
 (defn slots

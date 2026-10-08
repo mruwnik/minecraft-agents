@@ -182,6 +182,8 @@ input:focus, select:focus, button:focus-visible, .bcard:focus-visible { outline:
 .slot img { position: absolute; inset: 14%; width: 72%; height: 72%; object-fit: cover; object-position: 0 0; image-rendering: pixelated; }
 .slabel { font-size: 10px; color: var(--dim); font-family: var(--mono); }
 .scount { position: absolute; right: 2px; bottom: 0; font-size: 11px; font-family: var(--mono); font-weight: 700; color: #fff; text-shadow: 1px 1px 0 #000, -1px 1px 0 #000, 1px -1px 0 #000, -1px -1px 0 #000; }
+.sdur { position: absolute; left: 2px; right: 2px; bottom: 2px; height: 3px; background: #000; }
+.sdur > span { display: block; height: 100%; }
 .armorrow { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
 .armor { display: flex; gap: 3px; }
 .armorrow .slot { width: 46px; height: 46px; aspect-ratio: auto; flex: none; }

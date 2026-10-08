@@ -53,3 +53,13 @@
       (:name (first (:armor s))) nil
       (:name (second (:armor s))) "iron_chestplate"
       (:name (:offhand s)) "shield")))
+
+(deftest slot-durability
+  (let [s (h/slot {5 {:slot 5 :name "iron_helmet" :count 1 :durability 33 :maxDurability 165}
+                   6 {:slot 6 :name "iron_chestplate" :count 1 :durability 240 :maxDurability 240}
+                   7 {:slot 7 :name "stone" :count 3}} 5)]
+    (are [actual expected] (= expected actual)
+      (:durability-percent s) 20
+      (:title s) "iron_helmet 33/165"
+      (:durability-percent (h/slot {6 {:slot 6 :name "iron_chestplate" :count 1 :durability 240 :maxDurability 240}} 6)) nil
+      (:durability-percent (h/slot {7 {:slot 7 :name "stone" :count 3}} 7)) nil)))

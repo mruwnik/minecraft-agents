@@ -147,14 +147,16 @@
           (into [:div.effects] (map-indexed (fn [i e] ^{:key i} [:span.effect (hudmodel/effect-text e)])) (:effects hud)))])]))
 
 ;; ---------------------------------------------------------------- inventory
-(defn slot-cell [{:keys [slot count] :as s}]
+(defn slot-cell [{:keys [slot count durability-percent] :as s}]
   ^{:key slot}
   [:div.slot {:class (when (:empty? s) "vacant") :title (or (:title s) (str "slot " slot))}
    (when-not (:empty? s)
      [:<>
       [:span.slabel (:label s)]
       (when (:icon s) [:img {:src (:icon s) :alt "" :draggable false :on-error #(set! (.. % -target -style -display) "none")}])
-      (when (> (or count 0) 1) [:span.scount count])])])
+      (when (> (or count 0) 1) [:span.scount count])
+      (when durability-percent
+        [:span.sdur [:span {:style {:width (str durability-percent "%") :background (str "hsl(" (* 1.2 durability-percent) " 80% 45%)")}}]])])])
 
 (defn inventory-panel [hud]
   (let [{:keys [hotbar main armor offhand]} (hudmodel/slots (:inventory hud))]
