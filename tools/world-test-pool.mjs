@@ -281,7 +281,7 @@ export const runPool = async ({ units, workers, runUnit, retries = 1, load = () 
   let wake = []
   const notify = () => { const w = wake; wake = []; w.forEach((r) => r()) }
   const take = (worker) => {
-    const i = queue.findIndex((j) => j.avoid !== worker.body || workers.length === 1)
+    const i = queue.findIndex((j) => j.avoid !== worker.body || alive === 1) // a job avoiding this body waits for another live one
     return i < 0 ? null : queue.splice(i, 1)[0]
   }
   const key = (s) => `${s.id}#${s.run}`

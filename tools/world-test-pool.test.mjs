@@ -83,7 +83,7 @@ const fakeRunner = (script, log = []) => async ({ file, match, worker }) => {
 const ok = (file) => ({ code: 0, text: vec(form(`${file}/c1`, 'pass'), form(`${file}/c2`, 'pass')) })
 const sleepy = () => new Promise((r) => setTimeout(r, 5))
 
-test('runPool: every unit runs once, results merged, exit 0', async () => {
+test('runPool: every unit runs once, results merged, exit 0', { timeout: 10000 }, async () => {
   const log = []
   const r = await runPool({ units: ['a', 'b', 'c'], workers: workerSpecs(2, 19, 'P', 0), runUnit: fakeRunner((f) => ok(f), log) })
   assert.equal(r.code, 0)
@@ -91,13 +91,13 @@ test('runPool: every unit runs once, results merged, exit 0', async () => {
   assert.deepEqual(log.map((l) => l.file).sort(), ['a', 'b', 'c'])
   assert.equal(new Set(log.map((l) => l.body)).size, 2)
 })
-test('runPool: never more than the workers run at once', async () => {
+test('runPool: never more than the workers run at once', { timeout: 10000 }, async () => {
   let now = 0, peak = 0
   const run = async ({ file }) => { now++; peak = Math.max(peak, now); await sleepy(); now--; return ok(file) }
   await runPool({ units: ['a', 'b', 'c', 'd', 'e'], workers: workerSpecs(2, 19, 'P', 0), runUnit: run })
   assert.equal(peak, 2)
 })
-test('runPool: a failed case reruns once on a different body, by --match; a pass is :flaky, others kept', async () => {
+test('runPool: a failed case reruns once on a different body, by --match; a pass is :flaky, others kept', { timeout: 10000 }, async () => {
   const log = []
   const run = fakeRunner((file, match) => match
     ? { code: 0, text: vec(form('a/c2', 'pass')) }
@@ -113,7 +113,7 @@ test('runPool: a failed case reruns once on a different body, by --match; a pass
   assert.match(flaky, /:first-failure \{[^]*:status :fail[^]*\}[^]*:first-failure-body/)
   assert.equal(r.code, 0)
 })
-test('runPool: a case failing twice stays failed, exit 1, and is not rerun a third time', async () => {
+test('runPool: a case failing twice stays failed, exit 1, and is not rerun a third time', { timeout: 10000 }, async () => {
   const log = []
   const run = fakeRunner(() => ({ code: 1, text: vec(form('a/c1', 'fail')) }), log)
   const r = await runPool({ units: ['a'], workers: workerSpecs(2, 19, 'P', 0), runUnit: run })
@@ -121,14 +121,14 @@ test('runPool: a case failing twice stays failed, exit 1, and is not rerun a thi
   assert.deepEqual(splitForms(r.text).map(summarize).map((s) => s.status), ['fail'])
   assert.equal(r.code, 1)
 })
-test('runPool: with one body the rerun uses it (no other to pick)', async () => {
+test('runPool: with one body the rerun uses it (no other to pick)', { timeout: 10000 }, async () => {
   const log = []
   const run = fakeRunner((f, match) => match ? { code: 0, text: vec(form('a/c1', 'pass')) } : { code: 1, text: vec(form('a/c1', 'fail')) }, log)
   const r = await runPool({ units: ['a'], workers: workerSpecs(1, 19, 'P', 0), runUnit: run })
   assert.deepEqual(log.map((l) => l.body), ['PA', 'PA'])
   assert.equal(r.code, 0)
 })
-test('runPool: a unit that dies with no results is rerun whole once', async () => {
+test('runPool: a unit that dies with no results is rerun whole once', { timeout: 10000 }, async () => {
   const log = []
   const run = fakeRunner((file, match) => log.length === 1 ? { code: 3, text: null } : ok(file), log)
   const r = await runPool({ units: ['a'], workers: workerSpecs(2, 19, 'P', 0), runUnit: run })
@@ -137,13 +137,13 @@ test('runPool: a unit that dies with no results is rerun whole once', async () =
   assert.equal(r.code, 0)
   assert.equal(splitForms(r.text).length, 2)
 })
-test('runPool: a unit that keeps dying is reported as an :error result, exit 1', async () => {
+test('runPool: a unit that keeps dying is reported as an :error result, exit 1', { timeout: 10000 }, async () => {
   const r = await runPool({ units: ['a'], workers: workerSpecs(1, 19, 'P', 0), runUnit: async () => ({ code: 3, text: null }) })
   const s = splitForms(r.text).map(summarize)
   assert.deepEqual(s.map((x) => [x.id, x.status]), [['a', 'error']])
   assert.equal(r.code, 1)
 })
-test('runPool: inconclusive cases are not rerun and fail the exit code', async () => {
+test('runPool: inconclusive cases are not rerun and fail the exit code', { timeout: 10000 }, async () => {
   const log = []
   const r = await runPool({ units: ['a'], workers: workerSpecs(2, 19, 'P', 0), runUnit: fakeRunner(() => ({ code: 1, text: vec(form('a/c1', 'inconclusive')) }), log) })
   assert.equal(log.length, 1)
@@ -156,25 +156,25 @@ test('parsePoolArgs: --retry-failed N is the pool\'s own (not passed to children
   assert.deepEqual(p.passthrough, ['--phase', 'day'])
   assert.equal(parsePoolArgs(['d']).retries, 1)
 })
-test('runPool: --retry-failed N reruns a failing case exactly N times, no more', async () => {
+test('runPool: --retry-failed N reruns a failing case exactly N times, no more', { timeout: 10000 }, async () => {
   const log = []
   const run = fakeRunner(() => ({ code: 1, text: vec(form('a/c1', 'fail')) }), log)
   const r = await runPool({ units: ['a'], workers: workerSpecs(2, 19, 'P', 0), runUnit: run, retries: 3 })
   assert.equal(log.length, 4)
   assert.equal(r.code, 1)
 })
-test('runPool: --retry-failed 0 reruns nothing', async () => {
+test('runPool: --retry-failed 0 reruns nothing', { timeout: 10000 }, async () => {
   const log = []
   await runPool({ units: ['a'], workers: workerSpecs(2, 19, 'P', 0), runUnit: fakeRunner(() => ({ code: 1, text: vec(form('a/c1', 'fail')) }), log), retries: 0 })
   assert.equal(log.length, 1)
 })
-test('runPool: an :error case is not rerun (the single-body runner retries failures only)', async () => {
+test('runPool: an :error case is not rerun (the single-body runner retries failures only)', { timeout: 10000 }, async () => {
   const log = []
   const r = await runPool({ units: ['a'], workers: workerSpecs(2, 19, 'P', 0), runUnit: fakeRunner(() => ({ code: 1, text: vec(form('a/c1', 'error')) }), log) })
   assert.equal(log.length, 1)
   assert.equal(r.code, 1)
 })
-test('runPool: --repeat results of one id are all kept, and a rerun replaces only its own run', async () => {
+test('runPool: --repeat results of one id are all kept, and a rerun replaces only its own run', { timeout: 10000 }, async () => {
   const log = []
   const run = fakeRunner((f, match) => match
     ? { code: 0, text: vec(runForm('a/c1', 'pass', 1)) }
@@ -185,7 +185,7 @@ test('runPool: --repeat results of one id are all kept, and a rerun replaces onl
   assert.equal(log.length, 2)
   assert.equal(r.code, 0)
 })
-test('runPool: a rerun asks for the exact case id (and one run), not a substring', async () => {
+test('runPool: a rerun asks for the exact case id (and one run), not a substring', { timeout: 10000 }, async () => {
   const log = []
   const run = async (job) => { log.push(job); return job.match ? { code: 0, text: vec(form('a/c1', 'pass')) } : { code: 1, text: vec(form('a/c1', 'fail'), form('a/c10', 'pass')) } }
   await runPool({ units: ['a'], workers: workerSpecs(2, 19, 'P', 0), runUnit: run })
@@ -210,7 +210,7 @@ test('parsePoolArgs: --max-parallel is a pool flag', () => {
   assert.deepEqual(p.passthrough, [])
   assert.equal(parsePoolArgs(['d']).maxParallel, null)
 })
-test('runPool: waits (polling) while the load average is above the core count, before starting another child', async () => {
+test('runPool: waits (polling) while the load average is above the core count, before starting another child', { timeout: 10000 }, async () => {
   const loads = [20, 20, 3, 20, 3, 3, 3, 3, 3, 3]
   let polls = 0, sleeps = 0
   const started = []
@@ -227,7 +227,7 @@ test('runPool: waits (polling) while the load average is above the core count, b
   assert.ok(started[1][1] >= 3, 'the second child waited until the load dropped')
   assert.equal(sleeps, 2)
 })
-test('runPool: a high load never blocks when nothing is running (no livelock)', async () => {
+test('runPool: a high load never blocks when nothing is running (no livelock)', { timeout: 10000 }, async () => {
   const r = await runPool({ units: ['a'], workers: workerSpecs(1, 19, 'P', 0), runUnit: async ({ file }) => ok(file), load: () => 99, cores: 4, sleep: async () => { throw new Error('slept') } })
   assert.equal(r.code, 0)
 })
@@ -258,13 +258,13 @@ test('countListed: one case per --list line, times --repeat; blank lines are not
   assert.equal(countListed('a/x  #{:t}\nb/y  nil  PROBLEMS [\"x\"]\n\n', 1), 2)
   assert.equal(countListed('a/x  nil\n', 3), 3)
 })
-test('runPool events: the total is the one given from the start, in every progress line', async () => {
+test('runPool events: the total is the one given from the start, in every progress line', { timeout: 10000 }, async () => {
   const run = fakeRunner((f) => ({ code: 0, text: vec(form(`${f}/1`, 'pass'), form(`${f}/2`, 'pass')) }), [])
   const seen = await eventsOf(['a', 'b'], run, 4)
   assert.deepEqual(progressOf(seen).map((e) => [e.done, e.total, e.retries]), [[1, 4, 0], [2, 4, 0], [3, 4, 0], [4, 4, 0]])
   assert.equal(resultsOf(seen).length, 4)
 })
-test('runPool events: a case failing and failing again is one failed result, the reruns are counted as retries', async () => {
+test('runPool events: a case failing and failing again is one failed result, the reruns are counted as retries', { timeout: 10000 }, async () => {
   const run = fakeRunner(() => ({ code: 1, text: vec(form('a/c1', 'fail'), form('a/c2', 'pass')) }), [])
   const seen = await eventsOf(['a'], run, 2, 2)
   const results = resultsOf(seen)
@@ -272,7 +272,7 @@ test('runPool events: a case failing and failing again is one failed result, the
   const last = progressOf(seen).at(-1)
   assert.deepEqual([last.done, last.total, last.retries], [2, 2, 2])
 })
-test('runPool events: a failure that passes on the rerun is reported once, as flaky, not as a failure', async () => {
+test('runPool events: a failure that passes on the rerun is reported once, as flaky, not as a failure', { timeout: 10000 }, async () => {
   const run = fakeRunner((f, match) => match ? { code: 0, text: vec(form('a/c1', 'pass')) } : { code: 1, text: vec(form('a/c1', 'fail')) }, [])
   const seen = await eventsOf(['a'], run, 1)
   assert.deepEqual(resultsOf(seen).map((e) => [e.name, e.outcome]), [['a/c1#1', 'flaky']])
@@ -291,7 +291,7 @@ test('knownFailures: id -> first failing check of its last recorded result when 
   const newer = vec(form('a/c2', 'pass'), form('a/c3', 'flaky'))
   assert.deepEqual([...knownFailures([older, newer])], [['a/c1', '{:event {:kind :x}}']])
 })
-test('runPool: a failure with a different first failing check than last time is rerun, not a known failure', async () => {
+test('runPool: a failure with a different first failing check than last time is rerun, not a known failure', { timeout: 10000 }, async () => {
   const log = []
   const run = fakeRunner(() => ({ code: 1, text: vec(failForm('a/c1', '{:event {:kind :y}}')) }), log)
   const r = await runPool({ units: ['a'], workers: workerSpecs(2, 19, 'P', 0), runUnit: run, retries: 1, known: new Map([['a/c1', '{:event {:kind :x}}']]) })
@@ -308,7 +308,7 @@ test('result events carry known-failure and the seconds saved by an early end', 
   assert.equal(c1.endedEarlyS, 40)
   assert.equal('knownFailure' in c2, false)
 })
-test('runPool: a failed case that is a known failure is not rerun, is marked :known-failure true and counted as skipped', async () => {
+test('runPool: a failed case that is a known failure is not rerun, is marked :known-failure true and counted as skipped', { timeout: 10000 }, async () => {
   const log = []
   const run = fakeRunner(() => ({ code: 1, text: vec(form('a/c1', 'fail'), form('a/c2', 'fail')) }), log)
   const r = await runPool({ units: ['a'], workers: workerSpecs(2, 19, 'P', 0), runUnit: run, retries: 2, known: new Map([['a/c1', '']]) })
@@ -323,7 +323,7 @@ test('parseListed: the --list lines grouped by fixture stem, in order, PROBLEMS 
   const m = parseListed('a/x  #{:t}\na/y  nil\nb/z  nil  PROBLEMS ["x"]\n\n')
   assert.deepEqual([...m], [['a', ['a/x', 'a/y']], ['b', ['b/z']]])
 })
-test('runPool: a unit that dies twice settles one error per listed case (and run), so done reaches the total', async () => {
+test('runPool: a unit that dies twice settles one error per listed case (and run), so done reaches the total', { timeout: 10000 }, async () => {
   const listed = new Map([['a', ['a/c1', 'a/c2', 'a/c3']]])
   const seen = []
   const r = await runPool({ units: ['a'], workers: workerSpecs(2, 19, 'P', 0), runUnit: fakeRunner(() => ({ code: 1, text: null }), []), listed, repeat: 2, total: 6, emit: (e) => seen.push(e) })
@@ -332,7 +332,7 @@ test('runPool: a unit that dies twice settles one error per listed case (and run
   assert.equal(progressOf(seen).at(-1).done, 6)
   assert.equal(resultsOf(seen).length, 6)
 })
-test('runPool: listed cases missing from a unit that ended with partial results settle as errors', async () => {
+test('runPool: listed cases missing from a unit that ended with partial results settle as errors', { timeout: 10000 }, async () => {
   const listed = new Map([['a', ['a/c1', 'a/c2']]])
   const r = await runPool({ units: ['a'], workers: workerSpecs(2, 19, 'P', 0), runUnit: fakeRunner(() => ({ code: 1, text: vec(form('a/c1', 'pass')) }), []), listed, total: 2 })
   assert.deepEqual(splitForms(r.text).map((f) => { const s = summarize(f); return [s.id, s.status] }), [['a/c1', 'pass'], ['a/c2', 'error']])
@@ -349,7 +349,7 @@ test('noCasesSelected: a listing that leaves no unit is an empty selection; no l
   assert.equal(noCasesSelected(['a'], parseListed('a/x  nil\n')), false)
   assert.equal(noCasesSelected([], null), false)
 })
-test('runPool: no unit ran is exit 2 (no cases selected), like the single-body runner', async () => {
+test('runPool: no unit ran is exit 2 (no cases selected), like the single-body runner', { timeout: 10000 }, async () => {
   const r = await runPool({ units: [], workers: workerSpecs(2, 19, 'P', 0), runUnit: fakeRunner((f) => ok(f), []) })
   assert.equal(r.code, 2)
 })
@@ -360,7 +360,7 @@ const fakeServer = (downUntilMs) => { // a clock the fake sleep advances, and a 
   const clock = { t: 0 }
   return { clock, now: () => clock.t, sleep: async (ms) => { clock.t += ms }, probe: async () => clock.t >= downUntilMs }
 }
-test('runPool: cases that hit a refused connection wait for the server and rerun without using a retry or showing as errors', async () => {
+test('runPool: cases that hit a refused connection wait for the server and rerun without using a retry or showing as errors', { timeout: 10000 }, async () => {
   const srv = fakeServer(40000)
   const log = []
   const runUnit = fakeRunner((file) => (log.length === 1 ? { code: 1, text: vec(refused(`${file}/c1`), refused(`${file}/c2`)) } : ok(file)), log)
@@ -372,7 +372,7 @@ test('runPool: cases that hit a refused connection wait for the server and rerun
   assert.equal(resultsOf(seen).length, 2)
   assert.equal(progressOf(seen).at(-1).retries, 0)
 })
-test('runPool: a unit that exits with no results while the server is down is held and rerun whole once the server is back', async () => {
+test('runPool: a unit that exits with no results while the server is down is held and rerun whole once the server is back', { timeout: 10000 }, async () => {
   const srv = fakeServer(20000)
   const log = []
   const runUnit = fakeRunner((file) => (log.length === 1 ? { code: 1, text: null } : ok(file)), log)
@@ -380,14 +380,14 @@ test('runPool: a unit that exits with no results while the server is down is hel
   assert.equal(r.code, 0)
   assert.equal(log.length, 2)
 })
-test('runPool: no new unit starts while the server is down', async () => {
+test('runPool: no new unit starts while the server is down', { timeout: 10000 }, async () => {
   const srv = fakeServer(30000)
   const starts = []
   const runUnit = async ({ file }) => { starts.push([file, srv.clock.t]); return starts.length === 1 ? { code: 1, text: vec(refused(`${file}/c1`)) } : ok(file) }
   await runPool({ units: ['a', 'b', 'c'], workers: workerSpecs(1, 19, 'P', 0), runUnit, ...srv })
   assert.ok(starts.slice(1).every(([, t]) => t >= 30000))
 })
-test('runPool: a mixed unit keeps its good results and reruns only the refused case', async () => {
+test('runPool: a mixed unit keeps its good results and reruns only the refused case', { timeout: 10000 }, async () => {
   const srv = fakeServer(5000)
   const log = []
   const listed = new Map([['a', ['a/c1', 'a/c2']]])
@@ -397,7 +397,7 @@ test('runPool: a mixed unit keeps its good results and reruns only the refused c
   assert.deepEqual(log.map((l) => l.match), [null, 'a/c2'])
   assert.deepEqual(splitForms(r.text).map((f) => summarize(f).status).sort(), ['pass', 'pass'])
 })
-test('runPool: past the wait cap the pool stops as server unreachable (exit 3), recording no errors', async () => {
+test('runPool: past the wait cap the pool stops as server unreachable (exit 3), recording no errors', { timeout: 10000 }, async () => {
   const srv = fakeServer(Infinity)
   const r = await runPool({ units: ['a', 'b'], workers: workerSpecs(1, 19, 'P', 0), runUnit: fakeRunner((file) => ({ code: 1, text: vec(refused(`${file}/c1`)) }), []), serverWaitMs: 60000, ...srv })
   assert.equal(r.code, 3)
@@ -411,7 +411,7 @@ test('parsePoolArgs: --server-wait-s sets the cap in seconds (default 300)', () 
 })
 
 // ---- review findings of the fault handling (card 6bfe1115)
-test('runPool: a connection fault that persists while the probe says the server is up is rerun at most twice, then settles as an error', async () => {
+test('runPool: a connection fault that persists while the probe says the server is up is rerun at most twice, then settles as an error', { timeout: 40000 }, async () => {
   const log = []
   const runUnit = fakeRunner((file) => ({ code: 1, text: vec(refused(`${file}/c1`)) }), log)
   const r = await runPool({ units: ['a'], workers: workerSpecs(1, 19, 'P', 0), runUnit: async (u) => { if (log.length > 40) throw new Error('pool loops'); return runUnit(u) }, retries: 0 })
@@ -419,14 +419,14 @@ test('runPool: a connection fault that persists while the probe says the server 
   assert.equal(log.length, 3)
   assert.deepEqual(splitForms(r.text).map((f) => summarize(f).status), ['error'])
 })
-test('runPool: only the error, why or evidence field makes a connection fault, not other text of the form', async () => {
+test('runPool: only the error, why or evidence field makes a connection fault, not other text of the form', { timeout: 10000 }, async () => {
   const log = []
   const note = form('a/c1', 'error', 1, ', :log "ECONNRESET in the server log"')
   const r = await runPool({ units: ['a'], workers: workerSpecs(1, 19, 'P', 0), runUnit: fakeRunner(() => ({ code: 1, text: vec(note) }), log), retries: 0 })
   assert.equal(log.length, 1)
   assert.equal(r.code, 1)
 })
-test('runPool: after the server is back the units wait the settle time before they start', async () => {
+test('runPool: after the server is back the units wait the settle time before they start', { timeout: 10000 }, async () => {
   const srv = fakeServer(40000)
   const starts = []
   const runUnit = async ({ file }) => { starts.push(srv.clock.t); return starts.length === 1 ? { code: 1, text: vec(refused(`${file}/c1`)) } : ok(file) }
@@ -445,7 +445,7 @@ test('serverProbe: true only when every port accepts a connection', async () => 
   assert.equal(await serverProbe([open, shut])(), false)
   srv.close()
 })
-test('runPool: a case rerun after a fault that fails with its known failed check is not rerun again', async () => {
+test('runPool: a case rerun after a fault that fails with its known failed check is not rerun again', { timeout: 40000 }, async () => {
   const log = []
   const listed = new Map([['a', ['a/c1', 'a/c2']]])
   const runUnit = fakeRunner((file, match) => (log.length === 1 ? { code: 1, text: vec(form('a/c1', 'pass'), refused('a/c2')) } : { code: 1, text: vec(form(match, 'fail')) }), log)
@@ -454,7 +454,7 @@ test('runPool: a case rerun after a fault that fails with its known failed check
   assert.equal(r.skipped, 1)
   assert.match(r.text, /:known-failure true/)
 })
-test('runPool: on an unreachable stop a failure still waiting for its retry is returned as pending (inconclusive), not as a final failure', async () => {
+test('runPool: on an unreachable stop a failure still waiting for its retry is returned as pending (inconclusive), not as a final failure', { timeout: 10000 }, async () => {
   const srv = fakeServer(Infinity)
   const listed = new Map([['a', ['a/c1', 'a/c2']]])
   const runUnit = fakeRunner(() => ({ code: 1, text: vec(form('a/c1', 'fail'), refused('a/c2')) }), [])
@@ -463,7 +463,7 @@ test('runPool: on an unreachable stop a failure still waiting for its retry is r
   assert.deepEqual(splitForms(r.text).map((f) => summarize(f).status), ['inconclusive'])
   assert.equal(r.pending.length, 1)
 })
-test('runPool: on an unreachable stop the pending failure is written to the results as inconclusive with its first failure, and emitted', async () => {
+test('runPool: on an unreachable stop the pending failure is written to the results as inconclusive with its first failure, and emitted', { timeout: 10000 }, async () => {
   const srv = fakeServer(Infinity)
   const listed = new Map([['a', ['a/c1', 'a/c2']]])
   const seen = []
@@ -473,7 +473,7 @@ test('runPool: on an unreachable stop the pending failure is written to the resu
   assert.match(r.text, /:first-failure/)
   assert.equal(resultsOf(seen).length, 1)
 })
-test('runPool: the settle wait also runs when the first probe after a fault already passes', async () => {
+test('runPool: the settle wait also runs when the first probe after a fault already passes', { timeout: 10000 }, async () => {
   const srv = fakeServer(0)
   const starts = []
   const runUnit = async ({ file }) => { starts.push(srv.clock.t); return starts.length === 1 ? { code: 1, text: vec(refused(`${file}/c1`)) } : ok(file) }
@@ -484,7 +484,7 @@ test('parsePoolArgs: --server-settle-s sets the settle wait in seconds (default 
   assert.equal(parsePoolArgs(['d']).serverSettleS, 10)
   assert.equal(parsePoolArgs(['d', '--server-settle-s', '3']).serverSettleS, 3)
 })
-test('runPool: in a mixed unit the cases the faulted child never reached are rerun, not recorded as errors', async () => {
+test('runPool: in a mixed unit the cases the faulted child never reached are rerun, not recorded as errors', { timeout: 40000 }, async () => {
   const log = []
   const listed = new Map([['a', ['a/c1', 'a/c2', 'a/c3']]])
   const runUnit = fakeRunner((file, match) => (log.length === 1 ? { code: 1, text: vec(form('a/c1', 'pass'), refused('a/c2')) } : { code: 0, text: vec(form(match, 'pass')) }), log)
@@ -542,7 +542,7 @@ test('parsePoolArgs: --night-batches is the pool\'s own and not passed on', () =
   assert.equal(parsePoolArgs(['d']).nightBatches, false)
 })
 const batchRunner = (log, fn = (id) => ok(id.split('/')[0])) => async (unit) => { log.push(unit); await sleepy(); return fn(unit.id) }
-test('runNightBatches: batches run one after the other, the cases of one batch together, each case with its batch id on its own body', async () => {
+test('runNightBatches: batches run one after the other, the cases of one batch together, each case with its batch id on its own body', { timeout: 10000 }, async () => {
   const log = []
   let live = 0, peak = 0
   const run = async (unit) => { live++; peak = Math.max(peak, live); log.push(unit); await sleepy(); live--; return { code: 0, text: vec(form(unit.id, 'pass')) } }
@@ -555,7 +555,7 @@ test('runNightBatches: batches run one after the other, the cases of one batch t
   assert.notEqual(log[0].worker.body, log[1].worker.body)
   assert.equal(splitForms(r.text).length, 3)
 })
-test('runNightBatches: a failed case reruns alone in its own batch after the others; a pass is flaky', async () => {
+test('runNightBatches: a failed case reruns alone in its own batch after the others; a pass is flaky', { timeout: 10000 }, async () => {
   const log = []
   let n = 0
   const run = async (unit) => { log.push(unit); n++; return { code: 0, text: vec(form(unit.id, unit.id === 'a/2' && n < 3 ? 'fail' : 'pass')) } }
@@ -565,7 +565,7 @@ test('runNightBatches: a failed case reruns alone in its own batch after the oth
   assert.deepEqual(splitForms(r.text).map(summarize).map((s) => [s.id, s.status]), [['a/1', 'pass'], ['a/2', 'flaky'], ['b/1', 'pass']])
   assert.equal(r.code, 0)
 })
-test('runNightBatches: a case inconclusive for overrunning dawn reruns alone and keeps its first reason; other inconclusive cases do not rerun', async () => {
+test('runNightBatches: a case inconclusive for overrunning dawn reruns alone and keeps its first reason; other inconclusive cases do not rerun', { timeout: 10000 }, async () => {
   const log = []
   const over = ', :overran true, :first-why "boom"'
   const run = async (unit) => {
@@ -579,7 +579,7 @@ test('runNightBatches: a case inconclusive for overrunning dawn reruns alone and
   assert.deepEqual(splitForms(r.text).map(summarize).map((s) => [s.id, s.status]), [['a/1', 'flaky'], ['a/2', 'inconclusive']])
   assert.match(r.text, /:first-failure .*:first-why "boom"/)
 })
-test('runNightBatches: an overrun that overruns again settles inconclusive and the event says so', async () => {
+test('runNightBatches: an overrun that overruns again settles inconclusive and the event says so', { timeout: 10000 }, async () => {
   const ev = []
   const run = async (unit) => ({ code: 1, text: vec(form(unit.id, 'inconclusive', 1, ', :overran true, :first-why "boom"')) })
   const r = await runNightBatches({ batches: [{ kind: 'natural', ids: ['a/1'] }], workers: workerSpecs(1, 19, 'P', 0), runUnit: run, retries: 2, total: 1, emit: (e) => ev.push(e) })
@@ -587,13 +587,13 @@ test('runNightBatches: an overrun that overruns again settles inconclusive and t
   assert.deepEqual(ev.filter((e) => e.event === 'result').map((e) => e.outcome), ['inconclusive'])
   assert.equal(ev.find((e) => e.event === 'progress').retries, 2)
 })
-test('runNightBatches: a case with no result is an error; a failure twice stays failed; code 1', async () => {
+test('runNightBatches: a case with no result is an error; a failure twice stays failed; code 1', { timeout: 10000 }, async () => {
   const run = async (unit) => (unit.id === 'a/1' ? { code: 3, text: null } : { code: 1, text: vec(form(unit.id, 'fail')) })
   const r = await runNightBatches({ batches: [{ kind: 'natural', ids: ['a/1', 'a/2'] }], workers: workerSpecs(2, 19, 'P', 0), runUnit: run, retries: 1 })
   assert.deepEqual(splitForms(r.text).map(summarize).map((s) => [s.id, s.status]), [['a/1', 'error'], ['a/2', 'fail']])
   assert.equal(r.code, 1)
 })
-test('runNightBatches: events carry the fixed total and one result per case', async () => {
+test('runNightBatches: events carry the fixed total and one result per case', { timeout: 10000 }, async () => {
   const ev = []
   await runNightBatches({ batches: [{ kind: 'natural', ids: ['a/1', 'a/2'] }], workers: workerSpecs(2, 19, 'P', 0), runUnit: batchRunner([], (id) => ({ code: 0, text: vec(form(id, 'pass')) })), total: 2, emit: (e) => ev.push(e) })
   assert.deepEqual(ev.filter((e) => e.event === 'result').map((e) => e.name), ['a/1#1', 'a/2#1'])
@@ -605,7 +605,7 @@ test('nightBatches: cases that set the same time group into barrier batches (bef
   const b = nightBatches(cs, new Map(), { bodies: 2, budgetS: 300, defaultS: 60 })
   assert.deepEqual(b, [{ kind: 'barrier', ids: ['a/1', 'a/2'], barrier: 2 }, { kind: 'barrier', ids: ['a/3'], barrier: 1 }, { kind: 'barrier', ids: ['b/1'], barrier: 1 }, { kind: 'solo', ids: ['c/1'] }])
 })
-test('runNightBatches: a barrier batch hands its size to each case; a rerun has none; onBatchEnd gets every batch id', async () => {
+test('runNightBatches: a barrier batch hands its size to each case; a rerun has none; onBatchEnd gets every batch id', { timeout: 10000 }, async () => {
   const log = []
   const ended = []
   const run = async (unit) => { log.push(unit); return { code: 0, text: vec(form(unit.id, unit.id === 'a/2' && log.length < 3 ? 'fail' : 'pass')) } }
@@ -647,7 +647,7 @@ test('waitForBodies: gives up after the wait with a clear message; a cap already
   const q = await waitForBodies({ min: 4, cap: () => 4, sleep: async () => { throw new Error('slept') }, now: () => 0, log: () => {} })
   assert.equal(q.ok, true)
 })
-test('runPool: a unit that exits with the precheck code stops the pass at once (exit 5), starting no unit and recording no errors', async () => {
+test('runPool: a unit that exits with the precheck code stops the pass at once (exit 5), starting no unit and recording no errors', { timeout: 10000 }, async () => {
   const log = []
   const runUnit = fakeRunner(() => ({ code: PRECHECK_EXIT, text: null }), log)
   const listed = new Map([['a', ['a/c1', 'a/c2']], ['b', ['b/c1']], ['c', ['c/c1']]])
@@ -657,7 +657,7 @@ test('runPool: a unit that exits with the precheck code stops the pass at once (
   assert.equal(log.length, 1)
   assert.deepEqual(splitForms(r.text), [])
 })
-test('runNightBatches: a unit that exits with the precheck code stops the pass after that batch (exit 5), recording no errors', async () => {
+test('runNightBatches: a unit that exits with the precheck code stops the pass after that batch (exit 5), recording no errors', { timeout: 10000 }, async () => {
   const log = []
   const runUnit = async ({ id }) => { log.push(id); return { code: PRECHECK_EXIT, text: null } }
   const batches = [{ kind: 'night', ids: ['a/c1'] }, { kind: 'night', ids: ['b/c1'] }]
@@ -667,7 +667,7 @@ test('runNightBatches: a unit that exits with the precheck code stops the pass a
   assert.deepEqual(splitForms(r.text), [])
 })
 
-test('runPool events: a first attempt that fails or dies is announced as a progress line (attempted) before its rerun has finished', async () => {
+test('runPool events: a first attempt that fails or dies is announced as a progress line (attempted) before its rerun has finished', { timeout: 10000 }, async () => {
   const run = fakeRunner((f, match) => match ? { code: 0, text: vec(form('a/c1', 'pass')) } : { code: 1, text: vec(form('a/c1', 'fail'), form('a/c2', 'pass')) }, [])
   const seen = []
   await runPool({ units: ['a'], workers: workerSpecs(1, 19, 'P', 0), runUnit: run, total: 2, emit: (e) => seen.push(e) })
@@ -675,13 +675,13 @@ test('runPool events: a first attempt that fails or dies is announced as a progr
   assert.deepEqual([first.done, first.attempted, first.total], [1, 2, 2])
   assert.ok(seen.indexOf(first) < seen.findIndex((e) => e.outcome === 'flaky'))
 })
-test('runPool events: a unit that died with no results is announced as attempted while done stays 0', async () => {
+test('runPool events: a unit that died with no results is announced as attempted while done stays 0', { timeout: 10000 }, async () => {
   const seen = []
   const run = fakeRunner((f, match) => match === null && !seen.length ? { code: 1, text: null } : { code: 0, text: vec(form('a/c1', 'pass')) }, [])
   await runPool({ units: ['a'], workers: workerSpecs(1, 19, 'P', 0), runUnit: run, total: 1, emit: (e) => seen.push(e) })
   assert.deepEqual([progressOf(seen)[0].done, progressOf(seen)[0].attempted], [0, 1])
 })
-test('runPool: a unit that exits with the boot-death code stops the pass at once (exit 6), keeping the results it wrote', async () => {
+test('runPool: a unit that exits with the boot-death code stops the pass at once (exit 6), keeping the results it wrote', { timeout: 10000 }, async () => {
   const log = []
   const runUnit = fakeRunner((f) => ({ code: BOOT_EXIT, text: vec(form(`${f}/c1`, 'error')) }), log)
   const r = await runPool({ units: ['a', 'b', 'c'], workers: workerSpecs(1, 19, 'P', 0), runUnit, total: 3 })
@@ -692,7 +692,7 @@ test('runPool: a unit that exits with the boot-death code stops the pass at once
 })
 
 const bootErr = (id) => form(id, 'error', 1, ', :why "body did not start within 90 s"')
-test('runPool: a body that dies at boot is retired, its cases go to the other bodies and the pass goes on', async () => {
+test('runPool: a body that dies at boot is retired, its cases go to the other bodies and the pass goes on', { timeout: 10000 }, async () => {
   const log = []
   const runUnit = async ({ file, worker }) => {
     log.push({ file, body: worker.body })
@@ -705,19 +705,40 @@ test('runPool: a body that dies at boot is retired, its cases go to the other bo
   assert.deepEqual(splitForms(r.text).map((f) => summarize(f).id).sort(), ['a/c1', 'b/c1', 'c/c1'])
   assert.equal(log.filter((l) => l.body === 'PA').length, 1, 'the retired body ran nothing more')
 })
-test('runPool: when every body died at boot the pass stops with exit 6, keeping what was recorded', async () => {
+test('runPool: when every body died at boot the pass stops with exit 6, keeping what was recorded', { timeout: 10000 }, async () => {
   const runUnit = async ({ file }) => ({ code: BOOT_EXIT, text: vec(bootErr(`${file}/c1`)) })
   const r = await runPool({ units: ['a', 'b', 'c'], workers: workerSpecs(2, 19, 'P', 0), runUnit, total: 3 })
   assert.equal(r.code, 6)
   assert.equal(r.bootDead, true)
 })
-test('runPool: a rerun of a failed case tells runUnit its attempt number (first run 0)', async () => {
+test('runPool: with one of two bodies retired at boot, a failed case on the live body still reruns on it (no stall)', { timeout: 10000 }, async () => {
+  const log = []
+  const runUnit = async ({ file, match, worker }) => {
+    log.push({ file, match, body: worker.body })
+    if (worker.body === 'PA') return { code: BOOT_EXIT, text: vec(bootErr(`${file}/c1`)) }
+    return match ? { code: 0, text: vec(form('a/c1', 'pass')) } : { code: 1, text: vec(form('a/c1', 'fail')) }
+  }
+  const r = await runPool({ units: ['a'], workers: workerSpecs(2, 19, 'P', 0), runUnit, listed: new Map([['a', ['a/c1']]]), total: 1 })
+  assert.equal(r.code, 0)
+  assert.equal(summarize(splitForms(r.text)[0]).status, 'flaky')
+  assert.deepEqual(log.filter((l) => l.body === 'PB').map((l) => l.match), [null, 'a/c1'])
+})
+test('runPool: a flaky entry\'s :first-failure carries the failing run\'s :trace', { timeout: 10000 }, async () => {
+  const run = fakeRunner((f, match) => match
+    ? { code: 0, text: vec(form('a/c1', 'pass')) }
+    : { code: 1, text: vec(form('a/c1', 'fail', 1, ', :trace "cases/a__c1__r1-a0.edn"')) }, [])
+  const r = await runPool({ units: ['a'], workers: workerSpecs(2, 19, 'P', 0), runUnit: run })
+  const flaky = splitForms(r.text).find((f) => summarize(f).id === 'a/c1')
+  assert.match(flaky, /:first-failure \{[^]*:trace "cases\/a__c1__r1-a0.edn"[^]*\}[^]*:first-failure-body/)
+  assert.doesNotMatch(flaky.replace(/:first-failure \{[^]*\}[^]*:first-failure-body/, ''), /:trace/)
+})
+test('runPool: a rerun of a failed case tells runUnit its attempt number (first run 0)', { timeout: 10000 }, async () => {
   const seen = []
   const runUnit = async ({ file, match, attempt }) => { seen.push([match, attempt]); return match ? { code: 0, text: vec(form('a/c1', 'pass')) } : { code: 1, text: vec(form('a/c1', 'fail')) } }
   await runPool({ units: ['a'], workers: workerSpecs(2, 19, 'P', 0), runUnit, total: 1 })
   assert.deepEqual(seen, [[null, 0], ['a/c1', 1]])
 })
-test('runNightBatches: a case whose body died at boot runs again on another body; the dead body is not used again', async () => {
+test('runNightBatches: a case whose body died at boot runs again on another body; the dead body is not used again', { timeout: 10000 }, async () => {
   const log = []
   const runUnit = async ({ id, worker }) => {
     log.push([id, worker.body])
@@ -729,8 +750,9 @@ test('runNightBatches: a case whose body died at boot runs again on another body
   assert.equal(splitForms(r.text).length, 4)
   assert.deepEqual(log.filter(([, b]) => b === 'PA').length, 1)
   assert.deepEqual(log.slice(-2).map(([id]) => id).sort(), ['c/c1', 'd/c1'])
+  assert.deepEqual(log.slice(-2).map(([, b]) => b), ['PB', 'PB'], 'the dead body is skipped in later batches')
 })
-test('runNightBatches: with no body left the pass stops with exit 6', async () => {
+test('runNightBatches: with no body left the pass stops with exit 6', { timeout: 10000 }, async () => {
   const runUnit = async ({ id }) => ({ code: BOOT_EXIT, text: vec(bootErr(id)) })
   const r = await runNightBatches({ batches: [{ kind: 'natural', ids: ['a/c1'] }, { kind: 'natural', ids: ['b/c1'] }], workers: workerSpecs(2, 19, 'P', 0), runUnit, total: 2 })
   assert.equal(r.code, 6)
