@@ -107,69 +107,11 @@
       (boolean (surfaced-in-water? c))
       (ctx/wait c {:reason :not-underwater})))
 
-(defn columns
-  "Column offsets within radius, the own column first, then by distance."
-  [radius]
-  (->> (for [dx (range (- radius) (inc radius))
-             dz (range (- radius) (inc radius))
-             :when (<= (+ (* dx dx) (* dz dz)) (* radius radius))]
-         [dx dz])
-       (sort-by (fn [[dx dz]] (+ (* dx dx) (* dz dz))))))
-
 (defn rose?
   "A swim that ended with the feet at floor y is progress only above the best height reached so far (best, nil before
   the first swim) and the feet height the pass started at (fy): a body pushed back down between passes is not progress."
   [best fy y]
   (> y (max (or best fy) fy)))
-
-(defn drag-between?
-  "A downward bubble column lies in a cell the straight walk from the feet column (fx, fz) to (x, z) crosses, at the feet's
-  height or the one above (the target column itself included). A diagonal step crosses both cells beside it too: the
-  body may cut either corner."
-  [p fx fz x z fy]
-  (let [n (max (js/Math.abs (- x fx)) (js/Math.abs (- z fz)))
-        at (fn [i] [(js/Math.round (+ fx (* (- x fx) (/ i n)))) (js/Math.round (+ fz (* (- z fz) (/ i n))))])
-        cells (mapcat (fn [i]
-                        (let [[ax az] (at (dec i)) [bx bz :as b] (at i)]
-                          (if (and (not= ax bx) (not= az bz)) [[bx az] [ax bz] b] [b])))
-                      (range 1 (inc n)))]
-    (boolean
-     (some (fn [[cx cz]]
-             (some #(= "bubble_column_down" (breath/seen-water-name p {:x cx :y % :z cz})) [fy (inc fy)]))
-           cells))))
-
-(defn surface-in-column
-  "The feet cell in column x z, at or above fy and within reach, whose head
-  cell is air and which is reached through water or air only; nil if the
-  column is capped or leaves the loaded world. name-at (default breath/seen-water-name) reads the cells; a cell never seen ends the column."
-  ([p x z fy reach] (surface-in-column p x z fy reach breath/seen-water-name))
-  ([p x z fy reach name-at]
-   (loop [k 0]
-     (when (<= k reach)
-       (let [y (+ fy k)
-             feet (name-at p {:x x :y y :z z})
-             head (name-at p {:x x :y (inc y) :z z})]
-         (cond
-           (not (and feet head (breath/passable-water-or-air? feet))) nil
-           (breath/air? head) {:x x :y y :z z}
-           (contains? breath/swimmable head) (recur (inc k))
-           :else nil))))))
-
-(defn nearest-air
-  "The surface cell of the nearest column within radius that reaches air, not one of failed (a seq of cells); nil if none.
-  Every column is read only through cells the body has seen or feels, never through stone. With straight? (the default)
-  a column whose straight walk crosses a downward bubble column (drag-between?) is skipped: a raw move walks straight; a
-  go-to leg passes false, as its planner routes round one."
-  ([p self-pos radius reach] (nearest-air p self-pos radius reach nil true))
-  ([p self-pos radius reach failed straight?]
-   (let [fx (js/Math.floor (:x self-pos))
-         fy (js/Math.floor (:y self-pos))
-         fz (js/Math.floor (:z self-pos))
-         skip (set failed)]
-     (some (fn [[dx dz]]
-             (let [cell (surface-in-column p (+ fx dx) (+ fz dz) fy reach)]
-               (when-not (or (contains? skip cell) (and straight? (drag-between? p fx fz (+ fx dx) (+ fz dz) fy))) cell)))
-           (columns radius)))))
 
 (defn solid-at? [p cell] (breath/suffocates? p cell))
 
@@ -181,10 +123,10 @@
   (land/land-cell? #(u/seen-name p %) cell))
 
 (defn surface-pos
-  "pos with y raised to the feet cell at the top of the own water column (surface-in-column), so a body that has
+  "pos with y raised to the feet cell at the top of the own water column (breath/surface-in-column), so a body that has
   sunk a few blocks below the surface still finds a bank flush with it; pos itself when the column has no surface."
   [p pos reach]
-  (let [cell (surface-in-column p (js/Math.floor (:x pos)) (js/Math.floor (:z pos)) (js/Math.floor (:y pos)) reach)]
+  (let [cell (breath/surface-in-column p (js/Math.floor (:x pos)) (js/Math.floor (:z pos)) (js/Math.floor (:y pos)) reach)]
     (if cell (assoc pos :y (:y cell)) pos)))
 
 (defn same-way?
@@ -218,42 +160,13 @@
    (let [fx (js/Math.floor (:x self-pos))
          fy (js/Math.floor (:y self-pos))
          fz (js/Math.floor (:z self-pos))]
-     (->> (for [[dx dz] (columns radius)
+     (->> (for [[dx dz] (breath/columns radius)
                 :when (not (same-way? dx dz failed fx fz))
                 dy [0 -1 1 2]]
             {:x (+ fx dx) :y (+ fy dy) :z (+ fz dz)})
           (remove (set failed))
           (filter #(and (land-cell? p %) (keep? p %)))
           first))))
-
-(defn ^:async look-column!
-  "Look up the column x z from fy, one look per cell not yet seen, until a seen cell that is neither water nor air or
-  reach cells are done (at most reach + 1 looks; with first-only? one look, at the first unseen cell). A look glances
-  the cell and its neighbours, so cells in the dark are learned."
-  [c x z fy reach first-only?]
-  (loop [k 0]
-    (when (<= k (inc reach))
-      (let [cell {:x x :y (+ fy k) :z z}
-            p (:primitives c)]
-        (if (look/unknown? p [x (:y cell) z])
-          (do (await (look/look-at! c [x (:y cell) z]))
-              (when-not first-only? (recur (inc k))))
-          (when (breath/passable-water-or-air? (breath/seen-water-name p cell))
-            (recur (inc k))))))))
-
-(defn ^:async find-air!
-  "The nearest air target after looking: up the own column first, then, only when a block is seen over the own column,
-  once at each other column in radius (the first cell not seen there); nil if none."
-  [c pos]
-  (let [{:keys [radius reach]} (:args c)
-        p (:primitives c)
-        fx (js/Math.floor (:x pos)) fy (js/Math.floor (:y pos)) fz (js/Math.floor (:z pos))]
-    (await (look-column! c fx fz fy reach false))
-    (or (nearest-air p pos radius reach)
-        (when-not (breath/column-open? p fx fz fy reach)
-          (doseq [[dx dz] (rest (columns radius))]
-              (await (look-column! c (+ fx dx) (+ fz dz) fy reach true)))
-            (nearest-air p pos radius reach)))))
 
 (defn ^:async swim-up!
   "Drowning: look, then swim up the own column when it reaches air, else walk (through
@@ -268,7 +181,7 @@
         fx (js/Math.floor (:x pos))
         fy (js/Math.floor (:y pos))
         fz (js/Math.floor (:z pos))
-        target (await (find-air! c pos))
+        target (await (breath/find-air! c pos))
         ;; a swim that timed out but rose is progress, not a failed try: a deep column takes several 3 s swims
         swim! (fn ^:async f []
                 (let [surfaced? (= "surfaced" (status (await (ctx/act c :swim #js {}))))
@@ -283,7 +196,7 @@
       (or (await (swim!)) :no-air)
 
       (nil? target) :no-air
-      (surface-in-column p fx fz fy reach) (await (swim!))
+      (breath/surface-in-column p fx fz fy reach) (await (swim!))
 
       :else
       ;; raw moveTo kept: an emergency step to air or out of water (range 0), where the planner may have no standable cell; no time for a plan.
@@ -370,7 +283,7 @@
   [c]
   (let [{:keys [air-radius reach]} (:args c)
         p (:primitives c)
-        target (nearest-air p (u/self-pos c) air-radius reach (:failed-air (ctx/mem c)) false)]
+        target (breath/nearest-air p (u/self-pos c) air-radius reach (:failed-air (ctx/mem c)) false)]
     (if-not target
       :none
       (let [arrived? (await (go! c :air target 0))]
@@ -447,7 +360,7 @@
   (let [fx (js/Math.floor (:x pos)) fy (js/Math.floor (:y pos)) fz (js/Math.floor (:z pos))]
     (some (fn [k]
             (let [x (+ fx (* hx k)) z (+ fz (* hz k))
-                  cell (when (<= (hdist {:x x :z z} start) swim-range) (surface-in-column p x z fy reach))]
+                  cell (when (<= (hdist {:x x :z z} start) swim-range) (breath/surface-in-column p x z fy reach))]
               (when (and cell (= "water" (u/seen-name p cell))) cell)))
           (range leg-length (dec (min-leg)) -1))))
 
@@ -483,7 +396,7 @@
   (let [fx (js/Math.floor (:x pos)) fy (js/Math.floor (:y pos)) fz (js/Math.floor (:z pos))
         self (u/pos-of (.-pos (.self p)))
         own {:x (js/Math.floor (:x self)) :y (js/Math.floor (:y self)) :z (js/Math.floor (:z self))}]
-    (->> (for [[dx dz] (columns radius) dy [0 -1]] {:x (+ fx dx) :y (+ fy dy) :z (+ fz dz)})
+    (->> (for [[dx dz] (breath/columns radius) dy [0 -1]] {:x (+ fx dx) :y (+ fy dy) :z (+ fz dz)})
          (remove #(or (= own %) (contains? (set failed) %)))
          (filter #(and (= "water" (u/seen-name p %))
                        (breath/air? (u/seen-name p (update % :y inc)))

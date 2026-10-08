@@ -7,6 +7,7 @@
             [engine.registry :as registry]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.world-files :as world-files]
+            [jobs.lib.breath :as breath]
             [jobs.survival.breathe :as b]
             [engine.fake :as fake]
             [engine.takeover :as takeover]
@@ -1101,7 +1102,7 @@
 (deftest a-bubble-column-is-water-for-the-air-search
   (let [blocks (merge water-column {"0,65,0" "bubble_column" "0,66,0" "tall_seagrass"})
         p (:p (setup {:self {:inWater true :oxygen 4} :blocks blocks}))]
-    (is (= {:x 0 :y 67 :z 0} (b/surface-in-column p 0 0 64 10)))))
+    (is (= {:x 0 :y 67 :z 0} (breath/surface-in-column p 0 0 64 10)))))
 
 (deftest unseen-cells-are-not-side-land-or-shore-cells
   (let [world {"1,64,0" "air" "1,65,0" "air" "1,63,0" "stone"
@@ -1244,7 +1245,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup (drag-corner))]
-          (is (b/drag-between? p 0 0 1 1 64) "the corner cell counts")
+          (is (breath/drag-between? p 0 0 1 1 64) "the corner cell counts")
           (await (one-run! eng (assoc defaults :radius 2 :air-radius 1)))
           (is (not-any? #(and (= "moveTo" (.-name %)) (= [1 64 1] (some-> % .-args .-pos (as-> q [(.-x q) (.-y q) (.-z q)]))))
                         (array-seq (.. p -world -calls)))
@@ -1252,9 +1253,9 @@
 
 (deftest drag-between-checks-both-cells-beside-each-diagonal-step
   (let [{:keys [p]} (setup {:blocks {"1,64,0" "bubble_column"} :states {"1,64,0" {:drag true}}})]
-    (is (b/drag-between? p 0 0 2 1 64) "(0,0) to (2,1) passes the corner (1,0)")
-    (is (b/drag-between? p 0 0 1 1 64))
-    (is (not (b/drag-between? p 0 0 0 2 64)))))
+    (is (breath/drag-between? p 0 0 2 1 64) "(0,0) to (2,1) passes the corner (1,0)")
+    (is (breath/drag-between? p 0 0 1 1 64))
+    (is (not (breath/drag-between? p 0 0 0 2 64)))))
 
 (deftest a-second-drowning-in-the-same-run-counts-rises-afresh
   (async done

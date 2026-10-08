@@ -3,12 +3,11 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.breath :as breath]
             [jobs.lib.near :as near]
-            [jobs.lib.util :as u]
-            [jobs.survival.breathe :as breathe]))
+            [jobs.lib.util :as u]))
 
 (def max-surfacings "Walks to air one go-to call makes at most." 3)
 
-(def look-args "breathe/find-air!'s look: columns within :radius, cells up to :reach above the feet." {:radius 2 :reach 10})
+(def look-args "breath/find-air!'s look: columns within :radius, cells up to :reach above the feet." {:radius 2 :reach 10})
 
 (def air-radius "Columns this far sideways are read for air when the looks found none nearer (breathe's :air-radius default)." 8)
 
@@ -24,7 +23,7 @@
 (defn ^:async surface!
   "A round refused :air with the head under water: the planner refuses a swim past the air limit unless the goal is a
   way to air, so a far goal leaves the body under water. Look for air (up the own column first, then the columns beside
-  it, breathe/find-air!), else read seen air within air-radius, and walk one round (near/walk-round! with walk-opts) to
+  it, breath/find-air!), else read seen air within air-radius, and walk one round (near/walk-round! with walk-opts) to
   that surface cell, range 0: a way to air, whose drowning is priced, not refused. At most max-surfacings a call (mem
   :surfacings). True when it walked there or on (the caller plans again); nil when the head is out, the tries are spent
   or no air is known and the own column is not open (a block seen over it). With no air known and the own column open, swims up it blind (one swim)."
@@ -33,8 +32,8 @@
         n (:surfacings (ctx/mem c) 0)]
     (when (and (< n max-surfacings) (breath/head-under? p))
       (let [pos (u/self-pos c)
-            target (or (await (breathe/find-air! (assoc c :args look-args) pos))
-                       (breathe/nearest-air p pos air-radius (:reach look-args) nil false))]
+            target (or (await (breath/find-air! (assoc c :args look-args) pos))
+                       (breath/nearest-air p pos air-radius (:reach look-args) nil false))]
         (if-not target
           (when (breath/column-open? p (js/Math.floor (:x pos)) (js/Math.floor (:z pos)) (js/Math.floor (:y pos)) (:reach look-args))
             (ctx/update-mem! c assoc :surfacings (inc n))

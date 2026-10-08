@@ -14,6 +14,7 @@
   sand, paths, plants and fluids never do. The eye cell is the suffocating trigger's business."
   (:require [engine.game :as game]
             [engine.memory :as mem]
+            [jobs.lib.dig-look :as look]
             [jobs.lib.util :as u]))
 
 (def default-min-oxygen 12)
@@ -110,3 +111,90 @@
   [p x z fy reach]
   (every? (fn [k] (let [n (seen-water-name p {:x x :y (+ fy k) :z z})] (or (nil? n) (passable-water-or-air? n))))
           (range (inc (inc reach)))))
+
+(defn columns
+  "Column offsets within radius, the own column first, then by distance."
+  [radius]
+  (->> (for [dx (range (- radius) (inc radius))
+             dz (range (- radius) (inc radius))
+             :when (<= (+ (* dx dx) (* dz dz)) (* radius radius))]
+         [dx dz])
+       (sort-by (fn [[dx dz]] (+ (* dx dx) (* dz dz))))))
+
+(defn drag-between?
+  "A downward bubble column lies in a cell the straight walk from the feet column (fx, fz) to (x, z) crosses, at the feet's
+  height or the one above (the target column itself included). A diagonal step crosses both cells beside it too: the
+  body may cut either corner."
+  [p fx fz x z fy]
+  (let [n (max (js/Math.abs (- x fx)) (js/Math.abs (- z fz)))
+        at (fn [i] [(js/Math.round (+ fx (* (- x fx) (/ i n)))) (js/Math.round (+ fz (* (- z fz) (/ i n))))])
+        cells (mapcat (fn [i]
+                        (let [[ax az] (at (dec i)) [bx bz :as b] (at i)]
+                          (if (and (not= ax bx) (not= az bz)) [[bx az] [ax bz] b] [b])))
+                      (range 1 (inc n)))]
+    (boolean
+     (some (fn [[cx cz]]
+             (some #(= "bubble_column_down" (seen-water-name p {:x cx :y % :z cz})) [fy (inc fy)]))
+           cells))))
+
+(defn surface-in-column
+  "The feet cell in column x z, at or above fy and within reach, whose head
+  cell is air and which is reached through water or air only; nil if the
+  column is capped or leaves the loaded world. name-at (default seen-water-name) reads the cells; a cell never seen ends the column."
+  ([p x z fy reach] (surface-in-column p x z fy reach seen-water-name))
+  ([p x z fy reach name-at]
+   (loop [k 0]
+     (when (<= k reach)
+       (let [y (+ fy k)
+             feet (name-at p {:x x :y y :z z})
+             head (name-at p {:x x :y (inc y) :z z})]
+         (cond
+           (not (and feet head (passable-water-or-air? feet))) nil
+           (air? head) {:x x :y y :z z}
+           (contains? swimmable head) (recur (inc k))
+           :else nil))))))
+
+(defn nearest-air
+  "The surface cell of the nearest column within radius that reaches air, not one of failed (a seq of cells); nil if none.
+  Every column is read only through cells the body has seen or feels, never through stone. With straight? (the default)
+  a column whose straight walk crosses a downward bubble column (drag-between?) is skipped: a raw move walks straight; a
+  go-to leg passes false, as its planner routes round one."
+  ([p self-pos radius reach] (nearest-air p self-pos radius reach nil true))
+  ([p self-pos radius reach failed straight?]
+   (let [fx (js/Math.floor (:x self-pos))
+         fy (js/Math.floor (:y self-pos))
+         fz (js/Math.floor (:z self-pos))
+         skip (set failed)]
+     (some (fn [[dx dz]]
+             (let [cell (surface-in-column p (+ fx dx) (+ fz dz) fy reach)]
+               (when-not (or (contains? skip cell) (and straight? (drag-between? p fx fz (+ fx dx) (+ fz dz) fy))) cell)))
+           (columns radius)))))
+
+(defn ^:async look-column!
+  "Look up the column x z from fy, one look per cell not yet seen, until a seen cell that is neither water nor air or
+  reach cells are done (at most reach + 1 looks; with first-only? one look, at the first unseen cell). A look glances
+  the cell and its neighbours, so cells in the dark are learned."
+  [c x z fy reach first-only?]
+  (loop [k 0]
+    (when (<= k (inc reach))
+      (let [cell {:x x :y (+ fy k) :z z}
+            p (:primitives c)]
+        (if (look/unknown? p [x (:y cell) z])
+          (do (await (look/look-at! c [x (:y cell) z]))
+              (when-not first-only? (recur (inc k))))
+          (when (passable-water-or-air? (seen-water-name p cell))
+            (recur (inc k))))))))
+
+(defn ^:async find-air!
+  "The nearest air target after looking: up the own column first, then, only when a block is seen over the own column,
+  once at each other column in radius (the first cell not seen there); nil if none."
+  [c pos]
+  (let [{:keys [radius reach]} (:args c)
+        p (:primitives c)
+        fx (js/Math.floor (:x pos)) fy (js/Math.floor (:y pos)) fz (js/Math.floor (:z pos))]
+    (await (look-column! c fx fz fy reach false))
+    (or (nearest-air p pos radius reach)
+        (when-not (column-open? p fx fz fy reach)
+          (doseq [[dx dz] (rest (columns radius))]
+              (await (look-column! c (+ fx dx) (+ fz dz) fy reach true)))
+            (nearest-air p pos radius reach)))))
