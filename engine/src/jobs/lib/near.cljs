@@ -157,10 +157,10 @@
                                                          :frontier-target (:target (:frontier-taken last-plan))))
                            stuck (door-stuck (:cells done))
                            :else (recur (into walls (:cells done)) (:cells done)))))))]
-      ;; however the walk ended, what it opened and could not shut yet (the body was in its column) is shut when in reach
-      (when-not (= :never doors) (await (pass/shut-leftovers! c)))
       (when (and (not= :never doors) (= :arrived (:status result)))
         (await (step-out! c to range doors shut-also timeout-s (policy-of))))
+      ;; however the walk ended, what it opened and could not shut yet (the body was in its column) is shut when in reach
+      (when-not (= :never doors) (await (pass/shut-leftovers! c)))
       result)))
 
 (defn move-status

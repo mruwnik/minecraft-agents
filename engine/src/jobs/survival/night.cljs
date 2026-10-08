@@ -658,8 +658,6 @@
               :again))))))
 
 
-;; ------------------------------------------------------------------ morning
-
 (defn ^:async shut-room-door!
   "Shut an open door of the closed room the body stands in (retreat/shut-home-door!: from where it stands within a hand's
   reach, else a step to the room cell inside it first). A door still open once tried (clicked, or no step got nearer)
@@ -672,6 +670,8 @@
                                              :text "an open door of the room would not shut; digging in instead"})
     (ctx/remember! c :night-door-failed {:pos (sh/feet (:primitives c))} {:cap 1 :ttl (sh/door-failed-ms)}))
   :again)
+
+;; ------------------------------------------------------------------ morning
 
 (defn ^:async collect-bed!
   "By day: dig up the bed at pos the night put down outside the body's zones, then walk over its drop. One try: the
@@ -775,7 +775,7 @@
           (and (:enclose (ctx/mem c)) (not= :dug-in sheltered)) (await (enclose! c))
           door (await (shut-room-door! c door))
           (or roofed (sh/buried? p) (sh/shut-in-room? p)) (do (ctx/forget-where! c :night-site (constantly true))
-                                         (result/finish! c (cond-> (assoc (spent-fields c) :night (if (= :logged-out sheltered) :logged-out :roofed)) (fled c) (assoc :fled (fled c)))))
+                                                                 (result/finish! c (cond-> (assoc (spent-fields c) :night (if (= :logged-out sheltered) :logged-out :roofed)) (fled c) (assoc :fled (fled c)))))
           (:fleeing (ctx/mem c)) (await (flee! c (:fleeing (ctx/mem c))))
           (and (= :exposed sheltered) (retry-due? c)) (do (retry-dig-in! c) (await (shelter! c)))
           (= :exposed sheltered) (await (hold! c (str "exposed: " (exposed-why (failed-sites c)))))
