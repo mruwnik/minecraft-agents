@@ -9,8 +9,7 @@
 (deftest passes-in-order-with-the-per-pass-options
   (let [ps (s/passes opts)]
     (is (= [:day :night :night-exclusive] (names ps)))
-    (let [day (first (:argv (first ps)))]
-      (is (some? day)))
+    (is (= ["--phase" "day"] (take 2 (:argv (first ps)))))
     (is (= ["--phase" "day" "--bodies" "16" "--min-bodies" "8"] (take 6 (:argv (first ps)))))
     (is (every? #(some #{"--allow-time"} (:argv %)) ps))
     (is (= ["--time-log" "/d/time-log-night.txt" "--results" "/d/sweep-night.edn"]
@@ -73,6 +72,82 @@
                (is (re-find #"night" (:stopped r)))
                (is (= [:day :night] (mapv :name (:passes r))))
                (done))))))
+
+(deftest a-rejecting-or-throwing-pass-is-reported-and-time-set-still-runs
+  (doseq [boom [(fn [_] (js/Promise.reject (js/Error. "pool spawn failed")))
+                (fn [_] (throw (js/Error. "pool spawn failed")))]]
+    (async done
+      (let [{:keys [calls deps]} (fake {})
+            evs (atom [])]
+        (.then (s/run-sweep (s/passes opts) (assoc deps :run-pass! boom :emit! #(swap! evs conj %)))
+               (fn [r]
+                 (is (= [:time-set] @calls))
+                 (is (= 1 (:exit r)))
+                 (is (re-find #"pool spawn failed" (:error (first (:passes r)))))
+                 (is (re-find #"pool spawn failed" (:message (second @evs))))
+                 (done)))))))
+
+(deftest a-failed-pass-names-its-failing-fixtures
+  (async done
+    (let [evs (atom [])
+          {:keys [deps]} (fake {:day 1})]
+      (.then (s/run-sweep (s/passes opts)
+                          (assoc deps :run-pass! (fn [_] (js/Promise.resolve {:code 1 :results "[{:id \"a\" :status :pass} {:id \"b/x\" :status :fail} {:id \"c\" :status :error}]"}))
+                                      :emit! #(swap! evs conj %)))
+             (fn [_]
+               (is (re-find #"b/x" (:message (second @evs))))
+               (is (re-find #"c" (:message (second @evs))))
+               (is (not (re-find #"\"a\"|a," (:message (second @evs)))))
+               (done))))))
+
+(deftest an-interrupt-stops-further-passes-and-time-set-still-runs
+  (async done
+    (let [sig (atom nil)
+          {:keys [calls deps]} (fake {})]
+      (.then (s/run-sweep (s/passes opts)
+                          (assoc deps
+                                 :run-pass! (fn [p] (swap! calls conj (:name p)) (reset! sig "SIGTERM")
+                                              (js/Promise.resolve {:code 143 :results nil}))
+                                 :interrupted #(deref sig)))
+             (fn [r]
+               (is (= [:day :time-set] @calls))
+               (is (= 143 (:exit r)))
+               (is (= "SIGTERM" (:interrupted r)))
+               (done))))))
+
+(defn fake-proc []
+  (let [handlers (atom {})]
+    #js {:on (fn [sig f] (swap! handlers assoc sig f))
+         :fire (fn [sig] ((@handlers sig)))}))
+
+(defn fake-child []
+  (let [kills (atom [])]
+    #js {:kills kills :kill (fn [sig] (swap! kills conj sig))}))
+
+(deftest signals-are-forwarded-to-the-running-child
+  (let [proc (fake-proc) child (fake-child) current (atom child) sig (atom nil)]
+    (s/forward-signals! proc current sig 60000)
+    (.fire proc "SIGINT")
+    (is (= ["SIGINT"] @(.-kills child)))
+    (is (= "SIGINT" @sig))
+    (is (= 130 (s/signal-exit "SIGINT")))
+    (is (= 143 (s/signal-exit "SIGTERM")))))
+
+(deftest a-signal-without-a-child-is-just-recorded
+  (let [proc (fake-proc) sig (atom nil)]
+    (s/forward-signals! proc (atom nil) sig 60000)
+    (.fire proc "SIGTERM")
+    (is (= "SIGTERM" @sig))))
+
+(deftest a-child-that-ignores-the-signal-is-killed-after-the-grace
+  (async done
+    (let [proc (fake-proc) child (fake-child) current (atom child)]
+      (s/forward-signals! proc current (atom nil) 10)
+      (.fire proc "SIGTERM")
+      (js/setTimeout (fn []
+                       (is (= ["SIGTERM" "SIGKILL"] @(.-kills child)))
+                       (done))
+                     80))))
 
 (deftest events-plan-results-and-exit
   (async done

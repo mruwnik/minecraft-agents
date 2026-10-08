@@ -13,6 +13,7 @@
 (def usage
   (str "usage: node tools/world-sweep.mjs [--dir DIR] [--bodies 16] [--min-bodies 8] [--no-night-batches] [--durations RESULTS.edn ...] [--match-ids FILE] [--retry-failed 1] [fixture paths ...]\n"
        "runs --phase day, night, night-exclusive (--allow-time, --time-log DIR/time-log-PASS.txt, --results DIR/sweep-PASS.edn), then time-set day; writes DIR/sweep-summary.edn.\n"
+       "INT/TERM go to the running pass, then time-set day runs and the exit is 130/143.\n"
        "exit: 5 / 4 when a pass stopped the sweep with it, else 1 when any pass had failures or errors, else 0."))
 
 (defn parse-args
@@ -60,55 +61,96 @@
 
 (def stop-codes #{4 5})
 
+(def signal-codes {"SIGINT" 130 "SIGTERM" 143})
+
+(defn signal-exit [sig] (get signal-codes sig 1))
+
 (defn- stop-why [name code]
   (str "pass " (clojure.core/name name) " exited " code
        (case code 5 " (players near the plot grid, precheck)" 4 " (--min-bodies wait timed out)" "")))
 
+(defn failing-ids
+  "Results vector text (or nil) -> ids of the :fail and :error cases."
+  [text]
+  (let [rs (try (some-> text reader/read-string) (catch :default _ nil))]
+    (vec (keep #(when (#{:fail :error} (:status %)) (:id %)) rs))))
+
+(defn- safe-promise
+  "(f) as a promise that rejects instead of throwing."
+  [f]
+  (try (js/Promise.resolve (f)) (catch :default e (js/Promise.reject e))))
+
 (defn run-sweep
-  "deps: :run-pass! (pass -> promise of {:code :results}), :time-set! (-> promise of code), :now (ms), :emit! (@@test event map).
-  -> promise of {:passes [{:name :code :wall-min :counts :results-file}] :exit :stopped :time-set}."
-  [ps {:keys [run-pass! time-set! now emit!]}]
+  "deps: :run-pass! (pass -> promise of {:code :results}), :time-set! (-> promise of code), :now (ms), :emit! (@@test event map),
+  :interrupted (-> signal name or nil; optional; stops the remaining passes). A pass that throws or rejects counts as code 1 with its :error;
+  the time-set runs in every case.
+  -> promise of {:passes [{:name :code :wall-min :counts :results-file}] :exit :stopped :interrupted :time-set}."
+  [ps {:keys [run-pass! time-set! now emit! interrupted] :or {interrupted (constantly nil)}}]
   (emit! {:event "plan" :total (count ps)})
-  (letfn [(go [[p & more] done]
-            (if-not p
-              (js/Promise.resolve done)
+  (letfn [(finish [r] (js/Promise.resolve r))
+          (go [[p & more] done]
+            (if (or (not p) (interrupted))
+              (finish done)
               (let [t0 (now)]
-                (.then (run-pass! p)
-                       (fn [{:keys [code results]}]
-                         (let [r {:name (:name p) :code code :wall-min (/ (- (now) t0) 60000.0)
-                                  :counts (counts results) :results-file (:results p)}
-                               done (conj done r)]
+                (.then (.catch (safe-promise #(run-pass! p))
+                               (fn [e] {:code 1 :error (str "pass " (name (:name p)) ": " (or (.-message e) e))}))
+                       (fn [{:keys [code results error]}]
+                         (let [r (cond-> {:name (:name p) :code code :wall-min (/ (- (now) t0) 60000.0)
+                                          :counts (counts results) :results-file (:results p)}
+                                   error (assoc :error error))
+                               done (conj done r)
+                               failing (failing-ids results)]
                            (emit! (cond-> {:event "result" :name (str "sweep:" (name (:name p))) :outcome (if (zero? code) "passed" "failed")}
-                                    (pos? code) (assoc :message (str (if (stop-codes code) (stop-why (:name p) code) (str "exit " code)) ", " (pr-str (:counts r))))))
+                                    (pos? code) (assoc :message (str (cond error error
+                                                                         (stop-codes code) (stop-why (:name p) code)
+                                                                         :else (str "exit " code))
+                                                                     ", " (pr-str (:counts r))
+                                                                     (when (seq failing) (str ", failing: " (str/join " " failing)))))))
                            (emit! {:event "progress" :done (count done) :total (count ps) :unit "passes"})
                            (if (stop-codes code)
-                             (js/Promise.resolve done)
+                             (finish done)
                              (go more done))))))))]
-    (.then (go ps [])
+    (.then (.catch (go ps []) (fn [e] (js/console.error (str "world-sweep: " (or (.-message e) e))) []))
            (fn [done]
-             (let [stop (first (filter (comp stop-codes :code) done))]
-               (.then (time-set!)
+             (let [stop (first (filter (comp stop-codes :code) done))
+                   sig (interrupted)]
+               (.then (.catch (safe-promise time-set!) (fn [e] (js/console.error (str "world-sweep: time-set: " (or (.-message e) e))) 1))
                       (fn [ts]
                         {:passes done
-                         :exit (cond stop (:code stop) (some (comp pos? :code) done) 1 (pos? ts) ts :else 0)
+                         :exit (cond sig (signal-exit sig) stop (:code stop) (some (comp pos? :code) done) 1 (pos? ts) ts :else 0)
                          :stopped (when stop (stop-why (:name stop) (:code stop)))
+                         :interrupted sig
                          :time-set ts})))))))
+
+(defn forward-signals!
+  "On INT/TERM of `proc`: record the signal in the `interrupted` atom and pass it to the child in the `current` atom (if any); a child still
+  there after grace-ms gets SIGKILL, so the final time-set is not held up for ever."
+  [proc current interrupted grace-ms]
+  (doseq [sig ["SIGINT" "SIGTERM"]]
+    (.on proc sig
+         (fn []
+           (reset! interrupted sig)
+           (when-let [child @current]
+             (.kill child sig)
+             (let [timer (js/setTimeout #(when (identical? child @current) (.kill child "SIGKILL")) grace-ms)]
+               (when (.-unref timer) (.unref timer))))))))
 
 ;; ---- node edge
 
 (defn- repo [] (or js/process.env.WORLD_TEST_REPO "."))
 
 (defn- spawn-node!
-  "Runs `node tools/SCRIPT args` with the output passed through; no TEST_EVENTS in the child (the sweep prints the events). -> promise of the exit code."
-  [script args]
+  "Runs `node tools/SCRIPT args` with the output passed through; no TEST_EVENTS in the child (the sweep prints the events). `current` holds the running child. -> promise of the exit code."
+  [script args current]
   (js/Promise.
    (fn [resolve _]
      (let [env (js/Object.assign #js {} js/process.env)
            _ (js-delete env "TEST_EVENTS")
            child (cp/spawn js/process.execPath (clj->js (into [(path/join (repo) "tools" script)] args))
                            #js {:stdio "inherit" :env env})]
-       (.on child "error" (fn [e] (js/console.error (str script ": " (.-message e))) (resolve 1)))
-       (.on child "close" (fn [code] (resolve (or code 1))))))))
+       (reset! current child)
+       (.on child "error" (fn [e] (reset! current nil) (js/console.error (str script ": " (.-message e))) (resolve 1)))
+       (.on child "close" (fn [code] (reset! current nil) (resolve (or code 1))))))))
 
 (defn- read-results [file]
   (try (str (fs/readFileSync file "utf8")) (catch :default _ nil)))
@@ -123,13 +165,17 @@
             dir (or (:dir o) (fs/mkdtempSync (path/join (os/tmpdir) "world-sweep-")))
             ps (passes (assoc o :dir dir))
             _ (fs/mkdirSync dir #js {:recursive true})
-            emit! (fn [m] (when ev/enabled? (ev/emit! m)))]
+            emit! (fn [m] (when ev/enabled? (ev/emit! m)))
+            current (atom nil)
+            interrupted (atom nil)
+            _ (forward-signals! js/process current interrupted 60000)]
         (js/console.error (str "world-sweep: results in " dir))
         (.then (run-sweep ps {:run-pass! (fn [p]
                                            (js/console.error (str "world-sweep: pass " (name (:name p))))
-                                           (.then (spawn-node! "world-test.mjs" (:argv p))
+                                           (.then (spawn-node! "world-test.mjs" (:argv p) current)
                                                   (fn [code] {:code code :results (read-results (:results p))})))
-                              :time-set! #(spawn-node! "time-set.mjs" ["day"])
+                              :time-set! #(spawn-node! "time-set.mjs" ["day"] (atom nil))
+                              :interrupted #(deref interrupted)
                               :now #(js/Date.now)
                               :emit! emit!})
                (fn [r]
