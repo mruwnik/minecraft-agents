@@ -42,6 +42,7 @@ test('every declared setting is read by some primitive file', () => {
   const sources = readdirSync(new URL('.', import.meta.url))
     .filter(f => f.endsWith('.mjs') && !f.includes('.test.') && f !== 'settings.mjs')
     .map(f => readFileSync(new URL(f, import.meta.url), 'utf8')).join('\n')
+    + readFileSync(new URL('../../tools/view/renderer.mjs', import.meta.url), 'utf8') // the viewer reads view/held-torch-light
   const unread = Object.keys(SPECS).filter(k => !sources.includes(`'${k}'`))
   assert.deepEqual(unread, [])
 })

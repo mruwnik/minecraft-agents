@@ -7,6 +7,7 @@ import { mobImage } from './mob-textures.mjs'
 import { drawLabels } from './labels.mjs'
 import { lightColor, skyDarken } from './web/shading.mjs'
 import { colorOf } from './renderer-textures.mjs'
+import { setting } from '../../engine/js/settings.mjs'
 export * from './renderer-png.mjs'
 export * from './renderer-textures.mjs'
 
@@ -288,13 +289,16 @@ export const hitLight = (grid, hit, lamp = 0) => {
   const own = lightByte(grid, hit.x, hit.y, hit.z)
   const n = FACE_NORMAL[hit.face]
   const seen = n ? brighter(own, lightByte(grid, hit.x + n[0], hit.y + n[1], hit.z + n[2])) : own
-  return lamp ? brighter(seen, Math.max(0, Math.round(lamp - hit.t))) : seen
+  return lamp ? brighter(seen, lampLight(lamp, hit.t)) : seen
 }
-// a torch or soul torch in either hand lights like a placed one (14), covering perception's 7-block near-torch sight
-export const HELD_TORCH_LIGHT = 14
-export const heldLamp = pose => [pose.held, pose.offHand].some(n => n === 'torch' || n === 'soul_torch') ? HELD_TORCH_LIGHT : 0
+// a torch or soul torch in either hand lights the view like a placed one (setting view/held-torch-light)
+export const heldLamp = pose => [pose.held, pose.offHand].some(n => n === 'torch' || n === 'soul_torch') ? setting('view/held-torch-light') : 0
+const lampLight = (lamp, dist) => Math.max(0, Math.round(lamp - dist))
 // the light at an entity: the cell around the middle of its height
-export const entityLight = (grid, e) => lightByte(grid, Math.floor(e.x), Math.floor(e.y + e.height / 2), Math.floor(e.z))
+export const entityLight = (grid, e, lamp = 0, eye = e) => {
+  const seen = lightByte(grid, Math.floor(e.x), Math.floor(e.y + e.height / 2), Math.floor(e.z))
+  return lamp ? brighter(seen, lampLight(lamp, Math.hypot(e.x - eye.x, e.y + e.height / 2 - eye.y, e.z - eye.z))) : seen
+}
 
 // vanilla's lightmap (default brightness) for a time of day and rain: 256 [r, g, b] multipliers indexed by a light byte
 export const lightTable = (timeOfDay, rain = 0) => {
@@ -359,7 +363,7 @@ export function render ({ grid, info, texture, eye, entities = [], timeOfDay, ra
   const mobs = entities
     .filter(e => Math.hypot(e.x - eye.x, e.y - eye.y, e.z - eye.z) <= maxDist)
     .map(e => mobFor(e, eye))
-    .map(m => ({ ...m, rect: screenRect(cam.project, eye, m.box, width, height), light: entityLight(grid, m.e) }))
+    .map(m => ({ ...m, rect: screenRect(cam.project, eye, m.box, width, height), light: entityLight(grid, m.e, lamp, eye) }))
     .filter(m => m.rect)
   let nearPixels = 0
   // one block description serves every cell of that state for as long as `info` keeps it, so its pictures are looked

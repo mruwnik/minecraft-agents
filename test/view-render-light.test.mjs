@@ -81,3 +81,11 @@ test('a torch held in the off hand or the main hand lights the dark wall in fron
   }
   assert.equal(lookNear({ offHand: 'stone' }).center.light.block, 0)
 })
+
+test('a mob 3 blocks from the eye in the dark is lit by a held torch and dark without one', () => {
+  const zombie = { entities: [{ name: 'zombie', type: 'hostile', pos: { x: 6.5, y: 65, z: 5.1 }, width: 0.6, height: 1.95 }] }
+  const dark = lookNear(zombie).seen[0]
+  const lit = lookNear({ ...zombie, offHand: 'torch' }).seen[0]
+  assert.equal(dark.light.block, 0)
+  assert.ok(lit.light.block >= 9, `mob block light ${lit.light.block}`)
+})

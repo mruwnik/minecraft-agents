@@ -201,13 +201,13 @@ export function renderBand ({ grid, info, texture, eye, timeOfDay, rain = 0, lam
 }
 
 // render()'s entity work on a picture renderBand has drawn: the mobs nearer than the terrain (depth) overwrite its pixels.
-export function drawEntities ({ grid, eye, entities = [], timeOfDay, rain = 0, width, height, maxDist = 64, rgba, depth, mobPictures = mobImage, ...camera }) {
+export function drawEntities ({ grid, eye, entities = [], timeOfDay, rain = 0, lamp = 0, width, height, maxDist = 64, rgba, depth, mobPictures = mobImage, ...camera }) {
   const cam = cameraFor({ ...camera, width, height })
   const table = lightTable(timeOfDay, rain)
   const mobs = entities
     .filter(e => Math.hypot(e.x - eye.x, e.y - eye.y, e.z - eye.z) <= maxDist)
     .map(e => mobFor(e, eye))
-    .map(m => ({ ...m, rect: screenRect(cam.project, eye, m.box, width, height), light: entityLight(grid, m.e) }))
+    .map(m => ({ ...m, rect: screenRect(cam.project, eye, m.box, width, height), light: entityLight(grid, m.e, lamp, eye) }))
     .filter(m => m.rect)
   const d = { x: 0, y: 0, z: 0 }
   const local = { x: 0, y: 0, z: 0 }

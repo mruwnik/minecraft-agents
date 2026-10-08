@@ -75,6 +75,7 @@ export const SPECS = {
   'view/relight-backlog-max': { default: 4096, spec: ['int-in', 1, null], doc: "Most block changes waiting to be relit; beyond it only the ones nearest the body are kept." },
   'view/dirty-columns-max': { default: 256, spec: ['int-in', 1, null], doc: "Most columns remembered with block changes still to relit when the body comes near; the farthest column loses its view overlay instead." },
   'view/dirty-points-max': { default: 64, spec: ['int-in', 1, null], doc: "Most block changes remembered per column for a later relight; a column over it is relit whole instead." },
+  'view/held-torch-light': { default: 14, spec: ['int-in', 0, 15], doc: "Block light of a torch (or soul torch) held in either hand in the rendered view, falling 1 per block from the eye." },
   'raw-world/light-ttl-ms': { default: 1000, spec: ['int-in', 0, null], doc: "A light copy is re-read after this long, in ms." },
 }
 
