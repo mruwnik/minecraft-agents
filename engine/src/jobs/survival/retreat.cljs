@@ -1,5 +1,6 @@
 (ns jobs.survival.retreat
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as lb]
             [jobs.lib.click :as click]
@@ -196,7 +197,7 @@
   (when-not (:blocked-warned (ctx/mem c))
     (ctx/update-mem! c assoc :blocked-warned true)
     (ctx/emit! c :retreat_blocked :warn {:text (str why "; every escape failed, trying them again")}))
-  (await (ctx/act c :wait #js {:ms flight/wait-ms :why "cornered"}))
+  (await (ctx/act c :wait #js {:ms (flight/wait-ms) :why "cornered"}))
   (if (flight/cannot-escape? (ctx/mem c)) (flight/end-flight! c :cannot-escape) :again))
 
 (defn ^:async cornered!
@@ -228,16 +229,19 @@
   takes in every turn walk/choose-target tries."
   [0 90 -90])
 
-(def glance-reach "Blocks along a direction to the feet cell a glance looks at." 3)
+(a/defargs settings
+  {::glance-reach {:default 3 :doc "Blocks along a direction to the feet cell a glance looks at." :spec (a/int-in 0 nil)}
+   ::glance-memory {:default 24 :doc "Most glanced cells a flight remembers." :spec (a/int-in 0 nil)}})
+(defn glance-reach [] (settings/get settings ::glance-reach))
 
-(def glance-memory "Most glanced cells a flight remembers." 24)
+(defn glance-memory [] (settings/get settings ::glance-memory))
 
 (defn unseen-before-wall?
   "Whether a cell the body has not sensed lies in the columns along d from the first, up to glance-reach or the first
   column whose seen feet or head cell blocks the way (the cells behind it cannot change the walk)."
   [p from d y]
   (loop [k 1]
-    (when (<= k glance-reach)
+    (when (<= k (glance-reach))
       (let [[x z] (walk/column-along from d k)
             open-floor? (walk/floorless? (u/seen-name p {:x x :y (dec y) :z z}))
             unknown (some #(dig-look/unknown? p [x % z]) (range (if open-floor? (- y 2) (dec y)) (+ y 2)))
@@ -261,10 +265,10 @@
     (loop [[turn & more] glance-turns]
       (when turn
         (let [d (walk/rotate dir turn)
-              [gx gz] (walk/column-along from d glance-reach)
+              [gx gz] (walk/column-along from d (glance-reach))
               cell [gx y gz]]
           (when (and (not (some #{cell} (:glanced (ctx/mem c)))) (unseen-before-wall? p from d y))
-            (ctx/update-mem! c update :glanced #(vec (take-last glance-memory (conj (vec %) cell))))
+            (ctx/update-mem! c update :glanced #(vec (take-last (glance-memory) (conj (vec %) cell))))
             (await (dig-look/look-at! c cell))
             (look/see! c))
           (recur more))))))
@@ -341,7 +345,7 @@
 (defn ^:async wait-far!
   "Cornered with every chaser beyond :radius: hold still a moment (a :wait, why cornered) and look again."
   [c]
-  (await (ctx/act c :wait #js {:ms flight/wait-ms :why "cornered"}))
+  (await (ctx/act c :wait #js {:ms (flight/wait-ms) :why "cornered"}))
   :again)
 
 (defn ^:async flight-step!

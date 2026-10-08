@@ -1,5 +1,6 @@
 (ns jobs.survival.extinguish
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.look :as look]
@@ -51,24 +52,40 @@
 
 (def extinguish-policy {:cap 20 :ttl (* 60 60 1000)})
 (def hazard-policy {:cap 50 :ttl (* 6 60 60 1000)})
-(def max-hazards-per-round 16)
-(def hazard-reach 4)
-(def height-bonus 2)
-(def walk-cost 0.5)
-(def hazard-touch 1.5)
+(a/defargs settings
+  {::max-hazards-per-round {:default 16 :doc "Hazard cells costed per round, the nearest first." :spec (a/int-in 0 nil)}
+   ::hazard-reach {:default 4 :doc "Blocks around the body in which hazards are scanned." :spec (a/int-in 0 nil)}
+   ::height-bonus {:default 2 :doc "Cost credit per block a hazard cell lies above the body." :spec (a/int-in 0 nil)}
+   ::walk-cost {:default 0.5 :doc "Cost per block of the walk to a hazard cell." :spec (a/num-in 0 nil)}
+   ::hazard-touch {:default 1.5 :doc "Distance from the feet at which a hazard counts as touching." :spec (a/num-in 0 nil)}
+   ::max-stand-waits {:default 20 :doc "One-second waits standing still before the run stops :still-burning." :spec (a/int-in 0 nil)}
+   ::stand-wait-ms {:default 1000 :doc "One wait while standing still off the fire, in ms." :spec (a/int-in 0 nil)}
+   ::eat-below {:default 18 :doc "Food level below which the body eats while it burns." :spec (a/int-in 0 nil)}
+   ::max-covers {:default 3 :doc "Lava cells covered per run." :spec (a/int-in 0 nil)}
+   ::max-return-distance {:default 16 :doc "A pour left farther than this is dropped with a warn, not walked back to." :spec (a/int-in 0 nil)}
+   ::max-scoop-return-range {:default 3 :doc "go-to range for the walk back to a pour." :spec (a/int-in 0 nil)}
+   ::max-pour-waits {:default 8 :doc "Waits for the fire to go out after a pour." :spec (a/int-in 0 nil)}
+   ::max-water-waits {:default 10 :doc "Waits for poured water to show before it is scooped back." :spec (a/int-in 0 nil)}
+   ::pour-wait-ms {:default 250 :doc "A wait for the server to put the fire out or show the poured water." :spec (a/int-in 0 nil)}
+   ::max-passes {:default 60 :doc "Passes in one run before it stops :still-burning." :spec (a/int-in 0 nil)}})
+(defn max-hazards-per-round [] (settings/get settings ::max-hazards-per-round))
+(defn hazard-reach [] (settings/get settings ::hazard-reach))
+(defn height-bonus [] (settings/get settings ::height-bonus))
+(defn walk-cost [] (settings/get settings ::walk-cost))
+(defn hazard-touch [] (settings/get settings ::hazard-touch))
 
-(def max-stand-waits "One-second waits standing still before the run stops :still-burning." 20)
-(def stand-wait-ms 1000)
-(def eat-below 18)
+(defn max-stand-waits [] (settings/get settings ::max-stand-waits))
+(defn stand-wait-ms [] (settings/get settings ::stand-wait-ms))
+(defn eat-below [] (settings/get settings ::eat-below))
 (def water-like ["water" "powder_snow"])
-(def max-covers "Lava cells covered per run." 3)
+(defn max-covers [] (settings/get settings ::max-covers))
 ;; solid blocks that do not fall (sand, gravel and concrete powder would drop into the lava)
 (def cover-blocks ["cobblestone" "stone" "dirt" "netherrack" "cobbled_deepslate" "deepslate" "andesite" "diorite" "granite"])
 
-(def max-return-distance "A pour left farther than this is dropped with a warn, not walked back to." 16)
-(def max-scoop-return-range "go-to range for the walk back to a pour." 3)
-(def max-pour-waits 8)
-(def max-water-waits 10)
+(defn max-return-distance [] (settings/get settings ::max-return-distance))
+(defn max-scoop-return-range [] (settings/get settings ::max-scoop-return-range))
+(defn max-pour-waits [] (settings/get settings ::max-pour-waits))
+(defn max-water-waits [] (settings/get settings ::max-water-waits))
 
 (defn body-burning? [c] (body/burning? (:primitives c)))
 
@@ -115,9 +132,9 @@
 (defn score
   "Higher is better: away from hazards, up, and close."
   [from hazard-poss cell]
-  (let [near (transduce (map #(u/dist cell %)) min hazard-reach hazard-poss)]
-    (- (+ near (* height-bonus (- (:y cell) (:y from))))
-       (* walk-cost (u/dist from cell)))))
+  (let [near (transduce (map #(u/dist cell %)) min (hazard-reach) hazard-poss)]
+    (- (+ near (* (height-bonus) (- (:y cell) (:y from))))
+       (* (walk-cost) (u/dist from cell)))))
 
 (defn best-cell
   "The standable cell within step blocks of from with the best score, never
@@ -145,14 +162,14 @@
         fresh (->> scanned
                    (filter #(= "lava" (:name %)))
                    (remove #(contains? known (:pos %)))
-                   (take max-hazards-per-round))]
+                   (take (max-hazards-per-round)))]
     (doseq [{:keys [pos]} fresh]
       (ctx/remember! c :hazard {:kind :lava :pos pos} hazard-policy))))
 
 (defn hazard-near?
   "Whether any scanned hazard lies within hazard-touch blocks of the feet cell."
   [pos scanned]
-  (boolean (some #(<= (u/dist pos (:pos %)) hazard-touch) scanned)))
+  (boolean (some #(<= (u/dist pos (:pos %)) (hazard-touch)) scanned)))
 
 (defn adjacent-lava
   "A scanned lava cell next to the feet cell (side, or the cell below), or nil."
@@ -189,7 +206,7 @@
         adjacent (:pos (adjacent-lava pos (exposed-lava p pos scanned)))
         run-wide (cond
                    (and lava? (not (:blocked (ctx/mem c)))) :in-lava
-                   (<= max-covers (:covers (ctx/mem c) 0)) :max-covers
+                   (<= (max-covers) (:covers (ctx/mem c) 0)) :max-covers
                    (nil? (cover-item p)) :no-cover-item)]
     (mapv (fn [{lava :pos}]
             {:pos lava
@@ -202,8 +219,8 @@
 
 (defn clear? [c] (not (body-burning? c)))
 
-(def pour-wait-ms "A wait for the server to put the fire out or show the poured water." 250)
-(def max-passes "Passes in one run before it stops :still-burning." 60)
+(defn pour-wait-ms [] (settings/get settings ::pour-wait-ms))
+(defn max-passes [] (settings/get settings ::max-passes))
 
 (defn ^:async pour-water!
   "Pour a carried water bucket at the feet. True when the water was placed (then noted in body memory)."
@@ -233,25 +250,25 @@
     (cond
       (body-burning? c)
       (let [waits (inc (:pour-waits (ctx/mem c) 0))]
-        (if (> waits max-pour-waits)
+        (if (> waits (max-pour-waits))
           (do (clear-pour! c) nil)
           (do (ctx/update-mem! c assoc :pour-waits waits)
-              (await (burning-wait! c pour-wait-ms))
+              (await (burning-wait! c (pour-wait-ms)))
               :again)))
 
       (not= "water" (u/block-name p cell))
       (let [waits (inc (:water-waits (ctx/mem c) 0))]
-        (if (> waits max-water-waits)
+        (if (> waits (max-water-waits))
           (do (clear-pour! c) :done)
           (do (ctx/update-mem! c assoc :water-waits waits)
-              (await (burning-wait! c pour-wait-ms))
+              (await (burning-wait! c (pour-wait-ms)))
               :again)))
 
       (and (> (u/eye-dist (u/self-pos c) cell) u/bucket-reach)
-           (<= (u/dist (u/self-pos c) cell) max-return-distance)
+           (<= (u/dist (u/self-pos c) cell) (max-return-distance))
            (not (:returned (ctx/mem c))))
       (do (ctx/update-mem! c assoc :returned true)
-          (await (ctx/call-child c :go 'jobs.movement.go-to {:pos cell :range max-scoop-return-range :escalate false}))
+          (await (ctx/call-child c :go 'jobs.movement.go-to {:pos cell :range (max-scoop-return-range) :escalate false}))
           :again)
 
       (> (u/eye-dist (u/self-pos c) cell) u/bucket-reach)
@@ -289,13 +306,13 @@
     (when (= 1 waits)
       (ctx/emit! c :extinguish_wait :info {:text "no water near; standing still off the fire until it goes out"}))
     (ctx/hold-still! c :burning-wait)
-    (when (and food (< (.-food (.self p)) eat-below))
+    (when (and food (< (.-food (.self p)) (eat-below)))
       (await (ctx/act c :equip #js {:item food}))
       (await (ctx/act c :eat #js {:item food})))
-    (await (ctx/act c :wait (clj->js {:ms stand-wait-ms})))
+    (await (ctx/act c :wait (clj->js {:ms (stand-wait-ms)})))
     (cond
       (clear? c) :done
-      (>= waits max-stand-waits) (result/stop! c :still-burning "still burning after standing still off the fire")
+      (>= waits (max-stand-waits)) (result/stop! c :still-burning "still burning after standing still off the fire")
       :else :again)))
 
 (defn stuck!
@@ -368,7 +385,7 @@
           water
           (do (await (move! c (:pos water))) :again)
 
-          (and (or (not lava?) (:blocked (ctx/mem c))) (< (:covers (ctx/mem c) 0) max-covers) (cover-item p)
+          (and (or (not lava?) (:blocked (ctx/mem c))) (< (:covers (ctx/mem c) 0) (max-covers)) (cover-item p)
                (let [lava (:pos (adjacent-lava pos (exposed-lava p pos scanned)))]
                  (and lava
                       (nil? (access/trespass-refusal c :place lava))
@@ -407,7 +424,7 @@
   (loop [i 0]
     (cond
       (not (ctx/alive? c)) :done
-      (<= max-passes i) (result/stop! c :still-burning "still burning after many tries")
+      (<= (max-passes) i) (result/stop! c :still-burning "still burning after many tries")
       :else (let [r (await (pass! c))]
               (if (= :again r)
                 (do (await (pace/pace!)) (recur (inc i)))

@@ -432,7 +432,7 @@
           (core/submit! eng '(jobs.survival.night) {})
           (await (core/tick! eng))
           (set! ctx/call-child call-child)
-          (is (= (inc night/max-retries) @tries) "one dig-in, then one more per retry of the exposed hold"))))))
+          (is (= (inc (night/max-retries)) @tries) "one dig-in, then one more per retry of the exposed hold"))))))
 
 (deftest an-exposed-hold-retries-only-from-futile-radius-plus-one-away
   (let [due? (fn [feet]

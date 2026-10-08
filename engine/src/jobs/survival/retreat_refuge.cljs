@@ -1,7 +1,9 @@
 (ns jobs.survival.retreat-refuge
   "A cornered body's refuges (jobs.survival.retreat): sealed in with blocks, up a pillar, down a pit or in a side pocket,
   and the hiding in them."
-  (:require [jobs.lib.blocks :as lb]
+  (:require [engine.args :as a]
+            [engine.settings :as settings]
+            [jobs.lib.blocks :as lb]
             [engine.ctx :as ctx]
             [jobs.lib.pillar :as pl]
             [jobs.lib.access :as access]
@@ -128,13 +130,15 @@
               (hide-now! c {:kind :seal :anchor feet :cells (vec (:seal-cells (ctx/mem c)))}
                          "cornered: sealed in with blocks until the hostile leaves"))))
 
-(def pillar-height 3)
+(a/defargs settings
+  {::pillar-height {:default 3 :doc "Height of the pillar built as a refuge, in blocks." :spec (a/int-in 0 nil)}})
+(defn pillar-height [] (settings/get settings ::pillar-height))
 
 (defn pillar-item
   "The carried :blocks block with the most, when it is at least pillar-height; else nil."
   [c]
   (->> (lb/carried c (:blocks (:args c)))
-       (filter #(>= (:count %) pillar-height))
+       (filter #(>= (:count %) (pillar-height)))
        (sort-by :count >)
        first
        :name))
@@ -145,7 +149,7 @@
   "Whether a pillar-height pillar fits here: a solid floor, and the head cell and every cell the body rises into free."
   [block-at feet]
   (and (rules/solid-floor? block-at (up feet -1))
-       (every? #(pl/clear? (block-at (up feet %))) (range 1 (+ 2 pillar-height)))))
+       (every? #(pl/clear? (block-at (up feet %))) (range 1 (+ 2 (pillar-height))))))
 
 (defn cell-map [[x y z]] {:x x :y y :z z})
 
@@ -166,13 +170,13 @@
         feet (pl/feet-cell c)
         item (pillar-item c)]
     (when item
-      (doseq [cell (map #(up feet %) (range 1 (+ 2 pillar-height)))]
+      (doseq [cell (map #(up feet %) (range 1 (+ 2 (pillar-height))))]
         (when (look/unknown? p cell) (await (look/look-at! c cell)))))
     (when (and item (pillar-ok? (escape/block-at-of p) feet))
       (access/trespass! c "retreat" (some #(access/trespass-refusal (access/rules-input c) :place (cell-map (up feet %)))
-                                          (range pillar-height)))
+                                          (range (pillar-height))))
       (await (start-refuge! c {:kind :pillar :item item :anchor (cell-map feet)
-                               :cells (mapv #(up feet %) (range pillar-height))})))))
+                               :cells (mapv #(up feet %) (range (pillar-height)))})))))
 
 (def drop-of
   "The block a dug block drops, where it is another (an unlisted one drops itself)."
@@ -347,7 +351,7 @@
   (loop []
     (when (refuge-danger? c (:refuge (ctx/mem c))) (ctx/update-mem! c assoc :quiet-from (ctx/now c)))
     (if (< (- (ctx/now c) (:quiet-from (ctx/mem c))) (* 1000 (:quiet-s (:args c))))
-      (do (await (ctx/act c :wait #js {:ms flight/wait-ms :why "hiding"}))
+      (do (await (ctx/act c :wait #js {:ms (flight/wait-ms) :why "hiding"}))
           (await (pace/pace!))
           (recur))
       (do (ctx/update-mem! c dissoc :quiet-from)
@@ -361,7 +365,7 @@
 (defn ^:async pillar-round!
   "One block of the pillar (the child jobs.access.pillar); hidden once it is at least 2 high."
   [c {:keys [item] :as refuge}]
-  (let [r (await (ctx/call-child c :pillar 'jobs.access.pillar {:height pillar-height :item item :ignore-zones? true}))]
+  (let [r (await (ctx/call-child c :pillar 'jobs.access.pillar {:height (pillar-height) :item item :ignore-zones? true}))]
     (case r
       :declined (await (abandon-refuge! c))
       :done (if (>= (:built (ctx/child-result c :pillar) 0) 2)

@@ -1,5 +1,6 @@
 (ns jobs.survival.night
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [jobs.lib.blocks :as lb]
             [clojure.set :as set]
             [engine.ctx :as ctx]
@@ -264,9 +265,18 @@
   "The :night-site entries: failed sites, cleared at the morning the night job sees; a day at most."
   {:cap 8 :ttl sh/ms-per-day})
 
-(def max-sites "Failed sites a night tries before holding exposed." 4)
+(a/defargs settings
+  {::max-sites {:default 4 :doc "Failed sites a night tries before holding exposed." :spec (a/int-in 0 nil)}
+   ::relocate-reach {:default 16 :doc "How far (blocks) a night looks for a spot to dig in." :spec (a/int-in 0 nil)}
+   ::retry-after-ms {:default 660000 :doc "How long a body holds exposed before it tries to dig in again (past dig-in's own 10-minute give-up)." :spec (a/int-in 0 nil)}
+   ::max-retries {:default 2 :doc "Dig-in retries after a night went exposed." :spec (a/int-in 0 nil)}
+   ::max-flees {:default 3 :doc "Walks to somewhere safer a night tries." :spec (a/int-in 0 nil)}
+   ::ground-candidates {:default 16 :doc "Seen ground cells costed per flee: the nearest ones." :spec (a/int-in 0 nil)}
+   ::cave-candidates {:default 16 :doc "Seen cave cells costed per flee: the nearest ones." :spec (a/int-in 0 nil)}
+   ::cave-scan {:default 2048 :doc "Solid blocks one cave search reads: nearest first, so it reaches about 16 blocks around the body." :spec (a/int-in 0 nil)}})
+(defn max-sites [] (settings/get settings ::max-sites))
 
-(def relocate-reach "How far (blocks) a night looks for a spot to dig in." 16)
+(defn relocate-reach [] (settings/get settings ::relocate-reach))
 
 (defn failed-sites
   "Tonight's failed sites [{:pos :reason}]."
@@ -282,7 +292,7 @@
   "Whether a site that failed tonight lies within dig-in's futile radius of the feet."
   [c]
   (let [here (sh/feet (:primitives c))]
-    (boolean (some #(<= (u/dist here %) dig-in/futile-radius)
+    (boolean (some #(<= (u/dist here %) (dig-in/futile-radius))
                    (map :pos (failed-sites c))))))
 
 (defn pit-site?
@@ -300,7 +310,7 @@
   "Whether feet cell f is at least futile-radius+1 from every failed site (tonight's and dig-in's :dig-in-futile entries)."
   [c f]
   (let [failed (concat (map :pos (failed-sites c)) (map (comp :pos :data) (ctx/entries c :dig-in-futile)))]
-    (every? #(>= (u/dist % f) (inc dig-in/futile-radius)) failed)))
+    (every? #(>= (u/dist % f) (inc (dig-in/futile-radius))) failed)))
 
 (defn relocation-site
   "The nearest feet cell within relocate-reach of the failed site the body is at (its feet when none: a body in its
@@ -309,12 +319,12 @@
   [c]
   (let [p (:primitives c)
         feet (sh/feet p)
-        here (first (filter #(<= (u/dist feet %) dig-in/futile-radius) (map :pos (failed-sites c))))
+        here (first (filter #(<= (u/dist feet %) (dig-in/futile-radius)) (map :pos (failed-sites c))))
         {:keys [x y z]} (or here feet)
         offsets (sort-by (fn [[dx dz]] (+ (* dx dx) (* dz dz)))
-                         (for [dx (range (- relocate-reach) (inc relocate-reach))
-                               dz (range (- relocate-reach) (inc relocate-reach))
-                               :when (<= (+ (* dx dx) (* dz dz)) (* relocate-reach relocate-reach))]
+                         (for [dx (range (- (relocate-reach)) (inc (relocate-reach)))
+                               dz (range (- (relocate-reach)) (inc (relocate-reach)))
+                               :when (<= (+ (* dx dx) (* dz dz)) (* (relocate-reach) (relocate-reach)))]
                            [dx dz]))]
     (some (fn [[dx dz]]
             (some (fn [dy] (let [f {:x (+ x dx) :y (+ y dy) :z (+ z dz)}]
@@ -391,20 +401,20 @@
   "The failed site tonight whose pit the body stands in (below it, within the futile radius), or nil."
   [c]
   (let [feet (sh/feet (:primitives c))]
-    (first (filter #(and (< (:y feet) (:y %)) (<= (u/dist feet %) dig-in/futile-radius)) (map :pos (failed-sites c))))))
+    (first (filter #(and (< (:y feet) (:y %)) (<= (u/dist feet %) (dig-in/futile-radius))) (map :pos (failed-sites c))))))
 
-(def retry-after-ms "How long a body holds exposed before it tries to dig in again (past dig-in's own 10-minute give-up)." 660000)
+(defn retry-after-ms [] (settings/get settings ::retry-after-ms))
 
-(def max-retries "Dig-in retries after a night went exposed." 2)
+(defn max-retries [] (settings/get settings ::max-retries))
 
 (defn retry-due?
   "Whether the exposed hold digs in again: under max-retries, and the body has moved off the spot it went exposed on
   or retry-after-ms passed."
   [c]
   (let [{:keys [pos at retries]} (:exposed (ctx/mem c))]
-    (and pos (< (or retries 0) max-retries)
-         (or (>= (u/dist (sh/feet (:primitives c)) pos) (inc dig-in/futile-radius))
-             (>= (- (ctx/now c) at) retry-after-ms)))))
+    (and pos (< (or retries 0) (max-retries))
+         (or (>= (u/dist (sh/feet (:primitives c)) pos) (inc (dig-in/futile-radius)))
+             (>= (- (ctx/now c) at) (retry-after-ms))))))
 
 (defn retry-dig-in!
   "Start over from the exposed hold: failed sites and give-ups forgotten, one retry counted."
@@ -431,9 +441,9 @@
 
 ;; ------------------------------------------------------------------ somewhere safer
 
-(def max-flees "Walks to somewhere safer a night tries." 3)
+(defn max-flees [] (settings/get settings ::max-flees))
 
-(def ground-candidates "Seen ground cells costed per flee: the nearest ones." 16)
+(defn ground-candidates [] (settings/get settings ::ground-candidates))
 
 (defn ground-sites
   "Natural ground the body has seen within radius that the carried tools dig and that is no sand or gravel, as feet
@@ -444,12 +454,12 @@
                               :radius (min 64 radius) :max 64})
          (map #(update (:pos %) :y inc))
          (filter #(and (pit-site? p %) (clear-of-failed? c %)))
-         (take ground-candidates)
+         (take (ground-candidates))
          (mapv (fn [pos] {:kind :ground :pos pos})))))
 
-(def cave-candidates "Seen cave cells costed per flee: the nearest ones." 16)
+(defn cave-candidates [] (settings/get settings ::cave-candidates))
 
-(def cave-scan "Solid blocks one cave search reads: nearest first, so it reaches about 16 blocks around the body." 2048)
+(defn cave-scan [] (settings/get settings ::cave-scan))
 
 (defn cave-sites
   "Feet cells the body has seen under a roof (a seen solid block 2..roof-height above), over a seen solid floor, with
@@ -459,7 +469,7 @@
   [c radius]
   (let [p (:primitives c)
         roof-height (:roof-height (:args c))
-        solids (look/seen-blocks p {:match solid/solid? :radius (min 64 radius) :max cave-scan})
+        solids (look/seen-blocks p {:match solid/solid? :radius (min 64 radius) :max (cave-scan)})
         key-of (juxt :x :y :z)
         solid? (into #{} (map (comp key-of :pos)) solids)
         seen-free? (fn [cell] (and (not (solid? (key-of cell)))
@@ -479,7 +489,7 @@
                    (when (and (<= (count cells) have)
                               (not-any? #(access/trespass-refusal c :place %) cells))
                      {:kind :cave :pos f :needed (count cells)}))))
-         (take cave-candidates)
+         (take (cave-candidates))
          vec)))
 
 (defn ^:async flee-target
@@ -492,7 +502,7 @@
         p (:primitives c)
         flee-radius (:flee-radius (:args c))
         tried (set (:flee-failed m))]
-    (when (and (pos? flee-radius) (< (or (:flees m) 0) max-flees))
+    (when (and (pos? flee-radius) (< (or (:flees m) 0) (max-flees)))
       (let [here (sh/feet p)
             bed (when-let [pos (sh/bed-to-use p (ctx/view c) flee-radius (bed-permit c))]
                   (when (> (u/dist here pos) (radius c)) [{:kind :bed :pos pos}]))
@@ -569,7 +579,7 @@
   cell failed (:unreachable). With max-sites failed sites, or no such cell: hold exposed."
   [c]
   (let [site (or (:relocating (ctx/mem c))
-                 (when (< (count (failed-sites c)) max-sites) (relocation-site c)))
+                 (when (< (count (failed-sites c)) (max-sites)) (relocation-site c)))
         pit (pit-start c)]
     (cond
       (:pit-trapped (ctx/mem c)) (await (hold-exposed! c))

@@ -246,7 +246,7 @@
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))))
           (is (= 1 (count (calls p "place"))))
-          (is (= extinguish/max-water-waits (count (calls p "wait"))) "waited the bound for the water block"))))))
+          (is (= (extinguish/max-water-waits) (count (calls p "wait"))) "waited the bound for the water block"))))))
 
 (deftest no-safe-cell-gives-up-after-three-rounds-with-one-warning
   (async done
@@ -322,7 +322,7 @@
           (core/submit! eng '(jobs.survival.extinguish) {})
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))))
-          (is (= extinguish/max-stand-waits (count (calls p "wait"))))
+          (is (= (extinguish/max-stand-waits) (count (calls p "wait"))))
           (is (= :still-burning (stopped-reason seen)) "still burning is stopped, not completed"))))))
 
 (deftest standing-still-eats-to-keep-regenerating
@@ -433,7 +433,7 @@
       (fn ^:async t []
         (let [placed (await (cover-run [{:name "cobblestone" :count 20}]
                                        ["1,64,0" "-1,64,0" "0,64,1" "0,64,-1" "1,64,1" "2,64,0" "-2,64,0" "0,64,2"] 1))]
-          (is (<= (count (filter #(= "cobblestone" (:item %)) placed)) extinguish/max-covers)))))))
+          (is (<= (count (filter #(= "cobblestone" (:item %)) placed)) (extinguish/max-covers))))))))
 
 (deftest lava-under-an-already-covered-cell-is-not-covered-again
   (async done
@@ -499,7 +499,7 @@
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))))
           (is (= :still-burning (stopped-reason seen)))
-          (is (= extinguish/max-stand-waits (count (calls p "wait"))) "one wait per stand pass"))))))
+          (is (= (extinguish/max-stand-waits) (count (calls p "wait"))) "one wait per stand pass"))))))
 
 (deftest a-body-with-no-safe-cell-ends-stopped-stuck-after-three-failed-walks
   (async done
@@ -559,8 +559,8 @@
                                                            :done)
                                                          world)]
           (await (run-until-empty eng 3))
-          (is (= extinguish/max-covers @places-at-go-to) "covers first, then the go-to")
-          (is (= (repeat extinguish/max-covers "cobblestone") (mapv (comp :item call-args) (calls p "place"))))
+          (is (= (extinguish/max-covers) @places-at-go-to) "covers first, then the go-to")
+          (is (= (repeat (extinguish/max-covers) "cobblestone") (mapv (comp :item call-args) (calls p "place"))))
           (is (= 1 @go-tos))
           (is (= 1 (count (calls p "moveTo"))) "one blocked step")
           (is (= [] (of-kind seen :extinguish_stuck)))
@@ -570,7 +570,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [many (inc extinguish/max-passes)
+        (let [many (inc (extinguish/max-passes))
               {:keys [eng p seen go-tos]} (setup-blocked (fn [c p n]
                                                            (if (< n 6)
                                                              :continue
@@ -618,7 +618,7 @@
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))))
           (is (= :still-burning (stopped-reason seen)))
-          (is (= extinguish/max-passes @go-tos)))))))
+          (is (= (extinguish/max-passes) @go-tos)))))))
 
 (def scoop-edge "Blocks (feet distance) a pour can lie away and still be scooped in place: eye reach 4.5 less the eye height." 4)
 
@@ -669,8 +669,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [near (await (pour-then-flee extinguish/max-return-distance))
-              far (await (pour-then-flee (inc extinguish/max-return-distance)))]
+        (let [near (await (pour-then-flee (extinguish/max-return-distance)))
+              far (await (pour-then-flee (inc (extinguish/max-return-distance))))]
           (is (= ["water_bucket" "bucket"] (mapv (comp :item call-args) (calls (:p near) "place"))))
           (is (= ["water_bucket"] (mapv (comp :item call-args) (calls (:p far) "place"))) "no scoop attempted from afar")
           (is (= [] (entries (:eng far) :extinguish-pour)) "the entry is gone")

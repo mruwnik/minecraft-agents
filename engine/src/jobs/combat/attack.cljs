@@ -1,5 +1,6 @@
 (ns jobs.combat.attack
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost.weapon :as weapon]
@@ -48,7 +49,9 @@
    :walk-timeout-s {:doc "bound of one walk towards a target" :spec (a/num-in 0 nil) :default 5}
    :absent {:doc ":done ends the job with reason :absent when no target is present after a 2 s grace; :wait makes the check decline until one is" :spec #{:done :wait} :default :done}})
 
-(def reach 3)
+(a/defargs settings
+  {::reach {:default 3 :doc "How near the target the body stands to swing, in blocks." :spec (a/int-in 0 nil)}})
+(defn reach [] (settings/get settings ::reach))
 (def absent-grace-ms
   "How long a job that has seen nothing waits for the world's entities to arrive."
   2000)
@@ -167,7 +170,7 @@
   :walk-timeout-s). Resolves to :there (no walk needed), :arrived (the walk got within range), :partial or :blocked."
   [c target]
   (let [tpos (u/pos-of (.-pos target))]
-    (if (<= (u/dist (u/self-pos c) tpos) reach)
+    (if (<= (u/dist (u/self-pos c) tpos) (reach))
       :there
       (case (await (near/go-near! c tpos 2 {:doors :shut :leg-s (:walk-timeout-s (:args c)) :dangers false :escalate false :look-round false}))
         :there :arrived

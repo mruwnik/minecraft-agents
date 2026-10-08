@@ -1,6 +1,8 @@
 (ns jobs.survival.retreat-flight
   "The state of one flight (jobs.survival.retreat): the tried options and sweeps, who still chases, and the flight's end."
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.settings :as settings]
+            [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.reach :as reach]
@@ -8,7 +10,10 @@
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]))
 
-(def wait-ms "One hold of a hidden or cornered body before it looks again." 1000)
+(a/defargs settings
+  {::wait-ms {:default 1000 :doc "One hold of a hidden or cornered body before it looks again." :spec (a/int-in 0 nil)}
+   ::resume-gap-ms {:default 5000 :doc "A flight cut for longer than this starts its clocks afresh when it resumes." :spec (a/int-in 0 nil)}})
+(defn wait-ms [] (settings/get settings ::wait-ms))
 
 (defn dead-ids
   "The ids of hostiles a cornered fight has killed: their corpses may stay listed a while."
@@ -86,13 +91,13 @@
   [p]
   (danger-q/known-hostiles p threats/max-follow-range {}))
 
-(def resume-gap-ms "A flight cut for longer than this starts its clocks afresh when it resumes." 5000)
+(defn resume-gap-ms [] (settings/get settings ::resume-gap-ms))
 
 (defn resume-flight
   "mem of a flight resumed at now: after a gap past resume-gap-ms since its last step, the flight starts now and every
   chaser counts as just seen (the world is judged afresh); else as it was."
   [mem now]
-  (if (or (nil? (:last-step mem)) (<= (- now (:last-step mem)) resume-gap-ms))
+  (if (or (nil? (:last-step mem)) (<= (- now (:last-step mem)) (resume-gap-ms)))
     mem
     (cond-> (assoc mem :flight-start now :last-step now)
       (:chasers mem) (update :chasers update-vals #(assoc % :seen-t now)))))

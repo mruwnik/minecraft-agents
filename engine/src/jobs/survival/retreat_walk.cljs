@@ -1,9 +1,13 @@
 (ns jobs.survival.retreat-walk
   "Where a fleeing body can walk: the open cells along a direction and the walk target away from the threats (pure,
   over a block-at fn)."
-  (:require [jobs.lib.util :as u]))
+  (:require [engine.args :as a]
+            [engine.settings :as settings]
+            [jobs.lib.util :as u]))
 
-(def hazard-clearance 2.5)
+(a/defargs settings
+  {::hazard-clearance {:default 2.5 :doc "Distance in blocks kept from a hazard on a flight path." :spec (a/num-in 0 nil)}})
+(defn hazard-clearance [] (settings/get settings ::hazard-clearance))
 
 (def turns
   "Angles to try, in degrees from the preferred direction, best first."
@@ -75,7 +79,7 @@
   (checked at the middle and the end)."
   [hazards from target]
   (let [mid {:x (/ (+ (:x from) (:x target)) 2) :y (:y from) :z (/ (+ (:z from) (:z target)) 2)}]
-    (boolean (some #(or (< (u/dist % target) hazard-clearance) (< (u/dist % mid) hazard-clearance)) hazards))))
+    (boolean (some #(or (< (u/dist % target) (hazard-clearance)) (< (u/dist % mid) (hazard-clearance))) hazards))))
 
 (defn free-at?
   "Whether feet and head cells at feet height y in column x z are passable."
