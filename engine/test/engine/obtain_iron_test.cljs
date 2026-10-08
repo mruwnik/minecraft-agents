@@ -140,6 +140,20 @@
           (is (seq (f/calls s "dig")) "a log was felled for the charcoal"))))))
 
 (deftest the-time-limit-counts-from-the-last-change-of-what-is-carried
-  (is (= {:inv {"a" 1} :t 5} (obtain/progress nil {"a" 1} 5)))
-  (is (= {:inv {"a" 1} :t 5} (obtain/progress {:inv {"a" 1} :t 5} {"a" 1} 9)))
-  (is (= {:inv {"a" 2} :t 9} (obtain/progress {:inv {"a" 1} :t 5} {"a" 2} 9))))
+  (is (= {:inv {"a" 1} :t 5 :at 5} (obtain/progress nil {"a" 1} 5 60000)))
+  (is (= {:inv {"a" 1} :t 5 :at 9} (obtain/progress {:inv {"a" 1} :t 5 :at 5} {"a" 1} 9 60000)))
+  (is (= {:inv {"a" 2} :t 9 :at 9} (obtain/progress {:inv {"a" 1} :t 5 :at 5} {"a" 2} 9 60000))))
+
+(deftest a-charcoal-smelt-burns-the-planks-kind-carried
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (f/start (ore-world {"1,64,2" "furnace"} [{:name "oak_log" :count 1} {:name "spruce_planks" :count 4}]) [f/own-zone])]
+          (await (obtain! s {:item "charcoal" :how #{:craft :gather}} 100))
+          (is (= ["spruce_planks"] (keep :fuel (f/events-of s :smelt.loaded))) "the carried planks kind is the fuel, not coal or the first wood"))))))
+
+(deftest a-long-gap-between-steps-is-not-stall-time
+  (is (= {:inv {"a" 1} :t 85000 :at 100000}
+         (obtain/progress {:inv {"a" 1} :t 0 :at 5000} {"a" 1} 100000 10000)) "a gap of 95 s counts 10 s")
+  (is (= {:inv {"a" 1} :t 0 :at 8000}
+         (obtain/progress {:inv {"a" 1} :t 0 :at 5000} {"a" 1} 8000 10000)) "a short gap counts whole"))

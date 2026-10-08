@@ -69,9 +69,11 @@
   {::max-inspections {:default 4 :doc "Looks at a place before the search for it gives up." :spec (a/int-in 0 nil)}
    ::craft-radius {:default 32 :doc "Blocks within which a crafting table is looked for." :spec (a/int-in 0 nil)}
    ::max-fruitless {:default 3 :doc "Rounds without progress before the job gives up." :spec (a/int-in 0 nil)}
+   ::max-gap-ms {:default 60000 :doc "Longest gap between two steps that counts toward :minutes; a longer one (a preemption) counts this much." :spec (a/num-in 0 nil)}
    ::sheep-radius {:default 24 :doc "Blocks within which sheep are looked for when wool is gathered." :spec (a/num-in 0 nil)}
    ::explore {:default {:max-distance 64 :max-legs 12 :timeout-s 300} :doc "jobs.explore.search options of a search for a raw need (:explore true)." :spec map?}})
 (defn max-inspections [] (settings/get settings ::max-inspections))
+(defn max-gap-ms [] (settings/get settings ::max-gap-ms))
 (defn sheep-radius [] (settings/get settings ::sheep-radius))
 
 (defn names-of [{:keys [item any-of]}]
@@ -461,6 +463,12 @@
           {:depth (max 0 (dec (:depth o))) :how (:how o) :minutes (:minutes o) :fail-minutes (:fail-minutes o)
            :explore (:explore (:args c))})))
 
+(defn wood-fuel
+  "The planks kind to burn: the first of the smelt's wood fuels carried, else the first."
+  [inv]
+  (let [fuels (smelt/fetch-wood-fuels)]
+    (or (first (filter #(pos? (carried-of inv [%])) fuels)) (first fuels))))
+
 (defn ^:async smelt-step!
   "Run a smelt step of the plan as a jobs.items.smelt child (it fetches its own fuel and furnace) until it ends.
   While it cooks the child declines (:cooking): the round ends :declined and the check waits with its reason.
@@ -469,7 +477,7 @@
   (ctx/update-mem! c assoc-in [:craft :step] step)
   (let [r (await (declined/call-child! c :smelt 'jobs.items.smelt
                                                  (cond-> {:item (:item step) :count (:count step) :fetch (smelt-fetch c)}
-                                                   (= "charcoal" (:item step)) (assoc :fuel (first (smelt/fetch-wood-fuels))))))]
+                                                   (= "charcoal" (:item step)) (assoc :fuel (wood-fuel (u/inventory (:primitives c)))))))]
     (if (#{:continue :declined} r)
       r
       (let [res (ctx/child-result c :smelt)]
@@ -665,11 +673,12 @@
       (do (ctx/update-mem! c update :gather dissoc :before :item :tree) :again))))
 
 (defn progress
-  "The stall clock: prev ({:inv carried-counts :t ms}) kept while what is carried is the same, else restarted at now."
-  [prev inv now]
+  "The stall clock: prev ({:inv carried-counts :t ms :at ms of the last look}) kept while what is carried is the same, else
+  restarted at now. A gap since the last look beyond max-gap (a preemption, a long wait) does not count."
+  [prev inv now max-gap]
   (if (= inv (:inv prev))
-    prev
-    {:inv inv :t now}))
+    {:inv inv :at now :t (+ (:t prev) (max 0 (- now (:at prev) max-gap)))}
+    {:inv inv :t now :at now}))
 
 (defn ^:async step! [c]
   (let [a (:args c)
@@ -684,10 +693,10 @@
         (do (await (look/survey! c)) (if (check c) :again :continue))
         (let [_ (when-not (:start (ctx/mem c))
                   (ctx/update-mem! c update :craft dissoc :table-unreachable)
-                  (ctx/update-mem! c assoc :start {:have have :target (+ have (min 64 (:count a))) :t now}))
+                  (ctx/update-mem! c assoc :start {:have have :target (+ have (min 64 (:count a)))}))
               {:keys [target] :as start} (:start (ctx/mem c))
               seen-inv (carried-counts (:primitives c))
-              prog (progress (:progress (ctx/mem c)) seen-inv now)
+              prog (progress (:progress (ctx/mem c)) seen-inv now (max-gap-ms))
               _ (when (not= prog (:progress (ctx/mem c))) (ctx/update-mem! c assoc :progress prog))
               t (:t prog)
               got (max 0 (- have (:have start)))
@@ -719,4 +728,7 @@
   "The whole attempt in one call: step! again until the count is carried or it stops; :continue only while a child waits on the world, :declined while a smelt child cooks."
   [c]
   (declined/begin! c)
-  (await (pace/steps! c (fn ^:async obtain-step [] (await (step! c))))))
+  (await (pace/steps! c (fn ^:async obtain-step []
+                                      (let [r (await (step! c))]
+                                        (when (:progress (ctx/mem c)) (ctx/update-mem! c assoc-in [:progress :at] (ctx/now c)))
+                                        r)))))
