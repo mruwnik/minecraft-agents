@@ -44,8 +44,15 @@
 (deftest a-target-no-way-leads-to-is-blocked
   (async done
     ((fn ^:async t []
+       (let [{:keys [out]} (await (run-probe! (merge in-pit {:blocks stone-pit}) {:x 10 :y 64 :z 0} 2 {:escalate false}))]
+         (is (= :blocked @out) "escalation off: nothing leads to the target")
+         (done))))))
+
+(deftest a-target-no-way-leads-to-is-reached-by-hand-without-a-pickaxe
+  (async done
+    ((fn ^:async t []
        (let [{:keys [out]} (await (run-probe! (merge in-pit {:blocks stone-pit}) {:x 10 :y 64 :z 0} 2))]
-         (is (= :blocked @out) "no blocks and no pickaxe: nothing to escalate with")
+         (is (= :there @out) "no blocks and no pickaxe: the stair is dug by hand")
          (done))))))
 
 (deftest a-leg-that-got-nearer-is-partial

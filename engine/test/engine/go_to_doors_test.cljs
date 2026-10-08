@@ -230,7 +230,7 @@
         (let [w {:self {:pos {:x 0 :y 64 :z 0}}
                  :blocks (merge flat hut-wall {"5,64,0" "iron_door" "5,65,0" "iron_door"})
                  :states {"5,64,0" {:open false :half "lower" :facing "east"} "5,65,0" {:open false :half "upper" :facing "east"}}}
-              {:keys [out p]} (await (go! w {:pos [10 64 0] :range 0}))]
+              {:keys [out p]} (await (go! w {:pos [10 64 0] :range 0 :escalate false}))]
           (is (= {:arrived false :reason :unreachable} (select-keys @out [:arrived :reason])))
           (is (< (first (at p)) 5) "the body stays on its side")
           (is (zero? (clicks p))))))))
@@ -345,7 +345,7 @@
       (fn ^:async t []
         (let [w (iron-world {lever-cell "lever"} {lever-cell {:face "wall" :facing "west" :powered false}}
                             :wires {lever-cell ["5,64,0"]})
-              {:keys [out p]} (await (go! w {:pos [10 64 0] :range 0 :doors :never}))]
+              {:keys [out p]} (await (go! w {:pos [10 64 0] :range 0 :doors :never :escalate false}))]
           (is (= {:arrived false :reason :unreachable} (select-keys @out [:arrived :reason])))
           (is (zero? (clicks p))))))))
 
@@ -372,7 +372,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [start [2 4]
-                args [{:pos [10 64 0] :range 0} {:pos [10 64 0] :range 0 :escalate false} {:pos [10 64 3] :range 2 :escalate false}]]
+                args [{:pos [10 64 0] :range 0 :escalate false} {:pos [10 64 3] :range 2 :escalate false}]]
           (let [w {:self {:pos {:x start :y 64 :z 0}}
                    :blocks iron-room
                    :states {"5,64,0" {:open false :half "lower" :facing "east"} "5,65,0" {:open false :half "upper" :facing "east"}}}
