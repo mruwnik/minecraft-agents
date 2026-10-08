@@ -326,9 +326,15 @@
     (boolean (and c (not (:unloaded? c)) (zero? (:lo c)) (not (contains? @head k))))))
 
 (defn unloaded-leaks
-  "The unloaded (or unseen) cells the fill read, but not those covered?."
-  [{:keys [unloaded] :as world}]
-  (->> @unloaded (remove #(covered? world %)) sort (take 5) (mapv (fn [[x y z]] {:pos {:x x :y y :z z} :why :unloaded}))))
+  "The unloaded (or unseen) cells the fill read, but not those covered?: the 5 nearest to near [x y z] when given,
+  else the first 5 by coordinate."
+  [{:keys [unloaded] :as world} near]
+  (->> @unloaded (remove #(covered? world %))
+       (sort-by (fn [[x y z :as k]]
+                  (if near
+                    (let [[nx ny nz] near] [(+ (* (- x nx) (- x nx)) (* (- y ny) (- y ny)) (* (- z nz) (- z nz))) k])
+                    k)))
+       (take 5) (mapv (fn [[x y z]] {:pos {:x x :y y :z z} :why :unloaded}))))
 
 (defn dedupe-leaks [leaks]
   (vec (first (reduce (fn [[out seen] l]
@@ -338,7 +344,7 @@
 (defn analyse
   "One fill: {:world :fill :leaks} with the leaks found (the unloaded cells too); nil when there is no start and no
   unloaded cell was read looking for one."
-  [{:keys [block-at at box max-cells sealed]}]
+  [{:keys [block-at at box max-cells sealed near]}]
   (let [world (make-world block-at sealed)
         seeds (cond
                 at (seeds-at world at)
@@ -351,7 +357,7 @@
                     :else [])]
         {:world world
          :fill fill
-         :leaks (dedupe-leaks (concat found (unloaded-leaks world)))}))))
+         :leaks (dedupe-leaks (concat found (unloaded-leaks world near)))}))))
 
 (defn pen-without-leaks
   "The cells the pen would enclose with its leaks shut, or nil when shutting up to max-seals rounds of them does
@@ -369,7 +375,8 @@
 (defn check
   "The pen check.
   opts: :block-at (required), :at {:x :y :z} (feet cell to start from) and/or :box {:min :max} (every surface in it
-  starts the fill and a step out of it is a leak), :max-cells (default 2000).
+  starts the fill and a step out of it is a leak), :max-cells (default 2000), :near [x y z] (the unloaded leaks
+  listed are the nearest to it, else the first by coordinate).
   Returns {:closed? :reason :inside :leaks :gates}.
   :reason is nil when closed, else :leak, :unbounded (more than :max-cells reached and no way out pinned down; give
   a :box for exact crossings), :unloaded (a needed cell was not loaded or seen, the start's floor too) or :no-start (the start is no floor).

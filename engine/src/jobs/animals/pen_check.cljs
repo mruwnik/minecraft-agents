@@ -16,7 +16,7 @@
   that finds no wall either side of a gap says that too.
 
   Hands over and emits (info pen-check.done) {:closed? :reason :cells :leaks :gates}:
-  - :reason is nil when closed, else :leak, :unbounded, :unloaded or :no-start (:at is no floor to stand on).
+  - :reason is nil when closed, else :leak, :unbounded, :unloaded (a cell, or the start's floor, was never seen) or :no-start (:at is no floor to stand on).
   - :leaks lists {:pos {:x :y :z} :why}, why one of :open-gate :gap :climb :open :unloaded. At most 12 are
     listed, :leaks-total gives the count when more.
   - :cells counts the inside cells. For a leaky pen without a box it counts the cells the pen would enclose with

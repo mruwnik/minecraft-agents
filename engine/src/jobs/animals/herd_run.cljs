@@ -45,7 +45,8 @@
   (animals/adults (:primitives c) (:mob (:args c)) (view-radius c)))
 
 (defn read-pen [c]
-  (pen/check {:block-at (apiary/seen-block-at-fn (:primitives c)) :box (:box (:args c))}))
+  (pen/check {:block-at (apiary/seen-block-at-fn (:primitives c)) :box (:box (:args c))
+              :near (let [{:keys [x y z]} (u/self-pos c)] [(Math/floor x) (Math/floor y) (Math/floor z)])}))
 
 (defn in-pen-adults
   "The adults of :mob standing on the pen's cells."

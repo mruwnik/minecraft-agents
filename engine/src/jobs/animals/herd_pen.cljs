@@ -148,20 +148,20 @@
 (def look-range "How near the body goes to a pen cell it has not seen before looking at it." 4)
 
 (defn ^:async check-unknown!
-  "The pen has cells the body has not seen (a gate in the dark decays): go near the nearest, look at it once, then read
-  the pen again. A cell still unknown after the look ends :no-pen."
+  "The pen has cells the body has not seen (a gate in the dark decays): go near the nearest not yet looked at, look at it
+  once, then read the pen again. No such cell left, or one too far to look at, ends :no-pen."
   [c answer]
   (let [here (u/self-pos c)
         centre (fn [{:keys [x y z]}] {:x (+ x 0.5) :y (+ y 0.5) :z (+ z 0.5)})
-        unk (->> (:leaks answer) (filter #(= :unloaded (:why %))) (map :pos) (sort-by #(u/dist here (centre %))) first)
-        looked (set (:looked-pen (ctx/mem c)))]
+        looked (set (:looked-pen (ctx/mem c)))
+        unk (->> (:leaks answer) (filter #(= :unloaded (:why %))) (map :pos) (remove #(contains? looked (cell %)))
+                 (sort-by #(u/dist here (centre %))) first)]
     (cond
       (nil? unk) (finish! c :no-pen)
       (not (u/within? here unk look-range))
       (if (= :blocked (await (near/go-near! c unk look-range {:doors :never :escalate false})))
-        (finish! c :unreachable)
+        (finish! c :no-pen)
         :continue)
-      (contains? looked (cell unk)) (finish! c :no-pen)
       :else (do (await (sense/look-at! c (cell unk)))
                 (ctx/update-mem! c update :looked-pen (fnil conj []) (cell unk))
                 :continue))))

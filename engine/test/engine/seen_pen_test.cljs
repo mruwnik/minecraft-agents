@@ -70,7 +70,7 @@
       (fn ^:async t []
         (let [s (dark-run)
               _ (await (ht/run-ticks s 40))]
-          (is (contains? #{:no-pen :unreachable} (:reason (ht/done-event s))) "nothing can be read: the run ends, never brings"))))))
+          (is (= :no-pen (:reason (ht/done-event s))) "nothing can be read: the run ends :no-pen, never :unreachable, never brings"))))))
 
 (defn aged-run
   "A herd run with the gate remembered past its 10 s, after f was applied to the setup."
@@ -97,5 +97,4 @@
               _ (is (= :unloaded (:reason (read s))) "nothing seen yet: unloaded cells, not :no-start")
               _ (ht/submit! s {:target 1})
               _ (await (ht/run-ticks s 40))]
-
-          (is (not= :no-pen (:reason (ht/done-event s)))))))))
+          (is (= ht/gate (:gate (ht/done-event s))) "looked at, read in full: the run got as far as choosing the pen's gate"))))))
