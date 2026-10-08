@@ -160,6 +160,21 @@
           (is (= {[40 64 0] :unloaded} (:given-up result)))
           (is (= [[40 64 0]] (:missing result))))))))
 
+(deftest an-unseen-cell-is-looked-at-before-it-is-given-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "near" :parts [{:id "post" :cells [[3 64 0]] :want "oak_fence"}]}
+              [seen sink] (tu/legacy-capture-sink)
+              p (tu/seeing-after-look (tu/fake-on-floor {:inventory kit}))
+              eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref h/clock)
+                                :events (events/make {:body "Fake" :sinks [sink] :now #(deref h/clock)})
+                                :world (world/of-data {"near" plan} {} [])})
+              result (await (tu/child-outcome eng job {:plan "near"} 200))]
+          (is (seq (h/calls p "look")))
+          (is (= {} (:given-up result)))
+          (is (= 1 (:placed result))))))))
+
 (defn declines
   "Submit the job with args over the world spec and plans, tick a few times: [places, build.declined warns]."
   ([spec plans args] (declines spec plans args []))

@@ -4,6 +4,7 @@
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
+            [jobs.lib.dig-look :as dig-look]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
@@ -551,7 +552,11 @@
           (ctx/update-mem! c #(-> (count-fail % (:pos cell) :unreachable give-up)
                                   (update :bad-stands (fnil conj []) stand))))
         (when (and (= :there w) (nil? (:found cell)))
-          (ctx/update-mem! c count-fail (:pos cell) :unloaded give-up))
+          (let [pos (:pos cell)]
+            ;; a cell outside the view cone is seen only by turning to it
+            (when (dig-look/unknown? (:primitives c) pos) (await (dig-look/look-at! c pos)))
+            (when (nil? (u/seen-block (:primitives c) (zipmap [:x :y :z] pos)))
+              (ctx/update-mem! c count-fail pos :unloaded give-up))))
         (when (and (= :there w) (:found cell) (empty? (if (:dig? cell) (in-dig-reach c [cell]) (in-reach c [cell]))))
           (ctx/update-mem! c count-fail (:pos cell) :unreachable give-up))
         (if (= :partial w) :continue :again)))))
