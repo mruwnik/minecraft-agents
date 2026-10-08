@@ -85,6 +85,8 @@
            ["/api/attention/ProbeMove/resolve" {:kind :unknown}]
            ["/api/attention/w/Probe-Move_2/resolve" {:kind :attention-resolve :world "w" :name "Probe-Move_2"}]
            ["/api/attention/../resolve" {:kind :unknown}]
+           ["/api/settings/claude/ProbeMove" {:kind :settings :world "claude" :name "ProbeMove"}]
+           ["/api/settings/ProbeMove" {:kind :unknown}]
            ["/api/events/" {:kind :unknown}]
            ["/api/events/a/b/c" {:kind :unknown}]
            ["/api/events/w/..%2Fx" {:kind :unknown}]]]

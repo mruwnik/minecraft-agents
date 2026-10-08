@@ -1,7 +1,7 @@
 (ns engine.event-api
   "The engine's private HTTP API on a local Unix socket (mode 0600). The wire format is EDN.
-  GET   /snapshot, /status, /inventory, /events, /job, /jobs, /triggers, /catalog
-  POST  /jobs and /triggers (changes), /attention/resolve, /chat
+  GET   /snapshot, /status, /inventory, /events, /job, /jobs, /triggers, /catalog, /settings
+  POST  /jobs and /triggers (changes), /attention/resolve, /chat, /settings/reload, /settings/set, /settings/unset
   Bodies are limited (a setting, 16 KB). Lists are paged and bounded."
   (:require [engine.args :as a]
             [cljs.reader :as reader]
@@ -459,6 +459,36 @@
                               (.catch (fn [e]
                                         (bad! res (if (= "body too large" (.-message e)) 413 400)
                                               (if (= "body too large" (.-message e)) :too-large :bad-edn))))))
+
+                        (and (= method "GET") (= pathname "/settings"))
+                        (respond! res 200 (settings/view (:primitives eng)))
+
+                        (and (= method "POST") (contains? #{"/settings/reload" "/settings/set" "/settings/unset"} pathname))
+                        (if-not (.startsWith (or (aget (.-headers req) "content-type") "") "application/edn")
+                          (bad! res 415 :content-type-must-be-application-edn)
+                          (-> (read-body req)
+                              (.then
+                               (fn [text]
+                                 (let [{:keys [value error]} (parse-edn text)
+                                       k (:key value)
+                                       problems (atom [])
+                                       emit #(swap! problems conj %)
+                                       finish! (fn [result]
+                                                 (run! #(core/emit! eng %) @problems)
+                                                 (respond! res (if (:ok result) 200 409)
+                                                           (assoc result :problems (mapv :text @problems))))]
+                                   (cond
+                                     error (bad! res 400 error)
+                                     (not (map? value)) (bad! res 400 :bad-request)
+                                     (= "/settings/reload" pathname) (finish! (do (settings/reload! emit) {:ok true}))
+                                     (not (keyword? k)) (bad! res 400 :bad-request)
+                                     (= "/settings/unset" pathname) (finish! (settings/unset-key! k emit))
+                                     (contains? value :value) (finish! (settings/set-key! k (:value value) emit))
+                                     :else (bad! res 400 :bad-request)))))
+                              (.catch (fn [e]
+                                        (if (= "body too large" (.-message e))
+                                          (bad! res 413 :too-large)
+                                          (engine-failed! eng res e))))))
 
                         (and (= method "POST") (= pathname "/chat"))
                         (if-not (and (aget (.-headers req) "content-type")

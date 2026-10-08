@@ -67,7 +67,9 @@
                                  response-text (.toString (js/Buffer.concat (to-array @chunks)) "utf8")]
                              (if (and (>= status 200) (< status 300))
                                (try (resolve (edn-response response-text)) (catch :default e (reject e)))
-                               (reject (js/Error. (str "engine event API HTTP " status))))))))))]
+                               (reject (doto (js/Error. (str "engine event API HTTP " status))
+                                         (aset "status" status)
+                                         (aset "engineBody" (try (edn-response response-text) (catch :default _ nil))))))))))))]
        (.on req "error" reject)
        (.setTimeout req event-socket-timeout-ms #(.destroy req (js/Error. "engine event API timed out")))
        (.end req text)))))

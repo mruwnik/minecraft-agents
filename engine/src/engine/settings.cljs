@@ -85,7 +85,8 @@
   (let [[values layers events] (-> [{} {} []]
                                    (->> (#(apply-layer specs % :world world-file)))
                                    (->> (#(apply-layer specs % :body body-file))))]
-    (reset! state {:body body :specs specs :values values :layers layers})
+    (reset! state {:body body :specs specs :values values :layers layers
+                   :load {:world-file world-file :body-file body-file :body body}})
     (run! emit events)
     nil))
 
@@ -98,6 +99,46 @@
                         :layer (clojure.core/get layers k :code)
                         :doc (:doc spec)}]))
           specs)))
+
+(defn reload!
+  "Load again from the files of the last load!, passing each settings.bad event to emit. Throws before any load."
+  [emit]
+  (let [{:keys [specs load]} @state]
+    (when-not load (throw (ex-info "settings were never loaded" {})))
+    (load! (assoc load :specs specs :emit emit))))
+
+(defn write-body-key!
+  "Change the body file by f (a map fn) and reload. {:ok true}, or {:ok false :reason} when the file is unreadable."
+  [f emit]
+  (let [file (:body-file (:load @state))
+        [kind data] (read-layer file)]
+    (if (= :bad kind)
+      {:ok false :reason (str file " " data "; fix or delete it first")}
+      (do (fs/writeFileSync file (str (pr-str (f (if (= :ok kind) data {}))) "\n"))
+          (reload! emit)
+          {:ok true}))))
+
+(defn set-key!
+  "Write k = v into the body's settings.edn after checking it against the key's spec, then reload (events to emit).
+  {:ok true} or {:ok false :reason} with the file left alone."
+  [k v emit]
+  (let [{:keys [specs load]} @state
+        spec (clojure.core/get specs k)
+        why (when spec (a/problem k v))]
+    (cond
+      (not (:body-file load)) {:ok false :reason "no body settings file (settings were never loaded)"}
+      (not spec) {:ok false :reason (str "unknown key " k)}
+      why {:ok false :reason (str k " must be " why ", got " (pr-str v))}
+      :else (write-body-key! #(assoc % k v) emit))))
+
+(defn unset-key!
+  "Remove k from the body's settings.edn and reload. {:ok true} or {:ok false :reason}."
+  [k emit]
+  (let [{:keys [specs load]} @state]
+    (cond
+      (not (:body-file load)) {:ok false :reason "no body settings file (settings were never loaded)"}
+      (not (contains? specs k)) {:ok false :reason (str "unknown key " k)}
+      :else (write-body-key! #(dissoc % k) emit))))
 
 (defn with-settings
   "Run f with a fresh settings state holding the overrides {k v} (layer :test), then restore the state, also after a
@@ -145,3 +186,8 @@
     (when (= :assumed (rate-source))
       (emit {:source :system :kind (keyword "game-rate.assumed") :level :info
              :text "no set_ticking_state packet came since the join; assuming 20 ticks per second"}))))
+
+(defn view
+  "What the tools read: every key's value, layer and doc, and the rates. p is the primitives (for physics-ms)."
+  [p]
+  {:settings (resolved) :game-rate (game-rate) :rate-source (rate-source) :frozen? (frozen?) :physics-ms (physics-ms p)})

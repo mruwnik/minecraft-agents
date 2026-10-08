@@ -8,7 +8,7 @@
             [clojure.string :as str]
             [agent-tools.observe.status :refer [truthy-text?]]))
 
-(def usage "usage: observe.mjs <agent> --world <world> [status [--raw|--verbose] [--wait --timeout 60s --chatter addressed --observer agent --watch j12] | inventory [--raw] [--slots] | equipment [--raw] | job <id> | result <id> | catalog <job|trigger> <name> | catalog <jobs|triggers> [prefix]] [--limit <n>] [--offset <n>] [--worlds <dir>] [--state <legacy-parent>]\nstatus: :pos [x y z], :health and :food 0-20, :current the running job, :mode scheduled or manual. job <id>: its state and outcome; an unknown id answers :unknown-job.")
+(def usage "usage: observe.mjs <agent> --world <world> [status [--raw|--verbose] [--wait --timeout 60s --chatter addressed --observer agent --watch j12] | inventory [--raw] [--slots] | equipment [--raw] | job <id> | result <id> | catalog <job|trigger> <name> | catalog <jobs|triggers> [prefix] | settings [--changed] [--raw] | settings reload | settings set <:ns/key> <edn> | settings unset <:ns/key>] [--limit <n>] [--offset <n>] [--worlds <dir>] [--state <legacy-parent>]\nsettings: every key with value and layer (:code, :world, :body) and the game rate; set and unset edit the body's settings.edn and reload.\nstatus: :pos [x y z], :health and :food 0-20, :current the running job, :mode scheduled or manual. job <id>: its state and outcome; an unknown id answers :unknown-job.")
 
 ;; Requests
 
@@ -23,7 +23,7 @@
    :timeout {:type "string"} :chatter {:type "string"} :observer {:type "string"}
    :watch {:type "string" :multiple true}
    :from {:type "string"} :poll-ms {:type "string"}
-   :danger {:type "boolean" :default false} :disconnect {:type "boolean" :default false}})
+   :changed {:type "boolean" :default false} :danger {:type "boolean" :default false} :disconnect {:type "boolean" :default false}})
 
 (defn fail [message] (throw (ex-info message {::error message})))
 
@@ -58,6 +58,31 @@
     (check (not (integer-in? poll 50 5000)) "--poll-ms must be 50-5000")
     {:timeout-ms timeout-ms :observer observer :chatter chatter :watch watch
      :poll-ms poll :from from :danger danger :disconnect disconnect}))
+
+(def setting-key #":[a-z][a-z0-9.-]*/[a-z][a-z0-9-]*")
+
+(defn valid-edn? [text]
+  (try (data/read-edn text) true (catch :default _ false)))
+
+(defn settings-request
+  "[endpoint params extras] of the settings operation: extras is {:method :body} or {:settings-mode}."
+  [sub args values]
+  (check (some? (:limit values)) "--limit is not valid for settings")
+  (let [[k v & more] args
+        post (fn [endpoint body] [endpoint [] {:method "POST" :body body}])]
+    (case sub
+      nil (do (check (seq args) "settings takes no further arguments")
+              ["/settings" [] {:settings-mode {:changed (boolean (:changed values)) :raw (boolean (:raw values))}}])
+      "reload" (do (check (seq args) "settings reload takes no arguments")
+                   (post "/settings/reload" "{}"))
+      "set" (do (check (or (nil? k) (nil? v) (seq more)) "settings set needs a key and an EDN value")
+                (check (not (re-matches setting-key k)) "the key must be a keyword such as :jobs.items.smelt/wait-ms")
+                (check (not (valid-edn? v)) (str "the value is not valid EDN: " v))
+                (post "/settings/set" (str "{:key " k " :value " v "}")))
+      "unset" (do (check (or (nil? k) (seq (next args))) "settings unset needs a key")
+                  (check (not (re-matches setting-key k)) "the key must be a keyword such as :jobs.items.smelt/wait-ms")
+                  (post "/settings/unset" (str "{:key " k "}")))
+      (fail "settings needs reload, set <key> <edn>, unset <key> or no argument"))))
 
 (defn endpoint-for
   "[endpoint params] of the operation, validating its arguments."
@@ -110,6 +135,8 @@
 
       :else (fail "catalog needs job|trigger <name> or jobs|triggers [prefix]"))
 
+    "settings" (settings-request kind-or-id rest values)
+
     (fail (str "unknown operation " op))))
 
 (defn query-string [params]
@@ -131,7 +158,7 @@
       (check (nil? world) (bodies/missing-world-error "--world"))
       (check (not (re-matches world-name world)) "the world must be a name of letters, digits, _ and -")
       (let [state (bodies/storage-root values map-tool/default-state-dir)
-            [endpoint params] (endpoint-for op kind-or-id rest values)
+            [endpoint params extras] (endpoint-for op kind-or-id rest values)
             wait-options (when (:wait values)
                            (check (or (not= "status" op) (:raw values) (:verbose values) (truthy-text? (:limit values)))
                                   "--wait is only valid with compact status")
@@ -147,6 +174,8 @@
                  :socket-path (.join path (bodies/body-dir state world agent) "engine" "events.sock")
                  :path (if (seq query) (str endpoint "?" query) endpoint)}
           wait-options (assoc :wait-options wait-options)
+          (:method extras) (assoc :method (:method extras) :body (:body extras))
+          (:settings-mode extras) (assoc :settings-mode (:settings-mode extras))
           (= "result" op) (assoc :result-id kind-or-id)
           (#{"inventory" "equipment"} op) (assoc :inventory-mode (keyword op) :slots (:slots values) :raw (:raw values))
           (:verbose values) (assoc :verbose true))))

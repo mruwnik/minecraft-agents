@@ -5,7 +5,10 @@
             [engine.event-api :as event-api]
             [engine.events :as events]
             [engine.job-api :as job-api]
+            [engine.args :as a]
             [engine.registry :as registry]
+            [engine.settings :as settings]
+            ["fs" :as fs]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             ["http" :as http]
@@ -360,3 +363,48 @@
         shown (get-in (event-api/inventory-view eng) [:equipment :torso :enchants])]
     (is (= {:name "enchant-1" :level 1} (first shown)))
     (is (= 8 (count shown)) "capped")))
+
+(deftest settings-ops-read-reload-set-and-unset
+  (async done
+    (let [dir (tu/tmp-dir)
+          socket-path (path/join dir "events.sock")
+          body-file (path/join dir "body.edn")
+          server (event-api/create socket-path {:events (events/make {:generation-id "g"})
+                                                :primitives #js {}})
+          post (fn [p body] (request socket-path "POST" p {"Content-Type" "application/edn"} body))]
+      (tu/run-async
+       done
+       (fn []
+         (settings/with-settings {}
+           (fn []
+             (settings/load! {:specs (a/declare-settings! {:jobs.demo/wait-ms {:default 5000 :doc "w" :spec (a/int-in 0 nil)}})
+                              :body-file body-file :body "Bob" :emit (fn [_])})
+             (-> ((:listen server))
+                 (.then (fn [_] (request socket-path "GET" "/settings" {} nil)))
+                 (.then (fn [response]
+                          (let [v (edn-response response)]
+                            (is (= 200 (:status response)))
+                            (is (= {:value 5000 :layer :code :doc "w"} (get-in v [:settings :jobs.demo/wait-ms])))
+                            (is (= 20 (:game-rate v)))
+                            (is (= 50 (:physics-ms v))))
+                          (post "/settings/set" "{:key :jobs.demo/wait-ms :value 9}")))
+                 (.then (fn [response]
+                          (is (= 200 (:status response)))
+                          (is (= {:ok true} (select-keys (edn-response response) [:ok])))
+                          (is (= 9 (settings/get {:jobs.demo/wait-ms {:default 5000}} :jobs.demo/wait-ms)))
+                          (post "/settings/set" "{:key :jobs.demo/wait-ms :value -1}")))
+                 (.then (fn [response]
+                          (is (= 409 (:status response)))
+                          (is (= false (:ok (edn-response response))))
+                          (fs/writeFileSync body-file "{:jobs.demo/wait-ms 12}")
+                          (post "/settings/reload" "{}")))
+                 (.then (fn [response]
+                          (is (= 200 (:status response)))
+                          (is (= 12 (settings/get {:jobs.demo/wait-ms {:default 5000}} :jobs.demo/wait-ms)))
+                          (post "/settings/unset" "{:key :jobs.demo/wait-ms}")))
+                 (.then (fn [response]
+                          (is (= 200 (:status response)))
+                          (is (= 5000 (settings/get {:jobs.demo/wait-ms {:default 5000}} :jobs.demo/wait-ms)))
+                          (post "/settings/set" "{:key \"nope\" :value 1}")))
+                 (.then (fn [response] (is (= 400 (:status response)))))
+                 (.finally (fn [] ((:close server))))))))))))

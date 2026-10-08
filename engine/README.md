@@ -476,6 +476,8 @@ HTTP over `worlds/<world>/agents/<name>/engine/events.sock` (mode 0600; all bodi
 | `GET /inventory` | carried stacks and worn equipment (with a short enchants list), read-only |
 | `GET /job?id=` | one job's parsed spec, args, state, linked requests |
 | `GET /catalog?kind=jobs\|triggers&prefix=` / `kind=job\|trigger&name=` | names page / one description |
+| `GET /settings` | every key `{:value :layer :doc}` plus `:game-rate`, `:rate-source`, `:frozen?`, `:physics-ms` |
+| `POST /settings/reload` / `/settings/set` `{:key :value}` / `/settings/unset` `{:key}` | re-read the files / validate and write the key in the body's `settings.edn`, then reload; 409 `{:ok false :reason}` on refusal |
 | `GET /triggers[?id=]` | the register with live mute/move/cooldown/backoff state (`?id=` adds `:explain`) |
 | `POST /triggers` | one register edit |
 | `GET/POST /jobs` | list, `:submit`, `:interrupt`, `:cancel` (also a running reflex job: ends `reflex.ended :cancelled`, its trigger may fire again), `:cancel-all`, `:retry` (used by `tools/jobs.mjs`) |
@@ -713,6 +715,7 @@ node engine/tools/observe.mjs Bob --world claude --wait [--timeout 30s] [--watch
 node engine/tools/observe.mjs Bob --world claude job j17 | result j17
 node engine/tools/observe.mjs Bob --world claude catalog jobs jobs.farm. --limit 10 | catalog job <name> | catalog trigger <name>
 node engine/tools/observe.mjs Bob --world claude inventory [--slots] | equipment
+node engine/tools/observe.mjs Bob --world claude settings [--changed] [--raw] | settings reload | settings set :jobs.x/key <edn> | settings unset :jobs.x/key   # keys with layer and the game rate; dashboard popup has the same
 node engine/tools/entities.mjs Bob --world claude [--type zombie --radius 32 --player Alex --limit 20]
 node engine/tools/jobs.mjs Bob --world claude list | show j17 | cancel j17 | cancel-all | retry j17 | resolve <attention> --reason handled
 node engine/tools/jobs.mjs Bob --world claude submit '(jobs.movement.go-to {:pos {:x 10 :y 64 :z 20}})' [--next|--now|--hold] [--wait --timeout 5m]

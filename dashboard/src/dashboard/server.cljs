@@ -20,6 +20,7 @@
             [dashboard.server.esm :refer [load-view-mount view-mount view-request?]]
             [dashboard.server.pictures :refer [send-item-icon! send-thumb! send-thumbs-stats! thumbnailer]]
             [dashboard.server.events :refer [resolve-attention! send-events!]]
+            [dashboard.server.settings :refer [change-settings! send-settings!]]
             [dashboard.server.map :refer [send-plans! send-tile! send-tiles! tile-stats-json]]
             [dashboard.server.posts :refer [preview! request-restart! send-chat! send-whisper!]]))
 
@@ -66,6 +67,7 @@
         :item-icon (send-item-icon! res blueprint-name)
         :events (send-events! res (body-key route) query)
         :attention-resolve (resolve-attention! req res (body-key route))
+        :settings (if (= "POST" (.-method req)) (change-settings! req res (body-key route)) (send-settings! res (body-key route)))
         :chat-send (send-chat! req res)
         :whisper-send (send-whisper! req res (body-key route))
         :restart (request-restart! req res)

@@ -276,11 +276,23 @@
 
 (defn get!
   "GET over the body's events socket: a promise of {:status :content-type :text}. Options :timeout-ms :max-bytes
-  :signal :request-fn."
-  [socket-path request-path {:keys [timeout-ms max-bytes signal request-fn] :or {timeout-ms request-timeout-ms max-bytes max-response-bytes}}]
+  :signal :request-fn, and :method with an EDN :body for a POST."
+  [socket-path request-path {:keys [timeout-ms max-bytes signal request-fn method body] :or {timeout-ms request-timeout-ms max-bytes max-response-bytes}}]
   (http/request (cond-> {:socket-path socket-path :path request-path :label "observe" :timeout-ms timeout-ms
                          :max-bytes max-bytes :signal signal}
-                  request-fn (assoc :request-fn request-fn))))
+                  request-fn (assoc :request-fn request-fn)
+                  method (assoc :method method :body body :headers {"content-type" "application/edn"}))))
+
+(defn settings-view
+  "The /settings answer as printed: the rates and every key's value and layer (docs only with --raw), only the
+  keys off their code default with --changed."
+  [view {:keys [changed raw]}]
+  (update view :settings
+          (fn [settings]
+            (into (sorted-map)
+                  (comp (remove (fn [[_ v]] (and changed (= :code (:layer v)))))
+                        (map (fn [[k v]] [k (if raw v (dissoc v :doc))])))
+                  settings))))
 
 (defn print-text!
   "Write to stdout: a promise that resolves once the text is flushed."
@@ -363,6 +375,9 @@
         (-> (print! (inventory/compact result (:inventory-mode request) (:slots request)))
             (.then (constantly (if (false? (:ok result)) 1 0)))))
 
+      (and (starts? "/settings") (:settings-mode request) (= 200 status))
+      (-> (print! (settings-view (data/read-edn text) (:settings-mode request))) (.then (constantly 0)))
+
       (and (starts? "/job?") (job-not-found? status text))
       (job-outcome! request opts (.get (js/URLSearchParams. (second (str/split path #"\?" 2))) "id"))
 
@@ -391,7 +406,7 @@
                       (:wait-options request) (wait! request opts)
                       (:result-id request) (job-outcome! request opts (:result-id request))
                       :else
-                      (-> (get-fn (:socket-path request) (:path request) {})
+                      (-> (get-fn (:socket-path request) (:path request) (select-keys request [:method :body]))
                           (.then #(respond! request opts %))))))
            (.catch (fn [error]
                      (-> (output (failure-text request error)) (.then (constantly 2))))))))))

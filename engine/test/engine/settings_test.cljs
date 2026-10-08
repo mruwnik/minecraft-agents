@@ -217,3 +217,74 @@
       (is (= 7 (read "prim/demo-ms")) "a reload reaches the reader at its next call")
       (load! "{:prim/demo-ms 0}")
       (is (= 50 (read "prim/demo-ms")) "a value outside the spec keeps the default"))))))
+
+(defn load-args [dir]
+  {:world-file (path/join dir "world.edn") :body-file (path/join dir "body.edn") :specs specs :body "Bob"})
+
+(deftest reload-re-reads-the-files-load-was-given
+  (settings/with-settings {}
+    (fn []
+      (let [[_ _ files] (load-with nil "{:jobs.demo/wait-ms 20}")
+            events (atom [])]
+        (fs/writeFileSync (:body-file files) "{:jobs.demo/wait-ms 30 :jobs.demo/typo 1}")
+        (settings/reload! #(swap! events conj %))
+        (is (= 30 (settings/get specs :jobs.demo/wait-ms)))
+        (is (= 1 (count @events)))))))
+
+(deftest set-writes-the-body-file-validates-and-reloads
+  (settings/with-settings {}
+    (fn []
+      (let [[_ _ files] (load-with nil nil)
+            emit (fn [_])]
+        (is (= {:ok true} (settings/set-key! :jobs.demo/wait-ms 70 emit)))
+        (is (= 70 (settings/get specs :jobs.demo/wait-ms)))
+        (is (= {:jobs.demo/wait-ms 70} (cljs.reader/read-string (fs/readFileSync (:body-file files) "utf8"))))
+        (is (= :body (get-in (settings/resolved) [:jobs.demo/wait-ms :layer])))
+        (is (= {:ok true} (settings/set-key! :jobs.demo/label "x" emit)))
+        (is (= {:jobs.demo/wait-ms 70 :jobs.demo/label "x"} (cljs.reader/read-string (fs/readFileSync (:body-file files) "utf8"))))))))
+
+(deftest set-refuses-a-bad-key-or-value-and-leaves-the-file
+  (settings/with-settings {}
+    (fn []
+      (let [[_ _ files] (load-with nil "{:jobs.demo/wait-ms 20}")
+            emit (fn [_])
+            before (fs/readFileSync (:body-file files) "utf8")
+            unknown (settings/set-key! :jobs.demo/typo 1 emit)
+            wrong (settings/set-key! :jobs.demo/wait-ms -5 emit)]
+        (is (= false (:ok unknown)))
+        (is (re-find #"unknown" (:reason unknown)))
+        (is (= false (:ok wrong)))
+        (is (re-find #"-5" (:reason wrong)))
+        (is (= before (fs/readFileSync (:body-file files) "utf8")))
+        (is (= 20 (settings/get specs :jobs.demo/wait-ms)))))))
+
+(deftest set-refuses-an-unreadable-body-file
+  (settings/with-settings {}
+    (fn []
+      (let [[_ _ files] (load-with nil "{:jobs.demo/wait-ms")
+            r (settings/set-key! :jobs.demo/wait-ms 5 (fn [_]))]
+        (is (= false (:ok r)))
+        (is (= "{:jobs.demo/wait-ms" (fs/readFileSync (:body-file files) "utf8")))))))
+
+(deftest unset-removes-the-key-from-the-body-file
+  (settings/with-settings {}
+    (fn []
+      (let [[_ _ files] (load-with nil "{:jobs.demo/wait-ms 20 :jobs.demo/label \"x\"}")
+            emit (fn [_])]
+        (is (= {:ok true} (settings/unset-key! :jobs.demo/wait-ms emit)))
+        (is (= 5000 (settings/get specs :jobs.demo/wait-ms)))
+        (is (= {:jobs.demo/label "x"} (cljs.reader/read-string (fs/readFileSync (:body-file files) "utf8"))))
+        (is (= false (:ok (settings/unset-key! :jobs.demo/typo emit))))))))
+
+(deftest settings-view-carries-the-rates
+  (settings/with-settings {}
+    (fn []
+      (load-with nil nil)
+      (settings/set-clock! 40 false :packet)
+      (let [v (settings/view #js {:physicsMs (fn [] 25)})]
+        (is (= 40 (:game-rate v)))
+        (is (= :packet (:rate-source v)))
+        (is (= false (:frozen? v)))
+        (is (= 25 (:physics-ms v)))
+        (is (= 5000 (get-in v [:settings :jobs.demo/wait-ms :value]))))
+      (settings/set-clock! 20 false :assumed))))

@@ -9,7 +9,8 @@
             [dashboard.ui.drive :as drive]
             [dashboard.ui.eventlog :as eventlog]
             [dashboard.ui.hudmodel :as hudmodel]
-            [dashboard.ui.logic :as logic]))
+            [dashboard.ui.logic :as logic]
+            [dashboard.ui.settings :as settings]))
 
 (defn fact
   "One labelled fact of the header: \"Label: value\", the label dimmed."
@@ -254,6 +255,6 @@
        [:div.dmodal {:on-click #(.stopPropagation %)}
         [header m]
         [:div.dleft [chrome (:online? m)] [whisper-box (:name m) (:online? m)] [view-box m]]
-        [:div.dright [hud-panel (:hud m)] [inventory-panel (:hud m)] [jobs-panel m]]
+        [:div.dright [hud-panel (:hud m)] [inventory-panel (:hud m)] [jobs-panel m] [settings/panel]]
         [attention-panel (:online? m)]
         [log-panel]]])))
