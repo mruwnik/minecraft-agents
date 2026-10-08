@@ -43,7 +43,7 @@
     is crafted first). A child that brings in nothing three times stops it (:tried :gather). A mined need (seen, or
     with :explore) whose block no carried tool harvests gets the cheapest tool that does first (an obtain child, slot
     :pickaxe: wooden_pickaxe for stone and coal, stone_pickaxe for iron).
-    With :explore, an unseen ore other than coal is left to the mine child (it tunnels for ore); any other unseen raw need is searched for (jobs.explore.search child, slot :explore, at most 3 per need;
+    With :explore, an unseen stone material or ore other than coal is left to the mine child (it tunnels for ore); any other unseen raw need is searched for (jobs.explore.search child, slot :explore, at most 3 per need;
     a notice :obtain.exploring says so); none found stops it (:tried {:gather {:searched ..}}).
   - Nothing else: stopped :no-source with :tried.
 
@@ -238,7 +238,7 @@
   "The raw needs of a plan's :gather map, logs first: [{:key k :count n :job sym :args {..} :seen fn of a block name: what must have been seen}]. A new gather source
   is one more case here. An ore drop (coal, raw_iron ..) is mined from a plain or a deepslate ore (:ore? true: :block
   is set by with-block to the one seen); one other than coal is :tunnel? (unseen with :explore, the mine child
-  tunnels and descends for it rather than a surface search)."
+  tunnels and descends for it rather than a surface search); so is a stone material (it stairs down to stone)."
   ([gather] (gather-needs gather game/default-version))
   ([gather version]
   (let [logs (reduce + 0 (for [[k v] gather :when (log? k)] v))]
@@ -252,7 +252,7 @@
           (when (pos? logs) [{:key "log" :count logs :job 'jobs.forestry.harvest-wood :seen log? :args {:fetch #{:item}}}])
           (for [[k n] gather :when (material-blocks version k)]
             (let [blocks (material-blocks version k)]
-              {:key k :count n :job 'jobs.gather.mine :seen blocks
+              {:key k :count n :job 'jobs.gather.mine :seen blocks :tunnel? true
                :args {:block (first (sort blocks)) :item k :count n :fetch mine-fetch}}))
           (when-let [n (get gather "dirt")]
             [{:key "dirt" :count n :job 'jobs.gather.mine :seen dirt-blocks
