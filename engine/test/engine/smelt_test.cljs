@@ -3,6 +3,7 @@
   (:require [cljs.test :refer [deftest is are async]]
             [engine.settings :as settings]
             [engine.registry :as registry]
+            [engine.blocks-dig-test :as bd]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
@@ -639,7 +640,7 @@
                (await (result-of (assoc base-world :furnaces {pos-key {:input {:name "raw_iron" :count 2}}})
                                  {:furnace {:x 1 :y 64 :z 0} :item "raw_iron" :count 3})))
             "input already in the furnace is not counted")
-        (is (= {:smelted 0 :wanted 0 :reason "no-furnace"}
+        (is (= {:smelted 0 :wanted 0 :reason "no-furnace" :status :stopped}
                (await (result-of (dissoc base-world :blocks) {:furnace {:x 1 :y 64 :z 0} :item "raw_iron" :count 3}))))))))
 
 ;; ------------------------------------------------------------------ no :furnace: the nearest one seen
@@ -688,6 +689,44 @@
           (await (seeing-ticks s 3))
           (is (= {:x -1 :y 64 :z 4} (:furnace (first (of-kind seen :smelt.furnace))))
               "the nearer smoker cannot cook the carried iron"))))))
+
+(deftest a-cooked-product-names-its-raw-input
+  (are [out in] (= in (smelt/input-of out))
+    "cooked_chicken" "chicken"
+    "baked_potato" "potato"
+    "dried_kelp" "kelp"
+    "raw_iron" "raw_iron"
+    "iron_ingot" "iron_ingot"
+    nil nil))
+
+(deftest an-output-item-is-smelted-from-its-input
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:blocks {pos-key "furnace"} :inventory [{:name "chicken" :count 2} {:name "coal" :count 2}]})
+              result (await (bd/child-outcome eng 'jobs.items.smelt {:furnace {:x 1 :y 64 :z 0} :item "cooked_chicken" :count 1} 2))]
+          (is (= {:name "chicken" :count 1} (:input (furnace-of p))))
+          (is (nil? (:reason result))))))))
+
+(deftest an-item-no-furnace-cooks-is-refused-first-and-ends-stopped
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:blocks {pos-key "furnace"} :inventory [{:name "coal" :count 2}]})
+              result (await (bd/child-outcome eng 'jobs.items.smelt {:item "iron_ingot" :count 1} 3))
+              gave-up (first (of-kind seen :smelt.gave-up))]
+          (is (= {:status :stopped :reason "not-smeltable"} (select-keys result [:status :reason])))
+          (is (= "iron_ingot" (:item gave-up)))
+          (is (re-find #"iron_ingot" (:text gave-up)))
+          (is (empty? (calls p "furnace"))))))))
+
+(deftest a-give-up-with-nothing-smelted-ends-stopped
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:inventory [{:name "coal" :count 2}]})
+              result (await (bd/child-outcome eng 'jobs.items.smelt {:furnace {:x 1 :y 64 :z 0} :item "raw_iron" :count 1} 3))]
+          (is (= :stopped (:status result))))))))
 
 (deftest without-a-furnace-and-none-seen-it-ends-with-a-reason
   (async done
