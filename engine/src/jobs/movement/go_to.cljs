@@ -4,6 +4,8 @@
             [engine.ctx :as ctx]
             [engine.memory :as mem]
             [engine.settings :as settings]
+            [jobs.lib.access :as access]
+            [jobs.lib.access.zones :as zones]
             [jobs.lib.combat :as combat]
             [jobs.lib.reach :as reach]
             [jobs.lib.breath :as breath]
@@ -12,12 +14,14 @@
             [jobs.lib.watch :as watch]
             [jobs.lib.near :as near]
             [jobs.lib.cost :as cost]
+            [jobs.lib.fetch :as fetch]
             [jobs.lib.threats :as threats]
             [jobs.lib.walk.watch :as wwatch]
             [jobs.lib.look :as look]
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.walk.search :as wsearch]
             [jobs.lib.places :as places]
+            [jobs.lib.torch :as ltorch]
             [jobs.lib.world :as known]
             [jobs.movement.go-to.air :as air]
             [jobs.movement.go-to.escalation :as esc]
@@ -48,7 +52,12 @@
     prices of jobs.lib.cost/unknown-prices. When a dark drop was the better way it gives up :why :unseen-floor-dark; in the
     dark with a torch carried and the off hand empty it first holds the torch in the off hand (info go-to.off-hand-torch,
     once a call: it sees deeper) and plans again; it puts the torch back into the inventory before an escalation child runs and when the call ends (full: it
-    stays, info go-to.off-hand-kept); one a cut call left in the hand goes back at the next call's start. Nothing is placed.
+    stays, info go-to.off-hand-kept); one a cut call left in the hand goes back at the next call's start.
+  - :place-torches true (with :unknown; default false) may light such a dark floor instead: the planner prices a torch
+    (jobs.lib.cost/light-cost, or :unknown's :light-cost) where it can stand on the takeoff, in no other owner's zone or
+    claim; the walk stops there, places one from the inventory (info walk.torch-placed, body memory :torch-placed) and
+    walks on once it sees the floor. With none carried it fetches torches once a call (:fetch, default true; jobs.lib.fetch);
+    with none and no fetch it gives up :unseen-floor-dark saying so. A torch that cannot go there is not tried there again.
   - :dark false plans dark cells like lit ones (default: a dark cell costs twice a lit one, so a lit route up to about 2x
     longer is taken: a cell seen and dark, or one never seen at night; look/dark-fn).
   - :goal-danger :end gives up at once (:why :goal-dangerous, :mob, :mob-pos, :mob-distance) when the goal lies within the full-cost radius of a known mob the body would flee; :wait (default) walks on, an info goal-in-danger says so.
@@ -98,7 +107,9 @@
    :escalate {:doc "when shut in with no way out, pillar, stair or dig a door to get out (and put back what was dug); false: give up"
               :spec boolean? :default true}
    :dangers {:doc "false: plan straight past known dangers (a walk up to the hostile being fought); true: keep away from them" :spec boolean? :default true}
-   :unknown {:doc "true: plan over what the body has seen or felt only, unseen floors checked by eye before they are stepped on; a map of :cell :floor :peek-s :aim-s :see-lit-depth :light-depth overrides their prices and depths (jobs.lib.cost/unknown-prices); false: plan over the world as it is" :spec (a/valid-by "true, false or a map of :cell :floor :peek-s :aim-s :see-lit-depth :light-depth to numbers >= 0" wworld/unknown-problem) :default false}
+   :unknown {:doc "true: plan over what the body has seen or felt only, unseen floors checked by eye before they are stepped on; a map of :cell :floor :peek-s :aim-s :see-lit-depth :light-depth overrides their prices and depths (jobs.lib.cost/unknown-prices), :light-cost the seconds of a torch :place-torches places; false: plan over the world as it is" :spec (a/valid-by "true, false or a map of :cell :floor :peek-s :aim-s :see-lit-depth :light-depth :light-cost to numbers >= 0" wworld/unknown-problem) :default false}
+   :place-torches {:doc "with :unknown: light a dark floor it cannot see with a torch from the inventory, placed at the takeoff (priced by jobs.lib.cost/light-cost, or :unknown's :light-cost), fetching torches when none is carried (:fetch); false: never place one" :spec boolean? :default false}
+   :fetch {:doc "get torches for :place-torches when none is carried (jobs.lib.fetch): true, a set of kinds or a map of limits; false: give up instead" :spec fetch/option? :default true}
    :dark {:doc "false: plan dark cells like lit ones; true: a dark cell (seen dark, or unseen at night) costs twice a lit one" :spec boolean? :default true}
    :tolls {:doc "cells to cross only as a last resort, [{:x :y :z :factor}]: each costs factor times its own seconds more (jobs.lib.cost farm-tolls, zone-tolls)" :spec (a/valid-by "a list of {:x :y :z :factor} of finite numbers, :factor >= 0" wworld/tolls-problem) :default nil}
    :min-health {:doc "hp (1-20) a drop or a plant's prick may not take the body below, less a margin of 1 (the walk's damage budget); 12 when absent; a floor the walk never crosses, not even when it goes over its budget" :spec (a/num-in 1 20) :default nil}
@@ -247,12 +258,49 @@
   (let [budget (:explore-blocks (:args c))]
     (boolean (and budget (> (:explored (get @approaches (:id c)) 0) budget)))))
 
+(def torch-need "The wait :place-torches fetches for when no torch is carried." {:reason :need :item "torch" :count 4})
+(def torch-fetch-key [:item ["torch"]])
+
+(defn torch-fetch-open?
+  "Whether :place-torches may still fetch torches this call: :fetch is on, none was fetched yet, none failed lately."
+  [c]
+  (boolean (and (fetch/opts c 'jobs.movement.go-to) (not (:torch-fetched (ctx/mem c))) (nil? (fetch/failure c torch-fetch-key)))))
+
+(defn light-ok
+  "The planner's lightOk: (fn [x y z]) true where a torch may go, in no other owner's zone or claim (none under :ignore-zones?)."
+  [c]
+  (let [in (access/zone-input c)]
+    (fn [x y z] (or (:ignore-zones? in) (true? (:ok (zones/verdict (assoc in :action :place :cell [x y z]))))))))
+
+(defn round-unknown
+  "The mask spec of this round (c's :unknown): with :place-torches and a torch carried or a fetch still open, torches on
+  (wworld/with-light), priced by :unknown's :light-cost or jobs.lib.cost/light-cost."
+  [c]
+  (let [u (:unknown c)
+        n (ltorch/torches-carried (:primitives c))
+        arg (:unknown (:args c))]
+    (if (and u (:place-torches (:args c)) (or (pos? n) (torch-fetch-open? c)))
+      (wworld/with-light u (or (when (map? arg) (:light-cost arg)) (:cost (cost/light-cost {:carried n}))) (light-ok c))
+      u)))
+
+(defn ^:async fetch-torches!
+  "A walk that reached a floor to light with no torch carried: fetch torches once a call (jobs.lib.fetch), :continue while
+  the fetch child waits, else :again (the next round plans without torches when none came)."
+  [c]
+  (if (torch-fetch-open? c)
+    (do (ctx/update-mem! c assoc :torch-fetched true)
+        (or (await (fetch/step! c 'jobs.movement.go-to torch-need)) :again))
+    :again))
+
 (defn dark-end
   "A fruitless round's result as go-to gives it up when a dark way was the better way (:dark-best, jobs.lib.near/dark-best):
-  :no-path :unseen-floor-dark with that cell, unless the round failed for a reason of its own (stuck, health, air, ...)."
-  [result]
+  :no-path :unseen-floor-dark with that cell (and :torches :none or :fetch-failed when :place-torches had no torch), unless the
+  round failed for a reason of its own (stuck, health, air, ...)."
+  [c result]
   (if (end/dark-end? result)
-    {:status :no-path :reason :unseen-floor-dark :dark-best (:dark-best result)}
+    (cond-> {:status :no-path :reason :unseen-floor-dark :dark-best (:dark-best result)}
+      (and (:place-torches (:args c)) (zero? (ltorch/torches-carried (:primitives c))))
+      (assoc :torches (if (fetch/failure c torch-fetch-key) :fetch-failed :none)))
     result))
 
 (defn ^:async look-at-goal-air!
@@ -293,10 +341,11 @@
                   :zone-tolls (:zone-tolls (:args c))
                   :drop-cost (:drop-cost (:args c))
                   :costs (:costs (:args c))
-                  :unknown (:unknown c)
+                  :unknown (round-unknown c)
                   :progress (empty? (:frontier-best (ctx/mem c)))}
             {walked :result status :status to :to} (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos)) pos range opts))
-            aided? (when (and (not= "arrived" status) (torch/torch-aid? c walked)) (await (torch/hold-torch! c)))
+            fetched (when (= :no-torch (:status walked)) (await (fetch-torches! c)))
+            aided? (when (and (not fetched) (not= "arrived" status) (torch/torch-aid? c walked)) (await (torch/hold-torch! c)))
             looked? (when (and (not aided?) (= :air (:reason walked))) (await (look-at-goal-air! c pos)))
             surfaced? (when (and (not aided?) (not looked?) (= :air (:reason walked))) (await (air/surface! c (dissoc opts :progress))))
             result (known-frontier-result walked)
@@ -321,6 +370,8 @@
           (explore-spent? c)
           (end/give-up! c pos (:blocked (ctx/mem c) 0) status {:status :no-path :reason :explore-spent}
                         {:explored (js/Math.round (:explored (get @approaches (:id c))))})
+
+          fetched fetched
 
           aided? :again
 
@@ -350,7 +401,7 @@
             (if (and (if (false? (:retry (:args c))) progress? (< tries max-blocked)) (not (#{:goal-enclosed :goal-cut-off :goal-on-magma} (:reason result))))
               :again
               (let [unloaded? (wsearch/goal-unloaded? (.-snapshot pw) (mapv #(js/Math.floor (% pos)) [:x :y :z]))
-                    result (dark-end result)
+                    result (dark-end c result)
                     ended (if (esc/escalate? c result) result (unloaded-end result unloaded?))]
                 (await (esc/give-up-or-escalate! c pos tries status ended))))))))))))
 
@@ -363,6 +414,7 @@
         there? (here? c pos (:range (:args c)))]
     (wworld/warn-bad-settings! c)
     (ctx/update-mem! c #(cond-> (-> % (dissoc :best :fault-cells :over-budget :off-hand-tried :air-looked :surfacings) (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {}))
+                          (not (:fetching m)) (dissoc :torch-fetched)
                           (and there? (:escalate-now m)) (dissoc :escalate-now)
                           (and there? (:escalation m))
                           (-> (dissoc :escalation :escalation-from :planned :holes-before)
@@ -432,7 +484,8 @@
       (:escalation m) (await (esc/escalation-round! c pos))
       (:escalate-now m) (do (ctx/update-mem! c dissoc :escalate-now)
                             (await (esc/escalate! c pos nil)))
-      :else (await (walk! c pos (:range (:args c)) (some-> (:doors (:args c)) keyword))))))
+      :else (or (when (:fetching m) (await (fetch/step! c 'jobs.movement.go-to torch-need)))
+                (await (walk! c pos (:range (:args c)) (some-> (:doors (:args c)) keyword)))))))
 
 (defn shared-marker
   "The shared marker called s: the exact name first, else the first whose name matches in any case; nil when none."

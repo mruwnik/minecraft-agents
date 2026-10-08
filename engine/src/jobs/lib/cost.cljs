@@ -13,7 +13,7 @@
              planner dangers (jobs.lib.cost.danger).
     health   hp-seconds, health-scale, drown-prices, damage-budget, survivable-budget: what an hp costs and how many a walk may spend (jobs.lib.cost.health).
     food     food-reserve: the food a body keeps carried, 3 days of it (jobs.lib.cost.food).
-    value    item-value, fetch-cost, walk-cost: what items are worth, what fetching them or walking costs (jobs.lib.cost.value);
+    value    item-value, fetch-cost, walk-cost: what items are worth, what fetching them or walking costs; light-cost: a torch go-to places (jobs.lib.cost.value);
              per-dark, dark-factor: the one price of a dark block, which go-to's planner costs.
     planner  planner-costs-problem, planner-costs, planner-names: go-to's :costs, the per-move prices it may override; landing-problem, planner-landing: go-to's :landing, fall damage by landing block; air-profile, air-used, air-costs: the planner's air drain and grace from the body's helmet, the air a dive has used; swim-profile: its swimH from Depth Strider on the boots; gait-problem, gait-costs: go-to's :gait; unknown-prices: the planner's prices of unseen cells (jobs.lib.cost.planner).
     tolls    farm-tolls, zone-tolls: go-to's :tolls for planted cells and zone cells to cross only as a last resort
@@ -86,6 +86,8 @@
 (def item-value value/item-value)
 (def fetch-cost value/fetch-cost)
 (def walk-cost value/walk-cost)
+(defn trip [] (value/trip))
+(def light-cost value/light-cost)
 (def per-danger value/per-danger)
 (defn per-dark [] (value/per-dark))
 (defn dark-factor [] (value/dark-factor))

@@ -7,6 +7,9 @@
             [engine.ctx :as ctx]
             [engine.path.blocks :as blocks]
             [engine.path.executor :as executor]
+            [jobs.lib.look :as look]
+            [jobs.lib.placement :as placement]
+            [jobs.lib.torch :as torch]
             [jobs.lib.util :as u]
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.search :as wsearch]
@@ -18,7 +21,8 @@
   {::max-timeout-s {:default 120 :doc "The longest a walk call may run, in seconds." :spec (a/int-in 1 nil)}
    ::max-settle-waits {:default 20 :doc "Waits for the body to settle after a step before the walk goes on." :spec (a/int-in 0 nil)}
    ::centre-tolerance {:default 0.2 :doc "How near (blocks, each axis) a centring nudge ends to its target." :spec (a/num-in 0 nil)}
-   ::centre-max-ticks {:default 30 :doc "Ticks a centring nudge walks before it gives up." :spec (a/int-in 1 nil)}})
+   ::centre-max-ticks {:default 30 :doc "Ticks a centring nudge walks before it gives up." :spec (a/int-in 1 nil)}
+   ::light-wait-ms {:default 1500 :doc "How long a walk that placed a torch looks for the floor it lights before it gives the floor up, in ms." :spec (a/int-in 0 nil)}})
 
 (defn max-timeout-s [] (settings/get settings ::max-timeout-s))
 (defn max-settle-waits [] (settings/get settings ::max-settle-waits))
@@ -194,13 +198,9 @@
   [steps pose]
   {:exec (executor/start steps 0 pose)})
 
-(defn ^:async walk!
-  "Follow steps once. [result ms]: the executor's done map, or {:status :stuck ...} on a timeout,
-  {:status :failed ...}; ms is the wall time of the steer act. With a watch (see watch-stop), the walk also stops at a step
-  boundary with {:status :replan ...} when the way ahead changed or a partial plan is due a refresh. (:on-pose c), when
-  set, is called with each tick's pose {:x :y :z ...} (go-to records its approach with it)."
-  ([c steps timeout-s] (walk! c steps timeout-s nil))
-  ([c steps timeout-s watch]
+(defn ^:async steer-walk!
+  "walk!'s one steer act over steps: [result ms], result {:status :light ...} when the gate asks for a torch."
+  [c steps timeout-s watch]
   (let [gate (gate-env (:primitives c) steps)
         watch (cond-> watch (and watch gate) (update :skip (fnil into #{}) (wsight/floor-cells steps)))
         env {:policy (wworld/body-policy c) :steps steps :gate gate
@@ -224,7 +224,72 @@
        "timeout" {:status :stuck :why (str "walk timed out after " timeout-s " s")
                   :at (let [p (.-pose r)] [(.-x p) (.-y p) (.-z p)])}
        {:status :failed :reason (.-reason r)})
-     ms])))
+     ms]))
+
+(defn light-wait-ms [] (settings/get settings ::light-wait-ms))
+(def torch-placed-policy "Body memory of the torches walks placed (:torch-placed {:cell :by}), for a tidy-up." {:cap 64 :ttl :forever})
+
+(defn ^:async see-lit!
+  "Look at cell [x y z] (a floor a torch lights) until the body sees it (a sight pass, then see, the gate's: a pass takes in
+  any point of the floor's top, a glance only its centre), at most light-wait-ms: true when seen."
+  [c see [x y z :as cell]]
+  (await (ctx/act c :look (clj->js {:pos {:x (+ x 0.5) :y (+ y 0.5) :z (+ z 0.5)}})))
+  (loop [waited 0]
+    (look/see! c)
+    (cond
+      (some? (see cell)) true
+      (>= waited (light-wait-ms)) false
+      :else (do (await (ctx/act c :wait #js {:ms 100}))
+                (recur (+ waited 100))))))
+
+(defn ^:async light!
+  "Light the floor of step k (done {:status :light :step k :cells [floor]}, the gate's) with a torch from the inventory at
+  its takeoff (jobs.lib.torch/torch-at: a wall torch at the head, else a floor torch at the feet), then look until the
+  floor shows: nil to walk on, else the walk's done map: {:status :no-torch} with none carried, {:status :replan :why
+  :no-light :cells [takeoff]} when the torch could not go there, {:status :replan :why :unseen} when the floor stayed unseen."
+  [c steps {:keys [step cells at]}]
+  (let [p (:primitives c)
+        tk (nth steps (dec step))
+        g (nth steps step)
+        feet [(:x tk) (:y tk) (:z tk)]
+        floor (first cells)
+        block-at (fn [[x y z]] (u/seen-name p {:x x :y y :z z}))
+        no-light (fn [why] {:status :replan :why :no-light :cells [feet] :at at :step step :detail why})]
+    (if-not (pos? (torch/torches-carried p))
+      {:status :no-torch :cells [feet] :at at :step step}
+      (let [choice (torch/torch-at [(js/Math.sign (- (:x g) (:x tk))) (js/Math.sign (- (:z g) (:z tk)))] feet
+                                   (placement/eye (u/self-pos c)) block-at)]
+        (if (:refused choice)
+          (no-light (:refused choice))
+          (let [cell (:cell choice)
+                r (await (ctx/act c :place (clj->js {:pos (zipmap [:x :y :z] cell) :item "torch"
+                                                     :click (placement/js-click (:click choice))})))]
+            (if-not (or (= "placed" (.-status r)) (torch/torch-blocks (block-at cell)))
+              (no-light (keyword (.-status r)))
+              (do (ctx/remember! c :torch-placed {:cell cell :by (:id c)} torch-placed-policy)
+                  (ctx/emit! c :walk.torch-placed :info {:cell cell :floor floor :text (str "placed a torch at " (pr-str cell) " to see the floor at " (pr-str floor))})
+                  (when-not (await (see-lit! c (:see (gate-env p steps)) floor))
+                    {:status :replan :why :unseen :cells [floor] :at at :step step})))))))))
+
+(defn ^:async walk!
+  "Follow steps once. [result ms]: the executor's done map, or {:status :stuck ...} on a timeout,
+  {:status :failed ...}; ms is the wall time of the steer acts. With a watch (see watch-stop), the walk also stops at a step
+  boundary with {:status :replan ...} when the way ahead changed or a partial plan is due a refresh. (:on-pose c), when
+  set, is called with each tick's pose {:x :y :z ...} (go-to records its approach with it). A floor the plan lights
+  (:light) that the gate cannot see is lit by a torch (light!) and the walk goes on from its takeoff; light!'s other
+  ends end the walk."
+  ([c steps timeout-s] (walk! c steps timeout-s nil))
+  ([c steps timeout-s watch]
+   (loop [steps steps base 0 ms 0]
+     (let [[done wms] (await (steer-walk! c steps timeout-s watch))
+           ms (+ ms wms)
+           rebase (fn [d] (cond-> d (:step d) (update :step + base)))]
+       (if-not (= :light (:status done))
+         [(rebase done) ms]
+         (if-let [end (await (light! c steps done))]
+           [(rebase end) ms]
+           (let [k (:step done)]
+             (recur (update (subvec steps (dec k)) 1 dissoc :light) (+ base (dec k)) ms))))))))
 
 (defn partial-end
   "A partial plan that was walked to its end is not an arrival unless the body is in range of the goal: then the walk

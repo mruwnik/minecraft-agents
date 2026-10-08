@@ -47,7 +47,7 @@
               reason (assoc :detail (str reason)))
     (cond
       (or reason (= :no-path status)) (merge {:why (if reason (keyword reason) :no-path)}
-                                             (select-keys result [:kind :cells :near :one-way :dark-best]))
+                                             (select-keys result [:kind :cells :near :one-way :dark-best :torches]))
       :else {:why :no-progress})))
 
 (def kind-words
@@ -75,7 +75,7 @@
 
 (defn give-up-words
   "The give-up reason in words, for the :text of the :unreachable event and the result: no map dumps."
-  [pos {:keys [why kind detail escalation nearest-hostile mob mob-distance explored]}]
+  [pos {:keys [why kind detail escalation nearest-hostile mob mob-distance explored torches]}]
   (str "gave up walking to " (if (map? pos) (let [{:keys [x y z]} pos] [x y z]) pos) ": "
        (if escalation
          (str "shut in here; " (escalation-words escalation))
@@ -100,7 +100,11 @@
            :air-lethal "every way there under water would drown the body to death"
            :one-way "the way back is one-way"
            :door-stuck "a door in the way will not open"
-           :unseen-floor-dark "the way goes down onto floors it cannot see in the dark: carry a torch (held in the off hand it sees deeper) or light the way (:place-torches, go-to lighting them itself, is not built yet)"
+           :unseen-floor-dark (str "the way goes down onto floors it cannot see in the dark: carry a torch (held in the off hand it sees deeper), light the way, or set :place-torches (go-to lights them)"
+                                   (case torches
+                                     :none "; it has no torch to light them and fetches none"
+                                     :fetch-failed "; it has no torch to light them and could not fetch any"
+                                     ""))
            (str "no path (" (some-> why name) ")")))))
 
 (defn warn-level [c] (if (false? (:warn (:args c))) :info :warn))

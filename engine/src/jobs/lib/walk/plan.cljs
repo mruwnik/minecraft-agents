@@ -99,6 +99,11 @@
   (mapv (fn [s ^js js] (cond-> s (some? (unchecked-get js "damage")) (assoc :damage (unchecked-get js "damage"))))
         steps (array-seq js-steps)))
 
+(defn with-light
+  "steps (of js-steps) with :light true where the planner lights the step's floor with a torch at its takeoff."
+  [steps ^js js-steps]
+  (mapv (fn [s ^js js] (cond-> s (true? (unchecked-get js "light")) (assoc :light true))) steps (array-seq js-steps)))
+
 (defn unknown-floor-fn
   "With a mask on pw's snapshot (.unknown, its unseen cells read as the mask's id): a fn [x y z] true for a floor cell the
   mask hides under a stand that stands on its floor (not in a door's lower half or a climbable, whose floor the planner
@@ -114,7 +119,8 @@
 
 (defn path-steps
   "The executor's steps for a planner path over pw: corner free sides and hops, high corners, gap ceilings and drops onto a
-  bouncing block marked, the planned damage of each, and over a masked snapshot the unseen floors (jobs.lib.walk.sight)."
+  bouncing block marked, the planned damage of each, and over a masked snapshot the unseen floors (jobs.lib.walk.sight) and
+  the ones a torch lights (:light)."
   [pw ^js path]
   (let [solid? (wworld/solid-fn pw)
         unknown-floor? (unknown-floor-fn pw)
@@ -124,7 +130,7 @@
                   executor/policy
                   (executor/with-high-corners
                     executor/policy
-                    (executor/with-corner-hops (executor/with-free-sides (with-damage (executor/steps-of (.-steps path)) (.-steps path)) solid?) solid?)
+                    (executor/with-corner-hops (executor/with-free-sides (with-light (with-damage (executor/steps-of (.-steps path)) (.-steps path)) (.-steps path)) solid?) solid?)
                     solid?)
                   solid?)
                 (wworld/bounce-fn pw)

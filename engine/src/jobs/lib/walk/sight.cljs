@@ -260,7 +260,8 @@
   "The gate's controls this tick, with k the pending gate and i the executor's step: on the way, approach (the executor's
   controls held back); on the takeoff (i is k-1 and reached), hold, looking at the floor. Within look-blocks the body looks
   at the floor (pitch, and yaw on the takeoff). {:out {:controls :yaw :pitch} :gstate}, or {:done ...} once the floor is
-  given up as missed: still for still-ticks on the takeoff, or max-ticks there."
+  given up as missed: still for still-ticks on the takeoff, or max-ticks there; a step the plan lights (:light) is
+  {:status :light} then, for the walk to place a torch."
   [{:keys [floors opts]} steps k i gstate pose {:keys [controls yaw pitch]}]
   (let [tk (nth steps (dec k)) g (nth steps k)
         prev (when (>= k 2) (nth steps (- k 2)))
@@ -286,7 +287,10 @@
             s (if still? (inc (:still gstate 0)) 0)
             gstate' (assoc gstate :held n :still s)]
         (if (or (>= s (:still-ticks opts)) (>= n (:max-ticks opts)))
-          {:done {:status :replan :why :unseen :cells [cell] :at at :step k :ticks n} :gstate gstate'}
+          {:done (if (:light g)
+                   {:status :light :cells [cell] :at at :step k :ticks n}
+                   {:status :replan :why :unseen :cells [cell] :at at :step k :ticks n})
+           :gstate gstate'}
           {:out {:controls controls :yaw lyaw :pitch lpitch} :gstate gstate'})))))
 
 ;; ---------------------------------------------------------------- one tick of the gate
@@ -317,9 +321,10 @@
 
 (defn note-missed!
   "A walk that gave a floor up (done {:why :unseen :cells}) adds it to the missed Set of the mask on pw's snapshot (cell
-  keys; the planner's options.unknown.missed), so the next plan over that mask does not count on seeing it."
+  keys; the planner's options.unknown.missed), so the next plan over that mask does not count on seeing it; one whose
+  torch could not go on a takeoff ({:why :no-light :cells}) adds that to the noLight Set (options.unknown.noLight)."
   [^js pw {:keys [why cells]}]
   (when-let [^js u (some-> pw .-snapshot .-unknown)]
-    (when (= :unseen why)
-      (let [^js missed (or (.-missed u) (set! (.-missed u) (js/Set.)))]
-        (doseq [[x y z] cells] (.add missed (base/cell-key x y z)))))))
+    (when-let [field (case why :unseen "missed" :no-light "noLight" nil)]
+      (let [^js marked (or (unchecked-get u field) (doto (js/Set.) (->> (unchecked-set u field))))]
+        (doseq [[x y z] cells] (.add marked (base/cell-key x y z)))))))

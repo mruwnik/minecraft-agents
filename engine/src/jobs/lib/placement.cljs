@@ -208,9 +208,13 @@
       :else (result (:block want) (choose [(option cell (if (= "top" half) down up) 0.5)] eye block-at clickable?)
                     (look-toward (opposite facing))))))
 
+(defn torch-base?
+  "Whether a floor torch stands on block ({:name}): a sturdy one, or a thin one with a middle (floor-torch-base)."
+  [block]
+  (boolean (or (sturdy? block) (and (clickable? block) (re-find floor-torch-base (:name block))))))
+
 (defmethod decide :torch [_ want cell {:keys [eye block-at]}]
-  (let [base? #(or (sturdy? %) (and (clickable? %) (re-find floor-torch-base (:name %))))]
-    (result (:block want) (choose [(option cell up 0.5)] eye block-at base?) {:pitch (- (/ pi 2))})))
+  (result (:block want) (choose [(option cell up 0.5)] eye block-at torch-base?) {:pitch (- (/ pi 2))}))
 
 (defn hung
   "A block that hangs on the block behind it (wall torch, ladder), looking into that block."

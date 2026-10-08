@@ -53,7 +53,9 @@
    ::per-dark {:default 0.3 :spec (a/num-in 0 nil)
                :doc "One block walked in the dark, on top of per-block: a dark block costs twice a lit one."}
    ::walk-blocks-per-s {:default 2.9 :spec (a/num-in 0.1 nil)
-                        :doc "Walking speed with slack for detours (4.3 flat out, 1.5x the way), blocks a second."}})
+                        :doc "Walking speed with slack for detours (4.3 flat out, 1.5x the way), blocks a second."}
+   ::torch-place-s {:default 1.5 :spec (a/num-in 0 nil)
+                    :doc "Placing a torch to light a dark floor and waiting for the light to show it, in seconds."}})
 
 (def default-basis
   "Every constant of the item base; item-value's :basis is deep-merged over it."
@@ -376,6 +378,16 @@
   per-block and per-danger prices every trip is costed with."
   [{:keys [distance danger]}]
   (let [parts {:walk (* (per-block) distance) :danger (* per-danger (or danger 0))}]
+    {:cost (reduce + (vals parts)) :parts parts}))
+
+(defn torch-place-s [] (settings/get settings ::torch-place-s))
+
+(defn light-cost
+  "{:cost :parts {:torch :place :trip}} of one torch go-to places to light a dark floor (the planner's lightCost,
+  seconds): the torch's worth, torch-place-s, and a trip when none is carried (it is fetched first)."
+  [{:keys [carried]}]
+  (let [parts (cond-> {:torch (:value (item-value [{:name "torch" :count 1}])) :place (torch-place-s)}
+                (not (pos? carried)) (assoc :trip (trip)))]
     {:cost (reduce + (vals parts)) :parts parts}))
 
 (defn fetch-cost

@@ -12,6 +12,7 @@
             [jobs.lib.breath :as breath]
             [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
+            [jobs.lib.placement :as placement]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
             [jobs.lib.walk.sight :as wsight]
@@ -26,16 +27,37 @@
   shared by every pathWorld made with this spec (the floors the walk looked for and could not see)."
   [prices]
   (let [{:keys [cell floor peek-s aim-s see-lit-depth light-depth]} (merge cost/unknown-prices prices)]
-    #js {:cell cell :floor floor :peekS peek-s :aimS aim-s :seeLitDepth see-lit-depth :lightDepth light-depth :missed (js/Set.)}))
+    #js {:cell cell :floor floor :peekS peek-s :aimS aim-s :seeLitDepth see-lit-depth :lightDepth light-depth :missed (js/Set.)
+         :noLight (js/Set.)}))
 
 (defn unknown-problem
-  "Why u is not a usable go-to :unknown (a boolean, or a map of :cell :floor :peek-s :aim-s :see-lit-depth :light-depth to numbers >= 0), else nil."
+  "Why u is not a usable go-to :unknown (a boolean, or a map of :cell :floor :peek-s :aim-s :see-lit-depth :light-depth
+  :light-cost to numbers >= 0), else nil."
   [u]
   (cond
     (boolean? u) nil
     (not (map? u)) (str ":unknown is true, false or a map of prices; got " (pr-str u))
-    :else (when-let [[k v] (first (remove (fn [[k v]] (and (contains? cost/unknown-prices k) (number? v) (>= v 0))) u))]
-            (str ":unknown prices are :cell :floor :peek-s :aim-s :see-lit-depth :light-depth, numbers >= 0; got " (pr-str k) " " (pr-str v)))))
+    :else (when-let [[k v] (first (remove (fn [[k v]] (and (or (contains? cost/unknown-prices k) (= :light-cost k)) (number? v) (>= v 0))) u))]
+            (str ":unknown prices are :cell :floor :peek-s :aim-s :see-lit-depth :light-depth :light-cost, numbers >= 0; got " (pr-str k) " " (pr-str v)))))
+
+(def torch-base*
+  (delay (let [^js t (blocks/default-state-table)
+               a (js/Uint8Array. (.-length (.-top t)))]
+           (.forEach (.-nameIds t) (fn [^js r name]
+                                     (when (placement/torch-base? {:name name})
+                                       (doseq [id (range (aget r 0) (inc (aget r 1)))] (aset a id 1)))))
+           a)))
+
+(defn torch-base
+  "The planner's options.unknown.torchBase: 1 by state id for a block a floor torch stands on (jobs.lib.placement/torch-base?)."
+  []
+  @torch-base*)
+
+(defn with-light
+  "The mask spec unknown (unknown-spec) with torches on: the planner's lightCost (seconds, cost/light-cost or the caller's),
+  torchBase and lightOk (fn [x y z] true where a torch may go); its missed and noLight Sets stay shared."
+  [^js unknown light-cost light-ok]
+  (js/Object.assign #js {} unknown #js {:lightCost light-cost :torchBase (torch-base) :lightOk light-ok}))
 
 (defn- memory-sections
   "(fn [cx sy cz]) the ids of the body's memory of that section (sy the world's section y; ids + 1, 0 never seen), or nil;
@@ -74,10 +96,11 @@
   (some-> pw .-snapshot .-unknown))
 
 (defn unknown-key
-  "What a kept search's key holds of pw's mask: nil unmasked, else the floors missed so far and the see depth."
+  "What a kept search's key holds of pw's mask: nil unmasked, else the floors missed so far, the see depth, the takeoffs
+  where a torch failed and the torch price."
   [pw]
   (when-let [^js u (unknown-of pw)]
-    [(.-size ^js (.-missed u)) (.-seeDepth u)]))
+    [(.-size ^js (.-missed u)) (.-seeDepth u) (some-> ^js (.-noLight u) .-size) (.-lightCost u)]))
 
 (defn wall-id
   "A state id of a full block with no collision tricks (stone, the first state that is one), of a state table."
