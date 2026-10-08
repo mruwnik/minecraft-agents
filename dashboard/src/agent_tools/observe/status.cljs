@@ -186,6 +186,9 @@
       (and (= :body source) (:disconnect opts) (= :disconnected kind))
       (clean-pairs :wake :disconnected :reason (clip (:reason d)))
 
+      (and (= :job source) (= :obtain.exploring kind))
+      (clean-pairs :wake :notice :event kind :job (get-in e [:context :job-id]) :message (clip (:message e)))
+
       (and (= :job source) (job-results/terminal-kinds kind) (some #{(get-in e [:context :job-id])} (:watch opts)))
       (clean-pairs :wake :job-finished :job (get-in e [:context :job-id]) :result (:kind e)
                    :message (clip (or (:message e) (:error d)))))))

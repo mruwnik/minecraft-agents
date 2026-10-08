@@ -34,9 +34,9 @@
     felled or mined as one child per round, only what the body has seen: logs by jobs.forestry.harvest-wood,
     cobblestone and coal by jobs.gather.mine (its pickaxe only from a chest or a craft, never gathered: no mine inside a mine's fetch, so no loop back into obtain). The crafts follow once the chain is whole (a chain that is craftable now
     is crafted first). A child that brings in nothing three times stops it (:tried :gather). A stone material or coal
-    (seen, or with :explore) with no pickaxe carried gets a wooden pickaxe first (a jobs.items.obtain child, slot :pickaxe, when crafting is allowed).
-    With :explore, a raw need not seen is looked for by walking (a jobs.explore.search child, slot :explore, scan
-    radius 16, at most 3 per need); a search that ends with none seen stops it (:tried {:gather {:searched name ..}}).
+    (seen, or with :explore) with no pickaxe carried gets a wooden pickaxe first (child, slot :pickaxe).
+    With :explore, an unseen raw need is searched for (jobs.explore.search child, slot :explore, at most 3 per need;
+    a notice :obtain.exploring says so); none found stops it (:tried {:gather {:searched ..}}).
   - Nothing else: stopped :no-source with :tried.
 
   The check waits {:reason :no-source :why text :item|:any-of} (:why: what each source lacks) before the first round (once the round has looked around, when chests are allowed) when nothing is carried enough, no
@@ -432,6 +432,15 @@
   gather source, as does the third search for one need."
   [c need]
   (let [targets (search-names need)
+        o (explore-opts c)
+        here (.-pos (.self (:primitives c)))
+        _ (ctx/emit! c :obtain.exploring :info
+                     {:message (str "nothing seen to get " (clojure.string/join "/" targets) ": walking to look for it, up to " (:max-distance o)
+                                    " blocks out and " (:max-legs o) " legs, from " (js/Math.floor (.-x here)) " "
+                                    (js/Math.floor (.-y here)) " " (js/Math.floor (.-z here)))
+                      :attention :notice
+                      :for targets :max-distance (:max-distance o) :max-legs (:max-legs o)
+                      :from (mapv #(js/Math.floor %) [(.-x here) (.-y here) (.-z here)])})
         r (await (ctx/call-child c :explore 'jobs.explore.search
                                  (merge (explore-opts c) {:target targets :count 1 :scan-radius 16 :use-notes false})))]
     (if (= :continue r)

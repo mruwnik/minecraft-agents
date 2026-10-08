@@ -1116,6 +1116,12 @@
                        (is (= 'jobs.explore.search (:job call)))
                        (is (some #{"oak_log"} (:target (:args call))) (pr-str call))
                        (is (not-any? #(= :no-source (:reason %)) (events-of s :waiting)) "no wait: the explore child solves it")
+                       (let [ev (events-of s :obtain.exploring)]
+                         (is (= 1 (count ev)) "one notice per search")
+                         (is (= :notice (:attention (first ev))) (pr-str ev))
+                         (is (some #{"oak_log"} (:for (first ev))))
+                         (is (= 64 (:max-distance (first ev))))
+                         (is (vector? (:from (first ev)))))
                        (is (nil? (core/waiting (:eng s) id))))))))))))
 
 (deftest get-tool-whose-explore-finds-nothing-ends-no-source-saying-so

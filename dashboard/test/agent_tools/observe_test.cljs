@@ -255,6 +255,8 @@
    ["a watched job wakes" (assoc (event :job :completed) :context {:job-id "j1"}) (assoc defaults :watch ["j1"]) :job-finished]
    ["a watched job wakes when stopped" (assoc (event :job :stopped) :context {:job-id "j1"}) (assoc defaults :watch ["j1"]) :job-finished]
    ["a watched job wakes when cancelled" (assoc (event :job :cancelled) :context {:job-id "j1"}) (assoc defaults :watch ["j1"]) :job-finished]
+   ["an exploration start wakes" (assoc (event :job :obtain.exploring {:for ["oak_log"]} "looking for oak_log") :attention :notice) defaults :notice]
+   ["another notice stays quiet" (assoc (event :job :job.notify {} "hi") :attention :notice) defaults nil]
    ["an idle body always wakes" (event :body :idle {:jobs []} "body idle 10 s") defaults :idle]])
 
 (deftest a-death-wake-names-cause-and-place
