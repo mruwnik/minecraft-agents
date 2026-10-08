@@ -68,7 +68,7 @@
 (defn composter-allowed?
   "Whether the job may use the composter at pos (zones, claims, footprints; one warn when refused)."
   [c pos]
-  (gate/allowed? c :compost.declined "compost" :harvest pos))
+  (gate/allowed? c :compost.declined "compost" :harvest pos {:own-plans-ok? true}))
 
 (defn nearest-composter
   "The nearest composter within :radius that the zone rules let the job use."
@@ -76,7 +76,7 @@
   (let [me (u/self-pos c)]
     (->> (look/seen-blocks (:primitives c) {:names ["composter"] :radius (:radius (:args c)) :live? true})
          (map :pos)
-         (gate/allowed c :compost.declined "compost" :harvest)
+         (#(gate/allowed c :compost.declined "compost" :harvest % {:own-plans-ok? true}))
          (sort-by #(u/dist me %))
          first)))
 

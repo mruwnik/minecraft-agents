@@ -8,7 +8,8 @@
             [engine.events :as events]
             [engine.test-util :as tu :refer [child-outcome]]
             [engine.triggers :as triggers]
-            [jobs.lib.world-files :as ew]))
+            [jobs.lib.world-files :as ew]
+            [plan.shape :as shape]))
 
 (defn setup [world & [shared]]
   (let [clock (atom 1000000)
@@ -198,3 +199,13 @@
           (core/submit! eng (list job {:grass true :fetch false}) {})
           (is (nil? (core/tick! eng)))
           (is (empty? (calls p "useOn"))))))))
+
+(deftest fertilize-works-in-the-footprint-of-its-own-plan-but-not-another-bodys
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[author ripe] [["Fake" 7] ["Miles" 3]]]
+          (let [plan (shape/with-author {:id "hut" :parts [{:id "p" :box [[2 64 0] [2 64 0]] :want "stone"}]} author)
+                {:keys [eng p]} (setup {:inventory meal :blocks {"2,64,0" "wheat"} :ages {"2,64,0" 3}} (ew/of-data {"hut" plan} {} []))]
+            (await (child-outcome eng job {} 20))
+            (is (= ripe (age p "2,64,0")) author)))))))

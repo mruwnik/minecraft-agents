@@ -71,7 +71,7 @@
                      (map :pos)
                      (filter #(<= (u/dist mid %) radius))))]
     (->> (remove refused found)
-         (gate/allowed c :fertilize.declined "fertilize" :harvest)
+         (#(gate/allowed c :fertilize.declined "fertilize" :harvest % {:own-plans-ok? true}))
          (sort-by #(u/dist me %)))))
 
 (defn has-meal? [p]
@@ -108,7 +108,7 @@
       (case w
         :partial :continue
         :blocked (do (refuse!) :again)
-        (if-not (gate/allowed? c :fertilize.declined "fertilize" :harvest target)
+        (if-not (gate/allowed? c :fertilize.declined "fertilize" :harvest target {:own-plans-ok? true})
           (do (refuse!) :again)
           (let [r (await (ctx/act c :useOn #js {:pos (clj->js target) :item "bone_meal" :face "up"}))]
             (if (= "used" (.-status r))

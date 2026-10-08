@@ -15,6 +15,7 @@
             [engine.test-util :as tu :refer [run-until-empty child-outcome]]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
+            [plan.shape :as shape]
             [jobs.farm.till :as till]))
 
 (defn setup [world & [shared]]
@@ -397,3 +398,13 @@
     {:from {:x 0 :y 63 :z 0}}
     {:center {:x 0 :y 63 :z 0}}
     {:from {:x 0 :y 63 :z 0} :to {:x 1000000000 :y 63 :z 1000000000}}))
+
+(deftest till-leaves-cells-in-the-footprint-of-its-own-plan-alone-too
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [author ["Fake" "Miles"]]
+          (let [plan (shape/with-author {:id "hut" :parts [{:id "p" :box [[1 63 1] [2 63 2]] :want "stone"}]} author)
+                {:keys [eng p]} (setup {:inventory hoe :blocks four} (ew/of-data {"hut" plan} {} []))]
+            (await (child-outcome eng job box 4))
+            (is (empty? (calls p "useOn")) author)))))))

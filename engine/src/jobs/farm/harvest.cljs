@@ -245,9 +245,10 @@
     (first (sort-by #(u/dist here %) cells))))
 
 (defn permitted
-  "The poss the job may act on with action: zones, claims and the footprints of plans but its own (see jobs.lib.gate)."
+  "The poss the job may act on with action: zones, claims and the footprints of plans but its own (see jobs.lib.gate).
+  Sowing is also allowed in a plan this body made; cutting is not (it would undo that plan)."
   [c action poss]
-  (gate/allowed c :harvest.declined "harvest" action poss {:except (:plan (:args c))}))
+  (gate/allowed c :harvest.declined "harvest" action poss {:except (:plan (:args c)) :own-plans-ok? (= :sow action)}))
 
 (defn cut-action
   "The zone action asked for cutting a crop: :harvest in box mode; with :plan :dig, the action the plan jobs (farm.tend)

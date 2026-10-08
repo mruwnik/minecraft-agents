@@ -578,7 +578,8 @@ them: `act!` and the primitives check neither, and a job may ignore them. The he
   missing zone list never blocks a survival job.
 - A plan's footprint is the body's own when its `:metadata :by` equals the body's username (case-insensitive).
 - A body's own plan never blocks its explicit work: `blocks.dig`, `blocks.place`, `access.stair` and `access.pillar` act on
-  its cells. `gather.mine` and `forestry.fell-tree` spare own-plan cells unless `:spare-own-builds false` (default true).
+  its cells. `gather.mine` and `forestry.fell-tree` spare own-plan cells unless `:spare-own-builds false` (default true). Acts that change no cell
+  (animals, apiary harvest, compost, fertilize, sowing) also work in its footprint; till, path, sapling and mine place do not.
 - **Tidying** (`jobs.lib.tidy`): a dig or place that breaks another's block is noted as a `:tidy` memory entry.
   `jobs.survival.restore-broken` puts the cells back when the body is safe; the `:tidy-pending` trigger starts it.
 

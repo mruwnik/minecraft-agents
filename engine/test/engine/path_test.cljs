@@ -9,6 +9,7 @@
             [engine.test-util :as tu :refer [run-until-empty child-outcome]]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
+            [plan.shape :as shape]
             [jobs.build.path :as path]))
 
 (defn setup [world & [shared]]
@@ -199,3 +200,13 @@
           (is (= 1 (count (kinds seen :fetch.started))))
           (is (= 1 (count (kinds seen :fetch.failed))))
           (is (= [:no-shovel] (distinct (map :reason (kinds seen :path.skipped))))))))))
+
+(deftest path-leaves-cells-in-the-footprint-of-its-own-plan-alone-too
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [author ["Fake" "Miles"]]
+          (let [plan (shape/with-author {:id "hut" :parts [{:id "p" :box [[1 63 1] [2 63 2]] :want "stone"}]} author)
+                {:keys [eng p]} (setup {:inventory shovel :blocks four} (ew/of-data {"hut" plan} {} []))]
+            (await (child-outcome eng job box 4))
+            (is (empty? (calls p "useOn")) author)))))))

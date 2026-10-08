@@ -123,7 +123,7 @@
 (defn sowable-cells
   "The ground cells of cells whose sowing (the cell above) the job may do; one warn when some are refused."
   [c cells]
-  (let [ok (set (gate/allowed c :plant.declined "plant" :sow (map #(update % :y inc) cells)))]
+  (let [ok (set (gate/allowed c :plant.declined "plant" :sow (map #(update % :y inc) cells) {:own-plans-ok? true}))]
     (filterv #(ok (update % :y inc)) cells)))
 
 (defn seed-need
@@ -205,11 +205,11 @@
                                            :else (update acc :seeded conj debt)))
                                        {:short #{} :seeded []}
                                        (harvest/planned-bare (:primitives c) cells))
-        ok (set (gate/allowed c :plant.declined "plant" :sow (map :pos seeded) {:except plan}))]
+        ok (set (gate/allowed c :plant.declined "plant" :sow (map :pos seeded) {:except plan :own-plans-ok? true}))]
     (reduce (fn [acc {:keys [pos] :as debt}]
               (if (ok pos)
                 (update acc :ready conj debt)
-                (if-let [reason (permit/refusal c plan :sow pos)]
+                (if-let [reason (permit/refusal c plan :sow pos {:own-plans-ok? true})]
                   (update acc :refused conj {:pos pos :reason reason})
                   acc)))
             {:ready [] :short short :refused []}
@@ -218,7 +218,7 @@
 (defn ^:async plan-place!
   "Place the seed of debt at its cell after asking the rules once more; a failure is counted against the cell."
   [c {:keys [pos seed]}]
-  (when (permit/ok? c (:plan (:args c)) :sow pos)
+  (when (permit/ok? c (:plan (:args c)) :sow pos {:own-plans-ok? true})
     (let [outcome (await (blocks/place-cell! c pos seed {:ignore-zones? true}))]
       (case outcome
         :continue :continue

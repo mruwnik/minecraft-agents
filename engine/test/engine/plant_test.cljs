@@ -10,6 +10,7 @@
             [engine.hostile-test :as h]
             [engine.perception :as perception]
             [jobs.lib.world-files :as ew]
+            [plan.shape :as shape]
             [jobs.farm.plant :as plant]))
 
 (def clock (atom 1000000))
@@ -284,6 +285,18 @@
           (is (= "wheat" (block-at p 2 64 2)))
           (is (= "air" (block-at p 3 64 2)))
           (is (= [[:refused ["other"]]] (mapv (juxt :reason :plans) declined))))))))
+
+(deftest cells-shared-with-its-own-other-plan-are-sown
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[author sown] [["Fake" "wheat"] ["Miles" "air"]]]
+          (let [plans (update (shared-plans [[3 64 2]]) "other" shape/with-author author)
+                {:keys [eng p]} (start {:blocks (farmland (range 2 4) [2]) :inventory (inv "wheat_seeds" 6) :floor tu/walk-floor}
+                                       (ew/of-data plans {} []))]
+            (core/submit! eng (list job {:plan "mix"}) {})
+            (await (run-until-empty eng 40))
+            (is (= sown (block-at p 3 64 2)) author)))))))
 
 (deftest every-cell-refused-by-another-plan-warns-once-though-the-job-never-starts
   (async done

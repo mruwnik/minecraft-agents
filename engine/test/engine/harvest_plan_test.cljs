@@ -8,7 +8,8 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [jobs.lib.world-files :as world]))
+            [jobs.lib.world-files :as world]
+            [plan.shape :as shape]))
 
 (defn start
   "An engine over the fake world spec with the plans {id plan} as its world data."
@@ -154,3 +155,13 @@
           (is (= #{[2 2]} (dug p)))
           (is (= #{[2 2 "carrot"]} (placed p)))
           (is (= 1 (:replanted result))))))))
+
+(deftest a-bare-cell-in-its-own-other-plan-is-seeded-but-not-in-anothers
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[author seeded] [["Fake" true] ["Miles" false]]]
+          (let [extra (shape/with-author {:id "extra" :parts [{:id "x" :box [[4 64 2] [4 64 2]] :want "stone"}]} author)
+                {:keys [eng p]} (start mixed-field {"field" (field-plan [2]) "extra" extra})]
+            (await (tu/child-outcome eng h/job {:plan "field"} 200))
+            (is (= seeded (contains? (placed p) [4 2 "wheat_seeds"])) author)))))))

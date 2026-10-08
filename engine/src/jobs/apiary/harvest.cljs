@@ -54,7 +54,7 @@
 (defn hive-allowed?
   "Whether the job may take honey from the hive at pos (one warn per job when refused)."
   [c pos]
-  (gate/allowed? c :apiary.declined "apiary harvest" :harvest pos))
+  (gate/allowed? c :apiary.declined "apiary harvest" :harvest pos {:own-plans-ok? true}))
 
 (defn hives
   "Every hive the body has seen in the area that the zone rules let the job use, as {:pos :ripe}, nearest to the
@@ -67,7 +67,7 @@
         found (->> (look/seen-blocks p {:radius search :names hive-names :properties? true :live? true :max 64})
                    (map (fn [b] {:pos (:pos b) :ripe (ripe? b)}))
                    (filter #(apiary/in-area? {:box box :center center :radius radius} (:pos %))))
-        ok (set (gate/allowed c :apiary.declined "apiary harvest" :harvest (map :pos found)))]
+        ok (set (gate/allowed c :apiary.declined "apiary harvest" :harvest (map :pos found) {:own-plans-ok? true}))]
     (->> found
          (filter #(ok (:pos %)))
          (sort-by #(u/dist me (:pos %))))))

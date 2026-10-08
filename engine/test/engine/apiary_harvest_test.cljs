@@ -8,6 +8,7 @@
             [engine.test-util :as tu :refer [child-outcome]]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
+            [plan.shape :as shape]
             [jobs.apiary.harvest :as harvest]))
 
 (deftest the-comb-face-is-the-side-the-body-stands-on
@@ -18,12 +19,12 @@
     (is (= "north" (harvest/face-toward hive {:x 2 :y 64 :z -3})))
     (is (= "south" (harvest/face-toward hive {:x 2 :y 64 :z 3})))))
 
-(defn setup [world]
+(defn setup [world & [plans]]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         p (tu/seeing-all (tu/fake-on-floor world))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
-                          :world (ew/of-data {} {} (:zones world []))
+                          :world (ew/of-data (or plans {}) {} (:zones world []))
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen}))
 
@@ -286,3 +287,13 @@
     (with-stub-mem m #(do (harvest/settle-click! c) (harvest/settle-click! c)))
     (is (= 1 (:harvested @m)))
     (is (= :collect (:phase @m)))))
+
+(deftest harvest-works-in-the-footprint-of-its-own-plan-but-not-another-bodys
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[author harvested] [["Fake" 1] ["Miles" 0]]]
+          (let [plan (shape/with-author {:id "hut" :parts [{:id "p" :box [[2 64 0] [2 64 0]] :want "stone"}]} author)
+                {:keys [eng]} (setup (world {:inventory (inv "shears" 1)}) {"hut" plan})
+                result (await (child-outcome eng job {} 40))]
+            (is (= harvested (:harvested result 0)) author)))))))

@@ -8,6 +8,7 @@
             [engine.test-util :as tu :refer [child-outcome]]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
+            [plan.shape :as shape]
             [jobs.farm.compost :as compost]))
 
 (defn setup [world & [shared]]
@@ -181,3 +182,13 @@
               result (await (child-outcome eng job {:items ["wheat_seeds"]} 60))]
           (is (seq (calls p "look")))
           (is (= 1 (:bone-meal result))))))))
+
+(deftest compost-works-in-the-footprint-of-its-own-plan-but-not-another-bodys
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[author fed] [["Fake" true] ["Miles" false]]]
+          (let [plan (shape/with-author {:id "hut" :parts [{:id "p" :box [[2 63 0] [2 63 0]] :want "stone"}]} author)
+                {:keys [eng p]} (setup {:inventory (inv "oak_leaves" 3) :blocks comp-block} (ew/of-data {"hut" plan} {} []))]
+            (await (child-outcome eng job {} 40))
+            (is (= fed (boolean (seq (calls p "useOn")))) author)))))))
