@@ -108,7 +108,7 @@
               r (await (run-door (assoc wall :inventory [{:name "wooden_pickaxe" :count 1}]) nil
                                  {:heading :east :max-thick 3} {'jobs.movement.go-to go-to}))]
           (is (= [:stopped :step-failed] [(:status r) (:reason r)]) (pr-str r))
-          (is (= [{:x 3 :y 64 :z 0} 0 false] ((juxt :pos :range :escalate) @asked)) (pr-str @asked)))))))
+          (is (= [[3 64 0] 0 false] ((juxt :pos :range :escalate) @asked)) (pr-str @asked)))))))
 
 (deftest open-ground-ahead-is-no-door
   (async done
