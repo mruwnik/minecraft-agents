@@ -1,5 +1,6 @@
 (ns jobs.farm.tend
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
@@ -74,7 +75,9 @@
    :keep {:doc "{item-name count}: how many of an item compost and deposit leave carried, at least the seed reserve" :spec (a/map-of string? number?) :default {}}
    :ignore-zones? {:doc "act regardless of zones and claims (passed to harvest, till, plant, fertilize and compost); the rules of the game allow it" :spec boolean? :default false}})
 
-(def max-cells 2048)
+(a/defargs settings
+  {::max-cells {:default 2048 :doc "Cells one call looks at before it gives the round back." :spec (a/int-in 0 nil)}})
+(defn max-cells [] (settings/get settings ::max-cells))
 
 (def seed-items ["wheat_seeds" "carrot" "potato" "beetroot_seeds"])
 
@@ -92,7 +95,7 @@
   [box]
   (boolean (and box
                 (>= (:y (:max box)) (inc (:y (:min box))))
-                (<= (box-cells box) max-cells))))
+                (<= (box-cells box) (max-cells)))))
 
 (defn in-box? [{:keys [min max]} {:keys [x y z]}]
   (and (<= (:x min) x (:x max)) (<= (:y min) y (:y max)) (<= (:z min) z (:z max))))

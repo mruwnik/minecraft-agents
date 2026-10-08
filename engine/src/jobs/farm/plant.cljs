@@ -1,5 +1,6 @@
 (ns jobs.farm.plant
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [clojure.string :as str]
             [jobs.farm.permit :as permit]
             [engine.ctx :as ctx]
@@ -44,7 +45,9 @@
    :fetch {:doc "get a missing seed (jobs.lib.fetch): true, a set of kinds or a map of limits; false waits :need" :spec fetch/option? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
-(def max-fails 3)
+(a/defargs settings
+  {::max-fails {:default 3 :doc "Failures before the job gives up." :spec (a/int-in 0 nil)}})
+(defn max-fails [] (settings/get settings ::max-fails))
 
 ;; ------------------------------------------------------------------ pure helpers
 
@@ -85,7 +88,7 @@
 (defn count-fail
   "Count a fail of kind k (:fails or :walk-fails) on the cell at pos; the cell is skipped at the max-fails-th."
   [m k pos]
-  (crops/count-entry m k pos max-fails #(update %1 :skipped (fnil conj []) %2)))
+  (crops/count-entry m k pos (max-fails) #(update %1 :skipped (fnil conj []) %2)))
 
 (defn owes?
   "A box is given and the run has started, or a bare cell that is not skipped exists and a seed is carried.

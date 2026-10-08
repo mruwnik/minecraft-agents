@@ -1,5 +1,6 @@
 (ns jobs.gather.get-seeds
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
@@ -62,7 +63,10 @@
    :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent water, :lava-adjacent seen lava, :falling-block)"
             :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:falling-block}}})
 
-(def reach 3)
+(a/defargs settings
+  {::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
+   ::max-steps {:default 400 :doc "Pieces of work of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}})
+(defn reach [] (settings/get settings ::reach))
 
 (def materials
   {"wheat_seeds" {:from :grass :sources ["short_grass" "tall_grass"]}
@@ -203,7 +207,7 @@
 (defn ^:async dig-one!
   "Walk to pos and dig it: :dug, :missing, :walking (the walk waits on the world: yield) or :skipped (a blocked walk, a cell the rules no longer permit, or a dig that is neither dug nor missing)."
   [c pos]
-  (let [walked (await (near/go-near! c pos reach {:zone-tolls true}))]
+  (let [walked (await (near/go-near! c pos (reach) {:zone-tolls true}))]
     (cond
       (= :partial walked) :walking
       (= :blocked walked) (do (skip! c pos) :skipped)
@@ -288,9 +292,9 @@
       (empty? targets) (finish! c :none)
       :else (await (dig-round! c targets)))))
 
-(def max-steps "Pieces of work of one call before it gives the round back with :continue." 400)
+(defn max-steps [] (settings/get settings ::max-steps))
 
 (defn ^:async round
   [c]
   (let [n (atom 0)]
-    (await (pace/steps! c #(if (< (swap! n inc) max-steps) (step c) :continue)))))
+    (await (pace/steps! c #(if (< (swap! n inc) (max-steps)) (step c) :continue)))))

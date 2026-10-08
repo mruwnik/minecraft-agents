@@ -1,5 +1,6 @@
 (ns jobs.farm.harvest
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as blocks]
@@ -179,36 +180,41 @@
       (update :skipped (fnil conj []) pos)
       (update :unreachable (fnil inc 0))))
 
-(def max-place-fails 3)
+(a/defargs settings
+  {::max-place-fails {:default 3 :doc "Failed placements before the job gives up." :spec (a/int-in 0 nil)}
+   ::failed-reach {:default 3.0 :doc "Reach for a block a failed attempt left, in blocks." :spec (a/num-in 0 nil)}
+   ::max-walk-fails {:default 3 :doc "Failed walks before the job gives up." :spec (a/int-in 0 nil)}
+   ::max-home-fails {:default 3 :doc "Failed walks home before the job gives up." :spec (a/int-in 0 nil)}})
+(defn max-place-fails [] (settings/get settings ::max-place-fails))
 
 (defn fail-debt
   "Count a refused place on the debt at pos; the cell is bare once it has failed max-place-fails times."
   [m pos]
-  (crops/count-debt m :fails pos max-place-fails bare-debt))
+  (crops/count-debt m :fails pos (max-place-fails) bare-debt))
 
-(def failed-reach 3.0)
+(defn failed-reach [] (settings/get settings ::failed-reach))
 
 (defn debt-reach
   "The eye-to-centre distance within which debt is placed without walking: a cell that was refused once needs the body closer."
   [debt reach]
-  (if (pos? (:fails debt 0)) failed-reach reach))
+  (if (pos? (:fails debt 0)) (failed-reach) reach))
 
 (defn walk-range
   "The range walked to when out of reach: 3, or 2 for a debt that was refused."
   [debt]
   (if (pos? (:fails debt 0)) 2 3))
 
-(def max-walk-fails 3)
+(defn max-walk-fails [] (settings/get settings ::max-walk-fails))
 
 (defn walk-fail-crop
   "Count a blocked walk to the crop at pos in :walk-fails [{:pos :n}]; the crop is skipped at the max-walk-fails-th."
   [m pos]
-  (crops/count-entry m :walk-fails pos max-walk-fails skip-crop))
+  (crops/count-entry m :walk-fails pos (max-walk-fails) skip-crop))
 
 (defn walk-fail-debt
   "Count a blocked walk to the debt at pos; the cell is bare at the max-walk-fails-th."
   [m pos]
-  (crops/count-debt m :walk-fails pos max-walk-fails bare-debt))
+  (crops/count-debt m :walk-fails pos (max-walk-fails) bare-debt))
 
 (def inc-in crops/inc-in)
 
@@ -450,7 +456,7 @@
                 (warn-gave-up! c)
                 r)))))))
 
-(def max-home-fails 3)
+(defn max-home-fails [] (settings/get settings ::max-home-fails))
 
 (defn ^:async home!
   "Step 2b: a body farther than :radius from the centre with debts or a sweep owed walks back
@@ -462,7 +468,7 @@
         radius (:radius (:args c))]
     (when (and (or (seq (:replant m)) (:collect m))
                (> (u/dist (u/self-pos c) center) radius))
-      (if (>= (:home-fails m 0) max-home-fails)
+      (if (>= (:home-fails m 0) (max-home-fails))
         :finish
         (case (await (walk! c center (quot radius 2)))
           :there :again

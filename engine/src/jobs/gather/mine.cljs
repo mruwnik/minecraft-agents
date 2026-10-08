@@ -1,5 +1,6 @@
 (ns jobs.gather.mine
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [engine.game :as game]
             [jobs.lib.blocks :as blocks]
             [clojure.string :as str]
@@ -143,9 +144,18 @@
    :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent :falling-block); the lava and :wet rules above still hold"
             :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent :falling-block}}})
 
-(def reach 3)
-(def mend-reach 4)
-(def max-mend-failures 6)
+(a/defargs settings
+  {::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
+   ::mend-reach {:default 4 :doc "Reach while mending a cut, in blocks." :spec (a/int-in 0 nil)}
+   ::max-mend-failures {:default 6 :doc "Failed mends before the job gives up." :spec (a/int-in 0 nil)}
+   ::pickup-grace-ms {:default 400 :doc "How long the body waits for a drop to be picked up, in ms." :spec (a/int-in 0 nil)}
+   ::end-torch-gap {:default 4 :doc "A cut's end gets a torch when the last hangs this many steps back or more." :spec (a/int-in 0 nil)}
+   ::branch-gap {:default 4 :doc "A dig this far from the tunnel line (and from any torch hung on a branch) gets a torch of its own." :spec (a/int-in 0 nil)}
+   ::max-resumes {:default 2 :doc "Resumes of a cut before the job gives up." :spec (a/int-in 0 nil)}
+   ::max-steps {:default 400 :doc "Pieces of work of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}})
+(defn reach [] (settings/get settings ::reach))
+(defn mend-reach [] (settings/get settings ::mend-reach))
+(defn max-mend-failures [] (settings/get settings ::max-mend-failures))
 (def air #{"air" "cave_air"})
 (def not-solid #{"air" "cave_air" "water" "lava" "short_grass" "tall_grass"})
 (def faces [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])
@@ -320,7 +330,7 @@
                 (map (fn [e] [(access/cell (cell-of (u/pos-of (.-pos e)))) (or (some-> (.-item e) .-count) 1)])))
           (look/seen-items (:primitives c) {:radius radius :max 32})))))
 
-(def pickup-grace-ms 400)
+(defn pickup-grace-ms [] (settings/get settings ::pickup-grace-ms))
 
 (defn ^:async note-left!
   "Report drops of the item collect-drops left lying (out of reach), once per cell. A drop still listed right after
@@ -332,7 +342,7 @@
         first-look (into {} (filter fresh?) (left-behind c))
         fresh (if (empty? first-look)
                 first-look
-                (do (await (ctx/act c :wait #js {:ms pickup-grace-ms}))
+                (do (await (ctx/act c :wait #js {:ms (pickup-grace-ms)}))
                     (into {} (filter (fn [[pos _]] (contains? first-look pos))) (left-behind c))))]
     (when (seq fresh)
       (ctx/emit! c :mine.left-behind :info {:items (mapv (fn [[pos n]] {:pos pos :count n}) fresh)
@@ -478,7 +488,7 @@
 
 ;; ------------------------------------------------------------------ torches
 
-(def end-torch-gap "A cut's end gets a torch when the last hangs this many steps back or more." 4)
+(defn end-torch-gap [] (settings/get settings ::end-torch-gap))
 
 (defn count-of [c names]
   (transduce (comp (filter #(contains? names (:name %))) (map :count)) + 0 (u/inventory (:primitives c))))
@@ -505,9 +515,9 @@
          (or (nil? (:torch-at (ctx/mem c))) (>= (torch-gap c) interval)))))
 
 (defn end-torch-due? [c]
-  (and (pos? (or (:torch-interval (:args c)) 0)) (on-line? c) (>= (torch-gap c) end-torch-gap)))
+  (and (pos? (or (:torch-interval (:args c)) 0)) (on-line? c) (>= (torch-gap c) (end-torch-gap))))
 
-(def branch-gap "A dig this far from the tunnel line (and from any torch hung on a branch) gets a torch of its own." 4)
+(defn branch-gap [] (settings/get settings ::branch-gap))
 
 (defn line-dist
   "The distance from cell to the nearest cell of the tunnel dug so far."
@@ -520,8 +530,8 @@
   (let [{:keys [tunnel branch-torches]} (ctx/mem c)
         here (cell-of (u/self-pos c))]
     (and (some? tunnel) (pos? (or (:torch-interval (:args c)) 0))
-         (>= (line-dist tunnel here) branch-gap)
-         (every? #(>= (u/dist here %) branch-gap) branch-torches))))
+         (>= (line-dist tunnel here) (branch-gap))
+         (every? #(>= (u/dist here %) (branch-gap)) branch-torches))))
 
 (defn booked!
   "Book the torch step done: a tunnel torch at the tunnel's length, a branch one at the body's cell."
@@ -663,8 +673,8 @@
   is blocked from here; a body within reach that cannot get closer digs from there. :there, :partial or :blocked
   (jobs.lib.near/go-near!)."
   [c pos]
-  (let [walked (await (near/go-near! c pos (if (drop-in-line? c pos) reach 1) {:zone-tolls true}))]
-    (if (and (not= :there walked) (u/within? (u/self-pos c) (cell-of pos) reach))
+  (let [walked (await (near/go-near! c pos (if (drop-in-line? c pos) (reach) 1) {:zone-tolls true}))]
+    (if (and (not= :there walked) (u/within? (u/self-pos c) (cell-of pos) (reach)))
       :there
       walked)))
 
@@ -682,7 +692,7 @@
         off (vec (remove ground pool))
         group (in-line c (if (seq off) off pool))]
     (when (seq group)
-      (let [a (await (targets/nearest! c group reach {:tag :mine}))]
+      (let [a (await (targets/nearest! c group (reach) {:tag :mine}))]
         (case (:status a)
           :found (:target a)
           :searching :searching
@@ -797,8 +807,8 @@
     (filterv #(ok (:pos %)) cells)))
 
 (defn ^:async place! [c pos item]
-  (let [walked (if (> (u/dist (u/self-pos c) pos) mend-reach)
-                 (await (near/go-near! c pos reach {:zone-tolls true}))
+  (let [walked (if (> (u/dist (u/self-pos c) pos) (mend-reach))
+                 (await (near/go-near! c pos (reach) {:zone-tolls true}))
                  :there)]
     (if (not= :there walked)
       (do (when (= :blocked walked) (mend-fail! c)) (if (= :blocked walked) :again :continue))
@@ -827,7 +837,7 @@
         start (- goal (:count (:args c)))]
     (and (< now goal) (< now at-mend) (> at-mend start))))
 
-(def max-resumes 2)
+(defn max-resumes [] (settings/get settings ::max-resumes))
 
 (defn ^:async mended!
   "Nothing is owed. The mend spent the count: look around once from here, then dig on while targets off the ground
@@ -838,7 +848,7 @@
     (cond
       (not (spent-on-mend? c)) (wrap-up! c)
       (not= looked (cell-of (u/self-pos c))) (do (await (look-around! c)) :again)
-      (and more? (< (or resumes 0) max-resumes))
+      (and more? (< (or resumes 0) (max-resumes)))
       (do (ctx/update-mem! c #(-> % (assoc :phase :dig :failures 0 :dry 0 :last-carried (carried c) :mend-failures 0)
                                   (dissoc :collecting)
                                   (update :resumes (fnil inc 0))))
@@ -852,7 +862,7 @@
         pos (mend-target c cells)]
     (cond
       (empty? cells) (await (mended! c))
-      (>= (:mend-failures (ctx/mem c) 0) max-mend-failures)
+      (>= (:mend-failures (ctx/mem c) 0) (max-mend-failures))
       (do (ctx/emit! c :mine.mend-failed :warn {:owed (mapv :pos cells) :text (str "mine could not mend: " (cells-text cells))})
           (wrap-up! c))
       (nil? item)
@@ -999,9 +1009,9 @@
       (:collecting m) (await (collect! c))
       :else (await (dig-round! c)))))
 
-(def max-steps "Pieces of work of one call before it gives the round back with :continue." 400)
+(defn max-steps [] (settings/get settings ::max-steps))
 
 (defn ^:async round
   [c]
   (let [n (atom 0)]
-    (await (pace/steps! c #(if (< (swap! n inc) max-steps) (step c) :continue)))))
+    (await (pace/steps! c #(if (< (swap! n inc) (max-steps)) (step c) :continue)))))

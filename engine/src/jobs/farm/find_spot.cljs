@@ -1,5 +1,6 @@
 (ns jobs.farm.find-spot
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
@@ -26,7 +27,10 @@
 
 (def air #{"air" "cave_air" "void_air"})
 (def no-floor #{"water" "lava" "bubble_column" "ice" "frosted_ice" "magma_block" "powder_snow"})
-(def water-reach 4)
+(a/defargs settings
+  {::water-reach {:default 4 :doc "Blocks from water within which farmland is hydrated." :spec (a/int-in 0 nil)}
+   ::sky-extra {:default 8 :doc "Extra blocks of sky checked above a spot." :spec (a/int-in 0 nil)}})
+(defn water-reach [] (settings/get settings ::water-reach))
 
 (defn column-top
   "The y of the surface of column x z: the highest non-air block scanning from
@@ -72,8 +76,8 @@
   z of the farmland at x y z, at its y or one above."
   [water-set x y z]
   (boolean (some (fn [[wx wy wz]]
-                   (and (<= (js/Math.abs (- wx x)) water-reach)
-                        (<= (js/Math.abs (- wz z)) water-reach)
+                   (and (<= (js/Math.abs (- wx x)) (water-reach))
+                        (<= (js/Math.abs (- wz z)) (water-reach))
                         (or (= wy y) (= wy (inc y)))))
                  water-set)))
 
@@ -85,14 +89,14 @@
   "blockAt reads one attempt may spend on scanning (a cut and restart keeps the count); then it settles for the best spots found."
   30000)
 
-(def sky-extra 8)
+(defn sky-extra [] (settings/get settings ::sky-extra))
 
 (defn sky-above?
   "True when every cell above top up to (+ from-y depth sky-extra) is air or
   unloaded (nil)."
   [name-fn x z top from-y depth]
   (loop [y (inc top)]
-    (or (> y (+ from-y depth sky-extra))
+    (or (> y (+ from-y depth (sky-extra)))
         (let [n (name-fn {:x x :y y :z z})]
           (when (or (nil? n) (air n))
             (recur (inc y)))))))
