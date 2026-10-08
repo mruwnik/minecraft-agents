@@ -491,6 +491,18 @@
           (is (not (.-inWater (.self p))))
           (is (empty? (of-kind seen :holding))))))))
 
+(deftest a-farmland-bank-beyond-the-shore-radius-is-reached-with-a-go-to-child
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [farm (into {} (for [x (range 7 10) z (range -6 7)] [(str x ",64," z) "farmland"]))
+              {:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}}
+                                           :blocks (merge (lake -6 6 6) (bank 7 9 6) farm)})]
+          (await (one-run! eng no-shore-args))
+          (is (= [[:completed nil]] (ended seen)) "the go-to target over farmland is a cell the planner stands in")
+          (is (>= (:x (core/self-pos p)) 7) "stands on the farmland bank")
+          (is (not (.-inWater (.self p)))))))))
+
 (def wall-all-round
   (into {} (for [x (range -7 8) z (range -7 8) y [65 66]
                  :when (= 7 (max (js/Math.abs x) (js/Math.abs z)))]
