@@ -265,12 +265,16 @@
 
 (defn door-back
   "For a body in the free part of a shut door's cell feet (the door's own block hides the room from its eye): the cell
-  on the free side, to step back to and look round from, when it is open; else nil."
+  on the free side, to step back to and look round from, unless it is seen and not standable (an unseen cell is walked to
+  and looked at)."
   [p [x y z]]
   (let [kind-at (reach/lookup p)]
     (when-let [[dx dz] (reach/panel-step p kind-at {:x x :y y :z z})]
       (let [back [(- x dx) y (- z dz)]]
-        (when (and (reach/passable? kind-at (- x dx) y (- z dz)) (reach/passable? kind-at (- x dx) (inc y) (- z dz)))
+        (when (let [unseen? (unseen-of p)
+                    ok? (fn [cell good?] (or (unseen? cell) (good? kind-at (cell 0) (cell 1) (cell 2))))]
+                (and (ok? back reach/passable?) (ok? (up back 1) reach/passable?)
+                     (ok? (up back -1) #(keyword-identical? :solid (%1 %2 %3 %4)))))
           back)))))
 
 (def heading-dirs (into {} (map (fn [[k v]] [v k])) heading-names))

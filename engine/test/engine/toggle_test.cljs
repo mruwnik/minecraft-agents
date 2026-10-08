@@ -306,3 +306,21 @@
     (is (string? (:doc j)))
     (is (= 3 (get-in j [:args :reach :default])))
     (is (some? toggle/doc))))
+
+;; ------------------------------------------------------------------ a dark block read back after the click
+
+(defn make-dark
+  "Perception's dark rule: the cell at pos is not made out (unknown), however the world reads."
+  [p pos]
+  (let [sensed (.-sensedAt p)]
+    (aset p "sensedAt" (fn [q] (if (= (js->clj q :keywordize-keys true) pos) #js {:unknown true} (sensed q))))))
+
+(deftest a-lever-in-the-dark-that-flipped-is-changed-not-gone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup (world "lever" {:powered false} 3 4))
+              _ (make-dark p at)
+              result (await (child-outcome eng job {:pos at :state :on :reach 5} 40))]
+          (is (= {:status :done :reason :changed} (head result [:status :reason])) (pr-str result))
+          (is (true? (:powered (props p at)))))))))

@@ -48,7 +48,8 @@
   - :changed, the block is now in state
   - :unchanged, the click moved nothing
   - :wrong-way, it moved, but not to state
-  - :gone, with :why :missing (not there) or :unloaded (can no longer be read or seen)
+  - :gone, :why :missing (the game found no block there)
+  - :unseen, the click went through but the body cannot make the block out afterwards (dark, far) and the game gave no state
   - :no-room, the hand cannot be emptied
   - :unreachable, out of reach
   - :refused, the click was turned away (:status and :reason are the primitive's)"
@@ -58,7 +59,7 @@
         before (js->clj (some-> r .-before .-properties) :keywordize-keys true)
         after (js->clj (some-> r .-after .-properties) :keywordize-keys true)
         b (u/seen-block (:primitives c) pos)
-        now (props-of b)
+        now (or (props-of b) after)
         facts {:block block :was before :now now}
         out (fn [outcome & {:as more}] (merge {:outcome outcome :facts facts} more))]
     (cond
@@ -66,7 +67,7 @@
       (= "no-room" status) (out :no-room)
       (= "unreachable" status) (out :unreachable)
       (not (#{"used" "unchanged"} status)) (out :refused :status status :reason (.-reason r))
-      (nil? b) (out :gone :why :unloaded)
+      (nil? now) (out :unseen)
       (or (reached? state now) (reached? state after)) (out :changed)
       (= before now) (out :unchanged)
       :else (out :wrong-way))))

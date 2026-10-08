@@ -122,10 +122,11 @@
 (defn ^:async click!
   "Click once with an empty hand and read the block again."
   [c pos state block]
-  (let [{:keys [outcome facts why status reason]} (await (click/click! c pos state block))
+  (let [{:keys [outcome facts status reason]} (await (click/click! c pos state block))
         text (str block " at " (pr-str pos))]
     (case outcome
-      :gone (give-up! c :gone pos state (str text (if (= :unloaded why) " is no longer loaded" " is gone")) facts)
+      :gone (give-up! c :gone pos state (str text " is gone") facts)
+      :unseen (give-up! c :unseen pos state (str text " cannot be made out after the click (too dark or too far)") facts)
       :no-room (give-up! c :no-room pos state (str "no room to empty the hand at " text) facts)
       :unreachable (if (and (< (:closer (ctx/mem c) 0) max-closer) (> (reach c) 1))
                      (closer! c)

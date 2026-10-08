@@ -208,13 +208,17 @@
   left on, so the door stays open), a plate is the body's weight (the walk stops on it), then the door is read back. Same results as await-open!. A door a hand can open, behind a plate,
   is opened by hand when the plate did not."
   [c cell {:keys [via at]} shut?]
-  (let [name (some-> (await (seen-at! c at)) .-name)
+  (let [seen (some-> (await (seen-at! c at)) .-name)
+        name (or seen (get {"button" "stone_button" "lever" "lever"} via))
         door (await (seen-at! c cell))
         pressed (when (and (#{"button" "lever"} via) (not (some-> door click/props-of (->> (click/reached? :open)))))
                   (if (= (keyword via) (click/kind-of name))
                     (:outcome (await (click/click! c at (if (= "lever" via) :on :press) name)))
                     :unchanged))
-        r (if (#{nil :changed} pressed) (await (await-open! c cell)) {:result :stuck})]
+        r (if (#{nil :changed :unseen} pressed) (await (await-open! c cell)) {:result :stuck})]
+    (when (and (= :stuck (:result r)) (nil? seen) (#{"button" "lever"} via))
+      (ctx/emit! c :door-activator-unseen :warn {:cell at :via via :text (str "the " via " at " (pr-str at)
+                                                                              " cannot be made out (too dark?); pressed as planned")}))
     (if (and (= :stuck (:result r)) (= "plate" via) (= :openable (click/kind-of (some-> (block-at c cell) .-name))))
       (await (open-block! c cell shut?))
       r)))

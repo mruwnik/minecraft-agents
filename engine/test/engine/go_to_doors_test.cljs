@@ -12,10 +12,18 @@
             [jobs.lib.world-files :as world]
             [jobs.movement.go-to :as go-to]))
 
+(defn dark-cells!
+  "Perception's dark rule: the cells ([x y z] strings of the world spec) are never made out; sensedAt answers unknown."
+  [p cells]
+  (let [sensed (.-sensedAt p)
+        dark (set (map #(vec (map js/parseInt (.split % ","))) cells))]
+    (aset p "sensedAt" (fn [q] (if (dark [(.-x q) (.-y q) (.-z q)]) #js {:unknown true} (sensed q))))))
+
 (defn setup [world zones]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         p (tu/fake world)
+        _ (dark-cells! p (:dark world))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :world (world/of-data {} {} zones)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -440,3 +448,25 @@
             (is (= {:arrived true} @out) (str open " " facing " " from))
             (is (= to (at p)) (str open " " facing " " from))
             (is (= [open open] (mapv #(open? p %) [[5 65 0] [5 66 0]])) "the door is left as it was")))))))
+
+(deftest a-button-the-body-cannot-make-out-in-the-dark-is-still-pressed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (go! (button-world :wires {button-cell ["5,64,0"]} :dark [button-cell])
+                                          {:pos [10 64 0] :range 0}))]
+          (is (= {:arrived true} @out))
+          (is (= 1 (clicks p)) "the planned button is pressed"))))))
+
+(deftest the-body-turns-to-the-door-after-pressing-its-button
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (go! (button-world :wires {button-cell ["5,64,0"]}) {:pos [10 64 0] :range 0}))
+              names (mapv #(.-name %) (.-calls (.-world p)))
+              press (.indexOf names "useOn")
+              looks (keep-indexed (fn [i call] (when (and (> i press) (= "look" (.-name call))
+                                                          (= 5.5 (.-x (.-pos (.-args call)))))
+                                                 i))
+                                  (.-calls (.-world p)))]
+          (is (seq looks) "a look at the door's cell after the press"))))))

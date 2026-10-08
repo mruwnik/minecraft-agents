@@ -652,3 +652,26 @@
                                              {:pos [8 71 0] :range 0 :escalate false}))]
           (is (= {:why :goal-cut-off :reason :unreachable :arrived false} (select-keys @out [:why :reason :arrived]))
               "the default budget lets drops of 10 in, and still no way leads up onto the deck"))))))
+
+;; ---- door-back reads what the body senses
+
+(def door-cell
+  {:self {:pos {:x 0.5 :y 64 :z 0.2}}
+   :floor tu/walk-floor
+   :blocks {"0,64,0" "oak_door" "0,65,0" "oak_door"}
+   :states {"0,64,0" {:open false :half "lower" :facing "north"} "0,65,0" {:open false :half "upper" :facing "north"}}})
+
+(defn dark-at [p cells]
+  (let [sensed (.-sensedAt p) dark (set cells)]
+    (aset p "sensedAt" (fn [q] (if (dark [(.-x q) (.-y q) (.-z q)]) #js {:unknown true} (sensed q))))))
+
+(deftest door-back-is-a-seen-standable-cell-or-one-not-seen-yet
+  (let [back (escape/door-back (tu/fake door-cell) [0 64 0])
+        [bx by bz] back
+        walled (update door-cell :blocks assoc (str bx "," by "," bz) "stone")
+        seen-wall (tu/fake walled)
+        dark-wall (tu/fake walled)
+        _ (dark-at dark-wall [back])]
+    (is (some? back))
+    (is (nil? (escape/door-back seen-wall [0 64 0])) "a wall it sees")
+    (is (= back (escape/door-back dark-wall [0 64 0])) "a wall it has not seen: go and look, not an x-ray read")))
