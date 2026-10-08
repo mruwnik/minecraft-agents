@@ -26,14 +26,14 @@ tools/commit-mine -m m f.txt >/dev/null 2>&1; check "no card exit" "$?" 1
 # Hunks mode: paths and --expect-hunks are required; a patch touching other paths is refused.
 printf 'a\nb\nc\n' > g.txt; printf 'a\nb\nc\n' > h.txt; git add g.txt h.txt; git commit -q -m two
 printf 'A\nb\nc\n' > g.txt; printf 'a\nb\nC\n' > h.txt
-git diff g.txt > g.patch; git diff g.txt h.txt > gh.patch
+git diff -U0 g.txt > g.patch; git diff -U0 g.txt h.txt > gh.patch
 tools/commit-mine --card abcd1234 -m "$C m" --hunks g.patch --expect-hunks 1 >/dev/null 2>&1; check "hunks without paths exit" "$?" 1
 out=$(tools/commit-mine --card abcd1234 -m "$C m" --hunks gh.patch --expect-hunks 2 g.txt 2>&1); check "hunks foreign path exit" "$?" 3
 check "foreign path listed" "$(grep -c 'h.txt' <<<"$out")" 1
 check "foreign refusal leaves HEAD" "$(git log -1 --format=%s)" "$(git log -1 --format=%s)"
 tools/commit-mine --card abcd1234 -m "$C m" --hunks g.patch g.txt >/dev/null 2>&1; check "hunks missing expect exit" "$?" 5
 out=$(tools/commit-mine --card abcd1234 -m "$C m" --hunks g.patch --expect-hunks 2 g.txt 2>&1); check "hunks wrong expect exit" "$?" 5
-check "hunk list prints path and line" "$(grep -c 'g.txt: -a' <<<"$out")" 1
+check "hunk list prints path and line" "$(grep -c '^    -a' <<<"$out")" 1
 before=$(git rev-parse HEAD)
 tools/commit-mine --card abcd1234 -m "$C hm" --hunks g.patch --expect-hunks 1 g.txt >/dev/null 2>&1; check "hunks ok exit" "$?" 0
 check "hunks commit only g" "$(git show --name-only --format= HEAD)" "g.txt"
@@ -88,7 +88,7 @@ tools/commit-mine --card abcd1234 -m "$C m" --expect-lines 3 esm.cjs >/dev/null 
 # Hunks mode parses the patch-applied blob: a patch that leaves a broken file is refused.
 printf '%s\nexport const a = 1\n' "$W" > p.mjs; git add p.mjs; git commit -q -m p
 printf '%s\nexport const a = (\nexport const z = 2\n' "$W" > p.mjs
-git diff p.mjs > p.patch
+git diff -U0 p.mjs > p.patch
 tools/commit-mine --card abcd1234 -m "$C m" --hunks p.patch --expect-hunks 1 p.mjs >/dev/null 2>&1; check "hunks mode unparseable exit" "$?" 6
 check "hunks mode refusal leaves index clean" "$(git diff --cached --name-only)" ""
 git checkout -q p.mjs
@@ -142,7 +142,7 @@ check "moved file path mode: printed stat shows both files" "$(grep -c '2 files 
 # A hand-built patch may list files in any order: git's path order is not required.
 printf 'a\n' > ord_a.txt; printf 'b\n' > ord_b.txt; git add ord_a.txt ord_b.txt; git commit -q -m ord
 echo a2 >> ord_a.txt; echo b2 >> ord_b.txt
-git diff ord_a.txt > ord_a.patch; git diff ord_b.txt > ord_b.patch; cat ord_b.patch ord_a.patch > ord.patch
+git diff -U0 ord_a.txt > ord_a.patch; git diff -U0 ord_b.txt > ord_b.patch; cat ord_b.patch ord_a.patch > ord.patch
 out=$(tools/commit-mine --card abcd1234 -m "$C ord" --hunks ord.patch --expect-hunks 2 ord_a.txt ord_b.txt 2>&1); check "hunks out of path order exit" "$?" 0
 # Deleted files: staged (git rm) or not, many, a whole directory, mixed with an edit.
 mkdir -p gone/sub; for i in $(seq 1 120); do echo $i > gone/f$i.txt; done; echo s > gone/sub/s.txt; seq 1 5 > e.txt
@@ -291,4 +291,20 @@ for round in $(seq 1 60); do
 done
 check "reclaim race: no two holders" "$(cat "$rdir/violations" 2>/dev/null | wc -l)" 0
 rm -rf "$rdir"; unset LOCK
+# Hunks mode takes zero-context patches only: context lines would sweep a neighbour's edit into the hunk.
+printf '| a | 1 |\n| b | 2 |\n| c | 3 |\n| d | 4 |\n' > README.md; git add README.md; git commit -q -m readme
+printf '| a | 1 |\n| b | 2 foreign |\n| c | 3 mine |\n| d | 4 |\n' > README.md
+git diff README.md > ctx.patch; before=$(git rev-parse HEAD)
+out=$(tools/commit-mine --card abcd1234 -m "$C ctx" --hunks ctx.patch --expect-hunks 1 README.md 2>&1); check "context patch refused exit" "$?" 9
+check "context patch refused: HEAD unchanged" "$(git rev-parse HEAD)" "$before"
+check "context patch refusal names -U0" "$(grep -c -- '-U0' <<<"$out")" 1
+check "context patch refused: index clean" "$(git diff --cached --name-only)" ""
+printf 'diff --git a/README.md b/README.md\n--- a/README.md\n+++ b/README.md\n@@ -3 +3 @@\n-| c | 3 |\n+| c | 3 mine |\n' > row.patch
+out=$(tools/commit-mine --card abcd1234 -m "$C row" --hunks row.patch --expect-hunks 1 README.md 2>&1); check "one adjacent row exit" "$?" 0
+check "only my row committed" "$(git show --format= -U0 HEAD | grep -c '^[-+]| ')" 2
+check "my row in HEAD" "$(git show HEAD:README.md | grep -c 'c | 3 mine')" 1
+check "neighbour row not in HEAD" "$(git show HEAD:README.md | grep -c foreign)" 0
+check "neighbour row still in working tree" "$(grep -c foreign README.md)" 1
+check "changed lines printed" "$(grep -c '3 mine' <<<"$out")" 1
+git checkout -q README.md; rm -f ctx.patch row.patch
 exit $fail

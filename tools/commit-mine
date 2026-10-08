@@ -7,7 +7,9 @@
 #   --expect-hunks N is also checked when given.
 #   Hunks mode commits only the patch: build it ONLY from hunks you wrote. The paths are required and
 #   must cover every file in the patch (else exit 3, listing the others); N must equal the patch's
-#   hunk count (else exit 5); the tool prints each hunk's path and first changed line, check them.
+#   hunk count (else exit 5). The patch must have zero context (`git diff -U0`, else exit 9): cut it to your own
+#   changed lines (a neighbour's edit in the same run of lines is a changed line in your hunk: delete it).
+#   The tool prints every changed line of every hunk; check them.
 #   Optional: --approved-core <card-id> (takes the id of the card holding the owner's approval; needed for engine-core paths).
 #   Optional: --owner-said <card-id> (the owner said to commit docs/ or .claude/ paths, which are refused otherwise).
 #   Refuses (exit 6) a commit whose .js/.mjs/.cjs blob does not pass node --check.
@@ -77,15 +79,18 @@ if [ -n "$hunks" ]; then
     is_allowed "$f" || stray+=("$f")
   done <<<"$patch_files"
   [ ${#stray[@]} -eq 0 ] || die "patch touches paths not given on the command line: ${stray[*]} (foreign hunks? build the patch only from your own hunks)" 3
+  # Zero context only: a context line is no changed line, so a neighbour's edit inside it would ride along unseen.
+  ctx_lines="$(awk '/^@@/{inh=1; next} /^diff --git /{inh=0} inh && /^ /{c++} END{print c+0}' "$hunks")"
+  [ "$ctx_lines" -eq 0 ] || die "the patch has $ctx_lines context line(s); build it with 'git diff -U0 <paths>' and cut it to your own changed lines (a hand-cut hunk header may be approximate: it is recounted)" 9
   hunk_list="$(awk '
     /^diff --git /{f=$4; sub(/^b\//,"",f); inh=0}
-    /^@@/{inh=1; first=1; n++; next}
-    inh && first && /^[-+]/ && !/^(---|\+\+\+) /{printf "  hunk %d: %s: %s\n", n, f, $0; first=0}
+    /^@@/{inh=1; n++; printf "  hunk %d: %s %s\n", n, f, $0; next}
+    inh && /^[-+]/ && !/^(---|\+\+\+) /{printf "    %s\n", $0}
   ' "$hunks")"
   hunk_total="$(grep -c '^@@' "$hunks" || true)"
   if [ -z "$expect" ] || [ "$expect" != "$hunk_total" ]; then
     {
-      echo "commit-mine: hunks mode commits exactly this patch. Hunks in $hunks (path, first changed line):"
+      echo "commit-mine: hunks mode commits exactly this patch. Hunks in $hunks (every changed line):"
       echo "$hunk_list"
       echo "Total: $hunk_total. Every hunk must be one YOU wrote; delete any other agent's hunk from the patch."
       echo "Then rerun with --expect-hunks $hunk_total."
@@ -148,7 +153,7 @@ cleanup() {
   exit $rc
 }
 unstage() {
-  if [ -n "$hunks" ]; then git apply --cached -R "$hunks" 2>/dev/null || true; return; fi
+  if [ -n "$hunks" ]; then git apply --cached -R --unidiff-zero --recount "$hunks" 2>/dev/null || true; return; fi
   local p; for p in "${paths[@]}"; do git restore --staged -- "$p" 2>/dev/null || true; done
 }
 trap cleanup EXIT INT TERM HUP
@@ -199,7 +204,7 @@ fi
 # Stage.
 staged_by_me=1
 if [ -n "$hunks" ]; then
-  git apply --cached "$hunks"
+  git apply --cached --unidiff-zero --recount "$hunks"
 else
   # Only what differs from the index: a pathspec that matches nothing (all deleted and already staged by git rm) makes git add fail.
   git ls-files -m -d -o --exclude-standard -z -- "${paths[@]}" > "$LOCK/todo"

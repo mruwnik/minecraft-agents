@@ -20,7 +20,7 @@ hunks from the patch (only hunks you wrote), and commit with `--hunks my.patch`.
 
 Hunks mode commits exactly the patch (the given paths are not staged whole). The paths are required and must
 cover every file in the patch, else exit 3 listing the others. `--expect-hunks N` must equal the patch's hunk
-count, else exit 5; the tool prints each hunk's path and first changed line so foreign hunks show.
+count, else exit 5; the patch must be zero-context (`git diff -U0`, else exit 9); the tool prints every changed line so foreign lines show.
 
 Refuses (exit 1, nothing left staged) when:
 - an engine-core path (`engine/src/engine/{core,expr,triggers,takeover,trigger_api}.cljs`, `registry.clj`,
