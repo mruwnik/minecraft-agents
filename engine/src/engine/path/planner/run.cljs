@@ -245,7 +245,7 @@
       (.begin s)
       (.takeSchedule s)
       (when (and (not ^boolean (.-finished s)) ^boolean (.goalEnclosedEarly s))
-        (.finishEnclosed s "goal-enclosed")))
+        (.finishEnclosed s (if ^boolean (.-cut-off s) "goal-cut-off" "goal-enclosed"))))
     (loop [n 0]
       (when (and (< n max-expansions) (not ^boolean (.-finished s)))
         (cond

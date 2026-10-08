@@ -240,6 +240,7 @@
             (set! (.-allow-shut s) false)
             (set! (.-fr s) -1)
             (set! (.-flooded s) (.-size seen))
+            (set! (.-cut-off s) (and enclosed (not leaks) ^boolean (.floodDrops s queue)))
             (and enclosed (not leaks)))))))
 
   ;; a body-high free column beside the cell with nothing to stand on within a drop below it: a cliff or a gap, an edge the body
@@ -275,6 +276,19 @@
              ^boolean (.gapBelow s (aget queue head) (aget queue (+ head 1)) (aget queue (+ head 2)))) true
         :else (recur (+ head 4)))))
 
+  ;; a body-high free column beside the cell with no floor at its level or one below: an edge the body can walk or drop off,
+  ;; though the drop may land (a walled-in region has none: the cells beside are walls, or floors it walks both ways)
+  (dropBeside [s x y z h]
+    (loop [c 0]
+      (if (== c 4)
+        false
+        (let [x2 (+ x (aget (.-adx s) c))
+              z2 (+ z (aget (.-adz s) c))]
+          (if (and ^boolean (.clear s x2 z2 (+ (* y 16) h) (+ (* y 16) h BODY))
+                   (neg? (.nodeH s x2 y z2)) (neg? (.nodeH s x2 (dec y) z2)) (neg? (.nodeH s x2 (inc y) z2)))
+            true
+            (recur (inc c)))))))
+
   ;; true when the flooded region has a cliff edge: the goal sits on an island or above a drop, not in a pocket
   (floodLeaks [s ^js queue]
     (loop [head 0]
@@ -282,6 +296,18 @@
         (>= head (.-length queue)) false
         ^boolean (.cliffBeside s (aget queue head) (aget queue (+ head 1)) (aget queue (+ head 2))
                                (.nodeH s (aget queue head) (aget queue (+ head 1)) (aget queue (+ head 2)))) true
+        :else (recur (+ head 4)))))
+
+  ;; true when a flooded cell within a block of the goal's height has an edge the body can drop off (dropBeside): the goal
+  ;; stands on a deck or island, cut off by a drop, not walled in (a pocket's cells are walled; a wall top round it is
+  ;; higher up)
+  (floodDrops [s ^js queue]
+    (loop [head 0]
+      (cond
+        (>= head (.-length queue)) false
+        (and (<= (js/Math.abs (- (aget queue (+ head 1)) (.-goal-y s))) 1)
+             ^boolean (.dropBeside s (aget queue head) (aget queue (+ head 1)) (aget queue (+ head 2))
+                                   (.nodeH s (aget queue head) (aget queue (+ head 1)) (aget queue (+ head 2))))) true
         :else (recur (+ head 4)))))
 
   ;; the early pass of the flood, before the first expansion: only a small enclosed goal is caught, so it stays cheap, and
@@ -411,11 +437,11 @@
           (not (== state 1))))))
 
   ;; the run that is over: true when the goal is walled in or cut off (the flood exhausted within its budget, neither meeting the start
-  ;; nor leaking; cut-off says it has a cliff edge); flooded is the flood's size (left alone when the start is one of the goal's own cells, as goalEnclosed)
+  ;; nor leaking; cut-off says it has a cliff edge or the goal's level an edge to drop off, floodDrops); flooded is the flood's size (left alone when the start is one of the goal's own cells, as goalEnclosed)
   (lateFloodEnd [s]
     (set! (.-lf-active s) false)
     (set! (.-verifying s) false)
     (when-not ^boolean (.-lf-seed-open s) (set! (.-flooded s) (.-size ^js (.-lf-seen s))))
     (let [enclosed (and (not ^boolean (.-lf-open s)) (not ^boolean (.-leaked s)) (<= (.-size ^js (.-lf-seen s)) (.-lf-budget s)) (not ^boolean (.floodGap s ^js (.-lf-queue s))))]
-      (set! (.-cut-off s) (and enclosed ^boolean (.floodLeaks s ^js (.-lf-queue s))))
+      (set! (.-cut-off s) (and enclosed (or ^boolean (.floodLeaks s ^js (.-lf-queue s)) ^boolean (.floodDrops s ^js (.-lf-queue s)))))
       enclosed)))

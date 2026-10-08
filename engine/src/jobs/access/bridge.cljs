@@ -30,7 +30,8 @@
   A shove off the line walks back to the last cell stood on (3 tries), then gives up :off-line. The sneak-edge
   variant is not used: the body stands at the block's centre, so it does not step off the edge.
 
-  The check waits (:too-few-blocks, with :short) when blocks are missing at the start; run short part way, it gives up
+  The check waits (:too-few-blocks, with :short) when blocks are missing at the start (seen first: the round yields once
+  for it after looking ahead); run short part way, it gives up
   :too-few-blocks; a cell ahead still unsensed after the look gives up :unseen. Every give-up ends the job, so a parent running it as a child reads the result.
 
   Ends with {:status :done|:gave-up :reason :placed [[x y z] ...] :built n :length n}. :placed are this job's confirmed
@@ -239,12 +240,15 @@
     (ctx/update-mem! c #(-> % (update :start (fn [s] (or s feet))) (update :stand (fn [s] (or s feet)))))
     (if fetched
       fetched
-      (case (:step step)
-        :place (await (place! c l block-at step))
-        :move (await (move! c l step))
-        (if (= :off-line (:reason step))
-          (await (recover! c l block-at step))
-          (finish! c l step))))))
+      (cond
+        (= :place (:step step)) (await (place! c l block-at step))
+        (= :move (:step step)) (await (move! c l step))
+        (= :off-line (:reason step)) (await (recover! c l block-at step))
+        ;; blocks missing before the first block, seen only now the look ahead has sensed the cells: yield once, the check waits
+        (and (= :too-few-blocks (:reason step)) (empty? (placed c l (:start (ctx/mem c)) (:heading (:args c))))
+             (not (:short-yield (ctx/mem c))))
+        (do (ctx/update-mem! c assoc :short-yield true) :continue)
+        :else (finish! c l step)))))
 
 (defn ^:async round
   "The whole bridge: step! until it ends, a pace between blocks."

@@ -11,7 +11,9 @@
   :limit-s 180}
  :cases
  [{:name "hurt-body-with-food-waits-then-drops"
-   :act [[:rcon "effect give $BODY minecraft:instant_damage 1 0 true"]
+   ;; at the edge, so regeneration has no walk to heal over (from x 3.5 a body at 14 hp was full again at the drop)
+   :body {:at [38.5 10 16.5]}
+   :act [[:rcon "effect give $BODY minecraft:instant_damage 1 1 true"]
          [:job (jobs.movement.go-to {:pos #at [46 0 16] :range 1 :escalate false})]]
    :expect [{:event {:source :job :kind :go-to.waiting-health} :within-s 20 :of-job true}
             {:event {:source :job :kind :result :data {:arrived true}} :within-s 150 :of-job true}]

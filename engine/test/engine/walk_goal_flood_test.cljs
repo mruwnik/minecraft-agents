@@ -93,8 +93,8 @@
               (is (= "searching" (.-reason (:r first-plan))))
               (is (= ["found" nil] [(.-status (:r then)) (.-reason (:r then))])))))))))
 
-(deftest the-default-policy-proves-the-high-deck-enclosed-not-cut-off
+(deftest the-default-policy-proves-the-high-deck-cut-off
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= "goal-enclosed" (await (calls 12 [[0 0]] identity))) "drops of 10 are in the default budget")))))
+        (is (= "goal-cut-off" (await (calls 12 [[0 0]] identity))) "drops of 10 are in the default budget: they land, and no way leads up")))))

@@ -122,9 +122,9 @@
   (:reason (pf/plan (deck-over-bubbles drag) {:from {:x 0 :y 64 :z 0} :goal {:kind "near" :x 6 :y 67 :z 0 :range 0}} options)))
 
 ;; a lifting column is a way in the flood cannot follow; a dragging one pulls the body down to its bottom, so its top cell is
-;; no way onto the deck
+;; no way onto the deck (proved cut off: the deck's edges drop to the floor)
 (deftest a-deck-up-a-bubble-column-is-enclosed-only-when-the-column-drags
-  (are [drag options proved] (= proved (= "goal-enclosed" (reason-over-bubbles drag options)))
+  (are [drag options proved] (= proved (contains? false-proofs (reason-over-bubbles drag options)))
     false {:maxNodes 1} false
     false {:preFlood 0 :floodAfter 0} false
     true {:maxNodes 1} true
@@ -532,6 +532,15 @@
 
 (def pooled-high-deck
   {:blocks (merge (:blocks high-deck) (box 14 68 14 16 68 15 "stone") (box 14 69 14 16 70 15 "water"))})
+
+;; a body at full health may drop 22 blocks: the deck's edges drop onto the floor, so the early pass proves it sealed,
+;; and still a deck no way leads up to is cut off by a drop, not walled in (live: a 12-high deck read :goal-enclosed)
+(deftest a-deck-whose-drops-land-is-cut-off-not-walled-in
+  (let [floored {:blocks (merge (floor -2 -2 12 12) (box 4 70 4 8 70 8 "stone"))}
+        pooled (update floored :blocks merge {"4,69,4" "stone" "4,70,4" "water"})]
+    (is (= "goal-cut-off" (:reason (result-over floored [0 64 0] [6 71 6] {:maxDrop 22}))) "the early flood")
+    (is (= "goal-cut-off" (:reason (result-over pooled [0 64 0] [6 71 6] {:maxDrop 22}))))
+    (is (= "goal-cut-off" (:reason (result-over high-deck [0 64 0] [20 71 20] {:maxDrop 22}))) "the late flood")))
 
 (deftest a-flood-through-a-pool-proves-the-goal-cut-off-early
   (is (= "goal-cut-off"

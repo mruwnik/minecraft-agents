@@ -521,9 +521,9 @@
 (def floating (world {:fill [[10 66 10 14 66 14 "stone"]]}))
 (def flooding {:floodAfter 20 :preFlood 0})
 
-(deftest goal-on-platform-3-above-ground-is-goal-enclosed-cheaply
+(deftest goal-on-platform-3-above-ground-is-goal-cut-off-cheaply
   (let [r (run floating (near 12 67 12) flooding)]
-    (is (= "goal-enclosed" (:reason r)))
+    (is (= "goal-cut-off" (:reason r)))
     (is (and (> (:expanded r) 0) (< (:expanded r) 4000)))))
 
 (deftest easy-query-never-floods
@@ -538,7 +538,7 @@
 
 (deftest flood-larger-than-its-budget-hands-over-to-the-main-search-and-grows
   (let [small (run floating (near 12 67 12) (assoc flooding :goalFlood 10))]
-    (is (= "goal-enclosed" (:reason small)) "a later flood with a larger budget proves it")
+    (is (= "goal-cut-off" (:reason small)) "a later flood with a larger budget proves it")
     (is (> (get-in small [:stats :flooded]) 10))
     (is (not= "found" (:status small)))
     (is (= "found" (:status (run (world {}) (near 20 64 20) {:goalFlood 10}))))))
