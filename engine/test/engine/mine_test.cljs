@@ -802,13 +802,25 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
+        ;; lava seen over the cell to cut (through the open cells over the start): known before the cut
+        (let [s (await (scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 10}
+                                 (rock-world {"0,66,0" "air" "1,66,0" "air" "2,66,0" "lava"}) 80))]
+          (is (every? #(< (first %) 2) (dug-cells s)) "no cut beside the lava the body knew of")
+          (is (= :tunnel-stopped (:reason (done-event s))))
+          (is (= [{:reason :lava :at [2 66 0] :next [2 64 0]}] (map #(select-keys % [:reason :at :next]) (tunnel-ends s)))
+              "the stop names the lava")
+          (is (= "lava" (block-at s 2 66 0))))))))
+
+(deftest the-tunnel-seals-lava-a-cut-lays-open-and-goes-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        ;; lava behind the rock cannot be seen before the cut: the dig child seals it from the rim (fetching a block)
         (let [s (await (scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 10}
                                  (rock-world {"5,64,0" "lava"}) 80))]
-          (is (every? #(< (first %) 5) (dug-cells s)) "no cut into the lava the glance showed")
-          (is (= :tunnel-stopped (:reason (done-event s))))
-          (is (= [{:reason :lava :at [5 64 0] :next [4 64 0]}] (map #(select-keys % [:reason :at :next]) (tunnel-ends s)))
-              "the dig child sees the lava beside the next cell and refuses it; the stop names the lava")
-          (is (= "lava" (block-at s 5 64 0))))))))
+          (is (= 1 (count (events-of s :blocks.dig.sealed))))
+          (is (not= "lava" (block-at s 5 64 0)))
+          (is (= :tunnel-length (:reason (last (events-of s :mine.done))))))))))
 
 (deftest the-tunnel-length-bound-ends-the-job-with-a-reason
   (async done
