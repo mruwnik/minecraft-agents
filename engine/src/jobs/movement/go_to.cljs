@@ -100,7 +100,8 @@
     escalation adds :escalation {:step :reason ...}, the child's reason or wait.
   - Under water with no way to the goal in the air left (:air), it first walks to the nearest air it sees or finds by
     looking (jobs.movement.go-to.air, info go-to.surfacing, at most 3 a call) and plans again.
-  - Success is {:arrived true}, with :resolved the cell when go-to chose the y (a column's stand-in too). The result is also a :result info event.
+  - Success is {:arrived true}, with :resolved the cell when go-to chose the y, plus :provisional true (a column's
+    unseen surface) or :stand-in true (a column with no ground known: the feet y). The result is also a :result info event.
   - Every walk writes a :moved memory entry {:from :to :status :target} (arrived, partial or blocked) for
     the stuck trigger.
   - :doors (jobs.lib.pass): :shut (default) opens a shut door, gate or trapdoor with an empty hand, passes and
@@ -170,13 +171,17 @@
 
 (defn ^:async arrived!
   "Look round once if the place is risky (jobs.lib.watch), then finish: the next job starts facing along the walk.
-  A goal whose y go-to chose (goal-pos) adds :resolved, the cell it walked to."
+  A goal whose y go-to chose (goal-pos) adds :resolved, the cell it walked to, with :provisional true when that was a
+  column's unseen surface, :stand-in true when no ground of it was known."
   [c]
   (when-not (false? (:look-round (:args c)))
     (await (watch/watch! c {})))
-  (end/finish! c (cond-> {:arrived true}
-                   (:aimed (ctx/mem c)) (assoc :resolved (:aimed (ctx/mem c)))
-                   (:in-water (ctx/mem c)) (assoc :in-water true))))
+  (let [{:keys [aimed column-open]} (ctx/mem c)]
+    (end/finish! c (cond-> {:arrived true}
+                     aimed (assoc :resolved aimed)
+                     (= :guess column-open) (assoc :provisional true)
+                     (= :stand-in column-open) (assoc :stand-in true)
+                     (:in-water (ctx/mem c)) (assoc :in-water true)))))
 
 (defn forget-known-land!
   "Forget the land earlier searches knew to their end (wsearch/known-land) at the go-to's first walking round and after each
@@ -338,17 +343,32 @@
   (let [{:keys [y-slack unknown]} (:args c)]
     (column/aim (:primitives c) goal (or y-slack 4) (js/Math.floor (:y (u/self-pos c))) (not unknown))))
 
+(defn not-standable?
+  "Whether the planner answers goal-not-standable for pos alone (no search, wplan/goal-stand-problem)."
+  [c pos]
+  (let [pw (wworld/path-world (:primitives c) (:unknown c))]
+    (boolean (and pw (= :goal-not-standable (wplan/goal-stand-problem c pw [(:x pos) (:y pos) (:z pos)] (:range (:args c) 1)))))))
+
+(defn in-seen-ground?
+  "Under :unknown, whether the y goal pos is a cell the body has seen that is not free (a position in the ground)."
+  [c pos]
+  (boolean (and (:unknown c) (:y pos)
+                (let [k ((column/seen-kind-at (:primitives c)) (js/Math.floor (:x pos)) (js/Math.floor (:y pos)) (js/Math.floor (:z pos)))]
+                  (not (or (keyword-identical? :unknown k) (column/free? k)))))))
+
 (def max-column-looks "Looks a call takes at a column goal whose ground it has not made out, one after a fruitless walk." 3)
 
 (defn ^:async look-at-column!
-  "A column goal with no ground made out yet (mem :column-open) after a fruitless walk or within reach of its guess:
-  look at its cell at the body's feet y, then one above (a look glances the cell and its neighbours: the ground nearest
-  the feet), then its aimed cell, at most max-column-looks a call; true when it looked (goal-pos aims again from what it
-  saw)."
+  "A column goal with no ground made out yet (mem :column-open), or under :unknown a y goal whose cell it has not seen,
+  after a fruitless walk or within reach of its guess: look at its cell at the body's feet y, then one above (a look
+  glances the cell and its neighbours: the ground nearest the feet), then its aimed cell, at most max-column-looks a
+  call; true when it looked (goal-pos aims again from what it saw, the planner proves a seen solid goal cell not standable)."
   [c pos]
   (let [n (:column-looks (ctx/mem c) 0)
-        feet (js/Math.floor (:y (u/self-pos c)))]
-    (when (and (:column-open (ctx/mem c)) (< n max-column-looks))
+        feet (js/Math.floor (:y (u/self-pos c)))
+        cell (mapv #(js/Math.floor (% pos)) [:x :y :z])]
+    (when (and (or (:column-open (ctx/mem c)) (and (:unknown c) (sense/unknown? (:primitives c) cell)))
+               (< n max-column-looks))
       (ctx/update-mem! c assoc :column-looks (inc n))
       (await (sense/look-at! c [(js/Math.floor (:x pos)) (nth [feet (inc feet)] n (js/Math.floor (:y pos))) (js/Math.floor (:z pos))]))
       true)))
@@ -431,8 +451,11 @@
           (end/give-up! c pos (:blocked (ctx/mem c) 0) status {:status :no-path :reason :explore-spent}
                         {:explored (js/Math.round (:explored (get @approaches (:id c))))})
 
-          ;; the planner proved no cell in range stands: aim at the column's ground once (goal-pos, mem :re-aim)
-          (and (= :goal-not-standable (:reason walked)) (not (:re-aim (ctx/mem c))) (:resolved (aimed c pos)))
+          ;; the planner proved no cell in range stands: aim at the column's ground once (goal-pos, mem :re-aim); under
+          ;; :unknown it proves nothing next to unseen cells, so a goal cell seen in the ground is re-aimed too
+          (and (not (:re-aim (ctx/mem c)))
+               (or (= :goal-not-standable (:reason walked)) (in-seen-ground? c pos))
+               (:resolved (aimed c pos)))
           (do (ctx/update-mem! c assoc :re-aim true) :again)
 
           fetched fetched
@@ -609,7 +632,8 @@
 (defn goal-pos
   "The cell go-to plans to this step for goal: aimed when a column, or once the planner found no cell in range of its y
   stands (mem :re-aim), then as the planner stands (wworld/stand-goal). A y chosen for the
-  goal that differs from the last one chosen is an info goal-resolved {:goal :to} (mem :said); the cell aimed at, a
+  goal that differs from the last one chosen is an info goal-resolved {:goal :to} (:provisional true for a column's
+  unseen surface; mem :said); the cell aimed at, a
   column's stand-in too, is mem :aimed (the result's :resolved). A column not resolved from seen cells is :column-open
   (:guess for its unseen surface, :stand-in for no ground known)."
   [c goal]
@@ -624,7 +648,7 @@
         (ctx/update-mem! c assoc :aimed aimed-at))
       (when (and resolved (not= pos (:said (ctx/mem c))))
         (ctx/update-mem! c assoc :said pos)
-        (ctx/emit! c :goal-resolved :info {:goal goal :to pos}))
+        (ctx/emit! c :goal-resolved :info (cond-> {:goal goal :to pos} provisional (assoc :provisional true))))
       (wworld/stand-goal (wworld/path-world (:primitives c) (:unknown c)) pos))))
 
 (defn goal-danger
@@ -644,13 +668,13 @@
 
 (defn pre-aim!
   "Before the first walk: a y goal pos (goal-pos) that the planner answers goal-not-standable for alone (no search,
-  wplan/goal-stand-problem) and whose column aims it elsewhere is re-aimed now (mem :re-aim), not after a walk."
+  wplan/goal-stand-problem), or under :unknown seen in the ground, and whose column aims it elsewhere is re-aimed now
+  (mem :re-aim), not after a walk."
   [c goal pos]
-  (let [pw (wworld/path-world (:primitives c) (:unknown c))]
-    (when (and (:y goal) pw (not (:re-aim (ctx/mem c))) (pos? (:y-slack (:args c) 4))
-               (= :goal-not-standable (wplan/goal-stand-problem c pw [(:x pos) (:y pos) (:z pos)] (:range (:args c) 1)))
-               (:resolved (aimed c goal)))
-      (ctx/update-mem! c assoc :re-aim true))))
+  (when (and (:y goal) (not (:re-aim (ctx/mem c))) (pos? (:y-slack (:args c) 4))
+             (or (not-standable? c pos) (in-seen-ground? c pos))
+             (:resolved (aimed c goal)))
+    (ctx/update-mem! c assoc :re-aim true)))
 
 (defn ^:async run-steps!
   "step! until it arrives, gives up, or waits on a child (:continue), with pace! between steps; goal aimed again each

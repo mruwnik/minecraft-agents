@@ -88,10 +88,12 @@
     (every? #(free? (kind-at x % z)) (range (inc g) y))))
 
 (defn sky-ground
-  "The feet y of the column x z's topmost stand open to the sky (every cell above it free), else nil."
+  "The feet y of the column x z's topmost stand open to the sky (every cell above it :open; on water, its top water
+  cell), else nil."
   [kind-at x z]
-  (when-let [h (first (remove #(free? (kind-at x % z)) (range (inc top-y) (dec places/min-y) -1)))]
-    (when (stands? kind-at x (inc h) z) (inc h))))
+  (when-let [h (first (remove #(keyword-identical? :open (kind-at x % z)) (range (inc top-y) (dec places/min-y) -1)))]
+    (cond (keyword-identical? :water (kind-at x h z)) (when (stands? kind-at x h z) h)
+          (stands? kind-at x (inc h) z) (inc h))))
 
 (defn aim
   "{:pos cell} go-to walks to for goal ({:x :y :z}, or {:x :z} for a column): :resolved true when the y was chosen here,

@@ -2,7 +2,9 @@
   "jobs.movement.go-to's column goals ([x z], y left out) and its re-aim of a y with nothing standable in range."
   (:require [cljs.test :refer [deftest is async]]
             [engine.go-to-test :as gt :refer [go! at events-of refusal]]
+            [engine.core :as core]
             [engine.test-util :as tu :refer [box floor]]
+            [jobs.movement.go-to :as go-to]
             [jobs.movement.go-to.column :as column]))
 
 (def flat (floor -2 -3 40 3))
@@ -148,6 +150,14 @@
     (is (= {:pos {:x 30 :y 64 :z 0}} (column/aim p {:x 30 :z 0} 4 64 false))
         ":unknown on reads no unseen cell: the stand-in")))
 
+;; a lake at x 28..32: water y 49..63 (15 deep) on a stone bed at 48
+(def lake (merge flat (box 28 48 -3 32 48 3 "stone") (box 28 49 -3 32 63 3 "water")))
+
+(deftest an-unseen-lake-column-aims-at-its-surface-not-its-bed
+  (let [p (hiding lake (column-hidden-below 80))]
+    (is (= {:pos {:x 30 :y 63 :z 0} :resolved true :provisional true} (column/aim p {:x 30 :z 0} 4 64 true))
+        "the top water cell: water is no open sky")))
+
 (deftest a-seen-column-picks-its-seen-ground-nearest-the-feet
   (let [p (hiding hill-with-cave (constantly false))]
     (is (= {:pos {:x 30 :y 60 :z 0} :resolved true} (column/aim p {:x 30 :z 0} 4 64 true))
@@ -168,8 +178,9 @@
               {:keys [out p] :as s} (await (go! {:blocks floating :light [15 0]} {:pos [30 0] :range 0}))]
           (is (= {:arrived true :resolved {:x 30 :y 64 :z 0}} @out) (pr-str @out))
           (is (= [30 64 0] (mapv #(js/Math.floor %) (at p))))
-          (is (= [{:x 30 :y 71 :z 0} {:x 30 :y 64 :z 0}] (mapv :to (events-of s :goal-resolved)))
-              "said again when the target changed"))))))
+          (is (= [{:to {:x 30 :y 71 :z 0} :provisional true} {:to {:x 30 :y 64 :z 0}}]
+                 (mapv #(select-keys % [:to :provisional]) (events-of s :goal-resolved)))
+              "said again when the target changed; the unseen top is said as a guess"))))))
 
 (deftest a-column-stand-in-arrival-carries-the-cell
   (async done
@@ -178,7 +189,7 @@
         ;; the column x 3 has no floor at all: no ground, the stand-in (the feet y) is within range from the start
         (let [holed (apply dissoc flat (for [z (range -3 4)] (str "3,63," z)))
               {:keys [out]} (await (go! {:blocks holed} {:pos [3 0] :range 4}))]
-          (is (= {:arrived true :resolved {:x 3 :y 64 :z 0}} @out) (pr-str @out)))))))
+          (is (= {:arrived true :resolved {:x 3 :y 64 :z 0} :stand-in true} @out) (pr-str @out)))))))
 
 (deftest a-goal-sealed-under-a-ceiling-is-not-re-aimed-through-it
   (let [p (hiding pocket (constantly false))]
@@ -200,3 +211,40 @@
             (let [{:keys [out] :as s} (await (go! {:blocks mound :light [15 0] :self {:pos {:x 22 :y 64 :z 0}}} {:pos pos :range 0 :unknown true}))]
               (is (not= :not-done @out) (str (pr-str pos) " ended"))
               (is (< (count (events-of s :planned)) 300) (str (pr-str pos) " searches: " (count (events-of s :planned)))))))))))
+
+(deftest an-unseen-y-goal-inside-a-mound-under-unknown-is-re-aimed-once-seen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        ;; the goal cell (30,64,0) is stone inside the mound (ground at feet 65), unseen from x 22, in full sky light
+        (let [mound (merge flat (box 28 64 -3 32 64 3 "stone"))
+              {:keys [out p] :as s} (await (go! {:blocks mound :light [15 0] :self {:pos {:x 22 :y 64 :z 0}}}
+                                                {:pos [30 64 0] :range 0 :unknown true}))]
+          (is (= {:arrived true :resolved {:x 30 :y 65 :z 0}} @out) (pr-str @out))
+          (is (= [30 65 0] (mapv #(js/Math.floor %) (at p))))
+          (is (= [{:x 30 :y 65 :z 0}] (mapv :to (events-of s :goal-resolved)))))))))
+
+(defn ^:async go-hidden!
+  "go! with the cells hidden? answers true for never seen (hiding), whatever the body looks at."
+  [world hidden? args]
+  (let [{:keys [eng p] :as s} (gt/setup world)
+        out (atom :not-done)
+        eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (gt/recording-parent out args)))]
+    (aset p "sensedAt" (fn [pos] (if (hidden? [(.-x pos) (.-y pos) (.-z pos)]) #js {:unknown true} (.blockAt p pos))))
+    (core/submit! eng '(recording-parent) {})
+    (await (gt/tick-out! eng 30))
+    (assoc s :eng eng :out out)))
+
+(deftest a-column-guess-that-never-resolves-walks-near-looks-then-walks-in-range
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        ;; the column x 30 is never seen: its guess (the raw top, 64) is walked to within approach-range, looked at
+        ;; max-column-looks times, then walked to within the :range arg; the result says it was a guess
+        (let [{:keys [out p eng]} (await (go-hidden! {:blocks flat} (fn [[x _ z]] (= [30 0] [x z])) {:pos [30 0] :range 0}))
+              walks (gt/moved eng)]
+          (is (= {:arrived true :resolved {:x 30 :y 64 :z 0} :provisional true} @out) (pr-str @out))
+          (is (= [30 64 0] (mapv #(js/Math.floor %) (at p))))
+          (is (= go-to/max-column-looks (count (filter #(= "look" (.-name %)) (.-calls (.-world p))))) "its looks spent")
+          (is (some #(< 2 (js/Math.hypot (- 30 (:x (:to %))) (:z (:to %))) (inc column/approach-range)) walks)
+              (str "a walk stopped near the guess first: " (pr-str (mapv :to walks)))))))))
