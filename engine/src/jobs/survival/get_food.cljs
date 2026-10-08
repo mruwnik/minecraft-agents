@@ -19,6 +19,9 @@
   :health; fed, it ends {:food n}. Still hungry, it takes the first way that has something to do, then eats again:
   1. No food carried but 3 or more wheat: bake bread (the craft job, enough loaves for the hunger, within 32 blocks of
      a table). A failed bake is remembered as :no-bake for 10 minutes and the ladder goes on.
+  1b. Raw food carried (chicken, beef ...) with a furnace or smoker seen within ::cook-radius (16): cook it there (the smelt
+     job, waiting out the cook in the round), then eat it. Not at night nor while the night handler holds. A failed cook is remembered
+     as :no-cook for 10 minutes.
   2. The newest :food-source entry {:pos :kind} within :source-radius, reached by go-to:
      :farm: dig its mature crops (blocks.dig, which collects the drops). It does not replant.
      :chest: withdraw its best food (storage.withdraw); with no food but 3 or more wheat, wheat in multiples of 3,
@@ -28,9 +31,6 @@
   3. Harvest items lying within 8 blocks (collect-drops).
   4. The nearest passive food animal within :hunt-radius (combat.attack, then collect-drops).
   5. Mature crops or sweet berry bushes within :hunt-radius (blocks.dig).
-  1b. Raw food carried (chicken, beef ...) with a furnace or smoker seen within ::cook-radius (16): cook it there (the smelt
-     job, waiting out the cook in the round), then eat it. Not while the night handler holds. A failed cook is remembered
-     as :no-cook for 10 minutes.
   Nothing left: once per job (:explore, default on) it searches for food animals and crops (jobs.explore.search, the
   ::explore setting; not at night nor while the night handler holds) and goes on if it found some; at ::eat-bad-food (6) or below it then eats harmful food carried (rotten
   flesh, with :allow-bad). Still nothing: it stops :no-food with a food.none warning (what was searched, the nearest known source) and writes
@@ -439,14 +439,16 @@
        first :pos))
 
 (defn can-cook?
-  "Mid-cook, or raw food carried, a furnace in sight, no live :no-cook entry and the night handler not holding."
+  "Mid-cook, or raw food carried, a furnace in sight, no live :no-cook entry; never at night nor while the night
+  handler holds (a cook under way is dropped then)."
   [c]
   (boolean
-   (or (:cooking (ctx/mem c))
-       (and (seq (raw-carried c))
-            (zero? (ctx/count-in c :no-cook no-bake-ms))
-            (not (night-holds? c))
-            (nearest-cooker c)))))
+   (and (not (sh/night? (:primitives c)))
+        (not (night-holds? c))
+        (or (:cooking (ctx/mem c))
+            (and (seq (raw-carried c))
+                 (zero? (ctx/count-in c :no-cook no-bake-ms))
+                 (nearest-cooker c))))))
 
 (defn ^:async cook!
   "Way 1b: smelt the raw food carried (the smelt job, fuel as it takes it) in the furnace in sight; the cooking wait is

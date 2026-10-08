@@ -483,6 +483,17 @@
           (is (not-any? #{"chicken"} (map #(.-name %) (.-inventory (.self p)))) "no raw chicken left")
           (is (> (food p) 2) "and eaten"))))))
 
+(deftest raw-chicken-in-a-roofed-hut-at-night-is-not-carried-to-a-furnace
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pos {:x 5.5 :y 64 :z 0.5}
+              w (merge (hs/hut-world pos {"10,64,0" "furnace"})
+                       {:self {:food 2 :pos pos} :inventory [{:name "chicken" :count 2} {:name "coal" :count 2}] :time 15000})
+              {:keys [eng p]} (setup w :step-ms 5)]
+          (await (one-round! eng {:explore false}))
+          (is (= [] (calls p "furnace")) "a sheltered body does not walk out to a furnace at night"))))))
+
 (deftest raw-chicken-with-no-furnace-touches-no-furnace
   (async done
     (tu/run-async done
