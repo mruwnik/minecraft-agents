@@ -155,13 +155,19 @@
         (reset! done true)
         [dv 0]))))
 
-(deftest g3-a-push-on-the-way-is-braked-before-the-takeoff-and-its-twin-without-the-approach-overshoots
-  (let [c #(course "blue_ice" :drop false :push (leg-push 5.5 0.1))
+(def takeoff-end
+  "The body's centre past this x has left the takeoff (x 7): its hitbox (0.3 each way) no longer stands on it."
+  (+ edge 0.3))
+
+;; Unpushed, the executor's own stop at the takeoff is enough on every floor: the approach only matters after a push.
+(deftest g3-a-push-on-the-way-is-braked-on-the-takeoff-and-its-twin-without-the-approach-falls-off
+  ;; 0.3 along the road on blue ice, 1.5 blocks before the takeoff (a mob's hit gives about 0.4)
+  (let [c #(course "blue_ice" :drop false :push (leg-push 5.5 0.3))
         on (run (c) true)
         off (with-redefs [ws/approach (fn [controls & _] controls)] (run (c) true))]
-    (is (no-overshoot? on) (str "max x " (max-x (:poses on)) " " (report on)))
+    (is (< (max-x (:poses on)) takeoff-end) (str "max x " (max-x (:poses on)) " " (report on)))
     (is (= :unseen (:why (:done on))) (report on))
-    (is (not (no-overshoot? off)) (str "approach off: max x " (max-x (:poses off)) " " (report off)))))
+    (is (> (max-x (:poses off)) takeoff-end) (str "approach off: max x " (max-x (:poses off)) " " (report off)))))
 
 (deftest a-lit-drop-is-seen-from-the-peek-point-and-walked
   (doseq [floor ["stone" "blue_ice"]]
@@ -203,10 +209,6 @@
       (when (and (not @done) (>= (get-in state [:gate :still] 0) 2))
         (reset! done true)
         [dv 0]))))
-
-(def takeoff-end
-  "The body's centre past this x has left the takeoff (x 7): its hitbox (0.3 each way) no longer stands on it."
-  (+ edge 0.3))
 
 (deftest g6-a-push-while-held-is-braked-on-the-takeoff-and-its-twin-without-the-hold-falls-off
   ;; (a body thrown off sees the floor on the way down, so it is no breach: the hold keeps it on the takeoff)
