@@ -694,3 +694,14 @@
           (let [stop (first (ended seen))]
             (is (= :stopped (:kind stop)))
             (is (= :no-stock (:reason stop)) (pr-str stop))))))))
+
+(deftest explore-is-done-once-per-job-unless-starving-and-rested
+  (is (false? (get-food/explore-done? nil false 100 60000)))
+  (is (true? (get-food/explore-done? {:explored "x" :explored-at 0} false 999999 60000)))
+  (is (true? (get-food/explore-done? {:explored "x" :explored-at 0} true 59999 60000)))
+  (is (false? (get-food/explore-done? {:explored "x" :explored-at 0} true 60000 60000))))
+
+(deftest starving-uses-the-low-health-line-of-eating
+  (let [{:keys [p]} (setup {:self {:food 15 :health 6.5}} :step-ms 5)
+        c {:primitives p :args {}}]
+    (is (get-food/starving? c) "health below 7 and hungry")))
