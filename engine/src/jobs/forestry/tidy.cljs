@@ -11,17 +11,22 @@
 
 (def doc
   "Fell the part-cut trunks round the body: a natural tree (logs with leaves near the top, as fell-tree reads one)
-  whose lowest log is raised, the block under it seen as air, because the logs under it were cut. Runs three
+  whose lowest log is raised, the block under it seen as air, because the logs under it were cut. Judged per tree: a
+  raised log joined (side or corner touching, through logs) to a log standing on the ground is part of a living tree
+  (an acacia or fancy oak branch, a mangrove root) and is left. Runs three
   children in turn per trunk, each called once: fell-tree (:at the trunk's lowest log), collect-drops (round it) and
   plant-sapling (:at the seen ground cell under the trunk; the debt fell-tree wrote on the raised log is dropped).
   Acts only on trunks it has seen. A trunk with no leaves (a log wall of a build), a tree standing on the ground, and a
   trunk whose lowest log a zone, claim or plan footprint refuses (warn tidy.declined once) are left alone; so is a trunk
   fell-tree digs no log of.
-  Ends after :max-trees trunks, or when none is left in sight. Result {:tidied n}. With nothing to tidy it ends :stopped
-  :nothing-to-tidy. A missing axe, a pillar's blocks or a sapling are fetched by the children (:fetch).")
+  Ends after :max-trees trunks, or when none is left in sight. Result {:tidied n}, plus :replant-owed k when k felled trunks were not replanted (no seen ground, or plant-sapling
+  would not run: no sapling and none to fetch); their replant debts stay owed. With nothing to tidy it ends :stopped
+  :nothing-to-tidy. A missing axe, a pillar's blocks or a sapling are fetched by the children (:fetch). The check is always true: a
+  one-off job that finds nothing ends itself :nothing-to-tidy instead of staying queued.")
 
 (a/defargs settings
   {::max-trees {:default 8 :doc "The most trunks one tidy run fells." :spec (a/int-in 1 nil)}
+   ::max-steps {:default 400 :doc "Child calls of one round before it gives the body back with :continue." :spec (a/int-in 1 nil)}
    ::ground-depth {:default 24 :doc "Blocks under a raised log looked down for the ground to replant on." :spec (a/int-in 1 nil)}})
 
 (a/defargs args
@@ -51,6 +56,27 @@
           (contains? air n) (recur (inc dy))
           :else (assoc below :y (inc (:y below))))))))
 
+(defn neighbours [{:keys [x y z]}]
+  (for [dx [-1 0 1] dy [-1 0 1] dz [-1 0 1] :when (not (and (zero? dx) (zero? dy) (zero? dz)))]
+    {:x (+ x dx) :y (+ y dy) :z (+ z dz)}))
+
+(defn grounded?
+  "Whether the log at pos stands on a seen block that is neither air nor a log."
+  [p pos]
+  (let [n (seen-name p (update pos :y dec))]
+    (and n (not (contains? air n)) (not (trees/log-name? n)))))
+
+(defn living?
+  "Whether the log at pos is joined to a log standing on the ground: a flood fill over the seen logs (the set of
+  positions), side or corner touching."
+  [p logs pos]
+  (loop [todo [pos] seen #{pos}]
+    (when-let [at (peek todo)]
+      (if (grounded? p at)
+        true
+        (let [more (remove seen (filter logs (neighbours at)))]
+          (recur (into (pop todo) more) (into seen more)))))))
+
 (defn allowed?
   "Whether the job may dig the log at pos (one warn per job when refused)."
   [c pos]
@@ -62,9 +88,11 @@
   [c]
   (let [{:keys [radius species]} (:args c)
         p (:primitives c)
-        skipped (set (:skipped (ctx/mem c)))]
+        skipped (set (:skipped (ctx/mem c)))
+        logs (delay (into #{} (map :pos) (trees/scan-logs p radius nil)))]
     (->> (trees-near p radius species)
-         (filter #(and (not (skipped (:base %))) (raised? p (:base %)) (allowed? c (:base %)))))))
+         (filter #(and (not (skipped (:base %))) (raised? p (:base %)) (not (living? p @logs (:base %)))
+                       (allowed? c (:base %)))))))
 
 (defn phases
   "The children in order: [phase job args] for the trunk tree {:base :species :ground}."
@@ -82,7 +110,7 @@
   (let [n (:tidied (ctx/mem c) 0)]
     (if (zero? n)
       (result/stop! c :nothing-to-tidy "no part-cut trunk in sight")
-      (do (ctx/result! c {:tidied n}) :done))))
+      (do (ctx/result! c (cond-> {:tidied n} (pos? (:owed (ctx/mem c) 0)) (assoc :replant-owed (:owed (ctx/mem c))))) :done))))
 
 (defn next-tree!
   "Choose the next trunk into memory; false when none is left or the limit is reached."
@@ -94,13 +122,16 @@
         tree))))
 
 (defn end-tree!
-  "The trunk is done (felled, or skipped when skip? is true): counts it, clears the children."
-  [c skip?]
+  "The trunk is done (felled, or skipped when skip? is true; owed? when it was felled but not replanted): counts it,
+  clears the children. The debt of an owed replant stays."
+  [c skip? owed?]
   (let [base (:base (:tree (ctx/mem c)))]
-    (ctx/forget-where! c replant-kind #(= base (:pos %)))
+    (when-not (or skip? owed?)
+      (ctx/forget-where! c replant-kind #(= base (:pos %))))
     (ctx/update-mem! c #(-> %
                             (cond-> skip? (update :skipped (fnil conj []) base)
-                                    (not skip?) (update :tidied (fnil inc 0)))
+                                    (not skip?) (update :tidied (fnil inc 0))
+                                    owed? (update :owed (fnil inc 0)))
                             (dissoc :tree :phase :dug)
                             (update :children dissoc :fell :collect :plant)))
     :again))
@@ -114,27 +145,24 @@
       (finish! c)
       (let [phase (:phase (ctx/mem c))
             [_ job cargs] (some #(when (= phase (first %)) %) (phases (:args c) tree))
-            r (if (and (= :plant phase) (not (ctx/check-child c phase job cargs)))
-                :done
-                (await (ctx/call-child c phase job cargs)))]
+            unplantable? (and (= :plant phase) (not (ctx/check-child c phase job cargs)))
+            r (if unplantable? :done (await (ctx/call-child c phase job cargs)))]
         (cond
           (not= :done r) :continue
           (= :fell phase)
           (let [logs (:logs (ctx/child-result c :fell) 0)]
             (if (zero? logs)
-              (end-tree! c true)
+              (end-tree! c true false)
               (do (ctx/update-mem! c assoc :phase :collect) :again)))
           (= :collect phase)
           (if (:ground tree)
             (do (ctx/update-mem! c assoc :phase :plant) :again)
-            (end-tree! c false))
-          :else (end-tree! c false))))))
-
-(def max-steps "Child calls of one round before it gives the body back with :continue." 400)
+            (end-tree! c false true))
+          :else (end-tree! c false unplantable?))))))
 
 (defn check [_c] true)
 
 (defn ^:async round
   [c]
   (let [n (atom 0)]
-    (await (pace/steps! c #(if (< (swap! n inc) max-steps) (step c) :continue)))))
+    (await (pace/steps! c #(if (< (swap! n inc) (settings/get settings ::max-steps)) (step c) :continue)))))

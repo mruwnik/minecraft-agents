@@ -58,3 +58,70 @@
         (let [zones [{:name "vault" :min [5 64 -1] :max [7 80 1] :allow #{:place}}]
               {:keys [p]} (await (tidy {:blocks (merge (fm/ground [[6 0]]) (part-cut 6))} zones {:radius 12}))]
           (is (= [] (fm/digs p))))))))
+
+(defn ^:async outcome
+  "The result of tidy with args in a world of spec (child-outcome), with the world's calls: {:out :p}."
+  [spec args]
+  (let [{:keys [eng p]} (lt/setup spec)]
+    {:out (await (tu/child-outcome eng job args 150)) :p p}))
+
+(defn branched
+  "A living tree at x 6: a trunk of 4 logs on the ground and one branch log at bx, by, connected to it, leaves on top."
+  [bx by]
+  (merge (lt/tree 6 0 "oak" 4) {(fm/k bx by 0) "oak_log" (fm/k bx (inc by) 0) "oak_leaves"}))
+
+(deftest the-branch-of-a-living-acacia-is-left
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (outcome {:blocks (merge (fm/ground [[6 0] [7 0]]) (branched 7 67))} {:radius 12}))]
+          (is (= [] (fm/digs p))))))))
+
+(deftest the-side-branch-of-a-living-fancy-oak-is-left
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (outcome {:blocks (merge (fm/ground [[6 0] [7 0]]) (branched 7 66))} {:radius 12}))]
+          (is (= [] (fm/digs p))))))))
+
+(deftest nothing-to-tidy-stops-with-that-reason
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out]} (await (outcome {:blocks (fm/ground [[6 0]])} {:radius 12}))]
+          (is (= :stopped (:status out)))
+          (is (= :nothing-to-tidy (:reason out))))))))
+
+(deftest the-logs-of-a-felled-trunk-are-collected
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p out]} (await (outcome {:blocks (merge (fm/ground [[6 0]]) (part-cut 6)) :inventory [sapling]} {:radius 12}))]
+          (is (= {:tidied 1} out))
+          (is (<= 3 (get (lt/inv p) "oak_log" 0))))))))
+
+(deftest max-trees-ends-the-run-after-that-many-trunks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p out]} (await (outcome {:blocks (merge (fm/ground [[6 0] [10 0]]) (part-cut 6) (part-cut 10))
+                                               :inventory [sapling]}
+                                              {:radius 12 :max-trees 1}))]
+          (is (= {:tidied 1} out))
+          (is (= 1 (count (filter seq [(dug-ys p 6) (dug-ys p 10)])))))))))
+
+(deftest a-replant-that-cannot-be-done-is-owed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p out]} (await (outcome {:blocks (merge (fm/ground [[6 0]]) (part-cut 6))} {:radius 12 :fetch false}))]
+          (is (= #{65 66 67} (dug-ys p 6)))
+          (is (= {:tidied 1 :replant-owed 1} out)))))))
+
+(deftest a-trunk-with-no-ground-seen-under-it-is-owed-too
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p out]} (await (outcome {:blocks (part-cut 6) :inventory [sapling]} {:radius 12}))]
+          (is (= [] (fm/places p)))
+          (is (= {:tidied 1 :replant-owed 1} out)))))))
