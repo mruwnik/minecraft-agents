@@ -960,3 +960,54 @@
     (is (not (contains? (:walk-given (build/retry-walks m {:x 20 :y 64 :z 0} false)) [1 64 1])))
     (is (= {[2 64 2] :refused [3 64 3] :unreachable}
            (:given-up (build/retry-walks m {:x 0 :y 64 :z 0} true))) "finishing: retried in place")))
+
+;; ---------------------------------------------------------------- wood species
+
+(def wood-ground (into {} (for [x (range 8 15) z (range -3 4)] [(h/cell-key x 63 z) "stone"])))
+
+(defn wall-plan [extra]
+  (merge {:id "wall" :parts [{:id "w" :cells [[10 64 0] [11 64 0]] :want "oak_planks"}
+                             {:id "s" :cells [[12 64 0]] :want {:block "oak_stairs" :facing :north}}]}
+         extra))
+
+(deftest a-plan-of-oak-is-built-of-the-wood-carried
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (start {:blocks wood-ground :inventory [{:name "birch_planks" :count 8} {:name "birch_stairs" :count 2}]}
+                                     {"wall" (wall-plan {})})
+              result (await (tu/child-outcome eng job {:plan "wall" :fetch false} 300))]
+          (is (= "birch_planks" (block p [10 64 0])))
+          (is (= "birch_stairs" (block p [12 64 0])))
+          (is (= {"oak" "birch"} (:substituted result)))
+          (is (= [] (:missing result))))))))
+
+(deftest a-pinned-wood-is-not-substituted
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan (assoc-in (wall-plan {}) [:parts 0 :want] [:any "oak_planks"])
+              {:keys [eng p]} (start {:blocks wood-ground :inventory [{:name "birch_planks" :count 8}]} {"wall" plan})
+              result (await (tu/child-outcome eng job {:plan "wall" :fetch false} 300))]
+          (is (= "air" (block p [10 64 0])))
+          (is (nil? (:substituted result))))))))
+
+(deftest a-plan-with-exact-wood-is-not-substituted
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (start {:blocks wood-ground :inventory [{:name "birch_planks" :count 8}]}
+                                     {"wall" (wall-plan {:metadata {:exact-wood true}})})
+              result (await (tu/child-outcome eng job {:plan "wall" :fetch false} 300))]
+          (is (= "air" (block p [10 64 0])))
+          (is (nil? (:substituted result))))))))
+
+(deftest enough-of-the-planned-wood-keeps-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (start {:blocks wood-ground :inventory [{:name "oak_planks" :count 8} {:name "oak_stairs" :count 1} {:name "birch_planks" :count 50}]}
+                                     {"wall" (wall-plan {})})
+              result (await (tu/child-outcome eng job {:plan "wall" :fetch false} 300))]
+          (is (= "oak_planks" (block p [10 64 0])))
+          (is (nil? (:substituted result))))))))

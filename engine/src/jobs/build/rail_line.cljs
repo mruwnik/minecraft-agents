@@ -72,7 +72,7 @@
         p (:primitives c)
         answer (known/plan c plan)
         cells (when (and answer (not (:broken answer)))
-                (build/judged p answer part (set (keys (build/carried-counts p)))))
+                (build/judged p answer part (set (keys (build/carried-counts p))) {}))
         chain (when (seq cells) (rail/line cells))
         trouble (cond
                   (build/plan-trouble answer cells) {:reason :plan :detail (build/plan-trouble answer cells)
