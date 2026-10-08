@@ -89,17 +89,20 @@
          (remove (fn [[_ n]] (and n (or (air n) (fluids n) (kept? keep n)))))
          vec)))
 
-(defn sort-out
-  "{:allowed [[pos name] ..] :refused [[pos verdict] ..]}: the pending cells split by the rules' permission (a zone or
-  another plan's footprint); unloaded cells are allowed (walked to)."
-  [c todo]
-  (let [in (access/rules-input c)
-        accept (:accept (:args c))
-        judged (map (fn [[pos n]] (let [v (when n (access/may-dig? in pos))]
+(defn split-by-rules
+  "{:allowed [[pos name] ..] :refused [[pos verdict] ..]}: the todo cells split by the verdict of rules input in."
+  [in accept todo]
+  (let [judged (map (fn [[pos n]] (let [v (access/may-dig? in pos)]
                                     [pos n v (when v (access/judge v accept))]))
                     todo)]
     {:allowed (into [] (comp (remove #(= :refused (nth % 3))) (map (fn [[pos n]] [pos n]))) judged)
      :refused (into [] (comp (filter #(= :refused (nth % 3))) (map (fn [[pos _ v]] [pos v]))) judged)}))
+
+(defn sort-out
+  "{:allowed [[pos name] ..] :refused [[pos verdict] ..]}: the pending cells split by the rules' permission (a zone or
+  another plan's footprint); unloaded cells are allowed (walked to)."
+  [c todo]
+  (split-by-rules (access/rules-input c) (:accept (:args c)) todo))
 
 (defn started?
   "Whether a round has left anything in memory (dug, skipped, tried or started on a cell)."

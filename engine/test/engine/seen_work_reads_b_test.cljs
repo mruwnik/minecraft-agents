@@ -22,3 +22,11 @@
         attention? (fn [w] (smelt/needs-attention? w far-cell))]
     (is (false? (attention? (wrapped blocks true))) "unseen: not judged")
     (is (true? (attention? (wrapped blocks false))) "seen unlit: needs attention")))
+
+(deftest clear-box-refuses-an-unseen-cell-in-a-zone
+  (let [zone {:name "farm" :min [0 60 0] :max [0 70 5] :owner "Miles"}
+        in {:block-at (constantly "stone") :floor-at (constantly nil) :feet [5 64 5] :ledger #{}
+            :zones [zone] :footprints {} :plan-cells #{} :claims [] :self "Fake" :own-plans #{} :now 0 :ignore-zones? false}
+        sorted (clear-box/split-by-rules in #{:fluid-adjacent :falling-block} [[far-cell nil]])]
+    (is (= [] (:allowed sorted)) "a zone refuses the cell whether or not it is in view")
+    (is (= [far-cell] (map first (:refused sorted))))))
