@@ -1,8 +1,8 @@
 ;; Cards 5036e6fc and 5224d292: breed, shear, leash and lead-to fetch what they need (wheat, shears, a lead) when the body
 ;; carries none, instead of ending :no-food / :no-shears / :no-lead at once. The item sits in a chest the body has seen (it
 ;; looks at the chest first, as in blocks-place-fetch.edn). leash/shear/breed fetch through jobs.lib.fetch (fetch.started,
-;; fetch.done, fetch.failed); lead-to calls a jobs.items.obtain child (a seen chest, or a lead crafted from 4 string and a
-;; slime ball at a seen table) and ends :no-lead when that fails. :fetch false ends at once without a fetch.
+;; fetch.done, fetch.failed); lead-to calls a jobs.items.obtain child (a seen chest, or a lead crafted from 5 string
+;; (version 26.1 recipe) at a seen table) and ends :no-lead when that fails. :fetch false ends at once without a fetch.
 {:defaults
  {:tags [:animals :fetch :jobs]
   :time :any
@@ -54,7 +54,7 @@
    :limit-s 60}
   {:name "leash-fetches-a-lead"
    :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:lead\",count:2}]}"]]
-   :act [[:summon "cow" [20.5 0 12.5]]
+   :act [[:summon "cow" [18.5 0 14.5]]
          [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:wait-s 2]
          [:job (jobs.animals.leash {:mob "cow"})]]
    :expect [{:event {:source :job :kind :fetch.started} :within-s 30 :of-job true}
@@ -84,7 +84,7 @@
    :limit-s 190}
   {:name "lead-to-crafts-a-lead"
    :blocks [[:set [7 0 16] "crafting_table"]]
-   :body {:at [4.5 0 16.5] :inventory [["string" 4] ["slime_ball" 1]]}
+   :body {:at [4.5 0 16.5] :inventory [["string" 5]]}
    :act [[:summon "cow" [6.5 0 18.5]]
          [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 0"] [:wait-s 2]
          [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [26 0 16]})]]

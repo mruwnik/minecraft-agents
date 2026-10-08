@@ -58,3 +58,6 @@
   (is (= {"cobblestone" 3}
          (:gather (plan {"stick" 2} "stone_pickaxe" 1 {:gather? true :table? true})))
       "no :materials: the first recipe's"))
+
+(deftest a-lead-is-made-from-five-string
+  (is (= [[:craft "lead" 2]] (shape (plan {"string" 5} "lead" 2 {:table? true})))))
