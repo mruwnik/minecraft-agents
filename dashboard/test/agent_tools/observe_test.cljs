@@ -248,12 +248,18 @@
    ["disconnection is opt-in" (event :body :disconnected) defaults nil]
    ["danger wakes when asked" (event :body :hurt) (assoc defaults :danger true) :danger]
    ["disconnection wakes when asked" (event :body :disconnected) (assoc defaults :disconnect true) :disconnected]
+   ["a death always wakes" (event :body :died {:cause "skeleton"}) defaults :died]
+   ["a death wakes under danger as a death" (event :body :died {:cause "skeleton"}) (assoc defaults :danger true) :died]
    ["exhausted reconnection always wakes" (event :body :reconnect-failed) defaults :reconnect-failed]
    ["an unwatched job stays quiet" (assoc (event :job :completed) :context {:job-id "j1"}) defaults nil]
    ["a watched job wakes" (assoc (event :job :completed) :context {:job-id "j1"}) (assoc defaults :watch ["j1"]) :job-finished]
    ["a watched job wakes when stopped" (assoc (event :job :stopped) :context {:job-id "j1"}) (assoc defaults :watch ["j1"]) :job-finished]
    ["a watched job wakes when cancelled" (assoc (event :job :cancelled) :context {:job-id "j1"}) (assoc defaults :watch ["j1"]) :job-finished]
    ["an idle body always wakes" (event :body :idle {:jobs []} "body idle 10 s") defaults :idle]])
+
+(deftest a-death-wake-names-cause-and-place
+  (is (= {:wake :died :cause "skeleton" :at [1 2 3]}
+         (observe-status/classify (event :body :died {:cause "skeleton" :pos {:x 1 :y 2 :z 3}}) defaults "Probe"))))
 
 (deftest an-idle-wake-names-the-jobs
   (let [jobs [{:job "j1" :name "jobs.items.get-tool" :waiting {:reason :no-source}}]]
@@ -885,7 +891,7 @@
 
 ;; Deaths through the wait loop
 
-(defn died-item [result] (->> (get-in result [:summary :items]) (filter #(= :died (:event %))) first))
+(defn died-item [result] (when (= :died (:wake result)) result))
 
 (defn plain-job-event-at [kind id seq data] (assoc (plain-job-event kind id data) :seq seq))
 
@@ -902,7 +908,7 @@
                    (push! f (assoc (event :body :died {}) :seq 3))
                    ((:wait! f))))
           (.then (fn [second-death]
-                   (is (= :died (:event (died-item second-death))))
+                   (is (= :died (:wake (died-item second-death))))
                    (is (not (contains? (died-item second-death) :cancelled-jobs)))))))))
 
 (deftest cancels-from-an-earlier-call-are-kept-for-the-death-in-a-later-one
