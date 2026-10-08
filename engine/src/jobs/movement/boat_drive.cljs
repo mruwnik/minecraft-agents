@@ -2,7 +2,9 @@
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as b]
+            [jobs.lib.look :as look]
             [jobs.lib.result :as result]
+            [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
             [jobs.lib.vehicle :as vehicle]))
 
@@ -36,12 +38,12 @@
 (defn target [c] (:pos (b/parse (:args c))))
 
 (defn check
-  "Waits while the target cell is not sensed; bad args pass for the round to stop on."
+  "Waits while the target cell is not sensed and the job has looked around (before that the round looks); bad args pass for the round to stop on."
   [c]
   (let [cell (target c)]
     (or (nil? cell)
         (some? (u/seen-name (:primitives c) cell))
-        (ctx/wait c {:reason :unseen :why "the water cell is not sensed yet"}))))
+        (look/wait-unless-surveyed c {:reason :unseen :why "the water cell is not sensed yet"} [cell]))))
 
 (defn heading-error
   "Degrees to turn to face bearing from yaw, in (-180, 180]: positive turns right (the yaw grows)."
@@ -66,7 +68,7 @@
 (defn paddle! [c {:keys [turn forward ticks]}]
   (ctx/act c :paddle (clj->js (cond-> {:ticks ticks :forward forward} turn (assoc :turn turn)))))
 
-(defn ^:async round [c]
+(defn ^:async drive! [c]
   (let [p (:primitives c)
         {:keys [range max-strokes max-s]} (:args c)
         cell (target c)
@@ -76,7 +78,6 @@
     (cond
       (nil? cell) (stop! :bad-args (:error (b/parse (:args c))))
       (not (vehicle/mounted? p)) (stop! :not-aboard "the body is not in a boat")
-      (nil? (u/seen-name p cell)) :continue
       (not= "water" (u/seen-name p cell)) (stop! :not-water (str "the cell is " (u/seen-name p cell) ", not water") :pos cell)
       :else
       (do
@@ -108,3 +109,11 @@
                         (recur (inc strokes) (inc blocked)))
                       (= "ok" st) (recur (inc strokes) 0)
                       :else (stop! :failed (str "paddle: " st) :primitive st))))))))))))
+
+(defn ^:async round [c]
+  (let [cell (target c)
+        p (:primitives c)]
+    (if (and cell (vehicle/mounted? p)
+             (nil? (await (sense/decide! c :boat-drive.cell #(u/seen-name p cell)))))
+      (do (await (look/survey! c)) :continue) ; the cell stays unseen after a look: the check waits from now on
+      (await (drive! c)))))

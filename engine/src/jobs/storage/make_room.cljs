@@ -183,9 +183,12 @@
 ;; ------------------------------------------------------------------ world
 
 (defn free-cell?
-  "The two cells ahead of cell at eye level (feet y + 1) are not solid."
+  "The two cells ahead of cell at eye level (feet y + 1) have been seen and are not solid: a toss into a cell never
+  looked at may hit a wall."
   [p {:keys [x y z]} [dx dz]]
-  (not-any? #(sh/solid-at? p {:x (+ x (* % dx)) :y (+ y 1) :z (+ z (* % dz))}) [1 2]))
+  (every? #(let [pos {:x (+ x (* % dx)) :y (+ y 1) :z (+ z (* % dz))}]
+             (and (some? (u/seen-name p pos)) (not (sh/solid-at? p pos))))
+          [1 2]))
 
 (defn direction
   "The first cardinal [dx dz] with free cells ahead, else [1 0]. With away

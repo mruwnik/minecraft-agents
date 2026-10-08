@@ -654,6 +654,8 @@
                  (assoc-in [:self :inWater] (= here "water")) (assoc-in [:self :inLava] (= here "lava")))
              {:status "dismounted" :pos pos}])))
 
+(def paddle-max-ticks "The most ticks one stroke lasts (js/settings.mjs vehicle/paddle-max-ticks)." 40)
+
 (defn paddle
   "One stroke of steering the boat the body is in: boatStep (the JS model, js/vehicle.mjs) per tick over water; :blocked where the next
   forward tick would leave the water. The boat's heading is its :yaw (Minecraft degrees, default 0); the body rides along."
@@ -666,7 +668,7 @@
       (nil? id) [w {:status "not-mounted"}]
       (not (re-find #"_(boat|raft)$" (str (:name e)))) [w {:status "not-a-boat"}]
       :else
-      (let [n (min (max (js/Math.floor ticks) 0) (.-PADDLE_MAX_TICKS m))
+      (let [n (min (max (js/Math.floor ticks) 0) paddle-max-ticks)
             [x y z] (:pos e)]
         (loop [i 0 pose #js {:x x :y y :z z :yaw (:yaw e 0)} w w]
           (let [done (fn [status] [w {:status status :pos [(.-x pose) (.-y pose) (.-z pose)] :yaw (.-yaw pose) :ticks i :turnDeg (.-BOAT_TURN m) :speed (.-BOAT_SPEED m)}])

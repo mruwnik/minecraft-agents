@@ -9,6 +9,7 @@
             [engine.takeover :as takeover]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
+            [jobs.lib.shelter :as sh]
             [jobs.lib.world-files :as ew]
             [jobs.storage.make-room :as mr]))
 
@@ -722,3 +723,11 @@
           (await (tick-out! eng 10))
           (is (= 1 @walks) "the items thrown in the last 2 minutes may still lie there: step away once")
           (is (empty? (spots))))))))
+
+(deftest a-toss-direction-is-not-picked-from-cells-never-seen
+  (let [p (tu/seeing-all (tu/fake-on-floor {}))
+        {fx :x} (sh/feet p)
+        omniscient (.-sensedAt p)]
+    (is (= [1 0] (mr/direction p nil)) "everything seen: east first")
+    (aset p "sensedAt" (fn [pos] (if (> (.-x pos) fx) #js {:unknown true} (omniscient pos))))
+    (is (= [-1 0] (mr/direction p nil)) "the east cells were never looked at: west")))

@@ -2,7 +2,9 @@
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as b]
+            [jobs.lib.look :as look]
             [jobs.lib.result :as result]
+            [jobs.lib.sense :as sense]
             [jobs.lib.shore :as shore]
             [jobs.lib.util :as u]
             [jobs.lib.vehicle :as vehicle]))
@@ -32,12 +34,12 @@
 (defn given-pos [c] (when (:pos (:args c)) (:pos (b/parse (:args c)))))
 
 (defn check
-  "Waits while a given land cell is not sensed."
+  "Waits while a given land cell is not sensed and the job has looked around (before that the round looks)."
   [c]
   (let [cell (given-pos c)]
     (or (nil? cell)
         (some? (u/seen-name (:primitives c) cell))
-        (ctx/wait c {:reason :unseen :why "the land cell is not sensed yet"}))))
+        (look/wait-unless-surveyed c {:reason :unseen :why "the land cell is not sensed yet"} [cell]))))
 
 (defn candidates [c]
   (let [p (:primitives c)
@@ -86,7 +88,7 @@
       (not (vehicle/mounted? p)) (result/stop! c :not-aboard "the body is not in a boat")
       (and (:pos (:args c)) (nil? (given-pos c))) (result/stop! c :bad-args (:error (b/parse (:args c))))
       :else
-      (let [spots (take max-spots (candidates c))
+      (let [spots (take max-spots (await (sense/decide! c :boat-land.shore #(candidates c) {:retry? empty?})))
             boat-id (:id (vehicle/vehicle-of (.self p)))]
         (if (empty? spots)
           (result/stop! c :no-shore "no seen shore to land on")
