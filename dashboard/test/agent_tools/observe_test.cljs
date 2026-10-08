@@ -901,7 +901,7 @@
     (is (= {:path "/settings" :settings-mode {:changed true :raw false}} (r "settings" "--changed")))
     (is (= {:path "/settings" :settings-mode {:changed false :raw true}} (r "settings" "--raw")))
     (is (= {:path "/settings/reload" :method "POST" :body "{}"} (r "settings" "reload")))
-    (is (= {:path "/settings/set" :method "POST" :body "{:key :jobs.items.smelt/wait-ms :value 5000}"}
+    (is (= {:path "/settings/set" :method "POST" :body "{:key :jobs.items.smelt/wait-ms, :value 5000}"}
            (r "settings" "set" ":jobs.items.smelt/wait-ms" "5000")))
     (is (= {:path "/settings/unset" :method "POST" :body "{:key :engine.game/follow-tick-rate}"}
            (r "settings" "unset" ":engine.game/follow-tick-rate")))))
@@ -910,6 +910,8 @@
   (doseq [[argv pattern] [[["settings" "set" ":a/b"] #"needs a key and an EDN value"]
                           [["settings" "set" "nokey" "1"] #"keyword such as"]
                           [["settings" "set" ":a/b" "{:x"] #"not valid EDN"]
+                          [["settings" "set" ":a/b" "5 6"] #"exactly one"]
+                          [["settings" "set" ":a/b" "5 :value 7"] #"exactly one"]
                           [["settings" "unset"] #"needs a key"]
                           [["settings" "reload" "x"] #"takes no"]
                           [["settings" "frob"] #"settings needs"]]]
@@ -934,4 +936,4 @@
                           (is (= "d" (get-in (data/read-edn (:out raw)) [:settings :a/b :doc])))
                           (is (= 1 (:code refused)))
                           (is (= "POST" (:method (first (:seen refused)))))
-                          (is (= "{:key :a/b :value 3}" (:body (first (:seen refused)))))))))))
+                          (is (= "{:key :a/b, :value 3}" (:body (first (:seen refused)))))))))))

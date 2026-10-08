@@ -19,3 +19,8 @@
   (is (= {:op :set :key :a/b :value "x"} (settings/set-request ":a/b" "\"x\"")))
   (is (string? (:error (settings/set-request "a/b" "1"))))
   (is (string? (:error (settings/set-request ":a/b" "{:x")))))
+
+(deftest loading-another-bodys-settings-drops-the-previous-view
+  (let [db {:detail-body "B" :settings {:body "A" :view view :error "e" :key ":a/b"}}]
+    (is (= {:body "B"} (:settings (settings/start-load db))))
+    (is (= (:settings db) (:settings (settings/start-load (assoc db :detail-body "A")))))))

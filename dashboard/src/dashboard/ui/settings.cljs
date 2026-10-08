@@ -33,11 +33,19 @@
 
 (defn url [db name] (str "/api/settings/" (body-path db name)))
 
+(defn start-load
+  "db for a load of the open body's settings: another body's view, drafts and error are dropped first."
+  [db]
+  (if (= (:detail-body db) (get-in db [:settings :body]))
+    db
+    (assoc db :settings {:body (:detail-body db)})))
+
 (rf/reg-event-fx
  :settings-load
  (fn [{:keys [db]} _]
    (when-let [name (:detail-body db)]
-     {:fetch-edn {:key :settings :url (url db name) :on-ok [:settings-loaded name] :on-err [:settings-error name]}})))
+     {:db (start-load db)
+      :fetch-edn {:key :settings :url (url db name) :on-ok [:settings-loaded name] :on-err [:settings-error name]}})))
 
 (rf/reg-event-db
  :settings-loaded

@@ -16,10 +16,18 @@
       :set (when (and (keyword? key) (contains? request :value)) ["/settings/set" {:key key :value value}])
       nil)))
 
+(defn failure-status
+  "The engine's own status for a refusal it answered with a body, 409 when none is known, 503 when it did not answer."
+  [e]
+  (cond
+    (not (.-engineBody e)) 503
+    (<= 400 (.-status e) 599) (.-status e)
+    :else 409))
+
 (defn failure! [res e]
   (when-not (.-headersSent res)
     (let [engine-body (.-engineBody e)]
-      (send-edn! res (if engine-body 409 503)
+      (send-edn! res (failure-status e)
                  {:error (str (or (some-> engine-body :reason str) (.-message e))
                               (when-let [problems (seq (:problems engine-body))] (str " (" (first problems) ")")))}))))
 

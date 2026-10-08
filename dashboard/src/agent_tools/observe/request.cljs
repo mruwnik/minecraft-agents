@@ -64,6 +64,9 @@
 (defn valid-edn? [text]
   (try (data/read-edn text) true (catch :default _ false)))
 
+(defn one-form? [text]
+  (= 1 (count (data/read-edn (str "[" text "]")))))
+
 (defn settings-request
   "[endpoint params extras] of the settings operation: extras is {:method :body} or {:settings-mode}."
   [sub args values]
@@ -78,7 +81,8 @@
       "set" (do (check (or (nil? k) (nil? v) (seq more)) "settings set needs a key and an EDN value")
                 (check (not (re-matches setting-key k)) "the key must be a keyword such as :jobs.items.smelt/wait-ms")
                 (check (not (valid-edn? v)) (str "the value is not valid EDN: " v))
-                (post "/settings/set" (str "{:key " k " :value " v "}")))
+                (check (not (one-form? v)) (str "the value must be exactly one EDN form: " v))
+                (post "/settings/set" (pr-str {:key (keyword (subs k 1)) :value (data/read-edn v)})))
       "unset" (do (check (or (nil? k) (seq (next args))) "settings unset needs a key")
                   (check (not (re-matches setting-key k)) "the key must be a keyword such as :jobs.items.smelt/wait-ms")
                   (post "/settings/unset" (str "{:key " k "}")))
