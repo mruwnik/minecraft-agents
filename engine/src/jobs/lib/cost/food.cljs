@@ -40,22 +40,6 @@
                      0 inventory)]
     (max 0 (- reserve-points held))))
 
-(def cook-urgent-food
-  "At this food level or less a body eats what it has: no time to cook."
-  3)
-
-(def furnace-cost
-  "Hunger points a furnace to make and place is counted to cost (cobble, a craft, the fuel)."
-  8)
-
-(def place-cost
-  "Hunger points putting down a furnace already carried is counted to cost."
-  2)
-
-(def walk-cost
-  "Hunger points one block of walking to a furnace is counted to cost."
-  0.2)
-
 (defn cooked-name
   "The cooked food a raw one gives, or nil."
   [name]
@@ -72,11 +56,10 @@
           0 inventory))
 
 (defn cook-worth?
-  "Whether cooking the raw food in inventory beats eating it now: not at or below cook-urgent-food, and the points
-  gained cover the walk to a furnace (distance, nil when none is seen: one is made, furnace-cost, or only put down,
-  place-cost, when carried-cooker? says one is in the pack) with the cost growing as food falls."
-  ([inventory food distance] (cook-worth? inventory food distance false))
-  ([inventory food distance carried-cooker?]
-   (and (> food cook-urgent-food)
-        (let [cost (cond distance (* distance walk-cost) carried-cooker? place-cost :else furnace-cost)]
-          (>= (cook-gain inventory) (* cost (+ 1 (/ (- 20 food) 20))))))))
+  "Whether cooking the raw food in inventory beats eating it now: the points gained cover the walk to a furnace
+  (distance, nil when none is known: one is made, :furnace-cost, or only put down, :place-cost, when carried-cooker?
+  says one is in the pack; :walk-cost a block) with the cost growing as food falls. costs: {:furnace-cost :place-cost
+  :walk-cost}. Whether time allows (starvation ticking, a hostile near) is the caller's."
+  [inventory food distance carried-cooker? {:keys [furnace-cost place-cost walk-cost]}]
+  (let [cost (cond distance (* distance walk-cost) carried-cooker? place-cost :else furnace-cost)]
+    (>= (cook-gain inventory) (* cost (+ 1 (/ (- 20 food) 20))))))

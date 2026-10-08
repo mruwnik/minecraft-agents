@@ -3,12 +3,14 @@
             [engine.args :as a]
             [clojure.string :as str]
             [engine.ctx :as ctx]
+            [engine.memory :as mem]
             [jobs.lib.access :as access]
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
             [jobs.lib.crops :as crops]
             [jobs.lib.look :as look]
             [jobs.lib.result :as r]
+            [jobs.lib.threats :as threats]
             [jobs.lib.shelter :as sh]
             [jobs.lib.util :as u]
             [jobs.lib.foods :as foods]
@@ -20,9 +22,9 @@
   :health; fed, it ends {:food n}. Still hungry, it takes the first way that has something to do, then eats again:
   1. No food carried but 3 or more wheat: bake bread (the craft job, enough loaves for the hunger, within 32 blocks of
      a table). A failed bake is remembered as :no-bake for 10 minutes and the ladder goes on.
-  1b. Raw food carried (chicken, beef ...) with a furnace or smoker seen within ::cook-radius (16), or no furnace but enough raw food
+  1b. Raw food carried (chicken, beef ...) with a furnace or smoker seen within ::cook-radius (16) or remembered (the :furnace place, within ::cook-far-radius 64), or no furnace but enough raw food
      to pay for making one (jobs.lib.cost/cook-worth?): cook it (the smelt job, which fetches a furnace and fuel, waiting out the cook in
-     the round), then eat it. Done before eating while the body is not starving (food above 3), else as a way. Not at night nor while the night
+     the round), then eat it. Done before eating unless starving (food 0) or a danger is sensed. Not at night nor while the night
      handler holds. A failed cook is remembered as :no-cook for 10 minutes.
   2. The newest :food-source entry {:pos :kind} within :source-radius, reached by go-to:
      :farm: dig its mature crops (blocks.dig, which collects the drops). It does not replant.
@@ -83,6 +85,10 @@
    ::explore {:default {:max-distance 64 :max-legs 12 :timeout-s 120} :doc "jobs.explore.search options of the search for food (:explore true)." :spec map?}
    ::eat-bad-food {:default foods/default-food :doc "At this much food or less the last resort eats harmful food carried (rotten flesh); above it harmful food is not food." :spec (a/num-in 0 20)}
    ::cook-radius {:default 16 :doc "Blocks within which a seen furnace or smoker counts for cooking raw food carried." :spec (a/int-in 0 nil)}
+   ::cook-far-radius {:default 64 :doc "Blocks within which the furnace the body remembers (:furnace place, one it put down) counts for cooking, seen or not." :spec (a/int-in 0 nil)}
+   ::furnace-cost {:default 8 :doc "Hunger points a furnace to make and place is counted to cost when cooking is weighed against eating raw." :spec (a/num-in 0 nil)}
+   ::place-cost {:default 2 :doc "Hunger points putting down a furnace already carried is counted to cost." :spec (a/num-in 0 nil)}
+   ::walk-cost {:default 0.2 :doc "Hunger points one block of walking to a furnace is counted to cost." :spec (a/num-in 0 nil)}
    ::cook-kinds {:default #{"chicken" "beef" "porkchop" "mutton" "rabbit" "cod" "salmon" "potato"} :doc "Raw foods the cook step puts in a furnace." :spec (a/set-of a/item?)}
    ::max-ways {:default 12 :doc "Ways one round tries without getting fed before it stops :still-hungry." :spec (a/int-in 0 nil)}})
 (defn drop-radius [] (settings/get settings ::drop-radius))
@@ -98,6 +104,10 @@
 (defn cook-radius [] (settings/get settings ::cook-radius))
 
 (defn cook-kinds [] (settings/get settings ::cook-kinds))
+
+(defn cook-costs [] {:furnace-cost (settings/get settings ::furnace-cost)
+                     :place-cost (settings/get settings ::place-cost)
+                     :walk-cost (settings/get settings ::walk-cost)})
 
 (defn eat-bad-food [] (settings/get settings ::eat-bad-food))
 
@@ -461,26 +471,37 @@
   (filter #(contains? (cook-kinds) (:name %)) (u/inventory (:primitives c))))
 
 (defn nearest-cooker
-  "The nearest furnace or smoker seen within :cook-radius, as a position, or nil."
+  "The nearest furnace or smoker seen within ::cook-radius, else the furnace the body remembers (the :furnace place)
+  within ::cook-far-radius, as a position, or nil."
   [c]
-  (->> (look/seen-blocks (:primitives c) {:names #{"furnace" "smoker"} :radius (cook-radius) :max 8 :live? true})
-       first :pos))
+  (or (->> (look/seen-blocks (:primitives c) {:names #{"furnace" "smoker"} :radius (cook-radius) :max 8 :live? true})
+           first :pos)
+      (let [known (mem/place (ctx/view c) :furnace)]
+        (when (and known (<= (u/dist (u/self-pos c) known) (settings/get settings ::cook-far-radius)))
+          known))))
+
+(defn rushed?
+  "No time to cook: starvation is ticking (food 0) or a real danger is sensed near."
+  [c]
+  (boolean (or (<= (food-level c) 0) (seq (threats/sensed-mobs (:primitives c))))))
 
 (defn worth-cooking?
-  "Cooking the raw food carried beats eating it now (jobs.lib.cost/cook-worth?): the walk to the furnace in sight, or
-  the one smelt makes (or, carried, only puts down) when none is seen."
+  "Cooking the raw food carried beats eating it now (jobs.lib.cost/cook-worth?): the walk to the furnace known, or
+  the one smelt makes (or, carried, only puts down) when none is."
   [c]
   (let [cooker (nearest-cooker c)]
     (cost/cook-worth? (raw-carried c) (food-level c) (when cooker (u/dist (u/self-pos c) cooker))
-                      (boolean (some #(contains? #{"furnace" "smoker"} (:name %)) (u/inventory (:primitives c)))))))
+                      (boolean (some #(contains? #{"furnace" "smoker"} (:name %)) (u/inventory (:primitives c))))
+                      (cook-costs))))
 
 (defn can-cook?
-  "Mid-cook, or raw food carried and no live :no-cook entry, with a furnace in sight or cooking worth a furnace of its
-  own (worth-cooking?); never at night nor while the night handler holds (a cook under way is dropped then)."
+  "Mid-cook, or raw food carried and no live :no-cook entry, with a furnace known or cooking worth a furnace of its
+  own (worth-cooking?); never at night, while the night handler holds or when rushed? (a cook under way is dropped then)."
   [c]
   (boolean
    (and (not (sh/night? (:primitives c)))
         (not (night-holds? c))
+        (not (rushed? c))
         (or (:cooking (ctx/mem c))
             (and (seq (raw-carried c))
                  (zero? (ctx/count-in c :no-cook no-bake-ms))

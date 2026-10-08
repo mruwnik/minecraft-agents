@@ -8,7 +8,8 @@
             [jobs.lib.fetch :as fetch]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
-            [jobs.lib.near :as near]))
+            [jobs.lib.near :as near]
+            [jobs.lib.places :as places]))
 
 (def doc
   "Smelt :count of an item in a furnace, blast furnace or smoker without standing by it.
@@ -511,6 +512,7 @@
             (do (ctx/update-mem! c dissoc :furnace-spot)
                 (when (and (= :done r) (:placed (ctx/child-result c :place)))
                   (ctx/update-mem! c #(-> % (assoc :furnace spot) (dissoc :want-furnace)))
+                  (places/offer! c :furnace spot)
                   (ctx/emit! c :smelt.furnace :info {:furnace spot :text (str "put a furnace down at " (:x spot) " " (:y spot) " " (:z spot))})
                   :again))))))))
 

@@ -107,14 +107,16 @@
   (is (= 20 (cost/cook-gain four-beef)))
   (is (= 0 (cost/cook-gain [{:name "bread" :count 3}]))))
 
+(def costs {:furnace-cost 8 :place-cost 2 :walk-cost 0.2})
+
 (deftest cooking-is-worth-it-by-gain-against-walk-furnace-and-urgency
-  (is (cost/cook-worth? four-beef 5 4) "a furnace near")
-  (is (cost/cook-worth? four-beef 5 nil) "no furnace: one is made, four beef pay for it")
-  (is (not (cost/cook-worth? [{:name "beef" :count 1}] 5 nil)) "one beef does not pay for a furnace")
-  (is (not (cost/cook-worth? four-beef 5 200)) "a furnace too far")
-  (is (not (cost/cook-worth? four-beef 3 4)) "starving: eat now"))
+  (is (cost/cook-worth? four-beef 5 4 false costs) "a furnace near")
+  (is (cost/cook-worth? four-beef 5 nil false costs) "no furnace: one is made, four beef pay for it")
+  (is (not (cost/cook-worth? [{:name "beef" :count 1}] 5 nil false costs)) "one beef does not pay for a furnace")
+  (is (not (cost/cook-worth? four-beef 5 200 false costs)) "a furnace too far")
+  (is (cost/cook-worth? four-beef 3 4 false costs) "low food still cooks at a furnace near"))
 
 (deftest a-carried-furnace-makes-small-batches-worth-cooking
   (let [one-mutton [{:name "mutton" :count 1}]]
-    (is (not (cost/cook-worth? one-mutton 12 nil)) "no furnace at all: one mutton does not pay for making one")
-    (is (cost/cook-worth? one-mutton 12 nil true) "a furnace in the pack only needs putting down")))
+    (is (not (cost/cook-worth? one-mutton 12 nil false costs)) "no furnace at all: one mutton does not pay for making one")
+    (is (cost/cook-worth? one-mutton 12 nil true costs) "a furnace in the pack only needs putting down")))

@@ -24,7 +24,7 @@
 (def owned-kinds
   "Every unnamespaced memory kind the engine or a job writes for itself, and the place names: jobs.memory.remember
   may not write these. (Namespaced kinds, :job/*, :bred/*, :forestry/*, belong to the engine and its jobs by shape.)"
-  (into reserved #{:bed :chest :home :food-source :scaffold-held}))
+  (into reserved #{:bed :chest :home :furnace :food-source :scaffold-held}))
 
 (def name-pattern #"[a-z][a-z0-9-]{0,31}")
 
@@ -107,7 +107,8 @@
 (def block-kinds
   "For the places whose block can be checked, which block names belong to them."
   {:bed #(str/ends-with? % "_bed")
-   :chest #{"chest" "trapped_chest" "barrel"}})
+   :chest #{"chest" "trapped_chest" "barrel"}
+   :furnace #{"furnace" "smoker"}})
 
 (defn gone?
   "Whether a place of kind is gone: its block is loaded (block is a name) and not one of that kind's. A kind whose

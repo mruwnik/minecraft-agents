@@ -535,15 +535,51 @@
           (is (< (count (filter #{"beef"} (map #(.-name %) (.-inventory (.self p))))) 4) "raw beef was cooked")
           (is (> (food p) 5)))))))
 
-(deftest raw-beef-is-eaten-at-once-when-starving
+(deftest raw-beef-is-eaten-at-once-when-starvation-is-ticking
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:blocks {"2,64,0" "furnace"} :self {:food 2}
+        (let [{:keys [eng p]} (setup {:blocks {"2,64,0" "furnace"} :self {:food 0}
                                       :inventory [{:name "beef" :count 4} {:name "coal" :count 2}]})]
           (await (one-round! eng {:explore false}))
           (is (= [] (calls p "furnace")) "no time to cook")
-          (is (> (food p) 2)))))))
+          (is (> (food p) 0)))))))
+
+(deftest raw-beef-is-cooked-at-low-food-with-a-furnace-at-hand
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:blocks {"2,64,0" "furnace"} :self {:food 3}
+                                      :inventory [{:name "beef" :count 2} {:name "coal" :count 2}]}
+                                     :step-ms 2000)]
+          (core/submit! eng (list 'jobs.survival.get-food {}) {})
+          (await (run-until-idle! eng p 40))
+          (is (some #{"take"} (call-args p "furnace" "op")) "the cooked output was taken")
+          (is (> (food p) 3)))))))
+
+(deftest raw-beef-is-eaten-at-once-with-a-hostile-near
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [zombie {:id 9 :name "zombie" :kind "hostile" :pos {:x 6 :y 64 :z 0} :health 20}
+              {:keys [eng p]} (setup {:blocks {"2,64,0" "furnace"} :self {:food 5} :entities [zombie]
+                                      :inventory [{:name "beef" :count 4} {:name "coal" :count 2}]})]
+          (await (one-round! eng {:explore false}))
+          (is (= [] (calls p "furnace")) "no cooking under threat")
+          (is (> (food p) 5)))))))
+
+(deftest raw-beef-is-cooked-at-a-remembered-furnace-beyond-the-cook-radius
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:blocks {"30,64,0" "furnace"} :self {:food 5}
+                                      :inventory [{:name "beef" :count 4} {:name "coal" :count 2}]}
+                                     :step-ms 2000)]
+          (mem/write! (:store eng) :furnace {:pos {:x 30 :y 64 :z 0}} mem/place-policy)
+          (core/submit! eng (list 'jobs.survival.get-food {:explore false}) {})
+          (await (run-until-idle! eng p 80))
+          (is (some #{"take"} (call-args p "furnace" "op")) "walked to the remembered furnace and took the output")
+          (is (> (food p) 5)))))))
 
 (deftest one-raw-beef-does-not-pay-for-making-a-furnace
   (async done
