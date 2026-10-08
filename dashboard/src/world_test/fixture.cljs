@@ -208,12 +208,12 @@
 
 (defn bare-plot-positions
   "The :pos / :at / :target [x y z] vectors in the act steps written without #at whose y is a small plot-relative
-  height (0..4): in the real world they send the job to another place."
+  height (-16..16): in the real world they send the job to another place."
   [c]
   (->> (tree-seq coll? seq (:act c))
        (filter map?)
        (mapcat (fn [m] (keep (fn [k] (get m k)) [:pos :at :target])))
-       (filter #(and (coords? %) (<= 0 (second %) 4)))))
+       (filter #(and (coords? %) (<= -16 (second %) 16)))))
 
 (defn problems
   "Why a merged case cannot run, as a vector of strings (empty when it can)."

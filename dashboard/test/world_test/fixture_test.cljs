@@ -558,5 +558,8 @@
     (is (bad? {:opts {:at [5 4 5]}}))
     (is (not (bad? {:pos (f/rel [5 1 5])})))
     (is (not (bad? {:pos [100 64 -300]})))
+    (is (bad? {:pos [23 -1 16]}))
+    (is (bad? {:pos [5 16 5]}))
+    (is (not (bad? {:pos [5 17 5]})))
     (is (not (bad? {:pos [100 -60 -300]})))
     (is (not (bad? {:count [1 2 3]})))))
