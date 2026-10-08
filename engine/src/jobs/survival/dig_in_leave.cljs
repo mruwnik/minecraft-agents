@@ -85,6 +85,65 @@
         (update-leave! c assoc :stepped true)
         :continue))))
 
+;; Taking the shelter's valuable blocks back (the :take-back cells of the latest :shelter entry).
+
+(def take-back-reach
+  "Blocks from the feet within which a wall block is dug without a walk."
+  4)
+
+(def take-back-radius
+  "Blocks from the shelter cell within which the dug blocks' drops are collected."
+  8)
+
+(defn take-back-cells
+  "The :take-back cells of the latest :shelter entry that still hold the placed item and were not given up on, nearest first."
+  [c]
+  (let [p (:primitives c)
+        entry (:data (ctx/latest c :shelter))
+        skipped (:skipped (:take-back (ctx/mem c)))]
+    (->> (:take-back entry)
+         (remove #(contains? skipped (:cell %)))
+         (filter #(= (:item %) (u/seen-name p (:cell %))))
+         (sort-by #(u/dist (sh/feet p) (:cell %))))))
+
+(defn skip-cell! [c cell reason]
+  (ctx/update-mem! c update-in [:take-back :skipped] (fnil assoc {}) cell reason)
+  (ctx/emit! c :dig-in.take-back-skipped :debug {:cell cell :reason reason :text (str "left the shelter block at " (pr-str cell) ": " (name reason))}))
+
+(defn ^:async take-back!
+  "One round of digging the shelter's valuable blocks again: the nearest one still standing (a walk when out of reach, a
+  cell the walk or the dig fails on is skipped with a dig-in.take-back-skipped debug), then one collect-drops call.
+  Resolves to :continue while working, else nil."
+  [c]
+  (let [p (:primitives c)
+        tb (:take-back (ctx/mem c))
+        {:keys [cell item] :as target} (first (take-back-cells c))]
+    (cond
+      (:done tb) nil
+      (not target)
+      (if (and (pos? (:dug tb 0)) (not (:collected tb)))
+        (let [r (await (ctx/call-child c :take-back-collect 'jobs.forestry.collect-drops
+                                       {:radius take-back-radius :near (:pos (:data (ctx/latest c :shelter))) :filter (vec (distinct (map :item (:take-back (:data (ctx/latest c :shelter))))))}))]
+          (if (= :continue r)
+            :continue
+            (do (ctx/update-mem! c update :take-back assoc :collected true :done true)
+                (ctx/emit! c :dig-in.took-back :info {:dug (:dug tb) :text (str "took back " (:dug tb) " shelter blocks")})
+                nil)))
+        (do (ctx/update-mem! c update :take-back assoc :done true) nil))
+      (> (u/dist (sh/feet p) cell) take-back-reach)
+      (let [r (await (ctx/call-child c :take-back-walk 'jobs.movement.go-to {:pos cell :range 3 :escalate false :warn false :retry false}))]
+        (cond
+          (= :continue r) :continue
+          (= :done r) :continue
+          :else (do (skip-cell! c cell :unreachable) :continue)))
+      :else
+      (let [_ (await (tools/equip-for! c item {:fast true}))
+            r (await (tidy/dig! c cell))]
+        (if (= "dug" (.-status r))
+          (ctx/update-mem! c update-in [:take-back :dug] (fnil inc 0))
+          (skip-cell! c cell (keyword (.-status r))))
+        :continue))))
+
 (defn ^:async climb!
   "One stair attempt out of a pit (jobs.access.stair :up, a child of the caller): to the :start height, or with no
   :start one step at a time until nothing solid is within sh/default-roof-height above, at most max-climb steps. A
@@ -134,10 +193,12 @@
   - Only when a heading stopped for an access reason (:zone :claim :footprint :no-zones),
     all four are tried again with :ignore-zones?, the survival last resort.
     The cells dug in another's zone or claim are noted as :tidy entries.
-  The pit and the stair are left dug.
+  The pit and the stair are left dug. Out of it, with :take-back? (default true), the valuable blocks the shelter placed
+  (the :take-back cells of its entry, still the placed block) are dug and their drops collected (jobs.forestry.collect-drops);
+  a cell it cannot reach or dig is left, with a debug dig-in.take-back-skipped. Events: dig-in.took-back (info).
   Events: dig-in.left (info), dig-in.staying (info, unsafe), dig-in.trapped (warn, no way out)."
   ([c] (leave! c {}))
-  ([c {:keys [toward]}]
+  ([c {:keys [toward take-back?] :or {take-back? true}}]
    (let [p (:primitives c)
          entry (or (:entry (leave-mem c)) (sheltered-in c))
          _ (when entry (update-leave! c assoc :entry entry))
@@ -146,6 +207,7 @@
          why (when shut? (leave-unsafe p))]
      (cond
        step? (await (open-door! c (:door entry)))
+       (and (not shut?) take-back? (not (leave-unsafe p)) (= :continue (await (take-back! c)))) :continue
        (not shut?) (leave-result! c :done :out (select-keys (leave-mem c) [:heading]))
        why (leave-result! c :stopped :unsafe {:why why})
        (:door entry) (await (open-door! c (:door entry)))

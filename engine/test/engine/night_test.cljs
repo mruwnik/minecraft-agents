@@ -789,6 +789,14 @@
           (await (tu/run-until-empty eng 160))
           (is (empty? (st/emitted seen :shelter.fled))))))))
 
+(deftest logs-are-no-wall-blocks-for-an-overhang
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (cave-night [{:name "oak_log" :count 20}])]
+          (await (tu/run-until-empty eng 160))
+          (is (empty? (st/emitted seen :shelter.fled))))))))
+
 (deftest an-overhang-whose-roof-the-body-has-not-seen-is-no-flee-target
   (async done
     (tu/run-async done

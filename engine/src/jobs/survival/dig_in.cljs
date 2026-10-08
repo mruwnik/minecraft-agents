@@ -65,6 +65,7 @@
   and, on any end, :shelter {:pos :roof :state :built} (cap 10, one in-game day).
   :roof is the cell it placed above the body, absent if none. Walls mode adds :door, the feet and head cells of one side it placed.
   Pit mode adds :start, the cell dug from. Walls mode at the bottom of a shaft has :start at the shaft's top.
+  :take-back lists the placed {:cell :item} dearer than :wall-value, which leave! digs again by day.
   Plug mode adds :room true. A shelter sealed again where the latest entry stood keeps that entry's :start and :door.
   Leaving is jobs.survival.dig-in-leave/leave!, which jobs.survival.night calls by day.")
 
@@ -542,8 +543,12 @@
         door (when (= :walls (:mode (ctx/mem c))) (dig-cells/door placed feet))
         start (when (#{:dig :walls} (:mode (ctx/mem c))) (:start (ctx/mem c)))
         spent (:spent (ctx/mem c) {})
+        cheap (set (cheap-blocks (keys spent) (:wall-value (:args c))))
         prev (:data (ctx/latest c :shelter))
         resealed (= feet (:pos prev))
+        take-back (->> (concat (when resealed (:take-back prev))
+                               (for [[cell item] (:placed-items (ctx/mem c)) :when (not (cheap item))] {:cell cell :item item}))
+                       (reduce #(assoc %1 (:cell %2) %2) {}) vals vec)
         start (or start (when resealed (:start prev)))
         door (or door (when resealed (:door prev)))]
     (when (and (seq placed) (not (dig-cells/sealed-in? p judged (:roof-height (:args c)))))
@@ -565,6 +570,7 @@
                                 (contains? placed roof) (assoc :roof roof)
                                 door (assoc :door door)
                                 start (assoc :start start)
+                                (seq take-back) (assoc :take-back take-back)
                                 (= :plug mode) (assoc :room true))
                    shelter-policy)
     (if (dig-cells/sealed-in? p judged (:roof-height (:args c)))

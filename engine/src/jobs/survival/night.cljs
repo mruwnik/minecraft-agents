@@ -81,6 +81,8 @@
    :walk-radius {:doc "a roofed place farther than this is not walked to" :spec (a/num-in 0 nil) :default 32}
    :lit-light {:doc "block light a route cell needs to count as lit (mobs do not spawn at 1+)" :spec (a/int-in 0 15) :default 1}
    :max-days-awake {:doc "in-game days without sleep before finding a bed becomes urgent" :spec (a/num-in 0 nil) :default sh/max-days-awake}
+   :wall-value {:doc "a block worth more than this each (jobs.lib.cost/item-value) is not counted as a wall block when a cave is walled in (dig-in's :wall-value)" :spec (a/num-in 0 nil) :default 3}
+   :take-back? {:doc "by day, dig the valuable blocks dig-in placed in the shelter again and collect them" :spec boolean? :default true}
    :flee-radius {:doc "when no shelter can be dug here, how far the night looks for somewhere safer (a known bed or roofed place, a seen cave or overhang to wall in, or seen ground the carried tools dig); 0 never flees" :spec (a/num-in 0 nil) :default 64}})
 
 (defn bed-permit
@@ -474,7 +476,7 @@
         solid? (into #{} (map (comp key-of :pos)) solids)
         seen-free? (fn [cell] (and (not (solid? (key-of cell)))
                                    (not (:unknown (look/seen-block p cell)))))
-        have (reduce + (map :count (lb/carried c dig-in/shelter-blocks)))
+        have (reduce + (map :count (lb/carried c (dig-in/cheap-blocks dig-in/shelter-blocks (:wall-value (:args c))))))
         up (fn [{:keys [x y z]} dy] {:x x :y (+ y dy) :z z})
         sealed? (fn [cell] (and (solid? (key-of cell)) (dig-cells/sealed? p cell)))]
     (->> solids
@@ -681,7 +683,7 @@
   "By day, nothing to walk over: out of a dig-in pit first, then a bed picked up, then the end."
   [c]
   (if (or (#{:dug-in :exposed} (:sheltered (ctx/mem c))) (:dig-out (ctx/mem c)) (dig-leave/sheltered-in c))
-    (let [r (await (dig-leave/leave! c))]
+    (let [r (await (dig-leave/leave! c {:take-back? (:take-back? (:args c))}))]
       (cond
         (= :continue r) :again
         (= :out (:reason r)) (do (ctx/update-mem! c dissoc :dig-out)

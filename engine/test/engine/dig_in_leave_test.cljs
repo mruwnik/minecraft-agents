@@ -203,3 +203,30 @@
           (await (dig-in! s))
           (is (= {:pos {:x 0 :y 60 :z 0} :roof {:x 0 :y 62 :z 0} :start {:x 0 :y 64 :z 0} :state :built}
                  (last (entries eng :shelter)))))))))
+
+(defn have [p item]
+  (->> (array-seq (.-inventory (.self p))) (filter #(= item (.-name %))) (map #(.-count %)) (reduce + 0)))
+
+(def walled-logs
+  "Two log wall cells at x 3 and a stone one, with a :shelter entry saying the logs were placed (the stone is not a log any more)."
+  (merge (ground) {"3,64,0" "oak_log" "3,65,0" "oak_log" "4,64,0" "stone"}))
+
+(defn remember-walls! [eng]
+  (mem/write! (:store eng) :shelter
+              {:pos {:x 3 :y 64 :z 1} :state :built
+               :take-back [{:cell {:x 3 :y 64 :z 0} :item "oak_log"} {:cell {:x 3 :y 65 :z 0} :item "oak_log"}
+                           {:cell {:x 4 :y 64 :z 0} :item "oak_log"}]}
+              {:cap 10 :ttl 1200000}))
+
+(deftest by-day-the-body-takes-back-the-logs-the-shelter-placed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p out] :as s} (setup {:blocks walled-logs})]
+          (remember-walls! eng)
+          (await (leave-at-dawn! s))
+          (is (= [:done :out] ((juxt :status :reason) @out)))
+          (is (air? p [3 64 0]))
+          (is (air? p [3 65 0]))
+          (is (= "stone" (block-at p [4 64 0])) "a cell that is no longer the placed block is left")
+          (is (= 2 (have p "oak_log")) "the logs are picked up"))))))
