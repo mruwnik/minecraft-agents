@@ -46,6 +46,7 @@
     but :not-loaded.
   - :fluid-in-cut: a cut cell holds a fluid.
   - :crop: a crop, stem or farmland in a cut cell (never dug, zone or not).
+  - :base-block: a chest, bed, furnace, table, door or other base block in a cut cell (never dug, anyone's).
   - :undercuts-way: a cut cell is the floor of a stair this body cut earlier (memory :stair-way, written at every
     end with the floors of the steps walked).
   - :unbreakable: bedrock, barrier, portal frames, command blocks.
@@ -256,7 +257,7 @@
   scanned from the sky down for a stand, jobs.access.tunnel/surface)."
   [c feet]
   (merge {:floor-at (access/seen-at (:primitives c)) :block-at (access/sensed-at (:primitives c) blocks/hidden-guess) :column-at (access/sensed-at (:primitives c) "air")
-          :feet feet :ledger #{} :ways (ways-of c)}
+          :feet feet :ledger #{} :ways (ways-of c) :keep-base? true}
          (access-world c)))
 
 (defn judged-in

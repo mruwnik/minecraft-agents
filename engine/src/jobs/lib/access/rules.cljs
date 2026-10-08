@@ -16,6 +16,8 @@
     :ignore-zones?  true skips the zone, claim, footprint and no-zone-list checks (a job's opt-out). The
                  physical rules still apply.
     :ledger      set of [x y z] cells holding this body's own scaffold blocks (may be empty)
+    :keep-base?  true refuses a dig of a base block (base-block?), whoever's: a job cutting its own way (stair,
+                 tunnel) never breaks a chest, bed or furnace it meets
   The social part (zones, claims, footprints, no zone list) is jobs.lib.access.zones/verdict.
 
   Output: {:ok true}, or {:ok false :reason kw ...detail}. A dig with hazards is {:ok true :hazards [{:reason
@@ -24,6 +26,7 @@
   The rules say what is impossible or not permitted and only report what is dangerous. The job decides which
   danger it accepts (see accepts?).
   - Impossible or unknown: :not-loaded, :own-body, :not-replaceable (+ :block)
+  - Kept: :base-block (+ :block), only with :keep-base?
   - Not permitted (jobs.lib.access.zones): :footprint (+ :plan), :zone (+ :zone :owner), :claim (+ :claim
     :owner), :no-zones
   - Hazards of a dig, in this order: one :fluid-adjacent (+ :fluid :at) per neighbouring fluid cell,
@@ -31,7 +34,7 @@
 
   The first failing check is the verdict, so the most specific reason wins and :no-zones, the general one,
   shows only when nothing else is wrong. A caller that overrides it for an emergency can rely on that.
-    dig:   :not-loaded, :footprint, :zone, :no-zones, then the hazards
+    dig:   :not-loaded, :base-block, :footprint, :zone, :no-zones, then the hazards
     place: :not-loaded, :footprint, :zone, :own-body, :not-replaceable, :no-zones
   A cell holding air, water, lava or a bubble column can be placed into."
   (:require ["minecraft-data" :as minecraft-data]
@@ -66,6 +69,12 @@
 (def not-a-floor
   "Non-fluid, non-replaceable names that are no floor to stand on after the block above is gone."
   #{"magma_block" "powder_snow" "cobweb" "fire" "soul_fire" "cactus" "sweet_berry_bush"})
+
+(def base-blocks
+  "Blocks of a base: storage, beds, workstations, doors and signs."
+  #"chest$|barrel$|shulker_box$|furnace$|^smoker$|_bed$|_table$|^hopper$|^dispenser$|^dropper$|^brewing_stand$|^lectern$|^composter$|anvil$|cauldron$|^grindstone$|^loom$|^stonecutter$|^beehive$|^jukebox$|^bell$|^beacon$|^respawn_anchor$|_door$|_trapdoor$|_gate$|_sign$|_banner$")
+
+(defn base-block? [n] (boolean (and n (re-find base-blocks n))))
 
 (def falling-names #{"sand" "red_sand" "gravel"})
 
@@ -121,8 +130,9 @@
     (cond-> v
       (set? footprints) (dissoc :plan))))
 
-(defn common-checks [action {:keys [block-at cell ignore-zones?] :as in}]
+(defn common-checks [action {:keys [block-at cell ignore-zones? keep-base?] :as in}]
   [#(when (nil? (block-at cell)) (refuse :not-loaded))
+   #(when (and keep-base? (= :dig action) (base-block? (block-at cell))) (refuse :base-block :block (block-at cell)))
    #(when-not ignore-zones?
       (let [v (social-verdict action in)]
         (when-not (:ok v) v)))])
@@ -148,7 +158,7 @@
 
 (defn may-dig?
   "Verdict for digging the block at :cell. See the namespace docstring for the input and the output. Refusals are
-  :not-loaded, :footprint, :zone, :claim and :no-zones; hazards come back in :hazards on an {:ok true} verdict."
+  :not-loaded, :base-block, :footprint, :zone, :claim and :no-zones; hazards come back in :hazards on an {:ok true} verdict."
   [in]
   (let [refusal (verdict (concat (common-checks :dig in) [(no-zones-check in)]))]
     (if-not (:ok refusal)

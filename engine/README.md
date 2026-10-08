@@ -597,6 +597,7 @@ them: `act!` and the primitives check neither, and a job may ignore them. The he
   another's block only as a last resort (warn `<job>.trespass-last-resort`). They never take from a foreign container. A
   missing zone list never blocks a survival job.
 - A plan's footprint is the body's own when its `:metadata :by` equals the body's username (case-insensitive).
+- `access.stair` and `gather.mine` never dig a base block (chest, bed, furnace, table, door, sign: `rules/base-block?`), anyone's.
 - A body's own plan never blocks its explicit work: `blocks.dig`, `blocks.place`, `access.stair` and `access.pillar` act on
   its cells. `gather.mine` and `forestry.fell-tree` spare own-plan cells unless `:spare-own-builds false` (default true). Acts that change no cell
   (animals, apiary harvest, compost, fertilize, sowing, sapling planting) also work in its footprint; till, path and mine place do not.

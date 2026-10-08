@@ -97,6 +97,14 @@
   (is (nil? (:hazards (dig plain [5 64 5]))))
   (is (= {:ok true} (dig plain [5 64 5]))))
 
+(deftest keep-base-refuses-the-blocks-of-a-base
+  (are [n] (= {:ok false :reason :base-block :block n} (dig (world [5 64 5] n) [5 64 5] :keep-base? true))
+    "chest" "trapped_chest" "barrel" "furnace" "smoker" "blast_furnace" "white_bed" "red_bed" "crafting_table"
+    "smithing_table" "oak_door" "oak_sign" "brewing_stand" "composter")
+  (are [n] (= {:ok true} (dig (world [5 64 5] n) [5 64 5] :keep-base? true))
+    "stone" "dirt" "birch_planks" "oak_log" "iron_ore")
+  (is (= {:ok true} (dig (world [5 64 5] "chest") [5 64 5])) "only a job that asks keeps them"))
+
 (deftest every-fluid-neighbour-is-a-hazard
   (is (= {:ok true :hazards [{:reason :fluid-adjacent :fluid "water" :at [6 64 5]}
                              {:reason :fluid-adjacent :fluid "lava" :at [5 64 6]}]}

@@ -261,6 +261,18 @@
           (is (= 0 (:steps @out)))
           (is (empty? (digs p))))))))
 
+(deftest a-stair-started-in-a-hut-never-digs-its-chest-bed-or-furnace
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [block ["chest" "furnace" "white_bed" "crafting_table"]]
+          (let [{:keys [out p]} (await (stair! {:blocks (assoc ground "1,65,0" block)} east (fn [_])))]
+            (is (= :base-block (:reason @out)) block)
+            (is (= [1 65 0] (:cell @out)) block)
+            (is (= 0 (:steps @out)) block)
+            (is (empty? (digs p)) block)
+            (is (= block (block-at p [1 65 0])) block)))))))
+
 (deftest off-stair-says-where-the-body-is-against-the-start
   (async done
     (tu/run-async done
