@@ -195,6 +195,7 @@
                                         rayDir view.camera/js-ray-dir
                                         projectPoint view.camera/js-project-point
                                         faceRegion view.camera/js-face-region
+                                        entityPointers view.pointers/js-pointers
                                         regionStats view.stats/js-region-stats
                                         luminance view.stats/js-luminance}}}
            :compiler-options {:infer-externs :auto}}

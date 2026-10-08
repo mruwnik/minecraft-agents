@@ -1,7 +1,7 @@
 // Why JavaScript: WebGL/browser; the browser view entry, runs in the page.
 // The browser view: one scene (scene.mjs) of one agent drawn by the WebGL renderer (gl.mjs) every frame, with an overlay, a free
 // camera and the agent picker. window.__view exposes numbers for automated measurement. hub.mjs draws many scenes in one context.
-import { isAgentKey, directionFor } from './cljs/viewer.mjs'
+import { isAgentKey, directionFor, entityPointers } from './cljs/viewer.mjs'
 import { createDecoder } from './decoder.mjs'
 import { createRenderer } from './gl.mjs'
 import { createScene, decodePriority } from './scene.mjs'
@@ -31,6 +31,8 @@ const canvas = document.getElementById('view')
 const overlay = document.getElementById('overlay')
 const picker = document.getElementById('agents')
 const freeButton = document.getElementById('free')
+const pointersButton = document.getElementById('pointers')
+const pointerLayer = document.getElementById('pointer-layer')
 
 const percentile = (values, p) => {
   if (!values.length) return null
@@ -102,6 +104,51 @@ const moveFree = dt => {
   free.eye.y += u * FREE_SPEED * dt
 }
 
+// ---- pointers at the hostiles and players the view knows about (view.pointers does the maths) ----
+
+const POINTER_COLORS = { hostile: '#ff5252', player: '#4da3ff' }
+const POINTERS_KEY = 'view.pointers'
+let pointersOn = localStorage.getItem(POINTERS_KEY) !== '0' // on by default
+const showPointersState = () => {
+  pointersButton.textContent = `pointers (P): ${pointersOn ? 'on' : 'off'}`
+  if (!pointersOn) pointerLayer.replaceChildren()
+}
+const togglePointers = () => {
+  pointersOn = !pointersOn
+  localStorage.setItem(POINTERS_KEY, pointersOn ? '1' : '0')
+  showPointersState()
+}
+pointersButton.addEventListener('click', togglePointers)
+addEventListener('keydown', e => { if (e.code === 'KeyP' && !e.repeat) togglePointers() })
+
+// one element per pointer, reused frame to frame: an on-screen marker (triangle over the head, then the label) or an edge arrow
+// (rotated triangle, then the label inside the picture). Positions are canvas pixels, scaled to CSS pixels.
+const drawPointers = (params, w, h) => {
+  if (!pointersOn) return
+  const list = entityPointers(params, w, h)
+  const sx = canvas.clientWidth / w
+  const sy = canvas.clientHeight / h
+  while (pointerLayer.children.length > list.length) pointerLayer.lastChild.remove()
+  while (pointerLayer.children.length < list.length) {
+    const el = document.createElement('div')
+    el.className = 'pointer'
+    el.append(document.createElement('span'), document.createElement('b'))
+    pointerLayer.append(el)
+  }
+  list.forEach((p, i) => {
+    const el = pointerLayer.children[i]
+    const [glyph, label] = el.children
+    const color = POINTER_COLORS[p.kind] ?? '#ffffff'
+    el.style.color = color
+    el.style.left = `${p.px * sx}px`
+    el.style.top = `${p.py * sy}px`
+    glyph.textContent = p.onScreen ? '\u25BC' : '\u25B6'
+    glyph.style.transform = p.onScreen ? '' : `rotate(${p.angle}rad)`
+    label.textContent = p.text
+    el.classList.toggle('edge', !p.onScreen)
+  })
+}
+
 // ---- drawing ----
 
 const targetSize = () => {
@@ -113,8 +160,9 @@ const frame = now => {
   const [w, h] = targetSize()
   gfx.resize(w, h)
   const drawParams = scene?.frame(now, { camera: state.free })
-  if (!drawParams) return gfx.clear(0.78, 0.87, 1)
+  if (!drawParams) { pointerLayer.replaceChildren(); return gfx.clear(0.78, 0.87, 1) }
   gfx.draw(scene.world, drawParams)
+  drawPointers(drawParams, w, h)
 }
 
 const updateStats = now => {
@@ -175,6 +223,7 @@ picker.addEventListener('change', () => {
 })
 
 const main = () => {
+  showPointersState()
   fillPicker()
   setInterval(renderOverlay, 250)
   requestAnimationFrame(loop)
