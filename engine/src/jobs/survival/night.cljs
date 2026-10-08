@@ -565,7 +565,7 @@
     (if (not= pos (sh/feet p))
       (do (ctx/update-mem! c dissoc :enclose) :again)
       (let [_ (busy! c)
-            d (await (ctx/call-child c :enclose 'jobs.survival.dig-in {:roof-height roof-height :enclose true}))
+            d (await (ctx/call-child c :enclose 'jobs.survival.dig-in {:roof-height roof-height :enclose true :wall-value (:wall-value (:args c))}))
             res (ctx/child-result c :enclose)]
         (if (= :continue d)
           :again
@@ -624,7 +624,7 @@
             _ (when-not resume
                 (ctx/update-mem! c assoc :digging start)
                 (site-failed! c start :interrupted))
-            d (await (ctx/call-child c :dig-in 'jobs.survival.dig-in {:roof-height (:roof-height (:args c))}))
+            d (await (ctx/call-child c :dig-in 'jobs.survival.dig-in {:roof-height (:roof-height (:args c)) :wall-value (:wall-value (:args c))}))
             res (ctx/child-result c :dig-in)]
         (if (= :continue d)
           :again

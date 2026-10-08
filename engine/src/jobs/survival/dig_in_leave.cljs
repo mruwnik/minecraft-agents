@@ -1,6 +1,7 @@
 (ns jobs.survival.dig-in-leave
   "Leaving the shelter jobs.survival.dig-in built (leave!): jobs.survival.night calls it by day."
-  (:require [jobs.lib.tidy :as tidy]
+  (:require [jobs.lib.access :as access]
+            [jobs.lib.tidy :as tidy]
             [engine.ctx :as ctx]
             [jobs.lib.shelter :as sh]
             [jobs.lib.tools :as tools]
@@ -95,19 +96,41 @@
   "Blocks from the shelter cell within which the dug blocks' drops are collected."
   8)
 
+(defn take-back-state
+  "The take-back memory of the latest :shelter entry: a newer entry (a shelter sealed since) starts afresh."
+  [c]
+  (let [tb (:take-back (ctx/mem c))]
+    (if (= (:for tb) (:t (ctx/latest c :shelter))) tb {})))
+
+(defn update-take-back! [c f & args]
+  (ctx/update-mem! c assoc :take-back (assoc (apply f (take-back-state c) args) :for (:t (ctx/latest c :shelter)))))
+
+(defn take-back-skip
+  "Why the placed block at cell must stay: :floor (the cell under the feet), a refusal reason (another's zone, claim or
+  plan: :zone :claim :footprint, or any other the rules give), :hazard (lava or fluid beside it, or nothing solid under
+  it); nil when it may be dug."
+  [c cell]
+  (let [p (:primitives c)
+        {:keys [x y z]} (sh/feet p)
+        v (access/may? (access/rules-input c {:ignore-zones? false}) :dig cell)]
+    (cond
+      (= [(:x cell) (:y cell) (:z cell)] [x (dec y) z]) :floor
+      (and (not (:ok v)) (not= :no-zones (:reason v))) (:reason v)
+      (seq (:hazards v)) :hazard)))
+
 (defn take-back-cells
   "The :take-back cells of the latest :shelter entry that still hold the placed item and were not given up on, nearest first."
   [c]
   (let [p (:primitives c)
         entry (:data (ctx/latest c :shelter))
-        skipped (:skipped (:take-back (ctx/mem c)))]
+        skipped (:skipped (take-back-state c))]
     (->> (:take-back entry)
          (remove #(contains? skipped (:cell %)))
          (filter #(= (:item %) (u/seen-name p (:cell %))))
          (sort-by #(u/dist (sh/feet p) (:cell %))))))
 
 (defn skip-cell! [c cell reason]
-  (ctx/update-mem! c update-in [:take-back :skipped] (fnil assoc {}) cell reason)
+  (update-take-back! c update :skipped (fnil assoc {}) cell reason)
   (ctx/emit! c :dig-in.take-back-skipped :debug {:cell cell :reason reason :text (str "left the shelter block at " (pr-str cell) ": " (name reason))}))
 
 (defn ^:async take-back!
@@ -116,7 +139,7 @@
   Resolves to :continue while working, else nil."
   [c]
   (let [p (:primitives c)
-        tb (:take-back (ctx/mem c))
+        tb (take-back-state c)
         {:keys [cell item] :as target} (first (take-back-cells c))]
     (cond
       (:done tb) nil
@@ -126,21 +149,23 @@
                                        {:radius take-back-radius :near (:pos (:data (ctx/latest c :shelter))) :filter (vec (distinct (map :item (:take-back (:data (ctx/latest c :shelter))))))}))]
           (if (= :continue r)
             :continue
-            (do (ctx/update-mem! c update :take-back assoc :collected true :done true)
+            (do (update-take-back! c assoc :collected true :done true)
                 (ctx/emit! c :dig-in.took-back :info {:dug (:dug tb) :text (str "took back " (:dug tb) " shelter blocks")})
                 nil)))
-        (do (ctx/update-mem! c update :take-back assoc :done true) nil))
+        (do (update-take-back! c assoc :done true) nil))
       (> (u/dist (sh/feet p) cell) take-back-reach)
       (let [r (await (ctx/call-child c :take-back-walk 'jobs.movement.go-to {:pos cell :range 3 :escalate false :warn false :retry false}))]
         (cond
           (= :continue r) :continue
           (= :done r) :continue
           :else (do (skip-cell! c cell :unreachable) :continue)))
+      (take-back-skip c cell)
+      (do (skip-cell! c cell (take-back-skip c cell)) :continue)
       :else
       (let [_ (await (tools/equip-for! c item {:fast true}))
             r (await (tidy/dig! c cell))]
         (if (= "dug" (.-status r))
-          (ctx/update-mem! c update-in [:take-back :dug] (fnil inc 0))
+          (update-take-back! c update :dug (fnil inc 0))
           (skip-cell! c cell (keyword (.-status r))))
         :continue))))
 

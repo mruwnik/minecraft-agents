@@ -6,12 +6,14 @@
   dig-in.sealed event (BaseMiner #39: a shelter dug open at night was closed again with nothing the agent could see)."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
+            [jobs.lib.world-files :as world]
             [jobs.survival.dig-in-leave :as dig-leave]))
 
 (def night 14000)
@@ -28,8 +30,23 @@
   [out toward]
   {:check (constantly true)
    :round (fn ^:async leaver-round [c]
-            (let [r (await (dig-leave/leave! c {:toward toward}))]
+            (let [r (await (dig-leave/leave! c (merge {:toward toward} (:leave-args (:args c)))))]
               (if (map? r) (do (reset! out r) :done) :continue)))})
+
+(defn again
+  "A caller job that leaves twice; between the leaves a second shelter is sealed (one log wall at 3 64 0)."
+  [p runs]
+  {:check (constantly true)
+   :round (fn ^:async again-round [c]
+            (let [r (await (dig-leave/leave! c))]
+              (cond
+                (not (map? r)) :continue
+                (< 1 (swap! runs inc)) :done
+                :else (do (fake/set-block! p [3 64 0] "oak_log")
+                          (ctx/remember! c :shelter {:pos {:x 3 :y 64 :z 1} :state :built
+                                                     :take-back [{:cell {:x 3 :y 64 :z 0} :item "oak_log"}]}
+                                         {:cap 10 :ttl 1200000})
+                          :continue))))})
 
 (defn setup
   ([] (setup {}))
@@ -37,14 +54,16 @@
    (let [clock (atom 1000000)
          [seen sink] (tu/legacy-capture-sink)
          out (atom nil)
+         runs (atom 0)
          p (tu/fake (merge {:offlineScale 0.0001 :blocks (ground) :time night
                             :drops {"stone" "cobblestone"}
                             :inventory [{:name "iron_pickaxe" :count 1}]}
                            spec))
-         eng (core/create {:primitives p :jobs (assoc registry/jobs 'leaver (leaver out {:x 10 :y 64 :z 0}))
+         eng (core/create (cond-> {:primitives p :jobs (assoc registry/jobs 'leaver (leaver out {:x 10 :y 64 :z 0}) 'again (again p runs))
                            :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
-                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-     {:eng eng :p p :seen seen :clock clock :out out})))
+                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}
+                     (:zones spec) (assoc :world (world/of-data {} {} (:zones spec)))))]
+     {:eng eng :p p :seen seen :clock clock :out out :runs runs})))
 
 (defn ^:async run-until-empty [{:keys [eng clock]} n]
   (loop [i 0]
@@ -70,10 +89,12 @@
   (core/submit! eng '(jobs.survival.dig-in) {})
   (await (run-until-empty s 20)))
 
-(defn ^:async leave-at-dawn! [{:keys [eng p] :as s}]
-  (.setTime (.-world p) dawn)
-  (core/submit! eng '(leaver) {})
-  (await (run-until-empty s 200)))
+(defn ^:async leave-at-dawn!
+  ([s] (leave-at-dawn! s {}))
+  ([{:keys [eng p] :as s} leave-args]
+   (.setTime (.-world p) dawn)
+   (core/submit! eng (list 'leaver {:leave-args leave-args}) {})
+   (await (run-until-empty s 200))))
 
 (defn ^:async go-to! [{:keys [eng] :as s} goal]
   (core/submit! eng (list 'jobs.movement.go-to {:pos goal}) {})
@@ -230,3 +251,93 @@
           (is (air? p [3 65 0]))
           (is (= "stone" (block-at p [4 64 0])) "a cell that is no longer the placed block is left")
           (is (= 2 (have p "oak_log")) "the logs are picked up"))))))
+
+(defn remember-cells! [eng cells]
+  (mem/write! (:store eng) :shelter
+              {:pos {:x 3 :y 64 :z 1} :state :built
+               :take-back (mapv (fn [[cell item]] {:cell (zipmap [:x :y :z] cell) :item item}) cells)}
+              {:cap 10 :ttl 1200000}))
+
+(deftest take-back-leaves-the-block-under-the-feet
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup)
+              [x y z] (feet p)]
+          (remember-cells! eng [[[x (dec y) z] "dirt"]])
+          (await (leave-at-dawn! s))
+          (is (= "dirt" (block-at p [x (dec y) z])) "the floor stays")
+          (is (= [:floor] (mapv :reason (emitted seen :dig-in.take-back-skipped)))))))))
+
+(deftest take-back-leaves-a-block-beside-lava
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup {:blocks (assoc walled-logs "3,64,1" "lava")})]
+          (remember-cells! eng [[[3 64 0] "oak_log"]])
+          (await (leave-at-dawn! s))
+          (is (= "oak_log" (block-at p [3 64 0])))
+          (is (= [:hazard] (mapv :reason (emitted seen :dig-in.take-back-skipped)))))))))
+
+(deftest take-back-leaves-a-block-in-anothers-zone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup {:blocks walled-logs
+                                                 :zones [{:name "farm" :min [3 60 -1] :max [3 70 1] :owner "Miles"}]})]
+          (remember-walls! eng)
+          (await (leave-at-dawn! s))
+          (is (= "oak_log" (block-at p [3 64 0])))
+          (is (= "oak_log" (block-at p [3 65 0])))
+          (is (every? #{:zone :refused} (mapv :reason (emitted seen :dig-in.take-back-skipped))))
+          (is (seq (emitted seen :dig-in.take-back-skipped))))))))
+
+(deftest take-back-false-leaves-the-blocks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p out] :as s} (setup {:blocks walled-logs})]
+          (remember-walls! eng)
+          (await (leave-at-dawn! s {:take-back? false}))
+          (is (= [:done :out] ((juxt :status :reason) @out)))
+          (is (= "oak_log" (block-at p [3 64 0])))
+          (is (zero? (have p "oak_log"))))))))
+
+(deftest a-new-shelter-gets-a-new-take-back
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p runs] :as s} (setup {:blocks walled-logs})]
+          (remember-walls! eng)
+          (.setTime (.-world p) dawn)
+          (core/submit! eng '(again) {})
+          (await (run-until-empty s 300))
+          (is (= 2 @runs))
+          (is (= "air" (block-at p [3 64 0])) "the second shelter's block comes back in the same job"))))))
+
+(deftest dig-in-records-its-dear-walls-and-leave-takes-them-back
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p] :as s} (setup {:inventory [{:name "iron_pickaxe" :count 1} {:name "oak_log" :count 20}]
+                                            :blocks (assoc (ground) "0,66,0" "stone")})]
+          (core/submit! eng '(jobs.survival.dig-in {:enclose true}) {})
+          (await (run-until-empty s 40))
+          (let [entry (last (entries eng :shelter))
+                placed (frequencies (map #(.-item (.-args %)) (calls p "place")))]
+            (is (pos? (get placed "oak_log" 0)) "walled in with logs")
+            (is (= (get placed "oak_log") (count (:take-back entry))) (pr-str (:take-back entry)))
+            (is (every? #(= "oak_log" (:item %)) (:take-back entry))))
+          (let [before (have p "oak_log")]
+            (await (leave-at-dawn! s))
+            (is (< before (have p "oak_log")) "the logs are back in the pack")))))))
+
+(deftest dig-in-records-no-cheap-block-for-take-back
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng] :as s} (setup {:inventory [{:name "iron_pickaxe" :count 1} {:name "dirt" :count 20}]
+                                          :blocks (assoc (ground) "0,66,0" "stone")})]
+          (core/submit! eng '(jobs.survival.dig-in {:enclose true}) {})
+          (await (run-until-empty s 40))
+          (is (nil? (:take-back (last (entries eng :shelter))))))))))

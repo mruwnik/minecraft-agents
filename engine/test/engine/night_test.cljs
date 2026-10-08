@@ -756,7 +756,8 @@
 
 (defn cave-night
   "A night at the origin where nothing can be placed west of x 20 (no pit there), over cave-blocks; {:eng :p :seen}."
-  [inventory]
+  ([inventory] (cave-night inventory {}))
+  ([inventory args]
   (let [{:keys [p] :as r} (st/setup {:time night :inventory inventory :blocks cave-blocks})]
     (tu/seeing-all p)
     (.override (.-world p) "place"
@@ -765,8 +766,8 @@
                    #js {:status "no-support"}
                    (await (impl token a)))))
     (st/dawn-after! p 12)
-    (core/submit! (:eng r) '(jobs.survival.night) {})
-    r))
+    (core/submit! (:eng r) (list 'jobs.survival.night args) {})
+    r)))
 
 (deftest with-blocks-to-close-the-open-sides-the-night-flees-to-an-overhang-and-walls-in
   (async done
@@ -793,9 +794,21 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (cave-night [{:name "oak_log" :count 20}])]
-          (await (tu/run-until-empty eng 160))
-          (is (empty? (st/emitted seen :shelter.fled))))))))
+        (let [{:keys [eng seen]} (cave-night [{:name "oak_log" :count 20}])
+              log (await (with-child-log #(tu/run-until-empty eng 160)))]
+          (is (empty? (st/emitted seen :shelter.fled)))
+          (is (seq (filter #(and (= 'jobs.survival.dig-in (second %)) (not (:enclose (nth % 2)))) log))
+              "dug in where it stood, not walled in at the cave"))))))
+
+(deftest the-night-hands-its-wall-value-to-dig-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (cave-night [{:name "dirt" :count 8}] {:wall-value 5})
+              log (await (with-child-log #(tu/run-until-empty eng 160)))
+              dig-ins (filter #(= 'jobs.survival.dig-in (second %)) log)]
+          (is (seq dig-ins))
+          (is (every? #(= 5 (:wall-value (nth % 2))) dig-ins) (pr-str (map #(nth % 2) dig-ins))))))))
 
 (deftest an-overhang-whose-roof-the-body-has-not-seen-is-no-flee-target
   (async done
