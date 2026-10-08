@@ -1143,6 +1143,18 @@
 
 ;; Plain status lists what happened since the observer's last look
 
+(deftest missed-summary-sums-damage-and-lists-reflex-ends-and-fight-flee-decisions
+  (let [hurt (fn [t amount health causes] (assoc (event :body :hurt {:amount amount :health health :causes causes}) :time-ms t))
+        ended (assoc (event :reflex :ended {:outcome :done} "night → shelter: done") :context {:job-id "j8" :reflex-id :night} :time-ms 9000)
+        decided (fn [d] (assoc (event :job :hostile.decided {:decision d :mob "zombie"} "fight: zombie") :context {:job-id "j9"} :time-ms 8000))
+        events [(hurt 1000 2.5 8.5 ["zombie"]) (decided :fight) (hurt 2000 3 5.5 ["zombie"]) ended (decided :wait)]
+        summary (observe-status/missed-summary events 11000)]
+    (is (= 3 (:count summary)))
+    (is (= [:hurt :hostile.decided :ended] (mapv :event (:items summary))))
+    (is (= {:event :hurt :damage 5.5 :lowest-health 5.5 :cause "zombie" :ago-s 9} (first (:items summary))))
+    (is (= "night" (:reflex (nth (:items summary) 2))))))
+
+
 (deftest missed-summary-keeps-job-ends-flights-and-deaths
   (let [ended (assoc (event :job :completed {} "done") :context {:job-id "j141"} :time-ms 1000)
         fled (assoc (event :job :hostile.fled {} "fled 92 blocks") :attention :notice :context {:job-id "j9"} :time-ms 5000)

@@ -377,19 +377,40 @@
 (def max-missed 4)
 
 (defn missed?
-  "Whether an event is news a plain status points to: a job end, a flight (hostile.fled) or a death."
+  "Whether an event is news a plain status points to: a job end, a flight, a fight or flee decision, a reflex end, damage or a death."
   [e]
   (boolean (or (and (= :job (:source e)) (job-results/terminal-kinds (:kind e)))
                (= :hostile.fled (:kind e))
-               (and (= :body (:source e)) (= :died (:kind e))))))
+               (and (= :hostile.decided (:kind e)) (#{:fight :flee} (get-in e [:data :decision])))
+               (and (= :reflex (:source e)) (= :ended (:kind e)))
+               (and (= :body (:source e)) (#{:hurt :died} (:kind e))))))
+
+(defn hurt-event?
+  [e]
+  (and (= :body (:source e)) (= :hurt (:kind e))))
+
+(defn hurt-item
+  "One item standing for all the hits: total health lost, the lowest health and the last cause named."
+  [hits]
+  (let [d :data]
+    {:kind :hurt :time-ms (:time-ms (last hits))
+     :damage (reduce + (keep (comp :amount d) hits))
+     :lowest-health (some->> (keep (comp :health d) hits) seq (apply min))
+     :cause (last (mapcat (comp :causes d) hits))}))
+
+(defn missed-item [now-ms e]
+  (clean-pairs :event (:kind e) :job (get-in e [:context :job-id]) :reflex (some-> (get-in e [:context :reflex-id]) name)
+               :decision (some-> (get-in e [:data :decision]) name)
+               :damage (:damage e) :lowest-health (:lowest-health e) :cause (:cause e) :message (clip (:message e))
+               :ago-s (some-> (:time-ms e) (#(max 0 (js/Math.round (/ (- now-ms %) 1000)))))))
 
 (defn missed-summary
-  "{:count n :items [...]} of the missed events (the latest max-missed) among events, or nil when there are none."
+  "{:count n :items [...]} of the missed events (the latest max-missed) among events, or nil when there are none; all hits are one item, in the place of the first."
   [events now-ms]
-  (let [news (filterv missed? events)]
-    (when (seq news)
-      (array-map :count (count news)
-                 :items (mapv (fn [e]
-                                (clean-pairs :event (:kind e) :job (get-in e [:context :job-id]) :message (clip (:message e))
-                                             :ago-s (some-> (:time-ms e) (#(max 0 (js/Math.round (/ (- now-ms %) 1000)))))))
-                              (take-last max-missed news))))))
+  (let [news (filterv missed? events)
+        hits (filterv hurt-event? news)
+        hurt (when (seq hits) (hurt-item hits))
+        items (into [] (keep #(if (hurt-event? %) (when (identical? % (first hits)) hurt) %)) news)]
+    (when (seq items)
+      (array-map :count (count items)
+                 :items (mapv #(missed-item now-ms %) (take-last max-missed items))))))
