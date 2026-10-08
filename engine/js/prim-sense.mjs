@@ -7,7 +7,7 @@ import { stateProperties } from './use-on.mjs'
 import { mobFields } from './interact.mjs'
 import { professionOf, villagerData } from './villager.mjs'
 import { leashFields } from './leash.mjs'
-import { liveEntities } from './live-entities.mjs'
+import { liveEntities, itemSpawn } from './live-entities.mjs'
 import { vehicleFields, selfVehicle } from './vehicle.mjs'
 import { DEFAULT_RADIUS, xyz, dist, cell, vec, entityKind, burning, lyingDown, droppedItem } from './prim-base.mjs'
 
@@ -113,6 +113,7 @@ export function createSense (env) {
         ...(e.height !== undefined && { height: e.height }),
         ...(e.width !== undefined && { width: e.width }),
         ...(k === 'item' && { item: droppedItem(env.bot, e) }),
+        ...(k === 'item' && itemSpawn(env.bot, e.id) && { spawnedAt: itemSpawn(env.bot, e.id).at, thrownBy: itemSpawn(env.bot, e.id).by }),
         ...(k === 'player' && { username: e.username, lyingDown: lyingDown(env.bot, e) }),
         ...(e.name === 'creeper' && { creeper: true })
       }))

@@ -201,3 +201,14 @@
 (deftest a-dark-block-costs-twice-a-lit-one
   (is (= 1 (v/dark-factor)) "per-dark over per-block")
   (is (= (v/per-dark) (v/per-block))))
+
+(deftest a-detour-prices-the-walk-and-each-block-climbed-past-the-first
+  (is (= {:cost 3 :parts {:walk 3 :climb 0}} (v/detour-cost {:distance 10 :climb 1} {:per-block 0.3 :per-climb 2})))
+  (is (= {:cost 17 :parts {:walk 3 :climb 14}} (v/detour-cost {:distance 10 :climb 8} {:per-block 0.3 :per-climb 2})))
+  (is (< (:cost (v/detour-cost {:distance 3 :climb 0})) (:cost (v/detour-cost {:distance 3 :climb 8})))
+      "the defaults price a drop to climb back out of"))
+
+(deftest a-log-a-few-blocks-off-is-worth-the-detour-and-dirt-down-a-drop-is-not
+  (let [ratio (fn [item spot] (/ (value [{:name item :count 1}]) (:cost (v/detour-cost spot))))]
+    (is (< 1 (ratio "oak_log" {:distance 6 :climb 0})))
+    (is (> 1 (ratio "dirt" {:distance 8 :climb 7})))))

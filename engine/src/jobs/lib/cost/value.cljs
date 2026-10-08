@@ -50,6 +50,8 @@
            :doc "Any fetch: turning round, finding the pile, the risk of the place one died at, in seconds."}
    ::per-block {:default 0.3 :spec (a/num-in 0.01 nil)
                 :doc "One block walked, there and back about a second of a player's time per 3 blocks."}
+   ::per-climb {:default 2 :spec (a/num-in 0 nil)
+                :doc "One block climbed past the first on a detour (stairs or a pillar back out of a drop, or up to a ledge), in seconds."}
    ::per-dark {:default 0.3 :spec (a/num-in 0 nil)
                :doc "One block walked in the dark, on top of per-block: a dark block costs twice a lit one."}
    ::walk-blocks-per-s {:default 2.9 :spec (a/num-in 0.1 nil)
@@ -379,6 +381,19 @@
   [{:keys [distance danger]}]
   (let [parts {:walk (* (per-block) distance) :danger (* per-danger (or danger 0))}]
     {:cost (reduce + (vals parts)) :parts parts}))
+
+(defn per-climb [] (settings/get settings ::per-climb))
+
+(defn detour-cost
+  "{:cost :parts {:walk :climb}} of stepping off the way to pick something up `distance` blocks off and `climb` blocks
+  above or below the feet: per-block a block (there and back) plus per-climb for each block of climb past the first.
+  opts :per-block and :per-climb override the settings."
+  ([spot] (detour-cost spot {}))
+  ([{:keys [distance climb]} opts]
+   (let [block (or (:per-block opts) (per-block))
+         up (or (:per-climb opts) (per-climb))
+         parts {:walk (* block distance) :climb (* up (max 0 (dec (abs (or climb 0)))))}]
+     {:cost (reduce + (vals parts)) :parts parts})))
 
 (defn torch-place-s [] (settings/get settings ::torch-place-s))
 

@@ -2,7 +2,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
-import { trackLiveEntities, liveEntities } from './live-entities.mjs'
+import { trackLiveEntities, liveEntities, itemSpawn } from './live-entities.mjs'
 
 const drop = (id, count) => ({ id, name: 'item', type: 'other', position: { x: 0, y: 0, z: 0 }, getDroppedItem: () => ({ name: 'stick', count }) })
 const botWith = entities => Object.assign(new EventEmitter(), { _client: new EventEmitter(), entities })
@@ -50,4 +50,33 @@ test('a reused id is listed again once the dead mob is gone', () => {
   bot._client.emit('entity_status', { entityId: 1, entityStatus: 3 })
   bot.emit('entityGone', bot.entities[1])
   assert.deepEqual(ids(bot), [1])
+})
+
+const player = (id, username, x, y, z) => ({ id, name: 'player', type: 'player', username, position: { x, y, z } })
+const itemAt = (id, x, y, z) => ({ id, name: 'item', type: 'other', position: { x, y, z } })
+
+test('an item that spawns at a player\'s eye was thrown by that player', () => {
+  const bot = botWith({ 1: player(1, 'Ann', 10.5, 64, 3.5) })
+  trackLiveEntities(bot)
+  bot.entities[2] = itemAt(2, 10.5, 65.32, 3.5)
+  bot.emit('entitySpawn', bot.entities[2])
+  assert.equal(itemSpawn(bot, 2).by, 'Ann')
+  assert.equal(typeof itemSpawn(bot, 2).at, 'number')
+})
+
+test('an item that spawns on the ground beside a player (a block\'s drop) has no thrower', () => {
+  const bot = botWith({ 1: player(1, 'Ann', 10.5, 64, 3.5) })
+  trackLiveEntities(bot)
+  bot.entities[2] = itemAt(2, 11.5, 64.25, 3.5)
+  bot.emit('entitySpawn', bot.entities[2])
+  assert.equal(itemSpawn(bot, 2).by, undefined)
+})
+
+test('the spawn record is forgotten with the entity', () => {
+  const bot = botWith({})
+  trackLiveEntities(bot)
+  bot.entities[2] = itemAt(2, 0, 64, 0)
+  bot.emit('entitySpawn', bot.entities[2])
+  bot.emit('entityGone', bot.entities[2])
+  assert.equal(itemSpawn(bot, 2), undefined)
 })

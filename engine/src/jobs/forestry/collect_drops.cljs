@@ -4,6 +4,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.look :as look]
+            [jobs.lib.loose :as loose]
             [jobs.lib.reach :as reach]
             [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
@@ -22,6 +23,7 @@
   With :search, when fewer than :want items (those named in :want-items, else any) were collected and no item is in sight (leaves hide drops beyond them), the body walks (a go-to child, range 0)
   to seen standable cells round the anchor, nearest first, and looks again at each, until an item is seen or the cells within :search
   blocks are tried.
+  While it runs it holds its work area (jobs.lib.loose :collecting), so the :loose-items reflex leaves those drops to it.
   Result: {:collected n}, the number of items that entered the inventory, with :left [{:pos :reason}] for those.")
 
 (a/defargs args
@@ -185,7 +187,11 @@
   :ids limits it to those entity ids (a dig's own drops)."
   [c]
   (let [anchor (or (:anchor (ctx/mem c))
-                   (let [a (or (:near (:args c)) (u/self-pos c))] (ctx/update-mem! c assoc :anchor a) a))]
+                   (let [a (or (:near (:args c)) (u/self-pos c))]
+                     (ctx/update-mem! c assoc :anchor a)
+                     (loose/hold! c a (:radius (:args c)))
+                     a))
+        done! (fn [result] (loose/release! c) (ctx/result! c result) :done)]
     (loop []
       (let [item (when (ctx/alive? c) (nearest-item c anchor))]
         (if (and (not item) (ctx/alive? c) (pos? (:search (:args c)))
@@ -195,14 +201,12 @@
               :continue
               (if r
                 (recur)
-                (do (ctx/result! c (cond-> {:collected (:collected (ctx/mem c) 0)}
-                                     (not (ctx/alive? c)) (assoc :reason :cut)))
-                    :done))))
+                (done! (cond-> {:collected (:collected (ctx/mem c) 0)}
+                         (not (ctx/alive? c)) (assoc :reason :cut))))))
           (if-not item
-          (do (ctx/result! c (cond-> {:collected (:collected (ctx/mem c) 0)}
-                               (seq (:left (ctx/mem c))) (assoc :left (:left (ctx/mem c)))
-                               (not (ctx/alive? c)) (assoc :reason :cut)))
-              :done)
+          (done! (cond-> {:collected (:collected (ctx/mem c) 0)}
+                   (seq (:left (ctx/mem c))) (assoc :left (:left (ctx/mem c)))
+                   (not (ctx/alive? c)) (assoc :reason :cut)))
           (let [hole? (in-hole? c item)
                 moving? (and hole? (settling? c item))
                 why (when (and hole? (not moving?)) (await (hole-problem! c item)))
