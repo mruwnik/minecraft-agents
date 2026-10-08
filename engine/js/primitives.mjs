@@ -67,7 +67,8 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     const low = p.y - floored.y > 0.001 && bot.entity.onGround && bot.blockAt(floored)?.boundingBox === 'block'
     return low ? floored.offset(0, 1, 0) : floored
   }
-  const eye = () => ({ x: bot.entity.position.x, y: bot.entity.position.y + (bot.entity.height ?? 1.62), z: bot.entity.position.z })
+  // the eyes: Mineflayer's height is the top of the head (1.8), eyeHeight the eyes (1.62), as the server reads reach and air
+  const eye = () => ({ x: bot.entity.position.x, y: bot.entity.position.y + (bot.entity.eyeHeight ?? 1.62), z: bot.entity.position.z })
   const inventory = () => bot.inventory.items()
   // Worn and off-hand stacks are not in inventory().items(); they sit in these slots of the player window.
   const WORN_SLOTS = { head: 5, torso: 6, legs: 7, feet: 8, offHand: 45 }

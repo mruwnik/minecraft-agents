@@ -849,10 +849,11 @@
 
 (defn ^:async cap-run!
   "One breathe run in the capped column; the ending, the fake body, its events and the block reader."
-  [{:keys [block zones args] :or {block "dirt" zones [] args cap-args}}]
+  [{:keys [block zones args dig-ms inventory] :or {block "dirt" zones [] args cap-args dig-ms 0 inventory []}}]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/seeing-all (tu/fake {:self {:inWater true :oxygen 4} :blocks (capped-world block)}))
+        p (tu/seeing-all (tu/fake {:self {:inWater true :oxygen 4} :blocks (capped-world block) :inventory inventory}))
+        _ (swap! (fake/state p) assoc :dig-ms dig-ms)
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :world (world-files/of-data {} {} zones)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -981,6 +982,50 @@
           (is (= [[:stopped :no_air]] ended))
           (is (= :dig-failed (:cap data)))
           (is (= 3 digs)))))))
+
+;; ---------------------------------------------------------------- the cap dig fits the air left; seen air below
+
+(deftest a-cap-dig-slower-than-the-air-left-is-never-started
+  ;; oxygen 4 and health 20 leave 13 s; a floating dig under water is 25 times slower than on land
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [ended data p] at :block} (await (cap-run! {:block "stone" :dig-ms 60000}))]
+          (is (= [[:stopped :no_air]] ended))
+          (is (= :too-slow (:cap data)))
+          (is (= "stone" (at [0 68 0])))
+          (is (not (some #{"dig"} (call-names p)))))))))
+
+(deftest a-cap-dig-holds-the-best-tool-and-is-bounded-by-the-air-left
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [ended p]} (await (cap-run! {:block "stone" :dig-ms 1000 :inventory [{:name "stone_pickaxe" :count 1}]}))
+              calls (array-seq (.. p -world -calls))
+              dig (first (filter #(= "dig" (.-name %)) calls))
+              before-dig (take-while #(not= "dig" (.-name %)) calls)]
+          (is (= [[:completed nil]] ended))
+          (is (some #(and (= "equip" (.-name %)) (= "stone_pickaxe" (.. % -args -item))) before-dig) "the pickaxe is held first")
+          (is (< 1 (.. dig -args -timeoutS) 13) "the dig gives up within the air left"))))))
+
+(def flooded-shaft
+  "A stone block: a water shaft at x 0 from y 64 to 73 capped by stone at y 74, and at its foot a tunnel with air
+  from x 1 to 4 (y 64 and 65), the way the body came."
+  (merge (into {} (for [x (range -10 12) z (range -10 11) y (range 63 76)] [(str x "," y "," z) "stone"]))
+         (into {} (for [y (range 64 74)] [(str "0," y ",0") "water"]))
+         (into {} (for [x (range 1 5) y [64 65]] [(str x "," y ",0") "air"]))))
+
+(deftest drowning-under-a-slow-cap-goes-back-down-to-seen-air
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 72 :z 0}} :blocks flooded-shaft})]
+          (swap! (fake/state p) assoc :dig-ms 60000)
+          (await (one-run! eng (assoc defaults :air-radius 8)))
+          (is (= [[:completed nil]] (ended seen)))
+          (is (= "stone" (.-name (.blockAt p (tu/pos 0 74 0)))) "the cap is left")
+          (is (<= 1 (:x (core/self-pos p))) "in the tunnel")
+          (is (> 66 (:y (core/self-pos p))) "down at its floor"))))))
 
 (deftest a-two-cell-cap-is-dug-one-cell-and-the-air-over-it-is-not-peeked-at
   (async done

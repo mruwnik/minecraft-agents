@@ -148,11 +148,13 @@
   (boolean (or last-resort? (:ignore-zones? (:args c)))))
 
 (defn ^:async dig!
-  "ctx/act :dig at pos, noting a dug block of another's (see noting?). Resolves to the act's result."
+  "ctx/act :dig at pos (more act args in opts, e.g. :timeoutS), noting a dug block of another's (see noting?). Resolves
+  to the act's result."
   ([c pos] (dig! c pos false))
-  ([c pos last-resort?]
+  ([c pos last-resort?] (dig! c pos last-resort? nil))
+  ([c pos last-resort? opts]
    (let [pend (when (noting? c last-resort?) (pending c :dig pos))
-         r (await (ctx/act c :dig (clj->js {:pos pos})))
+         r (await (ctx/act c :dig (clj->js (merge opts {:pos pos}))))
          _ (await (tools/note-wear! c))]
      (when (= "dug" (.-status r)) (record! c pend "air"))
      r)))

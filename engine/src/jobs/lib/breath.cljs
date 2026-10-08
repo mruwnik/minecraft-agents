@@ -14,6 +14,7 @@
   sand, paths, plants and fluids never do. The eye cell is the suffocating trigger's business."
   (:require [engine.game :as game]
             [engine.memory :as mem]
+            [engine.settings :as settings]
             [jobs.lib.dig-look :as look]
             [jobs.lib.util :as u]))
 
@@ -175,6 +176,25 @@
              (let [cell (surface-in-column p (+ fx dx) (+ fz dz) fy reach)]
                (when-not (or (contains? skip cell) (and straight? (drag-between? p fx fz (+ fx dx) (+ fz dz) fy))) cell)))
            (columns radius)))))
+
+(defn nearest-pocket
+  "The nearest seen cell below the feet, within radius sideways and depth down, whose head cell is air and feet cell
+  water or air (the way a drowning body came, e.g. its tunnel), not one of failed; nil if none. Only cells seen."
+  [p self-pos radius depth failed]
+  (let [fx (js/Math.floor (:x self-pos)) fy (js/Math.floor (:y self-pos)) fz (js/Math.floor (:z self-pos))
+        skip (set failed)
+        d2 (fn [{:keys [x y z]}] (+ (* (- x fx) (- x fx)) (* (- y fy) (- y fy)) (* (- z fz) (- z fz))))]
+    (->> (for [[dx dz] (columns radius) dy (range 1 (inc depth))] {:x (+ fx dx) :y (- fy dy) :z (+ fz dz)})
+         (filter #(and (not (contains? skip %))
+                       (air? (seen-water-name p (update % :y inc)))
+                       (passable-water-or-air? (seen-water-name p %))))
+         (sort-by d2)
+         first)))
+
+(defn air-left-ms
+  "Wall-clock ms a drowning body has before it dies: 15 ticks a point of oxygen, then 2 health a second."
+  [self]
+  (settings/ticks->ms (+ (* 15 (max 0 (.-oxygen self))) (* 10 (max 0 (or (.-health self) 20))))))
 
 (defn ^:async look-column!
   "Look up the column x z from fy, one look per cell not yet seen, until a seen cell that is neither water nor air or

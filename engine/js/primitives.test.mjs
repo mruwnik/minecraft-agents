@@ -154,6 +154,14 @@ test('dig of air says what is there and what to do', async () => {
   assert.match(r.reason, /nothing to dig at 9 64 9 \(air\)/)
 })
 
+test('dig with timeoutS ends at that bound even when the block takes far longer (a floating dig under water)', { timeout: 5000 }, async () => {
+  const { bot, p } = rig({ ...world, hang: ['dig'] })
+  bot.digTime = () => 1e9
+  const r = await p.dig('t1', { pos: at(2, 64, 0), timeoutS: 1 })
+  assert.equal(r.status, 'timeout')
+  assert.deepEqual(names(bot).filter(n => n === 'stopDigging'), ['stopDigging'])
+})
+
 test('dig of a fluid cell says it is not a block: water and lava are not dug', async () => {
   for (const fluid of ['water', 'lava']) {
     const { p } = rig({ ...world, blocks: { ...world.blocks, '2,64,0': fluid } })
@@ -1318,6 +1326,15 @@ test('swim: a head that stays under water ends at the bound as timeout and relea
   assert.equal(result.status, 'timeout')
   assert.deepEqual(result.oxygen, { before: 4, after: 4 })
   assert.deepEqual(controls(bot).at(-1), ['jump', false])
+})
+
+test('swim: a head pressed under a ceiling, eyes still in water, does not report surfaced', async () => {
+  // Mineflayer's height is the body's top (1.8), its eyeHeight the eyes (1.62): at y 64.3 the top is in the stone at
+  // y 66, the eyes in the water at y 65
+  const { bot, p } = rig({ blocks: { '0,64,0': 'water', '0,65,0': 'water', '0,66,0': 'stone' }, pos: [0.5, 64.3, 0.5], oxygen: 4 })
+  Object.assign(bot.entity, { height: 1.8, eyeHeight: 1.62 })
+  const result = await p.swim('t1', { ms: 3000 })
+  assert.equal(result.status, 'timeout')
 })
 
 test('swim: ms is capped at 10 s', async () => {

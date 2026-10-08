@@ -71,8 +71,10 @@ export function createDig (env) {
   const dig = async (token, a = {}) => {
     if (!isOwner(token)) throw cutError()
     need(isPos(a.pos), 'dig needs pos {x, y, z}')
+    need(a.timeoutS === undefined || a.timeoutS === null || (isNum(a.timeoutS) && a.timeoutS > 0), 'dig timeoutS must be a number above 0')
     const p = cell(a.pos)
-    return act(token, { boundS: digBoundS(p) }, async ctx => {
+    // timeoutS: the caller's own bound (a drowning body digs only while its air lasts), never above the dig's
+    return act(token, { boundS: Math.min(digBoundS(p), a.timeoutS ?? Infinity) }, async ctx => {
       const block = env.bot.blockAt(vec(p))
       // a fluid is no block: minecraft-data lists it diggable, and a dig of it never ends
       if (!block || isAir(block.name) || isLiquid(block.name)) return { status: 'missing', reason: `nothing to dig at ${p.x} ${p.y} ${p.z} (${block ? block.name : 'not loaded'})` }
