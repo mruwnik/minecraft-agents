@@ -28,8 +28,8 @@
   deposit.refused warn and puts nothing in. :ignore-zones? true skips the check.
   Storage group: with no :chest, or a :chest that is the :chest place or one of the group (memory :storage/chests,
   jobs.lib.storage/group), chests are tried in turn; one that answers full or takes nothing is skipped. When all are
-  full and :make-chests? is true, a chest (jobs.blocks.place child, fetching or crafting it by default) goes down
-  beside a full one and joins the group; none to be had ends {:reason \"no-chest-item\"}, no free cell beside
+  full and :make-chests? is true, a chest (jobs.blocks.place child, fetching or crafting it by default; :fetch-chests? false only a carried one) goes down
+  beside a full one; a refused spot is skipped for the next free cell and joins the group; none to be had ends {:reason \"no-chest-item\"}, no free cell beside
   {:reason \"no-chest-spot\"}, :make-chests? false {:reason \"all-chests-full\"}. Any other :chest is used alone.
   Stock: a chest whose stock is booked in body memory :fetch/stock gets what was put in added (jobs.lib.fetch).")
 
@@ -39,6 +39,7 @@
    :keep {:doc "{item-name count}: leave at least this many of the name carried" :spec (a/map-of string? number?) :default {}}
    :free {:doc "stop once this many inventory slots are free; all of it when nil" :spec (a/int-in 0 nil) :default nil}
    :make-chests? {:doc "when every storage chest is full, put a new one beside them (carried, else fetched and crafted); false stops with reason all-chests-full" :spec boolean? :default true}
+   :fetch-chests? {:doc "a new chest may be fetched or crafted when none is carried; false places only a carried one (no-chest-item otherwise)" :spec boolean? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (defn to-deposit
@@ -135,13 +136,13 @@
     (let [spot (or (:chest-spot (ctx/mem c)) (first (chest-spots c pool)))]
       (cond
         (nil? spot) (stop! c "no-chest-spot")
-        (= "chest" (u/block-name (:primitives c) spot)) ; placed by an earlier round of the child
+        (= "chest" (u/seen-name (:primitives c) spot)) ; placed by an earlier round of the child
         (do (ctx/update-mem! c dissoc :chest-spot)
             (storage/add-to-group! c spot)
             (u/progress! c)
             :again)
         :else
-        (let [pargs (merge (select-keys (:args c) [:ignore-zones?]) {:pos spot :item "chest"})
+        (let [pargs (merge (select-keys (:args c) [:ignore-zones?]) {:pos spot :item "chest"} (when-not (:fetch-chests? (:args c)) {:fetch false}))
               _ (ctx/update-mem! c assoc :chest-spot spot)
               r (await (ctx/call-child c :place 'jobs.blocks.place pargs))
               out (ctx/child-result c :place)]
@@ -153,9 +154,12 @@
                 :again)
             (= :continue r) :continue
             (= :declined r) (let [why (:reason (b/child-wait c :place 'jobs.blocks.place pargs))]
-                              (ctx/update-mem! c dissoc :chest-spot)
-                              (ctx/emit! c :deposit.no-chest :warn {:text (str "cannot place a new storage chest: " (name (or why :not-ready)))})
-                              (stop! c (if (= :need why) "no-chest-item" "no-chest-spot")))
+                              (ctx/update-mem! c #(-> % (dissoc :chest-spot) (update :chest-tried (fnil conj #{}) (storage/cell-of spot))))
+                              (ctx/emit! c :deposit.no-chest :warn {:text (str "cannot place a new storage chest at " (pr-str (storage/cell-of spot)) ": " (name (or why :not-ready)))})
+                              (cond
+                                (= :need why) (stop! c "no-chest-item")
+                                (seq (chest-spots c pool)) :again
+                                :else (stop! c "no-chest-spot")))
             :else
             (do (ctx/update-mem! c #(-> % (dissoc :chest-spot) (update :chest-tried (fnil conj #{}) (storage/cell-of spot))))
                 (give-up! c :chest_unusable "could not place a new storage chest" "no-chest-spot"))))))))

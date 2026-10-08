@@ -4,6 +4,12 @@
             [engine.fake :as fake]
             [engine.memory :as mem]
             [engine.core :as core]
+            [engine.ctx :as ctx]
+            [engine.events :as events]
+            [engine.registry :as registry]
+            [engine.triggers :as triggers]
+            [jobs.lib.storage :as storage]
+            [jobs.lib.world-files :as world]
             [engine.withdraw-test :as wt]
             [engine.test-util :as tu]))
 
@@ -193,3 +199,138 @@
             (is (= :stopped (:status result)))
             (is (= "no-chest-item" (:reason result)))
             (is (= #{[10 64 0]} (chests-in p)))))))))
+
+;; ------------------------------------------------------------------ chest making: spots, restarts, group upkeep
+
+(def other-zone {:name "farm" :owner "Miles"})
+
+(defn setup-zoned
+  "setup-far with an engine world holding zones."
+  [world zones]
+  (let [clock (atom 1000000)
+        [seen sink] (tu/legacy-capture-sink)
+        p (tu/seeing-all (tu/fake-on-floor world))
+        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                          :world (world/of-data {} {} zones)
+                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+    {:eng eng :p p :seen seen}))
+
+(def one-chest-world {:inventory [{:name "dirt" :count 5} {:name "chest" :count 1}]
+                      :blocks {"10,64,0" "chest"} :containers {"10,64,0" [] "9,64,0" []}})
+
+(deftest deposit-skips-a-spot-in-anothers-zone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (setup-zoned one-chest-world [(assoc other-zone :min [11 60 0] :max [11 70 0])])
+              {:keys [eng p]} env]
+          (wt/know-place! eng :chest chest)
+          (full-at p [10 64 0])
+          (let [result (await (tu/child-outcome eng job {:items ["dirt"]} 40))
+                new-cells (disj (chests-in p) [10 64 0])]
+            (is (= {:gave-up false} result))
+            (is (= 1 (count new-cells)))
+            (is (not (contains? new-cells [11 64 0])) "the zoned cell got no chest")))))))
+
+(deftest deposit-tries-the-next-spot-when-the-first-is-declined
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup-far one-chest-world)
+              place-fn (get registry/jobs 'jobs.blocks.place)]
+          (wt/know-place! eng :chest chest)
+          (full-at p [10 64 0])
+          ;; the first spot answers declined once (as a place check that waits would)
+          (let [refused (atom #{})
+                eng (assoc-in eng [:jobs 'jobs.blocks.place]
+                              (assoc place-fn :check
+                                     (fn [c]
+                                       (let [pos (storage/cell-of (:pos (:args c)))]
+                                         (if (= [11 64 0] pos)
+                                           (do (swap! refused conj pos) (ctx/wait c {:reason :not-allowed :pos pos}))
+                                           ((:check place-fn) c))))))
+                result (await (tu/child-outcome eng job {:items ["dirt"]} 60))
+                new-cells (disj (chests-in p) [10 64 0])]
+            (is (= {:gave-up false} result))
+            (is (= #{[11 64 0]} @refused))
+            (is (= 1 (count new-cells)))
+            (is (not (contains? new-cells [11 64 0])) "the next cell took the chest")))))))
+
+(deftest deposit-stops-with-no-spot-when-every-spot-is-declined
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup-far one-chest-world)
+              place-fn (get registry/jobs 'jobs.blocks.place)]
+          (wt/know-place! eng :chest chest)
+          (full-at p [10 64 0])
+          (let [eng (assoc-in eng [:jobs 'jobs.blocks.place]
+                              (assoc place-fn :check (fn [c] (ctx/wait c {:reason :not-allowed :pos (storage/cell-of (:pos (:args c)))}))))
+                result (await (tu/child-outcome eng job {:items ["dirt"]} 80))]
+            (is (= "no-chest-spot" (:reason result)))
+            (is (= #{[10 64 0]} (chests-in p)))))))))
+
+(deftest deposit-with-fetching-off-does-not-fetch-the-chest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup-far (assoc one-chest-world :inventory [{:name "dirt" :count 5} {:name "oak_planks" :count 8}]))]
+          (wt/know-place! eng :chest chest)
+          (full-at p [10 64 0])
+          (let [result (await (tu/child-outcome eng job {:items ["dirt"] :fetch-chests? false} 60))]
+            (is (= "no-chest-item" (:reason result)))
+            (is (empty? (wt/calls p "craft")) "no crafting")
+            (is (= #{[10 64 0]} (chests-in p)))))))))
+
+(deftest deposit-restarted-with-its-chest-already-placed-joins-it-to-the-group
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup-far {:inventory [{:name "dirt" :count 5} {:name "chest" :count 1}]
+                                          :blocks {"10,64,0" "chest" "11,64,0" "chest"}
+                                          :containers {"10,64,0" [] "11,64,0" []}})
+              deposit (get registry/jobs job)
+              seeded (assoc deposit :round
+                            (fn [c]
+                              (when-not (:seeded (ctx/mem c))
+                                (ctx/update-mem! c assoc :seeded true :chest-spot {:x 11 :y 64 :z 0} :full #{[10 64 0]}))
+                              ((:round deposit) c)))
+              eng (assoc-in eng [:jobs job] seeded)]
+          (wt/know-place! eng :chest chest)
+          (full-at p [10 64 0])
+          (let [result (await (tu/child-outcome eng job {:items ["dirt"]} 30))]
+            (is (= {:gave-up false} result))
+            (is (= {"chest" 1} (wt/inv p)) "no second chest was placed")
+            (is (= #{[11 64 0]} (group-cells eng)))))))))
+
+(deftest deposit-drops-a-group-chest-that-answers-missing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup-far {:inventory [{:name "dirt" :count 5}]
+                                          :blocks {"10,64,0" "chest" "11,64,0" "chest"}
+                                          :containers {"10,64,0" [] "11,64,0" []}})]
+          (wt/know-place! eng :chest chest)
+          (mem/write! (:store eng) :storage/chests {:pos {:x 11 :y 64 :z 0}} {:cap 16 :ttl :forever})
+          (.override (.-world p) "transfer"
+                     (fn ^:async f [token args impl]
+                       (case (.-x (.-pos args))
+                         10 #js {:status "full" :moved 0}
+                         11 #js {:status "missing" :moved 0}
+                         (await (impl token args)))))
+          (await (tu/child-outcome eng job {:items ["dirt"]} 40))
+          (is (= #{} (group-cells eng)) "the missing chest left the group"))))))
+
+(deftest deposit-uses-a-chest-outside-the-group-alone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup-far {:inventory [{:name "dirt" :count 5} {:name "chest" :count 1}]
+                                          :blocks {"10,64,0" "chest" "20,64,0" "chest"}
+                                          :containers {"10,64,0" [] "20,64,0" []}})]
+          (wt/know-place! eng :chest chest)
+          (full-at p [20 64 0])
+          (let [result (await (tu/child-outcome eng job {:chest {:x 20 :y 64 :z 0} :items ["dirt"] :make-chests? true} 40))]
+            (is (true? (:gave-up result)))
+            (is (= #{[10 64 0] [20 64 0]} (chests-in p)) "no chest was made, none of the group used")
+            (is (empty? (get-in @(fake/state p) [:containers [10 64 0]])))))))))

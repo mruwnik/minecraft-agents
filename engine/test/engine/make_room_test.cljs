@@ -4,6 +4,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.fake :as fake]
             [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.takeover :as takeover]
@@ -308,9 +309,25 @@
           (.override (.-world p) "transfer" (fn ^:async f [_ _ _] #js {:status "full" :moved 0}))
           (know-chest! eng chest-pos)
           (await (run-reflex eng {} {}))
-          (is (= [{:pos chest-pos :reason "all-chests-full"}] (mapv :data (chest-entries eng))))
+          (is (= [{:pos chest-pos :reason "no-chest-item"}] (mapv :data (chest-entries eng))))
           (is (= 1 (count (calls p "transfer"))) "a full answer is final: it stops using the chest")
           (is (= 3 (count (calls p "toss"))) "then it tosses"))))))
+
+(deftest a-full-chest-gets-a-carried-chest-beside-it-but-none-is-fetched
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory (conj (many "junk" 34) {:name "chest" :count 1})
+                                      :blocks {"10,64,0" "chest"} :containers {"10,64,0" [] "11,64,0" [] "9,64,0" []}})]
+          (aset p "seenBlockAt" (fn [pos] (let [b (.blockAt p pos)] #js {:name (.-name b) :properties (.-properties b) :pos pos :age-ms 0})))
+          (aset p "seenBlocks" (fn [q] (.blocks p q)))
+          (.override (.-world p) "transfer"
+                     (fn ^:async f [token args impl]
+                       (if (= 10 (.-x (.-pos args))) #js {:status "full" :moved 0} (await (impl token args)))))
+          (know-chest! eng chest-pos)
+          (await (run-reflex eng {} {}))
+          (is (= 2 (count (filter #(= "chest" %) (vals (:blocks @(fake/state p)))))) "the carried chest went down")
+          (is (empty? (calls p "craft"))))))))
 
 (deftest a-chest-marked-unusable-is-not-tried-again
   (async done

@@ -2,7 +2,9 @@
   "What the body carries and where its chest is, shared by the storage and item jobs (deposit, withdraw, kit,
   make-room, bake, craft, give, obtain, get-seeds)."
   (:require [clojure.string :as str]
+            [engine.args :as a]
             [engine.memory :as mem]
+            [engine.settings :as settings]
             [engine.ctx :as ctx]
             [jobs.lib.places :as places]))
 
@@ -22,7 +24,10 @@
     (mem/place view :chest)))
 
 (def group-kind :storage/chests)
-(def group-policy {:cap 16 :ttl :forever})
+
+(a/defargs settings
+  {::group-cap {:default 16 :spec (a/int-in 1 nil) :doc "Most storage chests (memory :storage/chests) the body keeps."}})
+(defn group-cap [] (settings/get settings ::group-cap))
 
 (defn cell-of [pos] (let [{:keys [x y z]} (if (vector? pos) {:x (pos 0) :y (pos 1) :z (pos 2)} pos)] [x y z]))
 
@@ -37,7 +42,7 @@
   "Remember the chest at pos as storage, once."
   [c pos]
   (when-not (some #{(cell-of pos)} (group (ctx/view c)))
-    (ctx/remember! c group-kind {:pos (zipmap [:x :y :z] (cell-of pos))} group-policy)))
+    (ctx/remember! c group-kind {:pos (zipmap [:x :y :z] (cell-of pos))} {:cap (group-cap) :ttl :forever})))
 
 (defn drop-from-group!
   "Forget the chest at pos as storage (it is gone)."
