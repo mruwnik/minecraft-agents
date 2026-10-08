@@ -6,16 +6,17 @@ import { worldsDir } from '../../engine/js/bodies.mjs'
 import { loadSeen } from '../../engine/js/seen-file.mjs'
 
 const MINUTE_MS = 60000
-const OVERWORLD = 'minecraft:overworld'
+const OVERWORLD = 'overworld'
+const bare = dim => String(dim).replace(/^minecraft:/, '')
 
 // The body's own block memory: worlds/<world>/agents/<body>/engine/seen.bin, only what it has seen.
-// dim: the dimension to read, the overworld when omitted (a plan's :dim).
+// dim: the dimension to read, the overworld when omitted (a plan's :dim); the minecraft: prefix is optional.
 // -> {blockAt(x, y, z) -> {name, state} | null (never seen), seenAt(x, y, z) -> ms | null, sections, close()}
 export function createSeenBlocks ({ stateDir, world, body, dim = OVERWORLD }) {
   const file = path.join(worldsDir(stateDir), world, 'agents', body, 'engine', 'seen.bin')
   const data = loadSeen(file)
   const sections = new Map()
-  for (const s of data?.sections ?? []) if (s.dim === dim) sections.set(`${s.cx},${s.sy},${s.cz}`, s)
+  for (const s of data?.sections ?? []) if (bare(s.dim) === bare(dim)) sections.set(`${s.cx},${s.sy},${s.cz}`, s)
   const Block = data ? prismarineBlock(prismarineRegistry(data.version)) : null
   const cell = (x, y, z) => {
     const s = sections.get(`${x >> 4},${y >> 4},${z >> 4}`)
