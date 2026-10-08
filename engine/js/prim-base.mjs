@@ -2,72 +2,35 @@
 // Shared constants and helpers of the primitives modules (prim-*.mjs).
 
 import vec3 from 'vec3'
+import { setting } from './settings.mjs'
 
 const { Vec3 } = vec3
-export const REACH = 4.5
-export const ATTACK_REACH = 3.5
-export const DROP_RADIUS = 2
-export const DROP_WAIT_S = 1
-export const DIG_MARGIN_S = 5 // slack over the expected dig time (latency, a tick of lag)
-export const POLL_MS = 50
-export const DAMAGE_FRESH_MS = 1000 // a damage packet older than this is not the cause of a health loss
-export const HURT_WAIT_MS = 300 // attack waits this long for the server's entityHurt on the target
-export const SETTLE_QUIET_MS = 150 // transfer closes its window only after this long without a slot update...
-export const SETTLE_CAP_MS = 1500 // ...or this long in all
 export const CONTAINER = /chest|barrel|shulker_box|furnace|smoker|hopper|dispenser|dropper|brewing_stand/
 export const DESTS = ['hand', 'off-hand', 'head', 'torso', 'legs', 'feet']
 export const DEFAULT_RADIUS = 16
 export const KINDS = ['hostile', 'passive', 'player', 'item', 'other']
-export const OFFLINE_DEFAULT_MS = 5 * 60 * 1000
-export const OFFLINE_MAX_MS = 10 * 60 * 1000
-export const JUMP_PLACE_MAX = 8
-export const JUMP_PLACE_BLOCK_S = 2
-export const RISE_WAIT_MS = 800
-export const LAND_WAIT_MS = 1000
-export const SWIM_DEFAULT_MS = 3000
-export const SWIM_MAX_MS = 10000
-export const RECONNECT_TRIES = 3
-export const RECONNECT_RETRY_MS = 5000
 // after an unplanned drop (kick, socket end, server restart) the body reconnects by itself: the first try at once,
 // then after each failure a wait that doubles from the first to the cap, until it is back or closed
-export const RECONNECT_BACKOFF_FIRST_MS = 1000
-export const RECONNECT_BACKOFF_MAX_MS = 60000
-export const WORLD_TIMEOUT_MS = 10000
-export const WORLD_POLL_MS = 50
-export const PHYSICS_STALL_MS = 2000 // no physicsTick this long over an unloaded column: the body hangs frozen
-export const STALL_POLL_MS = 250
-export const SETTLE_MS = 1000 // senses count as trustworthy this long after the column under the body is loaded
-export const TELEPORT_BLOCKS = 16 // a forced move farther than this is a teleport; smaller ones are server corrections
 // Every bound body is 0.01 wider than mineflayer's 0.3: the server rejects every move of a body whose box touches a
 // block face exactly (pressed against a step, or the side of a block it walks past) and sets it back to the same
 // position about 20 times a second, indefinitely. Verified live against 26.1: 2 of 2 walks past one block on a flat
 // stone pad stuck 25 s at 0.3, 3 of 3 took 0.7-1 s with no setbacks at 0.31 (same on a leaf-litter hillside where
 // every moveTo came back blocked); a swim toward a rim, flush against its wall, only climbs out at 0.31.
 export const BODY_HALF_WIDTH = 0.31
-export const HOP_RANGE = 4 // a capped hop ends within this many blocks (XZ) of its point on the line to the target
 export const PLAN_REASONS = { NoPath: 'noPath', Timeout: 'planTimeout' } // goto's rejection names that say why it gave up
-export const PROGRESS_BLOCKS = 1 // a walk must get this far (3D) from its anchor...
-export const STALL_S = 8 // ...within this long, or it ends stalled (the pathfinder's own stuck reset plus one step-up fit in it)
 // A wedged body stands perfectly still, a bobbing or climbing one does not; 4 s leaves room for the pathfinder's 3.5 s stuck reset.
-export const STILL_BLOCKS = 0.1
-export const STILL_S = 4
 export const CLIMBABLE = /^(ladder|vine|scaffolding|weeping_vines(_plant)?|twisting_vines(_plant)?|cave_vines(_plant)?)$/
 export const POSE_SLEEPING = 2
 // Step-up out of a 1-deep hole when the pathfinder stalls flush against the ledge (see stepUp).
 export const STEP_RISE = 1.0
-export const CENTRE_TOLERANCE = 0.1
-export const CENTRE_S = 1
-export const CENTRE_SPEED = 0.005 // blocks per tick: centred means within tolerance and (nearly) stopped
-export const LOOK_TICK_MS = 100 // a look waits for the next physics tick (the rotation goes out there), at most this long
-export const STEP_S = 1.5
-export const STEP_ATTEMPTS = 2
+// the body's physics step in ms (the tick-rate shim's interval, else 50); a look waits up to two of them for the tick that sends its rotation
+export const physicsStepMs = bot => bot.physicsClock?.intervalMs() ?? 50
 export const FLAG_ON_FIRE = 0x01
 
-export const WAIT_MAX_MS = 10000
 export const sleepMs = ms => new Promise(resolve => setTimeout(resolve, ms))
 // Resolves true once the column under the body is loaded (blockAt there is non-null), false after `timeoutMs`.
 // A body that acts before its chunk arrives sees no roof, no bed and no other players.
-export async function waitForWorld (bot, { timeoutMs = WORLD_TIMEOUT_MS, pollMs = WORLD_POLL_MS, stop = () => false } = {}) {
+export async function waitForWorld (bot, { timeoutMs = setting('prim/world-timeout-ms'), pollMs = setting('prim/world-poll-ms'), stop = () => false } = {}) {
   const deadline = Date.now() + timeoutMs
   while (!bot.blockAt(bot.entity.position)) {
     if (stop() || Date.now() >= deadline) return false
@@ -97,7 +60,6 @@ export const badArgs = message => codedError('bad-args', message)
 export const isCut = err => err?.code === 'cut'
 // a mineflayer rejection is a domain failure: a status, never a throw (only cut and bad-args reject)
 export const failed = err => ({ status: 'failed', reason: String(err?.message ?? err).slice(0, 200) })
-export const BUCKET_WAIT_S = 2
 export const need = (ok, message) => { if (!ok) throw badArgs(message) }
 
 export const entityKind = e => {

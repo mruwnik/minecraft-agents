@@ -1,13 +1,10 @@
 // Why JavaScript: Mineflayer boundary; block use/activate calls and the safety guards before the click.
 // useOn: right-click a block with an item (or an empty hand) and report what changed.
 import vec3 from 'vec3'
+import { setting } from './settings.mjs'
 
 const { Vec3 } = vec3
 
-const REACH = 4.5
-const POLL_MS = 50
-const WAIT_MS = 1000
-const CONSUME_WAIT_MS = 300 // extra wait for the carried count to follow a block change (slot updates can lag)
 const FACES = { up: [0, 1, 0], down: [0, -1, 0], north: [0, 0, -1], south: [0, 0, 1], west: [-1, 0, 0], east: [1, 0, 0] }
 const BED = /_bed$|^respawn_anchor$/
 // The generic window guard is a last resort: a window mineflayer misparses can desync the inventory, so refuse window-opening blocks before the click.
@@ -60,7 +57,7 @@ export function createUseOn ({ act, getBot, inventory, eye, lookNow, timeScale, 
       const stack = item === undefined ? null : inventory().find(i => i.name === item)
       if (item !== undefined && !stack) return refuse('no-item')
       const distance = Math.hypot(eye().x - (p.x + 0.5), eye().y - (p.y + 0.5), eye().z - (p.z + 0.5))
-      if (distance > REACH) return refuse('unreachable', { reason: 'too-far', distance: Math.round(distance * 100) / 100 })
+      if (distance > setting('prim/reach')) return refuse('unreachable', { reason: 'too-far', distance: Math.round(distance * 100) / 100 })
       // noLine comes from engine.senses: the eye's ray reaches no part of the target before another block's shape.
       if (a.noLine) return refuse('unreachable', { reason: 'no-line' })
       if (stack) {
@@ -80,18 +77,18 @@ export function createUseOn ({ act, getBot, inventory, eye, lookNow, timeScale, 
       try {
         await bot.activateBlock(bot.blockAt(p), d, new Vec3(0.5 + 0.5 * d.x, 0.5 + 0.5 * d.y, 0.5 + 0.5 * d.z))
         ctx.alive()
-        const deadline = Date.now() + WAIT_MS * timeScale
+        const deadline = Date.now() + setting('use-on/wait-ms') * timeScale
         while (!windowOpened() && !changed() && Date.now() < deadline) {
-          await sleepMs(POLL_MS * timeScale)
+          await sleepMs(setting('prim/poll-ms') * timeScale)
           ctx.alive()
         }
         // The block update can arrive before the inventory slot update; give the count a moment to follow.
         const countMoved = () => carried(item) !== countBefore
         // Tools with durability never drop in count, so only other items are worth the wait.
         const countCanDrop = !(bot.registry?.itemsByName?.[item]?.maxDurability > 0)
-        const consumeDeadline = Date.now() + CONSUME_WAIT_MS * timeScale
+        const consumeDeadline = Date.now() + setting('use-on/consume-wait-ms') * timeScale
         while (!windowOpened() && item !== undefined && countCanDrop && !same(now(), before) && !countMoved() && Date.now() < consumeDeadline) {
-          await sleepMs(POLL_MS * timeScale)
+          await sleepMs(setting('prim/poll-ms') * timeScale)
           ctx.alive()
         }
         if (windowOpened()) {

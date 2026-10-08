@@ -4,14 +4,10 @@
 import vec3 from 'vec3'
 import { mobFields } from './interact.mjs'
 import { professionOf, villagerData } from './villager.mjs'
+import { setting } from './settings.mjs'
 
 export { professionOf }
 
-const OPEN_WAIT_MS = 3000
-const QUIET_MS = 150
-const SETTLE_MAX_MS = 2000
-const POLL_MS = 25
-const TRADE_WAIT_MS = 4000
 const DEFAULT_STACK = 64
 
 const middle = e => vec3(e.position.x, e.position.y + (e.height ?? 1) / 2, e.position.z)
@@ -27,7 +23,7 @@ const closeWindow = bot => { if (bot.currentWindow) bot.closeWindow(bot.currentW
 async function openWindow (bot, target, timeScale) {
   const opened = bot.openVillager(target)
   let timer
-  const timeout = new Promise(resolve => { timer = setTimeout(() => resolve(null), OPEN_WAIT_MS * timeScale) })
+  const timeout = new Promise(resolve => { timer = setTimeout(() => resolve(null), setting('trade/open-wait-ms') * timeScale) })
   try {
     const win = await Promise.race([opened, timeout])
     if (win) return win
@@ -75,15 +71,15 @@ const fits = (bot, name, count) => {
 async function closeAndSettle (bot, ctx, timeScale) {
   let last = Date.now()
   const touch = () => { last = Date.now() }
-  const deadline = last + SETTLE_MAX_MS * timeScale
+  const deadline = last + setting('trade/settle-max-ms') * timeScale
   bot.inventory.on('updateSlot', touch)
   try {
     closeWindow(bot)
     for (;;) {
       ctx.alive()
       const now = Date.now()
-      if (now - last >= QUIET_MS * timeScale || now >= deadline) return
-      await sleepMs(POLL_MS * timeScale)
+      if (now - last >= setting('trade/quiet-ms') * timeScale || now >= deadline) return
+      await sleepMs(setting('prim/poll-ms') * timeScale)
     }
   } finally {
     bot.inventory.removeListener('updateSlot', touch)
@@ -120,7 +116,7 @@ async function buy (bot, ctx, win, a, timeScale) {
   try {
     const call = clickAll()
     call.catch(() => {})
-    const bound = new Promise(resolve => { timer = setTimeout(() => resolve('stalled'), TRADE_WAIT_MS * timeScale) })
+    const bound = new Promise(resolve => { timer = setTimeout(() => resolve('stalled'), setting('trade/trade-wait-ms') * timeScale) })
     stalled = (await Promise.race([call, bound])) === 'stalled'
   } catch (err) {
     error = err

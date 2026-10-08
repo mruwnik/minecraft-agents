@@ -3,16 +3,10 @@
 // decides nothing (which offer is worth it); refusals come back as data and the result is measured from what is carried
 // and the body's level after the window is closed. See engine/README.md, primitive `enchant`.
 import vec3 from 'vec3'
+import { setting } from './settings.mjs'
 
 const { Vec3 } = vec3
 
-const OPEN_WAIT_MS = 3000
-const OFFERS_WAIT_MS = 3000
-const ENCHANT_WAIT_MS = 4000
-const LEVEL_WAIT_MS = 2000
-const QUIET_MS = 150
-const SETTLE_MAX_MS = 2000
-const POLL_MS = 25
 const ITEM_SLOT = 0
 const LAPIS_SLOT = 1
 const LAPIS = 'lapis_lazuli'
@@ -25,7 +19,7 @@ const sleepMs = ms => new Promise(resolve => setTimeout(resolve, ms))
 async function openWindow (bot, block, timeScale) {
   const opened = bot.openEnchantmentTable(block)
   let timer
-  const timeout = new Promise(resolve => { timer = setTimeout(() => resolve(null), OPEN_WAIT_MS * timeScale) })
+  const timeout = new Promise(resolve => { timer = setTimeout(() => resolve(null), setting('enchant/open-wait-ms') * timeScale) })
   try {
     const win = await Promise.race([opened, timeout])
     if (win) return { win }
@@ -50,10 +44,10 @@ const offersOf = (bot, win) => win.enchantments.map((e, index) => ({ index, leve
 
 // the offers arrive as window properties a moment after the item lies in the table
 async function offersArrive (win, timeScale) {
-  const deadline = Date.now() + OFFERS_WAIT_MS * timeScale
+  const deadline = Date.now() + setting('enchant/offers-wait-ms') * timeScale
   while (!win.enchantments.every(e => e.level >= 0)) {
     if (Date.now() >= deadline) return false
-    await sleepMs(POLL_MS * timeScale)
+    await sleepMs(setting('prim/poll-ms') * timeScale)
   }
   return true
 }
@@ -85,12 +79,12 @@ function watchQuiet (bot, timeScale) {
   return {
     async wait (ctx) {
       last = Date.now()
-      const deadline = last + SETTLE_MAX_MS * timeScale
+      const deadline = last + setting('enchant/settle-max-ms') * timeScale
       for (;;) {
         ctx.alive()
         const now = Date.now()
-        if (now - last >= QUIET_MS * timeScale || now >= deadline) return
-        await sleepMs(POLL_MS * timeScale)
+        if (now - last >= setting('enchant/quiet-ms') * timeScale || now >= deadline) return
+        await sleepMs(setting('prim/poll-ms') * timeScale)
       }
     },
     stop () {
@@ -163,7 +157,7 @@ async function enchant (bot, ctx, win, a, timeScale, xpLevel) {
   try {
     const call = Promise.resolve(win.enchant(a.choice))
     call.catch(() => {})
-    const bound = new Promise(resolve => { timer = setTimeout(() => resolve('stalled'), ENCHANT_WAIT_MS * timeScale) })
+    const bound = new Promise(resolve => { timer = setTimeout(() => resolve('stalled'), setting('enchant/enchant-wait-ms') * timeScale) })
     stalled = (await Promise.race([call, bound])) === 'stalled'
   } catch (err) {
     error = err
@@ -173,7 +167,7 @@ async function enchant (bot, ctx, win, a, timeScale, xpLevel) {
   try {
     ctx.alive()
     // the server's new level can arrive after the window call has returned
-    if (!stalled && !error) await levelMoved.wait(LEVEL_WAIT_MS * timeScale)
+    if (!stalled && !error) await levelMoved.wait(setting('enchant/level-wait-ms') * timeScale)
   } finally {
     levelMoved.stop()
   }

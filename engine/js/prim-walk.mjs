@@ -2,7 +2,8 @@
 // Walking for the primitives: the abortable goto with its stall watch and step-up, looks, and the centring sneak.
 
 import vec3 from 'vec3'
-import { POLL_MS, PLAN_REASONS, PROGRESS_BLOCKS, STALL_S, STILL_BLOCKS, STILL_S, CLIMBABLE, STEP_RISE, CENTRE_TOLERANCE, CENTRE_S, CENTRE_SPEED, LOOK_TICK_MS, STEP_S, STEP_ATTEMPTS, sleepMs, dist, cell, vec } from './prim-base.mjs'
+import { PLAN_REASONS, CLIMBABLE, STEP_RISE, physicsStepMs, sleepMs, dist, cell, vec } from './prim-base.mjs'
+import { setting } from './settings.mjs'
 
 const { Vec3 } = vec3
 const DROP_CAPS = Symbol('drop caps')
@@ -34,14 +35,14 @@ export function createWalk (env) {
     await aim()
     await new Promise(resolve => {
       const done = () => { clearTimeout(timer); env.bot.off('physicsTick', done); resolve() }
-      const timer = setTimeout(done, Math.max(1, LOOK_TICK_MS * timeScale))
+      const timer = setTimeout(done, Math.max(1, 2 * physicsStepMs(env.bot) * timeScale))
       env.bot.on('physicsTick', done)
     })
   }
   const waitUntil = async (ctx, done, boundS) => {
     const deadline = Date.now() + boundS * 1000 * timeScale
     while (!done() && Date.now() < deadline) {
-      await sleepMs(POLL_MS * timeScale)
+      await sleepMs(setting('prim/poll-ms') * timeScale)
       ctx.alive()
     }
   }
@@ -50,12 +51,12 @@ export function createWalk (env) {
   // always leaves sneak and forward released. Forward is released as soon as the body is within tolerance, and the
   // body is only done once it has coasted to a stop: it would otherwise drift ~0.1 further during a jump.
   // The wait is a body's `velocity` (blocks per tick); a body without one counts as stopped.
-  const centreBody = async (ctx, body, centre, tolerance = CENTRE_TOLERANCE) => {
+  const centreBody = async (ctx, body, centre, tolerance = setting('prim/centre-tolerance')) => {
     // a server correction replaces the position object, so it is read fresh at every use
     const live = () => body.entity.position
     const toCentre = () => Math.hypot(centre.x + 0.5 - live().x, centre.z + 0.5 - live().z)
     const speed = () => Math.hypot(body.entity.velocity?.x ?? 0, body.entity.velocity?.z ?? 0)
-    const centred = () => toCentre() < tolerance && speed() < CENTRE_SPEED
+    const centred = () => toCentre() < tolerance && speed() < setting('prim/centre-speed')
     if (centred()) return true
     const onCentre = () => {
       const off = toCentre() >= tolerance
@@ -65,7 +66,7 @@ export function createWalk (env) {
     body.setControlState('sneak', true)
     body.on('physicsTick', onCentre)
     try {
-      await waitUntil(ctx, centred, CENTRE_S)
+      await waitUntil(ctx, centred, setting('prim/centre-s'))
       return centred()
     } finally {
       body.off('physicsTick', onCentre)
@@ -88,7 +89,7 @@ export function createWalk (env) {
       body.setControlState('jump', true)
       body.on('physicsTick', onTick)
       const landed = () => { const now = cell(live()); return now.x === target.x && now.y === target.y && now.z === target.z && body.entity.onGround }
-      await waitUntil(ctx, landed, STEP_S)
+      await waitUntil(ctx, landed, setting('prim/step-s'))
     } finally {
       body.off('physicsTick', onTick)
       body.clearControlStates()
@@ -134,11 +135,11 @@ export function createWalk (env) {
       if (!started) return
       const pos = walking.entity.position
       const now = Date.now()
-      if (dist(pos, anchor.pos) >= PROGRESS_BLOCKS) anchor = { pos: pos.clone(), at: now }
-      else if (stall && now - anchor.at >= STALL_S * 1000 * timeScale) return onStall()
-      if (dist(pos, still.pos) > STILL_BLOCKS) still = { pos: pos.clone(), at: now }
-      else if (stall && now - still.at >= STILL_S * 1000 * timeScale && !walking.entity.isInWater && !CLIMBABLE.test(walking.blockAt(vec(cell(pos)))?.name ?? '')) onStall()
-    }, Math.max(1, POLL_MS * timeScale))
+      if (dist(pos, anchor.pos) >= setting('prim/progress-blocks')) anchor = { pos: pos.clone(), at: now }
+      else if (stall && now - anchor.at >= setting('prim/stall-s') * 1000 * timeScale) return onStall()
+      if (dist(pos, still.pos) > setting('prim/still-blocks')) still = { pos: pos.clone(), at: now }
+      else if (stall && now - still.at >= setting('prim/still-s') * 1000 * timeScale && !walking.entity.isInWater && !CLIMBABLE.test(walking.blockAt(vec(cell(pos)))?.name ?? '')) onStall()
+    }, Math.max(1, setting('prim/poll-ms') * timeScale))
     ctx.onAbort(() => clearInterval(poll)) // a timed-out or cut call never reaches the finally
     walking.on('path_update', onUpdate)
     walking.on('path_reset', onReset)
@@ -146,7 +147,7 @@ export function createWalk (env) {
       for (let attempts = 0; ; attempts++) {
         ctx.alive()
         const stuck = new Promise(resolve => {
-          onStuck = () => { const target = attempts < STEP_ATTEMPTS ? stepUpTarget(path, walking) : null; if (target) resolve(target) }
+          onStuck = () => { const target = attempts < setting('prim/step-attempts') ? stepUpTarget(path, walking) : null; if (target) resolve(target) }
         })
         const stalled = new Promise(resolve => { onStall = () => resolve({ reached: false, reason: 'stalled' }) })
         emptyNoPath = false

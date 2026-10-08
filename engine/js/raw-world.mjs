@@ -8,14 +8,12 @@ import { sectionIds } from './path/snapshot.mjs'
 import { blocksSight } from './sight.mjs'
 import { fullCube, shapeTop } from './block-shape.mjs'
 import { columnLightSection, hasSkyLight } from './view.mjs'
+import { setting } from './settings.mjs'
 
 const { Vec3 } = vec3
 export const UNLOADED = -1
 export const EYE_HEIGHT = 1.62
-const CACHE_MAX = 2048 // section copies kept before the caches are dropped
-const EPOCH_RANGE = 50 // a block update or chunk change this near the body (a little over the sight radius) moves epoch
 const hereY = bot => bot?.entity?.position?.y ?? 0
-const LIGHT_TTL_MS = 1000 // light changes arrive without an event: a light copy is re-read after this long
 
 // Uint8Array over state ids: 1 where the state blocks sight.
 export function sightTable (registry) {
@@ -45,7 +43,7 @@ export function stateInfo (registry) {
 // section key: column (16 bits each, as path/snapshot.mjs) and world section index (6 bits)
 const keyOf = (cx, cz, s) => ((cx & 0xFFFF) * 65536 + (cz & 0xFFFF)) * 64 + s
 
-export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay = () => undefined, now = Date.now, lightTtlMs = LIGHT_TTL_MS }) {
+export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay = () => undefined, now = Date.now, lightTtlMs = setting('raw-world/light-ttl-ms') }) {
   const states = new Map() // key -> Uint16Array | null (no column)
   const lights = new Map() // key -> {sky, block, at} | null
   const listeners = new Set()
@@ -71,7 +69,7 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
 
   // a column's sections (world section indices 0..63) leave the caches; the arg is mineflayer's corner Vec3 in blocks
   const forgetColumn = corner => {
-    if (near(getBot(), corner.x + 8, hereY(getBot()), corner.z + 8, EPOCH_RANGE + 8)) epoch++
+    if (near(getBot(), corner.x + 8, hereY(getBot()), corner.z + 8, setting('raw-world/epoch-range') + 8)) epoch++
     const cx = corner.x >> 4
     const cz = corner.z >> 4
     for (let s = 0; s < 64; s++) {
@@ -86,7 +84,7 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
   const onUpdate = (oldBlock, newBlock) => {
     const p = (newBlock ?? oldBlock)?.position
     if (!p) return
-    if (near(getBot(), p.x, p.y, p.z, EPOCH_RANGE)) epoch++
+    if (near(getBot(), p.x, p.y, p.z, setting('raw-world/epoch-range'))) epoch++
     const bot = getBot()
     const s = (p.y - (bot.game?.minY ?? -64)) >> 4
     const key = keyOf(p.x >> 4, p.z >> 4, s)
@@ -122,7 +120,7 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
   const heightOf = bot => bot.game?.height ?? 384
 
   const sectionStates = (bot, cx, cz, s, key) => {
-    if (states.size > CACHE_MAX) forget()
+    if (states.size > setting('raw-world/cache-max')) forget()
     const container = bot.world?.getColumn?.(cx, cz)?.sections?.[s]?.data
     const ids = container ? sectionIds(container) : null
     states.set(key, ids)
@@ -145,7 +143,7 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
   }
 
   const sectionLight = (bot, cx, cz, s, key) => {
-    if (lights.size > CACHE_MAX) forget()
+    if (lights.size > setting('raw-world/cache-max')) forget()
     const column = bot.world?.getColumn?.(cx, cz)
     const light = column ? (lightOverlay(cx, cz, s) ?? columnLightSection(column, s, hasSkyLight(bot.game?.dimension))) : null
     const entry = light ? { sky: light.sky, block: light.block, at: now() } : null

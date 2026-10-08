@@ -19,21 +19,22 @@ import { missingPatches, missingRequired } from './deps-check.mjs'
 import { wrapBlockAt } from './offset-shapes.mjs'
 import { say } from './chat.mjs'
 import vec3 from 'vec3'
-import { DAMAGE_FRESH_MS, OFFLINE_DEFAULT_MS, OFFLINE_MAX_MS, RECONNECT_TRIES, RECONNECT_RETRY_MS, RECONNECT_BACKOFF_FIRST_MS, RECONNECT_BACKOFF_MAX_MS, WORLD_TIMEOUT_MS, PHYSICS_STALL_MS, STALL_POLL_MS, SETTLE_MS, TELEPORT_BLOCKS, BODY_HALF_WIDTH, WAIT_MAX_MS, mcToMineflayerLook, mineflayerToMcLook, sleepMs, waitForWorld, xyz, isNum, vec, cutError, badArgs, isCut, failed, need, attempt, sleepStatusOf, spawnSetMessage, droppedItem, itemCounts } from './prim-base.mjs'
+import { BODY_HALF_WIDTH, mcToMineflayerLook, mineflayerToMcLook, sleepMs, waitForWorld, xyz, isNum, vec, cutError, badArgs, isCut, failed, need, attempt, sleepStatusOf, spawnSetMessage, droppedItem, itemCounts } from './prim-base.mjs'
 import { createWalk } from './prim-walk.mjs'
 import { createSense } from './prim-sense.mjs'
 import { createMove } from './prim-move.mjs'
 import { createDig } from './prim-dig.mjs'
 import { createItems } from './prim-items.mjs'
+import { setting, useSettings } from './settings.mjs'
 
 const { Vec3 } = vec3
 
-export { REACH, ATTACK_REACH, cutError, mcToMineflayerLook, mineflayerToMcLook, sleepStatusOf, waitForWorld } from './prim-base.mjs'
+export { cutError, mcToMineflayerLook, mineflayerToMcLook, sleepStatusOf, waitForWorld } from './prim-base.mjs'
 
 // Builds the primitives over an already spawned bot. `timeScale` multiplies every time bound (tests shrink it).
 // `reconnect` (internal; createPrimitives passes it) makes a fresh spawned bot with the same connection params and
 // enables `offline`; without it `offline` is unsupported.
-export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect = null, view = null, worldTimeoutMs = WORLD_TIMEOUT_MS, settleMs = SETTLE_MS, pending = [] } = {}) {
+export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect = null, view = null, worldTimeoutMs = setting('prim/world-timeout-ms'), settleMs = setting('prim/settle-ms'), pending = [] } = {}) {
   let bot = initialBot
   trackLeashes(bot)
   trackLiveEntities(bot)
@@ -175,7 +176,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
 
   // Waits `ms` (clamped to 0..WAIT_MAX_MS, scaled by timeScale) without touching the bot; a cut rejects at once.
   const wait = async (token, a = {}) => {
-    const ms = Math.min(Math.max(isNum(a.ms) ? a.ms : 0, 0), WAIT_MAX_MS)
+    const ms = Math.min(Math.max(isNum(a.ms) ? a.ms : 0, 0), setting('prim/wait-max-ms'))
     // the act's own time bound is the wait: it resolves ok when the bound passes, and a cut rejects before that
     return act(token, { boundS: ms / 1000, onTimeout: () => ({ status: 'ok' }) }, () => new Promise(() => {}))
   }
@@ -236,7 +237,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     const hurtNow = () => {
       const last = damage
       damage = null
-      if (!last || Date.now() - last.at >= DAMAGE_FRESH_MS) return {}
+      if (!last || Date.now() - last.at >= setting('prim/damage-fresh-ms')) return {}
       const { at, ...fields } = last
       return fields
     }
@@ -263,7 +264,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       forcedMove: () => {
         const moved = target.entity.position.distanceTo(lastPos)
         lastPos = target.entity.position.clone()
-        if (moved > TELEPORT_BLOCKS) settleFromNow()
+        if (moved > setting('prim/teleport-blocks')) settleFromNow()
       },
       chat: (from, message) => { if (from !== target.username) emit({ kind: 'chat', from, message }) },
       whisper: (from, message) => { if (from !== target.username) emit({ kind: 'whisper', from, message }) },
@@ -315,12 +316,12 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   const watchdog = setInterval(() => {
     if (closed || down || isOffline() || stalled) return
     const ms = Date.now() - lastTick
-    if (ms <= PHYSICS_STALL_MS * timeScale || columnLoaded()) return
+    if (ms <= setting('prim/physics-stall-ms') * timeScale || columnLoaded()) return
     stalled = true
     emit({ kind: 'physics-stalled', pos: here(), ms })
     bot.pathfinder?.setGoal(null)
     bot.clearControlStates()
-  }, Math.max(STALL_POLL_MS * timeScale, 10)) // not below 10 ms: tests shrink time a lot and leave bodies unclosed
+  }, Math.max(setting('prim/stall-poll-ms') * timeScale, 10)) // not below 10 ms: tests shrink time a lot and leave bodies unclosed
   watchdog.unref()
   const onBodyEvent = listener => {
     listeners.add(listener)
@@ -388,8 +389,8 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
         if (ready || closed) return ready
         fresh.error = new Error('the connection ended before the world loaded')
       }
-      if (attempt >= RECONNECT_TRIES) throw fresh.error
-      await sleepMs(RECONNECT_RETRY_MS * timeScale)
+      if (attempt >= setting('prim/reconnect-tries')) throw fresh.error
+      await sleepMs(setting('prim/reconnect-retry-ms') * timeScale)
     }
   }
 
@@ -430,7 +431,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
           if (closed) return
           fresh.error = new Error('the connection ended before the world loaded')
         }
-        const retryMs = Math.min(RECONNECT_BACKOFF_FIRST_MS * 2 ** (attempt - 1), RECONNECT_BACKOFF_MAX_MS)
+        const retryMs = Math.min(setting('prim/reconnect-backoff-first-ms') * 2 ** (attempt - 1), setting('prim/reconnect-backoff-max-ms'))
         emit({ kind: 'reconnect-failed', reason: String(fresh.error?.message ?? fresh.error), attempt, retryMs })
         await backoffWait(retryMs * timeScale)
       }
@@ -469,7 +470,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     need(a.ms === undefined || a.ms === null || (isNum(a.ms) && a.ms >= 0), 'offline needs ms, a number of milliseconds of at least 0')
     if (!reconnect) return { status: 'unsupported' }
     if (down) return { status: 'offline' } // the connection already dropped; the body is reconnecting by itself
-    const ms = Math.floor(Math.min(a.ms ?? OFFLINE_DEFAULT_MS, OFFLINE_MAX_MS))
+    const ms = Math.floor(Math.min(a.ms ?? setting('prim/offline-default-ms'), setting('prim/offline-max-ms')))
     const call = { token, cut: () => call.wake?.(), wake: null }
     let release
     rememberSelf()
@@ -543,7 +544,9 @@ const readRepoFile = rel => { try { return readFileSync(join(REPO_ROOT, rel), 'u
 // `connect` and `timeScale` exist for tests: a stand-in for connectBot, and shrunken time bounds.
 // `opts.view` ({stateDir, agent, world, onEvent}) turns on the view dump (docs/view-format.md); BODY_VIEW=0 turns it off.
 // A patch the planner relies on (deps-check REQUIRED) that is gone makes it refuse: before it connects, with the fix named.
-export async function createPrimitives ({ view: viewOpts, ...opts }, { connect = connectBot, timeScale = 1, worldTimeoutMs = WORLD_TIMEOUT_MS, settleMs = SETTLE_MS, readFile = readRepoFile } = {}) {
+export async function createPrimitives ({ view: viewOpts, settings, ...opts }, { connect = connectBot, timeScale = 1, worldTimeoutMs, settleMs, readFile = readRepoFile } = {}) {
+  useSettings(settings) // the live reader from main (key -> value); every tuning number is read at use, so a reload reaches here
+  worldTimeoutMs ??= setting('prim/world-timeout-ms')
   const required = missingRequired(readFile)
   if (required.length) throw new Error(`refusing to start: dependency patches missing (${required.join(', ')}); run node tools/patch-deps.mjs (an npm install undid them)`)
   const view = viewOpts ? createView(viewOpts) : null

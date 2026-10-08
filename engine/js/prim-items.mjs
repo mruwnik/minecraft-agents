@@ -7,7 +7,8 @@ import { furnaceVisit } from './furnace.mjs'
 import { enchantVisit } from './enchant.mjs'
 import { craftItem } from './craft.mjs'
 import { tradeWith } from './trade.mjs'
-import { REACH, ATTACK_REACH, SETTLE_QUIET_MS, SETTLE_CAP_MS, CONTAINER, DESTS, sleepMs, dist, center, isNum, isPos, cell, vec, cutError, need } from './prim-base.mjs'
+import { CONTAINER, DESTS, sleepMs, dist, center, isNum, isPos, cell, vec, cutError, need } from './prim-base.mjs'
+import { setting } from './settings.mjs'
 
 export function createItems (env) {
   const { act, isOwner, eye, inventory, timeScale } = env
@@ -25,8 +26,8 @@ export function createItems (env) {
   // mineflayer clicks in a burst on one stale stateId and the server answers each with a full window_items resync;
   // closing before those land leaves the inventory view short. Wait until the window's slot updates go quiet (or the cap).
   const settleWindow = async (ctx, win) => {
-    const quiet = Math.max(1, SETTLE_QUIET_MS * timeScale)
-    const deadline = Date.now() + SETTLE_CAP_MS * timeScale
+    const quiet = Math.max(1, setting('prim/settle-quiet-ms') * timeScale)
+    const deadline = Date.now() + setting('prim/settle-cap-ms') * timeScale
     let last = Date.now()
     const touch = () => { last = Date.now() }
     win.on('updateSlot', touch)
@@ -50,7 +51,7 @@ export function createItems (env) {
     return act(token, { boundS: 5 }, async ctx => {
       const block = containerAt(p)
       if (!block) return { status: 'missing' }
-      if (dist(eye(), center(p)) > REACH) return { status: 'unreachable' }
+      if (dist(eye(), center(p)) > setting('prim/reach')) return { status: 'unreachable' }
       return withWindow(ctx, block, async win => ({ status: 'ok', items: slots(win.containerItems()), size: win.inventoryStart, free: win.slots.slice(0, win.inventoryStart).filter(i => !i).length }))
     })
   }
@@ -62,7 +63,7 @@ export function createItems (env) {
     return act(token, { boundS: 5 }, async ctx => {
       const block = containerAt(p)
       if (!block) return { status: 'missing' }
-      if (dist(eye(), center(p)) > REACH) return { status: 'unreachable' }
+      if (dist(eye(), center(p)) > setting('prim/reach')) return { status: 'unreachable' }
       const type = env.bot.registry.itemsByName[a.item]?.id
       const clicked = await withWindow(ctx, block, async win => {
         const source = a.direction === 'deposit' ? inventory() : win.containerItems()
@@ -169,7 +170,7 @@ export function createItems (env) {
     need(isPos(a.pos), 'furnace needs pos {x, y, z}')
     need(['read', 'load', 'take'].includes(a.op), 'furnace op must be read, load or take')
     need(a.op !== 'load' || ((a.input || a.fuel) && furnaceLoad(a.input) && furnaceLoad(a.fuel)), 'furnace load needs input and/or fuel as {item, count?}')
-    return act(token, { boundS: 5 }, ctx => furnaceVisit(env.bot, ctx, { ...a, pos: cell(a.pos) }, { reach: REACH, distanceTo: p => dist(eye(), center(p)), settle: win => settleWindow(ctx, win) }))
+    return act(token, { boundS: 5 }, ctx => furnaceVisit(env.bot, ctx, { ...a, pos: cell(a.pos) }, { reach: setting('prim/reach'), distanceTo: p => dist(eye(), center(p)), settle: win => settleWindow(ctx, win) }))
   }
 
   const enchant = async (token, a = {}) => {
@@ -179,7 +180,7 @@ export function createItems (env) {
     need(typeof a.item === 'string' && a.item !== '', 'enchant needs item, the name of what to enchant')
     need(a.op !== 'enchant' || [0, 1, 2].includes(a.choice), 'enchant needs choice 0, 1 or 2')
     need(a.levelCost === undefined || Number.isInteger(a.levelCost), 'enchant levelCost must be an integer')
-    return act(token, { boundS: 15 }, ctx => enchantVisit(env.bot, ctx, { ...a, pos: cell(a.pos) }, { reach: REACH, distanceTo: p => dist(eye(), center(p)), timeScale }))
+    return act(token, { boundS: 15 }, ctx => enchantVisit(env.bot, ctx, { ...a, pos: cell(a.pos) }, { reach: setting('prim/reach'), distanceTo: p => dist(eye(), center(p)), timeScale }))
   }
   const eat = async (token, a = {}) => {
     if (!isOwner(token)) throw cutError()
@@ -201,7 +202,7 @@ export function createItems (env) {
     if (!isOwner(token)) throw cutError()
     need(isNum(a.id), 'interact needs an entity id')
     need(a.item == null || typeof a.item === 'string', 'interact item must be an item name')
-    return act(token, { boundS: 2 }, ctx => interactWith(env.bot, ctx, a, { timeScale, reach: ATTACK_REACH }))
+    return act(token, { boundS: 2 }, ctx => interactWith(env.bot, ctx, a, { timeScale, reach: setting('prim/attack-reach') }))
   }
 
   const trade = async (token, a = {}) => {
@@ -210,7 +211,7 @@ export function createItems (env) {
     need(a.op === 'offers' || a.op === 'buy', 'trade op must be offers or buy')
     need(a.op !== 'buy' || (Number.isInteger(a.offer) && a.offer >= 0), 'trade buy needs an offer index of 0 or more')
     need(a.times == null || (Number.isInteger(a.times) && a.times >= 1), 'trade times must be a positive integer')
-    return act(token, { boundS: 8 }, ctx => tradeWith(env.bot, ctx, a, { timeScale, reach: ATTACK_REACH }))
+    return act(token, { boundS: 8 }, ctx => tradeWith(env.bot, ctx, a, { timeScale, reach: setting('prim/attack-reach') }))
   }
 
   const unequip = async (token, a = {}) => {

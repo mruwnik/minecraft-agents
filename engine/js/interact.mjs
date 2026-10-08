@@ -3,11 +3,9 @@
 // result, so the call watches for what changed and reports it.
 import vec3 from 'vec3'
 import { emptyHand } from './unequip.mjs'
+import { setting } from './settings.mjs'
 
-export const INTERACT_WAIT_MS = 500
 export const LOVE_STATUS = 18
-export const LOVE_GRACE_MS = 150
-const POLL_MS = 50
 const DEFAULT_EYE = 1.62
 const WOOL_SHEARED = 0x10
 const WOOL_FALLBACK = 18
@@ -47,8 +45,6 @@ const carried = (bot, name) => name ? bot.inventory.items().filter(i => i.name =
 const differences = (before, after) => Object.fromEntries(
   Object.keys(after).filter(k => before[k] !== after[k]).map(k => [k, [before[k], after[k]]]))
 
-const DISMOUNT_WAIT_MS = 1000
-const RELEASE_MS = 500
 const sneak = (bot, on) => bot.setControlState('sneak', on)
 
 // 26.1 dismounts on sneak. The raw player_input is overridden by mineflayer's physics tick,
@@ -56,9 +52,9 @@ const sneak = (bot, on) => bot.setControlState('sneak', on)
 async function dismount (bot, timeScale) {
   if (!bot.vehicle) return
   sneak(bot, true)
-  const deadline = Date.now() + DISMOUNT_WAIT_MS * timeScale
+  const deadline = Date.now() + setting('interact/dismount-wait-ms') * timeScale
   try {
-    while (bot.vehicle && Date.now() < deadline) await sleepMs(POLL_MS * timeScale)
+    while (bot.vehicle && Date.now() < deadline) await sleepMs(setting('prim/poll-ms') * timeScale)
   } finally {
     sneak(bot, false)
   }
@@ -70,7 +66,7 @@ function dismountOnAbort (bot) {
   sneak(bot, true)
   setTimeout(() => {
     try { sneak(bot, false) } catch {}
-  }, RELEASE_MS)
+  }, setting('interact/release-ms'))
 }
 
 export async function interactWith (bot, ctx, a, { timeScale = 1, reach }) {
@@ -112,7 +108,7 @@ export async function interactWith (bot, ctx, a, { timeScale = 1, reach }) {
     ctx.alive()
     ctx.onAbort(undo)
     bot.useOn(target)
-    const deadline = Date.now() + INTERACT_WAIT_MS * timeScale
+    const deadline = Date.now() + setting('interact/interact-wait-ms') * timeScale
     const read = () => {
       const now = bot.entities[a.id]
       const wornNow = bot.heldItem?.name === a.item ? (bot.heldItem?.durabilityUsed ?? 0) - before.durabilityUsed : 0
@@ -133,11 +129,11 @@ export async function interactWith (bot, ctx, a, { timeScale = 1, reach }) {
       if (!seen(r)) return false
       if (!onlyConsumed(r)) return true
       consumedAt ??= Date.now()
-      return Date.now() - consumedAt >= LOVE_GRACE_MS * timeScale
+      return Date.now() - consumedAt >= setting('interact/love-grace-ms') * timeScale
     }
     let r = read()
     while (!settled(r) && !r.gone && !bot.vehicle && !bot.currentWindow && Date.now() < deadline) {
-      await sleepMs(POLL_MS * timeScale)
+      await sleepMs(setting('prim/poll-ms') * timeScale)
       ctx.alive()
       r = read()
     }

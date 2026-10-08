@@ -9,11 +9,8 @@
 // no look or position, so every wait here is wall time and the dismount look is a raw packet.
 import vec3 from 'vec3'
 import { emptyHand } from './unequip.mjs'
+import { setting } from './settings.mjs'
 
-const POLL_MS = 50
-export const MOUNT_REACH = 3
-const MOUNT_WAIT_MS = 1000
-const DISMOUNT_WAIT_MS = 1000
 
 const BOAT = /_(boat|raft)$/
 const CHEST_BOAT = /_chest_(boat|raft)$/
@@ -106,7 +103,7 @@ const eyeOf = bot => vec3(bot.entity.position.x, bot.entity.position.y + (bot.en
 const waitFor = async (ctx, done, ms) => {
   const deadline = Date.now() + ms
   while (!done() && Date.now() < deadline) {
-    await sleepMs(POLL_MS)
+    await sleepMs(setting('prim/poll-ms'))
     ctx.alive()
   }
   return done()
@@ -114,7 +111,7 @@ const waitFor = async (ctx, done, ms) => {
 
 // Gets the body on entity a.id: refused before any use when it cannot work, then a use, with an empty hand for a mob (a held
 // lead or food would leash or feed instead), then a wall-time wait for the server to list the body as a passenger.
-export async function mountVehicle (bot, ctx, a, { timeScale = 1, reach = MOUNT_REACH } = {}) {
+export async function mountVehicle (bot, ctx, a, { timeScale = 1, reach = setting('vehicle/mount-reach') } = {}) {
   if (bot.vehicle) return { status: 'already-mounted', vehicle: describe(bot.vehicle) }
   const target = bot.entities[a.id]
   if (!target) return { status: 'gone' }
@@ -128,7 +125,7 @@ export async function mountVehicle (bot, ctx, a, { timeScale = 1, reach = MOUNT_
   await bot.lookAt(middle(target), true)
   ctx.alive()
   bot.mount(target)
-  const seated = await waitFor(ctx, () => bot.vehicle?.id === a.id, MOUNT_WAIT_MS * timeScale)
+  const seated = await waitFor(ctx, () => bot.vehicle?.id === a.id, setting('vehicle/mount-wait-ms') * timeScale)
   return seated ? { status: 'mounted', vehicle: describe(bot.vehicle) } : { status: 'timeout' }
 }
 
@@ -156,7 +153,7 @@ export async function dismountVehicle (bot, ctx, a, { timeScale = 1 } = {}) {
   try {
     if (typeof a.yaw === 'number' && Number.isFinite(a.yaw)) writeLook(bot, a.yaw, typeof a.pitch === 'number' ? a.pitch : 0)
     bot.setControlState('sneak', true)
-    const off = await waitFor(ctx, () => !bot.vehicle && placed, DISMOUNT_WAIT_MS * timeScale)
+    const off = await waitFor(ctx, () => !bot.vehicle && placed, setting('vehicle/dismount-wait-ms') * timeScale)
     const p = bot.entity.position
     return off ? { status: 'dismounted', pos: { x: p.x, y: p.y, z: p.z } } : { status: 'timeout', mounted: Boolean(bot.vehicle) }
   } finally {
@@ -169,8 +166,6 @@ export async function dismountVehicle (bot, ctx, a, { timeScale = 1 } = {}) {
 // forward, only over water) and sends the result as vehicle_move with the keys as player_input, once a tick.
 export const BOAT_TURN = 4
 export const BOAT_SPEED = 0.2
-export const PADDLE_MAX_TICKS = 40
-const TICK_MS = 50
 
 const mcYawOf = mfYaw => (((180 - mfYaw * 180 / Math.PI) % 360) + 360) % 360
 const mfYawOf = mcYaw => Math.PI - mcYaw * Math.PI / 180
@@ -190,7 +185,7 @@ export async function paddleBoat (bot, ctx, a, { timeScale = 1 } = {}) {
   const boat = bot.vehicle
   if (!boat) return { status: 'not-mounted' }
   if (!BOAT.test(boat.name ?? '') && !CHEST_BOAT.test(boat.name ?? '')) return { status: 'not-a-boat' }
-  const ticks = Math.min(Math.max(Math.floor(a.ticks ?? 0), 0), PADDLE_MAX_TICKS)
+  const ticks = Math.min(Math.max(Math.floor(a.ticks ?? 0), 0), setting('vehicle/paddle-max-ticks'))
   const keys = { turn: a.turn ?? null, forward: Boolean(a.forward) }
   let pose = { x: boat.position.x, y: boat.position.y, z: boat.position.z, yaw: mcYawOf(boat.yaw ?? Math.PI) }
   const release = () => bot._client.write('player_input', { inputs: {} })
@@ -209,7 +204,7 @@ export async function paddleBoat (bot, ctx, a, { timeScale = 1 } = {}) {
       bot._client.write('player_input', { inputs: { forward: keys.forward, left: keys.turn === 'left', right: keys.turn === 'right' } })
       bot._client.write('vehicle_move', { x: pose.x, y: pose.y, z: pose.z, yaw: pose.yaw, pitch: 0, onGround: false })
       done++
-      await sleepMs(TICK_MS * timeScale)
+      await sleepMs((bot.physicsClock?.intervalMs() ?? 50) * timeScale)
       ctx.alive()
     }
     return result('ok', done)

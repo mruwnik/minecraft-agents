@@ -4,11 +4,10 @@
 // pathWorld: the planner's input from the live world (a snapshot) for one plan; jobs.lib.walk.world adds the block table and space.
 import vec3 from 'vec3'
 import { liveSnapshot } from './path/live-snapshot.mjs'
+import { setting } from './settings.mjs'
 
 const { Vec3 } = vec3
 
-const DEFAULT_TIMEOUT_S = 60
-const MAX_TIMEOUT_S = 120
 const CLIMBABLE = new Set(['ladder', 'vine', 'scaffolding', 'twisting_vines', 'twisting_vines_plant', 'weeping_vines', 'weeping_vines_plant', 'cave_vines', 'cave_vines_plant'])
 const isNum = n => typeof n === 'number' && Number.isFinite(n)
 const reasonOf = err => String(err).slice(0, 200)
@@ -65,8 +64,8 @@ export function createSteer ({ act, getBot, badArgs }) {
   const steer = (token, a = {}) => {
     const decide = a.decide
     if (typeof decide !== 'function') throw badArgs('steer needs decide, a function')
-    const timeoutS = a.timeoutS ?? DEFAULT_TIMEOUT_S
-    if (!isNum(timeoutS) || timeoutS <= 0 || timeoutS > MAX_TIMEOUT_S) throw badArgs(`steer timeoutS must be a number in (0, ${MAX_TIMEOUT_S}]`)
+    const timeoutS = a.timeoutS ?? setting('steer/default-timeout-s')
+    if (!isNum(timeoutS) || timeoutS <= 0 || timeoutS > setting('steer/max-timeout-s')) throw badArgs(`steer timeoutS must be a number in (0, ${setting('steer/max-timeout-s')}]`)
     const bot = getBot()
     return act(token, { boundS: timeoutS, onTimeout: () => ({ status: 'timeout', pose: pose(getBot()) }) }, ctx => new Promise((resolve, reject) => {
       let ticks = 0

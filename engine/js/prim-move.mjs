@@ -6,7 +6,8 @@ import { leaveBed } from './bed.mjs'
 import { mountVehicle, dismountVehicle, paddleBoat } from './vehicle.mjs'
 import vec3 from 'vec3'
 import pf from 'mineflayer-pathfinder'
-import { REACH, ATTACK_REACH, POLL_MS, HURT_WAIT_MS, JUMP_PLACE_MAX, JUMP_PLACE_BLOCK_S, RISE_WAIT_MS, LAND_WAIT_MS, SWIM_DEFAULT_MS, SWIM_MAX_MS, HOP_RANGE, sleepMs, dist, center, isNum, isPos, cell, vec, cutError, failed, need } from './prim-base.mjs'
+import { sleepMs, dist, center, isNum, isPos, cell, vec, cutError, failed, need } from './prim-base.mjs'
+import { setting } from './settings.mjs'
 
 const { Vec3 } = vec3
 const { goals } = pf
@@ -65,7 +66,7 @@ export function createMove (env) {
     const hx = Math.round(start.x + (target.x - start.x) * maxDistance / before)
     const hz = Math.round(start.z + (target.z - start.z) * maxDistance / before)
     const goal = capped
-      ? new GoalSurfaceHop(hx, hz, HOP_RANGE, () => env.bot)
+      ? new GoalSurfaceHop(hx, hz, setting('prim/hop-range'), () => env.bot)
       : new goals.GoalNear(target.x, target.y, target.z, range)
     // `reached` is only what the pathfinder promised: goto resolves on a noPath update with an empty path, so the
     // goal itself is checked against where the body stands.
@@ -107,7 +108,7 @@ export function createMove (env) {
     if (!isOwner(token)) throw cutError()
     need(a.ms === undefined || a.ms === null || (isNum(a.ms) && a.ms > 0), 'swim needs ms, a number of milliseconds above 0')
     need(a.toward === undefined || a.toward === null || isPos(a.toward), 'swim toward needs {x, y, z}')
-    const ms = Math.min(a.ms ?? SWIM_DEFAULT_MS, SWIM_MAX_MS)
+    const ms = Math.min(a.ms ?? setting('prim/swim-default-ms'), setting('prim/swim-max-ms'))
     const toward = a.toward ?? null
     const before = oxygenNow()
     const result = status => ({ status, oxygen: { before, after: oxygenNow() } })
@@ -129,14 +130,14 @@ export function createMove (env) {
           while (!arrived()) {
             press('jump')
             press('forward')
-            await sleepMs(POLL_MS * timeScale)
+            await sleepMs(setting('prim/poll-ms') * timeScale)
             ctx.alive()
           }
           return result('landed')
         }
         while (headUnderwater()) {
           press('jump')
-          await sleepMs(POLL_MS * timeScale)
+          await sleepMs(setting('prim/poll-ms') * timeScale)
           ctx.alive()
         }
         return result('surfaced')
@@ -153,10 +154,10 @@ export function createMove (env) {
     if (!isOwner(token)) throw cutError()
     need(typeof a.item === 'string', 'jumpPlace needs item')
     need(a.count === undefined || a.count === null || (Number.isInteger(a.count) && a.count >= 1), 'jumpPlace needs count, an integer of at least 1')
-    const count = Math.min(a.count ?? 1, JUMP_PLACE_MAX)
+    const count = Math.min(a.count ?? 1, setting('prim/jump-place-max'))
     let placed = 0
     const outcome = reason => ({ status: placed === count ? 'done' : placed > 0 ? 'partial' : 'failed', placed, ...(reason && { reason }) })
-    return act(token, { boundS: JUMP_PLACE_BLOCK_S * count, onTimeout: () => outcome('timeout') }, async ctx => {
+    return act(token, { boundS: setting('prim/jump-place-block-s') * count, onTimeout: () => outcome('timeout') }, async ctx => {
       let pressed = false
       const release = () => { if (pressed) { pressed = false; env.bot.setControlState('jump', false) } }
       ctx.onAbort(release)
@@ -179,7 +180,7 @@ export function createMove (env) {
           ctx.alive()
           pressed = true
           env.bot.setControlState('jump', true)
-          const riseDeadline = Date.now() + RISE_WAIT_MS * timeScale
+          const riseDeadline = Date.now() + setting('prim/rise-wait-ms') * timeScale
           while (env.bot.entity.position.y < start.y + 1.01 && Date.now() < riseDeadline) await pause(20)
           if (env.bot.entity.position.y < start.y + 1.01) return outcome('not-raised')
           // placeBlock's own unforced lookAt turns gradually when the body is slightly off-centre and delays the packet
@@ -191,7 +192,7 @@ export function createMove (env) {
           ctx.alive()
           release()
           if (failure) return outcome(`place-failed: ${String(failure.message ?? failure).slice(0, 100)}`)
-          const landDeadline = Date.now() + LAND_WAIT_MS * timeScale
+          const landDeadline = Date.now() + setting('prim/land-wait-ms') * timeScale
           while (!env.bot.entity.onGround && Date.now() < landDeadline) await pause(20)
           if (env.bot.entity.position.y < start.y + 0.9) return outcome('not-raised')
           placed += 1
@@ -208,7 +209,7 @@ export function createMove (env) {
     return act(token, { boundS: 1 }, async ctx => {
       const target = env.bot.entities[a.id]
       if (!target) return { status: 'gone' }
-      if (dist(eye(), { x: target.position.x, y: target.position.y + (target.height ?? 1) / 2, z: target.position.z }) > ATTACK_REACH) return { status: 'out-of-reach' }
+      if (dist(eye(), { x: target.position.x, y: target.position.y + (target.height ?? 1) / 2, z: target.position.z }) > setting('prim/attack-reach')) return { status: 'out-of-reach' }
       let hurtSeen = false
       const onHurt = entity => { if (entity?.id === a.id) hurtSeen = true }
       let deadSeen = false
@@ -218,9 +219,9 @@ export function createMove (env) {
       try {
         await env.bot.attack(target)
         ctx.alive()
-        const deadline = Date.now() + HURT_WAIT_MS * timeScale
+        const deadline = Date.now() + setting('prim/hurt-wait-ms') * timeScale
         while (!hurtSeen && !deadSeen && env.bot.entities[a.id] && Date.now() < deadline) {
-          await sleepMs(POLL_MS * timeScale)
+          await sleepMs(setting('prim/poll-ms') * timeScale)
           ctx.alive()
         }
       } finally {
@@ -241,7 +242,7 @@ export function createMove (env) {
     return act(token, { boundS: 5 }, async ctx => {
       const block = env.bot.blockAt(vec(p))
       if (!block || !block.name.endsWith('_bed')) return { status: 'missing' }
-      if (dist(eye(), center(p)) > REACH) return { status: 'unreachable' }
+      if (dist(eye(), center(p)) > setting('prim/reach')) return { status: 'unreachable' }
       // engine.senses decides these two from what the body senses and passes them in
       if (a.notNight) return { status: 'not-night' }
       if (a.monstersNear) return { status: 'monsters-near' }

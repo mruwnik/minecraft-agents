@@ -7,7 +7,8 @@ import { liveEntities, liveEntity } from './live-entities.mjs'
 import vec3 from 'vec3'
 import blockFor from 'prismarine-block'
 import pf from 'mineflayer-pathfinder'
-import { REACH, DROP_RADIUS, DROP_WAIT_S, DIG_MARGIN_S, POLL_MS, sleepMs, xyz, dist, center, isAir, isNum, isPos, cell, vec, cutError, BUCKET_WAIT_S, need, entityKind, droppedItem, gained } from './prim-base.mjs'
+import { sleepMs, xyz, dist, center, isAir, isNum, isPos, cell, vec, cutError, need, entityKind, droppedItem, gained } from './prim-base.mjs'
+import { setting } from './settings.mjs'
 
 const { Vec3 } = vec3
 const { goals } = pf
@@ -17,7 +18,7 @@ const blockClasses = new WeakMap()
 export function createDig (env) {
   const { act, isOwner, here, eye, inventory, countsNow, timeScale, lookNow, walk } = env
   const dropsNear = p => liveEntities(env.bot)
-    .filter(e => entityKind(e) === 'item' && dist(center(p), e.position) <= DROP_RADIUS)
+    .filter(e => entityKind(e) === 'item' && dist(center(p), e.position) <= setting('prim/drop-radius'))
     .map(e => ({ id: e.id, ...droppedItem(env.bot, e), pos: xyz(e.position) }))
   // an item already lying near the cell is not this dig's drop, unless its stack grew (a drop that merged into it)
   const lyingBefore = p => new Map(dropsNear(p).map(d => [d.id, d.count]))
@@ -30,7 +31,7 @@ export function createDig (env) {
   const digBoundS = p => {
     const block = env.bot.blockAt(vec(p))
     const ms = block && !isAir(block.name) && block.diggable ? env.bot.digTime?.(block) : 0
-    return (Number.isFinite(ms) ? ms / 1000 : 0) + DIG_MARGIN_S + DROP_WAIT_S
+    return (Number.isFinite(ms) ? ms / 1000 : 0) + setting('prim/dig-margin-s') + setting('prim/drop-wait-s')
   }
 
   // block.digTime counts 50 ms a tick; at another server tick rate the shim's clock scales it (bot.digTime is wrapped already)
@@ -74,17 +75,17 @@ export function createDig (env) {
     return act(token, { boundS: digBoundS(p) }, async ctx => {
       const block = env.bot.blockAt(vec(p))
       if (!block || isAir(block.name)) return { status: 'missing', reason: `nothing to dig at ${p.x} ${p.y} ${p.z} (${block ? 'air' : 'not loaded'})` }
-      if (dist(eye(), center(p)) > REACH) return { status: 'unreachable' }
+      if (dist(eye(), center(p)) > setting('prim/reach')) return { status: 'unreachable' }
       if (!block.diggable) return { status: 'cannot' }
       ctx.onAbort(() => env.bot.stopDigging())
       ctx.alive()
       const before = lyingBefore(p)
       await env.bot.dig(block, true)
       ctx.alive()
-      const deadline = Date.now() + DROP_WAIT_S * 1000 * timeScale
+      const deadline = Date.now() + setting('prim/drop-wait-s') * 1000 * timeScale
       let drops = newDrops(p, before)
       while (drops.length === 0 && Date.now() < deadline) {
-        await sleepMs(POLL_MS * timeScale)
+        await sleepMs(setting('prim/poll-ms') * timeScale)
         ctx.alive()
         drops = newDrops(p, before)
       }
@@ -110,7 +111,7 @@ export function createDig (env) {
   const useBoat = async (ctx, item, p) => {
     const there = env.bot.blockAt(vec(p))
     if (!there || there.name !== 'water') return { status: 'occupied', block: there?.name }
-    if (dist(eye(), center(p)) > REACH) return { status: 'unreachable' }
+    if (dist(eye(), center(p)) > setting('prim/reach')) return { status: 'unreachable' }
     const count = () => inventory().filter(i => i.name === item.name).reduce((sum, i) => sum + i.count, 0)
     const before = count()
     ctx.alive()
@@ -120,9 +121,9 @@ export function createDig (env) {
     ctx.alive()
     await env.bot.activateItem()
     const down = () => count() < before || Object.values(env.bot.entities).some(e => isBoat(e.name) && Math.hypot(e.position.x - (p.x + 0.5), e.position.z - (p.z + 0.5)) < 2 && Math.abs(e.position.y - p.y) < 2)
-    const deadline = Date.now() + BUCKET_WAIT_S * 1000 * timeScale
+    const deadline = Date.now() + setting('prim/bucket-wait-s') * 1000 * timeScale
     while (!down() && Date.now() < deadline) {
-      await sleepMs(POLL_MS * timeScale)
+      await sleepMs(setting('prim/poll-ms') * timeScale)
       ctx.alive()
     }
     return down() ? { status: 'placed', block: item.name } : { status: 'failed', reason: 'unchanged' }
@@ -137,7 +138,7 @@ export function createDig (env) {
     if (!scoop && there && !isAir(there.name) && !isReplaceable(there.name)) return { status: 'occupied', block: there.name }
     const aim = scoop ? there : supportFor(p)?.ref
     if (!aim) return { status: 'no-support' }
-    if (dist(eye(), center(p)) > REACH) return { status: 'unreachable' }
+    if (dist(eye(), center(p)) > setting('prim/reach')) return { status: 'unreachable' }
     const count = name => inventory().filter(i => i.name === name).reduce((sum, i) => sum + i.count, 0)
     const filledName = `${there?.name}_bucket`
     const [filledBefore, heldBefore] = [count(filledName), count(item.name)]
@@ -152,9 +153,9 @@ export function createDig (env) {
     const cellChanged = () => { const now = env.bot.blockAt(vec(p)); return scoop ? !(now && isLiquid(now.name)) : Boolean(now && isLiquid(now.name)) }
     const itemChanged = () => scoop ? count(filledName) > filledBefore : count(item.name) < heldBefore
     const changed = () => cellChanged() || itemChanged()
-    const deadline = Date.now() + BUCKET_WAIT_S * 1000 * timeScale
+    const deadline = Date.now() + setting('prim/bucket-wait-s') * 1000 * timeScale
     while (!changed() && Date.now() < deadline) {
-      await sleepMs(POLL_MS * timeScale)
+      await sleepMs(setting('prim/poll-ms') * timeScale)
       ctx.alive()
     }
     if (!changed()) return { status: 'failed', reason: 'unchanged' }
@@ -228,7 +229,7 @@ export function createDig (env) {
       if (!item) return { status: 'no-item' }
       const support = a.click ? clickSupport(a.click, p) : supportFor(p)
       if (!support) return { status: 'no-support' }
-      if (dist(eye(), center(p)) > REACH) return { status: 'unreachable' }
+      if (dist(eye(), center(p)) > setting('prim/reach')) return { status: 'unreachable' }
       ctx.alive()
       await env.bot.equip(item, 'hand')
       ctx.alive()
@@ -275,7 +276,7 @@ export function createDig (env) {
         if (inPickupReach(item)) {
           inReachSince ??= Date.now()
           if (Date.now() - inReachSince > PICKUP_WAIT_S * 1000 * timeScale) return result('unreachable', 'not-picked-up')
-          await sleepMs(POLL_MS * timeScale)
+          await sleepMs(setting('prim/poll-ms') * timeScale)
           ctx.alive()
           continue
         }
