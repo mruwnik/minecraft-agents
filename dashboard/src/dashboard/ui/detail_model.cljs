@@ -33,6 +33,7 @@
        :parked (:parked card)
        :goal (:goal card)
        :goal-age (:goal-age card)
+       :goal-wait (:goal-wait card)
        :action action
        :pos-text (pos-text (or (:pos view) (:pos engine)))
        :dimension (:dimension view)

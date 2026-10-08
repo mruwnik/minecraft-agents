@@ -64,3 +64,7 @@
 (deftest iframe-src-encodes-world-and-name
   (let [odd (assoc online :name "a&b#c" :world "w 1")]
     (is (= "/view?agent=w%201/a%26b%23c&embed=1&who=me" (:iframe-src (m/detail-model odd now nil "me"))))))
+
+(deftest the-goal-wait-reaches-the-model
+  (let [mdl (m/detail-model (assoc online :goal {:text "t" :wait "waiting: x" :since (- now 1000)}) now "wait" "k")]
+    (is (= "waiting: x" (:goal-wait mdl)))))

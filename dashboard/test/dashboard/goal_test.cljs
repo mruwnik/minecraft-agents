@@ -40,3 +40,9 @@
     (fs/writeFileSync (goal/goal-file dir) "{:text \"ok\"}")
     (is (= {:text "ok"} (goal/read-goal dir)))
     (fs/rmSync dir #js {:recursive true})))
+
+(deftest a-goal-keeps-its-optional-wait-text
+  (let [dir (temp-dir)]
+    (is (= {:text "t" :by "w" :since 5 :wait "waiting: reflex.ended"} (goal/write-goal! dir "t" "w" 5 "waiting: reflex.ended")))
+    (is (= "waiting: reflex.ended" (:wait (goal/read-goal dir))))
+    (is (= {:text "t" :since 5} (goal/write-goal! dir "t" nil 5 "  ")))))

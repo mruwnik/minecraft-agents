@@ -153,6 +153,7 @@
      :parked (parked-text (:jobs engine))
      :goal (:text goal)
      :goal-by (:by goal)
+     :goal-wait (:wait goal)
      :goal-age (when (number? (:since goal)) (ago now (:since goal)))
      :event (:text last-event)
      :event-age (when last-event (ago now (:t last-event)))

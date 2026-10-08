@@ -776,17 +776,19 @@
                    (is (= "{:ok false :reason \"settling\"}" (:out res)) "after the limit the reply is passed on unchanged")
                    (done)))))))
 
-(deftest the-case-goal-names-the-case-its-expectations-run-and-retry
-  (is (= "world-test pen-check/closed: event job.completed, no event reflex.fired (run 2, retry 1)"
-         (r/case-goal {:id "pen-check/closed"
-                       :expect [{:event {:source :job :kind :completed} :within-s 30}
-                                {:no-event {:source :reflex :kind :fired :context {:reflex-id :night}} :for-s 25}]}
-                      2 1)))
-  (is (= "world-test a/b: count job.started, event {:message \"x\"} (run 1, retry 0)"
-         (r/case-goal {:id "a/b" :expect [{:count-event {:source :job :kind :started} :at-least 2 :for-s 9}
-                                          {:event {:message "x"} :within-s 3}]}
-                      1 0)))
-  (is (= "world-test a/c (run 1, retry 0)" (r/case-goal {:id "a/c"} 1 0))))
+(deftest the-case-goal-names-file-case-and-run-or-retry-only-above-the-first
+  (is (= "test pen-check › closed" (r/case-goal {:id "pen-check/closed"} 1 0)))
+  (is (= "test pen-check › closed (run 2)" (r/case-goal {:id "pen-check/closed"} 2 0)))
+  (is (= "test pen-check › closed (retry 1)" (r/case-goal {:id "pen-check/closed"} 1 1)))
+  (is (= "test pen-check › closed (run 2, retry 1)" (r/case-goal {:id "pen-check/closed"} 2 1)))
+  (is (= "test solo" (r/case-goal {:id "solo"} 1 0))))
+
+(deftest the-case-wait-names-what-the-expectations-wait-for
+  (is (= "waiting: job.completed, no reflex.fired"
+         (r/case-wait {:expect [{:event {:source :job :kind :completed} :within-s 30}
+                                {:no-event {:source :reflex :kind :fired} :for-s 25}]})))
+  (is (= "waiting: count job.started" (r/case-wait {:expect [{:count-event {:source :job :kind :started} :at-least 2}]})))
+  (is (nil? (r/case-wait {:id "a/c"}))))
 
 (deftest a-case-run-sets-the-body-goal-and-clears-it-after-an-error-too
   (async done

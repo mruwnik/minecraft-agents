@@ -46,7 +46,7 @@ The compile JVM is capped (`:jvm-opts ["-Xmx1G"]` in `shadow-cljs.edn`) because 
   worker thread (heap caps, `resourceLimits` 160 MB old generation). `/api/thumbs/stats`: `{bodies, renders, last-ms, mean-ms, queue}`.
   On SIGTERM/SIGINT the server closes the thumbnailer and the view mount (`close()`, ends the block-issues scan worker) and exits. A body card whose view is older
   than 10 s shows an "N s old" / "N min old" mark when the body is online (`trouble/thumb-age-mark`).
-- Body card and popup: the goal its controller set (`worlds/<world>/agents/<name>/goal.edn`, `dashboard.goal`; `./bin/goal`, the world-test runner per case) with its age; the job with its hold or wait reason; a parked job with its error.
+- Body card and popup: the goal its controller set (`worlds/<world>/agents/<name>/goal.edn`, `dashboard.goal`; `./bin/goal`, the world-test runner per case) (labelled "Goal", with an optional dim `:wait` part such as "waiting: reflex.ended", and its age); the job (labelled "Job") with its hold or wait reason; a parked job with its error.
 - Body cards (hub mode): online bodies get a live textured scene from the view hub (`ui/livecards.cljs`); an offline body shows the server's still
   (`/api/thumb`, greyed by CSS) with no scene. Debug flags on the page URL: `?fps=1` labels live cards with their fps, `?nogl=1` forces the server stills,
   `?allive=1` gives every card with a view a live scene, offline ones too (the hub holds at most 12 scenes).

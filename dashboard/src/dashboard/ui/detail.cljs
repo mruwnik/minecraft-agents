@@ -11,18 +11,26 @@
             [dashboard.ui.hudmodel :as hudmodel]
             [dashboard.ui.logic :as logic]))
 
-(defn header [{:keys [name status reason severity goal goal-age job parked action pos-text dimension world last-seen]}]
+(defn fact
+  "One labelled fact of the header: \"Label: value\", the label dimmed."
+  [label & body]
+  (into [:span.dfact [:span.lbl label ":"]] body))
+
+(defn header [{:keys [name status reason severity goal goal-wait goal-age job parked action pos-text dimension world last-seen]}]
   [:div.dhead
    [:h2 name]
    (when status [bodies/status-pill status])
    (when reason [:span.reason {:class (clojure.core/name severity)} reason])
-   (when goal [:span.dfact.goal {:title goal} goal [:span.dim (str " · " goal-age)]])
-   [:span.dfact (or job [:span.dim "no job"]) (when action [:span.dim (str " · " action)])]
+   (when goal
+     (fact "Goal" [:span.val {:title goal} goal]
+           (when goal-wait [:span.dim.wait goal-wait])
+           (when goal-age [:span.dim.age goal-age])))
+   (fact "Job" (if job [:span.val job] [:span.dim "none"]) (when action [:span.dim.wait action]))
    (when parked [:span.dfact.parked parked])
-   [:span.dfact.mono pos-text]
-   (when dimension [:span.dfact dimension])
-   (when world [:span.dfact.dim world])
-   (when last-seen [:span.dfact.dim (str "seen " last-seen)])
+   (fact "Position" [:span.val.mono pos-text])
+   (when dimension (fact "Dimension" [:span.val dimension]))
+   (when world (fact "World" [:span.val world]))
+   (when last-seen (fact "Seen" [:span.val last-seen]))
    [:span.spacer]
    [:button.dclose {:title "close (Esc)" :on-click #(rf/dispatch [:close-detail])} "close ✕"]])
 

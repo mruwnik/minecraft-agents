@@ -1326,18 +1326,28 @@
     (if (and (:source p) (:kind p)) (str (n (:source p)) "." (n (:kind p))) (pr-str p))))
 
 (defn expect-brief [e]
-  (cond (:event e) (str "event " (pattern-brief (:event e)))
+  (cond (:event e) (pattern-brief (:event e))
         (:count-event e) (str "count " (pattern-brief (:count-event e)))
-        :else (str "no event " (pattern-brief (:no-event e)))))
+        :else (str "no " (pattern-brief (:no-event e)))))
 
 (defn case-goal
-  "The goal line of run `run` (retry `retry`) of case c: \"world-test <id>: <expectations> (run N, retry M)\", the
-  expectations cut to fit goal/max-text."
+  "The goal text of run `run` (retry `retry`) of case c: \"test <file> › <case>\", plus \" (run N, retry M)\" naming
+  only the counters above the first."
   [c run retry]
-  (let [tail (str " (run " run ", retry " retry ")")
-        head (str "world-test " (:id c) (when (seq (:expect c)) (str ": " (str/join ", " (map expect-brief (:expect c))))))
-        room (- goal/max-text (count tail))]
-    (str (if (> (count head) room) (str (subs head 0 (dec room)) "…") head) tail)))
+  (let [id (str (:id c))
+        k (str/last-index-of id "/")
+        name (if k (str (subs id 0 k) " › " (subs id (inc k))) id)
+        counts (cond-> []
+                 (> run 1) (conj (str "run " run))
+                 (> retry 0) (conj (str "retry " retry)))]
+    (str "test " name (when (seq counts) (str " (" (str/join ", " counts) ")")))))
+
+(defn case-wait
+  "What the case waits for, \"waiting: <expectations>\" cut to fit goal/max-text; nil without expectations."
+  [c]
+  (when (seq (:expect c))
+    (let [t (str "waiting: " (str/join ", " (map expect-brief (:expect c))))]
+      (if (> (count t) goal/max-text) (str (subs t 0 (dec goal/max-text)) "…") t))))
 
 (def goal-dirs
   "Body dirs whose goal this process set and has not yet cleared."
@@ -1363,15 +1373,16 @@
       (.on js/process sig (fn [] (clear-goals!) (.exit js/process code))))))
 
 (defn with-goal!
-  "Sets the body goal in body-dir to text, runs thunk (-> promise) and clears the goal when it settles, also on an error
+  "Sets the body goal in body-dir to text (and the optional dim wait part), runs thunk (-> promise) and clears the goal when it settles, also on an error
   (and on exit or a signal, see install-goal-cleanup!). A goal that cannot be written is logged; the run goes on."
-  [body-dir text thunk]
-  (try (goal/write-goal! body-dir text "world-test" (js/Date.now))
-       (swap! goal-dirs conj body-dir)
-       (catch :default e (log! "world-test: goal not set: " (.-message e))))
-  (-> (js/Promise.resolve nil)
-      (.then thunk)
-      (.finally (fn [] (swap! goal-dirs disj body-dir) (goal/clear-goal! body-dir)))))
+  ([body-dir text thunk] (with-goal! body-dir text nil thunk))
+  ([body-dir text wait thunk]
+   (try (goal/write-goal! body-dir text "world-test" (js/Date.now) wait)
+        (swap! goal-dirs conj body-dir)
+        (catch :default e (log! "world-test: goal not set: " (.-message e))))
+   (-> (js/Promise.resolve nil)
+       (.then thunk)
+       (.finally (fn [] (swap! goal-dirs disj body-dir) (goal/clear-goal! body-dir))))))
 
 (defn run-groups!
   "Runs the [case run] pairs of each register group in order on the body, on-result! (result -> any) after each; resolves
@@ -1387,7 +1398,7 @@
                                                            i (acquire-plot! (max from (:first-plot opts)) end)
                                                            memory (when (seq (:memory c))
                                                                     (f/memory-seed (:memory (f/resolve-tags c (f/plot-origin (f/case-grid c) i))) (js/Date.now)))]
-                                                       (-> (with-goal! (body-dir opts) (case-goal c run (or (:retry opts) 0))
+                                                       (-> (with-goal! (body-dir opts) (case-goal c run (or (:retry opts) 0)) (case-wait c)
                                                              #(run-case! opts c i run (when-not (= :keep plan) register)
                                                                          (fn [] (if (= :keep plan) (js/Promise.resolve nil) (stop-body! opts)))
                                                                          (fn [] (if (= :keep plan)

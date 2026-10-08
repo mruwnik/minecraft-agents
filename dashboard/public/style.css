@@ -460,3 +460,12 @@ button.on { background: #27405f; border-color: #3d6396; }
 .plan-conflicts { margin: 8px 0; }
 .plan-conflicts h3 { margin: 0 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); font-weight: 600; }
 .plan-legend i.conflict { background: transparent; border: 2px solid #ff3da5; box-sizing: border-box; }
+.lbl { color: var(--dim); margin-right: 5px; }
+.dhead .dfact { display: inline-flex; align-items: baseline; gap: 5px; padding-left: 12px; border-left: 1px solid var(--line); }
+.dhead .dfact .lbl { margin-right: 0; }
+.dfact .val { white-space: nowrap; }
+.dim.wait, .dim.age { color: var(--dim); }
+.line.goal .lbl, .line.job .lbl { flex: none; margin-right: 6px; font-size: 11px; }
+.line.job { display: flex; }
+.line.job .text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.line.goal .wait { flex: none; font-size: 11px; max-width: 45%; overflow: hidden; text-overflow: ellipsis; }

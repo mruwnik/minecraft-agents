@@ -1,6 +1,6 @@
 (ns dashboard.goal
   "A body's goal: one short line its controller (a game agent, the world-test runner) sets, kept in the body folder as
-  goal.edn {:text :by :since}. The dashboard shows it; the engine never reads it."
+  goal.edn {:text :by :since :wait}; :wait is an optional short part (what the controller waits for) shown dimmed. The dashboard shows it; the engine never reads it."
   (:require [cljs.reader :as reader]
             [clojure.string :as str]
             ["fs" :as fs]
@@ -24,16 +24,18 @@
 
 (defn write-goal!
   "Sets body-dir's goal to text, by who, since now (ms); returns the goal. Written to a temp file and renamed, so a
-  reader never sees half a goal. Throws on blank text."
-  [body-dir text by now]
+  reader never sees half a goal. Throws on blank text. The optional wait is kept when not blank."
+  ([body-dir text by now] (write-goal! body-dir text by now nil))
+  ([body-dir text by now wait]
   (let [t (clean-text text)
+        w (clean-text wait)
         _ (when-not t (throw (js/Error. "goal text is empty")))
-        goal (cond-> {:text t :since now} by (assoc :by (str by)))
+        goal (cond-> {:text t :since now} by (assoc :by (str by)) w (assoc :wait w))
         file (goal-file body-dir)
         tmp (str file "." (.-pid js/process) ".tmp")]
     (fs/writeFileSync tmp (str (pr-str goal) "\n"))
     (fs/renameSync tmp file)
-    goal))
+    goal)))
 
 (defn clear-goal! [body-dir]
   (fs/rmSync (goal-file body-dir) #js {:force true}))
