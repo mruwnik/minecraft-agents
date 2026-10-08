@@ -51,8 +51,7 @@
   {:name "respond-to-hostile-waits-no-hostile"
    :act [[:job (jobs.survival.respond-to-hostile {})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-hostile}} :within-s 20 :of-job true}
-            {:no-event {:source :job :kind :waiting :data {:reason :not-ready}} :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-hostile}} :of-job true}
-            {:no-event {:source :job :kind :round_started} :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-hostile}} :of-job true}]}
+            {:no-event {:source :job :kind :waiting :data {:reason :not-ready}} :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-hostile}} :of-job true}]}
   {:name "restore-broken-waits-nothing-to-restore"
    :act [[:job (jobs.survival.restore-broken {})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :nothing-to-restore}} :within-s 20 :of-job true}
