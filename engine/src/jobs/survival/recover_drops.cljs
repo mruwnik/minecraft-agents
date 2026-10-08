@@ -68,7 +68,14 @@
    :danger-radius {:doc "a hostile this close makes the job yield without acting" :spec (a/num-in 0 nil) :default 8}
    :collect-radius {:doc "collect the pile's drops within this many blocks of the death point (a pile on open ground rolls 6-8 out)" :spec (a/num-in 0 nil) :default 10}})
 
-(def arrive-range 2)
+(a/defargs settings
+  {::arrive-range {:default 2 :doc "How near the death point the walk back ends, in blocks." :spec (a/int-in 0 nil)}
+   ::xp-per-level {:default 5 :doc "Worth of one experience level carried at the death (the game drops a few levels' worth)." :spec (a/int-in 0 nil)}
+   ::top-n {:default 3 :doc "Items and mobs named in the report of a death site, at most." :spec (a/int-in 0 nil)}
+   ::max-collect-passes {:default 3 :doc "Walks back to the pile after a collect pass that left visible items of it behind." :spec (a/int-in 0 nil)}
+   ::stray-range {:default 5 :doc "A body this far from the death point in the collect phase (a flee cut the trip) walks back first." :spec (a/int-in 0 nil)}
+   ::bed-away-blocks {:default 10 :doc "A respawn farther than this from the bed the body slept in is reported." :spec (a/int-in 0 nil)}})
+(defn arrive-range [] (settings/get settings ::arrive-range))
 (def settle-ms
   "After a respawn the client needs this long to re-receive nearby entities;
   an estimate made sooner sees no hostiles."
@@ -146,8 +153,8 @@
   (let [m (ctx/mem c)]
     (ctx/remember! c :recover-trip (select-keys m [:death-t :decided :baseline :phase]) trip-policy)))
 
-(def xp-per-level "Worth of one experience level carried at the death (the game drops a few levels' worth)." 5)
-(def top-n 3)
+(defn xp-per-level [] (settings/get settings ::xp-per-level))
+(defn top-n [] (settings/get settings ::top-n))
 
 (defn estimate
   "{:value :cost :parts :reason :top-items :top-mobs} of recovering the drops of the :died data (cost js/Infinity when
@@ -162,15 +169,15 @@
                  (cost/route-danger (game/version-of p) kind-at route (danger-q/seen-hostiles p) (.-equipment (.self p)) :overrides (:danger-overrides (:args c)))
                  {:danger 0 :mobs []})
         fetch (cost/fetch-cost {:distance (when pos (u/dist here pos)) :danger (:danger threat) :elapsed-ms elapsed :cause cause})]
-    (cond-> {:value (+ (:value worth) (* xp-per-level (or (:level experience) 0)))
+    (cond-> {:value (+ (:value worth) (* (xp-per-level) (or (:level experience) 0)))
              :cost (:cost fetch)
-             :top-items (mapv #(select-keys % [:name :count :value]) (take top-n (:items worth)))}
+             :top-items (mapv #(select-keys % [:name :count :value]) (take (top-n) (:items worth)))}
       (:parts fetch) (assoc :parts (:parts fetch))
       (:reason fetch) (assoc :reason (:reason fetch))
-      (seq (:mobs threat)) (assoc :top-mobs (mapv #(select-keys % [:name :danger]) (take top-n (:mobs threat)))))))
+      (seq (:mobs threat)) (assoc :top-mobs (mapv #(select-keys % [:name :danger]) (take (top-n) (:mobs threat)))))))
 
-(def max-collect-passes "Walks back to the pile after a collect pass that left visible items of it behind." 3)
-(def stray-range "A body this far from the death point in the collect phase (a flee cut the trip) walks back first." 5)
+(defn max-collect-passes [] (settings/get settings ::max-collect-passes))
+(defn stray-range [] (settings/get settings ::stray-range))
 
 (defn decline!
   "Say why this run ends :declined (an event with the reason and a text), then :declined."
@@ -182,7 +189,7 @@
   "Walk to the death point by one go-to call: :next once there (the collect phase), else :declined (go-to waits on the
   world, or it did not arrive: the next run walks again while the pile is worth it, and the window closes it)."
   [c pos]
-  (let [r (await (ctx/call-child c :go 'jobs.movement.go-to {:pos pos :range arrive-range}))]
+  (let [r (await (ctx/call-child c :go 'jobs.movement.go-to {:pos pos :range (arrive-range)}))]
     (cond
       (not= :done r) (decline! c :unreachable (str "the walk to " (pr-str pos) " is waiting on the world") {:pos pos})
       (not (:arrived (ctx/child-result c :go)))
@@ -209,7 +216,7 @@
   "Ids of the item entities in sight lying within radius of pos whose name is one of names."
   [c pos names radius]
   (let [wanted (set names)]
-    (->> (array-seq (.entities (:primitives c) #js {:radius (+ radius stray-range 4) :kind "item" :max 64}))
+    (->> (array-seq (.entities (:primitives c) #js {:radius (+ radius (stray-range) 4) :kind "item" :max 64}))
          (remove #(false? (.-visible %)))
          (filter #(wanted (some-> (.-item %) .-name)))
          (filter #(<= (u/dist pos (u/pos-of (.-pos %))) radius))
@@ -247,12 +254,12 @@
           (finish-collect! c pile ids)
           (do
             (await (child/run! c :collect 'jobs.forestry.collect-drops
-                               {:radius (+ radius stray-range 4) :ids ids :filter names}))
+                               {:radius (+ radius (stray-range) 4) :ids ids :filter names}))
             (if (empty? (left-over c pile))
               (finish-collect! c pile [])
               (let [again (pile-ids c pos names radius)
                     passes (:passes (ctx/mem c) 0)]
-                (if (and (seq again) (< passes max-collect-passes))
+                (if (and (seq again) (< passes (max-collect-passes)))
                   (do (ctx/update-mem! c assoc :passes (inc passes) :phase :go) (save-trip! c) :next)
                   (finish-collect! c pile again))))))))))
 
@@ -316,7 +323,7 @@
 
       (threatened? c) (decline-danger! c (threatened? c))
 
-      (and (= :collect (:phase (ctx/mem c))) (> (u/dist (u/self-pos c) pos) stray-range))
+      (and (= :collect (:phase (ctx/mem c))) (> (u/dist (u/self-pos c) pos) (stray-range)))
       (do (ctx/update-mem! c assoc :phase :go) :next)
 
       (= :collect (:phase (ctx/mem c))) (await (collect! c pos collect-radius (:inventory (:data entry))))
@@ -331,7 +338,7 @@
     (finish! c :abandoned (assoc (:decided (ctx/mem c)) :reason (if (:blocked (ctx/mem c)) :unreachable :window-closed)))
     :else (await (trip! c entry))))
 
-(def bed-away-blocks "A respawn farther than this from the bed the body slept in is reported." 10)
+(defn bed-away-blocks [] (settings/get settings ::bed-away-blocks))
 
 (defn warn-away-from-bed!
   "Once per death: warn when the body respawned far from its known :bed that it slept in (the respawn point was not
@@ -342,7 +349,7 @@
     (when (and bed at (not (:bed-checked (ctx/mem c))))
       (ctx/update-mem! c assoc :bed-checked true)
       (when (and (some #(= bed (:pos (:data %))) (ctx/entries c :slept))
-                 (> (u/dist bed at) bed-away-blocks))
+                 (> (u/dist bed at) (bed-away-blocks)))
         (ctx/emit! c :respawn_away_from_bed :warn
                    {:bed bed :pos at :text "respawned away from the bed it slept in: the respawn point was not set there"})))))
 

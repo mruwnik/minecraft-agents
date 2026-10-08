@@ -1,5 +1,6 @@
 (ns jobs.survival.breathe
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [jobs.lib.tidy :as tidy]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
@@ -57,11 +58,18 @@
    :max-legs {:doc "swim legs one run makes at most" :spec (a/int-in 1 nil) :default 6}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
-(def max-cap-digs "Cap digs one run makes at most." 3)
-(def land-tries "Go-to targets one spot tries before it swims a leg." 3)
-(def min-leg "Blocks a swim leg must move to count as moved." 8)
-(def max-passes "Passes one run makes before it stops :no_way_out, a safety net against a world that never changes." 120)
-(def afloat-near "Blocks around a spot in which a later run takes over the start and failed headings of an earlier stop." 16)
+(a/defargs settings
+  {::max-cap-digs {:default 3 :doc "Cap digs one run makes at most." :spec (a/int-in 0 nil)}
+   ::land-tries {:default 3 :doc "Go-to targets one spot tries before it swims a leg." :spec (a/int-in 0 nil)}
+   ::min-leg {:default 8 :doc "Blocks a swim leg must move to count as moved." :spec (a/int-in 0 nil)}
+   ::max-passes {:default 120 :doc "Passes one run makes before it stops :no_way_out, a safety net against a world that never changes." :spec (a/int-in 0 nil)}
+   ::afloat-near {:default 16 :doc "Blocks around a spot in which a later run takes over the start and failed headings of an earlier stop." :spec (a/int-in 0 nil)}
+   ::max-steps {:default 2 :doc "Step blocks one spot places at most." :spec (a/int-in 0 nil)}})
+(defn max-cap-digs [] (settings/get settings ::max-cap-digs))
+(defn land-tries [] (settings/get settings ::land-tries))
+(defn min-leg [] (settings/get settings ::min-leg))
+(defn max-passes [] (settings/get settings ::max-passes))
+(defn afloat-near [] (settings/get settings ::afloat-near))
 (def afloat-policy {:cap 5 :ttl (* 5 60 1000)})
 
 (def breathe-policy {:cap 20 :ttl (* 60 60 1000)})
@@ -380,7 +388,7 @@
         {:keys [cells why]} (cap-above p head)]
     (cond
       (not cells) why
-      (<= max-cap-digs (:cap-digs (ctx/mem c) 0)) :dig-failed
+      (<= (max-cap-digs) (:cap-digs (ctx/mem c) 0)) :dig-failed
       :else
       (let [_ (ctx/update-mem! c update :cap-digs (fnil inc 0))
             _ (access/trespass! c "breathe" (:trespass (access/choose c :dig [cells] identity)))
@@ -428,7 +436,7 @@
   "{:start :failed} from the latest :breathe-afloat entry within afloat-near of pos: the start of the run that stopped
   there (its swim-range still bounds the swim) and the headings it found failed; {:start nil :failed #{}} for none."
   [entries pos]
-  (let [near (last (filter #(<= (hdist pos (:pos (:data %))) afloat-near) entries))
+  (let [near (last (filter #(<= (hdist pos (:pos (:data %))) (afloat-near)) entries))
         d (:data near)]
     {:start (:start d) :failed (into #{} (map vec) (:headings d))}))
 
@@ -441,7 +449,7 @@
             (let [x (+ fx (* hx k)) z (+ fz (* hz k))
                   cell (when (<= (hdist {:x x :z z} start) swim-range) (surface-in-column p x z fy reach))]
               (when (and cell (= "water" (u/seen-name p cell))) cell)))
-          (range leg-length (dec min-leg) -1))))
+          (range leg-length (dec (min-leg)) -1))))
 
 (defn ^:async go!
   "One go-to child call to target: true when it reports arrival. A call that waits or is declined is a failed try
@@ -466,7 +474,7 @@
                   :headings-failed (count failed)
                   :step (cond (= :no_blocks reason) :no-blocks (:step-refused m) :refused (seq (:failed-steps m)) :failed :else :no-wall))))
 
-(def max-steps "Step blocks one spot places at most." 2)
+(defn max-steps [] (settings/get settings ::max-steps))
 
 (defn step-cell
   "The nearest top water cell within radius of the body that a step block can go in: water with two air cells above it
@@ -521,7 +529,7 @@
   (let [before (u/self-pos c)]
     (ctx/update-mem! c update :travelled (fnil + 0) (hdist before target))
     (await (go! c :leg target 2))
-    (ctx/update-mem! c after-leg heading (>= (hdist before (u/self-pos c)) min-leg))
+    (ctx/update-mem! c after-leg heading (>= (hdist before (u/self-pos c)) (min-leg)))
     (if (on-land? (:primitives c)) :done :again)))
 
 (defn ^:async head-for-land!
@@ -540,9 +548,9 @@
         in-budget? (< (:travelled m 0) (* 3 swim-range))
         ways (fn []
                (let [shore (nearest-land p pos shore-radius (:failed-shores m) shore-cell?)
-                     land (when (and in-budget? (< (:land-tries m 0) land-tries))
+                     land (when (and in-budget? (< (:land-tries m 0) (land-tries)))
                             (nearest-land p pos search-radius (:failed-land m) (constantly true)))
-                     stepcell (when (< (:steps m 0) max-steps) (step-cell p pos shore-radius (:failed-steps m)))
+                     stepcell (when (< (:steps m 0) (max-steps)) (step-cell p pos shore-radius (:failed-steps m)))
                      legs (when (and in-budget? (< (:legs m 0) max-legs))
                             (some (fn [h] (when-let [t (leg-target p pos (:start m) h (:args c))] [h t]))
                                   (legal-headings pos (:start m) (:failed-headings m #{}))))]
@@ -624,7 +632,7 @@
   (loop [i 0]
     (cond
       (not (ctx/alive? c)) :done
-      (<= max-passes i) (result/stop! c :no_way_out "still not out after many tries")
+      (<= (max-passes) i) (result/stop! c :no_way_out "still not out after many tries")
       :else (let [r (await (pass! c))]
               (case r
                 :held (recur (inc i))

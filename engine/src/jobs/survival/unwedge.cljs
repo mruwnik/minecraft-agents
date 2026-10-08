@@ -1,5 +1,6 @@
 (ns jobs.survival.unwedge
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.pace :as pace]
             [jobs.lib.result :as result]
@@ -61,7 +62,9 @@
           (= "cannot" status) (await (block! c cell :cannot))
           :else (await (fail! c cell status)))))))
 
-(def max-passes "Tries (a step or a dig) in one run before it stops." 8)
+(a/defargs settings
+  {::max-passes {:default 8 :doc "Tries (a step or a dig) in one run before it stops." :spec (a/int-in 0 nil)}})
+(defn max-passes [] (settings/get settings ::max-passes))
 
 (defn ^:async pass!
   "One try at the wedged cell: the side step once, else a dig. Resolves :again or :done (stopped)."
@@ -82,7 +85,7 @@
         (cond
           (nil? cell) :done
           (not (ctx/alive? c)) :done
-          (<= max-passes i) (result/stop! c :still-wedged "still wedged after several tries")
+          (<= (max-passes) i) (result/stop! c :still-wedged "still wedged after several tries")
           :else (let [r (await (pass! c cell))]
                   (if (= :again r)
                     (do (await (pace/pace!)) (recur (inc i)))

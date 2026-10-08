@@ -127,7 +127,9 @@
 
 (a/defargs settings
   {::mob-wait-ticks {:default 200 :doc "Game ticks a shelter's place refused for a mob in its cell is retried before the shelter gives up."
-                     :spec (a/int-in 0 nil)}})
+                     :spec (a/int-in 0 nil)}
+   ::pickup-reach {:default 1 :doc "How far from the body, along the ground, an item is picked up without a walk." :spec (a/int-in 0 nil)}
+   ::rock-depth {:default 3 :doc "How far behind a seen solid face a cell the body has not sensed is taken for rock." :spec (a/int-in 0 nil)}})
 
 (defn mob-wait-ms [] (settings/ticks->ms (settings/get settings ::mob-wait-ticks)))
 
@@ -295,7 +297,7 @@
                  (pit-steps feet side depth))]
     (remove nil? (cons straight zigzag))))
 
-(def pickup-reach "How far from the body, along the ground, an item is picked up without a walk." 1)
+(defn pickup-reach [] (settings/get settings ::pickup-reach))
 
 (defn in-reach-ids
   "The ids of the item entities among ids that lie within pickup-reach of the body (a step or less above or below)."
@@ -306,7 +308,7 @@
     (->> (array-seq (.entities p #js {:radius 4 :kind "item" :max 64}))
          (filter #(wanted (.-id %)))
          (filter (fn [e] (let [q (u/pos-of (.-pos e))]
-                           (and (<= (js/Math.hypot (- (:x q) (:x at)) (- (:z q) (:z at))) pickup-reach)
+                           (and (<= (js/Math.hypot (- (:x q) (:x at)) (- (:z q) (:z at))) (pickup-reach))
                                 (<= (js/Math.abs (- (:y q) (:y at))) 1)))))
          (mapv #(.-id %)))))
 
@@ -342,7 +344,7 @@
 
 (defn shift [{:keys [x y z]} [dx dy dz]] {:x (+ x dx) :y (+ y dy) :z (+ z dz)})
 
-(def rock-depth "How far behind a seen solid face a cell the body has not sensed is taken for rock." 3)
+(defn rock-depth [] (settings/get settings ::rock-depth))
 
 (defn rock-name
   "The block name at cell as a player reads rock: what the body sees or remembers, else \"stone\" for a loaded cell it has
@@ -354,7 +356,7 @@
       (when (some-> (u/sensed p cell) .-unknown)
         (let [name-at (fn [d k] (u/seen-name p (shift cell (mapv #(* k %) d))))]
           (when (and (every? #(or (nil? %) (solid/solid? %)) (map #(name-at % 1) neighbours))
-                     (some (fn [d] (some solid/solid? (take 1 (remove nil? (map #(name-at d %) (range 1 (inc rock-depth)))))))
+                     (some (fn [d] (some solid/solid? (take 1 (remove nil? (map #(name-at d %) (range 1 (inc (rock-depth))))))))
                            neighbours))
             "stone")))))
 

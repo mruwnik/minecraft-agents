@@ -614,7 +614,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (with-redefs [restore-broken/max-passes 2]
+        (with-redefs [restore-broken/max-passes (fn [] 2)]
           (let [{:keys [eng seen]} (restore! open-floor-world [(zs/whole-zone "Miles")]
                                              [(dug-cell [3 64 0]) (dug-cell [3 64 2]) (dug-cell [3 64 -2])])]
             (await (core/tick! eng))

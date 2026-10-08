@@ -521,7 +521,7 @@
                                          :blocks (merge (lake -6 6 6) (bank 7 7 6) (bank -7 -7 6) wall-all-round)})]
           (await (one-run! eng small-args))
           (is (= [[:stopped :no_land_in_range]] (ended seen)))
-          (is (<= 1 (unreachable-count seen) b/land-tries)))))))
+          (is (<= 1 (unreachable-count seen) (b/land-tries))))))))
 
 (deftest open-water-with-no-land-swims-legs-inside-the-bounds-then-stops
   (async done

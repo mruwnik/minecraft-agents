@@ -1,5 +1,6 @@
 (ns jobs.survival.fight-back
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
             [jobs.lib.danger :as danger-q]
@@ -29,7 +30,9 @@
    :skip {:doc "entity ids already dead: not fought" :spec (a/coll-of number?) :default []}
    :attack-gap-ms {:doc "least time between swings" :spec (a/num-in 0 nil) :default 600}})
 
-(def reach 3)
+(a/defargs settings
+  {::reach {:default 3 :doc "How near the target the body stands to hit, in blocks." :spec (a/int-in 0 nil)}})
+(defn reach [] (settings/get settings ::reach))
 
 (defn given-up?
   "Whether the walk towards hostile e has been blocked, or swings at it done no damage, u/max-failures times."
@@ -108,7 +111,7 @@
   walk's outcome: :there, :partial or :blocked."
   [c target]
   (let [tpos (u/pos-of (.-pos target))
-        r (if (> (u/dist (u/self-pos c) tpos) reach)
+        r (if (> (u/dist (u/self-pos c) tpos) (reach))
             (await (near/go-near! c tpos 2 {:leg-s chase-timeout-s :dangers false :escalate false :look-round false}))
             :there)]
     (when (= :blocked r) (note-blocked! c target))

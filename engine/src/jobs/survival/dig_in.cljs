@@ -1,5 +1,6 @@
 (ns jobs.survival.dig-in
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [jobs.lib.blocks :as lb]
             [jobs.lib.trees :as trees]
             [jobs.lib.tidy :as tidy]
@@ -80,7 +81,10 @@
 
 (def futile-policy {:cap 5 :ttl 600000})
 
-(def futile-radius 8)
+(a/defargs settings
+  {::futile-radius {:default 8 :doc "Blocks around a failed dig-in site that count as the same site." :spec (a/int-in 0 nil)}
+   ::side-mob-radius {:default 8 :doc "Blocks out to which a hostile in a side column rules it out." :spec (a/int-in 0 nil)}})
+(defn futile-radius [] (settings/get settings ::futile-radius))
 
 (defn stop-reason!
   "Note in job memory why this call ends without a roof: the call's stopped result."
@@ -367,12 +371,12 @@
     (when (some bad? (let [{:keys [dig floor]} (first (:steps shape))] (conj dig floor)))
       shape)))
 
-(def side-mob-radius "Blocks out to which a hostile in a side column rules it out." 8)
+(defn side-mob-radius [] (settings/get settings ::side-mob-radius))
 
 (defn side-ok?
   "Whether the side column at feet height (cell and the one over it) is seen open, dry and free of hostiles."
   [p cell]
-  (let [mobs (refuge/hostile-cells p side-mob-radius)]
+  (let [mobs (refuge/hostile-cells p (side-mob-radius))]
     (every? #(and (dig-cells/open-cell? p %) (not (mobs %))) [cell (update cell :y inc)])))
 
 (defn ^:async find-shape!
@@ -427,7 +431,7 @@
   "Whether any :dig-in-futile entry, whatever its reason, lies within futile-radius of the body."
   [c]
   (let [here (u/self-pos c)]
-    (boolean (some #(<= (u/dist here (:pos (:data %))) futile-radius) (ctx/entries c :dig-in-futile)))))
+    (boolean (some #(<= (u/dist here (:pos (:data %))) (futile-radius)) (ctx/entries c :dig-in-futile)))))
 
 (defn note-unroofed!
   "A dig-in that ends with no roof over the body leaves a :dig-in-futile entry, so a caller that holds the body (the
@@ -447,7 +451,7 @@
                  (and (not reason)
                       (or have-blocks (and needs (tools/can-harvest? (:primitives c) needs)))))]
     (some #(when (and (not (retry? (:data %)))
-                      (<= (u/dist here (:pos (:data %))) futile-radius))
+                      (<= (u/dist here (:pos (:data %))) (futile-radius)))
              (:data %))
           (ctx/entries c :dig-in-futile))))
 

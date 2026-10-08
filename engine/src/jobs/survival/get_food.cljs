@@ -1,5 +1,6 @@
 (ns jobs.survival.get-food
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
@@ -64,15 +65,19 @@
 
 (def hungry-policy {:cap 10 :ttl (* 60 60 1000)})
 
-(def drop-radius 8)
+(a/defargs settings
+  {::drop-radius {:default 8 :doc "Blocks around the body in which dropped food is picked up." :spec (a/int-in 0 nil)}
+   ::reach {:default 3 :doc "How near a food source the body stands to use it, in blocks." :spec (a/int-in 0 nil)}
+   ::max-ways {:default 12 :doc "Ways one round tries without getting fed before it stops :still-hungry." :spec (a/int-in 0 nil)}})
+(defn drop-radius [] (settings/get settings ::drop-radius))
 
 (def no-bake-policy {:cap 1 :ttl (* 10 60 1000)})
 
 (def no-bake-ms (* 10 60 1000))
 
-(def reach 3)
+(defn reach [] (settings/get settings ::reach))
 
-(def max-ways "Ways one round tries without getting fed before it stops :still-hungry." 12)
+(defn max-ways [] (settings/get settings ::max-ways))
 
 (defn food-level [c] (.-food (.self (:primitives c))))
 
@@ -143,10 +148,10 @@
 (defn ^:async go-near!
   "Walk within reach of pos by one go-to call: :there, :far (it gave up) or :continue (go-to waits on the world)."
   [c pos]
-  (let [r (await (child/run! c :goto 'jobs.movement.go-to {:pos pos :range reach} {:max-calls 1}))]
+  (let [r (await (child/run! c :goto 'jobs.movement.go-to {:pos pos :range (reach)} {:max-calls 1}))]
     (cond
       (= :continue r) :continue
-      (<= (u/dist (u/self-pos c) pos) (inc reach)) :there
+      (<= (u/dist (u/self-pos c) pos) (inc (reach))) :there
       :else :far)))
 
 ;; ------------------------------------------------------------------ gathering
@@ -282,7 +287,7 @@
       (if (= :continue st)
         :continue
         (do (ctx/update-mem! c update :skipped-animals (fnil conj []) (.-id animal))
-            (or (await (collect-drops! c drop-radius)) :again))))))
+            (or (await (collect-drops! c (drop-radius))) :again))))))
 
 ;; ------------------------------------------------------------------ nothing found
 
@@ -399,7 +404,7 @@
   (let [source (if (gave-up-recently? c) (fresh-source c) (known-source c))]
     (or (when (can-bake? c) (await (bake! c)))
         (when source (await (use-source! c source)))
-        (await (collect-drops! c drop-radius))
+        (await (collect-drops! c (drop-radius)))
         (await (hunt! c))
         (await (dig-ripe! c (merge ripe-age berry-bush) (u/self-pos c) (:hunt-radius (:args c)))))))
 
@@ -423,7 +428,7 @@
           way (when-not (= :continue eaten)
                 (cond
                   (not (hungry-now? c)) ::fed
-                  (>= n max-ways) ::enough
+                  (>= n (max-ways)) ::enough
                   :else (await (next-way! c))))]
       (cond
         (not (ctx/alive? c)) :done

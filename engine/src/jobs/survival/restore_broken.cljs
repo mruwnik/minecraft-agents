@@ -1,5 +1,6 @@
 (ns jobs.survival.restore-broken
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.near :as near]
@@ -35,7 +36,11 @@
 
 (declare skip!)
 
-(def step-radius 4)
+(a/defargs settings
+  {::step-radius {:default 4 :doc "Blocks around the body in which a standing cell is looked for." :spec (a/int-in 0 nil)}
+   ::max-others-checked {:default 12 :doc "Other broken cells checked per pass for a standing cell." :spec (a/int-in 0 nil)}
+   ::max-passes {:default 100 :doc "Steps in one run before it stops." :spec (a/int-in 0 nil)}})
+(defn step-radius [] (settings/get settings ::step-radius))
 
 (defn halo-clear?
   "Whether a body standing at the middle of feet cell [x y z] (its 0.6 wide hitbox can reach into the neighbouring
@@ -53,8 +58,8 @@
         [x y z] [(floor :x) (floor :y) (floor :z)]
         reserved (into #{cell} (map :cell) waiting)
         centre (fn [pos] (-> pos (update :x + 0.5) (update :z + 0.5)))
-        cands (for [dx (range (- step-radius) (inc step-radius))
-                    dz (range (- step-radius) (inc step-radius))
+        cands (for [dx (range (- (step-radius)) (inc (step-radius)))
+                    dz (range (- (step-radius)) (inc (step-radius)))
                     dy (range -1 3)
                     :let [pos {:x (+ x dx) :y (+ y dy) :z (+ z dz)}]
                     :when (halo-clear? reserved [(:x pos) (:y pos) (:z pos)])
@@ -65,7 +70,7 @@
          (filter #(reach/walkable-way? p here %))
          first)))
 
-(def max-others-checked 12)
+(defn max-others-checked [] (settings/get settings ::max-others-checked))
 
 (defn seals-others?
   "Whether putting back the dug block of e would shut the body off from another entry of waiting it can still reach
@@ -77,7 +82,7 @@
           others (->> waiting
                       (remove #(= cell (:cell %)))
                       (filter #(and (= :dig (:action %)) (nil? (tidy/why-not p %))))
-                      (take max-others-checked))
+                      (take (max-others-checked)))
           at (fn [o] (zipmap [:x :y :z] (:cell o)))]
       (boolean (some #(and (reach/walkable-way? p here (at %))
                            (not (reach/walkable-way? p here (at %) #{cell}))) others)))))
@@ -181,7 +186,7 @@
       (do (await (ctx/call-child c :go 'jobs.movement.go-to {:pos target :range 0 :escalate false}))
           (ctx/update-mem! c assoc :stepped true)))))
 
-(def max-passes "Steps in one run before it stops." 100)
+(defn max-passes [] (settings/get settings ::max-passes))
 
 (defn ^:async pass!
   "One step over the next waiting entry: restore it, step clear of it, or skip it with a reason. Resolves :again,
@@ -207,6 +212,6 @@
   (loop [i 0]
     (cond
       (not (ctx/alive? c)) :done
-      (<= max-passes i) (report! c)
+      (<= (max-passes) i) (report! c)
       (= :again (await (pass! c))) (do (await (pace/pace!)) (recur (inc i)))
       :else (report! c))))

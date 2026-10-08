@@ -1,5 +1,6 @@
 (ns jobs.survival.block-arrow-gap
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [engine.game :as game]
             [jobs.lib.blocks :as lb]
             [engine.ctx :as ctx]
@@ -43,7 +44,9 @@
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
    :fetch {:doc "get a missing block (jobs.lib.fetch): true, a set of kinds or a map of limits; false stops :no-blocks" :spec fetch/option? :default true}})
 
-(def max-steps "Rounds one call takes at most." 12)
+(a/defargs settings
+  {::max-steps {:default 12 :doc "Rounds one call takes at most." :spec (a/int-in 0 nil)}})
+(defn max-steps [] (settings/get settings ::max-steps))
 
 (def ray-heights "Heights above the body's feet the arrows are aimed at." [game/eye-height 0.9])
 
@@ -142,7 +145,7 @@
   "Fill the gap (see doc), one cell a step with a timer between."
   [c]
   (loop [i 0]
-    (let [res (if (< i max-steps) (await (step c)) (fail! c :no-progress "the gap took too many steps"))]
+    (let [res (if (< i (max-steps)) (await (step c)) (fail! c :no-progress "the gap took too many steps"))]
       (if (= :again res)
         (do (await (pace/pace!)) (recur (inc i)))
         res))))

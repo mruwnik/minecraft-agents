@@ -146,7 +146,7 @@
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))))
           (is (= :still-wedged (stopped-reason seen)))
-          (is (= uw/max-passes (count (filter #{"dig"} (call-names p)))) "max-passes tries"))))))
+          (is (= (uw/max-passes) (count (filter #{"dig"} (call-names p)))) "max-passes tries"))))))
 
 (deftest a-cut-stops-the-unwedge-loop
   (async done

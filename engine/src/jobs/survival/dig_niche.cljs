@@ -1,5 +1,6 @@
 (ns jobs.survival.dig-niche
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [clojure.string]
             [jobs.lib.blocks :as lb]
             [engine.ctx :as ctx]
@@ -48,7 +49,10 @@
       (and (not (:site (ctx/mem c))) (sh/roofed? p (:roof-height (:args c)))) (ctx/wait c {:reason :already-sealed :pos (sh/feet p)})
       :else true)))
 
-(def max-steps "Rounds one call takes at most." 40)
+(a/defargs settings
+  {::max-steps {:default 40 :doc "Rounds one call takes at most." :spec (a/int-in 0 nil)}
+   ::dig-reach {:default 4 :doc "How far from a cell the body digs it without walking closer." :spec (a/int-in 0 nil)}})
+(defn max-steps [] (settings/get settings ::max-steps))
 
 (defn falling? [name] (boolean (re-find #"^(sand|red_sand|gravel)$|_concrete_powder$" (or name ""))))
 
@@ -137,7 +141,7 @@
   ([p reach] (find-site p reach (constantly true)))
   ([p reach ok?] (:site (scan p reach ok?))))
 
-(def dig-reach "How far from a cell the body digs it without walking closer." 4)
+(defn dig-reach [] (settings/get settings ::dig-reach))
 
 (defn stage
   "What is left to do at the site, from the world: [:dig cell] (the first solid cell, cut from the stand cell or the
@@ -149,7 +153,7 @@
     (cond
       (and (= feet (at stand dir 2 0 0)) (not (sh/solid-at? p (at stand dir 2 0 1))))
       (if (seq open) [:plug (first open)] [:sealed])
-      solid (if (<= (u/dist feet solid) dig-reach) [:dig solid] [:walk-to-face])
+      solid (if (<= (u/dist feet solid) (dig-reach)) [:dig solid] [:walk-to-face])
       :else [:walk-in])))
 
 (defn tool-wait
@@ -256,7 +260,7 @@
   world) is yielded."
   [c]
   (loop [i 0]
-    (let [r (if (< i max-steps) (await (step c)) (fail! c :no-progress "the niche took too many steps"))]
+    (let [r (if (< i (max-steps)) (await (step c)) (fail! c :no-progress "the niche took too many steps"))]
       (if (= :again r)
         (do (await (child/pace!)) (recur (inc i)))
         r))))
