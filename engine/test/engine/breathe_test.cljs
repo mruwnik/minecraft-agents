@@ -1057,12 +1057,12 @@
               looks (atom [])]
           (stub-seen! p (fn [[x y z]] (and (zero? x) (zero? z) (<= y 65))))
           (.override (.-world p) "look" (fn [_ a _]
-                                          (when-not (some #{"swim"} (call-names p))
-                                            (swap! looks conj [(js/Math.floor (.. a -pos -x)) (js/Math.floor (.. a -pos -z))]))
+                                          (swap! looks conj [[(js/Math.floor (.. a -pos -x)) (js/Math.floor (.. a -pos -z))]
+                                                             (boolean (some #{"swim"} (call-names p)))])
                                           #js {:status "ok"}))
           (await (one-run! eng (assoc defaults :radius 2 :air-radius 2)))
           (is (some #{"swim"} (call-names p)) "swam up")
-          (is (every? #{[0 0]} @looks) "before the swim up only the own column was looked at (after it the land search may look)"))))))
+          (is (every? #{[0 0]} (map first (remove second @looks))) "before the swim up only the own column was looked at (after it the land search may look)"))))))
 
 (deftest a-blocked-own-column-looks-at-the-neighbour-columns
   (async done
@@ -1283,11 +1283,19 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}}
                                            :blocks (merge (lake -30 19 8) (bank 20 24 8))})
-              looked (atom false)]
-          (stub-seen! p (fn [[x]] (or @looked (<= (js/Math.abs x) 4))))
-          (.override (.-world p) "look" (fn [_ _ _] (reset! looked true) #js {:status "ok"}))
+              looks (atom [])]
+          ;; a look shows what lies within 45 degrees of its direction (a flat view cone), the rest stays unseen
+          (stub-seen! p (fn [[x _ z]]
+                          (or (<= (js/Math.abs x) 4)
+                              (some (fn [[lx lz]] (let [d (js/Math.hypot lx lz)]
+                                                    (> (+ (* x lx) (* z lz)) (* 0.7 d (js/Math.hypot x z)))))
+                                    @looks))))
+          (.override (.-world p) "look" (fn [_ a _]
+                                          (swap! looks conj [(- (.. a -pos -x) 0.5) (- (.. a -pos -z) 0.5)])
+                                          #js {:status "ok"}))
           (await (one-run! eng small-args))
-          (is @looked "looked before giving up")
+          (is (seq @looks) "looked before giving up")
+          (is (some (fn [[lx lz]] (and (pos? lx) (< (js/Math.abs lz) lx))) @looks) "one look faced the east bank")
           (is (= [[:completed nil]] (ended seen)))
           (is (>= (:x (core/self-pos p)) 20) "on the east bank"))))))
 

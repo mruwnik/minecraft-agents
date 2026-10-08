@@ -573,7 +573,7 @@
                  {:shore shore :land land :stepcell stepcell :legs legs}))
         ;; a way out is looked for in the cells the decision read and the body never saw before the run gives up
         {:keys [shore land stepcell legs]} (await (sense/decide! c :breathe-land ways
-                                                                 {:retry? (fn [w] (not (or (:shore w) (:land w) (:legs w)
+                                                                 {:retry? (fn [w] (not (or (:shore w) (:land w)
                                                                                            (and carried? (:stepcell w)))))}))]
     (cond
       shore
