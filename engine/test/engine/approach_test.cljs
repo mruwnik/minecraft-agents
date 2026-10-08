@@ -83,3 +83,10 @@
         r (plan :block-at guessed :floor-at seen)]
     (is (nil? (:stand r)))
     (is (some? (:pillar r)))))
+
+(deftest a-leaf-is-no-floor-to-stand-on
+  (let [r (plan :targets #{[0 72 0]} :feet [1 70 0]
+                :block-at (world {} [1 70 0] "oak_leaves" [1 71 0] "air"))]
+    (is (not-any? #(= [1 71 0] %) (:stand r)))
+    (is (not= [1 71 0] (get-in r [:pillar :stand])))
+    (is (= 64 (second (get-in r [:pillar :base]))))))

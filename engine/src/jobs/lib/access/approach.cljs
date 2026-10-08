@@ -24,7 +24,8 @@
 
   Ranking: walking a block costs 1, placing a block pillar-cost. A stand needs no placement, so any stand wins over a
   pillar."
-  (:require [engine.args :as a]
+  (:require [clojure.string :as str]
+            [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.util :as u]))
@@ -51,10 +52,12 @@
     (boolean (and n (rules/replaceable n) (not (rules/fluids n))))))
 
 (defn standing-cell?
-  "Feet and head cells passable over a solid floor. The floor is read from floor-at (cells as seen, no guess)."
+  "Feet and head cells passable over a solid floor. The floor is read from floor-at (cells as seen, no guess).
+  Leaves are no floor: a canopy stand is enclosed by the tree and go-to refuses it."
   [block-at floor-at [x y z]]
   (and (passable? block-at [x y z]) (passable? block-at [x (inc y) z])
-       (rules/solid-floor? floor-at [x (dec y) z])))
+       (rules/solid-floor? floor-at [x (dec y) z])
+       (not (str/ends-with? (str (floor-at [x (dec y) z])) "_leaves"))))
 
 (defn in-reach?
   "Every target within reach of the eye of a body standing at the middle of the feet cell."
