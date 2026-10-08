@@ -4,6 +4,7 @@
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.click :as click]
             [jobs.lib.reach :as reach]
             [jobs.lib.solid :as solid]
             [jobs.lib.access.zones :as zones]
@@ -15,11 +16,17 @@
 (a/defargs settings
   {::seen-bed-radius {:default 6 :spec (a/int-in 1 nil)
                       :doc "Blocks (square) within which a bed in the body's room counts as seen."}
+   ::room-roof-height {:default 16 :spec (a/int-in 1 nil)
+                       :doc "How high above the feet a roof may be and still make the closed room around the body a shelter."}
+   ::door-failed-ms {:default 600000 :spec (a/int-in 0 nil)
+                     :doc "How long (ms) a room door the night could not shut is left alone from the cell it was tried at."}
    ::default-player-radius {:default 128 :spec (a/int-in 1 nil)
                             :doc "Blocks within which a sleeping player counts when the night is skipped."}})
 
 (defn seen-bed-radius [] (settings/get settings ::seen-bed-radius))
 (defn default-player-radius [] (settings/get settings ::default-player-radius))
+(defn room-roof-height [] (settings/get settings ::room-roof-height))
+(defn door-failed-ms [] (settings/get settings ::door-failed-ms))
 
 (def ms-per-day
   "One in-game day in engine-clock milliseconds (20 minutes). \"A day\" in memory policies and :max-days-awake is
@@ -353,15 +360,30 @@
      :hint (str "the body is sealed in its own shelter at [" x " " y " " z "]: the shelter job lets it out by day "
                 "(jobs.survival.night), or run jobs.survival.dig-in leave")}))
 
-(def room-roof-height
-  "How high above the feet a roof may be and still make the closed room around the body a shelter."
-  16)
-
 (defn shut-in-room?
   "Whether the body stands in a closed room (reach/closed-room?) with a roof over it within room-roof-height blocks:
   safe from the night though the roof is above :roof-height."
   [p]
-  (and (roofed? p room-roof-height) (reach/closed-room? p (feet p))))
+  (and (roofed? p (room-roof-height)) (reach/closed-room? p (feet p))))
+
+(defn open-room-door
+  "{:cell :inside} of a door or gate standing open in the closed room around the body (shut-in-room?), the nearest
+  first: shut, the room keeps the night out. Nil when there is none."
+  [p]
+  (when (roofed? p (room-roof-height))
+    (let [self (u/self-pos {:primitives p})
+          open? (fn [{:keys [cell]}]
+                  (let [b (u/seen-block p cell)]
+                    (and b (= :openable (click/kind-of (.-name b))) (click/reached? :open (click/props-of b)))))]
+      (->> (:doors (reach/room p (feet p)))
+           (filter open?)
+           (sort-by #(u/dist self (:cell %)))
+           first))))
+
+(defn door-given-up?
+  "Whether the night failed to shut a door of the room around the feet cell (a :night-door-failed entry for it)."
+  [p view]
+  (= (feet p) (:pos (:data (mem/latest view :night-door-failed)))))
 
 (defn night-holds?
   "Whether the night trigger holds (see triggers.survival.night). permit? decides whether a bed may be used (bed-permit)."
@@ -374,6 +396,7 @@
                 (bed-place-wanted? p view (bed-radius view args) permit?)
                 (log-out-for-sleepers? p view)
                 (and (unsafe-night? p (:roof-height args default-roof-height))
-                     (not (shut-in-room? p)))))
+                     (not (shut-in-room? p)))
+                (and (some? (open-room-door p)) (not (door-given-up? p view)))))
        (or (shut-in-by-day? p shelter (:data (mem/latest view :shelter-trapped)))
            (some? (bed-to-collect p view)))))))

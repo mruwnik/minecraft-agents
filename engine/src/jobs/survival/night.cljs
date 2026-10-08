@@ -25,7 +25,8 @@
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.dig-in-leave :as dig-leave]
             [jobs.survival.dig-niche :as dig-niche]
-            [jobs.survival.eat :as eat]))
+            [jobs.survival.eat :as eat]
+            [jobs.survival.retreat :as retreat]))
 
 (def doc
   "The night: one round from the trigger until the night is over and the body is out of its shelter. The round repeats
@@ -46,7 +47,10 @@
     :bed-placed for the morning. No room writes :bed-place-failed (10 minutes, or until the body is 6+ blocks away).
   - someone else asleep (sh/log-out-for-sleepers?): jobs.survival.log-out, a 30 s stint at most until morning, again
     while anyone sleeps or nothing is known. A log-out that is not ok or cut is not tried again tonight.
-  - roofed or buried: done {:night :roofed} (the queue runs).
+  - a closed room around the body (roofed within :room-roof-height) with an open door: the door is shut (retreat/shut-home-door!,
+    walking to it when out of reach); a door that stays open writes :night-door-failed (shelter.door-failed warn) and the
+    night goes on as below.
+  - roofed, buried or shut in a closed room: done {:night :roofed} (the queue runs).
   - else, before any pit and while no site has failed tonight: a remembered roofed place (:roofed-places, nearest first)
     within :walk-radius whose roof the body has seen, and whose route (the straight line, sampled every 2 blocks) is lit
     as far as the body has seen it (a seen cell with block light >= :lit-light; an unseen cell is not lit; the line approximates go-to's route): walk there (go-to :place). A walk
@@ -656,6 +660,19 @@
 
 ;; ------------------------------------------------------------------ morning
 
+(defn ^:async shut-room-door!
+  "Shut an open door of the closed room the body stands in (retreat/shut-home-door!: from where it stands within a hand's
+  reach, else a step to the room cell inside it first). A door still open once tried (clicked, or no step got nearer)
+  writes :night-door-failed for this cell, so the night digs in as before. :again."
+  [c door]
+  (await (retreat/shut-home-door! c door))
+  (when (and (sh/open-room-door (:primitives c))
+             (contains? (:doors-clicked (ctx/mem c) #{}) (retreat/door-key (:cell door))))
+    (ctx/emit! c :shelter.door-failed :warn {:cell (retreat/door-key (:cell door))
+                                             :text "an open door of the room would not shut; digging in instead"})
+    (ctx/remember! c :night-door-failed {:pos (sh/feet (:primitives c))} {:cap 1 :ttl (sh/door-failed-ms)}))
+  :again)
+
 (defn ^:async collect-bed!
   "By day: dig up the bed at pos the night put down outside the body's zones, then walk over its drop. One try: the
   :bed-placed entry is dropped whatever happens, and a :bed entry at pos is retracted."
@@ -749,13 +766,15 @@
             (sh/night-holds? p (ctx/view c) (:args c) (bed-permit c)) (await (hold! c :sheltered))
             :else (end-night! c)))
       :else
-      (let [bed (await (sense/decide! c ::bed #(sh/bed-to-use p (ctx/view c) (radius c) (bed-permit c))))]
+      (let [bed (await (sense/decide! c ::bed #(sh/bed-to-use p (ctx/view c) (radius c) (bed-permit c))))
+            door (when-not (sh/door-given-up? p (ctx/view c)) (sh/open-room-door p))]
         (cond
           bed (await (sleep-step c bed))
           (sh/bed-place-wanted? p (ctx/view c) (radius c) (bed-permit c)) (await (place-bed-and-sleep c))
           (log-out-wanted? c) (await (log-out-step c))
           (and (:enclose (ctx/mem c)) (not= :dug-in sheltered)) (await (enclose! c))
-          (or roofed (sh/buried? p)) (do (ctx/forget-where! c :night-site (constantly true))
+          door (await (shut-room-door! c door))
+          (or roofed (sh/buried? p) (sh/shut-in-room? p)) (do (ctx/forget-where! c :night-site (constantly true))
                                          (result/finish! c (cond-> (assoc (spent-fields c) :night (if (= :logged-out sheltered) :logged-out :roofed)) (fled c) (assoc :fled (fled c)))))
           (:fleeing (ctx/mem c)) (await (flee! c (:fleeing (ctx/mem c))))
           (and (= :exposed sheltered) (retry-due? c)) (do (retry-dig-in! c) (await (shelter! c)))
