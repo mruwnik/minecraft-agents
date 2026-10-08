@@ -137,7 +137,7 @@ Statuses below are the common ones; `reason` and extra fields are in `js/primiti
 | `collect` | `{id, timeoutS=10, maxDropDown}` (caps the walk's drops) | `collected`, `gone`, `unreachable`, `timeout` |
 | `inspectContainer` | `{pos}` | `ok` (`items`, `size`, `free` slots), `missing`, `unreachable` |
 | `transfer` | `{pos, direction: deposit/withdraw, item, count}` | `ok` (`moved`), `missing`, `unreachable`, `no-item`, `full` |
-| `equip` / `unequip` | `{item, dest='hand'}` / `{}` | `equipped`, `no-item` / `ok`, `empty`, `full` |
+| `equip` / `unequip` | `{item, dest='hand'}` / `{dest='hand'}` (or `'off-hand'`) | `equipped`, `no-item` / `ok`, `empty`, `full` (off hand: room includes an unfilled stack of it; what does not fit stays, `kept`) |
 | `toss` | `{item, count?, slot?, watchS?}` | `tossed` (`watchS` up to 5 (a thrown item is untakeable for 2 s) waits and adds `takenBy` {collector uuid: count}), `no-item` |
 | `craft` | `{item, count=1, table?}`; one recipe per call, never walks; only the handed `table` counts (the job passes a seen one) | `crafted`, `partial`, `no-item`, `out-of-reach`, `unreachable`, `full`, `cannot` (`jobs.items.shortfall` turns shortages into `short` and `alternatives`) |
 | `furnace` | `{pos, op: read/load/take, input?, fuel?, output?}` | `ok`, `missing`, `unreachable`, `cannot`, `no-item`, `busy`, `rejected`, `full`; never waits for cooking |

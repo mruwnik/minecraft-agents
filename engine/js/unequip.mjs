@@ -18,13 +18,20 @@ export async function emptyHand (bot, ctx) {
   return { status: 'ok', item: held.name }
 }
 
-// The off hand (slot 45) back into the inventory, same room rule.
+// An unfilled stack of the item in the main slots or the hotbar (9..44): mineflayer's putAway merges into it.
+const hasMerge = (bot, item) => Array.from({ length: 36 }, (_, i) => bot.inventory.slots[9 + i])
+  .some(s => s && s.name === item.name && s.count < s.stackSize)
+
+// The off hand (slot 45) back into the inventory: room is a free slot or an unfilled stack of it. What did not fit
+// stays in the off hand (full, kept: its count).
 export async function emptyOffHand (bot, ctx) {
   const held = bot.inventory.slots[45]
   if (!held) return { status: 'empty' }
-  if (!hasRoom(bot)) return { status: 'full' }
+  if (!hasRoom(bot) && !hasMerge(bot, held)) return { status: 'full' }
   await bot.unequip('off-hand')
   ctx.alive()
-  if (bot.inventory.slots[45]) return { status: 'failed', reason: 'still-held' }
+  const left = bot.inventory.slots[45]
+  if (left && left.name === held.name && left.count < held.count) return { status: 'full', kept: left.count }
+  if (left) return { status: 'failed', reason: 'still-held' }
   return { status: 'ok', item: held.name }
 }

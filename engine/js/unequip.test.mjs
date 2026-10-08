@@ -50,3 +50,20 @@ test('emptyOffHand puts slot 45 back when there is room, and says full otherwise
   assert.deepEqual(await emptyOffHand(packed, ctx), { status: 'full' })
   assert.deepEqual(packed.calls, [])
 })
+
+test('emptyOffHand counts an unfilled stack of the same item as room, as putAway merges into it', async () => {
+  const torches = (count) => ({ name: 'torch', count, stackSize: 64 })
+  const bot = makeBot({ slots: { ...full(36, 45), 20: torches(10), 45: torches(4) } })
+  bot.unequip = async where => { bot.calls.push(where); delete bot.inventory.slots[45] }
+  assert.deepEqual(await emptyOffHand(bot, ctx), { status: 'ok', item: 'torch' })
+  assert.deepEqual(bot.calls, ['off-hand'])
+  const filled = makeBot({ slots: { ...full(36, 45), 20: torches(64), 45: torches(4) } })
+  assert.deepEqual(await emptyOffHand(filled, ctx), { status: 'full' })
+  assert.deepEqual(filled.calls, [])
+})
+
+test('emptyOffHand says full when only part of the stack merged and the rest stays in the off hand', async () => {
+  const bot = makeBot({ slots: { ...full(36, 45), 20: { name: 'torch', count: 62, stackSize: 64 }, 45: { name: 'torch', count: 4, stackSize: 64 } } })
+  bot.unequip = async where => { bot.calls.push(where); bot.inventory.slots[45] = { name: 'torch', count: 2, stackSize: 64 } }
+  assert.deepEqual(await emptyOffHand(bot, ctx), { status: 'full', kept: 2 })
+})

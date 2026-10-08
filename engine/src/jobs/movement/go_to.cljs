@@ -470,8 +470,12 @@
               (await (run-steps! c pos)))))))))
 
 (defn ^:async round
-  "attempt, then (unless it waits on a child) the off-hand torch goes back whatever the outcome. A cut ends the call without it."
+  "attempt, then (unless it waits on a child) the off-hand torch goes back whatever the outcome, a throw too (rethrown).
+  A cut ends the call without it."
   [c]
-  (let [r (await (attempt c))]
+  (let [r (try (await (attempt c))
+               (catch :default e
+                 (when (ctx/alive? c) (await (torch/return-torch! c)))
+                 (throw e)))]
     (when-not (= :continue r) (await (torch/return-torch! c)))
     r))

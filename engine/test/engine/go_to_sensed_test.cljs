@@ -173,9 +173,8 @@
   "A 3-deep 1x1 pit (feet at y 61) in dirt x -2..2, y 60..63; stone ground east of it (x 3..14) topped at the rim."
   (apply dissoc (merge (box 3 60 -3 14 63 3 "stone") (box -2 60 -2 2 63 2 "dirt")) #{"0,61,0" "0,62,0" "0,63,0"}))
 
-(defn ^:async run-go-to
-  "Run go-to with args as a child over the sensed-only world spec; {:out :seen :p}. setup, when given, is called with the
-  sensed-only {:p :w} first."
+(defn ^:async run-go-to-unpinned
+  "run-go-to with js/Math.random left as it is."
   [spec args & [setup before]]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
@@ -198,6 +197,16 @@
         (await (core/tick! eng))
         (recur (inc i))))
     {:out @out :seen @seen :p p}))
+
+(defn ^:async run-go-to
+  "Run go-to with args as a child over the sensed-only world spec; {:out :seen :p}. setup, when given, is called with the
+  sensed-only {:p :w} first. js/Math.random is pinned to 0.5 for the run: it jitters the sight passes' rays, and some
+  jitters (0.54 to 0.59 in the dark tunnel) see one more cell, which changes the outcome."
+  [spec args & [setup before]]
+  (let [orig js/Math.random]
+    (set! js/Math.random (constantly 0.5))
+    (try (await (run-go-to-unpinned spec args setup before))
+         (finally (set! js/Math.random orig)))))
 
 (defn steps [seen] (mapv :step (filter #(= :go-to.escalated (:kind %)) seen)))
 
@@ -356,6 +365,36 @@
           (is (= 4 (reduce + (map :count (filter #(= "torch" (:name %)) (:inventory w))))) (pr-str (:inventory w)))
           (is (= 1 (count (filter #(= :go-to.off-hand-torch (:kind %)) seen))) "returned at the start, so held again for the dark walk")
           (is (empty? (filter #(= :go-to.off-hand-kept (:kind %)) seen))))))))
+
+(deftest go-to-with-unknown-puts-the-torch-back-when-a-round-throws
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [throw-held! (fn [{:keys [p w] :as world}]
+                            (dark-and-looked world)
+                            (let [pw (aget w "pathWorld")]
+                              (aset w "pathWorld" (fn [& xs]
+                                                    (when (= "torch" (get-in @(fake/state p) [:equipment "offHand" :name]))
+                                                      (throw (js/Error. "pathWorld broke")))
+                                                    (apply pw xs)))))
+              {:keys [seen p]} (await (run-go-to (assoc in-tunnel :inventory [{:name "torch" :count 4}])
+                                                 {:pos [9 61 0] :range 1 :escalate false :unknown true} throw-held!))
+              w @(fake/state p)]
+          (is (= 1 (count (filter #(= :go-to.off-hand-torch (:kind %)) seen))) "it was held")
+          (is (nil? (get-in w [:equipment "offHand"])) "off hand empty again")
+          (is (= 4 (reduce + (map :count (filter #(= "torch" (:name %)) (:inventory w))))) (pr-str (:inventory w))))))))
+
+(deftest go-to-refused-returns-a-torch-a-cut-call-left-in-the-off-hand
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (run-go-to (assoc in-tunnel :equipment {"offHand" {:name "torch" :count 4}})
+                                                {:place "nowhere-known" :unknown true} dark-and-looked
+                                                #(mem/write! (:store %) torch/kind {:held true} {:cap 1 :ttl :forever})))
+              w @(fake/state p)]
+          (is (= :unknown-place (:reason out)) (pr-str out))
+          (is (nil? (get-in w [:equipment "offHand"])) "off hand empty")
+          (is (= 4 (reduce + (map :count (filter #(= "torch" (:name %)) (:inventory w))))) (pr-str (:inventory w))))))))
 
 (deftest go-to-with-unknown-leaves-a-torch-it-never-held
   (async done
