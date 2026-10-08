@@ -34,7 +34,7 @@
 
 (a/defargs args
   {:furnace {:doc "furnace, blast furnace or smoker position [x y z] or {:x :y :z}; when nil the nearest one the body has seen within 32 blocks that cooks :item (or anything carried) is chosen (smelt.furnace says which), or the job ends with no-furnace-seen" :spec ::a/pos :default nil}
-   :item {:doc "what to smelt (an input; a cooked food such as cooked_chicken means its raw one; an item no furnace cooks ends not-smeltable at once); the first smeltable thing carried when nil" :spec a/item? :default nil}
+   :item {:doc "what to smelt (an input; a product such as cooked_chicken or iron_ingot means its input; an item no furnace cooks ends not-smeltable at once); the first smeltable thing carried when nil" :spec a/item? :default nil}
    :count {:doc "how many; all carried (at most one stack) when nil" :spec (a/int-in 0 nil) :default nil}
    :fuel {:doc "fuel item to load; the best carried when nil" :spec a/item? :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
@@ -71,14 +71,23 @@
                    (boolean (re-find #"_(log|wood)$" name)))
      false)))
 
-(def raw-of {"cooked_beef" "beef" "cooked_porkchop" "porkchop" "cooked_chicken" "chicken" "cooked_mutton" "mutton"
-             "cooked_rabbit" "rabbit" "cooked_cod" "cod" "cooked_salmon" "salmon" "baked_potato" "potato"
-             "dried_kelp" "kelp"})
+(def made-from
+  "{output input} of what the furnaces cook, for naming the input of a product. The vanilla recipes are in no
+  minecraft-data file."
+  {"cooked_beef" "beef" "cooked_porkchop" "porkchop" "cooked_chicken" "chicken" "cooked_mutton" "mutton"
+   "cooked_rabbit" "rabbit" "cooked_cod" "cod" "cooked_salmon" "salmon" "baked_potato" "potato" "dried_kelp" "kelp"
+   "iron_ingot" "raw_iron" "gold_ingot" "raw_gold" "copper_ingot" "raw_copper" "netherite_scrap" "ancient_debris"
+   "glass" "sand" "smooth_stone" "stone" "brick" "clay_ball" "terracotta" "clay"
+   "nether_brick" "netherrack" "smooth_sandstone" "sandstone" "smooth_red_sandstone" "red_sandstone"
+   "cracked_stone_bricks" "stone_bricks" "smooth_quartz" "quartz_block" "lime_dye" "sea_pickle" "green_dye" "cactus"
+   "popped_chorus_fruit" "chorus_fruit"})
+
+(declare smeltable?)
 
 (defn input-of
-  "The item to load for :item: the raw food of a cooked one, else itself."
+  "The item to load for :item: itself when a furnace cooks it, else the input it is made from (iron_ingot: raw_iron)."
   [item]
-  (get raw-of item item))
+  (if (or (nil? item) (smeltable? item)) item (get made-from item item)))
 
 (defn smeltable?
   "Whether some kind of furnace cooks the item."

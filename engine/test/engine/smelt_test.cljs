@@ -696,7 +696,15 @@
     "baked_potato" "potato"
     "dried_kelp" "kelp"
     "raw_iron" "raw_iron"
-    "iron_ingot" "iron_ingot"
+    "iron_ingot" "raw_iron"
+    "gold_ingot" "raw_gold"
+    "copper_ingot" "raw_copper"
+    "netherite_scrap" "ancient_debris"
+    "glass" "sand"
+    "stone" "stone"
+    "brick" "clay_ball"
+    "nether_brick" "netherrack"
+    "oak_planks" "oak_planks"
     nil nil))
 
 (deftest an-output-item-is-smelted-from-its-input
@@ -713,11 +721,11 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:blocks {pos-key "furnace"} :inventory [{:name "coal" :count 2}]})
-              result (await (bd/child-outcome eng 'jobs.items.smelt {:item "iron_ingot" :count 1} 3))
+              result (await (bd/child-outcome eng 'jobs.items.smelt {:item "diamond" :count 1} 3))
               gave-up (first (of-kind seen :smelt.gave-up))]
           (is (= {:status :stopped :reason "not-smeltable"} (select-keys result [:status :reason])))
-          (is (= "iron_ingot" (:item gave-up)))
-          (is (re-find #"iron_ingot" (:text gave-up)))
+          (is (= "diamond" (:item gave-up)))
+          (is (re-find #"diamond" (:text gave-up)))
           (is (empty? (calls p "furnace"))))))))
 
 (deftest a-give-up-with-nothing-smelted-ends-stopped
