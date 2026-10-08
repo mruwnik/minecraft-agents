@@ -12,7 +12,7 @@
   :fell (jobs.forestry.fell-tree), :collect (collect-drops) and :plant (plant-sapling).
   :collect works around the felled tree's base (when fewer logs came in than were felled and no drop is in sight, it walks round the base to look: leaves hide drops), wherever a reflex has since taken the body; a felling that brings in
   no item at all (the inventory count of the filter's items, before the felling against after the collecting)
-  ends the job :stopped (:nothing-collected). Ends when :plant is done. Only replant debts within :radius of where the body stood when :plant began are
+  ends the job :stopped (:nothing-collected, with :got the logs carried). Ends when :plant is done. Only replant debts within :radius of where the body stood when :plant began are
   planted; the others (and any when no sapling is carried or the spot is not clear) stay owed, and the job
   warns harvest-wood.debts-owed with their :count and the :nearest one's :pos.
   Debts within the radius that stay unplanted (no sapling carried, spot refused) warn harvest-wood.replant-owed
@@ -132,7 +132,7 @@
                         :got (logs-carried c) :replant-owed (warn-replant-owed! c)))
       (not= :done r) :continue
       (and (= :collect phase) (:tree (ctx/mem c)) (not (pos? gained)))
-      (result/stop! c :nothing-collected "felled a tree but no drop came into the inventory")
+      (result/stop! c :nothing-collected "felled a tree but no drop came into the inventory" :got (logs-carried c))
       (and (nil? next-phase) (more-trees? c))
       (do (ctx/update-mem! c #(-> % (assoc :phase :fell :tree nil :carried-before nil :logs-before nil :want nil :origin nil)
                                   (update :felled (fnil inc 0))

@@ -296,3 +296,19 @@
           (await (tu/run-until-empty eng 60))
           (is (= 3 (get (lt/inv p) "oak_log" 0)) "the two logs behind the leaves were fetched too")
           (is (= [] (filterv #(= :stopped (:kind %)) @seen))))))))
+
+(deftest nothing-collected-on-a-later-tree-still-reports-the-logs-carried
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (lt/setup {:blocks (merge (lt/tree 3 0 "oak" 3) (lt/tree 3 6 "oak" 3) {"3,63,0" "grass_block" "3,63,6" "grass_block"})
+                                         :inventory [{:name "oak_sapling" :count 2}]})
+              n (atom 0)]
+          (.override (.-world p) "dig"
+                     (fn ^:async dig [token args impl]
+                       (let [r (await (impl token args))]
+                         (when (= 6 (swap! n inc)) (clear-drops! p))
+                         r)))
+          (let [r (await (tu/child-outcome eng 'jobs.forestry.harvest-wood {:species "oak" :radius 12 :count 6} 80))]
+            (is (= {:status :stopped :reason :nothing-collected :got 3} (select-keys r [:status :reason :got]))
+                "the first tree's 3 logs are carried: the stop says so")))))))
