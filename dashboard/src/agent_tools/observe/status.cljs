@@ -371,3 +371,25 @@
     (assoc (clean result) :summary (cond-> (array-map :counts (:counts summary) :items (:items summary))
                                      (:more summary) (assoc :more? true)))
     (clean result)))
+
+;; What happened since the observer last looked
+
+(def max-missed 4)
+
+(defn missed?
+  "Whether an event is news a plain status points to: a job end, a flight (hostile.fled) or a death."
+  [e]
+  (boolean (or (and (= :job (:source e)) (job-results/terminal-kinds (:kind e)))
+               (= :hostile.fled (:kind e))
+               (and (= :body (:source e)) (= :died (:kind e))))))
+
+(defn missed-summary
+  "{:count n :items [...]} of the missed events (the latest max-missed) among events, or nil when there are none."
+  [events now-ms]
+  (let [news (filterv missed? events)]
+    (when (seq news)
+      (array-map :count (count news)
+                 :items (mapv (fn [e]
+                                (clean-pairs :event (:kind e) :job (get-in e [:context :job-id]) :message (clip (:message e))
+                                             :ago-s (some-> (:time-ms e) (#(max 0 (js/Math.round (/ (- now-ms %) 1000)))))))
+                              (take-last max-missed news))))))

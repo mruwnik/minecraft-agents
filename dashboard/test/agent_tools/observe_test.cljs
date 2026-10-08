@@ -1140,3 +1140,38 @@
     (is (observe-status/stale-notice? a [(notice "j1" :build.wrong "y") (assoc (event :job :stopped) :context {:job-id "j1"})]))
     (is (not (observe-status/stale-notice? a [(assoc (event :job :stopped) :context {:job-id "j2"})])))
     (is (not (observe-status/stale-notice? a [])))))
+
+;; Plain status lists what happened since the observer's last look
+
+(deftest missed-summary-keeps-job-ends-flights-and-deaths
+  (let [ended (assoc (event :job :completed {} "done") :context {:job-id "j141"} :time-ms 1000)
+        fled (assoc (event :job :hostile.fled {} "fled 92 blocks") :attention :notice :context {:job-id "j9"} :time-ms 5000)
+        events [(event :body :chat) ended (event :action :started) fled (event :body :died {:cause "fall"})]
+        summary (observe-status/missed-summary events 11000)]
+    (is (= 3 (:count summary)))
+    (is (= [:completed :hostile.fled :died] (mapv :event (:items summary))))
+    (is (= {:event :completed :job "j141" :message "done" :ago-s 10} (first (:items summary))))
+    (is (nil? (observe-status/missed-summary [(event :body :chat)] 11000)))))
+
+(deftest plain-status-lists-the-events-since-the-checkpoint
+  (async done
+    (let [state (state-dir)
+          file (.join path state "worlds" "w" "observers" "ProbeBody" "agent.edn")
+          lines (atom [])
+          events [{:seq 1 :source :job :kind :completed :context {:job-id "j141"} :data {} :message "done"}
+                  {:seq 2 :source :job :kind :hostile.fled :attention :notice :context {:job-id "j9"} :data {} :message "fled"}]
+          handler (fn [{:keys [path]}]
+                    (if (str/starts-with? path "/events")
+                      {:text (data/write-edn {:stream-id "s" :latest-seq 2 :cursor {:stream-id "s" :seq 2} :events events})}
+                      {:text "{:mode :scheduled :current nil :health 20 :food 18}"}))
+          [request-fn _] (fake/request-fn handler)]
+      (.mkdirSync fs (.dirname path file) #js {:recursive true})
+      (.writeFileSync fs file "{:cursor {:stream-id \"s\" :seq 0} :generation \"g\" :seen {}}\n")
+      (finish! done
+               (-> (observe/main! ["ProbeBody" "--world" "w" "--state" state] {:request-fn request-fn :output #(swap! lines conj %)})
+                   (.then (fn [code]
+                            (.rmSync fs state #js {:recursive true :force true})
+                            (let [out (data/read-edn (apply str @lines))]
+                              (is (= 0 code))
+                              (is (= [:completed :hostile.fled] (mapv :event (get-in out [:missed :items]))))
+                              (is (= 2 (get-in out [:missed :count])))))))))))

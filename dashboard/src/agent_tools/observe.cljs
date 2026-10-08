@@ -9,6 +9,7 @@
             [clojure.string :as str]
             ["node:timers/promises" :as timers]
             [agent-tools.observe.status :refer [attention-changes classify old-event-ms code-of coded collect compact-status death-details death-jobs clear-reported with-death-details id-str instance-names note-notice recovered? repeat-notice? stale-notice? signature stale-idle? stale-reconnect? summary-result track-deaths with-death-jobs]]
+            [agent-tools.observe.missed :refer [missed!]]
             [agent-tools.observe.lock :refer [acquire! checkpoint! observer-count saved-checkpoint]]
             [agent-tools.observe.request :refer [legacy-notice request-for usage wait-options]]
             [shadow.cljs.modern :refer [js-await]]))
@@ -367,6 +368,9 @@
 (defn job-not-found? [status text]
   (and (= 404 status) (= :job-not-found (:reason (data/read-edn text)))))
 
+(defn checkpoint-file [request]
+  (.join path (bodies/worlds-dir (:state request)) (:world request) "observers" (:agent request) "agent.edn"))
+
 (defn respond!
   "Print the engine's answer the way the request asked for it; a promise of the exit code. A job the scheduler
   no longer holds is answered from the retained event history."
@@ -382,7 +386,10 @@
       (-> (output (str (legacy-notice request) "\n")) (.then (constantly 2)))
 
       (and (starts? "/status") (not (:verbose request)) (= 200 status))
-      (-> (print! (compact-status (data/read-edn text))) (.then (constantly 0)))
+      (-> (missed! (:get! opts) (:socket-path request)
+                   (checkpoint-file request))
+          (.then #(print! (cond-> (compact-status (data/read-edn text)) % (assoc :missed %))))
+          (.then (constantly 0)))
 
       (and (starts? "/inventory") (:inventory-mode request) (not (:raw request)) (= 200 status))
       (let [result (data/read-edn text)]

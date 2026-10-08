@@ -2,11 +2,13 @@
   "Read the world's newest connected Overworld observer; never start a body."
   (:require [agent-tools.map :as map-tool]
             [agent-tools.world-data :as data]
+            [agent-tools.http :as http]
+            [agent-tools.observe.missed :refer [missed!]]
             ["node:fs" :as fs]
             ["node:path" :as path]
             ["node:timers/promises" :refer [setTimeout]]))
 
-(def usage "time.mjs --world WORLD clock|dawn [--worlds DIR --state LEGACY_PARENT --timeout 1200 --poll-ms 1000]\nclock: :time-of-day in ticks (0-24000; 13000-23000 is night), :day? true by day, :age-ms how old the reading is. dawn: waits until day.")
+(def usage "time.mjs --world WORLD clock|dawn [--worlds DIR --state LEGACY_PARENT --timeout 1200 --poll-ms 1000]\nclock: :time-of-day in ticks (0-24000; 13000-23000 is night), :day? true by day, :age-ms how old the reading is. dawn: waits until day, then adds :missed (job ends, flights, deaths since that body's observer last looked).")
 (def stale-ms 90000)
 
 (defn options [argv]
@@ -50,6 +52,16 @@
     (or (first (sort-by (juxt (comp - :seen-at) :by) (keep #(report ctx % now) bodies)))
         {:ok false :world (:world ctx) :reason :time-unknown})))
 
+(defn with-missed!
+  "A dawn result with what happened to the body that gave the clock since its observer last looked (:missed)."
+  [ctx {:keys [by] :as result}]
+  (if-not by
+    (js/Promise.resolve result)
+    (let [get! (fn [socket-path path options] (http/request (assoc options :socket-path socket-path :path path :label "time" :timeout-ms 3000)))]
+      (-> (missed! get! (.join path (:world-dir ctx) "agents" by "engine" "events.sock")
+                   (.join path (:world-dir ctx) "observers" by "agent.edn"))
+          (.then #(cond-> result % (assoc :missed %)))))))
+
 (defn execute! [{:keys [ctx command timeout-ms poll-ms]}]
   (let [started (js/Date.now) deadline (+ started timeout-ms)]
     (letfn [(poll []
@@ -64,6 +76,8 @@
 
 (defn main! [argv]
   (-> (js/Promise.resolve nil)
-      (.then (fn [_] (execute! (options (vec argv)))))
+      (.then (fn [_] (let [opts (options (vec argv))]
+                       (-> (execute! opts)
+                           (.then #(if (= :dawn (:command opts)) (with-missed! (:ctx opts) %) %))))))
       (.then (fn [result] (.write (.-stdout js/process) (str (data/write-edn result) "\n")) (if (:ok result) 0 1)))
       (.catch (fn [error] (.write (.-stdout js/process) (str (data/write-edn (map-tool/error-result error)) "\n")) 2))))

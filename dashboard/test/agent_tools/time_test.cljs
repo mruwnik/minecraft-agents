@@ -1,5 +1,5 @@
 (ns agent-tools.time-test
-  (:require [cljs.test :refer [deftest is]]
+  (:require [cljs.test :refer [deftest is async]]
             [agent-tools.time :as time]
             ["node:fs" :as fs]
             ["node:os" :as os]
@@ -31,3 +31,10 @@
 (deftest a-stale-or-offline-reading-is-no-clock
   (is (= {:ok false :reason :time-unknown} (select-keys (clock-of pose (+ 1000000 time/stale-ms 1)) [:ok :reason])))
   (is (false? (:ok (clock-of (assoc pose :status "offline") 1001000)))))
+
+(deftest a-dawn-result-without-a-checkpoint-or-body-gets-no-missed
+  (async done
+    (-> (js/Promise.all #js [(time/with-missed! {:world-dir "/nonexistent"} {:ok true :wake :day})
+                             (time/with-missed! {:world-dir "/nonexistent"} {:ok true :wake :day :by "Bob"})])
+        (.then (fn [rs] (is (= [{:ok true :wake :day} {:ok true :wake :day :by "Bob"}] (vec rs)))))
+        (.finally done))))
