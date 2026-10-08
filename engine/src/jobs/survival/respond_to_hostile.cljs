@@ -27,7 +27,8 @@
   (:ranged-radius for ranged mobs) and the retreat is not hiding (sealed in, up a pillar or down a pit).
   A child that stops (a retreat that cannot escape) stops it with that cause; three calls in a row that change
   neither the body's cell, its health, the dangers near nor the fight's hits stop it :no_response; never :continue.
-  Memory: writes one :hostile entry {:mob :decision} plus :pos (seen) or :direction :band :from (heard only) per encounter.
+  Memory: writes one :hostile entry {:mob :decision} plus :pos (seen) or :direction :band :from (heard only) per encounter,
+  and says it in one hostile.decided event.
   A danger reflex: never backed off.")
 
 (a/defargs args
@@ -59,10 +60,17 @@
                      :flee {:radius radius :ranged-radius ranged-radius :weapons weapons :reserve reserve :quiet-s quiet-s})]
     (await (ctx/call-child c decision (child-jobs decision) child-args))))
 
+(defn encounter-text [{:keys [mob decision pos direction band]}]
+  (str (name decision) ": " mob
+       (if pos
+         (str " seen at " (pr-str (mapv #(js/Math.floor (% pos)) [:x :y :z])))
+         (str " heard " (name band) ", " (name direction)))))
+
 (defn log-encounter! [c threat decision]
   (when-not (:logged (ctx/mem c))
-    (ctx/remember! c :hostile (assoc (threats/place-of (:primitives c) threat) :mob (.-name threat) :decision decision)
-                   hostile-policy)
+    (let [entry (assoc (threats/place-of (:primitives c) threat) :mob (.-name threat) :decision decision)]
+      (ctx/remember! c :hostile entry hostile-policy)
+      (ctx/emit! c :hostile.decided :info (assoc (dissoc entry :from) :text (encounter-text entry))))
     (ctx/update-mem! c assoc :logged true)))
 
 (defn mob-of

@@ -179,6 +179,21 @@
           (is (= [] (:list (core/state eng))))
           (is (= {:cap 50 :ttl 3600000} (mem/policy (mem/view (:store eng)) :hostile))))))))
 
+(defn decided [seen] (mapv #(select-keys % [:mob :decision :pos :direction :band]) (filter #(= :hostile.decided (:kind %)) @seen)))
+
+(deftest respond-says-once-what-it-answers-and-how-it-knows-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [seen]} (await (flight-round respond {:inventory sword :entities [(zombie 100 3 0)]}))]
+          (is (= [{:mob "zombie" :decision :fight :pos {:x 3 :y 64 :z 0}}] (decided seen))
+              "a seen mob: its place, one event for the whole encounter"))
+        (let [{:keys [eng seen]} (setup-seeing {:inventory sword :entities [(zombie 101 0.5 -5.5)]} [0 0])]
+          (core/submit! eng respond {})
+          (await (core/tick! eng))
+          (is (= [{:mob "zombie" :decision :fight :direction :north :band :near}] (decided seen))
+              "a heard-only mob: what the sound tells, never its place"))))))
+
 ;; ------------------------------------------------------------- fight-back
 
 (def fight '(jobs.survival.fight-back))
