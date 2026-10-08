@@ -229,6 +229,8 @@
       (some step-problem? (:act c)) (conj (str ":act steps must be one of " (sort step-kinds)))
       (seq (unbounded-selectors c)) (conj "an @e selector must be bounded to the plot: use $BOX (x,y,z,dx,dy,dz), not distance")
       (some #(not (and (after-kinds (first %)) (or (not= :file (first %)) (string? (second %))))) (:after c)) (conj (str ":after checks must be one of " (sort after-kinds)))
+      (some #(and (map? %) (contains? % ::rel) (= :vec (::as %))) (tree-seq coll? seq (:after c)))
+      (conj "positions in :after are plot-relative; drop #at")
       (and (empty? (:expect c)) (empty? (:after c))) (conj "the case checks nothing: it needs an :expect or :after")
       (and (empty? (:after c)) (seq (:expect c)) (not-any? #(or (:event %) (:from-event %) (pos? (or (:at-least %) 0))) (:expect c)))
       (conj "the case has no positive anchor: silence on an empty log passes; add an :event expectation, :from-event, a :count-event with :at-least or an :after check")

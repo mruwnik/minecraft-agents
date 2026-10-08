@@ -74,6 +74,13 @@
     (is (seq (ps {:plot {:height 16 :width 65}})))
     (is (seq (ps {:plot {:height 16 :length 8}})))))
 
+(deftest after-positions-are-plot-relative-so-no-at-tag
+  (let [ps #(f/problems (f/merge-case {} (merge {:name "a" :body {:at [1 0 1]} :act [] :expect [{:event {:kind :x} :within-s 1}]} %)))]
+    (is (empty? (ps {:after [[:block [1 2 3] "stone"]]})))
+    (is (some #(re-find #"drop #at" %) (ps {:after [[:block (f/rel [1 2 3]) "stone"]]})))
+    (is (some #(re-find #"drop #at" %) (ps {:after [[:entities {:at [(f/rel [1 2 3]) 4]}]]})))
+    (is (empty? (ps {:act [[:rcon "x"]] :expect [{:event {:at (f/rel [1 2 3])} :within-s 1}]})))))
+
 (deftest a-file-of-cases-merges-each-case-over-its-defaults
   (let [[open glass bad] (f/file-cases text "hostile")]
     (is (= "hostile/open" (:id open)))
