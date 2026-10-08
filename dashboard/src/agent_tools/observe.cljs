@@ -8,7 +8,7 @@
             ["node:path" :as path]
             [clojure.string :as str]
             ["node:timers/promises" :as timers]
-            [agent-tools.observe.status :refer [attention-changes classify old-event-ms code-of coded collect compact-status death-details death-jobs clear-reported with-death-details id-str instance-names note-notice recovered? repeat-notice? stale-notice? signature stale-idle? stale-reconnect? summary-result track-deaths with-death-jobs]]
+            [agent-tools.observe.status :refer [attention-changes classify old-event-ms code-of coded collect compact-status death-details death-jobs clear-reported with-death-details id-str instance-names note-notice recovered? repeat-notice? stale-notice? signature idle-before-watch? stale-idle? stale-reconnect? summary-result track-deaths with-death-jobs]]
             [agent-tools.observe.missed :refer [missed!]]
             [agent-tools.observe.lock :refer [acquire! checkpoint! observer-count saved-checkpoint]]
             [agent-tools.observe.request :refer [legacy-notice request-for usage wait-options]]
@@ -31,6 +31,11 @@
     (cond
       (and (= :job source) (some #{(:job-id context)} (:watch opts)) (or (#{:queued :round_started} kind) (job-results/terminal-kinds kind)))
       (str "job:" (:job-id context)))))
+
+(defn watched-end?
+  "Whether e ends a watched job."
+  [e opts]
+  (boolean (and (= :job (:source e)) (job-results/terminal-kinds (:kind e)) (some #{(get-in e [:context :job-id])} (:watch opts)))))
 
 (defn recent-results
   "Classified results of the watched jobs among past events, oldest first."
@@ -146,6 +151,7 @@
           _ (swap! deaths clear-reported event)
           immediate (when-not (or (and failed? (stale-reconnect? event later))
                               (and (= :idle (:kind event)) (= :body (:source event)) (stale-idle? event later))
+                              (idle-before-watch? event opts (:started-ms @st))
                               (repeat-notice? (:noticed @st) event)
                               (stale-notice? event later))
                       (some-> (classify event opts body) (with-death-jobs dead-jobs) (with-death-details details)))
@@ -173,7 +179,8 @@
           (swap! st assoc :snap snap)
           (let [update (attention-changes (:outstanding snap) (:seen @st))]
             (swap! st assoc :seen (:seen update))
-            (if (seq (:changed update))
+            ;; A watched job's end wakes as :job-finished (with its reason), not as the attention it raised.
+            (if (and (seq (:changed update)) (not (watched-end? event opts)))
               (finish! w (attention-wake update))
               (continue-event w event more (rest events) page))))
         (continue-event w event more (rest events) page)))))
@@ -250,7 +257,8 @@
             w (assoc w :generation generation :body (or (:body snap) (:agent request)) :watching? (boolean (seq (:watch opts))))]
         (reset! st {:cursor (or (:cursor saved) (:cursor snap)) :generation generation
                     :seen (or (:seen saved) seen-now) :lookup (or (nil? saved) (true? (:lookup saved)))
-                    :pending (vec (:pending saved)) :noticed (vec (:noticed saved)) :snap snap})
+                    :pending (vec (:pending saved)) :noticed (vec (:noticed saved)) :snap snap
+                    :started-ms (js/Date.now)})
         (reset! deaths {:names (instance-names snap) :cancelled (vec (:cancelled saved))})
         (when-not saved
           (save! (assoc w :st (atom (select-keys @st [:cursor :generation :seen :lookup :noticed])))))

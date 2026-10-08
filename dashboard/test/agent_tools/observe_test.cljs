@@ -1017,6 +1017,47 @@
           (.then (fn [_] (wait-for! f {:timeout "50ms" :watch ["j9"]})))
           (.then (fn [_] (is (= [] (observer-files f)))))))))
 
+(def parked
+  {:job-id "j101" :reason :round-failed :updated-at 1
+   :event {:kind :failed :message "Job failed and is parked until retried or cancelled: boom"
+           :data {:error "boom" :reason :round-failed}}})
+
+(defn parked-event [seq]
+  {:seq seq :generation-id "g" :source :job :kind :failed :attention :required
+   :context {:job-id "j101" :chain ["j101"]} :data {:error "boom" :reason :round-failed}
+   :message "Job failed and is parked until retried or cancelled: boom"})
+
+(deftest a-watched-job-that-fails-with-attention-wakes-as-finished-with-its-reason
+  (with-fixture ["1s"]
+    (fn [f]
+      (js/setTimeout (fn []
+                       (swap! (:world f) assoc-in [:outstanding :r101] parked)
+                       (push! f (parked-event 1)))
+                     60)
+      (-> (wait-for! f {:watch ["j101"]})
+          (.then (fn [wake]
+                   (is (= {:wake :job-finished :job "j101" :result :failed :message "boom"}
+                          (select-keys wake [:wake :job :result :message])))))))))
+
+(deftest a-failed-watched-job-does-not-wake-again-as-attention-on-the-next-wait
+  (with-fixture ["1s"]
+    (fn [f]
+      (swap! (:world f) assoc-in [:outstanding :r101] parked)
+      (push! f (parked-event 1))
+      (-> ((:wait! f))
+          (.then (fn [_] ((:wait! f))))
+          (.then (fn [again] (is (not= :attention (:wake again)))))))))
+
+(deftest an-idle-notice-from-before-the-watch-started-does-not-wake-it
+  (with-fixture ["200ms"]
+    (fn [f]
+      (-> ((:wait! f))
+          (.then (fn [_]
+                   (push! f (assoc (event :body :idle {:jobs []} "body idle 10 s") :seq 1 :time-ms 1000))
+                   (let [req (assoc-in (:req f) [:wait-options :watch] ["j9"])]
+                     (observe/wait-observe req (:get! f) nil (fn [_] (js/Promise.resolve nil))))))
+          (.then (fn [wake] (is (not= :idle (:wake wake)))))))))
+
 ;; Deaths through the wait loop
 
 (defn died-item [result] (when (= :died (:wake result)) result))

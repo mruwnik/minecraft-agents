@@ -177,6 +177,13 @@
                       (and (= :action (:source %)) (= :started (:kind %)) (= "moveTo" (get-in % [:data :name]))))
                  later)))
 
+(defn idle-before-watch?
+  "Whether e is a body.idle stamped before the wait began, under a --watch: the watch is about its jobs, and the
+  idle was said of a body state that has changed since."
+  [e opts started-ms]
+  (boolean (and (seq (:watch opts)) (= :body (:source e)) (= :idle (:kind e)) started-ms
+                (some-> (:time-ms e) (< started-ms)))))
+
 (defn classify
   "The wake an event causes under the options, or nil. Options: :from :chatter :watch :danger :disconnect
   :quiet-notices. A body.idle and a death always wake, and so does any :attention :notice event but a job end; under
@@ -209,7 +216,7 @@
 
       (and (= :job source) (job-results/terminal-kinds kind) (some #{(get-in e [:context :job-id])} (:watch opts)))
       (clean-pairs :wake :job-finished :job (get-in e [:context :job-id]) :result (:kind e)
-                   :message (clip (or (:message e) (:error d))))
+                   :message (clip (or (:error d) (:message e))))
 
       (and (= :notice (:attention e)) (not (:quiet-notices opts)) (not (job-results/terminal-kinds kind))
            (not (unwatched-notice? e opts)))
