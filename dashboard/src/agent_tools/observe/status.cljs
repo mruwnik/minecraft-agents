@@ -156,11 +156,15 @@
                   (some #(and (= :job (:source %)) (job-results/terminal-kinds (:kind %)) (= job (get-in % [:context :job-id])))
                         later)))))
 
+(def body-notice-kinds
+  "Notices about the body itself, from a reflex job the agent never watches: they wake under any --watch."
+  #{:hostile.fled})
+
 (defn unwatched-notice?
   "Whether a notice belongs to a job outside a non-empty --watch list (a child counts as its top job)."
   [e opts]
   (let [job (get-in e [:context :job-id])]
-    (boolean (and (seq (:watch opts)) job
+    (boolean (and (seq (:watch opts)) job (not (body-notice-kinds (:kind e)))
                   (not-any? #{(first (str/split job #"/"))} (:watch opts))))))
 
 (def jobs-changed-kinds (conj job-results/terminal-kinds :queued))
