@@ -536,6 +536,28 @@
               (await (tu/child-outcome eng 'jobs.forestry.fell-tree args 60))
               (is (= n (count (digs p))) (pr-str args)))))))))
 
+(deftest fell-tree-fells-a-tree-outside-its-own-plan-without-a-decline-warn
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [spec {:blocks (merge (ground [[3 0] [7 0]]) (lt/tree 3 0 "oak" 3) (lt/tree 7 0 "oak" 3))}
+              own (shape/with-author (forest-plan ["a" [[3 64 0] [3 65 0] [3 66 0]] "oak"]) "Fake")
+              {:keys [eng p seen]} (start spec {"forest" own})]
+          (await (tu/child-outcome eng 'jobs.forestry.fell-tree {:radius 10} 60))
+          (is (= [[7 64 0] [7 65 0] [7 66 0]] (digs p)) "the tree 4 blocks outside the plan is felled, the plan's tree spared")
+          (is (= [] (warns seen :fell-tree.declined)) "a spared tree is not a decline"))))))
+
+(deftest fell-tree-declines-a-tree-in-another-agents-plan-naming-the-plan
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [spec {:blocks (merge (ground [[3 0]]) (lt/tree 3 0 "oak" 3))}
+              theirs (shape/with-author (forest-plan ["a" [[3 64 0] [3 65 0] [3 66 0]] "oak"]) "Other")
+              {:keys [eng p seen]} (start spec {"forest" theirs})]
+          (await (tu/child-outcome eng 'jobs.forestry.fell-tree {:radius 10} 60))
+          (is (= [] (digs p)))
+          (is (= [["forest"]] (mapv :plans (warns seen :fell-tree.declined)))))))))
+
 ;; ------------------------------------------------------------------ :accept reaches the fell child
 
 (deftest fell-tree-digs-with-the-accept-it-was-given

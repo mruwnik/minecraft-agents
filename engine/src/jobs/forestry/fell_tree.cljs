@@ -70,10 +70,13 @@
    :pillar? {:doc "fell a log out of reach of the ground from a pillar (blocks placed, then taken back); false: such a tree is left" :spec boolean? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
+(defn gate-opts [c]
+  {:except (:for-plan (:args c)) :own-plans-ok? (false? (:spare-own-builds (:args c)))})
+
 (defn log-allowed?
   "Whether the job may dig the log at pos (one warn per job when refused)."
   [c pos]
-  (gate/allowed? c :fell-tree.declined "fell-tree" :dig pos {:except (:for-plan (:args c)) :own-plans-ok? (false? (:spare-own-builds (:args c)))}))
+  (gate/allowed? c :fell-tree.declined "fell-tree" :dig pos (gate-opts c)))
 
 (defn column-logs
   "Logs standing in the chosen column, lowest first."
@@ -187,6 +190,12 @@
 (a/defargs settings
   {::drop-radius {:default 6 :doc "Blocks round the base the cut logs are picked up from before a pillar is built." :spec (a/num-in 0 nil)}})
 
+(defn own-spared?
+  "Whether the dig at pos is refused only by a plan this body made: a build it spares, not a refusal to report."
+  [in pos]
+  (let [v (access/may? in :dig pos)]
+    (and (= :footprint (:reason v)) (contains? (:own-plans in) (:plan v)))))
+
 (defn candidates
   "The trees the job may fell, nearest in a line first (lazily): the one at :at (none once marked unreachable), else
   those of species within radius not marked unreachable; a tree whose base log the zones refuse is left out."
@@ -196,7 +205,9 @@
     (if-let [at (:at (:args c))]
       (when-let [t (tree-at p at)]
         (when-not (or (excluded [(:x at) (:z at)]) (not (log-allowed? c (:base t)))) [t]))
-      (filter #(log-allowed? c (:base %)) (trees-near p radius species excluded)))))
+      (let [in (access/rules-input c (gate-opts c))]
+        (filter #(and (not (own-spared? in (:base %))) (log-allowed? c (:base %)))
+                (trees-near p radius species excluded))))))
 
 (defn tree-logs
   "The logs of the chosen column: read from :at up when the job was given one, else those in radius."
