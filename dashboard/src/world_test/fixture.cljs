@@ -473,6 +473,11 @@
                 (into ["--by" "world-test"]))))
         (resolve-tags register origin)))
 
+(defn park-commands
+  "Before the plot is built: the body (still wherever the last case left it, maybe inside this plot) becomes a spectator, so stone filled over it does not hurt it; body-commands puts it back in survival."
+  [body]
+  [(str "gamemode spectator " body)])
+
 (defn body-commands
   "Put the body at its start (facing :yaw, 0 = south, 180 = north; :pitch, 0 level, positive down): on the plot, survival, healed and fed, its inventory and effects as the case says."
   [origin body c]

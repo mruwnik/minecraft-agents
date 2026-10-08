@@ -154,6 +154,8 @@
            (f/block-commands origin glass)))
     (is (= "fill 20001 150 20001 20003 152 20003 glass hollow" (f/block-command origin [:fill [1 0 1] [3 2 3] "glass" :hollow])))
     (is (= "setblock 20001 150 20002 oak_fence_gate[facing=east]" (f/block-command origin [:set [1 0 2] "oak_fence_gate[facing=east]"])))
+    (is (= ["gamemode spectator ProbeFixture"] (f/park-commands "ProbeFixture"))
+        "the body is parked as a spectator while the plot is built: stone filled over where it stands must not suffocate it")
     (let [body (f/body-commands origin "ProbeFixture" glass)]
       (is (some #{"tp ProbeFixture 20016.5 150 20016.5 0 0"} body))
       (is (some #{"give ProbeFixture bread 3"} body))
