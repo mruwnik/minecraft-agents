@@ -39,7 +39,7 @@
     order; the first with a plan is made, but one with no smelt step before one with. Three fruitless steps stop it (:tried :craft).
   - :gather (in :how): coal comes from a plain or deepslate ore seen; dirt is dug from seen dirt or grass; every raw item a chain lacks must be seen before it starts. A sapling (no recipe) comes from the leaves of its tree the body has seen, broken by
     jobs.gather.get-seeds (at most 60 leaves, one run; the drop is picked up). What a craft chain lacks that has no recipe (logs, coal, stone-tool material; recipes/gatherable?, stone-materials) is
-    felled or mined as one child per round, only what the body has seen: logs by jobs.forestry.harvest-wood,
+    felled or mined as one child per round, only what the body has seen: logs by jobs.forestry.harvest-wood (of any species, but one only its species makes, oak_log for oak_planks, from that species' trees),
     cobblestone and ore drops (coal, raw_iron, raw_gold, diamond ..: from the plain or deepslate ore seen) by jobs.gather.mine (its pickaxe only from a chest or a craft, never gathered: no mine inside a mine's fetch, so no loop back into obtain). The crafts follow once the chain is whole (a chain that is craftable now
     is crafted first). A child that brings in nothing three times stops it (:tried :gather). A mined need (seen, or
     with :explore) whose block no carried tool harvests gets the cheapest tool that does first (an obtain child, slot
@@ -204,6 +204,19 @@
   [c plan]
   (every? #(or (:sheep %) (seen-of c %)) (some-> plan :gather (gather-needs (game/version-of (:primitives c))))))
 
+(defn log? [name] (clojure.string/ends-with? name "_log"))
+
+(defn any-log
+  "The gather map with the logs any species would do as \"log\" (summed); a log only its own species makes (oak_log
+  for oak_planks) keeps its name: it stays the plan's even with plenty of another species carried."
+  [gather version have name n opts]
+  (let [free? (fn [k] (let [other (first (remove #{k} trees/log-names))
+                            pl (recipes/plan version (assoc have other 1000) name n opts)]
+                        (not (pos? (get-in pl [:gather k] 0)))))
+        free (filter (fn [[k _]] (and (log? k) (free? k))) gather)]
+    (cond-> (apply dissoc gather (map key free))
+      (seq free) (update "log" (fnil + 0) (reduce + 0 (vals free))))))
+
 (defn gather-plan
   "The craft chain for the first of names that has one once the raw items it lacks are gathered, with :gather
   {name n} when it lacks any, else nil. A sapling has no recipe: its plan is just :gather {name n}, when its leaves are seen (or its child is running).
@@ -221,16 +234,17 @@
                     (when (or (= name (get-in (ctx/mem c) [:gather :item]))
                               (seq (look/seen-blocks p {:names (vec seen-of-name) :radius 16 :max 1})))
                       {:steps [] :gather {name n} :item name})
-                    (when-let [pl (recipes/plan version have name n (merge (source-opts)
-                                                                           {:table? (boolean (or (:table (ctx/mem c)) (craft/nearest-table p (craft-radius))))
-                                                                            :gather? true :materials materials}))]
-                      (assoc pl :item name))))]
+                    (let [opts (merge (source-opts)
+                                      {:table? (boolean (or (:table (ctx/mem c)) (craft/nearest-table p (craft-radius))))
+                                       :gather? true :materials materials})]
+                      (when-let [pl (recipes/plan version have name n opts)]
+                        (-> pl
+                            (update :gather any-log version have name n opts)
+                            (assoc :item name))))))]
     (if (= 1 (count names))
       (plan-of (first names))
       (let [plans (keep plan-of names)]
         (pick-plan c (or (not-empty (filter #(raw-seen? c %) plans)) plans))))))
-
-(defn log? [name] (clojure.string/ends-with? name "_log"))
 
 (def sapling-leaf-limit
   "Leaves broken for one sapling at most (a drop is about 1 in 20); one run, no retries."
@@ -253,7 +267,7 @@
   tunnels and descends for it rather than a surface search); so is a stone material (it stairs down to stone)."
   ([gather] (gather-needs gather game/default-version))
   ([gather version]
-  (let [logs (reduce + 0 (for [[k v] gather :when (log? k)] v))]
+  (let [logs (get gather "log" 0)]
     (vec (concat
           (for [[sapling n] gather :when (leaves-of sapling)]
             {:key sapling :count n :job 'jobs.gather.get-seeds :seen #{(leaves-of sapling)} :max-runs 1
@@ -262,6 +276,8 @@
             {:key k :count n :job 'jobs.combat.hunt :sheep (wool-color k)
              :args {:mob "sheep" :color (wool-color k) :count n :radius (sheep-radius)}})
           (when (pos? logs) [{:key "log" :count logs :job 'jobs.forestry.harvest-wood :seen log? :args {:fetch #{:item}}}])
+          (for [[k n] gather :when (log? k)]
+            {:key k :count n :job 'jobs.forestry.harvest-wood :seen #{k} :args {:species (trees/species-of k) :fetch #{:item}}})
           (for [[k n] gather :when (material-blocks version k)]
             (let [blocks (material-blocks version k)]
               {:key k :count n :job 'jobs.gather.mine :seen blocks :tunnel? true
@@ -304,7 +320,7 @@
 (defn with-count
   "The need with the logs to carry in all (harvest-wood's :count) in its args: those carried and those it lacks."
   [p need]
-  (if (= "log" (:key need))
+  (if (= 'jobs.forestry.harvest-wood (:job need))
     (assoc-in need [:args :count] (+ (gather-carried p need) (:count need)))
     need))
 
@@ -365,7 +381,7 @@
     (str "nothing seen to gather what a craft lacks"
          (when (seq unseen)
            (str ": " (clojure.string/join ", " (for [{:keys [key seen sheep]} unseen]
-                                                  (if sheep (str key " (from " sheep " sheep within " (sheep-radius) " blocks)") (if (set? seen) (str key " (from " (clojure.string/join "/" (sort seen)) ")") key)))))))))
+                                                  (if sheep (str key " (from " sheep " sheep within " (sheep-radius) " blocks)") (if (and (set? seen) (not= #{key} seen)) (str key " (from " (clojure.string/join "/" (sort seen)) ")") key)))))))))
 
 (defn pickaxe-why
   "For a stone material wanted with no pickaxe carried: that it needs one, and what crafting the cheapest lacks; else nil."
@@ -648,7 +664,7 @@
       (do (when-not (get-in (ctx/mem c) [:gather :before])
             (ctx/update-mem! c assoc-in [:gather :before] (gather-carried p need))
             (ctx/update-mem! c assoc-in [:gather :item] (:key need))
-            (when (= "log" (:key need))
+            (when (= 'jobs.forestry.harvest-wood (:job need))
               (ctx/update-mem! c assoc-in [:gather :tree] (select-keys need [:key :job :args])))
             (when-let [{:keys [wanted taking]} (:wool-fallback pl)]
               (ctx/emit! c :obtain.wool-colour :info

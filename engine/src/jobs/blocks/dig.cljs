@@ -40,7 +40,7 @@
   A block under the feet with no seen solid floor below it is not dug from on top: the body first steps off its
   column to a cell beside it on a seen floor (a go-to child), then digs. Only :accept :under-feet digs it from on top
   (a caller that knows the floor below, e.g. its own pillar).
-  In reach it holds the best carried tool (tools/equip-for!) and digs through jobs.lib.tidy/dig!, so a dig of
+  In reach it holds the best carried tool (tools/equip!; by hand when a tool of another kind is held) and digs through jobs.lib.tidy/dig!, so a dig of
   another's block with :ignore-zones? is recorded for jobs.survival.restore-broken. With :collect it picks up the
   drops (only the item entities that appeared with this dig, by id).
   First, with :on-lava :seal (default), seen lava beside the dug cell (what the dig laid open) is filled with a building
@@ -214,7 +214,7 @@
   "Hold the best tool and dig; book the outcome. Resolves to :done (finished), :collect (dug: lava to seal, drops to
   pick up) or :unreachable (the primitive says out of reach)."
   [c pos block]
-  (await (tools/equip-for! c block))
+  (await (tools/equip! c block))
   (let [r (await (tidy/dig! c pos))
         status (.-status r)
         _ (when (= "dug" status) (await (look/look-at! c (b/cell pos))))

@@ -80,6 +80,25 @@
           (is (= 1 (carried p "cobblestone")))
           (is (= 1 (count (filter #(= :blocks.dig.done (:kind %)) @seen)))))))))
 
+(deftest leaves-are-never-dug-with-a-pickaxe
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self body :blocks {"2,64,0" "oak_leaves"} :inventory pick})
+              result (await (child-outcome eng job {:pos [2 64 0]} 10))]
+          (is (:dug result) (pr-str result))
+          (is (empty? (calls p "equip")) "a pickaxe digs leaves no faster and wears out"))))))
+
+(deftest a-held-pickaxe-is-put-away-for-dirt-when-no-shovel-is-carried
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self (assoc body :held "stone_pickaxe") :blocks {"2,64,0" "dirt"}
+                                      :inventory [{:name "stone_pickaxe" :count 1}]})
+              result (await (child-outcome eng job {:pos [2 64 0]} 10))]
+          (is (:dug result) (pr-str result))
+          (is (nil? (.-held (.self p))) "the dirt is dug by hand"))))))
+
 (deftest a-block-out-of-reach-is-walked-to-first
   (async done
     (tu/run-async done

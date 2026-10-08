@@ -896,6 +896,19 @@
           (is (some #(re-find #"tool for stone" (:text %)) (h/events-of seen :fetch.started)) "the pickaxe fetch is not held back")
           (is (= {} (:given-up result))))))))
 
+(deftest cobblestone-with-no-pickaxe-is-mined-with-a-pickaxe-crafted-from-carried-logs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "step" :parts [{:id "s" :cells [[3 64 3] [4 64 3]] :want "cobblestone"}]}
+              stone (into {} (for [x [-1 0] z [5 6] [y b] [[63 "andesite"] [64 "stone"]]] [(str x "," y "," z) b]))
+              spec {:blocks stone :drops {"stone" "cobblestone"} :inventory [{:name "oak_log" :count 4}]}
+              {:keys [eng p]} (start spec {"step" plan})
+              result (await (tu/child-outcome eng job {:plan "step" :fetch {:explore false}} 600))]
+          (is (= "cobblestone" (block p [3 64 3])) (pr-str (select-keys result [:short :fetch-failed :text])))
+          (is (= "cobblestone" (block p [4 64 3])))
+          (is (= [] (:missing result))))))))
+
 (deftest the-default-fetch-explores-for-what-is-short
   (async done
     (tu/run-async done

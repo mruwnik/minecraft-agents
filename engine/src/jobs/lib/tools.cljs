@@ -18,10 +18,11 @@
     "coarse_dirt" "rooted_dirt" "podzol" "mycelium" "farmland" "dirt_path"})
 
 (defn tool-kind
-  "\"shovel\", \"axe\" or \"pickaxe\": the tool that digs block-name fastest."
+  "\"shovel\", \"axe\", \"hoe\" or \"pickaxe\": the tool that digs block-name fastest."
   [block-name]
   (cond
     (shovel-blocks block-name) "shovel"
+    (str/ends-with? block-name "_leaves") "hoe"
     (some #(str/ends-with? block-name %) ["_log" "_wood" "_planks"]) "axe"
     :else "pickaxe"))
 
@@ -183,13 +184,15 @@
   (and (not (can-harvest? p block-name))
        (> (clear-ms p block-name) (quick-clear-ms))))
 
+(def dig-kinds ["pickaxe" "axe" "shovel" "hoe"])
+
 (defn hand-better?
-  "Whether the body should dig block bare-handed: it is not a pickaxe block, no tool of its kind is carried, and a
-  pickaxe is held (soil by hand, never wearing the pickaxe out on it)."
+  "Whether the body should dig block bare-handed: a digging tool of another kind is held and none of the block's kind
+  is carried (soil and leaves by hand, never wearing a pickaxe out on them)."
   [p block]
-  (let [held (.-held (.self p))]
-    (boolean (and block held (str/ends-with? held "_pickaxe") (not= "pickaxe" (tool-kind block))
-                  (nil? (pick p block))))))
+  (let [held (.-held (.self p))
+        kind (when held (some #(when (str/ends-with? held (str "_" %)) %) dig-kinds))]
+    (boolean (and block kind (not= kind (tool-kind block)) (nil? (pick p block))))))
 
 (defn ^:async equip!
   "Hold the best carried tool for block (the mined block when not given)."

@@ -906,6 +906,30 @@
           (is (= 1 (get (inv s) "wooden_pickaxe")))
           (is (seq (calls s "dig")) "a log was felled"))))))
 
+(deftest obtain-oak-planks-fells-no-birch
+  ;; a birch log makes no oak planks: felling birch for them gathered hundreds of logs live
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [birch (into {} (for [y (range 64 68)] [(str "4," y ",9") "birch_log"]))
+              s (start (update (bare []) :blocks merge birch {"4,68,9" "birch_leaves"}) [own-zone])]
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "oak_planks" :count 4}) {})
+          (await (run-ticks s 60))
+          (is (empty? (calls s "dig")))
+          (is (nil? (get (inv s) "birch_log")))
+          (is (some #(re-find #"gather what a craft lacks: oak_log" (str (:why %))) (concat (events-of s :waiting) (events-of s :stopped)))
+              (pr-str (map :why (concat (events-of s :waiting) (events-of s :stopped))))))))))
+
+(deftest obtain-wooden-pickaxe-fells-a-birch-any-planks-do
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [birch (into {} (for [y (range 64 68)] [(str "4," y ",9") "birch_log"]))
+              s (start (update (bare []) :blocks merge birch {"4,68,9" "birch_leaves"}) [own-zone])]
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "wooden_pickaxe"}) {})
+          (await (run-ticks s 60))
+          (is (pos? (get (inv s) "birch_log" 0)) (pr-str (inv s))))))))
+
 (deftest obtain-gathers-the-cobblestone-a-craft-lacks
   (async done
     (tu/run-async done
@@ -1015,6 +1039,29 @@
           (await (run-ticks s 80))
           (is (empty? (listed s)))
           (is (pos? (get (inv s) "torch" 0))))))))
+
+(deftest obtain-cobblestone-with-only-logs-crafts-a-wooden-pickaxe-and-mines-seen-stone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (assoc (update (world {}) :blocks merge (into {} (for [x [0 1] z [5 6]] [(str x ",64," z) "stone"])))
+                              :inventory [{:name "oak_log" :count 4}]) [own-zone])]
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "cobblestone" :count 3}) {})
+          (await (run-ticks s 160))
+          (is (empty? (listed s)) (pr-str (map :why (events-of s :waiting))))
+          (is (= 1 (get (inv s) "wooden_pickaxe")) (pr-str (inv s)))
+          (is (<= 3 (get (inv s) "cobblestone" 0))))))))
+
+(deftest obtain-cobblestone-unseen-with-explore-and-only-logs-crafts-the-pickaxe-then-runs-the-mine
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (bare [{:name "oak_log" :count 4}]) [own-zone])]
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "cobblestone" :count 3 :explore true}) {})
+          (await (run-ticks s 60))
+          (is (= 1 (get (inv s) "wooden_pickaxe")) (pr-str (inv s)))
+          (is (empty? (events-of s :obtain.exploring)) "no surface search")
+          (is (some #(re-find #"^mine\." (name (:kind %))) @(:seen s)) "the mine child ran"))))))
 
 (deftest obtain-digs-dirt-from-seen-grass-when-nothing-else-has-it
   ;; a pillar fetch (any-of dirt/cobblestone) on grassland: the dirt under seen grass is dug by hand

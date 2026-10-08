@@ -14,7 +14,9 @@
     "oak_wood" "axe"
     "stone" "pickaxe"
     "cobblestone" "pickaxe"
-    "iron_ore" "pickaxe"))
+    "iron_ore" "pickaxe"
+    "oak_leaves" "hoe"
+    "azalea_leaves" "hoe"))
 
 (deftest best-tool-picks-the-highest-material-of-the-kind
   (are [items block expected] (= expected (tools/best-tool items block))
