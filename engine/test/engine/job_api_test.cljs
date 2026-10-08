@@ -211,3 +211,12 @@
           (is (= 1 (count (:register (core/state eng)))) "the trigger stays registered")
           (core/shutdown! eng)
           (await round))))))
+(deftest submit-takes-survive-death-and-listings-show-it
+  (let [{:keys [eng]} (setup)
+        r (command eng "keep" :submit {:spec '(wait) :survive-death? true})
+        plain (command eng "plain" :submit {:spec '(done)})]
+    (is (true? (get-in r [:job :survive-death?])))
+    (is (nil? (get-in plain [:job :survive-death?])) "only a flagged job carries the key")
+    (is (true? (:survive-death? (first (:items (api/list-jobs eng 0 8))))))
+    (is (= :bad-field (:reason (command eng "bad" :submit {:spec '(done) :survive-death? "yes"}))))
+    (core/shutdown! eng)))

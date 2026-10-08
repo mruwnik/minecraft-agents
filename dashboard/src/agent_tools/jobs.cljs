@@ -14,10 +14,11 @@
 
 (defn usage-for [prefix]
   "Build the usage string with the given invocation prefix (e.g., 'jobs.mjs' or './bin/jobs')."
-  (str "usage: " prefix " <body> --world <world> list [--limit 8 --offset 0] | show <jID> | submit <EDN-spec> [--hold] [--next | --now] [--wait [--timeout 60s]] | cancel <jID> | cancel-all | retry <jID> | resolve <request-id> --reason handled|condition-recovered [--worlds DIR --state LEGACY_PARENT]\n"
+  (str "usage: " prefix " <body> --world <world> list [--limit 8 --offset 0] | show <jID> | submit <EDN-spec> [--hold] [--survive-death] [--next | --now] [--wait [--timeout 60s]] | cancel <jID> | cancel-all | retry <jID> | resolve <request-id> --reason handled|condition-recovered [--worlds DIR --state LEGACY_PARENT]\n"
        "While manual control holds the body (drive.mjs take) only the driver's one job runs (world.mjs submit): others stay :queued and list/submit say who holds it; drive.mjs <body> release frees it.\n"
        "submit appends the job to the end of the list (jobs take turns). --hold makes the job hold the body: no other job gets a round until it ends or fails (reflexes still come first).\n"
        "A spec is a job name then its args map: submit '(jobs.movement.go-to {:pos {:x 1 :y 64 :z 2}})' or '(jobs.items.get-tool {:item \"stone_pickaxe\"})'. Find a job's args with observe.mjs <body> catalog job <name> (catalog jobs [prefix] lists names).\n"
+       "  --survive-death  the job stays listed through the body's death and runs again once the respawn reflexes (recover-drops, night) are done; other jobs are cancelled\n"
        "  --next  list it directly after the current job: it gets the next round, nothing is cut\n"
        "  --now    cut the current job and run this one at once (it holds the body, as --hold does, until it ends); the cut job keeps its memory and\n"
        "           continues right after it ends. Reflexes still come first: --now queues behind a running reflex (night, hostile) and the answer's :hint names it. --now and --next cannot be combined (refused).\n"
@@ -50,7 +51,7 @@
     (let [{:keys [positionals values]} (map-tool/parse-options argv
           {:state {:type "string"} :worlds {:type "string"} :world {:type "string"}
            :request-id {:type "string"} :limit {:type "string"} :offset {:type "string"}
-           :reason {:type "string"} :hold {:type "boolean"} :next {:type "boolean"} :now {:type "boolean"}
+           :reason {:type "string"} :hold {:type "boolean"} :survive-death {:type "boolean"} :next {:type "boolean"} :now {:type "boolean"}
            :wait {:type "boolean"} :timeout {:type "string"}})
           [body op arg & extra] positionals
           op (keyword (or op "list"))
@@ -76,6 +77,8 @@
         (throw (js/Error. "--limit and --offset require list")))
       (when (and (contains? values :hold) (not spec-op?))
         (throw (js/Error. "--hold requires submit")))
+      (when (and (contains? values :survive-death) (not spec-op?))
+        (throw (js/Error. "--survive-death requires submit")))
       (when (and (contains? values :next) (not= op :submit))
         (throw (js/Error. "--next requires submit")))
       (when (and (contains? values :now) (not= op :submit))
@@ -123,6 +126,7 @@
                                   spec-op? (assoc :spec (spec-for arg))
                                   (#{:cancel :retry} op) (assoc :id arg)
                                   (contains? values :hold) (assoc :hold? (:hold values))
+                                  (:survive-death values) (assoc :survive-death? true)
                                   (contains? values :next) (assoc :next? (:next values)))))))))))
     (catch :default error {:error (.-message error)})))
 

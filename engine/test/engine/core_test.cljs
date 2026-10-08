@@ -1154,6 +1154,30 @@
 
 ;; ---------------------------------------------------------------- shutdown
 
+(deftest a-death-cancels-the-listed-jobs-but-keeps-one-submitted-to-survive-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen p clock]} (setup)
+              world (.-world p)
+              kept (core/submit! eng (list 'walk {:pos {:x 5 :y 64 :z 0}}) {:survive-death? true})
+              plain (core/submit! eng '(count) {})]
+          (.hold world "moveTo")
+          (let [round (core/tick! eng)]
+            (core/record-body-event! eng #js {:kind "died"})
+            (await round))
+          (is (= [kept] (listed eng)) "the flagged job stays listed")
+          (is (= [[plain :death]] (->> @seen (filter #(= :cancelled (:kind %))) (mapv (juxt :job :by)))))
+          (is (= [[kept :death]] (->> @seen (filter #(= :cut (:kind %))) (mapv (juxt :job :by))))
+              "its round in flight is cut, its memory kept")
+          (is (= [kept] (:survived (first (filter #(= :died (:kind %)) @seen)))) "the death event names it")
+          (is (nil? (core/tick! eng)) "a dead body starts no listed job")
+          (swap! clock + 1000)
+          (.respawn world)
+          (await (core/tick! eng))
+          (is (= [kept kept] (ran seen)) "after the respawn it runs again")
+          (is (= [] (listed eng))))))))
+
 (deftest a-cut-the-engine-did-not-make-keeps-the-job-listed
   (async done
     (tu/run-async done

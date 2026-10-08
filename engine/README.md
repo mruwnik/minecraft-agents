@@ -183,8 +183,10 @@ never dig or build; hazards (powder snow, cobweb, magma, campfires) add cost, an
 `disconnected`, `error`, `reconnect-failed`, `world-not-loaded`, `physics-stalled`, `offline`, `online`, `sleep-status`
 (the action bar's sleep count: `sleeping`, `needed`, or `skipping`), `spawn-set` (pos; the "Respawn point set" line) and `spawn-reset` (the bed is gone). The engine
 turns each into a body-memory entry of that kind. `hurt` events are merged into one per second in the event log. A death
-drops every listed job (cancelled `:by :death`) and every reflex job; register entries stay, so a trigger that still
-holds (`died` starts recover-drops) runs its job again.
+drops every listed job (cancelled `:by :death`) but those submitted with `:survive-death?` (a running one is cut, memory
+kept; the `died` event's `:survived` names them; the job reads `(ctx/latest c :died)` to judge whether its memory still holds)
+and every reflex job; register entries stay, so a trigger that still holds (`died` starts recover-drops) runs its job
+again. A kept job starts again only after the respawn.
 
 ### The fake
 
@@ -754,7 +756,7 @@ node engine/tools/progress.mjs Bob --world test [--goal j14] [--want iron_ingot:
 - `jobs.mjs show jID` of a job the scheduler no longer holds answers from the event history, as `observe job` does.
 - `jobs.mjs submit` appends to the list; `--next` lists after the current job without cutting; `--now` cuts the current
   listed job and runs the new one as a holder (a running reflex is not cut); `--hold` keeps the body while the check
-  declines. `--wait` blocks until the job ends (or a wake) and prints the result and a bounded summary. Mutations carry a
+  declines; `--survive-death` keeps the job listed through a death (it runs again after the respawn reflexes). `--wait` blocks until the job ends (or a wake) and prints the result and a bounded summary. Mutations carry a
   request id (`--request-id` to retry safely); the engine keeps the latest 128 ids and a duplicate returns the original
   result. A manual lease rejects `--now` with `:manual-control`.
 - `triggers.mjs` uses `GET/POST /triggers`; built-ins cannot be replaced or removed, only muted or moved. `put`/`add`

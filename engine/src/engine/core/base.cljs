@@ -269,6 +269,13 @@
   [eng]
   (true? (.isSettling (:primitives eng))))
 
+(defn dead?
+  "Whether the body has died and not come back: the latest :died entry is newer than any :respawned or :spawned one."
+  [eng]
+  (let [view (mem/view (:store eng))
+        t #(:t (mem/latest view %) -1)]
+    (> (t :died) (max (t :respawned) (t :spawned)))))
+
 (defn manual?
   "Whether someone drives the body by hand (see engine.takeover). Not persisted."
   [eng]

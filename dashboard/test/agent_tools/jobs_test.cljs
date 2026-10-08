@@ -89,6 +89,13 @@
         (.catch (fn [error] (is (= "ETIMEDOUT" (.-code error)))))
         (.then done))))
 
+(deftest survive-death-is-a-submission-option
+  (let [kept (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-day)" "--survive-death")
+        plain (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-day)")]
+    (is (true? (get-in kept [:request :survive-death?])))
+    (is (not (contains? (:request plain) :survive-death?)))
+    (is (string? (:error (request "Bob" "--world" "w" "list" "--survive-death"))))))
+
 (deftest cancel-all-has-no-job-argument-and-hold-and-front-are-submission-options
   (let [cancel (request "Bob" "--world" "w" "cancel-all" "--request-id" "all")
         held (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-day)" "--hold")

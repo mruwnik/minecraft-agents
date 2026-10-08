@@ -57,6 +57,7 @@
     :next?    list it directly after the current job, so it gets the next round
     :now?      list it directly before the current job (do-now!)
     :by        who asked, for the event
+    :survive-death?  the job stays listed through a death and runs again after the respawn (see core/drop-jobs-on-death!)
   While someone holds the manual lease, a job submitted by them is the slot job: it is listed at the end (:next? and
   :now? ignored) and replaces (cancels) the previous slot job. Jobs from others are listed as usual and wait."
   [eng spec {:keys [next? now? by] :as opts}]
@@ -69,7 +70,7 @@
         _ (when-let [old (and slot? (manual-job eng))] (cancel! eng old by))
         id (new-id! eng)]
     (when slot? (reset! (:manual-job eng) id))
-    (swap! (:state eng) #(let [s (add-instance % id node (cond-> {:hold? hold?} slot? (assoc :slot? true)))]
+    (swap! (:state eng) #(let [s (add-instance % id node (cond-> {:hold? hold?} slot? (assoc :slot? true) (:survive-death? opts) (assoc :survive-death? true)))]
                            (cond
                              now? (insert-now s id)
                              next? (insert-next s id)

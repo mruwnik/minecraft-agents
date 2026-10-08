@@ -21,6 +21,7 @@
   (when-let [inst (get-in (core/state eng) [:instances id])]
     (cond-> {:id id :name (text (expr/label (:spec inst)) 160) :status (status eng id)
              :round (:round inst) :hold? (boolean (:hold? inst))}
+      (:survive-death? inst) (assoc :survive-death? true)
       (= id (core/manual-job eng)) (assoc :manual true)
       (core/waiting eng id) (assoc :waiting (core/waiting eng id))
       (core/holding eng id) (assoc :holding (core/holding eng id)))))
@@ -51,7 +52,7 @@
       (walk spec 0))))
 (defn fingerprint [request]
   (let [canonical (walk/postwalk #(if (map? %) (into (sorted-map-by (fn [a b] (compare (pr-str a) (pr-str b)))) %) %)
-                                (select-keys request [:op :id :spec :generation-id :next? :hold? :by]))]
+                                (select-keys request [:op :id :spec :generation-id :next? :hold? :survive-death? :by]))]
     (.digest (.update (.createHash crypto "sha256") (pr-str canonical)) "hex")))
 (defn remember! [eng id record]
   (swap! (:state eng)
@@ -61,9 +62,9 @@
                  order (vec (take-last max-requests order))]
              (assoc s :job-requests {:order order :records (select-keys (assoc (:records ledger) id record) order)})))))
 (defn submit-opts
-  "core/submit! opts from a request's :next? :hold? :by."
+  "core/submit! opts from a request's :next? :hold? :survive-death? :by."
   [request by]
-  (merge {:by by} (select-keys request [:next? :hold?])))
+  (merge {:by by} (select-keys request [:next? :hold? :survive-death?])))
 (defn mutate! [eng {:keys [op id spec request-id generation-id by] :or {by :agent} :as request}]
   (let [prior (get-in (core/state eng) [:job-requests :records request-id])
         signature (fingerprint request)
@@ -72,7 +73,7 @@
     (cond
       (not (map? request)) (fail :bad-request)
       (not (contains? #{:submit :interrupt :cancel :cancel-all :retry} op)) (fail :bad-op)
-      (seq (remove #{:op :id :spec :request-id :generation-id :next? :hold? :by} (keys request))) (fail :unknown-field)
+      (seq (remove #{:op :id :spec :request-id :generation-id :next? :hold? :survive-death? :by} (keys request))) (fail :unknown-field)
       (not (valid-request-id? request-id)) (fail :bad-request-id)
       (not= generation-id (:generation-id (core/state eng))) (fail :generation-mismatch)
       prior (if (= signature (:signature prior))
@@ -84,7 +85,7 @@
                   (fail :request-uncertain "A previous attempt was interrupted; it will not be executed again."))
               (fail :request-id-conflict))
       spec-error (fail :bad-spec spec-error)
-      (some #(and (contains? request %) (not (boolean? (get request %)))) [:next? :hold?]) (fail :bad-field ":next? and :hold? are true or false")
+      (some #(and (contains? request %) (not (boolean? (get request %)))) [:next? :hold? :survive-death?]) (fail :bad-field ":next?, :hold? and :survive-death? are true or false")
       (not (valid-by? by)) (fail :bad-by ":by is a short string or keyword naming who asks")
       (and (#{:cancel :retry} op) (not (valid-job-id? id))) (fail :bad-job-id)
       (and (#{:cancel :retry} op) (nil? (get-in (core/state eng) [:instances id]))) (fail :job-not-found)
@@ -102,7 +103,8 @@
                                    (swap! (:state eng) assoc-in [:instances job-id :by] by)
                                    {:ok true :job (summary eng job-id)})
                          :interrupt (let [job-id (core/do-now! eng spec)]
-                                      (swap! (:state eng) assoc-in [:instances job-id :by] by)
+                                      (swap! (:state eng) update-in [:instances job-id] merge
+                                             (cond-> {:by by} (:survive-death? request) (assoc :survive-death? true)))
                                       {:ok true :job (summary eng job-id)})
                          :cancel (do (core/cancel! eng id by)
                                    {:ok true :id id :status :cancelled})

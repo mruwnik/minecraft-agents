@@ -640,6 +640,26 @@
     (let [after (core/submit! eng job {})]
       (is (= [after] (:list (core/state eng)))))))
 
+(deftest a-job-submitted-to-survive-a-death-runs-after-the-respawn-reflexes
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen clock]} (setup {:floor tu/walk-floor})
+              kept (core/submit! eng '(jobs.movement.look-around) {:survive-death? true})]
+          (core/submit! eng job {})
+          (core/register-reflex! eng {:trigger :died})
+          (die-event p)
+          (is (= [kept] (:list (core/state eng))))
+          (swap! clock + 1000)
+          (.respawn (.-world p))
+          (swap! clock + 2500) ; past recover-drops' settle wait; this clock only moves between ticks
+          (await (run-until-empty eng 10))
+          (let [order (keep-indexed (fn [i e] (cond (= [:reflex :fired :died] [(:source e) (:kind e) (:reflex e)]) [:fired i]
+                                                    (and (= :round_started (:kind e)) (= kept (:job e))) [:survivor i]))
+                                    @seen)]
+            (is (= :fired (first (first order))) "recover-drops has its turn first")
+            (is (some #(= :survivor (first %)) order) "then the surviving job runs")))))))
+
 (deftest other-body-events-drop-nothing
   (doseq [event [#js {:kind "hurt" :health 5}
                  #js {:kind "respawned" :pos #js {:x 0 :y 64 :z 0} :dimension "overworld"}]]

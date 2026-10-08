@@ -145,18 +145,23 @@
         :else :info))
 
 (defn drop-jobs-on-death!
-  "A job does not survive its body's death: cancel every listed job (queued, held,
-  cut or running) and drop every reflex job. Register entries stay, so a trigger
-  that still holds after the respawn starts its job again."
+  "Cancel every listed job (queued, held, cut or running) but those submitted with :survive-death? (a running one is
+  cut, memory kept), and drop every reflex job. Register entries stay, so a trigger that still holds after the
+  respawn starts its job again. Returns the ids of the jobs that survive."
   [eng]
-  (doseq [id (:list (state eng))]
-    (cancel! eng id :death))
+  (let [survives? #(get-in (state eng) [:instances % :survive-death?])
+        r (running eng)]
+    (when (and r (not (:reflex r)) (survives? (:id r)))
+      (cut! eng r :death nil))
+    (doseq [id (remove survives? (:list (state eng)))]
+      (cancel! eng id :death)))
   (doseq [[id inst] (:instances (state eng))
           :when (:reflex inst)]
     (when (= id (:id (running eng)))
       (free-owner! eng)
       (reset! (:running eng) nil))
-    (drop-reflex-job! eng id (:reflex inst) :dropped {:how :dropped :by :death})))
+    (drop-reflex-job! eng id (:reflex inst) :dropped {:how :dropped :by :death}))
+  (:list (state eng)))
 
 (def deaths-policy "The :deaths list: the ten latest, kept for good." {:cap 10 :ttl :forever})
 
@@ -169,13 +174,16 @@
 
 (defn record-body-event!
   "A momentary body event becomes an entry of its kind (:hurt, :died, ...).
-  A death also drops every job and joins the :deaths list, whatever runs."
+  A death also drops every job but the survivors (named in the event's :survived) and joins the :deaths list,
+  whatever runs."
   [eng e]
-  (let [m (js->clj e :keywordize-keys true)]
-    (when (= "died" (:kind m))
-      (hurt/flush! eng #(emit! eng %))
-      (drop-jobs-on-death! eng))
-    (let [entry (mem/write! (:store eng) (keyword (:kind m)) (dissoc m :kind))]
+  (let [m (js->clj e :keywordize-keys true)
+        m (if (= "died" (:kind m))
+            (do (hurt/flush! eng #(emit! eng %))
+                (let [kept (drop-jobs-on-death! eng)]
+                  (cond-> m (seq kept) (assoc :survived kept))))
+            m)]
+    (let [entry (mem/write! (:store eng) (keyword (:kind m)) (dissoc m :kind :survived))]
       (when (= "died" (:kind m)) (record-death! eng entry)))
     (save-memory! eng)
     (if (= "hurt" (:kind m))

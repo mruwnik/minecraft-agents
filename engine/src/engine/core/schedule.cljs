@@ -1,7 +1,7 @@
 (ns engine.core.schedule
   "The scheduling pass: readiness of listed jobs (checks, job.waiting, the next one to run), who holds
   the body, cuts, firing reflexes, tick! and do-now!."
-  (:require [engine.core.base :refer [add-instance call-guarded drop-reflex-job! emit! flush-save-stats! free-owner! job-fields job-of manual-job manual? new-id! now paused? reflex-text running save-memory! state wait-reason waiting-text]]
+  (:require [engine.core.base :refer [add-instance call-guarded dead? drop-reflex-job! emit! flush-save-stats! free-owner! job-fields job-of manual-job manual? new-id! now paused? reflex-text running save-memory! state wait-reason waiting-text]]
             [engine.core.fruitless :refer [reset-backoff!]]
             [engine.core.register :refer [effective-register evaluate-register! expire-changes! preempts?]]
             [engine.core.activity :refer [check-body-idle! check-idle! restart-body-idle!]]
@@ -42,13 +42,14 @@
     ok?))
 
 (defn choose-listed
-  "The listed job to run next, never a failed one: a holder (or nothing, while its check declines),
-  else the cut job, else round-robin from the cursor over passing checks."
+  "The listed job to run next, never a failed one nor, while the body is dead, one kept through the death: a holder
+  (or nothing, while its check declines), else the cut job, else round-robin from the cursor over passing checks."
   [eng]
   (let [{:keys [list instances resume cursor]} (state eng)
         n (count list)
+        dead (dead? eng)
         failed? (fn [id] (contains? (:failed (state eng)) id))
-        runnable? (fn [id] (and (not (failed? id)) (check-passes? eng id)))
+        runnable? (fn [id] (and (not (failed? id)) (not (and dead (:survive-death? (instances id)))) (check-passes? eng id)))
         holder (some #(when (and (:hold? (instances %)) (not (failed? %))) %) list)]
     (cond
       holder (when (runnable? holder) holder)

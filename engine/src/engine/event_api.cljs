@@ -253,6 +253,7 @@
              :status (instance-status s id running-id)
              :hold? (boolean (:hold? inst))
              :reflex (:reflex inst)}
+      (:survive-death? inst) (assoc :survive-death? true)
       waiting (assoc :waiting (bounded-value waiting 0 (volatile! 32))))))
 
 (defn attention-summary [[request-id request]]
@@ -355,6 +356,7 @@
         {:ok true :generation-id (:generation-id s) :id id :name (short-text (expr/label (:spec inst)) 160)
          :spec (bounded-value (:spec inst) 0 budget)
          :args (bounded-value args 0 budget) :bounded? true :round (:round inst) :hold? (boolean (:hold? inst))
+         :survive-death? (boolean (:survive-death? inst))
          :reflex (:reflex inst) :status (instance-status s id (:id (core/running eng)))
          :waiting (some-> (core/waiting eng id) (bounded-value 0 (volatile! 32)))
          :current? (= id (:id (core/holder eng)))
