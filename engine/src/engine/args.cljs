@@ -180,14 +180,15 @@
 
 (defn merge-args
   "layers (maps of args) merged in order over each other, later wins; a declared group merges key by key (one level
-  per group), any other value replaces."
+  per group; a nil group means the defaults and is skipped), any other value replaces."
   [data & layers]
   (reduce (fn [acc layer]
             (reduce-kv (fn [acc k v]
                          (let [ks (:keys (get data k))]
-                           (if (and ks (map? v) (map? (get acc k)))
-                             (assoc acc k (merge-args ks (get acc k) v))
-                             (assoc acc k v))))
+                           (cond
+                             (and ks (nil? v)) acc
+                             (and ks (map? v) (map? (get acc k))) (assoc acc k (merge-args ks (get acc k) v))
+                             :else (assoc acc k v))))
                        acc (or layer {})))
           {} layers))
 

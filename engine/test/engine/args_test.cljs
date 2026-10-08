@@ -66,6 +66,10 @@
   (is (= {:range 3 :risk {:min-health 5 :max-damage 1}}
          (a/merge-args args {:range 1 :risk {:min-health 5 :max-damage 4}} {:range 3} {:risk {:max-damage 1}}))))
 
+(deftest merge-args-skips-a-nil-group
+  (is (= {:range 3 :risk {:min-health 5 :max-damage 4}}
+         (a/merge-args args {:range 1 :risk {:min-health 5 :max-damage 4}} {:range 3 :risk nil}))))
+
 (deftest a-hand-built-job-declares-its-specs-at-run-time
   (let [data (a/declare! 'engine.args-test.hand {:n {:spec (a/int-in 0 5) :default 1 :form '(a/int-in 0 5)}})
         r {'engine.args-test.hand {:check (constantly true) :round noop-round :args data}}]
