@@ -1118,7 +1118,7 @@ test('relight cost: one torch, a mining burst along a tunnel, and changes spread
       const world = setup()
       lightWorld(world)
       const bot = worldBot(world)
-      const { view } = makeView(bot, opts)
+      const { view } = makeView(bot, { relightBudgetMs: Infinity, ...opts })
       view.stats()
       applyEdits(world, bot, edits)
       await view.flushColumns()
