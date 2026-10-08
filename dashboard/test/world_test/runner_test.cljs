@@ -1179,3 +1179,15 @@
       (-> (r/barrier-wait! {:dir dir :batch "n1" :n 2 :pid 1 :sleep r/sleep :timeout-ms 5000}
                            (fn [] (js/Promise.resolve true)))
           (.then (fn [ok] (is (true? ok)) (fs/rmSync dir #js {:recursive true}) (done)))))))
+
+(deftest a-failed-night-batch-case-that-ran-into-dawn-is-inconclusive
+  (let [c {:time :night-exclusive :act []}
+        b {:night-batch "n1"}]
+    (is (= [true false false false false]
+           [(r/night-overran? b c 100)
+            (r/night-overran? b c 15000)
+            (r/night-overran? {} c 100)
+            (r/night-overran? b {:time :night :act []} 100)
+            (r/night-overran? b {:time :night-exclusive :act [[:time-set 1000]]} 100)]))
+    (is (= [:inconclusive :pass]
+           [(:status (r/mark-night-overran {:status :fail} true)) (:status (r/mark-night-overran {:status :pass} true))]))))

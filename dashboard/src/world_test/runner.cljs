@@ -505,6 +505,21 @@
     (assoc r :status :inconclusive :why "world time jumped during the case (someone ran `time set`)")
     r))
 
+(defn night-overran?
+  "Whether a night batch case ran into dawn: opts has a --night-batch, the case wants the night (and sets no time itself)
+  and the day time t1 is outside it."
+  [opts c t1]
+  (boolean (and (:night-batch opts) t1 (= :night-exclusive (:time c))
+                (not-any? #(= :time-set (first %)) (:act c))
+                (not (night? t1)))))
+
+(defn mark-night-overran
+  "A failed result becomes :inconclusive when its night batch case ended after dawn (the pool reruns it alone)."
+  [r overran?]
+  (if (and overran? (= :fail (:status r)))
+    (assoc r :status :inconclusive :why "the night ended during the batch case (dawn); rerun it alone")
+    r))
+
 ;; ------------------------------------------------------------------ plot leases (parallel runners)
 
 (defn pause-sync [ms] (js/Atomics.wait (js/Int32Array. (js/SharedArrayBuffer. 4)) 0 0 ms))
@@ -673,9 +688,6 @@
   (let [file (sleep-state-file opts)]
     (when (fs/existsSync file)
       (try (reader/read-string (str (fs/readFileSync file "utf8"))) (catch :default _ nil)))))
-
-(defn- pid-alive? [pid]
-  (try (.kill js/process pid 0) true (catch :default e (= "EPERM" (.-code e)))))
 
 (defn restore-sleep-rule!
   "Restores the recorded players_sleeping_percentage (logged) and removes the state file; never writes 101 back.
@@ -1493,10 +1505,12 @@
                  (if (and @t-start (= :fail (:status r)))
                    (.then (rcon! ["time query day" "tick query"])
                           (fn [[reply rate-reply]]
-                            (mark-time-disturbed r (time-disturbed? rc (:ticks @t-start) (daytime (or reply ""))
-                                                                    (- (js/Date.now) (:ms @t-start))
-                                                                    (some-> @pre-register :offset (as-> off (woke? (read-events-from (events-file opts) off))))
-                                                                    (tick-rate-of rate-reply)))))
+                            (-> r
+                                (mark-time-disturbed (time-disturbed? rc (:ticks @t-start) (daytime (or reply ""))
+                                                                      (- (js/Date.now) (:ms @t-start))
+                                                                      (some-> @pre-register :offset (as-> off (woke? (read-events-from (events-file opts) off))))
+                                                                      (tick-rate-of rate-reply)))
+                                (mark-night-overran (night-overran? opts rc (daytime (or reply "")))))))
                    r)))
         (.then (fn [r]
                  (-> (run-cleanup! [#(when (some (fn [s] (#{:cli :http} (first s))) (:act c))
