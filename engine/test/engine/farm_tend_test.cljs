@@ -487,3 +487,19 @@
           (is (seq (calls s "look")))
           (is (= [:nothing-to-do] (distinct (map :reason (events-of s :waiting)))))
           (is (empty? (dug s))))))))
+
+(deftest nothing-to-do-says-what-blocks-the-tilling
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [terrain (world (ground "dirt" all-cells) (crops "grass_block" 0 all-cells)
+                             {:inventory [(item "stone_hoe" 1) (item "wheat_seeds" 4)]})
+              s (setup terrain)
+              _ (tu/seeing-after-look (:p s))]
+          (core/submit! (:eng s) (list 'jobs.farm.tend {:box box :till true}) {})
+          (dotimes [_ 6]
+            (swap! (:clock s) + 700)
+            (await (core/tick! (:eng s))))
+          (let [w (last (events-of s :waiting))]
+            (is (= :nothing-to-do (:reason w)))
+            (is (= 9 (:covered w)) "9 tillable cells have a block over them: the box sits too low")))))))

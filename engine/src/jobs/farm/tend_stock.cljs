@@ -38,3 +38,9 @@
   [{:keys [name above]}]
   (boolean (and (till/tillable name)
                 (or (till/air above) (till/ground-cover above)))))
+
+(defn covered?
+  "A ground cell {:name :above} of dirt or grass with a block over it that is neither air nor ground cover."
+  [{:keys [name above]}]
+  (boolean (and (till/tillable name) above
+                (not (till/air above)) (not (till/ground-cover above)))))

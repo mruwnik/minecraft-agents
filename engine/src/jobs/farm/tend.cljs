@@ -168,6 +168,7 @@
         me (u/self-pos c)
         tried (:till-tried (ctx/mem c) #{})
         ground (ground-layer p box)
+        raw-untilled (->> ground (filter stock/untilled?) (map :pos) (remove tried))
         bare (count (box-permitted c :sow (plant/bare-cells p box [])))
         keep-of (stock/keeps (reserve (beds ground) inventory) inventory keep)]
     {:mid mid
@@ -181,6 +182,8 @@
                     (box-permitted c :dig)
                     (sort-by #(u/dist me %))
                     vec)
+     :refused (- (count raw-untilled) (count (box-permitted c :dig raw-untilled)))
+     :covered (count (filter stock/covered? ground))
      :bare bare
      :seeds (transduce (map #(get (plant/sowable inventory) % 0)) + 0 seed-items)
      :seed (some? (plant/pick-seed nil inventory))
@@ -228,6 +231,12 @@
     (facts c)
     (check-cache/cached c :facts #(facts c))))
 
+(defn nothing-to-do-reason
+  "The wait reason when no step would run: :covered counts tillable cells with a block over them (the box sits too low),
+  :refused untilled cells a zone or claim refuses."
+  [f]
+  (into {:reason :nothing-to-do} (filter (comp pos? val)) (select-keys f [:covered :refused])))
+
 (defn check
   "Passes when a run is under way or a step would call a child. Otherwise it waits: :short-seed names the seeds the
   plan's bare cells want and the body lacks (the round says it with a warn)."
@@ -239,7 +248,7 @@
         (ctx/wait c {:reason :no-box})
         (let [f (check-facts c)]
           (or (would-run? c f)
-              (look/wait-unless-surveyed c (if (seq (:short f)) {:reason :short-seed :seeds (vec (sort (:short f)))} {:reason :nothing-to-do})
+              (look/wait-unless-surveyed c (if (seq (:short f)) {:reason :short-seed :seeds (vec (sort (:short f)))} (nothing-to-do-reason f))
                                          (field-cells c))))))))
 
 ;; ------------------------------------------------------------------ rounds
