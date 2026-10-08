@@ -5,7 +5,9 @@
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.combat :as combat]
+            [jobs.lib.armour :as armour]
             [jobs.lib.cost :as cost]
+            [jobs.lib.fetch :as fetch]
             [jobs.lib.pace :as pace]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.reach :as reach]
@@ -52,6 +54,9 @@
     many times dearer for a mob the body (its best weapon, armour, health) cannot afford to fight.
   - Infinite when lava, fire or the void took the pile, or the walk would end after the despawn.
   A fetch emits recover-drops.fetching. A skip emits recover-drops.decided. Both texts give the value, the cost and their parts.
+  Kit: before the decision, a body with no weapon or with an empty armour slot, whose killer or the hostiles it knows make the route
+  dangerous, fetches the best weapon and armour piece a chest of known stock (:fetch/stock) holds (jobs.lib.fetch, chests only,
+  :fetch false: off) and wears the armour (jobs.items.wear); nothing known to be in a chest: unchanged.
   Fetch: walks to the death point (jobs.movement.go-to), then collects (passes, up to 3) the pile's items it can see within :collect-radius
   (jobs.forestry.collect-drops; only the carried item names, never items out of sight).
   Ends by writing a :recovered entry {:decision :skip|:collected|:partial|:abandoned}.
@@ -70,6 +75,7 @@
    :value-overrides {:doc "jobs.lib.cost/item-value overrides, a map: item name or group (ore tool armor food block unknown) -> worth of one item, or {:times n}; e.g. {\"raw_iron\" 500}" :spec (a/map-of string? (a/or-of number? map?)) :default {}}
    :danger-overrides {:doc "jobs.lib.cost/route-danger overrides, a map: mob name -> threat in points of damage before armour, or {:times n}; e.g. {\"creeper\" 100 \"zombie\" 0}" :spec (a/map-of string? (a/or-of number? map?)) :default {}}
    :danger-radius {:doc "a hostile this close makes the job yield without acting" :spec (a/num-in 0 nil) :default 8}
+   :fetch {:doc "get a weapon and armour from a chest whose stock the body knows before walking to a pile its killer guards (jobs.lib.fetch limits); false: no kit fetch" :spec fetch/option? :default {:what #{:item} :how #{:chest} :minutes 3}}
    :collect-radius {:doc "collect the pile's drops within this many blocks of the death point (a pile on open ground rolls 6-8 out)" :spec (a/num-in 0 nil) :default 10}})
 
 (a/defargs settings
@@ -337,13 +343,57 @@
                           :pos (:pos (:data entry)) :text (decision-text :fetch e margin))))
       e)))
 
+;; ------------------------------------------------------------------ the kit
+
+(defn stock-names
+  "The item names the known chests hold (:fetch/stock)."
+  [c]
+  (into #{} (mapcat keys) (vals (fetch/stock-of (ctx/view c)))))
+
+(defn kit-problem
+  "The need wait of the best weapon, else of the best piece for an empty or weaker armour slot, that a known chest holds
+  and the body does not carry; nil when none."
+  [c]
+  (let [p (:primitives c)
+        have (set (map :name (u/inventory p)))
+        stock (remove have (stock-names c))
+        worn (armour/worn-of (.-equipment (.self p)))
+        weapons (->> stock (filter #(combat/weapon? combat/default-weapons %)) (sort-by combat/weapon-score >))
+        pieces (fn [slot] (->> stock
+                               (filter #(and (= slot (:slot (armour/parse %))) (> (armour/rank-of %) (armour/rank-of (get worn slot)))))
+                               (sort-by armour/rank-of >)))
+        need (fn [names] (when (seq names) {:reason :need :any-of (vec names) :count 1}))]
+    (or (when-not (combat/best-weapon p combat/default-weapons) (need weapons))
+        (some #(need (pieces %)) armour/slots))))
+
+(defn kit-called-for?
+  "Whether the killer or the hostiles the body knows make the route to the pile dangerous (the estimate names mobs)."
+  [c entry]
+  (boolean (seq (:top-mobs (estimate c (:data entry) (settings/ticks->ms (game/ticks-since entry (ctx/view c))))))))
+
+(defn ^:async kit!
+  "Once per run: fetch and wear a weapon and armour when the danger calls for them and a known chest has them. nil when
+  done (or nothing to do), :continue while a fetch child waits on the world."
+  [c entry]
+  (if (or (:kit-done (ctx/mem c)) (not (fetch/opts c 'jobs.survival.recover-drops))
+          (nil? (kit-problem c)) (not (kit-called-for? c entry)))
+    (do (ctx/update-mem! c assoc :kit-done true) nil)
+    (let [r (await (fetch/fetch! c 'jobs.survival.recover-drops kit-problem))]
+      (when-not (= :continue r)
+        (await (ctx/call-child c :wear 'jobs.items.wear {}))
+        (ctx/update-mem! c assoc :kit-done true))
+      r)))
+
 (defn ^:async trip!
   "The decision, then the walk and the collect passes of a trip inside its window."
   [c entry]
   (let [{:keys [margin collect-radius]} (:args c)
-        decided (decide! c entry)
+        kit (await (kit! c entry))
+        decided (when-not kit (decide! c entry))
         pos (:pos (:data entry))]
     (cond
+      kit :declined
+
       (<= (:value decided) (+ (if (= :infinite (:cost decided)) js/Infinity (:cost decided)) margin))
       (finish! c :skip decided)
 
