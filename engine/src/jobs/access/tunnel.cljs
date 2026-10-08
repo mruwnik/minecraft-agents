@@ -402,7 +402,7 @@
         choice (torch-choice plan s (placement/eye (u/self-pos c)) block-at)
         cell (:cell choice)
         verdict (when cell (rules/may-place? (assoc in :cell cell)))
-        reason (cond (zero? (torch/torches-carried p)) :no-torches
+        reason (cond (zero? (torch/torches-held p)) :no-torches
                      (:refused choice) (:refused choice)
                      (not (:ok verdict)) (:reason verdict))]
     (if reason
@@ -411,6 +411,7 @@
             intended (ledger/intend (ledger/reconcile (ledger/open-entries (ctx/view c)) block-at)
                                     {:cell cell :item (:block choice) :before "air" :job (:id c) :purpose :tunnel-torch})
             _ (when-not keep? (ledger/remember! c intended))
+            _ (await (torch/off-hand-to-inventory! c))
             r (await (ctx/act c :place (clj->js {:pos (zipmap [:x :y :z] cell) :item "torch"
                                                  :click (placement/js-click (:click choice))})))
             held? (or (= "placed" (.-status r)) (torch-blocks (block-at cell)))]

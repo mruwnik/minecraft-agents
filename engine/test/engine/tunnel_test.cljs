@@ -480,6 +480,17 @@
     (remove (fn [k] (some #(pos? (tunnel/torch-light plan % k)) sites))
             (range 0 (+ 2 (:steps plan) (:run plan))))))
 
+(deftest torches-held-in-the-off-hand-are-hung
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out]} (await (tunnel! {:blocks eight-down :inventory pick :equipment {"offHand" {:name "torch" :count 8}}}
+                                            {:target [6 57 0]} (fn [_])))
+              res @out]
+          (is (= :reached (:reason res)))
+          (is (seq (:torches res)) "torches hung from the off-hand stack")
+          (is (empty? (:unlit res))))))))
+
 (deftest torches-are-hung-on-the-way-in-one-per-site
   (async done
     (tu/run-async done

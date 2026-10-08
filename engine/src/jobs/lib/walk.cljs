@@ -250,15 +250,6 @@
   [c cell]
   (access/may? c :sow cell))
 
-(defn ^:async off-hand-to-inventory!
-  "With no torch in the inventory but some in the off hand (the off-hand torch aid moves the whole stack), move them
-  back so the place act finds them: true when the inventory holds a torch now."
-  [c]
-  (let [p (:primitives c)]
-    (when (and (zero? (torch/torches-carried p)) (pos? (torch/off-hand-torches p)))
-      (await (ctx/act c :unequip #js {:dest "off-hand"})))
-    (pos? (torch/torches-carried p))))
-
 (defn ^:async light!
   "Light the floor of step k (done {:status :light :step k :cells [floor]}, the gate's) with a torch from the inventory
   (or the off hand) at its takeoff (jobs.lib.torch/torch-at: a wall torch at the head, else a floor torch at the feet,
@@ -278,7 +269,7 @@
     (cond
       (zero? (torch/torches-held p)) {:status :no-torch :cells [feet] :at at :step step}
       refusal (no-light refusal)
-      (not (await (off-hand-to-inventory! c))) (no-light :off-hand-full)
+      (not (await (torch/off-hand-to-inventory! c))) (no-light :off-hand-full)
       :else
       (let [choice (torch/torch-at [(js/Math.sign (- (:x g) (:x tk))) (js/Math.sign (- (:z g) (:z tk)))] feet
                                    (placement/eye (u/self-pos c)) block-at (comp :ok verdicts))

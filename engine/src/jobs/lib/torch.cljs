@@ -1,6 +1,7 @@
 (ns jobs.lib.torch
   "Hanging a torch in a straight 1-wide run, shared by jobs.access.tunnel and jobs.gather.mine."
-  (:require [jobs.lib.util :as u]
+  (:require [engine.ctx :as ctx]
+            [jobs.lib.util :as u]
             [jobs.lib.placement :as placement]))
 
 (def torch-blocks #{"torch" "wall_torch"})
@@ -15,6 +16,15 @@
     (if (= "torch" (some-> o .-name)) (or (.-count o) 1) 0)))
 
 (defn torches-held [p] (+ (torches-carried p) (off-hand-torches p)))
+
+(defn ^:async off-hand-to-inventory!
+  "With no torch in the inventory but some in the off hand (the off-hand torch aid moves the whole stack), move them
+  back so the place act finds them: true when the inventory holds a torch now."
+  [c]
+  (let [p (:primitives c)]
+    (when (and (zero? (torches-carried p)) (pos? (off-hand-torches p)))
+      (await (ctx/act c :unequip #js {:dest "off-hand"})))
+    (pos? (torches-carried p))))
 
 (defn side-dirs
   "The unit steps to the left and to the right of a run going [dx dz]."

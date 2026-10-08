@@ -616,7 +616,8 @@
                      (not (gate/allowed? c :mine.declined "mine" :place (zipmap [:x :y :z] cell))) :refused)]
     (if reason
       (left-out! c cell reason branch)
-      (let [r (await (ctx/act c :place (clj->js {:pos (zipmap [:x :y :z] cell) :item "torch"
+      (let [_ (await (torch/off-hand-to-inventory! c))
+            r (await (ctx/act c :place (clj->js {:pos (zipmap [:x :y :z] cell) :item "torch"
                                                  :click (placement/js-click (:click choice))})))]
         (if branch (booked! c branch) (ctx/update-mem! c assoc :torch-at (:steps tunnel)))
         (when-not (or (= "placed" (.-status r)) (torch/torch-blocks (block-at cell)))
@@ -627,7 +628,7 @@
   charcoal and a stick are, say so once with none to hang, else hang one. :continue."
   [c branch]
   (let [m (ctx/mem c)
-        n (torch/torches-carried (:primitives c))]
+        n (torch/torches-held (:primitives c))]
     (cond
       (and (< n (torch-min)) (craftable? c) (not (:craft-failed m)))
       (let [r (await (ctx/call-child c :torches 'jobs.items.craft {:item "torch" :count (torch-craft-count) :fetch (:fetch (:args c))}))]

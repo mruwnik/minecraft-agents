@@ -1076,6 +1076,17 @@
           (is (= [0 10 20] (torch-xs lit)))
           (is (= (count (calls dark "look")) (count (calls lit "look")))))))))
 
+(deftest torches-held-in-the-off-hand-are-hung-and-none-crafted
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (assoc (torch-world [{:name "iron_pickaxe" :count 1} {:name "coal" :count 3} {:name "stick" :count 3}])
+                           :equipment {"offHand" {:name "torch" :count 8}})
+              s (await (scenario {:block "iron_ore" :count 1 :direction "east" :tunnel-length 22 :mend false} world 200))]
+          (is (= [0 10 20] (torch-xs s)) "hung from the off-hand stack")
+          (is (empty? (events-of s :mine.no-torches)))
+          (is (= 3 (get (inv s) "coal")) "nothing crafted"))))))
+
 (deftest the-torch-interval-is-an-arg
   (async done
     (tu/run-async done
