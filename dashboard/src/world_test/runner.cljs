@@ -425,6 +425,25 @@
 
 (def time-jump-tolerance-ticks 200)
 
+(def weather-commands
+  "Vanilla has no weather query: two inline predicates, thundering first."
+  ["execute if predicate {condition:\"minecraft:weather_check\",thundering:true}"
+   "execute if predicate {condition:\"minecraft:weather_check\",raining:true}"])
+
+(defn weather-of
+  "The weather (:clear :rain :thunder) from the replies to weather-commands; nil when a reply is not a test result."
+  [[thunder rain]]
+  (let [passed? #(re-find #"Test passed" (str %))
+        failed? #(re-find #"Test failed" (str %))]
+    (cond (passed? thunder) :thunder
+          (passed? rain) :rain
+          (and (failed? thunder) (failed? rain)) :clear)))
+
+(defn read-weather!
+  "Resolves to the weather now (read only), nil when the server will not say."
+  [send]
+  (-> (send weather-commands) (.then weather-of) (.catch (fn [_] nil))))
+
 (defn tick-rate-of
   "The target tick rate in a `tick query` reply (20 when it has none)."
   [reply]
@@ -1181,7 +1200,9 @@
         natural (f/natural-hostiles-commands grid origin rc (contains? #{:night :night-x} (lease/time-phase rc)))
         stop-sweep (atom (fn []))
         pre-register (atom nil)
-        result (fn [m] (merge {:id (:id c) :run run :plot i :origin origin :elapsed-s (/ (- (js/Date.now) started) 1000)} m))]
+        weather (atom nil)
+        result (fn [m] (cond-> (merge {:id (:id c) :run run :plot i :origin origin :elapsed-s (/ (- (js/Date.now) started) 1000)} m)
+                         @weather (assoc :weather @weather)))]
     (-> (let [phase (lock-phase opts rc)]
           (hold-phase!
            {:stop! stop!
@@ -1207,6 +1228,8 @@
                    (result {:status :skipped :why (str "needs " (name (:time rc)) " (no --allow-time)")})
                    (-> (.then (rcon! ["time query day"])
                               (fn [[reply]] (reset! t-start {:ticks (daytime (or reply "")) :ms (js/Date.now)})))
+                       (.then #(read-weather! rcon!))
+                       (.then #(reset! weather %))
                        (.then (fn [] (ev/emit! (ev/phase :setup)) (rcon! (f/park-commands (:body opts)))))
                        (.then (fn [] (build-plot! {:send rcon! :sleep sleep} grid origin rc)))
                        (.then (fn [why] (when why (throw (js/Error. why)))))
@@ -1271,6 +1294,7 @@
 (defn report! [r]
   (ev/emit! (ev/result r))
   (log! (str/upper-case (name (:status r))) " " (:id r) " #" (:run r) " (plot " (:plot r) ", " (.toFixed (:elapsed-s r) 1) " s)"
+        (when (:weather r) (str " [" (name (:weather r)) "]"))
         (when (:why r) (str ": " (:why r))))
   (when-not (= :pass (:status r))
     (run! #(log! (expect-line %)) (:expects r))

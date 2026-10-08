@@ -950,3 +950,19 @@
     (r/install-goal-cleanup!)
     (r/install-goal-cleanup!)
     (is (= (mapv inc before) (counts)))))
+
+(deftest weather-is-read-from-the-two-predicate-replies
+  (is (= :thunder (r/weather-of ["Test passed" "Test passed"])))
+  (is (= :rain (r/weather-of ["Test failed" "Test passed"])))
+  (is (= :clear (r/weather-of ["Test failed" "Test failed"])))
+  (is (nil? (r/weather-of ["Unknown command" "Test failed"]))))
+
+(deftest read-weather-sends-the-queries-and-survives-an-rcon-failure
+  (async done
+    (let [sent (atom nil)]
+      (-> (r/read-weather! (fn [cmds] (reset! sent cmds) (js/Promise.resolve ["Test failed" "Test passed"])))
+          (.then (fn [w]
+                   (is (= :rain w))
+                   (is (= r/weather-commands @sent))
+                   (r/read-weather! (fn [_] (js/Promise.reject (js/Error. "down"))))))
+          (.then (fn [w] (is (nil? w)) (done)))))))
