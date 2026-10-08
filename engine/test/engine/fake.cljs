@@ -873,7 +873,7 @@
                              (check-owner token)
                              (cond
                                (not (undefined? forced)) forced
-                               (and (#{"moveTo" "steer"} name) (some? (get-in @state [:self :vehicle]))) #js {:status "mounted"}
+                               (and (#{"moveTo" "steer"} name) (some? (get-in @state [:self :vehicle]))) #js {:status "refused-mounted"}
                                :else
                                (let [_ (when-not (#{"sleep" "wait"} name) (swap! state assoc-in [:self :isSleeping] false))
                                      impl (acts name)

@@ -84,7 +84,7 @@ test('moveTo and steer refuse while aboard, without touching the bot', async t =
       const { bot, p } = rig()
       passengers(bot, 9, [BODY])
       bot.calls.length = 0
-      assert.deepEqual(await p[name]('t1', args), { status: 'mounted' })
+      assert.deepEqual(await p[name]('t1', args), { status: 'refused-mounted' })
       assert.deepEqual(names(bot).filter(n => n !== 'blockAt'), [])
     })
   }

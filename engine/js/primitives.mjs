@@ -514,7 +514,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   // the walking primitives do nothing aboard (no physics tick runs), so they refuse at once
   const onFoot = fn => async (token, a) => {
     if (!isOwner(token)) throw cutError()
-    return bot.vehicle ? { status: 'mounted' } : fn(token, a)
+    return bot.vehicle ? { status: 'refused-mounted' } : fn(token, a)
   }
 
   const useOn = createUseOn({ act, getBot: () => bot, inventory, eye, lookNow, timeScale, isOwner, cutError, badArgs })

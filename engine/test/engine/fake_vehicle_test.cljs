@@ -117,7 +117,7 @@
        (fn ^:async t [[method args]]
          (let [p (rig {:self {:vehicle 9} :entities [(boat)]})
                result (got (await (js-invoke p method "t" args)))]
-           (is (= {:status "mounted"} result) method)
+           (is (= {:status "refused-mounted"} result) method)
            (is (= [0 64 0] (:pos (fake/self p))) method)))
        [["moveTo" #js {:pos (at 10 64 0)}]
         ["steer" #js {:timeoutS 1 :decide (fn [] #js {:done true})}]])))))

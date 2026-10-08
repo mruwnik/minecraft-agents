@@ -22,7 +22,7 @@
   (are [status failed?] (= failed? (backoff/failure? status))
     "blocked" true "failed" true "unreachable" true "cannot" true "timeout" true "gone" true
     "no-item" true "busy" true "rejected" true "hand-full" true "no-food" true "no-levels" true
-    "no-lapis" true "not-mounted" true "noPath" true "never-heard-of" true nil true
+    "no-lapis" true "not-mounted" true "refused-mounted" true "noPath" true "never-heard-of" true nil true
     "arrived" false "partial" false "dug" false "used" false "placed" false "ok" false
     "hit" false "killed" false "collected" false "sleeping" false "landed" false
     "surfaced" false "done" false "crafted" false "ate" false "mounted" false
