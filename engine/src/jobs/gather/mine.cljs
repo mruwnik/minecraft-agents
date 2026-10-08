@@ -136,7 +136,7 @@
    :collect-radius {:doc "how far around to collect drops after a dig" :spec (a/num-in 0 nil) :default 6}
    :max-failures {:doc "failures in a row before giving up" :spec (a/int-in 1 nil) :default 3}
    :dry-digs {:doc "digs in a row after which the carried count of the item did not rise before giving up (:no-drops)" :spec (a/int-in 1 nil) :default 3}
-   :direction {:doc "the strip tunnel's heading: north, south, east or west (n/s/e/w); nil: the way the body faces when the job starts" :spec (a/or-of string? keyword?) :default nil}
+   :direction {:doc "the strip tunnel's heading: north, south, east or west (n/s/e/w); nil: the way the body faces when the job starts" :spec (a/pred "north, south, east or west (n/s/e/w), a string or keyword" #(and (or (string? %) (keyword? %)) (heading-name %))) :default nil}
    :tunnel-length {:doc "the most blocks the strip tunnel runs in this job, at the body's level; 0: no tunnel, seen blocks only" :spec (a/int-in 0 nil) :default 32}
    :descend-limit {:doc "the most steps of stair down through soil to find stone, when the block is stone-type and none is in sight; 0: never descend" :spec (a/int-in 0 nil) :default 12}
    :torch-interval {:doc "the strip tunnel hangs a torch every this many steps; 0: none" :spec (a/int-in 0 nil) :default 10}
@@ -960,12 +960,6 @@
         heading (heading-name (:direction (:args c)))]
     (cond
       (and (contains? #{nil :dig} (:phase m)) (no-tool? c)) (await (fetch-pickaxe! c))
-
-      (and (nil? (:phase m)) (:direction (:args c)) (nil? heading))
-      (do (ctx/emit! c :mine.done :warn {:got 0 :reason :bad-direction :direction (:direction (:args c))
-                                         :text (str "mine: no such direction " (pr-str (:direction (:args c))) "; north, south, east or west")})
-          (ctx/result! c {:got 0 :reason :bad-direction})
-          :done)
 
       (nil? (:phase m))
       (let [faced (facing (:primitives c))

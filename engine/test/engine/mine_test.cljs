@@ -1246,6 +1246,11 @@
   (is (re-find #"jobs.gather.mine :fetch must be true, false"
                (expr/problem registry/jobs '(jobs.gather.mine {:block "stone" :count 1 :fetch "please"})))))
 
+(deftest a-bad-direction-is-refused-at-submit
+  (is (re-find #"jobs.gather.mine :direction must be"
+               (expr/problem registry/jobs '(jobs.gather.mine {:block "stone" :count 1 :direction "up"}))))
+  (is (nil? (expr/problem registry/jobs '(jobs.gather.mine {:block "stone" :count 1 :direction :w})))))
+
 (deftest fetch-false-ends-no-tool-without-asking-get-tool
   (async done
     (tu/run-async done
