@@ -216,9 +216,11 @@
             seeded)))
 
 (defn ^:async plan-place!
-  "Place the seed of debt at its cell after asking the rules once more; a failure is counted against the cell."
+  "Place the seed of debt at its cell after asking the gate once more (the reader sowing uses); a refusal or a failure
+  is counted against the cell."
   [c {:keys [pos seed]}]
-  (when (permit/ok? c (:plan (:args c)) :sow pos {:own-plans-ok? true})
+  (if-not (gate/allowed? c :plant.declined "plant" :sow pos {:except (:plan (:args c)) :own-plans-ok? true})
+    (ctx/update-mem! c count-fail :fails pos)
     (let [outcome (await (blocks/place-cell! c pos seed {:ignore-zones? true}))]
       (case outcome
         :continue :continue

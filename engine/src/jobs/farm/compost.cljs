@@ -74,9 +74,9 @@
   "The nearest composter within :radius that the zone rules let the job use."
   [c]
   (let [me (u/self-pos c)]
-    (->> (look/seen-blocks (:primitives c) {:names ["composter"] :radius (:radius (:args c)) :live? true})
-         (map :pos)
-         (#(gate/allowed c :compost.declined "compost" :harvest % {:own-plans-ok? true}))
+    (->> (gate/allowed c :compost.declined "compost" :harvest
+                       (map :pos (look/seen-blocks (:primitives c) {:names ["composter"] :radius (:radius (:args c)) :live? true}))
+                       {:own-plans-ok? true})
          (sort-by #(u/dist me %))
          first)))
 

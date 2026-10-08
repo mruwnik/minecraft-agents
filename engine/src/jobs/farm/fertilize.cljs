@@ -70,8 +70,7 @@
                      (filter #(some-> (:age %) (< (ripe-age (:name %)))))
                      (map :pos)
                      (filter #(<= (u/dist mid %) radius))))]
-    (->> (remove refused found)
-         (#(gate/allowed c :fertilize.declined "fertilize" :harvest % {:own-plans-ok? true}))
+    (->> (gate/allowed c :fertilize.declined "fertilize" :harvest (remove refused found) {:own-plans-ok? true})
          (sort-by #(u/dist me %)))))
 
 (defn has-meal? [p]

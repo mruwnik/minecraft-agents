@@ -18,7 +18,7 @@
   fetch failed, it waits (check) with :reason :no-sapling (:species). It also waits :log-on-spot when the spot still
   holds a log. The sapling kind is the species' (mangrove propagule, fungus too); the same one already on the spot
   counts as planted. Ends at once when there is nothing to plant or the spot is refused (a debt stays owed).
-  Zones: a spot in another owner's zone or claim, or in a plan's footprint (but :for-plan's own), is not planted.
+  Zones: a spot in another owner's zone or claim, or in another body's plan footprint (but :for-plan's own, or the body's own plan), is not planted.
   The job warns plant-sapling.declined once, with :reason :refused (or :no-zones when no zone list was read).
   :ignore-zones? true skips the check.")
 
@@ -35,7 +35,7 @@
 (defn spot-allowed?
   "Whether the job may plant at pos (one warn per job when refused)."
   [c pos]
-  (gate/allowed? c :plant-sapling.declined "plant-sapling" :place pos {:except (:for-plan (:args c))}))
+  (gate/allowed? c :plant-sapling.declined "plant-sapling" :place pos {:except (:for-plan (:args c)) :own-plans-ok? true}))
 
 (defn sapling-at?
   "True when the block at pos is a sapling, mangrove propagule or fungus."

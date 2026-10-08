@@ -1,8 +1,14 @@
 (ns engine.plant-sapling-unseen-test
   "jobs.forestry.plant-sapling looks at a planting spot it has never seen before it drops the spot."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.core :as core]
             [engine.library-test :as lt]
-            [engine.test-util :as tu]))
+            [engine.events :as events]
+            [engine.registry :as registry]
+            [engine.test-util :as tu]
+            [engine.triggers :as triggers]
+            [jobs.lib.world-files :as ew]
+            [plan.shape :as shape]))
 
 (def spot #js {:x 3 :y 64 :z 0})
 
@@ -37,3 +43,18 @@
       (fn ^:async t []
         (let [p (await (plant-unseen (constantly false)))]
           (is (= "air" (.-name (.blockAt p spot)))))))))
+
+(deftest a-sapling-is-planted-in-the-footprint-of-its-own-plan-but-not-another-bodys
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[author planted] [["Fake" "oak_sapling"] ["Miles" "air"]]]
+          (let [plan (shape/with-author {:id "hut" :parts [{:id "p" :box [[3 64 0] [3 64 0]] :want "stone"}]} author)
+                clock (atom 1000000)
+                [_ sink] (tu/legacy-capture-sink)
+                p (tu/seeing-all (tu/fake-on-floor {:blocks {} :inventory [{:name "oak_sapling" :count 1}]}))
+                eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                                  :world (ew/of-data {"hut" plan} {} [])
+                                  :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+            (await (tu/child-outcome eng 'jobs.forestry.plant-sapling {:at {:x 3 :y 64 :z 0} :species "oak"} 60))
+            (is (= planted (.-name (.blockAt p spot))) author)))))))

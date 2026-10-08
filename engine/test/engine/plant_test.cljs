@@ -298,6 +298,25 @@
             (await (run-until-empty eng 40))
             (is (= sown (block-at p 3 64 2)) author)))))))
 
+(deftest a-planned-cell-a-zone-refuses-after-the-walk-ends-the-job-instead-of-spinning
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [zone {:name "farm" :min [2 60 2] :max [3 70 2]}
+              world (ew/of-data (shared-plans []) {} [(assoc zone :owner "Fake")])
+              {:keys [eng p]} (start {:blocks (farmland (range 2 4) [2]) :inventory (inv "wheat_seeds" 6) :floor tu/walk-floor} world)
+              x0 (.-x (.-pos (.self p)))
+              moved? (atom false)]
+          (aset p "sensedAt" (let [orig (.-sensedAt p)]
+                               (fn [pos]
+                                 (when (and (not @moved?) (> (js/Math.abs (- x0 (.-x (.-pos (.self p))))) 0.5))
+                                   (reset! moved? true)
+                                   (ew/set-zones! world [(assoc zone :owner "Miles")]))
+                                 (orig pos))))
+          (core/submit! eng (list job {:plan "mix" :reach 0.1}) {})
+          (is (< (await (run-until-empty eng 60)) 60) "the job ended")
+          (is (true? @moved?) "the body walked"))))))
+
 (deftest every-cell-refused-by-another-plan-warns-once-though-the-job-never-starts
   (async done
     (tu/run-async done
