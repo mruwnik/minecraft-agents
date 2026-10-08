@@ -69,16 +69,17 @@
               {:keys [z]} (boat-pos p)]
           (is (< z 4) "the boat stopped at the shore"))))))
 
-(deftest an-unseen-target-waits
+(deftest an-unloaded-target-is-steered-to-not-waited-on
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (lt/setup {:blocks lake :unloaded ["10,63,2"] :entities [(boat-at 2.5 2.5)] :self {:vehicle 9}})]
           (core/submit! eng '(jobs.movement.boat-drive {:pos [10 63 2]}) {})
-          (await (tu/run-until-empty eng 3))
-          (is (= [:unseen] (mapv :reason (filterv #(= :waiting (:kind %)) @seen)))))))))
+          (await (tu/run-until-empty eng 30))
+          (is (empty? (filterv #(= :waiting (:kind %)) @seen)))
+          (is (some #(= :boat.driven (:kind %)) @seen)))))))
 
-(deftest a-target-that-turns-unsensed-after-the-check-waits
+(deftest a-target-that-turns-unsensed-on-the-way-is-still-steered-to
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -87,6 +88,7 @@
               calls (atom 0)]
           (aset p "blockAt" (fn [pos] (if (and (= 10 (.-x pos)) (> (swap! calls inc) 1)) nil (real pos))))
           (core/submit! eng '(jobs.movement.boat-drive {:pos [10 63 2]}) {})
-          (await (tu/run-until-empty eng 3))
+          (await (tu/run-until-empty eng 30))
           (is (empty? (filterv #(= :stopped (:kind %)) @seen)) (pr-str (mapv #(select-keys % [:kind :reason :data]) @seen)))
-          (is (= [:unseen] (distinct (mapv :reason (filterv #(= :waiting (:kind %)) @seen))))))))))
+          (is (empty? (filterv #(= :waiting (:kind %)) @seen)))
+          (is (some #(= :boat.driven (:kind %)) @seen)))))))

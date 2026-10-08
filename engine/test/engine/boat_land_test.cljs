@@ -72,14 +72,16 @@
     (is (nil? (shore/spot-at p {:x 21 :y 64 :z 3})) "an unseen stand cell is no shore")
     (is (some? (shore/spot-at p {:x 21 :y 64 :z 4})))))
 
-(deftest an-unseen-given-cell-waits
+(deftest an-unloaded-given-cell-is-driven-nearer-then-given-up
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (lt/setup (assoc world :unloaded ["21,64,12"]))]
           (core/submit! eng '(jobs.movement.boat-land {:pos [21 64 12]}) {})
-          (await (tu/run-until-empty eng 3))
-          (is (= [:unseen] (mapv :reason (filterv #(= :waiting (:kind %)) @seen)))))))))
+          (await (tu/run-until-empty eng 30))
+          (is (empty? (filterv #(= :waiting (:kind %)) @seen)))
+          (is (= [:no-shore] (mapv :reason (filterv #(= :stopped (:kind %)) @seen))))
+          (is (some #(= :boat.driven (:kind %)) @seen) "drove nearer first"))))))
 
 (deftest recover-takes-the-boat-back
   (async done

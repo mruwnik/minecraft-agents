@@ -75,14 +75,17 @@
           (let [{:keys [res]} (await (run w args))]
             (is (= {:status :stopped :reason reason} (select-keys res [:status :reason])) (pr-str [label res]))))))))
 
-(deftest an-unseen-given-cell-waits
+(deftest an-unloaded-given-cell-is-crossed-toward-then-given-up
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (lt/setup (assoc world :unloaded ["7,64,0"]))]
           (core/submit! eng '(jobs.movement.cross-water {:pos [7 64 0]}) {})
-          (await (tu/run-until-empty eng 3))
-          (is (= [:unseen] (mapv :reason (filterv #(= :waiting (:kind %)) @seen)))))))))
+          (await (tu/run-until-empty eng 60))
+          (is (empty? (filterv #(= :waiting (:kind %)) @seen)))
+          (is (some #(= :boat.launched (:kind %)) @seen))
+          (is (= :no-shore (:reason (last (filterv #(and (= :stopped (:kind %)) (= ["j1"] (:chain %))) @seen))))
+              (pr-str (mapv #(select-keys % [:kind :reason :chain]) (filterv #(= :stopped (:kind %)) @seen)))))))))
 
 (deftest far-shore-prefers-the-far-side
   (let [{:keys [p]} (lt/setup world)]

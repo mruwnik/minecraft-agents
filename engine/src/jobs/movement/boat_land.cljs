@@ -2,7 +2,6 @@
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as b]
-            [jobs.lib.look :as look]
             [jobs.lib.result :as result]
             [jobs.lib.sense :as sense]
             [jobs.lib.shore :as shore]
@@ -15,8 +14,8 @@
   :pos names the land cell, else the nearest within :radius of the boat. jobs.movement.boat-drive steers to the water cell beside it
   (a spot the boat cannot reach is dropped for the next, up to :max-spots), then jobs.movement.leave-vehicle steps off facing the land cell.
   With :recover the boat is then taken back (jobs.movement.boat-launch :recover; it needs the boat in sight).
-  The check waits (:unseen) while a given :pos is not sensed. Ends {:status :done :land {:x :y :z} :boat id :recovered bool}, info boat.landed, or
-  {:status :stopped :reason r}: :bad-args, :not-aboard (on foot: jobs.movement.boat-launch puts the body in a boat), :no-shore (none in sight, or :pos is no shore),
+  A given :pos the body cannot make out after a look is driven nearer once (boat-drive to the water cell on the boat's side of it), then decided again. Ends {:status :done :land {:x :y :z} :boat id :recovered bool}, info boat.landed, or
+  {:status :stopped :reason r}: :bad-args, :not-aboard (on foot: jobs.movement.boat-launch puts the body in a boat), :no-shore (none in sight, :pos is no shore, or it could not be made out even from near),
   :blocked (every spot tried could not be reached; with :cause), :drive-failed (the drive failed otherwise, with :cause), :not-landed (the dismount failed or left the body in water),
   :recover-failed (landed and boat.landed emitted, the boat not taken back; with :cause).
 
@@ -34,12 +33,8 @@
 (defn given-pos [c] (when (:pos (:args c)) (:pos (b/parse (:args c)))))
 
 (defn check
-  "Waits while a given land cell is not sensed and the job has looked around (before that the round looks)."
-  [c]
-  (let [cell (given-pos c)]
-    (or (nil? cell)
-        (some? (u/seen-name (:primitives c) cell))
-        (look/wait-unless-surveyed c {:reason :unseen :why "the land cell is not sensed yet"} [cell]))))
+  "Passes: the round looks at a given land cell not sensed yet, drives nearer to one it cannot make out, or stops with the reason."
+  [_c] true)
 
 (defn candidates [c]
   (let [p (:primitives c)
@@ -47,6 +42,41 @@
     (if-let [cell (given-pos c)]
       (some-> (shore/spot-at p cell) vector)
       (shore/spots p (u/self-pos c) {:radius radius}))))
+
+(def approach-range "A given land cell this near the boat is not driven nearer to." 3)
+
+(defn approach-cell
+  "The water-level cell beside land cell on the boat's side (along the axis the boat is farther off on)."
+  [{:keys [x y z]} {bx :x bz :z}]
+  (let [dx (- bx (+ x 0.5)) dz (- bz (+ z 0.5))]
+    (if (>= (js/Math.abs dx) (js/Math.abs dz))
+      {:x (+ x (if (pos? dx) 1 -1)) :y (dec y) :z z}
+      {:x x :y (dec y) :z (+ z (if (pos? dz) 1 -1))})))
+
+(defn unmade?
+  "Whether the given land cell, or a cell its shore test read, is not made out (never seen, or not loaded)."
+  [c reads]
+  (boolean (when-let [cell (given-pos c)]
+             (or (seq (:cells reads)) (nil? (u/seen-name (:primitives c) cell))))))
+
+(defn ^:async approach!
+  "Drive toward a given land cell the body could not make out: nil when not worth it (no :pos, made out, near, already
+  driven nearer this run), else the drive child's outcome (:continue while it runs)."
+  [c reads]
+  (let [cell (given-pos c)
+        pos (u/self-pos c)]
+    (when (and (unmade? c reads) (not (:approached (ctx/mem c)))
+               (> (u/dist pos (vehicle/centre cell)) approach-range))
+      (let [r (await (ctx/call-child c :approach 'jobs.movement.boat-drive {:pos (approach-cell cell pos) :range 2}))]
+        (if (= :continue r)
+          :continue
+          (do (ctx/update-mem! c assoc :approached true) :approached))))))
+
+(defn no-shore-text [c reads]
+  (cond
+    (nil? (given-pos c)) "no seen shore to land on"
+    (unmade? c reads) (let [{:keys [x y z]} (given-pos c)] (str "could not make out the land cell " x " " y " " z))
+    :else "the given cell is no shore"))
 
 (defn landed-boat
   "The boat id remembered by this job's landing, or nil."
@@ -88,10 +118,17 @@
       (not (vehicle/mounted? p)) (result/stop! c :not-aboard "the body is not in a boat")
       (and (:pos (:args c)) (nil? (given-pos c))) (result/stop! c :bad-args (:error (b/parse (:args c))))
       :else
-      (let [spots (take max-spots (await (sense/decide! c :boat-land.shore #(candidates c) {:retry? empty?})))
+      (let [found (await (sense/decide! c :boat-land.shore #(candidates c) {:retry? empty?}))
+            [_ reads] (sense/decide #(candidates c))
+            approached (when (empty? found) (await (approach! c reads)))
+            found (if (= :approached approached) (await (sense/decide! c :boat-land.shore #(candidates c) {:retry? empty?})) found)
+            [_ reads] (if (= :approached approached) (sense/decide #(candidates c)) [nil reads])
+            spots (take max-spots found)
             boat-id (:id (vehicle/vehicle-of (.self p)))]
-        (if (empty? spots)
-          (result/stop! c :no-shore "no seen shore to land on")
+        (cond
+          (= :continue approached) :continue
+          (empty? spots) (result/stop! c :no-shore (no-shore-text c reads))
+          :else
           (loop [[{:keys [land water]} & more] spots fails []]
             (if (nil? land)
               (let [[reason shown] (drive-failure fails)]

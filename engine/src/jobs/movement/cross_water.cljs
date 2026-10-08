@@ -4,6 +4,7 @@
             [jobs.lib.blocks :as b]
             [jobs.lib.look :as look]
             [jobs.lib.result :as result]
+            [jobs.lib.sense :as sense]
             [jobs.lib.shore :as shore]
             [jobs.lib.util :as u]
             [jobs.lib.vehicle :as vehicle]))
@@ -14,7 +15,7 @@
   the far shore, step off facing the land, and with :recover take the boat back). A body already aboard skips the launch.
   The far shore is :pos (a land cell: it must be a seen shore), else a seen shore within :radius of the body, at least :min-cross blocks away, with water between it and the body
   (not the start bank): the one nearest :goal when given, else the farthest.
-  The check waits (:unseen) while a given :pos is not sensed. Ends {:status :done :land {:x :y :z} :boat id :recovered bool}, info boat.landed (from boat-land), or
+  A given :pos is looked at first; one the body still cannot make out is crossed toward all the same (boat-land drives nearer to it). Ends {:status :done :land {:x :y :z} :boat id :recovered bool}, info boat.landed (from boat-land), or
   {:status :stopped :reason r}: :bad-args, :not-water (no water in sight to launch on), :no-far-shore (:pos is no shore, or none far enough is in sight),
   :no-boat (none carried and none could be fetched; :cause from the launch), :boat-not-seen (the placed boat is not in sight), the launch's other stops (:refused, :no-support,
   :unreachable, :occupied, :board-failed, :failed; :cause names the child),
@@ -38,12 +39,8 @@
 (defn given-pos [c] (when (:pos (:args c)) (:pos (b/parse (:args c)))))
 
 (defn check
-  "Waits while a given far-shore cell is not sensed."
-  [c]
-  (let [cell (given-pos c)]
-    (or (nil? cell)
-        (some? (u/seen-name (:primitives c) cell))
-        (ctx/wait c {:reason :unseen :why "the far-shore cell is not sensed yet"}))))
+  "Passes: the round looks for the far shore and stops with the reason when there is none."
+  [_c] true)
 
 (defn water-between?
   "Whether a seen water cell lies on the straight line from `from` to the spot's land cell, at the spot's water level."
@@ -133,7 +130,11 @@
       (and (:pos (:args c)) (nil? (given-pos c))) (result/stop! c :bad-args (:error (b/parse (:args c))))
       saved (await (land! c (:land saved)))
       :else
-      (let [spot (target-spot c)]
+      (let [spot (await (sense/decide! c :cross-water.shore #(target-spot c)))
+            [_ reads] (sense/decide #(target-spot c))
+            ;; a given far shore still not made out after the look: cross toward it, the landing drives nearer
+            spot (or spot (when (and (given-pos c) (or (seq (:cells reads)) (nil? (u/seen-name p (given-pos c)))))
+                            {:land (given-pos c)}))]
         (cond
           (and (or (nil? spot) (not (water-in-sight? c))) (not (look/surveyed? c)))
           (await (look/survey! c)) ; a shore or water behind the body is not seen until it looks
