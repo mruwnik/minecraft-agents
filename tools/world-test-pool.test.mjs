@@ -343,3 +343,59 @@ test('runPool: no unit ran is exit 2 (no cases selected), like the single-body r
   const r = await runPool({ units: [], workers: workerSpecs(2, 19, 'P', 0), runUnit: fakeRunner((f) => ok(f), []) })
   assert.equal(r.code, 2)
 })
+
+// ---- server down: a connection error is a setup fault, not a case result
+const refused = (id) => form(id, 'error', 1, ', :evidence "connect ECONNREFUSED 127.0.0.1:25575"')
+const fakeServer = (downUntilMs) => { // a clock the fake sleep advances, and a probe that refuses until downUntilMs
+  const clock = { t: 0 }
+  return { clock, now: () => clock.t, sleep: async (ms) => { clock.t += ms }, probe: async () => clock.t >= downUntilMs }
+}
+test('runPool: cases that hit a refused connection wait for the server and rerun without using a retry or showing as errors', async () => {
+  const srv = fakeServer(40000)
+  const log = []
+  const runUnit = fakeRunner((file) => (log.length === 1 ? { code: 1, text: vec(refused(`${file}/c1`), refused(`${file}/c2`)) } : ok(file)), log)
+  const seen = []
+  const r = await runPool({ units: ['a'], workers: workerSpecs(1, 19, 'P', 0), runUnit, retries: 1, total: 2, emit: (e) => seen.push(e), ...srv })
+  assert.equal(r.code, 0)
+  assert.deepEqual(splitForms(r.text).map((f) => summarize(f).status), ['pass', 'pass'])
+  assert.ok(srv.clock.t >= 40000)
+  assert.equal(resultsOf(seen).length, 2)
+  assert.equal(progressOf(seen).at(-1).retries, 0)
+})
+test('runPool: a unit that exits with no results while the server is down is held and rerun whole once the server is back', async () => {
+  const srv = fakeServer(20000)
+  const log = []
+  const runUnit = fakeRunner((file) => (log.length === 1 ? { code: 1, text: null } : ok(file)), log)
+  const r = await runPool({ units: ['a'], workers: workerSpecs(1, 19, 'P', 0), runUnit, ...srv })
+  assert.equal(r.code, 0)
+  assert.equal(log.length, 2)
+})
+test('runPool: no new unit starts while the server is down', async () => {
+  const srv = fakeServer(30000)
+  const starts = []
+  const runUnit = async ({ file }) => { starts.push([file, srv.clock.t]); return starts.length === 1 ? { code: 1, text: vec(refused(`${file}/c1`)) } : ok(file) }
+  await runPool({ units: ['a', 'b', 'c'], workers: workerSpecs(1, 19, 'P', 0), runUnit, ...srv })
+  assert.ok(starts.slice(1).every(([, t]) => t >= 30000))
+})
+test('runPool: a mixed unit keeps its good results and reruns only the refused case', async () => {
+  const srv = fakeServer(5000)
+  const log = []
+  const listed = new Map([['a', ['a/c1', 'a/c2']]])
+  const runUnit = fakeRunner((file, match) => (log.length === 1 ? { code: 1, text: vec(form('a/c1', 'pass'), refused('a/c2')) } : { code: 0, text: vec(form(match, 'pass')) }), log)
+  const r = await runPool({ units: ['a'], workers: workerSpecs(1, 19, 'P', 0), runUnit, listed, total: 2, ...srv })
+  assert.equal(r.code, 0)
+  assert.deepEqual(log.map((l) => l.match), [null, 'a/c2'])
+  assert.deepEqual(splitForms(r.text).map((f) => summarize(f).status).sort(), ['pass', 'pass'])
+})
+test('runPool: past the wait cap the pool stops as server unreachable (exit 3), recording no errors', async () => {
+  const srv = fakeServer(Infinity)
+  const r = await runPool({ units: ['a', 'b'], workers: workerSpecs(1, 19, 'P', 0), runUnit: fakeRunner((file) => ({ code: 1, text: vec(refused(`${file}/c1`)) }), []), serverWaitMs: 60000, ...srv })
+  assert.equal(r.code, 3)
+  assert.equal(r.unreachable, true)
+  assert.deepEqual(splitForms(r.text), [])
+  assert.ok(srv.clock.t >= 60000)
+})
+test('parsePoolArgs: --server-wait-s sets the cap in seconds (default 300)', () => {
+  assert.equal(parsePoolArgs(['d']).serverWaitS, 300)
+  assert.equal(parsePoolArgs(['d', '--server-wait-s', '90']).serverWaitS, 90)
+})

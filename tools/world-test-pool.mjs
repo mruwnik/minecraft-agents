@@ -15,16 +15,19 @@
 // A failed case whose last result in the --durations files was a fail on the same first failing check is a known failure: no rerun, :known-failure true in its result (and knownFailure in its event).
 //   --retry-failed N the pool owns retries (children never get it): a failed case (not an error or inconclusive one, as in the single-body runner)
 //                     is rerun up to N times (default 1; exactly its --match-id, one run) on a different body when the pool has one; a pass is :flaky.
+//   --server-wait-s S when a child hits a refused RCON/game-port connection the pool holds every unit and polls the server (up to S seconds, default 300),
+//                     reruns the faulted cases without using a retry, and past S stops with "server unreachable" (exit 3)
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
+import net from 'node:net'
 import { spawn, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 const PLOTS_PER_BODY = 20
 const LOAD_POLL_MS = 5000
 const here = path.dirname(fileURLToPath(import.meta.url))
-const POOL_VALUE_FLAGS = ['--bodies', '--body', '--first-plot', '--results', '--durations', '--max-parallel', '--retry-failed']
+const POOL_VALUE_FLAGS = ['--bodies', '--body', '--first-plot', '--results', '--durations', '--max-parallel', '--retry-failed', '--server-wait-s']
 const VALUE_FLAGS = ['--tag', '--match', '--repeat', '--world', '--card', '--time-log', '--phase', '--match-id']
 const CLOSERS = { '{': '}', '[': ']', '(': ')' }
 
@@ -142,7 +145,7 @@ export const unitOrder = (files, previousTexts) => {
 }
 
 export const parsePoolArgs = (args) => {
-  const p = { bodies: 1, prefix: 'ProbePool', firstPlot: 0, results: null, maxParallel: null, durations: [], retries: 1, paths: [], passthrough: [] }
+  const p = { bodies: 1, prefix: 'ProbePool', firstPlot: 0, results: null, maxParallel: null, durations: [], retries: 1, serverWaitS: 300, paths: [], passthrough: [] }
   for (let i = 0; i < args.length; i++) {
     const a = args[i]
     if (!a.startsWith('--')) { p.paths.push(a); continue }
@@ -155,6 +158,7 @@ export const parsePoolArgs = (args) => {
     else if (a === '--results') p.results = v
     else if (a === '--max-parallel') p.maxParallel = Number(v)
     else if (a === '--retry-failed') p.retries = Number(v)
+    else if (a === '--server-wait-s') p.serverWaitS = Number(v)
     else p.durations.push(v)
   }
   return p
@@ -195,7 +199,12 @@ const errorForm = (file, why, id = file) => `{:id ${JSON.stringify(id)}, :file $
 // Resolves to {text, code}: one merged results vector, code 0 when every case passed or was flaky.
 // total/emit (both optional): emit gets the @@test events of the run: one result per case when its status is final (a failure still
 // to be rerun is not final), and a progress {done, total, retries} after each; reruns are counted in retries, never in done or total.
-export const runPool = async ({ units, workers, runUnit, retries = 1, load = () => 0, cores = 1, total = null, known = new Map(), listed = null, repeat = 1, emit = () => {}, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) => {
+// A child's connection error (RCON or the game port) is a setup fault, not a case result: probe() says whether the server answers; while it does not,
+// no unit starts (polled every serverPollMs); the faulted cases rerun for free; past serverWaitMs the pool stops: {unreachable: true, code: 3}.
+const CONN_FAULT = /ECONN(REFUSED|RESET)|EPIPE/
+const connFault = (form) => summarize(form).status === 'error' && CONN_FAULT.test(form)
+export const runPool = async ({ units, workers, runUnit, retries = 1, load = () => 0, cores = 1, total = null, known = new Map(), listed = null, repeat = 1, emit = () => {}, sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
+  probe = async () => true, now = Date.now, serverWaitMs = 300000, serverPollMs = 3000 }) => {
   const queue = units.map((file) => ({ file, match: null, avoid: null }))
   const done = new Map() // `id#run` (or file when the unit died) -> form text, in first-seen order
   let busy = 0
@@ -210,6 +219,19 @@ export const runPool = async ({ units, workers, runUnit, retries = 1, load = () 
   }
   const key = (s) => `${s.id}#${s.run}`
   const settled = new Set()
+  const redoing = new Set() // keys of cases rerun after a server fault: not missing
+  let holding = null
+  let unreachable = false
+  const hold = () => {
+    holding ??= (async () => {
+      const t0 = now()
+      while (!(await probe())) {
+        if (now() - t0 >= serverWaitMs) { unreachable = true; break }
+        await sleep(serverPollMs)
+      }
+      holding = null
+    })()
+  }
   const settle = (k, form) => { // a case's final status
     settled.add(k)
     done.set(k, form)
@@ -220,12 +242,23 @@ export const runPool = async ({ units, workers, runUnit, retries = 1, load = () 
   const settleMissing = (file, why) => {
     for (const id of listed?.get(file) ?? []) {
       for (let run = 1; run <= repeat; run++) {
-        if (!settled.has(`${id}#${run}`) && !done.has(`${id}#${run}`)) settle(`${id}#${run}`, withRun(errorForm(file, why, id), run))
+        if (!settled.has(`${id}#${run}`) && !done.has(`${id}#${run}`) && !redoing.has(`${id}#${run}`)) settle(`${id}#${run}`, withRun(errorForm(file, why, id), run))
       }
     }
   }
   const rerun = (j) => { reruns++; queue.push(j) }
   const record = (job, worker, res) => {
+    if (job.redo) { // one case rerun after a server fault: a fresh run of it
+      const k = `${job.match}#${job.run}`
+      redoing.delete(k)
+      const mine = res.text ? splitForms(res.text).map((f) => withRun(f, job.run)).filter((f) => summarize(f).id === job.match) : []
+      if (!mine.length) settle(k, withRun(errorForm(job.file, `the run exited ${res.code} with no result for this case`, job.match), job.run))
+      mine.forEach((form) => {
+        if (failed(summarize(form)) && retries > 0) { done.set(k, form); rerun({ file: job.file, avoid: worker.body, retry: { body: worker.body }, match: job.match, run: job.run, attempt: 1, firstForm: form }) }
+        else settle(k, form)
+      })
+      return
+    }
     const retryJob = { file: job.file, avoid: worker.body, retry: { body: worker.body } }
     if (!res.text && job.retry) {
       const why = `the run exited ${res.code} with no results (twice)`
@@ -262,12 +295,27 @@ export const runPool = async ({ units, workers, runUnit, retries = 1, load = () 
   }
   const loop = async (worker) => {
     for (;;) {
+      if (holding) await holding
+      if (unreachable) return
       const job = take(worker)
       if (job) {
         while (busy && load() > cores) await sleep(LOAD_POLL_MS)
         busy++
         const res = await runUnit({ file: job.file, match: job.match, exact: job.match !== null, worker })
-        record(job, worker, res)
+        const forms = res.text ? splitForms(res.text) : []
+        const faulted = forms.filter(connFault)
+        if (faulted.length || (!res.text && !(await probe()))) {
+          hold()
+          if (job.match !== null || job.retry || faulted.length === forms.length) queue.push(job) // the same job again, no retry used
+          else {
+            for (const f of faulted) {
+              const s = summarize(f)
+              redoing.add(key(s))
+              queue.push({ file: job.file, match: s.id, run: s.run, redo: true, avoid: null })
+            }
+            record(job, worker, { ...res, text: mergeText(forms.filter((f) => !connFault(f))) })
+          }
+        } else record(job, worker, res)
         busy--
         notify()
         continue
@@ -278,6 +326,7 @@ export const runPool = async ({ units, workers, runUnit, retries = 1, load = () 
   }
   await Promise.all(workers.map(loop))
   const forms = [...done.values()]
+  if (unreachable) return { skipped, unreachable, text: mergeText(forms), code: 3 }
   return { skipped, text: mergeText(forms), code: !forms.length ? 2 : forms.every((f) => ['pass', 'flaky'].includes(summarize(f).status)) ? 0 : 1 }
 }
 
@@ -317,6 +366,20 @@ const readDurations = (files) => files.filter((f) => fs.existsSync(f)).flatMap((
   return []
 })
 
+// the server answers when its RCON port accepts a connection (port from server.properties next to the server, else 25575)
+const rconPort = () => {
+  const props = process.env.MC_SERVER_PROPERTIES
+  const text = props && fs.existsSync(props) ? fs.readFileSync(props, 'utf8') : ''
+  return Number(text.match(/^rcon\.port=(\d+)/m)?.[1] ?? 25575)
+}
+const serverProbe = (port) => () => new Promise((resolve) => {
+  const sock = net.connect({ port, host: '127.0.0.1' })
+  sock.setTimeout(3000)
+  sock.on('connect', () => { sock.destroy(); resolve(true) })
+  sock.on('timeout', () => { sock.destroy(); resolve(false) })
+  sock.on('error', () => resolve(false))
+})
+
 export const main = async (args) => {
   const p = parsePoolArgs(args)
   const byStem = new Map(fixtureFiles(p.paths).map((f) => [path.basename(f, '.edn'), f]))
@@ -351,7 +414,8 @@ export const main = async (args) => {
   }
   const total = listing === null ? null : countListed(listing, repeatOf(p))
   if (total !== null) emitLine({ event: 'plan', total })
-  const r = await runPool({ listed, repeat: repeatOf(p), units, workers, runUnit, retries: p.retries, total, known: knownFailures(previous), emit: emitLine, load: () => os.loadavg()[0], cores })
+  const r = await runPool({ listed, repeat: repeatOf(p), units, workers, runUnit, retries: p.retries, total, known: knownFailures(previous), emit: emitLine, load: () => os.loadavg()[0], cores, probe: serverProbe(rconPort()), serverWaitMs: p.serverWaitS * 1000 })
+  if (r.unreachable) console.error(`world-test pool: server unreachable (RCON port ${rconPort()} refused for ${p.serverWaitS} s); stopped, the cases not run are not recorded`)
   if (p.results) fs.writeFileSync(p.results, r.text)
   const sums = splitForms(r.text).map(summarize)
   const count = (st) => sums.filter((s) => s.status === st).length
