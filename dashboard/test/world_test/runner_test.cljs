@@ -1121,6 +1121,50 @@
                    (fs/rmSync dir #js {:recursive true})
                    (done)))))))
 
+(deftest the-state-records-the-pool-pid-and-its-start-time-and-a-live-pool-is-not-restored-over
+  (async done
+    (let [sent (atom []) dir (tmp-dir) opts {:sleep-state-dir dir :owner-pid js/process.pid}]
+      (-> (start! sent 25 opts "n1" dir)
+          (.then (fn [_]
+                   (let [st (r/read-sleep-state opts)]
+                     (is (= js/process.pid (:pid st)) "the pool's pid, not the runner's parent")
+                     (is (= (r/proc-start js/process.pid) (:start st)) "with its start time")
+                     (is (some? (:start st))))
+                   (reset! sent [])
+                   (r/restore-sleep-rule! (fake-send sent 101) {:sleep-state-dir dir} "crashed" {:only-dead? true})))
+          (.then (fn [_]
+                   (is (empty? @sent) "the pool is alive: a dead-only restore leaves the batch")
+                   (fs/rmSync dir #js {:recursive true})
+                   (done)))))))
+
+(deftest a-reused-pid-with-another-start-time-counts-as-dead
+  (async done
+    (let [sent (atom []) dir (tmp-dir)]
+      (fs/writeFileSync (path/join dir "world-test-sleep-rule.edn") (pr-str {:old 60 :batch "n1" :pid js/process.pid :start "1"}))
+      (-> (r/restore-sleep-rule! (fake-send sent 101) {:sleep-state-dir dir} "crashed" {:only-dead? true})
+          (.then (fn [_]
+                   (is (= ["gamerule players_sleeping_percentage 60"] @sent))
+                   (fs/rmSync dir #js {:recursive true})
+                   (done)))))))
+
+(deftest a-batch-end-or-pool-exit-of-another-run-leaves-the-state
+  (async done
+    (let [sent (atom []) dir (tmp-dir) opts {:sleep-state-dir dir :allow-time true :owner-pid js/process.pid}]
+      (-> (start! sent 25 opts "n1" dir)
+          (.then (fn [_]
+                   (reset! sent [])
+                   (r/end-night-batch! (fake-send sent 101) opts "n2" dir)))
+          (.then (fn [_]
+                   (r/restore-sleep-rule! (fake-send sent 101) opts "exit" {:pool 1})))
+          (.then (fn [_]
+                   (is (empty? @sent) "another batch / another pool restores nothing")
+                   (is (= 25 (:old (r/read-sleep-state opts))))
+                   (r/restore-sleep-rule! (fake-send sent 101) opts "exit" {:pool js/process.pid})))
+          (.then (fn [_]
+                   (is (= ["gamerule players_sleeping_percentage 25"] @sent) "the recording pool's own exit restores")
+                   (fs/rmSync dir #js {:recursive true})
+                   (done)))))))
+
 (deftest a-state-of-a-dead-run-restores-under-only-dead
   (async done
     (let [sent (atom []) dir (tmp-dir)]

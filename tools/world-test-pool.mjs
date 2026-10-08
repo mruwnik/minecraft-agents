@@ -442,7 +442,7 @@ const spawnChild = (script, pass, matchIds, { file, match, worker, batch, barrie
   const argv = [script, file, ...pass, ...(batch ? ['--night-batch', batch] : []), ...(batch && barrier ? ['--night-barrier', String(barrier)] : []), '--body', worker.body, '--first-plot', String(worker.firstPlot), '--results', tmpResults, ...(match ? ['--match-id', match, '--repeat', '1'] : withMatchIds(matchIds))]
   // the pool reports the @@test events itself (fixed total, final status per case), so a child prints none
   const { TEST_EVENTS: _events, ...env } = process.env
-  const child = spawn(process.execPath, argv, { stdio: 'inherit', env })
+  const child = spawn(process.execPath, argv, { stdio: 'inherit', env: { ...env, WORLD_TEST_POOL_PID: String(process.pid) } })
   const entry = reaper.add(child, tmpResults)
   child.on('close', (code) => { reaper.done(entry); resolve(code ?? 1) })
 })
@@ -491,9 +491,9 @@ export const nightBatchEndArgs = (pass, body, batch) => {
 }
 // restores the recorded sleep gamerule (a run killed in a batch leaves it in state/); dead = only when the run that recorded it is gone
 export const sleepRuleRestoreArgs = (pass, body, dead) => [dead ? '--sleep-rule-restore-dead' : '--sleep-rule-restore', ...nightBatchEndArgs(pass, body, 'x').slice(2)]
-const restoreSleepRule = (script, pass, body, dead) => spawnSync(process.execPath, [script, ...sleepRuleRestoreArgs(pass, body, dead)], { stdio: 'inherit' })
+const restoreSleepRule = (script, pass, body, dead) => spawnSync(process.execPath, [script, ...sleepRuleRestoreArgs(pass, body, dead)], { stdio: 'inherit', env: { ...process.env, WORLD_TEST_POOL_PID: String(process.pid) } })
 const endNightBatch = (script, pass, body, batch) => new Promise((resolve) => {
-  const child = spawn(process.execPath, [script, ...nightBatchEndArgs(pass, body, batch)], { stdio: 'inherit' })
+  const child = spawn(process.execPath, [script, ...nightBatchEndArgs(pass, body, batch)], { stdio: 'inherit', env: { ...process.env, WORLD_TEST_POOL_PID: String(process.pid) } })
   child.on('close', resolve)
 })
 

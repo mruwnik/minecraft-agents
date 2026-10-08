@@ -532,6 +532,20 @@
   (try (.kill js/process pid 0) true
        (catch :default e (= "EPERM" (.-code e)))))
 
+(defn proc-start
+  "The start time (clock ticks since boot, /proc/PID/stat field 22) of a process, as a string; nil when it is gone or unreadable.
+  A reused PID has another one."
+  [pid]
+  (try (let [stat (str (fs/readFileSync (str "/proc/" pid "/stat") "utf8"))]
+         (nth (str/split (subs stat (inc (.lastIndexOf stat ")"))) #"\s+") 20 nil))
+       (catch :default _ nil)))
+
+(defn owner-pid
+  "The pool that runs this process (WORLD_TEST_POOL_PID), else the parent process."
+  []
+  (let [n (js/parseInt (or (.. js/process -env -WORLD_TEST_POOL_PID) "") 10)]
+    (if (js/isNaN n) (.-ppid js/process) n)))
+
 (defn read-pid-file
   "The PID in file; :empty when it exists without a PID (a writer between create and write, or a crashed one); nil when absent."
   [file]
@@ -691,13 +705,16 @@
 
 (defn restore-sleep-rule!
   "Restores the recorded players_sleeping_percentage (logged) and removes the state file; never writes 101 back.
-  :only-dead? restores only when the recording process is gone (a crashed run), not a batch still running."
-  [send opts why & [{:keys [only-dead?]}]]
-  (let [{:keys [old pid] :as st} (read-sleep-state opts)
+  :only-dead? restores only when the recording pool is gone (same PID and start time), not a batch still running;
+  :batch only a state recorded for that batch; :pool only a state recorded by that pool PID."
+  [send opts why & [{:keys [only-dead? batch pool]}]]
+  (let [{:keys [old pid start] :as st} (read-sleep-state opts)
         file (sleep-state-file opts)]
     (cond
       (nil? st) (do (fs/rmSync file #js {:force true}) (js/Promise.resolve nil))
-      (and only-dead? pid (pid-alive? pid)) (js/Promise.resolve nil)
+      (and batch (not= batch (:batch st))) (js/Promise.resolve nil)
+      (and pool (not= pool pid)) (js/Promise.resolve nil)
+      (and only-dead? pid (pid-alive? pid) (or (nil? start) (= start (proc-start pid)))) (js/Promise.resolve nil)
       :else (.then (if (and old (not= 101 old)) (set-sleep-rule! send (update opts :time-log #(or % (:time-log st))) old why) (js/Promise.resolve nil))
                    (fn [_] (fs/rmSync file #js {:force true}) old)))))
 
@@ -727,7 +744,7 @@
                      (if (or (nil? old) (= 101 old))
                        nil
                        (do (fs/mkdirSync (path/dirname (sleep-state-file opts)) #js {:recursive true})
-                           (fs/writeFileSync (sleep-state-file opts) (pr-str {:old old :batch batch :pid (.-ppid js/process) :time-log (:time-log opts) :at (js/Date.now)}))
+                           (fs/writeFileSync (sleep-state-file opts) (pr-str {:old old :batch batch :pid (or (:owner-pid opts) (owner-pid)) :start (proc-start (or (:owner-pid opts) (owner-pid))) :time-log (:time-log opts) :at (js/Date.now)}))
                            (.then (set-sleep-rule! send opts 101 why) (fn [_] old)))))))))
 
 (defn end-night-batch!
@@ -735,7 +752,7 @@
   [send opts batch dir]
   (let [dir (or dir night-batch-marker-dir)]
     (fs/rmSync (path/join dir (str batch ".barrier")) #js {:recursive true :force true})
-    (.then (restore-sleep-rule! send opts (str "night batch " batch " ended"))
+    (.then (restore-sleep-rule! send opts (str "night batch " batch " ended") {:batch batch})
            (fn [_] (fs/rmSync (path/join dir batch) #js {:force true}) true))))
 
 (defn barrier-open?
@@ -1786,7 +1803,7 @@
                                          res)
                                    (log! "world-test --check: " (count res) " cases, " (count (remove #(= :pass (:status %)) res)) " failed")
                                    (check-exit-code res))
-                   (:sleep-rule-restore opts) (.then (restore-sleep-rule! rcon! opts "world-test restores a recorded gamerule" {:only-dead? (= :dead (:sleep-rule-restore opts))}) (constantly 0))
+                   (:sleep-rule-restore opts) (.then (restore-sleep-rule! rcon! opts "world-test restores a recorded gamerule" (if (= :dead (:sleep-rule-restore opts)) {:only-dead? true} {:pool (owner-pid)})) (constantly 0))
                    (:night-batch-end opts) (.then (end-night-batch! rcon! opts (:night-batch-end opts) nil) (constantly 0))
                    (:list opts) (do (run! (if (:night-classes opts)
                                            #(log! (night-class-line %))
