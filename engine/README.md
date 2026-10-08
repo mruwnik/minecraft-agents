@@ -484,6 +484,7 @@ HTTP over `worlds/<world>/agents/<name>/engine/events.sock` (mode 0600; all bodi
 | `GET /status?limit=` | compact body/job/attention projection (includes `:died` while a death is under 6000 game ticks of world age old; supplied by recover-drops through the status extras main passes to event-api/create) |
 | `GET /inventory` | carried stacks and worn equipment (with a short enchants list), read-only |
 | `GET /seen?names=a,*_ore&radius=&max=` | blocks remembered by perception (never x-ray), nearest first with `:pos`, `:distance` and `:age-ms` (air left out when no names); radius and max capped at 64; offline: `{:ok false :reason :offline}`; read-only |
+| `GET /chests?max=` | chest stock the body saw (memory `:fetch/stock`, latest per chest), nearest first with `:pos`, `:distance`, `:age-ms`, `:items {name n}`; max capped at 64; read-only (`observe <agent> chests`) |
 | `GET /job?id=` | one job's parsed spec, args, state, linked requests; a finished job answers its recorded outcome (`:finished? true :status :result :ended-at`) from the results record: the last `engine.core.base/recent-results-limit` (100) ended listed jobs and `reflex-results-limit` (20) reflex jobs, in `results.edn`, not in the state or `/snapshot` |
 | `GET /results?ids=j1,j2` | the recorded outcomes of up to 32 job ids |
 | `GET /catalog?kind=jobs\|triggers&prefix=` / `kind=job\|trigger&name=` | names page / one description |
