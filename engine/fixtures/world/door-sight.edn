@@ -1,0 +1,35 @@
+;; Card a248def0: a sight line passes the open part of a block that does not fill its cell (an open door's panel lies along the
+;; cell edge), but a shut door across the ray still hides what is behind it. A stone wall at x 14, z 8..24, y 0..3 with a doorway
+;; at [14 0..1 16]; gold at [20 1 16] behind it; the body 6 west looking east. The wall face [14 1 18] syncs the check: once the
+;; seen memory (saved every second here) holds the face, the gold cell is judged (plans.mjs check on the body's seen memory).
+{:defaults
+ {:tags [:sensing :door :tool]
+  :time :day
+  :plot {:height 8}
+  :blocks [[:fill [14 0 8] [14 3 24] "stone"] [:set [20 1 16] "gold_block"]]
+  :body {:at [8.5 0 16.5] :yaw -90 :settle-s 2}
+  :settings {:engine.perception/save-ms 1000}
+  :plans [{:id "face" :metadata {:by "tester"} :parts [{:id "face" :cells [#at [14 1 18]] :want [:any "stone"]}]}
+          {:id "gold" :metadata {:by "tester"} :parts [{:id "gold" :cells [#at [20 1 16]] :want [:any "gold_block"]}]}]
+  :limit-s 90}
+ :cases
+ [{:name "gold-seen-through-the-open-door"
+   :blocks [[:set [14 0 16] "oak_door[facing=east,half=lower,hinge=left,open=true]"]
+            [:set [14 1 16] "oak_door[facing=east,half=upper,hinge=left,open=true]"]]
+   :act [[:until [:cli "plans" ["--world" "$world" "check" "$plan:face" "--body" "$body"]
+          {:evidence :seen-memory :score {:counts {:match 1}}}] 30]
+         [:until [:cli "plans" ["--world" "$world" "check" "$plan:gold" "--body" "$body"]
+          {:evidence :seen-memory :score {:counts {:match 1} :checked {:seen 1 :unseen 0}}}] 30]]
+   :expect [{:no-event {:level :error} :for-s 3}]
+   :after [[:body-near [8.5 0 16.5] 4]]}
+  ;; should fail: the same door shut hides the gold, which stays unseen
+  {:name "gold-unseen-behind-the-shut-door"
+   :blocks [[:set [14 0 16] "oak_door[facing=east,half=lower,hinge=left,open=false]"]
+            [:set [14 1 16] "oak_door[facing=east,half=upper,hinge=left,open=false]"]]
+   :act [[:until [:cli "plans" ["--world" "$world" "check" "$plan:face" "--body" "$body"]
+          {:evidence :seen-memory :score {:counts {:match 1}}}] 30]
+         [:wait-s 3]
+         [:cli "plans" ["--world" "$world" "check" "$plan:gold" "--body" "$body"]
+          {:evidence :seen-memory :score {:counts {:unknown 1} :checked {:seen 0 :unseen 1}}}]]
+   :expect [{:no-event {:level :error} :for-s 3}]
+   :after [[:body-near [8.5 0 16.5] 4]]}]}

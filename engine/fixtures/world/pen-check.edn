@@ -75,4 +75,30 @@
             [:fill [2 0 2] [53 0 2] "oak_fence"] [:fill [2 0 53] [53 0 53] "oak_fence"]
             [:fill [2 0 2] [2 0 53] "oak_fence"] [:fill [53 0 2] [53 0 53] "oak_fence"]]
    :act [[:job (jobs.animals.pen-check {:at #at [16 0 18]})]]
-   :expect [{:event {:source :job :kind :pen-check.done :data {:closed? false :reason :unloaded}} :within-s 20 :of-job true}]}]}
+   :expect [{:event {:source :job :kind :pen-check.done :data {:closed? false :reason :unloaded}} :within-s 20 :of-job true}]}
+  ;; card 3148f78d: a long closed ring (88 x 11 inside) with an inner divider fence whose gate stands open. The start is beside the
+  ;; divider, so the fill crosses the gate on its way to the far, unseen end. An inner chokepoint is no leak evidence: the check
+  ;; looks at the unseen cells and fills again, so it reads :closed? true (never :reason :leak).
+  {:name "closed-long-pen-with-an-inner-open-gate-is-not-a-leak"
+   :plot {:length 96 :width 32}
+   :body {:at [8.5 0 8.5] :yaw -90}
+   :blocks [[:fill [2 0 2] [90 0 14] "oak_fence" :hollow]
+            [:fill [3 0 3] [89 0 13] "air"]
+            [:fill [20 0 3] [20 0 13] "oak_fence"]
+            [:set [20 0 8] "oak_fence_gate[facing=east,open=true]"]]
+   :act [[:job (jobs.animals.pen-check {:at #at [12 0 8]})]]
+   :expect [{:no-event {:source :job :kind :pen-check.done :data {:reason :leak}} :for-s 90 :until {:source :job :kind :pen-check.done}}
+            {:event {:source :job :kind :pen-check.done :data {:closed? true :leaks []}} :within-s 90 :of-job true}]
+   :limit-s 100}
+  ;; should fail: the same pen with one outer post missing at the far end reads :leak once the look has seen the gap
+  {:name "long-pen-with-a-missing-outer-post-still-leaks"
+   :plot {:length 96 :width 32}
+   :body {:at [8.5 0 8.5] :yaw -90}
+   :blocks [[:fill [2 0 2] [90 0 14] "oak_fence" :hollow]
+            [:fill [3 0 3] [89 0 13] "air"]
+            [:fill [20 0 3] [20 0 13] "oak_fence"]
+            [:set [20 0 8] "oak_fence_gate[facing=east,open=true]"]
+            [:set [90 0 8] "air"]]
+   :act [[:job (jobs.animals.pen-check {:at #at [12 0 8]})]]
+   :expect [{:event {:source :job :kind :pen-check.done :data {:closed? false :reason :leak}} :within-s 90 :of-job true}]
+   :limit-s 100}]}
