@@ -3,10 +3,11 @@
 // the removal), and it keeps a picked-up drop until the removal packet arrives. Neither is something a player sees.
 // A mob that died stays listed for its death animation (about a second): it is no longer a mob to fight or fear.
 // itemSpawn gives an item's raw spawn facts, what a player watching saw: {at, pos, player: {name, pos} (the player
-// nearest to it then, by feet), tossed (the time of the body's last toss, from noteToss)}. Who threw it is jobs.lib.loose's call.
+// nearest to it then, by feet), tosses (the body's last tosses [{at, item, count}], from noteToss)}. Who threw it is jobs.lib.loose's call.
 const collected = new WeakMap()
 const spawns = new WeakMap()
 const tosses = new WeakMap()
+const tossKeep = 8
 
 const xyz = p => ({ x: p.x, y: p.y, z: p.z })
 const d2 = (a, b) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2 + (a.z - b.z) ** 2
@@ -16,7 +17,7 @@ const nearestPlayer = (bot, pos) => Object.values(bot.entities ?? {})
   .reduce((best, e) => (!best || d2(e.position, pos) < d2(best.position, pos) ? e : best), null)
 
 // the toss primitive calls it just before it throws
-export const noteToss = bot => tosses.set(bot, Date.now())
+export const noteToss = (bot, item, count) => tosses.set(bot, [...(tosses.get(bot) ?? []), { at: Date.now(), item, count }].slice(-tossKeep))
 
 export function trackLiveEntities (bot) {
   if (!bot._client || collected.has(bot)) return
@@ -27,12 +28,12 @@ export function trackLiveEntities (bot) {
   bot.on('entitySpawn', e => {
     if (e?.name !== 'item' || !e.position) return
     const p = nearestPlayer(bot, e.position)
-    const tossed = tosses.get(bot)
+    const recent = tosses.get(bot)
     born.set(e.id, {
       at: Date.now(),
       pos: xyz(e.position),
       ...(p && { player: { name: p.username, pos: xyz(p.position) } }),
-      ...(tossed !== undefined && { tossed })
+      ...(recent && { tosses: recent })
     })
   })
   bot._client.on('collect', ({ collectedEntityId, pickupItemCount }) => {

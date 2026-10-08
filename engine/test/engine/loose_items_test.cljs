@@ -75,10 +75,10 @@
   (is (false? (holds? (update (world log-near) :entities conj {:id 7 :name "zombie" :kind "hostile" :pos [-3 64 0]})))))
 
 (defn spawn
-  "A spawn record: the item appeared at pos (dx dy dz from the feet of player name at feet), tossed ms before."
-  [player feet [dx dy dz] & [{:keys [ago tossed]}]]
+  "A spawn record: the item appeared at pos (dx dy dz from the feet of player name at feet), tossed ms before (a toss of item, default oak_log)."
+  [player feet [dx dy dz] & [{:keys [ago tossed item]}]]
   (cond-> {:at (- now (or ago 1000)) :pos (mapv + feet [dx dy dz]) :player {:name player :pos feet}}
-    tossed (assoc :tossed (- now (or ago 1000) tossed))))
+    tossed (assoc :tosses [{:at (- now (or ago 1000) tossed) :item (or item "oak_log") :count 1}])))
 
 (deftest thrown-items-are-left
   (is (false? (holds? (world (assoc log-near :spawn (spawn "Fake" [4.5 64 0.5] [0 1.32 0] {:ago 600000 :tossed 200}))))) "its own toss, ever")
@@ -87,12 +87,15 @@
 
 (defn xyz [[x y z]] {:x x :y y :z z})
 
-(defn thrower [s] (loose/thrower (loose/options {}) "Fake" (clj->js (-> s (update :pos xyz) (update-in [:player :pos] xyz)))))
+(defn thrower [s] (loose/thrower (loose/options {}) "Fake" "oak_log" (clj->js (-> s (update :pos xyz) (update-in [:player :pos] xyz)))))
 
 (deftest who-threw-it-is-told-from-the-spawn-point
   (let [feet [3.95 64 0.5]]
-    (is (nil? (thrower (spawn "Fake" feet [0.45 1.375 0] {:tossed 300})))
-        "a log broken at head height 0.45 off the body is not its toss, even just after a toss")
+    (is (nil? (thrower (spawn "Fake" feet [0.45 1.375 0] {:tossed 300 :item "dirt"})))
+        "a log broken at head height beside the body is not its toss of dirt")
+    (is (= "Fake" (thrower (spawn "Fake" feet [0.9 1.2 -0.7] {:tossed 300})))
+        "a toss while walking at sprint speed lands off the 0.1 box and is still its own")
+    (is (nil? (thrower (spawn "Fake" feet [4 1.32 0] {:tossed 300}))) "a toss of that item but the drop far from the body")
     (is (= "Fake" (thrower (spawn "Fake" feet [0 1.32 0] {:tossed 300}))) "at its drop point just after it tossed")
     (is (nil? (thrower (spawn "Fake" feet [0 1.32 0]))) "at its drop point with no toss: a block's drop that landed there")
     (is (nil? (thrower (spawn "Fake" feet [0 1.32 0] {:tossed 5000}))) "its last toss long before")
@@ -102,7 +105,7 @@
 
 (deftest a-log-broken-at-head-height-beside-the-body-is-picked-up
   (let [feet [3.95 64 0.5]
-        e (assoc log-near :spawn (spawn "Fake" feet [0.55 1.375 0] {:ago 200000 :tossed 100}))]
+        e (assoc log-near :spawn (spawn "Fake" feet [0.55 1.375 0] {:ago 200000 :tossed 100 :item "dirt"}))]
     (is (true? (holds? (world e))))))
 
 (deftest another-bodys-zone-or-claim-is-left

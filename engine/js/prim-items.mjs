@@ -135,7 +135,7 @@ export function createItems (env) {
     need(a.slot === undefined || a.slot === null || isNum(a.slot), 'toss slot must be a number')
     need(a.watchS === undefined || (isNum(a.watchS) && a.watchS >= 0), 'toss watchS must be a number of seconds')
     const tossed = async (ctx, count, drop) => {
-      const throwIt = () => { noteToss(env.bot); return drop() }
+      const throwIt = () => { noteToss(env.bot, a.item, count); return drop() }
       if (!a.watchS) {
         await throwIt()
         ctx.alive()

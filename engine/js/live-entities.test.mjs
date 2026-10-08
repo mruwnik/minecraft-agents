@@ -65,16 +65,19 @@ test('an item\'s spawn records where and when it appeared and the player nearest
   assert.deepEqual(s.pos, { x: 10.95, y: 65.375, z: 3.5 })
   assert.deepEqual(s.player, { name: 'Ann', pos: { x: 10.5, y: 64, z: 3.5 } })
   assert.equal(s.by, undefined)
-  assert.equal(s.tossed, undefined)
+  assert.equal(s.tosses, undefined)
 })
 
-test('an item\'s spawn carries the time of the body\'s last toss', () => {
+test('an item\'s spawn carries the body\'s recent tosses', () => {
   const bot = botWith({})
   trackLiveEntities(bot)
-  noteToss(bot)
+  noteToss(bot, 'cobblestone', 3)
   bot.entities[2] = itemAt(2, 0, 64, 0)
   bot.emit('entitySpawn', bot.entities[2])
-  assert.equal(typeof itemSpawn(bot, 2).tossed, 'number')
+  const [t] = itemSpawn(bot, 2).tosses
+  assert.equal(typeof t.at, 'number')
+  assert.equal(t.item, 'cobblestone')
+  assert.equal(t.count, 3)
   assert.equal(itemSpawn(bot, 2).player, undefined, 'no player near')
 })
 
