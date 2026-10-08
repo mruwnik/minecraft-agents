@@ -45,6 +45,7 @@
 (a/defargs args
   {:height {:doc "blocks to rise, 1 to 64" :spec (a/int-in 1 64) :default 1}
    :item {:doc "the block to pillar with; nil: dirt while any is carried, then cobblestone" :spec a/item? :default nil}
+   :items {:doc "the blocks to pillar with when :item is nil, first carried wins; nil: dirt, then cobblestone" :spec (a/coll-of a/item?) :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (a/defargs settings
@@ -77,11 +78,12 @@
 (defn up [[x y z] n] [x (+ y n) z])
 
 (defn item-to-use
-  "The block to place next: item when carried, without one the first of default-items carried; nil when none."
-  [item carried]
-  (if item
-    (when (pos? (get carried item 0)) item)
-    (first (filter #(pos? (get carried % 0)) pl/default-items))))
+  "The block to place next: item when carried, without one the first of items (default-items) carried; nil when none."
+  ([item carried] (item-to-use item carried nil))
+  ([item carried items]
+   (if item
+     (when (pos? (get carried item 0)) item)
+     (first (filter #(pos? (get carried % 0)) (or items pl/default-items))))))
 
 (defn permission-refusal
   "The first refusal among cells for permission alone (zone, footprint, no zone list), as the rules' refusal with :at."
@@ -99,7 +101,7 @@
 (defn next-step
   "The next step of a pillar, from {:feet :base :height :block-at :carried {name count} :item :zones :footprints
   :ledger #{cells}}: {:step :done}, {:step :place :cell :item} or {:step :give-up :reason ...}."
-  [{:keys [feet base height block-at carried item] :as in}]
+  [{:keys [feet base height block-at carried item items] :as in}]
   (let [[bx by bz] base
         [fx fy fz] feet
         top (+ by height)]
@@ -112,7 +114,7 @@
           (let [refusal (permission-refusal (map #(up feet %) (range (- top fy))) in)
                 floor (up feet -1)
                 ceiling (first (remove #(pl/clear? (block-at %)) [(up feet 1) (up feet 2)]))
-                use (item-to-use item carried)
+                use (item-to-use item carried items)
                 place (rules/may-place? (assoc in :cell feet :feet (up feet 1)))]
             (cond
               refusal (refusal->give-up refusal)
@@ -169,12 +171,12 @@
         block-at (access/sensed-at p blocks/hidden-guess)
         l (ledger/reconcile (ledger/open-entries (ctx/view c)) (access/sensed-at p nil))
         feet (pl/feet-cell c)
-        {:keys [height item]} (:args c)
+        {:keys [height item items]} (:args c)
         step (next-step (merge (access-inputs c)
                                {:feet feet :base (or (:base (ctx/mem c)) feet) :height height :block-at block-at
-                                :carried (pl/carried p) :item item :ledger (ledger/cells l)}))]
+                                :carried (pl/carried p) :item item :items items :ledger (ledger/cells l)}))]
     (if (= :too-few-blocks (:reason step))
-      (ctx/wait c {:reason :too-few-blocks :short (:short step) :item (or item pl/default-items)})
+      (ctx/wait c {:reason :too-few-blocks :short (:short step) :item (or item items pl/default-items)})
       true)))
 
 (defn ^:async land!
@@ -278,10 +280,10 @@
           l (ledger/reconcile seen (access/sensed-at p nil))
           feet (pl/feet-cell c)
           base (or (:base (ctx/mem c)) feet)
-          {:keys [height item]} (:args c)
+          {:keys [height item items]} (:args c)
           step (next-step (merge (access-inputs c)
                                  {:feet feet :base base :height height :block-at block-at :carried (pl/carried p)
-                                  :item item :ledger (ledger/cells l)}))]
+                                  :item item :items items :ledger (ledger/cells l)}))]
       (when (not= l seen) (ledger/remember! c l))
       (ctx/update-mem! c #(-> % (assoc :base base :stand feet) (update :home (fn [h] (or h (let [{:keys [x z]} (u/self-pos c)] [x z]))))))
       (if (= :place (:step step))

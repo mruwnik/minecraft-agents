@@ -32,7 +32,7 @@
 
 (defn eye-reach!
   "The fake measures a dig from the feet to a cell corner; the real body from the eye to the centre. Digs here run with
-  the body lifted to its eye height, as the planner counts reach."
+  the body lifted to its eye height, as the planner counts reach. Cut logs fall to the ground at once."
   [p]
   (.override (.-world p) "dig"
              (fn ^:async f [token args impl]
@@ -40,6 +40,7 @@
                  (swap! st update-in [:self :pos 1] + eye-height)
                  (let [r (await (impl token args))]
                    (swap! st update-in [:self :pos 1] - eye-height)
+                   (swap! st update :entities (fn [es] (mapv #(if (and (= "item" (:kind %)) (= "oak_log" (get-in % [:item :name])) (= 6 (first (:pos %)))) (assoc-in % [:pos 1] 64) %) es)))
                    r)))))
 
 (defn ^:async fell [spec args n]
@@ -69,14 +70,23 @@
           (is (apply < (take 5 ys)) "the low logs go bottom-up from the ground")
           (is (apply > (drop 5 ys)) "the high ones top-down from the pillar"))))))
 
-(deftest no-blocks-to-pillar-with-waits-and-places-nothing
+(def tall-9 {:blocks (lt/tree 6 0 "oak" 9) :inventory []})
+
+(defn log-pillar-cells
+  "Oak logs standing in the fake world outside the trunk's column."
+  [p]
+  (vec (keep (fn [[k v]] (when (and (= "oak_log" v) (not= 6 (first k))) k)) (:blocks @(fake/state p)))))
+
+(deftest a-nine-log-tree-is-felled-whole-pillaring-on-its-own-logs
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p out]} (await (fell (assoc tall :inventory []) {:radius 10} 60))]
-          (is (= :not-done out))
-          (is (= [] (h/calls p "jumpPlace")))
-          (is (= [] (pillar-cells p))))))))
+        (let [{:keys [eng p out]} (await (fell tall-9 {:radius 10 :fetch false} 300))]
+          (is (= {:base {:x 6 :y 64 :z 0} :logs 9 :axe :skipped-fetch-off} out))
+          (is (= (set (range 64 73)) (set (dug-ys p))) "every log dug")
+          (is (pos? (count (h/calls p "jumpPlace"))) "a pillar was built")
+          (is (= [] (ledger/open-entries (mem/view (:store eng)))) "ledger empty")
+          (is (= [] (log-pillar-cells p)) "no pillar log left"))))))
 
 (deftest a-tree-in-a-zone-that-bars-placing-is-declined-without-a-pillar
   (async done
@@ -190,7 +200,7 @@
     (is (= {:any-of ["dirt" "cobblestone"] :count 4} (:args (fetch/plan-for {:reason :need :any-of ["dirt" "cobblestone"] :count 4} o))))
     (is (= {:item "dirt" :count 3} (:args (fetch/plan-for {:reason :need :item "dirt" :count 3} o))))))
 
-(deftest too-few-blocks-for-the-pillar-are-fetched-from-a-seen-chest-by-default
+(deftest cut-logs-are-the-pillars-blocks-so-a-seen-chest-of-dirt-is-left-alone
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -198,16 +208,8 @@
               {:keys [p out]} s]
           (is (= {:base {:x 6 :y 64 :z 0} :logs 8 :axe :none-found} out))
           (is (= (set (range 64 72)) (set (dug-ys p))) "every log dug")
-          (is (> (- 20 (dirt-in-chest s)) 1) "the chest gave the pillar's height, not one block")
-          (is (= [] (pillar-cells p)) "no pillar block left"))))))
-
-(deftest fetch-false-waits-for-the-blocks-and-leaves-the-chest
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (await (fell (chest-world [{:name "dirt" :count 20}]) {:radius 10 :fetch false} 80))]
-          (is (= :not-done (:out s)))
-          (is (= 20 (dirt-in-chest s))))))))
+          (is (= 20 (dirt-in-chest s)) "no dirt fetched while logs are carried")
+          (is (= [] (log-pillar-cells p)) "no pillar block left"))))))
 
 (deftest a-log-over-hidden-lava-is-dug-and-the-lava-sealed
   (async done

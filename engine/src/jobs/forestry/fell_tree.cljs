@@ -13,7 +13,7 @@
             [jobs.lib.ledger :as ledger]
             [jobs.lib.look :as look]
             [jobs.lib.trees :refer [axe-worth-fetching? axe-fetch-limits scan-logs tree-near trees-near tree-at logs-at unreachable-set debts replant-kind
-                                          replant-policy default-radius max-partials dig-reach log-name?]]
+                                          replant-policy default-radius max-partials dig-reach log-name? log-names]]
             [jobs.lib.util :as u]
             [jobs.lib.walk :as walk]
             [jobs.lib.near :as near]
@@ -37,7 +37,8 @@
   the stand or the pillar base for the highest logs, the body walks there (go-to), builds the pillar
   (jobs.access.pillar, every block in the scaffold ledger), digs the logs in reach top-down, then jobs.access.cleanup
   takes the pillar back before the tree counts as felled (the same cleanup runs when a round starts with this job's
-  scaffold still open). With too few dirt or cobblestone carried it fetches the height in blocks (jobs.lib.fetch,
+  scaffold still open). The pillar is built of dirt, cobblestone and the logs cut so far (collected first); with too
+  few of those carried it fetches the height in blocks (jobs.lib.fetch,
   unless :fetch is false); else, or when the fetch failed, it waits (check) with :reason :need (:any-of the two,
   :count the height). A tree whose pillar a zone, claim or footprint refuses (warn fell-tree.declined, :reason
   :refused; other refusals warn with their :reason), or that has no ground or stand to reach it from, counts as unreachable,
@@ -181,6 +182,10 @@
   "Blocks from a tree's base the search for the tree to fell counts as reaching it: approach!'s looser range."
   3)
 
+(def drop-radius
+  "Blocks round the base the cut logs are picked up from before a pillar is built."
+  6)
+
 (defn candidates
   "The trees the job may fell, nearest in a line first (lazily): the one at :at (none once marked unreachable), else
   those of species within radius not marked unreachable; a tree whose base log the zones refuse is left out."
@@ -263,11 +268,17 @@
   (ctx/update-mem! c update :pillar assoc :phase :clean :failed true)
   :again)
 
-(defn blocks-carried
-  "How many of the pillar items (dirt, cobblestone) are carried."
+(defn pillar-blocks
+  "The blocks the pillar is built from: dirt and cobblestone, then every kind of log carried."
   [c]
   (let [have (pl/carried (:primitives c))]
-    (reduce + (map #(get have % 0) pillar-items))))
+    (into pillar-items (filter #(and (pos? (get have % 0)) (re-find #"_(log|stem)$" %)) (sort (keys have))))))
+
+(defn blocks-carried
+  "How many pillar blocks (dirt, cobblestone, logs) are carried."
+  [c]
+  (let [have (pl/carried (:primitives c))]
+    (reduce + (map #(get have % 0) (pillar-blocks c)))))
 
 (defn pillar-problem
   "The wait {:reason :need :any-of :count} while a planned pillar is not begun and fewer blocks than its height are carried."
@@ -282,14 +293,25 @@
   [c logs]
   (let [r (await (sense/decide! c ::pillar #(pillar-plan c logs) {:retry? :reason}))]
     (cond
-      (:stand r) (set-pillar! c {:phase :walk :plan {:stand (first (:stand r))}})
-      (:pillar r) (set-pillar! c {:phase :walk :plan (:pillar r)})
+      (:stand r) (set-pillar! c {:phase :collect :plan {:stand (first (:stand r))}})
+      (:pillar r) (set-pillar! c {:phase :collect :plan (:pillar r)})
       :else (do (ctx/warn-once! c [:pillar-refused] :fell-tree.declined
                                 (if (= :zone (:reason r))
                                   {:reason :refused :why :pillar :text "a zone or plan refuses a pillar by the tree"}
                                   {:reason (:reason r) :why :pillar :text (str "no way to reach the high logs: " (name (:reason r)))}))
                 (mark-unreachable! c)))
     :again))
+
+(defn ^:async pillar-collect!
+  "Pick up the logs cut so far (they are the pillar's blocks when no dirt is carried): a collect-drops child round the
+  base, one call. A collect that finds nothing is no failure."
+  [c]
+  (let [base (:base (ctx/mem c))
+        r (await (child/run! c :pcollect 'jobs.forestry.collect-drops
+                             {:radius drop-radius :filter log-names :near base :search 0 :want 0}))]
+    (if (= :continue r)
+      :continue
+      (do (ctx/update-mem! c assoc-in [:pillar :phase] :walk) :again))))
 
 (defn ^:async pillar-walk!
   [c {:keys [plan]}]
@@ -302,7 +324,7 @@
 
 (defn ^:async pillar-build!
   [c {:keys [plan]}]
-  (let [r (await (ctx/call-child c :pillar 'jobs.access.pillar {:height (:height plan) :ignore-zones? (:ignore-zones? (:args c))}))]
+  (let [r (await (ctx/call-child c :pillar 'jobs.access.pillar {:height (:height plan) :items (pillar-blocks c) :ignore-zones? (:ignore-zones? (:args c))}))]
     (cond
       (= :continue r) :continue
       (and (= :done r) (= :done (:status (ctx/child-result c :pillar)))) (do (ctx/update-mem! c assoc-in [:pillar :phase] :dig) :again)
@@ -346,6 +368,7 @@
   [c logs]
   (let [m (:pillar (ctx/mem c))]
     (case (:phase m)
+      :collect (await (pillar-collect! c))
       :walk (await (pillar-walk! c m))
       :build (await (pillar-build! c m))
       :dig (await (pillar-dig! c m logs))
