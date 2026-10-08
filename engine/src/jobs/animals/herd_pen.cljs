@@ -147,9 +147,39 @@
 
 (def look-range "How near the body goes to a pen cell it has not seen before looking at it." 4)
 
+(def gate-look-range "How near the gate the body goes to look into the pen when its cells stayed unseen from outside." 1)
+
+(defn box-gates
+  "The fence gates the body has seen on the ring of cells just outside the box (at its floor level), as {:x :y :z}."
+  [c]
+  (let [{:keys [min max]} (:box (:args c))
+        y (:y min)]
+    (for [x (range (dec (:x min)) (+ 2 (:x max))) z (range (dec (:z min)) (+ 2 (:z max)))
+          :when (not (and (<= (:x min) x (:x max)) (<= (:z min) z (:z max))))
+          :let [pos {:x x :y y :z z}]
+          :when (some-> (u/seen-name (:primitives c) pos) (.endsWith "_fence_gate"))]
+      pos)))
+
+(defn ^:async look-from-gate!
+  "The unseen cells stayed unseen from where the body was (a fence hides the floor beside it): go near the pen's gate once,
+  forget what was looked at and read again. No gate to go to, one already visited, or a blocked walk ends :no-pen."
+  [c answer]
+  (let [m (ctx/mem c)
+        wanted (:gate (:args c))
+        gates (->> (concat (map :pos (:gates answer)) (box-gates c)) (filter #(or (nil? wanted) (= (cell wanted) (cell %))))
+                   (sort-by #(u/dist (u/self-pos c) %)))
+        g (first gates)]
+    (cond
+      (or (nil? g) (:gate-visited m)) (finish! c :no-pen)
+      (u/within? (u/self-pos c) g gate-look-range)
+      (do (ctx/update-mem! c #(-> % (assoc :gate-visited true) (dissoc :looked-pen)))
+          :continue)
+      (= :blocked (await (near/go-near! c g gate-look-range {:doors :never :escalate false}))) (finish! c :no-pen)
+      :else :continue)))
+
 (defn ^:async check-unknown!
   "The pen has cells the body has not seen (a gate in the dark decays): go near the nearest not yet looked at, look at it
-  once, then read the pen again. No such cell left, or one too far to look at, ends :no-pen."
+  once, then read the pen again. No such cell left, or one too far to look at, goes to the pen's gate to look in (look-from-gate!)."
   [c answer]
   (let [here (u/self-pos c)
         centre (fn [{:keys [x y z]}] {:x (+ x 0.5) :y (+ y 0.5) :z (+ z 0.5)})
@@ -157,10 +187,10 @@
         unk (->> (:leaks answer) (filter #(= :unloaded (:why %))) (map :pos) (remove #(contains? looked (cell %)))
                  (sort-by #(u/dist here (centre %))) first)]
     (cond
-      (nil? unk) (finish! c :no-pen)
+      (nil? unk) (await (look-from-gate! c answer))
       (not (u/within? here unk look-range))
       (if (= :blocked (await (near/go-near! c unk look-range {:doors :never :escalate false})))
-        (finish! c :no-pen)
+        (await (look-from-gate! c answer))
         :continue)
       :else (do (await (sense/look-at! c (cell unk)))
                 (ctx/update-mem! c update :looked-pen (fnil conj []) (cell unk))

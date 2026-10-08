@@ -98,3 +98,26 @@
               _ (ht/submit! s {:target 1})
               _ (await (ht/run-ticks s 40))]
           (is (= ht/gate (:gate (ht/done-event s))) "looked at, read in full: the run got as far as choosing the pen's gate"))))))
+
+(defn hide-fence-floor!
+  "The pen floor beside the west fence is unseen until the body stands at the gate (x 8.5 or more): the fence hides it from outside."
+  [s]
+  (let [p (:p s)
+        orig (.-sensedAt p)]
+    (set! (.-sensedAt p)
+          (fn [pos]
+            (let [x (.-x pos)]
+              (if (and (= 11 x) (= 63 (.-y pos)) (< (ht/self-x s) 8.5))
+                #js {:unknown true}
+                (orig pos)))))
+    s))
+
+(deftest a-pen-floor-hidden-by-the-fence-is-looked-at-from-the-gate
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (hide-fence-floor! (seeing {:entities [(ht/cow 1 4 3)]} false))
+              _ (ht/submit! s {:target 1})
+              _ (await (ht/run-ticks s 60))]
+          (is (= ht/gate (:gate (ht/done-event s))) "walked to the gate, saw the floor, read the pen in full")
+          (is (= :brought (:reason (ht/done-event s)))))))))
