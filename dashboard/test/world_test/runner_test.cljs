@@ -501,7 +501,8 @@
 
 (deftest match-id-selects-the-exact-case
   (is (= 2 (:retry-failed (r/parse-args #js ["--retry-failed" "2" "--match-id" "a/c1"]))))
-  (is (= "a/c1" (:match-id (r/parse-args #js ["--match-id" "a/c1"])))))
+  (is (= #{"a/c1"} (:match-ids (r/parse-args #js ["--match-id" "a/c1"]))))
+  (is (= #{"a/c1" "b/c2"} (:match-ids (r/parse-args #js ["--match-id" "a/c1" "--match-id" "b/c2"])))))
 
 (deftest only-failed-results-are-retried-and-flaky-is-not-a-failure
   (is (= 0 (r/exit-code [{:status :pass} {:status :flaky}])))

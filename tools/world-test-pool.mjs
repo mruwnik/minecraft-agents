@@ -15,6 +15,7 @@
 // A failed case whose last result in the --durations files was a fail on the same first failing check is a known failure: no rerun, :known-failure true in its result (and knownFailure in its event).
 //   --retry-failed N the pool owns retries (children never get it): a failed case (not an error or inconclusive one, as in the single-body runner)
 //                     is rerun up to N times (default 1; exactly its --match-id, one run) on a different body when the pool has one; a pass is :flaky.
+//   --match-id ID    (repeatable) and --match-ids FILE (one id per line, or a --results .edn: its ids that did not pass) run exactly those cases; --list counts only them.
 //   --server-wait-s S when a child hits a refused RCON/game-port connection the pool holds every unit and polls the server (up to S seconds, default 300),
 //                     reruns the faulted cases without using a retry (at most twice each), waits --server-settle-s (default 10) after the server answers, and past S stops with "server unreachable" (exit 3)
 import fs from 'node:fs'
@@ -27,8 +28,8 @@ import { fileURLToPath } from 'node:url'
 const PLOTS_PER_BODY = 20
 const LOAD_POLL_MS = 5000
 const here = path.dirname(fileURLToPath(import.meta.url))
-const POOL_VALUE_FLAGS = ['--bodies', '--body', '--first-plot', '--results', '--durations', '--max-parallel', '--retry-failed', '--server-wait-s', '--server-settle-s']
-const VALUE_FLAGS = ['--tag', '--match', '--repeat', '--world', '--card', '--time-log', '--phase', '--match-id']
+const POOL_VALUE_FLAGS = ['--bodies', '--body', '--first-plot', '--results', '--durations', '--max-parallel', '--retry-failed', '--server-wait-s', '--server-settle-s', '--match-id', '--match-ids']
+const VALUE_FLAGS = ['--tag', '--match', '--repeat', '--world', '--card', '--time-log', '--phase']
 const CLOSERS = { '{': '}', '[': ']', '(': ')' }
 
 // ---- EDN text: just enough to split a results vector into its maps and read their top-level keys
@@ -145,7 +146,7 @@ export const unitOrder = (files, previousTexts) => {
 }
 
 export const parsePoolArgs = (args) => {
-  const p = { bodies: 1, prefix: 'ProbePool', firstPlot: 0, results: null, maxParallel: null, durations: [], retries: 1, serverWaitS: 300, serverSettleS: 10, paths: [], passthrough: [] }
+  const p = { bodies: 1, prefix: 'ProbePool', firstPlot: 0, results: null, maxParallel: null, durations: [], retries: 1, serverWaitS: 300, serverSettleS: 10, paths: [], passthrough: [], matchIds: [], matchIdsFile: null }
   for (let i = 0; i < args.length; i++) {
     const a = args[i]
     if (!a.startsWith('--')) { p.paths.push(a); continue }
@@ -157,6 +158,8 @@ export const parsePoolArgs = (args) => {
     else if (a === '--body') p.prefix = v
     else if (a === '--first-plot') p.firstPlot = Number(v)
     else if (a === '--results') p.results = v
+    else if (a === '--match-id') p.matchIds.push(v)
+    else if (a === '--match-ids') p.matchIdsFile = v
     else if (a === '--max-parallel') p.maxParallel = Number(v)
     else if (a === '--retry-failed') p.retries = Number(v)
     else if (a === '--server-wait-s') p.serverWaitS = Number(v)
@@ -164,6 +167,13 @@ export const parsePoolArgs = (args) => {
   }
   return p
 }
+
+// ids from a --match-ids file: a results vector gives its ids that did not pass (once each), else one id per line (blank lines and # comments skipped)
+export const matchIdsFrom = (text) => {
+  if (text.trimStart().startsWith('[')) return [...new Set(splitForms(text).map(summarize).filter((s) => !['pass', 'flaky'].includes(s.status)).map((s) => s.id))]
+  return text.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
+}
+const withMatchIds = (ids) => ids.flatMap((id) => ['--match-id', id])
 
 const bodyLetter = (k) => (k < 26 ? String.fromCharCode(65 + k) : String(k))
 export const workerSpecs = (wanted, cap, prefix, firstPlot) =>
@@ -353,8 +363,8 @@ const bodyCap = () => Math.max(1, (slotConfig().kinds.body.max ?? 1) - 1)
 const availableMb = () => Number(fs.readFileSync('/proc/meminfo', 'utf8').match(/MemAvailable:\s+(\d+)/)[1]) / 1024
 
 // One child per unit: the ordinary one-body entry point (it takes the body slot and the body claim itself). Exit 75 = busy: ask again.
-const spawnChild = (script, pass, { file, match, worker }, tmpResults, reaper) => new Promise((resolve) => {
-  const argv = [script, file, ...pass, '--body', worker.body, '--first-plot', String(worker.firstPlot), '--results', tmpResults, ...(match ? ['--match-id', match, '--repeat', '1'] : [])]
+const spawnChild = (script, pass, matchIds, { file, match, worker }, tmpResults, reaper) => new Promise((resolve) => {
+  const argv = [script, file, ...pass, '--body', worker.body, '--first-plot', String(worker.firstPlot), '--results', tmpResults, ...(match ? ['--match-id', match, '--repeat', '1'] : withMatchIds(matchIds))]
   // the pool reports the @@test events itself (fixed total, final status per case), so a child prints none
   const { TEST_EVENTS: _events, ...env } = process.env
   const child = spawn(process.execPath, argv, { stdio: 'inherit', env })
@@ -364,7 +374,7 @@ const spawnChild = (script, pass, { file, match, worker }, tmpResults, reaper) =
 
 // every case of the fixture files as the children will select them (--list needs no world); null when the listing fails
 // the --list call selects cases with the same paths and flags (--phase, --tag, --match, ...) the children get
-export const listArgs = (p) => [...p.paths, ...p.passthrough, '--list']
+export const listArgs = (p) => [...p.paths, ...p.passthrough, ...withMatchIds(p.matchIds), '--list']
 const repeatOf = (p) => { const at = p.passthrough.indexOf('--repeat'); return at < 0 ? 1 : Number(p.passthrough[at + 1]) }
 const listCases = (script, p) => {
   const r = spawnSync(process.execPath, [script, ...listArgs(p)], { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 })
@@ -396,6 +406,8 @@ export const serverProbe = (ports) => () => Promise.all(ports.map((port) => new 
 
 export const main = async (args) => {
   const p = parsePoolArgs(args)
+  if (p.matchIdsFile) p.matchIds.push(...matchIdsFrom(fs.readFileSync(p.matchIdsFile, 'utf8')))
+  if (p.matchIdsFile && !p.matchIds.length) { console.error(`world-test pool: ${p.matchIdsFile} holds no ids`); return 2 }
   const byStem = new Map(fixtureFiles(p.paths).map((f) => [path.basename(f, '.edn'), f]))
   const previous = readDurations(p.durations)
   const script = path.join(here, 'world-test.mjs')
@@ -418,7 +430,7 @@ export const main = async (args) => {
     let code
     for (let tries = 0; tries < 20; tries++) {
       fs.rmSync(tmp, { force: true })
-      code = await spawnChild(script, p.passthrough, { ...unit, file: byStem.get(unit.file) }, tmp, reaper)
+      code = await spawnChild(script, p.passthrough, p.matchIds, { ...unit, file: byStem.get(unit.file) }, tmp, reaper)
       if (code !== 75) break
       await sleep(5000)
     }

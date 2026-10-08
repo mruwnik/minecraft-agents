@@ -254,11 +254,11 @@
           cases)))
 
 (defn select-cases
-  "Cases whose :tags hold tag (when given), whose id contains match (when given) and equals match-id (when given)."
-  [cases {:keys [tag match match-id]}]
+  "Cases whose :tags hold tag (when given), whose id contains match (when given) and is one of match-ids (when given)."
+  [cases {:keys [tag match match-ids]}]
   (filterv #(and (or (nil? tag) (contains? (set (:tags %)) (keyword tag)))
                  (or (nil? match) (str/includes? (:id %) match))
-                 (or (nil? match-id) (= (:id %) match-id)))
+                 (or (empty? match-ids) (contains? match-ids (:id %))))
            cases))
 
 ;; ------------------------------------------------------------------ resolving

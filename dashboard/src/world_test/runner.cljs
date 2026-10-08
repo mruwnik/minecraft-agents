@@ -22,7 +22,7 @@
             [world-test.lease :as lease]))
 
 (def usage
-  (str "usage: node tools/world-test.mjs [fixture.edn|dir ...] [--tag T] [--match TEXT] [--match-id ID] [--repeat N] [--body NAME]\n"
+  (str "usage: node tools/world-test.mjs [fixture.edn|dir ...] [--tag T] [--match TEXT] [--match-id ID ...] [--repeat N] [--body NAME]\n"
        "         [--world claude] [--first-plot I] [--card ID] [--allow-time --time-log FILE] [--results FILE] [--phase day|night|night-exclusive] [--retry-failed N] [--changed-since-pass] [--stop-on-fail] [--list] [--check]\n"
        "--phase runs only the cases of that time class (case level; :any and untimed cases, and :day, count as day; a case whose first :time-set step is\n"
        "night counts as night): run day, then night, then night-exclusive so the time lock never flips mid-pass.\n"
@@ -46,7 +46,7 @@
       (empty? all) opts
       (= a "--tag") (recur more (assoc opts :tag b))
       (= a "--match") (recur more (assoc opts :match b))
-      (= a "--match-id") (recur more (assoc opts :match-id b))
+      (= a "--match-id") (recur more (update opts :match-ids (fnil conj #{}) b))
       (= a "--repeat") (recur more (assoc opts :repeat (js/Number b)))
       (= a "--body") (recur more (assoc opts :body b))
       (= a "--world") (recur more (assoc opts :world b))

@@ -2,7 +2,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import net from 'node:net'
-import { splitForms, scanForms, failSig, summarize, unitOrder, parsePoolArgs, workerSpecs, runPool, mergeText, poolCap, createReaper, countListed, listArgs, knownFailures, parseListed, unitsWithCases, noCasesSelected, serverProbe } from './world-test-pool.mjs'
+import { splitForms, scanForms, failSig, summarize, unitOrder, parsePoolArgs, workerSpecs, runPool, mergeText, poolCap, createReaper, countListed, listArgs, knownFailures, parseListed, unitsWithCases, noCasesSelected, serverProbe, matchIdsFrom } from './world-test-pool.mjs'
 
 const form = (id, status, secs = 1, extra = '') =>
   `{:plot 0, :file "${id.split('/')[0]}", :expects [{:status :pass, :evidence "a } \\" {"}], :status :${status}, :id "${id}", :elapsed-s ${secs}${extra}}`
@@ -489,4 +489,20 @@ test('runPool: in a mixed unit the cases the faulted child never reached are rer
   assert.equal(r.code, 0)
   assert.deepEqual(log.map((l) => l.match).sort(), ['a/c2', 'a/c3', null])
   assert.deepEqual(splitForms(r.text).map((f) => summarize(f).status), ['pass', 'pass', 'pass'])
+})
+
+test('parsePoolArgs: --match-id is repeatable and --match-ids FILE adds more; none of them pass through', () => {
+  const p = parsePoolArgs(['dir', '--match-id', 'a/x', '--phase', 'day', '--match-id', 'b/y', '--match-ids', 'ids.txt'])
+  assert.deepEqual(p.matchIds, ['a/x', 'b/y'])
+  assert.equal(p.matchIdsFile, 'ids.txt')
+  assert.deepEqual(p.passthrough, ['--phase', 'day'])
+})
+test('matchIdsFrom: one id per line (blank lines and # comments skipped); a results vector gives its non-pass, non-flaky ids once', () => {
+  assert.deepEqual(matchIdsFrom('a/x\n\n # note\n b/y \n'), ['a/x', 'b/y'])
+  const text = mergeText([form('a/p', 'pass'), form('a/f', 'fail'), form('a/f', 'fail'), form('b/e', 'error'), form('c/k', 'flaky')])
+  assert.deepEqual(matchIdsFrom(text), ['a/f', 'b/e'])
+})
+test('listArgs: every match id is handed to --list so only the matched cases are counted', () => {
+  const p = parsePoolArgs(['dir', '--match-id', 'a/x', '--match-id', 'b/y', '--phase', 'day'])
+  assert.deepEqual(listArgs(p), ['dir', '--phase', 'day', '--match-id', 'a/x', '--match-id', 'b/y', '--list'])
 })
