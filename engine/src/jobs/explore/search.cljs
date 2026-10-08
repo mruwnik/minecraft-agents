@@ -3,6 +3,7 @@
             [engine.args :as a]
             [clojure.string :as str]
             [engine.ctx :as ctx]
+            [jobs.movement.go-to.air :as air]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
@@ -284,11 +285,12 @@
                                                               :goal-danger :end}))]
     (if-not (= :done r)
       :continue
-      (let [{:keys [arrived why]} (ctx/child-result c :leg)
+      (let [{:keys [in-water why] :as res} (ctx/child-result c :leg)
+            arrived (and (:arrived res) (not in-water))
             dangerous? (= :goal-dangerous why)
             in-row (cond arrived 0 dangerous? (:failed-in-row (ctx/mem c) 0) :else (inc (:failed-in-row (ctx/mem c) 0)))]
         (ctx/update-mem! c (fn [m] (cond-> (assoc (dissoc m :leg :leg-column) :failed-in-row in-row)
-                                     (not arrived) (update :failed (fnil conj []) {:pos [x y z] :reason (if dangerous? :goal-dangerous :unreachable)})
+                                     (not arrived) (update :failed (fnil conj []) {:pos [x y z] :reason (cond dangerous? :goal-dangerous in-water :wet :else :unreachable)})
                                      (and dangerous? (:leg-column m)) (update :tried (fnil conj []) (:leg-column m)))))
         (if (>= in-row (max-failed-in-row)) (finish! c :not-found :stuck) :again)))))
 
@@ -297,7 +299,7 @@
   [c]
   (let [{:keys [max-legs use-notes max-distance] want :count} (:args c)
         names (targets c)
-        _ (await (scan! c names))
+        _ (when-not (air/in-water? (:primitives c)) (await (scan! c names)))
         ns (notes/notes c)
         m (ctx/mem c)
         found (cond-> (:found m) use-notes (add-found (noted (:primitives c) ns names (:origin m) max-distance) want))]

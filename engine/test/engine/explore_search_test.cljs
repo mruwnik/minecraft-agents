@@ -445,3 +445,13 @@
               s (await (search! {:target "diamond_block" :max-distance 20 :max-legs 0} {:cone? true} 60 #(write-other! % "Other" seen)))]
           (is (nil? (event-of s :search.done)) "the cell is in view and holds air: the note is out of date")
           (is (= :not-found (:reason (event-of s :search.not-found)))))))))
+
+;; a body in water does not look round (it sinks and drowns while it does): it walks on, and a leg ending in water fails
+(deftest a-body-in-water-does-not-look-round-where-it-is
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (search! {:target "diamond_block" :max-distance 20} {:self {:pos [0.5 64 0.5] :inWater true}}))
+              e (event-of s :search.not-found)]
+          (is (finished? s))
+          (is (zero? (get-in e [:coverage :scans])) (pr-str e)))))))
