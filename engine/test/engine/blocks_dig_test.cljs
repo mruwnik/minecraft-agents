@@ -509,6 +509,24 @@
             (is (= "cobblestone" (block-at p lava-under)) "the lava the dig laid open was looked for and sealed")
             (is (= [{:cell [0 62 0]}] (mapv #(select-keys % [:cell]) (sealed-events seen))))))))))
 
+(deftest lava-beside-the-dug-cell-shows-only-when-looked-at-and-is-then-sealed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [side {:x 1 :y 63 :z 0}
+              {:keys [eng p seen]} (setup {:self body :blocks {"0,63,0" "dirt" "1,63,0" "lava" "0,62,0" "stone" "1,62,0" "stone"} :inventory cobble})
+              shown (atom false)]
+          (aset p "sensedAt" (fn [pos] (if (and (= [1 63 0] [(.-x pos) (.-y pos) (.-z pos)]) (not @shown))
+                                         #js {:unknown true}
+                                         (.blockAt p pos))))
+          (.override (.-world p) "look" (fn [token a impl]
+                                          (when (< (js/Math.abs (- 1.5 (.. a -pos -x))) 0.1) (reset! shown true))
+                                          (impl token a)))
+          (let [result (await (child-outcome eng job {:pos under-feet :accept #{:lava-adjacent}} 40))]
+            (is (= {:dug true :reason :dug} (select-keys result [:dug :reason])))
+            (is (= "cobblestone" (block-at p side)) "the lava beside the dug cell was looked for and sealed")
+            (is (= [{:cell [1 63 0]}] (mapv #(select-keys % [:cell]) (sealed-events seen))))))))))
+
 (deftest with-no-block-to-seal-with-the-dig-stops-lava-unsealed-and-the-body-steps-away
   (async done
     (tu/run-async done
