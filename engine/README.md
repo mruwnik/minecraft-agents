@@ -131,7 +131,7 @@ Statuses below are the common ones; `reason` and extra fields are in `js/primiti
 | method | args | statuses |
 |---|---|---|
 | `moveTo` | `{pos, range=1, timeoutS=20, maxDistance=64}` (numbers, range from 0, the others above 0, else `bad-args`) | `arrived`, `partial`, `blocked` (reason `noPath`, `planTimeout`, `stalled`, `timeout`), `mounted`. Uses the mineflayer pathfinder and treats doors as walls; jobs walk with `go-to` instead |
-| `dig` | `{pos}` | `dug` (`drops`), `missing`, `unreachable` (over 4.5), `cannot` |
+| `dig` | `{pos}` | `dug` (`drops`), `missing` (air, a fluid or unloaded), `unreachable` (over 4.5), `cannot` |
 | `place` | `{pos, item, click?}` | `placed`, `occupied`, `no-item`, `no-support`, `unreachable`, `failed` (server refused: reason names face, body spot and entities near the cell); buckets pour/scoop at `pos` |
 | `jumpPlace` | `{item, count=1}` (max 8) | `done`, `partial`, `failed` (`no-item`, `no-support`, `no-headroom`, `not-raised`) |
 | `collect` | `{id, timeoutS=10, maxDropDown}` (caps the walk's drops) | `collected`, `gone`, `unreachable`, `timeout` |
