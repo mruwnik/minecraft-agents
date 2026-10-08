@@ -12,6 +12,7 @@
             ["path" :as path]
             [engine.test-util :as tu :refer [box floor]]
             [engine.triggers :as triggers]
+            [jobs.lib.near :as near]
             [jobs.movement.path-preview :as pp]))
 
 (def job 'jobs.movement.path-preview)
@@ -189,3 +190,14 @@
         path (fn [drown] #js {:seconds 2 :summary "" :cost #js {:seconds 2 :drown drown}})]
     (is (= 4.5 (:drown (pp/route steps (path 4.5)))))
     (is (not (contains? (pp/route steps (path 0)) :drown)))))
+
+(deftest unknown-names-a-dark-drop-only-for-a-reason-go-to-would-give-up-on
+  (let [dark {:x 1 :y 62 :z 0}
+        report (fn [plan]
+                 (with-redefs [near/with-sight (fn [result _ _] (assoc result :dark-best dark))
+                               pp/u-dist (fn [_ _] 5)]
+                   (pp/report nil plan {:x 9 :y 61 :z 0} nil true)))]
+    (are [plan reason] (= reason (:reason (report plan)))
+      {:status "none" :r #js {:reason nil}} :unseen-floor-dark
+      {:status "none" :r #js {:reason nil :damageRefused true}} nil
+      {:beyond {:kind :jump :at [1 2 3]}} :abilities)))

@@ -226,10 +226,8 @@
 (defn dark-end
   "A fruitless round's result as go-to gives it up when a dark way was the better way (:dark-best, jobs.lib.near/dark-best):
   :no-path :unseen-floor-dark with that cell, unless the round failed for a reason of its own (stuck, health, air, ...)."
-  [{:keys [status reason partial damage-refused] :as result}]
-  (if (and (:dark-best result) (not damage-refused)
-           (or (and (= :no-path status) (contains? #{nil :exhausted :goal-unloaded :start-enclosed} (some-> reason keyword)))
-               (and (= :off-plan status) partial)))
+  [result]
+  (if (end/dark-end? result)
     {:status :no-path :reason :unseen-floor-dark :dark-best (:dark-best result)}
     result))
 

@@ -6,6 +6,16 @@
             [jobs.lib.shelter :as sh]
             [jobs.lib.util :as u]))
 
+(defn dark-end?
+  "True when a fruitless round with a :dark-best is given up as :unseen-floor-dark (go-to, path-preview): :no-path for no reason,
+  :exhausted, :goal-unloaded or :start-enclosed, or :off-plan with a partial; never when the search was damage-refused or
+  the round failed for a reason of its own (stuck, health, air, ...)."
+  [{:keys [status reason partial damage-refused dark-best]}]
+  (boolean
+    (and dark-best (not damage-refused)
+         (or (and (= :no-path status) (contains? #{nil :exhausted :goal-unloaded :start-enclosed} (some-> reason keyword)))
+             (and (= :off-plan status) partial)))))
+
 (defn finish!
   "Hand result over (ctx/result!), emit it as a :result info event (its :kind is the event's :refused-kind: an event's own
   :kind is what it is), end the job."

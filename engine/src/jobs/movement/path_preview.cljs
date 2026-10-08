@@ -93,7 +93,11 @@
     (if-not unknown
       result
       (let [seen (near/with-sight result plan [(:x to) (:y to) (:z to)])]
-        (cond-> seen (:dark-best seen) (assoc :reason :unseen-floor-dark))))))
+        (cond-> seen
+          (end/dark-end? (if (= :partial (:reason seen))
+                           (assoc seen :status :off-plan :partial true)
+                           (assoc seen :status :no-path)))
+          (assoc :reason :unseen-floor-dark))))))
 
 (defn refuse!
   "End the preview with a refusal: {:status :stopped :found false :reason :text}."
