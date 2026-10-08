@@ -14,7 +14,7 @@
   policy keeps it). After the hour the entry is gone and (since :kind) is unknown again. A job that wants \"every
   3 days\" passes :ttl-s 259200. :ttl-s is in seconds and must be positive, or :forever. :cap is the number of newest entries
   kept, a positive whole number.
-  A wrong :data, :ttl-s or :cap is refused at submit by the spec. Refused (warn memory.refused with :reason and :text, result {:ok false :reason}, and the job still ends):
+  Refused (warn memory.refused with :reason and :text, result {:ok false :reason}, and the job still ends):
   :bad-kind (not a keyword, or namespaced), :reserved-kind (a kind the engine or another job writes, such as
   :hurt, :slept, :scaffold, or the name of a recorded place).
   Success: info memory.remembered with :memory-kind, :entry and :policy. Result {:ok true :kind}.")

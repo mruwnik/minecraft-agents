@@ -84,6 +84,14 @@
           (is (= :unknown-item (:reason @out)))
           (is (= :stopped (:status @out))))))))
 
+(deftest no-item-given-is-refused-with-a-clear-text
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out]} (await (equip (stacks "dirt") {}))]
+          (is (= :unknown-item (:reason @out)))
+          (is (= "equip needs :item" (:text @out))))))))
+
 (deftest a-bad-hand-is-refused-at-submit
   (is (re-find #"jobs.items.equip :hand must be one of \"main\", \"off\", got \"foot\""
                (expr/problem registry/jobs '(jobs.items.equip {:item "dirt" :hand "foot"})))))

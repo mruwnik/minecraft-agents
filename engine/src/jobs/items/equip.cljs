@@ -53,6 +53,8 @@
         {:keys [item]} (:args c)
         hand (or (:hand (:args c)) "main")]
     (cond
+      (nil? item)
+      (stop! c :unknown-item "equip needs :item" {})
       (not (known-item? p item))
       (stop! c :unknown-item (str "no such item " item) {:item item})
       (= item (held-in p hand))
