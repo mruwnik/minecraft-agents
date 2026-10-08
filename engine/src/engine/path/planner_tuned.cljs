@@ -73,8 +73,9 @@
      (in cost.darkSeconds; jobs.lib.cost/unknown-prices). No fall goes into an unseen cell, risk looks stop there, and no
      goal-enclosed, goal-not-standable or start-enclosed proof rests on one. missed and noLight are Sets of cell-key.
    - options.stopAtEdge: with the goal unloaded, the search names the first node it expands at the loaded edge (edgeStop)
-     as its frontier and ends once it has expanded as many nodes again (or run out), not after searching all loaded land.
-     go-to's budgeted searches set it (walk.search/new-search)."
+     as its frontier and ends once it has expanded as many nodes again (or run out, or the caller ends it: endSweep), not
+     after searching all loaded land; what only those nodes refused is not in the result. go-to's budgeted searches set it
+     (walk.search/new-search)."
   (:require [engine.path.planner.base :as base :refer [OCTILE-SLACK REGIONS TABLE WHOLE next-pow2]]
             [engine.path.planner.search :refer [Search ->Search]]
             [engine.path.planner.world]
@@ -367,8 +368,8 @@
      (.-knownCells options) nil (.-knownEdges options) nil
      ;; searched-out
      false
-     ;; stop-at-edge edge-node sweep-end
-     (and goal-unloaded (true? (option options "stopAtEdge" false))) -1 0
+     ;; stop-at-edge edge-node sweep-end sweep-flags
+     (and goal-unloaded (true? (option options "stopAtEdge" false))) -1 0 0
      ;; dangers n-dangers danger-cap dbx0 dbx1 dby0 dby1 dbz0 dbz1
      dangers n-dangers (* risk-scale (option options "dangerCap" 4))
      (aget dbox 0) (aget dbox 1) (aget dbox 2) (aget dbox 3) (aget dbox 4) (aget dbox 5)
@@ -515,7 +516,7 @@
   step(n) runs at most about n expansions (each newly flooded cell of the goal flood counts as one). It is true once
   the plan is ready, and result() is then what plan answers. The returnable search behind a one-way step (result-of)
   runs in the same slices. progress() is where an unfinished search has got to (Search.progress), nil once the
-  search itself is over."
+  search itself is over. endSweep() ends a search sweeping after its edge stop (Search.endSweep): true when it did."
   [snapshot query options]
   (let [search (new-search snapshot query options)
         clean (volatile! nil)
@@ -538,6 +539,8 @@
          :result (fn [] (if (neg? @node)
                           (.resultFrom search -1 nil)
                           (.resultFrom search @node (.nearest ^Search @clean))))
+         ;; ends a search sweeping after its edge stop now (Search.endSweep), for a caller out of budget: true when it did
+         :endSweep (fn [] (if (some? @clean) (.endSweep ^Search @clean) (.endSweep search)))
          ;; while the search itself is not over: where it has got to (Search.progress), else nil
          :progress (fn [] (when-not ^boolean (.-finished search) (.progress search)))}))
 
@@ -555,4 +558,5 @@
                          false)
                      done)))
          :result (fn [] (.result ^js @inner))
-         :progress (fn [] (.progress ^js @inner))}))
+         :progress (fn [] (.progress ^js @inner))
+         :endSweep (fn [] (.endSweep ^js @inner))}))

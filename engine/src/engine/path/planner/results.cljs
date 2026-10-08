@@ -327,11 +327,14 @@
   ;; no search has known since (one an earlier search saw and did not take, which a way through known land may lead
   ;; back to); else there is no frontier. While known-new is a Set, the scan adds there the key of each such node
   ;; not at the edge that the search expanded (land this search knows to its end; a search that ended at its first edge
-  ;; node, edgeStop, leaves the nodes it did not expand out), and to edges-new the key of each unknown node at the edge.
+  ;; node, edgeStop, leaves the nodes it did not expand out, see noteOpen), and to edges-new the key of each unknown node
+  ;; at the edge.
   (frontierNode [s]
     (let [lo OPEN-REACH
           hi (- 16 OPEN-REACH)
-          track (some? ^js (.-known-new s))]
+          track (some? ^js (.-known-new s))
+          ;; the chunks noteOpen has noted a node in
+          ^js open-chunks (js/Set.)]
       (loop [i 0
              best -1
              best-f js/Infinity
@@ -349,7 +352,7 @@
                     edge ^boolean (.atLoadedEdge s i)
                     f (+ (aget (.-gs s) i) (.heuristic s x z))]
                 (cond
-                  (not edge) (do (when (and track (not known) expanded) (.add ^js (.-known-new s) k))
+                  (not edge) (do (when (and track (not known)) (if expanded (.add ^js (.-known-new s) k) (.noteOpen s k x z open-chunks)))
                                  (recur (inc i) best best-f kbest kbest-f))
                   (and known (< f kbest-f)) (recur (inc i) best best-f i f)
                   known (recur (inc i) best best-f kbest kbest-f)
@@ -358,7 +361,7 @@
                               (recur (inc i) i f kbest kbest-f)
                               (recur (inc i) best best-f kbest kbest-f)))))
               (do (when (and track (some? ^js (.-known-edges s)))
-                    (.noteOffBand s i x y z expanded))
+                    (.noteOffBand s x y z expanded open-chunks))
                   (recur (inc i) best best-f kbest kbest-f))))
           (cond
             (not (neg? best)) best
@@ -369,17 +372,24 @@
                       (zero? (.-length open)) (do (set! (.-searched-out s) true) -1)
                       :else (.nearestToEdge s open))))))))
 
-  ;; An off-band node of a search that ended at its first edge (edgeStop) and was never expanded lies in land this search
-  ;; did not cover: it is left in edges-new (a handful: the fringe of the search) as an edge a way may still lead from. An
-  ;; expanded node that options.knownEdges holds is covered now: it goes in known-new.
-  (noteOffBand [s i x y z ^boolean expanded]
+  ;; An off-band node not expanded lies in land this search did not cover (noteOpen). An expanded node that
+  ;; options.knownEdges holds is covered now: it goes in known-new.
+  (noteOffBand [s x y z ^boolean expanded ^js open-chunks]
     (let [k (.knownKey s x y z)]
       (cond
         (neg? k) nil
         (and expanded ^boolean (.has ^js (.-known-edges s) k)) (.add ^js (.-known-new s) k)
-        (and (not expanded) (>= (.-edge-node s) 0) (< (.-length ^js (.-edges-new s)) 64)
-             (<= (js/Math.max (js/Math.abs (- x (.-goal-x s))) (js/Math.abs (- z (.-goal-z s)))) (.-frontier-reach s))
+        (and (not expanded) (<= (js/Math.max (js/Math.abs (- x (.-goal-x s))) (js/Math.abs (- z (.-goal-z s)))) (.-frontier-reach s))
              (not (and (some? ^js (.-known-cells s)) ^boolean (.has ^js (.-known-cells s) k))))
+        (.noteOpen s k x z open-chunks))))
+
+  ;; A node of a search that ended at its first edge (edgeStop) and was never expanded (key k, not known) lies in land
+  ;; this search did not cover, though the nodes that led to it may be known: once its chunk unloads, nothing else says
+  ;; a way goes on there. The first such node of each chunk goes in edges-new, an edge the tour comes back to.
+  (noteOpen [s k x z ^js open-chunks]
+    (let [c (+ (* 4096 (bit-shift-right x 4)) (bit-shift-right z 4))]
+      (when-not (or (neg? k) ^boolean (.has open-chunks c))
+        (.add open-chunks c)
         (.push ^js (.-edges-new s) k))))
 
   ;; the cells of options.knownEdges this search has not known to its end (known-new) as keys, an array; nil when it holds none
@@ -404,8 +414,8 @@
 
   ;; With no unknown edge left in the loaded land and an open edge out of sight (options.knownEdges, one an earlier search
   ;; saw and did not cover; the loaded land follows the body), the known frontier node that lies nearest to such an edge
-  ;; (along x, y and z, so a node on the edge's own level wins over one on a walkway above it; ties: the least cost plus
-  ;; heuristic): the walk to it brings that edge back into view. -1 when none.
+  ;; along x and z (chunks load by x and z; ties: the nearer along y, so a node on the edge's own level wins over one on a
+  ;; walkway above it, then the least cost plus heuristic): the walk to it brings that edge back into view. -1 when none.
   (nearestToEdge [s open]
     (let [lo OPEN-REACH
           hi (- 16 OPEN-REACH)]
@@ -420,7 +430,9 @@
               (let [d (loop [j 0 d js/Infinity]
                         (if (< j (.-length open))
                           (let [k (aget open j)]
-                            (recur (inc j) (js/Math.min d (js/Math.max (js/Math.abs (- x (.keyX s k))) (js/Math.abs (- y (.keyY s k))) (js/Math.abs (- z (.keyZ s k)))))))
+                            ;; along x and z, then y (under 1024)
+                            (recur (inc j) (js/Math.min d (+ (* 1024 (js/Math.max (js/Math.abs (- x (.keyX s k))) (js/Math.abs (- z (.keyZ s k)))))
+                                                             (js/Math.abs (- y (.keyY s k)))))))
                           d))
                     f (+ (aget (.-gs s) i) (.heuristic s x z))]
                 (if (or (< d best-d) (and (== d best-d) (< f best-f)))

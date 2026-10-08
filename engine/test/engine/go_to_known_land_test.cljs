@@ -316,8 +316,8 @@
           (is (= {:arrived false :reason :unreachable} (select-keys @out [:arrived :reason])) (str "result " @out))
           (is (< walked 800) (str "walked " walked ": " (mapv (juxt :status :from :to) (moved eng)))))))))
 
-;; the strip with the way on at its north end: the tour arrives, without walking an end twice
-(deftest go-to-tours-a-strip-to-a-way-at-its-far-end-without-walking-an-end-twice
+;; the strip with the way on at its north end: the tour arrives within a bound on the blocks it walks
+(deftest go-to-tours-a-strip-to-a-way-at-its-far-end-within-a-walk-bound
   (async done
     (tu/run-async done
       (fn ^:async t []

@@ -132,8 +132,8 @@
   "A budgeted search from the body's cell over walled: its limited search begun (wide-box, the policy's limits, known
   land {:cells :edges} as the planner's options.knownCells and knownEdges when not nil); :goal-unloaded whether its
   snapshot read the goal unloaded. With known land (go-to's frontier walks), :edge-stop true: its searches set the
-  planner's stopAtEdge, so one toward a goal that is unloaded ends at the first loaded-edge node it expands, its frontier,
-  not after searching all loaded land (card 7a031d15: over max-searching rounds when no node got progress-blocks nearer)."
+  planner's stopAtEdge, so one toward a goal that is unloaded names the first loaded-edge node it expands as its frontier
+  and ends after a sweep of the land round it, not after searching all loaded land."
   [c walled to range weight policy key known & [flood]]
   {:key key :t (js/Date.now) :walled walled :r nil :unlimited nil :air-used (:air-used policy) :health (:health policy)
    :goal-unloaded (goal-unloaded? (.-snapshot walled) to)
@@ -162,7 +162,8 @@
 (defn ^:async run-search!
   "Run search on for at most budget expansions and round-ms, in slices of chunk-expansions with a yield! between them. [search within]:
   within, plan-within!'s answer, once the search is over (the search without the limits run after the limited one when
-  beyond-needed?), else nil and the search to go on with."
+  beyond-needed?), else nil and the search to go on with. A search sweeping after its edge stop when the round is spent
+  ends there (the planner's endSweep), with its frontier."
   [c search budget policy to range weight]
   (let [walled (:walled search)
         t0 (js/performance.now)]
@@ -184,7 +185,8 @@
                      used)
               [search (wplan/within-of walled r)]))
 
-          (or (>= used budget) (>= (- (js/performance.now) t0) (* round-ms (max 1 (/ budget round-budget))))) [search nil]
+          (or (>= used budget) (>= (- (js/performance.now) t0) (* round-ms (max 1 (/ budget round-budget)))))
+          (if ^boolean (.endSweep phase) (recur search used) [search nil])
 
           :else (do (await (wplan/yield!))
                     (recur search used)))))))

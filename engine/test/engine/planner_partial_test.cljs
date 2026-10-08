@@ -209,10 +209,10 @@
   (let [edges (js/Set. #js [(.knownKey (key-search (js/Set.)) 3 64 0)])
         s (key-search edges)]
     ;; z -2048 spills one step into x: (4, -2048) would alias the key of (3, 0) without a range check
-    (.noteOffBand s 1 4 64 -2048 true)
+    (.noteOffBand s 4 64 -2048 true (js/Set.))
     (is (zero? (.-size ^js (.-known-new s))) "no key hit")
     (is (zero? (.-length ^js (.-edges-new s))))
-    (.noteOffBand s 1 3 64 0 true)
+    (.noteOffBand s 3 64 0 true (js/Set.))
     (is (= 1 (.-size ^js (.-known-new s))) "the near one does")))
 
 ;; ------------------------------------------------------------------ costs.dropFactor and maxDrop 1

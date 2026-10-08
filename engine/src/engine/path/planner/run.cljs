@@ -114,7 +114,7 @@
   (expandNext [s]
     (cond
       (and (>= (.-edge-node s) 0) (or (zero? (.-heap-n s)) (>= (.-expanded s) (.-sweep-end s)) ^boolean (.-over-budget s)))
-      (.finish s "exhausted")
+      (.endSweep s)
       (zero? (.-heap-n s))
       (when-not ^boolean (.floodAtEnd s)
         (.finish s (if ^boolean (.-boxed s) "box" "exhausted")))
@@ -135,7 +135,8 @@
               (set! (.-best-node s) i))
             (if (and ^boolean (.-stop-at-edge s) ^boolean (.edgeStop s i))
               (do (set! (.-edge-node s) i)
-                  (set! (.-sweep-end s) (* 2 (.-expanded s))))
+                  (set! (.-sweep-end s) (* 2 (.-expanded s)))
+                  (set! (.-sweep-flags s) (.refusalFlags s)))
               (do (.expandAt s x y z (aget (.-hs s) i) (aget (.-slows s) i) i (bit-and (aget (.-shapes s) i) 15))
                   (when (pos? (.-length ^js (.-held s))) (.flushHeld s))
                   (when ^boolean (.-over-budget s) (.finish s "budget")))))))))
@@ -143,7 +144,8 @@
   ;; After edgeStop named its frontier (edge-node), the search expands as many nodes again as it took to get there, so the
   ;; loaded land it read is known to its end (frontierNode's known-new) and that land does not read as unknown edges once
   ;; it unloads and loads again (a strip whose far columns the first edge left unsearched was toured twice). Only what
-  ;; is expanded becomes known; the frontier and the partial end stay as edgeStop left them.
+  ;; is expanded becomes known; the frontier and the partial end stay as edgeStop left them, and so do the refusals
+  ;; (endSweep).
   (sweepNext [s]
     (let [i (.popMin s)
           x (aget (.-xs s) i)
@@ -153,8 +155,34 @@
       (.expandAt s x y z (aget (.-hs s) i) (aget (.-slows s) i) i (bit-and (aget (.-shapes s) i) 15))
       (when (pos? (.-length ^js (.-held s))) (.flushHeld s))))
 
-  ;; Does the search end at node i (stop-at-edge; i is not on magma)? When it is a frontier node (frontierNode's test: within
-  ;; OPEN-REACH of a chunk's side, within frontier-reach of the goal, at the loaded edge) not in options.knownCells. The goal
+  ;; the refusals met so far, as bits: gap-seen air-seen lethal-seen damage-refused limit-refused boxed dark-refused
+  ;; unseen-refused
+  (refusalFlags [s]
+    (bit-or (if ^boolean (.-gap-seen s) 1 0) (if ^boolean (.-air-seen s) 2 0) (if ^boolean (.-lethal-seen s) 4 0)
+            (if ^boolean (.-damage-refused s) 8 0) (if ^boolean (.-limit-refused s) 16 0) (if ^boolean (.-boxed s) 32 0)
+            (if ^boolean (.-dark-refused s) 64 0) (if ^boolean (.-unseen-refused s) 128 0)))
+
+  ;; Ends a sweep (expandNext at sweep-end, or a caller out of its round's budget, so the frontier is not lost to a partial
+  ;; walk): the search finishes exhausted with the refusals it had met at edge-node. What only the sweep met (a swim
+  ;; refused for air, a move the limits refuse, a drop over the damage budget) names no reason and starts no search
+  ;; without the limits. False when the search is not sweeping.
+  (endSweep [s]
+    (if (or ^boolean (.-finished s) (neg? (.-edge-node s)))
+      false
+      (let [f (.-sweep-flags s)]
+        (set! (.-gap-seen s) (pos? (bit-and f 1)))
+        (set! (.-air-seen s) (pos? (bit-and f 2)))
+        (set! (.-lethal-seen s) (pos? (bit-and f 4)))
+        (set! (.-damage-refused s) (pos? (bit-and f 8)))
+        (set! (.-limit-refused s) (pos? (bit-and f 16)))
+        (set! (.-boxed s) (pos? (bit-and f 32)))
+        (set! (.-dark-refused s) (pos? (bit-and f 64)))
+        (set! (.-unseen-refused s) (pos? (bit-and f 128)))
+        (.finish s "exhausted")
+        true)))
+
+  ;; Does the search stop at node i and sweep (stop-at-edge; i is not on magma)? When it is a frontier node (frontierNode's
+  ;; test: within OPEN-REACH of a chunk's side, within frontier-reach of the goal, at the loaded edge) not in options.knownCells. The goal
   ;; is unloaded, so every way to it crosses the loaded edge, and nodes come out in order of cost plus (weighted) heuristic:
   ;; the first such node is the frontier the search would name once it had searched all loaded land (with weight 1 the very
   ;; same node, ties aside), found without searching the rest (card 7a031d15: up to 200000 nodes, over 100 go-to rounds).
