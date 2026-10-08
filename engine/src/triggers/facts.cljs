@@ -49,7 +49,7 @@
               :read (online (fn [_ s] (boolean-or-unknown (.-inWater s))))}
    'burning {:args [] :type :boolean :cost :cheap
              :doc "on fire or in lava without fire resistance (the burning trigger)"
-             :read (online (fn [_ s] (body/burning? s)))}
+             :read (online (fn [p _] (body/burning? p)))}
    'suffocating {:args [] :type :boolean :cost :cheap
                  :doc "drowning or enclosed (the suffocating trigger, default oxygen)"
                  :read (online (fn [p _] (some? (breath/situation p breath/default-min-oxygen))))}

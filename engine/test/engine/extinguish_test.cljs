@@ -102,6 +102,26 @@
   (doseq [[self expected] [[{:onFire true} true] [{:inLava true} true] [{} false]]]
     (is (= expected ((:when (:burning triggers/all)) (tu/fake {:self self}) nil {})) (pr-str self))))
 
+;; rain puts the on-fire flag out every tick while a fire block at the feet still hurts (sweep 919b3113)
+(deftest standing-in-a-fire-block-is-burning-though-the-flag-is-out
+  (doseq [[world expected] [[{:self {} :blocks {"0,64,0" "fire"}} true]
+                            [{:self {} :blocks {"0,64,0" "soul_fire"}} true]
+                            [{:self {} :blocks {"0,65,0" "fire"}} true]
+                            [{:self {:effects fire-resistance} :blocks {"0,64,0" "fire"}} false]
+                            [{:self {} :blocks {"1,64,0" "fire"}} false]]]
+    (is (= expected (extinguish/check (bare-ctx (tu/fake world) {}))) (pr-str world))
+    (is (= expected ((:when (:burning triggers/all)) (tu/fake world) nil {})) (pr-str world))))
+
+(deftest steps-off-a-fire-block-in-the-rain
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {} :blocks (merge (floor 8) {"0,64,0" "fire"})})]
+          (core/submit! eng '(jobs.survival.extinguish {:water-radius 6}) {})
+          (await (core/tick! eng))
+          (is (seq (calls p "moveTo")) "walks off the fire")
+          (is (not= {:x 0 :y 64 :z 0} (pos-now p))))))))
+
 ;; ------------------------------------------------------------------- rounds
 
 (deftest round-is-done-without-acting-when-clear

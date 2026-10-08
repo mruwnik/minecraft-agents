@@ -70,7 +70,7 @@
 (def max-pour-waits 8)
 (def max-water-waits 10)
 
-(defn body-burning? [c] (body/burning? (.self (:primitives c))))
+(defn body-burning? [c] (body/burning? (:primitives c)))
 
 (def pour-policy "Body memory of the cell poured: it outlives a cut run so the next run scoops it." {:cap 1 :ttl (* 10 60 1000)})
 
@@ -338,7 +338,7 @@
     (cond
       scooped scooped
 
-      (not (body/burning? me))
+      (not (body/burning? p))
       :done
 
       :else
