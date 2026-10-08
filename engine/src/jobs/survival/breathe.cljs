@@ -426,18 +426,11 @@
           (ctx/update-mem! c update :failed-steps (fnil conj []) cell))))
     :again))
 
-(def short-floor "Blocks under 1 high a body stands in the cell of: the planner's stand cell is the block's own." #{"farmland" "dirt_path" "soul_sand" "mud"})
-
-(defn stand-cell
-  "The planner's cell for standing at feet cell: the block itself when it is a short floor (farmland, path), else cell."
-  [p cell]
-  (if (contains? short-floor (u/seen-name p (update cell :y dec))) (update cell :y dec) cell))
-
 (defn ^:async land-by-go-to!
   "A go-to child onto land at target. :done when the body then stands on land, else :again (target excluded)."
   [c target]
   (ctx/update-mem! c (fn [m] (-> m (update :land-tries (fnil inc 0)) (update :travelled (fnil + 0) (hdist (u/self-pos c) target)))))
-  (await (go! c :land (stand-cell (:primitives c) target) 0))
+  (await (go! c :land target 0))
   (if (on-land? (:primitives c))
     :done
     (do (ctx/update-mem! c update :failed-land (fnil conj []) target)

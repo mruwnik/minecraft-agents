@@ -87,6 +87,18 @@
             (is (= {:arrived true} @out) (str "range " r))
             (is (<= (+ (* (- 10 x) (- 10 x)) (* z z)) (* r r)) (str "within range " r ", at " (at p)))))))))
 
+(deftest go-to-a-feet-cell-over-a-short-floor-walks-onto-it
+  ;; the planner stands in a farmland or path block's own cell (floor 15/16), so the feet cell above it (the goal a caller
+  ;; names) is mapped to that cell. The fake stands a body on top of such a block (y 64), so arrival is not judged here.
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [n ["farmland" "dirt_path"]]
+          (let [{:keys [out p]} (await (go! {:blocks (assoc flat "10,63,0" n)} {:pos [10 64 0] :range 0}))
+                [x _ z] (at p)]
+            (is (not= :goal-not-standable (:why @out)) n)
+            (is (= [10 0] [(js/Math.floor x) (js/Math.floor z)]) (str n " walked onto the block, at " (at p)))))))))
+
 (deftest go-to-from-the-edge-of-a-hole-arrives
   ;; the body's floored cell (0,64,0) has a hole under it; its hitbox (z .61-1.21) stands on the block under (0,64,1)
   (async done

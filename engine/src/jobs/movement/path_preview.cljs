@@ -109,7 +109,7 @@
   (let [c (go-to/with-body-food c)
         {:keys [doors range dangers dark tolls drop-cost costs one-way unknown]} (:args c)
         refusal (go-to/args-refusal c)
-        pos (:pos (go-to/target c))]
+        pos (some->> (:pos (go-to/target c)) (wworld/stand-goal (wworld/path-world (:primitives c))))]
     (cond
       refusal (refuse! c refusal)
       (nil? (wworld/path-world (:primitives c)))

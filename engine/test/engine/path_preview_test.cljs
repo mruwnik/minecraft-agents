@@ -64,6 +64,15 @@
           (is (= [10 64 1] (last (:waypoints out))))
           (is (= [0 64 1] (pos-of p))))))))
 
+(deftest a-feet-cell-over-a-short-floor-is-planned-to-the-blocks-own-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [n ["farmland" "dirt_path"]]
+          (let [{:keys [out]} (await (preview (assoc (floor 0 0 11 2) "10,63,1" n) {:pos [10 64 1] :range 0}))]
+            (is (true? (:found out)) (str n " " (pr-str out)))
+            (is (= [10 63 1] (last (:waypoints out))) n)))))))
+
 (deftest a-goal-with-no-way-is-stopped-with-a-reason
   (async done
     (tu/run-async done

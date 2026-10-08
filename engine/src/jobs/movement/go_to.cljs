@@ -31,7 +31,8 @@
 
 (def doc
   "Walk to :pos ([x y z] or {:x :y :z}, fractions floored to the cell) until the body's cell is within :range cells of
-  it (range 0: in that cell, 1: next to it). :place (a name such as :home, set by jobs.memory.set-place) walks to
+  it (range 0: in that cell, 1: next to it). A cell over a short floor (farmland, a path, a bottom slab) stands for that
+  block's own cell, where the body's feet are. :place (a name such as :home, set by jobs.memory.set-place) walks to
   that place's recorded position instead of :pos; a name not in memory falls back to the shared marker of that name (jobs.lib.world/marker).
   - Refused at submit (or the caller's call-child throws): an arg its spec refuses, such as a :tolls entry that is not {:x :y :z :factor} of finite numbers, a :drop-cost that is not a number >= 0 or false, a :costs that is not a map of known price names to numbers >= 0, a :landing that is not a map of block names to numbers, a :gait that is not :auto, :walk or :sneak, a :min-health outside 1-20, a :danger-shape that is not {:sensed|:remembered|:creeper {:close :radius}}.
   - Refused at once, before any walk: a :pos outside the world (:bad-pos), a :place that is not a valid name (:bad-name)
@@ -553,7 +554,7 @@
   (let [u (:unknown (:args c0))
         c (cond-> c0 u (assoc :unknown (wworld/unknown-spec (when (map? u) u))))
         refusal (args-refusal c)
-        pos (:pos (target c))]
+        pos (some->> (:pos (target c)) (wworld/stand-goal (wworld/path-world (:primitives c) (:unknown c))))]
     (if refusal
       (end/refuse! c refusal)
       (let [state (note-restart! c pos)]

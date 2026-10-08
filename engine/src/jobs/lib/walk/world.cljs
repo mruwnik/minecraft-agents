@@ -342,7 +342,19 @@
   (let [pos (.-pos (.self (:primitives c)))]
     {:x (js/Math.floor (.-x pos)) :y (js/Math.floor (.-y pos)) :z (js/Math.floor (.-z pos))}))
 
-(defn body-name [c] (.-username (.self (:primitives c))))
+(defn stand-goal
+  "Goal feet cell pos {:x :y :z} as the planner stands at it: the block under it when that block is a short floor (a top
+  under a whole block from its bottom: farmland, a path, a bottom slab), for the planner stands in such a block's own
+  cell; else pos. pw: a pathWorld (path-world), nil leaves pos."
+  [^js pw {:keys [x y z] :as pos}]
+  (let [^js t (some-> pw .-table)
+        top (when t (fn [y] (aget (.-top t) (.stateAt (.-snapshot pw) x y z))))
+        under (when t (top (dec y)))]
+    (if (and under (< 0 under base/WHOLE) (zero? (aget (.-base t) (.stateAt (.-snapshot pw) x (dec y) z))) (zero? (top y)))
+      (update pos :y dec)
+      pos)))
+
+(defn body-name [c](.-username (.self (:primitives c))))
 
 (defn landing-seen
   "The planner's options.landingSeen for the body of primitives p: (fn [x y z]) true when the body sees or feels the block
