@@ -209,7 +209,7 @@
         (let [{:keys [eng p clock]} (setup {:floor tu/walk-floor :entities drops :unreachable ["20,64,0"]})]
           (die! eng {:pos death-pos :inventory diamonds})
           (core/submit! eng job {})
-          (await (run-until-empty eng 6))
+          (await (run-until-empty eng 2))
           (swap! clock + 60000)
           (is (nil? (recovered eng)) "a blocked walk is no verdict")
           (is (= 1 (count (:list (core/state eng)))) "the job is still on its way")

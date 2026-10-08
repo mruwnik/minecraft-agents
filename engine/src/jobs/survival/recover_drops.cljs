@@ -55,8 +55,9 @@
   (jobs.forestry.collect-drops; only the carried item names, never items out of sight).
   Ends by writing a :recovered entry {:decision :skip|:collected|:partial|:abandoned}.
   :collected counts the pile's items that entered the inventory since the decision, those picked up on the walk too.
-  :abandoned with :reason :unreachable (the walk was blocked), :nothing-found or :window-closed (the five minute
-  despawn window closed). :partial carries :left and :reason :unreachable or :not-visible.
+  :abandoned with :reason :unreachable (the walk was blocked, or did not arrive :max-blocked-retries times), :danger
+  (the trip was cut by a hostile, or declined for a danger, :max-hostile-cuts times), :nothing-found or :window-closed
+  (the five minute despawn window closed). :partial carries :left and :reason :unreachable or :not-visible.
   A pile already carried again ends :collected without a collect step.
   Restart-safe: the decision, the baseline of carried items and the phase are kept in a :recover-trip entry keyed to the death.
   A run cut by a higher reflex, or a restarted body, goes on with the same trip.
@@ -76,10 +77,12 @@
    ::top-n {:default 3 :doc "Items and mobs named in the report of a death site, at most." :spec (a/int-in 0 nil)}
    ::max-collect-passes {:default 3 :doc "Walks back to the pile after a collect pass that left visible items of it behind." :spec (a/int-in 0 nil)}
    ::stray-range {:default 5 :doc "A body this far from the death point in the collect phase (a flee cut the trip) walks back first." :spec (a/int-in 0 nil)}
-   ::max-hostile-cuts {:default 2 :doc "Resumes of one trip (cut by a hostile reflex, or declined for a danger) before it is given up as :danger." :spec (a/int-in 1 nil)}
+   ::max-hostile-cuts {:default 2 :doc "Resumes of one trip that followed a cut by a hostile reflex, or a decline for a danger, before it is given up as :danger." :spec (a/int-in 1 nil)}
+   ::max-blocked-retries {:default 3 :doc "Walks of one trip that did not arrive before it is given up as :unreachable." :spec (a/int-in 1 nil)}
    ::bed-away-blocks {:default 10 :doc "A respawn farther than this from the bed the body slept in is reported." :spec (a/int-in 0 nil)}})
 (defn arrive-range [] (settings/get settings ::arrive-range))
 (defn max-hostile-cuts [] (settings/get settings ::max-hostile-cuts))
+(defn max-blocked-retries [] (settings/get settings ::max-blocked-retries))
 (def settle-ms
   "After a respawn the client needs this long to re-receive nearby entities;
   an estimate made sooner sees no hostiles."
@@ -144,20 +147,27 @@
     (when (= death-t (:death-t trip)) trip)))
 
 (defn save-trip!
-  "Write the trip so far (job memory :decided :baseline :phase :cuts :blocked) to the :recover-trip entry."
+  "Write the trip so far (job memory :decided :baseline :phase :cuts :blocked :blocked-retries :hostile-cut) to the :recover-trip entry."
   [c]
   (let [m (ctx/mem c)]
-    (ctx/remember! c :recover-trip (select-keys m [:death-t :decided :baseline :phase :cuts :blocked]) trip-policy)))
+    (ctx/remember! c :recover-trip (select-keys m [:death-t :decided :baseline :phase :cuts :blocked :blocked-retries :hostile-cut]) trip-policy)))
+
+(defn hostile-cut?
+  "Whether the saved trip was last cut by a hostile: it declined for a danger, or the hostile reflex wrote a :hostile
+  entry since the trip was saved. A cut by night, eating or a restart is not."
+  [c saved]
+  (boolean (or (:hostile-cut saved)
+               (seq (ctx/since c :hostile (:t (ctx/latest c :recover-trip)))))))
 
 (defn key-to-death!
   "Reset the job memory when it belongs to another death than entry: start from the saved trip of this death (a run
-  cut before, or a restart), else afresh."
+  cut before, or a restart), else afresh. The hostile cuts are counted whatever :blocked says."
   [c entry]
   (when (not= (:t entry) (:death-t (ctx/mem c)))
     (let [saved (saved-trip c (:t entry))]
       (ctx/update-mem! c (constantly (merge {:death-t (:t entry)}
-                                            (select-keys saved [:decided :baseline :phase :blocked])
-                                            (when saved {:cuts (+ (:cuts saved 0) (if (:blocked saved) 0 1))}))))
+                                            (select-keys saved [:decided :baseline :phase :blocked :blocked-retries])
+                                            (when saved {:cuts (+ (:cuts saved 0) (if (hostile-cut? c saved) 1 0))}))))
       (when saved (save-trip! c)))))
 
 (defn xp-per-level [] (settings/get settings ::xp-per-level))
@@ -203,7 +213,7 @@
     (cond
       (not= :done r) (decline! c :unreachable (str "the walk to " (pr-str pos) " is waiting on the world") {:pos pos})
       (not (:arrived (ctx/child-result c :go)))
-      (do (ctx/update-mem! c assoc :blocked true)
+      (do (ctx/update-mem! c #(-> % (assoc :blocked true) (update :blocked-retries (fnil inc 0))))
           (save-trip! c)
           (decline! c :unreachable (str "the walk to " (pr-str pos) " did not arrive") {:pos pos}))
       :else (do (ctx/update-mem! c assoc :phase :collect :blocked false) (save-trip! c) :next))))
@@ -293,6 +303,8 @@
   "End :declined for the danger m: its name and place are in the event."
   [c m]
   (let [{:keys [mob mob-pos] :as fields} (danger-fields (:primitives c) m)]
+    (ctx/update-mem! c assoc :hostile-cut true)
+    (save-trip! c)
     (decline! c :danger (str mob " at " (pr-str mob-pos) " within " (:danger-radius (:args c)) " blocks") fields)))
 
 (defn ^:async wait-while!
@@ -336,6 +348,9 @@
 
       (>= (:cuts (ctx/mem c) 0) (max-hostile-cuts))
       (finish! c :abandoned (assoc decided :reason :danger))
+
+      (>= (:blocked-retries (ctx/mem c) 0) (max-blocked-retries))
+      (finish! c :abandoned (assoc decided :reason :unreachable))
 
       (threatened? c) (decline-danger! c (threatened? c))
 

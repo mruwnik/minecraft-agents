@@ -64,29 +64,55 @@
 (defn death-t [eng] (:t (mem/latest (mem/view (:store eng)) :died)))
 
 (defn resume-run
-  "A trip decided and cut `cuts` times before: a saved :recover-trip, then the job."
-  [cuts]
-  (fn ^:async t []
-    (let [{:keys [eng seen]} (setup {:floor tu/walk-floor :entities (vec (pile-drops dt/diamonds))})]
-      (die! eng {:pos dt/death-pos :inventory dt/diamonds})
-      (mem/write! (:store eng) :recover-trip
-                  {:death-t (death-t eng) :decided {:value 1400 :cost 50} :baseline {} :phase :go :cuts cuts}
-                  {:cap 1 :ttl 1000000})
-      (core/submit! eng job {})
-      (await (run-until-empty eng 20))
-      {:eng eng :seen seen})))
+  "A trip decided and cut before: a saved :recover-trip with `trip` merged in, `before` run against the engine (a
+  :hostile entry written after the save, say), then the job's real resume through key-to-death!."
+  ([trip] (resume-run trip (fn [_])))
+  ([trip before]
+   (fn ^:async t []
+     (let [{:keys [eng seen]} (setup {:floor tu/walk-floor :entities (vec (pile-drops dt/diamonds))})]
+       (die! eng {:pos dt/death-pos :inventory dt/diamonds})
+       (mem/write! (:store eng)  :recover-trip
+                   (merge {:death-t (death-t eng) :decided {:value 1400 :cost 50} :baseline {} :phase :go} trip)
+                   {:cap 1 :ttl 1000000})
+       (before eng)
+       (core/submit! eng job {})
+       (await (run-until-empty eng 20))
+       {:eng eng :seen seen}))))
+
+(defn hostile-cut! [eng] (mem/write! (:store eng) :hostile {:name "zombie"} {:cap 5 :ttl 1000000}))
 
 (deftest a-trip-cut-by-hostiles-twice-is-abandoned-as-danger
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (await ((resume-run 1)))]
+        (let [{:keys [eng]} (await ((resume-run {:cuts 1} hostile-cut!)))]
           (is (= {:decision :abandoned :reason :danger} (select-keys (recovered eng) [:decision :reason])))
           (is (false? (died/died nil (mem/view (:store eng)) {})) "the died trigger stops firing"))))))
+
+(deftest hostile-cuts-count-while-the-trip-is-blocked
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (await ((resume-run {:cuts 1 :blocked true} hostile-cut!)))]
+          (is (= {:decision :abandoned :reason :danger} (select-keys (recovered eng) [:decision :reason]))))))))
+
+(deftest benign-cuts-are-not-hostile-cuts
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (await ((resume-run {:cuts 1})))]
+          (is (= :collected (:decision (recovered eng)))))))))
+
+(deftest a-trip-that-did-not-arrive-too-often-is-abandoned-as-unreachable
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (await ((resume-run {:blocked true :blocked-retries 3})))]
+          (is (= {:decision :abandoned :reason :unreachable} (select-keys (recovered eng) [:decision :reason]))))))))
 
 (deftest a-trip-cut-once-goes-on
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (await ((resume-run 0)))]
+        (let [{:keys [eng]} (await ((resume-run {:cuts 0} hostile-cut!)))]
           (is (= :collected (:decision (recovered eng)))))))))
