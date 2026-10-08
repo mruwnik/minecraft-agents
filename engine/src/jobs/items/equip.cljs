@@ -10,7 +10,7 @@
   "Hold a carried item in the main hand (:hand \"main\", default) or the off-hand (:hand \"off\"). Done at once when
   it is held there already. A missing item is fetched (jobs.lib.fetch) unless :fetch is false.
   Ends {:status :done :item name :hand h} (plus :held true when nothing had to move) or {:status :stopped :reason r}:
-  :no-item (not carried), :unknown-item (no such item for the body's version), :bad-args (bad :hand), :failed (the
+  :no-item (not carried), :unknown-item (no such item for the body's version), :failed (the
   server did not take it, with :equip the primitive's status), warn equip.refused.")
 
 (a/defargs args
@@ -33,7 +33,7 @@
   "The need wait of an item not carried, else nil."
   [c]
   (let [{:keys [item hand]} (:args c)]
-    (when (and (string? item) (contains? dests (or hand "main")) (not (carried? (:primitives c) item))
+    (when (and (string? item) (not (carried? (:primitives c) item))
                (not= item (held-in (:primitives c) (or hand "main"))))
       {:reason :need :item item})))
 
@@ -53,8 +53,6 @@
         {:keys [item]} (:args c)
         hand (or (:hand (:args c)) "main")]
     (cond
-      (not (and (string? item) (contains? dests hand)))
-      (stop! c :bad-args "equip needs :item and :hand main or off" {})
       (not (known-item? p item))
       (stop! c :unknown-item (str "no such item " item) {:item item})
       (= item (held-in p hand))

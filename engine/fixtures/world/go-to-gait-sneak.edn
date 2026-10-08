@@ -1,8 +1,7 @@
 ;; Cards f116ef59, 5dba17dd, 48ce8855: go-to :gait :sneak (and :walk) on the shapes a sneaking body must handle. Drops are refused
 ;; (:max-damage 0) and :escalate is off, so the only way to the goal is the shape under test. Every walk arrives and no fall hurts.
 ;; Should-succeed: down 1-block hill steps; down a 5-high ladder (sneak released on the climb); along a 1-wide ledge beside a 4-deep
-;; drop; over a 1-cell gap in that ledge; down a 4-high scaffolding tower under :sneak, :walk and :auto. Should-fail: a :gait that
-;; is not :auto/:walk/:sneak is refused :bad-gait before any walk.
+;; drop; over a 1-cell gap in that ledge; down a 4-high scaffolding tower under :sneak, :walk and :auto.
 {:defaults
  {:tags [:movement]
   :time :any
@@ -59,10 +58,4 @@
    :act [[:job (jobs.movement.go-to {:pos #at [18 0 16] :range 1 :escalate false :max-damage 0})]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 60 :of-job true}
             {:no-event {:source :body :kind :hurt} :for-s 60 :until {:source :job :kind :result}}]
-   :after [[:body-near [18.5 0 16.5] 3]]}
-  {:name "unknown-gait-refused-no-walk"
-   :body {:at [4.5 0 16.5]}
-   :act [[:job (jobs.movement.go-to {:pos #at [20 0 16] :range 1 :gait :crawl :escalate false})]]
-   :expect [{:event {:source :job :kind :result :data {:arrived false :reason :bad-gait}} :within-s 15 :of-job true}
-            {:no-event {:source :action :kind :started :data {:name "steer"}} :for-s 8 :until {:source :job :kind :result} :of-job true}]
-   :after [[:body-near [4.5 0 16.5] 1.5]]}]}
+   :after [[:body-near [18.5 0 16.5] 3]]}]}

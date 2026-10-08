@@ -149,17 +149,6 @@
 (def xp-per-level "Worth of one experience level carried at the death (the game drops a few levels' worth)." 5)
 (def top-n 3)
 
-(defn overrides-arg
-  "The override map of arg k, or {} with a recover-drops.bad-overrides warn when it is not a map."
-  [c k]
-  (let [o (get (:args c) k)]
-    (cond
-      (nil? o) {}
-      (map? o) o
-      :else (do (ctx/emit! c :recover-drops.bad-overrides :warn
-                           {:arg k :got (pr-str o) :text (str "recover-drops: " (name k) " must be a map such as {\"raw_iron\" 500}; ignored " (pr-str o))})
-                {}))))
-
 (defn estimate
   "{:value :cost :parts :reason :top-items :top-mobs} of recovering the drops of the :died data (cost js/Infinity when
   they cannot be fetched)."
@@ -167,10 +156,10 @@
   (let [p (:primitives c)
         here (u/self-pos c)
         kind-at (reach/lookup p)
-        worth (cost/item-value inventory :overrides (overrides-arg c :value-overrides))
+        worth (cost/item-value inventory :overrides (:value-overrides (:args c)))
         route (when pos (cost/straight-route kind-at here pos))
         threat (if route
-                 (cost/route-danger (game/version-of p) kind-at route (danger-q/seen-hostiles p) (.-equipment (.self p)) :overrides (overrides-arg c :danger-overrides))
+                 (cost/route-danger (game/version-of p) kind-at route (danger-q/seen-hostiles p) (.-equipment (.self p)) :overrides (:danger-overrides (:args c)))
                  {:danger 0 :mobs []})
         fetch (cost/fetch-cost {:distance (when pos (u/dist here pos)) :danger (:danger threat) :elapsed-ms elapsed :cause cause})]
     (cond-> {:value (+ (:value worth) (* xp-per-level (or (:level experience) 0)))

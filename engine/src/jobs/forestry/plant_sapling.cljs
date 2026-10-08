@@ -82,7 +82,7 @@
   "w without :item, plus the :fetch field when a fetch for it failed lately."
   [c w]
   (let [o (fetch/opts c 'jobs.forestry.plant-sapling)
-        f (when (and o (not (:error o)))
+        f (when o
             (some->> (fetch/plan-for (fetch-wait w) o) :key (fetch/failure c)))]
     (cond-> (dissoc w :item)
       f (assoc :fetch (fetch/shown f)))))

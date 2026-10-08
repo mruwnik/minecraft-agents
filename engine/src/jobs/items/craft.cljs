@@ -115,10 +115,10 @@
 
 (defn ^:async table-fetch!
   "With no table in reach: put a carried table down, else fetch one (:fetch) and put it down. Once per craft.
-  :again / :continue to go on, :done for a bad :fetch arg, nil when there is nothing to do (give up)."
+  :again / :continue to go on, nil when there is nothing to do (give up)."
   [c]
   (let [o (fetch/opts c 'jobs.items.craft)]
-    (when (and o (not (:error o)) (not (:table-tried (ctx/mem c))))
+    (when (and o (not (:table-tried (ctx/mem c))))
       (when-not (carried-table? c) (ctx/update-mem! c assoc :want-table true))
       (let [f (when (:want-table (ctx/mem c)) (await (fetch/fetch! c 'jobs.items.craft table-problem)))
             r (when (and (nil? f) (carried-table? c)) (await (place-table! c)))]

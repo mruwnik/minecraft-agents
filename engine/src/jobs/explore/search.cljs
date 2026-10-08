@@ -33,8 +33,8 @@
 
   Ends with {:reason :found|:not-found :why :found [{:what :pos :id? :noted? :by?}] :coverage {:legs :scans
   :failed [{:pos :reason}] :skipped :farthest}}, info search.done or warn search.not-found. :why is one of
-  :distance (no leg left), :legs (:max-legs walked), :time (:timeout-s since the first round), :stuck,
-  :not-loaded or :bad-args.
+  :distance (no leg left), :legs (:max-legs walked), :time (:timeout-s since the first round), :stuck
+  or :not-loaded.
 
   Memory: :origin :started :legs :scans :found :tried :failed :skipped :farthest :failed-in-row :deferred (unloaded legs set aside while a sweep goes on), and :leg while
   a walk is under way, so a cut or restart resumes it.")
@@ -59,7 +59,6 @@
 (def wait-ms 2000)
 (def reach 12)
 (def headings {:north [0 -1] :east [1 0] :south [0 1] :west [-1 0]})
-(def patterns #{:spiral :outward})
 
 ;; ------------------------------------------------------------------ pure
 
@@ -303,17 +302,12 @@
                 :else (do (ctx/update-mem! c update :failed (fnil into []) unloaded)
                           (finish! c :not-found :not-loaded)))))))
 
-(defn bad-args? [c]
-  (let [{:keys [pattern heading]} (:args c)]
-    (not (and (patterns (keyword pattern)) (headings (keyword heading))))))
-
 (defn ^:async search-step!
   "One pass: end, walk the leg under way, or look and start the next leg. :again goes on, else a round result."
   [c]
   (ctx/update-mem! c (fn [m] (cond-> m (nil? (:origin m)) (assoc :origin (here c) :started (ctx/now c)))))
   (let [{:keys [leg started]} (ctx/mem c)]
     (cond
-      (bad-args? c) (finish! c :not-found :bad-args)
       (>= (- (ctx/now c) started) (* 1000 (:timeout-s (:args c)))) (finish! c :not-found :time)
       leg (await (walk! c))
       :else (await (step! c)))))

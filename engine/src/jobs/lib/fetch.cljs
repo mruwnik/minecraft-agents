@@ -86,14 +86,12 @@
     (merge built-in (clean job-default) (clean (:all body)) (clean (get-in body [:jobs job])) (clean call))))
 
 (defn opts
-  "The fetch limits of the job running in c (job: its namespace symbol), nil when :fetch is off, {:error text} when
-  the arg is bad."
+  "The fetch limits of the job running in c (job: its namespace symbol), nil when :fetch is off."
   ([c job] (opts c job nil))
   ([c job job-default]
    (let [arg (parse-arg (:fetch (:args c)))]
      (cond
        (nil? arg) nil
-       (:error arg) arg
        :else (merge-limits job job-default (body-limits (ctx/view c)) arg)))))
 
 ;; ------------------------------------------------------------------ waits to fetch jobs
@@ -136,27 +134,24 @@
 ;; ------------------------------------------------------------------ check and round
 
 (defn check
-  "For the check of the job (symbol) whose problem is wait reason w (non-nil): true when the round will fetch for it
-  (or end a bad :fetch arg), else ctx/wait with w, plus {:fetch {:failed ...}} when a fetch for it failed lately."
+  "For the check of the job (symbol) whose problem is wait reason w (non-nil): true when the round will fetch for it,
+  else ctx/wait with w, plus {:fetch {:failed ...}} when a fetch for it failed lately."
   [c job w]
   (let [o (opts c job)
-        pl (when (and o (not (:error o))) (plan-for w o))
+        pl (when o (plan-for w o))
         f (when pl (failure c (:key pl)))]
     (cond
-      (:error o) true
       (nil? pl) (ctx/wait c w)
       f (ctx/wait c (assoc w :fetch (shown f)))
       :else true)))
 
 (defn due
-  "What the round of job should fetch for wait reason w (nil when none): the plan with the limits as :opts, or {:bad
-  text} for a bad :fetch arg."
+  "What the round of job should fetch for wait reason w (nil when none): the plan with the limits as :opts."
   [c job w]
   (when w
     (let [o (opts c job)]
       (cond
         (nil? o) nil
-        (:error o) {:bad (:error o)}
         :else (when-let [pl (plan-for w o)]
                 (when-not (failure c (:key pl))
                   (assoc pl :opts o :wait w)))))))
@@ -224,41 +219,32 @@
                                                        ": " (name (:failed f)))))
     :again))
 
-(defn bad!
-  "End the job for a bad :fetch arg."
-  [c text]
-  (ctx/emit! c :fetch.bad-args :warn {:text text})
-  (ctx/result! c {:status :stopped :reason :bad-args :why text :text text})
-  :done)
-
 (defn ^:async round!
   "One round of the fetch in slot :fetch for plan pl (from due). :continue while the child waits on the world, :again
-  after it ended or failed; :done only for a bad :fetch arg."
+  after it ended or failed."
   [c pl]
-  (if (:bad pl)
-    (bad! c (:bad pl))
-    (let [{:keys [job key opts]} pl
-          args (merge (:args pl) (select-keys opts [:depth :minutes :how :fail-minutes]))
-          pl (assoc pl :args args)]
-      (when-not (= key (:fetching (ctx/mem c)))
-        (ctx/update-mem! c #(cond-> (assoc % :fetching key)
-                              (not= key (first (:fetched %))) (dissoc :fetched)
-                              (and (:return? pl) (not (:fetch-return %))) (assoc :fetch-return (feet c))))
-        (ctx/emit! c :fetch.started :info {:for (:reason (:wait pl)) :job job :args (:args pl)
-                                           :text (str "fetching " (need-name args)
-                                                      " for " (name (:reason (:wait pl))))}))
-      (let [r (await (ctx/call-child c :fetch job args))]
-        (case r
-          :continue :continue
-          :declined (book-failed! c pl (or (b/child-wait c :fetch job args) {:reason :not-ready}))
-          (let [res (ctx/child-result c :fetch)]
-            (if (= :done (:status res))
-              (do (ctx/update-mem! c dissoc :fetching)
-                  (mark-done! c key (:wait pl))
-                  (ctx/emit! c :fetch.done :info (merge {:for (:reason (:wait pl)) :text (str "fetched for " (name (:reason (:wait pl))))}
-                                                        (select-keys res [:got :item :tool])))
-                  :again)
-              (book-failed! c pl res))))))))
+  (let [{:keys [job key opts]} pl
+        args (merge (:args pl) (select-keys opts [:depth :minutes :how :fail-minutes]))
+        pl (assoc pl :args args)]
+    (when-not (= key (:fetching (ctx/mem c)))
+      (ctx/update-mem! c #(cond-> (assoc % :fetching key)
+                            (not= key (first (:fetched %))) (dissoc :fetched)
+                            (and (:return? pl) (not (:fetch-return %))) (assoc :fetch-return (feet c))))
+      (ctx/emit! c :fetch.started :info {:for (:reason (:wait pl)) :job job :args (:args pl)
+                                         :text (str "fetching " (need-name args)
+                                                    " for " (name (:reason (:wait pl))))}))
+    (let [r (await (ctx/call-child c :fetch job args))]
+      (case r
+        :continue :continue
+        :declined (book-failed! c pl (or (b/child-wait c :fetch job args) {:reason :not-ready}))
+        (let [res (ctx/child-result c :fetch)]
+          (if (= :done (:status res))
+            (do (ctx/update-mem! c dissoc :fetching)
+                (mark-done! c key (:wait pl))
+                (ctx/emit! c :fetch.done :info (merge {:for (:reason (:wait pl)) :text (str "fetched for " (name (:reason (:wait pl))))}
+                                                      (select-keys res [:got :item :tool])))
+                :again)
+            (book-failed! c pl res)))))))
 
 (defn ^:async step!
   "One round's fetch part for job with wait reason w: runs the due fetch (round!) and returns its round result

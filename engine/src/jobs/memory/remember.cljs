@@ -14,9 +14,9 @@
   policy keeps it). After the hour the entry is gone and (since :kind) is unknown again. A job that wants \"every
   3 days\" passes :ttl-s 259200. :ttl-s is in seconds and must be positive, or :forever. :cap is the number of newest entries
   kept, a positive whole number.
-  Refused (warn memory.refused with :reason and :text, result {:ok false :reason}, and the job still ends):
+  A wrong :data, :ttl-s or :cap is refused at submit by the spec. Refused (warn memory.refused with :reason and :text, result {:ok false :reason}, and the job still ends):
   :bad-kind (not a keyword, or namespaced), :reserved-kind (a kind the engine or another job writes, such as
-  :hurt, :slept, :scaffold, or the name of a recorded place), :bad-ttl, :bad-cap, :bad-data (not a map).
+  :hurt, :slept, :scaffold, or the name of a recorded place).
   Success: info memory.remembered with :memory-kind, :entry and :policy. Result {:ok true :kind}.")
 
 (a/defargs args
@@ -39,15 +39,6 @@
 
     (or (contains? places/owned-kinds kind) (places/place-entry? view kind))
     (refusal :reserved-kind (str (name kind) " is a memory kind the engine or a job writes for something else; choose another"))
-
-    (not (or (nil? data) (map? data)))
-    (refusal :bad-data (str ":data is a map; got " (pr-str data)))
-
-    (not (or (nil? ttl-s) (= :forever ttl-s) (and (number? ttl-s) (js/isFinite ttl-s) (pos? ttl-s))))
-    (refusal :bad-ttl (str ":ttl-s is a positive number of seconds, or :forever; got " (pr-str ttl-s)))
-
-    (not (or (nil? cap) (and (int? cap) (pos? cap))))
-    (refusal :bad-cap (str ":cap is a positive whole number; got " (pr-str cap)))
 
     :else
     {:kind kind :data (or data {})

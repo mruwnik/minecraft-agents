@@ -390,40 +390,11 @@
           :else (places/refusal :unknown-place (str "no place called " s " is recorded in memory or among the shared markers")))))))
 
 (defn args-refusal
-  "The refusal {:reason :message} of the args go-to and its dry run share (target, :drop-cost, :tolls), nil when they are
-  usable; the target's parse is {:pos ...} when there is no refusal."
+  "The refusal {:reason :message} of the target go-to and its dry run share, nil when it is usable (the arg shapes are
+  the spec's: refused at submit). The target's parse is {:pos ...} when there is no refusal."
   [c]
-  (let [parsed (target c)
-        drop-cost (:drop-cost (:args c))
-        {:keys [min-health max-damage hp-seconds fall-margin flee-factor fight-factor danger-max-rate danger-shape]} (:args c)
-        factor? #(or (nil? %) (and (number? %) (js/isFinite %) (>= % 0)))
-        tolls-problem (wworld/tolls-problem (:tolls (:args c)))
-        costs-problem (cost/planner-costs-problem (:costs (:args c)))
-        landing-problem (cost/landing-problem (:landing (:args c)))
-        gait-problem (cost/gait-problem (:gait (:args c)))]
-    (cond
-      (:reason parsed) parsed
-      (not (or (nil? drop-cost) (false? drop-cost) (and (number? drop-cost) (js/isFinite drop-cost) (>= drop-cost 0))))
-      {:reason :bad-drop-cost :message (str ":drop-cost must be a number >= 0 or false, got " (pr-str drop-cost))}
-      (not (or (nil? min-health) (and (number? min-health) (<= 1 min-health 20))))
-      {:reason :bad-min-health :message (str ":min-health must be a number from 1 to 20, got " (pr-str min-health))}
-      (not (or (nil? max-damage) (and (number? max-damage) (js/isFinite max-damage) (>= max-damage 0))))
-      {:reason :bad-max-damage :message (str ":max-damage must be a number >= 0, got " (pr-str max-damage))}
-      (not (or (nil? hp-seconds) (and (number? hp-seconds) (js/isFinite hp-seconds) (pos? hp-seconds))))
-      {:reason :bad-hp-seconds :message (str ":hp-seconds must be a number above 0, got " (pr-str hp-seconds))}
-      (not (factor? fall-margin))
-      {:reason :bad-fall-margin :message (str ":fall-margin must be a number >= 0, got " (pr-str fall-margin))}
-      (not (factor? flee-factor)) {:reason :bad-flee-factor :message (str ":flee-factor must be a number >= 0, got " (pr-str flee-factor))}
-      (not (factor? fight-factor)) {:reason :bad-fight-factor :message (str ":fight-factor must be a number >= 0, got " (pr-str fight-factor))}
-      (not (or (nil? danger-max-rate) (and (number? danger-max-rate) (js/isFinite danger-max-rate) (pos? danger-max-rate))))
-      {:reason :bad-danger-max-rate :message (str ":danger-max-rate must be a number above 0, got " (pr-str danger-max-rate))}
-      (cost/danger-shape-problem danger-shape) {:reason :bad-danger-shape :message (cost/danger-shape-problem danger-shape)}
-      tolls-problem {:reason :bad-tolls :message tolls-problem}
-      costs-problem {:reason :bad-costs :message costs-problem}
-      landing-problem {:reason :bad-landing :message landing-problem}
-      gait-problem {:reason :bad-gait :message gait-problem}
-      (not (contains? #{nil :wait :end} (some-> (:goal-danger (:args c)) keyword)))
-      {:reason :bad-goal-danger :message (str ":goal-danger must be :wait or :end, got " (pr-str (:goal-danger (:args c))))})))
+  (let [parsed (target c)]
+    (when (:reason parsed) parsed)))
 
 (defn goal-danger
   "The nearest known mob the body would flee (sensed or remembered, jobs.lib.threats/known-dangers) that has the cell pos

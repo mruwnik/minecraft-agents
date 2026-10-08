@@ -8,7 +8,7 @@
 
 (def walk-floor
   "Seconds a block of walking costs: the planner's heuristic counts this per horizontal block, so a swim-h or exit price below it
-  would make the search inadmissible (the :bad-costs refusal names it)."
+  would make the search inadmissible (the spec refusal names it)."
   base/WALK-S)
 
 (def floored
