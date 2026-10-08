@@ -6,7 +6,9 @@
             [engine.fake :as fake]
             [engine.test-util :as tu]
             [jobs.animals.cull :as cull]
-            [jobs.lib.animals :as animals]))
+            [jobs.lib.animals :as animals]
+            [jobs.lib.world-files :as ew]
+            [plan.shape :as shape]))
 
 (defn spec [args] (list 'jobs.animals.cull args))
 
@@ -220,3 +222,16 @@
         far-edge {:x 23.7 :y 0 :z 18.7}]
     (is (>= (cull/reach c) (js/Math.hypot (- (:x far-edge) 16.5) (- (:z far-edge) 16.5)))
         "a cow at a fractional position in the max row is inside the query")))
+
+(deftest cull-acts-in-the-footprint-of-its-own-plan-but-not-another-bodys
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[author acted] [["Fake" [1]] ["Miles" []]]]
+          (let [plan (shape/with-author {:id "pen" :parts [{:id "p" :box [[2 64 0] [2 64 0]] :want "stone"}]} author)
+                {:keys [eng] :as s} (h/setup {:inventory h/sword :entities [(cow 1 2)]} 50 (ew/of-data {"pen" plan} {} []))]
+            (core/submit! eng (list 'jobs.animals.cull {:keep 0}) {})
+            (dotimes [_ 20]
+              (swap! (:clock s) + 700)
+              (await (core/tick! eng)))
+            (is (= acted (vec (distinct (attacked s)))) author)))))))

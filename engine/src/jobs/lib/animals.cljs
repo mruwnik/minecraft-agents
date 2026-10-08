@@ -43,7 +43,7 @@
   [c kind job-name action es]
   (let [cell-of (fn [e] (let [{:keys [x y z]} (u/pos-of (.-pos e))]
                           {:x (js/Math.floor x) :y (js/Math.floor (+ y 0.01)) :z (js/Math.floor z)}))
-        {:keys [allowed refusal]} (gate/judge c kind job-name action (map cell-of es))
+        {:keys [allowed refusal]} (gate/judge c kind job-name action (map cell-of es) {:own-plans-ok? true})
         ok (set allowed)]
     (ctx/update-mem! c #(if refusal (assoc % :refusal refusal) (dissoc % :refusal)))
     (filterv #(contains? ok (cell-of %)) es)))
