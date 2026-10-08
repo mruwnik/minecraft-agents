@@ -36,6 +36,7 @@
    :ranged-radius {:doc "ranged hostiles (skeletons and the like) within this many blocks count" :spec (a/num-in 0 nil) :default 16}
    :reserve {:doc "health a fight must be expected to leave" :spec (a/num-in 0 20) :default 4}
    :quiet-s {:doc "passed to the retreat: a hidden body keeps its refuge this many seconds after the last danger" :spec (a/num-in 0 nil) :default 30}
+   :hide-s {:doc "passed to the retreat: a hidden body hands back after this many seconds once no real danger is on it" :spec (a/num-in 0 nil) :default 60}
    :weapons {:doc "item name substrings that count as weapons" :spec (a/coll-of (a/or-of string? keyword?)) :default combat/default-weapons}})
 
 (def hostile-policy {:cap 50 :ttl (* 60 60 1000)})
@@ -54,10 +55,10 @@
 
 (def child-jobs {:fight 'jobs.survival.fight-back :flee 'jobs.survival.retreat})
 
-(defn ^:async run-child [c decision {:keys [radius ranged-radius weapons reserve quiet-s]}]
+(defn ^:async run-child [c decision {:keys [radius ranged-radius weapons reserve quiet-s hide-s]}]
   (let [child-args (case decision
                      :fight {:range radius :ranged-range ranged-radius :min-health 0 :weapons weapons}
-                     :flee {:radius radius :ranged-radius ranged-radius :weapons weapons :reserve reserve :quiet-s quiet-s})]
+                     :flee {:radius radius :ranged-radius ranged-radius :weapons weapons :reserve reserve :quiet-s quiet-s :hide-s hide-s})]
     (await (ctx/call-child c decision (child-jobs decision) child-args))))
 
 (defn encounter-text [{:keys [mob decision pos direction band]}]

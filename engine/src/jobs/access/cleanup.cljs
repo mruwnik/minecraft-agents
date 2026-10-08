@@ -3,12 +3,14 @@
             [engine.args :as a]
             [engine.game :as game]
             [jobs.access.stair :as stair]
+            [jobs.lib.danger :as danger-q]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.look :as look]
+            [jobs.lib.threats :as threats]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
@@ -45,6 +47,8 @@
   The body's own column is dug only from on top: the block under the feet when the cell below is solid floor
   (the body falls one block and lands). Deeper cells wait for the descent (:under-body). Over a hole it stops
   (:no-floor-below).
+
+  A retreat's plug (purpose :retreat-plug) stays while a known hostile is near (:hostile-near): it keeps that hostile out.
 
   Every dig asks jobs.lib.access.rules/may-dig? (zones, plan footprints, ledger cells) when chosen and again
   right before the dig. A refusal (:zone :footprint :no-zones :not-loaded) or a hazard :accept does not name
@@ -135,13 +139,15 @@
 
 (defn blocker
   "Why entry e cannot be dug now, as {:reason ...detail}, or nil. in: {:feet :block-at :zones :footprints :ledger
-  :accept :can-clear? (block name -> whether the body can clear it now, by hand or a carried tool; absent: always)}."
-  [{:keys [feet block-at accept can-clear?] :as in} {:keys [cell]}]
+  :accept :can-clear? (block name -> whether the body can clear it now, by hand or a carried tool; absent: always)
+  :hostile-near? (a known hostile near: a retreat's plug stays)}."
+  [{:keys [feet block-at accept can-clear? hostile-near?] :as in} {:keys [cell purpose]}]
   (let [[fx fy fz] feet
         [x y z] cell
         below (rules/offset cell 0 -1 0)]
     (cond
       (nil? (block-at cell)) {:reason :not-loaded}
+      (and hostile-near? (= :retreat-plug purpose)) {:reason :hostile-near}
       (and can-clear? (not (can-clear? (block-at cell)))) {:reason :no-tool :block (block-at cell)}
       (and (= [x z] [fx fz]) (< y (dec fy))) {:reason :under-body}
       (and (= cell [fx (dec fy) fz]) (not (rules/solid-floor? block-at below)))
@@ -184,6 +190,11 @@
   (let [{:keys [x y z]} (u/self-pos c)]
     [x (+ y game/eye-height) z]))
 
+(defn hostile-near?
+  "Whether a known hostile (heard or seen) is within the longest follow range (ranged ones within the danger ranged radius)."
+  [p]
+  (boolean (seq (danger-q/known-hostiles p threats/max-follow-range {:ranged-radius (danger-q/ranged-radius)}))))
+
 (defn inputs
   "next-step's input now: entries to work on, the whole ledger l for the rules."
   [c l entries zones]
@@ -191,6 +202,7 @@
     (merge (access/zone-input c {:ignore-zones? (:ignore-zones? (:args c))})
            {:feet (stair/feet-of c) :eye (eye-of c) :block-at (access/sensed-at (:primitives c) blocks/hidden-guess) :entries entries
             :can-clear? #(not (tools/needs-tool-to-clear? (:primitives c) %))
+            :hostile-near? (hostile-near? (:primitives c))
             :ledger (ledger/cells l) :zones zones :accept (set accept) :reach reach
             :held (:held (ctx/mem c) {}) :retreats (:retreats (ctx/mem c) 0)})))
 

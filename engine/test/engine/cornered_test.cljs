@@ -92,6 +92,10 @@
 
 (def retreat '(jobs.survival.retreat))
 
+(def hiding-retreat
+  "A retreat that hides on for as long as the test needs (:hide-s far off)."
+  '(jobs.survival.retreat {:hide-s 100000}))
+
 (deftest a-retreat-walks-back-down-the-stair-it-came-up
   (async done
     (tu/run-async done
@@ -137,13 +141,13 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen while-hidden]}
-              (await (hidden-round retreat {:blocks dead-end :inventory [{:name "cobblestone" :count 20}]
+              (await (hidden-round hiding-retreat {:blocks dead-end :inventory [{:name "cobblestone" :count 20}]
                                             :entities [(skeleton 4 64 0)]}
                                    120000 (fn [{:keys [eng p]}] {:list (:list (core/state eng)) :places (count (calls p "place"))})))]
           (is (= [[1 64 0] [1 65 0]] (placed-cells p)) "the open side towards the skeleton, feet then head")
           (is (zero? (count (calls p "attack"))))
           (is (= [0 64 0] (mapv js/Math.floor (:pos (fake/self p)))) "no walk: at most a step to the middle of its own cell")
-          (is (= {:list ["j1"] :places 2} while-hidden) "no timer: still sealed two minutes on, nothing more placed")
+          (is (= {:list ["j1"] :places 2} while-hidden) "still sealed two minutes on (inside :hide-s), nothing more placed")
           (is (empty? (blocked-events seen)) "never a blocked retreat")
           (is (= 1 (count (filter #(= :retreat_sealed (:kind %)) @seen))) "one notice that it walled itself in")
           (is (= [] (:list (core/state eng))) "done once the skeleton is gone"))))))
@@ -197,7 +201,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p while-hidden]}
-              (await (hidden-round '(jobs.survival.respond-to-hostile)
+              (await (hidden-round '(jobs.survival.respond-to-hostile {:hide-s 100000})
                                    {:blocks dead-end :inventory [{:name "cobblestone" :count 20}]
                                     :entities [(assoc (skeleton 4 64 0) :name "zombie")]}
                                    100000 (fn [{:keys [eng]}] (:list (core/state eng)))))]
@@ -210,7 +214,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p while-hidden]}
-              (await (hidden-round retreat {:blocks dead-end :inventory [{:name "cobblestone" :count 20}]
+              (await (hidden-round hiding-retreat {:blocks dead-end :inventory [{:name "cobblestone" :count 20}]
                                             :entities [(skeleton 4 64 0)]}
                                    31000 (fn [{:keys [eng]}] (:list (core/state eng)))
                                    [{:id 3 :name "zombie" :kind "hostile" :pos {:x 0 :y 64 :z 5} :health 20}]))]
@@ -248,18 +252,34 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng listed]}
-              (await (hide-steps retreat {:blocks long-dead-end :inventory [{:name "cobblestone" :count 20}]
+              (await (hide-steps hiding-retreat {:blocks long-dead-end :inventory [{:name "cobblestone" :count 20}]
                                           :entities [(zombie-at 4)]}
                                  [[[(zombie-at 12)] 100000]]))]
           (is (= [["j1"]] listed) "a zombie 12 blocks off, with a way to the open refuge, is still a danger")
           (is (= [] (:list (core/state eng)))))))))
+
+(deftest a-sealed-body-hands-back-after-hide-s-while-the-kept-off-hostile-stays
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[spec listed-want ended-want] [['(jobs.survival.retreat) [[]] [:hidden]]
+                                               ['(jobs.survival.respond-to-hostile) [[]] [:hidden]]
+                                               ['(jobs.survival.respond-to-hostile {:hide-s 100000}) [["j1"]] []]]]
+          (let [{:keys [seen listed]}
+                (await (hide-steps spec {:blocks long-dead-end :inventory [{:name "cobblestone" :count 20}]
+                                         :entities [(zombie-at 4)]}
+                                   [[[(zombie-at 4)] 61000]]))]
+            (is (= listed-want listed)
+                (str spec ": Juniper j655 hid a minute from a skeleton that never left; sealed and in no real danger, it hands back"))
+            (is (= ended-want (mapv :ended (filterv #(= :retreat.hide-ended (:kind %)) @seen)))
+                (str spec ": one event says so"))))))))
 
 (deftest a-sealed-body-listens-for-a-quiet-period-after-the-last-danger
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng listed]}
-              (await (hide-steps '(jobs.survival.retreat {:quiet-s 20000})
+              (await (hide-steps '(jobs.survival.retreat {:quiet-s 20000 :hide-s 100000})
                                  {:blocks long-dead-end :inventory [{:name "cobblestone" :count 20}]
                                   :entities [(zombie-at 4)]}
                                  [[[(zombie-at 12)] 0] [[] 10000]]))]
@@ -285,7 +305,7 @@
       (fn ^:async t []
         (doseq [[q ok?] [[0 #(< % 5)] [120 #(>= % 100)]]]
           (let [{:keys [waits]}
-                (await (hide-steps (list 'jobs.survival.respond-to-hostile {:quiet-s q})
+                (await (hide-steps (list 'jobs.survival.respond-to-hostile {:quiet-s q :hide-s 100000})
                                    {:blocks long-dead-end :inventory [{:name "cobblestone" :count 20}]
                                     :entities [(zombie-at 4)]}
                                    [[[] 0]]))]
@@ -312,7 +332,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p while-hidden]}
-              (await (hidden-round retreat {:blocks dead-end :inventory [{:name "stone_pickaxe" :count 1}]
+              (await (hidden-round hiding-retreat {:blocks dead-end :inventory [{:name "stone_pickaxe" :count 1}]
                                             :entities [(skeleton 4 64 0)]}
                                    120000 (fn [{:keys [eng]}] (:list (core/state eng)))))]
           (is (zero? (count (calls p "attack"))) "a pocket beats a pickaxe fight")

@@ -1,7 +1,8 @@
 (ns jobs.survival.retreat-refuge
   "A cornered body's refuges (jobs.survival.retreat): sealed in with blocks, up a pillar, down a pit or in a side pocket,
   and the hiding in them."
-  (:require [engine.args :as a]
+  (:require [clojure.string :as str]
+            [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.blocks :as lb]
             [engine.ctx :as ctx]
@@ -373,19 +374,46 @@
                          (reach/walkable-way? p (danger-q/mob-pos p %) anchor #{} open))
                    known))))
 
+(defn kept-off-text
+  "The hostiles the refuge still keeps off, as \"zombie at [x y z]\", for the hand-back message."
+  [c {:keys [anchor cells]}]
+  (let [p (:primitives c)
+        known (flight/near-known p (set (flight/dead-ids c)) threats/max-follow-range (:ranged-radius (:args c)))]
+    (->> known
+         (filter #(reach/walkable-way? p (danger-q/mob-pos p %) anchor #{} (set cells)))
+         (map #(str (.-name %) " at " (pr-str (mapv (fn [k] (js/Math.floor (k (danger-q/mob-pos p %)))) [:x :y :z]))))
+         (str/join ", "))))
+
 (defn ^:async hide-hold!
   "Sealed in, up the pillar or down the pit: hold (a :wait, why hiding) while the refuge keeps a danger off
-  (refuge-danger?) and :quiet-s after the last one, then end the flight :hidden."
+  (refuge-danger?) and :quiet-s after the last one, then end the flight :hidden. Past :hide-s in the refuge with no real
+  danger on the body as it stands (danger-q/danger-near?, the hostile-near trigger's test) it ends :hidden at once,
+  saying which hostile it still keeps off (info retreat.hide-ended): the trigger fires again should one reach it."
   [c]
-  (when-not (:quiet-from (ctx/mem c)) (ctx/update-mem! c assoc :quiet-from (ctx/now c)))
+  (let [now (ctx/now c)]
+    (when-not (:quiet-from (ctx/mem c)) (ctx/update-mem! c assoc :quiet-from now))
+    (when-not (:hidden-since (ctx/mem c)) (ctx/update-mem! c assoc :hidden-since now)))
   (loop []
     (when (refuge-danger? c (:refuge (ctx/mem c))) (ctx/update-mem! c assoc :quiet-from (ctx/now c)))
-    (if (< (- (ctx/now c) (:quiet-from (ctx/mem c))) (* 1000 (:quiet-s (:args c))))
-      (do (await (ctx/act c :wait #js {:ms (flight/wait-ms) :why "hiding"}))
-          (await (pace/pace!))
-          (recur))
-      (do (ctx/update-mem! c dissoc :quiet-from)
-          (flight/end-flight! c :hidden)))))
+    (let [{:keys [radius ranged-radius quiet-s hide-s]} (:args c)
+          {:keys [quiet-from hidden-since refuge]} (ctx/mem c)
+          quiet? (>= (- (ctx/now c) quiet-from) (* 1000 quiet-s))
+          spent? (and (>= (- (ctx/now c) hidden-since) (* 1000 hide-s))
+                      (not (danger-q/danger-near? (:primitives c) radius ranged-radius)))]
+      (cond
+        quiet? (do (ctx/update-mem! c dissoc :quiet-from :hidden-since)
+                   (flight/end-flight! c :hidden))
+        spent? (let [held (js/Math.round (/ (- (ctx/now c) hidden-since) 1000))
+                     kept (kept-off-text c refuge)]
+                 (ctx/emit! c :retreat.hide-ended :info
+                            {:ended :hidden :held-s held :pos (sh/feet (:primitives c))
+                             :text (str "hid " held " s; no hostile can reach or shoot the body here"
+                                        (when (seq kept) (str ", the refuge still keeps off " kept)) ": handing back")})
+                 (ctx/update-mem! c dissoc :quiet-from :hidden-since)
+                 (flight/end-flight! c :hidden))
+        :else (do (await (ctx/act c :wait #js {:ms (flight/wait-ms) :why "hiding"}))
+                  (await (pace/pace!))
+                  (recur))))))
 
 (defn hide-now! [c refuge text]
   (ctx/update-mem! c assoc :refuge (assoc refuge :hidden true))

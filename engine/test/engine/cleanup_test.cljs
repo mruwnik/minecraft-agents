@@ -131,6 +131,19 @@
 (deftest nothing-left-is-a-finish
   (is (= {:step :finish :open []} (step :entries []))))
 
+(deftest a-retreat-plug-stays-while-a-hostile-is-near
+  (let [plug (entry [3 64 1] :purpose :retreat-plug)
+        pillar (entry [3 65 1])]
+    (is (= [{:cell [3 64 1] :item "dirt" :reason :hostile-near}]
+           (:open (step :entries [plug] :hostile-near? true :block-at (lookup [3 64 1] "dirt"))))
+        "the refuge's plug keeps the hostile off")
+    (is (= {:step :dig :cell [3 65 1] :item "dirt"}
+           (step :entries [pillar] :hostile-near? true :block-at (lookup [3 65 1] "dirt")))
+        "other scaffold is taken back")
+    (is (= {:step :dig :cell [3 64 1] :item "dirt"}
+           (step :entries [plug] :hostile-near? false :block-at (lookup [3 64 1] "dirt")))
+        "the hostile gone, the plug is taken back")))
+
 ;; ------------------------------------------------------------------ the trigger
 
 (defn trigger-store [entries jobs]
@@ -670,3 +683,16 @@
           (await (ticks s eng 60))
           (is (some #(= "look" (.-name %)) (.-calls (.-world p))))
           (is (= [{:cell [0 64 0] :item "dirt"}] (:removed @out))))))))
+
+(deftest a-retreat-plug-beside-a-heard-skeleton-is-left-in-place
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cells [[2 64 0] [2 65 0]]
+              {:keys [eng p out digs] :as s} (setup {:self {:x 3.5 :y 64 :z 0.5} :blocks (pillar-blocks cells)
+                                                     :entries [(entry [2 64 0] :purpose :retreat-plug) (entry [2 65 0] :purpose :retreat-plug)]})]
+          (fake/add-entity! p {:id 9 :name "skeleton" :kind "hostile" :pos {:x -4 :y 64 :z 0} :health 20})
+          (core/submit! eng '(recording-parent) {})
+          (await (ticks s eng 60))
+          (is (= [] @digs) "Juniper j658: the plug dug next to the skeleton let it in")
+          (is (= #{:hostile-near} (set (map :reason (:open @out))))))))))

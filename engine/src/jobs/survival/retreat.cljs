@@ -78,7 +78,9 @@
   Sealed in, up a pillar or down a pit it hides (one retreat_sealed warning; a declared hold, wait why hiding) while a
   hostile within its follow range (jobs.lib.threats; ranged ones at least :ranged-radius) would have a walkable way to
   the refuge if its own blocks were gone, and for :quiet-s more after the last such danger (a silent mob is forgotten
-  after a few seconds); then the flight ends :hidden.
+  after a few seconds); then the flight ends :hidden. After :hide-s in the refuge with no real danger on the body as it
+  stands (jobs.lib.danger/danger-near?, the hostile-near trigger's test) it ends :hidden even while that hostile stays
+  (info retreat.hide-ended): the refuge stays, its plugs too while a hostile is near (jobs.access.cleanup).
   A chase has no time limit. With no new best gap to the nearest chaser in :no-gain-steps steps it takes the
   cornered options instead of walking on; stopped :cannot_escape only once every option failed in two sweeps in a row
   with no gain between.
@@ -99,6 +101,7 @@
    :on-lava {:doc ":seal: lava a dig lays open is filled with a carried block; :stop: the pocket or pit is dropped and the lava left" :spec #{:seal :stop} :default :seal}
    :lost-s {:doc "a mob out of line of sight this many seconds has stopped chasing" :spec (a/num-in 0 nil) :default 4}
    :quiet-s {:doc "a hidden body keeps its refuge this many seconds after the last danger" :spec (a/num-in 0 nil) :default 30}
+   :hide-s {:doc "a hidden body hands back after this many seconds in its refuge, though a danger it keeps off stays, once no real danger is on it as it stands" :spec (a/num-in 0 nil) :default 60}
    :swim-factor {:doc "blocks of walking a block of swimming costs a flight; nil: jobs.lib.cost/swim-factor of the boots" :spec (a/num-in 1 nil) :default nil}
    :hide-health {:doc "at or under this health, in a ranged chaser's line of fire with no covered step, take cover where it stands before walking on" :spec (a/num-in 0 20) :default 12}
    :no-gain-steps {:doc "flight steps without a new best gap to the nearest chaser before the cornered options are tried" :spec (a/int-in 1 nil) :default 20}})
