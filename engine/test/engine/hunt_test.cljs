@@ -297,3 +297,19 @@
           (is (= 2 (get (inv s) "leather")))
           (is (= :count (:reason (done-event s))))
           (is (finished? s) "one call"))))))
+
+(deftest the-too-few-wait-says-how-many-are-in-range-and-how-far-the-nearest-is
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[args entities want note]
+                [[{:mob "pig" :keep 0 :radius 24} [(animal 1 "pig" 36)]
+                  {:reason :too-few :mob "pig" :keep 0 :in-range 0 :radius 24 :nearest 36} "a pig seen past the radius"]
+                 [{:mob "pig" :keep 1 :radius 24} [(animal 1 "pig" 5) (animal 2 "pig" 40)]
+                  {:reason :too-few :mob "pig" :keep 1 :in-range 1 :radius 24 :nearest 5} "one in range, keep 1"]
+                 [{:mob "pig" :keep 0 :radius 24} []
+                  {:reason :too-few :mob "pig" :keep 0 :in-range 0 :radius 24} "none seen at all"]]]
+          (let [{:keys [eng]} (h/setup {:inventory h/sword :entities entities})]
+            (core/submit! eng (spec args) {})
+            (await (core/tick! eng))
+            (is (= want (core/waiting eng "j1")) note)))))))

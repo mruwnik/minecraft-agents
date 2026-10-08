@@ -1,6 +1,7 @@
 (ns jobs.combat.hunt
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
+            [engine.settings :as settings]
             [jobs.lib.combat :as combat]
             [jobs.lib.hunting :as hunting]
             [jobs.lib.shelter :as sh]
@@ -12,7 +13,8 @@
   Never takes the last :keep adults of the kind, so they can breed. :keep nil means 2 for animals and 0 for hostile mobs
   (a kind any of whose entities in range reports kind hostile). 0 turns the rule off.
   Babies are never targets and never counted.
-  Declines (waiting :too-few) unless more than :keep adults are within :radius. Once started it always passes.
+  Declines (waiting :too-few, with :in-range, :radius and :nearest, the distance of the nearest adult of the kind in
+  sight up to ::sight-radius) unless more than :keep adults are within :radius. Once started it always passes.
   One call hunts until it ends, in steps; it yields (:continue) only while a child is waiting on the world:
   1. With a :target, the attack child fights it. It is booked killed, or skipped when attack gave up on it or lost it.
      :max-skips skips in a row end the job :gave-up (warn hunt.gave-up).
@@ -37,15 +39,22 @@
    :drops {:doc "item names to collect after a kill; nil: the kind's entry in the drops table, else every item" :spec (a/coll-of a/item?) :default nil}
    :max-skips {:doc "animals skipped in a row before the hunt gives up" :spec (a/int-in 1 nil) :default 3}})
 
-(defn present
-  "The adult entities named :mob within :radius, never players, items or babies
+(a/defargs settings
+  {::sight-radius {:default 64 :doc "How far the :too-few wait looks for the nearest adult of the kind, in blocks." :spec (a/num-in 0 nil)}})
+
+(defn adults-within
+  "The adult entities named :mob within radius blocks, nearest first, never players, items or babies
   (an entity is an adult unless its baby field is true)."
+  [c radius]
+  (->> (array-seq (.entities (:primitives c) #js {:radius radius :names #js [(:mob (:args c))] :max 64}))
+       (remove #(contains? #{"player" "item"} (.-kind %)))
+       (remove #(true? (.-baby %)))
+       vec))
+
+(defn present
+  "The adult entities named :mob within :radius."
   [c]
-  (let [{:keys [mob radius]} (:args c)]
-    (->> (array-seq (.entities (:primitives c) #js {:radius radius :names #js [mob] :max 64}))
-         (remove #(contains? #{"player" "item"} (.-kind %)))
-         (remove #(true? (.-baby %)))
-         vec)))
+  (adults-within c (:radius (:args c))))
 
 (defn candidates
   "The present animals not skipped, nearest first."
@@ -71,13 +80,20 @@
       (:keep (ctx/mem c))
       (if (hostile? c) 0 2)))
 
+(defn too-few
+  "The :too-few wait: :mob :keep, the adults :in-range of :radius and the :nearest one's distance (when one is in sight)."
+  [c]
+  (let [{:keys [mob radius]} (:args c)
+        nearest (first (adults-within c (max radius (settings/get settings ::sight-radius))))]
+    (cond-> {:reason :too-few :mob mob :keep (keep-of c) :in-range (count (present c)) :radius radius}
+      nearest (assoc :nearest (js/Math.round (.-distance nearest))))))
+
 (defn check
-  "Started, or more adults of :mob in :radius than the pair rule keeps. Else it waits with reason :too-few (and :mob
-  :keep)."
+  "Started, or more adults of :mob in :radius than the pair rule keeps. Else it waits (too-few)."
   [c]
   (or (boolean (or (:started (ctx/mem c))
                    (> (count (present c)) (keep-of c))))
-      (ctx/wait c {:reason :too-few :mob (:mob (:args c)) :keep (keep-of c)})))
+      (ctx/wait c (too-few c))))
 
 (defn finish!
   "Emit the outcome, hand it to the parent and end the job."

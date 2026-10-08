@@ -634,7 +634,7 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 | `survival.unwedge` | Steps out of a full block at the feet cell, else digs it, all in one run (stopped + warn `unwedge.blocked` for bedrock or three failed digs); `:ignore-zones?` lifts the zone check |
 | `maintenance.shut-doors` | Shut every door a walk left open in one run (stopped `:left` with the reasons when any stays open) |
 | `combat.attack` `{:targets :radius :absent :done}` | Kills named targets (ids, usernames, mob types) in one call; ends `:cleared`, `:gave-up`, `:lost`, `:timeout` or `:absent` (after a look round). `:absent :wait` makes a standing guard |
-| `combat.hunt`, `animals.cull` | Kill adults of a mob kind, never the last `:keep`, and collect drops, all in one call (yields only while a child waits); `animals.cull` skips animals in another's zone (`:ignore-zones?`) |
+| `combat.hunt`, `animals.cull` | Kill adults of a mob kind, never the last `:keep`, and collect drops, all in one call (yields only while a child waits); hunt's `:too-few` wait names `:in-range`, `:radius` and the `:nearest` adult's distance; `animals.cull` skips animals in another's zone (`:ignore-zones?`) |
 
 **Gathering, items and storage**
 
