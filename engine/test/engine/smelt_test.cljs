@@ -705,7 +705,16 @@
     "brick" "clay_ball"
     "nether_brick" "netherrack"
     "oak_planks" "oak_planks"
+    "cracked_deepslate_bricks" "deepslate_bricks"
+    "cracked_deepslate_tiles" "deepslate_tiles"
+    "cracked_nether_bricks" "nether_bricks"
     nil nil))
+
+(deftest charcoal-is-made-from-the-most-plentiful-carried-log
+  (are [carried in] (= in (smelt/input-of "charcoal" carried))
+    [{:name "oak_log" :count 2} {:name "birch_log" :count 5} {:name "coal" :count 9}] "birch_log"
+    [{:name "oak_planks" :count 9}] "oak_log"
+    [] "oak_log"))
 
 (deftest an-output-item-is-smelted-from-its-input
   (async done

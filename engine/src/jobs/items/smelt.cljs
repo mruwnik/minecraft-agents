@@ -34,7 +34,7 @@
 
 (a/defargs args
   {:furnace {:doc "furnace, blast furnace or smoker position [x y z] or {:x :y :z}; when nil the nearest one the body has seen within 32 blocks that cooks :item (or anything carried) is chosen (smelt.furnace says which), or the job ends with no-furnace-seen" :spec ::a/pos :default nil}
-   :item {:doc "what to smelt (an input; a product such as cooked_chicken or iron_ingot means its input; an item no furnace cooks ends not-smeltable at once); the first smeltable thing carried when nil" :spec a/item? :default nil}
+   :item {:doc "what to smelt (an input; a product such as cooked_chicken or iron_ingot means its input, charcoal the carried log there is most of; an item no furnace cooks ends not-smeltable at once); the first smeltable thing carried when nil" :spec a/item? :default nil}
    :count {:doc "how many; all carried (at most one stack) when nil" :spec (a/int-in 0 nil) :default nil}
    :fuel {:doc "fuel item to load; the best carried when nil" :spec a/item? :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
@@ -79,15 +79,23 @@
    "iron_ingot" "raw_iron" "gold_ingot" "raw_gold" "copper_ingot" "raw_copper" "netherite_scrap" "ancient_debris"
    "glass" "sand" "smooth_stone" "stone" "brick" "clay_ball" "terracotta" "clay"
    "nether_brick" "netherrack" "smooth_sandstone" "sandstone" "smooth_red_sandstone" "red_sandstone"
-   "cracked_stone_bricks" "stone_bricks" "smooth_quartz" "quartz_block" "lime_dye" "sea_pickle" "green_dye" "cactus"
+   "cracked_stone_bricks" "stone_bricks" "cracked_deepslate_bricks" "deepslate_bricks"
+   "cracked_deepslate_tiles" "deepslate_tiles" "cracked_nether_bricks" "nether_bricks" "smooth_quartz" "quartz_block" "lime_dye" "sea_pickle" "green_dye" "cactus"
    "popped_chorus_fruit" "chorus_fruit"})
 
 (declare smeltable?)
 
 (defn input-of
-  "The item to load for :item: itself when a furnace cooks it, else the input it is made from (iron_ingot: raw_iron)."
-  [item]
-  (if (or (nil? item) (smeltable? item)) item (get made-from item item)))
+  "The item to load for :item: itself when a furnace cooks it, else the input it is made from (iron_ingot: raw_iron).
+  Charcoal comes from any log: the carried one there is most of, else oak_log."
+  ([item] (input-of item nil))
+  ([item carried]
+   (cond
+     (nil? item) item
+     (= "charcoal" item) (or (->> carried (filter #(re-find #"_(log|wood)$" (:name %))) (sort-by :count >) first :name)
+                             "oak_log")
+     (smeltable? item) item
+     :else (get made-from item item))))
 
 (defn smeltable?
   "Whether some kind of furnace cooks the item."
@@ -333,7 +341,7 @@
   [c state]
   (let [m (ctx/mem c)
         {:keys [count fuel]} (:args c)
-        item (input-of (:item (:args c)))
+        item (input-of (:item (:args c)) (carried c))
         plan (plan-load {:state state :carried (carried c) :item item :count count :fuel fuel :target (:target m)})]
     (if (:give-up plan)
       (stop! c (:give-up plan))
@@ -427,10 +435,10 @@
   four headings, level and down, a sight pass after each) and chooses again; none seen after that ends no-furnace-seen."
   [c]
   (cond
-    (and (nil? (:owed (ctx/mem c))) (:item (:args c)) (not (smeltable? (input-of (:item (:args c)))))) (refuse-item! c (:item (:args c)))
+    (and (nil? (:owed (ctx/mem c))) (:item (:args c)) (not (smeltable? (input-of (:item (:args c)) (carried c))))) (refuse-item! c (:item (:args c)))
     (furnace-of c) (await (round-with c (furnace-of c)))
     :else
-    (if-let [pos (nearest-furnace c (input-of (:item (:args c))))]
+    (if-let [pos (nearest-furnace c (input-of (:item (:args c)) (carried c)))]
       (do (ctx/update-mem! c assoc :furnace pos)
           (ctx/emit! c :smelt.furnace :info {:furnace pos :text (str "smelting at the furnace seen at " (:x pos) " " (:y pos) " " (:z pos))})
           (await (round-with c pos)))
