@@ -784,7 +784,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup zombie-at-12)]
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :hostile-near :args {:radius 16}}]}"))
-          (is (= {:radius 16 :ranged-radius 16} (:args (first (:register (core/state eng))))))
+          (is (= {:radius 16} (:args (first (:register (core/state eng))))))
           (await (core/tick! eng))
           (is (some #(= :fired (:kind %)) @seen)))))))
 

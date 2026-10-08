@@ -316,7 +316,7 @@
     (is (false? (at 1010 [2 64 0])) "same place, soon after")
     (is (false? (at 1010 [4 64 0])) "moved a little")
     (is (true? (at 1010 [40 64 0])) "moved far")
-    (is (true? (at (+ 1000 tidy-pending/retry-s) [2 64 0])) "window passed")))
+    (is (true? (at (+ 1000 (tidy-pending/retry-s)) [2 64 0])) "window passed")))
 
 (deftest the-trigger-answers-from-memory-alone-so-a-restart-changes-nothing
   (is (= (holds-at with-stone [[:tidy (tried 1000)]] 1010 [2 64 0])
