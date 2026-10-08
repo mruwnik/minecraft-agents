@@ -521,7 +521,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen clock]} (setup {:self {:food 0} :containers bread-chest})]
+        (let [{:keys [eng p seen clock]} (setup {:self {:food 1} :containers bread-chest})]
           (know-source! eng {:x 20 :y 64 :z 0} :chest)
           (swap! clock + 1000)
           (write-hungry! eng)
@@ -536,7 +536,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen clock]} (setup {:self {:food 0} :containers {"20,64,0" [{:name "cobblestone" :count 3}]}})]
+        (let [{:keys [eng seen clock]} (setup {:self {:food 1} :containers {"20,64,0" [{:name "cobblestone" :count 3}]}})]
           (write-hungry! eng)
           (swap! clock + 60000)
           (know-source! eng {:x 20 :y 64 :z 0} :chest)

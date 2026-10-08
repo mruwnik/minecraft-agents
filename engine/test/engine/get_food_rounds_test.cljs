@@ -404,6 +404,26 @@
           (is (= [] (events-of seen :search.not-found)))
           (is (= 1 (count (events-of seen :food.none)))))))))
 
+(deftest a-starving-body-searches-again-after-a-short-rest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen clock]} (setup {:self {:food 0 :health 1}} :step-ms 5)]
+          (await (one-round! eng {}))
+          (swap! clock + 120000)
+          (await (one-round! eng {}))
+          (is (= 2 (count (events-of seen :search.not-found))) "the 10 min rest is cut short when starving"))))))
+
+(deftest a-fed-enough-body-keeps-the-full-rest-before-searching-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen clock]} (setup {:self {:food 4 :health 20}} :step-ms 5)]
+          (await (one-round! eng {}))
+          (swap! clock + 120000)
+          (await (one-round! eng {}))
+          (is (= 1 (count (events-of seen :search.not-found)))))))))
+
 (deftest starving-with-only-rotten-flesh-eats-it-as-a-last-resort
   (async done
     (tu/run-async done
