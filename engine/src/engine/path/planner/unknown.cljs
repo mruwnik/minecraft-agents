@@ -2,7 +2,7 @@
   "Search methods: cells the body has not seen (options.unknown, see engine.path.planner-tuned). Such a cell reads as
   void_air, air to the body. A stand on an unseen floor (a phantom floor, standPlain reads it as unk-floor-id) is allowed
   only where the walk can stop on the takeoff to check it first and can see it from there, and it is priced."
-  (:require [engine.path.planner.base :refer [FREE-FALL MOVE-CLIMB-UP MOVE-CORNER MOVE-DIAGONAL MOVE-DROP MOVE-GAP MOVE-JUMP MOVE-JUMP-CLIMB MOVE-OPEN MOVE-SWIM MOVE-WALK OPEN TABLE UNLOADED WATER WHOLE cell-key]]
+  (:require [engine.path.planner.base :refer [FREE-FALL MOVE-CLIMB-UP MOVE-CORNER MOVE-DIAGONAL MOVE-DROP MOVE-GAP MOVE-JUMP MOVE-OPEN MOVE-SWIM MOVE-WALK OPEN TABLE UNLOADED WATER WHOLE cell-key]]
             [engine.path.planner.search :refer [Search]]))
 
 (set! *warn-on-infer* true)
@@ -47,6 +47,16 @@
              ^boolean (.isUnknown s (.stateAt ^js (.-snapshot s) x (inc y) z))
              ^boolean (.missedAt s x (dec y) z))))
 
+  ;; the unseen feet cells a gap jump from node p to x z passes over (the cells between, at p's level)
+  (arcUnknownCells [s p x z]
+    (let [px (aget (.-xs s) p) py (aget (.-ys s) p) pz (aget (.-zs s) p)
+          n (js/Math.max (js/Math.abs (- x px)) (js/Math.abs (- z pz)))
+          dx (js/Math.sign (- x px)) dz (js/Math.sign (- z pz))]
+      (loop [k 1 c 0]
+        (if (>= k n)
+          c
+          (recur (inc k) (if ^boolean (.isUnknown s (.stateAt ^js (.-snapshot s) (+ px (* dx k)) py (+ pz (* dz k)))) (inc c) c))))))
+
   ;; did node p's way in end with the body bouncing on a pad (a drop whose landing factor is a bounce)?
   (bounceArrival [s p]
     (and (== (aget (.-moves s) p) MOVE-DROP) (some? (.-land-factors s)) (>= (aget (.-parents s) p) 0)
@@ -57,13 +67,12 @@
            (and (> fall (* FREE-FALL 16)) (neg? (.landFactor s sup x y z fall))))))
 
   ;; Can the walk stop on node p's stand before `move` takes it onto a phantom floor, to check the floor? The move is a walk,
-  ;; diagonal, corner slide, jump, drop or open, and p was reached by none of a gap jump, a climb, a swim, an exit or a
+  ;; diagonal, corner slide, jump or drop, and p was reached by none of a gap jump, a climb (or trapdoor open), a swim, an exit or a
   ;; bounce (the start stands still).
   (gateCheckable [s move p]
-    (and (or (== move MOVE-WALK) (== move MOVE-DIAGONAL) (== move MOVE-CORNER) (== move MOVE-JUMP) (== move MOVE-DROP)
-             (== move MOVE-OPEN))
+    (and (or (== move MOVE-WALK) (== move MOVE-DIAGONAL) (== move MOVE-CORNER) (== move MOVE-JUMP) (== move MOVE-DROP))
          (let [m (aget (.-moves s) p)]
-           (and (not (== m MOVE-GAP)) (not (and (>= m MOVE-CLIMB-UP) (<= m MOVE-JUMP-CLIMB))) (< m MOVE-SWIM)
+           (and (not (== m MOVE-GAP)) (not (and (>= m MOVE-CLIMB-UP) (<= m MOVE-OPEN))) (< m MOVE-SWIM)
                 (not ^boolean (.bounceArrival s p))))))
 
   ;; 1 when the caller's test (options.unknown.seeLit) calls the landing x y z lit enough to see its floor from the peek,
@@ -113,11 +122,11 @@
 
   ;; True when the move from node p into x y z is refused for options.unknown: its stand is on a phantom floor that the walk
   ;; cannot stop to check first (unseen-refused), was missed, or cannot be seen and not lit (dark-refused). Else sets what it
-  ;; costs (move-unk, seconds: cell per unseen feet or head cell and floor for a phantom floor, both times dsec, and a peek
+  ;; costs (move-unk, seconds: cell per unseen feet or head cell (and per unseen feet cell a gap jump passes over) and floor for a phantom floor, both times dsec, and a peek
   ;; over a drop or an aim at a level or up one, and light-cost when a torch must light it) and move-light.
   (unseenRefuses [s x y z move p dsec]
     (set! (.-move-light s) 0)
-    (let [cells (* dsec (.-unk-cell s) (.unknownCells s x y z))]
+    (let [cells (* dsec (.-unk-cell s) (+ (.unknownCells s x y z) (if (== move MOVE-GAP) (.arcUnknownCells s p x z) 0)))]
       (if-not ^boolean (.phantomAt s x y z)
         (do (set! (.-move-unk s) cells)
             false)

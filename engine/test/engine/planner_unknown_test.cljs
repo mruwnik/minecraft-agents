@@ -216,8 +216,15 @@
       (is (found? r))
       (is (= [[0 64 2] [3 64 2]] (pf/cells r))))))
 
+(deftest a-gap-jump-prices-the-unseen-cells-of-its-arc
+  (let [w (line [0 63 "stone"] [2 64 U] [3 63 "stone"])
+        r (run w (pf/near 3 64 2) (unk {}))]
+    (is (found? r))
+    (is (= [[0 64 2] [3 64 2]] (pf/cells r)))
+    (is (near? (* 0.1 (step-secs r)) (dark-secs r)))))
+
 (deftest a-walk-through-a-closed-gate-onto-a-phantom-floor-is-checkable
-  ;; (a gate or door is crossed by a walk that opens it; MOVE-OPEN is the climb through a shut trapdoor)
+  ;; (a gate or door is crossed by a walk that opens it; MOVE-OPEN is the climb through a shut trapdoor, never a takeoff)
   (let [w (line [0 63 "stone"] [1 63 U] [1 64 "oak_fence_gate" {:facing "east" :open "false"}])
         r (run w (pf/near 1 64 2) (unk {}))]
     (is (found? r))
@@ -227,7 +234,24 @@
 (deftest a-water-takeoff-is-not-lightable
   (let [w (fn [feet] (line [0 63 "stone"] [0 64 feet] [1 61 U]))]
     (is (found? (run (w "air") (pf/near 1 62 2) (lights {}))) "a dry takeoff")
-    (is (not (found? (run (w "water") (pf/near 1 62 2) (lights {}) {:x 0 :y 64 :z 2}))))))
+    (let [r (run (w "water") (pf/near 1 62 2) (lights {}) {:x 0 :y 64 :z 2})]
+      (is (not (found? r)))
+      ;; (a swim node expands no drop at all, so the takeoff is never offered to lightable)
+      (is (= "exhausted" (:reason r)))
+      (is (not (:darkRefused r)))
+      (is (not (:unseenRefused r))))))
+
+(deftest a-phantom-after-a-trapdoor-climb-is-refused
+  ;; a ladder up to a shut trapdoor (MOVE-OPEN); the stand beside the trapdoor cell has an unseen floor
+  (let [w (pf/world {:fill [[8 64 4 10 72 6 "stone"]
+                            [9 64 5 9 72 5 "air"]
+                            [9 64 5 9 71 5 "ladder" {:facing "west"}]
+                            [9 72 5 9 72 5 "oak_trapdoor" {:half "top"}]
+                            [10 71 5 10 71 5 "void_air"]
+                            [10 72 5 10 72 5 "air"]]})
+        r (run w (pf/near 10 72 5) (unk {}) {:x 9 :y 64 :z 5})]
+    (is (not (found? r)))
+    (is (:unseenRefused r))))
 
 (deftest a-phantom-after-a-drop-is-allowed
   (let [w (line [0 63 "stone"] [1 62 "stone"] [2 62 U])]
@@ -278,3 +302,18 @@
     (is (found? on))
     (is (= (:gap pf/MOVE) (:move (last-step on))))
     (is (zero? (get-in on [:path :cost :risk])) "on: the look stops at the unseen cell")))
+
+(defn column-snapshot
+  "A snapshot of one loaded column (0 0) reading (f y) at every y of -64..319."
+  [f]
+  #js {:minY -64 :height 384 :stateAt (fn [x _y z] (if (and (zero? x) (zero? z)) (f _y) planner/UNLOADED))})
+
+(deftest ground-y-reads-the-masked-column
+  (let [^js t @pf/table
+        ground-y #'planner/ground-y
+        void (first (blocks/state-ids t "void_air"))
+        stone (first (blocks/state-ids t "stone"))
+        air (first (blocks/state-ids t "air"))]
+    (is (nil? (ground-y (column-snapshot (constantly void)) t 0 0)) "all unknown: no ground (the start's y bounds the box)")
+    (is (= 61 (ground-y (column-snapshot #(if (= 60 %) stone void)) t 0 0)) "known stone at 60 under unknown")
+    (is (= 64 (ground-y (column-snapshot #(if (<= % 63) stone air)) t 0 0)) "unmasked: as before")))
