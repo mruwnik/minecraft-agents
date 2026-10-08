@@ -1052,6 +1052,50 @@
           (stop)
           (is (<= 3 @calls) "the timer is re-armed although the error report threw"))))))
 
+(deftest the-tick-loop-handles-tick-returning-non-promise
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [clock (atom 1000000)
+              [seen sink] (tu/legacy-capture-sink)
+              eng (core/create {:primitives (tu/fake {}) :jobs registry :triggers triggers :dir (tu/tmp-dir)
+                                :now #(deref clock)
+                                :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})
+              original-tick! core/tick!
+              tick-count (atom 0)
+              stop (do (core/submit! eng '(count) {})
+                       (set! core/tick! (fn [e]
+                                         (swap! tick-count inc)
+                                         (if (= 1 @tick-count) nil (original-tick! e))))
+                       (core/start! eng {:tick-ms 5}))]
+          (await (js/Promise. (fn [resolve] (js/setTimeout resolve 60))))
+          (set! core/tick! original-tick!)
+          (stop)
+          (is (>= @tick-count 3) "the loop ticked multiple times including when tick! returned nil"))))))
+
+(deftest the-tick-loop-handles-tick-throwing-synchronously
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [clock (atom 1000000)
+              [seen sink] (tu/legacy-capture-sink)
+              eng (core/create {:primitives (tu/fake {}) :jobs registry :triggers triggers :dir (tu/tmp-dir)
+                                :now #(deref clock)
+                                :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})
+              original-tick! core/tick!
+              tick-count (atom 0)
+              stop (do (core/submit! eng '(count) {})
+                       (set! core/tick! (fn [e]
+                                         (swap! tick-count inc)
+                                         (if (= 1 @tick-count) (throw (js/Error. "sync tick error")) (original-tick! e))))
+                       (core/start! eng {:tick-ms 5}))]
+          (await (js/Promise. (fn [resolve] (js/setTimeout resolve 60))))
+          (set! core/tick! original-tick!)
+          (stop)
+          (is (>= @tick-count 3) "the loop ticked multiple times despite a synchronous throw")
+          (is (some #(and (= :error (:kind %)) (re-find #"sync tick error" (str (:text %)))) @seen)
+              "the error was reported"))))))
+
 (deftest a-throwing-check-warns-once-per-error-not-every-tick
   (let [{:keys [eng seen clock]} (setup {})]
     (core/submit! eng '(bad-check) {})

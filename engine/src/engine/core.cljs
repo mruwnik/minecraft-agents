@@ -311,7 +311,9 @@
               (when-not @stopped
                 (try
                   (when before-tick (before-tick))
-                  (some-> (tick! eng) (.catch #(report-tick-failure! eng %)))
+                  (-> (js/Promise.resolve)
+                      (.then #(tick! eng))
+                      (.catch #(report-tick-failure! eng %)))
                   (catch :default e
                     (report-tick-failure! eng e)))
                 (js/setTimeout step tick-ms)))]
