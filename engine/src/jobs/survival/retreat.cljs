@@ -49,13 +49,14 @@
      Eats one bite a step (up to food 20) when the nearest chaser is at least :eat-gap blocks away and food is carried.
   Low on health (at most :hide-health) in a seen ranged chaser's line of fire (over the cells it has seen) with no
   covered step, it takes cover where it stands first: seal in, else dig down and plug, else a side pocket (as below);
-  none of them possible, it walks on. Not while a creeper chases it or a melee mob is within cover-gap: it walks (or
-  backs off, cornered) first.
+  none of them possible, it walks on. A seal begun where it stands is finished before it walks on (refuge/sealing-here?).
+  Not while a creeper chases it or a melee mob is within cover-gap: it walks (or backs off, cornered) first.
   4. Cornered (no open direction worth a walk, or the walk is blocked; checked afresh every step) with no hostile within
      :radius: holds a second (wait, why cornered) and looks again; after :no-gain-steps such steps or holds with no gain the flight ends :keeps-off. With one within :radius: takes the safest option it has not yet failed.
      - fight (jobs.survival.fight-back) only when jobs.lib.cost/fight-damage leaves :reserve health. Never against a creeper.
      - seal in: fill the open sides at feet and head height and the roof (dig-in's 1x1 cells) with carried :blocks,
-       at most :max-places a step. It first steps to the middle of its cell, and does not place while a hostile's hitbox
+       at most :max-places a step, the sides towards a seen ranged hostile first (feet, then head: the first blocks
+       stop its arrows). It first steps to the middle of its cell, and does not place while a hostile's hitbox
        overlaps a cell to fill. An open door is shut, not filled. A cell that answers occupied (torch, chest, bed) is left alone.
        When only such cells stay open the seal has failed.
      - pillar up 3 (jobs.access.pillar, the carried block with the most, at least 3). Needs a solid floor and free cells above.
@@ -357,11 +358,14 @@
                  threats)))
 
 (defn exposed-low?
-  "Whether the body is at or under :hide-health with a ranged threat's line of fire on it (covered? false at its feet)."
+  "Whether the body is at or under :hide-health with a ranged threat's line of fire on it (covered? false at its feet),
+  or, a ranged threat seen, a seal begun where it stands is not finished (refuge/sealing-here?: its first blocks may
+  be all that stop the arrows)."
   [c covered?]
   (boolean (and covered?
-                (<= (.-health (.self (:primitives c))) (:hide-health (:args c)))
-                (not (covered? (sh/feet (:primitives c)))))))
+                (or (refuge/sealing-here? c)
+                    (and (<= (.-health (.self (:primitives c))) (:hide-health (:args c)))
+                         (not (covered? (sh/feet (:primitives c)))))))))
 
 (defn ^:async eat-on-the-run!
   "One bite a flee step, with the nearest hostile at least :eat-gap away; none for the rest of the flight once
@@ -486,7 +490,8 @@
       :else
       (let [_ (await (eat-on-the-run! c threat))
             target (await (flight-target! c threats covered?))
-            cover (when (and (exposed-low? c covered?) (not (and target (covered? target)))
+            cover (when (and (exposed-low? c covered?)
+                             (or (refuge/sealing-here? c) (not (and target (covered? target))))
                              (not (close-danger? p threats)))
                     (await (take-cover! c)))]
         (cond

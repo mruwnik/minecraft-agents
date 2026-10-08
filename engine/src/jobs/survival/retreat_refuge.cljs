@@ -85,6 +85,34 @@
     ;; raw moveTo kept: a step inside the body's own cell, range 0.15; the planner has no goal finer than a cell.
     (await (ctx/act c :moveTo #js {:pos #js {:x (+ x 0.5) :y y :z (+ z 0.5)} :range 0.15}))))
 
+(defn shooters
+  "Where the seen ranged hostiles within the flight's :ranged-radius stand."
+  [c]
+  (let [{:keys [radius ranged-radius]} (:args c)
+        p (:primitives c)]
+    (->> (danger-q/known-hostiles p radius {:ranged-radius ranged-radius})
+         (filter #(and (combat/ranged? %) (danger-q/seen-only? %)))
+         (mapv #(danger-q/mob-pos p %)))))
+
+(defn facing-first
+  "cells (dig-cells/fill-cells order) with the sides towards the nearest of shooters first, each side's feet cell then its
+  head cell, so the first blocks stop arrows; the roof support and the roof stay last. As given with no shooter."
+  [feet shooters cells]
+  (if (empty? shooters)
+    cells
+    (let [side-of (fn [{:keys [x y z]}] (when (<= (:y feet) y (inc (:y feet))) [x z]))
+          gap (fn [[x z]] (apply min (map #(u/dist {:x (+ x 0.5) :y (:y feet) :z (+ z 0.5)} %) shooters)))
+          sides (->> cells (keep side-of) distinct (sort-by gap))
+          rank (zipmap sides (range))]
+      (sort-by (fn [{:keys [y] :as cell}]
+                 (if-let [r (rank (side-of cell))] [0 r (- y (:y feet))] [1 0 0]))
+               cells))))
+
+(defn sealing-here?
+  "Whether a seal was begun at the body's feet cell this flight and has not failed: it is finished before the walk goes on."
+  [c]
+  (and (= (:seal-at (ctx/mem c)) (sh/feet (:primitives c))) (not (flight/tried? c :seal))))
+
 (defn ^:async seal!
   "Fill the open cells around the body (dig-in's 1x1: sides at feet and head
   height, a roof support, the roof) with carried :blocks, at most
@@ -98,7 +126,7 @@
   (let [{:keys [radius max-places blocks]} (:args c)
         p (:primitives c)
         open (dig-cells/open-cells p (sh/feet p))
-        cells (remove #(occupied? c %) open)
+        cells (facing-first (sh/feet p) (shooters c) (remove #(occupied? c %) open))
         forget! #(dig-cells/forget-wait! c :seal-mob-since)
         unfillable (fn [] (forget!) (flight/tried! c :seal) :failed)]
     (cond
@@ -109,7 +137,8 @@
       :else
       (do (when (off-centre? p) (await (centre! c)))
           (access/trespass! c "retreat" (some #(access/trespass-refusal (access/rules-input c) :place %) cells))
-          (ctx/update-mem! c update :seal-cells (fnil into #{}) (map (juxt :x :y :z) (take max-places cells)))
+          (ctx/update-mem! c #(-> % (update :seal-cells (fnil into #{}) (map (juxt :x :y :z) (take max-places cells)))
+                                  (assoc :seal-at (sh/feet p))))
           (case (await (place-seal! c (take max-places cells)))
             :failed (do (flight/tried! c :seal) :failed)
             :wait :again

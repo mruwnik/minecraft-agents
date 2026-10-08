@@ -164,6 +164,20 @@
             (is (< (:x (first-move eng)) 0) "at full health it runs")
             (is (zero? (count (calls p "place"))))))))))
 
+;; the seal fills the side facing the skeleton first (feet, then head), so the first blocks stop its arrows, and a seal
+;; begun goes on to the end though the body is no longer in the line of fire
+(deftest a-low-body-seals-the-side-facing-the-skeleton-first-and-finishes-the-seal
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p while-hidden]}
+              (await (hidden-round retreat {:self {:pos [0.5 64 0.5] :health 8} :inventory [{:name "cobblestone" :count 20}]
+                                            :entities [(assoc (skeleton 0.5 64 -5.5) :visible true)]}
+                                   1000 (fn [{:keys [p]}] {:places (count (calls p "place"))})))]
+          (is (= [[0 64 -1] [0 65 -1]] (take 2 (placed-cells p))) "the side towards the skeleton first")
+          (is (<= 8 (:places while-hidden)) "walled in on every side")
+          (is (= [0 64 0] (mapv js/Math.floor (:pos (fake/self p)))) "no walk out of a half-built seal"))))))
+
 (deftest a-seal-in-anothers-zone-is-recorded-for-tidying
   (async done
     (tu/run-async done
