@@ -20,6 +20,7 @@
 //                     is rerun up to N times (default 1; exactly its --match-id, one run) on a different body when the pool has one; a pass is :flaky.
 //   --match-id ID    (repeatable) and --match-ids FILE (one id per line, or a --results .edn: its ids that did not pass) run exactly those cases; --list counts only them.
 //   --min-bodies N   waits (polls free memory, logging the figure every minute) until the body cap reaches N; past --min-bodies-wait-s (default 1800) it stops with exit 4.
+//   A child exiting 5 (a precheck that fails for every case, e.g. a stranger near the plot grid) stops the pass at once with exit 5. At start the pool stops leftover bodies of its prefix with no live runner lease.
 //   --server-wait-s S when a child hits a refused RCON/game-port connection the pool holds every unit and polls the server (up to S seconds, default 300),
 //                     reruns the faulted cases without using a retry (at most twice each), waits --server-settle-s (default 10) after the server answers, and past S stops with "server unreachable" (exit 3)
 import fs from 'node:fs'
@@ -31,6 +32,7 @@ import { fileURLToPath } from 'node:url'
 
 const PLOTS_PER_BODY = 20
 const LOAD_POLL_MS = 5000
+export const PRECHECK_EXIT = 5 // a child's refusal that holds for every case (a stranger near the plot grid): the pool stops at once
 const here = path.dirname(fileURLToPath(import.meta.url))
 const POOL_VALUE_FLAGS = ['--min-bodies', '--min-bodies-wait-s', '--bodies', '--body', '--first-plot', '--results', '--durations', '--max-parallel', '--retry-failed', '--server-wait-s', '--server-settle-s', '--match-id', '--match-ids']
 const VALUE_FLAGS = ['--tag', '--match', '--repeat', '--world', '--card', '--time-log', '--phase']
@@ -282,6 +284,7 @@ export const runPool = async ({ units, workers, runUnit, retries = 1, load = () 
   const redoing = new Set() // keys of cases rerun after a server fault: not missing
   let holding = null
   let unreachable = false
+  let precheck = false
   const hold = () => {
     holding ??= (async () => {
       const t0 = now()
@@ -358,12 +361,13 @@ export const runPool = async ({ units, workers, runUnit, retries = 1, load = () 
   const loop = async (worker) => {
     for (;;) {
       if (holding) await holding
-      if (unreachable) return
+      if (unreachable || precheck) return
       const job = take(worker)
       if (job) {
         while (busy && load() > cores) await sleep(LOAD_POLL_MS)
         busy++
         const res = await runUnit({ file: job.file, match: job.match, exact: job.match !== null, worker })
+        if (res.code === PRECHECK_EXIT && !res.text) { precheck = true; busy--; notify(); return }
         const forms = res.text ? splitForms(res.text) : []
         const faults = (job.faults ?? 0) + 1
         const faulted = faults <= FAULT_RERUNS ? forms.filter(connFault) : []
@@ -392,6 +396,7 @@ export const runPool = async ({ units, workers, runUnit, retries = 1, load = () 
     }
   }
   await Promise.all(workers.map(loop))
+  if (precheck) return { skipped, precheck, text: mergeText([...done].filter(([k]) => settled.has(k)).map(([, f]) => f)), code: PRECHECK_EXIT }
   const forms = [...done.values()]
   if (unreachable) { // a failure still waiting for its retry is a result: inconclusive, with its first failure
     const pending = [...done].filter(([k]) => !settled.has(k)).map(([, f]) => withStatus(f, 'inconclusive', `:first-failure ${f}`))
@@ -408,6 +413,7 @@ export const runNightBatches = async ({ batches, workers, runUnit, retries = 1, 
   let finals = 0
   let reruns = 0
   let seq = 0
+  let precheck = false
   const settle = (id, form) => {
     done.set(id, form)
     emit(resultEvent(form))
@@ -417,6 +423,7 @@ export const runNightBatches = async ({ batches, workers, runUnit, retries = 1, 
     const batch = `${process.pid}-${seq++}`
     const out = await Promise.all(ids.map(async (id, k) => {
       const res = await runUnit({ id, batch, barrier, worker: workers[k % workers.length] })
+      if (res.code === PRECHECK_EXIT && !res.text) precheck = true
       const mine = (res.text ? splitForms(res.text) : []).find((f) => summarize(f).id === id)
       return [id, mine ?? errorForm(id.split('/')[0], `the run exited ${res.code} with no result for this case`, id)]
     }))
@@ -425,7 +432,9 @@ export const runNightBatches = async ({ batches, workers, runUnit, retries = 1, 
   }
   const failing = []
   for (const batch of batches) {
-    for (const [id, form] of await runBatch(batch.ids, batch.barrier)) {
+    const out = await runBatch(batch.ids, batch.barrier)
+    if (precheck) return { text: mergeText([...done.values()]), precheck, code: PRECHECK_EXIT }
+    for (const [id, form] of out) {
       if (!(failed(summarize(form)) || overran(form)) || retries <= 0) settle(id, form)
       else if (failed(summarize(form)) && known.get(id) === failSig(form)) settle(id, withExtra(form, ':known-failure true'))
       else failing.push([id, form])
@@ -511,6 +520,8 @@ export const nightBatchEndArgs = (pass, body, batch) => {
 // restores the recorded sleep gamerule (a run killed in a batch leaves it in state/); dead = only when the run that recorded it is gone
 export const sleepRuleRestoreArgs = (pass, body, dead) => [dead ? '--sleep-rule-restore-dead' : '--sleep-rule-restore', ...nightBatchEndArgs(pass, body, 'x').slice(2)]
 const restoreSleepRule = (script, pass, body, dead) => spawnSync(process.execPath, [script, ...sleepRuleRestoreArgs(pass, body, dead)], { stdio: 'inherit', env: { ...process.env, WORLD_TEST_POOL_PID: String(process.pid) } })
+// stops the leftover bodies of this pool's prefix that no live runner leases (the runner reads its own lease files)
+const stopStaleBodies = (script, prefix) => spawnSync(process.execPath, [script, '--stop-stale-bodies', prefix], { stdio: 'inherit' })
 const endNightBatch = (script, pass, body, batch) => new Promise((resolve) => {
   const child = spawn(process.execPath, [script, ...nightBatchEndArgs(pass, body, batch)], { stdio: 'inherit', env: { ...process.env, WORLD_TEST_POOL_PID: String(process.pid) } })
   child.on('close', resolve)
@@ -539,6 +550,7 @@ const nightMain = async (p, byStem, previous, script) => {
   if (!(await waitMin(p, capNow))) return 4
   const cap = capNow()
   const workers = workerSpecs(cap, bodyCap(), p.prefix, p.firstPlot)
+  stopStaleBodies(script, p.prefix)
   const batches = nightBatches(cases, durationsById(previous), { bodies: workers.length })
   console.error(`world-test pool: ${cases.length} night cases in ${batches.length} batches on up to ${workers.length} bodies (${batches.map((b) => `${b.kind}:${b.ids.length}`).join(' ')}; ${cores} cores)`)
   const reaper = createReaper((f) => fs.rmSync(f, { force: true }))
@@ -560,6 +572,7 @@ const nightMain = async (p, byStem, previous, script) => {
   }
   emitLine({ event: 'plan', total: cases.length })
   const res = await runNightBatches({ batches, workers, runUnit, retries: p.retries, total: cases.length, known: knownFailures(previous), emit: emitLine, onBatchEnd: (batch) => endNightBatch(script, pass, workers[0].body, batch) })
+  if (res.precheck) console.error('world-test pool: a precheck refused every case (see the line above); pass stopped, no case recorded')
   if (p.results) fs.writeFileSync(p.results, res.text)
   const sums = splitForms(res.text).map(summarize)
   const count = (st) => sums.filter((x) => x.status === st).length
@@ -587,6 +600,7 @@ export const main = async (args) => {
   const capNow = () => poolCap({ bodies: p.bodies, maxParallel: p.maxParallel, availableMb: availableMb(), floorMb: slotConfig().floorMb, needMb: slotConfig().kinds.body.needMb, bodyMax: bodyCap() })
   if (!(await waitMin(p, capNow))) return 4
   const workers = workerSpecs(capNow(), bodyCap(), p.prefix, p.firstPlot)
+  stopStaleBodies(script, p.prefix)
   const reaper = createReaper((f) => fs.rmSync(f, { force: true }))
   process.on('exit', reaper.reap)
   for (const [sig, code] of [['SIGINT', 130], ['SIGTERM', 143]]) process.on(sig, () => { reaper.reap(); process.exit(code) })
@@ -607,6 +621,7 @@ export const main = async (args) => {
   const total = listing === null ? null : countListed(listing, repeatOf(p))
   if (total !== null) emitLine({ event: 'plan', total })
   const r = await runPool({ listed, repeat: repeatOf(p), units, workers, runUnit, retries: p.retries, total, known: knownFailures(previous), emit: emitLine, load: () => os.loadavg()[0], cores, probe: serverProbe([rconPort(), gamePort()]), serverWaitMs: p.serverWaitS * 1000, settleMs: p.serverSettleS * 1000 })
+  if (r.precheck) console.error('world-test pool: a precheck refused every case (see the line above); pass stopped, no case recorded')
   if (r.unreachable) console.error(`world-test pool: server unreachable (RCON port ${rconPort()} or game port ${gamePort()} closed for ${p.serverWaitS} s); stopped, the cases not run are not recorded${r.pending?.length ? `; ${r.pending.length} failures awaiting a retry are recorded as inconclusive` : ''}`)
   if (p.results) fs.writeFileSync(p.results, r.text)
   const sums = splitForms(r.text).map(summarize)

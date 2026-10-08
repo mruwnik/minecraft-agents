@@ -23,7 +23,7 @@
 
 (def usage
   (str "usage: node tools/world-test.mjs [fixture.edn|dir ...] [--tag T] [--match TEXT] [--match-id ID ...] [--repeat N] [--body NAME]\n"
-       "         [--world claude] [--first-plot I] [--card ID] [--allow-time --time-log FILE] [--results FILE] [--phase day|night|night-exclusive] [--night-batch ID] [--night-barrier N] [--night-batch-end ID] [--night-classes] [--retry-failed N] [--changed-since-pass] [--stop-on-fail] [--list] [--check]\n"
+       "         [--world claude] [--first-plot I] [--card ID] [--allow-time --time-log FILE] [--results FILE] [--phase day|night|night-exclusive] [--night-batch ID] [--night-barrier N] [--night-batch-end ID] [--night-classes] [--retry-failed N] [--changed-since-pass] [--stop-on-fail] [--list] [--check] [--stop-stale-bodies PREFIX]\n"
        "--phase runs only the cases of that time class (case level; :any and untimed cases, and :day, count as day; a case whose first :time-set step is\n"
        "night counts as night): run day, then night, then night-exclusive so the time lock never flips mid-pass.\n"
        "--changed-since-pass skips a fixture file that passed fully at a recorded revision (every run passes record it, in .claude/world-test-passes.edn) when no file of the jobs and triggers it uses (and what their source names) changed since, tracked or untracked; any engine, js, trigger-default or runner change, or a change to the fixture file, runs it.\n"
@@ -51,6 +51,7 @@
       (= a "--night-batch-end") (recur more (assoc opts :night-batch-end b))
       (= a "--sleep-rule-restore") (recur (rest all) (assoc opts :sleep-rule-restore :now))
       (= a "--sleep-rule-restore-dead") (recur (rest all) (assoc opts :sleep-rule-restore :dead))
+      (= a "--stop-stale-bodies") (recur more (assoc opts :stop-stale-bodies b))
       (= a "--night-classes") (recur (rest all) (assoc opts :night-classes true))
       (= a "--match-id") (recur more (update opts :match-ids (fnil conj #{}) b))
       (= a "--repeat") (recur more (assoc opts :repeat (js/Number b)))
@@ -1585,6 +1586,20 @@
 (defn release-body! [{:keys [body]}]
   (try (fs/unlinkSync (body-lease-file body)) (catch :default _ nil)))
 
+(def precheck-exit
+  "Exit code of a refusal that holds for every case (a stranger near the plot grid); the pool stops its pass on it."
+  5)
+
+(defn stop-stale-bodies!
+  "Stops (SIGTERM, by PID) the running bodies named prefix + a capital letter whose runner lease is dead or missing."
+  [prefix]
+  (let [out (.-stdout (cp/spawnSync "pgrep" #js ["-af" "out/body.cjs --agent "] #js {:encoding "utf8"}))
+        stale (lease/stale-body-procs (lease/parse-body-procs out) prefix (lease/leased-bodies (read-body-leases) pid-alive?))]
+    (doseq [{:keys [pid name]} stale]
+      (log! "world-test: stopping the leftover body " name " (pid " pid ", no live runner)")
+      (try (.kill js/process pid "SIGTERM") (catch :default _ nil)))
+    (count stale)))
+
 (defn players-near
   "Resolves to nil, or to the refusal text, when a player other than this body and the bodies of live runners
   (body leases) is within 500 blocks of the grid's centre; it names who is online besides those."
@@ -1803,6 +1818,7 @@
                                          res)
                                    (log! "world-test --check: " (count res) " cases, " (count (remove #(= :pass (:status %)) res)) " failed")
                                    (check-exit-code res))
+                   (:stop-stale-bodies opts) (do (stop-stale-bodies! (:stop-stale-bodies opts)) 0)
                    (:sleep-rule-restore opts) (.then (restore-sleep-rule! rcon! opts "world-test restores a recorded gamerule" (if (= :dead (:sleep-rule-restore opts)) {:only-dead? true} {:pool (owner-pid)})) (constantly 0))
                    (:night-batch-end opts) (.then (end-night-batch! rcon! opts (:night-batch-end opts) nil) (constantly 0))
                    (:list opts) (do (run! (if (:night-classes opts)
@@ -1818,7 +1834,7 @@
                    (.then (players-near opts)
                           (fn [refusal]
                             (if refusal
-                              (do (log! refusal) 2)
+                              (do (log! refusal) precheck-exit)
                               (-> (ensure-body! opts)
                                   (.then #(lease-body! opts))
                                   (.then #(drop-shared! opts))

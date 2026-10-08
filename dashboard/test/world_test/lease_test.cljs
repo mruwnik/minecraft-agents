@@ -370,3 +370,19 @@
           (l/barrier-ticks {:time :night-exclusive :act [[:time-set 14000]]})
           (l/barrier-ticks {:time :night-exclusive :act [[:job 'x]]})
           (l/barrier-ticks {:time :night-exclusive :weather :rain :act [[:time-set 1000]]})])))
+
+(def pgrep-out
+  (str "101 node --max-old-space-size=128 engine/out/body.cjs --agent ProbePoolA --world claude --fresh\n"
+       "102 node engine/out/body.cjs --agent ProbePoolB --world claude\n"
+       "103 node engine/out/body.cjs --agent ProbePoolBX --world claude\n"
+       "104 node engine/out/body.cjs --agent ProbeOther --world claude\n"
+       "105 pgrep -af out/body.cjs --agent ProbePoolA \n"))
+
+(deftest body-processes-are-read-from-pgrep-lines
+  (is (= [{:pid 101 :name "ProbePoolA"} {:pid 102 :name "ProbePoolB"} {:pid 103 :name "ProbePoolBX"} {:pid 104 :name "ProbeOther"}]
+         (l/parse-body-procs pgrep-out))))
+
+(deftest stale-bodies-are-the-own-prefix-ones-without-a-live-lease
+  (let [procs (l/parse-body-procs pgrep-out)]
+    (is (= [102] (mapv :pid (l/stale-body-procs procs "ProbePool" #{"ProbePoolA"}))))
+    (is (= [101 102] (mapv :pid (l/stale-body-procs procs "ProbePool" #{}))))))

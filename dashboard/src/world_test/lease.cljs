@@ -1,6 +1,7 @@
 (ns world-test.lease
   "Plot leases for parallel world-test runners (pure parts). A lease is one file per plot index holding the owner's
-  PID, created exclusively; a lease whose PID is dead is reclaimed. The file and process access is in the runner.")
+  PID, created exclusively; a lease whose PID is dead is reclaimed. The file and process access is in the runner."
+  (:require [clojure.string :as str]))
 
 (def empty-tries
   "How often a lease file with no PID yet is re-read (settle! between) before it counts as abandoned."
@@ -37,6 +38,20 @@
   "{body-name pid} (the body leases) and alive? -> the set of body names whose runner is still alive."
   [holders alive?]
   (set (keep (fn [[name pid]] (when (alive? pid) name)) holders)))
+
+(defn parse-body-procs
+  "The output of `pgrep -af out/body.cjs` -> [{:pid :name}] of the body processes (the --agent name)."
+  [out]
+  (vec (keep (fn [line]
+               (when-let [[_ pid name] (re-find #"^\s*(\d+)\s+(?:\S*/)?node\s.*out/body\.cjs --agent (\S+)" line)]
+                 {:pid (js/parseInt pid 10) :name name}))
+             (str/split-lines (or out "")))))
+
+(defn stale-body-procs
+  "The body processes named prefix + one capital letter (a pool's bodies) whose name holds no live lease (`leased`)."
+  [procs prefix leased]
+  (let [own (re-pattern (str "^" prefix "[A-Z]$"))]
+    (filterv #(and (re-matches own (:name %)) (not (contains? leased (:name %)))) procs)))
 
 (defn parse-online
   "The reply of the server's `list` command -> the player names."

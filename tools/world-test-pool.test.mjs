@@ -2,7 +2,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import net from 'node:net'
-import { splitForms, scanForms, failSig, summarize, unitOrder, parsePoolArgs, workerSpecs, runPool, mergeText, poolCap, createReaper, countListed, listArgs, knownFailures, parseListed, unitsWithCases, noCasesSelected, serverProbe, matchIdsFrom, parseNightClasses, nightBatchEndArgs, sleepRuleRestoreArgs, nightBatches, durationsById, runNightBatches, waitForBodies } from './world-test-pool.mjs'
+import { splitForms, scanForms, failSig, summarize, unitOrder, parsePoolArgs, workerSpecs, runPool, mergeText, poolCap, createReaper, countListed, listArgs, knownFailures, parseListed, unitsWithCases, noCasesSelected, serverProbe, matchIdsFrom, parseNightClasses, nightBatchEndArgs, sleepRuleRestoreArgs, nightBatches, durationsById, runNightBatches, waitForBodies, PRECHECK_EXIT } from './world-test-pool.mjs'
 
 const form = (id, status, secs = 1, extra = '') =>
   `{:plot 0, :file "${id.split('/')[0]}", :expects [{:status :pass, :evidence "a } \\" {"}], :status :${status}, :id "${id}", :elapsed-s ${secs}${extra}}`
@@ -643,4 +643,23 @@ test('waitForBodies: gives up after the wait with a clear message; a cap already
   assert.match(r.message, /only 3 bodies.*8.*120 s/)
   const q = await waitForBodies({ min: 4, cap: () => 4, sleep: async () => { throw new Error('slept') }, now: () => 0, log: () => {} })
   assert.equal(q.ok, true)
+})
+test('runPool: a unit that exits with the precheck code stops the pass at once (exit 5), starting no unit and recording no errors', async () => {
+  const log = []
+  const runUnit = fakeRunner(() => ({ code: PRECHECK_EXIT, text: null }), log)
+  const listed = new Map([['a', ['a/c1', 'a/c2']], ['b', ['b/c1']], ['c', ['c/c1']]])
+  const r = await runPool({ units: ['a', 'b', 'c'], workers: workerSpecs(1, 19, 'P', 0), runUnit, listed, total: 4 })
+  assert.equal(r.code, 5)
+  assert.equal(r.precheck, true)
+  assert.equal(log.length, 1)
+  assert.deepEqual(splitForms(r.text), [])
+})
+test('runNightBatches: a unit that exits with the precheck code stops the pass after that batch (exit 5), recording no errors', async () => {
+  const log = []
+  const runUnit = async ({ id }) => { log.push(id); return { code: PRECHECK_EXIT, text: null } }
+  const batches = [{ kind: 'night', ids: ['a/c1'] }, { kind: 'night', ids: ['b/c1'] }]
+  const r = await runNightBatches({ batches, workers: workerSpecs(1, 19, 'P', 0), runUnit, total: 2 })
+  assert.equal(r.code, 5)
+  assert.deepEqual(log, ['a/c1'])
+  assert.deepEqual(splitForms(r.text), [])
 })

@@ -1238,3 +1238,9 @@
     (is (= {:overran true :first-why "boom"}
            (select-keys (r/mark-night-overran {:status :fail :why "boom"} true) [:overran :first-why]))
         "the pool reruns an :overran result; the first failure reason is kept")))
+
+(deftest stop-stale-bodies-parses-with-its-prefix
+  (is (= "ProbePool" (:stop-stale-bodies (r/parse-args ["--stop-stale-bodies" "ProbePool"])))))
+
+(deftest a-refusal-before-any-case-has-its-own-exit-code
+  (is (= 5 r/precheck-exit)))
