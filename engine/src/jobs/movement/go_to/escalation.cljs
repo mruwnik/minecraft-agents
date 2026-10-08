@@ -122,7 +122,8 @@
 
 (defn ^:async escalate!
   "Start the next escalation for the give-up kept in memory (:give-up), or give up with it when there is none (or
-  with failed, the detail of the escalation that just failed, when there is none left after it)."
+  with failed, the detail of the escalation that just failed, when there is none left after it; past max-escalations
+  with the last one that failed, if any)."
   [c pos failed]
   (let [{:keys [tries status result]} (:give-up (ctx/mem c))
         n (inc (:escalations (ctx/mem c) 0))
@@ -135,7 +136,7 @@
             {:step :none :why :zone}
             e)]
     (cond
-      (> n max-escalations) (end/give-up! c pos tries status result {:escalation {:step :spent :n max-escalations}})
+      (> n max-escalations) (end/give-up! c pos tries status result {:escalation (or failed (:last-failed (ctx/mem c)) {:step :spent :n max-escalations})})
       (= :none (:step e)) (end/give-up! c pos tries status result {:escalation (or failed e)})
       :else
       (do (ctx/emit! c :go-to.escalated :info {:step (:step e) :why (:why (end/give-up-fields result)) :n n :at feet
@@ -199,7 +200,8 @@
     (do (ctx/emit! c :go-to.escalation-stopped :warn (assoc detail :text (str (name step) " failed: "
                                                                               (some-> (:reason detail) name)
                                                                               "; trying another way")))
-        (ctx/update-mem! c #(cond-> (update % :skipped-steps (fnil conj #{}) (skip-key (:escalation (ctx/mem c))))
+        (ctx/update-mem! c #(cond-> (-> % (update :skipped-steps (fnil conj #{}) (skip-key (:escalation (ctx/mem c))))
+                                        (assoc :last-failed detail))
                               (= :stair step) (update :escalations dec)))
         (await (escalate! c pos detail)))))
 
@@ -220,7 +222,7 @@
           (= :declined r) (escalation-failed! c pos {:step step :reason :not-ready})
           (succeeded? e res) (escalated! c e)
           :else (escalation-failed! c pos (merge {:step step}
-                                                 (select-keys res [:reason :why :cell :block :at :short :detail]))))))))
+                                                 (select-keys res [:reason :why :cell :block :at :short :detail :wait]))))))))
 
 (defn restore-done!
   "Tell what was put back and what was left, and end the put-back (the walk goes on from a fresh count)."

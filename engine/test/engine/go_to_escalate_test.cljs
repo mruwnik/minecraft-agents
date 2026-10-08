@@ -229,6 +229,22 @@
           (is (= "gave up walking to [10 64 0]: shut in here; could not dig a stair out: no pickaxe" (:text @out)))
           (is (empty? (calls p "dig"))))))))
 
+(def stone-room
+  "The sealed room with stone walls and roof (a pickaxe block)."
+  (merge (box -6 63 -6 12 63 6 "stone")
+         (apply dissoc (box -3 64 -3 3 66 3 "stone") (for [x (range -2 3) z (range -2 3) y [64 65]] (str x "," y "," z)))))
+
+(deftest go-to-names-the-dig-wait-of-a-clear-path-in-words
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (run-job! (merge in-room {:blocks stone-room}) {:pos [8 64 0] :range 1}))]
+          (is (= false (:arrived @out)))
+          (is (= :clear-path (:step (:escalation @out))))
+          (is (= "gave up walking to [8 64 0]: shut in here; could not dig through the wall: no pickaxe" (:text @out))
+              "the dig child waits for a pickaxe: go-to says so, not \"dig waits\"")
+          (is (empty? (calls p "dig"))))))))
+
 (deftest go-to-on-open-ground-never-escalates
   (async done
     (tu/run-async done

@@ -909,3 +909,15 @@
     (is (found? taken))
     (is (pos? (cost taken :damage)))
     (is (not (found? refused)))))
+
+(deftest a-drag-column-is-ridden-from-a-platform-and-left-at-its-foot-into-a-pocket
+  ;; the go-to-bubble-column fixture's drag case (plot y 0 = 64): the pocket beside the column foot is reached only by the ride
+  (let [snapshot (world [[0 64 14 3 69 18 "stone"]
+                         [4 63 14 8 69 18 "stone"]
+                         [3 63 16 3 63 16 "magma_block"]
+                         [3 64 16 3 69 16 "bubble_column" {:drag true}]
+                         [2 64 16 2 65 16 "water"]])
+        r (run snapshot {:x 6 :y 70 :z 16} (near 2 64 16 0))]
+    (is (found? r))
+    (is (re-find #"magma column down" (summary r)))
+    (is (= [2 64 16] (xyz (last-step r))))))

@@ -65,9 +65,9 @@
    :zone "a stair or dig is refused by another's zone, claim or plan (pass :ignore-zones? or ask)"})
 
 (defn escalation-words
-  "A failed way out of a shut-in body in words: {:step :reason|:why :n}."
-  [{:keys [step reason why n]}]
-  (let [r (some-> (or reason why) (as-> k (or (escalation-reason-words k) (str/replace (name k) "-" " "))))]
+  "A failed way out of a shut-in body in words: {:step :reason|:why :n}; a child's wait (:wait) names its own reason."
+  [{:keys [step reason why n wait]}]
+  (let [r (some-> (or (:reason wait) reason why) (as-> k (or (escalation-reason-words k) (str/replace (name k) "-" " "))))]
     (case step
       :spent (str "gave up after " n " ways out")
       :none (str "no way out" (some->> r (str ": ")))
