@@ -51,7 +51,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p out]} (await (fell tall {:radius 10} 200))]
-          (is (= {:base {:x 6 :y 64 :z 0}} out))
+          (is (= {:base {:x 6 :y 64 :z 0} :logs 8} out))
           (is (= (set (range 64 72)) (set (dug-ys p))) "every log dug")
           (is (pos? (count (h/calls p "jumpPlace"))) "a pillar was built")
           (is (= [] (ledger/open-entries (mem/view (:store eng)))) "ledger empty")
@@ -194,7 +194,7 @@
       (fn ^:async t []
         (let [s (await (fell (chest-world [{:name "dirt" :count 20}]) {:radius 10} 300))
               {:keys [p out]} s]
-          (is (= {:base {:x 6 :y 64 :z 0}} out))
+          (is (= {:base {:x 6 :y 64 :z 0} :logs 8} out))
           (is (= (set (range 64 72)) (set (dug-ys p))) "every log dug")
           (is (> (- 20 (dirt-in-chest s)) 1) "the chest gave the pillar's height, not one block")
           (is (= [] (pillar-cells p)) "no pillar block left"))))))
@@ -256,5 +256,5 @@
                          (fake/set-block! p [6 64 0] "oak_log"))
                        (await (impl token args))))
           (let [out (await (tu/child-outcome (:eng s) 'jobs.forestry.fell-tree {:radius 10} 100))]
-            (is (= {:base {:x 6 :y 64 :z 0}} out) "the stump log is the base")
+            (is (= {:base {:x 6 :y 64 :z 0} :logs 3} out) "the stump log is the base")
             (is (= [{:pos {:x 6 :y 64 :z 0} :species "oak"}] (lt/debts (:eng s))) "the replant is on the ground, not on the log above it")))))))

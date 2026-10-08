@@ -19,7 +19,7 @@
   the body has seen the floor under it solid and safe and the cells round it (no lava, fluid or cave opening, nothing
   hazardous beside it), the walk dropping one block at most; else it is left, with a debug collect-drops.left
   {:pos :reason :unseen-floor|:unseen-cell|:unsafe-floor|:too-deep}. A drop still falling is judged at rest.
-  With :search, when nothing was collected and no item is in sight (leaves hide drops beyond them), the body walks (a go-to child, range 0)
+  With :search, when fewer than :want items were collected and no item is in sight (leaves hide drops beyond them), the body walks (a go-to child, range 0)
   to standable cells round the anchor, nearest first, and looks again at each, until an item is seen or the cells within :search
   blocks are tried.
   Result: {:collected n}, the number of items that entered the inventory, with :left [{:pos :reason}] for those.")
@@ -28,7 +28,8 @@
   {:radius {:doc "search radius in blocks" :spec (a/num-in 0 nil) :default default-radius}
    :filter {:doc "item names to collect; everything when nil" :spec (a/coll-of a/item?) :default nil}
    :near {:doc "{:x :y :z} the work area is centred on, instead of where the body stands when the job begins" :spec ::a/pos :default nil}
-   :search {:doc "blocks round the anchor to walk to and look from when no drop is in sight and none was collected; 0: no search" :spec (a/num-in 0 nil) :default 0}
+   :search {:doc "blocks round the anchor to walk to and look from when no drop is in sight and fewer than :want were collected; 0: no search" :spec (a/num-in 0 nil) :default 0}
+   :want {:doc "items the caller expects to come in; the :search goes on while fewer were collected" :spec (a/num-in 0 nil) :default 1}
    :ids {:doc "entity ids to collect (only those); any item when nil" :spec (a/coll-of number?) :default nil}
    :holes {:doc "cells the caller dug: an item lower than the feet at or under one of them, or one column beside, is in that hole"
            :spec (a/coll-of a/position?) :default nil}})
@@ -174,7 +175,7 @@
     (loop []
       (let [item (when (ctx/alive? c) (nearest-item c anchor))]
         (if (and (not item) (ctx/alive? c) (pos? (:search (:args c)))
-                 (zero? (:collected (ctx/mem c) 0)) (empty? (:left (ctx/mem c))))
+                 (< (:collected (ctx/mem c) 0) (:want (:args c))) (empty? (:left (ctx/mem c))))
           (let [r (await (search-step! c anchor))]
             (if (= :continue r)
               :continue

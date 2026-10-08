@@ -47,7 +47,7 @@
   own), is not a candidate. A later log that turns out refused makes the tree count as unreachable. The job warns
   fell-tree.declined once, with :reason :refused (or :no-zones when no zone list was read). :ignore-zones? true
   skips the check.
-  Result: {:base pos} of the tree it felled, when it did.")
+  Result: {:base pos :logs n} of the tree it felled, when it did: n logs dug.")
 
 (a/defargs args
   {:species {:doc "log species such as \"oak\"; any when nil" :spec a/name? :default nil}
@@ -147,6 +147,7 @@
               r (await (ctx/call-child c :dig 'jobs.blocks.dig args))
               res (ctx/child-result c :dig)
               waits (when (= :declined r) (blocks/child-wait c :dig 'jobs.blocks.dig args))]
+          (when (= :dug (:reason res)) (ctx/update-mem! c update :dug (fnil inc 0)))
           (when (and wrote? (some-> (u/seen-name (:primitives c) pos) log-name?))
             (ctx/forget-where! c replant-kind #(= pos (:pos %))))
           (outcome r res waits))))))
@@ -359,7 +360,7 @@
       :else
       (let [logs (await (sense/decide! c ::logs #(tree-logs c radius) {:retry? empty?}))]
         (if (empty? logs)
-          (do (ctx/result! c {:base (:base (ctx/mem c))})
+          (do (ctx/result! c {:base (:base (ctx/mem c)) :logs (:dug (ctx/mem c) 0)})
               :done)
           (let [_ (when-let [low (lower-base (ctx/mem c) logs)] (rebase! c low))
                 _ (await (watch/watch! c {:before-dig (:pos (first logs))}))

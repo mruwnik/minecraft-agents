@@ -284,3 +284,15 @@
               r (await (tu/child-outcome eng 'jobs.forestry.harvest-wood {:species "oak" :radius 10 :count 6} 80))]
           (is (= {:status :stopped :reason :no-tree :replant-owed 1} (select-keys r [:status :reason :replant-owed])))
           (is (= 1 (count (filterv #(= :harvest-wood.replant-owed (:kind %)) @seen))) "the debt is warned"))))))
+
+(deftest some-logs-picked-up-and-the-rest-behind-leaves-are-searched-for
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [wall (into {} (for [x [4 5] z (range -3 4) y [64 65]] [(str x "," y "," z) "oak_leaves"]))
+              {:keys [eng p seen]} (lt/setup {:blocks (merge (lt/tree 3 0 "oak" 3) wall) :inventory [{:name "oak_sapling" :count 1}]})]
+          (after-last-dig! p #(do (clear-drops! p) (fake/add-item! p "oak_log" 1) (swap! (fake/state p) fake/spawn [7 64 0] "oak_log" 2)))
+          (core/submit! eng '(jobs.forestry.harvest-wood {:species "oak" :radius 10}) {})
+          (await (tu/run-until-empty eng 60))
+          (is (= 3 (get (lt/inv p) "oak_log" 0)) "the two logs behind the leaves were fetched too")
+          (is (= [] (filterv #(= :stopped (:kind %)) @seen))))))))

@@ -10,7 +10,7 @@
 (def doc
   "Fell a tree, collect what dropped and replant. Runs three child jobs in turn, each called once and run to its end:
   :fell (jobs.forestry.fell-tree), :collect (collect-drops) and :plant (plant-sapling).
-  :collect works around the felled tree's base (when nothing was picked up yet and no drop is in sight, it walks round the base to look: leaves hide drops), wherever a reflex has since taken the body; a felling that brings in
+  :collect works around the felled tree's base (when fewer logs came in than were felled and no drop is in sight, it walks round the base to look: leaves hide drops), wherever a reflex has since taken the body; a felling that brings in
   no item at all (the inventory count of the filter's items, before the felling against after the collecting)
   ends the job :stopped (:nothing-collected). Ends when :plant is done. Only replant debts within :radius of where the body stood when :plant began are
   planted; the others (and any when no sapling is carried or the spot is not clear) stay owed, and the job
@@ -108,9 +108,9 @@
   wait (no sapling carried, the spot not clear) is done without it: the replant stays owed."
   [c]
   (let [_ (when-not (:origin (ctx/mem c)) (ctx/update-mem! c assoc :origin (u/self-pos c)))
-        _ (when-not (:carried-before (ctx/mem c)) (ctx/update-mem! c assoc :carried-before (carried-count c)))
+        _ (when-not (:carried-before (ctx/mem c)) (ctx/update-mem! c assoc :carried-before (carried-count c) :logs-before (logs-carried c)))
         [phase job args] (current-phase c)
-        args (cond-> args (and (= :collect phase) (pos? (- (carried-count c) (:carried-before (ctx/mem c))))) (assoc :search 0))
+        args (cond-> args (= :collect phase) (assoc :want (:want (ctx/mem c) 1)))
         wait (atom nil)
         no-more-trees? (and (= :fell phase) (:count (:args c)) (pos? (:felled (ctx/mem c) 0))
                             (not (ctx/check-child (assoc c :wait wait) phase job args))
@@ -120,7 +120,9 @@
             (and (= :plant phase) (not (ctx/check-child c phase job args))) :done
             :else (await (ctx/call-child c phase job args)))
         _ (when (and (= :fell phase) (= :done r))
-            (some->> (ctx/child-result c :fell) :base (ctx/update-mem! c assoc :tree)))
+            (some->> (ctx/child-result c :fell) :base (ctx/update-mem! c assoc :tree))
+            (ctx/update-mem! c assoc :want (max 0 (- (:logs (ctx/child-result c :fell) 1)
+                                                     (- (logs-carried c) (:logs-before (ctx/mem c) 0))))))
         gained (when (and (= :collect phase) (= :done r)) (- (carried-count c) (:carried-before (ctx/mem c))))
         next-phase (second (drop-while #(not= phase %) (map first (phases (:args c) nil nil))))]
     (cond
@@ -132,7 +134,7 @@
       (and (= :collect phase) (:tree (ctx/mem c)) (not (pos? gained)))
       (result/stop! c :nothing-collected "felled a tree but no drop came into the inventory")
       (and (nil? next-phase) (more-trees? c))
-      (do (ctx/update-mem! c #(-> % (assoc :phase :fell :tree nil :carried-before nil :origin nil)
+      (do (ctx/update-mem! c #(-> % (assoc :phase :fell :tree nil :carried-before nil :logs-before nil :want nil :origin nil)
                                   (update :felled (fnil inc 0))
                                   (update :children dissoc :fell :collect :plant)))
           :again)
