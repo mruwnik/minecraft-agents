@@ -10,6 +10,7 @@
             [jobs.lib.ledger :as ledger]
             [jobs.lib.pace :as pace]
             [jobs.lib.result :as result]
+            [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
             [jobs.lib.breath :as breath]))
 
@@ -27,7 +28,7 @@
     up it at once; only a seen block over the own column sends the looks to the neighbour columns.
   - Enclosed (head cell holds a suffocating block, see jobs.lib.breath): step to a side cell with room
     to stand, once; then dig the head block, the block above it if solid, and step up.
-  - Surfaced and still in water: each pass takes the first way left: swim to the nearest shore cell (land with its
+  - Surfaced and still in water: the ways out are read from what is seen; when none shows, the unseen cells that read touched are looked at (jobs.lib.sense/decide!, bounded) before the run gives up. Each pass takes the first way left: swim to the nearest shore cell (land with its
     rim at most one block above the water) within :shore-radius, another direction after each failed swim; a go-to
     child onto land within :search-radius (at most 3 targets per spot, a failed target excludes its direction);
     then a step block: with a carried pillar block (jobs.lib.escape/pillar-items), one placed (jobs.blocks.place child,
@@ -559,15 +560,21 @@
             (let [{:keys [start failed]} (initial-search (ctx/entries c :breathe-afloat) pos)]
               (ctx/update-mem! c assoc :start (or start (u/self-pos c)) :failed-headings failed)))
         m (ctx/mem c)
-        shore (nearest-land p pos shore-radius (:failed-shores m) shore-cell?)
-        in-budget? (< (:travelled m 0) (* 3 swim-range))
-        land (when (and in-budget? (< (:land-tries m 0) land-tries))
-               (nearest-land p pos search-radius (:failed-land m) (constantly true)))
-        stepcell (when (< (:steps m 0) max-steps) (step-cell p pos shore-radius (:failed-steps m)))
         carried? (boolean (escape/pillar-item p))
-        legs (when (and in-budget? (< (:legs m 0) max-legs))
-               (some (fn [h] (when-let [t (leg-target p pos (:start m) h (:args c))] [h t]))
-                     (legal-headings pos (:start m) (:failed-headings m #{}))))]
+        in-budget? (< (:travelled m 0) (* 3 swim-range))
+        ways (fn []
+               (let [shore (nearest-land p pos shore-radius (:failed-shores m) shore-cell?)
+                     land (when (and in-budget? (< (:land-tries m 0) land-tries))
+                            (nearest-land p pos search-radius (:failed-land m) (constantly true)))
+                     stepcell (when (< (:steps m 0) max-steps) (step-cell p pos shore-radius (:failed-steps m)))
+                     legs (when (and in-budget? (< (:legs m 0) max-legs))
+                            (some (fn [h] (when-let [t (leg-target p pos (:start m) h (:args c))] [h t]))
+                                  (legal-headings pos (:start m) (:failed-headings m #{}))))]
+                 {:shore shore :land land :stepcell stepcell :legs legs}))
+        ;; a way out is looked for in the cells the decision read and the body never saw before the run gives up
+        {:keys [shore land stepcell legs]} (await (sense/decide! c :breathe-land ways
+                                                                 {:retry? (fn [w] (not (or (:shore w) (:land w) (:legs w)
+                                                                                           (and carried? (:stepcell w)))))}))]
     (cond
       shore
       (let [r (await (ctx/act c :swim (clj->js {:toward shore})))]

@@ -1057,11 +1057,12 @@
               looks (atom [])]
           (stub-seen! p (fn [[x y z]] (and (zero? x) (zero? z) (<= y 65))))
           (.override (.-world p) "look" (fn [_ a _]
-                                          (swap! looks conj [(js/Math.floor (.. a -pos -x)) (js/Math.floor (.. a -pos -z))])
+                                          (when-not (some #{"swim"} (call-names p))
+                                            (swap! looks conj [(js/Math.floor (.. a -pos -x)) (js/Math.floor (.. a -pos -z))]))
                                           #js {:status "ok"}))
           (await (one-run! eng (assoc defaults :radius 2 :air-radius 2)))
           (is (some #{"swim"} (call-names p)) "swam up")
-          (is (every? #{[0 0]} @looks) "only the own column was looked at"))))))
+          (is (every? #{[0 0]} @looks) "before the swim up only the own column was looked at (after it the land search may look)"))))))
 
 (deftest a-blocked-own-column-looks-at-the-neighbour-columns
   (async done
@@ -1275,3 +1276,34 @@
           (is @pulled "drowned a second time")
           (is (empty? (of-kind seen :no_air)) "rises below the first surfacing are progress")
           (is (< 4 @n) "swam up again"))))))
+
+(deftest a-bank-never-seen-is-looked-for-before-the-run-stops-afloat
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}}
+                                           :blocks (merge (lake -30 19 8) (bank 20 24 8))})
+              looked (atom false)]
+          (stub-seen! p (fn [[x]] (or @looked (<= (js/Math.abs x) 4))))
+          (.override (.-world p) "look" (fn [_ _ _] (reset! looked true) #js {:status "ok"}))
+          (await (one-run! eng small-args))
+          (is @looked "looked before giving up")
+          (is (= [[:completed nil]] (ended seen)))
+          (is (>= (:x (core/self-pos p)) 20) "on the east bank"))))))
+
+(deftest an-unseen-ledge-behind-a-high-wall-is-looked-at-and-the-ledge-is-swum-to
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [wall (into {} (for [y (range 64 68) z [-1 0 1]] [(str "-2," y "," z) "stone"]))
+              {:keys [eng p]} (setup {:self {:inWater true :oxygen 4}
+                                      :blocks (merge pool wall
+                                                     {"-3,64,0" "stone" "-3,63,0" "stone"
+                                                      "2,64,0" "water" "2,65,0" "water" "3,64,0" "water" "3,65,0" "water"
+                                                      "4,64,0" "stone" "4,63,0" "stone"})})
+              looked (atom false)]
+          (stub-seen! p (fn [[x]] (or @looked (<= (js/Math.abs x) 1))))
+          (.override (.-world p) "look" (fn [_ _ _] (reset! looked true) #js {:status "ok"}))
+          (await (one-run! eng defaults))
+          (is @looked)
+          (is (= {:x 4 :y 65 :z 0} (core/self-pos p)) "the ledge, not the wall"))))))
