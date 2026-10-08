@@ -4,8 +4,10 @@
 ;; sight so its cells are seen dark) and a detour along z 24 (about 42 long, torches at x 10..19 only, far enough from
 ;; the rooms that no torch light reaches the direct corridor). The body looks east down the direct corridor. The preview
 ;; reports the route's :length in blocks and never walks: with :dark true the detour, with :dark false the direct one.
-;; Card ea376fb0: the same at night (--allow-time): the night heuristic scale must not hide the lit detour, and a route that is dark
+;; Card ea376fb0: the same at night (--allow-time): the lit detour wins once the body has walked it, and a route that is dark
 ;; all the way (torches removed) is still found, the shorter direct corridor.
+;; Card c1f4e3be: at night a cell never seen counts dark (look/dark-fn; a player cannot know a corridor round a corner is lit), so
+;; the night lit-detour case first walks the detour and back; a detour never seen takes the direct corridor at night.
 {:defaults
  {:tags [:movement :planner :dark]
   :time :any
@@ -19,6 +21,7 @@
   :limit-s 40}
  :cases
  [{:name "dark-direct-corridor-takes-the-lit-detour"
+   :time :day
    :act [[:job (jobs.movement.path-preview {:pos #at [28 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :path-preview :data {:found true :length [:> 35]}} :within-s 30 :of-job true}]
    :after [[:body-near [2.5 0 16.5] 1]]}
@@ -28,8 +31,17 @@
    :after [[:body-near [2.5 0 16.5] 1]]}
   {:name "night-dark-direct-corridor-takes-the-lit-detour"
    :time :night
+   :limit-s 120
+   :act [[:job (jobs.movement.go-to {:pos #at [19 0 24] :range 0})]
+         [:job (jobs.movement.go-to {:pos #at [28 0 20] :range 0})]
+         [:job (jobs.movement.go-to {:pos #at [2 0 16] :range 0})]
+         [:job (jobs.movement.path-preview {:pos #at [28 0 16] :range 1})]]
+   :expect [{:event {:source :job :kind :path-preview :data {:found true :length [:> 35]}} :within-s 110 :of-job true}]
+   :after [[:body-near [2.5 0 16.5] 1]]}
+  {:name "night-unseen-lit-detour-counts-dark-takes-the-direct-corridor"
+   :time :night
    :act [[:job (jobs.movement.path-preview {:pos #at [28 0 16] :range 1})]]
-   :expect [{:event {:source :job :kind :path-preview :data {:found true :length [:> 35]}} :within-s 30 :of-job true}]
+   :expect [{:event {:source :job :kind :path-preview :data {:found true :length [:< 30]}} :within-s 30 :of-job true}]
    :after [[:body-near [2.5 0 16.5] 1]]}
   {:name "night-all-dark-route-is-still-found"
    :time :night
