@@ -1,5 +1,6 @@
 (ns jobs.access.cleanup
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [engine.game :as game]
             [jobs.access.stair :as stair]
             [jobs.lib.ledger :as ledger]
@@ -70,11 +71,15 @@
    :give-up {:doc "walks ending out of reach, or failed digs, after which a cell is held" :spec (a/int-in 1 nil) :default 2}})
 
 
-(def walk-range 3)
+(a/defargs settings
+  {::walk-range {:default 3 :doc "How near a scaffold block the body walks before it digs it." :spec (a/int-in 0 nil)}
+   ::max-collect-radius {:default 48 :doc "Blocks around the body in which dropped scaffold is collected, at most." :spec (a/int-in 0 nil)}
+   ::max-passes {:default 200 :doc "Steps (dig, walk, collect) in one run before it stops." :spec (a/int-in 0 nil)}})
+(defn walk-range [] (settings/get settings ::walk-range))
 
-(def max-collect-radius 48)
+(defn max-collect-radius [] (settings/get settings ::max-collect-radius))
 
-(def max-passes "Steps (dig, walk, collect) in one run before it stops." 200)
+(defn max-passes [] (settings/get settings ::max-passes))
 
 ;; ------------------------------------------------------------------ the step, pure
 
@@ -247,7 +252,7 @@
             :else (ctx/update-mem! c count-fail cell {:reason :dig-failed :dig outcome} (:give-up (:args c))))
           (if (= :continue outcome) :continue :again))))))
 
-(def permanent-why "go-to's :why of a give-up that is a verdict on the cell." #{:abilities :goal-enclosed :goal-cut-off :one-way :goal-not-standable :exhausted})
+(def permanent-why "go-to's :why of a give-up that is a verdict on the cell." #{:abilities :goal-enclosed :goal-cut-off :one-way :goal-not-standable :goal-on-magma :exhausted})
 
 (defn permanent-walk?
   "Whether a go-to result is a verdict on the cell (held :unreachable), not something that may pass: a refused call
@@ -262,7 +267,7 @@
   "Walk to within 3 of cell; a permanent verdict holds it :unreachable, an end out of reach, a walk that did not end or
   a go-to that gave up for a passing reason counts a failure."
   [c {:keys [cell]}]
-  (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos cell :range walk-range :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))
+  (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos cell :range (walk-range) :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))
         result (when (= :done r) (ctx/child-result c :walk))
         status (:status result)]
     (cond
@@ -283,7 +288,7 @@
 
 (defn collect-radius [c removed]
   (let [{:keys [x y z]} (u/self-pos c)]
-    (min max-collect-radius
+    (min (max-collect-radius)
          (+ 4 (js/Math.ceil (apply max 0 (map #(distance [x y z] (centre (:cell %))) removed)))))))
 
 (defn ^:async collect!
@@ -372,6 +377,6 @@
                 (loop [i 0]
                   (cond
                     (not (ctx/alive? c)) :done
-                    (<= max-passes i) (result/stop! c :too-many-passes "cleanup did not settle")
+                    (<= (max-passes) i) (result/stop! c :too-many-passes "cleanup did not settle")
                     (= :again (await (work! c zones))) (do (await (pace/pace!)) (recur (inc i)))
                     :else :done))))))

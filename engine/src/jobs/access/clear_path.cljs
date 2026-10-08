@@ -1,5 +1,6 @@
 (ns jobs.access.clear-path
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as b]
             [jobs.lib.dig-look :as dig-look]
@@ -33,7 +34,9 @@
 
 (def headings {:north [0 -1] :south [0 1] :east [1 0] :west [-1 0]})
 
-(def max-cell-digs "Digs of one cell (a falling block refills it) before it stops :refills." 8)
+(a/defargs settings
+  {::max-cell-digs {:default 8 :doc "Digs of one cell (a falling block refills it) before it stops :refills." :spec (a/int-in 0 nil)}})
+(defn max-cell-digs [] (settings/get settings ::max-cell-digs))
 
 (defn check [_c] true)
 
@@ -81,7 +84,7 @@
     (cond
       (escape/protected? block) (finish! c :protected {:cell cell :block block})
       (and (not (:started (:digging (ctx/mem c))))
-           (>= (get-in (ctx/mem c) [:tries cell] 0) max-cell-digs))
+           (>= (get-in (ctx/mem c) [:tries cell] 0) (max-cell-digs)))
       (finish! c :refills {:cell cell :block block})
       :else
       (if-let [wait (when-not (:started (:digging (ctx/mem c))) (b/child-wait c :dig 'jobs.blocks.dig args))]

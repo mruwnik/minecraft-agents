@@ -1,5 +1,6 @@
 (ns jobs.access.pillar
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
@@ -45,19 +46,24 @@
    :item {:doc "the block to pillar with; nil: dirt while any is carried, then cobblestone" :spec a/item? :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
-(def max-height 64)
+(a/defargs settings
+  {::max-height {:default 64 :doc "Tallest pillar a call may ask for, in blocks." :spec (a/int-in 0 nil)}
+   ::max-failures {:default 3 :doc "Failed placements before the pillar gives up." :spec (a/int-in 0 nil)}
+   ::land-step-ms {:default 50 :doc "Wait between looks for the ground after a pillar, in ms." :spec (a/int-in 0 nil)}
+   ::land-max-steps {:default 20 :doc "Looks for the ground after a pillar before it goes on." :spec (a/int-in 0 nil)}})
+(defn max-height [] (settings/get settings ::max-height))
 
 (def purpose :pillar)
 
-(def max-failures 3)
+(defn max-failures [] (settings/get settings ::max-failures))
 
 (def max-displacements
   "Knockbacks (a failed jump with the body airborne or off its column) a pillar rides out before it gives up."
   8)
 
-(def land-step-ms 50)
+(defn land-step-ms [] (settings/get settings ::land-step-ms))
 
-(def land-max-steps 20)
+(defn land-max-steps [] (settings/get settings ::land-max-steps))
 
 (defn access-inputs
   "The zones, claims, footprints, the body's name, the clock and the job's :ignore-zones? arg, as jobs.lib.access.rules
@@ -96,8 +102,8 @@
   (let [[bx by bz] base
         [fx fy fz] feet
         top (+ by height)]
-    (if-not (and (int? height) (<= 1 height max-height))
-      (give-up :bad-args :text (str ":height must be 1 to " max-height ", not " (pr-str height)))
+    (if-not (and (int? height) (<= 1 height (max-height)))
+      (give-up :bad-args :text (str ":height must be 1 to " (max-height) ", not " (pr-str height)))
       (if (or (not= [bx bz] [fx fz]) (< fy by))
         (give-up :off-column :at feet)
         (if (>= fy top)
@@ -163,8 +169,8 @@
   "Wait in short steps until the body is on the ground, up to land-max-steps."
   [c]
   (loop [i 0]
-    (when (and (< i land-max-steps) (false? (.-onGround (.self (:primitives c)))))
-      (await (ctx/act c :wait (clj->js {:ms land-step-ms})))
+    (when (and (< i (land-max-steps)) (false? (.-onGround (.self (:primitives c)))))
+      (await (ctx/act c :wait (clj->js {:ms (land-step-ms)})))
       (recur (inc i)))))
 
 (defn centred?
@@ -214,11 +220,11 @@
             _ (when shoved? (ctx/update-mem! c #(-> % (update :displaced (fnil inc 0)) (assoc :counted true))))
             failures (if shoved? (:failures (ctx/mem c) 0) (inc (:failures (ctx/mem c) 0)))]
         (ctx/update-mem! c assoc :failures failures)
-        (if (and (< failures max-failures) (<= (:displaced (ctx/mem c) 0) max-displacements))
+        (if (and (< failures (max-failures)) (<= (:displaced (ctx/mem c) 0) max-displacements))
           :again
           (let [settled (ledger/reconcile l block-at)]
             (ledger/remember! c settled)
-            (finish! c settled (if (< failures max-failures)
+            (finish! c settled (if (< failures (max-failures))
                                  (give-up :off-column :at (pl/feet-cell c) :detail (.-reason r))
                                  (give-up :place-failed :detail (.-reason r))))))))))
 

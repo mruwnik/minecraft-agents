@@ -1,5 +1,6 @@
 (ns jobs.access.bridge
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [jobs.access.pillar :as pillar]
             [jobs.lib.pillar :as pl]
             [jobs.lib.access :as access]
@@ -47,11 +48,14 @@
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
    :fetch {:doc "get missing blocks instead of waiting :too-few-blocks (jobs.lib.fetch): true, a set of kinds or a map of limits" :spec fetch/option? :default true}})
 
-(def max-length 64)
+(a/defargs settings
+  {::max-length {:default 64 :doc "Longest bridge a call may ask for, in blocks." :spec (a/int-in 0 nil)}
+   ::max-failures {:default 3 :doc "Failed moves or recoveries before the bridge gives up." :spec (a/int-in 0 nil)}})
+(defn max-length [] (settings/get settings ::max-length))
 
 (def purpose :bridge)
 
-(def max-failures 3)
+(defn max-failures [] (settings/get settings ::max-failures))
 
 (def headings {:north [0 -1] :south [0 1] :east [1 0] :west [-1 0]})
 
@@ -84,8 +88,8 @@
   :footprints :ledger #{cells} :unknown? fn of a cell}: {:step :done}, {:step :move :to stand}, {:step :place :cell :item} or {:step :give-up
   :reason ...}."
   [{:keys [feet start heading length block-at carried item] :as in}]
-  (if-not (and (int? length) (<= 1 length max-length) (contains? headings heading))
-    (pillar/give-up :bad-args :text (str ":length must be 1 to " max-length " and :heading one of :north :east :south :west, not "
+  (if-not (and (int? length) (<= 1 length (max-length)) (contains? headings heading))
+    (pillar/give-up :bad-args :text (str ":length must be 1 to " (max-length) " and :heading one of :north :east :south :west, not "
                                          (pr-str length) " " (pr-str heading)))
     (let [i (progress feet start heading)]
       (cond
@@ -183,7 +187,7 @@
             settled (ledger/reconcile l block-at)]
         (ctx/update-mem! c assoc :failures failures)
         (ledger/remember! c settled)
-        (if (< failures max-failures)
+        (if (< failures (max-failures))
           :again
           (finish! c settled (pillar/give-up :place-failed :detail (or (.-reason r) (.-status r)))))))))
 
@@ -206,13 +210,13 @@
       :ok (do (ctx/update-mem! c assoc :moves 0 :stand to) :again)
       (let [n (inc (:moves (ctx/mem c) 0))]
         (ctx/update-mem! c assoc :moves n)
-        (if (< n max-failures) :again (finish! c l (pillar/give-up :move-failed :at to)))))))
+        (if (< n (max-failures)) :again (finish! c l (pillar/give-up :move-failed :at to)))))))
 
 (defn ^:async recover!
   "Off the line: walk back to the last cell stood on while its floor holds, three times; else give up :off-line."
   [c l block-at step]
   (let [{:keys [stand recovers]} (ctx/mem c)]
-    (if (and stand (< (or recovers 0) max-failures) (rules/solid-floor? block-at (update stand 1 dec)))
+    (if (and stand (< (or recovers 0) (max-failures)) (rules/solid-floor? block-at (update stand 1 dec)))
       (let [r (await (walk-to! c stand))]
         (when-not (= :continue r) (ctx/update-mem! c update :recovers (fnil inc 0)))
         (if (= :continue r) :continue :again))

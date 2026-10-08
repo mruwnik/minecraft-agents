@@ -1,5 +1,7 @@
 (ns jobs.access.stair
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [jobs.lib.game-facts :as facts]
+            [engine.args :as a]
             [clojure.string :as str]
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
@@ -90,9 +92,11 @@
 
 (def headings {:north [0 -1] :south [0 1] :east [1 0] :west [-1 0]})
 (def rises {:down -1 :up 1})
-(def max-cell-digs 3)
-(def max-steps "Digs, steps, bridges and fetch rounds of one call before it gives the round back with :continue." 400)
-(def stack-size 64)
+(a/defargs settings
+  {::max-cell-digs {:default 3 :doc "Digs of one cell before the stair stops :refills." :spec (a/int-in 0 nil)}
+   ::max-steps {:default 400 :doc "Digs, steps, bridges and fetch rounds of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}})
+(defn max-cell-digs [] (settings/get settings ::max-cell-digs))
+(defn max-steps [] (settings/get settings ::max-steps))
 (def unbreakable #{"bedrock" "barrier" "end_portal_frame" "end_portal" "nether_portal" "command_block" "structure_block" "jigsaw"})
 
 (defn add [[x y z] [dx dy dz]] [(+ x dx) (+ y dy) (+ z dz)])
@@ -205,7 +209,7 @@
   "A free slot, or a carried stack of item with room."
   [p item]
   (or (pos? (u/free-slots p))
-      (some #(and (= item (:name %)) (< (:count %) stack-size)) (u/inventory p))))
+      (some #(and (= item (:name %)) (< (:count %) facts/stack-size)) (u/inventory p))))
 
 (defn no-tool?
   "Whether block needs a tool to clear (jobs.lib.tools/needs-tool-to-clear?) and none is carried."
@@ -392,7 +396,7 @@
         block ((:block-at in) cell)
         tries (get-in (ctx/mem c) [:tries cell] 0)]
     (cond
-      (>= tries max-cell-digs) {:reason :refills :cell cell :block block}
+      (>= tries (max-cell-digs)) {:reason :refills :cell cell :block block}
       (unbreakable block) {:reason :unbreakable :cell cell :block block}
       (no-tool? p block) {:reason :no-tool :cell cell :block block :tool (tools/needed-kind p block)}
       (not (room-for? p (blocks/item-name {:block block}))) {:reason :inventory-full :cell cell :block block}
@@ -546,4 +550,4 @@
   "The whole stair: next! until it ends, a pace between pieces; :continue after max-steps of them."
   [c]
   (let [n (atom 0)]
-    (await (pace/steps! c #(if (< (swap! n inc) max-steps) (next! c) :continue)))))
+    (await (pace/steps! c #(if (< (swap! n inc) (max-steps)) (next! c) :continue)))))

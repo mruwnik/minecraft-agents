@@ -1,5 +1,6 @@
 (ns jobs.access.toggle
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [jobs.lib.click :as click]
             [engine.ctx :as ctx]
             [jobs.lib.pace :as pace]
@@ -105,7 +106,9 @@
           (ctx/wait c {:reason :standing-in :pos pos :block (.-name b)})
           :else true)))))
 
-(def max-closer "How often a click the game answers out of reach is followed by a walk one cell closer." 2)
+(a/defargs settings
+  {::max-closer {:default 2 :doc "How often a click the game answers out of reach is followed by a walk one cell closer." :spec (a/int-in 0 nil)}})
+(defn max-closer [] (settings/get settings ::max-closer))
 
 (defn reach
   "The reach the walk aims for now: :reach, less one for each walk closer after a click out of reach (at least 1)."
@@ -128,7 +131,7 @@
       :gone (give-up! c :gone pos state (str text " is gone") facts)
       :unseen (give-up! c :unseen pos state (str text " cannot be made out after the click (too dark or too far)") facts)
       :no-room (give-up! c :no-room pos state (str "no room to empty the hand at " text) facts)
-      :unreachable (if (and (< (:closer (ctx/mem c) 0) max-closer) (> (reach c) 1))
+      :unreachable (if (and (< (:closer (ctx/mem c) 0) (max-closer)) (> (reach c) 1))
                      (closer! c)
                      (give-up! c :unreachable pos state (str text " is out of reach") facts))
       :refused (give-up! c :refused pos state (str text " refused the click: " status " " reason) facts)

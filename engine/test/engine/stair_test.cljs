@@ -328,7 +328,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (with-redefs [stair/max-steps 2]
+        (with-redefs [stair/max-steps (fn [] 2)]
           (let [{:keys [eng clock out p] :as s} (setup {:blocks ground} east (fn [_]))]
             (swap! clock + 500)
             (await (core/tick! eng))

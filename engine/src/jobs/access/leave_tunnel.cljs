@@ -311,8 +311,8 @@
       :else (await (work-round c)))))
 
 (defn ^:async round
-  "The whole way out: step! until it ends, a pace between; :continue after stair/max-steps of them or while a child
+  "The whole way out: step! until it ends, a pace between; :continue after (stair/max-steps) of them or while a child
   waits on the world."
   [c]
   (let [n (atom 0)]
-    (await (pace/steps! c #(if (< (swap! n inc) stair/max-steps) (step! c) :continue)))))
+    (await (pace/steps! c #(if (< (swap! n inc) (stair/max-steps)) (step! c) :continue)))))
