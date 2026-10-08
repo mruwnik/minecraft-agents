@@ -93,7 +93,6 @@
     (dark-best plan to) (assoc :dark-best (dark-best plan to))
     (some :unseen-floor (:steps plan)) (assoc :unseen-floors true)))
 
-(defn ^:async walk-once!
 (defn ^:async step-out!
   "A walk that arrived in a doorway it opened to shut again (pass/standing-in-opened) steps to a cell beside it, out of
   its column and still within range of to, so shut-leftovers! can shut the door: those cells nearest the goal first, one
@@ -116,6 +115,7 @@
             (await (pass/walk! c steps {:timeout-s timeout-s :doors doors :shut-also shut-also}))
             (recur more)))))))
 
+(defn ^:async walk-once!
   "Plan from where the body stands and follow the plan (walk/follow!: planned again in the same round when the look-ahead
   sees the way change, a partial plan is due a refresh, or a mob is in the way of a stuck body; each replan is a :replan
   info event {:why :ms :kept :replans :at}): the walk's result map (jobs.lib.walk), or the no-path result of a plan that
