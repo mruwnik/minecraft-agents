@@ -5,6 +5,8 @@
             [engine.core :as core]
             [engine.events :as events]
             [engine.fake :as fake]
+            [engine.hut-shelter-test :as hs]
+            [engine.hut-door-test :as hd]
             [engine.memory :as mem]
             [jobs.lib.near :as near]
             [jobs.lib.pass :as pass]
@@ -307,3 +309,27 @@
           (swap! (fake/state p) assoc-in [:self :pos] [8.5 64 0.5])
           (await (tick-until s #(not (open? p gate-cell)) 60))
           (is (not (open? p gate-cell)) "shut by the reflex after the body stepped off"))))))
+
+(defn done-event [seen] (first (filter #(= :shut-doors.done (:kind %)) @seen)))
+
+(deftest a-hut-door-nobody-recorded-open-is-shut-by-an-explicit-call
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup (assoc (hs/hut-world {:x 5.5 :y 64 :z 1.5} {}) :states hd/open-door-states))]
+          (is (true? (hs/door-open? p)) "open to begin with, no :opened entry")
+          (core/submit! eng '(jobs.maintenance.shut-doors) {})
+          (await (tick-until s #(empty? (:list (core/state eng))) 20))
+          (is (false? (hs/door-open? p)) "shut")
+          (is (= 1 (:shut (done-event seen)))))))))
+
+(deftest an-unrecorded-door-that-stays-open-is-not-reported-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup (assoc (hs/hut-world {:x 5.5 :y 64 :z 1.5} {}) :states hd/open-door-states))]
+          (.override (.-world p) "useOn" (fn ^:async o [] #js {:status "done"}))
+          (core/submit! eng '(jobs.maintenance.shut-doors) {})
+          (await (tick-until s #(empty? (:list (core/state eng))) 30))
+          (is (true? (hs/door-open? p)))
+          (is (nil? (done-event seen)) "not done while the door stands open"))))))

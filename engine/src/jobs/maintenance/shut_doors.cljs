@@ -9,8 +9,9 @@
 (def doc
   "Shut the doors, gates and trapdoors a walk opened and left open (the job of the door-left trigger,
   jobs.lib.doors).
-  Only blocks with an :opened entry count (written by jobs.lib.pass when a walk opens a block, dropped when it
-  shuts it), whatever their age. A block the walker did not open is never touched. Blocks a :leave-open walk left
+  Blocks with an :opened entry count (written by jobs.lib.pass when a walk opens a block, dropped when it
+  shuts it), whatever their age. Wooden doors (never gates or trapdoors) the body has seen open without an entry
+  count too (:unrecorded?, default on). Any other block the walker did not open is never touched. Blocks a :leave-open walk left
   open on purpose are left alone while that walk's job lives (once it is gone, they count).
   One run shuts them all, nearest first. For each it walks within :reach (a jobs.movement.go-to child, doors :never:
   it opens nothing on the way), then shuts it as the walker does (pass/shut-column!). An animal in the cell is waited
@@ -25,6 +26,7 @@
 (a/defargs args
   {:radius {:doc "how far from the body a left block is looked for, in blocks" :spec (a/num-in 0 nil) :default 16}
    :reach {:doc "walk until within this many cells of the block (a click reaches 4.5 from the eye)" :spec (a/num-in 0 nil) :default 3}
+   :unrecorded? {:doc "also shut wooden doors seen standing open that no walk recorded opening" :spec boolean? :default true}
    :tries {:doc "clicks on one block before the run leaves it" :spec (a/int-in 1 nil) :default 3}
    :attempts {:doc "runs whose clicks failed before a block is dropped for good" :spec (a/int-in 1 nil) :default 5}})
 
@@ -32,10 +34,12 @@
 (defn cell-key [{:keys [x y z]}] [x y z])
 
 (defn targets
-  "The left-open blocks (doors/left-open, any age) within :radius, minus the cells in left ({:cell [x y z]})."
+  "The left-open blocks (doors/left-open, any age; then doors/unrecorded-open) within :radius, minus the cells in left ({:cell [x y z]})."
   [c left]
   (let [given-up (set (map :cell left))]
-    (remove #(given-up (cell-key (:cell %))) (doors/left-open (:primitives c) (ctx/view c) (:args c) 0))))
+    (remove #(given-up (cell-key (:cell %)))
+            (concat (doors/left-open (:primitives c) (ctx/view c) (:args c) 0)
+                    (when (:unrecorded? (:args c)) (doors/unrecorded-open (:primitives c) (ctx/view c) (:args c)))))))
 
 (defn ^:async walk!
   "nil when the body stands within reach, else why not: :walk-interrupted (the walk ended :continue) or :unreachable."

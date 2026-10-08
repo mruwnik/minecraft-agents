@@ -72,3 +72,20 @@
         here (feet-cell (self-pos p))]
     (boolean (some #(not (pass/in-column? (:column %) here))
                    (left-open p view args (* 1000 open-s) seen-open-block)))))
+
+(defn unrecorded-open
+  "The wooden doors seen standing open within radius of the body that no :opened entry names (a door left open after a
+  failure whose entry was dropped, by a night dig-in or by hand), read as open-block now, like left-open's blocks:
+  [{:cell :column :by nil :fails 0 :dist}] nearest first. Gates and trapdoors are never taken (a pen's gate stands open on purpose)."
+  [p view {:keys [radius]}]
+  (let [self (self-pos p)
+        recorded (set (map (comp :cell :data) (mem/entries view :opened)))]
+    (->> (look/seen-blocks p {:match #(re-find #"_door$" %) :radius radius :live? true})
+         (map :pos)
+         (remove recorded)
+         (keep (fn [cell]
+                 (when-let [o (open-block p cell)]
+                   (assoc o :by nil :fails 0 :dist (distance self cell)))))
+         (filter #(<= (:dist %) radius))
+         (sort-by :dist)
+         (reduce (fn [acc o] (if (some #(= (:column o) (:column %)) acc) acc (conj acc o))) []))))
