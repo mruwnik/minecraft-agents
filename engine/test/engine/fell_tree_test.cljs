@@ -258,3 +258,22 @@
           (let [out (await (tu/child-outcome (:eng s) 'jobs.forestry.fell-tree {:radius 10} 100))]
             (is (= {:base {:x 6 :y 64 :z 0} :logs 3} out) "the stump log is the base")
             (is (= [{:pos {:x 6 :y 64 :z 0} :species "oak"}] (lt/debts (:eng s))) "the replant is on the ground, not on the log above it")))))))
+
+(deftest a-body-left-up-in-the-leaves-after-the-felling-comes-down-to-the-ground
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [leaves (into {} (for [x (range 4 8) z [0 1]] [(str x ",69," z) "oak_leaves"]))
+              s (fm/start {:blocks (merge (lt/tree 3 0 "oak" 3) leaves)} {})
+              p (:p s)
+              n (atom 0)]
+          (.override (.-world p) "dig"
+                     (fn ^:async f [token args impl]
+                       (let [r (await (impl token args))]
+                         (when (= 3 (swap! n inc))
+                           (swap! (fake/state p) assoc-in [:self :pos] [5.5 70 0.5]))
+                         r)))
+          (let [out (await (tu/child-outcome (:eng s) 'jobs.forestry.fell-tree {:radius 10} 100))
+                y (get-in @(fake/state p) [:self :pos 1])]
+            (is (= 3 (:logs out)))
+            (is (<= y 65) "the body ends on the ground, not up on the leaves")))))))

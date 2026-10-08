@@ -1,6 +1,7 @@
 (ns jobs.forestry.fell-tree
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [jobs.lib.watch :as watch]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.pillar :as pl]
@@ -23,6 +24,7 @@
   "Fell the nearest tree: a log column with leaves near its top. One call fells the whole tree, lowest log first; it
   yields (:continue) only while a child waits on the world.
   The base log's :forestry/replant debt is written before it is dug.
+  It ends on the ground: from the canopy it walks down (go-to) beside the base, warning fell-tree.stranded when it cannot.
   A lower log of the column seen later becomes the base (and its debt moves down): the sapling goes on the ground.
   With :at it fells that one column instead (:radius and :species are then unused).
   The tree is chosen by a bounded search over at most 32 candidates, nearest in a line first (jobs.lib.targets).
@@ -94,6 +96,24 @@
   [c pos]
   (ctx/forget-where! c replant-kind #(= (:base (ctx/mem c)) (:pos %)))
   (ctx/update-mem! c assoc :base pos))
+
+(defn on-canopy?
+  "Whether the body stands more than a block over the base: up in the leaves."
+  [c]
+  (let [base (:base (ctx/mem c))]
+    (boolean (and base (> (js/Math.floor (:y (u/self-pos c))) (inc (:y base)))))))
+
+(defn ^:async come-down!
+  "Walk to the ground beside the base (one go-to call, slot :down) when the body stands up in the canopy. :continue while
+  go-to waits on the world, else nil; a walk that does not arrive warns fell-tree.stranded."
+  [c]
+  (when (on-canopy? c)
+    (let [{:keys [x y z]} (:base (ctx/mem c))
+          r (await (child/run! c :down 'jobs.movement.go-to {:pos [x y z] :range 2 :escalate false}))]
+      (cond
+        (= :continue r) :continue
+        (not (:arrived (ctx/child-result c :down)))
+        (ctx/warn-once! c :stranded :fell-tree.stranded {:text "felled the tree but could not come down from the canopy"})))))
 
 (defn ^:async approach!
   "Get the log at pos within reach to dig: nothing when its centre is within eye reach already, else walk to within 2
@@ -360,8 +380,10 @@
       :else
       (let [logs (await (sense/decide! c ::logs #(tree-logs c radius) {:retry? empty?}))]
         (if (empty? logs)
-          (do (ctx/result! c {:base (:base (ctx/mem c)) :logs (:dug (ctx/mem c) 0)})
-              :done)
+          (if (= :continue (await (come-down! c)))
+            :continue
+            (do (ctx/result! c {:base (:base (ctx/mem c)) :logs (:dug (ctx/mem c) 0)})
+                :done))
           (let [_ (when-let [low (lower-base (ctx/mem c) logs)] (rebase! c low))
                 _ (await (watch/watch! c {:before-dig (:pos (first logs))}))
                 r (await (dig-log! c (first logs)))]
