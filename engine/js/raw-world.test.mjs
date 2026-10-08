@@ -128,6 +128,13 @@ test('stateInfo names a state with its properties', () => {
   assert.deepEqual([info.name, info.properties.axis], ['oak_log', 'y'])
 })
 
+test('stateInfo carries the collision boxes a sight line is tested against', () => {
+  const { bot } = makeBot()
+  const raw = createRawWorld({ getBot: () => bot })
+  const [stone, door, lava] = ['stone', 'oak_door', 'lava'].map(n => raw.stateInfo(id(n)))
+  assert.deepEqual([stone.shapes, lava.shapes, door.fullCube, door.shapes.length], [[[0, 0, 0, 1, 1, 1]], [], false, 1])
+})
+
 test('sightTable blocks sight for lava and powder snow, which have no collision box but are opaque', () => {
   const table = sightTable(registry)
   assert.deepEqual(['lava', 'powder_snow'].map(n => table[id(n)]), [1, 1])

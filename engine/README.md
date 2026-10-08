@@ -56,6 +56,7 @@ Layout:
   `ctx`, `expr`, `composite`, `registry` (compile-time registries), `triggers` (the trigger registry), `hooks` (job code
   the engine calls), `condition`, `scenario`, `takeover`/`lease`, `perception` (+ `perception.light|store|rays|mobs|persist`), `main`; `engine.path.*` is the planner.
   Perception sees dark cells within `:near` (4) blocks, within `:near-torch` (7) with a torch in either hand.
+  A sight line passes a block that does not fill its cell (door, trapdoor, slab, stairs) except where it meets its collision boxes, from inside its cell too.
   One cell: `sensedAt`/`perception/sensed` answers felt, visible (one-ray glance, view cone), remembered (`ageMs`; fluids, doors, gates, trapdoors, fire, and non-solid cells beside a remembered fluid, older than 10 s read unknown) or `{unknown}`; `feel`, `glance`; the wrapped `look` glances where it turned. `blockAt` stays raw.
   A still body in an unchanged world looks again every `:still-ms` (30 s); unchanged means no block or chunk update within 50 blocks, same daylight, and same torch in hand.
 - `src/jobs/` the jobs, one namespace each (`jobs.survival.eat`); the build finds them. Helpers: `jobs.lib.*` (shared,
@@ -111,7 +112,7 @@ Notes:
   the body is connected but its senses are not yet trustworthy.
 - Entities: items carry `item {name, count}`; players `username`, `sleeping` (only in sight); mobs `uuid`, `baby`, villagers `profession` (`unemployed` when none), sheep `sheared`; leashed
   mobs `leashed`, `leashedToMe`, `leashHolder`; riders `passengers` and `vehicle`. Creepers carry `creeper: true`. Every
-  hostile carries `visible` (`engine.senses` over the raw world: a raycast from the eye to the entity's middle, then its head, then the head-height corners of its box, any one clear; glass, fences, gates, iron bars, water, fire and the like do not block, an
+  hostile carries `visible` (`engine.senses` over the raw world: a raycast from the eye to the entity's middle, then its head, then the head-height corners of its box, any one clear; glass, fences, gates, iron bars, water, fire and the like do not block, a door or slab only where the line meets it, an
   unloaded cell never blocks). Raw entity lists go through `js/live-entities.mjs` (drops bare, never-spawned entities, picked-up drops and mobs that died).
 - Blocks carry `age` for crops (wheat/carrots/potatoes ripe at 7, beetroots 3, sweet berries from 2) and, with
   `properties`, every block state (integers as numbers, booleans and enum names as they are).

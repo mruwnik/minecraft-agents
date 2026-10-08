@@ -3,7 +3,8 @@
   The primitives give timeOfDay, rainState and thunderState, entities with their height and lying flag, and the raw world
   gives cells (stateAt, sightTable, shapesAt, eye); wrap derives isDay, raining, thundering, visible, hittable and
   sleeping from them, lists only what a player would see, and passes the sleep preconditions down."
-  (:require [engine.sight :as sight]))
+  (:require [engine.perception.rays :as rays]
+            [engine.sight :as sight]))
 
 (def rain-level 0.2)   ;; vanilla client: raining above this rain level, thundering above thunder-level while raining
 (def thunder-level 0.9)
@@ -24,10 +25,11 @@
 ;; ---- sight over the raw world
 
 (defn blocks-sight?
-  "Whether the cell holds something that stops the eye; an unloaded cell never does, so a threat is not hidden by a gap."
-  [^js raw ^js table x y z]
+  "Whether the cell holds something that stops the eye's line from (fx fy fz) to (tx ty tz) (rays/blocks-line?: a door
+  or slab only where the line meets it); an unloaded cell never does, so a threat is not hidden by a gap."
+  [^js raw ^js table x y z fx fy fz tx ty tz]
   (let [id (.stateAt raw x y z)]
-    (and (>= id 0) (some? table) (= 1 (aget table id)))))
+    (and (>= id 0) (some? table) (rays/blocks-line? raw table id x y z fx fy fz tx ty tz))))
 
 (def corner-inset 0.05)
 
@@ -46,9 +48,9 @@
 (defn can-see?
   "A clear line from the eye to any of the entity's sight-points; stops at the first clear one."
   [^js raw ^js eye ^js e]
-  (let [table (.sightTable raw)
-        solid? (fn [x y z] (blocks-sight? raw table x y z))]
-    (boolean (some (fn [[x y z]] (sight/line-clear (.-x eye) (.-y eye) (.-z eye) x y z solid?)) (sight-points e)))))
+  (let [table (.sightTable raw) ex (.-x eye) ey (.-y eye) ez (.-z eye)]
+    (boolean (some (fn [[x y z]] (sight/line-clear ex ey ez x y z (fn [cx cy cz] (blocks-sight? raw table cx cy cz ex ey ez x y z))))
+                   (sight-points e)))))
 
 (defn can-hit?
   "A melee swing needs a clear line from the eye to the feet, the middle or the head of the entity, over collision boxes."

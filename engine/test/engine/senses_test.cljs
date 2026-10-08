@@ -148,12 +148,15 @@
                            #js {:eye (fn [] (fake-raw/eye w))
                                 :stateAt (fn [x y z] (fake-raw/state-at-slow w x y z))
                                 :sightTable (fn [] @fake-raw/sight)
+                                :stateInfo (fn [id] (@fake-raw/info id))
                                 :shapesAt (fn [& _] #js [])}))
         cow (ent 11 "cow" "passive" 5.5 {:height 1.4})
         listed (fn [block] (let [w (senses/wrap (:p (stub {:entities [cow]})) (raw (into {} (for [x [2 3] y [64 65]] [[x y 0] block]))))]
                              (count (.entities ^js w #js {}))))]
     (is (= [1 1 1 1 1 0] (mapv listed ["oak_fence" "oak_fence_gate" "iron_bars" "glass" "red_bed" "stone"]))
-        "a player sees past rails, glass and beds; a full stone hides the cow")))
+        "a player sees past rails, glass and beds; a full stone hides the cow")
+    (is (= [1 0] (mapv listed ["oak_trapdoor" "oak_slab"]))
+        "a shut trapdoor lying at the cell's bottom is passed over; a slab as high as the line is not")))
 
 (deftest an-entity-is-seen-when-any-point-of-its-box-is
   (let [listed (fn [e blocks] (mapv #(.-id ^js %) (.entities ^js (:w (wrapped {:entities [e] :blocks blocks})) #js {})))

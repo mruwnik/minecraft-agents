@@ -42,6 +42,41 @@
         (when (and table (pos? (.-length table)))
           (set! (.-sight st) table)))))
 
+;; ---- thin blocks
+
+(def thin-cache (js/WeakMap.)) ;; sight table -> Map of state id -> its clipped boxes, or false
+
+(defn thin-boxes
+  "The collision boxes (clipped to the cell) of state id when it blocks sight under `table` but does not fill its cell
+  (a door, a trapdoor, a slab, stairs): it stops a line only where the line meets one. Nil for a state that fills it (a
+  full cube, or no box: lava) or when the raw world has no stateInfo."
+  [^js raw ^js table id]
+  (when-let [info-of (aget raw "stateInfo")]
+    (let [^js m (or (.get thin-cache table) (let [m (js/Map.)] (.set thin-cache table m) m))
+          hit (.get m id)]
+      (if (some? hit)
+        (when hit hit)
+        (let [^js info (.call info-of raw id)
+              shapes (some-> info .-shapes array-seq)
+              boxes (when (and info (not (.-fullCube info)) (seq shapes))
+                      (to-array (map (fn [b] (let [[x0 y0 z0 x1 y1 z1] (array-seq b)]
+                                               [(max 0 x0) (max 0 y0) (max 0 z0) (min 1 x1) (min 1 y1) (min 1 z1)]))
+                                     shapes)))]
+          (.set m id (or boxes false))
+          boxes)))))
+
+(defn blocks-line?
+  "Whether the cell (x y z), holding state id, stops the segment from (fx fy fz) to (tx ty tz): it blocks sight under
+  `table` and, for a thin block (thin-boxes), the segment meets one of its boxes."
+  [^js raw ^js table id x y z fx fy fz tx ty tz]
+  (and (== 1 (aget table id))
+       (if-let [boxes (thin-boxes raw table id)]
+         (let [from [fx fy fz] to [tx ty tz]]
+           (boolean (some (fn [[x0 y0 z0 x1 y1 z1]]
+                            (sight/segment-hits-box? from to [(+ x x0) (+ y y0) (+ z z0) (+ x x1) (+ y y1) (+ z z1)]))
+                          (array-seq boxes))))
+         true)))
+
 ;; ---- the sight pass
 
 (defn near-of
@@ -60,10 +95,12 @@
         tdy (if (zero? dy) js/Infinity (js/Math.abs (/ 1 dy)))
         tdz (if (zero? dz) js/Infinity (js/Math.abs (/ 1 dz)))
         x0 (js/Math.floor ox) y0 (js/Math.floor oy) z0 (js/Math.floor oz)
+        ex (+ ox (* dx radius)) ey (+ oy (* dy radius)) ez (+ oz (* dz radius))
+        stops? (fn [id x y z] (blocks-line? raw sight id x y z ox oy oz ex ey ez))
         first-id (.stateAt ^js raw x0 y0 z0)
         first-light (.lightAt ^js raw x0 y0 z0)]
     (when (>= first-id 0) (record! st store x0 y0 z0 first-id now))
-    (if (or (< first-id 0) (== 1 (aget sight first-id)))
+    (if (or (< first-id 0) (stops? first-id x0 y0 z0))
       1
       (loop [x x0 y y0 z z0
              tmx (if (zero? dx) js/Infinity (* tdx (if (pos? dx) (- (inc x0) ox) (- ox x0))))
@@ -80,7 +117,7 @@
               (if (< id 0)
                 n
                 (let [light (.lightAt ^js raw x y z)
-                      blocks? (== 1 (aget sight id))
+                      blocks? (stops? id x y z)
                       shown (if blocks? (max-light light prev) light)]
                   (when (or (== 1 (aget visible shown)) (<= t near)) (record! st store x y z id now))
                   (if blocks?
@@ -193,7 +230,7 @@
 
 (defn walk-cells
   "Walk the cells from the eye (ox oy oz) towards the point (tx ty tz), up to (excluding) the point's own cell. Nil when a
-  cell on the way blocks sight under `table` (the raw world's sightTable), is unloaded, or the walk overruns its budget;
+  cell on the way blocks the line (blocks-line?), is unloaded, or the walk overruns its budget;
   else the light of the last cell before the point's cell (the eye's own cell when they are the same)."
   [^js raw ^js table ox oy oz tx ty tz]
   (let [vx (- tx ox) vy (- ty oy) vz (- tz oz)
@@ -221,7 +258,7 @@
                 target? (and (== nx x1) (== ny y1) (== nz z1))
                 here (.stateAt raw nx ny nz)]
             (cond
-              (and (not target?) (or (< here 0) (== 1 (aget table here)))) nil
+              (and (not target?) (or (< here 0) (blocks-line? raw table here nx ny nz ox oy oz tx ty tz))) nil
               target? prev
               :else (recur nx ny nz
                            (if ax (+ tmx tdx) tmx) (if ay (+ tmy tdy) tmy) (if az (+ tmz tdz) tmz)
@@ -246,11 +283,11 @@
 
 (defn line-clear?
   "Whether the eye at (ox oy oz) has a clear line to the point (tx ty tz): no cell strictly between the eye's cell and
-  the point's cell blocks sight under `table` (the raw world's sightTable) or is unloaded. No cone and no light rule:
+  the point's cell blocks the line (blocks-line?) or is unloaded. No cone and no light rule:
   this answers whether a thing there could be seen by turning to it."
   [^js raw ^js table ox oy oz tx ty tz]
   (sight/line-clear ox oy oz tx ty tz
-                    (fn [x y z] (let [id (.stateAt raw x y z)] (or (< id 0) (== 1 (aget table id)))))))
+                    (fn [x y z] (let [id (.stateAt raw x y z)] (or (< id 0) (blocks-line? raw table id x y z ox oy oz tx ty tz))))))
 
 (defn on-change!
   "A block changed in the raw world: memory takes the new state only if the body sees the cell now."

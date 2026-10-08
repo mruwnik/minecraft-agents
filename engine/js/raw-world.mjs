@@ -26,7 +26,7 @@ export function sightTable (registry) {
   return out
 }
 
-// id -> {name, properties, boundingBox ('block' or 'empty'), fullCube, top (shapeTop)}, cached per id.
+// id -> {name, properties, boundingBox ('block' or 'empty'), fullCube, top (shapeTop), shapes (collision boxes)}, cached per id.
 export function stateInfo (registry) {
   const Block = prismarineBlock(registry)
   const cache = new Map()
@@ -34,7 +34,7 @@ export function stateInfo (registry) {
     let info = cache.get(id)
     if (info) return info
     const block = Block.fromStateId(id, 0)
-    info = { name: block.name, properties: block.getProperties(), boundingBox: block.boundingBox, fullCube: fullCube(block), top: shapeTop(block) }
+    info = { name: block.name, properties: block.getProperties(), boundingBox: block.boundingBox, fullCube: fullCube(block), top: shapeTop(block), shapes: block.boundingBox === 'block' ? block.shapes ?? [] : [] }
     cache.set(id, info)
     return info
   }

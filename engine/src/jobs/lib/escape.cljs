@@ -260,9 +260,8 @@
             (recur (into (pop queue) nbrs) (into seen nbrs))))))))
 
 (defn door-back
-  "For a body in the free part of a shut door's cell feet (the door's own block hides the room from its eye): the cell
-  on the free side, to step back to and look round from, unless it is seen and not standable (an unseen cell is walked to
-  and looked at)."
+  "For a body in the free part of a shut door's cell feet: the cell on the free side, to step back to and look round
+  from, unless it is seen and not standable (an unseen cell is walked to and looked at)."
   [p [x y z]]
   (let [kind-at (reach/lookup p)]
     (when-let [[dx dz] (reach/panel-step p kind-at {:x x :y y :z z})]

@@ -62,6 +62,33 @@
     (perception/pass! per)
     (is (= ["glass" "gold_block"] (mapv #(seen-name per %) [[0 65 3] [0 65 6]])))))
 
+(defn door-rig
+  "The body at [0 64 0] (eye in the door's upper half when a door is there), the cells in `doors` [x y z] shut or open
+  doors of `name` facing `facing`, gold at [0 65 -5] and [0 65 5]."
+  [name doors facing open]
+  (let [p (tu/blind (tu/fake {:blocks (merge {"0,65,-5" "gold_block" "0,65,5" "gold_block"}
+                                             (into {} (for [[x y z] doors] [(str x "," y "," z) name])))
+                              :states (into {} (for [[x y z] doors]
+                                                 [(str x "," y "," z) {:facing facing :open open :hinge "left"
+                                                                       :half (if (even? y) "lower" "upper")}]))}))]
+    {:p p :per (perception/create (fake-raw/create p) {})}))
+
+(deftest from-the-free-part-of-a-door-cell-the-eye-sees-out-past-the-panel-not-through-it
+  (let [{:keys [p per]} (door-rig "iron_door" [[0 64 0] [0 65 0]] "north" false)]
+    (perception/pass! per)
+    (is (nil? (seen-name per [0 65 5])) "facing south the panel on the cell's south side hides the gold")
+    (turn! p 180)
+    (perception/pass! per)
+    (is (= "gold_block" (seen-name per [0 65 -5])) "facing north the free part of the cell shows the gold")))
+
+(deftest a-ray-passes-the-open-part-of-a-door-on-its-way
+  (let [shut (:per (door-rig "oak_door" [[0 64 3] [0 65 3]] "north" false))
+        open (:per (door-rig "oak_door" [[0 64 3] [0 65 3]] "north" true))]
+    (perception/pass! shut)
+    (perception/pass! open)
+    (is (= ["oak_door" nil] (mapv #(seen-name shut %) [[0 65 3] [0 65 5]])) "a shut door across the ray hides the gold")
+    (is (= ["oak_door" "gold_block"] (mapv #(seen-name open %) [[0 65 3] [0 65 5]])) "an open door's panel lies along it")))
+
 (deftest a-ray-stops-at-an-unloaded-cell
   (let [p (tu/fake {:blocks {"0,65,6" "gold_block"}
                     :unloaded (for [x (range -8 9) y (range 58 73)] (str x "," y ",3"))})
