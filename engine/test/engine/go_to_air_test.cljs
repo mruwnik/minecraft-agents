@@ -30,3 +30,33 @@
       (fn ^:async t []
         (let [out (await (go-east! (/ js/Math.PI 2)))]
           (is (true? (:arrived out)) (str "result " out)))))))
+
+;; the body at the foot of a 6 deep 1x1 water shaft (x 4, water 64..69, land over all at feet 70), looking level, with
+;; 10.5 or 11.25 s of air used: no way to the goal fits the air left (the swim up passes airLimit) and the goal's head is
+;; no way to air (far, or not seen), yet the shaft's top is the way to air. A player swims up first.
+(def shaft
+  (merge (box -4 60 -4 40 63 70 "stone") (box 0 64 0 31 69 63 "stone") (box 4 64 8 4 69 8 "water")))
+
+(deftest a-body-short-of-air-at-the-foot-of-a-shaft-swims-up-first
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [goal [[8 70 8] [18 70 8]] oxygen [6 5]]
+          (let [{:keys [out p]} (await (gt/go! {:self {:pos [4.5 64 8.5] :inWater true :oxygen oxygen :pitch 0} :blocks shaft :light [15 15]}
+                                               {:pos goal :range 1 :escalate false}))]
+            (is (true? (:arrived @out)) (str "to " goal " at oxygen " oxygen ": result " @out " at " (gt/at p)))))))))
+
+;; should fail: the only way on is a 32 cell sealed tunnel (16 s) to a shaft at x 37, the land cut by a bedrock ridge (x 11):
+;; it swims up for air, and with the air back no way fits it still
+(def long-tunnel
+  (merge (box -4 60 -4 45 69 63 "stone") (box 4 64 8 4 69 8 "water")
+         (box 5 64 8 36 65 8 "water") (box 37 64 8 37 69 8 "water") (box 11 70 -4 11 73 63 "bedrock")))
+
+(deftest a-body-short-of-air-swims-up-and-gives-up-air-when-no-way-fits-a-breath
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (gt/go! {:self {:pos [4.5 64 8.5] :inWater true :oxygen 6 :pitch 0} :blocks long-tunnel :light [15 15]}
+                                             {:pos [38 70 8] :range 1 :escalate false}))]
+          (is (= :air (:why @out)) (str "result " @out))
+          (is (<= 69 (second (gt/at p))) (str "it swam up for air: at " (gt/at p))))))))

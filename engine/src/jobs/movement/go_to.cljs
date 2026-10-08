@@ -19,6 +19,7 @@
             [jobs.lib.walk.search :as wsearch]
             [jobs.lib.places :as places]
             [jobs.lib.world :as known]
+            [jobs.movement.go-to.air :as air]
             [jobs.movement.go-to.escalation :as esc]
             [jobs.movement.go-to.health :as health]
             [jobs.movement.go-to.result :as end]
@@ -74,6 +75,8 @@
     (:kind the step, :detail the executor's text), :off-plan, :steer-failed, :no-progress, :cut-again (sent back by 3 cuts, each restart more than send-back-margin farther than where the cut found the body, with no 2 blocks gained on the closest approach in between (in-place cuts do not count or break it); an escalation child's own walk is its own call, a parent waiting on it is not walking; :nearest-hostile names a guess at the cause) or :moved-while-searching; :at is the
     body's feet cell and :near its blocks from the goal. A failed
     escalation adds :escalation {:step :reason ...}, the child's reason or wait.
+  - Under water with no way to the goal in the air left (:air), it first walks to the nearest air it sees or finds by
+    looking (jobs.movement.go-to.air, info go-to.surfacing, at most 3 a call) and plans again.
   - Success is {:arrived true}. The result is also a :result info event.
   - Every walk writes a :moved memory entry {:from :to :status :target} (arrived, partial or blocked) for
     the stuck trigger.
@@ -257,22 +260,24 @@
 
       :else
       (let [_ (forget-known-land! c)
-            {walked :result status :status to :to} (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos)) pos range {:doors doors :explore (not closed?)
-                                                                                          :dangers (not (false? (:dangers (:args c))))
-                                                                                          :dark (not (false? (:dark (:args c))))
-                                                                                          :timeout-s (or (:leg-s (:args c)) near/walk-timeout-s)
-                                                                                          :one-way (when-not closed? :open)
-                                                                                          :shut-also (shut-foreign c)
-                                                                                          :budget wsearch/round-budget
-                                                                                          :avoid (set (:fault-cells (ctx/mem c)))
-                                                                                          :tolls (:tolls (:args c))
-                                                                                          :zone-tolls (:zone-tolls (:args c))
-                                                                                          :drop-cost (:drop-cost (:args c))
-                                                                                          :costs (:costs (:args c))
-                                                                                          :unknown (:unknown c)
-                                                                                          :progress (empty? (:frontier-best (ctx/mem c)))}))
+            opts {:doors doors :explore (not closed?)
+                  :dangers (not (false? (:dangers (:args c))))
+                  :dark (not (false? (:dark (:args c))))
+                  :timeout-s (or (:leg-s (:args c)) near/walk-timeout-s)
+                  :one-way (when-not closed? :open)
+                  :shut-also (shut-foreign c)
+                  :budget wsearch/round-budget
+                  :avoid (set (:fault-cells (ctx/mem c)))
+                  :tolls (:tolls (:args c))
+                  :zone-tolls (:zone-tolls (:args c))
+                  :drop-cost (:drop-cost (:args c))
+                  :costs (:costs (:args c))
+                  :unknown (:unknown c)
+                  :progress (empty? (:frontier-best (ctx/mem c)))}
+            {walked :result status :status to :to} (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos)) pos range opts))
             aided? (when (and (not= "arrived" status) (torch/torch-aid? c walked)) (await (torch/hold-torch! c)))
             looked? (when (and (not aided?) (= :air (:reason walked))) (await (look-at-goal-air! c pos)))
+            surfaced? (when (and (not aided?) (not looked?) (= :air (:reason walked))) (await (air/surface! c (dissoc opts :progress))))
             result (known-frontier-result walked)
             left (u/dist to pos)
             best (:best (ctx/mem c) d)
@@ -295,6 +300,8 @@
           aided? :again
 
           looked? :again
+
+          surfaced? :again
 
           (= "searching" status)
           (let [n (cond-> (:searching (ctx/mem c) 0) (:fresh walked) inc)]
@@ -330,7 +337,7 @@
   (let [m (ctx/mem c)
         there? (here? c pos (:range (:args c)))]
     (wworld/warn-bad-settings! c)
-    (ctx/update-mem! c #(cond-> (-> % (dissoc :best :fault-cells :over-budget :off-hand-tried :air-looked) (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {}))
+    (ctx/update-mem! c #(cond-> (-> % (dissoc :best :fault-cells :over-budget :off-hand-tried :air-looked :surfacings) (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {}))
                           (and there? (:escalate-now m)) (dissoc :escalate-now)
                           (and there? (:escalation m))
                           (-> (dissoc :escalation :escalation-from :planned :holes-before)
