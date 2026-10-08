@@ -9,6 +9,7 @@ import { craftItem } from './craft.mjs'
 import { tradeWith } from './trade.mjs'
 import { CONTAINER, DESTS, sleepMs, dist, center, isNum, isPos, cell, vec, cutError, need } from './prim-base.mjs'
 import { setting } from './settings.mjs'
+import { noteToss } from './live-entities.mjs'
 
 export function createItems (env) {
   const { act, isOwner, eye, inventory, timeScale } = env
@@ -133,7 +134,8 @@ export function createItems (env) {
     need(typeof a.item === 'string', 'toss needs item, an item name')
     need(a.slot === undefined || a.slot === null || isNum(a.slot), 'toss slot must be a number')
     need(a.watchS === undefined || (isNum(a.watchS) && a.watchS >= 0), 'toss watchS must be a number of seconds')
-    const tossed = async (ctx, count, throwIt) => {
+    const tossed = async (ctx, count, drop) => {
+      const throwIt = () => { noteToss(env.bot); return drop() }
       if (!a.watchS) {
         await throwIt()
         ctx.alive()

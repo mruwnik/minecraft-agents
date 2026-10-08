@@ -113,7 +113,7 @@ export function createSense (env) {
         ...(e.height !== undefined && { height: e.height }),
         ...(e.width !== undefined && { width: e.width }),
         ...(k === 'item' && { item: droppedItem(env.bot, e) }),
-        ...(k === 'item' && itemSpawn(env.bot, e.id) && { spawnedAt: itemSpawn(env.bot, e.id).at, thrownBy: itemSpawn(env.bot, e.id).by }),
+        ...(k === 'item' && itemSpawn(env.bot, e.id) && { spawn: itemSpawn(env.bot, e.id) }),
         ...(k === 'player' && { username: e.username, lyingDown: lyingDown(env.bot, e) }),
         ...(e.name === 'creeper' && { creeper: true })
       }))

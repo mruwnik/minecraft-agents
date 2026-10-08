@@ -6,7 +6,7 @@
   worth the detour: jobs.lib.cost item-value (:value options) over detour-cost (:cost options) at least :min-ratio.
   It is left (the reason judge gives) when:
     :thrown       the body threw it (make-room's junk, a give), ever; another player threw it under :thrown-s ago
-                  (the thrower is told from the spawn: an item that appears at a player's eye was thrown, engine/js);
+                  (thrower: from the spawn engine/js records, the item appeared at that player's drop point);
     :zone         it lies in another's zone or claim (a :take verdict; no zone list never blocks);
     :collecting   a live job's collect-drops is collecting round it (the :collecting hold, written by collect-drops);
     :owed         it appeared under :owed-s ago while some other job runs: that job's own drop (a felled log, a dug ore);
@@ -29,9 +29,19 @@
    ::thrown-s {:default 60 :spec (a/num-in 0 nil) :doc "Seconds an item another player threw is left to them."}
    ::owed-s {:default 120 :spec (a/num-in 0 nil) :doc "Seconds an item that appeared while another job runs is left to that job."}
    ::left-s {:default 300 :spec (a/num-in 0 nil) :doc "Seconds an item a run could not pick up is not tried again."}
-   ::danger-radius {:default 8 :spec (a/num-in 0 nil) :doc "No pick-up while a real danger is this near."}})
+   ::danger-radius {:default 8 :spec (a/num-in 0 nil) :doc "No pick-up while a real danger is this near."}
+   ::drop-dy {:default 1.32 :spec (a/num-in 0 2) :doc "Height above a player's feet where its thrown items appear (vanilla: eye 1.62 less 0.3)."}
+   ::throw-dxz {:default 0.1 :spec (a/num-in 0 1) :doc "Blocks across from a player's drop point within which an item counts as its throw."}
+   ::throw-dy {:default 0.1 :spec (a/num-in 0 1) :doc "Blocks up or down from a player's drop point within which an item counts as its throw."}
+   ::toss-ms {:default 2000 :spec (a/num-in 0 nil) :doc "An item counts as the body's own throw only this many ms after its last toss."}
+   ::hold-cap {:default 16 :spec (a/int-in 1 nil) :doc "Most :collecting holds kept (one per collect-drops run)."}
+   ::hold-ttl-s {:default 3600 :spec (a/num-in 1 nil) :doc "Seconds a :collecting hold lasts when its job never released it."}
+   ::left-cap {:default 32 :spec (a/int-in 1 nil) :doc "Most :loose-left entries kept."}
+   ::check-radius {:default 32 :spec (a/num-in 1 nil) :doc "Blocks within which pick-up-loose looks for the items it tried, after the run."}
+   ::collect-pad {:default 1 :spec (a/num-in 0 nil) :doc "Blocks added to :radius for the collect-drops child's area."}})
 
-(def option-keys [:radius :min-ratio :always :never :thrown-s :owed-s :left-s :danger-radius])
+(def option-keys [:radius :min-ratio :always :never :thrown-s :owed-s :left-s :danger-radius
+                  :drop-dy :throw-dxz :throw-dy :toss-ms :hold-cap :hold-ttl-s :left-cap :check-radius :collect-pad])
 
 (defn options
   "The settings with the non-nil keys of args over them; :value (item-value options) and :cost (detour-cost options)
@@ -41,26 +51,49 @@
          (into {} (remove (comp nil? val)) (select-keys args (into option-keys [:value :cost])))))
 
 (def hold-kind :collecting)
-(def hold-policy {:cap 16 :ttl (* 60 60 1000)})
 (def left-kind :loose-left)
 
 (defn hold!
   "Mark the items within radius of anchor as this ctx's root job's to collect (collect-drops, while it runs)."
   [c anchor radius]
-  (ctx/remember! c hold-kind {:job (:root c) :anchor anchor :radius radius} hold-policy))
+  (let [o (options {})]
+    (ctx/remember! c hold-kind {:job (:root c) :anchor anchor :radius radius}
+                   {:cap (:hold-cap o) :ttl (* 1000 (:hold-ttl-s o))})))
 
 (defn release! [c] (ctx/forget-where! c hold-kind #(= (:root c) (:job %))))
 
 (defn left!
   "Remember entity ids a run could not pick up, for :left-s."
-  [c ids left-s]
+  [c ids o]
   (when (seq ids)
-    (ctx/remember! c left-kind {:ids (vec ids)} {:cap 32 :ttl (* 1000 left-s)})))
+    (ctx/remember! c left-kind {:ids (vec ids)} {:cap (:left-cap o) :ttl (* 1000 (:left-s o))})))
 
-(defn listed-ids
-  "The ids of the jobs whose job memory exists in view, but except's: a job's own check of what other jobs are live."
+(defn left-ids [view] (into #{} (mapcat (comp :ids :data)) (mem/entries view left-kind)))
+
+(defn live-ids
+  "The ids of the listed jobs (each has job memory in view from listing to its end), but except's. The trigger and
+  the job both count live jobs this way, so they judge alike."
   [view except]
   (into #{} (comp (filter mem/job-kind?) (map name) (remove #{except})) (keys (:entries (:data view)))))
+
+(defn thrower
+  "The name of the player who threw an item, from its spawn record s (engine/js: :pos, :player {:name :pos} nearest
+  then, :tossed the body's last toss): the item appeared at that player's drop point, :drop-dy over its feet, within
+  :throw-dxz across and :throw-dy up or down; the body itself only under :toss-ms after its own toss. A block broken
+  beside a player drops at the block's centre, off that point. nil when nobody threw it."
+  [o self s]
+  (let [pos (some-> s .-pos u/pos-of)
+        player (some-> s .-player)
+        feet (some-> player .-pos u/pos-of)
+        name (some-> player .-name)
+        tossed (some-> s .-tossed)]
+    (when (and pos feet name
+               (<= (js/Math.abs (- (:x pos) (:x feet))) (:throw-dxz o))
+               (<= (js/Math.abs (- (:z pos) (:z feet))) (:throw-dxz o))
+               (<= (js/Math.abs (- (:y pos) (:y feet) (:drop-dy o))) (:throw-dy o))
+               (or (not= name self)
+                   (and tossed (<= 0 (- (.-at s) tossed) (:toss-ms o)))))
+      name)))
 
 (defn item-pos [e] (u/pos-of (.-pos e)))
 
@@ -90,8 +123,9 @@
   (let [now (:now view)
         name (some-> (.-item e) .-name)
         pos (item-pos e)
-        age (when-let [t (.-spawnedAt e)] (- now t))
-        by (.-thrownBy e)
+        spawn (.-spawn e)
+        age (when-let [t (some-> spawn .-at)] (- now t))
+        by (thrower o self spawn)
         holds (filter #(contains? live (:job %)) (map :data (mem/entries view hold-kind)))]
     (cond
       (nil? name) :unknown
@@ -105,12 +139,13 @@
       (some #{name} (:always o)) nil
       (< (:ratio (worth o feet e)) (:min-ratio o)) :not-worth)))
 
+(defn seen [p o] (look/seen-items p {:radius (:radius o) :max 32}))
+
 (defn candidates
-  "The seen item entities within :radius of the body judge takes, nearest first. live is the set of live job ids
-  (those running, queued or paused) other than the caller."
-  [p view kn args live]
+  "The seen item entities within :radius of the body judge takes, nearest first. except is the caller's own job id
+  (nil for the trigger): every other listed job counts as live (live-ids)."
+  [p view kn args except]
   (let [o (options args)
         env {:view view :kn kn :o o :self (.-username (.self p)) :feet (u/pos-of (.-pos (.self p)))
-             :live (set live) :left (into #{} (mapcat (comp :ids :data)) (mem/entries view left-kind))}]
-    (->> (look/seen-items p {:radius (:radius o) :max 32})
-         (filterv #(nil? (judge env %))))))
+             :live (live-ids view except) :left (left-ids view)}]
+    (filterv #(nil? (judge env %)) (seen p o))))

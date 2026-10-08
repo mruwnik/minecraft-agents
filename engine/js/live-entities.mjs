@@ -2,17 +2,21 @@
 // Mineflayer creates a bare entity for any packet naming an id it no longer holds (a late velocity or teleport after
 // the removal), and it keeps a picked-up drop until the removal packet arrives. Neither is something a player sees.
 // A mob that died stays listed for its death animation (about a second): it is no longer a mob to fight or fear.
-// An item that spawns at a player's eye (eye height less 0.3, where vanilla's drop puts it) was thrown by that player, as a
-// player watching would tell; a block's or a mob's drop spawns elsewhere. itemSpawn gives {at, by} (by absent when none).
+// itemSpawn gives an item's raw spawn facts, what a player watching saw: {at, pos, player: {name, pos} (the player
+// nearest to it then, by feet), tossed (the time of the body's last toss, from noteToss)}. Who threw it is jobs.lib.loose's call.
 const collected = new WeakMap()
 const spawns = new WeakMap()
-const THROW_DY = [0.8, 1.8]
-const THROW_DXZ = 0.6
+const tosses = new WeakMap()
 
-const thrower = (bot, pos) => Object.values(bot.entities ?? {})
-  .find(e => e.type === 'player' && e.username && e.position &&
-    Math.abs(e.position.x - pos.x) <= THROW_DXZ && Math.abs(e.position.z - pos.z) <= THROW_DXZ &&
-    pos.y - e.position.y >= THROW_DY[0] && pos.y - e.position.y <= THROW_DY[1])?.username
+const xyz = p => ({ x: p.x, y: p.y, z: p.z })
+const d2 = (a, b) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2 + (a.z - b.z) ** 2
+
+const nearestPlayer = (bot, pos) => Object.values(bot.entities ?? {})
+  .filter(e => e.type === 'player' && e.username && e.position)
+  .reduce((best, e) => (!best || d2(e.position, pos) < d2(best.position, pos) ? e : best), null)
+
+// the toss primitive calls it just before it throws
+export const noteToss = bot => tosses.set(bot, Date.now())
 
 export function trackLiveEntities (bot) {
   if (!bot._client || collected.has(bot)) return
@@ -22,8 +26,14 @@ export function trackLiveEntities (bot) {
   spawns.set(bot, born)
   bot.on('entitySpawn', e => {
     if (e?.name !== 'item' || !e.position) return
-    const by = thrower(bot, e.position)
-    born.set(e.id, { at: Date.now(), ...(by && { by }) })
+    const p = nearestPlayer(bot, e.position)
+    const tossed = tosses.get(bot)
+    born.set(e.id, {
+      at: Date.now(),
+      pos: xyz(e.position),
+      ...(p && { player: { name: p.username, pos: xyz(p.position) } }),
+      ...(tossed !== undefined && { tossed })
+    })
   })
   bot._client.on('collect', ({ collectedEntityId, pickupItemCount }) => {
     const stack = bot.entities?.[collectedEntityId]?.getDroppedItem?.()

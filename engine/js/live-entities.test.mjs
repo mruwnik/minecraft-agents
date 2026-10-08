@@ -2,7 +2,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
-import { trackLiveEntities, liveEntities, itemSpawn } from './live-entities.mjs'
+import { trackLiveEntities, liveEntities, itemSpawn, noteToss } from './live-entities.mjs'
 
 const drop = (id, count) => ({ id, name: 'item', type: 'other', position: { x: 0, y: 0, z: 0 }, getDroppedItem: () => ({ name: 'stick', count }) })
 const botWith = entities => Object.assign(new EventEmitter(), { _client: new EventEmitter(), entities })
@@ -55,21 +55,27 @@ test('a reused id is listed again once the dead mob is gone', () => {
 const player = (id, username, x, y, z) => ({ id, name: 'player', type: 'player', username, position: { x, y, z } })
 const itemAt = (id, x, y, z) => ({ id, name: 'item', type: 'other', position: { x, y, z } })
 
-test('an item that spawns at a player\'s eye was thrown by that player', () => {
-  const bot = botWith({ 1: player(1, 'Ann', 10.5, 64, 3.5) })
+test('an item\'s spawn records where and when it appeared and the player nearest to it, no verdict', () => {
+  const bot = botWith({ 1: player(1, 'Ann', 10.5, 64, 3.5), 3: player(3, 'Bob', 20.5, 64, 3.5) })
   trackLiveEntities(bot)
-  bot.entities[2] = itemAt(2, 10.5, 65.32, 3.5)
+  bot.entities[2] = itemAt(2, 10.95, 65.375, 3.5)
   bot.emit('entitySpawn', bot.entities[2])
-  assert.equal(itemSpawn(bot, 2).by, 'Ann')
-  assert.equal(typeof itemSpawn(bot, 2).at, 'number')
+  const s = itemSpawn(bot, 2)
+  assert.equal(typeof s.at, 'number')
+  assert.deepEqual(s.pos, { x: 10.95, y: 65.375, z: 3.5 })
+  assert.deepEqual(s.player, { name: 'Ann', pos: { x: 10.5, y: 64, z: 3.5 } })
+  assert.equal(s.by, undefined)
+  assert.equal(s.tossed, undefined)
 })
 
-test('an item that spawns on the ground beside a player (a block\'s drop) has no thrower', () => {
-  const bot = botWith({ 1: player(1, 'Ann', 10.5, 64, 3.5) })
+test('an item\'s spawn carries the time of the body\'s last toss', () => {
+  const bot = botWith({})
   trackLiveEntities(bot)
-  bot.entities[2] = itemAt(2, 11.5, 64.25, 3.5)
+  noteToss(bot)
+  bot.entities[2] = itemAt(2, 0, 64, 0)
   bot.emit('entitySpawn', bot.entities[2])
-  assert.equal(itemSpawn(bot, 2).by, undefined)
+  assert.equal(typeof itemSpawn(bot, 2).tossed, 'number')
+  assert.equal(itemSpawn(bot, 2).player, undefined, 'no player near')
 })
 
 test('the spawn record is forgotten with the entity', () => {

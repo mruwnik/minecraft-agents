@@ -8,6 +8,7 @@
             [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.scenario :as scenario]
+            [engine.settings :as settings]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.loose :as loose]
@@ -41,14 +42,31 @@
 (deftest a-seen-log-a-few-blocks-off-holds
   (is (true? (holds? (world log-near)))))
 
+(def live-j1 [(mem/job-kind "j1") {:args {} :children {}}])
+
+(defn holds-with [overrides w & [opts]]
+  (settings/with-settings (update-keys overrides #(keyword "jobs.lib.loose" (name %))) #(holds? w opts)))
+
 (deftest dirt-down-a-drop-is-not-worth-it
   (is (false? (holds? (world dirt-down))))
-  (is (true? (holds? (world dirt-down) {:args {:always ["dirt"]}})) ":always takes it whatever the ratio")
-  (is (false? (holds? (world log-near) {:args {:never ["oak_log"]}})) ":never leaves it"))
+  (is (true? (holds-with {:always ["dirt"]} (world dirt-down))) ":always takes it whatever the ratio")
+  (is (false? (holds-with {:never ["oak_log"]} (world log-near))) ":never leaves it"))
 
 (deftest only-seen-items-within-the-radius-count
   (is (false? (holds? (world (assoc log-near :visible false)))) "hidden behind a wall")
-  (is (false? (holds? (world log-near) {:args {:radius 3}}))))
+  (is (false? (holds-with {:radius 3} (world log-near)))))
+
+(def log-ten-off (item 13 "oak_log" [10.5 64 0.5]))
+
+(deftest register-args-are-ignored-the-settings-rule-trigger-and-job-alike
+  (is (false? (holds? (world log-ten-off) {:args {:radius 12}})) "the job it fires reads the settings: radius 8")
+  (is (true? (holds-with {:radius 12} (world log-ten-off)))))
+
+(deftest trigger-and-job-count-the-same-jobs-live
+  (let [fresh (assoc log-near :spawn {:at (- now 5000)})]
+    (is (false? (holds? (world fresh) {:memory [live-j1]}))
+        "a listed job's memory counts as live, as the job counts it")
+    (is (true? (holds? (world fresh) {:live #{"j1"}})) "not the engine's own list, which the job cannot see")))
 
 (deftest a-nearly-full-inventory-holds-nothing
   (is (false? (holds? (assoc (world log-near) :inventory (vec (for [i (range 34)] {:name "dirt" :count 64 :slot (+ 9 i)})))))))
@@ -56,10 +74,36 @@
 (deftest a-danger-near-holds-nothing
   (is (false? (holds? (update (world log-near) :entities conj {:id 7 :name "zombie" :kind "hostile" :pos [-3 64 0]})))))
 
+(defn spawn
+  "A spawn record: the item appeared at pos (dx dy dz from the feet of player name at feet), tossed ms before."
+  [player feet [dx dy dz] & [{:keys [ago tossed]}]]
+  (cond-> {:at (- now (or ago 1000)) :pos (mapv + feet [dx dy dz]) :player {:name player :pos feet}}
+    tossed (assoc :tossed (- now (or ago 1000) tossed))))
+
 (deftest thrown-items-are-left
-  (is (false? (holds? (world (assoc log-near :thrown-by "Fake" :spawned-at (- now 600000))))) "its own toss, ever")
-  (is (false? (holds? (world (assoc log-near :thrown-by "Ann" :spawned-at (- now 10000))))) "a player's toss, for a while")
-  (is (true? (holds? (world (assoc log-near :thrown-by "Ann" :spawned-at (- now 70000))))) "a player's toss, after :thrown-s"))
+  (is (false? (holds? (world (assoc log-near :spawn (spawn "Fake" [4.5 64 0.5] [0 1.32 0] {:ago 600000 :tossed 200}))))) "its own toss, ever")
+  (is (false? (holds? (world (assoc log-near :spawn (spawn "Ann" [4.5 64 0.5] [0.05 1.3 0] {:ago 10000}))))) "a player's toss, for a while")
+  (is (true? (holds? (world (assoc log-near :spawn (spawn "Ann" [4.5 64 0.5] [0 1.32 0] {:ago 70000}))))) "a player's toss, after :thrown-s"))
+
+(defn xyz [[x y z]] {:x x :y y :z z})
+
+(defn thrower [s] (loose/thrower (loose/options {}) "Fake" (clj->js (-> s (update :pos xyz) (update-in [:player :pos] xyz)))))
+
+(deftest who-threw-it-is-told-from-the-spawn-point
+  (let [feet [3.95 64 0.5]]
+    (is (nil? (thrower (spawn "Fake" feet [0.45 1.375 0] {:tossed 300})))
+        "a log broken at head height 0.45 off the body is not its toss, even just after a toss")
+    (is (= "Fake" (thrower (spawn "Fake" feet [0 1.32 0] {:tossed 300}))) "at its drop point just after it tossed")
+    (is (nil? (thrower (spawn "Fake" feet [0 1.32 0]))) "at its drop point with no toss: a block's drop that landed there")
+    (is (nil? (thrower (spawn "Fake" feet [0 1.32 0] {:tossed 5000}))) "its last toss long before")
+    (is (= "Ann" (thrower (spawn "Ann" feet [0.05 1.3 0.05]))) "another player's drop point")
+    (is (nil? (thrower (spawn "Ann" feet [0.3 1.32 0]))) "beside it")
+    (is (nil? (thrower (spawn "Ann" feet [0 0.6 0]))) "at its knees")))
+
+(deftest a-log-broken-at-head-height-beside-the-body-is-picked-up
+  (let [feet [3.95 64 0.5]
+        e (assoc log-near :spawn (spawn "Fake" feet [0.55 1.375 0] {:ago 200000 :tossed 100}))]
+    (is (true? (holds? (world e))))))
 
 (deftest another-bodys-zone-or-claim-is-left
   (let [zone (fn [owner] [{:name "yard" :owner owner :min [0 60 -3] :max [8 70 3]}])]
@@ -69,12 +113,12 @@
 
 (deftest items-a-live-job-collects-are-left
   (let [hold [:collecting {:job "j1" :anchor {:x 3 :y 64 :z 0} :radius 4}]]
-    (is (false? (holds? (world log-near) {:memory [hold] :live #{"j1"}})) "inside a running collect-drops' area")
-    (is (true? (holds? (world log-near) {:memory [hold] :live #{}})) "its job ended"))
-  (let [fresh (assoc log-near :spawned-at (- now 5000))]
-    (is (false? (holds? (world fresh) {:live #{"j1"}})) "just dropped while a job runs: that job's to collect")
-    (is (true? (holds? (world fresh) {:live #{}})) "just dropped with no job running")
-    (is (true? (holds? (world (assoc log-near :spawned-at (- now 200000))) {:live #{"j1"}})) "lying past :owed-s")))
+    (is (false? (holds? (world log-near) {:memory [hold live-j1]})) "inside a running collect-drops' area")
+    (is (true? (holds? (world log-near) {:memory [hold]})) "its job ended"))
+  (let [fresh (assoc log-near :spawn {:at (- now 5000)})]
+    (is (false? (holds? (world fresh) {:memory [live-j1]})) "just dropped while a job runs: that job's to collect")
+    (is (true? (holds? (world fresh))) "just dropped with no job running")
+    (is (true? (holds? (world (assoc log-near :spawn {:at (- now 200000)})) {:memory [live-j1]})) "lying past :owed-s")))
 
 (deftest items-a-run-left-are-not-tried-again
   (is (false? (holds? (world log-near) {:memory [[:loose-left {:ids [11]}]]}))))
@@ -88,7 +132,7 @@
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :backoff false :world (ew/of-data {} {} [])
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    {:eng eng :p p :seen seen}))
+    {:eng eng :p p :seen seen :clock clock}))
 
 (defn carried [p n] (reduce + 0 (keep #(when (= n (:name %)) (:count %)) (:inventory @(fake/state p)))))
 
@@ -122,6 +166,26 @@
               r (await (tu/child-outcome eng 'jobs.items.pick-up-loose {} 20))]
           (is (= :not-done r) "declined: no result")
           (is (= 0 (carried p "dirt"))))))))
+
+(deftest a-declined-run-leaves-what-it-saw-so-a-disagreeing-trigger-cannot-repeat
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup (world dirt-down))
+              r (await (tu/child-outcome eng 'jobs.items.pick-up-loose {} 20))]
+          (is (= :not-done r))
+          (is (= [12] (into [] (mapcat (comp :ids :data)) (mem/entries (mem/view (:store eng)) loose/left-kind)))))))))
+
+(deftest register-args-cut-the-running-job-at-most-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen clock]} (setup (world log-ten-off))]
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :loose-items :args {:radius 12}}]}"))
+          (dotimes [_ 6]
+            (swap! clock + 31000)
+            (dotimes [_ 5] (await (core/tick! eng))))
+          (is (<= (count (filterv #(and (= :reflex (:source %)) (= :fired (:kind %))) @seen)) 1)))))))
 
 (deftest collect-drops-holds-its-area-while-it-runs
   (async done
