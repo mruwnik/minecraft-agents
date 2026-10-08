@@ -2,7 +2,7 @@
   "Block memory: per dimension and 16^3 section, the state ids and seen times of the cells the body has seen, capped by
   forgetting the least recently seen section; and reading it back (seen-block, seen-blocks).
   A cell holding a mutable state (fluid, door, gate, trapdoor, fire: `mutable-id?`) also keeps its seen time to the ms,
-  in the section's :fine map (not saved to file)."
+  in the section's :fine Float32Array (ms after its base, NaN: none; off the V8 heap; not saved to file)."
   (:require [engine.game :as game]))
 
 (def section-bytes 12288) ; ids (8192) and per-cell seen times (4096)
@@ -59,14 +59,25 @@
       m
       (let [shift (- m 255) ^js times (.-times sec)]
         (dotimes [i 4096] (aset times i (js/Math.max 0 (- (aget times i) shift))))
+        (when-let [^js fine (.-fine sec)]
+          (let [ms (* shift minute-ms)]
+            (dotimes [i 4096] (aset fine i (let [t (- (aget fine i) ms)] (if (neg? t) js/NaN t))))))
         (set! (.-base sec) (+ (.-base sec) (* shift minute-ms)))
         255))))
 
 (defn cell-seen
   "When the cell was last seen, in ms: to the ms for a mutable state, else to the minute (never later than the truth)."
   [^js sec i]
-  (or (some-> ^js (.-fine sec) (.get i))
-      (+ (.-base sec) (* minute-ms (aget (.-times sec) i)))))
+  (let [t (some-> ^js (.-fine sec) (aget i))]
+    (if (and (some? t) (not (js/isNaN t)))
+      (+ (.-base sec) t)
+      (+ (.-base sec) (* minute-ms (aget (.-times sec) i))))))
+
+(defn fine-times
+  "The section's :fine array, made (all NaN) when first asked for. Float32 holds a whole ms up to 2^24 (279 min) past
+  the base exactly; minute-of! keeps cells within 255 min of it."
+  [^js sec]
+  (or (.-fine sec) (set! (.-fine sec) (.fill (js/Float32Array. 4096) js/NaN))))
 
 (def mutable-names #{"water" "lava" "bubble_column" "fire" "soul_fire"})
 
@@ -101,8 +112,8 @@
       (aset (.-ids sec) i (inc id))
       (aset (.-times sec) i (minute-of! sec now))
       (if (mutable-id? st id)
-        (.set (or (.-fine sec) (set! (.-fine sec) (js/Map.))) i now)
-        (when-let [^js fine (.-fine sec)] (.delete fine i))))))
+        (aset (fine-times sec) i (- now (.-base sec)))
+        (when-let [^js fine (.-fine sec)] (aset fine i js/NaN))))))
 
 (defn new-stamp!
   "A new write round: sections written from now on are moved to the newest end again."

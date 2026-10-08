@@ -88,6 +88,36 @@
       (set! (.-fine ^js (sec-of)) nil)
       (is (<= (store/cell-seen (sec-of) (store/cell-index 0 65 4)) fine)))))
 
+(defn fill-section!
+  "Records every cell of the section holding [0 64 0] as the state id at now."
+  [^js st id now]
+  (let [store (store/store-of st "overworld")]
+    (doseq [x (range 16) y (range 64 80) z (range 16)] (store/record! st store x y z id now))
+    (.get store (store/section-key 0 4 0))))
+
+(deftest a-section-full-of-water-keeps-its-ms-times-in-one-fixed-16-kb-array
+  (let [{:keys [per clock]} (rig {"0,65,4" "water"})
+        ^js st (:st per)
+        id (:state-id (perception/glance! per [0 65 4]))
+        ^js sec (fill-section! st id @clock)]
+    (is (= 16384 (some-> ^js (.-fine sec) .-buffer .-byteLength)) "off the V8 heap, the same size however many cells")
+    (is (= @clock (store/cell-seen sec (store/cell-index 3 70 9))))))
+
+(deftest a-fluid-cells-ms-time-survives-the-section-base-moving-on-and-stone-drops-it
+  (let [{:keys [per clock]} (rig {"0,65,4" "water" "1,65,3" "stone"})
+        ^js st (:st per)
+        id (:state-id (perception/glance! per [0 65 4]))
+        stone (:state-id (perception/glance! per [1 65 3]))
+        store (store/store-of st "overworld")
+        ^js sec (.get store (store/section-key 0 4 0))
+        t0 @clock]
+    (swap! clock + (* 300 60000) 1234)
+    (store/record! st store 1 65 4 id @clock)
+    (is (= [(+ t0 (* 300 60000) 1234) true]
+           [(store/cell-seen sec (store/cell-index 1 65 4)) (> (.-base sec) t0)]))
+    (store/record! st store 1 65 4 stone @clock)
+    (is (= 0 (mod (- (store/cell-seen sec (store/cell-index 1 65 4)) (.-base sec)) 60000)) "stone is timed to the minute")))
+
 (deftest a-remembered-air-cell-next-to-remembered-fluid-reads-unknown-after-the-max-age
   (let [{:keys [p per clock]} (rig {"0,65,4" "lava" "1,65,4" "air" "3,65,4" "air" "4,65,4" "stone"})]
     (perception/pass! per)
