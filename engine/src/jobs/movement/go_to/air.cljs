@@ -1,6 +1,6 @@
 (ns jobs.movement.go-to.air
-  "go-to and water: under water when no way to the goal fits the air left (or a search goes on with little air left),
-  swim to air first, then plan again; an arrival in water walks on to a dry stand in range."
+  "go-to and water: under water when no way to the goal fits the air left (or a search goes on with little air left, or
+  keeps beginning afresh), swim to air first, then plan again; an arrival in water reads a dry stand in range."
   (:require [engine.ctx :as ctx]
             [engine.game :as game]
             [engine.perception :as perception]
@@ -24,13 +24,6 @@
 
 (def default-air-look-min "go-to's :air-look-min default: seconds of air left below which it looks no more (a swim up needs them)." 1.5)
 
-(def surface-air
-  "Seconds of air left under which a go-to whose head is under water and whose search goes on (no walk) swims to air
-  first: a body holding still in water sinks while it thinks."
-  7.5)
-
-(def dry-radius "Cells round the goal an arrival in water reads for a dry stand, at most (a larger :range reads this many)." 6)
-
 (defn in-water?
   "Whether the body is in water: it says so, or its feet cell feels like water (afloat at the surface)."
   [p]
@@ -38,18 +31,20 @@
     (boolean (or (.-inWater self) (= "water" (u/feel-name p (breath/feet-cell self)))))))
 
 (defn dry-stand
-  "The seen cell within range (at most dry-radius) of goal, nearest pos, where the body stands out of water: feet and
-  head open, a solid under the feet; nil when there is none."
-  [p goal within pos]
+  "The seen cell within radius of pos (the body) and within range within of goal, nearest pos, where the body stands
+  out of water: feet and head open, a solid under the feet; nil when there is none."
+  [p goal within pos radius]
   (let [k (column/kind-at p false)
         [gx gy gz] (mapv #(js/Math.floor (% goal)) [:x :y :z])
-        r (min within dry-radius)
-        n (js/Math.floor r)
+        [bx by bz] (mapv #(js/Math.floor (% pos)) [:x :y :z])
+        n (js/Math.floor radius)
+        sq (fn [a b c] (+ (* a a) (* b b) (* c c)))
         dry? (fn [[x y z]] (and (keyword-identical? :open (k x y z)) (keyword-identical? :open (k x (inc y) z))
                                 (keyword-identical? :solid (k x (dec y) z))))
         cells (for [dx (range (- n) (inc n)) dy (range (- n) (inc n)) dz (range (- n) (inc n))
-                    :when (<= (+ (* dx dx) (* dy dy) (* dz dz)) (* r r))]
-                [(+ gx dx) (+ gy dy) (+ gz dz)])
+                    :let [x (+ bx dx) y (+ by dy) z (+ bz dz)]
+                    :when (and (<= (sq dx dy dz) (* radius radius)) (<= (sq (- x gx) (- y gy) (- z gz)) (* within within)))]
+                [x y z])
         far (fn [[x y z]] (u/dist pos {:x (+ x 0.5) :y y :z (+ z 0.5)}))
         found (filter dry? cells)]
     (when (seq found)
@@ -114,37 +109,55 @@
         y (js/Math.floor (:y (u/self-pos c)))]
     (or (= "surfaced" (.-status r)) (> y fy))))
 
+(defn ^:async swim-to-air!
+  "Look for air (up the own column first, then the columns beside it, breath/find-air!), else read seen air within
+  air-radius, and walk one round (near/walk-round! with walk-opts) to that surface cell, range 0: a way to air, whose
+  drowning is priced, not refused; why starts its go-to.surfacing info. With no air known and the own column open, swims
+  up it blind (one swim); with the column not open (a block seen over it), look-again! toward goal. counted is called
+  when it swims. True when it walked there or on (the caller plans again); nil when no air is known and nothing is left
+  to look at."
+  [c walk-opts goal why counted]
+  (let [p (:primitives c)
+        pos (u/self-pos c)
+        target (or (await (breath/find-air! (assoc c :args look-args) pos))
+                   (breath/nearest-air p pos air-radius (:reach look-args) nil false))]
+    (if-not target
+      (if (breath/column-open? p (js/Math.floor (:x pos)) (js/Math.floor (:z pos)) (js/Math.floor (:y pos)) (:reach look-args))
+        (do (counted)
+            (ctx/emit! c :go-to.surfacing :info {:text (str why ", nothing seen above: swimming up blind")})
+            (await (swim-up-blind! c pos)))
+        (await (look-again! c pos goal)))
+      (do
+        (counted)
+        (ctx/emit! c :go-to.surfacing :info {:at target :text (str why ": swimming up to " [(:x target) (:y target) (:z target)] " first")})
+        (let [{:keys [status]} (await (near/walk-round! c target 0 walk-opts))]
+          (contains? #{"arrived" "partial" "searching"} status))))))
+
 (defn ^:async surface!
   "A round refused :air with the head under water: the planner refuses a swim past the air limit unless the goal is a
-  way to air, so a far goal leaves the body under water. Look for air (up the own column first, then the columns beside
-  it, breath/find-air!), else read seen air within air-radius, and walk one round (near/walk-round! with walk-opts) to
-  that surface cell, range 0: a way to air, whose drowning is priced, not refused. At most max-surfacings a call (mem
-  :surfacings). True when it walked there or on (the caller plans again); nil when the head is out, the tries are spent
-  or no air is known, the own column is not open (a block seen over it) and look-again! toward goal has nothing left. With
-  no air known and the own column open, swims up it blind (one swim)."
+  way to air, so a far goal leaves the body under water: swim-to-air!, at most max-surfacings a call (mem :surfacings).
+  Nil when the head is out or the tries are spent."
   [c walk-opts goal]
-  (let [p (:primitives c)
-        n (:surfacings (ctx/mem c) 0)]
-    (when (and (< n max-surfacings) (breath/head-under? p))
-      (let [pos (u/self-pos c)
-            target (or (await (breath/find-air! (assoc c :args look-args) pos))
-                       (breath/nearest-air p pos air-radius (:reach look-args) nil false))]
-        (if-not target
-          (if (breath/column-open? p (js/Math.floor (:x pos)) (js/Math.floor (:z pos)) (js/Math.floor (:y pos)) (:reach look-args))
-            (do (ctx/update-mem! c assoc :surfacings (inc n))
-                (ctx/emit! c :go-to.surfacing :info {:text "short of air, nothing seen above: swimming up blind"})
-                (await (swim-up-blind! c pos)))
-            (await (look-again! c pos goal)))
-          (do
-            (ctx/update-mem! c assoc :surfacings (inc n))
-            (ctx/emit! c :go-to.surfacing :info {:at target :text (str "short of air: swimming up to " [(:x target) (:y target) (:z target)] " first")})
-            (let [{:keys [status]} (await (near/walk-round! c target 0 walk-opts))]
-              (contains? #{"arrived" "partial" "searching"} status))))))))
+  (let [n (:surfacings (ctx/mem c) 0)]
+    (when (and (< n max-surfacings) (breath/head-under? (:primitives c)))
+      (await (swim-to-air! c walk-opts goal "short of air" #(ctx/update-mem! c assoc :surfacings (inc n)))))))
 
 (defn ^:async surface-while-searching!
-  "A round whose search goes on (no walk) with the head under water and less than surface-air of air left: surface!
-  first, as a player swims up while thinking. True when it swam."
-  [c walk-opts goal]
+  "A round whose search goes on (no walk) with the head under water: swim-to-air! first, as a player swims up while
+  thinking, when less than surface-air seconds of air are left, or when the search began afresh (fresh?) more than
+  restarts times since the last swim up (mem :wet-fresh): a kept search under water is dropped once its air drifts
+  (jobs.lib.walk.search/air-drift), so one that needs more slices never ends there. Never capped while air is short;
+  else at most max-surfacings swims in a row that left the head under water (mem :wet-surfacings). True when it swam."
+  [c walk-opts goal fresh? {:keys [surface-air restarts]}]
   (let [p (:primitives c)]
-    (when (and (breath/head-under? p) (< (air-left p) surface-air))
-      (await (surface! c walk-opts goal)))))
+    (when (breath/head-under? p)
+      (let [m (ctx/mem c)
+            n (cond-> (:wet-fresh m 0) fresh? inc)
+            low? (< (air-left p) surface-air)
+            restarted? (and (> n restarts) (< (:wet-surfacings m 0) max-surfacings))]
+        (when fresh? (ctx/update-mem! c assoc :wet-fresh n))
+        (when (or low? restarted?)
+          (ctx/update-mem! c assoc :wet-fresh 0)
+          (let [swam (await (swim-to-air! c walk-opts goal (if low? "short of air" "searching under water") (fn [])))]
+            (ctx/update-mem! c update :wet-surfacings #(if (breath/head-under? p) (inc (or % 0)) 0))
+            swam))))))
