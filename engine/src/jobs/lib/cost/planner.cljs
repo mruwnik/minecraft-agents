@@ -35,6 +35,25 @@
       (pos? (or respiration 0)) (assoc :air-drain (/ 1 (inc respiration)))
       (= "turtle_helmet" (:name head)) (assoc :air-grace 10))))
 
+(defn- swim-s
+  "Seconds a block of swimming at the surface takes with Depth Strider level (vanilla water travel: inertia 0.8 and
+  acceleration 0.02 move toward 0.546 and the walking speed 0.1 by level/3, max 3, half that off the ground)."
+  [level]
+  (let [e (/ (min level 3) 6)
+        inertia (+ 0.8 (* (- 0.546 0.8) e))
+        accel (+ 0.02 (* (- 0.1 0.02) e))]
+    (/ (- 1 inertia) (* 0.98 20 accel))))
+
+(defn swim-profile
+  "{:swim-h} for Depth Strider on the boots (none: {}): the planner's swimH scaled as the surface swim speeds up, about
+  0.73 at level 1, 0.61 at 2 and 0.55 at 3, never under walk-floor. equipment: self's :equipment (cljs or JS)."
+  [equipment]
+  (let [level (->> (:enchants (get (armour/equipment-of equipment) "feet"))
+                   (some #(when (= "depth_strider" (:name %)) (:level %))))]
+    (if (pos? (or level 0))
+      {:swim-h (max walk-floor (* (unchecked-get base/DEFAULT-COSTS "swimH") (/ (swim-s level) (swim-s 0))))}
+      {})))
+
 (defn air-used
   "The seconds of air a body with oxygen (0-20 bubbles, 15 s; unknown: full) has used; mineflayer rounds the air to a
   bubble, so 0.375 s (half a bubble) more."
@@ -42,10 +61,11 @@
   (if (number? oxygen) (+ (* (- 20 oxygen) 0.75) 0.375) 0))
 
 (defn air-costs
-  "The planner's options.costs airDrain, airGrace and airUsed (a JS object) for a policy's :air-drain, :air-grace and
-  :air-used, those it has."
+  "The planner's options.costs airDrain, airGrace, airUsed and swimH (a JS object) for a policy's :air-drain, :air-grace,
+  :air-used and :swim-h, those it has."
   [policy]
   (let [o #js {}]
+    (when-some [h (:swim-h policy)] (unchecked-set o "swimH" h))
     (when-some [d (:air-drain policy)] (unchecked-set o "airDrain" d))
     (when-some [g (:air-grace policy)] (unchecked-set o "airGrace" g))
     (when-some [u (:air-used policy)] (unchecked-set o "airUsed" u))

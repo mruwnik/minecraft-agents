@@ -2,6 +2,7 @@
   "jobs.lib.cost.planner: go-to's :costs overrides of the planner's per-move prices, and how they reach the planner."
   (:require [cljs.test :refer [deftest is are]]
             [engine.planner-fixture :as pf :refer [near world run]]
+            [engine.test-util :as tu]
             [jobs.lib.cost :as cost]
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.world :as wworld]))
@@ -116,3 +117,37 @@
   (let [walk-s (.-sprintS (.-costs (wplan/with-drops #js {} {:gait :walk})))]
     (is (= walk-s (.-sprintS (.-costs (wplan/with-drops #js {} {:sprint false})))) "sprint false: sprintS = walkS")
     (is (nil? (.-costs (wplan/with-drops #js {} {:sprint true}))) "can sprint: the planner's defaults")))
+
+(deftest swim-profile-follows-depth-strider-on-the-boots
+  (are [equipment expected] (= expected (cost/swim-profile equipment))
+    nil {}
+    {:feet {:name "iron_boots"}} {}
+    {:feet {:name "iron_boots" :enchants [{:name "feather_falling" :level 4}]}} {}
+    {:head {:name "turtle_helmet" :enchants [{:name "depth_strider" :level 3}]}} {})
+  (let [swim-h (fn [level] (:swim-h (cost/swim-profile {:feet {:name "diamond_boots" :enchants [{:name "depth_strider" :level level}]}})))]
+    (is (< (swim-h 3) (swim-h 2) (swim-h 1) (:swimH pf/default-costs)) "each level swims quicker")
+    (is (= (swim-h 3) (swim-h 5)) "the effect stops at level 3")
+    (is (< (:walkS pf/default-costs) (swim-h 3) (* 1.25 (:walkS pf/default-costs))) "level 3 swims a little slower than walking (half the effect off the ground)")))
+
+(deftest with-drops-sets-the-swim-price-under-the-callers-costs
+  (is (= 0.3 (.. (wplan/with-drops #js {} {:swim-h 0.3}) -costs -swimH)))
+  (is (= 2 (.. (wplan/with-drops #js {} {:swim-h 0.3 :costs {:swim-h 2}}) -costs -swimH)) "the caller's :costs :swim-h wins"))
+
+(deftest body-policy-reads-depth-strider-from-the-boots
+  (let [policy (fn [equipment] (wworld/body-policy {:primitives (tu/fake {:self {:health 20 :food 20} :equipment equipment}) :args {}
+                                                    :view (constantly {:now 0 :data {:entries {}}})}))]
+    (is (nil? (:swim-h (policy {}))))
+    (is (= (:swim-h (cost/swim-profile {:feet {:name "iron_boots" :enchants [{:name "depth_strider" :level 3}]}}))
+           (:swim-h (policy {:feet {:name "iron_boots" :enchants [{:name "depth_strider" :level 3}]}}))))))
+
+;; a 2-deep lake (surface y 63) across x 4..16 from the world's edge to z 10; the goal is across it
+(def lake (world {:fill [[4 62 -2 16 63 10 "water"]]}))
+
+(defn swims? [costs]
+  (let [r (run lake (near 18 64 2) {:goalFlood 0 :costs (cost/planner-costs costs)})]
+    (assert (= "found" (str (:status r))) (pr-str (:status r) (:reason r)))
+    (contains? (set (pf/moves r)) (:swim pf/MOVE))))
+
+(deftest depth-strider-flips-the-walk-round-for-the-swim
+  (is (false? (swims? {})) "no boots: round the lake")
+  (is (true? (swims? (cost/swim-profile {:feet {:name "iron_boots" :enchants [{:name "depth_strider" :level 3}]}}))) "depth strider III: across"))
