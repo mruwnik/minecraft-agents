@@ -19,7 +19,7 @@
      jobs.village.trade
      jobs.village.feed jobs.village.breed jobs.village.maintain jobs.village.roll
      jobs.items.smelt
-     jobs.items.enchant jobs.items.obtain jobs.items.get-tool jobs.items.fetch-limits
+     jobs.items.enchant jobs.items.obtain jobs.items.get-tool jobs.items.get-kit jobs.items.fetch-limits
      jobs.build.from-plan jobs.build.pen jobs.build.rail-line
      jobs.access.pillar jobs.access.bridge
      jobs.explore.search jobs.explore.look
