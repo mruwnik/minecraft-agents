@@ -1042,3 +1042,14 @@
                           (is (= 1 (:code refused)))
                           (is (= "POST" (:method (first (:seen refused)))))
                           (is (= "{:key :a/b, :value 3}" (:body (first (:seen refused)))))))))))
+
+(deftest a-body-idle-in-the-backlog-is-stale-once-the-jobs-or-the-body-moved-on
+  (let [idle (event :body :idle {:jobs [{:job "j73"}]} "body idle 10 s")
+        job (fn [kind] (assoc (event :job kind) :context {:job-id "j74"}))
+        started (fn [name] (event :action :started {:name name}))]
+    (is (false? (observe-status/stale-idle? idle [])))
+    (is (false? (observe-status/stale-idle? idle [(event :body :chat)])))
+    (is (false? (observe-status/stale-idle? idle [(started "look")])) "an idle-ok job's look keeps it true")
+    (is (true? (observe-status/stale-idle? idle [(job :cancelled)])) "the listed jobs changed")
+    (is (true? (observe-status/stale-idle? idle [(job :queued)])))
+    (is (true? (observe-status/stale-idle? idle [(started "look") (started "moveTo")])) "the body walked")))

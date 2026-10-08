@@ -147,6 +147,16 @@
   (boolean (or (> (or (get-in e [:data :attempt]) 1) 1)
                (some recovered? later))))
 
+(def jobs-changed-kinds (conj job-results/terminal-kinds :queued))
+
+(defn stale-idle?
+  "Whether a body.idle in the backlog is out of date: a job was queued or ended after it, or the body walked
+  (a moveTo act), so its job list and its claim of no useful act no longer hold."
+  [e later]
+  (boolean (some #(or (and (= :job (:source %)) (jobs-changed-kinds (:kind %)))
+                      (and (= :action (:source %)) (= :started (:kind %)) (= "moveTo" (get-in % [:data :name]))))
+                 later)))
+
 (defn classify
   "The wake an event causes under the options, or nil. Options: :from :chatter :watch :danger :disconnect. A
   body.idle and a death always wake."
