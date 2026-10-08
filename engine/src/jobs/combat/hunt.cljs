@@ -24,6 +24,7 @@
      else every item within :collect-radius).
   3. :killed reaching :count ends :count.
   4. At most :keep adults present ends :keep. Skipped animals still count.
+  With a :color only unsheared sheep of that colour count (sheared ones drop no wool) and are hunted; the last :keep of them stay.
   5. No candidate (present, not skipped) ends :none, on the second such round in a row, after a 1 s wait.
   6. Otherwise the nearest candidate becomes the :target and is attacked in the same round.
      The target stays until killed or given up on, even when a nearer animal turns up.
@@ -62,10 +63,10 @@
   (adults-within c (:radius (:args c))))
 
 (defn coloured
-  "The entities of the :color arg (all when it is nil)."
+  "The entities of the :color arg (all when it is nil); with a :color the sheared ones are left out, they drop no wool."
   [c es]
   (let [color (:color (:args c))]
-    (cond->> es color (filter #(= color (.-color %))))))
+    (cond->> es color (filter #(and (= color (.-color %)) (not (true? (.-sheared %))))))))
 
 (defn candidates
   "The present animals of the :color not skipped, nearest first."
@@ -122,7 +123,10 @@
         seen (vec (sort (distinct (keep #(.-color %) (present c)))))
         out {:killed 0 :reason :no-color :spared 0 :remaining (count (present c)) :seen-colors seen}
         text (str "hunt stopped: no " color " " mob " within " (:radius (:args c)) " blocks"
-                  (when (seq seen) (str "; seen: " (str/join ", " seen))))]
+                  (when (seq seen) (str "; seen: " (str/join ", " seen)))
+                  (let [n (count (filter #(and (= color (.-color %)) (true? (.-sheared %)))
+                                         (adults-within c (:radius (:args c)))))]
+                    (when (pos? n) (str "; " n " sheared " color " sheep skipped"))))]
     (ctx/emit! c :hunt.done :warn (assoc out :text text))
     (ctx/result! c (assoc out :status :stopped :text text))
     :done))
