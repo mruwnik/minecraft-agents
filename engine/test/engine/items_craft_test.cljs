@@ -280,6 +280,19 @@
           (is (= 1 (get (inv p) "bread")))
           (is (nil? (get (inv p) "crafting_table"))))))))
 
+(deftest craft-in-a-stone-pocket-digs-a-cell-beside-by-hand-for-the-table
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pocket (into {"0,66,0" "stone"}
+                           (for [x [-1 0 1] z [-1 0 1] y [63 64 65] :when (or (= 63 y) (not (and (zero? x) (zero? z))))]
+                             [(str x "," y "," z) "stone"]))
+              {:keys [eng p]} (setup {:inventory [{:name "wheat" :count 3} {:name "crafting_table" :count 1}] :blocks pocket})
+              result (await (child-outcome eng job {:item "bread"} 40))]
+          (is (= {:made 1 :spent {"crafting_table" 1}} (select-keys result [:made :spent])) (pr-str result))
+          (is (= 1 (count (calls p "dig"))) "one cell beside dug, bare-handed")
+          (is (= 1 (get (inv p) "bread"))))))))
+
 (deftest craft-fetches-a-missing-table-from-a-seen-chest-by-default
   (async done
     (tu/run-async done

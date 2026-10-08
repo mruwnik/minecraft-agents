@@ -51,6 +51,14 @@
           (is (= [:stopped :dig-waits :no-tool] [(:status r) (:reason r) (:reason (:wait r))]) (pr-str r))
           (is (= [1 65 0] (:cell r)) "the top layer first"))))))
 
+(deftest by-hand-digs-the-door-with-no-pickaxe
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [r (await (run-door wall nil {:heading :east :max-thick 3 :by-hand true}))]
+          (is (= [:done :done [3 64 0]] [(:status r) (:reason r) (:through r)]) (pr-str r))
+          (is (= 4 (count (:dug r))) "two blocks high, two thick, bare-handed"))))))
+
 (deftest a-cell-that-is-dug-but-never-clears-ends-refills
   (async done
     (tu/run-async done

@@ -77,7 +77,9 @@
 
   :fetch (default true; jobs.lib.fetch; false waits :no-tool): the :no-tool wait is not waited out; the call runs jobs.items.get-tool
   for the block (child :fetch) first, then walks back to the cell it stood on (child :fetch-back) and goes on. A
-  parent's stair child does not fetch.")
+  parent's stair child does not fetch.
+  :by-hand (default false): a block no carried tool clears is dug bare-handed anyway (slow, its drop lost): go-to's
+  last resort when it has no pickaxe.")
 
 (a/defargs args
   {:dir {:doc ":down or :up" :spec #{:down :up} :default :down}
@@ -88,7 +90,8 @@
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
    :note {:doc "a map: each cell dug is written to the tidy ledger at once with it (jobs.lib.escape/note-hole!; go-to's escalation)" :spec map? :default nil}
    :fetch {:doc "get a missing pickaxe instead of waiting :no-tool (jobs.lib.fetch), and a block to seal lava with: true, a set of kinds or a map of limits" :spec fetch/option? :default true}
-   :on-lava {:doc "exposed lava: :seal (fill it with a building block, then go on) or :stop" :spec #{:seal :stop} :default :seal}})
+   :on-lava {:doc "exposed lava: :seal (fill it with a building block, then go on) or :stop" :spec #{:seal :stop} :default :seal}
+   :by-hand {:doc "dig a block no carried tool clears bare-handed (slow, the drop is lost) instead of waiting :no-tool" :spec boolean? :default false}})
 
 (def headings {:north [0 -1] :south [0 1] :east [1 0] :west [-1 0]})
 (def rises {:down -1 :up 1})
@@ -215,6 +218,17 @@
   "Whether block needs a tool to clear (jobs.lib.tools/needs-tool-to-clear?) and none is carried."
   [p block]
   (tools/needs-tool-to-clear? p block))
+
+(defn lacks-tool?
+  "no-tool?, unless :by-hand digs it bare-handed."
+  [c block]
+  (and (not (:by-hand (:args c))) (no-tool? (:primitives c) block)))
+
+(defn drop-room?
+  "Room for block's drop, or no drop to keep: a :by-hand dig with no tool that harvests it loses it."
+  [c block]
+  (or (and (:by-hand (:args c)) (no-tool? (:primitives c) block))
+      (room-for? (:primitives c) (blocks/item-name {:block block}))))
 
 (defn access-world
   "The social half of the rules' input (jobs.lib.access/zone-input): zones, claims, footprints, the body's name and
@@ -364,8 +378,8 @@
             block (some #(let [n (when-not (unknown? p %) (block-at %))] (when (and n (not (rules/air n)) (not (unbreakable n))) n)) cut)]
         (cond
           (nil? block) nil
-          (no-tool? p block) {:reason :no-tool :tool (tools/needed-kind p block) :block block}
-          (not (room-for? p (blocks/item-name {:block block}))) {:reason :no-free-slot :block block})))))
+          (lacks-tool? c block) {:reason :no-tool :tool (tools/needed-kind p block) :block block}
+          (not (drop-room? c block)) {:reason :no-free-slot :block block})))))
 
 (defn refusal
   "Before anything is cut: the stop of the first step when a zone, claim or plan refuses its cut, else nil."
@@ -398,8 +412,8 @@
     (cond
       (>= tries (max-cell-digs)) {:reason :refills :cell cell :block block}
       (unbreakable block) {:reason :unbreakable :cell cell :block block}
-      (no-tool? p block) {:reason :no-tool :cell cell :block block :tool (tools/needed-kind p block)}
-      (not (room-for? p (blocks/item-name {:block block}))) {:reason :inventory-full :cell cell :block block}
+      (lacks-tool? c block) {:reason :no-tool :cell cell :block block :tool (tools/needed-kind p block)}
+      (not (drop-room? c block)) {:reason :inventory-full :cell cell :block block}
       :else
       (do
         (await (tools/equip! c block))

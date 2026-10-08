@@ -7,6 +7,7 @@
             [jobs.access.stair :as stair]
             [jobs.lib.escape :as escape]
             [jobs.lib.pace :as pace]
+            [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]))
 
 (def doc
@@ -24,13 +25,16 @@
   :protected (a block it never digs), :dig-waits (the dig child's wait or decline, as :wait), :dig-failed (its
   :dig result), :refills (a cell dug max-cell-digs times, e.g. sand falling in), :step-failed (the walk through did
   not arrive).
-  It does not put the blocks back: jobs.movement.go-to does that once through.")
+  It does not put the blocks back: jobs.movement.go-to does that once through.
+  :by-hand: a block no carried tool harvests is dug bare-handed (slow, the drop is lost) instead of stopping :dig-waits
+  :no-tool; go-to's last resort when it has no pickaxe.")
 
 (a/defargs args
   {:heading {:doc ":north :east :south or :west" :spec #{:north :east :south :west} :default nil}
    :max-thick {:doc "the thickest wall it digs through, in blocks" :spec (a/int-in 0 nil) :default 3}
    :note {:doc "a map: each cell dug is written to the tidy ledger at once with it (jobs.lib.escape/note-hole!; go-to's escalation)" :spec map? :default nil}
-   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
+   :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
+   :by-hand {:doc "dig a block no carried tool harvests bare-handed (slow, the drop is lost)" :spec boolean? :default false}})
 
 (def headings {:north [0 -1] :south [0 1] :east [1 0] :west [-1 0]})
 
@@ -79,7 +83,9 @@
   "One dig child call on the cell being dug (:digging {:cell :block :collect}, kept until the child ends, so a resumed
   call goes on with it). :again, :continue while the child waits on the world, or :done."
   [c {:keys [cell block collect]}]
-  (let [args {:pos cell :collect collect :fetch false :ignore-zones? (:ignore-zones? (:args c))}
+  (let [hand? (and (:by-hand (:args c)) (not (tools/can-harvest? (:primitives c) block)))
+        args {:pos cell :collect (and collect (not hand?)) :need-drop (not hand?) :fetch false
+              :ignore-zones? (:ignore-zones? (:args c))}
         done! (fn [] (ctx/update-mem! c dissoc :digging))]
     (cond
       (escape/protected? block) (finish! c :protected {:cell cell :block block})

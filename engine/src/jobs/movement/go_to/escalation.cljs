@@ -30,12 +30,13 @@
                  (and (= :abilities reason) (= :never doors) (= :open (some-> (:kind result) keyword)))))))
 
 (defn escalation-job
-  "[job args] of the child that carries out escalation e (jobs.lib.escape/choose); tag marks the holes it digs."
-  [{:keys [step] :as e} tag ignore-zones?]
+  "[job args] of the child that carries out escalation e (jobs.lib.escape/choose); tag marks the holes it digs;
+  by-hand? digs what no carried tool clears bare-handed."
+  [{:keys [step] :as e} tag ignore-zones? by-hand?]
   (case step
     :pillar ['jobs.access.pillar {:height (:height e) :item (:item e) :ignore-zones? ignore-zones?}]
-    :stair ['jobs.access.stair {:dir :up :heading (:heading e) :steps (:steps e) :note tag :fetch false :ignore-zones? ignore-zones?}]
-    :clear-path ['jobs.access.clear-path {:heading (:heading e) :note tag :ignore-zones? ignore-zones?}]
+    :stair ['jobs.access.stair {:dir :up :heading (:heading e) :steps (:steps e) :note tag :fetch false :ignore-zones? ignore-zones? :by-hand by-hand?}]
+    :clear-path ['jobs.access.clear-path {:heading (:heading e) :note tag :ignore-zones? ignore-zones? :by-hand by-hand?}]
     :approach ['jobs.movement.go-to {:pos (zipmap [:x :y :z] (:pos e)) :range 0 :escalate false}]))
 
 (defn succeeded? [{:keys [step]} result]
@@ -209,30 +210,58 @@
   [{:keys [step heading]}]
   (if (= :stair step) [:stair heading] step))
 
-(defn ^:async escalation-failed!
-  "The child stopped or would wait: when it changed something, walk again (escalated!) after a go-to.escalation-stopped
-  warn; else try the next method (escalate!, never the same step twice, at most max-escalations in all), giving up
-  with detail when none is left."
+(defn no-tool?
+  "Whether an escalation's stop or wait (detail) is for want of a tool: its own :no-tool, or its dig child's."
+  [detail]
+  (or (= :no-tool (:reason detail)) (= :no-tool (:reason (:wait detail)))))
+
+(defn by-hand!
+  "From now on this go-to digs what no carried tool clears bare-handed (memory :by-hand): the last resort before giving
+  up, as go-to fetches no tool. A go-to.by-hand warn says so once."
+  [c {:keys [step] :as detail}]
+  (ctx/update-mem! c assoc :by-hand true)
+  (let [block (or (:block detail) (:block (:wait detail)))]
+    (ctx/emit! c :go-to.by-hand :warn {:step step :block block
+                                       :text (str "no tool for " (or block "the wall") ": digging the " (name step)
+                                                  " by hand (slow, the drops are lost)")})))
+
+(defn escalation-stopped!
+  "The child changed something before it stopped: walk again (escalated!) after a go-to.escalation-stopped warn."
   [c pos {:keys [step] :as detail}]
-  (if (partly-made? c)
-    (do (ctx/emit! c :go-to.escalation-stopped :warn (assoc detail :text (str (name step) " stopped part way: "
-                                                                              (some-> (:reason detail) name)
-                                                                              "; walking again")))
-        (escalated! c pos detail false))
-    (do (ctx/emit! c :go-to.escalation-stopped :warn (assoc detail :text (str (name step) " failed: "
-                                                                              (some-> (:reason detail) name)
-                                                                              "; trying another way")))
-        (ctx/update-mem! c #(cond-> (-> % (update :skipped-steps (fnil conj #{}) (skip-key (:escalation (ctx/mem c))))
-                                        (assoc :last-failed detail))
-                              (= :stair step) (update :fruitless dec)))
-        (await (escalate! c pos detail)))))
+  (ctx/emit! c :go-to.escalation-stopped :warn (assoc detail :text (str (name step) " stopped part way: "
+                                                                        (some-> (:reason detail) name)
+                                                                        "; walking again")))
+  (escalated! c pos detail false))
+
+(defn ^:async escalation-next!
+  "The child changed nothing: try the next method (escalate!, never the same step twice, at most max-escalations in
+  all) after a go-to.escalation-stopped warn, giving up with detail when none is left."
+  [c pos {:keys [step] :as detail}]
+  (ctx/emit! c :go-to.escalation-stopped :warn (assoc detail :text (str (name step) " failed: "
+                                                                        (some-> (:reason detail) name)
+                                                                        "; trying another way")))
+  (ctx/update-mem! c #(cond-> (-> % (update :skipped-steps (fnil conj #{}) (skip-key (:escalation (ctx/mem c))))
+                                  (assoc :last-failed detail))
+                        (= :stair step) (update :fruitless dec)))
+  (await (escalate! c pos detail)))
+
+(defn ^:async escalation-failed!
+  "The child stopped or would wait: when it changed something, walk again (escalation-stopped!); when it had no tool
+  and has not dug by hand yet, run it again by hand (by-hand!); else try the next method (escalation-next!)."
+  [c pos detail]
+  (let [hand? (and (no-tool? detail) (not (:by-hand (ctx/mem c))))]
+    (when hand? (by-hand! c detail))
+    (cond
+      (partly-made? c) (escalation-stopped! c pos detail)
+      hand? :again
+      :else (await (escalation-next! c pos detail)))))
 
 (defn ^:async escalation-round!
   "One call of the escalation child: the whole pillar, stair or door. After it, every planned cell now dug is in the
   ledger (note-holes!). Its wait or its failure gives up, with the child's reason, unless it got part of the way."
   [c pos]
   (let [{:keys [step] :as e} (:escalation (ctx/mem c))
-        [job args] (escalation-job e (hole-tag c) (boolean (:ignore-zones? (:args c))))]
+        [job args] (escalation-job e (hole-tag c) (boolean (:ignore-zones? (:args c))) (boolean (:by-hand (ctx/mem c))))]
     (if-let [wait (b/child-wait c :escalation job args)]
       (escalation-failed! c pos (merge {:step step} wait))
       (let [_ (await (torch/return-torch! c))

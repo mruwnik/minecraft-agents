@@ -732,6 +732,24 @@
           (is (= 1 (get (inv s) "wooden_pickaxe")))
           (is (nil? (get (inv s) "crafting_table")) "the carried table was put down"))))))
 
+(def pocket
+  "Stone round the body's two cells (x -1..1, z -1..1, y 64..65), over its head and under it: no free cell beside it."
+  (into {"0,66,0" "stone"}
+        (for [x [-1 0 1] z [-1 0 1] y [63 64 65] :when (or (= 63 y) (not (and (zero? x) (zero? z))))]
+          [(str x "," y "," z) "stone"])))
+
+(deftest get-tool-in-a-stone-pocket-digs-a-table-spot-by-hand
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (update (bare [{:name "oak_planks" :count 3} {:name "stick" :count 2} {:name "crafting_table" :count 1}])
+                               :blocks merge pocket) [own-zone])]
+          (await (get-tool! s {:kind "pickaxe"} 80))
+          (is (empty? (listed s)))
+          (is (= 1 (get (inv s) "wooden_pickaxe")))
+          (is (nil? (get (inv s) "crafting_table")) "a stone cell beside was dug by hand and the table put in it")
+          (is (= 1 (count (tables s)))))))))
+
 (deftest get-tool-makes-a-table-when-the-seen-one-is-unreachable
   (async done
     (tu/run-async done

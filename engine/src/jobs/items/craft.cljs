@@ -3,6 +3,8 @@
             [jobs.items.shortfall :as craft]
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as b]
+            [jobs.lib.escape :as escape]
+            [jobs.lib.tools :as tools]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
@@ -92,6 +94,44 @@
             (look/see! c))
           (table-spot c)))))
 
+(defn dig-spot-cells
+  "With no free cell beside the body (a shut-in pocket): the cells beside it at its level that would be a table spot
+  once dug, quickest to break first: seen natural terrain (jobs.lib.escape/natural?, never a build) on a solid floor
+  or one not seen yet (rock hides it), not tried yet (memory :spot-dug)."
+  [c]
+  (let [p (:primitives c)
+        solid? (fn [n] (and n (not (b/air n)) (not (b/fluids n)) (not (b/clearable n))))
+        tried (:spot-dug (ctx/mem c) #{})]
+    (->> (spot-cells c)
+         (keep (fn [[pos floor]]
+                 (let [n (u/seen-name p pos)
+                       f (u/seen-name p floor)]
+                   (when (and (escape/natural? n) (solid? n) (or (nil? f) (solid? f)) (not (tried pos)))
+                     pos))))
+         (sort-by #(tools/clear-ms p (u/seen-name p %))))))
+
+(defn ^:async dig-spot!
+  "Make a table spot where there is none: dig the first dig-spot-cells cell (a jobs.blocks.dig child, bare-handed when
+  no carried tool harvests it; the drop is not kept), then look at its floor. The spot, :continue while the child
+  waits, or nil when no cell can be dug."
+  [c]
+  (when-let [cell (or (:spot-digging (ctx/mem c)) (first (dig-spot-cells c)))]
+    (ctx/update-mem! c assoc :spot-digging cell)
+    (let [r (await (ctx/call-child c :spot-dig 'jobs.blocks.dig {:pos cell :collect false :need-drop false :fetch false}))]
+      (if (= :continue r)
+        :continue
+        (do (ctx/update-mem! c #(-> % (dissoc :spot-digging) (update :spot-dug (fnil conj #{}) cell)))
+            (when (and (= :done r) (:dug (ctx/child-result c :spot-dig)))
+              (await (ctx/act c :look (clj->js {:pos {:x (+ (:x cell) 0.5) :y (- (:y cell) 0.5) :z (+ (:z cell) 0.5)}})))
+              (look/see! c)
+              (table-spot c)))))))
+
+(defn ^:async spot!
+  "A cell beside the body to put a table in: a free one (find-spot!), else one dug (dig-spot!). :continue while the dig
+  waits, nil when there is none."
+  [c]
+  (or (await (find-spot! c)) (await (dig-spot! c))))
+
 (defn carried-table? [c]
   (pos? (storage/carried (u/inventory (:primitives c)) "crafting_table")))
 
@@ -103,11 +143,13 @@
 
 (defn ^:async place-table!
   "Put the carried table down in a free cell beside the body (a jobs.blocks.place child; the floor is looked at first
-  when no spot is seen). :again once it stands (it is the table to craft at), :continue while the child waits, nil when
-  it could not be put down."
+  when no spot is seen, and with none a cell beside is dug: spot!). :again once it stands (it is the table to craft
+  at), :continue while a child waits, nil when it could not be put down."
   [c]
-  (let [spot (or (:table-spot (ctx/mem c)) (await (find-spot! c)))]
-    (when spot
+  (let [spot (or (:table-spot (ctx/mem c)) (await (spot! c)))]
+    (if (= :continue spot)
+      :continue
+      (when spot
       (ctx/update-mem! c assoc :table-spot spot)
       (let [r (await (ctx/call-child c :place 'jobs.blocks.place {:item "crafting_table" :pos spot :fetch false}))]
         (if (= :continue r)
@@ -116,7 +158,7 @@
               (when (and (= :done r) (:placed (ctx/child-result c :place)))
                 (ctx/update-mem! c #(-> % (assoc :table spot) (dissoc :want-table)))
                 (spent/note! c "crafting_table" spot)
-                :again)))))))
+                :again))))))))
 
 (defn ^:async table-fetch!
   "With no table in reach: put a carried table down, else fetch one (:fetch) and put it down. Once per craft.
