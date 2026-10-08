@@ -360,15 +360,6 @@
                       :underground)
         :else :roofed))))
 
-                (in-own-shelter p shelter)
-                (not= (:pos shelter) (:pos trapped)))))
-
-(defn shelter-hint
-  "{:inside-own-shelter pos :hint text} when the body is sealed in its own shelter (a go-to, attack or hunt that cannot
-  reach its target says so), else nil."
-  [c]
-  (when-let [{{:keys [x y z]} :pos :as entry} (sheltered-in c)]
-    {:inside-own-shelter (:pos entry)
 (def trapped-policy
   "Policy of the :shelter-trapped entries written when leave! found no way out: up to 3, five minutes."
   {:cap 3 :ttl 300000})
@@ -387,6 +378,15 @@
   [p]
   (and (roofed? p (room-roof-height)) (reach/closed-room? p (feet p))))
 
+                (in-own-shelter p shelter)
+                (not= (:pos shelter) (:pos trapped)))))
+
+(defn shelter-hint
+  "{:inside-own-shelter pos :hint text} when the body is sealed in its own shelter (a go-to, attack or hunt that cannot
+  reach its target says so), else nil."
+  [c]
+  (when-let [{{:keys [x y z]} :pos :as entry} (sheltered-in c)]
+    {:inside-own-shelter (:pos entry)
 (defn open-room-door
   "{:cell :inside} of a door or gate standing open in the closed room around the body (shut-in-room?), the nearest
   first: shut, the room keeps the night out. Nil when there is none."

@@ -843,13 +843,6 @@
     (ctx/wait c w)
     true))
 
-        (= :again r) (if (ctx/alive? c) (do (await (pace!)) (recur)) :continue)
-        :else (do (swap! approaches dissoc (:id c)) (ctx/update-mem! c dissoc :open) r)))))
-
-(defn ^:async attempt
-  "One whole attempt: step! until it arrives, gives up, or waits on a child (:continue), with pace! between steps. A
-  cut ends it at once (ctx/alive? per iteration, else at the next memory write or act, which throws). A goal inside a
-  fled mob's radius ends it at once under :goal-danger :end, else says so once. With :unknown, the attempt's mask spec
 (defn ^:async run-steps!
   "step! until it arrives, gives up, or waits on a child (:continue), with pace! between steps; goal aimed again each
   step (goal-pos), so a column seen on the way resolves."
@@ -857,6 +850,13 @@
   (loop []
     (let [r (await (step! c (goal-pos c goal)))]
       (cond
+        (= :again r) (if (ctx/alive? c) (do (await (pace!)) (recur)) :continue)
+        :else (do (swap! approaches dissoc (:id c)) (ctx/update-mem! c dissoc :open) r)))))
+
+(defn ^:async attempt
+  "One whole attempt: step! until it arrives, gives up, or waits on a child (:continue), with pace! between steps. A
+  cut ends it at once (ctx/alive? per iteration, else at the next memory write or act, which throws). A goal inside a
+  fled mob's radius ends it at once under :goal-danger :end, else says so once. With :unknown, the attempt's mask spec
   (wworld/unknown-spec: one missed Set for all its plans) rides on c as :unknown."
   [c0]
   (let [u (:unknown (:args c0))
