@@ -210,7 +210,7 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
   // Changes not relit yet (beyond relight-range, or trimmed off the backlog), by column. The overlay would keep the
   // server's load-time light there, so they are relit once the body comes near. Bounded: a column over its point bound
   // is remembered as the set of its touched sections (air or not) and relit section by section; over the column bound
-  // the farthest column is forgotten (its earlier relit overlay stays, the rest reads the server light).
+  // the farthest column is forgotten (its overlay is dropped: it reads the server light).
   const defer = p => {
     const key = `${p.x >> 4},${p.z >> 4}`
     const held = dirty.get(key)
@@ -229,6 +229,7 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     const far = k => { const [cx, cz] = k.split(',').map(Number); return at ? (cx * 16 + 8 - at.x) ** 2 + (cz * 16 + 8 - at.z) ** 2 : 0 }
     const victim = [...dirty.keys()].filter(k => k !== keep).reduce((a, b) => far(b) > far(a) ? b : a)
     dirty.delete(victim)
+    overlays.delete(victim) // its pending changes make the relit light stale, the server light is the better reading
     markColumn(...victim.split(',').map(Number))
   }
   // a whole dirty column: one point at the middle of each touched section (the box around it covers the section)
