@@ -1,6 +1,7 @@
 (ns jobs.survival.log-out
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
+            [engine.memory :as mem]
             [jobs.lib.shelter :as sh]))
 
 (def doc
@@ -8,7 +9,8 @@
   night. Declines unless it is night, :offline-allowed is true and the last log-out was not unsupported.
   Stays away :offline-ms, at most until morning. Back while it is still night, it waits :news-ms for the server's sleep
   count (sent on a join while anyone sleeps) before it ends.
-  Ends with the result {:status :ms}. Status is ok, cut, unsupported or closed.
+  A listed job that finds another job logged the body out since it was queued ends at once without acting.
+  Ends with the result {:status :ms}. Status is ok, cut, unsupported, closed or already (another job's log-out).
   Memory: writes :log-out {:ms :status} (cap 10, one in-game day).")
 
 (a/defargs args
@@ -18,9 +20,21 @@
 
 (def log-out-policy {:cap 10 :ttl sh/ms-per-day})
 
+(defn logged-out-meanwhile
+  "The latest ok or cut :log-out entry written after this listed job was queued (its memory entry is as old as the
+  job until it first runs), or nil; a child or reflex job never asks."
+  [c]
+  (when (and (empty? (:slots c)) (nil? (:reflex c)))
+    (let [v (ctx/view c)
+          queued (:t (mem/latest v (mem/job-kind (:root c))))
+          out (mem/latest v :log-out)]
+      (when (and queued out (> (:t out) queued) (#{"ok" "cut"} (:status (:data out))))
+        out))))
+
 (defn check [c]
   (let [p (:primitives c)]
     (cond
+      (logged-out-meanwhile c) true
       (= false (:offline-allowed (:args c))) (ctx/wait c {:reason :offline-forbidden})
       (not (sh/night? p)) (ctx/wait c {:reason :not-night})
       (sh/log-out-unsupported? (ctx/view c)) (ctx/wait c {:reason :log-out-unsupported})
@@ -30,7 +44,7 @@
   (let [until-morning (sh/ms-until-morning (.-timeOfDay (.self (:primitives c))))]
     (min (:offline-ms (:args c)) (if (pos? until-morning) until-morning js/Infinity))))
 
-(defn ^:async round [c]
+(defn ^:async log-out! [c]
   (let [r (await (ctx/act c :offline #js {:ms (away-ms c) :why "logged-out-for-sleeping-player"}))
         out {:ms (.-ms r) :status (.-status r)}]
     (when (and (= "ok" (.-status r)) (sh/night? (:primitives c)))
@@ -38,3 +52,9 @@
     (ctx/remember! c :log-out out log-out-policy)
     (ctx/result! c out)
     :done))
+
+(defn ^:async round [c]
+  (if-let [out (logged-out-meanwhile c)]
+    (do (ctx/result! c {:ms (:ms (:data out)) :status "already"})
+        :done)
+    (await (log-out! c))))

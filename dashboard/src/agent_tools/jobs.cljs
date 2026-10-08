@@ -12,8 +12,9 @@
             ["node:path" :as path]
             ["node:crypto" :as crypto]))
 
-(def usage
-  (str "usage: jobs.mjs <body> --world <world> list [--limit 8 --offset 0] | show <jID> | submit <EDN-spec> [--hold] [--next | --now] [--wait [--timeout 60s]] | cancel <jID> | cancel-all | retry <jID> | resolve <request-id> --reason handled|condition-recovered [--worlds DIR --state LEGACY_PARENT]\n"
+(defn usage-for [prefix]
+  "Build the usage string with the given invocation prefix (e.g., 'jobs.mjs' or './bin/jobs')."
+  (str "usage: " prefix " <body> --world <world> list [--limit 8 --offset 0] | show <jID> | submit <EDN-spec> [--hold] [--next | --now] [--wait [--timeout 60s]] | cancel <jID> | cancel-all | retry <jID> | resolve <request-id> --reason handled|condition-recovered [--worlds DIR --state LEGACY_PARENT]\n"
        "While manual control holds the body (drive.mjs take) only the driver's one job runs (world.mjs submit): others stay :queued and list/submit say who holds it; drive.mjs <body> release frees it.\n"
        "submit appends the job to the end of the list (jobs take turns). --hold makes the job hold the body: no other job gets a round until it ends or fails (reflexes still come first).\n"
        "A spec is a job name then its args map: submit '(jobs.movement.go-to {:pos {:x 1 :y 64 :z 2}})' or '(jobs.items.get-tool {:item \"stone_pickaxe\"})'. Find a job's args with observe.mjs <body> catalog job <name> (catalog jobs [prefix] lists names).\n"
@@ -26,6 +27,8 @@
        "           warnings). If the wait ends before the job, :follow names the command that waits on. Uses the observer\n"
        "           checkpoint observe --wait uses, so the same events are not reported twice.\n"
        "Without --wait mutations return immediately; observe.mjs <body> --world <world> --wait --watch jID tracks completion."))
+
+(def usage (usage-for "jobs.mjs"))
 
 (def spec-example "a spec is one list: a job name then an args map, e.g. (jobs.movement.go-to {:pos {:x 1 :y 64 :z 2}})")
 
@@ -216,6 +219,15 @@
   (str "waiting: manual control held by " who (when (seq why) (str " (" why ")"))
        "; only its job runs meanwhile, queued jobs run after drive.mjs <body> release"))
 
+(defn reflex-hint
+  "Why a queued job waits behind the running reflex of /status's :current: its id, name and, for the night handler, until when."
+  [{:keys [id name reflex]}]
+  (str "queued behind reflex " (pr-str reflex) " (" id " " name "): reflexes hold the body first, the job runs once it ends"
+       (when (= :night reflex) " (night: about dawn)")))
+
+(defn away-hint [{:keys [by why back-at]}]
+  (str "queued: the body is logged out (" (some-> by name) (when why (str " " (name why))) (when back-at (str ", back about " back-at)) "); the job runs after it is back"))
+
 (defn queued? [value]
   (or (= :queued (get-in value [:job :status]))
       (some #(= :queued (:status %)) (:items value))))
@@ -224,22 +236,24 @@
   "The mutation answer plus a :hint where its meaning is easily misread: a cancel/retry of a job that is gone, a held submit,
   a queued job while manual (the :manual map of /status) holds the body."
   ([r value] (with-hint r value nil))
-  ([r value manual]
+  ([r value {:keys [manual current offline]}]
   (cond
     (and manual (queued? value)) (assoc value :hint (manual-hint manual))
+    (and (:reflex current) (queued? value)) (assoc value :hint (reflex-hint current))
+    (and offline (queued? value)) (assoc value :hint (away-hint offline))
     (and (:mutating r) (= :job-not-found (:reason value))) (assoc value :hint finished-hint)
     (and (:mutating r) (true? (get-in value [:job :hold?]))) (assoc value :hint hold-hint)
     :else value)))
 
 (defn manual-for
-  "A promise of /status's :manual map when the answer has queued jobs (a list, or a submit), else nil; nil when status is unreadable."
+  "A promise of /status's {:manual :current :offline} when the answer has queued jobs (a list, or a submit), else nil; nil when status is unreadable."
   [r response opts]
   (let [value (when (http/edn-response? (:content-type response)) (try (data/read-edn (:text response)) (catch :default _ nil)))]
     (if-not (and (= 200 (:status response)) (queued? value)
-                 (or (str/starts-with? (:path r) "/jobs?") (= :submit (get-in r [:request :op]))))
+                 (or (str/starts-with? (:path r) "/jobs?") (#{:submit :interrupt} (get-in r [:request :op]))))
       (js/Promise.resolve nil)
       (-> (get! (:socketPath r) "/status" opts)
-          (.then (fn [status] (when (http/edn-response? (:content-type status)) (:manual (data/read-edn (:text status))))))
+          (.then (fn [status] (when (http/edn-response? (:content-type status)) (select-keys (data/read-edn (:text status)) [:manual :current :offline]))))
           (.catch (fn [_] nil))))))
 
 (defn deliver! [r output {:keys [status content-type text] :as response} & [opts]]
@@ -259,8 +273,8 @@
       (and (:mutating r) (= :request-uncertain (:reason value)))
       (do (print! (assoc value :request-id (get-in r [:request :request-id]))) 1)
 
-      (not= value (with-hint r value (:manual opts)))
-      (do (print! (with-hint r value (:manual opts))) (if (= 200 status) 0 1))
+      (not= value (with-hint r value (:status opts)))
+      (do (print! (with-hint r value (:status opts))) (if (= 200 status) 0 1))
 
       :else (do (output (line text)) (if (= 200 status) 0 1)))))
 
@@ -304,7 +318,7 @@
   "Send the request map r (request-for's shape) and print the answer; a promise of the exit code."
   [r output {:keys [request-fn] :as opts}]
   (-> (js/Promise.resolve nil)
-      (.then #(if (:wait r) (submit-and-wait! r output opts) (.then (exchange! r opts) (fn [response] (.then (manual-for r response opts) (fn [manual] (deliver! r output response (assoc opts :manual manual))))))))
+      (.then #(if (:wait r) (submit-and-wait! r output opts) (.then (exchange! r opts) (fn [response] (.then (manual-for r response opts) (fn [manual] (deliver! r output response (assoc opts :status manual))))))))
       (.catch (fn [error]
                 (output (str (data/write-edn (failure-for r error)) "\n"))
                 2))))

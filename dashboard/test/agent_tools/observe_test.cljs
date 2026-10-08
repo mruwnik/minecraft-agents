@@ -816,6 +816,15 @@
     (is (true? (observe-status/stale-reconnect? (failed 1) [(failed 2) online])) "the body came back later in the backlog")
     (is (false? (observe-status/stale-reconnect? (event :body :reconnect-failed) [])))))
 
+(deftest a-log-out-and-the-return-are-summarised-with-who-and-for-how-long
+  (let [out (event :action :logged-out {:by :jobs.survival.night :job "j71/log-out" :why :logged-out-for-sleeping-player :back-at 1020000})
+        summary (observe-status/collect {:counts {} :items [] :more false} out)
+        item (first (:items summary))]
+    (is (= {:logged-out 1} (:counts summary)))
+    (is (= :logged-out (:event item)))
+    (is (= "jobs.survival.night" (:by item)))
+    (is (= "logged-out-for-sleeping-player" (:why item)))))
+
 (defn with-lock-dir [f]
   (let [dir (.mkdtempSync fs (.join path (os/tmpdir) "observe-lock-"))]
     (try (f dir)

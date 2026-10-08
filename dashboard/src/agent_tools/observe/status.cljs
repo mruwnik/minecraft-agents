@@ -304,6 +304,7 @@
                    (and (= :reflex source) (= :fired kind)) :reflexes
                    (= :make-room.tossed kind) :tossed
                    (#{:picked-up :hurt :died :disconnected :online :reconnect-failed} kind) kind
+                   (and (= :action source) (= :logged-out kind)) kind
                    (= :notice (:attention e)) :notices)]
     (if-not category
       summary
@@ -311,7 +312,7 @@
         (if (< (count (:items summary)) 4)
           (update summary :items conj
                   (clean-pairs :event (:kind e) :job (when-not (= :reflexes category) (get-in e [:context :job-id]))
-                               :reflex (get-in e [:context :reflex-id]) :item (clip (:item d) 80) :count (:count d)
+                               :reflex (get-in e [:context :reflex-id]) :by (some-> (:by d) name) :why (some-> (:why d) name) :item (clip (:item d) 80) :count (:count d)
                                :message (clip (first (filter some? [(:message e) (:error d) (:reason d)])))
                                :cancelled-jobs (not-empty jobs)))
           (assoc summary :more true)))))))

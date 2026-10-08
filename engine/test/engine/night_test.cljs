@@ -254,6 +254,31 @@
           (is (= 1 (count (st/calls p "sleep"))))
           (is (= [] (st/calls p "offline"))))))))
 
+(deftest a-queued-log-out-ends-without-acting-when-another-job-logged-out-meanwhile
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (st/setup {:time night})]
+          (sleep-count! p 1 2)
+          (core/submit! eng '(jobs.survival.log-out) {})
+          (swap! clock + 1000)
+          (mem/write! (:store eng) :log-out {:ms 30000 :status "ok"} nil)
+          (await (tu/run-until-empty eng 3))
+          (is (= [] (st/calls p "offline")) "the body was not logged out again")
+          (is (= [] (:list (core/state eng))) "the job ended"))))))
+
+(deftest a-log-out-before-the-submit-does-not-end-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (st/setup {:time night})]
+          (sleep-count! p 1 2)
+          (mem/write! (:store eng) :log-out {:ms 30000 :status "ok"} nil)
+          (swap! clock + 1000)
+          (core/submit! eng '(jobs.survival.log-out) {})
+          (await (tu/run-until-empty eng 3))
+          (is (= 1 (count (st/calls p "offline")))))))))
+
 (deftest a-log-out-stint-ends-at-morning
   (async done
     (tu/run-async done

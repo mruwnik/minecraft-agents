@@ -8,6 +8,15 @@
             ["node:os" :as os]
             ["node:path" :as path]))
 
+(deftest usage-for-builds-help-with-custom-prefix
+  "usage-for should build the usage string with the given prefix, not including body/world args"
+  (let [raw (jobs/usage-for "jobs.mjs")
+        bin (jobs/usage-for "./bin/jobs")]
+    (is (str/starts-with? raw "usage: jobs.mjs <body> --world <world>"))
+    (is (str/starts-with? bin "usage: ./bin/jobs <body> --world <world>"))
+    (is (str/includes? raw "observe.mjs <body>"))
+    (is (str/includes? bin "observe.mjs <body>")) "usage-for doesn't cut other tool names"))
+
 (defn request [& args] (jobs/request-for (vec args)))
 
 (deftest native-expressions-preserve-lists-symbols-and-keyword-arguments
@@ -338,6 +347,31 @@
                                                               "{:mode :scheduled :manual nil}"
                                                               "{:total 1 :items [{:id \"j1\" :status :queued}]}")}))))
           (.then (fn [{:keys [out]}] (is (nil? (:hint (data/read-edn out))) out)))
+          (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
+
+(defn reflex-engine [current]
+  (fn [{:keys [path]}]
+    {:text (cond (= "/snapshot" path) "{:generation-id \"generation\"}"
+                 (= "/status" path) (str "{:mode :scheduled :manual nil :current " (pr-str current) "}")
+                 :else "{:ok true :job {:id \"j2\" :status :queued :hold? true}}")}))
+
+(deftest a-now-submit-queued-behind-a-reflex-says-which-one-and-until-when
+  (let [state (state-dir)
+        night {:id "j9" :name "jobs.survival.night" :status :running :reflex :night}]
+    (async done
+      (-> (run-main! state ["submit" "(jobs.x {})" "--now"] (reflex-engine night))
+          (.then (fn [{:keys [out]}]
+                   (let [hint (str (:hint (data/read-edn out)))]
+                     (is (re-find #"queued behind reflex :night" hint) out)
+                     (is (re-find #"j9" hint) out)
+                     (is (re-find #"dawn" hint) out))))
+          (.then (fn [_] (run-main! state ["submit" "(jobs.x {})" "--now"] (reflex-engine {:id "j9" :name "jobs.survival.hungry" :status :running :reflex :hungry}))))
+          (.then (fn [{:keys [out]}]
+                   (let [hint (str (:hint (data/read-edn out)))]
+                     (is (re-find #"queued behind reflex :hungry" hint) out)
+                     (is (not (re-find #"dawn" hint)) out))))
+          (.then (fn [_] (run-main! state ["submit" "(jobs.x {})" "--now"] (reflex-engine {:id "j3" :name "jobs.x" :status :running}))))
+          (.then (fn [{:keys [out]}] (is (not (re-find #"reflex" (str (:hint (data/read-edn out))))) out)))
           (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
 
 (deftest usage-shows-the-submit-form-where-to-find-args-and-now
