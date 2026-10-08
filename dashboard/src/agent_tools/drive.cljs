@@ -140,6 +140,12 @@
   (let [value (parse-json text)]
     (if (map? value) (data/write-edn value) text)))
 
+(defn reply-note
+  "One extra line after a successful take: what manual control switches off and what still protects the body."
+  [req text]
+  (when (and (= "take" (get-in req [:body :op])) (true? (:ok (parse-json text))))
+    "manual control: reflexes are off (no breathe, hostile, night); go-to still keeps air"))
+
 (defn print-text! [text] (js/console.log text))
 
 (defn main!
@@ -153,6 +159,7 @@
          (.then (send! socket req (:request-fn opts))
                 (fn [{:keys [status text]}]
                   (output (reply-text text))
+                  (when-let [note (reply-note req text)] (output note))
                   (exit-code-for {:status status :json (parse-json text)}))
                 (fn [error]
                   (output (failure-edn error (:agent req) socket))

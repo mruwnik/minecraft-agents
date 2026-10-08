@@ -78,3 +78,10 @@
     "{\"ok\":true,\"manual\":{\"who\":\"wt\"}}" "{:ok true :manual {:who \"wt\"}}"
     "{\"ok\":false,\"reason\":\"not-driver\"}" "{:ok false :reason \"not-driver\"}"
     "not json" "not json"))
+
+(deftest a-taken-body-is-told-reflexes-are-off
+  (let [take (drive/request-for ["Bob" "take" "--world" "w"])
+        ok "{\"ok\":true}"]
+    (is (re-find #"reflexes are off.*go-to still keeps air" (drive/reply-note take ok)))
+    (is (nil? (drive/reply-note take "{\"ok\":false}")))
+    (is (nil? (drive/reply-note (drive/request-for ["Bob" "ping" "--world" "w"]) ok)))))
