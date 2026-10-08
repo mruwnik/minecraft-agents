@@ -6,6 +6,7 @@
             [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
+            [jobs.lib.body :as body]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.gate :as gate]
             [jobs.lib.dig-look :as dig-look]
@@ -33,6 +34,7 @@
   tunnels.
 
   Declines and ends early:
+  - Health below jobs.lib.body/risky-min-health (6): the check waits {:reason :low-health}, also for a resumed job.
   - A pickaxe block (jobs.lib.tools/tool-kind) with no *_pickaxe carried, at the start or later (the pick broke),
     runs jobs.items.get-tool as a child first (unless :fetch is false). Nothing got: before any dig it ends at once, warn mine.no-tool,
     {:status :stopped :got 0 :reason :no-tool :tool <kind needed: pickaxe, sword, shears>}; in the dig phase the mend and walk home follow with
@@ -239,6 +241,7 @@
 (defn check [c]
   (cond
     (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) (access/decline! c :mine.declined "mine" {:reason :no-zones})
+    (body/too-hurt (:primitives c)) (ctx/wait c (body/too-hurt (:primitives c)))
     (:phase (ctx/mem c)) true
     (not (:block (:args c))) (ctx/wait c {:reason :no-block})
     :else (let [{:keys [targets refused]} (scan c)]

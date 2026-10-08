@@ -1582,3 +1582,34 @@
           (is (= {:status "blocked" :reason "noPath"} (select-keys (:walk e) [:status :reason])))
           (is (= {:cell "air" :floor "stone"} (select-keys (:walk e) [:cell :floor])))
           (is (re-find #"blocked noPath" (:text e))))))))
+
+;; ------------------------------------------------------------------ low health
+
+(deftest a-badly-hurt-body-waits-to-heal-before-it-mines
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "sand" :count 6} {:blocks (merge floor sand-patch) :self {:health 0.5}} 10))
+              world (.-world (:p s))
+              waits (events-of s :waiting)]
+          (is (zero? (dig-count s)) "nothing dug at 0.5 hp")
+          (is (= [:low-health] (distinct (map :reason waits))))
+          (is (= 0.5 (:health (first waits))))
+          (is (re-find #"heal" (str (:text (first waits)))))
+          (swap! (.. world -state) assoc-in [:self :health] 20)
+          (await (run-ticks s 60))
+          (is (>= (get (inv s) "sand") 6) "healed, it mines"))))))
+
+(deftest a-cut-mine-resumed-at-low-health-waits
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "sand" :count 30} {:blocks (merge wide-floor (cells "sand" (range 4 10) [64 65] (range -2 3)))} 0))
+              world (.-world (:p s))
+              _ (loop [n 0] (when (and (< n 40) (zero? (dig-count s))) (await (run-ticks s 1)) (recur (inc n))))
+              dug (dig-count s)]
+          (is (< 0 dug 30) "the job is under way")
+          (swap! (.. world -state) assoc-in [:self :health] 2)
+          (await (run-ticks s 10))
+          (is (= dug (dig-count s)) "no dig after the body got hurt")
+          (is (= [:low-health] (distinct (map :reason (events-of s :waiting))))))))))
