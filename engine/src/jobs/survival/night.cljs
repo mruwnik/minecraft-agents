@@ -251,7 +251,7 @@
             (when-not (sh/in-own-zone? p (:world (:engine c)) foot)
               (ctx/remember! c :bed-placed {:pos foot} sh/bed-placed-policy))
             foot))
-        (let [w (await (ctx/call-child c :bed-walk 'jobs.movement.go-to {:pos stand :range 0}))]
+        (let [w (await (ctx/call-child c :bed-walk 'jobs.movement.go-to {:pos stand :range 0 :at-night :go}))]
           (when (or (= :continue w) (:arrived (ctx/child-result c :bed-walk))) :continue))))))
 
 (defn ^:async place-bed-and-sleep
@@ -389,7 +389,7 @@
   "Walk (go-to :place) to the roofed place; :again. A walk that ends without arriving, or arrives and is still not roofed, is marked :roof-walk-failed."
   [c {:keys [name]}]
   (busy! c)
-  (let [w (await (ctx/call-child c :roof-walk 'jobs.movement.go-to {:place name :range 0}))]
+  (let [w (await (ctx/call-child c :roof-walk 'jobs.movement.go-to {:place name :range 0 :at-night :go}))]
     (when (and (not= :continue w)
                (not (and (:arrived (ctx/child-result c :roof-walk)) (sh/roofed? (:primitives c) (:roof-height (:args c))))))
       (ctx/update-mem! c assoc :roof-walk-failed true))
@@ -563,7 +563,7 @@
   [c t]
   (busy! c)
   (ctx/update-mem! c assoc :fleeing t)
-  (let [w (await (ctx/call-child c :flee 'jobs.movement.go-to (flee-args t)))]
+  (let [w (await (ctx/call-child c :flee 'jobs.movement.go-to (assoc (flee-args t) :at-night :go)))]
     (if (= :continue w)
       :again
       (let [arrived (:arrived (ctx/child-result c :flee))]
@@ -621,7 +621,7 @@
       :else
       (do (busy! c)
           (ctx/update-mem! c #(-> % (assoc :relocating site) (dissoc :dig-out)))
-          (let [w (await (ctx/call-child c :relocate 'jobs.movement.go-to {:pos site :range 0}))]
+          (let [w (await (ctx/call-child c :relocate 'jobs.movement.go-to {:pos site :range 0 :at-night :go}))]
             (if (= :continue w)
               :again
               (do (ctx/update-mem! c dissoc :relocating)
@@ -677,7 +677,7 @@
   "By day: dig up the bed at pos the night put down outside the body's zones, then walk over its drop. One try: the
   :bed-placed entry is dropped whatever happens, and a :bed entry at pos is retracted."
   [c pos]
-  (let [walk (await (ctx/call-child c :bed-collect 'jobs.movement.go-to {:pos pos :range 2}))]
+  (let [walk (await (ctx/call-child c :bed-collect 'jobs.movement.go-to {:pos pos :range 2 :at-night :go}))]
     (if (= :continue walk)
       :again
       (do (when (:arrived (ctx/child-result c :bed-collect))
@@ -692,7 +692,7 @@
 (defn ^:async pick-up-drop!
   "Walk over the dug bed's drop at pos (go-to); one try, then the walk is over."
   [c pos]
-  (let [w (await (ctx/call-child c :bed-pickup 'jobs.movement.go-to {:pos pos :range 0}))]
+  (let [w (await (ctx/call-child c :bed-pickup 'jobs.movement.go-to {:pos pos :range 0 :at-night :go}))]
     (when-not (= :continue w) (ctx/update-mem! c dissoc :pickup))
     :again))
 

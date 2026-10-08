@@ -92,18 +92,17 @@
           (let [{:keys [p]} (await (dig-in! (assoc (hut-world {:x 5 :y 64 :z 0} (assoc extra "5,67,0" "air")) :states states)))]
             (is (< 1 (count (st/calls p "place"))) why)))))))
 
-(deftest shelter-in-a-mended-room-holds-the-night-and-leaves-by-day-without-digging
+(deftest shelter-in-a-mended-room-ends-the-night-and-leaves-by-day-without-digging
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (st/setup (merge (hut-world {:x 5 :y 64 :z 0} {"5,67,0" "air"})
                                                {:time st/night :inventory st/dirt-stack}))]
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
-          (let [held (st/mid-night! p 2 #(some? (core/holder eng)))]
-            (await (st/tick-n eng 6))
-            (is (true? @held) "the shelter holds the body at night"))
-          (is (= [{:x 5 :y 67 :z 0}] (mapv st/arg-pos (st/calls p "place"))))
-          (is (nil? (core/holder eng)) "the shelter ended at day")
+          (is (nil? (await (st/night-then-day eng p 8 #(core/holder eng) 6)))
+              "mended, the room is safe: the night job ends and the queue may run")
+          (is (= [{:x 5 :y 67 :z 0}] (mapv st/arg-pos (st/calls p "place"))) "one block, and no dig-in after")
+          (is (nil? (core/holder eng)) "nothing holds by day")
           (is (= [] (st/calls p "dig")) "nothing dug to leave: the room's door is the way out")
           (is (= {} (room-blocks p))))))))
 

@@ -11,6 +11,7 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.breath :as breath]
             [jobs.lib.sense :as sense]
+            [jobs.lib.shelter :as sh]
             [jobs.lib.util :as u]
             [jobs.lib.watch :as watch]
             [jobs.lib.near :as near]
@@ -69,6 +70,10 @@
     with none and no fetch it gives up :unseen-floor-dark saying so. A torch that cannot go there is not tried there again.
   - :dark false plans dark cells like lit ones (default: a dark cell costs twice a lit one, so a lit route up to about 2x
     longer is taken: a cell seen and dark, or one never seen at night; look/dark-fn).
+  - :at-night :wait (default): at night a walk that would take the body out of the shelter it stands in
+    (jobs.lib.shelter/walk-leaves-shelter?: a closed room, its dug-in shelter, a roof, underground) waits for day: a listed
+    go-to declines {:reason :night-sheltered :shelter :goal}, a child call waits 1 s and yields :continue (info
+    go-to.night-sheltered, once a call). :go walks anyway; a reflex job's go-to always walks.
   - :goal-danger :end gives up at once (:why :goal-dangerous, :mob, :mob-pos, :mob-distance) when the goal lies within the full-cost radius of a known mob the body would flee; :wait (default) walks on, an info goal-in-danger says so.
   - :dangers false plans straight past known dangers (default: the plans keep away from them, jobs.lib.threats). :leg-s n
     walks one leg of at most n s and, when it got more than 1 block nearer, ends {:arrived false :leg true} (job :done)
@@ -156,6 +161,7 @@
    :air-looks {:doc "under water with no air known: rounds of looking again for air (goal head, open water ahead), the aim shifted a little each round, before giving up :air" :spec (a/int-in 0 nil) :default air/default-air-looks}
    :air-look-min {:doc "seconds of air left below which it looks again for air no more (:air-looks), the fallback (swim up, breathe) needs them" :spec (a/num-in 0 nil) :default air/default-air-look-min}
    :leave-water {:doc "false: an arrival within range in water stays there (a swim target, a boat), no walk on to a dry stand" :spec boolean? :default true}
+   :at-night {:doc ":wait: at night a walk out of the shelter the body stands in waits for day; :go: walk anyway (a reflex job's go-to always walks)" :spec #{:wait :go "wait" "go"} :default :wait}
    :ignore-zones? {:doc "act regardless of zones and claims in the escalation (pillar, stair, clear-path); the rules of the game allow it" :spec boolean? :default false}})
 
 (def max-blocked 3)
@@ -194,8 +200,6 @@
   "A promise that resolves after pace-ms (a timer, never a microtask)."
   []
   (js/Promise. (fn [resolve] (js/setTimeout resolve pace-ms))))
-
-(defn check [_c] true)
 
 (defn ^:async arrived!
   "Look round once if the place is risky (jobs.lib.watch), then finish: the next job starts facing along the walk.
@@ -819,6 +823,26 @@
   (loop []
     (let [r (await (step! c (goal-pos c goal)))]
       (cond
+(def night-wait-ms "The wait a child call takes before it yields :continue while night-wait holds." 1000)
+
+(defn night-wait
+  "The wait {:reason :night-sheltered :shelter :goal} while the walk would take the body out of its shelter at night
+  (sh/walk-leaves-shelter?), else nil. Never under a reflex job or with :at-night :go."
+  [c]
+  (let [p (:primitives c)]
+    (when (and (not (:reflex c)) (not= :go (some-> (:at-night (:args c)) keyword)) (sh/night? p))
+      (let [{goal :pos :as t} (target c)
+            kind (when (and goal (not (:reason t)))
+                   (sh/walk-leaves-shelter? p (:data (ctx/latest c :shelter)) goal (:range (:args c) 1)))]
+        (when kind {:reason :night-sheltered :shelter kind :goal goal})))))
+
+(defn check
+  "A listed go-to waits while night-wait holds (a child's round yields instead: its parent goes on)."
+  [c]
+  (if-let [w (and (empty? (:slots c)) (night-wait c))]
+    (ctx/wait c w)
+    true))
+
         (= :again r) (if (ctx/alive? c) (do (await (pace!)) (recur)) :continue)
         :else (do (swap! approaches dissoc (:id c)) (ctx/update-mem! c dissoc :open) r)))))
 
@@ -831,10 +855,18 @@
   (let [u (:unknown (:args c0))
         c (cond-> c0 u (assoc :unknown (wworld/unknown-spec (when (map? u) u))))
         refusal (args-refusal c)
-        goal (when-not refusal (:pos (target c)))
+        night (when-not refusal (night-wait c))
+        goal (when-not (or refusal night) (:pos (target c)))
         pos (goal-pos c goal)]
-    (if refusal
-      (end/refuse! c refusal)
+    (cond
+      refusal (end/refuse! c refusal)
+      night (do (when-not (:night-said (ctx/mem c))
+                  (ctx/update-mem! c assoc :night-said true)
+                  (ctx/emit! c :go-to.night-sheltered :info
+                             (assoc night :text (str "night: waiting for day in its shelter (" (name (:shelter night)) ") instead of walking out"))))
+                (await (ctx/act c :wait #js {:ms night-wait-ms}))
+                :continue)
+      :else
       (let [state (note-restart! c pos)
             spent? (and (cut-loop? state) (>= (:resets state) (max-cut-resets)))
             cycle? (and (cut-loop? state) (or spent? (seq (way-hostiles c pos))))]

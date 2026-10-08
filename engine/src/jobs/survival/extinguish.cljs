@@ -268,7 +268,7 @@
            (<= (u/dist (u/self-pos c) cell) (max-return-distance))
            (not (:returned (ctx/mem c))))
       (do (ctx/update-mem! c assoc :returned true)
-          (await (ctx/call-child c :go 'jobs.movement.go-to {:pos cell :range (max-scoop-return-range) :escalate false}))
+          (await (ctx/call-child c :go 'jobs.movement.go-to {:pos cell :range (max-scoop-return-range) :escalate false :at-night :go}))
           :again)
 
       (> (u/eye-dist (u/self-pos c) cell) u/bucket-reach)
@@ -337,7 +337,7 @@
   [c pos]
   (ctx/hold-still! c nil)
   (ctx/update-mem! c assoc :blocked true)
-  (let [r (await (ctx/call-child c :go 'jobs.movement.go-to {:pos pos :range 0}))
+  (let [r (await (ctx/call-child c :go 'jobs.movement.go-to {:pos pos :range 0 :at-night :go}))
         res (ctx/child-result c :go)]
     (cond
       (clear? c) :done

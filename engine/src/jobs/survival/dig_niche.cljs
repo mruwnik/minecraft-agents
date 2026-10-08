@@ -181,7 +181,7 @@
 (defn ^:async go!
   "One go-to to cell; :continue while it waits, :arrived, or :failed."
   [c slot cell]
-  (let [w (await (ctx/call-child c slot 'jobs.movement.go-to {:pos cell :range 0}))]
+  (let [w (await (ctx/call-child c slot 'jobs.movement.go-to {:pos cell :range 0 :at-night :go}))]
     (cond (= :continue w) :continue
           (:arrived (ctx/child-result c slot)) :arrived
           :else :failed)))

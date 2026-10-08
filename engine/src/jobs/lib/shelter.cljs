@@ -348,6 +348,27 @@
   out of this cell. Never at night."
   [p shelter trapped]
   (boolean (and (not (night? p))
+(declare shut-in-room?)
+
+(defn walk-leaves-shelter?
+  "At night, awake and safe from it (roofed or buried, or shut-in-room?), the shelter a walk to goal ({:x :y :z}, or {:x
+  :z} a column) within range would leave, else nil. A goal within range of the feet leaves none. :dug-in: shelter (the
+  latest :shelter entry) is the one the body is shut in. :room: no cell of the closed room is within range of the goal.
+  :underground: buried, and nothing solid within default-roof-height over a y goal. :roofed: any other roof."
+  [p shelter goal range]
+  (when (and (night? p) (not (sleeping? p))
+             (or (not (unsafe-night? p default-roof-height)) (shut-in-room? p)))
+    (let [goal (update-vals goal js/Math.floor)
+          near? (fn [cell] (if (:y goal) (u/within? cell goal range) (u/within? (assoc cell :y 0) (assoc goal :y 0) range)))
+          room (when (shut-in-room? p) (reach/room p (feet p)))]
+      (cond
+        (near? (feet p)) nil
+        (in-own-shelter p shelter) :dug-in
+        room (when-not (some (fn [[x y z]] (near? {:x x :y y :z z})) (:cells room)) :room)
+        (buried? p) (when-not (and (:y goal) (some #(solid-at? p (update goal :y + %)) (range 1 (inc default-roof-height))))
+                      :underground)
+        :else :roofed))))
+
                 (in-own-shelter p shelter)
                 (not= (:pos shelter) (:pos trapped)))))
 

@@ -206,7 +206,7 @@
   "One flee step to target as a go-to child (a flee never digs or pillars: :escalate false; known dangers stay costed):
   true when the body arrived or got on a leg nearer, false when go-to gave up, waited or was declined."
   [c slot target range]
-  (let [r (await (ctx/call-child c slot 'jobs.movement.go-to {:pos target :range range :escalate false
+  (let [r (await (ctx/call-child c slot 'jobs.movement.go-to {:pos target :range range :escalate false :at-night :go
                                                               :warn false :leg-s flight-timeout-s
                                                               :retry false :look-round false}))
         res (when (= :done r) (ctx/child-result c slot))]

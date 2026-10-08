@@ -126,7 +126,7 @@
       :done
       (let [taken? #(not ((sh/bed-permit p (:world (:engine c))) bed))
             _ (await (sense/decide! c ::bed-taken #(not (taken?)) {:retry? still-permitted?}))
-            walk (when-not (taken?) (await (ctx/call-child c :go 'jobs.movement.go-to {:pos bed :range 2})))]
+            walk (when-not (taken?) (await (ctx/call-child c :go 'jobs.movement.go-to {:pos bed :range 2 :at-night :go})))]
         (cond
           (taken?) :continue
           (= :continue walk) :continue
