@@ -284,7 +284,7 @@
       (:resolve r) (assoc :request-id request-id :confirmation :unknown
                           :message "Resolve confirmation is unknown; inspect outstanding attention before another request.")
       (and (:mutating r) (not (:resolve r))) (assoc :request-id request-id :confirmation :unknown
-                                                    :message "Query/retry with the same request ID; do not submit a new ID."))))
+                                                    :message (str "Repeat the same command with --request-id " request-id " (the body returns the first result if it already ran it); do not submit a new ID.")))))
 
 (defn follow-command [id] (str "./bin/observe --wait --watch " id))
 

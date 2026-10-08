@@ -386,3 +386,9 @@
   (doseq [[code reason] [["ENOENT" :no-running-body] ["ETIMEDOUT" :timeout] ["ERESPONSETOOLARGE" :response-too-large]
                          ["EACCES" :socket-access-denied] ["EPIPE" :transport-error]]]
     (is (= reason (:reason (jobs/failure-for {} (let [e (js/Error. "x")] (aset e "code" code) e)))) code)))
+
+(deftest an-uncertain-mutation-names-the-command-to-repeat
+  (let [e (let [e (js/Error. "x")] (aset e "code" "ECONNRESET") e)
+        m (:message (jobs/failure-for {:mutating true :request {:request-id "abc-1"}} e))]
+    (is (re-find #"--request-id abc-1" m) m)
+    (is (re-find #"same command" m) m)))
