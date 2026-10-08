@@ -90,7 +90,7 @@
    :lit-light {:doc "block light a route cell needs to count as lit (mobs do not spawn at 1+)" :spec (a/int-in 0 15) :default 1}
    :max-days-awake {:doc "in-game days without sleep before finding a bed becomes urgent" :spec (a/num-in 0 nil) :default sh/max-days-awake}
    :wall-value {:doc "a block worth more than this each (jobs.lib.cost/item-value) is not counted as a wall block when a cave is walled in (dig-in's :wall-value)" :spec (a/num-in 0 nil) :default 3}
-   :take-back? {:doc "by day, dig the valuable blocks dig-in placed in the shelter again and collect them" :spec boolean? :default true}
+   :take-back? {:doc "by day, dig the blocks (above dirt) dig-in placed in the shelter again and collect them" :spec boolean? :default true}
    :flee-radius {:doc "when no shelter can be dug here, how far the night looks for somewhere safer (a known bed or roofed place, a seen cave or overhang to wall in, or seen ground the carried tools dig); 0 never flees" :spec (a/num-in 0 nil) :default 64}})
 
 (defn bed-permit

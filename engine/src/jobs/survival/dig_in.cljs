@@ -65,7 +65,7 @@
   and, on any end, :shelter {:pos :roof :state :built} (cap 10, one in-game day).
   :roof is the cell it placed above the body, absent if none. Walls mode adds :door, the feet and head cells of one side it placed.
   Pit mode adds :start, the cell dug from. Walls mode at the bottom of a shaft has :start at the shaft's top.
-  :take-back lists the placed {:cell :item} dearer than :wall-value, which leave! digs again by day.
+  :take-back lists the placed {:cell :item} dearer than :take-back-value, which leave! digs again by day.
   Plug mode adds :room true. A shelter sealed again where the latest entry stood keeps that entry's :start and :door.
   Leaving is jobs.survival.dig-in-leave/leave!, which jobs.survival.night calls by day.")
 
@@ -77,6 +77,7 @@
   {:roof-height {:doc "a solid block within this many blocks above counts as a roof" :spec (a/int-in 0 nil) :default sh/default-roof-height}
    :blocks {:doc "names of the blocks it may place" :spec (a/coll-of a/item?) :default shelter-blocks}
    :wall-value {:doc "a block worth more than this each (jobs.lib.cost/item-value; dirt 0.35, cobblestone 0.85, stone 2.85, planks 3.4, log 12.8) walls the body in only when no pit can be dug" :spec (a/num-in 0 nil) :default 3}
+   :take-back-value {:doc "a placed block worth more than this each (jobs.lib.cost/item-value; dirt 0.35, cobblestone 0.85) is dug again and collected when the shelter is left by day" :spec (a/num-in 0 nil) :default 0.5}
    :max-places {:doc "placements per step" :spec (a/int-in 1 nil) :default 4}
    :on-lava {:doc ":seal: lava the dig lays open in or beside the hole is filled with a carried block; :stop: the dig is given up (:fluid-adjacent)" :spec #{:seal :stop} :default :seal}
    :enclose {:doc "wall in under a roof already overhead: walls only, never a pit; stops :no-blocks when too few blocks are carried" :spec boolean? :default false}
@@ -543,7 +544,7 @@
         door (when (= :walls (:mode (ctx/mem c))) (dig-cells/door placed feet))
         start (when (#{:dig :walls} (:mode (ctx/mem c))) (:start (ctx/mem c)))
         spent (:spent (ctx/mem c) {})
-        cheap (set (cheap-blocks (keys spent) (:wall-value (:args c))))
+        cheap (set (cheap-blocks (keys spent) (:take-back-value (:args c))))
         prev (:data (ctx/latest c :shelter))
         resealed (= feet (:pos prev))
         take-back (->> (concat (when resealed (:take-back prev))

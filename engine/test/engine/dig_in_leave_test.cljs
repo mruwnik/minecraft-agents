@@ -332,6 +332,21 @@
             (await (leave-at-dawn! s))
             (is (< before (have p "oak_log")) "the logs are back in the pack")))))))
 
+(deftest dig-in-takes-cobblestone-walls-back-by-day
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p] :as s} (setup {:inventory [{:name "iron_pickaxe" :count 1} {:name "cobblestone" :count 20}]
+                                            :blocks (assoc (ground) "0,66,0" "stone")})]
+          (core/submit! eng '(jobs.survival.dig-in {:enclose true}) {})
+          (await (run-until-empty s 40))
+          (let [entry (last (entries eng :shelter))]
+            (is (seq (:take-back entry)) "cobblestone walls are listed for take-back")
+            (is (every? #(= "cobblestone" (:item %)) (:take-back entry))))
+          (let [before (have p "cobblestone")]
+            (await (leave-at-dawn! s))
+            (is (< before (have p "cobblestone")) "the cobblestone is back in the pack")))))))
+
 (deftest dig-in-records-no-cheap-block-for-take-back
   (async done
     (tu/run-async done
