@@ -25,9 +25,10 @@
                             until retry! or cancel!
     :deferred-ends [{:reflex :job :outcome :reason :ended-at ms :text}]  reflex jobs that ended while
                             the body was settling or offline, judged on the first ready tick
-    :recent-results {id {:name :status :result :ended-at}}  the outcomes of the last jobs that ended (setting
-                            engine.core.base/recent-results-limit), served on /job and /snapshot
     :next-id n
+  The outcomes of the last jobs that ended ({id {:name :status :result :ended-at}}, bounded by the settings
+  engine.core.base/recent-results-limit and reflex-results-limit) live in (:results eng), saved to results.edn
+  when a job ends and served on /job and /results, not in the state.
   Not persisted:
     the in-flight round ({:id :token :reflex :round})
     the backoff: the :backoffs atom {reflex-id entry} (see engine.backoff); register entries only, listed jobs
@@ -81,6 +82,7 @@
 (def set-owner! base/set-owner!)
 (def settling? base/settling?)
 (def state base/state)
+(def recent-results base/results)
 (def outstanding attention/outstanding)
 (def replay-attention! attention/replay-attention!)
 (def request-attention! attention/request-attention!)
@@ -225,6 +227,7 @@
              :warned (atom #{})
              :continued (atom {})
              :state st
+             :results (atom (or (fsu/read-edn (path/join dir "results.edn")) {}))
              :running (atom nil)
              :tokens (atom 0)
              :manual (atom nil)
