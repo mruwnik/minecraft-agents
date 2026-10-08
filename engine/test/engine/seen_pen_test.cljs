@@ -73,6 +73,23 @@
           (is (seq (ht/events-of s :sense.looked)) "the dark cells are walked near and looked at")
           (is (= :brought (:reason (ht/done-event s))) "within 4 blocks no light is needed: read up close, the run brings, never :unreachable"))))))
 
+(defn blind-pen!
+  "Every cell of the pen and its gate stays unknown to the body even up close (dark, and a look gives nothing)."
+  [s]
+  (let [p (:p s)
+        orig (.-sensedAt p)]
+    (set! (.-sensedAt p) (fn [pos] (if (>= (.-x pos) 10) #js {:unknown true} (orig pos))))
+    s))
+
+(deftest a-pen-that-cannot-be-read-even-up-close-ends-no-pen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (blind-pen! (ht/clock-on-wait! (h/setup-seeing (ht/world {:entities [(ht/cow 1 4 3)]}) [0 0] 700)))
+              _ (ht/submit! s {:target 1})
+              _ (await (ht/run-ticks s 60))]
+          (is (= :no-pen (:reason (ht/done-event s))) "nothing can be read: the run ends :no-pen, never :unreachable, never brings"))))))
+
 (defn aged-run
   "A herd run with the gate remembered past its 10 s, after f was applied to the setup."
   [f world]
