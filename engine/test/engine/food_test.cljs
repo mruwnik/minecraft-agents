@@ -89,7 +89,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen clock]} (setup {:self {:food 3} :inventory [{:name "chicken" :count 2} {:name "rotten_flesh" :count 5}]})]
+        (let [{:keys [eng seen clock]} (setup {:self {:food 8 :health 14} :inventory [{:name "chicken" :count 2} {:name "rotten_flesh" :count 5}]})]
           (core/register-reflex! eng {:trigger :hungry})
           (await (tick-for! eng clock 5))
           (let [text (:text (first (filterv #(= :food.none (:kind %)) @seen)))]
@@ -372,7 +372,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:self {:food 0}})]
           (know-source! eng {:x 500 :y 64 :z 0} :farm)
-          (core/submit! eng '(jobs.survival.get-food) {})
+          (core/submit! eng '(jobs.survival.get-food {:explore false}) {})
           (await (run-until-empty eng 10))
           (is (= [] (tu/walk-calls p))))))))
 

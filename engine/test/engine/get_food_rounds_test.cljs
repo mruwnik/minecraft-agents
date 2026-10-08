@@ -380,3 +380,44 @@
           (reset! args {:a 2})
           (await (core/tick! eng))
           (is (= [2 2] @out) "a new target starts the child afresh"))))))
+
+;; ---------------------------------------------------------------- nothing seen: explore, rotten flesh, say why
+
+(defn events-of [seen kind] (filterv #(= kind (:kind %)) @seen))
+
+(deftest nothing-seen-searches-for-food-before-giving-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:self {:food 1}} :step-ms 5)]
+          (await (one-round! eng {}))
+          (is (= 1 (count (events-of seen :search.not-found))) "one search for animals and crops")
+          (is (re-find #"explored" (str (:text (first (events-of seen :food.none)))))))))))
+
+(deftest explore-false-gives-up-without-searching
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:self {:food 1}} :step-ms 5)]
+          (await (one-round! eng {:explore false}))
+          (is (= [] (events-of seen :search.not-found)))
+          (is (= 1 (count (events-of seen :food.none)))))))))
+
+(deftest starving-with-only-rotten-flesh-eats-it-as-a-last-resort
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:food 2} :inventory [{:name "rotten_flesh" :count 3}]} :step-ms 5)]
+          (await (one-round! eng {:explore false}))
+          (is (< 2 (food p)))
+          (is (= [] (events-of seen :food.none))))))))
+
+(deftest a-fruitless-job-inside-the-cooldown-waits-with-a-reason
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:self {:food 1}} :step-ms 5)]
+          (await (one-round! eng {:explore false}))
+          (core/submit! eng '(jobs.survival.get-food {:explore false}) {})
+          (await (core/tick! eng))
+          (is (= [:no-food-found] (distinct (map :reason (events-of seen :waiting))))))))))

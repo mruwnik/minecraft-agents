@@ -27,9 +27,11 @@
   3. Harvest items lying within 8 blocks (collect-drops).
   4. The nearest passive food animal within :hunt-radius (combat.attack, then collect-drops).
   5. Mature crops or sweet berry bushes within :hunt-radius (blocks.dig).
-  Nothing left: it stops :no-food with a food.none warning (what was searched, the nearest known source) and writes
+  Nothing left: once per job (:explore, default on) it searches for food animals and crops (jobs.explore.search, the
+  ::explore setting) and goes on if it found some; at food 6 or below it then eats harmful food carried (rotten
+  flesh, with :allow-bad). Still nothing: it stops :no-food with a food.none warning (what was searched, the nearest known source) and writes
   :hungry. For :ask-cooldown-ms after that a round still eats and still does ways 1, 3, 4 and 5, but not a source it
-  already knew when it gave up (one learned since is tried first); with nothing to do it declines, quietly.
+  already knew when it gave up (one learned since is tried first); with nothing to do the check waits :no-food-found, else the round declines.
   Never :continue: a go-to that waits on the world, or a child still going after jobs.lib.child's call cap, is waited out in the round.
   More than 12 ways in one round without getting fed stops :still-hungry.
   Wheat is never harvested. Babies and animals in another's zone or claim are never hunted (:ignore-zones? lifts the zone). A chest in another's zone or claim is skipped and never taken from, even when starving
@@ -47,6 +49,7 @@
    :farm-radius {:doc "how far around a known farm to harvest, in blocks" :spec (a/num-in 0 nil) :default 6}
    :take {:doc "most items to withdraw from a chest in one go" :spec (a/int-in 1 nil) :default 16}
    :attack-gap-ms {:doc "least time between two swings at an animal, so a swing lands at full strength" :spec (a/num-in 0 nil) :default 600}
+   :explore {:doc "with nothing known or seen, walk and look for food animals and crops once per job: false, true (the ::explore setting) or jobs.explore.search options over it" :spec (a/or-of boolean? map?) :default true}
    :ask-cooldown-ms {:doc "after finding nothing, how long before saying so (and searching) again" :spec (a/num-in 0 nil) :default (* 10 60 1000)}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
@@ -68,6 +71,7 @@
 (a/defargs settings
   {::drop-radius {:default 8 :doc "Blocks around the body in which dropped food is picked up." :spec (a/int-in 0 nil)}
    ::reach {:default 3 :doc "How near a food source the body stands to use it, in blocks." :spec (a/int-in 0 nil)}
+   ::explore {:default {:max-distance 64 :max-legs 12 :timeout-s 120} :doc "jobs.explore.search options of the search for food (:explore true)." :spec map?}
    ::max-ways {:default 12 :doc "Ways one round tries without getting fed before it stops :still-hungry." :spec (a/int-in 0 nil)}})
 (defn drop-radius [] (settings/get settings ::drop-radius))
 
@@ -85,15 +89,32 @@
   (let [self (.self (:primitives c))]
     (foods/hungry? (.-food self) (.-health self) (:args c))))
 
+(declare gave-up-recently? fresh-source animals-in-sight ripe-blocks can-bake?)
+
+(defn nothing-to-try?
+  "Hungry inside the ask cooldown with no food carried, no bread to bake, no source learned since giving up, no
+  animal to hunt and no ripe crop in range: a round would only decline."
+  [c]
+  (and (gave-up-recently? c)
+       (not-any? #(foods/food? (:name %)) (u/inventory (:primitives c)))
+       (not (can-bake? c))
+       (nil? (fresh-source c))
+       (empty? (remove :why (animals-in-sight c)))
+       (empty? (ripe-blocks c (merge ripe-age berry-bush) (u/self-pos c) (:hunt-radius (:args c))))))
+
 (defn check
-  "Hungry, or in the middle of a meal that began when it was."
+  "Hungry, or in the middle of a meal that began when it was. Hungry with nothing to try waits :no-food-found."
   [c]
   (let [self (.self (:primitives c))]
+    (if (and (hungry-now? c) (not (:eating (ctx/mem c))) (nothing-to-try? c))
+      (ctx/wait c {:reason :no-food-found
+                   :why (str "hungry (food " (.-food self) ") but no food is carried, known or in sight within "
+                             (:hunt-radius (:args c)) " blocks; searched recently")})
     (or (hungry-now? c)
         (foods/top-up? (.-food self) (.-health self) (foods/carried-names self))
         (foods/eat-now? self (:args c))
         (boolean (:eating (ctx/mem c)))
-        (ctx/wait c {:reason :not-hungry}))))
+        (ctx/wait c {:reason :not-hungry})))))
 
 ;; ------------------------------------------------------------------ sources
 
@@ -325,13 +346,14 @@
        (remove #(#{"item" "player"} (:kind %)))
        (mapv (fn [e] {:name (:name e) :kind (:kind e) :distance (/ (js/Math.round (* 10 (:distance e))) 10)}))))
 
-(defn none-text [c around]
+(defn none-text [c around explored]
   (let [{:keys [hunt-radius]} (:args c)
         near (nearest-known-source c)
         passed (passed-over c)
         wheat (carried-count c "wheat")
         reason (no-bake-reason c)]
     (str "no food: carried none" (harmful-carried-text (u/inventory (:primitives c))) ", searched for animals and ripe crops within " hunt-radius " blocks"
+         (when explored (str ", explored: " explored))
          (when (and (>= wheat 3) reason)
            (str "; carrying " wheat " wheat but cannot bake (" reason ")"))
          (when (seq passed)
@@ -349,7 +371,7 @@
   [c]
   (let [food (food-level c)
         around (nearby c)
-        text (none-text c around)]
+        text (none-text c around (:explored (ctx/mem c)))]
     (ctx/emit! c :food.none :warn {:food food :animals (passed-over c) :nearby around
                                    :text (str text "; the hungry reflex rests for "
                                               (js/Math.round (/ (:ask-cooldown-ms (:args c)) 60000))
@@ -408,6 +430,35 @@
         (await (hunt! c))
         (await (dig-ripe! c (merge ripe-age berry-bush) (u/self-pos c) (:hunt-radius (:args c)))))))
 
+(defn ^:async explore!
+  "Once per job, with nothing known or seen: search for food animals and ripe crops (jobs.explore.search, :explore).
+  :again when the search found something to hunt or dig, else nil with what it covered remembered."
+  [c]
+  (let [e (:explore (:args c))]
+    (when (and e (not (:explored (ctx/mem c))))
+      (ctx/update-mem! c assoc :explored "started")
+      (let [opts (merge (settings/get settings ::explore) (when (map? e) e))
+            st (await (child/run! c :explore 'jobs.explore.search
+                                  (assoc opts :target (vec (concat (sort food-animals) (keys ripe-age) (keys berry-bush))))
+                                  {:max-calls 1}))]
+        (if (= :continue st)
+          :continue
+          (let [res (ctx/child-result c :explore)]
+            (ctx/update-mem! c assoc :explored
+                             (str (count (:found res)) " found, " (get-in res [:coverage :legs] 0) " legs"
+                                  (when (:why res) (str ", " (name (:why res))))))
+            (when (= :found (:reason res)) :again)))))))
+
+(defn ^:async eat-bad!
+  "Last resort when food is at or below the default hunger line: eat what hurts (rotten flesh) with :allow-bad.
+  :again when the food level rose, else nil."
+  [c]
+  (when (and (<= (food-level c) foods/default-food)
+             (some #(contains? foods/harmful (:name %)) (u/inventory (:primitives c))))
+    (let [before (food-level c)
+          st (await (child/run! c :eat-bad 'jobs.survival.eat {:until foods/top-up-food :allow-bad true}))]
+      (if (= :continue st) :continue (when (> (food-level c) before) :again)))))
+
 (defn ^:async eat-carried!
   "Eat what is carried (the eat job) up to 18, or 20 below the :health line: :continue when the eat job is still
   going after the call cap, else nil."
@@ -437,5 +488,10 @@
         (= ::enough way) (r/stop! c :still-hungry (str "still hungry (food " (food-level c) ") after " n " ways")
                                   :food (food-level c))
         (= :again way) (recur (inc n))
-        (gave-up-recently? c) :declined
-        :else (none! c)))))
+        :else (let [more (if (or (gave-up-recently? c) (not (:explore (:args c)))) nil (await (explore! c)))
+                    bad (when-not more (await (eat-bad! c)))]
+                (cond
+                  (or (= :continue more) (= :continue bad)) (do (await (child/pace!)) (recur n))
+                  (or more bad) (recur (inc n))
+                  (gave-up-recently? c) :declined
+                  :else (none! c)))))))
