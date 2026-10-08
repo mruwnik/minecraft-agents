@@ -9,7 +9,7 @@
 
 (a/defargs settings
   {::hazard-clearance {:default 2.5 :doc "Distance in blocks kept from a hazard on a flight path." :spec (a/num-in 0 nil)}
-   ::flank-turn {:default 60 :doc "Degrees a flight turns from straight away toward a refuge that lies behind the chasers, to go round them." :spec (a/num-in 0 90)}})
+   ::flank-turn {:default 45 :doc "Degrees a flight turns from straight away toward a refuge that lies behind the chasers, to go round them, when it still gains on them so (jobs.lib.cost/outruns-at?)." :spec (a/num-in 0 90)}})
 (defn hazard-clearance [] (settings/get settings ::hazard-clearance))
 (defn flank-turn [] (settings/get settings ::flank-turn))
 

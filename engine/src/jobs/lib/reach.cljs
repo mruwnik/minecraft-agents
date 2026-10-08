@@ -243,9 +243,9 @@
             (recur m)))))
     top))
 
-(defn search
-  "Best-first search from start [x y z] over (next-cells x y z) to a cell near target [x y z]: :found, :closed (every
-  reachable cell expanded, no way) or :budget (node-budget cells expanded)."
+(defn search-steps
+  "Best-first search from start [x y z] over (next-cells x y z) to a cell near target [x y z]: the steps of the walk it
+  found (a number), :closed (every reachable cell expanded, no way) or :budget (node-budget cells expanded)."
   [next-cells [sx sy sz] [tx ty tz]]
   (let [key (keyer sx sz)
         seen (js/Set.)
@@ -260,7 +260,7 @@
         (let [top (heap-pop! open)
               g (aget top 1) x (aget top 2) y (aget top 3) z (aget top 4)]
           (if (near-cell? x y z tx ty tz)
-            :found
+            g
             (let [nexts (next-cells x y z)
                   g' (inc g)]
               (dotimes [i (.-length nexts)]
@@ -271,6 +271,11 @@
                     (.add seen k)
                     (heap-push! open #js [(+ g' (heuristic cx cy cz tx ty tz)) g' cx cy cz]))))
               (recur (inc n)))))))))
+
+(defn search
+  "search-steps' answer without the steps: :found, :closed or :budget."
+  [next-cells start target]
+  (let [r (search-steps next-cells start target)] (if (number? r) :found r)))
 
 (defn cell-of [pos] (let [{:keys [x y z]} (solid/cell pos)] [x y z]))
 
@@ -312,9 +317,9 @@
       :open
       (kind-of b))))
 
-(defn flood
-  "Breadth-first over (next-cells x y z) from start [x y z]: :closed when every reachable cell is expanded within budget
-  cells, else :room."
+(defn flood-cells
+  "Breadth-first over (next-cells x y z) from start [x y z]: every reachable cell (#js [x y z] each) when they are
+  expanded within budget cells, else nil."
   [next-cells [sx sy sz] budget]
   (let [key (keyer sx sz)
         seen (js/Set.)
@@ -322,8 +327,8 @@
     (.add seen (key sx sy sz))
     (loop [head 0]
       (cond
-        (== head (.-length queue)) :closed
-        (>= (.-size seen) budget) :room
+        (== head (.-length queue)) queue
+        (>= (.-size seen) budget) nil
         :else (let [c (aget queue head)
                     nexts (next-cells (aget c 0) (aget c 1) (aget c 2))]
                 (dotimes [i (.-length nexts)]
@@ -333,6 +338,11 @@
                       (.add seen k)
                       (.push queue n))))
                 (recur (inc head)))))))
+
+(defn flood
+  "flood-cells' answer as :closed (every reachable cell expanded within budget) or :room."
+  [next-cells start budget]
+  (if (flood-cells next-cells start budget) :closed :room))
 
 (def door-panel-step
   "The step [dx dz] from a door cell onto the side its closed panel fills: opposite the door's facing."
@@ -376,15 +386,38 @@
        (shut-in? p kind-at))
      false)))
 
-(defn closed-room?
-  "Whether a walker in cell pos {:x :y :z} could reach fewer than room-cells cells with every door, gate and trapdoor
-  shut (flood over the blocks the body has seen; an unseen or unloaded cell is open): a hut a chased body can shut
-  itself in."
+(defn room
+  "The closed room around cell pos {:x :y :z}: the cells a walker there reaches with every door, gate and trapdoor shut,
+  fewer than room-cells (flood over the blocks the body has seen; an unseen or unloaded cell is open). {:cells #{[x y
+  z]} feet cells, :doors [{:cell {:x :y :z} :inside {:x :y :z}}] each door or gate beside a room cell at its feet, with
+  that room cell}; nil when it is no closed room."
   [p {:keys [x y z]}]
   (let [kind-at (fn [cx cy cz]
                   (let [b (u/seen-block p {:x cx :y cy :z cz})]
                     (if (and b (openable? (.-name b))) :solid (kind-of b))))]
-    (= :closed (flood (fn [cx cy cz] (forward kind-at cx cy cz)) [x y z] room-cells))))
+    (when-let [cells (flood-cells (fn [cx cy cz] (forward kind-at cx cy cz)) [x y z] room-cells)]
+      (let [cells (set (map vec cells))
+            doors (for [[cx cy cz] cells
+                        [dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
+                        :let [cell {:x (+ cx dx) :y cy :z (+ cz dz)}
+                              name (some-> (u/seen-block p cell) .-name)]
+                        :when (and name (openable? name) (not (str/ends-with? name "_trapdoor")))]
+                    {:cell cell :inside {:x cx :y cy :z cz}})]
+        {:cells cells :doors (vec (vals (into {} (map (juxt :cell identity)) doors)))}))))
+
+(defn walk-steps
+  "The steps of a walk (search-steps) from cell from to a cell next to cell to ({:x :y :z} each) over the blocks the
+  body has seen, wooden doors opened (body-kind-of); nil when none is found."
+  [p from to]
+  (let [kind-at (fn [x y z] (body-kind-of (u/seen-block p {:x x :y y :z z})))
+        r (search-steps (partial forward kind-at) (mapv from [:x :y :z]) (mapv to [:x :y :z]))]
+    (when (number? r) r)))
+
+(defn closed-room?
+  "Whether a walker in cell pos {:x :y :z} could reach fewer than room-cells cells with every door, gate and trapdoor
+  shut (room): a hut a chased body can shut itself in."
+  [p pos]
+  (some? (room p pos)))
 
 (defn arrow-kind-of
   "What a block b is to an arrow: :open or :solid. Unloaded (nil) is open. Doors, gates and trapdoors follow their

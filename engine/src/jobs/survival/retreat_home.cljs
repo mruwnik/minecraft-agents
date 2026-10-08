@@ -1,6 +1,6 @@
 (ns jobs.survival.retreat-home
-  "The body's home as a flight's refuge: a closed room (jobs.lib.reach/closed-room?: walls, a roof or none needed,
-  doors that shut) that the body gets to before every melee chaser (jobs.lib.cost/reach-first?)."
+  "The body's home as a flight's refuge: a closed room (jobs.lib.reach/room: walls, a roof or none needed, doors that
+  shut) that the body gets into before every melee chaser reaches a door of it (jobs.lib.cost/reach-first?)."
   (:require [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
@@ -22,14 +22,32 @@
                      v))]
       (when closed home))))
 
-(defn at-home? [p home] (= (select-keys (sh/feet p) [:x :y :z]) (select-keys home [:x :y :z])))
+(defn inside?
+  "Whether the body is in room (jobs.lib.reach/room): its feet cell or the cell it stands on (as go-to arrives) is one of
+  the room's cells."
+  [p {:keys [cells]}]
+  (boolean (some #(contains? cells (mapv % [:x :y :z])) [(sh/feet p) (reach/standing-cell p)])))
+
+(defn mid [{:keys [x y z]}] {:x (+ x 0.5) :y y :z (+ z 0.5)})
+
+(defn way-in
+  "The door of room the body walks to in fewest steps over the blocks it has seen (jobs.lib.reach/walk-steps to the room
+  cell inside it): {:cell :inside :steps}, nil when it finds no walk to any."
+  [p room]
+  (->> (:doors room)
+       (keep (fn [d] (when-let [n (reach/walk-steps p (sh/feet p) (:inside d))] (assoc d :steps n))))
+       (sort-by :steps)
+       first))
 
 (defn race-won?
-  "Whether the body gets to home before every melee threat (ranged ones shoot, they do not race): cost/reach-first?
-  over straight distances."
-  [p home threats]
-  (cost/reach-first? (u/dist (u/self-pos {:primitives p}) home)
-                     (->> threats (remove combat/ranged?) (map #(u/dist (danger-q/mob-pos p %) home)))))
+  "Whether the body, at its own speed (food), walks way-in's steps before any melee threat (ranged ones shoot, they do
+  not race) gets to a door of room (straight line, the nearest door): cost/reach-first?."
+  [p room {:keys [steps]} threats]
+  (cost/reach-first? steps
+                     (->> threats
+                          (remove combat/ranged?)
+                          (map (fn [t] (apply min (map #(u/dist (danger-q/mob-pos p t) (mid (:cell %))) (:doors room))))))
+                     (or (.-food (.self p)) 20)))
 
 (defn say-once!
   "One retreat.home info a flight: it runs to its home."

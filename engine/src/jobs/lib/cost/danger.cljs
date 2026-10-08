@@ -24,6 +24,8 @@
    ::exposure-s {:default 3 :doc "Seconds a body is exposed to a mob on a route." :spec (a/int-in 0 nil)}
    ::snap-span {:default 4 :doc "How far up or down a straight route looks for ground in each column." :spec (a/int-in 0 nil)}
    ::sprint-speed {:default 5.6 :doc "Blocks a second a sprinting body covers (reach-first?)." :spec (a/num-in 0.1 nil)}
+   ::walk-speed {:default 4.3 :doc "Blocks a second a walking body covers, one too hungry to sprint (reach-first?)." :spec (a/num-in 0.1 nil)}
+   ::sprint-food {:default 6 :doc "Food at or under which a body cannot sprint (reach-first?)." :spec (a/int-in 0 20)}
    ::chase-speed {:default 3 :doc "Blocks a second a chasing melee mob covers, a little over a zombie's (reach-first?)." :spec (a/num-in 0.1 nil)}
    ::race-margin-s {:default 0.5 :doc "Seconds the body must win a race to a refuge by (reach-first?)." :spec (a/num-in 0 nil)}})
 
@@ -194,9 +196,20 @@
 
 ;; ---------------------------------------------------------------- the race to a refuge
 
+(defn body-speed
+  "Blocks a second a body with food food covers running: ::sprint-speed, ::walk-speed at ::sprint-food or under."
+  [food]
+  (settings/get settings (if (> food (settings/get settings ::sprint-food)) ::sprint-speed ::walk-speed)))
+
 (defn reach-first?
-  "Whether a sprinting body body-dist blocks from a refuge gets there ::race-margin-s before every chaser, each
-  (mob-dists) that many blocks from it at ::chase-speed. True with no chaser."
-  [body-dist mob-dists]
-  (let [[sprint-speed chase-speed race-margin-s] (map #(settings/get settings %) [::sprint-speed ::chase-speed ::race-margin-s])]
-    (every? #(< (+ (/ body-dist sprint-speed) race-margin-s) (/ % chase-speed)) mob-dists)))
+  "Whether a body with food food (body-speed), body-dist blocks from a refuge, gets there ::race-margin-s before every
+  chaser, each (mob-dists) that many blocks from it at ::chase-speed. True with no chaser."
+  [body-dist mob-dists food]
+  (let [[chase-speed race-margin-s] (map #(settings/get settings %) [::chase-speed ::race-margin-s])]
+    (every? #(< (+ (/ body-dist (body-speed food)) race-margin-s) (/ % chase-speed)) mob-dists)))
+
+(defn outruns-at?
+  "Whether a body with food food (body-speed) running degrees off straight away from a chaser still gains on it (at
+  ::chase-speed)."
+  [food degrees]
+  (> (* (body-speed food) (js/Math.cos (* degrees (/ js/Math.PI 180)))) (settings/get settings ::chase-speed)))
