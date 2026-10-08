@@ -27,7 +27,7 @@
     fence cells, or no zone list has been read (unless :ignore-zones?).
   - without a warn when nothing is missing and the pen already holds. Nothing is rebuilt after a restart: the
     world is the memory.
-  - through the builder's own build.declined while materials are not carried.
+  When the builder waits (e.g. :no-items while materials are not carried), the check also waits.
   Once begun, the check stays true.")
 
 (a/defargs args

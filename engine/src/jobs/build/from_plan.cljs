@@ -65,7 +65,7 @@
   The job declines (one build.declined warn naming the plan and the reason):
   - while the plan is missing, unreadable or has no cells to build (in :part).
   - while no zone list has been read.
-  - before the job has begun, while cells are missing but none of their blocks is carried and none can be fetched.
+  When cells are missing but none of their blocks is carried and none can be fetched, the job waits (:no-items with :needs).
   Material: while cells wait for an item not carried (and not given up or refused), each round first fetches it (:fetch,
   jobs.lib.fetch, a jobs.items.obtain child for the missing count); a pickaxe block to dig without a pickaxe fetches the tool the same way
   (jobs.items.get-tool). With :fetch false, or once a fetch failed, the build goes on with what is carried and ends
