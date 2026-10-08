@@ -993,7 +993,7 @@ const torchWorld = (overrides, at = new Vec3(8.5, 65, 10.5)) => {
     columns[`${x >> 4},0`].setBlockStateId({ x: x & 15, y: 65, z: 8 }, stateOf('torch'))
     bot.emit('blockUpdate', { position: new Vec3(x, 65, 8), stateId: AIR }, { position: new Vec3(x, 65, 8), stateId: stateOf('torch') })
   }
-  return { view, dir, torch }
+  return { view, dir, torch, bot }
 }
 
 test('relight: a change beyond relightRange of the body is not queued, its column is still dumped', async () => {
@@ -1015,6 +1015,44 @@ test('relight: a backlog over relightBacklogMax keeps only the nearest points', 
   assert.equal(s.relightBoxes, 1)
   assert.equal(s.relightCarried, 1)
   assert.equal(view.lightOverlay(0, 0, (65 + 64) >> 4)?.block[((65 + 64) & 15) << 8 | 8 << 4 | 8], 14)
+})
+
+const torchCell = (cx) => ((65 + 64) & 15) << 8 | 8 << 4 | 8
+
+test('relight: a far change is relit once the body comes within relightRange of its column', async () => {
+  const { view, torch, bot } = torchWorld({ relightRange: 50, relightBudgetMs: 1e9 })
+  torch(120)
+  await view.flushColumns()
+  await view.idle()
+  assert.equal(view.lightOverlay(7, 0, (65 + 64) >> 4), undefined)
+  bot.entity.position = new Vec3(110.5, 65, 10.5)
+  await view.flushColumns()
+  await view.idle()
+  assert.equal(view.lightOverlay(7, 0, (65 + 64) >> 4)?.block[torchCell()], 14)
+})
+
+test('relight: a point trimmed off the backlog is relit later, nearer the body', async () => {
+  const { view, torch, bot } = torchWorld({ relightRange: 1000, relightBacklogMax: 1, relightMaxPoints: 1, relightBudgetMs: 1e9 })
+  for (const x of [120, 8]) torch(x)
+  await view.flushColumns()
+  await view.idle()
+  assert.equal(view.lightOverlay(7, 0, (65 + 64) >> 4), undefined)
+  bot.entity.position = new Vec3(120.5, 65, 10.5)
+  await view.flushColumns()
+  await view.idle()
+  assert.equal(view.lightOverlay(7, 0, (65 + 64) >> 4)?.block[torchCell()], 14)
+})
+
+test('relight: a column with more far changes than the dirty bound drops its overlay instead', async () => {
+  const { view, torch, bot } = torchWorld({ relightRange: 50, relightBudgetMs: 1e9, dirtyPointsMax: 1 }, new Vec3(110.5, 65, 10.5))
+  torch(120)
+  await view.flushColumns()
+  await view.idle()
+  assert.equal(view.lightOverlay(7, 0, (65 + 64) >> 4)?.block[torchCell()], 14)
+  bot.entity.position = new Vec3(8.5, 65, 10.5)
+  torch(121)
+  torch(122)
+  assert.equal(view.lightOverlay(7, 0, (65 + 64) >> 4), undefined)
 })
 
 test('overlay light in a column file decodes to the overlay, and a column without overlay is unchanged', () => {

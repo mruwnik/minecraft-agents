@@ -133,7 +133,7 @@ export function nearestK (points, at, k) {
   return heap.sort((a, b) => a[0] - b[0]).map(([, p]) => p)
 }
 
-export function createView ({ stateDir, agent, world, onEvent = () => {}, now = Date.now, enabled = process.env.BODY_VIEW !== '0', poseHz = poseHzFromEnv(), relightBudgetMs = RELIGHT_BUDGET_MS, relightMaxPoints = RELIGHT_MAX_POINTS, relightRange, relightBacklogMax }) {
+export function createView ({ stateDir, agent, world, onEvent = () => {}, now = Date.now, enabled = process.env.BODY_VIEW !== '0', poseHz = poseHzFromEnv(), relightBudgetMs = RELIGHT_BUDGET_MS, relightMaxPoints = RELIGHT_MAX_POINTS, relightRange, relightBacklogMax, dirtyColumnsMax, dirtyPointsMax }) {
   if (!enabled) return noView
   let bot = null
   let unhook = () => {}
@@ -148,6 +148,7 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
   let mcVersion = null
   const pending = new Set()
   const overlays = new Map()
+  const dirty = new Map() // column key -> Map of block changes waiting for the body to come near (null: over the bound)
   let changes = new Map()
   const inflight = new Set()
   const running = new Set()
@@ -179,33 +180,82 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     const cx = Math.floor(point.x / 16)
     const cz = Math.floor(point.z / 16)
     overlays.delete(`${cx},${cz}`)
+    dirty.delete(`${cx},${cz}`) // the reloaded column carries the server's light, changes included
     markColumn(cx, cz)
   })
-  const onUnload = safely(point => overlays.delete(`${Math.floor(point.x / 16)},${Math.floor(point.z / 16)}`))
+  const onUnload = safely(point => {
+    const key = `${Math.floor(point.x / 16)},${Math.floor(point.z / 16)}`
+    overlays.delete(key)
+    dirty.delete(key)
+  })
   const onUpdate = safely((oldBlock, newBlock) => {
     const p = (newBlock ?? oldBlock)?.position
     if (!p) return
     markColumn(Math.floor(p.x / 16), Math.floor(p.z / 16))
     if (oldBlock?.stateId === newBlock?.stateId) return
     const at = bot?.entity?.position
-    if (at && distSq(p, at) > (relightRange ?? setting('view/relight-range')) ** 2) return // far changes only feed the column dump
+    if (at && distSq(p, at) > (relightRange ?? setting('view/relight-range')) ** 2) return defer(p) // far changes feed the column dump, and are relit when the body comes near
     changes.set(`${p.x},${p.y},${p.z}`, { x: p.x, y: p.y, z: p.z })
     // bounded memory: when the backlog doubles its cap, cut it back to the nearest points
     const cap = relightBacklogMax ?? setting('view/relight-backlog-max')
-    if (at && changes.size > cap * 2) changes = new Map(nearestK([...changes.values()], at, cap).map(q => [`${q.x},${q.y},${q.z}`, q]))
+    if (at && changes.size > cap * 2) {
+      const all = [...changes.values()]
+      const kept = nearestK(all, at, cap)
+      const keptKeys = new Set(kept.map(q => `${q.x},${q.y},${q.z}`))
+      changes = new Map(kept.map(q => [`${q.x},${q.y},${q.z}`, q]))
+      for (const q of all) if (!keptKeys.has(`${q.x},${q.y},${q.z}`)) defer(q)
+    }
   })
+
+  // Changes not relit yet (beyond relight-range, or trimmed off the backlog), by column. The overlay would keep the
+  // server's load-time light there, so they are relit once the body comes near. Bounded: a column over its point bound
+  // or the oldest column over the column bound loses its overlay instead (the server light is read there).
+  const defer = p => {
+    const key = `${p.x >> 4},${p.z >> 4}`
+    const pointsMax = dirtyPointsMax ?? setting('view/dirty-points-max')
+    const columnsMax = dirtyColumnsMax ?? setting('view/dirty-columns-max')
+    const forget = k => { dirty.set(k, null); overlays.delete(k) } // null: over the bound, nothing to relight
+    const points = dirty.get(key)
+    if (points === null) return
+    if (!points) {
+      dirty.set(key, new Map())
+      if (dirty.size > columnsMax) {
+        const oldest = [...dirty.keys()].find(k => k !== key)
+        if (dirty.get(oldest)) { overlays.delete(oldest); markColumn(...oldest.split(',').map(Number)) }
+        dirty.delete(oldest)
+      }
+    }
+    const mine = dirty.get(key)
+    mine.set(`${p.x},${p.y},${p.z}`, { x: p.x, y: p.y, z: p.z })
+    if (mine.size > pointsMax) forget(key)
+  }
+  // move the dirty columns now within range of the body back into the relight backlog
+  const requeueNear = at => {
+    const range = relightRange ?? setting('view/relight-range')
+    for (const [key, points] of [...dirty]) {
+      const [cx, cz] = key.split(',').map(Number)
+      if ((cx * 16 + 8 - at.x) ** 2 + (cz * 16 + 8 - at.z) ** 2 > range ** 2) continue
+      dirty.delete(key)
+      for (const [k, p] of points ?? []) changes.set(k, p)
+    }
+  }
 
   // Relight around the queued block changes, writing the differences into the overlay. Returns the keys of columns
   // whose changes were carried to a later flush (they are not written yet).
   const relight = target => {
     const blocked = new Set()
+    const at = target.entity?.position
+    if (at && dirty.size) requeueNear(at)
     if (!changes.size) return blocked
     const start = performance.now()
     // nearest the body first: perception reads light through the overlay, so what the body can see must not wait behind a far backlog
-    const at = target.entity?.position
     const cap = relightBacklogMax ?? setting('view/relight-backlog-max')
     const kept = at ? nearestK([...changes.values()], at, cap) : [...changes.values()].slice(0, cap)
     const queued = kept.slice(0, relightMaxPoints)
+    if (kept.length < changes.size) {
+      const keptKeys = new Set(kept.map(q => `${q.x},${q.y},${q.z}`))
+      for (const [k, q] of changes) if (!keptKeys.has(k)) defer(q)
+    }
     changes = new Map()
     // a huge backlog is not boxed in one go (boxFor and the merge cost grow with it): the rest waits for the next flush
     for (const p of kept.slice(relightMaxPoints)) {
@@ -527,6 +577,7 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
   const attach = target => {
     unhook()
     overlays.clear()
+    dirty.clear()
     changes = new Map()
     bot = target
     mcVersion = target.version
