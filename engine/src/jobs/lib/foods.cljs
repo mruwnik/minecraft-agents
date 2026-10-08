@@ -42,6 +42,13 @@
 
 (defn saturation [item] (get-in (table) [item :saturation] 0))
 
+(defn stock-points
+  "Hunger points the pack holds in food a meal would eat unnamed and that does not hurt; inv: [{:name :count}]."
+  [inv]
+  (reduce + 0 (for [{:keys [name count]} inv
+                    :when (and (food? name) (not (contains? harmful name)) (not (contains? named-only name)))]
+                (* count (points name)))))
+
 (defn edible?
   "A food worth carrying as food: any food that is not harmful."
   [item]

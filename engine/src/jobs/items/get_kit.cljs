@@ -21,8 +21,8 @@
   longer than the fetch limit). Each piece got is an info kit.progress.
   While furnace material is still short (mining or smelting ahead; pure crafting needs no food) and fewer than
   :min-food food points are carried (nil: ::min-food; harmful food does not count), a jobs.survival.get-food child
-  (with :explore) runs before the work and again after each piece (:food false: no child, stops :needs-food instead). A body that is
-  not hungry goes on; a child that stops ends the job :needs-food with its reason as :cause. Get a base first.
+  (with :explore, and :stock :min-food to fill the pack) runs before the work and again after each piece (:food false: no child, stops :needs-food instead). A child that
+  stops (:no-food, or :no-stock when fed with nothing to stock) ends the job :needs-food with its reason as :cause. Get a base first.
   A death since the job began (body memory :died) clears the children and what was made; the next round re-plans from
   what is carried. A death only keeps the job listed when it was submitted with :survive-death?.
   Ends {:status :done :have [..] :made [..]} or {:status :stopped :item next :reason r :why text :have :made}, warn
@@ -73,11 +73,6 @@
   "Whether the body died (latest :died entry) after the job booked :since."
   [m died]
   (boolean (and died (:since m) (> (:t died) (:since m)))))
-
-(defn food-points [inv]
-  (reduce + 0 (for [{:keys [name count]} inv
-                    :when (and (foods/food? name) (not (foods/harmful name)) (not (foods/named-only name)))]
-                (* count (foods/points name)))))
 
 (defn had?
   "Carried, worn, or an armour piece whose slot holds one at least as good."
@@ -131,13 +126,19 @@
     (ctx/result! c res)
     :done))
 
+(defn food-args
+  "The get-food child's args: feed the body, then stock the pack up to :min-food points."
+  [c]
+  {:explore (:explore (:args c))
+   :stock (or (:min-food (:args c)) (settings/get settings ::min-food))})
+
 (defn ^:async run-food!
   "One get-food child round: :continue, nil when the body is fed or not hungry, or {:reason :why} when it could not be fed."
   [c]
-  (let [r (await (ctx/call-child c :food 'jobs.survival.get-food {:explore (:explore (:args c))}))]
+  (let [r (await (ctx/call-child c :food 'jobs.survival.get-food (food-args c)))]
     (case r
       :continue :continue
-      :declined (let [w (b/child-wait c :food 'jobs.survival.get-food {:explore (:explore (:args c))})]
+      :declined (let [w (b/child-wait c :food 'jobs.survival.get-food (food-args c))]
                   (when-not (= :not-hungry (:reason w)) {:cause (:reason w) :why (:why w)}))
       (let [res (ctx/child-result c :food)]
         (when (= :stopped (:status res)) {:cause (:reason res) :why (:text res)})))))
@@ -158,7 +159,7 @@
             wear (when (:wear a) (first (to-wear items st)))
             have (filterv #(had? (:carried st) (:worn st) %) items)
             todo (remove (set have) items)
-            fp (food-points (:inv st))
+            fp (foods/stock-points (:inv st))
             short (when (seq todo) (first (furnace-short version todo (:carried st))))]
         (cond
           wear

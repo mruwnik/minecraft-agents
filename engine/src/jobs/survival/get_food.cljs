@@ -38,6 +38,7 @@
   flesh, with :allow-bad). Still nothing: it stops :no-food with a food.none warning (what was searched, the nearest known source) and writes
   :hungry. For :ask-cooldown-ms after that a round still eats and still does ways 1, 3, 4 and 5, but not a source it
   already knew when it gave up (one learned since is tried first); with nothing to do (harmful food above ::eat-bad-food does not count) the check waits :no-food-found, else the round declines.
+  :stock n: a fed body also takes the ways until the pack holds n food points, else stops :no-stock.
   Never :continue: a go-to that waits on the world, or a child still going after jobs.lib.child's call cap, is waited out in the round.
   More than 12 ways in one round without getting fed stops :still-hungry.
   Wheat is never harvested. Babies and animals in another's zone or claim are never hunted (:ignore-zones? lifts the zone). A chest in another's zone or claim is skipped and never taken from, even when starving
@@ -56,6 +57,7 @@
    :take {:doc "most items to withdraw from a chest in one go" :spec (a/int-in 1 nil) :default 16}
    :attack-gap-ms {:doc "least time between two swings at an animal, so a swing lands at full strength" :spec (a/num-in 0 nil) :default 600}
    :explore {:doc "with nothing known or seen, walk and look for food animals and crops once per job: false, true (the ::explore setting) or jobs.explore.search options over it" :spec (a/or-of boolean? map?) :default true}
+   :stock {:doc "also carry food worth this many hunger points: a fed body takes the ways below until the pack holds it (0: only feed)" :spec (a/num-in 0 nil) :default 0}
    :ask-cooldown-ms {:doc "after finding nothing, how long before saying so (and searching) again" :spec (a/num-in 0 nil) :default (* 10 60 1000)}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
@@ -110,6 +112,13 @@
   (and (foods/food? (:name item))
        (or (not (contains? foods/harmful (:name item))) (<= (food-level c) (eat-bad-food)))))
 
+(defn stock-short?
+  "A :stock is asked for and the pack holds fewer food points than that."
+  [c]
+  (< (foods/stock-points (u/inventory (:primitives c))) (:stock (:args c))))
+
+(defn wants-food? [c] (or (hungry-now? c) (stock-short? c)))
+
 (declare gave-up-recently? can-cook? night-holds? fresh-source animals-in-sight ripe-blocks can-bake?)
 
 (defn nothing-to-try?
@@ -132,7 +141,7 @@
       (ctx/wait c {:reason :no-food-found
                    :why (str "hungry (food " (.-food self) ") but no food is carried, known or in sight within "
                              (:hunt-radius (:args c)) " blocks; searched recently")})
-    (or (hungry-now? c)
+    (or (wants-food? c)
         (foods/top-up? (.-food self) (.-health self) (foods/carried-names self))
         (foods/eat-now? self (:args c))
         (boolean (:eating (ctx/mem c)))
@@ -401,6 +410,14 @@
     (ctx/remember! c :hungry {:food food} hungry-policy)
     (r/stop! c :no-food text :food food)))
 
+(defn stock-stop!
+  "Fed but the pack cannot be filled: stop :no-stock (no :hungry entry, the body is not hungry)."
+  [c]
+  (let [have (foods/stock-points (u/inventory (:primitives c)))]
+    (r/stop! c :no-stock (str "fed (food " (food-level c) ") but carries " have " of " (:stock (:args c))
+                              " food points and found no more within " (:hunt-radius (:args c)) " blocks")
+             :food (food-level c) :stock (:stock (:args c)) :have have)))
+
 (defn gave-up-recently? [c]
   (pos? (ctx/count-in c :hungry (:ask-cooldown-ms (:args c)))))
 
@@ -574,7 +591,7 @@
           eaten (if (or (= :continue cooked) (= :again cooked)) cooked (await (eat-carried! c)))
           way (when-not (or (= :continue eaten) (= :again cooked))
                 (cond
-                  (not (hungry-now? c)) ::fed
+                  (not (wants-food? c)) ::fed
                   (>= n (max-ways)) ::enough
                   :else (await (next-way! c))))]
       (cond
@@ -590,5 +607,6 @@
                 (cond
                   (or (= :continue more) (= :continue bad)) (do (await (child/pace!)) (recur n))
                   (or more bad) (recur (inc n))
+                  (not (hungry-now? c)) (stock-stop! c)
                   (gave-up-recently? c) :declined
                   :else (none! c)))))))

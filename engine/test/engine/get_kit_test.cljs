@@ -141,16 +141,6 @@
           (is (= 1 (get (f/inv s) "iron_pickaxe")))
           (is (= :done (:status @(:out s)))))))))
 
-(deftest a-fed-body-short-of-carried-food-goes-on-to-the-work
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (start (world [{:name "bread" :count 1}] {})
-                       {:items ["iron_pickaxe"] :min-food 20 :explore false})]
-          (await (f/run-ticks s 60))
-          (is (= {:status :stopped :item "iron_ingot" :reason :no-source}
-                 (select-keys @(:out s) [:status :item :reason]))))))))
-
 (deftest a-hungry-body-with-no-food-to-be-found-stops-needing-food-with-the-childs-reason
   (async done
     (tu/run-async done
@@ -202,3 +192,26 @@
   (let [waited (atom nil)]
     (kit/check {:args {:items []} :wait waited})
     (is (= :bad-args (:reason @waited)))))
+
+(deftest a-fed-body-with-no-food-and-an-animal-near-stocks-up-before-the-work
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (assoc (hungry-world [] 20) :entities [{:id 7 :name "cow" :kind "passive" :pos {:x 5 :y 64 :z 0} :health 20
+                                                                :drops [{:name "beef" :count 1}]}])
+                       {:items ["iron_pickaxe"] :min-food 3 :explore false})]
+          (let [timer (js/setInterval #(swap! (:clock s) + 500) 5)]
+            (await (f/run-ticks s 80))
+            (js/clearInterval timer))
+          (is (pos? (get (f/inv s) "beef" 0)))
+          (is (= {:status :stopped :item "iron_ingot" :reason :no-source}
+                 (select-keys @(:out s) [:status :item :reason]))))))))
+
+(deftest a-fed-body-with-no-food-source-stops-needing-food-naming-no-stock
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (hungry-world [] 20) {:items ["iron_pickaxe"] :min-food 20 :explore false})]
+          (await (f/run-ticks s 80))
+          (is (= {:status :stopped :item "iron_pickaxe" :reason :needs-food :cause :no-stock}
+                 (select-keys @(:out s) [:status :item :reason :cause]))))))))

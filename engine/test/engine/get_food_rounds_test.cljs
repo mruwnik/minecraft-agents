@@ -570,3 +570,34 @@
           (await (run-until-idle! eng p 40))
           (is (seq (filter #(= :food.no-cook (:kind %)) @seen)) "the cook failed (no fuel) and said so")
           (is (> (food p) 5) "the beef was eaten raw after"))))))
+
+;; ---------------------------------------------------------------- :stock
+
+(deftest stock-hunts-for-carried-food-when-already-fed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:food 20} :entities [cow]})]
+          (await (one-round! eng {:stock 3 :attack-gap-ms 0}))
+          (is (= [7 7 7 7] (call-args p "attack" "id")))
+          (is (empty? (call-args p "eat" "item")) "a fed body eats nothing")
+          (is (= [:completed] (mapv :kind (ended seen)))))))))
+
+(deftest stock-already-carried-does-nothing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:food 20} :inventory [{:name "bread" :count 3}] :entities [cow]})]
+          (await (one-round! eng {:stock 10}))
+          (is (empty? (call-args p "attack" "id")))
+          (is (empty? (ended seen)) "the check declines: nothing to do"))))))
+
+(deftest stock-with-no-source-stops-naming-the-reason
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:self {:food 20}} :step-ms 5)]
+          (await (one-round! eng {:stock 8 :explore false}))
+          (let [stop (first (ended seen))]
+            (is (= :stopped (:kind stop)))
+            (is (= :no-stock (:reason stop)) (pr-str stop))))))))
