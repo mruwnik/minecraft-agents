@@ -1,7 +1,8 @@
 // Why JavaScript: node --test file for tools/world-test-pool.mjs.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { splitForms, scanForms, failSig, summarize, unitOrder, parsePoolArgs, workerSpecs, runPool, mergeText, poolCap, createReaper, countListed, listArgs, knownFailures, parseListed, unitsWithCases, noCasesSelected } from './world-test-pool.mjs'
+import net from 'node:net'
+import { splitForms, scanForms, failSig, summarize, unitOrder, parsePoolArgs, workerSpecs, runPool, mergeText, poolCap, createReaper, countListed, listArgs, knownFailures, parseListed, unitsWithCases, noCasesSelected, serverProbe } from './world-test-pool.mjs'
 
 const form = (id, status, secs = 1, extra = '') =>
   `{:plot 0, :file "${id.split('/')[0]}", :expects [{:status :pass, :evidence "a } \\" {"}], :status :${status}, :id "${id}", :elapsed-s ${secs}${extra}}`
@@ -398,4 +399,71 @@ test('runPool: past the wait cap the pool stops as server unreachable (exit 3), 
 test('parsePoolArgs: --server-wait-s sets the cap in seconds (default 300)', () => {
   assert.equal(parsePoolArgs(['d']).serverWaitS, 300)
   assert.equal(parsePoolArgs(['d', '--server-wait-s', '90']).serverWaitS, 90)
+})
+
+// ---- review findings of the fault handling (card 6bfe1115)
+const guarded = (script, max = 40) => { // a runner that throws when the pool loops
+  let n = 0
+  return fakeRunner((...a) => { if (++n > max) throw new Error('pool loops'); return script(...a) }, [])
+}
+test('runPool: a connection fault that persists while the probe says the server is up is rerun at most twice, then settles as an error', async () => {
+  const log = []
+  const runUnit = fakeRunner((file) => ({ code: 1, text: vec(refused(`${file}/c1`)) }), log)
+  const r = await runPool({ units: ['a'], workers: workerSpecs(1, 19, 'P', 0), runUnit: async (u) => { if (log.length > 40) throw new Error('pool loops'); return runUnit(u) }, retries: 0 })
+  assert.equal(r.code, 1)
+  assert.equal(log.length, 3)
+  assert.deepEqual(splitForms(r.text).map((f) => summarize(f).status), ['error'])
+})
+test('runPool: only the error, why or evidence field makes a connection fault, not other text of the form', async () => {
+  const log = []
+  const note = form('a/c1', 'error', 1, ', :log "ECONNRESET in the server log"')
+  const r = await runPool({ units: ['a'], workers: workerSpecs(1, 19, 'P', 0), runUnit: fakeRunner(() => ({ code: 1, text: vec(note) }), log), retries: 0 })
+  assert.equal(log.length, 1)
+  assert.equal(r.code, 1)
+})
+test('runPool: after the server is back the units wait the settle time before they start', async () => {
+  const srv = fakeServer(40000)
+  const starts = []
+  const runUnit = async ({ file }) => { starts.push(srv.clock.t); return starts.length === 1 ? { code: 1, text: vec(refused(`${file}/c1`)) } : ok(file) }
+  await runPool({ units: ['a'], workers: workerSpecs(1, 19, 'P', 0), runUnit, settleMs: 7000, ...srv })
+  assert.ok(starts[1] >= 47000)
+})
+test('serverProbe: true only when every port accepts a connection', async () => {
+  const srv = net.createServer().listen(0, '127.0.0.1')
+  await new Promise((r) => srv.on('listening', r))
+  const open = srv.address().port
+  const closed = net.createServer().listen(0, '127.0.0.1')
+  await new Promise((r) => closed.on('listening', r))
+  const shut = closed.address().port
+  await new Promise((r) => closed.close(r))
+  assert.equal(await serverProbe([open])(), true)
+  assert.equal(await serverProbe([open, shut])(), false)
+  srv.close()
+})
+test('runPool: a case rerun after a fault that fails with its known failed check is not rerun again', async () => {
+  const log = []
+  const listed = new Map([['a', ['a/c1', 'a/c2']]])
+  const runUnit = fakeRunner((file, match) => (log.length === 1 ? { code: 1, text: vec(form('a/c1', 'pass'), refused('a/c2')) } : { code: 1, text: vec(form(match, 'fail')) }), log)
+  const r = await runPool({ units: ['a'], workers: workerSpecs(1, 19, 'P', 0), runUnit, listed, known: new Map([['a/c2', '']]), retries: 1 })
+  assert.equal(log.length, 2)
+  assert.equal(r.skipped, 1)
+  assert.match(r.text, /:known-failure true/)
+})
+test('runPool: on an unreachable stop a failure still waiting for its retry is returned as pending, not as a final result', async () => {
+  const srv = fakeServer(Infinity)
+  const listed = new Map([['a', ['a/c1', 'a/c2']]])
+  const runUnit = fakeRunner(() => ({ code: 1, text: vec(form('a/c1', 'fail'), refused('a/c2')) }), [])
+  const r = await runPool({ units: ['a'], workers: workerSpecs(1, 19, 'P', 0), runUnit, listed, retries: 1, serverWaitMs: 10000, ...srv })
+  assert.equal(r.code, 3)
+  assert.deepEqual(splitForms(r.text), [])
+  assert.equal(r.pending.length, 1)
+})
+test('runPool: in a mixed unit the cases the faulted child never reached are rerun, not recorded as errors', async () => {
+  const log = []
+  const listed = new Map([['a', ['a/c1', 'a/c2', 'a/c3']]])
+  const runUnit = fakeRunner((file, match) => (log.length === 1 ? { code: 1, text: vec(form('a/c1', 'pass'), refused('a/c2')) } : { code: 0, text: vec(form(match, 'pass')) }), log)
+  const r = await runPool({ units: ['a'], workers: workerSpecs(1, 19, 'P', 0), runUnit, listed, total: 3 })
+  assert.equal(r.code, 0)
+  assert.deepEqual(log.map((l) => l.match).sort(), ['a/c2', 'a/c3', null])
+  assert.deepEqual(splitForms(r.text).map((f) => summarize(f).status), ['pass', 'pass', 'pass'])
 })
