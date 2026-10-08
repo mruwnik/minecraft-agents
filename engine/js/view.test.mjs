@@ -332,6 +332,16 @@ test('hud snapshot lists non-empty inventory slots, effects and the held item', 
   assert.equal(hud.window, null)
 })
 
+test('hud snapshot carries durability left and max for damageable items only', () => {
+  const bot = fakeBot()
+  bot.registry = { itemsByName: { iron_pickaxe: { maxDurability: 250 } } }
+  bot.inventory = { slots: [null, { name: 'iron_pickaxe', count: 1, durabilityUsed: 50 }, { name: 'stone', count: 3 }] }
+  assert.deepEqual(hudSnapshot(bot, 5).inventory, [
+    { slot: 1, name: 'iron_pickaxe', count: 1, durability: 200, maxDurability: 250 },
+    { slot: 2, name: 'stone', count: 3 }
+  ])
+})
+
 test('pose writes only on change, but at least every 2 seconds', async () => {
   const bot = fakeBot()
   let clock = 10000

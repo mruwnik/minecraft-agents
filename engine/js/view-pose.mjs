@@ -75,6 +75,12 @@ export const offlinePose = ({ world, now, mcVersion, last }) => last
   ? { ...last, t: now, status: 'offline' }
   : { v: VIEW_VERSION, t: now, world, status: 'offline', mcVersion }
 
+// durability left and max for a damageable item, nothing for the rest
+const durability = (bot, item) => {
+  const max = bot.registry?.itemsByName?.[item.name]?.maxDurability
+  return max > 0 ? { durability: max - (item.durabilityUsed ?? 0), maxDurability: max } : {}
+}
+
 export function hudSnapshot (bot, now) {
   const slots = bot.inventory?.slots ?? []
   const effects = Object.values(bot.entity?.effects ?? {})
@@ -88,7 +94,7 @@ export function hudSnapshot (bot, now) {
     xp: { level: bot.experience?.level ?? 0, points: bot.experience?.points ?? 0, progress: bot.experience?.progress ?? 0 },
     effects: effects.map(e => ({ name: bot.registry?.effects?.[e.id]?.name ?? String(e.id), amplifier: e.amplifier, duration: e.duration })),
     held: bot.heldItem ? { name: bot.heldItem.name, count: bot.heldItem.count } : null,
-    inventory: slots.map((item, slot) => item ? { slot, name: item.name, count: item.count } : null).filter(Boolean),
+    inventory: slots.map((item, slot) => item ? { slot, name: item.name, count: item.count, ...durability(bot, item) } : null).filter(Boolean),
     window: bot.currentWindow?.type ?? null
   }
 }
