@@ -66,3 +66,9 @@
     (is (= (pf/cells (plan-with 10 0.4)) (pf/cells (plan-with 2 2)))))
   (testing "without a danger the weight changes nothing"
     (is (= (pf/cells (pf/run open-world goal {:damageWeight 40} from)) (pf/cells (pf/run open-world goal {} from))))))
+
+(deftest a-risk-weight-of-0-makes-danger-free-not-NaN
+  (let [r (pf/run open-world goal {:riskWeight 0 :dangers [(danger 2)]} from)]
+    (is (= "found" (:status r)))
+    (is (not (js/isNaN (get-in r [:path :cost :seconds]))))
+    (is (not (js/isNaN (get-in r [:path :cost :risk]))))))

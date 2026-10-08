@@ -255,7 +255,8 @@
         y-high (aget bounds 5)
         cap (js/Math.min max-nodes 1024)
         slots (next-pow2 (* cap 2))
-        risk-scale (/ (option options "damageWeight" (option options "riskWeight" 2)) (option options "riskWeight" 2))
+        risk-scale (let [rw (option options "riskWeight" 2)]
+                     (if (zero? rw) 1 (/ (option options "damageWeight" rw) rw)))
         ^js dangers (danger-array (.-dangers options) risk-scale)
         n-dangers (if (some? dangers) (/ (.-length dangers) DANGER-STRIDE) 0)
         ^js dbox (danger-box dangers)
