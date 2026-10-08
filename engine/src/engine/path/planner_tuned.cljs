@@ -129,16 +129,17 @@
             (== (aget kinds id) base/OPEN) (recur (dec y))
             :else (inc y)))))))
 
-(def ^:const GROUND-SAMPLES 16) ; column goals whose ground goal-bounds reads: an even sample of a big set
+(def ^:const GROUND-SAMPLES 32) ; column goals whose ground goal-bounds reads: an even sample of a big set (targets/max-targets)
 
 (defn- goal-bounds
   "#js [x0 x1 z0 z1 y0 y1]: the extent of the start and the goals (y: the start's, the sphere goals' and the ground of
   each column goal: a column goal whose ground lies outside the start's y margin would leave no goal cell in the box,
   and the search would drain the box before it answered). The ground is read for at most GROUND-SAMPLES column goals
-  (an even sample), so a goal set of hundreds of columns costs a bounded number of reads."
-  [^js snapshot ^js table ^js from ^js goals]
+  (an even sample), so a goal set of hundreds of columns costs a bounded number of reads; plan and create-plan search
+  again over every column when a sampled search ends \"box\"."
+  [^js snapshot ^js table ^js from ^js goals samples]
   (let [b #js [(.-x from) (.-x from) (.-z from) (.-z from) (.-y from) (.-y from)]
-        stride (js/Math.max 1 (js/Math.ceil (/ (.-length goals) GROUND-SAMPLES)))]
+        stride (js/Math.max 1 (js/Math.ceil (/ (.-length goals) samples)))]
     (doseq [[i ^js g] (map-indexed vector (array-seq goals))]
       (aset b 0 (js/Math.min (aget b 0) (.-x g)))
       (aset b 1 (js/Math.max (aget b 1) (.-x g)))
@@ -242,7 +243,7 @@
         n-goals (if (some? set-goals) (.-length set-goals) 0)
         multi (pos? n-goals)
         ^js goal (if multi (aget set-goals 0) (.-goal query))
-        ^js bounds (goal-bounds snapshot table from (if multi set-goals #js [goal]))
+        ^js bounds (goal-bounds snapshot table from (if multi set-goals #js [goal]) (option options "groundSamples" GROUND-SAMPLES))
         ^js costs (js/Object.assign #js {} DEFAULT-COSTS (.-costs options))
         max-nodes (option options "maxNodes" 200000)
         ^js avoid (.-avoid options)
@@ -472,13 +473,28 @@
          :result (fn [] (result-of search snapshot query options))
          :nearest (fn [] (.nearest search))}))
 
-(defn plan [snapshot query options]
+(defn- ^boolean sampled-box?
+  "True when result r ended on the search box while goal-bounds read only a sample of the query's column goals."
+  [^js r ^js query options]
+  (and (identical? (.-reason r) "box")
+       (some? (.-goals query))
+       (> (.-length (.-goals query)) (option options "groundSamples" GROUND-SAMPLES))))
+
+(defn- exact-options [options] (js/Object.assign #js {} options #js {:groundSamples js/Infinity}))
+
+(defn- plan-once [snapshot query options]
   (let [search (new-search snapshot query options)]
     (.init search)
     (.step search js/Infinity)
     (result-of search snapshot query options)))
 
-(defn create-plan
+(defn plan [snapshot query options]
+  (let [r (plan-once snapshot query options)]
+    (if (sampled-box? r query options)
+      (plan-once snapshot query (exact-options options))
+      r)))
+
+(defn- create-plan-once
   "plan in slices, for a caller that yields to the event loop between them: #js {step result progress}.
   step(n) runs at most about n expansions (each newly flooded cell of the goal flood counts as one). It is true once
   the plan is ready, and result() is then what plan answers. The returnable search behind a one-way step (result-of)
@@ -508,3 +524,19 @@
                           (.resultFrom search @node (.nearest ^Search @clean))))
          ;; while the search itself is not over: where it has got to (Search.progress), else nil
          :progress (fn [] (when-not ^boolean (.-finished search) (.progress search)))}))
+
+(defn create-plan
+  "plan in slices (create-plan-once); a sampled search that ends on the box (sampled-box?) restarts over every column."
+  [snapshot query options]
+  (let [inner (volatile! (create-plan-once snapshot query options))
+        exact (volatile! false)]
+    #js {:step (fn [max-expansions]
+                 (let [^js p @inner
+                       ^boolean done (.step p max-expansions)]
+                   (if (and done (not ^boolean @exact) (sampled-box? (.result p) query options))
+                     (do (vreset! exact true)
+                         (vreset! inner (create-plan-once snapshot query (exact-options options)))
+                         false)
+                     done)))
+         :result (fn [] (.result ^js @inner))
+         :progress (fn [] (.progress ^js @inner))}))

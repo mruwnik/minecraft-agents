@@ -260,5 +260,13 @@
         _ (set! (.-stateAt snap) (fn [x y z] (swap! reads inc) (.call orig snap x y z)))
         goals (vec (for [i (range 500)] (xz (+ 3 (mod i 25)) (+ -1 (quot i 25)) 0)))]
     (pf/plan snap {:from plateau :goals goals} {:goalFlood 0 :maxNodes 1})
-    ;; each column read stops at its ground; the cap is 16 columns whatever the goal set
-    (is (< @reads (* 16 400)))))
+    ;; each column read stops at its ground; the cap is 32 columns whatever the goal set
+    (is (< @reads (* 32 400)))))
+
+(deftest an-unsampled-column-goal-below-the-box-is-still-found
+  (let [snap (pf/snapshot {:fill steps-down})
+        ;; 40 column goals: the sample reads the even ones (over void); only goal 1 has ground to walk to
+        goals (vec (for [i (range 40)] (if (= i 1) (xz 42 2 1) (xz (+ 100 i) 2 0))))
+        r (pf/plan snap {:from plateau :goals goals} {:goalFlood 0 :yMargin 3})]
+    (is (= "found" (:status r)))
+    (is (= 64 (nth (last-cell r) 1)))))
