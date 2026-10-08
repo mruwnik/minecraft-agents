@@ -156,7 +156,24 @@
 (deftest a-resumed-search-ends-once-the-air-ran-down-past-its-plan
   (let [k [:same-key]
         kept {:key k :t (js/Date.now) :air-used 7}]
-    (is (wsearch/go-on? kept k nil [0 0 0] 7.75) "a bubble more used: the plan's air still holds")
-    (is (not (wsearch/go-on? kept k nil [0 0 0] 8.5)) "two bubbles more used: a new search plans with the air left")
-    (is (not (wsearch/go-on? (dissoc kept :air-used) k nil [0 0 0] 8.5)) "begun with the head out, now 8.5 s used")
-    (is (wsearch/go-on? (dissoc kept :air-used) k nil [0 0 0] nil) "never under water")))
+    (is (wsearch/go-on? kept k nil [0 0 0] {:air-used 7.75}) "a bubble more used: the plan's air still holds")
+    (is (not (wsearch/go-on? kept k nil [0 0 0] {:air-used 8.5})) "two bubbles more used: a new search plans with the air left")
+    (is (not (wsearch/go-on? (dissoc kept :air-used) k nil [0 0 0] {:air-used 8.5})) "begun with the head out, now 8.5 s used")
+    (is (wsearch/go-on? (dissoc kept :air-used) k nil [0 0 0] {}) "never under water")))
+
+(deftest a-search-key-ignores-the-health-a-drowning-body-loses
+  (let [c {:primitives (tu/fake {:self {:pos [4.5 64 8.5]}})}
+        policy {:sprint true :air-used 15 :health 10 :drown-prices [0 1 2] :damage-weight 4 :damage-budget 6 :max-drop 6}]
+    (is (= (wsearch/search-key c [18 70 8] 1 1 policy nil)
+           (wsearch/search-key c [18 70 8] 1 1 (assoc policy :health 8 :drown-prices [0 2] :damage-weight 5 :damage-budget 4 :max-drop 5) nil))
+        "one drowning hit does not make the search key new")
+    (is (not= (wsearch/search-key c [18 70 8] 1 1 (dissoc policy :air-used :health :drown-prices) nil)
+              (wsearch/search-key c [18 70 8] 1 1 (dissoc policy :air-used :health :drown-prices :damage-budget) nil))
+        "with the head out the damage budget stays in the key")))
+
+(deftest a-resumed-search-ends-once-the-body-lost-more-than-one-drowning-hit
+  (let [k [:same-key]
+        kept {:key k :t (js/Date.now) :air-used 15 :health 10}]
+    (is (wsearch/go-on? kept k nil [0 0 0] {:air-used 15 :health 8}) "one hit (2 hp) lost: the plan's lethal line still holds")
+    (is (not (wsearch/go-on? kept k nil [0 0 0] {:air-used 15 :health 6})) "two hits lost: a new search plans with the hp left")
+    (is (wsearch/go-on? kept k nil [0 0 0] {:air-used 15 :health 10.5}) "healed a little: the plan was the more careful")))

@@ -88,15 +88,22 @@
   "policy as a search key: a submerged body's :air-seen (a new fn each round) and :air-used (it drops while the body
   waits) would make every round search afresh, so a search that needs more than one round never ends; only whether
   the head was under water counts. A search gone on with plans with the air it began with, so go-on? bounds it
-  (air-drift)."
+  (air-drift). Likewise a drowning body's hp (:health, set only with the head under) and what follows from it
+  (:drown-prices, :damage-weight, :damage-budget, :max-drop) change at every hit: go-on? bounds them (health-drift)."
   [policy]
   (cond-> (dissoc policy :air-seen :air-used)
-    (contains? policy :air-used) (assoc :under true)))
+    (contains? policy :air-used) (assoc :under true)
+    (contains? policy :health) (dissoc :health :drown-prices :damage-weight :damage-budget :max-drop)))
 
 (def air-drift
   "Seconds of air a body may use after its kept search began and still go on with it (one 0.75 s bubble): its plan
   counts the air it began with, and the planner's airLimit leaves airSupply less 3 s."
   1)
+
+(def health-drift
+  "Hp a submerged body may lose after its kept search began and still go on with it (one drowning hit): its plan counts
+  the hp it began with; the walk's watch replans when the damage ahead is more than the body may spend."
+  2)
 
 (defn goal-flood!
   "The body's kept goal flood memo for searches of to within range (goal-floods), a new one when it held another goal or
@@ -128,7 +135,7 @@
   planner's stopAtEdge, so one toward a goal that is unloaded ends at the first loaded-edge node it expands, its frontier,
   not after searching all loaded land (card 7a031d15: over max-searching rounds when no node got progress-blocks nearer)."
   [c walled to range weight policy key known & [flood]]
-  {:key key :t (js/Date.now) :walled walled :r nil :unlimited nil :air-used (:air-used policy)
+  {:key key :t (js/Date.now) :walled walled :r nil :unlimited nil :air-used (:air-used policy) :health (:health policy)
    :goal-unloaded (goal-unloaded? (.-snapshot walled) to)
    :edge-stop (some? known)
    :limited (planner/create-plan (.-snapshot walled) (wplan/plan-query c to range)
@@ -142,11 +149,13 @@
   "Whether the kept search goes on at this call: it plans the same (key k), is younger than search-max-age-ms, and did
   not begin with the goal unloaded that pw (this call's pathWorld) has loaded since. A search's snapshot keeps the
   land as it first read it, so one begun with the goal unloaded never floods the goal; a new one can prove it walled in.
-  air-used: the body's seconds of air used now (policy :air-used, nil with the head out); past the search's own by more
-  than air-drift, a new search plans with the air left."
-  [kept k ^js pw to air-used]
+  policy: this call's; its :air-used (seconds of air used now, nil with the head out) past the search's own by more than
+  air-drift, or its :health (hp now under water) below the search's own by more than health-drift: a new search plans
+  with the air or hp left."
+  [kept k ^js pw to {:keys [air-used health]}]
   (and (= k (:key kept))
        (<= (- (or air-used 0) (or (:air-used kept) 0)) air-drift)
+       (or (nil? health) (nil? (:health kept)) (<= (- (:health kept) health) health-drift))
        (< (- (js/Date.now) (:t kept)) search-max-age-ms)
        (not (and (:goal-unloaded kept) (not (goal-unloaded? (.-snapshot pw) to))))))
 
@@ -216,7 +225,7 @@
         k (search-key c to range weight policy walls pw)
         kept (get @searches who)
         known (when frontier (known-cells! c to range))
-        fresh? (not (go-on? kept k pw to (:air-used policy)))
+        fresh? (not (go-on? kept k pw to policy))
         search (if-not fresh?
                  kept
                  (new-search c (wworld/with-walls pw walls) to range weight policy k known (goal-flood! c to range weight policy walls (wworld/unknown-key pw))))
