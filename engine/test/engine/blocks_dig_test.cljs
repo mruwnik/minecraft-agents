@@ -387,6 +387,20 @@
             (is (= 1 (count @stands)))
             (is (not= [0 0] (first @stands)) "the dig is made from beside the column, never from on top")))))))
 
+(deftest a-dig-from-beside-says-where-the-body-stepped
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self body :blocks {"0,63,0" "dirt" "0,62,0" "stone"}})
+              stands (atom [])]
+          (hiding p #(= [0 62 0] %))
+          (digging-from p stands)
+          (let [result (await (child-outcome eng job {:pos under-feet} 20))
+                [sx sz] (first @stands)
+                text (:text (last (filterv #(= :blocks.dig.done (:kind %)) @seen)))]
+            (is (= [sx 64 sz] (:stepped-aside result)) "the cell the body stood on to dig is in the result")
+            (is (re-find #"stepped aside to \[-?\d+ 64 -?\d+\]" (str text)) "the done text says the body moved")))))))
+
 (deftest with-no-cell-beside-to-stand-on-the-block-under-the-feet-waits-hazard
   (async done
     (tu/run-async done

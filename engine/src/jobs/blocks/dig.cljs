@@ -48,7 +48,8 @@
   :lava-unsealed with :cell, :place (:need: no block) and :stepped-away (false: :unreachable :no-cell, or :all-walks-failed
   with the last go-to's :walk).
 
-  Ends with info blocks.dig.done and {:dug true|false :pos :block :reason :collected n}. :reason is :dug or
+  Ends with info blocks.dig.done and {:dug true|false :pos :block :reason :collected n}, plus :stepped-aside [x y z] (the
+  cell it stood on) when it stepped off the column first: digging the block underfoot is no way down (go-to is). :reason is :dug or
   :already-clear (air there, nothing done): done. Stopped ({:status :stopped}, :dug true): :lava-unsealed. :dug false: :fluid (a fluid is not
   dug), :fluid-adjacent (:on-fluid :fail, with :hazards and a :hint), :cannot (bedrock and the like), :bad-args (with
   a blocks.dig.declined warn), or :failed (the primitive refused: a timeout, with its status as :primitive). Declined, the check
@@ -154,8 +155,10 @@
 
 (defn finish!
   [c result]
-  (let [{:keys [cell place]} result
+  (let [result (cond-> result (:stepped-aside (ctx/mem c)) (assoc :stepped-aside (:stepped-aside (ctx/mem c))))
+        {:keys [cell place stepped-aside]} result
         text (str (if (:dug result) "dug " "did not dig ") (or (:block result) "") " at " (pr-str (b/cell (:pos result)))
+                  (when stepped-aside (str " from beside (stepped aside to " (pr-str stepped-aside) ": no seen floor under it)"))
                   (cond
                     (= :lava-unsealed (:reason result))
                     (str ": lava at " (pr-str cell) " not sealed: " (if (= :need place) "no block to seal with" (name (or place :tries)))
@@ -278,7 +281,7 @@
         (and (access/under-feet? (access/may-dig? (b/rules-in c) pos)) (not (contains? (set (:accept (:args c))) :under-feet)))
         (let [r (await (step-aside! c))]
           (case r
-            :arrived (recur fails (inc steps))
+            :arrived (do (ctx/update-mem! c assoc :stepped-aside (b/feet-cell c)) (recur fails (inc steps)))
             :declined (do (b/refused-now c (problem c)) :declined)
             r))
         :else
