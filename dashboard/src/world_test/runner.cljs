@@ -976,12 +976,24 @@
                       (and (:event e) (or (:of-job e) (= :job (:source (:event e)))))))
                results)))
 
+(defn near-miss
+  "Text for the case's own job event closest to the pending expectation: the last one of its :kind, else the last
+  non-lifecycle one (nil when there is none), with its message or data."
+  [events ids expect]
+  (let [own (filter #(and (= :job (:source %)) (some ids (get-in % [:context :chain]))) events)
+        kind (get-in expect [:event :kind])
+        e (or (last (filter #(= kind (:kind %)) own))
+              (last (remove #(x/job-lifecycle (:kind %)) own)))]
+    (when e (str (x/evidence e) (when-let [d (:data e)] (str " " (pr-str d)))))))
+
 (defn end-early
-  "results with the pending ones failed: no job was active; saved-s seconds before the case's limit."
-  [results {:keys [state why]} saved-s]
+  "results with the pending ones failed: no job was active; saved-s seconds before the case's limit. The evidence ends
+  with the job's near miss (see near-miss) from events of the case's job ids."
+  [results {:keys [state why]} saved-s events ids]
   (mapv #(if (= :pending (:status %))
            (assoc % :status :fail :ended-early-s saved-s
-                  :evidence (str "no job active: " (name state) (when why (str " " why))))
+                  :evidence (str "no job active: " (name state) (when why (str " " why))
+                                 (when-let [m (near-miss events ids (:expect %))] (str "; nearest: " m))))
            %)
         results))
 
@@ -1008,7 +1020,7 @@
                   (or (x/decided? results) (> t limit))
                   (js/Promise.resolve (mapv #(if (= :pending (:status %)) (assoc % :status :fail :evidence "undecided at the case's limit") %) results))
                   (and idle (>= (- t @idle-since) (idle-grace-ms c)))
-                  (js/Promise.resolve (end-early results idle (js/Math.round (/ (- limit t) 1000))))
+                  (js/Promise.resolve (end-early results idle (js/Math.round (/ (- limit t) 1000)) evs ids))
                   :else
                   (.then (sleep 500) poll))))]
       (poll))))

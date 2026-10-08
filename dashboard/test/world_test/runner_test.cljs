@@ -828,6 +828,15 @@
              (is (< 80 (:ended-early-s (first res)) 100))
              (done)))))
 
+(deftest the-early-end-names-the-jobs-near-miss
+  (async done
+    (.then (watch-case {:limit-s 100 :expect [{:event {:source :job :kind :found} :within-s 90}]}
+                       [(job-ev :queued "j1") (job-ev :done "j1" :data {:reason :no-start}) (job-ev :completed "j1")])
+           (fn [res]
+             (is (re-find #"no job active: completed" (:evidence (first res))))
+             (is (re-find #"no-start" (:evidence (first res))))
+             (done)))))
+
 (deftest a-job-case-keeps-waiting-while-a-job-is-active
   (async done
     (.then (watch-case {:limit-s 5 :expect [{:event {:kind :never} :within-s 2}]} [(job-ev :queued "j1")])
