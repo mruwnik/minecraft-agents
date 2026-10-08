@@ -7,7 +7,8 @@
              :rename {species all-species}]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
-            [jobs.lib.pace :as pace]))
+            [jobs.lib.pace :as pace]
+            [jobs.lib.sense :as sense]))
 
 (def doc
   "Plant a sapling at :at, or at the oldest replant debt, and clear that debt. With :bone-meal n it then uses up to
@@ -122,7 +123,7 @@
           :blocked (u/fail! c :plant_blocked "cannot reach the planting spot")
           (cond
             (not (spot-allowed? c (:pos t))) :done
-            (nil? (u/seen-name (:primitives c) (:pos t)))
+            (nil? (await (sense/decide! c :plant-sapling.spot #(u/seen-name (:primitives c) (:pos t)))))
             (do (ctx/warn-once! c [:unknown (:pos t)] :plant-sapling.unknown {:pos (:pos t)}) :done)
             :else
             (do (await (ctx/act c :equip (clj->js {:item sapling})))
