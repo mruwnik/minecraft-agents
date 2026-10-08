@@ -19,5 +19,6 @@
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 40}
             {:event {:source :job :kind :completed :data {:status :completed}} :within-s 150 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :nothing-collected}} :for-s 150 :until {:source :job :kind :completed}}]
-   :after [[:item "oak_log" 1]]
+   ;; the whole 4-log tree: the job resumes after the reflex and collects every felled log
+   :after [[:item "oak_log" 4]]
    :limit-s 170}]}
