@@ -152,3 +152,11 @@
     (is (not= (wsearch/search-key c [18 70 8] 1 1 policy nil)
               (wsearch/search-key c [18 70 8] 1 1 (dissoc policy :air-used :air-seen) nil))
         "a search begun with the head out is not gone on with under water")))
+
+(deftest a-resumed-search-ends-once-the-air-ran-down-past-its-plan
+  (let [k [:same-key]
+        kept {:key k :t (js/Date.now) :air-used 7}]
+    (is (wsearch/go-on? kept k nil [0 0 0] 7.75) "a bubble more used: the plan's air still holds")
+    (is (not (wsearch/go-on? kept k nil [0 0 0] 8.5)) "two bubbles more used: a new search plans with the air left")
+    (is (not (wsearch/go-on? (dissoc kept :air-used) k nil [0 0 0] 8.5)) "begun with the head out, now 8.5 s used")
+    (is (wsearch/go-on? (dissoc kept :air-used) k nil [0 0 0] nil) "never under water")))
