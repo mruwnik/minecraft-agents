@@ -122,8 +122,8 @@
     (is (re-find #"jobs.d :n must be a whole number" (try (expr/parse-spec r '(jobs.d)) nil (catch :default e (ex-message e)))))))
 
 (def pos-args
-  "The position-valued args of real jobs: [job arg]."
-  [['jobs.movement.go-to :pos] ['jobs.blocks.dig :pos] ['jobs.blocks.place :pos] ['jobs.blocks.use-on :pos]
+  "The position-valued args of real jobs: [job arg]. go-to's :pos also takes a column (engine.go-to-column-test)."
+  [['jobs.blocks.dig :pos] ['jobs.blocks.place :pos] ['jobs.blocks.use-on :pos]
    ['jobs.access.toggle :pos] ['jobs.movement.leave-vehicle :toward]
    ['jobs.storage.withdraw :chest] ['jobs.storage.deposit :chest] ['jobs.items.smelt :furnace] ['jobs.items.bake :chest]
    ['jobs.build.clear-box :from] ['jobs.build.clear-box :to] ['jobs.access.tunnel :target] ['jobs.debug.walk-plan :to]

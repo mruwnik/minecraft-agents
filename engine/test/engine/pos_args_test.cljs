@@ -26,7 +26,7 @@
           (is (= {:x 5 :y 64 :z 3} (:target (first (ut/moved eng)))) "the walk went to the point, not the origin"))))))
 
 (deftest go-to-refuses-a-bad-point-at-submit
-  (doseq [bad [[5 64] "x" {:x 1 :y 2}]]
+  (doseq [bad [[5] "x" {:x 1 :y 2}]]
     (let [{:keys [eng]} (ut/setup {:self {:pos ut/at5} :floor tu/walk-floor})]
       (is (thrown-with-msg? js/Error #":pos must be \[x y z\]"
                             (core/submit! eng (list 'jobs.movement.go-to {:pos bad}) {}))

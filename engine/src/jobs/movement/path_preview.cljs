@@ -7,13 +7,14 @@
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.world :as wworld]
             [jobs.movement.go-to :as go-to]
+            [jobs.movement.go-to.column :as column]
             [jobs.movement.go-to.result :as end]))
 
 (def doc
   "Dry run of a go-to: plan the route to :pos (or :place) from where the body stands, with the policy, costs, dangers and
   tolls go-to plans with, and report it. Nothing is walked, opened or dug. One round, one plan (a search of any length, in
   slices that yield), then :done.
-  Takes the go-to args :pos :place :range :doors :dangers :dark :tolls :drop-cost :costs :landing :gait :min-health :max-damage :hp-seconds :food :one-way :unknown, same defaults, and the danger prices :flee-factor :fight-factor :danger-max-rate :danger-shape.
+  Takes the go-to args :pos (a column [x z] too) :place :range :doors :dangers :dark :tolls :drop-cost :costs :landing :gait :min-health :max-damage :hp-seconds :food :one-way :unknown, same defaults, and the danger prices :flee-factor :fight-factor :danger-max-rate :danger-shape.
   Returns {:status :completed :found true :length :seconds :summary :steps :moves :doors :waypoints (:drown hp where it drowns)}: length is the horizontal
   blocks, seconds the planner's cost in seconds (tolls, dark and danger costs not included), summary its words (drops, swims,
   doors), steps the step count, moves a count of each move kind (:drop :jump :open ...), doors the cells [x y z] it
@@ -26,7 +27,7 @@
   without pathWorld sensing, is {:status :stopped :found false :reason :bad-pos|:bad-name|:unknown-place|:unsupported :text}.")
 
 (a/defargs args
-  {:pos {:doc "target position [x y z] or {:x :y :z}" :spec ::a/pos :default nil}
+  {:pos {:doc "as go-to :pos: [x y z], {:x :y :z}, or [x z]/{:x :z} for the ground of that column" :spec column/pos-or-column? :default nil}
    :place {:doc "name of a place in body memory (:home, :bed, ...) to preview the walk to instead of :pos" :spec (a/or-of keyword? string?) :default nil}
    :range {:doc "how close counts as there, in cells" :spec (a/num-in 0 nil) :default 1}
    :doors {:doc "as go-to: :shut or :leave-open let the route open doors, gates and trapdoors; :never makes them walls" :spec #{:shut :leave-open :never} :default :shut}
@@ -109,7 +110,7 @@
   (let [c (go-to/with-body-food c)
         {:keys [doors range dangers dark tolls drop-cost costs one-way unknown]} (:args c)
         refusal (go-to/args-refusal c)
-        pos (some->> (:pos (go-to/target c)) (wworld/stand-goal (wworld/path-world (:primitives c))))]
+        pos (some->> (when-not refusal (:pos (go-to/target c))) (#(if (nil? (:y %)) (:pos (go-to/aimed c %)) %)) (wworld/stand-goal (wworld/path-world (:primitives c))))]
     (cond
       refusal (refuse! c refusal)
       (nil? (wworld/path-world (:primitives c)))
