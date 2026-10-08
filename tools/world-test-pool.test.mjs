@@ -2,7 +2,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import net from 'node:net'
-import { splitForms, scanForms, failSig, summarize, unitOrder, parsePoolArgs, workerSpecs, runPool, mergeText, poolCap, createReaper, countListed, listArgs, knownFailures, parseListed, unitsWithCases, noCasesSelected, serverProbe, matchIdsFrom, parseNightClasses, nightBatchEndArgs, nightBatches, durationsById, runNightBatches } from './world-test-pool.mjs'
+import { splitForms, scanForms, failSig, summarize, unitOrder, parsePoolArgs, workerSpecs, runPool, mergeText, poolCap, createReaper, countListed, listArgs, knownFailures, parseListed, unitsWithCases, noCasesSelected, serverProbe, matchIdsFrom, parseNightClasses, nightBatchEndArgs, sleepRuleRestoreArgs, nightBatches, durationsById, runNightBatches } from './world-test-pool.mjs'
 
 const form = (id, status, secs = 1, extra = '') =>
   `{:plot 0, :file "${id.split('/')[0]}", :expects [{:status :pass, :evidence "a } \\" {"}], :status :${status}, :id "${id}", :elapsed-s ${secs}${extra}}`
@@ -592,4 +592,10 @@ test('runNightBatches: a barrier batch hands its size to each case; a rerun has 
 test('nightBatchEndArgs: the batch end gets the time-change flags of the run, nothing else', () => {
   assert.deepEqual(nightBatchEndArgs(['--phase', 'night-exclusive', '--allow-time', '--time-log', 'f.log', '--tag', 'x', '--card', 'c1'], 'B', 'n1'),
     ['--night-batch-end', 'n1', '--body', 'B', '--allow-time', '--time-log', 'f.log', '--card', 'c1'])
+})
+
+test('sleepRuleRestoreArgs: the restore gets the time-change flags of the run; dead restores only a crashed run\'s value', () => {
+  const pass = ['--phase', 'night-exclusive', '--allow-time', '--time-log', 'f.log', '--tag', 'x', '--card', 'c1']
+  assert.deepEqual(sleepRuleRestoreArgs(pass, 'B', false), ['--sleep-rule-restore', '--body', 'B', '--allow-time', '--time-log', 'f.log', '--card', 'c1'])
+  assert.equal(sleepRuleRestoreArgs(pass, 'B', true)[0], '--sleep-rule-restore-dead')
 })

@@ -1041,13 +1041,13 @@
     (let [sent (atom [])
           dir (tmp-dir)
           log (path/join dir "time.log")
-          opts {:allow-time true :time-log log :body "B" :card "c1"}]
+          opts {:allow-time true :time-log log :body "B" :card "c1" :sleep-state-dir dir}]
       (-> (r/start-sleep-rule! (fake-send sent 50) opts {:time :night-exclusive :act []} "n1" dir "why")
           (.then (fn [old]
                    (is (= 50 old))
                    (is (= ["gamerule players_sleeping_percentage" "gamerule players_sleeping_percentage 101"] @sent))
                    (is (re-find #"gamerule players_sleeping_percentage 101 by world-test B for card c1 \(why\)" (fs/readFileSync log "utf8")))
-                   (r/mark-night-batch-set! "n1" dir {:gamerule old})
+                   (is (= 50 (:old (r/read-sleep-state opts))) "recorded before the end")
                    (reset! sent [])
                    (r/end-night-batch! (fake-send sent 101) opts "n1" dir)))
           (.then (fn [_]
@@ -1061,15 +1061,85 @@
   (async done
     (let [sent (atom [])
           dir (tmp-dir)]
-      (-> (r/start-sleep-rule! (fake-send sent 100) {:allow-time true} {:time :night-exclusive :sleep-skip true :act []} "n1" dir "why")
+      (-> (r/start-sleep-rule! (fake-send sent 100) {:allow-time true :sleep-state-dir dir} {:time :night-exclusive :sleep-skip true :act []} "n1" dir "why")
           (.then (fn [old] (is (nil? old))
-                   (r/start-sleep-rule! (fake-send sent 100) {} {:time :night-exclusive :act []} "n1" dir "why")))
+                   (r/start-sleep-rule! (fake-send sent 100) {:sleep-state-dir dir} {:time :night-exclusive :act []} "n2" dir "why")))
           (.then (fn [old]
                    (is (nil? old))
                    (is (empty? @sent))
-                   (r/end-night-batch! (fake-send sent 100) {:allow-time true} "n1" dir)))
+                   (r/end-night-batch! (fake-send sent 100) {:allow-time true :sleep-state-dir dir} "n1" dir)))
           (.then (fn [_]
                    (is (empty? @sent) "nothing recorded, nothing restored")
+                   (fs/rmSync dir #js {:recursive true})
+                   (done)))))))
+
+;; Pass C restore hardening (card 1fff343a)
+(def night-rc {:time :night-exclusive :act []})
+
+(defn- start! [sent old opts batch dir]
+  (r/start-sleep-rule! (fake-send sent old) (assoc opts :allow-time true :sleep-state-dir dir) night-rc batch dir "why"))
+
+(deftest an-unparsable-read-or-a-read-of-101-sets-nothing
+  (async done
+    (let [sent (atom []) dir (tmp-dir)]
+      (-> (start! sent "garbage" {} "n1" dir)
+          (.then (fn [old] (is (nil? old))
+                   (start! sent 101 {} "n2" dir)))
+          (.then (fn [old]
+                   (is (nil? old))
+                   (is (nil? (r/read-sleep-state {:sleep-state-dir dir})) "no old value recorded")
+                   (is (not-any? #(re-find #" 101$" %) @sent) "the rule was never set")
+                   (fs/rmSync dir #js {:recursive true})
+                   (done)))))))
+
+(deftest two-starters-of-one-batch-set-once-and-record-the-real-value
+  (async done
+    (let [sent (atom []) dir (tmp-dir)]
+      (-> (js/Promise.all #js [(start! sent 40 {} "n1" dir) (start! sent 101 {} "n1" dir)])
+          (.then (fn [olds]
+                   (is (= [40 nil] (vec olds)))
+                   (is (= 1 (count (filter #(= "gamerule players_sleeping_percentage 101" %) @sent))))
+                   (is (= 40 (:old (r/read-sleep-state {:sleep-state-dir dir}))))
+                   (fs/rmSync dir #js {:recursive true})
+                   (done)))))))
+
+(deftest a-leftover-state-restores-and-is-removed
+  (async done
+    (let [sent (atom []) dir (tmp-dir) opts {:sleep-state-dir dir}
+          log (path/join dir "t.log")]
+      (-> (start! sent 25 {:time-log log} "n1" dir)
+          (.then (fn [_]
+                   (reset! sent [])
+                   (r/restore-sleep-rule! (fake-send sent 101) {:sleep-state-dir dir :body "B"} "crashed" {:only-dead? true})))
+          (.then (fn [_]
+                   (is (empty? @sent) "the recorder (our parent) is alive: a running batch is left alone")
+                   (r/restore-sleep-rule! (fake-send sent 101) {:sleep-state-dir dir :body "B"} "crashed")))
+          (.then (fn [_]
+                   (is (= ["gamerule players_sleeping_percentage 25"] @sent))
+                   (is (nil? (r/read-sleep-state opts)))
+                   (is (re-find #"gamerule players_sleeping_percentage 25 by world-test B" (fs/readFileSync log "utf8")) "logged to the recorded time log")
+                   (fs/rmSync dir #js {:recursive true})
+                   (done)))))))
+
+(deftest a-state-of-a-dead-run-restores-under-only-dead
+  (async done
+    (let [sent (atom []) dir (tmp-dir)]
+      (fs/writeFileSync (path/join dir "world-test-sleep-rule.edn") (pr-str {:old 60 :batch "n1" :pid 2147483000}))
+      (-> (r/restore-sleep-rule! (fake-send sent 101) {:sleep-state-dir dir} "crashed" {:only-dead? true})
+          (.then (fn [_]
+                   (is (= ["gamerule players_sleeping_percentage 60"] @sent))
+                   (fs/rmSync dir #js {:recursive true})
+                   (done)))))))
+
+(deftest after-the-barrier-timeout-the-time-is-set-once-and-the-timeout-is-noted
+  (async done
+    (let [dir (tmp-dir) sets (atom []) notes (atom [])
+          at (fn [pid] (r/barrier-wait! {:dir dir :batch "n1" :n 3 :pid pid :sleep r/sleep :timeout-ms 300 :note #(swap! notes conj %)}
+                                        (fn [] (swap! sets conj pid) (r/sleep 100) (js/Promise.resolve true))))]
+      (-> (js/Promise.all #js [(at 1) (at 2)])
+          (.then (fn [_]
+                   (is (= 1 (count @sets)) "one body set the time, not both")
+                   (is (seq @notes) "the timeout is noted")
                    (fs/rmSync dir #js {:recursive true})
                    (done)))))))
 

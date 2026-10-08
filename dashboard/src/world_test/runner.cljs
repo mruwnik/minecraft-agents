@@ -49,6 +49,8 @@
       (= a "--night-batch") (recur more (assoc opts :night-batch b))
       (= a "--night-barrier") (recur more (assoc opts :night-barrier (js/Number b)))
       (= a "--night-batch-end") (recur more (assoc opts :night-batch-end b))
+      (= a "--sleep-rule-restore") (recur (rest all) (assoc opts :sleep-rule-restore :now))
+      (= a "--sleep-rule-restore-dead") (recur (rest all) (assoc opts :sleep-rule-restore :dead))
       (= a "--night-classes") (recur (rest all) (assoc opts :night-classes true))
       (= a "--match-id") (recur more (update opts :match-ids (fnil conj #{}) b))
       (= a "--repeat") (recur more (assoc opts :repeat (js/Number b)))
@@ -661,28 +663,68 @@
   (.then (send [(str "gamerule " sleep-rule " " value)])
          (fn [_] (log-command! opts (str "gamerule " sleep-rule " " value) why))))
 
+;; The server value to restore lives outside /tmp (gitignored state/), written BEFORE the set: a killed run leaves it for the next one.
+(defn sleep-state-file [opts]
+  (path/join (or (:sleep-state-dir opts) (repo-path "state")) "world-test-sleep-rule.edn"))
+
+(defn read-sleep-state
+  "{:old n :batch id :pid p} of a recorded set, or nil (none, or unreadable)."
+  [opts]
+  (let [file (sleep-state-file opts)]
+    (when (fs/existsSync file)
+      (try (reader/read-string (str (fs/readFileSync file "utf8"))) (catch :default _ nil)))))
+
+(defn- pid-alive? [pid]
+  (try (.kill js/process pid 0) true (catch :default e (= "EPERM" (.-code e)))))
+
+(defn restore-sleep-rule!
+  "Restores the recorded players_sleeping_percentage (logged) and removes the state file; never writes 101 back.
+  :only-dead? restores only when the recording process is gone (a crashed run), not a batch still running."
+  [send opts why & [{:keys [only-dead?]}]]
+  (let [{:keys [old pid] :as st} (read-sleep-state opts)
+        file (sleep-state-file opts)]
+    (cond
+      (nil? st) (do (fs/rmSync file #js {:force true}) (js/Promise.resolve nil))
+      (and only-dead? pid (pid-alive? pid)) (js/Promise.resolve nil)
+      :else (.then (if (and old (not= 101 old)) (set-sleep-rule! send (update opts :time-log #(or % (:time-log st))) old why) (js/Promise.resolve nil))
+                   (fn [_] (fs/rmSync file #js {:force true}) old)))))
+
+(defn claim-night-batch!
+  "Atomically writes the batch marker; true for the one starter that wins it."
+  [batch & [dir]]
+  (let [dir (or dir night-batch-marker-dir)]
+    (fs/mkdirSync dir #js {:recursive true})
+    (try (fs/writeFileSync (path/join dir batch) (pr-str {:at (js/Date.now)}) #js {:flag "wx"}) true
+         (catch :default _ false))))
+
 (defn start-sleep-rule!
-  "First setter of a night batch: unless the batch needs the vanilla night skip (:sleep-skip) or time changes are not
-  allowed, reads the server's players_sleeping_percentage, sets it to 101 (sleepers never skip the night early) and
-  resolves to the old value (nil when nothing was changed). Writes the batch marker (old value in it): the night is set."
+  "First setter of a night batch: claims the batch marker (a second starter gets nil and sets nothing). Unless the batch needs
+  the vanilla night skip (:sleep-skip) or time changes are not allowed, reads players_sleeping_percentage; only when that read
+  parses (and is not 101) it records the old value in the state file, then sets 101 (sleepers never skip the night early).
+  Resolves to the old value (nil when nothing was changed)."
   [send opts rc batch dir why]
-  (-> (if (or (not (:allow-time opts)) (= :skip (lease/night-class rc)))
-        (js/Promise.resolve nil)
-        (.then (send [(str "gamerule " sleep-rule)])
-               (fn [[reply]]
-                 (let [old (parse-gamerule reply)]
-                   (.then (set-sleep-rule! send opts 101 why) (fn [_] old))))))
-      (.then (fn [old] (mark-night-batch-set! batch dir (when old {:gamerule old})) old))))
+  (cond
+    (not (claim-night-batch! batch dir)) (js/Promise.resolve nil)
+    (or (not (:allow-time opts)) (= :skip (lease/night-class rc))) (js/Promise.resolve nil)
+    (read-sleep-state opts) (js/Promise.resolve nil)
+    :else (.then (send [(str "gamerule " sleep-rule)])
+                 (fn [[reply]]
+                   (let [old (parse-gamerule reply)]
+                     (when (or (nil? old) (= 101 old))
+                       (log-command! opts (str "gamerule " sleep-rule " left alone (read " (pr-str reply) ")") why))
+                     (if (or (nil? old) (= 101 old))
+                       nil
+                       (do (fs/mkdirSync (path/dirname (sleep-state-file opts)) #js {:recursive true})
+                           (fs/writeFileSync (sleep-state-file opts) (pr-str {:old old :batch batch :pid (.-ppid js/process) :time-log (:time-log opts) :at (js/Date.now)}))
+                           (.then (set-sleep-rule! send opts 101 why) (fn [_] old)))))))))
 
 (defn end-night-batch!
-  "Ends a night batch: restores the gamerule its marker recorded (logged), removes the marker and the barrier files."
+  "Ends a night batch: restores the recorded gamerule (logged), removes the marker and the barrier files."
   [send opts batch dir]
-  (let [dir (or dir night-batch-marker-dir)
-        file (path/join dir batch)
-        old (when (fs/existsSync file) (:gamerule (reader/read-string (str (fs/readFileSync file "utf8")))))]
+  (let [dir (or dir night-batch-marker-dir)]
     (fs/rmSync (path/join dir (str batch ".barrier")) #js {:recursive true :force true})
-    (.then (if (and old (:allow-time opts)) (set-sleep-rule! send opts old (str "night batch " batch " ended")) (js/Promise.resolve nil))
-           (fn [_] (fs/rmSync file #js {:force true}) true))))
+    (.then (restore-sleep-rule! send opts (str "night batch " batch " ended"))
+           (fn [_] (fs/rmSync (path/join dir batch) #js {:force true}) true))))
 
 (defn barrier-open?
   "states: {pid :arrived|:gone} of a barrier batch. Open when n bodies arrived or left."
@@ -712,9 +754,10 @@
 
 (defn barrier-wait!
   "Waits until n bodies of batch reached the barrier (or left it), then exactly one of them runs do-set! (-> promise) and the rest
-  wait for it to finish. A wait past timeout-ms ends the waiting: the body then runs do-set! itself (a stuck body must not hang the batch).
-  env: {:dir :batch :n :pid :sleep :timeout-ms}."
-  [{:keys [dir batch n pid sleep timeout-ms]} do-set!]
+  wait for it to finish. A wait past timeout-ms ends the waiting (note is called): one body still wins the set flag and runs do-set!,
+  the others wait for its done flag for up to timeout-ms more, never setting twice (a stuck body must not hang the batch).
+  env: {:dir :batch :n :pid :sleep :timeout-ms :note}."
+  [{:keys [dir batch n pid sleep timeout-ms note]} do-set!]
   (barrier-write! dir batch pid :arrived)
   (let [until (+ (js/Date.now) timeout-ms)
         d (barrier-dir dir batch)
@@ -722,9 +765,11 @@
     (letfn [(wait-done []
               (cond
                 (fs/existsSync (flag "done")) (js/Promise.resolve true)
-                (> (js/Date.now) until) (do-set!)
+                (> (js/Date.now) (+ until timeout-ms)) (do (when note (note "the barrier setter never finished; going on without waiting")) (js/Promise.resolve true))
                 :else (.then (sleep 200) wait-done)))
             (wait-open []
+              (when (and note (> (js/Date.now) until) (not (fs/existsSync (flag "set"))))
+                (note (str "barrier timed out after " timeout-ms " ms with " (count (barrier-states dir batch)) " of " n " bodies; setting the time anyway")))
               (cond
                 (or (barrier-open? (barrier-states dir batch) n) (> (js/Date.now) until))
                 (if (try (fs/writeFileSync (flag "set") (str pid) #js {:flag "wx"}) true (catch :default _ false))
@@ -786,9 +831,10 @@
   (let [t (first (array-seq argv))]
     (if-not (and t (re-matches #"day|noon|night|midnight|\d+" t))
       (do (js/console.error "usage: node tools/time-set.mjs <ticks|day|noon|night|midnight>") (js/Promise.resolve 2))
-      (with-time-lock! (lease/phase-of-ticks (case t "day" 1000 "noon" 6000 "night" 14000 "midnight" 18000 (js/parseInt t 10)))
+      (.then (restore-sleep-rule! rcon! {:body "time-set" :card "time-set"} "leftover of a crashed run" {:only-dead? true})
+             (fn [_] (with-time-lock! (lease/phase-of-ticks (case t "day" 1000 "noon" 6000 "night" 14000 "midnight" 18000 (js/parseInt t 10)))
         (str "time set " t)
-        #(.then (rcon! [(str "time set " t)]) (fn [[reply]] (mark-phase-set!) (log! reply) 0))))))
+        #(.then (rcon! [(str "time set " t)]) (fn [[reply]] (mark-phase-set!) (log! reply) 0))))))))
 
 (defn local-now
   "Now as local ISO with the UTC offset, the shared time log's format."
@@ -1092,7 +1138,8 @@
                          :time-set (.then (let [do-set #(set-time! opts a (str (:id c) " step"))]
                                             (if (and (:night-barrier opts) (:night-batch opts) (= a (lease/barrier-ticks c)))
                                               (barrier-wait! {:dir nil :batch (:night-batch opts) :n (:night-barrier opts) :pid (.-pid js/process)
-                                                              :sleep sleep :timeout-ms barrier-timeout-ms}
+                                                              :sleep sleep :timeout-ms barrier-timeout-ms
+                                                              :note #(log-command! opts "time set barrier" %)}
                                                              do-set)
                                               (do-set)))
                                           (fn [ok] (if ok ids (throw (js/Error. "a :time-set step needs --allow-time")))))
@@ -1713,8 +1760,8 @@
                (let [opts (parse-args (array-seq argv))
                      final-results (atom nil)
                      run-start (atom nil)
-                     all-cases (if (or (:check opts) (:night-batch-end opts)) [] (load-cases (:paths opts)))
-                     cases (if (or (:check opts) (:night-batch-end opts)) [] (select-phase (f/select-cases all-cases opts) (:phase opts)))
+                     all-cases (if (or (:check opts) (:night-batch-end opts) (:sleep-rule-restore opts)) [] (load-cases (:paths opts)))
+                     cases (if (or (:check opts) (:night-batch-end opts) (:sleep-rule-restore opts)) [] (select-phase (f/select-cases all-cases opts) (:phase opts)))
                      cases (if (:changed-since-pass opts) (select-changed cases (:paths opts)) cases)
                      bad (filter :problems cases)]
                  (cond
@@ -1725,6 +1772,7 @@
                                          res)
                                    (log! "world-test --check: " (count res) " cases, " (count (remove #(= :pass (:status %)) res)) " failed")
                                    (check-exit-code res))
+                   (:sleep-rule-restore opts) (.then (restore-sleep-rule! rcon! opts "world-test restores a recorded gamerule" {:only-dead? (= :dead (:sleep-rule-restore opts))}) (constantly 0))
                    (:night-batch-end opts) (.then (end-night-batch! rcon! opts (:night-batch-end opts) nil) (constantly 0))
                    (:list opts) (do (run! (if (:night-classes opts)
                                            #(log! (night-class-line %))

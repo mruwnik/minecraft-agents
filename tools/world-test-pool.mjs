@@ -489,6 +489,9 @@ export const nightBatchEndArgs = (pass, body, batch) => {
   }
   return ['--night-batch-end', batch, '--body', body, ...keep]
 }
+// restores the recorded sleep gamerule (a run killed in a batch leaves it in state/); dead = only when the run that recorded it is gone
+export const sleepRuleRestoreArgs = (pass, body, dead) => [dead ? '--sleep-rule-restore-dead' : '--sleep-rule-restore', ...nightBatchEndArgs(pass, body, 'x').slice(2)]
+const restoreSleepRule = (script, pass, body, dead) => spawnSync(process.execPath, [script, ...sleepRuleRestoreArgs(pass, body, dead)], { stdio: 'inherit' })
 const endNightBatch = (script, pass, body, batch) => new Promise((resolve) => {
   const child = spawn(process.execPath, [script, ...nightBatchEndArgs(pass, body, batch)], { stdio: 'inherit' })
   child.on('close', resolve)
@@ -508,8 +511,9 @@ const nightMain = async (p, byStem, previous, script) => {
   const batches = nightBatches(cases, durationsById(previous), { bodies: workers.length })
   console.error(`world-test pool: ${cases.length} night cases in ${batches.length} batches on up to ${workers.length} bodies (${batches.map((b) => `${b.kind}:${b.ids.length}`).join(' ')}; ${cores} cores)`)
   const reaper = createReaper((f) => fs.rmSync(f, { force: true }))
-  process.on('exit', reaper.reap)
-  for (const [sig, code] of [['SIGINT', 130], ['SIGTERM', 143]]) process.on(sig, () => { reaper.reap(); process.exit(code) })
+  restoreSleepRule(script, pass, workers[0].body, true)
+  process.on('exit', () => { reaper.reap(); restoreSleepRule(script, pass, workers[0].body, false) })
+  for (const [sig, code] of [['SIGINT', 130], ['SIGTERM', 143]]) process.on(sig, () => { process.exit(code) })
   const runUnit = async (unit) => {
     const tmp = `${p.results ?? path.join(process.env.TMPDIR ?? '/tmp', 'world-test-pool')}.${process.pid}.${unit.worker.body}.edn`
     let code
