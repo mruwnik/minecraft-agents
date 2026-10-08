@@ -692,7 +692,8 @@ the recorded pins (`planner_{bench,options,goals,courses}_golden.cljs`, `js/path
 - A partial plan ends at the node nearest the goal that the body can come back from (one-way drops, gap jumps and ways into a
   downward bubble column above its bottom are not taken), walked only to its last step with the head out of water. `go-near!` never leads the body off a ledge it cannot climb back.
 - A search that runs out of loaded land names a frontier (a loaded edge) at most `options.frontierReach` (256) farther from
-  the goal than the start.
+  the goal than the start. go-to tours frontiers until every one is spent; `:explore-blocks n` gives up `:explore-spent` once
+  the body walked n blocks without coming nearer the goal.
 - The walker watches the way ahead and replans when the world under the plan changed, when a mob blocks a leg (stuck, or standing 1 s in a 1-wide way ahead), when the hp planned for drops ahead is over what it may spend now (`:health`), and every 4 s
   for a partial plan. A fall that costs over 1 hp more than planned is a `damage-mismatch` warn.
 - Risks are priced rather than banned: gap jumps over pits, corner slides over lava or fire, time near known dangers

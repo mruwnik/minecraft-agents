@@ -247,3 +247,33 @@
                                               {:pos [0 80 8] :range 1}))]
           (is (= {:arrived true} (select-keys @out [:arrived]))
               (str "result " @out " at " (at p) (mapv (juxt :status :to) (moved eng)))))))))
+
+;; ---- an exploration budget (:explore-blocks): a tour past a dead end, bounded by the caller ----
+
+;; a floor strip (feet 64) 16 wide along z over open air, the goal 400 blocks west of it across the void (live: the plot grid's
+;; west edge, go-to-start-enclosed open field): every frontier lies along the strip, none nearer the goal
+(def abyss-strip
+  (merge (box 0 63 -200 15 63 200 "stone")
+         ;; one block deep down in each chunk west of and round the strip: those chunks are loaded (open air), as live
+         (into {} (for [cx (range -30 2) cz (range -13 13)] [(str (* 16 cx) ",0," (* 16 cz)) "stone"]))))
+
+(deftest go-to-gives-up-a-tour-past-its-explore-budget
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out eng]} (await (go! {:blocks abyss-strip :self {:pos {:x 2.5 :y 64 :z 0.5}} :viewChunks 1}
+                                            {:pos [-400 64 0] :range 1 :escalate false :explore-blocks 40}))
+              walked (reduce + (map #(dist-to [(:x (:from %)) 0 (:z (:from %))] [(:x (:to %)) 0 (:z (:to %))]) (moved eng)))]
+          (is (= {:arrived false :reason :unreachable :why :explore-spent} (select-keys @out [:arrived :reason :why]))
+              (str "result " @out " walks: " (mapv (juxt :status :from :to) (moved eng))))
+          (is (< 40 (:explored @out) 100) (str "result " @out))
+          (is (< walked 100) (str "walks: " (mapv (juxt :status :to) (moved eng)))))))))
+
+;; walking straight on toward a far unloaded goal comes nearer all the way: a budget smaller than the walk never runs out
+(deftest go-to-a-far-unloaded-goal-straight-on-arrives-within-a-small-explore-budget
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (go! {:blocks (box -150 63 0 15 63 15 "stone") :self {:pos {:x 10.5 :y 64 :z 8.5}} :viewChunks 1}
+                                          {:pos [-140 64 8] :range 1 :explore-blocks 20}))]
+          (is (= {:arrived true} (select-keys @out [:arrived])) (str "result " @out " at " (at p))))))))

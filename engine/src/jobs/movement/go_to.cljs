@@ -59,6 +59,10 @@
     is already there (a cut call's memory is a hint).
   - A walk that gets more than 1 block nearer is progress. Three walks in a row without progress give up, and so
     does a goal the planner proves walled in (:goal-enclosed, :goal-cut-off), at once.
+  - A search that runs out of loaded land walks to its frontier (the loaded edge), and a walk that gets nearer that edge
+    is progress too: a tour of frontiers ends only when every frontier within 1000 blocks of the goal is spent. :explore-blocks n
+    bounds it: once the body has walked n blocks since it last came nearer its goal than ever in the call, the call gives
+    up :why :explore-spent (:explored the blocks) at the end of that walk.
   - A walk stuck or off its plan at a cell is a go-to.walker-fault warn; the next plans of the call cost that cell
     (up to 8) far more (wworld/with-avoid), so a way round is taken when there is one.
   - :escalate (default true): a body that is shut in (jobs.lib.reach/enclosed?), not in its own shelter, and whose
@@ -114,6 +118,7 @@
    :zone-tolls {:doc "true: also toll the cells of other bodies' zones near each walk (jobs.lib.toll-cells/zone-walk-tolls), none with :ignore-zones?; for a job that respects zones" :spec boolean? :default false}
    :leg-s {:doc "walk one leg of at most this many seconds (0.1 to 120), then end {:arrived false :leg true} so the caller can re-aim at a moving target; nil: the whole way" :spec (a/num-in 0.1 120) :default nil}
    :one-way {:doc "arg, not the :one-way key of a give-up result: :closed takes no drop of 2 or 3 or gap jump down that the body cannot climb back, and walks to no frontier of loaded land (a walk to something visible); :open (default) takes one when the land past it runs on into unloaded land" :spec #{:open :closed} :default :open}
+   :explore-blocks {:doc "blocks the body may walk in a call without coming nearer its goal than ever before (a tour of frontiers past a dead end), then it gives up :why :explore-spent; nil: no bound (the tour ends when every frontier is spent)" :spec (a/num-in 0 nil) :default nil}
    :retry {:doc "false: a walk that got no nearer gives up at once instead of walking again (up to 3 times), for a caller that re-aims itself" :spec boolean? :default true}
    :look-round {:doc "false: no look round on arrival, for a caller that keeps moving" :spec boolean? :default true}
    :warn {:doc "false: a give-up or refusal is an info event, not a warn, for a caller that reports the failure itself"
@@ -213,18 +218,34 @@
     (ctx/update-mem! c update :fault-cells #(vec (take-last max-fault-cells (distinct (into (vec %) cells)))))))
 
 (def approaches
-  "This run's record of each open go-to's walk, by job id: {:last-dist :closest}, the body's distance to the goal now and
-  its least. In process, not in job memory: a walk updates it every tick and a memory write is an event."
+  "This run's record of each open go-to's walk, by job id: {:last-dist :closest :explored ...}, the body's distance to the
+  goal now, its least, and the blocks walked since it last came nearer (approach-step). In process, not in job memory: a
+  walk updates it every tick and a memory write is an event."
   (atom {}))
 
+(defn approach-step
+  "Approach record m after a tick's pose {:x :z ...} at d from the goal: :last-dist d, :closest the least, and :explored
+  the blocks walked along x and z since the body last came more than 1 block nearer than ever (:anchor, then 0 again)."
+  [m pose d]
+  (let [{:keys [prev anchor explored] :or {anchor d explored 0}} m
+        nearer? (< d (dec anchor))
+        step (if prev (js/Math.hypot (- (:x pose) (:x prev)) (- (:z pose) (:z prev))) 0)]
+    (assoc m :last-dist d :closest (min d (:closest m d)) :prev (select-keys pose [:x :z])
+             :anchor (if nearer? d anchor) :explored (if nearer? 0 (+ explored step)))))
+
 (defn approach-recorder
-  "The walk's :on-pose for a call to pos: while the round is alive, keeps the body's distance to the goal as :last-dist
-  and the least of them as :closest in approaches, so a cut walk leaves where the cut found it."
+  "The walk's :on-pose for a call to pos: while the round is alive, keeps approaches' record (approach-step), so a cut walk
+  leaves where the cut found it and :explore-blocks can be checked."
   [c pos]
   (fn [pose]
     (when (ctx/alive? c)
-      (let [d (u/dist pose pos)]
-        (swap! approaches update (:id c) #(assoc % :last-dist d :closest (min d (:closest % d))))))))
+      (swap! approaches update (:id c) approach-step pose (u/dist pose pos)))))
+
+(defn explore-spent?
+  "Whether the call's :explore-blocks, when given, is spent: the body walked more than that since it last came nearer."
+  [c]
+  (let [budget (:explore-blocks (:args c))]
+    (boolean (and budget (> (:explored (get @approaches (:id c)) 0) budget)))))
 
 (defn dark-end
   "A fruitless round's result as go-to gives it up when a dark way was the better way (:dark-best, jobs.lib.near/dark-best):
@@ -296,6 +317,10 @@
 
           (and (:leg-s (:args c)) (< left (dec d)))
           (end/finish! c {:arrived false :leg true})
+
+          (explore-spent? c)
+          (end/give-up! c pos (:blocked (ctx/mem c) 0) status {:status :no-path :reason :explore-spent}
+                        {:explored (js/Math.round (:explored (get @approaches (:id c))))})
 
           aided? :again
 

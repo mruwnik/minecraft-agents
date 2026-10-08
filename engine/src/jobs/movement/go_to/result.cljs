@@ -75,7 +75,7 @@
 
 (defn give-up-words
   "The give-up reason in words, for the :text of the :unreachable event and the result: no map dumps."
-  [pos {:keys [why kind detail escalation nearest-hostile mob mob-distance]}]
+  [pos {:keys [why kind detail escalation nearest-hostile mob mob-distance explored]}]
   (str "gave up walking to " (if (map? pos) (let [{:keys [x y z]} pos] [x y z]) pos) ": "
        (if escalation
          (str "shut in here; " (escalation-words escalation))
@@ -87,6 +87,7 @@
            :exhausted "no walkable way leads there from here"
            :goal-unloaded "the goal lies in land that is not loaded and the loaded land leads no nearer"
            :no-progress "the walk ended no nearer"
+           :explore-spent (str "walked " explored " blocks looking for a way on without coming nearer (its :explore-blocks)")
            :stuck (str "the body got stuck" (some->> kind name (str " on ")) (some->> detail (str ": ")))
            :off-plan (or detail "the walk left its plan")
            :steer-failed (str "steering failed" (some->> detail (str ": ")))
