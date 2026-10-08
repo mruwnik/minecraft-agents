@@ -2,6 +2,7 @@
   "Iron as a source of items.obtain: raw ores mined from their seen ore blocks, smelt products made by a smelt child."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
+            [engine.fake :as fake]
             [engine.fetch-test :as f]
             [engine.game :as game]
             [engine.test-util :as tu]
@@ -22,7 +23,7 @@
 (defn mine-events [s] (filterv #(re-find #"^mine\." (name (:kind %))) @(:seen s)))
 
 (deftest the-plan-for-an-iron-chestplate-from-nothing-gathers-raw-iron-and-smelts
-  (let [pl (recipes/plan game/default-version {} "iron_chestplate" 1 (assoc (obtain/source-opts game/default-version) :gather? true))]
+  (let [pl (recipes/plan game/default-version {} "iron_chestplate" 1 (assoc (obtain/source-opts) :gather? true))]
     (is (= 8 (get-in pl [:gather "raw_iron"])))
     (is (some #(and (= :smelt (:op %)) (= "iron_ingot" (:item %))) (:steps pl)))))
 
@@ -107,3 +108,38 @@
           (await (f/run-ticks s 200))
           (is (= 3 (get (f/inv s) "iron_ingot")))
           (is (empty? (f/listed s))))))))
+
+(deftest an-iron-pickaxe-from-seen-ore-is-mined-smelted-and-crafted
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [ore (into {} (for [x [1 2 3]] [(str x ",64,4") "iron_ore"]))
+              s (f/start (ore-world (merge ore {"1,64,2" "furnace"})
+                                    [{:name "stone_pickaxe" :count 1} {:name "stick" :count 2} {:name "coal" :count 1}
+                                     {:name "crafting_table" :count 1}])
+                         [f/own-zone])
+              _ (swap! (fake/state (:p s)) assoc-in [:recipes "iron_pickaxe"] {:count 1 :needs {"iron_ingot" 3 "stick" 2} :table true})]
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "iron_pickaxe" :minutes 1}) {})
+          (loop [i 0]
+            (await (f/run-ticks s 20))
+            (.advance (.-world (:p s)) 2000)
+            (when (and (< i 30) (zero? (get (f/inv s) "iron_pickaxe" 0)))
+              (recur (inc i))))
+          (is (= 1 (get (f/inv s) "iron_pickaxe")))
+          (is (empty? (filter #(= :timeout (:reason %)) (f/events-of s :stopped))))
+          (is (empty? (f/listed s))))))))
+
+(deftest a-coal-wanted-with-none-seen-falls-back-to-charcoal-from-seen-logs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [logs f/tree-blocks
+              s (f/start (ore-world (merge logs {"1,64,2" "furnace"}) []) [f/own-zone])]
+          (await (obtain! s {:any-of ["coal" "charcoal"] :how #{:craft :gather}} 60))
+          (is (empty? (filter #(= :no-source (:reason %)) (f/events-of s :waiting))))
+          (is (seq (f/calls s "dig")) "a log was felled for the charcoal"))))))
+
+(deftest the-time-limit-counts-from-the-last-change-of-what-is-carried
+  (is (= {:inv {"a" 1} :t 5} (obtain/progress nil {"a" 1} 5)))
+  (is (= {:inv {"a" 1} :t 5} (obtain/progress {:inv {"a" 1} :t 5} {"a" 1} 9)))
+  (is (= {:inv {"a" 2} :t 9} (obtain/progress {:inv {"a" 1} :t 5} {"a" 2} 9))))

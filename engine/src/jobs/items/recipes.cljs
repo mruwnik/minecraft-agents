@@ -132,7 +132,7 @@
         (str "crafting " item " " (if (seq short) (clojure.string/join "; " short) "has no ingredient short, but no chain works"))))))
 
 (defn plan
-  "See the ns doc."
+  "See the ns doc. n is the amount still lacking: a gatherable item is planned as {:gather {item n}} whatever is carried."
   [version have item n {:keys [table? max-depth gather? materials raw smelts] :or {max-depth 6}}]
   (let [rs (recipes-for version)
         st0 {:have have :steps [] :gather? gather? :materials (or materials (stone-materials version)) :ranks (material-ranks version)

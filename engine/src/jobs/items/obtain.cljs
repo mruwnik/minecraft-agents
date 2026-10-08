@@ -50,8 +50,8 @@
 
   The check waits {:reason :no-source :why text :item|:any-of} (:why: what each source lacks) before the first round (once the round has looked around, when chests are allowed) when nothing is carried enough, no
   usable chest that might hold it is seen and no craft chain makes it from what is carried, and nothing seen to gather what a chain lacks (with :explore, a chain whose raw needs are unseen passes: the search child solves it). Ends {:status :done :got n :item name} or {:status :stopped
-  :reason r :got n :tried {..}}, r :no-source, :cycle (a wanted name is on :chain), :timeout (:minutes from the first
-  round) or :bad-args. :depth is the nesting left for sources that need fetches of their own (not used yet: crafting
+  :reason r :got n :tried {..}}, r :no-source, :cycle (a wanted name is on :chain), :timeout (:minutes without what is
+  carried changing) or :bad-args. :depth is the nesting left for sources that need fetches of their own (not used yet: crafting
   plans its whole chain; a gather child fetches its own tools).")
 
 (a/defargs args
@@ -60,7 +60,7 @@
    :count {:doc "how many more than carried at the start (counts above 64 are taken as 64)" :spec (a/int-in 1 nil) :default 1}
    :how {:doc "sources to use, a subset of #{:chest :craft :gather}; nil: all" :spec (a/coll-of #{:chest :craft :gather}) :default nil}
    :depth {:doc "nested fetches left; nil: the fetch limits (jobs.lib.fetch)" :spec (a/int-in 0 nil) :default nil}
-   :minutes {:doc "time budget from the first round; nil: the fetch limits" :spec (a/num-in 0 nil) :default nil}
+   :minutes {:doc "minutes without a change in what is carried before it stops :timeout (a long chain keeps going while it makes progress); nil: the fetch limits" :spec (a/num-in 0 nil) :default nil}
    :fail-minutes {:doc "passed on to nested fetches; nil: the fetch limits" :spec (a/num-in 0 nil) :default nil}
    :chain {:doc "items being fetched above this one (a cycle stops)" :spec (a/coll-of a/item?) :default []}
    :explore {:doc "walk and look for a raw need not seen: false, true (the ::explore setting) or jobs.explore.search options over it" :spec (a/or-of boolean? map?) :default false}})
@@ -118,7 +118,7 @@
 (defn source-opts
   "The recipes/plan options of the gather and smelt sources: ore drops count as gathered, and every furnace product
   (jobs.items.smelt/made-from; charcoal from any overworld log) is also made by a smelt step."
-  [_version]
+  []
   {:raw ore-drops
    :smelts (assoc (into {} (map (fn [[out in]] [out [in]])) smelt/made-from) "charcoal" trees/log-names)})
 
@@ -141,7 +141,7 @@
         version (game/version-of p)]
     (furnace-free
      (keep (fn [name]
-             (when-let [pl (recipes/plan version have name n (assoc (source-opts version) :table? table?))]
+             (when-let [pl (recipes/plan version have name n (assoc (source-opts) :table? table?))]
                (assoc pl :item name)))
            names))))
 
@@ -194,6 +194,14 @@
           (and (not= chosen wanted) (seq (wool-of chosen)) (seq (wool-of wanted)))
           (assoc :wool-fallback {:wanted (first (colors-of wanted)) :taking (first (colors-of chosen))}))))))
 
+(declare gather-needs seen-of)
+
+(defn raw-seen?
+  "Whether every raw need of a gather plan (but wool, left to pick-plan) has a block seen: of several names, the plans
+  whose blocks are seen come before one that would have to look for them (coal unseen, logs seen: charcoal)."
+  [c plan]
+  (every? #(or (:sheep %) (seen-of c %)) (some-> plan :gather (gather-needs (game/version-of (:primitives c))))))
+
 (defn gather-plan
   "The craft chain for the first of names that has one once the raw items it lacks are gathered, with :gather
   {name n} when it lacks any, else nil. A sapling has no recipe: its plan is just :gather {name n}, when its leaves are seen (or its child is running).
@@ -211,13 +219,14 @@
                     (when (or (= name (get-in (ctx/mem c) [:gather :item]))
                               (seq (look/seen-blocks p {:names (vec seen-of-name) :radius 16 :max 1})))
                       {:steps [] :gather {name n} :item name})
-                    (when-let [pl (recipes/plan version have name n (merge (source-opts version)
+                    (when-let [pl (recipes/plan version have name n (merge (source-opts)
                                                                            {:table? (boolean (or (:table (ctx/mem c)) (craft/nearest-table p (craft-radius))))
                                                                             :gather? true :materials materials}))]
                       (assoc pl :item name))))]
     (if (= 1 (count names))
       (plan-of (first names))
-      (pick-plan c (keep plan-of names)))))
+      (let [plans (keep plan-of names)]
+        (pick-plan c (or (not-empty (filter #(raw-seen? c %) plans)) plans))))))
 
 (defn log? [name] (clojure.string/ends-with? name "_log"))
 
@@ -338,10 +347,12 @@
   (if (set? (:seen need)) (vec (sort (:seen need))) trees/log-names))
 
 (defn explorable?
-  "Whether :explore is on and a raw need of the chain is not seen: the search child solves it."
+  "Whether :explore is on and a raw need of the chain is not seen: the search child solves it, when the tool that
+  harvests its block (an unseen ore is mined by the pickaxe for its block) can be had (tool-viable?)."
   [c names n]
   (boolean (and (explore-opts c)
-                (some #(and (not (:sheep %)) (not (seen-of c %)))
+                (some #(and (not (:sheep %)) (not (seen-of c %))
+                            (or (not (tools-wanted c names %)) (tool-viable? c names %)))
                       (some-> (gather-plan c names n) :gather (gather-needs (game/version-of (:primitives c))))))))
 
 (defn unseen-why
@@ -452,10 +463,13 @@
 
 (defn ^:async smelt-step!
   "Run a smelt step of the plan as a jobs.items.smelt child (it fetches its own fuel and furnace) until it ends.
-  While it cooks the child declines (:cooking): the round ends :declined and the check waits with its reason."
+  While it cooks the child declines (:cooking): the round ends :declined and the check waits with its reason.
+  Charcoal burns wood (planks) as fuel: coal or charcoal as its fuel would ask for charcoal again."
   [c step]
   (ctx/update-mem! c assoc-in [:craft :step] step)
-  (let [r (await (declined/call-child! c :smelt 'jobs.items.smelt {:item (:item step) :count (:count step) :fetch (smelt-fetch c)}))]
+  (let [r (await (declined/call-child! c :smelt 'jobs.items.smelt
+                                                 (cond-> {:item (:item step) :count (:count step) :fetch (smelt-fetch c)}
+                                                   (= "charcoal" (:item step)) (assoc :fuel (first (smelt/fetch-wood-fuels))))))]
     (if (#{:continue :declined} r)
       r
       (let [res (ctx/child-result c :smelt)]
@@ -650,6 +664,13 @@
       :continue
       (do (ctx/update-mem! c update :gather dissoc :before :item :tree) :again))))
 
+(defn progress
+  "The stall clock: prev ({:inv carried-counts :t ms}) kept while what is carried is the same, else restarted at now."
+  [prev inv now]
+  (if (= inv (:inv prev))
+    prev
+    {:inv inv :t now}))
+
 (defn ^:async step! [c]
   (let [a (:args c)
         names (names-of a)
@@ -664,7 +685,11 @@
         (let [_ (when-not (:start (ctx/mem c))
                   (ctx/update-mem! c update :craft dissoc :table-unreachable)
                   (ctx/update-mem! c assoc :start {:have have :target (+ have (min 64 (:count a))) :t now}))
-              {:keys [target t] :as start} (:start (ctx/mem c))
+              {:keys [target] :as start} (:start (ctx/mem c))
+              seen-inv (carried-counts (:primitives c))
+              prog (progress (:progress (ctx/mem c)) seen-inv now)
+              _ (when (not= prog (:progress (ctx/mem c))) (ctx/update-mem! c assoc :progress prog))
+              t (:t prog)
               got (max 0 (- have (:have start)))
               o (limits c)
               m (ctx/mem c)]
