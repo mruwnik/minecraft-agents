@@ -18,7 +18,8 @@
   (shut-leftovers!), or the door-left trigger (triggers.maintenance.door-left) does, with jobs.maintenance.shut-doors.
   A block that stays open (an animal stands in its cell, so the walker waits and tries again but never pushes; or the
   click did nothing) keeps its entry and gets one :door-left-open warn."
-  (:require [engine.args :as a]
+  (:require [clojure.string :as str]
+            [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.click :as click]
             [engine.ctx :as ctx]
@@ -113,12 +114,23 @@
   [doors shut-also {:keys [x y z]}]
   (boolean (or (= :shut doors) (and shut-also (shut-also [x y z])))))
 
+(defn ^:async seen-door-half!
+  "[cell block] of the block at cell, or of the door half above or below it when cell stays unseen: a shut door blocks
+  sight, so close up with the eye above, the upper half hides the lower one. Nil when nothing is seen."
+  [c cell]
+  (if-let [b (await (seen-at! c cell))]
+    [cell b]
+    (first (for [other [(update cell :y inc) (update cell :y dec)]
+                 :let [b (block-at c other)]
+                 :when (some-> b .-name (str/ends-with? "_door"))]
+             [other b]))))
+
 (defn ^:async open-block!
   "Open the block at cell by hand unless it is open. {:result :opened :column} (the walker opened it, its entry written,
   with shut? saying whether the walker will shut it again), {:result :was-open}, or {:result :stuck}: not a block a hand
-  opens, or it did not open."
+  opens, or it did not open. A door whose cell is hidden is clicked at the half in sight."
   [c cell shut?]
-  (let [b (await (seen-at! c cell))
+  (let [[cell b] (await (seen-door-half! c cell))
         name (some-> b .-name)
         props (click/props-of b)]
     (cond

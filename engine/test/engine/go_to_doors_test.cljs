@@ -145,6 +145,17 @@
             (is (= 2 (clicks p)) "a door is one click to open and one to shut")
             (is (= [] (opened eng)))))))))
 
+(deftest a-door-whose-lower-half-is-hidden-by-the-upper-one-is-opened-by-the-half-in-sight
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p eng]} (await (go! (assoc (hut-world {:x 0 :y 64 :z 0}) :dark ["5,64,0"]) {:pos [10 64 0] :range 0}))]
+          (is (= {:arrived true} @out))
+          (is (= [10 64 0] (at p)))
+          (is (= [false false] (mapv #(open? p %) [[5 64 0] [5 65 0]])) "both halves shut again")
+          (is (= 2 (clicks p)) "one click to open, one to shut")
+          (is (= [] (opened eng))))))))
+
 ;; ------------------------------------------------------------------ an airlock of two gates
 
 (def airlock-blocks
