@@ -29,7 +29,7 @@
     planks to sticks to the tool, and a crafting table when the chain needs one and none is seen (crafted, then put
     down on a free cell beside the body with a jobs.blocks.place child). Each step is a jobs.items.craft child. The
     names are tried in order; the first with a plan is made. Three fruitless steps stop it (:tried :craft).
-  - :gather (in :how): coal comes from a plain or deepslate ore seen; every raw item a chain lacks must be seen before it starts. A sapling (no recipe) comes from the leaves of its tree the body has seen, broken by
+  - :gather (in :how): coal comes from a plain or deepslate ore seen; dirt is dug from seen dirt or grass; every raw item a chain lacks must be seen before it starts. A sapling (no recipe) comes from the leaves of its tree the body has seen, broken by
     jobs.gather.get-seeds (at most 60 leaves, one run; the drop is picked up). What a craft chain lacks that has no recipe (logs, coal, stone-tool material; recipes/gatherable?, stone-materials) is
     felled or mined as one child per round, only what the body has seen: logs by jobs.forestry.harvest-wood,
     cobblestone and coal by jobs.gather.mine (its pickaxe only from a chest or a craft, never gathered: no mine inside a mine's fetch, so no loop back into obtain). The crafts follow once the chain is whole (a chain that is craftable now
@@ -133,6 +133,10 @@
     (let [bs (set (for [[b d] b/drop-item :when (= d item)] b))]
       (if (seq bs) bs #{item})))))
 
+(def dirt-blocks
+  "The seen blocks digging which by hand gives dirt (grass drops it)."
+  #{"dirt" "grass_block"})
+
 (defn gather-plan
   "The craft chain for the first of names that has one once the raw items it lacks are gathered, with :gather
   {name n} when it lacks any, else nil. A sapling has no recipe: its plan is just :gather {name n}, when its leaves are seen (or its child is running)."
@@ -144,9 +148,10 @@
         seen (set (filter seen? (recipes/stone-materials version)))
         materials (if (seq seen) seen (recipes/stone-materials version))]
     (some (fn [name]
-            (if-let [leaves (leaves-of name)]
+            (if-let [seen-of-name (cond (= "dirt" name) dirt-blocks
+                                        (leaves-of name) #{(leaves-of name)})]
               (when (or (= name (get-in (ctx/mem c) [:gather :item]))
-                        (seq (look/seen-blocks p {:match #(= leaves %) :radius 16 :max 1})))
+                        (seq (look/seen-blocks p {:names (vec seen-of-name) :radius 16 :max 1})))
                 {:steps [] :gather {name n} :item name})
               (when-let [pl (recipes/plan version have name n {:table? (boolean (or (:table (ctx/mem c)) (craft/nearest-table p (craft-radius))))
                                                            :gather? true :materials materials})]
@@ -178,6 +183,9 @@
             (let [blocks (material-blocks version k)]
               {:key k :count n :job 'jobs.gather.mine :seen blocks
                :args {:block (first (sort blocks)) :item k :count n :fetch mine-fetch}}))
+          (when-let [n (get gather "dirt")]
+            [{:key "dirt" :count n :job 'jobs.gather.mine :seen dirt-blocks
+              :args {:block "dirt" :item "dirt" :count n :fetch mine-fetch}}])
           (when-let [n (get gather "coal")]
             [{:key "coal" :count n :job 'jobs.gather.mine :seen #{"coal_ore" "deepslate_coal_ore"}
               :args {:block "coal_ore" :item "coal" :count n :fetch mine-fetch}}]))))))
@@ -196,9 +204,9 @@
   (first (look/seen-blocks (:primitives c) {:match #((:seen need) %) :radius 16 :max 1})))
 
 (defn with-block
-  "The need with :block of its args the kind of ore seen when it could be either."
+  "The need with :block of its args the kind of block seen when it could be either (a coal ore, dirt or grass)."
   [c need]
-  (if-let [name (when (= "coal" (:key need)) (:name (seen-of c need)))]
+  (if-let [name (when (#{"coal" "dirt"} (:key need)) (:name (seen-of c need)))]
     (assoc-in need [:args :block] name)
     need))
 
@@ -404,10 +412,11 @@
     :again))
 
 (defn pickaxe-first?
-  "Whether need is mined, no pickaxe is carried and a wooden one may be crafted (not one being fetched above)."
+  "Whether need is mined (dirt is dug by hand), no pickaxe is carried and a wooden one may be crafted (not one being fetched above)."
   [c names need]
   (let [a (:args c)]
     (and (= 'jobs.gather.mine (:job need))
+         (not= "dirt" (:key need))
          (contains? (:how (limits c)) :craft)
          (not-any? #{"wooden_pickaxe"} (concat names (:chain a)))
          (not-any? (fn [[k v]] (and (pos? v) (clojure.string/ends-with? k "_pickaxe"))) (carried-counts (:primitives c))))))
