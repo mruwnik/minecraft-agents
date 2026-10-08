@@ -42,7 +42,7 @@
     also in the middle of the job. Nothing is dug or placed then.
 
   The first round writes to job memory before any dig: the goal (carried + :count), the start cell, the
-  tunnel heading (:direction, else the way the body faces) and the ground (the solid cells of the 5x5 under the
+  tunnel heading (:heading, else :direction, else the way the body faces) and the ground (the solid cells of the 5x5 under the
   start at y-1 and y-2; empty when :mend is false). So a cut or restart still mends.
 
   One call runs these steps in order, again and again until the job ends (it yields with :continue only while a child or
@@ -74,7 +74,7 @@
      :descent {:steps :stop}); the mend and the walk home follow.
   7. Else the strip tunnel, at the level then stood on.
 
-  Strip tunnel: a 1-wide 2-high straight run at the level the body stood on at the start, along :direction
+  Strip tunnel: a 1-wide 2-high straight run at the level the body stood on at the start, along :heading or :direction
   (north, south, east, west or n/s/e/w), at most :tunnel-length blocks per job. 0 means no tunnel: then no
   target ends :wet when a seen block was rejected only for water, else :none. Each step stands on the last
   cell of the run and judges the next cell and the one over it: no fluid in it, no seen lava beside it, no seen water
@@ -85,7 +85,7 @@
 
   The run used up ends the dig phase :tunnel-length, any stop ends it :tunnel-stopped. Either way one warn
   mine.tunnel-end {:reason (:tunnel-length :lava :water :fluid :no-floor :not-loaded :refused :dig-failed
-  :walk-failed) :heading :length :at :next}. :at is the offending cell, :next the line cell it stopped before.
+  :walk-failed) :heading :length :at :next :walk}. :at is the offending cell, :next the line cell it stopped before, :walk (walk-failed) the moveTo status, reason and the names seen at the cell and its floor.
 
   Torches: a dig of seen ore that takes the body 4+ blocks off the tunnel line hangs one torch there the same way
   (none within 4 of an earlier branch torch). The strip tunnel hangs a torch (jobs.access.tunnel/torch-at: a wall torch in the head cell, else a floor
@@ -138,6 +138,7 @@
    :collect-radius {:doc "how far around to collect drops after a dig" :spec (a/num-in 0 nil) :default 6}
    :max-failures {:doc "failures in a row before giving up" :spec (a/int-in 1 nil) :default 3}
    :dry-digs {:doc "digs in a row after which the carried count of the item did not rise before giving up (:no-drops)" :spec (a/int-in 1 nil) :default 3}
+   :heading {:doc "the strip tunnel's heading, over :direction: north, south, east or west (n/s/e/w), or a cell [x y z] (the dominant axis from the start toward it); nil: :direction" :spec (a/pred "a heading name or a cell [x y z]" #(or (and (or (string? %) (keyword? %)) (heading-name %)) (and (sequential? %) (= 3 (count %)) (every? number? %)))) :default nil}
    :direction {:doc "the strip tunnel's heading: north, south, east or west (n/s/e/w); nil: the way the body faces when the job starts" :spec (a/pred "north, south, east or west (n/s/e/w), a string or keyword" #(and (or (string? %) (keyword? %)) (heading-name %))) :default nil}
    :tunnel-length {:doc "the most blocks the strip tunnel runs in this job, at the body's level; 0: no tunnel, seen blocks only" :spec (a/int-in 0 nil) :default 32}
    :descend-limit {:doc "the most steps of stair down through soil to find stone, when the block is stone-type and none is in sight; 0: never descend" :spec (a/int-in 0 nil) :default 12}
@@ -453,9 +454,13 @@
 
 (defn tunnel-reason [stop] (if (= :tunnel-length stop) :tunnel-length :tunnel-stopped))
 
+(defn walk-text [{:keys [status reason cell floor]}]
+  (str " (walk " status (when reason (str " " reason)) ", cell " cell ", floor " floor ")"))
+
 (defn tunnel-end!
-  "The tunnel is done (stop: :tunnel-length or why it stopped at cell at): one warn mine.tunnel-end, then the mend."
-  [c stop at & [next]]
+  "The tunnel is done (stop: :tunnel-length or why it stopped at cell at): one warn mine.tunnel-end, then the mend.
+  walk: for :walk-failed, what stopped the walk (step-to!)."
+  [c stop at & [next walk]]
   (let [{:keys [goal tunnel]} (ctx/mem c)
         {:keys [heading steps]} tunnel
         got (max 0 (- (carried c) (- goal (:count (:args c)))))]
@@ -464,18 +469,25 @@
                         :text (str "mine's tunnel ended after " steps " blocks " heading ": "
                                    (if (= :tunnel-length stop) "its length is used up" (str "stopped, " (name stop)))
                                    (when at (str " at " (str/join "," (access/cell at))))
+                                   (when walk (walk-text walk))
                                    "; got " got " of " (:count (:args c)))}
                  at (assoc :at (access/cell at))
-                 next (assoc :next (access/cell next))))
+                 next (assoc :next (access/cell next))
+                 walk (assoc :walk walk)))
     (ctx/update-mem! c assoc-in [:tunnel :stop] stop)
     (to-mend! c (tunnel-reason stop))))
 
 (defn ^:async step-to!
-  "Walk to the centre of cell pos: true when there."
+  "Walk to the centre of cell pos: nil when there, else what stopped the walk {:status :reason :cell :floor} (the moveTo
+  result's status and reason, and the names the body sees at pos and under it)."
   [c pos]
-  (or (= (cell-of (u/self-pos c)) pos)
-      (= "arrived" (.-status (await (ctx/act c :moveTo (clj->js {:pos {:x (+ (:x pos) 0.5) :y (:y pos) :z (+ (:z pos) 0.5)}
-                                                                  :range 0})))))))
+  (when-not (= (cell-of (u/self-pos c)) pos)
+    (let [r (await (ctx/act c :moveTo (clj->js {:pos {:x (+ (:x pos) 0.5) :y (:y pos) :z (+ (:z pos) 0.5)}
+                                                 :range 0})))]
+      (when-not (= "arrived" (.-status r))
+        (let [name-at #(u/seen-name (:primitives c) %)]
+          {:status (.-status r) :reason (.-reason r)
+           :cell (name-at pos) :floor (name-at (update pos :y dec))})))))
 
 (defn ^:async cut!
   "Dig the cells in order (equip, rules, a blocks.dig child): :ok when each is air afterwards, else :refused or :dig-failed. A cut
@@ -621,10 +633,10 @@
 
 (defn ^:async end!
   "tunnel-end!, after a torch at the cut's end when one is due."
-  [c stop at & [next]]
+  [c stop at & [next walk]]
   (if (end-torch-due? c)
     (await (torch-step! c false))
-    (tunnel-end! c stop at next)))
+    (tunnel-end! c stop at next walk)))
 
 (defn ^:async tunnel-round!
   "One step of the strip tunnel: back onto its last cell, judge and cut the next two, look at them, step in."
@@ -637,11 +649,12 @@
         from (step-cell t steps)
         next (step-cell t (inc steps))
         cut [(update next :y inc) next]
-        hazard (some #(cut-hazard c %) cut)]
+        hazard (some #(cut-hazard c %) cut)
+        walk (atom nil)]
     (cond
       stop (to-mend! c (tunnel-reason stop))
       (>= steps (:tunnel-length (:args c))) (end! c :tunnel-length nil)
-      (not (await (step-to! c from))) (end! c :walk-failed from)
+      (do (reset! walk (await (step-to! c from))) @walk) (end! c :walk-failed from nil @walk)
       (and (look/unseen? (:primitives c) cut) (not= next (:glanced m)))
       (do (ctx/update-mem! c assoc :glanced next)
           (await (glance! c [(headings heading)]))
@@ -657,10 +670,10 @@
                 (do (await (glance! c [(headings heading)]))
                     (cond
                       (not (rules/solid-floor? name-at (update next :y dec))) (end! c :no-floor next)
-                      (await (step-to! c next))
+                      (do (reset! walk (await (step-to! c next))) (nil? @walk))
                       (do (ctx/update-mem! c #(-> % (update-in [:tunnel :steps] inc) (assoc :looked next)))
                           :again)
-                      :else (end! c :walk-failed next))))))))
+                      :else (end! c :walk-failed next nil @walk))))))))
 
 ;; ------------------------------------------------------------------ the dig phase
 
@@ -997,10 +1010,20 @@
       :else (do (ctx/emit! c :mine.no-tool :warn {:tool (needed-kind c) :text (str "mine has no " (needed-kind c) " for " (:block (:args c)) " and could not get one")})
                 (to-mend! c :no-tool)))))
 
+(defn toward
+  "The heading name for a :heading arg h at start: a name, or the dominant axis from start to a cell [x y z]; nil when none."
+  [start h]
+  (if-not (sequential? h)
+    (heading-name h)
+    (let [dx (- (first h) (:x start)) dz (- (nth h 2) (:z start))]
+      (cond (and (zero? dx) (zero? dz)) nil
+            (>= (js/Math.abs dx) (js/Math.abs dz)) (if (pos? dx) "east" "west")
+            :else (if (pos? dz) "south" "north")))))
+
 (defn ^:async step [c]
   (settle-dig! c)
   (let [m (ctx/mem c)
-        heading (heading-name (:direction (:args c)))]
+        {:keys [heading direction]} (:args c)]
     (cond
       (and (contains? #{nil :dig} (:phase m)) (no-tool? c)) (await (fetch-pickaxe! c))
 
@@ -1008,7 +1031,8 @@
       (let [faced (facing (:primitives c))
             _ (await (look/survey! c))
             now (carried c)
-            start (cell-of (u/self-pos c))]
+            start (cell-of (u/self-pos c))
+            heading (or (toward start heading) (heading-name direction))]
         (ctx/update-mem! c assoc
                          :goal (+ now (:count (:args c))) :start start :start-floor (u/feel-name (:primitives c) {:x (:x start) :y (dec (:y start)) :z (:z start)})
                          :failures 0 :dry 0 :last-carried now

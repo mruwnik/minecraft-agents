@@ -1516,3 +1516,28 @@
   (is (not (mine/solid-floor? nil "air")))
   (is (not (mine/solid-floor? "air" "dirt")) "seen open now wins over the felt floor")
   (is (mine/solid-floor? "dirt" "air")))
+
+(deftest the-tunnel-heading-arg-names-a-way-or-a-cell-to-run-toward
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[args cells-at] [[{:heading "north"} [[0 -1] [0 -2]]]
+                                 [{:heading :e :direction "north"} [[1 0] [2 0]]]
+                                 [{:heading [-30 64 3]} [[-1 0] [-2 0]]]
+                                 [{:heading [2 64 -30]} [[0 -1] [0 -2]]]]]
+          (let [s (await (scenario (merge {:block "iron_ore" :count 1 :tunnel-length 2} args)
+                                   (assoc (rock-world {}) :yaw 90) 40))]
+            (is (= (set (for [[x z] cells-at y [64 65]] [x y z])) (set (dug-cells s))) (pr-str args))))))))
+
+(deftest a-tunnel-that-cannot-walk-on-says-what-blocked-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "iron_ore" :count 1 :direction "east" :tunnel-length 10}
+                                 (assoc (rock-world {}) :noPath ["2.5,64,0.5"]) 80))
+              e (first (tunnel-ends s))]
+          (is (= :walk-failed (:reason e)))
+          (is (= [2 64 0] (:at e)))
+          (is (= {:status "blocked" :reason "noPath"} (select-keys (:walk e) [:status :reason])))
+          (is (= {:cell "air" :floor "stone"} (select-keys (:walk e) [:cell :floor])))
+          (is (re-find #"blocked noPath" (:text e))))))))
