@@ -340,6 +340,11 @@
           (.then (fn [{:keys [out]}] (is (nil? (:hint (data/read-edn out))) out)))
           (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
 
+(deftest usage-shows-the-submit-form-where-to-find-args-and-now
+  (is (re-find #"\(jobs\.movement\.go-to \{:pos" jobs/usage))
+  (is (re-find #"observe\.mjs.*catalog job" jobs/usage))
+  (is (re-find #"queues behind a running reflex" jobs/usage)))
+
 (deftest usage-says-jobs-wait-under-manual-control
   (is (re-find #"manual control" jobs/usage)))
 
