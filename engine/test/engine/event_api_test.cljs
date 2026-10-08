@@ -495,3 +495,18 @@
     (is (false? (m "bedrock")))
     (is (false? (m "bed_rock")))
     (is (nil? (event-api/seen-matcher nil)))))
+
+(deftest chests-view-lists-remembered-chest-stock-nearest-first-with-age
+  (let [store (atom {:now (constantly 100000) :data {}})
+        eng {:store store
+             :primitives #js {:isOffline (fn [] false)
+                              :self (fn [] #js {:pos #js {:x 0 :y 64 :z 0}})}}]
+    (swap! store assoc :data {:entries {:fetch/stock [{:t 40000 :data {:pos [30 64 0] :items {"bread" 3}}}
+                                                      {:t 90000 :data {:pos [5 64 0] :items {"shears" 1 "dirt" 2}}}
+                                                      {:t 95000 :data {:pos [5 64 0] :items {"shears" 1}}}]}})
+    (is (= {:ok true
+            :chests [{:pos [5 64 0] :distance 5.0 :age-ms 5000 :items {"shears" 1}}
+                     {:pos [30 64 0] :distance 30.0 :age-ms 60000 :items {"bread" 3}}]}
+           (event-api/chests-view eng {:max 10})) "the latest entry per chest wins")
+    (is (= [[5 64 0]] (mapv :pos (:chests (event-api/chests-view eng {:max 1})))))
+    (is (true? (:more? (event-api/chests-view eng {:max 1}))))))

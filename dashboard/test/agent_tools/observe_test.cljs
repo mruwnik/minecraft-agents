@@ -114,6 +114,13 @@
                           [["status" "--radius" "5"] #"only valid for seen"]]]
     (is (re-find pattern (:error (apply request "--world" "w" "ProbeBody" argv))) (pr-str argv))))
 
+(deftest chests-is-a-read-only-observe-query
+  (is (= "/chests?max=16" (:path (request "--world" "w" "ProbeBody" "chests"))))
+  (is (= "/chests?max=5" (:path (request "--world" "w" "ProbeBody" "chests" "--limit" "5"))))
+  (doseq [[argv pattern] [[["chests" "x"] #"takes no positional"]
+                          [["chests" "--radius" "5"] #"only valid for seen"]]]
+    (is (re-find pattern (:error (apply request "--world" "w" "ProbeBody" argv))) (pr-str argv))))
+
 (deftest observe-rejects-malformed-names-and-limits-before-connecting
   (doseq [[argv pattern] [[["bad/name"] #"body name"]
                           [["ProbeBody" "status" "--limit" "100"] #"1 to 32"]

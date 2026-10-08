@@ -1,6 +1,6 @@
 (ns engine.event-api
   "The engine's private HTTP API on a local Unix socket (mode 0600). The wire format is EDN.
-  GET   /snapshot, /status, /inventory, /seen, /events, /job, /jobs, /results, /triggers, /catalog, /settings
+  GET   /snapshot, /status, /inventory, /seen, /chests, /events, /job, /jobs, /results, /triggers, /catalog, /settings
   POST  /jobs and /triggers (changes), /attention/resolve, /chat, /settings/reload, /settings/set, /settings/unset
   Bodies are limited (a setting, 16 KB). Lists are paged and bounded."
   (:require [engine.args :as a]
@@ -171,6 +171,26 @@
                                (cond-> {:name name :pos [(:x pos) (:y pos) (:z pos)] :distance (/ (js/Math.round (* 10 distance)) 10)}
                                  age-ms (assoc :age-ms age-ms)))
                              (take max rows))}
+        (> (count rows) max) (assoc :more? true)))))
+
+(defn chests-view
+  "Read-only: what the body saw in chests it opened (body memory :fetch/stock, the latest per chest), nearest
+  first, as {:pos [x y z] :distance :age-ms :items {name n}}. q: :max (cut at 64)."
+  [eng {:keys [max]}]
+  (if (core/offline? eng)
+    {:ok false :reason :offline :offline (core/away eng)}
+    (let [max (min (or max 16) 64)
+          view (mem/view (:store eng))
+          me (.-pos (.self (:primitives eng)))
+          dist (fn [[x y z]] (js/Math.hypot (- x (.-x me)) (- y (.-y me)) (- z (.-z me))))
+          rows (->> (mem/entries view :fetch/stock)
+                    (reduce (fn [m e] (assoc m (:pos (:data e)) e)) {})
+                    vals
+                    (map (fn [e] (let [pos (:pos (:data e))]
+                                   {:pos pos :distance (/ (js/Math.round (* 10 (dist pos))) 10)
+                                    :age-ms (- (:now view) (:t e)) :items (:items (:data e))})))
+                    (sort-by :distance))]
+      (cond-> {:ok true :chests (vec (take max rows))}
         (> (count rows) max) (assoc :more? true)))))
 
 (defn seen-query
@@ -434,6 +454,11 @@
                         (and (= method "GET") (= pathname "/seen"))
                         (if-let [q (seen-query (.-searchParams url))]
                           (respond! res 200 (seen-view eng q))
+                          (bad! res 400 :bad-query))
+
+                        (and (= method "GET") (= pathname "/chests"))
+                        (if-let [max (number-param (.-searchParams url) "max" 16 64)]
+                          (respond! res 200 (chests-view eng {:max max}))
                           (bad! res 400 :bad-query))
 
                         (and (= method "GET") (= pathname "/status"))
