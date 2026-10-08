@@ -177,9 +177,11 @@
           (assoc body :y (inc ground) :vy (- (inc ground) (:y body)))))))))
 
 (defn step-body
-  "One tick of the walker: horizontal then vertical."
+  "One tick of the walker: horizontal then vertical. :vx and :vz are the tick's horizontal move (blocks a tick, as
+  mineflayer's velocity)."
   [w body controls yaw]
-  (vertical w (horizontal w body controls yaw) controls))
+  (let [moved (horizontal w body controls yaw)]
+    (vertical w (assoc moved :vx (- (:x moved) (:x body)) :vz (- (:z moved) (:z body))) controls)))
 
 (declare start-body)
 
@@ -201,7 +203,9 @@
     {:x (:x body)
      :y (:y body)
      :z (:z body)
+     :vx (:vx body 0)
      :vy (:vy body)
+     :vz (:vz body 0)
      :on-ground (and (solid? w cx (dec cell) cz) (= (:y body) cell))
      :on-climbable (climbable? w cx cell cz)
      :in-water (wet? w cx cell cz)
@@ -211,8 +215,8 @@
 
 (defn start-body [w]
   (let [[x y z] (get-in w [:self :pos])
-        mid (if (:body-hitbox w) identity #(+ % 0.5))]    ; hitbox mode: the position is the true one, not a cell corner
-    {:x (mid x) :y y :z (mid z) :vy 0 :collided false}))
+        mid (if (:body-hitbox w) identity #(+ (floor %) 0.5))]    ; hitbox mode: the position is the true one; else the cell's centre
+    {:x (mid x) :y y :z (mid z) :vx 0 :vy 0 :vz 0 :collided false}))
 
 ;; --- the planner's view of the world
 

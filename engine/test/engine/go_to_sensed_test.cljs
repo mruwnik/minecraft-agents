@@ -201,7 +201,7 @@
 (defn ^:async run-job
   "Run job (a symbol) with args as a child over the sensed-only world spec; {:out :seen :p}. setup, when given, is called
   with the sensed-only {:p :w} first. js/Math.random is pinned to 0.5 for the run: it jitters the sight passes' rays,
-  and some jitters (0.54 to 0.59 in the dark tunnel) see one more cell, which changes the outcome."
+  and some jitters (0.54 to 0.59 in the dark tunnel) see one more cell, which changes the walk."
   [job spec args & [setup before]]
   (let [orig js/Math.random]
     (set! js/Math.random (constantly 0.5))
@@ -375,6 +375,21 @@
                                                      {:pos [9 61 0] :range 1 :escalate false :unknown true} dark-and-looked))]
           (is (empty? (filter #(= :go-to.off-hand-torch (:kind %)) seen)))
           (is (= "shield" (get-in @(fake/state p) [:equipment "offHand" :name])))
+          (is (= :unseen-floor-dark (:why out)) (pr-str out)))))))
+
+(deftest go-to-with-unknown-names-the-dark-drop-after-walking-to-its-takeoff
+  ;; at ray jitter 0.55 the sight passes see one more cell: the first plan walks to the shaft's rim before the drop
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [orig js/Math.random
+              _ (set! js/Math.random (constantly 0.55))
+              {:keys [out seen]} (try (await (run-job-unpinned 'jobs.movement.go-to
+                                                               (assoc in-tunnel :inventory [{:name "torch" :count 4}]
+                                                                      :equipment {"offHand" {:name "shield" :count 1}})
+                                                               {:pos [9 61 0] :range 1 :escalate false :unknown true} dark-and-looked))
+                                      (finally (set! js/Math.random orig)))]
+          (is (empty? (filter #(= :walker-fault (:kind %)) seen)) (pr-str (filter #(= :walker-fault (:kind %)) seen)))
           (is (= :unseen-floor-dark (:why out)) (pr-str out)))))))
 
 (deftest go-to-with-unknown-returns-a-torch-a-cut-call-left-in-the-off-hand

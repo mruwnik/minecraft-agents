@@ -68,8 +68,24 @@
       (fn ^:async t []
         (let [poses (atom [])]
           (await (run (rig) (fn [pose] (swap! poses conj pose) {:done {}})))
-          (is (= {:x 0.5 :y 64 :z 0.5 :vy 0 :on-ground true :on-climbable false :in-water false :collided false :yaw 0}
+          (is (= {:x 0.5 :y 64 :z 0.5 :vx 0 :vy 0 :vz 0 :on-ground true :on-climbable false :in-water false :collided false :yaw 0}
                  (dissoc (first @poses) :t))))))))
+
+(deftest a-fractional-position-starts-the-body-at-its-cells-centre
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [r (await (run (rig {} [-0.5 64 0.5]) (fn [pose] {:done (select-keys pose [:x :z])})))]
+          (is (= {:x -0.5 :z 0.5} (:result r)) "the eye and the planner put the body in cell [-1 64 0], so does the walk"))))))
+
+(deftest the-pose-carries-the-last-ticks-horizontal-velocity
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [poses (atom [])]
+          (await (run (rig) (walk-to 5.5 {:on-pose #(swap! poses conj %)})))
+          (is (= [0 0] ((juxt :vx :vz) (first @poses))) "at rest")
+          (is (= [0.2 0] (mapv #(/ (js/Math.round (* % 1000)) 1000) ((juxt :vx :vz) (second @poses)))) "a walk's tick, blocks a tick as mineflayer's velocity"))))))
 
 (deftest a-body-standing-in-water-reads-in-water
   (async done
