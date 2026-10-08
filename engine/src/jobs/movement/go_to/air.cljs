@@ -1,5 +1,6 @@
 (ns jobs.movement.go-to.air
-  "go-to under water when no way to the goal fits the air left: swim to air first, then plan again."
+  "go-to and water: under water when no way to the goal fits the air left (or a search goes on with little air left),
+  swim to air first, then plan again; an arrival in water walks on to a dry stand in range."
   (:require [engine.ctx :as ctx]
             [engine.game :as game]
             [engine.perception :as perception]
@@ -10,7 +11,8 @@
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.lib.sense :as sense]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [jobs.movement.go-to.column :as column]))
 
 (def max-surfacings "Walks to air one go-to call makes at most." 3)
 
@@ -21,6 +23,37 @@
 (def default-air-looks "go-to's :air-looks default: rounds of looking again for air before an :air give-up." 3)
 
 (def default-air-look-min "go-to's :air-look-min default: seconds of air left below which it looks no more (a swim up needs them)." 1.5)
+
+(def surface-air
+  "Seconds of air left under which a go-to whose head is under water and whose search goes on (no walk) swims to air
+  first: a body holding still in water sinks while it thinks."
+  7.5)
+
+(def dry-radius "Cells round the goal an arrival in water reads for a dry stand, at most (a larger :range reads this many)." 6)
+
+(defn in-water?
+  "Whether the body is in water: it says so, or its feet cell feels like water (afloat at the surface)."
+  [p]
+  (let [self (.self p)]
+    (boolean (or (.-inWater self) (= "water" (u/feel-name p (breath/feet-cell self)))))))
+
+(defn dry-stand
+  "The seen cell within range (at most dry-radius) of goal, nearest pos, where the body stands out of water: feet and
+  head open, a solid under the feet; nil when there is none."
+  [p goal within pos]
+  (let [k (column/kind-at p false)
+        [gx gy gz] (mapv #(js/Math.floor (% goal)) [:x :y :z])
+        r (min within dry-radius)
+        n (js/Math.floor r)
+        dry? (fn [[x y z]] (and (keyword-identical? :open (k x y z)) (keyword-identical? :open (k x (inc y) z))
+                                (keyword-identical? :solid (k x (dec y) z))))
+        cells (for [dx (range (- n) (inc n)) dy (range (- n) (inc n)) dz (range (- n) (inc n))
+                    :when (<= (+ (* dx dx) (* dy dy) (* dz dz)) (* r r))]
+                [(+ gx dx) (+ gy dy) (+ gz dz)])
+        far (fn [[x y z]] (u/dist pos {:x (+ x 0.5) :y y :z (+ z 0.5)}))
+        found (filter dry? cells)]
+    (when (seq found)
+      (zipmap [:x :y :z] (apply min-key far found)))))
 
 (defn air-left
   "Seconds of air the body has left before it drowns: the planner's airSupply less the air its oxygen says is used."
@@ -107,3 +140,11 @@
             (ctx/emit! c :go-to.surfacing :info {:at target :text (str "short of air: swimming up to " [(:x target) (:y target) (:z target)] " first")})
             (let [{:keys [status]} (await (near/walk-round! c target 0 walk-opts))]
               (contains? #{"arrived" "partial" "searching"} status))))))))
+
+(defn ^:async surface-while-searching!
+  "A round whose search goes on (no walk) with the head under water and less than surface-air of air left: surface!
+  first, as a player swims up while thinking. True when it swam."
+  [c walk-opts goal]
+  (let [p (:primitives c)]
+    (when (and (breath/head-under? p) (< (air-left p) surface-air))
+      (await (surface! c walk-opts goal)))))

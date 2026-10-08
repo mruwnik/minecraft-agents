@@ -71,6 +71,9 @@
   - :dangers false plans straight past known dangers (default: the plans keep away from them, jobs.lib.threats). :leg-s n
     walks one leg of at most n s and, when it got more than 1 block nearer, ends {:arrived false :leg true} (job :done)
     for a caller chasing a moving target to call again; a leg that got no nearer goes on as any round.
+  - An arrival in water walks on to the nearest seen dry stand within :range (at most go-to.air/dry-radius), once a call;
+    with none (or that walk failing) it ends {:arrived true :in-water true} with an info go-to.in-water. Under water with
+    its search going on (no walk) and under go-to.air/surface-air seconds of air left, it swims to air first (go-to.surfacing).
   - A call starts afresh from the world: its walk counters are per call (the cut count carries over only a cut of this run's call to the same goal), and a saved escalation is dropped when the body
     is already there (a cut call's memory is a hint).
   - A walk that gets more than 1 block nearer is progress. Three walks in a row without progress give up, and so
@@ -171,7 +174,9 @@
   [c]
   (when-not (false? (:look-round (:args c)))
     (await (watch/watch! c {})))
-  (end/finish! c (cond-> {:arrived true} (:aimed (ctx/mem c)) (assoc :resolved (:aimed (ctx/mem c))))))
+  (end/finish! c (cond-> {:arrived true}
+                   (:aimed (ctx/mem c)) (assoc :resolved (:aimed (ctx/mem c)))
+                   (:in-water (ctx/mem c)) (assoc :in-water true))))
 
 (defn forget-known-land!
   "Forget the land earlier searches knew to their end (wsearch/known-land) at the go-to's first walking round and after each
@@ -353,9 +358,16 @@
   column/approach-range of it: it looks at it (look-at-column!), its looks spent it walks on within the :range arg (mem
   :column-near)."
   [c pos]
-  (let [m (ctx/mem c)]
+  (let [m (ctx/mem c)
+        p (:primitives c)
+        wet? (and (or (not= :guess (:column-open m)) (:column-near m)) (air/in-water? p))
+        dry (when (and wet? (not (:dry-tried m))) (air/dry-stand p pos (:range (:args c) 1) (u/self-pos c)))]
     (cond
       (:restore-pending m) (esc/restore-next! c)
+      dry (do (ctx/update-mem! c assoc :dry-tried true :dry-stand dry) :again)
+      wet? (do (ctx/update-mem! c assoc :in-water true)
+               (ctx/emit! c :go-to.in-water :info {:at (end/feet-cell c) :text "arrived within range but in water: no dry stand within range"})
+               (arrived! c))
       (or (not= :guess (:column-open m)) (:column-near m)) (arrived! c)
       (await (look-at-column! c pos)) :again
       :else (do (ctx/update-mem! c assoc :column-near true) :again))))
@@ -433,12 +445,19 @@
 
           col-looked? :again
 
+          (and (= "searching" status) (await (air/surface-while-searching! c (dissoc opts :progress) pos)))
+          :again
+
           (= "searching" status)
           (let [n (cond-> (:searching (ctx/mem c) 0) (:fresh walked) inc)]
             (ctx/update-mem! c assoc :searching n)
             (if (< n max-searching)
               :again
               (end/give-up! c pos (:blocked (ctx/mem c) 0) :searching {:status :no-path :reason :moved-while-searching})))
+
+          ;; the walk on to a dry stand (arrive!) got nowhere: arrive where the call's goal is
+          (:dry-stand (ctx/mem c))
+          (do (ctx/update-mem! c dissoc :dry-stand) :again)
 
           :else
           (let [handled (when (health/refused? c result) (await (health/heal-or-drop! c pos range)))]
@@ -467,7 +486,7 @@
   (let [m (ctx/mem c)
         there? (here? c pos (:range (:args c)))]
     (wworld/warn-bad-settings! c)
-    (ctx/update-mem! c #(cond-> (-> % (dissoc :best :fault-cells :over-budget :off-hand-tried :air-looked :air-relooks :surfacings :column-looks :column-near) (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {}))
+    (ctx/update-mem! c #(cond-> (-> % (dissoc :best :fault-cells :over-budget :off-hand-tried :air-looked :air-relooks :surfacings :column-looks :column-near :dry-tried :dry-stand :in-water) (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {}))
                           (not (:fetching m)) (dissoc :torch-fetched :fetched)
                           (and there? (:escalate-now m)) (dissoc :escalate-now)
                           (and there? (:escalation m))
@@ -548,7 +567,10 @@
       (:escalate-now m) (do (ctx/update-mem! c dissoc :escalate-now)
                             (await (esc/escalate! c pos nil)))
       :else (or (when (:fetching m) (await (fetch/step! c 'jobs.movement.go-to torch-need)))
-                (await (walk! c pos (cond-> (:range (:args c)) (and (= :guess (:column-open m)) (not (:column-near m))) (max column/approach-range))
+                (await (walk! c (or (:dry-stand m) pos)
+                              (cond (:dry-stand m) 0
+                                    (and (= :guess (:column-open m)) (not (:column-near m))) (max (:range (:args c)) column/approach-range)
+                                    :else (:range (:args c)))
                               (some-> (:doors (:args c)) keyword)))))))
 
 (defn shared-marker
