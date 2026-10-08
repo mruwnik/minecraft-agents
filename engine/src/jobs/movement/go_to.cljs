@@ -87,10 +87,11 @@
   - A walk stuck or off its plan at a cell is a go-to.walker-fault warn; the next plans of the call cost that cell
     (up to 8) far more (wworld/with-avoid), so a way round is taken when there is one.
   - :escalate (default true): a body that is shut in (jobs.lib.reach/enclosed?), not in its own shelter, and whose
-    search ran out of land (:exhausted, :goal-enclosed or :goal-cut-off) makes a way instead of giving up, at most 3 times per go-to, one child job
-    each (jobs.lib.escape/choose): jobs.access.pillar up out of a pit when it carries enough blocks; else
+    search ran out of land (:exhausted, :goal-enclosed or :goal-cut-off) makes a way instead of giving up, one child job
+    each (jobs.lib.escape/choose), at most 3 in a row that start no nearer the goal than one before (escalation/count-escalation): jobs.access.pillar up out of a pit when it carries enough blocks; else
     jobs.access.clear-path through a wall up to 3 thick toward the goal; else jobs.access.stair up out of a pit or
-    toward a higher goal; else a walk to the nearest wall first. Each emits go-to.escalated {:step :why :n}. Once
+    toward a higher goal (as far as the goal is above, at most 8; a stair that leaves the body shut in under the goal is
+    followed by the next escalation at once); else a walk to the nearest wall first. Each emits go-to.escalated {:step :why :n}. Once
     through, it puts back what clear-path or stair dug (jobs.blocks.place, the dug block or its drop, when
     carried): info go-to.restored, warn go-to.restore-skipped for cells it could not. Pillar blocks are left to
     jobs.access.cleanup. Its children's walks never escalate. Jobs that must not change the world on the way pass

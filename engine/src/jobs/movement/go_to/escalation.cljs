@@ -120,14 +120,25 @@
         (when (or (< lvl (dec escape/look-levels)) (escape/walled-at? block-at (escape/unseen-of p) (escape/up feet lvl)))
           (recur (inc lvl)))))))
 
+(defn count-escalation
+  "The count toward max-escalations of an escalation starting d from the goal, given memory m: {:fruitless n
+  :escalation-best b}. One that starts more than 1 block nearer than any before (b, the least so far) counts as the
+  first again: a stair that climbed is a way made, and a deep climb takes more than max-escalations of them."
+  [m d]
+  (let [best (:escalation-best m)
+        nearer? (and best (< d (dec best)))]
+    {:fruitless (inc (if nearer? 0 (:fruitless m 0)))
+     :escalation-best (min d (or best d))}))
+
 (defn ^:async escalate!
   "Start the next escalation for the give-up kept in memory (:give-up), or give up with it when there is none (or
   with failed, the detail of the escalation that just failed, when there is none left after it; past max-escalations
   with the last one that failed, if any)."
   [c pos failed]
   (let [{:keys [tries status result]} (:give-up (ctx/mem c))
-        n (inc (:escalations (ctx/mem c) 0))
         feet (end/feet-cell c)
+        counted (count-escalation (ctx/mem c) (u/dist (zipmap [:x :y :z] feet) pos))
+        n (:fruitless counted)
         _ (when (<= n max-escalations) (await (look-round! c feet)))
         goal (mapv #(js/Math.floor (% pos)) [:x :y :z])
         opts {:own? (own-placed-fn c) :skip (:skipped-steps (ctx/mem c) #{})}
@@ -141,8 +152,9 @@
       :else
       (do (ctx/emit! c :go-to.escalated :info {:step (:step e) :why (:why (end/give-up-fields result)) :n n :at feet
                                                :text (str "no way out on foot: " (name (:step e)))})
-          (ctx/update-mem! c assoc :escalations n :escalation e :escalation-from feet
-                           :planned (planned-cells (:primitives c) e feet) :holes-before (count (own-holes c)))
+          (ctx/update-mem! c #(-> (merge % counted)
+                                  (assoc :escalations (inc (:escalations % 0)) :escalation e :escalation-from feet
+                                         :planned (planned-cells (:primitives c) e feet) :holes-before (count (own-holes c)))))
           :again))))
 
 (defn escalate?
@@ -164,14 +176,24 @@
         (await (escalate! c pos nil)))
     (end/give-up! c pos tries status result)))
 
+(defn climb-on?
+  "Whether a stair that is done leaves the body still shut in (escape/enclosed?) under the goal pos: a walk could only
+  lead back down the stair (live: a partial walk toward the goal's column took the body back under it), so the next
+  escalation follows at once."
+  [c pos]
+  (and (< (second (end/feet-cell c)) (js/Math.floor (:y pos)))
+       (escape/enclosed? (:primitives c) (some-> (:doors (:args c)) keyword))))
+
 (defn escalated!
-  "The child made a way (or part of one): walk again from a fresh count. Its holes are put back once a walk round gets
-  on past it (restore-next!)."
-  [c {:keys [step]}]
-  (ctx/update-mem! c #(cond-> (-> % (dissoc :escalation :escalation-from :planned :holes-before :best)
-                                  (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {}))
-                        (= :approach step) (assoc :escalate-now true)
-                        (not= :approach step) (assoc :restore-pending true)))
+  "The child made a way (or part of one, done false): walk again from a fresh count, or escalate again at once after an
+  approach, or after a whole stair that left the body shut in under the goal (climb-on?). Its holes are put back once
+  a walk round gets on past it (restore-next!)."
+  [c pos {:keys [step]} done?]
+  (let [again? (or (= :approach step) (and done? (= :stair step) (climb-on? c pos)))]
+    (ctx/update-mem! c #(cond-> (-> % (dissoc :escalation :escalation-from :planned :holes-before :best)
+                                    (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {}))
+                          again? (assoc :escalate-now true)
+                          (not= :approach step) (assoc :restore-pending true))))
   :again)
 
 (defn partly-made?
@@ -196,13 +218,13 @@
     (do (ctx/emit! c :go-to.escalation-stopped :warn (assoc detail :text (str (name step) " stopped part way: "
                                                                               (some-> (:reason detail) name)
                                                                               "; walking again")))
-        (escalated! c detail))
+        (escalated! c pos detail false))
     (do (ctx/emit! c :go-to.escalation-stopped :warn (assoc detail :text (str (name step) " failed: "
                                                                               (some-> (:reason detail) name)
                                                                               "; trying another way")))
         (ctx/update-mem! c #(cond-> (-> % (update :skipped-steps (fnil conj #{}) (skip-key (:escalation (ctx/mem c))))
                                         (assoc :last-failed detail))
-                              (= :stair step) (update :escalations dec)))
+                              (= :stair step) (update :fruitless dec)))
         (await (escalate! c pos detail)))))
 
 (defn ^:async escalation-round!
@@ -220,7 +242,7 @@
         (cond
           (= :continue r) :continue
           (= :declined r) (escalation-failed! c pos {:step step :reason :not-ready})
-          (succeeded? e res) (escalated! c e)
+          (succeeded? e res) (escalated! c pos e true)
           :else (escalation-failed! c pos (merge {:step step}
                                                  (select-keys res [:reason :why :cell :block :at :short :detail :wait]))))))))
 

@@ -280,8 +280,9 @@
   allows (go-to: no other owner's zone or claim). opts :skip is a set of steps that already failed (a stair heading
   that failed: [:stair :east]): the next one is chosen.
   - {:step :pillar :height d :item}: in a pit d deep with room above the head and at least d pillar blocks carried.
-  - {:step :stair :heading kw :steps n}: a block in front to stair up on, n the pit's depth (in no pit: how far the
-    goal is above, at most max-depth), every cell of its cut diggable?.
+  - {:step :stair :heading kw :steps n}: a block in front to stair up on, n how far the goal is above or the pit's
+    depth, whichever is more, at most max-depth (the pit's depth when the longer cut is not all diggable?), every cell
+    of its cut diggable?.
   - {:step :clear-path :heading kw}: a wall at most max-door thick straight toward the goal, with floor beyond,
     every cell diggable?.
   - {:step :approach :pos cell}: no side of the body's cell is solid: walk to wall-spot first; in the free part of a
@@ -296,11 +297,13 @@
          depth (pit-depth block-at (unseen-of p) feet)
          {:keys [item count]} (pillar-item p)
          pillar-blocks? (and (not (skip :pillar)) (pos? depth) item (>= count depth))
-         rise (if (pos? depth) depth (min (max-depth) (max 0 (- (second goal) (second feet)))))
-         stair (when (and (not (skip :stair)) (pos? rise))
-                 (stair-heading block-at feet
-                                (remove #(skip [:stair (heading-names %)]) (distinct (cond->> cardinals dir (cons dir))))
-                                rise may-dig? own?))
+         rise (min (max-depth) (max depth (- (second goal) (second feet))))
+         stair-dirs (remove #(skip [:stair (heading-names %)]) (distinct (cond->> cardinals dir (cons dir))))
+         [stair rise] (if (or (skip :stair) (not (pos? rise)))
+                        [nil rise]
+                        (or (some (fn [n] (some-> (stair-heading block-at feet stair-dirs n may-dig? own?) (vector n)))
+                                  (distinct (filter pos? [rise depth])))
+                            [nil rise]))
          gap (when (and dir (not (skip :clear-path))) (door block-at (unseen-of p) feet dir (max-door)))
          spot (delay (when (and dir (not (skip :approach)) (walled-side? block-at feet))
                        (door-spot p feet dir #(diggable? block-at may-dig? own? %))))

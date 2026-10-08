@@ -1,7 +1,7 @@
 (ns engine.go-to-escalate-test
   "jobs.movement.go-to escalation (pillar, stair, clear-path, a walk to a wall) and jobs.lib.escape, against the fake
   world."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
@@ -286,28 +286,62 @@
           (is (empty? (events-of seen :go-to.escalated)) "a body sealed in its own shelter stays in it")
           (is (empty? (calls p "dig"))))))))
 
-(def deep-shaft
-  "A 1x1 shaft 30 deep (feet at y 34) in solid dirt x -30..30, y 30..63, z -30..30."
-  (apply dissoc (box -30 30 -30 30 63 30 "dirt") (for [y (range 34 64)] (str "0," y ",0"))))
-
-(deftest go-to-escalates-at-most-three-times
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        ;; each stair climbs at most 8: three of them leave the body 6 short of the rim
-        (let [{:keys [out seen]} (await (run-job! {:self {:pos {:x 0 :y 34 :z 0}} :blocks deep-shaft}
-                                              {:pos [10 64 0] :range 1}))]
-          (is (= [:stair :stair :stair] (mapv :step (events-of seen :go-to.escalated))))
-          (is (= false (:arrived @out)))
-          (is (= {:step :spent :n 3} (:escalation @out))))))))
-
-;; ------------------------------------------------------------------ review fixes (card 30615854, be7e5bb6)
-
 (defn ledger [eng] (mapv :data (mem/entries (mem/view (:store eng)) :tidy)))
 
 (defn holes [eng] (set (map :cell (filter :escalation (ledger eng)))))
 
 (defn dug-cells [p] (set (map #(mapv (js->clj (.-pos (.-args %)) :keywordize-keys true) [:x :y :z]) (calls p "dig"))))
+
+(def deep-shaft
+  "A 1x1 shaft 30 deep (feet at y 34) in solid dirt x -30..30, y 30..63, z -30..30."
+  (apply dissoc (box -30 30 -30 30 63 30 "dirt") (for [y (range 34 64)] (str "0," y ",0"))))
+
+;; live (Juniper, card ba754e77): 16 under its goal, the stairs climbed 8, then 4 (the depth of the first stair's own walled
+;; cut), then a partial walk led back down and the third way out was spent 9 under the goal. Each stair climbs as far as
+;; the goal is above (at most max-depth), and an escalation that got the body nearer than any before does not count
+;; toward the 3.
+(deftest go-to-climbs-a-deep-shaft-stair-by-stair-while-each-gets-nearer
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng out p seen]} (await (run-job! {:self {:pos {:x 0 :y 34 :z 0}} :blocks deep-shaft}
+                                                    {:pos [30 64 0] :range 1}))
+              escalated (events-of seen :go-to.escalated)]
+          (is (= {:arrived true} @out))
+          (is (= [:stair :stair :stair :stair] (map :step escalated)) "30 up is 4 stairs of at most 8, one after another")
+          (is (= [1 1 1 1] (map :n escalated)) "each began nearer than any before")
+          (is (= (dug-cells p) (holes eng)) "every dug cell is in the ledger"))))))
+
+(deftest go-to-pillars-up-a-deep-shaft-while-each-pillar-gets-nearer
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out seen]} (await (run-job! {:self {:pos {:x 0 :y 34 :z 0}} :blocks deep-shaft
+                                                   :inventory [{:name "dirt" :count 64}]}
+                                              {:pos [10 64 0] :range 1}))
+              escalated (events-of seen :go-to.escalated)]
+          (is (= {:arrived true} @out))
+          (is (= [:pillar :pillar :pillar :pillar] (map :step escalated)) "30 up is 4 pillars of at most 8")
+          (is (= [1 1 1 1] (map :n escalated))))))))
+
+(deftest escalations-count-only-while-none-gets-nearer
+  (are [m d n] (= n (:fruitless (esc/count-escalation m d)))
+    {} 20 1
+    {:fruitless 1 :escalation-best 20} 19.5 2
+    {:fruitless 2 :escalation-best 20} 12 1
+    {:fruitless 3 :escalation-best 12} 12 4)
+  (is (= 12 (:escalation-best (esc/count-escalation {:fruitless 2 :escalation-best 20} 12))))
+  (is (= 20 (:escalation-best (esc/count-escalation {:fruitless 1 :escalation-best 20} 30))) "the best so far stays"))
+
+(deftest escape-choose-stair-climbs-as-far-as-the-goal-is-above
+  (is (= {:step :stair :heading :east :steps 8}
+         (escape/choose (tu/fake (merge in-pit {:blocks pit})) [0 61 0] [10 75 0]))
+      "a 3-deep pit under a goal 14 up: the stair climbs max-depth, not the pit's 3")
+  (is (= {:step :stair :heading :east :steps 3}
+         (escape/choose (tu/fake (merge in-pit {:blocks pit})) [0 61 0] [10 62 0]))
+      "a goal no higher than the rim: the pit's depth"))
+
+;; ------------------------------------------------------------------ review fixes (card 30615854, be7e5bb6)
 
 (deftest escape-natural-is-a-whitelist-of-terrain
   (doseq [n ["stone" "dirt" "grass_block" "deepslate" "gravel" "sand" "netherrack" "iron_ore" "deepslate_diamond_ore"
@@ -402,19 +436,6 @@
           (is (= {:step :none :why :zone} (:escalation @out)))
           (is (empty? (events-of seen :go-to.escalated)))
           (is (empty? (calls p "dig"))))))))
-
-(deftest go-to-never-refills-a-stair-while-the-body-is-still-shut-in
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng out p seen]} (await (run-job! {:self {:pos {:x 0 :y 34 :z 0}} :blocks deep-shaft
-                                                         :inventory [{:name "dirt" :count 64}]}
-                                                    {:pos [10 64 0] :range 1}))]
-          (is (= false (:arrived @out)))
-          (is (empty? (calls p "place")) "every stair stopped short of the rim: none of it is put back")
-          (is (empty? (events-of seen :go-to.restored)))
-          (is (= (dug-cells p) (holes eng)) "every dug cell is in the ledger for restore-broken")
-          (is (every? #(= "air" (block p %)) (holes eng))))))))
 
 (deftest go-to-stair-stopped-part-way-walks-on-and-keeps-its-holes
   (async done
