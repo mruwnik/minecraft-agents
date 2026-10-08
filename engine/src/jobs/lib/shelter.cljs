@@ -369,15 +369,6 @@
   out of this cell. Never at night."
   [p shelter trapped]
   (boolean (and (not (night? p))
-     :hint (str "the body is sealed in its own shelter at [" x " " y " " z "]: the shelter job lets it out by day "
-                "(jobs.survival.night), or run jobs.survival.dig-in leave")}))
-
-(defn shut-in-room?
-  "Whether the body stands in a closed room (reach/closed-room?) with a roof over it within room-roof-height blocks:
-  safe from the night though the roof is above :roof-height."
-  [p]
-  (and (roofed? p (room-roof-height)) (reach/closed-room? p (feet p))))
-
                 (in-own-shelter p shelter)
                 (not= (:pos shelter) (:pos trapped)))))
 
@@ -396,6 +387,15 @@
           open? (fn [{:keys [cell]}]
                   (let [b (u/seen-block p cell)]
                     (and b (= :openable (click/kind-of (.-name b))) (click/reached? :open (click/props-of b)))))]
+     :hint (str "the body is sealed in its own shelter at [" x " " y " " z "]: the shelter job lets it out by day "
+                "(jobs.survival.night), or run jobs.survival.dig-in leave")}))
+
+(defn shut-in-room?
+  "Whether the body stands in a closed room (reach/closed-room?) with a roof over it within room-roof-height blocks:
+  safe from the night though the roof is above :roof-height."
+  [p]
+  (and (roofed? p (room-roof-height)) (reach/closed-room? p (feet p))))
+
       (->> (:doors (reach/room p (feet p)))
            (filter open?)
            (sort-by #(u/dist self (:cell %)))
