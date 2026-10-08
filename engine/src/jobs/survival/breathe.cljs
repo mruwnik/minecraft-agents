@@ -281,9 +281,23 @@
           (await (look/look-at! c [(:x cell) (:y cell) (:z cell)])))
         (recur (inc k))))))
 
+(defn ^:async cap-dig-ms
+  "Milliseconds the cap dig of the own column would take, after looking up; nil when it may not be dug, would not fit
+  ::cap-dig-share of the air left or the run has made :max-cap-digs digs."
+  [c]
+  (let [p (:primitives c)
+        head (breath/eye-cell (.self p))
+        _ (await (look-up! c head))
+        {:keys [cells]} (cap-above p head)
+        ms (reduce + (map #(.digTime p (clj->js %)) cells))]
+    (when (and cells (< (:cap-digs (ctx/mem c) 0) (max-cap-digs))
+               (<= ms (* (cap-dig-share) (breath/air-left-ms (.self p)))))
+      ms)))
+
 (defn ^:async go-air!
   "Drowning with no air near: a go-to child to the nearest air-reaching surface within :air-radius, else to the nearest
-  seen air below the feet within :depth (breath/nearest-pocket: the way the body came), not failed before. True
+  seen air below the feet joined to the body by water or air within :depth (breath/nearest-pocket: the way the body
+  came), not failed before, when the swim there fits the air left and is not dearer than the cap dig (cap-dig-ms). True
   on arrival (the body has surfaced); nil when it did not, :none when there is no target. The target is remembered as
   tried either way, so a world that stays drowning does not loop on it."
   [c]
@@ -292,7 +306,12 @@
         pos (u/self-pos c)
         failed (:failed-air (ctx/mem c))
         surface (breath/nearest-air p pos air-radius reach failed false)
-        target (or surface (breath/nearest-pocket p pos air-radius depth failed))]
+        pocket (when-not surface (breath/nearest-pocket p pos air-radius depth failed))
+        swim-ms (* (:steps pocket 0) (breath/swim-ms))
+        pocket? (and pocket
+                     (< swim-ms (breath/air-left-ms (.self p)))
+                     (let [dig-ms (await (cap-dig-ms c))] (or (nil? dig-ms) (<= swim-ms dig-ms))))
+        target (or surface (when pocket? (:cell pocket)))]
     (if-not target
       :none
       (let [arrived? (await (go! c :air target 0))]
@@ -303,26 +322,30 @@
 
 (defn ^:async dig-cap!
   "Drowning under a cap: dig it (and the solid cell over it) from below, with the best carried tool. A floating dig
-  under water is 25 times slower than on land, so the dig is started only when its expected time fits ::cap-dig-share
-  of the air left (breath/air-left-ms), and gives up there. True when a dig worked, so the next pass swims up; else the
-  reason (see cap-above, :too-slow, or :dig-failed, also after :max-cap-digs digs that left the body drowning)."
+  under water is 25 times slower than on land, so the dig is started only when its expected time, all cells together,
+  fits ::cap-dig-share of the air left (breath/air-left-ms), and each dig gives up at what is left of that. True when a
+  dig worked, so the next pass swims up; else the reason (see cap-above, :too-slow, or :dig-failed, also after
+  :max-cap-digs digs that left the body drowning)."
   [c]
   (let [p (:primitives c)
-        head (breath/eye-cell (.self p))
+        self (.self p)
+        head (breath/eye-cell self)
         _ (await (look-up! c head))
         {:keys [cells why]} (cap-above p head)
         _ (when (and cells (< (:cap-digs (ctx/mem c) 0) (max-cap-digs))) (await (tools/equip! c (u/seen-name p (first cells)))))
-        allowed-ms (* (cap-dig-share) (breath/air-left-ms (.self p)))]
+        air-ms (breath/air-left-ms self)
+        allowed-ms (* (cap-dig-share) air-ms)]
     (cond
       (not cells) why
       (<= (max-cap-digs) (:cap-digs (ctx/mem c) 0)) :dig-failed
-      (some #(< allowed-ms (.digTime p (clj->js %))) cells) :too-slow
+      (< allowed-ms (reduce + (map #(.digTime p (clj->js %)) cells))) :too-slow
       :else
       (let [_ (ctx/update-mem! c update :cap-digs (fnil inc 0))
             _ (access/trespass! c "breathe" (:trespass (access/choose c :dig [cells] identity)))
+            left-ms #(- allowed-ms (- air-ms (breath/air-left-ms (.self p))))
             dug (loop [todo cells ok? false]
                   (if-let [cell (first todo)]
-                    (let [r (status (await (tidy/dig! c cell true {:timeoutS (/ allowed-ms 1000)})))]
+                    (let [r (status (await (tidy/dig! c cell true {:timeoutS (/ (max 0 (left-ms)) 1000)})))]
                       (if (contains? #{"dug" "missing"} r) (recur (rest todo) true) ok?))
                     ok?))]
         (or dug :dig-failed)))))

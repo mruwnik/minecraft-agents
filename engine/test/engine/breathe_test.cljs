@@ -1027,6 +1027,29 @@
           (is (<= 1 (:x (core/self-pos p))) "in the tunnel")
           (is (> 66 (:y (core/self-pos p))) "down at its floor"))))))
 
+(def shaft-top {:x 0 :y 72 :z 0})
+
+(deftest a-seen-pocket-joined-to-the-body-by-water-is-a-target-with-its-swim-length
+  (let [p (:p (setup {:self {:inWater true :oxygen 4 :pos shaft-top} :blocks flooded-shaft}))
+        {:keys [cell steps]} (breath/nearest-pocket p shaft-top 8 24 nil)]
+    (is (= {:x 1 :y 64 :z 0} (select-keys cell [:x :y :z])))
+    (is (<= 8 steps 12) "down the shaft and one across")))
+
+(deftest a-seen-pocket-walled-off-from-the-body-is-no-target
+  (let [walled (assoc flooded-shaft "1,64,0" "stone" "1,65,0" "stone")
+        p (:p (setup {:self {:inWater true :oxygen 4 :pos shaft-top} :blocks walled}))]
+    (is (nil? (breath/nearest-pocket p shaft-top 8 24 nil)))))
+
+(deftest a-cheap-cap-dig-comes-before-a-swim-down-to-a-pocket
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:inWater true :oxygen 4 :pos shaft-top} :blocks flooded-shaft})]
+          (swap! (fake/state p) assoc :dig-ms 100)
+          (await (one-run! eng (assoc defaults :air-radius 8)))
+          (is (= "air" (.-name (.blockAt p (tu/pos 0 74 0)))) "the cap is dug")
+          (is (<= 72 (:y (core/self-pos p))) "not down in the tunnel"))))))
+
 (deftest a-two-cell-cap-is-dug-one-cell-and-the-air-over-it-is-not-peeked-at
   (async done
     (tu/run-async done

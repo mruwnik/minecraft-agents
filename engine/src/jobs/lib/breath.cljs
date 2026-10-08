@@ -12,7 +12,8 @@
 
   Wedged: the feet cell holds such a full block, e.g. sand that fell on the body. Farmland, slabs, snow layers, soul
   sand, paths, plants and fluids never do. The eye cell is the suffocating trigger's business."
-  (:require [engine.game :as game]
+  (:require [engine.args :as a]
+            [engine.game :as game]
             [engine.memory :as mem]
             [engine.settings :as settings]
             [jobs.lib.dig-look :as look]
@@ -177,24 +178,43 @@
                (when-not (or (contains? skip cell) (and straight? (drag-between? p fx fz (+ fx dx) (+ fz dz) fy))) cell)))
            (columns radius)))))
 
+(a/defargs settings
+  {::ticks-per-oxygen {:default 15 :doc "Game ticks a drowning body loses one point of oxygen in (the game's rule)." :spec (a/int-in 1 nil)}
+   ::ticks-per-health {:default 10 :doc "Game ticks between the 2 health a drowning body loses once the oxygen is gone (the game's rule)." :spec (a/int-in 1 nil)}
+   ::swim-ms {:default 500 :doc "Milliseconds a swimmer takes per block, to price a swim to a pocket of air." :spec (a/num-in 0 nil)}})
+
+(defn swim-ms [] (settings/get settings ::swim-ms))
+
+(def neighbours [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])
+
 (defn nearest-pocket
-  "The nearest seen cell below the feet, within radius sideways and depth down, whose head cell is air and feet cell
-  water or air (the way a drowning body came, e.g. its tunnel), not one of failed; nil if none. Only cells seen."
+  "The nearest seen pocket of air below the feet: {:cell :steps}, the cell (head cell air, feet cell water or air, not
+  one of failed) found by a walk through seen water and air cells from the feet, at most radius sideways, depth down
+  and 3 up, steps cells long; nil if none is joined to the body that way. Only cells seen."
   [p self-pos radius depth failed]
   (let [fx (js/Math.floor (:x self-pos)) fy (js/Math.floor (:y self-pos)) fz (js/Math.floor (:z self-pos))
         skip (set failed)
-        d2 (fn [{:keys [x y z]}] (+ (* (- x fx) (- x fx)) (* (- y fy) (- y fy)) (* (- z fz) (- z fz))))]
-    (->> (for [[dx dz] (columns radius) dy (range 1 (inc depth))] {:x (+ fx dx) :y (- fy dy) :z (+ fz dz)})
-         (filter #(and (not (contains? skip %))
-                       (air? (seen-water-name p (update % :y inc)))
-                       (passable-water-or-air? (seen-water-name p %))))
-         (sort-by d2)
-         first)))
+        open? (fn [{:keys [x y z] :as cell}]
+                (and (<= (js/Math.abs (- x fx)) radius) (<= (js/Math.abs (- z fz)) radius) (<= (- fy depth) y (+ fy 3))
+                     (passable-water-or-air? (seen-water-name p cell))))
+        pocket? (fn [cell] (and (< (:y cell) fy) (not (contains? skip cell)) (air? (seen-water-name p (update cell :y inc)))))
+        start {:x fx :y fy :z fz}]
+    (loop [frontier [start] seen #{start} steps 0]
+      (when (seq frontier)
+        (if-let [cell (first (filter pocket? frontier))]
+          {:cell cell :steps steps}
+          (let [next (->> (for [c frontier [dx dy dz] neighbours] (-> c (update :x + dx) (update :y + dy) (update :z + dz)))
+                          (remove seen)
+                          distinct
+                          (filter open?))]
+            (recur next (into seen next) (inc steps))))))))
 
 (defn air-left-ms
-  "Wall-clock ms a drowning body has before it dies: 15 ticks a point of oxygen, then 2 health a second."
+  "Wall-clock ms a drowning body has before it dies: a point of oxygen lasts ::ticks-per-oxygen ticks, then 2 health
+  every ::ticks-per-health."
   [self]
-  (settings/ticks->ms (+ (* 15 (max 0 (.-oxygen self))) (* 10 (max 0 (or (.-health self) 20))))))
+  (settings/ticks->ms (+ (* (settings/get settings ::ticks-per-oxygen) (max 0 (.-oxygen self)))
+                         (* (settings/get settings ::ticks-per-health) (max 0 (or (.-health self) 20))))))
 
 (defn ^:async look-column!
   "Look up the column x z from fy, one look per cell not yet seen, until a seen cell that is neither water nor air or
