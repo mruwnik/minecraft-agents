@@ -103,7 +103,7 @@ const eyeOf = bot => vec3(bot.entity.position.x, bot.entity.position.y + (bot.en
 const waitFor = async (ctx, done, ms) => {
   const deadline = Date.now() + ms
   while (!done() && Date.now() < deadline) {
-    await sleepMs(setting('prim/poll-ms'))
+    await sleepMs(setting('vehicle/poll-ms'))
     ctx.alive()
   }
   return done()

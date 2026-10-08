@@ -54,7 +54,7 @@ async function dismount (bot, timeScale) {
   sneak(bot, true)
   const deadline = Date.now() + setting('interact/dismount-wait-ms') * timeScale
   try {
-    while (bot.vehicle && Date.now() < deadline) await sleepMs(setting('prim/poll-ms') * timeScale)
+    while (bot.vehicle && Date.now() < deadline) await sleepMs(setting('interact/poll-ms') * timeScale)
   } finally {
     sneak(bot, false)
   }
@@ -133,7 +133,7 @@ export async function interactWith (bot, ctx, a, { timeScale = 1, reach }) {
     }
     let r = read()
     while (!settled(r) && !r.gone && !bot.vehicle && !bot.currentWindow && Date.now() < deadline) {
-      await sleepMs(setting('prim/poll-ms') * timeScale)
+      await sleepMs(setting('interact/poll-ms') * timeScale)
       ctx.alive()
       r = read()
     }

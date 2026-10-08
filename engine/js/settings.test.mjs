@@ -3,6 +3,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { SPECS, setting, useSettings } from './settings.mjs'
 import { waitForWorld } from './prim-base.mjs'
+import { readdirSync, readFileSync } from 'node:fs'
 
 const unloaded = { entity: { position: { x: 0, y: 0, z: 0 } }, blockAt: () => null }
 const waited = async () => { const t = Date.now(); await waitForWorld(unloaded); return Date.now() - t }
@@ -35,4 +36,17 @@ test('every spec has a default that fits its own spec', () => {
     assert.ok(Number.isFinite(d) && (lo === null || d >= lo) && (hi === null || d <= hi), k)
     assert.ok(kind === 'num-in' || (kind === 'int-in' && Number.isInteger(d)), k)
   }
+})
+
+test('every declared setting is read by some primitive file', () => {
+  const sources = readdirSync(new URL('.', import.meta.url))
+    .filter(f => f.endsWith('.mjs') && !f.includes('.test.') && f !== 'settings.mjs')
+    .map(f => readFileSync(new URL(f, import.meta.url), 'utf8')).join('\n')
+  const unread = Object.keys(SPECS).filter(k => !sources.includes(`'${k}'`))
+  assert.deepEqual(unread, [])
+})
+
+test('trade and enchant keep their 25 ms poll', () => {
+  assert.equal(SPECS['trade/poll-ms'].default, 25)
+  assert.equal(SPECS['enchant/poll-ms'].default, 25)
 })

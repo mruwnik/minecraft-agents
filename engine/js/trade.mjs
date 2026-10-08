@@ -79,7 +79,7 @@ async function closeAndSettle (bot, ctx, timeScale) {
       ctx.alive()
       const now = Date.now()
       if (now - last >= setting('trade/quiet-ms') * timeScale || now >= deadline) return
-      await sleepMs(setting('prim/poll-ms') * timeScale)
+      await sleepMs(setting('trade/poll-ms') * timeScale)
     }
   } finally {
     bot.inventory.removeListener('updateSlot', touch)

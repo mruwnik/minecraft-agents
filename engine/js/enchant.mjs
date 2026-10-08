@@ -47,7 +47,7 @@ async function offersArrive (win, timeScale) {
   const deadline = Date.now() + setting('enchant/offers-wait-ms') * timeScale
   while (!win.enchantments.every(e => e.level >= 0)) {
     if (Date.now() >= deadline) return false
-    await sleepMs(setting('prim/poll-ms') * timeScale)
+    await sleepMs(setting('enchant/poll-ms') * timeScale)
   }
   return true
 }
@@ -84,7 +84,7 @@ function watchQuiet (bot, timeScale) {
         ctx.alive()
         const now = Date.now()
         if (now - last >= setting('enchant/quiet-ms') * timeScale || now >= deadline) return
-        await sleepMs(setting('prim/poll-ms') * timeScale)
+        await sleepMs(setting('enchant/poll-ms') * timeScale)
       }
     },
     stop () {

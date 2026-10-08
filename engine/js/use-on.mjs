@@ -57,7 +57,7 @@ export function createUseOn ({ act, getBot, inventory, eye, lookNow, timeScale, 
       const stack = item === undefined ? null : inventory().find(i => i.name === item)
       if (item !== undefined && !stack) return refuse('no-item')
       const distance = Math.hypot(eye().x - (p.x + 0.5), eye().y - (p.y + 0.5), eye().z - (p.z + 0.5))
-      if (distance > setting('prim/reach')) return refuse('unreachable', { reason: 'too-far', distance: Math.round(distance * 100) / 100 })
+      if (distance > setting('use-on/reach')) return refuse('unreachable', { reason: 'too-far', distance: Math.round(distance * 100) / 100 })
       // noLine comes from engine.senses: the eye's ray reaches no part of the target before another block's shape.
       if (a.noLine) return refuse('unreachable', { reason: 'no-line' })
       if (stack) {
@@ -79,7 +79,7 @@ export function createUseOn ({ act, getBot, inventory, eye, lookNow, timeScale, 
         ctx.alive()
         const deadline = Date.now() + setting('use-on/wait-ms') * timeScale
         while (!windowOpened() && !changed() && Date.now() < deadline) {
-          await sleepMs(setting('prim/poll-ms') * timeScale)
+          await sleepMs(setting('use-on/poll-ms') * timeScale)
           ctx.alive()
         }
         // The block update can arrive before the inventory slot update; give the count a moment to follow.
@@ -88,7 +88,7 @@ export function createUseOn ({ act, getBot, inventory, eye, lookNow, timeScale, 
         const countCanDrop = !(bot.registry?.itemsByName?.[item]?.maxDurability > 0)
         const consumeDeadline = Date.now() + setting('use-on/consume-wait-ms') * timeScale
         while (!windowOpened() && item !== undefined && countCanDrop && !same(now(), before) && !countMoved() && Date.now() < consumeDeadline) {
-          await sleepMs(setting('prim/poll-ms') * timeScale)
+          await sleepMs(setting('use-on/poll-ms') * timeScale)
           ctx.alive()
         }
         if (windowOpened()) {
