@@ -341,7 +341,7 @@
           (if (pillar-problem c) :continue (await (pillar-round! c (tree-logs c radius)))))
 
       :else
-      (let [logs (tree-logs c radius)]
+      (let [logs (await (sense/decide! c ::logs #(tree-logs c radius) {:retry? empty?}))]
         (if (empty? logs)
           (do (ctx/result! c {:base (:base (ctx/mem c))})
               :done)

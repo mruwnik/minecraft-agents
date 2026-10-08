@@ -197,3 +197,25 @@
           (await (tu/child-outcome (:eng s) 'jobs.forestry.fell-tree {:radius 10} 200))
           (is (= "air" (h/block-at p 6 64 0)) "the bottom log is dug")
           (is (= "cobblestone" (h/block-at p 6 63 0)) "the lava under it is sealed"))))))
+
+(defn ^:async fell-top-unseen
+  "fell over a world where the top log (6,71,0) reads as never seen until the body looks at it."
+  [spec args n]
+  (let [s (fm/start spec {})
+        p (:p s)
+        sensed (.-sensedAt p)
+        block-at (.-seenBlockAt p)
+        top? (fn [pos] (and (= 6 (.-x pos)) (= 71 (.-y pos)) (= 0 (.-z pos))))
+        looked? #(boolean (some (fn [call] (and (= "look" (.-name call)) (= 71 (js/Math.floor (.-y (.-pos (.-args call))))))) (.-calls (.-world p))))
+        hidden? (fn [pos] (and (top? pos) (not (looked?))))]
+    (eye-reach! p)
+    (aset p "sensedAt" (fn [pos] (if (hidden? pos) #js {:unknown true} (.call sensed p pos))))
+    (aset p "seenBlockAt" (fn [pos] (if (hidden? pos) #js {:unknown true :pos pos} (.call block-at p pos))))
+    (assoc s :out (await (tu/child-outcome (:eng s) 'jobs.forestry.fell-tree args n)))))
+
+(deftest a-top-log-never-seen-is-looked-at-before-the-tree-counts-as-felled
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (fell-top-unseen tall {:radius 10} 300))]
+          (is (contains? (set (dug-ys p)) 71) "the top log was dug"))))))
