@@ -410,6 +410,15 @@
           (is (= 2 (:walks r)))
           (is (= :arrived (:status (:done r)))))))))
 
+(deftest a-danger-replan-whose-search-is-unfinished-stops-the-walk-and-never-walks-the-old-plan-on
+  ;; live (Juniper #53): an 80k-node route home outgrew the replan budget, the old plan was walked on past the danger
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [r (await (follow-with :danger "searching" "searching" []))]
+          (is (= 1 (:walks r)) "no second walk of the old plan")
+          (is (= :searching (:status (:done r))) "the caller searches on from where the body stands"))))))
+
 ;; ---------------------------------------------------------------- the health stop
 
 (def drop-ahead

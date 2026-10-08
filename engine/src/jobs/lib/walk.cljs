@@ -349,7 +349,8 @@
   opts: :plan-fn (fn [walls]) -> a plan-walk! result (or a promise of one: plan-walk!) from where the body stands now, the
   cells {:x :y :z} read as walls;
   :walk-fn (fn [steps watch]) -> [done ms] (walk! or jobs.lib.pass/walk!); :to the goal cell; :policy for no-walk;
-  :dangers true: a danger newly sensed near the way ahead is planned round once (watch-stop);
+  :dangers true: a danger newly sensed near the way ahead is planned round once (watch-stop); a search that has not
+  finished ends the call with its :searching no-walk (the old plan is never walked on past the danger);
   a :health stop (the damage still planned is over what the body may spend now) plans again and walks the new plan, or
   ends the call with its no-walk when that plan is not walkable (the caller decides: go-to heals or goes over its budget);
   :announce! (fn [:replan data]) per replan, data {:why :ms :kept :replans :at :text}.
@@ -359,6 +360,7 @@
   (let [known (when dangers (atom #{}))
         walkable? (fn [pl] (nil? (wplan/no-walk pl 0 policy)))
         proved-none? (fn [pl] (contains? #{:goal-cut-off :goal-enclosed} (:reason (wplan/no-walk pl 0 policy))))
+        searching? (fn [pl] (= :searching (:status (wplan/no-walk pl 0 policy))))
         cut-length (fn [steps k] (path-length (subvec steps 0 (min (count steps) (max 1 k)))))]
     (loop [plan plan steps (:steps plan) n 0 ms 0 walked 0 damage 0]
       (let [watch (when (< n wwatch/max-watch-replans) (wwatch/watch-of c plan known))
@@ -397,10 +399,11 @@
           (let [t (js/performance.now)
                 fresh (await (plan-fn []))
                 plan-ms (- (js/performance.now) t)]
-            (tell! :danger plan-ms (not (walkable? fresh)))
+            (tell! :danger plan-ms (not (or (walkable? fresh) (searching? fresh))))
             (cond
               (walkable? fresh) (recur (assoc fresh :ms plan-ms) (:steps fresh) (inc n) ms walked' damage')
-              (proved-none? fresh) (finish (wplan/no-walk fresh 0 policy) fresh walked')
+              ;; an unfinished search: the old plan runs past the danger, so the caller searches on from here
+              (or (proved-none? fresh) (searching? fresh)) (finish (wplan/no-walk fresh 0 policy) fresh walked')
               :else (recur (assoc plan :ms plan-ms) (subvec steps (max 0 (dec k))) (inc n) ms walked' kept-damage)))
 
           (= :replan (:status done))

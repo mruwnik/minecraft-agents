@@ -211,7 +211,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     let snapshot = inventoryNow()
     let ticks = 0
     // What the body stands in, as jobs.lib.cost.value/lethal-cause? names it. The death message of the server is not used:
-    // it arrives in a later packet than the death event. Unknown (a mob, a fall, hunger) leaves the cause out.
+    // it arrives in a later packet than the death event; the lethal hit's damage packet names the rest (killerNow).
     const causeNow = () => {
       const pos = target.entity.position
       if (pos.y < -64) return { cause: 'void' }
@@ -234,12 +234,21 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       }
     }
     target._client?.on('damage_event', onDamage)
+    let lastHurt = null // the fields of the last health loss's damage packet, for a death that follows it
     const hurtNow = () => {
       const last = damage
       damage = null
       if (!last || Date.now() - last.at >= setting('prim/damage-fresh-ms')) return {}
+      lastHurt = last
       const { at, ...fields } = last
       return fields
+    }
+    // The died event's cause when the block gives none: the attacker of the lethal hit, else its damage type.
+    const killerNow = () => {
+      if (!lastHurt || Date.now() - lastHurt.at >= setting('prim/damage-fresh-ms')) return {}
+      const { at, ...fields } = lastHurt
+      const cause = fields.attacker?.name ?? fields.damageType?.replace(/^minecraft:/, '')
+      return { ...fields, ...(cause && { cause }) }
     }
     // raw levels; engine.senses turns them into weather-changed when raining or thundering flips
     const levelsNow = () => ({ rain: target.rainState ?? 0, thunder: target.thunderState ?? 0 })
@@ -258,6 +267,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
         dimension: target.game?.dimension,
         inventory: inventoryNow().length > 0 ? inventoryNow() : snapshot,
         experience: { level: target.experience?.level ?? 0, points: target.experience?.points ?? 0 },
+        ...killerNow(),
         ...causeNow()
       }) },
       respawn: () => { stopWalking(target); respawning = true },
