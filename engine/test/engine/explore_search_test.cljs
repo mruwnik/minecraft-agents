@@ -325,6 +325,19 @@
           (is (= :distance (:why e)) (pr-str e))
           (is (= #{[-16 64 -16] [0 64 -16] [16 64 -16]} (set (map :pos (get-in e [:coverage :failed])))) "the held leg is walked later, after an arrival"))))))
 
+;; only held legs left (all candidates lie the way the one failed leg went): they are tried, so the search ends stuck
+;; only after its failures in a row
+(deftest only-held-legs-left-are-tried-after-one-failed-leg
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [marks (for [[x z] [[16 -16] [16 0] [16 16] [0 16] [-16 16]]]
+                      {:kind :searched :what ["diamond_block"] :pos [x 64 z] :r 3 :by "Other" :t 1 :until 9e15})
+              s (await (search! {:target "diamond_block" :max-distance 23} {:unreachable ["-16,64,-16"]} 400 #(write-other! % "Other" marks)))
+              e (event-of s :search.not-found)]
+          (is (= :distance (:why e)) (pr-str e))
+          (is (some #(= {:x 0 :z -16} (select-keys % [:x :z])) (walks s)) "the held legs are walked after the one failure"))))))
+
 (deftest outward-walks-along-the-heading
   (async done
     (tu/run-async done
