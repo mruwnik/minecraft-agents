@@ -468,7 +468,8 @@ round, reflex id, action-call id), `:data`, `:message`, `:attention` (omitted/`:
 `:request-id`. Required attention requests stay in saved state until explicitly resolved. The log keeps 64 MiB across
 `events.edn` and `.1` to `.3` (setting `:engine.events/max-bytes`, min 1024); a cursor is `{:stream-id :seq}` and a
 rotated-away cursor gets an explicit gap. Start-up parses only each segment's first and last record and the
-recent tail, so its memory does not grow with the log.
+recent tail, so its memory does not grow with the log. Only the newest 256 events (at most 256 KiB; settings
+`:engine.events/recent-count`, `recent-bytes`) stay in memory; an older cursor reads the files.
 
 A job that ends with a result of `:status :stopped` gets a `:stopped` warn event; its text is the result's `:text` (clipped to 200 chars), else `stopped: <reason>`.
 

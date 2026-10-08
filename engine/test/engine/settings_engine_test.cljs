@@ -20,7 +20,7 @@
   "The values the constants had before they became settings."
   {:engine.lease/max-ms 10000 :engine.lease/max-idle-s 3600 :engine.lease/default-release-ms 1000
    :engine.lease/default-idle-ms 15000
-   :engine.events/max-bytes 67108864 :engine.events/recent-count 2048 :engine.events/recent-bytes 4194304
+   :engine.events/max-bytes 67108864 :engine.events/recent-count 256 :engine.events/recent-bytes 262144
    :engine.events/default-page-size 256 :engine.events/max-page-size 2000
    :engine.event-api/max-body-bytes 16384 :engine.event-api/max-limit 1000 :engine.event-api/status-job-limit 4
    :engine.event-api/attention-limit 4 :engine.event-api/catalog-page-limit 20

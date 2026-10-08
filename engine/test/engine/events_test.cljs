@@ -212,6 +212,17 @@
       (is (= (:seq (last (:recent @first-run))) (:seq (last recent))))
       (is (pos? (:recent-byte-count @restarted))))))
 
+(deftest the-recent-buffer-stays-small-and-lagging-readers-read-disk
+  (let [file (path/join (tu/tmp-dir) "events.edn")
+        stream (events/make {:file file :generation-id "g"})
+        sid (:stream-id (events/cursor stream))]
+    (emit-n! stream 1000)
+    (is (<= (count (:recent @stream)) 256) "a few hundred events in memory, not thousands")
+    (is (<= (:recent-byte-count @stream) (* 256 1024)))
+    (let [page (events/read-after stream {:stream-id sid :after 100 :limit 2000})]
+      (is (false? (:gap? page)))
+      (is (= (range 101 1001) (mapv :seq (:events page)))))))
+
 (deftest make-seeds-a-short-file-completely
   (let [file (path/join (tu/tmp-dir) "events.edn")]
     (emit-n! (events/make {:file file :generation-id "g"}) 12)
