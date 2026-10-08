@@ -5,6 +5,7 @@
   (:require ["minecraft-data" :as minecraft-data]
             [clojure.set :as set]
             [jobs.lib.access.rules :as rules]
+            [jobs.lib.aim :as aim]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.dig-look :as look]
@@ -110,9 +111,11 @@
 
 (defn in-reach?
   "Whether the block at pos can be dug or placed from where the body stands (eye to cell centre, within
-  forestry/dig-reach, a margin under the primitive's 4.5)."
-  [c pos]
-  (<= (u/eye-dist (u/self-pos c) pos) forestry/dig-reach))
+  forestry/dig-reach, a margin under the primitive's 4.5); with see? also whether the eye sees it (jobs.lib.aim: nothing
+  seen solid in the way), as a player must to aim at it."
+  [c pos & [see?]]
+  (and (<= (u/eye-dist (u/self-pos c) pos) forestry/dig-reach)
+       (or (not see?) (aim/body-sees? c (if (vector? pos) pos (u/cell-vec pos))))))
 
 (defn unreachable-wait
   "The wait reason {:reason :unreachable :pos :why} for the failed walk remembered in memory m, while the body still
@@ -173,13 +176,14 @@
 
 (defn ^:async walk!
   "The walk to pos: one go-to call (child :walk, range 3), the whole walk. Resolves to :arrived (in reach), :continue
-  (go-to waits on the world) or {:unreachable why} (it gave up, or arrived with the block still out of reach)."
-  [c pos]
-  (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos pos :range 3 :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))
+  (go-to waits on the world) or {:unreachable why} (it gave up, or arrived with the block still out of reach). With see?
+  the walk ends only where the eye sees the block (go-to :see)."
+  [c pos & [see?]]
+  (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos pos :range 3 :see (boolean see?) :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))
         res (ctx/child-result c :walk)]
     (cond
       (= :continue r) :continue
-      (and (= :done r) (:arrived res) (in-reach? c pos)) :arrived
+      (and (= :done r) (:arrived res) (in-reach? c pos see?)) :arrived
       :else {:unreachable (cond (not= :done r) :declined
                                 (:arrived res) :out-of-reach
                                 :else (:why res :unreachable))})))

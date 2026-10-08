@@ -66,6 +66,7 @@
    :collect {:doc "pick up what the dig dropped (needs a free slot)" :spec boolean? :default true}
    :need-drop {:doc "wait :no-tool when no carried tool harvests the block; false digs anyway and the drop is lost (clearing)" :spec boolean? :default true}
    :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent water, :lava-adjacent seen lava, :falling-block; :under-feet digs a block under the feet from on top instead of from beside)" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block :under-feet}) :default #{}}
+   :see {:doc "true: dig only from where the eye sees the block (jobs.lib.aim: nothing seen solid in the way, as a player aims), walking to such a stand first (go-to :see; none: :unreachable :out-of-sight); false: within reach is enough, the game lets a dig pass through blocks" :spec boolean? :default false}
    :on-lava {:doc ":seal: seen lava beside the dug cell is filled with a building block (jobs.lib.lava); :leave: the caller deals with it (stair, tunnel)" :spec #{:seal :leave} :default :seal}
    :on-fluid {:doc ":wait: a block beside a fluid that :accept does not take waits :hazard; :fail: the job ends at once, reason :fluid-adjacent, with a :hint" :spec #{:wait :fail} :default :wait}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :spec a/name? :default nil}
@@ -274,8 +275,8 @@
         (b/fluids block) (stop! c {:dug false :pos pos :block block :reason :fluid})
         tool :declined
         (>= steps (max-steps)) :continue
-        (not (b/in-reach? c pos))
-        (let [w (await (b/walk! c pos))]
+        (not (b/in-reach? c pos (:see (:args c))))
+        (let [w (await (b/walk! c pos (:see (:args c))))]
           (cond
             (= :continue w) :continue
             (= :arrived w) (recur fails (inc steps))

@@ -5,6 +5,7 @@
             [engine.memory :as mem]
             [engine.settings :as settings]
             [jobs.lib.access :as access]
+            [jobs.lib.aim :as aim]
             [jobs.lib.access.zones :as zones]
             [jobs.lib.combat :as combat]
             [jobs.lib.reach :as reach]
@@ -34,7 +35,8 @@
 
 (def doc
   "Walk to :pos ([x y z] or {:x :y :z}, fractions floored to the cell) until the body's cell is within :range cells of
-  it (a sphere; range 0: in that cell, 1: next to it). :pos [x z] or {:x :z} (no y) walks to the seen ground of that
+  it (a sphere; range 0: in that cell, 1: next to it); with :see a cell in it counts only where the eye sees the block at
+  :pos (jobs.lib.aim), and a search that finds no such stand gives up :why :out-of-sight. :pos [x z] or {:x :z} (no y) walks to the seen ground of that
   column nearest the body's feet (unseen: first to within 8 of a height estimated from the seen columns around it, then looks); a y the planner finds no standable cell within :range of, or under :unknown a y seen in the ground with no seen stand within :range (asked before the first walk, pre-aim!), is re-aimed once to its column's
   ground nearest it, at most :y-slack blocks off and never past a solid (info goal-resolved {:goal :to}); see jobs.movement.go-to.column. A
   column whose ground is not made out is looked at after a fruitless walk (at most 3 a call). A cell over a short floor (farmland, a path, a bottom slab) stands for that
@@ -117,6 +119,7 @@
   {:pos {:doc "target position [x y z] or {:x :y :z}; [x z] or {:x :z}: the ground of that column nearest the body's feet" :spec column/pos-or-column? :default nil}
    :place {:doc "name of a place in body memory (:home, :bed, ...) to walk to instead of :pos" :spec (a/or-of keyword? string?) :default nil}
    :range {:doc "how close counts as there: arrive within this many cells of :pos (a sphere)" :spec (a/num-in 0 nil) :default 1}
+   :see {:doc "true: a cell within :range counts as there only when the eye there sees the block at :pos (jobs.lib.aim: a clear line over seen cells to its centre or a face), as a body that digs, places or uses it needs; a [x z] column goal ignores it" :spec boolean? :default false}
    :y-slack {:doc "blocks a :pos y with no standable cell within :range may be re-aimed up or down its column to the ground; 0: never" :spec (a/int-in 0 nil) :default 4}
    :doors {:doc "what to do at shut doors, gates and trapdoors: :shut (open, pass, shut again what the walk opened), :leave-open (open and pass), :never (walls)"
            :spec #{:shut :leave-open :never} :default :shut}
@@ -250,10 +253,27 @@
   [c]
   (fn [cell] (foreign? (known/zones c) (ctx/self-name c) cell)))
 
+(defn see-cell
+  "The cell [x y z] the eye must see under :see: the :pos arg's block (not the cell the walk aims at, which may stand for
+  it: a crop's farmland), else nil (no :see, a column or a place)."
+  [c]
+  (when (:see (:args c))
+    (let [{:keys [x y z]} (:pos (places/parse-pos (:pos (:args c))))]
+      (when (and x y z) [x y z]))))
+
 (defn here?
-  "Whether the body is within range of pos, by its position or by the cell it stands on."
+  "Whether the body is within range of pos, by its position or by the cell it stands on, and under :see sees pos's block."
   [c pos range]
-  (or (u/within? (u/self-pos c) pos range) (u/within? (reach/standing-cell (:primitives c)) pos range)))
+  (and (or (u/within? (u/self-pos c) pos range) (u/within? (reach/standing-cell (:primitives c)) pos range))
+       (if-let [cell (see-cell c)] (aim/body-sees? c cell) true)))
+
+(defn sight-end
+  "A fruitless round's result as go-to gives it up under :see: a search that ran out of land (:exhausted) found no stand
+  in range that sees the block: :out-of-sight."
+  [c pos result]
+  (if (and (see-cell c) (= :exhausted (some-> (:reason result) keyword)))
+    (assoc result :reason :out-of-sight)
+    result))
 
 (defn fault-cells
   "The cells a walk that failed at the walker (:stuck at :target, :off-plan at :at) says it cannot pass, [x y z] each.
@@ -545,7 +565,7 @@
       :else
       (let [_ (forget-known-land! c)
             opts (assoc (walk-opts c doors) :progress (empty? (:frontier-best (ctx/mem c))))
-            {walked :result status :status to :to} (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos)) pos range opts))
+            {walked :result status :status to :to} (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos)) pos range (assoc opts :see-cell (see-cell c))))
             fetched (when (= :no-torch (:status walked)) (await (fetch-torches! c)))
             aided? (when (and (not fetched) (not= "arrived" status) (torch/torch-aid? c walked)) (await (torch/hold-torch! c)))
             looked? (when (and (not aided?) (= :air (:reason walked))) (await (look-at-goal-air! c pos)))
@@ -626,7 +646,7 @@
               :again
               (let [unloaded? (wsearch/goal-unloaded? (.-snapshot pw) (mapv #(js/Math.floor (% pos)) [:x :y :z]))
                     result (dark-end c result)
-                    ended (if (esc/escalate? c result) result (unloaded-end result unloaded?))]
+                    ended (if (esc/escalate? c result) result (sight-end c pos (unloaded-end result unloaded?)))]
                 (await (esc/give-up-or-escalate! c pos tries status ended))))))))))))
 
 (defn start-attempt!

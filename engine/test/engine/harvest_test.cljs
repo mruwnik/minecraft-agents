@@ -11,7 +11,8 @@
             [engine.test-util :as tu :refer [child-outcome]]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
-            [jobs.farm.harvest :as harvest]))
+            [jobs.farm.harvest :as harvest]
+            [jobs.lib.aim :as aim]))
 
 (def clock
   "One clock for every engine of a test run; each tick moves it on, so a backoff pause ends."
@@ -193,6 +194,32 @@
           (is (= (set (:bare result)) (set (map #(into {} %) (:cells warn)))))
           (is (= 1 (count (events-of seen :harvest.bare))) "one event, the event stream carries no severity")
           (is (= [] (:list (core/state eng)))))))))
+
+(deftest a-body-in-a-pit-under-the-field-cuts-from-where-it-sees-the-crops
+  ;; the live case: a body in a hole beside the field, its eye under the farmland, had the crops within eye reach and dug
+  ;; them through the ground; the drops lay out of its sight and were lost. Ground stone to y 63 (the farmland's level),
+  ;; a pit at x 2 z 1 (feet y 62, its eye under the ground's top) with a step out at x 1 (feet y 63).
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:blocks (-> (tu/box -2 57 -3 10 63 6 "stone")
+                                 (dissoc "2,62,1" "2,63,1" "1,63,1")
+                                 (merge (field "wheat" 7 (range 4 7) (range 0 3))))
+                     :ages (ages 7 (range 4 7) (range 0 3))
+                     :drops wheat-drops
+                     :self {:pos {:x 2.5 :y 62 :z 1.5}}}
+              {:keys [eng p]} (start {:world world})
+              hidden (atom [])
+              _ (.override (.-world p) "dig" (fn [token ^js a impl]
+                                               (let [{:keys [x y z]} (u/self-pos {:primitives p})
+                                                     cell [(.-x (.-pos a)) (.-y (.-pos a)) (.-z (.-pos a))]]
+                                                 (when-not (aim/sees-cell? (aim/seen-kind-at p) (aim/eye-at {:x x :y y :z z}) cell)
+                                                   (swap! hidden conj cell))
+                                                 (impl token a))))
+              result (await (child-outcome eng job {} 200))]
+          (is (= 9 (:cut result)) (pr-str result))
+          (is (= [] @hidden) "no crop dug from where the eye did not see it")
+          (is (= {"wheat" 9} (inv p)) "every drop picked up"))))))
 
 (deftest unreachable-crops-are-given-up-on
   (async done

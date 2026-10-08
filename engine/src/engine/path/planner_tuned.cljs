@@ -23,6 +23,8 @@
    is not read then.
 
    Options:
+   - options.goalSeen (fn x y z): a cell in the goal's area is the goal only when it answers true (go-to's :see: the
+     eye there sees the goal block). The goal flood and goal-not-standable still judge the whole area.
    - options.avoid {kinds, cells, factor}: a search for another path (see avoidCost).
    - options.limits {kinds, gap, corner}: what the walker can do. Without it the search is unrestricted.
        kinds: bits of the move kinds never planned.
@@ -406,7 +408,9 @@
      ;; move-unk move-light lights dark-refused unseen-refused dark-best-x dark-best-y dark-best-z dark-best-d
      0 0 (js/Uint8Array. cap) false false 0 0 0 js/Infinity
      ;; rivals
-     (js/Int32Array. cap))))
+     (js/Int32Array. cap)
+     ;; goal-seen
+     (.-goalSeen options))))
 
 ;; the body's hitbox reaches this far from its centre in x and z
 (def ^:const HITBOX-HALF 0.3)

@@ -250,6 +250,36 @@
           (is (keyword? (:why r)))
           (is (empty? (calls (:p env) "dig"))))))))
 
+;; Stone y 60-64 (feet y 65 on top), a pit at x 3 z 1 two deep (feet y 63) with a step out at x 2. The dirt at (5 65 0)
+;; is within eye reach of the pit floor, but the surface stone is between the eye and every face of it (the farm case:
+;; a body in a hole under a field dug crops through the farmland and never saw the drops).
+(def pit-blocks
+  (-> (tu/box -2 60 -3 12 64 3 "stone")
+      (dissoc "3,63,1" "3,64,1" "2,64,1")
+      (assoc "5,65,0" "dirt")))
+
+(def in-pit {:pos {:x 3.5 :y 63 :z 1.5}})
+
+(deftest with-see-a-block-hidden-from-where-the-body-stands-is-dug-from-where-it-sees-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self in-pit :blocks pit-blocks})
+              result (await (child-outcome eng job {:pos [5 65 0] :see true} 10))
+              y (.-y (.-pos (.self p)))]
+          (is (= {:dug true :collected 1} (select-keys result [:dug :collected])) (pr-str result))
+          (is (>= y 64) (str "walked out of the pit first, feet y " y)))))))
+
+(deftest with-see-a-block-no-stand-sees-waits-unreachable-out-of-sight
+  ;; the dirt is buried under the surface: no stand within the walk's range sees it, so it is not dug through the stone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (setup {:self in-pit :blocks (assoc pit-blocks "5,62,0" "dirt")})
+              r (await (waiting-after env (list job {:pos [5 62 0] :see true}) 15))]
+          (is (= {:reason :unreachable :why :out-of-sight} (select-keys r [:reason :why])) (pr-str r))
+          (is (empty? (calls (:p env) "dig"))))))))
+
 (defn failing-walks
   "env with jobs.movement.go-to replaced by a walk that never arrives (why :no-path); walks counts its calls."
   [env walks]

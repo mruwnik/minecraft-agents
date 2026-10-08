@@ -153,4 +153,6 @@
    ^:mutable move-unk ^:mutable move-light ^:mutable lights ^:mutable ^boolean dark-refused ^:mutable ^boolean unseen-refused
    ^:mutable dark-best-x ^:mutable dark-best-y ^:mutable dark-best-z ^:mutable dark-best-d
    ;; each node's older record of the same key (a rival, see consider) plus 1, 0 for none: the records of one cell, newest first
-   ^:mutable rivals])
+   ^:mutable rivals
+   ;; options.goalSeen (fn x y z; nil: every cell): a cell in the goal's area is reached only when it answers true
+   ^js goal-seen])

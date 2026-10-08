@@ -126,7 +126,8 @@
             z (aget (.-zs s) i)
             deadly ^boolean (.endsOnMagma s x y z (aget (.-hs s) i))]
         (set! (.-expanded s) (inc (.-expanded s)))
-        (if (and (not deadly) ^boolean (.reached s x y z) (or (not ^boolean (.-to-air s)) ^boolean (.breathes s x y z)))
+        (if (and (not deadly) ^boolean (.reached s x y z) (or (not ^boolean (.-to-air s)) ^boolean (.breathes s x y z))
+                 (or (nil? (.-goal-seen s)) (true? ((.-goal-seen s) x y z))))
           (do (set! (.-goal-node s) i)
               (.finish s nil))
           (let [d (.distanceTo s x z)]

@@ -89,10 +89,12 @@
   waits) would make every round search afresh, so a search that needs more than one round never ends; only whether
   the head was under water counts. A search gone on with plans with the air it began with, so go-on? bounds it
   (air-drift). Likewise a drowning body's hp (:health, set only with the head under) and what follows from it
-  (:drown-prices, :damage-weight, :damage-budget, :max-drop) change at every hit: go-on? bounds them (health-drift)."
+  (:drown-prices, :damage-weight, :damage-budget, :max-drop) change at every hit: go-on? bounds them (health-drift).
+  A :goal-seen fn (go-to's :see, new each round, the goal is in the key) counts only as being there."
   [policy]
-  (cond-> (dissoc policy :air-seen :air-used)
+  (cond-> (dissoc policy :air-seen :air-used :goal-seen)
     (contains? policy :air-used) (assoc :under true)
+    (contains? policy :goal-seen) (assoc :goal-seen true)
     (contains? policy :health) (dissoc :health :drown-prices :damage-weight :damage-budget :max-drop)))
 
 (def air-drift
