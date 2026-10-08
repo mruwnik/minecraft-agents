@@ -94,3 +94,15 @@
           (core/submit! eng '(jobs.survival.set-spawn) {})
           (await (run-until-empty eng 6))
           (is (= 1 (count (calls p "useOn")))))))))
+
+(deftest set-spawn-records-the-spawn-bed-when-a-spawn-set-near-the-bed-is-known
+  (async done
+    (run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup bed-world)]
+          (know-bed! eng bed)
+          (mem/write! (:store eng) :spawn-set {:pos bed} policy)
+          (core/submit! eng '(jobs.survival.set-spawn) {})
+          (await (run-until-empty eng 6))
+          (is (= 0 (count (calls p "useOn"))))
+          (is (= [{:pos bed}] (entries eng :spawn-bed))))))))

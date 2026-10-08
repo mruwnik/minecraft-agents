@@ -33,7 +33,8 @@
   (let [bed (bed-of c)]
     (cond
       (nil? bed) (do (ctx/result! c {:status :stopped :reason :no-bed}) :done)
-      (sh/spawn-known? (ctx/view c) bed (ctx/now c)) (do (ctx/result! c {:status :completed :spawn bed}) :done)
+      (sh/spawn-known? (ctx/view c) bed (ctx/now c)) (do (ctx/remember! c :spawn-bed {:pos bed} sh/spawn-bed-policy)
+                                                          (ctx/result! c {:status :completed :spawn bed}) :done)
       :else
       (let [w (await (ctx/call-child c :use 'jobs.blocks.use-on {:pos bed}))
             r (ctx/child-result c :use)]

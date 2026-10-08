@@ -16,6 +16,8 @@
 (a/defargs settings
   {::seen-bed-radius {:default 6 :spec (a/int-in 1 nil)
                       :doc "Blocks (square) within which a bed in the body's room counts as seen."}
+   ::spawn-near {:default 3 :spec (a/int-in 0 nil)
+                 :doc "Blocks within which a :spawn-set or :spawn-bed entry counts as the respawn point of a bed (either half)."}
    ::room-roof-height {:default 16 :spec (a/int-in 1 nil)
                        :doc "How high above the feet a roof may be and still make the closed room around the body a shelter."}
    ::door-failed-ms {:default 600000 :spec (a/int-in 0 nil)
@@ -25,6 +27,7 @@
 
 (defn seen-bed-radius [] (settings/get settings ::seen-bed-radius))
 (defn default-player-radius [] (settings/get settings ::default-player-radius))
+(defn spawn-near [] (settings/get settings ::spawn-near))
 (defn room-roof-height [] (settings/get settings ::room-roof-height))
 (defn door-failed-ms [] (settings/get settings ::door-failed-ms))
 
@@ -236,10 +239,6 @@
                 (empty? (mem/entries view :sleep-failed))
                 (nil? (bed-to-use p view radius permit?)))))
 
-(def spawn-near
-  "A :spawn-set entry within this many blocks of a bed is that bed's respawn point."
-  3)
-
 (def spawn-bed-policy {:cap 1 :ttl :forever})
 
 (defn spawn-bed-live
@@ -250,11 +249,16 @@
     (when-not (and e reset (> (:t reset) (:t e)))
       e)))
 
+(defn spawn-bed-at?
+  "Whether the live :spawn-bed is within spawn-near of pos (the bed's other half counts)."
+  [view pos]
+  (boolean (some-> (:pos (:data (spawn-bed-live view))) (u/dist pos) (<= (spawn-near)))))
+
 (defn spawn-known?
   "Whether the body has seen the respawn point set at bed since t0, or earlier and not reset since (the server says it
   only when the point changes, so a bed slept in before is silent; :spawn-bed outlives the :spawn-set entry)."
   [view bed t0]
-  (let [near? #(some-> (:pos (:data %)) (u/dist bed) (<= spawn-near))
+  (let [near? #(some-> (:pos (:data %)) (u/dist bed) (<= (spawn-near)))
         reset-t (:t (mem/latest view :spawn-reset))
         current? #(or (>= (:t %) t0) (nil? reset-t) (> (:t %) reset-t))]
     (boolean (or (some #(and (current? %) (or (>= (:t %) t0) (near? %))) (mem/entries view :spawn-set))
@@ -267,7 +271,7 @@
   (when-not (night? p)
     (let [pos (:pos (:data (mem/latest view :bed-placed)))]
       (when (and pos (.endsWith (or (u/seen-name p pos) "") "_bed")
-                 (not= pos (:pos (:data (spawn-bed-live view)))))
+                 (not (spawn-bed-at? view pos)))
         pos))))
 
 (defn bed

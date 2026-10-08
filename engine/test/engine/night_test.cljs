@@ -125,6 +125,12 @@
                                 (write! eng :bed-placed {:pos {:x 3 :y 64 :z 0}})
                                 (write! eng :spawn-bed {:pos {:x 3 :y 64 :z 0}})))))))
 
+(deftest night-does-not-hold-for-a-placed-bed-whose-other-half-is-the-spawn-bed
+  (let [world {:time noon :blocks {"3,64,0" "red_bed"}}]
+    (is (false? (holds? world (fn [eng]
+                                (write! eng :bed-placed {:pos {:x 3 :y 64 :z 0}})
+                                (write! eng :spawn-bed {:pos {:x 4 :y 64 :z 0}})))))))
+
 (deftest a-muted-night-never-fires
   (async done
     (tu/run-async done
