@@ -750,6 +750,24 @@
           (is (nil? (get (inv s) "crafting_table")) "a stone cell beside was dug by hand and the table put in it")
           (is (= 1 (count (tables s)))))))))
 
+(def stair-pocket
+  "Stone round the body (x -1..1, z -1..1, y 63..66) but the 1-wide stair cells behind it, one level up: air at (-1,65..66,0)."
+  (into {}
+        (for [x [-1 0 1] z [-1 0 1] y [63 64 65 66]
+              :when (not (or (and (zero? x) (zero? z) (#{64 65} y))
+                             (and (= -1 x) (zero? z) (#{65 66} y))))]
+          [(str x "," y "," z) "stone"])))
+
+(deftest get-tool-in-a-stair-puts-the-table-in-the-cell-behind-one-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (update (bare [{:name "oak_planks" :count 3} {:name "stick" :count 2} {:name "crafting_table" :count 1}])
+                               :blocks merge stair-pocket) [own-zone])]
+          (await (get-tool! s {:kind "pickaxe"} 80))
+          (is (= 1 (get (inv s) "wooden_pickaxe")))
+          (is (= [[-1 65 0]] (map first (tables s))) "the table went in the stair cell behind"))))))
+
 (deftest get-tool-makes-a-table-when-the-seen-one-is-unreachable
   (async done
     (tu/run-async done

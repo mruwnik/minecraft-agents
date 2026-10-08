@@ -62,12 +62,14 @@
 (def table-offsets [[1 0] [-1 0] [0 1] [0 -1] [1 1] [-1 1] [1 -1] [-1 -1]])
 
 (defn spot-cells
-  "The candidate table cells beside the body: [pos floor-pos] for each offset."
+  "The candidate table cells beside the body: [pos floor-pos] for each offset at its level, then (a 1-wide stair has
+  no free cell at its level) each one level up. dig-spot-cells keeps to the level ones."
   [c]
   (let [{:keys [x y z]} (u/self-pos c)
         [x y z] (mapv #(js/Math.floor %) [x y z])]
-    (for [[dx dz] table-offsets
-          :let [pos {:x (+ x dx) :y y :z (+ z dz)}]]
+    (for [dy [0 1]
+          [dx dz] table-offsets
+          :let [pos {:x (+ x dx) :y (+ y dy) :z (+ z dz)}]]
       [pos (update pos :y dec)])))
 
 (defn table-spot
@@ -103,6 +105,7 @@
         solid? (fn [n] (and n (not (b/air n)) (not (b/fluids n)) (not (b/clearable n))))
         tried (:spot-dug (ctx/mem c) #{})]
     (->> (spot-cells c)
+         (filter (fn [[pos _]] (= (:y pos) (js/Math.floor (:y (u/self-pos c))))))
          (keep (fn [[pos floor]]
                  (let [n (u/seen-name p pos)
                        f (u/seen-name p floor)]
