@@ -5,6 +5,7 @@
             [jobs.farm.permit :as permit]
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as blocks]
+            [jobs.lib.cost :as cost]
             [jobs.lib.crops :as crops]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.gate :as gate]
@@ -23,7 +24,8 @@
   One call plants the bare cells within :reach, walking to the nearest when none is, until the field is done. A cell whose place is refused or
   unreachable, or whose walk is blocked, three times is skipped (warn plant.gave-up).
   Result: {:planted n :skipped [cells] :reason r}. :reason is :done, :none (no bare cell), :gave-up (cells
-  were skipped) or :no-seed.
+  were skipped), :no-seed, or :food-reserve (a food-crop seed is carried but the reserve keeps it; the result adds
+  :seed :held :kept :reserve-points, and nothing is fetched).
   :plan (optionally :part) makes the plan's crop cells the field instead (:box and :seed are then unused).
   Every planned cell standing bare is sown with the seed of the crop the plan wants there, when it is carried.
   Zones and the footprints of other active plans are asked before choosing a cell and again before the place.
@@ -80,6 +82,18 @@
            (filter #(pos? (carried %)))
            (sort-by #(- (carried %)))
            first))))
+
+(defn held-back
+  "{:seed :held :kept :reserve-points} when no seed may be sown but a food-crop seed (seed, else any) is carried and the
+  food reserve keeps it; else nil."
+  [seed inventory]
+  (when-not (pick-seed seed inventory)
+    (let [carried (into {} (map (juxt :name :count)) inventory)
+          kept (cost/food-reserve inventory)
+          names (if seed [seed] (vals crops/seed-of))]
+      (when-let [n (->> names (filter #(and (pos? (get carried % 0)) (pos? (get kept % 0))))
+                        (sort-by #(- (carried %))) first)]
+        {:seed n :held (carried n) :kept (kept n) :reserve-points cost/food-reserve-points}))))
 
 (declare planned sowing)
 
@@ -147,7 +161,7 @@
             (need-of short (count (harvest/planned-bare p (:cells field))))))
         (let [{:keys [box seed]} (:args c)
               bare (when box (bare-cells p box (:skipped m)))]
-          (when (and (seq bare) (not (pick-seed seed (u/inventory p))))
+          (when (and (seq bare) (not (pick-seed seed (u/inventory p))) (not (held-back seed (u/inventory p))))
             (seed-need seed (count bare))))))))
 
 (defn box-check
@@ -162,6 +176,7 @@
       (:started m) true
       (and (empty? bare) (not (look/surveyed? c :cell))) true ; the round looks around before it gives up
       (empty? bare) (ctx/wait c {:reason :nothing-to-do})
+      (held-back seed (u/inventory p)) true ; the round says :food-reserve
       (not (pick-seed seed (u/inventory p)))
       (fetch/check c job-sym (seed-need seed (count bare)))
       :else (or (boolean (seq (sowable-cells c bare)))
@@ -267,19 +282,22 @@
 ;; ------------------------------------------------------------------ steps
 
 (defn finish!
-  [c reason]
+  ([c reason] (finish! c reason nil))
+  ([c reason extra]
   (let [m (ctx/mem c)
         skipped (vec (:skipped m))
-        result {:planted (:planted m 0) :skipped skipped :reason reason}]
+        result (merge {:planted (:planted m 0) :skipped skipped :reason reason} extra)]
     (when (seq skipped)
       (ctx/emit! c :plant.gave-up :warn
                  {:cells skipped
                   :text (str "plant gave up on " (count skipped) " cells: " (str/join ", " (map pr-str skipped)))}))
     (ctx/emit! c :plant.done :info
                {:planted (:planted result) :skipped-count (count skipped) :reason reason
-                :text (str "plant done: planted " (:planted result) ", skipped " (count skipped) ", reason " (name reason))})
+                :text (str "plant done: planted " (:planted result) ", skipped " (count skipped) ", reason " (name reason)
+                           (when extra (str " (" (:seed extra) ": holding " (:held extra) ", reserve keeps " (:kept extra)
+                                            " of " (:reserve-points extra) " food points)")))})
     (ctx/result! c result)
-    :done))
+    :done)))
 
 (defn ^:async plant-one!
   "Place seed on cell and settle by the status: :no-seed when the seed is gone, else nil."
@@ -315,7 +333,9 @@
       (ctx/update-mem! c assoc :sowing seed))
     (cond
       (empty? cells) (finish! c (cond (seq (:skipped m)) :gave-up (pos? (:planted m 0)) :done :else :none))
-      (nil? seed) (finish! c :no-seed)
+      (nil? seed) (if-let [held (held-back (:seed (:args c)) inventory)]
+                    (finish! c :food-reserve held)
+                    (finish! c :no-seed))
       :else
       (let [here (u/self-pos c)
             near (filterv #(<= (u/eye-dist here %) (:reach (:args c))) cells)

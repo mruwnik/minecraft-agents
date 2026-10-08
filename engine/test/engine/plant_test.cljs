@@ -398,6 +398,18 @@
           (is (= 3 (:planted result)))
           (is (= {"carrot" 20} (inv-of p))))))))
 
+(deftest a-carried-seed-held-back-by-the-food-reserve-reports-food-reserve-and-fetches-nothing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (start (field-world (inv "carrot" 6)))
+              result (await (child-outcome eng job {:box field-box :seed "carrot"} 100))]
+          (is (= 0 (:planted result)))
+          (is (= :food-reserve (:reason result)))
+          (is (= {:seed "carrot" :held 6 :kept 6 :reserve-points 60} (select-keys result [:seed :held :kept :reserve-points])))
+          (is (empty? (events-of seen :fetch.started)))
+          (is (= {"carrot" 6} (inv-of p))))))))
+
 (deftest a-planned-cell-whose-place-answers-no-item-three-times-is-skipped
   (async done
     (tu/run-async done
