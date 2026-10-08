@@ -34,7 +34,7 @@
     is crafted first). A child that brings in nothing three times stops it (:tried :gather).
   - Nothing else: stopped :no-source with :tried.
 
-  The check waits {:reason :no-source :why text :item|:any-of} (:why: what each source lacks) before the first round when nothing is carried enough, no
+  The check waits {:reason :no-source :why text :item|:any-of} (:why: what each source lacks) before the first round (once the round has looked around, when chests are allowed) when nothing is carried enough, no
   usable chest that might hold it is seen (no exploring) and no craft chain makes it from what is carried, and nothing seen to gather what a chain lacks. Ends {:status :done :got n :item name} or {:status :stopped
   :reason r :got n :tried {..}}, r :no-source, :cycle (a wanted name is on :chain), :timeout (:minutes from the first
   round) or :bad-args. :depth is the nesting left for sources that need fetches of their own (not used yet: crafting
@@ -251,7 +251,10 @@
       (and (contains? (:how (limits c)) :chest) (seq (candidates c names))) true
       (and (contains? (:how (limits c)) :craft) (craft-plan c names (:count a))) true
       (and (contains? (:how (limits c)) :gather) (gather-viable? c names (:count a))) true
-      :else (ctx/wait c (merge {:reason :no-source :why (no-source-why c names (:count a))} (wanted-fields a))))))
+      :else (let [reason (merge {:reason :no-source :why (no-source-why c names (:count a))} (wanted-fields a))]
+              (if (contains? (:how (limits c)) :chest)
+                (look/wait-unless-surveyed c reason)
+                (ctx/wait c reason))))))
 
 (defn survey-first?
   "Before the first round, with chests allowed, none usable seen that might hold one of names and no look around yet:
@@ -402,7 +405,7 @@
       (do (ctx/emit! c :obtain.declined :warn {:reason :bad-args :text (str "items.obtain " e)})
           (stop! c :bad-args {:why e}))
       (if (survey-first? c names)
-        (do (await (look/survey! c)) :again)
+        (do (await (look/survey! c)) (if (check c) :again :continue))
         (let [_ (when-not (:start (ctx/mem c))
                   (ctx/update-mem! c update :craft dissoc :table-unreachable)
                   (ctx/update-mem! c assoc :start {:have have :target (+ have (min 64 (:count a))) :t now}))

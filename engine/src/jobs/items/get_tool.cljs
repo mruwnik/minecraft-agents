@@ -78,11 +78,11 @@
       (empty? names) (do (ctx/result! c {:status :done :needed false}) :done)
       (carried-tool p names) (do (ctx/result! c {:status :done :tool (carried-tool p names)}) :done)
       :else
-      (let [_ (when-not (:begun (ctx/mem c)) (ctx/update-mem! c assoc :begun true))
-            oargs (obtain-args c names)
+      (let [oargs (obtain-args c names)
             r (await (ctx/call-child c :obtain 'jobs.items.obtain oargs))]
         (case r
-          :continue :continue
+          :continue (do (when (get-in (ctx/mem c) [:children :obtain :start]) (ctx/update-mem! c assoc :begun true))
+                        :continue)
           :declined (let [w (b/child-wait c :obtain 'jobs.items.obtain oargs)]
                       (ctx/result! c (merge {:status :stopped :any-of names} (select-keys w [:reason])))
                       :done)

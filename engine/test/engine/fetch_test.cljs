@@ -641,6 +641,17 @@
           (is (= 1 (get (inv s) "wooden_pickaxe")))
           (is (= 1 (count (tables s)))))))))
 
+(deftest get-tool-looks-around-for-a-chest-behind-the-body-when-nothing-else-is-possible
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (-> (bare []) (assoc-in [:blocks "-2,64,-3"] "chest")
+                           (assoc :containers {"-2,64,-3" [{:name "wooden_pickaxe" :count 1}]}))
+                       [own-zone])
+              id (await (get-tool! s {:kind "pickaxe"} 30))]
+          (is (nil? (core/waiting (:eng s) id)) "the check did not wait before a first look")
+          (is (= 1 (get (inv s) "wooden_pickaxe")) "the pickaxe came out of the chest behind the body"))))))
+
 (deftest get-tool-with-nothing-usable-waits-no-source
   (async done
     (tu/run-async done
