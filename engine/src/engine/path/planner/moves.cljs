@@ -136,6 +136,16 @@
     (set! (.-gap-y s) (dec y))
     (.landing s lx (dec y) lz))
 
+  ;; an unseen cell (options.unknown) in the column x, z over the body span lo..hi (the cells `clear` reads): a block hidden
+  ;; there would stop a jump
+  (unseenSpan [s x z lo hi]
+    (let [last-y (bit-shift-right (dec hi) 4)]
+      (loop [y (bit-shift-right lo 4)]
+        (cond
+          (> y last-y) false
+          ^boolean (.isUnknown s (.stateAt ^js (.-snapshot s) x y z)) true
+          :else (recur (inc y))))))
+
   ;; sprint across 1..3 empty cells in a cardinal line, landing level or one lower; across 1 or 2, also up to one block
   ;; higher. A jump over 3 above a pit (pitBelow) has GAP-PIT-RISK: one that falls short traps the body, so a short way round
   ;; is taken instead
@@ -147,19 +157,18 @@
              ;; some gap cell so far is over a pit (pitBelow): a jump over 3 then carries GAP-PIT-RISK
              pit false
              ;; a jump up needs the higher arc over the start and every gap cell
-             up-arc ^boolean (.clear s x z h0 (+ h0 ARC-UP))]
+             up-arc (and ^boolean (.clear s x z h0 (+ h0 ARC-UP)) (not ^boolean (.unseenSpan s x z h0 (+ h0 ARC-UP))))]
         (when (<= n 3)
           (let [gx (+ x (* dx n))
                 gz (+ z (* dz n))]
             ;; (a phantom floor, options.unknown, is no landing: the jump may pass over it)
-            ;; (an unseen feet or head cell in the arc ends the gap loop: a block hidden there would stop the jump over the
+            ;; (an unseen cell in the arc's headroom ends the gap loop: a block hidden there would stop the jump over the
             ;; hole; an unseen floor under it is no matter)
-            (when-not (or ^boolean (.isUnknown s (.stateAt ^js (.-snapshot s) gx y gz))
-                          ^boolean (.isUnknown s (.stateAt ^js (.-snapshot s) gx (inc y) gz))
+            (when-not (or ^boolean (.unseenSpan s gx gz h0 (+ h0 ARC))
                           (and (> n 1) (or (and (>= (.landing s gx y gz) 0) (not ^boolean (.phantomAt s gx y gz)))
                                        (and (>= (.landing s gx (inc y) gz) 0) (not ^boolean (.phantomAt s gx (inc y) gz))))))
               (when ^boolean (.clear s gx gz h0 (+ h0 ARC))
-                (let [up-arc (and up-arc ^boolean (.clear s gx gz h0 (+ h0 ARC-UP)))
+                (let [up-arc (and up-arc ^boolean (.clear s gx gz h0 (+ h0 ARC-UP)) (not ^boolean (.unseenSpan s gx gz h0 (+ h0 ARC-UP))))
                       hole (js/Math.max hole (.holeRisk s gx y gz))
                       pit (or pit ^boolean (.pitBelow s gx y gz))
                       risk (if (and (== n 3) pit) (js/Math.max hole GAP-PIT-RISK) hole)

@@ -238,6 +238,19 @@
       (is (found? r))
       (is (= (:gap pf/MOVE) (:move (last-step r)))))))
 
+(deftest a-gap-jump-under-an-unseen-cell-two-over-the-feet-is-not-planned
+  (testing "a jump up over a 2-gap: its arc reaches y+2"
+    (let [seen (line [0 63 "stone"] [3 64 "stone"])
+          hidden (line [0 63 "stone"] [3 64 "stone"] [1 66 U])]
+      (is (= (:gap pf/MOVE) (:move (last-step (run seen (pf/near 3 65 2) (unk {}))))))
+      (is (not (found? (run hidden (pf/near 3 65 2) (unk {})))))))
+  (testing "a level gap from a bottom slab (feet 0.5 up): its arc reaches y+2"
+    (let [slab {:type "bottom"}
+          seen (line [0 64 "oak_slab" slab] [3 64 "oak_slab" slab])
+          hidden (line [0 64 "oak_slab" slab] [3 64 "oak_slab" slab] [2 66 U])]
+      (is (= (:gap pf/MOVE) (:move (last-step (run seen (pf/near 3 64 2) (unk {}))))))
+      (is (not (found? (run hidden (pf/near 3 64 2) (unk {}))))))))
+
 (deftest a-walk-through-a-closed-gate-onto-a-phantom-floor-is-checkable
   ;; (a gate or door is crossed by a walk that opens it; MOVE-OPEN is the climb through a shut trapdoor, never a takeoff)
   (let [w (line [0 63 "stone"] [1 63 U] [1 64 "oak_fence_gate" {:facing "east" :open "false"}])
