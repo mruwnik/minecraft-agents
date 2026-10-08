@@ -216,12 +216,16 @@
       (is (found? r))
       (is (= [[0 64 2] [3 64 2]] (pf/cells r))))))
 
-(deftest a-gap-jump-prices-the-unseen-cells-of-its-arc
-  (let [w (line [0 63 "stone"] [2 64 U] [3 63 "stone"])
-        r (run w (pf/near 3 64 2) (unk {}))]
-    (is (found? r))
-    (is (= [[0 64 2] [3 64 2]] (pf/cells r)))
-    (is (near? (* 0.1 (step-secs r)) (dark-secs r)))))
+(deftest a-gap-jump-through-an-unseen-feet-cell-is-not-planned
+  (testing "a 2-gap whose second cell has an unseen feet cell"
+    (let [w (line [0 63 "stone"] [2 64 U] [3 63 "stone"])
+          r (run w (pf/near 3 64 2) (unk {}))]
+      (is (not (found? r)))))
+  (testing "an unseen floor under the arc is allowed"
+    (let [w (line [0 63 "stone"] [1 63 U] [2 63 U] [3 63 "stone"])
+          r (run w (pf/near 3 64 2) (unk {:missed (js/Set. [(planner/cell-key 1 63 2) (planner/cell-key 2 63 2)])}))]
+      (is (found? r))
+      (is (= (:gap pf/MOVE) (:move (last-step r)))))))
 
 (deftest a-walk-through-a-closed-gate-onto-a-phantom-floor-is-checkable
   ;; (a gate or door is crossed by a walk that opens it; MOVE-OPEN is the climb through a shut trapdoor, never a takeoff)

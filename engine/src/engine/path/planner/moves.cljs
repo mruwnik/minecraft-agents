@@ -152,8 +152,10 @@
           (let [gx (+ x (* dx n))
                 gz (+ z (* dz n))]
             ;; (a phantom floor, options.unknown, is no landing: the jump may pass over it)
-            (when-not (and (> n 1) (or (and (>= (.landing s gx y gz) 0) (not ^boolean (.phantomAt s gx y gz)))
-                                       (and (>= (.landing s gx (inc y) gz) 0) (not ^boolean (.phantomAt s gx (inc y) gz)))))
+            ;; (an unseen feet cell in the arc ends the gap loop: the jump would pass it unpriced; an unseen floor under it is no matter)
+            (when-not (or ^boolean (.isUnknown s (.stateAt ^js (.-snapshot s) gx y gz))
+                          (and (> n 1) (or (and (>= (.landing s gx y gz) 0) (not ^boolean (.phantomAt s gx y gz)))
+                                       (and (>= (.landing s gx (inc y) gz) 0) (not ^boolean (.phantomAt s gx (inc y) gz))))))
               (when ^boolean (.clear s gx gz h0 (+ h0 ARC))
                 (let [up-arc (and up-arc ^boolean (.clear s gx gz h0 (+ h0 ARC-UP)))
                       hole (js/Math.max hole (.holeRisk s gx y gz))

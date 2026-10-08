@@ -47,16 +47,6 @@
              ^boolean (.isUnknown s (.stateAt ^js (.-snapshot s) x (inc y) z))
              ^boolean (.missedAt s x (dec y) z))))
 
-  ;; the unseen feet cells a gap jump from node p to x z passes over (the cells between, at p's level)
-  (arcUnknownCells [s p x z]
-    (let [px (aget (.-xs s) p) py (aget (.-ys s) p) pz (aget (.-zs s) p)
-          n (js/Math.max (js/Math.abs (- x px)) (js/Math.abs (- z pz)))
-          dx (js/Math.sign (- x px)) dz (js/Math.sign (- z pz))]
-      (loop [k 1 c 0]
-        (if (>= k n)
-          c
-          (recur (inc k) (if ^boolean (.isUnknown s (.stateAt ^js (.-snapshot s) (+ px (* dx k)) py (+ pz (* dz k)))) (inc c) c))))))
-
   ;; did node p's way in end with the body bouncing on a pad (a drop whose landing factor is a bounce)?
   (bounceArrival [s p]
     (and (== (aget (.-moves s) p) MOVE-DROP) (some? (.-land-factors s)) (>= (aget (.-parents s) p) 0)
@@ -122,11 +112,11 @@
 
   ;; True when the move from node p into x y z is refused for options.unknown: its stand is on a phantom floor that the walk
   ;; cannot stop to check first (unseen-refused), was missed, or cannot be seen and not lit (dark-refused). Else sets what it
-  ;; costs (move-unk, seconds: cell per unseen feet or head cell (and per unseen feet cell a gap jump passes over) and floor for a phantom floor, both times dsec, and a peek
+  ;; costs (move-unk, seconds: cell per unseen feet or head cell and floor for a phantom floor, both times dsec, and a peek
   ;; over a drop or an aim at a level or up one, and light-cost when a torch must light it) and move-light.
   (unseenRefuses [s x y z move p dsec]
     (set! (.-move-light s) 0)
-    (let [cells (* dsec (.-unk-cell s) (+ (.unknownCells s x y z) (if (== move MOVE-GAP) (.arcUnknownCells s p x z) 0)))]
+    (let [cells (* dsec (.-unk-cell s) (.unknownCells s x y z))]
       (if-not ^boolean (.phantomAt s x y z)
         (do (set! (.-move-unk s) cells)
             false)
