@@ -1,5 +1,6 @@
 (ns jobs.build.from-plan
   (:require [engine.args :as a]
+            [engine.settings :as settings]
             [clojure.string :as str]
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
@@ -82,6 +83,15 @@
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
    :sturdy-ground {:doc "a sturdy block on the ground of a rail line (plan.rail/ground) is no wrong block, whatever fill the plan wants there" :spec boolean? :default false}})
 
+(a/defargs settings
+  "Tuning numbers of the stand choice and of retrying walks."
+  {::stand-level {:default 3 :doc "A body within this many blocks of a cell's height also looks for stands at its own level (after the cell's)." :spec (a/int-in 0 nil)}
+   ::retry-distance {:default 8 :doc "A cell given up for a failed walk is tried again once the body is this far from where it gave up, in blocks." :spec (a/num-in 0 nil)}
+   ::max-retries {:default 2 :doc "Times one cell given up for a failed walk is opened again." :spec (a/int-in 0 nil)}})
+
+(defn stand-level [] (settings/get settings ::stand-level))
+(defn retry-distance [] (settings/get settings ::retry-distance))
+(defn max-retries [] (settings/get settings ::max-retries))
 
 ;; ------------------------------------------------------------------ pure helpers
 
@@ -136,21 +146,35 @@
                  (for [d [1 2] [sx sz] diagonal] [(+ x (* d sx)) y (+ z (* d sz))]))
          (remove #(or (planned %) (planned (update % 1 inc)))))))
 
-(defn stand-y
-  "The feet height to look for stands at: the body's when within 3 of the cell's (it stands on the same level), else
-  the cell's (a body deep underground aims for the site, not for its own depth)."
+(defn stand-levels
+  "The feet heights to look for stands at, in order: the cell's (a body deep underground aims for the site, not for its
+  own depth), then the body's own when within stand-level of it (a pit cell is placed from the rim)."
   [body-y cell-y]
-  (if (<= (js/Math.abs (- body-y cell-y)) 3) body-y cell-y))
+  (if (<= (js/Math.abs (- body-y cell-y)) (stand-level)) (distinct [cell-y body-y]) [cell-y]))
+
+(defn grounded
+  "The cands put on the ground (see ground-stands); empty when none can be stood on."
+  [p cands]
+  (let [fit (fn [[x y z]]
+              (some (fn [dy] (when (reach/standable-cell? p {:x x :y (+ y dy) :z z}) [x (+ y dy) z])) [0 1 -1 -2]))]
+    (keep fit cands)))
 
 (defn ground-stands
   "The stand cells of cands ([x y z], from stand-cells) put on the ground: each takes the nearest feet height (y, then one
   up, one down, two down) where a body can stand (jobs.lib.reach/standable-cell?); one with none is dropped. When none
   of them can (unloaded land) the candidates stay as they are."
   [p cands]
-  (let [fit (fn [[x y z]]
-              (some (fn [dy] (when (reach/standable-cell? p {:x x :y (+ y dy) :z z}) [x (+ y dy) z])) [0 1 -1 -2]))
-        found (keep fit cands)]
+  (let [found (grounded p cands)]
     (if (seq found) found cands)))
+
+(defn stands-for
+  "The stand cells to place or dig cell-pos from: those standable at the first of stand-levels that has any, else the
+  cell-height candidates as they are (unloaded land); never a planned cell or one in bad."
+  [p cell-pos body-y facing planned bad]
+  (let [at (fn [y] (remove bad (stand-cells cell-pos y facing planned)))
+        cell-y (second cell-pos)]
+    (or (some #(seq (remove bad (grounded p (at %)))) (stand-levels body-y cell-y))
+        (remove bad (ground-stands p (at cell-y))))))
 
 (defn shortage
   "{item n} of the missing cells' items beyond what is carried (carried {item n})."
@@ -428,6 +452,26 @@
       (-> m (update :fails dissoc pos) (assoc-in [:given-up pos] reason))
       (assoc-in m [:fails pos] n))))
 
+(defn walk-fail
+  "count-fail for a failed walk or an out-of-reach arrival, which the job's own stand choice caused: a cell it gives up
+  is noted with where the body stood (:walk-given), for retry-walks."
+  [m pos reason give-up at]
+  (let [m2 (count-fail m pos reason give-up)]
+    (cond-> m2
+      (and (contains? (:given-up m2) pos) (not (contains? (:given-up m) pos))) (assoc-in [:walk-given pos] at))))
+
+(defn retry-walks
+  "m with the cells given up for a walk opened again (given-up and :walk-given dropped, :retries counted): those the body
+  stands retry-distance from where it gave up, all of them when finishing?; a cell opened max-retries times stays."
+  [m body finishing?]
+  (let [open (filter (fn [[pos at]]
+                       (and (< (get-in m [:retries pos] 0) (max-retries))
+                            (or finishing? (>= (u/dist body at) (retry-distance)))))
+                     (:walk-given m))]
+    (reduce (fn [m [pos _]]
+              (-> m (update :given-up dissoc pos) (update :walk-given dissoc pos) (update-in [:retries pos] (fnil inc 0))))
+            m open)))
+
 (defn ^:async place-one!
   "Place the cell's item after asking the access rules and jobs.lib.placement once more; a refusal is booked, nothing
   is placed."
@@ -565,24 +609,24 @@
         planned (set (map :pos cells))
         bad (set (:bad-stands (ctx/mem c)))
         facing (when-not (or (:click cell) (:dig? cell)) (facing-of (:want cell)))
-        stands (remove bad (ground-stands (:primitives c) (stand-cells (:pos cell) (stand-y (js/Math.floor (:y body)) (second (:pos cell))) facing planned)))
+        stands (stands-for (:primitives c) (:pos cell) (js/Math.floor (:y body)) facing planned bad)
         stand (first (sort-by #(u/dist body (zipmap [:x :y :z] %)) stands))
         give-up (:give-up (:args c))]
     (if-not stand
-      (do (ctx/update-mem! c count-fail (:pos cell) :unreachable give-up)
+      (do (ctx/update-mem! c walk-fail (:pos cell) :unreachable give-up (u/self-pos c))
           :again)
       (let [w (await (near/go-near! c (zipmap [:x :y :z] stand) 0 {:zone-tolls true :escalate false}))]
         (when (= :blocked w)
-          (ctx/update-mem! c #(-> (count-fail % (:pos cell) :unreachable give-up)
+          (ctx/update-mem! c #(-> (walk-fail % (:pos cell) :unreachable give-up (u/self-pos c))
                                   (update :bad-stands (fnil conj []) stand))))
         (when (and (= :there w) (nil? (:found cell)))
           (let [pos (:pos cell)]
             ;; a cell outside the view cone is seen only by turning to it
             (when (dig-look/unknown? (:primitives c) pos) (await (dig-look/look-at! c pos)))
             (when (nil? (u/seen-block (:primitives c) (zipmap [:x :y :z] pos)))
-              (ctx/update-mem! c count-fail pos :unloaded give-up))))
+              (ctx/update-mem! c walk-fail pos :unloaded give-up (u/self-pos c)))))
         (when (and (= :there w) (:found cell) (empty? (if (:dig? cell) (in-dig-reach c [cell]) (in-reach c [cell]))))
-          (ctx/update-mem! c count-fail (:pos cell) :unreachable give-up))
+          (ctx/update-mem! c walk-fail (:pos cell) :unreachable give-up (u/self-pos c)))
         (if (= :partial w) :continue :again)))))
 
 (defn summary
@@ -672,7 +716,8 @@
 (defn ^:async build-step!
   "One step of the build (:again, or :continue while a walk waits): place or dig what is in reach, else walk, else finish."
   [c cells]
-  (let [closed #(merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))
+  (let [_ (ctx/update-mem! c retry-walks (u/self-pos c) false)
+        closed #(merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))
         todo (placeable c (permitted c (buildable cells (carried-counts (:primitives c)) (closed))))
         digs (diggable c (digging cells) (closed))
         given-up (closed)
@@ -699,7 +744,9 @@
       (seq todo) (await (walk-to! c cells (nearest todo)))
       (seq digs) (await (walk-to! c cells (nearest digs)))
       (seq (unseen cells given-up)) (await (walk-to! c cells (nearest (unseen cells given-up))))
-      :else (finish! c cells))))
+      :else (let [before (ctx/mem c)]
+              (ctx/update-mem! c retry-walks (u/self-pos c) true)
+              (if (= before (ctx/mem c)) (finish! c cells) :again)))))
 
 (defn ^:async step [c]
   (let [{:keys [trouble]} (planned c)]

@@ -876,10 +876,37 @@
             (finally (set! ctx/call-child orig)))
           (is (some #(and (= "oak_fence" (:item %)) (true? (:explore %))) @seen) (pr-str @seen)))))))
 
-(deftest stand-height-is-the-bodys-near-the-cell-and-the-cells-when-far-above-or-below
-  (are [body cell stand] (= stand (build/stand-y body cell))
-    64 64 64
-    62 64 62
-    67 64 67
-    48 64 64
-    80 64 64))
+(deftest stand-levels-are-the-cells-first-then-the-bodys-when-near
+  (are [body cell levels] (= levels (build/stand-levels body cell))
+    64 64 [64]
+    62 64 [64 62]
+    67 64 [64 67]
+    68 64 [64]
+    48 64 [64]
+    80 64 [64]))
+
+(deftest a-body-near-the-threshold-above-the-cell-aims-at-the-cells-ground-not-its-own-level
+  (let [p (tu/seeing-all (tu/fake-on-floor {:blocks {}}))
+        stands (build/stands-for p [40 64 0] 67 nil #{} #{})]
+    (is (seq stands))
+    (is (every? #(= 64 (second %)) stands) (pr-str stands))))
+
+(deftest a-pit-cell-is-aimed-at-from-the-rim-at-the-bodys-level
+  (let [rim (into {} (for [x (range 37 44) z (range -3 4) y (range 63 67)
+                           :when (not= [40 0] [x z])] [(str x "," y "," z) "stone"]))
+        p (tu/seeing-all (tu/fake-on-floor {:blocks rim}))
+        stands (build/stands-for p [40 64 0] 67 nil #{} #{})]
+    (is (seq stands))
+    (is (every? #(= 67 (second %)) stands) (pr-str stands))))
+
+(deftest walk-given-up-cells-are-retried-when-the-body-moved-or-the-job-is-finishing
+  (let [m {:given-up {[1 64 1] :unreachable [2 64 2] :refused [3 64 3] :unreachable}
+           :walk-given {[1 64 1] {:x 0 :y 64 :z 0} [3 64 3] {:x 0 :y 64 :z 0}}
+           :retries {[3 64 3] 2}}]
+    (is (= m (build/retry-walks m {:x 2 :y 64 :z 0} false)) "not moved: nothing")
+    (is (= {[2 64 2] :refused [3 64 3] :unreachable}
+           (:given-up (build/retry-walks m {:x 20 :y 64 :z 0} false))) "moved: the walk one is open, the refused stays, the twice-retried stays")
+    (is (= 1 (get-in (build/retry-walks m {:x 20 :y 64 :z 0} false) [:retries [1 64 1]])))
+    (is (not (contains? (:walk-given (build/retry-walks m {:x 20 :y 64 :z 0} false)) [1 64 1])))
+    (is (= {[2 64 2] :refused [3 64 3] :unreachable}
+           (:given-up (build/retry-walks m {:x 0 :y 64 :z 0} true))) "finishing: retried in place")))

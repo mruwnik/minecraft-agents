@@ -1,0 +1,17 @@
+;; Cards c496d4cd / 13c8ed75: build.from-plan started in a tunnel 14 below the site aims at stands at the site's height and walks up the
+;; stair (stand cells at the body's depth were inside rock: 28 cells given up unreachable). Stone mass x 8..30, z 8..30, y 0..14 (surface
+;; feet y 15); tunnel x 10..12 z 26 at y 1..2, a 1:1 stair east of it up to the surface at x 27; site: a dirt ring outline [18 15 18]-[20 16 20].
+{:defaults
+ {:tags [:build :movement] :time :any
+  :plot {:height 24}
+  :limit-s 260
+  :blocks [[:fill [8 0 8] [30 14 30] "stone"] [:fill [10 1 26] [12 2 26] "air"] [:fill [13 1 26] [13 4 26] "air"] [:fill [14 2 26] [14 5 26] "air"] [:fill [15 3 26] [15 6 26] "air"] [:fill [16 4 26] [16 7 26] "air"] [:fill [17 5 26] [17 8 26] "air"] [:fill [18 6 26] [18 9 26] "air"] [:fill [19 7 26] [19 10 26] "air"] [:fill [20 8 26] [20 11 26] "air"] [:fill [21 9 26] [21 12 26] "air"] [:fill [22 10 26] [22 13 26] "air"] [:fill [23 11 26] [23 14 26] "air"] [:fill [24 12 26] [24 14 26] "air"] [:fill [25 13 26] [25 14 26] "air"] [:fill [26 14 26] [26 14 26] "air"] [:fill [27 15 26] [27 14 26] "air"]]
+  :body {:at [10.5 1 26.5] :inventory [["dirt" 64]] :effects [["resistance" 600 4]] :settle-s 4}}
+ :cases
+ [{:name "underground-start-walks-up-the-stair-and-builds"
+   :plans [{:id "ring" :metadata {:by "$body"}
+            :parts [{:id "walls" :outline [#at [18 15 18] #at [20 16 20]] :want "dirt"}]}]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:ring"})]]
+   :expect [{:event {:source :job :kind :build.done :data {:missing 0}} :within-s 240 :of-job true}
+            {:no-event {:source :job :kind :build.gave-up} :for-s 240 :until {:source :job :kind :build.done}}]
+   :after [[:block [18 15 18] "dirt"] [:block [20 16 20] "dirt"] [:block [19 15 20] "dirt"]]}]}
