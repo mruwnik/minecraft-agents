@@ -13,13 +13,15 @@
   "Dry run of a go-to: plan the route to :pos (or :place) from where the body stands, with the policy, costs, dangers and
   tolls go-to plans with, and report it. Nothing is walked, opened or dug. One round, one plan (a search of any length, in
   slices that yield), then :done.
-  Takes the go-to args :pos :place :range :doors :dangers :dark :tolls :drop-cost :costs :landing :gait :min-health :max-damage :hp-seconds :food :one-way, same defaults, and the danger prices :flee-factor :fight-factor :danger-max-rate :danger-shape.
+  Takes the go-to args :pos :place :range :doors :dangers :dark :tolls :drop-cost :costs :landing :gait :min-health :max-damage :hp-seconds :food :one-way :unknown, same defaults, and the danger prices :flee-factor :fight-factor :danger-max-rate :danger-shape.
   Returns {:status :completed :found true :length :seconds :summary :steps :moves :doors :waypoints (:drown hp where it drowns)}: length is the horizontal
   blocks, seconds the planner's cost in seconds (tolls, dark and danger costs not included), summary its words (drops, swims,
   doors), steps the step count, moves a count of each move kind (:drop :jump :open ...), doors the cells [x y z] it
   would open, waypoints the cells [x y z] where the route turns or changes move kind, ending at the goal's end of the plan.
   A route that only gets nearer (a partial plan) or none is {:status :stopped :found false :reason (the planner's, as
   go-to's :why; :abilities with :kind) :near} plus :partial {the same fields up to where it ends} when there is one.
+  With :unknown, a route that checks unseen floors adds :unseen-floors true, and one refused for a dark drop go-to would
+  give up on is :reason :unseen-floor-dark with :dark-best (the stand {:x :y :z}).
   An arg its spec refuses (as go-to's) is refused at submit. A :pos outside the world, a bad or unknown :place, or a body
   without pathWorld sensing, is {:status :stopped :found false :reason :bad-pos|:bad-name|:unknown-place|:unsupported :text}.")
 
@@ -43,6 +45,7 @@
    :fight-factor {:doc "go-to's :fight-factor" :spec (a/num-in 0 nil) :default (:fight cost/danger-stances)}
    :danger-max-rate {:doc "go-to's :danger-max-rate" :spec a/pos-num? :default cost/danger-max-rate}
    :danger-shape {:doc "go-to's :danger-shape" :spec (a/valid-by "a map of :sensed, :remembered or :creeper to {:close :radius} numbers >= 0, :close under :radius" cost/danger-shape-problem) :default nil}
+   :unknown {:doc "as go-to :unknown: plan over what the body has seen or felt only" :spec (a/valid-by "true, false or a map of :cell :floor :peek-s :aim-s :see-lit-depth :light-depth to numbers >= 0" wworld/unknown-problem) :default false}
    :one-way {:doc ":closed takes no drop of 2 or 3 or gap jump down that the body cannot climb back; :open (default) takes one toward unloaded land" :spec #{:open :closed} :default :open}})
 
 (defn check [_c] true)
@@ -77,15 +80,20 @@
   [c to] (js/Math.round (js/Math.hypot (- (:x to) (:x (wworld/body-cell c))) (- (:z to) (:z (wworld/body-cell c))))))
 
 (defn report
-  "The job's result for a plan (jobs.lib.near/plan!)."
-  [c plan to policy]
+  "The job's result for a plan (jobs.lib.near/plan!); with unknown, what the masked plan says of unseen floors
+  (near/with-sight), a dark drop as go-to's :unseen-floor-dark."
+  [c plan to policy unknown]
   (let [{:keys [r steps status]} plan
         no (wplan/no-walk plan 0 policy)
-        here (u-dist c to)]
-    (cond
-      (and (nil? no) (= "found" status)) (assoc (route steps (.-path r)) :status :completed :found true)
-      (nil? no) {:status :stopped :found false :reason :partial :near here :partial (route steps (.-path r))}
-      :else (assoc (dissoc no :replans) :status :stopped :found false :near here))))
+        here (u-dist c to)
+        result (cond
+                 (and (nil? no) (= "found" status)) (assoc (route steps (.-path r)) :status :completed :found true)
+                 (nil? no) {:status :stopped :found false :reason :partial :near here :partial (route steps (.-path r))}
+                 :else (assoc (dissoc no :replans) :status :stopped :found false :near here))]
+    (if-not unknown
+      result
+      (let [seen (near/with-sight result plan [(:x to) (:y to) (:z to)])]
+        (cond-> seen (:dark-best seen) (assoc :reason :unseen-floor-dark))))))
 
 (defn refuse!
   "End the preview with a refusal: {:status :stopped :found false :reason :text}."
@@ -95,7 +103,7 @@
 
 (defn ^:async round [c]
   (let [c (go-to/with-body-food c)
-        {:keys [doors range dangers dark tolls drop-cost costs one-way]} (:args c)
+        {:keys [doors range dangers dark tolls drop-cost costs one-way unknown]} (:args c)
         refusal (go-to/args-refusal c)
         pos (:pos (go-to/target c))]
     (cond
@@ -108,10 +116,11 @@
                      (not= :never doors) (update :moves conj :open)
                      (some? drop-cost) (assoc :drop-cost drop-cost)
                      (some? costs) (assoc :costs costs))
+            spec (when unknown (wworld/unknown-spec (when (map? unknown) unknown)))
             plan (await (near/plan! c [(:x pos) (:y pos) (:z pos)] (or range 1) doors policy [] false
                                     (when-not (= :closed one-way) :open) nil true
-                                    (not (false? dangers)) nil (not (false? dark)) tolls))
-            result (report c plan pos policy)]
+                                    (not (false? dangers)) nil (not (false? dark)) tolls spec))
+            result (report c plan pos policy spec)]
         (ctx/result! c result)
         (ctx/emit! c :path-preview :info (assoc (dissoc result :partial) :nodes (some-> plan :r .-expanded) :text (if (:found result) (str "route: " (:summary result)) (str "no route: " (name (:reason result))))))
         :done))))

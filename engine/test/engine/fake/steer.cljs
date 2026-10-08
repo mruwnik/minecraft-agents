@@ -240,7 +240,8 @@
 (defn masked
   "snapshot read through unknown, live-snapshot.mjs's mask option: a cell the body's memory ((.known unknown cx sy cz), sy the
   world section y: ids + 1, 0 never seen; nil: none of it seen) has not got reads (.-id unknown); unloaded stays unloaded. It
-  carries unknown, as the live snapshot does."
+  carries unknown, as the live snapshot does. sectionHas stays unmasked (live masks it): it is the planner's pre-check
+  that lets it skip reading cells, so a true where live says false only makes it read the masked cells, same plan."
   [^js snapshot ^js unknown]
   (let [view (js/Object.create snapshot)
         id (.-id unknown)

@@ -8,27 +8,37 @@
 
 (def kind :go-to/off-hand-torch)
 
+(def torches
+  "The items that let the body see deeper in the dark from a hand (perception's near-torch), the first one carried is held."
+  ["torch" "soul_torch"])
+
 (defn off-hand-torch? [c]
-  (= "torch" (some-> (.-equipment (.self (:primitives c))) .-offHand .-name)))
+  (boolean (some #{(some-> (.-equipment (.self (:primitives c))) .-offHand .-name)} torches)))
+
+(defn carried-torch
+  "The name of the first of torches the body carries, else nil."
+  [p]
+  (let [names (set (map :name (u/inventory p)))]
+    (some names torches)))
 
 (defn torch-aid?
   "Whether a masked round (walked) should hold a carried torch in the off hand to see deeper: its plan refused a dark floor or
   checks unseen ones, the body's feet are dark, it carries a torch, the off hand is empty, and this call has not tried."
   [c walked]
-  (let [p (:primitives c)
-        {:keys [x y z]} (wworld/body-cell c)
-        lit? (look/see-lit-fn p)]
-    (boolean (and (:unknown c) (or (:dark-best walked) (:unseen-floors walked))
-                  (not (:off-hand-tried (ctx/mem c)))
-                  lit? (zero? (lit? x y z))
-                  (some #(= "torch" (:name %)) (u/inventory p))
-                  (nil? (some-> (.-equipment (.self p)) .-offHand))))))
+  (boolean (and (:unknown c) (or (:dark-best walked) (:unseen-floors walked))
+                (not (:off-hand-tried (ctx/mem c)))
+                (let [p (:primitives c)
+                      {:keys [x y z]} (wworld/body-cell c)
+                      lit? (look/see-lit-fn p)]
+                  (and lit? (zero? (lit? x y z))
+                       (carried-torch p)
+                       (nil? (some-> (.-equipment (.self p)) .-offHand)))))))
 
 (defn ^:async hold-torch!
-  "Hold a carried torch in the off hand (once a call; info go-to.off-hand-torch; recorded in body memory): true when it is held there now."
+  "Hold a carried torch (torches) in the off hand (once a call; info go-to.off-hand-torch; recorded in body memory): true when it is held there now."
   [c]
   (ctx/update-mem! c assoc :off-hand-tried true)
-  (let [r (await (ctx/act c :equip #js {:item "torch" :dest "off-hand"}))
+  (let [r (await (ctx/act c :equip #js {:item (or (carried-torch (:primitives c)) "torch") :dest "off-hand"}))
         held? (off-hand-torch? c)]
     (when held?
       (ctx/update-mem! c assoc :off-hand-held true)

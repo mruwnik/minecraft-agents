@@ -173,9 +173,9 @@
   "A 3-deep 1x1 pit (feet at y 61) in dirt x -2..2, y 60..63; stone ground east of it (x 3..14) topped at the rim."
   (apply dissoc (merge (box 3 60 -3 14 63 3 "stone") (box -2 60 -2 2 63 2 "dirt")) #{"0,61,0" "0,62,0" "0,63,0"}))
 
-(defn ^:async run-go-to-unpinned
-  "run-go-to with js/Math.random left as it is."
-  [spec args & [setup before]]
+(defn ^:async run-job-unpinned
+  "run-job with js/Math.random left as it is."
+  [job spec args & [setup before]]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         {:keys [w p] :as world} (sensed-only spec)
@@ -183,7 +183,7 @@
         out (atom :not-done)
         parent {:check (constantly true)
                 :round (fn ^:async recording-round [c]
-                         (let [r (await (ctx/call-child c :kid 'jobs.movement.go-to args))]
+                         (let [r (await (ctx/call-child c :kid job args))]
                            (when (= :done r) (reset! out (ctx/child-result c :kid)))
                            r))}
         eng (core/create {:primitives w :jobs (assoc registry/jobs 'recording-parent parent) :triggers {}
@@ -198,15 +198,17 @@
         (recur (inc i))))
     {:out @out :seen @seen :p p}))
 
-(defn ^:async run-go-to
-  "Run go-to with args as a child over the sensed-only world spec; {:out :seen :p}. setup, when given, is called with the
-  sensed-only {:p :w} first. js/Math.random is pinned to 0.5 for the run: it jitters the sight passes' rays, and some
-  jitters (0.54 to 0.59 in the dark tunnel) see one more cell, which changes the outcome."
-  [spec args & [setup before]]
+(defn ^:async run-job
+  "Run job (a symbol) with args as a child over the sensed-only world spec; {:out :seen :p}. setup, when given, is called
+  with the sensed-only {:p :w} first. js/Math.random is pinned to 0.5 for the run: it jitters the sight passes' rays,
+  and some jitters (0.54 to 0.59 in the dark tunnel) see one more cell, which changes the outcome."
+  [job spec args & [setup before]]
   (let [orig js/Math.random]
     (set! js/Math.random (constantly 0.5))
-    (try (await (run-go-to-unpinned spec args setup before))
+    (try (await (run-job-unpinned job spec args setup before))
          (finally (set! js/Math.random orig)))))
+
+(defn run-go-to [spec args & [setup before]] (run-job 'jobs.movement.go-to spec args setup before))
 
 (defn steps [seen] (mapv :step (filter #(= :go-to.escalated (:kind %)) seen)))
 
@@ -329,7 +331,29 @@
                                                    {:pos [9 61 0] :range 1 :escalate false :unknown true} watch!))]
           (is (true? @held) "the off hand held the torch during the walk")
           (is (= 1 (count (filter #(= :go-to.off-hand-torch (:kind %)) seen))) "once per call")
-          (is (not= :unseen-floor-dark (:why out)) (str "near 7 sees the drop: " (pr-str out))))))))
+          (is (= [:one-way {:kind :drop :at [1 62 0]}] [(:why out) (:one-way out)])
+              (str "near 7 sees the shaft's floor: the drop is planned, and refused only as one-way " (pr-str out))))))))
+
+(deftest go-to-with-unknown-holds-a-carried-soul-torch-in-the-dark
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [held (atom nil)
+              watch! (fn [{:keys [p] :as world}]
+                       (dark-and-looked world)
+                       (add-watch (fake/state p) :off-hand
+                                  (fn [_ _ _ w] (when-let [n (get-in w [:equipment "offHand" :name])] (reset! held n)))))
+              {:keys [out p]} (await (run-go-to (assoc in-tunnel :inventory [{:name "soul_torch" :count 4}])
+                                                {:pos [9 61 0] :range 1 :escalate false :unknown true} watch!))
+              w @(fake/state p)]
+          (is (= "soul_torch" @held) "the off hand held the soul torch during the walk")
+          (is (= :one-way (:why out)) (pr-str out))
+          (is (nil? (get-in w [:equipment "offHand"])) "put back")
+          (is (= 4 (reduce + (map :count (filter #(= "soul_torch" (:name %)) (:inventory w))))) (pr-str (:inventory w))))))))
+
+(deftest torch-aid-reads-nothing-without-unknown
+  (let [p (js/Proxy. #js {} #js {:get (fn [_ k] (throw (js/Error. (str "read " (str k)))))})]
+    (is (false? (torch/torch-aid? {:primitives p} {:dark-best {:x 1 :y 62 :z 0}})))))
 
 (deftest go-to-with-unknown-puts-the-off-hand-torch-back-when-the-call-ends
   (async done
@@ -403,6 +427,17 @@
         (let [{:keys [p]} (await (run-go-to (assoc in-tunnel :equipment {"offHand" {:name "torch" :count 4}})
                                             {:pos [9 61 0] :range 1 :escalate false :unknown true} dark-and-looked))]
           (is (= "torch" (get-in @(fake/state p) [:equipment "offHand" :name]))))))))
+
+(deftest path-preview-with-unknown-shows-the-dark-drop-go-to-would-refuse
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [preview (fn [args] (run-job 'jobs.movement.path-preview in-tunnel (merge {:pos [9 61 0] :range 1} args) dark-and-looked))
+              seen-all (:out (await (preview {})))
+              masked (:out (await (preview {:unknown true})))]
+          (is (true? (:found seen-all)) (pr-str seen-all))
+          (is (= [false :unseen-floor-dark] [(:found masked) (:reason masked)]) (pr-str masked))
+          (is (= {:x 1 :y 62 :z 0} (select-keys (:dark-best masked) [:x :y :z])) (pr-str masked)))))))
 
 (deftest go-to-escalation-child-sees-the-torches-in-the-inventory
   (async done
