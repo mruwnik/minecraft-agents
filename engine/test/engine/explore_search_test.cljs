@@ -214,8 +214,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [seen [{:kind :seen :what "diamond_block" :pos [45 64 3] :by "Other" :t 1 :until 9e15}]
-              s (await (search! {:target "diamond_block"} {} 400 #(write-other! % "Other" seen)))
-              own (await (search! {:target "diamond_block" :use-notes false :max-distance 20} {} 400
+              s (await (search! {:target "diamond_block"} {:cone? true :blocks diamond} 400 #(write-other! % "Other" seen)))
+              own (await (search! {:target "diamond_block" :use-notes false :max-distance 20} {:cone? true :blocks diamond} 400
                                   #(write-other! % "Other" seen)))]
           (is (= [{:what "diamond_block" :pos [45 64 3] :noted true :by "Other"}] (:found (event-of s :search.done))))
           (is (= [] (walks s)))
@@ -377,3 +377,25 @@
             (is (> (get-in e [:coverage :scans]) 5) "the points are examined over several steps")
             (is (= :distance (:why e)))
             (is (> (count (get-in e [:coverage :failed])) 100))))))))
+
+(def sealed-room
+  "Stone x 2..30, z 8..24, y 64..70 with a 3x3x2 room x 15..17, z 15..17 (the body in it) and ore buried at 22,64,16 and 16,64,21."
+  (merge (tu/box 2 64 8 30 70 24 "stone") (tu/box 15 64 15 17 65 17 "air")
+         {"22,64,16" "iron_ore" "16,64,21" "iron_ore"}))
+
+(deftest buried-ore-is-not-found-from-inside-a-sealed-room
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (search! {:target "iron_ore" :count 1 :max-distance 8 :spacing 4 :scan-radius 16 :timeout-s 40}
+                                {:blocks sealed-room :cone? true :self {:pos {:x 16.5 :y 64 :z 16.5}}} 60))]
+          (is (nil? (event-of s :search.done)) (pr-str (:found (event-of s :search.done)))))))))
+
+(deftest a-note-of-a-block-the-body-now-sees-as-something-else-is-not-a-finding
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [seen [{:kind :seen :what "diamond_block" :pos [0 64 5] :by "Other" :t 1 :until 9e15}]
+              s (await (search! {:target "diamond_block" :max-distance 20 :max-legs 0} {:cone? true} 60 #(write-other! % "Other" seen)))]
+          (is (nil? (event-of s :search.done)) "the cell is in view and holds air: the note is out of date")
+          (is (= :not-found (:reason (event-of s :search.not-found)))))))))

@@ -30,7 +30,8 @@
   yet), then the search ends :not-loaded. A walk go-to gives up on is recorded :unreachable. Three of those in
   a row end the search (:stuck).
 
-  With :use-notes, live :seen notes of a target within :max-distance count as found (:noted true, :by).
+  With :use-notes, live :seen notes of a target within :max-distance count as found (:noted true, :by), unless the body
+  sees another block at that cell now.
 
   Ends with {:reason :found|:not-found :why :found [{:what :pos :id? :noted? :by?}] :coverage {:legs :scans
   :failed [{:pos :reason}] :skipped :farthest}}, info search.done or warn search.not-found. :why is one of
@@ -146,12 +147,21 @@
   [found new want]
   (vec (take want (reduce (fn [v f] (if (some #(= (finding-key f) (finding-key %)) v) v (conj v f))) found new))))
 
+(defn outdated?
+  "Whether the body's own sight holds a different block at the cell of block note n (a cell never seen proves nothing)."
+  [p n]
+  (let [[x y z] (:pos n)
+        seen (when-not (:id n) (u/seen-name p {:x x :y y :z z}))]
+    (boolean (and seen (not= seen (:what n))))))
+
 (defn noted
-  "Findings from live :seen notes of names within max-distance (XZ) of the origin [x y z]."
-  [ns names [ox _ oz] max-distance]
+  "Findings from live :seen notes of names within max-distance (XZ) of the origin [x y z], leaving out a block note the
+  body now sees something else at."
+  [p ns names [ox _ oz] max-distance]
   (->> ns
        (filter #(and (= :seen (:kind %)) (some #{(:what %)} names)
-                     (<= (xz-dist [((:pos %) 0) ((:pos %) 2)] [ox oz]) max-distance)))
+                     (<= (xz-dist [((:pos %) 0) ((:pos %) 2)] [ox oz]) max-distance)
+                     (not (outdated? p %))))
        (map (fn [n] (cond-> {:what (:what n) :pos (:pos n) :noted true :by (:by n)} (:id n) (assoc :id (:id n)))))))
 
 ;; ------------------------------------------------------------------ the body
@@ -284,7 +294,7 @@
         _ (await (scan! c names))
         ns (notes/notes c)
         m (ctx/mem c)
-        found (cond-> (:found m) use-notes (add-found (noted ns names (:origin m) max-distance) want))]
+        found (cond-> (:found m) use-notes (add-found (noted (:primitives c) ns names (:origin m) max-distance) want))]
     (ctx/update-mem! c assoc :found found)
     (cond
       (>= (count found) want) (finish! c :found nil)
