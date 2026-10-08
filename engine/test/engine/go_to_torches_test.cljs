@@ -279,3 +279,21 @@
                                                                   :unknown (wworld/unknown-spec nil)))))]
     (is (= 7 (round {:unknown {:light-cost 7}})))
     (is (= (:cost (cost/light-cost {:carried 4})) (round {:unknown true})))))
+
+(deftest go-to-with-no-torch-fetches-torches-from-a-seen-chest-lights-the-drop-and-arrives
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out seen p]} (await (gs/run-go-to (assoc shielded :inventory []
+                                                                :blocks (assoc ledge "-2,64,0" "chest")
+                                                                :containers {"-2,64,0" [{:name "torch" :count 8}]})
+                                                        {:pos below :range 1 :escalate false :unknown true
+                                                         :place-torches true :ignore-zones? true}
+                                                        dark-with-torch-light))]
+          (is (= {:arrived true} out) (pr-str out))
+          (is (= 1 (count (filter #(= :fetch.started (:kind %)) seen))) (pr-str (map :kind seen)))
+          (is (empty? (filter #(= :fetch.failed (:kind %)) seen)))
+          (is (= 1 (count (torch-cells p))) "one torch on the takeoff")
+          (is (= 3 (torches-held p)) "go-to/torch-need (4) taken from the chest, one placed")
+          (is (= 4 (get-in @(fake/state p) [:containers [-2 64 0] 0 :count])) "the other four stay in the chest")
+          (is (= 1 (count (filter #(= :walk.torch-placed (:kind %)) seen)))))))))
