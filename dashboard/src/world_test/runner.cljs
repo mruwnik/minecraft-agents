@@ -23,7 +23,7 @@
 
 (def usage
   (str "usage: node tools/world-test.mjs [fixture.edn|dir ...] [--tag T] [--match TEXT] [--match-id ID ...] [--repeat N] [--body NAME]\n"
-       "         [--world claude] [--first-plot I] [--card ID] [--allow-time --time-log FILE] [--results FILE] [--phase day|night|night-exclusive] [--retry-failed N] [--changed-since-pass] [--stop-on-fail] [--list] [--check]\n"
+       "         [--world claude] [--first-plot I] [--card ID] [--allow-time --time-log FILE] [--results FILE] [--phase day|night|night-exclusive] [--night-batch ID] [--night-classes] [--retry-failed N] [--changed-since-pass] [--stop-on-fail] [--list] [--check]\n"
        "--phase runs only the cases of that time class (case level; :any and untimed cases, and :day, count as day; a case whose first :time-set step is\n"
        "night counts as night): run day, then night, then night-exclusive so the time lock never flips mid-pass.\n"
        "--changed-since-pass skips a fixture file that passed fully at a recorded revision (every run passes record it, in .claude/world-test-passes.edn) when no file of the jobs and triggers it uses (and what their source names) changed since, tracked or untracked; any engine, js, trigger-default or runner change, or a change to the fixture file, runs it.\n"
@@ -46,6 +46,8 @@
       (empty? all) opts
       (= a "--tag") (recur more (assoc opts :tag b))
       (= a "--match") (recur more (assoc opts :match b))
+      (= a "--night-batch") (recur more (assoc opts :night-batch b))
+      (= a "--night-classes") (recur (rest all) (assoc opts :night-classes true))
       (= a "--match-id") (recur more (update opts :match-ids (fnil conj #{}) b))
       (= a "--repeat") (recur more (assoc opts :repeat (js/Number b)))
       (= a "--body") (recur more (assoc opts :body b))
@@ -112,7 +114,7 @@
   [cases phase]
   (if-not phase
     cases
-    (filterv #(= phase (case (lease/time-phase %) :night "night" :night-x "night-exclusive" "day")) cases)))
+    (filterv #(= phase (case (lease/time-phase %) :night "night" :night-x "night-exclusive" :weather-x "night-exclusive" "day")) cases)))
 
 (def pass-record-path ".claude/world-test-passes.edn")
 
@@ -597,17 +599,45 @@
   [opts rc]
   (or (lease/time-phase rc) (if (:allow-time opts) :day :any)))
 
+(defn lock-batch
+  "The batch id a case locks with: only a :night-exclusive case shares its night, with the cases of the same --night-batch."
+  [opts rc]
+  (when (= :night-x (lease/time-phase rc)) (:night-batch opts)))
+
+(defn joiner-refresh?
+  "Whether a joiner of phase re-sets a drifted time of day: not for :any, without --allow-time, for a case that sets the time itself,
+  nor in a night batch (the pool sizes a batch to one night, so a reset would only break the cases running)."
+  [opts phase rc]
+  (not (or (#{:any :weather-x} phase) (not (:allow-time opts)) (some #(= :time-set (first %)) (:act rc))
+           (and (= :night-x phase) (:night-batch opts)))))
+
+(defn night-class-line
+  "The --list --night-classes line of an exclusive night case: its id and lease/night-class."
+  [c]
+  (str (:id c) "  " (name (lease/night-class c))))
+
+(def night-batch-marker-dir (path/join (os/tmpdir) "mc-night-batches"))
+
+(defn night-batch-set?
+  "Whether a case of the batch already put the night in place (the pool deletes the marker when the batch ends)."
+  [batch]
+  (fs/existsSync (path/join night-batch-marker-dir batch)))
+
+(defn mark-night-batch-set! [batch]
+  (fs/mkdirSync night-batch-marker-dir #js {:recursive true})
+  (fs/writeFileSync (path/join night-batch-marker-dir batch) (str (js/Date.now))))
+
 (defn acquire-shared!
   "Resolves to {:first? bool} when this process holds the time lock for phase (:day, :night or :any), logging who it waits
   for (once per holder set). Holders of the same phase share it; :any joins the phase that holds, else the world's.
   env: {:ops lock dir ops, :read-phase (-> promise of :day or :night), :sleep, :log}."
-  [{:keys [ops read-phase sleep log]} phase what]
+  [{:keys [ops read-phase sleep log batch]} phase what]
   (let [pid (.-pid js/process)
         seq (js/Date.now)]
     (letfn [(attempt [told]
               (.then (if (= :any phase) (read-phase) (js/Promise.resolve :day))
                      (fn [wp]
-                       (let [r (lease/try-share ops pid phase seq wp)]
+                       (let [r (lease/try-share ops pid phase seq wp batch)]
                          (if (:held r)
                            {:first? (:first? r)}
                            (do (when-not (= told (:waiting-on r))
@@ -616,8 +646,8 @@
       (attempt nil))))
 
 (defn acquire-time-lock!
-  [phase what]
-  (acquire-shared! {:ops (time-lock-dir-ops)
+  [phase what & [batch]]
+  (acquire-shared! {:ops (time-lock-dir-ops) :batch batch
                     :read-phase #(.then (rcon! ["time query day"]) (fn [[reply]] (if (night? (daytime (or reply ""))) :night :day)))
                     :sleep sleep :log log!}
                    phase what))
@@ -673,6 +703,25 @@
                (fs/appendFileSync file (str (local-now) " time set " ticks " by world-test " (:body opts)
                                             " for card " (or (:card opts) "world-fixtures") " (" why ")\n")))
              true))))
+
+(defn weather-wanted
+  "The weather case rc runs under: its own :weather, else clear."
+  [rc]
+  (or (:weather rc) :clear))
+
+(defn apply-weather!
+  "Sets the weather when allowed (and logs it like a time set); resolves to true, or false when not allowed. send: rcon fn."
+  [send opts weather why]
+  (if-not (:allow-time opts)
+    (js/Promise.resolve false)
+    (.then (send [(str "weather " (name weather))])
+           (fn [_]
+             (when-let [file (:time-log opts)]
+               (fs/appendFileSync file (str (local-now) " weather " (name weather) " by world-test " (:body opts)
+                                            " for card " (or (:card opts) "world-fixtures") " (" why ")\n")))
+             true))))
+
+(defn set-weather! [opts weather why] (apply-weather! rcon! opts weather why))
 
 (defn time-ok!
   "Whether the server's time suits case c, setting it first when allowed."
@@ -1210,19 +1259,31 @@
         weather (atom nil)
         result (fn [m] (cond-> (merge {:id (:id c) :run run :plot i :origin origin :elapsed-s (/ (- (js/Date.now) started) 1000)} m)
                          @weather (assoc :weather @weather)))]
-    (-> (let [phase (lock-phase opts rc)]
+    (-> (let [phase (lock-phase opts rc)
+              batch (lock-batch opts rc)]
           (hold-phase!
            {:stop! stop!
-            :acquire! #(acquire-time-lock! phase (str (:id c) (if (= :any phase) " runs under the current time" " depends on the time of day")))
+            :acquire! #(acquire-time-lock! phase (str (:id c) (if (= :any phase) " runs under the current time" " depends on the time of day")) batch)
             :first-set! (fn []
-                          (-> (if (= :any phase) true (time-ok! opts (if (lease/time-phase rc) rc (assoc rc :time :day))))
+                          (-> (cond
+                                (= :any phase) true
+                                (and batch (night-batch-set? batch)) (js/Promise.resolve true)
+                                batch (.then (set-time! opts 14000 (str (:id c) " starts night batch " batch))
+                                             (fn [ok] (when ok (mark-night-batch-set! batch)) ok))
+                                :else (time-ok! opts (if (lease/time-phase rc) rc (assoc rc :time :day))))
                               (.then (fn [ok]
                                        (if (or (not ok) (= :any phase))
                                          ok
-                                         (.then (confirm-phase! (if (#{:night :night-x} phase) :night :day)) (fn [_] ok)))))
+                                         (.then (confirm-phase! (if (or (#{:night :night-x} phase) (and (= :weather-x phase) (#{:night :night-exclusive} (:time rc)))) :night :day))
+                                                (fn [_] ok)))))
+                              (.then (fn [ok]
+                                       (if (or (not ok) (= :any phase))
+                                         ok
+                                         (.then (set-weather! opts (weather-wanted rc) (str (:id c) " starts the " (name phase) " phase"))
+                                                (fn [set?] (or set? (not= :weather-x phase)))))))
                               (.then (fn [ok] (mark-phase-set!) ok))))
             :refresh! (fn []
-                        (if (or (= :any phase) (not (:allow-time opts)) (some #(= :time-set (first %)) (:act rc)))
+                        (if-not (joiner-refresh? opts phase rc)
                           (js/Promise.resolve true)
                           (refresh-phase-time!
                            {:read-ticks #(.then (rcon! ["time query day"]) (fn [[reply]] (daytime (or reply ""))))
@@ -1232,7 +1293,7 @@
         (.then (fn [ok] (note-last-plot! opts origin grid) ok))
         (.then (fn [ok]
                  (if-not ok
-                   (result {:status :skipped :why (str "needs " (name (:time rc)) " (no --allow-time)")})
+                   (result {:status :skipped :why (str "needs " (if (lease/weather-x? rc) (str "weather " (name (:weather rc))) (name (:time rc))) " (no --allow-time)")})
                    (-> (.then (rcon! ["time query day"])
                               (fn [[reply]] (reset! t-start {:ticks (daytime (or reply "")) :ms (js/Date.now)})))
                        (.then #(read-weather! rcon!))
@@ -1282,6 +1343,7 @@
                                        (exec-file ["engine/tools/drive.mjs" (:body opts) "release" "--force" "--world" (:world opts)]))
                                     #(exec-file ["engine/tools/jobs.mjs" (:body opts) "--world" (:world opts) "cancel-all"])
                                     #(rcon! (f/cleanup-commands grid origin (:body opts) rc))
+                                    #(when (lease/weather-x? rc) (set-weather! opts :clear (str (:id c) " ended")))
                                     #(when (f/writes-shared? c) (drop-shared! opts))
                                     #(run! (fn [f] (when (fs/existsSync f) (fs/unlinkSync f))) @plan-files)])
                      (.then (constantly r)))))
@@ -1549,7 +1611,11 @@
                                          res)
                                    (log! "world-test --check: " (count res) " cases, " (count (remove #(= :pass (:status %)) res)) " failed")
                                    (check-exit-code res))
-                   (:list opts) (do (run! #(log! (:id %) "  " (pr-str (:tags %)) (when (:problems %) (str "  PROBLEMS " (:problems %)))) cases) 0)
+                   (:list opts) (do (run! (if (:night-classes opts)
+                                           #(log! (night-class-line %))
+                                           #(log! (:id %) "  " (pr-str (:tags %)) (when (:problems %) (str "  PROBLEMS " (:problems %)))))
+                                         cases)
+                                   0)
                    (empty? cases) (do (log! "no cases selected") 2)
                    (seq bad) (do (run! #(log! (:id %) ": " (str/join "; " (:problems %))) bad) 2)
                    (running? opts) (do (log! "the body " (:body opts) " already runs; stop it first") 2)

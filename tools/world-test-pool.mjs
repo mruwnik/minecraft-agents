@@ -12,6 +12,9 @@
 // With TEST_EVENTS=1 the pool prints the @@test lines itself (children print none): a plan with the total of all listed cases up front
 // (world-test --list), one result per case with its final status (a rerun that also fails is one failure), and progress lines
 // {done, total, retries} (reruns are counted in retries only).
+//   --night-batches  (with --phase night-exclusive --allow-time) runs the cases in night batches instead of one file per body: cases that only need a night run together, at most --bodies at once,
+//                     packed longest first so a batch fits one night; the case that needs the vanilla night skip (:sleep-skip) runs in its own batch; every case that sets the time itself runs alone.
+//                     Each batch has one `time set 14000`, made by its first case, and the next batch waits for all of it. A failed case reruns alone in a batch of its own (--retry-failed); no --repeat above 1.
 // A failed case whose last result in the --durations files was a fail on the same first failing check is a known failure: no rerun, :known-failure true in its result (and knownFailure in its event).
 //   --retry-failed N the pool owns retries (children never get it): a failed case (not an error or inconclusive one, as in the single-body runner)
 //                     is rerun up to N times (default 1; exactly its --match-id, one run) on a different body when the pool has one; a pass is :flaky.
@@ -126,6 +129,28 @@ export const parseListed = (text) => {
 // the units that have at least one listed case (all of them without a listing)
 export const noCasesSelected = (units, listed) => listed !== null && !units.length
 export const unitsWithCases = (units, listed) => (listed ? units.filter((u) => listed.has(u)) : units)
+// ---- night batches
+const NIGHT_BUDGET_S = 330 // a night is 13000-22000: 8000 ticks from 14000 are 400 s at 20 TPS, less the set-up of each body
+const NIGHT_DEFAULT_S = 90 // for a case with no recorded duration
+export const parseNightClasses = (text) => text.split('\n').map((l) => l.trim().split(/\s+/)).filter((w) => w[0]).map(([id, cls]) => ({ id, cls }))
+export const durationsById = (texts) => {
+  const m = new Map()
+  for (const text of texts) for (const f of splitForms(text)) { const s = summarize(f); m.set(s.id, s.elapsed) }
+  return m
+}
+const chunks = (xs, n) => Array.from({ length: Math.ceil(xs.length / n) }, (_, i) => xs.slice(i * n, i * n + n))
+// the batches in running order: natural cases longest first, `bodies` at most at once (one that outlasts the budget alone, first); the skip cases; every solo case alone
+export const nightBatches = (cases, durations, { bodies, budgetS = NIGHT_BUDGET_S, defaultS = NIGHT_DEFAULT_S }) => {
+  const secs = (id) => durations.get(id) ?? defaultS
+  const idsOf = (cls) => cases.filter((c) => c.cls === cls).map((c) => c.id)
+  const natural = idsOf('natural').map((id, i) => ({ id, i })).sort((a, b) => secs(b.id) - secs(a.id) || a.i - b.i).map((x) => x.id)
+  return [
+    ...natural.filter((id) => secs(id) > budgetS).map((id) => ({ kind: 'long', ids: [id] })),
+    ...chunks(natural.filter((id) => secs(id) <= budgetS), bodies).map((ids) => ({ kind: 'natural', ids })),
+    ...chunks(idsOf('skip'), bodies).map((ids) => ({ kind: 'skip', ids })),
+    ...idsOf('solo').map((id) => ({ kind: 'solo', ids: [id] })),
+  ]
+}
 const emitLine = (e) => { if (process.env.TEST_EVENTS) console.log(`@@test ${JSON.stringify(e)}`) }
 export const mergeText = (forms) => `[${forms.join('\n ')}]`
 
@@ -146,11 +171,12 @@ export const unitOrder = (files, previousTexts) => {
 }
 
 export const parsePoolArgs = (args) => {
-  const p = { bodies: 1, prefix: 'ProbePool', firstPlot: 0, results: null, maxParallel: null, durations: [], retries: 1, serverWaitS: 300, serverSettleS: 10, paths: [], passthrough: [], matchIds: [], matchIdsFile: null }
+  const p = { bodies: 1, prefix: 'ProbePool', firstPlot: 0, results: null, maxParallel: null, durations: [], retries: 1, serverWaitS: 300, serverSettleS: 10, paths: [], passthrough: [], matchIds: [], matchIdsFile: null, nightBatches: false }
   for (let i = 0; i < args.length; i++) {
     const a = args[i]
     if (!a.startsWith('--')) { p.paths.push(a); continue }
     const v = args[i + 1]
+    if (a === '--night-batches') { p.nightBatches = true; continue }
     if (!POOL_VALUE_FLAGS.includes(a)) { p.passthrough.push(a); if (VALUE_FLAGS.includes(a)) p.passthrough.push(args[++i]); continue }
     i++
     if (a === '--durations') { p.durations.push(v); while (args[i + 1] !== undefined && !args[i + 1].startsWith('--')) p.durations.push(args[++i]); continue }
@@ -353,6 +379,52 @@ export const runPool = async ({ units, workers, runUnit, retries = 1, load = () 
   return { skipped, text: mergeText(forms), code: !forms.length ? 2 : forms.every((f) => ['pass', 'flaky'].includes(summarize(f).status)) ? 0 : 1 }
 }
 
+// Runs the batches one after the other (a batch's cases together, one per worker, each with the batch id in its unit); a failed case reruns alone
+// (own batch, up to retries times; a pass is :flaky); a known failure is not rerun. runUnit({id, batch, worker}) -> {code, text}. -> {text, code} like runPool.
+export const runNightBatches = async ({ batches, workers, runUnit, retries = 1, known = new Map(), total = null, emit = () => {}, onBatchEnd = () => {} }) => {
+  const done = new Map()
+  let finals = 0
+  let reruns = 0
+  let seq = 0
+  const settle = (id, form) => {
+    done.set(id, form)
+    emit(resultEvent(form))
+    emit({ event: 'progress', done: ++finals, total: total ?? finals, unit: 'cases', retries: reruns })
+  }
+  const runBatch = async (ids) => {
+    const batch = `${process.pid}-${seq++}`
+    const out = await Promise.all(ids.map(async (id, k) => {
+      const res = await runUnit({ id, batch, worker: workers[k % workers.length] })
+      const mine = (res.text ? splitForms(res.text) : []).find((f) => summarize(f).id === id)
+      return [id, mine ?? errorForm(id.split('/')[0], `the run exited ${res.code} with no result for this case`, id)]
+    }))
+    onBatchEnd(batch)
+    return out
+  }
+  const failing = []
+  for (const batch of batches) {
+    for (const [id, form] of await runBatch(batch.ids)) {
+      if (!failed(summarize(form)) || retries <= 0) settle(id, form)
+      else if (known.get(id) === failSig(form)) settle(id, withExtra(form, ':known-failure true'))
+      else failing.push([id, form])
+    }
+  }
+  for (const [id, first] of failing) {
+    let last = first
+    let flaky = false
+    for (let attempt = 0; attempt < retries && !flaky; attempt++) {
+      reruns++
+      const [, form] = (await runBatch([id]))[0]
+      last = form
+      flaky = summarize(form).status === 'pass'
+      if (!flaky && !failed(summarize(form))) break
+    }
+    settle(id, flaky ? withStatus(last, 'flaky', `:first-failure ${first}`) : last)
+  }
+  const forms = batches.flatMap((b) => b.ids).map((id) => done.get(id))
+  return { text: mergeText(forms), code: !forms.length ? 2 : forms.every((f) => ['pass', 'flaky'].includes(summarize(f).status)) ? 0 : 1 }
+}
+
 // ---- the real thing
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const fixtureFiles = (paths) => paths.flatMap((p) => (fs.statSync(p).isDirectory()
@@ -363,8 +435,8 @@ const bodyCap = () => Math.max(1, (slotConfig().kinds.body.max ?? 1) - 1)
 const availableMb = () => Number(fs.readFileSync('/proc/meminfo', 'utf8').match(/MemAvailable:\s+(\d+)/)[1]) / 1024
 
 // One child per unit: the ordinary one-body entry point (it takes the body slot and the body claim itself). Exit 75 = busy: ask again.
-const spawnChild = (script, pass, matchIds, { file, match, worker }, tmpResults, reaper) => new Promise((resolve) => {
-  const argv = [script, file, ...pass, '--body', worker.body, '--first-plot', String(worker.firstPlot), '--results', tmpResults, ...(match ? ['--match-id', match, '--repeat', '1'] : withMatchIds(matchIds))]
+const spawnChild = (script, pass, matchIds, { file, match, worker, batch }, tmpResults, reaper) => new Promise((resolve) => {
+  const argv = [script, file, ...pass, ...(batch ? ['--night-batch', batch] : []), '--body', worker.body, '--first-plot', String(worker.firstPlot), '--results', tmpResults, ...(match ? ['--match-id', match, '--repeat', '1'] : withMatchIds(matchIds))]
   // the pool reports the @@test events itself (fixed total, final status per case), so a child prints none
   const { TEST_EVENTS: _events, ...env } = process.env
   const child = spawn(process.execPath, argv, { stdio: 'inherit', env })
@@ -375,6 +447,7 @@ const spawnChild = (script, pass, matchIds, { file, match, worker }, tmpResults,
 // every case of the fixture files as the children will select them (--list needs no world); null when the listing fails
 // the --list call selects cases with the same paths and flags (--phase, --tag, --match, ...) the children get
 export const listArgs = (p) => [...p.paths, ...p.passthrough, ...withMatchIds(p.matchIds), '--list']
+export const nightListArgs = (p) => [...listArgs(p), '--night-classes']
 const repeatOf = (p) => { const at = p.passthrough.indexOf('--repeat'); return at < 0 ? 1 : Number(p.passthrough[at + 1]) }
 const listCases = (script, p) => {
   const r = spawnSync(process.execPath, [script, ...listArgs(p)], { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 })
@@ -404,6 +477,45 @@ export const serverProbe = (ports) => () => Promise.all(ports.map((port) => new 
   sock.on('error', () => resolve(false))
 }))).then((answers) => answers.every(Boolean))
 
+const nightMain = async (p, byStem, previous, script) => {
+  const pass = p.passthrough
+  const phaseAt = pass.indexOf('--phase')
+  if (phaseAt < 0 || pass[phaseAt + 1] !== 'night-exclusive' || !pass.includes('--allow-time')) { console.error('world-test pool: --night-batches needs --phase night-exclusive and --allow-time'); return 2 }
+  if (repeatOf(p) > 1) { console.error('world-test pool: --night-batches runs each case once (no --repeat)'); return 2 }
+  const r = spawnSync(process.execPath, [script, ...nightListArgs(p)], { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 })
+  const cases = r.status === 0 ? parseNightClasses(r.stdout) : []
+  if (!cases.length) { console.error('world-test pool: no cases selected'); emitLine({ event: 'plan', total: 0 }); return 2 }
+  const cores = os.cpus().length
+  const cap = poolCap({ bodies: p.bodies, maxParallel: p.maxParallel, availableMb: availableMb(), floorMb: slotConfig().floorMb, needMb: slotConfig().kinds.body.needMb, bodyMax: bodyCap() })
+  const workers = workerSpecs(cap, bodyCap(), p.prefix, p.firstPlot)
+  const batches = nightBatches(cases, durationsById(previous), { bodies: workers.length })
+  console.error(`world-test pool: ${cases.length} night cases in ${batches.length} batches on up to ${workers.length} bodies (${batches.map((b) => `${b.kind}:${b.ids.length}`).join(' ')}; ${cores} cores)`)
+  const reaper = createReaper((f) => fs.rmSync(f, { force: true }))
+  process.on('exit', reaper.reap)
+  for (const [sig, code] of [['SIGINT', 130], ['SIGTERM', 143]]) process.on(sig, () => { reaper.reap(); process.exit(code) })
+  const markerDir = path.join(os.tmpdir(), 'mc-night-batches')
+  const runUnit = async (unit) => {
+    const tmp = `${p.results ?? path.join(process.env.TMPDIR ?? '/tmp', 'world-test-pool')}.${process.pid}.${unit.worker.body}.edn`
+    let code
+    for (let tries = 0; tries < 20; tries++) {
+      fs.rmSync(tmp, { force: true })
+      code = await spawnChild(script, pass, [], { file: byStem.get(unit.id.split('/')[0]), match: unit.id, worker: unit.worker, batch: unit.batch }, tmp, reaper)
+      if (code !== 75) break
+      await sleep(5000)
+    }
+    const text = fs.existsSync(tmp) ? fs.readFileSync(tmp, 'utf8') : null
+    fs.rmSync(tmp, { force: true })
+    return { code, text }
+  }
+  emitLine({ event: 'plan', total: cases.length })
+  const res = await runNightBatches({ batches, workers, runUnit, retries: p.retries, total: cases.length, known: knownFailures(previous), emit: emitLine, onBatchEnd: (batch) => fs.rmSync(path.join(markerDir, batch), { force: true }) })
+  if (p.results) fs.writeFileSync(p.results, res.text)
+  const sums = splitForms(res.text).map(summarize)
+  const count = (st) => sums.filter((x) => x.status === st).length
+  console.error(`world-test pool: ${sums.length} cases, ${count('pass')} pass, ${count('flaky')} flaky, ${sums.length - count('pass') - count('flaky')} not passing`)
+  return res.code
+}
+
 export const main = async (args) => {
   const p = parsePoolArgs(args)
   if (p.matchIdsFile) p.matchIds.push(...matchIdsFrom(fs.readFileSync(p.matchIdsFile, 'utf8')))
@@ -411,6 +523,7 @@ export const main = async (args) => {
   const byStem = new Map(fixtureFiles(p.paths).map((f) => [path.basename(f, '.edn'), f]))
   const previous = readDurations(p.durations)
   const script = path.join(here, 'world-test.mjs')
+  if (p.nightBatches) return nightMain(p, byStem, previous, script)
   const listing = listCases(script, p)
   const listed = listing === null ? null : parseListed(listing)
   const units = unitsWithCases(unitOrder([...byStem.keys()], previous), listed)

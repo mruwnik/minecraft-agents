@@ -11,6 +11,7 @@
  :cases
  [{:name "night-sleeps-wakes-and-completes"
    :time :night-exclusive
+   :sleep-skip true
    :tags [:night]
    :blocks [[:set [20 0 16] "red_bed[facing=east,part=foot]"] [:set [21 0 16] "red_bed[facing=east,part=head]"]]
    :act [[:job (jobs.memory.set-place {:name :bed :pos #at [20 0 16]})]

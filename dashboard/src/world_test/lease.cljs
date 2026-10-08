@@ -70,14 +70,16 @@
         world-phase)))
 
 (defn decide
-  "entries: {pid {:phase :state (:hold or :want) :seq}} of live processes. -> {:held true :first? bool} when pid may
+  "entries: {pid {:phase :state (:hold or :want) :seq :batch}} of live processes. -> {:held true :first? bool} when pid may
   hold phase now (every holder shares the phase and no waiter of the other phase is older), else {:waiting-on pids}.
-  :night-x (a sleeping case) shares with nobody: every holder and every older waiter blocks it, and it blocks all."
-  [entries pid phase seq]
+  :night-x (a sleeping case) shares with nobody but the :night-x entries of its own batch (nil batch: nobody): every other
+  holder and every older waiter blocks it, and it blocks all."
+  [entries pid phase seq batch]
   (let [others (dissoc entries pid)
         holders (filter (fn [[_ e]] (= :hold (:state e))) others)
-        solo? (fn [p] (= :night-x p))
-        differs? (fn [e] (or (not= phase (:phase e)) (solo? phase)))
+        solo? (fn [p] (contains? #{:night-x :weather-x} p))
+        same-batch? (fn [e] (and (some? batch) (= :night-x (:phase e)) (= batch (:batch e))))
+        differs? (fn [e] (or (not= phase (:phase e)) (and (solo? phase) (not (same-batch? e)))))
         blockers (concat (filter (fn [[_ e]] (differs? e)) holders)
                          (filter (fn [[_ e]] (and (= :want (:state e)) (differs? e) (< (:seq e) seq))) others))]
     (if (empty? blockers)
@@ -91,19 +93,21 @@
   entries are dropped. dir: {:guard (thunk -> its result, run exclusively) :entries (-> {pid entry}) :put! (pid entry)
   :remove! (pid) :alive? (pid -> bool)}. seq: when this process began waiting (keeps its place in the queue). phase :any
   (a time-independent case) joins the holders' phase, else world-phase (:day or :night), and waits like a holder of it."
-  ([dir pid phase seq] (try-share dir pid phase seq :day))
-  ([{:keys [guard entries put! remove! alive?]} pid phase seq world-phase]
+  ([dir pid phase seq] (try-share dir pid phase seq :day nil))
+  ([dir pid phase seq world-phase] (try-share dir pid phase seq world-phase nil))
+  ([{:keys [guard entries put! remove! alive?]} pid phase seq world-phase batch]
    (guard
     (fn []
       (let [live (into {} (filter (fn [[p _]] (or (= p pid) (alive? p)))) (entries))
             _ (run! remove! (remove live (keys (entries))))
             phase (effective-phase live pid phase world-phase)
-            r (decide live pid phase seq)
+            r (decide live pid phase seq batch)
+            entry (cond-> {:phase phase :seq seq} batch (assoc :batch batch))
             pending (when (:held r) (vec (sort (keep (fn [[p e]] (when (and (not= p pid) (= :hold (:state e)) (:setting e)) p)) live))))]
         (cond
-          (not-empty pending) (do (put! pid {:phase phase :state :want :seq seq}) {:waiting-on pending :setting true})
-          (:held r) (do (put! pid (cond-> {:phase phase :state :hold :seq seq} (:first? r) (assoc :setting true))) r)
-          :else (do (put! pid {:phase phase :state :want :seq seq}) r)))))))
+          (not-empty pending) (do (put! pid (assoc entry :state :want)) {:waiting-on pending :setting true})
+          (:held r) (do (put! pid (cond-> (assoc entry :state :hold) (:first? r) (assoc :setting true))) r)
+          :else (do (put! pid (assoc entry :state :want)) r)))))))
 
 (defn mark-set
   "The first holder calls this once the phase is really in place (its `time set` returned and `time query` confirmed):
@@ -112,12 +116,30 @@
   [{:keys [guard entries put!]} pid]
   (guard (fn [] (when-let [e (get (entries) pid)] (put! pid (dissoc e :setting))))))
 
+(defn weather-x?
+  "Whether case c sets rain or thunder (server-wide, so it runs alone: phase :weather-x)."
+  [c]
+  (contains? #{:rain :thunder} (:weather c)))
+
 (defn time-phase
-  "The phase (:day, :night or :night-x) whose time lock case c holds: its :time, else the phase of its first :time-set step; nil
+  "The phase (:day, :night, :night-x or :weather-x, a case with its own :weather) whose time lock case c holds: its :time, else the phase of its first :time-set step; nil
   when it does not depend on the time of day."
   [c]
-  (case (:time c)
-    :day :day
-    :night :night
-    :night-exclusive :night-x
-    (some (fn [[op ticks]] (when (= :time-set op) (phase-of-ticks ticks))) (:act c))))
+  (if (weather-x? c)
+    :weather-x
+    (case (:time c)
+      :day :day
+      :night :night
+      :night-exclusive :night-x
+      (some (fn [[op ticks]] (when (= :time-set op) (phase-of-ticks ticks))) (:act c)))))
+
+(defn night-class
+  "How a :night-exclusive case may share a night: :solo (a :time-set step flips the time for everyone, so it runs alone),
+  :skip (:sleep-skip true: needs the vanilla night skip, so it runs in a batch where every body sleeps), else :natural
+  (needs only night, batches with other natural cases)."
+  [c]
+  (cond
+    (weather-x? c) :solo
+    (some #(= :time-set (first %)) (:act c)) :solo
+    (:sleep-skip c) :skip
+    :else :natural))

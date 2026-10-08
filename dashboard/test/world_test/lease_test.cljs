@@ -316,3 +316,49 @@
     (l/mark-set (fake-share files #{10 11}) 10)
     (l/try-share (fake-share files #{10 11}) 11 :day 6)
     (is (= {:held true :first? false} (l/try-share (fake-share files #{11 12}) 12 :day 7)))))
+
+(deftest exclusive-night-holders-of-one-batch-share-the-night
+  (let [files (atom {10 (assoc (hold :night-x) :batch "b1")})]
+    (is (= {:held true :first? false} (l/try-share (fake-share files #{10 11}) 11 :night-x 5 :day "b1")))
+    (is (= "b1" (:batch (get @files 11))))))
+
+(deftest an-exclusive-night-case-of-another-batch-or-none-waits
+  (let [files (atom {10 (assoc (hold :night-x) :batch "b1")})]
+    (is (= {:waiting-on [10]} (l/try-share (fake-share files #{10 11}) 11 :night-x 5 :day "b2")))
+    (is (= {:waiting-on [10]} (l/try-share (fake-share files #{10 11}) 11 :night-x 5 :day nil)))
+    (is (= {:waiting-on [10]} (l/try-share (fake-share files #{10 11}) 11 :night 5 :day "b1")))))
+
+(deftest an-older-waiter-of-another-batch-blocks-a-batch-joiner
+  (let [files (atom {10 (assoc (hold :night-x) :batch "b1")
+                     12 (assoc (want :night-x 3) :batch "b2")})]
+    (is (= {:waiting-on [12]} (l/try-share (fake-share files #{10 11 12}) 11 :night-x 5 :day "b1")))))
+
+(deftest a-batch-joiner-waits-for-the-first-holder-to-mark-the-time-set
+  (let [files (atom {})
+        dir (fake-share files #{10 11})]
+    (is (= {:held true :first? true} (l/try-share dir 10 :night-x 1 :day "b1")))
+    (is (= {:waiting-on [10] :setting true} (l/try-share dir 11 :night-x 2 :day "b1")))
+    (l/mark-set dir 10)
+    (is (= {:held true :first? false} (l/try-share dir 11 :night-x 2 :day "b1")))))
+
+(deftest night-classes-of-the-exclusive-cases
+  (is (= [:solo :solo :skip :natural]
+         [(l/night-class {:time :night-exclusive :act [[:job 'x] [:time-set 1000]]})
+          (l/night-class {:time :night-exclusive :act [[:time-set 1000] [:time-set 14000]]})
+          (l/night-class {:time :night-exclusive :sleep-skip true :act [[:job 'x]]})
+          (l/night-class {:time :night-exclusive :act [[:job 'x]]})])))
+
+(deftest a-rain-or-thunder-case-holds-the-solo-weather-phase
+  (is (= [:weather-x :weather-x :day :night-x :solo]
+         [(l/time-phase {:time :day :weather :rain})
+          (l/time-phase {:time :night :weather :thunder :act []})
+          (l/time-phase {:time :day :weather :clear})
+          (l/time-phase {:time :night-exclusive :weather :clear})
+          (l/night-class {:time :day :weather :rain :act [[:job 'x]]})])))
+
+(deftest the-weather-phase-shares-with-nobody
+  (let [files (atom {10 (hold :day)})]
+    (is (= {:waiting-on [10]} (l/try-share (fake-share files #{10 11}) 11 :weather-x 5))))
+  (let [files (atom {10 (hold :weather-x)})]
+    (is (= {:waiting-on [10]} (l/try-share (fake-share files #{10 11}) 11 :day 5)))
+    (is (= {:waiting-on [10]} (l/try-share (fake-share files #{10 11}) 11 :weather-x 5)))))

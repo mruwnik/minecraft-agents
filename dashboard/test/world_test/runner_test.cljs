@@ -972,3 +972,44 @@
                    (is (= r/weather-commands @sent))
                    (r/read-weather! (fn [_] (js/Promise.reject (js/Error. "down"))))))
           (.then (fn [w] (is (nil? w)) (done)))))))
+
+(deftest night-batch-options
+  (is (= "n1" (:night-batch (r/parse-args #js ["--night-batch" "n1"]))))
+  (is (true? (:night-classes (r/parse-args #js ["--list" "--night-classes"]))))
+  (is (nil? (:night-batch (r/parse-args #js [])))))
+
+(deftest only-an-exclusive-night-case-locks-with-the-batch
+  (is (= ["n1" nil nil]
+         [(r/lock-batch {:night-batch "n1"} {:time :night-exclusive})
+          (r/lock-batch {:night-batch "n1"} {:time :night})
+          (r/lock-batch {} {:time :night-exclusive})])))
+
+(deftest a-batch-joiner-never-re-sets-the-time
+  (is (= [false true false false]
+         [(r/joiner-refresh? {:allow-time true :night-batch "n1"} :night-x {:act []})
+          (r/joiner-refresh? {:allow-time true} :night-x {:act []})
+          (r/joiner-refresh? {:allow-time true} :night {:act [[:time-set 1000]]})
+          (r/joiner-refresh? {} :night {:act []})])))
+
+(deftest the-night-class-line-names-the-class
+  (is (= "a/b  natural" (r/night-class-line {:id "a/b" :time :night-exclusive :act []})))
+  (is (= "a/c  solo" (r/night-class-line {:id "a/c" :time :night-exclusive :act [[:time-set 1000]]}))))
+
+(deftest set-weather-sends-and-logs-only-when-allowed
+  (async done
+    (let [sent (atom [])
+          file (str (os/tmpdir) "/weather-test-fixer-weather-control-" (js/Date.now) ".log")
+          send (fn [cmds] (swap! sent into cmds) (js/Promise.resolve ["Set the weather"]))]
+      (-> (r/apply-weather! send {:body "B" :card "c1"} :rain "case x")
+          (.then (fn [ok] (is (false? ok)) (is (empty? @sent))
+                   (r/apply-weather! send {:allow-time true :time-log file :body "B" :card "c1"} :rain "case x")))
+          (.then (fn [ok]
+                   (is (true? ok))
+                   (is (= ["weather rain"] @sent))
+                   (is (re-find #"weather rain by world-test B for card c1 \(case x\)" (fs/readFileSync file "utf8")))
+                   (fs/unlinkSync file)
+                   (done)))))))
+
+(deftest weather-wanted-is-the-cases-or-clear
+  (is (= [:rain :clear :clear]
+         [(r/weather-wanted {:weather :rain}) (r/weather-wanted {}) (r/weather-wanted {:weather :clear})])))
