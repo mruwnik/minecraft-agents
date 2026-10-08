@@ -1323,7 +1323,8 @@
           (core/tick! eng)
           (is (= [] (idles seen)) "10 s is not more than the default idle-s")
           (swap! clock + 1)
-          (core/tick! eng)
+          (let [r (core/tick! eng)]
+            (is (or (nil? r) (instance? js/Promise r)) "the tick that warns idle returns nil or a promise (start! calls .catch on it)"))
           (core/tick! eng)
           (is (= [["j1" 10001]] (mapv (juxt :job :idle-ms) (idles seen))) "warned once")
           (let [first-gate @gate]

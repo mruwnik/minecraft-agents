@@ -78,7 +78,8 @@
       (emit! eng (merge (job-fields eng (:id a))
                         {:source :job :kind :idle :level :warn :idle-ms idle-ms
                          :text (str "the round holds the body with no act for " (js/Math.round (/ idle-ms 1000))
-                                    " s and declared no hold (ctx/hold-still!)")})))))
+                                    " s and declared no hold (ctx/hold-still!)")}))
+      nil)))
 
 (defn idle-ok-node?
   "Whether every job of spec node declares (def idle-ok true): content to sit doing nothing (look-around, waits)."
