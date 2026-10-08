@@ -201,8 +201,8 @@ built-in recipe table, and instant, deterministic behaviour (`moveTo` jumps to t
 
 ## Jobs
 
-A job is a namespace under `src/jobs/` exporting `check` and `round`, and optionally `doc` and `args`. The
-namespace follows the path (`src/jobs/forestry/fell_tree.cljs` is `jobs.forestry.fell-tree`).
+A job is a namespace under `src/jobs/` exporting `check` and `round`, and optionally `doc`, `args` and `idle-ok` (`true`: its acts are no work, see
+`body.idle`). The namespace follows the path (`src/jobs/forestry/fell_tree.cljs` is `jobs.forestry.fell-tree`).
 
 ```clojure
 (ns jobs.survival.eat
@@ -434,6 +434,9 @@ the token so the in-flight round is never booked; the job stays listed.
   start) more than `:idle-s` (10) ago. An act or clearing a hold ends the spell.
 - `job.holding` (info): a declared hold (`ctx/hold-still!`, `act :wait` with `:why`); `jobs show` gives
   `:holding {:reason :since}`.
+- `body.idle` (info, once per stretch; wakes `observe --wait`; memory `:body-idle`): no act but `:wait` from a job not
+  `idle-ok` (look-around, linger-near, wait-for-day/-dusk) for `:engine.core.activity/body-idle-s` (10); lists each job with
+  its `:waiting`/`:holding` reason. A useful act or a list change re-arms it.
 - `job.fruitless`: a required attention request when every act of a listed job failed in 3 rounds in a row (a round that
   ends the job does not count; a round with no act neither counts nor resets); resolved by a round with progress. It only flags.
 - `job.round_started` and `job.yielded` are debug.
@@ -736,7 +739,7 @@ node engine/tools/time.mjs --world test clock | dawn --timeout 1200   # world ti
 node engine/tools/goal.mjs Bob --world test ["fence the pen" [--by NAME] | --clear]   # the goal line the dashboard shows (agents/Bob/goal.edn)
 ```
 
-- `observe --wait` blocks until addressed chat, new attention, a watched job or action finishing, an engine restart or the
+- `observe --wait` blocks until addressed chat, new attention, a watched job or action finishing, `body.idle`, an engine restart or the
   timeout (default 60 s). Each named observer (`--observer`) keeps its cursor in `worlds/<world>/observers/<body>/`; delivery
   is at least once. `--chatter none|addressed|all`, `--danger` and `--disconnect` choose what wakes it. Only the first `reconnect-failed` of an
   outage wakes it (later tries are summarised). Status of an offline body adds `:back-in-s`. A `died` wake or summary item carries `:cancelled-jobs [{:id :name}]` (jobs the death cancelled, seen in the same call).

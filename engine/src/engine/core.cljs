@@ -191,10 +191,11 @@
     :backoff     engine-wide backoff config of register entries, a map or false (see engine.backoff)
     :backoff-alert-ms  least gap between two job.backoff warns (300000)
     :idle-s            seconds with no act and no declared hold before job.idle (10)
+    :body-idle-s       seconds with no useful act before body.idle (setting :engine.core.activity/body-idle-s)
     :sweep-ms          memory sweep interval (60000)
     :stats-ms          memory.save-stats interval (60000)
     :max-event-bytes   event log size cap (setting :engine.events/max-bytes, 64 MiB)"
-  [{:keys [primitives jobs triggers dir now events body idle-s sweep-ms stats-ms world
+  [{:keys [primitives jobs triggers dir now events body idle-s body-idle-s sweep-ms stats-ms world
            max-event-bytes
            backoff backoff-alert-ms]
     :or {now js/Date.now idle-s default-idle-s sweep-ms default-sweep-ms
@@ -238,6 +239,8 @@
              :backoff backoff
              :backoff-alert-ms backoff-alert-ms
              :idle-s idle-s
+             :body-idle-s body-idle-s
+             :body-idle (atom {:busy 0 :last-at (now) :told? false :list (:list initial-state)})
              :sweep-ms sweep-ms
              :last-sweep (atom (now))
              :stats-ms stats-ms

@@ -235,7 +235,13 @@
    ["an unwatched job stays quiet" (assoc (event :job :completed) :context {:job-id "j1"}) defaults nil]
    ["a watched job wakes" (assoc (event :job :completed) :context {:job-id "j1"}) (assoc defaults :watch ["j1"]) :job-finished]
    ["a watched job wakes when stopped" (assoc (event :job :stopped) :context {:job-id "j1"}) (assoc defaults :watch ["j1"]) :job-finished]
-   ["a watched job wakes when cancelled" (assoc (event :job :cancelled) :context {:job-id "j1"}) (assoc defaults :watch ["j1"]) :job-finished]])
+   ["a watched job wakes when cancelled" (assoc (event :job :cancelled) :context {:job-id "j1"}) (assoc defaults :watch ["j1"]) :job-finished]
+   ["an idle body always wakes" (event :body :idle {:jobs []} "body idle 10 s") defaults :idle]])
+
+(deftest an-idle-wake-names-the-jobs
+  (let [jobs [{:job "j1" :name "jobs.items.get-tool" :waiting {:reason :no-source}}]]
+    (is (= {:wake :idle :message "body idle 10 s: j1 ..." :jobs jobs}
+           (observe-status/classify (event :body :idle {:jobs jobs} "body idle 10 s: j1 ...") defaults "Probe")))))
 
 (deftest classify-wakes-only-for-what-was-asked
   (doseq [[label e opts expected] classify-cases]

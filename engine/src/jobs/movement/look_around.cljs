@@ -3,6 +3,8 @@
             [engine.ctx :as ctx]
             [jobs.lib.util :as u]))
 
+(def idle-ok true)
+
 (def doc
   "Face a random point 3 blocks away (any yaw, from a block below to 1.5 above the body),
   write a :looked entry to body memory (a condition can read it: (since :looked)),

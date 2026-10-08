@@ -148,7 +148,8 @@
                (some recovered? later))))
 
 (defn classify
-  "The wake an event causes under the options, or nil. Options: :from :chatter :watch :danger :disconnect."
+  "The wake an event causes under the options, or nil. Options: :from :chatter :watch :danger :disconnect. A
+  body.idle always wakes."
   [e opts body]
   (let [{:keys [source kind]} e
         d (or (:data e) {})]
@@ -162,6 +163,9 @@
 
       (and (= :body source) (= :reconnect-failed kind))
       (clean-pairs :wake :reconnect-failed :reason (clip (:reason d)))
+
+      (and (= :body source) (= :idle kind))
+      (clean-pairs :wake :idle :message (clip (:message e)) :jobs (:jobs d))
 
       (and (= :body source) (:danger opts) (#{:hurt :died} kind))
       (clean-pairs :wake :danger :event (:kind e) :health (:health d))

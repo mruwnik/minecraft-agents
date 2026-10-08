@@ -3,6 +3,8 @@
             [engine.ctx :as ctx]
             [jobs.lib.util :as u]))
 
+(def idle-ok true)
+
 (def doc
   "Stay within :range of :pos for :wait-s seconds, for a wait that needs the body near (leaf decay before the drops
   despawn, crop growth, a birth). Needs :pos and a positive :wait-s (else declined at submit).

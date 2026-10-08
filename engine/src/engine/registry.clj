@@ -10,7 +10,7 @@
 
 (def exports
   "What a job namespace may define, and whether it must."
-  {'check true 'round true 'doc false 'args false})
+  {'check true 'round true 'doc false 'args false 'idle-ok false})
 
 (defn jobs-dir
   "The jobs/ directory on the classpath (engine/src/jobs), or nil."
@@ -135,13 +135,13 @@
     []))
 
 (defmacro job-registry
-  "{ns-symbol {:check :round :doc :args}} for every job namespace under jobs/."
+  "{ns-symbol {:check :round :doc :args :idle-ok}} for every job namespace under jobs/."
   []
   (into {}
         (map (fn [{:keys [ns defines]}]
                (let [ref (fn [k] (when (defines k) (symbol (str ns) (str k))))]
                  [(list 'quote ns) {:check (ref 'check) :round (ref 'round)
-                                    :doc (ref 'doc) :args (ref 'args)}])))
+                                    :doc (ref 'doc) :args (ref 'args) :idle-ok (ref 'idle-ok)}])))
         (job-namespaces)))
 
 ;; ------------------------------------------------------------------ triggers and hooks

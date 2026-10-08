@@ -3,6 +3,8 @@
             [engine.ctx :as ctx]))
 
 
+(def idle-ok true)
+
 (def doc
   "Done once it is evening. Waits (check) until the day's tick 12000 (dusk), and runs from dusk on through the
   night to dawn, so at once when started at night.")

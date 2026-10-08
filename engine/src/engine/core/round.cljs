@@ -4,7 +4,7 @@
   (:require [engine.core.base :refer [cut-error cut? distance emit! job-of normalize-result offline-cut-error owner? save-memory! self-pos stopped-result? wait-reason]]
             [engine.core.attention :refer [request-attention! resolve-attention!]]
             [engine.core.fruitless :refer [record-act!]]
-            [engine.core.activity :refer [act-ended! act-started! hold-still! log-out-record]]
+            [engine.core.activity :refer [act-ended! act-started! body-act! hold-still! log-out-record useful-act?]]
             [engine.core.list-edits :refer [submit!]]
             [engine.chat :as chat]
             [engine.memory :as mem]
@@ -20,7 +20,8 @@
   (when-not (owner? eng token) (throw (cut-error)))
   (act-started! eng token root k args)
   (save-memory! eng)
-  (let [action-id (.randomUUID crypto)
+  (let [useful? (useful-act? eng root k)
+        action-id (.randomUUID crypto)
         fields {:level :debug :job id :chain chain :round round :reflex reflex :name (name k)
                 :action-id action-id}
         p (:primitives eng)
@@ -31,6 +32,7 @@
             (reset! (:away eng) away-record)
             (emit! eng (merge fields {:source :action :kind :logged-out :level :info} away-record)))]
     (try
+      (when useful? (body-act! eng 1))
       (let [r (await (if (= :chat k) (chat/gate! eng p token args) (.call (aget p (name k)) p token args)))
             _ (when (= "offline" (some-> r .-status)) (throw (offline-cut-error)))
             to (when (= :moveTo k) (self-pos p))]
@@ -52,6 +54,7 @@
         (throw e))
       (finally
         (act-ended! eng token)
+        (when useful? (body-act! eng -1))
         (when away-record (reset! (:away eng) nil))))))
 
 (defn make-ctx

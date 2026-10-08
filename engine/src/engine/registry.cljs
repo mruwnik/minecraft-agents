@@ -4,7 +4,7 @@
   (:require-macros [engine.registry :refer [job-registry settings-registry]]))
 
 (def jobs
-  "{ns-symbol {:check fn :round fn :doc string-or-nil :args map-or-nil}}"
+  "{ns-symbol {:check fn :round fn :doc string-or-nil :args map-or-nil :idle-ok true-or-nil}}"
   (job-registry))
 
 (def settings-by-ns

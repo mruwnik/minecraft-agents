@@ -1,6 +1,8 @@
 (ns jobs.time.wait-for-day
   (:require [engine.ctx :as ctx]))
 
+(def idle-ok true)
+
 (def doc "Done once it is day. Waits (check reason :day-not-come) at night.")
 
 (defn check [c]

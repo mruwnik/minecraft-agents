@@ -4,7 +4,7 @@
   (:require [engine.core.base :refer [add-instance call-guarded drop-reflex-job! emit! flush-save-stats! free-owner! job-fields job-of manual-job manual? new-id! now paused? reflex-text running save-memory! state wait-reason waiting-text]]
             [engine.core.fruitless :refer [reset-backoff!]]
             [engine.core.register :refer [effective-register evaluate-register! expire-changes! preempts?]]
-            [engine.core.activity :refer [check-idle!]]
+            [engine.core.activity :refer [check-body-idle! check-idle! restart-body-idle!]]
             [engine.core.list-edits :refer [submit!]]
             [engine.core.round :refer [check-ctx]]
             [engine.core.settle :refer [end-slot! judge-deferred-ends! start-round!]]
@@ -111,6 +111,7 @@
   "One scheduling pass for a body that is on the server."
   [eng]
   (housekeep! eng)
+  (check-body-idle! eng)
   (let [order (effective-register (state eng) (now eng))
         firing (evaluate-register! eng order)
         h (holder eng)]
@@ -127,8 +128,8 @@
   ends deferred meanwhile."
   [eng]
   (cond
-    (paused? eng) (do (reset! (:was-paused eng) true) nil)
-    (manual? eng) (do (reset! (:was-paused eng) true) (tick-manual! eng))
+    (paused? eng) (do (reset! (:was-paused eng) true) (restart-body-idle! eng) nil)
+    (manual? eng) (do (reset! (:was-paused eng) true) (restart-body-idle! eng) (tick-manual! eng))
     :else
     (do (when @(:was-paused eng)
           (reset! (:was-paused eng) false)

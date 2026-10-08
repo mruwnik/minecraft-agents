@@ -1,8 +1,17 @@
 (ns engine.core.activity
   "Doing nothing: the in-flight round's activity record (acts in flight, declared holds), job.holding and
-  job.idle, and the away record of a body a job logged out."
-  (:require [engine.core.base :refer [emit! job-fields now running state]]
-            [engine.expr :as expr]))
+  job.idle, body.idle, and the away record of a body a job logged out."
+  (:require [clojure.string :as str]
+            [engine.args :as a]
+            [engine.core.base :refer [emit! job-fields now running state waiting-text]]
+            [engine.expr :as expr]
+            [engine.memory :as mem]
+            [engine.settings :as settings]))
+
+(a/defargs settings
+  {:engine.core.activity/body-idle-s
+   {:default 10 :spec (a/num-in 0.001 nil)
+    :doc "Seconds with no useful act (only idle-ok jobs act, the rest wait or hold) and no queue change before body.idle."}})
 
 (defn away
   "Why and until when the body is away, or nil while it is online: {:by :job :why :back-at} when a job logged it out
@@ -70,6 +79,81 @@
                         {:source :job :kind :idle :level :warn :idle-ms idle-ms
                          :text (str "the round holds the body with no act for " (js/Math.round (/ idle-ms 1000))
                                     " s and declared no hold (ctx/hold-still!)")})))))
+
+(defn idle-ok-node?
+  "Whether every job of spec node declares (def idle-ok true): content to sit doing nothing (look-around, waits)."
+  [jobs {:keys [op job child children]}]
+  (case op
+    :leaf (true? (:idle-ok (get jobs job)))
+    :repeat (idle-ok-node? jobs child)
+    (every? #(idle-ok-node? jobs %) children)))
+
+(defn idle-ok? [eng id]
+  (some->> (get-in (state eng) [:instances id :spec]) (idle-ok-node? (:jobs eng)) true?))
+
+(def body-idle-policy {:cap 1 :ttl :forever})
+
+(defn useful-act?
+  "Whether act k of root's round is useful work: any act but :wait, of a job that is not idle-ok."
+  [eng root k]
+  (and (not= :wait k) (not (idle-ok? eng root))))
+
+(defn body-act!
+  "A useful act started (delta 1) or ended (-1): the body is busy meanwhile, and the body.idle clock restarts."
+  [eng delta]
+  (some-> (:body-idle eng) (swap! #(-> (update % :busy + delta) (assoc :last-at (now eng) :told? false)))))
+
+(defn idle-job
+  "What listed or reflex job id does while the body idles: {:job :name} and :waiting, :holding, :failed or :idle-ok."
+  [eng id]
+  (let [waiting (get @(:waiting eng) id)
+        hold (holding eng id)
+        failed (get-in (state eng) [:failed id])]
+    (cond-> {:job id :name (some-> (get-in (state eng) [:instances id :spec]) expr/label)}
+      waiting (assoc :waiting waiting)
+      (and hold (not waiting)) (assoc :holding hold)
+      failed (assoc :failed (:error failed))
+      (idle-ok? eng id) (assoc :idle-ok true))))
+
+(defn idle-job-text [{:keys [job name waiting holding failed idle-ok]}]
+  (str job " " name " "
+       (cond waiting (waiting-text waiting)
+             holding (str "holding: " (pr-str (:reason holding)))
+             failed "failed"
+             idle-ok "idle-ok"
+             :else "no act")))
+
+(defn body-idle-s [eng]
+  (or (:body-idle-s eng) (settings/get settings :engine.core.activity/body-idle-s)))
+
+(defn restart-body-idle!
+  "Restart the body.idle clock: time paused, offline or driven by hand is not the jobs' idle time."
+  [eng]
+  (some-> (:body-idle eng) (swap! assoc :last-at (now eng) :told? false)))
+
+(defn tell-body-idle! [eng idle-ms]
+  (let [h (running eng)
+        ids (cond-> (:list (state eng)) (:reflex h) (conj (:id h)))
+        jobs (mapv #(idle-job eng %) ids)]
+    (mem/write! (:store eng) :body-idle {:jobs jobs :idle-ms idle-ms} body-idle-policy)
+    (emit! eng {:source :body :kind :idle :level :info :jobs jobs :idle-ms idle-ms
+                :text (str "body idle " (js/Math.round (/ idle-ms 1000)) " s with no useful act: "
+                           (if (seq jobs) (str/join "; " (map idle-job-text jobs)) "no jobs"))})))
+
+(defn check-body-idle!
+  "Emit body.idle once per stretch of :body-idle-s with no useful act (useful-act?) and no change of the list: the
+  agent hears that the body only fills time, and which jobs wait and why. A useful act or a list change re-arms it."
+  [eng]
+  (when-let [clock (:body-idle eng)]
+    (let [t (now eng)
+          listed (:list (state eng))
+          {:keys [busy last-at told?] :as b} @clock]
+      (cond
+        (not= listed (:list b)) (swap! clock assoc :list listed :last-at t :told? false)
+        (pos? busy) (swap! clock assoc :last-at t)
+        (and (not told?) (>= (- t last-at) (* 1000 (body-idle-s eng))))
+        (do (swap! clock assoc :told? true)
+            (tell-body-idle! eng (- t last-at)))))))
 
 (defn act-started!
   "Book the start of act k of the round of token: one more act in flight; a :wait with :why holds the body on
