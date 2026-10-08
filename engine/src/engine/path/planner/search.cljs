@@ -54,9 +54,9 @@
    ^:mutable ^boolean open-mode ; the opening pass of an expansion: closed doors, gates and trapdoors read as open
    ^:mutable ^boolean allow-shut ; standH refuses a shut trapdoor's cell unless the caller pays for opening it
    ^:mutable ^boolean gap-seen ; a ladder was refused because the feet would leave it at a gap
-   ^:mutable ^boolean air-seen ; a swim move was refused for lack of air
+   ^:mutable ^boolean air-seen ; a move with the head in water was refused for lack of air
    ^:mutable ^boolean enters-shut ; the last enterCell was a shut trapdoor
-   ;; what the swim move being made adds to the node (move-drown: the hp its drowning seconds cost, see swimBegin), and
+   ;; what the swim move being made adds to the node (move-drown: the hp its drowning seconds cost, see airStep), and
    ;; what the move being made opens
    ^:mutable move-air ^:mutable move-peak ^:mutable move-water ^:mutable move-drown ^:mutable move-open
    ^js open-lists

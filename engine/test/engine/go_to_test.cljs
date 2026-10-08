@@ -754,6 +754,11 @@
     (is (= {:goal goal :closest 1 :ref 1 :cuts 1 :last-dist 11} (go-to/cut-state (assoc m :closest 1 :last-dist 1) goal 11)))
     (is (= {:goal goal :closest 14 :ref 14 :cuts 0 :last-dist 14} (go-to/cut-state (dissoc m :open) goal 14)))))
 
+(deftest air-reasons-have-words
+  (doseq [why [:air :air-lethal]]
+    (is (not (str/includes? (end/give-up-words [10 64 0] {:why why}) "no path (")) (str why)))
+  (is (str/includes? (end/give-up-words [10 64 0] {:why :air-lethal}) "drown")))
+
 (deftest the-cut-again-text-names-the-nearest-hostile-as-a-guess
   (is (str/includes? (end/give-up-words [10 64 0] {:why :cut-again :nearest-hostile "zombie"}) "nearest hostile: zombie"))
   (is (not (str/includes? (end/give-up-words [10 64 0] {:why :cut-again}) "hostile"))))

@@ -413,11 +413,11 @@
           best))))
 
   ;; the result's frontier: {x y z path known} of frontierNode for a search that ran out of land to search (exhausted,
-  ;; its box, a ladder at a gap, air), nil otherwise or when no node stands at the loaded edge. known: the node is in
+  ;; its box, a ladder at a gap, air, air-lethal), nil otherwise or when no node stands at the loaded edge. known: the node is in
   ;; options.knownCells. A search that ran out of land to its end (exhausted, ladder-gap) with options.knownCells also
   ;; collects the result's known (frontierNode). A search that ended at its first edge node (edgeStop) names that node.
   (frontierOf [s]
-    (when (or (identical? (.-reason s) "exhausted") (identical? (.-reason s) "box") (identical? (.-reason s) "ladder-gap") (identical? (.-reason s) "air"))
+    (when (or (identical? (.-reason s) "exhausted") (identical? (.-reason s) "box") (identical? (.-reason s) "ladder-gap") (identical? (.-reason s) "air") (identical? (.-reason s) "air-lethal"))
       (when (and (some? ^js (.-known-cells s)) (or (identical? (.-reason s) "exhausted") (identical? (.-reason s) "ladder-gap")))
         (set! (.-known-new s) (js/Set.))
         (set! (.-edges-new s) #js []))

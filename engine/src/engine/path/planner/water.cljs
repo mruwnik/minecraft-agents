@@ -1,6 +1,6 @@
 (ns engine.path.planner.water
   "Search methods: swimming, diving, currents and leaving the water."
-  (:require [engine.path.planner.base :refer [AIR-REFILL BODY CORNER-S DAMAGE-STAND DAMAGE-TOUCH DROWN-HP EXIT-SLACK HAZARD-AVOID JUMP-S JUMP-UP LAVA-ADJACENT MOVE-CORNER MOVE-EXIT MOVE-JUMP MOVE-SWIM MOVE-SWIM-DOWN MOVE-SWIM-UP MOVE-WALK NARROW NONE OPEN SNAP SQRT2 STEP UNLOADED WATER WHOLE breathable?]]
+  (:require [engine.path.planner.base :refer [AIR-REFILL BODY CORNER-S DAMAGE-STAND DAMAGE-TOUCH DROWN-HP drowned-hp EXIT-SLACK HAZARD-AVOID JUMP-S JUMP-UP LAVA-ADJACENT MOVE-CORNER MOVE-EXIT MOVE-JUMP MOVE-SWIM MOVE-SWIM-DOWN MOVE-SWIM-UP MOVE-WALK NARROW NONE OPEN SNAP SQRT2 STEP UNLOADED WATER WHOLE breathable?]]
             [engine.path.planner.search :refer [Search]]))
 
 (set! *warn-on-infer* true)
@@ -134,7 +134,7 @@
             false)
 
         (and under ^boolean (.-no-lethal s) (> use (.-c-air-drown s))
-             (>= (+ (if (>= i 0) (aget (.-drowns s) i) 0) drown) (.-lethal-hp s)))
+             (>= (drowned-hp (+ (if (>= i 0) (aget (.-drowns s) i) 0) drown)) (.-lethal-hp s)))
         (do (set! (.-lethal-seen s) true)
             false)
 

@@ -382,6 +382,20 @@
     (is (not (found? r)))
     (is (= "air-lethal" (:reason r)))))
 
+(deftest the-default-lethal-refusal-still-finds-the-long-safe-way
+  (let [r (run (lethal-dive true) dive-start (near 53 70 1 0) (-> at-health-10 (update :costs dissoc :lethalAir) (assoc :tolls (toll-walk))))]
+    (is (found? r))
+    (is (some #(= 20 (:z %)) (steps r)) "the long way round")
+    (is (< (cost r :drown) 10) "not drowned")))
+
+(deftest drowning-counts-whole-seconds-as-vanilla-does
+  ;; 17.5 hp of drowning is 8 whole 2 hp ticks (16 hp) in the game: a body of 17 hp lives, so the way is not lethal
+  (let [no-lethal-air #(update % :costs dissoc :lethalAir)
+        r17 (run (lethal-dive false) dive-start (near 53 70 1 0) (-> at-health-10 no-lethal-air (assoc :health 17)))
+        r16 (run (lethal-dive false) dive-start (near 53 70 1 0) (-> at-health-10 no-lethal-air (assoc :health 16)))]
+    (is (found? r17))
+    (is (= "air-lethal" (:reason r16)) "8 ticks kill 16 hp")))
+
 (deftest a-lethal-way-to-air-is-refused-by-default
   (let [r (run (lethal-dive false) dive-start (near 53 70 1 0) (update at-health-10 :costs dissoc :lethalAir))]
     (is (= "air-lethal" (:reason r)))))

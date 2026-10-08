@@ -84,6 +84,8 @@
            :goal-dangerous (str "the goal is in danger: " (str/replace (str mob) "_" " ") " " mob-distance " blocks from it, a mob the body would flee")
            :moved-while-searching "the body was pushed about while the path was searched"
            :needs-health "every way costs more hp than the body may spend and it cannot heal first"
+           :air "every way there under water runs out of air"
+           :air-lethal "every way there under water would drown the body to death"
            :one-way "the way back is one-way"
            :door-stuck "a door in the way will not open"
            (str "no path (" (some-> why name) ")")))))

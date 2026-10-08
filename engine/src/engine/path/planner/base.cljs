@@ -157,6 +157,9 @@
 (def ^:const REGIONS 16) ; regions of one cell that can be nodes (4 bits of the key)
 (def ^:const AIR-REFILL 4) ; seconds of air a second with the head out of water gives back (vanilla: +4 air a tick, -1 under water)
 (def ^:const DROWN-HP 2) ; hp a second with no air left costs (vanilla: 2 every 20 ticks at 0 air)
+(defn drowned-hp
+  "The hp that `hp` of drowning (continuous: DROWN-HP a second) really takes: vanilla ticks it in whole DROWN-HP hits."
+  [hp] (* DROWN-HP (js/Math.floor (/ hp DROWN-HP))))
 (def ^:const LETHAL-S 1e6) ; seconds a lethal drowning costs, and each hp past it: any plan that does not drown wins
 (def ^:const AIR-STEP 1) ; seconds of air that make an arrival at a node already reached worth a record of its own
 (def ^:const DMG-STEP 0) ; hp of damage that make an arrival at a node already reached worth a record of its own (a finite budget: exact)

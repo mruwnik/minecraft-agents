@@ -638,6 +638,15 @@
         (is (true? (await (b/go! (stub-child-ctx :done {:arrived true}) :leg {:x 0 :y 64 :z 0} 2))))
         (is (false? (await (b/go! (stub-child-ctx :done {:arrived false}) :leg {:x 0 :y 64 :z 0} 2))))))))
 
+(deftest the-go-to-child-may-drown-the-body-when-no-other-way-exists
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [sent (atom nil)
+              c (assoc (stub-child-ctx :done {:arrived true}) :call-child (fn [_slot _def args] (reset! sent args) (js/Promise.resolve :done)))]
+          (await (b/go! c :leg {:x 0 :y 64 :z 0} 2))
+          (is (= {:lethal-air 1} (:costs @sent))))))))
+
 (deftest a-refire-after-a-stop-keeps-the-searched-area
   (let [entries [{:data {:start {:x 0 :y 64 :z 0} :pos {:x 100 :y 65 :z 100} :headings []}}
                  {:data {:start {:x 5 :y 64 :z 5} :pos {:x 8 :y 65 :z 8} :headings [[1 0]]}}]]

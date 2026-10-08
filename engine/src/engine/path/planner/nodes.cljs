@@ -1,6 +1,6 @@
 (ns engine.path.planner.nodes
   "Search methods: the goal test and heuristic, and node storage (hash, heap, recording an arrival, refused moves)."
-  (:require [engine.path.planner.base :refer [AIR-STEP AVOID-CLIMB DMG-STEP LETHAL-S AVOID-OPEN AVOID-WATER HALF JUMP-UP MOVE-CLIMB-UP MOVE-DROP MOVE-GAP MOVE-OPEN MOVE-SWIM REGIONS SPAN SQRT2 cell-key grown next-pow2]]
+  (:require [engine.path.planner.base :refer [AIR-STEP AVOID-CLIMB DMG-STEP LETHAL-S drowned-hp AVOID-OPEN AVOID-WATER HALF JUMP-UP MOVE-CLIMB-UP MOVE-DROP MOVE-GAP MOVE-OPEN MOVE-SWIM REGIONS SPAN SQRT2 cell-key grown next-pow2]]
             [engine.path.planner.search :refer [Search]]))
 
 (set! *warn-on-infer* true)
@@ -217,7 +217,7 @@
                   (* hp (.-damage-weight s))
                   (let [k (js/Math.min (dec n) (js/Math.floor hp))]
                     (+ (aget p k) (* (- hp k) (- (aget p (inc k)) (aget p k))))))]
-      (if (>= hp (.-lethal-hp s))
+      (if (>= (drowned-hp hp) (.-lethal-hp s))
         (+ price LETHAL-S (* LETHAL-S (- hp (.-lethal-hp s))))
         price)))
 
