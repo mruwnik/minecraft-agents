@@ -221,10 +221,6 @@
 (defn check [c]
   (cond
     (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) (access/decline! c :mine.declined "mine" {:reason :no-zones})
-    (:error (fetch/opts c 'jobs.gather.mine))
-    (let [why (:error (fetch/opts c 'jobs.gather.mine))]
-      (ctx/warn-once! c [:fetch :bad-args] :mine.declined {:reason :bad-args :why why :text (str "mine declined: " why)})
-      (ctx/wait c {:reason :bad-args :why why}))
     (:phase (ctx/mem c)) true
     (not (:block (:args c))) (ctx/wait c {:reason :no-block})
     :else (let [{:keys [targets refused]} (scan c)]
