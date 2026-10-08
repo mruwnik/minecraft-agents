@@ -402,10 +402,6 @@ test('parsePoolArgs: --server-wait-s sets the cap in seconds (default 300)', () 
 })
 
 // ---- review findings of the fault handling (card 6bfe1115)
-const guarded = (script, max = 40) => { // a runner that throws when the pool loops
-  let n = 0
-  return fakeRunner((...a) => { if (++n > max) throw new Error('pool loops'); return script(...a) }, [])
-}
 test('runPool: a connection fault that persists while the probe says the server is up is rerun at most twice, then settles as an error', async () => {
   const log = []
   const runUnit = fakeRunner((file) => ({ code: 1, text: vec(refused(`${file}/c1`)) }), log)
@@ -449,14 +445,35 @@ test('runPool: a case rerun after a fault that fails with its known failed check
   assert.equal(r.skipped, 1)
   assert.match(r.text, /:known-failure true/)
 })
-test('runPool: on an unreachable stop a failure still waiting for its retry is returned as pending, not as a final result', async () => {
+test('runPool: on an unreachable stop a failure still waiting for its retry is returned as pending (inconclusive), not as a final failure', async () => {
   const srv = fakeServer(Infinity)
   const listed = new Map([['a', ['a/c1', 'a/c2']]])
   const runUnit = fakeRunner(() => ({ code: 1, text: vec(form('a/c1', 'fail'), refused('a/c2')) }), [])
   const r = await runPool({ units: ['a'], workers: workerSpecs(1, 19, 'P', 0), runUnit, listed, retries: 1, serverWaitMs: 10000, ...srv })
   assert.equal(r.code, 3)
-  assert.deepEqual(splitForms(r.text), [])
+  assert.deepEqual(splitForms(r.text).map((f) => summarize(f).status), ['inconclusive'])
   assert.equal(r.pending.length, 1)
+})
+test('runPool: on an unreachable stop the pending failure is written to the results as inconclusive with its first failure, and emitted', async () => {
+  const srv = fakeServer(Infinity)
+  const listed = new Map([['a', ['a/c1', 'a/c2']]])
+  const seen = []
+  const runUnit = fakeRunner(() => ({ code: 1, text: vec(form('a/c1', 'fail'), refused('a/c2')) }), [])
+  const r = await runPool({ units: ['a'], workers: workerSpecs(1, 19, 'P', 0), runUnit, listed, retries: 1, serverWaitMs: 10000, emit: (e) => seen.push(e), ...srv })
+  assert.deepEqual(splitForms(r.text).map((f) => summarize(f).status), ['inconclusive'])
+  assert.match(r.text, /:first-failure/)
+  assert.equal(resultsOf(seen).length, 1)
+})
+test('runPool: the settle wait also runs when the first probe after a fault already passes', async () => {
+  const srv = fakeServer(0)
+  const starts = []
+  const runUnit = async ({ file }) => { starts.push(srv.clock.t); return starts.length === 1 ? { code: 1, text: vec(refused(`${file}/c1`)) } : ok(file) }
+  await runPool({ units: ['a'], workers: workerSpecs(1, 19, 'P', 0), runUnit, settleMs: 7000, ...srv })
+  assert.ok(starts[1] >= 7000)
+})
+test('parsePoolArgs: --server-settle-s sets the settle wait in seconds (default 10)', () => {
+  assert.equal(parsePoolArgs(['d']).serverSettleS, 10)
+  assert.equal(parsePoolArgs(['d', '--server-settle-s', '3']).serverSettleS, 3)
 })
 test('runPool: in a mixed unit the cases the faulted child never reached are rerun, not recorded as errors', async () => {
   const log = []

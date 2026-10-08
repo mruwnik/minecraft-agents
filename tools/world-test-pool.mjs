@@ -227,13 +227,11 @@ export const runPool = async ({ units, workers, runUnit, retries = 1, load = () 
   const hold = () => {
     holding ??= (async () => {
       const t0 = now()
-      let waited = false
       while (!(await probe())) {
-        waited = true
         if (now() - t0 >= serverWaitMs) { unreachable = true; break }
         await sleep(serverPollMs)
       }
-      if (waited && !unreachable) await sleep(settleMs)
+      if (!unreachable) await sleep(settleMs)
       holding = null
     })()
   }
@@ -337,9 +335,10 @@ export const runPool = async ({ units, workers, runUnit, retries = 1, load = () 
   }
   await Promise.all(workers.map(loop))
   const forms = [...done.values()]
-  if (unreachable) { // a failure still waiting for its retry is not a result
-    const pending = [...done].filter(([k]) => !settled.has(k)).map(([, f]) => f)
-    return { skipped, unreachable, text: mergeText([...done].filter(([k]) => settled.has(k)).map(([, f]) => f)), pending, code: 3 }
+  if (unreachable) { // a failure still waiting for its retry is a result: inconclusive, with its first failure
+    const pending = [...done].filter(([k]) => !settled.has(k)).map(([, f]) => withStatus(f, 'inconclusive', `:first-failure ${f}`))
+    pending.forEach((f) => emit(resultEvent(f)))
+    return { skipped, unreachable, text: mergeText([...[...done].filter(([k]) => settled.has(k)).map(([, f]) => f), ...pending]), pending, code: 3 }
   }
   return { skipped, text: mergeText(forms), code: !forms.length ? 2 : forms.every((f) => ['pass', 'flaky'].includes(summarize(f).status)) ? 0 : 1 }
 }
@@ -430,7 +429,7 @@ export const main = async (args) => {
   const total = listing === null ? null : countListed(listing, repeatOf(p))
   if (total !== null) emitLine({ event: 'plan', total })
   const r = await runPool({ listed, repeat: repeatOf(p), units, workers, runUnit, retries: p.retries, total, known: knownFailures(previous), emit: emitLine, load: () => os.loadavg()[0], cores, probe: serverProbe([rconPort(), gamePort()]), serverWaitMs: p.serverWaitS * 1000, settleMs: p.serverSettleS * 1000 })
-  if (r.unreachable) console.error(`world-test pool: server unreachable (RCON port ${rconPort()} or game port ${gamePort()} closed for ${p.serverWaitS} s); stopped, the cases not run are not recorded${r.pending?.length ? `; ${r.pending.length} failures awaiting a retry are not recorded either` : ''}`)
+  if (r.unreachable) console.error(`world-test pool: server unreachable (RCON port ${rconPort()} or game port ${gamePort()} closed for ${p.serverWaitS} s); stopped, the cases not run are not recorded${r.pending?.length ? `; ${r.pending.length} failures awaiting a retry are recorded as inconclusive` : ''}`)
   if (p.results) fs.writeFileSync(p.results, r.text)
   const sums = splitForms(r.text).map(summarize)
   const count = (st) => sums.filter((s) => s.status === st).length
