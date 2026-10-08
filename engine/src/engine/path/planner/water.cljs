@@ -1,6 +1,6 @@
 (ns engine.path.planner.water
   "Search methods: swimming, diving, currents and leaving the water."
-  (:require [engine.path.planner.base :refer [AIR-REFILL BODY CORNER-S DAMAGE-STAND DAMAGE-TOUCH DROWN-HP EXIT-SLACK HAZARD-AVOID JUMP-S JUMP-UP LAVA-ADJACENT MOVE-CORNER MOVE-EXIT MOVE-JUMP MOVE-SWIM MOVE-SWIM-DOWN MOVE-SWIM-UP MOVE-WALK NARROW NONE OPEN SNAP SQRT2 STEP UNLOADED WALK-S WATER WHOLE breathable?]]
+  (:require [engine.path.planner.base :refer [AIR-REFILL BODY CORNER-S DAMAGE-STAND DAMAGE-TOUCH DROWN-HP EXIT-SLACK HAZARD-AVOID JUMP-S JUMP-UP LAVA-ADJACENT MOVE-CORNER MOVE-EXIT MOVE-JUMP MOVE-SWIM MOVE-SWIM-DOWN MOVE-SWIM-UP MOVE-WALK NARROW NONE OPEN SNAP SQRT2 STEP UNLOADED WATER WHOLE breathable?]]
             [engine.path.planner.search :refer [Search]]))
 
 (set! *warn-on-infer* true)
@@ -178,7 +178,7 @@
               delta (- (+ (* y2 16) h1) h0)
               walks (<= delta STEP)]
           (when (or walks (and (<= delta JUMP-UP) ^boolean (.clear s x z (* (inc y) 16) (+ (* y2 16) h1 BODY))))
-            (let [sec (+ (if walks WALK-S (+ WALK-S JUMP-S)) (.-enter-extra s))
+            (let [sec (+ (if walks (.-c-walk-s s) (+ (.-c-walk-s s) JUMP-S)) (.-enter-extra s))
                   move (if walks MOVE-WALK MOVE-JUMP)]
               (if (or tight-src ^boolean (.tightAt s x2 y2 z2))
                 (.tightMove s i x y z 0 region c x2 y2 z2 h1 move sec (.-enter-risk s) (.-enter-slow s) SNAP SNAP)

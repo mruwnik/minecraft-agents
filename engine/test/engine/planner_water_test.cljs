@@ -515,6 +515,10 @@
     1 (:jump MOVE)
     0 (:walk MOVE)))
 
+(deftest wading-out-is-priced-by-the-gait
+  (let [seconds (fn [costs] (cost (run (wade 0) {:x 12 :y 64 :z 2} (near 13 64 2 0) {:goalFlood 0 :margin 8 :costs costs}) :seconds))]
+    (is (> (seconds {:walkS 5 :sprintS 5}) 4.5))))
+
 (deftest wading-a-block-two-over-the-floor-is-not-climbed
   (is (not (found? (run (wade 2) from2 (near 14 66 2 0) {:goalFlood 0 :margin 8})))))
 
