@@ -72,5 +72,7 @@
    :act [[:job (jobs.build.from-plan {:plan "$plan:box"})]]
    :expect [{:event {:source :job :kind :build.gave-up :message [:contains "unreachable"]} :within-s 140}
             {:event {:source :job :kind :stopped :data {:reason :incomplete} :message [:contains "unreachable"]} :within-s 140}]
-   :after [[:not-block [11 0 11] "dirt"] [:block [10 0 10] "dirt"]]
+   ;; some shell cell stays open, whichever one
+   :after [[:not-block [11 0 11] "dirt"] [:block [10 0 10] "dirt"]
+           [:any-not-block [[[10 2 10] [13 2 13]] [[10 0 10] [13 1 10]] [[10 0 13] [13 1 13]] [[10 0 11] [10 1 12]] [[13 0 11] [13 1 12]]] "dirt"]]
    :limit-s 170}]}

@@ -179,7 +179,7 @@
     (if (= (.-length kept) (.-length arr)) text (markers-text kept))))
 
 (def step-kinds #{:summon :rcon :rcon-until :job :wait-s :await :kill-body :time-set :restart-body :cli :http :until})
-(def after-kinds #{:block :not-block :body-near :body-far :item :entities :memory :file})
+(def after-kinds #{:block :not-block :any-not-block :body-near :body-far :item :entities :memory :file})
 (def http-ops #{:submit :cancel :cancel-all :take :release})
 (def cli-tools #{"jobs" "drive" "plans" "map" "world" "say" "time" "triggers" "entities" "observe" "workspace" "blueprints"})
 
@@ -568,6 +568,13 @@
   (case op
     :block (str "execute if block " (xyz-str (block-pos origin (first args))) " " (second args))
     :not-block (str "execute if block " (xyz-str (block-pos origin (first args))) " " (second args))
+    :any-not-block (let [[boxes block] args]
+                     (->> boxes
+                          (mapcat (fn [[[ax ay az] [bx by bz]]]
+                                    (for [x (range ax (inc bx)) y (range ay (inc by)) z (range az (inc bz))] [x y z])))
+                          (map #(str "if block " (xyz-str (block-pos origin %)) " " block))
+                          (str/join " ")
+                          (str "execute ")))
     (:body-near :body-far) (str "data get entity " body " Pos")
     :item (str "execute if items entity " body " container.* " (first args))
     :entities (str "execute if entity " (entities-selector origin args))
@@ -633,13 +640,13 @@
 (defn judge-after
   "Pass or fail of one :after check from its command's reply: {:check :pass? :evidence}."
   [origin [op & args :as check] reply]
-  (let [n (when (#{:block :not-block :item :entities} op) (reply-count reply))
+  (let [n (when (#{:block :not-block :any-not-block :item :entities} op) (reply-count reply))
         result (case op
-                 (:block :not-block :item :entities)
+                 (:block :not-block :any-not-block :item :entities)
                  (cond
                    (nil? n) [false (str "unrecognised reply: " reply)]
                    (= op :block) [(pos? n) reply]
-                   (= op :not-block) [(zero? n) reply]
+                   (#{:not-block :any-not-block} op) [(zero? n) reply]
                    (= op :item) [(count-ok? (second args) n) (str "count " n)]
                    :else [(count-ok? (nth args 2) n) (entities-evidence args n)])
                  (:body-near :body-far)
