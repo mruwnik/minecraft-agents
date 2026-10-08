@@ -551,12 +551,14 @@
 
 (defn equip [w {:keys [item dest]}]
   (let [part (if (= "off-hand" dest) "offHand" (when (contains? #{"head" "torso" "legs" "feet"} dest) dest))
-        old (when part (get-in w [:equipment part]))]
+        old (when part (get-in w [:equipment part]))
+        ;; Mineflayer moves the whole stack into the off hand
+        n (if (= "offHand" part) (carried (:inventory w) item) 1)]
     (cond
       (zero? (carried (:inventory w) item)) [w {:status "no-item"}]
       (not part) [(assoc-in w [:self :held] item) {:status "equipped"}]
-      :else [(cond-> (-> w (update :inventory #(first (take-from % item 1))) (assoc-in [:equipment part] {:name item :count 1}))
-               old (update :inventory add-to (:name old) 1))
+      :else [(cond-> (-> w (update :inventory #(first (take-from % item n))) (assoc-in [:equipment part] {:name item :count n}))
+               old (update :inventory add-to (:name old) (:count old 1)))
              {:status "equipped"}])))
 
 (defn eat [w {:keys [item]}]

@@ -111,7 +111,7 @@
         (set! (.-dark-best-z s) z))))
 
   ;; True when the move from node p into x y z is refused for options.unknown: its stand is on a phantom floor that the walk
-  ;; cannot stop to check first (unseen-refused), was missed, or cannot be seen and not lit (dark-refused). Else sets what it
+  ;; cannot stop to check first (unseen-refused), or was missed or cannot be seen, and is not lit (dark-refused). Else sets what it
   ;; costs (move-unk, seconds: cell per unseen feet or head cell and floor for a phantom floor, both times dsec, and a peek
   ;; over a drop or an aim at a level or up one, and light-cost when a torch must light it) and move-light.
   (unseenRefuses [s x y z move p dsec]
@@ -124,8 +124,7 @@
               priced (+ cells (* dsec (.-unk-floor s)) (if (pos? d) (.-peek-s s) (.-aim-s s)))]
           (cond
             (not ^boolean (.gateCheckable s move p)) (do (set! (.-unseen-refused s) true) true)
-            ^boolean (.missedAt s x (dec y) z) (do (.darkRefuse s x y z) true)
-            ^boolean (.seeable s x y z d) (do (set! (.-move-unk s) priced) false)
+            (and (not ^boolean (.missedAt s x (dec y) z)) ^boolean (.seeable s x y z d)) (do (set! (.-move-unk s) priced) false)
             ^boolean (.lightable s p d) (do (set! (.-move-unk s) (+ priced (.-light-cost s)))
                                             (set! (.-move-light s) 1)
                                             false)

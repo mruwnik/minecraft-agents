@@ -16,6 +16,7 @@
             [engine.test-util :as tu :refer [box]]
             [engine.triggers :as triggers]
             [jobs.lib.escape :as escape]
+            [jobs.lib.world-files :as world-files]
             [jobs.lib.pass :as pass]
             [jobs.lib.reach :as reach]
             [jobs.lib.step-off :as step-off]
@@ -175,7 +176,7 @@
   (apply dissoc (merge (box 3 60 -3 14 63 3 "stone") (box -2 60 -2 2 63 2 "dirt")) #{"0,61,0" "0,62,0" "0,63,0"}))
 
 (defn ^:async run-job-unpinned
-  "run-job with js/Math.random left as it is."
+  "run-job with js/Math.random left as it is. A spec's :zones (a zone list) is the body's world's."
   [job spec args & [setup before]]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
@@ -187,9 +188,10 @@
                          (let [r (await (ctx/call-child c :kid job args))]
                            (when (= :done r) (reset! out (ctx/child-result c :kid)))
                            r))}
-        eng (core/create {:primitives w :jobs (assoc registry/jobs 'recording-parent parent) :triggers {}
-                          :dir (tu/tmp-dir) :now #(deref clock) :backoff false
-                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+        eng (core/create (cond-> {:primitives w :jobs (assoc registry/jobs 'recording-parent parent) :triggers {}
+                                  :dir (tu/tmp-dir) :now #(deref clock) :backoff false
+                                  :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}
+                           (contains? spec :zones) (assoc :world (world-files/of-data {} {} (:zones spec)))))]
     (when before (before eng))
     (core/submit! eng '(recording-parent) {})
     (loop [i 0]

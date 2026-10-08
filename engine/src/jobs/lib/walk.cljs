@@ -7,8 +7,10 @@
             [engine.ctx :as ctx]
             [engine.path.blocks :as blocks]
             [engine.path.executor :as executor]
+            [jobs.lib.access :as access]
             [jobs.lib.look :as look]
             [jobs.lib.placement :as placement]
+            [jobs.lib.tidy :as tidy]
             [jobs.lib.torch :as torch]
             [jobs.lib.util :as u]
             [jobs.lib.walk.plan :as wplan]
@@ -242,11 +244,27 @@
       :else (do (await (ctx/act c :wait #js {:ms 100}))
                 (recur (+ waited 100))))))
 
+(defn may-light?
+  "The rules' verdict on a torch at cell [x y z] (jobs.lib.access/may? :sow: the body's own cells allowed): no other
+  owner's zone or claim, none under :ignore-zones?."
+  [c cell]
+  (access/may? c :sow cell))
+
+(defn ^:async off-hand-to-inventory!
+  "With no torch in the inventory but some in the off hand (the off-hand torch aid moves the whole stack), move them
+  back so the place act finds them: true when the inventory holds a torch now."
+  [c]
+  (let [p (:primitives c)]
+    (when (and (zero? (torch/torches-carried p)) (pos? (torch/off-hand-torches p)))
+      (await (ctx/act c :unequip #js {:dest "off-hand"})))
+    (pos? (torch/torches-carried p))))
+
 (defn ^:async light!
-  "Light the floor of step k (done {:status :light :step k :cells [floor]}, the gate's) with a torch from the inventory at
-  its takeoff (jobs.lib.torch/torch-at: a wall torch at the head, else a floor torch at the feet), then look until the
-  floor shows: nil to walk on, else the walk's done map: {:status :no-torch} with none carried, {:status :replan :why
-  :no-light :cells [takeoff]} when the torch could not go there, {:status :replan :why :unseen} when the floor stayed unseen."
+  "Light the floor of step k (done {:status :light :step k :cells [floor]}, the gate's) with a torch from the inventory
+  (or the off hand) at its takeoff (jobs.lib.torch/torch-at: a wall torch at the head, else a floor torch at the feet,
+  each where may-light?; placed through jobs.lib.tidy/place!), then look until the floor shows: nil to walk on, else
+  the walk's done map: {:status :no-torch} with none held, {:status :replan :why :no-light :cells [takeoff]} when the
+  torch could not go there, {:status :replan :why :unseen :no-light [takeoff]} when the floor stayed unseen."
   [c steps {:keys [step cells at]}]
   (let [p (:primitives c)
         tk (nth steps (dec step))
@@ -254,34 +272,42 @@
         feet [(:x tk) (:y tk) (:z tk)]
         floor (first cells)
         block-at (fn [[x y z]] (u/seen-name p {:x x :y y :z z}))
-        no-light (fn [why] {:status :replan :why :no-light :cells [feet] :at at :step step :detail why})]
-    (if-not (pos? (torch/torches-carried p))
-      {:status :no-torch :cells [feet] :at at :step step}
+        no-light (fn [why] {:status :replan :why :no-light :cells [feet] :at at :step step :detail why})
+        verdicts (into {} (map (fn [cell] [cell (may-light? c cell)])) [feet (update feet 1 inc)])
+        refusal (when-not (some :ok (vals verdicts)) (:reason (get verdicts feet)))]
+    (cond
+      (zero? (torch/torches-held p)) {:status :no-torch :cells [feet] :at at :step step}
+      refusal (no-light refusal)
+      (not (await (off-hand-to-inventory! c))) (no-light :off-hand-full)
+      :else
       (let [choice (torch/torch-at [(js/Math.sign (- (:x g) (:x tk))) (js/Math.sign (- (:z g) (:z tk)))] feet
-                                   (placement/eye (u/self-pos c)) block-at)]
-        (if (:refused choice)
-          (no-light (:refused choice))
-          (let [cell (:cell choice)
-                r (await (ctx/act c :place (clj->js {:pos (zipmap [:x :y :z] cell) :item "torch"
-                                                     :click (placement/js-click (:click choice))})))]
-            (if-not (or (= "placed" (.-status r)) (torch/torch-blocks (block-at cell)))
-              (no-light (keyword (.-status r)))
-              (do (ctx/remember! c :torch-placed {:cell cell :by (:id c)} torch-placed-policy)
-                  (ctx/emit! c :walk.torch-placed :info {:cell cell :floor floor :text (str "placed a torch at " (pr-str cell) " to see the floor at " (pr-str floor))})
-                  (when-not (await (see-lit! c (:see (gate-env p steps)) floor))
-                    {:status :replan :why :unseen :cells [floor] :at at :step step})))))))))
+                                   (placement/eye (u/self-pos c)) block-at (comp :ok verdicts))
+            cell (:cell choice)
+            there? #(torch/torch-blocks (block-at cell))
+            r (when (and cell (not (there?)))
+                (await (tidy/place! c (zipmap [:x :y :z] cell) "torch" false (placement/js-click (:click choice)))))
+            placed? (= "placed" (some-> r .-status))]
+        (cond
+          (:refused choice) (no-light (:refused choice))
+          (not (or placed? (there?))) (no-light (keyword (.-status r)))
+          :else
+          (do (when placed?
+                (ctx/remember! c :torch-placed {:cell cell :by (:id c)} torch-placed-policy)
+                (ctx/emit! c :walk.torch-placed :info {:cell cell :floor floor :text (str "placed a torch at " (pr-str cell) " to see the floor at " (pr-str floor))}))
+              (when-not (await (see-lit! c (:see (gate-env p steps)) floor))
+                {:status :replan :why :unseen :cells [floor] :no-light [feet] :at at :step step})))))))
 
 (defn ^:async walk!
   "Follow steps once. [result ms]: the executor's done map, or {:status :stuck ...} on a timeout,
   {:status :failed ...}; ms is the wall time of the steer acts. With a watch (see watch-stop), the walk also stops at a step
   boundary with {:status :replan ...} when the way ahead changed or a partial plan is due a refresh. (:on-pose c), when
   set, is called with each tick's pose {:x :y :z ...} (go-to records its approach with it). A floor the plan lights
-  (:light) that the gate cannot see is lit by a torch (light!) and the walk goes on from its takeoff; light!'s other
-  ends end the walk."
+  (:light) that the gate cannot see is lit by a torch (light!) and the walk goes on from its takeoff, within timeout-s
+  of steering in all; light!'s other ends end the walk."
   ([c steps timeout-s] (walk! c steps timeout-s nil))
   ([c steps timeout-s watch]
    (loop [steps steps base 0 ms 0]
-     (let [[done wms] (await (steer-walk! c steps timeout-s watch))
+     (let [[done wms] (await (steer-walk! c steps (max 1 (- timeout-s (/ ms 1000))) watch))
            ms (+ ms wms)
            rebase (fn [d] (cond-> d (:step d) (update :step + base)))]
        (if-not (= :light (:status done))

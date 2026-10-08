@@ -68,7 +68,7 @@
      up: 0) within seeDepth, or within seeLitDepth (5) over known air that seeLit(x, y, z) calls lit (1), or
      lit by a torch (lightCost seconds, the step's light true) from a takeoff whose feet are known air on a torchBase floor
      (Uint8Array by state id), d at most lightDepth (5), lightOk(x, y, z) not false and not in noLight; else result darkRefused and
-     darkBest {x y z h}. A floor in missed is never seen. The floor under a door's lower half is implied. Each unseen feet or
+     darkBest {x y z h}. A floor in missed is never seen, only lit. The floor under a door's lower half is implied. Each unseen feet or
      head cell costs cell, a phantom floor floor, times the move's seconds, and peekS a drop onto it, aimS a level or up step
      (in cost.darkSeconds; jobs.lib.cost/unknown-prices). No fall goes into an unseen cell, risk looks stop there, and no
      goal-enclosed, goal-not-standable or start-enclosed proof rests on one. missed and noLight are Sets of cell-key.

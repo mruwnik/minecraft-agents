@@ -56,7 +56,7 @@
     stays, info go-to.off-hand-kept); one a cut call left in the hand goes back at the next call's start.
   - :place-torches true (with :unknown; default false) may light such a dark floor instead: the planner prices a torch
     (jobs.lib.cost/light-cost, or :unknown's :light-cost) where it can stand on the takeoff, in no other owner's zone or
-    claim; the walk stops there, places one from the inventory (info walk.torch-placed, body memory :torch-placed) and
+    claim; the walk stops there, places one (an off-hand stack goes back to the inventory first; info walk.torch-placed) and
     walks on once it sees the floor. With none carried it fetches torches once a call (:fetch, default true; jobs.lib.fetch);
     with none and no fetch it gives up :unseen-floor-dark saying so. A torch that cannot go there is not tried there again.
   - :dark false plans dark cells like lit ones (default: a dark cell costs twice a lit one, so a lit route up to about 2x
@@ -268,17 +268,19 @@
   (boolean (and (fetch/opts c 'jobs.movement.go-to) (not (:torch-fetched (ctx/mem c))) (nil? (fetch/failure c torch-fetch-key)))))
 
 (defn light-ok
-  "The planner's lightOk: (fn [x y z]) true where a torch may go, in no other owner's zone or claim (none under :ignore-zones?)."
+  "The planner's lightOk: (fn [x y z]) true where a torch may go at a takeoff (x y z its feet): the feet or the head cell
+  in no other owner's zone or claim (none under :ignore-zones?); jobs.lib.walk/light! places it in the one allowed."
   [c]
-  (let [in (access/zone-input c)]
-    (fn [x y z] (or (:ignore-zones? in) (true? (:ok (zones/verdict (assoc in :action :place :cell [x y z]))))))))
+  (let [in (access/zone-input c)
+        ok? (fn [cell] (true? (:ok (zones/verdict (assoc in :action :place :cell cell)))))]
+    (fn [x y z] (or (:ignore-zones? in) (ok? [x y z]) (ok? [x (inc y) z])))))
 
 (defn round-unknown
   "The mask spec of this round (c's :unknown): with :place-torches and a torch carried or a fetch still open, torches on
   (wworld/with-light), priced by :unknown's :light-cost or jobs.lib.cost/light-cost."
   [c]
   (let [u (:unknown c)
-        n (ltorch/torches-carried (:primitives c))
+        n (ltorch/torches-held (:primitives c))
         arg (:unknown (:args c))]
     (if (and u (:place-torches (:args c)) (or (pos? n) (torch-fetch-open? c)))
       (wworld/with-light u (or (when (map? arg) (:light-cost arg)) (:cost (cost/light-cost {:carried n}))) (light-ok c))
@@ -300,7 +302,7 @@
   [c result]
   (if (end/dark-end? result)
     (cond-> {:status :no-path :reason :unseen-floor-dark :dark-best (:dark-best result)}
-      (and (:place-torches (:args c)) (zero? (ltorch/torches-carried (:primitives c))))
+      (and (:place-torches (:args c)) (zero? (ltorch/torches-held (:primitives c))))
       (assoc :torches (if (fetch/failure c torch-fetch-key) :fetch-failed :none)))
     result))
 
@@ -415,7 +417,7 @@
         there? (here? c pos (:range (:args c)))]
     (wworld/warn-bad-settings! c)
     (ctx/update-mem! c #(cond-> (-> % (dissoc :best :fault-cells :over-budget :off-hand-tried :air-looked :surfacings) (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {}))
-                          (not (:fetching m)) (dissoc :torch-fetched)
+                          (not (:fetching m)) (dissoc :torch-fetched :fetched)
                           (and there? (:escalate-now m)) (dissoc :escalate-now)
                           (and there? (:escalation m))
                           (-> (dissoc :escalation :escalation-from :planned :holes-before)

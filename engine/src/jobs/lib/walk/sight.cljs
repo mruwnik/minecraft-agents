@@ -322,9 +322,13 @@
 (defn note-missed!
   "A walk that gave a floor up (done {:why :unseen :cells}) adds it to the missed Set of the mask on pw's snapshot (cell
   keys; the planner's options.unknown.missed), so the next plan over that mask does not count on seeing it; one whose
-  torch could not go on a takeoff ({:why :no-light :cells}) adds that to the noLight Set (options.unknown.noLight)."
-  [^js pw {:keys [why cells]}]
+  torch could not go on a takeoff ({:why :no-light :cells}), or lit no floor it could see (:no-light), adds that to the
+  noLight Set (options.unknown.noLight)."
+  [^js pw {:keys [why cells no-light]}]
   (when-let [^js u (some-> pw .-snapshot .-unknown)]
-    (when-let [field (case why :unseen "missed" :no-light "noLight" nil)]
-      (let [^js marked (or (unchecked-get u field) (doto (js/Set.) (->> (unchecked-set u field))))]
-        (doseq [[x y z] cells] (.add marked (base/cell-key x y z)))))))
+    (let [mark! (fn [field cells]
+                  (let [^js marked (or (unchecked-get u field) (doto (js/Set.) (->> (unchecked-set u field))))]
+                    (doseq [[x y z] cells] (.add marked (base/cell-key x y z)))))]
+      (when-let [field (case why :unseen "missed" :no-light "noLight" nil)]
+        (mark! field cells))
+      (when (seq no-light) (mark! "noLight" no-light)))))
