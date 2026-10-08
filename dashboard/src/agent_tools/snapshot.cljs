@@ -19,7 +19,7 @@
        "cell, distance and light), :entities (mobs/players the body sees, in the picture, nearest first, left/centre/right),\n"
        ":heard (noises it hears but does not see: name, direction, band) and :text.\n"
        "Default direction: where the body faces. --yaw/--pitch in degrees (yaw 0 north, 90 west, 180 south, 270 east;\n"
-       "pitch +90 straight up), either alone; --look-at aims at the centre of block X,Y,Z (or X Y Z). Only the picture turns: the\n"
+       "pitch +90 straight down), either alone; --look-at aims at the centre of block X,Y,Z (or X Y Z). Only the picture turns: the\n"
        "body never moves. Needs the body online (pose.json written in the last " 10 " s). Drawn from the chunks the\n"
        "body has seen; unloaded terrain shows as sky. Sizes 16..1920 x 16..1080, --max-dist 4..96 blocks."))
 
@@ -90,12 +90,13 @@
     (nth names (mod eighth 8))))
 
 (defn camera
-  "The yaw/pitch (radians) to draw from: the pose's, with the given degrees or --look-at target instead."
+  "The yaw/pitch (radians) to draw from: the pose's, with the given degrees or --look-at target instead.
+  Pitch follows Minecraft convention: positive looks down, negative looks up."
   [pose {:keys [yaw pitch look-at]}]
   (if look-at
     (look-angles (:eye pose) (mapv #(+ (js/Math.floor %) 0.5) look-at))
     {:yaw (if yaw (/ yaw degrees) (:yaw pose))
-     :pitch (if pitch (/ pitch degrees) (:pitch pose))}))
+     :pitch (if pitch (/ (- pitch) degrees) (:pitch pose))}))
 
 (defn pose-problem
   "nil when `pose` is a fresh online pose of `world` with a position; else {:reason :message}."
@@ -146,7 +147,8 @@
   and the noises heard."
   [{:keys [pose camera center seen heard width]}]
   (let [yaw-deg (mod (js/Math.round (* (:yaw camera) degrees)) 360)
-        facing {:yaw yaw-deg :pitch (js/Math.round (* (:pitch camera) degrees)) :compass (compass (:yaw camera))}
+        pitch-deg (js/Math.round (* (- (:pitch camera)) degrees))
+        facing {:yaw yaw-deg :pitch pitch-deg :compass (compass (:yaw camera))}
         crosshair (when center
                     (cond-> {:block (:name center) :at [(:x center) (:y center) (:z center)] :face (:face center)
                              :distance (round1 (:t center))}

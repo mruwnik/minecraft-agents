@@ -66,8 +66,16 @@
     (is (= {:yaw 1.0 :pitch 0.2} (snap/camera p {})))
     (is (close? (/ pi 2) (:yaw (snap/camera p {:yaw 90}))))
     (is (= 0.2 (:pitch (snap/camera p {:yaw 90}))))
-    (is (close? (/ pi -6) (:pitch (snap/camera p {:pitch -30}))))
+    (is (close? (/ pi 6) (:pitch (snap/camera p {:pitch -30}))))
     (is (same-angle? 0 (:yaw (snap/camera (pose {}) {:look-at [0 65 -5]}))))))
+
+(deftest pitch-follows-minecraft-convention-positive-looks-down
+  (let [p (pose {:yaw 1.0 :pitch 0.2})]
+    ; In Minecraft convention, positive pitch looks down; negative looks up
+    ; --pitch 30 should look down (negative radian pitch in Mineflayer)
+    (is (close? (/ pi -6) (:pitch (snap/camera p {:pitch 30}))))
+    ; --pitch -30 should look up (positive radian pitch in Mineflayer)
+    (is (close? (/ pi 6) (:pitch (snap/camera p {:pitch -30}))))))
 
 (deftest pose-problem-requires-a-fresh-online-pose-of-this-world
   (are [p reason] (= reason (:reason (snap/pose-problem p "w" 5000)))
