@@ -308,10 +308,22 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (search! {:target "diamond_block"} {:unreachable ["-16,64,-16" "0,64,-16" "16,64,-16"]}))
+        (let [s (await (search! {:target "diamond_block" :max-distance 23} {:unreachable (mapv (fn [[x z]] (str x ",64," z)) (search/spiral-points [0 0] 16 23))}))
               e (event-of s :search.not-found)]
           (is (= :stuck (:why e)))
-          (is (= 3 (count (get-in e [:coverage :failed])))))))))
+          (is (= [[-16 64 -16] [16 64 -16] [16 64 16]] (mapv :pos (get-in e [:coverage :failed])))
+              "each next leg lies another way: one within 60 degrees of a failed leg's way is held back"))))))
+
+;; live (Juniper, card e51d1fe9): three legs east all failed at the same rim and the search ended stuck; a leg that lies
+;; the way a leg just failed from here waits until a leg arrives, so the next leg goes another way
+(deftest a-leg-the-way-a-leg-just-failed-waits-for-one-that-arrives
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (search! {:target "diamond_block" :max-distance 23} {:unreachable ["-16,64,-16" "0,64,-16" "16,64,-16"]}))
+              e (event-of s :search.not-found)]
+          (is (= :distance (:why e)) (pr-str e))
+          (is (= #{[-16 64 -16] [0 64 -16] [16 64 -16]} (set (map :pos (get-in e [:coverage :failed])))) "the held leg is walked later, after an arrival"))))))
 
 (deftest outward-walks-along-the-heading
   (async done

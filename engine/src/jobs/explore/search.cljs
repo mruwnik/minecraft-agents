@@ -29,7 +29,9 @@
   counted in :max-legs) and looked at again; within 3 blocks of it, it is recorded failed. An unloaded column is not tried but looked at again later. When only unloaded ones are
   left the round ends and the check declines for 2 s, up to :load-wait-s (a body just logged in has no chunks
   yet), then the search ends :not-loaded. A walk go-to gives up on is recorded :unreachable. Three of those in
-  a row end the search (:stuck). A leg whose goal lies by a mob the body would flee is not walked (go-to :goal-danger
+  a row end the search (:stuck); until a leg arrives, a leg within 60 degrees of the way one failed from where the
+  body stands waits (the same obstacle likely blocks it), and the search ends :stuck when only such legs are left.
+  A leg whose goal lies by a mob the body would flee is not walked (go-to :goal-danger
   :end): it is recorded :goal-dangerous, no stuck walk; a step toward an unseen column given up so leaves that column.
 
   With :use-notes, live :seen notes of a target within :max-distance count as found (:noted true, :by), unless the body
@@ -40,7 +42,8 @@
   :distance (no leg left), :legs (:max-legs walked), :time (:timeout-s since the first round), :stuck
   or :not-loaded.
 
-  Memory: :origin :started :legs :scans :found :tried :failed :skipped :farthest :failed-in-row :deferred (unloaded legs set aside while a sweep goes on), and :leg while
+  Memory: :origin :started :legs :scans :found :tried :failed :skipped :farthest :failed-in-row :blocked (the ways legs
+  failed since the last arrival) :deferred (unloaded legs set aside while a sweep goes on), and :leg while
   a walk is under way, so a cut or restart resumes it.")
 
 (a/defargs args
@@ -249,11 +252,33 @@
     (or (some (fn [k] (let [[sx sz] (at k) {sy :y} (stand-cell block-at sx sz y)] (when sy [sx sy sz]))) near)
         (when-let [k (first (filter #(<= % 6) near))] (let [[sx sz] (at k)] [sx y sz])))))
 
+(def held-cos
+  "A leg lies the way a failed leg did when the angle between them, seen from the body, is under 60 degrees."
+  0.5)
+
+(def held-near
+  "Blocks from where a leg failed within which its way still holds others back."
+  4)
+
+(defn held?
+  "Whether point [x z] lies the way a leg failed from near the body at [hx hz] (blocked, [{:at [x z] :leg [x z]}] since
+  the last arrival): the same obstacle likely stands in its way."
+  [blocked [hx hz] [x z]]
+  (let [v [(- x hx) (- z hz)]]
+    (boolean (some (fn [{[ax az] :at [lx lz] :leg}]
+                     (let [w [(- lx hx) (- lz hz)]
+                           n (* (js/Math.hypot (v 0) (v 1)) (js/Math.hypot (w 0) (w 1)))]
+                       (and (<= (xz-dist [hx hz] [ax az]) held-near)
+                            (pos? n)
+                            (> (/ (+ (* (v 0) (w 0)) (* (v 1) (w 1))) n) held-cos))))
+                   blocked))))
+
 (defn choose-leg
   "{:leg [x y z] (or nil when none is left) :tried [points looked at] :failed [{:pos :reason}] :skipped n
   :unloaded [{:pos :reason :not-loaded}] :step true when :leg is only a step toward an unseen column (it is no leg
-  walked; :column that column) :more true when stand-cap cells were read and candidates may be left}; an
-  unloaded column is not tried, so a later round looks again (m's :deferred ones are kept out of this sweep)."
+  walked; :column that column) :more true when stand-cap cells were read and candidates may be left :held n, the
+  points passed over for now (held?, m's :blocked)}; an unloaded column is not tried, so a later round looks again (m's
+  :deferred ones are kept out of this sweep)."
   [c m names ns]
   (let [{:keys [max-distance]} (:args c)
         [ox y oz] (here c)
@@ -261,11 +286,12 @@
         tried (into (set (:tried m)) (map (fn [{[x _ z] :pos}] [x z])) (:deferred m))
         p (:primitives c)
         block-at (seen-at p)]
-    (loop [[pt & more] (candidates c m) reads 0 acc {:tried [] :failed [] :skipped 0 :unloaded (vec (:deferred m))}]
+    (loop [[pt & more] (candidates c m) reads 0 acc {:tried [] :failed [] :skipped 0 :held 0 :unloaded (vec (:deferred m))}]
       (cond
         (nil? pt) acc
         (>= reads (stand-cap)) (assoc acc :more true)
         (or (tried pt) (> (xz-dist pt origin) max-distance) (= pt [ox oz])) (recur more reads acc)
+        (held? (:blocked m) [ox oz] pt) (recur more reads (update acc :held inc))
         (some #(notes/covers? % pt names) ns) (recur more reads (-> acc (update :tried conj pt) (update :skipped inc)))
         :else (let [{sy :y fail :fail} (stand-cell block-at (pt 0) (pt 1) y)
                     failed {:pos [(pt 0) y (pt 1)] :reason fail}
@@ -288,8 +314,11 @@
       (let [{:keys [in-water why] :as res} (ctx/child-result c :leg)
             arrived (and (:arrived res) (not in-water))
             dangerous? (= :goal-dangerous why)
-            in-row (cond arrived 0 dangerous? (:failed-in-row (ctx/mem c) 0) :else (inc (:failed-in-row (ctx/mem c) 0)))]
+            in-row (cond arrived 0 dangerous? (:failed-in-row (ctx/mem c) 0) :else (inc (:failed-in-row (ctx/mem c) 0)))
+            [hx _ hz] (here c)]
         (ctx/update-mem! c (fn [m] (cond-> (assoc (dissoc m :leg :leg-column) :failed-in-row in-row)
+                                     arrived (dissoc :blocked)
+                                     (not (or arrived dangerous?)) (update :blocked (fnil conj []) {:at [hx hz] :leg [x z]})
                                      (not arrived) (update :failed (fnil conj []) {:pos [x y z] :reason (cond dangerous? :goal-dangerous in-water :wet :else :unreachable)})
                                      (and dangerous? (:leg-column m)) (update :tried (fnil conj []) (:leg-column m)))))
         (if (>= in-row (max-failed-in-row)) (finish! c :not-found :stuck) :again)))))
@@ -307,7 +336,7 @@
     (cond
       (>= (count found) want) (finish! c :found nil)
       (>= (:legs m 0) max-legs) (finish! c :not-found :legs)
-      :else (let [{:keys [leg step column tried failed skipped unloaded more]} (choose-leg c m names ns)
+      :else (let [{:keys [leg step column tried failed skipped unloaded more held]} (choose-leg c m names ns)
                   now (ctx/now c)
                   waited (- now (:waiting-since m now))]
               (ctx/update-mem! c (fn [m] (-> m
@@ -320,6 +349,7 @@
                                                        (update :legs (fnil + 0) (if step 0 1)))))
                         (await (walk! c)))
                 more :again
+                (and (empty? unloaded) (pos? held)) (finish! c :not-found :stuck)
                 (empty? unloaded) (finish! c :not-found :distance)
                 (< waited (* 1000 (:load-wait-s (:args c))))
                 (do (ctx/update-mem! c assoc :waiting-since (- now waited) :wait-until (+ now (wait-ms)))
