@@ -468,10 +468,11 @@
 
 (defn worth-cooking?
   "Cooking the raw food carried beats eating it now (jobs.lib.cost/cook-worth?): the walk to the furnace in sight, or
-  the one smelt makes and puts down when none is seen."
+  the one smelt makes (or, carried, only puts down) when none is seen."
   [c]
   (let [cooker (nearest-cooker c)]
-    (cost/cook-worth? (raw-carried c) (food-level c) (when cooker (u/dist (u/self-pos c) cooker)))))
+    (cost/cook-worth? (raw-carried c) (food-level c) (when cooker (u/dist (u/self-pos c) cooker))
+                      (boolean (some #(contains? #{"furnace" "smoker"} (:name %)) (u/inventory (:primitives c)))))))
 
 (defn can-cook?
   "Mid-cook, or raw food carried and no live :no-cook entry, with a furnace in sight or cooking worth a furnace of its

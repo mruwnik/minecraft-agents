@@ -113,3 +113,8 @@
   (is (not (cost/cook-worth? [{:name "beef" :count 1}] 5 nil)) "one beef does not pay for a furnace")
   (is (not (cost/cook-worth? four-beef 5 200)) "a furnace too far")
   (is (not (cost/cook-worth? four-beef 3 4)) "starving: eat now"))
+
+(deftest a-carried-furnace-makes-small-batches-worth-cooking
+  (let [one-mutton [{:name "mutton" :count 1}]]
+    (is (not (cost/cook-worth? one-mutton 12 nil)) "no furnace at all: one mutton does not pay for making one")
+    (is (cost/cook-worth? one-mutton 12 nil true) "a furnace in the pack only needs putting down")))

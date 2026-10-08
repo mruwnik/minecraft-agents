@@ -569,6 +569,19 @@
           (is (some #{"take"} (call-args p "furnace" "op")))
           (is (< (count (filter #{"beef"} (map #(.-name %) (.-inventory (.self p))))) 4) "raw beef was cooked"))))))
 
+(deftest a-little-raw-meat-is-cooked-when-a-furnace-and-fuel-are-carried
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:food 5}
+                                      :inventory [{:name "porkchop" :count 1} {:name "furnace" :count 1} {:name "oak_planks" :count 4}]}
+                                     :step-ms 2000
+                                     :zones [{:name "home" :owner "Fake" :min [-20 60 -20] :max [20 70 20]}])]
+          (core/submit! eng (list 'jobs.survival.get-food {}) {})
+          (await (run-until-idle! eng p 60))
+          (is (= 1 (count (:furnaces @(fake/state p)))) "the carried furnace was put down")
+          (is (some #{"take"} (call-args p "furnace" "op")) "the cooked output was taken"))))))
+
 (deftest raw-beef-with-no-furnace-to-be-had-says-so-and-is-eaten-raw
   (async done
     (tu/run-async done

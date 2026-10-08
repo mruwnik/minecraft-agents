@@ -48,6 +48,10 @@
   "Hunger points a furnace to make and place is counted to cost (cobble, a craft, the fuel)."
   8)
 
+(def place-cost
+  "Hunger points putting down a furnace already carried is counted to cost."
+  2)
+
 (def walk-cost
   "Hunger points one block of walking to a furnace is counted to cost."
   0.2)
@@ -69,9 +73,10 @@
 
 (defn cook-worth?
   "Whether cooking the raw food in inventory beats eating it now: not at or below cook-urgent-food, and the points
-  gained cover the walk to a furnace (distance, nil when none is seen: one is made, furnace-cost) with the cost
-  growing as food falls."
-  [inventory food distance]
-  (and (> food cook-urgent-food)
-       (let [cost (if distance (* distance walk-cost) furnace-cost)]
-         (>= (cook-gain inventory) (* cost (+ 1 (/ (- 20 food) 20)))))))
+  gained cover the walk to a furnace (distance, nil when none is seen: one is made, furnace-cost, or only put down,
+  place-cost, when carried-cooker? says one is in the pack) with the cost growing as food falls."
+  ([inventory food distance] (cook-worth? inventory food distance false))
+  ([inventory food distance carried-cooker?]
+   (and (> food cook-urgent-food)
+        (let [cost (cond distance (* distance walk-cost) carried-cooker? place-cost :else furnace-cost)]
+          (>= (cook-gain inventory) (* cost (+ 1 (/ (- 20 food) 20))))))))
