@@ -3173,6 +3173,21 @@ test('the died event names the damage type of the lethal hit when nothing is res
   assert.equal(seen.find(e => e.kind === 'died').cause, 'fall')
 })
 
+test('a stale damage packet is not the cause of a later death', t => {
+  mockClock(t)
+  const { bot, seen } = hurtRig()
+  bot._client.emit('damage_event', { entityId: bot.entity.id, sourceTypeId: 0, sourceCauseId: 0, sourceDirectId: 0 })
+  bot.health = 14
+  bot.emit('health')
+  t.mock.timers.tick(5000)
+  bot.health = 0
+  bot.emit('health')
+  bot.emit('death')
+  const died = seen.find(e => e.kind === 'died')
+  assert.equal(died.cause, undefined)
+  assert.equal('damageType' in died, false)
+})
+
 test('a damage packet for another entity is not the cause', () => {
   const { bot, seen } = hurtRig()
   bot._client.emit('damage_event', { entityId: 999, sourceTypeId: 0, sourceCauseId: 0, sourceDirectId: 0 })
