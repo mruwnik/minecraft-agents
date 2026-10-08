@@ -36,3 +36,17 @@
                                             {:pos [0 64 0]}))]
           (is (= {:arrived true} (select-keys @out [:arrived])))
           (is (= 64 (second (g/at p))) "on the floor"))))))
+
+;; a route never ends in a magma column or on magma (the body would idle there), so a goal whose every cell in range is
+;; one is truly out of reach: go-to says so at once, without walking (it wandered the plot for 60 s)
+(deftest go-to-gives-up-at-once-on-a-goal-in-a-magma-column
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[goal range] [[[3 64 0] 0] [[3 67 0] 1]]]
+          (let [{:keys [out p ticks]} (await (g/go! (assoc (column "magma_block" true) :self {:pos {:x 5 :y 70 :z 0}})
+                                                    {:pos goal :range range}))]
+            (is (= {:arrived false :reason :unreachable :why :goal-on-magma} (select-keys @out [:arrived :reason :why])) (str goal))
+            (is (re-find #"magma" (str (:text @out))) (str goal))
+            (is (= [5 70 0] (mapv js/Math.floor (g/at p))) "the body did not walk")
+            (is (< ticks 5) (str "ticks " ticks))))))))

@@ -691,6 +691,7 @@ the recorded pins (`planner_{bench,options,goals,courses}_golden.cljs`, `js/path
   got to, or waits. A start closed in the loaded world, with the goal unloaded, ends `start-enclosed` (not `goal-unloaded`); a goal proved walled in or cut off while the start's own land is walled in too (a small forward drain, no cliff) ends `start-enclosed`. An enclosed goal is found by a small backward flood before any walking (`goal-enclosed`; a region with a cliff edge, or an edge to drop off at the goal's level, says `goal-cut-off`, an island or deck, which go-to treats alike; `options.preFlood`, default 256 cells), and go-to keeps its flood between searches toward one goal (`goalFloodMemo`).
 - A partial plan ends at the node nearest the goal that the body can come back from (one-way drops, gap jumps and ways into a
   downward bubble column above its bottom are not taken), walked only to its last step with the head out of water. `go-near!` never leads the body off a ledge it cannot climb back.
+- A route never ends on magma or in a magma bubble column: a goal with no other cell in range ends `goal-on-magma` before any search, and go-to gives up at once.
 - A search that runs out of loaded land names a frontier (a loaded edge) at most `options.frontierReach` (256) farther from
   the goal than the start. go-to tours frontiers until every one is spent; `:explore-blocks n` gives up `:explore-spent` once
   the body walked n blocks without coming nearer the goal.

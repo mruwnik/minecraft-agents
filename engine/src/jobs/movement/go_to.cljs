@@ -58,7 +58,7 @@
   - A call starts afresh from the world: its walk counters are per call (the cut count carries over only a cut of this run's call to the same goal), and a saved escalation is dropped when the body
     is already there (a cut call's memory is a hint).
   - A walk that gets more than 1 block nearer is progress. Three walks in a row without progress give up, and so
-    does a goal the planner proves walled in (:goal-enclosed, :goal-cut-off), at once.
+    does a goal the planner proves walled in (:goal-enclosed, :goal-cut-off) or on magma (:goal-on-magma), at once.
   - A search that runs out of loaded land walks to its frontier (the loaded edge), and a walk that gets nearer that edge
     is progress too: a tour of frontiers ends only when every frontier within 1000 blocks of the goal is spent. :explore-blocks n
     bounds it: once the body has walked n blocks since it last came nearer its goal than ever in the call, the call gives
@@ -75,7 +75,7 @@
     jobs.access.cleanup. Its children's walks never escalate. Jobs that must not change the world on the way pass
     :escalate false.
   - Gives up with {:status :stopped :arrived false :reason :unreachable :why ... :text words} (the job ends :stopped) and an :unreachable warn: :why is the planner's
-    reason (:exhausted, :goal-unloaded (the goal lies in unloaded land and the loaded land leads no nearer), :goal-enclosed, :goal-cut-off, :door-stuck with :cells, :one-way with :near and :one-way ...), or :stuck
+    reason (:exhausted, :goal-unloaded (the goal lies in unloaded land and the loaded land leads no nearer), :goal-enclosed, :goal-cut-off, :goal-on-magma, :door-stuck with :cells, :one-way with :near and :one-way ...), or :stuck
     (:kind the step, :detail the executor's text), :off-plan, :steer-failed, :no-progress, :cut-again (sent back by 3 cuts, each restart more than send-back-margin farther than where the cut found the body, with no 2 blocks gained on the closest approach in between (in-place cuts do not count or break it); an escalation child's own walk is its own call, a parent waiting on it is not walking; :nearest-hostile names a guess at the cause) or :moved-while-searching; :at is the
     body's feet cell and :near its blocks from the goal. A failed
     escalation adds :escalation {:step :reason ...}, the child's reason or wait.
@@ -347,7 +347,7 @@
                              :frontier-best (cond-> fbests frontier (assoc frontier (min fbest (u/dist to fcell))))
                              :target-best (cond-> tbests target (assoc target (min tdist (get tbests target js/Infinity)))))
             (when (and progress? (:restore-pending (ctx/mem c))) (esc/restore-next! c))
-            (if (and (if (false? (:retry (:args c))) progress? (< tries max-blocked)) (not (#{:goal-enclosed :goal-cut-off} (:reason result))))
+            (if (and (if (false? (:retry (:args c))) progress? (< tries max-blocked)) (not (#{:goal-enclosed :goal-cut-off :goal-on-magma} (:reason result))))
               :again
               (let [unloaded? (wsearch/goal-unloaded? (.-snapshot pw) (mapv #(js/Math.floor (% pos)) [:x :y :z]))
                     result (dark-end result)

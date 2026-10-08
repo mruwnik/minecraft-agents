@@ -83,6 +83,7 @@
            :abilities (str "it " (or (kind-words kind) (str "needs a " (some-> kind name) " move the body cannot make")))
            :goal-enclosed "the goal is walled in with no way through"
            :goal-cut-off "the goal is cut off by a drop: no walkable way leads to it"
+           :goal-on-magma "every cell in range is on magma or in a magma bubble column, where a route never ends"
            :start-enclosed "the body is shut in and nothing it can walk reaches out"
            :exhausted "no walkable way leads there from here"
            :goal-unloaded "the goal lies in land that is not loaded and the loaded land leads no nearer"

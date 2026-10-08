@@ -14,22 +14,30 @@
           rz (+ (- z (.-from-z s)) HALF)]
       (and (>= rx 0) (< rx SPAN) (>= rz 0) (< rz SPAN))))
 
-  (goalNotStandable [s]
-    (if (or (not ^boolean (.-near s)) ^boolean (.-goal-unloaded s))
-      false
+  ;; nil when a cell within range may end a route; else why none can: "goal-on-magma" when the standable ones are all on
+  ;; magma or in a magma column (endsOnMagma: a route never ends there), "goal-not-standable" when there are none
+  (goalStandProblem [s]
+    (when (and ^boolean (.-near s) (not ^boolean (.-goal-unloaded s)))
       (let [r (js/Math.ceil (.-goal-range s))]
         (loop [dx (- r)
                dy (- r)
-               dz (- r)]
-          (cond
-            (> dx r) true
-            (> dy r) (recur (inc dx) (- r) (- r))
-            (> dz r) (recur dx (inc dy) (- r))
-            (and (<= (+ (* dx dx) (* dy dy) (* dz dz)) (* (.-goal-range s) (.-goal-range s)))
-                 (or (>= (.nodeH s (+ (.-goal-x s) dx) (+ (.-goal-y s) dy) (+ (.-goal-z s) dz)) 0)
-                     ;; an unseen goal cell (options.unknown) may be standable
-                     ^boolean (.unknownNear s (+ (.-goal-x s) dx) (+ (.-goal-y s) dy) (+ (.-goal-z s) dz)))) false
-            :else (recur dx dy (inc dz)))))))
+               dz (- r)
+               magma false]
+          (if (> dx r)
+            (if ^boolean magma "goal-on-magma" "goal-not-standable")
+            (if (> dy r)
+              (recur (inc dx) (- r) (- r) magma)
+              (if (> dz r)
+                (recur dx (inc dy) (- r) magma)
+                (let [x (+ (.-goal-x s) dx) y (+ (.-goal-y s) dy) z (+ (.-goal-z s) dz)
+                      h (.nodeH s x y z)]
+                  (cond
+                    (> (+ (* dx dx) (* dy dy) (* dz dz)) (* (.-goal-range s) (.-goal-range s))) (recur dx dy (inc dz) magma)
+                    ;; an unseen goal cell (options.unknown) may be standable
+                    ^boolean (.unknownNear s x y z) nil
+                    (neg? h) (recur dx dy (inc dz) magma)
+                    ^boolean (.endsOnMagma s x y z h) (recur dx dy (inc dz) true)
+                    :else nil)))))))))
 
   ;; a bubble column lifts and drags in ways the flood does not enumerate: meeting one marks the flood leaked
   (leakBubble [s x y z]

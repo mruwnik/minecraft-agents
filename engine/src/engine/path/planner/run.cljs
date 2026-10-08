@@ -71,16 +71,15 @@
   (init [s]
     (set! (.-view s) (js-obj "stateAt" (fn [x y z] (.viewAt s x y z))))
     (set! (.-start-h s) (.nodeH s (.-from-x s) (.-from-y s) (.-from-z s)))
-    ;; (before goalNotStandable reuses standH)
+    ;; (before goalStandProblem reuses standH)
     (set! (.-start-slow s) (if (and (== (aget (.-tbl-hazard s) (.-support s)) SLOW) (not ^boolean (.isWater s (.-from-x s) (.-from-y s) (.-from-z s)))) 1 0)))
 
   (begin [s]
     (set! (.-started s) true)
     (set! (.-t0 s) (js/performance.now))
-    (cond
-      (neg? (.-start-h s)) (.finish s "start-not-standable")
-      ^boolean (.goalNotStandable s) (.finish s "goal-not-standable")
-      :else
+    (let [problem (if (neg? (.-start-h s)) "start-not-standable" (.goalStandProblem s))]
+     (if (some? problem)
+      (.finish s problem)
       (do
         (set! (.-start-distance s) (.distanceTo s (.-from-x s) (.-from-z s)))
         (let [shape (.startShape s)
@@ -103,7 +102,7 @@
               (set! (.-n-nodes s) 1)
               (set! (.-heap-n s) 1)
               (aset (.-heap s) 0 0)
-              (aset (.-heap-pos s) 0 0)))))))
+              (aset (.-heap-pos s) 0 0))))))))
 
   ;; the body died idling on magma: a route never ends on a magma block or in a magma column, so such a node is passed
   ;; through (it is searched on from) but is neither the goal nor the best partial end

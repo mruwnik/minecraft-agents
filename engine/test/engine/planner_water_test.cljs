@@ -650,12 +650,13 @@
       (= (state-id "magma_block") (state-at snapshot (:x s) (dec (:y s)) (:z s)))))
 
 (deftest route-never-ends-on-magma
-  (are [what snapshot goal status]
+  (are [what snapshot goal status reason]
        (let [r (run snapshot from2 goal {:goalFlood 0})]
-         (and (= status (:status r)) (not (on-magma? snapshot (last-step r)))))
-    "a goal range 1 around a magma block with stone beside it" (world [[9 63 2 10 63 2 "magma_block"]]) (near 10 64 2 1) "found"
-    "a goal on a magma block" (world [[10 63 2 10 63 2 "magma_block"]]) (near 10 64 2 0) "partial"
-    "a goal in a magma bubble column" (column 20 bubble-down) (near 11 74 1 0) "partial"))
+         (and (= [status reason] [(:status r) (:reason r)]) (not (on-magma? snapshot (last-step r)))))
+    "a goal range 1 around a magma block with stone beside it" (world [[9 63 2 10 63 2 "magma_block"]]) (near 10 64 2 1) "found" nil
+    "a goal on a magma block: no cell in range a route may end on" (world [[10 63 2 10 63 2 "magma_block"]]) (near 10 64 2 0) "none" "goal-on-magma"
+    "a goal in a magma bubble column" (column 20 bubble-down) (near 11 74 1 0) "none" "goal-on-magma"
+    "a goal range 1 in a magma bubble column" (column 20 bubble-down) (near 11 74 1 1) "none" "goal-on-magma"))
 
 (def beside
   (world [[-2 64 1 40 66 1 "stone"] [-2 64 3 40 66 3 "stone"]
