@@ -3,7 +3,8 @@
 ;; [13 0 12] and [19 0 12], both open; the body at [16.5 0 16.5], 5 blocks from each, facing north (:yaw 180): the
 ;; reflex reads only gates it has seen, and the default view faces south.
 ;; Should-succeed: both planned gates shut; with one planned, only that one.
-;; Should-fail (left alone): no plan, body standing in the gate, gate beyond the radius, gate walled into stone (gave up).
+;; Should-fail (left alone): no plan, body standing in the gate, gate beyond the radius, gate walled into glass (seen, never
+;; reached: gave up; a stone wall hides the gate and the reflex never sees it).
 {:defaults
  {:tags [:animals :triggers :pen-gate]
   :time :any
@@ -46,7 +47,7 @@
   {:name "gate-walled-into-stone-gives-up"
    :plans [{:id "pen" :parts [{:id "gate" :cells [#at [16 0 4]] :want [:any "oak_fence_gate"]}]}]
    :blocks [[:fill [13 0 12] [13 0 12] "oak_fence"] [:fill [19 0 12] [19 0 12] "oak_fence"]
-            [:fill [14 0 2] [18 3 6] "stone"]
+            [:fill [14 0 2] [18 3 9] "glass"]
             [:set [16 0 4] "oak_fence_gate[facing=south,open=true]"]]
    :body {:at [16.5 0 10.5]}
    :expect [{:event {:source :job :kind :shut-gate.gave-up :data {:cell #at [16 0 4]}} :within-s 50}]

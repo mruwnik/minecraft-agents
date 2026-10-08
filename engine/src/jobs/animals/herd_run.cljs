@@ -128,7 +128,7 @@
         inside (set (map animals/key-of (in-pen-adults c (read-pen c))))
         brought (filterv inside (:brought m))
         reason (or reason
-                   (cond (>= (count inside) target) :brought
+                   (cond (>= (count (remove (set (keys (:given-up m))) inside)) target) :brought
                          (seq brought) :short
                          :else :short))
         result (merge {:reason reason :inside (count inside) :target target :brought brought
