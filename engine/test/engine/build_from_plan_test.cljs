@@ -65,7 +65,11 @@
           (is (= "oak_fence_gate" (block p [3 64 2])))
           (is (= "torch" (block p [2 65 2])))
           (is (< (.indexOf order [2 64 2]) (.indexOf order [2 65 2])))
-          (is (= {:placed 9 :missing [] :short {} :given-up {} :wrong [] :refused []} result))
+          (is (= {:placed 9 :missing [] :short {} :given-up {} :wrong [] :refused []}
+                 (dissoc result :spent :spent-at)))
+          (is (= {"oak_fence" 7 "oak_fence_gate" 1 "torch" 1} (:spent result)) "what it placed, by item")
+          (is (= 5 (count (:spent-at result))))
+          (is (re-find #"used 7 oak_fence, 1 oak_fence_gate, 1 torch" (:text (first (h/events-of seen :build.done)))))
           (is (= 1 (count (h/events-of seen :build.done))))
           (is (empty? (h/events-of seen :build.short))))))))
 
@@ -725,7 +729,7 @@
       (fn ^:async t []
         (let [{:keys [eng]} (start {:inventory kit} {"pen" (pen-plan)})
               result (await (tu/child-outcome eng job {:plan "pen"} 1))]
-          (is (= {:placed 9 :missing [] :short {} :given-up {} :wrong [] :refused []} result)))))))
+          (is (= {:placed 9 :missing [] :short {} :given-up {} :wrong [] :refused []} (dissoc result :spent :spent-at))))))))
 
 (deftest a-place-that-finds-no-item-or-an-occupied-cell-is-given-up-after-the-tries
   (async done
