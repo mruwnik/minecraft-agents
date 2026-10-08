@@ -603,3 +603,59 @@
           (swap! (:clock env) + 700)
           (await (core/tick! (:eng env)))
           (is (= 2 @walks) "a cell beside that came free is tried"))))))
+
+(defn failing-step-offs
+  "env whose go-to walks fail (why :no-path) once the cell under the feet is dug; escalations holds each failed walk's :escalate."
+  [env escalations]
+  (let [go-to (get (:jobs (:eng env)) 'jobs.movement.go-to)
+        round (:round go-to)
+        stub (fn ^:async failing-step-off [c]
+               (if (= "air" (block-at (:p env) under-feet))
+                 (do (swap! escalations conj (boolean (:escalate (:args c))))
+                     (ctx/result! c {:arrived false :why :no-path})
+                     :done)
+                 (await (round c))))]
+    (assoc-in env [:eng :jobs 'jobs.movement.go-to] (assoc go-to :round stub))))
+
+(defn ^:async step-off-escalations
+  "The :escalate of each failed step-off walk after an unsealed dig under the feet on floor [x0 z0 x1 z1], and the result."
+  [floor]
+  (let [escalations (atom [])
+        env (failing-step-offs (setup (cond-> {:self body :blocks {"0,63,0" "dirt" "0,62,0" "lava"}} floor (assoc :floor floor)))
+                               escalations)]
+    (hiding (:p env) #(= [0 62 0] %))
+    (let [result (await (child-outcome (:eng env) job {:pos under-feet :seal-fetch false} 60))]
+      [@escalations result])))
+
+(deftest with-one-cell-to-step-off-to-its-walk-escalates-and-the-failure-is-kept
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[escalations result] (await (step-off-escalations [1 0 2 0]))]
+          (is (= [true] escalations) "the only cell is the last walk: it escalates")
+          (is (= {:reason :lava-unsealed :stepped-away false :unreachable :all-walks-failed :walk :no-path}
+                 (select-keys result [:reason :stepped-away :unreachable :walk]))))))))
+
+(deftest with-two-cells-to-step-off-to-the-second-walk-escalates
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[escalations result] (await (step-off-escalations [1 0 3 0]))]
+          (is (= [false true] escalations))
+          (is (= :all-walks-failed (:unreachable result))))))))
+
+(deftest step-away-walks-at-most-three-cells-the-last-escalated
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[escalations result] (await (step-off-escalations nil))]
+          (is (= [false false true] escalations))
+          (is (= {:stepped-away false :unreachable :all-walks-failed} (select-keys result [:stepped-away :unreachable]))))))))
+
+(deftest with-no-cell-to-step-off-to-the-result-says-no-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[escalations result] (await (step-off-escalations [1 0 1 0]))]
+          (is (= [] escalations))
+          (is (= {:stepped-away false :unreachable :no-cell} (select-keys result [:stepped-away :unreachable]))))))))

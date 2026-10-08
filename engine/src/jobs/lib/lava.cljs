@@ -54,13 +54,15 @@
     (set (for [[x _ z] cells dx [-1 0 1] dz [-1 0 1] y (range (dec (apply min ys)) (+ 3 (apply max ys)))]
            [(+ x dx) y (+ z dz)]))))
 
-(def away-tries "Cells step-away! walks to, one after another, before it gives up; the last walk may escalate." 3)
+(def away-tries "Cells step-away! walks to, one after another, before it gives up; the last walk escalates." 3)
 
 (defn ^:async step-away!
   "Walk off the cells beside the open lava and the dug cell (jobs.lib.step-off candidates, zones obeyed, up to 3
-  blocks): the nearest free cell first, then the next, up to away-tries cells, the last walk with go-to escalation.
-  Memory :away-to is the cell in hand, :away-tried the cells given up on. :arrived (also when the body already
-  stands clear), :continue, or {:unreachable why}."
+  blocks): the nearest free cell first, then the next, up to away-tries cells; the last walk tried (the last
+  candidate or the away-tries-th) escalates, so a lone cell gets an escalated walk at once. Memory :away-to is the
+  cell in hand (:away-escalate its walk's escalation), :away-tried the cells given up on. :arrived (also when the
+  body already stands clear), :continue, {:unreachable :no-cell} (no cell to go to) or {:unreachable
+  :all-walks-failed :walk why} (cells were tried; why is the last go-to's)."
   [c dug lavas]
   (let [avoid (near-cells (cons dug lavas))
         {:keys [x y z]} (u/self-pos c)
@@ -68,23 +70,27 @@
         feet-cell (zipmap [:x :y :z] feet)]
     (if-not (contains? avoid feet)
       :arrived
-      (loop []
-        (let [{:keys [away-to away-tried] :or {away-tried #{}}} (ctx/mem c)
+      (loop [why nil]
+        (let [{:keys [away-to away-escalate away-tried] :or {away-tried #{}}} (ctx/mem c)
               _ (when-not away-to
                   (await (dig-look/look-unknown! c (step-off/floors feet-cell 3))))
-              to (or away-to
-                     (first (remove #(contains? away-tried ((juxt :x :y :z) %))
-                                    (step-off/candidates (:primitives c) feet-cell
-                                                         {:avoid avoid :reach 3 :ok? (step-off/zone-ok (access/rules-input c))}))))]
+              left (when-not away-to
+                     (remove #(contains? away-tried ((juxt :x :y :z) %))
+                             (step-off/candidates (:primitives c) feet-cell
+                                                  {:avoid avoid :reach 3 :ok? (step-off/zone-ok (access/rules-input c))})))
+              to (or away-to (first left))
+              escalate (if away-to
+                         away-escalate
+                         (or (= (inc (count away-tried)) away-tries) (empty? (rest left))))]
           (if-not (and to (< (count away-tried) away-tries))
-            (do (ctx/update-mem! c dissoc :away-to :away-tried)
-                {:unreachable (if to :unreachable :no-cell)})
-            (let [r (await (ctx/call-child c :step-off 'jobs.movement.go-to
-                                           {:pos to :range 0 :escalate (= (inc (count away-tried)) away-tries)}))
+            (do (ctx/update-mem! c dissoc :away-to :away-escalate :away-tried)
+                (if (seq away-tried) {:unreachable :all-walks-failed :walk why} {:unreachable :no-cell}))
+            (let [_ (ctx/update-mem! c assoc :away-to to :away-escalate escalate)
+                  r (await (ctx/call-child c :step-off 'jobs.movement.go-to {:pos to :range 0 :escalate escalate}))
                   res (ctx/child-result c :step-off)]
-              (ctx/update-mem! c assoc :away-to to)
               (cond
                 (= :continue r) :continue
-                (and (= :done r) (:arrived res)) (do (ctx/update-mem! c dissoc :away-to :away-tried) :arrived)
-                :else (do (ctx/update-mem! c #(-> % (dissoc :away-to) (update :away-tried (fnil conj #{}) ((juxt :x :y :z) to))))
-                          (recur))))))))))
+                (and (= :done r) (:arrived res)) (do (ctx/update-mem! c dissoc :away-to :away-escalate :away-tried) :arrived)
+                :else (do (ctx/update-mem! c #(-> % (dissoc :away-to :away-escalate)
+                                                  (update :away-tried (fnil conj #{}) ((juxt :x :y :z) to))))
+                          (recur (or (:why res) r)))))))))))

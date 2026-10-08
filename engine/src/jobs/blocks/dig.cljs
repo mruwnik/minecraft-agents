@@ -44,7 +44,8 @@
   First, with :on-lava :seal (default), seen lava beside the dug cell (what the dig laid open) is filled with a building
   block from the rim (jobs.lib.lava, a jobs.blocks.place child, event blocks.dig.sealed); the dug cell stays dug. When
   it cannot be (no block carried or fetched (:seal-fetch), or two places fail) the body steps off the cells beside the lava and the job stops
-  :lava-unsealed with :cell, :place (:need: no block) and :stepped-away.
+  :lava-unsealed with :cell, :place (:need: no block) and :stepped-away (false: :unreachable :no-cell, or :all-walks-failed
+  with the last go-to's :walk).
 
   Ends with info blocks.dig.done and {:dug true|false :pos :block :reason :collected n}. :reason is :dug or
   :already-clear (air there, nothing done): done. Stopped ({:status :stopped}, :dug true): :lava-unsealed. :dug false: :fluid (a fluid is not
@@ -185,7 +186,8 @@
       unsealed (let [r (await (lava/step-away! c cell (:lavas unsealed)))]
                  (if (= :continue r)
                    :continue
-                   (stop! c (merge {:dug true :pos pos :block block :stepped-away (= :arrived r)} (dissoc unsealed :lavas)))))
+                   (stop! c (merge {:dug true :pos pos :block block :stepped-away (= :arrived r)} (dissoc unsealed :lavas)
+                                    (when (map? r) (select-keys r [:unreachable :walk]))))))
       (not= :seal (:on-lava (:args c))) nil
       :else
       (when-let [lavas (seq (lava/exposed (:primitives c) cell))]

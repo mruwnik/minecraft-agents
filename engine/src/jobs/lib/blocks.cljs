@@ -219,7 +219,8 @@
 
 (defn ^:async dig-cell!
   "Dig the one block at pos with a jobs.blocks.dig child in slot :dig (args merged over: no drops collected, no tool
-  needed, no fetch; the caller picks drops up) and say what came of it (dig-outcome)."
+  needed, no fetch; the caller picks drops up) and say what came of it (dig-outcome). :fetch false does not stop
+  the lava seal's fetch (:seal-fetch, default true); the jobs digging through here do not expose :seal-fetch."
   [c pos args]
   (let [args (merge {:collect false :need-drop false :fetch false} args {:pos pos})
         r (await (ctx/call-child c :dig 'jobs.blocks.dig args))
