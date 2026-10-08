@@ -6,6 +6,7 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.path.executor :as executor]
+            [engine.planner-fixture :as pf]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.walk.plan :as wplan]))
@@ -156,6 +157,19 @@
       [(s 0 false) (s 1 true) (s 2 false) (s 3 true)] [0 1 2]
       [(s 0 true) (s 1 true)] []
       [(s 0 false) (s 1 false)] [0 1])))
+
+;; a swim up a tunnel to the foot of a waterlogged ladder (x 4): its climb steps are no swims, but the head stays in water
+;; (live: a partial plan swam 15 cells and stopped on the ladder's foot, under water, then gave up :air); one out at the
+;; top (x 4, y 65: head in air) is dry
+(deftest a-partial-plan-never-ends-with-the-head-in-water
+  (let [wet-ladder ["ladder" {:facing "west" :waterlogged true}]
+        pw #js {:snapshot (pf/snapshot {:blocks [(into [4 64 0] wet-ladder) (into [4 65 0] wet-ladder) [1 65 0 "water"]]})
+                :table @pf/table}
+        s (fn [x y move swim?] (cond-> {:x x :y y :z 0 :move move} swim? (assoc :swim true)))
+        wet? (wplan/head-wet-fn pw)]
+    (are [steps kept] (= kept (mapv (juxt :x :y) (wplan/dry-end steps wet?)))
+      [(s 0 64 :start false) (s 1 64 :walk true) (s 4 64 :climb-up false)] [[0 64]]
+      [(s 0 64 :start false) (s 4 64 :climb-up false) (s 4 65 :climb-up false)] [[0 64] [4 64] [4 65]])))
 
 (deftest a-bank-too-high-to-leave-is-no-path-and-the-body-stays-dry
   (async done

@@ -6,6 +6,8 @@
             [engine.settings :as settings]
             [jobs.lib.combat :as combat]
             [jobs.lib.reach :as reach]
+            [jobs.lib.breath :as breath]
+            [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
             [jobs.lib.watch :as watch]
             [jobs.lib.near :as near]
@@ -231,6 +233,17 @@
     {:status :no-path :reason :unseen-floor-dark :dark-best (:dark-best result)}
     result))
 
+(defn ^:async look-at-goal-air!
+  "Under water, a plan refused for air whose goal head cell the body has not seen (the planner counts only seen air as a
+  way to air): one look at that cell a call (mem :air-looked); true when it looked."
+  [c pos]
+  (let [p (:primitives c)
+        cell (mapv #(js/Math.floor %) [(:x pos) (inc (:y pos)) (:z pos)])]
+    (when (and (not (:air-looked (ctx/mem c))) (breath/head-under? p) (sense/unknown? p cell))
+      (ctx/update-mem! c assoc :air-looked true)
+      (await (sense/look-at! c cell))
+      true)))
+
 (defn ^:async walk! [c0 pos range doors]
   (let [c (cond-> c0 (:over-budget (ctx/mem c0)) (assoc :over-budget true))
         from (u/self-pos c)
@@ -261,6 +274,7 @@
                                                                                           :unknown (:unknown c)
                                                                                           :progress (empty? (:frontier-best (ctx/mem c)))}))
             aided? (when (and (not= "arrived" status) (torch/torch-aid? c walked)) (await (torch/hold-torch! c)))
+            looked? (when (and (not aided?) (= :air (:reason walked))) (await (look-at-goal-air! c pos)))
             result (known-frontier-result walked)
             left (u/dist to pos)
             best (:best (ctx/mem c) d)
@@ -281,6 +295,8 @@
           (end/finish! c {:arrived false :leg true})
 
           aided? :again
+
+          looked? :again
 
           (= "searching" status)
           (let [n (cond-> (:searching (ctx/mem c) 0) (:fresh walked) inc)]
@@ -316,7 +332,7 @@
   (let [m (ctx/mem c)
         there? (here? c pos (:range (:args c)))]
     (wworld/warn-bad-settings! c)
-    (ctx/update-mem! c #(cond-> (-> % (dissoc :best :fault-cells :over-budget :off-hand-tried) (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {}))
+    (ctx/update-mem! c #(cond-> (-> % (dissoc :best :fault-cells :over-budget :off-hand-tried :air-looked) (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {}))
                           (and there? (:escalate-now m)) (dissoc :escalate-now)
                           (and there? (:escalation m))
                           (-> (dissoc :escalation :escalation-from :planned :holes-before)

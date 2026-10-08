@@ -108,6 +108,7 @@
     (set! (.-drown-closed s) (grown (.-drown-closed s) (.-cap s)))
     (set! (.-darks s) (grown (.-darks s) (.-cap s)))
     (set! (.-lights s) (grown (.-lights s) (.-cap s)))
+    (set! (.-rivals s) (grown (.-rivals s) (.-cap s)))
     (set! (.-airs s) (grown (.-airs s) (.-cap s)))
     (set! (.-peaks s) (grown (.-peaks s) (.-cap s)))
     (set! (.-wsecs s) (grown (.-wsecs s) (.-cap s)))
@@ -134,8 +135,10 @@
 
   (addNode [s x y z region key slot]
     (let [free (if (== (.-n-nodes s) (.-cap s)) (.grownSlot s x y z region key) slot)
-          node (.-n-nodes s)]
+          node (.-n-nodes s)
+          rival (aget (.-hash-table s) free)]
       (set! (.-n-nodes s) (inc node))
+      (aset (.-rivals s) node (if (== rival -1) 0 (inc rival)))
       (aset (.-hash-table s) free node)
       (aset (.-node-keys s) node key)
       (aset (.-xs s) node x)
@@ -295,20 +298,24 @@
               (set! (.-cur-drown s) drown)
               (if (== found -1)
                 (.insertNode s x y z h move parent-node sec risk dark g slow-to corner shape region key slot)
-                (let [d-air (- (.-move-air s) (aget (.-airs s) found))
-                      ;; (a search without a budget keeps one record per node)
-                      d-dmg (if (< (.-damage-budget s) js/Infinity) (- dmg (aget (.-dmgs s) found)) 0)
-                      d-drown (- drown (aget (.-drowns s) found))
-                      g-found (aget (.-gs s) found)]
-                  (cond
-                    (and (< g g-found) (<= d-air AIR-STEP) (<= d-dmg DMG-STEP) (<= d-drown DMG-STEP))
-                    (when-not (== (aget (.-heap-pos s) found) -2)
-                      (.relax s found x z h move parent-node sec risk dark g slow-to corner shape))
-
-                    (or (< g g-found) (< d-air (- AIR-STEP)) (< d-dmg (- DMG-STEP)) (< d-drown (- DMG-STEP)))
-                    (.insertNode s x y z h move parent-node sec risk dark g slow-to corner shape region key slot)
-
-                    :else nil)))))))))
+                ;; every record of the node (newest first): one no worse in cost, air, damage and drowning makes this arrival
+                ;; nothing new; else the newest it improves in cost and is no worse than in the rest takes it (relax); else a
+                ;; record of its own. Comparing with the newest only let an arrival in a record an older one beat, round
+                ;; and round (a dive with little air left: 200k records of a few cells)
+                (loop [r found relax-r -1]
+                  (if (== r -1)
+                    (cond
+                      (== relax-r -1) (.insertNode s x y z h move parent-node sec risk dark g slow-to corner shape region key slot)
+                      (== (aget (.-heap-pos s) relax-r) -2) nil
+                      :else (.relax s relax-r x z h move parent-node sec risk dark g slow-to corner shape))
+                    (let [d-air (- (.-move-air s) (aget (.-airs s) r))
+                          ;; (a search without a budget keeps one record per node)
+                          d-dmg (if (< (.-damage-budget s) js/Infinity) (- dmg (aget (.-dmgs s) r)) 0)
+                          d-drown (- drown (aget (.-drowns s) r))
+                          g-r (aget (.-gs s) r)]
+                      (when-not (and (>= g g-r) (>= d-air (- AIR-STEP)) (>= d-dmg (- DMG-STEP)) (>= d-drown (- DMG-STEP)))
+                        (recur (dec (aget (.-rivals s) r))
+                               (if (and (== relax-r -1) (< g g-r) (<= d-air AIR-STEP) (<= d-dmg DMG-STEP) (<= d-drown DMG-STEP)) r relax-r)))))))))))))
 
   (stand16 [s node] (+ (* (aget (.-ys s) node) 16) (aget (.-hs s) node)))
 

@@ -121,3 +121,34 @@
             (reset! wsearch/searches {})
             (is (some? @cut-at) "a search slice ran")
             (is (= @cut-at @slices) "no slice after the cut")))))))
+
+;; A body at the foot of a 6 deep water shaft (x 4) with half its air used (oxygen 10); a sealed 12 cell tunnel (feet 64,
+;; head 65) to a second shaft (x 17); land over all (feet 70); goal the land beside the far shaft. The search needs more
+;; than one round: a submerged body's policy carries a new :air-seen fn every round, so its key changed every round,
+;; each round searched afresh, and go-to gave up :moved-while-searching (live: the air ran out first, :why :air).
+(def shaft-blocks
+  (merge (box -4 60 -4 40 63 70 "stone") (box 0 64 0 31 69 63 "stone")
+         (box 4 64 8 4 69 8 "water") (box 5 64 8 16 65 8 "water") (box 17 64 8 17 69 8 "water")
+         (box 11 70 0 11 73 58 "bedrock")))
+
+(deftest a-submerged-body-goes-on-with-its-search
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (reset! wsearch/searches {})
+        (let [{:keys [eng]} (gt/setup {:blocks shaft-blocks :self {:pos {:x 4.5 :y 64 :z 8.5} :inWater true :oxygen 10}})
+              out (atom :not-done)
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (gt/recording-parent out {:pos [18 70 8] :range 1 :escalate false})))]
+          (core/submit! eng '(recording-parent) {})
+          (await (gt/tick-out! eng 30))
+          (reset! wsearch/searches {})
+          (is (true? (:arrived @out)) (str "result " @out)))))))
+
+(deftest a-search-key-ignores-the-air-seen-fn-and-the-air-used
+  (let [c {:primitives (tu/fake {:self {:pos [4.5 64 8.5]}})}
+        policy {:sprint true :air-used 7 :air-seen (fn [_ _ _] true)}]
+    (is (= (wsearch/search-key c [18 70 8] 1 1 policy nil)
+           (wsearch/search-key c [18 70 8] 1 1 (assoc policy :air-used 9 :air-seen (fn [_ _ _] true) ) nil)))
+    (is (not= (wsearch/search-key c [18 70 8] 1 1 policy nil)
+              (wsearch/search-key c [18 70 8] 1 1 (dissoc policy :air-used :air-seen) nil))
+        "a search begun with the head out is not gone on with under water")))

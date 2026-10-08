@@ -84,12 +84,20 @@
   "A kept search older than this is not gone on with (the land it read may have changed): a new one begins."
   60000)
 
+(defn policy-key
+  "policy as a search key: a submerged body's :air-seen (a new fn each round) and :air-used (it drops while the body
+  waits) would make every round search afresh, so a search that needs more than one round never ends; only whether
+  the head was under water counts. A search gone on with plans with the air it began with."
+  [policy]
+  (cond-> (dissoc policy :air-seen :air-used)
+    (contains? policy :air-used) (assoc :under true)))
+
 (defn goal-flood!
   "The body's kept goal flood memo for searches of to within range (goal-floods), a new one when it held another goal or
   is older than search-max-age-ms. mask: the pathWorld's wworld/unknown-key (a masked flood leaks at unseen cells)."
   [c to range weight policy walls & [mask]]
   (let [who (wworld/body-name c)
-        k [to range weight policy walls mask]
+        k [to range weight (policy-key policy) walls mask]
         kept (get @goal-floods who)]
     (if (and (= k (:key kept)) (< (- (js/Date.now) (:t kept)) search-max-age-ms))
       (:memo kept)
@@ -99,7 +107,7 @@
 
 (defn search-key [c to range weight policy walls & [pw]]
   (let [{:keys [x y z]} (wworld/body-cell c)]
-    (cond-> [[x y z] to range weight policy walls]
+    (cond-> [[x y z] to range weight (policy-key policy) walls]
       pw (conj (wworld/danger-key pw) (wworld/avoid-key pw) (wworld/tolls-key pw) (wworld/unknown-key pw)))))
 
 (defn goal-unloaded?
@@ -181,7 +189,7 @@
          ^js ow (when pr (.-oneWay pr))
          past (when (and (= :open one-way) ow (true? (.-open ow)) (nearer? (.-distance ow))) (.-path ow))
          path (or past (when (and pr (.-path pr) (nearer? (.-distance pr))) (.-path pr)))
-         steps (when path (wplan/dry-end (wplan/path-steps walled path)))
+         steps (when path (wplan/dry-end (wplan/path-steps walled path) (wplan/head-wet-fn walled)))
          walk? (>= (count steps) 2)
          r #js {:status (if walk? "partial" "searching") :reason "searching" :path (when walk? path) :ms ms}]
      (cond-> {:r r :status (.-status r) :pw walled :ms ms :steps (when walk? steps)}

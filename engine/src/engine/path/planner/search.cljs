@@ -150,4 +150,6 @@
    ;; a phantom floor was refused for want of sight (dark-refused; the refused stand nearest the goal, dark-best-*) or because
    ;; the walk could not stop to check it first (unseen-refused)
    ^:mutable move-unk ^:mutable move-light ^:mutable lights ^:mutable ^boolean dark-refused ^:mutable ^boolean unseen-refused
-   ^:mutable dark-best-x ^:mutable dark-best-y ^:mutable dark-best-z ^:mutable dark-best-d])
+   ^:mutable dark-best-x ^:mutable dark-best-y ^:mutable dark-best-z ^:mutable dark-best-d
+   ;; each node's older record of the same key (a rival, see consider) plus 1, 0 for none: the records of one cell, newest first
+   ^:mutable rivals])

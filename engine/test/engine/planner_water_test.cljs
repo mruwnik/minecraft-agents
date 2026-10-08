@@ -270,6 +270,20 @@
     (is (> (cost low :seconds) (cost fresh :seconds)))
     (is (>= (cost low :airMin) 2) "it keeps the margin")))
 
+;; go-to-air-budget's world (live: no plan, the air ran out meanwhile): a 6 deep shaft (x 4), a sealed 12 cell tunnel
+;; to a second shaft (x 17), land over all, a bedrock ridge (x 11) with a gap far south. With 8 s of air used, go-to's
+;; weighted search (weight 1.2) reached the shafts and the tunnel again and again with air a second apart; a new record
+;; was checked against the cell's newest record only, so one an older record beat came back round and round: 200k
+;; records, no plan ("budget"). Each record of the cell is checked now.
+(def shafts
+  (pf/snapshot {:fill [[-4 60 -4 40 63 70 "stone"] [0 64 0 31 69 63 "stone"]
+                       [4 64 8 4 69 8 "water"] [5 64 8 16 65 8 "water"] [17 64 8 17 69 8 "water"]
+                       [11 70 0 11 73 58 "bedrock"]]}))
+
+(deftest a-weighted-plan-mid-dive-ends-within-the-node-budget
+  (let [r (run shafts {:x 4 :y 64 :z 8} (near 18 70 8 1) {:weight 1.2 :costs {:airUsed 7.875}})]
+    (is (found? r) (str (verdict r) ", expanded " (:expanded r)))))
+
 (deftest a-plan-started-past-the-air-limit-still-swims-up
   (is (found? (run dive-or-up dive-start dive-goal {:goalFlood 0 :costs {:airUsed 14}}))))
 
@@ -341,6 +355,17 @@
 (deftest a-goal-whose-head-cell-is-not-seen-is-not-air
   (is (not (found? (run drown-tunnel drown-start (near 21 64 1 0) {:goalFlood 0 :costs {:airUsed 13} :airSeen (fn [_ _ _] false)}))))
   (is (found? (run drown-tunnel drown-start (near 21 64 1 0) {:goalFlood 0 :costs {:airUsed 13} :airSeen (fn [_ _ _] true)}))))
+
+;; go-to-air-budget drowning-body-swims-to-seen-air: a 2 high water tunnel (feet 64) with an air pocket in its roof (x 11..13,
+;; y 66); the body 6 cells west has seen the pocket's east cell only (a 1 high slit seen edge-on through the water). The goal
+;; (12 65 8, range 1) has its head in that pocket: a cell of the goal's range with seen air over it is the way to air
+(def roof-pocket
+  (pf/snapshot {:fill [[-4 60 -4 30 63 20 "stone"] [3 64 7 22 68 9 "stone"] [4 64 8 20 65 8 "water"] [11 66 8 13 66 8 "air"]]}))
+
+(deftest a-goal-whose-range-has-seen-air-over-it-is-a-way-to-air
+  (let [plan (fn [seen] (run roof-pocket {:x 5 :y 64 :z 8} (near 12 65 8 1) {:costs {:airUsed 12.375} :airSeen seen}))]
+    (is (found? (plan (fn [x y z] (= [x y z] [13 66 8])))) "the pocket's east cell seen")
+    (is (not (found? (plan (fn [_ _ _] false)))) "nothing of the pocket seen")))
 
 (deftest past-the-air-limit-no-swim-to-a-goal-under-water
   (is (found? (run drown-tunnel drown-start (near 12 64 1 0) {:goalFlood 0 :costs {:airUsed 11}})))

@@ -162,12 +162,21 @@
       (with-beyond within pw policy (await (plan-from! c pw to range weight nil policy)))
       within)))
 
+(defn head-wet-fn
+  "(fn [step]): whether the step's head cell over pw is water or waterlogged (a ladder, scaffolding), not a bubble column."
+  [pw]
+  (let [^js snapshot (.-snapshot pw) ^js table (.-table pw)]
+    (fn [{:keys [x y z]}]
+      (let [id (.stateAt snapshot x (inc y) z)]
+        (and (not (== id planner/UNLOADED)) (pos? (aget (.-wet table) id)) (zero? (aget (.-bubble table) id)))))))
+
 (defn dry-end
   "A partial plan up to its last step out of water: a walk that cannot reach the goal never leaves the body swimming (at a
-  bank too high to climb out, say)."
-  [steps]
-  (let [k (last (keep-indexed (fn [i s] (when-not (:swim s) i)) steps))]
-    (if k (subvec steps 0 (inc k)) [])))
+  bank too high to climb out, say), nor with its head in water (wet?, head-wet-fn: on a waterlogged ladder)."
+  ([steps] (dry-end steps (constantly false)))
+  ([steps wet?]
+   (let [k (last (keep-indexed (fn [i s] (when-not (or (:swim s) (wet? s)) i)) steps))]
+     (if k (subvec steps 0 (inc k)) []))))
 
 (defn near-goal
   "How far, in blocks to 1 decimal, the step is from the goal cell to."
@@ -218,7 +227,7 @@
         past (when (and (not edge) (not out) (= :open one-way)) (open-path r))
         steps (cond edge (path-steps walled (:path edge)) past (path-steps walled past) :else steps)
         status (if (or edge past) "partial" (.-status r))
-        walked (if (= "partial" status) (dry-end steps) steps)
+        walked (if (= "partial" status) (dry-end steps (head-wet-fn walled)) steps)
         step (one-way-of r)]
     {:r r :steps walked :beyond beyond :status status :pw pw
      :ms (or (some-> r .-ms) 0)

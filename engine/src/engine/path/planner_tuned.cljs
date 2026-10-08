@@ -196,19 +196,31 @@
 (defn- air-limit [^js costs]
   (+ (unchecked-get costs "airLimit") (air-grace costs)))
 
+(def ^:const TO-AIR-REACH "The most blocks of a goal's range to-air? looks through for seen air." 3)
+
 (defn- to-air?
   "Whether a plan started with air used (costs.airUsed above 0) goes to air: its one near goal's head cell breathes
-  (base/breathable?) and the body has seen or felt it (options.airSeen, nil: every cell). No swim of such a plan is
-  refused for air: it drowns, priced (drownCost), and it ends with the head in such a cell (expandNext)."
+  (base/breathable?) and the body has seen or felt the head of a cell within the goal's range (at most TO-AIR-REACH)
+  that breathes (options.airSeen, nil: every cell; a pocket seen edge-on through water shows a cell or two). No swim of
+  such a plan is refused for air: it drowns, priced (drownCost), and it ends with the head in such a cell (expandNext)."
   [^js snapshot ^js query ^js options]
   (let [^js goal (.-goal query)
         ^js goals (.-goals query)
-        ^js seen (.-airSeen options)]
+        ^js seen (.-airSeen options)
+        ^js table (.-table options)]
     (and (pos? (or-else (some-> (.-costs options) (unchecked-get "airUsed")) 0))
          (or (nil? goals) (zero? (.-length goals)))
          (some? goal) (identical? (.-kind goal) "near")
-         (base/breathable? (.-table options) (.stateAt snapshot (.-x goal) (inc (.-y goal)) (.-z goal)))
-         (or (nil? seen) (true? (seen (.-x goal) (inc (.-y goal)) (.-z goal)))))))
+         (base/breathable? table (.stateAt snapshot (.-x goal) (inc (.-y goal)) (.-z goal)))
+         (or (nil? seen)
+             (let [goal-range (or-else (.-range goal) 0)
+                   r (js/Math.min TO-AIR-REACH (js/Math.floor goal-range))]
+               (some (fn [[dx dy dz]]
+                       (let [x (+ (.-x goal) dx) y (+ (.-y goal) dy 1) z (+ (.-z goal) dz)]
+                         (and (<= (+ (* dx dx) (* dy dy) (* dz dz)) (* goal-range goal-range))
+                              (base/breathable? table (.stateAt snapshot x y z))
+                              (true? (seen x y z)))))
+                     (for [dx (range (- r) (inc r)) dy (range (- r) (inc r)) dz (range (- r) (inc r))] [dx dy dz])))))))
 
 ;; the seconds a lethal plan costs (Search lethal-s): LETHAL-S times the dearest second the caller's prices allow (a walk
 ;; at the danger cap through its dearest toll, in the dark, avoided, an hp of risk and of damage and a second of drowning
@@ -389,7 +401,9 @@
      ;; see-keys see-flags
      (when (some? see-lit) (js/Float64Array. TABLE)) (when (some? see-lit) (js/Uint8Array. TABLE))
      ;; move-unk move-light lights dark-refused unseen-refused dark-best-x dark-best-y dark-best-z dark-best-d
-     0 0 (js/Uint8Array. cap) false false 0 0 0 js/Infinity)))
+     0 0 (js/Uint8Array. cap) false false 0 0 0 js/Infinity
+     ;; rivals
+     (js/Int32Array. cap))))
 
 ;; the body's hitbox reaches this far from its centre in x and z
 (def ^:const HITBOX-HALF 0.3)
