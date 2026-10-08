@@ -780,6 +780,31 @@
                    (is (= "{:ok false :reason \"settling\"}" (:out res)) "after the limit the reply is passed on unchanged")
                    (done)))))))
 
+(deftest a-submit-timeout-is-retried-with-the-same-request-id-until-the-body-answers
+  (async done
+    (let [calls (atom [])
+          answers (atom ["{:ok false :reason :timeout :request-id \"r1\"}" "{:ok false :reason :timeout :request-id \"r1\"}"
+                         "{:ok true :duplicate true :job {:id \"j7\"}}"])
+          opts {:body "B" :world "w"
+                :exec (fn [argv] (swap! calls conj argv)
+                        (let [a (first @answers)]
+                          (swap! answers #(if (next %) (vec (rest %)) %))
+                          (js/Promise.resolve {:code 1 :out a})))
+                :sleep (fn [_] (js/Promise.resolve nil))}]
+      (-> (r/submit-job! opts {:job :x} [])
+          (.then (fn [id]
+                   (is (= "j7" id))
+                   (is (= 3 (count @calls)))
+                   (is (= 1 (count (set (map #(second (drop-while (complement #{"--request-id"}) %)) @calls)))) "one request id for every attempt")
+                   (reset! answers ["{:ok false :reason :timeout}"])
+                   (reset! calls [])
+                   (r/submit-job! (assoc opts :submit-retries 2) {:job :x} [])))
+          (.then (fn [_] (is false "gave up silently")))
+          (.catch (fn [e]
+                    (is (re-find #"submit refused" (.-message e)))
+                    (is (= 3 (count @calls)) "bounded retries")
+                    (done)))))))
+
 (deftest the-case-goal-names-file-case-and-run-or-retry-only-above-the-first
   (is (= "test pen-check › closed" (r/case-goal {:id "pen-check/closed"} 1 0)))
   (is (= "test pen-check › closed (run 2)" (r/case-goal {:id "pen-check/closed"} 2 0)))
