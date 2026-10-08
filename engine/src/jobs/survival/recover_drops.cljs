@@ -74,8 +74,10 @@
    ::top-n {:default 3 :doc "Items and mobs named in the report of a death site, at most." :spec (a/int-in 0 nil)}
    ::max-collect-passes {:default 3 :doc "Walks back to the pile after a collect pass that left visible items of it behind." :spec (a/int-in 0 nil)}
    ::stray-range {:default 5 :doc "A body this far from the death point in the collect phase (a flee cut the trip) walks back first." :spec (a/int-in 0 nil)}
+   ::max-hostile-cuts {:default 2 :doc "Resumes of one trip (cut by a hostile reflex, or declined for a danger) before it is given up as :danger." :spec (a/int-in 1 nil)}
    ::bed-away-blocks {:default 10 :doc "A respawn farther than this from the bed the body slept in is reported." :spec (a/int-in 0 nil)}})
 (defn arrive-range [] (settings/get settings ::arrive-range))
+(defn max-hostile-cuts [] (settings/get settings ::max-hostile-cuts))
 (def settle-ms
   "After a respawn the client needs this long to re-receive nearby entities;
   an estimate made sooner sees no hostiles."
@@ -139,19 +141,22 @@
   (let [trip (:data (ctx/latest c :recover-trip))]
     (when (= death-t (:death-t trip)) trip)))
 
+(defn save-trip!
+  "Write the trip so far (job memory :decided :baseline :phase :cuts :blocked) to the :recover-trip entry."
+  [c]
+  (let [m (ctx/mem c)]
+    (ctx/remember! c :recover-trip (select-keys m [:death-t :decided :baseline :phase :cuts :blocked]) trip-policy)))
+
 (defn key-to-death!
   "Reset the job memory when it belongs to another death than entry: start from the saved trip of this death (a run
   cut before, or a restart), else afresh."
   [c entry]
   (when (not= (:t entry) (:death-t (ctx/mem c)))
-    (ctx/update-mem! c (constantly (merge {:death-t (:t entry)}
-                                          (select-keys (saved-trip c (:t entry)) [:decided :baseline :phase]))))))
-
-(defn save-trip!
-  "Write the trip so far (job memory :decided :baseline :phase) to the :recover-trip entry."
-  [c]
-  (let [m (ctx/mem c)]
-    (ctx/remember! c :recover-trip (select-keys m [:death-t :decided :baseline :phase]) trip-policy)))
+    (let [saved (saved-trip c (:t entry))]
+      (ctx/update-mem! c (constantly (merge {:death-t (:t entry)}
+                                            (select-keys saved [:decided :baseline :phase :blocked])
+                                            (when saved {:cuts (+ (:cuts saved 0) (if (:blocked saved) 0 1))}))))
+      (when saved (save-trip! c)))))
 
 (defn xp-per-level [] (settings/get settings ::xp-per-level))
 (defn top-n [] (settings/get settings ::top-n))
@@ -165,8 +170,10 @@
         kind-at (reach/lookup p)
         worth (cost/item-value inventory :overrides (:value-overrides (:args c)))
         route (when pos (cost/straight-route kind-at here pos))
+        version (game/version-of p)
+        guard (when (and pos (string? cause)) [{:name cause :pos pos}]) ; route-danger drops a cause that is no hostile mob
         threat (if route
-                 (cost/route-danger (game/version-of p) kind-at route (danger-q/seen-hostiles p) (.-equipment (.self p)) :overrides (:danger-overrides (:args c)))
+                 (cost/route-danger version kind-at route (concat (danger-q/seen-hostiles p) guard) (.-equipment (.self p)) :overrides (:danger-overrides (:args c)))
                  {:danger 0 :mobs []})
         fetch (cost/fetch-cost {:distance (when pos (u/dist here pos)) :danger (:danger threat) :elapsed-ms elapsed :cause cause})]
     (cond-> {:value (+ (:value worth) (* (xp-per-level) (or (:level experience) 0)))
@@ -194,6 +201,7 @@
       (not= :done r) (decline! c :unreachable (str "the walk to " (pr-str pos) " is waiting on the world") {:pos pos})
       (not (:arrived (ctx/child-result c :go)))
       (do (ctx/update-mem! c assoc :blocked true)
+          (save-trip! c)
           (decline! c :unreachable (str "the walk to " (pr-str pos) " did not arrive") {:pos pos}))
       :else (do (ctx/update-mem! c assoc :phase :collect :blocked false) (save-trip! c) :next))))
 
@@ -297,19 +305,21 @@
       :else (do (ctx/hold-still! c reason) (await (pace/pace!)) (recur)))))
 
 (defn decide!
-  "The decision of this trip: the saved one, else estimate, save and report it."
+  "The decision of this trip: the saved one, else estimate, save and report it. A resumed trip estimates again once (from
+  where the body stands, with the hostiles it knows now); its baseline stays."
   [c entry]
-  (or (:decided (ctx/mem c))
-      (let [margin (:margin (:args c))
-            e (update (estimate c (:data entry) (settings/ticks->ms (game/ticks-since entry (ctx/view c)))) :cost finite)
-            fetch? (> (:value e) (+ (if (= :infinite (:cost e)) js/Infinity (:cost e)) margin))]
-        (ctx/update-mem! c assoc :decided e :baseline (carried-counts c))
-        (save-trip! c)
-        (when fetch?
-          (ctx/emit! c :recover-drops.fetching :info
-                     (assoc (select-keys e [:value :cost :parts :top-items :top-mobs])
-                            :pos (:pos (:data entry)) :text (decision-text :fetch e margin))))
-        e)))
+  (if (and (:decided (ctx/mem c)) (or (zero? (:cuts (ctx/mem c) 0)) (:reestimated (ctx/mem c))))
+    (:decided (ctx/mem c))
+    (let [margin (:margin (:args c))
+          e (update (estimate c (:data entry) (settings/ticks->ms (game/ticks-since entry (ctx/view c)))) :cost finite)
+          fetch? (> (:value e) (+ (if (= :infinite (:cost e)) js/Infinity (:cost e)) margin))]
+      (ctx/update-mem! c #(cond-> (assoc % :decided e :reestimated true) (nil? (:baseline %)) (assoc :baseline (carried-counts c))))
+      (save-trip! c)
+      (when fetch?
+        (ctx/emit! c :recover-drops.fetching :info
+                   (assoc (select-keys e [:value :cost :parts :top-items :top-mobs])
+                          :pos (:pos (:data entry)) :text (decision-text :fetch e margin))))
+      e)))
 
 (defn ^:async trip!
   "The decision, then the walk and the collect passes of a trip inside its window."
@@ -320,6 +330,9 @@
     (cond
       (<= (:value decided) (+ (if (= :infinite (:cost decided)) js/Infinity (:cost decided)) margin))
       (finish! c :skip decided)
+
+      (>= (:cuts (ctx/mem c) 0) (max-hostile-cuts))
+      (finish! c :abandoned (assoc decided :reason :danger))
 
       (threatened? c) (decline-danger! c (threatened? c))
 
