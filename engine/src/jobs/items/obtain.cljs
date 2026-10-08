@@ -145,9 +145,11 @@
 (defn wool-color [name] (subs name 0 (- (count name) (count "_wool"))))
 
 (defn sheep-in-range
-  "The adult sheep within the sheep radius, as JS entities."
+  "The adult unsheared sheep within the sheep radius, as JS entities."
   [c]
-  (remove #(true? (.-baby %)) (animals/herd (:primitives c) "sheep" (sheep-radius))))
+  (remove #(or (true? (.-baby %)) (true? (.-sheared %))) (animals/herd (:primitives c) "sheep" (sheep-radius))))
+
+(def wool-keep "Sheep of a colour combat.hunt spares (its :keep default for animals); a colour with no more is no source." 2)
 
 (defn pick-plan
   "Of the gather plans (one per wanted name) the one that gathers the least wool, so the colour the body carries
@@ -158,7 +160,7 @@
     (if-not (some (comp seq wool-of) plans)
       (first plans)
       (let [sorted (sort-by #(reduce + 0 (vals (wool-of %))) plans)
-            colors (set (keep #(.-color %) (sheep-in-range c)))
+            colors (set (keep (fn [[k n]] (when (> n wool-keep) k)) (frequencies (keep #(.-color %) (sheep-in-range c)))))
             colors-of (fn [pl] (map wool-color (keys (wool-of pl))))
             ok? (fn [pl] (every? colors (colors-of pl)))
             chosen (or (first (filter ok? sorted)) (first sorted))

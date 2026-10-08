@@ -341,3 +341,16 @@
           (is (= ["brown" "gray"] (:seen-colors e)))
           (is (re-find #"no white sheep" (:text e)))
           (is (finished? s)))))))
+
+(deftest a-colour-hunt-skips-sheared-sheep-and-says-when-only-sheared-ones-are-in-range
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [shorn #(assoc (sheep %1 %2 "white") :sheared true)
+              s (await (scenario {:mob "sheep" :color "white" :count 1 :keep 0} {:inventory h/sword :entities [(shorn 1 3) (sheep 2 6 "white")]} 30))
+              s2 (await (scenario {:mob "sheep" :color "white" :count 1 :keep 0} {:inventory h/sword :entities [(shorn 1 3) (shorn 2 6)]} 5))
+              e (done-event s2)]
+          (is (= #{2} (set (attacked s))) "the nearer sheared sheep is left alone")
+          (is (empty? (attacked s2)))
+          (is (= :no-color (:reason e)))
+          (is (re-find #"sheared" (:text e))))))))

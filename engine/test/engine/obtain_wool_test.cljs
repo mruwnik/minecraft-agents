@@ -48,3 +48,18 @@
           (is (= "brown" (:taking e))))))))
 
 ;; hunt keeps the last 2 sheep of the colour alive (its :keep), so each colour in the tests has 4.
+
+(deftest sheared-sheep-and-the-kept-pair-do-not-count-as-wool-sources
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [inv (into h/sword (carried "white_wool" 2 "oak_planks" 3 "crafting_table" 1))
+              shorn #(assoc (sheep %1 %2 "white") :sheared true)
+              ;; white: 3 sheep, 1 sheared: 2 unsheared are the pair hunt keeps; brown has 4
+              s (await (scenario {:any-of beds :count 1 :how #{:craft :gather}}
+                                 {:inventory inv :entities [(shorn 1 3) (sheep 2 6 "white") (sheep 3 8 "white")
+                                                            (sheep 4 10 "brown") (sheep 5 11 "brown") (sheep 6 12 "brown") (sheep 7 13 "brown")]} 40))
+              e (first (filter #(= :obtain.wool-colour (:kind %)) @(:seen s)))]
+          (is (seq (attacked s)))
+          (is (every? #{4 5 6 7} (attacked s)) "only brown sheep")
+          (is (= "brown" (:taking e))))))))
