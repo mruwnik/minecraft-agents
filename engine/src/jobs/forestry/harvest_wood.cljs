@@ -10,7 +10,7 @@
 (def doc
   "Fell a tree, collect what dropped and replant. Runs three child jobs in turn, each called once and run to its end:
   :fell (jobs.forestry.fell-tree), :collect (collect-drops) and :plant (plant-sapling).
-  :collect works around the felled tree's base, wherever a reflex has since taken the body; a felling that brings in
+  :collect works around the felled tree's base (when nothing was picked up yet and no drop is in sight, it walks round the base to look: leaves hide drops), wherever a reflex has since taken the body; a felling that brings in
   no item at all (the inventory count of the filter's items, before the felling against after the collecting)
   ends the job :stopped (:nothing-collected). Ends when :plant is done. Only replant debts within :radius of where the body stood when :plant began are
   planted; the others (and any when no sapling is carried or the spot is not clear) stay owed, and the job
@@ -31,7 +31,7 @@
   "The children in order: [phase job args]; the phase is also the slot. tree is the felled tree's base, if any."
   [{:keys [species radius filter ignore-zones? fetch]} origin tree]
   [[:fell 'jobs.forestry.fell-tree {:species species :radius radius :ignore-zones? ignore-zones?}]
-   [:collect 'jobs.forestry.collect-drops {:radius radius :filter (or filter (drop-filter species)) :near tree}]
+   [:collect 'jobs.forestry.collect-drops {:radius radius :filter (or filter (drop-filter species)) :near tree :search radius}]
    [:plant 'jobs.forestry.plant-sapling (cond-> {:species species :ignore-zones? ignore-zones? :near origin :within radius}
                                          (some? fetch) (assoc :fetch fetch))]])
 
@@ -110,6 +110,7 @@
   (let [_ (when-not (:origin (ctx/mem c)) (ctx/update-mem! c assoc :origin (u/self-pos c)))
         _ (when-not (:carried-before (ctx/mem c)) (ctx/update-mem! c assoc :carried-before (carried-count c)))
         [phase job args] (current-phase c)
+        args (cond-> args (and (= :collect phase) (pos? (- (carried-count c) (:carried-before (ctx/mem c))))) (assoc :search 0))
         wait (atom nil)
         no-more-trees? (and (= :fell phase) (:count (:args c)) (pos? (:felled (ctx/mem c) 0))
                             (not (ctx/check-child (assoc c :wait wait) phase job args))

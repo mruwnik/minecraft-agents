@@ -19,12 +19,16 @@
   the body has seen the floor under it solid and safe and the cells round it (no lava, fluid or cave opening, nothing
   hazardous beside it), the walk dropping one block at most; else it is left, with a debug collect-drops.left
   {:pos :reason :unseen-floor|:unseen-cell|:unsafe-floor|:too-deep}. A drop still falling is judged at rest.
+  With :search, when nothing was collected and no item is in sight (leaves hide drops beyond them), the body walks (a go-to child, range 0)
+  to standable cells round the anchor, nearest first, and looks again at each, until an item is seen or the cells within :search
+  blocks are tried.
   Result: {:collected n}, the number of items that entered the inventory, with :left [{:pos :reason}] for those.")
 
 (a/defargs args
   {:radius {:doc "search radius in blocks" :spec (a/num-in 0 nil) :default default-radius}
    :filter {:doc "item names to collect; everything when nil" :spec (a/coll-of a/item?) :default nil}
    :near {:doc "{:x :y :z} the work area is centred on, instead of where the body stands when the job begins" :spec ::a/pos :default nil}
+   :search {:doc "blocks round the anchor to walk to and look from when no drop is in sight and none was collected; 0: no search" :spec (a/num-in 0 nil) :default 0}
    :ids {:doc "entity ids to collect (only those); any item when nil" :spec (a/coll-of number?) :default nil}
    :holes {:doc "cells the caller dug: an item lower than the feet at or under one of them, or one column beside, is in that hole"
            :spec (a/coll-of a/position?) :default nil}})
@@ -130,6 +134,35 @@
                                              :text (str "left a drop at " x "," y "," z ": " (name why))})
     (ctx/update-mem! c update :left (fnil conj []) {:pos cell :reason why})))
 
+(defn search-cells
+  "Standable cells round the anchor at 2 blocks and at :search blocks in the eight directions, at the anchor's height or
+  one above or below, nearest to the body first."
+  [c anchor]
+  (let [p (:primitives c)
+        {:keys [search]} (:args c)
+        [ax ay az] (u/cell-vec anchor)
+        dists (distinct [(min 2 search) search])
+        cells (for [d dists dx [-1 0 1] dz [-1 0 1] :when (not (and (zero? dx) (zero? dz)))
+                    dy [0 1 -1]
+                    :let [cell {:x (+ ax (* d dx)) :y (+ ay dy) :z (+ az (* d dz))}]
+                    :when (reach/standable-cell? p cell)]
+                cell)
+        by-column (vals (group-by (juxt :x :z) cells))]
+    (->> by-column (map first) (sort-by #(u/dist (u/self-pos c) %)))))
+
+(defn ^:async search-step!
+  "Walks to the next unvisited search cell (one go-to call, slot :search; a cell go-to cannot reach is dropped).
+  :continue while go-to waits on the world, :walked after a cell, nil when none is left."
+  [c anchor]
+  (let [queue (or (:search-queue (ctx/mem c))
+                  (let [q (vec (search-cells c anchor))] (ctx/update-mem! c assoc :search-queue q) q))]
+    (when-let [cell (first queue)]
+      (let [r (await (child/run! c :search 'jobs.movement.go-to {:pos (u/cell-vec cell) :range 0 :escalate false}))]
+        (if (= :continue r)
+          :continue
+          (do (ctx/update-mem! c update :search-queue (comp vec rest))
+              :walked))))))
+
 (defn ^:async round
   "One whole attempt: collects the nearest matching dropped item again and again until none is left in radius.
   Each item is tried once (picked up, gone, unreachable or not): its id is remembered in job memory and skipped,
@@ -140,7 +173,15 @@
                    (let [a (or (:near (:args c)) (u/self-pos c))] (ctx/update-mem! c assoc :anchor a) a))]
     (loop []
       (let [item (when (ctx/alive? c) (nearest-item c anchor))]
-        (if-not item
+        (if (and (not item) (ctx/alive? c) (pos? (:search (:args c)))
+                 (zero? (:collected (ctx/mem c) 0)) (empty? (:left (ctx/mem c))))
+          (let [r (await (search-step! c anchor))]
+            (if (= :continue r)
+              :continue
+              (if r
+                (recur)
+                (do (ctx/result! c {:collected 0}) :done))))
+          (if-not item
           (do (ctx/result! c (cond-> {:collected (:collected (ctx/mem c) 0)}
                                (seq (:left (ctx/mem c))) (assoc :left (:left (ctx/mem c)))
                                (not (ctx/alive? c)) (assoc :reason :cut)))
@@ -158,4 +199,4 @@
                     (let [r (await (ctx/act c :collect (clj->js (cond-> {:id (.-id item)} hole? (assoc :maxDropDown 1)))))]
                       (ctx/update-mem! c update :collected (fnil + 0) (gained-count r))))
                   (ctx/update-mem! c update :skipped (fnil conj []) (.-id item))
-                  (recur)))))))))
+                  (recur))))))))))
