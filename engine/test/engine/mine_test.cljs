@@ -827,6 +827,31 @@
           (is (= :count (:reason (done-event s))))
           (is (empty? (events-of s :mine.left-behind))))))))
 
+(deftest a-drop-that-fell-out-of-sight-below-the-dug-cell-is-looked-for-and-collected
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks {"3,64,0" "iron_ore" "3,62,0" "stone"} :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270}})
+              p (:p s)]
+          ;; the cell under the dug one is known already, so only the job's own look at it shows the drop
+          (aset p "sensedAt" (fn [pos] (.blockAt p pos)))
+          (.override (.-world p) "dig"
+                     (fn [token args impl]
+                       (.then (impl token args)
+                              (fn [r]
+                                (swap! (fake/state p) update :entities
+                                       (fn [es] (mapv #(if (= "item" (:kind %)) (assoc % :pos [3 63 0] :visible false) %) es)))
+                                r))))
+          (.override (.-world p) "look"
+                     (fn [token a impl]
+                       (when (and (< (js/Math.abs (- 3.5 (.. a -pos -x))) 0.1) (< (js/Math.abs (- 63.5 (.. a -pos -y))) 0.1))
+                         (swap! (fake/state p) update :entities (fn [es] (mapv #(assoc % :visible true) es))))
+                       (impl token a)))
+          (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :tunnel-length 0}) {})
+          (await (run-ticks s 30))
+          (is (= 1 (get (inv s) "raw_iron")) "the drop under the dug cell was looked for, seen and collected"))))))
+
+
 (deftest drops-out-of-reach-are-reported-left-behind
   (async done
     (tu/run-async done

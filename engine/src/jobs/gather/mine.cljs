@@ -8,6 +8,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.gate :as gate]
+            [jobs.lib.dig-look :as dig-look]
             [jobs.lib.tools :as tools]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.util :as u]
@@ -46,7 +47,7 @@
 
   One call runs these steps in order, again and again until the job ends (it yields with :continue only while a child or
   a walk waits on the world, and after 400 steps):
-  1. Collecting: the collect-drops child gathers the item within :collect-radius. The count is the
+  1. Collecting: after a dig the body glances at the dug cell, the cell under it and unsensed cells further down (once per cell), then the collect-drops child gathers the item within :collect-radius. The count is the
      inventory's, never the dig's report. Drops of the item still lying afterwards (out of reach) are reported
      once each, info mine.left-behind {:items [{:pos :count}]}. The result's :left is re-checked after the walk
      home and keeps only drops still lying then.
@@ -350,7 +351,19 @@
                                                        (str/join " " (map (fn [[pos _]] (str/join "," pos)) fresh)))})
       (ctx/update-mem! c update :left merge fresh))))
 
+(defn ^:async look-for-drop!
+  "Once per dug cell, glance at the dug cell and the cell under it, then down the column at each unsensed cell (jobs.lib.dig-look),
+  where a drop of the dig that fell may lie out of sight."
+  [c]
+  (let [dug (:dug-at (ctx/mem c))]
+    (when (and dug (not= dug (:drop-looked (ctx/mem c))))
+      (ctx/update-mem! c assoc :drop-looked dug)
+      (await (dig-look/look-at! c dug))
+      (await (dig-look/look-at! c (update dug 1 dec)))
+      (await (dig-look/look-unknown! c (map #(update dug 1 - %) [2 3 4]))))))
+
 (defn ^:async collect! [c]
+  (await (look-for-drop! c))
   (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops
                                  (cond-> {:radius (drop-radius c) :filter [(blocks/item-name (:args c))]}
                                    (:dug-at (ctx/mem c)) (assoc :holes [(:dug-at (ctx/mem c))]))))]
