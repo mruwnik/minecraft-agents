@@ -492,6 +492,23 @@
             (is (= [{:cell [0 62 0]}] (mapv #(select-keys % [:cell]) (sealed-events seen))))
             (is (every? #(>= % 63) @ys) "the body never went down to the lava")))))))
 
+(deftest lava-under-the-dug-cell-shows-only-when-looked-at-and-is-then-sealed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self body :blocks {"0,63,0" "dirt" "0,62,0" "lava" "0,61,0" "stone"} :inventory cobble})
+              shown (atom false)]
+          (aset p "sensedAt" (fn [pos] (if (and (= [0 62 0] [(.-x pos) (.-y pos) (.-z pos)]) (not @shown))
+                                         #js {:unknown true}
+                                         (.blockAt p pos))))
+          (.override (.-world p) "look" (fn [token a impl]
+                                          (when (< (js/Math.abs (- 62.5 (.. a -pos -y))) 0.1) (reset! shown true))
+                                          (impl token a)))
+          (let [result (await (child-outcome eng job {:pos under-feet} 40))]
+            (is (= {:dug true :reason :dug} (select-keys result [:dug :reason])))
+            (is (= "cobblestone" (block-at p lava-under)) "the lava the dig laid open was looked for and sealed")
+            (is (= [{:cell [0 62 0]}] (mapv #(select-keys % [:cell]) (sealed-events seen))))))))))
+
 (deftest with-no-block-to-seal-with-the-dig-stops-lava-unsealed-and-the-body-steps-away
   (async done
     (tu/run-async done

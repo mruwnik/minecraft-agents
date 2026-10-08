@@ -19,6 +19,11 @@
   [p cell]
   (filterv #(seen-lava? p %) (map #(add cell %) rules/neighbour-deltas)))
 
+(defn ^:async look-round!
+  "Look at the cell under the dug cell when unsensed (jobs.lib.dig-look), so lava a dig down laid open is seen before exposed reads."
+  [c cell]
+  (await (dig-look/look-unknown! c [(add cell [0 -1 0])])))
+
 (def max-seals "Places per lava cell (a seal and one reseal) before the seal counts as failed." 2)
 
 (defn ^:async seal!

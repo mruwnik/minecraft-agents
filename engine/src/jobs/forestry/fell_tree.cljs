@@ -238,7 +238,7 @@
   "The next log is out of reach from the ground: plan a stand or a pillar for the highest logs and remember it. A
   refusal that read unseen floor cells is decided again after a look at them (jobs.lib.sense/decide!)."
   [c logs]
-  (let [r (await (sense/decide! c ::pillar #(pillar-plan c logs) {:retry? #(and (:reason %) (not= :zone (:reason %)))}))]
+  (let [r (await (sense/decide! c ::pillar #(pillar-plan c logs) {:retry? :reason}))]
     (cond
       (:stand r) (set-pillar! c {:phase :walk :plan {:stand (first (:stand r))}})
       (:pillar r) (set-pillar! c {:phase :walk :plan (:pillar r)})

@@ -195,7 +195,7 @@
                                     (when (map? r) (select-keys r [:unreachable :walk]))))))
       (not= :seal (:on-lava (:args c))) nil
       :else
-      (when-let [lavas (seq (lava/exposed (:primitives c) cell))]
+      (when-let [lavas (seq (do (await (lava/look-round! c cell)) (lava/exposed (:primitives c) cell)))]
         (let [r (await (lava/seal! c :blocks.dig.sealed #(u/seen-name (:primitives c) (zipmap [:x :y :z] %)) (first lavas)
                                    {:fetch (:seal-fetch (:args c)) :ignore-zones? (:ignore-zones? (:args c))}))]
           (if (map? r)

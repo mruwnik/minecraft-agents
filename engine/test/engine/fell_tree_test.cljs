@@ -144,6 +144,27 @@
           (is (= 0 (count (kinds s :tree_blocked))) "the tree is not dropped")
           (is (= (set (range 64 72)) (set (dug-ys p))) "every log dug"))))))
 
+(defn ^:async fell-ring-floor-unseen
+  "fell over a world with a zone ring round the trunk (x 3..9, z -3..3) whose floor cells at y 63 and below outside the ring
+  read as never seen until a look at one is made."
+  [spec args n]
+  (let [s (fm/start spec {})
+        p (:p s)
+        omniscient (.-sensedAt p)
+        outside? (fn [pos] (not (and (<= 3 (.-x pos) 9) (<= -3 (.-z pos) 3))))]
+    (eye-reach! p)
+    (aset p "sensedAt" (fn [pos] (if (or (> (.-y pos) 63) (not (outside? pos)) (looked-low? p)) (omniscient pos) #js {:unknown true})))
+    (assoc s :out (await (tu/child-outcome (:eng s) 'jobs.forestry.fell-tree args n)))))
+
+(deftest an-unseen-floor-beyond-a-zone-ring-is-looked-at-before-the-pillar-is-declined
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [ring [{:name "ring" :min [3 63 -3] :max [9 80 3] :allow #{:dig}}]
+              s (await (fm/with-zones ring #(fell-ring-floor-unseen bare {:radius 10} 400)))]
+          (is (= [] (kinds s :fell-tree.declined)) "the zone ring is not the whole story: the floor beyond it was unseen")
+          (is (= 1 (count (kinds s :pillar.done))) "a pillar was built from outside the ring"))))))
+
 (deftest a-floor-that-stays-unseen-after-the-looks-declines-with-the-reason
   (async done
     (tu/run-async done

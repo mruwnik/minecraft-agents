@@ -3,7 +3,9 @@
 ;; walks back to the start cell (otherwise warn mine.not-home, job :stopped :not-home). It must never end stranded: the checks are
 ;; mine.left-behind, mine.done, no mine.not-home, the body at the start cell. Case 1: the ore hangs over a 1-deep pit
 ;; (reachable drop: collected, nothing left). Case 2: the ore stands across a 1-wide 5-deep trench in the line, is dug from
-;; the cut's end and its drop lies in plain view on the far side, out of reach. (Seen in the probe runs: ore across a
+;; the cut's end (3 away) and its drop lies in plain view on the far ledge, out of reach: the ledge cell has stone above it
+;; (no standing there, so the 1-wide gap cannot be jumped for it) and the ore is a cell back from the trench edge, so
+;; the drop's hop cannot carry it into the trench, out of sight (919b3113: it did, or was picked up). (Seen in the probe runs: ore across a
 ;; 2-wide trench is never dug, and a drop down a 1-wide shaft is out of sight and not reported: sensing is like a
 ;; player's.) Stone mass x 2..30, z 8..24, y -6..6; body in a 1x2 cell at [16 0 16] facing east, stone pickaxe; the cut
 ;; [16..19] is open already so ore further east is in view.
@@ -21,9 +23,9 @@
    :after [[:item "raw_iron" 1] [:body-near [16.5 0 16.5] 1.5]]
    :limit-s 140}
   {:name "drop-across-a-trench-left-behind-body-goes-home"
-   ;; the ore stands across a 1-wide, 5-deep trench in the line: seen from the start, dug from the cut's end (2 away),
-   ;; its drop lies on the far side in plain view and cannot be reached
-   :blocks [[:fill [20 -4 16] [20 1 16] "air"] [:set [21 0 16] "iron_ore"]]
+   ;; the ore stands across a 1-wide, 5-deep trench and a 1-high ledge cell in the line: seen from the start, dug from
+   ;; the cut's end (3 away), its drop lies on the ledge in plain view and cannot be reached
+   :blocks [[:fill [20 -4 16] [20 1 16] "air"] [:set [21 0 16] "air"] [:set [22 0 16] "iron_ore"]]
    :act [[:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.left-behind} :within-s 60 :of-job true}
             {:event {:source :job :kind :mine.done} :within-s 90 :of-job true}
