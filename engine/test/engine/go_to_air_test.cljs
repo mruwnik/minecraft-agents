@@ -12,24 +12,40 @@
   (merge (box -4 60 -4 30 63 20 "stone") (box 3 64 7 22 68 9 "stone")
          (box 4 64 8 20 65 8 "water") (box 11 66 8 13 66 8 "air")))
 
-(defn ^:async go-east! [yaw]
-  (let [{:keys [out]} (await (gt/go! {:self {:pos [5.5 64 8.5] :inWater true :oxygen 4 :yaw yaw} :blocks tunnel :light [15 15]}
-                                     {:pos [12 65 8] :range 1 :escalate false}))]
-    @out))
+;; Sight jitters each pass's rays within their grid cells; seen edge-on, the pocket is hit by some jitters only (0.25 to
+;; 0.75 at the first look), so the cases run over jitters the first look misses it at too: the body looks again.
+(def jitters [0 0.1 0.5 0.9 0.999])
+
+(defn ^:async go-east!
+  ([yaw jitter] (go-east! yaw jitter {}))
+  ([yaw jitter args]
+   (let [{:keys [out]} (await (gt/go! {:self {:pos [5.5 64 8.5] :inWater true :oxygen 4 :yaw yaw} :blocks tunnel :light [15 15]
+                                       :jitter jitter}
+                                      (merge {:pos [12 65 8] :range 1 :escalate false} args)))]
+     @out)))
 
 (deftest a-drowning-body-swims-to-a-pocket-it-has-seen-a-cell-of
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [out (await (go-east! (/ js/Math.PI -2)))]
-          (is (true? (:arrived out)) (str "result " out)))))))
+        (doseq [jitter jitters]
+          (let [out (await (go-east! (/ js/Math.PI -2) jitter))]
+            (is (true? (:arrived out)) (str "jitter " jitter ": result " out))))))))
+
+(deftest with-no-looks-again-a-pocket-its-first-look-missed-is-given-up-for-air
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [out (await (go-east! (/ js/Math.PI -2) 0 {:air-looks 0}))]
+          (is (= :air (:why out)) (str "result " out)))))))
 
 (deftest a-drowning-body-facing-away-looks-at-the-goal-and-swims-to-it
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [out (await (go-east! (/ js/Math.PI 2)))]
-          (is (true? (:arrived out)) (str "result " out)))))))
+        (doseq [jitter jitters]
+          (let [out (await (go-east! (/ js/Math.PI 2) jitter))]
+            (is (true? (:arrived out)) (str "jitter " jitter ": result " out))))))))
 
 ;; the body at the foot of a 6 deep 1x1 water shaft (x 4, water 64..69, land over all at feet 70), looking level, with
 ;; 10.5 or 11.25 s of air used: no way to the goal fits the air left (the swim up passes airLimit) and the goal's head is

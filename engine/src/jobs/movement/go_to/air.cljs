@@ -1,8 +1,13 @@
 (ns jobs.movement.go-to.air
   "go-to under water when no way to the goal fits the air left: swim to air first, then plan again."
   (:require [engine.ctx :as ctx]
+            [engine.game :as game]
+            [engine.perception :as perception]
+            [engine.settings :as settings]
             [jobs.lib.breath :as breath]
+            [jobs.lib.look :as look]
             [jobs.lib.near :as near]
+            [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]))
 
 (def max-surfacings "Walks to air one go-to call makes at most." 3)
@@ -10,6 +15,52 @@
 (def look-args "breath/find-air!'s look: columns within :radius, cells up to :reach above the feet." {:radius 2 :reach 10})
 
 (def air-radius "Columns this far sideways are read for air when the looks found none nearer (breathe's :air-radius default)." 8)
+
+(def default-air-looks "go-to's :air-looks default: rounds of looking again for air before an :air give-up." 3)
+
+(defn look-cells
+  "The cells a drowning body looks again at for air, those still unknown: the goal's head cell, then the cell over the
+  head 4 ahead along each heading whose head cell 4 ahead is seen water (open water, where a roof pocket may be)."
+  [p pos goal]
+  (let [fx (js/Math.floor (:x pos)) hy (inc (js/Math.floor (:y pos))) fz (js/Math.floor (:z pos))
+        head [(js/Math.floor (:x goal)) (inc (js/Math.floor (:y goal))) (js/Math.floor (:z goal))]
+        ahead (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
+                    :let [x (+ fx (* 4 dx)) z (+ fz (* 4 dz))]
+                    :when (= "water" (breath/seen-water-name p {:x x :y hy :z z}))]
+                [x (inc hy) z])]
+    (filterv #(sense/unknown? p %) (distinct (cons head ahead)))))
+
+(defn aim-point
+  "The point a look at cell aims at from eye, shifted up and sideways by frac of the sight rays' spacing there, so a
+  pass lands its rays where the last one did not (a cell seen edge-on shows to some rays only)."
+  [eye [x y z] frac ray-deg]
+  (let [cx (+ x 0.5) cy (+ y 0.5) cz (+ z 0.5)
+        vx (- cx (:x eye)) vz (- cz (:z eye))
+        flat (max 1e-6 (js/Math.hypot vx vz))
+        d (js/Math.hypot vx (- cy (:y eye)) vz)
+        s (* frac d (js/Math.tan (* ray-deg (/ js/Math.PI 180))))]
+    {:x (+ cx (* s (/ (- vz) flat))) :y (+ cy s) :z (+ cz (* s (/ vx flat)))}))
+
+(defn ^:async look-again!
+  "Look again at the look-cells for air, aims shifted by i/(n+1) of the ray spacing for the i-th of n tries (mem
+  :air-relooks), a sight pass after each look, as a player who glimpsed air keeps looking. True when it looked; nil when
+  the tries are spent or nothing is left unknown."
+  [c pos goal]
+  (let [p (:primitives c)
+        n (or (:air-looks (:args c)) default-air-looks)
+        i (inc (:air-relooks (ctx/mem c) 0))
+        cells (look-cells p pos goal)]
+    (when (and (<= i n) (seq cells))
+      (ctx/update-mem! c assoc :air-relooks i)
+      (ctx/emit! c :go-to.air-look :info {:cells cells :text (str "short of air: looking again for air (" i " of " n ")")})
+      (let [eye {:x (:x pos) :y (+ (:y pos) game/eye-height) :z (:z pos)}
+            ray-deg (or (some-> (aget p "perception") :opts :ray-deg) (settings/get perception/settings :engine.perception/ray-deg))]
+        (loop [[cell & more] cells]
+          (when cell
+            (await (ctx/act c :look (clj->js {:pos (aim-point eye cell (/ i (inc n)) ray-deg)})))
+            (look/see! c)
+            (recur more))))
+      true)))
 
 (defn ^:async swim-up-blind!
   "No air known and nothing seen over the own column: swim up it, as breathe does in the dark (a body learns by moving).
@@ -26,8 +77,9 @@
   it, breath/find-air!), else read seen air within air-radius, and walk one round (near/walk-round! with walk-opts) to
   that surface cell, range 0: a way to air, whose drowning is priced, not refused. At most max-surfacings a call (mem
   :surfacings). True when it walked there or on (the caller plans again); nil when the head is out, the tries are spent
-  or no air is known and the own column is not open (a block seen over it). With no air known and the own column open, swims up it blind (one swim)."
-  [c walk-opts]
+  or no air is known, the own column is not open (a block seen over it) and look-again! toward goal has nothing left. With
+  no air known and the own column open, swims up it blind (one swim)."
+  [c walk-opts goal]
   (let [p (:primitives c)
         n (:surfacings (ctx/mem c) 0)]
     (when (and (< n max-surfacings) (breath/head-under? p))
@@ -35,10 +87,11 @@
             target (or (await (breath/find-air! (assoc c :args look-args) pos))
                        (breath/nearest-air p pos air-radius (:reach look-args) nil false))]
         (if-not target
-          (when (breath/column-open? p (js/Math.floor (:x pos)) (js/Math.floor (:z pos)) (js/Math.floor (:y pos)) (:reach look-args))
-            (ctx/update-mem! c assoc :surfacings (inc n))
-            (ctx/emit! c :go-to.surfacing :info {:text "short of air, nothing seen above: swimming up blind"})
-            (await (swim-up-blind! c pos)))
+          (if (breath/column-open? p (js/Math.floor (:x pos)) (js/Math.floor (:z pos)) (js/Math.floor (:y pos)) (:reach look-args))
+            (do (ctx/update-mem! c assoc :surfacings (inc n))
+                (ctx/emit! c :go-to.surfacing :info {:text "short of air, nothing seen above: swimming up blind"})
+                (await (swim-up-blind! c pos)))
+            (await (look-again! c pos goal)))
           (do
             (ctx/update-mem! c assoc :surfacings (inc n))
             (ctx/emit! c :go-to.surfacing :info {:at target :text (str "short of air: swimming up to " [(:x target) (:y target) (:z target)] " first")})
