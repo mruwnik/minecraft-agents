@@ -313,5 +313,5 @@ test('adoption rejects mismatches, symlinks and conflicting tools before writing
 
 test('the workspace guide points at the seen-blocks listing for workstations, chests, beds and ore', t => {
   const f = fixture(t)
-  assert.match(fs.readFileSync(path.join(f.workspace, 'WORKSPACE.md'), 'utf8'), /jobs\.explore\.look \{:useful\? true/)
+  assert.match(fs.readFileSync(path.join(f.workspace, 'WORKSPACE.md'), 'utf8'), /`\.\/bin\/observe seen`/)
 })

@@ -15,7 +15,7 @@ export async function runBound (context, command, argv) {
       // each launcher checks only its own exports: usage comes from the tool's module, plans from the plan library
       let usage
       if (command === 'plans' || command === 'blueprints') {
-        usage = (await import('./plan-tools-lib.mjs')).usage[command]
+        usage = tools.workspacePlayerUsage((await import('./plan-tools-lib.mjs')).usage[command])
       } else if (typeof module['usage-for'] === 'function') {
         // use the prefix-aware usage function if available, still cut other tool references and body/world plumbing
         usage = module['usage-for'](`./bin/${command}`)
