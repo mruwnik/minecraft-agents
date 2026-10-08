@@ -315,3 +315,29 @@
             (is (= (assoc want :status :stopped :reason :too-few :mob "pig" :killed 0)
                    (select-keys r [:status :reason :mob :killed :keep :in-range :radius :nearest])) note)
             (is (string? (:text r)) note)))))))
+
+;; ------------------------------------------------------------------ colour
+
+(defn sheep [id x color] (animal id "sheep" x {:color color :drops [{:name (str color "_wool") :count 1}]}))
+
+(deftest a-colour-hunt-attacks-only-sheep-of-that-colour
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:mob "sheep" :color "white" :count 1 :keep 0} {:inventory h/sword :entities [(sheep 1 3 "brown") (sheep 2 6 "white")]} 30))]
+          (is (= #{2} (set (attacked s))) "the nearer brown sheep is left alone")
+          (is (= #{1} (world-ids s)))
+          (is (= 1 (get (inv s) "white_wool")))
+          (is (= :count (:reason (done-event s)))))))))
+
+(deftest a-colour-hunt-with-no-such-sheep-ends-at-once-naming-the-colours-seen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:mob "sheep" :color "white" :count 1 :keep 0} {:inventory h/sword :entities [(sheep 1 3 "brown") (sheep 2 6 "gray")]} 5))
+              e (done-event s)]
+          (is (empty? (attacked s)))
+          (is (= :no-color (:reason e)))
+          (is (= ["brown" "gray"] (:seen-colors e)))
+          (is (re-find #"no white sheep" (:text e)))
+          (is (finished? s)))))))

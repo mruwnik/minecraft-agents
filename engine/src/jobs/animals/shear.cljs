@@ -39,6 +39,7 @@
    :radius {:doc "sheep within this many blocks count" :spec (a/num-in 0 nil) :default 16}
    :walk-timeout-s {:doc "bound of one walk towards a sheep" :spec (a/num-in 0 nil) :default 5}
    :timeout-s {:doc "seconds of working with the animals (not fetching) before the job gives up" :spec (a/num-in 0 nil) :default 120}
+   :color {:doc "shear only sheep of this wool colour (e.g. \"white\"); nil: any" :spec a/name? :default nil}
    :collect {:doc "pick up the wool afterwards" :spec boolean? :default true}
    :fetch {:doc "get shears when none are carried (jobs.lib.fetch): true, a set of kinds or a map of limits; false ends :no-shears" :spec fetch/option? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
@@ -79,7 +80,9 @@
         :again)))
 
 (defn sheep-in-radius [c]
-  (animals/herd (:primitives c) "sheep" (:radius (:args c))))
+  (let [color (:color (:args c))]
+    (cond->> (animals/herd (:primitives c) "sheep" (:radius (:args c)))
+      color (filterv #(= color (.-color %))))))
 
 (defn candidates
   "The adult unsheared sheep within radius not shorn or given up on, nearest first."

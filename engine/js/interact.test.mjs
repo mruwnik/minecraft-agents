@@ -51,8 +51,8 @@ test('mobFields', async t => {
   const rows = [
     ['adult cow without metadata', 'cow', {}, { baby: false }],
     ['baby cow', 'cow', { metadata: { [BABY]: true } }, { baby: true }],
-    ['sheared sheep', 'sheep', { metadata: { [WOOL]: 0x10 } }, { baby: false, sheared: true }],
-    ['coloured sheep', 'sheep', { metadata: { [WOOL]: 0x0e } }, { baby: false, sheared: false }],
+    ['sheared sheep', 'sheep', { metadata: { [WOOL]: 0x10 } }, { baby: false, color: 'white', sheared: true }],
+    ['coloured sheep', 'sheep', { metadata: { [WOOL]: 0x0e } }, { baby: false, color: 'red', sheared: false }],
     ['zombie has no baby key', 'zombie', {}, {}],
     ['fusing creeper', 'creeper', { metadata: { 16: 1 } }, { fusing: true }],
     ['idle creeper', 'creeper', { metadata: { 16: -1 } }, { fusing: false }],
@@ -65,7 +65,7 @@ test('mobFields', async t => {
 
 test('mobFields falls back to wool index 18 without a registry', () => {
   const e = entity('sheep', { metadata: { 18: 0x10 } })
-  assert.deepEqual(mobFields({}, e), { sheared: true })
+  assert.deepEqual(mobFields({}, e), { color: 'white', sheared: true })
 })
 
 const scenarios = [

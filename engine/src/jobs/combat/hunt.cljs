@@ -1,5 +1,6 @@
 (ns jobs.combat.hunt
-  (:require [engine.args :as a]
+  (:require [clojure.string :as str]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.combat :as combat]
@@ -31,6 +32,7 @@
 
 (a/defargs args
   {:mob {:doc "mob type name of the animals to hunt" :spec a/name? :default "cow"}
+   :color {:doc "sheep only: kill only sheep of this wool colour (e.g. \"white\"); nil: any" :spec a/name? :default nil}
    :count {:doc "animals to kill" :spec (a/int-in 1 nil) :default 1}
    :radius {:doc "animals within this many blocks of the body count" :spec (a/num-in 0 nil) :default 24}
    :keep {:doc "never kill the last this many adults of the kind within :radius (babies do not count); nil: 2 for animals, 0 for hostile mobs; 0 turns the rule off" :spec (a/int-in 0 nil) :default nil}
@@ -56,12 +58,18 @@
   [c]
   (adults-within c (:radius (:args c))))
 
+(defn coloured
+  "The entities of the :color arg (all when it is nil)."
+  [c es]
+  (let [color (:color (:args c))]
+    (cond->> es color (filter #(= color (.-color %))))))
+
 (defn candidates
-  "The present animals not skipped, nearest first."
+  "The present animals of the :color not skipped, nearest first."
   [c]
   (let [skipped (set (:skipped (ctx/mem c)))
         here (u/self-pos c)]
-    (->> (present c)
+    (->> (coloured c (present c))
          (remove #(contains? skipped (.-id %)))
          (sort-by #(u/dist here (u/pos-of (.-pos %)))))))
 
@@ -104,6 +112,18 @@
     (ctx/result! c (assoc out :text text))
     :done))
 
+(defn no-color!
+  "End at once, nothing of the :color in range: the colours that are, in the result and text."
+  [c]
+  (let [{:keys [mob color]} (:args c)
+        seen (vec (sort (distinct (keep #(.-color %) (present c)))))
+        out {:killed 0 :reason :no-color :spared 0 :remaining (count (present c)) :seen-colors seen}
+        text (str "hunt stopped: no " color " " mob " within " (:radius (:args c)) " blocks"
+                  (when (seq seen) (str "; seen: " (str/join ", " seen))))]
+    (ctx/emit! c :hunt.done :warn (assoc out :text text))
+    (ctx/result! c (assoc out :status :stopped :text text))
+    :done))
+
 (defn finish!
   "Emit the outcome, hand it to the parent and end the job."
   [c reason]
@@ -139,7 +159,9 @@
         keep (keep-of c)]
     (if (and (not (:started (ctx/mem c))) (<= (count (present c)) keep))
       (too-few! c)
-      (do
+      (if (and (not (:started (ctx/mem c))) (:color (:args c)) (empty? (candidates c)))
+        (no-color! c)
+        (do
         (ctx/update-mem! c #(-> % (update :started (fn [t] (or t now))) (assoc :keep keep)))
         (let [{:keys [target collecting killed]} (ctx/mem c)
               next-target (first (candidates c))]
@@ -150,7 +172,7 @@
             (<= (count (present c)) keep) (finish! c :keep)
             (nil? next-target) (await (hunting/search! c #(finish! % :none)))
             :else (do (ctx/update-mem! c assoc :target (.-id next-target) :misses 0)
-                      (await (hunting/attack! c (attack-opts c))))))))))
+                      (await (hunting/attack! c (attack-opts c)))))))))))
 
 (defn ^:async round
   "The whole hunt: steps until it ends; yields only while a child waits on the world."

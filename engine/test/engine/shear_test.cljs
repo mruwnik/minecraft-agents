@@ -245,3 +245,11 @@
           (is (every? #(and (false? (:escalate %)) (= 5 (:leg-s %)) (false? (:look-round %)) (:zone-tolls %)) opts)
               "a moving target is chased in legs, never dug or pillared toward")
           (is (finished? s)))))))
+
+(deftest a-colour-shear-leaves-other-colours-alone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:color "white"} {:inventory shears :entities [(sheep 1 2 {:color "brown"}) (sheep 2 3 {:color "white"})]} 8))]
+          (is (= [false true] (world-sheared s)))
+          (is (= ["u2"] (:shorn (done-event s)))))))))

@@ -110,7 +110,7 @@ Notes:
   mineflayer's stale `bot.vehicle` and moves riders with their mount). `engine.senses` derives `isDay` (`timeOfDay < 12542 || > 23460`), `raining` (rain level above 0.2) and `thundering` (above 0.9 while raining) from the raw `timeOfDay`, `rainState`, `thunderState`, and flips `weather-changed` from the raw `weather-levels` event.
 - `chunkLoaded` false means the column under the body is not loaded (physics then emits no tick). `settling` is true while
   the body is connected but its senses are not yet trustworthy.
-- Entities: items carry `item {name, count}`; players `username`, `sleeping` (only in sight); mobs `uuid`, `baby`, villagers `profession` (`unemployed` when none), sheep `sheared`; leashed
+- Entities: items carry `item {name, count}`; players `username`, `sleeping` (only in sight); mobs `uuid`, `baby`, villagers `profession` (`unemployed` when none), sheep `color` and `sheared`; leashed
   mobs `leashed`, `leashedToMe`, `leashHolder`; riders `passengers` and `vehicle`. Creepers carry `creeper: true`. Every
   hostile carries `visible` (`engine.senses` over the raw world: a raycast from the eye to the entity's middle, then its head, then the head-height corners of its box, any one clear; glass, fences, gates, iron bars, water, fire and the like do not block, a door or slab only where the line meets it, an
   unloaded cell never blocks). Raw entity lists go through `js/live-entities.mjs` (drops bare, never-spawned entities, picked-up drops and mobs that died; an item's `spawn` record: time, place, nearest player, the body's last toss).
@@ -636,7 +636,7 @@ Each job declares its args with defaults and its full rules in `doc`: read it wi
 | `survival.unwedge` | Steps out of a full block at the feet cell, else digs it, all in one run (stopped + warn `unwedge.blocked` for bedrock or three failed digs); `:ignore-zones?` lifts the zone check |
 | `maintenance.shut-doors` | Shut every door a walk left open in one run (stopped `:left` with the reasons when any stays open; a block whose clicks fail is retried by a later run, dropped after `:attempts`) |
 | `combat.attack` `{:targets :radius :absent :done}` | Kills named targets (ids, usernames, mob types) in one call; ends `:cleared`, `:gave-up`, `:lost`, `:timeout` or `:absent` (after a look round). `:absent :wait` makes a standing guard |
-| `combat.hunt`, `animals.cull` | Kill adults of a mob kind, never the last `:keep`, and collect drops, all in one call (yields only while a child waits); with `:keep` or fewer adults in range at the start both end at once, stopped `:too-few` (hunt names `:in-range`, `:radius` and the `:nearest` adult's distance); `animals.cull` skips animals in another's zone (`:ignore-zones?`) |
+| `combat.hunt`, `animals.cull` | Kill adults of a mob kind, never the last `:keep`, and collect drops, all in one call (yields only while a child waits); with `:keep` or fewer adults in range at the start both end at once, stopped `:too-few` (hunt names `:in-range`, `:radius` and the `:nearest` adult's distance); `combat.hunt` and `animals.shear` take a sheep `:color` (hunt ends `:no-color` naming `:seen-colors` when none is in range); `animals.cull` skips animals in another's zone (`:ignore-zones?`) |
 
 **Gathering, items and storage**
 
