@@ -98,3 +98,18 @@
 
 (deftest the-fight-reserve-has-one-default
   (is (= cost/default-reserve (:default (:reserve retreat/args))) "retreat's :reserve default is the cost's"))
+
+;; ---------------------------------------------------------------- cooking against eating now
+
+(def four-beef [{:name "beef" :count 4}])
+
+(deftest cook-gain-counts-the-points-cooking-adds
+  (is (= 20 (cost/cook-gain four-beef)))
+  (is (= 0 (cost/cook-gain [{:name "bread" :count 3}]))))
+
+(deftest cooking-is-worth-it-by-gain-against-walk-furnace-and-urgency
+  (is (cost/cook-worth? four-beef 5 4) "a furnace near")
+  (is (cost/cook-worth? four-beef 5 nil) "no furnace: one is made, four beef pay for it")
+  (is (not (cost/cook-worth? [{:name "beef" :count 1}] 5 nil)) "one beef does not pay for a furnace")
+  (is (not (cost/cook-worth? four-beef 5 200)) "a furnace too far")
+  (is (not (cost/cook-worth? four-beef 3 4)) "starving: eat now"))

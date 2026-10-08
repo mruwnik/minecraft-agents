@@ -5,6 +5,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.child :as child]
+            [jobs.lib.cost :as cost]
             [jobs.lib.crops :as crops]
             [jobs.lib.look :as look]
             [jobs.lib.result :as r]
@@ -19,9 +20,10 @@
   :health; fed, it ends {:food n}. Still hungry, it takes the first way that has something to do, then eats again:
   1. No food carried but 3 or more wheat: bake bread (the craft job, enough loaves for the hunger, within 32 blocks of
      a table). A failed bake is remembered as :no-bake for 10 minutes and the ladder goes on.
-  1b. Raw food carried (chicken, beef ...) with a furnace or smoker seen within ::cook-radius (16): cook it there (the smelt
-     job, waiting out the cook in the round), then eat it. Not at night nor while the night handler holds. A failed cook is remembered
-     as :no-cook for 10 minutes.
+  1b. Raw food carried (chicken, beef ...) with a furnace or smoker seen within ::cook-radius (16), or no furnace but enough raw food
+     to pay for making one (jobs.lib.cost/cook-worth?): cook it (the smelt job, which fetches a furnace and fuel, waiting out the cook in
+     the round), then eat it. Done before eating while the body is not starving (food above 3), else as a way. Not at night nor while the night
+     handler holds. A failed cook is remembered as :no-cook for 10 minutes.
   2. The newest :food-source entry {:pos :kind} within :source-radius, reached by go-to:
      :farm: dig its mature crops (blocks.dig, which collects the drops). It does not replant.
      :chest: withdraw its best food (storage.withdraw); with no food but 3 or more wheat, wheat in multiples of 3,
@@ -438,9 +440,16 @@
   (->> (look/seen-blocks (:primitives c) {:names #{"furnace" "smoker"} :radius (cook-radius) :max 8 :live? true})
        first :pos))
 
+(defn worth-cooking?
+  "Cooking the raw food carried beats eating it now (jobs.lib.cost/cook-worth?): the walk to the furnace in sight, or
+  the one smelt makes and puts down when none is seen."
+  [c]
+  (let [cooker (nearest-cooker c)]
+    (cost/cook-worth? (raw-carried c) (food-level c) (when cooker (u/dist (u/self-pos c) cooker)))))
+
 (defn can-cook?
-  "Mid-cook, or raw food carried, a furnace in sight, no live :no-cook entry; never at night nor while the night
-  handler holds (a cook under way is dropped then)."
+  "Mid-cook, or raw food carried and no live :no-cook entry, with a furnace in sight or cooking worth a furnace of its
+  own (worth-cooking?); never at night nor while the night handler holds (a cook under way is dropped then)."
   [c]
   (boolean
    (and (not (sh/night? (:primitives c)))
@@ -448,7 +457,12 @@
         (or (:cooking (ctx/mem c))
             (and (seq (raw-carried c))
                  (zero? (ctx/count-in c :no-cook no-bake-ms))
-                 (nearest-cooker c))))))
+                 (or (nearest-cooker c) (worth-cooking? c)))))))
+
+(defn cook-first?
+  "Cook before eating: can-cook? and the cook worth its time now (a cook under way goes on)."
+  [c]
+  (boolean (and (can-cook? c) (or (:cooking (ctx/mem c)) (worth-cooking? c)))))
 
 (defn ^:async cook!
   "Way 1b: smelt the raw food carried (the smelt job, fuel as it takes it) in the furnace in sight; the cooking wait is
@@ -456,7 +470,7 @@
   [c]
   (let [{:keys [name count]} (or (first (raw-carried c)) (:cooking (ctx/mem c)))
         furnace (or (:furnace (:cooking (ctx/mem c))) (nearest-cooker c))
-        args {:furnace furnace :item name :count count}
+        args (cond-> {:item name :count count} furnace (assoc :furnace furnace))
         _ (ctx/update-mem! c assoc :cooking {:name name :count count :furnace furnace})]
     (loop [n 0]
       (let [st (await (child/run! c :cook 'jobs.items.smelt args))]
@@ -556,14 +570,16 @@
   waited out in the round (a reflex never yields); a cut round ends :done and starts again from the world."
   [c]
   (loop [n 0]
-    (let [eaten (await (eat-carried! c))
-          way (when-not (= :continue eaten)
+    (let [cooked (when (cook-first? c) (await (cook! c)))
+          eaten (if (or (= :continue cooked) (= :again cooked)) cooked (await (eat-carried! c)))
+          way (when-not (or (= :continue eaten) (= :again cooked))
                 (cond
                   (not (hungry-now? c)) ::fed
                   (>= n (max-ways)) ::enough
                   :else (await (next-way! c))))]
       (cond
         (not (ctx/alive? c)) :done
+        (= :again cooked) (recur n)
         (or (= :continue eaten) (= :continue way)) (do (await (child/pace!)) (recur n))
         (= ::fed way) (r/finish! c {:food (food-level c)})
         (= ::enough way) (r/stop! c :still-hungry (str "still hungry (food " (food-level c) ") after " n " ways")

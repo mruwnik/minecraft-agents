@@ -39,3 +39,39 @@
   (let [held (reduce (fn [n {:keys [name count]}] (cond-> n (reserve-food? name) (+ (* count (foods/points name)))))
                      0 inventory)]
     (max 0 (- reserve-points held))))
+
+(def cook-urgent-food
+  "At this food level or less a body eats what it has: no time to cook."
+  3)
+
+(def furnace-cost
+  "Hunger points a furnace to make and place is counted to cost (cobble, a craft, the fuel)."
+  8)
+
+(def walk-cost
+  "Hunger points one block of walking to a furnace is counted to cost."
+  0.2)
+
+(defn cooked-name
+  "The cooked food a raw one gives, or nil."
+  [name]
+  (let [cooked (if (= "potato" name) "baked_potato" (str "cooked_" name))]
+    (when (foods/food? cooked) cooked)))
+
+(defn cook-gain
+  "Hunger points cooking the raw food in inventory ([{:name :count}]) adds over eating it raw."
+  [inventory]
+  (reduce (fn [n {:keys [name count]}]
+            (if-let [cooked (cooked-name name)]
+              (+ n (* count (max 0 (- (foods/points cooked) (or (foods/points name) 0)))))
+              n))
+          0 inventory))
+
+(defn cook-worth?
+  "Whether cooking the raw food in inventory beats eating it now: not at or below cook-urgent-food, and the points
+  gained cover the walk to a furnace (distance, nil when none is seen: one is made, furnace-cost) with the cost
+  growing as food falls."
+  [inventory food distance]
+  (and (> food cook-urgent-food)
+       (let [cost (if distance (* distance walk-cost) furnace-cost)]
+         (>= (cook-gain inventory) (* cost (+ 1 (/ (- 20 food) 20)))))))

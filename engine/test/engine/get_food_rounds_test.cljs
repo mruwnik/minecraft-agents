@@ -501,3 +501,72 @@
         (let [{:keys [eng p]} (setup {:self {:food 2} :inventory [{:name "chicken" :count 2}]})]
           (await (one-round! eng {:explore false}))
           (is (= [] (calls p "furnace"))))))))
+
+(deftest raw-beef-is-cooked-before-it-is-eaten-when-not-urgent
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:blocks {"2,64,0" "furnace"} :self {:food 5}
+                                      :inventory [{:name "beef" :count 4} {:name "coal" :count 2}]}
+                                     :step-ms 2000)]
+          (core/submit! eng (list 'jobs.survival.get-food {}) {})
+          (await (run-until-idle! eng p 40))
+          (is (some #{"take"} (call-args p "furnace" "op")) "the cooked output was taken")
+          (is (< (count (filter #{"beef"} (map #(.-name %) (.-inventory (.self p))))) 4) "raw beef was cooked")
+          (is (> (food p) 5)))))))
+
+(deftest raw-beef-is-eaten-at-once-when-starving
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:blocks {"2,64,0" "furnace"} :self {:food 2}
+                                      :inventory [{:name "beef" :count 4} {:name "coal" :count 2}]})]
+          (await (one-round! eng {:explore false}))
+          (is (= [] (calls p "furnace")) "no time to cook")
+          (is (> (food p) 2)))))))
+
+(deftest one-raw-beef-does-not-pay-for-making-a-furnace
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:food 5}
+                                      :inventory [{:name "beef" :count 1} {:name "furnace" :count 1} {:name "coal" :count 2}]})]
+          (await (one-round! eng {:explore false}))
+          (is (= [] (calls p "furnace")))
+          (is (> (food p) 5)))))))
+
+(deftest raw-beef-with-no-furnace-seen-has-one-made-and-cooked
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:food 5}
+                                      :inventory [{:name "beef" :count 4} {:name "furnace" :count 1} {:name "coal" :count 2}]}
+                                     :step-ms 2000
+                                     :zones [{:name "home" :owner "Fake" :min [-20 60 -20] :max [20 70 20]}])]
+          (core/submit! eng (list 'jobs.survival.get-food {}) {})
+          (await (run-until-idle! eng p 60))
+          (is (= 1 (count (:furnaces @(fake/state p)))) "a furnace was put down")
+          (is (some #{"take"} (call-args p "furnace" "op")))
+          (is (< (count (filter #{"beef"} (map #(.-name %) (.-inventory (.self p))))) 4) "raw beef was cooked"))))))
+
+(deftest raw-beef-with-no-furnace-to-be-had-says-so-and-is-eaten-raw
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:food 5} :inventory [{:name "beef" :count 4}]}
+                                          :zones [{:name "home" :owner "Fake" :min [-20 60 -20] :max [20 70 20]}])]
+          (core/submit! eng (list 'jobs.survival.get-food {:explore false}) {})
+          (await (run-until-idle! eng p 40))
+          (is (re-find #"no-furnace-seen" (str (:text (first (events-of seen :food.no-cook))))) "the cook said why it could not")
+          (is (> (food p) 5) "the beef was eaten raw after"))))))
+
+(deftest a-failed-cook-is-remembered-as-no-cook-and-the-food-is-eaten-raw
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:blocks {"2,64,0" "furnace"} :self {:food 5}
+                                           :inventory [{:name "beef" :count 4}]})]
+          (core/submit! eng (list 'jobs.survival.get-food {:explore false}) {})
+          (await (run-until-idle! eng p 40))
+          (is (seq (filter #(= :food.no-cook (:kind %)) @seen)) "the cook failed (no fuel) and said so")
+          (is (> (food p) 5) "the beef was eaten raw after"))))))
