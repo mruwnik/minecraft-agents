@@ -522,6 +522,18 @@
           (is (empty? (events-of seen :go-to.escalated)))
           (is (empty? (calls p "dig"))))))))
 
+(deftest go-to-with-doors-never-digs-out-past-a-door-in-the-wall
+  ;; live go-to-escalate/oak-door-with-doors-never-digs: the planner's only way is the door, refused (:abilities :open)
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [shut (-> room (assoc "3,64,0" "oak_door" "3,65,0" "oak_door"))
+              states {"3,64,0" {:open false :half "lower" :facing "east"} "3,65,0" {:open false :half "upper" :facing "east"}}
+              {:keys [out seen]} (await (run-job! (merge in-room {:blocks shut :states states :inventory [{:name "dirt" :count 2}]})
+                                                  {:pos [8 64 0] :range 1 :doors :never}))]
+          (is (seq (events-of seen :go-to.escalated)) (pr-str @out))
+          (is (= {:arrived true} @out)))))))
+
 (deftest go-to-tries-the-next-method-when-the-first-fails
   (async done
     (tu/run-async done
@@ -587,6 +599,14 @@
     (is (= :east first-heading))
     (is (= :stair (:step again)))
     (is (not= first-heading (:heading again)))))
+
+(deftest escape-enclosed-counts-an-unseen-door-as-a-wall-under-doors-never
+  ;; live go-to-escalate/oak-door-with-doors-never-digs: in a dark room the door was never seen
+  (let [wide (merge room (box -20 63 -20 30 63 20 "stone"))
+        p (tu/fake (merge in-room {:blocks (assoc wide "3,64,0" "oak_door" "3,65,0" "oak_door")}))
+        door? #{[3 64 0] [3 65 0]}]
+    (aset p "sensedAt" (fn [pos] (if (door? [(.-x pos) (.-y pos) (.-z pos)]) #js {:unknown true} (.blockAt p pos))))
+    (is (true? (escape/enclosed? p :never)))))
 
 (deftest go-to-climbs-out-of-a-pit-by-another-heading-when-the-first-is-refused
   (async done

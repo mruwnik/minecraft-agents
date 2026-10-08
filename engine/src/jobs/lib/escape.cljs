@@ -121,17 +121,13 @@
 
 (def usable-door #"^(?!iron_door$)[a-z_]+_door$|_fence_gate$")
 
-(def door-block #"_door$|_fence_gate$|_trapdoor$")
-
 (defn enclosed?
-  "reach/enclosed?, with every door, gate and trapdoor a wall when doors is :never (the walk will not open them)."
+  "reach/enclosed?, with every shut door, gate and trapdoor a wall when doors is :never (the walk will not open them),
+  read from the planner's snapshot as the walk's plans are, seen or not."
   [p doors]
   (if (not= :never doors)
     (reach/enclosed? p)
-    (let [base (reach/lookup p reach/body-kind-of)
-          block-at (block-at-of p)
-          kind-at (fn [x y z] (if (some->> (block-at [x y z]) (re-find door-block)) :solid (base x y z)))]
-      (reach/shut-in? p kind-at))))
+    (reach/shut-in? p (reach/lookup p reach/kind-of))))
 
 (defn open-door-beside?
   "door-beside? without the :doors check."
