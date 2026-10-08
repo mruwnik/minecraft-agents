@@ -6,6 +6,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.blocks :as blocks]
+            [jobs.lib.check-cache :as check-cache]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.lib.watch :as watch]
@@ -376,8 +377,11 @@
   (let [{:keys [cells trouble]} (planned c)]
     (when-not trouble (need-of c cells))))
 
-(defn check [c]
-  (let [{:keys [cells trouble]} (planned c)
+(defn check
+  "Passes while there is something to build, dig, fetch or look at. Otherwise it waits (:plan-trouble, or :no-items
+  with the {item n} still needed). The plan's cells are judged once per check-cache window."
+  [c]
+  (let [{:keys [cells trouble]} (check-cache/cached c :planned #(planned c))
         p (:primitives c)]
     (cond
       trouble (ctx/wait c {:reason :plan-trouble :why trouble})
@@ -387,13 +391,8 @@
           (seq (digging cells))
           (some #(pos? (get (carried-counts p) (:item %) 0)) (unseen cells {}))
           (when-let [w (need-of c cells)] (some? (fetch/due c 'jobs.build.from-plan w)))) true
-      :else
-      (do (ctx/warn-once! c [(:plan (:args c)) :no-items] :build.declined
-                          (let [reason (str "nothing carried to build with: "
-                                            (shortage-text (shortage (owed cells) (carried-counts p))))]
-                            {:plan (:plan (:args c)) :part (:part (:args c)) :reason reason
-                             :text (str "build declines plan " (:plan (:args c)) ": " reason)}))
-          (ctx/wait c {:reason :no-items})))))
+      :else (ctx/wait c {:reason :no-items :plan (:plan (:args c)) :part (:part (:args c))
+                         :needs (into {} (shortage (owed cells) (carried-counts p)))}))))
 
 ;; ------------------------------------------------------------------ steps
 

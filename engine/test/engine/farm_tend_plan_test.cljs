@@ -8,6 +8,7 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
+            [jobs.farm.tend-plan :as tend-plan]
             [jobs.lib.world-files :as world]))
 
 (def job 'jobs.farm.tend)
@@ -106,14 +107,26 @@
             (is (= "carrot" (:seed (first notes)))))
           (is (true? (finished? s))))))))
 
-(deftest a-missing-seed-alone-starts-no-run-and-still-says-so-once
+(deftest a-missing-seed-alone-starts-no-run-and-the-wait-says-so-without-a-warn
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (run {:plan "mix"} (world-of (ground "farmland" carrot-cells) {:inventory [(item "wheat_seeds" 6)]})
                             {"mix" (plan-of)} 6))]
           (is (empty? (.-calls (.-world (:p s)))))
-          (is (= 1 (count (events-of s :farm-tend.short-seed)))))))))
+          (is (= [] (events-of s :farm-tend.short-seed)) "the check writes no warn")
+          (is (= [[:short-seed ["carrot"]]] (distinct (map (juxt :reason :seeds) (events-of s :waiting))))))))))
+
+(deftest the-check-reads-the-field-once-per-window
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [n (atom 0)
+              real tend-plan/plan-facts]
+          (with-redefs [tend-plan/plan-facts (fn [c] (swap! n inc) (real c))]
+            (await (run {:plan "mix"} (world-of (ground "farmland" carrot-cells) {:inventory [(item "wheat_seeds" 6)]})
+                        {"mix" (plan-of)} 8)))
+          (is (< 0 @n 8) "eight ticks, fewer than eight readings"))))))
 
 (deftest planned-dirt-is-tilled-then-sown-with-the-planned-crop
   (async done

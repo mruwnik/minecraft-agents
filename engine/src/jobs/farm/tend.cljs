@@ -4,6 +4,7 @@
             [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
+            [jobs.lib.check-cache :as check-cache]
             [jobs.lib.gate :as gate]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
@@ -206,12 +207,10 @@
 (defn census [c] (if (:plan (:args c)) (tend-plan/plan-census c) (box-census c)))
 
 (defn would-run?
-  "Whether a run is under way, or some step would call a child over the facts read now."
-  [c]
+  "Whether a run is under way, or some step would call a child over the facts f."
+  [c f]
   (boolean (or (:todo (ctx/mem c))
-               (let [f (facts c)]
-                 (when (:plan (:args c)) (tend-plan/note-short! c (:short f)))
-                 (some #(:call (decide/decide % (:args c) f)) decide/steps)))))
+               (some #(:call (decide/decide % (:args c) f)) decide/steps))))
 
 (defn field-cells
   "The cells the run decides from: the box's ground and crop layers, or the plan's crop cells and the ground under them."
@@ -222,13 +221,26 @@
       (for [x (range (:x min) (inc (:x max))) z (range (:z min) (inc (:z max))) y [(:y min) (inc (:y min))]]
         {:x x :y y :z z}))))
 
-(defn check [c]
+(defn check-facts
+  "The facts the check decides from: read once per check-cache window, and fresh while a cell was never seen."
+  [c]
+  (if (look/unseen? (:primitives c) (field-cells c))
+    (facts c)
+    (check-cache/cached c :facts #(facts c))))
+
+(defn check
+  "Passes when a run is under way or a step would call a child. Otherwise it waits: :short-seed names the seeds the
+  plan's bare cells want and the body lacks (the round says it with a warn)."
+  [c]
   (let [trouble (when (:plan (:args c)) (:trouble (tend-plan/planned c)))]
-    (cond
-      trouble (ctx/wait c {:reason :plan-trouble :why trouble})
-      (and (not (:plan (:args c))) (not (usable-box? (:box (:args c))))) (ctx/wait c {:reason :no-box})
-      (would-run? c) true
-      :else (look/wait-unless-surveyed c {:reason :nothing-to-do} (field-cells c)))))
+    (if trouble
+      (ctx/wait c {:reason :plan-trouble :why trouble})
+      (if (and (not (:plan (:args c))) (not (usable-box? (:box (:args c)))))
+        (ctx/wait c {:reason :no-box})
+        (let [f (check-facts c)]
+          (or (would-run? c f)
+              (look/wait-unless-surveyed c (if (seq (:short f)) {:reason :short-seed :seeds (vec (sort (:short f)))} {:reason :nothing-to-do})
+                                         (field-cells c))))))))
 
 ;; ------------------------------------------------------------------ rounds
 

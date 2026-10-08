@@ -4,11 +4,12 @@
             [clojure.string :as str]
             [engine.core :as core]
             [engine.fake :as fake]
-            [engine.forest-maintain-test :refer [ground forest-plan item start ticks digs places warns listed? give! with-zones]]
+            [engine.forest-maintain-test :refer [waiting-reasons set-block! ground forest-plan item start ticks digs places warns listed? give! with-zones]]
             [engine.harvest-test :as h]
             [engine.test-util :as tu]
             [jobs.lib.world-files :as world]
             [jobs.forestry.prepare :as prepare]
+            [jobs.forestry.prepare-field :as field]
             [jobs.forestry.prepare-rule :as rule]))
 
 (def job 'jobs.forestry.prepare)
@@ -125,7 +126,7 @@
           (let [{:keys [p seen]} (await (run (world blocks (item "dirt" 1) (item "oak_sapling" 1)) {"forest" one-cell} {:plan "forest"} 10))]
             (is (= [] (digs p)) (str cell))
             (is (= [] (places p)) (str cell))
-            (is (= [{:pos {:x 3 :y 64 :z 0} :block (first (vals blocks))}] (warns seen :prepare.no-tool)) (str cell))))))))
+            (is (= [[] [:cells-no-tool]] [(warns seen :prepare.no-tool) (vec (waiting-reasons seen))]) (str cell))))))))
 
 (deftest a-field-with-other-work-reports-the-cell-left-for-want-of-a-tool
   (async done
@@ -291,7 +292,7 @@
         (let [plan (forest-plan ["a" [[3 64 0]] "birch"])
               {:keys [p seen]} (await (run (world {"3,64,0" "short_grass" "3,71,0" "stone"} (item "birch_sapling" 1)) {"forest" plan} {:plan "forest"} 20))]
           (is (= 0 (calls-made p)))
-          (is (= [{:pos {:x 3 :y 64 :z 0} :at [3 71 0] :block "stone"}] (warns seen :prepare.cramped))))))))
+          (is (= [[] [:cells-cramped]] [(warns seen :prepare.cramped) (vec (waiting-reasons seen))])))))))
 
 ;; ------------------------------------------------------------------ access
 
@@ -460,7 +461,7 @@
           (is (= 0 (calls-made p)))
           (is (= ["no zone list"] (mapv :reason (h/events-of seen :prepare.declined)))))))))
 
-(deftest a-field-nothing-can-improve-is-left-alone-with-one-note-per-cell
+(deftest a-field-nothing-can-improve-is-left-alone-and-the-wait-names-the-worst-cells
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -470,9 +471,8 @@
               {:keys [p eng seen]} (await (run spec {"forest" plan} {:plan "forest"} 40))]
           (is (= 0 (calls-made p)) "40 ticks, not one act")
           (is (listed? eng) "waiting")
-          (is (= 1 (count (warns seen :prepare.wrong))))
-          (is (= 1 (count (warns seen :prepare.no-soil))))
-          (is (= 1 (count (warns seen :prepare.cramped)))))))))
+          (is (= [0 0 0] (mapv #(count (warns seen %)) [:prepare.wrong :prepare.no-soil :prepare.cramped])) "the check writes no warn")
+          (is (= [:cells-wrong] (vec (waiting-reasons seen)))))))))
 
 (deftest the-job-wakes-when-what-it-lacked-is-carried
   (async done
@@ -700,3 +700,39 @@
           (is (= [[3 63 0]] (digs p)) "the body stands on the stone: it is dug once the body is off the column, not refused")
           (is (= "dirt" (h/block-at p 3 63 0)))
           (is (= (expect {:soiled 1 :planted 1}) result)))))))
+
+;; ------------------------------------------------------------------ the check
+
+(deftest a-check-over-cells-it-cannot-work-waits-with-the-reason-and-no-warn
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[blocks inv reason] [[{"3,64,0" "birch_sapling"} [(item "oak_sapling" 2)] :cells-wrong]
+                                     [{"3,64,0" "air" "3,63,0" "oak_planks"} [(item "oak_sapling" 2)] :cells-no-soil]]]
+          (let [{:keys [seen eng p]} (await (run (apply world blocks inv) {"forest" one-cell} {:plan "forest"} 12))]
+            (is (= [[] [] [reason] true]
+                   [(mapcat #(warns seen %) [:prepare.wrong :prepare.no-soil :prepare.short :prepare.wet])
+                    (digs p) (vec (waiting-reasons seen)) (listed? eng)])
+                (pr-str blocks))))))))
+
+(deftest a-check-over-cells-short-of-a-sapling-waits-with-the-reason-and-no-warn
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [seen]} (await (run (world {}) {"forest" one-cell} {:plan "forest"} 12))]
+          (is (= [[] [:cells-short]] [(warns seen :prepare.short) (vec (waiting-reasons seen))])))))))
+
+(deftest the-check-assesses-the-field-once-per-window-and-sees-a-change-after-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [n (atom 0)
+              real field/assessments
+              s (start (world {"3,64,0" "stone"} (item "oak_sapling" 2)) {"forest" one-cell})]
+          (with-redefs [field/assessments (fn [c f] (swap! n inc) (real c f))]
+            (core/submit! (:eng s) (list job {:plan "forest"}) {})
+            (await (ticks (:eng s) 10)))
+          (is (< 0 @n 10) "ten ticks, fewer than ten assessments")
+          (set-block! (:p s) 3 64 0 "air")
+          (await (ticks (:eng s) 10))
+          (is (= [[3 64 0 "oak_sapling"]] (places (:p s)))))))))

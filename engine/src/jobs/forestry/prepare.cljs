@@ -3,6 +3,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.trees :as forestry]
             [jobs.lib.blocks :as blocks]
+            [jobs.lib.check-cache :as check-cache]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
@@ -99,20 +100,36 @@
 
 (defn receding? [states] (boolean (some #(= :receding (:state %)) (vals states))))
 
+(def blocked-states
+  "The cell states that hold a cell back, worst first, with the wait reason each gives."
+  [[:wrong :cells-wrong] [:no-soil :cells-no-soil] [:wet :cells-wet] [:no-tool :cells-no-tool] [:cramped :cells-cramped]
+   [:short :cells-short]])
+
+(defn blocked-reason
+  "Why no cell can be worked, as a wait reason naming the worst state and its cells; nil when none is held back."
+  [states]
+  (let [by (group-by :state (vals states))]
+    (some (fn [[state reason]]
+            (when-let [cells (seq (get by state))]
+              {:reason reason :cells (vec (sort (map (comp maintain/cell-vec :pos) cells)))}))
+          blocked-states)))
+
 (defn check
   "Passes while a step can be taken on a planned cell, and once the job has begun (its finishing round must run)
-  unless a cell is still receding from a dam."
+  unless a cell is still receding from a dam. Otherwise it waits, naming the cells held back. The field is assessed
+  once per check-cache window; the round says (warns) what is wrong with each cell."
   [c]
   (let [field (field/planned c)]
     (if (:trouble field)
       (ctx/wait c {:reason :plan-trouble :why (:trouble field)})
-      (let [states (field/assessments c field)
+      (let [cells (maintain/field-cells field)
+            read #(field/assessments c field)
+            states (if (look/unseen? (:primitives c) cells) (read) (check-cache/cached c :states read))
             work (field/todo c states)]
-        (note-cells! c states (empty? work))
         (or (boolean (or (seq work) (and (:begun (ctx/mem c)) (not (receding? states)))))
             (if-let [due (seq (vals (:recede (ctx/mem c))))]
               (ctx/wait c {:reason :receding :ready-at (apply min due)})
-              (look/wait-unless-surveyed c {:reason :nothing-to-do} (maintain/field-cells field))))))))
+              (look/wait-unless-surveyed c (or (blocked-reason states) {:reason :nothing-to-do}) cells)))))))
 
 ;; ------------------------------------------------------------------ steps
 

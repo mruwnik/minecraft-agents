@@ -242,24 +242,47 @@
         (is (= [[] [[3 64 0 "oak_sapling"]] {:forest.no-sapling []} false]
                (await (cell-case {} [(item "oak_sapling" 2)] [:forest.no-sapling]))))))))
 
-(deftest a-bare-cell-with-another-species-carried-is-skipped-with-one-note
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (is (= [[] [] {:forest.no-sapling [{:species "oak" :cells [{:x 3 :y 64 :z 0}]}]} true]
-               (await (cell-case {} [(item "birch_sapling" 2)] [:forest.no-sapling]))))))))
+(defn waiting-reasons [seen] (distinct (map :reason (h/events-of seen :waiting))))
 
-(deftest cells-holding-something-else-are-left-and-reported-once
+(deftest a-bare-cell-with-another-species-carried-waits-with-the-reason
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[blocks warns] [[{"3,64,0" "oak_sapling"} []]
-                                [{"3,64,0" "birch_sapling"} [{:pos {:x 3 :y 64 :z 0} :found "birch_sapling" :wanted "oak"}]]
-                                [(lt/tree 3 0 "birch" 4) [{:pos {:x 3 :y 64 :z 0} :found "birch_log" :wanted "oak"}]]
-                                [{"3,64,0" "stone"} [{:pos {:x 3 :y 64 :z 0} :found "stone" :wanted "oak"}]]]]
-          (is (= [[] [] {:forest.foreign warns} true]
-                 (await (cell-case blocks [(item "oak_sapling" 3)] [:forest.foreign])))
-              (pr-str blocks)))))))
+        (let [{:keys [seen eng]} (await (run {:blocks (ground [[3 0]]) :inventory [(item "birch_sapling" 2)]} {"forest" oak-cell}
+                                             {:plan "forest"} 12))]
+          (is (= [] (warns seen :forest.no-sapling)) "the check writes no warn")
+          (is (= [:no-sapling] (waiting-reasons seen)))
+          (is (listed? eng)))))))
+
+(deftest cells-holding-something-else-wait-with-the-reason-and-no-warn
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [blocks [{"3,64,0" "birch_sapling"} (lt/tree 3 0 "birch" 4) {"3,64,0" "stone"}]]
+          (let [{:keys [p seen eng]} (await (run {:blocks (merge (ground [[3 0]]) blocks) :inventory [(item "oak_sapling" 3)]}
+                                                 {"forest" oak-cell} {:plan "forest"} 12))]
+            (is (= [[] [] [] [:cells-foreign] true] [(digs p) (places p) (warns seen :forest.foreign) (vec (waiting-reasons seen)) (listed? eng)])
+                (pr-str blocks))))))))
+
+(deftest the-check-reads-the-cells-once-per-window
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [n (atom 0)
+              real maintain/classes-of]
+          (with-redefs [maintain/classes-of (fn [c trees] (swap! n inc) (real c trees))]
+            (await (run {:blocks (merge (ground [[3 0]]) {"3,64,0" "stone"})} {"forest" oak-cell} {:plan "forest"} 10)))
+          (is (< 0 @n 10) "ten ticks, fewer than ten readings"))))))
+
+(deftest the-check-sees-a-change-after-the-window
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng]} (await (run {:blocks (merge (ground [[3 0]]) {"3,64,0" "stone"})} {"forest" oak-cell} {:plan "forest"} 4))]
+          (set-block! p 3 64 0 "air")
+          (give! p "oak_sapling" 1)
+          (await (ticks eng 10))
+          (is (= [[3 64 0 "oak_sapling"]] (places p))))))))
 
 (deftest a-plan-edited-while-listed-drops-a-tree-cell-from-the-next-round
   (async done
@@ -340,11 +363,11 @@
       (fn ^:async t []
         (let [{:keys [p eng seen]} (await (run {:blocks (ground [[3 0]])} {"forest" oak-cell} {:plan "forest"} 40))]
           (is (= [] (vec (.-calls (.-world p)))))
-          (is (= 1 (count (h/events-of seen :forest.no-sapling))) "one note")
+          (is (= [:no-sapling] (waiting-reasons seen)) "the wait says why")
           (give! p "oak_sapling" 1)
           (await (ticks eng 20))
           (is (= [[3 64 0 "oak_sapling"]] (places p)))
-          (is (= 1 (count (h/events-of seen :forest.no-sapling)))))))))
+          (is (= 0 (count (h/events-of seen :forest.no-sapling)))))))))
 
 (deftest a-tree-too-tall-is-left-with-one-note-and-not-retried
   (async done

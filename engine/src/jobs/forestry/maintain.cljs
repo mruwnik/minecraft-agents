@@ -3,6 +3,7 @@
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as blocks]
+            [jobs.lib.check-cache :as check-cache]
             [jobs.lib.access :as access]
             [jobs.lib.trees :as forestry]
             [jobs.lib.util :as u]
@@ -237,19 +238,33 @@
   (when (and (not (:begun (ctx/mem c))) (look/unseen? (:primitives c) (field-cells field)))
     (await (look/survey! c))))
 
+(defn blocked-reason
+  "Why no planned cell can be worked, as a wait reason: cells holding something foreign, cells that cannot take a
+  sapling, or bare cells whose sapling is not carried; nil when none."
+  [c classes]
+  (let [kinds (group-by (comp first val) classes)
+        cells (fn [& ks] (vec (sort (map (comp cell-vec key) (mapcat kinds ks)))))
+        have (carried-names (:primitives c))
+        short (filter (fn [[_ [_ species]]] (not (have (forestry/sapling-of species)))) (:bare kinds))]
+    (cond
+      (seq (:foreign kinds)) {:reason :cells-foreign :cells (cells :foreign)}
+      (or (seq (:no-ground kinds)) (seq (:cramped kinds))) {:reason :cells-unplantable :cells (cells :no-ground :cramped)}
+      (seq short) {:reason :no-sapling :cells (vec (sort (map (comp cell-vec key) short)))})))
+
 (defn check
   "A started job always passes (its finishing round must run); else a grown tree is ripe on a planned cell, or a
-  bare one has its sapling carried. With the plan unworkable, never."
+  bare one has its sapling carried. Otherwise it waits, naming the cells that hold it back. The cells are read once
+  per check-cache window; the round says (warns) what is wrong with each."
   [c]
   (let [field (planned c)]
     (if (:trouble field)
       (ctx/wait c {:reason :plan-trouble :why (:trouble field)})
-      (let [classes (classes-of c (:trees field))]
-        (note-cells! c classes)
+      (let [read #(classes-of c (:trees field))
+            classes (if (look/unseen? (:primitives c) (field-cells field)) (read) (check-cache/cached c :classes read))]
         (or (boolean (or (:begun (ctx/mem c))
                          (seq (ripe-cells c classes))
                          (seq (plantable c (owed-cells c classes)))))
-            (look/wait-unless-surveyed c {:reason :nothing-to-do} (field-cells field)))))))
+            (look/wait-unless-surveyed c (or (blocked-reason c classes) {:reason :nothing-to-do}) (field-cells field)))))))
 
 ;; ------------------------------------------------------------------ steps
 

@@ -202,7 +202,7 @@
           (is (= [{:plan "pen" :reason "the plan cannot be read: unreadable EDN: eof"}]
                  (mapv #(select-keys % [:plan :reason]) (kinds-of seen :pen-build.declined)))))))))
 
-(deftest nothing-carried-declines-through-the-builder
+(deftest nothing-carried-waits-through-the-builder-without-a-warn
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -210,7 +210,7 @@
           (core/submit! eng (list job {:plan "pen" :fetch false}) {})
           (dotimes [_ 4] (swap! h/clock + 700) (await (core/tick! eng)))
           (is (empty? (h/calls p "place")))
-          (is (= 1 (count (kinds-of seen :build.declined)))))))))
+          (is (= [0 [:no-items]] [(count (kinds-of seen :build.declined)) (vec (distinct (map :reason (kinds-of seen :waiting))))])))))))
 
 ;; ---------------------------------------------------------------- resuming
 

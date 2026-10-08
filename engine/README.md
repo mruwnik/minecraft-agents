@@ -273,6 +273,7 @@ The one argument of a check and a round. Helpers are in `engine.ctx`:
 | `(ctx/hold-still! ctx reason)` | the round holds the body still on purpose until it ends (`nil` clears); `act :wait` with `:why` does the same while it waits |
 | `(ctx/alive? ctx)` | false once the round is cut: a search loop with no act checks it and stops |
 | `(ctx/warn-once! ctx key kind fields)` | a warn once per job per process |
+| `(check-cache/cached ctx k thunk)` (`jobs.lib.check-cache`) | a check's world reading, reused for `::ttl-ms`; a check writes no warn: it waits with the cause (`:cells-foreign`, `:no-items` with `:needs`, `:short-seed`), the round warns |
 
 **act.** Every acting call goes through `act`: it checks the token, saves memory, emits `action.started`/`action.done`
 (debug), calls the primitive, saves again. There is no commit: a cut loses at most the work since the last save, so write a

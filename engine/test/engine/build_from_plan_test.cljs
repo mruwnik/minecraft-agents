@@ -188,8 +188,24 @@
   (let [kit-spec {:inventory kit}]
     (is (= [0 [{:plan "nope" :reason "no such plan"}]] (declines kit-spec {} {:plan "nope"})))
     (is (= [0 [{:plan "pen" :reason "no cells to build"}]] (declines kit-spec {"pen" (pen-plan)} {:plan "pen" :part "nope"})))
-    (is (= [0 [{:plan "pen" :reason "nothing carried to build with: oak_fence 7, oak_fence_gate 1, torch 1"}]]
-           (declines {:inventory []} {"pen" (pen-plan)} {:plan "pen" :fetch false})))))
+    (is (= [0 []] (declines {:inventory []} {"pen" (pen-plan)} {:plan "pen" :fetch false}))
+        "a check with nothing to build with writes no warn")))
+
+(deftest the-check-without-items-waits-naming-the-shortage
+  (let [{:keys [eng seen]} (start {:inventory []} {"pen" (pen-plan)})]
+    (core/submit! eng (list job {:plan "pen" :fetch false}) {})
+    (dotimes [_ 4] (swap! h/clock + 700) (core/tick! eng))
+    (is (= [[:no-items "pen" {"oak_fence" 7 "oak_fence_gate" 1 "torch" 1}]]
+           (distinct (map (juxt :reason :plan :needs) (h/events-of seen :waiting)))))))
+
+(deftest the-check-judges-the-plan-once-per-window
+  (let [n (atom 0)
+        real build/judged
+        {:keys [eng seen p]} (start {:inventory []} {"pen" (pen-plan)})]
+    (with-redefs [build/judged (fn [& args] (swap! n inc) (apply real args))]
+      (core/submit! eng (list job {:plan "pen" :fetch false}) {})
+      (dotimes [_ 8] (swap! h/clock + 700) (core/tick! eng)))
+    (is (< 0 @n 8) "eight ticks, fewer than eight judgements")))
 
 (deftest a-broken-plan-declines-naming-the-error
   (let [{:keys [eng p seen w]} (start {:inventory kit} {})]
