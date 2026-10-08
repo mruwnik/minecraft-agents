@@ -1,9 +1,9 @@
 (ns jobs.movement.go-to.column
   "go-to's goal y. A column goal ([x z] or {:x :z}, no y) stands on the ground of that column nearest the body's feet,
-  read from seen cells only, over the whole build height. A column with no ground seen aims provisionally at its
-  topmost stand open to the sky (the surface a player assumes; read from the world the plans read, so not with
-  :unknown on), else keeps a stand-in y (the body's feet); go-to aims again every step, so it resolves from seen cells
-  on approach; a provisional one it first walks to within approach-range of. A y with no standable cell within the
+  read from seen cells only, over the whole build height. A column with no ground seen aims provisionally at an
+  estimate (estimate: the seen ground of the nearest column around it, else the body's feet y), or, when the column is
+  seen there and does not stand, keeps a stand-in y (the body's feet); go-to aims again every step, so it resolves from
+  seen cells on approach; a provisional one it first walks to within approach-range of. A y with no standable cell within the
   range is re-aimed to its column's standable cell nearest it, at most :y-slack blocks off, never past a solid (leads-to?;
   seen cells, an unseen one from the world the plans read)."
   (:require [engine.args :as a]
@@ -87,26 +87,30 @@
     (not (free? (kind-at x y z)))
     (every? #(free? (kind-at x % z)) (range (inc g) y))))
 
-(defn sky-ground
-  "The feet y of the column x z's topmost stand open to the sky (every cell above it :open; on water, its top water
-  cell), else nil."
-  [kind-at x z]
-  (when-let [h (first (remove #(keyword-identical? :open (kind-at x % z)) (range (inc top-y) (dec places/min-y) -1)))]
-    (cond (keyword-identical? :water (kind-at x h z)) (when (stands? kind-at x h z) h)
-          (stands? kind-at x (inc h) z) (inc h))))
+(def estimate-reach "Blocks above and below the feet a neighbouring column's seen ground is looked for (estimate)." 32)
+
+(defn estimate
+  "The y an unseen column x z is guessed to stand at: the seen ground nearest the feet (within estimate-reach) of the
+  nearest column around it, looked for in 8 directions out to approach-range, else body-y."
+  [kind-at x z body-y]
+  (or (some (fn [[d dx dz]] (ground kind-at (+ x (* d dx)) (+ z (* d dz)) body-y (- body-y estimate-reach) (+ body-y estimate-reach)))
+            (for [d (range 1 (inc approach-range)) [dx dz] [[1 0] [-1 0] [0 1] [0 -1] [1 1] [1 -1] [-1 1] [-1 -1]]] [d dx dz]))
+      body-y))
 
 (defn aim
   "{:pos cell} go-to walks to for goal ({:x :y :z}, or {:x :z} for a column): :resolved true when the y was chosen here,
-  :provisional too when a column's y is its unseen surface (sky-ground). body-y: the body's feet y; slack: the :y-slack
-  arg; raw?: whether unseen cells read from the raw world. A y goal comes here only once the planner found no cell in
-  its range stands."
+  :provisional too when a column's y is an estimate (its cell or floor there unseen). body-y: the body's feet y; slack:
+  the :y-slack arg; raw?: whether unseen cells of a y goal's column read from the raw world (a column reads seen cells
+  only). A y goal comes here only once the planner found no cell in its range stands."
   [p {:keys [x y z] :as goal} slack body-y raw?]
   (if (nil? y)
-    (if-let [g (ground (seen-kind-at p) x z body-y places/min-y top-y)]
-      {:pos {:x x :y g :z z} :resolved true}
-      (if-let [s (when raw? (sky-ground (reach/lookup p kind) x z))]
-        {:pos {:x x :y s :z z} :resolved true :provisional true}
-        {:pos {:x x :y body-y :z z}}))
+    (let [seen (seen-kind-at p)]
+      (if-let [g (ground seen x z body-y places/min-y top-y)]
+        {:pos {:x x :y g :z z} :resolved true}
+        (let [e (estimate seen x z body-y)]
+          (if (or (keyword-identical? :unknown (seen x e z)) (keyword-identical? :unknown (seen x (dec e) z)))
+            {:pos {:x x :y e :z z} :resolved true :provisional true}
+            {:pos {:x x :y body-y :z z}}))))
     (if-let [g (when (pos? slack) (let [ka (kind-at p raw?)] (ground ka x z y (- y slack) (+ y slack) #(leads-to? ka x z y %))))]
       {:pos (assoc goal :y g) :resolved true}
       {:pos goal})))

@@ -3,7 +3,11 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.go-to-test :as gt :refer [go! at events-of refusal]]
             [engine.core :as core]
+            [engine.memory :as mem]
+            [engine.registry :as registry]
             [engine.test-util :as tu :refer [box floor]]
+            [jobs.lib.near :as near]
+            [jobs.lib.sense :as sense]
             [jobs.movement.go-to :as go-to]
             [jobs.movement.go-to.column :as column]))
 
@@ -113,13 +117,15 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        ;; :unknown true reads no raw cell: the mound at x 28..32 (ground at feet 65) is out of sight from the start, so
-        ;; the column first keeps the body's feet y (64, inside the mound) and is aimed again once the body sees it
+        ;; the mound at x 28..32 (ground at feet 65) is out of sight from the start, so the column is first estimated at
+        ;; the body's feet y (64, inside the mound) and is aimed again once the body sees it
         (let [mound (merge flat (box 28 64 -3 32 64 3 "stone"))
               {:keys [out p] :as s} (await (go! {:blocks mound :light [15 0]} {:pos [30 0] :range 0 :unknown true}))]
           (is (= {:arrived true :resolved {:x 30 :y 65 :z 0}} @out) (pr-str @out))
           (is (= [30 65 0] (mapv #(js/Math.floor %) (at p))))
-          (is (= [{:x 30 :y 65 :z 0}] (mapv :to (events-of s :goal-resolved))) "resolved once, on approach"))))))
+          (is (= [{:to {:x 30 :y 64 :z 0} :provisional true} {:to {:x 30 :y 65 :z 0}}]
+                 (mapv #(select-keys % [:to :provisional]) ((juxt first last) (events-of s :goal-resolved))))
+              "first the estimate, last resolved on approach"))))))
 
 (deftest a-column-pos-is-accepted-at-submit-and-a-bad-one-refused
   (is (nil? (refusal {:pos [10 0]})))
@@ -143,20 +149,20 @@
 
 (defn column-hidden-below [y] (fn [[x cy z]] (and (= [30 0] [x z]) (< cy y))))
 
-(deftest an-unseen-column-aims-at-its-ground-open-to-the-sky-never-a-hidden-cave
+(deftest an-unseen-column-aims-at-its-neighbours-ground-never-a-hidden-cave
   (let [p (hiding hill-with-cave (column-hidden-below 75))]
     (is (= {:pos {:x 30 :y 75 :z 0} :resolved true :provisional true} (column/aim p {:x 30 :z 0} 4 64 true))
-        "the top open to the sky, as a player sees it from above")
-    (is (= {:pos {:x 30 :y 64 :z 0}} (column/aim p {:x 30 :z 0} 4 64 false))
-        ":unknown on reads no unseen cell: the stand-in")))
+        "the ground of the seen hill beside it, as a player guesses it")
+    (is (= {:pos {:x 30 :y 75 :z 0} :resolved true :provisional true} (column/aim p {:x 30 :z 0} 4 64 false))
+        "the same estimate under :unknown: it reads no unseen cell either way")))
 
 ;; a lake at x 28..32: water y 49..63 (15 deep) on a stone bed at 48
 (def lake (merge flat (box 28 48 -3 32 48 3 "stone") (box 28 49 -3 32 63 3 "water")))
 
-(deftest an-unseen-lake-column-aims-at-its-surface-not-its-bed
+(deftest an-unseen-lake-column-aims-at-its-neighbours-surface-not-its-bed
   (let [p (hiding lake (column-hidden-below 80))]
     (is (= {:pos {:x 30 :y 63 :z 0} :resolved true :provisional true} (column/aim p {:x 30 :z 0} 4 64 true))
-        "the top water cell: water is no open sky")))
+        "the top water cell of the lake beside it")))
 
 (deftest a-seen-column-picks-its-seen-ground-nearest-the-feet
   (let [p (hiding hill-with-cave (constantly false))]
@@ -172,13 +178,13 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        ;; a lone block floats at y 70 over x 30: out of sight, the column aims at its top (71, out of reach); once
-        ;; seen, at its ground under it (64), nearer the feet
+        ;; a lone block floats at y 70 over x 30: out of sight, the column is estimated at the feet (64, nothing around it
+        ;; seen); once seen, its ground under it (64) is said again, no longer a guess
         (let [floating (merge flat (box 30 70 0 30 70 0 "stone"))
               {:keys [out p] :as s} (await (go! {:blocks floating :light [15 0]} {:pos [30 0] :range 0}))]
           (is (= {:arrived true :resolved {:x 30 :y 64 :z 0}} @out) (pr-str @out))
           (is (= [30 64 0] (mapv #(js/Math.floor %) (at p))))
-          (is (= [{:to {:x 30 :y 71 :z 0} :provisional true} {:to {:x 30 :y 64 :z 0}}]
+          (is (= [{:to {:x 30 :y 64 :z 0} :provisional true} {:to {:x 30 :y 64 :z 0}}]
                  (mapv #(select-keys % [:to :provisional]) (events-of s :goal-resolved)))
               "said again when the target changed; the unseen top is said as a guess"))))))
 
@@ -239,7 +245,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        ;; the column x 30 is never seen: its guess (the raw top, 64) is walked to within approach-range, looked at
+        ;; the column x 30 is never seen: its guess (the seen ground beside it, 64) is walked to within approach-range, looked at
         ;; max-column-looks times, then walked to within the :range arg; the result says it was a guess
         (let [{:keys [out p eng]} (await (go-hidden! {:blocks flat} (fn [[x _ z]] (= [30 0] [x z])) {:pos [30 0] :range 0}))
               walks (gt/moved eng)]
@@ -248,3 +254,62 @@
           (is (= go-to/max-column-looks (count (filter #(= "look" (.-name %)) (.-calls (.-world p))))) "its looks spent")
           (is (some #(< 2 (js/Math.hypot (- 30 (:x (:to %))) (:z (:to %))) (inc column/approach-range)) walks)
               (str "a walk stopped near the guess first: " (pr-str (mapv :to walks)))))))))
+
+;; ---------------------------------------------------------------- :range, seen cells only, look order, fetch
+
+(deftest a-seen-block-goal-with-range-is-reached-beside-it-under-unknown
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        ;; a crafting table at (10,64,0) on the floor, seen: range 1 has seen stands beside it, so no re-aim onto its top
+        (let [table (merge flat (box 10 64 0 10 64 0 "crafting_table"))
+              {:keys [out p] :as s} (await (go! {:blocks table} {:pos [10 64 0] :range 1 :unknown true}))]
+          (is (= {:arrived true} @out) (pr-str @out))
+          (is (= 64 (js/Math.floor (second (at p)))) (str "beside the table, not on it: " (at p)))
+          (is (empty? (events-of s :goal-resolved))))))))
+
+(def pillar "A stone pillar at x 30 up to y 80 (its top stands at feet 81) on the flat floor." (merge flat (box 30 64 0 30 80 0 "stone")))
+
+(deftest an-unseen-column-is-estimated-from-its-seen-neighbours-never-its-real-height
+  (let [p (hiding pillar (fn [[x _ z]] (= [30 0] [x z])))]
+    (doseq [raw? [true false]]
+      (is (= {:pos {:x 30 :y 64 :z 0} :resolved true :provisional true} (column/aim p {:x 30 :z 0} 4 64 raw?))
+          (str "raw? " raw? ": the ground of the seen columns beside it, not the pillar's unseen top (81)")))))
+
+(deftest an-unseen-column-with-no-seen-neighbour-is-estimated-at-the-feet
+  (let [p (hiding pillar (constantly true))]
+    (is (= {:pos {:x 30 :y 70 :z 0} :resolved true :provisional true} (column/aim p {:x 30 :z 0} 4 70 true)))))
+
+(defn stub-ctx
+  "A go-to ctx over primitives p whose job memory is the atom mem*, events dropped."
+  [p mem* args]
+  {:primitives p :args args :unknown (:unknown args) :id "col-stub" :root "col-stub" :slots [] :engine {:jobs registry/jobs}
+   :view (fn [] {:now 1000000 :data {:entries {(mem/job-kind "col-stub") [{:t 1000000 :data @mem*}]}
+                                     :policies {(mem/job-kind "col-stub") mem/job-policy}}})
+   :update-mem (fn [f more] (apply swap! mem* f more))
+   :remember (fn [_ _ _] nil)
+   :emit (fn [_ _ _] nil)
+   :call-child (fn [_ _ _] (js/Promise.resolve :continue))})
+
+(deftest a-y-goals-first-look-is-at-the-goal-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (hiding flat (constantly true))
+              c (stub-ctx p (atom {}) {:pos [10 40 0] :unknown true})
+              looks (atom [])]
+          (with-redefs [sense/look-at! (fn [_ cell] (swap! looks conj cell) (js/Promise.resolve true))]
+            (dotimes [_ go-to/max-column-looks] (await (go-to/look-at-column! c {:x 10 :y 40 :z 0}))))
+          (is (= [10 40 0] (first @looks)) (pr-str @looks)))))))
+
+(deftest a-torch-fetch-continue-is-kept-when-the-goal-is-seen-in-the-ground
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        ;; the goal (10,63,0) is the floor block, seen; the walk ends :no-torch and the torch fetch waits on its child
+        (let [p (tu/fake {:self {:pos [0.5 64 0.5]} :blocks flat})
+              c (stub-ctx p (atom {}) {:pos [10 63 0] :range 0 :unknown true :place-torches true})]
+          (with-redefs [near/walk-round! (fn [_ _ _ _] (js/Promise.resolve {:result {:status :no-torch} :status "partial"
+                                                                             :to {:x 2 :y 64 :z 0}}))
+                        go-to/fetch-torches! (fn [_] (js/Promise.resolve :continue))]
+            (is (= :continue (await (go-to/walk! c {:x 10 :y 63 :z 0} 0 nil))))))))))
