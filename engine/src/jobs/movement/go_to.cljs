@@ -43,7 +43,8 @@
     only where it can see it from the takeoff (a drop deeper than it sees in the dark is refused). A map overrides the
     prices of jobs.lib.cost/unknown-prices. When a dark drop was the better way it gives up :why :unseen-floor-dark; in the
     dark with a torch carried and the off hand empty it first holds the torch in the off hand (info go-to.off-hand-torch,
-    once a call: it sees deeper) and plans again. Nothing is placed.
+    once a call: it sees deeper) and plans again; when the call ends it puts the torch back into the inventory (full: it
+    stays, info go-to.off-hand-kept). Nothing is placed.
   - :dark false plans dark cells like lit ones (default: a dark cell costs twice a lit one, so a lit route up to about 2x
     longer is taken: a cell seen and dark, or one never seen at night; look/dark-fn).
   - :goal-danger :end gives up at once (:why :goal-dangerous, :mob, :mob-pos, :mob-distance) when the goal lies within the full-cost radius of a known mob the body would flee; :wait (default) walks on, an info goal-in-danger says so.
@@ -249,10 +250,22 @@
   (let [r (await (ctx/act c :equip #js {:item "torch" :dest "off-hand"}))
         held? (= "torch" (some-> (.-equipment (.self (:primitives c))) .-offHand .-name))]
     (when held?
+      (ctx/update-mem! c assoc :off-hand-held true)
       (ctx/emit! c :go-to.off-hand-torch :info {:text "holding a torch in the off hand to see the floors ahead in the dark"}))
     (when-not held?
       (ctx/emit! c :go-to.off-hand-torch :info {:held false :equip (some-> r .-status) :text "could not hold a torch in the off hand"}))
     held?))
+
+(defn ^:async return-torch!
+  "The call ends: a torch held in the off hand by hold-torch! goes back into the inventory; with no room it stays (info
+  go-to.off-hand-kept)."
+  [c]
+  (when (:off-hand-held (ctx/mem c))
+    (ctx/update-mem! c dissoc :off-hand-held)
+    (when (= "torch" (some-> (.-equipment (.self (:primitives c))) .-offHand .-name))
+      (let [r (await (ctx/act c :unequip #js {:dest "off-hand"}))]
+        (when-not (= "ok" (some-> r .-status))
+          (ctx/emit! c :go-to.off-hand-kept :info {:status (some-> r .-status) :text "the torch stays in the off hand: no room to put it back"}))))))
 
 (defn ^:async walk! [c0 pos range doors]
   (let [c (cond-> c0 (:over-budget (ctx/mem c0)) (assoc :over-budget true))
@@ -468,7 +481,7 @@
         (= :again r) (if (ctx/alive? c) (do (await (pace!)) (recur)) :continue)
         :else (do (swap! approaches dissoc (:id c)) (ctx/update-mem! c dissoc :open) r)))))
 
-(defn ^:async round
+(defn ^:async attempt
   "One whole attempt: step! until it arrives, gives up, or waits on a child (:continue), with pace! between steps. A
   cut ends it at once (ctx/alive? per iteration, else at the next memory write or act, which throws). A goal inside a
   fled mob's radius ends it at once under :goal-danger :end, else says so once. With :unknown, the attempt's mask spec
@@ -490,3 +503,10 @@
             (if (and danger (= :end (some-> (:goal-danger (:args c)) keyword)))
               (await (end/give-up! c pos 0 :goal-dangerous {:reason :goal-dangerous} danger))
               (await (run-steps! c pos)))))))))
+
+(defn ^:async round
+  "attempt, then (unless it waits on a child) the off-hand torch goes back whatever the outcome. A cut ends the call without it."
+  [c]
+  (let [r (await (attempt c))]
+    (when-not (= :continue r) (await (return-torch! c)))
+    r))

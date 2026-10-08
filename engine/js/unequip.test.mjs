@@ -1,7 +1,7 @@
 // Why JavaScript: tests unequip.mjs, which stays JS: Mineflayer boundary; calls bot.unequip.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { emptyHand, hasRoom } from './unequip.mjs'
+import { emptyHand, emptyOffHand, hasRoom } from './unequip.mjs'
 
 const ctx = { alive: () => {} }
 const stack = name => ({ name, count: 1 })
@@ -38,4 +38,15 @@ test('hasRoom reads the hotbar then the main slots', () => {
   assert.equal(hasRoom(makeBot({ slots: full(36, 45) })), false)
   assert.equal(hasRoom(makeBot({ slots: full(36, 45), free: 9 })), true)
   assert.equal(hasRoom(makeBot({ slots: full(36, 44) })), true)
+})
+
+test('emptyOffHand puts slot 45 back when there is room, and says full otherwise', async () => {
+  const bot = makeBot({ slots: { 45: stack('torch') } })
+  bot.unequip = async where => { bot.calls.push(where); delete bot.inventory.slots[45] }
+  assert.deepEqual(await emptyOffHand(bot, ctx), { status: 'ok', item: 'torch' })
+  assert.deepEqual(bot.calls, ['off-hand'])
+  assert.deepEqual(await emptyOffHand(makeBot(), ctx), { status: 'empty' })
+  const packed = makeBot({ slots: { ...full(36, 45), 45: stack('torch') } })
+  assert.deepEqual(await emptyOffHand(packed, ctx), { status: 'full' })
+  assert.deepEqual(packed.calls, [])
 })

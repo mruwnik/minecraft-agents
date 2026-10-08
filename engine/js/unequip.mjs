@@ -17,3 +17,14 @@ export async function emptyHand (bot, ctx) {
   if (bot.heldItem) return { status: 'failed', reason: 'still-held' }
   return { status: 'ok', item: held.name }
 }
+
+// The off hand (slot 45) back into the inventory, same room rule.
+export async function emptyOffHand (bot, ctx) {
+  const held = bot.inventory.slots[45]
+  if (!held) return { status: 'empty' }
+  if (!hasRoom(bot)) return { status: 'full' }
+  await bot.unequip('off-hand')
+  ctx.alive()
+  if (bot.inventory.slots[45]) return { status: 'failed', reason: 'still-held' }
+  return { status: 'ok', item: held.name }
+}

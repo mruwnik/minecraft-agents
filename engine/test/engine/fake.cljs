@@ -797,7 +797,7 @@
                "wait" (fn [_ _] (swap! state animals/tempt-follow) #js {:status "ok"})
                "interact" (act! (fn [w a] (animals/interact w (merge {:item nil} a))))
                "trade" (guarded (act! trade/trade))
-               "unequip" (act! (fn [w _] (unequip/unequip w)))
+               "unequip" (act! (fn [w a] (unequip/unequip w (or a {}))))
                "mount" (act! mount)
                "dismount" (act! dismount)
                "paddle" (act! paddle)

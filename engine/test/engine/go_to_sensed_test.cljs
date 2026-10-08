@@ -310,8 +310,18 @@
         (let [{:keys [out seen p]} (await (run-go-to (assoc in-tunnel :inventory [{:name "torch" :count 4}])
                                                      {:pos [9 61 0] :range 1 :escalate false :unknown true} dark-and-looked))]
           (is (= 1 (count (filter #(= :go-to.off-hand-torch (:kind %)) seen))) "once per call")
-          (is (= "torch" (get-in @(fake/state p) [:equipment "offHand" :name])))
           (is (not= :unseen-floor-dark (:why out)) (str "near 7 sees the drop: " (pr-str out))))))))
+
+(deftest go-to-with-unknown-puts-the-off-hand-torch-back-when-the-call-ends
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [seen p]} (await (run-go-to (assoc in-tunnel :inventory [{:name "torch" :count 4}])
+                                                 {:pos [9 61 0] :range 1 :escalate false :unknown true} dark-and-looked))
+              w @(fake/state p)]
+          (is (= 1 (count (filter #(= :go-to.off-hand-torch (:kind %)) seen))) "it was held")
+          (is (nil? (get-in w [:equipment "offHand"])) "off hand empty again")
+          (is (= 4 (reduce + (map :count (filter #(= "torch" (:name %)) (:inventory w))))) "all four torches back"))))))
 
 (deftest go-to-with-unknown-leaves-a-full-off-hand-alone
   (async done

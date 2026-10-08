@@ -2,7 +2,7 @@
 // Containers and held items for the primitives: inspectContainer, transfer, equip, toss, craft, furnace, enchant, eat, interact, trade, unequip.
 
 import { interactWith } from './interact.mjs'
-import { emptyHand } from './unequip.mjs'
+import { emptyHand, emptyOffHand } from './unequip.mjs'
 import { furnaceVisit } from './furnace.mjs'
 import { enchantVisit } from './enchant.mjs'
 import { craftItem } from './craft.mjs'
@@ -215,8 +215,8 @@ export function createItems (env) {
 
   const unequip = async (token, a = {}) => {
     if (!isOwner(token)) throw cutError()
-    need(a.dest == null || a.dest === 'hand', 'unequip only empties the hand')
-    return act(token, { boundS: 2 }, ctx => emptyHand(env.bot, ctx))
+    need(a.dest == null || a.dest === 'hand' || a.dest === 'off-hand', 'unequip only empties the hand or the off-hand')
+    return act(token, { boundS: 2 }, ctx => (a.dest === 'off-hand' ? emptyOffHand : emptyHand)(env.bot, ctx))
   }
   return { inspectContainer, transfer, equip, toss, craft, furnace, enchant, eat, interact, trade, unequip }
 }
