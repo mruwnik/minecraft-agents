@@ -16,6 +16,7 @@
             [jobs.lib.walk :as walk]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
+            [jobs.lib.sense :as sense]
             [jobs.lib.targets :as targets]))
 
 (def doc
@@ -234,9 +235,10 @@
       {:reason :need :any-of pillar-items :count (:height plan)})))
 
 (defn ^:async start-pillar!
-  "The next log is out of reach from the ground: plan a stand or a pillar for the highest logs and remember it."
+  "The next log is out of reach from the ground: plan a stand or a pillar for the highest logs and remember it. A
+  refusal that read unseen floor cells is decided again after a look at them (jobs.lib.sense/decide!)."
   [c logs]
-  (let [r (pillar-plan c logs)]
+  (let [r (await (sense/decide! c ::pillar #(pillar-plan c logs) {:retry? #(and (:reason %) (not= :zone (:reason %)))}))]
     (cond
       (:stand r) (set-pillar! c {:phase :walk :plan {:stand (first (:stand r))}})
       (:pillar r) (set-pillar! c {:phase :walk :plan (:pillar r)})

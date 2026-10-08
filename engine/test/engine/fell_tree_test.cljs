@@ -118,6 +118,42 @@
           (is (= :no-base (:reason w)))
           (is (= 1 (count (kinds s :fell-tree.declined)))))))))
 
+(def bare "tall without the side leaf: no stand to plan on the canopy." (update tall :blocks dissoc "7,71,0"))
+
+(defn looked-low?
+  "A look at a cell below the trunk foot's level (y 64) was made: what sense/decide! does for an unseen floor."
+  [p]
+  (boolean (some #(and (= "look" (.-name %)) (some-> (.-args %) .-pos .-y (< 64))) (.-calls (.-world p)))))
+
+(defn ^:async fell-floor-unseen
+  "fell over a world whose cells at y 63 and below read as never seen until (seen-now? p) says so."
+  [spec args n seen-now?]
+  (let [s (fm/start spec {})
+        p (:p s)
+        omniscient (.-sensedAt p)]
+    (eye-reach! p)
+    (aset p "sensedAt" (fn [pos] (if (or (> (.-y pos) 63) (seen-now? p)) (omniscient pos) #js {:unknown true})))
+    (assoc s :out (await (tu/child-outcome (:eng s) 'jobs.forestry.fell-tree args n)))))
+
+(deftest an-unseen-floor-by-the-trunk-is-looked-at-before-the-pillar-is-planned
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p] :as s} (await (fell-floor-unseen bare {:radius 10} 300 looked-low?))]
+          (is (= [] (kinds s :fell-tree.declined)) "not declined as no way to reach")
+          (is (= 0 (count (kinds s :tree_blocked))) "the tree is not dropped")
+          (is (= (set (range 64 72)) (set (dug-ys p))) "every log dug"))))))
+
+(deftest a-floor-that-stays-unseen-after-the-looks-declines-with-the-reason
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (fell-floor-unseen bare {:radius 10} 200 (constantly false)))
+              w (first (kinds s :fell-tree.declined))]
+          (is (not= :not-done (:out s)))
+          (is (contains? #{:no-base :no-stand} (:reason w)))
+          (is (= 1 (count (kinds s :fell-tree.declined)))))))))
+
 (def chest-at "-2,64,3")
 
 (defn chest-world [stock]
