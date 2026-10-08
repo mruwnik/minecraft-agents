@@ -1,5 +1,6 @@
 (ns jobs.animals.lead-to
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
             [jobs.lib.blocks :as b]
@@ -78,7 +79,11 @@
    :timeout-s {:doc "seconds from the first round (not the lead fetch) before the job gives up" :spec (a/num-in 0 nil) :default 180}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 
-(def max-ties 2)
+(a/defargs settings
+  {::max-ties {:default 2 :doc "Ties tried before the job gives up." :spec (a/int-in 0 nil)}
+   ::tie-settle-ms {:default 250 :doc "How long to wait between looks at the animal after the click on the post." :spec (a/int-in 0 nil)}
+   ::tie-settle-tries {:default 6 :doc "How often the animal is looked at again after the click before the tie counts as not taken." :spec (a/int-in 0 nil)}})
+(defn max-ties [] (settings/get settings ::max-ties))
 
 (defn lead-carried? [c]
   (some #(= "lead" (:name %)) (u/inventory (:primitives c))))
@@ -460,8 +465,8 @@
   (let [a (animal-now c)]
     (and a (animals/leashed? a) (not (animals/led-by-me? a)))))
 
-(def tie-settle-ms "How long to wait between looks at the animal after the click on the post." 250)
-(def tie-settle-tries "How often the animal is looked at again after the click before the tie counts as not taken." 6)
+(defn tie-settle-ms [] (settings/get settings ::tie-settle-ms))
+(defn tie-settle-tries [] (settings/get settings ::tie-settle-tries))
 
 (defn ^:async await-tied!
   "True once the animal is held by something else than this body, looking tries more times a beat apart: the
@@ -470,7 +475,7 @@
   (cond
     (tied? c) true
     (zero? tries) false
-    :else (do (await (ctx/act c :wait #js {:ms tie-settle-ms}))
+    :else (do (await (ctx/act c :wait #js {:ms (tie-settle-ms)}))
               (await (await-tied! c (dec tries))))))
 
 (defn ^:async tie! [c]
@@ -482,8 +487,8 @@
             tries (inc (:ties (ctx/mem c) 0))]
         (ctx/update-mem! c assoc :ties tries)
         (cond
-          (await (await-tied! c tie-settle-tries)) (do (ctx/update-mem! c assoc :still-led false :gathered true) (finish! c :tied))
-          (>= tries max-ties) (finish! c :tie-failed)
+          (await (await-tied! c (tie-settle-tries))) (do (ctx/update-mem! c assoc :still-led false :gathered true) (finish! c :tied))
+          (>= tries (max-ties)) (finish! c :tie-failed)
           :else (do (ctx/emit! c :lead-to.tie-retry :info {:status (.-status r) :text "the post did not take the animal, trying once more"})
                     :again))))))
 

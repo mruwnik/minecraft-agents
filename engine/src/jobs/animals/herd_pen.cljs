@@ -1,6 +1,8 @@
 (ns jobs.animals.herd-pen
   "The pen and its gate for jobs.animals.herd: choosing the gate, the geometry of the walk through it, the waits and the gate toggles."
-  (:require [jobs.lib.animals :as animals]
+  (:require [engine.args :as a]
+            [engine.settings :as settings]
+            [jobs.lib.animals :as animals]
             [jobs.lib.click :as click]
             [engine.ctx :as ctx]
             [jobs.lib.declined :as declined]
@@ -59,11 +61,18 @@
   drags it."
   4.3)
 
-(def settled-move "An animal that moved less than this since the last look has stopped." 0.25)
+(a/defargs settings
+  {::settled-move {:default 0.25 :doc "An animal that moved less than this since the last look has stopped." :spec (a/num-in 0 nil)}
+   ::pinned-ms {:default 6000 :doc "How long a far animal may stay far before it counts as pinned." :spec (a/int-in 0 nil)}
+   ::max-backs {:default 2 :doc "Steps back a pinned animal gets before the walk out and retry." :spec (a/int-in 0 nil)}
+   ::look-range {:default 4 :doc "How near the body goes to a pen cell it has not seen before looking at it." :spec (a/int-in 0 nil)}
+   ::gate-look-range {:default 1 :doc "How near the gate the body goes to look into the pen when its cells stayed unseen from outside." :spec (a/int-in 0 nil)}
+   ::max-leaves {:default 2 :doc "How often a run that ends with the body on the pen side goes out before the shut." :spec (a/int-in 0 nil)}})
+(defn settled-move [] (settings/get settings ::settled-move))
 
-(def pinned-ms "How long a far animal may stay far before it counts as pinned." 6000)
+(defn pinned-ms [] (settings/get settings ::pinned-ms))
 
-(def max-backs "Steps back a pinned animal gets before the walk out and retry." 2)
+(defn max-backs [] (settings/get settings ::max-backs))
 
 (def half-widths
   "Half the width of the mob's box, by name; mobs not listed use default-half-width."
@@ -112,8 +121,8 @@
   :pinned (farther, and waited-ms has reached pinned-ms) or :wait."
   [dist moved waited-ms]
   (cond
-    (and (<= dist settled-dist) (< moved settled-move)) :settled
-    (and (> dist settled-dist) (>= waited-ms pinned-ms)) :pinned
+    (and (<= dist settled-dist) (< moved (settled-move))) :settled
+    (and (> dist settled-dist) (>= waited-ms (pinned-ms))) :pinned
     :else :wait))
 
 (defn step-in-step
@@ -122,7 +131,7 @@
   or :give-up."
   [backs retried]
   (cond
-    (< backs max-backs) :back
+    (< backs (max-backs)) :back
     (not retried) :retry-from-out
     :else :give-up))
 
@@ -145,9 +154,9 @@
   [answer g]
   (filterv #(not= (cell (:pos %)) (cell g)) (:leaks answer)))
 
-(def look-range "How near the body goes to a pen cell it has not seen before looking at it." 4)
+(defn look-range [] (settings/get settings ::look-range))
 
-(def gate-look-range "How near the gate the body goes to look into the pen when its cells stayed unseen from outside." 1)
+(defn gate-look-range [] (settings/get settings ::gate-look-range))
 
 (defn box-gates
   "The fence gates the body has seen on the ring of cells just outside the box (at its floor level), as {:x :y :z}."
@@ -171,10 +180,10 @@
         g (first gates)]
     (cond
       (or (nil? g) (:gate-visited m)) (finish! c :no-pen)
-      (u/within? (u/self-pos c) g gate-look-range)
+      (u/within? (u/self-pos c) g (gate-look-range))
       (do (ctx/update-mem! c #(-> % (assoc :gate-visited true) (dissoc :looked-pen)))
           :continue)
-      (= :blocked (await (near/go-near! c g gate-look-range {:doors :never :escalate false}))) (finish! c :no-pen)
+      (= :blocked (await (near/go-near! c g (gate-look-range) {:doors :never :escalate false}))) (finish! c :no-pen)
       :else :continue)))
 
 (defn ^:async check-unknown!
@@ -188,8 +197,8 @@
                  (sort-by #(u/dist here (centre %))) first)]
     (cond
       (nil? unk) (await (look-from-gate! c answer))
-      (not (u/within? here unk look-range))
-      (if (= :blocked (await (near/go-near! c unk look-range {:doors :never :escalate false})))
+      (not (u/within? here unk (look-range)))
+      (if (= :blocked (await (near/go-near! c unk (look-range) {:doors :never :escalate false})))
         (await (look-from-gate! c answer))
         :continue)
       :else (do (await (sense/look-at! c (cell unk)))
@@ -217,8 +226,8 @@
 
 (defn ^:async survey! [c]
   (let [centre (box-centre (:box (:args c)))]
-    (if (> (u/dist (u/self-pos c) centre) near-pen)
-      (if (= :blocked (await (near/go-near! c centre approach-range {:doors :never :escalate false})))
+    (if (> (u/dist (u/self-pos c) centre) (near-pen))
+      (if (= :blocked (await (near/go-near! c centre (approach-range) {:doors :never :escalate false})))
         (finish! c :unreachable)
         :continue)
       (let [answer (await (sense/decide! c ::pen #(read-pen c) {:retry? #(= :unloaded (:reason %))}))]
@@ -267,7 +276,7 @@
 (defn body-outside? [c]
   (outside-gate? (gate-cell c) (cell (:inside-cell (ctx/mem c))) (u/self-pos c)))
 
-(def max-leaves "How often a run that ends with the body on the pen side goes out before the shut." 2)
+(defn max-leaves [] (settings/get settings ::max-leaves))
 
 (defn body-in-pen?
   "True when the body stands on a cell of the box or on the gate cell: a shut from there would leave it inside."
@@ -297,7 +306,7 @@
   [outside? reopens]
   (cond
     outside? :census
-    (< reopens max-reopens) :reopen
+    (< reopens (max-reopens)) :reopen
     :else :stuck))
 
 (defn shut-side!
@@ -353,7 +362,7 @@
             (if (>= waited max-ms)
               :settled
               (do (ctx/update-mem! c assoc :last-seen there)
-                  (await (ctx/act c :wait #js {:ms settle-ms}))
+                  (await (ctx/act c :wait #js {:ms (settle-ms)}))
                   nil))))
         :settled))))
 
@@ -367,7 +376,7 @@
       (on-done r))))
 
 (defn ^:async look-wait! [c]
-  (await (ctx/act c :wait #js {:ms settle-ms}))
+  (await (ctx/act c :wait #js {:ms (settle-ms)}))
   :continue)
 
 (defn waited-ms

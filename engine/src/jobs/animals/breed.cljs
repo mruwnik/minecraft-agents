@@ -1,5 +1,6 @@
 (ns jobs.animals.breed
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
             [jobs.lib.fetch :as fetch]
@@ -54,8 +55,11 @@
    :fetch {:doc "get breeding food when none is carried (jobs.lib.fetch): true, a set of kinds or a map of limits; false ends :no-food" :spec fetch/option? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 
-(def reach 3)
-(def max-in-row 3)
+(a/defargs settings
+  {::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
+   ::max-in-row {:default 3 :doc "Animals handled in a row before the body looks again." :spec (a/int-in 0 nil)}})
+(defn reach [] (settings/get settings ::reach))
+(defn max-in-row [] (settings/get settings ::max-in-row))
 
 (defn check [_c] true)
 
@@ -175,13 +179,13 @@
 (defn ^:async engage!
   "Walk to the animal and feed it; finish when out of food or fruitless three times in a row."
   [c animal food]
-  (let [walked (await (animals/walk! c (animals/key-of animal) animal reach {:reset-row? true}))
+  (let [walked (await (animals/walk! c (animals/key-of animal) animal (reach) {:reset-row? true}))
         fed (case walked
               :there (await (feed! c animal food))
               :again)]
     (cond
       (= :no-food fed) (await (finish! c :no-food))
-      (>= (:in-row (ctx/mem c) 0) max-in-row) (await (finish! c (out-reason c)))
+      (>= (:in-row (ctx/mem c) 0) (max-in-row)) (await (finish! c (out-reason c)))
       :else :again)))
 
 (defn bees-indoors?

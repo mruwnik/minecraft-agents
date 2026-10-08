@@ -1,5 +1,6 @@
 (ns jobs.animals.herd
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [jobs.lib.animals :as animals]
             [engine.ctx :as ctx]
             [jobs.lib.declined :as declined]
@@ -111,39 +112,39 @@
       :survey (await (survey! c))
       :regather (await (regather! c))
       :leash (await (leash-next! c))
-      :approach (await (settle-at! c 0 settle-out-ms #(set-phase! c :clear-out)))
-      :clear-out (await (wait-clear! c (crowded-near? c (axis-cell in-1) crowd-out-radius) crowd-ms :out
+      :approach (await (settle-at! c 0 (settle-out-ms) #(set-phase! c :clear-out)))
+      :clear-out (await (wait-clear! c (crowded-near? c (axis-cell in-1) (crowd-out-radius)) (crowd-ms) :out
                                      #(set-phase! c :line-up {:pos-index 1})))
       :line-up (let [i (:pos-index m)]
-                 (await (settle-at! c i settle-out-ms
+                 (await (settle-at! c i (settle-out-ms)
                                     #(if (= i out-1) (set-phase! c :open) (set-phase! c :line-up {:pos-index (inc i)})))))
       :open (await (set-gate! c :open :step {:then {:pos-index gate-index :back-step false}}))
       :step (await (step-position! c))
       ;; the retry walks out and lines up again with the gate shut: out-1, the shut (an animal on the gate cell is
       ;; waited for, then the gate stays open), out-4
       :retry-back (await (go-then! c (axis-cell out-1) :retry-shut))
-      :retry-shut (await (shut-when-clear! c 3 shut-look-ms :retry-out nil #(set-phase! c :retry-out)))
-      :retry-out (await (settle-at! c 0 settle-out-ms #(set-phase! c :line-up {:pos-index 1})))
+      :retry-shut (await (shut-when-clear! c 3 (shut-look-ms) :retry-out nil #(set-phase! c :retry-out)))
+      :retry-out (await (settle-at! c 0 (settle-out-ms) #(set-phase! c :line-up {:pos-index 1})))
       ;; the animal is clear of the gate cell: step back one cell and shut; one that stays on it is waited for, then
       ;; looked at once more from the deepest cell, else it is as good as pinned
       :shut-behind (cond
                      (not (on-gate? c)) (set-phase! c :shut-back)
-                     (< (waited-ms c) (if (:deepest-tried m) 0 shut-look-ms)) (await (look-wait! c))
+                     (< (waited-ms c) (if (:deepest-tried m) 0 (shut-look-ms))) (await (look-wait! c))
                      (:deepest-tried m) (pinned! c deepest)
                      :else (set-phase! c :shut-deepest {:deepest-tried true}))
       :shut-deepest (await (go-then! c (axis-cell deepest) :shut-behind))
       :shut-back (await (go-then! c (axis-cell (dec deepest)) :shut-click))
-      :shut-click (await (shut-when-clear! c 4 shut-look-ms :deep nil #(set-phase! c :shut-behind)))
+      :shut-click (await (shut-when-clear! c 4 (shut-look-ms) :deep nil #(set-phase! c :shut-behind)))
       :deep (await (go-then! c (let-go-cell (:inside (read-pen c)) (gate-cell c) (cell (:inside-cell m))) :deep-release))
       :deep-release (await (release-step! c #(released! c :deep-unequip)))
       :deep-unequip (do (await (ctx/act c :unequip #js {})) (set-phase! c :exit))
       :exit (await (go-then! c (axis-cell in-1) :clear-in))
-      :clear-in (await (wait-clear! c (or (crowded-near? c (axis-cell in-1) crowd-in-radius) (on-gate? c)) crowd-ms :in
+      :clear-in (await (wait-clear! c (or (crowded-near? c (axis-cell in-1) (crowd-in-radius)) (on-gate? c)) (crowd-ms) :in
                                     #(set-phase! c :exit-dash {:pen-before (count (in-pen-adults c (read-pen c))) :dash-tries 0 :reopens 0})))
       :exit-dash (await (exit-dash! c))
       :exit-open (await (set-gate! c :open :exit-out))
       :exit-out (await (go-then! c (axis-cell out-1) :shut-out))
-      :shut-out (await (shut-when-clear! c 3 exit-shut-ms :shut-side nil
+      :shut-out (await (shut-when-clear! c 3 (exit-shut-ms) :shut-side nil
                                          #(if (:stepped-back m)
                                             (shut-failed! c)
                                             (set-phase! c :shut-back-in {:stepped-back true}))))
@@ -157,9 +158,9 @@
       ;; a run ending with the body on the pen side goes out first (the exit's own way, then the census ends it)
       :shut-gate (cond
                    (not (gate-open? c)) (after-shut! c)
-                   (and (body-in-pen? c) (< (:leaves m 0) max-leaves))
+                   (and (body-in-pen? c) (< (:leaves m 0) (max-leaves)))
                    (set-phase! c :exit {:leaves (inc (:leaves m 0)) :stepped-back false})
-                   :else (await (shut-when-clear! c 3 shut-look-ms :shut-gate nil #(shut-failed! c)))))))
+                   :else (await (shut-when-clear! c 3 (shut-look-ms) :shut-gate nil #(shut-failed! c)))))))
 
 (defn ^:async step-once!
   "One step of the run: the timeout and the lead looked at, the :gate-held entry kept fresh, then the phase's step."
@@ -221,7 +222,9 @@
       inside? (set-phase! c :exit {:stepped-back false})
       :else (set-phase! c :shut-gate))))
 
-(def pace-ms "A step that changed nothing and took less than this is followed by a wait of settle-ms." 100)
+(a/defargs settings
+  {::pace-ms {:default 100 :doc "A step that changed nothing and took less than this is followed by a wait of settle-ms." :spec (a/int-in 0 nil)}})
+(defn pace-ms [] (settings/get settings ::pace-ms))
 
 (defn ^:async round
   "The whole run: steps until it ends. A round that starts unsafe restarts first (restart!). A step that changed no
@@ -236,6 +239,6 @@
           r (await (step-once! c))]
       (if (not= :continue r)
         r
-        (do (when (and (= before (ctx/mem c)) (< (- (ctx/now c) from) pace-ms))
-              (await (ctx/act c :wait #js {:ms settle-ms})))
+        (do (when (and (= before (ctx/mem c)) (< (- (ctx/now c) from) (pace-ms)))
+              (await (ctx/act c :wait #js {:ms (settle-ms)})))
             (recur))))))

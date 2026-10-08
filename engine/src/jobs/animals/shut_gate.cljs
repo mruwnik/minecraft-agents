@@ -1,5 +1,6 @@
 (ns jobs.animals.shut-gate
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.animals.herd-run :as hr]
             [jobs.lib.apiary :as apiary]
@@ -41,7 +42,9 @@
 
 (def quiet-ttl-ms (* 1000 (:quiet-s pg/defaults)))
 
-(def pause-ttl-ms 30000)
+(a/defargs settings
+  {::pause-ttl-ms {:default 30000 :doc "How long a gate stays paused after a failed shut, in ms." :spec (a/int-in 0 nil)}})
+(defn pause-ttl-ms [] (settings/get settings ::pause-ttl-ms))
 
 (defn cell-pos [[x y z]] {:x x :y y :z z})
 
@@ -113,7 +116,7 @@
 (defn leave!
   "Leave the gate for now, with no verdict on it: a short :gate-gave-up entry keeps the trigger away for a while."
   [c cell reason]
-  (ctx/remember! c :gate-gave-up {:cell cell :reason reason} {:cap 50 :ttl pause-ttl-ms})
+  (ctx/remember! c :gate-gave-up {:cell cell :reason reason} {:cap 50 :ttl (pause-ttl-ms)})
   {:cell cell :reason reason})
 
 (defn ^:async walk!

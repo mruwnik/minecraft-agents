@@ -1,5 +1,6 @@
 (ns jobs.animals.unleash
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
             [jobs.lib.util :as u]))
@@ -46,13 +47,20 @@
    :collect {:doc "pick up the leads afterwards" :spec boolean? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 
-(def reach 3)
-(def max-in-row 3)
+(a/defargs settings
+  {::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
+   ::max-in-row {:default 3 :doc "Animals handled in a row before the body looks again." :spec (a/int-in 0 nil)}
+   ::knot-margin {:default 12 :doc "Blocks around the knot searched for the animal." :spec (a/int-in 0 nil)}
+   ::settle-ms {:default 250 :doc "How long the body waits for an animal to settle, in ms." :spec (a/int-in 0 nil)}
+   ::settle-tries {:default 6 :doc "Looks at the animal before it counts as settled." :spec (a/int-in 0 nil)}
+   ::drop-wait-ms {:default 800 :doc "How long the body waits for a dropped item, in ms." :spec (a/int-in 0 nil)}})
+(defn reach [] (settings/get settings ::reach))
+(defn max-in-row [] (settings/get settings ::max-in-row))
 (def knot-name "leash_knot")
-(def knot-margin 12)
-(def settle-ms 250)
-(def settle-tries 6)
-(def drop-wait-ms 800)
+(defn knot-margin [] (settings/get settings ::knot-margin))
+(defn settle-ms [] (settings/get settings ::settle-ms))
+(defn settle-tries [] (settings/get settings ::settle-tries))
+(defn drop-wait-ms [] (settings/get settings ::drop-wait-ms))
 
 (defn check [_c] true)
 
@@ -105,7 +113,7 @@
   [c a]
   (let [holder (.-leashHolder a)]
     (when (number? holder)
-      (->> (array-seq (.entities (:primitives c) #js {:radius (+ knot-margin (:radius (:args c))) :max 64}))
+      (->> (array-seq (.entities (:primitives c) #js {:radius (+ (knot-margin) (:radius (:args c))) :max 64}))
            (filter #(and (= holder (.-id %)) (= knot-name (.-name %))))
            first))))
 
@@ -138,7 +146,7 @@
     (freed? c k) :freed
     (and knot? (handed-over? c k)) :handed
     (zero? tries) :unchanged
-    :else (do (await (ctx/act c :wait #js {:ms settle-ms}))
+    :else (do (await (ctx/act c :wait #js {:ms (settle-ms)}))
               (await (await-state! c k knot? (dec tries))))))
 
 (defn ^:async click!
@@ -147,7 +155,7 @@
   (let [k (animals/key-of animal)
         r (await (ctx/act c :interact #js {:id (.-id target)}))]
     (case (.-status r)
-      ("used" "no-effect") (case (await (await-state! c k (not (animals/led-by-me? animal)) settle-tries))
+      ("used" "no-effect") (case (await (await-state! c k (not (animals/led-by-me? animal)) (settle-tries)))
                             :freed (ctx/update-mem! c #(-> % (update :freed (fnil conj []) k) (assoc :in-row 0)))
                             :handed (ctx/update-mem! c assoc :in-row 0)
                             (do (animals/give-up! c k :no-effect) (animals/bump-row! c)))
@@ -163,15 +171,15 @@
         target (if (animals/led-by-me? a) a (knot-of c a))]
     (if-not target
       (do (animals/give-up! c k :no-knot) (animals/bump-row! c))
-      (when (= :there (await (animals/walk! c k target reach {:doors :shut})))
+      (when (= :there (await (animals/walk! c k target (reach) {:doors :shut})))
         (await (click! c a target))))
-    (if (>= (:in-row (ctx/mem c) 0) max-in-row)
+    (if (>= (:in-row (ctx/mem c) 0) (max-in-row))
       (go-collect! c (none-reason c))
       :again)))
 
 (defn ^:async collect! [c]
   (when-not (:dropped (ctx/mem c))
-    (await (ctx/act c :wait #js {:ms drop-wait-ms}))
+    (await (ctx/act c :wait #js {:ms (drop-wait-ms)}))
     (ctx/update-mem! c assoc :dropped true))
   (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops {:radius (:radius (:args c)) :filter ["lead"]}))]
     (if-not (= :done r)

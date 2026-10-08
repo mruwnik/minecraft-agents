@@ -1,6 +1,8 @@
 (ns jobs.animals.herd-trip
   "One animal's trip for jobs.animals.herd: leashing the next, regathering, the steps through the gate and the release."
-  (:require [jobs.lib.animals :as animals]
+  (:require [engine.args :as a]
+            [engine.settings :as settings]
+            [jobs.lib.animals :as animals]
             [engine.ctx :as ctx]
             [jobs.lib.pen :as pen]
             [jobs.lib.util :as u]
@@ -8,19 +10,21 @@
             [jobs.animals.herd-pen :refer [animal-pos pinned-ms settle-at! step-in-step]]))
 
 
-(def max-tries 2)
+(a/defargs settings
+  {::max-tries {:default 2 :doc "Attempts before the job gives up." :spec (a/int-in 0 nil)}})
+(defn max-tries [] (settings/get settings ::max-tries))
 
 (defn tired-keys
   "The keys of animals leashed max-tries times already (tries {key n}) and not in the pen (a set of keys)."
   [tries pen-keys]
-  (into [] (comp (filter #(>= (val %) max-tries)) (map key) (remove pen-keys)) tries))
+  (into [] (comp (filter #(>= (val %) (max-tries))) (map key) (remove pen-keys)) tries))
 
 (defn skip-keys
   "Keys never to leash: babies, animals in the pen, the ones given up on, those already fetched twice and outside."
   [c]
   (let [{:keys [mob radius]} (:args c)
         answer (read-pen c)
-        near (animals/herd (:primitives c) mob (+ radius near-pen))
+        near (animals/herd (:primitives c) mob (+ radius (near-pen)))
         in-pen? #(pen/in-pen? answer (u/pos-of (.-pos %)))
         skip? #(or (true? (.-baby %)) (in-pen? %))
         pen-keys (into #{} (comp (filter in-pen?) (map animals/key-of)) near)]
@@ -72,7 +76,7 @@
         (set-phase! c (if (gate-open? c) :shut-gate :regather)))))
 
 (defn ^:async regather! [c]
-  (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops {:radius regather-radius :filter ["lead"]}))]
+  (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops {:radius (regather-radius) :filter ["lead"]}))]
     (if (= :done r) (set-phase! c :leash) :continue)))
 
 
@@ -107,7 +111,7 @@
   to the shut), pinned to pinned!, a position reached on a back-step to the one it backed from."
   [c]
   (let [{:keys [pos-index back-step]} (ctx/mem c)]
-    (settle-at! c pos-index pinned-ms
+    (settle-at! c pos-index (pinned-ms)
                 #(cond
                    back-step (set-phase! c :step {:pos-index (inc pos-index) :back-step false})
                    (= :pinned %) (pinned! c pos-index)

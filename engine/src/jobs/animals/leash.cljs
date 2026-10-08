@@ -1,5 +1,6 @@
 (ns jobs.animals.leash
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
             [jobs.lib.fetch :as fetch]
@@ -40,8 +41,11 @@
    :fetch {:doc "get a lead when none is carried (jobs.lib.fetch): true, a set of kinds or a map of limits; false ends :no-lead" :spec fetch/option? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 
-(def reach 3)
-(def max-in-row 3)
+(a/defargs settings
+  {::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
+   ::max-in-row {:default 3 :doc "Animals handled in a row before the body looks again." :spec (a/int-in 0 nil)}})
+(defn reach [] (settings/get settings ::reach))
+(defn max-in-row [] (settings/get settings ::max-in-row))
 
 (defn check [_c] true)
 
@@ -118,11 +122,11 @@
 (defn ^:async engage!
   "Walk to the animal and lead it; end when fruitless three times in a row."
   [c animal]
-  (let [walked (await (animals/walk! c (animals/key-of animal) animal reach {:doors :shut}))
+  (let [walked (await (animals/walk! c (animals/key-of animal) animal (reach) {:doors :shut}))
         [reason led] (when (= :there walked) (await (lead! c animal)))]
     (cond
       reason (finish! c reason led)
-      (>= (:in-row (ctx/mem c) 0) max-in-row) (finish! c (none-reason c) nil)
+      (>= (:in-row (ctx/mem c) 0) (max-in-row)) (finish! c (none-reason c) nil)
       :else :again)))
 
 (defn lead-carried? [c]

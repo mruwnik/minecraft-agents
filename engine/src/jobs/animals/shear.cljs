@@ -1,5 +1,6 @@
 (ns jobs.animals.shear
-  (:require [engine.args :as a]
+  (:require [engine.settings :as settings]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
             [jobs.lib.fetch :as fetch]
@@ -42,8 +43,11 @@
    :fetch {:doc "get shears when none are carried (jobs.lib.fetch): true, a set of kinds or a map of limits; false ends :no-shears" :spec fetch/option? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 
-(def reach 3)
-(def max-in-row 3)
+(a/defargs settings
+  {::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
+   ::max-in-row {:default 3 :doc "Animals handled in a row before the body looks again." :spec (a/int-in 0 nil)}})
+(defn reach [] (settings/get settings ::reach))
+(defn max-in-row [] (settings/get settings ::max-in-row))
 
 (def wool-names
   (mapv #(str % "_wool")
@@ -121,10 +125,10 @@
 (defn ^:async engage!
   "Walk to the sheep and shear it; end when fruitless three times in a row."
   [c sheep]
-  (let [walked (await (animals/walk! c (animals/key-of sheep) sheep reach {:reset-row? true :doors :shut}))]
+  (let [walked (await (animals/walk! c (animals/key-of sheep) sheep (reach) {:reset-row? true :doors :shut}))]
     (when (= :there walked)
       (await (shear! c sheep)))
-    (if (>= (:in-row (ctx/mem c) 0) max-in-row)
+    (if (>= (:in-row (ctx/mem c) 0) (max-in-row))
       (out-of-sheep! c)
       :again)))
 

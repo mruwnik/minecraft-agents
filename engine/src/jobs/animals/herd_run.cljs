@@ -1,18 +1,36 @@
 (ns jobs.animals.herd-run
   "The state of a herd run: its constants, the ending and what the animals on the lead did, shared by the pen, the trip and the job."
-  (:require [jobs.lib.animals :as animals]
+  (:require [engine.args :as a]
+            [engine.settings :as settings]
+            [jobs.lib.animals :as animals]
             [jobs.lib.apiary :as apiary]
             [engine.ctx :as ctx]
             [jobs.lib.pen :as pen]
             [jobs.lib.pen-gate :as pg]
             [jobs.lib.util :as u]))
 
-(def near-pen 16)
-(def approach-range 12)
-(def watch-radius 64)
-(def release-radius 8)
-(def regather-radius 8)
-(def settle-ms 500)
+(a/defargs settings
+  {::near-pen {:default 16 :doc "Blocks from the pen within which the body counts as near it." :spec (a/int-in 0 nil)}
+   ::approach-range {:default 12 :doc "Blocks from the animal at which the body starts to approach." :spec (a/int-in 0 nil)}
+   ::watch-radius {:default 64 :doc "Blocks within which animals are watched." :spec (a/int-in 0 nil)}
+   ::release-radius {:default 8 :doc "Blocks within which a released animal counts as near." :spec (a/int-in 0 nil)}
+   ::regather-radius {:default 8 :doc "Blocks within which strays are gathered again." :spec (a/int-in 0 nil)}
+   ::settle-ms {:default 500 :doc "How long the body waits for an animal to settle, in ms." :spec (a/int-in 0 nil)}
+   ::settle-out-ms {:default 8000 :doc "How long the body waits for the animal to rest at a position outside the gate." :spec (a/int-in 0 nil)}
+   ::crowd-ms {:default 10000 :doc "How long the cells inside the gate may stay crowded before the body goes on." :spec (a/int-in 0 nil)}
+   ::shut-look-ms {:default 6000 :doc "How long a shut waits for the animals to clear the gate cell." :spec (a/int-in 0 nil)}
+   ::exit-shut-ms {:default 2000 :doc "How long the shut from outside waits before stepping back in." :spec (a/int-in 0 nil)}
+   ::crowd-out-radius {:default 2.5 :doc "Radius of crowding outside the gate, in blocks." :spec (a/num-in 0 nil)}
+   ::crowd-in-radius {:default 2.0 :doc "Radius of crowding inside the gate, in blocks." :spec (a/num-in 0 nil)}
+   ::max-reopens {:default 2 :doc "How often a gate shut with the body inside is opened again for the body to go out." :spec (a/int-in 0 nil)}
+   ::max-shut-retries {:default 2 :doc "How often a gate that will not shut is tried again before the run gives up on it." :spec (a/int-in 0 nil)}
+   ::max-release-declines {:default 3 :doc "How often the unleash child of one animal may decline before the animal is given up on." :spec (a/int-in 0 nil)}})
+(defn near-pen [] (settings/get settings ::near-pen))
+(defn approach-range [] (settings/get settings ::approach-range))
+(defn watch-radius [] (settings/get settings ::watch-radius))
+(defn release-radius [] (settings/get settings ::release-radius))
+(defn regather-radius [] (settings/get settings ::regather-radius))
+(defn settle-ms [] (settings/get settings ::settle-ms))
 (def orthogonal [[1 0] [-1 0] [0 1] [0 -1]])
 
 (def out-1 "Index in the axis cells of the cell outside the gate." 3)
@@ -20,12 +38,12 @@
 (def in-1 "Index in the axis cells of the cell inside the gate." 5)
 (def deepest "Index in the axis cells of the last position the body steps to (in-5)." 9)
 
-(def settle-out-ms "How long the body waits for the animal to rest at a position outside the gate." 8000)
-(def crowd-ms "How long the cells inside the gate may stay crowded before the body goes on." 10000)
-(def shut-look-ms "How long a shut waits for the animals to clear the gate cell." 6000)
-(def exit-shut-ms "How long the shut from outside waits before stepping back in." 2000)
-(def crowd-out-radius 2.5)
-(def crowd-in-radius 2.0)
+(defn settle-out-ms [] (settings/get settings ::settle-out-ms))
+(defn crowd-ms [] (settings/get settings ::crowd-ms))
+(defn shut-look-ms [] (settings/get settings ::shut-look-ms))
+(defn exit-shut-ms [] (settings/get settings ::exit-shut-ms))
+(defn crowd-out-radius [] (settings/get settings ::crowd-out-radius))
+(defn crowd-in-radius [] (settings/get settings ::crowd-in-radius))
 (def held-policy {:cap 4 :ttl 60000})
 
 (defn cell [{:keys [x y z]}] [x y z])
@@ -54,7 +72,7 @@
   (filterv #(pen/in-pen? answer (u/pos-of (.-pos %))) (adults c)))
 
 (defn animal-now [c k]
-  (animals/find-by-key (:primitives c) (:mob (:args c)) watch-radius k))
+  (animals/find-by-key (:primitives c) (:mob (:args c)) (watch-radius) k))
 
 (defn led-now
   "The keys of :led whose animal is on this body's lead now."
@@ -136,9 +154,9 @@
     (gate-open? c) (set-phase! c :shut-gate)
     :else (finish! c reason)))
 
-(def max-reopens "How often a gate shut with the body inside is opened again for the body to go out." 2)
+(defn max-reopens [] (settings/get settings ::max-reopens))
 
-(def max-shut-retries "How often a gate that will not shut is tried again before the run gives up on it." 2)
+(defn max-shut-retries [] (settings/get settings ::max-shut-retries))
 
 (defn escaped-count
   "How many animals left the pen between two counts of the adults on its cells."
@@ -156,7 +174,7 @@
         [x y z] (gate-cell c)]
     (cond
       (seq (led-now c)) (set-phase! c :let-go {:ending (or (:ending m) :shut-failed)})
-      (< retries max-shut-retries) (set-phase! c :shut-gate {:shut-retries (inc retries)})
+      (< retries (max-shut-retries)) (set-phase! c :shut-gate {:shut-retries (inc retries)})
       :else (do (ctx/emit! c :herd.gate-open :warn {:gate (:gate m)
                                                     :text (str "the gate at " x " " y " " z " could not be shut and stays open")})
                 (finish! c (if (= :shut-failed (:ending m)) :gate-stuck (:ending m)))))))
@@ -185,7 +203,7 @@
       (after-shut! c)
       (set-phase! c :leash))))
 
-(def max-release-declines "How often the unleash child of one animal may decline before the animal is given up on." 3)
+(defn max-release-declines [] (settings/get settings ::max-release-declines))
 
 (defn ^:async release-step!
   "One round of unleashing (jobs.animals.unleash by key, kept on one animal until that child is done, which
@@ -198,7 +216,7 @@
       (on-done)
       (do (ctx/update-mem! c assoc :releasing k)
           (let [r (await (ctx/call-child c :unleash 'jobs.animals.unleash
-                                         (cond-> {:mob (:mob (:args c)) :animal k :radius release-radius}
+                                         (cond-> {:mob (:mob (:args c)) :animal k :radius (release-radius)}
                                            (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))
                 reason (when (= :done r) (:reason (ctx/child-result c :unleash)))
                 declines (cond-> (:release-declines (ctx/mem c) 0) (= :declined r) inc)]
@@ -208,7 +226,7 @@
                                       (update :release-tried (fnil conj []) k)
                                       (cond-> (not= :unleashed reason) (update :unleash-failed assoc k (or reason :refused)))
                                       (dissoc :releasing :release-declines)))
-              (>= declines max-release-declines)
+              (>= declines (max-release-declines))
               (ctx/update-mem! c #(-> %
                                       (update :release-tried (fnil conj []) k)
                                       (update :unleash-failed assoc k :declined)
