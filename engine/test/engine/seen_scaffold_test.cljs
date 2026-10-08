@@ -2,6 +2,8 @@
   "Q98 C2b follow-up: place, pillar and bridge look before they read a cell they have not sensed. Perception wraps the
   fake primitives; blockAt stays raw."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.core :as core]
+            [engine.fake :as fake]
             [engine.dig-to-see-test :as d]
             [engine.test-util :as tu]
             [jobs.access.bridge :as bridge]
@@ -38,6 +40,31 @@
           (let [{:keys [out]} (await (d/run! {:blocks d/ground} 'jobs.access.pillar {:height 2 :ignore-zones? true}))]
             (is (= :done (:status @out)))
             (is (= 2 (:built @out)))))))))
+
+(def doorway-cell
+  "A 1-wide doorway along +z under open sky: stone walls at x -1 and 1 (feet and head), a floor, closed behind the body."
+  (merge (d/stone -1 1 63 63 -1 3)
+         (into {} (for [z (range -1 4) x [-1 1] y [64 65]] [(str x "," y "," z) "stone"]))
+         (into {} (for [y [64 65]] [(str "0," y ",-1") "stone"]))))
+
+(deftest a-cornered-retreat-looks-at-the-unseen-sky-before-it-rules-a-pillar-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [spec {:blocks doorway-cell :self {:pos {:x 0 :y 64 :z 0}} :inventory [{:name "cobblestone" :count 20}]
+                    :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 0 :y 64 :z 1} :health 20}]}
+              p (d/sensing spec)]
+          (is (true? (look/unknown? p [0 67 0])) "the sky over the doorway is unsensed at the start")
+          (let [{:keys [eng clock]} (d/setup p 'jobs.survival.retreat {})]
+            (let [round (core/tick! eng)]
+              (loop [i 0]
+                (when (and (< i 100) (empty? (d/calls p "jumpPlace")))
+                  (swap! clock + 500)
+                  (await (js/Promise. (fn [r] (js/setTimeout r 20))))
+                  (recur (inc i))))
+              (swap! (fake/state p) assoc :entities [])
+              round)
+            (is (pos? (count (d/calls p "jumpPlace"))) "an unseen sky is looked at, not taken for rock: the pillar goes up")))))))
 
 (deftest bridge-looks-at-the-stand-cell-before-stepping-onto-it
   (async done

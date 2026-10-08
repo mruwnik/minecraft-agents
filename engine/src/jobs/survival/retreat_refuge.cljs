@@ -159,13 +159,16 @@
   (await (refuge-round! c)))
 
 (defn ^:async pillar!
-  "Start a pillar-height pillar (jobs.access.pillar, ledgered) when it fits: a step's result, else nil."
+  "Start a pillar-height pillar (jobs.access.pillar, ledgered) when it fits: a step's result, else nil. The cells it
+  rises into that the body has not sensed are looked at first, so open sky is not taken for rock."
   [c]
   (let [p (:primitives c)
-        block-at (escape/block-at-of p)
         feet (pl/feet-cell c)
         item (pillar-item c)]
-    (when (and item (pillar-ok? block-at feet))
+    (when item
+      (doseq [cell (map #(up feet %) (range 1 (+ 2 pillar-height)))]
+        (when (look/unknown? p cell) (await (look/look-at! c cell)))))
+    (when (and item (pillar-ok? (escape/block-at-of p) feet))
       (access/trespass! c "retreat" (some #(access/trespass-refusal (access/rules-input c) :place (cell-map (up feet %)))
                                           (range pillar-height)))
       (await (start-refuge! c {:kind :pillar :item item :anchor (cell-map feet)
