@@ -110,3 +110,9 @@
                      (is (= {:op :submit :by "Wren" :spec '(jobs.blocks.dig {:pos {:x 1 :y 64 :z 2}})}
                             (select-keys sent [:op :by :spec]))))))
           (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
+
+(deftest move-to-with-two-numbers-is-a-column-goal
+  (are [args spec] (= spec (apply spec-of args))
+    ["move-to" "10" "-35"] '(jobs.movement.go-to {:pos [10 -35]})
+    ["move-to" "10" "-35" "--range" "2"] '(jobs.movement.go-to {:pos [10 -35] :range 2}))
+  (is (fails-with #"x z or x y z" ["--world" "w" "Probe" "submit" "move-to" "1"])))
