@@ -1,5 +1,6 @@
 ;; jobs.blocks.dig :on-fluid and jobs.gather.mine :wet (card d5e3748c): stone beside a water source (a one-cell
-;; pocket at [19 0 16], walled on four sides and open on top so the body sees the water surface; every stone cell touches it), a dry stone at [14 0 16]; bedrock floor so mine sees only that stone.
+;; pocket at [19 0 16], walled on four sides and open on top; every stone cell touches it), a dry stone at [14 0 16]; bedrock floor so mine sees only that stone.
+;; The dig cases stand on a stone step at [16 0 16] (eye 2.6): from the floor the water surface lies at a grazing angle behind the stone, unseen, and an unseen cell reads as stone.
 {:defaults
  {:tags [:blocks :mine :jobs] :time :any
   :plot {:height 8 :floor "bedrock"}
@@ -8,15 +9,21 @@
   :body {:at [16.5 0 16.5] :inventory [["iron_pickaxe" 1]]}}
  :cases
  [{:name "default-waits-on-hazard"
+   :blocks [[:set [16 0 16] "stone"]]
+   :body {:at [16.5 1 16.5]}
    :act [[:job (jobs.blocks.dig {:pos #at [18 0 16]})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :hazard}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :blocks.dig.done} :for-s 30 :until {:source :job :kind :waiting :data {:reason :hazard}}}]
    :after [[:block [18 0 16] "stone"]]}
   {:name "fail-ends-at-once-with-hint"
+   :blocks [[:set [16 0 16] "stone"]]
+   :body {:at [16.5 1 16.5]}
    :act [[:job (jobs.blocks.dig {:pos #at [18 0 16] :on-fluid :fail})]]
    :expect [{:event {:source :job :kind :blocks.dig.done :data {:dug false :reason :fluid-adjacent}} :within-s 30 :of-job true}]
    :after [[:block [18 0 16] "stone"]]}
   {:name "fail-with-accept-digs"
+   :blocks [[:set [16 0 16] "stone"]]
+   :body {:at [16.5 1 16.5]}
    :act [[:job (jobs.blocks.dig {:pos #at [18 0 16] :on-fluid :fail :accept #{:fluid-adjacent}})]]
    :expect [{:event {:source :job :kind :blocks.dig.done :data {:dug true :reason :dug}} :within-s 60 :of-job true}]
    :after [[:item "cobblestone" [:>= 1]]]}
