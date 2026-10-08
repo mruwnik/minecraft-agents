@@ -614,6 +614,8 @@
 
 (declare vehicle-of)
 
+(def mount-reach "How far the body mounts from (js/settings.mjs vehicle/mount-reach)." 3)
+
 (defn mount [w {:keys [id]}]
   (let [e (find-entity w id)
         riders (count (:passengers e))
@@ -623,7 +625,7 @@
       (some? vehicle) [w {:status "already-mounted" :vehicle (vehicle-of w)}]
       (nil? e) [w {:status "gone"}]
       refused [w {:status refused}]
-      (> (dist (body-pos w) (:pos e)) (.-MOUNT_REACH ^js @vehicle-mod)) [w {:status "out-of-reach"}]
+      (> (dist (body-pos w) (:pos e)) mount-reach) [w {:status "out-of-reach"}]
       (:mount-fails w) [w {:status "timeout"}]
       :else (let [w' (-> w (assoc-in [:self :held] nil) (assoc-in [:self :vehicle] id) (assoc-in [:self :pos] (:pos e))
                          (animals/update-entity id #(update % :passengers (fnil conj []) fake-body-id)))]
