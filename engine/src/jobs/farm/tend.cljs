@@ -37,7 +37,8 @@
   (jobs.lib.cost/food-reserve: 3 days of food, 60 hunger points, best food first; carrots and potatoes count toward it
   first) and the :keep entry. Harvested crops above it are stored; seed above it is composted.
   Skipped steps are booked as {:skipped reason}: :no-ripe, :till-off, :no-hoe, :nothing-to-till, :no-seed,
-  :no-bare, :fertilize-off, :no-bone-meal, :none-unripe, :no-composter, :no-surplus-seed, :no-chest,
+  :food-reserve (a plan's dry cells wait because the reserve keeps their seed; adds :seed :held :kept :reserve-points; cells
+  within 4 blocks of water, level or one up, are tilled anyway), :no-bare, :fertilize-off, :no-bone-meal, :none-unripe, :no-composter, :no-surplus-seed, :no-chest,
   :nothing-to-store or :declined (the child declined).
   A step that ran keeps its summary even if it is skipped later in the same run.
   The job declines (does nothing) unless the box has at most 2048 cells and some step would run (a field partly never
@@ -233,9 +234,10 @@
 
 (defn nothing-to-do-reason
   "The wait reason when no step would run: :covered counts tillable cells with a block over them (the box sits too low),
-  :refused untilled cells a zone or claim refuses."
+  :refused untilled cells a zone or claim refuses, :food-reserve the seed the reserve keeps from dry cells."
   [f]
-  (into {:reason :nothing-to-do} (filter (comp pos? val)) (select-keys f [:covered :refused])))
+  (cond-> (into {:reason :nothing-to-do} (filter (comp pos? val)) (select-keys f [:covered :refused]))
+    (:till-held f) (assoc :food-reserve (:till-held f))))
 
 (defn check
   "Passes when a run is under way or a step would call a child. Otherwise it waits: :short-seed names the seeds the

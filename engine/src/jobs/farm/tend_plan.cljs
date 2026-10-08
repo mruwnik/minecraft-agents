@@ -100,6 +100,21 @@
                                         (when (seq (:owners fields)) (str " (owner " (str/join ", " (:owners fields)) ")"))))))
     (mapv first verdicts)))
 
+(defn wet?
+  "Whether a ground cell is hydrated: seen water within 4 blocks horizontally, at its level or one up."
+  [p {:keys [x y z]}]
+  (boolean (some (fn [[dx dy dz]] (= "water" (u/seen-name p {:x (+ x dx) :y (+ y dy) :z (+ z dz)})))
+                 (for [dx (range -4 5) dz (range -4 5) dy [0 1]] [dx dy dz]))))
+
+(defn reserve-held
+  "What the food reserve keeps of the seeds of the crops of cells {pos crop}: {:seed :held :kept :reserve-points :cells}
+  for the first seed carried but kept, else nil."
+  [inventory cells]
+  (some (fn [seed]
+          (when-let [h (plant/held-back seed inventory)]
+            (assoc h :cells (count (filter #(= seed (harvest/seed-of (val %))) cells)))))
+        (distinct (map (comp harvest/seed-of val) cells))))
+
 (defn plan-facts
   "What the decisions are made from for a plan, read live."
   [c]
@@ -120,13 +135,19 @@
                             (filter (fn [[pos _]] (stock/untilled? (ground-cell p pos)))))
         _ (note-refused! c plan (map key untilled-cells))
         tillable (filter (fn [[pos _]] (permit/ok? c plan :dig pos)) untilled-cells)
-        seeded (filter (fn [[_ crop]] (let [seed (harvest/seed-of crop)] (> (get have seed 0) (get bare-of seed 0)))) tillable)]
+        seeded (filter (fn [[_ crop]] (let [seed (harvest/seed-of crop)] (> (get have seed 0) (get bare-of seed 0)))) tillable)
+        seeded-set (set (map key seeded))
+        unseeded (remove (comp seeded-set key) tillable)
+        wet (filter (fn [[pos _]] (wet? p pos)) unseeded)
+        dry (remove (set wet) unseeded)
+        tilled-cells (concat seeded wet)]
     {:mid mid
      :radius R
      :ripe (count (harvest/planned-ripe p {} crops []))
      :hoe (some? (till/hoe-of p))
-     :untilled (->> seeded (map key) (sort-by #(u/dist me %)) vec)
-     :till-short (- (count tillable) (count seeded))
+     :untilled (->> tilled-cells (map key) (sort-by #(u/dist me %)) vec)
+     :till-short (count dry)
+     :till-held (reserve-held inventory dry)
      :bare (- (count bare) (count (:refused sowing)))
      :seed (boolean (seq (:ready sowing)))
      :short (:short sowing)

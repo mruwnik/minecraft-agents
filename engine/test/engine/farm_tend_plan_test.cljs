@@ -502,3 +502,26 @@
                                          {"mix" (plan-of)} [] 20))]
           (is (= 1 (:planted r)))
           (is (= 1 (count (placed s)))))))))
+
+(def reserve-only {:inventory [(item "stone_hoe" 1) (item "carrot" 3)]})
+
+(deftest dry-cells-whose-crop-the-reserve-keeps-are-not-tilled-and-the-report-says-so
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (run {:plan "mix" :part "carrots"} (world-of (ground "dirt" [[2 3]]) (ground "farmland" [[3 3]]) (crops "carrots" 7 [[3 3]])
+                                      {:inventory (:inventory reserve-only) :drops {"carrots" ["carrot"]}})
+                            {"mix" (plan-of)} 60))]
+          (is (empty? (calls s "useOn")))
+          (is (= {:skipped :food-reserve :seed "carrot" :held 3 :kept 3 :reserve-points 60}
+                 (select-keys (step s :till) [:skipped :seed :held :kept :reserve-points]))))))))
+
+(deftest wet-cells-are-tilled-though-the-reserve-keeps-their-seed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (run {:plan "mix" :part "carrots"}
+                            (world-of (ground "dirt" carrot-cells) {:blocks {(k 7 64 3) "water"}} reserve-only)
+                            {"mix" (plan-of)} 80))]
+          (is (= {:tilled 1} (step s :till)) "only the cell within 4 blocks of the water")
+          (is (= ["farmland" "dirt"] (mapv #(block-at s % 63 3) [3 2]))))))))

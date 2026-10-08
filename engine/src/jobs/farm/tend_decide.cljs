@@ -22,10 +22,11 @@
                     {:center mid :radius radius :replant true})}}))
 
 (defn decide-till
-  [{:keys [till plan]} {:keys [hoe untilled bare seeds till-short]}]
+  [{:keys [till plan]} {:keys [hoe untilled bare seeds till-short till-held]}]
   (cond
     (not till) {:skip :till-off}
     (not hoe) {:skip :no-hoe}
+    (and (empty? untilled) till-held) {:skip :food-reserve :detail till-held}
     (empty? untilled) {:skip (if (pos? (or till-short 0)) :no-seed :nothing-to-till)}
     (and (not plan) (<= seeds bare)) {:skip :no-seed}
     :else {:call {:slot :till :job (jobs :till)
