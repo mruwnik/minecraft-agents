@@ -161,13 +161,13 @@
             (is (= :info (:level (first picked))))
             (is (= 1 (:collected (first picked))))))))))
 
-(deftest the-job-alone-declines-when-nothing-is-worth-it
+(deftest the-job-alone-ends-stopped-when-nothing-is-worth-it
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup (world dirt-down))
               r (await (tu/child-outcome eng 'jobs.items.pick-up-loose {} 20))]
-          (is (= :not-done r) "declined: no result")
+          (is (= {:status :stopped :reason :nothing-worth-it :collected 0} (dissoc r :text)))
           (is (= 0 (carried p "dirt"))))))))
 
 (deftest a-declined-run-leaves-what-it-saw-so-a-disagreeing-trigger-cannot-repeat
@@ -180,14 +180,18 @@
           (dotimes [_ 4] (await (core/tick! eng)))
           (is (= [12] (into [] (mapcat (comp :ids :data)) (mem/entries (mem/view (:store eng)) loose/left-kind)))))))))
 
-(deftest a-listed-job-with-nothing-worth-it-says-why-it-waits
+(deftest a-held-job-with-nothing-worth-it-ends-and-frees-the-queue
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (setup (world dirt-down))]
-          (core/submit! eng '(jobs.items.pick-up-loose) {})
-          (dotimes [_ 3] (await (core/tick! eng)))
-          (is (= [:nothing-worth-it] (mapv :reason (filterv #(= :waiting (:kind %)) @seen)))))))))
+        (let [{:keys [eng seen]} (setup (world dirt-down))
+              held (core/submit! eng '(jobs.items.pick-up-loose) {:hold? true})
+              behind (core/submit! eng '(jobs.items.pick-up-loose) {})]
+          (dotimes [_ 6] (await (core/tick! eng)))
+          (is (empty? (:list (core/state eng))) "both ended; the held one did not block the one behind it")
+          (is (= [[held :nothing-worth-it] [behind :nothing-worth-it]]
+                 (mapv (juxt :job :reason) (filterv #(= :stopped (:kind %)) @seen))))
+          (is (empty? (filterv #(= :waiting (:kind %)) @seen))))))))
 
 (deftest register-args-cut-the-running-job-at-most-once
   (async done
