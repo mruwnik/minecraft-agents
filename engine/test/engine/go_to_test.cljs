@@ -28,15 +28,17 @@
 (def start {:x 0 :y 64 :z 0})
 
 (defn setup
-  "A world key :light [sky block] makes the body see through perception, in that light everywhere."
+  "A world key :light [sky block] makes the body see through perception, in that light everywhere; :jitter (0.5) fixes
+  where each pass's rays fall in their grid cells."
   ([world] (setup world nil))
   ([world shared]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        raw (tu/fake (merge {:self {:pos start}} (dissoc world :light)))
+        raw (tu/fake (merge {:self {:pos start}} (dissoc world :light :jitter)))
         _ (when-let [l (:light world)] (swap! (fake/state raw) assoc :light-default l))
         p (if (:light world)
-            (perception/wrap raw (perception/create (fake-raw/create raw) {:radius 16 :ray-deg 2 :now #(deref clock)}))
+            (perception/wrap raw (perception/create (fake-raw/create raw) {:radius 16 :ray-deg 2 :now #(deref clock)
+                                                                      :rand (constantly (:jitter world 0.5))}))
             raw)
         eng (core/create (cond-> {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                                   :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}

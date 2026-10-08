@@ -376,26 +376,21 @@
             [0 0]
             (mapcat #(es6-iterator-seq (.values ^js %)) (es6-iterator-seq (.values (.-stores st)))))))
 
-(defn fixed-jitter [f]
-  (let [orig js/Math.random]
-    (set! js/Math.random (fn [] 0.5))
-    (try (f) (finally (set! js/Math.random orig)))))
-
 (def pinned-world
   (merge (tu/box -12 58 -12 12 58 12 "stone")
          (wall 7 9 ["0,65,7" "1,65,7" "0,66,7"] {"0,65,9" "diamond_ore" "3,60,5" "gold_block"})
          {"-4,65,3" "glass" "5,64,4" "dirt" "-6,66,-2" "stone"}))
 
 (deftest pass-seen-set-is-pinned-lit-world
-  (let [{:keys [per]} (rig pinned-world)]
-    (fixed-jitter #(perception/pass! per))
+  (let [{:keys [per]} (rig pinned-world {:rand (constantly 0.5)})]
+    (perception/pass! per)
     (is (= [674 565560582] (memory-digest per)))))
 
 (deftest pass-seen-set-is-pinned-dark-world-turned
-  (let [{:keys [p per]} (rig pinned-world)]
+  (let [{:keys [p per]} (rig pinned-world {:rand (constantly 0.5)})]
     (light! p {:light-default [0 0]})
     (turn! p 90)
-    (fixed-jitter #(perception/pass! per))
+    (perception/pass! per)
     (is (= [109 43201189] (memory-digest per)))))
 
 ;; ---- a still body in an unchanged world looks again only every :still-ms
@@ -441,3 +436,10 @@
     (perception/step! per)
     (while (.-pass ^js (:st per)) (perception/step! per))
     (is (= 3 (:passes (perception/stats per))))))
+
+(deftest a-pass-jitters-its-rays-by-the-rand-opt
+  (let [calls (atom 0)
+        {:keys [per]} (rig {} {:rand #(do (swap! calls inc) 0.5)})]
+    (perception/pass! per)
+    (perception/pass! per)
+    (is (= 4 @calls))))

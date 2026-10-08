@@ -156,7 +156,7 @@
   (when (sight-of per st)
     (set! (.-visible st) (table-now raw (:seeing-min opts)))
     (set! (.-lastStart st) #js {:at now :eye eye :epoch (epoch-of raw) :darken (darken-now raw) :near (near-of per)})
-    (set! (.-pass st) #js {:next 0 :jx (js/Math.random) :jy (js/Math.random)})))
+    (set! (.-pass st) #js {:next 0 :jx ((:rand opts)) :jy ((:rand opts))})))
 
 (defn cast-slice!
   "Casts rays [from, to) of the pass from the eye's current place and look."

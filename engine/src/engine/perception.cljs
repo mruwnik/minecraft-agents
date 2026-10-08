@@ -112,9 +112,10 @@
 ;; ---- create
 
 (defn create
-  "A perception over a rawWorld reader. opts override `(defaults)` (plus :now, a clock in ms)."
+  "A perception over a rawWorld reader. opts override `(defaults)` (plus :now, a clock in ms, and :rand, the random
+  source in [0, 1) that jitters each pass's rays within their grid cells)."
   [raw opts]
-  (let [o (merge (defaults) {:now #(js/Date.now)} opts)
+  (let [o (merge (defaults) {:now #(js/Date.now) :rand #(js/Math.random)} opts)
         g (rays/grid o)]
     {:raw raw
      :opts o

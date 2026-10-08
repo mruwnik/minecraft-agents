@@ -1,15 +1,9 @@
 (ns engine.go-to-air-test
   "go-to from under water to a goal with its head in air: the planner counts only air the body has seen (airSeen), so an
   unseen goal head would refuse the way for :air."
-  (:require [cljs.test :refer [deftest is async use-fixtures]]
+  (:require [cljs.test :refer [deftest is async]]
             [engine.go-to-test :as gt]
             [engine.test-util :as tu :refer [box]]))
-
-;; Sight jitters each pass's rays within their grid cells (Math.random); a pocket cell seen edge-on is hit by some
-;; jitters only, so the rays go through the cell centres here.
-(def random js/Math.random)
-
-(use-fixtures :each {:before #(set! js/Math.random (constantly 0.5)) :after #(set! js/Math.random random)})
 
 ;; go-to-air-budget drowning-body-swims-to-seen-air: a 2 high water tunnel (feet 64, head 65) under a stone roof, an air
 ;; pocket in the roof (x 11..13, y 66) 6 cells east of the body; oxygen 4 (12.4 s of air used). Looking east the body sees
