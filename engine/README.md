@@ -371,7 +371,7 @@ Built-in triggers, in the order of `triggers/defaults.edn` (the default register
 | `:night` | night, awake, and a bed to use or carried, someone asleep, or unroofed and not in a closed room (a dug-in or shut-in body is safe: the queue runs); by day shut in its shelter or a bed it put down outside its zone still stands | `survival.night` | 10 s |
 | `:door-left` | a door a walk opened and meant to shut was last seen open 10 s after (never read through a wall) | `maintenance.shut-doors` | 5 s |
 | `:died` | a `:died` under the despawn window (6000 game ticks) old with a newer `:respawned` and no `:recovered` | `recover-drops` | 30 s |
-| `:inventory-nearly-full` | at most `:free` 2 of 36 main and hotbar slots empty | `storage.make-room` | 120 s |
+| `:inventory-nearly-full` | at most `:free` 2 of 36 main and hotbar slots empty, not within `:rest-s` 120 of a make-room toss | `storage.make-room` | 120 s |
 | `:scaffold-left` | the scaffold ledger holds blocks whose job is gone | `access.cleanup` | stop |
 | `:tidy-pending` | body safe and on the ground, a `:tidy` entry pending; a cell a run tried (the entry's `:tried` stamp) waits 2 min or until the body moves 8 blocks; entries over `range` (48) blocks from the body wait until it comes near | `survival.restore-broken` | 10 s |
 | `:pen-gate` | a planned fence gate within 8 was last seen open, body more than 2 away; no `:opened`/`:gate-held`/`:gate-gave-up` entry for it | `animals.shut-gate` (waits `:open-s`, 4 s, before shutting; a gate it left for an animal or an interrupted walk is paused 30 s) | 5 s |
