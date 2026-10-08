@@ -39,6 +39,16 @@
         (let [out (await (go-east! (/ js/Math.PI -2) 0 {:air-looks 0}))]
           (is (= :air (:why out)) (str "result " out)))))))
 
+(deftest a-body-too-low-on-air-gives-up_without_looking_again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out]} (await (gt/go! {:self {:pos [5.5 64 8.5] :inWater true :oxygen 2 :yaw (/ js/Math.PI -2)} :blocks tunnel :light [15 15]
+                                            :jitter 0}
+                                           {:pos [12 65 8] :range 1 :escalate false}))
+              out @out]
+          (is (= :air (:why out)) (str "result " out)))))))
+
 (deftest a-drowning-body-facing-away-looks-at-the-goal-and-swims-to-it
   (async done
     (tu/run-async done
