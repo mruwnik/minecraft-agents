@@ -41,6 +41,7 @@
    :centre {:doc "nil, or {:x :z}: the bound is :radius blocks (horizontal) around it" :spec (a/map-with {:x number? :z number?}) :default nil}
    :radius {:doc "animals within this many blocks of :centre, or of the body when there is no :centre, are the herd" :spec (a/num-in 0 nil) :default 16}
    :box {:doc "nil, or {:min {:x :y :z} :max {:x :y :z}}: inclusive bound that replaces :centre and :radius" :spec a/box? :default nil}
+   :color {:doc "sheep only: kill only sheep of this wool colour (e.g. \"white\"); nil: any. :keep still counts every adult" :spec a/name? :default nil}
    :count {:doc "most animals to kill in one run; nil: no cap" :spec (a/int-in 1 nil) :default nil}
    :collect-radius {:doc "how far around to collect drops after a kill" :spec (a/num-in 0 nil) :default 8}
    :drops {:doc "item names to collect after a kill; nil: the kind's entry in the drops table, else every item" :spec (a/coll-of a/item?) :default nil}
@@ -92,8 +93,9 @@
   "The adults in the bound not skipped: reachable-looking ones first, then nearest."
   [c adults]
   (let [skipped (set (:skipped (ctx/mem c)))
+        color (:color (:args c))
         here (u/self-pos c)]
-    (->> (animals/allowed c :cull.declined "cull" :harvest adults)
+    (->> (animals/allowed c :cull.declined "cull" :harvest (cond->> adults color (filter #(= color (.-color %)))))
          (remove #(contains? skipped (.-id %)))
          (sort-by (juxt #(if (false? (.-hittable %)) 1 0)
                         #(u/dist here (u/pos-of (.-pos %))))))))

@@ -2,6 +2,7 @@
   (:require [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.lib.animals :as animals]
             [jobs.lib.blocks :as b]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.look :as look]
@@ -60,8 +61,10 @@
   {::max-inspections {:default 4 :doc "Looks at a place before the search for it gives up." :spec (a/int-in 0 nil)}
    ::craft-radius {:default 32 :doc "Blocks within which a crafting table is looked for." :spec (a/int-in 0 nil)}
    ::max-fruitless {:default 3 :doc "Rounds without progress before the job gives up." :spec (a/int-in 0 nil)}
+   ::sheep-radius {:default 24 :doc "Blocks within which sheep are looked for when wool is gathered." :spec (a/num-in 0 nil)}
    ::explore {:default {:max-distance 64 :max-legs 12 :timeout-s 300} :doc "jobs.explore.search options of a search for a raw need (:explore true)." :spec map?}})
 (defn max-inspections [] (settings/get settings ::max-inspections))
+(defn sheep-radius [] (settings/get settings ::sheep-radius))
 
 (defn names-of [{:keys [item any-of]}]
   (vec (if item [item] any-of)))
@@ -137,26 +140,56 @@
   "The seen blocks digging which by hand gives dirt (grass drops it)."
   #{"dirt" "grass_block"})
 
+(defn wool? [name] (clojure.string/ends-with? name "_wool"))
+
+(defn wool-color [name] (subs name 0 (- (count name) (count "_wool"))))
+
+(defn sheep-in-range
+  "The adult sheep within the sheep radius, as JS entities."
+  [c]
+  (remove #(true? (.-baby %)) (animals/herd (:primitives c) "sheep" (sheep-radius))))
+
+(defn pick-plan
+  "Of the gather plans (one per wanted name) the one that gathers the least wool, so the colour the body carries
+  most of; a plan whose sheep are not in range comes after one whose are. {:wool-fallback {:wanted :taking}} on
+  the plan when the colour the body carries most of has no sheep in range."
+  [c plans]
+  (let [wool-of (fn [pl] (into {} (filter (comp wool? key)) (:gather pl)))]
+    (if-not (some (comp seq wool-of) plans)
+      (first plans)
+      (let [sorted (sort-by #(reduce + 0 (vals (wool-of %))) plans)
+            colors (set (keep #(.-color %) (sheep-in-range c)))
+            colors-of (fn [pl] (map wool-color (keys (wool-of pl))))
+            ok? (fn [pl] (every? colors (colors-of pl)))
+            chosen (or (first (filter ok? sorted)) (first sorted))
+            wanted (first sorted)]
+        (cond-> chosen
+          (and (not= chosen wanted) (seq (wool-of chosen)) (seq (wool-of wanted)))
+          (assoc :wool-fallback {:wanted (first (colors-of wanted)) :taking (first (colors-of chosen))}))))))
+
 (defn gather-plan
   "The craft chain for the first of names that has one once the raw items it lacks are gathered, with :gather
-  {name n} when it lacks any, else nil. A sapling has no recipe: its plan is just :gather {name n}, when its leaves are seen (or its child is running)."
+  {name n} when it lacks any, else nil. A sapling has no recipe: its plan is just :gather {name n}, when its leaves are seen (or its child is running).
+  Of several names that lack wool, the one gathering the least (pick-plan)."
   [c names n]
   (let [p (:primitives c)
         have (carried-counts p)
         version (game/version-of p)
         seen? #(seq (look/seen-blocks p {:names (vec (material-blocks version %)) :radius 16 :max 1}))
         seen (set (filter seen? (recipes/stone-materials version)))
-        materials (if (seq seen) seen (recipes/stone-materials version))]
-    (some (fn [name]
-            (if-let [seen-of-name (cond (= "dirt" name) dirt-blocks
-                                        (leaves-of name) #{(leaves-of name)})]
-              (when (or (= name (get-in (ctx/mem c) [:gather :item]))
-                        (seq (look/seen-blocks p {:names (vec seen-of-name) :radius 16 :max 1})))
-                {:steps [] :gather {name n} :item name})
-              (when-let [pl (recipes/plan version have name n {:table? (boolean (or (:table (ctx/mem c)) (craft/nearest-table p (craft-radius))))
-                                                           :gather? true :materials materials})]
-                (assoc pl :item name))))
-          names)))
+        materials (if (seq seen) seen (recipes/stone-materials version))
+        plan-of (fn [name]
+                  (if-let [seen-of-name (cond (= "dirt" name) dirt-blocks
+                                              (leaves-of name) #{(leaves-of name)})]
+                    (when (or (= name (get-in (ctx/mem c) [:gather :item]))
+                              (seq (look/seen-blocks p {:names (vec seen-of-name) :radius 16 :max 1})))
+                      {:steps [] :gather {name n} :item name})
+                    (when-let [pl (recipes/plan version have name n {:table? (boolean (or (:table (ctx/mem c)) (craft/nearest-table p (craft-radius))))
+                                                                 :gather? true :materials materials})]
+                      (assoc pl :item name))))]
+    (if (= 1 (count names))
+      (plan-of (first names))
+      (pick-plan c (keep plan-of names)))))
 
 (defn log? [name] (clojure.string/ends-with? name "_log"))
 
@@ -178,6 +211,9 @@
           (for [[sapling n] gather :when (leaves-of sapling)]
             {:key sapling :count n :job 'jobs.gather.get-seeds :seen #{(leaves-of sapling)} :max-runs 1
              :args {:item sapling :count n :sources [(leaves-of sapling)] :dry-digs sapling-leaf-limit}})
+          (for [[k n] gather :when (wool? k)]
+            {:key k :count n :job 'jobs.combat.hunt :sheep (wool-color k)
+             :args {:mob "sheep" :color (wool-color k) :count n :radius (sheep-radius)}})
           (when (pos? logs) [{:key "log" :count logs :job 'jobs.forestry.harvest-wood :seen log? :args {:fetch #{:item}}}])
           (for [[k n] gather :when (material-blocks version k)]
             (let [blocks (material-blocks version k)]
@@ -199,16 +235,23 @@
   (reduce + 0 (for [[k v] (carried-counts p) :when (if (= "log" key) (log? k) (= key k))] v)))
 
 (defn seen-of
-  "The nearest seen block of a need (within 16), or nil."
+  "The nearest seen block of a need (within 16), or for a wool need a sheep of its colour in range, else nil."
   [c need]
-  (first (look/seen-blocks (:primitives c) {:match #((:seen need) %) :radius 16 :max 1})))
+  (if-let [color (:sheep need)]
+    (first (filter #(= color (.-color %)) (sheep-in-range c)))
+    (first (look/seen-blocks (:primitives c) {:match #((:seen need) %) :radius 16 :max 1}))))
 
 (defn with-block
-  "The need with :block of its args the kind of block seen when it could be either (a coal ore, dirt or grass)."
+  "The need with :block of its args the kind of block seen when it could be either (a coal ore, dirt or grass); a wool need shears when shears are carried, else hunts."
   [c need]
-  (if-let [name (when (#{"coal" "dirt"} (:key need)) (:name (seen-of c need)))]
-    (assoc-in need [:args :block] name)
-    need))
+  (cond
+    (and (:sheep need) (pos? (storage/carried (u/inventory (:primitives c)) "shears")))
+    (assoc need :job 'jobs.animals.shear :args {:color (:sheep need) :radius (sheep-radius)})
+
+    :else
+    (if-let [name (when (#{"coal" "dirt"} (:key need)) (:name (seen-of c need)))]
+      (assoc-in need [:args :block] name)
+      need)))
 
 (defn with-count
   "The need with the logs to carry in all (harvest-wood's :count) in its args: those carried and those it lacks."
@@ -247,7 +290,7 @@
   "Whether :explore is on and a raw need of the chain is not seen: the search child solves it."
   [c names n]
   (boolean (and (explore-opts c)
-                (some #(not (seen-of c %))
+                (some #(and (not (:sheep %)) (not (seen-of c %)))
                       (some-> (gather-plan c names n) :gather (gather-needs (game/version-of (:primitives c))))))))
 
 (defn unseen-why
@@ -257,8 +300,8 @@
                     (remove #(seen-of c %)))]
     (str "nothing seen to gather what a craft lacks"
          (when (seq unseen)
-           (str ": " (clojure.string/join ", " (for [{:keys [key seen]} unseen]
-                                                  (if (set? seen) (str key " (from " (clojure.string/join "/" (sort seen)) ")") key))))))))
+           (str ": " (clojure.string/join ", " (for [{:keys [key seen sheep]} unseen]
+                                                  (if sheep (str key " (from " sheep " sheep within " (sheep-radius) " blocks)") (if (set? seen) (str key " (from " (clojure.string/join "/" (sort seen)) ")") key)))))))))
 
 (defn pickaxe-why
   "For a stone material wanted with no pickaxe carried: that it needs one, and what crafting the cheapest lacks; else nil."
@@ -365,9 +408,11 @@
       (tried! c :craft :no-plan)
 
       (= :place (:op step))
-      (let [spot (or (:spot mem) (await (craft/find-spot! c)))]
-        (if-not spot
-          (fruitless! c :no-table-spot)
+      (let [spot (or (:spot mem) (await (craft/spot! c)))]
+        (cond
+          (= :continue spot) :continue
+          (not spot) (fruitless! c :no-table-spot)
+          :else
           (do (ctx/update-mem! c assoc-in [:craft :step] step)
               (ctx/update-mem! c assoc-in [:craft :spot] spot)
               (let [r (await (ctx/call-child c :place 'jobs.blocks.place {:item (:item step) :pos spot :fetch false}))]
@@ -467,12 +512,13 @@
   "One round of the gather source: the child for the first raw item the chain lacks, until it ends."
   [c names have target]
   (let [p (:primitives c)
-        need (some->> (some-> (gather-plan c names (- target have)) :gather (gather-need (game/version-of p))) (with-block c) (with-count p))]
+        pl (gather-plan c names (- target have))
+        need (some->> (some-> pl :gather (gather-need (game/version-of p))) (with-block c) (with-count p))]
     (cond
       (nil? need) (tried! c :gather :no-plan)
       (and (not (get-in (ctx/mem c) [:gather :before])) (pickaxe-first? c names need) (or (explore-opts c) (seen-of c need)))
       (await (pickaxe-step! c names))
-      (and (not (get-in (ctx/mem c) [:gather :before])) (explore-opts c) (not (seen-of c need))
+      (and (not (get-in (ctx/mem c) [:gather :before])) (explore-opts c) (not (:sheep need)) (not (seen-of c need))
            (< (get-in (ctx/mem c) [:explored (:key need)] 0) (max-fruitless)))
       (await (explore-step! c need))
       (and (not (get-in (ctx/mem c) [:gather :before]))
@@ -483,7 +529,11 @@
       :else
       (do (when-not (get-in (ctx/mem c) [:gather :before])
             (ctx/update-mem! c assoc-in [:gather :before] (gather-carried p need))
-            (ctx/update-mem! c assoc-in [:gather :item] (:key need)))
+            (ctx/update-mem! c assoc-in [:gather :item] (:key need))
+            (when-let [{:keys [wanted taking]} (:wool-fallback pl)]
+              (ctx/emit! c :obtain.wool-colour :info
+                         {:message (str "no " wanted " sheep within " (sheep-radius) " blocks; taking " taking " wool instead")
+                          :wanted wanted :taking taking})))
           (let [r (await (ctx/call-child c (gather-slot need) (:job need) (:args need)))]
             (if (= :continue r)
               :continue

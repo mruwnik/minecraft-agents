@@ -64,3 +64,6 @@
 
 (deftest lacking-names-the-material-a-player-looks-for
   (is (re-find #"needs 3 cobblestone, have 0" (recipes/lacking game/default-version {} "stone_pickaxe" 1))))
+
+(deftest wool-is-gathered-for-a-bed
+  (is (= {"white_wool" 1} (:gather (plan {"white_wool" 2 "oak_planks" 3 "crafting_table" 1} "white_bed" 1 {:gather? true :table? true})))))

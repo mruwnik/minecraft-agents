@@ -245,3 +245,14 @@
               (swap! (:clock s) + 700)
               (await (core/tick! eng)))
             (is (= acted (vec (distinct (attacked s)))) author)))))))
+
+(defn sheep [id x color] (animal id "sheep" x 0 {:color color :drops [{:name (str color "_wool") :count 1}]}))
+
+(deftest a-colour-cull-kills-only-sheep-of-that-colour
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:mob "sheep" :color "white" :keep 0 :count 1}
+                                 {:inventory h/sword :entities [(sheep 1 3 "brown") (sheep 2 6 "white")]} 40))]
+          (is (= #{2} (set (attacked s))) "the nearer brown sheep is left alone")
+          (is (= #{1} (world-ids s))))))))

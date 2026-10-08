@@ -16,9 +16,9 @@
 (def table-item "crafting_table")
 
 (defn gatherable?
-  "Items with no recipe that the body gets by mining or felling: logs, coal (and stone-materials)."
+  "Items with no recipe that the body gets by mining, felling or from sheep: logs, coal, wool (and stone-materials)."
   [item]
-  (boolean (or (= "coal" item) (clojure.string/ends-with? item "_log"))))
+  (boolean (or (= "coal" item) (clojure.string/ends-with? item "_log") (clojure.string/ends-with? item "_wool"))))
 
 (defn id-of [x]
   (cond (number? x) x (and (some? x) (number? (.-id x))) (.-id x)))
