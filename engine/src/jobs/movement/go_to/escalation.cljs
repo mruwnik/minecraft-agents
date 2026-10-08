@@ -10,7 +10,8 @@
             [jobs.lib.step-off :as step-off]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.util :as u]
-            [jobs.movement.go-to.result :as end]))
+            [jobs.movement.go-to.result :as end]
+            [jobs.movement.go-to.torch :as torch]))
 
 (def max-escalations 3)
 
@@ -210,7 +211,8 @@
         [job args] (escalation-job e (hole-tag c) (boolean (:ignore-zones? (:args c))))]
     (if-let [wait (b/child-wait c :escalation job args)]
       (escalation-failed! c pos (merge {:step step} wait))
-      (let [r (await (ctx/call-child c :escalation job args))
+      (let [_ (await (torch/return-torch! c))
+            r (await (ctx/call-child c :escalation job args))
             res (ctx/child-result c :escalation)]
         (note-holes! c (concat (:planned (ctx/mem c)) (when (not= :continue r) (:dug res))))
         (cond
@@ -279,7 +281,8 @@
           (skip! why)
           (if-let [wait (b/child-wait c :restore 'jobs.blocks.place args)]
             (skip! (:reason wait))
-            (let [r (await (ctx/call-child c :restore 'jobs.blocks.place args))
+            (let [_ (await (torch/return-torch! c))
+                  r (await (ctx/call-child c :restore 'jobs.blocks.place args))
                   res (ctx/child-result c :restore)]
               (cond
                 (= :continue r) :continue

@@ -19,7 +19,8 @@
             [jobs.lib.world :as known]
             [jobs.movement.go-to.escalation :as esc]
             [jobs.movement.go-to.health :as health]
-            [jobs.movement.go-to.result :as end]))
+            [jobs.movement.go-to.result :as end]
+            [jobs.movement.go-to.torch :as torch]))
 
 (def doc
   "Walk to :pos ([x y z] or {:x :y :z}, fractions floored to the cell) until the body's cell is within :range cells of
@@ -43,8 +44,8 @@
     only where it can see it from the takeoff (a drop deeper than it sees in the dark is refused). A map overrides the
     prices of jobs.lib.cost/unknown-prices. When a dark drop was the better way it gives up :why :unseen-floor-dark; in the
     dark with a torch carried and the off hand empty it first holds the torch in the off hand (info go-to.off-hand-torch,
-    once a call: it sees deeper) and plans again; when the call ends it puts the torch back into the inventory (full: it
-    stays, info go-to.off-hand-kept). Nothing is placed.
+    once a call: it sees deeper) and plans again; it puts the torch back into the inventory before an escalation child runs and when the call ends (full: it
+    stays, info go-to.off-hand-kept); one a cut call left in the hand goes back at the next call's start. Nothing is placed.
   - :dark false plans dark cells like lit ones (default: a dark cell costs twice a lit one, so a lit route up to about 2x
     longer is taken: a cell seen and dark, or one never seen at night; look/dark-fn).
   - :goal-danger :end gives up at once (:why :goal-dangerous, :mob, :mob-pos, :mob-distance) when the goal lies within the full-cost radius of a known mob the body would flee; :wait (default) walks on, an info goal-in-danger says so.
@@ -230,43 +231,6 @@
     {:status :no-path :reason :unseen-floor-dark :dark-best (:dark-best result)}
     result))
 
-(defn torch-aid?
-  "Whether a masked round (walked) should hold a carried torch in the off hand to see deeper: its plan refused a dark floor or
-  checks unseen ones, the body's feet are dark, it carries a torch, the off hand is empty, and this call has not tried."
-  [c walked]
-  (let [p (:primitives c)
-        {:keys [x y z]} (wworld/body-cell c)
-        lit? (look/see-lit-fn p)]
-    (boolean (and (:unknown c) (or (:dark-best walked) (:unseen-floors walked))
-                  (not (:off-hand-tried (ctx/mem c)))
-                  lit? (zero? (lit? x y z))
-                  (some #(= "torch" (:name %)) (u/inventory p))
-                  (nil? (some-> (.-equipment (.self p)) .-offHand))))))
-
-(defn ^:async hold-torch!
-  "Hold a carried torch in the off hand (once a call; info go-to.off-hand-torch): true when it is held there now."
-  [c]
-  (ctx/update-mem! c assoc :off-hand-tried true)
-  (let [r (await (ctx/act c :equip #js {:item "torch" :dest "off-hand"}))
-        held? (= "torch" (some-> (.-equipment (.self (:primitives c))) .-offHand .-name))]
-    (when held?
-      (ctx/update-mem! c assoc :off-hand-held true)
-      (ctx/emit! c :go-to.off-hand-torch :info {:text "holding a torch in the off hand to see the floors ahead in the dark"}))
-    (when-not held?
-      (ctx/emit! c :go-to.off-hand-torch :info {:held false :equip (some-> r .-status) :text "could not hold a torch in the off hand"}))
-    held?))
-
-(defn ^:async return-torch!
-  "The call ends: a torch held in the off hand by hold-torch! goes back into the inventory; with no room it stays (info
-  go-to.off-hand-kept)."
-  [c]
-  (when (:off-hand-held (ctx/mem c))
-    (ctx/update-mem! c dissoc :off-hand-held)
-    (when (= "torch" (some-> (.-equipment (.self (:primitives c))) .-offHand .-name))
-      (let [r (await (ctx/act c :unequip #js {:dest "off-hand"}))]
-        (when-not (= "ok" (some-> r .-status))
-          (ctx/emit! c :go-to.off-hand-kept :info {:status (some-> r .-status) :text "the torch stays in the off hand: no room to put it back"}))))))
-
 (defn ^:async walk! [c0 pos range doors]
   (let [c (cond-> c0 (:over-budget (ctx/mem c0)) (assoc :over-budget true))
         from (u/self-pos c)
@@ -296,7 +260,7 @@
                                                                                           :costs (:costs (:args c))
                                                                                           :unknown (:unknown c)
                                                                                           :progress (empty? (:frontier-best (ctx/mem c)))}))
-            aided? (when (and (not= "arrived" status) (torch-aid? c walked)) (await (hold-torch! c)))
+            aided? (when (and (not= "arrived" status) (torch/torch-aid? c walked)) (await (torch/hold-torch! c)))
             result (known-frontier-result walked)
             left (u/dist to pos)
             best (:best (ctx/mem c) d)
@@ -494,6 +458,7 @@
     (if refusal
       (end/refuse! c refusal)
       (let [state (note-restart! c pos)]
+        (await (torch/return-torch! c))
         (start-attempt! c pos)
         (if (cut-loop? state)
           (do (ctx/update-mem! c #(-> % (dissoc :open :goal :closest :ref :last-dist) (assoc :cuts 0)))
@@ -508,5 +473,5 @@
   "attempt, then (unless it waits on a child) the off-hand torch goes back whatever the outcome. A cut ends the call without it."
   [c]
   (let [r (await (attempt c))]
-    (when-not (= :continue r) (await (return-torch! c)))
+    (when-not (= :continue r) (await (torch/return-torch! c)))
     r))

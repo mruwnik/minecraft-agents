@@ -7,6 +7,8 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.fake :as fake]
+            [engine.memory :as mem]
+            [jobs.lib.util :as u]
             [engine.fake.raw-world :as fake-raw]
             [engine.perception :as perception]
             [engine.registry :as registry]
@@ -18,6 +20,7 @@
             [jobs.lib.step-off :as step-off]
             [jobs.lib.vehicle :as vehicle]
             [jobs.movement.go-to.escalation :as esc]
+            [jobs.movement.go-to.torch :as torch]
             [jobs.survival.retreat :as retreat]
             [jobs.survival.retreat-walk :as walk]))
 
@@ -173,7 +176,7 @@
 (defn ^:async run-go-to
   "Run go-to with args as a child over the sensed-only world spec; {:out :seen :p}. setup, when given, is called with the
   sensed-only {:p :w} first."
-  [spec args & [setup]]
+  [spec args & [setup before]]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         {:keys [w p] :as world} (sensed-only spec)
@@ -187,6 +190,7 @@
         eng (core/create {:primitives w :jobs (assoc registry/jobs 'recording-parent parent) :triggers {}
                           :dir (tu/tmp-dir) :now #(deref clock) :backoff false
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+    (when before (before eng))
     (core/submit! eng '(recording-parent) {})
     (loop [i 0]
       (when (and (< i 1000) (seq (:list (core/state eng))))
@@ -307,8 +311,14 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out seen p]} (await (run-go-to (assoc in-tunnel :inventory [{:name "torch" :count 4}])
-                                                     {:pos [9 61 0] :range 1 :escalate false :unknown true} dark-and-looked))]
+        (let [held (atom false)
+              watch! (fn [{:keys [p] :as world}]
+                       (dark-and-looked world)
+                       (add-watch (fake/state p) :off-hand
+                                  (fn [_ _ _ w] (when (= "torch" (get-in w [:equipment "offHand" :name])) (reset! held true)))))
+              {:keys [out seen]} (await (run-go-to (assoc in-tunnel :inventory [{:name "torch" :count 4}])
+                                                   {:pos [9 61 0] :range 1 :escalate false :unknown true} watch!))]
+          (is (true? @held) "the off hand held the torch during the walk")
           (is (= 1 (count (filter #(= :go-to.off-hand-torch (:kind %)) seen))) "once per call")
           (is (not= :unseen-floor-dark (:why out)) (str "near 7 sees the drop: " (pr-str out))))))))
 
@@ -333,3 +343,46 @@
           (is (empty? (filter #(= :go-to.off-hand-torch (:kind %)) seen)))
           (is (= "shield" (get-in @(fake/state p) [:equipment "offHand" :name])))
           (is (= :unseen-floor-dark (:why out)) (pr-str out)))))))
+
+(deftest go-to-with-unknown-returns-a-torch-a-cut-call-left-in-the-off-hand
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [seen p]} (await (run-go-to (assoc in-tunnel :equipment {"offHand" {:name "torch" :count 4}})
+                                                 {:pos [9 61 0] :range 1 :escalate false :unknown true} dark-and-looked
+                                                 #(mem/write! (:store %) torch/kind {:held true} {:cap 1 :ttl :forever})))
+              w @(fake/state p)]
+          (is (nil? (get-in w [:equipment "offHand"])) "off hand empty")
+          (is (= 4 (reduce + (map :count (filter #(= "torch" (:name %)) (:inventory w))))) (pr-str (:inventory w)))
+          (is (= 1 (count (filter #(= :go-to.off-hand-torch (:kind %)) seen))) "returned at the start, so held again for the dark walk")
+          (is (empty? (filter #(= :go-to.off-hand-kept (:kind %)) seen))))))))
+
+(deftest go-to-with-unknown-leaves-a-torch-it-never-held
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (run-go-to (assoc in-tunnel :equipment {"offHand" {:name "torch" :count 4}})
+                                            {:pos [9 61 0] :range 1 :escalate false :unknown true} dark-and-looked))]
+          (is (= "torch" (get-in @(fake/state p) [:equipment "offHand" :name]))))))))
+
+(deftest go-to-escalation-child-sees-the-torches-in-the-inventory
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [torches (atom :none)
+              child {:check (constantly true)
+                     :round (fn [c] (reset! torches (reduce + (map :count (filter #(= "torch" (:name %)) (u/inventory (:primitives c))))))
+                              :done)}
+              parent {:check (constantly true)
+                      :round (fn ^:async r [c]
+                               (let [c (assoc c :unknown true)]
+                                 (await (torch/hold-torch! c))
+                                 (ctx/update-mem! c assoc :escalation {:step :clear-path :heading [1 0]})
+                                 (await (esc/escalation-round! c {:x 5 :y 64 :z 0}))
+                                 :done))}
+              w (sensed-only {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks ground :inventory [{:name "torch" :count 4}]})
+              eng (core/create {:primitives (:w w) :jobs (assoc registry/jobs 'jobs.access.clear-path child 'torch-parent parent)
+                                :triggers {} :dir (tu/tmp-dir) :now (constantly 1000000) :backoff false})]
+          (core/submit! eng '(torch-parent) {})
+          (loop [i 0] (when (and (< i 20) (seq (:list (core/state eng)))) (await (core/tick! eng)) (recur (inc i))))
+          (is (= 4 @torches) "all four torches are in the inventory while the child runs"))))))
