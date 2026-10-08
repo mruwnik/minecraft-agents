@@ -1221,7 +1221,7 @@
                          (ctx/result! c {:status :stopped :reason :no-source}))
                        :done)
               :args {:block {:default nil} :item {:default nil} :kind {:default nil} :how {:default nil} :depth {:default nil}
-                     :minutes {:default nil} :fail-minutes {:default nil} :chain {:default []}}}
+                     :minutes {:default nil} :fail-minutes {:default nil} :chain {:default []} :explore {:default true}}}
         parent {:check (constantly true)
                 :round (fn ^:async mining-parent [c]
                          (let [r (await (ctx/call-child c :kid 'jobs.gather.mine args))]

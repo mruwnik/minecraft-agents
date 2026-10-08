@@ -406,7 +406,7 @@
                              (ctx/result! c {:status :done :tool "iron_pickaxe"})
                              :done)
                     :args {:block {:default nil} :item {:default nil} :kind {:default nil} :how {:default nil} :depth {:default nil}
-                           :minutes {:default nil} :fail-minutes {:default nil} :chain {:default []}}}
+                           :minutes {:default nil} :fail-minutes {:default nil} :chain {:default []} :explore {:default true}}}
               s (setup {:blocks eight-down :inventory (inventory)} {:target [6 57 0]} {:fetch true}
                        :between drop-pickaxe! :jobs {'jobs.items.get-tool stub})
               _ (reset! body (:p s))
@@ -427,7 +427,7 @@
                              (ctx/result! c {:status :done :tool "iron_pickaxe"})
                              :done)
                     :args {:block {:default nil} :item {:default nil} :kind {:default nil} :how {:default nil} :depth {:default nil}
-                           :minutes {:default nil} :fail-minutes {:default nil} :chain {:default []}}}
+                           :minutes {:default nil} :fail-minutes {:default nil} :chain {:default []} :explore {:default true}}}
               s (setup {:blocks eight-down :inventory (inventory)} {:target [6 57 0]} {}
                        :between drop-pickaxe! :jobs {'jobs.items.get-tool stub})
               _ (reset! body (:p s))
@@ -448,7 +448,7 @@
                              (ctx/result! c {:status :done :tool "iron_pickaxe"})
                              :done)
                     :args {:block {:default nil} :item {:default nil} :kind {:default nil} :how {:default nil} :depth {:default nil}
-                           :minutes {:default nil} :fail-minutes {:default nil} :chain {:default []}}}
+                           :minutes {:default nil} :fail-minutes {:default nil} :chain {:default []} :explore {:default true}}}
               s (setup {:blocks eight-down :inventory (inventory)} {:target [6 57 0]} {:fetch false}
                        :between drop-pickaxe! :jobs {'jobs.items.get-tool stub})
               _ (reset! body (:p s))

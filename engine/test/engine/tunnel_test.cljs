@@ -670,7 +670,7 @@
               (ctx/result! c {:status :stopped :reason :no-source}))
             :done)
    :args {:block {:default nil} :item {:default nil} :kind {:default nil} :how {:default nil} :depth {:default nil}
-          :minutes {:default nil} :fail-minutes {:default nil} :chain {:default []}}})
+          :minutes {:default nil} :fail-minutes {:default nil} :chain {:default []} :explore {:default true}}})
 
 (defn ^:async fetching-tunnel! [give fetch prep]
   (let [calls (atom [])

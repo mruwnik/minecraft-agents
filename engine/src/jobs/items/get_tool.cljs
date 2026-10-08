@@ -13,10 +13,11 @@
   "Get a tool: one that harvests :block (minecraft-data harvestTools), the tool :item, or a tool of :kind (\"pickaxe\",
   \"axe\", \"shovel\", \"hoe\", \"sword\": any tier; any other kind such as \"shears\" is that item). Any one carried
   is enough: done at once. Else a jobs.items.obtain child (slot :obtain) gets one of the tools, cheapest material
-  first (wooden, stone, copper, iron, diamond, netherite, golden), with :depth one less.
+  first (wooden, stone, copper, iron, diamond, netherite, golden), with :depth one less and :explore (default on: logs or
+  stone not seen are walked to and looked for, bounded by the search options).
 
   The check passes when a tool is carried, the obtain has begun, or the obtain's check passes; else it waits with the
-  obtain's reason ({:reason :no-source :any-of [..]}: nothing seen to get one from).
+  obtain's reason ({:reason :no-source :any-of [..]}: nothing seen to get one from, with :explore false).
   Ends {:status :done :tool name} ({:status :done :needed false} for a block the hand harvests) or {:status :stopped
   :reason r ...} with the obtain's reason and :tried, or :bad-args (also an unknown :block).")
 
@@ -28,7 +29,8 @@
    :depth {:doc "nested fetches left; nil: the fetch limits (jobs.lib.fetch)" :spec (a/int-in 0 nil) :default nil}
    :minutes {:doc "time budget; nil: the fetch limits" :spec (a/num-in 0 nil) :default nil}
    :fail-minutes {:doc "passed on to nested fetches; nil: the fetch limits" :spec (a/num-in 0 nil) :default nil}
-   :chain {:doc "items being fetched above this one" :spec (a/coll-of a/item?) :default []}})
+   :chain {:doc "items being fetched above this one" :spec (a/coll-of a/item?) :default []}
+   :explore {:doc "passed to the obtain: walk and look for raw material not seen (false: wait instead; a map: jobs.explore.search options)" :spec (a/or-of boolean? map?) :default true}})
 
 (def tiered #{"pickaxe" "axe" "shovel" "hoe" "sword"})
 
@@ -56,7 +58,7 @@
   (let [a (:args c)
         o (fetch/merge-limits 'jobs.items.get-tool nil (fetch/body-limits (ctx/view c)) a)]
     {:any-of names :count 1 :depth (max 0 (dec (:depth o))) :how (:how o) :minutes (:minutes o)
-     :fail-minutes (:fail-minutes o) :chain (vec (:chain a))}))
+     :fail-minutes (:fail-minutes o) :chain (vec (:chain a)) :explore (:explore a)}))
 
 (defn check [c]
   (let [p (:primitives c)

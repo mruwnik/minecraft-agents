@@ -96,7 +96,7 @@
 (deftest a-wait-maps-to-a-fetch-only-for-wanted-kinds
   (let [o (fetch/merge-limits nil nil nil nil)]
     (is (= 'jobs.items.get-tool (:job (fetch/plan-for {:reason :no-tool :needs "wooden_pickaxe" :block "stone"} o))))
-    (is (= {:block "stone"} (:args (fetch/plan-for {:reason :no-tool :needs "wooden_pickaxe" :block "stone"} o))))
+    (is (= {:block "stone" :explore false} (:args (fetch/plan-for {:reason :no-tool :needs "wooden_pickaxe" :block "stone"} o))))
     (is (= {:item "oak_planks" :count 1} (:args (fetch/plan-for {:reason :need :item "oak_planks" :pos {}} o))))
     (is (= {:any-of ["dirt" "cobblestone"] :count 1} (:args (fetch/plan-for {:reason :need :any-of ["dirt" "cobblestone"]} o))))
     (is (nil? (fetch/plan-for {:reason :no-tool :block "stone"} (assoc o :what #{:item}))))
@@ -552,7 +552,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (update (world {}) :blocks dissoc chest-at) [own-zone])
-              id (core/submit! (:eng s) (list 'jobs.items.get-tool {:block "stone"}) {})]
+              id (core/submit! (:eng s) (list 'jobs.items.get-tool {:block "stone" :explore false}) {})]
           (await (run-ticks s 5))
           (is (= :no-source (:reason (core/waiting (:eng s) id))))
           (is (empty? (inspects s))))))))
@@ -662,7 +662,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (bare [{:name "dirt" :count 5}]) [own-zone])
-              id (await (get-tool! s {:kind "pickaxe"} 6))]
+              id (await (get-tool! s {:kind "pickaxe" :explore false} 6))]
           (is (= :no-source (:reason (core/waiting (:eng s) id))))
           (is (empty? (calls s "craft"))))))))
 
@@ -671,7 +671,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (bare [{:name "wooden_pickaxe" :count 1} {:name "stick" :count 2} {:name "oak_log" :count 3}]) [own-zone])
-              id (await (get-tool! s {:item "stone_pickaxe"} 6))]
+              id (await (get-tool! s {:item "stone_pickaxe" :explore false} 6))]
           (is (= :no-source (:reason (core/waiting (:eng s) id)))))))))
 
 (deftest a-stone-pickaxe-whose-gather-finds-no-stone-ends-no-source
@@ -1085,3 +1085,89 @@
   (is (= "a tool for stone" (fetch/need-name {:block "stone"})))
   (is (= "a pickaxe" (fetch/need-name {:kind "pickaxe"})))
   (is (= "torch" (fetch/need-name {:item "torch"}))))
+
+;; ------------------------------------------------------------------ exploring for what is not seen
+
+(defn ^:async with-explore-stub
+  "Run (f s calls) with the :explore child stubbed: each call is recorded in the calls atom and ends at once with
+  result res; (on-call s) runs first (e.g. puts trees in view)."
+  [s res on-call f]
+  (let [orig ctx/call-child
+        orig-res ctx/child-result
+        seen (atom [])]
+    (set! ctx/call-child (fn [c slot job args]
+                           (if (= :explore slot)
+                             (do (swap! seen conj {:job job :args args}) (on-call s) (js/Promise.resolve :done))
+                             (orig c slot job args))))
+    (set! ctx/child-result (fn [c slot] (if (= :explore slot) res (orig-res c slot))))
+    (try
+      (await (f seen))
+      (finally (set! ctx/call-child orig) (set! ctx/child-result orig-res)))))
+
+(deftest get-tool-with-nothing-seen-explores-for-logs-instead-of-waiting
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (bare []) [own-zone])]
+          (await (with-explore-stub s {:reason :not-found :why :distance :found []} (fn [_])
+                   (fn ^:async body [seen]
+                     (let [id (await (get-tool! s {:item "stone_pickaxe"} 20))
+                           call (first @seen)]
+                       (is (= 'jobs.explore.search (:job call)))
+                       (is (some #{"oak_log"} (:target (:args call))) (pr-str call))
+                       (is (not-any? #(= :no-source (:reason %)) (events-of s :waiting)) "no wait: the explore child solves it")
+                       (is (nil? (core/waiting (:eng s) id))))))))))))
+
+(deftest get-tool-whose-explore-finds-nothing-ends-no-source-saying-so
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (bare []) [own-zone])]
+          (await (with-explore-stub s {:reason :not-found :why :distance :found []} (fn [_])
+                   (fn ^:async body [seen]
+                     (await (get-tool! s {:item "stone_pickaxe"} 30))
+                     (let [st (last (events-of s :stopped))]
+                       (is (= 1 (count @seen)) "one search per material")
+                       (is (empty? (listed s)))
+                       (is (= :no-source (:reason st)) (pr-str st))
+                       (is (re-find #"searched" (pr-str (:tried st))) (pr-str st)))))))))))
+
+(def tree-far
+  "A tree 24 blocks east of the body, past the 16 blocks within which a seen log counts."
+  (merge (into {} (for [y (range 64 68)] [(str "24," y ",2") "oak_log"]))
+         {"24,63,2" "dirt" "24,68,2" "oak_leaves" "25,67,2" "oak_leaves" "23,67,2" "oak_leaves"}))
+
+(deftest get-tool-whose-explore-finds-a-tree-fells-it-and-crafts
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (update (bare []) :blocks merge tree-far {"1,64,2" "crafting_table"}) [own-zone])
+              walk! (fn [s] (swap! (fake/state (:p s)) #(-> % (assoc-in [:self :pos] [20 64 2]) (fake/look-at {:pos [24 67 2]})))
+                      (perception/pass! (aget (:p s) "perception")))]
+          (await (with-explore-stub s {:reason :found :found [{:what "oak_log" :pos [24 64 2]}]} walk!
+                   (fn ^:async body [seen]
+                     (await (get-tool! s {:kind "pickaxe" :how #{:craft :gather}} 160))
+                     (is (= 1 (count @seen)) "no log within 16: one search")
+                     (is (empty? (listed s)))
+                     (is (= 1 (get (inv s) "wooden_pickaxe")) (pr-str (inv s) (last (events-of s :stopped))))))))))))
+
+(deftest get-tool-with-explore-off-waits-no-source
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (bare []) [own-zone])
+              id (await (get-tool! s {:item "stone_pickaxe" :explore false} 6))]
+          (is (= :no-source (:reason (core/waiting (:eng s) id)))))))))
+
+(deftest a-stone-pickaxe-with-no-pickaxe-gets-a-wooden-one-first-from-seen-logs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (-> (world {}) (update :blocks dissoc chest-at)
+                           (update :blocks merge (into {} (for [y (range 64 68)] [(str "4," y ",2") "oak_log"])) {"4,63,2" "dirt"} {"4,68,2" "oak_leaves" "5,67,2" "oak_leaves"}
+                                   (into {} (for [x [0 1] z [5 6]] [(str x ",64," z) "stone"])))
+                           (assoc-in [:blocks "1,64,2"] "crafting_table"))
+                       [own-zone])]
+          (await (get-tool! s {:item "stone_pickaxe" :explore false} 300))
+          (is (empty? (listed s)) (pr-str (last (events-of s :stopped))))
+          (is (= 1 (get (inv s) "stone_pickaxe")) (pr-str (inv s) (last (events-of s :stopped)))))))))

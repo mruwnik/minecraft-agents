@@ -4,7 +4,7 @@
 
   A job with :fetch reads its own wait reason (or the booked declined child's, jobs.lib.declined) and, when the
   reason is one a fetch job can cure, its check passes and its round runs that fetch job as the child in slot :fetch
-  (jobs.items.get-tool for :no-tool, jobs.items.obtain for :need). It does not pass :fetch to its children: their waits
+  (jobs.items.get-tool for :no-tool, :explore false: no walk off to look; jobs.items.obtain for :need). It does not pass :fetch to its children: their waits
   come up to it. A fetch that ends without the thing is remembered as :fetch/failed for :fail-minutes; meanwhile the
   job waits with its reason plus {:fetch {:failed reason ...}} and nothing is tried again.
 
@@ -103,9 +103,9 @@
   (let [{:keys [reason item any-of block needs]} w
         pl (case reason
              :no-tool (cond
-                        block {:kind :tool :job 'jobs.items.get-tool :args {:block block} :key [:tool block]}
-                        needs {:kind :tool :job 'jobs.items.get-tool :args {:item needs} :key [:tool needs]}
-                        (:kind w) {:kind :tool :job 'jobs.items.get-tool :args {:kind (:kind w)} :key [:tool (:kind w)]})
+                        block {:kind :tool :job 'jobs.items.get-tool :args {:block block :explore false} :key [:tool block]}
+                        needs {:kind :tool :job 'jobs.items.get-tool :args {:item needs :explore false} :key [:tool needs]}
+                        (:kind w) {:kind :tool :job 'jobs.items.get-tool :args {:kind (:kind w) :explore false} :key [:tool (:kind w)]})
              :need (cond
                      item {:kind :item :job 'jobs.items.obtain :args {:item item :count (or (:count w) 1)} :key [:item [item]]}
                      (seq any-of) {:kind :item :job 'jobs.items.obtain :args {:any-of (vec any-of) :count (or (:count w) 1)}

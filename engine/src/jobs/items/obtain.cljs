@@ -11,6 +11,7 @@
             [jobs.items.craft :as craft]
             [jobs.lib.storage :as storage]
             [engine.game :as game]
+            [jobs.lib.trees :as trees]
             [clojure.string]))
 
 (def doc
@@ -32,11 +33,14 @@
     jobs.gather.get-seeds (at most 60 leaves, one run; the drop is picked up). What a craft chain lacks that has no recipe (logs, coal, stone-tool material; recipes/gatherable?, stone-materials) is
     felled or mined as one child per round, only what the body has seen: logs by jobs.forestry.harvest-wood,
     cobblestone and coal by jobs.gather.mine (its pickaxe only from a chest or a craft, never gathered: no mine inside a mine's fetch, so no loop back into obtain). The crafts follow once the chain is whole (a chain that is craftable now
-    is crafted first). A child that brings in nothing three times stops it (:tried :gather).
+    is crafted first). A child that brings in nothing three times stops it (:tried :gather). A stone material or coal
+    (seen, or with :explore) with no pickaxe carried gets a wooden pickaxe first (a jobs.items.obtain child, slot :pickaxe, when crafting is allowed).
+    With :explore, a raw need not seen is looked for by walking (a jobs.explore.search child, slot :explore, scan
+    radius 16, at most 3 per need); a search that ends with none seen stops it (:tried {:gather {:searched name ..}}).
   - Nothing else: stopped :no-source with :tried.
 
   The check waits {:reason :no-source :why text :item|:any-of} (:why: what each source lacks) before the first round (once the round has looked around, when chests are allowed) when nothing is carried enough, no
-  usable chest that might hold it is seen (no exploring) and no craft chain makes it from what is carried, and nothing seen to gather what a chain lacks. Ends {:status :done :got n :item name} or {:status :stopped
+  usable chest that might hold it is seen and no craft chain makes it from what is carried, and nothing seen to gather what a chain lacks (with :explore, a chain whose raw needs are unseen passes: the search child solves it). Ends {:status :done :got n :item name} or {:status :stopped
   :reason r :got n :tried {..}}, r :no-source, :cycle (a wanted name is on :chain), :timeout (:minutes from the first
   round) or :bad-args. :depth is the nesting left for sources that need fetches of their own (not used yet: crafting
   plans its whole chain; a gather child fetches its own tools).")
@@ -49,12 +53,14 @@
    :depth {:doc "nested fetches left; nil: the fetch limits (jobs.lib.fetch)" :spec (a/int-in 0 nil) :default nil}
    :minutes {:doc "time budget from the first round; nil: the fetch limits" :spec (a/num-in 0 nil) :default nil}
    :fail-minutes {:doc "passed on to nested fetches; nil: the fetch limits" :spec (a/num-in 0 nil) :default nil}
-   :chain {:doc "items being fetched above this one (a cycle stops)" :spec (a/coll-of a/item?) :default []}})
+   :chain {:doc "items being fetched above this one (a cycle stops)" :spec (a/coll-of a/item?) :default []}
+   :explore {:doc "walk and look for a raw need not seen: false, true (the ::explore setting) or jobs.explore.search options over it" :spec (a/or-of boolean? map?) :default false}})
 
 (a/defargs settings
   {::max-inspections {:default 4 :doc "Looks at a place before the search for it gives up." :spec (a/int-in 0 nil)}
    ::craft-radius {:default 32 :doc "Blocks within which a crafting table is looked for." :spec (a/int-in 0 nil)}
-   ::max-fruitless {:default 3 :doc "Rounds without progress before the job gives up." :spec (a/int-in 0 nil)}})
+   ::max-fruitless {:default 3 :doc "Rounds without progress before the job gives up." :spec (a/int-in 0 nil)}
+   ::explore {:default {:max-distance 64 :max-legs 12 :timeout-s 300} :doc "jobs.explore.search options of a search for a raw need (:explore true)." :spec map?}})
 (defn max-inspections [] (settings/get settings ::max-inspections))
 
 (defn names-of [{:keys [item any-of]}]
@@ -217,6 +223,25 @@
          (let [need (with-block c (first needs))]
            (boolean (ctx/check-child c (gather-slot need) (:job need) (:args need)))))))
 
+(defn explore-opts
+  "The search options of :explore, or nil when it is off."
+  [c]
+  (let [e (:explore (:args c))]
+    (cond (map? e) (merge (settings/get settings ::explore) e)
+          e (settings/get settings ::explore))))
+
+(defn search-names
+  "The block names a search for a need looks for."
+  [need]
+  (if (set? (:seen need)) (vec (sort (:seen need))) trees/log-names))
+
+(defn explorable?
+  "Whether :explore is on and a raw need of the chain is not seen: the search child solves it."
+  [c names n]
+  (boolean (and (explore-opts c)
+                (some #(not (seen-of c %))
+                      (some-> (gather-plan c names n) :gather (gather-needs (game/version-of (:primitives c))))))))
+
 (defn unseen-why
   "Text for the gather source: the raw needs of the chain whose blocks are not seen, or the general text."
   [c names n]
@@ -256,6 +281,7 @@
       (and (contains? (:how (limits c)) :chest) (seq (candidates c names))) true
       (and (contains? (:how (limits c)) :craft) (craft-plan c names (:count a))) true
       (and (contains? (:how (limits c)) :gather) (gather-viable? c names (:count a))) true
+      (and (contains? (:how (limits c)) :gather) (explorable? c names (:count a))) true
       :else (let [reason (merge {:reason :no-source :why (no-source-why c names (:count a))} (wanted-fields a))]
               (if (contains? (:how (limits c)) :chest)
                 (look/wait-unless-surveyed c reason)
@@ -377,6 +403,48 @@
     (when (>= k (fruitless-limit need r)) (tried! c :gather (or why :failed)))
     :again))
 
+(defn pickaxe-first?
+  "Whether need is mined, no pickaxe is carried and a wooden one may be crafted (not one being fetched above)."
+  [c names need]
+  (let [a (:args c)]
+    (and (= 'jobs.gather.mine (:job need))
+         (contains? (:how (limits c)) :craft)
+         (not-any? #{"wooden_pickaxe"} (concat names (:chain a)))
+         (not-any? (fn [[k v]] (and (pos? v) (clojure.string/ends-with? k "_pickaxe"))) (carried-counts (:primitives c))))))
+
+(defn ^:async pickaxe-step!
+  "Get a wooden pickaxe for the mine (a jobs.items.obtain child): :again once it is carried, else the gather source fails."
+  [c names]
+  (let [a (:args c)
+        o (limits c)
+        r (await (ctx/call-child c :pickaxe 'jobs.items.obtain
+                                 {:any-of ["wooden_pickaxe"] :count 1 :how (:how o) :depth (max 0 (dec (:depth o)))
+                                  :minutes (:minutes o) :fail-minutes (:fail-minutes o) :chain (into (vec (:chain a)) names)
+                                  :explore (:explore a)}))]
+    (cond
+      (= :continue r) :continue
+      (pickaxe-first? c names {:job 'jobs.gather.mine})
+      (tried! c :gather {:pickaxe (or (:reason (ctx/child-result c :pickaxe)) r)})
+      :else :again)))
+
+(defn ^:async explore-step!
+  "Walk and look for need (a jobs.explore.search child): :again once it is seen; a search that finds none stops the
+  gather source, as does the third search for one need."
+  [c need]
+  (let [targets (search-names need)
+        r (await (ctx/call-child c :explore 'jobs.explore.search
+                                 (merge (explore-opts c) {:target targets :count 1 :scan-radius 16 :use-notes false})))]
+    (if (= :continue r)
+      :continue
+      (let [res (ctx/child-result c :explore)
+            k (inc (get-in (ctx/mem c) [:explored (:key need)] 0))]
+        (ctx/update-mem! c assoc-in [:explored (:key need)] k)
+        (if (and (= :found (:reason res)) (seen-of c need))
+          :again
+          (tried! c :gather (cond-> {:searched (:key need) :for targets :result (or (:reason res) r)}
+                              (:why res) (assoc :why (:why res))
+                              (:coverage res) (assoc :legs (:legs (:coverage res)) :farthest (:farthest (:coverage res))))))))))
+
 (defn ^:async gather-step!
   "One round of the gather source: the child for the first raw item the chain lacks, until it ends."
   [c names have target]
@@ -384,7 +452,15 @@
         need (some->> (some-> (gather-plan c names (- target have)) :gather (gather-need (game/version-of p))) (with-block c) (with-count p))]
     (cond
       (nil? need) (tried! c :gather :no-plan)
-      (and (not (get-in (ctx/mem c) [:gather :before])) (not (gather-viable? c names (- target have))))
+      (and (not (get-in (ctx/mem c) [:gather :before])) (pickaxe-first? c names need) (or (explore-opts c) (seen-of c need)))
+      (await (pickaxe-step! c names))
+      (and (not (get-in (ctx/mem c) [:gather :before])) (explore-opts c) (not (seen-of c need))
+           (< (get-in (ctx/mem c) [:explored (:key need)] 0) (max-fruitless)))
+      (await (explore-step! c need))
+      (and (not (get-in (ctx/mem c) [:gather :before]))
+           (not (if (explore-opts c)
+                  (and (seen-of c need) (ctx/check-child c (gather-slot need) (:job need) (:args need)))
+                  (gather-viable? c names (- target have)))))
       (tried! c :gather :none-seen)
       :else
       (do (when-not (get-in (ctx/mem c) [:gather :before])

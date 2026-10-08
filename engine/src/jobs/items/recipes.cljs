@@ -107,13 +107,14 @@
 
 (defn lacking
   "Why no craft of item (n more) can start, as text: the cheapest recipe's ingredients short of what is carried
-  (\"needs 3 stick, have 1\"), or that no recipe makes item. Pure."
+  (\"needs 3 stick, have 1\"; on a tie the commonest material, cobblestone), or that no recipe makes item. Pure."
   [version have item n]
   (let [rs (get (recipes-for version) item)
         st {:have have}]
     (if (empty? rs)
       (str "no recipe makes " item)
-      (let [r (first (sort-by #(short-count st % (ceil-div n (:count %))) rs))
+      (let [ranks (material-ranks version)
+            r (first (sort-by (juxt #(short-count st % (ceil-div n (:count %))) #(reduce + 0 (map (fn [k] (get ranks k 0)) (keys (:needs %))))) rs))
             batches (ceil-div n (:count r))
             short (keep (fn [[k v]] (let [h (get have k 0)] (when (< h (* v batches)) (str "needs " (* v batches) " " k ", have " h))))
                         (:needs r))]

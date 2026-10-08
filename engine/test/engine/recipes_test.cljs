@@ -61,3 +61,6 @@
 
 (deftest a-lead-is-made-from-five-string
   (is (= [[:craft "lead" 2]] (shape (plan {"string" 5} "lead" 2 {:table? true})))))
+
+(deftest lacking-names-the-material-a-player-looks-for
+  (is (re-find #"needs 3 cobblestone, have 0" (recipes/lacking game/default-version {} "stone_pickaxe" 1))))
