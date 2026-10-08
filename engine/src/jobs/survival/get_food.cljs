@@ -28,6 +28,9 @@
   3. Harvest items lying within 8 blocks (collect-drops).
   4. The nearest passive food animal within :hunt-radius (combat.attack, then collect-drops).
   5. Mature crops or sweet berry bushes within :hunt-radius (blocks.dig).
+  1b. Raw food carried (chicken, beef ...) with a furnace or smoker seen within ::cook-radius (16): cook it there (the smelt
+     job, waiting out the cook in the round), then eat it. Not while the night handler holds. A failed cook is remembered
+     as :no-cook for 10 minutes.
   Nothing left: once per job (:explore, default on) it searches for food animals and crops (jobs.explore.search, the
   ::explore setting; not at night nor while the night handler holds) and goes on if it found some; at ::eat-bad-food (6) or below it then eats harmful food carried (rotten
   flesh, with :allow-bad). Still nothing: it stops :no-food with a food.none warning (what was searched, the nearest known source) and writes
@@ -74,6 +77,8 @@
    ::reach {:default 3 :doc "How near a food source the body stands to use it, in blocks." :spec (a/int-in 0 nil)}
    ::explore {:default {:max-distance 64 :max-legs 12 :timeout-s 120} :doc "jobs.explore.search options of the search for food (:explore true)." :spec map?}
    ::eat-bad-food {:default foods/default-food :doc "At this much food or less the last resort eats harmful food carried (rotten flesh); above it harmful food is not food." :spec (a/num-in 0 20)}
+   ::cook-radius {:default 16 :doc "Blocks within which a seen furnace or smoker counts for cooking raw food carried." :spec (a/int-in 0 nil)}
+   ::cook-kinds {:default #{"chicken" "beef" "porkchop" "mutton" "rabbit" "cod" "salmon" "potato"} :doc "Raw foods the cook step puts in a furnace." :spec (a/set-of a/item?)}
    ::max-ways {:default 12 :doc "Ways one round tries without getting fed before it stops :still-hungry." :spec (a/int-in 0 nil)}})
 (defn drop-radius [] (settings/get settings ::drop-radius))
 
@@ -84,6 +89,10 @@
 (defn reach [] (settings/get settings ::reach))
 
 (defn max-ways [] (settings/get settings ::max-ways))
+
+(defn cook-radius [] (settings/get settings ::cook-radius))
+
+(defn cook-kinds [] (settings/get settings ::cook-kinds))
 
 (defn eat-bad-food [] (settings/get settings ::eat-bad-food))
 
@@ -99,7 +108,7 @@
   (and (foods/food? (:name item))
        (or (not (contains? foods/harmful (:name item))) (<= (food-level c) (eat-bad-food)))))
 
-(declare gave-up-recently? fresh-source animals-in-sight ripe-blocks can-bake?)
+(declare gave-up-recently? can-cook? night-holds? fresh-source animals-in-sight ripe-blocks can-bake?)
 
 (defn nothing-to-try?
   "Hungry inside the ask cooldown with no food carried, no bread to bake, no source learned since giving up, no
@@ -108,6 +117,7 @@
   (and (gave-up-recently? c)
        (not-any? #(tryable-food? c %) (u/inventory (:primitives c)))
        (not (can-bake? c))
+       (not (can-cook? c))
        (nil? (fresh-source c))
        (empty? (remove :why (animals-in-sight c)))
        (empty? (ripe-blocks c (merge ripe-age berry-bush) (u/self-pos c) (:hunt-radius (:args c))))))
@@ -415,6 +425,53 @@
               (ctx/emit! c :food.no-bake :info {:text (str "cannot bake bread: " reason)})
               nil))))
 
+;; ------------------------------------------------------------------ cooking
+
+(defn raw-carried
+  "The cookable raw foods carried, as {:name :count}."
+  [c]
+  (filter #(contains? (cook-kinds) (:name %)) (u/inventory (:primitives c))))
+
+(defn nearest-cooker
+  "The nearest furnace or smoker seen within :cook-radius, as a position, or nil."
+  [c]
+  (->> (look/seen-blocks (:primitives c) {:names #{"furnace" "smoker"} :radius (cook-radius) :max 8 :live? true})
+       first :pos))
+
+(defn can-cook?
+  "Mid-cook, or raw food carried, a furnace in sight, no live :no-cook entry and the night handler not holding."
+  [c]
+  (boolean
+   (or (:cooking (ctx/mem c))
+       (and (seq (raw-carried c))
+            (zero? (ctx/count-in c :no-cook no-bake-ms))
+            (not (night-holds? c))
+            (nearest-cooker c)))))
+
+(defn ^:async cook!
+  "Way 1b: smelt the raw food carried (the smelt job, fuel as it takes it) in the furnace in sight; the cooking wait is
+  spent in the round. :again when it ended, :continue while it goes on, else nil with :no-cook remembered."
+  [c]
+  (let [{:keys [name count]} (or (first (raw-carried c)) (:cooking (ctx/mem c)))
+        furnace (or (:furnace (:cooking (ctx/mem c))) (nearest-cooker c))
+        args {:furnace furnace :item name :count count}
+        _ (ctx/update-mem! c assoc :cooking {:name name :count count :furnace furnace})]
+    (loop [n 0]
+      (let [st (await (child/run! c :cook 'jobs.items.smelt args))]
+        (cond
+          (not (ctx/alive? c)) :continue
+          (= :continue st) :continue
+          (and (= :declined st) (< n (child/default-max-calls))) (do (await (child/pace!)) (recur (inc n)))
+          (= :declined st) :continue
+          :else (let [res (ctx/child-result c :cook)]
+                  (ctx/update-mem! c dissoc :cooking)
+                  (if (pos? (:smelted res 0))
+                    :again
+                    (let [reason (or (:reason res) "short")]
+                      (ctx/remember! c :no-cook {:reason reason} no-bake-policy)
+                      (ctx/emit! c :food.no-cook :info {:text (str "cannot cook " name ": " reason)})
+                      nil))))))))
+
 ;; ------------------------------------------------------------------ round
 
 (defn ^:async use-source!
@@ -435,6 +492,7 @@
   [c]
   (let [source (if (gave-up-recently? c) (fresh-source c) (known-source c))]
     (or (when (can-bake? c) (await (bake! c)))
+        (when (can-cook? c) (await (cook! c)))
         (when source (await (use-source! c source)))
         (await (collect-drops! c (drop-radius)))
         (await (hunt! c))

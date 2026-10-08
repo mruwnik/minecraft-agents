@@ -453,3 +453,40 @@
           (await (one-round! eng {}))
           (is (= [] (events-of seen :search.not-found)) "no search out of the hut at night")
           (is (re-find #"night" (str (:text (first (events-of seen :food.none)))))))))))
+
+;; ---------------------------------------------------------------- cooking raw food
+
+(def furnace-world
+  {:blocks {"2,64,0" "furnace"}
+   :inventory [{:name "chicken" :count 2} {:name "coal" :count 2}]})
+
+(defn ^:async run-until-idle!
+  "Tick until the list is empty or n ticks, the world's furnaces cooking on a timer meanwhile."
+  [eng p n]
+  (let [timer (js/setInterval #(.advance (.-world p) 100) 20)]
+    (try
+      (loop [i 0]
+        (when (and (< i n) (seq (:list (core/state eng))))
+          (await (core/tick! eng))
+          (recur (inc i))))
+      (finally (js/clearInterval timer)))))
+
+(deftest raw-chicken-next-to-a-furnace-is-cooked-and-eaten
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup (assoc furnace-world :self {:food 2}) :step-ms 2000)]
+          (core/submit! eng (list 'jobs.survival.get-food {}) {})
+          (await (run-until-idle! eng p 40))
+          (is (= [] (:list (core/state eng))) "the job ended")
+          (is (some #{"take"} (call-args p "furnace" "op")) "the cooked output was taken")
+          (is (not-any? #{"chicken"} (map #(.-name %) (.-inventory (.self p)))) "no raw chicken left")
+          (is (> (food p) 2) "and eaten"))))))
+
+(deftest raw-chicken-with-no-furnace-touches-no-furnace
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:food 2} :inventory [{:name "chicken" :count 2}]})]
+          (await (one-round! eng {:explore false}))
+          (is (= [] (calls p "furnace"))))))))
