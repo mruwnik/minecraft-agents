@@ -102,18 +102,35 @@
   (js/Math.min KEY-REACH (+ (option options "frontierReach" 256)
                             (js/Math.max (js/Math.abs (- (.-x from) (.-x goal))) (js/Math.abs (- (.-z from) (.-z goal)))))))
 
+(defn- ground-y
+  "The y above the highest block of the x z column that is not open (the feet of a body on top of it); nil when the
+  column is unloaded or all open."
+  [^js snapshot ^js table x z]
+  (let [kinds (.-kind table)
+        bottom (.-minY snapshot)]
+    (loop [y (+ bottom (or-else (.-height snapshot) 384) -1)]
+      (when (>= y bottom)
+        (let [id (.stateAt snapshot x y z)]
+          (cond
+            (== id UNLOADED) nil
+            (== (aget kinds id) base/OPEN) (recur (dec y))
+            :else (inc y)))))))
+
 (defn- goal-bounds
-  "#js [x0 x1 z0 z1 y0 y1]: the extent of the start and the goals (y: the start's and the sphere goals')."
-  [^js from ^js goals]
+  "#js [x0 x1 z0 z1 y0 y1]: the extent of the start and the goals (y: the start's, the sphere goals' and the ground of
+  each column goal: a column goal whose ground lies outside the start's y margin would leave no goal cell in the box,
+  and the search would drain the box before it answered)."
+  [^js snapshot ^js table ^js from ^js goals]
   (let [b #js [(.-x from) (.-x from) (.-z from) (.-z from) (.-y from) (.-y from)]]
     (doseq [^js g (array-seq goals)]
       (aset b 0 (js/Math.min (aget b 0) (.-x g)))
       (aset b 1 (js/Math.max (aget b 1) (.-x g)))
       (aset b 2 (js/Math.min (aget b 2) (.-z g)))
       (aset b 3 (js/Math.max (aget b 3) (.-z g)))
-      (when (identical? (.-kind g) "near")
-        (aset b 4 (js/Math.min (aget b 4) (.-y g)))
-        (aset b 5 (js/Math.max (aget b 5) (.-y g)))))
+      (let [y (if (identical? (.-kind g) "near") (.-y g) (ground-y snapshot table (.-x g) (.-z g)))]
+        (when (some? y)
+          (aset b 4 (js/Math.min (aget b 4) y))
+          (aset b 5 (js/Math.max (aget b 5) y)))))
     b))
 
 (defn- goal-array [ctor ^js goals f] (new ctor (.map goals f)))
@@ -180,7 +197,7 @@
         n-goals (if (some? set-goals) (.-length set-goals) 0)
         multi (pos? n-goals)
         ^js goal (if multi (aget set-goals 0) (.-goal query))
-        ^js bounds (goal-bounds from (if multi set-goals #js [goal]))
+        ^js bounds (goal-bounds snapshot table from (if multi set-goals #js [goal]))
         ^js costs (js/Object.assign #js {} DEFAULT-COSTS (.-costs options))
         max-nodes (option options "maxNodes" 200000)
         ^js avoid (.-avoid options)

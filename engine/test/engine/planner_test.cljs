@@ -628,9 +628,14 @@
 
 (def step-world (world {:fill [[5 64 -2 40 64 40 "stone"]]}))
 
+(def wall-world (world {:fill [[5 64 -2 5 64 40 "stone"]]}))
+
 (deftest y-margin-limits-the-search
-  (are [goal options status reason] (= [status reason] (status+reason (run step-world goal options)))
-    (near 8 65 2) {:yMargin 0} "found" nil
-    (xz 8 2 0) {:yMargin 0} "partial" "box"
-    (xz 8 2 0) {:yMargin 1} "found" nil
-    (xz 8 2 0) {} "found" nil))
+  (are [w goal options status reason] (= [status reason] (status+reason (run w goal options)))
+    step-world (near 8 65 2) {:yMargin 0} "found" nil
+    ;; the box takes the ground of an xz goal's column
+    step-world (xz 8 2 0) {:yMargin 0} "found" nil
+    step-world (xz 8 2 0) {} "found" nil
+    ;; over the wall the feet are at 65, above the box
+    wall-world (near 8 64 2) {:yMargin 0} "partial" "box"
+    wall-world (near 8 64 2) {:yMargin 1} "found" nil))

@@ -5,7 +5,7 @@
             [engine.path.planner-tuned :as planner]
             [engine.path.planner.results]
             [engine.path.planner.search :refer [Search]]
-            [engine.planner-fixture :as pf :refer [near cells moves last-cell]]))
+            [engine.planner-fixture :as pf :refer [near xz cells moves last-cell]]))
 
 (def DROP (:drop pf/MOVE))
 (def GAP (:gap pf/MOVE))
@@ -234,3 +234,19 @@
   (let [r (run drop-down plateau (near 14 67 2) {:maxDrop 1})]
     (is (not= "found" (:status r)))
     (is (not-any? #(= DROP %) (moves r)))))
+
+;; ------------------------------------------------------------------ an xz goal below the start's y box
+
+;; a wide plateau at feet 70, steps down to ground at feet 64: with yMargin 3 the start alone would put the goal's ground
+;; under the box, and the search would expand the whole plateau before it answered "box"
+(def steps-down
+  (into [(stone -2 -2 30 30 70) (stone 37 -2 45 6 64)]
+        (map (fn [i] (stone (+ 31 i) -2 (+ 31 i) 6 (- 69 i))) (range 6))))
+
+(deftest an-xz-goal-whose-ground-is-below-the-start-box-is-found-without-draining-the-box
+  (let [r (run steps-down plateau (xz 42 2 1) {:yMargin 3})]
+    (is (= "found" (:status r)))
+    (is (= 64 (nth (last-cell r) 1)))
+    ;; the plateau alone has 1089 cells; a box with room in y expands just as many
+    (is (< (:expanded r) 700))
+    (is (= (:expanded r) (:expanded (run steps-down plateau (xz 42 2 1) {:yMargin 48}))))))
