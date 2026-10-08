@@ -106,6 +106,11 @@
   "The engine's default policy for a memory kind (engine.memory/default-policy): 50 entries, one hour."
   {:cap 50 :ttl (* 60 60 1000)})
 
+(defn settings-text
+  "The text of the body's settings.edn for a case's :settings map (nil: the case sets none)."
+  [c]
+  (some-> (:settings c) pr-str))
+
 (defn memory-seed
   "The body's memory data (what engine/memory.edn holds) for a case's :memory entries, positions already absolute:
   each {:kind k :data {...}} (optionally :policy {:cap :ttl}, :age-s seconds old) becomes an entry written at now-ms (minus its age), in order."
@@ -233,6 +238,8 @@
       (not (every? #(or (nil? (:age-s %)) (number? (:age-s %))) (:memory c))) (conj ":memory :age-s must be a number of seconds")
       (not (or (nil? (get-in c [:body :pitch])) (number? (get-in c [:body :pitch])))) (conj ":body :pitch must be a number of degrees")
       (and (seq (:memory c)) (:keep-memory c)) (conj ":memory cannot be combined with :keep-memory")
+      (not (or (nil? (:settings c)) (and (map? (:settings c)) (every? #(and (keyword? %) (namespace %)) (keys (:settings c)))))) (conj ":settings must be a map of namespaced setting keys")
+      (and (:settings c) (:keep-memory c)) (conj ":settings cannot be combined with :keep-memory")
       (not (every? #(and (string? (:name %)) (not (str/blank? (:name %))) (coords? (:min %)) (coords? (:max %))) (:zones c))) (conj ":zones entries need a :name and :min / :max [x y z]")
       (not (every? #(and (string? (:name %)) (not (str/blank? (:name %))) (coords? (:pos %))) (:places c))) (conj ":places entries need a :name and :pos [x y z]")
       (not (vector? (get-in c [:body :at]))) (conj ":body :at must be [x y z]")

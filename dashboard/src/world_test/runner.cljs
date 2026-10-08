@@ -411,6 +411,15 @@
                (when-not ev (throw (js/Error. (str "the body did not start within 90 s (see " out ")"))))
                (await-online! opts))))))
 
+(defn write-body-settings!
+  "Writes the case's :settings as the body's settings.edn, or removes the file when it sets none."
+  [opts c]
+  (let [file (path/join (body-dir opts) "settings.edn")]
+    (if-let [text (f/settings-text c)]
+      (do (fs/mkdirSync (body-dir opts) #js {:recursive true})
+          (fs/writeFileSync file text))
+      (fs/rmSync file #js {:force true}))))
+
 (defn stop-body!
   "Stops the body this runner started (its own child, by PID) and waits for it to exit."
   [opts]
@@ -1552,12 +1561,12 @@
                                                                          (fn [] (if (= :keep plan)
                                                                                   (js/Promise.resolve nil)
                                                                                   (-> (if (= :restart-keep plan) (js/Promise.resolve nil) (reset-last-plot! opts))
-                                                                                      (.then (fn [] (start-body! opts register (= :restart-keep plan) memory))))))))
+                                                                                      (.then (fn [] (write-body-settings! opts c) (start-body! opts register (= :restart-keep plan) memory))))))))
                                                            (.then (fn [r] (on-result! c r)))
                                                            (.finally #(release-plot! i))))))))
                                        (js/Promise.resolve nil)
                                        (map-indexed vector pairs))
-                               (.finally #(stop-body! opts))))))
+                               (.finally #(.then (stop-body! opts) (fn [] (write-body-settings! opts {}))))))))
               (js/Promise.resolve nil)
               groups)))
 

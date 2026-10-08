@@ -80,3 +80,4 @@ After checks: `[:block p "block[state]"]` and `[:not-block p "block"]` (`execute
 
 What does not fit: natural terrain (forests, caves, far walks, unloaded land) stays in the go-to soak; cases needing
 two bodies or another player; cases judged by looking (the viewer).
+| `:settings` | `{:ns/key value}`: written as the body's `settings.edn` before it starts (removed after), e.g. `{:engine.perception/save-ms 1000}` so seen memory is saved every second; keys must be namespaced; not with `:keep-memory` | none |

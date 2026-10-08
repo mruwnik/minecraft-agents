@@ -591,3 +591,14 @@
     (is (empty? (ps {:weather :rain})))
     (is (empty? (ps {:weather :clear})))
     (is (seq (ps {:weather :snow})))))
+
+(deftest settings-must-be-a-map-of-namespaced-keys
+  (let [ps #(f/problems (merge {:name "a" :time :day :plot {:height 6} :body {:at [1 0 1]} :act [] :after [] :expect [{:event {:kind :x} :within-s 1}]} %))]
+    (is (empty? (ps {:settings {:engine.perception/save-ms 1000}})))
+    (is (seq (ps {:settings {:save-ms 1000}})))
+    (is (seq (ps {:settings [:engine.perception/save-ms 1000]})))
+    (is (seq (ps {:settings {:engine.perception/save-ms 1000} :keep-memory true})))))
+
+(deftest settings-text-is-the-body-settings-file
+  (is (= "{:engine.perception/save-ms 1000}" (f/settings-text {:settings {:engine.perception/save-ms 1000}})))
+  (is (nil? (f/settings-text {}))))
