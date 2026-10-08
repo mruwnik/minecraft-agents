@@ -1,6 +1,7 @@
 (ns jobs.survival.sleep
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.lib.sense :as sense]
             [jobs.lib.shelter :as sh]
             [jobs.lib.util :as u]
             [engine.memory :as mem]
@@ -118,8 +119,11 @@
         bed (bed-of c)]
     (if (or (nil? bed) (sh/sleeping? p) (not (sh/night? p)))
       :done
-      (let [walk (await (ctx/call-child c :go 'jobs.movement.go-to {:pos bed :range 2}))]
+      (let [taken? #(not ((sh/bed-permit p (:world (:engine c))) bed))
+            _ (await (sense/decide! c ::bed-taken #(not (taken?)) {:retry? true?}))
+            walk (when-not (taken?) (await (ctx/call-child c :go 'jobs.movement.go-to {:pos bed :range 2})))]
         (cond
+          (taken?) :continue
           (= :continue walk) :continue
           (not (:arrived (ctx/child-result c :go))) (give-up-unreachable! c bed)
           :else (await (sleep-at! c bed)))))))

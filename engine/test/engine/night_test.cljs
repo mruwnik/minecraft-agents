@@ -804,3 +804,40 @@
           (await (tu/run-until-empty eng 160))
           (is (seq (st/calls p "look")))
           (is (= [:ground] (mapv :target (st/emitted seen :shelter.fled)))))))))
+
+;; ------------------------------------------------------------------ a bed not yet looked at
+
+(deftest a-bed-in-the-room-not-yet-looked-at-is-slept-in-not-replaced-by-the-carried-bed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (st/setup {:time night :inventory [{:name "red_bed" :count 1}] :blocks {"3,64,0" "red_bed"}})]
+          (tu/seeing-after-look p)
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (tu/run-until-empty eng 12))
+          (is (seq (st/calls p "look")) "looked around first")
+          (is (= 1 (count (st/calls p "sleep"))) "slept in the seen bed")
+          (is (empty? (st/calls p "place")) "no second bed")
+          (is (empty? (st/emitted seen :shelter.bed_place_failed)) "did not decide to put the carried bed down unlooked"))))))
+
+(deftest an-occupied-bed-not-yet-looked-at-is-refused-before-the-sleep
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (st/setup {:time night :blocks {"6,64,0" "red_bed"} :states {"6,64,0" {:occupied true}}})
+              id (core/submit! eng '(jobs.survival.sleep {:bed {:x 6 :y 64 :z 0}}) {})]
+          (tu/seeing-after-look p)
+          (await (st/tick-n eng 6))
+          (is (empty? (st/calls p "sleep")) "no sleep on an occupied bed")
+          (is (= :bed-occupied (:reason (:waiting (job-api/summary eng id))))))))))
+
+(deftest a-room-not-yet-looked-at-is-looked-at-before-the-carried-bed-has-no-room
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (st/setup {:time night :inventory [{:name "red_bed" :count 1}] :skipNight false})]
+          (tu/seeing-after-look p)
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (tu/run-until-empty eng 12))
+          (is (seq (st/calls p "place")) "put the bed down")
+          (is (empty? (st/emitted seen :shelter.bed_place_failed))))))))

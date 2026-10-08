@@ -8,6 +8,7 @@
             [jobs.lib.escape :as escape]
             [jobs.lib.look :as look]
             [jobs.lib.result :as result]
+            [jobs.lib.sense :as sense]
             [jobs.lib.shelter :as sh]
             [jobs.lib.solid :as solid]
             [jobs.lib.targets :as targets]
@@ -231,7 +232,7 @@
   [c]
   (let [p (:primitives c)
         item (sh/carried-bed p)
-        {:keys [stand foot] :as layout} (or (bed-layout c true) (bed-layout c false))]
+        {:keys [stand foot] :as layout} (await (sense/decide! c ::layout #(or (bed-layout c true) (bed-layout c false))))]
     (when foot
       (if (= stand (sh/feet p))
         (let [r (await (tidy/place! c foot item false (click-for layout)))]
@@ -709,7 +710,7 @@
       (do (when-not sheltered (sheltered! c :dug-in))
           (if (log-out-wanted? c) (await (log-out-step c)) (await (hold! c :sheltered))))
       :else
-      (let [bed (sh/bed-to-use p (ctx/view c) (radius c) (bed-permit c))]
+      (let [bed (await (sense/decide! c ::bed #(sh/bed-to-use p (ctx/view c) (radius c) (bed-permit c))))]
         (cond
           bed (await (sleep-step c bed))
           (sh/bed-place-wanted? p (ctx/view c) (radius c) (bed-permit c)) (await (place-bed-and-sleep c))
