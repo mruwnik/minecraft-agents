@@ -74,7 +74,8 @@ export function createDig (env) {
     const p = cell(a.pos)
     return act(token, { boundS: digBoundS(p) }, async ctx => {
       const block = env.bot.blockAt(vec(p))
-      if (!block || isAir(block.name)) return { status: 'missing', reason: `nothing to dig at ${p.x} ${p.y} ${p.z} (${block ? 'air' : 'not loaded'})` }
+      // a fluid is no block: minecraft-data lists it diggable, and a dig of it never ends
+      if (!block || isAir(block.name) || isLiquid(block.name)) return { status: 'missing', reason: `nothing to dig at ${p.x} ${p.y} ${p.z} (${block ? block.name : 'not loaded'})` }
       if (dist(eye(), center(p)) > setting('prim/reach')) return { status: 'unreachable' }
       if (!block.diggable) return { status: 'cannot' }
       ctx.onAbort(() => env.bot.stopDigging())

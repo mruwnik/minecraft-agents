@@ -154,6 +154,15 @@ test('dig of air says what is there and what to do', async () => {
   assert.match(r.reason, /nothing to dig at 9 64 9 \(air\)/)
 })
 
+test('dig of a fluid cell says it is not a block: water and lava are not dug', async () => {
+  for (const fluid of ['water', 'lava']) {
+    const { p } = rig({ ...world, blocks: { ...world.blocks, '2,64,0': fluid } })
+    const r = await p.dig('t1', { pos: at(2, 64, 0) })
+    assert.equal(r.status, 'missing')
+    assert.match(r.reason, new RegExp(`nothing to dig at 2 64 0 \\(${fluid}\\)`))
+  }
+})
+
 test('plain results are plain objects', async () => {
   const { p } = rig(world)
   const r = await p.look('t1', { yaw: 1, pitch: 0 })
