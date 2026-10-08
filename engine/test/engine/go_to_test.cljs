@@ -10,6 +10,7 @@
             [engine.fake :as fake]
             [engine.memory :as mem]
             [engine.perception :as perception]
+            [jobs.lib.danger :as danger-q]
             [engine.fake.raw-world :as fake-raw]
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.walk.plan :as wplan]
@@ -683,6 +684,11 @@
 
 ;; ------------------------------------------------------- a goal a reflex keeps cutting the walk to (card 66863dc4)
 
+(def way-zombie
+  "A zombie standing still 7.2 blocks from goal [10 64 0], beside the way from the start, out of the hostile-near radius
+  of a body cut at x 6."
+  {:id 77 :name "zombie" :kind "hostile" :pos [14 64 6]})
+
 (defn cut-seed
   "Memory of an earlier call of this session left open at goal [10 64 0] after cuts, cut 3 blocks from it."
   [m]
@@ -692,12 +698,20 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        ;; the body is 10 from the goal; it got to 3 before, and was sent back twice already: this is the third
-        (let [{:keys [out returns eng]} (await (go-returns! {:blocks flat} {:pos [10 64 0] :range 0}
+        ;; the body is 10 from the goal; it got to 3 before, and was sent back twice already: this is the third, and the
+        ;; zombie that sent it back still stands near the way ahead
+        (let [{:keys [out returns eng]} (await (go-returns! {:blocks flat :entities [way-zombie]} {:pos [10 64 0] :range 0}
                                                             (cut-seed {:closest 3 :ref 3 :cuts 2})))]
           (is (= {:arrived false :reason :unreachable :why :cut-again} (select-keys @out [:arrived :reason :why])) (pr-str @out))
+          (is (= "zombie" (:nearest-hostile @out)) (pr-str @out))
           (is (= [:done] @returns))
           (is (= [] (moved eng)) "it walked nowhere"))
+        ;; the same three cuts with no hostile known near the way ahead (the sender is dead or gone): it walks on
+        (doseq [[why entities] [["no hostile at all" []] ["a zombie far from the way" [(assoc way-zombie :pos [-20 64 20])]]]]
+          (let [{:keys [out returns]} (await (go-returns! {:blocks flat :entities entities} {:pos [10 64 0] :range 0}
+                                                          (cut-seed {:closest 3 :ref 3 :cuts 2})))]
+            (is (= {:arrived true} @out) (str why " " (pr-str @out)))
+            (is (= [:done] @returns) why)))
         ;; two cuts so far: this one walks on
         (let [{:keys [out]} (await (go-returns! {:blocks flat} {:pos [10 64 0] :range 0}
                                                 (cut-seed {:closest 3 :ref 3 :cuts 1})))]
@@ -766,6 +780,14 @@
     (is (= {:goal goal :closest 1 :ref 1 :cuts 1 :last-dist 11} (go-to/cut-state (assoc m :closest 1 :last-dist 1) goal 11)))
     (is (= {:goal goal :closest 14 :ref 14 :cuts 0 :last-dist 14} (go-to/cut-state (dissoc m :open) goal 14)))))
 
+(deftest the-hostiles-near-the-way-are-the-known-ones-within-the-hostile-near-radius-of-it
+  ;; the way runs from the start [0 64 0] to [20 64 0]; melee within 8 of it count, ranged within 16, nearest the way first
+  (let [mob (fn [id name pos] {:id id :name name :kind "hostile" :pos pos})
+        p (tu/fake {:self {:pos start} :blocks flat
+                    :entities [(mob 1 "zombie" [10 64 7]) (mob 2 "zombie" [10 64 -9]) (mob 3 "zombie" [26 64 0])
+                               (mob 4 "skeleton" [10 64 12]) (mob 5 "skeleton" [10 64 -17])]})]
+    (is (= [3 1 4] (mapv #(.-id %) (danger-q/hostiles-near-way p {:x 20 :y 64 :z 0} 8 {:ranged-radius 16}))))))
+
 (deftest air-reasons-have-words
   (doseq [why [:air :air-lethal]]
     (is (not (str/includes? (end/give-up-words [10 64 0] {:why why}) "no path (")) (str why)))
@@ -819,11 +841,24 @@
         ;; the body walks to 4 blocks short of the goal, is cut there and sent back to the start each time (a stationary
         ;; zombie's flee): the walk records how near it got, so the fourth restart gives up
         (let [near-goal [#(>= (.-x %) 6) send-back!]
-              {:keys [out returns mems]} (await (cut-cycles! {:blocks flat} {:pos [10 64 0] :range 0} [near-goal near-goal near-goal]))]
+              {:keys [out returns mems]} (await (cut-cycles! {:blocks flat :entities [way-zombie]} {:pos [10 64 0] :range 0} [near-goal near-goal near-goal]))]
           (is (<= (:closest (first mems)) 4.5) (str "the cut walk recorded its approach: " (pr-str (first mems))))
           (is (= {:arrived false :reason :unreachable :why :cut-again} (select-keys @out [:arrived :reason :why])) (pr-str @out))
           (is (str/includes? (:text @out) "sent back") (:text @out))
           (is (= [:done] @returns) "the cut calls returned nothing; the fourth gave up"))))))
+
+(deftest a-goal-whose-sender-back-is-killed-before-the-restart-is-reached
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        ;; sent back three times as above, but the zombie is killed during the third cut: the fourth restart knows of no
+        ;; hostile near the way ahead, so the count no longer predicts a cycle and the walk goes on to the goal
+        (let [near-goal [#(>= (.-x %) 6) send-back!]
+              killed [#(>= (.-x %) 6) #(do (send-back! %) (swap! (fake/state %) update :entities (fn [es] (filterv (fn [e] (not= 77 (:id e))) es))))]
+              {:keys [out returns p]} (await (cut-cycles! {:blocks flat :entities [way-zombie]} {:pos [10 64 0] :range 0} [near-goal near-goal killed]))]
+          (is (= {:arrived true} @out) (pr-str @out))
+          (is (= [10 64 0] (at p)))
+          (is (= [:done] @returns) "the cut calls returned nothing; the fourth arrived"))))))
 
 (deftest a-long-bending-trip-cut-three-times-in-place-arrives
   (async done

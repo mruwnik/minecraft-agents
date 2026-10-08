@@ -82,6 +82,26 @@
          (sort-by #(mob-distance p %))
          vec)))
 
+(defn way-distance
+  "Blocks from point q to the straight segment from a to b ({:x :y :z})."
+  [a b q]
+  (let [d (mapv #(- (% b) (% a)) [:x :y :z])
+        len2 (reduce + (map * d d))
+        t (if (zero? len2) 0 (max 0 (min 1 (/ (reduce + (map * d (map #(- (% q) (% a)) [:x :y :z]))) len2))))]
+    (u/dist q (zipmap [:x :y :z] (map #(+ (%1 a) (* t %2)) [:x :y :z] d)))))
+
+(defn hostiles-near-way
+  "The hostiles the body knows of (known-hostiles: seen or heard, a heard one at its rough spot) within radius
+  (ranged ones within :ranged-radius) of the straight way from the body to goal ({:x :y :z}), nearest the way first."
+  [p goal radius {:keys [ranged-radius]}]
+  (let [rr (or ranged-radius radius)
+        body (u/pos-of (.-pos (.self p)))
+        off (fn [e] (way-distance body goal (mob-pos p e)))]
+    (->> (known-hostiles p (+ (u/dist body goal) (max radius rr)) {})
+         (filter #(<= (off %) (if (combat/ranged? %) rr radius)))
+         (sort-by off)
+         vec)))
+
 (defn danger-in?
   "danger? reading blocks through kind-at (shared by the mobs of one query) and, with pr, sharing walk proofs. opts
   :arrow-at is the query's shared arrow lookup (reach/lookup p reach/arrow-kind-of); without it a ranged mob builds its own."
