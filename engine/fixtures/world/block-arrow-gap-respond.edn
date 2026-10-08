@@ -10,7 +10,7 @@
   :time :any
   :mobs :keep
   :plot {:height 8}
-  :blocks [[:fill [16 0 15] [18 2 17] "stone"] [:fill [17 0 16] [17 1 16] "air"]]
+  :blocks [[:fill [16 0 15] [18 2 17] "stone"] [:fill [17 0 16] [18 1 16] "air"]]
   :body {:at [17.5 0 16.5] :yaw 270 :inventory [["cobblestone" 10] ["stone_pickaxe" 1]] :effects [["resistance" 600 4]]}
   :act [[:summon "skeleton" [27.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
         [:wait-s 2]
