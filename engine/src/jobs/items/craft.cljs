@@ -2,6 +2,7 @@
   (:require [engine.args :as a]
             [jobs.items.shortfall :as craft]
             [engine.ctx :as ctx]
+            [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
             [jobs.lib.escape :as escape]
             [jobs.lib.tools :as tools]
@@ -62,14 +63,16 @@
 (def table-offsets [[1 0] [-1 0] [0 1] [0 -1] [1 1] [-1 1] [1 -1] [-1 -1]])
 
 (defn spot-cells
-  "The candidate table cells beside the body: [pos floor-pos] for each offset at its level, then (a 1-wide stair has
+  "The candidate table cells beside the body, outside its box (the server refuses a place the body touches): [pos floor-pos] for each offset at its level, then (a 1-wide stair has
   no free cell at its level) each one level up. dig-spot-cells keeps to the level ones."
   [c]
   (let [{:keys [x y z]} (u/self-pos c)
+        cols (access/body-columns x z)
         [x y z] (mapv #(js/Math.floor %) [x y z])]
     (for [dy [0 1]
           [dx dz] table-offsets
-          :let [pos {:x (+ x dx) :y (+ y dy) :z (+ z dz)}]]
+          :let [pos {:x (+ x dx) :y (+ y dy) :z (+ z dz)}]
+          :when (not (cols [(:x pos) (:z pos)]))]
       [pos (update pos :y dec)])))
 
 (defn table-spot

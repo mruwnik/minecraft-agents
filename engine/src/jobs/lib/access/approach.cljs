@@ -95,7 +95,7 @@
   are no refusal: the pillar rises under it."
   [in [bx by bz] n]
   (let [block-at (:block-at in)]
-    (or (some (fn [y] (let [v (rules/may-place? (assoc in :cell [bx y bz] :feet [bx by bz]))]
+    (or (some (fn [y] (let [v (rules/may-place? (-> in (dissoc :body-cols) (assoc :cell [bx y bz] :feet [bx by bz])))]
                         (when-not (or (:ok v) (= :own-body (:reason v))) v)))
               (range by (+ by n)))
         (when-not (and (passable? block-at [bx (+ by n) bz]) (passable? block-at [bx (+ by n 1) bz]))

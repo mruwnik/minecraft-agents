@@ -156,6 +156,11 @@
     air-spot [0 64 0] {:zones nil} {:ok false :reason :own-body}
     plain [5 64 5] {:zones nil} {:ok false :reason :not-replaceable}))
 
+(deftest the-bodys-box-reaches-into-the-next-cell
+  (let [w (world [1 64 0] "air" [0 64 0] "air")]
+    (is (= {:ok false :reason :own-body} (place w [1 64 0] :body-cols #{[0 0] [1 0]})))
+    (is (= {:ok true} (place w [1 64 0] :body-cols #{[0 0]})))))
+
 (deftest place-details
   (is (= {:ok false :reason :zone :zone "farm" :owner "Miles"} (place air-spot [5 64 5] :zones [farm])))
   (is (= {:ok false :reason :not-replaceable :block "stone"} (place plain [5 64 5])))

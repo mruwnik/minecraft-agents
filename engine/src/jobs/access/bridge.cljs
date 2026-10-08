@@ -102,7 +102,7 @@
               unseen (first (filter (or (:unknown? in) (constantly false)) [stand (ahead feet heading 1 1)]))
               blocked (first (remove #(pl/clear? (block-at %)) [stand (ahead feet heading 1 1)]))
               use (pillar/item-to-use item carried)
-              place (rules/may-place? (assoc in :cell target :feet stand))]
+              place (rules/may-place? (-> in (dissoc :body-cols) (assoc :cell target :feet stand)))]
           (cond
             refusal (pillar/refusal->give-up refusal)
             (not (rules/solid-floor? block-at (ahead feet heading 0 -1))) (pillar/give-up :not-on-solid :at (ahead feet heading 0 -1))

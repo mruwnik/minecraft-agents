@@ -115,7 +115,7 @@
                 floor (up feet -1)
                 ceiling (first (remove #(pl/clear? (block-at %)) [(up feet 1) (up feet 2)]))
                 use (item-to-use item carried items)
-                place (rules/may-place? (assoc in :cell feet :feet (up feet 1)))]
+                place (rules/may-place? (-> in (dissoc :body-cols) (assoc :cell feet :feet (up feet 1))))]
             (cond
               refusal (refusal->give-up refusal)
               (not (rules/solid-floor? block-at floor)) (give-up :not-on-solid :at floor :block (block-at floor))

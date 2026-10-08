@@ -7,6 +7,7 @@
                  tunnel give what the body senses and a guess for a cell it has not seen; other jobs still read the world
     :cell        [x y z] the cell to dig or fill
     :feet        [x y z] the body's feet cell (its head cell is one above)
+    :body-cols   optional set of [x z] columns the body's box overlaps (default: the feet cell's); a place there is :own-body
     :zones       nil (no zone list loaded) or a vector of zones {:name :min :max :owner :allow}
     :footprints  cells other plans claim: a set, or a map {cell plan-id} (what jobs.lib.world/footprints gives),
                  in which case a :footprint refusal names the :plan
@@ -175,11 +176,13 @@
 
 (defn may-place?
   "Verdict for placing a block at :cell. See the namespace docstring."
-  [{:keys [block-at cell feet] :as in}]
-  (let [[fx fy fz] feet]
+  [{:keys [block-at cell feet body-cols] :as in}]
+  (let [[fx fy fz] feet
+        [cx cy cz] cell
+        cols (or body-cols #{[fx fz]})]
     (verdict
      (concat
       (common-checks :place in)
-      [#(when (contains? #{[fx fy fz] [fx (inc fy) fz]} cell) (refuse :own-body))
+      [#(when (and feet (contains? #{fy (inc fy)} cy) (contains? cols [cx cz])) (refuse :own-body))
        #(let [n (block-at cell)] (when-not (replaceable n) (refuse :not-replaceable :block n)))
        (no-zones-check in)]))))

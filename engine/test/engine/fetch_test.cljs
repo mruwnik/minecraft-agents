@@ -768,6 +768,17 @@
           (is (= 1 (get (inv s) "wooden_pickaxe")))
           (is (= [[-1 65 0]] (map first (tables s))) "the table went in the stair cell behind"))))))
 
+(deftest get-tool-puts-the-table-outside-the-bodys-box
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (assoc-in (bare [{:name "oak_planks" :count 3} {:name "stick" :count 2} {:name "crafting_table" :count 1}])
+                                 [:self :pos] {:x 0.71 :y 64 :z 0.5}) [own-zone])]
+          (await (get-tool! s {:kind "pickaxe"} 80))
+          (is (= 1 (get (inv s) "wooden_pickaxe")))
+          (is (every? (fn [[[x]]] (not= 1 x)) (tables s))
+              "no table in column x=1, which the body's box (0.41..1.01) touches"))))))
+
 (deftest get-tool-makes-a-table-when-the-seen-one-is-unreachable
   (async done
     (tu/run-async done

@@ -50,6 +50,19 @@
   [p]
   (fn [[x y z]] (when-let [b (u/sensed p {:x x :y y :z z})] (when-not (true? (.-unknown b)) (.-name b)))))
 
+(def body-half-width
+  "Half the width of the body's box, in blocks."
+  0.3)
+
+(defn body-columns
+  "The set of [x z] cells the body's box overlaps when it stands at x, z. A coordinate on a whole number (only a fake
+  world puts a body there) counts as inside its own cell."
+  [x z]
+  (let [span (fn [v] (if (integer? v)
+                       [v]
+                       (range (js/Math.floor (- v body-half-width)) (inc (js/Math.floor (+ v body-half-width))))))]
+    (set (for [cx (span x) cz (span z)] [cx cz]))))
+
 (defn rules-input
   "The rules' input without :cell: the blocks (as sensed), :floor-at (blocks as seen, no guess), the body's feet and
   zone-input. opts as zone-input."
@@ -60,6 +73,7 @@
      (merge {:block-at (sensed-at p hidden-guess)
              :floor-at (seen-at p)
              :feet [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]
+             :body-cols (body-columns x z)
              :ledger #{}}
             (zone-input c opts)))))
 
