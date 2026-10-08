@@ -250,3 +250,15 @@
     ;; the plateau alone has 1089 cells; a box with room in y expands just as many
     (is (< (:expanded r) 700))
     (is (= (:expanded r) (:expanded (run steps-down plateau (xz 42 2 1) {:yMargin 48}))))))
+
+;; ------------------------------------------------------------------ the goal bounds read a bounded number of columns
+
+(deftest a-big-xz-goal-set-reads-a-bounded-number-of-columns-for-the-goal-bounds
+  (let [snap (pf/snapshot {:fill [(stone -2 -2 30 30 70)]})
+        reads (atom 0)
+        orig (.-stateAt snap)
+        _ (set! (.-stateAt snap) (fn [x y z] (swap! reads inc) (.call orig snap x y z)))
+        goals (vec (for [i (range 500)] (xz (+ 3 (mod i 25)) (+ -1 (quot i 25)) 0)))]
+    (pf/plan snap {:from plateau :goals goals} {:goalFlood 0 :maxNodes 1})
+    ;; each column read stops at its ground; the cap is 16 columns whatever the goal set
+    (is (< @reads (* 16 400)))))

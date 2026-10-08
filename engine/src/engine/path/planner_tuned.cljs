@@ -129,18 +129,24 @@
             (== (aget kinds id) base/OPEN) (recur (dec y))
             :else (inc y)))))))
 
+(def ^:const GROUND-SAMPLES 16) ; column goals whose ground goal-bounds reads: an even sample of a big set
+
 (defn- goal-bounds
   "#js [x0 x1 z0 z1 y0 y1]: the extent of the start and the goals (y: the start's, the sphere goals' and the ground of
   each column goal: a column goal whose ground lies outside the start's y margin would leave no goal cell in the box,
-  and the search would drain the box before it answered)."
+  and the search would drain the box before it answered). The ground is read for at most GROUND-SAMPLES column goals
+  (an even sample), so a goal set of hundreds of columns costs a bounded number of reads."
   [^js snapshot ^js table ^js from ^js goals]
-  (let [b #js [(.-x from) (.-x from) (.-z from) (.-z from) (.-y from) (.-y from)]]
-    (doseq [^js g (array-seq goals)]
+  (let [b #js [(.-x from) (.-x from) (.-z from) (.-z from) (.-y from) (.-y from)]
+        stride (js/Math.max 1 (js/Math.ceil (/ (.-length goals) GROUND-SAMPLES)))]
+    (doseq [[i ^js g] (map-indexed vector (array-seq goals))]
       (aset b 0 (js/Math.min (aget b 0) (.-x g)))
       (aset b 1 (js/Math.max (aget b 1) (.-x g)))
       (aset b 2 (js/Math.min (aget b 2) (.-z g)))
       (aset b 3 (js/Math.max (aget b 3) (.-z g)))
-      (let [y (if (identical? (.-kind g) "near") (.-y g) (ground-y snapshot table (.-x g) (.-z g)))]
+      (let [y (cond
+                (identical? (.-kind g) "near") (.-y g)
+                (zero? (mod i stride)) (ground-y snapshot table (.-x g) (.-z g)))]
         (when (some? y)
           (aset b 4 (js/Math.min (aget b 4) y))
           (aset b 5 (js/Math.max (aget b 5) y)))))
