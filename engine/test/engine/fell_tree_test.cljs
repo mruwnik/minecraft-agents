@@ -3,6 +3,7 @@
   taken back (jobs.access.pillar, jobs.access.cleanup) before the job ends."
   (:require [cljs.test :refer [deftest is async]]
             [engine.blocks-dig-test :as bd]
+            [engine.core :as core]
             [engine.fake :as fake]
             [engine.forest-maintain-test :as fm]
             [engine.harvest-test :as h]
@@ -35,13 +36,15 @@
   the body lifted to its eye height, as the planner counts reach. Cut logs fall to the ground at once, or with lose-logs?
   vanish (none to carry)."
   ([p] (eye-reach! p false))
-  ([p lose-logs?]
+  ([p lose-logs?] (eye-reach! p lose-logs? nil))
+  ([p lose-logs? after-dig]
   (.override (.-world p) "dig"
              (fn ^:async f [token args impl]
                (let [st (fake/state p)]
                  (swap! st update-in [:self :pos 1] + eye-height)
                  (let [r (await (impl token args))]
                    (swap! st update-in [:self :pos 1] - eye-height)
+                   (when after-dig (after-dig))
                    (swap! st update :entities (fn [es] (if lose-logs?
                                                          (vec (remove #(and (= "item" (:kind %)) (= "oak_log" (get-in % [:item :name]))) es))
                                                          (mapv #(if (and (= "item" (:kind %)) (= "oak_log" (get-in % [:item :name])) (= 6 (first (:pos %)))) (assoc-in % [:pos 1] 64) %) es))))
@@ -418,3 +421,37 @@
           (is (= :skipped-fetch-off (:axe (:out off))))
           (is (= :none-found (:axe (:out none))))
           (is (= :skipped-small-tree (:axe (:out small)))))))))
+
+;; ------------------------------------------------------------------ a started tree is finished after a cut
+
+(defn cut-after-digs
+  "A function for eye-reach! that cuts the running job once after its n-th dig (a reflex job done next), as a hunger reflex would."
+  [eng n pickup]
+  (let [digs (atom 0)]
+    #(when (= n (swap! digs inc))
+       (pickup)
+       (core/do-now! eng '(jobs.debug.notify {:text "cut"})))))
+
+(defn ^:async run-job-cut
+  "Submit job with args on the tall tree with a stone axe, cut it after its n-th dig (picking up logs logs by then), run ticks; the state."
+  [job args n logs ticks]
+  (let [s (fm/start (assoc tall :inventory [{:name "dirt" :count 20} {:name "stone_axe" :count 1}]) {})
+        _ (eye-reach! (:p s) false (cut-after-digs (:eng s) n #(fake/add-item! (:p s) "oak_log" logs)))
+        _ (core/submit! (:eng s) (list job args) {})
+        _ (await (tu/run-until-empty (:eng s) ticks))]
+    s))
+
+(deftest a-cut-felling-resumes-the-same-column-and-finishes-the-tree
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (run-job-cut 'jobs.forestry.fell-tree {:radius 10} 3 0 300))]
+          (is (= 8 (count (dug-ys (:p s)))) "every log of the trunk is dug")
+          (is (= 8 (count (distinct (dug-ys (:p s))))) "none is dug twice"))))))
+
+(deftest obtain-finishes-a-tree-it-started-when-the-logs-carried-are-already-enough
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (run-job-cut 'jobs.items.obtain {:item "oak_log" :count 2} 2 3 300))]
+          (is (= 8 (count (distinct (dug-ys (:p s))))) "the cut came after 2 logs were carried; the tree is still felled whole"))))))

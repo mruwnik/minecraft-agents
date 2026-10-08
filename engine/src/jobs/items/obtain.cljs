@@ -614,6 +614,8 @@
       (do (when-not (get-in (ctx/mem c) [:gather :before])
             (ctx/update-mem! c assoc-in [:gather :before] (gather-carried p need))
             (ctx/update-mem! c assoc-in [:gather :item] (:key need))
+            (when (= "log" (:key need))
+              (ctx/update-mem! c assoc-in [:gather :tree] (select-keys need [:key :job :args])))
             (when-let [{:keys [wanted taking]} (:wool-fallback pl)]
               (ctx/emit! c :obtain.wool-colour :info
                          {:message (str "no " wanted " sheep within " (sheep-radius) " blocks; taking " taking " wool instead")
@@ -623,10 +625,21 @@
               :continue
               (let [res (ctx/child-result c (gather-slot need))
                     before (get-in (ctx/mem c) [:gather :before])]
-                (ctx/update-mem! c update :gather dissoc :before :item)
+                (ctx/update-mem! c update :gather dissoc :before :item :tree)
                 (if (> (gather-carried p need) before)
                   (do (ctx/update-mem! c assoc-in [:gather :fruitless] 0) :again)
                   (gather-failed! c need (or (:reason res) :nothing-gathered) r)))))))))
+
+(defn ^:async finish-tree!
+  "The log child of an earlier round was cut before it ended: runs it to its end even when the logs carried are enough
+  (a tree it started is felled whole). :continue while it waits, else :again."
+  [c]
+  (let [{:keys [key job args]} (get-in (ctx/mem c) [:gather :tree])
+        slot (gather-slot {:key key})
+        r (if (ctx/check-child c slot job args) (await (ctx/call-child c slot job args)) :done)]
+    (if (= :continue r)
+      :continue
+      (do (ctx/update-mem! c update :gather dissoc :before :item :tree) :again))))
 
 (defn ^:async step! [c]
   (let [a (:args c)
@@ -648,6 +661,7 @@
               m (ctx/mem c)]
           (cond
             (some (set (:chain a)) names) (stop! c :cycle {:chain (:chain a)})
+            (get-in m [:gather :tree]) (await (finish-tree! c))
             (>= have target) (do (ctx/result! c {:status :done :got got :item (or (holds (into {} (map (juxt :name :count)) inv) names) (first names))})
                                  :done)
             (> (- now t) (* 60000 (:minutes o))) (stop! c :timeout {:got got :tried (:tried m)})
