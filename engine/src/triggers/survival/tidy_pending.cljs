@@ -50,10 +50,12 @@
   (<= (js/Math.hypot (- x (:x here)) (- y (:y here)) (- z (:z here))) (tidy-range)))
 
 (defn loaded-entries
-  "The :tidy data maps in view whose cell is loaded and near here and whose recording job is not live (not in the
-  set live of job ids: running, queued or paused); an entry without a job id counts as ended."
+  "The :tidy data maps in view that are tidy work (jobs.lib.tidy/tidy-work?) whose cell is loaded and near here and
+  whose recording job is not live (not in the set live of job ids: running, queued or paused); an entry without a job
+  id counts as ended."
   [p view live here]
   (->> (map :data (mem/entries view :tidy))
+       (filter tidy/tidy-work?)
        (remove #(contains? live (:job %)))
        (filter #(near? here (:cell %)))
        (filterv #(some? (tidy/block-now p (:cell %))))))

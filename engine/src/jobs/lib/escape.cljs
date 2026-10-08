@@ -337,13 +337,18 @@
        :else {:step :none :why :no-dig}))))
 
 (defn note-hole!
-  "Write cell, where block was dug, to the tidy ledger (jobs.lib.tidy, body memory) as a :dig entry with tag merged and
-  :any-of, the items that put it back (the block or what it drops); only when it is air now and not noted yet. The
-  :note arg of jobs.access.stair and clear-path (go-to's escalations), so a cut or cancel leaves no hole unknown."
+  "Write cell, where block was dug, to the tidy ledger (jobs.lib.tidy, body memory) as a :dig entry with tag merged,
+  the :zone, :claim or :plan it trespassed on, and :any-of, the items that put it back (the block or what it drops);
+  only when another's zone, claim or plan covers the cell (the body's own diggings stay), it is air now and no tagged
+  entry is there yet (a plain one the dig itself noted is replaced). The :note arg of jobs.access.stair and
+  clear-path (go-to's escalations), so a cut or cancel leaves no hole unknown."
   [c tag cell block]
   (let [p (:primitives c)
-        cell (vec cell)]
-    (when (and (not-any? #(= cell (:cell %)) (tidy/entries c)) (b/air (u/seen-name p (zipmap [:x :y :z] cell))))
+        cell (vec cell)
+        noted (first (filter #(= cell (:cell %)) (tidy/entries c)))
+        v (when-not (:escalation noted) (tidy/refusal c :dig (zipmap [:x :y :z] cell)))]
+    (when (and v (b/air (u/seen-name p (zipmap [:x :y :z] cell))))
+      (when noted (tidy/forget-cell! c cell))
       (tidy/record! c (merge {:cell cell :action :dig :was block :any-of (vec (distinct (cons block (b/drops-of p block))))}
-                             tag)
+                             (select-keys v [:zone :claim :plan]) tag)
                     "air"))))

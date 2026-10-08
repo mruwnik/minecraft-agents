@@ -13,6 +13,8 @@
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as world]
             [jobs.access.stair :as stair]
+            [jobs.lib.ledger :as ledger]
+            [engine.settings :as settings]
             [jobs.lib.walk.plan :as wplan]
             [plan.shape :as shape]))
 
@@ -465,6 +467,23 @@
           (is (= [1 66 0] (:at @out)))
           (is (= "cobblestone" (block-at p [1 65 0])) "the floor was placed")
           (is (= 1 (count (filter #(= "place" (.-name %)) (.-calls (.-world p)))))))))))
+
+(defn scaffold [{:keys [eng]}] (mapv #(select-keys % [:cell :item :purpose]) (ledger/open-entries (mem/view (:store eng)))))
+
+(deftest a-noted-stair-leaves-its-bridged-floor-to-cleanup
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [inv (conj pick {:name "cobblestone" :count 10})
+              noted (assoc up-east :note {:escalation true})
+              floor [{:cell [1 65 0] :item "cobblestone" :purpose :stair-floor}]]
+          (is (= floor (scaffold (await (stair! {:blocks cave-gap :inventory inv} noted (fn [_])))))
+              "go-to's stair: the floor goes into the scaffold ledger")
+          (is (= [] (scaffold (await (stair! {:blocks cave-gap :inventory inv} up-east (fn [_])))))
+              "another caller's stair keeps its floor")
+          (is (= [] (await (settings/with-settings {:jobs.access.stair/take-back-floors? false}
+                             (fn ^:async kept [] (scaffold (await (stair! {:blocks cave-gap :inventory inv} noted (fn [_]))))))))
+              "the setting keeps go-to's floor too"))))))
 
 (deftest a-gap-in-the-next-floor-without-filler-says-so
   (async done

@@ -92,9 +92,10 @@
     jobs.access.clear-path through a wall up to 3 thick toward the goal; else jobs.access.stair up out of a pit or
     toward a higher goal (as far as the goal is above, at most 8; a stair that leaves the body shut in under the goal is
     followed by the next escalation at once); else a walk to the nearest wall first. Each emits go-to.escalated {:step :why :n}. Once
-    through, it puts back what clear-path or stair dug (jobs.blocks.place, the dug block or its drop, when
-    carried): info go-to.restored, warn go-to.restore-skipped for cells it could not. Pillar blocks are left to
-    jobs.access.cleanup. Its children's walks never escalate. Jobs that must not change the world on the way pass
+    through, it puts back what clear-path or stair dug in another's zone, claim or plan (with :ignore-zones?;
+    its own diggings elsewhere stay) (jobs.blocks.place, the dug block or its drop, when carried): info
+    go-to.restored, warn go-to.restore-skipped for cells it could not. Pillar blocks and a stair's placed floors are
+    left to jobs.access.cleanup. Its children's walks never escalate. Jobs that must not change the world on the way pass
     :escalate false.
   - Gives up with {:status :stopped :arrived false :reason :unreachable :why ... :text words} (the job ends :stopped) and an :unreachable warn: :why is the planner's
     reason (:exhausted, :goal-unloaded (the goal lies in unloaded land and the loaded land leads no nearer), :goal-enclosed, :goal-cut-off, :goal-on-magma, :door-stuck with :cells, :one-way with :near and :one-way ...), or :stuck

@@ -13,9 +13,9 @@
             [jobs.lib.util :as u]))
 
 (def doc
-  "Put back what a job broke in another's zone or claim, and the holes a go-to escalation dug (the :tidy entries
-  jobs.lib.tidy and jobs.movement.go-to write). A dug block is placed again from an item of the same name
-  carried, or for an escalation hole what the block drops (cobblestone for stone). An escalation hole waits while
+  "Put back what a job broke in another's zone, claim or plan, and the holes a go-to escalation dug there (the :tidy
+  entries jobs.lib.tidy and jobs.movement.go-to write; the body's own diggings elsewhere stay). A dug block is placed
+  again from an item of the same name carried, or for an escalation hole what the block drops (cobblestone for stone). An escalation hole waits while
   the body is shut in (:shut-in), as it is the body's way on. A placed block is dug again. It digs nothing else.
   Works only when the body is safe: health at least :min-health and no hostile within :danger-radius.
   Touches only a cell whose block is still what the job left (a changed cell is somebody's, left alone),

@@ -5,6 +5,7 @@
   After the act, `record!` writes a :tidy entry to body memory:
   {:cell [x y z] :action :dig|:place :was block-before :now block-after :zone/:claim/:plan :tries n :job id}.
   :job is the top-level job that recorded it; the :tidy-pending trigger waits until that job has ended.
+  A hole is tidy work only in another's zone, claim or plan (tidy-work?): the body's own diggings stay.
   jobs.survival.restore-broken puts the cells back when the body is safe. Best effort, never at the cost of safety."
   (:require [engine.args :as a]
             [engine.settings :as settings]
@@ -105,10 +106,16 @@
   (when p
     (ctx/remember! c :tidy (assoc p :now now :tries 0 :job (:root c)) tidy-policy)))
 
+(defn tidy-work?
+  "Whether entry e is to be put back: a placed block, or a dug one that names another's :zone, :claim or :plan (an
+  entry noted before holes were noted only there may name none)."
+  [{:keys [action] :as e}]
+  (or (not= :dig action) (boolean (some #(contains? e %) [:zone :claim :plan]))))
+
 (defn entries
-  "The :tidy data maps, oldest first."
+  "The :tidy data maps that are tidy work (tidy-work?), oldest first."
   [c]
-  (mapv :data (ctx/entries c :tidy)))
+  (into [] (comp (map :data) (filter tidy-work?)) (ctx/entries c :tidy)))
 
 (defn forget-cell! [c cell]
   (ctx/forget-where! c :tidy #(= cell (:cell %))))

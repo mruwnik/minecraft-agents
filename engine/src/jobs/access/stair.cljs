@@ -9,6 +9,7 @@
             [jobs.lib.escape :as escape]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.lava :as lava]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
             [jobs.lib.blocks :as blocks]
@@ -36,7 +37,8 @@
   A step's floor must be solid, the cell under it neither air nor fluid (:cave-below), and everything loaded.
   A floor of air gets a carried building block (blocks/building-blocks, never an ore or valuable) after the
   rules' may-place?. The cell under a placed floor is not judged. With no such block: :no-floor with :filler
-  :none. A lava or water floor is never bridged.
+  :none. A lava or water floor is never bridged. A go-to stair (:note) writes its placed floors to the scaffold ledger
+  (purpose :stair-floor) for jobs.access.cleanup to take back once go-to's job ended (setting take-back-floors?).
 
   Each step is judged when chosen and each cell again right before its dig. Stops:
   - Access refusals with their reason: :zone :claim :footprint :not-loaded :no-zones. :ignore-zones? skips all
@@ -88,7 +90,7 @@
    :y {:doc "feet height to end at, instead of :steps" :spec (a/num-in nil nil) :default nil}
    :accept {:doc "hazards taken: #{:water :lava :falling-block}" :spec (a/coll-of #{:water :lava :falling-block}) :default #{}}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
-   :note {:doc "a map: each cell dug is written to the tidy ledger at once with it (jobs.lib.escape/note-hole!; go-to's escalation)" :spec map? :default nil}
+   :note {:doc "a map (go-to's escalation): each cell dug in another's zone, claim or plan is written to the tidy ledger at once with it (jobs.lib.escape/note-hole!), each floor placed to the scaffold ledger (take-back-floor?)" :spec map? :default nil}
    :fetch {:doc "get a missing pickaxe instead of waiting :no-tool (jobs.lib.fetch), and a block to seal lava with: true, a set of kinds or a map of limits" :spec fetch/option? :default true}
    :on-lava {:doc "exposed lava: :seal (fill it with a building block, then go on) or :stop" :spec #{:seal :stop} :default :seal}
    :by-hand {:doc "dig a block no carried tool clears bare-handed (slow, the drop is lost) instead of waiting :no-tool" :spec boolean? :default false}})
@@ -97,7 +99,8 @@
 (def rises {:down -1 :up 1})
 (a/defargs settings
   {::max-cell-digs {:default 3 :doc "Digs of one cell before the stair stops :refills." :spec (a/int-in 0 nil)}
-   ::max-steps {:default 400 :doc "Digs, steps, bridges and fetch rounds of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}})
+   ::max-steps {:default 400 :doc "Digs, steps, bridges and fetch rounds of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}
+   ::take-back-floors? {:default true :doc "A floor block a go-to stair (:note) places goes into the scaffold ledger for jobs.access.cleanup to take back; false keeps it." :spec boolean?}})
 (defn max-cell-digs [] (settings/get settings ::max-cell-digs))
 (defn max-steps [] (settings/get settings ::max-steps))
 (def unbreakable #{"bedrock" "barrier" "end_portal_frame" "end_portal" "nether_portal" "command_block" "structure_block" "jigsaw"})
@@ -443,8 +446,14 @@
                       (:dug :missing) :continue
                       {:reason :dig-failed :cell cell :block block :dig outcome})))))))))))
 
+(defn take-back-floor?
+  "Whether a floor this stair places goes into the scaffold ledger: a go-to stair (:note), unless the setting keeps it."
+  [c]
+  (boolean (and (:note (:args c)) (settings/get settings ::take-back-floors?))))
+
 (defn ^:async bridge!
-  "Place carried filler on the missing floor of the step. :again, or a stop map."
+  "Place carried filler on the missing floor of the step (in the scaffold ledger when take-back-floor?). :again, or a
+  stop map."
   [c in {:keys [floor]}]
   (let [item (blocks/pick c blocks/building-blocks)
         verdict (rules/may-place? (assoc in :cell floor))
@@ -454,11 +463,16 @@
                    :why (str "no floor and no filler block carried (" (str/join ", " (take 4 blocks/building-blocks)) " ...)")}
       (not (:ok verdict)) (assoc (dissoc verdict :ok) :cell floor)
       :else
-      (do (await (ctx/act c :place #js {:pos #js {:x x :y y :z z} :item item}))
-          (if (rules/air ((:block-at (rules-in c (feet-of c))) floor))
-            {:reason :place-failed :cell floor :item item}
-            (do (ctx/update-mem! c update :bridged (fnil conj #{}) floor)
-                :again))))))
+      (let [l (when (take-back-floor? c)
+                (ledger/intend (ledger/open-entries (ctx/view c))
+                               {:cell floor :item item :before ((:block-at in) floor) :job (:id c) :purpose :stair-floor}))
+            _ (when l (ledger/remember! c l))
+            _ (await (ctx/act c :place #js {:pos #js {:x x :y y :z z} :item item}))]
+        (when l (ledger/remember! c (ledger/reconcile l (escape/block-at-of (:primitives c)))))
+        (if (rules/air ((:block-at (rules-in c (feet-of c))) floor))
+          {:reason :place-failed :cell floor :item item}
+          (do (ctx/update-mem! c update :bridged (fnil conj #{}) floor)
+              :again))))))
 
 (defn ^:async walk-into!
   "Walk the body into cell [x y z] with a go-to child in slot (no escalation: the dig is this job's own): :continue

@@ -311,8 +311,9 @@
       (and (not (b/in-reach? c cell)) (deep-below? c cell)) :away)))
 
 (defn ^:async restore-round!
-  "Put back the next hole this job's escalations dug (own-holes), lowest first, with jobs.blocks.place (the dug block or
-  what it drops), one child call each. It runs once the body got on past the escalation (restore-next!). A hole
+  "Put back the next hole this job's escalations dug (own-holes, each in another's zone, claim or plan: undoing the
+  trespass, so the place ignores zones), lowest first, with jobs.blocks.place (the dug block or what it drops), one
+  child call each. It runs once the body got on past the escalation (restore-next!). A hole
   skip-why refuses, or the place child would wait on (nothing to place), stays in the ledger for restore-broken (a
   :changed one is forgotten). A placed one is forgotten."
   [c]
@@ -322,7 +323,7 @@
     (if (nil? e)
       (do (restore-done! c) :again)
       (let [{:keys [cell was any-of]} e
-            args {:pos cell :any-of any-of :fetch false}
+            args {:pos cell :any-of any-of :fetch false :ignore-zones? true}
             done! (fn [k entry]
                     (ctx/update-mem! c #(-> % (update :restore-seen (fnil conj #{}) cell) (update k (fnil conj []) entry)))
                     :again)

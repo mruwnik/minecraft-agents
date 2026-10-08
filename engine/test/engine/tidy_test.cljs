@@ -548,6 +548,23 @@
           (is (not (reach/enclosed? p)) "out on open ground")
           (is (nil? (tidy/why-not p escalation-hole)) "nothing holds the hole back once the body is out"))))))
 
+(def own-hole
+  "An escalation hole noted before holes were noted only in another's zone: no :zone, :claim or :plan."
+  (dissoc escalation-hole :zone))
+
+(deftest an-own-hole-noted-earlier-is-neither-held-for-nor-filled
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (false? (holds? with-stone [[:tidy (assoc own-hole :cell [0 65 0])]]))
+            "the trigger does not hold for the body's own digging")
+        (is (true? (holds? with-stone [[:tidy (assoc escalation-hole :cell [0 65 0])]]))
+            "a hole in another's zone is held for")
+        (let [{:keys [eng p seen]} (restore! with-stone [] [(assoc own-hole :cell [0 65 0])])]
+          (await (zs/run-until-empty eng 6))
+          (is (= [] (zs/calls p "place")) "the hole stays")
+          (is (= [] (zs/trespass seen :tidy.not-restored)) "it is no tidy work: nothing to warn about"))))))
+
 (deftest a-sealed-body-restores-the-cell-it-can-reach
   (async done
     (tu/run-async done

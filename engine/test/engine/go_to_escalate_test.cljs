@@ -12,6 +12,7 @@
             [engine.registry :as registry]
             [engine.test-util :as tu :refer [box]]
             [engine.triggers :as triggers]
+            [triggers.access.scaffold-left :as scaffold-left]
             [jobs.lib.world-files :as ew]))
 
 (defn setup
@@ -135,12 +136,48 @@
           (is (= 3 (count (calls p "jumpPlace"))) "one block per pillar round")
           (is (empty? (calls p "dig"))))))))
 
+(declare holes dug-cells)
+
+(def foreign
+  "Another owner's zone over the whole test area: go-to digs there only with :ignore-zones?, and puts back what it dug."
+  [{:name "vault" :owner "Miles" :min [-60 0 -60] :max [60 120 60]}])
+
+(def trespass {:ignore-zones? true})
+
+(deftest go-to-s-pillar-on-open-land-is-taken-back-once-it-ended
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng out p]} (await (run-job! (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 5}]})
+                                                   'jobs.movement.go-to {:pos [10 64 0] :range 1} []))
+              column [[0 61 0] [0 62 0] [0 63 0]]]
+          (is (= {:arrived true} @out))
+          (is (every? #(= "dirt" (block p %)) column) "the pillar stands")
+          (is (true? (scaffold-left/scaffold-left p (mem/view (:store eng)) {} (ew/of-data {} {} [])))
+              "the scaffold-left trigger offers it once go-to ended")
+          (core/submit! eng '(jobs.access.cleanup) {})
+          (await (tick-out! eng 600))
+          (is (every? #(= "air" (block p %)) column) "cleanup took every pillar block back"))))))
+
+(deftest go-to-leaves-the-holes-it-dug-on-open-land
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [zones [nil [] [{:name "home" :owner "fake" :min [-60 0 -60] :max [60 120 60]}]]]
+          (let [{:keys [eng out p seen]} (await (run-job! (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 2}]})
+                                                      'jobs.movement.go-to {:pos [10 64 0] :range 1} zones))]
+            (is (= {:arrived true} @out) (pr-str zones))
+            (is (= [:stair] (mapv :step (events-of seen :go-to.escalated))) (pr-str zones))
+            (is (= #{} (holes eng)) "own diggings are not noted for refilling")
+            (is (empty? (events-of seen :go-to.restored)) (pr-str zones))
+            (is (every? #(= "air" (block p %)) (dug-cells p)) "the stair stays dug")))))))
+
 (deftest go-to-stairs-out-of-a-pit-and-puts-back-what-it-dug
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p seen]} (await (run-job! (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 2}]})
-                                                {:pos [10 64 0] :range 1}))
+                                                'jobs.movement.go-to (merge {:pos [10 64 0] :range 1} trespass) foreign))
               restored (first (events-of seen :go-to.restored))
               skipped (first (events-of seen :go-to.restore-skipped))]
           (is (= {:arrived true} @out))
@@ -160,7 +197,7 @@
       (fn ^:async t []
         (let [{:keys [out p seen]} (await (run-job! {:self {:pos {:x 0 :y 59 :z 0}} :blocks deep-pit
                                                      :inventory [{:name "dirt" :count 2}]}
-                                                {:pos [10 64 0] :range 1}))
+                                                'jobs.movement.go-to (merge {:pos [10 64 0] :range 1} trespass) foreign))
               skipped (:cells (first (events-of seen :go-to.restore-skipped)))
               low (set (mapv :cell skipped))]
           (is (= {:arrived true} @out))
@@ -175,7 +212,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p seen]} (await (run-job! (merge in-room {:blocks room :inventory [{:name "dirt" :count 2}]})
-                                                {:pos [8 64 0] :range 1}))]
+                                                'jobs.movement.go-to (merge {:pos [8 64 0] :range 1} trespass) foreign))]
           (is (= {:arrived true} @out))
           (is (= [:clear-path] (mapv :step (events-of seen :go-to.escalated))) "the failed walks took it to the east wall")
           (is (empty? (events-of seen :go-to.restore-skipped)))
@@ -309,7 +346,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng out p seen]} (await (run-job! {:self {:pos {:x 0 :y 34 :z 0}} :blocks deep-shaft}
-                                                    {:pos [30 64 0] :range 1}))
+                                                    'jobs.movement.go-to (merge {:pos [30 64 0] :range 1} trespass) foreign))
               escalated (events-of seen :go-to.escalated)]
           (is (= {:arrived true} @out))
           (is (= [:stair :stair :stair :stair] (map :step escalated)) "30 up is 4 stairs of at most 8, one after another")
@@ -323,7 +360,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng out p seen]} (await (run-job! {:self {:pos {:x 0 :y 34 :z 0}} :blocks deep-shaft}
-                                                    {:pos [10 64 0] :range 1}))]
+                                                    'jobs.movement.go-to (merge {:pos [10 64 0] :range 1} trespass) foreign))]
           (is (= {:arrived true} @out))
           (is (= [:stair :stair :stair :stair] (map :step (events-of seen :go-to.escalated))))
           (is (seq (events-of seen :go-to.restore-skipped)) "the put-back ran once the walk got on")
@@ -471,7 +508,7 @@
         ;; the third step would cut stone with no pickaxe: the stair stops after two, which already reach the rim
         (let [{:keys [eng out p seen]} (await (run-job! (merge in-pit {:blocks (assoc pit "3,64,0" "stone")
                                                                        :inventory [{:name "dirt" :count 2}]})
-                                                    {:pos [10 64 0] :range 1}))
+                                                    'jobs.movement.go-to (merge {:pos [10 64 0] :range 1} trespass) foreign))
               dug (dug-cells p)]
           (is (= {:arrived true} @out))
           (is (= #{[1 63 0] [1 62 0] [2 63 0]} dug))
@@ -486,8 +523,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [plain (apply dissoc (merge (box -40 63 -40 40 63 40 "stone") pit) pit-cells)
-              {:keys [eng p seen]} (setup (merge in-pit {:blocks plain :inventory [{:name "dirt" :count 2}]}))]
-          (core/submit! eng '(jobs.movement.go-to {:pos [10 64 0] :range 1}) {})
+              {:keys [eng p seen]} (setup (merge in-pit {:blocks plain :inventory [{:name "dirt" :count 2}]}) foreign)]
+          (core/submit! eng '(jobs.movement.go-to {:pos [10 64 0] :range 1 :ignore-zones? true}) {})
           (let [k (atom 0)]
             (.override (.-world p) "dig" (fn [token args impl]
                                            (if (< (swap! k inc) 3) (impl token args) (js/Promise. (fn [_ _])))))
@@ -518,7 +555,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p seen]} (await (run-job! (merge in-room {:blocks room}) {:pos [8 64 0] :range 1}))]
+        (let [{:keys [out p seen]} (await (run-job! (merge in-room {:blocks room}) 'jobs.movement.go-to
+                                                (merge {:pos [8 64 0] :range 1} trespass) foreign))]
           (is (= {:arrived true} @out))
           (is (= [:clear-path] (mapv :step (events-of seen :go-to.escalated))))
           (is (empty? (events-of seen :go-to.restore-skipped)) "nothing carried at the start: the dug dirt was picked up")
@@ -601,8 +639,9 @@
         (let [stone-hole (apply dissoc (merge (box 3 60 -3 14 63 3 "stone") (box -2 60 -2 2 63 2 "stone")) pit-cells)
               {:keys [eng p]} (setup (merge in-pit {:blocks stone-hole
                                                      :inventory [{:name "iron_pickaxe" :count 1}
-                                                                 {:name "cobblestone" :count 2}]}))]
-          (core/submit! eng '(jobs.movement.go-to {:pos [10 64 0] :range 1}) {})
+                                                                 {:name "cobblestone" :count 2}]})
+                                     foreign)]
+          (core/submit! eng '(jobs.movement.go-to {:pos [10 64 0] :range 1 :ignore-zones? true}) {})
           (await (tick-out! eng 600))
           (is (= "cobblestone" (block p [1 62 0])) "the put-back block is cobblestone")
           (is (= #{[[1 62 0] "cobblestone"] [[1 63 0] "cobblestone"]}
@@ -690,7 +729,7 @@
               flaky (assoc place :check (fn [c] (or (odd? (swap! calls* inc)) (do (ctx/wait c :flaky) false))))
               {:keys [out p seen eng]} (with-redefs [registry/jobs (assoc registry/jobs 'jobs.blocks.place flaky)]
                                          (await (run-job! (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 2}]})
-                                                          {:pos [10 64 0] :range 1})))
+                                                          'jobs.movement.go-to (merge {:pos [10 64 0] :range 1} trespass) foreign)))
               skipped (:cells (first (events-of seen :go-to.restore-skipped)))]
           (is (= {:arrived true} @out))
           (is (some #{:declined} (map :why skipped)) "a declined child is a skip with the reason :declined")
