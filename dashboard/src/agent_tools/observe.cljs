@@ -191,10 +191,13 @@
       (timeout! w)
       (poll w))))
 
-(defn- lookup-history [{:keys [request get! signal deadline st]}]
+(defn- lookup-history
+  "The retained history up to the cursor: the last `limit` events (default job-results/history-limit)."
+  [{:keys [request get! signal deadline st]} & [limit]]
   (job-results/history! get! (:socket-path request)
-                        {:signal signal :deadline @deadline
-                         :snap (assoc (:snap @st) :cursor (:cursor @st))}))
+                        (cond-> {:signal signal :deadline @deadline
+                                 :snap (assoc (:snap @st) :cursor (:cursor @st))}
+                          limit (assoc :limit limit))))
 
 (defn- step [{:keys [st deaths opts generation body watching?] :as w}]
   (let [changes (attention-changes (:outstanding (:snap @st)) (:seen @st))]
@@ -203,7 +206,11 @@
       (seq (:changed changes)) (finish! w (attention-wake changes))
 
       (and (:lookup @st) watching?)
-      (js-await [history (lookup-history w)]
+      (js-await [first-history (lookup-history w)]
+        (js-await [history (if (and (not (:gap? first-history))
+                                    (seq (unavailable-jobs (:events first-history) (:cursor @st) generation opts (:snap @st))))
+                             (lookup-history w job-results/result-limit) ; the same window `observe result` scans
+                             (js/Promise.resolve first-history))]
         (let [unavailable (unavailable-jobs (:events history) (:cursor @st) generation opts (:snap @st))]
           (cond
             (:gap? history)
@@ -219,7 +226,7 @@
             :else
             (do (swap! st assoc :pending (-> (recent-results (:events history) (:cursor @st) generation opts body)
                                              (with-projections history generation)))
-                (after-lookup w)))))
+                (after-lookup w))))))
 
       :else (after-lookup w))))
 

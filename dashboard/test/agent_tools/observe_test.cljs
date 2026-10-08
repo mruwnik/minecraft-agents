@@ -593,6 +593,19 @@
                      (is (= :history-unavailable (:reason wake)))
                      (is (= ["j4"] (:jobs wake))))))))))
 
+(deftest a-fresh-watch-for-a-job-finished-before-the-last-1000-events-reads-its-recorded-result
+  (with-fixture ["1s"]
+    (fn [f]
+      (swap! (:world f) assoc :instances {})
+      (apply push! f search-job)
+      (apply push! f (map #(job-event % "j8" :memory_written) (range 4 1204)))
+      (let [req (assoc-in (:req f) [:wait-options :watch] ["j4"])]
+        (-> (observe/wait-observe req (:get! f) nil (fn [_] (js/Promise.resolve nil)))
+            (.then (fn [wake]
+                     (is (= :job-finished (:wake wake)))
+                     (is (= "j4" (:job wake)))
+                     (is (= search-found (get-in wake [:events 0 :data :found]))))))))))
+
 (deftest a-cursor-from-before-a-restart-resets-once-without-old-jobs-and-the-watched-job-is-still-found
   (with-fixture ["1s"]
     (fn [f]
