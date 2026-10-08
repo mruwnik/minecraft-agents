@@ -1067,6 +1067,66 @@ test('relight: over the dirty column bound the farthest column is forgotten, the
   assert.equal(view.lightOverlay(7, 0, (65 + 64) >> 4), undefined)
 })
 
+test('relight: a section dug out to all air while the body was far is relit when it comes near', async () => {
+  const { view, torch, bot } = torchWorld({ relightRange: 50, relightBudgetMs: 1e9, dirtyPointsMax: 1 })
+  torch(120)
+  torch(121)
+  for (const x of [120, 121]) for (const y of [64, 65]) {
+    bot.world.getColumn(7, 0).setBlockStateId({ x: x & 15, y, z: 8 }, AIR)
+  }
+  await view.flushColumns()
+  await view.idle()
+  assert.equal(view.stats().relightBoxes, 0)
+  bot.entity.position = new Vec3(110.5, 65, 10.5)
+  await view.flushColumns()
+  await view.idle()
+  assert.ok(view.stats().relightBoxes > 0)
+})
+
+test('relight: a whole-dirty column with changes in several sections is relit in each of them', async () => {
+  const { view, bot } = torchWorld({ relightRange: 50, relightBudgetMs: 1e9, dirtyPointsMax: 1 })
+  const column = bot.world.getColumn(7, 0)
+  for (const y of [65, 90, 120]) {
+    column.setBlockStateId({ x: 8, y, z: 8 }, stateOf('torch'))
+    bot.emit('blockUpdate', { position: new Vec3(120, y, 8), stateId: AIR }, { position: new Vec3(120, y, 8), stateId: stateOf('torch') })
+  }
+  bot.entity.position = new Vec3(110.5, 65, 10.5)
+  await view.flushColumns()
+  await view.idle()
+  for (const y of [65, 90, 120]) {
+    assert.equal(view.lightOverlay(7, 0, (y + 64) >> 4)?.block[((y + 64) & 15) << 8 | 8 << 4 | 8], 14)
+  }
+})
+
+test('relight: a pond across a column border is relit on both sides', async () => {
+  const { view, bot } = torchWorld({ relightRange: 1000, relightBudgetMs: 1e9 })
+  for (const x of [15, 16]) {
+    bot.world.getColumn(x >> 4, 0).setBlockStateId({ x: x & 15, y: 65, z: 8 }, stateOf('torch'))
+    bot.emit('blockUpdate', { position: new Vec3(x, 65, 8), stateId: AIR }, { position: new Vec3(x, 65, 8), stateId: stateOf('torch') })
+  }
+  await view.flushColumns()
+  await view.idle()
+  assert.equal(view.lightOverlay(0, 0, (65 + 64) >> 4)?.block[((65 + 64) & 15) << 8 | 8 << 4 | 15], 14)
+  assert.equal(view.lightOverlay(1, 0, (65 + 64) >> 4)?.block[((65 + 64) & 15) << 8 | 8 << 4 | 0], 14)
+  assert.ok(view.lightOverlay(0, 0, (65 + 64) >> 4).block[((65 + 64) & 15) << 8 | 8 << 4 | 14] >= 13)
+  assert.ok(view.lightOverlay(1, 0, (65 + 64) >> 4).block[((65 + 64) & 15) << 8 | 8 << 4 | 1] >= 13)
+})
+
+test('relight: forgetting the farthest dirty column keeps the light relit earlier there', async () => {
+  const { view, torch, bot } = torchWorld({ relightRange: 50, relightBudgetMs: 1e9, dirtyColumnsMax: 1 })
+  torch(88)
+  bot.entity.position = new Vec3(90.5, 65, 10.5)
+  await view.flushColumns()
+  await view.idle()
+  assert.equal(view.lightOverlay(5, 0, (65 + 64) >> 4)?.block[torchCell()], 14)
+  bot.entity.position = new Vec3(8.5, 65, 10.5)
+  torch(89) // far now: column 5 is dirty
+  torch(120) // a second dirty column: column 5 is the farthest from nobody nearer, and is forgotten
+  await view.flushColumns()
+  await view.idle()
+  assert.equal(view.lightOverlay(5, 0, (65 + 64) >> 4)?.block[torchCell()], 14)
+})
+
 test('overlay light in a column file decodes to the overlay, and a column without overlay is unchanged', () => {
   const column = makeColumn()
   const args = { column, x: 0, z: 0, t: 1, body: 'Bob', mcVersion: VERSION }

@@ -148,7 +148,7 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
   let mcVersion = null
   const pending = new Set()
   const overlays = new Map()
-  const dirty = new Map() // column key -> Map of block changes waiting for the body to come near (true: over the point bound, the whole column)
+  const dirty = new Map() // column key -> Map of block changes waiting for the body to come near (a Set of section indices: over the point bound, the whole column)
   let changes = new Map()
   const inflight = new Set()
   const running = new Set()
@@ -209,19 +209,19 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
 
   // Changes not relit yet (beyond relight-range, or trimmed off the backlog), by column. The overlay would keep the
   // server's load-time light there, so they are relit once the body comes near. Bounded: a column over its point bound
-  // is remembered as a whole (true, no points) and relit section by section; over the column bound the farthest
-  // column is forgotten and loses its overlay (the server light is read there).
+  // is remembered as the set of its touched sections (air or not) and relit section by section; over the column bound
+  // the farthest column is forgotten (its earlier relit overlay stays, the rest reads the server light).
   const defer = p => {
     const key = `${p.x >> 4},${p.z >> 4}`
-    const points = dirty.get(key)
-    if (points === true) return
-    if (!points) {
+    const held = dirty.get(key)
+    if (held instanceof Set) return held.add(p.y >> 4)
+    if (!held) {
       dirty.set(key, new Map())
       forgetFarthest(key)
     }
     const mine = dirty.get(key)
     mine.set(`${p.x},${p.y},${p.z}`, { x: p.x, y: p.y, z: p.z })
-    if (mine.size > (dirtyPointsMax ?? setting('view/dirty-points-max'))) dirty.set(key, true)
+    if (mine.size > (dirtyPointsMax ?? setting('view/dirty-points-max'))) dirty.set(key, new Set([...mine.values()].map(q => q.y >> 4)))
   }
   const forgetFarthest = keep => {
     if (dirty.size <= (dirtyColumnsMax ?? setting('view/dirty-columns-max'))) return
@@ -229,18 +229,10 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     const far = k => { const [cx, cz] = k.split(',').map(Number); return at ? (cx * 16 + 8 - at.x) ** 2 + (cz * 16 + 8 - at.z) ** 2 : 0 }
     const victim = [...dirty.keys()].filter(k => k !== keep).reduce((a, b) => far(b) > far(a) ? b : a)
     dirty.delete(victim)
-    overlays.delete(victim)
     markColumn(...victim.split(',').map(Number))
   }
-  // a whole dirty column: one point at the middle of each section holding blocks (the box around it covers the column)
-  const columnPoints = (target, cx, cz) => {
-    const column = target.world.getColumn(cx, cz)
-    if (!column) return []
-    const sections = Math.ceil(column.worldHeight / 16)
-    return Array.from({ length: sections }, (_, s) => s)
-      .filter(s => columnStateSection(column, s).some(id => id !== 0))
-      .map(s => ({ x: cx * 16 + 8, y: column.minY + s * 16 + 8, z: cz * 16 + 8 }))
-  }
+  // a whole dirty column: one point at the middle of each touched section (the box around it covers the section)
+  const sectionPoints = (cx, cz, sections) => [...sections].map(sy => ({ x: cx * 16 + 8, y: sy * 16 + 8, z: cz * 16 + 8 }))
   // move the dirty columns now within range of the body back into the relight backlog
   const requeueNear = (target, at) => {
     const range = relightRange ?? setting('view/relight-range')
@@ -248,7 +240,7 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
       const [cx, cz] = key.split(',').map(Number)
       if ((cx * 16 + 8 - at.x) ** 2 + (cz * 16 + 8 - at.z) ** 2 > range ** 2) continue
       dirty.delete(key)
-      for (const p of points === true ? columnPoints(target, cx, cz) : points.values()) changes.set(`${p.x},${p.y},${p.z}`, p)
+      for (const p of points instanceof Set ? sectionPoints(cx, cz, points) : points.values()) changes.set(`${p.x},${p.y},${p.z}`, p)
     }
   }
 
