@@ -887,7 +887,7 @@
   (finish! c))
 
 (defn ^:async home-by-go-to!
-  "After a descent the way home is the stair up (and a pit the digging left at its foot): go-to walks it, with its
+  "The way home (after a descent the stair up, and a pit the digging left at its foot): go-to walks it, with its
   escalation. :continue while the walk goes on, else the job ends."
   [c start]
   (let [at-home? #(= (cell-of (u/self-pos c)) start)
@@ -899,15 +899,20 @@
       :continue
       (home-done! c (at-home?)))))
 
+(defn floor-open?
+  "Whether the cell under cell is seen as not solid (a hole the mend left): moveTo must not aim there, go-to judges it."
+  [c {:keys [x y z]}]
+  (some-> (u/seen-name (:primitives c) {:x x :y (dec y) :z z}) not-solid boolean))
+
 (defn ^:async home-round!
-  "The last step of every normal run: back to the cell it started on (moveTo; go-to after a descent), whatever the
+  "The last step of every normal run: back to the cell it started on (moveTo; go-to after a descent or when the start cell's floor is open), whatever the
   digging left open behind it; a warn mine.not-home when the walk did not arrive (the job ends :stopped :not-home). The job ends either way."
   [c]
   (let [{:keys [start descent homing]} (ctx/mem c)]
     (when-not homing
       (ctx/update-mem! c assoc :homing true)
       (ctx/update-mem! c assoc-in [:tunnel :end] (access/cell (cell-of (u/self-pos c)))))
-    (if (pos? (:steps descent 0))
+    (if (or (pos? (:steps descent 0)) (floor-open? c start))
       (await (home-by-go-to! c start))
       (home-done! c (await (step-to! c start))))))
 

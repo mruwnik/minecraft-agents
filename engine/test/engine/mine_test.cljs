@@ -379,7 +379,7 @@
           (await (run-ticks s 1))
           (is (= [] (:ground (job-mem s))) "no ground is recorded")
           (await (run-ticks s 60))
-          (is (= :count (:reason (done-event s))))
+          (is (= :count (:dig-reason (done-event s))) "the dig reached its count; the open floor under the start cell is not walked onto")
           (is (zero? (:mended (done-event s))))
           (is (zero? (count (calls s "place"))))
           (is (zero? (count (calls s "jumpPlace"))))
@@ -1412,3 +1412,17 @@
           (is (empty? (dug-cells s)) "a pillar top is never dug from on top")
           (is (= [{:x 0 :y 63 :z 0}] (mapv :pos (events-of s :mine.refused))))
           (is (not= :failures (:reason (done-event s))) "no dig failure is booked"))))))
+
+(deftest the-walk-home-does-not-aim-at-a-start-cell-whose-floor-the-mend-left-open
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks {"0,63,0" "sand" "0,62,0" "lava"}}})
+              ys (atom [])]
+          (add-watch (fake/state (:p s)) ::ys (fn [_ _ _ w] (swap! ys conj (second (get-in w [:self :pos])))))
+          (core/submit! (:eng s) (spec {:block "sand" :count 1 :tunnel-length 0}) {})
+          (await (run-ticks s 30))
+          (is (every? #(>= % 63) @ys) "the body never goes down onto the open hole")
+          (is (not-any? #(= {:x 0.5 :y 64 :z 0.5} (select-keys (:target %) [:x :y :z])) (moved s))
+              "no raw move onto the start cell")
+          (is (seq (events-of s :mine.not-home)) "the walk home says it did not get back"))))))
