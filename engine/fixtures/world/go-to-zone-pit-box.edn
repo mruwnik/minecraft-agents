@@ -18,5 +18,5 @@
   {:name "roofed-pit-ignore-zones-stairs-out"
    :act [[:job (jobs.movement.go-to {:pos #at [20 3 16] :range 1 :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 90 :of-job true}
-            {:event {:source :job :kind :result :context {:chain [:any]} :data {:arrived true}} :within-s 140 :of-job true}]
+            {:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
    :after [[:body-near [20.5 3 16.5] 2]]}]}
