@@ -134,6 +134,12 @@
 (defn failure-edn [error agent socket]
   (data/write-edn {:ok false :reason (http/transport-reason error) :message (failure-text error agent socket)}))
 
+(defn reply-text
+  "The socket's JSON reply as EDN (the tool family prints EDN), the raw text when it is not a JSON object."
+  [text]
+  (let [value (parse-json text)]
+    (if (map? value) (data/write-edn value) text)))
+
 (defn print-text! [text] (js/console.log text))
 
 (defn main!
@@ -146,7 +152,7 @@
        (let [socket (socket-path-for req)]
          (.then (send! socket req (:request-fn opts))
                 (fn [{:keys [status text]}]
-                  (output text)
+                  (output (reply-text text))
                   (exit-code-for {:status status :json (parse-json text)}))
                 (fn [error]
                   (output (failure-edn error (:agent req) socket))

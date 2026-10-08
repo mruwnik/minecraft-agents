@@ -72,3 +72,9 @@
   (let [options (drive/request-options "/s" {:method "GET" :path "/drive" :body nil})]
     (is (= 3000 (:timeout-ms options)))
     (is (= 65536 (:max-bytes options)))))
+
+(deftest reply-text-turns-the-json-reply-into-edn
+  (are [text expected] (= expected (drive/reply-text text))
+    "{\"ok\":true,\"manual\":{\"who\":\"wt\"}}" "{:ok true :manual {:who \"wt\"}}"
+    "{\"ok\":false,\"reason\":\"not-driver\"}" "{:ok false :reason \"not-driver\"}"
+    "not json" "not json"))

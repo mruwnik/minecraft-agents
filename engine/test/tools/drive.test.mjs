@@ -35,13 +35,13 @@ test('the CLI takes and reports state against a live control socket', async () =
   try {
     const taken = await run(['Bob', 'take', '--why', 'cli test', '--world', 'w', '--state', state])
     assert.equal(taken.code, 0)
-    assert.equal(JSON.parse(taken.stdout).manual.who, 'claude')
+    assert.equal(taken.stdout.includes(':who "claude"'), true)
     const st = await run(['Bob', 'state', '--world', 'w', '--state', state])
     assert.equal(st.code, 0)
-    assert.equal(JSON.parse(st.stdout).manual.why, 'cli test')
+    assert.equal(st.stdout.includes(':why "cli test"'), true)
     const refused = await run(['Bob', 'stop', '--who', 'other', '--world', 'w', '--state', state])
     assert.equal(refused.code, 1)
-    assert.equal(JSON.parse(refused.stdout).reason, 'not-driver')
+    assert.equal(refused.stdout.includes(':reason "not-driver"'), true)
   } finally {
     await control.close()
   }
