@@ -62,6 +62,7 @@ patterns write `#at [x y z]` (absolute `[x y z]`) or `#xyz [x y z]` (absolute `{
 Act steps:
 - `[:summon "type" p "{NBT}"]` (the runner adds `Tags:["wt"]` and `PersistenceRequired`), `[:rcon "text"]` (with `$BODY $X $Y $Z $BOX` = the body, the plot origin and the plot box; every `@e` selector must be a plot box, e.g. `kill @e[type=zombie,$BOX]`).
 - A summoned entity's `UUID` must be unique across all fixture cases: the pool runs cases on neighbouring plots at once, and a second summon with a taken UUID is dropped (the job then finds another plot's mob).
+- A case that summons a hostile mob (`:act` `[:summon ...]`) gets a mob plot: every second plot of every second row (rows 0-8), plain cases use rows 10-19, so no other case stands within hearing (16 blocks); a setup `hurt` by suffocation fails the case as a setup error.
 - `[:job (spec) [:now]]`: submitted with `engine/tools/jobs.mjs`; its id joins the run's jobs. A string `"$entity-id:<type>"` in the spec becomes the numeric id of the nearest mob of that type the body sees (entities.mjs, polled 10 s).
 - `[:await pattern s]`: wait for an event since t0, error after s. `[:until check s]`: poll a `:memory` / `:file` check or a `:cli` step every 0.5 s until it passes, error after s. Prefer these to `[:wait-s n]`.
 - `[:kill-body]`, `[:time-set ticks]` (needs `--allow-time`), `[:restart-body]` (stops the body, starts it keeping memory and position, puts the register again).

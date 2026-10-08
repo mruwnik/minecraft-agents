@@ -19,7 +19,7 @@
   (is (= [20000 150 20000] (f/plot-origin grid 0)))
   (is (= [20032 150 20000] (f/plot-origin grid 1)))
   (is (= [20000 150 20032] (f/plot-origin grid 20)))
-  (is (thrown? js/Error (f/plot-origin grid 416))))
+  (is (thrown? js/Error (f/plot-origin grid 466))))
 
 (defn rect [grid i]
   (let [[x _ z] (f/plot-origin grid i)] [x z (+ x (:size-x grid) -1) (+ z (:size-z grid) -1)]))
@@ -38,7 +38,34 @@
     (is (not-any? #(overlap? grid-rect %) rects))
     (is (not-any? (fn [[a b]] (overlap? a b)) (for [a rects b rects :when (not= a b)] [a b])))
     (is (= [400 416] (f/plot-range big)))
-    (is (= [0 400] (f/plot-range small)))))
+    (is (= [200 400] (f/plot-range small)) "plain cases keep to the rows below the mob plots")))
+
+(def mob-case {:plot {} :act [[:wait-s 1] [:summon "skeleton" [3.5 0 3.5] "{NoAI:1b}"]]})
+
+(deftest mob-cases-lie-two-plots-apart-and-away-from-the-others
+  (let [g (f/case-grid mob-case)
+        [from end] (f/plot-range g)
+        rects (map #(rect g %) (range from end))
+        plain (map #(rect (f/case-grid {:plot {}}) %) (range 200 400))
+        gap 16]
+    (is (= [416 466] [from end]))
+    (is (= [20000 150 20000] (f/plot-origin g 416)))
+    (is (= [20064 150 20000] (f/plot-origin g 417)))
+    (is (= [20000 150 20064] (f/plot-origin g 426)))
+    (is (thrown? js/Error (f/plot-origin g 466)))
+    (is (not-any? (fn [[a b]] (overlap? (let [[x z x2 z2] a] [(- x gap) (- z gap) (+ x2 gap) (+ z2 gap)]) b))
+                  (for [a rects b (concat plain (remove #{a} rects))] [a b]))
+        "no other leased plot lies within hearing (16 blocks) of a mob plot")))
+
+(deftest hostile-summons-make-a-mob-case
+  (is (f/mob-case? mob-case))
+  (is (f/mob-case? {:act [[:summon "minecraft:zombie" [1 0 1]]]}))
+  (is (not (f/mob-case? {:act [[:summon "cow" [1 0 1]]]})))
+  (is (not (f/mob-case? {:act [[:wait-s 1]]}))))
+
+(deftest suffocation-at-start-is-a-setup-error
+  (is (nil? (f/start-hurt [{:kind :hurt :data {:causes ["fall"]}} {:kind :moved}])))
+  (is (re-find #"suffocation" (f/start-hurt [{:kind :hurt :data {:causes ["suffocation"] :amount 3}}]))))
 
 (deftest large-plot-setup-covers-every-block-in-small-commands
   (let [g (f/case-grid {:plot {:length 400 :width 32}})
@@ -160,7 +187,9 @@
       (is (some #{"tp ProbeFixture 20016.5 150 20016.5 0 0"} body))
       (is (some #{"give ProbeFixture bread 3"} body))
       (is (some #{"effect give ProbeFixture resistance 3600 4 true"} body))
-      (is (= "clear ProbeFixture" (second body)))
+      (is (< (.indexOf body "tp ProbeFixture 20016.5 150 20016.5 0 0") (.indexOf body "gamemode survival ProbeFixture"))
+          "survival comes after the tp: a body switched while still inside the built plot suffocates")
+      (is (= "clear ProbeFixture" (first body)))
       (is (every? (set body) ["item replace entity ProbeFixture armor.head with minecraft:air"
                               "item replace entity ProbeFixture armor.chest with minecraft:air"
                               "item replace entity ProbeFixture armor.legs with minecraft:air"

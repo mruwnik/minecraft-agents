@@ -1444,6 +1444,7 @@
         natural (f/natural-hostiles-commands grid origin rc (contains? #{:night :night-x} (lease/time-phase rc)))
         stop-sweep (atom (fn []))
         pre-register (atom nil)
+        setup-cursor (atom nil)
         weather (atom nil)
         result (fn [m] (cond-> (merge {:id (:id c) :run run :plot i :origin origin :elapsed-s (/ (- (js/Date.now) started) 1000)} m)
                          @weather (assoc :weather @weather)))]
@@ -1494,6 +1495,7 @@
                        (.then #(write-plans-settled! opts rc))
                        (.then #(reset! plan-files %))
                        (.then #(seed-shared! opts origin c))
+                       (.then #(reset! setup-cursor (log-cursor (events-file opts))))
                        (.then #(rcon! (f/body-commands origin (:body opts) rc)))
                        (.then #(ensure-at-start! {:send rcon! :sleep sleep} origin (:body opts) rc))
                        (.then (fn [why] (when why (throw (js/Error. why)))))
@@ -1502,6 +1504,7 @@
                        (.then #(reset! pre-register {:offset (log-cursor (events-file opts)) :from-ms (js/Date.now)}))
                        (.then #(when register (ev/emit! (ev/phase :register)) (put-register! opts register origin)))
                        (.then #(sleep (* 1000 (get-in rc [:body :settle-s]))))
+                       (.then (fn [] (when-let [why (f/start-hurt (read-events-from (events-file opts) @setup-cursor))] (throw (js/Error. why)))))
                        (.then #(rcon! (f/clear-hostiles-commands grid origin rc)))
                        (.then (fn []
                                 (let [t0 (js/Date.now)

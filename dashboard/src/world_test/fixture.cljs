@@ -20,26 +20,49 @@
   up to 1024 long and 64 wide, so a lane never touches the grid or another lane."
   {:z0 20704 :stride 96 :count 16 :max-length 1024 :max-width 64 :min-length 16})
 
+(def mob-rows
+  "Grid rows 0..mob-rows-1 hold the mob plots (every second row and column, so a mob plot has an empty plot on each
+  side, 32 blocks, beyond the body's 16 block hearing); plain cases use the rows from mob-rows + 1 on."
+  9)
+
+(defn mob-plot-count [{:keys [cols]}] (* (quot (inc mob-rows) 2) (quot cols 2)))
+
 (defn plot-origin
-  "The origin [x y z] of plot i: its north-west corner at body level."
-  [{:keys [x0 z0 y size cols rows]} i]
-  (let [n (* cols rows) {lz :z0 :keys [stride count]} large-lanes]
+  "The origin [x y z] of plot i: its north-west corner at body level. Plots n + lanes and up are the mob plots."
+  [{:keys [x0 z0 y size cols rows] :as grid} i]
+  (let [n (* cols rows) {lz :z0 :keys [stride count]} large-lanes
+        k (- i n count)]
     (cond
       (< -1 (- i n) count) [x0 y (+ lz (* stride (- i n)))]
-      (>= i n) (throw (js/Error. (str "plot " i " is outside the grid (" n " plots, then " count " large lanes)")))
+      (< -1 k (mob-plot-count grid)) [(+ x0 (* size 2 (mod k (quot cols 2)))) y (+ z0 (* size 2 (quot k (quot cols 2))))]
+      (>= i n) (throw (js/Error. (str "plot " i " is outside the grid (" n " plots, " count " large lanes, " (mob-plot-count grid) " mob plots)")))
       :else [(+ x0 (* size (mod i cols))) y (+ z0 (* size (quot i cols)))])))
+
+(declare hostile-types)
+
+(defn mob-case?
+  "Does the case summon a hostile mob? Such a case needs a mob plot: its mobs must be out of hearing of every other plot."
+  [c]
+  (boolean (some (fn [x] (and (vector? x) (= :summon (first x)) (string? (second x))
+                              (some #{(str/replace (second x) #"^minecraft:" "")} hostile-types)))
+                 (tree-seq coll? seq (:act c)))))
 
 (defn case-grid
   "The grid with the case's plot size: :size-x (length along x) and :size-z (width), 32 by default."
-  [{:keys [plot]}]
-  (let [{:keys [length width]} plot]
-    (assoc default-grid :size-x (or length (:size default-grid)) :size-z (or width (:size default-grid)))))
+  [c]
+  (let [{:keys [length width]} (:plot c)]
+    (cond-> (assoc default-grid :size-x (or length (:size default-grid)) :size-z (or width (:size default-grid)))
+      (mob-case? c) (assoc :mob-plots? true))))
 
 (defn plot-range
-  "[first end) of the plot indexes a case may lease: the 32x32 grid, or the large lanes."
-  [{:keys [size-x size-z size cols rows]}]
-  (let [n (* cols rows)]
-    (if (and (<= (or size-x size) 32) (<= (or size-z size) 32)) [0 n] [n (+ n (:count large-lanes))])))
+  "[first end) of the plot indexes a case may lease: the plain rows of the 32x32 grid, the mob plots for a case that
+  summons a hostile, or the large lanes."
+  [{:keys [size-x size-z size cols rows mob-plots?] :as grid}]
+  (let [n (* cols rows) lanes (:count large-lanes)]
+    (cond
+      (or (> (or size-x size) 32) (> (or size-z size) 32)) [n (+ n lanes)]
+      mob-plots? [(+ n lanes) (+ n lanes (mob-plot-count grid))]
+      :else [(* cols (inc mob-rows)) n])))
 
 (defn dims [{:keys [size size-x size-z]}] [(or size-x size) (or size-z size)])
 
@@ -491,14 +514,14 @@
   ["armor.head" "armor.chest" "armor.legs" "armor.feet" "weapon.offhand"])
 
 (defn body-commands
-  "Put the body at its start (facing :yaw, 0 = south, 180 = north; :pitch, 0 level, positive down): on the plot, survival, healed and fed, its inventory and effects as the case says."
+  "Put the body at its start (facing :yaw, 0 = south, 180 = north; :pitch, 0 level, positive down): on the plot (tp first, while still a spectator, then survival), healed and fed, its inventory and effects as the case says."
   [origin body c]
   (let [{:keys [at yaw pitch inventory effects spawnpoint]} (:body c)]
-    (-> [(str "gamemode survival " body)
-         (str "clear " body)
+    (-> [(str "clear " body)
          (str "effect clear " body)]
         (into (for [slot worn-slots] (str "item replace entity " body " " slot " with minecraft:air")))
         (into [(str "tp " body " " (xyz-str (abs-pos origin at)) " " (or yaw 0) " " (or pitch 0))
+               (str "gamemode survival " body)
                (str "effect give " body " minecraft:instant_health 1 10 true")
                (str "effect give " body " minecraft:saturation 1 10 true")])
         (into (for [[item n] inventory] (str "give " body " " item " " (or n 1))))
@@ -507,6 +530,12 @@
         (cond-> spawnpoint (conj (str "spawnpoint " body " " (xyz-str (abs-pos origin spawnpoint))))))))
 
 (declare reply-pos)
+
+(defn start-hurt
+  "The setup error when the events logged while the case set up show the body suffocating (it stood in a block), else nil."
+  [events]
+  (when-let [e (some #(when (and (= :hurt (:kind %)) (some #{"suffocation"} (get-in % [:data :causes]))) %) events)]
+    (str "the body was hurt by suffocation at the start (" (get-in e [:data :amount]) " damage): it stood inside a block")))
 
 (defn start-check-command [body] (str "data get entity " body " Pos"))
 
