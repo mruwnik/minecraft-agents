@@ -280,6 +280,22 @@
           (is (= 1 (get (inv p) "bread")))
           (is (nil? (get (inv p) "crafting_table"))))))))
 
+(deftest putting-a-table-down-and-crafting-at-it-is-one-urgent-section
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:inventory [{:name "wheat" :count 3} {:name "crafting_table" :count 1}]})]
+          (await (child-outcome eng job {:item "bread"} 40))
+          (is (= [[:craft :urgent]] (->> @seen (filter #(and (= :section (:kind %)) (:open %))) (map (juxt :section :holds)) distinct vec))))))))
+
+(deftest a-craft-at-a-table-already-in-reach-opens-no-section
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:inventory [{:name "wheat" :count 3}] :blocks {"2,64,0" "crafting_table"}})]
+          (await (child-outcome eng job {:item "bread"} 40))
+          (is (not-any? #(= :section (:kind %)) @seen)))))))
+
 (deftest craft-in-a-stone-pocket-digs-a-cell-beside-by-hand-for-the-table
   (async done
     (tu/run-async done

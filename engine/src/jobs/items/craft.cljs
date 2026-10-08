@@ -160,15 +160,22 @@
                 (spent/note! c "crafting_table" spot)
                 :again))))))))
 
+(declare step!)
+
 (defn ^:async table-fetch!
   "With no table in reach: put a carried table down, else fetch one (:fetch) and put it down. Once per craft.
-  :again / :continue to go on, nil when there is nothing to do (give up)."
+  :again / :continue to go on, nil when there is nothing to do (give up). Putting a carried table down and the craft at
+  it run as one urgent section (ctx/atomic :craft), so a reflex does not leave the table unused."
   [c]
   (let [o (fetch/opts c 'jobs.items.craft)]
     (when (and o (not (:table-tried (ctx/mem c))))
       (when-not (carried-table? c) (ctx/update-mem! c assoc :want-table true))
       (let [f (when (:want-table (ctx/mem c)) (await (fetch/fetch! c 'jobs.items.craft table-problem)))
-            r (when (and (nil? f) (carried-table? c)) (await (place-table! c)))]
+            r (when (and (nil? f) (carried-table? c))
+                (await (ctx/atomic c :urgent :craft
+                                   (fn ^:async place-and-craft []
+                                     (let [placed (await (place-table! c))]
+                                       (if (= :again placed) (await (step! c)) placed))))))]
         (when-not (or f r) (ctx/update-mem! c #(-> % (dissoc :want-table) (assoc :table-tried true))))
         (or f r)))))
 

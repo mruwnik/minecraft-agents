@@ -8,6 +8,9 @@
             [jobs.lib.pass :as pass]
             [engine.registry :as registry]
             [engine.test-util :as tu :refer [box floor]]
+            [engine.hut-shelter-test :as hut]
+            [engine.moved-test :as ut]
+            [engine.shelter-test :as st]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as world]))
 
@@ -107,3 +110,31 @@
         (let [r (await (leftover-run :self :shut false))]
           (is (true? (:open r)))
           (is (= 1 (count (:entries r)))))))))
+
+;; ------------------------------------------------------------------ a door transit is an urgent section
+
+(defn sections-opened [seen]
+  (->> @seen (filter #(and (= :section (:kind %)) (:open %))) (map (juxt :section :holds)) distinct vec))
+
+(defn ^:async go-to-run
+  "go-to to pos from inside the hut (jobs.movement.go-to, through the door when pos is outside): the sections opened
+  and whether the door is open after."
+  [pos]
+  (let [{:keys [eng p seen]} (ut/setup (hut/hut-world {:x 5 :y 64 :z 0} {}))]
+    (core/submit! eng (list 'jobs.movement.go-to {:pos pos :range 1}) {})
+    (await (st/tick-n eng 8))
+    {:sections (sections-opened seen) :door-open (hut/door-open? p)}))
+
+(deftest a-door-transit-is-an-urgent-section-from-the-opening-to-the-shutting
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [r (await (go-to-run {:x 5 :y 64 :z 7}))]
+          (is (= [[:door :urgent]] (:sections r)))
+          (is (false? (:door-open r)) "the door is shut again"))))))
+
+(deftest a-walk-through-no-door-opens-no-section
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= [] (:sections (await (go-to-run {:x 5 :y 64 :z 0})))))))))

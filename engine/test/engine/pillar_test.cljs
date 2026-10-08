@@ -112,6 +112,15 @@
 (defn finished? [eng] (empty? (:list (core/state eng))))
 (defn column [from n] (mapv #(update from 1 + %) (range n)))
 
+(deftest the-climb-is-one-urgent-section
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen] :as s} (setup {})]
+          (core/submit! eng (list job {:height 3}) {})
+          (await (ticks s eng 10))
+          (is (= [[:pillar :urgent]] (->> @seen (filter #(and (= :section (:kind %)) (:open %))) (map (juxt :section :holds)) distinct vec))))))))
+
 (deftest builds-the-full-height-one-block-a-round-each-recorded
   (async done
     (tu/run-async done

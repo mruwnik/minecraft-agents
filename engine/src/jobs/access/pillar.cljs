@@ -291,6 +291,7 @@
         (finish! c l step)))))
 
 (defn ^:async round
-  "The whole pillar: step! until it ends, a pace between blocks."
+  "The whole pillar: step! until it ends, a pace between blocks, as one urgent section (ctx/atomic :pillar): a night or
+  low-food reflex waits for the climb to end, up to its cap."
   [c]
-  (await (pace/steps! c #(step! c))))
+  (await (ctx/atomic c :urgent :pillar #(pace/steps! c (fn [] (step! c))))))

@@ -257,35 +257,46 @@
 
 (defn body-at [c] (let [pos (.-pos (.self (:primitives c)))] [(.-x pos) (.-y pos) (.-z pos)]))
 
-(defn ^:async walk!
-  "Follow steps (a plan that may open things) once, segment by segment: [done ms] as jobs.lib.walk/walk! answers (its
-  :step counted in steps), or {:status :door-stuck :cells [...]} for blocks that would not open. watch, when given, is the
-  look-ahead (jobs.lib.walk.watch/watch-stop) of every segment walked with nothing left to shut behind, the rest of the plan as
-  its :ahead. A walk that ends off its plan or stuck still shuts what
-  it can; what it cannot (the body is in its column, or the walk was cut) keeps its :opened entry."
-  [c steps {:keys [timeout-s doors shut-also watch]}]
-  (let [last-i (dec (count steps))]
-    (loop [steps (with-climbs steps) s 0 pending [] ms 0]
-      (let [{e :end k :open} (segment steps s pending)
+(defn ^:async transit!
+  "One leg of walk!: open the block of step k when given, walk the segment from step s, shut what the body has left.
+  [:done result] or [:next steps s pending ms k] (k: the step whose :opens come next)."
+  [c steps s pending ms k last-i {:keys [timeout-s doors shut-also watch]}]
+  (let [opened (when k (await (open-all! c (:opens (nth steps k)) doors shut-also)))]
+    (if (seq (:stuck opened))
+      [:done [{:status :door-stuck :cells (:stuck opened) :at (body-at c)} ms]]
+      (let [steps (cond-> steps k (update k dissoc :opens))
+            pending (into pending (:pending opened))
+            {e :end k :open} (segment steps s pending)
             seg-watch (when (and watch (empty? pending)) (assoc watch :ahead (subvec steps (inc e))))
             [done seg-ms] (if (> e s) (await (walk/walk! c (subvec steps s (inc e)) timeout-s seg-watch)) [nil 0])
             ms (+ ms seg-ms)
             pending (if done (await (shut-ready! c pending)) pending)]
         (cond
           (and done (not= :arrived (:status done)))
-          [(cond-> done (:step done) (update :step + s)) ms]
+          [:done [(cond-> done (:step done) (update :step + s)) ms]]
 
           (and (= e last-i) (nil? k))
-          [(or done {:status :arrived :at (body-at c)}) ms]
-
-          (nil? k)
-          (recur steps e pending ms)
+          [:done [(or done {:status :arrived :at (body-at c)}) ms]]
 
           :else
-          (let [{opened :pending :keys [stuck]} (await (open-all! c (:opens (nth steps k)) doors shut-also))]
-            (if (seq stuck)
-              [{:status :door-stuck :cells stuck :at (body-at c)} ms]
-              (recur (update steps k dissoc :opens) e (into pending opened) ms))))))))
+          [:next steps e pending ms k])))))
+
+(defn ^:async walk!
+  "Follow steps (a plan that may open things) once, segment by segment: [done ms] as jobs.lib.walk/walk! answers (its
+  :step counted in steps), or {:status :door-stuck :cells [...]} for blocks that would not open. watch, when given, is the
+  look-ahead (jobs.lib.walk.watch/watch-stop) of every segment walked with nothing left to shut behind, the rest of the plan as
+  its :ahead. A walk that ends off its plan or stuck still shuts what
+  it can; what it cannot (the body is in its column, or the walk was cut) keeps its :opened entry.
+  A leg with a block to open or still open is an urgent section (:door, ctx/atomic): the open, the walk through and the shut."
+  [c steps opts]
+  (let [last-i (dec (count steps))]
+    (loop [steps (with-climbs steps) s 0 pending [] ms 0 k nil]
+      (let [leg #(transit! c steps s pending ms k last-i opts)
+            [tag & more] (if (or k (seq pending)) (await (ctx/atomic c :urgent :door leg)) (await (leg)))]
+        (if (= :done tag)
+          (first more)
+          (let [[steps s pending ms k] more]
+            (recur steps s pending ms k)))))))
 
 (defn standing-in-opened
   "The columns of the blocks this job opened to shut again (:opened entries, :shut? true) that stand open with the body in
