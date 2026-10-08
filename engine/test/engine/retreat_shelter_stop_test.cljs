@@ -43,7 +43,18 @@
     (await (look-at-cells! p walls)))
   p)
 
-(defn sleep [ms] (js/Promise. (fn [r] (js/setTimeout r ms))))
+(defn leave-at-first-hold!
+  "The hostile leaves (gone from the world, the clock 300 s on) at the body's first hold (a :wait, why hiding or
+  cornered): the retreat has dug, sealed or given up by then, whatever the machine's speed."
+  [raw clock]
+  (let [left (atom false)]
+    (.override (.-world raw) "wait"
+               (fn [token a impl]
+                 (when (and (not @left) (#{"hiding" "cornered"} (.-why a)))
+                   (reset! left true)
+                   (swap! (fake/state raw) assoc :entities [])
+                   (swap! clock + 300000))
+                 (impl token a)))))
 
 (defn ^:async round
   "Submit the retreat over the world and run its first rounds; the primitives p."
@@ -57,11 +68,8 @@
                           :events (events/make {:body "Fake" :sinks [sink] :now now})})]
     (await (see-tunnel! raw p))
     (core/submit! eng (list 'jobs.survival.retreat args) {})
-    (let [r (core/tick! eng)]
-      (await (sleep 700))
-      (swap! (fake/state raw) assoc :entities [])
-      (swap! clock + 300000)
-      (await r))
+    (leave-at-first-hold! raw clock)
+    (await (core/tick! eng))
     p))
 
 (defn calls [p kind] (mapv #(let [pos (.. % -args -pos)] [(.-x pos) (.-y pos) (.-z pos)])
@@ -157,11 +165,8 @@
                           :events (events/make {:body "Fake" :sinks [sink] :now now})})]
     (await (see-plain! raw p))
     (core/submit! eng (list 'jobs.survival.retreat args) {})
-    (let [r (core/tick! eng)]
-      (await (sleep 700))
-      (swap! (fake/state raw) assoc :entities [])
-      (swap! clock + 300000)
-      (await r))
+    (leave-at-first-hold! raw clock)
+    (await (core/tick! eng))
     {:p p :kinds (set (map :kind @seen)) :stood @stood :feet-y (js/Math.floor (second (:pos (fake/self raw))))}))
 
 (defn block-at [p x y z] (.-name (.blockAt p #js {:x x :y y :z z})))
