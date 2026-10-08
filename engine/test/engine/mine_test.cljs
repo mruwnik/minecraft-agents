@@ -1238,7 +1238,7 @@
 (defn ^:async as-child
   "Run the job with args under a parent for n ticks; {:s setup :out the child's result :fetch the get-tool calls}.
   get-tool is a stub that records its args and, when give is set, hands over that pickaxe (else stops :no-source)."
-  [args world give n]
+  [args world give n & [{:keys [move-to]}]]
   (let [s (start {:world world})
         out (atom nil)
         fetched (atom [])
@@ -1247,6 +1247,7 @@
                        (swap! fetched conj (:args c))
                        (if give
                          (do (fake/add-item! (:p s) give 1)
+                             (when move-to (swap! (fake/state (:p s)) assoc-in [:self :pos] move-to))
                              (ctx/result! c {:status :done :tool give}))
                          (ctx/result! c {:status :stopped :reason :no-source}))
                        :done)
@@ -1279,6 +1280,16 @@
           (is (= ["stone"] (mapv :block fetch)))
           (is (= :count (:reason out)))
           (is (= 1 (get (inv s) "cobblestone"))))))))
+
+(deftest the-tunnel-starts-where-the-body-stood-before-the-pickaxe-fetch
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [aisle (-> rock (dissoc "1,64,0" "2,64,0" "1,65,0" "2,65,0"))
+              {:keys [s]} (await (as-child {:block "iron_ore" :count 1 :direction "west" :tunnel-length 3 :mend false}
+                                           {:blocks aisle :drops {"iron_ore" "raw_iron" "stone" "cobblestone"}}
+                                           "stone_pickaxe" 120 {:move-to [2.5 64 0.5]}))]
+          (is (= [0 64 0] (:origin (:tunnel (done-event s)))) "the origin is the cell the job began on, not the fetch spot"))))))
 
 (deftest a-pickaxe-that-cannot-be-fetched-ends-stopped-no-tool
   (async done
