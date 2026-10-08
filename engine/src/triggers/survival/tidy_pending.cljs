@@ -12,7 +12,7 @@
   until the body is :move-far blocks from where it was or retry-s passed since the run counted its try (the entry's
   :tried stamp), so a cell no run can reach is tried once per window.
   Entries of a job that is still live (running, queued, paused) are ignored: that job may still be digging there.
-  Entries in an unloaded cell wait until the body is near.
+  Entries in an unloaded cell, or more than :range blocks from the body, wait until the body is near.
   Persistence is :cooldown (10 s), not :stop. A run cut short by a backoff leaves entries pending, so the condition
   stays true and a :stop latch would never clear. The retries are bounded: each try counts toward max-tries."
   (:require [engine.args :as a]
@@ -24,8 +24,10 @@
 (def defaults {:min-health 14 :danger-radius 8 :reach 3 :move-far 8})
 
 (a/defargs settings
-  {::retry-s {:default 120 :doc "Seconds before a try the run counted is retried while the body stays near it." :spec (a/int-in 0 nil)}})
+  {::range {:default 48 :doc "Blocks from the body within which a :tidy entry is held for; farther ones wait until the body comes near." :spec (a/int-in 1 nil)}
+   ::retry-s {:default 120 :doc "Seconds before a try the run counted is retried while the body stays near it." :spec (a/int-in 0 nil)}})
 (defn retry-s [] (settings/get settings ::retry-s))
+(defn tidy-range [] (settings/get settings ::range))
 
 (defn airborne? [p] (false? (.-onGround (.self p))))
 
@@ -41,21 +43,27 @@
         (< (js/Math.hypot (- (:x here) (:x tried)) (- (:z here) (:z tried))) move-far)
         (< (js/Math.abs (- (:y here) (:y tried))) move-far))))
 
+(defn near?
+  "Whether cell [x y z] is within tidy-range blocks of the body at here."
+  [here [x y z]]
+  (<= (js/Math.hypot (- x (:x here)) (- y (:y here)) (- z (:z here))) (tidy-range)))
+
 (defn loaded-entries
-  "The :tidy data maps in view whose cell is loaded and whose recording job is not live (not in the set live of
-  job ids: running, queued or paused); an entry without a job id counts as ended."
-  [p view live]
+  "The :tidy data maps in view whose cell is loaded and near here and whose recording job is not live (not in the
+  set live of job ids: running, queued or paused); an entry without a job id counts as ended."
+  [p view live here]
   (->> (map :data (mem/entries view :tidy))
        (remove #(contains? live (:job %)))
+       (filter #(near? here (:cell %)))
        (filterv #(some? (tidy/block-now p (:cell %))))))
 
 (defn holds?
   "Whether some pending entry is worth a run now (see the ns doc); "
-  [p view args live]
+  [p view args live here]
   (let [reported (set (:cells (:data (mem/latest view :tidy-reported))))]
     (filterv #(or (not (contains? reported (:cell %)))
                   (and (tidy/restorable? p %) (not (tidy/unreachable? p % (:reach args)))))
-             (loaded-entries p view live))))
+             (loaded-entries p view live here))))
 
 (defn tidy-pending
   [p view args _kn live]
@@ -64,5 +72,5 @@
         h (u/self-pos {:primitives p})
         here {:x (:x h) :y (:y h) :z (:z h)}
         pending (when-not (or (airborne? p) (tidy/unsafe? p args))
-                  (holds? p view args live))]
+                  (holds? p view args live here))]
     (boolean (some #(not (tried-lately? args now here (tidy/restorable? p %) %)) pending))))

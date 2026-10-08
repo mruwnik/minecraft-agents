@@ -373,7 +373,7 @@ Built-in triggers, in the order of `triggers/defaults.edn` (the default register
 | `:died` | a `:died` under the despawn window (6000 game ticks) old with a newer `:respawned` and no `:recovered` | `recover-drops` | 30 s |
 | `:inventory-nearly-full` | at most `:free` 2 of 36 main and hotbar slots empty | `storage.make-room` | 120 s |
 | `:scaffold-left` | the scaffold ledger holds blocks whose job is gone | `access.cleanup` | stop |
-| `:tidy-pending` | body safe and on the ground, a `:tidy` entry pending; a cell a run tried (the entry's `:tried` stamp) waits 2 min or until the body moves 8 blocks | `survival.restore-broken` | 10 s |
+| `:tidy-pending` | body safe and on the ground, a `:tidy` entry pending; a cell a run tried (the entry's `:tried` stamp) waits 2 min or until the body moves 8 blocks; entries over `range` (48) blocks from the body wait until it comes near | `survival.restore-broken` | 10 s |
 | `:pen-gate` | a planned fence gate within 8 was last seen open, body more than 2 away; no `:opened`/`:gate-held`/`:gate-gave-up` entry for it | `animals.shut-gate` (waits `:open-s`, 4 s, before shutting; a gate it left for an animal or an interrupted walk is paused 30 s) | 5 s |
 | `:mounted` | the body rides something and no live job holds a vehicle | `movement.leave-vehicle` | cooldown 30 s |
 | `:loose-items` | on the ground, not nearly full, no danger within 8, and a seen item within `:radius` 8 that `jobs.lib.loose` takes (worth / detour cost at least `:min-ratio`, or on `:always`; not on `:never`, thrown, owed to a live job or in another's zone or claim); settings only, register `:args` ignored | `items.pick-up-loose` | 30 s |

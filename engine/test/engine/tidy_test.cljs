@@ -318,6 +318,14 @@
     (is (true? (at 1010 [40 64 0])) "moved far")
     (is (true? (at (+ 1000 (tidy-pending/retry-s)) [2 64 0])) "window passed")))
 
+(deftest the-trigger-waits-for-entries-far-from-the-body
+  (let [far (assoc dug :cell [130 65 0])
+        at (fn [entry pos] (holds-at (assoc with-stone :unloaded []) [[:tidy entry]] 1000 pos))]
+    (is (false? (at far [0 64 0])) "130 blocks away: wait")
+    (is (true? (at far [120 64 0])) "body came near")
+    (is (false? (at (assoc dug :cell [0 130 0]) [0 64 0])) "far above")
+    (is (true? (at dug [0 64 0])) "near")))
+
 (deftest the-trigger-answers-from-memory-alone-so-a-restart-changes-nothing
   (is (= (holds-at with-stone [[:tidy (tried 1000)]] 1010 [2 64 0])
          (holds-at with-stone [[:tidy (tried 1000)]] 1010 [2 64 0]))

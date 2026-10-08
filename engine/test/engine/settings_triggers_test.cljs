@@ -15,6 +15,7 @@
   {:triggers.storage.inventory-nearly-full/free 2
    :triggers.survival.hungry/bake-wheat 3
    :triggers.survival.hungry/rest-s 600
+   :triggers.survival.tidy-pending/range 48
    :triggers.survival.tidy-pending/retry-s 120})
 
 (def all-specs
