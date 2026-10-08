@@ -902,7 +902,7 @@ test('relight: boxes over budget carry their changes to the next flush, and thei
   const columns = Object.fromEntries([0, 1, 2, 3, 4, 5, 6, 7].flatMap(cx => [0, 1].map(cz => [`${cx},${cz}`, new ChunkColumn()])))
   const bot = fakeBot({ columns })
   bot.registry = undefined
-  const { view, dir } = makeView(bot, { relightBudgetMs: 0 })
+  const { view, dir } = makeView(bot, { relightBudgetMs: 0, relightRange: 1e6 })
   const torch = x => {
     const stone = stateOf('stone')
     columns[`${x >> 4},0`].setBlockStateId({ x: x & 15, y: 64, z: 8 }, stone)
@@ -934,7 +934,7 @@ test('relight: a backlog bigger than relightMaxPoints is only looked at in part 
   const columns = Object.fromEntries([0, 1, 2, 3, 4, 5, 6, 7].flatMap(cx => [0, 1].map(cz => [`${cx},${cz}`, new ChunkColumn()])))
   const bot = fakeBot({ columns })
   bot.registry = undefined
-  const { view, dir } = makeView(bot, { relightMaxPoints: 1, relightBudgetMs: 1e9 })
+  const { view, dir } = makeView(bot, { relightMaxPoints: 1, relightRange: 1e6, relightBudgetMs: 1e9 })
   const torch = x => {
     const stone = stateOf('stone')
     columns[`${x >> 4},0`].setBlockStateId({ x: x & 15, y: 64, z: 8 }, stone)
@@ -980,6 +980,41 @@ test('relight: the changes nearest the body go first, whatever was queued before
     assert.equal(torchLight(view, 8), 14, JSON.stringify(overrides))
     assert.equal(torchLight(view, 120), undefined, JSON.stringify(overrides))
   }
+})
+
+const torchWorld = (overrides, at = new Vec3(8.5, 65, 10.5)) => {
+  const columns = Object.fromEntries([0, 1, 2, 3, 4, 5, 6, 7].flatMap(cx => [0, 1].map(cz => [`${cx},${cz}`, new ChunkColumn()])))
+  const bot = fakeBot({ columns })
+  bot.registry = undefined
+  bot.entity.position = at
+  const { view, dir } = makeView(bot, overrides)
+  const torch = x => {
+    columns[`${x >> 4},0`].setBlockStateId({ x: x & 15, y: 64, z: 8 }, stateOf('stone'))
+    columns[`${x >> 4},0`].setBlockStateId({ x: x & 15, y: 65, z: 8 }, stateOf('torch'))
+    bot.emit('blockUpdate', { position: new Vec3(x, 65, 8), stateId: AIR }, { position: new Vec3(x, 65, 8), stateId: stateOf('torch') })
+  }
+  return { view, dir, torch }
+}
+
+test('relight: a change beyond relightRange of the body is not queued, its column is still dumped', async () => {
+  const { view, dir, torch } = torchWorld({ relightRange: 50, relightBudgetMs: 1e9 })
+  torch(120)
+  await view.flushColumns()
+  await view.idle()
+  assert.equal(view.stats().relightBoxes, 0)
+  assert.equal(view.stats().relightCarried, 0)
+  assert.equal(fs.existsSync(path.join(worldChunks(dir), '7.0.bin')), true)
+})
+
+test('relight: a backlog over relightBacklogMax keeps only the nearest points', async () => {
+  const { view, torch } = torchWorld({ relightRange: 1000, relightBacklogMax: 2, relightMaxPoints: 1, relightBudgetMs: 1e9 })
+  for (const x of [120, 104, 88, 72, 8, 40]) torch(x)
+  await view.flushColumns()
+  await view.idle()
+  const s = view.stats()
+  assert.equal(s.relightBoxes, 1)
+  assert.equal(s.relightCarried, 1)
+  assert.equal(view.lightOverlay(0, 0, (65 + 64) >> 4)?.block[((65 + 64) & 15) << 8 | 8 << 4 | 8], 14)
 })
 
 test('overlay light in a column file decodes to the overlay, and a column without overlay is unchanged', () => {
@@ -1142,7 +1177,7 @@ test('relight cost: one torch, a mining burst along a tunnel, and changes spread
       const world = setup()
       lightWorld(world)
       const bot = worldBot(world)
-      const { view } = makeView(bot, { relightBudgetMs: Infinity, ...opts })
+      const { view } = makeView(bot, { relightBudgetMs: Infinity, relightRange: 1e6, ...opts })
       view.stats()
       applyEdits(world, bot, edits)
       await view.flushColumns()
@@ -1164,7 +1199,7 @@ test('relight cost: one torch, a mining burst along a tunnel, and changes spread
   const columns = Object.fromEntries(world.map)
   const bot = fakeBot({ columns })
   bot.registry = undefined
-  const { view } = makeView(bot)
+  const { view } = makeView(bot, { relightRange: 1e6 })
   for (const [x, y, z] of spread) {
     world.set(x, y - 1, z, stateOf('stone'))
     world.set(x, y, z, stateOf('torch'))

@@ -71,6 +71,8 @@ export const SPECS = {
   'steer/max-timeout-s': { default: 120, spec: ['int-in', 0, null], doc: "Longest steer time limit a caller may ask for, in seconds." },
   'raw-world/cache-max': { default: 2048, spec: ['int-in', 1, null], doc: "Section copies kept before the caches are dropped." },
   'raw-world/epoch-range': { default: 50, spec: ['int-in', 0, null], doc: "A block update or chunk change this near the body (a little over the sight radius) moves epoch, in blocks." },
+  'view/relight-range': { default: 64, spec: ['int-in', 0, null], doc: "A block change farther than this from the body is not relit for the view overlay (a little over the sight radius), in blocks." },
+  'view/relight-backlog-max': { default: 4096, spec: ['int-in', 1, null], doc: "Most block changes waiting to be relit; beyond it only the ones nearest the body are kept." },
   'raw-world/light-ttl-ms': { default: 1000, spec: ['int-in', 0, null], doc: "A light copy is re-read after this long, in ms." },
 }
 

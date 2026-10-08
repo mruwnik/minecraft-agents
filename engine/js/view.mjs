@@ -8,6 +8,7 @@ import zlib from 'node:zlib'
 import { createHash } from 'node:crypto'
 import { promisify } from 'node:util'
 import { relightBox } from './light.mjs'
+import { setting } from './settings.mjs'
 import { bodyDir, worldsDir } from './bodies.mjs'
 import { RELIGHT_BUDGET_MS, RELIGHT_MAX_POINTS, RELIGHT_REACH, columnLightSection, columnStateSection, hasSkyLight, tableFor, mergeOverlapping } from './view-light.mjs'
 import { VIEW_VERSION, encodeColumn } from './view-column.mjs'
@@ -108,7 +109,31 @@ export function poseHzFromEnv (env = process.env) {
 }
 
 
-export function createView ({ stateDir, agent, world, onEvent = () => {}, now = Date.now, enabled = process.env.BODY_VIEW !== '0', poseHz = poseHzFromEnv(), relightBudgetMs = RELIGHT_BUDGET_MS, relightMaxPoints = RELIGHT_MAX_POINTS }) {
+const distSq = (p, at) => (p.x - at.x) ** 2 + (p.y - at.y) ** 2 + (p.z - at.z) ** 2
+
+// The k points nearest `at`, nearest first, by a bounded max-heap: O(n log k), never a sort of all n.
+export function nearestK (points, at, k) {
+  const heap = [] // [distance, point], farthest at the root
+  const up = i => {
+    for (let j = (i - 1) >> 1; i > 0 && heap[i][0] > heap[j][0]; i = j, j = (i - 1) >> 1) [heap[i], heap[j]] = [heap[j], heap[i]]
+  }
+  const down = () => {
+    for (let i = 0; ;) {
+      let m = i
+      for (const c of [2 * i + 1, 2 * i + 2]) if (c < heap.length && heap[c][0] > heap[m][0]) m = c
+      if (m === i) return
+      ;[heap[i], heap[m]] = [heap[m], heap[i]]
+      i = m
+    }
+  }
+  for (const p of points) {
+    const d = distSq(p, at)
+    if (heap.length < k) { heap.push([d, p]); up(heap.length - 1) } else if (d < heap[0][0]) { heap[0] = [d, p]; down() }
+  }
+  return heap.sort((a, b) => a[0] - b[0]).map(([, p]) => p)
+}
+
+export function createView ({ stateDir, agent, world, onEvent = () => {}, now = Date.now, enabled = process.env.BODY_VIEW !== '0', poseHz = poseHzFromEnv(), relightBudgetMs = RELIGHT_BUDGET_MS, relightMaxPoints = RELIGHT_MAX_POINTS, relightRange, relightBacklogMax }) {
   if (!enabled) return noView
   let bot = null
   let unhook = () => {}
@@ -161,14 +186,14 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     const p = (newBlock ?? oldBlock)?.position
     if (!p) return
     markColumn(Math.floor(p.x / 16), Math.floor(p.z / 16))
-    if (oldBlock?.stateId !== newBlock?.stateId) changes.set(`${p.x},${p.y},${p.z}`, { x: p.x, y: p.y, z: p.z })
+    if (oldBlock?.stateId === newBlock?.stateId) return
+    const at = bot?.entity?.position
+    if (at && distSq(p, at) > (relightRange ?? setting('view/relight-range')) ** 2) return // far changes only feed the column dump
+    changes.set(`${p.x},${p.y},${p.z}`, { x: p.x, y: p.y, z: p.z })
+    // bounded memory: when the backlog doubles its cap, cut it back to the nearest points
+    const cap = relightBacklogMax ?? setting('view/relight-backlog-max')
+    if (at && changes.size > cap * 2) changes = new Map(nearestK([...changes.values()], at, cap).map(q => [`${q.x},${q.y},${q.z}`, q]))
   })
-
-  const nearestFirst = (points, at) => {
-    if (!at) return points
-    const d = p => (p.x - at.x) ** 2 + (p.y - at.y) ** 2 + (p.z - at.z) ** 2
-    return points.map(p => [d(p), p]).sort((a, b) => a[0] - b[0]).map(([, p]) => p)
-  }
 
   // Relight around the queued block changes, writing the differences into the overlay. Returns the keys of columns
   // whose changes were carried to a later flush (they are not written yet).
@@ -177,11 +202,13 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     if (!changes.size) return blocked
     const start = performance.now()
     // nearest the body first: perception reads light through the overlay, so what the body can see must not wait behind a far backlog
-    const all = nearestFirst([...changes.values()], target.entity?.position)
-    const queued = all.slice(0, relightMaxPoints)
+    const at = target.entity?.position
+    const cap = relightBacklogMax ?? setting('view/relight-backlog-max')
+    const kept = at ? nearestK([...changes.values()], at, cap) : [...changes.values()].slice(0, cap)
+    const queued = kept.slice(0, relightMaxPoints)
     changes = new Map()
     // a huge backlog is not boxed in one go (boxFor and the merge cost grow with it): the rest waits for the next flush
-    for (const p of all.slice(relightMaxPoints)) {
+    for (const p of kept.slice(relightMaxPoints)) {
       changes.set(`${p.x},${p.y},${p.z}`, p)
       blocked.add(`${p.x >> 4},${p.z >> 4}`)
       stats.relightCarried++
