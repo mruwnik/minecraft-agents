@@ -23,6 +23,7 @@
   "Fell the nearest tree: a log column with leaves near its top. One call fells the whole tree, lowest log first; it
   yields (:continue) only while a child waits on the world.
   The base log's :forestry/replant debt is written before it is dug.
+  A lower log of the column seen later becomes the base (and its debt moves down): the sapling goes on the ground.
   With :at it fells that one column instead (:radius and :species are then unused).
   The tree is chosen by a bounded search over at most 32 candidates, nearest in a line first (jobs.lib.targets).
   It picks the tree the body walks to soonest, so a walled-off or cliff-top tree is passed over for a reachable
@@ -78,6 +79,21 @@
     (when-not (some #(= base (:pos %)) (debts c))
       (ctx/remember! c replant-kind {:pos base :species species} replant-policy)
       true)))
+
+(defn lower-base
+  "The position of the lowest of logs when it lies under the committed base of mem (lower logs of the trunk seen late),
+  else nil."
+  [mem logs]
+  (let [low (:pos (first logs))
+        base (:base mem)]
+    (when (and low base (< (:y low) (:y base)) (= (:x low) (:x base)) (= (:z low) (:z base)))
+      low)))
+
+(defn rebase!
+  "Move the committed base (and its replant debt) down to pos: the sapling goes on the ground, not on a stump."
+  [c pos]
+  (ctx/forget-where! c replant-kind #(= (:base (ctx/mem c)) (:pos %)))
+  (ctx/update-mem! c assoc :base pos))
 
 (defn ^:async approach!
   "Get the log at pos within reach to dig: nothing when its centre is within eye reach already, else walk to within 2
@@ -345,7 +361,8 @@
         (if (empty? logs)
           (do (ctx/result! c {:base (:base (ctx/mem c))})
               :done)
-          (let [_ (await (watch/watch! c {:before-dig (:pos (first logs))}))
+          (let [_ (when-let [low (lower-base (ctx/mem c) logs)] (rebase! c low))
+                _ (await (watch/watch! c {:before-dig (:pos (first logs))}))
                 r (await (dig-log! c (first logs)))]
             (case r
               :ok (do (ctx/update-mem! c assoc :partials 0)

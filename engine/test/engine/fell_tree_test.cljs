@@ -240,3 +240,21 @@
       (fn ^:async t []
         (let [{:keys [p]} (await (fell-top-unseen tall {:radius 10} 300))]
           (is (contains? (set (dug-ys p)) 71) "the top log was dug"))))))
+
+(deftest a-lower-log-seen-after-the-base-was-chosen-becomes-the-base-and-the-debt
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [spec {:blocks (assoc (lt/tree 6 0 "oak" 3) "6,64,0" "air")}
+              s (fm/start spec {})
+              p (:p s)
+              shown (atom false)]
+          (.override (.-world p) "dig"
+                     (fn ^:async f [token args impl]
+                       (when-not @shown
+                         (reset! shown true)
+                         (fake/set-block! p [6 64 0] "oak_log"))
+                       (await (impl token args))))
+          (let [out (await (tu/child-outcome (:eng s) 'jobs.forestry.fell-tree {:radius 10} 100))]
+            (is (= {:base {:x 6 :y 64 :z 0}} out) "the stump log is the base")
+            (is (= [{:pos {:x 6 :y 64 :z 0} :species "oak"}] (lt/debts (:eng s))) "the replant is on the ground, not on the log above it")))))))
