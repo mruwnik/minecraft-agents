@@ -35,7 +35,7 @@
             {:event {:source :job :kind :fetch.done} :within-s 90 :of-job true}
             {:event {:source :job :kind :tunnel.done} :within-s 200 :of-job true}]
    :limit-s 220
-   :after [[:item "stone_pickaxe" [:>= 1]] [:block [17 9 16] "air"]]}
+   :after [[:item "stone_pickaxe" [:>= 1]] [:block [15 6 20] "air"]]}
   {:name "tunnel-fetch-false-waits-no-tool-and-fetches-nothing"
    :blocks [[:set [14 10 19] "chest{Items:[{Slot:0b,id:\"minecraft:stone_pickaxe\",count:1}]}"]]
    :body {:inventory [["torch" 8] ["cobblestone" 8]]}

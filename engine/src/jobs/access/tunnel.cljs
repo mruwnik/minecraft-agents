@@ -8,6 +8,7 @@
             [jobs.lib.dig-look :as look]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.pace :as pace]
+            [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
             [jobs.lib.torch :as torch]
             [jobs.access.stair :as stair]
@@ -112,16 +113,18 @@
 (defn surface
   "The feet height of the top stand of column [x z], looking down from hi to lo: the first cell that is not open must
   be a solid floor with two open cells over it. nil when it is not (a fluid, a cave roof above hi), or a cell on the
-  way is not loaded."
-  [block-at [x z] lo hi]
-  (loop [y hi]
-    (when (>= y lo)
-      (let [n (block-at [x y z])]
-        (cond
-          (nil? n) nil
-          (open-cell? n) (recur (dec y))
-          (and (<= (+ y 2) hi) (rules/solid-floor? block-at [x y z])) (inc y)
-          :else nil)))))
+  way is not loaded. With seen-at (nil for a cell not seen) the floor and the two cells over it must be seen: unseen
+  cells read as air above the surface, so the first seen stone of a hidden column is no surface."
+  ([block-at column lo hi] (surface block-at nil column lo hi))
+  ([block-at seen-at [x z] lo hi]
+   (loop [y hi]
+     (when (>= y lo)
+       (let [n (block-at [x y z])]
+         (cond
+           (nil? n) nil
+           (open-cell? n) (recur (dec y))
+           (and (<= (+ y 2) hi) (or (nil? seen-at) (every? seen-at [[x y z] [x (+ y 1) z] [x (+ y 2) z]])) (rules/solid-floor? block-at [x y z])) (inc y)
+           :else nil))))))
 
 (defn run-cells
   "The cells of one flat run step from feet: {:next :cut (head first) :floor :under}."
@@ -188,18 +191,18 @@
 (defn entry-heights
   "The feet heights an entry in column [ex ez] may take: the surface, and the body's own cell when it stands in
   that column (a cave or tunnel roof hides the surface from a body underground)."
-  [block-at [ex ez] lo hi feet]
+  [block-at seen-at [ex ez] lo hi feet]
   (let [[fx fy fz] feet
         own (when (and feet (= [fx fz] [ex ez]) (<= lo fy hi) (standable? block-at feet)) fy)]
-    (distinct (keep identity [(surface block-at [ex ez] lo hi) own]))))
+    (distinct (keep identity [(surface block-at seen-at [ex ez] lo hi) own]))))
 
 (defn fits
   "The plans of the lines along heading whose entry is n before the target, when the stair fits in it (entry: the
   surface, or the body's cell feet); else ()."
-  [block-at target heading n max-length feet]
+  [block-at seen-at target heading n max-length feet]
   (let [[tx ty tz] target
         [ex _ ez] (ahead target heading (- n))]
-    (for [y (entry-heights block-at [ex ez] (- ty max-length) (+ ty max-length 1) feet)
+    (for [y (entry-heights block-at seen-at [ex ez] (- ty max-length) (+ ty max-length 1) feet)
           :when (<= (js/Math.abs (- y ty)) (dec n))]
       (let [d (- y ty)
             plan {:entry [ex y ez] :heading heading :dir (if (neg? d) :up :down) :steps (js/Math.abs d)
@@ -210,7 +213,7 @@
   "{:plan p} for the shortest valid line along heading, else {:stop s} (the shortest fitting line's stop, or
   :too-far when none fits)."
   [in target heading max-length accept feet]
-  (let [fitting (mapcat #(fits (or (:column-at in) (:block-at in)) target heading % max-length feet) (range 1 (inc max-length)))
+  (let [fitting (mapcat #(fits (or (:column-at in) (:block-at in)) (:floor-at in) target heading % max-length feet) (range 1 (inc max-length)))
         judged (map (fn [p] [p (line-stop in p accept)]) fitting)]
     (if-let [[p] (first (filter (comp nil? second) judged))]
       {:plan p}
@@ -511,15 +514,17 @@
       (access/decline! c :tunnel.declined "tunnel" (assoc (access/refusal-fields [a]) :reason :refused))
       (fetch/declined-check c 'jobs.access.tunnel))))
 
-(defn choose!
-  "Judge the lines and keep the best, or finish with why there is none."
+(defn ^:async choose!
+  "Judge the lines and keep the best, or finish with why there is none. A refusal that read cells the body has not
+  seen is decided again after a look at them (jobs.lib.sense/decide!)."
   [c]
   (let [{:keys [max-length accept]} (:args c)
         target (target-of c)
         feet (feet-of c)]
     (if (bad-target? target)
       (finish! c :bad-args {:why "target must be [x y z] of integers"})
-      (let [a (approach (dissoc (stair/rules-in c feet) :feet) target feet max-length (set accept))]
+      (let [a (await (sense/decide! c ::approach #(approach (dissoc (stair/rules-in c feet) :feet) target feet max-length (set accept))
+                                    {:retry? #(not (:entry %))}))]
         (if (:entry a)
           (do (ctx/update-mem! c assoc :plan (assoc a :sites (torch-sites a)) :dug [])
               (ctx/emit! c :tunnel.plan :info (assoc a :text (str "tunnel from " (pr-str (:entry a)) " " (name (:heading a))
@@ -539,7 +544,7 @@
   (declined/begin! c)
   (let [m (ctx/mem c)]
     (cond
-      (nil? (:plan m)) (choose! c)
+      (nil? (:plan m)) (await (choose! c))
       (:stop m) (await (retreat! c))
       :else (let [r (await (work! c))]
               (cond

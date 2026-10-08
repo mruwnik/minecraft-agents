@@ -51,6 +51,16 @@
   (let [a (approach cave-room [4 57 0] :feet [0 60 0])]
     (is (= {:entry [0 60 0] :heading :east :dir :down :steps 3 :run 0 :length 4 :stand [3 57 0] :target [4 57 0]} a))))
 
+(deftest an-unseen-column-is-no-surface-entry
+  ;; The body sees only its room: every other cell is unseen, so the sky scan (column-at: unseen = air) must not take
+  ;; the first seen stone it meets, deep in the rock, as a surface.
+  (let [seen (into (set (keys cave-room)) (for [x (range -10 11) z (range -10 11) y [59 55] :when (or (= y 55) (<= -1 x 1) (<= -1 z 1))] [x y z]))
+        in {:block-at (world-fn cave-room) :floor-at #(when (seen %) ((world-fn cave-room) %))
+            :column-at #(if (seen %) ((world-fn cave-room) %) "air")
+            :zones [] :footprints #{} :ledger #{} :ways nil}
+        a (tunnel/approach in [4 57 0] [0 60 0] 24 #{})]
+    (is (= [0 60 0] (:entry a)) (pr-str a))))
+
 (deftest a-shorter-surface-entry-beats-the-body-underground
   (is (= (approach {} [2 64 0]) (approach cave-room [2 64 0] :feet [0 60 0]))))
 
