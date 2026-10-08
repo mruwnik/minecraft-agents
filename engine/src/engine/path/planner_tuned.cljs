@@ -62,9 +62,9 @@
    - options.unknown (nil: off, every loaded cell as it is) {id floorId cell floor seeDepth seeLit peekS aimS lightCost lightOk
      torchBase missed noLight}: a cell of state id (void_air) is one the body has not seen, air to the body. A stand on such a
      floor is a phantom floor (read as floorId, stone; not under water): allowed only after a move the walk can stop before
-     (walk, diagonal, corner, jump, drop, open; not after a gap, climb, swim, exit or bounce: else result unseenRefused; a
-     gap may jump over it) and only where it can be seen: a drop of d (level and up: 0) within seeDepth, or within 5 over
-     known air that seeLit(x, y, z) calls lit (1), or
+     (walk, diagonal, corner, jump, drop; not after a gap, climb, trapdoor open, swim, exit or bounce: else result unseenRefused; a
+     gap may jump over it, not through an unseen feet or head cell) and only where it can be seen: a drop of d (level and
+     up: 0) within seeDepth, or within 5 over known air that seeLit(x, y, z) calls lit (1), or
      lit by a torch (lightCost seconds, the step's light true) from a takeoff whose feet are known air on a torchBase floor
      (Uint8Array by state id), d at most 5, lightOk(x, y, z) not false and not in noLight; else result darkRefused and
      darkBest {x y z h}. A floor in missed is never seen. The floor under a door's lower half is implied. Each unseen feet or

@@ -4,9 +4,12 @@
   perception does: a glance is a ray from the eye to the cell's centre inside the view cone (the body's real yaw and
   pitch), with a clear line, lit or within near; a cell the grown hitbox reaches is felt. The gate's invariant: the body
   never stands on a floor of a gate step that it has not seen, or that is not plain (a breach). Each course has a twin
-  without the gate, which breaches."
+  without the gate, which breaches; the approach and the hold each have a twin with that part switched off, which leaves
+  the takeoff."
   (:require [cljs.test :refer [deftest is testing]]
+            [engine.floor-sight-pin-test :as pin]
             [engine.path.executor :as ex]
+            [engine.path.planner.unknown :as unknown]
             [engine.perception.rays :as rays]
             [engine.sight :as sight]
             [engine.stairs-physics-test :as sp]
@@ -118,10 +121,10 @@
 ;; ---------------------------------------------------------------- the scenarios
 
 (deftest g1-g2-a-dark-drop-stops-the-body-at-the-peek-point-still-and-gives-the-floor-up
-  (doseq [[floor fills] [["stone"] ["ice"] ["blue_ice"] ["slime_block"]
-                         ["soul_sand" (conj (road "stone" :drop) [4 63 0 7 63 0 "soul_sand" {}])]]]
+  (doseq [[floor more] [["stone" {}] ["ice" {}] ["blue_ice" {}] ["slime_block" {}]
+                        ["soul_sand" {:fills (conj (road "stone" :drop) [4 63 0 7 63 0 "soul_sand" {}])}]]]
     (testing floor
-      (let [r (run (cond-> (course floor :drop false) fills (assoc :fills fills)) true)
+      (let [r (run (merge (course floor :drop false) more) true)
             x (:x (peek (:poses r)))]
         (is (= [:replan :unseen [drop-floor]] ((juxt :status :why :cells) (:done r))) (report r))
         (is (empty? (:breaches r)) (report r))
@@ -142,6 +145,23 @@
 (deftest g3-twin-without-the-gate-blue-ice-slides-past-the-edge
   (let [r (run (course "blue_ice" :drop false) false)]
     (is (seq (:breaches r)) (report r))))
+
+(defn leg-push
+  "A push of dv along +x once the body passes x0 (on the way to the takeoff)."
+  [x0 dv]
+  (let [done (atom false)]
+    (fn [_t _state pose]
+      (when (and (not @done) (>= (:x pose) x0))
+        (reset! done true)
+        [dv 0]))))
+
+(deftest g3-a-push-on-the-way-is-braked-before-the-takeoff-and-its-twin-without-the-approach-overshoots
+  (let [c #(course "blue_ice" :drop false :push (leg-push 5.5 0.1))
+        on (run (c) true)
+        off (with-redefs [ws/approach (fn [controls & _] controls)] (run (c) true))]
+    (is (no-overshoot? on) (str "max x " (max-x (:poses on)) " " (report on)))
+    (is (= :unseen (:why (:done on))) (report on))
+    (is (not (no-overshoot? off)) (str "approach off: max x " (max-x (:poses off)) " " (report off)))))
 
 (deftest a-lit-drop-is-seen-from-the-peek-point-and-walked
   (doseq [floor ["stone" "blue_ice"]]
@@ -184,10 +204,23 @@
         (reset! done true)
         [dv 0]))))
 
-(deftest g6-a-small-push-while-held-is-braked-on-the-takeoff
-  (let [r (run (course "stone" :drop false :push (held-push 0.1)) true)]
+(def takeoff-end
+  "The body's centre past this x has left the takeoff (x 7): its hitbox (0.3 each way) no longer stands on it."
+  (+ edge 0.3))
+
+(deftest g6-a-push-while-held-is-braked-on-the-takeoff-and-its-twin-without-the-hold-falls-off
+  ;; (a body thrown off sees the floor on the way down, so it is no breach: the hold keeps it on the takeoff)
+  (let [r (run (course "stone" :drop false :push (held-push 0.2)) true)
+        pushed (atom false)
+        push (let [p (held-push 0.2)] (fn [t state pose] (when-let [dv (p t state pose)] (reset! pushed true) dv)))
+        hold ws/hold
+        ;; the twin holds the body at the peek point as before, and gives no input once pushed
+        off (with-redefs [ws/hold (fn [& args] (if @pushed {:controls (zipmap [:forward :back :left :right :jump :sprint :sneak] (repeat false)) :choice :none} (apply hold args)))]
+              (run (course "stone" :drop false :push push) true))]
     (is (empty? (:breaches r)) (report r))
-    (is (= :unseen (:why (:done r))) (report r))))
+    (is (= :unseen (:why (:done r))) (report r))
+    (is (< (max-x (:poses r)) takeoff-end) (str "max x " (max-x (:poses r))))
+    (is (> (max-x (:poses off)) takeoff-end) (str "hold off: max x " (max-x (:poses off)) " " (report off)))))
 
 (deftest g6-a-push-too-strong-to-brake-throws-the-body-into-the-pit-and-it-sees-the-floor-on-the-way-down
   (let [r (run (course "blue_ice" :drop false :push (held-push 0.4)) true)]
@@ -218,8 +251,8 @@
     {:fills (step-down-road half?) :from [1 64 0] :goal [12 (inc fy) 0] :unknown #{[8 fy 0]} :lit false}))
 
 (deftest a-drop-into-the-takeoff-lands-and-stops-short-of-the-gate
-  (doseq [half? [false true]]
-    (testing (if half? "half-block drop" "1-block drop")
+  (doseq [[label half?] [["1-block drop" false] ["half-block drop" true]]]
+    (testing label
       (let [r (run (step-down-course half?) true)]
         (is (= :unseen (:why (:done r))) (report r))
         (is (empty? (:breaches r)) (report r))
@@ -260,3 +293,18 @@
 (deftest g7-twin-without-the-gate-the-corner-jump-breaches
   (let [r (run {:fills corner-course :from [2 64 2] :goal [6 63 3] :unknown #{[4 62 3]} :lit false} false)]
     (is (seq (:breaches r)) (report r))))
+
+;; ---- the planner's sight depths rest on the gate's stop
+
+(def pinned-stop "The peek stop the planner's SEE-LIT-DEPTH and LIGHT-DEPTH were pinned at (engine.floor-sight-pin-test)." 0.87)
+
+(deftest the-gates-worst-stop-sees-the-planners-lit-depths
+  (let [courses [(course "stone" :drop false) (course "ice" :drop false) (course "blue_ice" :drop false)
+                 (course "slime_block" :drop false) (step-down-course false) (step-down-course true)
+                 {:fills (step-up-road) :from [1 64 0] :goal [12 62 0] :unknown #{drop-floor} :lit false}]
+        stops (for [c courses :let [r (run c true)]] (- (:x (peek (:poses r))) 7))
+        worst (apply min stops)]
+    (is (>= worst pinned-stop) (str "stops " (pr-str stops)))
+    (doseq [d [unknown/SEE-LIT-DEPTH unknown/LIGHT-DEPTH]]
+      (is (pin/seen? (pin/cliff d) :lit [worst 0.5] :aimed [1 (- 63 d) 0]) (str "d " d " from x " worst)))
+    (is (pin/seen? (pin/cliff unknown/SEE-LIT-DEPTH) :lit [pinned-stop 0.5] :aimed [1 (- 63 unknown/SEE-LIT-DEPTH) 0]))))

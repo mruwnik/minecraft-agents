@@ -287,8 +287,8 @@
 ;; ---------------------------------------------------------------- one tick of the gate
 
 (defn sense
-  "Resolve pending gates from i on whose floor the body knows now ((see cell): a state id, nil while unknown): a plain one
-  ((plain? id)) joins resolved, any other ends the walk {:status :replan :why :changed}. {:k :gstate :done}: k the first
+  "Resolve pending gates from i on whose floor the body knows now ((see cell): its block, nil while unknown): a plain one
+  ((plain? block)) joins resolved, any other ends the walk {:status :replan :why :changed}. {:k :gstate :done}: k the first
   gate still pending (nil: none)."
   [{:keys [see plain?]} steps gstate i pose]
   (loop [gstate gstate]

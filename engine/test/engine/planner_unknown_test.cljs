@@ -221,6 +221,11 @@
     (let [w (line [0 63 "stone"] [2 64 U] [3 63 "stone"])
           r (run w (pf/near 3 64 2) (unk {}))]
       (is (not (found? r)))))
+  (testing "a 2-gap with an unseen head cell in its arc"
+    (doseq [x [1 2]]
+      (let [w (line [0 63 "stone"] [x 65 U] [3 63 "stone"])
+            r (run w (pf/near 3 64 2) (unk {}))]
+        (is (not (found? r)) (str "head cell at x " x)))))
   (testing "an unseen floor under the arc is allowed"
     (let [w (line [0 63 "stone"] [1 63 U] [2 63 U] [3 63 "stone"])
           r (run w (pf/near 3 64 2) (unk {:missed (js/Set. [(planner/cell-key 1 63 2) (planner/cell-key 2 63 2)])}))]
