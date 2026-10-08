@@ -123,5 +123,6 @@
 (def unknown-prices
   "The planner's prices of cells the body has not seen (options.unknown), seconds: :cell a share of a move's own seconds per
   unseen feet or head cell, :floor the same for a stand on an unseen floor, :peek-s a drop onto one (a stop at the edge to
-  look), :aim-s a level or up step onto one (a look down at the takeoff)."
-  {:cell 0.1 :floor 0.3 :peek-s 0.7 :aim-s 0.1})
+  look), :aim-s a level or up step onto one (a look down at the takeoff); and the depths, in blocks: :see-lit-depth the deepest
+  drop a lit landing is seen over from the walk's worst peek stop, :light-depth the deepest a torch at the takeoff lights."
+  {:cell 0.1 :floor 0.3 :peek-s 0.7 :aim-s 0.1 :see-lit-depth 5 :light-depth 5})

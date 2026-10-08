@@ -7,8 +7,8 @@
 
 (set! *warn-on-infer* true)
 
-(def ^:const SEE-LIT-DEPTH 5) ; the deepest drop a lit landing is seen over from the walk's worst peek stop (x .87, floor-sight-pin-test)
-(def ^:const LIGHT-DEPTH 5) ; the deepest drop a torch at the takeoff lights the landing of so it is seen (as SEE-LIT-DEPTH)
+(def ^:const SEE-LIT-DEPTH 5) ; options.unknown.seeLitDepth default: the deepest drop a lit landing is seen over from the walk's worst peek stop (x .87, floor-sight-pin-test)
+(def ^:const LIGHT-DEPTH 5) ; options.unknown.lightDepth default: the deepest drop a torch at the takeoff lights the landing of so it is seen
 
 (extend-type Search
   Object
@@ -84,15 +84,15 @@
            (zero? (aget (.-tbl-top s) id)) (zero? (aget ^js (.-wet ^js (.-table s)) id)))))
 
   ;; Can the floor of a drop of d from node p be seen once the body is at the peek? Within see-depth, or within
-  ;; SEE-LIT-DEPTH when the landing's air is known and the caller calls it lit.
+  ;; see-lit-depth when the landing's air is known and the caller calls it lit.
   (seeable [s x y z d]
     (or (<= d (.-see-depth s))
-        (and (some? (.-see-lit s)) (<= d SEE-LIT-DEPTH) ^boolean (.knownAir s x y z) (== (.seeLitOf s x y z) 1))))
+        (and (some? (.-see-lit s)) (<= d (.-see-lit-depth s)) ^boolean (.knownAir s x y z) (== (.seeLitOf s x y z) 1))))
 
-  ;; Can a torch at node p's stand light a drop of d? Torches are on (light-cost), d is at most LIGHT-DEPTH, p's feet cell
+  ;; Can a torch at node p's stand light a drop of d? Torches are on (light-cost), d is at most light-depth, p's feet cell
   ;; is known air on a torch base (options.unknown.torchBase), the caller allows it there (lightOk) and no torch failed there.
   (lightable [s p d]
-    (and (>= (.-light-cost s) 0) (<= d LIGHT-DEPTH) (some? (.-torch-base s))
+    (and (>= (.-light-cost s) 0) (<= d (.-light-depth s)) (some? (.-torch-base s))
          (let [x (aget (.-xs s) p) y (aget (.-ys s) p) z (aget (.-zs s) p)
                floor (.stateAt ^js (.-snapshot s) x (dec y) z)]
            (and ^boolean (.knownAir s x y z)

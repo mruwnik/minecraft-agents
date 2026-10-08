@@ -25,17 +25,17 @@
   (jobs.lib.cost/unknown-prices, each overridden by prices, a map of the same keys; nil: the defaults) and one missed Set,
   shared by every pathWorld made with this spec (the floors the walk looked for and could not see)."
   [prices]
-  (let [{:keys [cell floor peek-s aim-s]} (merge cost/unknown-prices prices)]
-    #js {:cell cell :floor floor :peekS peek-s :aimS aim-s :missed (js/Set.)}))
+  (let [{:keys [cell floor peek-s aim-s see-lit-depth light-depth]} (merge cost/unknown-prices prices)]
+    #js {:cell cell :floor floor :peekS peek-s :aimS aim-s :seeLitDepth see-lit-depth :lightDepth light-depth :missed (js/Set.)}))
 
 (defn unknown-problem
-  "Why u is not a usable go-to :unknown (a boolean, or a map of :cell :floor :peek-s :aim-s to numbers >= 0), else nil."
+  "Why u is not a usable go-to :unknown (a boolean, or a map of :cell :floor :peek-s :aim-s :see-lit-depth :light-depth to numbers >= 0), else nil."
   [u]
   (cond
     (boolean? u) nil
     (not (map? u)) (str ":unknown is true, false or a map of prices; got " (pr-str u))
     :else (when-let [[k v] (first (remove (fn [[k v]] (and (contains? cost/unknown-prices k) (number? v) (>= v 0))) u))]
-            (str ":unknown prices are :cell :floor :peek-s :aim-s, numbers >= 0; got " (pr-str k) " " (pr-str v)))))
+            (str ":unknown prices are :cell :floor :peek-s :aim-s :see-lit-depth :light-depth, numbers >= 0; got " (pr-str k) " " (pr-str v)))))
 
 (defn- memory-sections
   "(fn [cx sy cz]) the ids of the body's memory of that section (sy the world's section y; ids + 1, 0 never seen), or nil;

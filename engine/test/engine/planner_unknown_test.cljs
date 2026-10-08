@@ -43,7 +43,7 @@
       (is (= (aget a air) (aget a void)) k))))
 
 (deftest default-prices-live-in-jobs-lib-cost
-  (is (= {:cell 0.1 :floor 0.3 :peek-s 0.7 :aim-s 0.1} cost/unknown-prices)))
+  (is (= {:cell 0.1 :floor 0.3 :peek-s 0.7 :aim-s 0.1 :see-lit-depth 5 :light-depth 5} cost/unknown-prices)))
 
 (deftest off-plans-as-before
   (let [w (line [0 63 "stone"] [1 63 U] [2 63 "stone"])
@@ -113,6 +113,12 @@
     (let [r (run (deep 6) (pf/near 1 (- 64 6) 2) opts)]
       (is (not (found? r)) "d 6")
       (is (true? (:darkRefused r))))))
+
+(deftest see-lit-depth-is-an-option
+  (let [deep (fn [d] (pf/snapshot {:blocks [[0 63 2 "stone"] [1 (- 63 d) 2 U]] :fill [[0 40 2 0 62 2 "stone"]]}))
+        opts (fn [depth] (merge {:maxDrop 12} (unk {:seeDepth 1 :seeLit (fn [_ _ _] 1) :seeLitDepth depth})))]
+    (is (found? (run (deep 6) (pf/near 1 (- 64 6) 2) (opts 6))) "d 6 with seeLitDepth 6")
+    (is (not (found? (run (deep 3) (pf/near 1 (- 64 3) 2) (opts 2)))) "d 3 with seeLitDepth 2")))
 
 (deftest no-descent-into-unseen-land
   (let [w (line [0 63 "stone"] [1 62 U] [1 61 U] [1 60 "stone"])]
@@ -326,3 +332,7 @@
     (is (nil? (ground-y (column-snapshot (constantly void)) t 0 0)) "all unknown: no ground (the start's y bounds the box)")
     (is (= 61 (ground-y (column-snapshot #(if (= 60 %) stone void)) t 0 0)) "known stone at 60 under unknown")
     (is (= 64 (ground-y (column-snapshot #(if (<= % 63) stone air)) t 0 0)) "unmasked: as before")))
+
+(deftest light-depth-is-an-option
+  (is (found? (run drop-2 (pf/near 1 62 2) (lights {:lightDepth 2}))))
+  (is (not (found? (run drop-2 (pf/near 1 62 2) (lights {:lightDepth 1}))))))
