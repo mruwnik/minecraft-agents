@@ -1,11 +1,12 @@
 (ns engine.fake.raw-world
   "The rawWorld reader (the shape engine/js/raw-world.mjs gives the real body) over a fake's world atom, so
   engine.perception runs over the fake exactly as over the body. Block state ids are the default states of the fake's
-  block names; a cell in the spec's :unloaded reads -1. Light comes from the world's :light {[x y z] [sky block]}, else
+  block names, with the properties of the world's :states for a door, button, lever, ladder or bubble column (open, powered, facing...); a cell in the spec's :unloaded reads -1. Light comes from the world's :light {[x y z] [sky block]}, else
   :light-default (open daylight [15 0] when unset). The eye is the centre of the body's cell at eye height, looking along the
   world's :yaw/:pitch (Minecraft degrees, as drive sets them), in mineflayer radians. Block changes come from a watch
-  on :blocks. The sight table and state names are raw-world.mjs's own, over the fixture registry. Test-only."
-  (:require [engine.fake.node :as node]
+  on :blocks and :states. The sight table and state names are raw-world.mjs's own, over the fixture registry. Test-only."
+  (:require [engine.fake.doors :as doors]
+            [engine.fake.node :as node]
             [engine.path.fixture :as fx]))
 
 (def raw-mod (delay (node/require-here "./js/raw-world.mjs")))
@@ -16,11 +17,18 @@
 (def max-y 320)
 (def eye-height 1.62)
 
+(defn state-at-pos
+  "The state id of the fake's block at pos: its name's default state, with the :states props the planner reads."
+  [w pos]
+  (let [name (get (:blocks w) pos "air")
+        props (doors/path-props w pos)]
+    (if (empty? props) (state-of name) (fx/state-id name props))))
+
 (defn state-at-slow [w x y z]
   (cond
     (or (< y min-y) (>= y max-y)) -1
     (contains? (:unloaded w) [x y z]) -1
-    :else (state-of (get (:blocks w) [x y z] "air"))))
+    :else (state-at-pos w [x y z])))
 
 (defn light-at-slow [w x y z]
   (let [[sky block] (or (get (:light w) [x y z]) (:light-default w) [15 0])]
@@ -41,7 +49,7 @@
   (let [seen (volatile! nil) cache (volatile! (js/Map.))]
     (fn [w x y z]
       (let [vals (sel w)]
-        (when-not (and (identical? (nth @seen 0 nil) (nth vals 0)) (identical? (nth @seen 1 nil) (nth vals 1)))
+        (when-not (and @seen (every? true? (map identical? @seen vals)))
           (vreset! seen vals)
           (vreset! cache (js/Map.)))
         (if-let [k (packed-key x y z)]
@@ -52,7 +60,7 @@
           (slow w x y z))))))
 
 (defn state-at-fn []
-  (lookup-cache (fn [w] [(:blocks w) (:unloaded w)]) state-at-slow))
+  (lookup-cache (fn [w] [(:blocks w) (:unloaded w) (:states w)]) state-at-slow))
 
 (defn light-at-fn []
   (lookup-cache (fn [w] [(:light w) (:light-default w)]) light-at-slow))
@@ -69,6 +77,11 @@
   (when-not (identical? old new)
     (filter #(not= (get old %) (get new %)) (distinct (concat (keys old) (keys new))))))
 
+(defn changed-states
+  "Cells whose block or :states differ between worlds old and new."
+  [old new]
+  (distinct (concat (changed-cells (:blocks old) (:blocks new)) (changed-cells (:states old) (:states new)))))
+
 (defn create
   "The rawWorld object over fake primitives p (engine.fake/create)."
   [p]
@@ -80,12 +93,12 @@
         light-at (light-at-fn)]
     (add-watch state watch-key
                (fn [_ _ old new]
-                 (when (not= (select-keys old [:blocks :unloaded :light :light-default])
-                             (select-keys new [:blocks :unloaded :light :light-default]))
+                 (when (not= (select-keys old [:blocks :states :unloaded :light :light-default])
+                             (select-keys new [:blocks :states :unloaded :light :light-default]))
                    (swap! epoch inc))
-                 (doseq [[x y z :as pos] (changed-cells (:blocks old) (:blocks new))
+                 (doseq [[x y z :as pos] (changed-states old new)
                          f @listeners]
-                   (f x y z (state-of (get (:blocks new) pos "air"))))))
+                   (f x y z (state-at-pos new pos)))))
     #js {:stateAt (fn [x y z] (state-at @state x y z))
          :lightAt (fn [x y z] (light-at @state x y z))
          :eye (fn [] (eye @state))

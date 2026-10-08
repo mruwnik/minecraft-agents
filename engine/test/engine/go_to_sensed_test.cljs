@@ -514,3 +514,35 @@
           (is (= {:arrived true} out) (pr-str out))
           (is (seq (steps seen))))))))
 
+
+(defn ^:async await-open-from
+  "A job that runs pass/await-open! on the cell [5 64 0] of a sensed-only world with the shut-looking stone wall east
+  of the floor, the body at the origin facing yaw; the result."
+  [yaw]
+  (let [clock (atom 1000000)
+        [_ sink] (tu/legacy-capture-sink)
+        {:keys [w]} (sensed-only {:self {:pos {:x 0.5 :y 64 :z 0.5}} :yaw yaw :pitch 0
+                                  :blocks (merge ground (box 5 64 0 5 65 0 "iron_door"))
+                                  :states {"5,64,0" {:open true :half "lower" :facing "east"}
+                                           "5,65,0" {:open true :half "upper" :facing "east"}}})
+        out (atom nil)
+        job {:check (constantly true)
+             :round (fn ^:async door-round [c]
+                      (reset! out (await (pass/await-open! c {:x 5 :y 64 :z 0})))
+                      :done)}
+        eng (core/create {:primitives w :jobs (assoc registry/jobs 'door-poll job) :triggers {} :dir (tu/tmp-dir)
+                          :now #(deref clock) :backoff false
+                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+    (core/submit! eng '(door-poll) {})
+    (loop [i 0]
+      (when (and (< i 200) (seq (:list (core/state eng))))
+        (swap! clock + 100)
+        (await (core/tick! eng))
+        (recur (inc i))))
+    @out))
+
+(deftest an-open-door-out-of-view-is-read-open-only-after-the-body-turns-to-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= {:result :was-open} (await (await-open-from 90))) "facing away (west): turned to the door, then read open")))))
