@@ -2,7 +2,7 @@
 ;; (look :scope :seen, :at {:unknown true} for a cell never seen; search writes no :seen note for buried ore).
 ;; Stone mass x 2..30, z 8..24, y 0..6. A lit 3x3x2 room x 15..17, z 15..17 (sea lantern in its roof); the body at [16.5 0 16.5]
 ;; facing east, ore [18 0 16] in the room's east wall (exposed), ore [22 0 16] and [16 0 21] buried in the rock; a sealed cell
-;; [24 0 16]-[24 1 16] 7 blocks east behind the rock holds a NoAI zombie in the cases that use it.
+;; [24 0 16]-[24 1 16] 7 blocks east behind the rock holds a NoAI zombie in the cases that use it (listed as heard: direction and band, no :pos).
 {:defaults
  {:tags [:explore :sensing :jobs] :time :any
   :plot {:height 12}
@@ -25,10 +25,10 @@
    :act [[:summon "zombie" [17.5 0 16.5] "{NoAI:1b,Silent:1b}"] [:wait-s 3]
          [:job (jobs.explore.look {:entity-names ["zombie"] :radius 16 :max-blocks 0})]]
    :expect [{:event {:source :job :kind :look.observed :data {:entities [{:name "zombie"}]}} :within-s 30 :of-job true}]}
-  {:name "look-does-not-list-the-walled-in-zombie"
+  {:name "look-lists-the-walled-in-zombie-only-as-heard"
    :act [[:summon "zombie" [24.5 0 16.5] "{NoAI:1b,Silent:1b}"] [:wait-s 3]
          [:job (jobs.explore.look {:entity-names ["zombie"] :radius 16 :max-blocks 0})]]
-   :expect [{:event {:source :job :kind :look.observed :data {:entities []}} :within-s 30 :of-job true}]}
+   :expect [{:event {:source :job :kind :look.observed :data {:entities [{:name "zombie" :heard? true}]}} :within-s 30 :of-job true}]}
   {:name "search-finds-the-exposed-ore"
    :act [[:job (jobs.explore.search {:target "iron_ore" :count 1 :max-distance 8 :spacing 4 :scan-radius 16 :timeout-s 40})]]
    :expect [{:event {:source :job :kind :search.done :data {:reason :found :found [{:what "iron_ore"}]}} :within-s 40 :of-job true}]}

@@ -1,5 +1,5 @@
 (ns jobs.explore.look
-  (:require [engine.args :as a]
+  (:require [engine.args :as a] [engine.entity-observations :as obs] [jobs.lib.util :as u]
             ["minecraft-data" :as minecraft-data] [engine.ctx :as ctx] [engine.game :as game] [jobs.lib.look :as look] [jobs.lib.places :as places]))
 (def doc
   "Observe the nearby blocks and entities the body has seen, once, without moving or changing the world. Emits
@@ -55,10 +55,21 @@
     (:uuid e) (assoc :uuid (:uuid e))
     (:username e) (assoc :username (:username e))
     (some? (:visible e)) (assoc :visible? (:visible e))))
-(defn placed?
-  "A hostile only heard (never seen) is a sound, not a sighting: the look lists it no more than it lists a block behind a wall."
+(defn heard-only?
+  "A hostile the body hears but does not see now: a sound, not a sighting, wherever it was seen before."
   [e]
-  (or (not= "hostile" (:kind e)) (not (contains? e :seen)) (:seen e)))
+  (and (= "hostile" (:kind e)) (contains? e :seen) (not (:visible e)) (boolean (:heard e))))
+(defn heard-entity
+  "What a sound tells of hostile e: its name, direction and band from the body (obs/rough-hearing), never its place."
+  [from e]
+  (-> (obs/rough-hearing from (:pos e))
+      (assoc :name (:name e) :kind (:kind e) :heard? true)))
+(defn listed?
+  "Whether the look lists e: a hostile only if it was seen (with its place) or is heard now (roughly)."
+  [e]
+  (or (not= "hostile" (:kind e)) (not (contains? e :seen)) (:seen e) (heard-only? e)))
+(defn listed [from e]
+  (if (heard-only? e) (heard-entity from e) (entity e)))
 (defn observe [p {:keys [radius block-names entity-names max-blocks max-entities properties? at]}]
   (let [self (.self p)
         blocks (if (pos? max-blocks)
@@ -66,11 +77,11 @@
                                        block-names (assoc :names block-names) (not block-names) (assoc :all? true)))
                  [])
         entities (if (pos? max-entities)
-                   (filterv placed? (look/seen-entities p (cond-> {:radius radius :max (inc max-entities)} entity-names (assoc :names entity-names))))
+                   (filterv listed? (look/seen-entities p (cond-> {:radius radius :max (inc max-entities)} entity-names (assoc :names entity-names))))
                    [])
         exact (when at (look/seen-block p at))]
     (cond-> {:center (pos (.-pos self)) :radius radius :scope :seen
-             :blocks (mapv block (take max-blocks blocks)) :entities (mapv entity (take max-entities entities))}
+             :blocks (mapv block (take max-blocks blocks)) :entities (mapv #(listed (u/pos-of (.-pos self)) %) (take max-entities entities))}
       (> (count blocks) max-blocks) (assoc :more-blocks? true)
       (> (count entities) max-entities) (assoc :more-entities? true)
       at (assoc :at (if (or (nil? exact) (:unknown exact))

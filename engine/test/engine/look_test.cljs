@@ -167,9 +167,14 @@
   (is (true? (:night? (look/dark-fn (seeing {:time midnight})))))
   (is (false? (:night? (look/dark-fn (seeing {:time day}))))))
 
-(deftest explore-look-lists-a-seen-hostile-not-one-only-heard-behind-a-wall
+(deftest explore-look-lists-a-seen-hostile-and-a-heard-one-only-roughly
   (let [p (seeing {:blocks wall
                    :entities [{:id 7 :name "zombie" :kind "hostile" :pos [0 64 5]}
                               {:id 8 :name "zombie" :kind "hostile" :pos [6 64 0]}]})
-        r (explore-look/observe p (explore-look/options {:entity-names ["zombie"] :max-blocks 0}))]
-    (is (= [[0 64 5]] (mapv :pos (:entities r))))))
+        r (explore-look/observe p (explore-look/options {:entity-names ["zombie"] :max-blocks 0}))
+        [seen heard] (sort-by #(boolean (:heard? %)) (:entities r))]
+    (is (= 2 (count (:entities r))))
+    (is (= [0 64 5] (:pos seen)))
+    (is (true? (:heard? heard)))
+    (is (not (contains? heard :pos)))
+    (is (= {:direction :east :band :near} (select-keys heard [:direction :band])))))
