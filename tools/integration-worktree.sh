@@ -3,6 +3,7 @@
 # Usage: tools/integration-worktree.sh <commit> <dir> | --remove <dir>
 # Checks out <commit> at <dir>, then adds what a clean checkout lacks (all git-ignored): node_modules (symlinked to the main
 # checkout's), the .shadow-cljs dir, worlds/test (symlinked to the main checkout's: world.json, biomes.json and the bodies; nothing else under worlds/), textures/, engine/test/fixtures/pathfinding, engine/out/test-ns-ms.json (shard timeouts), the built agent-tools.cjs and the viewer cljs.
+# At the end it prints the body flags that point the worktree at the main checkout's worlds and blueprints (untracked blueprints are not in the checkout).
 # Any failing step fails the script. The builds there start one shadow server (under a res-slot `server` slot, ~1-2 GB);
 # remove the worktree afterwards with `tools/integration-worktree.sh --remove <dir>`: it kills that server by PID, then removes it.
 set -euo pipefail
@@ -34,3 +35,4 @@ mkdir -p "$wt/engine/out"
 "$wt/tools/compile" dashboard agent-tools --release
 node "$wt/tools/view/build-cljs.mjs"
 echo "Worktree ready at $wt"
+echo "Start a body from it with: --worlds $repo/worlds --blueprints $repo/blueprints"

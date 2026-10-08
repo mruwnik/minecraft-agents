@@ -16,3 +16,11 @@
                                                        :t 1000 :until 2000}]))))
     (is (fs/existsSync file))
     (is (= (path/join state "worlds" "test" "plans") (get-in w [:opts :plans-dir])))))
+
+(deftest the-world-reads-blueprints-from-the-given-folder-else-beside-the-engine
+  (let [open #(main/open-world (merge {:state-dir (tu/tmp-dir) :world "test" :agent "ProbeView" :root "/repo/engine" :emit (fn [_])} %))]
+    (is (= "/repo/blueprints" (get-in (open {}) [:opts :blueprint-dir])))
+    (is (= "/main/blueprints" (get-in (open {:blueprints-dir "/main/blueprints"}) [:opts :blueprint-dir])))))
+
+(deftest parse-args-takes-the-blueprints-flag
+  (is (= "/main/blueprints" (:blueprints (main/parse-args ["--agent" "A" "--blueprints" "/main/blueprints"])))))

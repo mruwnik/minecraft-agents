@@ -1,5 +1,5 @@
 (ns engine.main
-  "Entry point: npm run body -- --agent <name> --world <world> --scenario <file> [--fresh] [--upgrade] [--worlds <dir>] [--state-dir <legacy-parent>]"
+  "Entry point: npm run body -- --agent <name> --world <world> --scenario <file> [--fresh] [--upgrade] [--worlds <dir>] [--blueprints <dir>] [--state-dir <legacy-parent>]"
   (:require [engine.args :as a]
             [engine.bodies :as bodies]
             [engine.core :as core]
@@ -31,6 +31,8 @@
 (a/defargs settings
   {:engine.main/shutdown-limit-ms {:default 5000 :spec (a/int-in 1 nil)
                                    :doc "The signal handler exits after this long even when the body has not stopped, ms."}
+   :engine.main/blueprints-dir {:default "" :spec string?
+                                :doc "Folder of blueprint files; empty means the repo's blueprints folder beside the engine. The --blueprints flag wins. Read at body start."}
    :engine.game/follow-tick-rate {:default true :spec boolean?
                                   :doc "Body physics follows the server's /tick rate (freeze, step, faster or slower); off runs stock 20 TPS physics. Read at body start."}})
 
@@ -44,6 +46,7 @@
       (= a "--scenario") (recur more (assoc opts :scenario b))
       (= a "--state-dir") (recur more (assoc opts :state-dir b))
       (= a "--worlds") (recur more (assoc opts :worlds b))
+      (= a "--blueprints") (recur more (assoc opts :blueprints b))
       (= a "--drive-idle-s") (recur more (assoc opts :drive-idle-s (js/parseFloat b)))
       (= a "--fresh") (recur (rest all) (assoc opts :fresh? true))
       (= a "--upgrade") (recur (rest all) (assoc opts :upgrade? true))
@@ -82,7 +85,7 @@
   []
   (trigger-api/with-conditions triggers/all trigger-api/compile-condition))
 
-(def usage "usage: npm run body -- --agent <name> --world <world> --scenario <file> [--fresh] [--upgrade] [--worlds <dir>] [--state-dir <legacy-parent>]")
+(def usage "usage: npm run body -- --agent <name> --world <world> --scenario <file> [--fresh] [--upgrade] [--worlds <dir>] [--blueprints <dir>] [--state-dir <legacy-parent>]")
 
 (defn preflight
   "Everything run needs before connecting, or {:error text}. On a restart (a saved engine.edn, no --fresh) a scenario
@@ -134,10 +137,10 @@
 (defn open-world
   "The body's world store (the :world/open hook: plans, blueprints, zones, claims) with its notes store
   (engine.notes) as :notes, in the world folder worlds/<world>; the body's notes are written as agent's."
-  [{:keys [state-dir world agent root emit]}]
+  [{:keys [state-dir world agent root emit blueprints-dir]}]
   (let [dir (path/join (bodies/worlds-dir state-dir) world)]
     (assoc ((:world/open hooks/all) {:plans-dir (path/join dir "plans")
-                                     :blueprint-dir (path/resolve root ".." "blueprints")
+                                     :blueprint-dir (if (seq blueprints-dir) (path/resolve blueprints-dir) (path/resolve root ".." "blueprints"))
                                      :zones-file (path/join dir "zones.edn")
                                      :claims-file (path/join dir "claims.edn")
                                      :emit emit})
@@ -191,6 +194,7 @@
         sensed (senses/wrap raw-p (.-rawWorld raw-p))
         p (if per (perception/wrap sensed per) sensed)
         world (open-world {:state-dir state-dir :world (:world cfg) :agent (:agent opts) :root root
+                           :blueprints-dir (or (:blueprints opts) (settings/get settings :engine.main/blueprints-dir))
                            :emit (fn [e] (some-> @eng-ref (core/emit! e)))})
         base-eng (core/create {:primitives p :jobs registry/jobs :triggers (body-triggers) :dir (:engine-dir cfg)
                                :body (:username cfg) :world world})
