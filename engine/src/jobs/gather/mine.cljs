@@ -83,9 +83,8 @@
      The limit used up, or the stair stopping, ends :stopped :no-stone-found (warn mine.no-stone-found, result
      :descent {:steps :stop}); the mend and the walk home follow.
   6b. Still none, a tunnel level set (:level, else the ore's ::ore-levels entry, e.g. iron_ore 16; :level false: none) and the
-     body above it, the tunnel owed and not begun: a stair down the same way (one step a round, :fetch passed on, a look round
-     each step, a torch every :torch-interval steps) until the feet are at the level. The stair stopping ends the descent
-     there (info mine.descent-stopped {:steps :stop :y :level}) and the tunnel runs at that height.
+     body above it: a stair down the same way until the feet are at the level; the stair stopping ends the descent there
+     (info mine.descent-stopped {:steps :stop :y :level}) and the tunnel runs at that height.
   7. Else the strip tunnel, at the level then stood on.
 
   Strip tunnel: a 1-wide 2-high straight run at the level the body stood on at the start, along :heading or :direction
@@ -95,9 +94,8 @@
   cell of the run and judges the next cell and the one over it: no fluid in it, no seen lava beside it, no seen water
   beside it unless :wet, a solid floor, the zone and plan rules with only :accept hazards. It digs them head
   first (a cut of :block is collected like a target), looks ahead level and down so perception records what
-  the cut exposed, and steps in. A cut cell not air after the cut, or a walk stopped with a falling block (gravel, sand)
-  in it, is cut again (the column above falls in turn), at most ::max-recuts times per cell, then :dig-failed. Ore that comes into view is then an ordinary target and is dug before the
-  next step.
+  the cut exposed, and steps in. A cut cell a falling block (gravel, sand) refilled is cut again, at most ::max-recuts times per cell, then
+  :dig-failed; one not seen yet is looked at again first. Ore that comes into view is dug before the next step.
 
   The run used up ends the dig phase :tunnel-length, any stop ends it :tunnel-stopped. Either way one warn
   mine.tunnel-end {:y (the tunnel's feet height) :reason (:tunnel-length :lava :water :fluid :no-floor :not-loaded :refused :dig-failed
