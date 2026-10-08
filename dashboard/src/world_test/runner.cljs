@@ -420,11 +420,21 @@
   [reply]
   (if-let [[_ n] (re-find #"Target tick rate: ([\d.]+)" (or reply ""))] (js/Number n) 20))
 
+(defn in-phase?
+  "Whether day time t is in the phase the case runs in (its :time; :any and a case with none accept day or night)."
+  [c t]
+  (case (:time c)
+    :night (night? t)
+    :night-exclusive (night? t)
+    :any true
+    (not (night? t))))
+
 (defn time-disturbed?
-  "Whether the day time jumped between two readings (ticks, nil when unread): forward by more than the elapsed real
-  time allows at the server's tick rate (20 unless given) plus a margin, or backward. Standing still or running slow
-  (low TPS, daylight cycle off) is not a jump. False for a case with a :time-set step, and when the body woke from
-  sleep (all online players asleep skips the night)."
+  "Whether the day time was disturbed between two readings (ticks, nil when unread): it jumped forward by more than the
+  elapsed real time allows at the server's tick rate (20 unless given) plus a margin, or backward, AND the world left
+  the case's phase (day/night changed between the readings, or the later one is outside the case's :time). A jump that
+  keeps the phase (the runner's own refresh) is none. False for a case with a :time-set step, and when the body woke
+  from sleep (all online players asleep skips the night)."
   ([c t0 t1 elapsed-ms woke?] (time-disturbed? c t0 t1 elapsed-ms woke? 20))
   ([c t0 t1 elapsed-ms woke? tick-rate]
    (boolean
@@ -432,7 +442,9 @@
          (not-any? #(= :time-set (first %)) (:act c))
          (let [moved (mod (- t1 t0) 24000)]
            (and (> moved (+ (* elapsed-ms (/ tick-rate 1000)) time-jump-tolerance-ticks))
-                (< moved (- 24000 time-jump-tolerance-ticks))))))))
+                (< moved (- 24000 time-jump-tolerance-ticks))
+                (or (not= (boolean (night? t0)) (boolean (night? t1)))
+                    (not (in-phase? c t1)))))))))
 
 (defn woke? [events] (boolean (some #(and (= :body (:source %)) (= :woke (:kind %))) events)))
 
