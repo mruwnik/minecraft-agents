@@ -326,9 +326,22 @@
         (let [through (await (run (door-rig (:blocks (gate true)) (:states (gate true))) (walk-to 5.5)))
               shut (await (run (door-rig (:blocks (gate false)) (:states (gate false))) (walk-to 5.5) {:timeout-s 1}))]
           (is (= ["done" "timeout"] [(:status through) (:status shut)]))
-          (is (< (:x (:pose shut)) 3)))))))
+          (is (< (:x (:pose shut)) 3.075) "pressed against the gate's wall (x 3.375), never through it"))))))
 
 ;; ---- fences, posts and gates collide by their boxes, as in the game: a body slips through the free side of a post
+
+(deftest a-body-walking-at-a-shut-gate-stops-pressed-against-it-as-in-the-game
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        ;; the gate's wall is x 3.375..3.625: pressed against it the body's centre is at 3.075, in the gate's cell, where
+        ;; the planner puts a stand in its free sliver (3.0625)
+        (let [{:keys [blocks states]} (gate false)
+              r (await (run (door-rig blocks states)
+                            (fn [{:keys [x]}] (if (< (js/Math.abs (- x 3.0625)) 0.02) {:done {:x x}} {:controls {:forward true} :yaw east}))
+                            {:timeout-s 1}))]
+          (is (= "done" (:status r)) (pr-str r))
+          (is (<= 3.0625 (:x (:result r)) 3.075)))))))
 
 (def wide-floor (merge (floor 63 -2 12) (into {} (for [x (range -2 13)] [[x 63 1] "stone"]))))
 

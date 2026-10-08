@@ -99,6 +99,19 @@
               _ (await (ht/run-ticks s 40))]
           (is (= ht/gate (:gate (ht/done-event s))) "looked at, read in full: the run got as far as choosing the pen's gate"))))))
 
+(deftest a-walk-to-look-into-the-pen-stands-pressed-against-the-shut-gate
+  ;; the walk check-unknown! makes to look at a pen floor cell: the plan's stand nearest it is the free sliver of the shut
+  ;; gate's cell (x 10.0625, the gate's wall at 10.375), reached pressed against the gate as in the game
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (ht/setup (ht/world {}))
+              _ (core/submit! (:eng s) '(jobs.movement.go-to {:pos [13 63 3] :range 4 :doors :never :escalate false :retry false}) {})
+              _ (await (ht/run-ticks s 10))]
+          (is (empty? (ht/events-of s :walker-fault)) (pr-str (ht/events-of s :walker-fault)))
+          (is (= [10 64 3] (mapv #(js/Math.floor %) (:pos (fake/self (:p s))))) "in the gate's cell")
+          (is (= false (get-in @(fake/state (:p s)) [:states [10 64 3] :open])) "the gate stays shut"))))))
+
 (defn hide-fence-floor!
   "The pen floor beside the west fence is unseen until the body stands at the gate (x 8.5 or more): the fence hides it from outside."
   [s]

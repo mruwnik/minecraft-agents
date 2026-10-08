@@ -90,10 +90,24 @@
   (or (and (= (floor x) (floor (:x body))) (= (floor z) (floor (:z body))))
       (narrow-cell? w (floor x) (:y body) (floor z))))
 
+(defn box-clear? [w body x z] (and (narrow-or-same? w body x z) (body-clear? w x (:y body) z)))
+
+(defn clamp-axis
+  "How far along one axis, from (x0, z0) toward (x1, z1), the body's box goes before it touches a narrow block's box
+  (bisected): the point [x z] where the game's collision stops it."
+  [w body [x0 z0] [x1 z1]]
+  (let [at (fn [f] [(round (+ x0 (* f (- x1 x0)))) (round (+ z0 (* f (- z1 z0))))])]
+    (loop [lo 0 hi 1 n 0]
+      (if (= n 12)
+        (at lo)
+        (let [m (/ (+ lo hi) 2)]
+          (if (apply box-clear? w body (at m)) (recur m hi (inc n)) (recur lo m (inc n))))))))
+
 (defn horizontal
   "The body after the horizontal part of a tick. A move whose cell holds a narrow block (a post, gate, wall, pane or
   bamboo) is judged by the body's box against the blocks' boxes, as the planner's space judges it; a blocked move
-  slides along one axis, as the game's collision does."
+  slides along one axis, else moves along x then z as far as the boxes let it (pressed against the block), as the
+  game's collision does."
   [w body {:keys [forward jump] :as controls} yaw]
   (if-not forward
     (assoc body :collided false)
@@ -104,10 +118,12 @@
       (cond
         (narrow-cell? w cx (:y body) cz)
         (if-let [[x' z'] (->> [[x z] [x (:z body)] [(:x body) z]]
-                              (filter (fn [[x' z']] (and (narrow-or-same? w body x' z') (body-clear? w x' (:y body) z'))))
+                              (filter (fn [[x' z']] (and (not= [x' z'] [(:x body) (:z body)]) (box-clear? w body x' z'))))
                               first)]
           (assoc body :x x' :z z' :collided (not= [x' z'] [x z]))
-          (assoc body :collided true))
+          (let [[x' _] (clamp-axis w body [(:x body) (:z body)] [x (:z body)])
+                [_ z'] (clamp-axis w body [x' (:z body)] [x' z])]
+            (assoc body :x x' :z z' :collided true)))
         :else
       (if (and (= cx (floor (:x body))) (= cz (floor (:z body))))
         (assoc body :x x :z z :collided false)
