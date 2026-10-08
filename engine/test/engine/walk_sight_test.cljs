@@ -178,3 +178,26 @@
   (is (= 1 (ws/see-depth 4)) "dark, near 4")
   (is (= 4 (ws/see-depth 7)) "a torch in a hand, near 7")
   (is (= 0 (ws/see-depth 1))))
+
+(defn run-ticks
+  "decide-tick from state s0 with the body held at pose, at most n ticks: [ticks out] at the first done (or the last)."
+  [e s0 pose n]
+  (loop [s s0 t 1]
+    (let [[s' out] (walk/decide-tick e s pose)]
+      (if (or (:done out) (>= t n)) [t out] (recur s' (inc t))))))
+
+(deftest a-walk-that-starts-on-a-takeoff-is-held-there
+  (let [steps (ws/mark-steps (subvec road 2) (fn [x y z] (= [4 61 0] [x y z])))
+        e (assoc (env (constantly nil)) :steps steps)
+        s0 (walk/start-state steps {:x 3.5 :z 0.5})
+        [s out] (walk/decide-tick e s0 (assoc still :x 3.5))]
+    (is (nil? (:done out)) (pr-str out))
+    (is (some? (:controls out)))
+    (is (= 0 (:i (:exec s))) "the executor walks to the takeoff, the one step it has")
+    (is (= :unseen (:why (:done (second (run-ticks e s0 (assoc still :x 3.5) 200))))) "the floor is given up, no crash")))
+
+(deftest a-body-blocked-on-the-last-leg-before-a-gate-ends-stuck
+  (let [e (env (constantly nil))
+        [t out] (run-ticks e (walk/start-state (:steps e) {:x 1.5 :z 0.5}) (assoc still :x 2.5) 600)]
+    (is (= :stuck (:status (:done out))) (pr-str out))
+    (is (<= t (+ (:no-progress-ticks ex/policy) 5)) t)))

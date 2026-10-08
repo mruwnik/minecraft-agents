@@ -126,7 +126,8 @@
 (defn gate-tick
   "decide-tick with the floor gate (jobs.lib.walk.sight): a body standing on a pending floor ends the walk :pushed; the
   pending floors are sensed (a plain one resolves, another ends :changed); the executor gets the steps up to the first
-  pending gate's takeoff, its arrival there and its stuck clock do not end the walk; the gate's controller holds the body."
+  pending gate's takeoff (a walk that starts on the takeoff walks to it), its arrival there does not end the walk, nor its
+  stuck clock on the takeoff; the gate's controller holds the body."
   [{:keys [policy steps watch-stop gate]} {:keys [exec] :as state} pose]
   (let [i (:i exec)
         at [(:x pose) (:y pose) (:z pose)]
@@ -135,10 +136,12 @@
       [state {:done {:status :replan :why :pushed :cells [cell] :at at :step before}
               :warn {:cell cell :step before :at at}}]
       (let [{:keys [k gstate done]} (wsight/sense gate steps (:gate state) i pose)
-            exec (assoc exec :steps (prefix (:steps exec) steps k))
+            pre (prefix (:steps exec) steps k)
+            exec (cond-> (assoc exec :steps pre) (>= (:i exec) (count pre)) (assoc :i (dec (count pre))))
             {exec' :state edone :done :keys [controls yaw pitch]} (executor/tick policy exec pose)
             held? (and k (= (:i exec') (dec k)))
-            edone (when-not (and held? (#{:arrived :stuck} (:status edone))) edone)
+            on? (and held? (or (:held gstate) (wsight/reached-takeoff? (nth steps (dec k)) pose)))
+            edone (when-not (or (and held? (= :arrived (:status edone))) (and on? (= :stuck (:status edone)))) edone)
             done (or done edone (when watch-stop (watch-stop i exec' pose)))
             base {:controls (gait-controls policy exec' pose controls) :yaw yaw :pitch pitch}]
         (cond
