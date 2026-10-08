@@ -17,6 +17,7 @@
   stays true and a :stop latch would never clear. The retries are bounded: each try counts toward max-tries."
   (:require [engine.args :as a]
             [engine.settings :as settings]
+            [jobs.lib.reach :as reach]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.util :as u]
             [engine.memory :as mem]))
@@ -58,11 +59,12 @@
        (filterv #(some? (tidy/block-now p (:cell %))))))
 
 (defn holds?
-  "Whether some pending entry is worth a run now (see the ns doc); "
-  [p view args live here]
+  "The pending entries worth a run now (see the ns doc). enclosed: a delay of the body's enclosure, flooded at most
+  once per check."
+  [p view args live enclosed here]
   (let [reported (set (:cells (:data (mem/latest view :tidy-reported))))]
     (filterv #(or (not (contains? reported (:cell %)))
-                  (and (tidy/restorable? p %) (not (tidy/unreachable? p % (:reach args)))))
+                  (and (tidy/restorable? p % enclosed) (not (tidy/unreachable? p % (:reach args)))))
              (loaded-entries p view live here))))
 
 (defn tidy-pending
@@ -71,6 +73,7 @@
         now (:now view)
         h (u/self-pos {:primitives p})
         here {:x (:x h) :y (:y h) :z (:z h)}
+        enclosed (delay (reach/enclosed? p))
         pending (when-not (or (airborne? p) (tidy/unsafe? p args))
-                  (holds? p view args live here))]
-    (boolean (some #(not (tried-lately? args now here (tidy/restorable? p %) %)) pending))))
+                  (holds? p view args live enclosed here))]
+    (boolean (some #(not (tried-lately? args now here (tidy/restorable? p % enclosed) %)) pending))))

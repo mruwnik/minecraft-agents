@@ -20,7 +20,8 @@
   Works only when the body is safe: health at least :min-health and no hostile within :danger-radius.
   Touches only a cell whose block is still what the job left (a changed cell is somebody's, left alone),
   with at most 3 tries per cell.
-  One run over every entry, paced between steps, a cell put back forgotten at once; a walk is one go-to call and
+  One run over every entry, paced between steps, a cell put back forgotten at once; a step takes the first of the next
+  max-candidates-checked cells whose put-back cuts the body's way to no other it reaches now; a walk is one go-to call and
   a failed try is repeated until the cell gave up. A cell not restored for now (unsafe, item not carried) keeps its
   entry. The others are forgotten.
   Ends with one info tidy.restored (the cells put back, none if none were), :done when every cell was settled,
@@ -39,6 +40,7 @@
 (a/defargs settings
   {::step-radius {:default 4 :doc "Blocks around the body in which a standing cell is looked for." :spec (a/int-in 0 nil)}
    ::max-others-checked {:default 12 :doc "Other broken cells checked per pass for a standing cell." :spec (a/int-in 0 nil)}
+   ::max-candidates-checked {:default 4 :doc "Waiting cells checked per pass for one whose put-back seals no other." :spec (a/int-in 1 nil)}
    ::max-passes {:default 100 :doc "Steps in one run before it stops." :spec (a/int-in 0 nil)}})
 (defn step-radius [] (settings/get settings ::step-radius))
 
@@ -71,29 +73,53 @@
          first)))
 
 (defn max-others-checked [] (settings/get settings ::max-others-checked))
+(defn max-candidates-checked [] (settings/get settings ::max-candidates-checked))
+
+(defn probe
+  "What the checks of one pass decision share, so its work does not grow with the entries waiting: one block lookup,
+  the body's enclosure (flooded at most once) and whether the body walks to each other cell now (searched at most
+  once)."
+  [c]
+  (let [p (:primitives c)]
+    {:kind-at (reach/lookup p)
+     :enclosed (delay (reach/enclosed? p))
+     :reaches (volatile! {})}))
+
+(defn reaches-now?
+  "Whether the body's walk search finds cell now within its budget (an unknown answer is no: such a cell is too far
+  to judge a seal by)."
+  [c {:keys [kind-at reaches]} cell]
+  (let [hit (get @reaches cell)]
+    (if (some? hit)
+      hit
+      (let [v (= :found (reach/search (partial reach/forward kind-at) (reach/cell-of (u/self-pos c)) cell))]
+        (vswap! reaches assoc cell v)
+        v))))
 
 (defn seals-others?
   "Whether putting back the dug block of e would shut the body off from another entry of waiting it can still reach
-  now (the body must be able to walk next to a cell to place a block in it)."
-  [c {:keys [cell action] :as e} waiting]
+  now (the body must be able to walk next to a cell to place a block in it). pr: the pass's probe."
+  [c {:keys [cell action] :as e} waiting pr]
   (when (= :dig action)
     (let [p (:primitives c)
-          here (u/self-pos c)
+          kind-at (:kind-at pr)
+          [cx cy cz] cell
+          filled (fn [x y z] (if (and (== x cx) (== y cy) (== z cz)) :solid (kind-at x y z)))
+          here (reach/cell-of (u/self-pos c))
           others (->> waiting
                       (remove #(= cell (:cell %)))
-                      (filter #(and (= :dig (:action %)) (nil? (tidy/why-not p %))))
-                      (take (max-others-checked)))
-          at (fn [o] (zipmap [:x :y :z] (:cell o)))]
-      (boolean (some #(and (reach/walkable-way? p here (at %))
-                           (not (reach/walkable-way? p here (at %) #{cell}))) others)))))
+                      (filter #(and (= :dig (:action %)) (nil? (tidy/why-not p % (:enclosed pr)))))
+                      (take (max-others-checked)))]
+      (boolean (some #(and (reaches-now? c pr (:cell %))
+                           (not (reach/way? filled here (:cell %)))) others)))))
 
 (defn seals-body?
   "Whether putting back the dug block of e would shut the body itself in: it has room to walk now and would not with
-  the cell solid (its doorway, its stair)."
-  [c {:keys [cell action]}]
+  the cell solid (its doorway, its stair). pr: the pass's probe."
+  [c {:keys [cell action]} pr]
   (and (= :dig action)
        (let [p (:primitives c)]
-         (and (not (reach/enclosed? p)) (reach/enclosed? p #{(vec cell)})))))
+         (and (not @(:enclosed pr)) (reach/enclosed? p #{(vec cell)})))))
 
 (defn check [c]
   (or (boolean (seq (tidy/entries c)))
@@ -105,9 +131,9 @@
   (tidy/unsafe? (:primitives c) args))
 
 (defn why-not
-  "Why entry cannot be restored now (:changed :not-carried), or nil."
-  [c e]
-  (tidy/why-not (:primitives c) e))
+  "Why entry cannot be restored now (:changed :not-carried :shut-in :occupied), or nil. pr: the pass's probe."
+  [c e pr]
+  (tidy/why-not (:primitives c) e (:enclosed pr)))
 
 (defn ^:async walk-to!
   "Walk to within reach of cell: true when it arrived, :continue when the walk yielded, false when it gave up."
@@ -188,25 +214,39 @@
 
 (defn max-passes [] (settings/get settings ::max-passes))
 
+(defn decide
+  "What one pass does with the waiting entries (synchronous, its searches and floods bounded whatever the number
+  waiting): [:done], [:skip e why], [:step-clear e] or [:restore e]. An occupied cell comes first, then the first of
+  the next max-candidates-checked whose put-back seals no other, else the next."
+  [c waiting]
+  (let [a (:args c)
+        pr (probe c)
+        e (or (first (filter #(= :occupied (why-not c % pr)) waiting))
+              (first (remove #(seals-others? c % waiting pr) (take (max-candidates-checked) waiting)))
+              (first waiting))
+        why (when e (why-not c e pr))]
+    (cond
+      (nil? e) [:done]
+      (unsafe? c a) [:skip e :unsafe]
+      (= :occupied why) [:step-clear e]
+      why [:skip e why]
+      (tidy/unreachable? (:primitives c) e (:reach a)) [:skip e :unreachable]
+      (>= (:tries e) (tidy/max-tries)) [:skip e :gave-up]
+      (or (seals-body? c e pr) (seals-others? c e waiting pr)) [:skip e :seals]
+      :else [:restore e])))
+
 (defn ^:async pass!
   "One step over the next waiting entry: restore it, step clear of it, or skip it with a reason. Resolves :again,
   or :done when none is waiting."
   [c]
-  (let [a (:args c)
-        seen (:seen (ctx/mem c) #{})
+  (let [seen (:seen (ctx/mem c) #{})
         waiting (vec (remove #(contains? seen (:cell %)) (tidy/entries c)))
-        e (or (first (filter #(= :occupied (why-not c %)) waiting))
-              (first (remove #(seals-others? c % waiting) waiting))
-              (first waiting))]
-    (cond
-      (nil? e) :done
-      (unsafe? c a) (do (skip! c e :unsafe) :again)
-      (= :occupied (why-not c e)) (do (await (step-clear! c e waiting)) :again)
-      (why-not c e) (do (skip! c e (why-not c e)) :again)
-      (tidy/unreachable? (:primitives c) e (:reach a)) (do (skip! c e :unreachable) :again)
-      (>= (:tries e) (tidy/max-tries)) (do (skip! c e :gave-up) :again)
-      (or (seals-body? c e) (seals-others? c e waiting)) (do (skip! c e :seals) :again)
-      :else (do (await (restore-one! c e (:reach a))) :again))))
+        [verdict e why] (decide c waiting)]
+    (case verdict
+      :done :done
+      :skip (do (skip! c e why) :again)
+      :step-clear (do (await (step-clear! c e waiting)) :again)
+      :restore (do (await (restore-one! c e (:reach (:args c)))) :again))))
 
 (defn ^:async round [c]
   (loop [i 0]

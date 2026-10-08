@@ -66,13 +66,15 @@
 (defn why-not
   "Why entry cannot be restored now, or nil: :changed (the cell no longer holds what was recorded), :not-carried (no
   place-item carried), :shut-in (a go-to escalation hole, :escalation, while the body is shut in: the hole is its way
-  on) or :occupied (the block would be placed into the body)."
-  [p {:keys [cell now action escalation] :as e}]
-  (cond
-    (not= now (block-now p cell)) :changed
-    (and (= :dig action) (nil? (place-item p e))) :not-carried
-    (and (= :dig action) escalation (reach/enclosed? p)) :shut-in
-    (and (= :dig action) (in-body? p cell)) :occupied))
+  on) or :occupied (the block would be placed into the body). enclosed: a delay of (reach/enclosed? p), shared by the
+  calls of one decision so the flood runs at most once."
+  ([p e] (why-not p e (delay (reach/enclosed? p))))
+  ([p {:keys [cell now action escalation] :as e} enclosed]
+   (cond
+     (not= now (block-now p cell)) :changed
+     (and (= :dig action) (nil? (place-item p e))) :not-carried
+     (and (= :dig action) escalation @enclosed) :shut-in
+     (and (= :dig action) (in-body? p cell)) :occupied)))
 
 (defn unreachable?
   "Whether the body cannot get within reach blocks of entry's cell: it is farther off and has no walkable way to the
@@ -112,9 +114,11 @@
   (ctx/forget-where! c :tidy #(= cell (:cell %))))
 
 (defn restorable?
-  "Whether entry e is worth a restore try now: fewer than max-tries tries and nothing in the way (why-not)."
-  [p {:keys [tries] :as e}]
-  (and (< tries (max-tries)) (nil? (why-not p e))))
+  "Whether entry e is worth a restore try now: fewer than max-tries tries and nothing in the way (why-not; enclosed as
+  there)."
+  ([p e] (restorable? p e (delay (reach/enclosed? p))))
+  ([p {:keys [tries] :as e} enclosed]
+   (and (< tries (max-tries)) (nil? (why-not p e enclosed)))))
 
 (defn tried-record
   "The :tried stamp of an entry a run just counted a try on: the time, the body's feet (here {:x :y :z}) and whether the

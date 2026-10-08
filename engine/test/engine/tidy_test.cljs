@@ -632,3 +632,31 @@
             (let [warns (filterv #(= :tidy.not-restored (:kind %)) @seen)]
               (is (= 1 (count warns)))
               (is (= [(:cell (first (tidy-entries eng)))] (mapv :cell (:cells (first warns)))) "the warn lists the unvisited cell"))))))))
+
+;; ------------------------------------------------------------------ bounded work per pass
+
+(defn holes
+  "n escalation holes (dug stone pillars, now air) on the open floor 6 to 13 blocks east of the body."
+  [n]
+  (vec (for [i (range n)] (assoc escalation-hole :cell [(+ 6 (mod i 8)) 64 (- (quot i 8) 4)]))))
+
+(defn decide-work
+  "The walk searches and floods one restore-broken pass decision runs over n escalation holes, and its verdict."
+  [n]
+  (let [{:keys [p]} (setup (assoc with-hitbox :floor [-30 -30 30 30] :self {:pos [0 64 0]}) [(zs/whole-zone "Miles")])
+        searches (atom 0)
+        floods (atom 0)
+        search reach/search
+        flood reach/flood
+        verdict (with-redefs [reach/search (fn [& xs] (swap! searches inc) (apply search xs))
+                              reach/flood (fn [& xs] (swap! floods inc) (apply flood xs))]
+                  (first (restore-broken/decide {:primitives p :args {:min-health 14 :danger-radius 8 :reach 3}} (holes n))))]
+    {:verdict verdict :searches @searches :floods @floods}))
+
+(deftest one-pass-decision-does-bounded-work-however-many-entries-wait
+  (let [few (decide-work 20)
+        many (decide-work 48)]
+    (is (= :restore (:verdict many)))
+    (is (<= (:floods many) 3) "the body's enclosure is flooded once a pass, not once per escalation entry")
+    (is (= (:searches few) (:searches many)) "walk searches do not grow with the number of entries")
+    (is (= (:floods few) (:floods many)))))
