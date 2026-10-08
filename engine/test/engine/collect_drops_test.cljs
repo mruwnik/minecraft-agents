@@ -180,3 +180,18 @@
             (is (= 0 (:collected result)))
             (is (= [{:reason :unseen :ids [999]}] (:left result)))
             (is (= [:unseen] (mapv :reason (bd/left-drops seen))))))))))
+
+(deftest a-drop-in-a-sealed-pocket-is-dug-to-with-dig-true
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pocket (into {} (for [x (range -1 9) y (range 56 64) z [-2 -1 0 1 2]
+                                    :when (not= [5 58 0] [x y z])]
+                                [(str x "," y "," z) "stone"]))
+              {:keys [eng p seen]} (bd/setup {:self body :inventory [{:name "wooden_pickaxe" :count 1}] :blocks pocket})]
+          (drop! p [5 58 0] "dirt")
+          (seen-from-above! p)
+          (let [result (await (bd/child-outcome eng job {:radius 8 :dig true} 80))]
+            (is (pos? (:collected result)) "the dug stone came in with it")
+            (is (= 1 (bd/carried p "dirt")))
+            (is (empty? (:left result)))))))))

@@ -1,8 +1,10 @@
 (ns jobs.forestry.collect-drops
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.lib.blocks :as blocks]
             [jobs.lib.child :as child]
             [jobs.lib.dig-look :as dig-look]
+            [jobs.lib.dig-route :as dig-route]
             [jobs.lib.look :as look]
             [jobs.lib.loose :as loose]
             [jobs.lib.reach :as reach]
@@ -25,6 +27,9 @@
   blocks are tried.
   While it runs it holds its work area (jobs.lib.loose :collecting), so the :loose-items reflex leaves those drops to it.
   With :ids, ids not in sight when none is left to try are booked as one :left {:reason :unseen :ids [...]}.
+  With :dig, a drop go-to cannot reach, or one too deep in the dug hole, is dug to once: the fewest cells (jobs.lib.dig-route,
+  over the blocks the body has seen, an unseen one taken for stone) that open a way to it, each a jobs.blocks.dig child (zones, claims, hazards
+  are its rules), then the walk is tried again. No such way, or a dig that fails, leaves the drop :unreachable.
   Result: {:collected n}, the number of items that entered the inventory, with :left [{:pos :reason}] for those.")
 
 (a/defargs args
@@ -35,6 +40,7 @@
    :want {:doc "items the caller expects to come in; the :search goes on while fewer were collected" :spec (a/num-in 0 nil) :default 1}
    :want-items {:doc "item names that count towards :want; every collected item when nil" :spec (a/coll-of a/item?) :default nil}
    :ids {:doc "entity ids to collect (only those); any item when nil" :spec (a/coll-of number?) :default nil}
+   :dig {:doc "dig a way to a drop that cannot be walked to (the cells are left for the caller's tidy)" :spec boolean? :default false}
    :holes {:doc "cells the caller dug: an item lower than the feet at or under one of them, or one column beside, is in that hole"
            :spec (a/coll-of a/position?) :default nil}})
 
@@ -132,6 +138,24 @@
       (and (= :done r) (:arrived (ctx/child-result c :walk))) :arrived
       :else :unreachable)))
 
+(defn ^:async dig-to!
+  "Dig the route to item (jobs.lib.dig-route): one jobs.blocks.dig child per cell, in walking order. :dug when every
+  cell is open now, :continue while a dig waits on the world, :unreachable when there is no route or a dig fails."
+  [c item]
+  (let [p (:primitives c)
+        at (fn [[x y z]] (u/seen-name p {:x x :y y :z z}))
+        r (dig-route/route at (u/cell-vec (u/self-pos c)) (item-cell item) {})]
+    (if (:problem r)
+      :unreachable
+      (loop [cells (:dig r)]
+        (if-let [cell (first cells)]
+          (let [o (await (blocks/dig-cell! c cell {}))]
+            (cond
+              (= :continue o) :continue
+              (#{:dug :missing} o) (recur (rest cells))
+              :else :unreachable))
+          :dug)))))
+
 (defn leave!
   "Leave item where it lies: why is the hole-problem."
   [c item why]
@@ -220,8 +244,12 @@
           (let [hole? (in-hole? c item)
                 moving? (and hole? (settling? c item))
                 why (when (and hole? (not moving?)) (await (hole-problem! c item)))
-                walk (when (and (not hole?) (deep? c item)) (await (walk-down! c item)))]
-            (if (or moving? (= :continue walk))
+                walk (when (and (not hole?) (deep? c item)) (await (walk-down! c item)))
+                dig? (and (:dig (:args c)) (or (= :unreachable walk) (= :too-deep why)))
+                dug (when dig? (await (dig-to! c item)))
+                walk (if (= :dug dug) (await (walk-down! c item)) walk)
+                why (if (= :dug dug) nil why)]
+            (if (or moving? (= :continue walk) (= :continue dug))
               :continue
               (do (cond
                     why (leave! c item why)
