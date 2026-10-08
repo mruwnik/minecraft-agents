@@ -478,16 +478,21 @@
   [body]
   [(str "gamemode spectator " body)])
 
+(def worn-slots
+  "Slots /clear is not trusted with: a helmet left by an earlier case changes go-to's air plan."
+  ["armor.head" "armor.chest" "armor.legs" "armor.feet" "weapon.offhand"])
+
 (defn body-commands
   "Put the body at its start (facing :yaw, 0 = south, 180 = north; :pitch, 0 level, positive down): on the plot, survival, healed and fed, its inventory and effects as the case says."
   [origin body c]
   (let [{:keys [at yaw pitch inventory effects spawnpoint]} (:body c)]
     (-> [(str "gamemode survival " body)
          (str "clear " body)
-         (str "effect clear " body)
-         (str "tp " body " " (xyz-str (abs-pos origin at)) " " (or yaw 0) " " (or pitch 0))
-         (str "effect give " body " minecraft:instant_health 1 10 true")
-         (str "effect give " body " minecraft:saturation 1 10 true")]
+         (str "effect clear " body)]
+        (into (for [slot worn-slots] (str "item replace entity " body " " slot " with minecraft:air")))
+        (into [(str "tp " body " " (xyz-str (abs-pos origin at)) " " (or yaw 0) " " (or pitch 0))
+               (str "effect give " body " minecraft:instant_health 1 10 true")
+               (str "effect give " body " minecraft:saturation 1 10 true")])
         (into (for [[item n] inventory] (str "give " body " " item " " (or n 1))))
         (into (for [[effect seconds amp] effects]
                 (str "effect give " body " " effect " " (or seconds 600) " " (or amp 0) " true")))

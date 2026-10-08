@@ -160,7 +160,16 @@
       (is (some #{"tp ProbeFixture 20016.5 150 20016.5 0 0"} body))
       (is (some #{"give ProbeFixture bread 3"} body))
       (is (some #{"effect give ProbeFixture resistance 3600 4 true"} body))
-      (is (= "clear ProbeFixture" (second body))))
+      (is (= "clear ProbeFixture" (second body)))
+      (is (every? (set body) ["item replace entity ProbeFixture armor.head with minecraft:air"
+                              "item replace entity ProbeFixture armor.chest with minecraft:air"
+                              "item replace entity ProbeFixture armor.legs with minecraft:air"
+                              "item replace entity ProbeFixture armor.feet with minecraft:air"
+                              "item replace entity ProbeFixture weapon.offhand with minecraft:air"])
+          "worn armour and the off-hand are emptied by name, not left to /clear: a helmet of an earlier case must not carry over")
+      (is (< (.indexOf body "item replace entity ProbeFixture armor.head with minecraft:air")
+             (.indexOf body "give ProbeFixture bread 3"))
+          "the slots are emptied before the case's gear is given"))
     (is (some #{"tp ProbeFixture 20016.5 150 20016.5 180 0"}
               (f/body-commands origin "ProbeFixture" (assoc-in glass [:body :yaw] 180)))
         "a case may turn the body (yaw, degrees: 0 south, 180 north) so it can see what lies behind the default view")
