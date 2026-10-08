@@ -323,15 +323,16 @@
 
 (defn ^:async flight-target!
   "The walk target away from threats (walk/choose-target over what the body sees, after glance-away!; cover from the
-  ranged ones first, a swim slow), nil when none. covered? as cover-fn (given so the caller shares one)."
-  ([c threats] (await (flight-target! c threats (cover-fn (:primitives c) threats))))
-  ([c threats covered?]
+  ranged ones first, a swim slow), leaning toward the first of rooms (refuges), nil when none. covered? as cover-fn
+  (given so the caller shares one)."
+  ([c threats] (await (flight-target! c threats (cover-fn (:primitives c) threats) (refuges c))))
+  ([c threats covered? rooms]
    (let [p (:primitives c)
          from (u/self-pos c)
          threat-pos (mapv #(danger-q/mob-pos p %) threats)
-         refuge (:start (first (refuges c)))
+         refuge (:start (first rooms))
          home (or refuge (home-pos c))
-         flank? (and (some? refuge) (cost/outruns-at? (or (.-food (.self p)) 20) (walk/flank-turn)))]
+         flank? (and (some? refuge) (cost/outruns-at? (retreat-home/food p) (walk/flank-turn)))]
      (await (glance-away! c (walk/direction from threat-pos home flank?)))
      (walk/choose-target (block-at-fn p) from threat-pos home (keep (comp :pos :data) (ctx/entries c :hazard))
                          (:step (:args c)) {:swim-factor (swim-factor c) :covered? covered? :flank? flank?}))))
@@ -398,7 +399,7 @@
         {fx :x fy :y fz :z} (sh/feet p)
         r (js/Math.ceil door-reach)
         clicked (:doors-clicked (ctx/mem c) #{})
-        mid (fn [{:keys [x y z]}] {:x (+ x 0.5) :y y :z (+ z 0.5)})]
+        mid retreat-home/mid]
     (->> (for [x (range (- fx r) (+ fx r 1)) y (range (dec fy) (+ fy 3)) z (range (- fz r) (+ fz r 1))]
            {:x x :y y :z z})
          (keep (fn [cell]
@@ -419,8 +420,8 @@
   shut does not hold the flight. :again: the next step sees whether the danger is still there."
   [c {:keys [cell name]}]
   (ctx/update-mem! c update :doors-clicked (fnil conj #{}) (door-key cell))
-  (let [r (await (click/click! c cell :closed name))]
-    (when (= :changed (:outcome r))
+  (let [r (await (dig-cells/shut-open! c cell))]
+    (when (= :shut r)
       (ctx/emit! c :retreat.door-shut :info {:cell (door-key cell) :text (str "shut the " name " at " (door-key cell)
                                                                              " on the hostile")})))
   :again)
@@ -470,7 +471,8 @@
         threat (first threats)
         door (when threat (door-to-shut c (danger-q/mob-pos p threat)))
         covered? (cover-fn p threats)
-        {:keys [room way inside?]} (when threat (retreat-home/choose p (refuges c) threats (not (exposed-low? c covered?))))
+        rooms (when threat (refuges c))
+        {:keys [room way inside?]} (when threat (retreat-home/choose p rooms threats (not (exposed-low? c covered?))))
         stuck (fn ^:async stuck [why]
                 (if (seq (near-hostiles c))
                   (await (cornered! c why inside?))
@@ -489,7 +491,7 @@
       way (await (run-home! c room way))
       :else
       (let [_ (await (eat-on-the-run! c threat))
-            target (await (flight-target! c threats covered?))
+            target (await (flight-target! c threats covered? rooms))
             cover (when (and (exposed-low? c covered?)
                              (or (refuge/sealing-here? c) (not (and target (covered? target))))
                              (not (close-danger? p threats)))

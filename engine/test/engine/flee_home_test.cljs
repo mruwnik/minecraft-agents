@@ -125,7 +125,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (await (flee! (hut {:x 5.5 :y 64 :z 12.5} hs/door-states [(zombie 5.5 7.5 0.4)])))]
-          (is (not= 5 (:x (first (walk-targets eng)))) (str "the first step turns toward the hut's side: " (walk-targets eng)))
+          (is (<= 2 (js/Math.abs (- (:x (first (walk-targets eng))) 5)) 5) (str "the first step turns toward the hut's side: " (walk-targets eng)))
+          (is (< 12 (:z (first (walk-targets eng)))) (str "and still away from the zombie: " (walk-targets eng)))
           (is (not (ran-home? seen)) "the zombie stays nearer the door than the body's way round")
           (is (= [] (:list (core/state eng))) "the body gets away"))))))
 
@@ -168,7 +169,8 @@
       (fn ^:async t []
         (let [{:keys [eng]} (await (first-step (hut {:x 5.5 :y 64 :z -4.5} hs/door-states
                                                      [(assoc (zombie 12.5 -2.5 nil) :visible true)])))]
-          (is (not (in-room? (mapv (first (walk-targets eng)) [:x :y :z])))
+          (is (some? (first (walk-targets eng))) "it walks somewhere")
+          (is (not (in-room? (mapv (or (first (walk-targets eng)) home) [:x :y :z])))
               (str "the way round to the door is longer than the zombie's, it flees first: " (walk-targets eng))))))))
 
 (deftest a-hungry-body-does-not-race-as-if-sprinting
@@ -182,19 +184,27 @@
 (defn sleep [ms] (js/Promise. (fn [r] (js/setTimeout r ms))))
 
 (defn ^:async first-move
-  "Submit the retreat over world and let its round run until it runs home or holds (hides), then clear the mobs so the
-  round ends."
+  "Submit the retreat over world and let its round run until it runs home or seals itself in (takes cover), then clear
+  the mobs so the round ends."
   [world]
   (let [{:keys [eng p seen] :as s} (setup world)]
     (core/submit! eng '(jobs.survival.retreat) {})
-    (let [round (core/tick! eng)]
-      (loop [i 0]
-        (when (and (not (ran-home? seen)) (not-any? #(= :holding (:kind %)) @seen) (< i 250))
+    (let [round (core/tick! eng)
+          ended (atom false)]
+      (.then round #(reset! ended true))
+      (loop []
+        (when-not (or @ended (ran-home? seen) (some #(= :retreat_sealed (:kind %)) @seen))
           (await (sleep 20))
-          (recur (inc i))))
+          (recur)))
       (swap! (fake/state p) assoc :entities [])
       (await round))
     s))
+
+(defn first-move-kind
+  "The flight's first move: the run home (:retreat.home, said before its walk), another walk (:planned) or a seal where
+  it stands (:retreat_sealed)."
+  [seen]
+  (some (comp #{:retreat.home :planned :retreat_sealed} :kind) @seen))
 
 (deftest a-low-body-in-a-skeletons-line-of-fire-takes-cover-before-running-home
   (async done
@@ -205,9 +215,9 @@
                                             :health 20 :visible true}])
                                      (assoc-in [:self :health] health)
                                      (assoc :inventory [{:name "cobblestone" :count 20}])))]
-          (is (ran-home? (:seen (await (first-move (world 20))))) "healthy, it runs home")
-          (is (not (ran-home? (:seen (await (first-move (world 8)))))) "low and under fire, no run across open ground"))))))
-
+          (is (= :retreat.home (first-move-kind (:seen (await (first-move (world 20)))))) "healthy, it runs home at once")
+          (is (#{:planned :retreat_sealed} (first-move-kind (:seen (await (first-move (world 8))))))
+              "low and under fire, a step to cover comes before any run across open ground"))))))
 
 ;; Any closed building the body has seen is a refuge, not only its own home (owner Q132).
 
@@ -262,3 +272,39 @@
           (await (tu/run-until-empty eng 6))
           (is (not (ran-home? seen)) "no run to a building it never saw")
           (is (not (in-room? (body p)))))))))
+
+(defn counting!
+  "Replace the var at (getter) via (setter f) with a wrapper counting calls in counts under k; returns the restore fn."
+  [counts k getter setter]
+  (let [f (getter)]
+    (setter (fn [& args] (swap! counts update k (fnil inc 0)) (apply f args)))
+    #(setter f)))
+
+(def lone-doors
+  "Six oak doors standing alone in the open field west of the hut: both sides of each flood open."
+  (into {} (for [i (range 6) :let [x (- -6 (* 3 i))] half ["lower" "upper"]]
+             [(str x "," (if (= half "lower") 64 65) ",6") "oak_door"])))
+
+(def lone-door-states
+  (into {} (for [i (range 6) :let [x (- -6 (* 3 i))] half ["lower" "upper"]]
+             [(str x "," (if (= half "lower") 64 65) ",6") {:open false :half half :facing "south"}])))
+
+(deftest the-room-search-per-flight-step-stays-bounded
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [counts (atom {})
+              restores [(counting! counts :closed-room #(identity reach/closed-room?) #(set! reach/closed-room? %))
+                        (counting! counts :room #(identity reach/room) #(set! reach/room %))
+                        (counting! counts :walk-steps #(identity reach/walk-steps) #(set! reach/walk-steps %))
+                        (counting! counts :steps #(identity retreat/flight-step!) #(set! retreat/flight-step! %))]
+              {:keys [p]} (try (await (flee! (assoc (hut {:x 5.5 :y 64 :z 6.5} (merge hs/door-states lone-door-states)
+                                                         [(zombie 5.5 13.5 0.4)] lone-doors)
+                                                    :home false)))
+                               (finally (doseq [r restores] (r))))
+              {:keys [closed-room room walk-steps steps]} @counts]
+          (is (in-room? (body p)) (str "inside the hut: " (body p)))
+          (is (pos? steps))
+          (is (<= closed-room (* 2 (retreat-home/max-doors))) (str "each door side flooded once a flight: " @counts))
+          (is (<= room (+ closed-room (* steps (retreat-home/max-rooms)))) (str "rooms rebuilt per step: " @counts))
+          (is (<= walk-steps (* steps (retreat-home/max-rooms))) (str "one walk search per room door per step: " @counts)))))))

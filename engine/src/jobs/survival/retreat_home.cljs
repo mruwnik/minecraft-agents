@@ -16,6 +16,8 @@
 
 (defn mid [{:keys [x y z]}] {:x (+ x 0.5) :y y :z (+ z 0.5)})
 
+(defn food "The body's food, 20 (full) when unknown." [p] (or (.-food (.self p)) 20))
+
 (a/defargs settings
   {::door-radius {:default 32 :doc "Blocks from the body within which a seen door or gate may lead into a closed building to flee to." :spec (a/num-in 0 64)}
    ::max-doors {:default 8 :doc "Seen doors and gates, nearest first, whose two sides a flight checks for a closed room." :spec (a/int-in 0 nil)}
@@ -96,7 +98,7 @@
                      (->> threats
                           (remove combat/ranged?)
                           (map (fn [t] (apply min (map #(u/dist (danger-q/mob-pos p t) (mid (:cell %))) (:doors room))))))
-                     (or (.-food (.self p)) 20)))
+                     (food p)))
 
 (defn choose
   "Where the flight goes among rooms (rooms): {:room r :inside? true} for the room the body is in, else {:room r :way w}
