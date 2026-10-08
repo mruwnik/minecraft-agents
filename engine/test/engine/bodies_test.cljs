@@ -6,7 +6,7 @@
             ["path" :as path]))
 
 (deftest body-dir-is-under-its-world
-  (is (= (path/join "/s" "worlds" "claude" "agents" "Bob") (bodies/body-dir "/s" "claude" "Bob")))
+  (is (= (path/join "/s" "worlds" "test" "agents" "Bob") (bodies/body-dir "/s" "test" "Bob")))
   (is (not= (bodies/body-dir "/s" "a" "Bob") (bodies/body-dir "/s" "b" "Bob"))))
 
 (deftest canonical-worlds-and-legacy-state-selectors
@@ -32,7 +32,7 @@
   (is (re-find #"name" (try (bodies/account-dir "/s" "../x") "" (catch :default e (ex-message e))))))
 
 (deftest world-of-body-dir-and-missing-world-text
-  (is (= "claude" (bodies/world-of-body-dir (bodies/body-dir "/s" "claude" "Bob"))))
+  (is (= "test" (bodies/world-of-body-dir (bodies/body-dir "/s" "test" "Bob"))))
   (is (re-find #"--world <world>" (bodies/missing-world-error "--world"))))
 
 (deftest list-bodies-reads-every-world

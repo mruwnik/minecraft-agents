@@ -17,7 +17,7 @@ const numberParam = (name, fallback) => {
 // the body is <world>/<name>: a name is unique only within a world
 const agentParam = params.get('agent')
 const agentName = isAgentKey(agentParam) ? agentParam : null
-const agentError = agentParam && !agentName ? `bad ?agent=${agentParam}: use <world>/<name>, e.g. ?agent=claude/Bob (pick one below)` : null
+const agentError = agentParam && !agentName ? `bad ?agent=${agentParam}: use <world>/<name>, e.g. ?agent=test/Bob (pick one below)` : null
 const radius = Math.min(32, Math.round(numberParam('radius', 8)))
 const fov = numberParam('fov', 70)
 const maxDist = numberParam('dist', radius * 16)

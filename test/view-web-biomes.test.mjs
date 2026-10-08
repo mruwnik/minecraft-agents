@@ -92,8 +92,8 @@ test('biomes: a real 24-section column decodes the same on every call', async ()
   assert.deepEqual(decodeBiomes(sections, format), decodeBiomes(sections, format))
 })
 
-test('biomes: the known dark_forest cell of worlds/claude/chunks/-124.-120.bin', async t => {
-  const file = fileURLToPath(new URL('../worlds/claude/chunks/-124.-120.bin', import.meta.url))
+test('biomes: the known dark_forest cell of worlds/test/chunks/-124.-120.bin', async t => {
+  const file = fileURLToPath(new URL('../worlds/test/chunks/-124.-120.bin', import.meta.url))
   if (!fs.existsSync(file)) return t.skip('no state file')
   const { header, sections } = parseColumnFile(await inflate(fs.readFileSync(file)))
   const decoded = decodeBiomes(sections, { ...columnFormat(header.mcVersion), numSections: header.worldHeight >> 4 })

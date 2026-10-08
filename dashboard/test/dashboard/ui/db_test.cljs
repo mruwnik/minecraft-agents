@@ -77,7 +77,7 @@
   (are [search expected] (= expected (:show-body (db/initial-db search "who")))
     "" nil
     "?show=Near" "Near"
-    "?world=claude&show=Probe_1" "Probe_1")
+    "?world=test&show=Probe_1" "Probe_1")
   (is (= true (:places-open? (db/initial-db "" "who"))))
   (is (= false (:players-open? (db/initial-db "" "who")))))
 

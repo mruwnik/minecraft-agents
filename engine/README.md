@@ -524,11 +524,11 @@ lease is not saved; restart or going offline ends it.
   `system.drive_deadman`.
 
 ```
-node engine/tools/drive.mjs ProbeDrive --world claude take --who claude --why "stuck in a pit" [--idle-s 30]
-node engine/tools/drive.mjs ProbeDrive --world claude look 270 0 --who claude      # yaw 0 south, 90 west, 270 east
-node engine/tools/drive.mjs ProbeDrive --world claude hold forward,jump 2000 --who claude
-node engine/tools/drive.mjs ProbeDrive --world claude state | stop | release [--force]
-node engine/tools/world.mjs ProbeDrive --world claude submit move-to -5 64 -7 --who claude [--wait --timeout 60s]
+node engine/tools/drive.mjs ProbeDrive --world test take --who claude --why "stuck in a pit" [--idle-s 30]
+node engine/tools/drive.mjs ProbeDrive --world test look 270 0 --who claude      # yaw 0 south, 90 west, 270 east
+node engine/tools/drive.mjs ProbeDrive --world test hold forward,jump 2000 --who claude
+node engine/tools/drive.mjs ProbeDrive --world test state | stop | release [--force]
+node engine/tools/world.mjs ProbeDrive --world test submit move-to -5 64 -7 --who claude [--wait --timeout 60s]
 ```
 
 Exit codes: 0 ok, 1 refused, 2 no running body or bad usage. The view page can drive too (`docs/view-format.md`).
@@ -718,21 +718,21 @@ All take `<body> --world <world>`, print EDN, read through the local sockets, an
 noted. Most run a prebuilt bundle: build it once with `cd dashboard && npm run build-agent-tools`. The loader warns on stderr when a source is newer than the bundle: rebuild with `tools/compile dashboard agent-tools`.
 
 ```
-node engine/tools/observe.mjs Bob --world claude                       # compact status (--raw: full snapshot, --verbose)
-node engine/tools/observe.mjs Bob --world claude --wait [--timeout 30s] [--watch j17]
-node engine/tools/observe.mjs Bob --world claude job j17 | result j17
-node engine/tools/observe.mjs Bob --world claude catalog jobs jobs.farm. --limit 10 | catalog job <name> | catalog trigger <name>
-node engine/tools/observe.mjs Bob --world claude inventory [--slots] | equipment
-node engine/tools/observe.mjs Bob --world claude settings [--changed] [--raw] | settings reload | settings set :jobs.x/key <edn> | settings unset :jobs.x/key   # keys with layer and the game rate; dashboard popup has the same
-node engine/tools/entities.mjs Bob --world claude [--type zombie --radius 32 --player Alex --limit 20]
-node engine/tools/jobs.mjs Bob --world claude list | show j17 | cancel j17 | cancel-all | retry j17 | resolve <attention> --reason handled
-node engine/tools/jobs.mjs Bob --world claude submit '(jobs.movement.go-to {:pos {:x 10 :y 64 :z 20}})' [--next|--now|--hold] [--wait --timeout 5m]
-node engine/tools/triggers.mjs Bob --world claude list | show hungry | upgrade [ids] | decline [ids] | add hungry --trigger hungry | mute hungry --for 10m | unmute | move X --before Y | reset X --property position | remove X
-node engine/tools/triggers.mjs Bob --world claude put near-home --when '(< (inventory "bread") 8)' --job '(jobs.movement.look-around)' --persistence cooldown --cooldown-s 30
-node engine/tools/say.mjs Bob --world claude [--to Steve] "message"       # chat, shares the engine's rate limits
-node engine/tools/snapshot.mjs Bob --world claude [--yaw 90 --pitch -20 --look-at X,Y,Z]   # PNG of its view: draws its seen entities, prints :heard and :light
-node engine/tools/time.mjs --world claude clock | dawn --timeout 1200   # world time from a fresh observer pose
-node engine/tools/goal.mjs Bob --world claude ["fence the pen" [--by NAME] | --clear]   # the goal line the dashboard shows (agents/Bob/goal.edn)
+node engine/tools/observe.mjs Bob --world test                       # compact status (--raw: full snapshot, --verbose)
+node engine/tools/observe.mjs Bob --world test --wait [--timeout 30s] [--watch j17]
+node engine/tools/observe.mjs Bob --world test job j17 | result j17
+node engine/tools/observe.mjs Bob --world test catalog jobs jobs.farm. --limit 10 | catalog job <name> | catalog trigger <name>
+node engine/tools/observe.mjs Bob --world test inventory [--slots] | equipment
+node engine/tools/observe.mjs Bob --world test settings [--changed] [--raw] | settings reload | settings set :jobs.x/key <edn> | settings unset :jobs.x/key   # keys with layer and the game rate; dashboard popup has the same
+node engine/tools/entities.mjs Bob --world test [--type zombie --radius 32 --player Alex --limit 20]
+node engine/tools/jobs.mjs Bob --world test list | show j17 | cancel j17 | cancel-all | retry j17 | resolve <attention> --reason handled
+node engine/tools/jobs.mjs Bob --world test submit '(jobs.movement.go-to {:pos {:x 10 :y 64 :z 20}})' [--next|--now|--hold] [--wait --timeout 5m]
+node engine/tools/triggers.mjs Bob --world test list | show hungry | upgrade [ids] | decline [ids] | add hungry --trigger hungry | mute hungry --for 10m | unmute | move X --before Y | reset X --property position | remove X
+node engine/tools/triggers.mjs Bob --world test put near-home --when '(< (inventory "bread") 8)' --job '(jobs.movement.look-around)' --persistence cooldown --cooldown-s 30
+node engine/tools/say.mjs Bob --world test [--to Steve] "message"       # chat, shares the engine's rate limits
+node engine/tools/snapshot.mjs Bob --world test [--yaw 90 --pitch -20 --look-at X,Y,Z]   # PNG of its view: draws its seen entities, prints :heard and :light
+node engine/tools/time.mjs --world test clock | dawn --timeout 1200   # world time from a fresh observer pose
+node engine/tools/goal.mjs Bob --world test ["fence the pen" [--by NAME] | --clear]   # the goal line the dashboard shows (agents/Bob/goal.edn)
 ```
 
 - `observe --wait` blocks until addressed chat, new attention, a watched job or action finishing, an engine restart or the
@@ -758,16 +758,16 @@ node engine/tools/goal.mjs Bob --world claude ["fence the pen" [--by NAME] | --c
 return EDN, cap pages at 10 records (100 with `--limit`, `--offset` pages on), and take `--raw`, `--dry-run`.
 
 ```
-node engine/tools/plans.mjs --world claude list | find home | show home --raw
-node engine/tools/plans.mjs --world claude validate home --edn '{:id "home" :parts []}'
-node engine/tools/plans.mjs --world claude check home --body Wren --inventory '{:stone 24}'     # material needs and conflicts vs what that body has seen (its seen memory, in the plan's `:dim`, default overworld; `add` by a body stamps its current dimension); never-seen cells count unknown
-node engine/tools/plans.mjs --world claude add|edit home --edn '...' --by builder [--revision <digest>]
-node engine/tools/blueprints.mjs --world claude find hut | show starter-hut | validate hut --edn '...' | save hut --edn '...' --by builder [--revision <digest>] | remove hut --by builder --revision <digest>
-node engine/tools/map.mjs --world claude find --type marker --text farm
-node engine/tools/map.mjs --world claude add zone garden --by Alice --data '{:min [10 63 20] :max [20 70 30] :allow #{:harvest}}'
-node engine/tools/map.mjs --world claude add claim extension --by Alice --for 30m --data '{:min [21 63 20] :max [30 70 30]}'
-node engine/tools/map.mjs --world claude renew|release|remove claim extension --by Alice --if-revision REV
-node engine/tools/world-changes.mjs --world claude --wait --type claim --observer planner --timeout 30s
+node engine/tools/plans.mjs --world test list | find home | show home --raw
+node engine/tools/plans.mjs --world test validate home --edn '{:id "home" :parts []}'
+node engine/tools/plans.mjs --world test check home --body Wren --inventory '{:stone 24}'     # material needs and conflicts vs what that body has seen (its seen memory, in the plan's `:dim`, default overworld; `add` by a body stamps its current dimension); never-seen cells count unknown
+node engine/tools/plans.mjs --world test add|edit home --edn '...' --by builder [--revision <digest>]
+node engine/tools/blueprints.mjs --world test find hut | show starter-hut | validate hut --edn '...' | save hut --edn '...' --by builder [--revision <digest>] | remove hut --by builder --revision <digest>
+node engine/tools/map.mjs --world test find --type marker --text farm
+node engine/tools/map.mjs --world test add zone garden --by Alice --data '{:min [10 63 20] :max [20 70 30] :allow #{:harvest}}'
+node engine/tools/map.mjs --world test add claim extension --by Alice --for 30m --data '{:min [21 63 20] :max [30 70 30]}'
+node engine/tools/map.mjs --world test renew|release|remove claim extension --by Alice --if-revision REV
+node engine/tools/world-changes.mjs --world test --wait --type claim --observer planner --timeout 30s
 ```
 
 - Mutations are atomic compare-and-swap writes under a shared lock. `add` creates only; `edit` and `remove` need the

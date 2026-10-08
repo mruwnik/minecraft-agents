@@ -16,7 +16,7 @@ test('canonical worlds roots can have any basename and legacy state keeps its pa
 })
 
 test('bodyDir is worlds/<world>/agents/<name>', () => {
-  assert.equal(bodyDir('/s', 'claude', 'Bob'), path.join('/s', 'worlds', 'claude', 'agents', 'Bob'))
+  assert.equal(bodyDir('/s', 'test', 'Bob'), path.join('/s', 'worlds', 'test', 'agents', 'Bob'))
 })
 
 test('the same name in two worlds is two folders', () => {
@@ -42,7 +42,7 @@ test('accountDir is worlds/.accounts/<name>, outside every world', () => {
 })
 
 test('worldOfBodyDir reads the world from where the folder is', () => {
-  assert.equal(worldOfBodyDir(bodyDir('/s', 'claude', 'Bob')), 'claude')
+  assert.equal(worldOfBodyDir(bodyDir('/s', 'test', 'Bob')), 'test')
 })
 
 test('missingWorldError names the flag', () => {

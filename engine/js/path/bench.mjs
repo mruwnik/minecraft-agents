@@ -1,7 +1,7 @@
 // Why JavaScript: dev benchmark harness that loads the mineflayer-pathfinder baseline and reads chunk files; no engine behaviour.
 // Repeatable pathfinding benchmark: `freeze` copies the chunk files and picks the queries once, `run` plans them
 // with a chosen planner adapter (./bench-NAME.mjs; bench-baseline.mjs is the mineflayer-pathfinder one), so results do not move when the live world does.
-//   node engine/js/path/bench.mjs freeze --world claude [--out dir]
+//   node engine/js/path/bench.mjs freeze --world test [--out dir]
 //   node engine/js/path/bench.mjs run --planner baseline [--dir dir] [--out results.json]
 import fs from 'node:fs'
 import path from 'node:path'
@@ -178,7 +178,7 @@ const flagValue = (argv, flag) => argv.includes(flag) ? argv[argv.indexOf(flag) 
 async function main (argv) {
   const [command] = argv
   if (command === 'freeze') {
-    const stats = freeze({ world: flagValue(argv, '--world') ?? 'claude', out: flagValue(argv, '--out') ?? DEFAULT_DIR })
+    const stats = freeze({ world: flagValue(argv, '--world') ?? 'test', out: flagValue(argv, '--out') ?? DEFAULT_DIR })
     console.log(`froze ${stats.columns} columns, ${stats.megabytes.toFixed(1)} MB, load ${stats.loadMs.toFixed(0)} ms, ${stats.queries} queries`)
     return
   }

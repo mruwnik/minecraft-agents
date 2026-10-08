@@ -317,18 +317,18 @@
   (is (= ["memory.edn" "seen.bin"] f/clean-start-files)))
 
 (deftest register-entries-become-trigger-put-commands
-  (is (= [["Probe" "--world" "claude" "put" "night" "--trigger" "night" "--by" "world-test"]]
-         (f/register-put-argvs "Probe" "claude" [{:trigger :night}] [0 0 0])))
-  (is (= [["Probe" "--world" "claude" "put" "wedged" "--trigger" "wedged" "--persistence" "cooldown"
+  (is (= [["Probe" "--world" "test" "put" "night" "--trigger" "night" "--by" "world-test"]]
+         (f/register-put-argvs "Probe" "test" [{:trigger :night}] [0 0 0])))
+  (is (= [["Probe" "--world" "test" "put" "wedged" "--trigger" "wedged" "--persistence" "cooldown"
            "--cooldown-s" "0" "--job" "(jobs.survival.unwedge)" "--args" "{:radius 8}" "--by" "world-test"]]
-         (f/register-put-argvs "Probe" "claude"
+         (f/register-put-argvs "Probe" "test"
                                [{:trigger :wedged :persistence :cooldown :cooldown-s 0
                                  :job '(jobs.survival.unwedge) :args {:radius 8}}] [0 0 0])))
-  (is (= [] (f/register-put-argvs "Probe" "claude" [] [0 0 0]))))
+  (is (= [] (f/register-put-argvs "Probe" "test" [] [0 0 0]))))
 
 (deftest register-put-resolves-plot-relative-markers-in-job-args
-  (is (= [["Probe" "--world" "claude" "put" "hungry" "--trigger" "hungry" "--job" "(jobs.storage.deposit {:chest [20016 150 20011]})" "--by" "world-test"]]
-         (f/register-put-argvs "Probe" "claude" [{:trigger :hungry :job (list 'jobs.storage.deposit {:chest (f/rel [16 0 11])})}] [20000 150 20000]))))
+  (is (= [["Probe" "--world" "test" "put" "hungry" "--trigger" "hungry" "--job" "(jobs.storage.deposit {:chest [20016 150 20011]})" "--by" "world-test"]]
+         (f/register-put-argvs "Probe" "test" [{:trigger :hungry :job (list 'jobs.storage.deposit {:chest (f/rel [16 0 11])})}] [20000 150 20000]))))
 
 (deftest block-commands-floor-fractional-coordinates
   (is (= "setblock 20001 150 20002 stone" (f/block-command [20000 150 20000] [:set [1.5 0 2.5] "stone"])))
@@ -489,23 +489,23 @@
     (is (some #(re-find #":places" %) (ps {:places [{:name "p" :pos [0 0]}]})))))
 
 (deftest cli-and-http-steps-become-tool-argv
-  (let [argv #(f/step-argv "B" "claude" % "j7")]
-    (is (= ["engine/tools/plans.mjs" "check" "--body" "B" "--world" "claude"]
+  (let [argv #(f/step-argv "B" "test" % "j7")]
+    (is (= ["engine/tools/plans.mjs" "check" "--body" "B" "--world" "test"]
            (argv [:cli "plans" ["check" "--body" "$body" "--world" "$world"]])))
-    (is (= ["engine/tools/drive.mjs" "B" "take" "--world" "claude" "--who" "wt" "--why" "t"]
+    (is (= ["engine/tools/drive.mjs" "B" "take" "--world" "test" "--who" "wt" "--why" "t"]
            (argv [:http :take {:who "wt" :why "t"}])))
-    (is (= ["engine/tools/drive.mjs" "B" "release" "--world" "claude" "--who" "wt"] (argv [:http :release {:who "wt"}])))
-    (is (= ["engine/tools/jobs.mjs" "B" "--world" "claude" "cancel" "j7"] (argv [:http :cancel "$job"])))
-    (is (= ["engine/tools/jobs.mjs" "B" "--world" "claude" "cancel" "j3"]
-           (f/step-argv "B" "claude" [:http :cancel "$event-job"] "j7" "j3"))
+    (is (= ["engine/tools/drive.mjs" "B" "release" "--world" "test" "--who" "wt"] (argv [:http :release {:who "wt"}])))
+    (is (= ["engine/tools/jobs.mjs" "B" "--world" "test" "cancel" "j7"] (argv [:http :cancel "$job"])))
+    (is (= ["engine/tools/jobs.mjs" "B" "--world" "test" "cancel" "j3"]
+           (f/step-argv "B" "test" [:http :cancel "$event-job"] "j7" "j3"))
         "$event-job is the job of the last awaited event (a reflex's job has no submit)")
     (is (= ["engine/tools/plans.mjs" "check" "test-bob-w" "--body" "Bob"]
-           (f/step-argv "Bob" "claude" [:cli "plans" ["check" "$plan:w" "--body" "$body"]] nil nil))
+           (f/step-argv "Bob" "test" [:cli "plans" ["check" "$plan:w" "--body" "$body"]] nil nil))
         "$plan:<id> is the id the runner gives a case's plan (test-<lowercase body>-<id>)")
     (is (= ["engine/tools/map.mjs" "add" "marker" "hut-wt-bob" "--data" "{:kind \"base\", :x 3, :y 0, :z 4}"]
-           (f/step-argv "Bob" "claude" [:cli "map" ["add" "marker" "hut-$tag" "--data" {:kind "base" :at [3 0 4]}]] nil nil))
+           (f/step-argv "Bob" "test" [:cli "map" ["add" "marker" "hut-$tag" "--data" {:kind "base" :at [3 0 4]}]] nil nil))
         "$tag is the body's shared tag; a map argument is printed as EDN, its :at (resolved) becoming :x :y :z")
-    (is (= ["engine/tools/jobs.mjs" "B" "--world" "claude" "submit" "(jobs.x {:a 1})" "--next"]
+    (is (= ["engine/tools/jobs.mjs" "B" "--world" "test" "submit" "(jobs.x {:a 1})" "--next"]
            (argv [:http :submit '(jobs.x {:a 1}) [:next]])))))
 
 (deftest cli-steps-take-string-map-and-position-arguments
@@ -514,7 +514,7 @@
     (is (not (step-problem? [:cli "world" ["b" "submit" "dig" [1 0 2]]])))
     (is (step-problem? [:cli "map" ["add" 5]]) "only strings, maps and positions")
     (is (= ["engine/tools/world.mjs" "B" "submit" "dig" "7" "0" "9"]
-           (f/step-argv "B" "claude" [:cli "world" ["$body" "submit" "dig" [7 0 9]]] nil nil))
+           (f/step-argv "B" "test" [:cli "world" ["$body" "submit" "dig" [7 0 9]]] nil nil))
         "a position argument is spread into x y z")))
 
 (deftest a-tool-answer-is-judged-by-its-edn-and-exit-code
@@ -557,7 +557,7 @@
 
 (deftest tool-step-argv-gap-names-an-unfilled-placeholder
   (is (nil? (f/argv-gap ["engine/tools/jobs.mjs" "B" "cancel" "j1"])))
-  (is (some? (f/argv-gap (f/step-argv "B" "claude" [:http :cancel "$job"] nil)))))
+  (is (some? (f/argv-gap (f/step-argv "B" "test" [:http :cancel "$job"] nil)))))
 
 (deftest argv-gap-names-which-placeholder-is-unfilled
   (let [step [:cli "jobs" ["cancel" "$event-job"]]

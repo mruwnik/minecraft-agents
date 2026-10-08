@@ -169,15 +169,15 @@
   (is (= "héllo" (ee/decode-bytes (enc "héllo")))))
 
 (deftest parse-engine-agents-tolerates-bad-config
-  (is (= [{:name "Broken" :username "Broken" :world "claude"}
-          {:name "NoConfig" :username "NoConfig" :world "claude"}
-          {:name "NoPort" :username "NoPort" :world "claude"}
-          {:name "ProbeWater" :username "PW" :world "claude"}]
+  (is (= [{:name "Broken" :username "Broken" :world "test"}
+          {:name "NoConfig" :username "NoConfig" :world "test"}
+          {:name "NoPort" :username "NoPort" :world "test"}
+          {:name "ProbeWater" :username "PW" :world "test"}]
          (ee/parse-engine-agents
-          [{:name "ProbeWater" :world "claude" :text "{\"username\":\"PW\",\"apiPort\":3804}"}
-           {:name "NoPort" :world "claude" :text "{}"}
-           {:name "NoConfig" :world "claude" :text ""}
-           {:name "Broken" :world "claude" :text "{"}]))))
+          [{:name "ProbeWater" :world "test" :text "{\"username\":\"PW\",\"apiPort\":3804}"}
+           {:name "NoPort" :world "test" :text "{}"}
+           {:name "NoConfig" :world "test" :text ""}
+           {:name "Broken" :world "test" :text "{"}]))))
 
 (deftest parse-engine-agents-takes-the-world-from-the-folder-not-the-config
   (is (= [{:name "Bob" :username "Bob" :world "a"}
@@ -187,19 +187,19 @@
            {:name "Bob" :world "a" :text "{}"}]))))
 
 (deftest engine-body-shape
-  (let [agent {:name "P" :username "P" :world "claude"}
+  (let [agent {:name "P" :username "P" :world "test"}
         up (ee/engine-body agent (view [(ev 1 {:name "a"})] (+ t0 2000)))
         down (ee/engine-body agent (view [(ev 1)] (+ t0 99000)))
         none (ee/engine-body agent (ee/engine-view ee/empty-engine t0))]
-    (is (= {:name "P" :username "P" :world "claude" :up true :error nil :at (+ t0 1000) :state {:pos {:x 1 :y 64 :z -1}}}
+    (is (= {:name "P" :username "P" :world "test" :up true :error nil :at (+ t0 1000) :state {:pos {:x 1 :y 64 :z -1}}}
            (dissoc up :engine)))
     (is (= "a" (get-in up [:engine :job :name])))
     (is (= [false "last event 98s ago"] [(:up down) (:error down)]))
     (is (= [false nil nil] [(:up none) (:state none) (:at none)]))))
 
 (deftest unsupported-body-is-down
-  (is (= {:name "Old" :username "O" :world "claude" :up false :error "not an engine body (unsupported)" :at nil :state nil :engine nil}
-         (ee/unsupported-body {:name "Old" :username "O" :world "claude"}))))
+  (is (= {:name "Old" :username "O" :world "test" :up false :error "not an engine body (unsupported)" :at nil :state nil :engine nil}
+         (ee/unsupported-body {:name "Old" :username "O" :world "test"}))))
 
 ;; ---------------------------------------------------------------- signals (what the trouble rules read)
 (defn signals [events] (:signals (view events (+ t0 99000))))

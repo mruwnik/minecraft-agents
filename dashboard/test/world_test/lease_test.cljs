@@ -372,10 +372,10 @@
           (l/barrier-ticks {:time :night-exclusive :weather :rain :act [[:time-set 1000]]})])))
 
 (def pgrep-out
-  (str "101 node --max-old-space-size=128 engine/out/body.cjs --agent ProbePoolA --world claude --fresh\n"
-       "102 node engine/out/body.cjs --agent ProbePoolB --world claude\n"
-       "103 node engine/out/body.cjs --agent ProbePoolBX --world claude\n"
-       "104 node engine/out/body.cjs --agent ProbeOther --world claude\n"
+  (str "101 node --max-old-space-size=128 engine/out/body.cjs --agent ProbePoolA --world test --fresh\n"
+       "102 node engine/out/body.cjs --agent ProbePoolB --world test\n"
+       "103 node engine/out/body.cjs --agent ProbePoolBX --world test\n"
+       "104 node engine/out/body.cjs --agent ProbeOther --world test\n"
        "105 pgrep -af out/body.cjs --agent ProbePoolA \n"))
 
 (deftest body-processes-are-read-from-pgrep-lines

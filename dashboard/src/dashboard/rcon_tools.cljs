@@ -181,10 +181,10 @@
 
 (def password-file (path/join (os/homedir) ".config" "minecraft-claude" "rcon-password"))
 (defn server-properties-path
-  "MINECRAFT_SERVER_PROPERTIES when set, else minecraft/claude/server.properties under `home`."
+  "MINECRAFT_SERVER_PROPERTIES when set, else minecraft/test/server.properties under `home`."
   [env home]
   (or (not-empty (.-MINECRAFT_SERVER_PROPERTIES env))
-      (path/join home "minecraft" "claude" "server.properties")))
+      (path/join home "minecraft" "test" "server.properties")))
 (def server-properties (server-properties-path js/process.env (os/homedir)))
 
 (defn exit-code-after

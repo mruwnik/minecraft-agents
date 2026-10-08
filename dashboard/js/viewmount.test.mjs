@@ -71,10 +71,10 @@ const driveCases = [
   ['form content type', { 'content-type': 'application/x-www-form-urlencoded' }, 403]
 ]
 for (const [name, headers, status] of driveCases) {
-  test(`POST /drive/claude/ProbeWater with ${name} is refused`, async () => {
+  test(`POST /drive/test/ProbeWater with ${name} is refused`, async () => {
     const server = await listen()
     const res = await new Promise((resolve, reject) => {
-      const req = http.request({ host: '127.0.0.1', port: server.address().port, path: '/drive/claude/ProbeWater', method: 'POST', headers }, resolve)
+      const req = http.request({ host: '127.0.0.1', port: server.address().port, path: '/drive/test/ProbeWater', method: 'POST', headers }, resolve)
       req.on('error', reject)
       req.end('{"cmd":"stop"}')
     })

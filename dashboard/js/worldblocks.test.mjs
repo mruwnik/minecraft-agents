@@ -11,7 +11,7 @@ import { makeChunkClass } from '../../tools/view/columns.mjs'
 import { createWorldBlocks } from './worldblocks.mjs'
 
 const realState = path.join(import.meta.dirname, '../../state')
-const hasRealColumn = fs.existsSync(path.join(realState, 'worlds', 'claude', 'chunks', '1.-6.bin'))
+const hasRealColumn = fs.existsSync(path.join(realState, 'worlds', 'test', 'chunks', '1.-6.bin'))
 
 test('no chunk directory: every block is unknown (null)', () => {
   const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'worldblocks-'))
@@ -57,7 +57,7 @@ test('a dumped block answers with its name and its state, air with an empty stat
 })
 
 test('a dumped column answers with block names, a neighbour that was never dumped with null', { skip: !hasRealColumn }, () => {
-  const { blockAt, close } = createWorldBlocks({ stateDir: realState, world: 'claude' })
+  const { blockAt, close } = createWorldBlocks({ stateDir: realState, world: 'test' })
   const names = [-64, 0, 63, 64, 65, 66, 70, 80].map(y => blockAt(16, y, -96)?.name)
   assert.ok(names.every(n => typeof n === 'string'))
   assert.ok(names.some(n => n !== 'air'))
@@ -67,7 +67,7 @@ test('a dumped column answers with block names, a neighbour that was never dumpe
 
 test('worldtiles: a missing column is null, a dumped one has 256 cells with a palette, heights and water depth', { skip: !hasRealColumn }, async () => {
   const { createWorldTiles, encodeTile } = await import('./worldblocks.mjs')
-  const tiles = createWorldTiles({ stateDir: realState, world: 'claude' })
+  const tiles = createWorldTiles({ stateDir: realState, world: 'test' })
   const skip = ['air', 'cave_air', 'short_grass']
   assert.equal(tiles.column(9_999_999, 9_999_999, skip), null)
   const col = tiles.column(1, -6, skip)

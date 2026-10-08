@@ -48,10 +48,10 @@
 (deftest whisper-url-only-for-minecraft-names-in-a-world
   (is (nil? (cs/whisper-url nil "Pacer")))
   (is (nil? (cs/whisper-url "a/b" "Pacer")))
-  (are [n expected] (= expected (cs/whisper-url "claude" n))
-    "Pacer" "/api/whisper/claude/Pacer"
-    "a_1" "/api/whisper/claude/a_1"
-    "abcdefghijklmnop" "/api/whisper/claude/abcdefghijklmnop"
+  (are [n expected] (= expected (cs/whisper-url "test" n))
+    "Pacer" "/api/whisper/test/Pacer"
+    "a_1" "/api/whisper/test/a_1"
+    "abcdefghijklmnop" "/api/whisper/test/abcdefghijklmnop"
     "" nil
     nil nil
     "ab" nil

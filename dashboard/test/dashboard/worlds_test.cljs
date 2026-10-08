@@ -5,37 +5,37 @@
 
 (deftest parse-world-list-sorted-with-host-and-port
   (is (= [{:name "broken" :host nil :port nil}
-          {:name "claude" :host "localhost" :port 25565}
           {:name "empty" :host nil :port nil}
+          {:name "main" :host "localhost" :port 25565}
           {:name "test" :host "h2" :port 25566}]
          (worlds/parse-world-list
           [{:name "test" :text "{\"host\":\"h2\",\"port\":25566}"}
-           {:name "claude" :text "{\"host\":\"localhost\",\"port\":25565}"}
+           {:name "main" :text "{\"host\":\"localhost\",\"port\":25565}"}
            {:name "broken" :text "{nope"}
            {:name "empty" :text ""}]))))
 
 (deftest resolve-world-cases
   (doseq [[why names requested expected]
-          [["nil picks the first" ["claude" "test"] nil "claude"]
-           ["empty string picks the first" ["claude" "test"] "" "claude"]
+          [["nil picks the first" ["main" "test"] nil "main"]
+           ["empty string picks the first" ["main" "test"] "" "main"]
            ["no worlds and nothing asked is nil" [] nil nil]
-           ["an exact name" ["claude" "test"] "test" "test"]
-           ["a case difference is invalid" ["claude"] "Claude" :unknown]
-           ["a traversal is invalid" ["claude"] "../x" :unknown]
-           ["a sibling directory is invalid" ["claude"] "../agents" :unknown]
-           ["a slash is invalid" ["claude"] "a/b" :unknown]
-           ["a nested traversal is invalid" ["claude"] "claude/../claude" :unknown]
-           ["a name when no worlds exist is invalid" [] "claude" :unknown]
-           ["an absolute path is invalid" ["claude"] "/etc/passwd" :unknown]]]
+           ["an exact name" ["main" "test"] "test" "test"]
+           ["a case difference is invalid" ["main"] "Main" :unknown]
+           ["a traversal is invalid" ["main"] "../x" :unknown]
+           ["a sibling directory is invalid" ["main"] "../agents" :unknown]
+           ["a slash is invalid" ["main"] "a/b" :unknown]
+           ["a nested traversal is invalid" ["main"] "main/../main" :unknown]
+           ["a name when no worlds exist is invalid" [] "main" :unknown]
+           ["an absolute path is invalid" ["main"] "/etc/passwd" :unknown]]]
     (testing why
       (is (= expected (worlds/resolve-world names requested))))))
 
 (deftest world-choice-cases
   (doseq [[why names requested expected]
-          [["valid" ["claude" "test"] "test" {:name "test"}]
-           ["default" ["claude" "test"] nil {:name "claude"}]
+          [["valid" ["main" "test"] "test" {:name "test"}]
+           ["default" ["main" "test"] nil {:name "main"}]
            ["no worlds" [] nil {:name nil}]
-           ["invalid" ["claude"] "nope" {:error "no world called nope" :worlds ["claude"]}]]]
+           ["invalid" ["main"] "nope" {:error "no world called nope" :worlds ["main"]}]]]
     (testing why
       (is (= expected (worlds/world-choice names requested))))))
 

@@ -25,19 +25,19 @@
          (l/split-bodies [foreign down-b up-b up-a]))))
 
 (deftest world-from-search
-  (doseq [[search expected] [["?world=claude" "claude"] ["?a=1&world=a%20b" "a b"] ["" nil] ["?world=" nil]]]
+  (doseq [[search expected] [["?world=test" "test"] ["?a=1&world=a%20b" "a b"] ["" nil] ["?world=" nil]]]
     (is (= expected (l/world-from-search search)))))
 
 (deftest with-world
-  (doseq [[path world expected] [["/villages" "claude" "/villages?world=claude"]
+  (doseq [[path world expected] [["/villages" "test" "/villages?world=test"]
                                  ["/villages" nil "/villages"]
                                  ["/" "a b" "/?world=a%20b"]]]
     (is (= expected (l/with-world path world)))))
 
 (deftest api-url
   (doseq [[path world params expected]
-          [["/api/state" "claude" {} "/api/state?world=claude"]
-           ["/api/chat" "claude" {:limit 300} "/api/chat?world=claude&limit=300"]
+          [["/api/state" "test" {} "/api/state?world=test"]
+           ["/api/chat" "test" {:limit 300} "/api/chat?world=test&limit=300"]
            ["/api/worlds" nil {} "/api/worlds"]]]
     (is (= expected (l/api-url path world params)))))
 
@@ -117,7 +117,7 @@
     (is (= expected (l/show-from-search search)))))
 
 (deftest map-show-url-cases
-  (doseq [[world name expected] [["claude" "Bob" "/map?world=claude&show=Bob"]
+  (doseq [[world name expected] [["test" "Bob" "/map?world=test&show=Bob"]
                                  [nil "Bob" "/map?show=Bob"]
                                  ["a b" "Probe_1" "/map?world=a%20b&show=Probe_1"]]]
     (is (= expected (l/map-show-url world name)))))

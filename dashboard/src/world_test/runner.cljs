@@ -23,7 +23,7 @@
 
 (def usage
   (str "usage: node tools/world-test.mjs [fixture.edn|dir ...] [--tag T] [--match TEXT] [--match-id ID ...] [--repeat N] [--body NAME]\n"
-       "         [--world claude] [--first-plot I] [--card ID] [--allow-time --time-log FILE] [--results FILE] [--phase day|night|night-exclusive] [--night-batch ID] [--night-barrier N] [--night-batch-end ID] [--night-classes] [--retry-failed N] [--changed-since-pass] [--stop-on-fail] [--list] [--check] [--stop-stale-bodies PREFIX]\n"
+       "         [--world test] [--first-plot I] [--card ID] [--allow-time --time-log FILE] [--results FILE] [--phase day|night|night-exclusive] [--night-batch ID] [--night-barrier N] [--night-batch-end ID] [--night-classes] [--retry-failed N] [--changed-since-pass] [--stop-on-fail] [--list] [--check] [--stop-stale-bodies PREFIX]\n"
        "--phase runs only the cases of that time class (case level; :any and untimed cases, and :day, count as day; a case whose first :time-set step is\n"
        "night counts as night): run day, then night, then night-exclusive so the time lock never flips mid-pass.\n"
        "--changed-since-pass skips a fixture file that passed fully at a recorded revision (every run passes record it, in .claude/world-test-passes.edn) when no file of the jobs and triggers it uses (and what their source names) changed since, tracked or untracked; any engine, js, trigger-default or runner change, or a change to the fixture file, runs it.\n"
@@ -41,7 +41,7 @@
     (throw (js/Error. "--allow-time needs --time-log FILE (every time set is logged there)")))
   (when (and (some #{"--retry-failed"} argv) (some #{"--stop-on-fail"} argv))
     (throw (js/Error. "--retry-failed cannot be combined with --stop-on-fail (the batch ends at the first failure, so nothing is retried)")))
-  (loop [[a b & more :as all] (vec argv) opts {:paths [] :repeat 1 :body "ProbeFixture" :world "claude" :first-plot 0}]
+  (loop [[a b & more :as all] (vec argv) opts {:paths [] :repeat 1 :body "ProbeFixture" :world "test" :first-plot 0}]
     (cond
       (empty? all) opts
       (= a "--tag") (recur more (assoc opts :tag b))

@@ -8,7 +8,7 @@ import path from 'node:path';
 
 const defaults = {
   cdp: 'http://127.0.0.1:9223/json',
-  page: '/map?world=claude',
+  page: '/map?world=test',
   canvas: 'canvas.map-overlay',
   phaseMs: 8000,
   panX: 300,
