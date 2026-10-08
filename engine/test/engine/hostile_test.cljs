@@ -487,7 +487,7 @@
           (core/submit! eng respond {})
           (await (core/tick! eng))
           (is (= 3 (count (filter #(= :unreachable (:kind %)) @seen))) "three go-to walks towards the zombie gave up, never more")
-          (is (= 6 (walks-to {:p p :eng eng} {:x 6 :z 0})) "each go-to call books two blocked rounds: the probe and the re-aimed y")
+          (is (= 3 (walks-to {:p p :eng eng} {:x 6 :z 0})) "one blocked walk per go-to call: any y re-aim comes before the walk")
           (is (< (:x (last-move eng)) 0) "then it walks away instead")
           (is (zero? (count (calls p "attack")))))))))
 
