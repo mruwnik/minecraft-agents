@@ -425,6 +425,38 @@
           (is (not-any? #(= {:x 2 :y 63 :z 0} %) (digs (:p refused))) "the cell beside the water is not opened")
           (is (= :done (:status @taken))))))))
 
+(deftest water-found-beside-a-cell-the-stair-just-dug-is-plugged-with-a-block
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [prep (fn [p]
+                     (let [world (.-world p)]
+                       (.override world "dig"
+                                  (fn ^:async f [token a impl]
+                                    (let [r (await (impl token a))]
+                                      (swap! (.. world -state) assoc-in [:blocks [1 64 1]] "water")
+                                      r)))))
+              {:keys [out p]} (await (stair! {:blocks ground :inventory (conj pick {:name "cobblestone" :count 8})} east prep))]
+          (is (= :hazard (:reason @out)))
+          (is (= [1 64 0] (:plugged @out)))
+          (is (= "cobblestone" (block-at p [1 64 0])) "the opened cell is shut again"))))))
+
+(deftest water-beside-a-dug-cell-with-no-block-to-plug-it-says-so
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [prep (fn [p]
+                     (let [world (.-world p)]
+                       (.override world "dig"
+                                  (fn ^:async f [token a impl]
+                                    (let [r (await (impl token a))]
+                                      (swap! (.. world -state) assoc-in [:blocks [1 64 1]] "water")
+                                      (swap! (.. world -state) assoc :inventory pick)
+                                      r)))))
+              {:keys [out]} (await (stair! {:blocks ground} (assoc east :fetch false) prep))]
+          (is (= :water-unplugged (:reason @out)))
+          (is (= [1 64 0] (:cell @out))))))))
+
 (deftest water-let-into-the-cut-stops-the-stair
   (async done
     (tu/run-async done

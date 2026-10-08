@@ -1695,3 +1695,33 @@
           (await (run-ticks s 10))
           (is (= dug (dig-count s)) "no dig after the body got hurt")
           (is (= [:low-health] (distinct (map :reason (events-of s :waiting))))))))))
+
+(deftest a-body-with-its-head-in-water-digs-nothing-and-says-flooded
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [flooded {:blocks (merge floor sand-patch {"0,65,0" "water" "0,64,0" "water"}) :self {:inWater true}}
+              s (await (scenario {:block "sand" :count 6} flooded 40))]
+          (is (zero? (dig-count s)))
+          (is (= :flooded (:reason (done-event s))))
+          (is (= 0 (:got (done-event s))))
+          (is (finished? s)))))))
+
+(deftest water-pouring-in-after-a-dig-stops-the-digging
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (seeing (tu/fake-on-floor {:world nil :floor-block floor-block :blocks (merge floor sand-patch)}))
+              world (.-world p)
+              _ (.override world "dig"
+                           (fn ^:async f [token a impl]
+                             (let [r (await (impl token a))]
+                               (let [[x y z] (map #(js/Math.floor %) (get-in @(.-state world) [:self :pos]))]
+                                 (swap! (.. world -state) update :blocks merge {[x (inc y) z] "water" [x y z] "water"}))
+                               (swap! (.. world -state) assoc-in [:self :inWater] true)
+                               r)))
+              s (start {:p p})]
+          (core/submit! (:eng s) (spec {:block "sand" :count 6}) {})
+          (await (run-ticks s 40))
+          (is (= 1 (dig-count s)) "nothing is dug once the head is wet")
+          (is (= :flooded (:reason (done-event s)))))))))

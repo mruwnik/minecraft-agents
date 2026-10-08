@@ -20,6 +20,7 @@
             [jobs.lib.watch :as watch]
             [jobs.lib.reach :as reach-lib]
             [jobs.lib.look :as look :refer [cell-of headings heading-name facing glance! look-around!]]
+            [jobs.lib.breath :as breath]
             [jobs.lib.torch :as torch]
             [jobs.lib.placement :as placement]
             [jobs.lib.world :as known]))
@@ -37,6 +38,8 @@
 
   Declines and ends early:
   - Health below jobs.lib.body/risky-min-health (6): the check waits {:reason :low-health}, also for a resumed job.
+  - The head in water (jobs.lib.breath/head-under?) before a dig: no more digging, warn mine.flooded; before the first dig the job ends
+    {:status :stopped :got 0 :reason :flooded}, later the dig phase ends :flooded and the body walks home.
   - A pickaxe block (jobs.lib.tools/tool-kind) with no *_pickaxe carried, at the start or later (the pick broke),
     runs jobs.items.get-tool as a child first (unless :fetch is false). Nothing got: before any dig it ends at once, warn mine.no-tool,
     {:status :stopped :got 0 :reason :no-tool :tool <kind needed: pickaxe, sword, shears>}; in the dig phase the mend and walk home follow with
@@ -1161,6 +1164,18 @@
                 (ctx/result! c {:status :stopped :got 0 :reason :not-back})
                 :done))))
 
+(defn flooded!
+  "The head is in water: no more digging (the cut may be what let it in). Warn; before the first dig end at once
+  {:status :stopped :got 0 :reason :flooded}, later end the dig phase :flooded and walk home."
+  [c]
+  (ctx/emit! c :mine.flooded :warn {:text "mine stopped digging: the head is in water"})
+  (if (:phase (ctx/mem c))
+    (do (ctx/update-mem! c assoc :reason :flooded)
+        (wrap-up! c))
+    (do (ctx/emit! c :mine.done :info {:got 0 :reason :flooded :mended 0 :text "mine done: flooded, got 0, mended 0"})
+        (ctx/result! c {:status :stopped :got 0 :reason :flooded :text "mine got nothing: the head is in water"})
+        :done)))
+
 (defn ^:async step [c]
   (settle-dig! c)
   (when (and (nil? (:phase (ctx/mem c))) (nil? (:pre-start (ctx/mem c))))
@@ -1168,6 +1183,8 @@
   (let [m (ctx/mem c)
         {:keys [heading direction]} (:args c)]
     (cond
+      (and (contains? #{nil :dig} (:phase m)) (breath/head-under? (:primitives c))) (flooded! c)
+
       (and (contains? #{nil :dig} (:phase m)) (no-tool? c)) (await (fetch-pickaxe! c))
 
       (and (nil? (:phase m)) (not (no-tool? c)) (:pre-start m) (not (at-pre-start? c))) (await (back-to-pre-start! c))

@@ -59,6 +59,11 @@
   - :lava-unsealed: that lava could not be filled (:on-lava :seal, the default): the place child's outcome in :place,
     or still lava after max-seals places (a seal, then one reseal when lava flows back). The body first steps back to the stair's cell before (:backed-off) and
     digs no more.
+  - :water-unplugged: a cell the stair dug turned out to touch seen water (:water not in :accept) and could not be filled.
+
+  Water a dig lays open (a cell the stair dug now touches seen water, :water not in :accept) is plugged at once: the cell
+  is filled with a building block (same child and fetch as the lava seal, event stair.plugged), and the stair stops :hazard
+  with :plugged <cell>.
 
   Exposed lava (beside the feet, the head or an open cut cell, or in one) is filled with a building block
   (blocks/building-blocks, a jobs.blocks.place child; it fetches one when :fetch allows), sources behind first, one
@@ -312,6 +317,32 @@
       {:reason :lava-exposed :cell cell :fluid "lava"}
       (await (lava/seal! c kind block-at cell {:fetch (:fetch (:args c)) :ignore-zones? (:ignore-zones? (:args c))})))))
 
+(defn exposed-water
+  "The cells this stair dug (memory :dug) among the cut that are open now and touch seen water, each with the water
+  cell: [cell water], water in the cell itself counted. Empty when :water is accepted."
+  [block-at dug accept cut]
+  (if (accept :water)
+    []
+    (let [dug? (set (map :cell dug))]
+      (vec (for [cell cut :when (dug? cell)
+                 :let [n (block-at cell)]
+                 :when (or (rules/air n) (rules/fluids n))
+                 w (cons cell (map #(add cell %) rules/neighbour-deltas))
+                 :when (= "water" (block-at w))]
+             [cell w])))))
+
+(defn ^:async water-step!
+  "Water a dig laid open: a cell the stair dug that now touches seen water is filled with a building block at once
+  (jobs.lib.lava/seal!, event stair.plugged), before the water pours in. nil when there is none; :continue while the
+  place child waits; the stop {:reason :hazard :cell :plugged :hazards} once plugged, else {:reason :water-unplugged}."
+  [c block-at accept cut]
+  (when-let [[cell w] (first (exposed-water block-at (:dug (ctx/mem c)) accept cut))]
+    (let [r (await (lava/seal! c :stair.plugged block-at cell {:fetch (:fetch (:args c)) :ignore-zones? (:ignore-zones? (:args c))}))]
+      (cond
+        (= :continue r) :continue
+        (= :again r) {:reason :hazard :cell cell :plugged cell :hazards [{:reason :fluid-adjacent :fluid "water" :at w}]}
+        :else (assoc r :reason :water-unplugged)))))
+
 (defn target-steps
   "Steps to cut from the args and the start feet, or {:error text}."
   [{:keys [dir heading steps y]} [_ fy _]]
@@ -522,7 +553,9 @@
                                                            (as-> cs (assoc cs :up? (= :up dir)
                                                                  :bridged? (contains? (:bridged (ctx/mem c)) (:floor cs)))))
                     _ (await (look-ahead! c feet next cut))
-                    stop (or (await (lava-step! c :stair.sealed (:block-at in) feet cut)) (await (judge! c in cells accept)))]
+                    stop (or (await (lava-step! c :stair.sealed (:block-at in) feet cut))
+                             (await (water-step! c (:block-at in) accept cut))
+                             (await (judge! c in cells accept)))]
                 (if (and (= :no-floor (:reason stop)) (rules/air (:block stop)))
                   (await (bridge! c in cells))
                   (or stop

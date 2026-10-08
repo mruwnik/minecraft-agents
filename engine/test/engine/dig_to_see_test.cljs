@@ -119,14 +119,15 @@
           (is (= "lava" (block-at p [3 63 0])))
           (is (not-any? #{{:x 3 :y 63 :z 0} {:x 3 :y 62 :z 0}} (digs p)) "nothing dug into the lava"))))))
 
-(deftest stair-water-behind-stone-shows-after-the-dig-above-and-stops-in-the-cut
+(deftest stair-water-behind-stone-shows-after-the-dig-above-and-the-opened-cell-is-plugged
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p]} (await (run! {:blocks (assoc ground "2,63,0" "water")} 'jobs.access.stair stair-east))]
-          (is (= :fluid-in-cut (:reason @out)))
-          (is (= [2 63 0] (:cell @out)))
+          (is (= :hazard (:reason @out)))
+          (is (= [2 64 0] (:plugged @out)))
           (is (some #{{:x 2 :y 64 :z 0}} (digs p)) "dug to see what was under")
+          (is (not= "air" (block-at p [2 64 0])) "the dug cell is shut again")
           (is (= "water" (block-at p [2 63 0]))))))))
 
 (def trench
