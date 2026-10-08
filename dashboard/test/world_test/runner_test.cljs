@@ -390,6 +390,14 @@
           (.catch (fn [e] (is (= "no rcon" (.-message e))) (is (= [:stop] @calls))))
           (.then done)))))
 
+(deftest hold-phase-takes-a-bare-first-set-result
+  (async done
+    (-> (r/hold-phase! {:stop! #(js/Promise.resolve nil) :acquire! #(js/Promise.resolve {:first? true})
+                        :first-set! (fn [] true) :start! #(js/Promise.resolve nil)})
+        (.then (fn [ok] (is (true? ok))))
+        (.catch (fn [e] (is false (str "rejected: " (.-message e)))))
+        (.then done))))
+
 (deftest phase-time-fix-says-when-the-phase-window-was-left
   (is (= [nil nil 1000 1000 nil nil 14000 14000 nil nil]
          [(r/phase-time-fix :day 1000) (r/phase-time-fix :day 10999) (r/phase-time-fix :day 11000) (r/phase-time-fix :day 18000)

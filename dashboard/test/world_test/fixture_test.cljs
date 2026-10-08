@@ -549,3 +549,14 @@
 
 (deftest memory-records-are-not-entities
   (is (= #{} (f/case-uuids {:memory [{:kind :threat :data {:uuid "00000000-0000-0000-0000-000000000099"}}]}))))
+
+(deftest job-positions-with-a-plot-relative-height-need-at
+  (let [ps #(f/problems (f/merge-case {} (merge {:name "a" :body {:at [1 0 1]} :expect [{:event {:kind :x} :within-s 1}]} %)))
+        bad? (fn [args] (boolean (some #(re-find #"needs #at" %) (ps {:act [[:job (list 'jobs.x args)]]}))))]
+    (is (bad? {:pos [5 1 5]}))
+    (is (bad? {:target [5 0 5]}))
+    (is (bad? {:opts {:at [5 4 5]}}))
+    (is (not (bad? {:pos (f/rel [5 1 5])})))
+    (is (not (bad? {:pos [100 64 -300]})))
+    (is (not (bad? {:pos [100 -60 -300]})))
+    (is (not (bad? {:count [1 2 3]})))))

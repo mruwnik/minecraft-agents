@@ -206,6 +206,15 @@
 
 (defn coords? [v] (and (vector? v) (= 3 (count v)) (every? number? v)))
 
+(defn bare-plot-positions
+  "The :pos / :at / :target [x y z] vectors in the act steps written without #at whose y is a small plot-relative
+  height (0..4): in the real world they send the job to another place."
+  [c]
+  (->> (tree-seq coll? seq (:act c))
+       (filter map?)
+       (mapcat (fn [m] (keep (fn [k] (get m k)) [:pos :at :target])))
+       (filter #(and (coords? %) (<= 0 (second %) 4)))))
+
 (defn problems
   "Why a merged case cannot run, as a vector of strings (empty when it can)."
   [c]
@@ -227,6 +236,7 @@
       (not (every? #(and (string? (:name %)) (not (str/blank? (:name %))) (coords? (:pos %))) (:places c))) (conj ":places entries need a :name and :pos [x y z]")
       (not (vector? (get-in c [:body :at]))) (conj ":body :at must be [x y z]")
       (some step-problem? (:act c)) (conj (str ":act steps must be one of " (sort step-kinds)))
+      (seq (bare-plot-positions c)) (conj (str "a job position " (first (bare-plot-positions c)) " with a plot-relative height needs #at"))
       (seq (unbounded-selectors c)) (conj "an @e selector must be bounded to the plot: use $BOX (x,y,z,dx,dy,dz), not distance")
       (some #(not (and (after-kinds (first %)) (or (not= :file (first %)) (string? (second %))))) (:after c)) (conj (str ":after checks must be one of " (sort after-kinds)))
       (some #(and (map? %) (contains? % ::rel) (= :vec (::as %))) (tree-seq coll? seq (:after c)))

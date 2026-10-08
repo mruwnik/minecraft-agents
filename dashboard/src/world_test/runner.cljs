@@ -1162,7 +1162,7 @@
   [{:keys [stop! acquire! first-set! refresh! start!]}]
   (.then (stop!)
          (fn [_] (.then (acquire!) (fn [held]
-           (.then (if (:first? held) (first-set!) (if refresh! (refresh!) (js/Promise.resolve true)))
+           (.then (if (:first? held) (js/Promise.resolve (first-set!)) (if refresh! (refresh!) (js/Promise.resolve true)))
                   (fn [ok] (.then (start!) (fn [_] ok)))))))))
 
 (defn run-case!
