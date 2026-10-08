@@ -14,6 +14,7 @@
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
+            [jobs.lib.trip :as trip]
             [jobs.lib.targets :as targets]
             [jobs.lib.watch :as watch]
             [jobs.lib.reach :as reach-lib]
@@ -40,6 +41,8 @@
   - The check passes when a phase is in memory, or :block is named, unless every seen target is refused.
   - No zone list (zones.edn missing or never valid) declines with one warn mine.declined {:reason :no-zones},
     also in the middle of the job. Nothing is dug or placed then.
+
+  Before the first round it deposits at the known chest when the bag is fullish (jobs.lib.trip/ready!; :deposit-first? false skips it).
 
   The first round writes to job memory before any dig: the goal (carried + :count), the start cell, the
   tunnel heading (:heading, else :direction, else the way the body faces) and the ground (the solid cells of the 5x5 under the
@@ -133,6 +136,7 @@
    :wet {:doc "dig blocks that touch water, and tunnel beside water" :spec boolean? :default false}
    :fetch {:doc "get a pickaxe when none is carried (jobs.items.get-tool via jobs.lib.fetch limits): true, a set of kinds or a map of limits; false ends :no-tool" :spec fetch/option? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
+   :deposit-first? {:doc "deposit at the known chest first when the bag is fullish and the chest is near (jobs.lib.trip/ready!)" :spec boolean? :default true}
    :spare-own-builds {:doc "a cell of a plan this body made is never a target; false: it may be dug" :spec boolean? :default true}
    :mend {:doc "fill the ground under the start again afterwards" :spec boolean? :default true}
    :collect-radius {:doc "how far around to collect drops after a dig" :spec (a/num-in 0 nil) :default 6}
@@ -1090,5 +1094,7 @@
 
 (defn ^:async round
   [c]
-  (let [n (atom 0)]
-    (await (pace/steps! c #(if (< (swap! n inc) (max-steps)) (step c) :continue)))))
+  (if-let [t (await (trip/ready! c))]
+    t
+    (let [n (atom 0)]
+      (await (pace/steps! c #(if (< (swap! n inc) (max-steps)) (step c) :continue))))))

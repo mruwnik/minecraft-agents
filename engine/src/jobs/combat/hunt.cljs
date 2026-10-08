@@ -7,6 +7,7 @@
             [jobs.lib.hunting :as hunting]
             [jobs.lib.shelter :as sh]
             [jobs.lib.pace :as pace]
+            [jobs.lib.trip :as trip]
             [jobs.lib.util :as u]))
 
 (def doc
@@ -26,6 +27,7 @@
   5. No candidate (present, not skipped) ends :none, on the second such round in a row, after a 1 s wait.
   6. Otherwise the nearest candidate becomes the :target and is attacked in the same round.
      The target stays until killed or given up on, even when a nearer animal turns up.
+  Before the first step it deposits at the known chest when the bag is fullish (jobs.lib.trip/ready!; :deposit-first? false skips it).
   Ends with info hunt.done and the result {:killed n :reason r :spared s :remaining m}.
   :spared is the kills asked for and not made because of the pair rule (0 unless :keep ended it).
   :remaining is the adults of the kind in range at the end.")
@@ -37,6 +39,7 @@
    :radius {:doc "animals within this many blocks of the body count" :spec (a/num-in 0 nil) :default 24}
    :keep {:doc "never kill the last this many adults of the kind within :radius (babies do not count); nil: 2 for animals, 0 for hostile mobs; 0 turns the rule off" :spec (a/int-in 0 nil) :default nil}
    :collect-radius {:doc "how far around to collect drops after a kill" :spec (a/num-in 0 nil) :default 8}
+   :deposit-first? {:doc "deposit at the known chest first when the bag is fullish and the chest is near (jobs.lib.trip/ready!)" :spec boolean? :default true}
    :weapons {:doc "item name substrings that count as weapons" :spec (a/coll-of (a/or-of string? keyword?)) :default combat/default-weapons}
    :drops {:doc "item names to collect after a kill; nil: the kind's entry in the drops table, else every item" :spec (a/coll-of a/item?) :default nil}
    :max-skips {:doc "animals skipped in a row before the hunt gives up" :spec (a/int-in 1 nil) :default 3}})
@@ -177,5 +180,7 @@
 (defn ^:async round
   "The whole hunt: steps until it ends; yields only while a child waits on the world."
   [c]
-  (let [r (await (pace/steps! c #(step c)))]
-    (if (= :yield r) :continue r)))
+  (if-let [t (await (trip/ready! c))]
+    t
+    (let [r (await (pace/steps! c #(step c)))]
+      (if (= :yield r) :continue r))))

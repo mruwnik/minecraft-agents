@@ -1,0 +1,58 @@
+(ns engine.trip-test
+  "jobs.lib.trip/ready!: a hunt that leaves home deposits first when the bag is fullish, against the fake world."
+  (:require [cljs.test :refer [deftest is async]]
+            [engine.core :as core]
+            [engine.hostile-test :as h]
+            [engine.memory :as mem]
+            [engine.test-util :as tu]))
+
+(def cow-drops [{:name "beef" :count 1}])
+(defn cow [id x] {:id id :name "cow" :kind "passive" :pos {:x x :y 64 :z 0} :drops cow-drops})
+(def junk (mapv (fn [i] {:name (str "junk_" i) :count 1}) (range 30)))
+
+(defn ^:async hunt
+  "Run a one-cow hunt with a nearly full bag, a chest known at chest (or none); [setup transfers attacks event-kinds]."
+  [chest args]
+  (let [s (h/setup {:inventory (into h/sword junk) :containers {"10,64,0" []} :entities [(cow 1 3) (cow 2 5) (cow 3 7)]} 20)]
+    (when chest (mem/write! (:store (:eng s)) :chest {:pos chest} mem/place-policy))
+    (core/submit! (:eng s) (list 'jobs.combat.hunt (merge {:count 1 :keep 0} args)) {})
+    (dotimes [_ 40]
+      (swap! (:clock s) + 700)
+      (await (core/tick! (:eng s))))
+    [s (count (h/calls (:p s) "transfer")) (count (h/calls (:p s) "attack")) (set (map :kind @(:seen s)))]))
+
+(deftest a-fullish-bag-with-a-chest-near-deposits-then-hunts
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[_ transfers attacks kinds] (await (hunt {:x 10 :y 64 :z 0} {}))]
+          (is (pos? transfers))
+          (is (pos? attacks))
+          (is (contains? kinds :trip.deposited)))))))
+
+(deftest a-fullish-bag-with-no-chest-hunts-with-an-info-event
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[_ transfers attacks kinds] (await (hunt nil {}))]
+          (is (zero? transfers))
+          (is (pos? attacks))
+          (is (contains? kinds :trip.no-chest)))))))
+
+(deftest a-chest-too-far-is-not-walked-to
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[_ transfers attacks kinds] (await (hunt {:x 400 :y 64 :z 0} {}))]
+          (is (zero? transfers))
+          (is (pos? attacks))
+          (is (contains? kinds :trip.far)))))))
+
+(deftest deposit-first-false-skips-the-deposit
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[_ transfers attacks kinds] (await (hunt {:x 10 :y 64 :z 0} {:deposit-first? false}))]
+          (is (zero? transfers))
+          (is (pos? attacks))
+          (is (not-any? #{:trip.deposited :trip.no-chest :trip.far} kinds)))))))
