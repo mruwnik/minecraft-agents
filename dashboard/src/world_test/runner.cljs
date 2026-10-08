@@ -188,18 +188,25 @@
 
 (defn check-fixtures
   "Loads every fixture file without a server: one {:id :run :status :why} per case (a file that does not parse is one
-  failed result named by its stem)."
+  failed result named by its stem). An entity UUID literal used by more than one case fails them all."
   [paths]
-  (vec (mapcat (fn [file]
-                 (let [stem (path/basename file ".edn")]
-                   (try (let [cases (f/file-cases (fs/readFileSync file "utf8") stem)
-                              repeated (set (keep (fn [[id n]] (when (< 1 n) id)) (frequencies (map :id cases))))]
-                          (map (fn [c] (let [ps (cond-> (vec (:problems c)) (repeated (:id c)) (conj "case name repeated in the file"))]
-                                         (cond-> {:id (:id c) :run 1 :status (if (seq ps) :fail :pass)}
-                                           (seq ps) (assoc :why (str/join "; " ps)))))
-                               cases))
-                        (catch :default e [{:id stem :run 1 :status :fail :why (str file ": " (.-message e))}]))))
-               (fixture-files paths))))
+  (let [loaded (mapv (fn [file]
+                       (let [stem (path/basename file ".edn")]
+                         (try {:cases (f/file-cases (fs/readFileSync file "utf8") stem)}
+                              (catch :default e {:error {:id stem :run 1 :status :fail :why (str file ": " (.-message e))}}))))
+                     (fixture-files paths))
+        all (mapcat :cases loaded)
+        reuse (f/uuid-reuse all)
+        shared-by (fn [c] (for [[u ids] reuse :when (some #{(:id c)} ids)] (str "UUID " u " also in " (str/join ", " (remove #{(:id c)} ids)))))]
+    (vec (mapcat (fn [{:keys [cases error]}]
+                   (if error
+                     [error]
+                     (let [repeated (set (keep (fn [[id n]] (when (< 1 n) id)) (frequencies (map :id cases))))]
+                       (map (fn [c] (let [ps (cond-> (into (vec (:problems c)) (shared-by c)) (repeated (:id c)) (conj "case name repeated in the file"))]
+                                      (cond-> {:id (:id c) :run 1 :status (if (seq ps) :fail :pass)}
+                                        (seq ps) (assoc :why (str/join "; " ps)))))
+                            cases))))
+                 loaded))))
 
 (defn check-exit-code [results] (if (every? #(= :pass (:status %)) results) 0 1))
 

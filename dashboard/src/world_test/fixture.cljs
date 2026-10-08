@@ -253,6 +253,23 @@
                 (seq (problems m)) (assoc :problems (problems m)))))
           cases)))
 
+(defn case-uuids
+  "The literal entity UUIDs a case mentions (not in :memory, which holds no entities), normalised: NBT int arrays \"I;a,b,c,d\" and hex strings (lower case)."
+  [c]
+  (let [text (pr-str (dissoc c :id :file :memory))]
+    (into (set (map (fn [[_ a]] (str "I;" (str/join "," (map str/trim (str/split a #",")))))
+                    (re-seq #"UUID:\s*\[I;([^\]]*)\]" text)))
+          (map str/lower-case)
+          (re-seq #"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}" text))))
+
+(defn uuid-reuse
+  "{uuid [case ids]} for each UUID literal that appears in more than one case (cases run at once on neighbouring plots)."
+  [cases]
+  (->> cases
+       (mapcat (fn [c] (map (fn [u] [u (:id c)]) (case-uuids c))))
+       (reduce (fn [m [u id]] (update m u (fnil conj []) id)) {})
+       (into {} (filter (fn [[_ ids]] (< 1 (count ids)))))))
+
 (defn select-cases
   "Cases whose :tags hold tag (when given), whose id contains match (when given) and is one of match-ids (when given)."
   [cases {:keys [tag match match-ids]}]

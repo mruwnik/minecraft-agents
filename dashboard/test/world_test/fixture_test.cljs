@@ -534,3 +534,18 @@
     (is (not (ps [:until [:cli "jobs" [] {:items [{:status :queued}]}] 20])))
     (is (ps [:until [:block [0 0 0] "air"] 20]) "only checks the runner can re-run")
     (is (ps [:until [:memory {}]]) "a bound is required")))
+
+(deftest entity-uuids-are-read-in-nbt-and-string-forms
+  (is (= #{"I;1,2,3,4" "0000000a-0000-0000-0000-000000000001"}
+         (f/case-uuids {:act [[:summon "villager" [1 0 1] "{NoAI:1b,UUID:[I; 1, 2,3,4]}"]
+                              [:rcon "data merge entity @e[limit=1] {UUID:\"0000000A-0000-0000-0000-000000000001\"}"]]})))
+  (is (= #{} (f/case-uuids {:act [[:summon "cow" [1 0 1] "{NoAI:1b}"]]}))))
+
+(deftest a-uuid-in-two-cases-is-reported
+  (let [mk (fn [id u] {:id id :act [[:summon "villager" [1 0 1] (str "{UUID:[I;" u "]}")]]})
+        cases [(mk "a/x" "1,2,3,4") (mk "a/y" "1,2,3,4") (mk "b/z" "1,2,3,5")]]
+    (is (= {"I;1,2,3,4" ["a/x" "a/y"]} (f/uuid-reuse cases)))
+    (is (= {} (f/uuid-reuse [(assoc (mk "a/x" "1,2,3,4") :after [[:rcon "UUID:[I;1,2,3,4]"]])])) "within one case is fine")))
+
+(deftest memory-records-are-not-entities
+  (is (= #{} (f/case-uuids {:memory [{:kind :threat :data {:uuid "00000000-0000-0000-0000-000000000099"}}]}))))
