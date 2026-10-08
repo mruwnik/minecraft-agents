@@ -310,3 +310,8 @@ test('adoption rejects mismatches, symlinks and conflicting tools before writing
   assert.throws(() => tools.workspaceGenerate([path.join(alias, 'w/agents/B'), '--body', 'B', '--world', 'w', '--worlds', alias, '--adopt-existing'], repo), /symlinked parents/)
   assert.equal(fs.existsSync(path.join(body, 'context.edn')), false)
 })
+
+test('the workspace guide points at the seen-blocks listing for workstations, chests, beds and ore', t => {
+  const f = fixture(t)
+  assert.match(fs.readFileSync(path.join(f.workspace, 'WORKSPACE.md'), 'utf8'), /jobs\.explore\.look \{:useful\? true/)
+})

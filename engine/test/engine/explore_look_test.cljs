@@ -87,3 +87,11 @@
     (is (re-find #"unknown block names" (:error (look/options {:block-names ["constructor"]} checker))))
     (is (re-find #"unknown block names" (:error (look/options {:block-names ["__proto__"]} checker)))))))
 
+(deftest useful-lists-seen-workstations-storage-beds-and-ore-nearest-first-with-distance
+  (let [p (tu/seeing-all (tu/fake {:blocks {"3,64,0" "crafting_table" "1,64,0" "stone" "2,64,0" "oak_log"
+                                            "6,64,0" "iron_ore" "9,64,0" "red_bed" "5,64,4" "chest" "4,64,0" "furnace"}
+                                   :self {:pos [0 64 0]}}))
+        r (look/observe p (look/options {:useful? true :max-blocks 16}))]
+    (is (= ["crafting_table" "furnace" "iron_ore" "chest" "red_bed"] (mapv :name (:blocks r))))
+    (is (= [30 40 60 64 90] (mapv #(js/Math.round (* 10 (:distance %))) (:blocks r))) "distance in blocks, rounded"))
+  (is (:error (look/options {:useful? true :block-names ["stone"]})) "useful? and block-names are exclusive"))

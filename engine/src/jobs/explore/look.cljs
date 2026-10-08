@@ -13,9 +13,16 @@
    :entity-names {:doc "nil, one entity name or a vector/set of up to 16 names" :spec (a/or-of a/name? (a/coll-of a/name?)) :default nil}
    :max-blocks {:doc "nearest blocks to return, 0..16; zero skips scan" :spec (a/int-in 0 16) :default 6}
    :max-entities {:doc "nearest entities to return, 0..8; zero skips scan" :spec (a/int-in 0 8) :default 2}
+   :useful? {:doc "list the workstations, storage, beds and ores seen (each with its :distance); excludes :block-names" :spec boolean? :default false}
    :properties? {:doc "include nearby block state properties" :spec boolean? :default false}
    :at {:doc "optional exact block position [x y z] or {:x :y :z}" :spec ::a/pos :default nil}})
 (defn check [_] true)
+(def useful-names #{"crafting_table" "furnace" "blast_furnace" "smoker" "chest" "trapped_chest" "barrel" "ender_chest"
+                    "enchanting_table" "anvil" "brewing_stand" "ancient_debris"})
+(defn useful-block?
+  "Whether a block name is a workstation, storage, bed or ore."
+  [n]
+  (boolean (or (useful-names n) (re-find #"(?:_bed|_ore)$" n))))
 (defn names [v]
   (cond (nil? v) nil (string? v) [v] (or (vector? v) (set? v)) (vec v) :else ::bad))
 (defn count-bound? [v hi] (and (integer? v) (<= 0 v hi)))
@@ -42,6 +49,8 @@
       (not (count-bound? (:max-entities a) 8)) {:error "max-entities must be an integer 0..8"}
       (not (and (valid-names? blocks) (valid-names? entities))) {:error "names must be nil, a name, or up to 16 block/entity names"}
       (and known-block? (seq (remove known-block? blocks))) {:error (str "unknown block names: " (pr-str (vec (remove known-block? blocks))))}
+      (and (:useful? a) blocks) {:error ":useful? and :block-names are exclusive"}
+      (not (boolean? (:useful? a))) {:error "useful? must be true or false"}
       (not (boolean? (:properties? a))) {:error "properties? must be true or false"}
       (:reason at) {:error (:message at)}
       :else (assoc a :block-names blocks :entity-names entities :at (:pos at))))))
@@ -70,18 +79,21 @@
   (or (not= "hostile" (:kind e)) (not (contains? e :seen)) (:seen e) (heard-only? e)))
 (defn listed [from e]
   (if (heard-only? e) (heard-entity from e) (entity e)))
-(defn observe [p {:keys [radius block-names entity-names max-blocks max-entities properties? at]}]
+(defn distance-row [from b]
+  (assoc (block b) :distance (/ (js/Math.round (* 10 (u/dist from (:pos b)))) 10)))
+(defn observe [p {:keys [radius block-names entity-names max-blocks max-entities properties? useful? at]}]
   (let [self (.self p)
         blocks (if (pos? max-blocks)
                  (look/seen-blocks p (cond-> {:radius radius :max (inc max-blocks) :properties? properties?}
-                                       block-names (assoc :names block-names) (not block-names) (assoc :all? true)))
+                                       block-names (assoc :names block-names) useful? (assoc :match useful-block?)
+                                       (and (not block-names) (not useful?)) (assoc :all? true)))
                  [])
         entities (if (pos? max-entities)
                    (filterv listed? (look/seen-entities p (cond-> {:radius radius :max (inc max-entities)} entity-names (assoc :names entity-names))))
                    [])
         exact (when at (look/seen-block p at))]
     (cond-> {:center (pos (.-pos self)) :radius radius :scope :seen
-             :blocks (mapv block (take max-blocks blocks)) :entities (mapv #(listed (u/pos-of (.-pos self)) %) (take max-entities entities))}
+             :blocks (mapv (if useful? #(distance-row (u/pos-of (.-pos self)) %) block) (take max-blocks blocks)) :entities (mapv #(listed (u/pos-of (.-pos self)) %) (take max-entities entities))}
       (> (count blocks) max-blocks) (assoc :more-blocks? true)
       (> (count entities) max-entities) (assoc :more-entities? true)
       at (assoc :at (if (or (nil? exact) (:unknown exact))
