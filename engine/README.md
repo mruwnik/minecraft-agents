@@ -37,7 +37,7 @@ npm run body -- --agent <name> --world <world> [--scenario <file.edn>]   # node 
 Run one namespace with `node --max-old-space-size=4096 out/test.cjs --test=engine.<ns>-test`.
 
 Builds (in `dashboard/shadow-cljs.edn`, which holds the engine and dashboard builds; engine outputs go to `engine/out/`): `:test` (`:node-test`, the `engine|jobs|plan` namespaces ending in `-test`, to `out/test.cjs`) and `:body`
-(`:node-script`, `out/body.cjs`, `engine.main/main`). The compile JVM is capped at 1 GB.
+(`:node-script`, `out/body.cjs`, `engine.main/main`) and `:body-release` (the same under `:simple`, `out/body-release.cjs`: what bodies run, from `npm run body` and the world-test runner; `:advanced` breaks the JS interop). The compile JVM is capped at 1 GB.
 
 **Compiling: `tools/compile <engine|dashboard> <build>... [--priority] [--release]`** (repo root). Every cljs compile goes
 through it. It queues on `/tmp/mc-compile.lock` (never wrap it in `flock`) and compiles against the checkout's one long-lived
