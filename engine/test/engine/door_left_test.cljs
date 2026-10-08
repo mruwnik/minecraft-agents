@@ -312,24 +312,42 @@
 
 (defn done-event [seen] (first (filter #(= :shut-doors.done (:kind %)) @seen)))
 
-(deftest a-hut-door-nobody-recorded-open-is-shut-by-an-explicit-call
+(defn run-shut! [{:keys [eng] :as s} args ticks]
+  (core/submit! eng (list 'jobs.maintenance.shut-doors args) {})
+  (tick-until s #(empty? (:list (core/state eng))) ticks))
+
+(defn hut-setup [home?]
+  (let [{:keys [eng] :as s} (setup (assoc (hs/hut-world {:x 5.5 :y 64 :z 1.5} {}) :states hd/open-door-states))]
+    (when home? (mem/write! (:store eng) :home {:pos {:x 5 :y 64 :z 1}} mem/place-policy))
+    s))
+
+(deftest a-hut-door-nobody-recorded-open-is-shut-by-an-agent-call-near-home
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen] :as s} (setup (assoc (hs/hut-world {:x 5.5 :y 64 :z 1.5} {}) :states hd/open-door-states))]
+        (let [{:keys [p seen] :as s} (hut-setup true)]
           (is (true? (hs/door-open? p)) "open to begin with, no :opened entry")
-          (core/submit! eng '(jobs.maintenance.shut-doors) {})
-          (await (tick-until s #(empty? (:list (core/state eng))) 20))
+          (await (run-shut! s {:unrecorded? true} 20))
           (is (false? (hs/door-open? p)) "shut")
           (is (= 1 (:shut (done-event seen)))))))))
 
-(deftest an-unrecorded-door-that-stays-open-is-not-reported-done
+(deftest a-foreign-open-door-is-left-open-by-default
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen] :as s} (setup (assoc (hs/hut-world {:x 5.5 :y 64 :z 1.5} {}) :states hd/open-door-states))]
+        (let [{:keys [p seen] :as s} (hut-setup false)]
+          (await (run-shut! s {} 20))
+          (is (true? (hs/door-open? p)) "no record, default: untouched")
+          (await (run-shut! s {:unrecorded? true} 20))
+          (is (true? (hs/door-open? p)) "not near home and no plan of the body's: untouched")
+          (is (= 0 (:shut (done-event seen)))))))))
+
+(deftest an-unrecorded-own-door-that-stays-open-is-not-reported-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p seen] :as s} (hut-setup true)]
           (.override (.-world p) "useOn" (fn ^:async o [] #js {:status "done"}))
-          (core/submit! eng '(jobs.maintenance.shut-doors) {})
-          (await (tick-until s #(empty? (:list (core/state eng))) 30))
+          (await (run-shut! s {:unrecorded? true} 30))
           (is (true? (hs/door-open? p)))
           (is (nil? (done-event seen)) "not done while the door stands open"))))))

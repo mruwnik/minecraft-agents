@@ -4,14 +4,18 @@
             [jobs.lib.util :as u]
             [jobs.lib.result :as res]
             [jobs.lib.pass :as pass]
-            [jobs.lib.doors :as doors]))
+            [jobs.lib.doors :as doors]
+            [jobs.lib.access :as access]
+            [jobs.lib.world :as known]
+            [engine.memory :as mem]))
 
 (def doc
   "Shut the doors, gates and trapdoors a walk opened and left open (the job of the door-left trigger,
   jobs.lib.doors).
   Blocks with an :opened entry count (written by jobs.lib.pass when a walk opens a block, dropped when it
-  shuts it), whatever their age. Wooden doors (never gates or trapdoors) the body has seen open without an entry
-  count too (:unrecorded?, default on). Any other block the walker did not open is never touched. Blocks a :leave-open walk left
+  shuts it), whatever their age. With :unrecorded? (default off; the door-left reflex and lead-to never set it) wooden
+  doors (never gates or trapdoors) seen open without an entry count too, but only those of the body's own building:
+  inside the footprint of a plan it made, or within :home-radius of its :home place. Any other block the walker did not open is never touched. Blocks a :leave-open walk left
   open on purpose are left alone while that walk's job lives (once it is gone, they count).
   One run shuts them all, nearest first. For each it walks within :reach (a jobs.movement.go-to child, doors :never:
   it opens nothing on the way), then shuts it as the walker does (pass/shut-column!). An animal in the cell is waited
@@ -26,12 +30,20 @@
 (a/defargs args
   {:radius {:doc "how far from the body a left block is looked for, in blocks" :spec (a/num-in 0 nil) :default 16}
    :reach {:doc "walk until within this many cells of the block (a click reaches 4.5 from the eye)" :spec (a/num-in 0 nil) :default 3}
-   :unrecorded? {:doc "also shut wooden doors seen standing open that no walk recorded opening" :spec boolean? :default true}
+   :unrecorded? {:doc "also shut wooden doors of the body's own building seen standing open that no walk recorded opening" :spec boolean? :default false}
+   :home-radius {:doc "with :unrecorded?, a door this close to the :home place is the body's own, in blocks" :spec (a/num-in 0 nil) :default 8}
    :tries {:doc "clicks on one block before the run leaves it" :spec (a/int-in 1 nil) :default 3}
    :attempts {:doc "runs whose clicks failed before a block is dropped for good" :spec (a/int-in 1 nil) :default 5}})
 
 ;; the blocks given up in this run are skipped; a later run starts afresh from the world and the :opened entries
 (defn cell-key [{:keys [x y z]}] [x y z])
+
+(defn own-door?
+  "Whether the door cell is in the footprint of a plan this body made, or within :home-radius of its :home place."
+  [c {:keys [x y z] :as cell}]
+  (let [home (mem/place (ctx/view c) :home)]
+    (boolean (or (some (access/own-plans c) [(get (known/footprints c) [x y z])])
+                 (and home (<= (doors/distance {:x (:x home) :y (:y home) :z (:z home)} cell) (:home-radius (:args c))))))))
 
 (defn targets
   "The left-open blocks (doors/left-open, any age; then doors/unrecorded-open) within :radius, minus the cells in left ({:cell [x y z]})."
@@ -39,7 +51,7 @@
   (let [given-up (set (map :cell left))]
     (remove #(given-up (cell-key (:cell %)))
             (concat (doors/left-open (:primitives c) (ctx/view c) (:args c) 0)
-                    (when (:unrecorded? (:args c)) (doors/unrecorded-open (:primitives c) (ctx/view c) (:args c)))))))
+                    (when (:unrecorded? (:args c)) (doors/unrecorded-open (:primitives c) (ctx/view c) (assoc (:args c) :own? #(own-door? c %))))))))
 
 (defn ^:async walk!
   "nil when the body stands within reach, else why not: :walk-interrupted (the walk ended :continue) or :unreachable."

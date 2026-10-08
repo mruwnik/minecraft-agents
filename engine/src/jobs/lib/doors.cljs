@@ -75,14 +75,16 @@
 
 (defn unrecorded-open
   "The wooden doors seen standing open within radius of the body that no :opened entry names (a door left open after a
-  failure whose entry was dropped, by a night dig-in or by hand), read as open-block now, like left-open's blocks:
-  [{:cell :column :by nil :fails 0 :dist}] nearest first. Gates and trapdoors are never taken (a pen's gate stands open on purpose)."
-  [p view {:keys [radius]}]
+  failure whose entry was dropped, by a night dig-in or by hand) and that own? (a fn of the cell map {:x :y :z}) calls the
+  body's own, read as open-block now, like left-open's blocks: [{:cell :column :by nil :fails 0 :dist}] nearest first.
+  Gates and trapdoors are never taken (a pen's gate stands open on purpose)."
+  [p view {:keys [radius own?]}]
   (let [self (self-pos p)
         recorded (set (map (comp :cell :data) (mem/entries view :opened)))]
     (->> (look/seen-blocks p {:match #(re-find #"_door$" %) :radius radius :live? true})
          (map :pos)
          (remove recorded)
+         (filter own?)
          (keep (fn [cell]
                  (when-let [o (open-block p cell)]
                    (assoc o :by nil :fails 0 :dist (distance self cell)))))
