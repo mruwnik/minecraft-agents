@@ -15,6 +15,7 @@
   (:require [engine.args :as a]
             [clojure.string :as str]
             [engine.perception :as perception]
+            [engine.senses :as senses]
             [engine.settings :as settings]
             ["crypto" :as crypto]))
 
@@ -54,7 +55,7 @@
 
 (defn sense
   "How the body perceives entity e, a non-hostile one (hostile mobs: see `known-sense`). Uses
-  perception/sense-thing: a clear line from the eye to the entity's middle or head, within sight, lit and in
+  perception/sense-thing: a clear line from the eye to any of the entity's sight points (senses/can-see?), within sight, lit and in
   the view cone, or heard within hearing range unless it makes no sound. per is the perception (nil: no
   world, so nothing is sensed). Returns :self, :seen, :heard or nil."
   [per ^js source ^js e]
@@ -66,10 +67,8 @@
       (and source (identical? e (.-entity source))) :self
       (or (nil? eye) (nil? p) (nil? table) (zero? (.-length table))) nil
       :else
-      (let [h (or (.-height e) 1.8)
-            my (+ (.-y p) (/ h 2)) hy (+ (.-y p) (max 0.1 (- h 0.1)))
-            clear? (fn [y] (perception/line-clear? raw table (.-x eye) (.-y eye) (.-z eye) (.-x p) y (.-z p)))]
-        (perception/sense-thing per eye p (boolean (or (clear? my) (clear? hy))) (boolean (silent-types (entity-type e))))))))
+      (perception/sense-thing per eye p (senses/can-see? raw eye #js {:pos p :height (.-height e) :width (.-width e)})
+                              (boolean (silent-types (entity-type e)))))))
 
 (defn known-sense
   "How the body perceives hostile mob e by perception's known-mobs entry (a knownMobs() row, or nil when the body knows

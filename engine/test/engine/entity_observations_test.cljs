@@ -57,6 +57,11 @@
     (is (= {"player" :self "cow" :heard}
            (listed (rig {:blocks (tu/box 5 64 -3 5 69 3 "stone")}) [(mob 2 "cow" 64 12.5 0.5)])) "through a wall: heard")))
 
+(deftest a-mob-seen-only-past-a-corner-of-its-box-is-seen-as-senses-sees-it
+  (let [cow (doto (mob 2 "cow" 64 1.6 3.5) (aset "width" 0.6))
+        r (rig {:blocks (tu/box 1 65 1 1 65 1 "stone")})]
+    (is (= {"player" :self "cow" :seen} (listed r [cow])) "the middle and head are behind the block, a head-height corner is not")))
+
 (deftest hostile-mobs-come-from-the-known-mobs-memory-only
   (is (= {"player" :self} (listed (rig {:entities [(fake-mob 2 "creeper" 0.5 -2.5)]}) [(mob 2 "creeper" 64 0.5 -2.5)]))
       "a silent creeper behind the body is not perceived")
