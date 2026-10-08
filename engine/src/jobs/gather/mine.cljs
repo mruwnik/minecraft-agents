@@ -174,6 +174,7 @@
    ::branch-gap {:default 4 :doc "A dig this far from the tunnel line (and from any torch hung on a branch) gets a torch of its own." :spec (a/int-in 0 nil)}
    ::torch-min {:default 2 :doc "A torch round crafts more when fewer torches than this are carried." :spec (a/int-in 0 nil)}
    ::torch-craft-count {:default 4 :doc "Torches one craft makes." :spec (a/int-in 1 nil)}
+   ::open-skip-drop {:default 3 :doc "The most blocks the strip tunnel's start steps down while it skips open cells on its line (a stair); the tunnel then runs at that level." :spec (a/int-in 0 nil)}
    ::max-resumes {:default 2 :doc "Resumes of a cut before the job gives up." :spec (a/int-in 0 nil)}
    ::max-steps {:default 400 :doc "Pieces of work of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}
    ::max-recuts {:default 12 :doc "Cuts again of one tunnel cell that a falling block (gravel, sand) refilled before the tunnel stops :dig-failed." :spec (a/int-in 0 nil)}
@@ -524,9 +525,12 @@
 
 (def max-open-skip 64)
 
+(defn open-skip-drop [] (settings/get settings ::open-skip-drop))
+
 (defn open-start
   "Where a strip tunnel really starts: from cell, along heading dir [dx dz] over cells already open (feet and head passable, a
-  solid floor, as seen), stepping down where the line drops to an open cell with a floor (a stair); the last such cell."
+  solid floor, as seen), stepping down where the line drops to an open cell with a floor (a stair), at most ::open-skip-drop
+  blocks below cell in all; the last such cell."
   [name-at cell [dx dz]]
   (let [open? (fn [p] (and (passable (name-at p)) (passable (name-at (update p :y inc)))
                            (rules/solid-floor? name-at (update p :y dec))))
@@ -536,7 +540,7 @@
         (cond
           (>= n max-open-skip) p
           (open? q) (recur q (inc n))
-          (and (passable (name-at q)) (open? down)) (recur down (inc n))
+          (and (passable (name-at q)) (open? down) (<= (- (:y cell) (:y down)) (open-skip-drop))) (recur down (inc n))
           :else p)))))
 
 (defn tunnel-reason [stop] (if (= :tunnel-length stop) :tunnel-length :tunnel-stopped))

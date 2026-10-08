@@ -778,6 +778,44 @@
           (is (= "chest" (block-at s 2 64 0)))
           (is (not-any? #{[2 64 0]} (dug-cells s))))))))
 
+;; ------------------------------------------------------------------ open-start: where the strip tunnel starts over open cells
+
+(defn open-line
+  "name-at of an east-running corridor from x 0 at y 64: air at feet and head for xs, stone floor under floor-xs, rest unseen (nil)."
+  [xs floor-xs & [extra]]
+  (let [m (merge (into {} (for [x xs y [64 65]] [[x y 0] "air"]))
+                 (into {} (for [x floor-xs] [[x 63 0] "stone"]))
+                 extra)]
+    (fn [{:keys [x y z]}] (get m [x y z]))))
+
+(def east [1 0])
+(defn start-x [name-at] (:x (mine/open-start name-at {:x 0 :y 64 :z 0} east)))
+
+(deftest open-start-runs-over-open-cells-with-a-floor
+  (is (= 5 (start-x (open-line (range 0 6) (range 0 6))))))
+
+(deftest open-start-stops-at-an-unseen-cell
+  (is (= 2 (start-x (open-line (concat (range 0 3) [4]) (range 0 6))))))
+
+(deftest open-start-stops-at-a-cell-with-no-floor
+  (is (= 2 (start-x (open-line (range 0 6) [0 1 2 4 5])))))
+
+(deftest open-start-stops-at-lava-and-water
+  (doseq [fluid ["lava" "water"]]
+    (is (= 2 (start-x (open-line (range 0 6) (range 0 6) {[3 64 0] fluid}))) fluid)))
+
+(deftest open-start-stops-at-the-skip-cap
+  (is (= mine/max-open-skip (start-x (open-line (range 0 (+ mine/max-open-skip 10)) (range 0 (+ mine/max-open-skip 10)))))))
+
+(deftest open-start-steps-down-a-stair-but-not-past-the-drop-bound
+  (let [descending (fn [{:keys [x y z]}]
+                     (when (zero? z)
+                       (let [floor (- 63 x)]
+                         (cond (= y floor) "stone" (> y floor) "air"))))
+        drop (- 64 (:y (mine/open-start descending {:x 0 :y 64 :z 0} east)))]
+    (is (pos? drop) "a stair still counts")
+    (is (= (mine/open-skip-drop) drop) "the origin sits the drop bound below the start")))
+
 (def corridor (into {} (for [x (range 1 6) y [64 65]] [(str x "," y ",0") "air"])))
 
 (deftest the-tunnel-skips-its-own-open-corridor-and-never-digs-its-torches
