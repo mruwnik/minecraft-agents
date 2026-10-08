@@ -851,4 +851,7 @@
           (core/submit! eng '(jobs.survival.night) {})
           (await (tu/run-until-empty eng 12))
           (is (seq (st/calls p "place")) "put the bed down")
+          (let [names (mapv #(.-name %) (.-calls (.-world p)))]
+            (is (< (.indexOf names "look") (.indexOf names "place")) "the room was looked at before the bed went down")
+            (is (not= -1 (.indexOf names "look"))))
           (is (empty? (st/emitted seen :shelter.bed_place_failed))))))))

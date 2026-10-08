@@ -85,4 +85,5 @@
       (fn ^:async t []
         (let [s (await (seen/run-pit! {:blocks seen/ground :inventory [{:name "iron_pickaxe" :count 1}]
                                        :drops {"stone" "coal"}}))]
-          (is (some #(re-find #"nothing to roof the pit with" (str (:text %))) (seen/failed s))))))))
+          (is (some #(re-find #"nothing to roof the pit with" (str (:text %))) (seen/failed s)))
+          (is (= [:stopped :no-blocks] ((juxt :status :reason) @(:out s))) "the call reports the stop, not success"))))))

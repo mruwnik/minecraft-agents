@@ -114,13 +114,18 @@
                       :done))
       (u/fail! c :bed_unusable (str "cannot sleep: " (.-status r))))))
 
+(defn still-permitted?
+  "sense/decide!'s retry? for the bed-taken decision: its value is true while the bed still reads permitted, so keep looking."
+  [v]
+  (true? v))
+
 (defn ^:async round [c]
   (let [p (:primitives c)
         bed (bed-of c)]
     (if (or (nil? bed) (sh/sleeping? p) (not (sh/night? p)))
       :done
       (let [taken? #(not ((sh/bed-permit p (:world (:engine c))) bed))
-            _ (await (sense/decide! c ::bed-taken #(not (taken?)) {:retry? true?}))
+            _ (await (sense/decide! c ::bed-taken #(not (taken?)) {:retry? still-permitted?}))
             walk (when-not (taken?) (await (ctx/call-child c :go 'jobs.movement.go-to {:pos bed :range 2})))]
         (cond
           (taken?) :continue
