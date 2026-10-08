@@ -31,6 +31,10 @@
   (is (walk/wet? pond-world {:x 3 :y 64 :z 0}) "on water: the body sinks into it")
   (is (not (walk/wet? pond-world {:x 0 :y 64 :z 5}))))
 
+(deftest water-plants-and-a-bubble-column-are-wet
+  (doseq [plant ["kelp" "kelp_plant" "seagrass" "tall_seagrass" "bubble_column"]]
+    (is (walk/wet? (fn [{:keys [y]}] (if (= y 64) plant "stone")) {:x 0 :y 64 :z 0}) plant)))
+
 (deftest a-flight-from-a-ranged-mob-takes-a-covered-end-first
   (let [flat (fn [{:keys [y]}] (if (<= y 63) "stone" "air"))
         covered? (fn [end] (neg? (:z end)))]

@@ -554,3 +554,58 @@
       "a body walled in on four sides cannot squeeze out diagonally")
   (is (= 2 (count (retreat-walk/walk-cells (fn [{:keys [y]}] (if (= y 63) "stone" "air")) {:x 0.5 :y 64 :z 0.5} (retreat-walk/unit 1 1) 2)))
       "past no corner, the diagonal is open"))
+
+(defn ^:async first-act-round
+  "Submit spec over world and run its round until its first walk or place (5 s at most); then the mobs leave and the
+  round ends. The setup map plus :places-before-walk, the place calls made before the first walk."
+  [spec world]
+  (let [{:keys [eng p] :as s} (setup world)
+        acted? #(or (seq (tu/walked-to eng)) (seq (calls p "place")))]
+    (core/submit! eng spec {})
+    (let [round (core/tick! eng)]
+      (loop [i 0] (when (and (not (acted?)) (< i 250)) (await (sleep 20)) (recur (inc i))))
+      (let [places (count (calls p "place"))]
+        (swap! (fake/state p) assoc :entities [])
+        (await round)
+        (assoc s :places-before-walk places)))))
+
+;; low on health in a skeleton's line of fire, but a creeper or a zombie close by: no seal or pit beside it (a blast
+;; breaks the wall, a zombie stands in the cell to fill); it walks away first
+(deftest a-low-body-with-a-creeper-or-zombie-close-walks-instead-of-taking-cover
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (loop [[[what close] & more] [["creeper" (assoc (creeper 0.5 64 3.5) :visible true)]
+                                      ["zombie" (assoc (zombie 3.5 64 0.5) :visible true)]]]
+          (when what
+            (let [{:keys [eng p]}
+                  (await (first-act-round retreat {:self {:pos [0.5 64 0.5] :health 8}
+                                                   :inventory [{:name "cobblestone" :count 20}]
+                                                   :entities [(assoc (skeleton 6.5 64 0.5) :visible true) close]}))]
+              (is (not-any? #(> (first %) -3) (placed-cells p)) (str what ": no seal beside it " (placed-cells p)))
+              (is (< (:x (first-move eng)) 0) (str what ": it walks away first")))
+            (recur more)))))))
+
+;; a skeleton only heard (its rough spot) is no line of fire to hide from: the low body walks
+(deftest a-low-body-does-not-seal-in-from-a-heard-only-skeleton
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng places-before-walk]}
+              (await (first-act-round retreat {:self {:pos [0.5 64 0.5] :health 8}
+                                               :inventory [{:name "cobblestone" :count 20}]
+                                               :entities [(assoc (skeleton 6.5 64 0.5) :visible false)]}))]
+          (is (zero? places-before-walk) "no seal")
+          (is (< (:x (first-move eng)) 0) "it walks away"))))))
+
+;; cover is judged from the cells the body has seen: a wall it has not seen is no cover (an arrow may pass)
+(deftest cover-reads-seen-cells-only
+  (let [wall (into {} (for [z (range -3 4) y [64 65 66]] [(key-of 3 y z) "stone"]))
+        p (tu/fake-on-floor {:self {:pos [0.5 64 0.5]} :blocks wall})
+        skel #js {:name "skeleton" :visible true :pos #js {:x 6.5 :y 64 :z 0.5}}
+        behind {:x 0 :y 64 :z 0}]
+    (is (true? ((retreat/cover-fn p [skel]) behind)) "a seen wall covers")
+    (aset p "sensedAt" (fn [pos] (if (= 3 (.-x pos)) #js {:unknown true} (.blockAt p pos))))
+    (is (false? ((retreat/cover-fn p [skel]) behind)) "an unseen one does not")
+    (is (nil? (retreat/cover-fn p [#js {:name "skeleton" :visible false :pos #js {:x 6.5 :y 64 :z 0.5}}]))
+        "a heard-only skeleton gives no line of fire to judge")))

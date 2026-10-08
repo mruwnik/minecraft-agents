@@ -36,8 +36,10 @@
      It first looks away and to either side where it has not seen the ground (at most 3 looks); a cell still unseen
      reads as rock.
      Eats one bite a step (up to food 20) when the nearest chaser is at least :eat-gap blocks away and food is carried.
-  Low on health (at most :hide-health) in a ranged chaser's line of fire with no covered step, it takes cover where it
-  stands first: seal in, else dig down and plug, else a side pocket (as below); none of them possible, it walks on.
+  Low on health (at most :hide-health) in a seen ranged chaser's line of fire (over the cells it has seen) with no
+  covered step, it takes cover where it stands first: seal in, else dig down and plug, else a side pocket (as below);
+  none of them possible, it walks on. Not while a creeper chases it or a melee mob is within cover-gap: it walks (or
+  backs off, cornered) first.
   3. Cornered (no open direction worth a walk, or the walk is blocked; checked afresh every step) with no hostile within
      :radius: holds a second (wait, why cornered) and looks again; after :no-gain-steps such steps or holds with no gain the flight ends :keeps-off. With one within :radius: takes the safest option it has not yet failed.
      - fight (jobs.survival.fight-back) only when jobs.lib.cost/fight-damage leaves :reserve health. Never against a creeper.
@@ -238,10 +240,13 @@
 
 (a/defargs settings
   {::glance-reach {:default 3 :doc "Blocks along a direction to the feet cell a glance looks at." :spec (a/int-in 0 nil)}
-   ::glance-memory {:default 24 :doc "Most glanced cells a flight remembers." :spec (a/int-in 0 nil)}})
+   ::glance-memory {:default 24 :doc "Most glanced cells a flight remembers." :spec (a/int-in 0 nil)}
+   ::cover-gap {:default 5 :doc "Blocks within which a melee chaser keeps a low body from taking cover where it stands." :spec (a/num-in 0 nil)}})
 (defn glance-reach [] (settings/get settings ::glance-reach))
 
 (defn glance-memory [] (settings/get settings ::glance-memory))
+
+(defn cover-gap [] (settings/get settings ::cover-gap))
 
 (defn unseen-before-wall?
   "Whether a cell the body has not sensed lies in the columns along d from the first, up to glance-reach or the first
@@ -281,10 +286,11 @@
           (recur more))))))
 
 (defn cover-fn
-  "(feet cell -> whether it is out of every ranged threat's line of fire), nil when no threat is ranged."
+  "(feet cell -> whether it is out of every seen ranged threat's line of fire, over the cells the body has seen: an
+  unseen cell stops no arrow), nil when no seen threat is ranged (a heard one's rough spot is no line of fire)."
   [p threats]
-  (when-let [ranged (seq (filter combat/ranged? threats))]
-    (let [arrow-at (reach/lookup p reach/arrow-kind-of)
+  (when-let [ranged (seq (filter #(and (combat/ranged? %) (danger-q/seen-only? %)) threats))]
+    (let [arrow-at (fn [x y z] (reach/arrow-kind-of (u/seen-block p {:x x :y y :z z})))
           at (mapv #(danger-q/mob-pos p %) ranged)]
       #(walk/out-of-fire? arrow-at at %))))
 
@@ -318,6 +324,14 @@
                   :pit (await (refuge/pit! c))
                   :pocket (await (refuge/pocket! c))))]
         (if (some? r) r (recur more))))))
+
+(defn close-danger?
+  "Whether a creeper chases the body or a melee threat is within cover-gap: a seal or pit beside it is no cover (a blast
+  breaks the wall, a mob stands in the cell to fill)."
+  [p threats]
+  (boolean (some #(or (combat/creeper? %)
+                      (and (not (combat/ranged? %)) (<= (danger-q/mob-distance p %) (cover-gap))))
+                 threats)))
 
 (defn exposed-low?
   "Whether the body is at or under :hide-health with a ranged threat's line of fire on it (covered? false at its feet)."
@@ -416,7 +430,8 @@
       (let [_ (await (eat-on-the-run! c threat))
             covered? (cover-fn p threats)
             target (await (flight-target! c threats covered?))
-            cover (when (and (exposed-low? c covered?) (not (and target (covered? target))))
+            cover (when (and (exposed-low? c covered?) (not (and target (covered? target)))
+                             (not (close-danger? p threats)))
                     (await (take-cover! c)))]
         (cond
           (some? cover) cover

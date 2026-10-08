@@ -3,6 +3,8 @@
 ;; [11 0 19], behind the leaves (they stop arrows); it keeps to their shadow (x 5..11, z 19..22) until out of line 4 s.
 ;; open-runs: no leaves, the flight runs due west along z 16 until 16 from the skeleton, out of that shadow.
 ;; low-health-seals: :hide-health 20 (every health counts as low) in the open with cobblestone: it seals in where it stands.
+;; pond-goes-round: a pond (x 6..13, z 12..21, 2 deep) straight away west, dry ground north and south: the flight
+;; goes round it, never into the water (a swim is slow; the death this card came from).
 {:defaults
  {:tags [:hostile :survival]
   :time :any
@@ -26,4 +28,12 @@
    :act [[:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:job (jobs.survival.retreat {:hide-health 20})]]
    :expect [{:event {:source :job :kind :retreat_sealed} :within-s 30}]
-   :after [[:body-near [16.5 0 16.5] 1.5]]}]}
+   :after [[:body-near [16.5 0 16.5] 1.5]]}
+  {:name "pond-goes-round"
+   :blocks [[:fill [5 -3 11] [14 -1 22] "stone"]
+            [:fill [6 -2 12] [13 -1 21] "water"]]
+   :act [[:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:job (jobs.survival.retreat {})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :go-to.in-water} :for-s 40 :until {:source :job :kind :completed}}]
+   :after [[:body-far [10 0 16.5] 5.5]]}]}

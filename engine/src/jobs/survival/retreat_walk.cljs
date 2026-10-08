@@ -3,6 +3,7 @@
   over a block-at fn)."
   (:require [engine.args :as a]
             [engine.settings :as settings]
+            [jobs.lib.breath :as breath]
             [jobs.lib.reach :as reach]
             [jobs.lib.util :as u]))
 
@@ -153,9 +154,10 @@
               (or (> open min-open) (>= (- then now) 2))))))
 
 (defn wet?
-  "Whether a walker in feet cell swims there: water at its feet, or as its floor (it sinks into it)."
+  "Whether a walker in feet cell swims there: water (or kelp, seagrass, a bubble column: breath/swimmable) at its feet,
+  or as its floor (it sinks into it)."
   [block-at {:keys [x y z]}]
-  (or (= "water" (block-at {:x x :y y :z z})) (= "water" (block-at {:x x :y (dec y) :z z}))))
+  (or (contains? breath/swimmable (block-at {:x x :y y :z z})) (contains? breath/swimmable (block-at {:x x :y (dec y) :z z}))))
 
 (defn walk-time
   "Blocks of walking cells take: a wet? one counts swim-factor."

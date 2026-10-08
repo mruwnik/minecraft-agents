@@ -274,6 +274,24 @@
           (is (not-any? #(= {:x 16 :z 0} (select-keys % [:x :z])) (walks s)) "the leg by the zombie is never walked to")
           (is (= 3 (count (walks s)))))))))
 
+;; a step toward an unseen column whose step point lies by a dangerous mob is given up once: that column is tried, the
+;; search goes on with others and never gives the same step up again
+(deftest a-dangerous-step-toward-an-unseen-column-is-given-up-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [zombie {:key "z1" :name "zombie" :pos {:x 1 :y 64 :z -7}}
+              far? (fn [pos] (or (> (js/Math.abs (.-x pos)) 8) (> (js/Math.abs (.-z pos)) 8)))
+              blind-far (fn [{:keys [p]}]
+                          (let [at (.-sensedAt p)]
+                            (aset p "sensedAt" (fn [pos] (if (far? pos) #js {:unknown true} (at pos))))))
+              s (with-redefs [threats/sensed-mobs (constantly [zombie])]
+                  (await (search! {:target "diamond_block" :max-distance 20} {} 80 blind-far)))
+              given-up (filterv #(= :goal-dangerous (:reason %)) (get-in (or (event-of s :search.not-found) (event-of s :search.done)) [:coverage :failed]))]
+          (is (finished? s) "the search ends")
+          (is (= [{:pos [0 64 -6] :reason :goal-dangerous}] given-up) (pr-str (event-of s :search.not-found) (walks s)))
+          (is (not-any? #(= {:x 0 :z -6} (select-keys % [:x :z])) (walks s)) "the step by the zombie is never walked to"))))))
+
 (deftest three-failed-legs-in-a-row-end-it-stuck
   (async done
     (tu/run-async done

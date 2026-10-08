@@ -29,7 +29,7 @@
   left the round ends and the check declines for 2 s, up to :load-wait-s (a body just logged in has no chunks
   yet), then the search ends :not-loaded. A walk go-to gives up on is recorded :unreachable. Three of those in
   a row end the search (:stuck). A leg whose goal lies by a mob the body would flee is not walked (go-to :goal-danger
-  :end): it is recorded :goal-dangerous, no stuck walk.
+  :end): it is recorded :goal-dangerous, no stuck walk; a step toward an unseen column given up so leaves that column.
 
   With :use-notes, live :seen notes of a target within :max-distance count as found (:noted true, :by), unless the body
   sees another block at that cell now.
@@ -249,7 +249,7 @@
 (defn choose-leg
   "{:leg [x y z] (or nil when none is left) :tried [points looked at] :failed [{:pos :reason}] :skipped n
   :unloaded [{:pos :reason :not-loaded}] :step true when :leg is only a step toward an unseen column (it is no leg
-  walked) :more true when stand-cap cells were read and candidates may be left}; an
+  walked; :column that column) :more true when stand-cap cells were read and candidates may be left}; an
   unloaded column is not tried, so a later round looks again (m's :deferred ones are kept out of this sweep)."
   [c m names ns]
   (let [{:keys [max-distance]} (:args c)
@@ -268,7 +268,7 @@
                     failed {:pos [(pt 0) y (pt 1)] :reason fail}
                     step (when (= :unseen fail) (step-toward block-at (here c) (pt 0) (pt 1)))]
                 (cond
-                  step (assoc acc :leg step :step true)
+                  step (assoc acc :leg step :step true :column pt)
                   (= :not-loaded fail) (recur more (inc reads) (update acc :unloaded conj failed))
                   fail (recur more (inc reads) (-> acc (update :tried conj pt) (update :failed conj failed)))
                   :else (assoc (update acc :tried conj pt) :leg [(pt 0) sy (pt 1)])))))))
@@ -285,8 +285,9 @@
       (let [{:keys [arrived why]} (ctx/child-result c :leg)
             dangerous? (= :goal-dangerous why)
             in-row (cond arrived 0 dangerous? (:failed-in-row (ctx/mem c) 0) :else (inc (:failed-in-row (ctx/mem c) 0)))]
-        (ctx/update-mem! c (fn [m] (cond-> (assoc (dissoc m :leg) :failed-in-row in-row)
-                                     (not arrived) (update :failed (fnil conj []) {:pos [x y z] :reason (if dangerous? :goal-dangerous :unreachable)}))))
+        (ctx/update-mem! c (fn [m] (cond-> (assoc (dissoc m :leg :leg-column) :failed-in-row in-row)
+                                     (not arrived) (update :failed (fnil conj []) {:pos [x y z] :reason (if dangerous? :goal-dangerous :unreachable)})
+                                     (and dangerous? (:leg-column m)) (update :tried (fnil conj []) (:leg-column m)))))
         (if (>= in-row (max-failed-in-row)) (finish! c :not-found :stuck) :again)))))
 
 (defn ^:async step!
@@ -302,7 +303,7 @@
     (cond
       (>= (count found) want) (finish! c :found nil)
       (>= (:legs m 0) max-legs) (finish! c :not-found :legs)
-      :else (let [{:keys [leg step tried failed skipped unloaded more]} (choose-leg c m names ns)
+      :else (let [{:keys [leg step column tried failed skipped unloaded more]} (choose-leg c m names ns)
                   now (ctx/now c)
                   waited (- now (:waiting-since m now))]
               (ctx/update-mem! c (fn [m] (-> m
@@ -311,7 +312,8 @@
                                              (update :skipped (fnil + 0) skipped)
                                              (assoc :deferred (when (and more (not leg)) unloaded)))))
               (cond
-                leg (do (ctx/update-mem! c (fn [m] (-> m (dissoc :waiting-since) (assoc :leg leg) (update :legs (fnil + 0) (if step 0 1)))))
+                leg (do (ctx/update-mem! c (fn [m] (-> m (dissoc :waiting-since) (assoc :leg leg :leg-column column)
+                                                       (update :legs (fnil + 0) (if step 0 1)))))
                         (await (walk! c)))
                 more :again
                 (empty? unloaded) (finish! c :not-found :distance)
