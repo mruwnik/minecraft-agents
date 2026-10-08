@@ -41,7 +41,7 @@
             {:event {:source :job :kind :shelter.exposed} :within-s 120}]
    :limit-s 150}
   {:name "walled-home-flee-fails-honestly"
-   :blocks [[:fill [28 0 14] [32 4 18] "stone" :hollow]]
+   :blocks [[:fill [28 0 14] [31 4 18] "stone" :hollow]]
    :act [[:job (jobs.memory.set-place {:name :home :pos #at [30 1 16]})]
          [:job (jobs.survival.night {:walk-radius 5})]]
    :expect [{:event {:source :job :kind :shelter.flee_failed} :within-s 150}

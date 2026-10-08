@@ -243,6 +243,21 @@
        (mapcat (fn [m] (keep (fn [k] (get m k)) [:pos :at :target])))
        (filter #(and (coords? %) (<= -16 (second %) 16)))))
 
+;; A goal this far outside the plot is deliberately far (an unloaded-goal case), not a mistake.
+(def far-margin 64)
+
+(defn out-of-plot-positions
+  "The plot-relative x z positions of the case's :blocks corners and #at act positions that lie outside the plot
+  (0..length-1, 0..width-1; 32 by default). #at positions more than far-margin outside are deliberate and allowed."
+  [c]
+  (let [{:keys [length width]} (:plot c)
+        lx (or length 32) lz (or width 32)
+        out? (fn [margin [x _ z]] (or (< x (- margin)) (>= x (+ lx margin)) (< z (- margin)) (>= z (+ lz margin))))
+        block-corners (mapcat (fn [[op a b]] (case op :fill [a b] :set [a] [])) (:blocks c))
+        at-positions (->> (tree-seq coll? seq (:act c)) (filter map?) (keep ::rel))]
+    (concat (filter #(and (coords? %) (out? 0 %)) block-corners)
+            (filter #(and (coords? %) (out? 0 %) (not (out? far-margin %))) at-positions))))
+
 (defn problems
   "Why a merged case cannot run, as a vector of strings (empty when it can)."
   [c]
@@ -268,6 +283,7 @@
       (not (vector? (get-in c [:body :at]))) (conj ":body :at must be [x y z]")
       (some step-problem? (:act c)) (conj (str ":act steps must be one of " (sort step-kinds)))
       (seq (bare-plot-positions c)) (conj (str "a job position " (first (bare-plot-positions c)) " with a plot-relative height needs #at"))
+      (seq (out-of-plot-positions c)) (conj (str "position " (first (out-of-plot-positions c)) " is outside the plot: give :plot :length / :width or move it inside"))
       (seq (unbounded-selectors c)) (conj "an @e selector must be bounded to the plot: use $BOX (x,y,z,dx,dy,dz), not distance")
       (some #(not (and (after-kinds (first %)) (or (not= :file (first %)) (string? (second %))))) (:after c)) (conj (str ":after checks must be one of " (sort after-kinds)))
       (some #(and (map? %) (contains? % ::rel) (= :vec (::as %))) (tree-seq coll? seq (:after c)))

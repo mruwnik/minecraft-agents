@@ -631,3 +631,16 @@
 (deftest settings-text-is-the-body-settings-file
   (is (= "{:engine.perception/save-ms 1000}" (f/settings-text {:settings {:engine.perception/save-ms 1000}})))
   (is (nil? (f/settings-text {}))))
+
+(deftest out-of-plot-positions-are-problems
+  (let [ps (fn [c] (f/problems (f/merge-case {} (merge {:name "a" :body {:at [1 0 1]} :expect [{:event {:kind :x} :within-s 1}]} c))))
+        out? (fn [c] (some #(re-find #"outside the plot" %) (ps c)))]
+    (is (out? {:blocks [[:fill [0 0 0] [40 3 10] "stone"]]}) "fill past the default 32 length")
+    (is (out? {:blocks [[:set [5 0 32] "stone"]]}) "set past the width")
+    (is (out? {:blocks [[:fill [0 -2 0] [32 -2 32] "stone"]]}))
+    (is (not (out? {:blocks [[:fill [0 0 0] [31 3 31] "stone"]]})))
+    (is (not (out? {:plot {:length 52} :blocks [[:fill [0 0 0] [51 3 31] "stone"]]})) "a longer plot")
+    (is (out? {:plot {:length 52} :blocks [[:fill [0 0 0] [52 3 31] "stone"]]}))
+    (is (out? {:act [[:submit {:job 'go-to :args {:pos (f/rel [46 0 16])}}]]}) "a goal in the neighbour plot")
+    (is (not (out? {:plot {:length 52} :act [[:submit {:job 'go-to :args {:pos (f/rel [46 0 16])}}]]})))
+    (is (not (out? {:act [[:submit {:job 'go-to :args {:pos (f/rel [1000 0 16])}}]]})) "deliberately far goals are allowed")))

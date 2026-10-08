@@ -61,7 +61,7 @@
    ;; dirt over bedrock: the chain crafts a wooden pickaxe, gather's stair finds no stone (mine.no-stone-found) three times
    ;; and the job ends :stopped :no-source; stone anywhere in view would be mined for cobblestone instead (fetch by default)
    :plot {:height 12 :floor "dirt"}
-   :blocks [[:fill [0 -2 0] [32 -2 32] "bedrock"]]
+   :blocks [[:fill [0 -2 0] [31 -2 31] "bedrock"]]
    :body {:inventory [["oak_log" 12] ["stick" 4]]}
    :act [[:job (jobs.items.get-tool {:item "stone_pickaxe"})]]
    :limit-s 150
