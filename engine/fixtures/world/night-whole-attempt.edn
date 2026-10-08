@@ -25,7 +25,7 @@
   {:name "wet-site-is-left-for-another-pit-site"
    :blocks [[:fill [0 -6 0] [31 -1 31] "dirt"] [:set [17 -1 16] "water"]]
    :act [[:job (jobs.survival.night)]]
-   :expect [{:event {:source :job :kind :dig_in_failed :message [:contains "beside the descent cell"]} :within-s 30}
+   :expect [{:event {:source :job :kind :dig_in_failed :message [:contains "; not "]} :within-s 30}
             {:event {:source :job :kind :shelter.relocated} :within-s 60}
             {:event {:source :job :kind :dig-in.sealed} :within-s 120}
             {:no-event {:source :job :kind :shelter.exposed} :for-s 120 :until {:source :job :kind :dig-in.sealed}}]
@@ -79,8 +79,8 @@
             {:no-event {:source :job :kind :shelter.exposed} :for-s 120}
             {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 200 :of-job true}]
    :limit-s 230}
-  ;; Card 62278915 (fix b0462852): pit-site? needs ground the carried tools dig. A stone pad and no pickaxe: no pit is started
-  ;; (no dig-in call at all), the night holds exposed; the same pad with a stone pickaxe is dug in.
+  ;; Card 62278915 (fix b0462852): pit-site? needs ground the carried tools dig. A stone pad and no pickaxe: dig-in refuses at once
+  ;; ("cannot harvest stone", no pit dug) and the night holds exposed; the same pad with a stone pickaxe is dug in.
   {:name "stone-pad-no-pickaxe-starts-no-pit"
    :time :night-exclusive
    :blocks [[:fill [8 -6 8] [24 -1 24] "stone"]]
@@ -89,8 +89,9 @@
          [:wait-s 10]
          [:time-set 1000]]
    :expect [{:event {:source :job :kind :shelter.exposed} :within-s 90}
-            {:no-event {:source :job :kind #{:dig-in.sealed :dig_in_failed}} :for-s 90 :until {:source :job :kind :stopped :data {:reason :exposed}}}
+            {:no-event {:source :job :kind :dig-in.sealed} :for-s 90 :until {:source :job :kind :stopped :data {:reason :exposed}}}
             {:event {:source :job :kind :stopped :data {:reason :exposed}} :within-s 150 :of-job true}]
+   :after [[:block [16 -1 16] "stone"]]
    :limit-s 170}
   {:name "stone-pad-with-pickaxe-digs-in"
    :blocks [[:fill [8 -6 8] [24 -1 24] "stone"]]

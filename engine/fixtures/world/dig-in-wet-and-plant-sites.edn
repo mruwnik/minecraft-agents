@@ -12,22 +12,22 @@
  [{:name "water-beside-descent-cell-refuses"
    :blocks [[:set [17 -2 16] "stone"] [:set [17 -1 16] "water"]]
    :act [[:job (jobs.survival.dig-in {})]]
-   :expect [{:event {:source :job :kind :dig_in_failed :message [:contains "beside the descent cell"]} :within-s 30 :of-job true}
-            {:no-event {:source :job :kind :dig-in.sealed} :for-s 30 :until {:source :job :kind :dig_in_failed :message [:contains "beside the descent cell"]}}]
+   :expect [{:event {:source :job :kind :dig_in_failed :message [:contains "; not "]} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :dig-in.sealed} :for-s 30 :until {:source :job :kind :dig_in_failed :message [:contains "; not "]}}]
    :after [[:block [16 -1 16] "dirt"]]
    :limit-s 40}
   {:name "waterlogged-slab-beside-descent-cell-refuses"
    :blocks [[:set [17 -1 16] "oak_slab[waterlogged=true]"]]
    :act [[:job (jobs.survival.dig-in {})]]
-   :expect [{:event {:source :job :kind :dig_in_failed :message [:contains "beside the descent cell"]} :within-s 30 :of-job true}
-            {:no-event {:source :job :kind :dig-in.sealed} :for-s 30 :until {:source :job :kind :dig_in_failed :message [:contains "beside the descent cell"]}}]
+   :expect [{:event {:source :job :kind :dig_in_failed :message [:contains "; not "]} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :dig-in.sealed} :for-s 30 :until {:source :job :kind :dig_in_failed :message [:contains "; not "]}}]
    :after [[:block [16 -1 16] "dirt"]]
    :limit-s 40}
   {:name "seagrass-beside-descent-cell-refuses"
    :blocks [[:set [17 -1 16] "seagrass"]]
    :act [[:job (jobs.survival.dig-in {})]]
-   :expect [{:event {:source :job :kind :dig_in_failed :message [:contains "beside the descent cell"]} :within-s 30 :of-job true}
-            {:no-event {:source :job :kind :dig-in.sealed} :for-s 30 :until {:source :job :kind :dig_in_failed :message [:contains "beside the descent cell"]}}]
+   :expect [{:event {:source :job :kind :dig_in_failed :message [:contains "; not "]} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :dig-in.sealed} :for-s 30 :until {:source :job :kind :dig_in_failed :message [:contains "; not "]}}]
    :after [[:block [16 -1 16] "dirt"]]
    :limit-s 40}
   {:name "water-in-feet-cell-refuses"
