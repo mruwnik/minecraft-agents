@@ -40,6 +40,20 @@
    :act [[:job (jobs.animals.pen-check {:at #at [5 0 5]})]]
    :blocks [[:set [8 0 5] "air"]]
    :expect [{:event {:source :job :kind :pen-check.done :data {:closed? false :reason :leak}} :within-s 20 :of-job true}]}
+  ;; card 6da4b388: a 3-high stone ring with a 2-high doorway in the north wall (the lintel stays). The body inside looks away
+  ;; (the doorway unseen) or at it: either way the doorway is a leak, never read closed
+  {:name "doorway-under-lintel-looking-away-leaks"
+   :body {:at [5.5 0 5.5] :yaw 0}
+   :blocks [[:fill [2 0 2] [8 2 8] "stone" :hollow] [:fill [3 0 3] [7 2 7] "air"]
+            [:set [5 0 2] "air"] [:set [5 1 2] "air"]]
+   :act [[:job (jobs.animals.pen-check {:at #at [5 0 5]})]]
+   :expect [{:event {:source :job :kind :pen-check.done :data {:closed? false :reason :leak}} :within-s 25 :of-job true}]}
+  {:name "doorway-under-lintel-facing-it-leaks"
+   :body {:at [5.5 0 5.5] :yaw 180}
+   :blocks [[:fill [2 0 2] [8 2 8] "stone" :hollow] [:fill [3 0 3] [7 2 7] "air"]
+            [:set [5 0 2] "air"] [:set [5 1 2] "air"]]
+   :act [[:job (jobs.animals.pen-check {:at #at [5 0 5]})]]
+   :expect [{:event {:source :job :kind :pen-check.done :data {:closed? false :reason :leak}} :within-s 25 :of-job true}]}
   {:name "bound-too-small-unbounded"
    :act [[:job (jobs.animals.pen-check {:at #at [5 0 5] :max-cells 10})]]
    :expect [{:event {:source :job :kind :pen-check.done :data {:closed? false :reason :unbounded}} :within-s 20 :of-job true}]}

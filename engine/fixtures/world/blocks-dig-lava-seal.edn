@@ -1,0 +1,23 @@
+;; Card ba557bb5: blocks.dig of the cell under the feet that lays hidden lava open seals it from the rim (:on-lava :seal, the
+;; default) and goes on. Should fail: no block carried and :seal-fetch false stops :lava-unsealed, and the body steps clear of the
+;; lava column. Stone mass x 8..24, z 8..24, y 0..9; lava under the dug cell (16 9 16).
+{:defaults
+ {:tags [:blocks :mining :lava :survival]
+  :time :any
+  :plot {:height 20}
+  :blocks [[:fill [8 0 8] [24 9 24] "stone"] [:set [16 8 16] "lava"]]
+  :body {:at [16.5 10 16.5] :inventory [["iron_pickaxe" 1]] :effects [["resistance" 600 4] ["fire_resistance" 600 0]]}
+  :limit-s 120}
+ :cases
+ [{:name "dig-under-feet-seals-lava-below"
+   :body {:inventory [["iron_pickaxe" 1] ["cobblestone" 8]]}
+   :act [[:job (jobs.blocks.dig {:pos #at [16 9 16]})]]
+   :expect [{:event {:source :job :kind :blocks.dig.sealed} :within-s 100 :of-job true}
+            {:event {:source :job :kind :blocks.dig.done :data {:dug true}} :within-s 110 :of-job true}]
+   :after [[:not-block [16 8 16] "lava"] [:block [16 9 16] "air"]]}
+  ;; should fail: nothing to seal with, nothing fetched
+  {:name "no-block-no-fetch-stops-lava-unsealed-and-steps-clear"
+   :act [[:job (jobs.blocks.dig {:pos #at [16 9 16] :seal-fetch false})]]
+   :expect [{:event {:source :job :kind :blocks.dig.done :data {:dug true :reason :lava-unsealed}} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :blocks.dig.sealed} :for-s 60 :until {:source :job :kind :blocks.dig.done}}]
+   :after [[:block [16 8 16] "lava"] [:body-far [16.5 10 16.5] 1.9]]}]}

@@ -1,0 +1,32 @@
+;; Card c31ba591: a drop that fell into the hole blocks.dig made under the feet is walked to only from a seen, safe, solid floor
+;; one block down; over a cave opening (2 down) or a magma floor it is left, with a debug collect-drops.left, and the body
+;; never enters. Stone mass x 8..24, z 8..24, y 0..9; the body stands on top and digs the cell under its feet (16 9 16);
+;; it steps aside first, so the hole is dug from the rim.
+{:defaults
+ {:tags [:forestry :collect-drops :mining :survival]
+  :time :any
+  :plot {:height 20}
+  :blocks [[:fill [8 0 8] [24 9 24] "stone"]]
+  :body {:at [16.5 10 16.5] :inventory [["iron_pickaxe" 1]] :effects [["resistance" 600 4] ["fire_resistance" 600 0]]}
+  :limit-s 90}
+ :cases
+ [;; should succeed: seen solid stone under the hole, the drop is collected
+  {:name "safe-hole-drop-collected"
+   :act [[:job (jobs.blocks.dig {:pos #at [16 9 16]})]]
+   :expect [{:event {:source :job :kind :blocks.dig.done :data {:dug true}} :within-s 80 :of-job true}]
+   :after [[:item "cobblestone" [:>= 1]]]}
+  ;; should stay: a 1-cell cave under the dug cell, the drop falls 2 below the feet and is left
+  {:name "cave-opening-drop-left"
+   :blocks [[:set [16 8 16] "air"]]
+   :act [[:job (jobs.blocks.dig {:pos #at [16 9 16]})]]
+   :expect [{:event {:source :job :level :debug :kind :collect-drops.left :data {:reason :too-deep}} :within-s 80 :of-job true}
+            {:event {:source :job :kind :blocks.dig.done :data {:dug true}} :within-s 80 :of-job true}
+            {:no-event {:source :action :kind :started :data {:name "collect"}} :for-s 60 :until {:source :job :kind :blocks.dig.done}}]
+   :after [[:item "cobblestone" 0] [:body-far [16.5 8.5 16.5] 1.5]]}
+  ;; should stay: a magma floor under the dug cell (an item does not burn on it), the body does not step in
+  {:name "magma-floor-drop-left"
+   :blocks [[:set [16 8 16] "magma_block"]]
+   :act [[:job (jobs.blocks.dig {:pos #at [16 9 16]})]]
+   :expect [{:event {:source :job :level :debug :kind :collect-drops.left :data {:reason :unsafe-floor}} :within-s 80 :of-job true}
+            {:no-event {:source :action :kind :started :data {:name "collect"}} :for-s 60 :until {:source :job :kind :blocks.dig.done}}]
+   :after [[:item "cobblestone" 0] [:body-far [16.5 9.0 16.5] 0.8]]}]}
