@@ -164,13 +164,20 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     if (oldBlock?.stateId !== newBlock?.stateId) changes.set(`${p.x},${p.y},${p.z}`, { x: p.x, y: p.y, z: p.z })
   })
 
+  const nearestFirst = (points, at) => {
+    if (!at) return points
+    const d = p => (p.x - at.x) ** 2 + (p.y - at.y) ** 2 + (p.z - at.z) ** 2
+    return points.map(p => [d(p), p]).sort((a, b) => a[0] - b[0]).map(([, p]) => p)
+  }
+
   // Relight around the queued block changes, writing the differences into the overlay. Returns the keys of columns
   // whose changes were carried to a later flush (they are not written yet).
   const relight = target => {
     const blocked = new Set()
     if (!changes.size) return blocked
     const start = performance.now()
-    const all = [...changes.values()]
+    // nearest the body first: perception reads light through the overlay, so what the body can see must not wait behind a far backlog
+    const all = nearestFirst([...changes.values()], target.entity?.position)
     const queued = all.slice(0, relightMaxPoints)
     changes = new Map()
     // a huge backlog is not boxed in one go (boxFor and the merge cost grow with it): the rest waits for the next flush

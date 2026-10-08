@@ -958,6 +958,30 @@ test('relight: a backlog bigger than relightMaxPoints is only looked at in part 
   assert.equal(fs.existsSync(path.join(worldChunks(dir), '7.0.bin')), true)
 })
 
+// perception reads lightAt through the overlay: a change the body can see must not wait behind far ones queued before it
+test('relight: the changes nearest the body go first, whatever was queued before them', async () => {
+  const torchLight = (view, x) => view.lightOverlay(x >> 4, 0, (65 + 64) >> 4)?.block[((65 + 64) & 15) << 8 | 8 << 4 | (x & 15)]
+  for (const overrides of [{ relightMaxPoints: 1, relightBudgetMs: 1e9 }, { relightBudgetMs: 0 }]) {
+    const columns = Object.fromEntries([0, 1, 2, 3, 4, 5, 6, 7].flatMap(cx => [0, 1].map(cz => [`${cx},${cz}`, new ChunkColumn()])))
+    const bot = fakeBot({ columns })
+    bot.registry = undefined
+    bot.entity.position = new Vec3(8.5, 65, 10.5)
+    const { view } = makeView(bot, overrides)
+    const torch = x => {
+      columns[`${x >> 4},0`].setBlockStateId({ x: x & 15, y: 64, z: 8 }, stateOf('stone'))
+      columns[`${x >> 4},0`].setBlockStateId({ x: x & 15, y: 65, z: 8 }, stateOf('torch'))
+      bot.emit('blockUpdate', { position: new Vec3(x, 65, 8), stateId: AIR }, { position: new Vec3(x, 65, 8), stateId: stateOf('torch') })
+    }
+    torch(120)
+    torch(88)
+    torch(8)
+    await view.flushColumns()
+    await view.idle()
+    assert.equal(torchLight(view, 8), 14, JSON.stringify(overrides))
+    assert.equal(torchLight(view, 120), undefined, JSON.stringify(overrides))
+  }
+})
+
 test('overlay light in a column file decodes to the overlay, and a column without overlay is unchanged', () => {
   const column = makeColumn()
   const args = { column, x: 0, z: 0, t: 1, body: 'Bob', mcVersion: VERSION }
