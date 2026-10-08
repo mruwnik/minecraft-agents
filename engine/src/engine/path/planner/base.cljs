@@ -64,7 +64,7 @@
   #js {:climbUp 0.43 :climbDown 0.33 :jumpClimb 0.5 :open 1.0 :openRedstone 1.5 :openLever 6 :openPlate 0 :besideMagmaColumn 1
        :swimH 0.5 :swimUp 0.3 :swimDown 0.35 :exit 0.6 :current 0.3 :bubbleUp 0.08 :bubbleDown 0.12
        :airSupply 15 :airLimit 12 :airDrain 1 :airGrace 0 :airUsed 0 :maxWaterDrop 64 :dripleaf 0.2 :dripleafRisk 0.5
-       :dropFactor 1 :lethalAir 0
+       :dropFactor 1 :lethalAir 0 :drownSlack 1
        :walkS WALK-S :sprintS SPRINT-S})
 
 (def ^:const BODY 29) ; 1.8 blocks in 1/16, rounded up
@@ -158,8 +158,9 @@
 (def ^:const AIR-REFILL 4) ; seconds of air a second with the head out of water gives back (vanilla: +4 air a tick, -1 under water)
 (def ^:const DROWN-HP 2) ; hp a second with no air left costs (vanilla: 2 every 20 ticks at 0 air)
 (defn drowned-hp
-  "The hp that `hp` of drowning (continuous: DROWN-HP a second) really takes: vanilla ticks it in whole DROWN-HP hits."
-  [hp] (* DROWN-HP (js/Math.floor (/ hp DROWN-HP))))
+  "The hp that `hp` of drowning (continuous: DROWN-HP a second) may take: vanilla deals whole DROWN-HP hits, the first up to
+  a second early (a body already at 0 air) and a swim may run slower than planned, so ceil(seconds + slack) hits (costs.drownSlack)."
+  [slack hp] (if (pos? hp) (* DROWN-HP (js/Math.ceil (+ (/ hp DROWN-HP) slack))) 0))
 (def ^:const LETHAL-S 1e6) ; seconds a lethal drowning costs, and each hp past it: any plan that does not drown wins
 (def ^:const AIR-STEP 1) ; seconds of air that make an arrival at a node already reached worth a record of its own
 (def ^:const DMG-STEP 0) ; hp of damage that make an arrival at a node already reached worth a record of its own (a finite budget: exact)

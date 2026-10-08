@@ -354,13 +354,15 @@
 ;; at health 10 (an hp costs 20 s): a 40-block sealed tunnel (x 12..51) from the start's shaft (x 11) to the goal's (x 52)
 ;; drowns the body even after a breath on the ledge at its top (7 s past the supply, 14 hp); the walkway round by z 20
 ;; is safe but a toll makes it some 500 s dearer
-(defn lethal-dive [walkway]
-  (world (cond-> [[10 64 -2 56 72 22 "stone"]
-                  [11 64 1 11 69 1 "water"] [11 70 1 11 71 1 "air"]
-                  [12 64 1 51 65 1 "water"]
-                  [52 64 1 52 69 1 "water"] [52 70 1 53 71 1 "air"]
-                  [11 70 2 11 71 2 "air"]]
-           walkway (into [[11 70 2 11 71 20 "air"] [12 70 20 52 71 20 "air"] [52 70 2 52 71 19 "air"]]))))
+(defn lethal-dive
+  ([walkway] (lethal-dive walkway 52))
+  ([walkway far] ; far: the x of the goal's shaft (a shorter tunnel drowns less)
+   (world (cond-> [[10 64 -2 56 72 22 "stone"]
+                   [11 64 1 11 69 1 "water"] [11 70 1 11 71 1 "air"]
+                   [12 64 1 (dec far) 65 1 "water"]
+                   [far 64 1 far 69 1 "water"] [far 70 1 (inc far) 71 1 "air"]
+                   [11 70 2 11 71 2 "air"]]
+            walkway (into [[11 70 2 11 71 20 "air"] [12 70 20 52 71 20 "air"] [52 70 2 52 71 19 "air"]])))))
 (defn toll-walk [] {:cells (js/Map. #js [#js [(planner/cell-key 30 70 20) 3000]])})
 (def at-health-10 {:goalFlood 0 :health 10 :damageWeight 20 :costs {:airUsed 12.5 :lethalAir 1}})
 
@@ -386,15 +388,25 @@
   (let [r (run (lethal-dive true) dive-start (near 53 70 1 0) (-> at-health-10 (update :costs dissoc :lethalAir) (assoc :tolls (toll-walk))))]
     (is (found? r))
     (is (some #(= 20 (:z %)) (steps r)) "the long way round")
+    (is (some? (cost r :drown)) "the plan reports its drowning")
     (is (< (cost r :drown) 10) "not drowned")))
 
-(deftest drowning-counts-whole-seconds-as-vanilla-does
-  ;; 17.5 hp of drowning is 8 whole 2 hp ticks (16 hp) in the game: a body of 17 hp lives, so the way is not lethal
-  (let [no-lethal-air #(update % :costs dissoc :lethalAir)
-        r17 (run (lethal-dive false) dive-start (near 53 70 1 0) (-> at-health-10 no-lethal-air (assoc :health 17)))
-        r16 (run (lethal-dive false) dive-start (near 53 70 1 0) (-> at-health-10 no-lethal-air (assoc :health 16)))]
-    (is (found? r17))
-    (is (= "air-lethal" (:reason r16)) "8 ticks kill 16 hp")))
+(def no-lethal-air #(update % :costs dissoc :lethalAir))
+
+(deftest drowning-counts-its-hits-with-a-margin
+  ;; 17.5 hp of drowning is 8.75 s past the supply: 8 exact 2 hp hits, but the counter may already be below 0 (a body at
+  ;; oxygen 0) or the swim slower than planned, so it counts ceil(8.75 + drownSlack 1) = 10 hits (20 hp)
+  (let [lethal (fn [opts] (run (lethal-dive false) dive-start (near 53 70 1 0) (-> at-health-10 no-lethal-air (merge opts))))]
+    (is (= "air-lethal" (:reason (lethal {:health 17}))) "9 hits can kill 17 hp")
+    (is (= "air-lethal" (:reason (lethal {:health 20}))) "the margin's 10 hits kill 20 hp")
+    (is (found? (lethal {:health 19 :costs {:airUsed 12.5 :drownSlack 0}})) "drownSlack 0: ceil(8.75) = 9 hits leave 1 hp")
+    (is (= "air-lethal" (:reason (lethal {:health 18 :costs {:airUsed 12.5 :drownSlack 0}}))))))
+
+(deftest a-drowning-with-a-real-margin-is-still-planned
+  ;; a 30-block tunnel: about 3.75 s past the supply, counted as ceil(3.75 + 1) = 5 hits (10 hp)
+  (let [r (run (lethal-dive false 42) dive-start (near 43 70 1 0) (-> at-health-10 no-lethal-air (assoc :health 12)))]
+    (is (found? r))
+    (is (< 0 (cost r :drown) 10) "it drowns some, short of the counted 10 hp")))
 
 (deftest a-lethal-way-to-air-is-refused-by-default
   (let [r (run (lethal-dive false) dive-start (near 53 70 1 0) (update at-health-10 :costs dissoc :lethalAir))]

@@ -209,7 +209,8 @@
       (.siftUp s (aget (.-heap-pos s) node) node)))
 
   ;; the seconds drowning hp costs: drown-prices (the first k hp cost drown-prices[k], between and past them linear; nil:
-  ;; damage-weight each), and LETHAL-S more, and LETHAL-S each hp past it, from lethal-hp on (a lethal plan loses to any other)
+  ;; damage-weight each), and LETHAL-S more, and LETHAL-S each counted hp past it (drowned-hp, the refusal's count), from
+  ;; lethal-hp on (a lethal plan loses to any other); below it the price is of the hp itself
   (drownCost [s hp]
     (let [^js p (.-drown-prices s)
           n (if (some? p) (dec (.-length p)) 0)
@@ -217,9 +218,10 @@
                   (* hp (.-damage-weight s))
                   (let [k (js/Math.min (dec n) (js/Math.floor hp))]
                     (+ (aget p k) (* (- hp k) (- (aget p (inc k)) (aget p k))))))]
-      (if (>= (drowned-hp hp) (.-lethal-hp s))
-        (+ price LETHAL-S (* LETHAL-S (- hp (.-lethal-hp s))))
-        price)))
+      (let [counted (drowned-hp (.-drown-slack s) hp)]
+        (if (>= counted (.-lethal-hp s))
+          (+ price LETHAL-S (* LETHAL-S (- counted (.-lethal-hp s))))
+          price))))
 
   ;; a record of its own for a node: unless the node budget is spent
   (insertNode [s x y z h move parent-node sec risk dark g slow-to corner shape region key slot]

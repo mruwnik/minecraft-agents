@@ -134,7 +134,7 @@
             false)
 
         (and under ^boolean (.-no-lethal s) (> use (.-c-air-drown s))
-             (>= (drowned-hp (+ (if (>= i 0) (aget (.-drowns s) i) 0) drown)) (.-lethal-hp s)))
+             (>= (drowned-hp (.-drown-slack s) (+ (if (>= i 0) (aget (.-drowns s) i) 0) drown)) (.-lethal-hp s)))
         (do (set! (.-lethal-seen s) true)
             false)
 
