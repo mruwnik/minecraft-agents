@@ -562,6 +562,28 @@ test('runNightBatches: a failed case reruns alone in its own batch after the oth
   assert.deepEqual(splitForms(r.text).map(summarize).map((s) => [s.id, s.status]), [['a/1', 'pass'], ['a/2', 'flaky'], ['b/1', 'pass']])
   assert.equal(r.code, 0)
 })
+test('runNightBatches: a case inconclusive for overrunning dawn reruns alone and keeps its first reason; other inconclusive cases do not rerun', async () => {
+  const log = []
+  const over = ', :overran true, :first-why "boom"'
+  const run = async (unit) => {
+    log.push(unit.id)
+    const again = log.filter((x) => x === unit.id).length > 1
+    if (unit.id === 'a/1') return { code: 1, text: vec(form(unit.id, again ? 'pass' : 'inconclusive', 1, again ? '' : over)) }
+    return { code: 1, text: vec(form(unit.id, 'inconclusive')) }
+  }
+  const r = await runNightBatches({ batches: [{ kind: 'natural', ids: ['a/1', 'a/2'] }], workers: workerSpecs(2, 19, 'P', 0), runUnit: run, retries: 1 })
+  assert.deepEqual(log, ['a/1', 'a/2', 'a/1'])
+  assert.deepEqual(splitForms(r.text).map(summarize).map((s) => [s.id, s.status]), [['a/1', 'flaky'], ['a/2', 'inconclusive']])
+  assert.match(r.text, /:first-failure .*:first-why "boom"/)
+})
+test('runNightBatches: an overrun that overruns again settles inconclusive and the event says so', async () => {
+  const ev = []
+  const run = async (unit) => ({ code: 1, text: vec(form(unit.id, 'inconclusive', 1, ', :overran true, :first-why "boom"')) })
+  const r = await runNightBatches({ batches: [{ kind: 'natural', ids: ['a/1'] }], workers: workerSpecs(1, 19, 'P', 0), runUnit: run, retries: 2, total: 1, emit: (e) => ev.push(e) })
+  assert.equal(splitForms(r.text).map(summarize)[0].status, 'inconclusive')
+  assert.deepEqual(ev.filter((e) => e.event === 'result').map((e) => e.outcome), ['inconclusive'])
+  assert.equal(ev.find((e) => e.event === 'progress').retries, 2)
+})
 test('runNightBatches: a case with no result is an error; a failure twice stays failed; code 1', async () => {
   const run = async (unit) => (unit.id === 'a/1' ? { code: 3, text: null } : { code: 1, text: vec(form(unit.id, 'fail')) })
   const r = await runNightBatches({ batches: [{ kind: 'natural', ids: ['a/1', 'a/2'] }], workers: workerSpecs(2, 19, 'P', 0), runUnit: run, retries: 1 })

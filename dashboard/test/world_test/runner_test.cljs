@@ -1234,4 +1234,7 @@
             (r/night-overran? b {:time :night :act []} 100)
             (r/night-overran? b {:time :night-exclusive :act [[:time-set 1000]]} 100)]))
     (is (= [:inconclusive :pass]
-           [(:status (r/mark-night-overran {:status :fail} true)) (:status (r/mark-night-overran {:status :pass} true))]))))
+           [(:status (r/mark-night-overran {:status :fail} true)) (:status (r/mark-night-overran {:status :pass} true))]))
+    (is (= {:overran true :first-why "boom"}
+           (select-keys (r/mark-night-overran {:status :fail :why "boom"} true) [:overran :first-why]))
+        "the pool reruns an :overran result; the first failure reason is kept")))

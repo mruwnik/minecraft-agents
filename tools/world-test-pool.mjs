@@ -106,7 +106,7 @@ export const failSig = (formText) => {
   return valueOf(formText, ':why') ?? ''
 }
 const withExtra = (formText, extra) => `${formText.slice(0, -1)} ${extra}}`
-const OUTCOMES = { pass: 'passed', fail: 'failed', error: 'error', skipped: 'skipped', flaky: 'flaky' }
+const OUTCOMES = { pass: 'passed', fail: 'failed', error: 'error', skipped: 'skipped', flaky: 'flaky', inconclusive: 'inconclusive' }
 const resultEvent = (formText) => {
   const s = summarize(formText)
   const why = valueOf(formText, ':why') ?? valueOf(formText, ':evidence')
@@ -227,6 +227,8 @@ export const createReaper = (rm) => {
 
 // ---- scheduling
 const failed = (s) => s.status === 'fail'
+// a night-batch case the runner marked :inconclusive because the night ended during it: worth a rerun alone, like a failure
+const overran = (formText) => summarize(formText).status === 'inconclusive' && valueOf(formText, ':overran') === 'true'
 // id -> failSig for the ids whose last recorded result (the texts in order, later ones win) is a fail: a rerun that fails on the same check tells nothing new
 export const knownFailures = (previousTexts) => {
   const last = new Map()
@@ -407,8 +409,8 @@ export const runNightBatches = async ({ batches, workers, runUnit, retries = 1, 
   const failing = []
   for (const batch of batches) {
     for (const [id, form] of await runBatch(batch.ids, batch.barrier)) {
-      if (!failed(summarize(form)) || retries <= 0) settle(id, form)
-      else if (known.get(id) === failSig(form)) settle(id, withExtra(form, ':known-failure true'))
+      if (!(failed(summarize(form)) || overran(form)) || retries <= 0) settle(id, form)
+      else if (failed(summarize(form)) && known.get(id) === failSig(form)) settle(id, withExtra(form, ':known-failure true'))
       else failing.push([id, form])
     }
   }
@@ -420,7 +422,7 @@ export const runNightBatches = async ({ batches, workers, runUnit, retries = 1, 
       const [, form] = (await runBatch([id]))[0]
       last = form
       flaky = summarize(form).status === 'pass'
-      if (!flaky && !failed(summarize(form))) break
+      if (!flaky && !failed(summarize(form)) && !overran(form)) break
     }
     settle(id, flaky ? withStatus(last, 'flaky', `:first-failure ${first}`) : last)
   }

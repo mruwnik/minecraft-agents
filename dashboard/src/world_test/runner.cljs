@@ -517,7 +517,7 @@
   "A failed result becomes :inconclusive when its night batch case ended after dawn (the pool reruns it alone)."
   [r overran?]
   (if (and overran? (= :fail (:status r)))
-    (assoc r :status :inconclusive :why "the night ended during the batch case (dawn); rerun it alone")
+    (assoc r :status :inconclusive :overran true :first-why (:why r) :why "the night ended during the batch case (dawn); rerun it alone")
     r))
 
 ;; ------------------------------------------------------------------ plot leases (parallel runners)
