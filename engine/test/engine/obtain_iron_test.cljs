@@ -77,6 +77,15 @@
           (is (empty? (f/events-of s :obtain.exploring)) "no surface search")
           (is (seq (mine-events s)) "the mine child ran"))))))
 
+(deftest cobblestone-unseen-with-explore-goes-to-the-mine-not-a-surface-walk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (f/start (ore-world {} [{:name "wooden_pickaxe" :count 1}]) [f/own-zone])]
+          (await (obtain! s {:item "cobblestone" :count 3 :how #{:gather} :explore true} 6))
+          (is (empty? (f/events-of s :obtain.exploring)) "no surface search")
+          (is (seq (mine-events s)) "the mine child ran"))))))
+
 (deftest an-iron-ingot-with-raw-iron-carried-is-smelted-by-a-smelt-child
   (async done
     (tu/run-async done
