@@ -37,12 +37,17 @@
    :first-s (settings/get settings :engine.backoff/first-s)
    :max-s (settings/get settings :engine.backoff/max-s)})
 
+(defn declared-class
+  "The class cfg's :progress :failure :neutral sets declare status in, else nil."
+  [cfg status]
+  (some #(when (contains? (get cfg %) status) %) status-keys))
+
 (defn status-class
   "The class of act status, :progress :neutral or :failure: as cfg's declared :progress :failure :neutral sets say
   (config keeps them apart, the most specific level winning), else the settings' progress and neutral sets; any
   other status is a failure."
   [cfg status]
-  (or (some #(when (contains? (get cfg %) status) %) status-keys)
+  (or (declared-class cfg status)
       (cond (contains? (settings/get settings :engine.backoff/neutral) status) :neutral
             (contains? (settings/get settings :engine.backoff/progress) status) :progress
             :else :failure)))
@@ -70,19 +75,21 @@
        (= :neutral (status-class cfg status))
        (and (= :moveTo act) (failure? cfg status) (some? moved) (>= moved (settings/get settings :engine.backoff/moved-min)))
        (and (= :walk act)
-            (or (= "partial" status)
+            (or (and (= "partial" status) (nil? (declared-class cfg status)))
                 (and (failure? cfg status) (some? moved) (>= moved (settings/get settings :engine.backoff/walk-moved-min))))))))
 
 (defn validate!
   "Throws unless cfg is nil, false (off) or a map of :after :first-s :max-s to positive numbers and of
-  :progress :failure :neutral to sets of act statuses (strings)."
+  :progress :failure :neutral to sets of act statuses (strings), no status in two of them."
   [cfg]
   (when-not (or (nil? cfg) (false? cfg)
                 (and (map? cfg)
                      (every? (fn [[k v]] (if (some #{k} status-keys)
                                            (and (set? v) (every? string? v))
                                            (and (contains? (defaults) k) (number? v) (pos? v))))
-                             cfg)))
+                             cfg)
+                     (let [all (mapcat #(get cfg %) status-keys)]
+                       (= (count all) (count (set all))))))
     (throw (ex-info (str ":backoff must be false or a map of " (pr-str (keys (defaults)))
                          " to positive numbers and of " (pr-str status-keys) " to sets of statuses, not " (pr-str cfg))
                     {:backoff cfg}))))
@@ -102,10 +109,11 @@
 (defn config
   "The effective config of levels, least specific first (engine, job def, entry);
   nil levels are skipped, a map is merged over what is below, false means off
-  (returned as false)."
+  (returned as false). A map of only status classes leaves it off; one with :after :first-s or :max-s turns it on."
   [& levels]
   (reduce (fn [cfg l]
             (cond (false? l) false
+                  (and (false? cfg) (not-any? #(contains? l %) (keys (defaults)))) false
                   (map? l) (merge-level (or cfg (defaults)) l)
                   :else cfg))
           (defaults) levels))

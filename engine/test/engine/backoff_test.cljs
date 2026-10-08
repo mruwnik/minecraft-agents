@@ -98,7 +98,18 @@
     [{:after 5} {:max-s 10} {:after 2}] {:after 2 :first-s 1 :max-s 10}
     [nil nil false] false
     [false nil nil] false
-    [false nil {:after 2}] {:after 2 :first-s 1 :max-s 30}))
+    [false nil {:after 2}] {:after 2 :first-s 1 :max-s 30}
+    [false nil {:progress #{"busy"}}] false
+    [false {:failure #{"ok"}} {:neutral #{"x"}}] false
+    [false {:progress #{"busy"}} {:after 2}] {:after 2 :first-s 1 :max-s 30}))
+
+(deftest a-walk-partial-follows-a-declaration-and-is-neutral-otherwise
+  (are [cfg counted failed] (= {:acts counted :failed failed}
+                               (select-keys (backoff/note-act backoff/empty-round :walk "partial" nil 0 cfg) [:acts :failed]))
+    nil 0 0
+    {:failure #{"partial"}} 1 1
+    {:progress #{"partial"}} 1 0
+    {:neutral #{"partial"}} 0 0))
 
 (deftest the-delay-starts-at-first-doubles-and-is-capped
   (let [cfg (backoff/config)
@@ -133,7 +144,8 @@
     {:progress #{"busy"}} {:after 9 :failure #{"ok"} :neutral #{}})
   (are [cfg] (thrown? js/Error (backoff/validate! cfg))
     true {:after 0} {:after "3"} {:bogus 1} {:max-s -1} 5
-    {:progress "busy"} {:failure #{:ok}} {:neutral ["busy"]}))
+    {:progress "busy"} {:failure #{:ok}} {:neutral ["busy"]}
+    {:progress #{"busy"} :failure #{"busy"}} {:failure #{"a" "b"} :neutral #{"b"}}))
 
 ;; ---------------------------------------------------------------- through the engine
 

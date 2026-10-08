@@ -443,7 +443,8 @@ Listed jobs are never backed off.
 
 - `act!` classifies each act result: a status in `:engine.backoff/progress` (settings) is progress, one in
   `:engine.backoff/neutral` counts for neither, anything else is a failure. A `:backoff` declaration may move statuses:
-  `{:progress #{"busy"} :failure #{..} :neutral #{..}}`. `look`, `wait`, `equip` and `steer` are neutral. A walk round
+  `{:progress #{"busy"} :failure #{..} :neutral #{..}}` (a status in one class only; a declaration also beats the
+  walk `partial` rule; a status-only map never turns a `:backoff false` back on). `look`, `wait`, `equip` and `steer` are neutral. A walk round
   (`jobs.lib.near`) counts as one `:walk` act: `arrived` is progress, `partial` and long detours are neutral, a blocked
   walk is a failure.
 - A **fruitless run** made no progress and every act failed, or it declined or stopped. Cut runs and throws do not count.
