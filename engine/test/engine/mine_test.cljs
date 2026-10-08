@@ -1441,13 +1441,53 @@
           (is (empty? (events-of s :mine.not-home)) "ending beside the hole is the normal end")
           (is (let [[x y z] (feet s)] (and (<= (abs x) 1) (<= (abs z) 1) (>= y 64))) "the body ends on a standable cell beside the start"))))))
 
-(deftest an-unseen-start-floor-is-walked-home-by-go-to-not-moveTo
+(defn spy-go-to
+  "s with its engine's go-to job spied: [s' atom-of-the-args-of-each-go-to-round]."
+  [s]
+  (let [go-tos (atom [])
+        real (get-in (:eng s) [:jobs 'jobs.movement.go-to])
+        spy (assoc real :round (fn [c] (swap! go-tos conj (:args c)) ((:round real) c)))]
+    [(assoc s :eng (assoc (:eng s) :jobs (assoc (:jobs (:eng s)) 'jobs.movement.go-to spy))) go-tos]))
+
+(defn home-go-tos "The go-to calls that aim at the start cell or a cell next to it: the walk home."
+  [go-tos]
+  (filterv #(let [{:keys [x y z]} (:pos %)] (and (= 64 y) (<= (+ (abs (- x 0.5)) (abs (- z 0.5))) 1))) go-tos))
+
+(deftest the-walk-home-from-a-patch-is-one-go-to-onto-the-start-cell
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start {:world {:blocks floor}})]
-          (core/submit! (:eng s) (spec {:block "dirt" :count 1 :mend false}) {})
-          (await (run-ticks s 80))
-          (is (empty? (filter #(= 0 (:range %)) (map :data (mem/entries (mem/view (:store (:eng s))) :moved))))
-              "no raw range-0 moveTo")
+        (let [[s go-tos] (spy-go-to (start {:world {:blocks (merge wide-floor sand-patch)}}))]
+          (core/submit! (:eng s) (spec {:block "sand" :count 6 :mend false}) {})
+          (await (run-ticks s 120))
+          (is (seq (home-go-tos @go-tos)) "home by a go-to child, not a raw moveTo")
+          (is (= #{0} (set (map :range (home-go-tos @go-tos)))) "onto the start cell: range 0 on every round of the walk")
+          (is (= [0 64 0] (feet s)))
           (is (finished? s)))))))
+
+(deftest the-go-to-args-of-the-walk-home-stay-the-same-while-the-walk-goes-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[s go-tos] (spy-go-to (start {:world {:blocks {"0,63,0" "sand" "0,62,0" "lava"}}}))]
+          (core/submit! (:eng s) (spec {:block "sand" :count 1 :tunnel-length 0}) {})
+          (await (run-ticks s 30))
+          (is (seq (home-go-tos @go-tos)))
+          (is (= 1 (count (set (home-go-tos @go-tos)))) "one set of args for the whole walk home"))))))
+
+(deftest beside-counts-only-a-standable-cell-next-to-the-start-like-go-to-range-1
+  (let [start {:x 0 :y 64 :z 0}]
+    (is (mine/beside? {:x 1 :y 64 :z 0} start))
+    (is (mine/beside? {:x 0 :y 64 :z -1} start))
+    (is (mine/beside? {:x 0 :y 65 :z 0} start) "above the start is standable")
+    (is (not (mine/beside? {:x 0 :y 63 :z 0} start)) "inside the dug hole is not home")
+    (is (not (mine/beside? {:x 1 :y 63 :z 0} start)))
+    (is (not (mine/beside? {:x 1 :y 64 :z 1} start)) "a diagonal is out of go-to's range 1")
+    (is (not (mine/beside? {:x 2 :y 64 :z 0} start)))))
+
+(deftest a-start-floor-felt-at-the-start-decides-when-it-is-not-seen-now
+  (is (mine/solid-floor? nil "dirt") "unseen now: the felt floor counts")
+  (is (not (mine/solid-floor? nil nil)) "never known: no place to aim at")
+  (is (not (mine/solid-floor? nil "air")))
+  (is (not (mine/solid-floor? "air" "dirt")) "seen open now wins over the felt floor")
+  (is (mine/solid-floor? "dirt" "air")))

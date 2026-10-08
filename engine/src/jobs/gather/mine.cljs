@@ -107,8 +107,8 @@
   target off the ground remains in :radius. Otherwise it ends :spent-on-mend, keeping the earlier reason in
   :dig-reason.
 
-  Every job ends, after the mend, by a go-to walk back to the cell it started on, or beside it when its floor is open (warn mine.not-home when the walk
-  does not arrive; the job then ends {:status :stopped :reason :not-home}, the ore kept, :dig-reason the earlier reason).
+  Every job ends, after the mend, by a go-to walk back to the cell it started on, or onto a seen standable cell beside it when its
+  floor is open or unseen (warn mine.not-home when the walk does not arrive; the job then ends {:status :stopped :reason :not-home}, the ore kept, :dig-reason the earlier reason).
 
   Zones and plans (jobs.lib.access.rules, through jobs.lib.access): a target must be a dig the rules permit,
   with only :accept hazards, when chosen and again right before the dig. A cell in a zone that bars :dig, or in
@@ -882,29 +882,49 @@
   (when (seq (:left (ctx/mem c))) (still-left! c))
   (finish! c))
 
-(defn near-cell?
-  "Whether the body's cell is within one cell of cell (every axis)."
-  [c cell]
-  (let [here (cell-of (u/self-pos c))]
-    (every? #(<= (abs (- (% here) (% cell))) 1) [:x :y :z])))
+(defn beside?
+  "Whether here is a cell go-to's range 1 accepts as next to the start cell: one step along one axis, and never below it (that is the
+  hole the digging left)."
+  [here start]
+  (and (>= (:y here) (:y start))
+       (<= (reduce + (map #(let [d (- (% here) (% start))] (* d d)) [:x :y :z])) 1)))
 
-(defn floor-solid?
-  "Whether the floor under the start cell is solid: as seen now (a hole the mend or the descent left shows open), else as felt under
-  the feet at the start; an unknown floor is no place to aim a walk at."
-  [c {:keys [x y z]}]
-  (let [name (or (u/seen-name (:primitives c) {:x x :y (dec y) :z z}) (:start-floor (ctx/mem c)))]
+(defn solid-floor?
+  "Whether the floor under the start cell is solid: as seen now (seen), else as felt at the start (felt); an unknown floor is no place
+  to aim a walk at."
+  [seen felt]
+  (let [name (or seen felt)]
     (boolean (and name (not (not-solid name))))))
 
-(defn ^:async home-by-go-to!
-  "The way home through a go-to child, with its escalation: onto the start cell when its floor is seen solid, else (a hole the mend
-  left, or a floor never seen) to a standable cell beside it (range 1). :continue while the walk goes on, else the job ends."
+(defn home-goal
+  "Where this walk home goes, decided once: {:cell c :range 0} the start cell when its floor is solid (seen now, else felt at the
+  start); else, a hole the mend left or a floor never seen, a seen standable cell next to it ({:range 0}: the body must not end in
+  the hole), else {:cell start :range 1}."
   [c start]
-  (let [exact? (boolean (floor-solid? c start))
-        arrived? #(if exact? (= (cell-of (u/self-pos c)) start) (near-cell? c start))
+  (let [seen #(u/seen-name (:primitives c) %)
+        below (fn [{:keys [x y z]}] {:x x :y (dec y) :z z})
+        solid-at? #(solid-floor? (seen (below %)) nil)
+        open-at? #(some-> (seen %) not-solid boolean)
+        beside (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
+                     :let [cell (-> start (update :x + dx) (update :z + dz))]
+                     :when (and (solid-at? cell) (open-at? cell))]
+                 cell)]
+    (cond
+      (solid-floor? (seen (below start)) (:start-floor (ctx/mem c))) {:cell start :range 0}
+      (seq beside) {:cell (first beside) :range 0}
+      :else {:cell start :range 1})))
+
+(defn ^:async home-by-go-to!
+  "The way home through a go-to child, with its escalation, to the goal home-round! decided (mem :home-goal). :continue while the walk
+  goes on, else the job ends."
+  [c start]
+  (let [{:keys [cell range]} (:home-goal (ctx/mem c))
+        arrived? #(let [here (cell-of (u/self-pos c))] (if (zero? range) (= here cell) (beside? here start)))
         r (if (arrived?)
             :arrived
             (await (ctx/call-child c :home 'jobs.movement.go-to
-                                   {:pos {:x (+ (:x start) 0.5) :y (:y start) :z (+ (:z start) 0.5)} :range (if exact? 0 1) :escalate true :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))})))]
+                                   {:pos {:x (+ (:x cell) 0.5) :y (:y cell) :z (+ (:z cell) 0.5)} :range range :escalate true :zone-tolls true
+                                    :ignore-zones? (boolean (:ignore-zones? (:args c)))})))]
     (if (= :continue r)
       :continue
       (home-done! c (arrived?)))))
@@ -915,7 +935,7 @@
   [c]
   (let [{:keys [start homing]} (ctx/mem c)]
     (when-not homing
-      (ctx/update-mem! c assoc :homing true)
+      (ctx/update-mem! c assoc :homing true :home-goal (home-goal c start))
       (ctx/update-mem! c assoc-in [:tunnel :end] (access/cell (cell-of (u/self-pos c)))))
     (await (home-by-go-to! c start))))
 
