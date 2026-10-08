@@ -32,20 +32,24 @@
 
 (defn eye-reach!
   "The fake measures a dig from the feet to a cell corner; the real body from the eye to the centre. Digs here run with
-  the body lifted to its eye height, as the planner counts reach. Cut logs fall to the ground at once."
-  [p]
+  the body lifted to its eye height, as the planner counts reach. Cut logs fall to the ground at once, or with lose-logs?
+  vanish (none to carry)."
+  ([p] (eye-reach! p false))
+  ([p lose-logs?]
   (.override (.-world p) "dig"
              (fn ^:async f [token args impl]
                (let [st (fake/state p)]
                  (swap! st update-in [:self :pos 1] + eye-height)
                  (let [r (await (impl token args))]
                    (swap! st update-in [:self :pos 1] - eye-height)
-                   (swap! st update :entities (fn [es] (mapv #(if (and (= "item" (:kind %)) (= "oak_log" (get-in % [:item :name])) (= 6 (first (:pos %)))) (assoc-in % [:pos 1] 64) %) es)))
-                   r)))))
+                   (swap! st update :entities (fn [es] (if lose-logs?
+                                                         (vec (remove #(and (= "item" (:kind %)) (= "oak_log" (get-in % [:item :name]))) es))
+                                                         (mapv #(if (and (= "item" (:kind %)) (= "oak_log" (get-in % [:item :name])) (= 6 (first (:pos %)))) (assoc-in % [:pos 1] 64) %) es))))
+                   r))))))
 
 (defn ^:async fell [spec args n]
   (let [s (fm/start spec {})
-        _ (eye-reach! (:p s))
+        _ (eye-reach! (:p s) (:lose-logs? spec))
         out (await (tu/child-outcome (:eng s) 'jobs.forestry.fell-tree args n))]
     (assoc s :out out)))
 
@@ -87,6 +91,15 @@
           (is (pos? (count (h/calls p "jumpPlace"))) "a pillar was built")
           (is (= [] (ledger/open-entries (mem/view (:store eng)))) "ledger empty")
           (is (= [] (log-pillar-cells p)) "no pillar log left"))))))
+
+(deftest no-logs-or-blocks-carried-with-fetch-false-waits-and-places-nothing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p out]} (await (fell (assoc tall :inventory [] :lose-logs? true) {:radius 10 :fetch false} 60))]
+          (is (= :not-done out))
+          (is (= [] (h/calls p "jumpPlace")))
+          (is (= [] (pillar-cells p))))))))
 
 (deftest a-tree-in-a-zone-that-bars-placing-is-declined-without-a-pillar
   (async done
@@ -210,6 +223,38 @@
           (is (= (set (range 64 72)) (set (dug-ys p))) "every log dug")
           (is (= 20 (dirt-in-chest s)) "no dirt fetched while logs are carried")
           (is (= [] (log-pillar-cells p)) "no pillar block left"))))))
+
+(deftest no-logs-carried-the-pillars-height-of-dirt-is-fetched-from-a-seen-chest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (fell (assoc (chest-world [{:name "dirt" :count 20}]) :lose-logs? true) {:radius 10} 300))
+              {:keys [p out]} s]
+          (is (= {:base {:x 6 :y 64 :z 0} :logs 8 :axe :none-found} out))
+          (is (= (set (range 64 72)) (set (dug-ys p))) "every log dug")
+          (is (< 1 (- 20 (dirt-in-chest s))) "the chest gave the pillar's height, not one block")
+          (is (= [] (pillar-cells p)) "no pillar block left"))))))
+
+(deftest a-shortfall-of-logs-asks-only-for-the-missing-blocks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (assoc (chest-world [{:name "dirt" :count 20}]) :lose-logs? true)
+              none (await (fell world {:radius 10} 300))
+              one (await (fell (assoc world :inventory [{:name "oak_log" :count 1}]) {:radius 10} 300))
+              given #(- 20 (dirt-in-chest %))]
+          (is (pos? (given one)) "dirt was fetched for the shortfall")
+          (is (= 1 (- (given none) (given one))) "one carried log cuts the fetch by one"))))))
+
+(deftest another-players-fresh-log-near-the-tree-is-not-picked-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [ann {:id 99 :name "item" :kind "item" :visible true :pos [8.5 64.02 0.5] :item {:name "oak_log" :count 1}
+                   :spawn {:at (+ (js/Date.now) 1000000) :pos [8.5 64.02 0.5] :player {:name "Ann" :pos [8.5 62.7 0.5]}}}
+              {:keys [p out]} (await (fell (assoc tall :entities [ann]) {:radius 10} 300))]
+          (is (= 8 (:logs out)))
+          (is (some #(= 99 (:id %)) (:entities @(fake/state p))) "her log is still on the ground"))))))
 
 (deftest a-log-over-hidden-lava-is-dug-and-the-lava-sealed
   (async done

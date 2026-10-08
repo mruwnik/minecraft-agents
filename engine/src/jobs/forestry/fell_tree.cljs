@@ -2,6 +2,7 @@
   (:require [clojure.string :as str]
             [engine.args :as a]
             [engine.ctx :as ctx]
+            [engine.settings :as settings]
             [jobs.lib.child :as child]
             [jobs.lib.watch :as watch]
             [jobs.lib.blocks :as blocks]
@@ -12,6 +13,7 @@
             [jobs.lib.gate :as gate]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.look :as look]
+            [jobs.lib.loose :as loose]
             [jobs.lib.trees :refer [axe-worth-fetching? axe-fetch-limits scan-logs tree-near trees-near tree-at logs-at unreachable-set debts replant-kind
                                           replant-policy default-radius max-partials dig-reach log-name? log-names]]
             [jobs.lib.util :as u]
@@ -182,9 +184,8 @@
   "Blocks from a tree's base the search for the tree to fell counts as reaching it: approach!'s looser range."
   3)
 
-(def drop-radius
-  "Blocks round the base the cut logs are picked up from before a pillar is built."
-  6)
+(a/defargs settings
+  {::drop-radius {:default 6 :doc "Blocks round the base the cut logs are picked up from before a pillar is built." :spec (a/num-in 0 nil)}})
 
 (defn candidates
   "The trees the job may fell, nearest in a line first (lazily): the one at :at (none once marked unreachable), else
@@ -272,7 +273,13 @@
   "The blocks the pillar is built from: dirt and cobblestone, then every kind of log carried."
   [c]
   (let [have (pl/carried (:primitives c))]
-    (into pillar-items (filter #(and (pos? (get have % 0)) (re-find #"_(log|stem)$" %)) (sort (keys have))))))
+    (into pillar-items (filter #(and (pos? (get have % 0)) (log-name? %)) (sort (keys have))))))
+
+(defn logs-carried
+  "How many logs are carried."
+  [c]
+  (let [have (pl/carried (:primitives c))]
+    (reduce + (map #(get have % 0) (remove (set pillar-items) (pillar-blocks c))))))
 
 (defn blocks-carried
   "How many pillar blocks (dirt, cobblestone, logs) are carried."
@@ -281,11 +288,12 @@
     (reduce + (map #(get have % 0) (pillar-blocks c)))))
 
 (defn pillar-problem
-  "The wait {:reason :need :any-of :count} while a planned pillar is not begun and fewer blocks than its height are carried."
+  "The wait {:reason :need :any-of :count} while a planned pillar is not begun and fewer blocks than its height are
+  carried; :count is the dirt or cobblestone wanted beside the logs carried."
   [c]
   (let [{:keys [phase plan]} (:pillar (ctx/mem c))]
     (when (and (= :walk phase) (:height plan) (< (blocks-carried c) (:height plan)))
-      {:reason :need :any-of pillar-items :count (:height plan)})))
+      {:reason :need :any-of pillar-items :count (- (:height plan) (logs-carried c))})))
 
 (defn ^:async start-pillar!
   "The next log is out of reach from the ground: plan a stand or a pillar for the highest logs and remember it. A
@@ -302,13 +310,25 @@
                 (mark-unreachable! c)))
     :again))
 
+(defn own-log-drops
+  "The ids of the logs lying within :drop-radius of the base that jobs.lib.loose lets the body take (not another
+  player's throw, not in a zone that refuses taking)."
+  [c base]
+  (let [r (settings/get settings ::drop-radius)]
+    (->> (loose/candidates (:primitives c) (ctx/view c) (:world (:engine c)) {:radius (+ r (u/dist base (u/self-pos c))) :always log-names} (:root c))
+         (filter #(and (log-name? (some-> (.-item %) .-name)) (<= (u/dist base (u/pos-of (.-pos %))) r)))
+         (mapv #(.-id %)))))
+
 (defn ^:async pillar-collect!
-  "Pick up the logs cut so far (they are the pillar's blocks when no dirt is carried): a collect-drops child round the
-  base, one call. A collect that finds nothing is no failure."
+  "Pick up the logs cut so far (they are the pillar's blocks when no dirt is carried): a collect-drops child for the
+  ones lying round the base that the body may take, one call. Finding none is no failure."
   [c]
   (let [base (:base (ctx/mem c))
-        r (await (child/run! c :pcollect 'jobs.forestry.collect-drops
-                             {:radius drop-radius :filter log-names :near base :search 0 :want 0}))]
+        ids (own-log-drops c base)
+        r (if (seq ids)
+            (await (child/run! c :pcollect 'jobs.forestry.collect-drops
+                               {:radius (settings/get settings ::drop-radius) :ids ids :near base :search 0 :want 0}))
+            :done)]
     (if (= :continue r)
       :continue
       (do (ctx/update-mem! c assoc-in [:pillar :phase] :walk) :again))))
