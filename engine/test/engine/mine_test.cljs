@@ -1103,6 +1103,25 @@
           (is (nil? (get (inv s) "coal")))
           (is (empty? (events-of s :mine.no-torches))))))))
 
+(deftest coal-and-a-log-are-crafted-into-sticks-and-torches
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "iron_ore" :count 1 :direction "east" :tunnel-length 12 :mend false}
+                                 (torch-world [{:name "iron_pickaxe" :count 1} {:name "coal" :count 1} {:name "oak_log" :count 1}]) 300))]
+          (is (= [0 10] (torch-xs s)) "the first one hung")
+          (is (pos? (get (inv s) "torch" 0)))
+          (is (empty? (events-of s :mine.no-torches))))))))
+
+(deftest fetch-false-with-coal-and-a-log-but-no-stick-leaves-the-tunnel-dark
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "iron_ore" :count 1 :direction "east" :tunnel-length 12 :mend false :fetch false}
+                                 (torch-world [{:name "iron_pickaxe" :count 1} {:name "coal" :count 1} {:name "oak_log" :count 1}]) 300))]
+          (is (= [] (torch-xs s)))
+          (is (= 1 (count (events-of s :mine.no-torches)))))))))
+
 (deftest no-torches-and-no-materials-keeps-mining-with-one-event
   (async done
     (tu/run-async done

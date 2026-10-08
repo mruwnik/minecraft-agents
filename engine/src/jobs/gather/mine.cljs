@@ -91,7 +91,7 @@
   (none within 4 of an earlier branch torch). The strip tunnel hangs a torch (jobs.access.tunnel/torch-at: a wall torch in the head cell, else a floor
   torch) behind the body at its first step, then every :torch-interval steps, and at the cut's end when none hangs
   within 4 blocks of it; 0 hangs none. Torches are the body's own and stay: nothing takes them back. Under 2
-  carried with a coal or charcoal and a stick, the torch craft is run as a child (4 torches). With no torch and
+  carried with a coal or charcoal and a stick or logs or planks (sticks are crafted; :fetch is passed on), the torch craft is run as a child (4 torches). With no torch and
   nothing to craft from, one info mine.no-torches (per tunnel and per branch) and the dig goes on dark (it tries again at the next torch
   step, after more coal or sticks are picked up). A place the rules refuse, or that fails, or a branch dig straight above or below the line (:no-site), is an info
   mine.torch-left-out {:cell :reason}.
@@ -153,6 +153,8 @@
    ::pickup-grace-ms {:default 400 :doc "How long the body waits for a drop to be picked up, in ms." :spec (a/int-in 0 nil)}
    ::end-torch-gap {:default 4 :doc "A cut's end gets a torch when the last hangs this many steps back or more." :spec (a/int-in 0 nil)}
    ::branch-gap {:default 4 :doc "A dig this far from the tunnel line (and from any torch hung on a branch) gets a torch of its own." :spec (a/int-in 0 nil)}
+   ::torch-min {:default 2 :doc "A torch round crafts more when fewer torches than this are carried." :spec (a/int-in 0 nil)}
+   ::torch-craft-count {:default 4 :doc "Torches one craft makes." :spec (a/int-in 1 nil)}
    ::max-resumes {:default 2 :doc "Resumes of a cut before the job gives up." :spec (a/int-in 0 nil)}
    ::max-steps {:default 400 :doc "Pieces of work of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}})
 (defn reach [] (settings/get settings ::reach))
@@ -515,11 +517,23 @@
 
 (defn end-torch-gap [] (settings/get settings ::end-torch-gap))
 
+(defn torch-min [] (settings/get settings ::torch-min))
+(defn torch-craft-count [] (settings/get settings ::torch-craft-count))
+
 (defn count-of [c names]
   (transduce (comp (filter #(contains? names (:name %))) (map :count)) + 0 (u/inventory (:primitives c))))
 
-(defn craftable? [c]
-  (and (pos? (count-of c #{"coal" "charcoal"})) (pos? (count-of c #{"stick"}))))
+(defn wood?
+  "Whether an item crafts into sticks: a log or planks."
+  [n]
+  (boolean (and n (re-find #"_(log|planks)$" n))))
+
+(defn craftable?
+  "Whether torches can be crafted from what is carried: coal or charcoal, and sticks or wood to make them from."
+  [c]
+  (let [names (map :name (u/inventory (:primitives c)))]
+    (and (pos? (count-of c #{"coal" "charcoal"}))
+         (or (pos? (count-of c #{"stick"})) (some wood? names)))))
 
 (defn on-line?
   "Whether the body stands on the tunnel's last cell, past its first."
@@ -615,8 +629,8 @@
   (let [m (ctx/mem c)
         n (torch/torches-carried (:primitives c))]
     (cond
-      (and (< n 2) (craftable? c) (not (:craft-failed m)))
-      (let [r (await (ctx/call-child c :torches 'jobs.items.craft {:item "torch" :count 4 :fetch false}))]
+      (and (< n (torch-min)) (craftable? c) (not (:craft-failed m)))
+      (let [r (await (ctx/call-child c :torches 'jobs.items.craft {:item "torch" :count (torch-craft-count) :fetch (:fetch (:args c))}))]
         (when (and (not= :continue r) (not (and (= :done r) (pos? (:made (ctx/child-result c :torches) 0)))))
           (ctx/update-mem! c assoc :craft-failed true))
         (if (= :continue r) :continue :again))
