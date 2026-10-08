@@ -4,7 +4,7 @@
   (:require [engine.core.base :refer [cut-error cut? distance emit! job-of normalize-result offline-cut-error owner? save-memory! self-pos stopped-result? wait-reason]]
             [engine.core.attention :refer [request-attention! resolve-attention!]]
             [engine.core.fruitless :refer [record-act!]]
-            [engine.core.activity :refer [act-ended! act-started! body-act! hold-still! log-out-record useful-act?]]
+            [engine.core.activity :refer [act-ended! act-started! body-act! close-section! hold-still! log-out-record open-section! useful-act?]]
             [engine.core.list-edits :refer [submit!]]
             [engine.chat :as chat]
             [engine.memory :as mem]
@@ -109,6 +109,18 @@
                           (resolve-attention! eng request-id reason))
      :alive? #(or (nil? token) (owner? eng token))
      :hold-still (fn [reason] (check!) (hold-still! eng token root reason))
+     :open-section (fn [section level]
+                     (check!)
+                     (let [opened? (open-section! eng token section level (boolean (some-> (:deferred eng) deref seq)))]
+                       (when opened?
+                         (emit! eng {:source :job :kind :section :level :debug :job id :chain chain :round round
+                                     :reflex reflex :section section :holds level :open true}))
+                       opened?))
+     :close-section (fn [section]
+                      (close-section! eng token)
+                      (when (owner? eng token)
+                        (emit! eng {:source :job :kind :section :level :debug :job id :chain chain :round round
+                                    :reflex reflex :section section :open false})))
      :emit (fn [kind level fields]
              (let [notice? (and (#{:warn :error} level) (not (contains? fields :attention)))]
                (when (or (nil? token) (owner? eng token))

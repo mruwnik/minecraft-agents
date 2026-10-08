@@ -1,15 +1,23 @@
 (ns engine.core.schedule
   "The scheduling pass: readiness of listed jobs (checks, job.waiting, the next one to run), who holds
-  the body, cuts, firing reflexes, tick! and do-now!."
-  (:require [engine.core.base :refer [add-instance call-guarded dead? drop-reflex-job! emit! flush-save-stats! free-owner! job-fields job-of manual-job manual? new-id! now paused? reflex-text running save-memory! state wait-reason waiting-text]]
+  the body, cuts, firing reflexes and holding them off during a section (ctx/atomic), tick! and do-now!."
+  (:require [engine.args :as a]
+            [engine.core.base :refer [add-instance call-guarded dead? drop-reflex-job! emit! flush-save-stats! free-owner! job-fields job-of manual-job manual? new-id! now paused? reflex-text running save-memory! state wait-reason waiting-text]]
             [engine.core.fruitless :refer [reset-backoff!]]
-            [engine.core.register :refer [effective-register evaluate-register! expire-changes! preempts?]]
-            [engine.core.activity :refer [check-body-idle! check-idle! restart-body-idle!]]
+            [engine.core.register :refer [effective-register evaluate-register! expire-changes! levels preempts?]]
+            [engine.core.activity :refer [check-body-idle! check-idle! restart-body-idle! section-level sections]]
             [engine.core.list-edits :refer [submit!]]
             [engine.core.round :refer [check-ctx]]
             [engine.core.settle :refer [end-slot! judge-deferred-ends! start-round!]]
             [engine.expr :as expr]
-            [engine.memory :as mem]))
+            [engine.memory :as mem]
+            [engine.settings :as settings]))
+
+(a/defargs settings
+  {::urgent-wait-s {:default 15 :spec (a/num-in 0 nil)
+                    :doc "Seconds an urgent reflex (night, food near 0, low health) waits for the running job's urgent section (ctx/atomic) before it cuts it."}
+   ::comfort-wait-s {:default 90 :spec (a/num-in 0 nil)
+                     :doc "Seconds a comfort reflex (hunger, a full bag, tidying, doors, loose items) waits for the running job's section (ctx/atomic) before it cuts it."}})
 
 (defn note-waiting!
   "Listed job id's check declined with reason (or none): emit job.waiting when the reason is new for this wait, and
@@ -84,6 +92,46 @@
     (mem/create-job! (:store eng) id (second (job-of eng {:spec node})))
     (start-round! eng id)))
 
+(defn wait-cap-ms
+  "How long a reflex at level waits for a section, in ms: danger never waits."
+  [level]
+  (* 1000 (case level
+            :urgent (settings/get settings ::urgent-wait-s)
+            :comfort (settings/get settings ::comfort-wait-s)
+            0)))
+
+(defn under-section?
+  "Whether firing entry's level is at or below the highest level of the sections open in holder h's round."
+  [eng h entry]
+  (let [held (section-level eng (:token h))]
+    (boolean (and held (<= (levels (:level entry)) (levels held))))))
+
+(defn choose-firing!
+  "The entry to fire now among the firing ones (in register order), or nil: the first that preempts holder h and is
+  not held off. An entry under h's open sections is held off until it has waited its level's cap since it was first
+  held off. :deferred keeps {id since} of the entries held off ahead of the chosen one: reflex.deferred when one is
+  new, job.section_overran when the chosen one cuts a section past its cap."
+  [eng order firing h]
+  (let [t (now eng)
+        before @(:deferred eng)
+        since #(get before (:id %) t)
+        held-off? #(and (under-section? eng h %) (< (- t (since %)) (wait-cap-ms (:level %))))
+        [held [entry]] (split-with held-off? (filter #(preempts? order h %) firing))
+        section (some-> (sections eng (:token h)) last :section)]
+    (reset! (:deferred eng) (into {} (map (fn [e] [(:id e) (since e)])) held))
+    (doseq [e held :when (not (contains? before (:id e)))]
+      (emit! eng {:source :reflex :kind :deferred :level :info :reflex (:id e) :urgency (:level e) :job (:id h)
+                  :section section :wait-s (/ (wait-cap-ms (:level e)) 1000)
+                  :text (str (name (:id e)) " (" (name (:level e)) ") waits for " (:id h) " to end section "
+                             (name section))}))
+    (when (and entry (contains? before (:id entry)) (under-section? eng h entry))
+      (emit! eng (merge (job-fields eng (:id h))
+                        {:source :job :kind :section_overran :level :warn :reflex (:id entry) :section section
+                         :held-ms (- t (since entry))
+                         :text (str "section " (name section) " ran past the " (/ (wait-cap-ms (:level entry)) 1000)
+                                    " s " (name (:level entry)) " reflex " (name (:id entry)) " may wait: cut")})))
+    entry))
+
 (defn housekeep!
   "Expire register changes, and emit the save stats and sweep memory when due."
   [eng]
@@ -100,6 +148,7 @@
   failing check ends it at once with the check's reason. With it gone the body idles."
   [eng]
   (housekeep! eng)
+  (reset! (:deferred eng) {})
   (if (running eng)
     (check-idle! eng)
     (when-let [id (manual-job eng)]
@@ -114,10 +163,10 @@
   (housekeep! eng)
   (check-body-idle! eng)
   (let [order (effective-register (state eng) (now eng))
-        firing (evaluate-register! eng order)
-        h (holder eng)]
+        h (holder eng)
+        firing (choose-firing! eng order (evaluate-register! eng order) h)]
     (cond
-      (and firing (preempts? order h firing)) (fire! eng firing h)
+      firing (fire! eng firing h)
       (running eng) (check-idle! eng)
       :else (when-let [id (choose-listed eng)] (start-round! eng id)))))
 
@@ -139,8 +188,8 @@
         (tick-online! eng))))
 
 (defn do-now!
-  "Cut a running listed job and list the job spec directly before it, holding the body: the new job runs now and the
-  cut one, memory kept, continues once it ends. A running reflex is not cut; the new job waits behind it."
+  "Cut a running listed job, open sections or not, and list the job spec directly before it, holding the body: the new
+  job runs now and the cut one, memory kept, continues once it ends. A running reflex is not cut; the new job waits behind it."
   [eng spec]
   (expr/parse-spec (:jobs eng) spec)
   (let [r (running eng)]

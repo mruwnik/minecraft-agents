@@ -49,17 +49,37 @@
       (= (:reflex holder) (:id entry)) false
       :else (< (position (:id entry)) (position (:reflex holder))))))
 
-(defn trigger-holds?
-  "Whether entry's trigger holds: (:when world view args plans live), where view is a
-  memory view {:data :now} (see engine.memory), args are the entry's args, plans is the
-  engine's jobs.lib.world-files (a trigger may ignore it) and live is the set of ids of
-  the jobs still listed (running, queued or paused; not the parked failed ones)."
+(def levels
+  "Interrupt levels, by rank: a reflex at or below the level of the running round's open section waits (see
+  engine.core.schedule)."
+  {:comfort 1 :urgent 2 :danger 3})
+
+(defn level-of
+  "The level a trigger's :when result r gives: nil when r is falsy, r when it is a level, else default."
+  [default r]
+  (cond
+    (not r) nil
+    (contains? levels r) r
+    :else default))
+
+(defn trigger-level
+  "The level entry's trigger holds at now, or nil when it does not hold: (:when world view args plans live), where view
+  is a memory view {:data :now} (see engine.memory), args are the entry's args, plans is the engine's
+  jobs.lib.world-files (a trigger may ignore it) and live is the set of ids of the jobs still listed (running, queued
+  or paused; not the parked failed ones). :when returns falsy, a level, or any other truthy value: the entry's :level,
+  else its trigger's (an entry saved before levels has none), else :danger."
   [eng entry world view]
   (let [t (trigger-def eng (:trigger entry))
         st (state eng)
         live (into #{} (remove #(contains? (:failed st) %)) (:list st))]
-    (boolean (call-guarded eng (str "trigger " (:trigger entry)) false
-                           #((:when t) world view (:args entry) (:world eng) live)))))
+    (level-of (or (:level entry) (:level t) :danger)
+              (call-guarded eng (str "trigger " (:trigger entry)) false
+                            #((:when t) world view (:args entry) (:world eng) live)))))
+
+(defn trigger-holds?
+  "Whether entry's trigger holds (trigger-level)."
+  [eng entry world view]
+  (some? (trigger-level eng entry world view)))
 
 (defn eligible?
   "Whether entry may fire at t: not stopped, past its cooldown, not backing off
@@ -72,18 +92,20 @@
 
 (defn evaluate-register!
   "Evaluate every trigger in order; clear :stop latches whose condition is
-  false; return the first entry that holds and is eligible."
+  false; return the entries that hold and are eligible, in order, each with :level the level it holds at now."
   [eng order]
   (let [p (:primitives eng)
         view (mem/view (:store eng))
-        results (mapv (fn [e] [e (trigger-holds? eng e p view)]) order)
+        results (mapv (fn [e] [e (trigger-level eng e p view)]) order)
         t (now eng)]
-    (doseq [[e holds] results
-            :when (and (not holds) (get-in (state eng) [:reflex-state (:id e) :stopped?]))]
+    (doseq [[e level] results
+            :when (and (nil? level) (get-in (state eng) [:reflex-state (:id e) :stopped?]))]
       (swap! (:state eng) update-in [:reflex-state (:id e)] dissoc :stopped?))
-    (doseq [[e holds] results :when holds]
+    (doseq [[e level] results :when level]
       (pass-over? eng (:id e)))
-    (some (fn [[e holds]] (when (and holds (eligible? (state eng) e (backoff-entry eng (:id e)) t)) e)) results)))
+    (into [] (keep (fn [[e level]] (when (and level (eligible? (state eng) e (backoff-entry eng (:id e)) t))
+                                     (assoc e :level level))))
+          results)))
 
 (defn expire-changes! [eng]
   (doseq [[rid prop change] (expired-changes (state eng) (now eng))]
@@ -97,12 +119,12 @@
 (defn entry-from
   "A register entry from a spec {:trigger ...overrides}, filled from the
   trigger. :job is a job spec (an expression without hold); :args are the
-  trigger's, merged over its defaults."
+  trigger's, merged over its defaults; :level, when given, overrides the trigger's (trigger-level)."
   [eng spec]
   (let [t (trigger-def eng (:trigger spec))]
     (merge {:id (:trigger spec) :trigger (:trigger spec) :job (:job t)
             :persistence (:persistence t :retry) :cooldown-s (:cooldown-s t 0) :builtin? false}
-           (select-keys spec [:id :job :persistence :cooldown-s :builtin? :backoff])
+           (select-keys spec [:id :job :persistence :cooldown-s :level :builtin? :backoff])
            {:args (merge (:args t {}) (:args spec))})))
 
 (defn register-reflex!

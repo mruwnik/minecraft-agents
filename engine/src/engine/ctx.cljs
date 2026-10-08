@@ -135,6 +135,23 @@
   [ctx reason]
   ((:hold-still ctx) reason))
 
+(def section-levels #{:comfort :urgent})
+
+(defn ^:async atomic
+  "Run (f) as an atomic section named section (a keyword) at level :comfort or :urgent; a promise of f's result. While
+  it runs the scheduler holds off a reflex at or below level, each up to its level's wait cap (settings
+  :engine.core.schedule/urgent-wait-s, comfort-wait-s); a danger reflex and the agent's do-now cut at once. Sections
+  nest (the highest level holds). The outermost section is not opened while a held-off reflex waits, so it fires in
+  the gap. In a check it only calls f."
+  [ctx level section f]
+  (when-not (section-levels level)
+    (throw (ex-info (str "ctx/atomic level is :comfort or :urgent, not " (pr-str level)) {:level level})))
+  (let [opened? (if-let [open (:open-section ctx)] (and (:token ctx) (open section level)) false)]
+    (try
+      (await (f))
+      (finally
+        (when opened? ((:close-section ctx) section))))))
+
 (defn act
   "Call acting primitive k (a keyword such as :moveTo) with this round's
   token, through the engine's act wrapper: token check, memory saved before

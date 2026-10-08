@@ -46,6 +46,8 @@
   :refused; other refusals warn with their :reason), or that has no ground or stand to reach it from, counts as unreachable,
   and so does one whose pillar digs no log. A cleanup that leaves the scaffold open is a failed round (tree_blocked
   after a few). :pillar? false leaves such a tree.
+  Once a tree is chosen the rest of it is a comfort section (ctx/atomic), the pillar's build, dig and clean an urgent
+  one: reflexes at or below those levels wait for them, up to their caps.
   Before the first log of a tree big enough for an axe to pay (jobs.lib.trees/axe-worth-fetching?) with none carried it
   fetches one (jobs.items.get-tool, a seen chest or crafted) unless :fetch is false or lacks :tool; a failed fetch is
   warned (fetch.failed) and the tree is chopped by hand.
@@ -394,8 +396,8 @@
                 (when failed (mark-unreachable! c))
                 :again))))
 
-(defn ^:async pillar-round!
-  "One round of the pillar: walk to its base (or stand), build it, dig from it, take it back."
+(defn ^:async pillar-phase!
+  "One phase of the pillar: walk to its base (or stand), build it, dig from it, take it back."
   [c logs]
   (let [m (:pillar (ctx/mem c))]
     (case (:phase m)
@@ -404,6 +406,21 @@
       :build (await (pillar-build! c m))
       :dig (await (pillar-dig! c m logs))
       :clean (await (pillar-clean! c m)))))
+
+(def climb-phases #{:build :dig :clean})
+
+(defn climbing? [c] (contains? climb-phases (:phase (:pillar (ctx/mem c)))))
+
+(defn ^:async pillar-round!
+  "The pillar's next phase. Build, dig and clean run as one urgent section (ctx/atomic :pillar): a night or low-food
+  reflex waits for the pillar to be taken back, up to its cap."
+  [c radius]
+  (if (climbing? c)
+    (await (ctx/atomic c :urgent :pillar
+                       #(pace/steps! c (fn ^:async climb []
+                                         (let [r (await (pillar-phase! c (tree-logs c radius)))]
+                                           (if (and (= :again r) (not (climbing? c))) :climbed r))))))
+    (await (pillar-phase! c (tree-logs c radius)))))
 
 (defn walk-failed!
   "Book a walk result of :blocked or :partial against the chosen tree: :again once the tree is given up, :continue
@@ -443,6 +460,7 @@
             (await (look/survey! c :cell)))
         _ (when (and (not (:pillar (ctx/mem c))) (open-scaffold? c))
             (set-pillar! c {:phase :clean}))
+        fresh? (not (:column (ctx/mem c)))
         chosen (or (:column (ctx/mem c)) (await (choose-tree! c radius species)))]
     (cond
       (= :searching chosen) :again
@@ -453,9 +471,12 @@
 
       (not chosen) :continue
 
+      ;; the tree is chosen: the round felling it runs as one section
+      fresh? :again
+
       (:pillar (ctx/mem c))
       (or (await (fetch/fetch! c 'jobs.forestry.fell-tree pillar-problem))
-          (if (pillar-problem c) :continue (await (pillar-round! c (tree-logs c radius)))))
+          (if (pillar-problem c) :continue (let [r (await (pillar-round! c radius))] (if (= :climbed r) :again r))))
 
       :else
       (let [logs (await (sense/decide! c ::logs #(tree-logs c radius) {:retry? empty?}))]
@@ -483,9 +504,20 @@
 (def max-steps "Pieces of work of one call before it gives the round back with :continue." 400)
 
 (defn ^:async round
+  "Steps until a tree is chosen, then that tree as one comfort section (ctx/atomic :tree): hunger, a full bag or
+  tidying waits for the tree, up to its cap. A tree given up ends its section before the next is chosen."
   [c]
-  (let [n (atom 0)]
-    (await (pace/steps! c #(if (< (swap! n inc) max-steps) (step c) :continue)))))
+  (let [n (atom 0)
+        step! #(if (< (swap! n inc) max-steps) (step c) :continue)
+        chosen? #(some? (:column (ctx/mem c)))
+        steps-while (fn [want] (pace/steps! c (fn ^:async part []
+                                                (let [r (await (step!))]
+                                                  (if (and (= :again r) (not= want (chosen?))) :switch r)))))]
+    (loop []
+      (let [r (if (chosen?)
+                (await (ctx/atomic c :comfort :tree #(steps-while true)))
+                (await (steps-while false)))]
+        (if (= :switch r) (recur) r)))))
 
 (defn check
   "A tree is chosen, or every candidate was unreachable (the round warns and

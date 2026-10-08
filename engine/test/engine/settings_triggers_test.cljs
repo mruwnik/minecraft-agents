@@ -16,6 +16,7 @@
    :triggers.storage.inventory-nearly-full/rest-s 120
    :triggers.survival.hungry/bake-wheat 3
    :triggers.survival.hungry/rest-s 600
+   :triggers.survival.hungry/urgent-food 2
    :triggers.survival.tidy-pending/range 48
    :triggers.survival.tidy-pending/retry-s 120})
 

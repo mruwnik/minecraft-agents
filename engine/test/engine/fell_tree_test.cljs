@@ -455,3 +455,31 @@
       (fn ^:async t []
         (let [s (await (run-job-cut 'jobs.items.obtain {:item "oak_log" :count 2} 2 3 300))]
           (is (= 8 (count (distinct (dug-ys (:p s))))) "the cut came after 2 logs were carried; the tree is still felled whole"))))))
+
+;; ------------------------------------------------------------------ sections: a hunger reflex waits for the tree
+
+(defn hungry-tick
+  "A function for eye-reach! that drops food to 5 (hungry, a comfort reflex) and runs a scheduler tick after each dig,
+  as the body's tick would mid-round; started collects whether a tick started a round."
+  [eng p started]
+  #(do (swap! (fake/state p) assoc-in [:self :food] 5)
+       (swap! started conj (some? (core/tick! eng)))))
+
+(defn sections-opened [seen]
+  (->> @seen (filter #(and (= :section (:kind %)) (:open %))) (map (juxt :section :holds)) distinct vec))
+
+(deftest a-hunger-reflex-waits-for-the-whole-tree-and-the-pillar-is-an-urgent-section
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (fm/start (assoc tall :inventory [{:name "dirt" :count 20} {:name "stone_axe" :count 1}]) {})
+              started (atom [])]
+          (core/register-reflex! eng {:trigger :hungry})
+          (eye-reach! p false (hungry-tick eng p started))
+          (core/submit! eng '(jobs.forestry.fell-tree {:radius 10}) {})
+          (await (tu/run-until-empty eng 300))
+          (is (= 8 (count (distinct (dug-ys p)))) "the whole trunk is dug")
+          (is (not-any? true? @started) "no tick mid-tree cut the felling")
+          (is (some #(and (= :deferred (:kind %)) (= :hungry (:reflex %))) @seen) "hunger was held off")
+          (is (not-any? #(and (= :fired (:kind %)) (= :hungry (:reflex %))) @seen))
+          (is (= [[:tree :comfort] [:pillar :urgent]] (sections-opened seen))))))))

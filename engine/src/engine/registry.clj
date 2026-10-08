@@ -225,17 +225,19 @@
 
 (defn trigger-defaults
   "The default trigger set, resource triggers/defaults.edn: {:facts sym :triggers [{:id :when :job :args
-  :persistence :cooldown-s :backoff} ...]}, checked: every :when names a fn that exists, in a namespace under triggers/ once
-  that folder holds any; ids unique. {} when absent."
+  :persistence :cooldown-s :level :backoff} ...]}, checked: every :when names a fn that exists, in a namespace under
+  triggers/ once that folder holds any; every :level is :danger, :urgent or :comfort; ids unique. {} when absent."
   []
   (let [{:keys [facts triggers] :as data} (or (read-edn-resource "triggers/defaults.edn") {})
         repeated (keep (fn [[id n]] (when (> n 1) id)) (frequencies (map :id triggers)))
         in-dir (set (trigger-files-namespaces))]
     (when (seq repeated)
       (throw (ex-info (str "triggers/defaults.edn: trigger id repeated: " (str/join ", " repeated)) {:ids repeated})))
-    (doseq [{id :id when-fn :when} triggers]
+    (doseq [{id :id when-fn :when level :level} triggers]
       (when-not (keyword? id)
         (throw (ex-info (str "triggers/defaults.edn: :id must be a keyword, found " (pr-str id)) {:id id})))
+      (when-not (#{:danger :urgent :comfort} level)
+        (throw (ex-info (str "trigger " id ": :level must be :danger, :urgent or :comfort, found " (pr-str level)) {:id id})))
       (check-ref (str "trigger " id " :when") when-fn)
       (when (and (seq in-dir) (not (in-dir (symbol (namespace when-fn)))))
         (throw (ex-info (str "trigger " id " :when " when-fn ": not a namespace under triggers/") {:id id}))))

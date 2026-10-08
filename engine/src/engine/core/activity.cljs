@@ -4,6 +4,7 @@
   (:require [clojure.string :as str]
             [engine.args :as a]
             [engine.core.base :refer [emit! job-fields now running state waiting-text]]
+            [engine.core.register :refer [levels]]
             [engine.expr :as expr]
             [engine.memory :as mem]
             [engine.settings :as settings]))
@@ -35,7 +36,7 @@
 (defn note-activity!
   "Apply (f activity & args) to the in-flight round's activity record when token is that round's.
   The record: {:token :id :in-flight n :last-at ms :hold {:reason :since} :wait-hold {:reason :since}
-  :idle-warned? bool}."
+  :idle-warned? bool :sections [{:section :level :since}]}."
   [eng token f & args]
   (swap! (:activity eng) #(if (and (some? token) (= token (:token %))) (apply f % args) %)))
 
@@ -63,6 +64,32 @@
       (when (not= reason (:reason before))
         (note-activity! eng token assoc :hold {:reason reason :since t})
         (emit-holding! eng root reason t)))))
+
+(defn sections
+  "The sections open in the round of token ({:section :level :since}, outermost first), or nil."
+  [eng token]
+  (let [a (some-> (:activity eng) deref)]
+    (when (and a (some? token) (= token (:token a)))
+      (seq (:sections a)))))
+
+(defn section-level
+  "The highest level of the sections open in the round of token, or nil."
+  [eng token]
+  (some->> (sections eng token) (map :level) (apply max-key levels)))
+
+(defn open-section!
+  "Open section (a keyword) at level in the round of token. Not opened (false) when the round opens its outermost
+  section while a reflex waits (waiting?): the reflex then fires in the gap."
+  [eng token section level waiting?]
+  (if (or (not= token (:token @(:activity eng))) (and waiting? (empty? (sections eng token))))
+    false
+    (do (note-activity! eng token update :sections (fnil conj []) {:section section :level level :since (now eng)})
+        true)))
+
+(defn close-section!
+  "Close the innermost section of the round of token."
+  [eng token]
+  (note-activity! eng token update :sections #(if (seq %) (pop %) %)))
 
 (defn check-idle!
   "Warn job.idle once per spell when the running round has no act in flight, declared no hold, and its last act

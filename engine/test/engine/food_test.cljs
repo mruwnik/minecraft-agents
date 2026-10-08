@@ -59,6 +59,12 @@
     (is (not (holds? {:food 18})))
     (is (holds? {:food 10 :health 12}))))
 
+(deftest hungry-holds-at-urgent-near-empty-or-hurt-with-food-at-hand
+  (let [level (fn [world] ((:when (get triggers/all :hungry)) (tu/fake world) {} {}))]
+    (is (true? (level {:self {:food 5}})) "hungry: its :comfort level")
+    (is (= :urgent (level {:self {:food 2}})) "food 2")
+    (is (= :urgent (level {:self {:food 15 :health 5} :inventory [{:name "bread" :count 1}]})) "hurt, food carried")))
+
 ;; ------------------------------------------- the hungry reflex with nothing to eat
 
 (defn hungry-fired [seen]

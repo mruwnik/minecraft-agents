@@ -2,20 +2,22 @@
 
  ;; The default trigger set: id -> trigger fn, default job, args and persistence. The order here is the default
  ;; register's priority (most urgent first), used when a scenario has no :register; an explicit :register orders its own.
+ ;; :level: the interrupt level, :danger (never waits), :urgent or :comfort (waits for a running job's section at or
+ ;; above it, up to the level's cap; see engine.core.schedule). A :when may return a level instead of true.
  ;; :backoff (engine.backoff): the entry's default. Off for danger reflexes (no backoff while the danger lasts), for night
  ;; (time-critical, bounds itself). {:after 9} where one firing may take several fruitless runs (two unreachable doors or gates).
  :triggers
- [{:id :suffocating :when triggers.survival.suffocating/suffocating :job (jobs.survival.breathe) :args triggers.survival.suffocating/defaults :persistence :cooldown :cooldown-s 0 :backoff false}
-  {:id :burning :when triggers.survival.burning/burning :job (jobs.survival.extinguish) :args {} :persistence :cooldown :cooldown-s 0 :backoff false}
-  {:id :wedged :when triggers.survival.wedged/wedged :job (jobs.survival.unwedge) :args {} :persistence :cooldown :cooldown-s 0}
-  {:id :hostile-near :when triggers.survival.hostile-near/hostile-near :job (jobs.survival.respond-to-hostile) :args triggers.survival.hostile-near/defaults :persistence :retry :backoff false}
-  {:id :night :when triggers.survival.night/night :job (jobs.survival.night) :args triggers.survival.night/defaults :persistence :cooldown :cooldown-s 10 :backoff false}
-  {:id :hungry :when triggers.survival.hungry/hungry :job (jobs.survival.get-food) :args triggers.survival.hungry/defaults :persistence :cooldown :cooldown-s 90}
-  {:id :door-left :when triggers.maintenance.door-left/door-left :job (jobs.maintenance.shut-doors) :args triggers.maintenance.door-left/defaults :persistence :cooldown :cooldown-s 5 :backoff {:after 9}}
-  {:id :died :when triggers.survival.died/died :job (jobs.survival.recover-drops) :args {} :persistence :cooldown :cooldown-s 30}
-  {:id :inventory-nearly-full :when triggers.storage.inventory-nearly-full/inventory-nearly-full :job (jobs.storage.make-room) :args triggers.storage.inventory-nearly-full/defaults :persistence :cooldown :cooldown-s 120}
-  {:id :scaffold-left :when triggers.access.scaffold-left/scaffold-left :job (jobs.access.cleanup) :args {} :persistence :stop}
-  {:id :tidy-pending :when triggers.survival.tidy-pending/tidy-pending :job (jobs.survival.restore-broken) :args triggers.survival.tidy-pending/defaults :persistence :cooldown :cooldown-s 10}
-  {:id :pen-gate :when triggers.animals.pen-gate/pen-gate :job (jobs.animals.shut-gate) :args triggers.animals.pen-gate/defaults :persistence :cooldown :cooldown-s 5 :backoff {:after 9}}
-  {:id :mounted :when triggers.movement.mounted/mounted :job (jobs.movement.leave-vehicle) :args {} :persistence :cooldown :cooldown-s 30}
-  {:id :loose-items :when triggers.items.loose-items/loose-items :job (jobs.items.pick-up-loose) :args triggers.items.loose-items/defaults :persistence :cooldown :cooldown-s 30}]}
+ [{:id :suffocating :level :danger :when triggers.survival.suffocating/suffocating :job (jobs.survival.breathe) :args triggers.survival.suffocating/defaults :persistence :cooldown :cooldown-s 0 :backoff false}
+  {:id :burning :level :danger :when triggers.survival.burning/burning :job (jobs.survival.extinguish) :args {} :persistence :cooldown :cooldown-s 0 :backoff false}
+  {:id :wedged :level :danger :when triggers.survival.wedged/wedged :job (jobs.survival.unwedge) :args {} :persistence :cooldown :cooldown-s 0}
+  {:id :hostile-near :level :danger :when triggers.survival.hostile-near/hostile-near :job (jobs.survival.respond-to-hostile) :args triggers.survival.hostile-near/defaults :persistence :retry :backoff false}
+  {:id :night :level :urgent :when triggers.survival.night/night :job (jobs.survival.night) :args triggers.survival.night/defaults :persistence :cooldown :cooldown-s 10 :backoff false}
+  {:id :hungry :level :comfort :when triggers.survival.hungry/hungry :job (jobs.survival.get-food) :args triggers.survival.hungry/defaults :persistence :cooldown :cooldown-s 90}
+  {:id :door-left :level :comfort :when triggers.maintenance.door-left/door-left :job (jobs.maintenance.shut-doors) :args triggers.maintenance.door-left/defaults :persistence :cooldown :cooldown-s 5 :backoff {:after 9}}
+  {:id :died :level :danger :when triggers.survival.died/died :job (jobs.survival.recover-drops) :args {} :persistence :cooldown :cooldown-s 30}
+  {:id :inventory-nearly-full :level :comfort :when triggers.storage.inventory-nearly-full/inventory-nearly-full :job (jobs.storage.make-room) :args triggers.storage.inventory-nearly-full/defaults :persistence :cooldown :cooldown-s 120}
+  {:id :scaffold-left :level :comfort :when triggers.access.scaffold-left/scaffold-left :job (jobs.access.cleanup) :args {} :persistence :stop}
+  {:id :tidy-pending :level :comfort :when triggers.survival.tidy-pending/tidy-pending :job (jobs.survival.restore-broken) :args triggers.survival.tidy-pending/defaults :persistence :cooldown :cooldown-s 10}
+  {:id :pen-gate :level :comfort :when triggers.animals.pen-gate/pen-gate :job (jobs.animals.shut-gate) :args triggers.animals.pen-gate/defaults :persistence :cooldown :cooldown-s 5 :backoff {:after 9}}
+  {:id :mounted :level :comfort :when triggers.movement.mounted/mounted :job (jobs.movement.leave-vehicle) :args {} :persistence :cooldown :cooldown-s 30}
+  {:id :loose-items :level :comfort :when triggers.items.loose-items/loose-items :job (jobs.items.pick-up-loose) :args triggers.items.loose-items/defaults :persistence :cooldown :cooldown-s 30}]}

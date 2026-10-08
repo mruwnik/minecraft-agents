@@ -7,6 +7,7 @@
 
 (a/defargs settings
   {::bake-wheat {:default 3 :doc "Carried wheat enough to bake a loaf." :spec (a/int-in 0 nil)}
+   ::urgent-food {:default 2 :doc "At or below this food the trigger holds at :urgent (it cuts a job's comfort section) instead of its default :comfort." :spec (a/int-in 0 20)}
    ::rest-s {:default 600 :doc "Seconds the trigger rests after get-food found nothing, unless food comes to hand. Same as get-food's :ask-cooldown-ms." :spec (a/int-in 0 nil)}})
 (defn bake-wheat [] (settings/get settings ::bake-wheat))
 
@@ -32,12 +33,15 @@
 
 (defn hungry
   "Holds when hungry? says so, top-up? does (a hurt body below 18 food carrying common food), or eat-now? does.
+  Holds at :urgent when eat-now? does (low health) or food is at most ::urgent-food (2), else at its :comfort level.
   Args: :food, :health, :rest-s.
   It rests (resting?) for :rest-s (600) after get-food found nothing, so a body with nothing at hand is not sent
   searching again every cooldown. The rest ends when food is carried, wheat to bake is, or a food source is learned."
   [world memory args]
-  (let [self (.self world)]
+  (let [self (.self world)
+        urgent? (or (foods/eat-now? self args) (<= (.-food self) (settings/get settings ::urgent-food)))]
     (and (or (foods/hungry? (.-food self) (.-health self) args)
              (foods/top-up? (.-food self) (.-health self) (foods/carried-names self))
              (foods/eat-now? self args))
-         (not (resting? self memory args)))))
+         (not (resting? self memory args))
+         (if urgent? :urgent true))))
