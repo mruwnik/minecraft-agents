@@ -378,15 +378,6 @@
   [c]
   (when-let [{{:keys [x y z]} :pos :as entry} (sheltered-in c)]
     {:inside-own-shelter (:pos entry)
-(defn open-room-door
-  "{:cell :inside} of a door or gate standing open in the closed room around the body (shut-in-room?), the nearest
-  first: shut, the room keeps the night out. Nil when there is none."
-  [p]
-  (when (roofed? p (room-roof-height))
-    (let [self (u/self-pos {:primitives p})
-          open? (fn [{:keys [cell]}]
-                  (let [b (u/seen-block p cell)]
-                    (and b (= :openable (click/kind-of (.-name b))) (click/reached? :open (click/props-of b)))))]
      :hint (str "the body is sealed in its own shelter at [" x " " y " " z "]: the shelter job lets it out by day "
                 "(jobs.survival.night), or run jobs.survival.dig-in leave")}))
 
@@ -396,6 +387,15 @@
   [p]
   (and (roofed? p (room-roof-height)) (reach/closed-room? p (feet p))))
 
+(defn open-room-door
+  "{:cell :inside} of a door or gate standing open in the closed room around the body (shut-in-room?), the nearest
+  first: shut, the room keeps the night out. Nil when there is none."
+  [p]
+  (when (roofed? p (room-roof-height))
+    (let [self (u/self-pos {:primitives p})
+          open? (fn [{:keys [cell]}]
+                  (let [b (u/seen-block p cell)]
+                    (and b (= :openable (click/kind-of (.-name b))) (click/reached? :open (click/props-of b)))))]
       (->> (:doors (reach/room p (feet p)))
            (filter open?)
            (sort-by #(u/dist self (:cell %)))
