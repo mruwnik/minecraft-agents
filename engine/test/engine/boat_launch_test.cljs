@@ -4,6 +4,7 @@
             [engine.core :as core]
             [engine.fake :as fake]
             [engine.library-test :as lt]
+            [engine.sense-test :as st]
             [engine.test-util :as tu]
             [jobs.movement.boat-launch :as bl]))
 
@@ -181,3 +182,26 @@
           (await (tu/run-until-empty eng 30))
           (is (some #(= "look" (.-name %)) (.-calls (.-world p))))
           (is (empty? (:list (core/state eng)))))))))
+
+(def channel
+  "Water one cell wide at x 4, z -2..2: every cell has a bank block beside it."
+  (into {} (for [z (range -2 3)] [(str "4,63," z) "water"])))
+
+(deftest water-without-room-waits-no-room
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (lt/setup {:blocks channel :inventory [boat-item]})]
+          (core/submit! eng '(jobs.movement.boat-launch {}) {})
+          (await (tu/run-until-empty eng 3))
+          (is (= [:no-room] (mapv :reason (filterv #(= :waiting (:kind %)) @seen)))))))))
+
+(deftest an-unseen-bank-is-looked-at-before-a-cell-is-chosen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (st/seeing {:blocks pond})
+              c (assoc (st/stub-ctx p) :args {:radius 12})
+              cell (await (bl/launch-pos! c))]
+          (is (some? cell))
+          (is (some #(= :sense.looked (:kind %)) @(:events c)) "it looked at what it had not seen"))))))

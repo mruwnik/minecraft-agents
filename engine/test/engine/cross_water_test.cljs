@@ -24,11 +24,9 @@
 
 (defn aboard? [p] (some? (:vehicle (js->clj (.self p) :keywordize-keys true))))
 
-(def wide "The lake again." lake)
-
 (def aboard-world
-  "The body in a boat on the wide lake (a placed boat in the fake has no dismount cell: the recover leg needs one on the bank)."
-  {:blocks wide
+  "The body in a boat on the lake (a placed boat in the fake has no dismount cell: the recover leg needs one on the bank)."
+  {:blocks lake
    :entities [{:id 9 :name "oak_boat" :uuid "u-9" :kind "other" :pos {:x 4.5 :y 63.5 :z 0.5} :yaw 0 :health 1 :drops [{:name "oak_boat" :count 1}]
                :dismountAt [7.5 64 0.5]}]
    :self {:vehicle 9 :pos [4.5 63.5 0.5]}})
@@ -144,6 +142,16 @@
           (is (= :done (:status res)) (pr-str res))
           (is (= far (:land res)))
           (is (false? (:recovered res))))))))
+
+(deftest launches-from-foot-lands-and-takes-the-boat-back
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [res seen]} (await (run world {:pos [7 64 0]}))]
+          (is (= :done (:status res)) (pr-str res))
+          (is (true? (:recovered res)))
+          (is (some #(= :boat.launched (:kind %)) @seen))
+          (is (some #(= :boat.landed (:kind %)) @seen)))))))
 
 (deftest lands-and-reports-a-failed-recover
   ;; the boat drops nothing, so the pick-up fails: the crossing still lands, then says why the boat stayed

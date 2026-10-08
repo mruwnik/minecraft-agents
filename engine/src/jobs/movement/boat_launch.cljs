@@ -5,6 +5,7 @@
             [jobs.lib.blocks :as b]
             [jobs.lib.look :as look]
             [jobs.lib.result :as result]
+            [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
             [jobs.lib.vehicle :as vehicle]))
 
@@ -14,8 +15,8 @@
   Launch: the boat item is :item, else the first carried boat or raft; none carried is fetched (jobs.blocks.place :fetch, oak_boat).
   The water cell is :pos, else the nearest water in sight (:radius) that has air above it and room round it for the boat (no bank block within a cell).
   jobs.blocks.place puts the boat down (it walks into reach); then, with :board, jobs.movement.mount boards it.
-  The check waits (:no-water) while no such water is in sight. Ends {:status :done :id :boat name :pos :boarded bool}, info boat.launched, or
-  {:status :stopped :reason r}: :bad-args, :aboard (already on a vehicle), :need (no boat and none to fetch), :refused (zone, claim),
+  The check waits (:no-water) while no water is in sight, (:no-room) while water is but none has room for a boat. Ends {:status :done :id :boat name :pos :boarded bool}, info boat.launched, or
+  {:status :stopped :reason r}: :bad-args, :aboard (already on a vehicle), :no-water, :no-room (see the check), :need (no boat and none to fetch), :refused (zone, claim),
   :no-support, :unreachable, :occupied, :no-boat (the placed boat is not in sight), :board-failed (with :cause), :failed (the place failed, with :primitive).
 
   Recover: the boat is :id, else the nearest boat or raft in sight. When aboard, it gets off first (jobs.movement.leave-vehicle),
@@ -63,25 +64,44 @@
   [p {:keys [x y z]}]
   (and (= "air" (u/seen-name p {:x x :y (inc y) :z z}))
        (not-any? (fn [[dx dz]]
-                   (some #(solid-name? (u/seen-name p {:x (+ x dx) :y % :z (+ z dz)})) [y (inc y)]))
+                   (some #(solid-name? (u/block-name-or p {:x (+ x dx) :y % :z (+ z dz)} "air")) [y (inc y)]))
                  ring)))
 
+(defn water-cells
+  "The water cells in sight within :radius, nearest first."
+  [c]
+  (map :pos (look/seen-blocks (:primitives c) {:names ["water"] :radius (:radius (:args c)) :max 128 :live? true})))
+
 (defn find-water
-  "The nearest water cell in sight that has room for a boat, or nil."
+  "The nearest water cell in sight that has room for a boat, or nil. A bank cell not seen yet reads as air (noted as a guess)."
   [c]
   (let [p (:primitives c)]
-    (->> (look/seen-blocks p {:names ["water"] :radius (:radius (:args c)) :max 128 :live? true})
-         (map :pos)
-         (filter #(clear-water? p %))
-         first)))
+    (first (filter #(clear-water? p %) (water-cells c)))))
+
+(defn no-water-reason
+  "Why find-water found nothing: :no-room when water is in sight, else :no-water."
+  [c]
+  (if (seq (water-cells c)) :no-room :no-water))
+
+(defn no-water-text [reason]
+  (if (= :no-room reason) "water in sight, but none with room round it for a boat" "no water to put a boat on in sight"))
 
 (defn launch-pos [c]
   (let [{:keys [pos]} (:args c)]
     (if pos (:pos (b/parse (:args c))) (find-water c))))
 
+(defn ^:async launch-pos!
+  "launch-pos, the nearest-water search decided again after a look at the unseen cells it read."
+  [c]
+  (if (:pos (:args c))
+    (launch-pos c)
+    (await (sense/decide! c ::water #(find-water c) {:verify-guesses true}))))
+
 (defn check [c]
   (case (or (:action (:args c)) :launch)
-    :launch (or (some? (launch-pos c)) (look/wait-unless-surveyed c {:reason :no-water :why "no water to put a boat on in sight"}))
+    :launch (or (some? (launch-pos c))
+                (let [r (no-water-reason c)]
+                  (look/wait-unless-surveyed c {:reason r :why (no-water-text r)})))
     :recover (or (if-let [id (:id (:args c))]
                    (some #(= id (:id %)) (boats-in-sight c))
                    (seq (boats-in-sight c)))
@@ -107,11 +127,12 @@
   (let [p (:primitives c)
         {:keys [item board]} (:args c)
         item (or item (carried-boat c) default-item)
-        cell (launch-pos c)]
+        surveyed? (look/surveyed? c)
+        cell (await (launch-pos! c))]
     (cond
       (not (boat-name? item)) (result/stop! c :bad-args (str item " is not a boat"))
-      (and (nil? cell) (not (look/surveyed? c))) (await (look/survey! c)) ; water behind the body is not seen until it looks
-      (nil? cell) (result/stop! c :no-water "no water to put a boat on in sight")
+      (and (nil? cell) (not surveyed?)) :continue ; water behind the body is not seen until it looks (launch-pos! did): the check waits
+      (nil? cell) (let [r (no-water-reason c)] (result/stop! c r (no-water-text r)))
       (vehicle/mounted? p) (result/stop! c :aboard "already on a vehicle")
       :else
       (let [r (await (b/place-cell! c cell item {:fetch true}))]

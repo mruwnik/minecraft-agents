@@ -5,6 +5,7 @@
             [engine.fake :as fake]
             [engine.memory :as mem]
             [engine.test-util :as tu]
+            [jobs.blocks.place :as place]
             [plan.shape :as shape]))
 
 (def job 'jobs.blocks.place)
@@ -206,3 +207,8 @@
               result (await (bd/child-outcome eng job {:pos [0 64 0] :item "wheat_seeds"} 5))]
           (is (= {:placed true :item "wheat_seeds"} (select-keys result [:placed :item])))
           (is (= "wheat" (bd/block-at p {:x 0 :y 64 :z 0}))))))))
+
+(deftest boats-needs-at-least-one-item-and-all-boats
+  (is (true? (place/boats? ["oak_boat" "bamboo_raft"])))
+  (is (false? (place/boats? [])) "no items: the support check stays")
+  (is (false? (place/boats? ["oak_boat" "dirt"]))))

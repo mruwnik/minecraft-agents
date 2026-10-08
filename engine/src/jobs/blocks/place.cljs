@@ -104,9 +104,9 @@
     (when (and block (not (some #{block} items)) (= :not-replaceable (:reason v))) block)))
 
 (defn boats?
-  "Whether every item is a boat or raft: it is used on the water, so it needs no block beside the cell."
+  "Whether items are all boats or rafts (and there is one): it is used on the water, so it needs no block beside the cell."
   [items]
-  (every? #(re-find #"_(boat|raft)$" %) items))
+  (boolean (and (seq items) (every? #(re-find #"_(boat|raft)$" %) items))))
 
 (defn problem
   "Why the job cannot run now: a wait reason map (see doc), or nil. Bad args and a cell already holding the block
