@@ -24,6 +24,19 @@
           (is (= 3 (bd/carried p "cobblestone")))
           (is (= 1 (count (filter #(= :blocks.place.done (:kind %)) @seen)))))))))
 
+(deftest a-refused-place-keeps-the-primitives-reason
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (bd/setup {:self body :inventory cobble})
+              why "Server refused to place cobblestone at (2, 64, 0): the block is still air"]
+          (.override (.-world p) "place" (fn ^:async f [_ _ _] #js {:status "failed" :reason why}))
+          (let [result (await (bd/child-outcome eng job {:pos at :item "cobblestone"} 5))
+                done-event (first (filter #(= :blocks.place.done (:kind %)) @seen))]
+            (is (= :stopped (:status result)))
+            (is (= why (:why result)))
+            (is (re-find #"still air" (:text done-event)))))))))
+
 (deftest any-of-places-the-first-carried
   (async done
     (tu/run-async done
