@@ -37,3 +37,12 @@
         (doseq [inv [[fresh] [worn fresh] [{:name "stone_pickaxe" :count 1 :durability 1}]]]
           (let [s (await (st/stair! (assoc spare-chest :inventory inv) east tu/seeing-all))]
             (is (not-any? #{:tool.spare :tool.no-spare} (kinds s)))))))))
+
+(deftest a-worn-last-iron-pickaxe-gets-the-cheapest-pickaxe-that-harvests-stone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [worn-iron {:name "iron_pickaxe" :count 1 :durability 10 :max-durability 250}
+              s (await (st/stair! (assoc spare-chest :inventory [worn-iron]) east tu/seeing-all))]
+          (is (= :done (:status @(:out s))))
+          (is (= ["stone_pickaxe"] (map :tool (st/events-of s :tool.spare)))))))))

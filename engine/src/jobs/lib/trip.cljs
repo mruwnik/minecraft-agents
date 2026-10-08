@@ -7,6 +7,7 @@
             [clojure.string :as str]
             [jobs.lib.blocks :as b]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]))
@@ -76,16 +77,25 @@
     (when (and best (every? worn? usable))
       best)))
 
+(defn spare-name
+  "The tool to obtain as the spare for the worn need: the cheapest tool of its kind that harvests block-name and
+  lasts (not wooden or golden: a stone pickaxe will do for stone), else the cheapest at all, else the worn tool's own name."
+  [p block-name need]
+  (let [suffix (str "_" (tools/tool-kind block-name))
+        harvest (filter #(str/ends-with? % suffix) (some-> (.harvestTools p block-name) js->clj))
+        lasting (remove #(#{"wooden" "golden"} (weapon/material-of %)) harvest)]
+    (or (tools/cheapest-tool (seq lasting)) (tools/cheapest-tool harvest) (:name need))))
+
 (defn ^:async tool-ready!
   "Before a job that digs a lot sets out: when the tool for block-name is the last of its kind that harvests it and is
-  worn (spare-need), run jobs.items.obtain for another of the same name (child :spare; chest, craft, gather). Resolves nil
+  worn (spare-need), run jobs.items.obtain for the cheapest tool of its kind that harvests block-name (spare-name; child :spare; chest, craft, gather). Resolves nil
   to go on, :continue while the child waits on the world. Told once per tool name in the job's memory (:spare-tried):
   info tool.spare when one came, warn tool.no-spare with the child's reason when not (the job goes on with the worn
   tool). The job's :fetch off, or a set of kinds without :tool, skips it."
   [c block-name]
   (let [p (:primitives c)
         need (when (and block-name (let [f (fetch/parse-arg (:fetch (:args c)))] (and (map? f) (not (:error f)) (or (nil? (:what f)) (contains? (:what f) :tool))))) (spare-need p block-name))
-        tool-name (:name need)]
+        tool-name (when need (spare-name p block-name need))]
     (when (and need (not (contains? (:spare-tried (ctx/mem c)) tool-name)))
       (let [r (await (ctx/call-child c :spare 'jobs.items.obtain {:item tool-name :count 1}))]
         (if (= :continue r)

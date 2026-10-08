@@ -599,6 +599,7 @@
             target (target-steps (:args c) feet)]
         (if (map? target)
           (finish! c :bad-args {:why (:error target)})
+          ;; stone stands for the cells to dig: unseen cells are taken for stone (see the ns doc)
           (if (= :continue (await (trip/tool-ready! c "stone")))
             :continue
             (do (ctx/update-mem! c assoc :origin feet :target target :dug [])
