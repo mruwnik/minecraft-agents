@@ -3,7 +3,7 @@
   test server with one probe body. Per case and run: a fresh plot of the reserved grid is cleared and built, the body
   is put at its start, the act steps run, the body's event log is read until every expectation is decided, the
   :after checks ask the server, and the plot is cleaned up. The body is started once per distinct :register (the
-  scenario) and restarted before every case with its engine/memory.edn and seen.bin deleted and the plot it was last left on cleared (a case with :keep-memory true keeps
+  scenario) and restarted before every case with its engine/memory.edn and seen.bin and its leftover test plans deleted and the plot it was last left on cleared (a case with :keep-memory true keeps
   the memory: the body goes on from the case before it). Stopped at the end. Pure parts: world-test.fixture and world-test.expect."
   (:require ["child_process" :as cp]
             ["fs" :as fs]
@@ -366,6 +366,8 @@
                          (.then (sleep 250) poll)))))]
       (poll))))
 
+(declare clear-stale-plans!)
+
 (defn reset-body-log!
   "Drops the body.log an earlier run kept, so this run's log holds only this run (start-body! appends across restarts)."
   [opts]
@@ -377,6 +379,7 @@
   memory-data when given (the case's :memory seed; the body reads the file as it starts)."
   [opts register keep-memory? memory-data]
   (when-not keep-memory?
+    (clear-stale-plans! opts)
     (doseq [name f/clean-start-files
             :let [file (path/join (body-dir opts) "engine" name)]
             :when (fs/existsSync file)]
@@ -662,6 +665,15 @@
 
 (defn plan-prefix [opts] (str "test-" (str/lower-case (:body opts)) "-"))
 (defn plans-dir [opts] (repo-path "worlds" (:world opts) "plans"))
+
+(defn clear-stale-plans!
+  "Deletes the plan files this body's earlier cases wrote (test-<body>-*.edn) and a killed or failed run left behind, so a
+  case sees only the plans it writes itself."
+  [opts]
+  (when (fs/existsSync (plans-dir opts))
+    (doseq [name (array-seq (fs/readdirSync (plans-dir opts)))
+            :when (and (str/starts-with? name (plan-prefix opts)) (str/ends-with? name ".edn"))]
+      (fs/rmSync (path/join (plans-dir opts) name) #js {:force true}))))
 
 (defn write-plans! [opts c]
   (doall (for [plan (:plans c)]

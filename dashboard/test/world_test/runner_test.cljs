@@ -724,6 +724,21 @@
     (is (seq res))
     (is (empty? bad) (str (count bad) " fixture cases fail: " (pr-str (map (juxt :id :why) (take 5 bad)))))))
 
+(deftest clear-stale-plans-drops-only-this-bodys-leftover-test-plans
+  (async done
+    (-> (with-body-dir
+    (fn [opts _]
+      (let [plans (r/plans-dir opts)
+            names ["test-b-deep.edn" "test-b-pen.edn" "test-bb-x.edn" "test-c-deep.edn" "real.edn"]]
+        (fs/mkdirSync plans #js {:recursive true})
+        (doseq [n names] (fs/writeFileSync (path/join plans n) "{}"))
+        (r/clear-stale-plans! opts)
+        (is (= ["real.edn" "test-bb-x.edn" "test-c-deep.edn"] (vec (sort (fs/readdirSync plans)))))
+        (r/clear-stale-plans! {:body "B" :world "nope"})
+        (js/Promise.resolve nil))))
+        (.catch (fn [e] (is false (.-message e))))
+        (.finally done))))
+
 (deftest write-plans-settled-waits-for-the-body-to-re-read-each-plan-file
   (async done
     (-> (with-body-dir
