@@ -3,6 +3,7 @@
             [engine.args :as a]
             [jobs.lib.blocks :as lb]
             [clojure.set :as set]
+            [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.child :as child]
@@ -388,6 +389,18 @@
       (ctx/update-mem! c assoc :roof-walk-failed true))
     :again))
 
+(defn exposed-why
+  "A short why for a night with no shelter, from the failed sites' reasons: counts per reason, and a hint to move when
+  every site was a place the server refused (spawn protection)."
+  [sites]
+  (let [reasons (map :reason sites)
+        counts (frequencies reasons)]
+    (cond
+      (empty? sites) "no site tried"
+      :else (str (str/join ", " (map (fn [[r n]] (str n " " (name r))) (sort-by (comp name key) counts)))
+                 (when (every? #{:walls-server-refused} reasons)
+                   "; the server refused every block placed (spawn protection?): move well away from here and try again")))))
+
 (defn ^:async hold-exposed!
   "Nothing shelters the body tonight: hold it anyway until day (:exposed; the first time one shelter.exposed warn).
   Each pass still looks for a bed or a sleeper first."
@@ -396,8 +409,9 @@
     (sheltered! c :exposed)
     (ctx/update-mem! c update :exposed #(or % {:pos (sh/feet (:primitives c)) :at (ctx/now c)}))
     (ctx/emit! c :shelter.exposed :warn {:pos (sh/feet (:primitives c)) :sites (failed-sites c)
-                                         :text "cannot shelter here (no bed, nobody asleep, no site to dig in, nowhere safer known); holding until day"}))
-  (await (hold! c :exposed)))
+                                         :text (str "cannot shelter here (no bed, nobody asleep, no site to dig in, nowhere safer known: "
+                                                    (exposed-why (failed-sites c)) "); holding until day")}))
+  (await (hold! c (str "exposed: " (exposed-why (failed-sites c))))))
 
 (defn pit-start
   "The failed site tonight whose pit the body stands in (below it, within the futile radius), or nil."
@@ -675,7 +689,7 @@
         sites (failed-sites c)]
     (ctx/forget-where! c :night-site (constantly true))
     (if (= :exposed how)
-      (result/stop! c :exposed "no shelter tonight: no bed, nobody asleep, no site to dig in, nowhere safer known"
+      (result/stop! c :exposed (str "no shelter tonight: no bed, nobody asleep, no site to dig in, nowhere safer known (" (exposed-why sites) ")")
                     :sites sites :fled (fled c))
       (result/finish! c (cond-> {} how (assoc :night how) (fled c) (assoc :fled (fled c)))))))
 
@@ -732,7 +746,7 @@
                                          (result/finish! c (cond-> {:night (if (= :logged-out sheltered) :logged-out :roofed)} (fled c) (assoc :fled (fled c)))))
           (:fleeing (ctx/mem c)) (await (flee! c (:fleeing (ctx/mem c))))
           (and (= :exposed sheltered) (retry-due? c)) (do (retry-dig-in! c) (await (shelter! c)))
-          (= :exposed sheltered) (await (hold! c :exposed))
+          (= :exposed sheltered) (await (hold! c (str "exposed: " (exposed-why (failed-sites c)))))
           :else (if-let [place (and (roof-walk-wanted? c) (await (sense/decide! c ::roofed-place #(roofed-place c))))]
                   (await (roof-walk! c place))
                   (await (shelter! c))))))))

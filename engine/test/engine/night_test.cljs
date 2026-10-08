@@ -355,7 +355,7 @@
           (st/dawn-after! p 4 (fn [n] (when (= n 2) (reset! mid (:reason (core/holding eng "j1"))))))
           (core/submit! eng '(jobs.survival.night) {})
           (await (core/tick! eng))
-          (is (= :exposed @mid) "a declared hold")
+          (is (re-find #"^exposed: " (str @mid)) "a declared hold")
           (is (= 1 (count (st/emitted seen :shelter.exposed))))
           (let [[s & more] (st/emitted seen :stopped)]
             (is (empty? more))
@@ -363,6 +363,28 @@
             (is (= [:roof-failed] (take 1 (mapv :reason (:sites s)))) "the first site's reason is dig-in's")
           (is (= 4 (count (:sites s))) "max-sites tried, then exposed"))
           (is (= [] (:list (core/state eng)))))))))
+
+(deftest exposed-why-names-the-site-reasons
+  (is (re-find #"2 walls-failed" (night/exposed-why [{:reason :walls-failed} {:reason :walls-failed} {:reason :unreachable}])))
+  (is (re-find #"1 unreachable" (night/exposed-why [{:reason :walls-failed} {:reason :unreachable}])))
+  (is (not (re-find #"spawn protection" (night/exposed-why [{:reason :walls-failed} {:reason :walls-failed}]))))
+  (is (not (re-find #"spawn protection" (night/exposed-why [{:reason :walls-server-refused} {:reason :unreachable}]))))
+  (is (re-find #"spawn protection.*move" (night/exposed-why [{:reason :walls-server-refused} {:reason :walls-server-refused}])))
+  (is (= "no site tried" (night/exposed-why []))))
+
+(deftest a-body-held-exposed-says-why-when-the-server-refuses-every-place
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (st/setup {:time night :blocks st/floor :inventory st/dirt-stack :floor [-4 -4 4 4]})
+              mid (atom nil)]
+          (.override (.-world p) "place" (fn ^:async f [_ _ _] #js {:status "failed" :reason "Server refused the placement"}))
+          (st/dawn-after! p 4 (fn [n] (when (= n 2) (reset! mid (:reason (core/holding eng "j1"))))))
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (core/tick! eng))
+          (is (re-find #"^exposed: " (str @mid)) "the hold names its why")
+          (is (re-find #"spawn protection" (:text (first (st/emitted seen :shelter.exposed)))) "the notice too")
+          (is (re-find #"spawn protection" (:text (first (st/emitted seen :stopped))))))))))
 
 (deftest dig-in-is-one-call-and-stops-with-the-site-reason
   (async done

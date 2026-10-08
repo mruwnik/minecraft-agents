@@ -150,7 +150,7 @@
                          :done)
       (= :wait status) :yield
       (= "no-item" status) (do (ctx/update-mem! c dissoc :mode :start) :continue)
-      (not= :ok status) (fail-site! c :walls-failed (str "cannot place a block: " status (:mob-text (ctx/mem c)) "; " (open-text open)))
+      (not= :ok status) (fail-site! c (if (= "failed" status) :walls-server-refused :walls-failed) (str "cannot place a block: " status (:mob-text (ctx/mem c)) "; " (open-text open)))
       (dig-cells/sealed-in? p :walls roof-height) :done
       :else :continue)))
 
