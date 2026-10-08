@@ -376,6 +376,16 @@
        (shut-in? p kind-at))
      false)))
 
+(defn closed-room?
+  "Whether a walker in cell pos {:x :y :z} could reach fewer than room-cells cells with every door, gate and trapdoor
+  shut (flood over the blocks the body has seen; an unseen or unloaded cell is open): a hut a chased body can shut
+  itself in."
+  [p {:keys [x y z]}]
+  (let [kind-at (fn [cx cy cz]
+                  (let [b (u/seen-block p {:x cx :y cy :z cz})]
+                    (if (and b (openable? (.-name b))) :solid (kind-of b))))]
+    (= :closed (flood (fn [cx cy cz] (forward kind-at cx cy cz)) [x y z] room-cells))))
+
 (defn arrow-kind-of
   "What a block b is to an arrow: :open or :solid. Unloaded (nil) is open. Doors, gates and trapdoors follow their
   open property. solid's non-solid and walk-through blocks and arrow-passes are open. Anything else stops it."

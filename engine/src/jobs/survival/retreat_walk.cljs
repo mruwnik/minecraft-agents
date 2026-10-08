@@ -8,8 +8,10 @@
             [jobs.lib.util :as u]))
 
 (a/defargs settings
-  {::hazard-clearance {:default 2.5 :doc "Distance in blocks kept from a hazard on a flight path." :spec (a/num-in 0 nil)}})
+  {::hazard-clearance {:default 2.5 :doc "Distance in blocks kept from a hazard on a flight path." :spec (a/num-in 0 nil)}
+   ::flank-turn {:default 60 :doc "Degrees a flight turns from straight away toward a refuge that lies behind the chasers, to go round them." :spec (a/num-in 0 90)}})
 (defn hazard-clearance [] (settings/get settings ::hazard-clearance))
+(defn flank-turn [] (settings/get settings ::flank-turn))
 
 (def turns
   "Angles to try, in degrees from the preferred direction, best first."
@@ -41,11 +43,19 @@
   (let [n (js/Math.hypot dx dz)]
     (when (pos? n) [(/ dx n) (/ dz n)])))
 
+(defn rotate [[ux uz] degrees]
+  (let [a (* degrees (/ js/Math.PI 180))
+        c (js/Math.cos a)
+        s (js/Math.sin a)]
+    [(- (* ux c) (* uz s)) (+ (* ux s) (* uz c))]))
+
 (defn direction
   "The preferred unit [ux uz] from from: directly away from the threats (positions), each weighing 1/distance so the
   nearer pushes harder (+x when they cancel out), blended with the direction of home when that lies on the away side
-  (not through the threats)."
-  [from threats home]
+  (not through the threats). flank?: home is a refuge, so when it lies behind the threats the way away turns flank-turn
+  degrees toward its side (a fixed side when straight behind), to go round them."
+  ([from threats home] (direction from threats home false))
+  ([from threats home flank?]
   (let [push (fn [t] (let [d (max 1 (js/Math.hypot (- (:x from) (:x t)) (- (:z from) (:z t))))
                            [ux uz] (or (unit (- (:x from) (:x t)) (- (:z from) (:z t))) [0 0])]
                        [(/ ux d) (/ uz d)]))
@@ -53,15 +63,11 @@
         away (or (unit (first sum) (second sum)) [1 0])
         to-home (when home (unit (- (:x home) (:x from)) (- (:z home) (:z from))))
         along (when to-home (+ (* (first away) (first to-home)) (* (second away) (second to-home))))]
-    (if (and along (pos? along))
-      (or (unit (+ (first away) (first to-home)) (+ (second away) (second to-home))) away)
-      away)))
-
-(defn rotate [[ux uz] degrees]
-  (let [a (* degrees (/ js/Math.PI 180))
-        c (js/Math.cos a)
-        s (js/Math.sin a)]
-    [(- (* ux c) (* uz s)) (+ (* ux s) (* uz c))]))
+    (cond
+      (and along (pos? along)) (or (unit (+ (first away) (first to-home)) (+ (second away) (second to-home))) away)
+      (and along flank?) (let [cross (- (* (first away) (second to-home)) (* (second away) (first to-home)))]
+                           (rotate away (if (neg? cross) (- (flank-turn)) (flank-turn))))
+      :else away))))
 
 (defn column-along
   "The [x z] column k blocks along [ux uz] from the centre of from's cell (a
@@ -174,10 +180,11 @@
   "The walk target, a feet cell, among the directions (turns from the preferred one) that avoid every hazard and are
   worth walking (see worth?): first one whose end (covered? true: out of a ranged mob's line of fire) gives cover, a
   full step before a short one; else the full step that takes least time (walk-time: a swim is slow), turn order
-  breaking ties; else the most open. nil when cornered. opts {:swim-factor (default 1) :covered? (end -> bool)}."
+  breaking ties; else the most open. nil when cornered. opts {:swim-factor (default 1) :covered? (end -> bool)
+  :flank? (home is a refuge: direction)}."
   ([block-at from threats home hazards step] (choose-target block-at from threats home hazards step nil))
-  ([block-at from threats home hazards step {:keys [swim-factor covered?] :or {swim-factor 1}}]
-   (let [dir (direction from threats home)
+  ([block-at from threats home hazards step {:keys [swim-factor covered? flank?] :or {swim-factor 1}}]
+   (let [dir (direction from threats home flank?)
          options (->> turns
                       (map #(rotate dir %))
                       (map (fn [d] (let [cells (walk-cells block-at from d step)]

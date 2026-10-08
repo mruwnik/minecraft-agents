@@ -22,7 +22,10 @@
    ::default-radius {:default 16 :doc "Blocks out to which a sensed or remembered mob costs a route." :spec (a/int-in 1 nil)}
    ::close {:default 2 :doc "Blocks within which a mob is close." :spec (a/int-in 0 nil)}
    ::exposure-s {:default 3 :doc "Seconds a body is exposed to a mob on a route." :spec (a/int-in 0 nil)}
-   ::snap-span {:default 4 :doc "How far up or down a straight route looks for ground in each column." :spec (a/int-in 0 nil)}})
+   ::snap-span {:default 4 :doc "How far up or down a straight route looks for ground in each column." :spec (a/int-in 0 nil)}
+   ::sprint-speed {:default 5.6 :doc "Blocks a second a sprinting body covers (reach-first?)." :spec (a/num-in 0.1 nil)}
+   ::chase-speed {:default 3 :doc "Blocks a second a chasing melee mob covers, a little over a zombie's (reach-first?)." :spec (a/num-in 0.1 nil)}
+   ::race-margin-s {:default 0.5 :doc "Seconds the body must win a race to a refuge by (reach-first?)." :spec (a/num-in 0 nil)}})
 
 
 ;; ---------------------------------------------------------------- reading inputs
@@ -188,3 +191,12 @@
                    (sort-by #(u/dist (:pos body) (:pos %))))]
     (vec (take max-dangers (concat (map #(danger-of body :sensed % opts) sensed)
                                    (map #(danger-of body :remembered {:name (:mob %) :pos (:pos %)} opts) spots)))))))
+
+;; ---------------------------------------------------------------- the race to a refuge
+
+(defn reach-first?
+  "Whether a sprinting body body-dist blocks from a refuge gets there ::race-margin-s before every chaser, each
+  (mob-dists) that many blocks from it at ::chase-speed. True with no chaser."
+  [body-dist mob-dists]
+  (let [[sprint-speed chase-speed race-margin-s] (map #(settings/get settings %) [::sprint-speed ::chase-speed ::race-margin-s])]
+    (every? #(< (+ (/ body-dist sprint-speed) race-margin-s) (/ % chase-speed)) mob-dists)))

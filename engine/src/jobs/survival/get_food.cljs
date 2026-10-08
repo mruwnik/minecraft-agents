@@ -29,7 +29,7 @@
   4. The nearest passive food animal within :hunt-radius (combat.attack, then collect-drops).
   5. Mature crops or sweet berry bushes within :hunt-radius (blocks.dig).
   Nothing left: once per job (:explore, default on) it searches for food animals and crops (jobs.explore.search, the
-  ::explore setting; not while the night handler holds) and goes on if it found some; at ::eat-bad-food (6) or below it then eats harmful food carried (rotten
+  ::explore setting; not at night nor while the night handler holds) and goes on if it found some; at ::eat-bad-food (6) or below it then eats harmful food carried (rotten
   flesh, with :allow-bad). Still nothing: it stops :no-food with a food.none warning (what was searched, the nearest known source) and writes
   :hungry. For :ask-cooldown-ms after that a round still eats and still does ways 1, 3, 4 and 5, but not a source it
   already knew when it gave up (one learned since is tried first); with nothing to do (harmful food above ::eat-bad-food does not count) the check waits :no-food-found, else the round declines.
@@ -447,13 +447,14 @@
 
 (defn ^:async explore!
   "Once per job, with nothing known or seen: search for food animals and ripe crops (jobs.explore.search, :explore),
-  not while the night handler holds. :again when the search found something to hunt or dig, else nil with what it
+  not at night (a body sheltered for the night stays in) nor while the night handler holds. :again when the search found something to hunt or dig, else nil with what it
   covered remembered."
   [c]
   (let [e (:explore (:args c))]
     (cond
       (or (not e) (:explored (ctx/mem c))) nil
-      (night-holds? c) (do (ctx/update-mem! c assoc :explored "not searched, the night handler holds") nil)
+      (or (sh/night? (:primitives c)) (night-holds? c))
+      (do (ctx/update-mem! c assoc :explored "not searched at night or while the night handler holds") nil)
       :else
       (do
         (ctx/update-mem! c assoc :explored "started")

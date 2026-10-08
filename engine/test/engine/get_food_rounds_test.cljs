@@ -7,6 +7,7 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.fake :as fake]
+            [engine.hut-shelter-test :as hs]
             [engine.memory :as mem]
             [engine.scenario :as scenario]
             [engine.takeover :as takeover]
@@ -440,4 +441,15 @@
         (let [{:keys [eng seen]} (setup {:self {:food 1} :time 15000} :step-ms 5)]
           (await (one-round! eng {}))
           (is (= [] (events-of seen :search.not-found)))
+          (is (re-find #"night" (str (:text (first (events-of seen :food.none)))))))))))
+
+(deftest hungry-at-night-in-a-roofed-hut-does-not-explore-out-of-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup (merge (hs/hut-world {:x 5.5 :y 64 :z 0.5} {}) {:self {:food 1 :pos {:x 5.5 :y 64 :z 0.5}}
+                                                                                       :time 15000})
+                                        :step-ms 5)]
+          (await (one-round! eng {}))
+          (is (= [] (events-of seen :search.not-found)) "no search out of the hut at night")
           (is (re-find #"night" (str (:text (first (events-of seen :food.none)))))))))))

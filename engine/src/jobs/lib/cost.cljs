@@ -10,7 +10,7 @@
              (tool-tier, weapon-rank, cheapness) (jobs.lib.cost.weapon).
     fight    fight-damage, decide: the damage of a fight with the current kit, :fight or :flee (jobs.lib.cost.fight).
     danger   route-danger, straight-route: the danger of a walk past mobs; stance, danger-rate, danger-list: go-to's
-             planner dangers (jobs.lib.cost.danger).
+             planner dangers; reach-first?: a body's race to a refuge against its chasers (jobs.lib.cost.danger).
     health   hp-seconds, health-scale, drown-prices, damage-budget, survivable-budget: what an hp costs and how many a walk may spend (jobs.lib.cost.health).
     food     food-reserve: the food a body keeps carried, 3 days of it (jobs.lib.cost.food).
     value    item-value, fetch-cost, walk-cost, detour-cost: what items are worth, what fetching them, walking or a pick-up detour costs; light-cost: a torch go-to places (jobs.lib.cost.value);
@@ -62,6 +62,7 @@
 (def danger-max-rate danger/max-rate)
 (def danger-cap danger/danger-cap)
 (def danger-default-shape danger/danger-shape)
+(def reach-first? danger/reach-first?)
 
 (def hp-seconds health/hp-seconds)
 (def health-scale health/health-scale)

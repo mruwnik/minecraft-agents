@@ -16,6 +16,7 @@
             [jobs.lib.pace :as pace]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.retreat-flight :as flight]
+            [jobs.survival.retreat-home :as retreat-home]
             [jobs.survival.retreat-refuge :as refuge]
             [jobs.survival.retreat-walk :as walk]))
 
@@ -28,8 +29,13 @@
   Each step, in this order:
   1. A door, gate or trapdoor standing open within a hand's reach and nearer the nearest chaser than the body is shut
      with one click (retreat.door-shut info). Each door is clicked at most once a flight.
-  2. Walks a short step (:step blocks) away from all chasers (nearer ones weigh more) with a go-to child (:escalate false),
-     leaning toward the latest :bed or :home when it is within :home-range and not through the hostiles, avoiding :hazard positions.
+  2. Runs home first: the latest :bed or :home within :home-range that is a closed room (walls, doors that shut:
+     jobs.survival.retreat-home) and that it reaches ahead of every melee chaser (jobs.lib.cost/reach-first?), with a
+     go-to child (retreat.home info, once a flight); a step that gets no nearer drops home for the flight. At home the
+     door is shut (1.), and a chaser still with a way in gets the cornered options (4.): it does not walk out.
+  3. Walks a short step (:step blocks) away from all chasers (nearer ones weigh more) with a go-to child (:escalate false),
+     leaning toward the latest :bed or :home when it is within :home-range and not through the hostiles (a closed home behind
+     them: turned retreat-walk ::flank-turn degrees toward it, to go round them), avoiding :hazard positions.
      When a wall blocks the way away it turns up to 120 degrees towards open ground (at least 2 clear cells).
      It prefers, in this order: a step whose end is out of every ranged chaser's line of fire (cover: leaves stop arrows),
      the full step that takes least time (a swim block costs :swim-factor), the most open.
@@ -40,7 +46,7 @@
   covered step, it takes cover where it stands first: seal in, else dig down and plug, else a side pocket (as below);
   none of them possible, it walks on. Not while a creeper chases it or a melee mob is within cover-gap: it walks (or
   backs off, cornered) first.
-  3. Cornered (no open direction worth a walk, or the walk is blocked; checked afresh every step) with no hostile within
+  4. Cornered (no open direction worth a walk, or the walk is blocked; checked afresh every step) with no hostile within
      :radius: holds a second (wait, why cornered) and looks again; after :no-gain-steps such steps or holds with no gain the flight ends :keeps-off. With one within :radius: takes the safest option it has not yet failed.
      - fight (jobs.survival.fight-back) only when jobs.lib.cost/fight-damage leaves :reserve health. Never against a creeper.
      - seal in: fill the open sides at feet and head height and the roof (dig-in's 1x1 cells) with carried :blocks,
@@ -307,10 +313,11 @@
    (let [p (:primitives c)
          from (u/self-pos c)
          threat-pos (mapv #(danger-q/mob-pos p %) threats)
-         home (home-pos c)]
-     (await (glance-away! c (walk/direction from threat-pos home)))
+         home (home-pos c)
+         flank? (some? (retreat-home/refuge c home))]
+     (await (glance-away! c (walk/direction from threat-pos home flank?)))
      (walk/choose-target (block-at-fn p) from threat-pos home (keep (comp :pos :data) (ctx/entries c :hazard))
-                         (:step (:args c)) {:swim-factor (swim-factor c) :covered? covered?}))))
+                         (:step (:args c)) {:swim-factor (swim-factor c) :covered? covered? :flank? flank?}))))
 
 (defn ^:async take-cover!
   "Seal in, else dig down and plug, else a side pocket (refuge), the first not failed this sweep: its step's result, nil
@@ -404,9 +411,22 @@
   (await (ctx/act c :wait #js {:ms (flight/wait-ms) :why "cornered"}))
   :again)
 
+(defn refuge
+  "The latest :home or :bed (home-pos) when it is a closed room to flee to (jobs.survival.retreat-home/refuge), else nil."
+  [c]
+  (retreat-home/refuge c (home-pos c)))
+
+(defn ^:async run-home!
+  "A step home (go-to, dangers costed), said once a flight (retreat.home): :again; a step that gets no nearer drops home
+  for the rest of the flight."
+  [c home]
+  (retreat-home/say-once! c home)
+  (when-not (await (step! c :home home 0)) (retreat-home/failed! c))
+  :again)
+
 (defn ^:async flight-step!
-  "One step of the flight (flight/look!, then shut a door, or walk a step away, or the cornered options), :again; the flight's
-  end (flight/end-flight!) once no chaser is left."
+  "One step of the flight (flight/look!, then shut a door, or run home, or walk a step away, or the cornered options),
+  :again; the flight's end (flight/end-flight!) once no chaser is left."
   [c]
   (let [{:keys [no-gain-steps]} (:args c)
         p (:primitives c)
@@ -426,6 +446,8 @@
       (do (when (seq (near-hostiles c)) (ctx/update-mem! c assoc :since-gain 0))
           (await (stuck "the chaser keeps up")))
       door (await (shut-door! c door))
+      (when-let [h (refuge c)] (retreat-home/at-home? p h)) (await (stuck "at home, the hostile still has a way in"))
+      (when-let [h (refuge c)] (retreat-home/race-won? p h threats)) (await (run-home! c (refuge c)))
       :else
       (let [_ (await (eat-on-the-run! c threat))
             covered? (cover-fn p threats)
