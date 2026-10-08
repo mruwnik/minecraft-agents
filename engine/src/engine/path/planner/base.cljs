@@ -161,7 +161,7 @@
   "The hp that `hp` of drowning (continuous: DROWN-HP a second) may take: vanilla deals whole DROWN-HP hits, the first up to
   a second early (a body already at 0 air) and a swim may run slower than planned, so ceil(seconds + slack) hits (costs.drownSlack)."
   [slack hp] (if (pos? hp) (* DROWN-HP (js/Math.ceil (+ (/ hp DROWN-HP) slack))) 0))
-(def ^:const LETHAL-S 1e6) ; seconds a lethal drowning costs, and each hp past it: any plan that does not drown wins
+(def ^:const LETHAL-S 1e6) ; seconds a lethal drowning costs, and each hp past it, times the dearest second (planner-tuned lethal-seconds): any plan that does not drown wins
 (def ^:const AIR-STEP 1) ; seconds of air that make an arrival at a node already reached worth a record of its own
 (def ^:const DMG-STEP 0) ; hp of damage that make an arrival at a node already reached worth a record of its own (a finite budget: exact)
 (def ^:const TABLE 8192) ; slots of the direct-mapped tight-cell caches

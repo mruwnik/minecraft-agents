@@ -132,4 +132,8 @@
    ;; (seconds of margin in the count of drowning hits, drowned-hp)
    ^:mutable drowns ^:mutable cur-drown ^js drown-prices lethal-hp ^js air-known drown-slack
    ;; costs.lethalAir off (the default): a swim whose drowning reaches lethal-hp is refused (lethal-seen, reason "air-lethal")
-   ^boolean no-lethal ^:mutable ^boolean lethal-seen])
+   ^boolean no-lethal ^:mutable ^boolean lethal-seen
+   ;; each node's drowning hp in its open air-out (the head under since the last breath) and the counted hp (drowned-hp) of
+   ;; the air-outs closed before it; what the move being made leaves (set by airStep); the seconds a lethal plan costs
+   ;; (LETHAL-S times the dearest second the caller's prices allow, see drownCost)
+   ^:mutable drown-runs ^:mutable drown-closed ^:mutable move-run ^:mutable move-closed lethal-s])

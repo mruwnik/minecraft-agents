@@ -57,7 +57,7 @@
      sets it from the oxygen when the head is under water. Such a plan to a goal with its head in seen air (to-air?) is never
      refused for air and ends with the head in air (options.airSeen, fn x y z: the body has seen or felt that block, nil: all): each second past the supply drowns DROWN-HP hp (result cost.drown; not
      damage, so no damageBudget), the first k hp costing options.drownPrices[k] seconds (nil: damageWeight each); drowning
-     to options.health (20) is lethal, counting its 2 hp hits as ceil(seconds + costs.drownSlack (1)): refused (reason air-lethal) unless options.costs.lethalAir is 1 (go-to :costs :lethal-air, breathe's), then it costs LETHAL-S more, so a lethal plan comes back only when no other does. Any
+     with the plan's certain damage to options.health (20) is lethal, each air-out (under since the last breath) counting its 2 hp hits as ceil(seconds + costs.drownSlack (1)): refused (reason air-lethal) unless options.costs.lethalAir is 1 (go-to :costs :lethal-air, breathe's), then it costs LETHAL-S (times the dearest second the caller's prices allow) more, so a lethal plan comes back only when no other does. Any
      other plan swims no further than airLimit from airUsed.
    - options.stopAtEdge: with the goal unloaded, the search ends at the first node it expands at the loaded edge (edgeStop)
      and names it as its frontier, not after searching all loaded land. go-to's budgeted searches set it (walk.search/new-search)."
@@ -190,6 +190,14 @@
          (base/breathable? (.-table options) (.stateAt snapshot (.-x goal) (inc (.-y goal)) (.-z goal)))
          (or (nil? seen) (true? (seen (.-x goal) (inc (.-y goal)) (.-z goal)))))))
 
+;; the seconds a lethal plan costs (Search lethal-s): LETHAL-S times the dearest second the caller's prices allow (a walk
+;; at the danger cap through its dearest toll, in the dark, avoided, an hp of risk and of damage a second), so no toll,
+;; danger rate or weight makes a plan that does not kill cost more than one that does
+(defn- lethal-seconds [risk-weight damage-weight danger-cap dark-factor ^js tolls avoid-factor]
+  (let [toll (if (some? tolls) (reduce max 0 (es6-iterator-seq (.values tolls))) 0)]
+    (* base/LETHAL-S (+ 1 avoid-factor)
+       (+ 1 toll dark-factor (* risk-weight danger-cap) risk-weight damage-weight))))
+
 (defn- search-from ^Search [^js snapshot ^js query ^js options]
   (let [^js table (.-table options)
         ^js from (.-from query)
@@ -320,7 +328,12 @@
      (js/Float64Array. cap) 0 0 0 false
      ;; drowns cur-drown drown-prices lethal-hp air-known
      (js/Float64Array. cap) 0 (.-drownPrices options) (option options "health" 20) (.-airSeen options) (unchecked-get costs "drownSlack")
-     (not (pos? (or-else (unchecked-get costs "lethalAir") 0))) false)))
+     (not (pos? (or-else (unchecked-get costs "lethalAir") 0))) false
+     ;; drown-runs drown-closed move-run move-closed lethal-s
+     (js/Float64Array. cap) (js/Float64Array. cap) 0 0
+     (let [rw (option options "riskWeight" 2)]
+       (lethal-seconds rw (option options "damageWeight" rw) (* risk-scale (option options "dangerCap" 4)) dark-factor
+                       (when (some? tolls) (.-cells tolls)) (if (some? avoid) (or-else (.-factor avoid) 0) 0))))))
 
 ;; the body's hitbox reaches this far from its centre in x and z
 (def ^:const HITBOX-HALF 0.3)

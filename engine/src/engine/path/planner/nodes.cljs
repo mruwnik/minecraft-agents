@@ -1,6 +1,6 @@
 (ns engine.path.planner.nodes
   "Search methods: the goal test and heuristic, and node storage (hash, heap, recording an arrival, refused moves)."
-  (:require [engine.path.planner.base :refer [AIR-STEP AVOID-CLIMB DMG-STEP LETHAL-S drowned-hp AVOID-OPEN AVOID-WATER HALF JUMP-UP MOVE-CLIMB-UP MOVE-DROP MOVE-GAP MOVE-OPEN MOVE-SWIM REGIONS SPAN SQRT2 cell-key grown next-pow2]]
+  (:require [engine.path.planner.base :refer [AIR-STEP AVOID-CLIMB DMG-STEP drowned-hp AVOID-OPEN AVOID-WATER HALF JUMP-UP MOVE-CLIMB-UP MOVE-DROP MOVE-GAP MOVE-OPEN MOVE-SWIM REGIONS SPAN SQRT2 cell-key grown next-pow2]]
             [engine.path.planner.search :refer [Search]]))
 
 (set! *warn-on-infer* true)
@@ -104,6 +104,8 @@
     (set! (.-risks s) (grown (.-risks s) (.-cap s)))
     (set! (.-dmgs s) (grown (.-dmgs s) (.-cap s)))
     (set! (.-drowns s) (grown (.-drowns s) (.-cap s)))
+    (set! (.-drown-runs s) (grown (.-drown-runs s) (.-cap s)))
+    (set! (.-drown-closed s) (grown (.-drown-closed s) (.-cap s)))
     (set! (.-darks s) (grown (.-darks s) (.-cap s)))
     (set! (.-airs s) (grown (.-airs s) (.-cap s)))
     (set! (.-peaks s) (grown (.-peaks s) (.-cap s)))
@@ -196,6 +198,8 @@
     (aset (.-risks s) node risk)
     (aset (.-dmgs s) node (.-cur-dmg s))
     (aset (.-drowns s) node (.-cur-drown s))
+    (aset (.-drown-runs s) node (.-move-run s))
+    (aset (.-drown-closed s) node (.-move-closed s))
     (aset (.-darks s) node dark)
     (aset (.-airs s) node (.-move-air s))
     (aset (.-peaks s) node (js/Math.max (aget (.-peaks s) parent-node) (.-move-peak s)))
@@ -208,19 +212,24 @@
           (.siftUp s (dec (.-heap-n s)) node))
       (.siftUp s (aget (.-heap-pos s) node) node)))
 
+  ;; the hp a plan counts against options.health: the counted hp (drowned-hp) of each air-out, closed and open, and the
+  ;; certain damage `dmg`
+  (lethalCount [s closed run dmg] (+ closed (drowned-hp (.-drown-slack s) run) dmg))
+
   ;; the seconds drowning hp costs: drown-prices (the first k hp cost drown-prices[k], between and past them linear; nil:
-  ;; damage-weight each), and LETHAL-S more, and LETHAL-S each counted hp past it (drowned-hp, the refusal's count), from
-  ;; lethal-hp on (a lethal plan loses to any other); below it the price is of the hp itself
-  (drownCost [s hp]
-    (let [^js p (.-drown-prices s)
-          n (if (some? p) (dec (.-length p)) 0)
-          price (if (< n 1)
-                  (* hp (.-damage-weight s))
-                  (let [k (js/Math.min (dec n) (js/Math.floor hp))]
-                    (+ (aget p k) (* (- hp k) (- (aget p (inc k)) (aget p k))))))]
-      (let [counted (drowned-hp (.-drown-slack s) hp)]
+  ;; damage-weight each), and lethal-s more, and lethal-s each counted hp past it (`counted`, lethalCount, the refusal's
+  ;; count), from lethal-hp on (a lethal plan loses to any other); below it the price is of the hp itself. 0 without drowning.
+  (drownCost [s hp counted]
+    (if-not (pos? hp)
+      0
+      (let [^js p (.-drown-prices s)
+            n (if (some? p) (dec (.-length p)) 0)
+            price (if (< n 1)
+                    (* hp (.-damage-weight s))
+                    (let [k (js/Math.min (dec n) (js/Math.floor hp))]
+                      (+ (aget p k) (* (- hp k) (- (aget p (inc k)) (aget p k))))))]
         (if (>= counted (.-lethal-hp s))
-          (+ price LETHAL-S (* LETHAL-S (- counted (.-lethal-hp s))))
+          (+ price (.-lethal-s s) (* (.-lethal-s s) (- counted (.-lethal-hp s))))
           price))))
 
   ;; a record of its own for a node: unless the node budget is spent
@@ -248,6 +257,10 @@
         (and (pos? (.-move-dmg s)) (> (+ (aget (.-dmgs s) parent-node) (.-move-dmg s)) (.-damage-budget s))) (do (set! (.-damage-refused s) true) nil)
         ;; a move that is not a swim: its air (headAir)
         (and (zero? (.-move-water s)) (not ^boolean (.headAir s parent-node x y z dsec))) nil
+        ;; certain damage after drowning (airStep refuses the swims themselves)
+        (and ^boolean (.-no-lethal s) (pos? (.-move-dmg s)) (pos? (aget (.-drowns s) parent-node))
+             (>= (.lethalCount s (.-move-closed s) (.-move-run s) (+ (aget (.-dmgs s) parent-node) (.-move-dmg s))) (.-lethal-hp s)))
+        (do (set! (.-lethal-seen s) true) nil)
         :else
         (let [drisk (if (pos? (.-n-dangers s)) (+ drisk (.dangerRisk s x y z dsec)) drisk)
               extra (if ^boolean (.-avoiding s) (.avoidCost s x y z move dsec drisk) 0)
@@ -265,11 +278,14 @@
                   ;; the price of certain damage over what risk already charges for it
                   dpay (* (- (.-damage-weight s) (.-risk-weight s)) (.-move-dmg s))
                   drown (+ (aget (.-drowns s) parent-node) (.-move-drown s))
+                  counted (.lethalCount s (.-move-closed s) (.-move-run s) dmg)
                   g (if ^boolean (.-avoiding s)
                       (+ (aget (.-gs s) parent-node) dsec (* (.-risk-weight s) drisk) extra ddark dpay
-                         (if (pos? (.-move-drown s)) (- (.drownCost s drown) (.drownCost s (aget (.-drowns s) parent-node))) 0))
+                         (- (.drownCost s drown counted)
+                            (.drownCost s (aget (.-drowns s) parent-node)
+                                        (.lethalCount s (aget (.-drown-closed s) parent-node) (aget (.-drown-runs s) parent-node) (aget (.-dmgs s) parent-node)))))
                       (+ sec (* (.-risk-weight s) risk) dark (* (- (.-damage-weight s) (.-risk-weight s)) dmg)
-                         (if (pos? drown) (.drownCost s drown) 0)))]
+                         (.drownCost s drown counted)))]
               (set! (.-cur-dmg s) dmg)
               (set! (.-cur-drown s) drown)
               (if (== found -1)

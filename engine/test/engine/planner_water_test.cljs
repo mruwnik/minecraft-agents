@@ -782,3 +782,50 @@
     (is (found? r) "off the pillar into the column's top")
     (is (= [66 65 64] (mapv :y (in-column r))))
     (is (= 64 (:y (first (leaves-column-at r)))))))
+
+;; a 3 s air supply: three dives of 6 water blocks (3.5 s each, from airUsed 0.5 and after 3-block surface windows that
+;; give the air back), each 0.5 s past the supply (1 hp). Each air-out is its own count of 2 hp hits, ceil(0.5 + slack):
+;; with drownSlack 1, 3 x 2 hits = 12 hp, not ceil(1.5 + 1) = 3 hits of the summed 3 hp
+(def air-outs
+  (world [[10 64 -2 37 68 4 "stone"]
+          [11 64 1 34 65 1 "water"]
+          [17 65 1 19 65 1 "air"] [26 65 1 28 65 1 "air"]
+          [35 64 1 35 65 1 "air"]]))
+(defn run-air-outs [health slack]
+  (run air-outs drown-start (near 35 64 1 0) {:goalFlood 0 :health health :costs {:airSupply 3 :airUsed 0.5 :drownSlack slack}}))
+
+(deftest each-air-out-counts-its-own-hits
+  (let [r (run-air-outs 13 1)]
+    (is (found? r))
+    (is (= 3 (cost r :drown)) "three air-outs of 1 hp"))
+  (is (= "air-lethal" (:reason (run-air-outs 12 1))) "3 x ceil(0.5 + 1) hits = 12 hp")
+  (is (= "air-lethal" (:reason (run-air-outs 6 0))) "3 x ceil(0.5) hits = 6 hp")
+  (is (found? (run-air-outs 7 0))))
+
+;; a 3 s air supply: a 6-block dive to an air pocket (x 17) from airUsed 1 drowns 1 s (2 hp, counted ceil(1 + 1) hits =
+;; 4 hp), then a 5-block drop out of the pocket takes 2 hp of fall damage: 6 hp certain on the plan
+(def drown-then-drop
+  (world [[10 64 -2 22 68 4 "stone"] [16 50 -2 24 58 4 "stone"]
+          [11 64 1 16 65 1 "water"] [17 64 1 17 65 1 "air"] [18 59 1 20 65 1 "air"]]))
+(defn run-drown-then-drop [health]
+  (run drown-then-drop drown-start (near 19 59 1 0) {:goalFlood 0 :maxDrop 6 :health health :costs {:airSupply 3 :airUsed 1}}))
+
+(deftest certain-damage-on-the-plan-adds-to-the-lethal-drowning-count
+  (let [r (run-drown-then-drop 7)]
+    (is (found? r))
+    (is (= 2 (cost r :drown)))
+    (is (= 2 (cost r :damage)) "the fall"))
+  (is (= "air-lethal" (:reason (run-drown-then-drop 6))) "4 counted hp of drowning and the 2 hp fall"))
+
+;; a lethal plan loses to any other whatever the caller's prices: a toll or a danger on the walkway dearer than LETHAL-S
+(deftest a-lethal-way-to-air-loses-to-a-safe-one-at-any-toll
+  (let [r (run (lethal-dive true) dive-start (near 53 70 1 0)
+               (assoc at-health-10 :tolls {:cells (js/Map. #js [#js [(planner/cell-key 30 70 20) 1e9]])}))]
+    (is (found? r))
+    (is (some #(= 20 (:z %)) (steps r)) "the long way round")))
+
+(deftest a-lethal-way-to-air-loses-to-a-safe-one-at-any-danger-rate
+  (let [r (run (lethal-dive true) dive-start (near 53 70 1 0)
+               (assoc at-health-10 :dangerCap 1e9 :dangers [{:x 30.5 :y 70 :z 20.5 :close 1 :radius 2 :rate 1e9}]))]
+    (is (found? r))
+    (is (some #(= 20 (:z %)) (steps r)) "the long way round")))

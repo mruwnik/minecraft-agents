@@ -120,21 +120,24 @@
   ;; head under water (`under`): false when refused for air. Over the air limit (airLimit + airGrace * airDrain: a turtle
   ;; helmet's 10 free seconds) a move is refused, except on a way to air from under water (to-air): there its seconds past
   ;; c-air-drown (the supply plus the grace) drown DROWN-HP hp each (move-drown, which consider adds to the node's drowning
-  ;; and prices; not damage, so no damage budget refuses it). A move with the head out breathes AIR-REFILL times its
-  ;; `refill` seconds back.
+  ;; and prices; not damage, so no damage budget refuses it), and without lethal-air a move whose count (lethalCount: each
+  ;; air-out's hits, and the certain damage so far) reaches lethal-hp is refused. A move with the head out breathes AIR-REFILL
+  ;; times its `refill` seconds back and closes the air-out (move-run, move-closed).
   (airStep [s i ^boolean under base refill]
     (let [air (if (>= i 0) (aget (.-airs s) i) 0)
           use (+ air (* base (.-c-air-drain s)))
           drown (if (and under (> use (.-c-air-drown s)))
                   (/ (* DROWN-HP (- use (js/Math.max air (.-c-air-drown s)))) (.-c-air-drain s))
-                  0)]
+                  0)
+          run (if (>= i 0) (aget (.-drown-runs s) i) 0)
+          closed (if (>= i 0) (aget (.-drown-closed s) i) 0)]
       (cond
         (and under (> use (.-c-air-limit s)) (not ^boolean (.-to-air s)))
         (do (set! (.-air-seen s) true)
             false)
 
         (and under ^boolean (.-no-lethal s) (> use (.-c-air-drown s))
-             (>= (drowned-hp (.-drown-slack s) (+ (if (>= i 0) (aget (.-drowns s) i) 0) drown)) (.-lethal-hp s)))
+             (>= (.lethalCount s closed (+ run drown) (if (>= i 0) (aget (.-dmgs s) i) 0)) (.-lethal-hp s)))
         (do (set! (.-lethal-seen s) true)
             false)
 
@@ -142,6 +145,8 @@
         (do (set! (.-move-air s) (if under use (js/Math.max 0 (- air (* AIR-REFILL refill)))))
             (set! (.-move-peak s) (if under use 0))
             (set! (.-move-drown s) drown)
+            (set! (.-move-run s) (if under (+ run drown) 0))
+            (set! (.-move-closed s) (if under closed (+ closed (drowned-hp (.-drown-slack s) run))))
             true))))
 
   ;; a move that is not a swim (a climb, a walk, a drop): with the head in a wet cell (a waterlogged ladder, scaffolding
@@ -153,7 +158,9 @@
     (set! (.-move-air s) 0)
     (set! (.-move-peak s) 0)
     (set! (.-move-water s) 0)
-    (set! (.-move-drown s) 0))
+    (set! (.-move-drown s) 0)
+    (set! (.-move-run s) 0)
+    (set! (.-move-closed s) 0))
 
   (currentAt [s x y z]
     (if (== (aget (.-tbl-flowing s) (.stateAt s x y z)) 1) (.-c-current s) 0))
