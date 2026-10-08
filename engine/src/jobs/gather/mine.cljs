@@ -1035,12 +1035,37 @@
             (>= (js/Math.abs dx) (js/Math.abs dz)) (if (pos? dx) "east" "west")
             :else (if (pos? dz) "south" "north")))))
 
+(defn at-pre-start?
+  "Whether the body stands on the cell the job began on."
+  [c]
+  (= (access/cell (:pre-start (ctx/mem c))) (access/cell (cell-of (u/self-pos c)))))
+
+(defn ^:async back-to-pre-start!
+  "Before the first dig, after a fetch walked the body off: a go-to child back to the cell the job began on (mem :pre-start),
+  which the start, tunnel origin and walk home are taken from. Else the job ends
+  :stopped :not-back. :continue while it walks, :again once there."
+  [c]
+  (let [{:keys [x y z] :as cell} (:pre-start (ctx/mem c))
+        r (await (ctx/call-child c :back 'jobs.movement.go-to
+                                 {:pos {:x (+ x 0.5) :y y :z (+ z 0.5)} :range 0 :escalate true :zone-tolls true
+                                  :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+    (cond
+      (= :continue r) :continue
+      (at-pre-start? c) :again
+      :else (do (ctx/emit! c :mine.done :warn {:got 0 :reason :not-back :text (str "mine could not get back to " (str/join "," (access/cell cell)) " after fetching its tool")})
+                (ctx/result! c {:status :stopped :got 0 :reason :not-back})
+                :done))))
+
 (defn ^:async step [c]
   (settle-dig! c)
+  (when (and (nil? (:phase (ctx/mem c))) (nil? (:pre-start (ctx/mem c))))
+    (ctx/update-mem! c assoc :pre-start (cell-of (u/self-pos c))))
   (let [m (ctx/mem c)
         {:keys [heading direction]} (:args c)]
     (cond
       (and (contains? #{nil :dig} (:phase m)) (no-tool? c)) (await (fetch-pickaxe! c))
+
+      (and (nil? (:phase m)) (not (no-tool? c)) (:pre-start m) (not (at-pre-start? c))) (await (back-to-pre-start! c))
 
       (nil? (:phase m))
       (let [faced (facing (:primitives c))
