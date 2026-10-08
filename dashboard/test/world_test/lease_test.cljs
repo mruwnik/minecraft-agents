@@ -376,13 +376,14 @@
        "102 node engine/out/body.cjs --agent ProbePoolB --world test\n"
        "103 node engine/out/body.cjs --agent ProbePoolBX --world test\n"
        "104 node engine/out/body.cjs --agent ProbeOther --world test\n"
+       "106 node --max-old-space-size=128 out/body-release.cjs --agent ProbePoolC --world test --fresh\n"
        "105 pgrep -af out/body.cjs --agent ProbePoolA \n"))
 
 (deftest body-processes-are-read-from-pgrep-lines
-  (is (= [{:pid 101 :name "ProbePoolA"} {:pid 102 :name "ProbePoolB"} {:pid 103 :name "ProbePoolBX"} {:pid 104 :name "ProbeOther"}]
+  (is (= [{:pid 101 :name "ProbePoolA"} {:pid 102 :name "ProbePoolB"} {:pid 103 :name "ProbePoolBX"} {:pid 104 :name "ProbeOther"} {:pid 106 :name "ProbePoolC"}]
          (l/parse-body-procs pgrep-out))))
 
 (deftest stale-bodies-are-the-own-prefix-ones-without-a-live-lease
   (let [procs (l/parse-body-procs pgrep-out)]
-    (is (= [102] (mapv :pid (l/stale-body-procs procs "ProbePool" #{"ProbePoolA"}))))
-    (is (= [101 102] (mapv :pid (l/stale-body-procs procs "ProbePool" #{}))))))
+    (is (= [102 106] (mapv :pid (l/stale-body-procs procs "ProbePool" #{"ProbePoolA"}))))
+    (is (= [101 102 106] (mapv :pid (l/stale-body-procs procs "ProbePool" #{}))))))

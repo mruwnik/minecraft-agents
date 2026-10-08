@@ -40,10 +40,10 @@
   (set (keep (fn [[name pid]] (when (alive? pid) name)) holders)))
 
 (defn parse-body-procs
-  "The output of `pgrep -af out/body.cjs` -> [{:pid :name}] of the body processes (the --agent name)."
+  "The output of `pgrep -af out/body` -> [{:pid :name}] of the body processes (the --agent name)."
   [out]
   (vec (keep (fn [line]
-               (when-let [[_ pid name] (re-find #"^\s*(\d+)\s+(?:\S*/)?node\s.*out/body\.cjs --agent (\S+)" line)]
+               (when-let [[_ pid name] (re-find #"^\s*(\d+)\s+(?:\S*/)?node\s.*out/body(?:-release)?\.cjs --agent (\S+)" line)]
                  {:pid (js/parseInt pid 10) :name name}))
              (str/split-lines (or out "")))))
 

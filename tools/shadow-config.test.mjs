@@ -36,7 +36,7 @@ test('the engine project has no shadow-cljs.edn of its own', () => {
 })
 
 test('engine builds output under ../engine/out', () => {
-  for (const id of ['body', 'test', 'test-golden', 'planner-record', 'planner-bench', 'search-bench', 'goto-bench', 'planner-bench-release'])
+  for (const id of ['body', 'test', 'test-golden', 'planner-record', 'planner-bench', 'search-bench', 'goto-bench', 'planner-bench-release', 'body-release'])
     assert.match(build(id), /:output-to "\.\.\/engine\/out\//, id)
 })
 

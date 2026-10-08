@@ -316,22 +316,22 @@
     (mapcat #(when (fs/existsSync %) (walk %)) dirs)))
 
 (defn refresh-body-build!
-  "Rebuilds engine/out/body.cjs (tools/compile engine body) when it is older than a file under engine/src or engine/js.
+  "Rebuilds engine/out/body-release.cjs (tools/compile engine body-release) when it is older than a file under engine/src or engine/js.
   Returns true when the build is current (or was refreshed), false when the compile failed."
   []
-  (let [bundle (repo-path "engine" "out" "body.cjs")
+  (let [bundle (repo-path "engine" "out" "body-release.cjs")
         built (when (fs/existsSync bundle) (.-mtimeMs (fs/statSync bundle)))]
     (if-not (build/stale? built (source-mtimes [(repo-path "engine" "src") (repo-path "engine" "js")]))
       true
-      (let [r (cp/spawnSync (repo-path "tools" "compile") #js ["engine" "body"] #js {:encoding "utf8"})]
+      (let [r (cp/spawnSync (repo-path "tools" "compile") #js ["engine" "body-release"] #js {:encoding "utf8"})]
         (if (zero? (.-status r))
-          (do (log! "engine/out/body.cjs was stale: rebuilt with tools/compile engine body") true)
-          (do (log! "engine/out/body.cjs is stale and tools/compile engine body failed:\n" (.-stdout r) (.-stderr r)) false))))))
+          (do (log! "engine/out/body-release.cjs was stale: rebuilt with tools/compile engine body-release") true)
+          (do (log! "engine/out/body-release.cjs is stale and tools/compile engine body-release failed:\n" (.-stdout r) (.-stderr r)) false))))))
 
 (def bodies (atom {}))
 
 (defn running? [{:keys [body]}]
-  (str/includes? (or (.-stdout (cp/spawnSync "pgrep" #js ["-af" (str "out/body.cjs --agent " body " ")] #js {:encoding "utf8"})) "")
+  (str/includes? (or (.-stdout (cp/spawnSync "pgrep" #js ["-af" (str "out/body(-release)?\\.cjs --agent " body " ")] #js {:encoding "utf8"})) "")
                  (str "--agent " body " ")))
 
 (defn run-dir [opts] (path/join (os/tmpdir) (str "world-test-" (:body opts))))
@@ -369,7 +369,7 @@
 (defn body-argv
   "node argv for a body: V8 flags must be on the command line (heap cap: RSS 335 -> ~255 MB)."
   [opts scenario]
-  #js ["--max-old-space-size=128" "--max-semi-space-size=8" "out/body.cjs" "--agent" (:body opts) "--world" (:world opts) "--scenario" scenario "--fresh"])
+  #js ["--max-old-space-size=128" "--max-semi-space-size=8" "out/body-release.cjs" "--agent" (:body opts) "--world" (:world opts) "--scenario" scenario "--fresh"])
 
 (defn await-online!
   "Polls the server's player list (every 250 ms, up to 10 s) until the body is on it (the start check polls the rest)."
@@ -1618,7 +1618,7 @@
 (defn stop-stale-bodies!
   "Stops (SIGTERM, by PID) the running bodies named prefix + a capital letter whose runner lease is dead or missing."
   [prefix]
-  (let [out (.-stdout (cp/spawnSync "pgrep" #js ["-af" "out/body.cjs --agent "] #js {:encoding "utf8"}))
+  (let [out (.-stdout (cp/spawnSync "pgrep" #js ["-af" "out/body(-release)?\\.cjs --agent "] #js {:encoding "utf8"}))
         stale (lease/stale-body-procs (lease/parse-body-procs out) prefix (lease/leased-bodies (read-body-leases) pid-alive?))]
     (doseq [{:keys [pid name]} stale]
       (log! "world-test: stopping the leftover body " name " (pid " pid ", no live runner)")

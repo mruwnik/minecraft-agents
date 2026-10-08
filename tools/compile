@@ -11,7 +11,7 @@
 #
 #   --priority  jump the queue: ahead of every waiting normal compile (it still waits for the compile now running).
 #               For the owner's UI rebuilds (dashboard ui/server) and nothing else.
-#   --release   `shadow-cljs release` instead of `compile` (the :viewer build).
+#   --release   `shadow-cljs release` instead of `compile` (the :viewer build); the engine :body-release build always does.
 #   A build-time .clj (engine/src, dashboard/src) newer than the running server restarts it before the compile (shadow-cljs does not reload macros).
 #   --stop      stop the checkout's server (needs the lock; for restarts; no build argument).
 #
@@ -48,6 +48,7 @@ while [ $# -gt 0 ]; do
     --release) verb=release ;;
     --stop) stop=1 ;;
     -*) usage ;;
+    body-release) builds+=("$a"); verb=release ;;   # the body's release build
     *) builds+=("$a") ;;
   esac
 done
