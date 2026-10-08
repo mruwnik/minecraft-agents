@@ -747,6 +747,7 @@ node engine/tools/goal.mjs Bob --world test ["fence the pen" [--by NAME] | --cle
 ```
 
 - `observe --wait` blocks until addressed chat, new attention, a watched job or action finishing, `body.idle`, an engine restart or the
+node engine/tools/progress.mjs Bob --world test [--goal j14] [--want iron_ingot:24,iron_pickaxe] [--wait 60m [--stall 10m]]   # one check-in line; --wait returns only on goal end, death, a give-up, needs-you or a stall
   timeout (default 60 s). Each named observer (`--observer`) keeps its cursor in `worlds/<world>/observers/<body>/`; delivery
   is at least once. `--chatter none|addressed|all`, `--danger` and `--disconnect` choose what wakes it. Only the first `reconnect-failed` of an
   outage wakes it (later tries are summarised). Status of an offline body adds `:back-in-s`. A `died` wake or summary item carries `:cancelled-jobs [{:id :name}]` (jobs the death cancelled, seen in the same call).

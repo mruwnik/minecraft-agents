@@ -132,6 +132,8 @@
                                :sayMain agent-tools.api/say-main
                                :goalUsage agent-tools.goal/usage
                                :goalMain agent-tools.goal/main!
+                               :progressUsage agent-tools.progress/usage
+                               :progressMain agent-tools.progress/main!
                                :driveUsage agent-tools.api/drive-usage
                                :driveDefaultStateDir agent-tools.api/drive-default-state-dir
                                :driveMain agent-tools.api/drive-main
