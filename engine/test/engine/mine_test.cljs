@@ -81,6 +81,9 @@
 (def floor
   "Two layers of dirt under the start, on stone (the ground goes on below what the job digs)."
   (merge (cells "stone" (range -2 3) [61] (range -2 3)) (cells "dirt" (range -2 3) [62 63] (range -2 3))))
+(def wide-floor
+  "The floor out to x 12, for walks home from the far end of a patch."
+  (cells "dirt" (range -2 13) [62 63] (range -3 4)))
 (def sand-patch (cells "sand" (range 4 7) [64] (range -1 2)))
 
 ;; ------------------------------------------------------------------ the job
@@ -296,7 +299,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng clock]} (start {:world {:blocks sand-patch}})
+        (let [s0 (start {:world {:blocks (merge wide-floor sand-patch)}})
+              {:keys [eng clock]} s0
               out (atom nil)
               parent {:check (constantly true)
                       :round (fn ^:async mining-parent [c]
@@ -305,7 +309,7 @@
                                  r))}
               eng (assoc eng :jobs (assoc (:jobs eng) 'mining-parent parent))]
           (core/submit! eng '(mining-parent) {})
-          (dotimes [_ 40]
+          (dotimes [_ 120]
             (swap! clock + 700)
             (await (core/tick! eng)))
           (is (= :count (:reason @out)))
@@ -379,7 +383,8 @@
           (await (run-ticks s 1))
           (is (= [] (:ground (job-mem s))) "no ground is recorded")
           (await (run-ticks s 60))
-          (is (= :count (:dig-reason (done-event s))) "the dig reached its count; the open floor under the start cell is not walked onto")
+          (is (= :count (:reason (done-event s))) "the dig reached its count; the walk home ends beside the open floor, not on it")
+          (is (empty? (events-of s :mine.not-home)))
           (is (zero? (:mended (done-event s))))
           (is (zero? (count (calls s "place"))))
           (is (zero? (count (calls s "jumpPlace"))))
@@ -857,17 +862,20 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start {:world {:blocks {"8,64,0" "iron_ore"} :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270
+        (let [s (start {:world {:blocks (merge wide-floor {"8,64,0" "iron_ore"}) :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270
                                 :unreachable ["5,64,2"]}})]
           (drop-away! (:p s) [5 64 2])
           ;; a later steer (the walk home) picks the drop up
-          (.override (.-world (:p s)) "moveTo"
-                     (fn [token args impl]
-                       (when (= 0.5 (.-x (.-pos args)))
-                         (swap! (fake/state (:p s)) assoc :entities []))
-                       (impl token args)))
+          (.override (.-world (:p s)) "steer"
+                     (fn [token ^js args impl]
+                       (let [decide (.-decide args)
+                             wrapped (fn [pose]
+                                       (when (<= (.-x pose) 2)
+                                         (swap! (fake/state (:p s)) assoc :entities []))
+                                       (decide pose))]
+                         (impl token (js/Object.assign #js {} args #js {:decide wrapped})))))
           (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :tunnel-length 0}) {})
-          (await (run-ticks s 20))
+          (await (run-ticks s 60))
           (is (= 1 (count (events-of s :mine.left-behind))) "reported when it was still lying")
           (is (nil? (:left (done-event s))) "but gone by the end"))))))
 
@@ -1425,4 +1433,16 @@
           (is (every? #(>= % 63) @ys) "the body never goes down onto the open hole")
           (is (not-any? #(= {:x 0.5 :y 64 :z 0.5} (select-keys (:target %) [:x :y :z])) (moved s))
               "no raw move onto the start cell")
-          (is (seq (events-of s :mine.not-home)) "the walk home says it did not get back"))))))
+          (is (empty? (events-of s :mine.not-home)) "ending beside the hole is the normal end")
+          (is (let [[x y z] (feet s)] (and (<= (abs x) 1) (<= (abs z) 1) (>= y 64))) "the body ends on a standable cell beside the start"))))))
+
+(deftest an-unseen-start-floor-is-walked-home-by-go-to-not-moveTo
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks floor}})]
+          (core/submit! (:eng s) (spec {:block "dirt" :count 1 :mend false}) {})
+          (await (run-ticks s 80))
+          (is (empty? (filter #(= 0 (:range %)) (map :data (mem/entries (mem/view (:store (:eng s))) :moved))))
+              "no raw range-0 moveTo")
+          (is (finished? s)))))))

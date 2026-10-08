@@ -107,7 +107,7 @@
   target off the ground remains in :radius. Otherwise it ends :spent-on-mend, keeping the earlier reason in
   :dig-reason.
 
-  Every job ends, after the mend, by walking back to the cell it started on (warn mine.not-home when the walk
+  Every job ends, after the mend, by a go-to walk back to the cell it started on, or beside it when its floor is open (warn mine.not-home when the walk
   does not arrive; the job then ends {:status :stopped :reason :not-home}, the ore kept, :dig-reason the earlier reason).
 
   Zones and plans (jobs.lib.access.rules, through jobs.lib.access): a target must be a dig the rules permit,
@@ -886,35 +886,42 @@
   (when (seq (:left (ctx/mem c))) (still-left! c))
   (finish! c))
 
+(defn near-cell?
+  "Whether the body's cell is within one cell of cell (every axis)."
+  [c cell]
+  (let [here (cell-of (u/self-pos c))]
+    (every? #(<= (abs (- (% here) (% cell))) 1) [:x :y :z])))
+
+(defn floor-solid?
+  "Whether the floor under the start cell is solid: as seen now (a hole the mend or the descent left shows open), else as felt under
+  the feet at the start; an unknown floor is no place to aim a walk at."
+  [c {:keys [x y z]}]
+  (let [name (or (u/seen-name (:primitives c) {:x x :y (dec y) :z z}) (:start-floor (ctx/mem c)))]
+    (boolean (and name (not (not-solid name))))))
+
 (defn ^:async home-by-go-to!
-  "The way home (after a descent the stair up, and a pit the digging left at its foot): go-to walks it, with its
-  escalation. :continue while the walk goes on, else the job ends."
+  "The way home through a go-to child, with its escalation: onto the start cell when its floor is seen solid, else (a hole the mend
+  left, or a floor never seen) to a standable cell beside it (range 1). :continue while the walk goes on, else the job ends."
   [c start]
-  (let [at-home? #(= (cell-of (u/self-pos c)) start)
-        r (if (at-home?)
+  (let [exact? (boolean (floor-solid? c start))
+        arrived? #(if exact? (= (cell-of (u/self-pos c)) start) (near-cell? c start))
+        r (if (arrived?)
             :arrived
             (await (ctx/call-child c :home 'jobs.movement.go-to
-                                   {:pos {:x (+ (:x start) 0.5) :y (:y start) :z (+ (:z start) 0.5)} :range 0 :escalate true :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))})))]
+                                   {:pos {:x (+ (:x start) 0.5) :y (:y start) :z (+ (:z start) 0.5)} :range (if exact? 0 1) :escalate true :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))})))]
     (if (= :continue r)
       :continue
-      (home-done! c (at-home?)))))
-
-(defn floor-open?
-  "Whether the cell under cell is seen as not solid (a hole the mend left): moveTo must not aim there, go-to judges it."
-  [c {:keys [x y z]}]
-  (some-> (u/seen-name (:primitives c) {:x x :y (dec y) :z z}) not-solid boolean))
+      (home-done! c (arrived?)))))
 
 (defn ^:async home-round!
-  "The last step of every normal run: back to the cell it started on (moveTo; go-to after a descent or when the start cell's floor is open), whatever the
-  digging left open behind it; a warn mine.not-home when the walk did not arrive (the job ends :stopped :not-home). The job ends either way."
+  "The last step of every normal run: back to the cell it started on through a go-to child (beside it when its floor is open or unseen),
+  whatever the digging left open behind it; a warn mine.not-home when the walk did not arrive (the job ends :stopped :not-home)."
   [c]
-  (let [{:keys [start descent homing]} (ctx/mem c)]
+  (let [{:keys [start homing]} (ctx/mem c)]
     (when-not homing
       (ctx/update-mem! c assoc :homing true)
       (ctx/update-mem! c assoc-in [:tunnel :end] (access/cell (cell-of (u/self-pos c)))))
-    (if (or (pos? (:steps descent 0)) (floor-open? c start))
-      (await (home-by-go-to! c start))
-      (home-done! c (await (step-to! c start))))))
+    (await (home-by-go-to! c start))))
 
 (defn no-tool?
   "Whether the block needs a tool to drop (get-tool's test: its harvestTools) and none carried is one of them."
@@ -970,7 +977,8 @@
             now (carried c)
             start (cell-of (u/self-pos c))]
         (ctx/update-mem! c assoc
-                         :goal (+ now (:count (:args c))) :start start :failures 0 :dry 0 :last-carried now
+                         :goal (+ now (:count (:args c))) :start start :start-floor (u/feel-name (:primitives c) {:x (:x start) :y (dec (:y start)) :z (:z start)})
+                         :failures 0 :dry 0 :last-carried now
                          :heading (or heading faced)
                          :ground (if (:mend (:args c)) (snapshot c start) [])
                          :phase :dig)
