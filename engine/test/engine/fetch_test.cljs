@@ -88,6 +88,11 @@
     (is (= 4 (:minutes (fetch/merge-limits 'jobs.blocks.dig nil body nil))))
     (is (= 1 (:depth (fetch/merge-limits 'jobs.blocks.dig {:depth 6} body {:depth 1}))) "the call wins")))
 
+(deftest a-need-above-64-is-fetched-whole
+  (let [o (fetch/merge-limits nil nil nil nil)]
+    (is (= {:item "cobblestone" :count 100} (:args (fetch/plan-for {:reason :need :item "cobblestone" :count 100} o))) "no 64 cap on one fetch")
+    (is (= {:any-of ["dirt"] :count 100} (:args (fetch/plan-for {:reason :need :any-of ["dirt"] :count 100} o))))))
+
 (deftest a-wait-maps-to-a-fetch-only-for-wanted-kinds
   (let [o (fetch/merge-limits nil nil nil nil)]
     (is (= 'jobs.items.get-tool (:job (fetch/plan-for {:reason :no-tool :needs "wooden_pickaxe" :block "stone"} o))))

@@ -1,5 +1,5 @@
 ;; Card 1d206297: a need above 64 (a plan short of 100 cobblestone) is fetched: the build asks for the cells it has seen so far (a fetch of 40, then
-;; 60 once the walk showed the rest), obtain takes 64 a trip at most; it is no longer refused at submit (:count had :max 64). The body stands at [4.5 0 16.5] facing the chest at
+;; 60 once the walk showed the rest), obtain takes 64 a trip at most (one fetch above 64: fetch-test a-need-above-64-is-fetched-whole); the 128 in the chest all go in: build.done :missing 0 on 100 cells is the total over 64; it is no longer refused at submit (:count had :max 64). The body stands at [4.5 0 16.5] facing the chest at
 ;; [4 0 12] (turned by RCON so its first sight sees it); the plan is a 10x10 cobblestone floor x 18..27, z 12..21 (100 cells).
 ;; Should-fail: no chest and no stone to gather (dirt floor): fetch.failed, the build ends short.
 {:defaults
