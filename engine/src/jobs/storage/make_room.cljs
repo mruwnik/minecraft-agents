@@ -369,7 +369,8 @@
   {:short "nothing more may go"
    :nothing-to-go "nothing it may put away or toss"
    :stalled "still short of room after its :max-steps steps"
-   :toss-failed "three tosses failed"})
+   :toss-failed "three tosses failed"
+   :taken-back "the tossed items came back to the body (it cannot toss them out of its own reach)"})
 
 (defn ^:async finish-end!
   "The summary event and the :done or :stopped result."
@@ -394,8 +395,10 @@
   (let [spot (tossed-spot c)
         near? (and spot (near-spot? c spot))
         _ (when (and spot (not near?)) (ctx/forget-where! c :make-room-tossed (constantly true)))
-        _ (when near? (await (walk-away! c spot)))]
-    (await (finish-end! c reason))))
+        _ (when near? (await (walk-away! c spot)))
+        tossed? (seq (:tossed (ctx/mem c)))
+        back? (and (nil? reason) tossed? (< (u/free-slots (:primitives c)) (:free (:args c))))]
+    (await (finish-end! c (if back? :taken-back reason)))))
 
 (defn ^:async step!
   "One unit of work on a fresh look at the inventory: a deposit child call, a swap or a toss (:again), or the end

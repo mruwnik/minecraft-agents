@@ -25,7 +25,7 @@
      else every item within :collect-radius).
   3. :killed reaching :count ends :count.
   4. At most :keep adults present ends :keep. Skipped animals still count.
-  With a :color only unsheared sheep of that colour count (sheared ones drop no wool) and are hunted; the last :keep of them stay.
+  With a :color only unsheared sheep of that colour count and are hunted (the :keep rule applies to them: the last :keep stay); none of it in range at the start ends :stopped :no-color (:seen-colors).
   5. No candidate (present, not skipped) ends :none, on the second such round in a row, after a 1 s wait.
   6. Otherwise the nearest candidate becomes the :target and is attacked in the same round.
      The target stays until killed or given up on, even when a nearer animal turns up.
@@ -58,23 +58,28 @@
        (remove #(true? (.-baby %)))
        vec))
 
-(defn present
-  "The adult entities named :mob within :radius."
-  [c]
-  (adults-within c (:radius (:args c))))
-
 (defn coloured
   "The entities of the :color arg (all when it is nil); with a :color the sheared ones are left out, they drop no wool."
   [c es]
   (let [color (:color (:args c))]
     (cond->> es color (filter #(and (= color (.-color %)) (not (true? (.-sheared %))))))))
 
+(defn present-any
+  "The adult entities named :mob within :radius, of any colour."
+  [c]
+  (adults-within c (:radius (:args c))))
+
+(defn present
+  "The adult entities named :mob within :radius, of the :color when given."
+  [c]
+  (vec (coloured c (present-any c))))
+
 (defn candidates
   "The present animals of the :color not skipped, nearest first."
   [c]
   (let [skipped (set (:skipped (ctx/mem c)))
         here (u/self-pos c)]
-    (->> (coloured c (present c))
+    (->> (present c)
          (remove #(contains? skipped (.-id %)))
          (sort-by #(u/dist here (u/pos-of (.-pos %)))))))
 
@@ -124,8 +129,8 @@
   "End at once, nothing of the :color in range: the colours that are, in the result and text."
   [c]
   (let [{:keys [mob color]} (:args c)
-        seen (vec (sort (distinct (keep #(.-color %) (present c)))))
-        out {:killed 0 :reason :no-color :spared 0 :remaining (count (present c)) :seen-colors seen}
+        seen (vec (sort (distinct (keep #(.-color %) (present-any c)))))
+        out {:killed 0 :reason :no-color :spared 0 :remaining (count (present-any c)) :seen-colors seen}
         text (str "hunt stopped: no " color " " mob " within " (:radius (:args c)) " blocks"
                   (when (seq seen) (str "; seen: " (str/join ", " seen)))
                   (let [n (count (filter #(and (= color (.-color %)) (true? (.-sheared %)))
@@ -168,10 +173,10 @@
   (let [now (ctx/now c)
         wanted (:count (:args c))
         keep (keep-of c)]
-    (if (and (not (:started (ctx/mem c))) (<= (count (present c)) keep))
-      (too-few! c)
-      (if (and (not (:started (ctx/mem c))) (:color (:args c)) (empty? (candidates c)))
-        (no-color! c)
+    (cond
+      (and (not (:started (ctx/mem c))) (:color (:args c)) (empty? (present c))) (no-color! c)
+      (and (not (:started (ctx/mem c))) (<= (count (present c)) keep)) (too-few! c)
+      :else
         (do
         (ctx/update-mem! c #(-> % (update :started (fn [t] (or t now))) (assoc :keep keep)))
         (let [{:keys [target collecting killed]} (ctx/mem c)
@@ -183,7 +188,7 @@
             (<= (count (present c)) keep) (finish! c :keep)
             (nil? next-target) (await (hunting/search! c #(finish! % :none)))
             :else (do (ctx/update-mem! c assoc :target (.-id next-target) :misses 0)
-                      (await (hunting/attack! c (attack-opts c)))))))))))
+                      (await (hunting/attack! c (attack-opts c))))))))))
 
 (defn ^:async round
   "The whole hunt: steps until it ends; yields only while a child waits on the world."

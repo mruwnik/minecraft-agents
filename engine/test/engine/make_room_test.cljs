@@ -748,3 +748,18 @@
     (is (= [1 0] (mr/direction p nil)) "everything seen: east first")
     (aset p "sensedAt" (fn [pos] (if (> (.-x pos) fx) #js {:unknown true} (omniscient pos))))
     (is (= [-1 0] (mr/direction p nil)) "the east cells were never looked at: west")))
+
+(deftest a-toss-the-body-takes-back-ends-stopped-taken-back
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p out]} (with-parent {:inventory (vec (concat [{:name "coal" :count 5}] (same "diamond_pickaxe" 32 1) [{:name "item_a" :count 1}]))}
+                                               {:free 3 :keep-blocks 0} nil)
+              step (.-steer p)
+              back (atom false)]
+          (set! (.-steer p) (fn [& a]
+                             (when-not @back (reset! back true) (fake/add-item! p "stick" 1))
+                             (.apply step p (to-array a))))
+          (await (tick-out! eng 30))
+          (is @back "walk-away ran")
+          (is (= {:status :stopped :reason :taken-back} (select-keys @out [:status :reason]))))))))

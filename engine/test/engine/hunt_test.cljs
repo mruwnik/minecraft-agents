@@ -342,6 +342,17 @@
           (is (re-find #"no white sheep" (:text e)))
           (is (finished? s)))))))
 
+(deftest a-colour-hunt-counts-only-its-colour-against-keep
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[args entities reason note]
+                [[{:mob "sheep" :color "white" :count 1 :keep 1} [(sheep 1 3 "white") (sheep 2 5 "brown") (sheep 3 6 "brown")] :too-few "one white, keep 1: too few, however many of other colours"]
+                 [{:mob "sheep" :color "white" :count 1 :keep 2} [(sheep 1 3 "brown")] :no-color "none of the colour wins over too-few"]]]
+          (let [{:keys [eng]} (h/setup {:inventory h/sword :entities entities})
+                r (await (tu/child-outcome eng 'jobs.combat.hunt args 20))]
+            (is (= reason (:reason r)) note)))))))
+
 (deftest a-colour-hunt-skips-sheared-sheep-and-says-when-only-sheared-ones-are-in-range
   (async done
     (tu/run-async done
