@@ -251,6 +251,11 @@
   (and (= (:x tk) (js/Math.floor x)) (= (:z tk) (js/Math.floor z))
        (<= (js/Math.abs (- y (+ (:y tk) (/ (:h tk) 16)))) 0.5)))
 
+(defn on-takeoff?
+  "The executor is at the takeoff's step (at-step?) and the gate holds the body there, or the body has reached the takeoff."
+  [tk at-step? gstate pose]
+  (boolean (and at-step? (or (:held gstate) (reached-takeoff? tk pose)))))
+
 (defn control
   "The gate's controls this tick, with k the pending gate and i the executor's step: on the way, approach (the executor's
   controls held back); on the takeoff (i is k-1 and reached), hold, looking at the floor. Within look-blocks the body looks
@@ -263,7 +268,7 @@
         cell (floor-cell g)
         [lyaw lpitch] (look-at pose cell)
         near? (<= (js/Math.hypot (- (+ 0.5 (cell 0)) (:x pose)) (- (+ 0.5 (cell 2)) (:z pose))) (:look-blocks opts))
-        on? (and (= i (dec k)) (or (:held gstate) (reached-takeoff? tk pose)))
+        on? (on-takeoff? tk (= i (dec k)) gstate pose)
         at [(:x pose) (:y pose) (:z pose)]]
     (if-not on?
       (let [now-floor (floor-name floors (support-cell (assoc pose :on-ground true)))

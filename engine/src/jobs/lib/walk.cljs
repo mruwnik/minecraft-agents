@@ -140,7 +140,7 @@
             exec (cond-> (assoc exec :steps pre) (>= (:i exec) (count pre)) (assoc :i (dec (count pre))))
             {exec' :state edone :done :keys [controls yaw pitch]} (executor/tick policy exec pose)
             held? (and k (= (:i exec') (dec k)))
-            on? (and held? (or (:held gstate) (wsight/reached-takeoff? (nth steps (dec k)) pose)))
+            on? (and k (wsight/on-takeoff? (nth steps (dec k)) held? gstate pose))
             edone (when-not (or (and held? (= :arrived (:status edone))) (and on? (= :stuck (:status edone)))) edone)
             done (or done edone (when watch-stop (watch-stop i exec' pose)))
             base {:controls (gait-controls policy exec' pose controls) :yaw yaw :pitch pitch}]
