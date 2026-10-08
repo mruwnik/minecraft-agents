@@ -1,4 +1,4 @@
-;; Card db7aa152: jobs.items.equip holds a carried item in the main or off hand; a missing or misspelt item is refused with a reason.
+;; Cards db7aa152, 76ce6829: jobs.items.equip holds a carried item in the main or off hand; a missing or misspelt item is refused with a reason.
 {:defaults
  {:tags [:items :equip]
   :plot {:height 8}

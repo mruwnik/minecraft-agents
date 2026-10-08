@@ -1,4 +1,4 @@
-;; Cards e0f00a7f and d252830f: animal jobs follow zones. The plot is outside every zones.edn box, so another body's plan
+;; Cards e0f00a7f and d252830f (own-zone-acts cases also 9974c755): animal jobs follow zones. The plot is outside every zones.edn box, so another body's plan
 ;; footprint (:metadata :by "SomeoneElse") stands in for the foreign zone (same rule: jobs.lib.gate / access/may?).
 ;; Per job (cull shear breed leash): refused with a <job>.declined warn :reason :refused and the animal untouched;
 ;; :ignore-zones? true acts; the body's own footprint acts; no footprint acts. Plus herd (gate in a foreign footprint

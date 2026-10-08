@@ -1,0 +1,19 @@
+;; Card 7ae7068b: a body drowning in a 1x1 water column grown with kelp (kelp_plant below, a kelp head under the surface) swims up to the air:
+;; kelp is water for breathe, never a cap. Stone mass, column x 16 z 16 water y 0..3, open air above (y 4..8), body at the bottom.
+{:defaults
+ {:tags [:survival :water] :time :any
+  :plot {:height 12}
+  :register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {:min-oxygen 12}
+              :job (jobs.survival.breathe {:min-oxygen 12})}]
+  :blocks [[:fill [0 0 0] [31 8 31] "stone"]
+           [:fill [16 0 16] [16 3 16] "water"]
+           [:fill [16 4 16] [16 8 16] "air"]]
+  :body {:at [16.5 1 16.5] :effects [["resistance" 600 4]] :settle-s 1}
+  :limit-s 70}
+ :cases
+ [{:name "kelp-column-swims-up"
+   :blocks [[:fill [16 0 16] [16 2 16] "kelp_plant"] [:set [16 3 16] "kelp[age=25]"]]
+   :expect [{:event {:source :reflex :kind :fired} :within-s 30}
+            {:event {:source :reflex :kind :ended :data {:how :cleared}} :within-s 50}
+            {:no-event {:source :job :kind :no_air} :for-s 50 :until {:source :reflex :kind :ended}}]
+   :after [[:body-near [16.5 4 16.5] 2.5]]}]}

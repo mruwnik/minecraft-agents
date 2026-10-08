@@ -1,4 +1,4 @@
-;; Card bd6f0344 / d4f90a9d: the apiary jobs as whole attempts, one call works every fire or hive.
+;; Card bd6f0344 / d4f90a9d (harvest-takes-two-ripe-hives also daa94849, b1c2723e: shears from the body's side): the apiary jobs as whole attempts, one call works every fire or hive.
 ;; Should-succeed: two raised fires (one under a carpet, one open) with campfires and a carpet carried are both sunk and
 ;; carpeted in one guard call, the dug carpet picked up and put back; two ripe smoked hives both harvested with the comb
 ;; collected in one harvest call; nothing ripe -> maintain does not act.
