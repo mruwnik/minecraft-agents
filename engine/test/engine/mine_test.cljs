@@ -769,6 +769,35 @@
           (is (= [0 64 0] (:back-at (:tunnel (done-event s)))))
           (is (re-find #"walked back to \[?0,64,0" (:text (done-event s)))))))))
 
+(deftest the-tunnel-never-digs-a-chest-in-its-way
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 4 :mend false}
+                                 (rock-world {"2,64,0" "chest"}) 80))]
+          (is (= "chest" (block-at s 2 64 0)))
+          (is (not-any? #{[2 64 0]} (dug-cells s))))))))
+
+(def corridor (into {} (for [x (range 1 6) y [64 65]] [(str x "," y ",0") "air"])))
+
+(deftest the-tunnel-skips-its-own-open-corridor-and-never-digs-its-torches
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 2 :mend false}
+                                 (rock-world (assoc corridor "3,65,0" "wall_torch")) 80))]
+          (is (= [[6 65 0] [6 64 0] [7 65 0] [7 64 0]] (dug-cells s)) "new rock only, no torch")
+          (is (= 2 (:length (first (tunnel-ends s))))))))))
+
+(deftest the-tunnel-steps-down-a-stair-to-its-level
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 1 :mend false}
+                                 (rock-world {"1,64,0" "air" "1,65,0" "air" "1,66,0" "air" "1,63,0" "air"}) 80))]
+          (is (= [[2 63 0] [2 64 0]] (sort-by second (dug-cells s))) "cut at the lower level")
+          (is (empty? (filter #(= :no-floor (:reason %)) (tunnel-ends s)))))))))
+
 (deftest the-tunnel-stops-before-lava
   (async done
     (tu/run-async done
@@ -873,6 +902,15 @@
           (is (= [{:reason :tunnel-length :length 4}] (map #(select-keys % [:reason :length]) (tunnel-ends s))))
           (is (= "air" (block-at s 2 65 0)) "the fallen gravel is dug")
           (is (= 4 (count (filter #{[2 65 0]} (dug-cells s)))) "the cut, then each of the 3 that fell"))))))
+
+(deftest what-a-cut-leaves-tells-an-unseen-cell-from-a-fallen-block
+  (let [world {[1 65 0] "air" [1 64 0] "cave_air" [2 65 0] "gravel"}
+        cut [{:x 1 :y 65 :z 0} {:x 1 :y 64 :z 0}]
+        after #(mine/after-cut (fn [{:keys [x y z]}] (get % [x y z])) cut)]
+    (is (= :clear (after world)))
+    (is (= :refilled (after (assoc world [1 64 0] "gravel"))))
+    (is (= :unseen (after (dissoc world [1 64 0]))) "not yet seen: look again, do not cut")
+    (is (= :unseen (after (-> world (dissoc [1 64 0]) (assoc [1 65 0] "sand")))))))
 
 (deftest the-tunnel-runs-the-way-asked-or-the-way-the-body-faces
   (async done
