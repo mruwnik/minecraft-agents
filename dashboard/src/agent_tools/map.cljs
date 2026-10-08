@@ -8,7 +8,7 @@
             ["node:path" :as path]
             ["node:util" :refer [parseArgs]]))
 
-(def usage "map.mjs --world WORLD find|show|add|edit|remove|renew|release [marker|zone|claim] [ID] [--data EDN --revision REV --by ACTOR --for 30m --dry-run --raw --center EDN --place ID --radius 128 --type TYPE --owner OWNER --status STATUS --text TEXT --limit 10 --offset 0 --worlds DIR --state LEGACY_PARENT]\nShared map of markers (a point: {:x :y :z :kind :note}, kind is free text such as :base or :farm, default :place, note up to 80 characters), zones (a box others avoid) and claims (a timed hold). :box is [[x y z] [x y z]] corner to corner; :total counts all matches, :next-offset pages.")
+(def usage "map.mjs --world WORLD find|show|add|edit|remove|renew|release [marker|zone|claim] [ID] [--data EDN --revision REV --by ACTOR --for 30m --dry-run --raw --center EDN --place ID --radius 128 --type TYPE --owner OWNER --status STATUS --text TEXT --limit 10 --offset 0 --worlds DIR --state LEGACY_PARENT]\nShared map of markers (a point: {:x :y :z :kind :note}, kind is free text such as :base or :farm, default :place, note up to 80 characters), zones ({:name :owner :min [x y z] :max [x y z] :allow :note}, a box others avoid) and claims (a timed hold). find shows a record's :box as [[x y z] [x y z]]; --center is [x y z] or {:x :y :z}; :total counts all matches, :next-offset pages.")
 (def default-state-dir (.resolve path js/__dirname "../.."))
 
 (defn coalesce [& values] (first (filter some? values)))
@@ -74,13 +74,19 @@
         (throw (data/fail :revision-required "give --revision from show/find")))
       {:command command :kind kind :id id :ctx ctx :values v})))
 
+(defn center-of [form]
+  (cond
+    (and (map? form) (every? #(contains? form %) [:x :y :z])) [(:x form) (:y form) (:z form)]
+    (and (vector? form) (= 3 (count form))) form
+    :else (throw (data/fail :invalid-center "--center needs [x y z] or {:x :y :z}"))))
+
 (defn filters [ctx v]
   (when (and (:center v) (:place v)) (throw (data/fail :invalid-center "choose --center or --place")))
   (let [center (if-let [id (:place v)]
                  (let [place (data/read-document ctx :marker id)]
                    (when-not place (throw (data/fail :place-not-found "no such marker")))
                    ((juxt :x :y :z) (:value place)))
-                 (when (:center v) (read-edn (:center v))))]
+                 (when (:center v) (center-of (read-edn (:center v)))))]
     (when (and (:radius v) (nil? center)) (throw (data/fail :invalid-center "radius requires explicit center or place")))
     (merge (select-keys v [:type :owner :status :text])
            {:center center :radius (js/Number (or (:radius v) 128))
@@ -114,8 +120,9 @@
        (every? true? (map <= (:min v) (:max v)))))
 
 (defn validate-zone [v]
-  (when (or (not (map? v)) (some #(not (#{:name :min :max :owner :allow :note} %)) (keys v)))
-    (throw (data/fail :validation "zone contains unsupported keys")))
+  (when-not (map? v) (throw (data/fail :validation "zone must be a map")))
+  (when-let [bad (seq (remove #{:name :min :max :owner :allow :note} (keys v)))]
+    (throw (data/fail :validation (str "zone contains unsupported keys " (pr-str (vec bad)) "; accepted: :name :owner :min :max :allow :note (corners are :min and :max, not :box)"))))
   (when (or (not (string? (:name v))) (str/blank? (:name v)) (not (string? (:owner v))) (str/blank? (:owner v)))
     (throw (data/fail :validation "zone needs name and owner")))
   (when-not (corners? v) (throw (data/fail :validation "zone needs ordered integer min/max corners")))
