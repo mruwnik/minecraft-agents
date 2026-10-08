@@ -4,9 +4,10 @@
 ;; replan-*: a 6 deep water shaft S (x 4), a 2 high sealed tunnel from S's bottom to the shaft F (x 5+T), land over all (feet y 6), a bedrock ridge at x 11 (y 6..9) across the plot, with a gap at z 59..63 (the walk round, 100+ blocks) or none.
 ;;   The body starts at S's bottom and waits under water (/data cannot set a player's air) before go-to to the land beside F; no reflex is registered.
 ;;   Should-succeed: full air takes the sealed tunnel (T 12); with air half spent it surfaces (and walks round or dives again) (no :hurt). Should-fail: air half spent, T 32 sealed, only a lethal drowning way: :why :air (the goal's head is on land the body has not seen, so it is no way to air).
-;; drowning-*: a 2 high water tunnel with a stone roof and an air pocket (air at y 2 over the water) in line of sight; the body waits ~10 s under water (air ~4 of 20 bubbles, vanilla 15 s) then go-to the pocket.
-;;   Should-succeed: pocket 6 cells away (3 s): arrives, the drowning is priced not refused (go-to looks at the pocket; a cell of it seen edge-on is enough). Should-fail: pocket 36 cells away (18 s, over 20 hp of drowning), past sight: :why :air (resistance given to keep the body alive after).
-;; Live risks: the wait gives an oxygen of about 4..10, not exact; the 36 cell line of sight.
+;; drowning-*: a 2 high water tunnel with a stone roof and an air pocket (air at y 2 over the water); the body waits ~10 s under water (air ~4 of 20 bubbles, vanilla 15 s) then go-to the pocket.
+;;   Should-succeed: pocket 6 cells away in line of sight (3 s): arrives, the drowning is priced not refused (go-to looks at the pocket; a cell of it seen edge-on is enough).
+;;   Should-fail: the same seen pocket, the body at 2 hp (hunger stops regeneration) after ~14 s under water: any drowning kills, :why :air-lethal. A pocket round a bend (30 cells, never in sight): no way to air, :why :air. Resistance keeps the body alive after.
+;; Live risks: the wait gives an oxygen of about 4..10, not exact.
 {:defaults
  {:tags [:movement :water :air] :time :any
   :plot {:height 8 :length 80 :width 16}
@@ -96,13 +97,26 @@
    :act [[:wait-s 11] [:job (jobs.movement.go-to {:pos #at [12 1 8] :range 1 :escalate false})]]
    :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived false :reason :unreachable :why :air}} :within-s 60 :of-job true}]
    :after [[:body-near [5.5 0 8.5] 3]]}
-  ;; should fail: the pocket is 36 cells (18 s) away, past sight: refused for air
-  {:name "drowning-body-far-air-lethal-refused"
-   :plot {:height 8 :length 64 :width 16}
-   :blocks [[:fill [3 0 7] [62 4 9] "stone"]
-            [:fill [4 0 8] [60 1 8] "water"]
-            [:fill [40 2 8] [42 2 8] "air"]]
+  ;; should fail: the seen pocket 6 cells away, but at 2 hp with the air spent the first drowning hit kills: refused, lethal
+  {:name "drowning-body-at-2-hp-seen-air-lethal-refused"
+   :plot {:height 8 :length 24 :width 16}
+   :blocks [[:fill [3 0 7] [22 4 9] "stone"]
+            [:fill [4 0 8] [20 1 8] "water"]
+            [:fill [11 2 8] [13 2 8] "air"]]
+   :body {:at [5.5 0 8.5] :yaw 270}
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:wait-s 7]
+         [:rcon "effect give $BODY minecraft:instant_damage 1 1 true"] [:rcon "effect give $BODY minecraft:instant_damage 1 0 true"]
+         [:rcon "effect give $BODY minecraft:resistance 600 4 true"] [:wait-s 6]
+         [:job (jobs.movement.go-to {:pos #at [12 1 8] :range 1 :escalate false})]]
+   :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived false :reason :unreachable :why :air-lethal}} :within-s 60 :of-job true}]
+   :after [[:body-near [5.5 0 8.5] 3]]}
+  ;; should fail: the pocket is round a bend (25 cells east, 5 north), never in sight: no way to air, refused for air
+  {:name "drowning-body-unseen-air-round-a-bend-refused"
+   :plot {:height 8 :length 40 :width 16}
+   :blocks [[:fill [3 0 6] [33 4 15] "stone"]
+            [:fill [4 0 8] [30 1 8] "water"] [:fill [30 0 9] [30 1 14] "water"]
+            [:fill [30 2 12] [30 2 14] "air"]]
    :body {:at [5.5 0 8.5] :yaw 270 :effects [["resistance" 600 4]]}
-   :act [[:wait-s 10] [:job (jobs.movement.go-to {:pos #at [41 1 8] :range 1 :escalate false})]]
+   :act [[:wait-s 10] [:job (jobs.movement.go-to {:pos #at [30 1 13] :range 1 :escalate false})]]
    :expect [{:event {:source :job :kind :result :context {:chain [[:any]]} :data {:arrived false :reason :unreachable :why :air}} :within-s 60 :of-job true}]
    :after [[:body-near [5.5 0 8.5] 3]]}]}

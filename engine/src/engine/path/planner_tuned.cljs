@@ -54,8 +54,9 @@
    - options.costs.dropFactor (1): scales the fall seconds and fall damage of every drop on land (0: free); options.maxDrop
      (3) refuses a drop of more than that many blocks (1: none of 2 or 3). go-to's :drop-cost sets them.
    - options.costs.airUsed (0): seconds of air the body has used at the start (a plan made mid-dive); go-to's body-policy
-     sets it from the oxygen when the head is under water. Such a plan to a goal with its head in seen air (to-air?) is never
-     refused for air and ends with the head in air (options.airSeen, fn x y z: the body has seen or felt that block, nil: all): each second past the supply drowns DROWN-HP hp (result cost.drown; not
+     sets it from the oxygen when the head is under water. Such a plan to a goal whose head cell breathes, with a breathing
+     head cell seen within the goal's range (at most TO-AIR-REACH blocks; options.airSeen, fn x y z: the body has seen or felt
+     that block, nil: all) (to-air?), is never refused for air and ends with the head in such a cell: each second past the supply drowns DROWN-HP hp (result cost.drown; not
      damage, so no damageBudget), the first k hp costing options.drownPrices[k] seconds (nil: damageWeight each); drowning
      with the plan's certain damage to options.health (20) is lethal, each air-out (under since the last breath) counting its 2 hp hits as ceil(seconds + costs.drownSlack (1)): refused (reason air-lethal) unless options.costs.lethalAir is 1 (go-to :costs :lethal-air, breathe's), then it costs LETHAL-S (times the dearest second the caller's prices allow) more, so a lethal plan comes back only when no other does. Any
      other plan swims no further than airLimit from airUsed.
