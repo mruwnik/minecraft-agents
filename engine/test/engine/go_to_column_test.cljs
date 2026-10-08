@@ -313,3 +313,31 @@
                                                                              :to {:x 2 :y 64 :z 0}}))
                         go-to/fetch-torches! (fn [_] (js/Promise.resolve :continue))]
             (is (= :continue (await (go-to/walk! c {:x 10 :y 63 :z 0} 0 nil))))))))))
+
+;; ---------------------------------------------------------------- a far unseen column 20 above or below the feet
+
+(defn slope
+  "Ground of feet y (+ y0 (* dir (- x 30))) at x 31..49 between flat ground at feet y0 (x -2..30) and at feet y0 + 20 * dir
+  (x 50..70), z -3..3, each column solid down to y 63."
+  [y0 dir]
+  (let [top (fn [x] (+ y0 -1 (* dir (min 20 (max 0 (- x 30))))))]
+    (into {} (for [x (range -2 71)] (box x 63 -3 x (top x) 3 "stone")))))
+
+(deftest a-far-unseen-column-up-a-hill-or-down-a-valley-is-walked-to-and-arrived-at
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        ;; the column x 60 is 60 blocks off, out of sight (radius 16) from the start, its ground 20 above or below the
+        ;; feet: no ground within approach-range of the feet-y estimate; walking toward it brings it into view
+        (doseq [[label y0 dir to] [["hill" 64 1 84] ["valley" 84 -1 64]]]
+          (let [{:keys [out p]} (await (go! {:blocks (slope y0 dir) :light [15 0] :self {:pos {:x 0 :y y0 :z 0}}}
+                                            {:pos [60 0] :range 0}))]
+            (is (= {:arrived true :resolved {:x 60 :y to :z 0}} @out) (str label " " (pr-str @out)))
+            (is (= [60 to 0] (mapv #(js/Math.floor %) (at p))) (str label " at " (at p)))))))))
+
+(deftest a-waypoint-is-the-seen-ground-on-the-line-nearest-the-column
+  (let [land (slope 64 1)]
+    (is (= {:x 44 :y 78 :z 0} (column/waypoint (column/seen-kind-at (hiding land (fn [[x _ _]] (> x 44)))) 60 0 [0 64 0]))
+        "the farthest seen column toward x 60")
+    (is (nil? (column/waypoint (column/seen-kind-at (hiding land (fn [[x _ _]] (> x 0)))) 60 0 [0 64 0]))
+        "nothing seen ahead: no waypoint, never the unseen ground")))

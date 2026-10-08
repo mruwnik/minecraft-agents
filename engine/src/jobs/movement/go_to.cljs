@@ -411,6 +411,53 @@
       (await (sense/look-at! c (assoc cell 1 (nth (vec (distinct (if (:column-open (ctx/mem c)) [feet (inc feet)] [(nth cell 1) feet (inc feet)]))) n (nth cell 1)))))
       true)))
 
+(def max-waypoint-misses "Waypoint walks (guess-waypoint) a call takes that bring the body no nearer its column goal." 3)
+
+(defn waypoint-due?
+  "Whether a column goal is only guessed (mem :column-open :guess) and fewer than max-waypoint-misses waypoint walks were
+  fruitless."
+  [c]
+  (and (= :guess (:column-open (ctx/mem c))) (< (:waypoint-misses (ctx/mem c) 0) max-waypoint-misses)))
+
+(defn guess-waypoint
+  "For a column goal whose guess has no stand in reach (waypoint-due?): a seen stand to walk to toward it
+  (column/waypoint), else nil."
+  [c pos]
+  (when (waypoint-due? c)
+    (let [{:keys [x y z]} (u/self-pos c)]
+      (column/waypoint (column/seen-kind-at (:primitives c)) (:x pos) (:z pos) (mapv #(js/Math.floor %) [x y z])))))
+
+(def way-looks
+  "The looks look-along! takes, in turn, before each waypoint walk: [blocks ahead toward the goal, blocks under the feet]
+  (ahead and a little down: a slope up; close and steeply down: a slope or drop below an edge)."
+  [[6 1] [3 4]])
+
+(defn ^:async look-along!
+  "Before a waypoint walk (waypoint-due?): the next of way-looks not yet taken since the last waypoint walk (mem
+  :way-looks), at the cell that far along the line to pos and that far under the feet; true when it looked."
+  [c pos]
+  (let [n (:way-looks (ctx/mem c) 0)
+        {:keys [x y z]} (u/self-pos c)
+        h (js/Math.hypot (- (:x pos) x) (- (:z pos) z))]
+    (when (and (waypoint-due? c) (< n (count way-looks)) (> h 2))
+      (let [[ahead down] (nth way-looks n)
+            k (/ (min ahead (- h 1)) h)]
+        (ctx/update-mem! c assoc :way-looks (inc n))
+        (await (sense/look-at! c (mapv #(js/Math.floor %) [(+ x (* k (- (:x pos) x))) (- y down) (+ z (* k (- (:z pos) z)))])))
+        true))))
+
+(defn ^:async walk-waypoint!
+  "Walk to way (guess-waypoint) on the way to pos: from there the body sees more of the land toward pos and goal-pos
+  aims again. A walk that brings it no 2 blocks nearer pos (across) is a miss (mem :waypoint-misses). :again."
+  [c pos way opts]
+  (let [across #(js/Math.hypot (- (:x pos) (:x %)) (- (:z pos) (:z %)))
+        before (across (u/self-pos c))]
+    (await (near/walk-round! c way 1 (dissoc opts :progress)))
+    (ctx/update-mem! c dissoc :way-looks)
+    (when-not (< (across (u/self-pos c)) (dec before))
+      (ctx/update-mem! c update :waypoint-misses (fnil inc 0)))
+    :again))
+
 (defn walk-opts
   "The near/walk-round! options of a go-to walk round with doors (the :doors arg as a keyword)."
   [c doors]
@@ -502,7 +549,9 @@
             aided? (when (and (not fetched) (not= "arrived" status) (torch/torch-aid? c walked)) (await (torch/hold-torch! c)))
             looked? (when (and (not aided?) (= :air (:reason walked))) (await (look-at-goal-air! c pos)))
             surfaced? (when (and (not aided?) (not looked?) (= :air (:reason walked))) (await (air/surface! c (dissoc opts :progress) pos)))
-            col-looked? (when (and (not aided?) (not looked?) (not surfaced?) (not fetched) (not (#{"arrived" "searching"} status)))
+            way-looked? (when (and (not fetched) (= :goal-not-standable (:reason walked))) (await (look-along! c pos)))
+            way (when (and (not fetched) (not way-looked?) (= :goal-not-standable (:reason walked))) (guess-waypoint c pos))
+            col-looked? (when (and (not aided?) (not looked?) (not surfaced?) (not fetched) (not way) (not way-looked?) (not (#{"arrived" "searching"} status)))
                           (await (look-at-column! c pos)))
             result (known-frontier-result walked)
             left (u/dist to pos)
@@ -528,6 +577,10 @@
                         {:explored (js/Math.round (:explored (get @approaches (:id c))))})
 
           fetched fetched
+
+          way-looked? :again
+
+          way (await (walk-waypoint! c pos way opts))
 
           ;; the planner proved no cell in range stands: aim at the column's ground once (goal-pos, mem :re-aim); under
           ;; :unknown it proves nothing next to unseen cells, so a goal cell seen in the ground is re-aimed too
@@ -583,7 +636,7 @@
   (let [m (ctx/mem c)
         there? (here? c pos (:range (:args c)))]
     (wworld/warn-bad-settings! c)
-    (ctx/update-mem! c #(cond-> (-> % (dissoc :best :fault-cells :over-budget :off-hand-tried :air-looked :air-relooks :surfacings :column-looks :column-near :dry-tried :in-water :wet-fresh :wet-surfacings) (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {}))
+    (ctx/update-mem! c #(cond-> (-> % (dissoc :best :fault-cells :over-budget :off-hand-tried :air-looked :air-relooks :surfacings :column-looks :column-near :waypoint-misses :way-looks :dry-tried :in-water :wet-fresh :wet-surfacings) (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {}))
                           (not (:fetching m)) (dissoc :torch-fetched :fetched)
                           (and there? (:escalate-now m)) (dissoc :escalate-now)
                           (and there? (:escalation m))

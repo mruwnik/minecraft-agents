@@ -97,6 +97,20 @@
             (for [d (range 1 (inc approach-range)) [dx dz] [[1 0] [-1 0] [0 1] [0 -1] [1 1] [1 -1] [-1 1] [-1 -1]]] [d dx dz]))
       body-y))
 
+(defn waypoint
+  "A cell to walk to toward the column x z from the body's feet [bx by bz] when its estimate has no stand in reach: the
+  seen ground (nearest by, within estimate-reach; a head cell not seen counts as open, as a seen slope's air) of the
+  column on the straight line from the body to x z that is nearest x z and at least 2 blocks nearer it than the body,
+  else nil."
+  [kind-at x z [bx by bz]]
+  (let [h (js/Math.hypot (- x bx) (- z bz))
+        ux (/ (- bx x) (max h 1))
+        uz (/ (- bz z) (max h 1))
+        ka (fn [cx cy cz] (let [k (kind-at cx cy cz)]
+                            (if (and (keyword-identical? :unknown k) (free? (kind-at cx (dec cy) cz))) :open k)))]
+    (some (fn [[cx cz]] (when-let [g (ground ka cx cz by (- by estimate-reach) (+ by estimate-reach))] {:x cx :y g :z cz}))
+          (distinct (for [k (range 1 (- h 1))] [(js/Math.floor (+ x 0.5 (* k ux))) (js/Math.floor (+ z 0.5 (* k uz)))])))))
+
 (defn aim
   "{:pos cell} go-to walks to for goal ({:x :y :z}, or {:x :z} for a column): :resolved true when the y was chosen here,
   :provisional too when a column's y is an estimate (its cell or floor there unseen). body-y: the body's feet y; slack:
