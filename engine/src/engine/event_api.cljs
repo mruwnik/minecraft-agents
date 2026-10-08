@@ -265,9 +265,14 @@
        (into {} (keep (fn [[k f]] (when-let [v (f view)] [k v]))) extras))))))
 
 (defn job-detail
-  "One listed job with its bounded spec and args, status, wait reason, failure and attention requests; nil when unknown."
+  "One listed job with its bounded spec and args, status, wait reason, failure and attention requests; a finished job
+  its recorded outcome (:finished? true, :status, :result, :ended-at); nil when unknown."
   [eng id limit]
   (let [s (core/state eng)]
+    (if-let [done (and (not (get-in s [:instances id])) (get-in s [:recent-results id]))]
+      {:ok true :generation-id (:generation-id s) :id id :name (short-text (:name done) 160) :finished? true
+       :status (:status done) :result (some-> (:result done) (bounded-value 0 (volatile! 32)))
+       :ended-at (:ended-at done)}
     (when-let [inst (get-in s [:instances id])]
       (let [[_ args] (core/job-of eng inst)
             failure (get-in s [:failed id])
@@ -285,7 +290,7 @@
          :current? (= id (:id (core/holder eng)))
          :failure (when failure {:error (short-text (:error failure) 1000) :at (:t failure)})
          :attention {:total (count requests) :items (->> requests (take limit) vec)
-                     :more? (> (count requests) limit)}})))))
+                     :more? (> (count requests) limit)}}))))))
 
 (defn catalog-entry [eng kind name]
   (case kind

@@ -408,3 +408,11 @@
                           (post "/settings/set" "{:key \"nope\" :value 1}")))
                  (.then (fn [response] (is (= 400 (:status response)))))
                  (.finally (fn [] ((:close server))))))))))))
+
+(deftest a-finished-job-reads-its-recorded-result-from-job-detail
+  (let [eng (status-engine #js {:isOffline (fn [] false) :isSettling (fn [] false)
+                                :self (fn [] #js {:username "Probe"})}
+                           {:recent-results {"j5" {:name "mine" :status :stopped :result {:reason :no-ore} :ended-at 7}}} nil)]
+    (is (= {:ok true :id "j5" :name "mine" :status :stopped :result {:reason :no-ore} :ended-at 7 :finished? true}
+           (select-keys (event-api/job-detail eng "j5" 4) [:ok :id :name :status :result :ended-at :finished?])))
+    (is (nil? (event-api/job-detail eng "j6" 4)))))

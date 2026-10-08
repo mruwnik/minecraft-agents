@@ -208,10 +208,12 @@
       (and (:lookup @st) watching?)
       (js-await [first-history (lookup-history w)]
         (js-await [history (if (and (not (:gap? first-history))
-                                    (seq (unavailable-jobs (:events first-history) (:cursor @st) generation opts (:snap @st))))
+                                    (seq (unavailable-jobs (job-results/with-recorded (:events first-history) (:snap @st) (:watch opts))
+                                                           (:cursor @st) generation opts (:snap @st))))
                              (lookup-history w job-results/result-limit) ; the same window `observe result` scans
                              (js/Promise.resolve first-history))]
-        (let [unavailable (unavailable-jobs (:events history) (:cursor @st) generation opts (:snap @st))]
+        (let [history (update history :events job-results/with-recorded (:snap @st) (:watch opts))
+              unavailable (unavailable-jobs (:events history) (:cursor @st) generation opts (:snap @st))]
           (cond
             (:gap? history)
             (do (swap! st assoc :lookup false)

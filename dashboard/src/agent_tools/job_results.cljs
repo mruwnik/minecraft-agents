@@ -70,6 +70,21 @@
         (or (> (count observations) event-limit) (:truncated? clipped)) (assoc :events-truncated? true)
         (= :failed (:kind terminal)) (assoc :error (:value (bounded (get-in terminal [:data :error])))))))))
 
+(defn with-recorded
+  "events plus, for each id in ids the engine recorded as ended (snapshot :state :recent-results) with no terminal
+  event among them, a synthetic terminal event of the recorded status (seq 0): a job that ended before the window."
+  [events snap ids]
+  (let [recorded (get-in snap [:state :recent-results])
+        generation (:generation-id snap)
+        has-end? (into #{} (keep #(when (terminal-kinds (:kind %)) (get-in % [:context :job-id]))) events)]
+    (into (vec events)
+          (keep (fn [id]
+                  (when-let [{:keys [status result text]} (and (not (has-end? id)) (get recorded id))]
+                    (cond-> {:seq 0 :generation-id generation :source :job :kind status
+                             :context {:job-id id :chain [id]} :data (or result {})}
+                      text (assoc :message text)))))
+          ids)))
+
 (defn ^:async history!
   "Read at most 1000 retained events in bounded pages. get! is (get! socket-path path {:signal :timeout-ms
    :max-bytes}), a promise of {:status :content-type :text}. snap, when given, is the snapshot whose :cursor ends
@@ -113,7 +128,9 @@
   "The projected outcome of job id from the retained history (see history! for get!)."
   [get! socket-path id {:keys [signal deadline]}]
   (let [history (await (history! get! socket-path {:signal signal :deadline deadline :limit result-limit}))]
-    (project id (get-in history [:snapshot :generation-id]) (:events history) (or (:partial? history) (:truncated? history))
+    (project id (get-in history [:snapshot :generation-id])
+             (with-recorded (:events history) (:snapshot history) [id])
+             (or (:partial? history) (:truncated? history))
              (get-in history [:snapshot :state :next-id]))))
 
 (defn js-get

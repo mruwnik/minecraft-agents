@@ -345,7 +345,8 @@
                       cursor {:stream-id "s" :seq (count events)}
                       value (cond
                               (= "/snapshot" endpoint) (cond-> {:body "Probe" :generation-id generation :outstanding outstanding :cursor cursor}
-                                                         (contains? @world :instances) (assoc :state {:instances (:instances @world)}))
+                                                         (or (contains? @world :instances) (contains? @world :recent-results))
+                                                         (assoc :state (select-keys @world [:instances :recent-results])))
                               (= "/status" endpoint) {:mode :scheduled :current nil}
                               :else (let [after (js/Number (.get (.-searchParams (js/URL. (str "http://x" endpoint))) "after"))]
                                       {:gap? gap :stream-id "s" :latest-seq (count events) :cursor cursor
@@ -611,6 +612,25 @@
                      (is (= :job-finished (:wake wake)))
                      (is (= "j4" (:job wake)))
                      (is (= search-found (get-in wake [:events 0 :data :found]))))))))))
+
+(def recorded-search
+  {"j4" {:name "search" :status :completed :ended-at 5 :result {:status :completed}}})
+
+(deftest a-job-that-ended-long-ago-is-reported-from-the-engines-recorded-results
+  (with-fixture ["1s"]
+    (fn [f]
+      (swap! (:world f) assoc :instances {} :recent-results recorded-search)
+      (apply push! f (map #(job-event % "j8" :memory_written) (range 1 10001)))
+      (let [req (assoc-in (:req f) [:wait-options :watch] ["j4"])]
+        (-> (job-results/read! (:get! f) "/unused" "j4" {})
+            (.then (fn [result]
+                     (is (= :completed (:status result)))
+                     (is (true? (:finished? result)))
+                     (observe/wait-observe req (:get! f) nil (fn [_] (js/Promise.resolve nil)))))
+            (.then (fn [wake]
+                     (is (= :job-finished (:wake wake)))
+                     (is (= "j4" (:job wake)))
+                     (is (= :completed (:result wake))))))))))
 
 (deftest a-cursor-from-before-a-restart-resets-once-without-old-jobs-and-the-watched-job-is-still-found
   (with-fixture ["1s"]

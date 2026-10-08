@@ -1,11 +1,18 @@
 (ns engine.core.base
   "The engine's shared plumbing: the empty state, cuts as errors, accessors of the engine map, events,
   state and memory saves, ids and instances, and small predicates (paused?, stopped-result?, wait-reason)."
-  (:require [engine.composite :as composite]
+  (:require [engine.args :as a]
+            [engine.composite :as composite]
             [engine.events :as events]
             [engine.expr :as expr]
             [engine.memory :as mem]
+            [engine.settings :as settings]
             ["path" :as path]))
+
+(a/defargs settings
+  {:engine.core.base/recent-results-limit
+   {:default 100 :spec (a/int-in 1 nil)
+    :doc "How many ended jobs' outcomes the engine keeps (state :recent-results, served on /job and /snapshot)."}})
 
 (def default-idle-s
   "Seconds a round may hold the body with no act in flight and no declared hold before a job.idle warn."
@@ -21,7 +28,7 @@
 
 (def empty-state
   {:list [] :instances {} :register [] :changes {} :reflex-state {}
-   :deferred-ends [] :cursor 0 :resume nil :current nil :failed {}
+   :deferred-ends [] :recent-results {} :cursor 0 :resume nil :current nil :failed {}
    :attention {} :next-id 1})
 
 (defn cut-error []
@@ -66,7 +73,40 @@
   (or (get-in eng [:triggers trigger])
       (throw (ex-info (str "unknown trigger " trigger) {:trigger trigger}))))
 
+(def terminal-kinds #{:completed :failed :cancelled :stopped})
+
+(def max-result-chars 2000)
+
+(defn result-entry
+  "The recent-results entry of a job's terminal event: {:name :status :result :ended-at}, :result the event's data
+  (dropped with :result-clipped true when it prints past max-result-chars)."
+  [event ended-at]
+  (let [data (:data event)
+        clipped? (> (count (pr-str data)) max-result-chars)]
+    (cond-> {:name (:name event) :status (:kind event) :ended-at ended-at}
+      (and (seq data) (not clipped?)) (assoc :result data)
+      clipped? (assoc :result-clipped true)
+      (string? (:text event)) (assoc :text (subs (:text event) 0 (min 200 (count (:text event))))))))
+
+(defn record-result!
+  "Keep a listed job's terminal event in :recent-results, the newest recent-results-limit of them."
+  [eng event]
+  (let [id (:job event)
+        limit (settings/get settings :engine.core.base/recent-results-limit)
+        entry (result-entry event (now eng))]
+    (swap! (:state eng)
+           (fn [s]
+             (let [kept (assoc (dissoc (:recent-results s) id) id entry)
+                   over (- (count kept) limit)]
+               (assoc s :recent-results
+                      (if (pos? over)
+                        (apply dissoc kept (map key (take over (sort-by (comp :ended-at val) kept))))
+                        kept)))))))
+
 (defn emit! [eng event]
+  (when (and (= :job (:source event)) (terminal-kinds (:kind event)) (string? (:job event))
+             (= [(:job event)] (or (:chain event) [(:job event)])))
+    (record-result! eng event))
   (events/emit! (:events eng) event))
 
 (defn job-fields [eng id]

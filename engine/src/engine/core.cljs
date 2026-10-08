@@ -25,6 +25,8 @@
                             until retry! or cancel!
     :deferred-ends [{:reflex :job :outcome :reason :ended-at ms :text}]  reflex jobs that ended while
                             the body was settling or offline, judged on the first ready tick
+    :recent-results {id {:name :status :result :ended-at}}  the outcomes of the last jobs that ended (setting
+                            engine.core.base/recent-results-limit), served on /job and /snapshot
     :next-id n
   Not persisted:
     the in-flight round ({:id :token :reflex :round})

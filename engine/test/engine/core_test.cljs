@@ -11,6 +11,7 @@
             [engine.registry :as registry]
             [engine.fake :as fake]
             [engine.test-util :as tu]
+            [engine.settings :as settings]
             [engine.triggers :as triggers]
             ["fs" :as fs]
             ["path" :as path]))
@@ -1889,3 +1890,30 @@
     (set! (.-self p) (fn [] (swap! self-calls inc) (self-fn)))
     (is (= 740 (:age (mem/view (:store eng)))))
     (is (zero? @self-calls))))
+
+(deftest ended-jobs-leave-a-bounded-result-record-that-is-saved
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng dir]} (setup)
+              key :engine.core.base/recent-results-limit]
+          (swap! settings/state assoc-in [:values key] 2)
+          (try
+            (core/submit! eng '(walk {:pos {:x 3 :y 64 :z 0}}) {})
+            (await (core/tick! eng))
+            (let [rec (:recent-results (core/state eng))]
+              (is (= :completed (get-in rec ["j1" :status])))
+              (is (= "walk" (get-in rec ["j1" :name])))
+              (is (number? (get-in rec ["j1" :ended-at]))))
+            (core/submit! eng '(count) {})
+            (core/submit! eng '(count) {})
+            (core/submit! eng '(count) {})
+            (core/cancel! eng "j2")
+            (core/cancel! eng "j3")
+            (core/cancel! eng "j4")
+            (let [rec (:recent-results (core/state eng))]
+              (is (= #{"j3" "j4"} (set (keys rec))) "bounded to the setting, oldest dropped")
+              (is (= :cancelled (get-in rec ["j4" :status]))))
+            (is (contains? (reader/read-string (.readFileSync fs (path/join dir "engine.edn") "utf8")) :recent-results)
+                "saved with the job state")
+            (finally (swap! settings/state update :values dissoc key))))))))
