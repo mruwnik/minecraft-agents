@@ -17,7 +17,7 @@
   jobs.movement.go-to as a child (range 2). One call is the whole search; it yields (:continue) only while go-to waits
   on the world or for leg columns to load.
 
-  Legs are :spacing apart: :spiral rings round the origin, or :outward ahead along :heading, then the sides. A
+  Legs are :spacing apart: :spiral rings round the origin, or :outward ahead along :heading, then the sides, and on further ahead once those are tried or searched. A
   leg is never tried twice and never goes beyond :max-distance (XZ) of the origin. It is skipped (:skipped)
   when a live :searched note of any body, this one included, listing every target name lies within half its
   radius.
@@ -230,7 +230,9 @@
         [ox _ oz] (:origin m)
         [x _ z] (here c)]
     (if (= :outward (keyword pattern))
-      (outward-points [x z] (keyword heading) spacing)
+      (let [[dx dz] (headings (keyword heading))]
+        (mapcat (fn [k] (outward-points [(+ x (* dx spacing k)) (+ z (* dz spacing k))] (keyword heading) spacing))
+                (range (inc (js/Math.ceil (/ max-distance spacing))))))
       (spiral-points [ox oz] spacing max-distance))))
 
 (defn stand-cap [] (settings/get settings ::stand-cap))

@@ -202,6 +202,18 @@
           (is (= 8 (get-in e [:coverage :skipped])))
           (is (= :distance (:why e))))))))
 
+(deftest an-outward-search-goes-on-past-searched-ground-ahead
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [marks (for [[x z] (search/outward-points [0.5 0.5] :north 16)]
+                      {:kind :searched :what ["diamond_block"] :pos [x 64 z] :r 3 :by "Other" :t 1 :until 9e15})
+              s (await (search! {:target "diamond_block" :pattern :outward :heading :north :max-distance 64} {} 400 #(write-other! % "Other" marks)))
+              e (event-of s :search.not-found)]
+          (is (pos? (count (walks s))) "the body walked on instead of ending at once")
+          (is (every? #(< (:z %) -16) (walks s)) "past the searched legs, further north")
+          (is (pos? (get-in e [:coverage :legs]))))))))
+
 (deftest ground-searched-for-other-names-is-not-skipped
   (async done
     (tu/run-async done
