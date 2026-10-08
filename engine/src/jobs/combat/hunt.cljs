@@ -3,6 +3,7 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.body :as body]
             [jobs.lib.combat :as combat]
             [jobs.lib.hunting :as hunting]
             [jobs.lib.shelter :as sh]
@@ -101,9 +102,12 @@
       nearest (assoc :nearest (js/Math.round (.-distance nearest))))))
 
 (defn check
-  "Always: too few animals at the start end the job in its round, so a held hunt never blocks the queue."
-  [_c]
-  true)
+  "Waits {:reason :low-health} while the body is too hurt (jobs.lib.body/too-hurt). Too few animals at the start end the
+  job in its round, so a held hunt never blocks the queue."
+  [c]
+  (if-let [hurt (body/too-hurt (:primitives c))]
+    (ctx/wait c hurt)
+    true))
 
 (defn too-few!
   "Warn and end the job stopped :too-few with how many are in range."

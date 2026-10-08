@@ -4,6 +4,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
             [jobs.lib.blocks :as b]
+            [jobs.lib.body :as body]
             [jobs.lib.declined :as declined]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.look :as look]
@@ -383,7 +384,8 @@
       (and (contains? (:how (limits c)) :chest) (seq (candidates c names))) true
       (and (contains? (:how (limits c)) :craft) (craft-plan c names (:count a))) true
       (and (contains? (:how (limits c)) :gather) (gather-viable? c names (:count a))) true
-      (and (contains? (:how (limits c)) :gather) (explorable? c names (:count a))) true
+      (and (contains? (:how (limits c)) :gather) (explorable? c names (:count a)))
+      (if-let [hurt (body/too-hurt (:primitives c))] (ctx/wait c hurt) true)
       :else (let [reason (merge {:reason :no-source :why (no-source-why c names (:count a))} (wanted-fields a))]
               (if (contains? (:how (limits c)) :chest)
                 (look/wait-unless-surveyed c reason)
@@ -565,7 +567,7 @@
       (tried! c :gather {:pickaxe (or (:reason (ctx/child-result c :pickaxe)) r)})
       :else :again)))
 
-(defn ^:async explore-step!
+(defn ^:async explore-walk!
   "Walk and look for need (a jobs.explore.search child): :again once it is seen; a search that finds none stops the
   gather source, as does the third search for one need."
   [c need]
@@ -591,6 +593,13 @@
           (tried! c :gather (cond-> {:searched (:key need) :for targets :result (or (:reason res) r)}
                               (:why res) (assoc :why (:why res))
                               (:coverage res) (assoc :legs (:legs (:coverage res)) :farthest (:farthest (:coverage res))))))))))
+
+(defn ^:async explore-step!
+  "explore-walk! unless the body is too hurt (jobs.lib.body/too-hurt): then :continue until it has healed."
+  [c need]
+  (if (body/too-hurt (:primitives c))
+    :continue
+    (await (explore-walk! c need))))
 
 (defn ^:async gather-step!
   "One round of the gather source: the child for the first raw item the chain lacks, until it ends."

@@ -86,6 +86,15 @@
           (is (empty? (f/events-of s :obtain.exploring)) "no surface search")
           (is (seq (mine-events s)) "the mine child ran"))))))
 
+(deftest a-badly-hurt-body-does-not-walk-off-to-look-for-an-unseen-need
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (f/start (assoc-in (ore-world {} []) [:self :health] 0.5) [f/own-zone])]
+          (await (obtain! s {:item "oak_log" :count 2 :how #{:gather} :explore true} 8))
+          (is (empty? (f/events-of s :obtain.exploring)) "no search walk at 0.5 hp")
+          (is (some #(= :low-health (:reason %)) (f/events-of s :waiting))))))))
+
 (deftest an-iron-ingot-with-raw-iron-carried-is-smelted-by-a-smelt-child
   (async done
     (tu/run-async done

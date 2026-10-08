@@ -40,7 +40,7 @@
     else hold (:sheltered) while the trigger would still fire (a bed to use, a sleeper), else the job ends: a body
     that is safe leaves the queue to run (the morning's trigger lets it out).
   - a bed (sh/bed-to-use: seen, or remembered within :bed-radius, :urgent-bed-radius once :max-days-awake days without
-    sleep; never an occupied one, one given up on, or one whose walk leaves an underground, dug-in or room shelter): jobs.survival.sleep on it. A sleep that ends without sleeping writes
+    sleep; never an occupied one, one given up on, or, unless :max-days-awake days without sleep, one whose walk leaves an underground, dug-in or room shelter): jobs.survival.sleep on it. A sleep that ends without sleeping writes
     :sleep-failed (5 minutes, shelter.sleep_failed warn).
   - a bed item carried and no bed to use: put down beside the body (roofed cells first, else in the open; never in a
     doorway or another's zone), slept in, recorded as :bed unless a live :bed is; outside its own zones also as

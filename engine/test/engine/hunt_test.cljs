@@ -354,3 +354,11 @@
           (is (empty? (attacked s2)))
           (is (= :no-color (:reason e)))
           (is (re-find #"sheared" (:text e))))))))
+
+(deftest a-badly-hurt-body-waits-to-heal-before-it-hunts
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:count 1 :keep 0} {:inventory h/sword :self {:health 0.5} :entities [(cow 1 3)]} 10))]
+          (is (empty? (attacked s)) "nothing attacked at 0.5 hp")
+          (is (= [:low-health] (distinct (map :reason (events-of s :waiting))))))))))

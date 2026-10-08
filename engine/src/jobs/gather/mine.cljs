@@ -275,15 +275,16 @@
   (not-any? #(= pos (:pos %)) (:ground (ctx/mem c))))
 
 (defn check [c]
-  (cond
-    (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) (access/decline! c :mine.declined "mine" {:reason :no-zones})
-    (body/too-hurt (:primitives c)) (ctx/wait c (body/too-hurt (:primitives c)))
-    (:phase (ctx/mem c)) true
-    (not (:block (:args c))) (ctx/wait c {:reason :no-block})
-    :else (let [{:keys [targets refused]} (scan c)]
-            (if (and (empty? targets) (seq refused))
-              (access/decline! c :mine.declined "mine" (assoc (access/refusal-fields refused) :reason :refused))
-              true))))
+  (let [hurt (body/too-hurt (:primitives c))]
+    (cond
+      (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) (access/decline! c :mine.declined "mine" {:reason :no-zones})
+      hurt (ctx/wait c hurt)
+      (:phase (ctx/mem c)) true
+      (not (:block (:args c))) (ctx/wait c {:reason :no-block})
+      :else (let [{:keys [targets refused]} (scan c)]
+              (if (and (empty? targets) (seq refused))
+                (access/decline! c :mine.declined "mine" (assoc (access/refusal-fields refused) :reason :refused))
+                true)))))
 
 
 (defn ground-pos

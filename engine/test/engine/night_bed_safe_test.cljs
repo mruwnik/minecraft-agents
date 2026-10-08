@@ -57,6 +57,20 @@
   (is (nil? (bed-to-use (tunnel-world buried-light))))
   (is (false? (holds? (tunnel-world buried-light))) "the night trigger does not hold"))
 
+(defn bed-to-use-after-days
+  "bed-to-use for a body that last slept `days` in-game days ago."
+  [world days]
+  (let [{:keys [eng p]} (setup world)
+        _ (mem/write! (:store eng) :slept {:pos {:x 0 :y 64 :z 0}} {:cap 10 :ttl (* 10 sh/ms-per-day)})
+        view (assoc (mem/view (:store eng)) :now (+ 1000000 (* days sh/ms-per-day)))]
+    (sh/bed-to-use p view 128 (constantly true))))
+
+(deftest a-buried-body-overdue-for-sleep-walks-to-its-bed
+  (is (= far-bed (bed-to-use-after-days (tunnel-world buried-light) 3))))
+
+(deftest a-buried-body-not-yet-overdue-stays-in-the-tunnel
+  (is (nil? (bed-to-use-after-days (tunnel-world buried-light) 2))))
+
 (deftest a-roofed-body-the-sky-reaches-still-walks-to-its-bed
   (is (= far-bed (bed-to-use (tunnel-world {}))) "a roof alone is no shelter to keep")
   (is (true? (holds? (tunnel-world {})))))

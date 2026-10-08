@@ -190,15 +190,17 @@
 (defn bed-to-use
   "The bed a body awake at night sleeps in: one it sees (seen-bed), else the remembered :bed within radius, under any
   roof or none. Never one permit? refuses (occupied), one in an unexpired :bed-unreachable entry, or one whose walk
-  would take the body out of a kept-shelters shelter; none after a sleep tonight (:slept within half an in-game day)
+  would take the body out of a kept-shelters shelter (unless overdue: max-days-awake days since :slept, phantoms);
+  none after a sleep tonight (:slept within half an in-game day)
   or while a :sleep-failed entry is unexpired. nil otherwise."
   [p view radius permit?]
   (when (and (night? p) (not (sleeping? p))
              (zero? (mem/count-in view :slept slept-tonight-ms))
              (empty? (mem/entries view :sleep-failed)))
     (let [shelter (:data (mem/latest view :shelter))
+          overdue? (>= (or (days-awake-in view) 0) max-days-awake)
           ok? (fn [pos] (and (permit? pos) (not-any? #(= pos (:pos (:data %))) (mem/entries view :bed-unreachable))
-                             (not (kept-shelters (walk-leaves-shelter? p shelter pos 1)))))]
+                             (or overdue? (not (kept-shelters (walk-leaves-shelter? p shelter pos 1))))))]
       (or (seen-bed p ok?)
           (when-let [pos (bed-in-view p view radius)]
             (when (ok? pos) pos))))))
