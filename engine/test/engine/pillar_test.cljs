@@ -128,6 +128,9 @@
           (is (= 58 (.-count (first (.-inventory (.self p))))))
           (let [d (first (of-kind seen :pillar.done))]
             (is (= (column base 6) (:cells d)))
+            (is (= {"dirt" 6} (:spent d)))
+            (is (= (conj (vec (take 4 (column base 6))) (last (column base 6))) (:spent-at d)))
+            (is (re-find #"used 6 dirt" (:text d)))
             (is (= 6 (:height d)))))))))
 
 (deftest one-call-builds-the-whole-height

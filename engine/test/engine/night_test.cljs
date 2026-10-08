@@ -525,6 +525,18 @@
           (is (empty? (st/emitted seen :shelter.exposed)))
           (is (empty? (st/emitted seen :stopped)) "the night ended done"))))))
 
+(deftest the-nights-result-sums-what-its-niche-placed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (st/setup {:time night :blocks hillside :floor [-2 -2 8 2] :inventory [{:name "iron_pickaxe" :count 1}]})]
+          (st/refuse-cell! p [0 63 0])
+          (st/dawn-after! p 4)
+          (let [r (await (tu/child-outcome eng 'jobs.survival.night {} 40))]
+            (is (= :dug-in (:night r)) (pr-str r))
+            (is (= 2 (reduce + (vals (:spent r)))) (pr-str r))
+            (is (re-find #"used 2 .*night shelter" (:text r)) (pr-str r))))))))
+
 ;; ------------------------------------------------------------------ job: a roofed place close by
 
 (def home-roof {"10,66,0" "stone"})

@@ -4,6 +4,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.reach :as reach]
             [jobs.lib.shelter :as sh]
+            [jobs.lib.spent :as spent]
             [jobs.lib.util :as u]))
 
 (defn dark-end?
@@ -18,12 +19,13 @@
 
 (defn finish!
   "Hand result over (ctx/result!), emit it as a :result info event (its :kind is the event's :refused-kind: an event's own
-  :kind is what it is), end the job."
+  :kind is what it is), end the job. What the walk placed (torches) is added as :spent and :spent-at."
   [c result]
-  (ctx/result! c result)
-  (ctx/emit! c :result :info (cond-> (dissoc result :kind)
-                               (:kind result) (assoc :refused-kind (:kind result))))
-  :done)
+  (let [result (merge result (some-> (spent/log c) spent/summary))]
+    (ctx/result! c result)
+    (ctx/emit! c :result :info (cond-> (dissoc result :kind)
+                                 (:kind result) (assoc :refused-kind (:kind result))))
+    :done))
 
 (defn feet-cell [c]
   (let [{:keys [x y z]} (reach/standing-cell (:primitives c))]

@@ -8,6 +8,7 @@
             [jobs.lib.dig-look :as look]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.pace :as pace]
+            [jobs.lib.spent :as spent]
             [jobs.lib.reach :as reach]
             [jobs.lib.walk :as walk]
             [jobs.lib.pillar :as pl]
@@ -132,16 +133,27 @@
        (sort-by second)
        vec))
 
+(defn spent-log
+  "jobs.lib.spent log of this job's confirmed pillar blocks in ledger l."
+  [c l]
+  (->> (ledger/of-job l (:id c) purpose)
+       (filter #(= :placed (:state %)))
+       (sort-by (comp second :cell))
+       (reduce (fn [log {:keys [item cell]}] (spent/add log item cell)) nil)))
+
 (defn finish!
-  "End the job: the result and its event."
+  "End the job: the result (with :spent and :spent-at) and its event."
   [c l step]
   (let [cells (built c l)
         height (:height (:args c))
+        spent-log (spent-log c l)
         result (merge {:status (if (= :done (:step step)) :done :gave-up) :cells cells :built (count cells) :height height}
+                      (some-> spent-log spent/summary)
                       (dissoc step :step))]
     (ctx/result! c result)
     (if (= :done (:step step))
-      (ctx/emit! c :pillar.done :info (assoc result :text (str "pillar of " (count cells) " up to " (pr-str (peek cells)))))
+      (ctx/emit! c :pillar.done :info (assoc result :text (str "pillar of " (count cells) " up to " (pr-str (peek cells))
+                                                                     (some->> (spent/text spent-log "pillar") (str "; ")))))
       (ctx/emit! c :pillar.gave-up :warn
                  (assoc result :text (str "pillar gave up at " (count cells) " of " height ": " (name (:reason step))
                                           (when (:short step) (str ", " (:short step) " blocks short"))

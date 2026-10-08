@@ -12,6 +12,7 @@
             [jobs.lib.result :as result]
             [jobs.lib.sense :as sense]
             [jobs.lib.shelter :as sh]
+            [jobs.lib.spent :as spent]
             [jobs.lib.solid :as solid]
             [jobs.lib.targets :as targets]
             [jobs.lib.tidy :as tidy]
@@ -452,7 +453,9 @@
       (when (map? r) (ctx/update-mem! c assoc :pit-trapped true))
       :again)
     (let [d (await (ctx/call-child c :niche 'jobs.survival.dig-niche {:fetch false}))]
-      (when-not (= :continue d) (ctx/update-mem! c assoc :niche :tried))
+      (when-not (= :continue d)
+        (ctx/update-mem! c assoc :niche :tried)
+        (spent/absorb! c (ctx/child-result c :niche)))
       :again)))
 
 ;; ------------------------------------------------------------------ somewhere safer
@@ -681,6 +684,12 @@
   (let [n (:flees (ctx/mem c))]
     (when (and n (pos? n)) n)))
 
+(defn spent-fields
+  "What the night's children placed (the niche), as the :spent, :spent-at and :text a done result carries; {} when nothing."
+  [c]
+  (let [log (spent/log c)]
+    (if log (assoc (spent/summary log) :text (spent/text log "night shelter")) {})))
+
 (defn end-night!
   "The night is over: forget tonight's failed sites and end, done {:night how}, or stopped :exposed {:sites} when
   nothing sheltered the body."
@@ -691,7 +700,7 @@
     (if (= :exposed how)
       (result/stop! c :exposed (str "no shelter tonight: no bed, nobody asleep, no site to dig in, nowhere safer known (" (exposed-why sites) ")")
                     :sites sites :fled (fled c))
-      (result/finish! c (cond-> {} how (assoc :night how) (fled c) (assoc :fled (fled c)))))))
+      (result/finish! c (cond-> (spent-fields c) how (assoc :night how) (fled c) (assoc :fled (fled c)))))))
 
 (defn ^:async morning-step!
   "By day, nothing to walk over: out of a dig-in pit first, then a bed picked up, then the end."
@@ -743,7 +752,7 @@
           (log-out-wanted? c) (await (log-out-step c))
           (and (:enclose (ctx/mem c)) (not= :dug-in sheltered)) (await (enclose! c))
           (or roofed (sh/buried? p)) (do (ctx/forget-where! c :night-site (constantly true))
-                                         (result/finish! c (cond-> {:night (if (= :logged-out sheltered) :logged-out :roofed)} (fled c) (assoc :fled (fled c)))))
+                                         (result/finish! c (cond-> (assoc (spent-fields c) :night (if (= :logged-out sheltered) :logged-out :roofed)) (fled c) (assoc :fled (fled c)))))
           (:fleeing (ctx/mem c)) (await (flee! c (:fleeing (ctx/mem c))))
           (and (= :exposed sheltered) (retry-due? c)) (do (retry-dig-in! c) (await (shelter! c)))
           (= :exposed sheltered) (await (hold! c (str "exposed: " (exposed-why (failed-sites c)))))

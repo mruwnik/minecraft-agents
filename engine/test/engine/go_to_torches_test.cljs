@@ -101,7 +101,9 @@
         (let [{:keys [out seen p]} (await (gs/run-go-to shielded {:pos below :range 1 :escalate false :unknown true
                                                                   :place-torches true :ignore-zones? true}
                                                         dark-with-torch-light))]
-          (is (= {:arrived true} out) (pr-str out))
+          (is (= {:arrived true} (select-keys out [:arrived])) (pr-str out))
+          (is (= {"torch" 1} (:spent out)) (str "the torch is reported: " (pr-str out)))
+          (is (= (mapv vec (torch-cells p)) (:spent-at out)))
           (is (= [[0 65 0]] (torch-cells p)) "one torch on the takeoff, on the wall at the head")
           (is (= 3 (torches-left p)))
           (is (= 1 (count (filter #(= :walk.torch-placed (:kind %)) seen))))
@@ -160,7 +162,7 @@
         (let [{:keys [out seen p]} (await (gs/run-go-to bare {:pos below :range 1 :escalate false :unknown true
                                                               :place-torches true :ignore-zones? true}
                                                         dark-with-torch-light))]
-          (is (= {:arrived true} out) (pr-str out))
+          (is (= {:arrived true} (select-keys out [:arrived])) (pr-str out))
           (is (= 1 (count (torch-cells p))) (pr-str (torch-cells p)))
           (is (= 3 (torches-held p)))
           (is (empty? (filter #(= :fetch.started (:kind %)) seen)) "it had torches"))))))
@@ -173,7 +175,7 @@
                                                         {:pos below :range 1 :escalate false :unknown true
                                                          :place-torches true :fetch false :ignore-zones? true}
                                                         dark-with-torch-light))]
-          (is (= {:arrived true} out) (pr-str out))
+          (is (= {:arrived true} (select-keys out [:arrived])) (pr-str out))
           (is (= 1 (count (torch-cells p))))
           (is (= 3 (torches-held p)))
           (is (empty? (filter #(= :fetch.started (:kind %)) seen))))))))
@@ -187,7 +189,7 @@
         (let [{:keys [out p]} (await (gs/run-go-to (assoc shielded :zones [{:name "theirs" :min [0 65 0] :max [0 65 0] :owner "Other"}])
                                                    {:pos below :range 1 :escalate false :unknown true :place-torches true}
                                                    dark-with-torch-light))]
-          (is (= {:arrived true} out) (pr-str out))
+          (is (= {:arrived true} (select-keys out [:arrived])) (pr-str out))
           (is (= [[0 64 0]] (torch-cells p)) "a floor torch at the feet, not a wall torch in the zone"))))))
 
 (deftest go-to-places-no-torch-at-a-takeoff-in-another-owners-zone
@@ -290,7 +292,7 @@
                                                         {:pos below :range 1 :escalate false :unknown true
                                                          :place-torches true :ignore-zones? true}
                                                         dark-with-torch-light))]
-          (is (= {:arrived true} out) (pr-str out))
+          (is (= {:arrived true} (select-keys out [:arrived])) (pr-str out))
           (is (= 1 (count (filter #(= :fetch.started (:kind %)) seen))) (pr-str (map :kind seen)))
           (is (empty? (filter #(= :fetch.failed (:kind %)) seen)))
           (is (= 1 (count (torch-cells p))) "one torch on the takeoff")
