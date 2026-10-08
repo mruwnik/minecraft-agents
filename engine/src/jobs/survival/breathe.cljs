@@ -108,21 +108,6 @@
          [dx dz])
        (sort-by (fn [[dx dz]] (+ (* dx dx) (* dz dz))))))
 
-(def swimmable
-  "Fluid and water plants a body swims through as water: kelp, seagrass and an upward bubble column (see seen-water-name:
-  a downward one drags to the floor and is never swum into)."
-  #{"water" "kelp" "kelp_plant" "seagrass" "tall_seagrass" "bubble_column"})
-
-(defn seen-water-name
-  "u/seen-name, but a bubble column with drag true (it pulls down, over magma) reads as \"bubble_column_down\", which is
-  not swimmable."
-  [p cell]
-  (let [b (u/seen-block p cell)
-        drag? (and b (= "bubble_column" (.-name b))
-                   (let [props (or (.-properties b) (some-> (.-getProperties b) (.call b)))]
-                     (or (true? (some-> props .-drag)) (= "true" (some-> props .-drag str)))))]
-    (if drag? "bubble_column_down" (some-> b .-name))))
-
 (defn rose?
   "A swim that ended with the feet at floor y is progress only above the best height reached so far (best, nil before
   the first swim) and the feet height the pass started at (fy): a body pushed back down between passes is not progress."
@@ -142,17 +127,14 @@
                       (range 1 (inc n)))]
     (boolean
      (some (fn [[cx cz]]
-             (some #(= "bubble_column_down" (seen-water-name p {:x cx :y % :z cz})) [fy (inc fy)]))
+             (some #(= "bubble_column_down" (breath/seen-water-name p {:x cx :y % :z cz})) [fy (inc fy)]))
            cells))))
-
-(defn passable-water-or-air? [name]
-  (or (breath/air? name) (contains? swimmable name)))
 
 (defn surface-in-column
   "The feet cell in column x z, at or above fy and within reach, whose head
   cell is air and which is reached through water or air only; nil if the
-  column is capped or leaves the loaded world. name-at (default seen-water-name) reads the cells; a cell never seen ends the column."
-  ([p x z fy reach] (surface-in-column p x z fy reach seen-water-name))
+  column is capped or leaves the loaded world. name-at (default breath/seen-water-name) reads the cells; a cell never seen ends the column."
+  ([p x z fy reach] (surface-in-column p x z fy reach breath/seen-water-name))
   ([p x z fy reach name-at]
    (loop [k 0]
      (when (<= k reach)
@@ -160,9 +142,9 @@
              feet (name-at p {:x x :y y :z z})
              head (name-at p {:x x :y (inc y) :z z})]
          (cond
-           (not (and feet head (passable-water-or-air? feet))) nil
+           (not (and feet head (breath/passable-water-or-air? feet))) nil
            (breath/air? head) {:x x :y y :z z}
-           (contains? swimmable head) (recur (inc k))
+           (contains? breath/swimmable head) (recur (inc k))
            :else nil))))))
 
 (defn nearest-air
@@ -215,8 +197,8 @@
   [p cell]
   (some (fn [[dx dz]]
           (let [n (-> cell (update :x + dx) (update :z + dz))
-                at (fn [dy] (seen-water-name p (update n :y + dy)))]
-            (and (passable-water-or-air? (at 0)) (passable-water-or-air? (at 1))
+                at (fn [dy] (breath/seen-water-name p (update n :y + dy)))]
+            (and (breath/passable-water-or-air? (at 0)) (breath/passable-water-or-air? (at 1))
                  (or (= "water" (at -1)) (= "water" (at -2))))))
         [[1 0] [-1 0] [0 1] [0 -1]]))
 
@@ -248,14 +230,8 @@
         (if (look/unknown? p [x (:y cell) z])
           (do (await (look/look-at! c [x (:y cell) z]))
               (when-not first-only? (recur (inc k))))
-          (when (passable-water-or-air? (seen-water-name p cell))
+          (when (breath/passable-water-or-air? (breath/seen-water-name p cell))
             (recur (inc k))))))))
-
-(defn column-open?
-  "No cell seen over the feet cell up to reach is a block: what is not seen is not a cap, so a drowning body may swim up it."
-  [p x z fy reach]
-  (every? (fn [k] (let [n (seen-water-name p {:x x :y (+ fy k) :z z})] (or (nil? n) (passable-water-or-air? n))))
-          (range (inc (inc reach)))))
 
 (defn ^:async find-air!
   "The nearest air target after looking: up the own column first, then, only when a block is seen over the own column,
@@ -266,7 +242,7 @@
         fx (js/Math.floor (:x pos)) fy (js/Math.floor (:y pos)) fz (js/Math.floor (:z pos))]
     (await (look-column! c fx fz fy reach false))
     (or (nearest-air p pos radius reach)
-        (when-not (column-open? p fx fz fy reach)
+        (when-not (breath/column-open? p fx fz fy reach)
           (doseq [[dx dz] (rest (columns radius))]
               (await (look-column! c (+ fx dx) (+ fz dz) fy reach true)))
             (nearest-air p pos radius reach)))))
@@ -295,7 +271,7 @@
                     (ctx/update-mem! c update :best-y #(max (or % y) y)))
                   (or surfaced? rose)))]
     (cond
-      (and (nil? target) (column-open? p fx fz fy reach))
+      (and (nil? target) (breath/column-open? p fx fz fy reach))
       (or (await (swim!)) :no-air)
 
       (nil? target) :no-air
@@ -319,13 +295,13 @@
         fy (js/Math.floor (.. self -pos -y))
         fz (js/Math.floor (.. self -pos -z))
         fits? (fn [cell]
-                (let [feet (seen-water-name p cell)
-                      head (seen-water-name p (update cell :y inc))
-                      below (seen-water-name p (update cell :y dec))]
+                (let [feet (breath/seen-water-name p cell)
+                      head (breath/seen-water-name p (update cell :y inc))
+                      below (breath/seen-water-name p (update cell :y dec))]
                   (and feet head below
                        (not (breath/suffocates? p cell)) (not (breath/suffocates? p (update cell :y inc)))
                        (not (contains? harmful-in-cell feet)) (not (contains? harmful-in-cell head))
-                       (not (breath/air? below)) (not (contains? swimmable below)) (not (contains? #{"lava" "magma_block"} below))
+                       (not (breath/air? below)) (not (contains? breath/swimmable below)) (not (contains? #{"lava" "magma_block"} below))
                        (not-any? #{"bubble_column_down"} [feet head below]))))]
     (->> [[1 0] [-1 0] [0 1] [0 -1]]
          (map (fn [[dx dz]] {:x (+ fx dx) :y fy :z (+ fz dz)}))
@@ -359,11 +335,11 @@
   [p head]
   (let [cell (fn [k] (update head :y + k))]
     (loop [k 0]
-      (let [n (when (<= k 3) (seen-water-name p (cell k)))]
+      (let [n (when (<= k 3) (breath/seen-water-name p (cell k)))]
         (cond
           (> k 3) {:why :no-cap}
           (nil? n) {:why :unseen}
-          (passable-water-or-air? n) (recur (inc k))
+          (breath/passable-water-or-air? n) (recur (inc k))
           (escape/protected? n) {:why :protected}
           (not (escape/natural? n)) {:why :not-natural}
           (contains? falling n) {:why :gravity}

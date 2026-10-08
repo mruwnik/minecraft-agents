@@ -36,7 +36,7 @@
             target (or (await (breathe/find-air! (assoc c :args look-args) pos))
                        (breathe/nearest-air p pos air-radius (:reach look-args) nil false))]
         (if-not target
-          (when (breathe/column-open? p (js/Math.floor (:x pos)) (js/Math.floor (:z pos)) (js/Math.floor (:y pos)) (:reach look-args))
+          (when (breath/column-open? p (js/Math.floor (:x pos)) (js/Math.floor (:z pos)) (js/Math.floor (:y pos)) (:reach look-args))
             (ctx/update-mem! c assoc :surfacings (inc n))
             (ctx/emit! c :go-to.surfacing :info {:text "short of air, nothing seen above: swimming up blind"})
             (await (swim-up-blind! c pos)))

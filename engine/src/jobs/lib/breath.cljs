@@ -86,3 +86,27 @@
   "Whether the job already reported cell as one it cannot free (a recent :unwedge-blocked entry): no refire then."
   [memory cell]
   (boolean (and memory (some #(= cell (:cell (:data %))) (mem/entries memory :unwedge-blocked)))))
+
+(def swimmable
+  "Fluid and water plants a body swims through as water: kelp, seagrass and an upward bubble column (see seen-water-name:
+  a downward one drags to the floor and is never swum into)."
+  #{"water" "kelp" "kelp_plant" "seagrass" "tall_seagrass" "bubble_column"})
+
+(defn seen-water-name
+  "u/seen-name, but a bubble column with drag true (it pulls down, over magma) reads as \"bubble_column_down\", which is
+  not swimmable."
+  [p cell]
+  (let [b (u/seen-block p cell)
+        drag? (and b (= "bubble_column" (.-name b))
+                   (let [props (or (.-properties b) (some-> (.-getProperties b) (.call b)))]
+                     (or (true? (some-> props .-drag)) (= "true" (some-> props .-drag str)))))]
+    (if drag? "bubble_column_down" (some-> b .-name))))
+
+(defn passable-water-or-air? [name]
+  (or (air? name) (contains? swimmable name)))
+
+(defn column-open?
+  "No cell seen over the feet cell up to reach is a block: what is not seen is not a cap, so a drowning body may swim up it."
+  [p x z fy reach]
+  (every? (fn [k] (let [n (seen-water-name p {:x x :y (+ fy k) :z z})] (or (nil? n) (passable-water-or-air? n))))
+          (range (inc (inc reach)))))
