@@ -170,3 +170,15 @@
             (is (= {:gave-up false :short {}} result))
             (is (= {"bread" 16} (inv p)))
             (is (= 1 (count (calls p "transfer"))))))))))
+
+(deftest withdraw-looks-in-the-next-chest-of-the-group
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:blocks {"10,64,0" "chest" "11,64,0" "chest"}
+                                      :containers {"10,64,0" [{:name "dirt" :count 3}] "11,64,0" [{:name "bread" :count 9}]}})]
+          (know-place! eng :chest chest)
+          (mem/write! (:store eng) :storage/chests {:pos {:x 11 :y 64 :z 0}} {:cap 16 :ttl :forever})
+          (let [result (await (child-outcome eng job {:items {"bread" 5}} 12))]
+            (is (= {"bread" 5} (inv p)))
+            (is (= {:gave-up false :short {}} result))))))))

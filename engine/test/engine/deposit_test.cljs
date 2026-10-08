@@ -1,6 +1,8 @@
 (ns engine.deposit-test
   "jobs.storage.deposit against the fake world."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.fake :as fake]
+            [engine.memory :as mem]
             [engine.core :as core]
             [engine.withdraw-test :as wt]
             [engine.test-util :as tu]))
@@ -115,3 +117,79 @@
           (.override (.-world p) "transfer" (fn ^:async f [_ _ _] #js {:status "timeout"}))
           (let [result (await (tu/child-outcome eng job {:chest chest :items ["dirt"]} 12))]
             (is (= true (:gave-up result)))))))))
+
+;; ------------------------------------------------------------------ storage group: a full chest, then a new one
+
+(defn full-at
+  "Make the transfers into the chest at cell answer \"full\" with nothing moved."
+  [p cell]
+  (.override (.-world p) "transfer"
+             (fn ^:async f [token args impl]
+               (if (and (= (.-x (.-pos args)) (first cell)) (= (.-z (.-pos args)) (last cell)))
+                 #js {:status "full" :moved 0}
+                 (await (impl token args))))))
+
+(defn group-cells [eng]
+  (set (map (comp (juxt :x :y :z) :pos :data) (mem/entries (mem/view (:store eng)) :storage/chests))))
+
+(defn chests-in [p]
+  (set (keep (fn [[k v]] (when (= "chest" v) k)) (:blocks @(fake/state p)))))
+
+(deftest deposit-places-a-new-chest-beside-a-full-one
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup-far {:inventory [{:name "dirt" :count 5} {:name "chest" :count 1}]
+                                          :blocks {"10,64,0" "chest"} :containers {"10,64,0" [] "11,64,0" []}})]
+          (wt/know-place! eng :chest chest)
+          (full-at p [10 64 0])
+          (let [result (await (tu/child-outcome eng job {:items ["dirt"]} 30))
+                new-cells (disj (chests-in p) [10 64 0])]
+            (is (= {:gave-up false} result))
+            (is (= {} (wt/inv p)))
+            (is (= 1 (count new-cells)))
+            (is (= 1 (js/Math.abs (apply + (map - (first new-cells) [10 64 0]))))
+                "the new chest stands beside the full one")
+            (is (= (conj new-cells [10 64 0]) (conj (group-cells eng) [10 64 0])) "the group remembers it")))))))
+
+(deftest deposit-uses-the-next-chest-of-the-group-before-making-one
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup-far {:inventory [{:name "dirt" :count 5} {:name "chest" :count 1}]
+                                          :blocks {"10,64,0" "chest" "11,64,0" "chest"}
+                                          :containers {"10,64,0" [] "11,64,0" []}})]
+          (wt/know-place! eng :chest chest)
+          (mem/write! (:store eng) :storage/chests {:pos {:x 11 :y 64 :z 0}} {:cap 16 :ttl :forever})
+          (full-at p [10 64 0])
+          (let [result (await (tu/child-outcome eng job {:items ["dirt"]} 30))]
+            (is (= {:gave-up false} result))
+            (is (= {"chest" 1} (wt/inv p)) "no chest was placed")
+            (is (= #{[10 64 0] [11 64 0]} (chests-in p)))
+            (is (= [{"dirt" 5}] [(into {} (map (juxt :name :count)) (get-in @(fake/state p) [:containers [11 64 0]]))]))))))))
+
+(deftest deposit-stops-with-a-reason-when-the-chests-are-full-and-making-is-off
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup-far {:inventory [{:name "dirt" :count 5} {:name "chest" :count 1}]
+                                          :blocks {"10,64,0" "chest"} :containers {"10,64,0" []}})]
+          (wt/know-place! eng :chest chest)
+          (full-at p [10 64 0])
+          (let [result (await (tu/child-outcome eng job {:items ["dirt"] :make-chests? false} 30))]
+            (is (= {:gave-up true :reason "all-chests-full" :status :stopped :moved 0} result))
+            (is (= #{[10 64 0]} (chests-in p)))))))))
+
+(deftest deposit-stops-when-a-new-chest-cannot-be-had
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup-far {:inventory [{:name "dirt" :count 5}]
+                                          :blocks {"10,64,0" "chest"} :containers {"10,64,0" []}})]
+          (wt/know-place! eng :chest chest)
+          (full-at p [10 64 0])
+          (let [result (await (tu/child-outcome eng job {:items ["dirt"]} 60))]
+            (is (= true (:gave-up result)))
+            (is (= :stopped (:status result)))
+            (is (= "no-chest-item" (:reason result)))
+            (is (= #{[10 64 0]} (chests-in p)))))))))

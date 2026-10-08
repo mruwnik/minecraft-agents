@@ -22,6 +22,8 @@
   Zones: a chest in another owner's zone or claim that does not allow :take is refused before the walk and again
   before the transfer. The job ends {:gave-up true :reason :refused :zones [..] :claims [..]} after one
   withdraw.refused warn and takes nothing. :ignore-zones? true skips the check.
+  Storage group: with no :chest, or a :chest of the group (jobs.lib.storage/group), a chest that lacks what is short
+  is followed by the next one; chest-lacks is reported only once the last has been looked into.
   Stock: what the chest holds is booked in body memory :fetch/stock when inspected and after each take
   (jobs.lib.fetch), for jobs.items.obtain.")
 
@@ -96,11 +98,13 @@
                        short)]
         (cond
           (nil? pick) (let [held (held-items (.-items seen))
-                            lacking (into {} short)]
-                        (ctx/emit! c :withdraw.short :info {:short lacking :held held
+                            lacking (into {} short)
+                            others (rest (:open (deposit/chests c)))]
+                        (when (seq others) (deposit/mark-full! c chest))
+                        (if (seq others) :again (do (ctx/emit! c :withdraw.short :info {:short lacking :held held
                                                            :text (lacks-text (map first short) held)})
                         (ctx/result! c {:gave-up false :status :stopped :reason "chest-lacks" :held held :short lacking})
-                        :done)
+                        :done)))
           (access/container-refusal c :take chest) (refuse! c (access/container-refusal c :take chest))
           :else
           (let [[name n] pick
@@ -122,7 +126,7 @@
   holds none of what is short, or it stopped. The shortfall is read at the start of the step."
   [c]
   (let [{:keys [items]} (:args c)
-        chest (storage/chest-of (ctx/view c) (:args c))
+        chest (some-> (first (:open (deposit/chests c))) deposit/cell-pos)
         short (shortfall (u/inventory (:primitives c)) items)]
     (cond
       (empty? short) (do (ctx/result! c {:gave-up false :short {}}) :done)
