@@ -268,6 +268,9 @@
    ["an exploration start wakes" (notice "j2" :obtain.exploring "looking for oak_log") defaults :notice]
    ["any notice wakes" (notice "j2" :shelter.exposed "exposed: no roof") defaults :notice]
    ["a notice from a body source wakes" (assoc (event :body :job.notify {} "hi") :attention :notice) defaults :notice]
+   ["a watch limits notices to the watched job" (notice "j2" :shelter.exposed "exposed") (assoc defaults :watch ["j5"]) nil]
+   ["a notice of a watched job's child wakes" (notice "j5/place" :blocks.place.done "x") (assoc defaults :watch ["j5"]) :notice]
+   ["a body notice wakes under a watch" (assoc (event :body :job.notify {} "hi") :attention :notice) (assoc defaults :watch ["j5"]) :notice]
    ["quiet notices suppress it" (notice "j2" :shelter.exposed "exposed") (assoc defaults :quiet-notices true) nil]
    ["an unwatched job end noticed stays quiet" (notice "j2" :completed nil) defaults nil]
    ["an unwatched give-up noticed stays quiet" (notice "j2" :stopped "gave up walking") defaults nil]
@@ -1106,3 +1109,9 @@
     (is (true? (observe-status/stale-idle? idle [(job :cancelled)])) "the listed jobs changed")
     (is (true? (observe-status/stale-idle? idle [(job :queued)])))
     (is (true? (observe-status/stale-idle? idle [(started "look") (started "moveTo")])) "the body walked")))
+
+(deftest a-notice-of-an-ended-job-is-stale
+  (let [a (notice "j1" :build.gave-up "x")]
+    (is (observe-status/stale-notice? a [(notice "j1" :build.wrong "y") (assoc (event :job :stopped) :context {:job-id "j1"})]))
+    (is (not (observe-status/stale-notice? a [(assoc (event :job :stopped) :context {:job-id "j2"})])))
+    (is (not (observe-status/stale-notice? a [])))))

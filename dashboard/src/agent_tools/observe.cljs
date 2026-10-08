@@ -8,7 +8,7 @@
             ["node:path" :as path]
             [clojure.string :as str]
             ["node:timers/promises" :as timers]
-            [agent-tools.observe.status :refer [attention-changes classify code-of coded collect compact-status death-details death-jobs clear-reported with-death-details id-str instance-names note-notice recovered? repeat-notice? signature stale-idle? stale-reconnect? summary-result track-deaths with-death-jobs]]
+            [agent-tools.observe.status :refer [attention-changes classify code-of coded collect compact-status death-details death-jobs clear-reported with-death-details id-str instance-names note-notice recovered? repeat-notice? stale-notice? signature stale-idle? stale-reconnect? summary-result track-deaths with-death-jobs]]
             [agent-tools.observe.lock :refer [acquire! checkpoint! observer-count saved-checkpoint]]
             [agent-tools.observe.request :refer [legacy-notice request-for usage wait-options]]
             [shadow.cljs.modern :refer [js-await]]))
@@ -145,7 +145,8 @@
           _ (swap! deaths clear-reported event)
           immediate (when-not (or (and failed? (stale-reconnect? event later))
                               (and (= :idle (:kind event)) (= :body (:source event)) (stale-idle? event later))
-                              (repeat-notice? (:noticed @st) event))
+                              (repeat-notice? (:noticed @st) event)
+                              (stale-notice? event later))
                       (some-> (classify event opts body) (with-death-jobs dead-jobs) (with-death-details details)))
           _ (swap! st update :noticed note-notice event)
           skip! (fn [] (swap! summary collect event dead-jobs) (more))]

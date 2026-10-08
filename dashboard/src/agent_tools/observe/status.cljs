@@ -147,6 +147,22 @@
   (boolean (or (> (or (get-in e [:data :attempt]) 1) 1)
                (some recovered? later))))
 
+(defn stale-notice?
+  "Whether a notice in the backlog is from a job that has ended since (a later terminal event of the same job): its
+  news is in the summary and the job's result, not a wake."
+  [e later]
+  (let [job (get-in e [:context :job-id])]
+    (boolean (and (= :notice (:attention e)) job
+                  (some #(and (= :job (:source %)) (job-results/terminal-kinds (:kind %)) (= job (get-in % [:context :job-id])))
+                        later)))))
+
+(defn unwatched-notice?
+  "Whether a notice belongs to a job outside a non-empty --watch list (a child counts as its top job)."
+  [e opts]
+  (let [job (get-in e [:context :job-id])]
+    (boolean (and (seq (:watch opts)) job
+                  (not-any? #{(first (str/split job #"/"))} (:watch opts))))))
+
 (def jobs-changed-kinds (conj job-results/terminal-kinds :queued))
 
 (defn stale-idle?
@@ -159,7 +175,8 @@
 
 (defn classify
   "The wake an event causes under the options, or nil. Options: :from :chatter :watch :danger :disconnect
-  :quiet-notices. A body.idle and a death always wake, and so does any :attention :notice event but a job end."
+  :quiet-notices. A body.idle and a death always wake, and so does any :attention :notice event but a job end; under
+  --watch only the notices of the watched jobs (and body notices) wake."
   [e opts body]
   (let [{:keys [source kind]} e
         d (or (:data e) {})]
@@ -190,7 +207,8 @@
       (clean-pairs :wake :job-finished :job (get-in e [:context :job-id]) :result (:kind e)
                    :message (clip (or (:message e) (:error d))))
 
-      (and (= :notice (:attention e)) (not (:quiet-notices opts)) (not (job-results/terminal-kinds kind)))
+      (and (= :notice (:attention e)) (not (:quiet-notices opts)) (not (job-results/terminal-kinds kind))
+           (not (unwatched-notice? e opts)))
       (clean-pairs :wake :notice :event kind :job (get-in e [:context :job-id]) :message (clip (:message e))))))
 
 (def max-noticed 256)
