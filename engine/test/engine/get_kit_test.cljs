@@ -93,7 +93,8 @@
           (await (f/run-ticks s 120))
           (is (not-any? #{"iron_pickaxe" "iron_helmet" "iron_boots"} (crafted s)))
           (is (= {:status :stopped :item "iron_ingot" :reason :no-source}
-                 (select-keys @(:out s) [:status :item :reason]))))))))
+                 (select-keys @(:out s) [:status :item :reason])))
+          (is (re-find #"iron_ingot" (str (:why @(:out s))))))))))
 
 (deftest a-worn-piece-is-skipped
   (async done

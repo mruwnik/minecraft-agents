@@ -721,8 +721,11 @@
             (await (craft-step! c names have target))
             (and (contains? (:how o) :gather) (not (get-in m [:tried :gather])))
             (await (gather-step! c names have target))
-            :else (stop! c (if (= :table-unreachable (get-in m [:tried :craft])) :table-unreachable :no-source)
-                         {:got got :tried (:tried m)})))))))
+            :else (let [unreachable (= :table-unreachable (get-in m [:tried :craft]))]
+                    (stop! c (if unreachable :table-unreachable :no-source)
+                           (cond-> {:got got :tried (:tried m)}
+                             (not unreachable) (assoc :why (str "no source for " (clojure.string/join "/" names) ": "
+                                                                (no-source-why c names (:count a)))))))))))))
 
 (defn ^:async round
   "The whole attempt in one call: step! again until the count is carried or it stops; :continue only while a child waits on the world, :declined while a smelt child cooks."
