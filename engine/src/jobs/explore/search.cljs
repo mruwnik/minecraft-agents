@@ -66,6 +66,8 @@
   {::max-failed-in-row {:default 3 :doc "Failed attempts in a row before the search gives up." :spec (a/int-in 0 nil)}
    ::wait-ms {:default 2000 :doc "How long the search waits for the world to settle, in ms." :spec (a/int-in 0 nil)}
    ::reach {:default 12 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
+   ::held-angle {:default 60 :doc "A leg lies the way a failed leg went when the angle between them, seen from the body, is under this many degrees." :spec (a/num-in 0 180)}
+   ::held-near {:default 4 :doc "Blocks from where a leg failed within which its way still holds others back." :spec (a/num-in 0 nil)}
    ::stand-cap {:default 48 :doc "Stand cells one choice reads; past it :more says candidates are left for the next step." :spec (a/int-in 0 nil)}})
 (defn max-failed-in-row [] (settings/get settings ::max-failed-in-row))
 (defn wait-ms [] (settings/get settings ::wait-ms))
@@ -252,14 +254,6 @@
     (or (some (fn [k] (let [[sx sz] (at k) {sy :y} (stand-cell block-at sx sz y)] (when sy [sx sy sz]))) near)
         (when-let [k (first (filter #(<= % 6) near))] (let [[sx sz] (at k)] [sx y sz])))))
 
-(def held-cos
-  "A leg lies the way a failed leg did when the angle between them, seen from the body, is under 60 degrees."
-  0.5)
-
-(def held-near
-  "Blocks from where a leg failed within which its way still holds others back."
-  4)
-
 (defn held?
   "Whether point [x z] lies the way a leg failed from near the body at [hx hz] (blocked, [{:at [x z] :leg [x z]}] since
   the last arrival): the same obstacle likely stands in its way."
@@ -268,9 +262,9 @@
     (boolean (some (fn [{[ax az] :at [lx lz] :leg}]
                      (let [w [(- lx hx) (- lz hz)]
                            n (* (js/Math.hypot (v 0) (v 1)) (js/Math.hypot (w 0) (w 1)))]
-                       (and (<= (xz-dist [hx hz] [ax az]) held-near)
+                       (and (<= (xz-dist [hx hz] [ax az]) (settings/get settings ::held-near))
                             (pos? n)
-                            (> (/ (+ (* (v 0) (w 0)) (* (v 1) (w 1))) n) held-cos))))
+                            (> (/ (+ (* (v 0) (w 0)) (* (v 1) (w 1))) n) (js/Math.cos (* js/Math.PI (/ (settings/get settings ::held-angle) 180)))))))
                    blocked))))
 
 (defn choose-leg
@@ -349,7 +343,7 @@
                                                        (update :legs (fnil + 0) (if step 0 1)))))
                         (await (walk! c)))
                 more :again
-                (and (empty? unloaded) (pos? held)) (finish! c :not-found :stuck)
+                (and (empty? unloaded) (pos? held)) (do (ctx/update-mem! c dissoc :blocked) :again)
                 (empty? unloaded) (finish! c :not-found :distance)
                 (< waited (* 1000 (:load-wait-s (:args c))))
                 (do (ctx/update-mem! c assoc :waiting-since (- now waited) :wait-until (+ now (wait-ms)))
