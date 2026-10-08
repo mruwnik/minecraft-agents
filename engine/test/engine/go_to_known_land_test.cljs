@@ -13,10 +13,9 @@
             [engine.test-util :as tu :refer [box]]
             [engine.triggers :as triggers]))
 
-(defn setup [world]
+(defn setup [world p]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake world)
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen}))
@@ -35,14 +34,18 @@
       (do (await (core/tick! eng))
           (recur (inc i))))))
 
-(defn ^:async go! [world args]
-  (let [{:keys [eng] :as s} (setup world)
+(defn ^:async go-on!
+  "go-to args over the fake p of world, ticked out: {:eng :p :seen :out :ticks}."
+  [world p args]
+  (let [{:keys [eng] :as s} (setup world p)
         out (atom :not-done)
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out args)))]
     (reset! wsearch/searches {})
     (reset! wsearch/known-land {})
     (core/submit! eng '(recording-parent) {})
     (assoc s :eng eng :out out :ticks (await (tick-out! eng 200)))))
+
+(defn go! [world args] (go-on! world (tu/fake world) args))
 
 (defn at [p] (let [pos (.-pos (.self p))] [(.-x pos) (.-y pos) (.-z pos)]))
 
@@ -290,3 +293,37 @@
         (let [{:keys [out p]} (await (go! {:blocks (box -150 63 0 15 63 15 "stone") :self {:pos {:x 10.5 :y 64 :z 8.5}} :viewChunks 1}
                                           {:pos [-140 64 8] :range 1 :explore-blocks 20}))]
           (is (= {:arrived true} (select-keys @out [:arrived])) (str "result " @out " at " (at p))))))))
+
+(defn ^:async go-walked!
+  "go! that also sums the blocks the body walks (along x plus along z, over every move of the fake's body): {... :walked}."
+  [world args]
+  (let [walked (atom 0)
+        p (tu/fake world)]
+    (add-watch (fake/state p) ::walked
+               (fn [_ _ old new]
+                 (let [[ax _ az] (get-in old [:self :pos]) [bx _ bz] (get-in new [:self :pos])]
+                   (when (and ax bx) (swap! walked + (js/Math.abs (- bx ax)) (js/Math.abs (- bz az)))))))
+    (assoc (await (go-on! world p args)) :walked @walked)))
+
+;; the bare abyss strip, no way on: the tour walks each end once (about 400 blocks along the strip and back, plus the turns
+;; across it), never an end it has searched again because its land unloaded and loaded once more
+(deftest go-to-tours-each-end-of-a-dead-end-strip-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out eng walked]} (await (go-walked! {:blocks abyss-strip :self {:pos {:x 2.5 :y 64 :z 0.5}} :viewChunks 1}
+                                                         {:pos [-400 64 0] :range 1 :escalate false}))]
+          (is (= {:arrived false :reason :unreachable} (select-keys @out [:arrived :reason])) (str "result " @out))
+          (is (< walked 800) (str "walked " walked ": " (mapv (juxt :status :from :to) (moved eng)))))))))
+
+;; the strip with the way on at its north end: the tour arrives, without walking an end twice
+(deftest go-to-tours-a-strip-to-a-way-at-its-far-end-without-walking-an-end-twice
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [blocks (merge abyss-strip (box -401 63 199 -1 63 200 "stone") (box -401 63 -1 -399 63 198 "stone"))
+              {:keys [out walked]} (await (go-walked! {:blocks blocks :self {:pos {:x 2.5 :y 64 :z 0.5}} :viewChunks 1}
+                                                      {:pos [-400 64 0] :range 1 :escalate false}))]
+          (is (= {:arrived true} (select-keys @out [:arrived])) (str "result " @out))
+          ;; south end 191, back to the north end 390, the bridge 400 and back south 200
+          (is (< walked 1500) (str "walked " walked)))))))

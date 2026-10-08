@@ -112,9 +112,14 @@
 
   ;; pop the best open node and expand it; a plan to air (to-air) ends only where the head breathes
   (expandNext [s]
-    (if (zero? (.-heap-n s))
+    (cond
+      (and (>= (.-edge-node s) 0) (or (zero? (.-heap-n s)) (>= (.-expanded s) (.-sweep-end s)) ^boolean (.-over-budget s)))
+      (.finish s "exhausted")
+      (zero? (.-heap-n s))
       (when-not ^boolean (.floodAtEnd s)
         (.finish s (if ^boolean (.-boxed s) "box" "exhausted")))
+      (>= (.-edge-node s) 0) (.sweepNext s)
+      :else
       (let [i (.popMin s)
             x (aget (.-xs s) i)
             y (aget (.-ys s) i)
@@ -130,10 +135,23 @@
               (set! (.-best-node s) i))
             (if (and ^boolean (.-stop-at-edge s) ^boolean (.edgeStop s i))
               (do (set! (.-edge-node s) i)
-                  (.finish s "exhausted"))
+                  (set! (.-sweep-end s) (* 2 (.-expanded s))))
               (do (.expandAt s x y z (aget (.-hs s) i) (aget (.-slows s) i) i (bit-and (aget (.-shapes s) i) 15))
                   (when (pos? (.-length ^js (.-held s))) (.flushHeld s))
                   (when ^boolean (.-over-budget s) (.finish s "budget")))))))))
+
+  ;; After edgeStop named its frontier (edge-node), the search expands as many nodes again as it took to get there, so the
+  ;; loaded land it read is known to its end (frontierNode's known-new) and that land does not read as unknown edges once
+  ;; it unloads and loads again (a strip whose far columns the first edge left unsearched was toured twice). Only what
+  ;; is expanded becomes known; the frontier and the partial end stay as edgeStop left them.
+  (sweepNext [s]
+    (let [i (.popMin s)
+          x (aget (.-xs s) i)
+          y (aget (.-ys s) i)
+          z (aget (.-zs s) i)]
+      (set! (.-expanded s) (inc (.-expanded s)))
+      (.expandAt s x y z (aget (.-hs s) i) (aget (.-slows s) i) i (bit-and (aget (.-shapes s) i) 15))
+      (when (pos? (.-length ^js (.-held s))) (.flushHeld s))))
 
   ;; Does the search end at node i (stop-at-edge; i is not on magma)? When it is a frontier node (frontierNode's test: within
   ;; OPEN-REACH of a chunk's side, within frontier-reach of the goal, at the loaded edge) not in options.knownCells. The goal

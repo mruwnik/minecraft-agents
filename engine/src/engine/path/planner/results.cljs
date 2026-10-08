@@ -400,9 +400,12 @@
 
   (keyZ [s k] (+ (- (mod (js/Math.floor (/ k 1024)) 2048) 1024) (.-goal-z s)))
 
+  (keyY [s k] (- (mod k 1024) 512))
+
   ;; With no unknown edge left in the loaded land and an open edge out of sight (options.knownEdges, one an earlier search
   ;; saw and did not cover; the loaded land follows the body), the known frontier node that lies nearest to such an edge
-  ;; (ties: the least cost plus heuristic): the walk to it brings that edge back into view. -1 when none.
+  ;; (along x, y and z, so a node on the edge's own level wins over one on a walkway above it; ties: the least cost plus
+  ;; heuristic): the walk to it brings that edge back into view. -1 when none.
   (nearestToEdge [s open]
     (let [lo OPEN-REACH
           hi (- 16 OPEN-REACH)]
@@ -417,7 +420,7 @@
               (let [d (loop [j 0 d js/Infinity]
                         (if (< j (.-length open))
                           (let [k (aget open j)]
-                            (recur (inc j) (js/Math.min d (js/Math.max (js/Math.abs (- x (.keyX s k))) (js/Math.abs (- z (.keyZ s k)))))))
+                            (recur (inc j) (js/Math.min d (js/Math.max (js/Math.abs (- x (.keyX s k))) (js/Math.abs (- y (.keyY s k))) (js/Math.abs (- z (.keyZ s k)))))))
                           d))
                     f (+ (aget (.-gs s) i) (.heuristic s x z))]
                 (if (or (< d best-d) (and (== d best-d) (< f best-f)))

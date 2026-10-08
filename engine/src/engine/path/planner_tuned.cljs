@@ -72,8 +72,9 @@
      head cell costs cell, a phantom floor floor, times the move's seconds, and peekS a drop onto it, aimS a level or up step
      (in cost.darkSeconds; jobs.lib.cost/unknown-prices). No fall goes into an unseen cell, risk looks stop there, and no
      goal-enclosed, goal-not-standable or start-enclosed proof rests on one. missed and noLight are Sets of cell-key.
-   - options.stopAtEdge: with the goal unloaded, the search ends at the first node it expands at the loaded edge (edgeStop)
-     and names it as its frontier, not after searching all loaded land. go-to's budgeted searches set it (walk.search/new-search)."
+   - options.stopAtEdge: with the goal unloaded, the search names the first node it expands at the loaded edge (edgeStop)
+     as its frontier and ends once it has expanded as many nodes again (or run out), not after searching all loaded land.
+     go-to's budgeted searches set it (walk.search/new-search)."
   (:require [engine.path.planner.base :as base :refer [OCTILE-SLACK REGIONS TABLE WHOLE next-pow2]]
             [engine.path.planner.search :refer [Search ->Search]]
             [engine.path.planner.world]
@@ -366,8 +367,8 @@
      (.-knownCells options) nil (.-knownEdges options) nil
      ;; searched-out
      false
-     ;; stop-at-edge edge-node
-     (and goal-unloaded (true? (option options "stopAtEdge" false))) -1
+     ;; stop-at-edge edge-node sweep-end
+     (and goal-unloaded (true? (option options "stopAtEdge" false))) -1 0
      ;; dangers n-dangers danger-cap dbx0 dbx1 dby0 dby1 dbz0 dbz1
      dangers n-dangers (* risk-scale (option options "dangerCap" 4))
      (aget dbox 0) (aget dbox 1) (aget dbox 2) (aget dbox 3) (aget dbox 4) (aget dbox 5)
