@@ -1,6 +1,7 @@
 ;; Card 9af99615: items.obtain's craft plan no longer counts a remembered table once the craft marked it unreachable. A table at
-;; [19 0 16] is seen (yaw 270), the body looks away (yaw 90), the table is removed (memory follows only what is in view), then
-;; jobs.items.get-tool wooden_pickaxe runs. The craft finds no table, marks it, and plans with its own table.
+;; [19 0 16] is seen (yaw 270), a stone wall at x 16 (z 12..20, y 0..3) then hides its cell, the body looks away (yaw 90), the table
+;; is removed (memory follows only what is in view), then jobs.items.get-tool wooden_pickaxe runs. Without the wall the job's
+;; first look around sees the empty cell, forgets the table and waits :no-source (3 planks make no table): not this case. The craft finds no table, marks it, and plans with its own table.
 ;; Should-succeed: 7 planks + 4 sticks make a new table and the pickaxe. Should-fail: 3 planks + 2 sticks cannot make a table too:
 ;; the job stops :table-unreachable without a pickaxe, not an endless walk to the dead table.
 {:defaults
@@ -9,6 +10,7 @@
   :blocks [[:set [19 0 16] "crafting_table"]]
   :body {:at [14.5 0 16.5] :settle-s 3 :effects [["resistance" 600 4]]}
   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 0"] [:wait-s 3]
+        [:rcon "execute positioned $X $Y $Z run fill ~16 ~ ~12 ~16 ~3 ~20 stone"]
         [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 0"] [:wait-s 2]
         [:rcon "execute positioned $X $Y $Z run setblock ~19 ~ ~16 air"]
         [:job (jobs.items.get-tool {:item "wooden_pickaxe"})]]
