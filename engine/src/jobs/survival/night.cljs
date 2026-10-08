@@ -721,7 +721,7 @@
           (:fleeing (ctx/mem c)) (await (flee! c (:fleeing (ctx/mem c))))
           (and (= :exposed sheltered) (retry-due? c)) (do (retry-dig-in! c) (await (shelter! c)))
           (= :exposed sheltered) (await (hold! c :exposed))
-          :else (if-let [place (and (roof-walk-wanted? c) (roofed-place c))]
+          :else (if-let [place (and (roof-walk-wanted? c) (await (sense/decide! c ::roofed-place #(roofed-place c))))]
                   (await (roof-walk! c place))
                   (await (shelter! c))))))))
 

@@ -488,7 +488,8 @@
 (defn night-at-home
   "Run the night job (with args) in world with :home at pos, the body seeing through its perception: {:eng :p}."
   ([world pos] (night-at-home world pos {}))
-  ([world pos args]
+  ([world pos args] (night-at-home world pos args {}))
+  ([world pos args {:keys [unseen]}]
   (let [[seen sink] (tu/legacy-capture-sink)
         raw-p (tu/fake (merge {:offlineScale 0.0001 :floor tu/walk-floor} (dissoc world :light-default :light)))
         _ (swap! (fake/state raw-p) merge (select-keys world [:light-default :light]))
@@ -497,10 +498,11 @@
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
                           :now (constantly 1000000)
                           :events (events/make {:body "Fake" :sinks [sink] :now (constantly 1000000)})})]
-    (aset p "seenBlockAt" (fn [pos] #js {:name (.-name (.blockAt raw-p pos)) :pos pos :age-ms 0}))
-    (doseq [yaw [0 90 180 270]] ; what the body has seen by now (reads are sensed: felt, in view or remembered)
-      (swap! (fake/state raw-p) assoc :yaw yaw)
-      (perception/pass! per))
+    (when-not unseen
+      (aset p "seenBlockAt" (fn [pos] #js {:name (.-name (.blockAt raw-p pos)) :pos pos :age-ms 0}))
+      (doseq [yaw [0 90 180 270]] ; what the body has seen by now (reads are sensed: felt, in view or remembered)
+        (swap! (fake/state raw-p) assoc :yaw yaw)
+        (perception/pass! per)))
     (swap! (fake/state raw-p) assoc :yaw 0)
     (st/dawn-after! p st/default-dawn)
     (know-home! eng pos)
@@ -514,6 +516,15 @@
         (let [{:keys [eng p]} (await (night-at-home lit-world {:x 10 :y 64 :z 0}))]
           (await (tu/run-until-empty eng 40))
           (is (= [] (st/calls p "place")) "no pit dug")
+          (is (= {:x 10 :y 64 :z 0} (select-keys (st/pos-of p) [:x :y :z]))))))))
+
+(deftest a-lit-route-the-body-has-not-looked-at-yet-is-looked-at-before-digging-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (await (night-at-home lit-world {:x 10 :y 64 :z 0} {} {:unseen true}))]
+          (await (tu/run-until-empty eng 40))
+          (is (= [] (st/calls p "place")) "no pit dug: the route was looked at, found lit, and walked")
           (is (= {:x 10 :y 64 :z 0} (select-keys (st/pos-of p) [:x :y :z]))))))))
 
 (deftest an-unlit-route-is-dug-in-where-the-body-is
