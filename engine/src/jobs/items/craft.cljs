@@ -160,12 +160,13 @@
                 (spent/note! c "crafting_table" spot)
                 :again))))))))
 
-(declare step!)
+(declare craft-act! settle!)
 
 (defn ^:async table-fetch!
   "With no table in reach: put a carried table down, else fetch one (:fetch) and put it down. Once per craft.
-  :again / :continue to go on, nil when there is nothing to do (give up). Putting a carried table down and the craft at
-  it run as one urgent section (ctx/atomic :craft), so a reflex does not leave the table unused."
+  :again / :continue to go on, nil when there is nothing to do (give up). Putting a carried table down and the craft call at
+  it run as one urgent section (ctx/atomic :craft), so a reflex does not leave the table unused; the
+  follow-up on the craft's status (settle!) is outside it."
   [c]
   (let [o (fetch/opts c 'jobs.items.craft)]
     (when (and o (not (:table-tried (ctx/mem c))))
@@ -175,7 +176,8 @@
                 (await (ctx/atomic c :urgent :craft
                                    (fn ^:async place-and-craft []
                                      (let [placed (await (place-table! c))]
-                                       (if (= :again placed) (await (step! c)) placed))))))]
+                                       (if (= :again placed) (await (craft-act! c)) placed))))))
+            r (if (map? r) (await (settle! c r)) r)]
         (when-not (or f r) (ctx/update-mem! c #(-> % (dissoc :want-table) (assoc :table-tried true))))
         (or f r)))))
 
@@ -241,8 +243,9 @@
             (ctx/emit! c :craft.short :info {:text (str "craft " item " is missing " (pr-str short))})
             (finish! c made shortage))))))
 
-(defn ^:async step!
-  "Stop when the target is carried, else craft the rest and act on the status: :again, :continue (go-to waits) or :done."
+(defn ^:async craft-act!
+  "The craft call alone (no follow-up): the target is carried already -> finish!'s result, else {:r the primitive's
+  result :table table :start start} for settle!."
   [c]
   (let [p (:primitives c)
         {:keys [item count]} (:args c)
@@ -253,35 +256,51 @@
         have (storage/carried (u/inventory p) item)]
     (if (>= have target)
       (finish! c (- have start) {})
-      (let [table (or (:table (ctx/mem c)) (:table (:args c)))
-            r (await (ctx/act c :craft (clj->js {:item item :count (- target have) :table table})))
-            status (.-status r)
-            made (- (storage/carried (u/inventory p) item) start)]
-        (when table (ctx/update-mem! c assoc :table table))
-        (case status
-          "crafted" (finish! c made {})
-          "no-item" (await (short! c item r made))
-          "partial" (if (= "no-item" (.-reason r))
-                      (await (short! c item r made))
-                      (do (u/progress! c) :again))
-          "out-of-reach" (let [handed (u/pos-of (.-table r))]
-                           (cond
-                             (:table (:args c)) (await (reach-table! c made))
-                             (> (u/dist (u/self-pos c) handed) (:radius (:args c))) (await (no-table! c made))
-                             :else (do (ctx/update-mem! c assoc :table handed)
-                                       (await (reach-table! c made)))))
-          "unreachable" (cond
-                          (= "no-table" (.-reason r)) (do (ctx/update-mem! c dissoc :table)
-                                                          (await (reach-table! c made)))
-                          (not= "not-a-table" (.-reason r)) (await (reach-table! c made))
-                          (:table (:args c)) (do (ctx/emit! c :craft.no-table :warn {:text (str "not a crafting table: " (pr-str table))})
-                                                 (finish! c made {:reason "not-a-table"}))
-                          :else (do (ctx/update-mem! c dissoc :table) :again))
-          "full" (do (ctx/emit! c :craft.full :warn {:text "inventory is full"})
-                     (finish! c made {:reason "full"}))
-          "cannot" (do (ctx/emit! c :craft.cannot :warn {:text (str "cannot craft " item ": " (.-reason r))})
-                       (finish! c made {:reason (.-reason r)}))
-          (give-up! c made status))))))
+      (let [table (or (:table (ctx/mem c)) (:table (:args c)))]
+        {:r (await (ctx/act c :craft (clj->js {:item item :count (- target have) :table table})))
+         :table table :start start}))))
+
+(defn ^:async settle!
+  "Act on the craft call's status (a craft-act! map): :again, :continue (go-to waits) or :done. Anything else is
+  craft-act!'s own result."
+  [c act]
+  (if-not (:r act)
+    act
+    (let [p (:primitives c)
+          {:keys [item]} (:args c)
+          {:keys [r table start]} act
+          status (.-status r)
+          made (- (storage/carried (u/inventory p) item) start)]
+      (when table (ctx/update-mem! c assoc :table table))
+      (case status
+        "crafted" (finish! c made {})
+        "no-item" (await (short! c item r made))
+        "partial" (if (= "no-item" (.-reason r))
+                    (await (short! c item r made))
+                    (do (u/progress! c) :again))
+        "out-of-reach" (let [handed (u/pos-of (.-table r))]
+                         (cond
+                           (:table (:args c)) (await (reach-table! c made))
+                           (> (u/dist (u/self-pos c) handed) (:radius (:args c))) (await (no-table! c made))
+                           :else (do (ctx/update-mem! c assoc :table handed)
+                                     (await (reach-table! c made)))))
+        "unreachable" (cond
+                        (= "no-table" (.-reason r)) (do (ctx/update-mem! c dissoc :table)
+                                                        (await (reach-table! c made)))
+                        (not= "not-a-table" (.-reason r)) (await (reach-table! c made))
+                        (:table (:args c)) (do (ctx/emit! c :craft.no-table :warn {:text (str "not a crafting table: " (pr-str table))})
+                                               (finish! c made {:reason "not-a-table"}))
+                        :else (do (ctx/update-mem! c dissoc :table) :again))
+        "full" (do (ctx/emit! c :craft.full :warn {:text "inventory is full"})
+                   (finish! c made {:reason "full"}))
+        "cannot" (do (ctx/emit! c :craft.cannot :warn {:text (str "cannot craft " item ": " (.-reason r))})
+                     (finish! c made {:reason (.-reason r)}))
+        (give-up! c made status)))))
+
+(defn ^:async step!
+  "Stop when the target is carried, else craft the rest and act on the status: :again, :continue (go-to waits) or :done."
+  [c]
+  (await (settle! c (await (craft-act! c)))))
 
 (defn ^:async round
   "The whole craft in one call: step! until it is done or stopped."

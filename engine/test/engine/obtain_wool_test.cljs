@@ -63,3 +63,12 @@
           (is (seq (attacked s)))
           (is (every? #{4 5 6 7} (attacked s)) "only brown sheep")
           (is (= "brown" (:taking e))))))))
+
+(deftest obtain-puts-a-carried-table-down-in-an-urgent-section
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:item "wooden_pickaxe" :count 1}
+                                 {:inventory (carried "oak_planks" 3 "stick" 2 "crafting_table" 1)} 20))]
+          (is (= 1 (get (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self (:p s)))) "wooden_pickaxe")) "crafted")
+          (is (= [[:place-table :urgent]] (->> @(:seen s) (filter #(and (= :section (:kind %)) (:open %))) (map (juxt :section :holds)) distinct vec))))))))

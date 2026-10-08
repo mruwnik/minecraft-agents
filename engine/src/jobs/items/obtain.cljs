@@ -512,7 +512,10 @@
           :else
           (do (ctx/update-mem! c assoc-in [:craft :step] step)
               (ctx/update-mem! c assoc-in [:craft :spot] spot)
-              (let [r (await (ctx/call-child c :place 'jobs.blocks.place {:item (:item step) :pos spot :fetch false}))]
+              (let [place #(ctx/call-child c :place 'jobs.blocks.place {:item (:item step) :pos spot :fetch false})
+                    r (await (if (= "crafting_table" (:item step))
+                               (ctx/atomic c :urgent :place-table (fn ^:async place-table [] (await (place))))
+                               (place)))]
                 (if (= :continue r)
                   :continue
                   (let [res (ctx/child-result c :place)]
