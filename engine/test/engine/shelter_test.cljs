@@ -353,7 +353,7 @@
           (core/submit! eng '(jobs.survival.sleep) {})
           (is (< (await (run-until-empty eng 20)) 20))
           (is (= [] (calls p "sleep")))
-          (is (= 12 (count (tu/walked-to eng))) "each of the three tries walks go-to afresh: one walk at the bed cell (not standable, re-aimed one up), then three blocked walks at the re-aimed cell")
+          (is (= 9 (count (tu/walked-to eng))) "each of the three tries walks go-to afresh: three blocked walks at the bed's cell re-aimed one up before any walk")
           (is (= 1 (count (emitted seen :bed_unreachable)))))))))
 
 (def unreachable-world {:time night :blocks {"6,64,0" "red_bed"} :unreachable ["6,64,0"]})

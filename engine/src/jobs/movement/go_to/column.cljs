@@ -4,8 +4,8 @@
   topmost stand open to the sky (the surface a player assumes; read from the world the plans read, so not with
   :unknown on), else keeps a stand-in y (the body's feet); go-to aims again every step, so it resolves from seen cells
   on approach; a provisional one it first walks to within approach-range of. A y with no standable cell within the
-  range is re-aimed to its column's standable cell nearest it, at most :y-slack blocks off (seen cells, an unseen one
-  from the world the plans read)."
+  range is re-aimed to its column's standable cell nearest it, at most :y-slack blocks off, never past a solid (leads-to?;
+  seen cells, an unseen one from the world the plans read)."
   (:require [engine.args :as a]
             [jobs.lib.places :as places]
             [jobs.lib.reach :as reach]
@@ -70,12 +70,22 @@
          (or (keyword-identical? :water feet) (keyword-identical? :solid (kind-at x (dec y) z))))))
 
 (defn ground
-  "The y from lo to hi nearest y (the higher of two) where the column x z stands, else nil."
-  [kind-at x z y lo hi]
-  (some (fn [d] (let [up (+ y d) down (- y d)]
-                  (cond (and (<= up hi) (stands? kind-at x up z)) up
-                        (and (pos? d) (>= down lo) (stands? kind-at x down z)) down)))
-        (range 0 (inc (max (- hi y) (- y lo))))))
+  "The y from lo to hi nearest y (the higher of two) where the column x z stands (and ok? of it, when given), else nil."
+  ([kind-at x z y lo hi] (ground kind-at x z y lo hi (constantly true)))
+  ([kind-at x z y lo hi ok?]
+   (some (fn [d] (let [up (+ y d) down (- y d)]
+                   (cond (and (<= up hi) (stands? kind-at x up z) (ok? up)) up
+                         (and (pos? d) (>= down lo) (stands? kind-at x down z) (ok? down)) down)))
+         (range 0 (inc (max (- hi y) (- y lo)))))))
+
+(defn leads-to?
+  "Whether the column x z leads from a goal at y to the stand at g without passing a solid: up only from a goal cell
+  that is not free (a position in the ground: its surface), down only through free cells. An open cell under a ceiling
+  (a sealed pocket, a cave) is never re-aimed onto the ground over it."
+  [kind-at x z y g]
+  (if (> g y)
+    (not (free? (kind-at x y z)))
+    (every? #(free? (kind-at x % z)) (range (inc g) y))))
 
 (defn sky-ground
   "The feet y of the column x z's topmost stand open to the sky (every cell above it free), else nil."
@@ -95,6 +105,6 @@
       (if-let [s (when raw? (sky-ground (reach/lookup p kind) x z))]
         {:pos {:x x :y s :z z} :resolved true :provisional true}
         {:pos {:x x :y body-y :z z}}))
-    (if-let [g (when (pos? slack) (ground (kind-at p raw?) x z y (- y slack) (+ y slack)))]
+    (if-let [g (when (pos? slack) (let [ka (kind-at p raw?)] (ground ka x z y (- y slack) (+ y slack) #(leads-to? ka x z y %))))]
       {:pos (assoc goal :y g) :resolved true}
       {:pos goal})))

@@ -13,8 +13,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
+        ;; y 61 is a cell inside the ground under x 10 (stone 60..62 under the floor), as a block's position is
         (doseq [y [67 61]]
-          (let [{:keys [out p] :as s} (await (go! {:blocks flat} {:pos [10 y 0]}))]
+          (let [{:keys [out p] :as s} (await (go! {:blocks (merge flat (box 9 60 -1 11 62 1 "stone"))} {:pos [10 y 0]}))]
             (is (= {:arrived true :resolved {:x 10 :y 64 :z 0}} @out) (str "y " y " " (pr-str @out)))
             (is (near-x10? p) (str "y " y " at " (at p)))
             (is (= [{:goal {:x 10 :y y :z 0} :to {:x 10 :y 64 :z 0}}]
@@ -59,6 +60,27 @@
         (let [{:keys [out p]} (await (go! {:blocks flat} {:pos [10 67 0] :y-slack 0}))]
           (is (= {:arrived false :reason :unreachable :why :goal-not-standable} (select-keys @out [:arrived :reason :why])))
           (is (= [0 64 0] (at p))))))))
+
+(deftest the-re-aim-comes-before-any-walk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out eng]} (await (go! {:blocks flat} {:pos [10 67 0]}))]
+          (is (= {:arrived true :resolved {:x 10 :y 64 :z 0}} @out))
+          (is (= [{:x 10 :y 64 :z 0}] (mapv :target (gt/moved eng))) "one walk, to the re-aimed cell: no walk toward y 67"))))))
+
+;; a sealed stone pocket under a pit: x 4..6, y 56..59, z -1..1, its one open cell (5,58,0); the pit over it (no floor
+;; at y 63 in those columns) stands on its top at feet 60
+(def pocket
+  (merge (apply dissoc flat (for [x [4 5 6] z [-1 0 1]] (str x ",63," z)))
+         (box 4 56 -1 6 59 1 "stone") (box 5 58 0 5 58 0 "air")))
+
+(deftest a-goal-in-a-sealed-pocket-gives-up-and-never-arrives-over-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out]} (await (go! {:blocks pocket} {:pos [5 58 0] :escalate false}))]
+          (is (= {:arrived false :reason :unreachable} (select-keys @out [:arrived :reason])) (pr-str @out)))))))
 
 (deftest a-y-farther-off-than-the-slack-is-not-re-aimed
   (async done
@@ -157,3 +179,24 @@
         (let [holed (apply dissoc flat (for [z (range -3 4)] (str "3,63," z)))
               {:keys [out]} (await (go! {:blocks holed} {:pos [3 0] :range 4}))]
           (is (= {:arrived true :resolved {:x 3 :y 64 :z 0}} @out) (pr-str @out)))))))
+
+(deftest a-goal-sealed-under-a-ceiling-is-not-re-aimed-through-it
+  (let [p (hiding pocket (constantly false))]
+    (is (= {:pos {:x 5 :y 58 :z 0}} (column/aim p {:x 5 :y 58 :z 0} 4 64 true))
+        "the ground over the pocket's roof is no way to the cell under it")
+    (is (= {:pos {:x 5 :y 60 :z 0} :resolved true} (column/aim p {:x 5 :y 59 :z 0} 4 64 true))
+        "a goal in the roof block itself is a position in the ground: its top")
+    (is (= {:pos {:x 10 :y 64 :z 0} :resolved true} (column/aim p {:x 10 :y 66 :z 0} 4 64 true))
+        "a goal in the open air over the ground comes down to it")))
+
+(deftest an-unseen-goal-inside-a-mound-under-unknown-ends-from-near-it
+  ;; no endless "searching" loop: the call ends, in a bounded number of plans
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        ;; the body starts at x 22, 6 short of the mound at x 28..32 (ground at feet 65), the goal cell (30,64,0) inside it
+        (let [mound (merge flat (box 28 64 -3 32 64 3 "stone"))]
+          (doseq [pos [[30 0] [30 64 0]]]
+            (let [{:keys [out] :as s} (await (go! {:blocks mound :light [15 0] :self {:pos {:x 22 :y 64 :z 0}}} {:pos pos :range 0 :unknown true}))]
+              (is (not= :not-done @out) (str (pr-str pos) " ended"))
+              (is (< (count (events-of s :planned)) 300) (str (pr-str pos) " searches: " (count (events-of s :planned)))))))))))

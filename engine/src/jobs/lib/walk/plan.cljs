@@ -61,6 +61,16 @@
                          :dark (.-dark pw) :tolls (.-tolls pw) :unknown (wworld/unknown-of pw)}
                     (clj->js box)))
 
+(defn goal-stand-problem
+  "The planner's verdict on the goal alone, before any search or goal flood: :goal-not-standable (no cell within range
+  of to [x y z] stands) or :goal-on-magma, else nil (a cell may end a route, or the start does not stand). pw: a
+  pathWorld (wworld/path-world)."
+  [c ^js pw to range]
+  (let [^js s (planner/create-search (.-snapshot pw) (plan-query c to range)
+                                     (doto (plan-options pw 1 nil nil) (unchecked-set "preFlood" 0)))]
+    (when (.step s 0)
+      (#{:goal-not-standable :goal-on-magma} (keyword (.-reason ^js (.result s)))))))
+
 (defn with-drops
   "options (the planner's, a JS object) with the policy's :drop-cost: a number is the planner's costs.dropFactor (nil: as
   it is), false takes no drop of 2 or 3 (maxDrop 1). The policy's :max-drop is maxDrop, its :fall-factor fallFactor, and

@@ -20,6 +20,7 @@
             [jobs.lib.walk.watch :as wwatch]
             [jobs.lib.look :as look]
             [jobs.lib.walk.world :as wworld]
+            [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.search :as wsearch]
             [jobs.lib.places :as places]
             [jobs.lib.torch :as ltorch]
@@ -34,8 +35,8 @@
 (def doc
   "Walk to :pos ([x y z] or {:x :y :z}, fractions floored to the cell) until the body's cell is within :range cells of
   it (a sphere; range 0: in that cell, 1: next to it). :pos [x z] or {:x :z} (no y) walks to the seen ground of that
-  column nearest the body's feet (unseen: first to within 8 of its topmost ground open to the sky, then looks); a y the planner finds no standable cell within :range of is re-aimed once to its column's
-  ground nearest it, at most :y-slack blocks off (info goal-resolved {:goal :to}); see jobs.movement.go-to.column. A
+  column nearest the body's feet (unseen: first to within 8 of its topmost ground open to the sky, then looks); a y the planner finds no standable cell within :range of (asked before the first walk, pre-aim!) is re-aimed once to its column's
+  ground nearest it, at most :y-slack blocks off and never past a solid (info goal-resolved {:goal :to}); see jobs.movement.go-to.column. A
   column whose ground is not made out is looked at after a fruitless walk (at most 3 a call). A cell over a short floor (farmland, a path, a bottom slab) stands for that
   block's own cell, where the body's feet are. :place (a name such as :home, set by jobs.memory.set-place) walks to
   that place's recorded position instead of :pos; a name not in memory falls back to the shared marker of that name (jobs.lib.world/marker).
@@ -619,6 +620,16 @@
          (sort-by :mob-distance)
          first)))
 
+(defn pre-aim!
+  "Before the first walk: a y goal pos (goal-pos) that the planner answers goal-not-standable for alone (no search,
+  wplan/goal-stand-problem) and whose column aims it elsewhere is re-aimed now (mem :re-aim), not after a walk."
+  [c goal pos]
+  (let [pw (wworld/path-world (:primitives c) (:unknown c))]
+    (when (and (:y goal) pw (not (:re-aim (ctx/mem c))) (pos? (:y-slack (:args c) 4))
+               (= :goal-not-standable (wplan/goal-stand-problem c pw [(:x pos) (:y pos) (:z pos)] (:range (:args c) 1)))
+               (:resolved (aimed c goal)))
+      (ctx/update-mem! c assoc :re-aim true))))
+
 (defn ^:async run-steps!
   "step! until it arrives, gives up, or waits on a child (:continue), with pace! between steps; goal aimed again each
   step (goal-pos), so a column seen on the way resolves."
@@ -658,7 +669,8 @@
             (when danger (ctx/emit! c :goal-in-danger :info (assoc danger :target pos)))
             (if (and danger (= :end (some-> (:goal-danger (:args c)) keyword)))
               (await (end/give-up! c pos 0 :goal-dangerous {:reason :goal-dangerous} danger))
-              (await (run-steps! c goal)))))))))
+              (do (pre-aim! c goal pos)
+                  (await (run-steps! c goal))))))))))
 
 (defn ^:async round
   "attempt, then (unless it waits on a child) the off-hand torch goes back whatever the outcome, a throw too (rethrown).
