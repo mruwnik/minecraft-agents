@@ -361,7 +361,7 @@
     (when (and on-stair? (rises dir) (headings heading))
       (let [block-at (:block-at (rules-in c feet))
             {:keys [cut]} (step-cells feet dir heading)
-            block (some #(let [n (block-at %)] (when (and n (not (rules/air n)) (not (unbreakable n))) n)) cut)]
+            block (some #(let [n (when-not (unknown? p %) (block-at %))] (when (and n (not (rules/air n)) (not (unbreakable n))) n)) cut)]
         (cond
           (nil? block) nil
           (no-tool? p block) {:reason :no-tool :tool (tools/needed-kind p block) :block block}

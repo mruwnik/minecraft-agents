@@ -329,9 +329,9 @@
   (filterv :dig? cells))
 
 (defn unseen
-  "The cells with an item that nobody can see now (unloaded), not given up."
+  "The cells with an item, or to clear, that nobody can see now (unloaded), not given up."
   [cells given-up]
-  (filterv #(and (nil? (:found %)) (:item %) (not (:companion %)) (not (contains? given-up (:pos %)))) cells))
+  (filterv #(and (nil? (:found %)) (or (:item %) (= :clear (:want %))) (not (:companion %)) (not (contains? given-up (:pos %)))) cells))
 
 (defn owed
   "The cells still to build: missing, wrong to dig, or unseen."
@@ -389,7 +389,7 @@
           (empty? (owed cells))
           (seq (buildable cells (carried-counts p) {}))
           (seq (digging cells))
-          (some #(pos? (get (carried-counts p) (:item %) 0)) (unseen cells {}))
+          (some #(or (= :clear (:want %)) (pos? (get (carried-counts p) (:item %) 0))) (unseen cells {}))
           (when-let [w (need-of c cells)] (some? (fetch/due c 'jobs.build.from-plan w)))) true
       :else (ctx/wait c {:reason :no-items :plan (:plan (:args c)) :part (:part (:args c))
                          :needs (into {} (shortage (owed cells) (carried-counts p)))}))))

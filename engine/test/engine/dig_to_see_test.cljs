@@ -307,3 +307,14 @@
           (is (= :dug (:reason @out)))
           (is (= "dirt" (:block @out)))
           (is (some #{{:x 3 :y 64 :z 0}} (digs p))))))))
+
+(def snow-mass (update-vals (stone -3 12 50 64 -2 2) (constantly "snow_block")))
+
+(deftest stair-into-unseen-snow-is-dug-by-hand-without-fetching-a-tool
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (run! {:blocks snow-mass :inventory []} 'jobs.access.stair stair-east))]
+          (is (= :done (:status @(:out s))))
+          (is (empty? (events-of s :fetch.started)))
+          (is (seq (digs (:p s)))))))))

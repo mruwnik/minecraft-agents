@@ -796,3 +796,19 @@
           (await (tu/child-outcome eng job {:plan "house"} 200))
           (is (= "air" (block p [3 63 3])) "the plan's cell stays clear")
           (is (= "cobblestone" (block p [3 62 3])) "the lava under it is sealed"))))))
+
+(deftest an-unseen-clear-cell-is-looked-at-and-dug-not-taken-as-clear
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "near" :parts [{:id "clear" :cells [[3 64 0]] :want :clear}]}
+              [seen sink] (tu/legacy-capture-sink)
+              p (tu/seeing-after-look (tu/fake-on-floor {:inventory [] :blocks {"3,64,0" "dirt"}}))
+              eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref h/clock)
+                                :events (events/make {:body "Fake" :sinks [sink] :now #(deref h/clock)})
+                                :world (world/of-data {"near" plan} {} [])})
+              result (await (tu/child-outcome eng job {:plan "near"} 200))]
+          (is (seq (h/calls p "look")))
+          (is (= {} (:given-up result)))
+          (is (= [] (:missing result)))
+          (is (= "air" (block p [3 64 0]))))))))
