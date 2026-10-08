@@ -65,8 +65,9 @@
   Events: build.done (info), build.short, build.gave-up, build.refused and build.wrong (warns). Event texts name
   the count and the first few cells. The whole list is in :cells of the event and in the result.
   The job declines (one build.declined warn naming the plan and the reason):
-  - while the plan is missing, unreadable or has no cells to build (in :part).
-  - while no zone list has been read.
+  - while no zone list has been read (it waits :plan-trouble).
+  A plan that is missing, unreadable or has no cells to build (in :part) ends the job at once: stopped, :reason :plan-trouble,
+  with the cause in :text (after the one warn), so a held job never blocks the queue.
   When cells are missing but none of their blocks is carried and none can be fetched, the job waits (:no-items with :needs).
   Material: while cells wait for an item not carried (and not given up or refused), each round first fetches it (:fetch,
   jobs.lib.fetch with :explore on: a jobs.items.obtain child for the missing count, walking off to look for what is unseen; an item whose fetch failed is skipped for the next); a pickaxe block to dig without a pickaxe fetches the tool the same way
@@ -305,6 +306,8 @@
   (let [ground (when sturdy-ground (rail/ground cells))]
     (fn [{:keys [pos]}] (and (contains? ground pos) (rail/sturdy? (world-block (:primitives c) pos))))))
 
+(def no-zones "no zone list has been read")
+
 (defn planned
   "{:cells judged} for the plan in the args, or {:trouble text} (warned once per reason)."
   [c]
@@ -316,7 +319,7 @@
                         kept? (kept-ground c cells (:sturdy-ground (:args c)))]
                     (mapv #(if (and (:short? %) (kept? %)) (dissoc % :short?) %) cells))))
         trouble (or (plan-trouble answer cells)
-                    (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) "no zone list has been read"))]
+                    (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) no-zones))]
     (if-not trouble
       {:cells cells}
       (do (ctx/warn-once! c [plan trouble] :build.declined
@@ -426,13 +429,15 @@
     (when-not trouble (need-of c cells))))
 
 (defn check
-  "Passes while there is something to build, dig, fetch or look at. Otherwise it waits (:plan-trouble, or :no-items
+  "Passes while there is something to build, dig, fetch or look at, and for a plan that can never be built (the round
+  ends it :stopped :plan-trouble). Otherwise it waits (:plan-trouble while no zone list is read, or :no-items
   with the {item n} still needed). The plan's cells are judged once per check-cache window."
   [c]
   (let [{:keys [cells trouble]} (check-cache/cached c :planned #(planned c))
         p (:primitives c)]
     (cond
-      trouble (ctx/wait c {:reason :plan-trouble :why trouble})
+      (and trouble (= no-zones trouble)) (ctx/wait c {:reason :plan-trouble :why trouble})
+      trouble true
       (or (:begun (ctx/mem c))
           (empty? (owed cells))
           (seq (buildable cells (carried-counts p) {}))
@@ -750,8 +755,11 @@
 
 (defn ^:async step [c]
   (let [{:keys [trouble]} (planned c)]
-    (if trouble
-      :declined
+    (cond
+      (= no-zones trouble) :declined
+      trouble (do (ctx/result! c {:status :stopped :reason :plan-trouble :text (str "plan " (:plan (:args c)) " cannot be built: " trouble)})
+                  :done)
+      :else
       (do (when-not (:begun (ctx/mem c)) (ctx/update-mem! c assoc :begun true))
           (or (await (fetch/fetch! c 'jobs.build.from-plan problem))
               (let [cells (:cells (planned c))]

@@ -11,8 +11,8 @@
 
   The herd is the animals of the kind inside a bound: :box when set, else :radius blocks around :centre
   ({:x :z}, horizontal), else :radius blocks around the body. Babies are never targets and never count as
-  adults. The check waits (:too-few) while :keep or fewer adults are in the bound. A started job always passes,
-  so a cut job resumes.
+  adults. With :keep or fewer adults in the bound at the start it ends at once, stopped :too-few (warn cull.too-few, with
+  :mob :keep and :in-range), so a held cull never blocks the queue.
 
   One call is the whole run, a loop of these:
   - With a target: the attack child fights it. It is booked killed, or skipped when attack gave up or lost it.
@@ -99,11 +99,20 @@
                         #(u/dist here (u/pos-of (.-pos %))))))))
 
 (defn check
-  "Started, or more adults of :mob inside the bound than :keep. Else it waits with reason :too-few (and :mob :keep)."
+  "Always: too few adults at the start end the job in its round."
+  [_c]
+  true)
+
+(defn too-few!
+  "Warn and end the job stopped :too-few."
   [c]
-  (or (boolean (or (:started (ctx/mem c))
-                   (> (count (:adults (census c))) (:keep (:args c)))))
-      (ctx/wait c {:reason :too-few :mob (:mob (:args c)) :keep (:keep (:args c))})))
+  (let [{:keys [mob keep]} (:args c)
+        in-range (count (:adults (census c)))
+        text (str "cull stopped: " in-range " " mob " adults in the bound, keeping " keep)
+        out {:status :stopped :reason :too-few :mob mob :keep keep :in-range in-range :killed 0 :text text}]
+    (ctx/emit! c :cull.too-few :warn out)
+    (ctx/result! c out)
+    :done))
 
 (defn finish!
   "Emit the outcome, hand it to the parent and end the job."
@@ -139,6 +148,9 @@
 (defn ^:async step [c]
   (let [now (ctx/now c)
         {:keys [keep] wanted :count} (:args c)]
+    (if (and (not (:started (ctx/mem c))) (<= (count (:adults (census c))) keep))
+      (too-few! c)
+      (do
     (ctx/update-mem! c update :started #(or % now))
     (let [{:keys [target collecting killed skipped]} (ctx/mem c)]
       (if target
@@ -153,7 +165,7 @@
               (and (nil? next-target) (seq skipped)) (give-up! c :unreachable)
               (nil? next-target) (await (hunting/search! c none!))
               :else (do (ctx/update-mem! c assoc :target (.-id next-target) :misses 0)
-                        (await (hunting/attack! c (attack-opts c)))))))))))
+                        (await (hunting/attack! c (attack-opts c)))))))))))))
 
 (defn ^:async round
   "The whole attempt: loop the steps until one ends or yields."

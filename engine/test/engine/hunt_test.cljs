@@ -67,7 +67,7 @@
           (is (= 2 (get (inv s) "porkchop")))
           (is (finished? s)))))))
 
-(deftest the-check-declines-with-at-most-keep-of-the-kind
+(deftest at-most-keep-of-the-kind-ends-the-job-without-attacking
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -79,10 +79,10 @@
                  [{:keep 1 :radius 10} [(cow 1 3) (cow 2 30)] "outside the radius does not count"]]]
           (let [{:keys [eng p]} (h/setup {:inventory h/sword :entities entities})]
             (core/submit! eng (spec args) {})
-            (is (nil? (core/tick! eng)) note)
+            (await (core/tick! eng))
             (is (zero? (count (h/calls p "attack"))) note)
             (is (zero? (count (h/calls p "equip"))) note)
-            (is (= ["j1"] (:list (core/state eng))) note)))))))
+            (is (empty? (:list (core/state eng))) note)))))))
 
 (deftest a-cow-hunt-never-attacks-a-sheep
   (async done
@@ -193,7 +193,8 @@
         (let [{:keys [eng p]} (h/setup {:inventory h/sword
                                         :entities [(cow 1 3) (cow 2 4) (baby-cow 3 2) (baby-cow 4 2) (baby-cow 5 2)]})]
           (core/submit! eng (spec {:keep 2}) {})
-          (is (nil? (core/tick! eng)) "two adults and three babies: nothing to take")
+          (await (core/tick! eng))
+          (is (empty? (:list (core/state eng))) "two adults and three babies: nothing to take")
           (is (zero? (count (h/calls p "attack")))))))))
 
 (deftest keep-ends-the-hunt-on-adults-with-babies-around
@@ -222,14 +223,14 @@
           (is (= 2 (:remaining d)))
           (is (finished? s)))))))
 
-(deftest default-keep-declines-with-two-adults-and-babies
+(deftest default-keep-ends-the-job-with-two-adults-and-babies
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (h/setup {:inventory h/sword
                                         :entities [(cow 1 3) (cow 2 4) (baby-cow 3 2) (baby-cow 4 2) (baby-cow 5 2)]})]
           (core/submit! eng (spec {}) {})
-          (is (nil? (core/tick! eng)))
+          (await (core/tick! eng))
           (is (zero? (count (h/calls p "attack"))))
           (is (= 5 (count (fake/entities p)))))))))
 
@@ -298,18 +299,19 @@
           (is (= :count (:reason (done-event s))))
           (is (finished? s) "one call"))))))
 
-(deftest the-too-few-wait-says-how-many-are-in-range-and-how-far-the-nearest-is
+(deftest too-few-animals-end-the-job-stopped-saying-how-many-are-in-range-and-how-far-the-nearest-is
   (async done
     (tu/run-async done
       (fn ^:async t []
         (doseq [[args entities want note]
                 [[{:mob "pig" :keep 0 :radius 24} [(animal 1 "pig" 36)]
-                  {:reason :too-few :mob "pig" :keep 0 :in-range 0 :radius 24 :nearest 36} "a pig seen past the radius"]
+                  {:keep 0 :in-range 0 :radius 24 :nearest 36} "a pig seen past the radius"]
                  [{:mob "pig" :keep 1 :radius 24} [(animal 1 "pig" 5) (animal 2 "pig" 40)]
-                  {:reason :too-few :mob "pig" :keep 1 :in-range 1 :radius 24 :nearest 5} "one in range, keep 1"]
+                  {:keep 1 :in-range 1 :radius 24 :nearest 5} "one in range, keep 1"]
                  [{:mob "pig" :keep 0 :radius 24} []
-                  {:reason :too-few :mob "pig" :keep 0 :in-range 0 :radius 24} "none seen at all"]]]
-          (let [{:keys [eng]} (h/setup {:inventory h/sword :entities entities})]
-            (core/submit! eng (spec args) {})
-            (await (core/tick! eng))
-            (is (= want (core/waiting eng "j1")) note)))))))
+                  {:keep 0 :in-range 0 :radius 24} "none seen at all"]]]
+          (let [{:keys [eng]} (h/setup {:inventory h/sword :entities entities})
+                r (await (tu/child-outcome eng 'jobs.combat.hunt args 20))]
+            (is (= (assoc want :status :stopped :reason :too-few :mob "pig" :killed 0)
+                   (select-keys r [:status :reason :mob :killed :keep :in-range :radius :nearest])) note)
+            (is (string? (:text r)) note)))))))

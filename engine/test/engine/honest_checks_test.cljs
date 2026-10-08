@@ -41,13 +41,11 @@
 
 (deftest build-checks-say-why-they-decline
   (are [job] (= :plan-trouble (waiting-reason job {:plan "no-such-plan"}))
-    'jobs.build.from-plan
     'jobs.build.pen
     'jobs.build.rail-line))
 
 (deftest plan-trouble-waits-carry-the-text
   (are [job] (= "no such plan" (:why (first (waiting-event job {:plan "no-such-plan"}))))
-    'jobs.build.from-plan
     'jobs.build.pen
     'jobs.build.rail-line))
 

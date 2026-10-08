@@ -41,14 +41,13 @@
 (defn inv [{:keys [p]}] (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p))))
 (defn world-ids [{:keys [p]}] (set (map :id (fake/entities p))))
 
-(defn declines?
-  "True when the job is submitted, the first tick does nothing and no attack or walk is called."
+(defn ^:async too-few-outcome
+  "The result of the job submitted as a child with args in a world: it ends at once and attacks and walks nowhere."
   [args entities]
-  (let [{:keys [eng p]} (h/setup {:inventory h/sword :entities entities})]
-    (core/submit! eng (spec args) {})
-    (and (nil? (core/tick! eng))
-         (zero? (count (h/calls p "attack")))
-         (zero? (count (h/calls p "moveTo"))))))
+  (let [{:keys [eng p]} (h/setup {:inventory h/sword :entities entities})
+        r (await (tu/child-outcome eng 'jobs.animals.cull args 20))]
+    (assoc (select-keys r [:status :reason :in-range :killed])
+           :acted (+ (count (h/calls p "attack")) (count (h/calls p "moveTo"))))))
 
 (deftest six-adults-keep-two-kills-four-and-collects
   (async done
@@ -71,12 +70,18 @@
           (is (= :keep (:reason (done-event s))))
           (is (= 2 (get (inv s) "beef"))))))))
 
-(deftest the-check-declines-without-a-surplus
-  (is (declines? {:keep 2} [(cow 1 3) (cow 2 4) (calf 3 2) (calf 4 2) (calf 5 2)]) "two adults and three calves")
-  (is (declines? {:keep 2} []) "no cows")
-  (is (declines? {:keep 2} [(animal 1 "sheep" 3) (animal 2 "sheep" 4) (animal 3 "sheep" 5)]) "only other kinds")
-  (is (declines? {:keep 2} [(cow 1 3) (cow 2 4)]) "exactly keep")
-  (is (declines? {:keep 0} []) "keep zero and nothing there"))
+(deftest without-a-surplus-the-job-ends-stopped-too-few
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[args entities in-range note]
+                [[{:keep 2} [(cow 1 3) (cow 2 4) (calf 3 2) (calf 4 2) (calf 5 2)] 2 "two adults and three calves"]
+                 [{:keep 2} [] 0 "no cows"]
+                 [{:keep 2} [(animal 1 "sheep" 3) (animal 2 "sheep" 4) (animal 3 "sheep" 5)] 0 "only other kinds"]
+                 [{:keep 2} [(cow 1 3) (cow 2 4)] 2 "exactly keep"]
+                 [{:keep 0} [] 0 "keep zero and nothing there"]]]
+          (is (= {:status :stopped :reason :too-few :in-range in-range :killed 0 :acted 0}
+                 (await (too-few-outcome args entities))) note))))))
 
 (deftest a-surplus-of-one-with-calves-around-kills-one-adult
   (async done
@@ -143,7 +148,12 @@
                  (select-keys (done-event s) [:killed :remaining :reason]))))))))
 
 (deftest the-body-radius-bounds-the-herd-without-a-centre
-  (is (declines? {:keep 1 :radius 10} [(cow 1 3) (cow 2 30) (cow 3 40)]) "one cow in range is not above keep"))
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= {:status :stopped :reason :too-few :in-range 1 :killed 0 :acted 0}
+               (await (too-few-outcome {:keep 1 :radius 10} [(cow 1 3) (cow 2 30) (cow 3 40)])))
+            "one cow in range is not above keep")))))
 
 (defn wall-of [block xs] (into {} (for [x xs y [64 65 66]] [(str x "," y ",0") block])))
 

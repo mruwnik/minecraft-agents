@@ -13,8 +13,8 @@
   Never takes the last :keep adults of the kind, so they can breed. :keep nil means 2 for animals and 0 for hostile mobs
   (a kind any of whose entities in range reports kind hostile). 0 turns the rule off.
   Babies are never targets and never counted.
-  Declines (waiting :too-few, with :in-range, :radius and :nearest, the distance of the nearest adult of the kind in
-  sight up to ::sight-radius) unless more than :keep adults are within :radius. Once started it always passes.
+  With :keep or fewer adults within :radius at the start it ends at once, stopped :too-few (warn hunt.too-few; the result
+  has :in-range, :radius, :keep and :nearest, the distance of the nearest adult of the kind in sight up to ::sight-radius).
   One call hunts until it ends, in steps; it yields (:continue) only while a child is waiting on the world:
   1. With a :target, the attack child fights it. It is booked killed, or skipped when attack gave up on it or lost it.
      :max-skips skips in a row end the job :gave-up (warn hunt.gave-up).
@@ -89,11 +89,20 @@
       nearest (assoc :nearest (js/Math.round (.-distance nearest))))))
 
 (defn check
-  "Started, or more adults of :mob in :radius than the pair rule keeps. Else it waits (too-few)."
+  "Always: too few animals at the start end the job in its round, so a held hunt never blocks the queue."
+  [_c]
+  true)
+
+(defn too-few!
+  "Warn and end the job stopped :too-few with how many are in range."
   [c]
-  (or (boolean (or (:started (ctx/mem c))
-                   (> (count (present c)) (keep-of c))))
-      (ctx/wait c (too-few c))))
+  (let [{:keys [reason] :as m} (too-few c)
+        out (-> m (dissoc :reason) (assoc :status :stopped :reason reason :killed 0))
+        text (str "hunt stopped: " (:in-range m) " " (:mob m) " adults within " (:radius m) " blocks, keeping " (:keep m)
+                  (when-let [n (:nearest m)] (str "; the nearest is " n " away")))]
+    (ctx/emit! c :hunt.too-few :warn (assoc out :text text))
+    (ctx/result! c (assoc out :text text))
+    :done))
 
 (defn finish!
   "Emit the outcome, hand it to the parent and end the job."
@@ -128,17 +137,20 @@
   (let [now (ctx/now c)
         wanted (:count (:args c))
         keep (keep-of c)]
-    (ctx/update-mem! c #(-> % (update :started (fn [t] (or t now))) (assoc :keep keep)))
-    (let [{:keys [target collecting killed]} (ctx/mem c)
-          next-target (first (candidates c))]
-      (cond
-        target (await (hunting/attack! c (attack-opts c)))
-        collecting (await (hunting/collect! c :yield))
-        (>= (or killed 0) wanted) (finish! c :count)
-        (<= (count (present c)) keep) (finish! c :keep)
-        (nil? next-target) (await (hunting/search! c #(finish! % :none)))
-        :else (do (ctx/update-mem! c assoc :target (.-id next-target) :misses 0)
-                  (await (hunting/attack! c (attack-opts c))))))))
+    (if (and (not (:started (ctx/mem c))) (<= (count (present c)) keep))
+      (too-few! c)
+      (do
+        (ctx/update-mem! c #(-> % (update :started (fn [t] (or t now))) (assoc :keep keep)))
+        (let [{:keys [target collecting killed]} (ctx/mem c)
+              next-target (first (candidates c))]
+          (cond
+            target (await (hunting/attack! c (attack-opts c)))
+            collecting (await (hunting/collect! c :yield))
+            (>= (or killed 0) wanted) (finish! c :count)
+            (<= (count (present c)) keep) (finish! c :keep)
+            (nil? next-target) (await (hunting/search! c #(finish! % :none)))
+            :else (do (ctx/update-mem! c assoc :target (.-id next-target) :misses 0)
+                      (await (hunting/attack! c (attack-opts c))))))))))
 
 (defn ^:async round
   "The whole hunt: steps until it ends; yields only while a child waits on the world."

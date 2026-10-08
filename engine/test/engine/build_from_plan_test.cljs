@@ -195,6 +195,18 @@
     (is (= [0 []] (declines {:inventory []} {"pen" (pen-plan)} {:plan "pen" :fetch false}))
         "a check with nothing to build with writes no warn")))
 
+(deftest a-plan-in-terminal-trouble-ends-the-job-stopped-with-the-reason
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[plans args reason] [[{} {:plan "nope"} "no such plan"]
+                                     [{"pen" (pen-plan)} {:plan "pen" :part "nope"} "no cells to build"]]]
+          (let [{:keys [eng seen]} (start {:inventory kit} plans)
+                result (await (tu/child-outcome eng job args 200))]
+            (is (= :stopped (:status result)) reason)
+            (is (= :plan-trouble (:reason result)) reason)
+            (is (re-find (re-pattern reason) (:text result)) reason)))))))
+
 (deftest the-check-without-items-waits-naming-the-shortage
   (let [{:keys [eng seen]} (start {:inventory []} {"pen" (pen-plan)})]
     (core/submit! eng (list job {:plan "pen" :fetch false}) {})
