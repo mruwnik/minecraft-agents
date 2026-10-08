@@ -203,12 +203,18 @@
          (or (nil? seen) (true? (seen (.-x goal) (inc (.-y goal)) (.-z goal)))))))
 
 ;; the seconds a lethal plan costs (Search lethal-s): LETHAL-S times the dearest second the caller's prices allow (a walk
-;; at the danger cap through its dearest toll, in the dark, avoided, an hp of risk and of damage a second), so no toll,
-;; danger rate or weight makes a plan that does not kill cost more than one that does
-(defn- lethal-seconds [risk-weight damage-weight danger-cap dark-factor ^js tolls avoid-factor unknown-factor]
-  (let [toll (if (some? tolls) (reduce max 0 (es6-iterator-seq (.values tolls))) 0)]
-    (* base/LETHAL-S (+ 1 avoid-factor)
-       (+ 1 toll dark-factor unknown-factor (* risk-weight danger-cap) risk-weight damage-weight))))
+;; at the danger cap through its dearest toll, in the dark, avoided, an hp of risk and of damage and a second of drowning
+;; at the dearest drownPrices hp), so no toll, danger rate or weight makes a plan that does not kill cost more than one
+;; that does. A price that is not finite (an Infinity toll, NaN) counts 0: lethal-s stays finite (Infinity * 0 is NaN).
+(defn lethal-seconds [risk-weight damage-weight danger-cap dark-factor ^js tolls avoid-factor unknown-factor ^js drown-prices]
+  (let [fin (fn [x] (if ^boolean (js/isFinite x) x 0))
+        toll (if (some? tolls) (reduce max 0 (map fin (es6-iterator-seq (.values tolls)))) 0)
+        drown-hp (if (some? drown-prices)
+                   (reduce max (fin (aget drown-prices 0)) (map #(fin (- %2 %1)) drown-prices (rest drown-prices)))
+                   0)]
+    (* base/LETHAL-S (+ 1 (fin avoid-factor))
+       (+ 1 toll (fin dark-factor) (fin unknown-factor) (fin (* risk-weight danger-cap)) (fin risk-weight) (fin damage-weight)
+          (* base/DROWN-HP drown-hp)))))
 
 (defn- first-id [^js table name] (aget (.get (.-nameIds table) name) 0))
 
@@ -361,7 +367,7 @@
      (let [rw (option options "riskWeight" 2)]
        (lethal-seconds rw (option options "damageWeight" rw) (* risk-scale (option options "dangerCap" 4)) dark-factor
                        (when (some? tolls) (.-cells tolls)) (if (some? avoid) (or-else (.-factor avoid) 0) 0)
-                       (unknown-factor unknown costs)))
+                       (unknown-factor unknown costs) (.-drownPrices options)))
      ;; unk-id unk-floor-id unk-cell unk-floor see-depth see-lit peek-s aim-s light-cost light-ok torch-base missed no-light
      (if unk (or-else (.-id unknown) (first-id table "void_air")) -1)
      (if unk (or-else (.-floorId unknown) (first-id table "stone")) 0)

@@ -829,3 +829,49 @@
                (assoc at-health-10 :dangerCap 1e9 :dangers [{:x 30.5 :y 70 :z 20.5 :close 1 :radius 2 :rate 1e9}]))]
     (is (found? r))
     (is (some #(= 20 (:z %)) (steps r)) "the long way round")))
+
+;; a waterlogged ladder shaft (x 11) with a ledge (x 12..13, y 70) whose first cell stands on magma (1 hp): from the
+;; ladder at y 70 with 14.9 s of air used, the step off it onto the magma (head in water at its start) is the plan's first
+;; drowning move and takes the hp itself: counted 4 hp of drowning (ceil(t + 1) hits) and 1 hp
+(def magma-ledge
+  (world [[10 64 -2 14 80 4 "stone"]
+          [11 64 1 11 75 1 "ladder" {:facing "east" :waterlogged true}]
+          [12 70 1 13 71 1 "air"] [12 69 1 12 69 1 "magma_block"]]))
+(defn run-magma-ledge [health]
+  (run magma-ledge {:x 11 :y 70 :z 1} (near 13 70 1 0) {:goalFlood 0 :health health :costs {:airUsed 14.9}}))
+
+(deftest the-first-drowning-move-counts-its-own-damage
+  (let [r (run-magma-ledge 6)]
+    (is (found? r))
+    (is (pos? (cost r :drown)))
+    (is (= 1 (cost r :damage)) "the magma"))
+  (is (= "air-lethal" (:reason (run-magma-ledge 5))) "4 counted hp of drowning and the magma's 1"))
+
+;; drown-then-drop with a way round the 5-block drop: a 3-block drop at z 2 and a 2-block one into the shaft, no damage.
+;; Damage is all but free (riskWeight 0.01), so the drop is the plan until the drowning and its 2 hp reach health; with lethalAir 1
+;; the drop is then priced lethal and loses to the way round
+(def drown-then-drop-or-round
+  (world [[10 64 -2 22 68 4 "stone"] [16 50 -2 24 58 4 "stone"]
+          [11 64 1 16 65 1 "water"] [17 64 1 17 65 1 "air"] [18 59 1 20 65 1 "air"]
+          [17 61 2 17 65 2 "air"] [18 61 2 18 62 2 "air"]]))
+(defn run-drop-or-round [health]
+  (run drown-then-drop-or-round drown-start (near 19 59 1 0)
+       {:goalFlood 0 :maxDrop 6 :health health :riskWeight 0.01 :costs {:airSupply 3 :airUsed 1 :lethalAir 1}}))
+
+(deftest with-lethal-air-certain-damage-makes-a-plan-lethal
+  (is (= 2 (cost (run-drop-or-round 7) :damage)) "4 counted hp and the 2 hp drop: not lethal")
+  (let [r (run-drop-or-round 6)]
+    (is (found? r))
+    (is (= 0 (cost r :damage)) "the way round")))
+
+;; a toll of Infinity on a cell off the way (a direct planner caller; go-to's spec refuses it) leaves the lethal plan priced
+(deftest a-lethal-plan-is-found-beside-an-infinite-toll
+  (let [r (run (lethal-dive false) dive-start (near 53 70 1 0)
+               (assoc at-health-10 :tolls {:cells (js/Map. #js [#js [(planner/cell-key 30 70 20) js/Infinity]])}))]
+    (is (found? r))
+    (is (>= (cost r :drown) 10))))
+
+(deftest lethal-seconds-covers-the-dearest-drowning-second
+  (is (>= (planner/lethal-seconds 2 2 8 0 nil 0 0 #js [0 1e3 2e3]) (* 1e6 2 1e3)) "2 hp a second at 1000 s an hp")
+  (is (js/isFinite (planner/lethal-seconds 2 2 js/Infinity 0 (js/Map. #js [#js [1 js/Infinity]]) 0 0 nil)))
+  (is (js/isFinite (planner/lethal-seconds 0 0 js/NaN 0 nil 0 0 nil)) "riskWeight 0: a NaN danger cap"))

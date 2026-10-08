@@ -261,8 +261,8 @@
         (and (pos? (.-move-dmg s)) (> (+ (aget (.-dmgs s) parent-node) (.-move-dmg s)) (.-damage-budget s))) (do (set! (.-damage-refused s) true) nil)
         ;; a move that is not a swim: its air (headAir)
         (and (zero? (.-move-water s)) (not ^boolean (.headAir s parent-node x y z dsec))) nil
-        ;; certain damage after drowning (airStep refuses the swims themselves)
-        (and ^boolean (.-no-lethal s) (pos? (.-move-dmg s)) (pos? (aget (.-drowns s) parent-node))
+        ;; certain damage on or after drowning (airStep refuses the swims themselves)
+        (and ^boolean (.-no-lethal s) (pos? (.-move-dmg s)) (pos? (+ (aget (.-drowns s) parent-node) (.-move-drown s)))
              (>= (.lethalCount s (.-move-closed s) (.-move-run s) (+ (aget (.-dmgs s) parent-node) (.-move-dmg s))) (.-lethal-hp s)))
         (do (set! (.-lethal-seen s) true) nil)
         :else
