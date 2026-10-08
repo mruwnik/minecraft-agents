@@ -168,3 +168,15 @@
                                                          :near {:x 4 :y 64 :z 0} :search 3 :want 1} 80))]
             (is (= 2 (:collected result)))
             (is (= 1 (bd/carried p "oak_log")))))))))
+
+(deftest ids-not-in-sight-are-left-unseen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (bd/setup {:self body})]
+          (drop! p [4 64 0] "oak_log")
+          (swap! (fake/state p) update :entities (fn [es] (mapv #(assoc % :visible false) es)))
+          (let [result (await (bd/child-outcome eng job {:radius 6 :ids [999]} 30))]
+            (is (= 0 (:collected result)))
+            (is (= [{:reason :unseen :ids [999]}] (:left result)))
+            (is (= [:unseen] (mapv :reason (bd/left-drops seen))))))))))

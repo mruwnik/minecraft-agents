@@ -24,6 +24,7 @@
   to seen standable cells round the anchor, nearest first, and looks again at each, until an item is seen or the cells within :search
   blocks are tried.
   While it runs it holds its work area (jobs.lib.loose :collecting), so the :loose-items reflex leaves those drops to it.
+  With :ids, ids not in sight when none is left to try are booked as one :left {:reason :unseen :ids [...]}.
   Result: {:collected n}, the number of items that entered the inventory, with :left [{:pos :reason}] for those.")
 
 (a/defargs args
@@ -140,6 +141,15 @@
                                              :text (str "left a drop at " x "," y "," z ": " (name why))})
     (ctx/update-mem! c update :left (fnil conj []) {:pos cell :reason why})))
 
+(defn leave-unseen!
+  "The wanted :ids that were neither picked up nor skipped are not in sight (a pit, a wall): booked as one :left entry."
+  [c]
+  (let [gone (set (:skipped (ctx/mem c)))
+        ids (vec (remove gone (:ids (:args c))))]
+    (when (seq ids)
+      (ctx/emit! c :collect-drops.left :debug {:reason :unseen :ids ids :text (str "left " (count ids) " drops not in sight")})
+      (ctx/update-mem! c update :left (fnil conj []) {:reason :unseen :ids ids}))))
+
 (defn seen-standable?
   "Whether cell is standable (jobs.lib.reach/standable-cell?) by the blocks the body has seen: its feet, head and floor cells all seen."
   [p {:keys [x y z] :as cell}]
@@ -204,7 +214,7 @@
                 (done! (cond-> {:collected (:collected (ctx/mem c) 0)}
                          (not (ctx/alive? c)) (assoc :reason :cut))))))
           (if-not item
-          (done! (cond-> {:collected (:collected (ctx/mem c) 0)}
+          (done! (cond-> (do (when (ctx/alive? c) (leave-unseen! c)) {:collected (:collected (ctx/mem c) 0)})
                    (seq (:left (ctx/mem c))) (assoc :left (:left (ctx/mem c)))
                    (not (ctx/alive? c)) (assoc :reason :cut)))
           (let [hole? (in-hole? c item)

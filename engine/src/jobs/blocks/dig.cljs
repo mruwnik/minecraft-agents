@@ -1,5 +1,6 @@
 (ns jobs.blocks.dig
-  (:require [engine.settings :as settings]
+  (:require [clojure.string :as str]
+            [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
@@ -48,7 +49,7 @@
   :lava-unsealed with :cell, :place (:need: no block) and :stepped-away (false: :unreachable :no-cell, or :all-walks-failed
   with the last go-to's :walk).
 
-  Ends with info blocks.dig.done and {:dug true|false :pos :block :reason :collected n}, plus :stepped-aside [x y z] (the
+  Ends with info blocks.dig.done and {:dug true|false :pos :block :reason :collected n}, plus :left (collect-drops' drops it could not take, e.g. :unseen in a covered pit), :stepped-aside [x y z] (the
   cell it stood on) when it stepped off the column first: digging the block underfoot is no way down (go-to is). :reason is :dug or
   :already-clear (air there, nothing done): done. Stopped ({:status :stopped}, :dug true): :lava-unsealed. :dug false: :fluid (a fluid is not
   dug), :fluid-adjacent (:on-fluid :fail, with :hazards and a :hint), :cannot (bedrock and the like), :bad-args (with
@@ -163,7 +164,9 @@
                     (= :lava-unsealed (:reason result))
                     (str ": lava at " (pr-str cell) " not sealed: " (if (= :need place) "no block to seal with" (name (or place :tries)))
                          (when-not (:stepped-away result) "; could not step away"))
-                    (not (:dug result)) (str ": " (name (:reason result)))))]
+                    (not (:dug result)) (str ": " (name (:reason result)))
+                    (seq (:left result)) (str "; " (count (:left result)) " drop(s) left: "
+                                              (str/join ", " (distinct (map (comp name :reason) (:left result)))))))]
     (ctx/emit! c :blocks.dig.done :info (assoc result :text text))
     (ctx/result! c result)
     :done))
@@ -180,8 +183,9 @@
         r (await (child/run! c :collect 'jobs.forestry.collect-drops {:radius (collect-radius) :ids ids :holes [pos]}))]
     (if (= :continue r)
       :continue
-      (finish! c {:dug true :pos pos :block block :reason :dug
-                  :collected (if (= :done r) (:collected (ctx/child-result c :collect) 0) 0)}))))
+      (let [res (when (= :done r) (ctx/child-result c :collect))]
+        (finish! c (cond-> {:dug true :pos pos :block block :reason :dug :collected (:collected res 0)}
+                     (seq (:left res)) (assoc :left (:left res))))))))
 
 (defn ^:async seal-step!
   "One step after a dig with :on-lava :seal: nil when no seen lava borders the dug cell, :again once one lava cell is
