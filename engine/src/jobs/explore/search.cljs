@@ -3,7 +3,7 @@
             [engine.args :as a]
             [clojure.string :as str]
             [engine.ctx :as ctx]
-            [jobs.movement.go-to.air :as air]
+            [jobs.lib.breath :as breath]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
@@ -322,7 +322,7 @@
   [c]
   (let [{:keys [max-legs use-notes max-distance] want :count} (:args c)
         names (targets c)
-        _ (when-not (air/in-water? (:primitives c)) (await (scan! c names)))
+        _ (when-not (breath/in-water? (:primitives c)) (await (scan! c names)))
         ns (notes/notes c)
         m (ctx/mem c)
         found (cond-> (:found m) use-notes (add-found (noted (:primitives c) ns names (:origin m) max-distance) want))]

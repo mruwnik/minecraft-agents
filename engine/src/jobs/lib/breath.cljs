@@ -71,6 +71,12 @@
    :y (js/Math.floor (+ (.. self -pos -y) 0.001))
    :z (js/Math.floor (.. self -pos -z))})
 
+(defn in-water?
+  "Whether the body is in water: it says so, or its feet cell feels like water (afloat at the surface)."
+  [p]
+  (let [self (.self p)]
+    (boolean (or (.-inWater self) (= "water" (u/feel-name p (feet-cell self)))))))
+
 (defn wedged-cell
   "The feet cell when its block fills the cell, else nil."
   [p]

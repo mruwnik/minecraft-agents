@@ -24,12 +24,6 @@
 
 (def default-air-look-min "go-to's :air-look-min default: seconds of air left below which it looks no more (a swim up needs them)." 1.5)
 
-(defn in-water?
-  "Whether the body is in water: it says so, or its feet cell feels like water (afloat at the surface)."
-  [p]
-  (let [self (.self p)]
-    (boolean (or (.-inWater self) (= "water" (u/feel-name p (breath/feet-cell self)))))))
-
 (defn dry-stand
   "The seen cell within radius of pos (the body) and within range within of goal, nearest pos, where the body stands
   out of water: feet and head open, a solid under the feet; nil when there is none."

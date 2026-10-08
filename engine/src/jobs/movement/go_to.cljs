@@ -501,7 +501,7 @@
                  (ctx/update-mem! c assoc :dry-tried true)
                  (await (walk-dry! c dry)))]
     (cond
-      (not (air/in-water? p)) (if (here? c pos r) (arrived! c) :again)
+      (not (breath/in-water? p)) (if (here? c pos r) (arrived! c) :again)
       (not (here? c pos r)) :again
       :else
       (do (ctx/update-mem! c assoc :in-water true)
@@ -521,7 +521,7 @@
   [c pos]
   (let [m (ctx/mem c)
         p (:primitives c)
-        wet? (and (or (not= :guess (:column-open m)) (:column-near m)) (air/in-water? p))]
+        wet? (and (or (not= :guess (:column-open m)) (:column-near m)) (breath/in-water? p))]
     (cond
       (:restore-pending m) (esc/restore-next! c)
       wet? (await (leave-water! c pos))
