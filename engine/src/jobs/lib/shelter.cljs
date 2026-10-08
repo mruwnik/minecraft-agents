@@ -236,12 +236,38 @@
                 (empty? (mem/entries view :sleep-failed))
                 (nil? (bed-to-use p view radius permit?)))))
 
+(def spawn-near
+  "A :spawn-set entry within this many blocks of a bed is that bed's respawn point."
+  3)
+
+(def spawn-bed-policy {:cap 1 :ttl :forever})
+
+(defn spawn-bed-live
+  "The durable :spawn-bed entry of view unless a :spawn-reset came after it."
+  [view]
+  (let [e (mem/latest view :spawn-bed)
+        reset (mem/latest view :spawn-reset)]
+    (when-not (and e reset (> (:t reset) (:t e)))
+      e)))
+
+(defn spawn-known?
+  "Whether the body has seen the respawn point set at bed since t0, or earlier and not reset since (the server says it
+  only when the point changes, so a bed slept in before is silent; :spawn-bed outlives the :spawn-set entry)."
+  [view bed t0]
+  (let [near? #(some-> (:pos (:data %)) (u/dist bed) (<= spawn-near))
+        reset-t (:t (mem/latest view :spawn-reset))
+        current? #(or (>= (:t %) t0) (nil? reset-t) (> (:t %) reset-t))]
+    (boolean (or (some #(and (current? %) (or (>= (:t %) t0) (near? %))) (mem/entries view :spawn-set))
+                 (some-> (spawn-bed-live view) near?)))))
+
 (defn bed-to-collect
-  "By day: the latest :bed-placed position while a bed block still stands there, else nil."
+  "By day: the latest :bed-placed position while a bed block still stands there and is not the respawn point
+  (:spawn-bed), else nil."
   [p view]
   (when-not (night? p)
     (let [pos (:pos (:data (mem/latest view :bed-placed)))]
-      (when (and pos (.endsWith (or (u/seen-name p pos) "") "_bed"))
+      (when (and pos (.endsWith (or (u/seen-name p pos) "") "_bed")
+                 (not= pos (:pos (:data (spawn-bed-live view)))))
         pos))))
 
 (defn bed

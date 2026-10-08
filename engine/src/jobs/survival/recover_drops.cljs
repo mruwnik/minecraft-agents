@@ -1,5 +1,6 @@
 (ns jobs.survival.recover-drops
   (:require [engine.args :as a]
+            [jobs.lib.shelter :as sh]
             [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
@@ -61,7 +62,7 @@
   A pile already carried again ends :collected without a collect step.
   Restart-safe: the decision, the baseline of carried items and the phase are kept in a :recover-trip entry keyed to the death.
   A run cut by a higher reflex, or a restarted body, goes on with the same trip.
-  Warns respawn_away_from_bed once per death when the body respawned over 10 blocks from the bed it slept in.
+  Warns respawn_away_from_bed once per death when the body respawned over 10 blocks from its respawn bed (the live :spawn-bed, else the :bed it slept in).
   Memory: reads :died, :respawned, :bed, :slept, :recover-trip. Writes :recovered and :recover-trip.")
 
 (a/defargs args
@@ -372,17 +373,19 @@
 (defn bed-away-blocks [] (settings/get settings ::bed-away-blocks))
 
 (defn warn-away-from-bed!
-  "Once per death: warn when the body respawned far from its known :bed that it slept in (the respawn point was not
-  the bed). Nothing for a bed it never slept in."
+  "Once per death: warn when the body respawned far from its respawn bed: the live :spawn-bed (set by a click or a
+  sleep), else the known :bed it slept in (the respawn point was not set there). Nothing for a bed it never slept in."
   [c entry]
-  (let [bed (mem/place (ctx/view c) :bed)
+  (let [spawn-bed (:pos (:data (sh/spawn-bed-live (ctx/view c))))
+        bed (or spawn-bed
+                (let [b (mem/place (ctx/view c) :bed)]
+                  (when (some #(= b (:pos (:data %))) (ctx/entries c :slept)) b)))
         at (:pos (:data (ctx/latest c :respawned)))]
     (when (and bed at (not (:bed-checked (ctx/mem c))))
       (ctx/update-mem! c assoc :bed-checked true)
-      (when (and (some #(= bed (:pos (:data %))) (ctx/entries c :slept))
-                 (> (u/dist bed at) (bed-away-blocks)))
+      (when (> (u/dist bed at) (bed-away-blocks))
         (ctx/emit! c :respawn_away_from_bed :warn
-                   {:bed bed :pos at :text "respawned away from the bed it slept in: the respawn point was not set there"})))))
+                   {:bed bed :pos at :text "respawned away from its bed: the respawn point was not set there"})))))
 
 (defn ^:async round
   "One whole run: wait for the respawn and its settling (declared holds), decide, walk, collect, write :recovered.

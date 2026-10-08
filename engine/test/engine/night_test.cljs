@@ -119,6 +119,12 @@
     (is (false? (holds? {:time noon} placed)) "the bed is gone")
     (is (false? (holds? world (fn [_]))) "a bed it did not put down")))
 
+(deftest night-does-not-hold-for-a-placed-bed-that-is-the-spawn-bed
+  (let [world {:time noon :blocks {"3,64,0" "red_bed"}}]
+    (is (false? (holds? world (fn [eng]
+                                (write! eng :bed-placed {:pos {:x 3 :y 64 :z 0}})
+                                (write! eng :spawn-bed {:pos {:x 3 :y 64 :z 0}})))))))
+
 (deftest a-muted-night-never-fires
   (async done
     (tu/run-async done

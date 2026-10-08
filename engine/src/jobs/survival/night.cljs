@@ -33,7 +33,7 @@
   one choice, each time from the world as it is now (the first that applies), with a 50 ms timer between:
   - day: a dug-in or exposed night leaves the shelter (dig-in-leave/leave!); :no-way-out stops the job (shelter.failed warn,
     a :shelter-trapped entry, 5 minutes); then a bed it put down outside its own zones (:bed-placed) is dug up and its
-    drop walked over (go-to); then the job ends: done {:night :slept|:dug-in|:logged-out}, or stopped :exposed {:sites} after a
+    drop walked over (go-to), unless it is the respawn bed (:spawn-bed); then the job ends: done {:night :slept|:dug-in|:logged-out}, or stopped :exposed {:sites} after a
     night with no shelter.
   - asleep: hold (:sleeping).
   - roofed and sheltered (slept, dug in, or shut in its own latest :shelter): a log-out stint while someone else sleeps,

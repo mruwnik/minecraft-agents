@@ -133,6 +133,28 @@
           (is (= 1 (count (emitted seen :respawn_away_from_bed))))
           (is (= :warn (:level (first (emitted seen :respawn_away_from_bed))))))))))
 
+(defn ^:async away-warns
+  "How many respawn_away_from_bed warns a recover-drops gives with only a :spawn-bed at spawn-bed."
+  [spawn-bed]
+  (let [{:keys [eng seen]} (setup {:floor tu/walk-floor :entities drops})]
+    (mem/write! (:store eng) :spawn-bed {:pos spawn-bed} {:cap 1 :ttl :forever})
+    (die! eng {:pos death-pos :inventory diamonds})
+    (core/submit! eng job {})
+    (await (run-until-empty eng 10))
+    (count (emitted seen :respawn_away_from_bed))))
+
+(deftest recover-drops-warns-when-the-body-respawned-away-from-a-spawn-bed-it-never-slept-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= 1 (await (away-warns {:x 40 :y 64 :z 0}))))))))
+
+(deftest recover-drops-does-not-warn-near-a-spawn-bed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= 0 (await (away-warns {:x 3 :y 64 :z 0}))))))))
+
 (deftest recover-drops-does-not-warn-near-the-bed-or-without-sleeping-in-it
   (are [bed slept]
        (async done

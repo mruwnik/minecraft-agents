@@ -69,38 +69,13 @@
       (ctx/remember! c :bed-unreachable {:pos bed} unreachable-policy))
     r))
 
-(def spawn-near
-  "A :spawn-set entry within this many blocks of a bed is that bed's respawn point."
-  3)
-
-(def spawn-bed-policy {:cap 1 :ttl :forever})
-
-(defn spawn-bed-live
-  "The durable :spawn-bed entry unless a :spawn-reset came after it."
-  [c]
-  (let [e (last (ctx/entries c :spawn-bed))
-        reset (last (ctx/entries c :spawn-reset))]
-    (when-not (and e reset (> (:t reset) (:t e)))
-      e)))
-
-(defn spawn-known?
-  "Whether the body has seen the respawn point set at bed since t0, or earlier (the server says it only when the
-  point changes, so a bed slept in before is silent; :spawn-bed outlives the :spawn-set entry)."
-  [c bed t0]
-  (let [near? #(some-> (:pos (:data %)) (u/dist bed) (<= spawn-near))
-        known? (boolean (or (some #(or (>= (:t %) t0) (near? %))
-                                  (ctx/entries c :spawn-set))
-                            (some-> (spawn-bed-live c) near?)))]
-    (when known?
-      (ctx/remember! c :spawn-bed {:pos bed} spawn-bed-policy))
-    known?))
-
 (defn ^:async sleep-at! [c bed]
   (let [t0 (ctx/now c)
         r (await (ctx/act c :sleep (clj->js {:pos bed})))]
     (case (.-status r)
       "sleeping" (do (ctx/remember! c :slept {:pos bed} slept-policy)
-                     (when-not (spawn-known? c bed t0)
+                     (if (sh/spawn-known? (ctx/view c) bed t0)
+                       (ctx/remember! c :spawn-bed {:pos bed} sh/spawn-bed-policy)
                        (ctx/emit! c :spawn_not_set :warn {:pos bed :text "slept in the bed but the server did not say the respawn point was set"}))
                      (when (:bed (:args c)) (places/offer! c :bed bed))
                      :done)

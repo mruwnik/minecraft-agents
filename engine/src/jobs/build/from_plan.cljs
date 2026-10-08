@@ -16,6 +16,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.placement :as placement]
             [jobs.lib.reach :as reach]
+            [jobs.lib.shelter :as sh]
             [jobs.lib.spent :as spent]
             [plan.rail :as rail]
             [plan.shape :as shape]
@@ -47,7 +48,9 @@
   3. Walk to a stand cell one to three blocks beside the nearest buildable (or diggable) cell, on the ground there
      (the body's feet height, or one up or down on a slope).
   4. Walk toward the nearest unloaded cell. Unseen cells are never taken as built.
-  5. Finish.
+  5. By day, with a bed built and no respawn bed known (jobs.lib.shelter/spawn-bed-live), use the bed to set the
+     respawn point (jobs.survival.set-spawn child, once).
+  6. Finish.
   A cell whose state no neighbour gives, or with no block to click beside it yet, waits for one. If still missing at
   the end it is given up with jobs.lib.placement's reason (:no-support, :no-room, :opened, :double-slab). A cell whose place is refused, or whose stand cell
   cannot be reached, :give-up times is given up (:refused, :occupied, :no-item, :unreachable or :unloaded).
@@ -719,6 +722,27 @@
                      result))
     :done))
 
+(defn spawn-cell
+  "By day, the foot cell of a bed the plan wants that stands built, when no respawn bed is known and the spawn was not
+  yet tried by this job; else nil."
+  [c cells]
+  (let [p (:primitives c)]
+    (when (and (not (:spawn-tried (ctx/mem c))) (not (sh/night? p)) (nil? (sh/spawn-bed-live (ctx/view c))))
+      (some (fn [{:keys [pos want]}]
+              (when (and (map? want) (= "foot" (some-> (:part want) name)) (str/ends-with? (str (:block want)) "_bed")
+                         (str/ends-with? (str (:name (world-block p pos))) "_bed"))
+                pos))
+            cells))))
+
+(defn ^:async set-spawn!
+  "Use the built bed at pos to set the respawn point (jobs.survival.set-spawn child); one try."
+  [c pos]
+  (let [w (await (ctx/call-child c :spawn 'jobs.survival.set-spawn {:bed pos}))]
+    (if (= :continue w)
+      :continue
+      (do (ctx/update-mem! c assoc :spawn-tried true)
+          :again))))
+
 (defn ^:async build-step!
   "One step of the build (:again, or :continue while a walk waits): place or dig what is in reach, else walk, else finish."
   [c cells]
@@ -750,6 +774,7 @@
       (seq todo) (await (walk-to! c cells (nearest todo)))
       (seq digs) (await (walk-to! c cells (nearest digs)))
       (seq (unseen cells given-up)) (await (walk-to! c cells (nearest (unseen cells given-up))))
+      (spawn-cell c cells) (await (set-spawn! c (spawn-cell c cells)))
       :else (let [before (ctx/mem c)]
               (ctx/update-mem! c retry-walks (u/self-pos c) true)
               (if (= before (ctx/mem c)) (finish! c cells) :again)))))

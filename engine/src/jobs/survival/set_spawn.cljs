@@ -2,14 +2,13 @@
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.places :as places]
-            [jobs.lib.shelter :as sh]
-            [jobs.survival.sleep :as sleep]))
+            [jobs.lib.shelter :as sh]))
 
 (def doc
   "Set the respawn point at a bed without sleeping: by day, click the bed (jobs.blocks.use-on walks into reach) and the
   server answers \"respawn point set\".
   Needs a bed: the :bed argument, else the remembered :bed within :bed-radius. Waits (:no-bed, :night); at night the
-  sleep job sets it. Done at once when the spawn is already known at that bed (:spawn-bed, not reset since).
+  sleep job sets it. Done at once when the spawn is already known at that bed (jobs.lib.shelter/spawn-known?: :spawn-bed or :spawn-set near it, not reset since).
   Returns {:status :completed :spawn pos} when the server set the point (or it was already known); {:status :stopped
   :reason ...} when the click did not set it (:no-bed, :night, :not-set). Writes :spawn-bed {:pos bed} (cap 1, forever),
   which jobs.survival.sleep also writes; warns spawn_not_set when the click did not set it.")
@@ -30,22 +29,17 @@
     (nil? (bed-of c)) (ctx/wait c {:reason :no-bed :text "no bed given or remembered within the bed radius"})
     :else true))
 
-(defn known?
-  "Whether the live :spawn-bed entry is at bed."
-  [c bed]
-  (some-> (sleep/spawn-bed-live c) :data :pos (= bed)))
-
 (defn ^:async round [c]
   (let [bed (bed-of c)]
     (cond
       (nil? bed) (do (ctx/result! c {:status :stopped :reason :no-bed}) :done)
-      (known? c bed) (do (ctx/result! c {:status :completed :spawn bed}) :done)
+      (sh/spawn-known? (ctx/view c) bed (ctx/now c)) (do (ctx/result! c {:status :completed :spawn bed}) :done)
       :else
       (let [w (await (ctx/call-child c :use 'jobs.blocks.use-on {:pos bed}))
             r (ctx/child-result c :use)]
         (cond
           (= :continue w) :continue
-          (:used r) (do (ctx/remember! c :spawn-bed {:pos bed} sleep/spawn-bed-policy)
+          (:used r) (do (ctx/remember! c :spawn-bed {:pos bed} sh/spawn-bed-policy)
                         (ctx/result! c {:status :completed :spawn bed})
                         :done)
           :else (do (ctx/emit! c :spawn_not_set :warn {:pos bed :text (str "clicking the bed did not set the respawn point: " (name (or (:reason r) :unknown)))})

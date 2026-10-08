@@ -5,6 +5,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.takeover :as takeover]
+            [engine.memory :as mem]
             [engine.events :as events]
             [engine.blocks-dig-test :as bd]
             [engine.harvest-test :as h]
@@ -379,6 +380,25 @@
           (is (= [[[2 64 2] "oak_door"] [[4 64 3] "white_bed"]] (sort (places p))))
           (is (= ["upper" "head"] [(:half (state-at p [2 65 2])) (:part (state-at p [4 64 4]))]))
           (is (= {:placed 2 :missing [] :wrong [] :given-up {}} (select-keys result [:placed :missing :wrong :given-up]))))))))
+
+(def bed-parts [{:id "bed-head" :cells [[4 64 4]] :want {:block "white_bed" :facing :south :part :head}}
+                {:id "bed-foot" :cells [[4 64 3]] :want {:block "white_bed" :facing :south :part :foot}}])
+
+(defn ^:async build-bed
+  "Build a bed from a plan at time of day: [uses spawn-bed entries]."
+  [time]
+  (let [{:keys [eng p]} (start {:blocks ground :time time :inventory [{:name "white_bed" :count 1}]}
+                               {"house" {:id "house" :parts bed-parts}})]
+    (await (tu/child-outcome eng job {:plan "house"} 200))
+    [(mapv (fn [c] (let [a (.-args c)] [(.-x (.-pos a)) (.-y (.-pos a)) (.-z (.-pos a))])) (h/calls p "useOn"))
+     (mapv :data (mem/entries (mem/view (:store eng)) :spawn-bed))]))
+
+(deftest a-bed-built-by-day-gets-the-spawn-set-at-night-it-does-not
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= [[[4 64 3]] [{:pos {:x 4 :y 64 :z 3}}]] (await (build-bed 1000))))
+        (is (= [[] []] (await (build-bed 14000))) "the sleep job sets the spawn at night")))))
 
 (deftest a-wall-torch-is-placed-with-a-torch-on-its-wall-and-a-floor-torch-looking-down
   (async done
