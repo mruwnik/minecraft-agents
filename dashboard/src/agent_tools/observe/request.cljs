@@ -24,7 +24,8 @@ status: :pos [x y z], :health and :food 0-20, :current the running job, :mode sc
    :timeout {:type "string"} :chatter {:type "string"} :observer {:type "string"}
    :watch {:type "string" :multiple true}
    :from {:type "string"} :poll-ms {:type "string"}
-   :changed {:type "boolean" :default false} :danger {:type "boolean" :default false} :disconnect {:type "boolean" :default false}})
+   :changed {:type "boolean" :default false} :danger {:type "boolean" :default false} :disconnect {:type "boolean" :default false}
+   :quiet-notices {:type "boolean" :default false}})
 
 (defn fail [message] (throw (ex-info message {::error message})))
 
@@ -48,7 +49,7 @@ status: :pos [x y z], :health and :food 0-20, :current the running job, :mode sc
 
 (def duration-units {"ms" 1 "s" 1000 "m" 60000})
 
-(defn wait-options [{:keys [timeout observer chatter watch from poll-ms danger disconnect]}]
+(defn wait-options [{:keys [timeout observer chatter watch from poll-ms danger disconnect quiet-notices]}]
   (let [[_ amount unit] (re-matches #"^(\d+(?:\.\d+)?)(ms|s|m)?$" (or timeout "60s"))
         timeout-ms (if amount (* (js/Number amount) (duration-units (or unit "s"))) js/NaN)
         observer (or observer "agent")
@@ -62,7 +63,7 @@ status: :pos [x y z], :health and :food 0-20, :current the running job, :mode sc
     (check (and (truthy-text? from) (not (re-matches body-name from))) "--from must be a player name")
     (check (not (integer-in? poll 50 5000)) "--poll-ms must be 50-5000")
     {:timeout-ms timeout-ms :observer observer :chatter chatter :watch watch
-     :poll-ms poll :from from :danger danger :disconnect disconnect}))
+     :poll-ms poll :from from :danger danger :disconnect disconnect :quiet-notices quiet-notices}))
 
 (def setting-key #":[a-z][a-z0-9.-]*/[a-z][a-z0-9-]*")
 
@@ -187,7 +188,7 @@ status: :pos [x y z], :health and :food 0-20, :current the running job, :mode sc
             query (query-string params)]
         (when-not (:wait values)
           (check (or (some #(some? (get values %)) [:timeout :chatter :observer :watch :from :poll-ms])
-                     (:danger values) (:disconnect values))
+                     (:danger values) (:disconnect values) (:quiet-notices values))
                  "wait options require --wait"))
         (check (and (:verbose values) (or (not= "status" op) (:raw values)))
                "--verbose is only valid for status without --raw")

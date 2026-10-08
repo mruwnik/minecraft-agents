@@ -158,8 +158,8 @@
                  later)))
 
 (defn classify
-  "The wake an event causes under the options, or nil. Options: :from :chatter :watch :danger :disconnect. A
-  body.idle and a death always wake."
+  "The wake an event causes under the options, or nil. Options: :from :chatter :watch :danger :disconnect
+  :quiet-notices. A body.idle and a death always wake, and so does any :attention :notice event but a job end."
   [e opts body]
   (let [{:keys [source kind]} e
         d (or (:data e) {})]
@@ -186,12 +186,34 @@
       (and (= :body source) (:disconnect opts) (= :disconnected kind))
       (clean-pairs :wake :disconnected :reason (clip (:reason d)))
 
-      (and (= :job source) (= :obtain.exploring kind))
-      (clean-pairs :wake :notice :event kind :job (get-in e [:context :job-id]) :message (clip (:message e)))
-
       (and (= :job source) (job-results/terminal-kinds kind) (some #{(get-in e [:context :job-id])} (:watch opts)))
       (clean-pairs :wake :job-finished :job (get-in e [:context :job-id]) :result (:kind e)
-                   :message (clip (or (:message e) (:error d)))))))
+                   :message (clip (or (:message e) (:error d))))
+
+      (and (= :notice (:attention e)) (not (:quiet-notices opts)) (not (job-results/terminal-kinds kind)))
+      (clean-pairs :wake :notice :event kind :job (get-in e [:context :job-id]) :message (clip (:message e))))))
+
+(def max-noticed 256)
+
+(defn notice-key [e] (str (some-> (:kind e) name) "|" (get-in e [:context :job-id])))
+
+(defn repeat-notice?
+  "Whether e is a notice of a (kind, job) that already woke the observer in this stretch."
+  [noticed e]
+  (and (= :notice (:attention e)) (boolean (some #{(notice-key e)} noticed))))
+
+(defn note-notice
+  "The noticed (kind|job) keys after e: a notice adds its key (the latest max-noticed are kept); a job end drops the
+  keys of that job, so its notices wake again if the job runs again."
+  [noticed e]
+  (let [job (get-in e [:context :job-id])]
+    (cond
+      (and (= :job (:source e)) (job-results/terminal-kinds (:kind e)))
+      (filterv #(not (str/ends-with? % (str "|" job))) noticed)
+      (= :notice (:attention e))
+      (let [k (notice-key e)]
+        (if (some #{k} noticed) noticed (vec (take-last max-noticed (conj noticed k)))))
+      :else noticed)))
 
 (defn spec-label
   "The job name of a spec node as the engine prints it (a leaf's job, else the combinator form)."

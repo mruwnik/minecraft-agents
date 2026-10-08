@@ -15,6 +15,13 @@
 
 (defn request [& args] (observe-request/request-for (vec args)))
 
+(deftest usage-for-builds-help-with-custom-prefix
+  "usage-for should build the usage string with the given prefix"
+  (let [raw (observe-request/usage-for "observe.mjs")
+        bin (observe-request/usage-for "./bin/observe")]
+    (is (str/starts-with? raw "usage: observe.mjs <agent> --world <world>"))
+    (is (str/starts-with? bin "usage: ./bin/observe <agent> --world <world>"))))
+
 (defn finish!
   "Report an unexpected rejection as a failure, then end the async test."
   [done promise]
@@ -235,6 +242,9 @@
 (defn event [source kind & [data message]]
   (cond-> {:source source :kind kind :data (or data {})} message (assoc :message message)))
 
+(defn notice [job kind message]
+  (assoc (event :job kind {} message) :attention :notice :context {:job-id job}))
+
 (def chat (event :body :chat {:from "Alex"} "Hello Probe!"))
 
 (def classify-cases
@@ -255,9 +265,41 @@
    ["a watched job wakes" (assoc (event :job :completed) :context {:job-id "j1"}) (assoc defaults :watch ["j1"]) :job-finished]
    ["a watched job wakes when stopped" (assoc (event :job :stopped) :context {:job-id "j1"}) (assoc defaults :watch ["j1"]) :job-finished]
    ["a watched job wakes when cancelled" (assoc (event :job :cancelled) :context {:job-id "j1"}) (assoc defaults :watch ["j1"]) :job-finished]
-   ["an exploration start wakes" (assoc (event :job :obtain.exploring {:for ["oak_log"]} "looking for oak_log") :attention :notice) defaults :notice]
-   ["another notice stays quiet" (assoc (event :job :job.notify {} "hi") :attention :notice) defaults nil]
+   ["an exploration start wakes" (notice "j2" :obtain.exploring "looking for oak_log") defaults :notice]
+   ["any notice wakes" (notice "j2" :shelter.exposed "exposed: no roof") defaults :notice]
+   ["a notice from a body source wakes" (assoc (event :body :job.notify {} "hi") :attention :notice) defaults :notice]
+   ["quiet notices suppress it" (notice "j2" :shelter.exposed "exposed") (assoc defaults :quiet-notices true) nil]
+   ["an unwatched job end noticed stays quiet" (notice "j2" :completed nil) defaults nil]
+   ["an unwatched give-up noticed stays quiet" (notice "j2" :stopped "gave up walking") defaults nil]
+   ["a watched job end still reports as finished" (notice "j2" :completed nil) (assoc defaults :watch ["j2"] :quiet-notices true) :job-finished]
+   ["an event without attention stays quiet" (assoc (event :job :retreat {} "x") :context {:job-id "j2"}) defaults nil]
    ["an idle body always wakes" (event :body :idle {:jobs []} "body idle 10 s") defaults :idle]])
+
+(deftest a-notice-wake-names-kind-job-and-clipped-message
+  (is (= {:wake :notice :event :hostile.chased :job "j4" :message (apply str (repeat 240 "x"))}
+         (observe-status/classify (notice "j4" :hostile.chased (apply str (repeat 400 "x"))) defaults "Probe"))))
+
+(deftest a-repeating-notice-wakes-once-per-kind-and-job
+  (let [a (notice "j1" :retreat "back")
+        b (notice "j2" :retreat "back")
+        c (notice "j1" :dig "dig")
+        noticed (reduce observe-status/note-notice [] [a])]
+    (is (observe-status/repeat-notice? noticed a))
+    (is (not (observe-status/repeat-notice? noticed b)))
+    (is (not (observe-status/repeat-notice? noticed c)))
+    (is (not (observe-status/repeat-notice? noticed (assoc (event :job :retreat) :context {:job-id "j1"}))))))
+
+(deftest a-job-end-starts-a-new-stretch-for-its-notices
+  (let [a (notice "j1" :retreat "back")
+        noticed (-> [] (observe-status/note-notice a) (observe-status/note-notice (notice "j2" :retreat "x")))
+        after (observe-status/note-notice noticed (assoc (event :job :completed) :context {:job-id "j1"}))]
+    (is (not (observe-status/repeat-notice? after a)))
+    (is (observe-status/repeat-notice? after (notice "j2" :retreat "x")))))
+
+(deftest the-noticed-list-is-bounded
+  (let [noticed (reduce #(observe-status/note-notice %1 (notice (str "j" %2) :dig "d")) [] (range 1000))]
+    (is (<= (count noticed) 256))
+    (is (observe-status/repeat-notice? noticed (notice "j999" :dig "d")))))
 
 (deftest a-death-wake-names-cause-and-place
   (is (= {:wake :died :cause "skeleton" :at [1 2 3]}

@@ -8,7 +8,7 @@
             ["node:path" :as path]
             [clojure.string :as str]
             ["node:timers/promises" :as timers]
-            [agent-tools.observe.status :refer [attention-changes classify code-of coded collect compact-status death-details death-jobs clear-reported with-death-details id-str instance-names recovered? signature stale-idle? stale-reconnect? summary-result track-deaths with-death-jobs]]
+            [agent-tools.observe.status :refer [attention-changes classify code-of coded collect compact-status death-details death-jobs clear-reported with-death-details id-str instance-names note-notice recovered? repeat-notice? signature stale-idle? stale-reconnect? summary-result track-deaths with-death-jobs]]
             [agent-tools.observe.lock :refer [acquire! checkpoint! observer-count saved-checkpoint]]
             [agent-tools.observe.request :refer [legacy-notice request-for usage wait-options]]
             [shadow.cljs.modern :refer [js-await]]))
@@ -136,7 +136,7 @@
       ;; watched jobs are looked up in the history on the next call.
       (reset! summary {:counts {} :items [] :more false})
       (swap! deaths dissoc :cancelled)
-      (swap! st assoc :snap snap :cursor (:cursor snap) :seen {} :pending [] :lookup true)
+      (swap! st assoc :snap snap :cursor (:cursor snap) :seen {} :noticed [] :pending [] :lookup true)
       (finish! w (array-map :wake :reset :reason :engine-restarted)))
     (let [failed? (= :reconnect-failed (:kind event))
           _ (swap! deaths track-deaths event)
@@ -144,8 +144,10 @@
           details (death-details @deaths event later)
           _ (swap! deaths clear-reported event)
           immediate (when-not (or (and failed? (stale-reconnect? event later))
-                              (and (= :idle (:kind event)) (= :body (:source event)) (stale-idle? event later)))
+                              (and (= :idle (:kind event)) (= :body (:source event)) (stale-idle? event later))
+                              (repeat-notice? (:noticed @st) event))
                       (some-> (classify event opts body) (with-death-jobs dead-jobs) (with-death-details details)))
+          _ (swap! st update :noticed note-notice event)
           skip! (fn [] (swap! summary collect event dead-jobs) (more))]
       (cond
         (nil? immediate) (skip!)
@@ -246,13 +248,13 @@
             w (assoc w :generation generation :body (or (:body snap) (:agent request)) :watching? (boolean (seq (:watch opts))))]
         (reset! st {:cursor (or (:cursor saved) (:cursor snap)) :generation generation
                     :seen (or (:seen saved) seen-now) :lookup (or (nil? saved) (true? (:lookup saved)))
-                    :pending (vec (:pending saved)) :snap snap})
+                    :pending (vec (:pending saved)) :noticed (vec (:noticed saved)) :snap snap})
         (reset! deaths {:names (instance-names snap) :cancelled (vec (:cancelled saved))})
         (when-not saved
-          (save! (assoc w :st (atom (select-keys @st [:cursor :generation :seen :lookup])))))
+          (save! (assoc w :st (atom (select-keys @st [:cursor :generation :seen :lookup :noticed])))))
         (vreset! timeout-finish #(timeout! w))
         (if (and saved (not= (:generation saved) generation))
-          (do (swap! st assoc :cursor (:cursor snap) :seen {} :pending [] :lookup true)
+          (do (swap! st assoc :cursor (:cursor snap) :seen {} :noticed [] :pending [] :lookup true)
               (swap! deaths dissoc :cancelled)
               (reset-with-status! w :engine-restarted))
           (step w))))))
