@@ -353,6 +353,46 @@
     (is (= jobs (:cancelled-jobs (observe-status/with-death-jobs {:wake :danger} jobs))))
     (is (= {:wake :danger} (observe-status/with-death-jobs {:wake :danger} nil)))))
 
+(def real-hurt {:source :body :kind :hurt :time-ms 1791455125080 :data {:amount 3 :health 0 :causes ["skeleton"]}})
+(def real-died
+  {:source :body :kind :died :time-ms 1791455125099
+   :data {:dimension "overworld" :pos {:x -1547.8 :y 62.3 :z -1499.2}
+          :inventory [{:name "birch_log" :count 2 :slot 9} {:name "stick" :count 2 :slot 10}
+                      {:name "oak_sapling" :count 2 :slot 37} {:name "leaf_litter" :count 8 :slot 38}
+                      {:name "dirt" :count 16 :slot 39} {:name "birch_planks" :count 1 :slot 40}]}})
+(def real-decision
+  {:source :job :kind :recover-drops.decided
+   :data {:decision :skip :reason :too-far :value 75.35 :cost :infinite}})
+
+(deftest a-death-takes-its-cause-from-the-last-hurt
+  (let [tracker (reduce observe-status/track-deaths {} [real-hurt real-died])
+        details (observe-status/death-details tracker real-died nil)]
+    (is (= "skeleton" (:cause details)))
+    (is (nil? (observe-status/death-details tracker real-hurt nil)))))
+
+(deftest a-hurt-long-before-the-death-is-not-its-cause
+  (let [old (assoc real-hurt :time-ms (- (:time-ms real-died) 20000))
+        tracker (reduce observe-status/track-deaths {} [old real-died])]
+    (is (nil? (:cause (observe-status/death-details tracker real-died nil))))))
+
+(deftest a-death-lists-the-top-lost-items-by-count
+  (let [details (observe-status/death-details {} real-died nil)]
+    (is (= ["dirt x16" "leaf_litter x8" "birch_log x2"] (:lost details)))
+    (is (= 3 (:lost-more details)))))
+
+(deftest a-death-carries-the-recover-decision-when-it-arrived
+  (is (= {:decision "skip" :reason "too-far" :value 75}
+         (:recover (observe-status/death-details {} real-died [real-decision]))))
+  (is (nil? (:recover (observe-status/death-details {} real-died nil)))))
+
+(deftest the-death-wake-merges-the-details
+  (let [tracker (reduce observe-status/track-deaths {} [real-hurt real-died])
+        wake (observe-status/with-death-details (observe-status/classify real-died defaults "Probe")
+               (observe-status/death-details tracker real-died [real-decision]))]
+    (is (= "skeleton" (:cause wake)))
+    (is (= :died (:wake wake)))
+    (is (= "skip" (get-in wake [:recover :decision])))))
+
 ;; The wait loop
 
 (defn fixture

@@ -204,6 +204,8 @@
   (let [id (get-in e [:context :job-id])]
     (cond
       (and (= :job (:source e)) (= :queued (:kind e))) (assoc-in tracker [:names id] (get-in e [:data :name]))
+      (and (= :body (:source e)) (= :hurt (:kind e)))
+      (assoc tracker :hurt {:cause (str/join ", " (get-in e [:data :causes])) :time-ms (:time-ms e)})
       (and (= :job (:source e)) (= :cancelled (:kind e)) (= :death (get-in e [:data :by])))
       (update tracker :cancelled #(vec (take-last max-cancelled (conj (or % []) (clean-pairs :id id :name (get-in tracker [:names id]))))))
       :else tracker)))
@@ -212,13 +214,46 @@
   "The tracker without its cancelled jobs once the :died event they belong to has been seen."
   [tracker e]
   (cond-> tracker
-    (and (= :body (:source e)) (= :died (:kind e))) (dissoc :cancelled)))
+    (and (= :body (:source e)) (= :died (:kind e))) (dissoc :cancelled :hurt)))
 
 (defn death-jobs
   "The jobs the tracker saw cancelled by death when e is the :died event, else nil."
   [tracker e]
   (when (and (= :body (:source e)) (= :died (:kind e)))
     (not-empty (:cancelled tracker))))
+
+(def hurt-window-ms 5000)
+(def lost-shown 3)
+
+(defn lost-items
+  "The inventory of a death as [\"name xN\" ...] for the lost-shown largest stacks, merged by name."
+  [inventory]
+  (->> (reduce (fn [m {:keys [name count]}] (update m name (fnil + 0) count)) {} inventory)
+       (sort-by (fn [[n c]] [(- c) n]))
+       (map (fn [[n c]] (str n " x" c)))))
+
+(defn recover-view [e]
+  (let [d (:data e)]
+    (clean-pairs :decision (some-> (:decision d) name) :reason (some-> (:reason d) name)
+                 :value (some-> (:value d) js/Math.round))))
+
+(defn death-details
+  "For the :died event e: its :cause (the last hurt within hurt-window-ms), :lost (the biggest stacks, :lost-more
+  the number of other names) and :recover (the recover-drops decision among the later events of the page); else nil."
+  [tracker e later]
+  (when (and (= :body (:source e)) (= :died (:kind e)))
+    (let [{:keys [cause time-ms]} (:hurt tracker)
+          cause (when (and time-ms (:time-ms e) (<= 0 (- (:time-ms e) time-ms) hurt-window-ms)) cause)
+          lost (lost-items (get-in e [:data :inventory]))
+          decided (first (filter #(and (= :job (:source %)) (= :recover-drops.decided (:kind %))) later))]
+      (clean-pairs :cause (some-> (not-empty cause) (clip 80))
+                   :lost (not-empty (vec (take lost-shown lost)))
+                   :lost-more (nonzero (- (count lost) lost-shown))
+                   :recover (some-> decided recover-view)))))
+
+(defn with-death-details [result details]
+  (cond-> result
+    (and result (seq details)) (merge (into (array-map) (remove (fn [[k _]] (and (= :cause k) (:cause result)))) details))))
 
 (defn with-death-jobs [result jobs]
   (cond-> result (seq jobs) (assoc :cancelled-jobs jobs)))
