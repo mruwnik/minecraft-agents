@@ -252,7 +252,7 @@
   "True when cell x y z holds something that blocks an animal standing there (more than half a block high)."
   [{:keys [cell]} x y z]
   (let [c (cell x y z)]
-    (boolean (and c (> (:hi c) 0.5)))))
+    (boolean (and c (not (:unloaded? c)) (> (:hi c) 0.5)))))
 
 (defn barrier-both-sides?
   "True when a barrier stands within d cells on both opposite sides of x y z, along one axis."
@@ -354,6 +354,7 @@
             found (cond
                     (seq exits) (keep #(leak-at world (conj (path-to seen (:from %)) {:key (:to %) :s (:top %)}) true) exits)
                     (and truncated? (not box)) (keep identity [(leak-at world (path-to seen end) false)])
+                    (and (not box) (seq @(:unloaded world))) (keep identity [(leak-at world (path-to seen (last (:order fill))) false)])
                     :else [])]
         {:world world
          :fill fill

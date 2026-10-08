@@ -178,6 +178,16 @@
     (is (false? (:closed? r)))
     (is (seq (:leaks r)))))
 
+(defn unseen-border
+  "Cells at x or z -3 and 7, y 63 and 64, unseen: the edge of what a body has looked at."
+  [cells]
+  (into cells (for [x (range -3 8) z (range -3 8) y [63 64] :when (or (#{-3 7} x) (#{-3 7} z))] [[x y z] :unloaded])))
+
+(deftest a-low-wall-with-unseen-ground-beyond-is-still-a-leak
+  (are [cells] (= :leak (:reason (check (unseen-border cells))))
+    (ring "stone" [64])
+    (without (ring "oak_fence" [64]) [5 64 3])))
+
 (deftest a-one-block-wall-all-round-is-climbed-over
   (let [r (check (ring "stone" [64]))]
     (is (false? (:closed? r)))
