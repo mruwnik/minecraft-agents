@@ -1,6 +1,7 @@
 ;; The :loose-items reflex (jobs.lib.loose, jobs.items.pick-up-loose): seen items worth the detour are picked up.
-;; Should-succeed: logs a felled tree left lying are picked up once fell-tree ends; a log 4 blocks off.
-;; Should-fail: dirt 8 blocks down a drop (not worth the climb), a log in another body's zone.
+;; Should-succeed: once fell-tree ends, its logs left lying and 2 logs summoned 4 off are picked up; a log 4 blocks off;
+;; dirt 8 blocks down a drop when on :always (the control: it is in sight and judged).
+;; Should-fail: the same dirt without :always (not worth the climb), a log in another body's zone.
 {:defaults
  {:tags [:items :loose-items :triggers] :time :any
   :register [{:trigger :loose-items}]
@@ -13,24 +14,37 @@
             [:fill [14 3 14] [18 5 18] "oak_leaves[persistent=true]"]
             [:fill [16 3 16] [16 4 16] "oak_log"]]
    :body {:inventory [["iron_axe" 1]]}
-   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16]})]]
+   ;; the body walks over most felled logs while it digs; the 2 summoned after the fell make sure the reflex has some
+   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16]})]
+         [:await {:source :job :kind :completed} 90]
+         [:summon "item" [16.5 0 20.5] "{Item:{id:\"minecraft:oak_log\",count:2}}"]]
    :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}
-            {:event {:source :job :kind :loose-items.picked :data {:collected [:>= 1]}} :within-s 110}]
-   :after [[:not-block [16 0 16] "oak_log"] [:item "oak_log" [:>= 4]]]}
+            {:event {:source :job :kind :loose-items.picked :data {:collected [:>= 2]}} :within-s 110}]
+   :after [[:not-block [16 0 16] "oak_log"] [:item "oak_log" [:>= 6]]]}
   {:name "log-four-blocks-off-picked-up"
    :act [[:summon "item" [16.5 0 16.5] "{Item:{id:\"minecraft:oak_log\",count:2}}"]]
    :expect [{:event {:source :job :kind :loose-items.picked :data {:collected 2}} :within-s 30}]
    :after [[:item "oak_log" 2]]
    :limit-s 40}
-  ;; should stay: 8 blocks down from the ledge (radius raised to 10 so it is in range), the climb back costs more than dirt is worth
+  ;; should stay: 8 blocks down and 4 out from the ledge, in sight from it (radius raised to 10 so it is in range); the
+  ;; climb back costs more than dirt is worth
   {:name "dirt-down-a-drop-left"
    :plot {:height 12}
    :blocks [[:fill [10 0 10] [22 7 22] "stone"]]
    :body {:at [22.5 8 16.5]}
    :settings {:jobs.lib.loose/radius 10}
-   :act [[:summon "item" [23.5 0 16.5] "{Item:{id:\"minecraft:dirt\",count:1}}"]]
+   :act [[:summon "item" [26.5 0 16.5] "{Item:{id:\"minecraft:dirt\",count:1}}"]]
    :expect [{:no-event {:source :job :kind :loose-items.picked} :for-s 30}]
    :after [[:item "dirt" 0]]
+   :limit-s 40}
+  ;; the control: the same dirt on :always fires the reflex, so only the cost rule leaves it above
+  {:name "dirt-down-a-drop-on-always-is-tried"
+   :plot {:height 12}
+   :blocks [[:fill [10 0 10] [22 7 22] "stone"]]
+   :body {:at [22.5 8 16.5]}
+   :settings {:jobs.lib.loose/radius 10 :jobs.lib.loose/always ["dirt"]}
+   :act [[:summon "item" [26.5 0 16.5] "{Item:{id:\"minecraft:dirt\",count:1}}"]]
+   :expect [{:event {:source :job :kind :loose-items.picked} :within-s 30}]
    :limit-s 40}
   ;; should stay: another body's zone
   {:name "log-in-anothers-zone-left"
