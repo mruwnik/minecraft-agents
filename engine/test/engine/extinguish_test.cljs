@@ -755,3 +755,18 @@
           (await (core/tick! eng))
           (is (= 1 (count (calls p "moveTo"))) "the flames at its feet are felt: it walks off them, it does not stand")
           (is (not= {:x 0 :y 64 :z 0} (:pos (call-args (first (calls p "moveTo")))))))))))
+
+(deftest lava-scanned-but-no-cover-chosen-emits-a-debug-event
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:onFire true} :inventory [{:name "sand" :count 8}]
+                                           :blocks (merge (floor 8) {"1,64,0" "lava" "5,64,5" "lava"})})]
+          (core/submit! eng '(jobs.survival.extinguish) {})
+          (await (core/tick! eng))
+          (let [[e] (of-kind seen :extinguish.no_cover)]
+            (is (some? e))
+            (is (= :debug (:level e)))
+            (is (= {:x 0 :y 64 :z 0} (:feet e)))
+            (is (= #{{:x 1 :y 64 :z 0} {:x 5 :y 64 :z 5}} (set (:lava e))))
+            (is (= #{:no-cover-item} (set (map :reason (:refused e)))))))))))

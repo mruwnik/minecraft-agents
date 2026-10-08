@@ -180,6 +180,26 @@
 
 (defn cover-item [p] (some (fn [n] (when (some #(= n (:name %)) (u/inventory p)) n)) cover-blocks))
 
+(defn lava-refusals
+  "Why each scanned lava cell is no cover candidate, as [{:pos :reason}]: a run-wide reason (:no-cover-item, :max-covers,
+  :in-lava) first, else :covered-over, :not-adjacent or :social. Empty when some cell is a candidate."
+  [c p pos scanned lava?]
+  (let [lavas (filter #(= "lava" (:name %)) scanned)
+        exposed (set (map :pos (exposed-lava p pos scanned)))
+        adjacent (:pos (adjacent-lava pos (exposed-lava p pos scanned)))
+        run-wide (cond
+                   (and lava? (not (:blocked (ctx/mem c)))) :in-lava
+                   (<= max-covers (:covers (ctx/mem c) 0)) :max-covers
+                   (nil? (cover-item p)) :no-cover-item)]
+    (mapv (fn [{lava :pos}]
+            {:pos lava
+             :reason (cond
+                       run-wide run-wide
+                       (not (contains? exposed lava)) :covered-over
+                       (not= lava adjacent) :not-adjacent
+                       (some? (access/trespass-refusal c :place lava)) :social)})
+          lavas)))
+
 (defn clear? [c] (not (body-burning? c)))
 
 (def pour-wait-ms "A wait for the server to put the fire out or show the poured water." 250)
@@ -332,6 +352,15 @@
             refusal (when pour? (access/trespass-refusal c :place pos))]
         (ctx/remember! c :extinguish {:pos pos :cause (if lava? :lava :fire)} extinguish-policy)
         (remember-hazards! c scanned)
+        (let [refused (lava-refusals c p pos scanned lava?)]
+          (when (and (seq refused) (every? :reason refused))
+            (ctx/emit! c :extinguish.no_cover :debug
+                       {:text "lava scanned, no cover chosen"
+                        :feet pos :in-lava lava?
+                        :scanned (mapv :pos scanned)
+                        :lava (mapv :pos (filter #(= "lava" (:name %)) scanned))
+                        :hazards (mapv (comp :pos :data) (ctx/entries c :hazard))
+                        :refused refused})))
         (cond
           (and pour? (nil? refusal) (await (pour-water! c pos)))
           :again
