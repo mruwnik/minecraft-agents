@@ -424,7 +424,7 @@ true, read every tick (hungry is `:urgent` at food 2 or low health); an entry's 
 section, an entry at or below the section's level (nested: the highest) waits, info `reflex.deferred`, until the section
 ends or it has waited `:engine.core.schedule/urgent-wait-s` (15) or `comfort-wait-s` (90); a cut past the cap warns
 `job.section_overran`. `:danger` never waits; `do-now!` cuts at once. The outermost section is not opened while an entry
-waits, so it fires in the gap.
+waits, so it fires in the gap. Urgent sections: a door transit (`jobs.lib.pass`: open, walk through, shut), a carried table put down and crafted at (`items.craft`), a pillar climb (`access.pillar`, `forestry.fell-tree`).
 
 **Waiting is never silent.** A check says why with `(ctx/wait ctx reason)` (a keyword or a map with `:reason`). The
 scheduler emits one `job.waiting` when a check first declines and again only when the reason changes; it shows as
