@@ -71,7 +71,7 @@
    :pos {:doc "where to lead it {:x :y :z}; the :fence cell when nil" :spec ::a/pos :default nil}
    :fence {:doc "the fence post {:x :y :z} to tie it to; unleash it at :pos when nil" :spec ::a/pos :default nil}
    :range {:doc "how close to :pos counts as there" :spec (a/num-in 0 nil) :default 2}
-   :radius {:doc "animals within this many blocks are leashed from where the job starts" :spec (a/num-in 0 nil) :default 8}
+   :radius {:doc "animals within this many blocks of where the job starts are leashed" :spec (a/num-in 0 nil) :default 8}
    :gather-radius {:doc "without :fence the animal is let go once it is within this many blocks of :pos" :spec (a/num-in 0 nil) :default 3}
    :gather-tries {:doc "without :fence how many times the body walks on to pull a trailing animal nearer" :spec (a/int-in 0 nil) :default 3}
    :watch-radius {:doc "how far from the body the led animal is looked for" :spec (a/num-in 0 nil) :default 64}
@@ -190,7 +190,7 @@
 (defn ^:async leash! [c]
   (let [{:keys [mob radius]} (:args c)
         r (await (ctx/call-child c :leash 'jobs.animals.leash
-                                 (cond-> {:mob mob :radius radius} (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))]
+                                 (cond-> {:mob mob :radius radius :center (:origin (ctx/mem c))} (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))]
     (if-not (= :done r)
       :yield
       (let [res (ctx/child-result c :leash)]
@@ -510,7 +510,8 @@
         (:ending (ctx/mem c)) (await (close-up! c))
         (and fence (contains? #{nil :arrive} phase) (not-fence? c)) (finish! c :no-fence)
         (>= (- now started) (* 1000 timeout-s)) (finish! c :timeout)
-        (nil? phase) (do (set-phase! c (if (lead-carried? c) :leash :get-lead)) :again)
+        (nil? phase) (do (ctx/update-mem! c assoc :origin (u/self-pos c))
+                         (set-phase! c (if (lead-carried? c) :leash :get-lead)) :again)
         (= :get-lead phase) (await (u/untimed! c #(get-lead! c)))
         (= :leash phase) (await (leash! c))
         (and (#{:gather :arrive} phase) (nil? a)) (if (= :lost (escort-problem c safe-gap))

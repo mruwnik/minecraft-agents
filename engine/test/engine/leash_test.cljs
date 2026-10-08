@@ -262,3 +262,12 @@
           (is (every? #(and (false? (:escalate %)) (= 5 (:leg-s %)) (false? (:look-round %)) (:zone-tolls %)) opts)
               "a moving target is chased in legs, never dug or pillared toward")
           (is (finished? s)))))))
+
+(deftest a-center-moves-the-radius-off-the-body
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [near-center (await (scenario {:center {:x 14 :y 64 :z 0}} {:inventory lead :entities [(cow 1 15)]} 4))
+              far-from-center (await (scenario {:center {:x 40 :y 64 :z 0}} {:inventory lead :entities [(cow 1 5)]} 4))]
+          (is (= :leashed (:reason (done-event near-center))) "a cow 15 away is within 8 of the center")
+          (is (= :none (:reason (done-event far-from-center))) "a cow near the body is not within 8 of the center"))))))

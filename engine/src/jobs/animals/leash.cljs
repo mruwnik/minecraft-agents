@@ -33,6 +33,7 @@
 (a/defargs args
   {:mob {:doc "the animal's name, such as \"cow\"" :spec a/name? :default nil}
    :radius {:doc "animals within this many blocks count" :spec (a/num-in 0 nil) :default 8}
+   :center {:doc "where :radius is measured from; the body's own spot when nil" :spec ::a/pos :default nil}
    :skip {:doc "keys (uuids, else ids) of animals never to leash" :spec (a/coll-of (a/or-of string? number?)) :default []}
    :walk-timeout-s {:doc "bound of one walk towards the animal" :spec (a/num-in 0 nil) :default 5}
    :timeout-s {:doc "seconds of working with the animals (not fetching) before the job gives up" :spec (a/num-in 0 nil) :default 30}
@@ -57,8 +58,19 @@
     (ctx/result! c result)
     :done))
 
+(defn flat-dist [a b]
+  (js/Math.hypot (- (:x a) (:x b)) (- (:z a) (:z b))))
+
 (defn herd [c]
-  (animals/herd (:primitives c) (:mob (:args c)) (:radius (:args c))))
+  (let [{:keys [mob radius center]} (:args c)
+        p (:primitives c)]
+    (if-not center
+      (animals/herd p mob radius)
+      (let [around (fn [e] (flat-dist (u/pos-of (.-pos e)) center))]
+        (->> (animals/herd p mob (+ radius (flat-dist (u/self-pos c) center)))
+             (filterv #(<= (around %) radius))
+             (sort-by #(around %))
+             vec)))))
 
 (defn candidates
   "The animals within radius not on a lead, not given up on and not in :skip, nearest first."
