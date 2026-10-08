@@ -111,6 +111,7 @@ export function createSense (env) {
         ...(k !== 'item' && k !== 'player' && leashFields(env.bot, e)),
         ...(k !== 'item' && vehicleFields(env.bot, e)),
         ...(e.height !== undefined && { height: e.height }),
+        ...(e.width !== undefined && { width: e.width }),
         ...(k === 'item' && { item: droppedItem(env.bot, e) }),
         ...(k === 'player' && { username: e.username, lyingDown: lyingDown(env.bot, e) }),
         ...(e.name === 'creeper' && { creeper: true })

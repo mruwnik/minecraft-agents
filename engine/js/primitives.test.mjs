@@ -587,6 +587,12 @@ test('a player lying in a bed reports lyingDown and the low height the sight lin
   assert.deepEqual(p.entities({ kind: 'player' }).map(e => [e.lyingDown, e.height]), [[true, 0.2]])
 })
 
+test('entities pass the width the sight corners aim at', () => {
+  const boat = { id: 6, type: 'other', name: 'oak_boat', position: at(3, 64, 0), height: 0.5625, width: 1.375 }
+  const p = withBot(bot => { bot.entities = { 6: boat } }, world)
+  assert.deepEqual(p.entities({}).map(e => [e.height, e.width]), [[0.5625, 1.375]])
+})
+
 test('entities finds the pose index through the registry', () => {
   const p = withBot(bot => {
     bot.registry = { ...bot.registry, ...keysFor(['shared_flags', 'pose']) }

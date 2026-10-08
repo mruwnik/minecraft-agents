@@ -154,3 +154,13 @@
                              (count (.entities ^js w #js {}))))]
     (is (= [1 1 1 1 1 0] (mapv listed ["oak_fence" "oak_fence_gate" "iron_bars" "glass" "red_bed" "stone"]))
         "a player sees past rails, glass and beds; a full stone hides the cow")))
+
+(deftest an-entity-is-seen-when-any-point-of-its-box-is
+  (let [listed (fn [e blocks] (mapv #(.-id ^js %) (.entities ^js (:w (wrapped {:entities [e] :blocks blocks})) #js {})))
+        boat (js/Object.assign (ent 5 "oak_boat" "passive" 5.5 {:height 0.5625 :width 1.375}) #js {:pos (at 5.5 63 0.5)})
+        cow (js/Object.assign (ent 6 "cow" "passive" 5.5 {:height 1 :width 1.375}) #js {:pos (at 5.5 64 0.5)})
+        column (into {} (for [y (range 63 68)] [[4 y 0] :block]))]
+    (is (= [5] (listed boat {[3 63 0] :block})) "a bank block hides the boat's middle, not its top")
+    (is (= [] (listed boat {[3 63 0] :block [3 64 0] :block})) "a two-high bank hides the whole boat")
+    (is (= [6] (listed cow column)) "a column hides the middle and the head; a corner of the top face shows")
+    (is (= [] (listed (js/Object.assign cow #js {:width js/undefined}) column)) "no width: only the middle and the head")))

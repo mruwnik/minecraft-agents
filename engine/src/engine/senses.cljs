@@ -29,13 +29,26 @@
   (let [id (.stateAt raw x y z)]
     (and (>= id 0) (some? table) (= 1 (aget table id)))))
 
+(def corner-inset 0.05)
+
+(defn sight-points
+  "Where the eye may meet entity e, in order: its middle, its head (0.1 under the top), then the head-height corners of
+  its box when its width is known."
+  [^js e]
+  (let [^js pos (.-pos e) x (.-x pos) y (.-y pos) z (.-z pos)
+        h (or (.-height e) default-height)
+        head (+ y (max 0.1 (- h 0.1)))
+        r (some-> (.-width e) (/ 2) (- corner-inset))]
+    (concat [[x (+ y (/ h 2)) z] [x head z]]
+            (when (and r (pos? r))
+              (for [dx [(- r) r] dz [(- r) r]] [(+ x dx) head (+ z dz)])))))
+
 (defn can-see?
-  "A clear line from the eye to the middle of the entity (its height, 1.8 when unknown)."
+  "A clear line from the eye to any of the entity's sight-points; stops at the first clear one."
   [^js raw ^js eye ^js e]
-  (let [^js pos (.-pos e) table (.sightTable raw)]
-    (sight/line-clear (.-x eye) (.-y eye) (.-z eye)
-                      (.-x pos) (+ (.-y pos) (/ (or (.-height e) default-height) 2)) (.-z pos)
-                      (fn [x y z] (blocks-sight? raw table x y z)))))
+  (let [table (.sightTable raw)
+        solid? (fn [x y z] (blocks-sight? raw table x y z))]
+    (boolean (some (fn [[x y z]] (sight/line-clear (.-x eye) (.-y eye) (.-z eye) x y z solid?)) (sight-points e)))))
 
 (defn can-hit?
   "A melee swing needs a clear line from the eye to the feet, the middle or the head of the entity, over collision boxes."
@@ -78,6 +91,7 @@
               (when (= k "player") (aset e "sleeping" (boolean (and (.-lyingDown e) see?))))
               (js-delete e "lyingDown")
               (js-delete e "height")
+              (js-delete e "width")
               e))))
 
 (defn- monsters-near?
