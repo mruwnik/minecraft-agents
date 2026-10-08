@@ -5,7 +5,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
             [jobs.lib.result :as result]
-            [jobs.lib.trees :refer [default-radius drop-filter debts near-debt? sapling-for]]))
+            [jobs.lib.trees :as trees :refer [default-radius drop-filter debts near-debt? sapling-for]]))
 
 (def doc
   "Fell a tree, collect what dropped and replant. Runs three child jobs in turn, each called once and run to its end:
@@ -31,7 +31,7 @@
   "The children in order: [phase job args]; the phase is also the slot. tree is the felled tree's base, if any."
   [{:keys [species radius filter ignore-zones? fetch]} origin tree]
   [[:fell 'jobs.forestry.fell-tree {:species species :radius radius :ignore-zones? ignore-zones?}]
-   [:collect 'jobs.forestry.collect-drops {:radius radius :filter (or filter (drop-filter species)) :near tree :search radius}]
+   [:collect 'jobs.forestry.collect-drops {:radius radius :filter (or filter (drop-filter species)) :want-items (if species [(str species "_log")] trees/log-names) :near tree :search radius}]
    [:plant 'jobs.forestry.plant-sapling (cond-> {:species species :ignore-zones? ignore-zones? :near origin :within radius}
                                          (some? fetch) (assoc :fetch fetch))]])
 

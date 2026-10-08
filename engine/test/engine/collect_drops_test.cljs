@@ -146,3 +146,25 @@
           (let [result (await (bd/child-outcome eng job {:radius 6 :filter ["oak_log"] :near {:x 4 :y 64 :z 0}} 30))]
             (is (= 0 (:collected result)))
             (is (= 0 (bd/carried p "oak_log")))))))))
+
+(deftest a-search-that-runs-out-of-cells-reports-what-was-collected
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (bd/setup {:self body})]
+          (drop! p [1 64 0] "oak_log")
+          (let [result (await (bd/child-outcome eng job {:radius 6 :filter ["oak_log"] :near {:x 4 :y 64 :z 0} :search 3 :want 3} 80))]
+            (is (= 1 (:collected result)))
+            (is (= 1 (bd/carried p "oak_log")))))))))
+
+(deftest only-the-want-items-count-towards-want
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (bd/setup {:self body :blocks leaf-wall})]
+          (drop! p [-1 64 0] "oak_sapling")
+          (drop! p [4 64 0] "oak_log")
+          (let [result (await (bd/child-outcome eng job {:radius 6 :filter ["oak_log" "oak_sapling"] :want-items ["oak_log"]
+                                                         :near {:x 4 :y 64 :z 0} :search 3 :want 1} 80))]
+            (is (= 2 (:collected result)))
+            (is (= 1 (bd/carried p "oak_log")))))))))
