@@ -37,7 +37,7 @@
               reason (assoc :detail (str reason)))
     (cond
       (or reason (= :no-path status)) (merge {:why (if reason (keyword reason) :no-path)}
-                                             (select-keys result [:kind :cells :near :one-way]))
+                                             (select-keys result [:kind :cells :near :one-way :dark-best]))
       :else {:why :no-progress})))
 
 (def kind-words
@@ -88,6 +88,7 @@
            :air-lethal "every way there under water would drown the body to death"
            :one-way "the way back is one-way"
            :door-stuck "a door in the way will not open"
+           :unseen-floor-dark "the way goes down onto floors it cannot see in the dark: carry a torch (held in the off hand it sees deeper) or light the way (:place-torches, go-to lighting them itself, is not built yet)"
            (str "no path (" (some-> why name) ")")))))
 
 (defn warn-level [c] (if (false? (:warn (:args c))) :info :warn))

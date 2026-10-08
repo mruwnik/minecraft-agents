@@ -107,6 +107,13 @@
 
 ;; ---------------------------------------------------------------- marks and gates
 
+(defn see-depth
+  "The deepest drop whose landing floor the body sees from the peek point when only cells within near count as seen (the
+  dark): the eye 1.62 over the takeoff, 0.55 short of the landing column's centre, so the floor of a drop d is
+  sqrt(0.55^2 + (d + 2.12)^2) away (engine.floor-sight-pin-test). 4 -> 1, 7 (a torch in a hand) -> 4."
+  [near]
+  (js/Math.max 0 (js/Math.floor (- (js/Math.sqrt (js/Math.max 0 (- (* near near) (* 0.55 0.55)))) 2.12))))
+
 (defn floor-cell [{:keys [x y z]}] [x (dec y) z])
 
 (defn mark-steps

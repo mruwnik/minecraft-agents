@@ -12,6 +12,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.threats :as threats]
             [jobs.lib.walk.watch :as wwatch]
+            [jobs.lib.look :as look]
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.walk.search :as wsearch]
             [jobs.lib.places :as places]
@@ -37,6 +38,12 @@
     go-to.waiting-health, :continue; it eats a carried food first when hungry), and one that cannot heal or whose healing
     stalled goes over it, down to 1 hp (info go-to.over-budget). With a :min-health or :max-damage given it does neither and
     gives up :why :needs-health. See jobs.movement.go-to.health.
+  - :unknown true (default false) plans over what the body has seen or felt only: a cell it never saw is unknown (air to
+    the body), a floor it never saw is stepped onto only after the walk stops to look at it (jobs.lib.walk.sight), and
+    only where it can see it from the takeoff (a drop deeper than it sees in the dark is refused). A map overrides the
+    prices of jobs.lib.cost/unknown-prices. When a dark drop was the better way it gives up :why :unseen-floor-dark; in the
+    dark with a torch carried and the off hand empty it first holds the torch in the off hand (info go-to.off-hand-torch,
+    once a call: it sees deeper) and plans again. Nothing is placed.
   - :dark false plans dark cells like lit ones (default: a dark cell costs twice a lit one, so a lit route up to about 2x
     longer is taken: a cell seen and dark, or one never seen at night; look/dark-fn).
   - :goal-danger :end gives up at once (:why :goal-dangerous, :mob, :mob-pos, :mob-distance) when the goal lies within the full-cost radius of a known mob the body would flee; :wait (default) walks on, an info goal-in-danger says so.
@@ -80,6 +87,7 @@
    :escalate {:doc "when shut in with no way out, pillar, stair or dig a door to get out (and put back what was dug); false: give up"
               :spec boolean? :default true}
    :dangers {:doc "false: plan straight past known dangers (a walk up to the hostile being fought); true: keep away from them" :spec boolean? :default true}
+   :unknown {:doc "true: plan over what the body has seen or felt only, unseen floors checked by eye before they are stepped on; a map of :cell :floor :peek-s :aim-s overrides their prices (jobs.lib.cost/unknown-prices); false: plan over the world as it is" :spec (a/valid-by "true, false or a map of :cell :floor :peek-s :aim-s to numbers >= 0" wworld/unknown-problem) :default false}
    :dark {:doc "false: plan dark cells like lit ones; true: a dark cell (seen dark, or unseen at night) costs twice a lit one" :spec boolean? :default true}
    :tolls {:doc "cells to cross only as a last resort, [{:x :y :z :factor}]: each costs factor times its own seconds more (jobs.lib.cost farm-tolls, zone-tolls)" :spec (a/valid-by "a list of {:x :y :z :factor} of finite numbers, :factor >= 0" wworld/tolls-problem) :default nil}
    :min-health {:doc "hp (1-20) a drop or a plant's prick may not take the body below, less a margin of 1 (the walk's damage budget); 12 when absent; a floor the walk never crosses, not even when it goes over its budget" :spec (a/num-in 1 20) :default nil}
@@ -211,6 +219,41 @@
       (let [d (u/dist pose pos)]
         (swap! approaches update (:id c) #(assoc % :last-dist d :closest (min d (:closest % d))))))))
 
+(defn dark-end
+  "A fruitless round's result as go-to gives it up when a dark way was the better way (:dark-best, jobs.lib.near/dark-best):
+  :no-path :unseen-floor-dark with that cell, unless the round failed for a reason of its own (stuck, health, air, ...)."
+  [{:keys [status reason partial damage-refused] :as result}]
+  (if (and (:dark-best result) (not damage-refused)
+           (or (and (= :no-path status) (contains? #{nil :exhausted :goal-unloaded :start-enclosed} (some-> reason keyword)))
+               (and (= :off-plan status) partial)))
+    {:status :no-path :reason :unseen-floor-dark :dark-best (:dark-best result)}
+    result))
+
+(defn torch-aid?
+  "Whether a masked round (walked) should hold a carried torch in the off hand to see deeper: its plan refused a dark floor or
+  checks unseen ones, the body's feet are dark, it carries a torch, the off hand is empty, and this call has not tried."
+  [c walked]
+  (let [p (:primitives c)
+        {:keys [x y z]} (wworld/body-cell c)
+        lit? (look/see-lit-fn p)]
+    (boolean (and (:unknown c) (or (:dark-best walked) (:unseen-floors walked))
+                  (not (:off-hand-tried (ctx/mem c)))
+                  lit? (zero? (lit? x y z))
+                  (some #(= "torch" (:name %)) (u/inventory p))
+                  (nil? (some-> (.-equipment (.self p)) .-offHand))))))
+
+(defn ^:async hold-torch!
+  "Hold a carried torch in the off hand (once a call; info go-to.off-hand-torch): true when it is held there now."
+  [c]
+  (ctx/update-mem! c assoc :off-hand-tried true)
+  (let [r (await (ctx/act c :equip #js {:item "torch" :dest "off-hand"}))
+        held? (= "torch" (some-> (.-equipment (.self (:primitives c))) .-offHand .-name))]
+    (when held?
+      (ctx/emit! c :go-to.off-hand-torch :info {:text "holding a torch in the off hand to see the floors ahead in the dark"}))
+    (when-not held?
+      (ctx/emit! c :go-to.off-hand-torch :info {:held false :equip (some-> r .-status) :text "could not hold a torch in the off hand"}))
+    held?))
+
 (defn ^:async walk! [c0 pos range doors]
   (let [c (cond-> c0 (:over-budget (ctx/mem c0)) (assoc :over-budget true))
         from (u/self-pos c)
@@ -238,7 +281,9 @@
                                                                                           :zone-tolls (:zone-tolls (:args c))
                                                                                           :drop-cost (:drop-cost (:args c))
                                                                                           :costs (:costs (:args c))
+                                                                                          :unknown (:unknown c)
                                                                                           :progress (empty? (:frontier-best (ctx/mem c)))}))
+            aided? (when (and (not= "arrived" status) (torch-aid? c walked)) (await (hold-torch! c)))
             result (known-frontier-result walked)
             left (u/dist to pos)
             best (:best (ctx/mem c) d)
@@ -257,6 +302,8 @@
 
           (and (:leg-s (:args c)) (< left (dec d)))
           (end/finish! c {:arrived false :leg true})
+
+          aided? :again
 
           (= "searching" status)
           (let [n (cond-> (:searching (ctx/mem c) 0) (:fresh walked) inc)]
@@ -280,6 +327,7 @@
             (if (and (if (false? (:retry (:args c))) progress? (< tries max-blocked)) (not (#{:goal-enclosed :goal-cut-off} (:reason result))))
               :again
               (let [unloaded? (wsearch/goal-unloaded? (.-snapshot pw) (mapv #(js/Math.floor (% pos)) [:x :y :z]))
+                    result (dark-end result)
                     ended (if (esc/escalate? c result) result (unloaded-end result unloaded?))]
                 (await (esc/give-up-or-escalate! c pos tries status ended))))))))))))
 
@@ -291,7 +339,7 @@
   (let [m (ctx/mem c)
         there? (here? c pos (:range (:args c)))]
     (wworld/warn-bad-settings! c)
-    (ctx/update-mem! c #(cond-> (-> % (dissoc :best :fault-cells :over-budget) (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {}))
+    (ctx/update-mem! c #(cond-> (-> % (dissoc :best :fault-cells :over-budget :off-hand-tried) (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {}))
                           (and there? (:escalate-now m)) (dissoc :escalate-now)
                           (and there? (:escalation m))
                           (-> (dissoc :escalation :escalation-from :planned :holes-before)
@@ -423,9 +471,12 @@
 (defn ^:async round
   "One whole attempt: step! until it arrives, gives up, or waits on a child (:continue), with pace! between steps. A
   cut ends it at once (ctx/alive? per iteration, else at the next memory write or act, which throws). A goal inside a
-  fled mob's radius ends it at once under :goal-danger :end, else says so once."
-  [c]
-  (let [refusal (args-refusal c)
+  fled mob's radius ends it at once under :goal-danger :end, else says so once. With :unknown, the attempt's mask spec
+  (wworld/unknown-spec: one missed Set for all its plans) rides on c as :unknown."
+  [c0]
+  (let [u (:unknown (:args c0))
+        c (cond-> c0 u (assoc :unknown (wworld/unknown-spec (when (map? u) u))))
+        refusal (args-refusal c)
         pos (:pos (target c))]
     (if refusal
       (end/refuse! c refusal)

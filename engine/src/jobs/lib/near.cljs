@@ -47,10 +47,11 @@
   With dark (default: unless false), each plan costs dark cells twice (wworld/with-dark: look/dark-fn).
   With avoid (a set of [x y z] cells), each plan costs entering them much more (wworld/with-avoid): a way round is taken when there is one.
   With tolls ([{:x :y :z :factor}], jobs.lib.cost farm-tolls and zone-tolls), each plan costs those cells factor times their seconds more (wworld/with-tolls).
+  With unknown (wworld/unknown-spec), each plan reads the cells the body never saw as unknown (wworld/path-world).
   A promise: the searches run in slices with yields between them (walk/plan-walk!), so the body's API answers meanwhile."
-  [c to range doors policy walls explore one-way budget progress dangers & [avoid dark tolls]]
+  [c to range doors policy walls explore one-way budget progress dangers & [avoid dark tolls unknown]]
   (loop [walls walls]
-    (let [pw (cond-> (wworld/costed-world c (wworld/path-world (:primitives c)) {:dangers? dangers :dark? (not (false? dark))})
+    (let [pw (cond-> (wworld/costed-world c (wworld/path-world (:primitives c) unknown) {:dangers? dangers :dark? (not (false? dark))})
                (seq avoid) (wworld/with-avoid avoid)
                (seq tolls) (wworld/with-tolls tolls))
           plan (await (walk/plan-walk! c pw to range walk/default-weight
@@ -66,6 +67,31 @@
         (recur (into walls iron))
         plan))))
 
+(defn octile
+  "The planner's distance (its h) between columns [x z] and [gx gz]: the longer side plus 0.414 of the shorter."
+  [[x z] [gx gz]]
+  (let [dx (js/Math.abs (- x gx)) dz (js/Math.abs (- z gz))]
+    (+ (max dx dz) (* (- js/Math.SQRT2 1) (min dx dz)))))
+
+(defn dark-best
+  "The cell {:x :y :z} of the stand on an unseen floor that plan's search refused for want of sight (the planner's darkBest,
+  options.unknown) when a dark way was the better way: the plan reaches no goal, and has no steps or ends at least 1 farther
+  from the goal to than that stand; else nil."
+  [{:keys [^js r steps]} [gx _ gz]]
+  (when-let [^js best (some-> r .-darkBest)]
+    (when (and (not= "found" (.-status r))
+               (or (< (count steps) 2)
+                   (let [{:keys [x z]} (peek steps)] (<= (+ (.-h best) 1) (octile [x z] [gx gz])))))
+      {:x (.-x best) :y (.-y best) :z (.-z best)})))
+
+(defn with-sight
+  "result with what a masked plan says of unseen floors: :dark-best (dark-best) and :unseen-floors true when the plan's steps
+  check unseen floors (:unseen-floor)."
+  [result plan to]
+  (cond-> result
+    (dark-best plan to) (assoc :dark-best (dark-best plan to))
+    (some :unseen-floor (:steps plan)) (assoc :unseen-floors true)))
+
 (defn ^:async walk-once!
   "Plan from where the body stands and follow the plan (walk/follow!: planned again in the same round when the look-ahead
   sees the way change, a partial plan is due a refresh, or a mob is in the way of a stuck body; each replan is a :replan
@@ -79,8 +105,9 @@
   and :frontier-known true when that node lay in land earlier searches knew to their end (wsearch/known-land).
   With budget (go-to), each plan searches at most that many expansions (plan!): a plan still searching is the result
   {:status :searching} (wplan/no-walk), nothing walked; progress false: an unfinished search walks nowhere (plan!).
-  dangers: whether the plans keep away from known dangers (plan!). avoid: cells the plans keep off (plan!). dark: false plans dark cells like lit ones. tolls: cells the plans price (plan!). drop-cost: the policy's :drop-cost (wplan/with-drops: a number scales drops, false takes none of 2 or 3). costs: the policy's :costs (planner price overrides, cost/planner-costs)."
-  [c to range doors shut-also timeout-s explore one-way budget progress dangers & [avoid dark tolls drop-cost costs]]
+  dangers: whether the plans keep away from known dangers (plan!). avoid: cells the plans keep off (plan!). dark: false plans dark cells like lit ones. tolls: cells the plans price (plan!). drop-cost: the policy's :drop-cost (wplan/with-drops: a number scales drops, false takes none of 2 or 3). costs: the policy's :costs (planner price overrides, cost/planner-costs).
+  unknown: the mask spec (plan!); the result then says what the last plan said of unseen floors (with-sight)."
+  [c to range doors shut-also timeout-s explore one-way budget progress dangers & [avoid dark tolls drop-cost costs unknown]]
   (await (walk/settle! c))
   (let [policy-of (fn [] (cond-> (wworld/body-policy c) (not= :never doors) (update :moves conj :open) (some? drop-cost) (assoc :drop-cost drop-cost) (some? costs) (assoc :costs costs)))
         announce! (fn [_kind data] (ctx/emit! c :replan :info data))
@@ -90,17 +117,17 @@
                     (pass/walk! c steps {:timeout-s timeout-s :doors doors :shut-also shut-also :watch watch})))]
     (when-not (= :never doors) (await (pass/shut-leftovers! c)))
     (let [result (loop [walls [] stuck nil]
-                   (let [plan (await (plan! c to range doors (policy-of) walls explore one-way budget progress dangers avoid dark tolls))]
+                   (let [plan (await (plan! c to range doors (policy-of) walls explore one-way budget progress dangers avoid dark tolls unknown))]
                      (if-let [no (wplan/no-walk plan 0 (policy-of))]
-                       (if stuck (door-stuck stuck) no)
+                       (if stuck (door-stuck stuck) (with-sight no plan to))
                        (let [began (ctx/now c)
                              {done :done last-plan :plan planned :damage}
-                             (await (walk/follow! c plan {:plan-fn #(plan! c to range doors (policy-of) (into walls %) explore one-way (wsearch/replan-budget budget) progress dangers avoid dark tolls)
+                             (await (walk/follow! c plan {:plan-fn #(plan! c to range doors (policy-of) (into walls %) explore one-way (wsearch/replan-budget budget) progress dangers avoid dark tolls unknown)
                                                           :walk-fn walk-fn :to to :policy (policy-of) :announce! announce! :dangers dangers}))
                              _ (walk/note-mismatch! c planned began (:fall-margin (:args c)))]
                          (cond
                            (not= :door-stuck (:status done))
-                           (cond-> (walk/partial-end done (:status last-plan) to range (:steps last-plan) (:stop last-plan))
+                           (cond-> (with-sight (walk/partial-end done (:status last-plan) to range (:steps last-plan) (:stop last-plan)) last-plan to)
                              (:frontier-taken last-plan) (assoc :frontier (:at (:frontier-taken last-plan)))
                              (:known (:frontier-taken last-plan)) (assoc :frontier-known true
                                                          :frontier-target (:target (:frontier-taken last-plan))))
@@ -122,14 +149,14 @@
   "One walk-once! toward the cell pos ({:x :y :z} of whole numbers) from where the body stands (the caller has checked the
   primitives have a pathWorld), with its :moved entry {:from :to :status :target} written and the round booked for the
   backoff as one walk (ctx/note-walk!: the status and the blocks the body moved). opts {:doors :shut-also :timeout-s :explore
-  :one-way :budget :progress :dangers :avoid :dark :tolls :zone-tolls :drop-cost :costs}: zone-tolls true adds the cells of other bodies' zones to tolls (toll-cells/zone-walk-tolls, none under the job's :ignore-zones?); doors, shut-also (jobs.lib.pass), explore, one-way (default :open: past a drop toward a far goal), budget, progress (default true) and dangers (default true) and avoid as walk-once!, timeout-s the bound of each steer (default walk-timeout-s). {:result :status :from :to}: result
+  :one-way :budget :progress :dangers :avoid :dark :tolls :zone-tolls :drop-cost :costs :unknown}: unknown the mask spec (walk-once!); zone-tolls true adds the cells of other bodies' zones to tolls (toll-cells/zone-walk-tolls, none under the job's :ignore-zones?); doors, shut-also (jobs.lib.pass), explore, one-way (default :open: past a drop toward a far goal), budget, progress (default true) and dangers (default true) and avoid as walk-once!, timeout-s the bound of each steer (default walk-timeout-s). {:result :status :from :to}: result
   is the walk's result map, status the entry's (\"partial\" too for a walk to a frontier that moved the body over a block:
   it went where a way may be, not stuck). A round whose plan is still searching (result :searching) walked nowhere and
   failed at nothing: status \"searching\", no :moved entry and no walk booked."
-  [c pos range {:keys [doors shut-also timeout-s explore one-way budget progress dangers avoid dark tolls zone-tolls drop-cost costs] :or {timeout-s walk-timeout-s one-way :open progress true dangers true}}]
+  [c pos range {:keys [doors shut-also timeout-s explore one-way budget progress dangers avoid dark tolls zone-tolls drop-cost costs unknown] :or {timeout-s walk-timeout-s one-way :open progress true dangers true}}]
   (let [from (u/self-pos c)
         tolls (if zone-tolls (into (vec tolls) (tc/zone-walk-tolls c pos)) tolls)
-        result (await (walk-once! c [(:x pos) (:y pos) (:z pos)] range doors shut-also timeout-s explore one-way budget progress dangers avoid dark tolls drop-cost costs))
+        result (await (walk-once! c [(:x pos) (:y pos) (:z pos)] range doors shut-also timeout-s explore one-way budget progress dangers avoid dark tolls drop-cost costs unknown))
         to (u/self-pos c)
         status (cond
                  (= :searching (:status result)) "searching"

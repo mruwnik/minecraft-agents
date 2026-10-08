@@ -13,18 +13,71 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
             [jobs.lib.threats :as threats]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [jobs.lib.walk.sight :as wsight]
+            [engine.perception.store :as store]))
 
 (a/defargs settings
   {::default-food {:default 20 :doc "The food a walk counts on when it has neither a :food arg nor a body food: fed (nothing caps the damage)." :spec (a/int-in 0 nil)}})
 
+(defn unknown-spec
+  "go-to's :unknown as the mask spec of one go-to call (the planner's options.unknown less what path-world adds): the prices
+  (jobs.lib.cost/unknown-prices, each overridden by prices, a map of the same keys; nil: the defaults) and one missed Set,
+  shared by every pathWorld made with this spec (the floors the walk looked for and could not see)."
+  [prices]
+  (let [{:keys [cell floor peek-s aim-s]} (merge cost/unknown-prices prices)]
+    #js {:cell cell :floor floor :peekS peek-s :aimS aim-s :missed (js/Set.)}))
+
+(defn unknown-problem
+  "Why u is not a usable go-to :unknown (a boolean, or a map of :cell :floor :peek-s :aim-s to numbers >= 0), else nil."
+  [u]
+  (cond
+    (boolean? u) nil
+    (not (map? u)) (str ":unknown is true, false or a map of prices; got " (pr-str u))
+    :else (when-let [[k v] (first (remove (fn [[k v]] (and (contains? cost/unknown-prices k) (number? v) (>= v 0))) u))]
+            (str ":unknown prices are :cell :floor :peek-s :aim-s, numbers >= 0; got " (pr-str k) " " (pr-str v)))))
+
+(defn- memory-sections
+  "(fn [cx sy cz]) the ids of the body's memory of that section (sy the world's section y; ids + 1, 0 never seen), or nil;
+  nil without a perception."
+  [p]
+  (when-let [per (aget p "perception")]
+    (let [^js st (:st per)
+          ^js sections (store/store-of st (.-dim st))]
+      (fn [cx sy cz] (some-> ^js (.get sections (store/section-key cx sy cz)) .-ids)))))
+
+(defn- see-depth-now
+  "The deepest drop the body sees the landing floor of in the dark from a peek, with what it holds now."
+  [p]
+  (wsight/see-depth (or (look/near-of p) 0)))
+
 (defn path-world
   "The primitives' pathWorld sensing (a snapshot over the world) with the planner's block table and free-space module, nil when
-  they have none or cannot sense now."
-  [p]
-  (when (fn? (.-pathWorld p))
-    (when-let [pw (.pathWorld p)]
-      (js/Object.assign #js {:table (blocks/default-state-table) :space space/space} pw))))
+  they have none or cannot sense now. With unknown (unknown-spec), over a body with a perception: cells the body never saw
+  or felt read void_air (its known cells read as they are now), and the snapshot carries the planner's options.unknown:
+  the spec with the mask's id, seeDepth (from what the body holds now) and seeLit (look/see-lit-fn)."
+  ([p] (path-world p nil))
+  ([p unknown]
+   (when (fn? (.-pathWorld p))
+     (let [table (blocks/default-state-table)
+           known (when unknown (memory-sections p))
+           mask (when known
+                  (js/Object.assign #js {} unknown
+                                    #js {:id (first (blocks/state-ids table "void_air")) :known known
+                                         :seeDepth (see-depth-now p) :seeLit (look/see-lit-fn p)}))]
+       (when-let [pw (if mask (.pathWorld p mask) (.pathWorld p))]
+         (js/Object.assign #js {:table table :space space/space} pw))))))
+
+(defn unknown-of
+  "The mask's options (the planner's options.unknown) pw's snapshot carries, nil when it is not masked."
+  [pw]
+  (some-> pw .-snapshot .-unknown))
+
+(defn unknown-key
+  "What a kept search's key holds of pw's mask: nil unmasked, else the floors missed so far and the see depth."
+  [pw]
+  (when-let [^js u (unknown-of pw)]
+    [(.-size ^js (.-missed u)) (.-seeDepth u)]))
 
 (defn wall-id
   "A state id of a full block with no collision tricks (stone, the first state that is one), of a state table."
@@ -74,11 +127,11 @@
 
 (defn costed-world
   "pw (the primitives' pathWorld) costed the way go-to plans: with the dangers the body knows of now (dangers?, jobs.lib.threats)
-  and with dark cells (dark?, look/dark-fn). Every search that ranks routes by cost plans over this."
+  and with dark cells (dark?, look/dark-fn; over a masked pw an unseen cell is priced by the mask, not as dark). Every search that ranks routes by cost plans over this."
   [c pw {:keys [dangers? dark?]}]
   (cond-> pw
     dangers? (with-dangers (threats/planner-dangers c))
-    dark? (with-dark (look/dark-fn (:primitives c)))))
+    dark? (with-dark (look/dark-fn (:primitives c) {:unseen-dark? (nil? (unknown-of pw))}))))
 
 (def avoid-factor
   "How many times a cell's own cost an avoided cell costs more (the planner's options.avoid.factor): a detour is taken

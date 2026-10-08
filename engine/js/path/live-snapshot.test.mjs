@@ -92,3 +92,61 @@ test('forgetColumn reads a column loaded since again, and one unloaded since as 
   assert.equal(snapshot.hasColumn(0, 0), false)
   assert.equal(snapshot.stateAt(3, 70, 4), UNLOADED)
 })
+
+// the body's memory of the rig's column: world section y 4 (y 64-79) holds (3,70,4) and (4,70,4); no other section
+const memoryRig = () => {
+  const column = new ChunkColumn()
+  column.setBlockStateId(new Vec3(3, 70, 4), id('stone'))
+  column.setBlockStateId(new Vec3(4, 70, 4), id('dirt'))
+  column.setBlockStateId(new Vec3(5, 70, 4), id('dirt'))
+  column.setBlockStateId(new Vec3(3, 10, 4), id('stone'))
+  const world = { getColumn: (cx, cz) => cx === 0 && cz === 0 ? column : undefined }
+  const memory = new Uint16Array(4096)
+  const at = (x, y, z) => ((y & 15) << 8) | ((z & 15) << 4) | (x & 15)
+  memory[at(3, 70, 4)] = id('stone') + 1
+  memory[at(4, 70, 4)] = id('stone') + 1 // remembered as stone, dirt now: the live id wins
+  const asked = []
+  const known = (cx, sy, cz) => { asked.push([cx, sy, cz]); return cx === 0 && sy === 4 && cz === 0 ? memory : null }
+  const unknown = { id: id('void_air'), known }
+  return { snapshot: liveSnapshot(world, { ...SIZE, unknown }), asked, unknown }
+}
+
+test('with unknown, a cell the body knows reads its live id', () => {
+  const { snapshot } = memoryRig()
+  assert.equal(snapshot.stateAt(3, 70, 4), id('stone'))
+  assert.equal(snapshot.stateAt(4, 70, 4), id('dirt'))
+})
+
+test('with unknown, a cell the body never saw in a known section reads the mask id', () => {
+  assert.equal(memoryRig().snapshot.stateAt(5, 70, 4), id('void_air'))
+})
+
+test('with unknown, the memory is asked by world section y (minY offset), not the snapshot section index', () => {
+  const { snapshot, asked } = memoryRig()
+  snapshot.stateAt(3, 70, 4)
+  assert.deepEqual(asked, [[0, 70 >> 4, 0]])
+})
+
+test('with unknown, a section with no memory reads the mask id everywhere', () => {
+  const { snapshot } = memoryRig()
+  assert.equal(snapshot.stateAt(3, 10, 4), id('void_air'))
+  assert.equal(snapshot.stateAt(0, 0, 0), id('void_air'))
+})
+
+test('with unknown, sectionHas reads the masked copy', () => {
+  const { snapshot } = memoryRig()
+  const flags = new Uint8Array(65536)
+  flags[id('stone')] = 1
+  assert.equal(snapshot.sectionHas(flags, 0, (10 + 64) >> 4, 0), false)
+  assert.equal(snapshot.sectionHas(flags, 0, (70 + 64) >> 4, 0), true)
+})
+
+test('with unknown, an absent column still reads unloaded', () => {
+  assert.equal(memoryRig().snapshot.stateAt(100, 70, 4), UNLOADED)
+})
+
+test('the snapshot carries its unknown option; none without one', () => {
+  const { snapshot, unknown } = memoryRig()
+  assert.equal(snapshot.unknown, unknown)
+  assert.equal(rig().snapshot.unknown, undefined)
+})

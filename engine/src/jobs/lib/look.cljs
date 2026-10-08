@@ -10,6 +10,8 @@
             [engine.ctx :as ctx]
             [jobs.lib.util :as u]
             [engine.perception :as perception]
+            [engine.perception.light :as light]
+            [engine.perception.rays :as rays]
             [engine.perception.store :as store]))
 
 (a/defargs settings
@@ -224,24 +226,39 @@
   "The planner's test of a feet cell (options.dark.at), {:at (fn [x y z] 1 dark, 0 lit) :night? whether the sky is dark},
   for the body of primitives p; nil without a perception. A cell the body has seen is lit by block light of 1 or more
   (mobs do not spawn there) or by sky light still at dark-light after the sky darkening; a seen cave stays dark by day.
-  A cell never seen is dark only when the sky is (night?): by day it costs like a lit one. Light is read only for cells
-  seen, as a player would know them."
+  A cell never seen is dark only when the sky is (night?): by day it costs like a lit one; with :unseen-dark? false never
+  (a masked plan prices unseen cells itself). Light is read only for cells seen, as a player would know them."
+  ([p] (dark-fn p nil))
+  ([p {:keys [unseen-dark?]}]
+   (when-let [per (aget p "perception")]
+     (when-let [raw (:raw per)]
+       (let [^js st (:st per)
+             subtract (sky-subtract raw)
+             dark (dark-light)
+             night? (< (- 15 subtract) dark)
+             unseen (if (and night? (not (false? unseen-dark?))) 1 0)
+             ^js sections (store/store-of st (.-dim st))]
+         {:night? night?
+          :at (fn [x y z]
+                (let [^js sec (.get sections (store/section-key (bit-shift-right x 4) (bit-shift-right y 4) (bit-shift-right z 4)))]
+                  (if (or (nil? sec) (zero? (aget (.-ids sec) (store/cell-index x y z))))
+                    unseen
+                    (let [packed (.lightAt ^js raw x y z)]
+                      (if (or (pos? (bit-and packed 15)) (>= (- (bit-shift-right packed 4) subtract) dark)) 0 1)))))})))))
+
+(defn see-lit-fn
+  "The planner's options.unknown.seeLit for the body of primitives p: (fn [x y z]) 1 when the cell's live light makes it
+  visible by perception's own table (seeing-min, the sky now), else 0; nil without a perception."
   [p]
   (when-let [per (aget p "perception")]
-    (when-let [raw (:raw per)]
-      (let [^js st (:st per)
-            subtract (sky-subtract raw)
-            dark (dark-light)
-            night? (< (- 15 subtract) dark)
-            unseen (if night? 1 0)
-            ^js sections (store/store-of st (.-dim st))]
-        {:night? night?
-         :at (fn [x y z]
-               (let [^js sec (.get sections (store/section-key (bit-shift-right x 4) (bit-shift-right y 4) (bit-shift-right z 4)))]
-                 (if (or (nil? sec) (zero? (aget (.-ids sec) (store/cell-index x y z))))
-                   unseen
-                   (let [packed (.lightAt ^js raw x y z)]
-                     (if (or (pos? (bit-and packed 15)) (>= (- (bit-shift-right packed 4) subtract) dark)) 0 1)))))}))))
+    (when-let [^js raw (:raw per)]
+      (let [visible (light/table-now raw (:seeing-min (:opts per)))]
+        (fn [x y z] (aget visible (.lightAt raw x y z)))))))
+
+(defn near-of
+  "How close a dark cell must be for the body of primitives p to see it (more with a torch in a hand); nil without a perception."
+  [p]
+  (some-> (aget p "perception") rays/near-of))
 
 (defn drops
   "Item entities of name within radius as [{:id :pos :count}], nearest first; only those within toss-reach of near

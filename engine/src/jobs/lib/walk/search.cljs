@@ -61,7 +61,7 @@
         fresh))))
 
 (defonce ^{:doc "Per body: {:key :t :memo}, memo the planner's options.goalFloodMemo shared by go-to's searches toward one
-  goal (key [to range weight policy walls]), kept for search-max-age-ms; forgotten with the known land."}
+  goal (key [to range weight policy walls mask], mask wworld/unknown-key), kept for search-max-age-ms; forgotten with the known land."}
   goal-floods (atom {}))
 
 (defn forget-known!
@@ -86,10 +86,10 @@
 
 (defn goal-flood!
   "The body's kept goal flood memo for searches of to within range (goal-floods), a new one when it held another goal or
-  is older than search-max-age-ms."
-  [c to range weight policy walls]
+  is older than search-max-age-ms. mask: the pathWorld's wworld/unknown-key (a masked flood leaks at unseen cells)."
+  [c to range weight policy walls & [mask]]
   (let [who (wworld/body-name c)
-        k [to range weight policy walls]
+        k [to range weight policy walls mask]
         kept (get @goal-floods who)]
     (if (and (= k (:key kept)) (< (- (js/Date.now) (:t kept)) search-max-age-ms))
       (:memo kept)
@@ -100,7 +100,7 @@
 (defn search-key [c to range weight policy walls & [pw]]
   (let [{:keys [x y z]} (wworld/body-cell c)]
     (cond-> [[x y z] to range weight policy walls]
-      pw (conj (wworld/danger-key pw) (wworld/avoid-key pw) (wworld/tolls-key pw)))))
+      pw (conj (wworld/danger-key pw) (wworld/avoid-key pw) (wworld/tolls-key pw) (wworld/unknown-key pw)))))
 
 (defn goal-unloaded?
   "Whether the snapshot reads the goal cell to [x y z] as unloaded (the planner's goal-unloaded: no goal flood runs)."
@@ -202,7 +202,7 @@
         fresh? (not (go-on? kept k pw to))
         search (if-not fresh?
                  kept
-                 (new-search c (wworld/with-walls pw walls) to range weight policy k known (goal-flood! c to range weight policy walls)))
+                 (new-search c (wworld/with-walls pw walls) to range weight policy k known (goal-flood! c to range weight policy walls (wworld/unknown-key pw))))
         [search within] (await (run-search! c search budget policy to range weight))
         ms (- (js/performance.now) t)]
     (if within

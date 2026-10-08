@@ -171,11 +171,13 @@
   (apply dissoc (merge (box 3 60 -3 14 63 3 "stone") (box -2 60 -2 2 63 2 "dirt")) #{"0,61,0" "0,62,0" "0,63,0"}))
 
 (defn ^:async run-go-to
-  "Run go-to with args as a child over the sensed-only world spec; {:out :seen}."
-  [spec args]
+  "Run go-to with args as a child over the sensed-only world spec; {:out :seen :p}. setup, when given, is called with the
+  sensed-only {:p :w} first."
+  [spec args & [setup]]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        {:keys [w]} (sensed-only spec)
+        {:keys [w p] :as world} (sensed-only spec)
+        _ (when setup (setup world))
         out (atom :not-done)
         parent {:check (constantly true)
                 :round (fn ^:async recording-round [c]
@@ -191,7 +193,7 @@
         (swap! clock + 100)
         (await (core/tick! eng))
         (recur (inc i))))
-    {:out @out :seen @seen}))
+    {:out @out :seen @seen :p p}))
 
 (defn steps [seen] (mapv :step (filter #(= :go-to.escalated (:kind %)) seen)))
 
@@ -260,3 +262,64 @@
         (let [r (await (run-step-off {:self {:pos {:x 0.5 :y 64 :z 0.5}} :yaw 0 :pitch 0 :blocks ground} {:reach 1}))]
           (is (not= {:unreachable :no-cell} r) "a body at pitch 0 that remembers nothing glances down before it judges")
           (is (= :arrived r)))))))
+
+;; ---- go-to :unknown: a hidden tunnel down a dark shaft
+
+(def tunnel
+  "Rock (stone x -2..10, y 59..66, z -2..2) with a room (x -1..1, y 64..65, z -1..1, the body's), a 3-deep shaft at x 1
+  (feet cells y 63..61 over a floor at 60) and a tunnel east from its foot (x 2..9, y 61..62, z 0)."
+  (apply dissoc (box -2 59 -2 10 66 2 "stone")
+         (concat (for [x (range -1 2) y [64 65] z (range -1 2)] (str x "," y "," z))
+                 (for [y [61 62 63]] (str "1," y ",0"))
+                 (for [x (range 2 10) y [61 62]] (str x "," y ",0")))))
+
+(defn dark-and-looked
+  "The world dark, and a sight pass to each side from where the body stands, looking down 30 degrees: the room is known,
+  the shaft's floor is not (deeper than near, 4)."
+  [{:keys [p w]}]
+  (swap! (fake/state p) assoc :light-default [0 0] :pitch 30)
+  (doseq [yaw [0 90 180 270]]
+    (swap! (fake/state p) assoc :yaw yaw)
+    (perception/pass! (aget w "perception"))))
+
+(def in-tunnel
+  "The body in the room one block west of the shaft's rim (a walk to the rim comes before the drop)."
+  {:self {:pos {:x -0.5 :y 64 :z 0.5}} :blocks tunnel})
+
+(deftest go-to-without-unknown-walks-the-tunnel-it-never-saw
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out seen]} (await (run-go-to in-tunnel {:pos [9 61 0] :range 1 :escalate false} dark-and-looked))]
+          (is (= {:arrived true} out) (pr-str (last seen))))))))
+
+(deftest go-to-with-unknown-does-not-drop-into-a-dark-shaft-it-cannot-see
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out seen p]} (await (run-go-to in-tunnel {:pos [9 61 0] :range 1 :escalate false :unknown true} dark-and-looked))]
+          (is (= [false :unseen-floor-dark] [(:arrived out) (:why out)]) (pr-str out))
+          (is (re-find #":place-torches" (str (:text out))) "the words say what would help")
+          (is (= 64 (js/Math.floor (second (:pos (fake/self p))))) "never dropped")
+          (is (empty? (filter #(= :go-to.off-hand-torch (:kind %)) seen)) "no torch carried"))))))
+
+(deftest go-to-with-unknown-holds-a-carried-torch-in-the-dark
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out seen p]} (await (run-go-to (assoc in-tunnel :inventory [{:name "torch" :count 4}])
+                                                     {:pos [9 61 0] :range 1 :escalate false :unknown true} dark-and-looked))]
+          (is (= 1 (count (filter #(= :go-to.off-hand-torch (:kind %)) seen))) "once per call")
+          (is (= "torch" (get-in @(fake/state p) [:equipment "offHand" :name])))
+          (is (not= :unseen-floor-dark (:why out)) (str "near 7 sees the drop: " (pr-str out))))))))
+
+(deftest go-to-with-unknown-leaves-a-full-off-hand-alone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out seen p]} (await (run-go-to (assoc in-tunnel :inventory [{:name "torch" :count 4}]
+                                                            :equipment {"offHand" {:name "shield" :count 1}})
+                                                     {:pos [9 61 0] :range 1 :escalate false :unknown true} dark-and-looked))]
+          (is (empty? (filter #(= :go-to.off-hand-torch (:kind %)) seen)))
+          (is (= "shield" (get-in @(fake/state p) [:equipment "offHand" :name])))
+          (is (= :unseen-floor-dark (:why out)) (pr-str out)))))))

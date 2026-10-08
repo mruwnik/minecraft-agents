@@ -237,6 +237,22 @@
      :table (blocks/default-state-table)
      :space space/space}))
 
+(defn masked
+  "snapshot read through unknown, live-snapshot.mjs's mask option: a cell the body's memory ((.known unknown cx sy cz), sy the
+  world section y: ids + 1, 0 never seen; nil: none of it seen) has not got reads (.-id unknown); unloaded stays unloaded. It
+  carries unknown, as the live snapshot does."
+  [^js snapshot ^js unknown]
+  (let [view (js/Object.create snapshot)
+        id (.-id unknown)
+        known? (fn [x y z]
+                 (when-let [^js mem (.known unknown (bit-shift-right x 4) (bit-shift-right y 4) (bit-shift-right z 4))]
+                   (pos? (aget mem (bit-or (bit-shift-left (bit-and y 15) 8) (bit-shift-left (bit-and z 15) 4) (bit-and x 15))))))]
+    (set! (.-stateAt view) (fn [x y z]
+                             (let [s (.stateAt snapshot x y z)]
+                               (if (or (== s 0xFFFF) (known? x y z)) s id))))
+    (set! (.-unknown view) unknown)
+    view))
+
 (def path-world-cache
   "The last path-world: [inputs result]. A world is an immutable map, so the snapshot is rebuilt only when a map that
   path-world reads is no longer the identical one (any block, state or marker write replaces it), or the body moved

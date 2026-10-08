@@ -54,10 +54,11 @@
 
 (defn plan-options
   "The planner options over pw with weight, limits and the search box (nil: the planner's default); pw's dangers
-  (with-dangers) as options.dangers and its dark (with-dark) as options.dark."
+  (with-dangers) as options.dangers, its dark (with-dark) as options.dark and its snapshot's mask (wworld/path-world with
+  unknown) as options.unknown."
   [pw weight limits box]
   (js/Object.assign #js {:table (.-table pw) :space (.-space pw) :weight weight :limits limits :dangers (.-dangers pw) :avoid (.-avoid pw)
-                         :dark (.-dark pw) :tolls (.-tolls pw)}
+                         :dark (.-dark pw) :tolls (.-tolls pw) :unknown (wworld/unknown-of pw)}
                     (clj->js box)))
 
 (defn with-drops

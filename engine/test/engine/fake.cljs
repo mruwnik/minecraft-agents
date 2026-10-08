@@ -989,8 +989,8 @@
                                   (when (contains? (:ages w) pos) {:age (get-in w [:ages pos])})
                                   (when (seq props) {:properties props})
                                   (when-not (re-find not-full-cube block) {:fullCube true}))))))
-              "pathWorld" (fn [] (let [{:keys [snapshot table space]} (steer/path-world @state)]
-                                   #js {:snapshot snapshot :table table :space space}))
+              "pathWorld" (fn [unknown] (let [{:keys [snapshot table space]} (steer/path-world @state)]
+                                          #js {:snapshot (if unknown (steer/masked snapshot unknown) snapshot) :table table :space space}))
               "onBodyEvent" (fn [listener] (swap! listeners conj listener) (fn [] (swap! listeners disj listener)))
               "close" (fn [])}]
        (aset p k f))

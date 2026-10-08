@@ -4,9 +4,17 @@
 // needed and the cost is one section copy per section the plan touches (the region map's snapshot is kept: its source
 // follows changes with setState and forgetColumn). A column or section the world lacks is
 // remembered as tried (no re-read) and reads UNLOADED.
+// With unknown {id, known, ...}: a copied section is masked once, every cell the body never saw or felt reading unknown.id
+// (known(cx, sy, cz), sy the WORLD section y, is the body's memory of that section, ids + 1 and 0 for never seen, or null:
+// all unseen); a known cell reads its live id. The snapshot carries unknown (the planner's options.unknown).
 import { createSnapshot, sectionIds, UNLOADED } from './snapshot.mjs'
 
-export function liveSnapshot (world, { minY, height }) {
+const mask = (ids, memory, id) => {
+  for (let i = 0; i < ids.length; i++) if (!memory || memory[i] === 0) ids[i] = id
+  return ids
+}
+
+export function liveSnapshot (world, { minY, height, unknown }) {
   const inner = createSnapshot({ minY, height })
   const columns = new Map() // "cx,cz" -> column or null
   const tried = new Set() // "cx,sy,cz"
@@ -24,7 +32,9 @@ export function liveSnapshot (world, { minY, height }) {
     if (tried.has(key)) return
     tried.add(key)
     const container = columnAt(cx, cz)?.sections[sy]?.data
-    if (container) inner.setSection(cx, sy, cz, sectionIds(container))
+    if (!container) return
+    const ids = sectionIds(container)
+    inner.setSection(cx, sy, cz, unknown ? mask(ids, unknown.known(cx, sy + (minY >> 4), cz), unknown.id) : ids)
   }
 
   const inRange = y => y >= minY && y < minY + height
@@ -33,6 +43,7 @@ export function liveSnapshot (world, { minY, height }) {
   return {
     minY,
     height,
+    unknown,
     stateAt: (x, y, z) => {
       if (!inRange(y)) return UNLOADED
       // fast path: a copied section answers directly; only an UNLOADED read pays the string key and tried lookup

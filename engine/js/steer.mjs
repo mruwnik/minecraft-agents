@@ -55,10 +55,11 @@ export function createSteer ({ act, getBot, badArgs }) {
     if (isNum(yaw)) bot.look(yaw, pitch, true)
   }
 
-  const pathWorld = () => {
+  // unknown (optional): the mask of the cells the body never saw (live-snapshot.mjs)
+  const pathWorld = unknown => {
     const bot = getBot()
     if (!bot.world) return null
-    return { snapshot: liveSnapshot(bot.world, { minY: bot.game.minY, height: bot.game.height }) }
+    return { snapshot: liveSnapshot(bot.world, { minY: bot.game.minY, height: bot.game.height, unknown }) }
   }
 
   const steer = (token, a = {}) => {

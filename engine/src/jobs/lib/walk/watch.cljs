@@ -237,13 +237,13 @@
         (refresh-due? status tick interval) {:status :replan :why :refresh :at at :step i2}))))
 
 (defn watch-of
-  "The look-ahead for walking plan: its own snapshot as the base, a fresh pathWorld per check, the cells the plan opens
+  "The look-ahead for walking plan: its own snapshot as the base, a fresh pathWorld per check (masked as the base is), the cells the plan opens
   skipped, and the refresh interval from the plan's ms. With known (an atom of danger keys, kept over a follow!'s plans:
   a mob is planned for once), the dangers sensed now join it and a newly sensed one near the way ahead stops the walk."
   ([c plan] (watch-of c plan nil))
   ([c plan known]
   (when known (swap! known into (map :key (threats/sensed-mobs (:primitives c)))))
-  (cond-> {:base (:pw plan) :fresh #(wworld/path-world (:primitives c)) :ahead [] :skip (opens-cells (:steps plan))
+  (cond-> {:base (:pw plan) :fresh #(wworld/path-world (:primitives c) (wworld/unknown-of (:pw plan))) :ahead [] :skip (opens-cells (:steps plan))
    :mobs #(combat/sensed (:primitives c) {:radius 8 :max 64}) :seen (atom {})
    :status (:status plan) :interval (refresh-ticks (:ms plan) (settings/physics-ms (:primitives c))) :budget #(wworld/damage-budget c)}
     known (assoc :known known :sense #(threats/sensed-mobs (:primitives c))))))

@@ -173,3 +173,8 @@
     (is (true? (plain? (see [5 63 0]))))
     (is (false? (plain? #js {:name "magma_block" :fullCube true})))
     (is (false? (plain? #js {:name "oak_slab" :fullCube false})))))
+
+(deftest see-depth-is-the-deepest-dark-drop-seen-from-the-peek
+  (is (= 1 (ws/see-depth 4)) "dark, near 4")
+  (is (= 4 (ws/see-depth 7)) "a torch in a hand, near 7")
+  (is (= 0 (ws/see-depth 1))))

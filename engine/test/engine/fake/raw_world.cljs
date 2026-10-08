@@ -89,7 +89,7 @@
     #js {:stateAt (fn [x y z] (state-at @state x y z))
          :lightAt (fn [x y z] (light-at @state x y z))
          :eye (fn [] (eye @state))
-         :offHand (fn [] (get-in @state [:self :offhand]))
+         :offHand (fn [] (or (get-in @state [:self :offhand]) (get-in @state [:equipment "offHand" :name])))
          :heldItem (fn [] (get-in @state [:self :held]))
          :sky (fn [] (let [w @state]
                        #js {:timeOfDay (:time w) :rain (if (:raining w) 1 0) :thunder (if (:thundering w) 1 0)}))
