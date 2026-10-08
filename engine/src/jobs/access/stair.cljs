@@ -15,6 +15,7 @@
             [jobs.lib.blocks :as blocks]
             [jobs.lib.dig-look :refer [unknown? look-at! settle! see-round!]]
             [jobs.lib.tools :as tools]
+            [jobs.lib.trip :as trip]
             [jobs.lib.util :as u]
             [engine.path.executor :as executor]
             [jobs.lib.walk :as walk]
@@ -564,8 +565,10 @@
             target (target-steps (:args c) feet)]
         (if (map? target)
           (finish! c :bad-args {:why (:error target)})
-          (do (ctx/update-mem! c assoc :origin feet :target target :dug [])
-              :again)))
+          (if (= :continue (await (trip/tool-ready! c "stone")))
+            :continue
+            (do (ctx/update-mem! c assoc :origin feet :target target :dug [])
+                :again))))
       :else
       (let [r (await (work! c))]
         (cond

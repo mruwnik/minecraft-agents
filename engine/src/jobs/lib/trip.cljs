@@ -4,12 +4,21 @@
             [engine.ctx :as ctx]
             [engine.memory :as mem]
             [engine.settings :as settings]
+            [clojure.string :as str]
+            [jobs.lib.blocks :as b]
             [jobs.lib.cost :as cost]
+            [jobs.lib.fetch :as fetch]
+            [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
   {::want-free {:default 12 :doc "Free slots a trip wants at its start: with fewer free and a known chest near, the body deposits first." :spec (a/int-in 0 36)}
    ::max-cost {:default 30 :doc "Walk cost (jobs.lib.cost/walk-cost, about 100 blocks) up to which a known chest is near enough to deposit at before a trip." :spec (a/num-in 0 nil)}})
+
+(a/defargs spare-settings
+  {::spare-fraction {:default 0.25 :doc "A pickaxe, axe or shovel at or under this fraction of its durability is worn: a job about to dig a lot with the last one gets a spare first." :spec (a/num-in 0 1)}})
+
+(defn spare-fraction [] (settings/get spare-settings ::spare-fraction))
 
 (defn want-free [] (settings/get settings ::want-free))
 (defn max-cost [] (settings/get settings ::max-cost))
@@ -52,3 +61,43 @@
           (if (= :continue r)
             :continue
             (do (done! c :deposited (assoc (select-keys p [:free :cost]) :result (ctx/child-result c child))) nil)))))))
+
+(defn spare-need
+  "The carried tool (map) that tool-ready! wants a spare for when digging block-name, or nil: the one digging it
+  (jobs.lib.tools/suited-item) is at or under ::spare-fraction of its durability and no other carried tool of that kind
+  that harvests it is above it. A tool with no known durability counts as whole."
+  [p block-name]
+  (let [harvest (some-> (.harvestTools p block-name) js->clj)
+        suffix (str "_" (tools/tool-kind block-name))
+        ok (set harvest)
+        worn? (fn [t] (and (:durability t) (:max t) (<= (:durability t) (* (spare-fraction) (:max t)))))
+        usable (filter #(and (str/ends-with? (:name %) suffix) (or (empty? ok) (ok (:name %)))) (u/inventory p))
+        best (tools/suited-item usable block-name harvest)]
+    (when (and best (every? worn? usable))
+      best)))
+
+(defn ^:async tool-ready!
+  "Before a job that digs a lot sets out: when the tool for block-name is the last of its kind that harvests it and is
+  worn (spare-need), run jobs.items.obtain for another of the same name (child :spare; chest, craft, gather). Resolves nil
+  to go on, :continue while the child waits on the world. Told once per tool name in the job's memory (:spare-tried):
+  info tool.spare when one came, warn tool.no-spare with the child's reason when not (the job goes on with the worn
+  tool). The job's :fetch off, or a set of kinds without :tool, skips it."
+  [c block-name]
+  (let [p (:primitives c)
+        need (when (and block-name (let [f (fetch/parse-arg (:fetch (:args c)))] (and (map? f) (not (:error f)) (or (nil? (:what f)) (contains? (:what f) :tool))))) (spare-need p block-name))
+        tool-name (:name need)]
+    (when (and need (not (contains? (:spare-tried (ctx/mem c)) tool-name)))
+      (let [r (await (ctx/call-child c :spare 'jobs.items.obtain {:item tool-name :count 1}))]
+        (if (= :continue r)
+          :continue
+          (let [res (if (= :declined r)
+                      (b/child-wait c :spare 'jobs.items.obtain {:item tool-name :count 1})
+                      (ctx/child-result c :spare))
+                got? (and (not= :declined r) (= :done (:status res)) (pos? (:got res 0)))]
+            (ctx/update-mem! c update :spare-tried (fnil conj #{}) tool-name)
+            (if got?
+              (ctx/emit! c :tool.spare :info {:tool tool-name :text (str "carrying a spare " tool-name)})
+              (ctx/emit! c :tool.no-spare :warn {:tool tool-name :durability (:durability need) :reason (:reason res) :status (:status res) :tried (:tried res)
+                                                 :text (str "the last " tool-name " is worn (" (:durability need) " left) and no spare could be had"
+                                                            (when-let [r (:reason res)] (str ": " (name r))))}))
+            nil))))))
