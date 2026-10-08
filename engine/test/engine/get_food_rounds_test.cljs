@@ -421,3 +421,23 @@
           (core/submit! eng '(jobs.survival.get-food {:explore false}) {})
           (await (core/tick! eng))
           (is (= [:no-food-found] (distinct (map :reason (events-of seen :waiting))))))))))
+
+(deftest rotten-flesh-above-the-eat-bad-line-is-nothing-to-try
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [args {:explore false}
+              {:keys [eng seen]} (setup {:self {:food 11 :health 6} :inventory [{:name "rotten_flesh" :count 3}]} :step-ms 5)]
+          (await (one-round! eng args))
+          (core/submit! eng (list 'jobs.survival.get-food args) {})
+          (await (core/tick! eng))
+          (is (= [:no-food-found] (distinct (map :reason (events-of seen :waiting))))))))))
+
+(deftest hungry-at-night-does-not-explore
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:self {:food 1} :time 15000} :step-ms 5)]
+          (await (one-round! eng {}))
+          (is (= [] (events-of seen :search.not-found)))
+          (is (re-find #"night" (str (:text (first (events-of seen :food.none)))))))))))

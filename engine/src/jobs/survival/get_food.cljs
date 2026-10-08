@@ -8,6 +8,7 @@
             [jobs.lib.crops :as crops]
             [jobs.lib.look :as look]
             [jobs.lib.result :as r]
+            [jobs.lib.shelter :as sh]
             [jobs.lib.util :as u]
             [jobs.lib.foods :as foods]
             [jobs.survival.eat :as eat]))
@@ -28,10 +29,10 @@
   4. The nearest passive food animal within :hunt-radius (combat.attack, then collect-drops).
   5. Mature crops or sweet berry bushes within :hunt-radius (blocks.dig).
   Nothing left: once per job (:explore, default on) it searches for food animals and crops (jobs.explore.search, the
-  ::explore setting) and goes on if it found some; at food 6 or below it then eats harmful food carried (rotten
+  ::explore setting; not while the night handler holds) and goes on if it found some; at ::eat-bad-food (6) or below it then eats harmful food carried (rotten
   flesh, with :allow-bad). Still nothing: it stops :no-food with a food.none warning (what was searched, the nearest known source) and writes
   :hungry. For :ask-cooldown-ms after that a round still eats and still does ways 1, 3, 4 and 5, but not a source it
-  already knew when it gave up (one learned since is tried first); with nothing to do the check waits :no-food-found, else the round declines.
+  already knew when it gave up (one learned since is tried first); with nothing to do (harmful food above ::eat-bad-food does not count) the check waits :no-food-found, else the round declines.
   Never :continue: a go-to that waits on the world, or a child still going after jobs.lib.child's call cap, is waited out in the round.
   More than 12 ways in one round without getting fed stops :still-hungry.
   Wheat is never harvested. Babies and animals in another's zone or claim are never hunted (:ignore-zones? lifts the zone). A chest in another's zone or claim is skipped and never taken from, even when starving
@@ -72,6 +73,7 @@
   {::drop-radius {:default 8 :doc "Blocks around the body in which dropped food is picked up." :spec (a/int-in 0 nil)}
    ::reach {:default 3 :doc "How near a food source the body stands to use it, in blocks." :spec (a/int-in 0 nil)}
    ::explore {:default {:max-distance 64 :max-legs 12 :timeout-s 120} :doc "jobs.explore.search options of the search for food (:explore true)." :spec map?}
+   ::eat-bad-food {:default foods/default-food :doc "At this much food or less the last resort eats harmful food carried (rotten flesh); above it harmful food is not food." :spec (a/num-in 0 20)}
    ::max-ways {:default 12 :doc "Ways one round tries without getting fed before it stops :still-hungry." :spec (a/int-in 0 nil)}})
 (defn drop-radius [] (settings/get settings ::drop-radius))
 
@@ -83,11 +85,19 @@
 
 (defn max-ways [] (settings/get settings ::max-ways))
 
+(defn eat-bad-food [] (settings/get settings ::eat-bad-food))
+
 (defn food-level [c] (.-food (.self (:primitives c))))
 
 (defn hungry-now? [c]
   (let [self (.self (:primitives c))]
     (foods/hungry? (.-food self) (.-health self) (:args c))))
+
+(defn tryable-food?
+  "Food worth a round: any edible item, and harmful food (rotten flesh) only at or below the eat-bad line."
+  [c item]
+  (and (foods/food? (:name item))
+       (or (not (contains? foods/harmful (:name item))) (<= (food-level c) (eat-bad-food)))))
 
 (declare gave-up-recently? fresh-source animals-in-sight ripe-blocks can-bake?)
 
@@ -96,7 +106,7 @@
   animal to hunt and no ripe crop in range: a round would only decline."
   [c]
   (and (gave-up-recently? c)
-       (not-any? #(foods/food? (:name %)) (u/inventory (:primitives c)))
+       (not-any? #(tryable-food? c %) (u/inventory (:primitives c)))
        (not (can-bake? c))
        (nil? (fresh-source c))
        (empty? (remove :why (animals-in-sight c)))
@@ -430,30 +440,40 @@
         (await (hunt! c))
         (await (dig-ripe! c (merge ripe-age berry-bush) (u/self-pos c) (:hunt-radius (:args c)))))))
 
+(defn night-holds?
+  "Whether the night handler would take the body now (jobs.lib.shelter/night-holds?): no exploring then."
+  [c]
+  (boolean (sh/night-holds? (:primitives c) (ctx/view c) {} (sh/bed-permit (:primitives c) (:world (:engine c))))))
+
 (defn ^:async explore!
-  "Once per job, with nothing known or seen: search for food animals and ripe crops (jobs.explore.search, :explore).
-  :again when the search found something to hunt or dig, else nil with what it covered remembered."
+  "Once per job, with nothing known or seen: search for food animals and ripe crops (jobs.explore.search, :explore),
+  not while the night handler holds. :again when the search found something to hunt or dig, else nil with what it
+  covered remembered."
   [c]
   (let [e (:explore (:args c))]
-    (when (and e (not (:explored (ctx/mem c))))
-      (ctx/update-mem! c assoc :explored "started")
-      (let [opts (merge (settings/get settings ::explore) (when (map? e) e))
-            st (await (child/run! c :explore 'jobs.explore.search
-                                  (assoc opts :target (vec (concat (sort food-animals) (keys ripe-age) (keys berry-bush))))
-                                  {:max-calls 1}))]
-        (if (= :continue st)
-          :continue
-          (let [res (ctx/child-result c :explore)]
-            (ctx/update-mem! c assoc :explored
-                             (str (count (:found res)) " found, " (get-in res [:coverage :legs] 0) " legs"
-                                  (when (:why res) (str ", " (name (:why res))))))
-            (when (= :found (:reason res)) :again)))))))
+    (cond
+      (or (not e) (:explored (ctx/mem c))) nil
+      (night-holds? c) (do (ctx/update-mem! c assoc :explored "not searched, the night handler holds") nil)
+      :else
+      (do
+        (ctx/update-mem! c assoc :explored "started")
+        (let [opts (merge (settings/get settings ::explore) (when (map? e) e))
+              st (await (child/run! c :explore 'jobs.explore.search
+                                    (assoc opts :target (vec (concat (sort food-animals) (keys ripe-age) (keys berry-bush))))
+                                    {:max-calls 1}))]
+          (if (= :continue st)
+            :continue
+            (let [res (ctx/child-result c :explore)]
+              (ctx/update-mem! c assoc :explored
+                               (str (count (:found res)) " found, " (get-in res [:coverage :legs] 0) " legs"
+                                    (when (:why res) (str ", " (name (:why res))))))
+              (when (= :found (:reason res)) :again))))))))
 
 (defn ^:async eat-bad!
-  "Last resort when food is at or below the default hunger line: eat what hurts (rotten flesh) with :allow-bad.
+  "Last resort when food is at or below the ::eat-bad-food line: eat what hurts (rotten flesh) with :allow-bad.
   :again when the food level rose, else nil."
   [c]
-  (when (and (<= (food-level c) foods/default-food)
+  (when (and (<= (food-level c) (eat-bad-food))
              (some #(contains? foods/harmful (:name %)) (u/inventory (:primitives c))))
     (let [before (food-level c)
           st (await (child/run! c :eat-bad 'jobs.survival.eat {:until foods/top-up-food :allow-bad true}))]
