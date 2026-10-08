@@ -36,12 +36,13 @@
   "The driver's slot job gets one call and leaves the slot: unlisted, one job.stopped with reason (a check's reason, or
   :yielded for a round that returned :continue or :declined) plus the wait map w it gave, if any."
   [eng id reason w]
-  (let [data (merge {:status :stopped :reason reason} (when w (dissoc w :reason)))]
+  (let [data (merge {:status :stopped :reason reason} (when w (dissoc w :reason)))
+        fields (job-fields eng id)]
     (resolve-job-attention! eng id :job-completed #(remove-listed % id))
     (swap! (:waiting eng) dissoc id)
     (swap! (:fruitless eng) dissoc id)
     (mem/delete-job! (:store eng) id)
-    (emit! eng (merge (job-fields eng id)
+    (emit! eng (merge fields
                       {:source :job :kind :stopped :level :warn :attention :notice
                        :data data :text (stopped-text data)}))))
 

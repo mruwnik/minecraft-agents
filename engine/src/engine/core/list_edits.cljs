@@ -1,6 +1,6 @@
 (ns engine.core.list-edits
   "Edits of the job list: submit! (at the end, next or now), cancel! and retry!."
-  (:require [engine.core.base :refer [add-instance driver? drop-reflex-job! emit! free-owner! job-of manual-job new-id! remove-listed running save-memory! state]]
+  (:require [engine.core.base :refer [add-instance driver? drop-reflex-job! emit! free-owner! job-fields job-of manual-job new-id! remove-listed running save-memory! state]]
             [engine.core.attention :refer [resolve-job-attention!]]
             [engine.expr :as expr]
             [engine.memory :as mem]))
@@ -36,6 +36,7 @@
   ends with reflex.ended :cancelled and its trigger may fire again. by names who asked."
   ([eng id] (cancel! eng id :agent))
   ([eng id by]
+   (let [fields (job-fields eng id)]
    (when (= id (:id (running eng)))
      (free-owner! eng)
      (reset! (:running eng) nil))
@@ -46,7 +47,8 @@
          (swap! (:rounds eng) dissoc id)
          (mem/delete-job! (:store eng) id)
          (save-memory! eng)))
-   (emit! eng {:source :job :kind :cancelled :level :info :job id :chain [id] :by by})))
+   (emit! eng (merge (into {} (filter val) (select-keys fields [:name :reflex]))
+                     {:source :job :kind :cancelled :level :info :job id :chain [id] :by by})))))
 
 (defn submit!
   "Put a job spec (an expression, see engine.expr) on the list. Returns the instance id; throws on a bad spec.

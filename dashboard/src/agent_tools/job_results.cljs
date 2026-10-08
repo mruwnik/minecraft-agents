@@ -2,6 +2,7 @@
   "Bounded job observations from the existing event API. This is tool-side
    history, not an engine wait or a promise of retained child result! values."
   (:require [cljs.reader :as reader]
+            [clojure.string :as str]
             [agent-tools.storage-compat :as compat]))
 
 (def history-limit 1000)
@@ -71,12 +72,10 @@
         (= :failed (:kind terminal)) (assoc :error (:value (bounded (get-in terminal [:data :error])))))))))
 
 (defn with-recorded
-  "events plus, for each id in ids the engine recorded as ended (snapshot :state :recent-results) with no terminal
+  "events plus, for each id in ids the engine recorded as ended (recorded, the /results answer) with no terminal
   event among them, a synthetic terminal event of the recorded status (seq 0): a job that ended before the window."
-  [events snap ids]
-  (let [recorded (get-in snap [:state :recent-results])
-        generation (:generation-id snap)
-        has-end? (into #{} (keep #(when (terminal-kinds (:kind %)) (get-in % [:context :job-id]))) events)]
+  [events generation recorded ids]
+  (let [has-end? (into #{} (keep #(when (terminal-kinds (:kind %)) (get-in % [:context :job-id]))) events)]
     (into (vec events)
           (keep (fn [id]
                   (when-let [{:keys [status result text]} (and (not (has-end? id)) (get recorded id))]
@@ -88,9 +87,10 @@
 (defn ^:async history!
   "Read at most 1000 retained events in bounded pages. get! is (get! socket-path path {:signal :timeout-ms
    :max-bytes}), a promise of {:status :content-type :text}. snap, when given, is the snapshot whose :cursor ends
-   the read (read from /snapshot when nil). A shared deadline limits the whole read; reducing a read-only page after
+   the read (read from /snapshot when nil). record-ids, when given, are looked up on /results and returned as
+   :recorded. A shared deadline limits the whole read; reducing a read-only page after
    its byte cap is safe."
-  [get! socket-path {:keys [signal deadline snap limit] :or {limit history-limit}}]
+  [get! socket-path {:keys [signal deadline snap limit record-ids] :or {limit history-limit}}]
   (let [deadline (or deadline (+ (js/Date.now) 3000))
         read (fn [endpoint]
                (when (>= (js/Date.now) deadline)
@@ -103,6 +103,8 @@
                           (throw (js/Error. "job result history unavailable")))
                         (reader/read-string (:text response)))))
         snap (or snap (await (read "/snapshot")))
+        recorded (when (seq record-ids)
+                   (:results (await (read (str "/results?ids=" (str/join "," record-ids))))))
         cursor (:cursor snap)
         target (:seq cursor)
         query (fn [after size] (str "/events?stream-id=" (js/encodeURIComponent (:stream-id cursor))
@@ -120,16 +122,16 @@
                     combined (into events (take (- limit (count events)) batch))
                     next-seq (or (:seq (last batch)) after)]
                 (if (or (:gap? page) (empty? batch) (>= next-seq target) (>= (count combined) limit))
-                  {:snapshot snap :events combined :gap? (boolean (:gap? page)) :partial? (or partial? (:gap? page))
+                  {:snapshot snap :recorded recorded :events combined :gap? (boolean (:gap? page)) :partial? (or partial? (:gap? page))
                    :truncated? (> target limit)}
                   (recur next-seq size combined partial?))))))))))
 
 (defn ^:async read!
   "The projected outcome of job id from the retained history (see history! for get!)."
   [get! socket-path id {:keys [signal deadline]}]
-  (let [history (await (history! get! socket-path {:signal signal :deadline deadline :limit result-limit}))]
+  (let [history (await (history! get! socket-path {:signal signal :deadline deadline :limit result-limit :record-ids [id]}))]
     (project id (get-in history [:snapshot :generation-id])
-             (with-recorded (:events history) (:snapshot history) [id])
+             (with-recorded (:events history) (get-in history [:snapshot :generation-id]) (:recorded history) [id])
              (or (:partial? history) (:truncated? history))
              (get-in history [:snapshot :state :next-id]))))
 

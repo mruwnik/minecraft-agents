@@ -363,7 +363,10 @@
                       value (cond
                               (= "/snapshot" endpoint) (cond-> {:body "Probe" :generation-id generation :outstanding outstanding :cursor cursor}
                                                          (or (contains? @world :instances) (contains? @world :recent-results))
-                                                         (assoc :state (select-keys @world [:instances :recent-results])))
+                                                         (assoc :state (select-keys @world [:instances])))
+                              (.startsWith endpoint "/results?ids=")
+                              {:results (select-keys (:recent-results @world)
+                                                     (str/split (second (str/split endpoint #"=")) #","))}
                               (= "/status" endpoint) {:mode :scheduled :current nil}
                               :else (let [after (js/Number (.get (.-searchParams (js/URL. (str "http://x" endpoint))) "after"))]
                                       {:gap? gap :stream-id "s" :latest-seq (count events) :cursor cursor
@@ -593,7 +596,7 @@
                      (is (= :job-finished (:wake wake)))
                      (is (= :complete (:history wake)))
                      (is (= search-found (get-in wake [:events 0 :data :found])))
-                     (is (= 4 (count @(:queries f))) "result, then the fresh watcher, each read snapshot and history once"))))))))
+                     (is (= 6 (count @(:queries f))) "result, then the fresh watcher, each read snapshot, recorded results and history once"))))))))
 
 (deftest a-watched-job-finishing-during-the-wait-carries-its-outcome
   (with-fixture ["1s"]

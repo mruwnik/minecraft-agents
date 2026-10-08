@@ -53,6 +53,7 @@
    :primitives primitives
    :jobs registry/jobs
    :triggers triggers/all
+   :results (atom {})
    :running (atom running)
    :manual (atom nil)
    :now (constantly 123)})
@@ -423,10 +424,14 @@
 (deftest a-finished-job-reads-its-recorded-result-from-job-detail
   (let [eng (status-engine #js {:isOffline (fn [] false) :isSettling (fn [] false)
                                 :self (fn [] #js {:username "Probe"})}
-                           {:recent-results {"j5" {:name "mine" :status :stopped :result {:reason :no-ore} :ended-at 7}}} nil)]
+                           {} nil)
+        _ (reset! (:results eng) {"j5" {:name "mine" :status :stopped :result {:reason :no-ore} :ended-at 7 :n 1}})]
     (is (= {:ok true :id "j5" :name "mine" :status :stopped :result {:reason :no-ore} :ended-at 7 :finished? true}
            (select-keys (event-api/job-detail eng "j5" 4) [:ok :id :name :status :result :ended-at :finished?])))
-    (is (nil? (event-api/job-detail eng "j6" 4)))))
+    (is (nil? (event-api/job-detail eng "j6" 4)))
+    (is (= {"j5" {:name "mine" :status :stopped :result {:reason :no-ore} :ended-at 7}}
+           (:results (event-api/results eng ["j5" "j6"])))
+        "the listing answers for the asked ids only, without the order counter")))
 
 (defn seen-engine [rows calls]
   {:primitives #js {:seenBlocks (fn [q] (swap! calls conj (js->clj q :keywordize-keys true))

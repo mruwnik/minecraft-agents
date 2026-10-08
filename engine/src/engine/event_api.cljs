@@ -1,9 +1,10 @@
 (ns engine.event-api
   "The engine's private HTTP API on a local Unix socket (mode 0600). The wire format is EDN.
-  GET   /snapshot, /status, /inventory, /seen, /events, /job, /jobs, /triggers, /catalog, /settings
+  GET   /snapshot, /status, /inventory, /seen, /events, /job, /jobs, /results, /triggers, /catalog, /settings
   POST  /jobs and /triggers (changes), /attention/resolve, /chat, /settings/reload, /settings/set, /settings/unset
   Bodies are limited (a setting, 16 KB). Lists are paged and bounded."
   (:require [engine.args :as a]
+            [clojure.string :as str]
             [cljs.reader :as reader]
             [engine.core :as core]
             [engine.chat :as chat]
@@ -300,12 +301,18 @@
      (let [view (mem/view (:store eng))]
        (into {} (keep (fn [[k f]] (when-let [v (f view)] [k v]))) extras))))))
 
+(defn results
+  "The recorded outcomes (see engine.core.base/results) of the job ids given, without the order counter."
+  [eng ids]
+  {:ok true :generation-id (:generation-id (core/state eng))
+   :results (into {} (keep (fn [id] (when-let [r (get (core/recent-results eng) id)] [id (dissoc r :n)]))) ids)})
+
 (defn job-detail
   "One listed job with its bounded spec and args, status, wait reason, failure and attention requests; a finished job
   its recorded outcome (:finished? true, :status, :result, :ended-at); nil when unknown."
   [eng id limit]
   (let [s (core/state eng)]
-    (if-let [done (and (not (get-in s [:instances id])) (get-in s [:recent-results id]))]
+    (if-let [done (and (not (get-in s [:instances id])) (get (core/recent-results eng) id))]
       {:ok true :generation-id (:generation-id s) :id id :name (short-text (:name done) 160) :finished? true
        :status (:status done) :result (some-> (:result done) (bounded-value 0 (volatile! 32)))
        :ended-at (:ended-at done)}
@@ -436,6 +443,12 @@
                             (if-let [detail (job-detail eng id limit)]
                               (respond! res 200 detail)
                               (bad! res 404 :job-not-found))
+                            (bad! res 400 :bad-query)))
+
+                        (and (= method "GET") (= pathname "/results"))
+                        (let [ids (str/split (or (.get (.-searchParams url) "ids") "") #",")]
+                          (if (and (<= 1 (count ids) 32) (every? #(re-matches #"j[0-9]+" %) ids))
+                            (respond! res 200 (results eng ids))
                             (bad! res 400 :bad-query)))
 
                         (and (= method "GET") (= pathname "/catalog"))

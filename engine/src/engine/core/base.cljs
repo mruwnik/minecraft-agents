@@ -5,6 +5,7 @@
             [engine.composite :as composite]
             [engine.events :as events]
             [engine.expr :as expr]
+            [engine.fsutil :as fsu]
             [engine.memory :as mem]
             [engine.settings :as settings]
             ["path" :as path]))
@@ -12,7 +13,10 @@
 (a/defargs settings
   {:engine.core.base/recent-results-limit
    {:default 100 :spec (a/int-in 1 nil)
-    :doc "How many ended jobs' outcomes the engine keeps (state :recent-results, served on /job and /snapshot)."}})
+    :doc "How many ended listed jobs' outcomes the engine keeps (results.edn, served on /job and /results)."}
+   :engine.core.base/reflex-results-limit
+   {:default 20 :spec (a/int-in 1 nil)
+    :doc "How many ended reflex jobs' outcomes the engine keeps, apart from the listed jobs'."}})
 
 (def default-idle-s
   "Seconds a round may hold the body with no act in flight and no declared hold before a job.idle warn."
@@ -28,7 +32,7 @@
 
 (def empty-state
   {:list [] :instances {} :register [] :changes {} :reflex-state {}
-   :deferred-ends [] :recent-results {} :cursor 0 :resume nil :current nil :failed {}
+   :deferred-ends [] :cursor 0 :resume nil :current nil :failed {}
    :attention {} :next-id 1})
 
 (defn cut-error []
@@ -77,31 +81,51 @@
 
 (def max-result-chars 2000)
 
+(defn results
+  "The recorded outcomes of ended jobs {id {:name :status :result :ended-at :reflex? :n}}; :n orders them."
+  [eng]
+  (some-> (:results eng) deref))
+
 (defn result-entry
-  "The recent-results entry of a job's terminal event: {:name :status :result :ended-at}, :result the event's data
-  (dropped with :result-clipped true when it prints past max-result-chars)."
-  [event ended-at]
+  "The recent-results entry of a job's terminal event: {:name :status :result :ended-at :reflex? :n}, :result the
+  event's data (dropped with :result-clipped true when it prints past max-result-chars). name and reflex come from
+  the event, else from the job's instance."
+  [eng event ended-at]
   (let [data (:data event)
-        clipped? (> (count (pr-str data)) max-result-chars)]
-    (cond-> {:name (:name event) :status (:kind event) :ended-at ended-at}
+        inst (get-in (state eng) [:instances (:job event)])
+        clipped? (> (count (pr-str data)) max-result-chars)
+        reflex (or (:reflex event) (:reflex inst))
+        name (or (:name event) (some-> (:spec inst) expr/label))]
+    (cond-> {:name name :status (:kind event) :ended-at ended-at}
+      reflex (assoc :reflex? true)
       (and (seq data) (not clipped?)) (assoc :result data)
       clipped? (assoc :result-clipped true)
       (string? (:text event)) (assoc :text (subs (:text event) 0 (min 200 (count (:text event))))))))
 
+(defn trim-results
+  "kept without the oldest (lowest :n) entries of each kind past its limit: listed jobs and reflexes count apart."
+  [kept limit reflex-limit]
+  (let [drop-over (fn [kept reflex? limit]
+                    (let [group (filter #(= reflex? (boolean (:reflex? (val %)))) kept)
+                          over (- (count group) limit)]
+                      (if (pos? over)
+                        (apply dissoc kept (map key (take over (sort-by (comp :n val) group))))
+                        kept)))]
+    (-> kept (drop-over false limit) (drop-over true reflex-limit))))
+
 (defn record-result!
-  "Keep a listed job's terminal event in :recent-results, the newest recent-results-limit of them."
+  "Keep a root job's terminal event in the results record (own file, not the state): the newest
+  recent-results-limit listed jobs and reflex-results-limit reflex jobs."
   [eng event]
   (let [id (:job event)
+        entry (result-entry eng event (now eng))
         limit (settings/get settings :engine.core.base/recent-results-limit)
-        entry (result-entry event (now eng))]
-    (swap! (:state eng)
-           (fn [s]
-             (let [kept (assoc (dissoc (:recent-results s) id) id entry)
-                   over (- (count kept) limit)]
-               (assoc s :recent-results
-                      (if (pos? over)
-                        (apply dissoc kept (map key (take over (sort-by (comp :ended-at val) kept))))
-                        kept)))))))
+        reflex-limit (settings/get settings :engine.core.base/reflex-results-limit)
+        next-n (inc (reduce max 0 (map :n (vals (results eng)))))]
+    (swap! (:results eng)
+           (fn [m] (trim-results (assoc (dissoc m id) id (assoc entry :n next-n)) limit reflex-limit)))
+    (try (fsu/write-edn! (path/join (:dir eng) "results.edn") @(:results eng))
+         (catch :default _ nil))))
 
 (defn emit! [eng event]
   (when (and (= :job (:source event)) (terminal-kinds (:kind event)) (string? (:job event))

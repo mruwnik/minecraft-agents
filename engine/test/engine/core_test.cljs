@@ -1901,7 +1901,7 @@
           (try
             (core/submit! eng '(walk {:pos {:x 3 :y 64 :z 0}}) {})
             (await (core/tick! eng))
-            (let [rec (:recent-results (core/state eng))]
+            (let [rec (core/recent-results eng)]
               (is (= :completed (get-in rec ["j1" :status])))
               (is (= "walk" (get-in rec ["j1" :name])))
               (is (number? (get-in rec ["j1" :ended-at]))))
@@ -1911,9 +1911,44 @@
             (core/cancel! eng "j2")
             (core/cancel! eng "j3")
             (core/cancel! eng "j4")
-            (let [rec (:recent-results (core/state eng))]
+            (let [rec (core/recent-results eng)]
               (is (= #{"j3" "j4"} (set (keys rec))) "bounded to the setting, oldest dropped")
-              (is (= :cancelled (get-in rec ["j4" :status]))))
-            (is (contains? (reader/read-string (.readFileSync fs (path/join dir "engine.edn") "utf8")) :recent-results)
-                "saved with the job state")
+              (is (= :cancelled (get-in rec ["j4" :status])))
+              (is (= "count" (get-in rec ["j4" :name])) "a cancelled job keeps its name"))
+            (is (contains? (reader/read-string (.readFileSync fs (path/join dir "results.edn") "utf8")) "j4")
+                "saved in its own file")
+            (is (not (contains? (core/state eng) :recent-results)) "not in the state (snapshot, engine.edn)")
+            (is (not (contains? (reader/read-string (.readFileSync fs (path/join dir "engine.edn") "utf8")) :recent-results)))
+            (finally (swap! settings/state update :values dissoc key))))))))
+
+(deftest reflex-ends-are-kept-apart-from-listed-jobs-and-carry-the-job-name
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:self {:health 5}})
+              key :engine.core.base/reflex-results-limit]
+          (swap! settings/state assoc-in [:values key] 2)
+          (try
+            (core/submit! eng '(count) {})
+            (core/cancel! eng "j1")
+            (core/register-reflex! eng {:trigger :hurt :job '(give-up)})
+            (dotimes [_ 5] (await (core/tick! eng)))
+            (let [rec (core/recent-results eng)
+                  reflexes (filter (comp :reflex? val) rec)]
+              (is (= "count" (get-in rec ["j1" :name])) "the listed job survives a reflex flood")
+              (is (= 2 (count reflexes)) "reflex ends are capped on their own")
+              (is (every? #(= "give-up" (:name (val %))) reflexes) "a stopped reflex has its name"))
+            (finally (swap! settings/state update :values dissoc key))))))))
+
+(deftest recent-results-keep-the-newest-for-ends-in-one-millisecond
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup)
+              key :engine.core.base/recent-results-limit]
+          (swap! settings/state assoc-in [:values key] 10)
+          (try
+            (dotimes [_ 12] (core/cancel! eng (core/submit! eng '(count) {})))
+            (is (= (set (map #(str "j" %) (range 3 13))) (set (keys (core/recent-results eng))))
+                "the newest ten, though every end shares one millisecond")
             (finally (swap! settings/state update :values dissoc key))))))))

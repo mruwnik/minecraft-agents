@@ -129,6 +129,16 @@
           (is (= ["j1"] (ran seen)))
           (is (true? (owns? s (token eng)))))))))
 
+(deftest a-slot-job-end-is-recorded-with-its-name
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup)]
+          (takeover/take! eng me)
+          (submit-as eng "claude" '(spin))
+          (await (core/tick! eng))
+          (is (= ["spin" :stopped] ((juxt :name :status) (get (core/recent-results eng) "j1")))))))))
+
 (deftest a-slot-job-whose-check-fails-ends-at-once-with-the-checks-reason
   (let [{:keys [eng seen]} (setup)]
     (takeover/take! eng me)
