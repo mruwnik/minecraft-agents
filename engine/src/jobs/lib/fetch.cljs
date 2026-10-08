@@ -202,9 +202,12 @@
     true))
 
 (defn need-name
-  "What a fetch's args name: the item, block, tool kind or any-of list."
+  "What a fetch's args name: the item, a tool for a block, a tool kind or the any-of list."
   [args]
-  (or (:item args) (:block args) (:kind args) (pr-str (:any-of args))))
+  (or (:item args)
+      (some->> (:block args) (str "a tool for "))
+      (some->> (:kind args) (str "a "))
+      (pr-str (:any-of args))))
 
 (defn book-failed!
   "Book the failed fetch (until now + :fail-minutes), warn fetch.failed, :again (the check now waits)."

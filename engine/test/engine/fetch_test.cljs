@@ -1080,3 +1080,8 @@
           (await (one-tick! s (list 'jobs.items.get-tool {:kind "pickaxe"})))
           (is (empty? (listed s)))
           (is (= 1 (get (inv s) "wooden_pickaxe"))))))))
+
+(deftest a-tool-fetch-is-named-as-a-tool
+  (is (= "a tool for stone" (fetch/need-name {:block "stone"})))
+  (is (= "a pickaxe" (fetch/need-name {:kind "pickaxe"})))
+  (is (= "torch" (fetch/need-name {:item "torch"}))))
