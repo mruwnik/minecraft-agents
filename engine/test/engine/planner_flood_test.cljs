@@ -546,6 +546,14 @@
   (is (= "goal-cut-off"
          (:reason (result-over pooled-high-deck [0 64 0] [20 71 20] {:maxNodes 1 :preFlood 0 :floodAfter 0 :goalFlood 100000})))))
 
+;; a sealed room whose floor has a 3-deep pit and a hole into a cave: the goal is walled in, not cut off by a drop
+(deftest a-sealed-room-with-an-inner-pit-is-enclosed-not-cut-off
+  (let [holed (update sealed-room :blocks #(-> (apply dissoc % (for [x [10 11] z [0 1]] (str x ",63," z)))
+                                              (merge (box 10 60 0 11 60 1 "stone"))))]
+    (are [options] (= "goal-enclosed" (:reason (plan-over holed [12 64 0] options)))
+      {:maxNodes 1}
+      {:maxNodes 1 :preFlood 0 :floodAfter 0 :goalFlood 100000})))
+
 ;; a pool beside a ladder tower: the path climbs to y 80 and falls into the pool, so the pool is a way in the flood must find
 (deftest a-pool-a-fall-from-a-tower-reaches-is-not-enclosed
   (let [spec {:blocks (merge (:blocks high-deck)

@@ -284,8 +284,25 @@
              ^boolean (.gapBelow s (aget queue head) (aget queue (+ head 1)) (aget queue (+ head 2)))) true
         :else (recur (+ head 4)))))
 
-  ;; a body-high free column beside the cell with no floor at its level or one below: an edge the body can walk or drop off,
-  ;; though the drop may land (a walled-in region has none: the cells beside are walls, or floors it walks both ways)
+  ;; true when every straight line out of the free column x z meets a wall at body height within 24 cells: a pit or hole
+  ;; inside a walled room, whose drop lands in the room, not an edge of a deck open to the air
+  (holeInside [s x z y h]
+    (loop [c 0]
+      (if (== c 4)
+        true
+        (let [dx (aget (.-adx s) c)
+              dz (aget (.-adz s) c)]
+          (if (loop [i 1]
+                (cond
+                  (> i 24) false
+                  (not ^boolean (.clear s (+ x (* i dx)) (+ z (* i dz)) (+ (* y 16) h) (+ (* y 16) h BODY))) true
+                  :else (recur (inc i))))
+            (recur (inc c))
+            false)))))
+
+  ;; a body-high free column beside the cell with no floor at its level or one below, and not a hole inside a walled room:
+  ;; an edge the body can walk or drop off, though the drop may land (a walled-in region has none: the cells beside are
+  ;; walls, or floors it walks both ways)
   (dropBeside [s x y z h]
     (loop [c 0]
       (if (== c 4)
@@ -293,7 +310,8 @@
         (let [x2 (+ x (aget (.-adx s) c))
               z2 (+ z (aget (.-adz s) c))]
           (if (and ^boolean (.clear s x2 z2 (+ (* y 16) h) (+ (* y 16) h BODY))
-                   (neg? (.nodeH s x2 y z2)) (neg? (.nodeH s x2 (dec y) z2)) (neg? (.nodeH s x2 (inc y) z2)))
+                   (neg? (.nodeH s x2 y z2)) (neg? (.nodeH s x2 (dec y) z2)) (neg? (.nodeH s x2 (inc y) z2))
+                   (not ^boolean (.holeInside s x2 z2 y h)))
             true
             (recur (inc c)))))))
 
