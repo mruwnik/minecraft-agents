@@ -58,6 +58,27 @@
           (is (= 0 (.-honey_level (.-properties (.blockAt p #js {:x 2 :y 64 :z 0})))))
           (is (= 1 (count (kinds seen :apiary.done)))))))))
 
+(defn delay-items!
+  "Make p's item entities invisible for the first n entities() calls after the first useOn: a drop whose spawn the body has not heard of yet."
+  [p n]
+  (let [orig (.bind (.-entities p) p)
+        seen-calls (atom 0)]
+    (aset p "entities" (fn [q]
+                         (if (and (seq (calls p "useOn")) (< (swap! seen-calls inc) n))
+                           #js []
+                           (orig q))))))
+
+(deftest the-comb-is-waited-for-when-its-spawn-is-not-heard-yet
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup (world {:inventory (inv "shears" 1)}))
+              _ (delay-items! p 3)
+              result (await (child-outcome eng job {} 60))]
+          (is (= 1 (:harvested result)))
+          (is (= 3 (:collected result)))
+          (is (= 3 (carried p "honeycomb"))))))))
+
 (deftest a-glass-bottle-takes-the-honey-into-a-honey-bottle
   (async done
     (tu/run-async done

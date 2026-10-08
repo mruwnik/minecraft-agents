@@ -60,17 +60,13 @@
   (let [{:keys [box radius]} (:args c)]
     {:box box :center center :radius radius}))
 
-(defn corners [{:keys [from to]}]
-  (for [x [(:x from) (:x to)] y [(:y from) (:y to)] z [(:z from) (:z to)]]
-    {:x x :y y :z z}))
-
 (defn reach
   "How far from the body the bee query must look to cover the area."
   [c center]
   (let [{:keys [box radius]} (:args c)
         here (u/self-pos c)]
     (if box
-      (apply max (map #(u/dist here %) (corners box)))
+      (apply max (map #(u/dist here %) (apiary/corners box)))
       (+ radius (u/dist here center)))))
 
 (defn bees-in-area [c center]
@@ -172,14 +168,9 @@
   (let [f (facts c)]
     (boolean (some #(:call (decide % (:args c) f)) steps))))
 
-(defn watched-cells
-  "The cells whose never having been seen calls for a look: the corners of the box, or the centre."
-  [c]
-  (if-let [box (:box (:args c))] (corners box) [(apiary/center-of c)]))
-
 (defn check [c]
   (or (boolean (or (:todo (ctx/mem c)) (would-run? c)))
-      (look/wait-unless-surveyed c {:reason :nothing-to-do} (watched-cells c))))
+      (look/wait-unless-surveyed c {:reason :nothing-to-do} (apiary/watched-cells c))))
 
 ;; ------------------------------------------------------------------ the run
 
@@ -239,7 +230,7 @@
   "One piece of the pass: :again after a step ended, :continue while its child waits on the world, :done. With
   nothing to do in sight before the pass, a look around first (:continue: the check decides again)."
   [c]
-  (if (and (not (:todo (ctx/mem c))) (not (look/surveyed? c)) (look/unseen? (:primitives c) (watched-cells c))
+  (if (and (not (:todo (ctx/mem c))) (not (look/surveyed? c)) (look/unseen? (:primitives c) (apiary/watched-cells c))
            (not (would-run? c)))
     (await (look/survey! c))
     (await (pass-step c))))

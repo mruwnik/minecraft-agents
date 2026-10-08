@@ -123,16 +123,22 @@
 
 ;; ------------------------------------------------------------------ rounds
 
+(def comb-waits "Rounds a shears harvest waits for its comb to show before it goes on without." 10)
+
 (defn ^:async collect!
-  "Pick up the honeycomb lying about, then go back to the hives. :continue while the pick-up waits; any other end
-  of it (done, declined) closes the phase."
+  "Pick up the honeycomb lying about, then go back to the hives. :continue while the pick-up waits, and for up to
+  comb-waits rounds while no comb shows yet (the spawn may not have reached the body); any other end of it
+  (done, declined) closes the phase."
   [c]
-  (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops {:radius 8 :filter ["honeycomb"]}))]
+  (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops {:radius 8 :filter ["honeycomb"]}))
+        got (if (= :done r) (:collected (ctx/child-result c :collect) 0) 0)
+        waits (:comb-waits (ctx/mem c) 0)]
     (when (= :done r)
-      (ctx/update-mem! c update :collected (fnil + 0) (:collected (ctx/child-result c :collect) 0)))
-    (if (= :continue r)
-      :continue
-      (do (ctx/update-mem! c dissoc :phase) :again))))
+      (ctx/update-mem! c update :collected (fnil + 0) got))
+    (cond
+      (= :continue r) :continue
+      (and (= :done r) (zero? got) (< waits comb-waits)) (do (ctx/update-mem! c assoc :comb-waits (inc waits)) :continue)
+      :else (do (ctx/update-mem! c #(-> % (dissoc :phase) (assoc :comb-waits 0))) :again))))
 
 (defn book-harvest!
   "Count the hive at pos as taken when it is no longer ripe; the comb is then collected after shears."

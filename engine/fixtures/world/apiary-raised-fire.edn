@@ -1,6 +1,6 @@
 ;; Card 2f9da188: a raised campfire that is carpeted over no longer blocks apiary harvest (maintain skipped every ripe hive as
 ;; :unsafe-fire when any smoking fire was raised; now only an open one, with nothing on it, does). The hive stands over the fire:
-;; campfire [14 0 22] (raised: the floor is y -1), carpet [14 1 22], hive [14 2 22]; the open case has no carpet and the hive at [14 1 22].
+;; campfire [14 0 22] (raised: the floor is y -1), carpet [14 1 22], hive [14 2 22]; the open case has no carpet: air at [14 1 22], the hive at [14 2 22] (a hive straight on the fire covers it).
 ;; Should-succeed: harvest and maintain take the hive over the carpeted raised fire. Should-fail: an open raised fire declines (:open-fire), untouched.
 {:defaults
  {:tags [:apiary :jobs] :time :day
@@ -22,9 +22,9 @@
             {:no-event {:kind :maintain.done :data {:steps {:harvest {:skipped :unsafe-fire}}}} :for-s 100 :until {:kind :maintain.done}}]
    :after [[:block [14 2 22] "beehive[honey_level=0]"] [:item "honeycomb" [:>= 3]]]}
   {:name "harvest-over-an-open-raised-fire-declines"
-   :blocks [[:set [14 0 22] "campfire[lit=true]"] [:set [14 1 22] "beehive[honey_level=5]"]]
+   :blocks [[:set [14 0 22] "campfire[lit=true]"] [:set [14 2 22] "beehive[honey_level=5]"]]
    :body {:inventory [["shears" 1]]}
    :act [[:job (jobs.apiary.harvest {:radius 20})]]
    :expect [{:event {:kind :apiary.done :data {:reason :open-fire}} :within-s 60 :of-job true}]
-   :after [[:block [14 1 22] "beehive[honey_level=5]"] [:item "honeycomb" 0]]
+   :after [[:block [14 2 22] "beehive[honey_level=5]"] [:item "honeycomb" 0]]
    :limit-s 80}]}

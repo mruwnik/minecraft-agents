@@ -269,7 +269,7 @@
         (do (abandon! c fire :on-fire) :again)))))
 
 (defn check
-  "True while a run is under way or some lit fire in the area lacks a carpet or sits too high."
+  "True while a run is under way or some lit fire in the area lacks a carpet or sits too high, and while a cell of the area was never seen and the body has not looked."
   [c]
   (or (boolean
        (or (:started (ctx/mem c))
@@ -278,7 +278,7 @@
                  {:keys [box radius]} (:args c)
                  center (or (:center (:args c)) (u/self-pos c))]
              (some #(seq (apiary/needs block-at (:pos %))) (permitted-fires c (apiary/fires p {:box box :center center :radius radius}))))))
-      (ctx/wait c {:reason :nothing-to-guard})))
+      (look/wait-unless-surveyed c {:reason :nothing-to-guard} (apiary/watched-cells c))))
 
 (defn ^:async step
   "One piece of the guarding: resume a sink; else survey the fires and finish when the budget is spent, three fires

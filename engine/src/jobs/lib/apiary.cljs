@@ -121,6 +121,15 @@
 (defn center-of [c]
   (or (:center (:args c)) (:center (ctx/mem c)) (u/self-pos c)))
 
+(defn corners [{:keys [from to]}]
+  (for [x [(:x from) (:x to)] y [(:y from) (:y to)] z [(:z from) (:z to)]]
+    {:x x :y y :z z}))
+
+(defn watched-cells
+  "The cells whose never having been seen calls for a look: the corners of the box, or the centre."
+  [c]
+  (if-let [box (:box (:args c))] (corners box) [(center-of c)]))
+
 (defn in-area?
   "True when pos is inside the area {:box {:from :to}} or {:center :radius}."
   [{:keys [box center radius]} pos]

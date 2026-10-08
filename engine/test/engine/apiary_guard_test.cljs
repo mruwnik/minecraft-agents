@@ -170,6 +170,17 @@
           (is (empty? (calls p "dig")))
           (is (= "campfire" (block-name p 2 64 0))))))))
 
+(deftest a-fire-in-the-bodys-own-cell-is-guarded-though-never-seen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (-> (fire-world {:inventory (inv "white_carpet" 1)}) (assoc :self {:pos {:x 2.5 :y 64 :z 0.5}}))
+              {:keys [eng p]} (setup w true)
+              _ (tu/seeing-after-look p)
+              result (await (child-outcome eng job {} 60))]
+          (is (= :guarded (:reason result)))
+          (is (= 1 (:carpeted result))))))))
+
 (deftest a-safe-fire-is-not-the-jobs-business
   (are [w] (false? (check-of (:p (setup w)) {}))
     (assoc (fire-world {}) :blocks (assoc (:blocks (fire-world {})) "2,65,0" "white_carpet"))
