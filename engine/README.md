@@ -463,7 +463,8 @@ The engine writes one EDN map per line to stdout and `worlds/<world>/agents/<nam
 round, reflex id, action-call id), `:data`, `:message`, `:attention` (omitted/`:none`, `:notice`, `:required`),
 `:request-id`. Required attention requests stay in saved state until explicitly resolved. The log keeps 64 MiB across
 `events.edn` and `.1` to `.3` (setting `:engine.events/max-bytes`, min 1024); a cursor is `{:stream-id :seq}` and a
-rotated-away cursor gets an explicit gap.
+rotated-away cursor gets an explicit gap. Start-up parses only each segment's first and last record and the
+recent tail, so its memory does not grow with the log.
 
 A job that ends with a result of `:status :stopped` gets a `:stopped` warn event; its text is the result's `:text` (clipped to 200 chars), else `stopped: <reason>`.
 

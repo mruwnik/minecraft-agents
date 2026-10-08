@@ -324,3 +324,55 @@
     (let [file (write-exact-lines! (range 1 4) nl-at false)]
       (is (= [1 2 3] (seqs-after file 0 10)) (str "line length " nl-at))
       (is (= [3] (seqs-after file 2 10)) (str "line length " nl-at)))))
+
+(defn bytes-read-by
+  "Run f counting the bytes it reads from the segments of file (readSync and
+  readFileSync); returns the count."
+  [file f]
+  (let [segments (set (events/segment-files file))
+        fds (atom #{})
+        total (atom 0)
+        {:keys [openSync readSync readFileSync]} {:openSync (.-openSync fs) :readSync (.-readSync fs)
+                                                  :readFileSync (.-readFileSync fs)}]
+    (set! (.-openSync fs) (fn [p & more]
+                            (let [fd (apply openSync p more)]
+                              (when (segments p) (swap! fds conj fd))
+                              fd)))
+    (set! (.-readSync fs) (fn [fd & more]
+                            (let [n (apply readSync fd more)]
+                              (when (@fds fd) (swap! total + n))
+                              n)))
+    (set! (.-readFileSync fs) (fn [p & more]
+                                (let [r (apply readFileSync p more)]
+                                  (when (segments p) (swap! total + (.-size (fs/statSync p))))
+                                  r)))
+    (try (f) @total
+         (finally (set! (.-openSync fs) openSync)
+                  (set! (.-readSync fs) readSync)
+                  (set! (.-readFileSync fs) readFileSync)))))
+
+(deftest make-reads-only-the-ends-of-large-segments
+  (let [line (fn [n] (str (pr-str {:seq n :pad (apply str (repeat 1000 "p"))}) "\n"))
+        dir (tu/tmp-dir)
+        file (path/join dir "events.edn")
+        rotated (events/segment-file file 1)]
+    (fs/mkdirSync dir #js {:recursive true})
+    (fs/writeFileSync rotated (apply str (map line (range 1 6001))))
+    (fs/writeFileSync file (apply str (map line (range 6001 12001))))
+    (let [stream (atom nil)
+          read (bytes-read-by file #(reset! stream (events/make {:file file :generation-id "g"})))]
+      (is (< read (+ (events/setting "recent-bytes") (* 4 events/read-chunk-bytes)))
+          (str "make read " read " bytes of two ~6 MB segments"))
+      (is (= 12000 (:seq (events/cursor @stream))))
+      (is (= 1 (:oldest-seq @@stream)))
+      (is (= [6001 12000] ((juxt :first-seq :last-seq) (last (:segments @@stream)))))
+      (is (= 12001 (events/emit! @stream {:source :system :kind :started}))))))
+
+(deftest an-active-segment-over-the-cap-is-cut-at-a-line-start
+  (let [file (write-lines! (range 1 41) 100)
+        stream (events/make {:file file :generation-id "g" :max-bytes 2048})
+        kept (read-lines file)]
+    (is (<= (total-bytes file) 2048))
+    (is (= (range (:seq (first kept)) 41) (mapv :seq kept)) "whole lines, the newest kept")
+    (is (= (:seq (first kept)) (:oldest-seq @stream)))
+    (is (= 40 (:seq (events/cursor stream))))))

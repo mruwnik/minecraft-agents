@@ -59,58 +59,127 @@
                       {:file file :line line-no})))
     record))
 
-(defn repair-active-tail! [file]
-  (when (fs/existsSync file)
-    (let [buf (fs/readFileSync file)
-          len (.-length buf)]
-      (when (and (pos? len) (not= 10 (.readUInt8 buf (dec len))))
-        (let [newline (.lastIndexOf buf 10)
-              keep (if (neg? newline) 0 (inc newline))]
-          (fs/truncateSync file keep))))))
+(def read-chunk-bytes (* 64 1024))
 
-(defn scan-segment [file]
+(defn read-bytes
+  "Up to len bytes of the file behind fd from position pos; empty at or past the end."
+  [fd pos len]
+  (let [buf (js/Buffer.alloc len)
+        n (fs/readSync fd buf 0 len pos)]
+    (.subarray buf 0 n)))
+
+(def line-probe-bytes 512)
+
+(defn line-end
+  "Byte offset of the newline ending the line that holds position pos, or size.
+  Reads small first, doubling up to a chunk, so a probe stays cheap."
+  [fd size pos]
+  (loop [at pos len line-probe-bytes]
+    (if (>= at size)
+      size
+      (let [buf (read-bytes fd at len)
+            i (.indexOf buf 10)]
+        (cond
+          (zero? (.-length buf)) size
+          (neg? i) (recur (+ at (.-length buf)) (min read-chunk-bytes (* 2 len)))
+          :else (+ at i))))))
+
+(defn record-at
+  "The first non-blank line starting at or after byte offset start:
+  {:start :end :record}, or nil at the end of the file."
+  [fd size file start]
+  (loop [at start]
+    (when (< at size)
+      (let [end (line-end fd size at)
+            line (.toString (read-bytes fd at (- end at)) "utf8")]
+        (if (str/blank? line)
+          (recur (inc end))
+          {:start at :end end :record (seq-of-record line file (str "(byte " at ")"))})))))
+
+(defn line-start
+  "Byte offset of the start of the line that ends just before byte offset end.
+  Reads backwards, small first, doubling up to a chunk."
+  [fd end]
+  (loop [at end len line-probe-bytes]
+    (let [from (max 0 (- at len))
+          i (.lastIndexOf (read-bytes fd from (- at from)) 10)]
+      (cond
+        (not (neg? i)) (+ from i 1)
+        (zero? from) 0
+        :else (recur from (min read-chunk-bytes (* 2 len)))))))
+
+(defn last-record
+  "The last non-blank line of the file behind fd: {:start :end :record}, or nil."
+  [fd size file]
+  (loop [end size]
+    (when (pos? end)
+      (let [content-end (if (= 10 (aget (read-bytes fd (dec end) 1) 0)) (dec end) end)
+            start (line-start fd content-end)
+            line (.toString (read-bytes fd start (- content-end start)) "utf8")]
+        (if (str/blank? line)
+          (recur start)
+          {:start start :end content-end :record (seq-of-record line file (str "(byte " start ")"))})))))
+
+(defn with-fd [file f]
+  (let [fd (fs/openSync file "r")]
+    (try (f fd (.-size (fs/fstatSync fd)))
+         (finally (fs/closeSync fd)))))
+
+(defn repair-active-tail!
+  "Cut an incomplete last line (no newline) off file. Reads only the tail."
+  [file]
+  (when (fs/existsSync file)
+    (let [keep (with-fd file (fn [fd size]
+                               (when (and (pos? size) (not= 10 (aget (read-bytes fd (dec size) 1) 0)))
+                                 (line-start fd size))))]
+      (when keep (fs/truncateSync file keep)))))
+
+(defn scan-segment
+  "{:file :bytes :first-seq :last-seq} of a segment. Parses only its first and last record."
+  [file]
   (if-not (fs/existsSync file)
     {:file file :bytes 0 :first-seq nil :last-seq nil}
-    (let [text (fs/readFileSync file "utf8")
-          lines (str/split-lines text)
-          seqs (loop [remaining lines line-no 1 prior 0 found []]
-                 (if-let [line (first remaining)]
-                   (if (str/blank? line)
-                     (recur (rest remaining) (inc line-no) prior found)
-                     (let [n (:seq (seq-of-record line file line-no))]
-                       (when (<= n prior)
-                         (throw (ex-info (str "event sequence is not increasing in " file
-                                              " at line " line-no)
-                                         {:file file :line line-no :seq n :prior prior})))
-                       (recur (rest remaining) (inc line-no) n (conj found n))))
-                   found))]
-      {:file file
-       :bytes (.-size (fs/statSync file))
-       :first-seq (first seqs)
-       :last-seq (last seqs)})))
+    (with-fd file
+      (fn [fd size]
+        (let [first-seq (some-> (record-at fd size file 0) :record :seq)
+              last-seq (some-> (last-record fd size file) :record :seq)]
+          (when (and first-seq (< last-seq first-seq))
+            (throw (ex-info (str "event sequence is not increasing in " file)
+                            {:file file :first-seq first-seq :last-seq last-seq})))
+          {:file file :bytes size :first-seq first-seq :last-seq last-seq})))))
 
 (defn scan-segments [file]
   (mapv scan-segment (reverse (segment-files file)))) ; oldest to active
 
-(defn trim-active! [file max-bytes]
-  (let [text (fs/readFileSync file "utf8")
-        lines (->> (str/split-lines text) (remove str/blank?) vec)
-        {:keys [kept dropped]} (loop [remaining (reverse lines) used 0 kept [] dropped [] stopped? false]
-                                 (if-let [line (first remaining)]
-                                   (let [line-size (inc (js/Buffer.byteLength line "utf8"))]
-                                     (if (and (not stopped?) (<= (+ used line-size) max-bytes))
-                                       (recur (rest remaining) (+ used line-size)
-                                              (conj kept line) dropped false)
-                                       (recur (rest remaining) used kept (conj dropped line) true)))
-                                   {:kept (reverse kept) :dropped (reverse dropped)}))]
-    (when (seq dropped)
-      (doseq [line dropped]
-        (let [event (seq-of-record line file 1)]
+(defn copy-tail!
+  "Replace file by its bytes from offset start on, copied a chunk at a time."
+  [file fd size start]
+  (let [tmp (str file ".tmp")
+        out (fs/openSync tmp "w")]
+    (try
+      (loop [at start]
+        (when (< at size)
+          (let [buf (read-bytes fd at read-chunk-bytes)]
+            (fs/writeSync out buf)
+            (recur (+ at (.-length buf))))))
+      (finally (fs/closeSync out)))
+    (fs/renameSync tmp file)))
+
+(defn trim-active!
+  "Keep the newest whole lines of file within max-bytes. A file under the cap is not read."
+  [file max-bytes]
+  (when (> (.-size (fs/statSync file)) max-bytes)
+    (with-fd file
+      (fn [fd size]
+        (let [cut (inc (line-end fd size (dec (- size max-bytes))))
+              first-dropped (some-> (record-at fd size file 0) :record :seq)
+              first-kept (some-> (record-at fd size file cut) :record :seq)]
           (.write js/process.stderr
-                  (str "event retention: dropped complete record seq " (:seq event)
-                       " while enforcing " max-bytes " byte cap\n"))))
-      (write-atomic! file (if (seq kept) (str (str/join "\n" kept) "\n") "")))
-    (scan-segment file)))
+                  (str "event retention: dropped complete records seq " first-dropped " to "
+                       (if first-kept (dec first-kept) "the end") " (" cut " bytes) while enforcing "
+                       max-bytes " byte cap\n"))
+          (copy-tail! file fd size cut)))))
+  (scan-segment file))
 
 (defn ensure-valid-max-bytes! [n]
   (when-not (and (integer? n) (<= min-max-bytes n))
@@ -126,16 +195,6 @@
                            (not (neg? (:last-seq m))))))
       (throw (ex-info (str "invalid event metadata " mf) {:file mf})))
     (or m {:stream-id (random-id) :last-seq 0})))
-
-(defn all-records [segments]
-  (into []
-        (mapcat (fn [{:keys [file bytes]}]
-                  (if (zero? bytes)
-                    []
-                    (->> (str/split-lines (fs/readFileSync file "utf8"))
-                         (remove str/blank?)
-                         (map-indexed (fn [i line] (seq-of-record line file (inc i))))))))
-        segments))
 
 (defn bounded-page-size [n]
   (if (and (integer? n) (pos? n)) (min n (setting "max-page-size")) (setting "default-page-size")))
@@ -289,15 +348,6 @@
                  (.write js/process.stderr (str "event sink failed: " (.-message e) "\n")))))
         n))))
 
-(def read-chunk-bytes (* 64 1024))
-
-(defn read-bytes
-  "Up to len bytes of the file behind fd from position pos; empty at or past the end."
-  [fd pos len]
-  (let [buf (js/Buffer.alloc len)
-        n (fs/readSync fd buf 0 len pos)]
-    (.subarray buf 0 n)))
-
 (defn tail-records
   "The last events of file, at most max-count and within max-bytes: {:records :bytes}.
   Reads only the file's tail."
@@ -361,34 +411,6 @@
 (defn cursor-map [stream]
   (let [{:keys [stream-id last-seq]} @stream]
     {:stream-id stream-id :seq last-seq}))
-
-(def line-probe-bytes 512)
-
-(defn line-end
-  "Byte offset of the newline ending the line that holds position pos, or size.
-  Reads small first, doubling up to a chunk, so a probe stays cheap."
-  [fd size pos]
-  (loop [at pos len line-probe-bytes]
-    (if (>= at size)
-      size
-      (let [buf (read-bytes fd at len)
-            i (.indexOf buf 10)]
-        (cond
-          (zero? (.-length buf)) size
-          (neg? i) (recur (+ at (.-length buf)) (min read-chunk-bytes (* 2 len)))
-          :else (+ at i))))))
-
-(defn record-at
-  "The first non-blank line starting at or after byte offset start:
-  {:start :end :record}, or nil at the end of the file."
-  [fd size file start]
-  (loop [at start]
-    (when (< at size)
-      (let [end (line-end fd size at)
-            line (.toString (read-bytes fd at (- end at)) "utf8")]
-        (if (str/blank? line)
-          (recur (inc end))
-          {:start at :end end :record (seq-of-record line file (str "(byte " at ")"))})))))
 
 (defn first-start-after
   "Byte offset of the first line whose :seq exceeds after, or size when there is
