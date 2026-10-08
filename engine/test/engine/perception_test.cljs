@@ -443,3 +443,18 @@
     (perception/pass! per)
     (perception/pass! per)
     (is (= 4 @calls))))
+
+(deftest seen-blocks-without-a-filter-leaves_out_air
+  (let [{:keys [per]} (rig {"0,65,3" "gold_block" "3,65,8" "stone"})]
+    (perception/pass! per)
+    (let [names (set (map :name (perception/seen-blocks per {:radius 16 :max 64})))]
+      (is (contains? names "gold_block"))
+      (is (not-any? #{"air" "cave_air" "void_air"} names)))))
+
+(deftest seen-blocks-keeps-only-the-nearest-max-in-order
+  (let [blocks (into {} (map (fn [i] [(str (- i 6) ",65,4") "gold_block"])) (range 12))
+        {:keys [per]} (rig blocks)]
+    (perception/pass! per)
+    (let [rows (perception/seen-blocks per {:names ["gold_block"] :radius 20 :max 3})]
+      (is (= [0 65 4] (:pos (first rows))))
+      (is (= #{[-1 65 4] [1 65 4]} (set (map :pos (rest rows))))))))

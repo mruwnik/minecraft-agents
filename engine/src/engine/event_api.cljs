@@ -156,19 +156,22 @@
 
 (defn seen-view
   "Read-only: the blocks the body's perception memory holds (never x-ray), nearest first, as
-  {:name :pos [x y z] :distance}. q: :names (a name or *suffix, at most 32), :radius (cut at 64), :max (cut at 64)."
+  {:name :pos [x y z] :distance :age-ms}. q: :names (a name or *suffix, at most 32), :radius (cut at 64), :max (cut at 64)."
   [eng {:keys [names radius max]}]
-  (let [radius (min (or radius 32) 64) max (min (or max 16) 64)
-        match (seen-matcher names)
-        rows (if-let [f (.-seenBlocks (:primitives eng))]
-               (js->clj (.call f (:primitives eng) (clj->js (cond-> {:radius radius :max (inc max)} match (assoc :match match))))
-                        :keywordize-keys true)
-               [])]
-    (cond-> {:ok true :radius radius
-             :blocks (mapv (fn [{:keys [name pos distance]}]
-                             {:name name :pos [(:x pos) (:y pos) (:z pos)] :distance (/ (js/Math.round (* 10 distance)) 10)})
-                           (take max rows))}
-      (> (count rows) max) (assoc :more? true))))
+  (if (core/offline? eng)
+    {:ok false :reason :offline :offline (core/away eng)}
+    (let [radius (min (or radius 32) 64) max (min (or max 16) 64)
+          match (seen-matcher names)
+          rows (if-let [f (.-seenBlocks (:primitives eng))]
+                 (js->clj (.call f (:primitives eng) (clj->js (cond-> {:radius radius :max (inc max)} match (assoc :match match))))
+                          :keywordize-keys true)
+                 [])]
+      (cond-> {:ok true :radius radius
+               :blocks (mapv (fn [{:keys [name pos distance age-ms]}]
+                               (cond-> {:name name :pos [(:x pos) (:y pos) (:z pos)] :distance (/ (js/Math.round (* 10 distance)) 10)}
+                                 age-ms (assoc :age-ms age-ms)))
+                             (take max rows))}
+        (> (count rows) max) (assoc :more? true)))))
 
 (defn seen-query
   "The validated /seen query as {:names :radius :max}, or nil when it is malformed."

@@ -133,6 +133,8 @@
         (properties-of info) (assoc :properties (properties-of info))))
     {:unknown true :pos pos}))
 
+(def air-names #{"air" "cave_air" "void_air"})
+
 (defn seen-blocks
   "Remembered blocks within radius (at most max-seen-radius) of the body's feet, nearest first:
   [{:name :pos :distance :age-ms}]. names (a coll) or match (name -> truthy) filters; max caps the list."
@@ -142,7 +144,7 @@
       []
       (let [radius (min radius max-seen-radius)
             fx (.-x eye) fy (- (.-y eye) game/eye-height) fz (.-z eye)
-            wanted? (cond names (set names) match match :else (constantly true))
+            wanted? (cond names (set names) match match :else (complement air-names))
             by-id (js/Map.)
             ok? (fn [id] (if (.has by-id id)
                            (.get by-id id)
@@ -151,7 +153,9 @@
                              (.set by-id id hit)
                              hit)))
             now ((:now opts))
-            found (array)]
+            found (array)
+            by-distance (fn [^js a ^js b] (- (.-distance a) (.-distance b)))
+            keep-nearest! (fn [] (.sort found by-distance) (set! (.-length found) max))]
         (.forEach (store-of st (.-dim st))
                   (fn [^js sec]
                     (let [bx (* 16 (.-cx sec)) by (* 16 (.-sy sec)) bz (* 16 (.-cz sec))
@@ -164,8 +168,9 @@
                                 (let [x (+ bx (bit-and i 15)) y (+ by (bit-shift-right i 8)) z (+ bz (bit-and (bit-shift-right i 4) 15))
                                       d (js/Math.hypot (- (+ x 0.5) fx) (- (+ y 0.5) fy) (- (+ z 0.5) fz))]
                                   (when (<= d radius)
-                                    (.push found #js {:name name :pos [x y z] :distance d :ageMs (- now (cell-seen sec i))})))))))))))
-        (.sort found (fn [^js a ^js b] (- (.-distance a) (.-distance b))))
+                                    (.push found #js {:name name :pos [x y z] :distance d :ageMs (- now (cell-seen sec i))})
+                                    (when (>= (.-length found) (* 4 (clojure.core/max max 64))) (keep-nearest!))))))))))))
+        (.sort found by-distance)
         (into [] (comp (take max) (map (fn [^js r] {:name (.-name r) :pos (.-pos r) :distance (.-distance r) :age-ms (.-ageMs r)}))) found)))))
 
 (defn beside-fluid?

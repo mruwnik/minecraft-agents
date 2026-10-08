@@ -208,7 +208,7 @@
                         (request socket-path "GET" "/seen?names=chest&radius=10&max=5" {} nil))))
              (.then (fn [response]
                       (is (= 200 (:status response)))
-                      (is (= [{:name "chest" :pos [1 2 3] :distance 1.5}] (:blocks (edn-response response))))
+                      (is (= [{:name "chest" :pos [1 2 3] :distance 1.5 :age-ms 0}] (:blocks (edn-response response))))
                       (request socket-path "GET" "/seen?radius=abc" {} nil)))
              (.then (fn [response]
                       (is (= 400 (:status response)))
@@ -442,7 +442,8 @@
     (is (= {} (:results (event-api/results eng ["j1"]))) "a stale record never answers for a live job id")))
 
 (defn seen-engine [rows calls]
-  {:primitives #js {:seenBlocks (fn [q] (swap! calls conj (js->clj q :keywordize-keys true))
+  {:primitives #js {:isOffline (fn [] false)
+                    :seenBlocks (fn [q] (swap! calls conj (js->clj q :keywordize-keys true))
                                   (clj->js rows))}})
 
 (deftest seen-view-lists-remembered-blocks-nearest-first-with-name-pos-and-distance
@@ -451,8 +452,8 @@
               {:name "iron_ore" :pos {:x 4 :y 60 :z 2} :distance 7.26 :age-ms 9}]
         view (event-api/seen-view (seen-engine rows calls) {:names ["chest" "*_ore"] :radius 20 :max 10})]
     (is (= {:ok true :radius 20
-            :blocks [{:name "chest" :pos [1 64 2] :distance 3.0}
-                     {:name "iron_ore" :pos [4 60 2] :distance 7.3}]}
+            :blocks [{:name "chest" :pos [1 64 2] :distance 3.0 :age-ms 5}
+                     {:name "iron_ore" :pos [4 60 2] :distance 7.3 :age-ms 9}]}
            view))
     (is (= 20 (:radius (first @calls))))
     (is (= 11 (:max (first @calls))))))
@@ -471,3 +472,26 @@
         view (event-api/seen-view (seen-engine rows (atom [])) {:names ["chest"] :radius 8 :max 3})]
     (is (= 3 (count (:blocks view))))
     (is (true? (:more? view)))))
+
+(deftest seen-view-of-an-offline-body-reports-offline-without-reading-memory
+  (let [calls (atom [])
+        eng (let [e (seen-engine [] calls)] (aset (:primitives e) "isOffline" (fn [] true)) e)]
+    (is (= {:ok false :reason :offline :offline {:by :connection :why :connection-lost}}
+           (event-api/seen-view eng {:names ["chest"] :radius 8 :max 3})))
+    (is (empty? @calls))))
+
+(deftest seen-view-rows-carry-how-long-ago-they-were-seen
+  (let [rows [{:name "chest" :pos {:x 1 :y 64 :z 2} :distance 3.0 :age-ms 1200}]]
+    (is (= [{:name "chest" :pos [1 64 2] :distance 3.0 :age-ms 1200}]
+           (:blocks (event-api/seen-view (seen-engine rows (atom [])) {:names ["chest"] :radius 8 :max 3}))))))
+
+(deftest seen-matcher-takes-exact-names-and-star-suffixes
+  (let [m (event-api/seen-matcher ["chest" "*_bed" "*ore"])]
+    (is (true? (m "chest")))
+    (is (true? (m "white_bed")))
+    (is (true? (m "iron_ore")))
+    (is (true? (m "deepslate_iron_ore")))
+    (is (false? (m "trapped_chest")))
+    (is (false? (m "bedrock")))
+    (is (false? (m "bed_rock")))
+    (is (nil? (event-api/seen-matcher nil)))))
