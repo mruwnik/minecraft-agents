@@ -149,8 +149,11 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (f/start (ore-world {"1,64,2" "furnace"} [{:name "oak_log" :count 1} {:name "spruce_planks" :count 4}]) [f/own-zone])]
-          (await (obtain! s {:item "charcoal" :how #{:craft :gather}} 100))
-          (is (= ["spruce_planks"] (keep :fuel (f/events-of s :smelt.loaded))) "the carried planks kind is the fuel, not coal or the first wood"))))))
+          (await (obtain! s {:item "charcoal" :how #{:craft :gather}} 6))
+          (is (= ["spruce_planks"] (keep :fuel (f/events-of s :smelt.loaded))) "the carried planks kind is the fuel, not coal or the first wood")
+          (.advance (.-world (:p s)) 2000)
+          (await (f/run-ticks s 200))
+          (is (= 1 (get (f/inv s) "charcoal")) "the cook finished and its output was collected"))))))
 
 (deftest a-long-gap-between-steps-is-not-stall-time
   (is (= {:inv {"a" 1} :t 85000 :at 100000}
