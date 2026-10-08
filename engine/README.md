@@ -420,7 +420,7 @@ An ad hoc `:when` can be a condition: an EDN list read by `engine.condition` aga
    runs until the next tick.
 
 **Sections and levels.** Each trigger has a level (`:level`, else `:danger`); its `:when` may return a level instead of
-true, read every tick (hungry is `:urgent` at food 2 or low health). While the running round is inside a `ctx/atomic`
+true, read every tick (hungry is `:urgent` at food 2 or low health); an entry's own `:level` is a floor the returned level never goes below. While the running round is inside a `ctx/atomic`
 section, an entry at or below the section's level (nested: the highest) waits, info `reflex.deferred`, until the section
 ends or it has waited `:engine.core.schedule/urgent-wait-s` (15) or `comfort-wait-s` (90); a cut past the cap warns
 `job.section_overran`. `:danger` never waits; `do-now!` cuts at once. The outermost section is not opened while an entry
