@@ -59,7 +59,7 @@
 
 ;; Player help: the wrapper supplies the body, world and directories, so they are cut from the usage lines.
 (def player-cuts
-  [[#"(\S+)\.mjs" "./bin/$1"]
+  [[#"(\w+)\.mjs" "./bin/$1"]
    [#"\[--worlds DIR --state LEGACY_PARENT " "["]
    [#" \[--worlds (?:DIR|<dir>) --state (?:LEGACY_PARENT|<legacy-parent>)\]" ""]
    [#" --worlds (?:DIR|<dir>) --state (?:LEGACY_PARENT|<legacy-parent>)" ""]

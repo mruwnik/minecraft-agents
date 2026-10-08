@@ -73,3 +73,24 @@
     "{:ok true :message \"fine\"}"
     "not edn at all {"
     "{:ok false :reason :x :message \"nothing to cut\"}"))
+
+(deftest runBound-help-output-contains-no-raw-tool-invocation
+  "The help output shown by runBound should not contain .mjs <body> or .mjs <agent> after using usage-for and player-usage"
+  (let [;; Simulating what runBound does: build the usage string with the ./bin/ prefix,
+        ;; then apply player-usage to cut other tool references
+        jobs-with-prefix "usage: ./bin/jobs <body> --world <world> list [--limit 8 --offset 0] | show <jID> | submit '(jobs.movement.go-to {...})'. Find a job's args with observe.mjs <body> catalog job <name>. While manual control holds the body (drive.mjs take) only the driver's one job runs (world.mjs submit): others stay :queued."
+        observe-with-prefix "usage: ./bin/observe <agent> --world <world> [status [--raw|--verbose] [--wait --timeout 60s --chatter addressed --observer agent --watch j12] | inventory [--raw] [--slots]]"
+        jobs-cut (workspace/player-usage jobs-with-prefix)
+        observe-cut (workspace/player-usage observe-with-prefix)]
+    (is (not (re-find #"\.mjs.*<body>" jobs-cut))
+        (str "jobs help should not contain '.mjs <body>': " jobs-cut))
+    (is (not (re-find #"\.mjs.*<agent>" observe-cut))
+        (str "observe help should not contain '.mjs <agent>': " observe-cut))
+    (is (re-find #"usage: \./bin/jobs" jobs-cut)
+        (str "jobs help should contain 'usage: ./bin/jobs': " jobs-cut))
+    (is (re-find #"usage: \./bin/observe" observe-cut)
+        (str "observe help should contain 'usage: ./bin/observe': " observe-cut))
+    (is (re-find #"\./bin/observe" jobs-cut)
+        (str "jobs help should contain './bin/observe' after cutting other tool refs: " jobs-cut))
+    (is (re-find #"\./bin/drive" jobs-cut)
+        (str "jobs help should contain './bin/drive' after cutting other tool refs: " jobs-cut))))

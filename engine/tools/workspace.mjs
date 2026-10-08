@@ -13,8 +13,19 @@ export async function runBound (context, command, argv) {
     const module = await import(new URL(`./${command}.mjs`, import.meta.url))
     if (argv.length === 1 && ['--help', '-h'].includes(argv[0])) {
       // each launcher checks only its own exports: usage comes from the tool's module, plans from the plan library
-      const usage = command === 'plans' || command === 'blueprints' ? (await import('./plan-tools-lib.mjs')).usage[command] : module.usage
-      process.stdout.write(`Workspace ${command}:\n${tools.workspacePlayerUsage(usage)}\n`)
+      let usage
+      if (command === 'plans' || command === 'blueprints') {
+        usage = (await import('./plan-tools-lib.mjs')).usage[command]
+      } else if (typeof module['usage-for'] === 'function') {
+        // use the prefix-aware usage function if available, still cut other tool references and body/world plumbing
+        usage = module['usage-for'](`./bin/${command}`)
+        usage = tools.workspacePlayerUsage(usage)
+      } else {
+        usage = module.usage
+        // cut the body/world plumbing from legacy usage strings that don't use the function
+        usage = tools.workspacePlayerUsage(usage)
+      }
+      process.stdout.write(`Workspace ${command}:\n${usage}\n`)
       return 0
     }
     // a tool's own error carries its raw usage line (EDN on stdout, text on stderr): cut the body/world plumbing from both
