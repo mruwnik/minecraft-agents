@@ -21,6 +21,12 @@
    :act [[:job (jobs.movement.go-to {:pos #at [26 0 22] :range 1})]]
    :expect [{:event {:source :job :kind :result :data {:arrived true}} :within-s 80 :of-job true}]
    :after [[:body-near [26.5 0 22.5] 2]]}
+  {:name "burning-in-rain-is-still-handled"
+   :weather :rain
+   :act [[:job (jobs.movement.go-to {:pos #at [26 0 16] :range 1})]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :burning}} :within-s 20}
+            {:event {:source :job :kind :result :data {:arrived true}} :within-s 80 :of-job true}]
+   :after [[:body-near [26.5 0 16.5] 2]]}
   {:name "covers-adjacent-lava-1"
    :blocks [[:set [11 -2 16] "stone"] [:set [11 -1 16] "lava"]]
    :body {:inventory [["cobblestone" 8]]}

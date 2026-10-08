@@ -139,7 +139,9 @@ export const durationsById = (texts) => {
   return m
 }
 const chunks = (xs, n) => Array.from({ length: Math.ceil(xs.length / n) }, (_, i) => xs.slice(i * n, i * n + n))
-// the batches in running order: natural cases longest first, `bodies` at most at once (one that outlasts the budget alone, first); the skip cases; every solo case alone
+// the ids of the barrier cases (class `barrier:TICKS`), grouped by the time they set
+const barrierGroups = (cases) => [...Map.groupBy(cases.filter((c) => c.cls.startsWith('barrier:')), (c) => c.cls).values()].map((g) => g.map((c) => c.id))
+// the batches in running order: natural cases longest first, `bodies` at most at once (one that outlasts the budget alone, first); the skip cases; the cases that end the night with the same time-set (barrier: they meet at the step); every other solo case alone
 export const nightBatches = (cases, durations, { bodies, budgetS = NIGHT_BUDGET_S, defaultS = NIGHT_DEFAULT_S }) => {
   const secs = (id) => durations.get(id) ?? defaultS
   const idsOf = (cls) => cases.filter((c) => c.cls === cls).map((c) => c.id)
@@ -148,6 +150,7 @@ export const nightBatches = (cases, durations, { bodies, budgetS = NIGHT_BUDGET_
     ...natural.filter((id) => secs(id) > budgetS).map((id) => ({ kind: 'long', ids: [id] })),
     ...chunks(natural.filter((id) => secs(id) <= budgetS), bodies).map((ids) => ({ kind: 'natural', ids })),
     ...chunks(idsOf('skip'), bodies).map((ids) => ({ kind: 'skip', ids })),
+    ...barrierGroups(cases).flatMap((ids) => chunks(ids, bodies).map((c) => ({ kind: 'barrier', ids: c, barrier: c.length }))),
     ...idsOf('solo').map((id) => ({ kind: 'solo', ids: [id] })),
   ]
 }
@@ -391,19 +394,19 @@ export const runNightBatches = async ({ batches, workers, runUnit, retries = 1, 
     emit(resultEvent(form))
     emit({ event: 'progress', done: ++finals, total: total ?? finals, unit: 'cases', retries: reruns })
   }
-  const runBatch = async (ids) => {
+  const runBatch = async (ids, barrier) => {
     const batch = `${process.pid}-${seq++}`
     const out = await Promise.all(ids.map(async (id, k) => {
-      const res = await runUnit({ id, batch, worker: workers[k % workers.length] })
+      const res = await runUnit({ id, batch, barrier, worker: workers[k % workers.length] })
       const mine = (res.text ? splitForms(res.text) : []).find((f) => summarize(f).id === id)
       return [id, mine ?? errorForm(id.split('/')[0], `the run exited ${res.code} with no result for this case`, id)]
     }))
-    onBatchEnd(batch)
+    await onBatchEnd(batch)
     return out
   }
   const failing = []
   for (const batch of batches) {
-    for (const [id, form] of await runBatch(batch.ids)) {
+    for (const [id, form] of await runBatch(batch.ids, batch.barrier)) {
       if (!failed(summarize(form)) || retries <= 0) settle(id, form)
       else if (known.get(id) === failSig(form)) settle(id, withExtra(form, ':known-failure true'))
       else failing.push([id, form])
@@ -435,8 +438,8 @@ const bodyCap = () => Math.max(1, (slotConfig().kinds.body.max ?? 1) - 1)
 const availableMb = () => Number(fs.readFileSync('/proc/meminfo', 'utf8').match(/MemAvailable:\s+(\d+)/)[1]) / 1024
 
 // One child per unit: the ordinary one-body entry point (it takes the body slot and the body claim itself). Exit 75 = busy: ask again.
-const spawnChild = (script, pass, matchIds, { file, match, worker, batch }, tmpResults, reaper) => new Promise((resolve) => {
-  const argv = [script, file, ...pass, ...(batch ? ['--night-batch', batch] : []), '--body', worker.body, '--first-plot', String(worker.firstPlot), '--results', tmpResults, ...(match ? ['--match-id', match, '--repeat', '1'] : withMatchIds(matchIds))]
+const spawnChild = (script, pass, matchIds, { file, match, worker, batch, barrier }, tmpResults, reaper) => new Promise((resolve) => {
+  const argv = [script, file, ...pass, ...(batch ? ['--night-batch', batch] : []), ...(batch && barrier ? ['--night-barrier', String(barrier)] : []), '--body', worker.body, '--first-plot', String(worker.firstPlot), '--results', tmpResults, ...(match ? ['--match-id', match, '--repeat', '1'] : withMatchIds(matchIds))]
   // the pool reports the @@test events itself (fixed total, final status per case), so a child prints none
   const { TEST_EVENTS: _events, ...env } = process.env
   const child = spawn(process.execPath, argv, { stdio: 'inherit', env })
@@ -477,6 +480,20 @@ export const serverProbe = (ports) => () => Promise.all(ports.map((port) => new 
   sock.on('error', () => resolve(false))
 }))).then((answers) => answers.every(Boolean))
 
+// the argv that ends a night batch: the runner restores the world settings the batch changed (logged like the sets) and removes its marker
+export const nightBatchEndArgs = (pass, body, batch) => {
+  const keep = []
+  for (let i = 0; i < pass.length; i++) {
+    if (pass[i] === '--allow-time') keep.push(pass[i])
+    else if (['--time-log', '--card', '--world'].includes(pass[i])) keep.push(pass[i], pass[++i])
+  }
+  return ['--night-batch-end', batch, '--body', body, ...keep]
+}
+const endNightBatch = (script, pass, body, batch) => new Promise((resolve) => {
+  const child = spawn(process.execPath, [script, ...nightBatchEndArgs(pass, body, batch)], { stdio: 'inherit' })
+  child.on('close', resolve)
+})
+
 const nightMain = async (p, byStem, previous, script) => {
   const pass = p.passthrough
   const phaseAt = pass.indexOf('--phase')
@@ -493,13 +510,12 @@ const nightMain = async (p, byStem, previous, script) => {
   const reaper = createReaper((f) => fs.rmSync(f, { force: true }))
   process.on('exit', reaper.reap)
   for (const [sig, code] of [['SIGINT', 130], ['SIGTERM', 143]]) process.on(sig, () => { reaper.reap(); process.exit(code) })
-  const markerDir = path.join(os.tmpdir(), 'mc-night-batches')
   const runUnit = async (unit) => {
     const tmp = `${p.results ?? path.join(process.env.TMPDIR ?? '/tmp', 'world-test-pool')}.${process.pid}.${unit.worker.body}.edn`
     let code
     for (let tries = 0; tries < 20; tries++) {
       fs.rmSync(tmp, { force: true })
-      code = await spawnChild(script, pass, [], { file: byStem.get(unit.id.split('/')[0]), match: unit.id, worker: unit.worker, batch: unit.batch }, tmp, reaper)
+      code = await spawnChild(script, pass, [], { file: byStem.get(unit.id.split('/')[0]), match: unit.id, worker: unit.worker, batch: unit.batch, barrier: unit.barrier }, tmp, reaper)
       if (code !== 75) break
       await sleep(5000)
     }
@@ -508,7 +524,7 @@ const nightMain = async (p, byStem, previous, script) => {
     return { code, text }
   }
   emitLine({ event: 'plan', total: cases.length })
-  const res = await runNightBatches({ batches, workers, runUnit, retries: p.retries, total: cases.length, known: knownFailures(previous), emit: emitLine, onBatchEnd: (batch) => fs.rmSync(path.join(markerDir, batch), { force: true }) })
+  const res = await runNightBatches({ batches, workers, runUnit, retries: p.retries, total: cases.length, known: knownFailures(previous), emit: emitLine, onBatchEnd: (batch) => endNightBatch(script, pass, workers[0].body, batch) })
   if (p.results) fs.writeFileSync(p.results, res.text)
   const sums = splitForms(res.text).map(summarize)
   const count = (st) => sums.filter((x) => x.status === st).length

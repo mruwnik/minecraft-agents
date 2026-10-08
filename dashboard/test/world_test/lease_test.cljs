@@ -342,7 +342,7 @@
     (is (= {:held true :first? false} (l/try-share dir 11 :night-x 2 :day "b1")))))
 
 (deftest night-classes-of-the-exclusive-cases
-  (is (= [:solo :solo :skip :natural]
+  (is (= [:barrier :solo :skip :natural]
          [(l/night-class {:time :night-exclusive :act [[:job 'x] [:time-set 1000]]})
           (l/night-class {:time :night-exclusive :act [[:time-set 1000] [:time-set 14000]]})
           (l/night-class {:time :night-exclusive :sleep-skip true :act [[:job 'x]]})
@@ -362,3 +362,11 @@
   (let [files (atom {10 (hold :weather-x)})]
     (is (= {:waiting-on [10]} (l/try-share (fake-share files #{10 11}) 11 :day 5)))
     (is (= {:waiting-on [10]} (l/try-share (fake-share files #{10 11}) 11 :weather-x 5)))))
+
+(deftest a-case-with-one-day-time-set-joins-the-barrier-of-that-time
+  (is (= [1000 nil nil nil nil]
+         [(l/barrier-ticks {:time :night-exclusive :act [[:job 'x] [:time-set 1000]]})
+          (l/barrier-ticks {:time :night-exclusive :act [[:time-set 1000] [:time-set 1000]]})
+          (l/barrier-ticks {:time :night-exclusive :act [[:time-set 14000]]})
+          (l/barrier-ticks {:time :night-exclusive :act [[:job 'x]]})
+          (l/barrier-ticks {:time :night-exclusive :weather :rain :act [[:time-set 1000]]})])))

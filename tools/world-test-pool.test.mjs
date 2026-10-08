@@ -2,7 +2,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import net from 'node:net'
-import { splitForms, scanForms, failSig, summarize, unitOrder, parsePoolArgs, workerSpecs, runPool, mergeText, poolCap, createReaper, countListed, listArgs, knownFailures, parseListed, unitsWithCases, noCasesSelected, serverProbe, matchIdsFrom, parseNightClasses, nightBatches, durationsById, runNightBatches } from './world-test-pool.mjs'
+import { splitForms, scanForms, failSig, summarize, unitOrder, parsePoolArgs, workerSpecs, runPool, mergeText, poolCap, createReaper, countListed, listArgs, knownFailures, parseListed, unitsWithCases, noCasesSelected, serverProbe, matchIdsFrom, parseNightClasses, nightBatchEndArgs, nightBatches, durationsById, runNightBatches } from './world-test-pool.mjs'
 
 const form = (id, status, secs = 1, extra = '') =>
   `{:plot 0, :file "${id.split('/')[0]}", :expects [{:status :pass, :evidence "a } \\" {"}], :status :${status}, :id "${id}", :elapsed-s ${secs}${extra}}`
@@ -573,4 +573,23 @@ test('runNightBatches: events carry the fixed total and one result per case', as
   await runNightBatches({ batches: [{ kind: 'natural', ids: ['a/1', 'a/2'] }], workers: workerSpecs(2, 19, 'P', 0), runUnit: batchRunner([], (id) => ({ code: 0, text: vec(form(id, 'pass')) })), total: 2, emit: (e) => ev.push(e) })
   assert.deepEqual(ev.filter((e) => e.event === 'result').map((e) => e.name), ['a/1#1', 'a/2#1'])
   assert.deepEqual(ev.filter((e) => e.event === 'progress').map((e) => [e.done, e.total]), [[1, 2], [2, 2]])
+})
+
+test('nightBatches: cases that set the same time group into barrier batches (before the solo ones); a batch carries its barrier size', () => {
+  const cs = classes(['a/1', 'barrier:1000'], ['a/2', 'barrier:1000'], ['a/3', 'barrier:1000'], ['b/1', 'barrier:2000'], ['c/1', 'solo'])
+  const b = nightBatches(cs, new Map(), { bodies: 2, budgetS: 300, defaultS: 60 })
+  assert.deepEqual(b, [{ kind: 'barrier', ids: ['a/1', 'a/2'], barrier: 2 }, { kind: 'barrier', ids: ['a/3'], barrier: 1 }, { kind: 'barrier', ids: ['b/1'], barrier: 1 }, { kind: 'solo', ids: ['c/1'] }])
+})
+test('runNightBatches: a barrier batch hands its size to each case; a rerun has none; onBatchEnd gets every batch id', async () => {
+  const log = []
+  const ended = []
+  const run = async (unit) => { log.push(unit); return { code: 0, text: vec(form(unit.id, unit.id === 'a/2' && log.length < 3 ? 'fail' : 'pass')) } }
+  await runNightBatches({ batches: [{ kind: 'barrier', ids: ['a/1', 'a/2'], barrier: 2 }], workers: workerSpecs(2, 19, 'P', 0), runUnit: run, retries: 1, onBatchEnd: async (b) => { ended.push(b) } })
+  assert.deepEqual(log.map((u) => u.barrier), [2, 2, undefined])
+  assert.equal(ended.length, 2)
+})
+
+test('nightBatchEndArgs: the batch end gets the time-change flags of the run, nothing else', () => {
+  assert.deepEqual(nightBatchEndArgs(['--phase', 'night-exclusive', '--allow-time', '--time-log', 'f.log', '--tag', 'x', '--card', 'c1'], 'B', 'n1'),
+    ['--night-batch-end', 'n1', '--body', 'B', '--allow-time', '--time-log', 'f.log', '--card', 'c1'])
 })

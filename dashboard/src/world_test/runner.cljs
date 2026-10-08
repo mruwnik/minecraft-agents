@@ -23,7 +23,7 @@
 
 (def usage
   (str "usage: node tools/world-test.mjs [fixture.edn|dir ...] [--tag T] [--match TEXT] [--match-id ID ...] [--repeat N] [--body NAME]\n"
-       "         [--world claude] [--first-plot I] [--card ID] [--allow-time --time-log FILE] [--results FILE] [--phase day|night|night-exclusive] [--night-batch ID] [--night-classes] [--retry-failed N] [--changed-since-pass] [--stop-on-fail] [--list] [--check]\n"
+       "         [--world claude] [--first-plot I] [--card ID] [--allow-time --time-log FILE] [--results FILE] [--phase day|night|night-exclusive] [--night-batch ID] [--night-barrier N] [--night-batch-end ID] [--night-classes] [--retry-failed N] [--changed-since-pass] [--stop-on-fail] [--list] [--check]\n"
        "--phase runs only the cases of that time class (case level; :any and untimed cases, and :day, count as day; a case whose first :time-set step is\n"
        "night counts as night): run day, then night, then night-exclusive so the time lock never flips mid-pass.\n"
        "--changed-since-pass skips a fixture file that passed fully at a recorded revision (every run passes record it, in .claude/world-test-passes.edn) when no file of the jobs and triggers it uses (and what their source names) changed since, tracked or untracked; any engine, js, trigger-default or runner change, or a change to the fixture file, runs it.\n"
@@ -47,6 +47,8 @@
       (= a "--tag") (recur more (assoc opts :tag b))
       (= a "--match") (recur more (assoc opts :match b))
       (= a "--night-batch") (recur more (assoc opts :night-batch b))
+      (= a "--night-barrier") (recur more (assoc opts :night-barrier (js/Number b)))
+      (= a "--night-batch-end") (recur more (assoc opts :night-batch-end b))
       (= a "--night-classes") (recur (rest all) (assoc opts :night-classes true))
       (= a "--match-id") (recur more (update opts :match-ids (fnil conj #{}) b))
       (= a "--repeat") (recur more (assoc opts :repeat (js/Number b)))
@@ -621,20 +623,115 @@
            (and (= :night-x phase) (:night-batch opts)))))
 
 (defn night-class-line
-  "The --list --night-classes line of an exclusive night case: its id and lease/night-class."
+  "The --list --night-classes line of an exclusive night case: its id and lease/night-class (a barrier case adds :ticks)."
   [c]
-  (str (:id c) "  " (name (lease/night-class c))))
+  (str (:id c) "  " (name (lease/night-class c)) (when-let [t (lease/barrier-ticks c)] (str ":" t))))
 
 (def night-batch-marker-dir (path/join (os/tmpdir) "mc-night-batches"))
 
 (defn night-batch-set?
-  "Whether a case of the batch already put the night in place (the pool deletes the marker when the batch ends)."
-  [batch]
-  (fs/existsSync (path/join night-batch-marker-dir batch)))
+  "Whether a case of the batch already put the night in place (the marker lives until `--night-batch-end`)."
+  [batch & [dir]]
+  (fs/existsSync (path/join (or dir night-batch-marker-dir) batch)))
 
-(defn mark-night-batch-set! [batch]
-  (fs/mkdirSync night-batch-marker-dir #js {:recursive true})
-  (fs/writeFileSync (path/join night-batch-marker-dir batch) (str (js/Date.now))))
+(defn mark-night-batch-set!
+  "Writes the batch marker: what to undo at the end of the batch (data, e.g. {:gamerule old})."
+  [batch & [dir data]]
+  (let [dir (or dir night-batch-marker-dir)]
+    (fs/mkdirSync dir #js {:recursive true})
+    (fs/writeFileSync (path/join dir batch) (pr-str (merge {:at (js/Date.now)} data)))))
+
+(declare local-now)
+
+(def sleep-rule "players_sleeping_percentage")
+
+(defn parse-gamerule
+  "The reply of `gamerule NAME` -> its number, or nil."
+  [reply]
+  (some-> (re-find #"(?:set to|is):?\s*(-?\d+)" (or reply "")) second js/parseInt))
+
+(defn log-command!
+  "Appends a line for a world change (time, weather, gamerule) to the --time-log file, if any."
+  [opts what why]
+  (when-let [file (:time-log opts)]
+    (fs/appendFileSync file (str (local-now) " " what " by world-test " (:body opts) " for card " (or (:card opts) "world-fixtures") " (" why ")\n"))))
+
+(defn set-sleep-rule!
+  [send opts value why]
+  (.then (send [(str "gamerule " sleep-rule " " value)])
+         (fn [_] (log-command! opts (str "gamerule " sleep-rule " " value) why))))
+
+(defn start-sleep-rule!
+  "First setter of a night batch: unless the batch needs the vanilla night skip (:sleep-skip) or time changes are not
+  allowed, reads the server's players_sleeping_percentage, sets it to 101 (sleepers never skip the night early) and
+  resolves to the old value (nil when nothing was changed). Writes the batch marker (old value in it): the night is set."
+  [send opts rc batch dir why]
+  (-> (if (or (not (:allow-time opts)) (= :skip (lease/night-class rc)))
+        (js/Promise.resolve nil)
+        (.then (send [(str "gamerule " sleep-rule)])
+               (fn [[reply]]
+                 (let [old (parse-gamerule reply)]
+                   (.then (set-sleep-rule! send opts 101 why) (fn [_] old))))))
+      (.then (fn [old] (mark-night-batch-set! batch dir (when old {:gamerule old})) old))))
+
+(defn end-night-batch!
+  "Ends a night batch: restores the gamerule its marker recorded (logged), removes the marker and the barrier files."
+  [send opts batch dir]
+  (let [dir (or dir night-batch-marker-dir)
+        file (path/join dir batch)
+        old (when (fs/existsSync file) (:gamerule (reader/read-string (str (fs/readFileSync file "utf8")))))]
+    (fs/rmSync (path/join dir (str batch ".barrier")) #js {:recursive true :force true})
+    (.then (if (and old (:allow-time opts)) (set-sleep-rule! send opts old (str "night batch " batch " ended")) (js/Promise.resolve nil))
+           (fn [_] (fs/rmSync file #js {:force true}) true))))
+
+(defn barrier-open?
+  "states: {pid :arrived|:gone} of a barrier batch. Open when n bodies arrived or left."
+  [states n]
+  (>= (count states) n))
+
+(def barrier-timeout-ms
+  "How long a body waits at the barrier for the others (they may be failing or slow) before it sets the time itself."
+  300000)
+
+(defn- barrier-dir [dir batch] (path/join (or dir night-batch-marker-dir) (str batch ".barrier")))
+
+(defn- barrier-write! [dir batch pid state]
+  (fs/mkdirSync (barrier-dir dir batch) #js {:recursive true})
+  (fs/writeFileSync (path/join (barrier-dir dir batch) (str pid)) (name state)))
+
+(defn barrier-leave!
+  "A body that ends without reaching the barrier counts as arrived, so the others do not wait for it."
+  [dir batch pid]
+  (let [f (path/join (barrier-dir dir batch) (str pid))]
+    (when-not (fs/existsSync f) (barrier-write! dir batch pid :gone))))
+
+(defn- barrier-states [dir batch]
+  (let [d (barrier-dir dir batch)]
+    (into {} (comp (remove #{"set" "done"}) (map (fn [f] [f (keyword (str/trim (str (fs/readFileSync (path/join d f) "utf8"))))])))
+          (if (fs/existsSync d) (array-seq (fs/readdirSync d)) []))))
+
+(defn barrier-wait!
+  "Waits until n bodies of batch reached the barrier (or left it), then exactly one of them runs do-set! (-> promise) and the rest
+  wait for it to finish. A wait past timeout-ms ends the waiting: the body then runs do-set! itself (a stuck body must not hang the batch).
+  env: {:dir :batch :n :pid :sleep :timeout-ms}."
+  [{:keys [dir batch n pid sleep timeout-ms]} do-set!]
+  (barrier-write! dir batch pid :arrived)
+  (let [until (+ (js/Date.now) timeout-ms)
+        d (barrier-dir dir batch)
+        flag (fn [name] (path/join d name))]
+    (letfn [(wait-done []
+              (cond
+                (fs/existsSync (flag "done")) (js/Promise.resolve true)
+                (> (js/Date.now) until) (do-set!)
+                :else (.then (sleep 200) wait-done)))
+            (wait-open []
+              (cond
+                (or (barrier-open? (barrier-states dir batch) n) (> (js/Date.now) until))
+                (if (try (fs/writeFileSync (flag "set") (str pid) #js {:flag "wx"}) true (catch :default _ false))
+                  (.then (do-set!) (fn [r] (fs/writeFileSync (flag "done") "") r))
+                  (wait-done))
+                :else (.then (sleep 200) wait-open)))]
+      (wait-open))))
 
 (defn acquire-shared!
   "Resolves to {:first? bool} when this process holds the time lock for phase (:day, :night or :any), logging who it waits
@@ -992,7 +1089,12 @@
                          :kill-body (.then (rcon! [(str "kill " (:body opts))]) (constantly ids))
                          :rcon-until (.then (rcon-until! opts origin box offset t0 a b) (constantly ids))
                          :wait-s (.then (sleep (* 1000 a)) (constantly ids))
-                         :time-set (.then (set-time! opts a (str (:id c) " step"))
+                         :time-set (.then (let [do-set #(set-time! opts a (str (:id c) " step"))]
+                                            (if (and (:night-barrier opts) (:night-batch opts) (= a (lease/barrier-ticks c)))
+                                              (barrier-wait! {:dir nil :batch (:night-batch opts) :n (:night-barrier opts) :pid (.-pid js/process)
+                                                              :sleep sleep :timeout-ms barrier-timeout-ms}
+                                                             do-set)
+                                              (do-set)))
                                           (fn [ok] (if ok ids (throw (js/Error. "a :time-set step needs --allow-time")))))
                          :await (.then (await-event opts offset a (await-since a t0 @cli-ms) (* 1000 b))
                                        (fn [ev] (if ev (do (reset! event-job (get-in ev [:context :job-id])) ids) (throw (js/Error. (str ":await " (pr-str a) " timed out after " b " s"))))))
@@ -1278,7 +1380,9 @@
                                 (= :any phase) true
                                 (and batch (night-batch-set? batch)) (js/Promise.resolve true)
                                 batch (.then (set-time! opts 14000 (str (:id c) " starts night batch " batch))
-                                             (fn [ok] (when ok (mark-night-batch-set! batch)) ok))
+                                             (fn [ok] (if ok
+                                                        (.then (start-sleep-rule! rcon! opts rc batch nil (str (:id c) " starts night batch " batch)) (constantly ok))
+                                                        ok)))
                                 :else (time-ok! opts (if (lease/time-phase rc) rc (assoc rc :time :day))))
                               (.then (fn [ok]
                                        (if (or (not ok) (= :any phase))
@@ -1353,6 +1457,7 @@
                                     #(exec-file ["engine/tools/jobs.mjs" (:body opts) "--world" (:world opts) "cancel-all"])
                                     #(rcon! (f/cleanup-commands grid origin (:body opts) rc))
                                     #(when (lease/weather-x? rc) (set-weather! opts :clear (str (:id c) " ended")))
+                                    #(when (and (:night-barrier opts) (:night-batch opts)) (barrier-leave! nil (:night-batch opts) (.-pid js/process)))
                                     #(when (f/writes-shared? c) (drop-shared! opts))
                                     #(run! (fn [f] (when (fs/existsSync f) (fs/unlinkSync f))) @plan-files)])
                      (.then (constantly r)))))
@@ -1608,8 +1713,8 @@
                (let [opts (parse-args (array-seq argv))
                      final-results (atom nil)
                      run-start (atom nil)
-                     all-cases (if (:check opts) [] (load-cases (:paths opts)))
-                     cases (if (:check opts) [] (select-phase (f/select-cases all-cases opts) (:phase opts)))
+                     all-cases (if (or (:check opts) (:night-batch-end opts)) [] (load-cases (:paths opts)))
+                     cases (if (or (:check opts) (:night-batch-end opts)) [] (select-phase (f/select-cases all-cases opts) (:phase opts)))
                      cases (if (:changed-since-pass opts) (select-changed cases (:paths opts)) cases)
                      bad (filter :problems cases)]
                  (cond
@@ -1620,6 +1725,7 @@
                                          res)
                                    (log! "world-test --check: " (count res) " cases, " (count (remove #(= :pass (:status %)) res)) " failed")
                                    (check-exit-code res))
+                   (:night-batch-end opts) (.then (end-night-batch! rcon! opts (:night-batch-end opts) nil) (constantly 0))
                    (:list opts) (do (run! (if (:night-classes opts)
                                            #(log! (night-class-line %))
                                            #(log! (:id %) "  " (pr-str (:tags %)) (when (:problems %) (str "  PROBLEMS " (:problems %)))))

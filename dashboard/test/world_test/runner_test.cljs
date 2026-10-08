@@ -993,7 +993,8 @@
 
 (deftest the-night-class-line-names-the-class
   (is (= "a/b  natural" (r/night-class-line {:id "a/b" :time :night-exclusive :act []})))
-  (is (= "a/c  solo" (r/night-class-line {:id "a/c" :time :night-exclusive :act [[:time-set 1000]]}))))
+  (is (= "a/c  barrier:1000" (r/night-class-line {:id "a/c" :time :night-exclusive :act [[:time-set 1000]]})))
+  (is (= "a/d  solo" (r/night-class-line {:id "a/d" :time :night-exclusive :act [[:time-set 1000] [:time-set 14000]]}))))
 
 (deftest set-weather-sends-and-logs-only-when-allowed
   (async done
@@ -1013,3 +1014,98 @@
 (deftest weather-wanted-is-the-cases-or-clear
   (is (= [:rain :clear :clear]
          [(r/weather-wanted {:weather :rain}) (r/weather-wanted {}) (r/weather-wanted {:weather :clear})])))
+
+(deftest night-barrier-and-batch-end-options
+  (is (= [3 "n1"] [(:night-barrier (r/parse-args #js ["--night-barrier" "3"])) (:night-batch-end (r/parse-args #js ["--night-batch-end" "n1"]))]))
+  (is (nil? (:night-barrier (r/parse-args #js [])))))
+
+(deftest parse-gamerule-reads-the-value-of-the-server-reply
+  (is (= [100 0 nil]
+         [(r/parse-gamerule "Gamerule players_sleeping_percentage is currently set to: 100")
+          (r/parse-gamerule "Gamerule players_sleeping_percentage is currently set to: 0")
+          (r/parse-gamerule "Unknown gamerule")])))
+
+(defn- tmp-dir [] (fs/mkdtempSync (path/join (os/tmpdir) "fixer-pass-c-test-")))
+
+(defn- fake-send
+  "A send fn answering the players_sleeping_percentage query with old; records every command."
+  [sent old]
+  (fn [cmds]
+    (swap! sent into cmds)
+    (js/Promise.resolve (mapv #(if (= % "gamerule players_sleeping_percentage")
+                                 (str "Gamerule players_sleeping_percentage is currently set to: " old)
+                                 "ok") cmds))))
+
+(deftest a-non-skip-night-batch-stops-the-early-skip-and-the-end-restores-the-old-value
+  (async done
+    (let [sent (atom [])
+          dir (tmp-dir)
+          log (path/join dir "time.log")
+          opts {:allow-time true :time-log log :body "B" :card "c1"}]
+      (-> (r/start-sleep-rule! (fake-send sent 50) opts {:time :night-exclusive :act []} "n1" dir "why")
+          (.then (fn [old]
+                   (is (= 50 old))
+                   (is (= ["gamerule players_sleeping_percentage" "gamerule players_sleeping_percentage 101"] @sent))
+                   (is (re-find #"gamerule players_sleeping_percentage 101 by world-test B for card c1 \(why\)" (fs/readFileSync log "utf8")))
+                   (r/mark-night-batch-set! "n1" dir {:gamerule old})
+                   (reset! sent [])
+                   (r/end-night-batch! (fake-send sent 101) opts "n1" dir)))
+          (.then (fn [_]
+                   (is (= ["gamerule players_sleeping_percentage 50"] @sent))
+                   (is (re-find #"gamerule players_sleeping_percentage 50 by world-test B" (fs/readFileSync log "utf8")))
+                   (is (false? (r/night-batch-set? "n1" dir)) "the marker is gone")
+                   (fs/rmSync dir #js {:recursive true})
+                   (done)))))))
+
+(deftest a-skip-batch-or-a-run-without-allow-time-keeps-the-server-rule
+  (async done
+    (let [sent (atom [])
+          dir (tmp-dir)]
+      (-> (r/start-sleep-rule! (fake-send sent 100) {:allow-time true} {:time :night-exclusive :sleep-skip true :act []} "n1" dir "why")
+          (.then (fn [old] (is (nil? old))
+                   (r/start-sleep-rule! (fake-send sent 100) {} {:time :night-exclusive :act []} "n1" dir "why")))
+          (.then (fn [old]
+                   (is (nil? old))
+                   (is (empty? @sent))
+                   (r/end-night-batch! (fake-send sent 100) {:allow-time true} "n1" dir)))
+          (.then (fn [_]
+                   (is (empty? @sent) "nothing recorded, nothing restored")
+                   (fs/rmSync dir #js {:recursive true})
+                   (done)))))))
+
+(deftest the-barrier-opens-when-every-body-arrived-or-left
+  (is (= [false true true]
+         [(r/barrier-open? {1 :arrived 2 :arrived} 3)
+          (r/barrier-open? {1 :arrived 2 :arrived 3 :arrived} 3)
+          (r/barrier-open? {1 :arrived 2 :gone 3 :arrived} 3)])))
+
+(deftest one-body-at-the-barrier-sets-the-time-once-for-all
+  (async done
+    (let [dir (tmp-dir)
+          sets (atom [])
+          at (fn [pid] (r/barrier-wait! {:dir dir :batch "n1" :n 2 :pid pid :sleep r/sleep :timeout-ms 5000}
+                                        (fn [] (swap! sets conj pid) (js/Promise.resolve true))))]
+      (-> (js/Promise.all #js [(at 1) (at 2)])
+          (.then (fn [_]
+                   (is (= 1 (count @sets)) "exactly one body set the time")
+                   (fs/rmSync dir #js {:recursive true})
+                   (done)))))))
+
+(deftest a-body-that-never-arrives-does-not-hold-the-others-past-the-timeout
+  (async done
+    (let [dir (tmp-dir)
+          sets (atom 0)]
+      (-> (r/barrier-wait! {:dir dir :batch "n1" :n 2 :pid 1 :sleep r/sleep :timeout-ms -1}
+                           (fn [] (swap! sets inc) (js/Promise.resolve true)))
+          (.then (fn [_]
+                   (is (= 1 @sets))
+                   (fs/rmSync dir #js {:recursive true})
+                   (done)))))))
+
+(deftest a-body-that-leaves-counts-for-the-barrier
+  (async done
+    (let [dir (tmp-dir)]
+      (r/barrier-leave! dir "n1" 2)
+      (-> (r/barrier-wait! {:dir dir :batch "n1" :n 2 :pid 1 :sleep r/sleep :timeout-ms 5000}
+                           (fn [] (js/Promise.resolve true)))
+          (.then (fn [ok] (is (true? ok)) (fs/rmSync dir #js {:recursive true}) (done)))))))
