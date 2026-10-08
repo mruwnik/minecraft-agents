@@ -63,3 +63,51 @@
       (fn ^:async t []
         (let [{:keys [p]} (await ((run-with-chest kit-in-chest true "fall")))]
           (is (nil? (get (inv p) "iron_sword"))))))))
+
+(defn run-with-pile
+  "Like run-with-chest for any pile; fetch-stub (or nil) replaces jobs.lib.fetch/fetch!."
+  [pile fetch-stub]
+  (fn ^:async t []
+    (let [world {:floor tu/walk-floor :entities (vec (pile-drops pile))
+                 :blocks {"-2,64,3" "chest"} :containers {"-2,64,3" kit-in-chest}}
+          {:keys [eng seen p]} (setup world)
+          real fetch/fetch!]
+      (mem/write! (:store eng) fetch/stock-kind {:pos chest-cell :items (fetch/stacks->items kit-in-chest)} fetch/stock-policy)
+      (die! eng {:pos dt/death-pos :inventory pile :cause "skeleton"})
+      (core/submit! eng job {})
+      (set! fetch/fetch! (or fetch-stub real))
+      (try (await (run-until-empty eng 60))
+           (finally (set! fetch/fetch! real)))
+      {:eng eng :seen seen :p p})))
+
+(def kinds-of (fn [seen] (mapv :kind @seen)))
+
+(deftest a-worthless-pile-does-not-send-the-body-to-a-chest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (await ((run-with-pile dt/junk nil)))]
+          (is (nil? (get (inv p) "iron_sword")))
+          (is (= :skip (:decision (recovered eng)))))))))
+
+(deftest a-waiting-kit-fetch-is-a-wait-not-a-decline
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls (atom 0)
+              real fetch/fetch!
+              stub (fn ^:async stub-fetch [c j pr]
+                     (if (= 1 (swap! calls inc)) :continue (await (real c j pr))))
+              {:keys [eng seen p]} (await ((run-with-pile dt/death-pile-of-the-field-report stub)))]
+          (is (< 1 @calls))
+          (is (not (some #{:yielded :recover-drops.declined} (kinds-of seen))))
+          (is (= 1 (get (inv p) "iron_sword")))
+          (is (not= :skip (:decision (recovered eng)))))))))
+
+(deftest a-fetch-that-ends-the-job-drops-the-kit-and-the-trip-goes-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (await ((run-with-pile dt/death-pile-of-the-field-report (fn ^:async stub-fetch [c j pr] :done))))]
+          (is (some #{:recover-drops.kit-dropped} (kinds-of seen)))
+          (is (some? (recovered eng))))))))

@@ -54,9 +54,10 @@
     many times dearer for a mob the body (its best weapon, armour, health) cannot afford to fight.
   - Infinite when lava, fire or the void took the pile, or the walk would end after the despawn.
   A fetch emits recover-drops.fetching. A skip emits recover-drops.decided. Both texts give the value, the cost and their parts.
-  Kit: before the decision, a body with no weapon or with an empty armour slot, whose killer or the hostiles it knows make the route
+  Kit: before the decision, when the pile is worth the trip were the route safe, a body with no weapon or with an empty armour slot, whose killer or the hostiles it knows make the route
   dangerous, fetches the best weapon and armour piece a chest of known stock (:fetch/stock) holds (jobs.lib.fetch, chests only,
   :fetch false: off) and wears the armour (jobs.items.wear); nothing known to be in a chest: unchanged.
+  A kit fetch waiting on the world is waited for (declared hold :fetching-kit); a fetch that ended the job drops the kit (warn recover-drops.kit-dropped).
   Fetch: walks to the death point (jobs.movement.go-to), then collects (passes, up to 3) the pile's items it can see within :collect-radius
   (jobs.forestry.collect-drops; only the carried item names, never items out of sight).
   Ends by writing a :recovered entry {:decision :skip|:collected|:partial|:abandoned}.
@@ -350,39 +351,64 @@
   [c]
   (into #{} (mapcat keys) (vals (fetch/stock-of (ctx/view c)))))
 
+(defn piece-points
+  "Armour points of one piece (jobs.lib.cost/armour-stats), 0 for nil."
+  [slot item]
+  (if item (:points (cost/armour-stats {slot {:name item}})) 0))
+
 (defn kit-problem
   "The need wait of the best weapon, else of the best piece for an empty or weaker armour slot, that a known chest holds
-  and the body does not carry; nil when none."
+  and the body does not carry (ranked by jobs.lib.cost: damage per attack gap, armour points); nil when none."
   [c]
   (let [p (:primitives c)
         have (set (map :name (u/inventory p)))
         stock (remove have (stock-names c))
         worn (armour/worn-of (.-equipment (.self p)))
-        weapons (->> stock (filter #(combat/weapon? combat/default-weapons %)) (sort-by combat/weapon-score >))
+        weapons (->> stock (filter #(combat/weapon? combat/default-weapons %)) (sort-by #(/ (cost/weapon-damage %) (cost/attack-gap-ms %)) >))
         pieces (fn [slot] (->> stock
-                               (filter #(and (= slot (:slot (armour/parse %))) (> (armour/rank-of %) (armour/rank-of (get worn slot)))))
-                               (sort-by armour/rank-of >)))
+                               (filter #(and (= slot (:slot (armour/parse %))) (> (piece-points slot %) (piece-points slot (get worn slot)))))
+                               (sort-by #(piece-points slot %) >)))
         need (fn [names] (when (seq names) {:reason :need :any-of (vec names) :count 1}))]
     (or (when-not (combat/best-weapon p combat/default-weapons) (need weapons))
         (some #(need (pieces %)) armour/slots))))
 
 (defn kit-called-for?
-  "Whether the killer or the hostiles the body knows make the route to the pile dangerous (the estimate names mobs)."
+  "Whether the pile is worth the trip were the route safe (its value against the fetch cost without danger and the margin)
+  and the killer or the hostiles the body knows make the route dangerous (the estimate names mobs)."
   [c entry]
-  (boolean (seq (:top-mobs (estimate c (:data entry) (settings/ticks->ms (game/ticks-since entry (ctx/view c))))))))
+  (let [{:keys [pos cause]} (:data entry)
+        elapsed (settings/ticks->ms (game/ticks-since entry (ctx/view c)))
+        e (estimate c (:data entry) elapsed)
+        safe (cost/fetch-cost {:distance (when pos (u/dist (u/self-pos c) pos)) :danger 0 :elapsed-ms elapsed :cause cause})
+        safe-cost (if (js/isFinite (:cost safe)) (:cost safe) js/Infinity)]
+    (boolean (and (seq (:top-mobs e)) (> (:value e) (+ safe-cost (:margin (:args c))))))))
 
 (defn ^:async kit!
-  "Once per run: fetch and wear a weapon and armour when the danger calls for them and a known chest has them. nil when
-  done (or nothing to do), :continue while a fetch child waits on the world."
+  "Once per run: fetch and wear a weapon and armour when the pile is worth the trip, the danger calls for them and a known
+  chest has them. A fetch child waiting on the world is waited for (declared hold :fetching-kit) until it ends, a danger
+  or the despawn window. nil when done, dropped (a fetch that ended the job: warn) or nothing to do; :declined for a
+  danger or a death."
   [c entry]
   (if (or (:kit-done (ctx/mem c)) (not (fetch/opts c 'jobs.survival.recover-drops))
           (nil? (kit-problem c)) (not (kit-called-for? c entry)))
     (do (ctx/update-mem! c assoc :kit-done true) nil)
-    (let [r (await (fetch/fetch! c 'jobs.survival.recover-drops kit-problem))]
-      (when-not (= :continue r)
-        (await (ctx/call-child c :wear 'jobs.items.wear {}))
-        (ctx/update-mem! c assoc :kit-done true))
-      r)))
+    (loop []
+      (let [r (await (fetch/fetch! c 'jobs.survival.recover-drops kit-problem))]
+        (cond
+          (= :done r)
+          (do (ctx/update-mem! c assoc :kit-done true)
+              (ctx/emit! c :recover-drops.kit-dropped :warn {:text "recover-drops: the kit fetch ended the job; going without a kit"})
+              nil)
+
+          (not= :continue r)
+          (do (await (ctx/call-child c :wear 'jobs.items.wear {}))
+              (ctx/update-mem! c assoc :kit-done true)
+              nil)
+
+          (not (ctx/alive? c)) :declined
+          (window-closed? c entry) (do (ctx/hold-still! c nil) nil)
+          (threatened? c) (do (ctx/hold-still! c nil) (decline-danger! c (threatened? c)))
+          :else (do (ctx/hold-still! c :fetching-kit) (await (pace/pace!)) (recur)))))))
 
 (defn ^:async trip!
   "The decision, then the walk and the collect passes of a trip inside its window."
