@@ -326,7 +326,9 @@
         cell (or (first (remove #(dig-cells/sealed? p %) (:plugs shape))) roof)
         item (lb/pick c blocks)]
     (if (nil? item)
-      (do (remember-material! c {:pos roof}) :done)
+      (do (remember-material! c {:pos roof})
+          (ctx/emit! c :dig_in_failed :warn {:text "nothing to roof the pit with"})
+          :done)
       (let [r (await (tidy/place! c cell item true))]
         (cond
           (and (= "occupied" (.-status r)) (not= cell roof) (not (dig-cells/sealed? p cell)))

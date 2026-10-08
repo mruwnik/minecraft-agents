@@ -78,3 +78,11 @@
               s (await (seen/tick-out! (seen/setup p 'jobs.survival.dig-in {})))]
           (is (<= @n 5) "bounded")
           (is (re-find #"does not seal" (str (:text (first (seen/failed s)))))))))))
+
+(deftest a-pit-dug-with-no-block-to-roof-it-says-so
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (seen/run-pit! {:blocks seen/ground :inventory [{:name "iron_pickaxe" :count 1}]
+                                       :drops {"stone" "coal"}}))]
+          (is (some #(re-find #"nothing to roof the pit with" (str (:text %))) (seen/failed s))))))))
