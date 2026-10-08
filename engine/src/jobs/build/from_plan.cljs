@@ -58,7 +58,7 @@
   :sturdy-ground true accepts a sturdy block on the ground of a rail line (plan.rail/ground) where the plan wants
   fill; it is not listed :wrong.
   Result: {:placed n :missing [[x y z] ...] :short {item n} :given-up {[x y z] reason} :wrong [{:pos :found
-  :want}] :refused [...]}. A build that leaves cells missing ends :stopped (:reason :incomplete, :text naming the
+  :want}] :refused [...] :fetch-failed {item {:failed :why}}}. A build that leaves cells missing ends :stopped (:reason :incomplete, :text naming the
   missing count and what it left); only a complete one has no :status. For a block placed in the wrong state, :found names the state it came out in.
   Events: build.done (info), build.short, build.gave-up, build.refused and build.wrong (warns). Event texts name
   the count and the first few cells. The whole list is in :cells of the event and in the result.
@@ -67,9 +67,9 @@
   - while no zone list has been read.
   When cells are missing but none of their blocks is carried and none can be fetched, the job waits (:no-items with :needs).
   Material: while cells wait for an item not carried (and not given up or refused), each round first fetches it (:fetch,
-  jobs.lib.fetch, a jobs.items.obtain child for the missing count); a pickaxe block to dig without a pickaxe fetches the tool the same way
+  jobs.lib.fetch with :explore on: a jobs.items.obtain child for the missing count, walking off to look for what is unseen; an item whose fetch failed is skipped for the next); a pickaxe block to dig without a pickaxe fetches the tool the same way
   (jobs.items.get-tool). With :fetch false, or once a fetch failed, the build goes on with what is carried and ends
-  :short as before, a pickaxe block given up :no-tool.")
+  :short as before (the stop text and :fetch-failed name each failed fetch and why), a pickaxe block given up :no-tool.")
 
 (a/defargs args
   {:plan {:doc "id of a plan of the body's world" :spec a/name? :default nil}
@@ -77,7 +77,7 @@
    :reach {:doc "cells whose centre is this close to the eye are placed without walking, in blocks" :spec (a/num-in 0 nil) :default u/eye-reach}
    :give-up {:doc "refused places or failed walks after which a cell is given up" :spec (a/int-in 1 nil) :default 3}
    :accept {:doc "fluid hazards of a cell taken: :fluid-adjacent (water beside; placing beside or into water seals and bridges), :lava-adjacent (lava beside; not taken by default: the body stands beside the cell)" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default [:fluid-adjacent]}
-   :fetch {:doc "get the blocks and tools the plan lacks (jobs.lib.fetch): true, a set of kinds or a map of limits; false builds with what is carried" :spec fetch/option? :default true}
+   :fetch {:doc "get the blocks and tools the plan lacks (jobs.lib.fetch): true, a set of kinds or a map of limits; false builds with what is carried" :spec fetch/option? :default {:explore true}}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
    :sturdy-ground {:doc "a sturdy block on the ground of a rail line (plan.rail/ground) is no wrong block, whatever fill the plan wants there" :spec boolean? :default false}})
 
@@ -360,16 +360,16 @@
           (digging cells))))
 
 (defn need-of
-  "The wait of the open cells: the :need for the first item of the missing ones not carried enough, else the
-  :no-tool for a pickaxe block to dig without a tool, else nil."
+  "The wait of the open cells: the :need for the first item of the missing ones not carried enough that a fetch is
+  due for (else the first), else the :no-tool for a pickaxe block to dig without a tool, else nil."
   [c cells]
   (let [mem (ctx/mem c)
         closed (merge (:given-up mem) (:refused mem))
         open (remove #(contains? closed (:pos %)) (missing cells))
-        [item n] (first (shortage open (carried-counts (:primitives c))))]
-    (if item
-      {:reason :need :item item :count n}
-      (tool-of c cells))))
+        waits (map (fn [[item n]] {:reason :need :item item :count n}) (shortage open (carried-counts (:primitives c))))]
+    (or (first (filter #(fetch/due c 'jobs.build.from-plan %) waits))
+        (first waits)
+        (tool-of c cells))))
 
 (defn problem
   "need-of for the plan as it stands now, nil when the plan is in trouble."
@@ -614,14 +614,31 @@
     (ctx/emit! c :build.done :info {:plan plan :placed (:placed result) :missing (count left)
                                     :text (str "build of " plan " done: placed " (:placed result) ", still missing " (count left))})))
 
+(defn fetch-failed-text
+  "The booked failed fetches of the short items, in words: 'could not fetch birch_log: no-source (why)'."
+  [fails]
+  (str/join "; " (map (fn [[item {:keys [failed why]}]]
+                        (str "could not fetch " item ": " (name (or failed :failed)) (when why (str " (" why ")"))))
+                      fails)))
+
 (defn stopped-text
   "Why a build that left cells ended stopped: the plan, how many were placed and are missing, and what it left."
-  [plan {:keys [placed missing] :as result}]
-  (let [left (left-text result)]
+  [plan {:keys [placed missing fetch-failed] :as result}]
+  (let [left (str/join "; " (remove str/blank? [(left-text result) (fetch-failed-text fetch-failed)]))]
     (str "build of " plan " stopped: placed " placed ", still missing " (count missing) (when (seq left) (str " (" left ")")))))
 
+(defn assoc-fetch-failed
+  "result with :fetch-failed {item {:failed :why}} for each short item whose fetch failed and is still booked."
+  [c result]
+  (let [fails (into (sorted-map)
+                    (keep (fn [item]
+                            (when-let [f (fetch/failure c [:item [item]])]
+                              [item (select-keys f [:failed :why])])))
+                    (keys (:short result)))]
+    (cond-> result (seq fails) (assoc :fetch-failed fails))))
+
 (defn finish! [c cells]
-  (let [result (summary c cells (ctx/mem c) (:sturdy-ground (:args c)))]
+  (let [result (assoc-fetch-failed c (summary c cells (ctx/mem c) (:sturdy-ground (:args c))))]
     (announce! c result)
     (ctx/result! c (if (seq (:missing result))
                      (assoc result :status :stopped :reason :incomplete :text (stopped-text (:plan (:args c)) result))

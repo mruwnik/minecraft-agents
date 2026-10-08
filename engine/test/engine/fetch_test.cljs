@@ -1177,3 +1177,12 @@
           (await (get-tool! s {:item "stone_pickaxe" :explore false} 300))
           (is (empty? (listed s)) (pr-str (last (events-of s :stopped))))
           (is (= 1 (get (inv s) "stone_pickaxe")) (pr-str (inv s) (last (events-of s :stopped)))))))))
+
+(deftest explore-is-a-fetch-limit-passed-to-the-fetch-jobs
+  (let [o (assoc (fetch/merge-limits nil nil nil {:explore true}) :explore true)]
+    (is (true? (:explore (fetch/merge-limits nil nil nil {:explore true}))))
+    (is (false? (:explore (fetch/merge-limits nil {:explore true} nil {:explore false}))) "the call wins")
+    (is (= {:item "oak_log" :count 2 :explore true} (:args (fetch/plan-for {:reason :need :item "oak_log" :count 2} o))))
+    (is (= {:block "stone" :explore true} (:args (fetch/plan-for {:reason :no-tool :block "stone"} o))))
+    (is (nil? (fetch/limit-error {:explore {:max-distance 10}})))
+    (is (some? (fetch/limit-error {:explore "yes"})))))

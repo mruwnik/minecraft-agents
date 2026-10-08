@@ -4,12 +4,13 @@
 
   A job with :fetch reads its own wait reason (or the booked declined child's, jobs.lib.declined) and, when the
   reason is one a fetch job can cure, its check passes and its round runs that fetch job as the child in slot :fetch
-  (jobs.items.get-tool for :no-tool, :explore false: no walk off to look; jobs.items.obtain for :need). It does not pass :fetch to its children: their waits
+  (jobs.items.get-tool for :no-tool, with the :explore limit; jobs.items.obtain for :need). It does not pass :fetch to its children: their waits
   come up to it. A fetch that ends without the thing is remembered as :fetch/failed for :fail-minutes; meanwhile the
   job waits with its reason plus {:fetch {:failed reason ...}} and nothing is tried again.
 
   The :fetch arg: false/nil (off), true (all kinds, all sources), a set of kinds (#{:tool :item}), or a map of limits
-  {:what :how :depth :minutes :fail-minutes}. Limits merge, later wins: built-in, the job's code default, the body's
+  {:what :how :depth :minutes :fail-minutes :explore}; :explore (default false: reflexes must not walk off) lets the
+  fetch jobs walk and look for a raw need not seen. Limits merge, later wins: built-in, the job's code default, the body's
   default for all jobs, the body's default for this job (both set by jobs.items.fetch-limits, body memory
   :fetch/limits), the call's own arg.
 
@@ -41,12 +42,12 @@
   "The limits of :fetch true."
   {:what kinds :how sources :depth 7 :minutes 10 :fail-minutes 10})
 
-(def limit-keys [:what :how :depth :minutes :fail-minutes])
+(def limit-keys [:what :how :depth :minutes :fail-minutes :explore])
 
 (defn limit-error
   "Why a limits map is bad, or nil."
   [m]
-  (let [{:keys [what how depth minutes fail-minutes]} m
+  (let [{:keys [what how depth minutes fail-minutes explore]} m
         pos-num? #(and (number? %) (js/isFinite %) (pos? %))]
     (cond
       (not (map? m)) "limits are a map"
@@ -55,7 +56,8 @@
       (and (some? how) (not (and (set? how) (every? sources how)))) (str ":how is a set of " (pr-str sources))
       (and (some? depth) (not (and (int? depth) (>= depth 0)))) ":depth is a whole number, 0 or more"
       (and (some? minutes) (not (pos-num? minutes))) ":minutes is a positive number"
-      (and (some? fail-minutes) (not (pos-num? fail-minutes))) ":fail-minutes is a positive number")))
+      (and (some? fail-minutes) (not (pos-num? fail-minutes))) ":fail-minutes is a positive number"
+      (and (some? explore) (not (or (boolean? explore) (map? explore)))) ":explore is true, false or jobs.explore.search options")))
 
 (defn parse-arg
   "The :fetch arg as a limits map ({} for true), nil when off, or {:error text}."
@@ -69,7 +71,7 @@
 
 (def option?
   "The spec of a job's :fetch arg."
-  (a/pred "true, false, a set of kinds (:tool :item) or a map of limits {:what :how :depth :minutes :fail-minutes}"
+  (a/pred "true, false, a set of kinds (:tool :item) or a map of limits {:what :how :depth :minutes :fail-minutes :explore}"
           #(nil? (:error (parse-arg %)))))
 
 (def limits-kind :fetch/limits)
@@ -101,14 +103,16 @@
   is not in (:what o). A :no-tool wait names :block, :needs (an item) or :kind (a tool kind such as \"hoe\"). A :need wait's :count is how many obtain gets (default 1)."
   [w o]
   (let [{:keys [reason item any-of block needs]} w
+        explore (or (:explore o) false)
+        with-explore #(cond-> % explore (assoc :explore explore))
         pl (case reason
              :no-tool (cond
-                        block {:kind :tool :job 'jobs.items.get-tool :args {:block block :explore false} :key [:tool block]}
-                        needs {:kind :tool :job 'jobs.items.get-tool :args {:item needs :explore false} :key [:tool needs]}
-                        (:kind w) {:kind :tool :job 'jobs.items.get-tool :args {:kind (:kind w) :explore false} :key [:tool (:kind w)]})
+                        block {:kind :tool :job 'jobs.items.get-tool :args {:block block :explore explore} :key [:tool block]}
+                        needs {:kind :tool :job 'jobs.items.get-tool :args {:item needs :explore explore} :key [:tool needs]}
+                        (:kind w) {:kind :tool :job 'jobs.items.get-tool :args {:kind (:kind w) :explore explore} :key [:tool (:kind w)]})
              :need (cond
-                     item {:kind :item :job 'jobs.items.obtain :args {:item item :count (or (:count w) 1)} :key [:item [item]]}
-                     (seq any-of) {:kind :item :job 'jobs.items.obtain :args {:any-of (vec any-of) :count (or (:count w) 1)}
+                     item {:kind :item :job 'jobs.items.obtain :args (with-explore {:item item :count (or (:count w) 1)}) :key [:item [item]]}
+                     (seq any-of) {:kind :item :job 'jobs.items.obtain :args (with-explore {:any-of (vec any-of) :count (or (:count w) 1)})
                                    :key [:item (vec any-of)]})
              nil)]
     (when (and pl (contains? (:what o) (:kind pl)))

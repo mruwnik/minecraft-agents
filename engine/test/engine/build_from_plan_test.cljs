@@ -812,3 +812,17 @@
           (is (= {} (:given-up result)))
           (is (= [] (:missing result)))
           (is (= "air" (block p [3 64 0]))))))))
+
+(deftest an-item-that-cannot-be-fetched-does-not-stop-the-fetch-of-the-next-one
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [spec {:inventory [{:name "oak_fence_gate" :count 1}]
+                    :blocks {fence-chest "chest"} :containers {fence-chest [{:name "torch" :count 4}]}}
+              {:keys [eng p]} (start spec {"pen" (pen-plan)})
+              _ (tu/seeing-all p)
+              result (await (tu/child-outcome eng job {:plan "pen" :fetch {:explore false}} 300))]
+          (is (= {"oak_fence" 7} (:short result)) "the torch was fetched though the fences could not be")
+          (is (= #{"oak_fence"} (set (keys (:fetch-failed result)))))
+          (is (= :stopped (:status result)))
+          (is (re-find #"could not fetch oak_fence: no-source" (:text result)) (:text result)))))))
