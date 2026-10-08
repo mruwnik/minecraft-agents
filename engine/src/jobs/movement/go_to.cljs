@@ -175,6 +175,7 @@
    ::wet-restarts {:default 2 :doc "Times a go-to's search under water may begin afresh (no walk) after its first slice before it swims to air first and plans from there." :spec (a/int-in 0 nil)}
    ::dry-radius {:default 6 :doc "Blocks from the body an arrival in water reads for a dry stand (also within :range of the goal)." :spec (a/num-in 0 nil)}
    ::dry-walk-rounds {:default 3 :doc "Walk rounds (search slices or walks) the walk on from an arrival in water to a dry stand takes at most." :spec (a/int-in 1 nil)}
+   ::night-wait-ms {:default 1000 :doc "Milliseconds a go-to waits before it yields :continue while it holds for day inside a shelter." :spec (a/int-in 0 nil)}
    ::max-waypoint-misses {:default 3 :doc "Waypoint walks toward a column goal whose ground is only guessed that a call takes while they bring the body no nearer it." :spec (a/int-in 0 nil)}
    ::waypoint-gain {:default 2 :doc "Blocks (across) a waypoint must lie nearer a guessed column goal than the body, and a waypoint walk must bring the body nearer, not to be a miss." :spec (a/num-in 1 nil)}
    ::way-looks {:default [[6 1] [3 4]] :doc "The looks taken in turn before each waypoint walk: [blocks ahead toward the goal, blocks under the feet] (ahead and a little down: a slope up; close and steeply down: a slope or drop below an edge)." :spec (a/coll-of (a/pred "a pair [ahead down] of numbers >= 0" #(and (sequential? %) (= 2 (count %)) (every? (fn [n] (and (number? n) (>= n 0))) %))))}})
@@ -188,6 +189,7 @@
 (defn wet-restarts [] (settings/get settings ::wet-restarts))
 (defn dry-radius [] (settings/get settings ::dry-radius))
 (defn dry-walk-rounds [] (settings/get settings ::dry-walk-rounds))
+(defn night-wait-ms [] (settings/get settings ::night-wait-ms))
 (defn max-waypoint-misses [] (settings/get settings ::max-waypoint-misses))
 (defn waypoint-gain [] (settings/get settings ::waypoint-gain))
 (defn way-looks [] (settings/get settings ::way-looks))
@@ -823,14 +825,18 @@
              (:resolved (aimed c goal)))
     (ctx/update-mem! c assoc :re-aim true)))
 
-(def night-wait-ms "The wait a child call takes before it yields :continue while night-wait holds." 1000)
+(defn manual-slot?
+  "Whether this call runs for the driver of a manual lease (its slot job): the agent's own order."
+  [c]
+  (let [slot (some-> (:manual-job (:engine c)) deref)]
+    (and (some? slot) (= slot (:root c)))))
 
 (defn night-wait
   "The wait {:reason :night-sheltered :shelter :goal} while the walk would take the body out of its shelter at night
-  (sh/walk-leaves-shelter?), else nil. Never under a reflex job or with :at-night :go."
+  (sh/walk-leaves-shelter?), else nil. Never under a reflex job, the manual driver's own go-to or with :at-night :go."
   [c]
   (let [p (:primitives c)]
-    (when (and (not (:reflex c)) (not= :go (some-> (:at-night (:args c)) keyword)) (sh/night? p))
+    (when (and (not (:reflex c)) (not (manual-slot? c)) (not= :go (some-> (:at-night (:args c)) keyword)) (sh/night? p))
       (let [{goal :pos :as t} (target c)
             kind (when (and goal (not (:reason t)))
                    (sh/walk-leaves-shelter? p (:data (ctx/latest c :shelter)) goal (:range (:args c) 1)))]
@@ -871,7 +877,7 @@
                   (ctx/update-mem! c assoc :night-said true)
                   (ctx/emit! c :go-to.night-sheltered :info
                              (assoc night :text (str "night: waiting for day in its shelter (" (name (:shelter night)) ") instead of walking out"))))
-                (await (ctx/act c :wait #js {:ms night-wait-ms}))
+                (await (ctx/act c :wait #js {:ms (night-wait-ms)}))
                 :continue)
       :else
       (let [state (note-restart! c pos)

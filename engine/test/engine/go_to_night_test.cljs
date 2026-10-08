@@ -10,6 +10,7 @@
             [engine.registry :as registry]
             [engine.scenario :as scenario]
             [engine.shelter-test :as st]
+            [engine.takeover :as takeover]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.shelter :as sh]))
@@ -84,6 +85,18 @@
           (await (tu/run-until-empty eng 40))
           (is (empty? (:list (core/state eng))))
           (is (> 2 (js/Math.abs (- 15 (:x (st/pos-of p)))))))))))
+
+(deftest a-manual-go-to-walks-out-of-the-hut-at-night
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (st/setup (night-hut {}))
+              seen-held (:ok (takeover/take! eng {:who "claude" :why "own order"}))
+              id (core/submit! eng '(jobs.movement.go-to {:pos [15 64 0]}) {:by "claude"})]
+          (is seen-held)
+          (await (ticks eng 40))
+          (is (nil? (:reason (waiting-of eng id))) "the driver's own go-to does not wait for day")
+          (is (> 2 (js/Math.abs (- 15 (:x (st/pos-of p))))) "it walks out at night"))))))
 
 ;; ------------------------------------------------------------------ a child go-to
 
