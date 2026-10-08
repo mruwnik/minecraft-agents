@@ -508,3 +508,33 @@
           (is (< (first (body-pos raw)) -30) (str "fled far west: " (pr-str out)))
           (is (not (contains? names "attack")) "never fights")
           (is (empty? (filter #(= :retreat_blocked (:kind %)) @seen))))))))
+
+(deftest a-silent-creeper-behind-the-fleeing-body-is-looked-back-at-before-the-flight-ends
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [creeper {:id 9 :uuid "u9" :name "creeper" :kind "hostile" :pos {:x 5 :y 64 :z 0}
+                       :chase {:speed 0.7 :follow 16}}
+              {:keys [raw out]} (await (run-job! (setup-sensed {:entities [creeper]}) 'jobs.survival.retreat {}))]
+          (is (= :done (:status out)) (pr-str out))
+          (is (> (fake/dist (body-pos raw) (mob-pos raw 9)) 16)
+              (str "the flight ends only once the creeper really stopped chasing, not while it follows unseen: "
+                   (pr-str out) " body " (body-pos raw) " creeper " (mob-pos raw 9))))))))
+
+(deftest a-far-flight-tells-the-agent-where-the-body-went-and-why
+  (is (nil? (retreat-flight/fled-notice {:x 0 :y 64 :z 0} {:x -10 :y 64 :z 0} [{:mob "zombie" :id 7}] :far 16))
+      "a short flight is no news")
+  (is (nil? (retreat-flight/fled-notice nil {:x -10 :y 64 :z 0} [] :far 16)) "no start place: no news")
+  (is (= {:from [0 64 0] :to [-40 64 3] :distance 40 :mobs ["zombie 7"] :ended :far
+          :text "fled 40 blocks from zombie 7: [0 64 0] -> [-40 64 3]; it stopped chasing (far)"}
+         (retreat-flight/fled-notice {:x 0.4 :y 64 :z 0.2} {:x -39.6 :y 64 :z 3.4} [{:mob "zombie" :id 7}] :far 16)))
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [seen]} (await (run-job! (setup {:entities [(zombie 7 5 {:chase {:speed 0.7}})]})
+                                              'jobs.survival.retreat {}))
+              fled (filterv #(= :hostile.fled (:kind %)) @seen)]
+          (is (= 1 (count fled)) "one notice for the whole flight")
+          (is (= :warn (:level (first fled))))
+          (is (= ["zombie 7"] (:mobs (first fled))))
+          (is (> (:distance (first fled)) 30)))))))

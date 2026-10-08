@@ -421,7 +421,7 @@
                         (flight/end-flight! c :keeps-off)
                         (await (wait-far! c))))))]
     (cond
-      (nil? threat) (flight/end-flight! c nil)
+      (nil? threat) (or (await (flight/look-back! c)) (flight/end-flight! c nil))
       (flight/no-gain? (ctx/mem c) no-gain-steps)
       (do (when (seq (near-hostiles c)) (ctx/update-mem! c assoc :since-gain 0))
           (await (stuck "the chaser keeps up")))
@@ -449,7 +449,7 @@
   "One whole flight: steps (flight-step!, or the refuge's) until it ends."
   [c]
   (ctx/update-mem! c flight/resume-flight (ctx/now c))
-  (when-not (:flight-start (ctx/mem c)) (ctx/update-mem! c assoc :flight-start (ctx/now c)))
+  (when-not (:flight-start (ctx/mem c)) (ctx/update-mem! c assoc :flight-start (ctx/now c) :flight-from (u/self-pos c)))
   (loop []
     (ctx/update-mem! c assoc :last-step (ctx/now c))
     (let [r (await (if (:refuge (ctx/mem c)) (refuge/refuge-round! c) (flight-step! c)))]

@@ -8,10 +8,12 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.result :as r]
             [jobs.lib.threats :as threats]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [clojure.string :as str]))
 
 (a/defargs settings
   {::wait-ms {:default 1000 :doc "One hold of a hidden or cornered body before it looks again." :spec (a/int-in 0 nil)}
+   ::far-flight {:default 16 :doc "Blocks a flight must move the body to tell the agent (hostile.fled)." :spec (a/num-in 0 nil)}
    ::resume-gap-ms {:default 5000 :doc "A flight cut for longer than this starts its clocks afresh when it resumes." :spec (a/int-in 0 nil)}})
 (defn wait-ms [] (settings/get settings ::wait-ms))
 
@@ -102,6 +104,17 @@
     (cond-> (assoc mem :flight-start now :last-step now)
       (:chasers mem) (update :chasers update-vals #(assoc % :seen-t now)))))
 
+(defn sensed-now?
+  "Whether hostile e (a known-hostiles entry, or nil) is sensed now rather than remembered at its last place."
+  [e]
+  (and (some? e) (not (true? (.-remembered e)))))
+
+(defn unsensed-loss?
+  "Whether a chaser judged off for why may only be out of the body's senses (a silent mob behind it, a remembered place
+  gone stale): lost, far or gone while not sensed now. Such a chaser is looked back at before it is let go."
+  [e why]
+  (and (#{:lost :far :gone} why) (not (sensed-now? e))))
+
 (defn chaser-entry
   "A chaser's flight entry: its id, uuid, name and place (threats/place-of: exact only when seen)."
   [p e now]
@@ -120,17 +133,48 @@
         listed (into {} (map (juxt #(.-id %) identity)) live)
         joining (remove #(dead (.-id %)) (danger-q/dangers p radius {:ranged-radius ranged-radius} {:sight? false}))
         chasers (merge (:chasers (ctx/mem c)) (into {} (map (juxt #(.-id %) #(chaser-entry p % now))) joining))
+        looked (set (:looked-back (ctx/mem c)))
         judged (for [[id ch] chasers
                      :let [e (listed id)
                            seen-t (if (and e (true? (.-visible e))) now (:seen-t ch))
-                           ch (cond-> (assoc ch :seen-t seen-t) e (-> (dissoc :pos :direction :band :from) (merge (threats/place-of p e))))]]
-                 {:id id :ch ch :e e :why (stopped-chasing (some->> e (seen-now p)) seen-t now (* 1000 lost-s))})
+                           ch (cond-> (assoc ch :seen-t seen-t) e (-> (dissoc :pos :direction :band :from) (merge (threats/place-of p e))))
+                           why (stopped-chasing (some->> e (seen-now p)) seen-t now (* 1000 lost-s))]]
+                 {:id id :ch ch :e e :why why
+                  :look-back? (and (unsensed-loss? e why) (not (looked id)) (not (dead id)))})
         on (filter #(nil? (:why %)) judged)
-        off (remove #(nil? (:why %)) judged)]
+        back (filter :look-back? judged)
+        off (remove #(or (nil? (:why %)) (:look-back? %)) judged)]
     (ctx/update-mem! c #(-> %
-                            (assoc :chasers (into {} (map (juxt :id :ch)) on))
+                            (assoc :chasers (into {} (map (juxt :id :ch)) (concat on back)))
+                            (assoc :look-back (mapv :ch back))
+                            (update :looked-back (fn [ids] (vec (remove (set (keep (fn [{:keys [id e]}] (when (sensed-now? e) id)) judged)) ids))))
                             (update :fled (fnil into []) (map (fn [{:keys [ch why]}] (assoc ch :ended why))) off)))
     (sort-by #(danger-q/mob-distance p %) (map :e on))))
+
+(defn ^:async look-back!
+  "Turn to each chaser look! held back (job memory :look-back: lost while unsensed) at its last known place, once until it
+  is sensed again; :again when it looked, nil when there was nothing to look back at."
+  [c]
+  (when-let [chs (seq (:look-back (ctx/mem c)))]
+    (ctx/update-mem! c #(-> % (dissoc :look-back) (update :looked-back (fnil into []) (map :id chs))))
+    (doseq [ch chs]
+      (when-let [pos (danger-q/rough-pos ch)]
+        (await (ctx/act c :look (clj->js {:pos (update pos :y + 0.9)})))))
+    :again))
+
+(defn far-flight [] (settings/get settings ::far-flight))
+
+(defn fled-notice
+  "Pure: the hostile.fled fields for a flight that moved the body from `from` to `to` ({:x :y :z}) away from the mobs
+  fled ([{:mob :id}]), ended why; nil when it moved less than far blocks."
+  [from to mobs ended far]
+  (let [d (when (and from to) (js/Math.round (u/dist from to)))
+        at (fn [p] (mapv #(js/Math.floor (% p)) [:x :y :z]))
+        names (mapv #(str (:mob %) " " (:id %)) mobs)]
+    (when (and d (>= d far))
+      {:from (at from) :to (at to) :distance d :mobs names :ended ended
+       :text (str "fled " d " blocks from " (str/join ", " names) ": " (at from) " -> " (at to)
+                  "; it stopped chasing (" (name ended) ")")})))
 
 (defn end-flight!
   "Write a :threat entry per mob fled (jobs.lib.threats; one per mob, its last way out) and end the flight: done with
@@ -144,7 +188,9 @@
         why (or ended (:ended (peek (vec fled))) :none)
         ids (mapv :id all)]
     (doseq [t all] (threats/remember! c t))
-    (ctx/update-mem! c dissoc :chasers :fled)
+    (when-let [n (fled-notice (:flight-from (ctx/mem c)) (u/self-pos c) all why (far-flight))]
+      (ctx/emit! c :hostile.fled :warn n))
+    (ctx/update-mem! c dissoc :chasers :fled :look-back :looked-back)
     (if (= :cannot-escape ended)
       (r/stop! c :cannot_escape "every way of escaping failed twice in a row" :fled ids)
       (r/finish! c {:fled ids :ended why}))))
