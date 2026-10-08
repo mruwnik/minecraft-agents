@@ -2,7 +2,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import net from 'node:net'
-import { splitForms, scanForms, failSig, summarize, unitOrder, parsePoolArgs, workerSpecs, runPool, mergeText, poolCap, createReaper, countListed, listArgs, knownFailures, parseListed, unitsWithCases, noCasesSelected, serverProbe, matchIdsFrom, parseNightClasses, nightBatchEndArgs, sleepRuleRestoreArgs, nightBatches, durationsById, runNightBatches, waitForBodies, PRECHECK_EXIT, BOOT_EXIT } from './world-test-pool.mjs'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { splitForms, scanForms, failSig, summarize, unitOrder, parsePoolArgs, workerSpecs, runPool, mergeText, poolCap, createReaper, countListed, listArgs, knownFailures, parseListed, unitsWithCases, noCasesSelected, serverProbe, matchIdsFrom, parseNightClasses, nightBatchEndArgs, sleepRuleRestoreArgs, nightBatches, durationsById, runNightBatches, waitForBodies, PRECHECK_EXIT, BOOT_EXIT, traceDirOf, durationFiles, main } from './world-test-pool.mjs'
 
 const form = (id, status, secs = 1, extra = '') =>
   `{:plot 0, :file "${id.split('/')[0]}", :expects [{:status :pass, :evidence "a } \\" {"}], :status :${status}, :id "${id}", :elapsed-s ${secs}${extra}}`
@@ -686,4 +689,71 @@ test('runPool: a unit that exits with the boot-death code stops the pass at once
   assert.equal(r.bootDead, true)
   assert.equal(log.length, 1)
   assert.equal(splitForms(r.text).length, 1)
+})
+
+const bootErr = (id) => form(id, 'error', 1, ', :why "body did not start within 90 s"')
+test('runPool: a body that dies at boot is retired, its cases go to the other bodies and the pass goes on', async () => {
+  const log = []
+  const runUnit = async ({ file, worker }) => {
+    log.push({ file, body: worker.body })
+    return worker.body === 'PA' ? { code: BOOT_EXIT, text: vec(bootErr(`${file}/c1`)) } : { code: 0, text: vec(form(`${file}/c1`, 'pass')) }
+  }
+  const listed = new Map([['a', ['a/c1']], ['b', ['b/c1']], ['c', ['c/c1']]])
+  const r = await runPool({ units: ['a', 'b', 'c'], workers: workerSpecs(2, 19, 'P', 0), runUnit, listed, total: 3 })
+  assert.equal(r.code, 0)
+  assert.equal(r.bootDead, undefined)
+  assert.deepEqual(splitForms(r.text).map((f) => summarize(f).id).sort(), ['a/c1', 'b/c1', 'c/c1'])
+  assert.equal(log.filter((l) => l.body === 'PA').length, 1, 'the retired body ran nothing more')
+})
+test('runPool: when every body died at boot the pass stops with exit 6, keeping what was recorded', async () => {
+  const runUnit = async ({ file }) => ({ code: BOOT_EXIT, text: vec(bootErr(`${file}/c1`)) })
+  const r = await runPool({ units: ['a', 'b', 'c'], workers: workerSpecs(2, 19, 'P', 0), runUnit, total: 3 })
+  assert.equal(r.code, 6)
+  assert.equal(r.bootDead, true)
+})
+test('runPool: a rerun of a failed case tells runUnit its attempt number (first run 0)', async () => {
+  const seen = []
+  const runUnit = async ({ file, match, attempt }) => { seen.push([match, attempt]); return match ? { code: 0, text: vec(form('a/c1', 'pass')) } : { code: 1, text: vec(form('a/c1', 'fail')) } }
+  await runPool({ units: ['a'], workers: workerSpecs(2, 19, 'P', 0), runUnit, total: 1 })
+  assert.deepEqual(seen, [[null, 0], ['a/c1', 1]])
+})
+test('runNightBatches: a case whose body died at boot runs again on another body; the dead body is not used again', async () => {
+  const log = []
+  const runUnit = async ({ id, worker }) => {
+    log.push([id, worker.body])
+    return worker.body === 'PA' && log.length === 1 ? { code: BOOT_EXIT, text: vec(bootErr(id)) } : { code: 0, text: vec(form(id, 'pass')) }
+  }
+  const batches = [{ kind: 'natural', ids: ['a/c1', 'b/c1'] }, { kind: 'natural', ids: ['c/c1', 'd/c1'] }]
+  const r = await runNightBatches({ batches, workers: workerSpecs(2, 19, 'P', 0), runUnit, total: 4 })
+  assert.equal(r.code, 0)
+  assert.equal(splitForms(r.text).length, 4)
+  assert.deepEqual(log.filter(([, b]) => b === 'PA').length, 1)
+  assert.deepEqual(log.slice(-2).map(([id]) => id).sort(), ['c/c1', 'd/c1'])
+})
+test('runNightBatches: with no body left the pass stops with exit 6', async () => {
+  const runUnit = async ({ id }) => ({ code: BOOT_EXIT, text: vec(bootErr(id)) })
+  const r = await runNightBatches({ batches: [{ kind: 'natural', ids: ['a/c1'] }, { kind: 'natural', ids: ['b/c1'] }], workers: workerSpecs(2, 19, 'P', 0), runUnit, total: 2 })
+  assert.equal(r.code, 6)
+  assert.equal(r.bootDead, true)
+})
+test('traceDirOf: cases/ next to the --results file, none without one', () => {
+  assert.equal(traceDirOf({ results: '/d/sweep.edn' }), '/d/cases')
+  assert.equal(traceDirOf({ results: null }), null)
+})
+
+test('durationFiles: skips missing paths, directories and non-.edn files', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pool-dur-'))
+  const edn = path.join(dir, 'a.edn')
+  fs.writeFileSync(edn, '[]')
+  fs.writeFileSync(path.join(dir, 'b.txt'), '[]')
+  fs.mkdirSync(path.join(dir, 'd.edn'))
+  assert.deepEqual(durationFiles([edn, path.join(dir, 'b.txt'), path.join(dir, 'd.edn'), dir, path.join(dir, 'gone.edn')]), [edn])
+  fs.rmSync(dir, { recursive: true, force: true })
+})
+test('main: no fixture path is a clear usage error (exit 2)', async () => {
+  const err = console.error
+  const lines = []
+  console.error = (m) => lines.push(m)
+  try { assert.equal(await main(['--bodies', '2', '--durations', 'a.edn']), 2) } finally { console.error = err }
+  assert.match(lines.join('\n'), /no fixture file or directory/)
 })

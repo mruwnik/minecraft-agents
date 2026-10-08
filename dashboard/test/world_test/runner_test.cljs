@@ -1258,3 +1258,17 @@
 
 (deftest a-refusal-before-any-case-has-its-own-exit-code
   (is (= 5 r/precheck-exit)))
+
+(deftest trace-options-parse-and-only-failed-results-get-a-trace
+  (let [o (r/parse-args #js ["--trace-dir" "/d/cases" "--trace-attempt" "2"])]
+    (is (= ["/d/cases" 2] ((juxt :trace-dir :trace-attempt) o))))
+  (is (= {:status :pass} (r/write-trace! {:trace-dir "/nonexistent-x/cases" :body "B"} {:status :pass} {:ino nil :pos 0})))
+  (is (= {:status :fail} (r/write-trace! {:body "B"} {:status :fail} {:ino nil :pos 0}))))
+
+(deftest a-failed-result-gets-its-trace-file
+  (let [dir (fs/mkdtempSync (path/join (os/tmpdir) "trace-run-"))
+        out (r/write-trace! {:trace-dir dir :body "NoSuchBodyX" :world "claude" :trace-attempt 1 :retry 1}
+                            {:id "f/c" :run 2 :status :fail} {:ino nil :pos 0})]
+    (is (= (path/join dir "f__c__r2-a2.edn") (:trace out)))
+    (is (fs/existsSync (:trace out)))
+    (fs/rmSync dir #js {:recursive true :force true})))

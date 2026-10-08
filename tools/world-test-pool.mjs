@@ -20,7 +20,8 @@
 //                     is rerun up to N times (default 1; exactly its --match-id, one run) on a different body when the pool has one; a pass is :flaky.
 //   --match-id ID    (repeatable) and --match-ids FILE (one id per line, or a --results .edn: its ids that did not pass) run exactly those cases; --list counts only them.
 //   --min-bodies N   waits (polls free memory, logging the figure every minute) until the body cap reaches N; past --min-bodies-wait-s (default 1800) it stops with exit 4.
-//   A child exiting 6 (its body died at boot twice in a row) stops the pass at once with exit 6, keeping the results it wrote.
+//   A child exiting 6 (its body died at boot twice in a row) retires that body: its cases go to the others; when no body is left the pass stops with exit 6, keeping the results it wrote.
+//   With --results FILE each failed, errored or flaky case's trace (body events, body.log tail; capped) is written to <dir of FILE>/cases/ and named :trace in its entry (a flaky entry's :first-failure holds the failing run's).
 //   A child exiting 5 (a precheck that fails for every case, e.g. a stranger near the plot grid) stops the pass at once with exit 5. At start the pool stops leftover bodies of its prefix with no live runner lease.
 //   --server-wait-s S when a child hits a refused RCON/game-port connection the pool holds every unit and polls the server (up to S seconds, default 300),
 //                     reruns the faulted cases without using a retry (at most twice each), waits --server-settle-s (default 10) after the server answers, and past S stops with "server unreachable" (exit 3)
@@ -266,6 +267,8 @@ const errorForm = (file, why, id = file) => `{:id ${JSON.stringify(id)}, :file $
 // no unit starts (polled every serverPollMs, then settleMs once it answers); the faulted cases rerun for free (at most FAULT_RERUNS times each); past serverWaitMs the pool stops: {unreachable: true, code: 3}.
 const CONN_FAULT = /ECONN(REFUSED|RESET)|EPIPE/
 const FAULT_RERUNS = 2 // a case that still faults after this many free reruns settles as an ordinary error
+const BOOT_FAULT = /did not start within/
+const bootFault = (form) => summarize(form).status === 'error' && [':error', ':why', ':evidence'].some((k) => BOOT_FAULT.test(valueOf(form, k) ?? ''))
 const connFault = (form) => summarize(form).status === 'error' && [':error', ':why', ':evidence'].some((k) => CONN_FAULT.test(valueOf(form, k) ?? ''))
 export const runPool = async ({ units, workers, runUnit, retries = 1, load = () => 0, cores = 1, total = null, known = new Map(), listed = null, repeat = 1, emit = () => {}, sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
   probe = async () => true, now = Date.now, serverWaitMs = 300000, serverPollMs = 3000, settleMs = 10000 }) => {
@@ -288,6 +291,7 @@ export const runPool = async ({ units, workers, runUnit, retries = 1, load = () 
   let unreachable = false
   let precheck = false
   let bootDead = false
+  let alive = workers.length // bodies not retired for dying at boot
   let attempted = 0
   const hold = () => {
     holding ??= (async () => {
@@ -370,34 +374,38 @@ export const runPool = async ({ units, workers, runUnit, retries = 1, load = () 
       if (job) {
         while (busy && load() > cores) await sleep(LOAD_POLL_MS)
         busy++
-        const res = await runUnit({ file: job.file, match: job.match, exact: job.match !== null, worker })
+        const res = await runUnit({ file: job.file, match: job.match, exact: job.match !== null, worker, attempt: job.attempt ?? 0 })
         if (res.code === PRECHECK_EXIT && !res.text) { precheck = true; busy--; notify(); return }
         const forms = res.text ? splitForms(res.text) : []
         const faults = (job.faults ?? 0) + 1
-        const faulted = faults <= FAULT_RERUNS ? forms.filter(connFault) : []
-        if (faulted.length || (!res.text && !(await probe()))) {
-          hold()
-          if (job.match !== null || job.retry || faulted.length === forms.length) queue.push({ ...job, faults }) // the same job again, no retry used
+        const retire = res.code === BOOT_EXIT && alive > 1 // this body is retired, its cases go to the others; the last body ends the pass
+        if (retire) alive--
+        const bad = retire ? forms.filter(bootFault) : faults <= FAULT_RERUNS ? forms.filter(connFault) : []
+        if (retire || bad.length || (!res.text && !(await probe()))) {
+          if (!retire) hold()
+          const extra = retire ? { avoid: worker.body } : { faults }
+          if (job.match !== null || job.retry || bad.length === forms.length) queue.push({ ...job, ...extra }) // the same job again, no retry used
           else {
             const redo = (id, run) => {
               redoing.add(`${id}#${run}`)
-              queue.push({ file: job.file, match: id, run, redo: true, avoid: null, faults })
+              queue.push({ file: job.file, match: id, run, redo: true, avoid: null, ...extra })
             }
-            for (const f of faulted) redo(summarize(f).id, summarize(f).run)
+            for (const f of bad) redo(summarize(f).id, summarize(f).run)
             const seen = new Set(forms.map((f) => key(summarize(f))))
             for (const id of listed?.get(job.file) ?? []) { // cases the child never reached
               for (let run = 1; run <= repeat; run++) if (!seen.has(`${id}#${run}`) && !settled.has(`${id}#${run}`) && !done.has(`${id}#${run}`) && !redoing.has(`${id}#${run}`)) redo(id, run)
             }
-            record(job, worker, { ...res, text: mergeText(forms.filter((f) => !connFault(f))) })
+            record(job, worker, { ...res, text: mergeText(forms.filter((f) => !bad.includes(f))) })
           }
         } else record(job, worker, res)
-        if (res.code === BOOT_EXIT) bootDead = true
+        if (res.code === BOOT_EXIT && !retire) bootDead = true
         if (done.size > finals && done.size !== attempted) { // first attempts waiting for their rerun
           attempted = done.size
           emit({ event: 'progress', done: finals, total: total ?? done.size, unit: 'cases', retries: reruns, attempted })
         }
         busy--
         notify()
+        if (retire) return
         continue
       }
       if (!busy && !queue.length) return
@@ -424,38 +432,62 @@ export const runNightBatches = async ({ batches, workers, runUnit, retries = 1, 
   let reruns = 0
   let seq = 0
   let precheck = false
+  let bootDead = false
+  const dead = new Set() // bodies retired for dying at boot
+  const live = () => workers.filter((w) => !dead.has(w.body))
   const settle = (id, form) => {
     done.set(id, form)
     emit(resultEvent(form))
     emit({ event: 'progress', done: ++finals, total: total ?? finals, unit: 'cases', retries: reruns })
   }
-  const runBatch = async (ids, barrier) => {
+  // [id, form, bootFail] per id; the ids run together on the live bodies (in waves when there are fewer bodies than ids); a case whose body died at boot is bootFail and retires that body
+  const runBatch = async (ids, barrier, attempt = 0) => {
     const batch = `${process.pid}-${seq++}`
-    const out = await Promise.all(ids.map(async (id, k) => {
-      const res = await runUnit({ id, batch, barrier, worker: workers[k % workers.length] })
-      if (res.code === PRECHECK_EXIT && !res.text) precheck = true
-      const mine = (res.text ? splitForms(res.text) : []).find((f) => summarize(f).id === id)
-      return [id, mine ?? errorForm(id.split('/')[0], `the run exited ${res.code} with no result for this case`, id)]
-    }))
+    const out = []
+    for (let at = 0; at < ids.length; at += Math.max(1, live().length)) {
+      const bodies = live()
+      out.push(...await Promise.all(ids.slice(at, at + bodies.length).map(async (id, k) => {
+        const res = await runUnit({ id, batch, barrier, worker: bodies[k], attempt })
+        if (res.code === PRECHECK_EXIT && !res.text) precheck = true
+        const mine = (res.text ? splitForms(res.text) : []).find((f) => summarize(f).id === id)
+        const bootFail = res.code === BOOT_EXIT && (!mine || bootFault(mine))
+        if (res.code === BOOT_EXIT) dead.add(bodies[k].body)
+        return [id, mine ?? errorForm(id.split('/')[0], `the run exited ${res.code} with no result for this case`, id), bootFail]
+      })))
+    }
     await onBatchEnd(batch)
     return out
   }
+  // the cases whose body died at boot run again on the others (each such death retires a body, so this ends)
+  const rerunBootFails = async (out) => {
+    let cur = out
+    while (!precheck && cur.some((x) => x[2])) {
+      if (!live().length) { bootDead = true; return cur }
+      const again = new Map((await runBatch(cur.filter((x) => x[2]).map((x) => x[0]))).map((x) => [x[0], x]))
+      cur = cur.map((x) => again.get(x[0]) ?? x)
+    }
+    return cur
+  }
   const failing = []
   for (const batch of batches) {
-    const out = await runBatch(batch.ids, batch.barrier)
+    if (batch.barrier && live().length < batch.ids.length) { bootDead = true; break } // the cases of a barrier meet: they need a body each
+    const out = await rerunBootFails(await runBatch(batch.ids, batch.barrier))
     if (precheck) return { text: mergeText([...done.values()]), precheck, code: PRECHECK_EXIT }
+    if (bootDead) break
     for (const [id, form] of out) {
       if (!(failed(summarize(form)) || overran(form)) || retries <= 0) settle(id, form)
       else if (failed(summarize(form)) && known.get(id) === failSig(form)) settle(id, withExtra(form, ':known-failure true'))
       else failing.push([id, form])
     }
   }
+  if (bootDead) return { text: mergeText([...done.values()]), bootDead, code: BOOT_EXIT }
   for (const [id, first] of failing) {
     let last = first
     let flaky = false
     for (let attempt = 0; attempt < retries && !flaky; attempt++) {
       reruns++
-      const [, form] = (await runBatch([id]))[0]
+      const [, form] = (await rerunBootFails(await runBatch([id], undefined, attempt + 1)))[0]
+      if (bootDead) return { text: mergeText([...done.values()]), bootDead, code: BOOT_EXIT }
       last = form
       flaky = summarize(form).status === 'pass'
       if (!flaky && !failed(summarize(form)) && !overran(form)) break
@@ -476,8 +508,8 @@ const bodyCap = () => Math.max(1, (slotConfig().kinds.body.max ?? 1) - 1)
 const availableMb = () => Number(fs.readFileSync('/proc/meminfo', 'utf8').match(/MemAvailable:\s+(\d+)/)[1]) / 1024
 
 // One child per unit: the ordinary one-body entry point (it takes the body slot and the body claim itself). Exit 75 = busy: ask again.
-const spawnChild = (script, pass, matchIds, { file, match, worker, batch, barrier }, tmpResults, reaper) => new Promise((resolve) => {
-  const argv = [script, file, ...pass, ...(batch ? ['--night-batch', batch] : []), ...(batch && barrier ? ['--night-barrier', String(barrier)] : []), '--body', worker.body, '--first-plot', String(worker.firstPlot), '--results', tmpResults, ...(match ? ['--match-id', match, '--repeat', '1'] : withMatchIds(matchIds))]
+const spawnChild = (script, pass, matchIds, { file, match, worker, batch, barrier, attempt = 0 }, tmpResults, reaper, traceDir) => new Promise((resolve) => {
+  const argv = [script, file, ...pass, ...(traceDir ? ['--trace-dir', traceDir, '--trace-attempt', String(attempt)] : []), ...(batch ? ['--night-batch', batch] : []), ...(batch && barrier ? ['--night-barrier', String(barrier)] : []), '--body', worker.body, '--first-plot', String(worker.firstPlot), '--results', tmpResults, ...(match ? ['--match-id', match, '--repeat', '1'] : withMatchIds(matchIds))]
   // the pool reports the @@test events itself (fixed total, final status per case), so a child prints none
   const { TEST_EVENTS: _events, ...env } = process.env
   const child = spawn(process.execPath, argv, { stdio: 'inherit', env: { ...env, WORLD_TEST_POOL_PID: String(process.pid) } })
@@ -489,6 +521,8 @@ const spawnChild = (script, pass, matchIds, { file, match, worker, batch, barrie
 // the --list call selects cases with the same paths and flags (--phase, --tag, --match, ...) the children get
 export const listArgs = (p) => [...p.paths, ...p.passthrough, ...withMatchIds(p.matchIds), '--list']
 export const nightListArgs = (p) => [...listArgs(p), '--night-classes']
+// failed cases' traces go next to the --results file (none without one)
+export const traceDirOf = (p) => (p.results ? path.join(path.resolve(path.dirname(p.results)), 'cases') : null)
 const repeatOf = (p) => { const at = p.passthrough.indexOf('--repeat'); return at < 0 ? 1 : Number(p.passthrough[at + 1]) }
 const listCases = (script, p) => {
   const r = spawnSync(process.execPath, [script, ...listArgs(p)], { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 })
@@ -496,7 +530,8 @@ const listCases = (script, p) => {
 }
 
 // the texts of the existing --durations files that hold a complete results vector; an empty or cut-off one is warned about and skipped
-const readDurations = (files) => files.filter((f) => fs.existsSync(f)).flatMap((f) => {
+export const durationFiles = (files) => files.filter((f) => f.endsWith('.edn') && fs.existsSync(f) && fs.statSync(f).isFile())
+const readDurations = (files) => durationFiles(files).flatMap((f) => {
   const text = fs.readFileSync(f, 'utf8')
   if (scanForms(text).complete) return [text]
   console.error(`world-test pool: --durations file ${f} is empty or truncated, skipped`)
@@ -572,7 +607,7 @@ const nightMain = async (p, byStem, previous, script) => {
     let code
     for (let tries = 0; tries < 20; tries++) {
       fs.rmSync(tmp, { force: true })
-      code = await spawnChild(script, pass, [], { file: byStem.get(unit.id.split('/')[0]), match: unit.id, worker: unit.worker, batch: unit.batch, barrier: unit.barrier }, tmp, reaper)
+      code = await spawnChild(script, pass, [], { file: byStem.get(unit.id.split('/')[0]), match: unit.id, worker: unit.worker, batch: unit.batch, barrier: unit.barrier, attempt: unit.attempt }, tmp, reaper, traceDirOf(p))
       if (code !== 75) break
       await sleep(5000)
     }
@@ -583,6 +618,7 @@ const nightMain = async (p, byStem, previous, script) => {
   emitLine({ event: 'plan', total: cases.length })
   const res = await runNightBatches({ batches, workers, runUnit, retries: p.retries, total: cases.length, known: knownFailures(previous), emit: emitLine, onBatchEnd: (batch) => endNightBatch(script, pass, workers[0].body, batch) })
   if (res.precheck) console.error('world-test pool: a precheck refused every case (see the line above); pass stopped, no case recorded')
+  if (res.bootDead) console.error('world-test pool: every body died at boot (see the child log, e.g. a heap OOM); pass stopped, the cases not run are not recorded')
   if (p.results) fs.writeFileSync(p.results, res.text)
   const sums = splitForms(res.text).map(summarize)
   const count = (st) => sums.filter((x) => x.status === st).length
@@ -592,6 +628,7 @@ const nightMain = async (p, byStem, previous, script) => {
 
 export const main = async (args) => {
   const p = parsePoolArgs(args)
+  if (!p.paths.length) { console.error('world-test pool: no fixture file or directory given (e.g. engine/fixtures/world)'); return 2 }
   if (p.matchIdsFile) p.matchIds.push(...matchIdsFrom(fs.readFileSync(p.matchIdsFile, 'utf8')))
   if (p.matchIdsFile && !p.matchIds.length) { console.error(`world-test pool: ${p.matchIdsFile} holds no ids`); return 2 }
   const byStem = new Map(fixtureFiles(p.paths).map((f) => [path.basename(f, '.edn'), f]))
@@ -620,7 +657,7 @@ export const main = async (args) => {
     let code
     for (let tries = 0; tries < 20; tries++) {
       fs.rmSync(tmp, { force: true })
-      code = await spawnChild(script, p.passthrough, p.matchIds, { ...unit, file: byStem.get(unit.file) }, tmp, reaper)
+      code = await spawnChild(script, p.passthrough, p.matchIds, { ...unit, file: byStem.get(unit.file) }, tmp, reaper, traceDirOf(p))
       if (code !== 75) break
       await sleep(5000)
     }
@@ -632,7 +669,7 @@ export const main = async (args) => {
   if (total !== null) emitLine({ event: 'plan', total })
   const r = await runPool({ listed, repeat: repeatOf(p), units, workers, runUnit, retries: p.retries, total, known: knownFailures(previous), emit: emitLine, load: () => os.loadavg()[0], cores, probe: serverProbe([rconPort(), gamePort()]), serverWaitMs: p.serverWaitS * 1000, settleMs: p.serverSettleS * 1000 })
   if (r.precheck) console.error('world-test pool: a precheck refused every case (see the line above); pass stopped, no case recorded')
-  if (r.bootDead) console.error('world-test pool: a body died at boot repeatedly (see the child log, e.g. a heap OOM); pass stopped, the cases not run are not recorded')
+  if (r.bootDead) console.error('world-test pool: every body died at boot (see the child log, e.g. a heap OOM); pass stopped, the cases not run are not recorded')
   if (r.unreachable) console.error(`world-test pool: server unreachable (RCON port ${rconPort()} or game port ${gamePort()} closed for ${p.serverWaitS} s); stopped, the cases not run are not recorded${r.pending?.length ? `; ${r.pending.length} failures awaiting a retry are recorded as inconclusive` : ''}`)
   if (p.results) fs.writeFileSync(p.results, r.text)
   const sums = splitForms(r.text).map(summarize)

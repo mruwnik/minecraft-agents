@@ -17,17 +17,19 @@
             [world-test.build :as build]
             [world-test.changed :as chg]
             [world-test.events :as ev]
+            [world-test.trace :as trace]
             [world-test.expect :as x]
             [world-test.fixture :as f]
             [world-test.lease :as lease]))
 
 (def usage
   (str "usage: node tools/world-test.mjs [fixture.edn|dir ...] [--tag T] [--match TEXT] [--match-id ID ...] [--repeat N] [--body NAME]\n"
-       "         [--world test] [--first-plot I] [--card ID] [--allow-time --time-log FILE] [--results FILE] [--phase day|night|night-exclusive] [--night-batch ID] [--night-barrier N] [--night-batch-end ID] [--night-classes] [--retry-failed N] [--changed-since-pass] [--stop-on-fail] [--list] [--check] [--stop-stale-bodies PREFIX]\n"
+       "         [--world test] [--first-plot I] [--card ID] [--allow-time --time-log FILE] [--results FILE] [--trace-dir DIR [--trace-attempt N]] [--phase day|night|night-exclusive] [--night-batch ID] [--night-barrier N] [--night-batch-end ID] [--night-classes] [--retry-failed N] [--changed-since-pass] [--stop-on-fail] [--list] [--check] [--stop-stale-bodies PREFIX]\n"
        "--phase runs only the cases of that time class (case level; :any and untimed cases, and :day, count as day; a case whose first :time-set step is\n"
        "night counts as night): run day, then night, then night-exclusive so the time lock never flips mid-pass.\n"
        "--changed-since-pass skips a fixture file that passed fully at a recorded revision (every run passes record it, in .claude/world-test-passes.edn) when no file of the jobs and triggers it uses (and what their source names) changed since, tracked or untracked; any engine, js, trigger-default or runner change, or a change to the fixture file, runs it.\n"
        "--retry-failed N reruns each failed case (not errors or inconclusive) up to N times after the batch, on the same body; a pass on a retry is reported :flaky (counted apart, never :pass, exit 0, also the live outcome) with the first failure kept under :first-failure; not combinable with --stop-on-fail.\n"
+       "--trace-dir DIR writes, for each failed or errored case, DIR/<fixture>__<case>__r<run>-a<attempt>.edn (its body events from the setup on, capped, and the tail of body.log) and names it under :trace in the result; --trace-attempt N (default 0) numbers the attempt in the file name.\n"
        "--check only loads and validates the fixtures (no body, no server): one result per case, exit 1 on a parse error or problem.\n"
        "A job case (no :register, no :wait-full true, only :event expectations pending) ends :idle-grace-s (default 3) s after every job it submitted has ended, failed or parked (\"no job active: ...\", :ended-early-s and :idle-grace-s in the result).\n"
        "Runs world fixtures (default dir engine/fixtures/world) on the reserved plot grid x/z 20000..20640, y 150 (large plots: lanes south of it, to z 22240).\n"
@@ -68,6 +70,8 @@
       (= a "--changed-since-pass") (recur (rest all) (assoc opts :changed-since-pass true))
       (= a "--card") (recur more (assoc opts :card b))
       (= a "--results") (recur more (assoc opts :results b))
+      (= a "--trace-dir") (recur more (assoc opts :trace-dir b))
+      (= a "--trace-attempt") (recur more (assoc opts :trace-attempt (js/Number b)))
       (= a "--stop-on-fail") (recur (rest all) (assoc opts :stop-on-fail true))
       (= a "--allow-time") (recur (rest all) (assoc opts :allow-time true))
       (= a "--list") (recur (rest all) (assoc opts :list true))
@@ -1428,6 +1432,22 @@
            (.then (if (:first? held) (js/Promise.resolve (first-set!)) (if refresh! (refresh!) (js/Promise.resolve true)))
                   (fn [ok] (.then (start!) (fn [_] ok)))))))))
 
+(defn write-trace!
+  "A failed or errored result r with its trace file named under :trace, when --trace-dir is given: the body events from
+  cursor on and the tail of body.log. A trace that cannot be written is logged and r stays as it is."
+  [opts r cursor]
+  (if-not (and (:trace-dir opts) (#{:fail :error} (:status r)))
+    r
+    (try
+      (let [attempt (+ (:trace-attempt opts 0) (or (:retry opts) 0))
+            log-file (path/join (run-dir opts) "body.log")
+            doc (trace/trace-doc (assoc (select-keys r [:id :run :status :why])
+                                        :attempt attempt
+                                        :events (read-events-from (events-file opts) cursor)
+                                        :log (when (fs/existsSync log-file) (trace/tail-text (str (fs/readFileSync log-file "utf8")) trace/max-log-bytes))))]
+        (assoc r :trace (trace/write! (:trace-dir opts) (:id r) (:run r) attempt doc)))
+      (catch :default e (log! "world-test: trace not written: " (.-message e)) r))))
+
 (defn run-case!
   "One run of case c on plot i (leased by the caller); stop! (a thunk to a promise) stops the previous body before the
   time lock is waited for, start! starts or keeps the body once the lock is held. Resolves to a result map. register: the entries to put on the body once it stands in
@@ -1445,6 +1465,7 @@
         stop-sweep (atom (fn []))
         pre-register (atom nil)
         setup-cursor (atom nil)
+        start-cursor (log-cursor (events-file opts))
         weather (atom nil)
         result (fn [m] (cond-> (merge {:id (:id c) :run run :plot i :origin origin :elapsed-s (/ (- (js/Date.now) started) 1000)} m)
                          @weather (assoc :weather @weather)))]
@@ -1533,6 +1554,7 @@
                                                                       (tick-rate-of rate-reply)))
                                 (mark-night-overran (night-overran? opts rc (daytime (or reply "")))))))
                    r)))
+        (.then (fn [r] (write-trace! opts r (or @setup-cursor start-cursor))))
         (.then (fn [r]
                  (-> (run-cleanup! [#(when (some (fn [s] (#{:cli :http} (first s))) (:act c))
                                        (exec-file ["engine/tools/drive.mjs" (:body opts) "release" "--force" "--world" (:world opts)]))
