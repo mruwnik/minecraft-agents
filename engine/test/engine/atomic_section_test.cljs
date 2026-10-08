@@ -159,6 +159,22 @@
           (await round)
           (is (= [:deferred :fired :cut] (kinds seen))))))))
 
+(deftest an-entrys-level-is-a-floor-a-lower-reported-level-does-not-demote-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup)]
+          (core/register-reflex! eng {:trigger :promo :level :danger})
+          (core/submit! eng '(section-then-walk {:level :urgent}) {})
+          (.hold (.-world p) "moveTo")
+          (.hold (.-world p) "moveTo")
+          (let [round (core/tick! eng)]
+            (await (settle!))
+            (self! p :food 2)
+            (is (some? (core/tick! eng)) "reports :urgent but the entry is :danger: cuts the urgent section at once")
+            (await round)
+            (is (= [:fired :cut] (kinds seen)))))))))
+
 (deftest a-trigger-with-no-level-is-danger-and-cuts-at-once
   (async done
     (tu/run-async done

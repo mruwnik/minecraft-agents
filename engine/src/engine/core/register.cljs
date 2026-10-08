@@ -55,26 +55,31 @@
   {:comfort 1 :urgent 2 :danger 3})
 
 (defn level-of
-  "The level a trigger's :when result r gives: nil when r is falsy, r when it is a level, else default."
-  [default r]
-  (cond
-    (not r) nil
-    (contains? levels r) r
-    :else default))
+  "The level a trigger's :when result r gives: nil when r is falsy, r when it is a level, else default; floor, when
+  given, is the lowest level the result may give."
+  ([default r] (level-of default r nil))
+  ([default r floor]
+   (let [lv (cond
+              (not r) nil
+              (contains? levels r) r
+              :else default)]
+     (if (and lv floor (< (levels lv) (levels floor))) floor lv))))
 
 (defn trigger-level
   "The level entry's trigger holds at now, or nil when it does not hold: (:when world view args plans live), where view
   is a memory view {:data :now} (see engine.memory), args are the entry's args, plans is the engine's
   jobs.lib.world-files (a trigger may ignore it) and live is the set of ids of the jobs still listed (running, queued
   or paused; not the parked failed ones). :when returns falsy, a level, or any other truthy value: the entry's :level,
-  else its trigger's (an entry saved before levels has none), else :danger."
+  else its trigger's (an entry saved before levels has none), else :danger; a level :when returns replaces it, but
+  never below the entry's own :level."
   [eng entry world view]
   (let [t (trigger-def eng (:trigger entry))
         st (state eng)
         live (into #{} (remove #(contains? (:failed st) %)) (:list st))]
     (level-of (or (:level entry) (:level t) :danger)
               (call-guarded eng (str "trigger " (:trigger entry)) false
-                            #((:when t) world view (:args entry) (:world eng) live)))))
+                            #((:when t) world view (:args entry) (:world eng) live))
+              (:level entry))))
 
 (defn trigger-holds?
   "Whether entry's trigger holds (trigger-level)."
