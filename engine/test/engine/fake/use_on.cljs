@@ -15,7 +15,8 @@
     "melon_slice" "short_grass" "tall_grass" "oak_leaves" "birch_leaves" "spruce_leaves" "kelp" "sweet_berries"
     "oak_sapling" "birch_sapling" "spruce_sapling" "bread" "baked_potato" "cookie" "pumpkin" "melon"})
 (def hives #{"beehive" "bee_nest"})
-(def bed-re #"_bed$|^respawn_anchor$")
+(def bed-re #"_bed$")
+(def anchor-re #"^respawn_anchor$")
 ;; The generic window guard is a last resort: a window mineflayer misparses can desync the inventory, so refuse
 ;; window-opening blocks before the click.
 (def container-re #"chest$|barrel$|shulker_box$|furnace$|smoker$|hopper$|dispenser$|dropper$|brewing_stand$|crafting_table$|anvil$|enchanting_table$|grindstone$|loom$|stonecutter$|cartography_table$|smithing_table$|lectern$|beacon$|^crafter$|command_block$|^structure_block$|^jigsaw$|^vault$")
@@ -85,7 +86,8 @@
         hand? (nil? item)]
     (cond
       (= here "air") [w {:status "missing"}]
-      (re-find bed-re here) (done w "cannot" 0 {:reason "bed"})
+      (re-find anchor-re here) (done w "cannot" 0 {:reason "bed"})
+      (re-find bed-re here) (if near? (done w "used" 0 {:spawnSet true}) (done w "unreachable" 0 {:reason "too-far"}))
       (re-find container-re here) (done w "cannot" 0 {:reason "container"})
       (hazards item) (done w "cannot" 0 {:reason "hazard"})
       (and (block-items item) (not= here "composter")) (done w "cannot" 0 {:reason "use-place"})

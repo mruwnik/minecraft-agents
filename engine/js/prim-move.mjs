@@ -248,8 +248,16 @@ export function createMove (env) {
       if (a.monstersNear) return { status: 'monsters-near' }
       ctx.onAbort(() => leaveBed(env.bot))
       ctx.alive()
-      const failure = await env.bot.sleep(block).then(() => null, err => err)
+      // the head half's block update can trail the place by a moment: the library calls that "half bed"
+      const deadline = Date.now() + setting('prim/half-bed-wait-ms') * timeScale
+      let failure = await env.bot.sleep(block).then(() => null, err => err)
       ctx.alive()
+      while (failure && /half bed/i.test(failure.message) && Date.now() < deadline) {
+        await sleepMs(setting('prim/poll-ms') * timeScale)
+        ctx.alive()
+        failure = await env.bot.sleep(env.bot.blockAt(vec(p))).then(() => null, err => err)
+        ctx.alive()
+      }
       if (failure && /occupied/i.test(failure.message)) return { status: 'occupied' }
       if (failure) throw failure
       return { status: 'sleeping' }

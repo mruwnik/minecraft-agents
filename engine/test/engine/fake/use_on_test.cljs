@@ -103,8 +103,12 @@
   (is (= {:status "unchanged" :before (plain "stone") :after (plain "stone") :consumed 0}
          (result (owned {:blocks {p "stone"} :inventory [(stack "apple" 1)]}) {:item "apple"}))))
 
+(deftest a-bed-used-sets-the-respawn-point
+  (is (= {:status "used" :spawnSet true :before (plain "white_bed") :after (plain "white_bed") :consumed 0}
+         (result (owned {:blocks {p "white_bed"}}) {}))))
+
 (deftest guards
-  (doseq [[label block item reason] [["a bed" "white_bed" "iron_hoe" "bed"] ["a respawn anchor" "respawn_anchor" "iron_hoe" "bed"]
+  (doseq [[label block item reason] [["a respawn anchor" "respawn_anchor" "iron_hoe" "bed"]
                                      ["a chest" "chest" "iron_hoe" "container"] ["a crafting table" "crafting_table" "iron_hoe" "container"]
                                      ["a barrel" "barrel" "iron_hoe" "container"] ["a crafter" "crafter" "iron_hoe" "container"]
                                      ["a command_block" "command_block" "iron_hoe" "container"]

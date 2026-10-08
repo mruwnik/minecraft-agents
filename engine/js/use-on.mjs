@@ -2,11 +2,15 @@
 // useOn: right-click a block with an item (or an empty hand) and report what changed.
 import vec3 from 'vec3'
 import { setting } from './settings.mjs'
+import { spawnSetMessage } from './prim-base.mjs'
 
 const { Vec3 } = vec3
 
 const FACES = { up: [0, 1, 0], down: [0, -1, 0], north: [0, 0, -1], south: [0, 0, 1], west: [-1, 0, 0], east: [1, 0, 0] }
-const BED = /_bed$|^respawn_anchor$/
+const BED = /_bed$/
+const ANCHOR = /^respawn_anchor$/
+// A bed explodes outside the overworld; an unknown dimension is taken as the overworld.
+const bedSafe = bot => /overworld$/.test(bot.game?.dimension ?? 'overworld')
 // The generic window guard is a last resort: a window mineflayer misparses can desync the inventory, so refuse window-opening blocks before the click.
 const CONTAINER = /chest$|barrel$|shulker_box$|furnace$|smoker$|hopper$|dispenser$|dropper$|brewing_stand$|crafting_table$|anvil$|enchanting_table$|grindstone$|loom$|stonecutter$|cartography_table$|smithing_table$|lectern$|beacon$|^crafter$|command_block$|^structure_block$|^jigsaw$|^vault$/
 const HAZARDS = new Set(['flint_and_steel', 'fire_charge', 'lava_bucket'])
@@ -50,7 +54,7 @@ export function createUseOn ({ act, getBot, inventory, eye, lookNow, timeScale, 
       if (!block || isAir(block.name)) return { status: 'missing' }
       const before = snapshot(block)
       const refuse = (status, extra = {}) => ({ status, ...extra, before, after: before, consumed: 0 })
-      if (BED.test(block.name)) return refuse('cannot', { reason: 'bed' })
+      if (ANCHOR.test(block.name) || (BED.test(block.name) && !bedSafe(bot))) return refuse('cannot', { reason: 'bed' })
       if (CONTAINER.test(block.name)) return refuse('cannot', { reason: 'container' })
       if (HAZARDS.has(item)) return refuse('cannot', { reason: 'hazard' })
       if (item !== undefined && bot.registry?.blocksByName?.[item] && block.name !== 'composter') return refuse('cannot', { reason: 'use-place' })
@@ -70,10 +74,14 @@ export function createUseOn ({ act, getBot, inventory, eye, lookNow, timeScale, 
       let opened = null
       const onOpen = w => { opened ??= w }
       const now = () => { const b = bot.blockAt(p); return b ? snapshot(b) : { name: 'air', properties: {} } }
-      const changed = () => !same(now(), before) || (item !== undefined && carried(item) !== countBefore)
+      // A bed used by day answers with the "respawn point set" action bar line instead of changing.
+      let spawnSet = false
+      const onBar = msg => { spawnSet ||= spawnSetMessage(msg) }
+      const changed = () => spawnSet || !same(now(), before) || (item !== undefined && carried(item) !== countBefore)
       const windowOpened = () => { opened ??= bot.currentWindow ?? null; return opened !== null }
       // activateBlock resolves once the packet is written, so the server's open_window can arrive during the waits.
       bot.on('windowOpen', onOpen)
+      bot.on('actionBar', onBar)
       try {
         await bot.activateBlock(bot.blockAt(p), d, new Vec3(0.5 + 0.5 * d.x, 0.5 + 0.5 * d.y, 0.5 + 0.5 * d.z))
         ctx.alive()
@@ -95,9 +103,10 @@ export function createUseOn ({ act, getBot, inventory, eye, lookNow, timeScale, 
           bot.closeWindow(opened)
           return { status: 'cannot', reason: 'window', before, after: now(), consumed: item === undefined ? 0 : Math.max(0, countBefore - carried(item)) }
         }
-        return { status: changed() ? 'used' : 'unchanged', before, after: now(), consumed: item === undefined ? 0 : Math.max(0, countBefore - carried(item)) }
+        return { status: changed() ? 'used' : 'unchanged', ...(spawnSet ? { spawnSet } : {}), before, after: now(), consumed: item === undefined ? 0 : Math.max(0, countBefore - carried(item)) }
       } finally {
         bot.removeListener('windowOpen', onOpen)
+        bot.removeListener('actionBar', onBar)
       }
     })
   }

@@ -217,8 +217,33 @@ test('a tool with durability never waits for a count change after the block chan
   assert.equal(polls, 3) // the change check, the status check and the after snapshot; no extra wait polls
 })
 
+const bar = bot => bot.emit('actionBar', { translate: 'block.minecraft.set_spawn' })
+
+test('a bed clicked in the overworld that answers "respawn point set" is used and reports spawnSet', async () => {
+  const { bot, p } = rig({ blocks: { '1,64,0': 'red_bed' }, onUseBlock: bot => bar(bot) })
+  bot.game = { dimension: 'minecraft:overworld' }
+  const r = await p.useOn('t1', { pos: at(1, 64, 0) })
+  assert.deepEqual(r, { status: 'used', spawnSet: true, before: { name: 'red_bed', properties: {} }, after: { name: 'red_bed', properties: {} }, consumed: 0 })
+  assert.equal(calls(bot, 'activateBlock').length, 1)
+})
+
+test('a bed whose click changes nothing and says nothing is unchanged', async () => {
+  const { bot, p } = rig({ blocks: { '1,64,0': 'red_bed' } })
+  bot.game = { dimension: 'minecraft:overworld' }
+  const r = await p.useOn('t1', { pos: at(1, 64, 0) })
+  assert.equal(r.status, 'unchanged')
+})
+
+test('a bed outside the overworld explodes when used: cannot/bed, nothing clicked', async () => {
+  const { bot, p } = rig({ blocks: { '1,64,0': 'red_bed' } })
+  bot.game = { dimension: 'minecraft:the_nether' }
+  const r = await p.useOn('t1', { pos: at(1, 64, 0) })
+  assert.equal(r.status, 'cannot')
+  assert.equal(r.reason, 'bed')
+  assert.equal(calls(bot, 'activateBlock').length, 0)
+})
+
 const guardRefusals = [
-  { name: 'a bed', block: 'red_bed', item: 'diamond_hoe', reason: 'bed' },
   { name: 'a respawn anchor', block: 'respawn_anchor', item: 'diamond_hoe', reason: 'bed' },
   { name: 'a chest', block: 'chest', item: 'diamond_hoe', reason: 'container' },
   { name: 'a crafting table by hand', block: 'crafting_table', item: undefined, reason: 'container' },

@@ -215,6 +215,26 @@ for (const [name, args, over, status] of statuses) {
   })
 }
 
+test('sleep waits for the head half of a bed whose block update is late, then sleeps', async () => {
+  const { bot, p } = rig({ ...world, entities: {} })
+  let tries = 0
+  bot.sleep = async () => {
+    tries += 1
+    if (tries < 3) throw new Error("there's only half bed")
+    bot.isSleeping = true
+  }
+  const result = await p.sleep('t1', { pos: at(2, 64, 1) })
+  assert.equal(result.status, 'sleeping')
+  assert.equal(tries, 3)
+})
+
+test('sleep on a bed that stays half fails with the library reason after the wait', async () => {
+  const { p } = rig({ ...world, entities: {}, reject: { sleep: "there's only half bed" } })
+  const result = await p.sleep('t1', { pos: at(2, 64, 1) })
+  assert.equal(result.status, 'failed')
+  assert.match(result.reason, /half bed/)
+})
+
 test('inspectContainer reports the size and the free slots', async () => {
   const { p } = rig(world)
   const result = await p.inspectContainer('t1', { pos: at(3, 64, 0) })

@@ -10,7 +10,7 @@
   check always passes. It yields :continue only when the walk waits on the world. Zones are not consulted: a click
   changes no block by itself.
 
-  Ends with info blocks.use-on.done and {:used true|false :pos :item :face :reason}. :reason is the primitive's
+  Ends with info blocks.use-on.done and {:used true|false :pos :item :face :reason}, plus :spawn-set true when a bed answered \"respawn point set\" (a bed is used by day to set the spawn; not in the Nether or End). :reason is the primitive's
   status (:used, :unchanged, :no-item, :no-room, :missing, :cannot, :unreachable, :failed); only :used is done.
   Anything else, or a walk that failed twice (:unreachable), is {:status :stopped}. A bad :pos or :face
   is :bad-args with a blocks.use-on.declined warn.")
@@ -53,4 +53,5 @@
             (let [r (await (ctx/act c :useOn (clj->js (cond-> {:pos pos :face face} item (assoc :item item)))))
                   status (keyword (.-status r))]
               (finish! c (cond-> {:used (= :used status) :pos pos :item item :face face :reason status}
+                           (.-spawnSet r) (assoc :spawn-set true)
                            (not= :used status) (assoc :status :stopped))))))))))

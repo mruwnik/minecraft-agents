@@ -7,6 +7,7 @@ export const SPECS = {
   'prim/drop-wait-s': { default: 1, spec: ['int-in', 0, null], doc: "How long dig waits for its drop to appear, in seconds." },
   'prim/dig-margin-s': { default: 5, spec: ['int-in', 0, null], doc: "Slack over the expected dig time (latency, a tick of lag), in seconds." },
   'prim/poll-ms': { default: 50, spec: ['int-in', 1, null], doc: "How often primitives poll the world while they wait, in ms." },
+  'prim/half-bed-wait-ms': { default: 2000, spec: ['int-in', 0, null], doc: "How long sleep retries while a bed's head half has not arrived yet, in ms." },
   'prim/damage-fresh-ms': { default: 1000, spec: ['int-in', 0, null], doc: "A damage packet older than this is not the cause of a health loss, in ms." },
   'prim/hurt-wait-ms': { default: 300, spec: ['int-in', 0, null], doc: "Attack waits this long for the server's entityHurt on the target, in ms." },
   'prim/settle-quiet-ms': { default: 150, spec: ['int-in', 0, null], doc: "A container transfer closes its window only after this long without a slot update, in ms." },
