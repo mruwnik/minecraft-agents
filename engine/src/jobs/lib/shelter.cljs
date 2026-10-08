@@ -181,15 +181,24 @@
   (let [days (days-awake-in view)]
     (if (and days (>= days max-days-awake)) urgent-bed-radius bed-radius)))
 
+(declare walk-leaves-shelter?)
+
+(def kept-shelters
+  "The shelters (walk-leaves-shelter?) a body does not leave at night for a bed: a bare roof is not one of them."
+  #{:underground :dug-in :room})
+
 (defn bed-to-use
   "The bed a body awake at night sleeps in: one it sees (seen-bed), else the remembered :bed within radius, under any
-  roof or none. Never one permit? refuses (occupied) or one in an unexpired :bed-unreachable entry; none after a sleep
-  tonight (:slept within half an in-game day) or while a :sleep-failed entry is unexpired. nil otherwise."
+  roof or none. Never one permit? refuses (occupied), one in an unexpired :bed-unreachable entry, or one whose walk
+  would take the body out of a kept-shelters shelter; none after a sleep tonight (:slept within half an in-game day)
+  or while a :sleep-failed entry is unexpired. nil otherwise."
   [p view radius permit?]
   (when (and (night? p) (not (sleeping? p))
              (zero? (mem/count-in view :slept slept-tonight-ms))
              (empty? (mem/entries view :sleep-failed)))
-    (let [ok? (fn [pos] (and (permit? pos) (not-any? #(= pos (:pos (:data %))) (mem/entries view :bed-unreachable))))]
+    (let [shelter (:data (mem/latest view :shelter))
+          ok? (fn [pos] (and (permit? pos) (not-any? #(= pos (:pos (:data %))) (mem/entries view :bed-unreachable))
+                             (not (kept-shelters (walk-leaves-shelter? p shelter pos 1)))))]
       (or (seen-bed p ok?)
           (when-let [pos (bed-in-view p view radius)]
             (when (ok? pos) pos))))))
@@ -343,14 +352,14 @@
 
 (defn walk-leaves-shelter?
   "At night, awake and safe from it (roofed or buried, or shut-in-room?), the shelter a walk to goal ({:x :y :z}, or {:x
-  :z} a column) within range would leave, else nil. A goal within range of the feet leaves none. :dug-in: shelter (the
-  latest :shelter entry) is the one the body is shut in. :room: no cell of the closed room is within range of the goal.
+  :z} a column) within dist would leave, else nil. A goal within dist of the feet leaves none. :dug-in: shelter (the
+  latest :shelter entry) is the one the body is shut in. :room: no cell of the closed room is within dist of the goal.
   :underground: buried, and nothing solid within default-roof-height over a y goal. :roofed: any other roof."
-  [p shelter goal range]
+  [p shelter goal dist]
   (when (and (night? p) (not (sleeping? p))
              (or (not (unsafe-night? p default-roof-height)) (shut-in-room? p)))
     (let [goal (update-vals goal js/Math.floor)
-          near? (fn [cell] (if (:y goal) (u/within? cell goal range) (u/within? (assoc cell :y 0) (assoc goal :y 0) range)))
+          near? (fn [cell] (if (:y goal) (u/within? cell goal dist) (u/within? (assoc cell :y 0) (assoc goal :y 0) dist)))
           room (when (shut-in-room? p) (reach/room p (feet p)))]
       (cond
         (near? (feet p)) nil

@@ -45,7 +45,7 @@
   (is (every? nil? (map triggers/all [:night-unsafe :player-sleeping-nearby :shut-in-by-day]))))
 
 (deftest night-holds-for-a-remembered-bed-within-the-radius-under-any-roof
-  (let [world {:time night :blocks (merge roof {"20,64,0" "red_bed" "60,64,0" "red_bed"})}]
+  (let [world {:time night :floor tu/walk-floor :blocks {"0,67,0" "stone" "20,64,0" "red_bed" "60,64,0" "red_bed"}}] ; roofed, not shut in: a floor, nothing seen right over the head
     (is (true? (holds? world #(st/know-bed! % {:x 20 :y 64 :z 0}))) "20 blocks away, roofed")
     (is (false? (holds? world #(st/know-bed! % {:x 60 :y 64 :z 0}))) "beyond 48")
     (is (false? (holds? (assoc world :states {"20,64,0" {:occupied true}}) #(st/know-bed! % {:x 20 :y 64 :z 0})))

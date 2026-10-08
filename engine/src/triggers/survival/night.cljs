@@ -1,6 +1,7 @@
 (ns triggers.survival.night
   "The night trigger: the one night handler. At night, while the body is awake, it holds when any of these is so:
-    a bed to sleep in (sh/bed-to-use: seen, or remembered within :bed-radius under any roof; not occupied)
+    a bed to sleep in (sh/bed-to-use: seen, or remembered within :bed-radius under any roof; not occupied, nor one whose
+      walk would leave an underground, dug-in or closed-room shelter)
     a bed item carried and no bed to use (sh/bed-place-wanted?)
     someone else on the server asleep (sh/log-out-for-sleepers?)
     nothing solid within :roof-height blocks straight above, not buried and not in a closed room (sh/unsafe-night?)

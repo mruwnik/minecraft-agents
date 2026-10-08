@@ -361,10 +361,6 @@
     (is (true? (holds-with (world {}) know)) "a bed 5 blocks along the tunnel")
     (is (true? (holds-with (world {:inventory [{:name "red_bed" :count 1}]}) (fn [_]))) "a carried bed")))
 
-(deftest a-bed-remembered-away-from-the-hut-is-still-the-bed-to-use
-  (let [world (merge (hut-world {:x 5 :y 64 :z 0} {"30,64,0" "red_bed"}) {:time st/night})]
-    (is (true? (holds-with world (fn [eng] (st/know-bed! eng {:x 30 :y 64 :z 0})))) "remembered 25 blocks away")))
-
 (deftest a-hut-bed-memory-does-not-know-is-found-and-slept-in-before-any-second-bed
   (async done
     (tu/run-async done
