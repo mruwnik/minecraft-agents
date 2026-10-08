@@ -214,6 +214,7 @@
   (cond
     (nil? answer) "no such plan"
     (:broken answer) (str "the plan cannot be read: " (:broken answer))
+    (and (empty? cells) (seq (:errors answer))) (str "the plan cannot be built: " (str/join "; " (map #(if (map? %) (:error %) %) (:errors answer))))
     (empty? cells) "no cells to build"))
 
 ;; ------------------------------------------------------------------ access

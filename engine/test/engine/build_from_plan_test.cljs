@@ -46,6 +46,8 @@
            {:id "gate" :cells [[3 64 2]] :want {:block "oak_fence_gate" :facing :north}}
            {:id "light" :cells [[2 65 2]] :want "torch"}]})
 
+(def missing-blueprint-plan {:id "huts" :parts [{:id "h1" :blueprint "hut" :at [5 64 5]}]})
+
 (def kit [{:name "oak_fence" :count 16} {:name "oak_fence_gate" :count 1} {:name "torch" :count 4}])
 
 (def ring [[2 64 2] [4 64 2] [2 64 3] [4 64 3] [2 64 4] [3 64 4] [4 64 4]])
@@ -192,6 +194,9 @@
   (let [kit-spec {:inventory kit}]
     (is (= [0 [{:plan "nope" :reason "no such plan"}]] (declines kit-spec {} {:plan "nope"})))
     (is (= [0 [{:plan "pen" :reason "no cells to build"}]] (declines kit-spec {"pen" (pen-plan)} {:plan "pen" :part "nope"})))
+    (is (= [0 [{:plan "huts" :reason "the plan cannot be built: no blueprint called \"hut\""}]]
+           (declines kit-spec {"huts" missing-blueprint-plan} {:plan "huts"}))
+        "a plan whose blueprint is not found says so, not that it has no cells")
     (is (= [0 []] (declines {:inventory []} {"pen" (pen-plan)} {:plan "pen" :fetch false}))
         "a check with nothing to build with writes no warn")))
 
