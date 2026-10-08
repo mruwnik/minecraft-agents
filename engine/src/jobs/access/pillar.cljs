@@ -159,12 +159,6 @@
       (ctx/wait c {:reason :too-few-blocks :short (:short step) :item (or item pl/default-items)})
       true)))
 
-(defn displaced?
-  "True when the body is airborne or outside the column cell [bx _ bz] (a knockback), not merely refused."
-  [c [bx _ bz]]
-  (let [[fx _ fz] (pl/feet-cell c)]
-    (boolean (or (false? (.-onGround (.self (:primitives c)))) (not= [bx bz] [fx fz])))))
-
 (defn ^:async land!
   "Wait in short steps until the body is on the ground, up to land-max-steps."
   [c]
@@ -180,6 +174,13 @@
     (and (= [x z] [(js/Math.floor px) (js/Math.floor pz)])
          (<= (js/Math.abs (- px hx)) (walk/centre-tolerance))
          (<= (js/Math.abs (- pz hz)) (walk/centre-tolerance)))))
+
+(defn displaced?
+  "True when the body is outside the column cell [bx _ bz] or off the point where the pillar began (a knockback). A
+  body still over its column, even mid-air after a refused jump, is merely refused."
+  [c [bx _ bz] home]
+  (let [[fx _ fz] (pl/feet-cell c)]
+    (not (and (= [bx bz] [fx fz]) (or (nil? home) (centred? c [bx bz] home))))))
 
 (defn ^:async recentre!
   "Walk back to [hx hz], the point the pillar began at, after a shove. :in when the body is over its column again,
@@ -209,7 +210,7 @@
       (do (when (= item (block-at cell)) (ledger/remember! c (ledger/confirm l cell)))
           (ctx/update-mem! c assoc :failures 0)
           :again)
-      (let [shoved? (displaced? c (:base (ctx/mem c)))
+      (let [shoved? (displaced? c (:base (ctx/mem c)) (:home (ctx/mem c)))
             _ (when shoved? (ctx/update-mem! c #(-> % (update :displaced (fnil inc 0)) (assoc :counted true))))
             failures (if shoved? (:failures (ctx/mem c) 0) (inc (:failures (ctx/mem c) 0)))]
         (ctx/update-mem! c assoc :failures failures)

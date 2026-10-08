@@ -361,6 +361,17 @@
           (is (finished? eng))
           (is (= :off-column (:reason (first (of-kind seen :pillar.gave-up))))))))))
 
+(deftest refused-every-time-in-the-column-mid-air-is-a-failed-place-not-a-knockback
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup {})]
+          (knock! p 1000 [0 64.2 0] true)
+          (core/submit! eng (list job {:height 3}) {})
+          (await (ticks s eng 60))
+          (is (finished? eng))
+          (is (= :place-failed (:reason (first (of-kind seen :pillar.gave-up))))))))))
+
 (defn shove-after-place!
   "Override jumpPlace so that after each real placement the body is moved by the next of offsets [dx dy dz]."
   [p offsets]
