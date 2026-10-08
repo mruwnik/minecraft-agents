@@ -377,6 +377,21 @@
     (is (true? (:more @summary)))
     (is (= {:event :picked-up :item "wheat" :count 1} (first (:items @summary))))))
 
+(deftest a-job-end-or-notice-takes-a-routine-items-place-in-a-full-summary
+  (let [routine [(event :body :picked-up {:item "dirt" :count 1}) (event :body :picked-up {:item "dirt" :count 1})
+                 (assoc (event :reflex :fired) :context {:job-id "j142" :reflex-id :hostile-near})
+                 (assoc (event :reflex :fired) :context {:job-id "j143" :reflex-id :hostile-near})
+                 (event :body :picked-up {:item "dirt" :count 1})]
+        ended (assoc (plain-job-event :completed "j141" {:status :completed}) :attention :notice)
+        fled (assoc (notice "j148/flee" :hostile.fled "fled 30 blocks") :level :warn)
+        summary (reduce observe-status/collect {:counts {} :items [] :more false} (concat routine [ended fled]))]
+    (is (= 4 (count (:items summary))))
+    (is (true? (:more summary)))
+    (is (= [:fired :fired :completed :hostile.fled] (mapv :event (:items summary)))
+        "the oldest routine items make room, the rest keep their order")
+    (is (= "j141" (:job (nth (:items summary) 2))))
+    (is (= {:picked-up 3 :reflexes 2 :completed 1 :notices 1} (:counts summary)))))
+
 (deftest make-room-tosses-are-summarised-with-item-and-count
   (let [summary (observe-status/collect {:counts {} :items [] :more false}
                                  (event :job :make-room.tossed {:item "coal" :count 4}))]

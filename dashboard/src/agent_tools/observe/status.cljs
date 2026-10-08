@@ -311,6 +311,25 @@
 (defn with-death-jobs [result jobs]
   (cond-> result (seq jobs) (assoc :cancelled-jobs jobs)))
 
+(def max-items 4)
+
+(defn key-category?
+  "Whether a summary category is news the agent must not miss (a job end, a death, a notice) rather than routine."
+  [category]
+  (boolean (or (job-results/terminal-kinds category) (#{:died :notices} category))))
+
+(defn routine-item? [item] (not (:key? (meta item))))
+
+(defn room-for
+  "The summary items with room for one more, or nil: under max-items as they are; full, a key item drops the oldest
+  routine one (the rest keep their order)."
+  [items key?]
+  (cond
+    (< (count items) max-items) items
+    (not key?) nil
+    :else (let [i (first (keep-indexed (fn [i item] (when (routine-item? item) i)) items))]
+            (when i (into (subvec items 0 i) (subvec items (inc i)))))))
+
 (defn collect
   "Fold one routine event into the bounded quiet summary {:counts :items :more}; jobs are the ones a death cancelled."
   ([summary e] (collect summary e nil))
@@ -327,12 +346,13 @@
     (if-not category
       summary
       (let [summary (update-in summary [:counts category] #(min 1000000 (inc (or % 0))))]
-        (if (< (count (:items summary)) 4)
-          (update summary :items conj
-                  (clean-pairs :event (:kind e) :job (when-not (= :reflexes category) (get-in e [:context :job-id]))
+        (if-let [items (room-for (:items summary) (key-category? category))]
+          (assoc summary :more (or (:more summary) (< (count items) (count (:items summary)))) :items (conj items
+                  (with-meta (clean-pairs :event (:kind e) :job (when-not (= :reflexes category) (get-in e [:context :job-id]))
                                :reflex (get-in e [:context :reflex-id]) :by (some-> (:by d) name) :why (some-> (:why d) name) :item (clip (:item d) 80) :count (:count d)
                                :message (clip (first (filter some? [(:message e) (:error d) (:reason d)])))
-                               :cancelled-jobs (not-empty jobs)))
+                               :cancelled-jobs (not-empty jobs))
+                             {:key? (key-category? category)})))
           (assoc summary :more true)))))))
 
 (defn summary-result [summary result]
