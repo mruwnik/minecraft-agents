@@ -114,6 +114,32 @@
   [p feet]
   (fill-cells #(sealed? p %) feet))
 
+(defn placeable?
+  "Whether a block placed in cell has a neighbour (any of the six) whose collision shape fills its cell to be placed against."
+  [p {:keys [x y z]}]
+  (boolean (some (fn [[dx dy dz]] (:full-cube? (u/seen-facts p {:x (+ x dx) :y (+ y dy) :z (+ z dz)})))
+                 rules/neighbour-deltas)))
+
+(defn support-chain
+  "The cells to fill, lowest first, so a block can then be placed in cell: [] when cell is placeable? already, the cells
+  under it down to one that is (at most depth of them), nil when none is (or one is wet or in avoid, the body's cells)."
+  [p cell avoid depth]
+  (if (placeable? p cell)
+    []
+    (let [below (update cell :y dec)]
+      (when (and (pos? depth) (not (avoid below)) (not (wet? p below)))
+        (some-> (support-chain p below avoid (dec depth)) (conj below))))))
+
+(defn bottom-up
+  "The next cells to place from the open cells, in order: the placeable? ones, else the first one with the support-chain
+  under it (the cell alone when it has none: the place then says no-support)."
+  [p cells feet]
+  (let [avoid #{feet (update feet :y inc)}
+        ready (filterv #(placeable? p %) cells)]
+    (if (or (seq ready) (empty? cells))
+      ready
+      (conj (vec (support-chain p (first cells) avoid 3)) (first cells)))))
+
 (defn door
   "The door cells [feet head] of one side among the placed cells: the first side
   with both cells placed, else the first side placed at feet height plus the

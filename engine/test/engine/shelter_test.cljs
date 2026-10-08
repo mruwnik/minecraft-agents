@@ -696,7 +696,7 @@
           (is (= [] (emitted seen :dig-in.sealed)) "no sealed claim while a wall is open")
           (let [[u] (emitted seen :dig-in.unsealed)]
             (is (some? u) "reported honestly")
-            (is (= [{:x -1 :y 64 :z 0}] (:open u)) "the open cell is named")))))))
+            (is (= [{:x -1 :y 64 :z 0} {:x -1 :y 65 :z 0}] (:open u)) "the open cells are named: the refused one and the one above it, which has nothing to stand against")))))))
 
 (deftest dig-in-places-the-other-walls-before-retrying-a-refused-cell
   (async done
@@ -707,8 +707,8 @@
           (core/submit! eng '(jobs.survival.dig-in) {})
           (await (run-until-empty eng 12))
           (is (every? #(= "dirt" (.-name (.blockAt p (tu/pos (first %) (second %) (nth % 2)))))
-                      [[1 64 0] [0 64 1] [0 64 -1] [-1 65 0] [1 65 0] [0 66 0]])
-              "every cell but the refused one is filled"))))))
+                      [[1 64 0] [0 64 1] [0 64 -1] [1 65 0] [0 66 0]])
+              "every cell but the refused one and the one above it is filled"))))))
 
 ;; ----------------------------------------------------------------- shelter
 
