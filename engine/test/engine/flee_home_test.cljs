@@ -30,7 +30,7 @@
         now (tu/act-clock clock p 1000)
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
                           :events (events/make {:body "Fake" :sinks [sink] :now now})})]
-    (mem/write! (:store eng) :home {:pos (:home world home)} {:cap 1 :ttl :forever})
+    (when-not (false? (:home world)) (mem/write! (:store eng) :home {:pos (:home world home)} {:cap 1 :ttl :forever}))
     {:eng eng :p p :seen seen}))
 
 (defn ^:async flee! [world]
@@ -208,3 +208,57 @@
           (is (ran-home? (:seen (await (first-move (world 20))))) "healthy, it runs home")
           (is (not (ran-home? (:seen (await (first-move (world 8)))))) "low and under fire, no run across open ground"))))))
 
+
+;; Any closed building the body has seen is a refuge, not only its own home (owner Q132).
+
+(defn shift
+  "Blocks or states keyed \"x,y,z\" moved dx along x."
+  [m dx]
+  (into {} (map (fn [[k v]] (let [[x y z] (.split k ",")] [(str (+ (js/Number x) dx) "," y "," z) v]))) m))
+
+(deftest a-body-runs-into-a-closed-building-it-has-seen-that-is-not-its-home
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (await (flee! (assoc (hut {:x 5.5 :y 64 :z 6.5} hs/door-states [(zombie 5.5 13.5 0.4)])
+                                                       :home false)))]
+          (is (ran-home? seen) "it runs to the building")
+          (is (in-room? (body p)) (str "inside the building: " (body p)))
+          (is (false? (hs/door-open? p)) "the door is shut behind it")
+          (is (= [] (:list (core/state eng)))))))))
+
+(deftest a-near-building-beats-a-home-it-cannot-reach-first
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [far-hut (shift (merge hs/hut hut-floor) -24)
+              world (-> (hut {:x 5.5 :y 64 :z 6.5} (merge hs/door-states (shift hs/door-states -24)) [(zombie 5.5 13.5 0.4)]
+                             far-hut)
+                        (assoc :home {:x -19 :y 64 :z 0}))
+              {:keys [p]} (await (flee! world))]
+          (is (in-room? (body p)) (str "inside the near building, not off toward home: " (body p))))))))
+
+(defn seeing-all-but
+  "p seeing every block (tu/seeing-all) except those in cells hidden? [x y z] keeps unknown."
+  [p hidden?]
+  (tu/seeing-all p)
+  (let [blocks (.-blocks p) block-at (.-blockAt p)
+        hid? (fn [pos] (hidden? [(js/Math.floor (.-x pos)) (js/Math.floor (.-y pos)) (js/Math.floor (.-z pos))]))]
+    (aset p "seenBlocks" (fn [q] (.filter (.call blocks p q) #(not (hid? (.-pos %))))))
+    (aset p "seenBlockAt" (fn [pos] (if (hid? pos)
+                                      #js {:unknown true :pos pos}
+                                      (let [b (.call block-at p pos)] #js {:name (.-name b) :properties (.-properties b) :pos pos :age-ms 0}))))
+    (aset p "sensedAt" (fn [pos] (if (hid? pos) #js {:unknown true} (.call block-at p pos))))
+    p))
+
+(deftest a-building-the-body-has-not-seen-is-no-refuge
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (assoc (hut {:x 5.5 :y 64 :z 6.5} hs/door-states [(zombie 5.5 13.5 0.4)]) :home false)
+              {:keys [eng p seen]} (setup world)
+              _ (seeing-all-but p (fn [[x _ z]] (and (<= 3 x 7) (<= -2 z 2))))]
+          (core/submit! eng '(jobs.survival.retreat) {})
+          (await (tu/run-until-empty eng 6))
+          (is (not (ran-home? seen)) "no run to a building it never saw")
+          (is (not (in-room? (body p)))))))))

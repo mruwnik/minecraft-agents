@@ -29,16 +29,17 @@
   Each step, in this order:
   1. A door, gate or trapdoor standing open within a hand's reach and nearer the nearest chaser than the body is shut
      with one click (retreat.door-shut info). Each door is clicked at most once a flight.
-  2. Runs home first: the latest :bed or :home within :home-range that is a closed room (walls, doors that shut:
-     jobs.lib.reach/room) whose door it walks to (over seen blocks, at its own speed) ahead of every melee chaser
-     (jobs.lib.cost/reach-first?), with a go-to child to the room cell inside that door (retreat.home info, once a
-     flight); a step that gets no nearer drops home for the flight. Not while low in a ranged chaser's line of fire (the
-     cover step below comes first). Any cell of the room is home: there an open door of the room is shut (a step back
-     to one out of reach first), and a chaser still with a way in gets the cornered options (4.), no pit or pocket dug
-     in its own hut: it does not walk out.
+  2. Runs into a closed building first: the latest :bed or :home within :home-range, or a room behind a wooden door or
+     gate the body has seen (jobs.survival.retreat-home/rooms, bounded by its settings), that is a closed room (walls,
+     doors that shut: jobs.lib.reach/room) whose door it walks to (over seen blocks, at its own speed) ahead of every
+     melee chaser (jobs.lib.cost/reach-first?), the fewest steps of those, with a go-to child to the room cell inside
+     that door (retreat.home info, once a flight); a step that gets no nearer drops that room for the flight. Not while
+     low in a ranged chaser's line of fire (the cover step below comes first). Any cell of the room counts as home:
+     there an open door of the room is shut (a step back to one out of reach first), and a chaser still with a way in
+     gets the cornered options (4.), no pit or pocket dug in the hut: it does not walk out.
   3. Walks a short step (:step blocks) away from all chasers (nearer ones weigh more) with a go-to child (:escalate false),
-     leaning toward the latest :bed or :home when it is within :home-range and not through the hostiles (a closed home behind
-     them: turned retreat-walk ::flank-turn degrees toward it, to go round them, while it still gains on them so:
+     leaning toward the first closed room of 2. (else the latest :bed or :home within :home-range) when not through the
+     hostiles (a closed room behind them: turned retreat-walk ::flank-turn degrees toward it, to go round them, while it still gains on them so:
      jobs.lib.cost/outruns-at?), avoiding :hazard positions.
      When a wall blocks the way away it turns up to 120 degrees towards open ground (at least 2 clear cells).
      It prefers, in this order: a step whose end is out of every ranged chaser's line of fire (cover: leaves stop arrows),
@@ -119,6 +120,12 @@
                  :data
                  :pos)]
     (when (and pos (<= (u/dist pos (u/self-pos c)) (:home-range (:args c)))) pos)))
+
+(defn refuges
+  "The closed rooms to flee to: the latest :home or :bed (home-pos) and those behind the doors the body has seen
+  (jobs.survival.retreat-home/rooms)."
+  [c]
+  (retreat-home/rooms c (home-pos c)))
 
 (defn check [_c] true)
 
@@ -321,8 +328,9 @@
    (let [p (:primitives c)
          from (u/self-pos c)
          threat-pos (mapv #(danger-q/mob-pos p %) threats)
-         home (home-pos c)
-         flank? (and (some? (retreat-home/refuge c home)) (cost/outruns-at? (or (.-food (.self p)) 20) (walk/flank-turn)))]
+         refuge (:start (first (refuges c)))
+         home (or refuge (home-pos c))
+         flank? (and (some? refuge) (cost/outruns-at? (or (.-food (.self p)) 20) (walk/flank-turn)))]
      (await (glance-away! c (walk/direction from threat-pos home flank?)))
      (walk/choose-target (block-at-fn p) from threat-pos home (keep (comp :pos :data) (ctx/entries c :hazard))
                          (:step (:args c)) {:swim-factor (swim-factor c) :covered? covered? :flank? flank?}))))
@@ -419,17 +427,12 @@
   (await (ctx/act c :wait #js {:ms (flight/wait-ms) :why "cornered"}))
   :again)
 
-(defn refuge
-  "The latest :home or :bed (home-pos) when it is a closed room to flee to (jobs.survival.retreat-home/refuge), else nil."
-  [c]
-  (retreat-home/refuge c (home-pos c)))
-
 (defn ^:async run-home!
-  "A step home (go-to, dangers costed) to the room cell inside its door way (retreat-home/way-in), said once a flight
-  (retreat.home): :again; a step that gets no nearer drops home for the rest of the flight."
-  [c home way]
-  (retreat-home/say-once! c home)
-  (when-not (await (step! c :home (:inside way) 0)) (retreat-home/failed! c))
+  "A step to room (home or another closed building) to the room cell inside its door way (retreat-home/way-in), said
+  once a flight (retreat.home): :again; a step that gets no nearer drops that room for the rest of the flight."
+  [c room way]
+  (retreat-home/say-once! c room)
+  (when-not (await (step! c :home (:inside way) 0)) (retreat-home/failed! c room))
   :again)
 
 (defn home-door
@@ -462,10 +465,8 @@
         threats (flight/look! c)
         threat (first threats)
         door (when threat (door-to-shut c (danger-q/mob-pos p threat)))
-        room (when-let [h (when threat (refuge c))] (reach/room p h))
-        inside? (and room (retreat-home/inside? p room))
         covered? (cover-fn p threats)
-        way (when (and room (not inside?) (not (exposed-low? c covered?))) (retreat-home/way-in p room))
+        {:keys [room way inside?]} (when threat (retreat-home/choose p (refuges c) threats (not (exposed-low? c covered?))))
         stuck (fn ^:async stuck [why]
                 (if (seq (near-hostiles c))
                   (await (cornered! c why inside?))
@@ -481,7 +482,7 @@
       door (await (shut-door! c door))
       (and inside? (home-door c room)) (await (shut-home-door! c (home-door c room)))
       inside? (await (stuck "at home, the hostile still has a way in"))
-      (and way (retreat-home/race-won? p room way threats)) (await (run-home! c (refuge c) way))
+      way (await (run-home! c room way))
       :else
       (let [_ (await (eat-on-the-run! c threat))
             target (await (flight-target! c threats covered?))

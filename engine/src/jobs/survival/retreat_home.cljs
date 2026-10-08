@@ -1,34 +1,83 @@
 (ns jobs.survival.retreat-home
-  "The body's home as a flight's refuge: a closed room (jobs.lib.reach/room: walls, a roof or none needed, doors that
-  shut) that the body gets into before every melee chaser reaches a door of it (jobs.lib.cost/reach-first?)."
-  (:require [engine.ctx :as ctx]
+  "A closed building as a flight's refuge: the body's home or any closed room it has seen (jobs.lib.reach/room: walls, a
+  roof or none needed, doors that shut) that it gets into before every melee chaser reaches a door of it
+  (jobs.lib.cost/reach-first?)."
+  (:require [clojure.string :as str]
+            [engine.args :as a]
+            [engine.ctx :as ctx]
+            [engine.settings :as settings]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
+            [jobs.lib.look :as look]
             [jobs.lib.reach :as reach]
             [jobs.lib.shelter :as sh]
             [jobs.lib.util :as u]))
 
-(defn refuge
-  "home ({:x :y :z}, its feet cell) when it is a closed room and no run to it failed this flight, else nil. The room
-  check is kept in mem :refuge-room for the flight."
+(defn mid [{:keys [x y z]}] {:x (+ x 0.5) :y y :z (+ z 0.5)})
+
+(a/defargs settings
+  {::door-radius {:default 32 :doc "Blocks from the body within which a seen door or gate may lead into a closed building to flee to." :spec (a/num-in 0 64)}
+   ::max-doors {:default 8 :doc "Seen doors and gates, nearest first, whose two sides a flight checks for a closed room." :spec (a/int-in 0 nil)}
+   ::max-rooms {:default 3 :doc "Closed rooms, the home first then the nearest, a flight step races for." :spec (a/int-in 1 nil)}})
+(defn door-radius [] (settings/get settings ::door-radius))
+(defn max-doors [] (settings/get settings ::max-doors))
+(defn max-rooms [] (settings/get settings ::max-rooms))
+
+(defn cell-key [{:keys [x y z]}] (str x "," y "," z))
+
+(defn door-sides
+  "The cells on either side of the lower half of a seen wooden door or gate {:pos :properties}, along its facing."
+  [{:keys [pos properties]}]
+  (when-let [[dx dz] (reach/door-panel-step (:facing properties))]
+    [(-> pos (update :x + dx) (update :z + dz)) (-> pos (update :x - dx) (update :z - dz))]))
+
+(defn starts
+  "Cells a closed room may hold: home ({:x :y :z}, its feet cell, or nil) first, then the sides (door-sides) of the
+  wooden doors and gates the body has seen within door-radius, nearest first, at most max-doors of them. Each
+  {:pos :home?}."
+  [p home]
+  (let [doors (->> (look/seen-blocks p {:match #(and (or (str/ends-with? % "_door") (str/ends-with? % "_fence_gate"))
+                                                     (not (str/starts-with? % "iron_")))
+                                        :radius (door-radius) :max (* 2 (max-doors)) :properties? true})
+                   (remove #(= "upper" (:half (:properties %))))
+                   (take (max-doors)))]
+    (cond->> (for [d doors s (door-sides d)] {:pos s :home? false})
+      home (cons {:pos home :home? true}))))
+
+(defn closed?
+  "Whether cell pos holds a closed room (jobs.lib.reach/closed-room?), kept in mem :refuge-rooms for the job."
+  [c pos]
+  (let [k (cell-key pos)
+        known (get (:refuge-rooms (ctx/mem c)) k)]
+    (if (some? known)
+      known
+      (let [v (reach/closed-room? (:primitives c) pos)]
+        (ctx/update-mem! c assoc-in [:refuge-rooms k] v)
+        v))))
+
+(defn rooms
+  "The closed rooms to flee to (jobs.lib.reach/room plus :start and :home?): the home's (home {:x :y :z} or nil) and
+  those behind the doors the body has seen (starts), none a run to failed this flight, at most max-rooms, the home
+  first then the nearest."
   [c home]
-  (when (and home (not (:home-failed (ctx/mem c))))
-    (let [[at closed] (:refuge-room (ctx/mem c))
-          closed (if (= at home)
-                   closed
-                   (let [v (reach/closed-room? (:primitives c) home)]
-                     (ctx/update-mem! c assoc :refuge-room [home v])
-                     v))]
-      (when closed home))))
+  (let [p (:primitives c)
+        me (u/self-pos c)
+        failed (:refuges-failed (ctx/mem c) #{})]
+    (->> (starts p home)
+         (remove #(failed (cell-key (:pos %))))
+         (filter #(closed? c (:pos %)))
+         (sort-by (fn [{:keys [pos home?]}] [(if home? 0 1) (u/dist me (mid pos))]))
+         (keep (fn [{:keys [pos home?]}] (some-> (reach/room p pos) (assoc :start pos :home? home?))))
+         (reduce (fn [acc r] (if (some #(contains? (:cells %) (mapv (:start r) [:x :y :z])) acc) acc (conj acc r))) [])
+         (take (max-rooms))
+         vec)))
 
 (defn inside?
   "Whether the body is in room (jobs.lib.reach/room): its feet cell or the cell it stands on (as go-to arrives) is one of
   the room's cells."
   [p {:keys [cells]}]
   (boolean (some #(contains? cells (mapv % [:x :y :z])) [(sh/feet p) (reach/standing-cell p)])))
-
-(defn mid [{:keys [x y z]}] {:x (+ x 0.5) :y y :z (+ z 0.5)})
 
 (defn way-in
   "The door of room the body walks to in fewest steps over the blocks it has seen (jobs.lib.reach/walk-steps to the room
@@ -49,11 +98,30 @@
                           (map (fn [t] (apply min (map #(u/dist (danger-q/mob-pos p t) (mid (:cell %))) (:doors room))))))
                      (or (.-food (.self p)) 20)))
 
+(defn choose
+  "Where the flight goes among rooms (rooms): {:room r :inside? true} for the room the body is in, else {:room r :way w}
+  for the one whose door it walks to in fewest steps (way-in) ahead of every melee chaser (race-won?), the home on a tie;
+  nil when none. way?: whether a run may be looked for now (false: only the room it is in counts)."
+  [p rooms threats way?]
+  (if-let [r (some #(when (inside? p %) %) rooms)]
+    {:room r :inside? true}
+    (when way?
+      (->> rooms
+           (keep (fn [r] (when-let [w (way-in p r)] (when (race-won? p r w threats) {:room r :way w}))))
+           (sort-by (comp :steps :way))
+           first))))
+
 (defn say-once!
-  "One retreat.home info a flight: it runs to its home."
-  [c {:keys [x y z]}]
+  "One retreat.home info a flight: it runs to its home or to another closed building, room."
+  [c {:keys [start home?]}]
   (when-not (:home-said (ctx/mem c))
     (ctx/update-mem! c assoc :home-said true)
-    (ctx/emit! c :retreat.home :info {:home [x y z] :text (str "runs home to [" x " " y " " z "], ahead of the hostile")})))
+    (let [{:keys [x y z]} start]
+      (ctx/emit! c :retreat.home :info {:home [x y z] :own? home?
+                                        :text (str (if home? "runs home to [" "runs into the closed building at [")
+                                                   x " " y " " z "], ahead of the hostile")}))))
 
-(defn failed! [c] (ctx/update-mem! c assoc :home-failed true))
+(defn failed!
+  "A run to room got no nearer: no run to it again this flight."
+  [c room]
+  (ctx/update-mem! c update :refuges-failed (fnil conj #{}) (cell-key (:start room))))
