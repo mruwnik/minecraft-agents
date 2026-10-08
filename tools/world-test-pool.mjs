@@ -7,7 +7,7 @@
 // SIGINT, SIGTERM and exit kill every child this call spawned (by pid) and delete its temp result file.
 //   --body PREFIX     body names PREFIX + A, B, ... (default ProbePool); each needs a whitelist entry
 //   --first-plot I    first plot of body A; body k starts at I + 20 k
-//   --durations FILE  earlier --results files (repeatable): files run longest first; unseen files count as the median; none = file order
+//   --durations FILE...  earlier --results files (all files up to the next flag; repeatable): files run longest first; unseen files count as the median; none = file order
 // Every other flag (--phase, --allow-time, --time-log, --tag, ...) goes to every child, so one call is one time phase.
 // With TEST_EVENTS=1 the pool prints the @@test lines itself (children print none): a plan with the total of all listed cases up front
 // (world-test --list), one result per case with its final status (a rerun that also fails is one failure), and progress lines
@@ -152,6 +152,7 @@ export const parsePoolArgs = (args) => {
     const v = args[i + 1]
     if (!POOL_VALUE_FLAGS.includes(a)) { p.passthrough.push(a); if (VALUE_FLAGS.includes(a)) p.passthrough.push(args[++i]); continue }
     i++
+    if (a === '--durations') { p.durations.push(v); while (args[i + 1] !== undefined && !args[i + 1].startsWith('--')) p.durations.push(args[++i]); continue }
     if (a === '--bodies') p.bodies = Number(v)
     else if (a === '--body') p.prefix = v
     else if (a === '--first-plot') p.firstPlot = Number(v)
@@ -160,7 +161,6 @@ export const parsePoolArgs = (args) => {
     else if (a === '--retry-failed') p.retries = Number(v)
     else if (a === '--server-wait-s') p.serverWaitS = Number(v)
     else if (a === '--server-settle-s') p.serverSettleS = Number(v)
-    else p.durations.push(v)
   }
   return p
 }

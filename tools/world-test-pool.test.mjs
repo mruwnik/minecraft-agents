@@ -54,6 +54,12 @@ test('parsePoolArgs: pool flags are taken out, paths and other flags pass throug
   assert.deepEqual(p.paths, ['dir', 'x.edn'])
   assert.deepEqual(p.passthrough, ['--phase', 'day', '--allow-time', '--time-log', 't.txt'])
 })
+test('parsePoolArgs: --durations takes every file up to the next flag, never as fixture paths', () => {
+  const p = parsePoolArgs(['dir', '--durations', 'a.edn', 'b.edn', '--durations', 'c.edn', '--phase', 'day'])
+  assert.deepEqual(p.durations, ['a.edn', 'b.edn', 'c.edn'])
+  assert.deepEqual(p.paths, ['dir'])
+})
+
 test('parsePoolArgs: defaults', () => {
   const p = parsePoolArgs(['d', '--bodies', '3'])
   assert.equal(p.prefix, 'ProbePool'); assert.equal(p.firstPlot, 0); assert.equal(p.results, null)
