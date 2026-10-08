@@ -4,7 +4,8 @@
             [jobs.lib.animals :as animals]
             [jobs.lib.combat :as combat]
             [jobs.lib.util :as u]
-            [jobs.lib.hunting :as hunting]))
+            [jobs.lib.hunting :as hunting]
+            [jobs.lib.trip :as trip]))
 
 (def doc
   "Thin a herd of one kind (:mob) down to :keep adults and collect the drops.
@@ -21,6 +22,8 @@
     item within :collect-radius).
   - Otherwise it picks the next candidate: adults in the bound not skipped, those that are not unhittable first
     (an animal behind a wall comes last), then nearest first. The target stays until killed or given up on.
+
+  With :deposit-first? true it first deposits at the known chest when the bag is fullish (jobs.lib.trip/ready!).
 
   Ends with info cull.done and {:killed n :remaining adults-in-bound :babies n :reason r :skipped [ids]}. Skipped
   animals stay alive and still count as adults, so they still breed.
@@ -46,6 +49,7 @@
    :collect-radius {:doc "how far around to collect drops after a kill" :spec (a/num-in 0 nil) :default 8}
    :drops {:doc "item names to collect after a kill; nil: the kind's entry in the drops table, else every item" :spec (a/coll-of a/item?) :default nil}
    :weapons {:doc "item name substrings that count as weapons" :spec (a/coll-of (a/or-of string? keyword?)) :default combat/default-weapons}
+   :deposit-first? {:doc "deposit at the known chest first when the bag is fullish and the chest is near (jobs.lib.trip/ready!)" :spec boolean? :default false}
    :max-skips {:doc "animals skipped in a row before the cull gives up" :spec (a/int-in 1 nil) :default 3}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 
@@ -172,6 +176,8 @@
 (defn ^:async round
   "The whole attempt: loop the steps until one ends or yields."
   [c]
-  (loop []
-    (let [r (await (step c))]
-      (if (= :again r) (recur) r))))
+  (if-let [t (and (:deposit-first? (:args c)) (await (trip/ready! c)))]
+    t
+    (loop []
+      (let [r (await (step c))]
+        (if (= :again r) (recur) r)))))

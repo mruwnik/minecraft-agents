@@ -56,3 +56,32 @@
           (is (zero? transfers))
           (is (pos? attacks))
           (is (not-any? #{:trip.deposited :trip.no-chest :trip.far} kinds)))))))
+
+(defn ^:async cull
+  "Run a one-cow cull with a nearly full bag and a chest known at 10,64,0; [transfers attacks event-kinds]."
+  [args]
+  (let [s (h/setup {:inventory (into h/sword junk) :containers {"10,64,0" []} :entities [(cow 1 3) (cow 2 5) (cow 3 7)]} 20)]
+    (mem/write! (:store (:eng s)) :chest {:pos {:x 10 :y 64 :z 0}} mem/place-policy)
+    (core/submit! (:eng s) (list 'jobs.animals.cull (merge {:count 1 :keep 0} args)) {})
+    (dotimes [_ 40]
+      (swap! (:clock s) + 700)
+      (await (core/tick! (:eng s))))
+    [(count (h/calls (:p s) "transfer")) (count (h/calls (:p s) "attack")) (set (map :kind @(:seen s)))]))
+
+(deftest cull-deposit-first-deposits-then-culls
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[transfers attacks kinds] (await (cull {:deposit-first? true}))]
+          (is (pos? transfers))
+          (is (pos? attacks))
+          (is (contains? kinds :trip.deposited)))))))
+
+(deftest cull-does-not-deposit-by-default
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[transfers attacks kinds] (await (cull {}))]
+          (is (zero? transfers))
+          (is (pos? attacks))
+          (is (not-any? #{:trip.deposited :trip.no-chest :trip.far} kinds)))))))
