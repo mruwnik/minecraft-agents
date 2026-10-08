@@ -1614,15 +1614,31 @@
                (str "another player is within 500 blocks of the plot grid (not a leased test body): "
                     (str/join ", " (lease/strangers (lease/parse-online listing) (:body opts) leased))))))))
 
+(def boot-exit
+  "Exit code of a batch stopped because the body died at boot boot-limit times in a row; the pool and the sweep stop on it."
+  6)
+
+(def boot-limit 2)
+
+(defn boot-dead?
+  "Whether the last boot-limit results are all errors of a body that did not start."
+  [results]
+  (let [tail (take-last boot-limit results)]
+    (and (= boot-limit (count tail))
+         (every? #(and (= :error (:status %)) (str/includes? (str (:why %)) "did not start within")) tail))))
+
 (defn stop-batch?
-  "Whether --stop-on-fail ends the batch: some result so far failed or errored."
+  "Whether the batch ends: the body died at boot repeatedly, or --stop-on-fail and some result so far failed or errored."
   [{:keys [stop-on-fail]} results]
-  (boolean (and stop-on-fail (some #(#{:fail :error} (:status %)) results))))
+  (boolean (or (boot-dead? results)
+               (and stop-on-fail (some #(#{:fail :error} (:status %)) results)))))
 
 (defn exit-code
-  "0 when there is at least one result and all passed or were flaky, else 1."
+  "boot-exit when the body died at boot repeatedly; else 0 when there is at least one result and all passed or were flaky, else 1."
   [results]
-  (if (and (seq results) (every? #(#{:pass :flaky} (:status %)) results)) 0 1))
+  (cond (boot-dead? results) boot-exit
+        (and (seq results) (every? #(#{:pass :flaky} (:status %)) results)) 0
+        :else 1))
 
 (defn retry-targets
   "The results worth a retry: plain failures (an error or an inconclusive run is not a flake candidate)."

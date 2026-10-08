@@ -73,6 +73,16 @@
                (is (= [:day :night] (mapv :name (:passes r))))
                (done))))))
 
+(deftest exit-6-boot-death-stops-the-sweep-with-a-reason
+  (async done
+    (let [{:keys [calls deps]} (fake {:night 6})]
+      (.then (s/run-sweep (s/passes opts) deps)
+             (fn [r]
+               (is (= [:day :night :time-set] @calls))
+               (is (= 6 (:exit r)))
+               (is (re-find #"died at boot" (:stopped r)))
+               (done))))))
+
 (deftest a-rejecting-or-throwing-pass-is-reported-and-time-set-still-runs
   (doseq [boom [(fn [_] (js/Promise.reject (js/Error. "pool spawn failed")))
                 (fn [_] (throw (js/Error. "pool spawn failed")))]]

@@ -1,6 +1,6 @@
 (ns world-test.sweep
   "tools/world-sweep.mjs: one world sweep in one command: the passes day, night and night-exclusive of tools/world-test.mjs (the pool),
-  then `tools/time-set.mjs day`, and one summary EDN. A pass that exits 5 (players near the plot grid) or 4 (--min-bodies timeout) stops the
+  then `tools/time-set.mjs day`, and one summary EDN. A pass that exits 6 (a body died at boot repeatedly), 5 (players near the plot grid) or 4 (--min-bodies timeout) stops the
   sweep; the final time-set (which also restores a leftover sleep gamerule of a dead run) runs anyway. Pure parts: parse-args, passes, counts, run-sweep."
   (:require ["child_process" :as cp]
             ["fs" :as fs]
@@ -14,7 +14,7 @@
   (str "usage: node tools/world-sweep.mjs [--dir DIR] [--bodies 16] [--min-bodies 8] [--no-night-batches] [--durations RESULTS.edn ...] [--match-ids FILE] [--retry-failed 1] [fixture paths ...]\n"
        "runs --phase day, night, night-exclusive (--allow-time, --time-log DIR/time-log-PASS.txt, --results DIR/sweep-PASS.edn), then time-set day; writes DIR/sweep-summary.edn.\n"
        "INT/TERM go to the running pass, then time-set day runs and the exit is 130/143.\n"
-       "exit: 5 / 4 when a pass stopped the sweep with it, else 1 when any pass had failures or errors, else 0."))
+       "exit: 6 / 5 / 4 when a pass stopped the sweep with it, else 1 when any pass had failures or errors, else 0."))
 
 (defn parse-args
   "argv (seq of strings) -> options map."
@@ -59,7 +59,7 @@
     (cond-> {:total (count rs)}
       (seq rs) (merge {:pass 0 :fail 0 :flaky 0 :error 0} by))))
 
-(def stop-codes #{4 5})
+(def stop-codes #{4 5 6})
 
 (def signal-codes {"SIGINT" 130 "SIGTERM" 143})
 
@@ -67,7 +67,7 @@
 
 (defn- stop-why [name code]
   (str "pass " (clojure.core/name name) " exited " code
-       (case code 5 " (players near the plot grid, precheck)" 4 " (--min-bodies wait timed out)" "")))
+       (case code 6 " (a body died at boot repeatedly)" 5 " (players near the plot grid, precheck)" 4 " (--min-bodies wait timed out)" "")))
 
 (defn failing-ids
   "Results vector text (or nil) -> ids of the :fail and :error cases."

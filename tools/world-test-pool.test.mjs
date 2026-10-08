@@ -2,7 +2,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import net from 'node:net'
-import { splitForms, scanForms, failSig, summarize, unitOrder, parsePoolArgs, workerSpecs, runPool, mergeText, poolCap, createReaper, countListed, listArgs, knownFailures, parseListed, unitsWithCases, noCasesSelected, serverProbe, matchIdsFrom, parseNightClasses, nightBatchEndArgs, sleepRuleRestoreArgs, nightBatches, durationsById, runNightBatches, waitForBodies, PRECHECK_EXIT } from './world-test-pool.mjs'
+import { splitForms, scanForms, failSig, summarize, unitOrder, parsePoolArgs, workerSpecs, runPool, mergeText, poolCap, createReaper, countListed, listArgs, knownFailures, parseListed, unitsWithCases, noCasesSelected, serverProbe, matchIdsFrom, parseNightClasses, nightBatchEndArgs, sleepRuleRestoreArgs, nightBatches, durationsById, runNightBatches, waitForBodies, PRECHECK_EXIT, BOOT_EXIT } from './world-test-pool.mjs'
 
 const form = (id, status, secs = 1, extra = '') =>
   `{:plot 0, :file "${id.split('/')[0]}", :expects [{:status :pass, :evidence "a } \\" {"}], :status :${status}, :id "${id}", :elapsed-s ${secs}${extra}}`
@@ -662,4 +662,28 @@ test('runNightBatches: a unit that exits with the precheck code stops the pass a
   assert.equal(r.code, 5)
   assert.deepEqual(log, ['a/c1'])
   assert.deepEqual(splitForms(r.text), [])
+})
+
+test('runPool events: a first attempt that fails or dies is announced as a progress line (attempted) before its rerun has finished', async () => {
+  const run = fakeRunner((f, match) => match ? { code: 0, text: vec(form('a/c1', 'pass')) } : { code: 1, text: vec(form('a/c1', 'fail'), form('a/c2', 'pass')) }, [])
+  const seen = []
+  await runPool({ units: ['a'], workers: workerSpecs(1, 19, 'P', 0), runUnit: run, total: 2, emit: (e) => seen.push(e) })
+  const first = progressOf(seen).find((e) => e.attempted !== undefined)
+  assert.deepEqual([first.done, first.attempted, first.total], [1, 2, 2])
+  assert.ok(seen.indexOf(first) < seen.findIndex((e) => e.outcome === 'flaky'))
+})
+test('runPool events: a unit that died with no results is announced as attempted while done stays 0', async () => {
+  const seen = []
+  const run = fakeRunner((f, match) => match === null && !seen.length ? { code: 1, text: null } : { code: 0, text: vec(form('a/c1', 'pass')) }, [])
+  await runPool({ units: ['a'], workers: workerSpecs(1, 19, 'P', 0), runUnit: run, total: 1, emit: (e) => seen.push(e) })
+  assert.deepEqual([progressOf(seen)[0].done, progressOf(seen)[0].attempted], [0, 1])
+})
+test('runPool: a unit that exits with the boot-death code stops the pass at once (exit 6), keeping the results it wrote', async () => {
+  const log = []
+  const runUnit = fakeRunner((f) => ({ code: BOOT_EXIT, text: vec(form(`${f}/c1`, 'error')) }), log)
+  const r = await runPool({ units: ['a', 'b', 'c'], workers: workerSpecs(1, 19, 'P', 0), runUnit, total: 3 })
+  assert.equal(r.code, 6)
+  assert.equal(r.bootDead, true)
+  assert.equal(log.length, 1)
+  assert.equal(splitForms(r.text).length, 1)
 })

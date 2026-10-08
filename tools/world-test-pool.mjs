@@ -11,7 +11,7 @@
 // Every other flag (--phase, --allow-time, --time-log, --tag, ...) goes to every child, so one call is one time phase.
 // With TEST_EVENTS=1 the pool prints the @@test lines itself (children print none): a plan with the total of all listed cases up front
 // (world-test --list), one result per case with its final status (a rerun that also fails is one failure), and progress lines
-// {done, total, retries} (reruns are counted in retries only).
+// {done, total, retries} (reruns are counted in retries only); a first attempt that fails or dies with a rerun queued adds a progress line with attempted (cases with a first result, done included).
 //   --night-batches  (with --phase night-exclusive --allow-time) runs the cases in night batches instead of one file per body: cases that only need a night run together, at most --bodies at once,
 //                     packed longest first so a batch fits one night; the case that needs the vanilla night skip (:sleep-skip) runs in its own batch; every case that sets the time itself runs alone.
 //                     Each batch has one `time set 14000`, made by its first case, and the next batch waits for all of it. A failed case reruns alone in a batch of its own (--retry-failed); no --repeat above 1.
@@ -20,6 +20,7 @@
 //                     is rerun up to N times (default 1; exactly its --match-id, one run) on a different body when the pool has one; a pass is :flaky.
 //   --match-id ID    (repeatable) and --match-ids FILE (one id per line, or a --results .edn: its ids that did not pass) run exactly those cases; --list counts only them.
 //   --min-bodies N   waits (polls free memory, logging the figure every minute) until the body cap reaches N; past --min-bodies-wait-s (default 1800) it stops with exit 4.
+//   A child exiting 6 (its body died at boot twice in a row) stops the pass at once with exit 6, keeping the results it wrote.
 //   A child exiting 5 (a precheck that fails for every case, e.g. a stranger near the plot grid) stops the pass at once with exit 5. At start the pool stops leftover bodies of its prefix with no live runner lease.
 //   --server-wait-s S when a child hits a refused RCON/game-port connection the pool holds every unit and polls the server (up to S seconds, default 300),
 //                     reruns the faulted cases without using a retry (at most twice each), waits --server-settle-s (default 10) after the server answers, and past S stops with "server unreachable" (exit 3)
@@ -32,6 +33,7 @@ import { fileURLToPath } from 'node:url'
 
 const PLOTS_PER_BODY = 20
 const LOAD_POLL_MS = 5000
+export const BOOT_EXIT = 6 // a child's results end in repeated boot failures (the body dies at start): the pool stops at once, keeping them
 export const PRECHECK_EXIT = 5 // a child's refusal that holds for every case (a stranger near the plot grid): the pool stops at once
 const here = path.dirname(fileURLToPath(import.meta.url))
 const POOL_VALUE_FLAGS = ['--min-bodies', '--min-bodies-wait-s', '--bodies', '--body', '--first-plot', '--results', '--durations', '--max-parallel', '--retry-failed', '--server-wait-s', '--server-settle-s', '--match-id', '--match-ids']
@@ -285,6 +287,8 @@ export const runPool = async ({ units, workers, runUnit, retries = 1, load = () 
   let holding = null
   let unreachable = false
   let precheck = false
+  let bootDead = false
+  let attempted = 0
   const hold = () => {
     holding ??= (async () => {
       const t0 = now()
@@ -361,7 +365,7 @@ export const runPool = async ({ units, workers, runUnit, retries = 1, load = () 
   const loop = async (worker) => {
     for (;;) {
       if (holding) await holding
-      if (unreachable || precheck) return
+      if (unreachable || precheck || bootDead) return
       const job = take(worker)
       if (job) {
         while (busy && load() > cores) await sleep(LOAD_POLL_MS)
@@ -387,6 +391,11 @@ export const runPool = async ({ units, workers, runUnit, retries = 1, load = () 
             record(job, worker, { ...res, text: mergeText(forms.filter((f) => !connFault(f))) })
           }
         } else record(job, worker, res)
+        if (res.code === BOOT_EXIT) bootDead = true
+        if (done.size > finals && done.size !== attempted) { // first attempts waiting for their rerun
+          attempted = done.size
+          emit({ event: 'progress', done: finals, total: total ?? done.size, unit: 'cases', retries: reruns, attempted })
+        }
         busy--
         notify()
         continue
@@ -398,6 +407,7 @@ export const runPool = async ({ units, workers, runUnit, retries = 1, load = () 
   await Promise.all(workers.map(loop))
   if (precheck) return { skipped, precheck, text: mergeText([...done].filter(([k]) => settled.has(k)).map(([, f]) => f)), code: PRECHECK_EXIT }
   const forms = [...done.values()]
+  if (bootDead) return { skipped, bootDead, text: mergeText(forms), code: BOOT_EXIT }
   if (unreachable) { // a failure still waiting for its retry is a result: inconclusive, with its first failure
     const pending = [...done].filter(([k]) => !settled.has(k)).map(([, f]) => withStatus(f, 'inconclusive', `:first-failure ${f}`))
     pending.forEach((f) => emit(resultEvent(f)))
@@ -622,6 +632,7 @@ export const main = async (args) => {
   if (total !== null) emitLine({ event: 'plan', total })
   const r = await runPool({ listed, repeat: repeatOf(p), units, workers, runUnit, retries: p.retries, total, known: knownFailures(previous), emit: emitLine, load: () => os.loadavg()[0], cores, probe: serverProbe([rconPort(), gamePort()]), serverWaitMs: p.serverWaitS * 1000, settleMs: p.serverSettleS * 1000 })
   if (r.precheck) console.error('world-test pool: a precheck refused every case (see the line above); pass stopped, no case recorded')
+  if (r.bootDead) console.error('world-test pool: a body died at boot repeatedly (see the child log, e.g. a heap OOM); pass stopped, the cases not run are not recorded')
   if (r.unreachable) console.error(`world-test pool: server unreachable (RCON port ${rconPort()} or game port ${gamePort()} closed for ${p.serverWaitS} s); stopped, the cases not run are not recorded${r.pending?.length ? `; ${r.pending.length} failures awaiting a retry are recorded as inconclusive` : ''}`)
   if (p.results) fs.writeFileSync(p.results, r.text)
   const sums = splitForms(r.text).map(summarize)

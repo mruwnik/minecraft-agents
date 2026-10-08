@@ -157,6 +157,20 @@
   (is (= 1000 (r/await-since {:kind :slept} 1000 5000)) "other events keep the case window")
   (is (= 9000 (r/await-since {:kind :world.reloaded} 9000 5000))))
 
+(def boot-error {:status :error :why "the body did not start within 90 s (see out)"})
+
+(deftest boot-dead-needs-the-last-n-results-all-boot-failures
+  (is (r/boot-dead? [{:status :pass} boot-error boot-error]))
+  (is (not (r/boot-dead? [boot-error {:status :pass} boot-error])))
+  (is (not (r/boot-dead? [boot-error])) "one is not a pattern")
+  (is (not (r/boot-dead? [{:status :error :why "other"} {:status :error :why "other"}]))))
+
+(deftest a-boot-dead-batch-stops-and-exits-6
+  (is (r/stop-batch? {} [boot-error boot-error]))
+  (is (not (r/stop-batch? {} [boot-error])))
+  (is (= r/boot-exit (r/exit-code [{:status :pass} boot-error boot-error])))
+  (is (= 6 r/boot-exit)))
+
 (deftest the-exit-code-is-zero-only-when-every-case-ran-and-passed
   (is (= 0 (r/exit-code [{:status :pass} {:status :pass}])))
   (is (= 1 (r/exit-code [{:status :pass} {:status :fail}])))
