@@ -13,6 +13,7 @@
 
 (def defaults-then
   {:triggers.storage.inventory-nearly-full/free 2
+   :triggers.storage.inventory-nearly-full/rest-s 120
    :triggers.survival.hungry/bake-wheat 3
    :triggers.survival.hungry/rest-s 600
    :triggers.survival.tidy-pending/range 48
@@ -35,6 +36,16 @@
       (fn [] (is (false? (nearly-full/inventory-nearly-full full nil {})))))
     (is (false? (nearly-full/inventory-nearly-full full nil {:free 1})) "an entry's own :free still wins")))
 
+(defn rested [now t] {:now now :data {:entries {:make-room-rest [{:t t :data {}}]}}})
+
+(deftest nearly-full-rests-after-make-room-tossed
+  (let [full (tu/fake {:inventory (vec (repeat 34 {:name "dirt" :count 64}))})]
+    (is (false? (nearly-full/inventory-nearly-full full (rested 100000 50000) {})) "50 s after a toss: resting")
+    (is (true? (nearly-full/inventory-nearly-full full (rested 200000 50000) {})) "150 s after: fires again")
+    (is (true? (nearly-full/inventory-nearly-full full (rested 100000 50000) {:rest-s 10})) "the entry's :rest-s wins")
+    (settings/with-settings {:triggers.storage.inventory-nearly-full/rest-s 300}
+      (fn [] (is (false? (nearly-full/inventory-nearly-full full (rested 200000 50000) {})))))))
+
 (deftest a-layer-moves-the-accessors
   (settings/with-settings {:jobs.lib.danger/hostile-radius 5 :jobs.lib.danger/ranged-radius 6
                            :triggers.survival.hungry/bake-wheat 4 :triggers.survival.hungry/rest-s 7
@@ -48,4 +59,5 @@
   (is (nil? (:radius hostile-near/defaults)))
   (is (nil? (:ranged-radius hostile-near/defaults)))
   (is (nil? (:free nearly-full/defaults)))
-  (is (nil? (:rest-s hungry/defaults))))
+  (is (nil? (:rest-s hungry/defaults)))
+  (is (nil? (:rest-s nearly-full/defaults))))

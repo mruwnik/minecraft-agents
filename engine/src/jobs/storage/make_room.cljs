@@ -65,6 +65,10 @@
   "The spot of a toss, in body memory: a cut reflex loses its job memory, the refire still walks away from it."
   {:cap 1 :ttl 120000})
 
+(def rest-policy
+  "When make-room last tossed: the inventory-nearly-full trigger rests (its :rest-s) after it."
+  {:cap 1 :ttl 3600000})
+
 (defn item-worth
   "The worth of one item of an inventory entry ({:name :count? ...}): its jobs.lib.cost/item-value per item."
   [item]
@@ -373,6 +377,7 @@
   (let [m (ctx/mem c)
         free-now (u/free-slots (:primitives c))
         {:keys [tossed text] :as summary} (tossed-summary m free-now)]
+    (when (seq tossed) (ctx/remember! c :make-room-rest {} rest-policy))
     (if (nil? reason)
       (do (when (:acted m) (ctx/emit! c :make-room.done :info summary))
           (res/finish! c {:tossed tossed :free free-now}))
