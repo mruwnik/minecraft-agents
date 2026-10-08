@@ -20,7 +20,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (m/scenario {:block "iron_ore" :count 1 :direction "east" :tunnel-length 4}
+        (let [s (await (m/scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 4}
                                    (m/rock-world {"3,64,1" "iron_ore"}) 1))]
           (is (m/finished? s) "ended after one tick")
           (is (= 1 (get (m/inv s) "raw_iron")))
@@ -42,7 +42,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (m/scenario {:block "iron_ore" :count 1 :direction "east" :tunnel-length 4 :torch-interval 2}
+        (let [s (await (m/scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 4 :torch-interval 2}
                                    (assoc (m/rock-world {}) :inventory (conj m/pickaxe {:name "torch" :count 3})) 1))]
           (is (m/finished? s) "ended after one tick")
           (is (some #(= "torch" (.-item (.-args %))) (m/calls s "place")) "a torch was placed"))))))
@@ -132,7 +132,7 @@
           (is (= 2 (count (filter #(= (first cells) %) cells))) "the cut one and its repeat")
           (is (= 3 (get (m/inv again) "dirt"))))))))
 
-(def torch-tunnel {:block "iron_ore" :count 1 :direction "east" :tunnel-length 12 :mend false})
+(def torch-tunnel {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 12 :mend false})
 (def coal-stick [{:name "iron_pickaxe" :count 1} {:name "coal" :count 1} {:name "stick" :count 1}])
 
 (deftest a-torch-craft-that-makes-nothing-is-not-retried

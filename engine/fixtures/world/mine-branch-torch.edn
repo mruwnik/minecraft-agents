@@ -15,14 +15,14 @@
  :cases
  [{:name "ore-far-off-the-line-gets-a-branch-torch"
    :blocks [[:fill [16 0 17] [16 1 28] "air"] [:fill [15 0 29] [17 1 29] "iron_ore"]]
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
+   :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
    :expect [{:event {:source :job :kind :mine.done :data {:got 1}} :within-s 150 :of-job true}
             {:event {:source :action :kind :done :data {:name "place" :status "placed"}} :within-s 150}
             {:no-event {:source :job :kind :mine.torch-left-out} :for-s 150 :until {:source :job :kind :mine.done}}]
    :after [[:item "raw_iron" 1]]}
   {:name "ore-three-off-the-line-gets-no-torch"
    :blocks [[:fill [16 0 17] [16 1 19] "air"] [:set [16 0 20] "iron_ore"]]
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
+   :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
    :expect [{:event {:source :job :kind :mine.done :data {:got 1}} :within-s 100 :of-job true}
             {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 100 :until {:source :job :kind :mine.done}}]
    :after [[:item "raw_iron" 1] [:not-block [16 0 20] "iron_ore"]]}]}

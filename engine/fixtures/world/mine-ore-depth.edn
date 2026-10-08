@@ -1,0 +1,28 @@
+;; jobs.gather.mine of an ore with none in sight (card 0752c3a5): it stairs down east to :level (10 below the body), strip-tunnels
+;; there, takes both kinds of the ore (iron_ore and deepslate_iron_ore count for raw_iron) and walks back; a plot with no
+;; ore ends :tunnel-length with got 0. Gravel over the tunnel line (card 31213781) falls into the cut and is dug until the
+;; line is clear, then the tunnel goes on.
+;; Stone mass x 4..31, y -16..3, z 12..20; body in a 1x2 cell at [16 0 16], stone pickaxe and torches.
+{:defaults
+ {:tags [:mine :jobs] :time :any
+  :plot {:height 12}
+  :blocks [[:fill [4 -16 12] [31 3 20] "stone"] [:fill [16 0 16] [16 1 16] "air"]]
+  :body {:at [16.5 0 16.5] :yaw 270 :inventory [["stone_pickaxe" 1] ["torch" 8] ["cobblestone" 16]] :effects [["resistance" 900 4]]}
+  :limit-s 300}
+ :cases
+ [{:name "ore-at-depth-both-kinds"
+   :blocks [[:set [28 -10 17] "iron_ore"] [:set [29 -10 15] "deepslate_iron_ore"]]
+   :act [[:job (jobs.gather.mine {:block "iron_ore" :count 2 :direction :east :level #at [16 -10 16] :tunnel-length 4 :radius 8 :mend false})]]
+   :expect [{:event {:source :job :kind :mine.done :data {:got 2 :reason :count}} :within-s 280 :of-job true}
+            {:no-event {:source :job :kind :mine.not-home} :for-s 280 :until {:source :job :kind :mine.done}}]
+   :after [[:item "raw_iron" 2] [:not-block [28 -10 17] "iron_ore"] [:not-block [29 -10 15] "deepslate_iron_ore"]]}
+  {:name "no-ore-gives-up-naming-tunnel-and-depth"
+   :act [[:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :level #at [16 -10 16] :tunnel-length 4 :radius 8 :mend false})]]
+   :expect [{:event {:source :job :kind :mine.done :data {:got 0 :reason :tunnel-length}} :within-s 280 :of-job true}]
+   :after [[:item "raw_iron" 0]]}
+  {:name "gravel-falling-into-the-tunnel-is-dug"
+   :blocks [[:fill [19 2 16] [19 4 16] "gravel"]]
+   :act [[:job (jobs.gather.mine {:block "iron_ore" :count 1 :direction :east :level false :tunnel-length 6 :radius 8 :mend false})]]
+   :expect [{:event {:source :job :kind :mine.done :data {:got 0 :reason :tunnel-length}} :within-s 200 :of-job true}
+            {:no-event {:source :job :kind :mine.tunnel-end :data {:reason :walk-failed}} :for-s 200 :until {:source :job :kind :mine.done}}]
+   :after [[:not-block [19 1 16] "gravel"] [:not-block [19 2 16] "gravel"] [:not-block [19 4 16] "gravel"]]}]}

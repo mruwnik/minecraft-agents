@@ -26,7 +26,9 @@
 
 (def doc
   "Mine like a player: dig out :count more of one block kind (:block) that the body has seen, strip-tunnelling
-  at its own level to find more, then mend the pit under where it started and walk back to the start cell.
+  to find more (for an ore at its ore level, :level), then mend the pit under where it started and walk back to the start cell.
+  An ore's stone and deepslate kinds both count (:variants): {:block \"iron_ore\" :count 8} gets 8 raw_iron from iron_ore and
+  deepslate_iron_ore.
 
   Targets come only from perception (the primitives' seenBlocks, never x-ray). A target is a remembered :block
   within :radius that is still there and has at least one of its 6 face neighbours seen as air or cave_air. It is
@@ -77,6 +79,10 @@
      :descend-limit steps, soil dug by hand; each step looks round, so stone that comes into view is a target.
      The limit used up, or the stair stopping, ends :stopped :no-stone-found (warn mine.no-stone-found, result
      :descent {:steps :stop}); the mend and the walk home follow.
+  6b. Still none, a tunnel level set (:level, else the ore's ::ore-levels entry, e.g. iron_ore 16; :level false: none) and the
+     body above it, the tunnel owed and not begun: a stair down the same way (one step a round, :fetch passed on, a look round
+     each step, a torch every :torch-interval steps) until the feet are at the level. The stair stopping ends the descent
+     there (info mine.descent-stopped {:steps :stop :y :level}) and the tunnel runs at that height.
   7. Else the strip tunnel, at the level then stood on.
 
   Strip tunnel: a 1-wide 2-high straight run at the level the body stood on at the start, along :heading or :direction
@@ -85,11 +91,12 @@
   cell of the run and judges the next cell and the one over it: no fluid in it, no seen lava beside it, no seen water
   beside it unless :wet, a solid floor, the zone and plan rules with only :accept hazards. It digs them head
   first (a cut of :block is collected like a target), looks ahead level and down so perception records what
-  the cut exposed, and steps in. Ore that comes into view is then an ordinary target and is dug before the
+  the cut exposed, and steps in. A cut cell not air after the cut, or a walk stopped with a falling block (gravel, sand)
+  in it, is cut again (the column above falls in turn), at most ::max-recuts times per cell, then :dig-failed. Ore that comes into view is then an ordinary target and is dug before the
   next step.
 
   The run used up ends the dig phase :tunnel-length, any stop ends it :tunnel-stopped. Either way one warn
-  mine.tunnel-end {:reason (:tunnel-length :lava :water :fluid :no-floor :not-loaded :refused :dig-failed
+  mine.tunnel-end {:y (the tunnel's feet height) :reason (:tunnel-length :lava :water :fluid :no-floor :not-loaded :refused :dig-failed
   :walk-failed) :heading :length :at :next :walk}. :at is the offending cell, :next the line cell it stopped before, :walk (walk-failed) the moveTo status, reason and the names seen at the cell and its floor.
 
   Torches: a dig of seen ore that takes the body 4+ blocks off the tunnel line hangs one torch there the same way
@@ -126,7 +133,8 @@
 
   Hands over {:got n :reason r} (with :status :stopped when :got is 0 or the walk home failed, :reason :not-home: never completed) plus
   :dig-reason, :resumes, :tunnel and :left when set; info mine.done with
-  :mended, the cells filled. With reason :wet (also when a tunnel dug nothing and seen blocks were skipped for water), :wet-skipped counts the seen blocks left for water beside them. Its text says the reason, :got and :mended, and for a tunnel its length, heading, end cell
+  :mended, the cells filled; its text (and the result's text when :got is 0) names the stair's steps and the tunnel's length,
+  heading and height (\"; stair down 48 steps; tunnel 32 blocks east at y 16\"); :descent {:steps :stop} is in the result after any descent. With reason :wet (also when a tunnel dug nothing and seen blocks were skipped for water), :wet-skipped counts the seen blocks left for water beside them. Its text says the reason, :got and :mended, and for a tunnel its length, heading, end cell
   and whether the body walked back. :got is how many more are carried than at the start, at least 0. :tunnel is
   {:origin :heading :steps :stop :end :back-at :walked-back?}, :end the cell it ended on before the walk back.")
 
@@ -147,6 +155,9 @@
    :heading {:doc "the strip tunnel's heading, over :direction: north, south, east or west (n/s/e/w), or a cell [x y z] (the dominant axis from the start toward it); nil: :direction" :spec (a/pred "a heading name or a cell [x y z]" #(or (and (or (string? %) (keyword? %)) (heading-name %)) (and (sequential? %) (= 3 (count %)) (every? number? %)))) :default nil}
    :direction {:doc "the strip tunnel's heading: north, south, east or west (n/s/e/w); nil: the way the body faces when the job starts" :spec (a/pred "north, south, east or west (n/s/e/w), a string or keyword" #(and (or (string? %) (keyword? %)) (heading-name %))) :default nil}
    :tunnel-length {:doc "the most blocks the strip tunnel runs in this job, at the body's level; 0: no tunnel, seen blocks only" :spec (a/int-in 0 nil) :default 32}
+   :variants {:doc "an ore's stone and deepslate kinds both count as the block (iron_ore and deepslate_iron_ore, either named); false: only :block" :spec boolean? :default true}
+   :level {:doc "the feet height the strip tunnel runs at (a whole number, or a cell [x y z] / {:x :y :z} whose y it takes): with no target seen the body first stairs down to it (jobs.access.stair) when higher; nil: the ore's level (setting ::ore-levels), none for other blocks; false: where the body stands"
+           :spec (a/pred "a whole number, a cell [x y z] or {:x :y :z}, nil or false" #(or (nil? %) (false? %) (integer? %) (and (sequential? %) (= 3 (count %)) (integer? (second %))) (and (map? %) (integer? (:y %))))) :default nil}
    :descend-limit {:doc "the most steps of stair down through soil to find stone, when the block is stone-type and none is in sight; 0: never descend" :spec (a/int-in 0 nil) :default 12}
    :torch-interval {:doc "the strip tunnel hangs a torch every this many steps; 0: none" :spec (a/int-in 0 nil) :default 10}
    :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent :falling-block); the lava and :wet rules above still hold"
@@ -162,11 +173,36 @@
    ::torch-min {:default 2 :doc "A torch round crafts more when fewer torches than this are carried." :spec (a/int-in 0 nil)}
    ::torch-craft-count {:default 4 :doc "Torches one craft makes." :spec (a/int-in 1 nil)}
    ::max-resumes {:default 2 :doc "Resumes of a cut before the job gives up." :spec (a/int-in 0 nil)}
-   ::max-steps {:default 400 :doc "Pieces of work of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}})
+   ::max-steps {:default 400 :doc "Pieces of work of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}
+   ::max-recuts {:default 12 :doc "Cuts again of one tunnel cell that a falling block (gravel, sand) refilled before the tunnel stops :dig-failed." :spec (a/int-in 0 nil)}
+   ::ore-levels {:default {"iron_ore" 16 "copper_ore" 48 "gold_ore" -16 "lapis_ore" 0 "redstone_ore" -54 "diamond_ore" -54}
+                 :doc "The feet height a strip tunnel for an ore runs at when :level is nil, by the ore's stone kind; an ore not listed tunnels where the body stands."
+                 :spec (a/map-of string? (a/int-in nil nil))}})
 (defn reach [] (settings/get settings ::reach))
 (defn mend-reach [] (settings/get settings ::mend-reach))
 (defn max-mend-failures [] (settings/get settings ::max-mend-failures))
 (def air #{"air" "cave_air"})
+
+(defn base-ore
+  "The stone kind of an ore block (deepslate_iron_ore: iron_ore); any other block as it is."
+  [block]
+  (let [plain (some-> block (str/replace #"^deepslate_" ""))]
+    (if (contains? blocks/ores plain) plain block)))
+
+(defn kinds
+  "The block names that count as the mined block: an ore's stone and deepslate kinds with :variants, else :block alone."
+  [{:keys [block variants]}]
+  (let [base (base-ore block)]
+    (if (and variants (contains? blocks/ores base)) #{base (str "deepslate_" base)} #{block})))
+
+(defn tunnel-level
+  "The feet height the strip tunnel should run at (args a): :level, else the ore's ::ore-levels entry; nil for none (:level false)."
+  [{:keys [block level]}]
+  (cond (false? level) nil
+        (sequential? level) (second level)
+        (map? level) (:y level)
+        (some? level) level
+        :else (get (settings/get settings ::ore-levels) (base-ore block))))
 (def not-solid #{"air" "cave_air" "water" "lava" "short_grass" "tall_grass"})
 (def faces [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])
 
@@ -215,12 +251,12 @@
   zone or plan refuses, :wet? true when an unskipped block was rejected only for water, :wet-n how many}. Only seen blocks that are
   still there count."
   [c]
-  (let [{:keys [block radius wet accept]} (:args c)
+  (let [{:keys [radius wet accept]} (:args c)
         p (:primitives c)
         skipped (set (:skipped (ctx/mem c)))
         ground (into #{} (map :pos) (:ground (ctx/mem c)))
         here (u/self-pos c)
-        cells (->> (look/seen-blocks p {:names [block] :radius radius :max 128 :live? true})
+        cells (->> (look/seen-blocks p {:names (vec (kinds (:args c))) :radius radius :max 128 :live? true})
                    (map :pos)
                    (remove skipped))
         graded (map (juxt identity #(classify c wet %)) cells)
@@ -276,29 +312,36 @@
                (not-any? #(= cell (:pos %)) ground))
       (ctx/update-mem! c update :ground (fnil conj []) {:pos cell :name name}))))
 
+(defn dug-text
+  "The descent and the tunnel of a run, for the end texts: \"; stair down 6 steps; tunnel 3 blocks east at y 58\" (empty for neither)."
+  [{:keys [descent tunnel]} reason]
+  (str (when (and (pos? (:steps descent 0)) (not= :no-stone-found reason)) (str "; stair down " (:steps descent) " steps"))
+       (when (pos? (:steps tunnel 0)) (str "; tunnel " (:steps tunnel) " blocks " (:heading tunnel) " at y " (:y (:origin tunnel))))))
+
 (defn finish!
   "Emit the outcome, hand it to the parent and end the job."
   [c]
   (let [{:keys [goal mended dig-reason resumes tunnel left descent wet-skipped] :as m} (ctx/mem c)
         got (max 0 (- (carried c) (- goal (:count (:args c)))))
         reason (if (and (zero? got) (pos? (or wet-skipped 0)) (#{:none :no-drops :tunnel-length :tunnel-stopped} (:reason m))) :wet (:reason m))
-        why (cond-> {} dig-reason (assoc :dig-reason dig-reason) (= :no-stone-found reason) (assoc :descent descent) (= :wet reason) (assoc :wet-skipped (or wet-skipped 0)) resumes (assoc :resumes resumes)
+        why (cond-> {} dig-reason (assoc :dig-reason dig-reason) (or (= :no-stone-found reason) (pos? (:steps descent 0))) (assoc :descent descent) (= :wet reason) (assoc :wet-skipped (or wet-skipped 0)) resumes (assoc :resumes resumes)
               (pos? (:steps tunnel 0)) (assoc :tunnel (-> tunnel (select-keys [:origin :heading :steps :stop :end :back-at :walked-back?]) (update :origin access/cell)))
               (seq left) (assoc :left (mapv (fn [[pos n]] {:pos pos :count n}) left)))]
     (ctx/emit! c :mine.done (if (= :not-home reason) :warn :info) (merge {:got got :reason reason :mended (or mended 0)
                                           :text (str "mine done: " (name reason) ", got " got ", mended " (or mended 0)
                                                      (when (= :no-stone-found reason) (str "; dug down " (:steps descent 0) " blocks through soil, found no stone"))
                                                      (when (= :wet reason) (str "; " (or wet-skipped 0) " seen blocks beside water skipped, pass :wet true to dig them"))
+                                                     (dug-text m reason)
                                                      (when-let [{:keys [end back-at walked-back?]} (when (pos? (:steps tunnel 0)) tunnel)]
-                                                       (str "; tunnel " (:steps tunnel) " blocks " (:heading tunnel)
-                                                            (when end (str ", ended at " (str/join "," end)))
+                                                       (str (when end (str ", ended at " (str/join "," end)))
                                                             (if walked-back?
                                                               (str ", walked back to " (str/join "," back-at))
                                                               ", did not get back to its origin"))))}
                                          why))
     (ctx/result! c (merge (cond
                             (zero? got) {:status :stopped :text (str "mine got nothing: " (name reason)
-                                                                     (when (= :no-stone-found reason) (str "; dug down " (:steps descent 0) " blocks through soil, found no stone")))}
+                                                                     (when (= :no-stone-found reason) (str "; dug down " (:steps descent 0) " blocks through soil, found no stone"))
+                                                                     (dug-text m reason))}
                             (= :not-home reason) {:status :stopped :text (str "mine got " got " but did not get back to its start")})
                           {:got got :reason reason} why))
     :done))
@@ -474,8 +517,8 @@
         {:keys [heading steps]} tunnel
         got (max 0 (- (carried c) (- goal (:count (:args c)))))]
     (ctx/emit! c :mine.tunnel-end :warn
-               (cond-> {:reason stop :heading heading :length steps :got got
-                        :text (str "mine's tunnel ended after " steps " blocks " heading ": "
+               (cond-> {:reason stop :heading heading :length steps :y (:y (:origin tunnel)) :got got
+                        :text (str "mine's tunnel ended after " steps " blocks " heading " at y " (:y (:origin tunnel)) ": "
                                    (if (= :tunnel-length stop) "its length is used up" (str "stopped, " (name stop)))
                                    (when at (str " at " (str/join "," (access/cell at))))
                                    (when walk (walk-text walk))
@@ -508,14 +551,14 @@
             _ (await (tools/equip! c block))
             v (access/may-dig? (rules-in c) pos)
             verdict (access/judge v (:accept (:args c)))
-            _ (when (and (= :ok verdict) (= block (:block (:args c)))) (ctx/update-mem! c assoc :digging pos))
+            _ (when (and (= :ok verdict) (contains? (kinds (:args c)) block)) (ctx/update-mem! c assoc :digging pos))
             outcome (when (= :ok verdict) (await (dig-cell! c pos)))
             _ (when-not (= :continue outcome) (ctx/update-mem! c dissoc :digging))]
         (cond
           (not= :ok verdict) (do (refused! c pos v verdict) :refused)
           (= :continue outcome) :continue
           (not (#{:dug :missing} outcome)) :dig-failed
-          :else (do (when (and (= :dug outcome) (= block (:block (:args c))))
+          :else (do (when (and (= :dug outcome) (contains? (kinds (:args c)) block))
                       (ctx/update-mem! c assoc :collecting true :dug-at (access/cell pos)))
                     (recur (rest cells)))))
       :ok)))
@@ -580,11 +623,21 @@
          (every? #(>= (u/dist here %) (branch-gap)) branch-torches))))
 
 (defn booked!
-  "Book the torch step done: a tunnel torch at the tunnel's length, a branch one at the body's cell."
+  "Book the torch step done: a tunnel torch at the tunnel's length, a stair one (branch :stair) at the descent's steps, a branch one
+  (branch true) at the body's cell."
   [c branch]
-  (if branch
-    (ctx/update-mem! c update :branch-torches (fnil conj []) (cell-of (u/self-pos c)))
-    (ctx/update-mem! c assoc :torch-at (get-in (ctx/mem c) [:tunnel :steps]))))
+  (cond
+    (= :stair branch) (ctx/update-mem! c assoc-in [:descent :torch-at] (get-in (ctx/mem c) [:descent :steps] 0))
+    branch (ctx/update-mem! c update :branch-torches (fnil conj []) (cell-of (u/self-pos c)))
+    :else (ctx/update-mem! c assoc :torch-at (get-in (ctx/mem c) [:tunnel :steps]))))
+
+(defn stair-torch-due?
+  "Whether the stair down to the ore level owes a torch: the first after its first step, then every :torch-interval steps."
+  [c]
+  (let [interval (:torch-interval (:args c))
+        {:keys [steps torch-at]} (:descent (ctx/mem c))]
+    (and (pos? (or interval 0)) (pos? (or steps 0))
+         (or (nil? torch-at) (>= (- steps torch-at) interval)))))
 
 (defn left-out!
   "Book the torch step done, with an info event of the reason."
@@ -612,7 +665,12 @@
   (let [p (:primitives c)
         {:keys [tunnel]} (ctx/mem c)
         block-at (fn [[x y z]] (u/seen-name p {:x x :y y :z z}))
-        {:keys [dir site]} (if branch (branch-site tunnel (cell-of (u/self-pos c))) {:dir (headings (:heading tunnel)) :site (step-cell tunnel (dec (:steps tunnel)))})
+        here (cell-of (u/self-pos c))
+        {:keys [dir site]} (cond
+                             (= :stair branch) (let [[dx dz :as d] (headings (:heading (ctx/mem c)))]
+                                                 {:dir d :site (-> here (update :x - dx) (update :z - dz) (update :y inc))})
+                             branch (branch-site tunnel here)
+                             :else {:dir (headings (:heading tunnel)) :site (step-cell tunnel (dec (:steps tunnel)))})
         pick (fn [] (when site (torch/torch-at dir [(:x site) (:y site) (:z site)] (placement/eye (u/self-pos c)) block-at)))
         choice (or (let [c0 (pick)] (when-not (:refused c0) c0))
                    (when site (let [[dx dz] dir] (await (glance! c [[(- dx) (- dz)] [(- dz) dx] [dz (- dx)]]))))
@@ -626,12 +684,12 @@
       (let [_ (await (torch/off-hand-to-inventory! c))
             r (await (ctx/act c :place (clj->js {:pos (zipmap [:x :y :z] cell) :item "torch"
                                                  :click (placement/js-click (:click choice))})))]
-        (if branch (booked! c branch) (ctx/update-mem! c assoc :torch-at (:steps tunnel)))
+        (booked! c branch)
         (when-not (or (= "placed" (.-status r)) (torch/torch-blocks (block-at cell)))
           (left-out! c cell :place-failed branch))))))
 
 (defn ^:async torch-step!
-  "One round of a torch (the tunnel's, or a branch's when branch): craft more when under 2 are carried and coal or
+  "One round of a torch (the tunnel's; a branch's when branch is true, the stair's when :stair): craft more when under 2 are carried and coal or
   charcoal and a stick are, say so once with none to hang, else hang one. :continue."
   [c branch]
   (let [m (ctx/mem c)
@@ -644,10 +702,10 @@
         (if (= :continue r) :continue :again))
 
       (zero? n)
-      (do (when-not (get-in m [:no-torches-said (boolean branch)])
+      (do (when-not (get-in m [:no-torches-said (if (= :stair branch) :stair (boolean branch))])
             (ctx/emit! c :mine.no-torches :info {:text (str "mine has no torches and nothing to craft them from: the "
-                                                            (if branch "branch" "tunnel") " stays dark")}))
-          (ctx/update-mem! c assoc-in [:no-torches-said (boolean branch)] true)
+                                                            (cond (= :stair branch) "stair" branch "branch" :else "tunnel") " stays dark")}))
+          (ctx/update-mem! c assoc-in [:no-torches-said (if (= :stair branch) :stair (boolean branch))] true)
           (booked! c branch)
           :again)
 
@@ -659,6 +717,17 @@
   (if (end-torch-due? c)
     (await (torch-step! c false))
     (tunnel-end! c stop at next walk)))
+
+(defn max-recuts [] (settings/get settings ::max-recuts))
+
+(defn ^:async recut!
+  "A cut cell is not air after the cut (gravel or sand fell in from above): cut it again next round, at most max-recuts times
+  per cell, then end :dig-failed."
+  [c next]
+  (let [n (inc (:recuts (ctx/mem c) 0))]
+    (if (> n (max-recuts))
+      (await (end! c :dig-failed next))
+      (do (ctx/update-mem! c assoc :recuts n) :again))))
 
 (defn ^:async tunnel-round!
   "One step of the strip tunnel: back onto its last cell, judge and cut the next two, look at them, step in."
@@ -691,10 +760,12 @@
                 :else
                 (do (await (glance! c [(headings heading)]))
                     (cond
+                      (not-every? #(air (name-at %)) cut) (await (recut! c next))
                       (not (rules/solid-floor? name-at (update next :y dec))) (end! c :no-floor next)
                       (do (reset! walk (await (step-to! c next))) (nil? @walk))
-                      (do (ctx/update-mem! c #(-> % (update-in [:tunnel :steps] inc) (assoc :looked next)))
+                      (do (ctx/update-mem! c #(-> % (update-in [:tunnel :steps] inc) (assoc :looked next) (dissoc :recuts)))
                           :again)
+                      (some #(rules/falling? (name-at %)) cut) (await (recut! c next))
                       :else (end! c :walk-failed next nil @walk))))))))
 
 ;; ------------------------------------------------------------------ the dig phase
@@ -748,11 +819,22 @@
 
 (def stone-types #{"stone" "cobblestone" "deepslate" "andesite" "granite" "diorite" "tuff"})
 
+(defn to-level?
+  "Whether the dig phase should first stair down to the tunnel level: one is set, the body stands above it, the tunnel is owed and not
+  begun, and the stair has not stopped."
+  [c]
+  (let [level (tunnel-level (:args c))
+        m (ctx/mem c)]
+    (boolean (and level (pos? (:tunnel-length (:args c))) (nil? (:tunnel m)) (nil? (:stop (:descent m)))
+                  (> (:y (cell-of (u/self-pos c))) level)))))
+
 (defn descend-due?
-  "Whether the dig phase should first stair down: the block is stone-type, no seen target (nor seen block skipped for water), the strip tunnel not begun."
+  "Whether the dig phase should first stair down: to the tunnel level (to-level?), or the block is stone-type, with no seen target (nor
+  seen block skipped for water) and the strip tunnel not begun."
   [c]
   (let [{:keys [block descend-limit]} (:args c)]
-    (and (contains? stone-types block) (pos? descend-limit) (nil? (:tunnel (ctx/mem c))))))
+    (or (to-level? c)
+        (and (nil? (tunnel-level (:args c))) (contains? stone-types block) (pos? descend-limit) (nil? (:tunnel (ctx/mem c)))))))
 
 (defn no-stone!
   "The stair down found no stone: one warn mine.no-stone-found, then the mend and the walk home with :reason :no-stone-found."
@@ -763,15 +845,30 @@
                                                                                (when stop (str "; the stair stopped: " (name stop))))})
     (to-mend! c :no-stone-found)))
 
-(defn ^:async descend-round!
-  "One step of the stair down (jobs.access.stair child, :steps 1, :fetch) along the tunnel heading; the next round
-  looks round and scans. At :descend-limit steps, or when the stair stops, ends :no-stone-found."
+(defn stair-stopped!
+  "The stair down to the tunnel level stopped above it: one info mine.descent-stopped, and the tunnel runs where the body stands."
   [c]
-  (let [n (:steps (:descent (ctx/mem c)) 0)]
-    (if (>= n (:descend-limit (:args c)))
-      (no-stone! c)
+  (let [{:keys [steps stop]} (:descent (ctx/mem c))
+        y (:y (cell-of (u/self-pos c)))
+        level (tunnel-level (:args c))]
+    (ctx/emit! c :mine.descent-stopped :info {:steps (or steps 0) :stop stop :y y :level level
+                                              :text (str "mine's stair down stopped at y " y " (" (name stop) "), short of y " level
+                                                         "; it tunnels there")})
+    :again))
+
+(defn ^:async descend-round!
+  "One step of the stair down (jobs.access.stair child, :steps 1) along the tunnel heading; the next round looks round and scans.
+  To the tunnel level: a torch first when one is due (stair-torch-due?), :fetch passed on; the stair stopping ends the descent there.
+  For stone: :fetch true; at :descend-limit steps, or when the stair stops, ends :no-stone-found."
+  [c]
+  (let [n (:steps (:descent (ctx/mem c)) 0)
+        level? (to-level? c)]
+    (cond
+      (and level? (stair-torch-due? c)) (await (torch-step! c :stair))
+      (and (not level?) (>= n (:descend-limit (:args c)))) (no-stone! c)
+      :else
       (let [r (await (ctx/call-child c :stair 'jobs.access.stair
-                                     {:dir :down :heading (keyword (:heading (ctx/mem c))) :steps 1 :fetch true
+                                     {:dir :down :heading (keyword (:heading (ctx/mem c))) :steps 1 :fetch (if level? (:fetch (:args c)) true)
                                       :ignore-zones? (:ignore-zones? (:args c))}))
             res (when (not= :continue r) (ctx/child-result c :stair))]
         (cond
@@ -779,7 +876,7 @@
           (and (= :done r) (= :done (:status res)))
           (do (ctx/update-mem! c update-in [:descent :steps] (fnil + 0) (or (:steps res) 1)) :again)
           :else (do (ctx/update-mem! c update :descent assoc :stop (or (:reason res) :declined))
-                    (no-stone! c)))))))
+                    (if level? (stair-stopped! c) (no-stone! c))))))))
 
 (defn ^:async dig-round! [c]
   (let [{:keys [goal failures dry looked]} (ctx/mem c)
@@ -1097,7 +1194,7 @@
 
 (defn ^:async round
   [c]
-  (if-let [t (await (trip/ready! c))]
+  (if-let [t (or (await (trip/ready! c)) (await (trip/tool-ready! c (:block (:args c)))))]
     t
     (let [n (atom 0)]
       (await (pace/steps! c #(if (< (swap! n inc) (max-steps)) (step c) :continue))))))
