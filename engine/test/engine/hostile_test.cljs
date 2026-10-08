@@ -483,10 +483,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup-flight {:inventory sword :entities [(zombie 6 0)] :unreachable ["6,64,0"]})]
+        (let [{:keys [eng p seen]} (setup-flight {:inventory sword :entities [(zombie 6 0)] :unreachable ["6,64,0"]})]
           (core/submit! eng respond {})
           (await (core/tick! eng))
-          (is (= 3 (walks-to {:p p :eng eng} {:x 6 :z 0})) "three blocked walks towards the zombie, never more")
+          (is (= 3 (count (filter #(= :unreachable (:kind %)) @seen))) "three go-to walks towards the zombie gave up, never more")
+          (is (= 6 (walks-to {:p p :eng eng} {:x 6 :z 0})) "each go-to call books two blocked rounds: the probe and the re-aimed y")
           (is (< (:x (last-move eng)) 0) "then it walks away instead")
           (is (zero? (count (calls p "attack")))))))))
 
