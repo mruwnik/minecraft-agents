@@ -62,8 +62,20 @@
         (let [{:keys [eng p seen]} (setup {:containers {"10,64,0" [{:name "bread" :count 5}]}})
               result (await (child-outcome eng job {:chest chest :items (array-map "bread" 16 "stone_hoe" 2)} 8))]
           (is (= {"bread" 5} (inv p)))
-          (is (= {:gave-up false :status :stopped :short {"bread" 11 "stone_hoe" 2}} result))
+          (is (= {:gave-up false :status :stopped :reason "chest-lacks" :held {}
+                  :short {"bread" 11 "stone_hoe" 2}} result))
           (is (some #(= :withdraw.short (:kind %)) @seen)))))))
+
+(deftest withdraw-names-the-reason-and-the-held-items-when-the-chest-lacks-them
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:containers {"10,64,0" [{:name "bread" :count 5} {:name "dirt" :count 2}]}})
+              _ (await (child-outcome eng job {:chest chest :items {"shears" 1}} 8))
+              text (some #(when (= :withdraw.short (:kind %)) (:text %)) @seen)]
+          (is (re-find #"no shears in this chest" text))
+          (is (re-find #"bread 5" text))
+          (is (re-find #"dirt 2" text)))))))
 
 (deftest withdraw-finds-the-chest-in-places
   (async done
@@ -143,7 +155,7 @@
       (fn ^:async t []
         (let [{:keys [eng]} (setup {:containers {"10,64,0" [{:name "bread" :count 5}]}})
               result (await (child-outcome eng job {:chest chest :items (array-map "bread" 16)} 1))]
-          (is (= {:gave-up false :status :stopped :short {"bread" 11}} result)))))))
+          (is (= {:gave-up false :status :stopped :reason "chest-lacks" :held {} :short {"bread" 11}} result)))))))
 
 (deftest withdraw-counts-what-moved-before-a-transfer-timed-out
   (async done

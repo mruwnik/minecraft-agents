@@ -1,5 +1,6 @@
 (ns jobs.storage.withdraw
-  (:require [engine.args :as a]
+  (:require [clojure.string :as str]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.fetch :as fetch]
@@ -13,7 +14,8 @@
   each name in :items is carried. What is short is re-derived from the inventory before each take, so a cut or
   restart loses nothing.
   Ends with {:gave-up false :short {name n}}; :short is empty when everything is carried, else what the chest could
-  not supply (and the status is stopped). After three failed attempts, or at once when go-to cannot reach, it ends
+  not supply (status stopped, reason chest-lacks, :held {name n} what the chest holds; the withdraw.short info
+  says so in words). After three failed attempts, or at once when go-to cannot reach, it ends
   stopped {:gave-up true :reason r :short {...}} and warns. r is the inspect or transfer status, \"unreachable\" or
   \"nothing-moved\".
   Memory: a container missing at the recorded :chest retracts that place, with one chest_missing warn, and ends at once with reason \"missing\". No chest known: the job waits, reason :no-chest.
@@ -60,6 +62,18 @@
   [stacks name]
   (transduce (comp (filter #(= name (.-name %))) (map #(.-count %))) + 0 (array-seq stacks)))
 
+(defn held-items
+  "{name n} the inspected container items hold, summed per name."
+  [stacks]
+  (fetch/stacks->items stacks))
+
+(defn lacks-text
+  "\"no shears in this chest (holds bread 5, dirt 2)\": the wanted names the chest lacks, and what it does hold."
+  [names held]
+  (str "no " (str/join ", " names) " in this chest ("
+       (if (empty? held) "empty" (str "holds " (str/join ", " (map (fn [[n k]] (str n " " k)) (sort held)))))
+       ")"))
+
 (defn refuse!
   "End refused: one withdraw.refused warn naming the zones and claims, the refusal as the result."
   [c verdict]
@@ -81,10 +95,12 @@
                                         (when (pos? held) [name (min n held)])))
                        short)]
         (cond
-          (nil? pick) (do (ctx/emit! c :withdraw.short :info {:short (into {} short)
-                                                             :text (str "chest lacks " (pr-str (into {} short)))})
-                          (ctx/result! c {:gave-up false :status :stopped :short (into {} short)})
-                          :done)
+          (nil? pick) (let [held (held-items (.-items seen))
+                            lacking (into {} short)]
+                        (ctx/emit! c :withdraw.short :info {:short lacking :held held
+                                                           :text (lacks-text (map first short) held)})
+                        (ctx/result! c {:gave-up false :status :stopped :reason "chest-lacks" :held held :short lacking})
+                        :done)
           (access/container-refusal c :take chest) (refuse! c (access/container-refusal c :take chest))
           :else
           (let [[name n] pick
