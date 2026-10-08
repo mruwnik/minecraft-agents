@@ -11,14 +11,15 @@
 
 (defn fetch-run
   "Die with the field-report pile and cause, run the job to its decision: the :recover-drops.decided or .fetching event."
-  [cause]
+  ([cause] (fetch-run cause {}))
+  ([cause body]
   (let [pile dt/death-pile-of-the-field-report]
     (fn ^:async t []
-      (let [{:keys [eng seen]} (setup {:floor tu/walk-floor :entities (vec (pile-drops pile))})]
+      (let [{:keys [eng seen]} (setup (merge {:floor tu/walk-floor :entities (vec (pile-drops pile))} body))]
         (die! eng (cond-> {:pos dt/death-pos :inventory pile} cause (assoc :cause cause)))
         (core/submit! eng job {})
         (await (run-until-empty eng 20))
-        {:eng eng :seen seen}))))
+        {:eng eng :seen seen})))))
 
 (defn decided-text [seen]
   (:text (first (filter #(contains? #{:recover-drops.fetching :recover-drops.decided} (:kind %)) @seen))))
@@ -38,6 +39,25 @@
       (fn ^:async t []
         (let [r (await ((fetch-run "fall")))]
           (is (re-find #"danger 0," (decided-text (:seen r)))))))))
+
+(def iron-kit
+  {:inventory [{:name "iron_sword" :count 1}]
+   :equipment {:head {:name "iron_helmet"} :torso {:name "iron_chestplate"} :legs {:name "iron_leggings"} :feet {:name "iron_boots"}}})
+
+(deftest an-unarmed-body-skips-a-pile-its-killer-guards
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (await ((fetch-run "skeleton")))]
+          (is (= :skip (:decision (recovered eng))))
+          (is (re-find #"skip: .*danger [1-9][0-9.]*,.*: skeleton" (decided-text seen))))))))
+
+(deftest a-body-with-an-iron-sword-and-armour-goes-for-the-guarded-pile
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [seen]} (await ((fetch-run "skeleton" iron-kit)))]
+          (is (re-find #"^fetch: " (decided-text seen))))))))
 
 ;; ------------------------------------------------------------ cut trips
 

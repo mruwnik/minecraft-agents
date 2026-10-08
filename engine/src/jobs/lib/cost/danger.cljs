@@ -4,7 +4,8 @@
   go-to planner costs near a known danger (its options.dangers).
 
   route-danger per mob: hostile (jobs.lib.cost.threat; provoked-only mobs x0.1) or named in overrides; mob-hurt over 3 s
-  after armour; weight 1 within 2 blocks of the route, falling to 0 at :radius; counts only if a melee mob can walk to
+  after armour, dearer for a body that cannot afford to fight it (no-answer-factor);
+  weight 1 within 2 blocks of the route, falling to 0 at :radius; counts only if a melee mob can walk to
   the route or a ranged mob has a line of fire to it. Overrides {mob-name number-or-{:times n}}: threat before armour.
 
   danger-rate: mob-hurt over 1 s x stance factor (:flee x4, :fight x0.1), at most max-rate: hp a second (the factors, the cap and
@@ -27,6 +28,7 @@
    ::walk-speed {:default 4.3 :doc "Blocks a second a walking body covers, one too hungry to sprint (reach-first?)." :spec (a/num-in 0.1 nil)}
    ::sprint-food {:default 6 :doc "Food at or under which a body cannot sprint (reach-first?)." :spec (a/int-in 0 20)}
    ::chase-speed {:default 3 :doc "Blocks a second a chasing melee mob covers, a little over a zombie's (reach-first?)." :spec (a/num-in 0.1 nil)}
+   ::no-answer-scale {:default 60 :doc "How much dearer a mob's route danger is for each time over what the body can afford to lose in a fight with it (no-answer-factor)." :spec (a/num-in 0 nil)}
    ::race-margin-s {:default 0.5 :doc "Seconds the body must win a race to a refuge by (reach-first?)." :spec (a/num-in 0 nil)}})
 
 
@@ -72,12 +74,24 @@
 (defn close [] (settings/get settings ::close))
 (defn exposure-s [] (settings/get settings ::exposure-s))
 
+(defn no-answer-scale [] (settings/get settings ::no-answer-scale))
+
+(defn no-answer-factor
+  "How much dearer a mob's danger is for a body with weapon (item name, nil a fist) and health that cannot afford to
+  fight it: 1 when fight-damage (alone, at distance) leaves the fight reserve, else 1 + no-answer-scale x (damage over
+  the health above the reserve, less 1). Nil weapon and health count as a fist at 20."
+  [equipment weapon health name distance]
+  (let [damage (fight/fight-damage {:weapon weapon :equipment equipment :mobs [{:name name :distance distance}]})
+        affordable (max 1 (- (if (number? health) health 20) fight/default-reserve))
+        ratio (/ damage affordable)]
+    (if (> ratio 1) (+ 1 (* (no-answer-scale) (- ratio 1))) 1)))
+
 (defn route-danger
   "{:danger total :mobs [{:name :pos :distance :weight :threat :danger} ...]} of walking route ([{:x :y :z}] cells)
   past mobs (cljs maps {:name :pos} or JS entities) for a body wearing equipment. Lists only mobs that add danger, the
-  worst first. version: the minecraft-data version; kind-at: jobs.lib.reach/lookup. Options: :overrides, :radius (16).
-  See the ns doc."
-  [version kind-at route mobs equipment & {:keys [overrides radius]}]
+  worst first. version: the minecraft-data version; kind-at: jobs.lib.reach/lookup. Options: :overrides, :radius (16),
+  :weapon (the item held or to hold, default a fist) and :health (default 20): see no-answer-factor. See the ns doc."
+  [version kind-at route mobs equipment & {:keys [overrides radius weapon health]}]
   (let [radius (or radius (default-radius))
         overrides (into {} (map (fn [[k o]] [(if (keyword? k) (name k) (str k)) o])) overrides)
         stats (armour/armour-stats equipment)
@@ -97,8 +111,9 @@
                            threat-fn #(* share ((override-fn (get overrides (:name m))) %))
                            threat (threat-fn (:threat (threat/base-threat (:name m) (exposure-s))))]
                      :when (and (pos? weight) (pos? threat) (reaches? kind-at m (map second cells)))
-                     :let [hurt (threat/mob-hurt stats (:name m) (exposure-s) threat-fn)]]
-                 {:name (:name m) :pos (:pos m) :distance d :weight weight :threat threat :danger (* weight hurt)}))
+                     :let [hurt (threat/mob-hurt stats (:name m) (exposure-s) threat-fn)
+                           scale (no-answer-factor equipment weapon health (:name m) d)]]
+                 {:name (:name m) :pos (:pos m) :distance d :weight weight :threat threat :danger (* weight hurt scale)}))
         rows (vec (sort-by :danger > rows))]
     {:danger (reduce + 0 (map :danger rows)) :mobs rows}))
 

@@ -3,6 +3,7 @@
             [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
+            [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
             [jobs.lib.pace :as pace]
             [jobs.lib.danger :as danger-q]
@@ -46,7 +47,8 @@
   Decision: skips when the value of what was carried is at most the fetch cost plus :margin.
   - Value: jobs.lib.cost/item-value (with :value-overrides), plus 5 per level of experience.
   - Cost: a trip of 10, 0.3 per block of straight distance, and 10 per point of route danger (jobs.lib.cost/route-danger)
-    past the hostiles the body knows of (seen or heard, jobs.lib.danger/known-hostiles; :danger-overrides, after armour).
+    past the hostiles the body knows of (seen or heard, jobs.lib.danger/known-hostiles; :danger-overrides, after armour),
+    many times dearer for a mob the body (its best weapon, armour, health) cannot afford to fight.
   - Infinite when lava, fire or the void took the pile, or the walk would end after the despawn.
   A fetch emits recover-drops.fetching. A skip emits recover-drops.decided. Both texts give the value, the cost and their parts.
   Fetch: walks to the death point (jobs.movement.go-to), then collects (passes, up to 3) the pile's items it can see within :collect-radius
@@ -173,7 +175,8 @@
         version (game/version-of p)
         guard (when (and pos (string? cause)) [{:name cause :pos pos}]) ; route-danger drops a cause that is no hostile mob
         threat (if route
-                 (cost/route-danger version kind-at route (concat (danger-q/seen-hostiles p) guard) (.-equipment (.self p)) :overrides (:danger-overrides (:args c)))
+                 (cost/route-danger version kind-at route (concat (danger-q/seen-hostiles p) guard) (.-equipment (.self p))
+                                    :overrides (:danger-overrides (:args c)) :weapon (combat/best-weapon p combat/default-weapons) :health (.-health (.self p)))
                  {:danger 0 :mobs []})
         fetch (cost/fetch-cost {:distance (when pos (u/dist here pos)) :danger (:danger threat) :elapsed-ms elapsed :cause cause})]
     (cond-> {:value (+ (:value worth) (* (xp-per-level) (or (:level experience) 0)))

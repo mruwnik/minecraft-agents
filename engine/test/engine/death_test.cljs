@@ -16,6 +16,8 @@
 
 ;; The value and cost functions are jobs.lib.cost (jobs_value_test, cost_test); route danger jobs_danger_test.
 
+(def sword "The body carries a weapon, so a zombie on the way is a fight it can afford." [{:name "iron_sword" :count 1}])
+
 (def junk
   "A pile too small to walk 20 blocks for: a few dirt and seeds."
   [{:name "wheat_seeds" :count 5} {:name "dirt" :count 3}])
@@ -369,7 +371,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}}
-              {:keys [eng p]} (setup {:floor tu/walk-floor :entities (conj drops zombie)})]
+              {:keys [eng p]} (setup {:floor tu/walk-floor :inventory sword :entities (conj drops zombie)})]
           (die! eng {:pos death-pos :inventory diamonds})
           (core/submit! eng job {})
           (await (core/tick! eng))
@@ -389,7 +391,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}}
-              {:keys [eng seen]} (setup {:floor tu/walk-floor :entities (conj drops zombie)})]
+              {:keys [eng seen]} (setup {:floor tu/walk-floor :inventory sword :entities (conj drops zombie)})]
           (die! eng {:pos death-pos :inventory diamonds})
           (core/submit! eng job {})
           (await (core/tick! eng))
@@ -571,7 +573,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:floor tu/walk-floor :entities (conj (vec (pile-drops death-pile-of-the-field-report))
+        (let [{:keys [eng p seen]} (setup {:floor tu/walk-floor :inventory sword :entities (conj (vec (pile-drops death-pile-of-the-field-report))
                                                                                 zombie-by-the-way)})]
           (die! eng {:pos death-pos :inventory death-pile-of-the-field-report})
           (core/submit! eng job {})

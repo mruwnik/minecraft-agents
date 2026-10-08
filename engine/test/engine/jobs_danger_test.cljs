@@ -112,3 +112,30 @@
       [[0 1] [2 0]] {:x 2.5 :y 64.5 :z 1.5} true  ;; a diagonal between solid cells
       [[0 0] [2 1]] {:x 2.5 :y 64.5 :z 1.5} true  ;; solid start and end cells do not count
       [[1 0]] {:x 2.5 :y 64.5 :z 1.5} false)))
+
+;; ---------------------------------------------------------------- a body with no answer
+
+(defn armed-danger
+  ([m weapon health] (armed-danger m weapon health naked))
+  ([m weapon health equipment] (:danger (route-danger (world) route [m] equipment :weapon weapon :health health))))
+
+(deftest an-unarmed-body-facing-a-skeleton-is-priced-far-above-an-armed-one
+  (let [skeleton (mob 2 "skeleton" 15 0)
+        armed (armed-danger skeleton "iron_sword" 20 iron-armour)
+        bare (armed-danger skeleton nil 20)]
+    (is (pos? armed))
+    (is (> bare 90))
+    (is (> bare (* 10 armed)))))
+
+(deftest a-body-that-would-win-the-fight-is-priced-as-before
+  (let [zombie (mob 1 "zombie" 15 2)]
+    (is (= (:danger (route-danger (world) route [zombie] iron-armour))
+           (armed-danger zombie "iron_sword" 20 iron-armour)))))
+
+(deftest the-weaker-the-body-the-dearer-the-danger
+  (let [zombie (mob 1 "zombie" 15 2)]
+    (is (> (armed-danger zombie nil 6) (armed-danger zombie nil 20)))))
+
+(deftest an-unreachable-or-passive-mob-stays-free-however-weak-the-body
+  (is (= 0 (:danger (route-danger (world :blocks skeleton-wall) route [(mob 1 "skeleton" 15 8)] naked :weapon nil :health 4))))
+  (is (= 0 (:danger (route-danger (world) route [{:id 1 :name "cow" :kind "passive" :pos {:x 15.5 :y 64 :z 1.5}}] naked :weapon nil :health 4)))))
