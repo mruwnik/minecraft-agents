@@ -2,7 +2,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import net from 'node:net'
-import { splitForms, scanForms, failSig, summarize, unitOrder, parsePoolArgs, workerSpecs, runPool, mergeText, poolCap, createReaper, countListed, listArgs, knownFailures, parseListed, unitsWithCases, noCasesSelected, serverProbe, matchIdsFrom, parseNightClasses, nightBatchEndArgs, sleepRuleRestoreArgs, nightBatches, durationsById, runNightBatches } from './world-test-pool.mjs'
+import { splitForms, scanForms, failSig, summarize, unitOrder, parsePoolArgs, workerSpecs, runPool, mergeText, poolCap, createReaper, countListed, listArgs, knownFailures, parseListed, unitsWithCases, noCasesSelected, serverProbe, matchIdsFrom, parseNightClasses, nightBatchEndArgs, sleepRuleRestoreArgs, nightBatches, durationsById, runNightBatches, waitForBodies } from './world-test-pool.mjs'
 
 const form = (id, status, secs = 1, extra = '') =>
   `{:plot 0, :file "${id.split('/')[0]}", :expects [{:status :pass, :evidence "a } \\" {"}], :status :${status}, :id "${id}", :elapsed-s ${secs}${extra}}`
@@ -620,4 +620,27 @@ test('sleepRuleRestoreArgs: the restore gets the time-change flags of the run; d
   const pass = ['--phase', 'night-exclusive', '--allow-time', '--time-log', 'f.log', '--tag', 'x', '--card', 'c1']
   assert.deepEqual(sleepRuleRestoreArgs(pass, 'B', false), ['--sleep-rule-restore', '--body', 'B', '--allow-time', '--time-log', 'f.log', '--card', 'c1'])
   assert.equal(sleepRuleRestoreArgs(pass, 'B', true)[0], '--sleep-rule-restore-dead')
+})
+
+test('parsePoolArgs: --min-bodies and --min-bodies-wait-s are pool flags (default none, 1800 s)', () => {
+  assert.deepEqual([parsePoolArgs([]).minBodies, parsePoolArgs([]).minBodiesWaitS], [0, 1800])
+  const p = parsePoolArgs(['--min-bodies', '8', '--min-bodies-wait-s', '60', '--bodies', '16'])
+  assert.deepEqual([p.minBodies, p.minBodiesWaitS, p.passthrough], [8, 60, []])
+})
+test('waitForBodies: polls until the cap reaches the minimum, logging the figure every minute', async () => {
+  let t = 0
+  const caps = [2, 2, 3, 5, 8]
+  const logs = []
+  const r = await waitForBodies({ min: 8, cap: () => caps.shift() ?? 8, sleep: async (ms) => { t += ms }, now: () => t, pollMs: 30000, logMs: 60000, waitMs: 1800000, log: (m) => logs.push(m) })
+  assert.deepEqual([r.ok, r.cap], [true, 8])
+  assert.equal(logs.length, 2, 'one line per minute, not per poll')
+  assert.match(logs[0], /2 .*8/)
+})
+test('waitForBodies: gives up after the wait with a clear message; a cap already high does not wait', async () => {
+  let t = 0
+  const r = await waitForBodies({ min: 8, cap: () => 3, sleep: async (ms) => { t += ms }, now: () => t, pollMs: 30000, logMs: 60000, waitMs: 120000, log: () => {} })
+  assert.equal(r.ok, false)
+  assert.match(r.message, /only 3 bodies.*8.*120 s/)
+  const q = await waitForBodies({ min: 4, cap: () => 4, sleep: async () => { throw new Error('slept') }, now: () => 0, log: () => {} })
+  assert.equal(q.ok, true)
 })

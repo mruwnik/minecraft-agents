@@ -19,6 +19,7 @@
 //   --retry-failed N the pool owns retries (children never get it): a failed case (not an error or inconclusive one, as in the single-body runner)
 //                     is rerun up to N times (default 1; exactly its --match-id, one run) on a different body when the pool has one; a pass is :flaky.
 //   --match-id ID    (repeatable) and --match-ids FILE (one id per line, or a --results .edn: its ids that did not pass) run exactly those cases; --list counts only them.
+//   --min-bodies N   waits (polls free memory, logging the figure every minute) until the body cap reaches N; past --min-bodies-wait-s (default 1800) it stops with exit 4.
 //   --server-wait-s S when a child hits a refused RCON/game-port connection the pool holds every unit and polls the server (up to S seconds, default 300),
 //                     reruns the faulted cases without using a retry (at most twice each), waits --server-settle-s (default 10) after the server answers, and past S stops with "server unreachable" (exit 3)
 import fs from 'node:fs'
@@ -31,7 +32,7 @@ import { fileURLToPath } from 'node:url'
 const PLOTS_PER_BODY = 20
 const LOAD_POLL_MS = 5000
 const here = path.dirname(fileURLToPath(import.meta.url))
-const POOL_VALUE_FLAGS = ['--bodies', '--body', '--first-plot', '--results', '--durations', '--max-parallel', '--retry-failed', '--server-wait-s', '--server-settle-s', '--match-id', '--match-ids']
+const POOL_VALUE_FLAGS = ['--min-bodies', '--min-bodies-wait-s', '--bodies', '--body', '--first-plot', '--results', '--durations', '--max-parallel', '--retry-failed', '--server-wait-s', '--server-settle-s', '--match-id', '--match-ids']
 const VALUE_FLAGS = ['--tag', '--match', '--repeat', '--world', '--card', '--time-log', '--phase']
 const CLOSERS = { '{': '}', '[': ']', '(': ')' }
 
@@ -174,7 +175,7 @@ export const unitOrder = (files, previousTexts) => {
 }
 
 export const parsePoolArgs = (args) => {
-  const p = { bodies: 1, prefix: 'ProbePool', firstPlot: 0, results: null, maxParallel: null, durations: [], retries: 1, serverWaitS: 300, serverSettleS: 10, paths: [], passthrough: [], matchIds: [], matchIdsFile: null, nightBatches: false }
+  const p = { bodies: 1, prefix: 'ProbePool', firstPlot: 0, results: null, maxParallel: null, durations: [], retries: 1, serverWaitS: 300, serverSettleS: 10, minBodies: 0, minBodiesWaitS: 1800, paths: [], passthrough: [], matchIds: [], matchIdsFile: null, nightBatches: false }
   for (let i = 0; i < args.length; i++) {
     const a = args[i]
     if (!a.startsWith('--')) { p.paths.push(a); continue }
@@ -192,6 +193,8 @@ export const parsePoolArgs = (args) => {
     else if (a === '--max-parallel') p.maxParallel = Number(v)
     else if (a === '--retry-failed') p.retries = Number(v)
     else if (a === '--server-wait-s') p.serverWaitS = Number(v)
+    else if (a === '--min-bodies') p.minBodies = Number(v)
+    else if (a === '--min-bodies-wait-s') p.minBodiesWaitS = Number(v)
     else if (a === '--server-settle-s') p.serverSettleS = Number(v)
   }
   return p
@@ -211,6 +214,20 @@ export const workerSpecs = (wanted, cap, prefix, firstPlot) =>
 // bodies at once: --max-parallel, else the bodies asked for, capped by the body slot max and by what the memory above the res-slot floor holds
 export const poolCap = ({ bodies, maxParallel, availableMb, floorMb, needMb, bodyMax }) =>
   maxParallel ?? Math.max(1, Math.min(bodies, bodyMax, Math.floor((availableMb - floorMb) / needMb)))
+
+// --min-bodies: polls cap() (the bodies the free memory holds) until it reaches min, logging the figure every logMs; gives up after waitMs.
+// -> {ok, cap, message?}
+export const waitForBodies = async ({ min, cap, sleep, now = Date.now, pollMs = 10000, logMs = 60000, waitMs = 1800000, log = console.error }) => {
+  const start = now()
+  let lastLog = -Infinity
+  for (;;) {
+    const c = cap()
+    if (c >= min) return { ok: true, cap: c }
+    if (now() - start >= waitMs) return { ok: false, cap: c, message: `world-test pool: only ${c} bodies fit the free memory, --min-bodies wants ${min}; gave up after ${Math.round(waitMs / 1000)} s` }
+    if (now() - lastLog >= logMs) { log(`world-test pool: ${c} bodies fit the free memory, waiting for ${min} (--min-bodies)`); lastLog = now() }
+    await sleep(pollMs)
+  }
+}
 
 // Children alive and their temp files; reap() is idempotent and synchronous so it can run in an 'exit' handler.
 export const createReaper = (rm) => {
@@ -499,6 +516,16 @@ const endNightBatch = (script, pass, body, batch) => new Promise((resolve) => {
   child.on('close', resolve)
 })
 
+// --min-bodies at the start of a pool: false (message printed) when the memory never holds that many bodies
+const waitMin = async (p, capNow) => {
+  if (!p.minBodies) return true
+  const reachable = Math.min(p.bodies, bodyCap(), p.maxParallel ?? Infinity)
+  if (reachable < p.minBodies) { console.error(`world-test pool: --min-bodies ${p.minBodies} can never be met (--bodies, --max-parallel and the body slot max allow ${reachable})`); return false }
+  const r = await waitForBodies({ min: p.minBodies, cap: capNow, sleep, waitMs: p.minBodiesWaitS * 1000 })
+  if (!r.ok) console.error(r.message)
+  return r.ok
+}
+
 const nightMain = async (p, byStem, previous, script) => {
   const pass = p.passthrough
   const phaseAt = pass.indexOf('--phase')
@@ -508,7 +535,9 @@ const nightMain = async (p, byStem, previous, script) => {
   const cases = r.status === 0 ? parseNightClasses(r.stdout) : []
   if (!cases.length) { console.error('world-test pool: no cases selected'); emitLine({ event: 'plan', total: 0 }); return 2 }
   const cores = os.cpus().length
-  const cap = poolCap({ bodies: p.bodies, maxParallel: p.maxParallel, availableMb: availableMb(), floorMb: slotConfig().floorMb, needMb: slotConfig().kinds.body.needMb, bodyMax: bodyCap() })
+  const capNow = () => poolCap({ bodies: p.bodies, maxParallel: p.maxParallel, availableMb: availableMb(), floorMb: slotConfig().floorMb, needMb: slotConfig().kinds.body.needMb, bodyMax: bodyCap() })
+  if (!(await waitMin(p, capNow))) return 4
+  const cap = capNow()
   const workers = workerSpecs(cap, bodyCap(), p.prefix, p.firstPlot)
   const batches = nightBatches(cases, durationsById(previous), { bodies: workers.length })
   console.error(`world-test pool: ${cases.length} night cases in ${batches.length} batches on up to ${workers.length} bodies (${batches.map((b) => `${b.kind}:${b.ids.length}`).join(' ')}; ${cores} cores)`)
@@ -555,7 +584,9 @@ export const main = async (args) => {
     return 2
   }
   const cores = os.cpus().length
-  const workers = workerSpecs(poolCap({ bodies: p.bodies, maxParallel: p.maxParallel, availableMb: availableMb(), floorMb: slotConfig().floorMb, needMb: slotConfig().kinds.body.needMb, bodyMax: bodyCap() }), bodyCap(), p.prefix, p.firstPlot)
+  const capNow = () => poolCap({ bodies: p.bodies, maxParallel: p.maxParallel, availableMb: availableMb(), floorMb: slotConfig().floorMb, needMb: slotConfig().kinds.body.needMb, bodyMax: bodyCap() })
+  if (!(await waitMin(p, capNow))) return 4
+  const workers = workerSpecs(capNow(), bodyCap(), p.prefix, p.firstPlot)
   const reaper = createReaper((f) => fs.rmSync(f, { force: true }))
   process.on('exit', reaper.reap)
   for (const [sig, code] of [['SIGINT', 130], ['SIGTERM', 143]]) process.on(sig, () => { reaper.reap(); process.exit(code) })
