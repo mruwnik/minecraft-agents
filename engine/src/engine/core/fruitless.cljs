@@ -102,12 +102,13 @@
 
 (defn record-act!
   "Book the result r of act k of the round of root (moved: blocks a moveTo moved
-  the body): a failure status counts toward a fruitless round, any other status
-  is progress and resets a reflex's backoff at once; a neutral act is neither."
+  the body), classed by the reflex's backoff config (engine.backoff/status-class): a progress status resets a
+  reflex's backoff at once, a neutral act is neither, any other status counts toward a fruitless round."
   [eng {:keys [root reflex]} k r moved]
-  (let [status (.-status r)]
-    (swap! (:rounds eng) #(cond-> % (contains? % root) (update root backoff/note-act k status (.-reason r) moved)))
-    (when (and reflex (not (or (backoff/failure? status) (backoff/neutral? k status moved))))
+  (let [status (.-status r)
+        cfg (when reflex (backoff-config eng reflex))]
+    (swap! (:rounds eng) #(cond-> % (contains? % root) (update root backoff/note-act k status (.-reason r) moved cfg)))
+    (when (and reflex (not (or (backoff/failure? cfg status) (backoff/neutral? k status moved cfg))))
       (recovered! eng reflex))))
 
 (def fruitless-rounds

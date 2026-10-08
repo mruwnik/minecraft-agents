@@ -2,11 +2,12 @@
   "Backoff for jobs whose rounds keep failing at once: pure functions; the
   wiring is in engine.core.fruitless. See README.md, Backoff.
 
-  A round is fruitless when it ran at least one act and every act failed
-  (a failure status below). After :after fruitless rounds in a row the job gets
-  no round for :first-s seconds; each further fruitless round doubles the wait,
-  up to :max-s. Any act with another status is progress and resets everything,
-  except neutral acts: they count for neither."
+  A round is fruitless when it ran at least one act and every act failed. Only a
+  progress status (the :engine.backoff/progress setting, or one a trigger or entry
+  declares) is progress and resets everything; neutral acts and statuses count for
+  neither; any other status is a failure. After :after fruitless rounds in a row the
+  job gets no round for :first-s seconds; each further fruitless round doubles the
+  wait, up to :max-s."
   (:require [engine.args :as a]
             [engine.settings :as settings]))
 
@@ -16,7 +17,18 @@
    :engine.backoff/max-s {:default 30 :spec (a/num-in 0.001 nil) :doc "The longest wait, s."}
    :engine.backoff/moved-min {:default 1 :spec (a/num-in 0 nil) :doc "Blocks a failed moveTo must have moved the body to be neutral."}
    :engine.backoff/walk-moved-min {:default 8 :spec (a/num-in 0 nil)
-                                   :doc "Blocks a walk round that got no nearer must have moved the body to be neutral: a long way round is not a failure, shuffling on the spot is."}})
+                                   :doc "Blocks a walk round that got no nearer must have moved the body to be neutral: a long way round is not a failure, shuffling on the spot is."}
+   :engine.backoff/progress {:default #{"ok" "done" "success" "arrived" "partial" "landed" "surfaced" "placed" "dug"
+                                        "used" "crafted" "bought" "enchanted" "collected" "tossed" "equipped" "empty"
+                                        "ate" "hit" "killed" "mounted" "already-mounted" "dismounted" "sleeping" "sent"}
+                             :spec (a/set-of a/name?)
+                             :doc "Act statuses that are progress; any status neither progress nor neutral is a failure."}
+   :engine.backoff/neutral {:default #{"cut" "closed"} :spec (a/set-of a/name?)
+                            :doc "Act statuses that count for neither side."}})
+
+(def status-keys
+  "The status classes a :backoff declaration may set, each a set of act statuses."
+  [:progress :failure :neutral])
 
 (defn defaults
   "The engine-wide backoff {:after :first-s :max-s} as set."
@@ -25,14 +37,19 @@
    :first-s (settings/get settings :engine.backoff/first-s)
    :max-s (settings/get settings :engine.backoff/max-s)})
 
-(def failure-statuses
-  "Act statuses that count as a failure; every other status is progress."
-  #{"blocked" "failed" "unreachable" "cannot" "no-effect" "timeout" "gone" "out-of-reach" "no-item"
-    "no-support" "no-headroom" "occupied" "full" "disconnected" "unsupported" "not-night"
-    "monsters-near" "unchanged" "no-room" "missing"})
+(defn status-class
+  "The class of act status, :progress :neutral or :failure: as cfg's declared :progress :failure :neutral sets say
+  (config keeps them apart, the most specific level winning), else the settings' progress and neutral sets; any
+  other status is a failure."
+  [cfg status]
+  (or (some #(when (contains? (get cfg %) status) %) status-keys)
+      (cond (contains? (settings/get settings :engine.backoff/neutral) status) :neutral
+            (contains? (settings/get settings :engine.backoff/progress) status) :progress
+            :else :failure)))
 
-(defn failure? [status]
-  (contains? failure-statuses status))
+(defn failure?
+  ([status] (failure? nil status))
+  ([cfg status] (= :failure (status-class cfg status))))
 
 (def neutral-acts
   "Acts that neither count toward a fruitless round nor reset a backoff. A
@@ -42,27 +59,45 @@
 
 (defn neutral?
   "Whether an act is neutral (counts for neither side). Neutral when:
-  - the act is in neutral-acts,
+  - the act is in neutral-acts or its status is neutral (status-class under cfg),
   - it is a failed moveTo that moved the body at least moved-min blocks, or
   - it is a :walk round (booked by engine.path.near) that ended nearer
     (\"partial\") or moved the body at least walk-moved-min blocks.
   An arrival is progress. A walk with no path, or one that got nowhere, is a failure."
-  [act status moved]
-  (or (contains? neutral-acts act)
-      (and (= :moveTo act) (failure? status) (some? moved) (>= moved (settings/get settings :engine.backoff/moved-min)))
-      (and (= :walk act)
-           (or (= "partial" status)
-               (and (failure? status) (some? moved) (>= moved (settings/get settings :engine.backoff/walk-moved-min)))))))
+  ([act status moved] (neutral? act status moved nil))
+  ([act status moved cfg]
+   (or (contains? neutral-acts act)
+       (= :neutral (status-class cfg status))
+       (and (= :moveTo act) (failure? cfg status) (some? moved) (>= moved (settings/get settings :engine.backoff/moved-min)))
+       (and (= :walk act)
+            (or (= "partial" status)
+                (and (failure? cfg status) (some? moved) (>= moved (settings/get settings :engine.backoff/walk-moved-min))))))))
 
 (defn validate!
-  "Throws unless cfg is nil, false (off) or a map of :after :first-s :max-s to positive numbers."
+  "Throws unless cfg is nil, false (off) or a map of :after :first-s :max-s to positive numbers and of
+  :progress :failure :neutral to sets of act statuses (strings)."
   [cfg]
   (when-not (or (nil? cfg) (false? cfg)
                 (and (map? cfg)
-                     (every? (fn [[k v]] (and (contains? (defaults) k) (number? v) (pos? v))) cfg)))
+                     (every? (fn [[k v]] (if (some #{k} status-keys)
+                                           (and (set? v) (every? string? v))
+                                           (and (contains? (defaults) k) (number? v) (pos? v))))
+                             cfg)))
     (throw (ex-info (str ":backoff must be false or a map of " (pr-str (keys (defaults)))
-                         " to positive numbers, not " (pr-str cfg))
+                         " to positive numbers and of " (pr-str status-keys) " to sets of statuses, not " (pr-str cfg))
                     {:backoff cfg}))))
+
+(defn merge-level
+  "cfg with level l merged over it: a status l declares leaves the classes it had below."
+  [cfg l]
+  (reduce (fn [c k]
+            (if-let [declared (get l k)]
+              (reduce (fn [c other] (cond-> c (contains? c other) (update other #(reduce disj % declared))))
+                      (update c k (fnil into #{}) declared)
+                      (remove #{k} status-keys))
+              c))
+          (merge cfg (apply dissoc l status-keys))
+          status-keys))
 
 (defn config
   "The effective config of levels, least specific first (engine, job def, entry);
@@ -71,7 +106,7 @@
   [& levels]
   (reduce (fn [cfg l]
             (cond (false? l) false
-                  (map? l) (merge (or cfg (defaults)) l)
+                  (map? l) (merge-level (or cfg (defaults)) l)
                   :else cfg))
           (defaults) levels))
 
@@ -80,14 +115,16 @@
 (def empty-round {:acts 0 :failed 0 :last nil})
 
 (defn note-act
-  "The round after an act with status (and reason, when the result has one);
-  moved is how far a moveTo or a walk round moved the body, else nil. A neutral act leaves it as is."
-  [round act status reason moved]
-  (if (neutral? act status moved)
-    round
-    (cond-> (update round :acts inc)
-      (failure? status) (-> (update :failed inc)
-                            (assoc :last {:act act :status status :reason reason})))))
+  "The round after an act with status (and reason, when the result has one), classed under cfg (the backoff
+  config, nil: the settings); moved is how far a moveTo or a walk round moved the body, else nil. A neutral act
+  leaves it as is."
+  ([round act status reason moved] (note-act round act status reason moved nil))
+  ([round act status reason moved cfg]
+   (if (neutral? act status moved cfg)
+     round
+     (cond-> (update round :acts inc)
+       (failure? cfg status) (-> (update :failed inc)
+                                 (assoc :last {:act act :status status :reason reason}))))))
 
 (defn fruitless-round? [{:keys [acts failed]}]
   (and (pos? acts) (= acts failed)))

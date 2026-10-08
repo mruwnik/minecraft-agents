@@ -440,9 +440,9 @@ the token so the in-flight round is never booked; the job stays listed.
 **Backoff.** Register entries only: a reflex whose runs keep failing would fire as fast as the tick, so its entry waits.
 Listed jobs are never backed off.
 
-- `act!` classifies each act result. Failure statuses are `blocked failed unreachable cannot timeout gone out-of-reach
-  no-item no-support no-headroom occupied full disconnected unsupported not-night monsters-near no-effect unchanged
-  no-room missing`; anything else is progress. `look`, `wait`, `equip` and `steer` are neutral. A walk round
+- `act!` classifies each act result: a status in `:engine.backoff/progress` (settings) is progress, one in
+  `:engine.backoff/neutral` counts for neither, anything else is a failure. A `:backoff` declaration may move statuses:
+  `{:progress #{"busy"} :failure #{..} :neutral #{..}}`. `look`, `wait`, `equip` and `steer` are neutral. A walk round
   (`jobs.lib.near`) counts as one `:walk` act: `arrived` is progress, `partial` and long detours are neutral, a blocked
   walk is a failure.
 - A **fruitless run** made no progress and every act failed, or it declined or stopped. Cut runs and throws do not count.

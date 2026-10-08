@@ -43,7 +43,7 @@
 (def all-specs (apply merge (vals families)))
 
 (deftest every-moved-value-keeps-its-old-default
-  (is (= defaults-then (into {} (map (fn [[k spec]] [k (:default spec)])) (dissoc all-specs :engine.perception/save-ms)))))
+  (is (= defaults-then (into {} (map (fn [[k spec]] [k (:default spec)])) (dissoc all-specs :engine.perception/save-ms :engine.backoff/progress :engine.backoff/neutral)))))
 
 (deftest every-key-is-declared-in-its-own-family-namespace-and-documented
   (doseq [[k spec] all-specs]
@@ -52,7 +52,7 @@
     (is (nil? (a/problem k (:default spec))) (str k " default fits its spec"))))
 
 (deftest a-layer-overrides-each-key-through-get
-  (doseq [[fam specs] families [k spec] specs :let [v (inc (:default spec))]]
+  (doseq [[fam specs] families [k spec] specs :when (number? (:default spec)) :let [v (inc (:default spec))]]
     (settings/with-settings {k v}
       (fn [] (is (= v (settings/get specs k)) (str fam " " k))))))
 

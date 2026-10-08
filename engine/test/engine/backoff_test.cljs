@@ -18,15 +18,36 @@
   [& statuses]
   (reduce (fn [r s] (backoff/note-act r :moveTo s nil nil)) backoff/empty-round statuses))
 
-(deftest failure-statuses-are-exactly-the-listed-ones
+(deftest only-progress-statuses-are-progress-and-anything-else-fails
   (are [status failed?] (= failed? (backoff/failure? status))
     "blocked" true "failed" true "unreachable" true "cannot" true "timeout" true "gone" true
-    "out-of-reach" true "no-item" true "no-support" true "no-headroom" true "occupied" true
-    "full" true "disconnected" true "unsupported" true "not-night" true "monsters-near" true
-    "unchanged" true "no-room" true "missing" true
+    "no-item" true "busy" true "rejected" true "hand-full" true "no-food" true "no-levels" true
+    "no-lapis" true "not-mounted" true "noPath" true "never-heard-of" true nil true
     "arrived" false "partial" false "dug" false "used" false "placed" false "ok" false
     "hit" false "killed" false "collected" false "sleeping" false "landed" false
-    "surfaced" false "done" false nil false))
+    "surfaced" false "done" false "crafted" false "ate" false "mounted" false
+    "cut" false)
+  (is (= :neutral (backoff/status-class nil "cut")) "an act cut short is neither"))
+
+(deftest a-declared-status-class-overrides-the-defaults
+  (are [cfg status class] (= class (backoff/status-class cfg status))
+    {:progress #{"busy"}} "busy" :progress
+    {:neutral #{"busy"}} "busy" :neutral
+    {:failure #{"ok"}} "ok" :failure
+    {:progress #{"busy"}} "rejected" :failure
+    {} "ok" :progress
+    nil "busy" :failure))
+
+(deftest config-lets-the-most-specific-level-move-a-status
+  (let [cfg (backoff/config {:progress #{"busy" "rejected"}} {:failure #{"busy"}} nil)]
+    (is (= :failure (backoff/status-class cfg "busy")))
+    (is (= :progress (backoff/status-class cfg "rejected")))
+    (is (= {:after 3 :first-s 1 :max-s 30} (select-keys cfg [:after :first-s :max-s])))))
+
+(deftest a-declared-progress-status-counts-as-progress-in-a-round
+  (let [cfg {:progress #{"busy"}}]
+    (is (not (backoff/fruitless-round? (backoff/note-act backoff/empty-round :useOn "busy" nil nil cfg))))
+    (is (backoff/fruitless-round? (backoff/note-act backoff/empty-round :useOn "busy" nil nil)))))
 
 (deftest a-round-is-fruitless-when-it-acted-and-every-act-failed
   (are [statuses fruitless?] (= fruitless? (backoff/fruitless-round? (apply round-of statuses)))
@@ -108,9 +129,11 @@
 
 (deftest validate-accepts-maps-of-positive-numbers-and-false
   (are [cfg] (nil? (backoff/validate! cfg))
-    nil false {} {:after 1} {:after 3 :first-s 0.5 :max-s 60})
+    nil false {} {:after 1} {:after 3 :first-s 0.5 :max-s 60}
+    {:progress #{"busy"}} {:after 9 :failure #{"ok"} :neutral #{}})
   (are [cfg] (thrown? js/Error (backoff/validate! cfg))
-    true {:after 0} {:after "3"} {:bogus 1} {:max-s -1} 5))
+    true {:after 0} {:after "3"} {:bogus 1} {:max-s -1} 5
+    {:progress "busy"} {:failure #{:ok}} {:neutral ["busy"]}))
 
 ;; ---------------------------------------------------------------- through the engine
 
@@ -264,7 +287,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[st backs-off?] [["unchanged" true] ["no-room" true] ["missing" true] ["used" false]]]
+        (doseq [[st backs-off?] [["unchanged" true] ["no-room" true] ["missing" true] ["busy" true] ["rejected" true]
+                                 ["used" false]]]
           (let [{:keys [eng p] :as r} (setup)]
             (.override (.-world p) "useOn"
                        (fn [_ args _] (js/Promise. (fn [resolve] (resolve #js {:status (.-status args)})))))
@@ -272,6 +296,23 @@
             (core/register-reflex! eng {:trigger :use-on})
             (dotimes [_ 3] (await (tick-at r t0)))
             (is (= backs-off? (some? (:until (entry eng :use-on)))) st)))))))
+
+(deftest a-trigger-or-entry-declares-what-counts-as-progress
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[trigger-cfg entry-cfg st backs-off?] [[{:progress #{"busy"}} nil "busy" false]
+                                                       [nil {:progress #{"busy"}} "busy" false]
+                                                       [{:progress #{"busy"}} {:failure #{"busy"}} "busy" true]
+                                                       [nil {:failure #{"used"}} "used" true]]]
+          (let [{:keys [eng p] :as r} (setup {:triggers (assoc triggers :use-on (cond-> (:use-on triggers)
+                                                                                  trigger-cfg (assoc :backoff trigger-cfg)))})]
+            (.override (.-world p) "useOn"
+                       (fn [_ args _] (js/Promise. (fn [resolve] (resolve #js {:status (.-status args)})))))
+            (reset! status st)
+            (core/register-reflex! eng (cond-> {:trigger :use-on} entry-cfg (assoc :backoff entry-cfg)))
+            (dotimes [_ 3] (await (tick-at r t0)))
+            (is (= backs-off? (some? (:until (entry eng :use-on)))) [trigger-cfg entry-cfg st])))))))
 
 (deftest a-listed-job-is-never-backed-off
   (async done
