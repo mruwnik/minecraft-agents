@@ -4,7 +4,8 @@
 
   steer is a toy kinematic walker, not physics: every tick (a setImmediate, so tests are fast) it asks decide for
   controls, then moves 0.2 blocks (0.26 sprinting) along the yaw, steps up at most 0.6 (1.25 with jump), drops to the
-  next floor at once, and climbs or descends a ladder. A move into a cell holding a fence, gate, wall, pane or bamboo is
+  next floor once its box (half-width) has left the floor it is on (supported?), and climbs or descends a ladder. A
+  move into a cell holding a fence, gate, wall, pane or bamboo is
   judged by the body's box against the joined blocks' boxes (engine.path.space), so a body slips beside a post as in the game; without :body-hitbox the position kept is the cell, or :sub-pos beside a post (sub-pos). The kinematics are pure functions (body, controls, yaw, world)
   -> body. A tick budget of timeout-s * 20 (at most 2400) stands in for the real time bound.
 
@@ -30,6 +31,7 @@
 (def climb 0.2)
 (def slip 0.15)
 (def height 1.8)
+(def half-width 0.3)
 (def scan-down 4)
 (def fall-limit 256)
 (def bury 3)
@@ -75,6 +77,17 @@
     (->> (range top (- top scan-down 2) -1)
          (filter (fn [g] (and (solid? w x (dec g) z) (not (solid? w x g z)) (not (solid? w x (inc g) z)))))
          first)))
+
+(defn under-box
+  "The columns [x z] under the body's box (half-width each side of x, z)."
+  [x z]
+  (distinct (for [bx [(- x half-width) (+ x half-width)] bz [(- z half-width) (+ z half-width)]] [(floor bx) (floor bz)])))
+
+(defn supported?
+  "Does a floor under the body's box hold it at feet y (a whole number)? The game holds a body up while any part of its
+  box is over a floor, so a body cutting a corner past a hole stays up."
+  [w x y z]
+  (and (= y (floor y)) (boolean (some (fn [[cx cz]] (solid? w cx (dec y) cz)) (under-box x z)))))
 
 (declare body-clear?)
 
@@ -135,6 +148,9 @@
             ;; a swimmer moves through open water, or over its surface, with no floor under it
             (and (or (wet-y? cell) (wet-y? (dec cell))) (not (solid? w cx cell cz)) (not (solid? w cx (inc cell) cz)))
             (assoc body :x x :z z :collided false)
+            ;; a drop waits until the box has left the floor it is on
+            (and (< rise 0) (supported? w x (:y body) z) (not (solid? w cx cell cz)) (not (solid? w cx (inc cell) cz)))
+            (assoc body :x x :z z :collided false)
             (or (<= rise step) (and (<= rise jump-step) jump)) (assoc body :x x :y g :z z :collided false)
             :else (assoc body :collided true))))))))
 
@@ -172,7 +188,7 @@
             (assoc body :y (inc below) :vy (- (inc below) (:y body)))
             (assoc body :y lower :vy (- slip)))))
       (let [ground (->> (range (dec cell) (- cell 1 fall-limit) -1) (filter #(solid? w cx % cz)) first)]
-        (if (or (solid? w cx (dec cell) cz) (nil? ground))
+        (if (or (solid? w cx (dec cell) cz) (supported? w (:x body) (:y body) (:z body)) (nil? ground))
           (assoc body :vy 0)
           (assoc body :y (inc ground) :vy (- (inc ground) (:y body)))))))))
 
@@ -206,7 +222,7 @@
      :vx (:vx body 0)
      :vy (:vy body)
      :vz (:vz body 0)
-     :on-ground (and (solid? w cx (dec cell) cz) (= (:y body) cell))
+     :on-ground (and (or (solid? w cx (dec cell) cz) (supported? w (:x body) (:y body) (:z body))) (= (:y body) cell))
      :on-climbable (climbable? w cx cell cz)
      :in-water (wet? w cx cell cz)
      :collided (:collided body)

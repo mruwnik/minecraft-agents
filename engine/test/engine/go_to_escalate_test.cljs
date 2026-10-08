@@ -292,6 +292,13 @@
 
 (defn dug-cells [p] (set (map #(mapv (js->clj (.-pos (.-args %)) :keywordize-keys true) [:x :y :z]) (calls p "dig"))))
 
+(defn restores-after-the-last-stair?
+  "Whether every put-back event (go-to.restored, go-to.restore-skipped) comes after the last go-to.escalated: a stair
+  that leaves the body shut in is followed by the next at once, never refilled under it."
+  [seen]
+  (let [last-esc (apply max (map :seq (events-of seen :go-to.escalated)))]
+    (every? #(> (:seq %) last-esc) (concat (events-of seen :go-to.restored) (events-of seen :go-to.restore-skipped)))))
+
 (def deep-shaft
   "A 1x1 shaft 30 deep (feet at y 34) in solid dirt x -30..30, y 30..63, z -30..30."
   (apply dissoc (box -30 30 -30 30 63 30 "dirt") (for [y (range 34 64)] (str "0," y ",0"))))
@@ -310,6 +317,20 @@
           (is (= {:arrived true} @out))
           (is (= [:stair :stair :stair :stair] (map :step escalated)) "30 up is 4 stairs of at most 8, one after another")
           (is (= [1 1 1 1] (map :n escalated)) "each began nearer than any before")
+          (is (restores-after-the-last-stair? seen))
+          (is (= (dug-cells p) (holes eng)) "every dug cell is in the ledger"))))))
+
+;; the walk from the last stair's top to a goal back over the cut passes the corner of the cut's open column
+(deftest go-to-climbs-a-deep-shaft-to-a-goal-back-over-its-stairs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng out p seen]} (await (run-job! {:self {:pos {:x 0 :y 34 :z 0}} :blocks deep-shaft}
+                                                    {:pos [10 64 0] :range 1}))]
+          (is (= {:arrived true} @out))
+          (is (= [:stair :stair :stair :stair] (map :step (events-of seen :go-to.escalated))))
+          (is (seq (events-of seen :go-to.restore-skipped)) "the put-back ran once the walk got on")
+          (is (restores-after-the-last-stair? seen))
           (is (= (dug-cells p) (holes eng)) "every dug cell is in the ledger"))))))
 
 (deftest go-to-pillars-up-a-deep-shaft-while-each-pillar-gets-nearer

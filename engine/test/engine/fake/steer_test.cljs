@@ -135,6 +135,20 @@
           (is (= "done" (:status r)))
           (is (= 63 (second (pos-of p)))))))))
 
+(def cut
+  "Stone floor at y 63, x 25..29, z 0..1, but for column [27 _ 0]: open down to a floor at y 60 (a stair's cut)."
+  (merge (into {} (for [x (range 25 30) z [0 1]] [[x 63 z] "stone"]))
+         {[27 63 0] "air" [27 59 0] "stone"}))
+
+(deftest a-body-stays-up-while-its-box-is-over-a-floor-and-falls-when-it-is-not
+  (let [w {:blocks cut}
+        corner (steer/step-body w {:x 27.4 :y 64 :z 1.05 :vy 0} {:forward true} (/ js/Math.PI 4))
+        over (steer/step-body w {:x 27.5 :y 64 :z 0.85 :vy 0} {:forward true} 0)]
+    (is (= [27 0] (mapv js/Math.floor [(:x corner) (:z corner)])) "the centre is over the hole")
+    (is (= 64 (:y corner)) "a diagonal past the hole's corner: the box is still over the floors beside it, as in the game")
+    (is (:on-ground (steer/pose-of w corner 0)))
+    (is (= 60 (:y over)) "the whole box over the hole: it falls")))
+
 (deftest a-ladder-climbs-with-jump-and-does-not-climb-without-it
   (async done
     (tu/run-async done
