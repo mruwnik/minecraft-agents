@@ -306,6 +306,18 @@
           (is (= 0 (count-of s "lead")) "the lead stays on the cow")
           (is (empty? (events-of s :lead-to.gave-up))))))))
 
+(deftest a-fence-never-seen-is-walked-to-not-refused
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p] :as s} (setup {:floor tu/walk-floor :inventory lead :blocks fence :entities [(cow 1 3)]})
+              at-fence? (fn [pos] (= [31 64 0] [(.-x pos) (.-y pos) (.-z pos)]))
+              raw (.-sensedAt p)]
+          (aset p "sensedAt" (fn [pos] (if (and (at-fence? pos) (< (.-x (.-pos (.self p))) 20)) #js {:unknown true} (raw pos))))
+          (await (submit s {:fence {:x 31 :y 64 :z 0}} 12))
+          (is (finished? s))
+          (is (= :tied (:reason (done-event s))) "the post is far; it is checked when seen, not refused unseen"))))))
+
 (deftest a-tie-that-lands-a-moment-after-the-click-is-polled-for-not-failed
   (async done
     (tu/run-async done
@@ -336,8 +348,8 @@
       (fn ^:async t []
         (doseq [[label args world reason]
                 [["no cow" {} {:inventory lead :entities []} :none]
-                 ["no fence at the named cell" {:fence {:x 31 :y 64 :z 0}} {:inventory lead :entities [(cow 1 3)]} :no-fence]
-                 ["a block that is not a fence" {:fence {:x 31 :y 64 :z 0}} {:inventory lead :blocks {"31,64,0" "stone"} :entities [(cow 1 3)]} :no-fence]]]
+                 ["no fence at the named cell" {:fence {:x 5 :y 64 :z 0}} {:inventory lead :entities [(cow 1 3)]} :no-fence]
+                 ["a block that is not a fence" {:fence {:x 5 :y 64 :z 0}} {:inventory lead :blocks {"5,64,0" "stone"} :entities [(cow 1 3)]} :no-fence]]]
           (let [s (await (scenario args world 5))]
             (is (finished? s) label)
             (is (= reason (:reason (done-event s))) label)

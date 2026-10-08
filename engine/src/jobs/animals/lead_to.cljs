@@ -32,7 +32,7 @@
   - :arrive: with :fence, walk within 2 of the post and click it with an empty hand (useOn), tried twice.
     Without :fence, jobs.animals.unleash lets the animal go and picks the lead up.
 
-  With :fence the block there must be a fence (name ends _fence), else :no-fence before anything is leashed.
+  With :fence the block there must be a fence (name ends _fence), else :no-fence before anything is leashed; a post not yet seen (far off) is checked again on arrival.
   A tie counts only when the sensing then shows the animal held by something else than this body.
 
   Before each walking round the animal is looked up (within :watch-radius). Seen off this body's lead: ends
@@ -156,8 +156,15 @@
   (let [{:keys [pos fence]} (:args c)]
     (or pos fence)))
 
-(defn fence-block? [c]
+(defn fence-block?
+  "True when the post cell is seen and a fence, false when seen and not, nil when never seen."
+  [c]
   (some-> (u/seen-name (:primitives c) (:fence (:args c))) (.endsWith "_fence")))
+
+(defn not-fence?
+  "True when the post is seen and no fence. A post never seen (far off) is not judged: it is checked on arrival."
+  [c]
+  (false? (fence-block? c)))
 
 (defn animal-now
   "The led animal as the sensing shows it, or nil when it is not seen."
@@ -501,7 +508,7 @@
       (when a (ctx/update-mem! c dissoc :unseen-since))
       (cond
         (:ending (ctx/mem c)) (await (close-up! c))
-        (and (nil? phase) fence (not (fence-block? c))) (finish! c :no-fence)
+        (and fence (contains? #{nil :arrive} phase) (not-fence? c)) (finish! c :no-fence)
         (>= (- now started) (* 1000 timeout-s)) (finish! c :timeout)
         (nil? phase) (do (set-phase! c (if (lead-carried? c) :leash :get-lead)) :again)
         (= :get-lead phase) (await (u/untimed! c #(get-lead! c)))
