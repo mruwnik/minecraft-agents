@@ -90,6 +90,23 @@
                           [["inventory" "--limit" "2"] #"not valid for inventory"]]]
     (is (re-find pattern (:error (apply request "--world" "w" "ProbeBody" argv))) (pr-str argv))))
 
+(deftest seen-is-a-read-only-observe-query-defaulting-to-the-useful-blocks
+  (let [default (request "--world" "w" "ProbeBody" "seen")
+        query (second (str/split (:path default) #"\?"))
+        params (js/URLSearchParams. query)]
+    (is (str/starts-with? (:path default) "/seen?"))
+    (is (= "32" (.get params "radius")))
+    (is (= "16" (.get params "max")))
+    (doseq [n ["crafting_table" "furnace" "chest" "barrel" "*_bed" "*_door" "*_ore"]]
+      (is (some #{n} (str/split (.get params "names") #",")) n)))
+  (is (= "/seen?names=chest%2Ciron_ore&radius=20&max=5"
+         (:path (request "--world" "w" "ProbeBody" "seen" "--names" "chest,iron_ore" "--radius" "20" "--limit" "5"))))
+  (doseq [[argv pattern] [[["seen" "x"] #"takes no positional"]
+                          [["seen" "--radius" "65"] #"--radius"]
+                          [["seen" "--names" "Bad!"] #"--names"]
+                          [["status" "--radius" "5"] #"only valid for seen"]]]
+    (is (re-find pattern (:error (apply request "--world" "w" "ProbeBody" argv))) (pr-str argv))))
+
 (deftest observe-rejects-malformed-names-and-limits-before-connecting
   (doseq [[argv pattern] [[["bad/name"] #"body name"]
                           [["ProbeBody" "status" "--limit" "100"] #"1 to 32"]

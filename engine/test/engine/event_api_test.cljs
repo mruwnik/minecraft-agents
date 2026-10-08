@@ -142,6 +142,7 @@
                                              :inventory #js [#js {:name "bread" :count 5 :slot 9}]
                                              :equipment #js {:head #js {:name "iron_helmet" :count 1 :durability 140}
                                                              :feet nil :offHand nil :mainHand nil}})
+                          :seenBlocks (fn [_] #js [#js {:name "chest" :pos #js {:x 1 :y 2 :z 3} :distance 1.5 :age-ms 0}])
                           :isOffline (fn [] false)
                           :isSettling (fn [] true)}
           eng {:events stream
@@ -203,7 +204,17 @@
                         (is (= [{:name "bread" :count 5 :slot 9}] (:inventory inventory)))
                         (is (= {:head {:name "iron_helmet" :count 1 :durability 140} :torso :empty :legs :empty :feet :empty}
                                (:equipment inventory)))
-                        (request socket-path "GET" "/job?id=j1" {} nil))))
+                        (request socket-path "GET" "/seen?names=chest&radius=10&max=5" {} nil))))
+             (.then (fn [response]
+                      (is (= 200 (:status response)))
+                      (is (= [{:name "chest" :pos [1 2 3] :distance 1.5}] (:blocks (edn-response response))))
+                      (request socket-path "GET" "/seen?radius=abc" {} nil)))
+             (.then (fn [response]
+                      (is (= 400 (:status response)))
+                      (request socket-path "GET" "/seen?names=Bad!" {} nil)))
+             (.then (fn [response]
+                      (is (= 400 (:status response)))
+                      (request socket-path "GET" "/job?id=j1" {} nil)))
              (.then (fn [response]
                       (let [job (edn-response response)]
                         (is (= 200 (:status response)))
@@ -416,3 +427,34 @@
     (is (= {:ok true :id "j5" :name "mine" :status :stopped :result {:reason :no-ore} :ended-at 7 :finished? true}
            (select-keys (event-api/job-detail eng "j5" 4) [:ok :id :name :status :result :ended-at :finished?])))
     (is (nil? (event-api/job-detail eng "j6" 4)))))
+
+(defn seen-engine [rows calls]
+  {:primitives #js {:seenBlocks (fn [q] (swap! calls conj (js->clj q :keywordize-keys true))
+                                  (clj->js rows))}})
+
+(deftest seen-view-lists-remembered-blocks-nearest-first-with-name-pos-and-distance
+  (let [calls (atom [])
+        rows [{:name "chest" :pos {:x 1 :y 64 :z 2} :distance 3.04 :age-ms 5}
+              {:name "iron_ore" :pos {:x 4 :y 60 :z 2} :distance 7.26 :age-ms 9}]
+        view (event-api/seen-view (seen-engine rows calls) {:names ["chest" "*_ore"] :radius 20 :max 10})]
+    (is (= {:ok true :radius 20
+            :blocks [{:name "chest" :pos [1 64 2] :distance 3.0}
+                     {:name "iron_ore" :pos [4 60 2] :distance 7.3}]}
+           view))
+    (is (= 20 (:radius (first @calls))))
+    (is (= 11 (:max (first @calls))))))
+
+(deftest seen-view-matches-star-suffix-names-and-bounds-radius-and-count
+  (let [calls (atom [])
+        _ (event-api/seen-view (seen-engine [] calls) {:names ["*_bed" "chest"] :radius 500 :max 500})
+        q (first @calls)]
+    (is (= 64 (:radius q)))
+    (is (nil? (:names q)))
+    (is (fn? (:match q)))
+    (is (<= (:max q) 65))))
+
+(deftest seen-view-reports-more-when-the-list-is-cut
+  (let [rows (mapv (fn [i] {:name "chest" :pos {:x i :y 1 :z 1} :distance (double i) :age-ms 0}) (range 4))
+        view (event-api/seen-view (seen-engine rows (atom [])) {:names ["chest"] :radius 8 :max 3})]
+    (is (= 3 (count (:blocks view))))
+    (is (true? (:more? view)))))

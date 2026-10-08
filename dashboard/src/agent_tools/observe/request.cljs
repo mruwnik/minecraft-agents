@@ -8,7 +8,8 @@
             [clojure.string :as str]
             [agent-tools.observe.status :refer [truthy-text?]]))
 
-(def usage "usage: observe.mjs <agent> --world <world> [status [--raw|--verbose] [--wait --timeout 60s --chatter addressed --observer agent --watch j12] | inventory [--raw] [--slots] | equipment [--raw] | job <id> | result <id> | catalog <job|trigger> <name> | catalog <jobs|triggers> [prefix] | settings [--changed] [--raw] | settings reload | settings set <:ns/key> <edn> | settings unset <:ns/key>] [--limit <n>] [--offset <n>] [--worlds <dir>] [--state <legacy-parent>]\nsettings: every key with value and layer (:code, :world, :body) and the game rate; set and unset edit the body's settings.edn and reload.\nstatus: :pos [x y z], :health and :food 0-20, :current the running job, :mode scheduled or manual. job <id>: its state and outcome; an unknown id answers :unknown-job.")
+(def usage "usage: observe.mjs <agent> --world <world> [status [--raw|--verbose] [--wait --timeout 60s --chatter addressed --observer agent --watch j12] | inventory [--raw] [--slots] | equipment [--raw] | seen [--radius 32] [--names a,b,*_ore] [--limit 16] | job <id> | result <id> | catalog <job|trigger> <name> | catalog <jobs|triggers> [prefix] | settings [--changed] [--raw] | settings reload | settings set <:ns/key> <edn> | settings unset <:ns/key>] [--limit <n>] [--offset <n>] [--worlds <dir>] [--state <legacy-parent>]\nsettings: every key with value and layer (:code, :world, :body) and the game rate; set and unset edit the body's settings.edn and reload.\nseen: blocks the body has seen (memory, nothing through walls), nearest first with :distance; default names are workstations, storage, beds, doors and ores.
+status: :pos [x y z], :health and :food 0-20, :current the running job, :mode scheduled or manual. job <id>: its state and outcome; an unknown id answers :unknown-job.")
 
 ;; Requests
 
@@ -17,7 +18,7 @@
 
 (def option-spec
   {:state {:type "string"} :worlds {:type "string"} :world {:type "string"}
-   :limit {:type "string"} :offset {:type "string"}
+   :limit {:type "string"} :offset {:type "string"} :radius {:type "string"} :names {:type "string"}
    :raw {:type "boolean" :default false} :slots {:type "boolean" :default false}
    :verbose {:type "boolean" :default false} :wait {:type "boolean" :default false}
    :timeout {:type "string"} :chatter {:type "string"} :observer {:type "string"}
@@ -28,6 +29,10 @@
 (defn fail [message] (throw (ex-info message {::error message})))
 
 (defn check [bad? message] (when bad? (fail message)))
+
+(def seen-default-names
+  ["crafting_table" "furnace" "blast_furnace" "smoker" "chest" "trapped_chest" "barrel" "ender_chest" "enchanting_table"
+   "anvil" "brewing_stand" "ancient_debris" "*_bed" "*_door" "*_ore"])
 
 (defn integer-in? [n low high] (and (js/Number.isInteger n) (<= low n high)))
 
@@ -106,6 +111,17 @@
         (check (and (= "equipment" op) (:slots values)) "--slots is only valid for inventory")
         ["/inventory" []])
 
+    "seen"
+    (let [radius (js/Number (or (:radius values) 32))
+          limit (or (limit-param (:limit values) 64) "16")
+          names (if (some? (:names values)) (str/split (:names values) #",") seen-default-names)]
+      (check (or (some? kind-or-id) (seq rest)) "seen takes no positional arguments")
+      (check (some? (:offset values)) "--offset is not valid for seen")
+      (check (not (integer-in? radius 1 64)) "--radius must be an integer from 1 to 64")
+      (check (or (> (count names) 32) (not-every? #(re-matches #"\*?[a-z0-9_]{1,80}" %) names))
+             "--names needs up to 32 comma-separated block names (a *suffix matches every name ending so)")
+      ["/seen" [["names" (str/join "," names)] ["radius" (str radius)] ["max" limit]]])
+
     ("job" "result")
     (do (check (or (not (truthy-text? kind-or-id)) (seq rest)) (str op " needs one job ID, such as j12"))
         (check (and (= "result" op) (not (re-matches #"j[0-9]+" kind-or-id))) "result needs a job ID such as j12")
@@ -157,6 +173,7 @@
           [agent requested-op kind-or-id & rest] positionals
           op (or requested-op "status")
           world (:world values)]
+      (check (and (or (some? (:radius values)) (some? (:names values))) (not= "seen" op)) "--radius and --names are only valid for seen")
       (check (and (:slots values) (not= "inventory" op)) "--slots is only valid for inventory")
       (check (not (and agent (re-matches body-name agent))) "agent must be a body name")
       (check (nil? world) (bodies/missing-world-error "--world"))

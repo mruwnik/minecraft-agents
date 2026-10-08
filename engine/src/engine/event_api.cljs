@@ -1,6 +1,6 @@
 (ns engine.event-api
   "The engine's private HTTP API on a local Unix socket (mode 0600). The wire format is EDN.
-  GET   /snapshot, /status, /inventory, /events, /job, /jobs, /triggers, /catalog, /settings
+  GET   /snapshot, /status, /inventory, /seen, /events, /job, /jobs, /triggers, /catalog, /settings
   POST  /jobs and /triggers (changes), /attention/resolve, /chat, /settings/reload, /settings/set, /settings/unset
   Bodies are limited (a setting, 16 KB). Lists are paged and bounded."
   (:require [engine.args :as a]
@@ -142,6 +142,42 @@
         (seq equipment) (assoc :equipment equipment)
         (> (count all-stacks) (setting "inventory-stack-limit")) (assoc :more? true)
         offline? (assoc :last-known true :offline (core/away eng)))))))
+
+(def seen-name-pattern #"\*?[a-z0-9_]{1,80}")
+
+(defn seen-matcher
+  "A fn of a block name for the wanted names (a name, or *suffix for every name ending so), nil for all."
+  [names]
+  (when (seq names)
+    (let [exact (set (remove #(.startsWith % "*") names))
+          suffixes (mapv #(subs % 1) (filter #(.startsWith % "*") names))]
+      (fn [n] (or (contains? exact n) (boolean (some #(.endsWith n %) suffixes)))))))
+
+(defn seen-view
+  "Read-only: the blocks the body's perception memory holds (never x-ray), nearest first, as
+  {:name :pos [x y z] :distance}. q: :names (a name or *suffix, at most 32), :radius (cut at 64), :max (cut at 64)."
+  [eng {:keys [names radius max]}]
+  (let [radius (min (or radius 32) 64) max (min (or max 16) 64)
+        match (seen-matcher names)
+        rows (if-let [f (.-seenBlocks (:primitives eng))]
+               (js->clj (.call f (:primitives eng) (clj->js (cond-> {:radius radius :max (inc max)} match (assoc :match match))))
+                        :keywordize-keys true)
+               [])]
+    (cond-> {:ok true :radius radius
+             :blocks (mapv (fn [{:keys [name pos distance]}]
+                             {:name name :pos [(:x pos) (:y pos) (:z pos)] :distance (/ (js/Math.round (* 10 distance)) 10)})
+                           (take max rows))}
+      (> (count rows) max) (assoc :more? true))))
+
+(defn seen-query
+  "The validated /seen query as {:names :radius :max}, or nil when it is malformed."
+  [params]
+  (let [names (some-> (.get params "names") (.split ",") array-seq vec)
+        radius (number-param params "radius" 32 64)
+        max (number-param params "max" 16 64)]
+    (when (and radius max (pos? radius) (pos? max)
+               (or (nil? names) (and (<= 1 (count names) 32) (every? #(re-matches seen-name-pattern %) names))))
+      {:names names :radius radius :max max})))
 
 (defn bounded-value
   "A small EDN-safe copy of user-supplied job args or specs: depth at most 4, strings cut to 160
@@ -380,6 +416,11 @@
                         (and (= method "GET") (= pathname "/inventory"))
                         (let [view (inventory-view eng)]
                           (respond! res (if (:ok view) 200 503) view))
+
+                        (and (= method "GET") (= pathname "/seen"))
+                        (if-let [q (seen-query (.-searchParams url))]
+                          (respond! res 200 (seen-view eng q))
+                          (bad! res 400 :bad-query))
 
                         (and (= method "GET") (= pathname "/status"))
                         (let [limit (number-param (.-searchParams url) "limit" (setting "status-job-limit") 32)]

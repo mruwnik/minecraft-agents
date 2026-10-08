@@ -481,6 +481,7 @@ HTTP over `worlds/<world>/agents/<name>/engine/events.sock` (mode 0600; all bodi
 | `POST /chat` | one public line or whisper, sharing the chat limits |
 | `GET /status?limit=` | compact body/job/attention projection (includes `:died` while a death is under 6000 game ticks of world age old; supplied by recover-drops through the status extras main passes to event-api/create) |
 | `GET /inventory` | carried stacks and worn equipment (with a short enchants list), read-only |
+| `GET /seen?names=a,*_ore&radius=&max=` | blocks remembered by perception (never x-ray), nearest first with `:pos` and `:distance`; radius and max capped at 64, read-only |
 | `GET /job?id=` | one job's parsed spec, args, state, linked requests; a finished job answers its recorded outcome (`:finished? true :status :result :ended-at`) from `:recent-results`, the last `engine.core.base/recent-results-limit` (100) ended jobs, which persists and rides on `/snapshot` |
 | `GET /catalog?kind=jobs\|triggers&prefix=` / `kind=job\|trigger&name=` | names page / one description |
 | `GET /settings` | every key `{:value :layer :doc}` plus `:game-rate`, `:rate-source`, `:frozen?`, `:physics-ms` |
