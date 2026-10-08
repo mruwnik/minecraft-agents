@@ -385,6 +385,15 @@
   (let [hill (merge room (box 3 64 -3 8 66 3 "dirt"))]
     (is (= :stair (:step (escape/choose (tu/fake {:self {:pos {:x 2 :y 64 :z 0}} :blocks hill}) [2 64 0] [8 67 0]))))))
 
+(deftest escape-choose-digs-through-a-thin-wall-in-a-tunnel-to-a-goal-on-its-level
+  ;; Juniper #47: a 1-wide tunnel sealed by one dirt block read as a pit, and the stair climbed 18 blocks
+  (let [tunnel (merge (apply dissoc (box -8 62 -2 8 67 2 "stone")
+                             (for [x (range -6 7) :when (not= x 1) y [64 65]] (str x "," y ",0")))
+                      {"1,64,0" "dirt" "1,65,0" "dirt"})
+        p (tu/fake {:self {:pos {:x 0 :y 64 :z 0}} :blocks tunnel})]
+    (is (= {:step :clear-path :heading :east} (escape/choose p [0 64 0] [6 64 0])))
+    (is (= :stair (:step (escape/choose p [0 64 0] [6 66 0]))) "a goal above still stairs")))
+
 (deftest escape-choose-stair-checks-every-step
   (let [ba-pit (assoc pit "2,63,0" "bricks")]
     (is (not= :east (:heading (escape/choose (tu/fake (merge in-pit {:blocks ba-pit})) [0 61 0] [10 64 0])))
