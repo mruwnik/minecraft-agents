@@ -585,3 +585,9 @@
     (is (not (bad? {:pos [5 17 5]})))
     (is (not (bad? {:pos [100 -60 -300]})))
     (is (not (bad? {:count [1 2 3]})))))
+
+(deftest weather-must-be-rain-thunder-or-clear
+  (let [ps #(f/problems (merge {:name "a" :time :day :plot {:height 6} :body {:at [1 0 1]} :act [] :after [] :expect [{:event {:kind :x} :within-s 1}]} %))]
+    (is (empty? (ps {:weather :rain})))
+    (is (empty? (ps {:weather :clear})))
+    (is (seq (ps {:weather :snow})))))

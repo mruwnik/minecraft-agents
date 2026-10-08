@@ -227,6 +227,7 @@
       (not (contains? #{nil :keep} (:mobs c))) (conj ":mobs must be :keep (or absent)")
       (not (string? (:name c))) (conj ":name must be a string")
       (not (#{:day :night :night-exclusive :any} (:time c))) (conj ":time must be :day, :night, :night-exclusive or :any")
+      (not (contains? #{nil :rain :thunder :clear} (:weather c))) (conj ":weather must be :rain, :thunder or :clear")
       (not (and (int? h) (< 1 h 32))) (conj ":plot :height must be an integer 2..31")
       (not (every? #(and (keyword? (:kind %)) (map? (:data %))) (:memory c))) (conj ":memory entries need a keyword :kind and a map :data")
       (not (every? #(or (nil? (:age-s %)) (number? (:age-s %))) (:memory c))) (conj ":memory :age-s must be a number of seconds")
