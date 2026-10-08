@@ -284,6 +284,13 @@
         (some->> (first-where #(ridge? path %)) (hash-map :why :climb :index))
         (some->> (first-where #(barrier-both-sides? world (key-at %) 2)) (hash-map :why :gap :index)))))
 
+(defn climb-at
+  "The leak {:pos :why :climb} of the first wall top path climbs over, or nil. For a fill that ended on unseen cells:
+  a gap or an open gate on the path may be an inner chokepoint, so only a look at the unseen cells can tell."
+  [path]
+  (when-let [i (first (filter #(ridge? path %) (range (count path))))]
+    (let [[x y z] (:key (nth path i))] {:pos {:x x :y y :z z} :why :climb})))
+
 (defn leak-at
   "The leak {:pos :why} on path, a path that ends outside. With box? the crossing itself is the answer when
   nothing shows better; without it, nil when nothing shows."
@@ -354,7 +361,7 @@
             found (cond
                     (seq exits) (keep #(leak-at world (conj (path-to seen (:from %)) {:key (:to %) :s (:top %)}) true) exits)
                     (and truncated? (not box)) (keep identity [(leak-at world (path-to seen end) false)])
-                    (and (not box) (seq @(:unloaded world))) (keep identity [(leak-at world (path-to seen (last (:order fill))) false)])
+                    (and (not box) (seq @(:unloaded world))) (keep identity [(climb-at (path-to seen (last (:order fill))))])
                     :else [])]
         {:world world
          :fill fill

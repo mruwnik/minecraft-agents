@@ -184,9 +184,20 @@
   (into cells (for [x (range -3 8) z (range -3 8) y [63 64] :when (or (#{-3 7} x) (#{-3 7} z))] [[x y z] :unloaded])))
 
 (deftest a-low-wall-with-unseen-ground-beyond-is-still-a-leak
-  (are [cells] (= :leak (:reason (check (unseen-border cells))))
-    (ring "stone" [64])
-    (without (ring "oak_fence" [64]) [5 64 3])))
+  (is (= :leak (:reason (check (unseen-border (ring "stone" [64])))))))
+
+(def divider
+  "A fence line across the closed ring at x 2, z 0..4, with its middle cell given by value (nil: a gap)."
+  (fn [value]
+    (merge fence-ring
+           (into {} (for [z (range 0 5)] [[2 64 z] "oak_fence"]))
+           (if value {[2 64 2] value} {[2 64 2] "air"}))))
+
+(deftest a-gap-or-open-gate-is-no-leak-evidence-while-a-cell-is-unseen
+  ;; the unseen cell shows only after a look; which side is outside cannot be told from a gap or a gate alone
+  (are [cells] (= :unloaded (:reason (check (assoc cells [4 64 4] :unloaded))))
+    (divider nil)
+    (divider ["oak_fence_gate" {:open true}])))
 
 (deftest a-one-block-wall-all-round-is-climbed-over
   (let [r (check (ring "stone" [64]))]
