@@ -40,6 +40,14 @@ Every commit appends a JSON line to `.git/commit-ledger.jsonl`:
 `time, hash, card, paths, insertions, deletions, stat, flags` (flags: hunks-mode, engine-core approvals,
 foreign-staged, large-deletion >= 500).
 
+### fixer-worktree.sh / land.sh
+
+    tools/fixer-worktree.sh <card8>            # prints the worktree path; branch fix/<card8> from the main checkout's branch
+    tools/fixer-worktree.sh --remove <card8>   # abandon: stops its shadow-cljs server, removes worktree and branch
+    tools/land.sh [--rebased-ok]               # from the worktree
+
+A fixer's own checkout (`$FIXER_WT_ROOT`, default `~/.claude/jobs/worktrees/fix-<card8>`). `node_modules`, `worlds/`, `state/`, `textures/` and the pathfinding fixtures are symlinks to the main checkout's, so tools and tests there write to the shared data; nothing is built until the first `tools/compile` there. `land.sh` takes the commit lock, rebases onto the main checkout's branch and fast-forwards it, then removes the worktree. Exit 3: it had to rebase, so rerun your tests and land again; 1: conflict (aborted) or dirty tree; 4: the main checkout has uncommitted edits to a file the landing changes. Tested by `land.test.mjs`.
+
 ### ledger
 
     tools/ledger [--since <hash|ISO-time>] [--flagged]
