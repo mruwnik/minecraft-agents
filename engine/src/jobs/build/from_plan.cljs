@@ -104,7 +104,7 @@
           (empty? (owed cells))
           (seq (buildable cells (carried-counts p) {}))
           (seq (digging cells))
-          (some #(or (= :clear (:want %)) (pos? (get (carried-counts p) (:item %) 0))) (unseen cells {}))
+          (seq (unseen cells (merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))))
           (when-let [w (need-of c cells)] (some? (fetch/due c 'jobs.build.from-plan w)))) true
       :else (ctx/wait c {:reason :no-items :plan (:plan (:args c)) :part (:part (:args c))
                          :needs (into {} (shortage (owed cells) (carried-counts p)))}))))

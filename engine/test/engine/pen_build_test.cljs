@@ -229,16 +229,16 @@
             (finally (set! ctx/call-child orig)))
           (is (some #(and (= "oak_fence" (:item %)) (true? (:explore %))) @asked) (pr-str @asked)))))))
 
-(deftest an-any-of-fence-is-placed-with-the-other-wood-carried
+(deftest an-unseen-gate-is-walked-to-not-waited-for-as-an-item
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [plan (assoc-in (ring-plan) [:parts 0 :want] [:any "oak_fence" "birch_fence"])
-              {:keys [eng p seen]} (b/start (spec [{:name "birch_fence" :count 7}]) {"pen" plan} [])]
+        (let [plan {:id "pen" :parts [{:id "gate" :cells [[3 64 2]] :want [:any "oak_fence_gate" "birch_fence_gate"]}]}
+              {:keys [eng p seen]} (b/start {:inventory [{:name "birch_fence" :count 5}] :blocks ground :unloaded ["3,64,2"]} {"pen" plan} [])]
           (core/submit! eng (list job {:plan "pen" :fetch false}) {})
           (dotimes [_ 4] (swap! h/clock + 700) (await (core/tick! eng)))
-          (is (= [7 []] [(count (h/calls p "place"))
-                         (vec (distinct (map :reason (kinds-of seen :waiting))))])))))))
+          (is (seq (tu/walk-calls p)))
+          (is (empty? (filter #(= :no-items (:reason %)) (kinds-of seen :waiting)))))))))
 
 ;; ---------------------------------------------------------------- resuming
 

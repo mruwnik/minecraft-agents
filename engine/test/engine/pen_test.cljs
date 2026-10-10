@@ -191,7 +191,7 @@
   (fn [value]
     (merge fence-ring
            (into {} (for [z (range 0 5)] [[2 64 z] "oak_fence"]))
-           (if value {[2 64 2] value} {[2 64 2] "air"}))))
+           {[2 64 2] (or value "air")})))
 
 (deftest a-gap-or-open-gate-is-no-leak-evidence-while-a-cell-is-unseen
   ;; the unseen cell shows only after a look; which side is outside cannot be told from a gap or a gate alone
