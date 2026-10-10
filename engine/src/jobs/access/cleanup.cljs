@@ -289,7 +289,7 @@
   "Walk one leg toward within 3 of cell, or hold it :danger. A permanent verdict holds it :unreachable, an end out of
   reach, a walk that did not end or a go-to that gave up for a passing reason counts a failure; a leg that got nearer does not."
   [c {:keys [cell]}]
-  (let [[r d] (await (child/call-walk-leg c :walk {:pos cell :range (walk-range) :escalate false :zone-tolls true
+  (let [[r d] (await (child/call-walk-leg c :walk {:pos cell :range (walk-range) :escalate false :clear-seal false :zone-tolls true
                                                    :ignore-zones? (boolean (:ignore-zones? (:args c)))}
                                           (:leg-s (:args c)) #(danger-ahead? c cell)))
         result (when (= :done r) (ctx/child-result c :walk))
@@ -307,7 +307,7 @@
   "Walk to the ground at the end of the row the body stands on (go-to, range 0, no digging); counts a try."
   [c {:keys [to]}]
   (let [[x y z] to
-        r (await (child/call-walk c :retreat {:pos {:x x :y y :z z} :range 0 :escalate false
+        r (await (child/call-walk c :retreat {:pos {:x x :y y :z z} :range 0 :escalate false :clear-seal false
                                                                   :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
     (when-not (= :continue r) (ctx/update-mem! c update :retreats (fnil inc 0)))
     :again))
