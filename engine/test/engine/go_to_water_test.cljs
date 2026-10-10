@@ -165,3 +165,18 @@
           (is (= {:arrived true} @out) (str "result " @out))
           (is (= [64 5] [(second at) (nth at 2)]) (str "on the north bank: at " at))
           (is (<= x 6) (str "the bank beside it: at " at)))))))
+
+;; a long search leaves the body standing; that is said (a declared hold), not the idle warning of a round that forgot
+(deftest a-long-search-declares-the-hold-while-the-body-stands
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [real near/walk-round!
+              n (atom 0)]
+          (with-redefs [near/walk-round! (fn [c pos range opts]
+                                           (if (< (swap! n inc) 4)
+                                             (js/Promise.resolve {:result {:status :searching :fresh false} :status "searching" :from (:pos c) :to {:x 4.5 :y 64 :z 0.5}})
+                                             (real c pos range opts)))]
+            (let [{:keys [out] :as s} (await (gt/go! {:self {:pos [-4.5 64 0.5]} :blocks (pond 0)} {:pos [10 64 0] :range 1 :escalate false}))]
+              (is (true? (:arrived @out)) (str "result " @out))
+              (is (= [:searching] (mapv :reason (gt/events-of s :holding)))))))))))
