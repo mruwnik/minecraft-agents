@@ -382,6 +382,18 @@
 
 (declare shut-in-room?)
 
+(defn night-sheltered
+  "At night, awake and safe from it (roofed or buried, or shut-in-room?), the kind of shelter the body is in (:dug-in
+  the one shelter says it is shut in, :room, :underground, :roofed), else nil: outdoor work waits for day then."
+  [p shelter]
+  (when (and (night? p) (not (sleeping? p))
+             (or (not (unsafe-night? p default-roof-height)) (shut-in-room? p)))
+    (cond
+      (in-own-shelter p shelter) :dug-in
+      (shut-in-room? p) :room
+      (buried? p) :underground
+      :else :roofed)))
+
 (defn walk-leaves-shelter?
   "At night, awake and safe from it (roofed or buried, or shut-in-room?), the shelter a walk to goal ({:x :y :z}, or {:x
   :z} a column) within dist would leave, else nil. A goal within dist of the feet leaves none. :dug-in: shelter (the

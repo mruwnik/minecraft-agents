@@ -177,6 +177,29 @@
           (is (= inside (st/pos-of p)))
           (is (= [:night-sheltered] (distinct (map :reason (st/emitted seen :holding))))))))))
 
+(def oak-tree
+  "A trunk of four logs with leaves on top, outside the hut."
+  (into {"10,68,0" "oak_leaves"} (for [y (range 64 68)] [(str "10," y ",0") "oak_log"])))
+
+(defn ^:async fell-tree-world! [world]
+  (let [clock (atom 1000000)
+        [seen sink] (tu/legacy-capture-sink)
+        p (tu/seeing-all (tu/fake-on-floor world))
+        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all
+                          :dir (tu/tmp-dir) :now #(deref clock)
+                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+    (core/submit! eng '(jobs.forestry.harvest-wood {:count 1 :radius 16}) {})
+    (await (ticks eng 60))
+    {:eng eng :p p :seen seen}))
+
+(deftest harvest-wood-in-a-shelter-at-night-waits-for-day-instead-of-ending-no-tree
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p seen]} (await (fell-tree-world! (update (night-hut {}) :blocks merge oak-tree)))]
+          (is (= inside (st/pos-of p)) "stayed in the hut")
+          (is (empty? (st/emitted seen :stopped)) (pr-str (map :reason (st/emitted seen :stopped)))))))))
+
 ;; ------------------------------------------------------------------ the night trigger and a queued walk (card 4252e02e)
 
 (deftest a-queued-walk-does-not-lead-the-body-out-of-its-mended-room-at-night

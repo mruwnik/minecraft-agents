@@ -21,6 +21,7 @@
             [jobs.lib.walk :as walk]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
+            [jobs.lib.shelter :as sh]
             [jobs.lib.sense :as sense]
             [jobs.lib.targets :as targets]))
 
@@ -228,6 +229,12 @@
   (ctx/update-mem! c #(-> % (merge (select-keys t [:column :species :base])) (assoc :partials 0)))
   t)
 
+(defn night-sheltered
+  "The kind of shelter the body is shut in at night (jobs.lib.shelter/night-sheltered), else nil; never under a reflex job."
+  [c]
+  (when-not (:reflex c)
+    (sh/night-sheltered (:primitives c) (:data (ctx/latest c :shelter)))))
+
 (defn mark-all-unreachable!
   "Remember the columns of trees as unreachable."
   [c trees]
@@ -246,7 +253,7 @@
           :found (commit-tree! c (nth ts (:index a)))
           :searching :searching
           (if (:proved a)
-            (do (mark-all-unreachable! c ts) nil)
+            (do (when-not (night-sheltered c) (mark-all-unreachable! c ts)) nil)
             (commit-tree! c (first ts))))))))
 
 (defn mark-unreachable!
@@ -526,14 +533,16 @@
 
 (defn check
   "A tree is chosen, or every candidate was unreachable (the round warns and
-  finishes), or a tree is in sight. Else it waits with reason :no-tree (and :radius, :species when given)."
+  finishes), or a tree is in sight. Else it waits with reason :no-tree (and :radius, :species when given).
+  At night in a shelter it waits :night-sheltered: the trees are outside, and a search from inside proves none reachable."
   [c]
   (let [m (ctx/mem c)
         {:keys [radius species]} (:args c)]
-    (if-let [w (pillar-problem c)]
-      (fetch/check c 'jobs.forestry.fell-tree w)
-      (or (boolean (or (:column m)
-                     (seq (:unreachable m))
-                     (first (candidates c radius species))
-                     (not (look/surveyed? c :cell))))
-        (ctx/wait c (cond-> {:reason :no-tree :radius radius} species (assoc :species species)))))))
+    (cond
+      (night-sheltered c) (ctx/wait c {:reason :night-sheltered :shelter (night-sheltered c)})
+      (pillar-problem c) (fetch/check c 'jobs.forestry.fell-tree (pillar-problem c))
+      :else (or (boolean (or (:column m)
+                             (seq (:unreachable m))
+                             (first (candidates c radius species))
+                             (not (look/surveyed? c :cell))))
+                (ctx/wait c (cond-> {:reason :no-tree :radius radius} species (assoc :species species)))))))

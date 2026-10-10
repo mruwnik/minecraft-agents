@@ -266,7 +266,7 @@
       (case r
         :continue :continue
         :declined (let [w (or (b/child-wait c :fetch job args) {:reason :not-ready})]
-                    (if (= :cooking (:reason w)) :continue (book-failed! c pl w)))
+                    (if (#{:cooking :night-sheltered} (:reason w)) :continue (book-failed! c pl w)))
         (let [res (ctx/child-result c :fetch)]
           (if (= :done (:status res))
             (do (ctx/update-mem! c dissoc :fetching)
