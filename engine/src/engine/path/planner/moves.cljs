@@ -1,6 +1,6 @@
 (ns engine.path.planner.moves
   "Search methods: the moves out of a node: walks, diagonals, jumps, drops, gap jumps and climbing."
-  (:require [engine.path.planner.base :refer [ARC ARC-UP BODY CLIMB-TRAP-SHUT CORNER-S GAP-PIT-RISK GAP-S GAP-UP-S GRID HAZARD-SLIDE-RISK JUMP-S JUMP-UP LAVA MOVE-CLIMB-DOWN MOVE-CLIMB-UP MOVE-CORNER MOVE-DIAGONAL MOVE-DROP MOVE-GAP MOVE-JUMP MOVE-JUMP-CLIMB MOVE-OPEN MOVE-SWIM MOVE-WALK SLOW-EXTRA SNAP SQRT2 STEP UNLOADED WATER WHOLE FREE-FALL BOUNCE-S pad-cells]]
+  (:require [engine.path.planner.base :refer [CLIMB-FALL-P CLIMB-FALL-SCAN FULL-HEALTH ARC ARC-UP BODY CLIMB-TRAP-SHUT CORNER-S GAP-PIT-RISK GAP-S GAP-UP-S GRID HAZARD-SLIDE-RISK JUMP-S JUMP-UP LAVA MOVE-CLIMB-DOWN MOVE-CLIMB-UP MOVE-CORNER MOVE-DIAGONAL MOVE-DROP MOVE-GAP MOVE-JUMP MOVE-JUMP-CLIMB MOVE-OPEN MOVE-SWIM MOVE-WALK SLOW-EXTRA SNAP SQRT2 STEP UNLOADED WATER WHOLE FREE-FALL BOUNCE-S pad-cells]]
             [engine.path.planner.search :refer [Search]]))
 
 (set! *warn-on-infer* true)
@@ -337,10 +337,26 @@
             (set! (.-gap-seen s) (and ^boolean (.climbHere s x (+ y k) z) ^boolean (.freeCell s (.stateAt s x (inc y) z))
                                 (or (== k 2) ^boolean (.freeCell s (.stateAt s x (+ y 2) z)))))
             (recur (inc k))))
-        (let [sec (+ (.-c-climb-up s) (if ^boolean (.-enters-shut s) (.-c-open s) 0))]
-          (when ^boolean (.-enters-shut s) (set! (.-move-open s) (.push ^js (.-open-lists s) #js [#js {:x x :y (inc y) :z z}])))
-          (.verticalMove s i x y z h region (inc y) h2 (if ^boolean (.-enters-shut s) MOVE-OPEN MOVE-CLIMB-UP) sec (.-enter-risk s) (.-enter-slow s))
-          (set! (.-move-open s) 0)))))
+        (let [sec (+ (.-c-climb-up s) (if ^boolean (.-enters-shut s) (.-c-open s) 0))
+              fall (.climbFall s x y z h2)
+              dmg (.dropDamage s 1 fall)]
+          (when (or (>= (.-lethal-hp s) FULL-HEALTH) (< dmg (.-lethal-hp s)))
+            (when ^boolean (.-enters-shut s) (set! (.-move-open s) (.push ^js (.-open-lists s) #js [#js {:x x :y (inc y) :z z}])))
+            (.verticalMove s i x y z h region (inc y) h2 (if ^boolean (.-enters-shut s) MOVE-OPEN MOVE-CLIMB-UP) sec (+ (.-enter-risk s) (* CLIMB-FALL-P dmg)) (.-enter-slow s))
+            (set! (.-move-open s) 0))))))
+
+  ;; the fall (1/16 blocks) from the cell above (x, y, z) at height h2 down to the first solid ground below the climb, through
+  ;; free and climbable cells; 0 when the water, unloaded land or no ground within CLIMB-FALL-SCAN lies below
+  (climbFall [s x y z h2]
+    (let [from16 (+ (* (inc y) 16) h2)]
+      (loop [y3 y]
+        (if (< y3 (- y CLIMB-FALL-SCAN))
+          0
+          (let [id (.stateAt s x y3 z)]
+            (cond
+              (or (== id UNLOADED) (== id (.-unk-id s)) (== (aget (.-tbl-kind s) id) WATER) (not (neg? (.swimAt s x y3 z)))) 0
+              (and (pos? (aget (.-tbl-top s) id)) (zero? (aget (.-tbl-climb s) id))) (js/Math.max 0 (- from16 (+ (* y3 16) (aget (.-tbl-top s) id))))
+              :else (recur (dec y3))))))))
 
   ;; a climbable or standable cell one block down; else, through free cells, a short fall onto the first climbable or floor
   (climbDown [s i x y z h region]

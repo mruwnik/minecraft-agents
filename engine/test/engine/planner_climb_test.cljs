@@ -146,6 +146,12 @@
     (is (>= (:climbed (cost r)) 9))
     (is (re-find #"ladder up (9|10)" (summary r)))))
 
+;; a climb h blocks over the floor risks a fall of h (Sorrel died of three falls off a vine)
+(deftest a-climb-whose-fall-would-be-lethal-at-the-current-hp-is-refused
+  (are [health status] (= status (:status (run5 shaft from5 (near1 15 74 5) {:health health})))
+    20 "found"
+    5 "partial"))
+
 (deftest closed-trapdoor-over-ladder-by-material
   (are [trap statuses] (contains? statuses (:status (run5 (trap-shaft trap {:open false :facing "east"}) from5 (near 13 73 5) {})))
     "oak_trapdoor" #{"found"}

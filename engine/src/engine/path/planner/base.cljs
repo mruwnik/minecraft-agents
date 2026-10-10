@@ -88,6 +88,10 @@
 ;; to about a minute's walk wins; still allowed, so a body in a pocket whose only way out is such a slide gets out.
 (def ^:const HAZARD-SLIDE-RISK 10)
 (def ^:const FREE-FALL 3)
+;; a climb over the ground risks a fall of its height: the share of that fall's hp it prices, and the blocks of column scanned for the ground
+(def ^:const CLIMB-FALL-P 0.01)
+(def ^:const CLIMB-FALL-SCAN 64)
+(def ^:const FULL-HEALTH 20) ; a body at full health climbs any ladder: tall shafts are common, and the fall risk is only priced
 (def ^:const BOUNCE-S 1.4) ; seconds a body takes to settle on a bouncing block, per square root of the blocks it fell (10 blocks: about 4.4 s)
 (def ^:const BOUNCE-MARGIN 0.5) ; blocks a wall round a slime pad must reach over the bounce's first peak
 

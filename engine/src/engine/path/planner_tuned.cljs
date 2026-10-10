@@ -53,6 +53,9 @@
      factor of the fall damage onto that block (hay 0.2), a negative one: a bounce (no damage, BOUNCE-S settle seconds) when the
      8 blocks round the landing's are bouncing ones or a wall (else the full fall) and options.landingSeen (fn x y z, nil: all)
      says the body sees each now. result.cost.damage is the path's damage, a step's damage its own.
+   - A climb up prices the fall it risks, a climb cell's height over the solid ground below it (through free and climbable cells;
+     none over water or unloaded land): CLIMB-FALL-P of that fall's hp as risk, and a cell whose fall would reach options.health is
+     refused (not at options.health 20, the default: a body at full health climbs any shaft).
    - options.costs.dropFactor (1): scales the fall seconds and fall damage of every drop on land (0: free); options.maxDrop
      (3) refuses a drop of more than that many blocks (1: none of 2 or 3). go-to's :drop-cost sets them.
    - options.costs.airUsed (0): seconds of air the body has used at the start (a plan made mid-dive); go-to's body-policy
