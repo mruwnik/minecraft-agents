@@ -1123,7 +1123,7 @@
           (await (run-ticks s 20))
           (is (nil? (get (inv s) "raw_iron")))
           (is (= 0 (:got (done-event s))))
-          (is (= [[{:pos [5 64 2] :count 1}]] (map :items (events-of s :mine.left-behind))))
+          (is (= [[{:pos [5 64 2] :count 1 :reason :unreachable}]] (map :items (events-of s :mine.left-behind))))
           (is (= [{:pos [5 64 2] :count 1}] (:left (done-event s)))))))))
 
 (deftest a-drop-out-of-sight-from-where-it-was-dug-is-walked-to-and-collected

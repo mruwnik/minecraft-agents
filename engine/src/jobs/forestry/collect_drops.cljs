@@ -1,6 +1,7 @@
 (ns jobs.forestry.collect-drops
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
+            [engine.settings :as settings]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.child :as child]
             [jobs.lib.dig-look :as dig-look]
@@ -29,7 +30,7 @@
   With :ids, ids not in sight when none is left to try are booked as one :left {:reason :unseen :ids [...] :last {id [x y z]}}, the cell each was last seen in.
   With :dig, a drop go-to cannot reach, or one too deep in the dug hole, is dug to once: the fewest cells (jobs.lib.dig-route,
   over the blocks the body has seen, an unseen one taken for stone) that open a way to it, each a jobs.blocks.dig child (zones, claims, hazards
-  are its rules), then the walk is tried again. No such way, or a dig that fails, leaves the drop :unreachable.
+  are its rules), then the walk is tried again. No such way leaves the drop :no-route, a dig that fails with that dig's outcome (:refused, :cannot, :unreachable ...).
   Result: {:collected n}, the number of items that entered the inventory, with :left [{:pos :reason}] for those (also in :loose-left, so the :loose-items reflex leaves them).")
 
 (a/defargs args
@@ -43,6 +44,11 @@
    :dig {:doc "dig a way to a drop that cannot be walked to (the cells are left for the caller's tidy)" :spec boolean? :default false}
    :holes {:doc "cells the caller dug: an item lower than the feet at or under one of them, or one column beside, is in that hole"
            :spec (a/coll-of a/position?) :default nil}})
+
+(a/defargs settings
+  {::dig-max-cells {:default 16 :doc "The most cells :dig digs to reach one drop; a dearer route leaves it." :spec (a/int-in 0 nil)}
+   ::dig-margin {:default 3 :doc "How far outside the box round the body and the drop the dig route may wander, in blocks." :spec (a/int-in 0 nil)}
+   ::dig-max-fall {:default 3 :doc "The longest fall, in blocks, the dig route plans." :spec (a/int-in 0 nil)}})
 
 (defn check [_c] true)
 
@@ -146,20 +152,23 @@
 
 (defn ^:async dig-to!
   "Dig the route to item (jobs.lib.dig-route): one jobs.blocks.dig child per cell, in walking order. :dug when every
-  cell is open now, :continue while a dig waits on the world, :unreachable when there is no route or a dig fails."
+  cell is open now, :continue while a dig waits on the world, else why not: :no-route or the failed dig's outcome
+  (:refused, :cannot, :unreachable ...)."
   [c item]
   (let [p (:primitives c)
         at (fn [[x y z]] (u/seen-name p {:x x :y y :z z}))
-        r (dig-route/route at (u/cell-vec (u/self-pos c)) (item-cell item) {})]
+        r (dig-route/route at (u/cell-vec (u/self-pos c)) (item-cell item)
+                              {:max-digs (settings/get settings ::dig-max-cells) :margin (settings/get settings ::dig-margin)
+                               :max-fall (settings/get settings ::dig-max-fall)})]
     (if (:problem r)
-      :unreachable
+      :no-route
       (loop [cells (:dig r)]
         (if-let [cell (first cells)]
-          (let [o (await (blocks/dig-cell! c cell {}))]
+          (let [o (await (blocks/dig-cell! c cell {:need-drop true}))]
             (cond
               (= :continue o) :continue
               (#{:dug :missing} o) (recur (rest cells))
-              :else :unreachable))
+              :else o))
           :dug)))))
 
 (defn leave!
@@ -259,19 +268,23 @@
                 walk (when (and (not hole?) (deep? c item)) (await (walk-down! c item)))
                 dig? (and (:dig (:args c)) (or (= :unreachable walk) (= :too-deep why)))
                 dug (when dig? (await (dig-to! c item)))
+                dig-why (when-not (#{nil :dug :continue} dug) dug)
                 walk (if (= :dug dug) (await (walk-down! c item)) walk)
                 why (if (= :dug dug) nil why)]
             (let [collect! (fn [] (ctx/act c :collect (clj->js (cond-> {:id (.-id item)} hole? (assoc :maxDropDown 1)))))
                   r (when-not (or moving? (= :continue walk) (= :continue dug) why (= :unreachable walk)) (await (collect!)))
                   stuck? (and r (= "unreachable" (.-status r)))
                   dug2 (when (and stuck? (:dig (:args c))) (await (dig-to! c item)))
+                  dig2-why (when-not (#{nil :dug :continue} dug2) dug2)
                   r2 (when (= :dug dug2) (await (collect!)))
                   r2-stuck? (and r2 (= "unreachable" (.-status r2)))]
               (if (or moving? (= :continue walk) (= :continue dug) (= :continue dug2))
                 :continue
                 (do (cond
+                      dig-why (leave! c item dig-why)
                       why (leave! c item why)
                       (= :unreachable walk) (leave! c item :unreachable)
+                      dig2-why (leave! c item dig2-why)
                       (and stuck? (not= :dug dug2)) (leave! c item :unreachable)
                       r2-stuck? (leave! c item :unreachable))
                     (ctx/update-mem! c (fn [m] (reduce (fn [m r] (-> m (update :collected (fnil + 0) (gained-count r))

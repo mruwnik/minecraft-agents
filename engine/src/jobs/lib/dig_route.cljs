@@ -22,22 +22,22 @@
 
 (defn floor-ok? [n] (boolean (and n (not (open? n)) (not (fluids n)) (not (reach/hazard-blocks n)))))
 
-(defn neighbours [[x y z]]
-  (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]] dy [0 -1 1 -2 -3]] [(+ x dx) (+ y dy) (+ z dz)]))
+(defn neighbours [[x y z] max-fall]
+  (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]] dy (cons 1 (map - (range max-fall -1 -1)))] [(+ x dx) (+ y dy) (+ z dz)]))
 
 (defn step-cells
-  "The cells that must be open to walk from feet cell m to the adjacent feet cell n (a fall of up to 3 included)."
+  "The cells that must be open to walk from feet cell m to the adjacent feet cell n (a fall included)."
   [[_ my _ :as m] [nx ny nz :as n]]
   (cond
     (> ny my) [[(m 0) (+ my 2) (m 2)] n [nx (inc ny) nz]]
-    (< ny my) (mapv (fn [y] [nx y nz]) (range (+ my 2) (dec ny) -1))
+    (< ny my) (mapv (fn [y] [nx y nz]) (range (inc my) (dec ny) -1))
     :else [n [nx (inc ny) nz]]))
 
 (defn route
   "The cells to dig (head cell first within a step, in walking order) of the cheapest route from feet cell from to feet
-  cell goal, at most :max-digs of them, within :margin cells of both ends; each step's floor must be a seen solid block.
+  cell goal, at most :max-digs of them, within :margin cells of both ends, falls of at most :max-fall; each step's floor must be a seen solid block.
   {:dig [cell ..]} or {:problem :no-route}."
-  [block-at from goal {:keys [max-digs margin] :or {max-digs 16 margin 3}}]
+  [block-at from goal {:keys [max-digs margin max-fall] :or {max-digs 16 margin 3 max-fall 3}}]
   (let [lo (mapv #(- (min %1 %2) margin) from goal)
         hi (mapv #(+ (max %1 %2) margin) from goal)
         inside? (fn [c] (every? true? (map #(<= %1 %2 %3) lo c hi)))
@@ -57,7 +57,7 @@
                                    c)))})
           (> d max-digs) {:problem :no-route}
           :else
-          (let [relax (for [n (neighbours cur) :when (and (inside? n) (not (done n)))
+          (let [relax (for [n (neighbours cur max-fall) :when (and (inside? n) (not (done n)))
                             :let [s (step cur n)] :when s] [n (+ d s)])
                 better (filter (fn [[n nd]] (< nd (get dist n js/Infinity))) relax)]
             (recur (into dist better) (into prev (map (fn [[n _]] [n cur]) better)) (conj done cur))))))))

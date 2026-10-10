@@ -23,3 +23,12 @@
 (deftest too-many-digs-is-no-route
   (let [deep (fn [c] (or ({[30 8 0] "air" [0 20 0] "air" [0 21 0] "air"} c) (if (< (c 1) 20) "stone" "air")))]
     (is (= {:problem :no-route} (dr/route deep [0 20 0] [30 8 0] {:max-digs 5})))))
+
+(deftest a-step-down-does-not-dig-above-the-head
+  (let [low (fn [c] (or ({[1 9 0] "air" [1 8 0] "air"} c) (if (or (< (c 1) 10) (>= (c 1) 12)) "stone" "air")))]
+    (is (= {:dig []} (dr/route low [0 10 0] [1 8 0] {})))))
+
+(deftest the-fall-limit-is-an-option
+  (let [w (world {[1 9 0] "air" [1 8 0] "air" [1 7 0] "air" [1 6 0] "air"})]
+    (is (= {:dig []} (dr/route w [0 10 0] [1 6 0] {:max-fall 4})))
+    (is (seq (:dig (dr/route w [0 10 0] [1 6 0] {:max-fall 1}))))))

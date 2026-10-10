@@ -456,8 +456,8 @@
 (defn ^:async note-left!
   "Report drops of the item collect-drops left lying (out of reach), once per cell. A drop still listed right after
   the collect may be one whose pickup packet has not arrived, so a drop counts only when it is still lying after a
-  short wait."
-  [c]
+  short wait. why maps a cell to the reason collect-drops left it, shown when known."
+  [c why]
   (let [known (:left (ctx/mem c))
         fresh? (fn [[pos _]] (not (contains? known pos)))
         first-look (into {} (filter fresh?) (left-behind c))
@@ -466,7 +466,7 @@
                 (do (await (ctx/act c :wait #js {:ms (pickup-grace-ms)}))
                     (into {} (filter (fn [[pos _]] (contains? first-look pos))) (left-behind c))))]
     (when (seq fresh)
-      (ctx/emit! c :mine.left-behind :info {:items (mapv (fn [[pos n]] {:pos pos :count n}) fresh)
+      (ctx/emit! c :mine.left-behind :info {:items (mapv (fn [[pos n]] (cond-> {:pos pos :count n} (why pos) (assoc :reason (why pos)))) fresh)
                                             :text (str "mine left drops it could not pick up at "
                                                        (str/join " " (map (fn [[pos _]] (str/join "," pos)) fresh)))})
       (ctx/update-mem! c update :left merge fresh))))
@@ -498,9 +498,10 @@
   (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops
                                  (cond-> {:radius (drop-radius c) :filter [(blocks/item-name (:args c))] :dig true}
                                    (:dug-at (ctx/mem c)) (assoc :holes [(:dug-at (ctx/mem c))]))))
+        why (into {} (map (fn [{:keys [pos reason]}] [[(:x pos) (:y pos) (:z pos)] reason])) (:left (ctx/child-result c :collect)))
         w (when (not= :continue r) (await (walk-to-drop! c)))]
     (when (and (not= :continue r) (nil? w))
-      (await (note-left! c))
+      (await (note-left! c why))
       (let [now (carried c)]
         (ctx/update-mem! c (fn [m]
                              (-> m
