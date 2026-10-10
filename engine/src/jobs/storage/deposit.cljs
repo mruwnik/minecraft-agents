@@ -19,7 +19,7 @@
   Ends with {:gave-up false} when nothing is left to put away, or stopped {:gave-up true :status :stopped :reason r
   :moved n} (n items put in) after three failed transfers (warn chest_unusable) or at once when go-to cannot reach.
   r is the transfer status or \"unreachable\".
-  Memory: a :chest argument that took at least one item and finished clean is offered to the :chest place. It is
+  Memory: a :chest argument that took at least one item and finished clean, not in another body's zone or claim, is offered to the :chest place. It is
   recorded when none is recorded or the recorded one is gone, never over a different live one (place.kept
   event; jobs.memory.set-place moves it). A transfer that finds the recorded chest missing retracts it, with one
   chest_missing warn, and ends at once with reason \"missing\". No chest known: waits, reason :no-chest; no chest
@@ -193,7 +193,8 @@
         pick (when-not (and free (>= (u/free-slots (:primitives c)) free))
                (to-deposit inventory items (if items keep (merge-with max (cost/food-reserve inventory) keep))))]
     (cond
-      (nil? pick) (do (when (and (:chest (:args c)) (pos? (:deposited (ctx/mem c) 0)))
+      (nil? pick) (do (when (and (:chest (:args c)) (pos? (:deposited (ctx/mem c) 0))
+                                 (not (access/container-refusal (assoc-in c [:args :ignore-zones?] false) :put (:chest (:args c)))))
                         (places/offer! c :chest (:chest (:args c))))
                       (ctx/result! c {:gave-up false})
                       :done)
