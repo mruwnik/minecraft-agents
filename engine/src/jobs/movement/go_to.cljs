@@ -618,11 +618,12 @@
 (def seal-clear-radius 3)
 
 (defn ^:async clear-goal-seal!
-  "A goal proved walled in (:goal-enclosed) with blocks of the body's own ledger within seal-clear-radius of it (a dig-in's
-  seal beside a gate): one jobs.access.cleanup child takes them back. True when it ran, so the walk is planned again."
+  "A goal the walk could not reach (:goal-enclosed, :goal-cut-off, or a search that ran out of land: :exhausted, :ladder-gap)
+  with blocks of the body's own ledger within seal-clear-radius of it (a dig-in's seal beside a gate, a plug in a stair
+  mouth): one jobs.access.cleanup child takes them back. True when it ran, so the walk is planned again."
   [c pos result]
   (let [near {:pos {:x (js/Math.floor (:x pos)) :y (js/Math.floor (:y pos)) :z (js/Math.floor (:z pos))} :radius seal-clear-radius}]
-    (when (and (= :goal-enclosed (:reason result)) (not (:seal-cleared (ctx/mem c)))
+    (when (and (#{:goal-enclosed :goal-cut-off :exhausted :ladder-gap} (:reason result)) (not (:seal-cleared (ctx/mem c)))
                (seq (ledger/near-of (ledger/open-entries (ctx/view c)) near)))
       (ctx/update-mem! c assoc :seal-cleared true)
       (await (ctx/call-child c :seal-cleanup 'jobs.access.cleanup {:job :all :near near}))

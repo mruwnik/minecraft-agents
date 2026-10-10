@@ -589,3 +589,25 @@
             (core/submit! eng '(recording-parent) {})
             (await (tick-out! eng clock 60))
             (is (= arrives? (boolean (:arrived @out))) (pr-str label @out))))))))
+
+(deftest a-dirt-plug-of-the-bodys-own-in-a-wall-across-the-way-is-taken-back-near-the-goal
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[label entries arrives?]
+                [["plug in the ledger" (mapv (fn [cell] {:cell cell :item "dirt" :before "air" :job "j9" :purpose :shelter :state :placed}) [[9 64 0] [9 65 0]]) true]
+                 ["same plug, not the body's" [] false]]]
+          (let [wall (-> (box 9 64 -3 9 67 3 "stone") (assoc "9,64,0" "dirt" "9,65,0" "dirt"))
+                world {:self {:pos {:x 0 :y 64 :z 0}} :blocks (merge flat wall)}
+                {:keys [eng clock] :as s} (setup world [])
+                out (atom :not-done)
+                parent {:check (constantly true)
+                        :round (fn ^:async plug-round [c]
+                                 (let [r (await (ctx/call-child c :kid 'jobs.movement.go-to {:pos [10 64 0] :range 0 :escalate false}))]
+                                   (when (= :done r) (reset! out (ctx/child-result c :kid)))
+                                   r))}
+                eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
+            (ledger/write! (:store eng) entries)
+            (core/submit! eng '(recording-parent) {})
+            (await (tick-out! eng clock 60))
+            (is (= arrives? (boolean (:arrived @out))) (pr-str label (select-keys @out [:arrived :why])))))))))
