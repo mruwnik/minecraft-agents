@@ -206,6 +206,17 @@
     (is (not (holds? {:time night :blocks {"0,66,0" "stone" "3,66,0" "stone"} :self {:pos {:x 3 :y 64 :z 0}}}))
         "roofed elsewhere, out of its shelter")))
 
+(def walls
+  (into {} (for [[x z] [[1 0] [-1 0] [0 1] [0 -1]] y [64 65]] [(str x "," y "," z) "stone"])))
+
+(deftest a-pit-with-a-way-out-does-not-hold-the-body-by-day
+  (let [{:keys [eng]} (setup {})
+        holds? (fn [world] (boolean ((:when (get triggers/all :night)) (tu/fake world) (mem/view (:store eng)) {})))]
+    (mem/write! (:store eng) :shelter {:pos {:x 0 :y 64 :z 0} :start {:x 0 :y 66 :z 0} :state :built} {:cap 10 :ttl day-ms})
+    (is (holds? {:time noon :floor tu/walk-floor :blocks (assoc walls "0,66,0" "stone")}) "shut in a pit by day: let out")
+    (is (not (holds? {:time noon :floor tu/walk-floor :blocks (dissoc walls "1,64,0" "1,65,0")}))
+        "a side opened (the stair it left by): walking back in is not being shut in")))
+
 ;; -------------------------------------------------------------------- sleep
 
 (deftest sleep-goes-to-the-bed-sleeps-and-writes-slept

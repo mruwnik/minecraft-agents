@@ -360,12 +360,12 @@
 
 (defn shut-in?
   "Whether the body is still shut in by its shelter entry. Never for a mended :room (its door is the way out). With a
-  pit :start, when below that height. With a :door, when a door cell is solid. With neither, when under a solid
+  pit :start, when below that height and walled in (a pit left by a stair is open). With a :door, when a door cell is solid. With neither, when under a solid
   block within default-roof-height."
   [p {:keys [start door room]}]
   (cond
     room false
-    start (< (:y (feet p)) (:y start))
+    start (and (< (:y (feet p)) (:y start)) (reach/enclosed? p))
     door (boolean (some #(solid-at? p %) door))
     :else (roofed? p default-roof-height)))
 
