@@ -14,6 +14,7 @@
             [jobs.lib.ledger :as ledger]
             [jobs.lib.look :as look]
             [jobs.lib.loose :as loose]
+            [jobs.lib.reach :as reach]
             [jobs.lib.trip :as trip]
             [jobs.lib.trees :refer [axe-worth-fetching? axe-fetch-limits scan-logs tree-near trees-near tree-at logs-at unreachable-set debts replant-kind
                                           replant-policy default-radius max-partials dig-reach log-name? log-names]]
@@ -245,7 +246,8 @@
   "Choose the tree to fell among the candidates (at most targets/max-targets): the one the body walks to soonest
   (targets/nearest!), committed (commit-tree!). :searching while that search goes on; nil when no candidate is in
   sight, or when the search proved every one out of reach (all marked unreachable); the nearest in a line when it ran
-  out of nodes (the walk decides)."
+  out of nodes, or when the body is shut in (its walk digs or builds out, which the search does not count): the
+  nearest in a line (the walk decides)."
   [c radius species]
   (let [ts (vec (take targets/max-targets (candidates c radius species)))]
     (when (seq ts)
@@ -253,7 +255,7 @@
         (case (:status a)
           :found (commit-tree! c (nth ts (:index a)))
           :searching :searching
-          (if (:proved a)
+          (if (and (:proved a) (not (reach/enclosed? (:primitives c))))
             (do (when-not (night-sheltered c) (mark-all-unreachable! c ts)) nil)
             (commit-tree! c (first ts))))))))
 

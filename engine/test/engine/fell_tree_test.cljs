@@ -505,3 +505,21 @@
           (is (= 8 (:logs (:out s))))
           (is (empty? (kinds s :tool.spare)))
           (is (empty? (kinds s :tool.no-spare))))))))
+
+;; ------------------------------------------------------------------ a body fenced in its own pen
+
+(def fenced
+  "Two trees in sight and the body shut in by a ring of walls (a pen it built): the search over the trees proves none
+  reachable by walking."
+  (let [ring (for [x (range -3 4) z (range -3 4) y [64 65 66]
+                   :when (= 3 (max (Math/abs x) (Math/abs z)))]
+               [(str x "," y "," z) "oak_fence"])]
+    {:blocks (merge (lt/tree 8 0 "oak" 4) (lt/tree 8 6 "oak" 4) (into {} ring))
+     :inventory [{:name "stone_axe" :count 1} {:name "dirt" :count 20}]}))
+
+(deftest a-body-shut-in-by-its-pen-lets-the-walk-say-why-instead-of-the-search-writing-the-trees-off
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (fell fenced {:radius 12} 150))]
+          (is (= "exhausted" (:why (:out s))) "a walk tried and gave its reason"))))))
