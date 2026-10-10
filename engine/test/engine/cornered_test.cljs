@@ -3,6 +3,7 @@
   a body with no way out escalates (seal with carried blocks, fight with a tool
   or the fist) instead of failing the same round again and again."
   (:require [cljs.test :refer [deftest is async]]
+            [clojure.string :as str]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.world-files :as ew]
             [engine.memory :as mem]
@@ -152,6 +153,9 @@
           (is (= {:list ["j1"] :places 2} while-hidden) "still sealed two minutes on (inside :hide-s), nothing more placed")
           (is (empty? (blocked-events seen)) "never a blocked retreat")
           (is (= 1 (count (filter #(= :retreat_sealed (:kind %)) @seen))) "one notice that it walled itself in")
+          (let [e (first (filter #(= :retreat_sealed (:kind %)) @seen))]
+            (is (str/includes? (:text e) "from skeleton at [4 64 0]") "the notice names the mob and where it is")
+            (is (= [{:name "skeleton" :pos [4 64 0]}] (:hostiles e)) "and carries them"))
           (is (= [] (:list (core/state eng))) "done once the skeleton is gone"))))))
 
 ;; low on health in a skeleton's line of fire with no covered way to walk: it hides (seals itself in) instead of fleeing

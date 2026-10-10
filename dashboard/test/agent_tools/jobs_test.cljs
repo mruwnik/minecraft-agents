@@ -308,6 +308,14 @@
                      (is (= "./bin/observe --wait --watch j7" (:follow result))))))
           (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
 
+(deftest a-wait-woken-by-body-idle-says-the-job-is-not-lost
+  (let [wake {:wake :idle :jobs [{:job "j7" :name "jobs.blocks.dig"}
+                                 {:job "j8" :name "jobs.survival.respond-to-hostile" :holding {:reason "hiding"}}]}
+        note (:note (jobs/wait-result {:ok true} "j7" wake))]
+    (is (str/includes? note "j7 is still queued or cut by a reflex, not lost"))
+    (is (str/includes? note "jobs.survival.respond-to-hostile"))
+    (is (str/includes? note "./bin/jobs show j7"))))
+
 (deftest a-waited-submit-under-manual-control-says-who-holds-the-body
   (let [state (state-dir)
         events (atom [(event-of 1 :system :started {})])

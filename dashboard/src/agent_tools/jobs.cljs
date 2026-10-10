@@ -25,7 +25,7 @@
        "  --wait   block until the job ends, or until anything that ends observe --wait (addressed chat, attention, an\n"
        "           engine restart, the --timeout), and print {:job .. :wait <the wake>}: the job's last events and a\n"
        "           bounded summary of what else happened meanwhile (reflexes fired, pickups, hurt, other jobs ended,\n"
-       "           warnings). If the wait ends before the job, :follow names the command that waits on. Uses the observer\n"
+       "           warnings). If the wait ends before the job, :follow names the command that waits on and :note says the job is not lost. Uses the observer\n"
        "           checkpoint observe --wait uses, so the same events are not reported twice.\n"
        "Without --wait mutations return immediately; observe.mjs <body> --world <world> --wait --watch jID tracks completion."))
 
@@ -297,11 +297,20 @@
 
 (defn follow-command [id] (str "./bin/observe --wait --watch " id))
 
+(defn unfinished-note
+  "Said when a wait ends before the job does: the job is not lost, whatever held the body, and where its result will be."
+  [id wake]
+  (let [holders (->> (:jobs wake) (filter :holding) (keep :name))]
+    (str id " is still queued or cut by a reflex, not lost"
+         (when (seq holders) (str " (holding: " (str/join ", " holders) ")"))
+         "; it runs when the body is free. Result later: ./bin/jobs show " id ", or keep waiting: " (follow-command id))))
+
 (defn wait-result
-  "The submit answer with the wake that ended the wait under :wait, and :follow when the job had not ended by then."
+  "The submit answer with the wake that ended the wait under :wait, and :follow and :note when the job had not ended by then."
   [answer id wake]
   (cond-> (assoc answer :wait wake)
-    (not (and (= :job-finished (:wake wake)) (= id (:job wake)))) (assoc :follow (follow-command id))))
+    (not (and (= :job-finished (:wake wake)) (= id (:job wake))))
+    (assoc :follow (follow-command id) :note (unfinished-note id wake))))
 
 (defn submit-and-wait!
   "Submit, then wait for the job as observe --wait --watch does; print one map. A refused submit prints as without

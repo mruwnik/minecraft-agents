@@ -484,10 +484,21 @@
                   (await (pace/pace!))
                   (recur))))))
 
+(defn hostiles-known
+  "The hostiles the body knows within follow range, as [{:name :pos [x y z]}]; empty when it only heard one."
+  [c]
+  (let [p (:primitives c)]
+    (mapv (fn [e] {:name (.-name e) :pos (mapv #(js/Math.floor (% (danger-q/mob-pos p e))) [:x :y :z])})
+          (flight/near-known p (set (flight/dead-ids c)) threats/max-follow-range (:ranged-radius (:args c))))))
+
 (defn hide-now! [c refuge text]
   (ctx/update-mem! c assoc :refuge (assoc refuge :hidden true))
-  (let [placed (spent/log c)]
-    (ctx/emit! c :retreat_sealed :warn (merge {:text (str text (some->> (spent/text placed "refuge") (str "; "))) :pos (sh/feet (:primitives c))}
+  (let [placed (spent/log c)
+        hostiles (hostiles-known c)
+        from (if (seq hostiles)
+               (str/join ", " (map #(str (:name %) " at " (pr-str (:pos %))) hostiles))
+               "a hostile heard, not seen")]
+    (ctx/emit! c :retreat_sealed :warn (merge {:text (str text "; hiding from " from (some->> (spent/text placed "refuge") (str "; "))) :pos (sh/feet (:primitives c)) :hostiles hostiles}
                                               (when (seq placed) (spent/summary placed)))))
   :again)
 
