@@ -21,7 +21,7 @@
   batch loses nothing.
   Ends with {:made n}, the number of items gained (plus :spent, :spent-at and a :text when it put a table down). When it stops short it adds :short {name n} (an ingredient ran
   out) or :reason (\"no-table\", \"not-a-table\", \"unreachable\", \"full\", the cannot reason, or the failed
-  status), after a warn, and its status is stopped. One call is the whole craft: it walks (a go-to child) and crafts
+  status), after a warn, and its status is stopped. A full bag first runs one jobs.storage.make-room child (once a call). One call is the whole craft: it walks (a go-to child) and crafts
   again until the count is carried or it stops; it yields only while go-to waits on the world.
   An ingredient that runs out is fetched (jobs.lib.fetch: a jobs.items.obtain child for each missing item) and the
   craft goes on (a further fetch for each batch while the last one led to more made), unless :fetch is false or the fetch failed: then it stops with :short and a :text. With no table in reach a
@@ -172,6 +172,17 @@
 
 (declare craft-act! settle!)
 
+(defn ^:async room!
+  "A full bag: once per craft, a jobs.storage.make-room child (child :room). :continue while it waits, :again when it
+  ran, nil when it was tried before."
+  [c]
+  (when-not (:room-tried (ctx/mem c))
+    (let [r (await (ctx/call-child c :room 'jobs.storage.make-room {}))]
+      (if (= :continue r)
+        :continue
+        (do (ctx/update-mem! c assoc :room-tried true)
+            :again)))))
+
 (defn ^:async table-fetch!
   "With no table in reach: put a carried table down, else fetch one (:fetch) and put it down. Once per craft.
   :again / :continue to go on, nil when there is nothing to do (give up). Putting a carried table down and the craft call at
@@ -305,8 +316,9 @@
                         (:table (:args c)) (do (ctx/emit! c :craft.no-table :warn {:text (str "not a crafting table: " (pr-str table))})
                                                (finish! c made {:reason "not-a-table"}))
                         :else (do (ctx/update-mem! c dissoc :table) :again))
-        "full" (do (ctx/emit! c :craft.full :warn {:text "inventory is full"})
-                   (finish! c made {:reason "full"}))
+        "full" (or (await (room! c))
+                   (do (ctx/emit! c :craft.full :warn {:text "inventory is full and make-room freed nothing"})
+                       (finish! c made {:reason "full"})))
         "cannot" (do (ctx/emit! c :craft.cannot :warn {:text (str "cannot craft " item ": " (.-reason r))})
                      (finish! c made {:reason (.-reason r)}))
         (give-up! c made status)))))

@@ -145,14 +145,23 @@
               (is (= 1 (count (calls p "craft"))) "one failed act, then only the walk until it arrives"))
             (finally (set! child/call-walk orig))))))))
 
-(deftest craft-with-a-full-inventory
+(deftest craft-with-a-full-inventory-that-make-room-cannot-free-stops
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [filler (mapv #(hash-map :name (str "item_" %) :count 1) (range 35))
+        (let [filler (mapv (fn [_] {:name "iron_pickaxe" :count 1}) (range 35))
               [result _ seen] (await (craft {:inventory (conj filler {:name "oak_log" :count 1})} {:item "oak_planks"}))]
           (is (= {:made 0 :status :stopped :reason "full"} result))
           (is (some #(= :craft.full (:kind %)) @seen)))))))
+
+(deftest craft-with-a-full-inventory-of-junk-makes-room-and-goes-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [filler (mapv (fn [_] {:name "dirt" :count 64}) (range 35))
+              [result p] (await (craft {:inventory (conj filler {:name "oak_log" :count 1})} {:item "oak_planks"}))]
+          (is (= {:made 4} result))
+          (is (= 4 (get (inv p) "oak_planks"))))))))
 
 (deftest craft-gives-up-when-the-table-arg-is-not-a-table
   (async done
