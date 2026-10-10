@@ -213,3 +213,12 @@
                     :when (and (> (inc y) (+ (:y from) 0.5)) (<= (u/dist from centre) reach) (>= (near-threat centre) now))]
                 [cell (u/dist from centre)])]
     (some->> (seq cells) (sort-by (juxt (comp - :y first) second)) ffirst)))
+
+(defn clear-of?
+  "Whether the straight line (on the ground plane) from from to goal passes every position of threats at margin blocks or more."
+  [from goal threats margin]
+  (let [dx (- (:x goal) (:x from)) dz (- (:z goal) (:z from))
+        len2 (+ (* dx dx) (* dz dz))
+        near (fn [t] (let [k (if (zero? len2) 0 (-> (/ (+ (* (- (:x t) (:x from)) dx) (* (- (:z t) (:z from)) dz)) len2) (max 0) (min 1)))]
+                       (js/Math.hypot (- (:x t) (+ (:x from) (* k dx))) (- (:z t) (+ (:z from) (* k dz))))))]
+    (every? #(>= (near %) margin) threats)))

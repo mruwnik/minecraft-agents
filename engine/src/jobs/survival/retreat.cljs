@@ -102,7 +102,7 @@
   {:radius {:doc "hostiles within this many blocks start a flight" :spec (a/num-in 0 nil) :default 8}
    :ranged-radius {:doc "ranged hostiles (skeletons and the like) within this many blocks start a flight" :spec (a/num-in 0 nil) :default 16}
    :eat-gap {:doc "with at least this many blocks to the nearest hostile, eat a bite per flee step" :spec (a/num-in 0 nil) :default 12}
-   :goal {:doc "a position {:x :y :z} the flight leans toward, round the hostiles, like a refuge (the walk the body was on); nil: away only" :spec goal/pos-spec :default nil}
+   :goal {:doc "a position {:x :y :z} the flight walks to with go-to legs (planner danger costs keep it round the hostiles) while the body outruns them and the line clears them by 4 blocks, else leans toward, like a refuge; nil: away only" :spec goal/pos-spec :default nil}
    :step {:doc "blocks per walk" :spec (a/num-in 1 nil) :default 6}
    :home-range {:doc "a flight leans towards the latest :bed or :home only when it lies within this many blocks" :spec (a/num-in 0 nil) :default 64}
    :weapons {:doc "item name substrings that count as weapons, for a cornered fight" :spec (a/coll-of (a/or-of string? keyword?)) :default combat/default-weapons}
@@ -493,6 +493,32 @@
     (let [[x y z] (if (vector? goal) goal [(:x goal) (:y goal) (:z goal)])]
       {:x x :y y :z z})))
 
+(defn active-goal
+  "The :goal as a position, nil when none or a walk to it lost ground on the chasers this flight (:goal-off)."
+  [c]
+  (when-not (:goal-off (ctx/mem c)) (goal-pos (:goal (:args c)))))
+
+(def goal-near
+  "Blocks from the goal at which the flight no longer walks to it."
+  3)
+
+(def goal-margin
+  "Blocks the straight line to the goal keeps from every chaser for the flight to walk it."
+  4)
+
+(defn goal-leg
+  "The goal as a go-to target while the body outruns its chasers (cost/outruns-at? at the flank turn), is farther than
+  goal-near from it and the straight line to it passes every chaser at goal-margin or more, else nil (the flight leans
+  toward it instead): the planner's danger costs then route the leg round the hostiles."
+  [c threats]
+  (let [goal (active-goal c)
+        p (:primitives c)
+        from (u/self-pos c)]
+    (when (and goal (> (u/dist from goal) goal-near)
+               (walk/clear-of? from goal (mapv #(danger-q/mob-pos p %) threats) goal-margin)
+               (cost/outruns-at? (retreat-home/food (:primitives c)) (walk/flank-turn)))
+      goal)))
+
 (def way-reach
   "Blocks within which the stairs the body cut are a way out of a flight."
   14)
@@ -517,7 +543,7 @@
          from (u/self-pos c)
          threat-pos (into (mapv #(danger-q/mob-pos p %) threats) (lost-spots c threats))
          refuge (:start (first rooms))
-         goal (goal-pos (:goal (:args c)))
+         goal (active-goal c)
          home (or refuge goal (home-pos c))
          flank? (and (some? (or refuge goal)) (cost/outruns-at? (retreat-home/food p) (walk/flank-turn)))]
      (await (glance-away! c (walk/direction from threat-pos home flank?)))
@@ -703,7 +729,10 @@
       way (await (run-home! c room way))
       :else
       (let [_ (await (eat-on-the-run! c threat))
-            target (await (flight-target! c threats covered? rooms))
+            leg (goal-leg c threats)
+            gap0 (flight/nearest-gap p threats)
+            goal-gap0 (when leg (u/dist (u/self-pos c) leg))
+            target (or leg (await (flight-target! c threats covered? rooms)))
             cover (cond
                     (and (exposed-low? c covered?)
                          (or (refuge/sealing-here? c) (not (and target (covered? target))))
@@ -718,8 +747,15 @@
           (let [_ (when (:cornered (ctx/mem c)) (ctx/update-mem! c dissoc :cornered))
                 _ (say-target! c target threats covered?)
                 moved (await (step! c :step target 1))]
-            (if-not moved
-              (await (stuck "the way away from the hostile is blocked"))
+            (cond
+              (and leg (not (and moved
+                                 (>= (or (flight/nearest-gap p threats) js/Infinity) (dec (or gap0 0)))
+                                 (< (u/dist (u/self-pos c) leg) (- goal-gap0 0.5)))))
+              (do (ctx/update-mem! c assoc :goal-off true)
+                  (ctx/emit! c :retreat.goal-off :info {:text "the walk to the goal lost ground on the hostiles or did not near the goal: away from them instead"})
+                  :again)
+              (not moved) (await (stuck "the way away from the hostile is blocked"))
+              :else
               (let [gap (flight/nearest-gap p threats)]
                 (ctx/update-mem! c #(-> % (dissoc :tried) (flight/note-gap gap)))
                 :again))))))))

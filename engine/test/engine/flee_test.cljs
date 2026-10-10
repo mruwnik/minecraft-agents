@@ -526,10 +526,38 @@
                       (await (run-job! s 'targeter args))
                       @out))
               away (await (run {:step 6}))
-              round (await (run {:step 6 :goal {:x 20 :y 64 :z 12}}))]
+              round (await (run {:step 6 :goal {:x 10 :y 64 :z 16}}))]
           (is (= {:x -6 :y 64 :z 0} away) "no goal: straight away")
           (is (pos? (:z round)) (str "the goal lies past the zombie on the +z side: the flight turns that way " (pr-str round)))
           (is (<= (:x round) 0) "and still gains on the zombie"))))))
+
+(defn first-target [seen] (:target (first (filterv #(= :retreat.target (:kind %)) @seen))))
+
+(deftest a-flight-with-a-goal-clear-of-the-chaser-takes-a-go-to-path-to-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [seen]} (await (run-job! (setup {:entities [(zombie 7 5 {:chase {:speed 0.7}})]})
+                                              'jobs.survival.retreat {:goal {:x 10 :y 64 :z 16}}))]
+          (is (= [10 64 16] (first-target seen)) "the goal itself, the planner's costs keep it round the zombie"))))))
+
+(def walker
+  "A listed job whose memory holds an open go-to walk to (10 64 16), as one cut on its way."
+  {:check (constantly true)
+   :round (fn ^:async walker-round [c]
+            (ctx/update-mem! c assoc :children {:go {:open 1 :goal {:x 10 :y 64 :z 16}}})
+            (ctx/wait c {:reason :walking}))})
+
+(deftest the-hostile-reflex-passes-on-the-goal-of-the-walk-it-interrupted
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup {:entities [(zombie 7 5 {:chase {:speed 0.7}})]})
+              s (assoc-in s [:eng :jobs 'walker] walker)
+              _ (core/submit! (:eng s) '(walker) {})
+              _ (await (core/tick! (:eng s)))
+              {:keys [seen]} (await (run-job! s 'jobs.survival.respond-to-hostile {}))]
+          (is (= [10 64 16] (first-target seen))))))))
 
 (def tunnel-cells (set (for [x (range 0 9) y [64 65]] [x y 0])))
 
