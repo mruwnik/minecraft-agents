@@ -768,3 +768,14 @@
           (await (core/tick! eng))
           (is (= 1 (count (filter #(= :retreat_sealed (:kind %)) @seen))) "sealed first")
           (is (pos? (count (calls p "attack"))) "hit while sealed: it stops hiding and hits back"))))))
+
+(deftest a-pillar-beside-a-slope-the-mob-can-climb-does-not-fit
+  (let [floor (fn [pos] (if (= 63 (second pos)) "stone" "air"))
+        with (fn [cells] (fn [pos] (if (contains? cells pos) "stone" (floor pos))))
+        column (fn [x h] (for [y (range 64 (+ 64 h))] [x y 0]))
+        slope (set (concat (column 1 3) (column 2 2) (column 3 1)))]
+    (is (true? (retreat-refuge/pillar-ok? (with #{}) [0 64 0])) "open ground all round")
+    (is (false? (retreat-refuge/pillar-ok? (with slope) [0 64 0]))
+        "a slope up to the pillar's top: a zombie walks up and reaches the body")
+    (is (true? (retreat-refuge/pillar-ok? (with (set (column 1 3))) [0 64 0]))
+        "a wall of the same height with no steps up to it: out of reach")))

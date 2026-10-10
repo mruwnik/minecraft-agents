@@ -63,7 +63,7 @@
        stop its arrows). It first steps to the middle of its cell, and does not place while a hostile's hitbox
        overlaps a cell to fill. An open door is shut, not filled. A cell that answers occupied (torch, chest, bed) is left alone.
        When only such cells stay open the seal has failed. Every seal block goes to the scaffold ledger (purpose :retreat-plug), taken back by jobs.access.cleanup once no hostile is near.
-     - pillar up 3 (jobs.access.pillar, the carried block with the most, at least 3). Needs a solid floor and free cells above.
+     - pillar up 3 (jobs.access.pillar, the carried block with the most, at least 3). Needs a solid floor, free cells above and no slope or ledge a mob could climb to beside its top.
        Not against a ranged mob. Every block goes to the scaffold ledger (purpose :pillar) for jobs.access.cleanup.
      - back off: a step of up to 2 cells in any of 8 directions that gains at least a block on the hostile.
      - dig down and plug: a pit 2 deep under a solid side, else 3, then carried or dug blocks beside and over the head

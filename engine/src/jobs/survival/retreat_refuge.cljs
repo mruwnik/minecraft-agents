@@ -203,11 +203,41 @@
 
 (defn up [[x y z] n] [x (+ y n) z])
 
+(def climb-radius
+  "Blocks round the pillar within which a mob's climb to its top is looked for."
+  4)
+
+(defn climbable-top?
+  "Whether a mob could walk up a slope or ledge (steps of one block, over seen blocks) to stand beside the pillar's top
+  (levels 2 to 4 above the start: its hitbox then overlaps the body's)."
+  [block-at feet]
+  (let [[x y z] feet
+        standable? (fn [cell] (and (rules/solid-floor? block-at (up cell -1))
+                                   (pl/clear? (block-at cell))
+                                   (pl/clear? (block-at (up cell 1)))))
+        near? (fn [[cx _ cz]] (and (<= (abs (- cx x)) climb-radius) (<= (abs (- cz z)) climb-radius)))
+        beside-top? (fn [[cx cy cz]] (and (<= (abs (- cx x)) 1) (<= (abs (- cz z)) 1) (not= [x z] [cx cz]) (<= (+ y 2) cy (+ y 4))))
+        start (filter standable? (for [dx (range (- climb-radius) (inc climb-radius)) dz (range (- climb-radius) (inc climb-radius))
+                                       dy [0 1] :when (not= 0 dx dz)]
+                                   [(+ x dx) (+ y dy) (+ z dz)]))]
+    (loop [seen (set start) todo (vec start)]
+      (let [cell (peek todo)]
+        (cond
+          (nil? cell) false
+          (beside-top? cell) true
+          :else
+          (let [[cx cy cz] cell
+                nxt (->> (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]] dy [-1 0 1]] [(+ cx dx) (+ cy dy) (+ cz dz)])
+                         (filter #(and (near? %) (not (seen %)) (not= [x z] [(first %) (nth % 2)]) (standable? %))))]
+            (recur (into seen nxt) (into (pop todo) nxt))))))))
+
 (defn pillar-ok?
-  "Whether a pillar-height pillar fits here: a solid floor, and the head cell and every cell the body rises into free."
+  "Whether a pillar-height pillar fits here: a solid floor, the head cell and every cell the body rises into free, and
+  no ledge beside its top a mob could climb to."
   [block-at feet]
   (and (rules/solid-floor? block-at (up feet -1))
-       (every? #(pl/clear? (block-at (up feet %))) (range 1 (+ 2 (pillar-height))))))
+       (every? #(pl/clear? (block-at (up feet %))) (range 1 (+ 2 (pillar-height))))
+       (not (climbable-top? block-at feet))))
 
 (defn cell-map [[x y z]] {:x x :y y :z z})
 
