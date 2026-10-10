@@ -329,6 +329,13 @@
     [:any {:block "oak_log" :axis :y} "oak_log"] {:name "oak_log"} :match
     [:any {:block "oak_log" :axis :y} "stone"] {:name "oak_log" :state {:axis "x"}} :wrong))
 
+(deftest a-want-of-air-is-a-clear-cell-however-it-is-written
+  (let [plan {:id "p" :parts [{:id "a" :cells [[0 64 0]] :want "air"}
+                              {:id "b" :cells [[1 64 0]] :want {:block "cave_air"}}]}
+        cells (shape/plan-minus-world (:cells (shape/expand plan {})) {[0 64 0] {:name "air"} [1 64 0] {:name "dirt"}})]
+    (is (= [:clear :clear] (mapv :want (:cells (shape/expand plan {})))))
+    (is (= [:match :extra] (mapv :answer cells)) "air standing there matches; a block there is in the way")))
+
 (deftest plan-minus-world-answers-every-cell
   (let [world {[200 65 300] {:name "wheat" :state {:age 3}}
                [201 65 300] {:name "air"}

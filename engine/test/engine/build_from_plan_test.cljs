@@ -611,6 +611,20 @@
           (is (= "air" (h/block-at p 3 64 3)))
           (is (= {:wrong [] :missing []} (select-keys result [:wrong :missing]))))))))
 
+(deftest a-want-of-air-clears-the-cell-and-fetches-nothing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (build [{:id "wall" :cells [[1 64 1]] :want "dirt"}
+                                        {:id "door" :cells [[3 64 3]] :want "air"}]
+                                       (assoc ground "3,64,3" "oak_leaves")
+                                       [{:name "dirt" :count 2}]))]
+          (is (= "air" (h/block-at p 3 64 3)))
+          (is (= "dirt" (h/block-at p 1 64 1)))
+          (is (not (contains? (:short result) "air")))
+          (is (empty? (:fetch-failed result)))
+          (is (= [] (:missing result))))))))
+
 (defn no-support-world!
   "Make place answer no-support for a cell with no block beside, above or below it, as the real primitive does."
   [p]

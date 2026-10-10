@@ -54,6 +54,11 @@
 
 (defn air? [name] (contains? air-names name))
 
+(defn clear-air
+  "want, with a want of air (a name or {:block air}) read as :clear: nothing to place, what stands there to dig."
+  [want]
+  (if (or (air? want) (and (map? want) (air? (:block want)))) :clear want))
+
 ;; ---------------------------------------------------------------- checking
 (defn coords? [v] (and (vector? v) (= 3 (count v)) (every? integer? v)))
 
@@ -317,7 +322,7 @@
   (let [turn (or turn 0)
         size (layer-size bp)
         world (fn [offset] (mapv + at (turn-offset offset size turn)))]
-    {:cells (mapv (fn [{:keys [offset want]}] {:pos (world offset) :want (turn-want want turn)}) (blueprint-cells bp))
+    {:cells (mapv (fn [{:keys [offset want]}] {:pos (world offset) :want (clear-air (turn-want want turn))}) (blueprint-cells bp))
      :spots (into {} (map (fn [[spot offset]] [(str id "/" spot) (world offset)])) (:spots bp))}))
 
 ;; ---------------------------------------------------------------- expansion
@@ -330,7 +335,7 @@
     (if-let [bp (get blueprints (:blueprint part))]
       (update (place bp part) :cells (fn [cells] (mapv #(assoc % :part (:id part)) cells)))
       {:error (str "no blueprint called " (pr-str (:blueprint part)))})
-    {:cells (mapv (fn [pos] {:pos pos :want (:want part) :part (:id part)}) (part-cells part))}))
+    {:cells (mapv (fn [pos] {:pos pos :want (clear-air (:want part)) :part (:id part)}) (part-cells part))}))
 
 (defn later-wins
   "Cells with each position kept once, from the last part that names it, in their first order otherwise."
