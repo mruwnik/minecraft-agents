@@ -1,5 +1,5 @@
 // Why JavaScript: Mineflayer boundary; the one adapter that calls Mineflayer and the pathfinder, with tick-bound policy that lives inside their event loops.
-// Containers and held items for the primitives: inspectContainer, transfer, equip, toss, craft, furnace, enchant, eat, interact, trade, unequip.
+// Containers and held items for the primitives: inspectContainer, transfer, equip, toss, craft, furnace, enchant, eat, fish, interact, trade, unequip.
 
 import { interactWith } from './interact.mjs'
 import { emptyHand, emptyOffHand } from './unequip.mjs'
@@ -200,6 +200,48 @@ export function createItems (env) {
     })
   }
 
+  // Cast at the water cell a.pos (looked at from where the body stands), wait for the bite up to a.timeoutS, reel in
+  // (mineflayer's bot.fish casts, waits and reels); the catch is the inventory gain after the reel.
+  const fish = async (token, a = {}) => {
+    if (!isOwner(token)) throw cutError()
+    need(isPos(a.pos), 'fish needs pos {x, y, z}, the water cell to cast at')
+    need(a.timeoutS == null || (isNum(a.timeoutS) && a.timeoutS > 0), 'fish timeoutS must be a positive number')
+    const p = cell(a.pos)
+    const waitS = a.timeoutS ?? setting('prim/fish-wait-s')
+    const count = () => { const m = {}; for (const i of inventory()) m[i.name] = (m[i.name] ?? 0) + i.count; return m }
+    return act(token, { boundS: waitS + 5 }, async ctx => {
+      const rod = inventory().find(i => i.name === 'fishing_rod')
+      if (!rod) return { status: 'no-rod' }
+      const there = env.bot.blockAt(vec(p))
+      if (!there || there.name !== 'water') return { status: 'no-water' }
+      if (dist(eye(), center(p)) > setting('prim/fish-reach')) return { status: 'unreachable' }
+      const before = count()
+      ctx.onAbort(() => env.bot.deactivateItem())
+      await env.bot.equip(rod, 'hand')
+      ctx.alive()
+      await env.bot.lookAt(vec({ x: p.x + 0.5, y: p.y + 0.9, z: p.z + 0.5 }), true)
+      ctx.alive()
+      let timer
+      const bite = env.bot.fish().then(() => 'bite', () => 'failed')
+      const timeout = new Promise(resolve => { timer = setTimeout(() => resolve('timeout'), waitS * 1000 * timeScale) })
+      const outcome = await Promise.race([bite, timeout])
+      clearTimeout(timer)
+      if (outcome === 'timeout') {
+        env.bot.activateItem()
+        return { status: 'timeout' }
+      }
+      if (outcome === 'failed') return { status: 'timeout' }
+      const deadline = Date.now() + setting('prim/fish-pickup-ms') * timeScale
+      const gained = () => Object.entries(count()).find(([name, n]) => name !== 'fishing_rod' && n > (before[name] ?? 0))
+      while (!gained() && Date.now() < deadline) {
+        await sleepMs(setting('prim/poll-ms') * timeScale)
+        ctx.alive()
+      }
+      const got = gained()
+      return got ? { status: 'caught', item: got[0], count: got[1] - (before[got[0]] ?? 0) } : { status: 'nothing' }
+    })
+  }
+
   const interact = async (token, a = {}) => {
     if (!isOwner(token)) throw cutError()
     need(isNum(a.id), 'interact needs an entity id')
@@ -221,5 +263,5 @@ export function createItems (env) {
     need(a.dest == null || a.dest === 'hand' || a.dest === 'off-hand', 'unequip only empties the hand or the off-hand')
     return act(token, { boundS: 2 }, ctx => (a.dest === 'off-hand' ? emptyOffHand : emptyHand)(env.bot, ctx))
   }
-  return { inspectContainer, transfer, equip, toss, craft, furnace, enchant, eat, interact, trade, unequip }
+  return { inspectContainer, transfer, equip, toss, craft, furnace, enchant, eat, fish, interact, trade, unequip }
 }

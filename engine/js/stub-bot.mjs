@@ -82,6 +82,7 @@ export function stubBot ({ oxygen = 20, blocks = {}, items = [], worn = [], enti
     toss: act('toss'),
     tossStack: act('tossStack'),
     consume: act('consume'),
+    fish: act('fish'),
     deactivateItem: act('deactivateItem'),
     activateItem: act('activateItem', () => onActivate(bot)),
     attack: act('attack'),

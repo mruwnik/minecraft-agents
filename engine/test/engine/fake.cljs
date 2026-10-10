@@ -212,7 +212,8 @@
          :settling false
          :offline-scale (:offlineScale spec 0.001)
          :furnaces (cells (:furnaces spec) #(rekey kebab %))
-         :enchant-tables (cells (:enchantTables spec) identity)}
+         :enchant-tables (cells (:enchantTables spec) identity)
+         :fish {:catch (vec (get-in spec [:fish :catch] ["cod"])) :misses (get-in spec [:fish :misses] 0)}}
         furnace/start)))
 
 ;; ---- blocks keep the order they were put in (as the old Map did): the nearest-first lists break ties by it
@@ -573,6 +574,19 @@
       :else (let [now (min 20 (+ hunger 5))]
               [(-> w (take-one food) (assoc-in [:self :food] now)) {:status "ate" :item food :food now}]))))
 
+(defn fish
+  "A cast at the water cell pos: the first :misses casts time out, then each cast catches the next of :catch (cycling)."
+  [w {:keys [pos]}]
+  (let [{:keys [catch misses]} (:fish w)
+        water? (= "water" (block-name w pos))]
+    (cond
+      (zero? (carried (:inventory w) "fishing_rod")) [w {:status "no-rod"}]
+      (not water?) [w {:status "no-water"}]
+      (pos? misses) [(assoc-in w [:fish :misses] (dec misses)) {:status "timeout"}]
+      :else (let [item (first catch)]
+              [(-> w (give item 1) (update-in [:fish :catch] #(vec (concat (rest %) [(first %)]))))
+               {:status "caught" :item item :count 1}]))))
+
 (defn attack [w {:keys [id]}]
   (let [e (find-entity w id)]
     (cond
@@ -802,6 +816,7 @@
                "transfer" (act! transfer)
                "equip" (act! equip)
                "eat" (act! #(eat %1 (or %2 {})))
+               "fish" (act! #(fish %1 (or %2 {})))
                "attack" (act! attack)
                "sleep" (act! sleep)
                "swim" (act! swim)
