@@ -3,7 +3,8 @@
   within the executor's abilities (jobs.lib.walk), follow the plan once, opening shut doors, gates and trapdoors by the
   :doors policy (jobs.lib.pass), and write the :moved memory entry.
   Its own namespace because jobs.lib.walk and jobs.lib.pass require jobs.lib.util."
-  (:require [jobs.lib.aim :as aim]
+  (:require [jobs.lib.child :as child]
+            [jobs.lib.aim :as aim]
             [jobs.lib.click :as click]
             [engine.ctx :as ctx]
             [jobs.lib.util :as u]
@@ -219,7 +220,7 @@
        (nil? cell) (do (ctx/emit! c :refused :warn {:reason :bad-pos :text (:message (places/parse-pos pos))})
                        :blocked)
        (and (u/within? (u/self-pos c) cell range) (or (not see) (aim/body-sees? c [(:x cell) (:y cell) (:z cell)]))) :there
-       :else (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to
+       :else (let [r (await (child/call-walk c :walk
                                             {:pos cell :range range :doors doors :dangers dangers :tolls tolls :zone-tolls (boolean zone-tolls)
                                              :escalate escalate :leg-s leg-s :look-round look-round :one-way one-way :see (boolean see) :warn false :retry false :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
                (case r

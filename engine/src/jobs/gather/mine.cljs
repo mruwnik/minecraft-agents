@@ -1,5 +1,6 @@
 (ns jobs.gather.mine
-  (:require [engine.settings :as settings]
+  (:require [jobs.lib.child :as child]
+            [engine.settings :as settings]
             [engine.args :as a]
             [engine.game :as game]
             [jobs.lib.blocks :as blocks]
@@ -792,7 +793,7 @@
   (let [m (zone-margin)
         goal (exit-goal (cell-of (u/self-pos c)) zn m)
         from (:pre-start (ctx/mem c))
-        r (await (ctx/call-child c :leave 'jobs.movement.go-to
+        r (await (child/call-walk c :leave
                                  {:pos {:x (+ (:x goal) 0.5) :y (:y goal) :z (+ (:z goal) 0.5)} :range 2 :y-slack 8 :escalate true :zone-tolls true}))
         here (cell-of (u/self-pos c))]
     (cond
@@ -1196,7 +1197,7 @@
         arrived? #(let [here (cell-of (u/self-pos c))] (if (zero? range) (= here cell) (beside? here start)))
         r (if (arrived?)
             :arrived
-            (await (ctx/call-child c :home 'jobs.movement.go-to
+            (await (child/call-walk c :home
                                    {:pos {:x (+ (:x cell) 0.5) :y (:y cell) :z (+ (:z cell) 0.5)} :range range :escalate true :zone-tolls true
                                     :ignore-zones? (boolean (:ignore-zones? (:args c)))})))]
     (if (= :continue r)
@@ -1269,7 +1270,7 @@
   :stopped :not-back. :continue while it walks, :again once there."
   [c]
   (let [{:keys [x y z] :as cell} (:pre-start (ctx/mem c))
-        r (await (ctx/call-child c :back 'jobs.movement.go-to
+        r (await (child/call-walk c :back
                                  {:pos {:x (+ x 0.5) :y y :z (+ z 0.5)} :range 0 :escalate true :zone-tolls true
                                   :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
     (cond

@@ -16,7 +16,8 @@
 
   Also body memory :fetch/stock: what a chest held when last looked into or moved from (withdraw, deposit, kit,
   obtain), so obtain goes first to a chest known to hold the item and skips one known not to."
-  (:require [clojure.set :as set]
+  (:require [jobs.lib.child :as child]
+            [clojure.set :as set]
             [engine.args :as a]
             [engine.settings :as settings]
             [engine.ctx :as ctx]
@@ -196,7 +197,7 @@
   there or when the walk ends (arrived or not: the job judges where it stands). :continue while go-to waits, else :again."
   [c cell]
   (let [[x y z] cell
-        r (await (ctx/call-child c :fetch-back 'jobs.movement.go-to {:pos {:x x :y y :z z} :range 0 :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+        r (await (child/call-walk c :fetch-back {:pos {:x x :y y :z z} :range 0 :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
     (when-not (= :continue r)
       (ctx/update-mem! c dissoc :fetch-return))
     (if (= :continue r) :continue :again)))

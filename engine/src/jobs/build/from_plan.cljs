@@ -1,5 +1,6 @@
 (ns jobs.build.from-plan
-  (:require [engine.args :as a]
+  (:require [jobs.lib.child :as child]
+            [engine.args :as a]
             [engine.settings :as settings]
             [clojure.string :as str]
             [jobs.lib.access.rules :as rules]
@@ -625,7 +626,7 @@
   or not: the next step judges where the body stands). :continue while the walk waits, else :again."
   [c]
   (let [[x y z] (:leave (ctx/mem c))
-        r (await (ctx/call-child c :leave 'jobs.movement.go-to {:pos {:x x :y y :z z} :range 1 :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+        r (await (child/call-walk c :leave {:pos {:x x :y y :z z} :range 1 :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
     (when-not (= :continue r)
       (ctx/update-mem! c dissoc :leave))
     (if (= :continue r) :continue :again)))

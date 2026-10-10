@@ -843,9 +843,10 @@
         (when kind {:reason :night-sheltered :shelter kind :goal goal})))))
 
 (defn check
-  "A listed go-to waits while night-wait holds (a child's round yields instead: its parent goes on)."
+  "A listed go-to waits while night-wait holds (a child's round yields instead: its parent goes on, and asks with
+  :report-wait, jobs.lib.child/call-walk, to name the wait)."
   [c]
-  (if-let [w (and (empty? (:slots c)) (night-wait c))]
+  (if-let [w (and (or (empty? (:slots c)) (:report-wait c)) (night-wait c))]
     (ctx/wait c w)
     true))
 

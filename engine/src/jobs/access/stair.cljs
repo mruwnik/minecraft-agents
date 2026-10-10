@@ -1,5 +1,6 @@
 (ns jobs.access.stair
-  (:require [engine.settings :as settings]
+  (:require [jobs.lib.child :as child]
+            [engine.settings :as settings]
             [jobs.lib.game-facts :as facts]
             [engine.args :as a]
             [clojure.string :as str]
@@ -511,7 +512,7 @@
   "Walk the body into cell [x y z] with a go-to child in slot (no escalation: the dig is this job's own): :continue
   while it walks, else the child's result."
   [c slot cell]
-  (if (= :done (await (ctx/call-child c slot 'jobs.movement.go-to {:pos cell :range 0 :escalate false})))
+  (if (= :done (await (child/call-walk c slot {:pos cell :range 0 :escalate false})))
     (ctx/child-result c slot)
     :continue))
 

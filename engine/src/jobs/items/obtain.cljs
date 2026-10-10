@@ -1,5 +1,6 @@
 (ns jobs.items.obtain
-  (:require [engine.settings :as settings]
+  (:require [jobs.lib.child :as child]
+            [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
@@ -452,7 +453,7 @@
   (let [cell (fetch/cell-of pos)
         mark! #(ctx/update-mem! c (fn [m] (-> m (update :done-chests (fnil conj #{}) cell) (update :inspected (fnil inc 0)))))
         w (when-not (u/within? (u/self-pos c) pos 3)
-            (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos pos :range 3 :escalate false :warn false :retry false :zone-tolls true})))]
+            (await (child/call-walk c :walk {:pos pos :range 3 :escalate false :warn false :retry false :zone-tolls true})))]
     (cond
       (= :continue w) :continue
       (and w (not (:arrived (ctx/child-result c :walk)))) (do (mark!) :again)
