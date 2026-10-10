@@ -602,13 +602,14 @@
 
 (defn cut-hazard
   "Why the tunnel may not take cell pos (a fluid in it, lava or unwanted water beside it seen, not loaded), else nil:
-  {:reason r :at cell}, the cell being the offending one (the lava beside pos, not pos itself). Faces never seen are no hazard."
+  {:reason r :at cell}, the cell being the offending one (the lava beside pos, not pos itself). Faces never seen are no
+  hazard, nor is a loaded cell not yet seen (the dig looks); only a cell with no chunk is :not-loaded."
   [c pos]
   (let [own (u/seen-name (:primitives c) pos)
         beside (map (fn [f n] [(around pos f) n]) faces (face-names c pos))
         beside-of (fn [n] (some (fn [[cell nm]] (when (= n nm) cell)) beside))]
     (cond
-      (nil? own) {:reason :not-loaded :at pos}
+      (nil? (u/sensed (:primitives c) pos)) {:reason :not-loaded :at pos}
       (rules/fluids own) {:reason :fluid :at pos}
       (beside-of "lava") {:reason :lava :at (beside-of "lava")}
       (and (beside-of "water") (not (:wet (:args c)))) {:reason :water :at (beside-of "water")})))

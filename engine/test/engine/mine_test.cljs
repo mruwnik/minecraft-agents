@@ -1873,6 +1873,18 @@
   (is (= :no (classify-in {"0,64,2" "lava"})) "lava in the open face, seen")
   (is (= :buried (classify-in {"1,64,3" "stone" "-1,64,3" "stone" "0,65,3" "stone" "0,63,3" "stone" "0,64,4" "stone" "0,64,2" "stone"}))))
 
+(defn cut-hazard-of
+  "mine/cut-hazard of the stone at [1 64 0] when the body's sensedAt answers (answer orig pos) for it."
+  [answer]
+  (let [p (:p (start {:world {:blocks {"1,64,0" "stone"}}}))
+        orig (aget p "sensedAt")]
+    (aset p "sensedAt" (fn [pos] (if (= 1 (.-x pos)) (answer pos) (orig pos))))
+    (mine/cut-hazard {:primitives p :args {}} {:x 1 :y 64 :z 0})))
+
+(deftest a-loaded-cell-the-body-has-not-seen-is-no-tunnel-hazard-an-unloaded-one-is
+  (is (nil? (cut-hazard-of (fn [pos] #js {:unknown true :pos pos}))) "loaded, never seen: the dig looks")
+  (is (= {:reason :not-loaded :at {:x 1 :y 64 :z 0}} (cut-hazard-of (fn [_] nil))) "no chunk there"))
+
 (deftest the-tunnel-cuts-beside-lava-it-has-not-seen
   (async done
     (tu/run-async done
