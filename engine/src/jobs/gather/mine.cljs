@@ -14,7 +14,7 @@
             [jobs.lib.gate :as gate]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.tools :as tools]
-            [jobs.access.stair :as stair]
+            [jobs.lib.bridge :as bridge]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.access.zones :as zones]
             [jobs.lib.shafts :as shafts]
@@ -104,7 +104,7 @@
   mine.tunnel-skipped, also down a stair to a floor) and never digs a torch. 0 means no tunnel: then no
   target ends :wet when a seen block was rejected only for water, else :none. Each step stands on the last
   cell of the run and judges the next cell and the one over it: no fluid in it, no seen lava beside it, no seen water
-  beside it unless :wet, a solid floor (an air one gets a carried building block, jobs.access.stair/bridge-plans; none carried: :no-floor), the zone and plan rules with only :accept hazards. It digs them head
+  beside it unless :wet, a solid floor (an air one gets a carried building block, jobs.lib.bridge/bridge-plans; none carried: :no-floor), the zone and plan rules with only :accept hazards. It digs them head
   first (a cut of :block is collected like a target), looks ahead level and down so perception records what
   the cut exposed, and steps in. A cut cell a falling block (gravel, sand) refilled is cut again, at most ::max-recuts times per cell, then
   :dig-failed; one not seen yet is looked at again first. Ore that comes into view is dug before the next step.
@@ -941,20 +941,15 @@
       (do (ctx/update-mem! c assoc :recuts n) :again))))
 
 (defn ^:async bridge-floor!
-  "Place a carried building block on the air floor under the tunnel's next feet cell (stair/bridge-plans): true when the floor stands, false with none carried, no plan or no support."
+  "Place a carried building block on the air floor under the tunnel's next feet cell (jobs.lib.bridge/bridge-plans): true when the floor stands, false with none carried, no plan or no support."
   [c next]
   (let [feet [(:x next) (:y next) (:z next)]
         floor (update feet 1 dec)
-        in (stair/rules-in c (stair/feet-of c))
+        in (rules-in c)
         item (blocks/pick c blocks/building-blocks)
-        plans (stair/bridge-plans (:block-at in) floor)]
-    (if-not (and item (seq plans))
-      false
-      (loop [[plan & more] plans]
-        (let [stop (await (stair/place-all! c in item plan))]
-          (cond (nil? stop) true
-                (and (= :no-support-floor (:reason stop)) (seq more)) (recur more)
-                :else false))))))
+        plans (bridge/bridge-plans (:block-at in) floor (bridge/eye-y c))]
+    (boolean (and item (seq plans)
+                  (nil? (await (bridge/place-plans! c in item plans false)))))))
 
 (defn ^:async tunnel-round!
   "One step of the strip tunnel: back onto its last cell, judge and cut the next two, look at them, step in."

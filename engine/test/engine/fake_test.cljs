@@ -208,6 +208,14 @@
        (is (= "dirt" placed))
        (is (= "no-item" (.-status r3)))))))
 
+(deftest place-against-the-block-over-the-cell-needs-the-eye-below-its-underside
+  (async-test
+   (fn ^:async t []
+     (doseq [[y status] [[98 "placed"] [101 "no-support"]]]
+       (let [p (owned {:inventory [{:name "dirt" :count 2}] :self {:pos {:x 0 :y y :z 0}} :blocks {"2,100,0" "stone"}})
+             r (await (act p "place" {:pos (at 2 99 0) :item "dirt"}))]
+         (is (= status (.-status r)) (str "body at y " y)))))))
+
 (deftest place-puts-a-block-into-water-and-lava
   (async-test
    (fn ^:async t []

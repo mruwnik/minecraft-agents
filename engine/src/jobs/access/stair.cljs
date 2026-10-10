@@ -15,6 +15,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
             [jobs.lib.blocks :as blocks]
+            [jobs.lib.bridge :as bridge]
             [jobs.lib.look :as look]
             [jobs.lib.dig-look :refer [unknown? look-at! settle! see-round!]]
             [jobs.lib.tools :as tools]
@@ -40,7 +41,7 @@
 
   A step's floor must be solid, the cell under it not a fluid, nor air when no building block is carried (:cave-below), and everything loaded.
   A floor of air gets a carried building block (blocks/building-blocks, never an ore or valuable) after the
-  rules' may-place?, against a neighbour, or from the cell under it first when only that has a face (jobs.access.stair/bridge-plans; a plan whose face was unseen air gives way to the next); a cave floor with no block beside or under it stops :no-support-floor (the underside of the block over it cannot be aimed at).
+  rules' may-place?, against a neighbour, or from the cell under it first when only that has a face (jobs.lib.bridge/bridge-plans; a plan whose face was unseen air gives way to the next); a cave floor with no block beside or under it stops :no-support-floor (the underside of the block over it cannot be aimed at).
   The cell under a placed floor is not judged. With no such block: :no-floor with :filler :none; with no face to place
   against at any of them (a void pocket): :no-support-floor with :cell, :tried and :why. A lava or water floor is never bridged. A go-to stair (:note) writes its placed floors to the scaffold ledger
   (purpose :stair-floor) for jobs.access.cleanup to take back once go-to's job ended (setting take-back-floors?).
@@ -493,75 +494,18 @@
   [c]
   (boolean (and (:note (:args c)) (settings/get settings ::take-back-floors?))))
 
-(def face-steps
-  "The neighbours whose faces a block can be placed against from above: not the one over the cell (its underside cannot be aimed at)."
-  [[1 0 0] [-1 0 0] [0 -1 0] [0 0 1] [0 0 -1]])
-
-(defn face-support?
-  "Whether a block can be placed against a face of cell: some neighbour is solid (seen), or unseen when loose?."
-  [block-at cell loose?]
-  (boolean (some (fn [d] (let [n (block-at (mapv + cell d))]
-                           (if (nil? n)
-                             loose?
-                             (not (or (rules/air n) (#{"water" "lava"} n))))))
-                 face-steps)))
-
-(defn bridge-plans
-  "The cell lists to place for a missing floor, to try in order: [floor] when it has a face to place against, [support
-  floor] when only the cell under it has one (the previous floor of a stair up). Cells with a seen face come before
-  those whose face is an unseen neighbour, which may be air (place answers no-support). Only cells that are air are
-  placed; a floor in a cave with nothing beside or under it has no plan."
-  [block-at floor]
-  (let [under (update floor 1 dec)]
-    (vec (distinct (for [loose? [false true]
-                         [probe plan] [[floor [floor]] [under [under floor]]]
-                         :when (face-support? block-at probe loose?)]
-                     (filterv #(rules/air (block-at %)) plan))))))
-
-(defn ^:async place-floor!
-  "Place item at cell (in the scaffold ledger when take-back-floor?): nil when it stands, else a stop map."
-  [c in item cell]
-  (let [verdict (rules/may-place? (assoc in :cell cell))
-        [x y z] cell]
-    (if-not (:ok verdict)
-      (assoc (dissoc verdict :ok) :cell cell)
-      (let [l (when (take-back-floor? c)
-                (ledger/intend (ledger/open-entries (ctx/view c))
-                               {:cell cell :item item :before ((:block-at in) cell) :job (:id c) :purpose :stair-floor}))
-            _ (when l (ledger/remember! c l))
-            r (await (ctx/act c :place #js {:pos #js {:x x :y y :z z} :item item}))]
-        (when l (ledger/remember! c (ledger/reconcile l (escape/block-at-of (:primitives c)))))
-        (if (rules/air ((:block-at (rules-in c (feet-of c))) cell))
-          (if (= "no-support" (some-> r .-status))
-            {:reason :no-support-floor :cell cell :item item :why (str "nothing to place " item " against at " (pr-str cell))}
-            {:reason :place-failed :cell cell :item item})
-          (do (ctx/update-mem! c update :bridged (fnil conj #{}) cell)
-              nil))))))
-
-(defn ^:async place-all!
-  "Place item at each of cells in order: nil when all stand, else the first stop map."
-  [c in item cells]
-  (loop [[cell & more] cells]
-    (let [stop (await (place-floor! c in item cell))]
-      (cond stop stop
-            (seq more) (recur more)))))
-
 (defn ^:async bridge!
-  "Place carried filler on the missing floor of the step (bridge-plans, a plan whose placing found no support gives way
+  "Place carried filler on the missing floor of the step (bridge/bridge-plans, a plan whose placing found no support gives way
   to the next). :again, or a stop map (:no-support-floor when no plan works)."
   [c in {:keys [floor]}]
   (let [item (blocks/pick c blocks/building-blocks)
-        plans (bridge-plans (:block-at in) floor)]
+        plans (bridge/bridge-plans (:block-at in) floor (bridge/eye-y c))]
     (cond
       (nil? item) {:reason :no-floor :cell floor :block ((:block-at in) floor) :filler :none
                    :why (str "no floor and no filler block carried (" (str/join ", " (take 4 blocks/building-blocks)) " ...)")}
       (empty? plans) {:reason :no-support-floor :cell floor :tried [floor (update floor 1 dec)]
                       :why (str "no block beside or under " (pr-str floor) " to place " item " against: the floor opens into a void")}
-      :else (loop [[plan & more] plans]
-              (let [stop (await (place-all! c in item plan))]
-                (cond (nil? stop) :again
-                      (and (= :no-support-floor (:reason stop)) (seq more)) (recur more)
-                      :else stop))))))
+      :else (or (await (bridge/place-plans! c in item plans (take-back-floor? c))) :again))))
 
 (defn ^:async walk-into!
   "Walk the body into cell [x y z] with a go-to child in slot (no escalation: the dig is this job's own): :continue

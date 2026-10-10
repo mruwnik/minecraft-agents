@@ -100,6 +100,8 @@ export function createDig (env) {
   const supportCandidates = p => [[0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, 1, 0]]
     .map(([dx, dy, dz]) => ({ ref: env.bot.blockAt(new Vec3(p.x + dx, p.y + dy, p.z + dz)), face: new Vec3(-dx, -dy, -dz) }))
     .filter(({ ref }) => ref && !isAir(ref.name) && ref.boundingBox === 'block')
+    // the underside of the block over the cell cannot be aimed at from above it: the server refuses such a click
+    .filter(({ face }) => face.y !== -1 || eye().y < p.y + 1)
   const supportFor = p => {
     const candidates = supportCandidates(p)
     return candidates.find(({ ref }) => !isInteractable(ref.name)) ?? candidates[0]

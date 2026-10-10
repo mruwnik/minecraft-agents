@@ -13,6 +13,7 @@
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as world]
             [jobs.access.stair :as stair]
+            [jobs.lib.bridge :as bridge]
             [jobs.lib.ledger :as ledger]
             [engine.settings :as settings]
             [jobs.lib.walk.plan :as wplan]
@@ -51,16 +52,17 @@
 
 (deftest a-floor-is-placed-against-a-neighbour-or-from-the-cell-under-it-else-it-has-no-support
   (let [floor [4 60 0]
-        plans #(stair/bridge-plans % floor)]
+        plans #(bridge/bridge-plans % floor 70.0)]
     (is (= [[floor]] (plans (solid-at [3 60 0]))) "a face beside it")
     (is (= [[[4 59 0] floor]] (plans (solid-at [3 59 0]))) "only the cell under has a face: support first")
-    (is (empty? (plans (solid-at [4 61 0]))) "the underside of the block over it cannot be aimed at")
+    (is (empty? (plans (solid-at [4 61 0]))) "the underside of the block over it cannot be aimed at from above")
+    (is (= [[floor]] (bridge/bridge-plans (solid-at [4 61 0]) floor 60.5)) "but it can from below")
     (is (empty? (plans (solid-at [9 9 9]))) "a void pocket")))
 
 (deftest an-unseen-neighbour-is-tried-only-after-the-cells-with-a-known-face
   (let [floor [4 60 0]
         unseen-east (fn [cell] (cond (= cell [5 60 0]) nil (= cell [4 59 1]) "stone" :else "air"))]
-    (is (= [[[4 59 0] floor] [floor]] (stair/bridge-plans unseen-east floor)))))
+    (is (= [[[4 59 0] floor] [floor]] (bridge/bridge-plans unseen-east floor 70.0)))))
 
 (deftest stair-index-finds-the-step-on-the-line-only
   (are [feet dir heading i] (= i (stair/stair-index [0 65 0] feet dir heading 8))

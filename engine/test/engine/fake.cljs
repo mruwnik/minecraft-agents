@@ -367,11 +367,12 @@
       (assoc w :yaw (mod (- 180 (* deg yaw)) 360) :pitch (- (* deg pitch))))))
 
 (defn plain-click
-  "The click a place without one makes: the first solid neighbour's face (below first), looked at from the eye."
+  "The click a place without one makes: the first solid neighbour's face (below first), looked at from the eye. The block over the cell is no choice from above it: its underside cannot be aimed at."
   [w pos]
   (when-some [against (->> [[0 -1 0] [1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 1 0]]
                            (map #(mapv + pos %))
                            (remove #(no-shape (block-name w %)))
+                           (remove #(and (= % (mapv + pos [0 1 0])) (>= (+ (second (body-pos w)) eye) (inc (second pos)))))
                            first)]
     (let [cursor (mapv #(+ 0.5 (/ (- %1 %2) 2)) pos against)
           [dx dy dz] (map - (mapv + against cursor) (body-pos w) [0 eye 0])]
@@ -436,6 +437,8 @@
       (str/ends-with? item "campfire")
       [(-> w (take-one item) (assoc-in [:states pos] {:lit true}) (put-block pos item))
        {:status "placed" :block item :placed {:name item :properties {:lit true}}}]
+
+      (and (nil? click) (nil? (plain-click w pos)) (not (no-shape (block-name w (mapv + pos [0 1 0]))))) [w {:status "no-support"}]
 
       :else (place-block w pos item click))))
 
