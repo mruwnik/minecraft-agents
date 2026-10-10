@@ -170,3 +170,13 @@
           (is (empty? (filter #(= :no-source (:reason %)) (f/events-of s :waiting))))
           (is (empty? (f/events-of s :obtain.exploring)))
           (is (seq (mine-events s)) "the mine went for the ore"))))))
+
+(deftest nuggets-carried-are-combined-into-an-ingot-with-how-given-as-a-vector
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (f/start (assoc (f/bare [{:name "iron_nugget" :count 27} {:name "oak_log" :count 2}])
+                                  :recipes {"iron_ingot" {:count 1 :needs {"iron_nugget" 9} :table true}}) [])]
+          (await (obtain! s {:item "iron_ingot" :count 1 :how [:craft]} 80))
+          (is (empty? (f/listed s)))
+          (is (= 1 (get (f/inv s) "iron_ingot"))))))))

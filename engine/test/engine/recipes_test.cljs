@@ -87,3 +87,7 @@
 
 (deftest a-needed-item-is-never-crafted-down-to-be-crafted-back
   (is (nil? (plan {"iron_ingot" 3} "iron_ingot" 3 {:table? true})) "ingots are not turned into nuggets to make more ingots"))
+
+(deftest nuggets-are-combined-into-ingots
+  (is (= [[:craft "iron_ingot" 3]] (shape (plan {"iron_nugget" 27} "iron_ingot" 3 {:table? true}))))
+  (is (= [:craft "iron_ingot" 3] (last (shape (plan {"iron_nugget" 27 "oak_log" 2} "iron_ingot" 3))))))
