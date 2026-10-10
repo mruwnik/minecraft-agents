@@ -434,6 +434,7 @@
    ::glance-reach {:default 3 :doc "Blocks along a direction to the feet cell a glance looks at." :spec (a/int-in 0 nil)}
    ::glance-memory {:default 24 :doc "Most glanced cells a flight remembers." :spec (a/int-in 0 nil)}
    ::cover-gap {:default 5 :doc "Blocks within which a melee chaser keeps a low body from taking cover where it stands." :spec (a/num-in 0 nil)}
+   ::close-leg-s {:default 1 :doc "Seconds a flee step may search or walk while a melee hostile is within hit reach: a body that stands searching there is hit for the whole leg." :spec (a/num-in 0 nil)}
    ::refuge-gap {:default 10 :doc "Blocks within which a lone melee hostile the body cannot outfight is pillared against (else sealed against) before any flee step, when blocks are carried; 0 never." :spec (a/num-in 0 nil)}})
 (defn glance-reach [] (settings/get settings ::glance-reach))
 
@@ -442,6 +443,8 @@
 (defn cover-gap [] (settings/get settings ::cover-gap))
 
 (defn refuge-gap [] (settings/get settings ::refuge-gap))
+
+(defn close-leg-s [] (settings/get settings ::close-leg-s))
 
 (defn unseen-before-wall?
   "Whether a cell the body has not sensed lies in the columns along d from the first, up to glance-reach or the first
@@ -787,7 +790,9 @@
           (let [_ (when (:cornered (ctx/mem c)) (ctx/update-mem! c dissoc :cornered))
                 _ (say-target! c target threats covered?)
                 from (u/self-pos c)
-                moved (await (leg-step! c :step target 1 (if low? low-leg-s flight-timeout-s)))]
+                moved (await (leg-step! c :step target 1 (cond (seq (hitters c (near-hostiles c))) (close-leg-s)
+                                                                                       low? low-leg-s
+                                                                                       :else flight-timeout-s)))]
             (ctx/update-mem! c #(if (and low? (< (u/dist from (u/self-pos c)) stall-blocks))
                                   (update % :stalled (fnil inc 0))
                                   (dissoc % :stalled)))

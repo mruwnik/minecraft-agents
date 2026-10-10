@@ -237,17 +237,23 @@
               {:keys [p clock]} s
               world (.-world p)
               t0 @clock
+              searches (atom 0)
+              searches-at-attack (atom nil)
               first-attack (atom nil)]
           (.override world "attack" (fn ^:async f [token a impl]
+                                      (swap! searches-at-attack #(or % @searches))
                                       (swap! first-attack #(or % (+ @clock (* ms-per-call (.-length (.-calls world))))))
                                       (await (impl token a))))
           (with-redefs [near/walk-round! (fn [c _ _ _]
+                                           (swap! searches inc)
                                            (swap! clock + 1000)
+                                           (swap! (fake/state p) update-in [:self :health] - 2)
                                            (js/Promise.resolve {:result {:status :searching :fresh false} :status "searching"
                                                                 :from (:pos c) :to (:pos c)}))]
             (await (run-job! s 'jobs.survival.retreat {})))
           (is (some? @first-attack) "the body hit back")
-          (is (<= (- @first-attack t0) (* 1000 (+ 4 retreat/flight-timeout-s))) "after one leg's search (and the calls to equip and look), not after standing searching"))))))
+          (is (<= @searches-at-attack 1) "a hostile in reach bounds the leg to one search round, so the body does not stand taking hits")
+          (is (<= (- @first-attack t0) (* 1000 (+ 4 (retreat/close-leg-s)))) "after one short leg (and the calls to equip and look), not after standing searching"))))))
 
 (deftest a-chase-that-gains-no-distance-escalates-and-a-gain-resets-it
   (let [step (fn [mem gap] (retreat-flight/note-gap mem gap))]
