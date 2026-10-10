@@ -941,14 +941,13 @@
       (do (ctx/update-mem! c assoc :recuts n) :again))))
 
 (defn ^:async bridge-floor!
-  "Place a carried building block on the air floor under the tunnel's next feet cell (stair/bridge-plans, the feet cell itself
-  left open): true when the floor stands, false with none carried, no plan or no support."
+  "Place a carried building block on the air floor under the tunnel's next feet cell (stair/bridge-plans): true when the floor stands, false with none carried, no plan or no support."
   [c next]
   (let [feet [(:x next) (:y next) (:z next)]
         floor (update feet 1 dec)
         in (stair/rules-in c (stair/feet-of c))
         item (blocks/pick c blocks/building-blocks)
-        plans (remove #(some #{feet} %) (stair/bridge-plans (:block-at in) floor feet))]
+        plans (stair/bridge-plans (:block-at in) floor)]
     (if-not (and item (seq plans))
       false
       (loop [[plan & more] plans]

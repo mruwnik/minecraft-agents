@@ -49,18 +49,18 @@
   (let [named (set cells)]
     (fn [cell] (if (named cell) "stone" "air"))))
 
-(deftest a-floor-is-placed-against-a-neighbour-or-from-the-cell-under-it-or-the-step-above-else-it-has-no-support
-  (let [floor [4 60 0] next [4 61 0]
-        plans #(stair/bridge-plans % floor next)]
+(deftest a-floor-is-placed-against-a-neighbour-or-from-the-cell-under-it-else-it-has-no-support
+  (let [floor [4 60 0]
+        plans #(stair/bridge-plans % floor)]
     (is (= [[floor]] (plans (solid-at [3 60 0]))) "a face beside it")
     (is (= [[[4 59 0] floor]] (plans (solid-at [3 59 0]))) "only the cell under has a face: support first")
-    (is (= [[next floor]] (plans (solid-at [3 61 0]))) "only the step's feet cell has one: placed first, cut again")
+    (is (empty? (plans (solid-at [4 61 0]))) "the underside of the block over it cannot be aimed at")
     (is (empty? (plans (solid-at [9 9 9]))) "a void pocket")))
 
 (deftest an-unseen-neighbour-is-tried-only-after-the-cells-with-a-known-face
-  (let [floor [4 60 0] next [4 61 0]
-        unseen-east (fn [cell] (cond (= cell [5 60 0]) nil (= cell [3 61 0]) "stone" :else "air"))]
-    (is (= [[next floor] [floor]] (stair/bridge-plans unseen-east floor next)))))
+  (let [floor [4 60 0]
+        unseen-east (fn [cell] (cond (= cell [5 60 0]) nil (= cell [4 59 1]) "stone" :else "air"))]
+    (is (= [[[4 59 0] floor] [floor]] (stair/bridge-plans unseen-east floor)))))
 
 (deftest stair-index-finds-the-step-on-the-line-only
   (are [feet dir heading i] (= i (stair/stair-index [0 65 0] feet dir heading 8))
@@ -625,19 +625,19 @@
 
 (def cave-below
   "A cave under the first step down: the next feet cell (1 64 0) is open (already cut), and the floor under it at (1 63 0)
-  has only air round it. The one face to place against is the current floor (0 64 0), beside the next feet cell."
+  has only air round it, but the cell over it (the feet cell) whose underside cannot be aimed at."
   (-> (apply dissoc ground (for [x (range 0 3) y (range 60 64) z (range -1 2)] (str x "," y "," z)))
       (dissoc "1,64,0" "1,65,0")))
 
-(deftest a-floor-in-a-cave-is-bridged-from-the-step-above-it
+(deftest a-cave-floor-with-only-the-block-over-it-to-place-against-stops-no-support
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [inv (conj pick {:name "cobblestone" :count 10})
               {:keys [out p]} (await (stair! {:blocks cave-below :inventory inv} (assoc east :steps 1) (fn [_])))]
-          (is (= :done (:status @out)))
-          (is (= "cobblestone" (block-at p [1 63 0])) "the floor was placed")
-          (is (= "air" (block-at p [1 64 0])) "the step it was placed from is cut again"))))))
+          (is (= :no-support-floor (:reason @out)))
+          (is (= "air" (block-at p [1 63 0])) "nothing was placed")
+          (is (= "air" (block-at p [1 64 0]))))))))
 
 (deftest a-bridge-plan-the-world-answers-no-support-to-gives-way-to-the-next
   (async done
@@ -652,7 +652,7 @@
                                     (if (= 1 (swap! n inc))
                                       #js {:status "no-support"}
                                       (await (impl token a)))))))
-              {:keys [out p]} (await (stair! {:blocks (dissoc ground "1,63,0" "1,64,0" "1,65,0") :inventory inv} (assoc east :steps 1) prep))]
+              {:keys [out p]} (await (stair! {:blocks (dissoc ground "1,63,0" "1,62,0") :inventory inv} (assoc east :steps 1) prep))]
           (is (= :done (:status @out)) (pr-str (dissoc @out :dug)))
           (is (< 1 @n) "a second plan was tried")
           (is (= "cobblestone" (block-at p [1 63 0]))))))))
