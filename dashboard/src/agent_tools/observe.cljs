@@ -120,6 +120,8 @@
   (js-await [status (read! w "/status")]
     (finish! w (array-map :wake :reset :reason reason :status (compact-status status)))))
 
+(def look-ahead-pages 16)
+
 (defn- recovered-later?
   "The batch is one page: look at the following pages for the body coming back."
   [w event page]
@@ -130,6 +132,18 @@
                       (or (empty? evs) (zero? pages) (:gap? p)) false
                       :else (from (:seq (last evs)) (dec pages))))))]
     (from (:seq event) 8)))
+
+(defn- later-beyond
+  "The events after the page, up to look-ahead-pages pages, for the staleness of a backlog event."
+  [w page]
+  (letfn [(from [after pages acc]
+            (js-await [p (read! w (events-query (:stream-id page) after 256))]
+              (let [evs (:events p)
+                    acc (into acc evs)]
+                (if (or (empty? evs) (zero? pages) (:gap? p))
+                  acc
+                  (from (:seq (last evs)) (dec pages) acc)))))]
+    (from (:seq (last (:events page))) look-ahead-pages [])))
 
 (defn- continue-event [{:keys [st deaths summary opts body] :as w} event more later page]
   (when (and (= :attention (:source event)) (= :resolved (:kind event)))
@@ -150,20 +164,29 @@
           dead-jobs (death-jobs @deaths event)
           details (death-details @deaths event later)
           _ (swap! deaths clear-reported event)
-          immediate (when-not (or (and failed? (stale-reconnect? event later))
-                              (and (= :idle (:kind event)) (= :body (:source event)) (stale-idle? event later))
-                              (idle-before-watch? event opts (:started-ms @st))
-                              (repeat-notice? (:noticed @st) event)
-                              (stale-notice? event later))
-                      (some-> (classify event opts body) (with-death-jobs dead-jobs) (with-death-details details)))
+          immediate-in (fn [later]
+                         (when-not (or (and failed? (stale-reconnect? event later))
+                                       (and (= :idle (:kind event)) (= :body (:source event)) (stale-idle? event later))
+                                       (idle-before-watch? event opts (:started-ms @st))
+                                       (repeat-notice? (:noticed @st) event)
+                                       (stale-notice? event later))
+                           (some-> (classify event opts body) (with-death-jobs dead-jobs) (with-death-details details))))
+          immediate (immediate-in later)
           _ (swap! st update :noticed note-notice event)
-          skip! (fn [] (swap! summary collect event dead-jobs (- (js/Date.now) old-event-ms)) (more))]
+          skip! (fn [] (swap! summary collect event dead-jobs (- (js/Date.now) old-event-ms)) (more))
+          wake! (fn [immediate later]
+                  (if (and failed? (empty? later) (< (:seq event) (:latest-seq page)))
+                    (js-await [back? (recovered-later? w event page)]
+                      (if back? (skip!) (finish! w immediate)))
+                    (finish! w immediate)))]
       (cond
         (nil? immediate) (skip!)
-        (and failed? (empty? later) (< (:seq event) (:latest-seq page)))
-        (js-await [back? (recovered-later? w event page)]
-          (if back? (skip!) (finish! w immediate)))
-        :else (finish! w immediate)))))
+        ;; The end of the event's job (or the next job change) may lie past this page.
+        (< (:seq (last (:events page))) (:latest-seq page))
+        (js-await [beyond (later-beyond w page)]
+          (let [later (into (vec later) beyond)]
+            (if-let [immediate (immediate-in later)] (wake! immediate later) (skip!))))
+        :else (wake! immediate later)))))
 
 (defn- process-events [{:keys [st deadline opts] :as w} page events]
   (if (empty? events)

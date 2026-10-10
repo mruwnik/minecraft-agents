@@ -1075,6 +1075,27 @@
 
 (defn plain-job-event-at [kind id seq data] (assoc (plain-job-event kind id data) :seq seq))
 
+(def picked (event :body :picked-up {:item "wheat" :count 1}))
+
+(defn ended-beyond-the-page-wakes
+  "The wake of a wait over a page of one event, for `first-event` followed by filler and the end of j1."
+  [first-event]
+  (with-fixture []
+    (fn [f]
+      (swap! (:world f) assoc :page-limit 1)
+      (-> ((:wait! f))
+          (.then (fn [_]
+                   (push! f (assoc first-event :seq 1) (assoc picked :seq 2) (assoc picked :seq 3)
+                          (plain-job-event-at :cancelled "j1" 4 {}))
+                   ((:wait! f))))
+          (.then (fn [result] (is (= :timeout (:wake result)) (pr-str result))))))))
+
+(deftest a-notice-of-a-job-that-ended-beyond-the-page-does-not-wake
+  (ended-beyond-the-page-wakes (notice "j1" :harvest.declined "refused")))
+
+(deftest an-idle-from-before-a-job-ended-beyond-the-page-does-not-wake
+  (ended-beyond-the-page-wakes (event :body :idle)))
+
 (deftest a-death-names-a-job-queued-before-the-call-and-a-second-death-does-not-repeat-the-first
   (with-fixture []
     (fn [f]
