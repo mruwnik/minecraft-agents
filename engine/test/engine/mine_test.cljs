@@ -1145,11 +1145,12 @@
           (is (= 2 (count (dug-cells s)))))))))
 
 (deftest the-mend-follows-the-zone-owner-and-the-opt-out
-  ;; the owner's body walks out of its own zone first, off the dirt: nothing to dig or mend
+  ;; the owner mends its own zone only when told to ignore zones: otherwise it walks out before it digs
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[owner extra mended-some declined] [["Fake" {} false []] ["FAKE" {} false []]
+        (doseq [[owner extra mended-some declined] [["Fake" {:ignore-zones? true} true []] ["FAKE" {:ignore-zones? true} true []]
+                                                   ["Fake" {} false []]
                                                    ["Miles" {} false [{:reason :refused :zones ["farm"]}]]
                                                    ["Miles" {:ignore-zones? true} true []]]]
           (let [zone {:name "farm" :min [-2 60 -2] :max [2 70 2] :owner owner :allow #{:dig}}
@@ -1586,6 +1587,16 @@
           (is (= :no-stone-found (:reason (done-event s))))
           (is (re-find #"dug down 3 blocks through soil, found no stone" (:text (done-event s))))
           (is (zero? (get (inv s) "cobblestone" 0))))))))
+
+(deftest a-stair-that-meets-an-own-zone-ends-own-zone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (ew/of-data {} {} [{:name "home" :min [8 40 -3] :max [12 70 3] :owner "Fake"}])
+              s (await (zoned {:block "stone" :count 2 :direction "east" :tunnel-length 4 :mend false}
+                              {:blocks (soil-over-stone 63 40) :drops cobble :inventory [{:name "stone_pickaxe" :count 1}]} w 200))]
+          (is (= :own-zone (:reason (done-event s))))
+          (is (every? #(< (first %) 8) (dug-cells s))))))))
 
 (deftest mine-spares-cells-of-the-bodys-own-plan-unless-told-not-to
   (async done

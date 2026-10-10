@@ -985,7 +985,7 @@
       (and level? (stair-torch-due? c)) (await (torch-step! c :stair))
       (and (not level?) (>= n (:descend-limit (:args c)))) (no-stone! c)
       (stair-in-own-zone? c) (do (ctx/update-mem! c assoc-in [:descent :stop] :own-zone)
-                                 (if level? (stair-stopped! c) (no-stone! c)))
+                                 (if level? (stair-stopped! c) (to-mend! c :own-zone)))
       :else
       (let [r (await (ctx/call-child c :stair 'jobs.access.stair
                                      {:dir :down :heading (keyword (:heading (ctx/mem c))) :steps 1 :fetch (if level? (:fetch (:args c)) true)
@@ -996,7 +996,7 @@
           (and (= :done r) (= :done (:status res)))
           (do (ctx/update-mem! c update-in [:descent :steps] (fnil + 0) (or (:steps res) 1)) :again)
           :else (do (ctx/update-mem! c update :descent assoc :stop (or (:reason res) :declined))
-                    (if level? (stair-stopped! c) (no-stone! c))))))))
+                    (if level? (stair-stopped! c) (to-mend! c :own-zone))))))))
 
 (defn ^:async dig-round! [c]
   (let [{:keys [goal failures dry looked]} (ctx/mem c)
