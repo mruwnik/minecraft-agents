@@ -45,6 +45,9 @@
   Underground (shelter/buried?) it first takes the stairs the body cut (ledger/ways-of: the highest stair cell within 14
   blocks, above it and no nearer a chaser), and with none digs a side pocket (as below) before it walks across the open cave,
   unless a creeper or a melee mob is within cover-gap.
+  2b. A lone melee mob (no creeper, enderman, spider, flyer or shooter) between ::cover-gap (5) and ::refuge-gap (10) that a fight would not win, with
+     pillar-height blocks carried: pillar up, else seal in, before any flee step (a walk gains little on it); when neither can be
+     done the flight walks. Each flee step emits debug retreat.step-speed {:blocks :seconds :bps}.
   3. Walks a short step (:step blocks) away from all chasers (nearer ones weigh more) with a go-to child (:escalate false),
      leaning toward the first closed room of 2. (else the :goal, the destination of the walk the flight interrupted; else the latest :bed or :home within :home-range) when not through the
      hostiles (a closed room behind them: turned retreat-walk ::flank-turn degrees toward it, to go round them, while it still gains on them so:
@@ -261,10 +264,16 @@
   "One flee step to target as a go-to child of legs of at most leg-s seconds (a flee never digs or pillars: :escalate false;
   known dangers stay costed): true when the body arrived or got on a leg nearer, false when go-to gave up, waited or was declined."
   [c slot target range leg-s]
-  (let [r (await (ctx/call-child c slot 'jobs.movement.go-to {:pos target :range range :escalate false :at-night :go
+  (let [from (u/self-pos c)
+        t0 (ctx/now c)
+        r (await (ctx/call-child c slot 'jobs.movement.go-to {:pos target :range range :escalate false :at-night :go
                                                               :warn false :leg-s leg-s
                                                               :retry false :look-round false :allow-over-budget true}))
-        res (when (= :done r) (ctx/child-result c slot))]
+        res (when (= :done r) (ctx/child-result c slot))
+        s (/ (- (ctx/now c) t0) 1000)
+        d (u/dist from (u/self-pos c))]
+    (ctx/emit! c :retreat.step-speed :debug {:slot slot :blocks (/ (js/Math.round (* 10 d)) 10) :seconds (/ (js/Math.round (* 10 s)) 10)
+                                             :bps (when (pos? s) (/ (js/Math.round (* 10 (/ d s))) 10))})
     (boolean (or (:arrived res) (:leg res)))))
 
 (defn step! [c slot target range] (leg-step! c slot target range flight-timeout-s))
@@ -424,12 +433,15 @@
   {::lost-memory-ms {:default 30000 :doc "Milliseconds a mob the flight lost (its :threat entry) still counts, at the place it was last known, when choosing where to flee; a creeper counts triple." :spec (a/int-in 0 nil)}
    ::glance-reach {:default 3 :doc "Blocks along a direction to the feet cell a glance looks at." :spec (a/int-in 0 nil)}
    ::glance-memory {:default 24 :doc "Most glanced cells a flight remembers." :spec (a/int-in 0 nil)}
-   ::cover-gap {:default 5 :doc "Blocks within which a melee chaser keeps a low body from taking cover where it stands." :spec (a/num-in 0 nil)}})
+   ::cover-gap {:default 5 :doc "Blocks within which a melee chaser keeps a low body from taking cover where it stands." :spec (a/num-in 0 nil)}
+   ::refuge-gap {:default 10 :doc "Blocks within which a lone melee hostile the body cannot outfight is pillared against (else sealed against) before any flee step, when blocks are carried; 0 never." :spec (a/num-in 0 nil)}})
 (defn glance-reach [] (settings/get settings ::glance-reach))
 
 (defn glance-memory [] (settings/get settings ::glance-memory))
 
 (defn cover-gap [] (settings/get settings ::cover-gap))
+
+(defn refuge-gap [] (settings/get settings ::refuge-gap))
 
 (defn unseen-before-wall?
   "Whether a cell the body has not sensed lies in the columns along d from the first, up to glance-reach or the first
@@ -699,6 +711,27 @@
     (ctx/emit! c :retreat.target :info {:target cell :from from :cover (boolean (and covered? (covered? target)))
                                         :text (str "flee step to " (str/join " " cell) " away from " (str/join ", " from))})))
 
+(defn lone-melee?
+  "Whether hostiles is one melee mob a pillar stops (not a creeper, enderman, spider, flyer or shooter) farther than cover-gap (it would stand in the cells to fill) and within refuge-gap."
+  [p hostiles]
+  (let [h (first hostiles)]
+    (boolean (and h (nil? (second hostiles)) (pos? (refuge-gap))
+                  (not (combat/ranged? h)) (not (combat/creeper? h)) (not (combat/enderman? h))
+                  (not (combat/climber? h)) (not (combat/flyer? h))
+                  (< (cover-gap) (danger-q/mob-distance p h) (inc (refuge-gap)))))))
+
+(defn ^:async early-refuge!
+  "A lone melee hostile close by that a fight would not win, at least a pillar's blocks carried: pillar up, else seal in,
+  before any flee step (a walk gains little on it). Once a flight: nil when it cannot, and then the flight walks."
+  [c]
+  (let [hostiles (near-hostiles c)]
+    (when (and (not (:early-refuge-failed (ctx/mem c))) (lone-melee? (:primitives c) hostiles)
+               (refuge/pillar-item c) (not (fight-wins? c hostiles)))
+      (let [r (or (when-not (flight/tried? c :pillar) (await (refuge/pillar! c)))
+                  (when-not (flight/tried? c :seal) (await (refuge/hide! c))))]
+        (when (nil? r) (ctx/update-mem! c assoc :early-refuge-failed true))
+        r))))
+
 (defn ^:async flight-step!
   "One step of the flight (flight/look!, then shut a door, or run home, or walk a step away, or the cornered options),
   :again; the flight's end (flight/end-flight!) once no chaser is left."
@@ -709,6 +742,7 @@
         threat (first threats)
         hit? (hit-on-the-run! c)
         door (when threat (door-to-shut c (danger-q/mob-pos p threat)))
+        early (when (and threat (not hit?)) (await (early-refuge! c)))
         covered? (cover-fn p threats)
         rooms (when threat (refuges c))
         {:keys [room way inside?]} (when threat (retreat-home/choose p rooms threats (not (exposed-low? c covered?))))
@@ -721,6 +755,7 @@
                         (await (wait-far! c))))))]
     (cond
       (nil? threat) (or (await (flight/look-back! c)) (flight/end-flight! c nil))
+      (some? early) early
       (flight/no-gain? (ctx/mem c) no-gain-steps)
       (do (when (seq (near-hostiles c)) (ctx/update-mem! c assoc :since-gain 0))
           (await (stuck "the chaser keeps up")))

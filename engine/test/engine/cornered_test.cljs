@@ -441,6 +441,35 @@
           (is (= [] (:list (core/state eng))) "done once the zombie has gone")
           (is (empty? (blocked-events seen))))))))
 
+(deftest a-lone-melee-mob-within-ten-with-blocks-carried-is-pillared-against-before-any-flee-step
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (first-round retreat {:self {:health 10} :inventory [{:name "dirt" :count 39}]
+                                                       :entities [(zombie 8 64 0)]}))]
+          (is (= 3 (count (calls p "jumpPlace"))) "a pillar three high")
+          (is (empty? (calls p "steer")) "no flee step first")
+          (is (empty? (calls p "moveTo")) "no flee step first"))))))
+
+(deftest a-flee-step-logs-its-speed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [seen]} (await (first-round retreat {:self {:health 10} :inventory [{:name "dirt" :count 2}]
+                                                          :entities [(zombie 8 64 0)]}))
+              e (first (filter #(= :retreat.step-speed (:kind %)) @seen))]
+          (is (some? e))
+          (is (every? number? [(:blocks e) (:seconds e)])))))))
+
+(deftest a-lone-melee-mob-with-fewer-than-three-blocks-carried-is-fled-from
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (first-round retreat {:self {:health 10} :inventory [{:name "dirt" :count 2}]
+                                                       :entities [(zombie 8 64 0)]}))]
+          (is (empty? (calls p "jumpPlace")))
+          (is (seq (concat (calls p "steer") (calls p "moveTo")))))))))
+
 (deftest a-pillar-that-gives-up-short-abandons-the-refuge-and-fights
   (async done
     (tu/run-async done
