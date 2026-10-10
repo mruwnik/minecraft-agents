@@ -84,18 +84,39 @@
   (cond-> {:name (.-name e) :distance (danger-q/mob-distance p e) :hits (:hits struck 0)}
     (number? (:health struck)) (assoc :health (:health struck))))
 
+(defn note-hits
+  "Pure: the times (ms) of hits taken in the last window-ms (only a flight counts them), given the earlier ones, now and the health before and now."
+  [hits now before after window-ms]
+  (let [hits (filterv #(< (- now %) window-ms) hits)]
+    (cond-> hits (< after before) (conj now))))
+
+(def hit-window-ms "A flight hit twice within this long is failing: the body fights." 5000)
+
+(def faster-mobs "Mobs a walking body cannot get away from." #{"spider" "cave_spider"})
+
+(def sprint-food "A body sprints only above this food." 6)
+
 (defn ^:async respond [c near]
   (let [{:keys [reserve weapons] :as a} (:args c)
         p (:primitives c)
         self (.self p)
-        decision (if (some combat/enderman? near)
+        m (ctx/mem c)
+        hits (note-hits (when (= :flee (:decision m)) (:hits m)) (ctx/now c) (:last-health m (.-health self)) (.-health self) hit-window-ms)
+        _ (ctx/update-mem! c assoc :hits hits :last-health (.-health self))
+        chosen (if (some combat/enderman? near)
                    :flee
                    (cost/decide {:health (.-health self)
+                               :fighting? (= :fight (:decision m))
+                               :single? (= 1 (count near))
+                               :cannot-outrun? (boolean (and (<= (.-food self) sprint-food) (some #(faster-mobs (.-name %)) near)))
                                :creeper? (boolean (some combat/creeper? near))
                                :reserve reserve
                                :damage (cost/fight-damage {:weapon (combat/best-weapon p weapons)
                                                            :equipment (cost/equipment-of (.-equipment self))
-                                                           :mobs (map #(mob-of p (get-in (ctx/mem c) [:children :fight :struck (.-id %)]) %) near)})}))]
+                                                           :mobs (map #(mob-of p (get-in (ctx/mem c) [:children :fight :struck (.-id %)]) %) near)})}))
+        decision (if (and (= :flee chosen) (>= (count hits) 2) (not-any? combat/creeper? near) (not-any? combat/enderman? near))
+                   :fight
+                   chosen)]
     (log-encounter! c (first near) decision)
     (ctx/update-mem! c assoc :decision decision)
     (let [result (await (run-child c decision a))]

@@ -1,7 +1,7 @@
 (ns engine.hostile-test
   "respond-to-hostile, fight-back, retreat and the hostile-near trigger
   against the fake world."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [deftest is are async]]
             [engine.registry :as registry]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -147,6 +147,38 @@
                                                               :legs {:name "iron_leggings" :count 1}}
                                                   :entities [(zombie 7 3 0) (zombie 8 3 1)]})))
             "two are fightable in armour (11 points: 22.5 expected damage becomes 12.6)")))))
+
+(deftest a-fight-begun-against-one-mob-is-not-dropped-for-one-hit
+  (are [world expected] (= expected (cost/decide (merge {:reserve 4 :damage 16} world)))
+    {:health 20} :fight
+    {:health 18} :flee
+    {:health 18 :fighting? true :single? true} :fight
+    {:health 18 :fighting? true :single? false} :flee
+    {:health 10 :fighting? true :single? true} :flee
+    {:health 18 :fighting? true :single? true :creeper? true} :flee))
+
+(deftest a-body-that-cannot-sprint-fights-a-mob-it-cannot-outrun
+  (are [world expected] (= expected (cost/decide (merge {:reserve 4 :damage 16 :health 18} world)))
+    {} :flee
+    {:cannot-outrun? true} :fight
+    {:cannot-outrun? true :creeper? true} :flee
+    {:cannot-outrun? true :health 4} :flee))
+
+(deftest respond-fights-a-spider-with-the-fist-when-food-forbids-sprinting
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (fought? (await (flight-round respond {:self {:health 18 :food 6} :entities [{:id 5 :name "spider" :kind "hostile" :pos {:x 2 :y 64 :z 0}}]})))
+            "no sprint, a spider as fast as the body: fight")
+        (is (fled? (await (flight-round respond {:self {:health 18 :food 20} :entities [{:id 5 :name "spider" :kind "hostile" :pos {:x 2 :y 64 :z 0}}]})))
+            "fed, the body sprints: retreat as before")))))
+
+(deftest hits-taken-while-fleeing-are-counted-in-a-window
+  (are [hits now before after expected] (= expected (respond-to-hostile/note-hits hits now before after 5000))
+    [] 10000 20 18 [10000]
+    [8000] 10000 18 16 [8000 10000]
+    [2000 8000] 10000 16 16 [8000]
+    [] 10000 16 18 []))
 
 (deftest respond-fights-a-hostile-beyond-melee-by-walking-up
   (async done

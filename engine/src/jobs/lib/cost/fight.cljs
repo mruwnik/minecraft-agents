@@ -23,9 +23,18 @@
         ends (rest (reductions + 0 (map #(+ (approach %) (kill-s %)) mobs)))]
     (reduce + 0 (map (fn [m end] (threat/mob-hurt stats (:name m) end)) mobs ends))))
 
+(def hysteresis-health
+  "Above this health a fight already begun against a single mob goes on though one hit made it dearer than reserve."
+  10)
+
 (defn decide
-  "Pure: :flee from any creeper, else :fight when the expected damage leaves at least reserve health, else :flee."
-  [{:keys [health damage creeper? reserve]}]
-  (if (and (not creeper?) (<= damage (- health reserve)))
+  "Pure: :flee from any creeper, else :fight when the expected damage leaves at least reserve health, or when a
+  fight already begun (fighting?) against a single mob (single?) is held above hysteresis-health, or when the body
+  cannot outrun the mob (cannot-outrun?: no sprint against a faster one) and keeps its reserve, else :flee."
+  [{:keys [health damage creeper? reserve fighting? single? cannot-outrun?]}]
+  (if (and (not creeper?)
+           (or (<= damage (- health reserve))
+               (and fighting? single? (> health hysteresis-health))
+               (and cannot-outrun? (> health reserve))))
     :fight
     :flee))
