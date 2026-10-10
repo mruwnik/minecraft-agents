@@ -19,6 +19,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.fetch :as fetch]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.threats :as threats]
             [jobs.lib.walk.watch :as wwatch]
             [jobs.lib.look :as look]
@@ -611,6 +612,19 @@
       (await (look-at-column! c pos)) :again
       :else (do (ctx/update-mem! c assoc :column-near true) :again))))
 
+(def seal-clear-radius 3)
+
+(defn ^:async clear-goal-seal!
+  "A goal proved walled in (:goal-enclosed) with blocks of the body's own ledger within seal-clear-radius of it (a dig-in's
+  seal beside a gate): one jobs.access.cleanup child takes them back. True when it ran, so the walk is planned again."
+  [c pos result]
+  (let [near {:pos {:x (js/Math.floor (:x pos)) :y (js/Math.floor (:y pos)) :z (js/Math.floor (:z pos))} :radius seal-clear-radius}]
+    (when (and (= :goal-enclosed (:reason result)) (not (:seal-cleared (ctx/mem c)))
+               (seq (ledger/near-of (ledger/open-entries (ctx/view c)) near)))
+      (ctx/update-mem! c assoc :seal-cleared true)
+      (await (ctx/call-child c :seal-cleanup 'jobs.access.cleanup {:job :all :near near}))
+      true)))
+
 (defn ^:async walk! [c0 pos range doors]
   (let [c (cond-> c0 (:over-budget (ctx/mem c0)) (assoc :over-budget true))
         from (u/self-pos c)
@@ -714,7 +728,9 @@
                     result (dark-end c result)
                     ended (cond-> (if (esc/escalate? c result) result (sight-end c pos (unloaded-end result unloaded?)))
                             (:waypoint-why (ctx/mem c)) (assoc :waypoint-why (:waypoint-why (ctx/mem c))))]
-                (await (esc/give-up-or-escalate! c pos tries status ended))))))))))))
+                (if (await (clear-goal-seal! c pos ended))
+                  :again
+                  (await (esc/give-up-or-escalate! c pos tries status ended)))))))))))))
 
 (defn start-attempt!
   "Begin a call from the world, with memory as a hint: the counters of an earlier call (cut, or ended :continue) start

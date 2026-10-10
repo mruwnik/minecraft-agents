@@ -6,6 +6,7 @@
             [engine.settings :as settings]
             [jobs.lib.blocks :as lb]
             [jobs.lib.click :as click]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.tidy :as tidy]
             [engine.ctx :as ctx]
             [jobs.lib.access.rules :as rules]
@@ -185,8 +186,12 @@
   (boolean (some-> (u/seen-block (:primitives c) cell) .-fullCube)))
 
 (defn note-placed!
-  "Job memory: cell is a placed cell, and one more of item is spent (:spent {item count}, which the sealed event reports)."
+  "Job memory: cell is a placed cell, and one more of item is spent (:spent {item count}, which the sealed event reports).
+  The block also goes to the scaffold ledger (purpose :shelter) for go-to's goal-enclosed clearing and recover-drops."
   [c cell item]
+  (let [at (if (map? cell) [(:x cell) (:y cell) (:z cell)] (vec cell))]
+    (ledger/remember! c (-> (ledger/intend (ledger/open-entries (ctx/view c)) {:cell at :item item :before "air" :job (:id c) :purpose :shelter})
+                            (ledger/confirm at))))
   (ctx/update-mem! c #(-> % (update :placed (fnil conj #{}) cell) (assoc-in [:placed-items cell] item) (update-in [:spent item] (fnil inc 0)))))
 
 (defn ^:async place-all!

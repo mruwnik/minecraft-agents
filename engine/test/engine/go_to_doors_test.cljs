@@ -9,6 +9,7 @@
             [engine.memory :as mem]
             [engine.test-util :as tu :refer [box floor]]
             [engine.triggers :as triggers]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.world-files :as world]
             [jobs.movement.go-to :as go-to]))
 
@@ -561,3 +562,30 @@
                  :blocks (-> (floor 5 -3 40 3) (assoc "0,64,0" "vine" "0,65,0" "vine"))}
               {:keys [out]} (await (go! w {:pos [1 64 0] :range 2}))]
           (is (= {:arrived false :reason :unreachable} (select-keys @out [:arrived :reason])) (pr-str @out)))))))
+
+(def seal-cells
+  "A 3x3x3 dirt box round the goal (10 64 0) (10 65 0) the body placed: all its cells are in the scaffold ledger."
+  (vec (for [x [9 10 11] y [64 65 66] z [-1 0 1]
+             :when (not (and (= [10 0] [x z]) (#{64 65} y)))]
+         [x y z])))
+
+(deftest a-goal-boxed-in-by-the-bodys-own-placed-blocks-has-them-taken-back-then-arrives
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[label entries arrives?]
+                [["own seal in the ledger" (mapv (fn [cell] {:cell cell :item "dirt" :before "air" :job "j9" :purpose :shelter :state :placed}) seal-cells) true]
+                 ["same blocks, not the body's" [] false]]]
+          (let [world {:self {:pos {:x 0 :y 64 :z 0}} :blocks (merge flat (zipmap (map #(clojure.string/join "," %) seal-cells) (repeat "dirt")))}
+                {:keys [eng clock] :as s} (setup world [])
+                out (atom :not-done)
+                parent {:check (constantly true)
+                        :round (fn ^:async sealed-round [c]
+                                 (let [r (await (ctx/call-child c :kid 'jobs.movement.go-to {:pos [10 64 0] :range 0 :escalate false}))]
+                                   (when (= :done r) (reset! out (ctx/child-result c :kid)))
+                                   r))}
+                eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
+            (ledger/write! (:store eng) entries)
+            (core/submit! eng '(recording-parent) {})
+            (await (tick-out! eng clock 60))
+            (is (= arrives? (boolean (:arrived @out))) (pr-str label @out))))))))

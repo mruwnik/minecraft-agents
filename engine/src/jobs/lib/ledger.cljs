@@ -155,13 +155,13 @@
       (filterv (fn [{[cx cy cz] :cell}] (<= (js/Math.hypot (- cx x) (- cy y) (- cz z)) (:radius near))) l))))
 
 (defn select
-  "The entries of l a cleanup with :job job works on: nil, those whose owner is not live and that are not held; :all,
+  "The entries of l a cleanup with :job job works on: nil, those whose owner is not live and that are not held (a dig-in's :shelter blocks stay: the dig-in's leave takes them back); :all,
   every one; an instance id, those of that instance and its children. near narrows them to a pos and radius (near-of)."
   ([l view job] (select l view job nil))
   ([l view job near]
    (near-of (cond
               (nil? job) (let [held (held-cells view)]
-                           (filterv #(and (not (owner-live? view %)) (not (held (:cell %)))) l))
+                           (filterv #(and (not= :shelter (:purpose %)) (not (owner-live? view %)) (not (held (:cell %)))) l))
               (= :all job) (vec l)
               :else (filterv #(of-instance? job %) l))
             near)))

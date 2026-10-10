@@ -96,10 +96,10 @@
   2)
 
 (defn near-gate?
-  "Whether cell {:x :y :z} lies within gate-take-back-range of a fence gate some plan wants (jobs.lib.pen-gate)."
+  "Whether cell {:x :y :z} lies within gate-take-back-range of a door or fence gate some plan wants (jobs.lib.pen-gate)."
   [c {:keys [x y z]}]
   (boolean (some (fn [[gx gy gz]] (<= (u/dist {:x x :y y :z z} {:x gx :y gy :z gz}) gate-take-back-range))
-                 (keys (pen-gate/gate-index (:world (:engine c)))))))
+                 (keys (pen-gate/opening-index (:world (:engine c)))))))
 
 (def shelter-policy {:cap 10 :ttl sh/ms-per-day})
 

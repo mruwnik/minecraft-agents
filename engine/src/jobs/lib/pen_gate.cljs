@@ -24,16 +24,34 @@
 (defn gate-want? [want]
   (some #(str/ends-with? % "_fence_gate") (want-names want)))
 
-(defn gate-cells
-  "{[x y z] plan-id} of the cells of the plans (answers, see jobs.lib.world-files/answer) that want a fence gate;
+(defn wanting-cells
+  "{[x y z] plan-id} of the cells of the plans (answers, see jobs.lib.world-files/answer) whose want satisfies pred;
   a cell several plans want belongs to the first by id. A broken plan has none."
-  [answers]
+  [pred answers]
   (into {}
         (for [{:keys [id cells broken] :as a} (reverse (sort-by :id (remove nil? answers)))
               :when (not broken)
               {:keys [pos want]} cells
-              :when (gate-want? want)]
+              :when (pred want)]
           [(vec pos) id])))
+
+(defn gate-cells
+  "wanting-cells of the fence gates."
+  [answers]
+  (wanting-cells gate-want? answers))
+
+(defn opening-want? [want]
+  (some #(or (str/ends-with? % "_fence_gate") (str/ends-with? % "_door")) (want-names want)))
+
+(defn opening-cells
+  "wanting-cells of the doors and fence gates."
+  [answers]
+  (wanting-cells opening-want? answers))
+
+(defn opening-index
+  "opening-cells of the world's plans, rebuilt only when a plan or blueprint changed."
+  [kn]
+  (world/derived kn :plan-openings opening-cells))
 
 (defn gate-index
   "gate-cells of the world's plans, rebuilt only when a plan or blueprint changed; nil for a nil world."

@@ -10,6 +10,7 @@
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.memory :as mem]
+            [jobs.lib.ledger :as ledger]
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
@@ -374,7 +375,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [pen {:id "pen" :parts [{:id "gate" :cells [[2 64 0]] :want "oak_fence_gate"}]}
+        (doseq [want ["oak_fence_gate" "oak_door"]]
+        (let [pen {:id "pen" :parts [{:id "gate" :cells [[2 64 0]] :want want}]}
               {:keys [eng p] :as s} (setup {:inventory [{:name "iron_pickaxe" :count 1} {:name "dirt" :count 20}]
                                             :blocks (assoc (ground) "0,66,0" "stone")
                                             :zones [] :plans {"pen" pen}})]
@@ -386,4 +388,22 @@
             (is (every? #(near-gate? (:cell %)) take-back) "and only those")
             (is (< (count take-back) (count (calls p "place")))))
           (await (leave-at-dawn! s))
-          (is (= "air" (block-at p [1 64 0])) "the seal beside the gate is gone"))))))
+          (is (= "air" (block-at p [1 64 0])) (str "the seal beside the " want " is gone"))))))))
+
+(deftest dig-in-writes-its-placed-blocks-to-the-scaffold-ledger-where-a-default-cleanup-leaves-them
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p] :as s} (setup {:inventory [{:name "iron_pickaxe" :count 1} {:name "dirt" :count 20}]
+                                            :blocks (assoc (ground) "0,66,0" "stone") :zones []})]
+          (core/submit! eng '(jobs.survival.dig-in {:enclose true}) {})
+          (await (run-until-empty s 40))
+          (let [view (mem/view (:store eng))
+                l (ledger/open-entries view)
+                n (count (calls p "place"))]
+            (is (seq l))
+            (is (= #{:shelter} (set (map :purpose l))))
+            (is (= n (count l)) "one entry per placed block")
+            (is (not-any? #(air? p (:cell %)) l))
+            (is (empty? (ledger/select l view nil)) "the default cleanup does not dig a shelter")
+            (is (= (count l) (count (ledger/select l view :all))))))))))
