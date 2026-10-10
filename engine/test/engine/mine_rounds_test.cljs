@@ -142,7 +142,7 @@
       (fn ^:async t []
         (let [s (m/start {:world (m/torch-world coal-stick)})]
           (.override (.-world (:p s)) "craft" (fn [_ _ _] (js/Promise.resolve #js {:status "failed" :reason "no-recipe"})))
-          (core/submit! (:eng s) (m/spec torch-tunnel) {})
+          (core/submit! (:eng s) (m/spec (assoc torch-tunnel :fetch false)) {})
           (await (m/run-ticks s 60))
           (is (m/finished? s))
           (is (= :tunnel-length (:reason (m/done-event s))))
