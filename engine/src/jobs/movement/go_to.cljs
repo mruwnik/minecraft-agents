@@ -735,7 +735,7 @@
           :else
           (let [handled (when (health/refused? c result) (await (health/heal-or-drop! c pos range)))]
            (or (#{:continue :again} handled)
-          (let [result (cond-> result (:needs-health handled) (-> (assoc :reason :needs-health) (merge (select-keys handled [:hp-cost :hp-budget]))))
+          (let [result (cond-> result (:needs-health handled) (-> (assoc :reason :needs-health) (merge (select-keys handled [:heal :health :hp-cost :hp-budget]))))
                 _ (note-fault! c walked)
                 progress? (or (< left (dec best)) explored? nearer?)
                 tries (if progress? 0 (inc (:blocked (ctx/mem c) 0)))]
