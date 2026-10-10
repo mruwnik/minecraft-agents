@@ -260,14 +260,21 @@
                 dug (when dig? (await (dig-to! c item)))
                 walk (if (= :dug dug) (await (walk-down! c item)) walk)
                 why (if (= :dug dug) nil why)]
-            (if (or moving? (= :continue walk) (= :continue dug))
-              :continue
-              (do (cond
-                    why (leave! c item why)
-                    (= :unreachable walk) (leave! c item :unreachable)
-                    (not= :unreachable walk)
-                    (let [r (await (ctx/act c :collect (clj->js (cond-> {:id (.-id item)} hole? (assoc :maxDropDown 1)))))]
-                      (ctx/update-mem! c #(-> % (update :collected (fnil + 0) (gained-count r))
-                                              (update :wanted (fnil + 0) (gained-count r (some-> (:want-items (:args c)) set)))))))
-                  (ctx/update-mem! c update :skipped (fnil conj []) (.-id item))
-                  (recur))))))))))
+            (let [collect! (fn [] (ctx/act c :collect (clj->js (cond-> {:id (.-id item)} hole? (assoc :maxDropDown 1)))))
+                  r (when-not (or moving? (= :continue walk) (= :continue dug) why (= :unreachable walk)) (await (collect!)))
+                  stuck? (and r (= "unreachable" (.-status r)))
+                  dug2 (when (and stuck? (:dig (:args c))) (await (dig-to! c item)))
+                  r2 (when (= :dug dug2) (await (collect!)))
+                  r2-stuck? (and r2 (= "unreachable" (.-status r2)))]
+              (if (or moving? (= :continue walk) (= :continue dug) (= :continue dug2))
+                :continue
+                (do (cond
+                      why (leave! c item why)
+                      (= :unreachable walk) (leave! c item :unreachable)
+                      (and stuck? (not= :dug dug2)) (leave! c item :unreachable)
+                      r2-stuck? (leave! c item :unreachable))
+                    (ctx/update-mem! c (fn [m] (reduce (fn [m r] (-> m (update :collected (fnil + 0) (gained-count r))
+                                                                    (update :wanted (fnil + 0) (gained-count r (some-> (:want-items (:args c)) set)))))
+                                                       m (remove nil? [r r2]))))
+                    (ctx/update-mem! c update :skipped (fnil conj []) (.-id item))
+                    (recur)))))))))))

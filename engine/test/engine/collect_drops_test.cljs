@@ -210,3 +210,38 @@
             (is (pos? (:collected result)) "the dug stone came in with it")
             (is (= 1 (bd/carried p "dirt")))
             (is (empty? (:left result)))))))))
+
+(defn collect-unreachable-first!
+  "Make the first n collect calls answer unreachable without moving; later ones run for real."
+  [p n]
+  (let [left (atom n)]
+    (.override (.-world p) "collect"
+               (fn [token args impl]
+                 (if (pos? @left)
+                   (do (swap! left dec) #js {:status "unreachable" :reason "no-path" :gained #js []})
+                   (impl token args))))))
+
+(deftest a-hole-drop-the-collect-action-calls-unreachable-is-left-unreachable
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (bd/setup {:self body :blocks {"0,62,0" "stone"}})]
+          (drop! p [0 63 0] "dirt")
+          (collect-unreachable-first! p 5)
+          (let [result (await (bd/child-outcome eng job {:radius 6 :holes [[0 63 0]]} 20))]
+            (is (= 0 (:collected result)))
+            (is (= [:unreachable] (mapv :reason (:left result))))
+            (is (= [:unreachable] (mapv :reason (bd/left-drops seen))))))))))
+
+(deftest a-hole-drop-the-collect-action-calls-unreachable-is-dug-to-and-collected-again-with-dig-true
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (bd/setup {:self body :blocks {"0,62,0" "stone"}})]
+          (drop! p [0 63 0] "dirt")
+          (collect-unreachable-first! p 1)
+          (let [result (await (bd/child-outcome eng job {:radius 6 :holes [[0 63 0]] :dig true} 20))]
+            (is (= 1 (:collected result)))
+            (is (= 1 (bd/carried p "dirt")))
+            (is (empty? (:left result)))
+            (is (empty? (bd/left-drops seen)))))))))

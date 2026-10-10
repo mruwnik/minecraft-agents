@@ -353,11 +353,11 @@
     (tu/run-async done
       (fn ^:async t []
         (let [item (fn [id x name] {:id id :name "item" :kind "item" :pos {:x x :y 64 :z 0} :item {:name name :count 1}})]
-          (is (= {:collected 2}
+          (is (= {:collected 2 :left [{:pos {:x 2 :y 64 :z 0} :reason :unreachable}]}
                  (await (child-outcome (:eng (setup {:entities [(item 1 2 "stick") (item 2 3 "dirt") (item 3 4 "dirt")]
                                                      :unreachable ["2,64,0"]}))
                                        'jobs.forestry.collect-drops {:radius 10} 8)))
-              "the unreachable stick is not counted")
+              "the unreachable stick is not counted but booked left")
           (is (= {:collected 0}
                  (await (child-outcome (:eng (setup {})) 'jobs.forestry.collect-drops {:radius 10} 3)))))))))
 
