@@ -67,7 +67,7 @@
     (is (#{:cooldown :retry :stop} (:persistence t)) (str id))))
 
 (deftest trigger-lines-keep-their-defaults
-  (is (= {:name :scaffold-left :job '(jobs.access.cleanup) :args {:within 32} :persistence :stop :level :comfort}
+  (is (= {:name :scaffold-left :job '(jobs.access.cleanup {:within 32}) :args {:within 32} :persistence :stop :level :comfort}
          (dissoc (:scaffold-left triggers/all) :when))
       "a line without :cooldown-s has none"))
 

@@ -173,7 +173,8 @@
     (is (true? (fires? p (trigger-store [(entry [20 64 0])] []) [] args)) "near")
     (is (false? (fires? p (trigger-store [(entry [50 64 0])] []) [] args)) "far: nothing for the reflex")
     (is (true? (fires? p (trigger-store [(entry [50 64 0])] []) [])) "no radius given: any distance")
-    (is (= args (:args (:scaffold-left triggers/all))))))
+    (is (= args (:args (:scaffold-left triggers/all))))
+    (is (= [args] (rest (:job (:scaffold-left triggers/all)))) "the job the reflex starts gets the radius too")))
 
 (deftest cleanup-within-narrows-to-the-body-and-near-wins
   (let [c {:primitives (tu/fake {:blocks {"0,64,0" "dirt"}})}]
@@ -183,7 +184,7 @@
 
 (deftest the-trigger-is-a-builtin
   (is (= scaffold-left/scaffold-left (:when (:scaffold-left triggers/all))))
-  (is (= '(jobs.access.cleanup) (:job (:scaffold-left triggers/all)))))
+  (is (= '(jobs.access.cleanup {:within 32}) (:job (:scaffold-left triggers/all)))))
 
 ;; ------------------------------------------------------------------ against the fake world
 
