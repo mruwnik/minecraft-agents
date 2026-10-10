@@ -47,3 +47,9 @@
     (is (false? (:ok prepared)))
     (is (re-find #"exceeds 100000" (str/join " " (:errors prepared))))
     (is (empty? (:cells prepared)))))
+
+(deftest a-stair-part-is-estimated-by-its-steps
+  (let [prepared (prepare "{:id \"deep\" :parts [{:id \"s\" :stair {:from [0 50000 0] :heading :east :to-y 5000} :want :clear}]}" "deep" [] [])]
+    (is (false? (:ok prepared)))
+    (is (re-find #"exceeds 100000" (str/join " " (:errors prepared))))
+    (is (empty? (:cells prepared)))))

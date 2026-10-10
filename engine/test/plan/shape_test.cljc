@@ -70,6 +70,12 @@
     {:id "x" :box [[0 0 0] [1 0 1]] :want "stone" :harvest true} ":harvest"
     {:id "x" :box [[0 0 0] [1 0 1]] :want "stone" :yield 3} ":yield"
     {:id "x" :box [[0 0 0] [500 0 500]] :want "stone"} "too large"
+    {:id "x" :stair {:from [0 64 0] :heading :east :to-y 60} :cells [[0 0 0]] :want :clear} "one of :box"
+    {:id "x" :stair {:from [0 64 0] :heading :up :to-y 60} :want :clear} ":heading"
+    {:id "x" :stair {:from [0 64 0] :heading :east :to-y 64} :want :clear} "below"
+    {:id "x" :stair {:from [0 64.5 0] :heading :east :to-y 60} :want :clear} ":from"
+    {:id "x" :stair {:from [0 64 0] :heading :east :to-y 60 :dir :up} :want :clear} ":dir"
+    {:id "x" :stair {:from [0 70000 0] :heading :east :to-y 0} :want :clear} "too large"
     {:id "x" :blueprint "hut"} ":at"
     {:id "x" :blueprint "hut" :at [0 64 0] :turn 45} ":turn"
     {:id "x" :blueprint "hut" :at [0 64 0] :want "stone"} ":want"
@@ -105,6 +111,11 @@
 
 (deftest an-outline-one-block-wide-is-all-its-cells
   (is (= 4 (count (cells-of {:outline [[0 64 0] [0 64 3]]})))))
+
+(deftest a-stair-is-three-cells-a-step-and-the-from-column-is-not-cut
+  (is (= #{[1 63 0] [1 64 0] [1 65 0] [2 62 0] [2 63 0] [2 64 0]}
+         (cells-of {:stair {:from [0 64 0] :heading :east :to-y 62}})))
+  (is (= 30 (count (shape/part-cells {:stair {:from [0 64 0] :heading :north :to-y 54}})))))
 
 (deftest cells-are-listed-once
   (is (= [[0 64 0] [1 64 0]] (shape/part-cells {:cells [[0 64 0] [1 64 0] [0 64 0]]}))))

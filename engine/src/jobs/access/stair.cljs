@@ -4,6 +4,7 @@
             [jobs.lib.game-facts :as facts]
             [engine.args :as a]
             [clojure.string :as str]
+            [plan.shape :as shape]
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
@@ -103,8 +104,8 @@
    :on-lava {:doc "exposed lava: :seal (fill it with a building block, then go on) or :stop" :spec #{:seal :stop} :default :seal}
    :by-hand {:doc "dig a block no carried tool clears bare-handed (slow, the drop is lost) instead of waiting :no-tool" :spec boolean? :default false}})
 
-(def headings {:north [0 -1] :south [0 1] :east [1 0] :west [-1 0]})
-(def rises {:down -1 :up 1})
+(def headings shape/headings)
+(def rises shape/rises)
 (a/defargs settings
   {::max-cell-digs {:default 3 :doc "Digs of one cell before the stair stops :refills." :spec (a/int-in 0 nil)}
    ::max-steps {:default 400 :doc "Digs, steps, bridges and fetch rounds of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}
@@ -113,22 +114,9 @@
 (defn max-steps [] (settings/get settings ::max-steps))
 (def unbreakable #{"bedrock" "barrier" "end_portal_frame" "end_portal" "nether_portal" "command_block" "structure_block" "jigsaw"})
 
-(defn add [[x y z] [dx dy dz]] [(+ x dx) (+ y dy) (+ z dz)])
-
-(defn delta
-  "One step's move [dx dy dz]."
-  [dir heading]
-  (let [[dx dz] (headings heading)] [dx (rises dir) dz]))
-
-(defn step-cells
-  "The cells of the step from feet: {:next feet cell after the step, :cut cells to clear top first, :floor, :under}."
-  [feet dir heading]
-  (let [d (delta dir heading)
-        n (add feet d)
-        cut (if (= :down dir)
-              [(add n [0 2 0]) (add n [0 1 0]) n]
-              [(add feet [0 2 0]) (add n [0 1 0]) n])]
-    {:next n :cut cut :floor (add n [0 -1 0]) :under (add n [0 -2 0])}))
+(def add shape/add)
+(def delta shape/delta)
+(def step-cells shape/step-cells)
 
 (defn stair-index
   "i when feet is the stair's cell after i steps from origin, 0 <= i <= steps; else nil."

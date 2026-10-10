@@ -35,6 +35,14 @@
     :up :south [0 66 1] [[0 67 0] [0 67 1] [0 66 1]]
     :up :north [0 66 -1] [[0 67 0] [0 67 -1] [0 66 -1]]))
 
+(deftest a-plan-stair-part-has-the-cells-the-stair-job-cuts
+  (doseq [heading [:north :east :south :west]]
+    (let [from [3 70 -2]
+          feet (take 12 (iterate #(:next (stair/step-cells % :down heading)) from))
+          dug (into #{} (mapcat #(:cut (stair/step-cells % :down heading))) feet)]
+      (is (= dug (set (shape/part-cells {:stair {:from from :heading heading :to-y 58}}))) (name heading))
+      (is (not-any? (set (shape/part-cells {:stair {:from from :heading heading :to-y 58}})) [from (update from 1 inc)])))))
+
 (deftest stair-index-finds-the-step-on-the-line-only
   (are [feet dir heading i] (= i (stair/stair-index [0 65 0] feet dir heading 8))
     [0 65 0] :down :east 0

@@ -2,7 +2,7 @@
   "Plans and blueprints (docs/design.md, \"Plans and blueprints\"): the ONE namespace that knows what they are. Plain data
   in, plain data out, no IO and no host interop (.cljc, so the dashboard and the engine's jobs share it):
     1. checking     plan-errors, blueprint-errors, want-error
-    2. where        part-cells (:box, :outline, :cells)
+    2. where        part-cells (:box, :outline, :cells, :stair)
     3. blueprints   place, turn-want, front-after
     4. expansion    expand: a plan and its blueprints -> cells [{:pos :want :part}], spots, part summaries, errors
     5. plan minus world  judge, plan-minus-world, assignment-answers
@@ -44,8 +44,9 @@
     (and (nil? (:dim plan)) (not (str/blank? dim)))
     (assoc :dim (if (str/includes? dim ":") dim (str "minecraft:" dim)))))
 
-(def where-keys [:box :outline :cells])
-(def area-part-keys #{:id :box :outline :cells :want :note})
+(def where-keys [:box :outline :cells :stair])
+(def area-part-keys #{:id :box :outline :cells :stair :want :note})
+(def stair-keys #{:from :heading :to-y})
 (def blueprint-part-keys #{:id :blueprint :at :turn :note})
 (def blueprint-keys #{:id :front :key :layers :spots :note})
 
@@ -88,11 +89,54 @@
   (when-let [k (first (remove allowed (keys part)))]
     (str "unknown key " k)))
 
+(def headings {:north [0 -1] :south [0 1] :east [1 0] :west [-1 0]})
+(def rises {:down -1 :up 1})
+
+(defn add [[x y z] [dx dy dz]] [(+ x dx) (+ y dy) (+ z dz)])
+
+(defn delta
+  "One stair step's move [dx dy dz]."
+  [dir heading]
+  (let [[dx dz] (headings heading)] [dx (rises dir) dz]))
+
+(defn step-cells
+  "The cells of the stair step from feet: {:next feet cell after the step, :cut cells to clear top first, :floor, :under}."
+  [feet dir heading]
+  (let [d (delta dir heading)
+        n (add feet d)
+        cut (if (= :down dir)
+              [(add n [0 2 0]) (add n [0 1 0]) n]
+              [(add feet [0 2 0]) (add n [0 1 0]) n])]
+    {:next n :cut cut :floor (add n [0 -1 0]) :under (add n [0 -2 0])}))
+
+(defn stair-steps
+  "Steps of a {:from :to-y} stair going down: the drop from the top step's feet cell."
+  [{[_ y _] :from to-y :to-y}]
+  (- y to-y))
+
+(defn stair-cells
+  "The cells a {:from [x y z] :heading h :to-y y} stair digs going down from the feet cell :from (the :from column itself
+  is not cut), each once: the union of the :cut of every step, as jobs.access.stair digs them."
+  [{:keys [from heading] :as stair}]
+  (vec (distinct (mapcat #(:cut (step-cells % :down heading))
+                         (take (stair-steps stair) (iterate (fn [feet] (add feet (delta :down heading))) from))))))
+
+(defn stair-error [stair]
+  (cond
+    (not (map? stair)) ":stair needs {:from [x y z] :heading :east :to-y y}"
+    (not (coords? (:from stair))) ":stair :from needs [x y z] integers"
+    (not (contains? headings (:heading stair))) ":stair :heading must be :north :east :south or :west"
+    (not (integer? (:to-y stair))) ":stair :to-y needs an integer"
+    (not (< (:to-y stair) (second (:from stair)))) ":stair :to-y must be below the :from y"
+    (> (* 3 (stair-steps stair)) max-cells) (str ":stair too large (" (* 3 (stair-steps stair)) " cells, at most " max-cells ")")
+    :else (unknown-key-error stair stair-keys)))
+
 (defn area-part-error [part]
   (let [wheres (filter #(contains? part %) where-keys)
         where (first wheres)]
     (cond
-      (not= 1 (count wheres)) "a part needs exactly one of :box :outline :cells (or :blueprint)"
+      (not= 1 (count wheres)) "a part needs exactly one of :box :outline :cells :stair (or :blueprint)"
+      (and (= :stair where) (stair-error (:stair part))) (stair-error (:stair part))
       (and (#{:box :outline} where) (not (corners? (where part)))) (str where " needs two corners [[x y z] [x y z]]")
       (and (#{:box :outline} where) (> (box-size (where part)) max-cells))
       (str where " too large (" (box-size (where part)) " cells, at most " max-cells ")")
@@ -196,9 +240,10 @@
 (defn span [a b] (range (min a b) (inc (max a b))))
 
 (defn part-cells
-  "The cells a :box, :outline or :cells part names, each once. An outline is the plan-view ring of its box at every y."
-  [{:keys [box outline cells]}]
+  "The cells a :box, :outline, :cells or :stair part names, each once. An outline is the plan-view ring of its box at every y."
+  [{:keys [box outline cells stair]}]
   (cond
+    stair (stair-cells stair)
     cells (vec (distinct cells))
     :else (let [[[x1 y1 z1] [x2 y2 z2]] (or box outline)
                 ring? (fn [x z] (or (= x (min x1 x2)) (= x (max x1 x2)) (= z (min z1 z2)) (= z (max z1 z2))))]
