@@ -341,7 +341,8 @@
   [0 90 -90])
 
 (a/defargs settings
-  {::glance-reach {:default 3 :doc "Blocks along a direction to the feet cell a glance looks at." :spec (a/int-in 0 nil)}
+  {::lost-memory-ms {:default 30000 :doc "Milliseconds a mob the flight lost (its :threat entry) still counts, at the place it was last known, when choosing where to flee; a creeper counts triple." :spec (a/int-in 0 nil)}
+   ::glance-reach {:default 3 :doc "Blocks along a direction to the feet cell a glance looks at." :spec (a/int-in 0 nil)}
    ::glance-memory {:default 24 :doc "Most glanced cells a flight remembers." :spec (a/int-in 0 nil)}
    ::cover-gap {:default 5 :doc "Blocks within which a melee chaser keeps a low body from taking cover where it stands." :spec (a/num-in 0 nil)}})
 (defn glance-reach [] (settings/get settings ::glance-reach))
@@ -401,6 +402,19 @@
   [c]
   (or (:swim-factor (:args c)) (cost/swim-factor (.-equipment (.self (:primitives c))))))
 
+(defn lost-memory-ms [] (settings/get settings ::lost-memory-ms))
+
+(defn lost-spots
+  "The places of the mobs a flight lost within lost-memory-ms (:threat entries, other than the chasers now on), as walk
+  positions: a creeper three times, so the way away leans from it."
+  [c chasing]
+  (let [ids (set (map #(.-id %) chasing))]
+    (->> (ctx/since c :threat (- (ctx/now c) (lost-memory-ms)))
+         (map :data)
+         (remove #(contains? ids (:id %)))
+         (mapcat (fn [d] (when-let [pos (or (:pos d) (danger-q/rough-pos d))]
+                           (repeat (if (= "creeper" (:mob d)) 3 1) pos)))))))
+
 (defn ^:async flight-target!
   "The walk target away from threats (walk/choose-target over what the body sees, after glance-away!; cover from the
   ranged ones first, a swim slow), leaning toward the first of rooms (refuges), nil when none. covered? as cover-fn
@@ -409,7 +423,7 @@
   ([c threats covered? rooms]
    (let [p (:primitives c)
          from (u/self-pos c)
-         threat-pos (mapv #(danger-q/mob-pos p %) threats)
+         threat-pos (into (mapv #(danger-q/mob-pos p %) threats) (lost-spots c threats))
          refuge (:start (first rooms))
          home (or refuge (home-pos c))
          flank? (and (some? refuge) (cost/outruns-at? (retreat-home/food p) (walk/flank-turn)))]

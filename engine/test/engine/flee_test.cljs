@@ -151,6 +151,20 @@
           (is (vector? (:target e)))
           (is (= ["zombie 7"] (:from e)) "the chasers the step runs from"))))))
 
+(deftest a-flight-keeps-clear-of-a-creeper-it-lost-seconds-ago
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup {:entities [(zombie 7 -5 {:chase {:speed 0.7}})]})
+              _ (mem/write! (:store (:eng s)) :threat {:mob "creeper" :id 9 :uuid "u9" :key "u9" :pos {:x 8 :y 64 :z 0} :ended :lost}
+                            threats/threat-policy)
+              _ (swap! (:clock s) + 10000)
+              {:keys [seen]} (await (run-job! s 'jobs.survival.retreat {}))
+              target (:target (first (filterv #(= :retreat.target (:kind %)) @seen)))]
+          (is (some? target))
+          (is (> (js/Math.abs (- (nth target 2) 0)) 3) "sideways: not east towards the creeper")
+          (is (< (first target) 4) "and not towards it"))))))
+
 (deftest retreat-eats-one-bite-per-flee-step
   (async done
     (tu/run-async done
