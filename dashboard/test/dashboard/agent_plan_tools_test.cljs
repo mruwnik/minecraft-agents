@@ -53,3 +53,16 @@
     (is (false? (:ok prepared)))
     (is (re-find #"exceeds 100000" (str/join " " (:errors prepared))))
     (is (empty? (:cells prepared)))))
+
+(deftest score-lists-the-wrong-cells-with-wanted-and-found
+  (let [prepared (prepare plan-text "score" [] [])
+        blocks {[0 64 0] {:name "stone"} [1 64 0] {:name "dirt"} [2 64 0] {:name "air"}}
+        score (tools/score-native (:expansion prepared) blocks (constantly nil) {} false 0 10)]
+    (is (= [{:pos [1 64 0] :part "base" :want "stone" :found "dirt"}] (:wrong-cells score)))))
+
+(deftest score-caps-the-wrong-cell-list-and-says-so
+  (let [text (str "{:id \"many\" :parts [{:id \"base\" :cells [" (cells-text 14) "] :want \"stone\"}]}")
+        prepared (prepare text "many" [] [])
+        score (tools/score-native (:expansion prepared) (constantly {:name "dirt"}) (constantly nil) {} false 0 10)]
+    (is (= 10 (count (:wrong-cells score))))
+    (is (= 14 (:wrong-total score)))))
