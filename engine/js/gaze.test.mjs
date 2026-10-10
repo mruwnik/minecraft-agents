@@ -1,8 +1,9 @@
 // Why JavaScript: node tests of gaze.mjs, the JS adapter's look guard.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { EventEmitter } from 'node:events'
 import vec3 from 'vec3'
-import { stares, avoidEnderStare } from './gaze.mjs'
+import { stares, avoidEnderStare, safePitch } from './gaze.mjs'
 
 const { Vec3 } = vec3
 const enderman = (x, y, z) => ({ name: 'enderman', position: new Vec3(x, y, z) })
@@ -10,12 +11,12 @@ const enderman = (x, y, z) => ({ name: 'enderman', position: new Vec3(x, y, z) }
 // a body at the origin (eyes 1.62 up) looking along -z (yaw 0), an enderman 10 blocks ahead
 const fakeBot = (entities, blocks = {}) => {
   const looks = []
-  const bot = {
+  const bot = Object.assign(new EventEmitter(), {
     entity: { position: new Vec3(0, 64, 0), height: 1.62 },
     entities,
     blockAt: v => blocks[`${v.x},${v.y},${v.z}`] ?? null,
     look: async (yaw, pitch, force) => { looks.push({ yaw, pitch, force }) }
-  }
+  })
   return { bot, looks }
 }
 
@@ -46,4 +47,27 @@ test('a look is left alone with no enderman, one out of sight, or one not in the
     await bot.look(0, Math.atan2(0.93, 10), true)
     assert.equal(looks[0].pitch, Math.atan2(0.93, 10))
   }
+})
+
+test('the eye is at the entity\'s eyeHeight, not its box height', () => {
+  const { bot } = fakeBot({ 1: enderman(0, 64, -10) })
+  bot.entity.height = 1.8
+  bot.entity.eyeHeight = 1.62
+  const eye = new Vec3(0, 65.62, 0)
+  const pitch = Math.atan2(0.93, 10)
+  assert.equal(stares(eye, 0, pitch, new Vec3(0, 66.55, -10)), true)
+  assert.notEqual(safePitch(bot, 0, pitch), pitch)
+})
+
+test('an enderman that comes into view while the head is still is looked away from on the next tick', async () => {
+  const { bot, looks } = fakeBot({})
+  bot.entity.yaw = 0
+  bot.entity.pitch = Math.atan2(0.93, 10)
+  avoidEnderStare(bot)
+  bot.emit('physicsTick')
+  assert.equal(looks.length, 0, 'no enderman, no correction')
+  bot.entities[1] = enderman(0, 64, -10)
+  bot.emit('physicsTick')
+  assert.equal(looks.length, 1)
+  assert.equal(stares(new Vec3(0, 65.62, 0), 0, looks[0].pitch, new Vec3(0, 66.55, -10)), false)
 })

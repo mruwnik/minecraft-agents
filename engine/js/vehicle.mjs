@@ -10,6 +10,7 @@
 import vec3 from 'vec3'
 import { emptyHand } from './unequip.mjs'
 import { setting } from './settings.mjs'
+import { safePitch } from './gaze.mjs'
 
 
 const BOAT = /_(boat|raft)$/
@@ -132,6 +133,7 @@ export async function mountVehicle (bot, ctx, a, { timeScale = 1, reach = settin
 // Minecraft degrees (0 south, 90 west; pitch down positive) as a raw look: mounted Mineflayer sends none, and the
 // server picks the exit from the look it holds. The local rotation follows, in Mineflayer's radians.
 const writeLook = (bot, yaw, pitch) => {
+  pitch = -safePitch(bot, Math.PI - yaw * Math.PI / 180, -pitch * Math.PI / 180) * 180 / Math.PI
   bot._client.write('look', { yaw, pitch, onGround: false, flags: { onGround: false, hasHorizontalCollision: false } })
   bot.entity.yaw = Math.PI - yaw * Math.PI / 180
   bot.entity.pitch = -pitch * Math.PI / 180

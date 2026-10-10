@@ -27,6 +27,7 @@ const DYE_COLORS = ['white', 'orange', 'magenta', 'light_blue', 'yellow', 'lime'
 export const mobFields = (bot, e) => ({
   ...(typeof e.uuid === 'string' && { uuid: e.uuid }),
   ...(hasMetaKey(bot, e, 'baby') && { baby: e.metadata?.[metaIndex(bot, e, 'baby', -1)] === true }),
+  ...(e.name === 'enderman' && { angry: e.metadata?.[metaIndex(bot, e, 'creepy', 17)] === true }),
   ...(e.name === 'creeper' && { fusing: e.metadata?.[metaIndex(bot, e, 'swell_dir', 16)] === 1 }),
   ...(e.name === 'sheep' && { color: DYE_COLORS[sheepDye(bot, e)] }),
   ...(e.name === 'sheep' && { sheared: ((e.metadata?.[metaIndex(bot, e, 'wool', WOOL_FALLBACK)] ?? 0) & WOOL_SHEARED) !== 0 })

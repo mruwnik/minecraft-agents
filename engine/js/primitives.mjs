@@ -40,7 +40,6 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   trackLeashes(bot)
   trackLiveEntities(bot)
   trackVehicles(bot)
-  avoidEnderStare(bot)
   view?.attach(bot)
   let closed = false
   let owner = null
@@ -202,6 +201,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   const bindEvents = target => {
     if (target.physics) target.physics.playerHalfWidth = BODY_HALF_WIDTH
     wrapBlockAt(target) // physics collides with bamboo/dripstone where the server has them, not at minecraft-data's fixed box
+    const unguard = avoidEnderStare(target)
     lastTick = Date.now()
     stalled = false
     settleFromNow()
@@ -317,6 +317,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     Object.entries(handlers).forEach(([name, fn]) => target.on(name, fn))
     if (entityDeathListeners.size) removalEvents.forEach(([n, f]) => target.on(n, f))
     return () => {
+      unguard()
       target._client?.removeListener('damage_event', onDamage)
       Object.entries(handlers).forEach(([name, fn]) => target.removeListener(name, fn))
       removalEvents.forEach(([n, f]) => target.removeListener(n, f))
@@ -413,7 +414,6 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     trackLeashes(bot)
     trackLiveEntities(bot)
     trackVehicles(bot)
-    avoidEnderStare(bot)
     unbind = bindEvents(bot)
     view?.attach(bot)
     down = false

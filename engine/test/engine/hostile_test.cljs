@@ -945,3 +945,11 @@
       (fn ^:async t []
         (let [{:keys [seen]} (await (flight-round respond {:inventory sword :entities [{:id 100 :name "enderman" :kind "hostile" :pos {:x 5 :y 64 :z 0}}]}))]
           (is (= [:flee] (mapv :decision (decided seen)))))))))
+
+(deftest a-calm-enderman-is-no-danger-an-angry-one-is
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[angry want] [[false []] [true [:flee]]]]
+          (let [{:keys [seen]} (await (flight-round respond {:entities [{:id 100 :name "enderman" :kind "hostile" :angry angry :pos {:x 5 :y 64 :z 0}}]}))]
+            (is (= want (mapv :decision (decided seen))) (str "angry " angry))))))))

@@ -56,6 +56,8 @@ test('mobFields', async t => {
     ['zombie has no baby key', 'zombie', {}, {}],
     ['fusing creeper', 'creeper', { metadata: { 16: 1 } }, { fusing: true }],
     ['idle creeper', 'creeper', { metadata: { 16: -1 } }, { fusing: false }],
+    ['angry enderman', 'enderman', { metadata: { 17: true } }, { angry: true }],
+    ['calm enderman', 'enderman', { metadata: { 17: false } }, { angry: false }],
     ['uuid passes through', 'zombie', { uuid: 'abc-123' }, { uuid: 'abc-123' }]
   ]
   for (const [label, name, extra, expected] of rows) {

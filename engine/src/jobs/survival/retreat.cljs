@@ -53,7 +53,7 @@
   Not while a creeper chases it or a melee mob is within cover-gap: it walks (or backs off, cornered) first.
   4. Cornered (no open direction worth a walk, or the walk is blocked; checked afresh every step) with no hostile within
      :radius: holds a second (wait, why cornered) and looks again; after :no-gain-steps such steps or holds with no gain the flight ends :keeps-off. With one within :radius: takes the safest option it has not yet failed.
-     - an angry enderman near (one that hurt the body this flight or is within 3 blocks; it teleports; a walk is no flight): at once, before any walk: water within 6 blocks (it keeps away from water; the body steps in and holds), else seal, pit, pocket, last of all fight.
+     - an angry enderman near (one the client flags angry, that hurt the body this flight or is within 3 blocks; it teleports; a walk is no flight): at once, before any walk: water within 6 blocks (it keeps away from water; the body steps in and holds), else seal, pit, pocket, last of all fight.
      - fight (jobs.survival.fight-back) only when jobs.lib.cost/fight-damage leaves :reserve health. Never against a creeper.
      - seal in: fill the open sides at feet and head height and the roof (dig-in's 1x1 cells) with carried :blocks,
        at most :max-places a step, the sides towards a seen ranged hostile first (feet, then head: the first blocks
@@ -183,12 +183,12 @@
   3)
 
 (defn angry-enderman?
-  "Whether one of hostiles is an enderman that hurt the body this flight (its health is under the flight's start) or
+  "Whether one of hostiles is an enderman that is angry (the client's flag), hurt the body this flight (its health is under the flight's start) or
   stands within enderman-close: a calm one is walked away from like any mob, never sealed against."
   [c hostiles]
   (let [p (:primitives c)
         hurt? (< (.-health (.self p)) (:flight-health (ctx/mem c) 0))]
-    (boolean (some #(and (combat/enderman? %) (or hurt? (<= (danger-q/mob-distance p %) enderman-close))) hostiles))))
+    (boolean (some #(and (combat/enderman? %) (or hurt? (true? (.-angry %)) (<= (danger-q/mob-distance p %) enderman-close))) hostiles))))
 
 (defn fight-wins?
   "Whether fighting hostiles with the best weapon carried is expected to leave :reserve health

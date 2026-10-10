@@ -106,14 +106,23 @@
          (sort-by off)
          vec)))
 
+(defn calm-enderman?
+  "Whether e is an enderman the body's client says is not angry (its angry field is false; one without the field counts as angry):
+  it does nothing unless provoked, so it is no danger."
+  [e]
+  (and (combat/enderman? e) (false? (.-angry e))))
+
 (defn danger-in?
   "danger? reading blocks through kind-at (shared by the mobs of one query) and, with pr, sharing walk proofs. opts
   :arrow-at is the query's shared arrow lookup (reach/lookup p reach/arrow-kind-of); without it a ranged mob builds its own."
   ([p kind-at e opts] (danger-in? p kind-at nil e opts))
   ([p kind-at pr e {:keys [sight? arrow-at] :or {sight? true}}]
-   (if (combat/ranged? e)
+   (cond
+     (calm-enderman? e) false
+     (combat/ranged? e)
      (and (or (not sight?) (seen-only? e) (not (in-tunnel? kind-at (reach/cell-of (u/pos-of (.-pos (.self p)))))))
           (reach/line-of-fire? (or arrow-at (reach/lookup p reach/arrow-kind-of)) (mob-pos p e) (u/pos-of (.-pos (.self p)))))
+     :else
      (and (or (seen-mob? e) (not sight?))
           (let [mob (reach/cell-of (mob-pos p e))
                 body (reach/cell-of (u/pos-of (.-pos (.self p))))]

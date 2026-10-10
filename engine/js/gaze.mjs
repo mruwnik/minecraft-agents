@@ -32,7 +32,7 @@ const seen = (bot, eye, target) => {
 }
 
 const eyesInSight = bot => {
-  const eye = bot.entity.position.offset(0, bot.entity.height ?? 1.62, 0)
+  const eye = bot.entity.position.offset(0, bot.entity.eyeHeight ?? 1.62, 0)
   return Object.values(bot.entities ?? {})
     .filter(e => e?.name === 'enderman' && e.position && e.position.distanceTo(eye) <= RANGE)
     .map(e => e.position.offset(0, ENDERMAN_EYE, 0))
@@ -52,9 +52,19 @@ export const safePitch = (bot, yaw, pitch) => {
   return pitch
 }
 
+// returns the function that stops the per-tick check
 export function avoidEnderStare (bot) {
-  if (bot.look.avoidsEnderStare) return
-  const look = bot.look.bind(bot)
-  bot.look = (yaw, pitch, force) => look(yaw, safePitch(bot, yaw, pitch), force)
-  bot.look.avoidsEnderStare = true
+  if (!bot.look.avoidsEnderStare) {
+    const look = bot.look.bind(bot)
+    bot.look = (yaw, pitch, force) => look(yaw, safePitch(bot, yaw, pitch), force)
+    bot.look.avoidsEnderStare = true
+  }
+  // an enderman that walks or teleports into the view of a still head is looked away from at once
+  const onTick = () => {
+    const { yaw, pitch } = bot.entity
+    if (!Number.isFinite(yaw) || !Number.isFinite(pitch)) return
+    if (safePitch(bot, yaw, pitch) !== pitch) bot.look(yaw, pitch, true)
+  }
+  bot.on('physicsTick', onTick)
+  return () => bot.removeListener('physicsTick', onTick)
 }
