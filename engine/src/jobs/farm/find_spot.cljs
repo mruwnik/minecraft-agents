@@ -5,7 +5,8 @@
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
-            [jobs.lib.pace :as pace]))
+            [jobs.lib.pace :as pace]
+            [clojure.string :as str]))
 
 (def doc
   "Pick where a :w x :h farm would go. Ranks patches by flatness first, then water within 4,
@@ -13,7 +14,11 @@
   A patch of 8 or more is tried at every fourth corner. Reads blocks only: it never digs or marks anything.
   A scan reads at most about 30000 blocks, then settles for the best spots so far.
   With :walk true it then walks to the best spot.
-  Result: {:spot pos-or-nil :spots [...] :walked bool}. A pos is the north-west corner at ground level.
+  Result: {:spot pos-or-nil :spots [...] :walked bool}, :spots best first up to :limit, each {:pos :score :level :work
+  :water-share :sky :away :y}; the info find-spot.found lists them all. A pos is the north-west corner at ground level.
+  Score = level (% of the patch's cells at its commonest ground height y, 0-100) + 25 x water-share + 15 for open sky,
+  less :work (sum of blocks the other cells are off y, at most 40) and :away / 4 (blocks from :center, at most 30).
+  A spot with level under 100 has cells to level or build up.
   :reason is :none (no patch found) or :unreachable (walk failed).")
 
 (a/defargs args
@@ -179,6 +184,10 @@
 
 (defn check [_c] true)
 
+(defn spot-text [{:keys [pos score level work water-share sky away]}]
+  (str "x " (:x pos) " y " (:y pos) " z " (:z pos) " score " score " (level " level "% work " work " water "
+       (js/Math.round (* 100 water-share)) "% " (if sky "open sky" "roofed") ", " away " away)"))
+
 (defn finish-scan!
   "Remember and announce the found spots in memory (dropping the scan state);
   nil (after a warn) when there are none."
@@ -191,7 +200,7 @@
     (do (ctx/update-mem! c assoc :spots found)
         (ctx/emit! c :find-spot.found :info
                    {:spots (count found) :best (:pos (first found)) :score (:score (first found))
-                    :text (str (count found) " spots, best " (pr-str (:pos (first found))) " score " (:score (first found)))})
+                    :text (str (count found) " spots, best first: " (str/join "; " (map spot-text found)))})
         found)))
 
 (defn scan-step!

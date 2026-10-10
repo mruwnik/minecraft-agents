@@ -317,3 +317,17 @@
               r (await (child-outcome eng job (assoc small :walk false) 8))]
           (is (seq (calls p "look")))
           (is (= [1.0 0] (mapv :water-share (take 2 (:spots r))))))))))
+
+(deftest the-found-text-lists-every-spot-with-what-its-score-is-made-of
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:blocks wet-world})
+              r (await (child-outcome eng job (assoc small :walk false) 4))
+              text (:text (first (kinds seen :find-spot.found)))]
+          (is (= 3 (count (:spots r))))
+          (is (every? #(re-find (re-pattern (str "x " (get-in % [:pos :x]) " y " (get-in % [:pos :y]) " z " (get-in % [:pos :z])
+                                                 ".*score " (:score %) ".*level " (:level %) ".*work " (:work %)))
+                                text)
+                      (:spots r))
+              text))))))
