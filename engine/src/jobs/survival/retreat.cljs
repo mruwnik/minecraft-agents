@@ -53,7 +53,7 @@
   Not while a creeper chases it or a melee mob is within cover-gap: it walks (or backs off, cornered) first.
   4. Cornered (no open direction worth a walk, or the walk is blocked; checked afresh every step) with no hostile within
      :radius: holds a second (wait, why cornered) and looks again; after :no-gain-steps such steps or holds with no gain the flight ends :keeps-off. With one within :radius: takes the safest option it has not yet failed.
-     - an enderman near (it teleports; a walk is no flight): at once, before any walk, seal, pit, pocket, last of all fight.
+     - an enderman near (it teleports; a walk is no flight): at once, before any walk: water within 6 blocks (it keeps away from water; the body steps in and holds), else seal, pit, pocket, last of all fight.
      - fight (jobs.survival.fight-back) only when jobs.lib.cost/fight-damage leaves :reserve health. Never against a creeper.
      - seal in: fill the open sides at feet and head height and the roof (dig-in's 1x1 cells) with carried :blocks,
        at most :max-places a step, the sides towards a seen ranged hostile first (feet, then head: the first blocks
@@ -162,11 +162,11 @@
 (defn escape-order
   "Pure: the cornered options to try, safest first. {:win? the odds say a fight leaves reserve health (never true
   for a creeper), :creeper? one is near, :enderman? an enderman is (it teleports, so no walk or back-off, and a
-  pillar is within its reach: the body shuts itself in), :ranged? the threat shoots, :home? the body is in its home
+  pillar is within its reach: the body enters water within water-reach, which it avoids, else shuts itself in), :ranged? the threat shoots, :home? the body is in its home
   room: it digs no pit or pocket in its own floor or walls}."
   [{:keys [win? creeper? enderman? ranged? home?]}]
   (cond->> (cond
-             enderman? [:seal :pit :pocket :fight]
+             enderman? [:water :seal :pit :pocket :fight]
              win? [:fight]
              creeper? [:back-off :seal :pillar :pit :pocket :fight]
              :else (into (if ranged? [:seal] [:seal :pillar]) [:back-off :pit :pocket :fight]))
@@ -224,6 +224,35 @@
       (do (flight/tried! c :back-off) nil)
       :again)))
 
+(def water-reach
+  "Blocks within which a body hunted by an enderman looks for water to stand in."
+  6)
+
+(defn water-cell
+  "The nearest cell within reach (blocks, horizontally and up to 2 vertically) of from that block-at reads as water, or nil."
+  [block-at from reach]
+  (let [[fx fy fz] (mapv #(js/Math.floor %) [(:x from) (:y from) (:z from)])]
+    (->> (for [dx (range (- reach) (inc reach)) dy (range -2 3) dz (range (- reach) (inc reach))
+               :when (<= (+ (* dx dx) (* dz dz)) (* reach reach))
+               :let [cell {:x (+ fx dx) :y (+ fy dy) :z (+ fz dz)}]
+               :when (= "water" (block-at cell))]
+           cell)
+         (sort-by #(u/dist from {:x (+ 0.5 (:x %)) :y (:y %) :z (+ 0.5 (:z %))}))
+         first)))
+
+(defn ^:async water!
+  "Stand in water (an enderman keeps away from it): a step to the nearest water within water-reach, a short hold once
+  in it. :again, nil when there is none or the walk is blocked."
+  [c]
+  (let [block-at (block-at-fn (:primitives c))
+        self (u/self-pos c)]
+    (if (= "water" (block-at {:x (js/Math.floor (:x self)) :y (js/Math.floor (:y self)) :z (js/Math.floor (:z self))}))
+      (do (await (ctx/act c :wait #js {:ms (flight/wait-ms) :why "in water, away from the enderman"})) :again)
+      (when-let [cell (water-cell block-at self water-reach)]
+        (if (await (step! c :water {:x (+ 0.5 (:x cell)) :y (:y cell) :z (+ 0.5 (:z cell))} 0))
+          :again
+          (do (flight/tried! c :water) nil))))))
+
 (defn ^:async blocked!
   "Every option failed: forget them all, warn once a flight, hold a moment (wait, why cornered) and go on: the next step
   tries them again from the start (the danger still stands). The second sweep in a row ends the flight :cannot-escape."
@@ -254,6 +283,7 @@
                   :fight (await (fight! c (if (= [:fight] order) weapons (into (vec weapons) tool-weapons))))
                   :seal (await (refuge/hide! c))
                   :pillar (await (refuge/pillar! c))
+                  :water (await (water! c))
                   :back-off (when threat (await (back-off! c threat)))
                   :pit (await (refuge/pit! c))
                   :pocket (await (refuge/pocket! c))))]

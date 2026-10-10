@@ -647,7 +647,7 @@
 (def enderman (fn [x y z] {:id 10 :name "enderman" :kind "hostile" :pos {:x x :y y :z z} :health 40}))
 
 (deftest an-angry-enderman-is-not-fled-on-foot-nor-fought-the-body-shelters
-  (is (= [:seal :pit :pocket :fight] (retreat/escape-order {:enderman? true :win? true}))
+  (is (= [:water :seal :pit :pocket :fight] (retreat/escape-order {:enderman? true :win? true}))
       "no walk away, no pillar (it is 3 tall), no back-off; a fight only last, whatever the odds"))
 
 (deftest a-body-with-an-enderman-near-walls-itself-in-instead-of-walking
@@ -662,3 +662,22 @@
           (is (= [{:x 0.5 :y 64 :z 0.5}] (tu/walked-to eng)) "no flee step: only the seal's step to its cell's middle")
           (is (zero? (count (calls p "attack"))))
           (is (pos? (count (calls p "place"))) "blocks between it and the enderman"))))))
+
+(deftest water-cell-is-the-nearest-seen-water-within-reach
+  (let [water #{[3 64 0] [-2 64 1] [9 64 0]}
+        at (fn [{:keys [x y z]}] (if (water [x y z]) "water" "air"))]
+    (is (= {:x -2 :y 64 :z 1} (retreat/water-cell at {:x 0.5 :y 64 :z 0.5} 6)))
+    (is (nil? (retreat/water-cell at {:x 20.5 :y 64 :z 0.5} 6)) "none within reach")))
+
+(deftest a-body-with-an-enderman-near-steps-into-water-nearby
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory [{:name "dirt" :count 16}] :blocks {(key-of 3 64 1) "water"}
+                                      :entities [(enderman 7 64 0.5)]})]
+          (.override (.-world p) "steer"
+                     (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r)))))
+          (core/submit! eng retreat {})
+          (await (core/tick! eng))
+          (is (= {:x 3 :y 64 :z 1} (first (tu/walked-to eng))) "walks to the water, not away")
+          (is (zero? (count (calls p "place")))))))))

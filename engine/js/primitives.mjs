@@ -15,6 +15,7 @@ import { createSteer } from './steer.mjs'
 import { trackLeashes } from './leash.mjs'
 import { trackLiveEntities, liveEntities } from './live-entities.mjs'
 import { trackVehicles } from './vehicle.mjs'
+import { avoidEnderStare } from './gaze.mjs'
 import { missingPatches, missingRequired } from './deps-check.mjs'
 import { wrapBlockAt } from './offset-shapes.mjs'
 import { say } from './chat.mjs'
@@ -39,6 +40,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   trackLeashes(bot)
   trackLiveEntities(bot)
   trackVehicles(bot)
+  avoidEnderStare(bot)
   view?.attach(bot)
   let closed = false
   let owner = null
@@ -411,6 +413,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     trackLeashes(bot)
     trackLiveEntities(bot)
     trackVehicles(bot)
+    avoidEnderStare(bot)
     unbind = bindEvents(bot)
     view?.attach(bot)
     down = false
