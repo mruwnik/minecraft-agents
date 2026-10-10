@@ -96,6 +96,12 @@
     (is (not (contains? (:request plain) :survive-death?)))
     (is (string? (:error (request "Bob" "--world" "w" "list" "--survive-death"))))))
 
+(deftest a-standing-repeat-job-survives-death-by-default
+  (let [kept (request "Bob" "--world" "w" "submit" "(repeat (jobs.farm.tend {}))")
+        one-shot (request "Bob" "--world" "w" "submit" "(seq (jobs.time.wait-for-day))")]
+    (is (true? (get-in kept [:request :survive-death?])))
+    (is (not (contains? (:request one-shot) :survive-death?)))))
+
 (deftest cancel-all-has-no-job-argument-and-hold-and-front-are-submission-options
   (let [cancel (request "Bob" "--world" "w" "cancel-all" "--request-id" "all")
         held (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-day)" "--hold")

@@ -781,7 +781,7 @@ node engine/tools/progress.mjs Bob --world test [--goal j14] [--want iron_ingot:
 - `jobs.mjs show jID` of a job the scheduler no longer holds answers from the event history, as `observe job` does.
 - `jobs.mjs submit` appends to the list; `--next` lists after the current job without cutting; `--now` cuts the current
   listed job and runs the new one as a holder (a running reflex is not cut); `--hold` keeps the body while the check
-  declines; `--survive-death` keeps the job listed through a death (it runs again after the respawn reflexes). `--wait` blocks until the job ends (or a wake) and prints the result and a bounded summary. Mutations carry a
+  declines; `--survive-death` keeps the job listed through a death (it runs again after the respawn reflexes); a `(repeat ...)` spec gets it by default. `--wait` blocks until the job ends (or a wake) and prints the result and a bounded summary. Mutations carry a
   request id (`--request-id` to retry safely); the engine keeps the latest 128 ids and a duplicate returns the original
   result. A manual lease rejects `--now` with `:manual-control`.
 - `triggers.mjs` uses `GET/POST /triggers`; built-ins cannot be replaced or removed, only muted or moved. `put`/`add`
