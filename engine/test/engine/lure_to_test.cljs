@@ -13,7 +13,8 @@
 (def goal {:x 30 :y 64 :z 0})
 
 (defn ^:async scenario [args world n]
-  (let [{:keys [eng clock] :as s} (h/setup (merge {:floor tu/walk-floor} world) 50)]
+  (let [{:keys [eng clock] :as s} (h/setup (merge {:floor tu/walk-floor} (dissoc world :seeing)) 50)]
+    (when (:seeing world) (tu/seeing-all (:p s)))
     (core/submit! eng (list 'jobs.animals.lure-to (merge {:mob "cow" :pos goal} args)) {})
     (dotimes [_ n]
       (swap! clock + 700)
@@ -56,6 +57,19 @@
           (is (finished? s))
           (is (= :no-food (:reason (done-event s))))
           (is (= 1 (count (stopped s)))))))))
+
+(deftest a-chicken-lure-with-no-seeds-breaks-grass-for-them-first
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [grass (into {} (for [x (range 1 6) z (range 1 4)] [(str x ",64," z) "short_grass"]))
+              s (await (scenario {:mob "chicken"}
+                                 {:inventory [] :seeing true :blocks grass :drops {"short_grass" "wheat_seeds"}
+                                  :entities [{:id 1 :uuid "u1" :name "chicken" :kind "passive" :pos {:x 3 :y 64 :z 0}}]}
+                                 60))]
+          (is (finished? s))
+          (is (not= :no-food (:reason (done-event s))) "seeds were got from the grass")
+          (is (= :arrived (:reason (done-event s)))))))))
 
 (deftest no-animal-ends-none
   (async done

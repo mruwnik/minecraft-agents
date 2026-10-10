@@ -161,6 +161,10 @@
     (clojure.string/ends-with? name "_sapling") (str (subs name 0 (- (count name) (count "_sapling"))) "_leaves")
     (= "mangrove_propagule" name) "mangrove_leaves"))
 
+(def grass-seeds
+  "The seed items broken out of grass, and the grass blocks that drop them."
+  {"wheat_seeds" #{"short_grass" "tall_grass"}})
+
 (defn material-blocks
   "The blocks mining which gives a stone-material (stone: cobblestone), or nil for any other item. A block
   that drops itself (blackstone) is its own."
@@ -237,7 +241,8 @@
         materials (if (seq seen) seen (recipes/stone-materials version))
         plan-of (fn [name]
                   (if-let [seen-of-name (cond (= "dirt" name) dirt-blocks
-                                              (leaves-of name) #{(leaves-of name)})]
+                                              (leaves-of name) #{(leaves-of name)}
+                                              (grass-seeds name) (grass-seeds name))]
                     (when (or (= name (get-in (ctx/mem c) [:gather :item]))
                               (seq (look/seen-blocks p {:names (vec seen-of-name) :radius (seen-radius) :max 1})))
                       {:steps [] :gather {name n} :item name})
@@ -279,6 +284,9 @@
           (for [[sapling n] gather :when (leaves-of sapling)]
             {:key sapling :count n :job 'jobs.gather.get-seeds :seen #{(leaves-of sapling)} :max-runs 1
              :args {:item sapling :count n :sources [(leaves-of sapling)] :dry-digs sapling-leaf-limit}})
+          (for [[seed n] gather :when (grass-seeds seed)]
+            {:key seed :count n :job 'jobs.gather.get-seeds :seen (grass-seeds seed) :max-runs 1
+             :args {:item seed :count n}})
           (for [[k n] gather :when (wool? k)]
             {:key k :count n :job 'jobs.combat.hunt :sheep (wool-color k)
              :args {:mob "sheep" :color (wool-color k) :count n :radius (sheep-radius)}})
