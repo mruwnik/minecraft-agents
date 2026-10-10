@@ -72,3 +72,14 @@
                                  {:inventory (carried "oak_planks" 3 "stick" 2 "crafting_table" 1)} 20))]
           (is (= 1 (get (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self (:p s)))) "wooden_pickaxe")) "crafted")
           (is (= [[:place-table :urgent]] (->> @(:seen s) (filter #(and (= :section (:kind %)) (:open %))) (map (juxt :section :holds)) distinct vec))))))))
+
+(deftest wool-with-no-sheep-seen-waits-no-source-without-throwing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (h/setup-seeing {:inventory (carried "oak_planks" 3)} nil 700)]
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "white_wool" :count 3}) {})
+          (dotimes [_ 3]
+            (swap! (:clock s) + 700)
+            (await (core/tick! (:eng s))))
+          (is (empty? (filter #(= :failed (:kind %)) @(:seen s))) "no round or check threw"))))))

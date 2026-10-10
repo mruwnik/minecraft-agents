@@ -314,9 +314,10 @@
   "The seen blocks of a need (within ::seen-radius), nearest first, with those a zone, claim or plan footprint bars
   taking left out unless all? is true."
   [c need all?]
-  (let [in (access/rules-input c)
-        blocks (look/seen-blocks (:primitives c) {:match #((:seen need) %) :radius (seen-radius) :max (if all? 1 64)})]
-    (if all? blocks (filter #(and (:ok (access/may? in :harvest (:pos %))) (not (cut-off? c %))) blocks))))
+  (when (:seen need)
+    (let [in (access/rules-input c)
+          blocks (look/seen-blocks (:primitives c) {:match #((:seen need) %) :radius (seen-radius) :max (if all? 1 64)})]
+      (if all? blocks (filter #(and (:ok (access/may? in :harvest (:pos %))) (not (cut-off? c %))) blocks)))))
 
 (defn seen-of
   "The nearest seen block of a need that may be taken, or for a wool need a sheep of its colour in range, else nil."
