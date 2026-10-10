@@ -1136,6 +1136,17 @@
           (is (= 4 (count-of s "wheat")) "the food is not used up")
           (is (nil? (held s)) "the hand is empty again so nothing follows out"))))))
 
+(def far-ground (into {} (for [x (range -50 -10) z (range -10 16)] [(str x ",63," z) "stone"])))
+
+(deftest a-lured-cow-far-from-the-pen-is-walked-back-in-legs-it-can-follow
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:target 1 :radius 60} {:entities [(cow 1 -40 3)] :inventory [wheat] :blocks far-ground} 900))
+              e (done-event s)]
+          (is (= :brought (:reason e)) (pr-str (select-keys e [:reason :given-up])))
+          (is (= #{1} (cows-in-pen s))))))))
+
 (deftest the-gate-toggle-keeps-the-food-in-hand
   (async done
     (tu/run-async done

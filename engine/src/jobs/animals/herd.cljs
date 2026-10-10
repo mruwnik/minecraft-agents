@@ -6,8 +6,10 @@
             [jobs.lib.declined :as declined]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.util :as u]
+            [jobs.lib.child :as child]
+            [jobs.animals.lead-to :as lead-to]
             [jobs.lib.watch :as watch]
-            [jobs.animals.herd-run :refer [adults after-shut! cell census! crowd-in-radius crowd-ms crowd-out-radius deepest end! exit-shut-ms gate-cell gate-index gate-open? hold-gate! in-1 in-pen-adults led-now lure? out-1 read-pen release-step! set-phase! settle-ms settle-out-ms shut-failed! shut-look-ms transient-keys]]
+            [jobs.animals.herd-run :refer [adults after-shut! cell census! crowd-in-radius crowd-ms crowd-out-radius deepest end! exit-shut-ms gate-cell gate-index gate-open? hold-gate! cell-pos in-1 in-pen-adults led-now lure? animal-now follow-range out-1 read-pen release-step! set-phase! settle-ms settle-out-ms shut-failed! shut-look-ms transient-keys]]
             [jobs.animals.herd-pen :refer [body-in-pen? cell-middle crowded-near? exit-dash! flat-dist go-then! let-go-cell look-wait! max-leaves on-gate? set-gate! settle-at! shut-side! shut-when-clear! survey! wait-clear! waited-ms]]
             [jobs.animals.herd-trip :refer [leash-next! pinned! prune-led! regather! regather-or-lose! released! step-position!]]))
 
@@ -22,6 +24,8 @@
 
   Declines while the box already holds :target adults. A started run always passes, so a cut job resumes.
   A body more than 16 blocks from the pen first walks within 12 of it.
+  A lured animal follows the food only within about 10 blocks: from where it was met the body walks to the pen in short legs,
+  holding still while the animal trails more than 7 behind, and gives it up (given-up :lost unseen 3 s, :lagging beyond 10) rather than outrun it.
 
   Checks before the first animal (each ends the run with its reason):
   - :no-pen: the pen cannot be read from :box (the result's :cell names the first unseen cell when there is one; a cell it has not seen is gone near and looked at once; one still unknown goes to the pen's gate to look in, once; still unknown ends here).
@@ -116,6 +120,37 @@
       (< (count (filter #(animals/in-box? box (u/pos-of (.-pos %))) (adults c))) target) true
       :else (ctx/wait c {:reason :at-target :target target}))))
 
+(defn lure-lost!
+  "The lured animal is given up (reason :lost, unseen, or :lagging, beyond follow range); the run goes on as when nobody is led."
+  [c reason]
+  (let [k (:animal (ctx/mem c))]
+    (ctx/emit! c :herd.lure-lost :info {:animal k :reason reason :text (str "herd gives up the lured " (:mob (:args c)) ": " (name reason))})
+    (ctx/update-mem! c #(-> % (assoc :led []) (update :given-up assoc k reason) (dissoc :unseen-since)))
+    (regather-or-lose! c)))
+
+(defn ^:async lure-approach!
+  "The walk to the pen's first cell with a lured animal: an animal follows the food only within follow-range, so the body goes
+  in short go-to legs and holds still while the animal trails more than lead-to/safe-gap; unseen for lead-to/unseen-lost-ms
+  or beyond follow-range it is given up. The last leg is settle-at!'s."
+  [c]
+  (let [m (ctx/mem c)
+        a (animal-now c (:animal m))
+        now (ctx/now c)
+        since (or (:unseen-since m) now)
+        d (when a (flat-dist (u/pos-of (.-pos a)) (u/self-pos c)))
+        target (cell-pos (nth (:axis m) 0))]
+    (cond
+      (nil? a) (if (<= lead-to/unseen-lost-ms (- now since))
+                 (lure-lost! c :lost)
+                 (do (ctx/update-mem! c assoc :unseen-since since) (await (lead-to/wait-for-animal! c)) :continue))
+      (> d (follow-range)) (lure-lost! c :lagging)
+      (do (ctx/update-mem! c dissoc :unseen-since) (> d lead-to/safe-gap)) (do (await (lead-to/wait-for-animal! c)) :continue)
+      :else (let [leg (await (lead-to/leg-target c target 1))]
+              (if-not leg
+                (await (settle-at! c 0 (settle-out-ms) #(set-phase! c :clear-out)))
+                (do (await (child/call-walk c :walk {:pos leg :range 1 :doors :never :escalate false}))
+                    :continue))))))
+
 (defn ^:async step! [c phase]
   (let [m (ctx/mem c)
         axis-cell #(nth (:axis m) %)]
@@ -123,7 +158,9 @@
       :survey (await (survey! c))
       :regather (await (regather! c))
       :leash (await (leash-next! c))
-      :approach (await (settle-at! c 0 (settle-out-ms) #(set-phase! c :clear-out)))
+      :approach (if (and (lure? c) (not (:walked m)))
+                  (await (lure-approach! c))
+                  (await (settle-at! c 0 (settle-out-ms) #(set-phase! c :clear-out))))
       :clear-out (await (wait-clear! c (crowded-near? c (axis-cell in-1) (crowd-out-radius)) (crowd-ms) :out
                                      #(set-phase! c :line-up {:pos-index 1})))
       :line-up (let [i (:pos-index m)]
@@ -183,7 +220,7 @@
     (when (and gate (gate-open? c)) (hold-gate! c))
     (cond
       (and lead-phase? animal-started (>= (- now animal-started) (* 1000 (:timeout-s (:args c))))) (end! c :timeout)
-      (and lead-phase? (pos? (prune-led! c)) (empty? (:led (ctx/mem c)))) (regather-or-lose! c)
+      (and lead-phase? (not (and (= :approach phase) (lure? c) (not (:walked (ctx/mem c))))) (pos? (prune-led! c)) (empty? (:led (ctx/mem c)))) (regather-or-lose! c)
       :else (do (when lead-phase? (await (watch/watch! c {})))
                 (await (step! c phase))))))
 
