@@ -14,7 +14,7 @@
   "Dry run of a go-to: plan the route to :pos (or :place) from where the body stands, with the policy, costs, dangers and
   tolls go-to plans with, and report it. Nothing is walked, opened or dug. One round, one plan (a search of any length, in
   slices that yield), then :done.
-  Takes the go-to args :pos (a column [x z] too) :place :range :doors :dangers :dark :tolls :drop-cost :costs :landing :gait :min-health :max-damage :hp-seconds :food :one-way :unknown, same defaults, and the danger prices :flee-factor :fight-factor :danger-max-rate :danger-shape.
+  Takes the go-to args :pos (a column [x z] too) :place :range :doors :dangers :dark :tolls :drop-cost :y-margin :costs :landing :gait :min-health :max-damage :hp-seconds :food :one-way :unknown, same defaults, and the danger prices :flee-factor :fight-factor :danger-max-rate :danger-shape.
   Returns {:status :completed :found true :length :seconds :summary :steps :moves :doors :waypoints (:drown hp where it drowns)}: length is the horizontal
   blocks, seconds the planner's cost in seconds (tolls, dark and danger costs not included), summary its words (drops, swims,
   doors), steps the step count, moves a count of each move kind (:drop :jump :open ...), doors the cells [x y z] it
@@ -34,6 +34,7 @@
    :dangers {:doc "false: plan straight past known dangers; true: keep away from them" :spec boolean? :default true}
    :dark {:doc "false: plan dark cells like lit ones" :spec boolean? :default true}
    :tolls {:doc "cells to cross only as a last resort, [{:x :y :z :factor}]" :spec (a/valid-by "a list of {:x :y :z :factor} of finite numbers, :factor >= 0" wworld/tolls-problem) :default nil}
+   :y-margin {:doc "as go-to :y-margin" :spec (a/int-in 0 nil) :default nil}
    :drop-cost {:doc "number: scales the cost of a drop; false: no drop of 2 or 3 at all" :spec (a/or-of (a/num-in 0 nil) false?) :default 1}
    :costs {:doc "as go-to :costs" :spec (a/valid-by "a map of planner price name to a number of seconds >= 0" cost/planner-costs-problem) :default nil}
    :landing {:doc "as go-to :landing: block name -> share of a fall's damage taken landing on it (negative: a bounce, no damage but settle time)" :spec (a/valid-by "a map of block name to a number" cost/landing-problem) :default nil}

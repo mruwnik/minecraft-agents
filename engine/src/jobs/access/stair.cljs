@@ -521,13 +521,17 @@
                       :why (str "no block beside or under " (pr-str floor) " to place " item " against: the floor opens into a void")}
       :else (or (await (bridge/place-plans! c in item plans (take-back-floor? c))) :again))))
 
+(def entry-depth "Blocks below both ends a walk to or from a line's entry may plan." 16)
+
 (defn ^:async walk-into!
   "Walk the body into cell [x y z] with a go-to child in slot (no escalation: the dig is this job's own): :continue
   while it walks, else the child's result. The steps of the line (:walk, :back) go on at night: the cell is one this job
-  cut, and the night shelter would hold the body between two steps for ever."
+  cut, and the night shelter would hold the body between two steps for ever. The walks to and from the entry (:in, :out)
+  plan no deeper than entry-depth below the lower of body and cell: a way through deep caves is no way, the job digs."
   [c slot cell]
   (if (= :done (await (child/call-walk c slot (cond-> {:pos cell :range 0 :escalate false}
-                                                (#{:walk :back} slot) (assoc :at-night :go)))))
+                                                (#{:walk :back} slot) (assoc :at-night :go)
+                                                (#{:in :out} slot) (assoc :y-margin entry-depth)))))
     (ctx/child-result c slot)
     :continue))
 

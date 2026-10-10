@@ -48,7 +48,7 @@
   :cave-below :no-floor :fluid-in-cut :undercuts-way :not-loaded :no-zones). :too-far: no line fits within :max-length.
   :no-approach: the headings differ, with :headings giving each one's reason.
 
-  Then the body walks to the entry (a go-to child; failing: :walk-in-failed) and the stair child cuts
+  Then the body walks to the entry (a go-to child planning no deeper than 16 below the lower of body and entry; failing: :walk-in-failed) and the stair child cuts
   and walks its steps. Each run step is judged again right before each dig (:hazard :floor-unseen :zone :no-tool
   :inventory-full :refills :dig-failed). Exposed lava is sealed or stops as the stair's :on-lava says (tunnel.sealed
   info; :lava-exposed, :lava-unsealed). Before each further run step, and at the stand, the way back to the

@@ -14,6 +14,11 @@
   A* goes no wider than it must, and a search in the default box that hit its edge would only have to be repeated."
   {:margin 256 :yMargin 96})
 
+(defn box-of
+  "wide-box with the policy's :y-margin (go-to's) as its yMargin."
+  [policy]
+  (cond-> wide-box (some? (:y-margin policy)) (assoc :yMargin (:y-margin policy))))
+
 (def chunk-expansions
   "Expansions a search of the walking plans (plan-from! and plan-within!) runs between yields to the event
   loop, so the body's HTTP API, perception and the other jobs run during a long search. An expansion costs some tens
@@ -102,7 +107,7 @@
   planner's JS result, searched in slices (run-plan!) with the event loop run between them; policy's :drop-cost as with-drops."
   ([c pw to range weight limits] (plan-from! c pw to range weight limits nil))
   ([c pw to range weight limits policy]
-   (await (run-plan! c (.-snapshot pw) (plan-query c to range) (with-drops (plan-options pw weight limits wide-box) policy (wworld/landing-seen (:primitives c)))))))
+   (await (run-plan! c (.-snapshot pw) (plan-query c to range) (with-drops (plan-options pw weight limits (box-of policy)) policy (wworld/landing-seen (:primitives c)))))))
 
 (defn with-damage
   "steps (of js-steps) with the hp each is planned to cost (:damage, the planner's step damage) where it costs any."
