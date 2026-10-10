@@ -184,6 +184,15 @@
     (is (= :no-bed (reason {:time night} false)))
     (is (= :not-night (reason {:time noon :blocks {"6,64,0" "red_bed"}} true)))))
 
+(deftest night-job-says-why-it-waits-when-already-safe
+  (let [waiting (fn [world]
+                  (let [{:keys [eng]} (st/setup world)
+                        id (core/submit! eng '(jobs.survival.night) {})]
+                    (core/tick! eng)
+                    (select-keys (:waiting (job-api/summary eng id)) [:reason :shelter])))]
+    (is (= {:reason :not-night} (waiting {:time noon})))
+    (is (= {:reason :night-safe :shelter :roofed} (waiting {:time night :blocks roof})))))
+
 (deftest the-night-puts-a-carried-bed-down-in-the-open-sleeps-and-picks-it-up-by-day
   (async done
     (tu/run-async done
