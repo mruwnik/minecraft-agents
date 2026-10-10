@@ -10,7 +10,7 @@
             [jobs.combat.attack :as attack]
             [jobs.survival.breathe :as breathe]
             [jobs.survival.extinguish :as extinguish]
-            [jobs.survival.night :as night]
+            [jobs.survival.night.sites :as sites]
             [jobs.survival.recover-drops :as recover-drops]
             [jobs.survival.retreat-flight :as flight]))
 
@@ -24,7 +24,7 @@
     breathe/max-passes 120
     extinguish/walk-cost 0.5
     extinguish/pour-wait-ms 250
-    night/retry-after-ms 660000
+    sites/retry-after-ms 660000
     recover-drops/top-n 3
     flight/resume-gap-ms 5000))
 

@@ -20,7 +20,8 @@
             [engine.triggers :as triggers]
             [jobs.lib.shelter :as sh]
             [jobs.lib.targets :as targets]
-            [jobs.survival.night :as night]))
+            [jobs.survival.night :as night]
+            [jobs.survival.night.sites :as sites]))
 
 (def night st/night)
 (def noon st/noon)
@@ -240,6 +241,17 @@
             (is (empty? (st/calls p "moveTo")) "the drop is walked to by go-to, not a direct move")
             (is (= [] (:list (core/state eng))))))))))
 
+(deftest bed-down-puts-a-carried-bed-down-and-sleeps-in-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (st/setup {:time night :inventory [{:name "red_bed" :count 1}] :skipNight false})
+              r (await (tu/child-outcome eng 'jobs.survival.bed-down {} 20))
+              foot (st/arg-pos (first (st/calls p "place")))]
+          (is (some? foot) (pr-str r))
+          (is (= [foot] (mapv st/arg-pos (st/calls p "sleep"))))
+          (is (true? (:slept r)) (pr-str r)))))))
+
 ;; ------------------------------------------------------------------ job: sleepers
 
 (defn offline-why [p] (mapv #(.-why (.-args %)) (st/calls p "offline")))
@@ -443,12 +455,12 @@
           (is (= [] (:list (core/state eng)))))))))
 
 (deftest exposed-why-names-the-site-reasons
-  (is (re-find #"2 walls-failed" (night/exposed-why [{:reason :walls-failed} {:reason :walls-failed} {:reason :unreachable}])))
-  (is (re-find #"1 unreachable" (night/exposed-why [{:reason :walls-failed} {:reason :unreachable}])))
-  (is (not (re-find #"spawn protection" (night/exposed-why [{:reason :walls-failed} {:reason :walls-failed}]))))
-  (is (not (re-find #"spawn protection" (night/exposed-why [{:reason :walls-server-refused} {:reason :unreachable}]))))
-  (is (re-find #"spawn protection.*move" (night/exposed-why [{:reason :walls-server-refused} {:reason :walls-server-refused}])))
-  (is (= "no site tried" (night/exposed-why []))))
+  (is (re-find #"2 walls-failed" (sites/exposed-why [{:reason :walls-failed} {:reason :walls-failed} {:reason :unreachable}])))
+  (is (re-find #"1 unreachable" (sites/exposed-why [{:reason :walls-failed} {:reason :unreachable}])))
+  (is (not (re-find #"spawn protection" (sites/exposed-why [{:reason :walls-failed} {:reason :walls-failed}]))))
+  (is (not (re-find #"spawn protection" (sites/exposed-why [{:reason :walls-server-refused} {:reason :unreachable}]))))
+  (is (re-find #"spawn protection.*move" (sites/exposed-why [{:reason :walls-server-refused} {:reason :walls-server-refused}])))
+  (is (= "no site tried" (sites/exposed-why []))))
 
 (deftest a-body-held-exposed-says-why-when-the-server-refuses-every-place
   (async done
@@ -532,27 +544,27 @@
           (core/submit! eng '(jobs.survival.night) {})
           (await (core/tick! eng))
           (set! ctx/call-child call-child)
-          (is (= (inc (night/max-retries)) @tries) "one dig-in, then one more per retry of the exposed hold"))))))
+          (is (= (inc (sites/max-retries)) @tries) "one dig-in, then one more per retry of the exposed hold"))))))
 
 (deftest an-exposed-hold-retries-only-from-futile-radius-plus-one-away
   (let [due? (fn [feet]
                (with-redefs [ctx/mem (constantly {:exposed {:pos {:x 0 :y 0 :z 0} :at 0 :retries 0}})
                              ctx/now (constantly 1000)
                              sh/feet (constantly feet)]
-                 (night/retry-due? {:primitives nil})))]
+                 (sites/retry-due? {:primitives nil})))]
     (is (not (due? {:x 8 :y 0 :z 1})) "8.06 away is still inside dig-in's futile check")
     (is (due? {:x 9 :y 0 :z 0}))))
 
 (deftest a-pit-site-is-judged-by-the-surface-a-player-sees
   (let [p (tu/fake {:blocks (into {} (for [x (range -2 3) z (range -2 3)] [(str x ",63," z) "dirt"]))})]
-    (is (night/pit-site? p {:x 1 :y 64 :z 1}) "one layer of dirt shows nothing against a pit; dig-in finds out")
-    (is (not (night/pit-site? p {:x 9 :y 64 :z 9})) "no ground to stand on")))
+    (is (sites/pit-site? p {:x 1 :y 64 :z 1}) "one layer of dirt shows nothing against a pit; dig-in finds out")
+    (is (not (sites/pit-site? p {:x 9 :y 64 :z 9})) "no ground to stand on")))
 
 (deftest a-pit-site-needs-ground-the-carried-tools-dig
   (let [stone (into {} (for [x (range -2 3) z (range -2 3)] [(str x ",63," z) "stone"]))
         site {:x 1 :y 64 :z 1}]
-    (is (not (night/pit-site? (tu/fake {:blocks stone}) site)) "no pickaxe: stone cannot be dug")
-    (is (night/pit-site? (tu/fake {:blocks stone :inventory [{:name "iron_pickaxe" :count 1}]}) site))))
+    (is (not (sites/pit-site? (tu/fake {:blocks stone}) site)) "no pickaxe: stone cannot be dug")
+    (is (sites/pit-site? (tu/fake {:blocks stone :inventory [{:name "iron_pickaxe" :count 1}]}) site))))
 
 ;; ------------------------------------------------------------------ a niche in a hillside
 
