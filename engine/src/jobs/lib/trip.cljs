@@ -105,10 +105,10 @@
   that harvests it is above it. A tool with no known durability counts as whole."
   [p block-name]
   (let [harvest (some-> (.harvestTools p block-name) js->clj)
-        suffix (str "_" (tools/tool-kind block-name))
+        kind (tools/tool-kind block-name)
         ok (set harvest)
         worn? (fn [t] (and (:durability t) (:max t) (<= (:durability t) (* (spare-fraction) (:max t)))))
-        usable (filter #(and (str/ends-with? (:name %) suffix) (or (empty? ok) (ok (:name %)))) (u/inventory p))
+        usable (filter #(and (tools/of-kind? (:name %) kind) (or (empty? ok) (ok (:name %)))) (u/inventory p))
         best (tools/suited-item usable block-name harvest)]
     (when (and best (every? worn? usable))
       best)))
@@ -117,8 +117,8 @@
   "The tool to obtain as the spare for the worn need: the cheapest tool of its kind that harvests block-name and
   lasts (not wooden or golden: a stone pickaxe will do for stone), else the cheapest at all, else the worn tool's own name."
   [p block-name need]
-  (let [suffix (str "_" (tools/tool-kind block-name))
-        harvest (filter #(str/ends-with? % suffix) (some-> (.harvestTools p block-name) js->clj))
+  (let [kind (tools/tool-kind block-name)
+        harvest (filter #(tools/of-kind? % kind) (some-> (.harvestTools p block-name) js->clj))
         lasting (remove #(#{"wooden" "golden"} (weapon/material-of %)) harvest)]
     (or (tools/cheapest-tool (seq lasting)) (tools/cheapest-tool harvest) (:name need))))
 

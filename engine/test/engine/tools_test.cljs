@@ -16,7 +16,14 @@
     "cobblestone" "pickaxe"
     "iron_ore" "pickaxe"
     "oak_leaves" "hoe"
-    "azalea_leaves" "hoe"))
+    "azalea_leaves" "hoe"
+    "oak_fence" "axe"
+    "dark_oak_fence_gate" "axe"
+    "dark_oak_planks" "axe"
+    "nether_brick_fence" "pickaxe"
+    "rail" "pickaxe"
+    "chest_minecart" "pickaxe"
+    "cobweb" "shears"))
 
 (deftest best-tool-picks-the-highest-material-of-the-kind
   (are [items block expected] (= expected (tools/best-tool items block))
@@ -51,6 +58,13 @@
     (items "stone_pickaxe") "diamond_ore" diamond-harvest nil
     (items "iron_shovel" "wooden_shovel") "dirt" nil "wooden_shovel"
     (items "iron_axe" "stone_axe") "oak_log" nil "stone_axe"))
+
+(deftest cobweb-is-dug-with-shears-else-a-sword
+  (are [carried expected] (= expected (tools/suited-tool (apply items carried) "cobweb" nil))
+    ["iron_pickaxe" "shears"] "shears"
+    ["iron_pickaxe" "stone_sword" "shears"] "shears"
+    ["iron_pickaxe" "stone_sword"] "stone_sword"
+    ["iron_pickaxe"] nil))
 
 (deftest suited-tool-uses-the-most-worn-of-a-tier-first
   (is (= {:name "stone_pickaxe" :durability 20}

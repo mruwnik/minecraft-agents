@@ -18,22 +18,31 @@
     "coarse_dirt" "rooted_dirt" "podzol" "mycelium" "farmland" "dirt_path"})
 
 (defn tool-kind
-  "\"shovel\", \"axe\", \"hoe\" or \"pickaxe\": the tool that digs block-name fastest."
+  "\"shovel\", \"axe\", \"hoe\", \"shears\" or \"pickaxe\": the tool that digs block-name fastest."
   [block-name]
   (cond
     (shovel-blocks block-name) "shovel"
+    (= block-name "cobweb") "shears"
+    (and (str/includes? block-name "fence") (not (str/starts-with? block-name "nether_brick"))) "axe"
     (str/ends-with? block-name "_leaves") "hoe"
     (some #(str/ends-with? block-name %) ["_log" "_wood" "_planks"]) "axe"
     :else "pickaxe"))
+
+(defn of-kind?
+  "Whether item-name is a tool of kind: \"<material>_<kind>\", or the kind itself (shears)."
+  [item-name kind]
+  (or (= item-name kind) (str/ends-with? item-name (str "_" kind))))
+
+(def fallback-kind "What digs a block when its own kind is not carried." {"shears" "sword"})
 
 (defn best-tool
   "The carried tool (of item-names) of the kind that suits block-name with the
   highest material, or nil."
   [item-names block-name]
-  (let [suffix (str "_" (tool-kind block-name))
+  (let [kind (tool-kind block-name)
         rank weapon/weapon-rank]
     (->> item-names
-         (filter #(str/ends-with? % suffix))
+         (filter #(of-kind? % kind))
          (sort-by rank >)
          first)))
 
@@ -57,10 +66,11 @@
   "The carried item (map {:name :durability ...}) a careful player digs block-name with, or nil. It is of the right
   kind and, when harvest-tools is not empty, one of them. Cheapest material first, then the most worn."
   [items block-name harvest-tools]
-  (let [suffix (str "_" (tool-kind block-name))
-        ok (set harvest-tools)]
-    (->> items
-         (filter #(and (str/ends-with? (:name %) suffix) (or (empty? ok) (ok (:name %)))))
+  (let [kind (tool-kind block-name)
+        ok (set harvest-tools)
+        of (fn [k] (filter #(and (of-kind? (:name %) k) (or (empty? ok) (ok (:name %)))) items))
+        found (or (seq (of kind)) (some-> (fallback-kind kind) of seq))]
+    (->> found
          (sort-by (juxt (comp weapon/cheap-rank :name) #(or (:durability %) js/Infinity)))
          first)))
 
@@ -197,14 +207,14 @@
   (and (not (can-harvest? p block-name))
        (> (clear-ms p block-name) (quick-clear-ms))))
 
-(def dig-kinds ["pickaxe" "axe" "shovel" "hoe"])
+(def dig-kinds ["pickaxe" "axe" "shovel" "hoe" "shears"])
 
 (defn hand-better?
   "Whether the body should dig block bare-handed: a digging tool of another kind is held and none of the block's kind
   is carried (soil and leaves by hand, never wearing a pickaxe out on them)."
   [p block]
   (let [held (.-held (.self p))
-        kind (when held (some #(when (str/ends-with? held (str "_" %)) %) dig-kinds))]
+        kind (when held (some #(when (of-kind? held %) %) dig-kinds))]
     (boolean (and block kind (not= kind (tool-kind block)) (nil? (pick p block))))))
 
 (defn ^:async equip!
