@@ -171,6 +171,54 @@
     (perception/pass! per)
     p))
 
+(def cave-blocks
+  "A stone floor at y 63 and ceiling at y 70 over x, z -20..20 (1681 standable cells: more than a closed room holds), open at the sides."
+  (into {} (for [x (range -20 21) z (range -20 21) y [63 70]] [(str x "," y "," z) "stone"])))
+
+(def tunnel-blocks
+  "A 1-wide, 2-high tunnel along x from -3 to 40 at the body's level."
+  (into {} (concat (for [x (range -3 41) y [63 66]] [(str x "," y ",0") "stone"])
+                   (for [x (range -3 41) y [64 65] z [-1 1]] [(str x "," y "," z) "stone"]))))
+
+(defn seen-dark
+  "A fake body with light data (as the night trigger reads it) that has seen every block."
+  [blocks & [light extra]]
+  (let [raw-p (tu/fake (merge {:time night :blocks blocks} extra))
+        _ (swap! (fake/state raw-p) merge {:light-default [0 0]} (when light {:light light}))
+        per (perception/create (fake-raw/create raw-p) {:now (constantly 1000000)})]
+    (tu/seeing-all (perception/wrap raw-p per))))
+
+(deftest a-body-buried-in-a-wide-dark-cave-is-unsafe-at-night
+  (is (>= (sh/cave-cells (seen-dark cave-blocks)) 16))
+  (is (< (sh/cave-cells (seen-dark tunnel-blocks)) 16) "its own 1-wide tunnel")
+  (is (true? (sh/open-cave? (seen-dark cave-blocks))))
+  (is (false? (sh/open-cave? (seen-dark tunnel-blocks))))
+  (is (true? (sh/unsafe-night? (seen-dark cave-blocks) sh/default-roof-height)))
+  (is (false? (sh/unsafe-night? (seen-dark tunnel-blocks) sh/default-roof-height))))
+
+(deftest a-lit-cave-is-not-unsafe
+  (is (false? (sh/open-cave? (seen-dark cave-blocks {[0 64 0] [0 14] [0 65 0] [0 14]})))))
+
+(defn ^:async places-at-night
+  "How many blocks the night job places in three ticks for a body that has seen blocks, in the dark."
+  [blocks]
+  (let [p (seen-dark blocks nil {:inventory dirt-stack})
+        [_ sink] (tu/legacy-capture-sink)
+        clock (atom 1000000)
+        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
+                          :now #(deref clock)
+                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+    (core/submit! eng '(jobs.survival.night) {})
+    (await (tick-n eng 3))
+    (count (calls p "place"))))
+
+(deftest a-body-in-a-wide-dark-cave-digs-in-where-it-stands-but-keeps-mining-in-its-own-tunnel
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (pos? (await (places-at-night cave-blocks))) "an open cave: sealed in where it stands")
+        (is (zero? (await (places-at-night tunnel-blocks))) "its own tunnel: nothing to do")))))
+
 (deftest night-without-light-data-falls-back-to-the-seen-roof
   (is (sh/buried-by-column? (seen-fake {:time night :blocks (stone-above 2 1)})) "one seen block over the head, air above it")
   (is (not (sh/buried-by-column? (seen-fake {:time night :blocks (stone-above 5 3)}))) "air over the head")

@@ -80,10 +80,49 @@
 
 (defn sleeping? [p] (boolean (.-isSleeping (.self p))))
 
+(def cave-radius 3)
+(def cave-width
+  "Standable cells under a ceiling within cave-radius of the feet from which the body counts as in an open cave, not a tunnel it dug."
+  16)
+(def cave-ceiling 8)
+(def lit-level "Block light at the feet from which a cell is lit enough that the body counts it a lit pocket." 8)
+
+(declare shut-in-room?)
+
+(defn block-light-at
+  "Block light (0-15) of the cell, or nil when no light data is loaded there."
+  [p {:keys [x y z]}]
+  (let [raw (some-> (aget p "perception") :raw)]
+    (when (and raw (<= 0 (.stateAt ^js raw x y z)))
+      (bit-and (.lightAt ^js raw x y z) 15))))
+
+(defn cave-cells
+  "How many standable cells (feet and head free, a solid floor, a seen solid within cave-ceiling over them) lie within
+  cave-radius of the feet, a block up or down: a cave is wide, a tunnel the body dug is not."
+  [p]
+  (let [{:keys [x y z]} (feet p)
+        solid? (fn [cx cy cz] (solid-at? p {:x cx :y cy :z cz}))]
+    (count (for [dx (range (- cave-radius) (inc cave-radius))
+                 dz (range (- cave-radius) (inc cave-radius))
+                 dy [-1 0 1]
+                 :let [cx (+ x dx) cy (+ y dy) cz (+ z dz)]
+                 :when (and (solid? cx (dec cy) cz) (not (solid? cx cy cz)) (not (solid? cx (inc cy) cz))
+                            (some #(solid? cx (+ cy %) cz) (range 2 (inc cave-ceiling))))]
+             1))))
+
+(defn open-cave?
+  "Buried in a dark, wide natural cave: no sky light, not shut in a closed room, under lit-level block light at the
+  feet (no light data counts as dark) and cave-cells wide. Mobs spawn there whatever the hour."
+  [p]
+  (boolean (and (buried? p) (not (shut-in-room? p))
+                (< (or (block-light-at p (feet p)) 0) lit-level)
+                (>= (cave-cells p) cave-width))))
+
 (defn unsafe-night?
-  "Night, awake, not under a roof and not buried underground."
+  "Night, awake, and not under a roof and not buried underground, or buried in a dark open cave (open-cave?)."
   [p roof-height]
-  (and (night? p) (not (sleeping? p)) (not (roofed? p roof-height)) (not (buried? p))))
+  (and (night? p) (not (sleeping? p))
+       (or (and (not (roofed? p roof-height)) (not (buried? p))) (open-cave? p))))
 
 (defn bed-in-view
   "The remembered bed position when it is within radius of the body, else nil."
@@ -397,7 +436,6 @@
   [c]
   (in-own-shelter (:primitives c) (:data (ctx/latest c :shelter))))
 
-(declare shut-in-room?)
 
 (defn safe-from-night?
   "Whether the body is safe from the night where it stands: a roof within roof-height (default default-roof-height) over it, buried,
