@@ -69,7 +69,7 @@
        overlaps a cell to fill. An open door is shut, not filled. A cell that answers occupied (torch, chest, bed) is left alone.
        When only such cells stay open the seal has failed. Every seal block goes to the scaffold ledger (purpose :retreat-plug), taken back by jobs.access.cleanup once no hostile is near.
      - pillar up 3 (jobs.access.pillar, the carried block with the most, at least 3). Needs a solid floor, free cells above and no slope or ledge a mob could climb to beside its top.
-       Not against a ranged mob. Every block goes to the scaffold ledger (purpose :pillar) for jobs.access.cleanup.
+       Not against a ranged mob or a spider (it climbs the pillar). Every block goes to the scaffold ledger (purpose :pillar) for jobs.access.cleanup.
      - back off: a step of up to 2 cells in any of 8 directions that gains at least a block on the hostile.
      - dig down and plug: a pit 2 deep under a solid side, else 3, then carried or dug blocks beside and over the head
        (ledger purpose :retreat-plug). It never drops onto a floor it has not seen solid: it zigzags over an open side
@@ -80,7 +80,7 @@
      - The pit and the pocket are dropped when a dig shows fluid or a cave (a seen open cell) in their shell. Lava is first
        filled with a carried block (:on-lava :seal, the default; :stop leaves it).
      - last of all, fight with the best weapon or tool (pickaxe, shovel, hoe) or the fist.
-     Order: fight if it wins, then seal, pillar (not against a ranged mob), back off, pit, pocket, fight.
+     Order: fight if it wins, then seal, pillar (not against a ranged mob or a spider), back off, pit, pocket, fight.
      Against a creeper back off comes first.
      An option that fails is not tried again until all have failed. Then, after a second's hold, all are tried again
      (one retreat_blocked warning per flight).
@@ -170,15 +170,15 @@
 (defn escape-order
   "Pure: the cornered options to try, safest first. {:win? the odds say a fight leaves reserve health (never true
   for a creeper), :flyer? a phantom is near (it outflies a walker: shelter, else fight), :creeper? one is near (it comes first), :enderman? an angry enderman is near (angry-enderman?) (it teleports, so no walk or back-off, and a
-  pillar is within its reach: the body enters water within water-reach, which it avoids, else walks under a 2-high roof within roof-reach, which it cannot enter, else shuts itself in), :ranged? the threat shoots, :home? the body is in its home
+  pillar is within its reach: the body enters water within water-reach, which it avoids, else walks under a 2-high roof within roof-reach, which it cannot enter, else shuts itself in), :ranged? the threat shoots, :climber? it is a spider (it climbs the pillar), :home? the body is in its home
   room: it digs no pit or pocket in its own floor or walls, :swim? the body is in water with a drowned near: swimming out to dry land comes first unless a fight wins}."
-  [{:keys [win? creeper? enderman? flyer? ranged? swim? home?]}]
+  [{:keys [win? creeper? enderman? flyer? ranged? climber? swim? home?]}]
   (cond->> (cond
              creeper? [:back-off :seal :pillar :pit :pocket :fight]
              enderman? [:water :roof :seal :pit :pocket :fight]
              win? [:fight]
              flyer? [:seal :pit :pocket :fight]
-             :else (into (if ranged? [:seal] [:seal :pillar]) [:back-off :pit :pocket :fight]))
+             :else (into (if (or ranged? climber?) [:seal] [:seal :pillar]) [:back-off :pit :pocket :fight]))
     (and swim? (not creeper?) (not enderman?) (not win?)) (into [:swim-out])
     home? (filterv (complement #{:pit :pocket}))))
 
@@ -384,6 +384,7 @@
                              :enderman? (angry-enderman? c hostiles)
                              :flyer? (boolean (some combat/flyer? hostiles))
                              :ranged? (boolean (and threat (combat/ranged? threat)))
+                             :climber? (boolean (some combat/climber? hostiles))
                              :swim? (and (boolean (some #(= "drowned" (.-name %)) hostiles)) (in-water? c))
                              :home? home?})]
     (loop [[option & more] order]

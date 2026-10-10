@@ -769,6 +769,10 @@
   (is (= [:fight] (retreat/escape-order {:swim? true :win? true})) "an armed body that wins still fights")
   (is (= :back-off (first (retreat/escape-order {:swim? true :creeper? true})))))
 
+(deftest no-pillar-against-a-climber
+  (is (= [:seal :back-off :pit :pocket :fight] (retreat/escape-order {:climber? true}))
+      "a spider climbs the pillar's side to the body on top"))
+
 (def pool
   "Water x -4..8, y 64..65, z -4..4 over the floor: dry land beyond it, nearest at x -5."
   (into {} (for [x (range -4 9) y [64 65] z (range -4 5)] [(key-of x y z) "water"])))

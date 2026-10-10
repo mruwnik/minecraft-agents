@@ -48,6 +48,8 @@
 
 (defn flyer? [e] (= "phantom" (.-name e)))
 
+(defn climber? [e] (contains? #{"spider" "cave_spider"} (.-name e)))
+
 (defn creeper? [e]
   (or (true? (.-creeper e)) (= "creeper" (.-name e))))
 
