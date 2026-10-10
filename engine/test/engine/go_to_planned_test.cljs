@@ -42,5 +42,5 @@
           (core/submit! eng '(jobs.movement.go-to {:pos [32 58 0] :range 0 :escalate false}) {})
           (dotimes [_ 6] (await (core/tick! eng)))
           (let [data (map #(or (:data %) %) (filter #(= :planned (:kind %)) @seen))]
-            (is (every? #(= 10 (:oxygen %)) (take 1 data)) (pr-str (first data)))
+            (is (= 10 (:oxygen (first data))) (pr-str (first data)))
             (is (some #(number? (:swim-steps %)) data) "a found plan counts its swim steps")))))))

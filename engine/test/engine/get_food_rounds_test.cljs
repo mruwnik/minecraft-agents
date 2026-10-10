@@ -513,17 +513,22 @@
           (is (= [] (events-of seen :search.not-found)))
           (is (re-find #"night" (str (:text (first (events-of seen :food.none)))))))))))
 
-(deftest hungry-underground-does-not-explore-the-caves-but-a-starving-body-does
+(deftest hungry-underground-does-not-explore-the-caves
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[food health searched] [[8 10 []] [0 20 :one]]]
-          (let [{:keys [eng seen]} (setup {:time 6000 :blocks {"0,66,0" "stone"} :self {:food food :health health}} :step-ms 5)]
-            (await (one-round! eng {}))
-            (if (= :one searched)
-              (is (= 1 (count (events-of seen :search.not-found))) "starving: the search goes on")
-              (do (is (= [] (events-of seen :search.not-found)) "food 8 underground: no search through the dark caves")
-                  (is (re-find #"underground" (str (:text (first (events-of seen :food.none))))))))))))))
+        (let [{:keys [eng seen]} (setup {:time 6000 :blocks {"0,66,0" "stone"} :self {:food 8 :health 10}} :step-ms 5)]
+          (await (one-round! eng {}))
+          (is (= [] (events-of seen :search.not-found)) "food 8 underground: no search through the dark caves")
+          (is (re-find #"underground" (str (:text (first (events-of seen :food.none)))))))))))
+
+(deftest a-starving-body-underground-explores-the-caves
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:time 6000 :blocks {"0,66,0" "stone"} :self {:food 0 :health 20}} :step-ms 5)]
+          (await (one-round! eng {}))
+          (is (= 1 (count (events-of seen :search.not-found))) "starving: the search goes on"))))))
 
 (deftest a-starving-body-searches-at-night-when-no-danger-is-near
   (async done

@@ -335,14 +335,23 @@
             (is (= #{[10 64 0] [20 64 0]} (chests-in p)) "no chest was made, none of the group used")
             (is (empty? (get-in @(fake/state p) [:containers [10 64 0]])))))))))
 
+(defn chest-place-of [eng]
+  (some-> (mem/place (mem/view (:store eng)) :chest) (select-keys [:x :y :z])))
+
 (deftest a-deposit-into-anothers-zoned-chest-does-not-become-the-chest-place
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[zones recorded?] [[[(assoc other-zone :min [10 60 0] :max [10 70 0])] false]
-                                   [[] true]]]
-          (let [{:keys [eng p]} (setup-zoned one-chest-world zones)
-                result (await (tu/child-outcome eng job {:chest chest :items ["dirt"] :ignore-zones? true} 12))]
-            (is (= {:gave-up false} result) (pr-str zones))
-            (is (= (when recorded? {:x 10 :y 64 :z 0}) (some-> (mem/place (mem/view (:store eng)) :chest) (select-keys [:x :y :z])))
-                (pr-str zones))))))))
+        (let [{:keys [eng]} (setup-zoned one-chest-world [(assoc other-zone :min [10 60 0] :max [10 70 0])])
+              result (await (tu/child-outcome eng job {:chest chest :items ["dirt"] :ignore-zones? true} 12))]
+          (is (= {:gave-up false} result))
+          (is (nil? (chest-place-of eng))))))))
+
+(deftest a-deposit-into-an-unzoned-chest-becomes-the-chest-place
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup-zoned one-chest-world [])
+              result (await (tu/child-outcome eng job {:chest chest :items ["dirt"] :ignore-zones? true} 12))]
+          (is (= {:gave-up false} result))
+          (is (= {:x 10 :y 64 :z 0} (chest-place-of eng))))))))

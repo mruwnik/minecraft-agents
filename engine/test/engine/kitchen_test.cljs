@@ -56,18 +56,25 @@
 
 (defn waits [s] (distinct (map (juxt :reason :backed-off) (events-of s :waiting))))
 
-(deftest the-check-passes-for-raw-food-or-three-wheat-and-waits-otherwise
+(defn run-with [inventory]
+  (run (list job (dissoc args :keep)) {:inventory inventory :containers {"10,64,0" []}} 2))
+
+(deftest the-check-passes-for-raw-food-or-three-wheat
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[inventory runs?] [[[(item "beef" 1)] true]
-                                   [[(item "wheat" 3)] true]
-                                   [[(item "wheat" 2) (item "cooked_beef" 4) (item "bread" 5)] false]
-                                   [[(item "potato" 4)] false]]]
-          (let [s (await (run (list job (dissoc args :keep)) {:inventory inventory :containers {"10,64,0" []}} 2))]
-            (is (= runs? (boolean (seq (events-of s :round_started)))) (pr-str inventory))
-            (when-not runs?
-              (is (= [[:nothing-to-do nil]] (waits s)) (pr-str inventory)))))))))
+        (doseq [inventory [[(item "beef" 1)] [(item "wheat" 3)]]]
+          (let [s (await (run-with inventory))]
+            (is (seq (events-of s :round_started)) (pr-str inventory))))))))
+
+(deftest the-check-waits-for-less-than-three-wheat-or-only-cooked-food
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [inventory [[(item "wheat" 2) (item "cooked_beef" 4) (item "bread" 5)] [(item "potato" 4)]]]
+          (let [s (await (run-with inventory))]
+            (is (empty? (events-of s :round_started)) (pr-str inventory))
+            (is (= [[:nothing-to-do nil]] (waits s)) (pr-str inventory))))))))
 
 (deftest a-pass-that-leaves-raw-food-carried-rests-so-a-standing-job-does-not-starve-the-queue
   (async done
