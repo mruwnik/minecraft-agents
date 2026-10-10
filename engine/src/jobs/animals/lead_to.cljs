@@ -14,6 +14,7 @@
             [jobs.lib.doors :as doors]
             [engine.memory :as mem]
             [clojure.string :as str]
+            [jobs.animals.herd-run :as hr]
             [jobs.lib.places :as places]))
 
 (def doc
@@ -145,8 +146,8 @@
 
 (defn ^:async close-up!
   "Shut the gates the :leave-open legs left open (the animal followed through them): their entries become shut-able and a
-  jobs.maintenance.shut-doors child shuts them. :yield while that child waits, else the job concludes."
-  [c]
+  jobs.maintenance.shut-doors child shuts them. :yield while that child waits, else (conclude! c reason) ends the job."
+  [c conclude!]
   (let [mine (walk-entries c)]
     (doseq [e mine :when (false? (:shut? e))]
       (ctx/forget-where! c :opened #(= (:cell e) (:cell %)))
@@ -318,6 +319,13 @@
   rather than looks decides."
   3000)
 
+(defn following?
+  "True when the animal is on this body's lead, or (a lure-to run, memory :method :lure) the body still holds its food."
+  [c a]
+  (if (= :lure (:method (ctx/mem c)))
+    (hr/holds-food? c)
+    (animals/led-by-me? a)))
+
 (defn escort-problem
   "Why the walk must stop after a leg: :lost (not seen for unseen-lost-ms), :lead-broke or :lagging (the animal
   farther than follow-reach), :wait (not seen yet, or seen more than gap behind: the body holds still), else nil."
@@ -331,7 +339,7 @@
       (do (ctx/update-mem! c dissoc :unseen-since)
           (let [d (flat-dist (u/pos-of (.-pos a)) (u/self-pos c))]
             (cond
-              (not (animals/led-by-me? a)) :lead-broke
+              (not (following? c a)) :lead-broke
               (> d follow-reach) :lagging
               (> d gap) :wait))))))
 
@@ -512,7 +520,7 @@
           a (when animal (animal-now c))]
       (when a (ctx/update-mem! c dissoc :unseen-since))
       (cond
-        (:ending (ctx/mem c)) (await (close-up! c))
+        (:ending (ctx/mem c)) (await (close-up! c conclude!))
         (and fence (contains? #{nil :arrive} phase) (not-fence? c)) (finish! c :no-fence)
         (>= (- now started) (* 1000 timeout-s)) (finish! c :timeout)
         (nil? phase) (do (ctx/update-mem! c assoc :origin (u/self-pos c))

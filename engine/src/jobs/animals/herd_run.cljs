@@ -78,12 +78,17 @@
 
 (defn lure? [c] (= :lure (:method (ctx/mem c))))
 
+(defn holds-food?
+  "True when the body holds the breeding food of :mob in hand."
+  [c]
+  (boolean (some #{(.-held (.self (:primitives c)))} (get animals/breeding-food (:mob (:args c))))))
+
 (defn held-by-me?
   "True when the animal is on this body's lead, or in a lure run follows the food held in hand (within follow-range)."
   [c e]
   (if (lure? c)
-    (boolean (and (some #{(.-held (.self (:primitives c)))} (get animals/breeding-food (:mob (:args c))))
-                  (<= (u/dist (u/self-pos c) (u/pos-of (.-pos e))) (follow-range))))
+    (and (holds-food? c)
+         (<= (u/dist (u/self-pos c) (u/pos-of (.-pos e))) (follow-range)))
     (animals/led-by-me? e)))
 
 (defn led-now
