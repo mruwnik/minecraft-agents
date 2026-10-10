@@ -1034,7 +1034,8 @@
           (core/submit! (:eng s) (list 'jobs.items.obtain {:item "wooden_pickaxe"}) {})
           (await (run-ticks s 6))
           (is (= 1 (count (filter #(= :no-source (:reason %)) (events-of s :waiting)))))
-          (is (re-find #"nothing seen to gather" (:why (first (events-of s :waiting))))))))))
+          (is (re-find #"nothing seen to gather" (:why (first (events-of s :waiting)))))
+          (is (re-find #"pass :explore true to search for it" (:why (first (events-of s :waiting))))))))))
 
 (deftest obtain-gather-is-off-when-how-leaves-it-out
   (async done

@@ -448,6 +448,7 @@
          (when (some #(= "obsidian" (:key %)) needs)
            " (obsidian: seen obsidian, or lava with open air above and a water bucket carried; a bucket is 3 iron plus a seen water source)")
          (when (seq unseen) (str ": " (clojure.string/join ", " (map label unseen))))
+         (when (and (seq unseen) (not (explore-opts c))) " (pass :explore true to search for it)")
          (when (seq seen)
            (str "; seen but not taken (a zone, claim or plan footprint may refuse it): "
                 (clojure.string/join ", " (for [need seen :let [b (first (seen-blocks-of c need true))]]
