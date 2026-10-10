@@ -174,8 +174,8 @@
                    :why (str "hungry (food " (.-food self) ") but no food is carried, known or in sight within "
                              (hunt-radius c) " blocks; searched recently")})
     (or (wants-food? c)
-        (foods/top-up? (.-food self) (.-health self) (foods/carried-names self))
-        (foods/eat-now? self (:args c))
+        (foods/top-up? (.-food self) (.-health self) (foods/carried-names self (foods/reserved (ctx/view c))))
+        (foods/eat-now? self (:args c) (foods/reserved (ctx/view c)))
         (boolean (:eating (ctx/mem c)))
         (ctx/wait c {:reason :not-hungry
                      :why (str "food " (.-food self) " at health " (.-health self) ", hungry below " (foods/hungry-line (.-health self) (:args c)))})))))

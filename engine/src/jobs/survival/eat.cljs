@@ -36,10 +36,11 @@
 
 (defn best-food
   "The name of the carried item to eat, or nil: the common foods by most hunger points then most saturation, then
-  precious ones, then harmful ones (allow-bad). Ties by carrying order. Only item when given."
-  [inventory allow-bad item health]
+  precious ones, then harmful ones (allow-bad). Ties by carrying order. Only item when given. Reserved bait (foods/reserved) is left when no item is named."
+  [inventory allow-bad item health food reserved]
   (->> inventory
        (map :name)
+       (remove #(and (nil? item) (foods/spared? food % reserved)))
        (filter #(or (nil? item) (= item %)))
        (filter #(eaten? allow-bad item health %))
        (sort-by (fn [n] [(cond (contains? foods/harmful n) 2 (contains? foods/precious n) 1 :else 0)
@@ -49,7 +50,7 @@
 (defn carried-best [c]
   (let [{:keys [item allow-bad]} (:args c)
         self (.self (:primitives c))]
-    (best-food (u/inventory (:primitives c)) allow-bad item (.-health self))))
+    (best-food (u/inventory (:primitives c)) allow-bad item (.-health self) (.-food self) (foods/reserved (ctx/view c)))))
 
 (defn refusal
   "[reason text] when the :item is not eaten at all (not a food, or harmful without :allow-bad), else nil."

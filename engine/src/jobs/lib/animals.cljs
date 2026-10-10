@@ -30,6 +30,11 @@
   (let [have (into #{} (map :name) (u/inventory p))]
     (first (filter have (get breeding-food mob)))))
 
+(defn reserve-bait!
+  "Tell the hunger reflexes the foods of mob are bait this job needs: an unnamed meal leaves them alone for 5 minutes (foods/reserved). Call it each round."
+  [c mob]
+  (ctx/remember! c :bait-reserve {:foods (get breeding-food mob)} {:cap 5 :ttl 300000}))
+
 (defn herd
   "The JS entities named mob within radius of the body, nearest first, as a vector."
   [p mob radius]

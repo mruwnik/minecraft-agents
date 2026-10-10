@@ -208,6 +208,7 @@
 (defn ^:async round
   "The whole attempt: steps until the job ends; yields only while a child waits on the world."
   [c]
+  (animals/reserve-bait! c (:mob (:args c)))
   (loop []
     (let [r (await (step c))]
       (case r

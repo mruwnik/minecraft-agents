@@ -287,6 +287,7 @@
   "The whole run: steps until it ends. A round that starts unsafe restarts first (restart!). A step that changed no
   memory and took under pace-ms is followed by a wait, so a step that keeps answering at once never spins."
   [c]
+  (animals/reserve-bait! c (:mob (:args c)))
   (declined/begin! c)
   (ctx/update-mem! c update :started #(or % (ctx/now c)))
   (ctx/update-mem! c update :origin #(or % (u/self-pos c)))

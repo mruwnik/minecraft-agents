@@ -134,6 +134,27 @@
           (is (= ["cooked_beef" "carrot" "carrot"] (mapv :item (entries eng :fed))))
           (is (= [] (:list (core/state eng))) "one call eats until :until or nothing edible is left"))))))
 
+(deftest eat-leaves-the-bait-an-animal-job-reserved-unless-near-starving
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [fed (fn ^:async fed* [food reserve?]
+                    (let [{:keys [eng]} (setup {:self {:food food} :inventory [{:name "carrot" :count 10}]})]
+                      (when reserve? (mem/write! (:store eng) :bait-reserve {:foods ["carrot"]} {:cap 5 :ttl 300000}))
+                      (core/submit! eng '(jobs.survival.eat) {})
+                      (await (core/tick! eng))
+                      (count (entries eng :fed))))]
+          (is (zero? (await (fed 5 true))) "reserved: none eaten")
+          (is (pos? (await (fed 5 false))) "not reserved: eaten")
+          (is (pos? (await (fed 1 true))) "starving: eaten"))))))
+
+(deftest reserved-bait-is-not-food-for-the-hungry-checks
+  (let [self (fn [food] #js {:food food :health 20 :inventory #js [#js {:name "carrot" :count 10}]})
+        res #{"carrot"}]
+    (is (not (foods/carries-food? (self 5) res)))
+    (is (foods/carries-food? (self 5)))
+    (is (foods/carries-food? (self 1) res))))
+
 (deftest eat-goes-on-until-fed-or-out-of-food
   (async done
     (tu/run-async done

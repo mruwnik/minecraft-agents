@@ -29,7 +29,7 @@
         learned (:t (mem/latest view :food-source))]
     (boolean (and gave-up
                   (< (- (:now view) gave-up) (* 1000 (rest-s self args)))
-                  (not (foods/carries-food? self))
+                  (not (foods/carries-food? self (foods/reserved view)))
                   (< (wheat-carried self) (bake-wheat))
                   (not (and learned (> learned gave-up)))))))
 
@@ -43,9 +43,10 @@
   searching again every cooldown. The rest ends when food is carried, wheat to bake is, or a food source is learned."
   [world memory args]
   (let [self (.self world)
-        urgent? (or (foods/eat-now? self args) (<= (.-food self) (settings/get settings ::urgent-food)))]
+        reserved (foods/reserved memory)
+        urgent? (or (foods/eat-now? self args reserved) (<= (.-food self) (settings/get settings ::urgent-food)))]
     (and (or (foods/hungry? (.-food self) (.-health self) args)
-             (foods/top-up? (.-food self) (.-health self) (foods/carried-names self))
-             (foods/eat-now? self args))
+             (foods/top-up? (.-food self) (.-health self) (foods/carried-names self reserved))
+             (foods/eat-now? self args reserved))
          (not (resting? self memory args))
          (if urgent? :urgent true))))

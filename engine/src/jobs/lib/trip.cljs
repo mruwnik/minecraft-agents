@@ -33,7 +33,7 @@
     (boolean (and gave-up
                   (< (- (:now view) gave-up) (* 1000 (settings/get food-settings ::gave-up-s)))
                   (foods/hungry? (.-food self) (.-health self) {})
-                  (not (foods/carries-food? self))))))
+                  (not (foods/carries-food? self (foods/reserved view)))))))
 
 (defn spare-fraction [] (settings/get spare-settings ::spare-fraction))
 

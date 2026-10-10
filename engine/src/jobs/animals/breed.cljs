@@ -239,6 +239,7 @@
 (defn ^:async round
   "The whole attempt: walk and feed until the job ends."
   [c]
+  (animals/reserve-bait! c (:mob (:args c)))
   (loop []
     (let [r (await (step c))]
       (if (= :again r) (recur) r))))

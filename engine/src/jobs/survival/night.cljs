@@ -163,7 +163,7 @@
         self (.self p)]
     (and (not (sh/sleeping? p))
          (foods/starving? self {})
-         (not (foods/carries-food? self))
+         (not (foods/carries-food? self (foods/reserved (ctx/view c))))
          (zero? (ctx/count-in c :hungry (foods/starving-rest-ms)))
          (not (danger-q/danger-near? p (danger-q/hostile-radius) (danger-q/ranged-radius))))))
 

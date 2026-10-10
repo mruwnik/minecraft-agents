@@ -3,6 +3,7 @@
   and the three short judgement lists on top of it: harmful, precious and named-only foods. The data names
   mob and fish buckets as foods (they are not eaten); those are left out."
   (:require [engine.args :as a]
+            [engine.memory :as mem]
             [engine.settings :as settings]
             ["minecraft-data" :as minecraft-data]
             [clojure.string :as str]
@@ -10,6 +11,7 @@
 
 (a/defargs settings
   {::starving-rest-ms {:default 60000 :doc "The rest after a fruitless food search while starving (food 0, or hurt and hungry), for get-food's ask cooldown and the hungry trigger." :spec (a/num-in 0 nil)}
+   ::reserve-eat-below {:default 3 :doc "At this much food or less bait reserved by a running animal job is eaten as well." :spec (a/int-in 0 20)}
    ::low-health {:default 10 :doc "Below this health (of 20) precious food is eaten unnamed." :spec (a/int-in 0 nil)}})
 
 (def table-for
@@ -97,8 +99,23 @@
   (boolean (and (< health 20) (< food top-up-food)
                 (some #(and (edible? %) (not (rare-food %))) carried-names))))
 
-(defn carried-names [self]
-  (map #(.-name %) (array-seq (.-inventory self))))
+(defn reserved
+  "The item names animal jobs have reserved as bait lately (jobs.lib.animals/reserve-bait!), from a memory view."
+  [view]
+  (into #{} (mapcat :foods) (map :data (mem/entries view :bait-reserve))))
+
+(defn spared?
+  "Whether an unnamed meal leaves name alone: it is in reserved and food is above ::reserve-eat-below."
+  [food name reserved]
+  (and (contains? reserved name) (> food (settings/get settings ::reserve-eat-below))))
+
+(defn carried-names
+  "Names of the carried items an unnamed meal may eat: not the reserved bait (names), unless nearly starving."
+  ([self] (carried-names self #{}))
+  ([self reserved]
+   (->> (array-seq (.-inventory self))
+        (map #(.-name %))
+        (remove #(spared? (.-food self) % reserved)))))
 
 (defn eaten-unnamed?
   "Whether a meal that names no item would eat item at health: food, not harmful, not named-only, and precious only
@@ -110,10 +127,12 @@
 
 (defn carries-food?
   "Whether the sensed self carries something a meal would eat."
-  [self]
-  (boolean (some #(eaten-unnamed? (.-health self) %) (carried-names self))))
+  ([self] (carries-food? self #{}))
+  ([self reserved]
+   (boolean (some #(eaten-unnamed? (.-health self) %) (carried-names self reserved)))))
 
 (defn eat-now?
   "Health below :health (default 7), food below 20 and something a meal would eat carried."
-  [self args]
-  (boolean (and (< (.-health self) (:health args default-health)) (< (.-food self) 20) (carries-food? self))))
+  ([self args] (eat-now? self args #{}))
+  ([self args reserved]
+   (boolean (and (< (.-health self) (:health args default-health)) (< (.-food self) 20) (carries-food? self reserved)))))
