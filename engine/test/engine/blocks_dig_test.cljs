@@ -487,6 +487,17 @@
             (is (= 1 (count @stands)))
             (is (not= [0 0] (first @stands)) "the dig is made from beside the column, never from on top")))))))
 
+(deftest a-dig-under-the-feet-says-what-it-read-of-the-floor-before-it-digs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self body :blocks {"0,63,0" "dirt" "0,62,0" "stone"}})]
+          (hiding p #(= [0 62 0] %))
+          (await (child-outcome eng job {:pos under-feet} 20))
+          (let [e (first (filterv #(= :blocks.dig.under-feet (:kind %)) @seen))]
+            (is (= {:feet [0 64 0] :cell [0 63 0] :decision :step-aside :floor-read "stone" :hazards [:under-feet]}
+                   (select-keys e [:feet :cell :decision :floor-seen :floor-read :hazards])))))))))
+
 (deftest a-dig-from-beside-says-where-the-body-stepped
   (async done
     (tu/run-async done

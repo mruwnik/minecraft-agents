@@ -267,6 +267,21 @@
   (b/unreachable! c why)
   :declined)
 
+(defn note-under-feet!
+  "Debug event blocks.dig.under-feet before the first dig of the cell under the feet: the floor below as seen and as
+  guessed, the hazards the rules read, and whether the body steps aside."
+  [c pos decision]
+  (let [[fx fy fz] (b/feet-cell c)
+        [x y z] (b/cell pos)
+        below [x (dec y) z]
+        p (:primitives c)]
+    (when (= [x y z] [fx (dec fy) fz])
+      (ctx/emit! c :blocks.dig.under-feet :debug
+                 {:feet [fx fy fz] :cell [x y z] :decision decision
+                  :floor-seen ((access/seen-at p) below) :floor-read ((access/sensed-at p b/hidden-guess) below)
+                  :hazards (mapv :reason (:hazards (access/may-dig? (b/rules-in c) pos)))
+                  :text (str "dig under the feet at " (pr-str [x y z]) ": " (name decision))}))))
+
 (defn ^:async attempt!
   "The whole dig: fetch a tool if due, walk into reach, dig, pick up the drops. A walk that fails or leaves the block
   out of reach is tried once more, then the job declines :unreachable."
@@ -303,13 +318,15 @@
             :else (recur (inc fails) (inc steps))))
         (b/refused-now c (problem c)) :declined
         (and (access/under-feet? (access/may-dig? (b/rules-in c) pos)) (not (contains? (set (:accept (:args c))) :under-feet)))
-        (let [r (await (step-aside! c))]
+        (let [_ (note-under-feet! c pos :step-aside)
+              r (await (step-aside! c))]
           (case r
             :arrived (do (ctx/update-mem! c assoc :stepped-aside (b/feet-cell c)) (recur fails (inc steps)))
             :declined (do (b/refused-now c (problem c)) :declined)
             r))
         :else
-        (let [d (await (dig! c pos block))]
+        (let [_ (note-under-feet! c pos :dig-on-top)
+              d (await (dig! c pos block))]
           (cond
             (= :done d) :done
             (= :collect d) (recur fails (inc steps))
