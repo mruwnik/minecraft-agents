@@ -1,5 +1,6 @@
 (ns jobs.gather.get-seeds
-  (:require [engine.settings :as settings]
+  (:require [clojure.string :as str]
+            [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
@@ -38,7 +39,7 @@
   is neither dug nor missing (tall grass takes its other half with it, so missing is fine).
 
   No block left ends :refused (warn get-seeds.gave-up with :zones and :plans) when any was refused, else
-  :none. Two batches in a row where nothing was diggable (none dug, none skipped: all missing) end :barren
+  :none (the text names the radius and the nearest source seen beyond it). Two batches in a row where nothing was diggable (none dug, none skipped: all missing) end :barren
   (warn get-seeds.gave-up). A batch of only skipped blocks is not barren.
 
   Hands over {:got n :reason r} (info get-seeds.done). :got is how many more are carried than at the start, at
@@ -156,13 +157,24 @@
       (and (= :stalk m) (stalks-in-range? c)) (decline! c :too-short)
       :else (look/wait-unless-surveyed c {:reason :nothing-in-range :radius (:radius (:args c))}))))
 
+(defn none-why
+  "Why no source block is left: none within :radius, and the nearest seen beyond it (the seen-blocks cap is 64)."
+  [c]
+  (let [{:keys [radius sources item] :as a} (:args c)
+        names (cond (= :stalk (mode a)) [(:block (materials item))] sources sources :else (:sources (materials item)))
+        far (first (look/seen-blocks (:primitives c) {:names names :radius 64 :max 1 :live? true}))]
+    (str (if-let [n (seq (:skipped (ctx/mem c)))]
+           (str "all " (count n) " skipped within " radius)
+           (str "no " (str/join "/" names) " within " radius))
+         (when far (str ", the nearest seen is " (Math/round (u/dist (u/self-pos c) (:pos far))) " away")))))
+
 (defn finish!
   "Emit the outcome, hand it to the parent and end the job."
   [c reason]
   (let [{:keys [goal]} (ctx/mem c)
         got (max 0 (- (carried c) (- goal (:count (:args c)))))]
     (ctx/emit! c :get-seeds.done :info {:got got :reason reason
-                                        :text (str "get-seeds done: " (name reason) ", got " got)})
+                                        :text (str "get-seeds done: " (if (= :none reason) (none-why c) (name reason)) ", got " got)})
     (ctx/result! c {:got got :reason reason})
     :done))
 

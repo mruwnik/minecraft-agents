@@ -113,6 +113,25 @@
           (is (= 8 (count (h/calls (:p s) "look"))) "exactly one look-around (8 glances) before concluding there is nothing")
           (is (zero? (dig-count s))))))))
 
+(deftest the-none-text-names-the-radius-and-the-nearest-grass-beyond-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:radius 10} {:blocks (patch "short_grass" [30] [0])} 10))
+              text (:text (done-event s))]
+          (is (= :none (:reason (done-event s))))
+          (is (re-find #"no short_grass/tall_grass within 10" text) text)
+          (is (re-find #"nearest seen is 30 away" text) text))))))
+
+(deftest the-none-text-without-any-grass-seen-says-so
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {} {:blocks {"2,64,0" "dirt"}} 10))
+              text (:text (done-event s))]
+          (is (re-find #"no short_grass/tall_grass within 16" text) text)
+          (is (not (re-find #"nearest" text)) text))))))
+
 (deftest the-check-passes-with-only-a-chest
   (async done
     (tu/run-async done
