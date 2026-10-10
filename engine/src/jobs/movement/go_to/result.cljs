@@ -2,8 +2,10 @@
   "How a go-to call ends: hand the result over, give up with the planner's reason in words, refuse."
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
+            [jobs.movement.go-to.headroom :as headroom]
             [jobs.lib.reach :as reach]
             [jobs.lib.shelter :as sh]
+            [jobs.lib.solid :as solid]
             [jobs.lib.spent :as spent]
             [jobs.lib.util :as u]))
 
@@ -80,13 +82,13 @@
 
 (defn give-up-words
   "The give-up reason in words, for the :text of the :unreachable event and the result: no map dumps."
-  [pos {:keys [why kind detail escalation shut-in nearest-hostile resets-spent mob mob-distance explored torches waypoint-why hp-cost hp-budget]}]
+  [pos {:keys [why kind detail escalation shut-in nearest-hostile resets-spent mob mob-distance explored torches waypoint-why hp-cost hp-budget low-passage]}]
   (str "gave up walking to " (if (map? pos) (let [{:keys [x y z]} pos] [x y z]) pos) ": "
        (if escalation
          (str "shut in here; " (escalation-words escalation))
          (case why
            :abilities (str (if shut-in "the body is shut in and " "it ") (or (kind-words kind) (str "needs a " (some-> kind name) " move the body cannot make")))
-           :goal-enclosed "the goal is walled in with no way through"
+           :goal-enclosed (if low-passage (headroom/words low-passage) "the goal is walled in with no way through")
            :goal-cut-off "the goal is cut off by a drop: no walkable way leads to it"
            :goal-on-magma "every cell in range is on magma or in a magma bubble column, where a route never ends"
            :start-enclosed "the body is shut in and nothing it can walk reaches out"
@@ -123,6 +125,9 @@
   ([c pos tries status result extra]
    (let [{:keys [why kind] :as fields} (merge {:at (feet-cell c) :near (js/Math.round (u/dist (u/self-pos c) pos))}
                                               (give-up-fields result) (sh/shelter-hint c) extra)
+         fields (cond-> fields
+                  (= :goal-enclosed why) (merge (some->> (headroom/low-passage (:primitives c) (solid/cell (if (map? pos) pos (zipmap [:x :y :z] pos))))
+                                                          (hash-map :low-passage))))
          more (dissoc fields :why :kind)
          text (give-up-words pos fields)]
      (ctx/emit! c :unreachable (warn-level c) (cond-> (merge {:target pos :tries tries :status status :why why
