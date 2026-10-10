@@ -4,6 +4,7 @@
             [engine.core :as core]
             [engine.events :as events]
             [engine.fake :as fake]
+            [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]))
@@ -24,9 +25,12 @@
     {:eng eng :p p :seen seen :clock clock}))
 
 (defn ^:async run
-  "Submit form over the world and tick n times, the furnaces cooking and the clock moving 40 s between ticks."
-  [form world n]
+  "Submit form over the world and tick n times, the furnaces cooking and the clock moving 40 s between ticks.
+  stock, when given, is the chest's booked content {name n}."
+  [form world n & [stock]]
   (let [{:keys [eng p clock] :as s} (setup world)]
+    (when stock
+      (mem/write! (:store eng) :fetch/stock {:pos [10 64 0] :items stock} {:cap 64 :ttl (* 6 60 60 1000)}))
     (core/submit! eng form {})
     (dotimes [_ n]
       (await (core/tick! eng))
@@ -56,8 +60,8 @@
 
 (defn waits [s] (distinct (map (juxt :reason :backed-off) (events-of s :waiting))))
 
-(defn run-with [inventory]
-  (run (list job (dissoc args :keep)) {:inventory inventory :containers {"10,64,0" []}} 2))
+(defn run-with [inventory & [stock]]
+  (run (list job (dissoc args :keep)) {:inventory inventory :containers {"10,64,0" []}} 2 (or stock {})))
 
 (deftest the-check-passes-for-raw-food-or-three-wheat
   (async done
@@ -86,3 +90,21 @@
           (swap! (:clock s) + 660000)
           (dotimes [_ 6] (await (core/tick! (:eng s))) (swap! (:clock s) + 1000))
           (is (= 2 (count (events-of s :kitchen.done))) "after the rest it tries again"))))))
+
+(deftest wheat-in-the-chest-is-baked-though-none-is-carried
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [stock [nil {"wheat" 6}]]
+          (let [s (await (run (list job args) {:inventory [(item "coal" 1)] :containers {"10,64,0" [(item "wheat" 6)]}} 12 stock))]
+            (is (true? (finished? s)) (pr-str stock))
+            (is (pos? (get (chest-items s) "bread" 0)) (pr-str stock))
+            (is (nil? (get (chest-items s) "wheat")) (pr-str stock))))))))
+
+(deftest a-chest-booked-without-wheat-keeps-the-kitchen-waiting
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (run-with [(item "potato" 4)] {"cobblestone" 20}))]
+          (is (empty? (events-of s :round_started)))
+          (is (= [[:nothing-to-do nil]] (waits s))))))))

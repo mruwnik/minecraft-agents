@@ -1,6 +1,7 @@
 (ns jobs.items.kitchen
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.lib.fetch :as fetch]
             [jobs.lib.standing :as standing]
             [jobs.lib.steps :as steps]
             [jobs.lib.storage :as storage]
@@ -11,12 +12,13 @@
   a child job:
   - :smelt (jobs.items.smelt), once per raw food of :foods that is carried, in the order of :foods: all of it at
     :furnace (the nearest seen furnace or smoker when nil; the child fetches fuel). A food is tried once a pass.
-  - :bake (jobs.items.bake) when 3 or more wheat are carried above its :keep entry: crafts it at the table near
-    :chest and keeps the bread's :keep loaves.
+  - :bake (jobs.items.bake) when 3 or more wheat are carried above its :keep entry or the chest holds them (its
+    stock booked in :fetch/stock, or unknown): bake takes the chest's wheat, crafts it at the table near :chest and
+    keeps the bread's :keep loaves.
   - :deposit (jobs.storage.deposit) of the cooked foods and bread carried above their :keep entries into :chest.
   A step with nothing to do is skipped and booked {:skipped reason}: :no-food, :no-wheat, :no-chest,
   :nothing-to-store. The check passes when a run is under way or a step would run (raw food carried, wheat for a
-  loaf above the keep), so a body with nothing to cook is not held. A pass that leaves such work (no furnace, no
+  loaf carried above the keep or in the chest), so a body with nothing to cook is not held. A pass that leaves such work (no furnace, no
   fuel) rests the kitchen 10 minutes (jobs.lib.standing): the check waits {:reason :nothing-to-do :backed-off
   [\"kitchen\"]}, so the job can stand in the queue under repeat without starving other jobs.
   Ends :done with info kitchen.done and {:steps {step summary}}; smelt summaries are keyed by food.")
@@ -38,11 +40,15 @@
 (def rest-key "kitchen")
 
 (defn facts
-  "What the decisions are made from: {name count} carried, whether a chest is known, the foods tried this pass."
+  "What the decisions are made from: {name count} carried, whether a chest is known and the wheat it is booked to
+  hold (nil when unknown), the foods tried this pass."
   [c]
-  {:carried (reduce (fn [m {:keys [name count]}] (update m name (fnil + 0) count)) {} (u/inventory (:primitives c)))
-   :chest (some? (storage/chest-of (ctx/view c) (:args c)))
-   :tried (:tried (ctx/mem c))})
+  (let [chest (storage/chest-of (ctx/view c) (:args c))
+        stock (some->> chest storage/cell-of (get (fetch/stock-of (ctx/view c))))]
+    {:carried (reduce (fn [m {:keys [name count]}] (update m name (fnil + 0) count)) {} (u/inventory (:primitives c)))
+     :chest (some? chest)
+     :chest-wheat (some-> stock (get "wheat" 0))
+     :tried (:tried (ctx/mem c))}))
 
 (defn to-store
   "The cooked foods and bread carried above their keep."
@@ -50,7 +56,7 @@
   (vec (filter #(> (get carried % 0) (get keep % 0)) (conj cooked-foods "bread"))))
 
 (defn decide
-  [step {:keys [furnace chest foods keep ignore-zones?]} {:keys [carried tried] chest? :chest}]
+  [step {:keys [furnace chest foods keep ignore-zones?]} {:keys [carried tried chest-wheat] chest? :chest}]
   (let [zone (when ignore-zones? {:ignore-zones? true})]
     (case step
       :smelt (if-let [food (first (filter #(and (pos? (get carried % 0)) (not (contains? tried %))) foods))]
@@ -58,7 +64,7 @@
                {:skip :no-food})
       :bake (cond
               (not chest?) {:skip :no-chest}
-              (< (- (get carried "wheat" 0) (get keep "wheat" 0)) 3) {:skip :no-wheat}
+              (and chest-wheat (< (+ chest-wheat (max 0 (- (get carried "wheat" 0) (get keep "wheat" 0)))) 3)) {:skip :no-wheat}
               :else {:call {:slot :bake :job (jobs :bake) :args (merge zone {:chest chest :keep (get keep "bread" 16)})}})
       :deposit (let [items (to-store carried keep)]
                  (cond
