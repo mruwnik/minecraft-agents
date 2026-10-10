@@ -127,6 +127,16 @@
           (is (empty? (f/events-of s :obtain.exploring)) "no search walk at 0.5 hp")
           (is (some #(= :low-health (:reason %)) (f/events-of s :waiting))))))))
 
+(deftest logs-seen-only-in-a-foreign-zone-stop-naming-the-refusal
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [trunk (into {} (for [y [64 65 66]] [(str "3," y ",4") "oak_log"]))
+              zone {:name "village" :min [2 60 3] :max [4 70 5] :owner "Miles"}
+              s (f/start (ore-world trunk []) [f/own-zone zone])]
+          (await (obtain! s {:any-of ["oak_log" "birch_log"] :count 2 :how #{:gather} :explore true} 12))
+          (is (re-find #"seen but not taken.*zone" (str (:why (first (f/events-of s :stopped))))) "the stop says the logs were seen and refused"))))))
+
 (deftest an-iron-ingot-with-raw-iron-carried-is-smelted-by-a-smelt-child
   (async done
     (tu/run-async done

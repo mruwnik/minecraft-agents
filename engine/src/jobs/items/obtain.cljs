@@ -380,14 +380,20 @@
                       (some-> (gather-plan c names n) :gather (gather-needs (game/version-of (:primitives c))))))))
 
 (defn unseen-why
-  "Text for the gather source: the raw needs of the chain whose blocks are not seen, or the general text."
+  "Text for the gather source: the raw needs of the chain whose blocks are not seen, those seen but not taken (a zone,
+  claim or plan footprint refuses them), or the general text."
   [c names n]
-  (let [unseen (->> (some-> (gather-plan c names n) :gather (gather-needs (game/version-of (:primitives c))))
-                    (remove #(seen-of c %)))]
+  (let [needs (some-> (gather-plan c names n) :gather (gather-needs (game/version-of (:primitives c))))
+        seen (filter #(and (seen-of c %) (let [n (with-block c %)] (not (ctx/check-child c (gather-slot n) (:job n) (:args n))))) needs)
+        unseen (remove #(seen-of c %) needs)
+        label (fn [{:keys [key seen sheep]}]
+                (if sheep (str key " (from " sheep " sheep within " (sheep-radius) " blocks)") (if (and (set? seen) (not= #{key} seen)) (str key " (from " (clojure.string/join "/" (sort seen)) ")") key)))]
     (str "nothing seen to gather what a craft lacks"
-         (when (seq unseen)
-           (str ": " (clojure.string/join ", " (for [{:keys [key seen sheep]} unseen]
-                                                  (if sheep (str key " (from " sheep " sheep within " (sheep-radius) " blocks)") (if (and (set? seen) (not= #{key} seen)) (str key " (from " (clojure.string/join "/" (sort seen)) ")") key)))))))))
+         (when (seq unseen) (str ": " (clojure.string/join ", " (map label unseen))))
+         (when (seq seen)
+           (str "; seen but not taken (a zone, claim or plan footprint may refuse it): "
+                (clojure.string/join ", " (for [need seen :let [b (seen-of c need)]]
+                                            (str (label need) (when-let [p (some-> b :pos)] (str " at " (:x p) " " (:y p) " " (:z p)))))))))))
 
 (defn pickaxe-why
   "For a stone material wanted with no pickaxe carried: that it needs one, and what crafting the cheapest lacks; else nil."
