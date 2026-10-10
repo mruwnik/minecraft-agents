@@ -142,6 +142,23 @@
           (is (= inside (st/pos-of p)))
           (is (= [:night-sheltered] (distinct (map :reason (st/emitted seen :holding))))))))))
 
+(deftest get-seeds-in-a-shelter-at-night-holds-with-the-reason-instead-of-spinning
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [clock (atom 1000000)
+              [seen sink] (tu/legacy-capture-sink)
+              p (tu/seeing-all (tu/fake-on-floor (-> (night-hut {})
+                                                        (update :blocks merge {"10,64,0" "short_grass" "11,64,0" "short_grass"})
+                                                        (assoc :drops {"short_grass" "wheat_seeds"}))))
+              eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all
+                                :dir (tu/tmp-dir) :now #(deref clock)
+                                :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+          (core/submit! eng '(jobs.gather.get-seeds {:count 2}) {})
+          (await (ticks eng 6))
+          (is (= inside (st/pos-of p)))
+          (is (= [:night-sheltered] (distinct (map :reason (st/emitted seen :holding))))))))))
+
 ;; ------------------------------------------------------------------ the night trigger and a queued walk (card 4252e02e)
 
 (deftest a-queued-walk-does-not-lead-the-body-out-of-its-mended-room-at-night
