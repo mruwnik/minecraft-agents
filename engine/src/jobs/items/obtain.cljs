@@ -193,6 +193,17 @@
 
 (def wool-keep "Sheep of a colour combat.hunt spares (its :keep default for animals); a colour with no more is no source." 2)
 
+(defn shears-source
+  "How the body gets shears for wool: :carried, :craft (2 iron ingots carried), :chest (shears or 2 iron ingots in a
+  booked chest), else nil."
+  [c]
+  (let [inv (u/inventory (:primitives c))
+        in-chest (fn [item n] (some #(>= (get % item 0) n) (vals (fetch/stock-of (ctx/view c)))))]
+    (cond
+      (pos? (storage/carried inv "shears")) :carried
+      (>= (storage/carried inv "iron_ingot") 2) :craft
+      (or (in-chest "shears" 1) (in-chest "iron_ingot" 2)) :chest)))
+
 (defn pick-plan
   "Of the gather plans (one per wanted name) the one that gathers the least wool, so the colour the body carries
   most of; a plan whose sheep are not in range comes after one whose are. {:wool-fallback {:wanted :taking}} on
@@ -202,7 +213,8 @@
     (if-not (some (comp seq wool-of) plans)
       (furnace-free plans)
       (let [sorted (sort-by #(reduce + 0 (vals (wool-of %))) plans)
-            colors (set (keep (fn [[k n]] (when (> n wool-keep) k)) (frequencies (keep #(.-color %) (sheep-in-range c)))))
+            keep-n (if (shears-source c) 0 wool-keep)
+            colors (set (keep (fn [[k n]] (when (> n keep-n) k)) (frequencies (keep #(.-color %) (sheep-in-range c)))))
             colors-of (fn [pl] (map wool-color (keys (wool-of pl))))
             ok? (fn [pl] (every? colors (colors-of pl)))
             chosen (or (first (filter ok? sorted)) (first sorted))
@@ -344,10 +356,10 @@
     (first (seen-blocks-of c need false))))
 
 (defn with-block
-  "The need with :block of its args the kind of block seen when it could be either (a coal ore, dirt or grass); a wool need shears when shears are carried, else hunts."
+  "The need with :block of its args the kind of block seen when it could be either (a coal ore, dirt or grass); a wool need shears when shears are carried, craftable from 2 iron ingots or in a booked chest, else hunts."
   [c need]
   (cond
-    (and (:sheep need) (pos? (storage/carried (u/inventory (:primitives c)) "shears")))
+    (and (:sheep need) (shears-source c))
     (assoc need :job 'jobs.animals.shear :args {:color (:sheep need) :radius (sheep-radius)})
 
     (and (= "obsidian" (:key need))
@@ -755,6 +767,15 @@
             (ctx/update-mem! c assoc-in [:gather :item] (:key need))
             (when (= 'jobs.forestry.harvest-wood (:job need))
               (ctx/update-mem! c assoc-in [:gather :tree] (select-keys need [:key :job :args])))
+            (when (:sheep need)
+              (let [how (shears-source c)]
+                (ctx/emit! c :obtain.wool-source :info
+                           {:message (case how
+                                       :carried "wool by shearing: shears carried"
+                                       :craft "wool by shearing: shears will be crafted from 2 iron ingots"
+                                       :chest "wool by shearing: shears or iron fetched from a chest"
+                                       "wool by killing sheep: no shears and no iron for shears (the last 2 adults of a colour live)")
+                            :how (or how :kill)})))
             (when-let [{:keys [wanted taking]} (:wool-fallback pl)]
               (ctx/emit! c :obtain.wool-colour :info
                          {:message (str "no " wanted " sheep within " (sheep-radius) " blocks; taking " taking " wool instead")

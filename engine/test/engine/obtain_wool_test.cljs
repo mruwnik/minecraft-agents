@@ -83,3 +83,38 @@
             (swap! (:clock s) + 700)
             (await (core/tick! (:eng s))))
           (is (empty? (filter #(= :failed (:kind %)) @(:seen s))) "no round or check threw"))))))
+
+(def shears-recipe {"shears" {:count 1 :needs {"iron_ingot" 2}}})
+
+(defn wool-source [{:keys [seen]}] (first (filter #(= :obtain.wool-source (:kind %)) @seen)))
+(defn wool-count [{:keys [p]}]
+  (reduce + 0 (for [s (.-inventory (.self p)) :when (= "white_wool" (.-name s))] (.-count s))))
+
+(deftest wool-is-sheared-with-shears-crafted-from-carried-iron-and-no-sheep-dies
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [inv (into h/sword (carried "iron_ingot" 2))
+              s (await (scenario {:item "white_wool" :count 2}
+                                 {:inventory inv :recipes shears-recipe :entities [(sheep 1 3 "white") (sheep 2 6 "white")]} 60))]
+          (is (empty? (attacked s)) "no sheep was killed")
+          (is (<= 2 (wool-count s)) "wool carried")
+          (is (re-find #"shear" (pr-str (wool-source s))) "the text says it sheared"))))))
+
+(deftest wool-is-hunted-when-shears-are-neither-carried-nor-craftable-and-says-so
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [inv (into h/sword (carried "iron_ingot" 1))
+              s (await (scenario {:item "white_wool" :count 1}
+                                 {:inventory inv :entities [(sheep 1 3 "white") (sheep 2 6 "white") (sheep 3 8 "white") (sheep 4 10 "white")]} 40))]
+          (is (seq (attacked s)) "a sheep was killed")
+          (is (re-find #"kill|hunt" (pr-str (wool-source s)))))))))
+
+(deftest kept-pair-is-not-killed-for-wool-when-shearing-is-impossible
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:item "white_wool" :count 1}
+                                 {:inventory h/sword :entities [(sheep 1 3 "white") (sheep 2 6 "white")]} 40))]
+          (is (empty? (attacked s)) "the last two adults live"))))))
