@@ -6,6 +6,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
+            [jobs.lib.danger :as danger-q]
             [jobs.survival.fight-back :as fight-back]
             [jobs.lib.util :as u]
             [jobs.survival.recover-drops :as recover-drops]
@@ -953,3 +954,8 @@
         (doseq [[angry want] [[false []] [true [:flee]]]]
           (let [{:keys [seen]} (await (flight-round respond {:entities [{:id 100 :name "enderman" :kind "hostile" :angry angry :pos {:x 5 :y 64 :z 0}}]}))]
             (is (= want (mapv :decision (decided seen))) (str "angry " angry))))))))
+
+(deftest a-skeleton-only-heard-far-off-is-no-danger-a-near-one-is
+  (doseq [[x n] [[12 0] [6 1]]]
+    (let [p (tu/fake-on-floor {:floor flight-floor :entities [{:id 5 :name "skeleton" :kind "hostile" :visible false :pos {:x x :y 64 :z 0}}]})]
+      (is (= n (count (danger-q/dangers p 8 {:ranged-radius 16}))) (str "heard " x " blocks east")))))

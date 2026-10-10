@@ -120,7 +120,8 @@
    (cond
      (calm-enderman? e) false
      (combat/ranged? e)
-     (and (or (not sight?) (seen-only? e) (not (in-tunnel? kind-at (reach/cell-of (u/pos-of (.-pos (.self p)))))))
+     (and (or (not sight?) (seen-only? e) (<= (mob-distance p e) obs/near-band))
+          (or (not sight?) (seen-only? e) (not (in-tunnel? kind-at (reach/cell-of (u/pos-of (.-pos (.self p)))))))
           (reach/line-of-fire? (or arrow-at (reach/lookup p reach/arrow-kind-of)) (mob-pos p e) (u/pos-of (.-pos (.self p)))))
      :else
      (and (or (seen-mob? e) (not sight?))
@@ -130,7 +131,7 @@
 
 (defn danger?
   "Whether hostile e (JS entity) is a real danger to the body.
-  A ranged mob needs a line of fire and, when the body is in a tunnel (in-tunnel?), to have been seen, not only heard
+  A ranged mob needs a line of fire, to have been seen or (heard only) to be in the near band, and, when the body is in a tunnel (in-tunnel?), to have been seen, not only heard
   (unless :sight? is false). A melee mob needs a walkable way to the body and, unless :sight? is false, to
   have been seen (seen-mob?)."
   ([p e] (danger? p e {}))

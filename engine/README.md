@@ -118,7 +118,7 @@ Notes:
   `properties`, every block state (integers as numbers, booleans and enum names as they are).
 - **Hostile trigger rule.** `:hostile-near` holds only for a real danger within its radius (`jobs.lib.danger/danger?`): a
   melee mob the body knows of that has a walkable way to the body, or a ranged mob (skeleton and the like) with a line of
-  fire (in a tunnel: solid overhead and both sides along an axis, it must be seen, not only heard). A mob walled in or fenced in (fences, walls and shut gates are 1.5 high, never stepped onto), across a deep trench, or with the body sealed in is no danger. "Knows of" comes from perception's
+  fire (in a tunnel: solid overhead and both sides along an axis, it must be seen, not only heard; heard only, a ranged mob counts in the near band, 8 blocks, alone). A mob walled in or fenced in (fences, walls and shut gates are 1.5 high, never stepped onto), across a deep trench, or with the body sealed in is no danger. "Knows of" comes from perception's
   mob memory (`engine.perception`): heard within 16 blocks (not a silent creeper), or seen (clear line, within 48, in the
   view cone or heard, and lit; in the dark only within 4). A creeper with a lit fuse hisses (`fusing`) and is heard. A heard
   mob is judged at its rough spot (direction, band: near 4, far 16, derived from `obs/near-band`; `danger/mob-pos`, `mob-distance`), never its exact place. `retreat` and `respond-to-hostile` use the
