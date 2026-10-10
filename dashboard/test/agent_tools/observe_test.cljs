@@ -1223,6 +1223,46 @@
     (is (= {:event :completed :job "j141" :message "done" :ago-s 10} (first (:items summary))))
     (is (nil? (observe-status/missed-summary [(event :body :chat)] 11000)))))
 
+(deftest missed-summary-always-shows-a-death-however-much-came-after
+  (let [done (fn [i] (assoc (event :job :completed {} "done") :context {:job-id (str "j" i)} :time-ms (* 1000 i)))
+        events (-> [(assoc (event :body :died {:cause "zombie"}) :time-ms 500) (assoc (event :body :respawned {}) :time-ms 600)]
+                   (into (map done (range 1 11))))
+        summary (observe-status/missed-summary events 20000 3)]
+    (is (= 12 (:count summary)))
+    (is (= [:died :respawned :completed :completed :completed :completed] (mapv :event (:items summary)))
+        "the death and respawn, then the latest max-missed others")
+    (is (= ["j7" "j8" "j9" "j10"] (keep :job (:items summary))) "the latest pages win")
+    (is (= 3 (:skipped summary)) "events never read are counted")
+    (is (not (contains? (observe-status/missed-summary events 20000) :skipped)))))
+
+(deftest missed-reads-every-page-after-the-cursor
+  (async done
+    (let [state (state-dir)
+          file (.join path state "worlds" "w" "observers" "ProbeBody" "agent.edn")
+          total 30000
+          at (fn [n] (cond (= n 5000) {:seq n :source :body :kind :died :data {:cause "zombie"}}
+                           (> n 29990) {:seq n :source :job :kind :completed :context {:job-id (str "j" n)} :data {}}
+                           :else {:seq n :source :body :kind :chat :data {}}))
+          handler (fn [{:keys [path]}]
+                    (if (str/starts-with? path "/events")
+                      (let [after (js/parseInt (second (re-find #"after=(\d+)" path)))
+                            limit (js/parseInt (second (re-find #"limit=(\d+)" path)))
+                            evs (mapv at (range (inc after) (inc (min total (+ after limit)))))]
+                        {:text (data/write-edn {:stream-id "s" :latest-seq total :cursor {:stream-id "s" :seq (or (:seq (last evs)) after)} :events evs})})
+                      {:text "{:mode :scheduled :current nil :health 20 :food 18}"}))
+          [request-fn _] (fake/request-fn handler)
+          lines (atom [])]
+      (.mkdirSync fs (.dirname path file) #js {:recursive true})
+      (.writeFileSync fs file "{:cursor {:stream-id \"s\" :seq 0} :generation \"g\" :seen {}}\n")
+      (finish! done
+               (-> (observe/main! ["ProbeBody" "--world" "w" "--state" state] {:request-fn request-fn :output #(swap! lines conj %)})
+                   (.then (fn [code]
+                            (.rmSync fs state #js {:recursive true :force true})
+                            (let [out (data/read-edn (apply str @lines))]
+                              (is (= 0 code))
+                              (is (= [:died :completed :completed :completed :completed] (mapv :event (get-in out [:missed :items])))
+                                  "a death 25,000 events back is still shown with the latest four")))))))))
+
 (deftest plain-status-lists-the-events-since-the-checkpoint
   (async done
     (let [state (state-dir)

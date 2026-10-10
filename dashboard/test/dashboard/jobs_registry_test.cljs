@@ -34,7 +34,7 @@
 
 (deftest every-default-trigger-is-listed
   (is (= #{"suffocating" "burning" "wedged" "hostile-near" "hungry" "night" "died" "pen-gate" "door-left"
-           "inventory-nearly-full" "scaffold-left" "tidy-pending" "mounted" "loose-items" "needs-bed"}
+           "inventory-nearly-full" "scaffold-left" "tidy-pending" "mounted" "loose-items" "needs-bed" "dusk-home"}
          (set (map :id (filter #(= :trigger (:kind %)) reg/entries))))))
 
 (deftest pretty-args-one-entry-per-line

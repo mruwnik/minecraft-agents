@@ -391,7 +391,12 @@
                (= :hostile.fled (:kind e))
                (and (= :hostile.decided (:kind e)) (#{:fight :flee} (get-in e [:data :decision])))
                (and (= :reflex (:source e)) (= :ended (:kind e)))
-               (and (= :body (:source e)) (#{:hurt :died} (:kind e))))))
+               (and (= :body (:source e)) (#{:hurt :died :respawned} (:kind e))))))
+
+(defn critical?
+  "Whether a missed event is always shown, however many others came after it: a death or a respawn."
+  [e]
+  (and (= :body (:source e)) (contains? #{:died :respawned} (:kind e))))
 
 (defn hurt-event?
   [e]
@@ -413,12 +418,18 @@
                :ago-s (some-> (:time-ms e) (#(max 0 (js/Math.round (/ (- now-ms %) 1000)))))))
 
 (defn missed-summary
-  "{:count n :items [...]} of the missed events (the latest max-missed) among events, or nil when there are none; all hits are one item, in the place of the first."
-  [events now-ms]
+  "{:count n :items [...]} of the missed events among events, or nil when there are none: the latest max-missed and every
+  death or respawn before them, in order; all hits are one item, in the place of the first. skipped (events never read)
+  is added as :skipped when positive."
+  ([events now-ms] (missed-summary events now-ms 0))
+  ([events now-ms skipped]
   (let [news (filterv missed? events)
         hits (filterv hurt-event? news)
         hurt (when (seq hits) (hurt-item hits))
         items (into [] (keep #(if (hurt-event? %) (when (identical? % (first hits)) hurt) %)) news)]
     (when (seq items)
-      (array-map :count (count items)
-                 :items (mapv #(missed-item now-ms %) (take-last max-missed items))))))
+      (let [latest (set (take-last max-missed items))
+            shown (filter #(or (critical? %) (latest %)) items)]
+        (cond-> (array-map :count (count items)
+                           :items (mapv #(missed-item now-ms %) shown))
+          (pos? skipped) (assoc :skipped skipped)))))))
