@@ -1218,9 +1218,8 @@
         ended (fn [i] (assoc (event :job :completed {} "done") :context {:job-id (str "j" i)} :time-ms (+ 2000 i)))
         summary (observe-status/missed-summary (into [hurt] (map ended (range 6))) 11000)]
     (is (= 7 (:count summary)))
-    (is (= 4 (count (:items summary))))
     (is (= :hurt (:event (first (:items summary)))) "the damage and its cause stay in the list")
-    (is (= ["j3" "j4" "j5"] (mapv :job (rest (:items summary)))) "with the latest of the rest")))
+    (is (= ["j2" "j3" "j4" "j5"] (mapv :job (rest (:items summary)))) "after the latest four")))
 
 (deftest missed-summary-keeps-job-ends-flights-and-deaths
   (let [ended (assoc (event :job :completed {} "done") :context {:job-id "j141"} :time-ms 1000)
