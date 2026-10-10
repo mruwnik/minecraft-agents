@@ -97,6 +97,18 @@
                  (select-keys @(:out s) [:status :item :reason])))
           (is (re-find #"iron_ingot" (str (:why @(:out s))))))))))
 
+(deftest items-before-the-furnace-material-are-made-first
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (-> (world [{:name "cobblestone" :count 2} {:name "stick" :count 3}] {})
+                    (update :recipes assoc "stone_sword" {:count 1 :needs {"cobblestone" 2 "stick" 1} :table true}))
+              s (start w {:items ["stone_sword" "iron_pickaxe"] :explore false :min-food 0})]
+          (await (f/run-ticks s 120))
+          (is (= #{"stone_sword"} (set (crafted s))))
+          (is (= {:status :stopped :item "iron_ingot" :reason :no-source}
+                 (select-keys @(:out s) [:status :item :reason]))))))))
+
 (deftest a-worn-piece-is-skipped
   (async done
     (tu/run-async done

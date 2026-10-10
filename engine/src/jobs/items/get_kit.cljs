@@ -16,7 +16,7 @@
   :wear, wear each armour piece once it is carried. One call is the whole goal; it yields (:continue) only while a
   child waits on the world.
   Each round starts from the world: an item carried or worn (or a better armour piece worn in its slot) is skipped.
-  One jobs.items.obtain child gets the furnace material all missing pieces need together (iron_ingot: 32 for the
+  When the next missing item needs furnace material, one jobs.items.obtain child gets what all missing pieces need together (iron_ingot: 32 for the
   whole kit, less what is carried), so the ore is mined and smelted in one go; if it cannot, the job stops at once
   naming the material, unless raw input of it is carried: then that is smelted, the pieces it covers are made in
   order and the job stops at the first one it cannot make. Then one obtain child per missing piece, in order, with :explore and :minutes (nil: ::minutes,
@@ -177,7 +177,8 @@
             todo (remove (set have) items)
             fp (foods/stock-points (:inv st))
             partial (:partial (ctx/mem c))
-            need (when (seq todo) (first (furnace-short version todo (:carried st))))
+            need (when (and (seq todo) (seq (furnace-short version [(first todo)] {})))
+                   (first (furnace-short version todo (:carried st))))
             short (when-not partial need)
             raw (when partial (get (:carried st) (get smelt/made-from (first need)) 0))]
         (cond
