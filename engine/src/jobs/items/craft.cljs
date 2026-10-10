@@ -16,7 +16,7 @@
 
 (def doc
   "Craft :count more of :item. 2x2 recipes work anywhere. Bigger ones need a crafting table: :table, else the
-  nearest within :radius, walking there when out of reach.
+  nearest within :radius, walking there when out of reach (a carried table is put down instead, with no :table).
   The count carried at the start is kept in memory and the target is that plus :count, so a cut or a partial
   batch loses nothing.
   Ends with {:made n}, the number of items gained (plus :spent, :spent-at and a :text when it put a table down). When it stops short it adds :short {name n} (an ingredient ran
@@ -293,12 +293,14 @@
         "out-of-reach" (let [handed (u/pos-of (.-table r))]
                          (cond
                            (:table (:args c)) (await (reach-table! c made))
+                           (carried-table? c) (or (await (table-fetch! c)) (await (reach-table! c made)))
                            (> (u/dist (u/self-pos c) handed) (:radius (:args c))) (await (no-table! c made))
                            :else (do (ctx/update-mem! c assoc :table handed)
                                      (await (reach-table! c made)))))
         "unreachable" (cond
                         (= "no-table" (.-reason r)) (do (ctx/update-mem! c dissoc :table)
-                                                        (await (reach-table! c made)))
+                                                        (or (when (and (carried-table? c) (not (:table (:args c)))) (await (table-fetch! c)))
+                                                            (await (reach-table! c made))))
                         (not= "not-a-table" (.-reason r)) (await (reach-table! c made))
                         (:table (:args c)) (do (ctx/emit! c :craft.no-table :warn {:text (str "not a crafting table: " (pr-str table))})
                                                (finish! c made {:reason "not-a-table"}))

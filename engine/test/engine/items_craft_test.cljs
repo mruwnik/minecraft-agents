@@ -304,6 +304,17 @@
           (is (= 1 (get (inv p) "bread")))
           (is (nil? (get (inv p) "crafting_table"))))))))
 
+(deftest craft-puts-a-carried-table-down-instead-of-walking-to-a-far-one
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory [{:name "wheat" :count 3} {:name "crafting_table" :count 1}] :blocks table-block})
+              result (await (child-outcome eng job {:item "bread"} 40))]
+          (is (= 1 (get (inv p) "bread")))
+          (is (nil? (get (inv p) "crafting_table")) "the carried table was put down")
+          (is (= {"crafting_table" 1} (:spent result)))
+          (is (empty? (tu/walked-to eng))))))))
+
 (deftest putting-a-table-down-and-crafting-at-it-is-one-urgent-section
   (async done
     (tu/run-async done
