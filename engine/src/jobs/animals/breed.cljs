@@ -109,11 +109,12 @@
                 :given-up (:given-up m {})
                 :food (or (animals/food-carried p mob) (:food m))
                 :adults (count (animals/adults p mob radius))
-                :babies (count (animals/babies p mob radius))})]
+                :babies (count (animals/babies p mob radius))})
+        seen (str "adults " (:adults result) ", babies " (:babies result))]
     (mark-bred! c)
-    (ctx/emit! c :breed.done :info (assoc result :text (str "breed done: " (name reason) ", fed " (count (:fed m)))))
+    (ctx/emit! c :breed.done :info (assoc result :text (str "breed done: " (name reason) ", fed " (count (:fed m)) ", " seen)))
     (when (not= :fed reason)
-      (ctx/emit! c :breed.gave-up :warn {:reason reason :text (str "breeding stopped: " (name reason))}))
+      (ctx/emit! c :breed.gave-up :warn {:reason reason :text (str "breeding stopped: " (name reason) " (" seen ")")}))
     (ctx/result! c result)
     :done))
 

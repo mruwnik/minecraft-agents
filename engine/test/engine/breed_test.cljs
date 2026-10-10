@@ -146,6 +146,14 @@
             (is (= babies (:babies (done-event s))) label)
             (is (= (items-total (:inventory world)) (items-total (js->clj (.-inventory (.self (:p s))) :keywordize-keys true))) label)))))))
 
+(deftest the-done-text-and-warn-name-the-adults-and-babies-seen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:mob "cow"} {:inventory (wheat 2) :entities [(cow 1 2) (cow 2 3 {:baby true})]} 4))]
+          (is (= "breed done: too-few, fed 0, adults 1, babies 1" (:text (done-event s))))
+          (is (= "breeding stopped: too-few (adults 1, babies 1)" (:text (first (events-of s :breed.gave-up))))))))))
+
 (deftest unfed-reasons-warn
   (async done
     (tu/run-async done
