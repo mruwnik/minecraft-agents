@@ -125,6 +125,32 @@
               "a step that gains nothing ends at once and never looks round")
           (is (> (fake/dist (body-pos p) (mob-pos p 7)) 35)))))))
 
+(def pen-blocks
+  "A 5x5 pen (x, z in -2..2) walled by a two-high fence ring on stone with an open gate at 0,64,3 in its south side."
+  (into {} (for [x (range -3 4) z (range -3 4) y [63 64 65]
+                 :when (and (or (= 3 (js/Math.abs x)) (= 3 (js/Math.abs z))) (not= [0 3 65] [x z y]))]
+             [(str x "," y "," z) (cond (= 63 y) "stone" (and (= [0 3] [x z]) (= 64 y)) "oak_fence_gate" :else "oak_fence")])))
+
+(deftest a-gate-the-flight-shut-on-a-zombie-stays-shut
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup {:blocks pen-blocks :states {"0,64,3" {:open true}} :self {:pos {:x 0.5 :y 64 :z 1.5}}
+                        :entities [(zombie 7 0 {:pos {:x 0.5 :y 64 :z 6.5} :chase {:speed 0.7}})]})
+              {:keys [p seen]} (await (run-job! s 'jobs.survival.retreat {}))]
+          (is (= 1 (count (filterv #(= :retreat.door-shut (:kind %)) @seen))) "the flight shut the gate")
+          (is (false? (get-in @(fake/state p) [:states [0 64 3] :open])) "and nothing opened it again"))))))
+
+(deftest a-flee-step-says-where-it-goes-and-from-what
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [seen]} (await (run-job! (setup {:entities [(zombie 7 5 {:chase {:speed 0.7}})]}) 'jobs.survival.retreat {}))
+              e (first (filterv #(= :retreat.target (:kind %)) @seen))]
+          (is (some? e) "every flee step logs its target")
+          (is (vector? (:target e)))
+          (is (= ["zombie 7"] (:from e)) "the chasers the step runs from"))))))
+
 (deftest retreat-eats-one-bite-per-flee-step
   (async done
     (tu/run-async done

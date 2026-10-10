@@ -1,5 +1,6 @@
 (ns jobs.survival.retreat
-  (:require [engine.settings :as settings]
+  (:require [clojure.string :as str]
+            [engine.settings :as settings]
             [engine.args :as a]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as lb]
@@ -540,6 +541,14 @@
             (ctx/update-mem! c update :doors-clicked (fnil conj #{}) (door-key cell)))
           :again))))
 
+(defn say-target!
+  "Log (retreat.target) the cell a flee step walks to, the chasers it runs from and whether it is out of every ranged one's line of fire."
+  [c target threats covered?]
+  (let [cell (mapv #(js/Math.floor %) [(:x target) (:y target) (:z target)])
+        from (mapv #(str (.-name %) " " (.-id %)) threats)]
+    (ctx/emit! c :retreat.target :info {:target cell :from from :cover (boolean (and covered? (covered? target)))
+                                        :text (str "flee step to " (str/join " " cell) " away from " (str/join ", " from))})))
+
 (defn ^:async flight-step!
   "One step of the flight (flight/look!, then shut a door, or run home, or walk a step away, or the cornered options),
   :again; the flight's end (flight/end-flight!) once no chaser is left."
@@ -581,6 +590,7 @@
           (nil? target) (await (stuck "no open way away from the hostile"))
           :else
           (let [_ (when (:cornered (ctx/mem c)) (ctx/update-mem! c dissoc :cornered))
+                _ (say-target! c target threats covered?)
                 moved (await (step! c :step target 1))]
             (if-not moved
               (await (stuck "the way away from the hostile is blocked"))
