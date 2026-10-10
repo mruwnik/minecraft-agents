@@ -22,6 +22,7 @@
   :except is a plan id for a job working that plan. Its footprint is left out of :footprints and its cells are given
   as :plan-cells, because the plan is the permission (see jobs.lib.access.zones/verdict).
   :own-plans-ok? drops the footprints of plans this body made too (a body's own plan never blocks its own work).
+  :spare-own? true makes own-keep see the body's own zones and plans (a survival job that must not wreck its own builds).
   :ignore-zones? defaults to the job's own :ignore-zones? arg."
   ([c] (zone-input c {}))
   ([c {:keys [except own-plans-ok?] :as opts}]
@@ -36,6 +37,7 @@
     :self (ctx/self-name c)
     :own-plans (own-plans c)
     :now (ctx/now c)
+    :spare-own? (boolean (:spare-own? opts))
     :ignore-zones? (boolean (if (contains? opts :ignore-zones?) (:ignore-zones? opts) (:ignore-zones? (:args c))))}))
 
 (def hidden-guess "What a cell the body has not sensed is taken for: rock, so a dig goes ahead and looks." "stone")
@@ -174,6 +176,19 @@
     (when (and (contains? social-reasons (:reason v))
                (not (and (= :footprint (:reason v)) (contains? (:own-plans in) (:plan v)))))
       v)))
+
+(defn own-keep
+  "The verdict {:ok false :reason :zone|:footprint :own true ...} naming the body's own zone or own plan footprint that
+  holds pos, when the input asks to spare them (:spare-own?), else nil. For a job that digs where it must not wreck the
+  body's own pens and builds: zones and claims of others are trespass-refusal's."
+  [in pos]
+  (when (:spare-own? in)
+    (let [c (cell pos)
+          plan (get (:footprints in) c)
+          zone (first (filter #(and (zones/in-box? c %) (zones/same-owner? (:owner %) (:self in))) (:zones in)))]
+      (cond
+        (and plan (contains? (:own-plans in) plan)) {:ok false :reason :footprint :plan plan :own true :cell c}
+        zone {:ok false :reason :zone :zone (:name zone) :owner (:owner zone) :own true :cell c}))))
 
 (defn choose
   "Pick from options the first whose cells (cells-of option) are all permitted for action, else the first option as a

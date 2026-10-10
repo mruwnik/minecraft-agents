@@ -25,10 +25,12 @@
   when no open cell is left around the feet),
   or :futile {:pos :why} (a :dig-in-futile entry within 8 blocks that blocks it, see below).
   One call is a whole attempt. It ends with the result {:pos :mode :roof} when the world shows the body shut in, else
-  stopped {:reason :text :pos}: the :dig-in-futile reasons below, :no-blocks, :no-tool, :unsealed or :no-progress.
+  stopped {:reason :text :pos}: the :dig-in-futile reasons below, :no-blocks, :no-tool, :spared, :unsealed or :no-progress.
   The mode is the first of these whose cells the zone rules permit. If none is permitted it takes the first
   as a last resort, with one dig-in.trespass-last-resort warning.
   - Blocks it places: building blocks (planks, stone kinds, dirt), then logs as a last resort.
+  A pit that would cut into the body's own zone or the footprint of a plan it made is not dug (stopped :spared, a
+  dig_in_failed warning naming the cell and the zone or plan): the shelter looks elsewhere. Walls and plug are not affected.
   - plug: the body is in a closed room with a door and a hole in the roof over it. One carried block mends the hole.
   - walls: enough :blocks are carried for every open cell. Places the four sides at feet height, the four at head height,
     a support beside the roof cell, then the roof cell, at most :max-places per step.
@@ -390,6 +392,18 @@
   (let [mobs (refuge/hostile-cells p (side-mob-radius))]
     (every? #(and (dig-cells/open-cell? p %) (not (mobs %))) [cell (update cell :y inc)])))
 
+(defn pit-cells
+  "The cells the pit of dig-plan digs from start (its :cells, else the column under start for its :depth)."
+  [start dig-plan]
+  (let [{:keys [depth cells]} (or dig-plan {:depth 2})]
+    (or cells (map #(update start :y - %) (range 1 (inc depth))))))
+
+(defn spared-cell
+  "The first cell of the pit that lies in the body's own zone or plan (access/own-keep), as its verdict, else nil."
+  [c start dig-plan]
+  (let [in (access/rules-input c {:spare-own? true})]
+    (some #(access/own-keep in %) (pit-cells start dig-plan))))
+
 (defn ^:async find-shape!
   "The pit to dig from start (refused-column, else the first of dig-cells/pit-shapes), or nil. With none, the body looks
   at the side column cells it has not sensed (look/look-unknown!) and tries once more."
@@ -423,6 +437,7 @@
                    (assoc plan :roof (:roof shape) :cells (mapcat :dig (:steps shape)))
                    plan)
             plug (when (and (pos? have) (not enclose)) (dig-cells/room-plug p start (:roof-height (:args c))))
+            spared (when (and shape (not enclose)) (spared-cell c start plan))
             [chosen refusal] (if enclose
                                [(if (>= have (count cells)) :walls :no-blocks)
                                 (some #(access/trespass-refusal (access/rules-input c) :place %) cells)]
@@ -435,6 +450,7 @@
                                                   (dig-cells/shaft-top p start) (assoc :start {:x x :y (dig-cells/shaft-top p start) :z z})))
           (nil? plan) (ctx/update-mem! c assoc :mode :no-roof-support)
           (nil? shape) (ctx/update-mem! c assoc :mode :no-floor)
+          spared (ctx/update-mem! c assoc :mode :spared :spared spared)
           :else (ctx/update-mem! c assoc :mode :dig :roof (:roof shape) :start start :shape shape
                                  :cols (into #{[x z]} (map (comp (juxt :x :z) :to) (:steps shape)))
                                  :target-y (:y (:to (peek (:steps shape))))))))))
@@ -496,6 +512,16 @@
   (ctx/emit! c :dig_in_failed :warn {:text "no floor the body sees solid under a pit; not digging down"})
   :done)
 
+(defn spared-round
+  "The only way left is a pit through the body's own zone or plan: do not dig, so the night shelter looks elsewhere."
+  [c]
+  (let [{:keys [zone plan cell]} (:spared (ctx/mem c))]
+    (remember-failed-site! c :spared)
+    (ctx/emit! c :dig_in_failed :warn {:cell cell :zone zone :plan plan
+                                       :text (str "the pit would cut into the body's own " (if zone (str "zone " zone) (str "plan " plan))
+                                                  " at " (pr-str cell) "; not digging")})
+    :done))
+
 (defn ^:async plug-round
   "In a closed room: place one block in the hole of the roof over the body (:plug)."
   [c]
@@ -520,6 +546,7 @@
       (= :walls mode) (await (walls-round c))
       (= :no-roof-support mode) (no-roof-round c)
       (= :no-floor mode) (no-floor-round c)
+      (= :spared mode) (spared-round c)
       (= :no-blocks mode) (do (remember-material! c {:pos (sh/feet (:primitives c))}) :done)
       (> (:y (sh/feet (:primitives c))) target-y) (await (if (seq (:plugs (:shape (ctx/mem c)))) (zigzag-round c) (descend-round c)))
       :else (await (roof-round c)))))

@@ -151,6 +151,26 @@
 
 (defn dug [p] (mapv arg-pos (calls p "dig")))
 
+(deftest dig-in-spares-the-bodys-own-zone-and-plans-and-digs-nowhere-else-for-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [no-blocks (dissoc night-world :inventory)
+              pit (zone "Fake" [0 60 0] [0 63 0])]
+          (doseq [[label world zones plan digs?]
+                  [["no zone" no-blocks [] nil true]
+                   ["own zone over the pit" no-blocks [pit] nil false]
+                   ["foreign zone over the pit" no-blocks [(zone "Miles" [0 60 0] [0 63 0])] nil true]
+                   ["own plan over the pit" no-blocks [] {:id "pen" :parts [{:id "p" :cells [[0 63 0] [0 62 0]] :want "stone"}]} false]
+                   ["another's plan over the pit" no-blocks [] {:id "pen" :metadata {:by "Miles"} :parts [{:id "p" :cells [[0 63 0] [0 62 0]] :want "stone"}]} true]]]
+            (let [{:keys [eng p seen]} (if plan
+                                         (setup-with-plan world (cond-> plan (nil? (:metadata plan)) (shape/with-author "Fake")))
+                                         (setup world zones))]
+              (core/submit! eng '(jobs.survival.dig-in) {})
+              (await (run-until-empty eng 10))
+              (is (= digs? (boolean (seq (dug p)))) label)
+              (is (= (not digs?) (boolean (seq (filterv #(= :dig_in_failed (:kind %)) @seen)))) label))))))))
+
 ;; ------------------------------------------------------------------ get-food
 
 (def two-carrots {:floor tu/walk-floor :blocks {"2,64,0" "carrots" "3,64,0" "carrots"} :ages {"2,64,0" 7 "3,64,0" 7} :drops {:carrots "carrot"}})

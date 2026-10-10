@@ -1181,3 +1181,14 @@
             (is (= why (:why e)) label)
             (is (= cell (:cell e)) label)
             (is (re-find text (str (failed-error s))) label)))))))
+
+(deftest herd-refusals-name-the-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[label w reason text]
+                [["a fence gap" {:entities [(cow 1 4 3)] :blocks {"16,64,3" "air"}} :leaky #"gap at \[16 64 3\]"]
+                 ["a pen too shallow" {:entities [(cow 1 4 3)] :blocks (into {} (for [z (range 0 7)] [(str "13,64," z) "oak_fence"]))} :too-shallow #"2 cells in a line, 5 needed"]]]
+          (let [s (await (scenario {:target 2} w 20))]
+            (is (= reason (:reason (done-event s))) label)
+            (is (re-find text (str (failed-error s))) label)))))))

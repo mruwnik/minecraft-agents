@@ -190,6 +190,12 @@
           :when (some-> (u/seen-name (:primitives c) pos) (.endsWith "_fence_gate"))]
       pos)))
 
+(defn unseen-extra
+  "What names the cell that kept the pen from being read: the first unseen leak cell, else the body's feet."
+  [answer]
+  (let [leak (first (filter #(= :unloaded (:why %)) (:leaks answer)))]
+    (if leak {:why :unseen :cell (cell (:pos leak))} {:why (or (:reason answer) :unread)})))
+
 (defn ^:async look-from-gate!
   "The unseen cells stayed unseen from where the body was (a fence hides the floor beside it): go near the pen's gate once,
   forget what was looked at and read again. No gate to go to, one already visited, or a blocked walk ends :no-pen."
@@ -200,11 +206,11 @@
                    (sort-by #(u/dist (u/self-pos c) %)))
         g (first gates)]
     (cond
-      (or (nil? g) (:gate-visited m)) (finish! c :no-pen)
+      (or (nil? g) (:gate-visited m)) (finish! c :no-pen (unseen-extra answer))
       (u/within? (u/self-pos c) g (gate-look-range))
       (do (ctx/update-mem! c #(-> % (assoc :gate-visited true) (dissoc :looked-pen)))
           :continue)
-      (= :blocked (await (near/go-near! c g (gate-look-range) {:doors :never :escalate false}))) (finish! c :no-pen)
+      (= :blocked (await (near/go-near! c g (gate-look-range) {:doors :never :escalate false}))) (finish! c :no-pen (unseen-extra answer))
       :else :continue)))
 
 (defn ^:async check-unknown!
@@ -234,7 +240,7 @@
         leaks (when chosen (other-leaks answer gate))
         inside (count (in-pen-adults c answer))]
     (cond
-      (= :no-start (:reason answer)) (finish! c :no-pen)
+      (= :no-start (:reason answer)) (finish! c :no-pen {:why :no-start})
       (nil? chosen) (finish! c :no-gate (gate-diagnosis c answer))
       (not (gate/allowed? c :herd.declined "herd" :place gate {:own-plans-ok? true})) (finish! c :refused)
       (not (approach-free? (:primitives c) (cell gate) in out))
@@ -242,7 +248,8 @@
                            :cell (first (remove #(free-floor? (:primitives c) %) (take approach-cells (axis-cells (cell gate) in out 0))))})
       (seq leaks) (finish! c :leaky {:leaks (vec (take 12 leaks))})
       (>= inside target) (finish! c :full)
-      (< (depth (:inside answer) (cell gate) in) min-depth) (finish! c :too-shallow)
+      (< (depth (:inside answer) (cell gate) in) min-depth)
+      (finish! c :too-shallow {:cell (cell in) :depth (depth (:inside answer) (cell gate) in) :need min-depth})
       :else (do (ctx/update-mem! c assoc :phase :leash :gate gate :inside-cell (cell-pos in) :outside-cell (cell-pos out)
                                  :axis (axis-cells (cell gate) in out (depth (:inside answer) (cell gate) in)))
                   :continue))))

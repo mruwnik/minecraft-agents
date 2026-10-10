@@ -158,7 +158,11 @@
     (ctx/result! c result)
     (when (and (empty? brought) (not (#{:brought :full} reason)))
       (throw (ex-info (str "herd brought none of the " target " wanted: " (name reason)
-                           (when (:why result) (str " (" (name (:why result)) (when (:cell result) (str " at " (pr-str (:cell result)))) ")"))
+                           (let [leak (first (:leaks result))
+                                 cell (or (:cell result) (some-> leak :pos cell))]
+                             (when (or (:why result) cell)
+                               (str " (" (some-> (or (:why result) (:why leak)) name) (when cell (str " at " (pr-str cell)))
+                                    (when (:need result) (str ", " (:depth result) " cells in a line, " (:need result) " needed")) ")")))
                            ", " (count inside) " in the pen"
                            (when (seq (:given-up m)) (str ", given up " (pr-str (:given-up m)))))
                       result)))

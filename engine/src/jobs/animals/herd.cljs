@@ -24,7 +24,7 @@
   A body more than 16 blocks from the pen first walks within 12 of it.
 
   Checks before the first animal (each ends the run with its reason):
-  - :no-pen: the pen cannot be read from :box (a cell it has not seen is gone near and looked at once; one still unknown goes to the pen's gate to look in, once; still unknown ends here).
+  - :no-pen: the pen cannot be read from :box (the result's :cell names the first unseen cell when there is one; a cell it has not seen is gone near and looked at once; one still unknown goes to the pen's gate to look in, once; still unknown ends here).
   - :leaky: the pen has a leak other than the chosen gate (:leaks lists them).
   - :no-gate: no usable gate. The gate is :gate, else the pen's gate nearest the body. It needs pen floor on
     one side and free floor straight across (a corner gate has none). The four cells straight out from the gate
@@ -33,7 +33,8 @@
     :no-approach, with the :cell.
   - :refused: the gate stands in another owner's zone or claim, or in a plan's footprint (or no zone list was read;
     warn herd.declined once). :ignore-zones? true skips the check.
-  - :too-shallow: fewer than 5 pen cells in a line inward from the gate.
+  - :too-shallow: fewer than 5 pen cells in a line inward from the gate (the result gives :cell, the first pen cell
+    inside the gate, :depth and :need).
   - :full: adults already on the pen's cells make :target.
 
   One round trip per animal:
