@@ -10,7 +10,7 @@
 
 (defn usage-for [prefix]
   "Build the usage string with the given invocation prefix (e.g., 'observe.mjs' or './bin/observe')."
-  (str "usage: " prefix " <agent> --world <world> [status [--raw|--verbose] [--wait --timeout 60s --chatter addressed --observer agent --watch j12] | inventory [--raw] [--slots] | equipment [--raw] | seen [--radius 32 (1 to 64)] [--names a,b,*_ore] [--limit 16] | chests [--limit 16] | job <id> | result <id> | catalog <job|trigger> <name> | catalog <jobs|triggers> [prefix] | settings [--changed] [--raw] | settings reload | settings set <:ns/key> <edn> | settings unset <:ns/key>] [--limit <n>] [--offset <n>] [--worlds <dir>] [--state <legacy-parent>]\n--wait: job notices wake once per kind and job; notices of a job that has since ended go to the summary; with --watch only the watched jobs' notices wake; the summary's 4 items keep job ends, deaths and notices before routine ones; events over 10 min old are only counted.\nsettings: every key with value and layer (:code, :world, :body) and the game rate; set and unset edit the body's settings.edn and reload.\nchests: what the body saw in chests it opened (remembered, may be out of date), nearest first with :distance and :age-ms.\nseen: blocks the body has seen (memory, nothing through walls), nearest first with :distance; default names are workstations, storage, beds, doors, ores and crops.\nstatus: :missed lists job ends, flights, fight/flee decisions, reflex ends, deaths and one summed :hurt (damage, lowest-health, cause) since the last observe --wait. :pos [x y z], :health and :food 0-20, :current the running job, :mode scheduled or manual. job <id>: its state and outcome; an unknown id answers :unknown-job."))
+  (str "usage: " prefix " <agent> --world <world> [status [--raw|--verbose] [--wait --timeout 60s --chatter addressed --observer agent --watch j12] | inventory [--raw] [--slots] | equipment [--raw] | seen [--radius 32 (1 to 64)] [--names a,b,*_ore] [--limit 16] | chests [--limit 16] | job <id> | result <id> | events [--kinds died,hurt --job j12 --level debug|info|warn --since 10m|death|<ms> --until death|10m|<ms> --before <seq> --limit 20 (1 to 64)] | catalog <job|trigger> <name> | catalog <jobs|triggers> [prefix] | settings [--changed] [--raw] | settings reload | settings set <:ns/key> <edn> | settings unset <:ns/key>] [--limit <n>] [--offset <n>] [--worlds <dir>] [--state <legacy-parent>]\n--wait: job notices wake once per kind and job; notices of a job that has since ended go to the summary; with --watch only the watched jobs' notices wake; the summary's 4 items keep job ends, deaths and notices before routine ones; events over 10 min old are only counted.\nsettings: every key with value and layer (:code, :world, :body) and the game rate; set and unset edit the body's settings.edn and reload.\nchests: what the body saw in chests it opened (remembered, may be out of date), nearest first with :distance and :age-ms.\nseen: blocks the body has seen (memory, nothing through walls), nearest first with :distance; default names are workstations, storage, beds, doors, ores and crops.\nevents: past events, newest page first, printed oldest first with :next-before (pass it as --before for older ones), :window {:scanned :oldest-seq :partial?}; debug-level noise is left out unless --level debug; --until death ends at the newest death, so a post-mortem is `events --until death`; --since/--until also take a duration back from now or an epoch ms; at most the last 8000 retained events are scanned.\nstatus: :missed lists job ends, flights, fight/flee decisions, reflex ends, deaths and one summed :hurt (damage, lowest-health, cause) since the last observe --wait. :pos [x y z], :health and :food 0-20, :current the running job, :mode scheduled or manual. job <id>: its state and outcome; an unknown id answers :unknown-job."))
 
 (def usage (usage-for "observe.mjs"))
 
@@ -28,7 +28,10 @@
    :watch {:type "string" :multiple true}
    :from {:type "string"} :poll-ms {:type "string"}
    :changed {:type "boolean" :default false} :danger {:type "boolean" :default false} :disconnect {:type "boolean" :default false}
-   :quiet-notices {:type "boolean" :default false}})
+   :quiet-notices {:type "boolean" :default false}
+   :kinds {:type "string"} :job {:type "string"} :level {:type "string"} :since {:type "string"} :until {:type "string"} :before {:type "string"}})
+
+(def event-options [:kinds :job :level :since :until :before])
 
 (defn fail [message] (throw (ex-info message {::error message})))
 
@@ -165,6 +168,26 @@
 
       :else (fail "catalog needs job|trigger <name> or jobs|triggers [prefix]"))
 
+    "events"
+    (let [kinds (some-> (:kinds values) (str/split #","))
+          time-ok? #(or (nil? %) (= "death" %) (re-matches #"\d+(ms|s|m|h)?" %))]
+      (check (or (some? kind-or-id) (seq rest)) "events takes no positional arguments")
+      (check (or (some? (:offset values)) (:raw values)) "--offset and --raw are not valid for events")
+      (check (or (> (count kinds) 16) (not-every? #(re-matches #"[a-z][a-z0-9._-]{0,60}" %) kinds)) "--kinds needs up to 16 comma-separated event kinds such as died,hurt")
+      (check (and (:job values) (not (re-matches #"j[0-9]+" (:job values)))) "--job needs a job ID such as j12")
+      (check (and (:level values) (not (#{"debug" "info" "warn" "error"} (:level values)))) "--level must be debug, info, warn or error")
+      (check (not (and (time-ok? (:since values)) (time-ok? (:until values))))
+             "--since and --until take death, a duration such as 10m (ms, s, m, h) or an epoch ms")
+      (check (and (:before values) (not (re-matches #"\d+" (:before values)))) "--before takes the :next-before seq of the previous page")
+      (let [limit (limit-param (:limit values) 64)]
+        ["/snapshot" [] {:events-query (cond-> {:limit (js/Number (or limit 20))}
+                                         kinds (assoc :kinds (set kinds))
+                                         (:job values) (assoc :job (:job values))
+                                         (:level values) (assoc :level (keyword (:level values)))
+                                         (:since values) (assoc :since (:since values))
+                                         (:until values) (assoc :until (:until values))
+                                         (:before values) (assoc :before (js/Number (:before values))))}]))
+
     "settings" (settings-request kind-or-id rest values)
 
     (fail (str "unknown operation " op))))
@@ -185,6 +208,7 @@
           world (:world values)]
       (check (and (or (some? (:radius values)) (some? (:names values))) (not= "seen" op)) "--radius and --names are only valid for seen")
       (check (and (:slots values) (not= "inventory" op)) "--slots is only valid for inventory")
+      (check (and (some #(some? (get values %)) event-options) (not= "events" op)) "--kinds, --job, --level, --since, --until and --before are only valid for events")
       (check (not (and agent (re-matches body-name agent))) "agent must be a body name")
       (check (nil? world) (bodies/missing-world-error "--world"))
       (check (not (re-matches world-name world)) "the world must be a name of letters, digits, _ and -")
@@ -208,6 +232,7 @@
           (:method extras) (assoc :method (:method extras) :body (:body extras))
           (:settings-mode extras) (assoc :settings-mode (:settings-mode extras))
           (= "result" op) (assoc :result-id kind-or-id)
+          (:events-query extras) (assoc :events-query (:events-query extras))
           (#{"inventory" "equipment"} op) (assoc :inventory-mode (keyword op) :slots (:slots values) :raw (:raw values))
           (:verbose values) (assoc :verbose true))))
     (catch :default error

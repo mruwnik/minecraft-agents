@@ -5,6 +5,7 @@
             [agent-tools.http :as http]
             [agent-tools.inventory :as inventory]
             [agent-tools.job-results :as job-results]
+            [agent-tools.observe.events :as events]
             ["node:path" :as path]
             [clojure.string :as str]
             ["node:timers/promises" :as timers]
@@ -434,6 +435,8 @@
                     (cond
                       (:wait-options request) (wait! request opts)
                       (:result-id request) (job-outcome! request opts (:result-id request))
+                      (:events-query request) (-> (events/read! get-fn (:socket-path request) (:events-query request) (js/Date.now))
+                                                  (.then #(print-outcome! output %)))
                       :else
                       (-> (get-fn (:socket-path request) (:path request) (select-keys request [:method :body]))
                           (.then #(respond! request opts %))))))

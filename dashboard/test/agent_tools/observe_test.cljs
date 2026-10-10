@@ -1294,3 +1294,67 @@
                               (is (= 0 code))
                               (is (= [:completed :hostile.fled] (mapv :event (get-in out [:missed :items]))))
                               (is (= 2 (get-in out [:missed :count])))))))))))
+
+;; observe events: a bounded, paged look at past events
+
+(defn timed [n source kind & [{:keys [job level message data]}]]
+  (cond-> {:seq n :generation-id "g" :time-ms (* n 1000) :source source :kind kind :level (or level :info) :data (or data {})}
+    job (assoc :context {:job-id job :chain [job]})
+    message (assoc :message message)))
+
+(def past-events
+  (vec (concat [(timed 1 :job :queued {:job "j1"})
+                (timed 2 :job :memory_written {:job "j1" :level :debug})
+                (timed 3 :reflex :fired {:message "night -> jobs.survival.night"})
+                (timed 4 :job :dig-in.done {:job "j1" :message "dug in" :data {:cells 4}})
+                (timed 5 :body :hurt {:message "zombie" :data {:damage 3}})
+                (timed 6 :body :died {:message "died" :data {:cause "zombie"}})
+                (timed 7 :job :queued {:job "j2"})
+                (timed 8 :job :go-to.unreachable {:job "j2" :message "gave up"})]
+               (map #(timed % :job :explore.leg {:job "j2" :message (str "leg " %)}) (range 9 40)))))
+
+(defn events-handler [{:keys [path]}]
+  (let [after (js/Number (second (re-find #"after=(\d+)" (or path ""))))
+        limit (js/Number (second (re-find #"limit=(\d+)" (or path ""))))]
+    (cond
+      (= "/snapshot" path) {:text (data/write-edn {:body "ProbeBody" :generation-id "g" :cursor {:stream-id "s" :seq 39}})}
+      :else {:text (data/write-edn {:stream-id "s" :latest-seq 39 :gap? false
+                                    :events (vec (take limit (filter #(> (:seq %) after) past-events)))})})))
+
+(defn events-out [& argv]
+  (-> (run-main! (into ["events"] argv) events-handler)
+      (.then (fn [r] (assoc r :view (data/read-edn (:out r)))))))
+
+(deftest observe-events-validates-its-options-before-connecting
+  (is (nil? (:error (request "--world" "w" "Probe" "events" "--kinds" "died,hurt" "--job" "j2" "--limit" "10" "--until" "death" "--since" "5m"))))
+  (doseq [argv [["events" "--limit" "100"] ["events" "--kinds" "Bad Kind"] ["events" "--job" "x"] ["events" "--since" "soon"]
+                ["events" "--before" "-1"] ["events" "extra"] ["status" "--kinds" "died"]]]
+    (is (string? (:error (apply request "--world" "w" "Probe" argv))) (pr-str argv))))
+
+(deftest observe-events-filters-by-kind-and-job-and-leaves-out-debug-noise
+  (async done
+    (finish! done
+             (-> (series [#(events-out "--kinds" "died,hurt") #(events-out "--job" "j1") #(events-out "--job" "j1" "--level" "debug")])
+                 (.then (fn [[kinds job debug]]
+                          (is (= [:hurt :died] (mapv :kind (:events (:view kinds)))))
+                          (is (= [:queued :dig-in.done] (mapv :kind (:events (:view job)))) "j1 without the debug memory write")
+                          (is (= [:queued :memory_written :dig-in.done] (mapv :kind (:events (:view debug)))))
+                          (is (= {:cells 4} (:data (last (:events (:view job))))))))))))
+
+(deftest observe-events-until-death-shows-what-led-up-to-it-and-pages-back
+  (async done
+    (finish! done
+             (-> (series [#(events-out "--until" "death" "--limit" "3") #(events-out "--until" "death" "--limit" "3" "--before" "4")])
+                 (.then (fn [[newest older]]
+                          (is (= [:dig-in.done :hurt :died] (mapv :kind (:events (:view newest)))) "nothing after the death")
+                          (is (= 4 (:next-before (:view newest))))
+                          (is (= [:queued :fired] (mapv :kind (:events (:view older)))))
+                          (is (not (contains? (:view older) :next-before)) "nothing older is left")))))))
+
+(deftest observe-events-without-filters-is-the-newest-page-and-is-bounded
+  (async done
+    (finish! done
+             (-> (events-out)
+                 (.then (fn [{:keys [view]}]
+                          (is (= (range 20 40) (map :seq (:events view))) "20 newest, oldest first")
+                          (is (= 20 (:next-before view)))))))))

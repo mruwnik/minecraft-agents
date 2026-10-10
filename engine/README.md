@@ -758,6 +758,7 @@ noted. Most run a prebuilt bundle: build it once with `cd dashboard && npm run b
 node engine/tools/observe.mjs Bob --world test                       # compact status (--raw: full snapshot, --verbose)
 node engine/tools/observe.mjs Bob --world test --wait [--timeout 30s] [--watch j17]
 node engine/tools/observe.mjs Bob --world test job j17 | result j17
+node engine/tools/observe.mjs Bob --world test events [--until death] [--kinds died,hurt] [--job j17] [--level debug] [--since 10m] [--before SEQ] [--limit 20]   # past events, newest page first, oldest first within it; :next-before pages back; a post-mortem is `events --until death`
 node engine/tools/observe.mjs Bob --world test catalog jobs jobs.farm. --limit 10 | catalog job <name> | catalog trigger <name>
 node engine/tools/observe.mjs Bob --world test inventory [--slots] | equipment
 node engine/tools/observe.mjs Bob --world test settings [--changed] [--raw] | settings reload | settings set :jobs.x/key <edn> | settings unset :jobs.x/key   # keys with layer and the game rate; dashboard popup has the same
