@@ -138,6 +138,16 @@
       (is (= :warn (:level dead)))
       (is (= "driver claude silent 2100 ms: controls released" (:text dead))))))
 
+(deftest a-death-under-manual-control-is-told-to-the-driver
+  (let [{:keys [eng seen]} (setup {})]
+    (core/record-body-event! eng #js {:kind "died"})
+    (is (empty? (kinds-of seen :takeover_body_died)) "no driver, no notice")
+    (takeover/take! eng me)
+    (core/record-body-event! eng #js {:kind "died" :cause "lava"})
+    (let [[e] (kinds-of seen :takeover_body_died)]
+      (is (= ["claude" :warn :notice] ((juxt :who :level :attention) e)))
+      (is (re-find #"claude" (:text e))))))
+
 (deftest manual-state-is-not-persisted
   (let [{:keys [eng dir]} (setup {})]
     (takeover/take! eng me)
