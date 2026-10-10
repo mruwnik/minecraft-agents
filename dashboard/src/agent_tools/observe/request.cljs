@@ -36,7 +36,8 @@
 
 (def seen-default-names
   ["crafting_table" "furnace" "blast_furnace" "smoker" "chest" "trapped_chest" "barrel" "ender_chest" "enchanting_table"
-   "anvil" "brewing_stand" "ancient_debris" "*_bed" "*_door" "*_ore"])
+   "anvil" "brewing_stand" "ancient_debris" "*_bed" "*_door" "*_ore"
+   "wheat" "carrots" "potatoes" "beetroots" "nether_wart" "melon" "pumpkin" "sweet_berry_bush" "cocoa"])
 
 (defn integer-in? [n low high] (and (js/Number.isInteger n) (<= low n high)))
 

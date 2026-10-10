@@ -104,7 +104,7 @@
     (is (str/starts-with? (:path default) "/seen?"))
     (is (= "32" (.get params "radius")))
     (is (= "16" (.get params "max")))
-    (doseq [n ["crafting_table" "furnace" "chest" "barrel" "*_bed" "*_door" "*_ore"]]
+    (doseq [n ["crafting_table" "furnace" "chest" "barrel" "*_bed" "*_door" "*_ore" "wheat" "carrots" "potatoes" "beetroots" "nether_wart" "melon" "pumpkin"]]
       (is (some #{n} (str/split (.get params "names") #",")) n)))
   (is (= "/seen?names=chest%2Ciron_ore&radius=20&max=5"
          (:path (request "--world" "w" "ProbeBody" "seen" "--names" "chest,iron_ore" "--radius" "20" "--limit" "5"))))
