@@ -1036,6 +1036,15 @@
           (is (empty? (calls-of s "useOn")))
           (is (= 1 (count (events-of s :herd.gave-up)))))))))
 
+(deftest a-pen-floor-a-step-below-its-fence-line-still-has-a-gate
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [dug (into {} (for [x (range 11 14) z (range 1 6) [y b] [[63 "air"] [62 "stone"]]] [(str x "," y "," z) b]))
+              s (await (scenario {:target 2} {:entities [(cow 1 4 3)] :blocks dug} 20))
+              e (done-event s)]
+          (is (not (contains? #{:no-gate :too-shallow :leaky} (:reason e))) (pr-str e)))))))
+
 (deftest no-food-is-not-a-reason-to-decline
   (async done
     (tu/run-async done

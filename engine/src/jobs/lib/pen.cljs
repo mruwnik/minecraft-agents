@@ -227,13 +227,13 @@
             s (get-in seen [k :s])
             steps (moves world x z s)
             [seen' order' exits' queue']
-            (reduce (fn [[seen order exits queue] [[dx dz] {:keys [top]}]]
+            (reduce (fn [[seen order exits queue] [[dx dz] {:keys [top perch?]}]]
                       (let [nx (+ x dx) nz (+ z dz)
                             nk [nx (floor-cell top) nz]]
                         (cond
-                          (and box (outside? box nx nz)) [seen order (conj exits {:from k :to nk :top top}) queue]
+                          (and box (outside? box nx nz)) [seen order (conj exits {:from k :to nk :top top :perch? perch?}) queue]
                           (contains? seen nk) [seen order exits queue]
-                          :else [(assoc seen nk {:s top :from k}) (conj order nk) exits (conj queue nk)])))
+                          :else [(assoc seen nk {:s top :from k :perch? perch?}) (conj order nk) exits (conj queue nk)])))
                     [seen order exits (pop queue)]
                     steps)]
         (recur queue' seen' order' exits')))))
@@ -244,7 +244,7 @@
   (loop [k key acc ()]
     (if-not k
       (vec acc)
-      (recur (get-in seen [k :from]) (conj acc {:key k :s (get-in seen [k :s])})))))
+      (recur (get-in seen [k :from]) (conj acc (assoc (select-keys (get seen k) [:s :perch?]) :key k))))))
 
 ;; ------------------------------------------------------------------ where it leaks
 
@@ -291,15 +291,25 @@
   (when-let [i (first (filter #(ridge? path %) (range (count path))))]
     (let [[x y z] (:key (nth path i))] {:pos {:x x :y y :z z} :why :climb})))
 
+(defn perch-entry
+  "The fence, wall or gate cell where path first steps onto a block top higher than a block, {:x :y :z}, or nil."
+  [path]
+  (when-let [i (first (filter #(and (:perch? (nth path %)) (not (:perch? (get path (dec %))))) (range (count path))))]
+    (let [{[x _ z] :key s :s} (nth path i)] {:x x :y (dec (floor-cell s)) :z z})))
+
 (defn leak-at
-  "The leak {:pos :why} on path, a path that ends outside. With box? the crossing itself is the answer when
-  nothing shows better; without it, nil when nothing shows."
+  "The leak {:pos :why} on path, a path that ends outside. With box? a wall top stood on is the answer (the
+  floor reached it a step below its top), unless an open gate shows; else the crossing itself when nothing shows
+  better; without box?, nil when nothing shows."
   [world path box?]
   (let [tail (if box? (vec (take-last 3 path)) path)
         found (evidence world tail)
         end (last path)
+        perch (when box? (perch-entry path))
         pos (fn [[x y z]] {:x x :y y :z z})]
     (cond
+      (= :open-gate (:why found)) {:pos (pos (:key (nth tail (:index found)))) :why :open-gate}
+      perch {:pos perch :why :climb}
       found {:pos (pos (:key (nth tail (:index found)))) :why (:why found)}
       (not box?) nil
       (apply not= (map :s tail)) {:pos (pos (:key end)) :why :climb}
@@ -308,10 +318,10 @@
 ;; ------------------------------------------------------------------ gates
 
 (defn gates-near
-  "Every fence gate in or beside the cells, {:pos :open?}, in position order."
+  "Every fence gate in or beside the cells (a step up or down too: the floor inside may be a step off the fence line), {:pos :open?}, in position order."
   [{:keys [block]} cells]
   (->> cells
-       (mapcat (fn [[x y z]] (for [[dx dz] (cons [0 0] orthogonal)] [(+ x dx) y (+ z dz)])))
+       (mapcat (fn [[x y z]] (for [[dx dz] (cons [0 0] orthogonal) dy [0 1 -1]] [(+ x dx) (+ y dy) (+ z dz)])))
        distinct
        (keep (fn [[x y z :as k]]
                (let [b (block x y z)]
@@ -359,7 +369,7 @@
     (when (or (seq seeds) (seq @(:unloaded world)))
       (let [{:keys [seen exits truncated?] end :last :as fill} (fill world seeds box max-cells)
             found (cond
-                    (seq exits) (keep #(leak-at world (conj (path-to seen (:from %)) {:key (:to %) :s (:top %)}) true) exits)
+                    (seq exits) (keep #(leak-at world (conj (path-to seen (:from %)) {:key (:to %) :s (:top %) :perch? (:perch? %)}) true) exits)
                     (and truncated? (not box)) (keep identity [(leak-at world (path-to seen end) false)])
                     (and (not box) (seq @(:unloaded world))) (keep identity [(climb-at (path-to seen (last (:order fill))))])
                     :else [])]

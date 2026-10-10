@@ -327,3 +327,17 @@
     (is (false? (:closed? (check floating))) "from a cell")
     (is (false? (:closed? (check floating (assoc box :at nil)))) "from a box taller than the floor")
     (is (false? (:closed? (check floating (assoc-in (assoc box :at nil) [:box :min :y] 63)))) "box starting below the floor")))
+
+;; ------------------------------------------------------------------ uneven ground
+
+(deftest a-block-inside-beside-a-fence-names-the-fence-top-as-the-climb
+  (let [r (pen/check {:block-at (block-at-from (assoc fence-ring [0 64 2] "stone")) :box box})]
+    (is (false? (:closed? r)))
+    (is (= {:pos {:x -1 :y 64 :z 2} :why :climb} (first (:leaks r))))))
+
+(deftest a-gate-a-step-above-the-floor-inside-is-listed
+  (let [inside-dug (into {} (for [x (range 5) z (range 5)] [[x 63 z] "air"]))
+        r (check (merge fence-ring inside-dug {[2 64 -1] "oak_fence_gate"})
+                 {:at {:x 2 :y 63 :z 2}})]
+    (is (true? (:closed? r)))
+    (is (= [{:pos {:x 2 :y 64 :z -1} :open? false}] (:gates r)))))

@@ -12,7 +12,7 @@
             [jobs.lib.pen :as pen]
             [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
-            [jobs.animals.herd-run :refer [adults animal-now approach-range box-centre cell cell-pos drop-gate! end! finish! gate-cell gate-open? hold-gate! in-pen-adults max-reopens near-pen orthogonal out-1 read-pen set-phase! settle-ms shut-failed!]]))
+            [jobs.animals.herd-run :refer [adults animal-now approach-range box-centre cell cell-pos drop-gate! end! finish! gate-cell gate-index gate-open? hold-gate! in-pen-adults max-reopens near-pen orthogonal out-1 read-pen set-phase! settle-ms shut-failed!]]))
 
 ;; ------------------------------------------------------------------ the pen and its gate
 
@@ -23,13 +23,23 @@
         [below feet head] (map at [-1 0 1])]
     (boolean (and below feet head (pen/passes? feet) (pen/passes? head) (not (pen/passes? below))))))
 
+(defn near-levels
+  "Cell, the cell below it, and (up? true) the cell above it: a fence line on uneven ground puts the floor inside
+  or outside a gate a step off the gate's own. Outside only a drop counts: a block in the way is no approach."
+  ([c] (near-levels c true))
+  ([[x y z] up?]
+   (cond-> [[x y z] [x (dec y) z]] up? (conj [x (inc y) z]))))
+
 (defn gate-sides
-  "[inside outside]: the pen cell beside gate g and the free floor straight across, or nil (a corner gate)."
+  "[inside outside]: the pen cell beside gate g and the free floor straight across, each at the gate's height or a
+  step off it, or nil (a corner gate)."
   [p inside g]
   (let [[x y z] (cell g)]
     (first (for [[dx dz] orthogonal
-                 :let [in [(- x dx) y (- z dz)] out [(+ x dx) y (+ z dz)]]
-                 :when (and (contains? inside in) (not (contains? inside out)) (free-floor? p out))]
+                 :let [in (first (filter inside (near-levels [(- x dx) y (- z dz)])))
+                       far (near-levels [(+ x dx) y (+ z dz)] false)
+                       out (first (filter #(free-floor? p %) far))]
+                 :when (and in out (not-any? inside far))]
              [in out]))))
 
 (defn choose-gate
@@ -124,10 +134,31 @@
                  (map #(shift in d %) (range (min depth max-axis-depth)))))))
 
 (defn depth
-  "How many pen cells lie in a straight line from in (in-1) along the gate's axis."
+  "How many pen cells lie in a straight line from in (in-1) along the gate's axis, the floor a step up or down at
+  most from one cell to the next."
   [inside g in]
   (let [d (axis-dir g in)]
-    (count (take-while inside (iterate #(shift % d 1) in)))))
+    (loop [c in n 0]
+      (if-let [c' (first (filter inside (near-levels c)))]
+        (recur (shift c' d 1) (inc n))
+        n))))
+
+(defn level-axis
+  "The axis cells with each cell off the gate moved a step up or down to where an animal stands: free floor outside,
+  a pen cell inside."
+  [p inside axis]
+  (let [g (nth axis gate-index)
+        carry (fn [ok? up? cells] (rest (reductions (fn [[_ y _] [x _ z]]
+                                                      (or (first (filter ok? (near-levels [x y z] up?))) [x y z]))
+                                                    g cells)))]
+    (vec (concat (reverse (carry #(free-floor? p %) false (reverse (subvec axis 0 gate-index))))
+                 [g]
+                 (carry inside true (subvec axis (inc gate-index)))))))
+
+(defn axis
+  "axis-cells fitted to the floor."
+  [p inside g in out depth]
+  (level-axis p inside (axis-cells g in out depth)))
 
 (defn overlaps-cell?
   "True when an entity centre pos {:x :z} is within 0.5 + half-width + overlap-margin of the middle of cell on both
@@ -167,8 +198,8 @@
 
 (defn approach-free?
   "True when out-1..out-4 (out is out-1) are all free floor."
-  [p g in out]
-  (every? #(free-floor? p %) (take approach-cells (axis-cells g in out 0))))
+  [p inside g in out]
+  (every? #(free-floor? p %) (take approach-cells (axis p inside g in out 0))))
 
 (defn other-leaks
   "The leaks of the pen but the chosen gate standing open."
@@ -243,15 +274,15 @@
       (= :no-start (:reason answer)) (finish! c :no-pen {:why :no-start})
       (nil? chosen) (finish! c :no-gate (gate-diagnosis c answer))
       (not (gate/allowed? c :herd.declined "herd" :place gate {:own-plans-ok? true})) (finish! c :refused)
-      (not (approach-free? (:primitives c) (cell gate) in out))
+      (not (approach-free? (:primitives c) (:inside answer) (cell gate) in out))
       (finish! c :no-gate {:why :no-approach
-                           :cell (first (remove #(free-floor? (:primitives c) %) (take approach-cells (axis-cells (cell gate) in out 0))))})
+                           :cell (first (remove #(free-floor? (:primitives c) %) (take approach-cells (axis (:primitives c) (:inside answer) (cell gate) in out 0))))})
       (seq leaks) (finish! c :leaky {:leaks (vec (take 12 leaks))})
       (>= inside target) (finish! c :full)
       (< (depth (:inside answer) (cell gate) in) min-depth)
       (finish! c :too-shallow {:cell (cell in) :depth (depth (:inside answer) (cell gate) in) :need min-depth})
       :else (do (ctx/update-mem! c assoc :phase :leash :gate gate :inside-cell (cell-pos in) :outside-cell (cell-pos out)
-                                 :axis (axis-cells (cell gate) in out (depth (:inside answer) (cell gate) in)))
+                                 :axis (axis (:primitives c) (:inside answer) (cell gate) in out (depth (:inside answer) (cell gate) in)))
                   :continue))))
 
 (defn ^:async survey! [c]
