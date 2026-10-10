@@ -312,7 +312,7 @@
     (cond
       (not= :done r) (if (= :declined r) :declined :continue)
       (= :done (:status (ctx/child-result c :gate)))
-      (do (when (= :closed state) (drop-gate! c))
+      (do (when (= :closed state) (ctx/update-mem! c assoc :gate-closed true) (drop-gate! c))
           (set-phase! c next then))
       (= :open state) (end! c :gate-stuck)
       :else (shut-failed! c))))

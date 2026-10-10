@@ -118,9 +118,11 @@
       :else :shut)))
 
 (defn gate-open?
-  "True unless the gate is seen shut: an unknown gate is never taken for shut (the body goes there and reads it)."
+  "True unless the gate is seen shut or the last toggle of this run found it closed (:gate-closed, dropped when the run
+  opens it): a gate out of sight is remembered as it was last seen, and an unknown one is never taken for shut."
   [c]
-  (not= :shut (gate-state (:primitives c) (gate-cell c))))
+  (and (not (:gate-closed (ctx/mem c)))
+       (not= :shut (gate-state (:primitives c) (gate-cell c)))))
 
 (defn same-cell? [g entry-cell] (= g (some-> entry-cell vec)))
 
@@ -128,6 +130,7 @@
   "Tell the pen-gate trigger the open gate is open on purpose: a fresh :gate-held entry, the old one replaced."
   [c]
   (let [g (gate-cell c)]
+    (ctx/update-mem! c dissoc :gate-closed)
     (ctx/forget-where! c :gate-held #(same-cell? g (:cell %)))
     (ctx/remember! c :gate-held {:cell g :by (:id c)} held-policy)))
 

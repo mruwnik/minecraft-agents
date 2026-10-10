@@ -1271,3 +1271,25 @@
                                  {:self {:pos {:x -40 :y 64 :z 3}} :blocks far-floor :entities [(cow 1 -58 3)]}
                                  100))]
           (is (= :none (:reason (done-event s)))))))))
+
+(deftest a-gate-found-shut-by-a-toggle-is-shut-though-the-body-last-saw-it-open
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng make p] :as s} (restartable {:entities [(cow 1 4 3)]} {:target 1})
+              stopped (atom false)
+              blind? (atom false)
+              sensed (.-sensedAt p)]
+          (aset p "sensedAt" (fn [pos] (if (and @blind? (= (.-x pos) 10) (= (.-z pos) 3) (= (.-y pos) 64))
+                                         (doto (js/Object.assign #js {} (sensed pos)) (aset "properties" #js {:open true :facing "east"}))
+                                         (sensed pos))))
+          (on-step-when! s #(and (not @stopped) (>= (self-x s) 12))
+                         (fn [] (reset! stopped true) (core/shutdown! eng)))
+          (await (run-until s (fn [_] @stopped) 200))
+          (swap! (fake/state p) #(-> % (assoc-in [:states gate-key :open] false) (assoc-in [:self :pos] [-5 64 3])))
+          (update-entity! s 1 assoc :leashed-to-me false)
+          (reset! blind? true)
+          (let [again (make)]
+            (await (run-ticks (assoc s :eng again) 200))
+            (is (< (count (events-of s :toggle.done)) 6) "a gate found shut is not shut again for ever")
+            (is (not= :shut-gate (:phase (core/job-memory again "j1"))) "the run went on")))))))
