@@ -190,6 +190,8 @@
     (set (mapcat #(when (= dim (:dim (:data %))) (:floors (:data %))) (ctx/entries c :stair-way)))))
 
 (defn near-of-args
-  "The :near the entries are narrowed to: the arg, else the body's position and :within, else nil."
-  [c {:keys [near within]}]
-  (or near (when within {:pos (u/self-pos c) :radius within})))
+  "The :near the entries are narrowed to: the arg, else the body's position and :within, else (unowned entries, :job
+  nil) the body's position and 32, so a saved trigger register whose job spec has no :within stays bounded, else nil."
+  [c {:keys [near within job]}]
+  (or near
+      (when-let [r (or within (when (nil? job) 32))] {:pos (u/self-pos c) :radius r})))

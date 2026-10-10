@@ -172,7 +172,7 @@
     (is (= {:within 32} args))
     (is (true? (fires? p (trigger-store [(entry [20 64 0])] []) [] args)) "near")
     (is (false? (fires? p (trigger-store [(entry [50 64 0])] []) [] args)) "far: nothing for the reflex")
-    (is (true? (fires? p (trigger-store [(entry [50 64 0])] []) [])) "no radius given: any distance")
+    (is (false? (fires? p (trigger-store [(entry [50 64 0])] []) [])) "no radius given: the default radius, as a saved register's old spec has")
     (is (= args (:args (:scaffold-left triggers/all))))
     (is (= [args] (rest (:job (:scaffold-left triggers/all)))) "the job the reflex starts gets the radius too")))
 
@@ -180,7 +180,10 @@
   (let [c {:primitives (tu/fake {:blocks {"0,64,0" "dirt"}})}]
     (is (= [32 #{:x :y :z}] ((juxt :radius (comp set keys :pos)) (ledger/near-of-args c {:within 32}))))
     (is (= {:pos {:x 9 :y 9 :z 9} :radius 5} (ledger/near-of-args c {:within 32 :near {:pos {:x 9 :y 9 :z 9} :radius 5}})))
-    (is (nil? (ledger/near-of-args c {})))))
+    (is (= 32 (:radius (ledger/near-of-args c {}))) "unowned entries: 32 by default")
+    (is (= 32 (:radius (ledger/near-of-args c {:job nil}))))
+    (is (nil? (ledger/near-of-args c {:job :all})))
+    (is (nil? (ledger/near-of-args c {:job "j3"})))))
 
 (deftest the-trigger-is-a-builtin
   (is (= scaffold-left/scaffold-left (:when (:scaffold-left triggers/all))))

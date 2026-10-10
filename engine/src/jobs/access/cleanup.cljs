@@ -30,7 +30,8 @@
     own id.
   - :all: every entry.
   :near {:pos :radius} narrows any of these to the entries within :radius of :pos; :within n, to those within n blocks of the
-  body now (the standing trigger passes 32, so far scaffold waits for the body to come near or an explicit cleanup).
+  body now. With :job nil and neither given, :within is 32: far scaffold waits for the body to come near, or for :job :all, an
+  instance id, :near or a larger :within.
 
   One run: every pass first settles the entries it works on from their cells. The recorded item still there: ours. A
   cell marked :removing that is now air: removed. Anything else (swapped by someone, or gone): the entry is
@@ -72,7 +73,7 @@
 (a/defargs args
   {:job {:doc "nil: entries no live job owns; \"jN\": that instance's and its children's; :all: every entry" :spec (a/or-of #{:all} a/name?) :default nil}
    :near {:doc "only the entries within :radius of :pos" :spec (a/map-with {:pos a/point? :radius (a/num-in 0 nil)}) :default nil}
-   :within {:doc "only the entries within this many blocks of the body, read afresh each time (the standing trigger's job passes 32); :near wins" :spec (a/num-in 0 nil) :default nil}
+   :within {:doc "only the entries within this many blocks of the body, read afresh each time (32 when :job is nil); :near wins" :spec (a/num-in 0 nil) :default nil}
    :accept {:doc "dig hazards accepted: :fluid-adjacent (water beside), :lava-adjacent, :falling-block"
             :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block :under-feet}) :default #{:fluid-adjacent}}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
