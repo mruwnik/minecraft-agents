@@ -110,6 +110,15 @@
           (is (false? (hs/door-open? p)) "the door is shut behind it")
           (is (= [] (:list (core/state eng)))))))))
 
+(deftest a-creeper-is-never-led-to-the-hut
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [creeper (assoc (zombie 5.5 13.5 0.4) :name "creeper")
+              {:keys [p seen]} (await (flee! (hut {:x 5.5 :y 64 :z 6.5} hs/door-states [creeper])))]
+          (is (not (ran-home? seen)) "a blast at the door would take the door, chest and bed")
+          (is (not (in-room? (body p)))))))))
+
 (deftest a-zombie-at-the-door-is-not-run-into
   (async done
     (tu/run-async done

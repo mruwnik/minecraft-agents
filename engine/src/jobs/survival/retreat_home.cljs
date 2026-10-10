@@ -103,11 +103,12 @@
 (defn choose
   "Where the flight goes among rooms (rooms): {:room r :inside? true} for the room the body is in, else {:room r :way w}
   for the one whose door it walks to in fewest steps (way-in) ahead of every melee chaser (race-won?), the home on a tie;
-  nil when none. way?: whether a run may be looked for now (false: only the room it is in counts)."
+  nil when none. way?: whether a run may be looked for now (false: only the room it is in counts). No run while a
+  creeper chases: it would follow to the door and blow the door, chest and bed."
   [p rooms threats way?]
   (if-let [r (some #(when (inside? p %) %) rooms)]
     {:room r :inside? true}
-    (when way?
+    (when (and way? (not-any? combat/creeper? threats))
       (->> rooms
            (keep (fn [r] (when-let [w (way-in p r)] (when (race-won? p r w threats) {:room r :way w}))))
            (sort-by (comp :steps :way))

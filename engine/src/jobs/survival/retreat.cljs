@@ -29,7 +29,7 @@
   Each step, in this order:
   1. A door, gate or trapdoor standing open within a hand's reach and nearer the nearest chaser than the body is shut
      with one click (retreat.door-shut info). Each door is clicked at most once a flight.
-  2. Runs into a closed building first: the latest :bed or :home within :home-range, or a room behind a wooden door or
+  2. Runs into a closed building first (not while a creeper chases: its blast would take the door and what is inside): the latest :bed or :home within :home-range, or a room behind a wooden door or
      gate the body has seen (jobs.survival.retreat-home/rooms, bounded by its settings), that is a closed room (walls,
      doors that shut: jobs.lib.reach/room) whose door it walks to (over seen blocks, at its own speed) ahead of every
      melee chaser (jobs.lib.cost/reach-first?), the fewest steps of those, with a go-to child to the room cell inside
