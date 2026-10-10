@@ -204,3 +204,16 @@
           (is (= :done (:status r)))
           (is (empty? (called env 'jobs.storage.haul)))
           (is (= ["set-place" "set-spawn"] (mapv #(last (re-find #"\.([a-z-]+)$" %)) (take-last 2 (names env))))))))))
+
+(deftest a-spawner-stop-seals-the-segment-at-once-and-skips-what-hangs-beyond-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [spawner (fn [a] (if (= "x-27-20:-20..0" (:id (:segment a))) {:status :stopped :reason :spawner :cell [-5 -26 22]} {:status :done :taken {}}))
+              env (setup :results {'jobs.strip.corridor spawner})
+              r (await (start! env (assoc args :spawner :seal)))]
+          (is (= :done (:status r)))
+          (is (= {:sealed 2 :stripped 1} (:segments r)))
+          (is (= [:seal] (distinct (map :spawner (called env 'jobs.strip.corridor)))) "the policy goes to the corridor")
+          (is (= 1 (count (filter #(= "x-27-20:-20..0" (:id (:segment %))) (called env 'jobs.strip.corridor)))) "not retried")
+          (is (= 2 (count (called env 'jobs.strip.seal)))))))))

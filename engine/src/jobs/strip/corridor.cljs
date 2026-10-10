@@ -28,16 +28,19 @@
   walks to the far end and looks round there, so crossings and new corridors come into view, then takes back the torches
   standing in the segment (the caller seals behind it).
   The check declines (wait :danger) while a real danger is near (jobs.lib.danger), unless :danger-check is false.
-  Every child's failure ends the trip stopped with the child's reason in :child. A spawner is not in :take by default.
+  A spawner follows :spawner: :break lights the standable corridor cells within 4 of it with torches (light 8), then digs it with
+  a pickaxe (no drop expected); :seal stops the trip :spawner at once with it left; :skip leaves it, listed in :kept {:why :spawner}.
+  Every child's failure ends the trip stopped with the child's reason in :child.
   Ends {:status :done :taken {class n} :kept [{:pos :why}] :new-segments [segment ..]}, :new-segments being the corridors
   seen from the far end that are not this segment (the caller folds them into its memory with merge-segments); or stopped
-  {:status :stopped :reason r :taken ..} with r one of :bag-full :food-short :no-torches :no-tool (:tool kind) :refused
+  {:status :stopped :reason r :taken ..} with r one of :bag-full :food-short :no-torches :no-tool (:tool kind) :spawner (:cell) :refused
   :unreachable :dig-failed :cart-failed :torch-failed :bad-args. Events: strip.corridor.done (info), strip.corridor.stopped (warn).")
 
 (a/defargs args
   {:segment {:doc "the segment map {:y :axis :line :from :to :open-ends} of jobs.lib.strip, or its id string" :spec (a/pred "a segment map or its id string" #(or (map? %) (string? %))) :default nil}
    :entry {:doc "[x y z] of the base side: targets are taken outward from the end nearest it" :spec ::a/pos :default nil}
-   :take {:doc "classes taken: :wood :cobweb :rail :ore :spawner" :spec (a/coll-of #{:wood :cobweb :rail :ore :spawner}) :default [:wood :cobweb :rail :ore]}
+   :take {:doc "classes taken: :wood :cobweb :rail :ore" :spec (a/coll-of #{:wood :cobweb :rail :ore}) :default [:wood :cobweb :rail :ore]}
+   :spawner {:doc "a spawner in the segment: dug once lit, stops the trip :spawner, or left and listed kept" :spec #{:break :seal :skip} :default :skip}
    :want-free {:doc "free slots under which the trip turns back; nil: jobs.lib.trip/want-free" :spec (a/int-in 0 36) :default nil}
    :danger-check {:doc "decline while a real danger is near" :spec boolean? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims" :spec boolean? :default false}})
@@ -122,13 +125,35 @@
        (filter #(<= (strip/gap seg (u/cell-vec (:pos %))) 2))
        (mapv :id)))
 
+(defn spawners
+  "The spawners seen in the segment: [{:pos :name :class :spawner}], nearest the entry first."
+  [c seg]
+  (:targets (strip/targets [] seg {:entry (some-> (:entry (:args c)) a/cell ((juxt :x :y :z))) :take #{:spawner} :block-at (access/seen-at (:primitives c))})))
+
+(defn dark-near
+  "A standable cell of the corridor's centre line within 4 of pos whose light is under 8 and which no torch of this trip
+  hangs near, the nearest to pos first; nil when none."
+  [c seg {:keys [x y z]}]
+  (let [block-at (access/seen-at (:primitives c))
+        {:keys [axis line from to]} seg
+        along (if (= axis :x) x z)
+        hung (:torches (ctx/mem c))
+        d2 (fn [[cx cy cz]] (+ (* (- cx x) (- cx x)) (* (- cy y) (- cy y)) (* (- cz z) (- cz z))))]
+    (->> (range (max from (- along 4)) (inc (min to (+ along 4))))
+         (map #(strip/at axis (:y seg) line %))
+         (filter #(and (<= (d2 %) 16) (let [n (block-at %)] (or (strip/air? n) (strip/rail? n)))
+                       (some-> (light-at (:primitives c) %) (< lit))
+                       (not-any? (fn [h] (<= (u/dist (zipmap [:x :y :z] %) (zipmap [:x :y :z] h)) torch-gap)) hung)))
+         (sort-by d2)
+         first)))
+
 (defn ^:async dig! [c {:keys [pos name class]}]
   (let [cell [(:x pos) (:y pos) (:z pos)]
         kind (tools/tool-kind name)]
     (cond
       (and (not= :torch class) (not-any? #(tools/of-kind? (:name %) kind) (u/inventory (:primitives c)))) (stop! c :no-tool {:tool kind :cell cell})
       :else
-      (let [o (await (b/dig-cell! c pos (merge {:collect true :need-drop true} (select-keys (:args c) [:ignore-zones?]))))]
+      (let [o (await (b/dig-cell! c pos (merge {:collect true :need-drop (not= :spawner class)} (select-keys (:args c) [:ignore-zones?]))))]
         (case o
           :continue :continue
           (:dug :missing) (do (ctx/update-mem! c #(-> % (update :dug (fnil conj []) cell) (update-in [:taken class] (fnil inc 0)))) :again)
@@ -172,25 +197,32 @@
   (let [p (:primitives c)
         blocks (look/seen-blocks p {:match #(or (strip/fence? %) (strip/planks? %) (strip/rail? %)) :radius 24 :max 512})
         news (remove #(strip/overlaps? seg %) (strip/segments blocks {:block-at (access/seen-at p)}))]
-    (finish! c :done {:kept (:kept (strip/targets [] seg {:block-at (access/seen-at p)})) :new-segments (vec news)})))
+    (finish! c :done {:kept (into (:kept (strip/targets [] seg {:block-at (access/seen-at p)}))
+                                  (map (fn [t] {:pos (:pos t) :why :spawner}))
+                                  (when (not= :break (:spawner (:args c))) (spawners c seg)))
+                      :new-segments (vec news)})))
 
 (defn ^:async step! [c seg]
   (let [p (:primitives c)
-        {:keys [entry take want-free]} (:args c)
-        found (strip/targets [] seg {:entry (some-> entry a/cell ((juxt :x :y :z))) :take (set take) :block-at (access/seen-at p)})
+        {:keys [entry take want-free spawner]} (:args c)
+        found (strip/targets [] seg {:entry (some-> entry a/cell ((juxt :x :y :z))) :take (cond-> (set take) (= :break spawner) (conj :spawner)) :block-at (access/seen-at p)})
+        sealed-spawner (when (= :seal spawner) (first (spawners c seg)))
         dug (set (:dug (ctx/mem c)))
         fresh (fn [xs] (first (remove #(dug [(:x (:pos %)) (:y (:pos %)) (:z (:pos %))]) xs)))
         target (fresh (:targets found))
         cart (first (carts c seg))
         feet (assoc (b/feet-cell c) 1 (:y seg))
         torch (fresh (torch-cells c seg))
+        dark (when (= :spawner (:class target)) (dark-near c seg (:pos target)))
         work? (or target cart)]
     (when (and target (:looked (ctx/mem c))) (ctx/update-mem! c dissoc :looked))
     (cond
       (trip/food-short? c) (stop! c :food-short {})
+      sealed-spawner (stop! c :spawner {:cell (u/cell-vec (:pos sealed-spawner))})
       (and work? (< (u/free-slots p) (or want-free (trip/want-free)))) (stop! c :bag-full {})
       (and work? (torch-due? c feet)) (await (hang-torch! c seg feet))
       cart (await (loot! c cart))
+      dark (await (hang-torch! c seg dark))
       target (await (dig! c target))
       (not (:looked (ctx/mem c))) (await (look-end! c seg))
       torch (await (dig! c torch))

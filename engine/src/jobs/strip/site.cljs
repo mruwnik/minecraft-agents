@@ -35,7 +35,7 @@
           (storage.deposit), obtain torches, get the tool, then back down; at most :max-trips.
   :haul   storage.haul from the base chests to the main storage (not with :haul false).
   :restore  :home and the respawn bed back to :was (also on any stop). The torches the corridor took back are
-          carried; spawners are left alone (:spawner :break is the seam of the spawner job).
+          carried.
   Ends {:status :done :segments {state n} :taken {class n} :hauled {item n}}, or {:status :stopped :reason r :phase p}:
   :child-failed (:child the job, :because its reason), :bad-plan, :no-site, :no-shears, :unreachable, :base-full,
   :food-short, :trips-exhausted. The check waits :danger in the strip phase. Events: strip.site.done (info), strip.site.stopped (warn).")
@@ -47,7 +47,7 @@
    :shaft {:doc "id of a mineshaft plan down from the base; nil: the nearest usable one; false: walk" :spec (a/or-of a/name? boolean?) :default nil}
    :radius {:doc "how far from :at a corridor belongs to the site" :spec (a/int-in 8 65) :default 64}
    :take {:doc "classes stripped" :spec (a/coll-of #{:wood :cobweb :rail :ore}) :default [:wood :cobweb :rail :ore]}
-   :spawner {:doc ":break adds :spawner to what is taken; :seal and :skip leave it (the spawner job's seam)" :spec #{:break :seal :skip} :default :skip}
+   :spawner {:doc "a spawner in a segment: :break lights and digs it, :seal seals the segment's mouth at once (its subtree skipped), :skip leaves it" :spec #{:break :seal :skip} :default :skip}
    :seal-with {:doc "blocks to seal with, the first carried; nil: strip.seal's own" :spec (a/coll-of a/item?) :default nil}
    :haul {:doc "false leaves the loot in the base chests" :spec boolean? :default true}
    :want-free {:doc "free slots under which a trip turns back; nil: jobs.lib.trip/want-free" :spec (a/int-in 0 36) :default nil}
@@ -259,7 +259,7 @@
   (let [{:keys [entry]} (mouth s t seg)
         {:keys [take spawner want-free stop-limit ignore-zones? danger-check]} (:args c)
         res (await (call! c :corridor 'jobs.strip.corridor
-                          (cond-> {:segment seg :entry entry :take (cond-> (vec take) (= :break spawner) (conj :spawner))
+                          (cond-> {:segment seg :entry entry :take take :spawner spawner
                                    :danger-check danger-check :ignore-zones? ignore-zones?}
                             want-free (assoc :want-free want-free))))
         id (:id seg)
@@ -269,6 +269,10 @@
         radius (:radius (:args c))]
     (cond
       (= :continue res) :continue
+      (= :spawner why) (do (save! c #(-> % taken
+                                         (assoc-in [:segments id] (assoc seg :state :stripped :why :spawner))
+                                         (update :segments (fn [m] (reduce (fn [m k] (assoc m k (assoc (get m k) :state :skipped :why :spawner))) m (beyond t id))))))
+                           :again)
       (= :done (:status res)) (do (save! c #(-> % taken (assoc-in [:segments id :state] :stripped)
                                                 (update :segments strip/merge-segments (filter (fn [g] (<= (strip/gap g (vec3 (:at s))) radius)) (:new-segments res)))))
                                   :again)

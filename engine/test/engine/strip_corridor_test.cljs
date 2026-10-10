@@ -28,16 +28,25 @@
            (into {} (map (fn [c] [(key c) "rail"])) rail-cells)
            {(key web) "cobweb" (key bridge) "oak_planks"})))
 
-(defn world [& {:keys [inventory entities zones] :or {inventory kit}}]
-  (bd/setup {:self {:pos {:x -3 :y 64 :z 0}} :blocks corridor :inventory inventory :drops drops :entities (or entities [])
+(defn world [& {:keys [inventory entities zones blocks] :or {inventory kit blocks corridor}}]
+  (bd/setup {:self {:pos {:x -3 :y 64 :z 0}} :blocks blocks :inventory inventory :drops drops :entities (or entities [])
              :zones (or zones [])}))
 
 (defn dark-world
   "A seeing world whose floor level in the corridor is dark (light 0) after the first sight pass; the rest stays lit so the corridor is seen."
-  [inventory]
-  (let [env (bd/setup-seeing {:self {:pos {:x -3 :y 64 :z 0}} :blocks corridor :drops drops :inventory inventory})]
-    (swap! (.. (:p env) -world -state) merge {:light (into {} (for [x (range -5 16) z [-1 0 1]] [[x 64 z] [0 0]]))})
-    env))
+  ([inventory] (dark-world inventory corridor (range -5 16)))
+  ([inventory blocks xs]
+   (let [env (bd/setup-seeing {:self {:pos {:x -3 :y 64 :z 0}} :blocks blocks :drops drops :inventory inventory})]
+     (swap! (.. (:p env) -world -state) merge {:light (into {} (for [x xs z [-1 0 1]] [[x 64 z] [0 0]]))})
+     env)))
+
+(def spawner-cell [10 65 2])
+(def spawner-corridor
+  "The corridor with nothing to take but a spawner in its wall."
+  (-> (apply dissoc corridor (map (fn [[x y z]] (str x "," y "," z)) (concat wood-cells rail-cells [web bridge])))
+      (assoc "8,63,0" "stone" "10,65,2" "spawner")))
+(def spider {:id 9 :name "cave_spider" :kind "hostile" :pos {:x 3 :y 64 :z 0} :health 12})
+(def pick-torches (into kit [{:name "torch" :count 8}]))
 
 (defn run! [{:keys [eng]} a] (bd/child-outcome eng job a 400))
 (defn gone? [p cells] (every? #(#{"air" "cave_air"} (bd/block-at p %)) cells))
@@ -148,3 +157,55 @@
       (fn ^:async t []
         (let [r (await (run! (world) {:segment "nonsense"}))]
           (is (= {:status :stopped :reason :bad-args} (select-keys r [:status :reason]))))))))
+
+(deftest spawner-break-with-a-cave-spider-near-declines-danger-and-digs-nothing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (world :entities [spider] :blocks spawner-corridor)
+              why (await (bd/waiting-after env (list job (assoc args :spawner :break)) 3))]
+          (is (= :danger (:reason why)))
+          (is (empty? (bd/calls (:p env) "dig")))
+          (is (= "spawner" (bd/block-at (:p env) spawner-cell))))))))
+
+(deftest spawner-break-lights-the-cells-round-it-then-digs-it-counting-it-taken
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p] :as env} (dark-world pick-torches spawner-corridor (range 6 13))
+              r (await (run! env (assoc args :spawner :break)))
+              torches (map #(js->clj (.-pos (.-args %)) :keywordize-keys true) (filter #(= "torch" (.-item (.-args %))) (bd/calls p "place")))]
+          (is (= {:status :done :taken {:spawner 1 :torch 2}} (select-keys r [:status :taken])) "the torches hung are taken back")
+          (is (gone? p [spawner-cell]))
+          (is (seq torches))
+          (is (every? (fn [{:keys [x y z]}] (<= (+ (* (- x 10) (- x 10)) (* (- y 65) (- y 65)) (* (- z 2) (- z 2))) 16)) torches)
+              "every torch within 4 of the spawner"))))))
+
+(deftest spawner-break-in-the-dark-without-torches-stops-no-torches-leaving-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p] :as env} (dark-world kit spawner-corridor (range 6 13))
+              r (await (run! env (assoc args :spawner :break)))]
+          (is (= {:status :stopped :reason :no-torches} (select-keys r [:status :reason])))
+          (is (= "spawner" (bd/block-at p spawner-cell))))))))
+
+(deftest spawner-seal-stops-at-once-with-the-spawner-left
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (world :blocks (assoc corridor "10,65,2" "spawner"))
+              r (await (run! env (assoc args :spawner :seal)))]
+          (is (= {:status :stopped :reason :spawner :cell [10 65 2]} (select-keys r [:status :reason :cell])))
+          (is (empty? (bd/calls (:p env) "dig")))
+          (is (= "spawner" (bd/block-at (:p env) spawner-cell))))))))
+
+(deftest spawner-skip-strips-the-rest-and-lists-it-kept
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (world :blocks (assoc corridor "10,65,2" "spawner"))
+              r (await (run! env args))]
+          (is (= {:status :done :taken {:wood 21 :rail 13 :cobweb 1}} (select-keys r [:status :taken])))
+          (is (some #{{:pos {:x 10 :y 65 :z 2} :why :spawner}} (:kept r)))
+          (is (= "spawner" (bd/block-at (:p env) spawner-cell))))))))
