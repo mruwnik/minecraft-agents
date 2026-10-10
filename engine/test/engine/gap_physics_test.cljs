@@ -30,3 +30,15 @@
 (deftest a-body-that-cannot-sprint-has-no-plan-over-a-gap-of-2-or-3
   (are [n] (= :no-plan (walk-with hungry n nil))
     2 3))
+
+(def canopy
+  "Leaf platforms at y 94 (feet 95) either side of a 2-cell gap, the far one one block lower."
+  [[0 94 0 9 94 4 "oak_leaves" {}] [12 93 0 20 93 4 "oak_leaves" {}]])
+
+(deftest a-canopy-gap-down-one-is-crossed-straight-and-slantwise
+  (are [extra goal at] (= :arrived (:status (:done (sp/walk (into canopy extra) [2 95 2] goal at))))
+    [] [14 94 2] [2.5 2.5]
+    [[0 96 1 20 96 1 "oak_leaves" {}] [0 96 3 20 96 3 "oak_leaves" {}]] [14 94 2] [2.5 2.5]
+    [] [14 94 1] [2.5 2.9]
+    [] [14 94 3] [2.5 2.1]
+    [[10 95 1 11 95 1 "oak_leaves" {}] [10 95 3 11 95 3 "oak_leaves" {}]] [14 94 2] [2.5 2.5]))
