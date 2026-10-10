@@ -2,12 +2,13 @@
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.places :as places]
-            [jobs.lib.shelter :as sh]))
+            [jobs.lib.shelter :as sh]
+            [jobs.lib.util :as u]))
 
 (def doc
   "Set the respawn point at a bed without sleeping: by day, click the bed (jobs.blocks.use-on walks to where the eye sees it, through the door of a hut) and the
   server answers \"respawn point set\".
-  Needs a bed: the :bed argument, else the remembered :bed within :bed-radius. Waits (:no-bed, :night); at night the
+  Needs a bed: the :bed argument, else the remembered :bed within :bed-radius (forgotten with a bed_missing warn when its block is seen to be gone), else a bed the body sees. Waits (:no-bed, :night); at night the
   sleep job sets it. Done at once when the spawn is already known at that bed (jobs.lib.shelter/spawn-known?: :spawn-bed or :spawn-set near it, not reset since).
   Returns {:status :completed :spawn pos} when the server set the point (or it was already known); {:status :stopped
   :reason ...} when the click did not set it (:no-bed, :night, :not-set). Writes :spawn-bed {:pos bed} (cap 1, forever),
@@ -18,10 +19,20 @@
                 :spec (a/num-in 0 nil) :default sh/default-bed-radius}
    :bed {:doc "bed position [x y z] or {:x :y :z} to use instead of the remembered :bed (no radius)" :spec ::a/pos :default nil}})
 
-(defn bed-of [c]
+(defn remembered-gone?
+  "Whether the remembered :bed (no :bed arg) is loaded and no longer a bed."
+  [c]
+  (let [p (:primitives c)
+        pos (when-not (:bed (:args c)) (sh/bed c (:bed-radius (:args c))))]
+    (boolean (and pos (places/gone? :bed (u/block-name p pos))))))
+
+(defn bed-of
+  "The :bed arg, else the remembered bed unless it is gone, else a bed the body sees."
+  [c]
   (if-let [given (:bed (:args c))]
     (:pos (places/parse-pos given))
-    (sh/bed c (:bed-radius (:args c)))))
+    (or (when-not (remembered-gone? c) (sh/bed c (:bed-radius (:args c))))
+        (sh/seen-bed (:primitives c)))))
 
 (defn check [c]
   (cond
@@ -30,6 +41,8 @@
     :else true))
 
 (defn ^:async round [c]
+  (when (remembered-gone? c)
+    (places/retract-if-missing! c :bed (sh/bed c (:bed-radius (:args c))) "missing"))
   (let [bed (bed-of c)]
     (cond
       (nil? bed) (do (ctx/result! c {:status :stopped :reason :no-bed}) :done)

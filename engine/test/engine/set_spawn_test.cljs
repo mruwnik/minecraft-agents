@@ -60,6 +60,23 @@
               pos (.-pos (.self p))]
           (is (< -3 (.-z pos)) (str "the body is inside the hut, at " (.-x pos) " " (.-z pos))))))))
 
+(deftest set-spawn-forgets-a-remembered-bed-that-is-gone-and-uses-the-one-it-sees
+  (async done
+    (run-async done
+      (fn ^:async t []
+        (let [seen-bed {:x 2 :y 64 :z 0}
+              {:keys [eng p]} (await (run-set-spawn {:time noon :blocks {"2,64,0" "red_bed"}} {} #(know-bed! % bed)))]
+          (is (= [seen-bed] (mapv st/arg-pos (calls p "useOn"))))
+          (is (= {:gone true :was bed} (:data (mem/latest (mem/view (:store eng)) :bed))))
+          (is (= [{:pos seen-bed}] (entries eng :spawn-bed))))))))
+
+(deftest set-spawn-forgets-a-remembered-bed-that-is-gone-and-waits-when-it-sees-none
+  (let [{:keys [eng]} (setup {:time noon})]
+    (know-bed! eng bed)
+    (let [id (core/submit! eng '(jobs.survival.set-spawn) {})]
+      (core/tick! eng)
+      (is (= :no-bed (:reason (:waiting (job-api/summary eng id))))))))
+
 (deftest set-spawn-does-not-click-again-when-the-spawn-bed-is-known
   (async done
     (run-async done
