@@ -489,7 +489,7 @@
   [c]
   (let [{:keys [dug-at drop-walked last-carried]} (ctx/mem c)]
     (when (and dug-at (not= dug-at drop-walked) (<= (carried c) (or last-carried 0)))
-      (let [w (await (near/go-near! c (zipmap [:x :y :z] dug-at) 1 {:zone-tolls true :escalate false}))]
+      (let [w (await (near/go-near! c (zipmap [:x :y :z] dug-at) 1 {:zone-tolls true :escalate false :min-health (hp-cost/default-min-health)}))]
         (when-not (= :partial w) (ctx/update-mem! c assoc :drop-walked dug-at))
         (case w :partial :partial :there :walked nil)))))
 
@@ -1286,7 +1286,7 @@
 
 (defn ^:async place! [c pos item]
   (let [walked (if (> (u/dist (u/self-pos c) pos) (mend-reach))
-                 (await (near/go-near! c pos (reach) {:zone-tolls true}))
+                 (await (near/go-near! c pos (reach) {:zone-tolls true :min-health (hp-cost/default-min-health)}))
                  :there)]
     (if (not= :there walked)
       (do (when (= :blocked walked) (mend-fail! c)) (if (= :blocked walked) :again :continue))
