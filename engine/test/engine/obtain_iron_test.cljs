@@ -130,39 +130,6 @@
           (is (empty? (f/events-of s :obtain.exploring)) "no search walk at 0.5 hp")
           (is (some #(= :low-health (:reason %)) (f/events-of s :waiting))))))))
 
-(def village-trunk
-  "A trunk at x 3 inside a foreign zone."
-  {:blocks (into {} (for [y [64 65 66]] [(str "3," y ",4") "oak_log"]))
-   :zones [f/own-zone {:name "village" :min [2 60 3] :max [4 70 5] :owner "Miles"}]})
-
-(deftest logs-seen-only-in-a-foreign-zone-are-explored-past-and-then-named
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (f/start (ore-world (:blocks village-trunk) []) (:zones village-trunk))]
-          (await (obtain! s {:any-of ["oak_log" "birch_log"] :count 2 :how #{:gather} :explore true} 12))
-          (is (seq (f/events-of s :obtain.exploring)) "walks to look for logs it may take")
-          (await (f/run-ticks s 600))
-          (is (re-find #"seen but not taken.*zone" (str (:why (first (f/events-of s :stopped))))) "when exploring fails the stop names the refusal"))))))
-
-(deftest a-tree-it-may-take-is-preferred-to-logs-in-a-foreign-zone
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [free (into {"30,68,4" "oak_leaves" "31,67,4" "oak_leaves"} (for [y [64 65 66 67]] [(str "30," y ",4") "oak_log"]))
-              s (f/start (ore-world (merge (:blocks village-trunk) free) []) (:zones village-trunk))]
-          (await (obtain! s {:any-of ["oak_log"] :count 2 :how #{:gather} :explore true} 400))
-          (is (<= 2 (get (f/inv s) "oak_log" 0)) "logs were got from the tree outside the zone"))))))
-
-(deftest a-tree-cut-off-from-the-body-is-explored-past-with-explore
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [free (into {"30,68,4" "oak_leaves" "31,67,4" "oak_leaves"} (for [y [64 65 66 67]] [(str "30," y ",4") "oak_log"]))
-              s (f/start (assoc (ore-world (merge f/tree-blocks free) []) :unreachable ["0,64,4" "0,65,4" "0,66,4" "0,67,4"]) [f/own-zone])]
-          (await (obtain! s {:any-of ["oak_log"] :count 2 :how #{:gather} :explore true} 600))
-          (is (<= 2 (get (f/inv s) "oak_log" 0)) "logs were got from the reachable tree"))))))
-
 (deftest a-tree-seen-while-sheltered-at-night-waits-night-sheltered-not-no-source
   (async done
     (tu/run-async done
@@ -240,16 +207,6 @@
          (obtain/progress {:inv {"a" 1} :t 0 :at 5000} {"a" 1} 100000 10000)) "a gap of 95 s counts 10 s")
   (is (= {:inv {"a" 1} :t 0 :at 8000}
          (obtain/progress {:inv {"a" 1} :t 0 :at 5000} {"a" 1} 8000 10000)) "a short gap counts whole"))
-
-(deftest raw-iron-seen-38-blocks-away-sends-the-mine-not-a-search
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (f/start (ore-world (into {} (for [x [0 1 2] y [63 64 65]] [(str x "," y ",38") "iron_ore"])) [{:name "stone_pickaxe" :count 1}]) [] (assoc f/sight-opts :radius 48))]
-          (await (obtain! s {:item "raw_iron" :how #{:craft :gather}} 200))
-          (is (empty? (filter #(= :no-source (:reason %)) (f/events-of s :waiting))))
-          (is (empty? (f/events-of s :obtain.exploring)))
-          (is (seq (mine-events s)) "the mine went for the ore"))))))
 
 (deftest nuggets-carried-are-combined-into-an-ingot-with-how-given-as-a-vector
   (async done

@@ -44,26 +44,27 @@
     (+ (* (+ x coord-limit) 1073741824) (* (+ z coord-limit) 512) (- y min-y))))
 
 (defn lookup-cache
-  "A lazy per-key cache for fn f over the world values (selected by sel); reset when any selected value changes."
-  [sel slow]
+  "A lazy per-key cache for fn slow over the world values under keys; reset when any of them changes."
+  [ks slow]
   (let [seen (volatile! nil) cache (volatile! (js/Map.))]
     (fn [w x y z]
-      (let [vals (sel w)]
-        (when-not (and @seen (every? true? (map identical? @seen vals)))
-          (vreset! seen vals)
-          (vreset! cache (js/Map.)))
-        (if-let [k (packed-key x y z)]
-          (let [^js m @cache v (.get m k)]
-            (if (undefined? v)
-              (let [v (slow w x y z)] (.set m k v) v)
-              v))
-          (slow w x y z))))))
+      (when-not (and @seen (loop [i 0 ks ks]
+                             (or (empty? ks)
+                                 (and (identical? (aget ^js @seen i) (get w (first ks))) (recur (inc i) (rest ks))))))
+        (vreset! seen (to-array (map #(get w %) ks)))
+        (vreset! cache (js/Map.)))
+      (if-let [k (packed-key x y z)]
+        (let [^js m @cache v (.get m k)]
+          (if (undefined? v)
+            (let [v (slow w x y z)] (.set m k v) v)
+            v))
+        (slow w x y z)))))
 
 (defn state-at-fn []
-  (lookup-cache (fn [w] [(:blocks w) (:unloaded w) (:states w)]) state-at-slow))
+  (lookup-cache [:blocks :unloaded :states] state-at-slow))
 
 (defn light-at-fn []
-  (lookup-cache (fn [w] [(:light w) (:light-default w)]) light-at-slow))
+  (lookup-cache [:light :light-default] light-at-slow))
 
 (defn eye [w]
   (when-not (:offline w)
