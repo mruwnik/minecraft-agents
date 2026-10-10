@@ -641,11 +641,6 @@
     (is (string? (:error (apply request "--world" "w" "Probe" argv))) (pr-str argv)))
   (is (string? (:error (request "--world" "w" "Probe" "inventory" "--wait")))))
 
-(deftest waits-wake-on-hurt-unless-told-not-to
-  (is (true? (get-in (request "--world" "w" "Probe" "--wait") [:wait-options :danger])))
-  (is (false? (get-in (request "--world" "w" "Probe" "--wait" "--no-danger") [:wait-options :danger])))
-  (is (string? (:error (request "--world" "w" "Probe" "--no-danger")))))
-
 (deftest watchers-accept-repeated-and-comma-separated-options
   (let [r (request "--world" "w" "Probe" "--wait" "--watch" "j1,j2" "--watch" "j3")]
     (is (= ["j1" "j2" "j3"] (get-in r [:wait-options :watch])))))

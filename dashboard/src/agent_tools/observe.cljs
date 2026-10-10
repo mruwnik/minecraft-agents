@@ -5,7 +5,6 @@
             [agent-tools.http :as http]
             [agent-tools.inventory :as inventory]
             [agent-tools.job-results :as job-results]
-            [agent-tools.vitals :as vitals]
             [agent-tools.observe.events :as events]
             ["node:path" :as path]
             [clojure.string :as str]
@@ -382,12 +381,7 @@
         cancel #(.abort controller)]
     (.once js/process "SIGINT" cancel)
     (.once js/process "SIGTERM" cancel)
-    (-> (vitals/read! (:socket-path request) get!)
-        (.then (fn [before]
-                 (wait-observe request get! (.-signal controller)
-                               (fn [result]
-                                 (.then (vitals/read! (:socket-path request) get!)
-                                        (fn [after] (output (str (data/write-edn (assoc result :vitals (vitals/view before after (:seen after)))) "\n"))))))))
+    (-> (wait-observe request get! (.-signal controller) (fn [result] (output (str (data/write-edn result) "\n"))))
         (.then (fn [_] 0))
         (.finally (fn []
                     (.removeListener js/process "SIGINT" cancel)

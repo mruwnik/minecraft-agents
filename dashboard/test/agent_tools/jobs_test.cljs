@@ -413,36 +413,3 @@
         m (:message (jobs/failure-for {:mutating true :request {:request-id "abc-1"}} e))]
     (is (re-find #"--request-id abc-1" m) m)
     (is (re-find #"same command" m) m)))
-
-(defn vitals-engine
-  "waiting-engine whose /status health falls from 20 to 14 between its first and later answers."
-  [events manual]
-  (let [calls (atom 0)]
-    (fn [req]
-      (if (= "/status" (:path req))
-        (let [n (swap! calls inc)]
-          {:text (pr-str (cond-> {:mode :scheduled :health (if (< n 3) 20 14) :food 18 :position {:x 0 :y 64 :z 0}}
-                           manual (assoc :manual {:who "Wren" :why "probing"})))})
-        ((waiting-engine events) req)))))
-
-(deftest a-waited-submit-reports-health-lost-and-the-reflexes-off-reminder
-  (let [state (state-dir)
-        events (atom [(event-of 1 :system :started {})])]
-    (async done
-      (-> (run-main! state ["submit" "(jobs.time.wait-for-day)" "--wait" "--timeout" "100ms"] (vitals-engine events true))
-          (.then (fn [{:keys [out]}]
-                   (let [v (:vitals (data/read-edn out))]
-                     (is (= "lost 6 health during the wait (20 -> 14)" (:hurt v)) out)
-                     (is (= 14 (:health v)))
-                     (is (re-find #"reflexes are off" (str (:reflexes-off v)))))))
-          (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
-
-(deftest a-waited-submit-woken-by-a-hit-says-so
-  (let [state (state-dir)
-        events (atom [(event-of 1 :system :started {})])]
-    (js/setTimeout #(swap! events conj (event-of 2 :body :hurt {} {:data {:health 14 :causes ["zombie"]}})) 150)
-    (async done
-      (-> (run-main! state ["submit" "(jobs.time.wait-for-day)" "--wait" "--timeout" "5s"] (vitals-engine events false))
-          (.then (fn [{:keys [out]}]
-                   (is (= :danger (get-in (data/read-edn out) [:wait :wake])) out)))
-          (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))

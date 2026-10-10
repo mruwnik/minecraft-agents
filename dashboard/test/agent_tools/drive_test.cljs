@@ -82,7 +82,7 @@
 (deftest a-taken-body-is-told-reflexes-are-off
   (let [take (drive/request-for ["Bob" "take" "--world" "w"])
         ok "{\"ok\":true}"]
-    (is (re-find #"reflexes are off.*go-to still keeps air" (drive/reply-note take ok)))
+    (is (re-find #"reflexes are off.*go-to still keeps air.*submitted job" (drive/reply-note take ok)))
     (is (nil? (drive/reply-note take "{\"ok\":false}")))
     (is (nil? (drive/reply-note (drive/request-for ["Bob" "release" "--world" "w"]) ok)))
     (is (nil? (drive/reply-note (drive/request-for ["Bob" "state" "--world" "w"]) ok)))))

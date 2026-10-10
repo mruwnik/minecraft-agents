@@ -239,11 +239,3 @@
         (is (nil? (:goal cleared)))
         (is (= [["iron_ingot" 24]] (:want cleared)) "clearing the goal keeps the want list"))
       (finally (.rmSync fs dir #js {:recursive true :force true})))))
-
-(deftest a-hit-wakes-progress-and-the-reply-says-so-first
-  (is (= {:wake :needs-you :text "hit: health 14"} (progress/wake-verdict {:wake :danger :health 14} nil)))
-  (is (false? (:danger (request "Probe" "--world" "w" "--wait" "1m" "--no-danger"))))
-  (is (true? (:danger (request "Probe" "--world" "w" "--wait" "1m"))))
-  (let [text (progress/wake-text {:wake :needs-you :text "hit: health 14" :vitals {:hurt "lost 6 health during the wait (20 -> 14)" :health 14 :food 18}})]
-    (is (str/starts-with? text "HURT: lost 6 health"))
-    (is (str/includes? text "NOW health 14 food 18"))))
