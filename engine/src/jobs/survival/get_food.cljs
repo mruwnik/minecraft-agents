@@ -35,7 +35,7 @@
      A chest found empty or a source go-to cannot reach is forgotten; a farm with nothing ripe is passed over.
   3. Harvest items lying within 8 blocks (collect-drops).
   4. The nearest passive food animal within :hunt-radius (combat.attack, then collect-drops).
-  5. Mature crops or sweet berry bushes within :hunt-radius (blocks.dig).
+  5. Mature crops, sweet berry bushes or melons within :hunt-radius (blocks.dig).
   Nothing left: once per job (:explore, default on; a starving body again after foods/::starving-rest-ms) it searches for food animals and crops (jobs.explore.search, the
   ::explore setting; not at night nor while the night handler holds) and goes on if it found some; at ::eat-bad-food (6) or below it then eats harmful food carried (rotten
   flesh, with :allow-bad). Still nothing: it stops :no-food with a food.none warning (what was searched, the nearest known source) and writes
@@ -72,6 +72,10 @@
   {"carrots" 7 "potatoes" 7 "beetroots" 3})
 
 (def berry-bush {"sweet_berry_bush" 2})
+
+(def melon-block "A melon has no growth stage: it is always ripe." {"melon" 0})
+
+(def wild-food "Blocks dug for food besides the crops." (merge berry-bush melon-block))
 
 (def harvest-items
   "What the drops of a harvest or a kill may be called."
@@ -157,7 +161,7 @@
        (not (can-cook? c))
        (nil? (fresh-source c))
        (empty? (remove :why (animals-in-sight c)))
-       (empty? (ripe-blocks c (merge ripe-age berry-bush) (u/self-pos c) (hunt-radius c)))))
+       (empty? (ripe-blocks c (merge ripe-age wild-food) (u/self-pos c) (hunt-radius c)))))
 
 (defn check
   "Hungry, or in the middle of a meal that began when it was. Hungry with nothing to try waits :no-food-found."
@@ -252,7 +256,7 @@
   [c ripe-ages center radius]
   (let [skipped (set (:skipped-blocks (ctx/mem c)))]
     (->> (crops/seen-crops (:primitives c) (keys ripe-ages) radius 64)
-         (filter #(some-> (:age %) (>= (ripe-ages (:name %)))))
+         (filter #(let [need (ripe-ages (:name %))] (or (zero? need) (some-> (:age %) (>= need)))))
          (map :pos)
          (filter #(<= (u/dist % center) radius))
          (remove skipped))))
@@ -592,7 +596,7 @@
         (when source (await (use-source! c source)))
         (await (collect-drops! c (drop-radius)))
         (await (hunt! c))
-        (await (dig-ripe! c (merge ripe-age berry-bush) (u/self-pos c) (hunt-radius c))))))
+        (await (dig-ripe! c (merge ripe-age wild-food) (u/self-pos c) (hunt-radius c))))))
 
 (defn night-holds?
   "Whether the night handler would take the body now (jobs.lib.shelter/night-holds?): no exploring then."
@@ -630,7 +634,7 @@
         (ctx/update-mem! c assoc :explored "started" :explored-at (ctx/now c))
         (let [opts (widen-explore (merge (settings/get settings ::explore) (when (map? e) e)) (widen c))
               st (await (child/run! c :explore 'jobs.explore.search
-                                    (assoc opts :target (vec (concat (sort food-animals) (keys ripe-age) (keys berry-bush))))
+                                    (assoc opts :target (vec (concat (sort food-animals) (keys ripe-age) (keys wild-food))))
                                     {:max-calls 1}))]
           (if (= :continue st)
             :continue

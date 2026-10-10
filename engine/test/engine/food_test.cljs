@@ -424,6 +424,18 @@
           (is (= [{:x 6 :y 64 :z 0}] (call-args p "dig" "pos")))
           (is (= ["sweet_berries"] (call-args p "eat" "item"))))))))
 
+(deftest get-food-digs-a-melon-block-for-its-slices
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:food 1}
+                                      :blocks {"6,64,0" "melon"}
+                                      :drops {:melon "melon_slice"}})]
+          (core/submit! eng '(jobs.survival.get-food) {})
+          (await (run-until-empty eng 20))
+          (is (= [{:x 6 :y 64 :z 0}] (call-args p "dig" "pos")))
+          (is (= ["melon_slice"] (call-args p "eat" "item"))))))))
+
 (deftest get-food-says-so-once-per-cooldown-when-nothing-is-found
   (async done
     (tu/run-async done
