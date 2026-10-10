@@ -10,7 +10,8 @@
   A world is {:state atom :said atom :opts {...}}. Jobs ask through jobs.lib.world (plan, zones, claims), which
   answers from memory.
     A re-read zones.edn, places.json or plan file emits a :debug world.reloaded naming the files.
-    The files are stat-ed again at most every :every-ms, by a read or by the timer a real body's world runs.
+    The files are stat-ed again at most every :every-ms, by a read or by the timer a real body's world runs; a plan read
+    checks its own file at once.
     Only files whose stamp (modification time and size) changed are read and parsed again.
     A file that turns unreadable or invalid keeps its last good copy and warns once
     (world.plan-unreadable, world.blueprint-unreadable, world.zones-unreadable, world.claims-unreadable).
@@ -222,12 +223,12 @@
          (path/join dir (str id ".edn")))))
 
 (defn refresh!
-  "Stat the files when due and fold in what changed; emits a warn per newly broken file. A world without
-  files (of-data) is never refreshed."
-  [{:keys [state opts]}]
+  "Stat the files when due (or at once with force?) and fold in what changed; emits a warn per newly broken file. A world
+  without files (of-data) is never refreshed."
+  [{:keys [state opts]} & [force?]]
   (when (:plans-dir opts)
     (let [now ((:now opts))]
-      (when (fsync/due? (assoc @state :every-ms (:every-ms opts)) now)
+      (when (or force? (fsync/due? (assoc @state :every-ms (:every-ms opts)) now))
         (let [old @state
               results (into {} (map (fn [[kind spec]] [kind (sync-kind (get old kind) (get opts (:dir spec)) spec)]))
                             kinds)
@@ -326,7 +327,8 @@
   "The answer for plan id (see answer); nil for a nil world."
   [w id]
   (when w
-    (refresh! w)
+    (let [file (some-> (get-in w [:opts :plans-dir]) (path/join (str id ".edn")))]
+      (refresh! w (and file (not= (file-stamp file) (get-in @(:state w) [:plans id :stamp])))))
     (answer @(:state w) id)))
 
 (defn first-time!

@@ -103,15 +103,19 @@
     (is (= 1 (count (:cells (world/plan w "huts")))))
     (is (nil? (world/plan w "notes")))))
 
-(deftest an-edit-is-seen-after-the-recheck-interval-only
+(deftest an-edit-of-the-asked-plan-is-seen-at-once-and-other-files-after-the-interval
   (let [{:keys [plans clock w]} (reader)]
     (write! plans "field" (pr-str wheat))
+    (write! plans "huts" (pr-str huts))
     (is (nil? (:note (:plan (world/plan w "field")))))
     (touch-later! plans "field" (pr-str (assoc wheat :note "later")))
+    (is (= "later" (:note (:plan (world/plan w "field")))) "the plan asked for")
+    (write! plans "extra" (pr-str wheat))
+    (is (some? (world/plan w "extra")) "a plan added since the last check")
+    (touch-later! plans "huts" (pr-str (assoc huts :note "later")))
     (swap! clock + 1000)
-    (is (nil? (:note (:plan (world/plan w "field")))))
-    (swap! clock + 3000)
-    (is (= "later" (:note (:plan (world/plan w "field")))))))
+    (world/plan w "field")
+    (is (nil? (:note (:plan (world/answer @(:state w) "huts")))) "another plan waits for the interval")))
 
 (deftest a-broken-edit-keeps-the-last-good-copy-with-one-warn
   (let [{:keys [plans clock seen w]} (reader)]
