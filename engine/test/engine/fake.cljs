@@ -533,15 +533,23 @@
     :else [(update w :chat conj {:message message :to to})
            (cond-> {:status "sent" :parts 1} to (assoc :to to))]))
 
-(defn inspect-container [w {:keys [pos]}]
-  (let [items (get-in w [:containers pos])]
+(defn holder
+  "[path-in-world items pos] of a container: the block at pos, or the chest minecart entity (its :items); nil when absent."
+  [w {:keys [pos entity]}]
+  (if entity
+    (let [e (find-entity w entity) i (first (keep-indexed #(when (= entity (:id %2)) %1) (:entities w)))]
+      (when (and e (= "chest_minecart" (:name e))) [[:entities i :items] (or (:items e) []) (:pos e)]))
+    (when-let [items (get-in w [:containers pos])] [[:containers pos] items pos])))
+
+(defn inspect-container [w a]
+  (let [[_ items pos] (holder w a)]
     (cond
       (nil? items) [w {:status "missing"}]
       (not (near? w pos)) [w {:status "unreachable"}]
       :else [w {:status "ok" :items (with-slots items) :size 27 :free (max 0 (- 27 (count items)))}])))
 
-(defn transfer [w {:keys [pos direction item count]}]
-  (let [items (get-in w [:containers pos])]
+(defn transfer [w {:keys [direction item count] :as a}]
+  (let [[path items pos] (holder w a)]
     (cond
       (nil? items) [w {:status "missing" :moved 0}]
       (not (near? w pos)) [w {:status "unreachable" :moved 0}]
@@ -552,7 +560,7 @@
             to' (add-to to item moved)]
         (if (zero? moved)
           [w {:status "no-item" :moved 0}]
-          [(if deposit? (-> w (assoc :inventory from') (assoc-in [:containers pos] to')) (-> w (assoc :inventory to') (assoc-in [:containers pos] from')))
+          [(if deposit? (-> w (assoc :inventory from') (assoc-in path to')) (-> w (assoc :inventory to') (assoc-in path from')))
            {:status "ok" :moved moved}])))))
 
 (defn equip [w {:keys [item dest]}]
@@ -599,7 +607,7 @@
       [(animals/update-entity w id #(update % :health - 5)) {:status "hit" :health (- (:health e) 5) :hurt true}]
       (:lingers e) [(animals/update-entity w id #(assoc % :health 0)) {:status "killed" :health 0 :hurt true}]
       :else [(reduce (fn [w d] (spawn w (:pos e) (:name d) (:count d)))
-                     (update w :entities #(filterv (fn [x] (not= id (:id x))) %)) (:drops e))
+                     (update w :entities #(filterv (fn [x] (not= id (:id x))) %)) (concat (:drops e) (:items e)))
              {:status "killed" :health 0 :hurt true}])))
 
 (defn sleep [w {:keys [pos]}]

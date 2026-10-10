@@ -43,28 +43,33 @@ export function createItems (env) {
     const block = env.bot.blockAt(vec(p))
     return block && CONTAINER.test(block.name) ? block : null
   }
+  // A container is a block at `pos` or a chest minecart entity `entity` (an id); the second is where the position is the entity's.
+  const holderOf = a => {
+    if (a.entity === undefined) return { block: containerAt(cell(a.pos)), at: center(cell(a.pos)) }
+    const e = env.bot.entities[a.entity]
+    return { block: e?.name === 'chest_minecart' && e.position ? e : null, at: e?.position }
+  }
+  const holderArgs = a => isPos(a.pos) || Number.isInteger(a.entity)
   const slots = items => items.map(i => ({ name: i.name, count: i.count, slot: i.slot }))
 
   const inspectContainer = async (token, a = {}) => {
     if (!isOwner(token)) throw cutError()
-    need(isPos(a.pos), 'inspectContainer needs pos {x, y, z}')
-    const p = cell(a.pos)
+    need(holderArgs(a), 'inspectContainer needs pos {x, y, z} or entity id')
     return act(token, { boundS: 5 }, async ctx => {
-      const block = containerAt(p)
+      const { block, at } = holderOf(a)
       if (!block) return { status: 'missing' }
-      if (dist(eye(), center(p)) > setting('prim/reach')) return { status: 'unreachable' }
+      if (dist(eye(), at) > setting('prim/reach')) return { status: 'unreachable' }
       return withWindow(ctx, block, async win => ({ status: 'ok', items: slots(win.containerItems()), size: win.inventoryStart, free: win.slots.slice(0, win.inventoryStart).filter(i => !i).length }))
     })
   }
 
   const transfer = async (token, a = {}) => {
     if (!isOwner(token)) throw cutError()
-    need(isPos(a.pos) && typeof a.item === 'string' && ['deposit', 'withdraw'].includes(a.direction), 'transfer needs pos, item and direction deposit|withdraw')
-    const p = cell(a.pos)
+    need(holderArgs(a) && typeof a.item === 'string' && ['deposit', 'withdraw'].includes(a.direction), 'transfer needs pos or entity, item and direction deposit|withdraw')
     return act(token, { boundS: 5 }, async ctx => {
-      const block = containerAt(p)
+      const { block, at } = holderOf(a)
       if (!block) return { status: 'missing' }
-      if (dist(eye(), center(p)) > setting('prim/reach')) return { status: 'unreachable' }
+      if (dist(eye(), at) > setting('prim/reach')) return { status: 'unreachable' }
       const type = env.bot.registry.itemsByName[a.item]?.id
       const clicked = await withWindow(ctx, block, async win => {
         const source = a.direction === 'deposit' ? inventory() : win.containerItems()

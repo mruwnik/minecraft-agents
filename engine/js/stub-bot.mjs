@@ -100,7 +100,7 @@ export function stubBot ({ oxygen = 20, blocks = {}, items = [], worn = [], enti
     }),
     look: act('look', (yaw, pitch) => { Object.assign(bot.entity, { yaw, pitch }) }),
     closeWindow: act('closeWindow'),
-    openContainer: act('openContainer', block => windowOf(key(block.position.x, block.position.y, block.position.z))),
+    openContainer: act('openContainer', block => windowOf(block.id !== undefined ? `e${block.id}` : key(block.position.x, block.position.y, block.position.z))),
     openFurnace: act('openFurnace', () => Object.assign(new EventEmitter(), { slots: [], close: act('close'), putInput: act('putInput'), putFuel: act('putFuel'), takeOutput: act('takeOutput') })),
     openEnchantmentTable: act('openEnchantmentTable', () => Object.assign(new EventEmitter(), { slots: [], enchantments: [], close: act('close') })),
     quit: act('quit')

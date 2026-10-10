@@ -242,6 +242,21 @@ test('inspectContainer reports the size and the free slots', async () => {
   assert.equal(result.free, 26)
 })
 
+const cartWorld = { ...world, entities: { 9: { id: 9, name: 'chest_minecart', type: 'object', position: at(2, 64, 0) }, 10: { id: 10, name: 'minecart', type: 'object', position: at(2, 64, 0) }, 11: { id: 11, name: 'chest_minecart', type: 'object', position: at(40, 64, 0) } }, containers: { e9: [{ name: 'cobblestone', count: 5, slot: 0 }] } }
+
+for (const [entity, status] of [[9, 'ok'], [10, 'missing'], [12, 'missing'], [11, 'unreachable']]) {
+  test(`inspectContainer entity ${entity} is ${status}`, async () => {
+    const { p } = rig(cartWorld)
+    assert.equal((await p.inspectContainer('t1', { entity })).status, status)
+  })
+}
+
+test('transfer withdraws from a chest minecart entity', async () => {
+  const { p } = rig(cartWorld)
+  const result = await p.transfer('t1', { entity: 9, direction: 'withdraw', item: 'cobblestone', count: 2 })
+  assert.equal(result.status, 'ok')
+})
+
 test(`attack ${JSON.stringify({ id: 8 })} resolves hit`, async t => {
   mockClock(t)
   const { p } = rig({ ...world })
