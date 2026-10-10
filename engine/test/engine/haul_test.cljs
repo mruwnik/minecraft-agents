@@ -6,18 +6,26 @@
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.memory :as mem]
-            [engine.test-util :as tu :refer [child-outcome]]
+            [engine.deposit-test :as dt]
+            [engine.test-util :as tu :refer [child-outcome run-until-empty]]
             [engine.triggers :as triggers]
+            [jobs.lib.world-files :as ew]
             [jobs.storage.haul :as haul]))
 
-(defn setup [world]
+(defn start
+  "An engine on dir over primitives p (and world store w, default none); the main chest place is known."
+  [dir p w]
   (let [clock (atom 1000000)
         [_ sink] (tu/legacy-capture-sink)
-        p (tu/fake-on-floor world)
-        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
-                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+        eng (core/create (cond-> {:primitives p :jobs registry/jobs :triggers triggers/all :dir dir :now #(deref clock)
+                                  :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}
+                           w (assoc :world w)))]
     (mem/write! (:store eng) :chest {:pos {:x 20 :y 64 :z 0}} mem/place-policy)
-    {:eng eng :p p}))
+    {:eng eng :p p :dir dir}))
+
+(defn setup
+  ([world] (setup world nil))
+  ([world w] (start (tu/tmp-dir) (tu/fake-on-floor world) w)))
 
 (defn stacks [prefix n] (mapv (fn [i] {:name (str prefix i) :count 5}) (range n)))
 (defn containers [p] (:containers @(fake/state p)))
@@ -62,3 +70,81 @@
           (is (= false (:gave-up result)))
           (is (= [{:name "keepme" :count 7}] (map #(select-keys % [:name :count]) (get (containers p) [10 64 0]))))
           (is (= ["a"] (map :name (get (containers p) [20 64 0])))))))))
+
+(def two-sources {"10,64,0" (stacks "a" 5) "10,64,4" (stacks "b" 5) "20,64,0" []})
+
+(deftest haul-without-sources-stops-with-a-reason
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [args [{} {:from []} {:to [20 64 0]}]]
+          (let [{:keys [eng]} (setup {:containers {"20,64,0" []}})
+                result (await (child-outcome eng 'jobs.storage.haul args 10))]
+            (is (= {:gave-up true :status :stopped :reason :no-source} (select-keys result [:gave-up :status :reason])) (pr-str args))))))))
+
+(deftest haul-cut-at-a-transfer-resumes-without-doubling-the-load
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [n [1 2]]
+          (let [first-run (setup {:containers two-sources})
+                {:keys [eng p dir]} first-run]
+            (tu/shutdown-at! first-run "transfer" n)
+            (core/submit! eng (list 'jobs.storage.haul {:from [[10 64 0]]}) {})
+            (await (core/tick! eng))
+            (let [resumed (start dir p nil)]
+              (await (run-until-empty (:eng resumed) 30))
+              (is (empty? (get (containers p) [10 64 0])) (str "cut at transfer " n))
+              (is (= (map :name (stacks "a" 5)) (map :name (get (containers p) [20 64 0]))) (str "cut at transfer " n))
+              (is (= [5] (distinct (map :count (get (containers p) [20 64 0])))) (str "cut at transfer " n)))))))))
+
+(deftest haul-looks-again-at-a-chest-found-empty-before-a-restart
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [first-run (setup {:containers {"10,64,0" [] "10,64,4" (stacks "b" 5) "20,64,0" []}})
+              {:keys [eng p dir]} first-run]
+          (tu/shutdown-at! first-run "transfer" 1)
+          (core/submit! eng (list 'jobs.storage.haul {:from [[10 64 0] [10 64 4]]}) {})
+          (await (core/tick! eng))
+          (swap! (fake/state p) assoc-in [:containers [10 64 0]] (stacks "a" 3))
+          (await (run-until-empty (:eng (start dir p nil)) 30))
+          (is (empty? (get (containers p) [10 64 0])))
+          (is (= 8 (count (get (containers p) [20 64 0])))))))))
+
+(deftest haul-stops-to-full-when-the-main-chest-takes-nothing-and-making-is-off
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:containers two-sources})]
+          (dt/full-at p [20 64 0])
+          (let [result (await (child-outcome eng 'jobs.storage.haul {:from [[10 64 0]] :make-chests? false} 30))]
+            (is (= {:gave-up true :status :stopped :reason :to-full} (select-keys result [:gave-up :status :reason])))))))))
+
+(deftest haul-stops-unreachable-when-the-source-cannot-be-reached
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:containers two-sources :unreachable ["10,64,0"]})
+              result (await (child-outcome eng 'jobs.storage.haul {:from [[10 64 0]]} 30))]
+          (is (= {:gave-up true :status :stopped :reason :unreachable} (select-keys result [:gave-up :status :reason]))))))))
+
+(deftest haul-stops-refused-for-a-source-in-another-agents-zone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[args gave-up reason] [[{} true :refused] [{:ignore-zones? true} false nil]]]
+          (let [w (ew/of-data {} {} [{:name "farm" :owner "Miles" :min [10 60 -5] :max [12 70 5]}])
+                {:keys [eng p]} (setup {:containers two-sources} w)
+                result (await (child-outcome eng 'jobs.storage.haul (merge {:from [[10 64 0]]} args) 30))]
+            (is (= gave-up (:gave-up result)) (pr-str args))
+            (is (= reason (:reason result)) (pr-str args))
+            (is (= gave-up (boolean (seq (get (containers p) [10 64 0])))) (pr-str args))))))))
+
+(deftest haul-stops-bag-full-when-nothing-can-be-deposited-to-make-room
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:inventory (vec (repeat 35 {:name "iron_pickaxe" :count 1})) :containers two-sources})
+              result (await (child-outcome eng 'jobs.storage.haul {:from [[10 64 0]]} 30))]
+          (is (= {:gave-up true :status :stopped :reason :bag-full} (select-keys result [:gave-up :status :reason]))))))))

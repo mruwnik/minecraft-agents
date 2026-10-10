@@ -14,10 +14,10 @@
   or no source holds anything more; else walk to the next source chest, inspect it, take one bag load (one slot is
   left free; jobs.storage.withdraw as carry-at-least targets), repeat. The targets are saved before the take, so a
   restart takes the same load again without doubling it; the chests and the bag are the rest of the state.
-  Needs: a main chest (:to, else the storage group, so a known :chest place); waits with reason :no-chest. Sources that
+  Needs: a main chest (:to, else the storage group, so a known :chest place); waits with reason :no-chest. No :from stops :no-source. Sources that
   are in the storage group are not meant: withdraw may then take from the group's other chests.
   Returns {:gave-up false :trips n :moved {name n}} once every source is empty (or holds only :keep); n counts the
-  deposits. Stops {:gave-up true :status :stopped :reason r :trips :moved}: :to-full (deposit found no room and could
+  deposits. Stops {:gave-up true :status :stopped :reason r :trips :moved}: :no-source, :to-full (deposit found no room and could
   not place a chest), :unreachable, :refused (zones; the refusal fields come with it), :bag-full (nothing to deposit
   yet no room to take), else the child's reason.")
 
@@ -29,11 +29,9 @@
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (defn check
-  "Sources are named and a main chest is known; else waits with reason :no-chest."
+  "A main chest is known; else waits with reason :no-chest."
   [c]
-  (let [{:keys [from to]} (:args c)]
-    (and (seq from)
-         (or (some? to) (seq (storage/group (ctx/view c))) (ctx/wait c {:reason :no-chest})))))
+  (or (some? (:to (:args c))) (seq (storage/group (ctx/view c))) (ctx/wait c {:reason :no-chest})))
 
 (defn totals
   "{name n} carried over all stacks."
@@ -136,6 +134,10 @@
       :else (await (look! c (first pending) inv free)))))
 
 (defn ^:async round
-  "The whole haul in one call; :continue only while a child waits on the world."
+  "The whole haul in one call; :continue only while a child waits on the world. Chests seen empty are looked at again
+  on every start: they may have been refilled."
   [c]
-  (await (pace/steps! c (fn ^:async haul-step [] (await (step! c))))))
+  (if (empty? (:from (:args c)))
+    (stop! c :no-source)
+    (do (ctx/update-mem! c dissoc :empty)
+        (await (pace/steps! c (fn ^:async haul-step [] (await (step! c))))))))
