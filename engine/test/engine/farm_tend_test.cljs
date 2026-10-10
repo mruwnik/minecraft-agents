@@ -512,3 +512,32 @@
           (let [w (last (events-of s :waiting))]
             (is (= :nothing-to-do (:reason w)))
             (is (= 9 (:covered w)) "9 tillable cells have a block over them: the box sits too low")))))))
+
+(def far-box {:min {:x 202 :y 63 :z 2} :max {:x 204 :y 64 :z 4}})
+(def far-ripe
+  (world {:blocks (into {} (map (fn [[x z]] [(k (+ x 200) 63 z) "farmland"])) all-cells)}
+         {:blocks (into {} (map (fn [[x z]] [(k (+ x 200) 64 z) "wheat"])) all-cells)
+          :ages (into {} (map (fn [[x z]] [(k (+ x 200) 64 z) 7])) all-cells)}))
+
+(defn ^:async far-run
+  "Ripe wheat 200 blocks off; wait-for-dusk (listed, check false by day) first when listed?."
+  [listed?]
+  (let [s (setup far-ripe)]
+    (when listed? (core/submit! (:eng s) '(jobs.time.wait-for-dusk) {}))
+    (core/submit! (:eng s) (list 'jobs.farm.tend {:box far-box}) {})
+    (dotimes [_ 3] (swap! (:clock s) + 700) (await (core/tick! (:eng s))))
+    s))
+
+(deftest a-tend-far-from-its-field-declines-while-another-job-is-listed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (far-run true))]
+          (is (empty? (events-of s :round_started)))
+          (is (some #(= :away (:reason %)) (events-of s :waiting))))))))
+
+(deftest a-tend-far-from-its-field-runs-when-nothing-else-is-listed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (seq (events-of (await (far-run false)) :round_started)))))))

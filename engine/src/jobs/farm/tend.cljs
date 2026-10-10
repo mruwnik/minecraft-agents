@@ -271,13 +271,21 @@
 
 (defn for-part [c part] (assoc-in c [:args :part] part))
 
+(defn site
+  "A position of the field: the box's centre, else the plan's first crop cell; nil when there is neither."
+  [c]
+  (if-let [{:keys [min max]} (:box (:args c))]
+    (when min {:x (/ (+ (:x min) (:x max)) 2) :y (:y min) :z (/ (+ (:z min) (:z max)) 2)})
+    (when (:plan (:args c)) (first (keys (:crops (tend-plan/planned c)))))))
+
 (defn check
   "Passes when a run is under way, or when some part not resting passes check-part. Otherwise it waits (the reason of the
-  last part checked), naming the resting parts as :backed-off."
+  last part checked), naming the resting parts as :backed-off. It declines far from the field while another job is listed."
   [c]
   (let [m (ctx/mem c)]
     (cond
       (seq (:results m)) true
+      (and (not (:cur m)) (some? (standing/away-wait c (site c)))) false
       (:cur m) (true? (check-part (for-part c (:part (:cur m)))))
       :else
       (let [rested (standing/rested c job-sym)
@@ -427,4 +435,5 @@
   "The whole run: one pass per part, each one child call after another over the six steps; :continue only while a
   child waits on the world."
   [c]
+  (standing/mark! c)
   (await (pace/steps! c (fn ^:async s [] (await (run-step c))))))

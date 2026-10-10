@@ -87,9 +87,11 @@
   "A run is under way, or a step would run and the kitchen is not resting."
   [c]
   (let [f (facts c)
+        site (storage/chest-of (ctx/view c) (:args c))
         resting (let [r (get (standing/rested c job-sym) rest-key)] (when-not (and (= :no-table (:why r)) (table-seen? c)) r))]
     (cond
       (:todo (ctx/mem c)) true
+      (some? (standing/away-wait c site)) false
       resting (ctx/wait c {:reason :nothing-to-do :backed-off [rest-key]})
       (would-run? c f) true
       :else (ctx/wait c {:reason :nothing-to-do :skipped (into {} (map (fn [[s d]] [s (:skip d)])) (decisions c f))}))))
@@ -120,6 +122,7 @@
 (defn ^:async round
   "One child call after another until the pass is over; :continue only while a child waits on the world."
   [c]
+  (standing/mark! c)
   (when-not (:todo (ctx/mem c))
     (ctx/update-mem! c assoc :todo steps :report {} :tried #{}))
   (loop []

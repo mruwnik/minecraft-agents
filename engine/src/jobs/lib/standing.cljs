@@ -1,15 +1,22 @@
 (ns jobs.lib.standing
   "Targets a standing job (one kept in the queue under repeat) rests after a fruitless pass, so a stuck crop or refused
   ground never keeps its check true for ever and starves the other jobs. Body memory :standing/rested
-  {:job :key :until :why}; a target rests ::rest-ms, then is tried once more."
-  (:require [engine.args :as a]
+  {:job :key :until :why}; a target rests ::rest-ms, then is tried once more. A standing job also declines far from
+  its site while a job that is not standing is listed (away-wait), so it does not walk the body home between two trips;
+  a job marks itself standing (mark!) when it runs. Body memory :standing/self {:id}."
+  (:require [clojure.string :as str]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.memory :as mem]
-            [engine.settings :as settings]))
+            [engine.settings :as settings]
+            [jobs.lib.loose :as loose]
+            [jobs.lib.util :as u]))
 
 (a/defargs settings
-  {::rest-ms {:default 600000 :doc "How long a target rests after a pass that left it undone, in ms." :spec (a/int-in 1 nil)}})
+  {::rest-ms {:default 600000 :doc "How long a target rests after a pass that left it undone, in ms." :spec (a/int-in 1 nil)}
+   ::away-limit {:default 48 :doc "How far from its site a standing job still starts while another job is listed, in blocks." :spec (a/num-in 0 nil)}})
 (defn rest-ms [] (settings/get settings ::rest-ms))
+(defn away-limit [] (settings/get settings ::away-limit))
 
 (def kind :standing/rested)
 
@@ -27,3 +34,23 @@
   [c job key why]
   (ctx/forget-where! c kind #(and (= job (:job %)) (= key (:key %))))
   (ctx/remember! c kind {:job job :key key :why why :until (+ (ctx/now c) (rest-ms))} {:cap 32 :ttl (rest-ms)}))
+
+(def self-kind :standing/self)
+
+(defn root-id [c] (first (str/split (:id c) #"/")))
+
+(defn mark!
+  "Note that this job is standing, so another standing job's away-wait does not wait for it."
+  [c]
+  (ctx/remember! c self-kind {:id (root-id c)} {:cap 16 :ttl :forever}))
+
+(defn away-wait
+  "For a check: nil, or the declined wait (false, reason :away) when site (a position, or nil) is farther than
+  ::away-limit from the body and a listed job other than this one and the standing jobs is listed."
+  [c site]
+  (let [view (ctx/view c)
+        standing (into #{(root-id c)} (map (comp :id :data)) (mem/entries view self-kind))]
+    (when (and site
+               (> (u/dist (u/self-pos c) site) (away-limit))
+               (seq (remove standing (loose/live-ids view nil))))
+      (ctx/wait c {:reason :away :site site :limit (away-limit)}))))

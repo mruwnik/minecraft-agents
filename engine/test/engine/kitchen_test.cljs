@@ -129,3 +129,36 @@
         (let [s (await (run-with [(item "bread" 4)]))]
           (is (= [{:smelt :no-food :bake :no-wheat :deposit :kept-carried}]
                  (distinct (map :skipped (events-of s :waiting))))))))))
+
+(defn ^:async run-beside
+  "Submit the job wait-for-dusk (listed, check false by day), then form, over the world; tick 3 times."
+  [form world]
+  (let [{:keys [eng] :as s} (setup world)]
+    (core/submit! eng '(jobs.time.wait-for-dusk) {})
+    (core/submit! eng form {})
+    (dotimes [_ 3] (await (core/tick! eng)))
+    s))
+
+(def far-chest {:x 200 :y 64 :z 0})
+
+(deftest a-kitchen-far-from-its-chest-declines-while-another-job-is-listed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (run-beside (list job (assoc args :chest far-chest)) {:inventory [(item "beef" 3)] :containers {"200,64,0" []}}))]
+          (is (empty? (events-of s :round_started)) "no pass starts")
+          (is (some #(= :away (:reason %)) (events-of s :waiting)) "the wait says the body is away"))))))
+
+(deftest a-kitchen-far-from-its-chest-runs-when-nothing-else-is-listed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (run (list job (assoc args :chest far-chest)) {:inventory [(item "beef" 3)] :containers {"200,64,0" []}} 3))]
+          (is (seq (events-of s :round_started))))))))
+
+(deftest a-kitchen-near-its-chest-runs-while-another-job-is-listed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (run-beside (list job args) {:inventory [(item "beef" 3)] :containers {"10,64,0" []}}))]
+          (is (seq (events-of s :round_started))))))))
