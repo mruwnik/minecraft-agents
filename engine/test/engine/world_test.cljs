@@ -48,7 +48,7 @@
 (deftest answer-gives-the-plan-its-status-and-cells
   (let [state (world/expand-all {:plans {"field" {:value wheat} "huts" {:value huts :error "bad edit"}}
                                  :blueprints {"hut" {:value hut-bp}}})]
-    (are [id expected] (= expected (dissoc (world/answer state id) :cells))
+    (are [id expected] (= expected (dissoc (world/answer state id) :cells :spots))
       "field" {:id "field" :plan wheat :errors []}
       "huts" {:id "huts" :plan huts :errors [] :error "bad edit"}
       "none" nil)

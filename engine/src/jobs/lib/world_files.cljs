@@ -68,7 +68,7 @@
 
 (defn answer
   "What a job gets for plan id: nil (no such file), {:id :broken text} (never readable), or
-  {:id :plan :cells :errors} (:cells [{:pos [x y z] :want :part}], :errors those of the expansion), with
+  {:id :plan :cells :spots :errors} (:cells [{:pos [x y z] :want :part}], :spots {\"part/spot\" [x y z]}, :errors those of the expansion), with
   :error when the current file is bad and this is the last good copy."
   [state id]
   (let [{:keys [value error] :as entry} (get-in state [:plans id])
@@ -76,7 +76,7 @@
     (cond
       (nil? entry) nil
       (nil? value) {:id id :broken error}
-      :else (cond-> {:id id :plan value :cells (:cells expansion) :errors (:errors expansion)}
+      :else (cond-> {:id id :plan value :cells (:cells expansion) :spots (:spots expansion) :errors (:errors expansion)}
               error (assoc :error error)))))
 
 ;; ------------------------------------------------------------------ files
