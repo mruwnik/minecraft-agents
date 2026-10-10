@@ -855,3 +855,14 @@
           (is (= [{:cell [-1 61 1] :block "coal_ore"}] (mapv #(select-keys % [:cell :block]) (:ores @(:out on)))))
           (is (= "coal_ore" (block-at (:p on) [0 61 0])) "the target is left to its caller")
           (is (= "coal_ore" (block-at (:p off) [-1 61 1])) "opted out"))))))
+
+(deftest a-tunnel-with-only-a-spent-pickaxe-stops-tool-spent-unless-told-otherwise
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[uses args dug? reason] [[3 {:target [6 57 0]} false :tool-spent]
+                                         [4 {:target [6 57 0]} true :reached]
+                                         [3 {:target [6 57 0] :spent-ok true} true :reached]]]
+          (let [{:keys [out p]} (await (tunnel! {:blocks eight-down :inventory [{:name "iron_pickaxe" :count 1 :durability uses}]} args (fn [_])))]
+            (is (= dug? (boolean (seq (digs p)))) (pr-str uses args))
+            (is (= reason (:reason @out)) (pr-str uses args))))))))

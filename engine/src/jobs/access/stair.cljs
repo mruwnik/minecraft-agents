@@ -96,6 +96,8 @@
   :fetch (default true; jobs.lib.fetch; false waits :no-tool): the :no-tool wait is not waited out; the call runs jobs.items.get-tool
   for the block (child :fetch) first, then walks back to the cell it stood on (child :fetch-back) and goes on. A
   parent's stair child does not fetch.
+  :spent-ok (default false): a dig whose every carried tool is down to 3 uses (jobs.lib.trip/spent-tool?) stops {:reason :tool-spent :tool <kind>}
+  before the last tool breaks deep down; true digs on.
   :by-hand (default false): a block no carried tool clears is dug bare-handed anyway (slow, its drop lost): go-to's
   last resort when it has no pickaxe. Also done once the fetch of a tool for that block failed.")
 
@@ -110,6 +112,7 @@
    :fetch {:doc "get a missing pickaxe instead of waiting :no-tool (jobs.lib.fetch), and a block to seal lava with: true, a set of kinds or a map of limits" :spec fetch/option? :default true}
    :on-lava {:doc "exposed lava: :seal (fill it with a building block, then go on) or :stop" :spec #{:seal :stop} :default :seal}
    :by-hand {:doc "dig a block no carried tool clears bare-handed (slow, the drop is lost) instead of waiting :no-tool" :spec boolean? :default false}
+   :spent-ok {:doc "dig on with tools down to jobs.lib.trip's ::spent-uses (3) uses instead of stopping :tool-spent before the last breaks; true for a way out" :spec boolean? :default false}
    :stock-torches {:doc "a stair down first gets torches when few are carried (jobs.lib.trip/torches-ready!, needs :fetch); false for a stair a job runs as its own child" :spec boolean? :default true}
    :pick-up-ores {:doc "true: dig the ores of jobs.lib.ore-pick's ::ores setting that are exposed within reach on the way; false: none; or the ore block names to dig" :spec (a/or-of boolean? (a/coll-of a/name?)) :default true}
    :through {:doc "the id of a mineshaft plan the stair runs down: its footprint is no obstacle (jobs.lib.shafts)" :spec string? :default nil}})
@@ -473,6 +476,7 @@
                                    (assoc :why "put back by something else, e.g. the night shelter closing an opened refuge again"))
       (unbreakable block) {:reason :unbreakable :cell cell :block block}
       (lacks-tool? c block) {:reason :no-tool :cell cell :block block :tool (tools/needed-kind p block)}
+      (and (not (:spent-ok (:args c))) (trip/spent-tool? p block)) {:reason :tool-spent :cell cell :block block :tool (tools/needed-kind p block)}
       (not (drop-room? c block)) {:reason :inventory-full :cell cell :block block}
       :else
       (do

@@ -188,7 +188,7 @@
       :else
       (let [slot (keyword (str "escape-" i))
             sargs (assoc (escape-stair (:line tunnel) entry-y)
-                         :heading (:heading attempt) :fetch false :stock-torches false :ignore-zones? (:ignore-zones? attempt))
+                         :heading (:heading attempt) :fetch false :spent-ok true :stock-torches false :ignore-zones? (:ignore-zones? attempt))
             r (await (declined/call-child! c slot 'jobs.access.stair sargs))
             res (when (= :done r) (ctx/child-result c slot))
             refused (when (= :declined r) (blocks/child-wait c slot 'jobs.access.stair sargs))]

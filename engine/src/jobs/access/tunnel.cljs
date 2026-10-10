@@ -96,6 +96,7 @@
   from the world. :inside is true when the body is off the entry, on the way in. Also a tunnel.done info or
   tunnel.stopped warn event.
 
+  :spent-ok (default false): every carried pickaxe down to 3 uses stops the tunnel {:reason :tool-spent} before the last breaks (jobs.access.stair).
   :fetch (default true; false waits :no-tool; jobs.lib.fetch): a missing pickaxe (the stair's wait, or a :no-tool stop of the run's own
   digs) is got with jobs.items.get-tool, then the body walks back to the cell it stood on and goes on. The stair
   child fetches only items (a block to seal lava with), not tools.")
@@ -109,6 +110,7 @@
    :keep {:doc "a tunnel that stays: torches left and the tunnel left open; false (a dead end): torches go into the scaffold ledger for jobs.access.leave-tunnel to take back" :spec boolean? :default false}
    :max-steps {:doc "give the round back with :continue after this many steps (a stair segment, a run cell), for a caller that looks around between them; nil: the stair's ::max-steps" :spec (a/int-in 1 nil) :default nil}
    :fetch {:doc "get a missing pickaxe instead of waiting :no-tool (jobs.lib.fetch): true, a set of kinds or a map of limits; false waits :no-tool" :spec fetch/option? :default true}
+   :spent-ok {:doc "dig on with tools down to 3 uses instead of stopping :tool-spent (see jobs.access.stair)" :spec boolean? :default false}
    :pick-up-ores {:doc "true: dig the ores of jobs.lib.ore-pick's ::ores setting that are exposed within reach on the way; false: none; or the ore block names to dig" :spec (a/or-of boolean? (a/coll-of a/name?)) :default true}})
 
 (def heading-order [:north :east :south :west])
@@ -416,7 +418,7 @@
   (let [cells (line-cells plan)
         r (await (declined/call-child! c :stair 'jobs.access.stair
                                  {:dir dir :heading heading :fetch (stair-fetch (:fetch (:args c))) :stock-torches false :y ((cells (segment-end plan k)) 1) :on-lava (:on-lava (:args c) :seal)
-                                  :accept (set (:accept (:args c))) :ignore-zones? (boolean (:ignore-zones? (:args c)))
+                                  :accept (set (:accept (:args c))) :ignore-zones? (boolean (:ignore-zones? (:args c))) :spent-ok (boolean (:spent-ok (:args c)))
                                  :pick-up-ores (:pick-up-ores (:args c))}))]
     (if (not= :done r)
       (if (= :declined r) :declined :continue)

@@ -415,7 +415,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [spec {:blocks ground :inventory [{:name "stone_pickaxe" :count 1 :durability 1}]}
+        (let [spec {:blocks ground :inventory [{:name "stone_pickaxe" :count 1 :durability 4}]}
               total (count (digs (:p (await (stair! spec east (fn [_]))))))
               n (atom 0)
               prep (fn [p]
@@ -1029,3 +1029,14 @@
           (is (= :done (:status @out)) "not held night-sheltered between its steps")
           (is (= 3 (:steps @out)))
           (is (nil? (waiting s))))))))
+
+(deftest a-stair-with-only-a-spent-pickaxe-stops-tool-spent-unless-told-otherwise
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[uses args dug? status reason] [[3 east false :stopped :tool-spent]
+                                                [4 east true :done :done]
+                                                [3 (assoc east :spent-ok true) true :done :done]]]
+          (let [{:keys [out p]} (await (stair! {:blocks ground :inventory [{:name "stone_pickaxe" :count 1 :durability uses}]} args (fn [_])))]
+            (is (= dug? (boolean (seq (digs p)))) (pr-str uses args))
+            (is (= [status reason] [(:status @out) (:reason @out)]) (pr-str uses args))))))))
