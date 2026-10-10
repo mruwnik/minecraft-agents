@@ -225,7 +225,7 @@
         (await (escalate! c pos nil)))
     (end/give-up! c pos tries status result
                   (when (and (not (sh/sheltered-in c))
-                             (escalate-reason? result (some-> (:doors (:args c)) keyword))
+                             (or (escalate-reason? result (some-> (:doors (:args c)) keyword)) (sprint-only? result))
                              (escape/enclosed? (:primitives c) (some-> (:doors (:args c)) keyword)))
                     {:shut-in true}))))
 

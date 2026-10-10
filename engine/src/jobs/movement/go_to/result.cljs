@@ -85,7 +85,7 @@
        (if escalation
          (str "shut in here; " (escalation-words escalation))
          (case why
-           :abilities (str "it " (or (kind-words kind) (str "needs a " (some-> kind name) " move the body cannot make")))
+           :abilities (str (if shut-in "the body is shut in and " "it ") (or (kind-words kind) (str "needs a " (some-> kind name) " move the body cannot make")))
            :goal-enclosed "the goal is walled in with no way through"
            :goal-cut-off "the goal is cut off by a drop: no walkable way leads to it"
            :goal-on-magma "every cell in range is on magma or in a magma bubble column, where a route never ends"

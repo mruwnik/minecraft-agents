@@ -16,6 +16,7 @@
       (fn ^:async t []
         (let [{:keys [out p]} (await (g/go! (assoc-in corner-world [:self :food] 6) {:pos [1 65 1] :escalate false}))]
           (is (= :corner-jump (:kind @out)) (pr-str @out))
+          (is (re-find #"shut in" (:text @out)) "a sealed body is told it is shut in, not only that it lacks a sprint")
           (is (= [0 64 0] (g/at p)) "the body did not move"))))))
 
 (deftest go-to-at-food-20-plans-the-high-corner-jump-it-can-sprint
