@@ -10,6 +10,7 @@
     the view cone, or hearing. Drops and the like make no sound.
   - a :heard row has no :pos, only :direction (8 compass points) and :band (:near or :far); :seen and :remembered keep
     the exact place.
+  - a baby mob (the sample's `fields`, interact.mjs mobFields) carries :baby true.
   - the body itself is :self.
   Mineflayer tracks far more (mobs deep in the rock under the body). Those are never listed."
   (:require [engine.args :as a]
@@ -124,7 +125,7 @@
     {:direction (nth directions sector)
      :band (if (<= (js/Math.hypot dx (- (:y to) (:y from)) dz) near-band) :near :far)}))
 
-(defn observation [store source dim [e how entry] now]
+(defn observation [store source fields dim [e how entry] now]
   (when-let [pos (when-not (.has (:dead store) e) (position (or entry e)))]
     (merge (entity-identity store source e)
            {:type (entity-type e) :id (when (integer? (.-id e)) (.-id e)) :world (get-in store [:opts :world])
@@ -136,6 +137,7 @@
              (rough-hearing (or (position (.-entity source)) pos) pos)
              {:pos pos})
            (when-let [username (short-text (.-username e) 64)] {:username username})
+           (when (some-> fields (#(% e)) .-baby true?) {:baby true})
            (when (identical? e (.-entity source)) {:self? true}))))
 
 (defn prune [entities now]
@@ -160,7 +162,7 @@
         ;; Still loaded but no longer sensed (walked behind a wall, teleported away): the row would be a ghost.
         lost (into #{} (keep (fn [[e how]] (when-not how (:key (entity-identity store source e))))) senses)
         cap (get-in store [:opts :cap])
-        incoming (keep #(observation store source dim % now) (take cap loaded))
+        incoming (keep #(observation store source (.-fields sample) dim % now) (take cap loaded))
         prior (apply dissoc (prune (:entities @(:state store)) now) lost)
         merged (reduce (fn [m entity] (assoc m (:key entity) entity)) prior incoming)
         dropped (+ (max 0 (- (count loaded) cap)) (max 0 (- (count merged) cap)))

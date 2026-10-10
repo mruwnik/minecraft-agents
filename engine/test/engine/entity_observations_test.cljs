@@ -117,6 +117,14 @@
     (is (= {"player" :self} (listed-raw per bot [(.-entity bot) (mob 2 "cow" 64 3.5 0.5)])))
     (is (= {"player" :self} (listed-raw nil bot [(.-entity bot) (mob 2 "cow" 64 3.5 0.5)])))))
 
+(deftest a-baby-is-listed-as-a-baby-and-an-adult-is-not
+  (let [c (cache) bot (js-obj)
+        chick (entity 1 "chicken" "c-1" 1) hen (entity 2 "chicken" "c-2" 2)
+        s (sample bot [chick hen])]
+    (set! (.-fields s) (fn [e] #js {:baby (= 1 (.-id e))}))
+    (seen/observe! c s 1000)
+    (is (= {"c-1" true "c-2" nil} (into {} (map (juxt :uuid :baby)) (:entities (seen/snapshot c 1000)))))))
+
 (deftest loaded-entities-refresh-and-unloaded-entities-expire
   (let [c (cache) bot (js-obj) e (entity 1 "villager" "v-1" 1)]
     (seen/observe! c (sample bot [e]) 1000)

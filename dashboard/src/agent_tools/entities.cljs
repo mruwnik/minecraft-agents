@@ -112,6 +112,7 @@
       (:uuid entity) (assoc :uuid (:uuid entity))
       (nil? (:uuid entity)) (assoc :key (:key entity))
       (:username entity) (assoc :player (:username entity))
+      (:baby entity) (assoc :baby true)
       (:sense entity) (assoc :sense (:sense entity)))))
 
 (defn project

@@ -13,6 +13,7 @@ import { leaveBed, ensureAwake } from './bed.mjs'
 import { createUseOn } from './use-on.mjs'
 import { createSteer } from './steer.mjs'
 import { trackLeashes } from './leash.mjs'
+import { mobFields } from './interact.mjs'
 import { trackLiveEntities, liveEntities } from './live-entities.mjs'
 import { trackVehicles } from './vehicle.mjs'
 import { avoidEnderStare } from './gaze.mjs'
@@ -350,7 +351,8 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     source: bot,
     online: !closed && !down && !stalled && !isOffline() && Date.now() - lastTick <= 10000,
     dimension: bot.game?.dimension,
-    entities: liveEntities(bot)
+    entities: liveEntities(bot),
+    fields: e => mobFields(bot, e)
   })
   const onEntityDeath = listener => {
     if (!entityDeathListeners.size) removalEvents.forEach(([n, f]) => bot.on(n, f))

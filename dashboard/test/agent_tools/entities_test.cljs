@@ -56,6 +56,14 @@
         result (entities/project {:body "ProbeMove" :radius 64 :limit 10 :raw? false} (snapshot now rows))]
     (is (= [4711 nil] (mapv :id (:items result))))))
 
+(deftest compact-rows-mark-a-baby
+  (let [now 1700000000000
+        rows [(entity "self" "player" "overworld" {:x 0 :y 64 :z 0} now 100 119900 {:self? true :username "ProbeMove"})
+              (entity "chick" "chicken" "overworld" {:x 3 :y 64 :z 0} now 10 119990 {:baby true})
+              (entity "hen" "chicken" "overworld" {:x 5 :y 64 :z 0} now 10 119990)]
+        result (entities/project {:body "ProbeMove" :radius 64 :limit 10 :raw? false} (snapshot now rows))]
+    (is (= [true nil] (mapv :baby (:items result))))))
+
 (deftest compact-query-centres-on-self-includes-players-and-uses-real-ages
   (let [now 1700000000000
         rows [(entity "self" "player" "overworld" {:x 0.45 :y 64 :z 0.52} now 100 119900 {:self? true :username "ProbeMove"})
