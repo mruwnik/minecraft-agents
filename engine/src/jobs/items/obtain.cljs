@@ -67,6 +67,7 @@
    :minutes {:doc "minutes without a change in what is carried before it stops :timeout (a long chain keeps going while it makes progress); nil: the fetch limits" :spec (a/num-in 0 nil) :default nil}
    :fail-minutes {:doc "passed on to nested fetches; nil: the fetch limits" :spec (a/num-in 0 nil) :default nil}
    :chain {:doc "items being fetched above this one (a cycle stops)" :spec (a/coll-of a/item?) :default []}
+   :avoid {:doc "cells [x y z] a crafting table is never put in or dug for (a caller's dig line); passed to the craft steps" :spec (a/coll-of a/position?) :default nil}
    :explore {:doc "walk and look for a raw need not seen: false, true (the ::explore setting) or jobs.explore.search options over it" :spec (a/or-of boolean? map?) :default false}})
 
 (a/defargs settings
@@ -632,7 +633,7 @@
 
       :else
       (do (ctx/update-mem! c assoc-in [:craft :step] step)
-          (let [r (await (ctx/call-child c :craft 'jobs.items.craft (cond-> {:item (:item step) :count (:count step) :fetch false}
+          (let [r (await (ctx/call-child c :craft 'jobs.items.craft (cond-> {:item (:item step) :count (:count step) :fetch false :avoid (:avoid (:args c))}
                                                                         (and (:table? step) (:table (ctx/mem c))) (assoc :table (:table (ctx/mem c))))))]
             (if (= :continue r)
               :continue

@@ -338,6 +338,20 @@
           (is (= {"crafting_table" 1} (:spent result)))
           (is (empty? (tu/walked-to eng))))))))
 
+(defn placed-at [p]
+  (mapv #(let [a (.-args %)] (select-keys (js->clj (.-pos a) :keywordize-keys true) [:x :y :z])) (calls p "place")))
+
+(deftest craft-never-puts-its-table-in-a-cell-the-caller-avoids
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:inventory [{:name "wheat" :count 3} {:name "crafting_table" :count 1}]}
+              [_ p1] (await (craft world {:item "bread"}))
+              [_ p2] (await (craft world {:item "bread" :avoid [[1 64 0] [1 65 0]]}))]
+          (is (= [{:x 1 :y 64 :z 0}] (placed-at p1)) "unconstrained: the first cell beside the body")
+          (is (= 1 (count (placed-at p2))))
+          (is (not= {:x 1 :y 64 :z 0} (first (placed-at p2))) "the avoided cell is left free"))))))
+
 (deftest putting-a-table-down-and-crafting-at-it-is-one-urgent-section
   (async done
     (tu/run-async done

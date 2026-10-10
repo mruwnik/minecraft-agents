@@ -33,7 +33,8 @@
    :count {:doc "how many more to end up with" :spec (a/int-in 0 nil) :default 1}
    :table {:doc "crafting table position; the nearest seen within :radius when nil and the recipe needs one" :spec ::a/pos :default nil}
    :radius {:doc "how far to look for a crafting table" :spec (a/num-in 0 nil) :default 32}
-   :fetch {:doc "get an ingredient that runs out (jobs.lib.fetch): true, a set of kinds or a map of limits; false stops :short" :spec fetch/option? :default true}})
+   :fetch {:doc "get an ingredient that runs out (jobs.lib.fetch): true, a set of kinds or a map of limits; false stops :short" :spec fetch/option? :default true}
+   :avoid {:doc "cells [x y z] a table is never put in or dug for: the dig line of a job that crafts as its child" :spec (a/coll-of a/position?) :default nil}})
 
 (defn check
   "An item name is given."
@@ -64,16 +65,17 @@
 (def table-offsets [[1 0] [-1 0] [0 1] [0 -1] [1 1] [-1 1] [1 -1] [-1 -1]])
 
 (defn spot-cells
-  "The candidate table cells beside the body, outside its box (the server refuses a place the body touches): [pos floor-pos] for each offset at its level, then (a 1-wide stair has
+  "The candidate table cells beside the body, outside its box (the server refuses a place the body touches) and not in :avoid: [pos floor-pos] for each offset at its level, then (a 1-wide stair has
   no free cell at its level) each one level up. dig-spot-cells keeps to the level ones."
   [c]
   (let [{:keys [x y z]} (u/self-pos c)
         cols (access/body-columns x z)
+        avoid (into #{} (map (comp (juxt :x :y :z) a/cell)) (:avoid (:args c)))
         [x y z] (mapv #(js/Math.floor %) [x y z])]
     (for [dy [0 1]
           [dx dz] table-offsets
           :let [pos {:x (+ x dx) :y (+ y dy) :z (+ z dz)}]
-          :when (not (cols [(:x pos) (:z pos)]))]
+          :when (and (not (cols [(:x pos) (:z pos)])) (not (avoid [(:x pos) (:y pos) (:z pos)])))]
       [pos (update pos :y dec)])))
 
 (defn table-spot

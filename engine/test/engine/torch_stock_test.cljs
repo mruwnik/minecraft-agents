@@ -3,7 +3,8 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.mine-test :as mt]
             [engine.stair-test :as st]
-            [engine.test-util :as tu]))
+            [engine.test-util :as tu]
+            [jobs.lib.trip :as trip]))
 
 (def chest "2,65,1")
 (def torch-chest {:blocks (assoc st/ground chest "chest") :containers {chest [{:name "torch" :count 20}]}})
@@ -69,3 +70,8 @@
           (is (pos? (get (mt/inv s) "torch" 0)) "the chest's torches were taken")
           (is (seq (mt/dug-cells s)))
           (is (every? (fn [[x]] (<= x 2)) (mt/dug-cells s)) (pr-str (mt/dug-cells s))))))))
+
+(deftest the-line-a-dig-cuts-next-is-two-cells-ahead-at-three-heights
+  (let [p (tu/fake {:self {:pos {:x 5.5 :y 64 :z 2.5}}})]
+    (is (= [[6 63 2] [6 64 2] [6 65 2] [7 63 2] [7 64 2] [7 65 2]] (trip/line-ahead {:args {:heading :east} :primitives p})))
+    (is (= [[5 63 1] [5 64 1] [5 65 1] [5 63 0] [5 64 0] [5 65 0]] (trip/line-ahead {:args {:direction "north"} :primitives p})))))

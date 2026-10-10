@@ -9,6 +9,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.fetch :as fetch]
+            [jobs.lib.look :as look]
             [jobs.lib.foods :as foods]
             [jobs.lib.near :as near]
             [jobs.lib.near :as near]
@@ -161,6 +162,20 @@
         :continue
         (do (ctx/update-mem! c dissoc :torches-from) nil)))))
 
+(def heading-steps {:north [0 -1] :east [1 0] :south [0 1] :west [-1 0]})
+
+(defn line-ahead
+  "The cells a dig on along its heading (the :heading or :direction arg, else the way the body faces) cuts next: one and two
+  steps ahead, at the feet cell and one above and below it (a stair or a tunnel goes there): [[x y z] ..]. A crafting table
+  put down for the trip must not stand in them."
+  [c]
+  (let [heading (keyword (or (some-> (or (:heading (:args c)) (:direction (:args c))) (#(when (or (string? %) (keyword? %)) (name %))))
+                             (look/facing (:primitives c))))
+        [dx dz] (heading-steps heading [0 0])
+        {:keys [x y z]} (u/self-pos c)
+        [x y z] (mapv #(js/Math.floor %) [x y z])]
+    (vec (for [n [1 2] dy [-1 0 1]] [(+ x (* n dx)) (+ y dy) (+ z (* n dz))]))))
+
 (defn ^:async torches-ready!
   "Before a job that digs down or tunnels sets out: when fewer than ::torch-low torches are carried, run jobs.items.obtain
   for torches up to ::torch-stock (child :torches; chest, craft from coal or charcoal, charcoal from logs by smelt, gather).
@@ -175,7 +190,7 @@
           fetch? (and (map? limits) (not (:error limits)) (or (nil? (:what limits)) (contains? (:what limits) :item)))
           fuel (torch/fuel-held (:primitives c))
           want (- (torch-stock) held)
-          args {:item "torch" :count (if (pos? fuel) (min want (* 4 fuel)) want)}]
+          args {:item "torch" :count (if (pos? fuel) (min want (* 4 fuel)) want) :avoid (line-ahead c)}]
       (when (and fetch? (< held (torch-low)) (not (:torches-tried (ctx/mem c))) (not (food-short? c)))
         (when-not (:torches-from (ctx/mem c)) (ctx/update-mem! c assoc :torches-from (u/self-pos c)))
         (let [r (await (ctx/call-child c :torches 'jobs.items.obtain args))]
