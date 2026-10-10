@@ -97,6 +97,9 @@
    ::max-blocked-retries {:default 3 :doc "Walks of one trip that did not arrive before it is given up as :unreachable." :spec (a/int-in 1 nil)}
    ::wet-danger {:default 30 :doc "Points of route danger added for a pile in water or lost to drowning (a swim with the air running out); 10 cost each." :spec (a/num-in 0 nil)}
    ::seal-radius {:default 4 :doc "Scaffold blocks this body placed within this many blocks of the pile (a flee seal) are taken back when they keep it out of reach." :spec (a/num-in 0 nil)}
+   ::deep-drop {:default 8 :doc "A pile this many blocks or more below the body, within ::deep-reach aside, is reached by a stair down (jobs.access.tunnel) instead of a walk." :spec (a/int-in 1 nil)}
+   ::deep-reach {:default 24 :doc "How far aside of a deep pile the walk goes on before the stair down is cut." :spec (a/num-in 0 nil)}
+   ::stair-step-s {:default 3 :doc "Seconds one block of a stair down and its run is reckoned to take, against the despawn window left." :spec (a/num-in 0 nil)}
    ::killer-guard-ms {:default 60000 :doc "How long after a death its killer is assumed to still stand at the pile; later only the hostiles the body knows of count." :spec (a/num-in 0 nil)}
    ::bed-away-blocks {:default 10 :doc "A respawn farther than this from the bed the body slept in is reported." :spec (a/int-in 0 nil)}})
 (defn seal-radius [] (settings/get settings ::seal-radius))
@@ -256,6 +259,10 @@
       (:parts fetch) (assoc :parts (:parts fetch))
       (:reason fetch) (assoc :reason (:reason fetch))
       (seq (:mobs threat)) (assoc :top-mobs (mapv #(select-keys % [:name :danger]) (take (top-n) (:mobs threat)))))))
+
+(defn deep-drop [] (settings/get settings ::deep-drop))
+(defn deep-reach [] (settings/get settings ::deep-reach))
+(defn stair-step-s [] (settings/get settings ::stair-step-s))
 
 (defn max-collect-passes [] (settings/get settings ::max-collect-passes))
 (defn stray-range [] (settings/get settings ::stray-range))
@@ -535,6 +542,34 @@
                     :text (str (decision-text :skip decided (:margin (:args c))) "; looks again")))
   :declined)
 
+(defn deep-pile
+  "{:below n :aside d} when the pile lies ::deep-drop or more under the body and within ::deep-reach aside of it, else nil."
+  [c pos]
+  (let [here (u/self-pos c)
+        below (- (js/Math.floor (:y here)) (js/Math.floor (:y pos)))
+        aside (u/dist (assoc here :y 0) (assoc pos :y 0))]
+    (when (and (>= below (deep-drop)) (<= aside (deep-reach)))
+      {:below below :aside aside})))
+
+(defn ^:async dig-down!
+  "A stair down to the pile (jobs.access.tunnel, kept): :next once it ended there, else the trip ends :abandoned. Not when
+  the window left cannot hold it (about ::stair-step-s per block): go-to has no way down and would only stand above."
+  [c entry pos {:keys [below aside]}]
+  (let [need-s (* (stair-step-s) (max below aside))
+        left-s (/ (settings/ticks->ms (game/despawn-left-ticks entry (ctx/view c))) 1000)
+        give-up! (fn [reason text]
+                   (ctx/emit! c :recover-drops.deep :info {:reason reason :below below :aside aside :text text})
+                   (finish! c :abandoned (assoc (:decided (ctx/mem c)) :reason reason)))]
+    (if (> need-s left-s)
+      (give-up! :window-closed (str "the pile is " below " blocks down: a stair takes about " (js/Math.round need-s) " s, " (js/Math.round left-s) " s are left"))
+      (let [r (await (child/run! c :dig 'jobs.access.tunnel {:target [(js/Math.floor (:x pos)) (js/Math.floor (:y pos)) (js/Math.floor (:z pos))]
+                                                              :max-length 96 :keep true}))
+            result (ctx/child-result c :dig)]
+        (cond
+          (= :done r) :next
+          (= :continue r) (decline! c :unreachable "the stair down to the pile is waiting on the world" {:pos pos})
+          :else (give-up! :unreachable (str "no stair down to the pile: " (pr-str (or (:reason result) r)))))))))
+
 (defn ^:async trip!
   "The decision, then the walk and the collect passes of a trip inside its window."
   [c entry]
@@ -562,6 +597,7 @@
       (do (ctx/update-mem! c assoc :phase :go) :next)
 
       (= :collect (:phase (ctx/mem c))) (await (collect! c pos collect-radius (:inventory (:data entry))))
+      (deep-pile c pos) (await (dig-down! c entry pos (deep-pile c pos)))
       :else (await (go! c pos)))))
 
 (defn ^:async step!

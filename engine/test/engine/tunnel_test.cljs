@@ -793,7 +793,7 @@
 
 (deftest max-length-is-typed-and-bounded
   (let [spec (:max-length tunnel/args)]
-    (is (= '(a/int-in 1 64) (:spec spec)))))
+    (is (= '(a/int-in 1 96) (:spec spec)))))
 
 (deftest the-widest-line-reads-few-blocks-over-open-air
   (let [reads (atom 0)

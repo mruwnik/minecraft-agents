@@ -101,7 +101,7 @@
 
 (a/defargs args
   {:target {:doc "the buried block [x y z] or {:x :y :z}" :spec ::a/pos :default nil}
-   :max-length {:doc "longest line, in blocks along the heading from the entry to the target, 1 to 64" :spec (a/int-in 1 64) :default 24}
+   :max-length {:doc "longest line, in blocks along the heading from the entry to the target, 1 to 96" :spec (a/int-in 1 96) :default 24}
    :accept {:doc "hazards taken: #{:water :lava :falling-block}" :spec (a/coll-of #{:water :lava :falling-block}) :default #{}}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
    :on-lava {:doc "exposed lava: :seal (fill it with a building block, then go on) or :stop (jobs.access.stair)" :spec #{:seal :stop} :default :seal}
