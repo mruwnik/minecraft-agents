@@ -13,7 +13,8 @@
             [engine.perception :as perception]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [jobs.items.smelt :as smelt]))
+            [jobs.items.smelt :as smelt]
+            [jobs.lib.result :as r]))
 
 ;; ------------------------------------------------------------------ tables
 
@@ -806,8 +807,9 @@
 ;; ------------------------------------------------------------------ :fetch: furnace, input and fuel
 
 (defn ^:async fetched-run
-  "result-of with room for the fetch children: [result p seen]."
-  [world args]
+  "result-of with room for the fetch children: [result p seen]. jobs: replacements for registry jobs."
+  ([world args] (await (fetched-run world args {})))
+  ([world args jobs]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         p (tu/seeing-all (tu/fake-on-floor world))
@@ -819,7 +821,7 @@
                          (let [r (await (ctx/call-child c :kid 'jobs.items.smelt args))]
                            (when (= :done r) (reset! out (ctx/child-result c :kid)))
                            r))}
-        eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
+        eng (assoc eng :jobs (merge (:jobs eng) jobs {'recording-parent parent}))]
     (core/submit! eng '(recording-parent) {})
     (loop [i 0]
       (when (and (< i 80) (seq (:list (core/state eng))))
@@ -827,7 +829,7 @@
         (advance! p 700)
         (swap! clock + 40000)
         (recur (inc i))))
-    [@out p seen]))
+    [@out p seen])))
 
 (defn furnaces-at [p] (:furnaces @(fake/state p)))
 
@@ -839,6 +841,20 @@
           (is (= {:smelted 3 :wanted 3} r))
           (is (nil? (get (inv-of p) "furnace")))
           (is (= 1 (count (furnaces-at p)))))))))
+
+(def refusing-place
+  "A jobs.blocks.place that always refuses, naming the footprint of another plan."
+  {:check (constantly true)
+   :round (fn ^:async refuse [c] (r/stop! c :footprint "the cell is inside another plan's footprint"))})
+
+(deftest a-carried-furnace-that-cannot-be-put-down-names-the-refusal
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[r _ seen] (await (fetched-run {:inventory (conj iron-and-coal {:name "furnace" :count 1})} {:item "raw_iron" :count 3}
+                                             {'jobs.blocks.place refusing-place}))]
+          (is (= "furnace-not-placed" (:reason r)) "not 'no-furnace-seen': a furnace is carried")
+          (is (re-find #"footprint" (str (:why (first (of-kind seen :smelt.gave-up)))))))))))
 
 (deftest a-missing-furnace-is-fetched-from-a-seen-chest
   (async done

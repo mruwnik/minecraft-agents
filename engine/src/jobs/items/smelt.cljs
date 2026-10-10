@@ -29,7 +29,7 @@
   finds nothing leaves the reason below (no-item, no-fuel, no-furnace-seen). :fetch false skips all of it.
   Result: {:smelted n :wanted n}: :wanted is the count this job loaded and :smelted what came of it; input
   already in the furnace and the output already there do not count. Plus :reason and :status :stopped after a warn (smelt.gave-up) when it gives up:
-  - no-furnace-seen (no :furnace given and none seen), no-furnace, not-a-furnace, furnace-gone (broken or
+  - no-furnace-seen (no :furnace given and none seen), furnace-not-placed (one is carried and could not be put down; :why says why), no-furnace, not-a-furnace, furnace-gone (broken or
     replaced meanwhile), output-gone (input and output both gone), unreachable.
   - no-item, nothing-smeltable, not-smeltable (this kind of furnace cannot cook it, also found when it never lit).
   - no-fuel, unknown-fuel, rejected-fuel, out-of-fuel (leftover input is taken back), fuel-busy (the fuel slot
@@ -299,12 +299,14 @@
     :done))
 
 (defn stop!
-  "Warn and finish with a reason; block is the block the body saw where the furnace should be."
-  ([c reason] (stop! c reason nil))
-  ([c reason block]
-   (ctx/emit! c :smelt.gave-up :warn (cond-> {:reason reason :text (str "smelt gave up: " reason (when block (str " (saw " block ")")))}
-                                       block (assoc :block block)))
-   (finish! c {:reason reason :status :stopped})))
+  "Warn and finish with a reason; block is the block the body saw where the furnace should be, why the cause when the reason alone misleads."
+  ([c reason] (stop! c reason nil nil))
+  ([c reason block] (stop! c reason block nil))
+  ([c reason block why]
+   (ctx/emit! c :smelt.gave-up :warn (cond-> {:reason reason :text (str "smelt gave up: " reason (when block (str " (saw " block ")")) (when why (str ": " why)))}
+                                       block (assoc :block block)
+                                       why (assoc :why why)))
+   (finish! c (cond-> {:reason reason :status :stopped} why (assoc :why why)))))
 
 (defn ^:async stop-back!
   "Give up after a load: leftover input goes back to the pockets first."
@@ -501,22 +503,28 @@
 
 (defn ^:async place-furnace!
   "Put the carried furnace down beside the body (jobs.blocks.place child; craft/spot! finds the cell) and make it the
-  furnace of this job. :again once it stands, :continue while a child waits, nil when it could not be put down."
+  furnace of this job. :again once it stands, :continue while a child waits, nil when it could not be put down (memory
+  :furnace-refusal says why)."
   [c]
   (let [spot (or (:furnace-spot (ctx/mem c)) (await (craft/spot! c)))]
-    (if (= :continue spot)
-      :continue
-      (when spot
-        (ctx/update-mem! c assoc :furnace-spot spot)
-        (let [r (await (ctx/call-child c :place 'jobs.blocks.place {:item "furnace" :pos spot :fetch false}))]
-          (if (= :continue r)
-            :continue
-            (do (ctx/update-mem! c dissoc :furnace-spot)
-                (when (and (= :done r) (:placed (ctx/child-result c :place)))
-                  (ctx/update-mem! c #(-> % (assoc :furnace spot) (dissoc :want-furnace)))
-                  (places/offer! c :furnace spot)
-                  (ctx/emit! c :smelt.furnace :info {:furnace spot :text (str "put a furnace down at " (:x spot) " " (:y spot) " " (:z spot))})
-                  :again))))))))
+    (cond
+      (= :continue spot) :continue
+      (nil? spot) (do (ctx/update-mem! c assoc :furnace-refusal "no free cell beside the body to put it on")
+                      nil)
+      :else
+      (do (ctx/update-mem! c assoc :furnace-spot spot)
+          (let [r (await (ctx/call-child c :place 'jobs.blocks.place {:item "furnace" :pos spot :fetch false}))]
+            (if (= :continue r)
+              :continue
+              (let [res (ctx/child-result c :place)]
+                (ctx/update-mem! c dissoc :furnace-spot)
+                (if (and (= :done r) (:placed res))
+                  (do (ctx/update-mem! c #(-> % (assoc :furnace spot) (dissoc :want-furnace)))
+                      (places/offer! c :furnace spot)
+                      (ctx/emit! c :smelt.furnace :info {:furnace spot :text (str "put a furnace down at " (:x spot) " " (:y spot) " " (:z spot))})
+                      :again)
+                  (do (ctx/update-mem! c assoc :furnace-refusal (str (or (:why res) (some-> (:reason res) name) "it was not placed")))
+                      nil)))))))))
 
 (defn ^:async furnace-fetch!
   "With no furnace seen: put a carried one down, else fetch one and put it down. Once per smelt. :again / :continue,
@@ -542,7 +550,9 @@
       (or (await (look/survey! c :cell))
           (let [f (await (furnace-fetch! c))]
             (case f
-              nil (stop! c "no-furnace-seen")
+              nil (if-let [why (and (pos? (carried-count (carried c) "furnace")) (:furnace-refusal (ctx/mem c)))]
+                    (stop! c "furnace-not-placed" nil (str "a furnace is carried but could not be put down: " why))
+                    (stop! c "no-furnace-seen"))
               :again (await (round-with c (:furnace (ctx/mem c))))
               f))))))
 
