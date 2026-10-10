@@ -1,0 +1,16 @@
+{:id "field-base" :front :south
+ :key {"W" "cobblestone" "P" "oak_planks" "T" "crafting_table" "." :clear
+       "l" {:block "chest" :facing :south :type :left}
+       "r" {:block "chest" :facing :south :type :right}
+       "F" {:block "furnace" :facing :west}
+       "t" {:block "torch"}
+       "B" {:block "white_bed" :facing :east :part :foot}
+       "H" {:block "white_bed" :facing :east :part :head}
+       "D" {:block "oak_door" :facing :north :half :lower}
+       "d" {:block "oak_door" :facing :north :half :upper}}
+ :layers [["PPPPPPP" "PPPPPPP" "PPPPPPP" "PPPPPPP" "PPPPPPP"]
+          ["WWWWWWW" "Wlr.lrW" "WBH..FW" "WT...FW" "WWWDWWW"]
+          ["WWWWWWW" "W.....W" "W.....W" "Wt....W" "WWWdWWW"]
+          ["PPPPPPP" "PPPPPPP" "PPPPPPP" "PPPPPPP" "PPPPPPP"]]
+ :spots {"bed" [1 1 2] "chest-1" [1 1 1] "chest-2" [2 1 1] "chest-3" [4 1 1] "chest-4" [5 1 1]
+         "furnace-1" [5 1 2] "furnace-2" [5 1 3] "table" [1 1 3] "door" [3 1 4] "torch" [1 2 3]}}
