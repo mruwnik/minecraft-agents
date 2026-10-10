@@ -64,6 +64,11 @@
 (deftest a-shorter-surface-entry-beats-the-body-underground
   (is (= (approach {} [2 64 0]) (approach cave-room [2 64 0] :feet [0 60 0]))))
 
+(deftest a-body-far-underground-in-the-line-enters-it-where-it-stands-rather-than-walk-to-a-surface-entry
+  (let [far-room (into {} (for [x [-61 -60 -59] y [20 21] z [-1 0 1]] [[x y z] "air"]))
+        a (approach far-room [0 20 0] :feet [-60 20 0] :max-length 64)]
+    (is (= {:entry [-60 20 0] :heading :east :dir :down :steps 0 :run 59 :length 60 :stand [-1 20 0] :target [0 20 0]} a))))
+
 (deftest a-body-that-cannot-stand-where-it-is-is-no-entry
   (is (not= [0 60 0] (:entry (approach {} [4 57 0] :feet [0 60 0])))))
 

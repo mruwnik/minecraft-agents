@@ -36,7 +36,7 @@
   other plans' footprints, unloaded; a cut cell that is the floor of a stair this body cut earlier, :undercuts-way,
   from the :stair-way memory; a fluid in a cut; a fluid beside a cut or a falling block over one, taken
   only when named in :accept, default #{}; the next floor solid; the cell under it neither air nor fluid). The
-  target's own column counts as a last run step. The shortest valid line wins. Among equals one that leaves the
+  target's own column counts as a last run step. The shortest valid line wins, among those whose entry is within 24 blocks of the body if any (the body does not walk to a far surface entry when it stands in a line underground). Among equals one that leaves the
   floor under the body's start uncut wins, then the entry nearest the body.
 
   Every line refused by a zone, claim or plan declines the check (wait :refused, one warn tunnel.declined). Else no
@@ -209,6 +209,17 @@
                   :run (- n 1 (js/Math.abs d)) :length n :target [tx ty tz]}]
         (assoc plan :stand (:stand (line plan)))))))
 
+(defn dist2 [[x y z] [a b c]] (+ (* (- x a) (- x a)) (* (- y b) (- y b)) (* (- z c) (- z c))))
+
+(def walk-in-max
+  "Blocks the body walks to an entry before a longer line from where it stands is taken instead."
+  24)
+
+(defn far-entry?
+  "Whether the entry of plan is more than walk-in-max from feet: such a line loses to any nearer one."
+  [plan feet]
+  (> (dist2 feet (:entry plan)) (* walk-in-max walk-in-max)))
+
 (defn best-on-heading
   "{:plan p} for the shortest valid line along heading, else {:stop s} (the shortest fitting line's stop, or
   :too-far when none fits)."
@@ -216,7 +227,7 @@
   (let [fitting (mapcat #(fits (or (:column-at in) (:block-at in)) (:floor-at in) target heading % max-length feet) (range 1 (inc max-length)))
         judged (map (fn [p] [p (line-stop in p accept)]) fitting)]
     (if-let [[p] (first (filter (comp nil? second) judged))]
-      {:plan p}
+      {:plan p :near (some (fn [[q stop]] (when (and (nil? stop) (not (far-entry? q feet))) q)) judged)}
       {:stop (or (second (first judged)) {:reason :too-far})})))
 
 (defn cuts-floor?
@@ -225,7 +236,6 @@
   (let [floor (stair/add feet [0 -1 0])]
     (boolean (some (fn [[_ {:keys [cut]}]] (some #{floor} cut)) (:steps (line plan))))))
 
-(defn dist2 [[x y z] [a b c]] (+ (* (- x a) (- x a)) (* (- y b) (- y b)) (* (- z c) (- z c))))
 
 (defn approach
   "The line to cut to target (the plan map, see fits) from rules input in (without :cell and :feet), the body at
@@ -234,9 +244,9 @@
   (if (and (nil? (:zones in)) (not (:ignore-zones? in)))
     {:reason :no-zones}
     (let [per (into {} (map (fn [h] [h (best-on-heading in target h max-length accept feet)])) heading-order)
-          plans (keep (comp :plan per) heading-order)]
+          plans (distinct (mapcat (fn [h] (keep identity [(:plan (per h)) (:near (per h))])) heading-order))]
       (if (seq plans)
-        (first (sort-by (juxt :length #(cuts-floor? % feet) #(dist2 feet (:entry %))) plans))
+        (first (sort-by (juxt #(far-entry? % feet) :length #(cuts-floor? % feet) #(dist2 feet (:entry %))) plans))
         (let [stops (into {} (map (fn [[h r]] [h (:stop r)])) per)
               real (remove #(= :too-far (:reason %)) (vals stops))
               reasons (set (map :reason real))]
