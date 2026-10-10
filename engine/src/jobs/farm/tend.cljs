@@ -8,6 +8,7 @@
             [jobs.lib.gate :as gate]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
+            [jobs.lib.standing :as standing]
             [jobs.lib.steps :as steps]
             [jobs.lib.util :as u]
             [jobs.farm.fertilize :as fertilize]
@@ -63,6 +64,10 @@
   Tilling and sowing are checked against zones and the footprints of the other active plans, when a cell is chosen
   and again before the act. Untilled ground the rules refuse is left alone with one farm-tend.refused warn.
   When only refused ground remains, the check stays false: the job waits and the reason is on record.
+  :parts (a list of part names) works those parts in one job, a pass each in order, and ends :done with
+  {:parts {part {:steps :field}}} (one info farm-tend.done). A part (or the whole field) whose pass leaves a step that would
+  still run rests 10 minutes (jobs.lib.standing): its check is false for that long, the wait names it as :backed-off, and the
+  other parts go on; so the job can stand in the queue under repeat without starving other jobs.
   The job declines (one farm-tend.declined warn) while the plan is missing, unreadable, has no crop cells, or no
   zone list has been read. A started run declines in its next round if the plan stops being workable.")
 
@@ -70,6 +75,7 @@
   {:box {:doc "the field: {:min {:x :y :z} :max {:x :y :z}}, inclusive; y min is the farmland layer, max y at least min y + 1; at most 2048 cells; required unless :plan is given (without either the check declines)" :spec a/box? :default nil}
    :plan {:doc "id of a plan of the body's world whose crop cells are the field, each cell worked with the crop the plan wants there (then :box is not used)" :spec a/name? :default nil}
    :part {:doc "with :plan, only the cells of this part" :spec a/name? :default nil}
+   :parts {:doc "with :plan, the parts worked in one job, one pass each in this order (instead of :part)" :spec (a/coll-of a/name?) :default nil}
    :till {:doc "hoe untilled dirt and grass in the ground layer when seed and a hoe are carried" :spec boolean? :default true}
    :fertilize {:doc "use bone meal on unripe crops" :spec boolean? :default false}
    :composter {:doc "composter position {:x :y :z} for seed above the reserve; nil: do not compost" :spec ::a/pos :default nil}
@@ -231,7 +237,7 @@
   [c]
   (if (look/unseen? (:primitives c) (field-cells c))
     (facts c)
-    (check-cache/cached c :facts #(facts c))))
+    (check-cache/cached c [:facts (:part (:args c))] #(facts c))))
 
 (defn nothing-to-do-reason
   "The wait reason when no step would run: :covered counts tillable cells with a block over them (the box sits too low),
@@ -240,7 +246,7 @@
   (cond-> (into {:reason :nothing-to-do} (filter (comp pos? val)) (select-keys f [:covered :refused]))
     (:till-held f) (assoc :food-reserve (:till-held f))))
 
-(defn check
+(defn check-part
   "Passes when a run is under way or a step would call a child. Otherwise it waits: :short-seed names the seeds the
   plan's bare cells want and the body lacks (the round says it with a warn)."
   [c]
@@ -253,6 +259,33 @@
           (or (would-run? c f)
               (look/wait-unless-surveyed c (if (seq (:short f)) {:reason :short-seed :seeds (vec (sort (:short f)))} (nothing-to-do-reason f))
                                          (field-cells c))))))))
+
+(def job-sym 'jobs.farm.tend)
+(defn key-of [part] (or part "*"))
+
+(defn parts-of
+  "The parts a job works: :parts, else the one :part (nil: the whole field)."
+  [c]
+  (let [{:keys [parts part]} (:args c)]
+    (if (seq parts) (vec parts) [part])))
+
+(defn for-part [c part] (assoc-in c [:args :part] part))
+
+(defn check
+  "Passes when a run is under way, or when some part not resting passes check-part. Otherwise it waits (the reason of the
+  last part checked), naming the resting parts as :backed-off."
+  [c]
+  (let [m (ctx/mem c)]
+    (cond
+      (seq (:results m)) true
+      (:cur m) (true? (check-part (for-part c (:part (:cur m)))))
+      :else
+      (let [rested (standing/rested c job-sym)
+            live (remove #(contains? rested (key-of %)) (parts-of c))]
+        (or (boolean (some #(true? (check-part (for-part c %))) live))
+            (do (when (seq rested)
+                  (ctx/wait c {:reason :nothing-to-do :backed-off (vec (sort (keys rested)))}))
+                false))))))
 
 ;; ------------------------------------------------------------------ rounds
 
@@ -267,11 +300,11 @@
     :compost (select-keys r [:fed :bone-meal :reason])
     :deposit (select-keys r [:gave-up :reason])))
 
-(defn finish!
+(defn part-report
+  "{:steps :field} of the pass just made over the field c works (and the plan's notes about it)."
   [c report]
   (let [{:keys [short] :as seen} (census c)
-        field (dissoc seen :short)
-        out {:steps report :field field}]
+        field (dissoc seen :short)]
     (when (:plan (:args c))
       (tend-plan/note-short! c short)
       (when (seq (:wrong field))
@@ -279,8 +312,32 @@
                    {:plan (:plan (:args c)) :cells (:wrong field)
                     :text (str "tend of " (:plan (:args c)) " left " (count (:wrong field)) " wrong crops standing: "
                                (str/join ", " (map #(str (pr-str (:pos %)) " " (:found %)) (:wrong field))))})))
+    {:steps report :field field}))
+
+(defn finish-part!
+  "The pass over the field c works is made: book its report, clear the pass, and rest the field when a step would still
+  run (the pass could not do it). :again."
+  [c report]
+  (let [part (:part (:args c))
+        out (part-report c report)]
+    (when (some #(:call (decide/decide % (:args c) (facts c))) decide/steps)
+      (standing/rest! c job-sym (key-of part) :undone))
+    (ctx/update-mem! c #(-> % (dissoc :todo :report :call-args :cur :till-tried :tilled)
+                            (assoc-in [:results (key-of part)] out)))
+    :again))
+
+(defn finish-all!
+  "Every part has had its pass: the event and the result, :done."
+  [c]
+  (let [results (:results (ctx/mem c))
+        multi? (seq (:parts (:args c)))
+        out (if multi?
+              {:parts (into (array-map) (map (fn [part] [part (get results (key-of part))])) (filter #(contains? results (key-of %)) (:parts (:args c))))}
+              (val (first results)))
+        fields (if multi? (map :field (vals (:parts out))) [(:field out)])
+        sum #(reduce + (map (fn [f] (get f % 0)) fields))]
     (ctx/emit! c :farm-tend.done :info
-               (assoc out :text (str "farm tend done: " (:crops field) " crops, " (:bare field) " bare, " (:untilled field) " untilled")))
+               (assoc out :text (str "farm tend done: " (sum :crops) " crops, " (sum :bare) " bare, " (sum :untilled) " untilled")))
     (ctx/result! c out)
     :done))
 
@@ -322,7 +379,7 @@
   (let [{:keys [call] :as p} (steps/next-plan decide/decide decide/jobs c facts)]
     (ctx/update-mem! c assoc :todo (:todo p) :report (:report p))
     (if-not call
-      (finish! c (:report p))
+      (finish-part! c (:report p))
       (let [step (:slot call)
             _ (ctx/update-mem! c assoc :call-args (:args call))
             outcome (await (ctx/call-child c step (:job call) (with-zone-opt-out c step (:args call))))]
@@ -339,8 +396,35 @@
     (await (look/survey! c))
     :else (await (work c))))
 
+(defn ^:async pass-step
+  "One step of the pass over the part in c (a child call or the look round): :again, :continue, :declined."
+  [c]
+  (await (step c)))
+
+(defn next-part
+  "{:part} of the first untried part not resting whose check passes, marking every part looked at as tried; nil when none is left."
+  [c]
+  (let [rested (standing/rested c job-sym)]
+    (loop [parts (remove #(contains? (:tried (ctx/mem c)) (key-of %)) (parts-of c))]
+      (when (seq parts)
+        (let [part (first parts)]
+          (ctx/update-mem! c update :tried (fnil conj #{}) (key-of part))
+          (if (and (not (contains? rested (key-of part))) (true? (check-part (for-part c part))))
+            {:part part}
+            (recur (rest parts))))))))
+
+(defn ^:async run-step
+  "One step of the whole run: go on with the part under way, else start the next part, else hand over the result."
+  [c]
+  (if-let [cur (:cur (ctx/mem c))]
+    (await (pass-step (for-part c (:part cur))))
+    (if-let [{:keys [part]} (next-part c)]
+      (do (ctx/update-mem! c assoc :cur {:part part})
+          :again)
+      (finish-all! c))))
+
 (defn ^:async round
-  "The whole run: one child call after another over the six steps until the report is made; :continue only while a
+  "The whole run: one pass per part, each one child call after another over the six steps; :continue only while a
   child waits on the world."
   [c]
-  (await (pace/steps! c (fn ^:async s [] (await (step c))))))
+  (await (pace/steps! c (fn ^:async s [] (await (run-step c))))))

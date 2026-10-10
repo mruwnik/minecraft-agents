@@ -95,6 +95,48 @@
           (is (= {:crops 4 :bare 0 :untilled 0 :wrong []} (:field (done-event s))))
           (is (true? (finished? s))))))))
 
+(deftest parts-work-several-parts-of-the-plan-in-one-job
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (run {:plan "mix" :parts ["wheat" "carrots"]} (world-of farmland-all all-seed) {"mix" (plan-of)} 80))
+              ev (done-event s)]
+          (is (= {[2 64 2] "wheat_seeds" [3 64 2] "wheat_seeds" [2 64 3] "carrot" [3 64 3] "carrot"} (placed s)))
+          (is (= ["wheat" "carrots"] (keys (:parts ev))) "one report per part, in order")
+          (is (= 1 (count (events-of s :farm-tend.done))))
+          (is (true? (finished? s))))))))
+
+(deftest parts-limit-the-job-to-the-named-parts
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (run {:plan "mix" :parts ["carrots"]} (world-of farmland-all all-seed) {"mix" (plan-of)} 60))]
+          (is (= #{[2 64 3] [3 64 3]} (set (keys (placed s))))))))))
+
+(defn ^:async run-standing
+  "Submit (repeat (tend args)) over the world, tick n times 700 ms apart; the setup map."
+  [args spec plans n]
+  (let [s (setup spec plans [])]
+    (core/submit! (:eng s) (list 'repeat (list job args)) {})
+    (dotimes [_ n]
+      (swap! (:clock s) + 700)
+      (await (core/tick! (:eng s))))
+    s))
+
+(def stuck-wheat
+  (world-of farmland-all (crops "wheat" 7 wheat-cells) {:unreachable ["2,64,2" "3,64,2"] :inventory [(item "wheat_seeds" 6) (item "bread" 12)]}))
+
+(deftest a-part-whose-pass-leaves-its-check-true-backs-off-and-does-not-starve-the-queue
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (run-standing {:plan "mix" :part "wheat"} stuck-wheat {"mix" (plan-of)} 80))]
+          (is (= 1 (count (events-of s :farm-tend.done))) "one pass, then the part rests")
+          (is (some #(= [:wheat] (map keyword (:backed-off %))) (events-of s :waiting)) "the wait names the part")
+          (swap! (:clock s) + 660000)
+          (dotimes [_ 40] (swap! (:clock s) + 700) (await (core/tick! (:eng s))))
+          (is (= 2 (count (events-of s :farm-tend.done))) "after the back-off it tries again"))))))
+
 (deftest a-missing-seed-leaves-its-cells-bare-with-one-note-and-the-other-crop-is-still-sown
   (async done
     (tu/run-async done
