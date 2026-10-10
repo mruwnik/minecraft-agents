@@ -13,6 +13,7 @@
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.tools :as tools]
             [jobs.access.cleanup :as cleanup]
+            [jobs.access.stair :as stair]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.access.zones :as zones]
             [jobs.lib.util :as u]
@@ -373,6 +374,14 @@
     :again
     (wrap-up! c)))
 
+(defn way-floor
+  "The first of cells (maps {:x :y :z}) that is a still-solid floor of a stair this body cut (memory :stair-way): digging it
+  cuts the walk back up."
+  [c cells]
+  (let [ways (stair/ways-of c)
+        name-at #(u/seen-name (:primitives c) %)]
+    (first (filter #(and (contains? ways (access/cell %)) (rules/solid-floor? name-at %)) cells))))
+
 (defn skip! [c pos] (ctx/update-mem! c update :skipped (fnil conj []) pos))
 
 (defn drop-radius
@@ -577,7 +586,7 @@
 
 (def heading-stops
   "Stops that say only this heading is blocked: the stair or tunnel at 0 steps tries the next heading."
-  #{:own-zone :floor-unseen :not-loaded :base-block :crop :fluid-in-cut :place-failed :no-support-floor :no-floor :walk-failed :refused})
+  #{:way-out :own-zone :floor-unseen :not-loaded :base-block :crop :fluid-in-cut :place-failed :no-support-floor :no-floor :walk-failed :refused})
 
 (defn turn-heading!
   "Turn the run to the next of the four headings not yet tried (memory :tried-headings), forgetting the stop and the tunnel
@@ -903,6 +912,7 @@
     (cond
       stop (to-mend! c (tunnel-reason stop))
       (some #(within-own-zone c 0 (access/cell %)) cut) (end! c :own-zone next)
+      (way-floor c cut) (end! c :way-out (way-floor c cut) next)
       (>= steps (:tunnel-length (:args c))) (end! c :tunnel-length nil)
       (do (reset! walk (await (step-to! c from))) @walk) (end! c :walk-failed from nil @walk)
       (and (look/unseen? (:primitives c) cut) (not= next (:glanced m)))
@@ -1079,6 +1089,7 @@
                                      (to-mend! c :gave-up))
       (nil? looked) (do (await (look-around! c)) :again)
       (= :searching pos) :again
+      (and (some? pos) (way-floor c [pos])) (do (skip! c pos) :again)
       (some? pos) (let [walked (await (walk-to-dig! c pos))]
                     (cond
                       (and (= :blocked walked) (cleanup/permanent-walk? (ctx/child-result c :walk))) (do (skip-unreachable! c pos) :again)

@@ -1707,6 +1707,29 @@
           (is (seq stair-cells) "the stair cells below the start level are still open")
           (is (every? #(#{"air" nil} (block-at s (first %) (second %) (nth % 2))) stair-cells)))))))
 
+;; ------------------------------------------------------------------ a way out
+
+(defn stair-down-east
+  "Stone over x -6..12, y 50..63, z -3..3 with a stair cut east from the surface cell (0,64,0): step i stands at (i, 64-i, 0)."
+  [steps]
+  (apply dissoc (cells "stone" (range -6 13) (range 50 64) (range -3 4))
+         (for [i (range 1 (inc steps)) dy [0 1 2]] (str i "," (+ (- 64 i) dy) ",0"))))
+
+;; Juniper j108: a tunnel run from the foot of a stair back under it would cut its lowest steps' floors.
+(deftest a-tunnel-under-the-stair-it-came-down-stops-before-it-cuts-the-way-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks (stair-down-east 4) :drops {"iron_ore" "raw_iron" "stone" "cobblestone"} :inventory pickaxe
+                                :self {:pos [4.5 60 0.5]}}})]
+          (mem/write! (:store (:eng s)) :stair-way {:dim "overworld" :floors (vec (for [i (range 1 5)] [i (- 63 i) 0]))})
+          (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :heading "west" :tunnel-length 6 :mend false :torch-interval 0}) {})
+          (await (run-ticks s 200))
+          (is (finished? s))
+          (is (= "stone" (block-at s 3 60 0)) "the floor of the lowest step is not cut")
+          (is (= [:way-out] (mapv :reason (tunnel-ends s))) "the tunnel ends saying why")
+          (is (= [4 60 0] (feet s))))))))
+
 ;; ------------------------------------------------------------------ unseen faces are no hazard
 
 (defn classify-in
