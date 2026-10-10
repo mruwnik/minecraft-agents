@@ -3,6 +3,7 @@
             [engine.args :as a]
             [clojure.string :as str]
             [jobs.lib.cost :as cost]
+            [jobs.lib.pen-gate :as pen-gate]
             [jobs.lib.blocks :as lb]
             [jobs.lib.trees :as trees]
             [jobs.lib.tidy :as tidy]
@@ -67,7 +68,7 @@
   and, on any end, :shelter {:pos :roof :state :built} (cap 10, one in-game day).
   :roof is the cell it placed above the body, absent if none. Walls mode adds :door, the feet and head cells of one side it placed.
   Pit mode adds :start, the cell dug from. Walls mode at the bottom of a shaft has :start at the shaft's top.
-  :take-back lists the placed {:cell :item} dearer than :take-back-value, which leave! digs again by day.
+  :take-back lists the placed {:cell :item} dearer than :take-back-value, and any within 2 of a fence gate a plan wants, which leave! digs again by day.
   Plug mode adds :room true. A shelter sealed again where the latest entry stood keeps that entry's :start and :door.
   Leaving is jobs.survival.dig-in-leave/leave!, which jobs.survival.night calls by day.")
 
@@ -89,6 +90,16 @@
   "The blocks worth at most max-value each by jobs.lib.cost/item-value."
   [blocks max-value]
   (filterv #(<= (:value (cost/item-value [{:name % :count 1}])) max-value) blocks))
+
+(def gate-take-back-range
+  "A cheap seal block this near a planned gate is taken back with the dear ones: it would box the gate in."
+  2)
+
+(defn near-gate?
+  "Whether cell {:x :y :z} lies within gate-take-back-range of a fence gate some plan wants (jobs.lib.pen-gate)."
+  [c {:keys [x y z]}]
+  (boolean (some (fn [[gx gy gz]] (<= (u/dist {:x x :y y :z z} {:x gx :y gy :z gz}) gate-take-back-range))
+                 (keys (pen-gate/gate-index (:world (:engine c)))))))
 
 (def shelter-policy {:cap 10 :ttl sh/ms-per-day})
 
@@ -576,7 +587,7 @@
         prev (:data (ctx/latest c :shelter))
         resealed (= feet (:pos prev))
         take-back (->> (concat (when resealed (:take-back prev))
-                               (for [[cell item] (:placed-items (ctx/mem c)) :when (not (cheap item))] {:cell cell :item item}))
+                               (for [[cell item] (:placed-items (ctx/mem c)) :when (or (not (cheap item)) (near-gate? c cell))] {:cell cell :item item}))
                        (reduce #(assoc %1 (:cell %2) %2) {}) vals vec)
         start (or start (when resealed (:start prev)))
         door (or door (when resealed (:door prev)))]

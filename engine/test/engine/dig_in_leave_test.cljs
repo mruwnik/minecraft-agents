@@ -62,7 +62,7 @@
          eng (core/create (cond-> {:primitives p :jobs (assoc registry/jobs 'leaver (leaver out {:x 10 :y 64 :z 0}) 'again (again p runs))
                            :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                            :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}
-                     (:zones spec) (assoc :world (world/of-data {} {} (:zones spec)))))]
+                     (:zones spec) (assoc :world (world/of-data (:plans spec {}) {} (:zones spec)))))]
      {:eng eng :p p :seen seen :clock clock :out out :runs runs})))
 
 (defn ^:async run-until-empty [{:keys [eng clock]} n]
@@ -369,3 +369,21 @@
           (core/submit! eng '(jobs.survival.dig-in {:enclose true}) {})
           (await (run-until-empty s 40))
           (is (nil? (:take-back (last (entries eng :shelter))))))))))
+
+(deftest dig-in-takes-back-even-its-cheap-walls-beside-a-pen-gate
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pen {:id "pen" :parts [{:id "gate" :cells [[2 64 0]] :want "oak_fence_gate"}]}
+              {:keys [eng p] :as s} (setup {:inventory [{:name "iron_pickaxe" :count 1} {:name "dirt" :count 20}]
+                                            :blocks (assoc (ground) "0,66,0" "stone")
+                                            :zones [] :plans {"pen" pen}})]
+          (core/submit! eng '(jobs.survival.dig-in {:enclose true}) {})
+          (await (run-until-empty s 40))
+          (let [take-back (:take-back (last (entries eng :shelter)))
+                near-gate? (fn [{:keys [x y z]}] (<= (js/Math.hypot (- x 2) (- y 64) (- z 0)) 2))]
+            (is (seq take-back) "dirt walls beside the gate are listed")
+            (is (every? #(near-gate? (:cell %)) take-back) "and only those")
+            (is (< (count take-back) (count (calls p "place")))))
+          (await (leave-at-dawn! s))
+          (is (= "air" (block-at p [1 64 0])) "the seal beside the gate is gone"))))))
