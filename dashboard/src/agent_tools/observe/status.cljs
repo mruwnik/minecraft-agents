@@ -385,12 +385,13 @@
 (def max-missed 4)
 
 (defn missed?
-  "Whether an event is news a plain status points to: a job end, a flight, a fight or flee decision, a reflex end, damage or a death."
+  "Whether an event is news a plain status points to: a job end, a flight, a fight or flee decision, a reflex end, a notice, damage or a death."
   [e]
   (boolean (or (and (= :job (:source e)) (job-results/terminal-kinds (:kind e)))
                (= :hostile.fled (:kind e))
                (and (= :hostile.decided (:kind e)) (#{:fight :flee} (get-in e [:data :decision])))
                (and (= :reflex (:source e)) (= :ended (:kind e)))
+               (= :notice (:attention e))
                (and (= :body (:source e)) (#{:hurt :died :respawned} (:kind e))))))
 
 (defn critical?

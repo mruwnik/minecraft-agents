@@ -1232,6 +1232,11 @@
     (is (= {:event :completed :job "j141" :message "done" :ago-s 10} (first (:items summary))))
     (is (nil? (observe-status/missed-summary [(event :body :chat)] 11000)))))
 
+(deftest missed-summary-lists-a-notice-the-agent-must-decide-on
+  (let [warn (assoc (notice "j5" :go-home.too-far "home is 409 blocks away") :time-ms 5000)
+        summary (observe-status/missed-summary [(event :body :chat) warn (event :job :tick)] 11000)]
+    (is (= [{:event :go-home.too-far :job "j5" :message "home is 409 blocks away" :ago-s 6}] (:items summary)))))
+
 (deftest missed-summary-always-shows-a-death-however-much-came-after
   (let [done (fn [i] (assoc (event :job :completed {} "done") :context {:job-id (str "j" i)} :time-ms (* 1000 i)))
         events (-> [(assoc (event :body :died {:cause "zombie"}) :time-ms 500) (assoc (event :body :respawned {}) :time-ms 600)]
