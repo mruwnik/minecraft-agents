@@ -29,8 +29,8 @@
   The mode is the first of these whose cells the zone rules permit. If none is permitted it takes the first
   as a last resort, with one dig-in.trespass-last-resort warning.
   - Blocks it places: building blocks (planks, stone kinds, dirt), then logs as a last resort.
-  A pit that would cut into the body's own zone or the footprint of a plan it made is not dug (stopped :spared, a
-  dig_in_failed warning naming the cell and the zone or plan): the shelter looks elsewhere. Walls and plug are not affected.
+  A pit that would cut into the footprint of a plan the body made (a pen) is not dug (stopped :spared, a
+  dig_in_failed warning naming the cell and the plan): the shelter looks elsewhere. Walls and plug are not affected.
   - plug: the body is in a closed room with a door and a hole in the roof over it. One carried block mends the hole.
   - walls: enough :blocks are carried for every open cell. Places the four sides at feet height, the four at head height,
     a support beside the roof cell, then the roof cell, at most :max-places per step.
@@ -400,7 +400,7 @@
     (or cells (map #(update start :y - %) (range 1 (inc depth))))))
 
 (defn spared-cell
-  "The first cell of the pit that lies in the body's own zone or plan (access/own-keep), as its verdict, else nil."
+  "The first cell of the pit that lies in a plan the body made (access/own-keep), as its verdict, else nil."
   [c start dig-plan]
   (let [in (access/rules-input c {:spare-own? true})]
     (some #(access/own-keep in %) (pit-cells start dig-plan))))
