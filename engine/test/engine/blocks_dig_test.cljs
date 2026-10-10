@@ -239,6 +239,28 @@
             (is (= {:dug true :collected 1} (select-keys result [:dug :collected])) (pr-str result))
             (is (= 1 (carried p "oak_log")))))))))
 
+(defn picks-up-during-dig!
+  "p whose dig act ends with the dug block's drop already in the inventory (an adjacent drop flies to the body)."
+  [p]
+  (.override (.-world p) "dig"
+             (fn ^:async dig-and-pick [token args impl]
+               (let [r (await (impl token args))]
+                 (doseq [d (array-seq (or (.-drops r) #js []))]
+                   (swap! (.-state (.-world p)) #(-> % (update :entities (fn [es] (filterv (fn [e] (not= (.-id d) (:id e))) es)))
+                                                      (fake/give (.-name d) 1))))
+                 r))))
+
+(deftest a-drop-picked-up-during-the-dig-is-not-searched-for
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self body :blocks {"2,64,0" "oak_log"} :drops {"oak_log" "oak_log"}})]
+          (picks-up-during-dig! p)
+          (let [result (await (child-outcome eng job {:pos at} 60))]
+            (is (= 1 (carried p "oak_log")))
+            (is (= {:dug true} (select-keys result [:dug])) (pr-str result))
+            (is (zero? (count (calls p "steer"))) (pr-str (map #(.-name %) (.-calls (.-world p)))))))))))
+
 (deftest drops-left-with-no-room-left-are-reported-as-inventory-full
   (are [room? expected] (= expected (dig/mark-full [{:reason :unseen :ids [3]}] room?))
     true [{:reason :unseen :ids [3]}]

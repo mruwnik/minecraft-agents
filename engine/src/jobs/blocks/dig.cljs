@@ -181,6 +181,15 @@
   "How far round the dug cell collect-drops walks to look for a drop that is out of sight (behind leaves)."
   3)
 
+(defn drops-wanted
+  "How many of the dug block's drops (JS array of {:name :count}) are still to come in: their count less what the inventory
+  gained of those items across the dig (an adjacent drop flies to the body); 1 when the dig saw no drop, so the search stays."
+  [drops before after]
+  (let [drops (mapv (fn [d] {:name (.-name d) :count (.-count d)}) (array-seq (or drops #js [])))
+        names (set (map :name drops))
+        carried (fn [inv] (transduce (comp (filter (comp names :name)) (map :count)) + 0 inv))]
+    (if (empty? drops) 1 (max 0 (- (transduce (map :count) + 0 drops) (- (carried after) (carried before)))))))
+
 (defn mark-full
   "The left drops with their reason :inventory-full when the body has no room for the block's drop now (the pickup filled the last stack), else as they are."
   [left room?]
@@ -189,8 +198,8 @@
 (defn ^:async collect!
   "Pick up the dug block's drops (jobs.forestry.collect-drops child, called until it ends); finish when it has."
   [c pos]
-  (let [{:keys [block ids]} (:dug (ctx/mem c))
-        r (await (child/run! c :collect 'jobs.forestry.collect-drops {:radius (collect-radius) :ids ids :holes [pos] :search search-blocks}))]
+  (let [{:keys [block ids want]} (:dug (ctx/mem c))
+        r (await (child/run! c :collect 'jobs.forestry.collect-drops {:radius (collect-radius) :ids ids :holes [pos] :search search-blocks :want want}))]
     (if (= :continue r)
       :continue
       (let [res (when (= :done r) (ctx/child-result c :collect))]
@@ -224,12 +233,13 @@
   pick up) or :unreachable (the primitive says out of reach)."
   [c pos block]
   (await (tools/equip! c block))
-  (let [r (await (tidy/dig! c pos))
+  (let [before (u/inventory (:primitives c))
+        r (await (tidy/dig! c pos))
         status (.-status r)
         _ (when (= "dug" status) (await (look/look-at! c (b/cell pos))))
         ids (vec (keep #(.-id %) (array-seq (or (.-drops r) #js []))))]
     (case status
-      "dug" (do (ctx/update-mem! c assoc :dug {:block block :ids ids}) :collect)
+      "dug" (do (ctx/update-mem! c assoc :dug {:block block :ids ids :want (drops-wanted (.-drops r) before (u/inventory (:primitives c)))}) :collect)
       "missing" (finish! c {:dug false :pos pos :block block :reason :already-clear})
       "cannot" (stop! c {:dug false :pos pos :block block :reason :cannot})
       "unreachable" :unreachable
