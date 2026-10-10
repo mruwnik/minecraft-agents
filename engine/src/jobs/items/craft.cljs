@@ -23,7 +23,7 @@
   status), after a warn, and its status is stopped. One call is the whole craft: it walks (a go-to child) and crafts
   again until the count is carried or it stops; it yields only while go-to waits on the world.
   An ingredient that runs out is fetched (jobs.lib.fetch: a jobs.items.obtain child for each missing item) and the
-  craft goes on, unless :fetch is false or the fetch failed: then it stops with :short. With no table in reach a
+  craft goes on (a further fetch for each batch while the last one led to more made), unless :fetch is false or the fetch failed: then it stops with :short and a :text. With no table in reach a
   carried one is put down beside the body, else one is fetched (a crafting_table obtain child) and put down, the same
   way; :fetch false or a failed fetch stops with :reason \"no-table\".")
 
@@ -236,18 +236,19 @@
   [c item r made]
   (let [{:keys [short] :as shortage} (craft/no-item (js->clj (.-recipes r)) (js->clj (.-have r)))
         have (js->clj (.-have r))]
-    (when (and (seq short) (fetch/opts c 'jobs.items.craft) (not (:fetched (ctx/mem c))))
+    (when (and (seq short) (fetch/opts c 'jobs.items.craft) (not= made (:fetched-made (ctx/mem c))))
       (ctx/update-mem! c assoc :wants (into {} (map (fn [[name n]] [name (+ n (get have name 0))])) short)))
     (let [f (when (seq (:wants (ctx/mem c))) (await (fetch/fetch! c 'jobs.items.craft problem)))]
       (cond
         f f
         (and (seq (:wants (ctx/mem c))) (nil? (problem c)))
-        (do (ctx/update-mem! c #(-> % (assoc :fetched true) (dissoc :wants))) :again)
+        (do (ctx/update-mem! c #(-> % (assoc :fetched-made made) (dissoc :wants))) :again)
 
         :else
         (do (ctx/update-mem! c dissoc :wants)
-            (ctx/emit! c :craft.short :info {:text (str "craft " item " is missing " (pr-str short))})
-            (finish! c made shortage))))))
+            (let [text (str "craft " item " is missing " (pr-str short))]
+              (ctx/emit! c :craft.short :info {:text text})
+              (finish! c made (assoc shortage :text text))))))))
 
 (defn ^:async craft-act!
   "The craft call alone (no follow-up): the target is carried already -> finish!'s result, else {:r the primitive's

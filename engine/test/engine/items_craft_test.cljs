@@ -1,6 +1,7 @@
 (ns engine.items-craft-test
   "jobs.items.craft against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
+            [clojure.string :as str]
             [engine.fake]
             [engine.registry :as registry]
             [engine.core :as core]
@@ -81,7 +82,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [[result p seen eng] (await (craft {:inventory [{:name "wheat" :count 2}] :blocks table-block} {:item "bread"}))]
-          (is (= {:made 0 :status :stopped :short {"wheat" 1}} result))
+          (is (= {:made 0 :status :stopped :short {"wheat" 1} :text "craft bread is missing {\"wheat\" 1}"} result))
           (is (some #(= :craft.short (:kind %)) @seen)))))))
 
 (deftest the-nearest-table-is-one-the-body-has-seen
@@ -165,7 +166,7 @@
         (let [{:keys [eng p]} (setup {:inventory [{:name "oak_log" :count 1}]})
               _ (.override (.-world p) "craft" (fn ^:async f [_ _ _] #js {:status "no-item" :have #js {} :recipes #js [#js {"birch_log" 1} #js {"oak_log" 1} #js {"spruce_log" 1}]}))
               result (await (child-outcome eng job {:item "birch_planks"} 8))]
-          (is (= {:made 0 :status :stopped :short {"oak_log" 1} :alternatives {"oak_log" ["birch_log" "spruce_log"]}} result)))))))
+          (is (= {:made 0 :status :stopped :short {"oak_log" 1} :alternatives {"oak_log" ["birch_log" "spruce_log"]} :text "craft birch_planks is missing {\"oak_log\" 1}"} result)))))))
 
 (deftest craft-a-partial-batch-short-of-an-ingredient-hands-over-the-shortfall
   (async done
@@ -243,7 +244,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [[result] (await (craft {:inventory [{:name "wheat" :count 2}] :blocks table-block} {:item "bread"}))]
-          (is (= {:made 0 :status :stopped :short {"wheat" 1}} result)))))))
+          (is (= {:made 0 :status :stopped :short {"wheat" 1} :text "craft bread is missing {\"wheat\" 1}"} result)))))))
 
 (def wheat-chest {"-2,64,3" "chest"})
 (defn wheat-world [] {:inventory [{:name "wheat" :count 2}] :blocks (merge table-block wheat-chest) :containers {"-2,64,3" [{:name "wheat" :count 1}]}})
@@ -259,13 +260,35 @@
           (is (= 1 (get (inv p) "bread")))
           (is (nil? (chest-wheat p))))))))
 
+(defn wheat-batches-world [chest-count]
+  {:blocks (merge table-block wheat-chest) :containers {"-2,64,3" [{:name "wheat" :count chest-count}]}})
+
+(deftest craft-fetches-again-for-each-batch-while-fetches-bring-progress
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup (wheat-batches-world 9))
+              result (await (child-outcome eng job {:item "bread" :count 3} 200))]
+          (is (= {:made 3} result))
+          (is (= 3 (get (inv p) "bread"))))))))
+
+(deftest craft-stops-with-a-text-when-a-fetch-brings-no-progress
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup (wheat-batches-world 3))
+              result (await (child-outcome eng job {:item "bread" :count 3} 200))]
+          (is (= 1 (:made result)))
+          (is (= :stopped (:status result)))
+          (is (not (str/blank? (:text result)))))))))
+
 (deftest craft-fetch-false-reports-the-shortfall-and-leaves-the-chest
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup (wheat-world))
               result (await (child-outcome eng job {:item "bread" :fetch false} 80))]
-          (is (= {:made 0 :status :stopped :short {"wheat" 1}} result))
+          (is (= {:made 0 :status :stopped :short {"wheat" 1} :text "craft bread is missing {\"wheat\" 1}"} result))
           (is (= 1 (chest-wheat p))))))))
 
 
