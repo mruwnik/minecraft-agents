@@ -543,6 +543,44 @@
           (await (run-job! s 'targeter {:step 6}))
           (is (= {:x -5 :y 66 :z 0} @out) "the highest stair cell, away from the zombie, not a 6 block hop"))))))
 
+(def rock-box
+  "Stone z -3..3, x -12..12, y 62..68 round a 1-wide tunnel along x at z 0 (x -10..9, feet and head height)."
+  (let [open (set (for [x (range -10 10) y [64 65]] [x y 0]))]
+    (into {} (for [x (range -12 13) y (range 62 69) z (range -3 4) :when (not (open [x y z]))]
+                [(key-of x y z) "stone"]))))
+
+(defn buried-setup [world]
+  (let [s (setup (merge {:blocks rock-box :inventory [{:name "stone_pickaxe" :count 1}]} world))]
+    (swap! (fake/state (:p s)) assoc :light-default [0 0])
+    s))
+
+(defn dug [p] (filterv #(= "dig" (.-name %)) (.-calls (.-world p))))
+
+(deftest a-buried-flight-with-no-stair-digs-a-pocket-before-any-hop
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (run-job! (buried-setup {:entities [(zombie 7 6 {})]}) 'jobs.survival.retreat {}))
+              names (mapv #(.-name %) (.-calls (.-world p)))]
+          (is (= "dig" (first (filter #{"dig" "steer"} names))) "a pocket, not a hop down the tunnel"))))))
+
+(deftest a-failed-pocket-is-not-tried-again-in-the-same-flight
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (buried-setup {:entities [(zombie 7 6 {})]})
+              digs (atom 0)
+              _ (.override (.-world (:p s)) "dig" (fn ^:async f [_ _ _] (swap! digs inc) #js {:status "failed"}))
+              job {:check (constantly true)
+                   :round (fn ^:async again [c]
+                            (dotimes [_ 3]
+                              (ctx/update-mem! c dissoc :tried)
+                              (await (retreat/dig-pocket! c)))
+                            :done)}
+              s (assoc-in s [:eng :jobs 'again] job)]
+          (await (run-job! s 'again {:blocks ["cobblestone"]}))
+          (is (= 1 @digs) "one dig attempt for the whole flight"))))))
+
 (defn looks [raw] (count (filter #(= "look" (.-name %)) (.-calls (.-world raw)))))
 
 (deftest a-flight-in-a-seen-tunnel-looks-once-per-direction-not-every-step

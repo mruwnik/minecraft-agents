@@ -204,7 +204,7 @@
       (if n
         (ctx/emit! c :hostile.fled :warn n)
         (when origin (ctx/remember! c :flight {:from origin} {:cap 1 :ttl (settings/get settings ::chain-window-ms)}))))
-    (ctx/update-mem! c dissoc :chasers :fled :look-back :looked-back)
+    (ctx/update-mem! c dissoc :chasers :fled :look-back :looked-back :pocket-tried :pocket-dug)
     (if (= :cannot-escape ended)
       (r/stop! c :cannot_escape "every way of escaping failed twice in a row" :fled ids)
       (r/finish! c {:fled ids :ended why}))))

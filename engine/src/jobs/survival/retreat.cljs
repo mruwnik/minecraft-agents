@@ -529,9 +529,16 @@
 
 (defn ^:async dig-pocket!
   "Underground with no stair to take, a side pocket in the rock beats a hop across the open cave: its step's result,
-  nil when it is not possible or failed this sweep."
+  nil when it is not possible. One dig attempt a flight (a hop does not clear that); once dug, the next steps seal it."
   [c]
-  (when-not (flight/tried? c :pocket) (await (refuge/pocket! c))))
+  (let [{:keys [pocket-tried pocket-dug]} (ctx/mem c)]
+    (cond
+      pocket-dug (or (await (refuge/hide! c)) (do (ctx/update-mem! c dissoc :pocket-dug) nil))
+      pocket-tried nil
+      :else (do (ctx/update-mem! c assoc :pocket-tried true)
+                (let [r (await (refuge/pocket! c))]
+                  (when r (ctx/update-mem! c assoc :pocket-dug true))
+                  r)))))
 
 (defn close-danger?
   "Whether a creeper chases the body or a melee threat is within cover-gap: a seal or pit beside it is no cover (a blast
