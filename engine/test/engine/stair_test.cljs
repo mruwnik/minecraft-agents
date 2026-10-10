@@ -370,7 +370,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng clock out]} (setup {:blocks ground} east (fn [_]))]
+        (let [{:keys [eng clock out]} (setup {:blocks ground :inventory (conj pick {:name "torch" :count 10})} east (fn [_]))]
           (swap! clock + 500)
           (await (core/tick! eng))
           (is (= :done (:status @out)) "one round is the whole stair")

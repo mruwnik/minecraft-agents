@@ -736,7 +736,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng clock out p]} (setup {:blocks (assoc ground "6,57,0" "iron_ore")} {:target [6 57 0]} (fn [_]))]
+        (let [{:keys [eng clock out p]} (setup {:blocks (assoc ground "6,57,0" "iron_ore") :inventory (conj pick {:name "torch" :count 10})} {:target [6 57 0]} (fn [_]))]
           (swap! clock + 500)
           (await (core/tick! eng))
           (is (= :reached (:reason @out)) "one round digs the stair, the run and opens the target")

@@ -11,6 +11,7 @@
             [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
             [jobs.lib.torch :as torch]
+            [jobs.lib.trip :as trip]
             [jobs.access.stair :as stair]
             [jobs.lib.ore-pick :as ore-pick]
             [jobs.lib.placement :as placement]
@@ -19,6 +20,7 @@
 (def doc
   "Cut a way to stand beside a buried block :target [x y z] and stop there, with the target the next cell ahead
   at feet height. The target itself is left. A nil zone list declines the check (one warn tunnel.declined).
+  Before the first step it stocks torches when under 8 are carried (jobs.lib.trip/torches-ready!: info torch.stocked, or warn torch.no-stock and it goes on dark).
 
   The way is one straight line along a heading through the target's column:
   1. An entry stand: on the surface (the column's top cell over a solid floor, two open cells; no entry from
@@ -392,7 +394,7 @@
   [c {:keys [heading dir] :as plan} k]
   (let [cells (line-cells plan)
         r (await (declined/call-child! c :stair 'jobs.access.stair
-                                 {:dir dir :heading heading :fetch (stair-fetch (:fetch (:args c))) :y ((cells (segment-end plan k)) 1) :on-lava (:on-lava (:args c) :seal)
+                                 {:dir dir :heading heading :fetch (stair-fetch (:fetch (:args c))) :stock-torches false :y ((cells (segment-end plan k)) 1) :on-lava (:on-lava (:args c) :seal)
                                   :accept (set (:accept (:args c))) :ignore-zones? (boolean (:ignore-zones? (:args c)))
                                  :pick-up-ores (:pick-up-ores (:args c))}))]
     (if (not= :done r)
@@ -626,5 +628,6 @@
   "The whole tunnel, in and (a dead end) out: step! until it ends, a pace between; :continue after (stair/max-steps) of
   them or while a child waits on the world."
   [c]
-  (let [n (atom 0)]
-    (await (pace/steps! c #(if (< (swap! n inc) (stair/max-steps)) (step! c) :continue)))))
+  (or (await (trip/torches-ready! c))
+      (let [n (atom 0)]
+        (await (pace/steps! c #(if (< (swap! n inc) (stair/max-steps)) (step! c) :continue))))))

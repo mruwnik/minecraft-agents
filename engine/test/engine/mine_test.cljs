@@ -43,7 +43,7 @@
   [{:keys [world p dir clock shared jobs]}]
   (let [clock (or clock (atom 1000000))
         [seen sink] (tu/legacy-capture-sink)
-        p (seeing (or p (tu/fake-on-floor (assoc world :floor-block floor-block))))
+        p (seeing (or p (tu/fake-on-floor (-> world (assoc :floor-block floor-block) (update :inventory #(or % [{:name "torch" :count 10}]))))))
         eng (core/create {:primitives p :jobs (or jobs registry/jobs) :triggers triggers/all :dir (or dir (tu/tmp-dir))
                           :now #(deref clock) :world shared
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -499,7 +499,10 @@
 
 ;; ------------------------------------------------------------------ the mend must not eat the count
 
-(def pickaxe [{:name "iron_pickaxe" :count 1}])
+(def bare-pickaxe [{:name "iron_pickaxe" :count 1}])
+(def pickaxe
+  "The pickaxe and enough torches that the job does not stock up first (jobs.lib.trip/torches-ready!)."
+  (conj bare-pickaxe {:name "torch" :count 10}))
 (def cobble {"stone" "cobblestone"})
 (def stone-floor
   "A stone floor under the start (y 62, 63) on a dirt layer, so a body in a pit has support."
@@ -1456,7 +1459,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 22 :mend false}
-                                 (torch-world pickaxe) 200))]
+                                 (torch-world bare-pickaxe) 200))]
           (is (= [] (torch-xs s)))
           (is (= 1 (count (events-of s :mine.no-torches))))
           (is (= 22 (:steps (:tunnel (done-event s)))) "the tunnel went on")
@@ -1486,7 +1489,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 12 :mend false}
-                                 (assoc (torch-world pickaxe) :blocks (merge long-rock side-room)) 200))]
+                                 (assoc (torch-world bare-pickaxe) :blocks (merge long-rock side-room)) 200))]
           (is (some #{[10 64 8]} (dug-cells s)))
           (is (empty? (side-torch-cells s))))))))
 
@@ -1547,7 +1550,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 12 :mend false}
-                                 (assoc (torch-world pickaxe) :blocks (merge long-rock side-room)) 200))]
+                                 (assoc (torch-world bare-pickaxe) :blocks (merge long-rock side-room)) 200))]
           (is (= [false true] (mapv #(boolean (re-find #"branch stays dark" (:text %))) (events-of s :mine.no-torches)))
               (pr-str (mapv :text (events-of s :mine.no-torches)))))))))
 

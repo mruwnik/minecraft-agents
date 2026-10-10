@@ -56,6 +56,7 @@
   - No zone list (zones.edn missing or never valid) declines with one warn mine.declined {:reason :no-zones},
     also in the middle of the job. Nothing is dug or placed then.
 
+  Before a descent or strip tunnel it stocks torches when under 8 are carried (jobs.lib.trip/torches-ready!: obtain, charcoal from logs; warn torch.no-stock, then it digs dark).
   Before the first round it deposits at the known chest when the bag is fullish (jobs.lib.trip/ready!; :deposit-first? false skips it).
 
   The first round writes to job memory before any dig: the goal (carried + :count), the start cell, the
@@ -1146,7 +1147,7 @@
       (let [_ (when-not (get-in (ctx/mem c) [:descent :top])
                 (ctx/update-mem! c update :descent assoc :top (access/cell (cell-of (u/self-pos c))) :top-heading (keyword (:heading (ctx/mem c)))))
             r (await (ctx/call-child c :stair 'jobs.access.stair
-                                     {:dir :down :heading (keyword (:heading (ctx/mem c))) :steps 1 :fetch (if level? (:fetch (:args c)) true)
+                                     {:dir :down :heading (keyword (:heading (ctx/mem c))) :steps 1 :stock-torches false :fetch (if level? (:fetch (:args c)) true)
                                       :accept (filterv #{:falling-block} (:accept (:args c)))
                                       :ignore-zones? (:ignore-zones? (:args c))
                                       :pick-up-ores (:pick-up-ores (:args c))}))
@@ -1211,7 +1212,7 @@
                  (u/within? (u/self-pos c) (cell-of (xyz top)) 1) (do (ctx/update-mem! c assoc-in [:shaft :state] :down) :again)
                  :else (shaft-none! c :unreachable)))
       :down (let [r (await (ctx/call-child c :shaft-stair 'jobs.access.stair
-                                           {:dir :down :heading heading :y to-y :fetch true :through id
+                                           {:dir :down :heading heading :y to-y :fetch true :stock-torches false :through id
                                             :ignore-zones? (:ignore-zones? (:args c))}))
                   res (when (not= :continue r) (ctx/child-result c :shaft-stair))]
               (cond
@@ -1594,7 +1595,9 @@
 
 (defn ^:async round
   [c]
-  (if-let [t (or (await (trip/ready! c)) (await (trip/tool-ready! c (:block (:args c)))))]
+  (if-let [t (or (await (trip/ready! c)) (await (trip/tool-ready! c (:block (:args c))))
+                 (await (when (and (pos? (or (:torch-interval (:args c)) 0)) (or (pos? (:tunnel-length (:args c))) (descent-wanted? c)))
+                          (trip/torches-ready! c))))]
     t
     (let [n (atom 0)]
       (await (pace/steps! c #(if (< (swap! n inc) (max-steps)) (step c) :continue))))))

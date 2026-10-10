@@ -30,6 +30,7 @@
 (def doc
   "Dig a 1-wide stair :down or :up along :heading (nil: the way the body faces) from where the body stands, :steps steps or to feet height :y.
   The check waits (:no-tool, :no-free-slot) when the next dig lacks a pickaxe or room for the drop.
+  A stair down first stocks torches when under 8 are carried (jobs.lib.trip/torches-ready!; :stock-torches false skips it, as does :fetch off).
 
   A step cuts three cells, top first, so the body can walk one block forward and one down (or up) with full
   headroom. Then the body walks into the step (a go-to child). Before cutting the next step it plans the
@@ -109,6 +110,7 @@
    :fetch {:doc "get a missing pickaxe instead of waiting :no-tool (jobs.lib.fetch), and a block to seal lava with: true, a set of kinds or a map of limits" :spec fetch/option? :default true}
    :on-lava {:doc "exposed lava: :seal (fill it with a building block, then go on) or :stop" :spec #{:seal :stop} :default :seal}
    :by-hand {:doc "dig a block no carried tool clears bare-handed (slow, the drop is lost) instead of waiting :no-tool" :spec boolean? :default false}
+   :stock-torches {:doc "a stair down first gets torches when few are carried (jobs.lib.trip/torches-ready!, needs :fetch); false for a stair a job runs as its own child" :spec boolean? :default true}
    :pick-up-ores {:doc "true: dig the ores of jobs.lib.ore-pick's ::ores setting that are exposed within reach on the way; false: none; or the ore block names to dig" :spec (a/or-of boolean? (a/coll-of a/name?)) :default true}
    :through {:doc "the id of a mineshaft plan the stair runs down: its footprint is no obstacle (jobs.lib.shafts)" :spec string? :default nil}})
 
@@ -609,7 +611,8 @@
           (do
             ;; the spare's fetch may walk the body off: the stair starts where it was asked, not where the fetch ended
             (ctx/update-mem! c assoc :start feet)
-            (if (= :continue (await (trip/tool-ready! c "stone")))
+            (if (= :continue (or (await (when (and (= :down (:dir (:args c))) (:stock-torches (:args c))) (trip/torches-ready! c)))
+                                   (await (trip/tool-ready! c "stone"))))
               :continue
               (if (and (not= feet (feet-of c)) (= :continue (await (walk-into! c :start feet))))
                 :continue

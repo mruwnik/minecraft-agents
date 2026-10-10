@@ -31,7 +31,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (m/start {:world {:blocks (m/soil-over-stone 63 59) :drops m/cobble :inventory [{:name "stone_pickaxe" :count 1}]}})]
+        (let [s (m/start {:world {:blocks (m/soil-over-stone 63 59) :drops m/cobble :inventory [{:name "stone_pickaxe" :count 1} {:name "torch" :count 10}]}})]
           (fake/swap-self! (:p s) assoc :held "stone_pickaxe")
           (core/submit! (:eng s) (m/spec {:block "stone" :count 2 :direction "east" :tunnel-length 4 :mend false}) {})
           ;; after a dig the stair yields :continue until a flow delay has passed (the fake clock moves 700 ms a tick)
@@ -44,7 +44,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (m/scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 4 :torch-interval 2}
-                                   (assoc (m/rock-world {}) :inventory (conj m/pickaxe {:name "torch" :count 3})) 1))]
+                                   (assoc (m/rock-world {}) :inventory m/pickaxe) 1))]
           (is (m/finished? s) "ended after one tick")
           (is (some #(= "torch" (.-item (.-args %))) (m/calls s "place")) "a torch was placed"))))))
 
@@ -183,8 +183,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[_ sand1 ev1] (await (hungry-mine 2 [{:name "bread" :count 2}]))
-              [_ sand2 ev2] (await (hungry-mine 20 []))]
+        (let [[_ sand1 ev1] (await (hungry-mine 2 [{:name "bread" :count 2} {:name "torch" :count 10}]))
+              [_ sand2 ev2] (await (hungry-mine 20 [{:name "torch" :count 10}]))]
           (is (= :count (:reason ev1)))
           (is (= :count (:reason ev2)))
           (is (>= sand1 6))
