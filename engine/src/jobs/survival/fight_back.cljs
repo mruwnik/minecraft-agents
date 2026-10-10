@@ -12,6 +12,7 @@
   "Equip the best weapon, walk up to the nearest hostile within :range and hit it, at most one swing per :attack-gap-ms.
   Only a hostile the body has seen is fought: one only heard is judged by its direction and band (jobs.lib.danger), never
   walked to or hit; the body turns toward it and the job declines, so the retreat takes over.
+  With :hold the body stays where it is: a melee hostile beyond reach is waited for, 15 s at most, then the job declines (a ranged one is still walked up to).
   A hostile more than :leash blocks from the point the job started at is not chased (the job declines, so the retreat takes over).
   Declines when health is below :min-health.
   Ends when no hostile is within :range, with the result {:killed [ids]}.
@@ -29,7 +30,8 @@
    :min-health {:doc "decline below this health" :spec (a/num-in 0 20) :default 8}
    :weapons {:doc "item name substrings that count as weapons" :spec (a/coll-of (a/or-of string? keyword?)) :default combat/default-weapons}
    :skip {:doc "entity ids already dead: not fought" :spec (a/coll-of number?) :default []}
-   :attack-gap-ms {:doc "least time between swings" :spec (a/num-in 0 nil) :default 600}})
+   :attack-gap-ms {:doc "least time between swings" :spec (a/num-in 0 nil) :default 600}
+   :hold {:doc "true: never walk toward a melee mob; strike one that comes within reach (night, with more hostiles about than the body sees)" :spec boolean? :default false}})
 
 (a/defargs settings
   {::reach {:default 3 :doc "How near the target the body stands to hit, in blocks." :spec (a/int-in 0 nil)}})
@@ -122,14 +124,27 @@
   "Bound of one walk toward the mob: it moves, so the walk aims again at where it is now this often."
   10)
 
+(def hold-limit-ms "How long a held body waits for a mob that does not come before the fight declines (the retreat takes over)." 15000)
+
+(defn held-too-long? [c]
+  (when-let [since (:held-since (ctx/mem c))]
+    (> (- (ctx/now c) since) hold-limit-ms)))
+
+(def chase-gap-ms "How long a held body waits for a mob to come before it looks again." 200)
+
 (defn ^:async swing!
   "Walk into reach if needed, then face and hit target once. Resolves to the
-  walk's outcome: :there, :partial or :blocked."
+  walk's outcome: :there, :partial, :blocked or :held (waited for the mob)."
   [c target]
   (let [tpos (u/pos-of (.-pos target))
-        r (if (> (u/dist (u/self-pos c) tpos) (reach))
-            (await (near/go-near! c tpos 2 {:leg-s chase-timeout-s :dangers false :escalate false :look-round false}))
-            :there)]
+        far? (> (u/dist (u/self-pos c) tpos) (reach))
+        hold? (and (:hold (:args c)) (not (combat/ranged? target)))
+        r (cond
+            (not far?) :there
+            hold? (do (ctx/update-mem! c update :held-since #(or % (ctx/now c)))
+                      (await (combat/wait-gap! c (ctx/now c) chase-gap-ms))
+                      :held)
+            :else (await (near/go-near! c tpos 2 {:leg-s chase-timeout-s :dangers false :escalate false :look-round false})))]
     (when (= :blocked r) (note-blocked! c target))
     (when (= :there r)
       (ctx/update-mem! c assoc :last-attack (ctx/now c))
@@ -149,6 +164,7 @@
     (when-not (:start (ctx/mem c)) (ctx/update-mem! c assoc :start (u/self-pos c)))
     (cond
       (and last-attack (< (.-health (.self p)) min-health)) :declined
+      (held-too-long? c) :declined
       (and last-attack (< (.-health (.self p)) (:health0 (ctx/mem c)))) :continue
       (nil? target) (if-let [heard (first (remove danger-q/seen-only? (in-range c)))]
                       (do (await (ctx/act c :look (let [{:keys [x y z]} (danger-q/mob-pos p heard)] #js {:pos #js {:x x :y (+ 1 y) :z z}})))

@@ -57,9 +57,20 @@
 
 (def child-jobs {:fight 'jobs.survival.fight-back :flee 'jobs.survival.retreat})
 
+(def hold-radius
+  "Hostiles known within this many blocks count for holding position at night."
+  16)
+
+(defn hold?
+  "Whether the fight stays where it is: at night, with more than one hostile known (the ones in view are not all there are)."
+  [c]
+  (let [p (:primitives c)]
+    (boolean (and (sh/night? p) (> (count (danger-q/known-hostiles p hold-radius {})) 1)))))
+
 (defn ^:async run-child [c decision {:keys [radius ranged-radius weapons reserve quiet-s hide-s]}]
   (let [child-args (case decision
-                     :fight {:range radius :ranged-range ranged-radius :min-health 0 :weapons weapons}
+                     :fight {:range radius :ranged-range ranged-radius :min-health 0 :weapons weapons
+                             :hold (hold? c)}
                      :flee {:radius radius :ranged-radius ranged-radius :weapons weapons :reserve reserve :quiet-s quiet-s :hide-s hide-s
                             :goal (:goal (ctx/mem c))})]
     (await (ctx/call-child c decision (child-jobs decision) child-args))))

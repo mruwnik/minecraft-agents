@@ -202,6 +202,10 @@
   "The shelters (walk-leaves-shelter?) a body does not leave at night for a bed: a bare roof is not one of them."
   #{:underground :dug-in :room})
 
+(def bed-open-policy
+  "Policy of the :bed-open entries the night job writes for a bed it found open and dug in beside instead: half a day."
+  {:cap 5 :ttl (quot ms-per-day 2)})
+
 (defn bed-to-use
   "The bed a body awake at night sleeps in: one it sees (seen-bed), else the remembered :bed within radius, under any
   roof or none. Never one permit? refuses (occupied), one in an unexpired :bed-unreachable entry, or one whose walk
@@ -215,6 +219,7 @@
     (let [shelter (:data (mem/latest view :shelter))
           overdue? (>= (or (days-awake-in view) 0) max-days-awake)
           ok? (fn [pos] (and (permit? pos) (not-any? #(= pos (:pos (:data %))) (mem/entries view :bed-unreachable))
+                             (not-any? #(= pos (:pos (:data %))) (mem/entries view :bed-open))
                              (or overdue? (not (kept-shelters (walk-leaves-shelter? p shelter pos 1))))))]
       (or (seen-bed p ok?)
           (when-let [pos (bed-in-view p view radius)]

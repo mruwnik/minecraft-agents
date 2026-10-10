@@ -204,15 +204,19 @@
       :else (do (ctx/update-mem! c assoc :log-out-failed true) :again))))
 
 (defn ^:async sleep-step
-  "jobs.survival.sleep on bed. Asleep it is :sheltered :slept; a sleep that ends without sleeping marks :sleep-failed
+  "jobs.survival.sleep on bed (open-ok?: also one not shut in a roofed room: a bed the body just put down, or an overdue body). Asleep it is :sheltered :slept; a sleep that ends without sleeping marks :sleep-failed
   (a body-memory entry, 5 minutes) and the next pass chooses again."
-  [c bed]
+  [c bed open-ok?]
   (busy! c)
   (let [p (:primitives c)
         started (ctx/now c)
-        s (await (ctx/call-child c :sleep 'jobs.survival.sleep {:bed bed}))]
+        s (await (ctx/call-child c :sleep 'jobs.survival.sleep {:bed bed :open-bed open-ok?}))]
     (cond
       (= :continue s) :again
+      (= :bed-open (:reason (ctx/child-result c :sleep)))
+      (do (ctx/remember! c :bed-open {:pos bed} sh/bed-open-policy)
+          (ctx/emit! c :shelter.bed_open :info {:pos bed :text "bed is open, dug in beside it"})
+          :again)
       (or (sh/sleeping? p) (seq (ctx/since c :slept started))) (do (sheltered! c :slept) :again)
       (not (sh/night? p)) :again
       :else (do (ctx/remember! c :sleep-failed {:pos bed} sh/sleep-failed-policy)
@@ -299,7 +303,7 @@
   (let [r (await (put-down-bed! c))]
     (cond
       (= :continue r) :again
-      r (await (sleep-step c r))
+      r (await (sleep-step c r true))
       :else
       (do (ctx/remember! c :bed-place-failed {:pos (sh/feet (:primitives c))} sh/bed-place-failed-policy)
           (ctx/emit! c :shelter.bed_place_failed :warn {:text "no room or permission to put the carried bed down; not sleeping in it"})
@@ -833,7 +837,7 @@
             door (sh/open-room-door p (ctx/view c))]
         (when-not bed (note-bed-far! c))
         (cond
-          bed (await (sleep-step c bed))
+          bed (await (sleep-step c bed (overdue? c)))
           (sh/bed-place-wanted? p (ctx/view c) (radius c) (bed-permit c)) (await (place-bed-and-sleep c))
           (log-out-wanted? c) (await (log-out-step c))
           (and (:enclose (ctx/mem c)) (not= :dug-in sheltered)) (await (enclose! c))

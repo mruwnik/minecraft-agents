@@ -9,6 +9,7 @@
             [engine.fake :as fake]
             [engine.job-api :as job-api]
             [engine.events :as events]
+            [engine.hut-shelter-test :as hut]
             [engine.fake.raw-world :as fake-raw]
             [engine.memory :as mem]
             [engine.perception :as perception]
@@ -144,15 +145,17 @@
 
 ;; ------------------------------------------------------------------ job: beds
 
-(deftest the-night-walks-to-a-remembered-bed-under-a-roof-and-sleeps
+(deftest the-night-digs-in-beside-an-open-bed-instead-of-sleeping-in-it
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (st/setup {:time night :blocks (merge roof {"20,64,0" "red_bed"})})]
+        (let [{:keys [eng p seen]} (st/setup {:time night :blocks {"20,64,0" "red_bed"} :inventory st/dirt-stack})]
           (st/know-bed! eng {:x 20 :y 64 :z 0})
           (core/submit! eng '(jobs.survival.night) {})
-          (await (tu/run-until-empty eng 20))
-          (is (= [{:x 20 :y 64 :z 0}] (mapv st/arg-pos (st/calls p "sleep")))))))))
+          (await (tu/run-until-empty eng 40))
+          (is (empty? (st/calls p "sleep")) "an unwalled, unroofed bed is no place to lie")
+          (is (re-find #"bed is open, dug in beside it" (str (:text (first (st/emitted seen :shelter.bed_open))))))
+          (is (<= (Math/abs (- 20 (:x (st/pos-of p)))) 3) "the body dug in beside the bed"))))))
 
 (deftest after-a-far-flight-the-night-takes-a-bed-beyond-the-usual-radius
   (async done
@@ -302,7 +305,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (st/setup {:time night :blocks {"6,64,0" "red_bed"}})]
+        (let [{:keys [eng p]} (st/setup hut/night-bed-world)]
           (st/know-bed! eng {:x 6 :y 64 :z 0})
           (sleep-count! p 1 2)
           (core/submit! eng '(jobs.survival.night) {})
@@ -951,7 +954,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (st/setup {:time night :inventory [{:name "red_bed" :count 1}] :blocks {"3,64,0" "red_bed"}})]
+        (let [{:keys [eng p seen]} (st/setup (assoc hut/night-bed-world :inventory [{:name "red_bed" :count 1}]))]
           (tu/seeing-after-look p)
           (core/submit! eng '(jobs.survival.night) {})
           (await (tu/run-until-empty eng 12))

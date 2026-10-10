@@ -88,6 +88,10 @@
 (defn emitted-by [seen source reflex] (filterv #(= [source reflex] [(:source %) (:reflex %)]) @seen))
 
 (def floor {"0,63,0" "dirt" "0,62,0" "stone" "0,61,0" "stone" "0,60,0" "stone"})
+(def bed-room
+  "A closed stone room (inside x -1..7, y 64..65, z -1..1, roof at 66) around the body's start and a bed at 6,64,0."
+  (assoc (apply dissoc (tu/box -2 64 -2 8 66 2 "stone") (keys (tu/box -1 64 -1 7 65 1 "stone"))) "6,64,0" "red_bed"))
+
 (def dirt-stack [{:name "dirt" :count 12}])
 (def sleeper {:id 5 :name "Alex" :kind "player" :sleeping true :pos {:x 10 :y 64 :z 0}})
 (def awake {:id 6 :name "Sam" :kind "player" :pos {:x 10 :y 64 :z 0}})
@@ -725,7 +729,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:time night :entities [sleeper] :players ["Alex"] :blocks {"6,64,0" "red_bed"}})]
+        (let [{:keys [eng p]} (setup {:time night :entities [sleeper] :players ["Alex"] :blocks bed-room})]
           (know-bed! eng {:x 6 :y 64 :z 0})
           (core/submit! eng '(jobs.survival.night) {})
           (await (run-until-empty eng 8))
@@ -863,7 +867,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:time night :skipNight false :blocks {"6,64,0" "red_bed"}})]
+        (let [{:keys [eng p seen]} (setup {:time night :skipNight false :blocks bed-room})]
           (know-bed! eng {:x 6 :y 64 :z 0})
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
           (core/submit! eng '(jobs.debug.notify {:text "after"}) {})
@@ -942,7 +946,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:time night :blocks {"6,64,0" "red_bed"}})]
+        (let [{:keys [eng p]} (setup {:time night :blocks bed-room})]
           (know-bed! eng {:x 6 :y 64 :z 0})
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
           (await (tick-n eng 4))
@@ -1072,7 +1076,7 @@
             (dawn-after! p 7 (fn [n] (case n 2 (reset! at2 @tries)
                                            4 (do (reset! at4 @tries) (swap! clock + (:ttl sh/sleep-failed-policy)))
                                            nil)))
-            (core/submit! eng '(jobs.survival.night) {})
+            (core/submit! eng '(jobs.survival.night {:max-days-awake 0}) {})
             (await (tick-nights eng clock 2))
             (is (pos? @at2))
             (is (= @at2 @at4) "the failed entry holds it off")

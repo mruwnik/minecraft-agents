@@ -260,6 +260,20 @@
           (is (every? #(<= % 15) (map #(.-timeoutS (.-args %)) (calls p "steer"))) "a short walk: it aims again at the mob")
           (is (pos? (count (calls p "attack")))))))))
 
+(deftest fight-back-with-hold-waits-for-a-mob-beyond-reach-and-hits-it-when-it-comes
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng]} (await (first-round-ms '(jobs.survival.fight-back {:range 6 :hold true}) {:inventory sword :entities [(zombie 5 0)]} 20))]
+          (is (empty? (tu/walked-to eng)) "it does not advance on the mob")
+          (is (empty? (calls p "attack")) "and does not swing at one it cannot reach"))))))
+
+(deftest the-fight-holds-position-at-night-with-more-than-one-hostile-known
+  (are [world held?] (= held? (respond-to-hostile/hold? {:primitives (tu/fake world)}))
+    {:time 14000 :entities [(zombie 7 5 0) (zombie 8 6 3)]} true
+    {:time 14000 :entities [(zombie 7 5 0)]} false
+    {:time 1000 :entities [(zombie 7 5 0) (zombie 8 6 3)]} false))
+
 (deftest fight-back-chases-in-legs-that-never-escalate
   (async done
     (tu/run-async done

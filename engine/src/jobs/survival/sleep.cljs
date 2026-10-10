@@ -6,7 +6,8 @@
             [jobs.lib.shelter :as sh]
             [jobs.lib.util :as u]
             [engine.memory :as mem]
-            [jobs.lib.places :as places]))
+            [jobs.lib.places :as places]
+            [jobs.lib.result :as result]))
 
 (def doc
   "Walk to a bed and sleep in it.
@@ -32,6 +33,8 @@
 (a/defargs args
   {:bed-radius {:doc "a remembered bed farther than this many blocks from the body is not used"
                 :spec (a/num-in 0 nil) :default sh/default-bed-radius}
+   :open-bed {:doc "false: a bed that is not shut in a closed, roofed room is not lain in (the job ends :stopped :bed-open once the body is beside it)"
+              :spec boolean? :default true}
    :bed {:doc "bed position [x y z] or {:x :y :z} to sleep in instead of the remembered :bed (no radius); it is recorded as :bed when that is unset or gone" :spec ::a/pos
          :default nil}})
 
@@ -105,6 +108,15 @@
                       :done))
       (u/fail! c :bed_unusable (str "cannot sleep: " (.-status r))))))
 
+(defn bed-block? [c bed]
+  (.endsWith (or (u/seen-name (:primitives c) bed) "") "_bed"))
+
+(defn open-bed?
+  "Whether the body, standing beside its bed, would lie in the open: not shut in a closed room under a roof nor buried."
+  [c]
+  (let [p (:primitives c)]
+    (not (or (sh/shut-in-room? p) (sh/buried? p)))))
+
 (defn still-permitted?
   "sense/decide!'s retry? for the bed-taken decision: its value is true while the bed still reads permitted, so keep looking."
   [v]
@@ -122,4 +134,6 @@
           (taken?) :continue
           (= :continue walk) :continue
           (not (:arrived (ctx/child-result c :go))) (give-up-unreachable! c bed)
+          (and (false? (:open-bed (:args c))) (bed-block? c bed) (open-bed? c))
+          (result/stop! c :bed-open "the bed is open (not shut in a roofed room)" :pos bed)
           :else (await (sleep-at! c bed)))))))
