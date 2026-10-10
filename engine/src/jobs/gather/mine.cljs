@@ -30,6 +30,7 @@
             [jobs.lib.breath :as breath]
             [jobs.lib.torch :as torch]
             [jobs.lib.placement :as placement]
+            [jobs.gather.mine-stay :as stay]
             [jobs.lib.world :as known]))
 
 (def doc
@@ -115,7 +116,11 @@
 
   The run used up ends the dig phase :tunnel-length, any stop ends it :tunnel-stopped. Either way one warn
   mine.tunnel-end {:y (the tunnel's feet height) :reason (:tunnel-length :lava :water :fluid :no-floor :not-loaded :refused :dig-failed
-  :walk-failed) :heading :length :at :next :walk}. :at is the offending cell, :next the line cell it stopped before, :walk (walk-failed) the moveTo status, reason and the names seen at the cell and its floor.
+  :walk-failed :breach-sealed :breach-open) :heading :length :at :next :walk}. :at is the offending cell, :next the line cell it stopped before, :walk (walk-failed) the moveTo status, reason and the names seen at the cell and its floor.
+
+  :stay-level true is the cave-safe mode: the tunnel runs at the start height (no stair down, no :level, no descent through soil), only
+  seen ore within one column of the body counts, and a cut that opens into air beyond the tunnel is refilled with a carried building
+  block, ending the tunnel :breach-sealed (:breach-open when it cannot seal).
 
   Torches: a dig of seen ore that takes the body 4+ blocks off the tunnel line hangs one torch there the same way
   (none within 4 of an earlier branch torch). The strip tunnel hangs a torch (jobs.access.tunnel/torch-at: a wall torch in the head cell, else a floor
@@ -174,6 +179,7 @@
    :heading {:doc "the strip tunnel's heading, over :direction: north, south, east or west (n/s/e/w), or a cell [x y z] (the dominant axis from the start toward it); nil: :direction" :spec (a/pred "a heading name or a cell [x y z]" #(or (and (or (string? %) (keyword? %)) (heading-name %)) (and (sequential? %) (= 3 (count %)) (every? number? %)))) :default nil}
    :direction {:doc "the strip tunnel's heading: north, south, east or west (n/s/e/w); nil: the way the body faces when the job starts" :spec (a/pred "north, south, east or west (n/s/e/w), a string or keyword" #(and (or (string? %) (keyword? %)) (heading-name %))) :default nil}
    :tunnel-length {:doc "the most blocks the strip tunnel runs in this job, at the body's level; 0: no tunnel, seen blocks only" :spec (a/int-in 0 nil) :default 32}
+   :stay-level {:doc "caution for caves: dig only at the level the body starts at (the two-high tunnel, no stair down, no :level), mine only seen ore beside the body, and seal a dug cell that opens into air beyond the tunnel with a carried block (tunnel ends :breach-sealed, or :breach-open when it cannot seal)" :spec boolean? :default false}
    :variants {:doc "an ore's stone and deepslate kinds both count as the block (iron_ore and deepslate_iron_ore, either named); false: only :block" :spec boolean? :default true}
    :level {:doc "the feet height the strip tunnel runs at (a whole number, or a cell [x y z] / {:x :y :z} whose y it takes): with no target seen the body first stairs down to it (jobs.access.stair) when higher; nil: the ore's level (setting ::ore-levels), none for other blocks; false: where the body stands"
            :spec (a/pred "a whole number, a cell [x y z] or {:x :y :z}, nil or false" #(or (nil? %) (false? %) (integer? %) (and (sequential? %) (= 3 (count %)) (integer? (second %))) (and (map? %) (integer? (:y %))))) :default nil}
@@ -222,8 +228,8 @@
 
 (defn tunnel-level
   "The feet height the strip tunnel should run at (args a): :level, else the ore's ::ore-levels entry; nil for none (:level false)."
-  [{:keys [block level]}]
-  (cond (false? level) nil
+  [{:keys [block level stay-level]}]
+  (cond (or stay-level (false? level)) nil
         (sequential? level) (second level)
         (map? level) (:y level)
         (some? level) level
@@ -292,6 +298,7 @@
         here (u/self-pos c)
         cells (->> (look/seen-blocks p {:names (vec (kinds (:args c))) :radius radius :max 128 :live? true})
                    (map :pos)
+                   (filter #(or (not (:stay-level (:args c))) (stay/beside-body? (cell-of here) %)))
                    (remove skipped)
                    (remove #(too-deep? c %)))
         graded (map (juxt identity #(classify c wet %)) cells)
@@ -638,9 +645,9 @@
 
 (defn open-start
   "Where a strip tunnel really starts: from cell, along heading dir [dx dz] over cells already open (feet and head passable, a
-  solid floor, as seen), stepping down where the line drops to an open cell with a floor (a stair), at most ::open-skip-drop
-  blocks below cell in all; the last such cell."
-  [name-at cell [dx dz]]
+  solid floor, as seen), stepping down where the line drops to an open cell with a floor (a stair), at most max-drop (default
+  ::open-skip-drop) blocks below cell in all; the last such cell."
+  [name-at cell [dx dz] & [max-drop]]
   (let [open? (fn [p] (and (passable (name-at p)) (passable (name-at (update p :y inc)))
                            (rules/solid-floor? name-at (update p :y dec))))
         ahead (fn [p] (-> p (update :x + dx) (update :z + dz)))]
@@ -649,12 +656,12 @@
         (cond
           (>= n max-open-skip) p
           (open? q) (recur q (inc n))
-          (and (passable (name-at q)) (open? down) (<= (- (:y cell) (:y down)) (open-skip-drop))) (recur down (inc n))
+          (and (passable (name-at q)) (open? down) (<= (- (:y cell) (:y down)) (or max-drop (open-skip-drop)))) (recur down (inc n))
           :else p)))))
 
 (def heading-stops
   "Stops that say only this heading is blocked: the stair or tunnel at 0 steps tries the next heading."
-  #{:way-out :own-zone :floor-unseen :not-loaded :base-block :crop :fluid-in-cut :place-failed :no-support-floor :no-floor :walk-failed :refused})
+  #{:breach-sealed :way-out :own-zone :floor-unseen :not-loaded :base-block :crop :fluid-in-cut :place-failed :no-support-floor :no-floor :walk-failed :refused})
 
 (defn turn-heading!
   "Turn the run to the next of the four headings not yet tried (memory :tried-headings), forgetting the stop and the tunnel
@@ -974,7 +981,7 @@
   (let [m (ctx/mem c)
         t (or (:tunnel m)
               (let [start (cell-of (u/self-pos c))
-                    origin (open-start #(u/seen-name (:primitives c) %) start (headings (:heading m)))]
+                    origin (open-start #(u/seen-name (:primitives c) %) start (headings (:heading m)) (when (:stay-level (:args c)) 0))]
                 (when (not= origin start)
                   (ctx/emit! c :mine.tunnel-skipped :info {:from (access/cell start) :to (access/cell origin) :heading (:heading m)
                                                            :text (str "mine's tunnel line is open from " (str/join "," (access/cell start)) " to "
@@ -1013,6 +1020,9 @@
                           (await (glance! c [(headings heading)]))
                           :again)
                       (not= :clear (after-cut name-at cut)) (await (recut! c next))
+                      (and (:stay-level (:args c)) (seq (stay/breaches name-at from cut)))
+                      (let [open (stay/breaches name-at from cut)]
+                        (end! c (if (await (stay/seal! c (rules-in c) open)) :breach-sealed :breach-open) (first open) next))
                       (and (not (rules/solid-floor? name-at (update next :y dec))) (rules/air (name-at (update next :y dec)))
                            (await (bridge-floor! c next)))
                       :again
@@ -1096,7 +1106,7 @@
   [c]
   (let [{:keys [block descend-limit]} (:args c)]
     (or (to-level? c)
-        (and (nil? (tunnel-level (:args c))) (contains? stone-types block) (pos? descend-limit) (nil? (:tunnel (ctx/mem c)))))))
+        (and (nil? (tunnel-level (:args c))) (not (:stay-level (:args c))) (contains? stone-types block) (pos? descend-limit) (nil? (:tunnel (ctx/mem c)))))))
 
 (defn shaft-state [c] (:state (:shaft (ctx/mem c))))
 

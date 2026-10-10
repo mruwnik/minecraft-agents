@@ -956,6 +956,53 @@
           (is (= 1 (get (inv s) "raw_iron")))
           (is (= :count (:reason (done-event s)))))))))
 
+;; ------------------------------------------------------------------ :stay-level
+
+(deftest stay-level-tunnels-at-the-start-height-without-a-stair
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "iron_ore" :count 1 :direction "east" :tunnel-length 3 :stay-level true :mend false}
+                                 (deep-rock {}) 120))]
+          (is (seq (dug-cells s)))
+          (is (every? #(#{64 65} (second %)) (dug-cells s)) "no cell below the start level")
+          (is (= 3 (:length (first (tunnel-ends s))))))))))
+
+(def far-cave
+  "A cave corridor east of the body (x 1..6, y 64 and 65) with ore at its far end."
+  (merge (cells "air" (range 1 7) [64 65] [0]) {"6,64,0" "iron_ore"}))
+
+(deftest stay-level-leaves-ore-seen-across-a-cave
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "iron_ore" :level false :count 1 :tunnel-length 0 :stay-level true}
+                                 (rock-world far-cave) 40))]
+          (is (empty? (calls s "dig")))
+          (is (= :none (:reason (done-event s)))))))))
+
+(def side-cave "A cave pocket behind the wall beside the tunnel's second cell." {"2,64,1" "air" "2,65,1" "air"})
+
+(deftest stay-level-seals-a-cut-that-opens-into-a-cave
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "iron_ore" :direction "east" :tunnel-length 6 :stay-level true :mend false}
+                                 (update (rock-world side-cave) :inventory into [{:name "cobblestone" :count 5}]) 120))]
+          (is (= :breach-sealed (:reason (first (tunnel-ends s)))) (pr-str (map :text (tunnel-ends s))))
+          (is (= "cobblestone" (block-at s 2 64 0)))
+          (is (= "cobblestone" (block-at s 2 65 0)))
+          (is (not-any? #(> (first %) 2) (dug-cells s))))))))
+
+(deftest stay-level-stops-open-when-it-cannot-seal
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "iron_ore" :direction "east" :tunnel-length 6 :stay-level true :mend false}
+                                 (rock-world side-cave) 120))]
+          (is (= :breach-open (:reason (first (tunnel-ends s)))) (pr-str (map :text (tunnel-ends s))))
+          (is (not-any? #(> (first %) 2) (dug-cells s))))))))
+
 (deftest with-no-ore-seen-it-stairs-down-to-the-ore-level-then-tunnels-and-comes-back
   (async done
     (tu/run-async done
