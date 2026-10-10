@@ -9,6 +9,7 @@
             [engine.memory :as mem]
             [engine.perception :as perception]
             [engine.registry :as registry]
+            [engine.scenario :as scenario]
             [engine.takeover :as takeover]
             [engine.test-util :as tu :refer [run-until-empty]]
             [engine.triggers :as triggers]
@@ -544,6 +545,27 @@
             (is (every? #(>= % 64) @ys) "the body never steps into the hole")
             (is (= [{:pos under-feet :reason :unsafe-floor}] (mapv #(select-keys % [:pos :reason]) (left-drops seen))))
             (is (zero? (carried p "dirt")) "the drop is left")))))))
+
+(deftest the-loose-items-reflex-does-not-walk-into-the-hole-over-a-magma-floor-after-the-dig-ends
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [clock (atom 1000000)
+              [seen sink] (tu/legacy-capture-sink)
+              p (tu/seeing-all (tu/fake-on-floor {:self body :inventory [{:name "wooden_pickaxe" :count 1}] :blocks {"0,63,0" "stone" "0,62,0" "magma_block"}}))
+              eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                                :backoff false :world (world/of-data {} {} [])
+                                :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})
+              ys (atom [])]
+          (heights p ys)
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :loose-items}]}"))
+          (core/submit! eng (list job {:pos under-feet}) {})
+          (dotimes [_ 60]
+            (swap! clock + 700)
+            (await (core/tick! eng)))
+          (is (empty? (calls p "collect")) "no collect for the drop in the magma hole")
+          (is (every? #(>= % 64) @ys) "the body never steps into the hole")
+          (is (zero? (carried p "cobblestone"))))))))
 
 (deftest a-drop-over-a-cave-opening-is-left
   (async done

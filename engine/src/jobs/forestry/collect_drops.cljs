@@ -30,7 +30,7 @@
   With :dig, a drop go-to cannot reach, or one too deep in the dug hole, is dug to once: the fewest cells (jobs.lib.dig-route,
   over the blocks the body has seen, an unseen one taken for stone) that open a way to it, each a jobs.blocks.dig child (zones, claims, hazards
   are its rules), then the walk is tried again. No such way, or a dig that fails, leaves the drop :unreachable.
-  Result: {:collected n}, the number of items that entered the inventory, with :left [{:pos :reason}] for those.")
+  Result: {:collected n}, the number of items that entered the inventory, with :left [{:pos :reason}] for those (also in :loose-left, so the :loose-items reflex leaves them).")
 
 (a/defargs args
   {:radius {:doc "search radius in blocks" :spec (a/num-in 0 nil) :default default-radius}
@@ -163,12 +163,13 @@
           :dug)))))
 
 (defn leave!
-  "Leave item where it lies: why is the hole-problem."
+  "Leave item where it lies: why is the hole-problem. Its id is remembered (loose/left!), so the :loose-items reflex does not fetch it after."
   [c item why]
   (let [[x y z] (item-cell item)
         cell {:x x :y y :z z}]
     (ctx/emit! c :collect-drops.left :debug {:pos cell :reason why :item (some-> (.-item item) .-name)
                                              :text (str "left a drop at " x "," y "," z ": " (name why))})
+    (loose/left! c [(.-id item)] (loose/options {}))
     (ctx/update-mem! c update :left (fnil conj []) {:pos cell :reason why})))
 
 (defn leave-unseen!
