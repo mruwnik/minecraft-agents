@@ -3,6 +3,7 @@
             [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.lib.access :as access]
             [jobs.lib.animals :as animals]
             [jobs.lib.blocks :as b]
             [jobs.lib.body :as body]
@@ -304,12 +305,20 @@
 (defn gather-carried [p {:keys [key]}]
   (reduce + 0 (for [[k v] (carried-counts p) :when (if (= "log" key) (log? k) (= key k))] v)))
 
+(defn seen-blocks-of
+  "The seen blocks of a need (within ::seen-radius), nearest first, with those a zone, claim or plan footprint bars
+  taking left out unless all? is true."
+  [c need all?]
+  (let [in (access/rules-input c)
+        blocks (look/seen-blocks (:primitives c) {:match #((:seen need) %) :radius (seen-radius) :max (if all? 1 64)})]
+    (if all? blocks (filter #(:ok (access/may? in :harvest (:pos %))) blocks))))
+
 (defn seen-of
-  "The nearest seen block of a need (within ::seen-radius), or for a wool need a sheep of its colour in range, else nil."
+  "The nearest seen block of a need that may be taken, or for a wool need a sheep of its colour in range, else nil."
   [c need]
   (if-let [color (:sheep need)]
     (first (filter #(= color (.-color %)) (sheep-in-range c)))
-    (first (look/seen-blocks (:primitives c) {:match #((:seen need) %) :radius (seen-radius) :max 1}))))
+    (first (seen-blocks-of c need false))))
 
 (defn with-block
   "The need with :block of its args the kind of block seen when it could be either (a coal ore, dirt or grass); a wool need shears when shears are carried, else hunts."
@@ -384,15 +393,15 @@
   claim or plan footprint refuses them), or the general text."
   [c names n]
   (let [needs (some-> (gather-plan c names n) :gather (gather-needs (game/version-of (:primitives c))))
-        seen (filter #(and (seen-of c %) (let [n (with-block c %)] (not (ctx/check-child c (gather-slot n) (:job n) (:args n))))) needs)
-        unseen (remove #(seen-of c %) needs)
+        seen (filter #(and (not (:sheep %)) (not (seen-of c %)) (seq (seen-blocks-of c % true))) needs)
+        unseen (remove #(or (seen-of c %) (seq (seen-blocks-of c % true))) needs)
         label (fn [{:keys [key seen sheep]}]
                 (if sheep (str key " (from " sheep " sheep within " (sheep-radius) " blocks)") (if (and (set? seen) (not= #{key} seen)) (str key " (from " (clojure.string/join "/" (sort seen)) ")") key)))]
     (str "nothing seen to gather what a craft lacks"
          (when (seq unseen) (str ": " (clojure.string/join ", " (map label unseen))))
          (when (seq seen)
            (str "; seen but not taken (a zone, claim or plan footprint may refuse it): "
-                (clojure.string/join ", " (for [need seen :let [b (seen-of c need)]]
+                (clojure.string/join ", " (for [need seen :let [b (first (seen-blocks-of c need true))]]
                                             (str (label need) (when-let [p (some-> b :pos)] (str " at " (:x p) " " (:y p) " " (:z p)))))))))))
 
 (defn pickaxe-why
@@ -656,7 +665,7 @@
                       :for targets :max-distance (:max-distance o) :max-legs (:max-legs o)
                       :from (mapv #(js/Math.floor %) [(.-x here) (.-y here) (.-z here)])})
         r (await (ctx/call-child c :explore 'jobs.explore.search
-                                 (merge (explore-opts c) {:target targets :count 1 :scan-radius 16 :use-notes false})))]
+                                 (merge (explore-opts c) {:target targets :count 1 :scan-radius 16 :use-notes false :takeable true})))]
     (if (= :continue r)
       :continue
       (let [res (ctx/child-result c :explore)

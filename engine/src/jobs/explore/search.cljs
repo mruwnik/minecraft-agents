@@ -3,6 +3,7 @@
             [engine.args :as a]
             [clojure.string :as str]
             [engine.ctx :as ctx]
+            [jobs.lib.access :as access]
             [jobs.lib.breath :as breath]
             [jobs.lib.child :as child]
             [jobs.lib.look :as look]
@@ -57,6 +58,7 @@
    :scan-radius {:doc "how far round the body each look reaches" :spec (a/num-in 0 nil) :default 24}
    :max-legs {:doc "legs walked before it gives up" :spec (a/int-in 0 nil) :default 32}
    :timeout-s {:doc "seconds from the first round before it gives up, not counting the time go-to holds for day in a shelter" :spec (a/num-in 0 nil) :default 600}
+   :takeable {:doc "leave out blocks a zone, claim or plan footprint bars this body from taking" :spec boolean? :default false}
    :use-notes {:doc "targets noted (by any body) within :max-distance count as found" :spec boolean? :default true}
    :seen-ttl-s {:doc "how long a note of a block seen lasts" :spec (a/num-in 0 nil) :default 259200}
    :entity-ttl-s {:doc "how long a note of an entity seen lasts" :spec (a/num-in 0 nil) :default 600}
@@ -219,12 +221,20 @@
     (ctx/result! c result)
     :done))
 
+(defn takeable
+  "found without the blocks a zone, claim or plan footprint bars taking, when :takeable is on."
+  [c found]
+  (if-not (:takeable (:args c))
+    found
+    (let [in (access/rules-input c)]
+      (filter #(or (:id %) (:ok (access/may? in :harvest (:pos %)))) found))))
+
 (defn ^:async scan!
   "Look round (every heading, once per cell), note what was seen and the spot as searched, book the findings."
   [c names]
   (let [{:keys [scan-radius seen-ttl-s entity-ttl-s searched-ttl-s] want :count} (:args c)
         _ (when-not (await (look/survey! c :cell)) (look/see! c))
-        sighted (vec (sense (:primitives c) names scan-radius))
+        sighted (vec (takeable c (sense (:primitives c) names scan-radius)))
         [x y z] (here c)
         [ox _ oz] (:origin (ctx/mem c))]
     (notes/note! c (conj (mapv #(assoc % :kind :seen :ttl-ms (* 1000 (if (:id %) entity-ttl-s seen-ttl-s))) sighted)
@@ -338,7 +348,7 @@
         _ (when-not (breath/in-water? (:primitives c)) (await (scan! c names)))
         ns (notes/notes c)
         m (ctx/mem c)
-        found (cond-> (:found m) use-notes (add-found (noted (:primitives c) ns names (:origin m) max-distance) want))]
+        found (cond-> (:found m) use-notes (add-found (takeable c (noted (:primitives c) ns names (:origin m) max-distance)) want))]
     (ctx/update-mem! c assoc :found found)
     (cond
       (>= (count found) want) (finish! c :found nil)

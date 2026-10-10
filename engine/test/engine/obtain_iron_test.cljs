@@ -127,24 +127,29 @@
           (is (empty? (f/events-of s :obtain.exploring)) "no search walk at 0.5 hp")
           (is (some #(= :low-health (:reason %)) (f/events-of s :waiting))))))))
 
-(deftest logs-seen-only-in-a-foreign-zone-stop-naming-the-refusal
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [trunk (into {} (for [y [64 65 66]] [(str "3," y ",4") "oak_log"]))
-              zone {:name "village" :min [2 60 3] :max [4 70 5] :owner "Miles"}
-              s (f/start (ore-world trunk []) [f/own-zone zone])]
-          (await (obtain! s {:any-of ["oak_log" "birch_log"] :count 2 :how #{:gather} :explore true} 12))
-          (is (re-find #"seen but not taken.*zone" (str (:why (first (f/events-of s :stopped))))) "the stop says the logs were seen and refused"))))))
+(def village-trunk
+  "A trunk at x 3 inside a foreign zone."
+  {:blocks (into {} (for [y [64 65 66]] [(str "3," y ",4") "oak_log"]))
+   :zones [f/own-zone {:name "village" :min [2 60 3] :max [4 70 5] :owner "Miles"}]})
 
-(deftest the-only-tree-seen-being-unreachable-the-stop-says-why
+(deftest logs-seen-only-in-a-foreign-zone-are-explored-past-and-then-named
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (f/start (assoc (ore-world f/tree-blocks []) :unreachable ["0,64,4" "0,65,4" "0,66,4" "0,67,4"]) [f/own-zone])]
-          (await (obtain! s {:item "oak_log" :count 2 :how #{:gather}} 300))
-          (let [stop (first (f/events-of s :stopped))]
-            (is (re-find #"ended :no-tree \(goal-not-standable\)" (str (:why stop))) "the stop names the walk's reason")))))))
+        (let [s (f/start (ore-world (:blocks village-trunk) []) (:zones village-trunk))]
+          (await (obtain! s {:any-of ["oak_log" "birch_log"] :count 2 :how #{:gather} :explore true} 12))
+          (is (seq (f/events-of s :obtain.exploring)) "walks to look for logs it may take")
+          (await (f/run-ticks s 600))
+          (is (re-find #"seen but not taken.*zone" (str (:why (first (f/events-of s :stopped))))) "when exploring fails the stop names the refusal"))))))
+
+(deftest a-tree-it-may-take-is-preferred-to-logs-in-a-foreign-zone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [free (into {"30,68,4" "oak_leaves" "31,67,4" "oak_leaves"} (for [y [64 65 66 67]] [(str "30," y ",4") "oak_log"]))
+              s (f/start (ore-world (merge (:blocks village-trunk) free) []) (:zones village-trunk))]
+          (await (obtain! s {:any-of ["oak_log"] :count 2 :how #{:gather} :explore true} 400))
+          (is (<= 2 (get (f/inv s) "oak_log" 0)) "logs were got from the tree outside the zone"))))))
 
 (deftest an-iron-ingot-with-raw-iron-carried-is-smelted-by-a-smelt-child
   (async done
