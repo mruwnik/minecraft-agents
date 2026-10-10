@@ -119,19 +119,22 @@
 
 (defn ^:async dig-spot!
   "Make a table spot where there is none: dig the first dig-spot-cells cell (a jobs.blocks.dig child, bare-handed when
-  no carried tool harvests it; the drop is not kept), then look at its floor. The spot, :continue while the child
-  waits, or nil when no cell can be dug."
+  no carried tool harvests it; the drop is not kept; a cell beside water or lava is passed over, :on-fluid :fail), then
+  look at its floor. A cell that could not be dug goes to the next. The spot, :continue while the child waits, or nil
+  when no cell can be dug."
   [c]
-  (when-let [cell (or (:spot-digging (ctx/mem c)) (first (dig-spot-cells c)))]
-    (ctx/update-mem! c assoc :spot-digging cell)
-    (let [r (await (ctx/call-child c :spot-dig 'jobs.blocks.dig {:pos cell :collect false :need-drop false :fetch false}))]
-      (if (= :continue r)
-        :continue
-        (do (ctx/update-mem! c #(-> % (dissoc :spot-digging) (update :spot-dug (fnil conj #{}) cell)))
-            (when (and (= :done r) (:dug (ctx/child-result c :spot-dig)))
-              (await (ctx/act c :look (clj->js {:pos {:x (+ (:x cell) 0.5) :y (- (:y cell) 0.5) :z (+ (:z cell) 0.5)}})))
-              (look/see! c)
-              (table-spot c)))))))
+  (loop []
+    (when-let [cell (or (:spot-digging (ctx/mem c)) (first (dig-spot-cells c)))]
+      (ctx/update-mem! c assoc :spot-digging cell)
+      (let [r (await (ctx/call-child c :spot-dig 'jobs.blocks.dig {:pos cell :collect false :need-drop false :fetch false :on-fluid :fail}))]
+        (if (= :continue r)
+          :continue
+          (do (ctx/update-mem! c #(-> % (dissoc :spot-digging) (update :spot-dug (fnil conj #{}) cell)))
+              (if (and (= :done r) (:dug (ctx/child-result c :spot-dig)))
+                (do (await (ctx/act c :look (clj->js {:pos {:x (+ (:x cell) 0.5) :y (- (:y cell) 0.5) :z (+ (:z cell) 0.5)}})))
+                    (look/see! c)
+                    (table-spot c))
+                (recur))))))))
 
 (defn ^:async spot!
   "A cell beside the body to put a table in: a free one (find-spot!), else one dug (dig-spot!). :continue while the dig
