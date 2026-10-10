@@ -58,6 +58,18 @@
           (is (nil? (get carried "crafting_table")))
           (is (empty? (filter #(= "place" (.-name %)) (.-calls (.-world (:p s))))) "no table placed"))))))
 
+(deftest a-stair-down-with-logs-and-no-furnace-says-why-no-torches-came
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (st/stair! {:blocks st/ground :inventory (conj st/pick {:name "oak_log" :count 11})} east tu/seeing-all))
+              [ev] (st/events-of s :torch.no-stock)]
+          (is (= :done (:status @(:out s))))
+          (is (= :no-source (:reason ev)))
+          (is (= "no-furnace-seen" (:craft (:tried ev))))
+          (is (re-find #"no-furnace-seen" (:text ev)) "the text names why")
+          (is (not (re-find #"no coal or logs" (:text ev))) "11 logs are carried"))))))
+
 (deftest the-torch-stocking-trip-to-a-far-chest-does-not-move-the-tunnel
   (async done
     (tu/run-async done

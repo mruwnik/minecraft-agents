@@ -215,6 +215,6 @@
                 (ctx/emit! c :torch.stocked :info {:held now :text (str "carrying " now " torches for the dig")})
                 (ctx/emit! c :torch.no-stock :warn {:held now :reason (:reason res) :tried (:tried res)
                                                     :text (str "carries " (if (zero? now) "no torches" (str "only " now " torches"))
-                                                               (if (zero? now) ", no coal or logs to make any" " and could not get more")
+                                                               (if (zero? now) (str ", none made (" (str/join ", " (map (fn [[k v]] (str (name k) " " (if (keyword? v) (name v) v))) (:tried res))) ")") " and could not get more")
                                                                ": the dig goes on " (if (zero? now) "dark" "with them"))}))
               (await (back-from-stocking! c)))))))))
