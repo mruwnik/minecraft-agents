@@ -3,6 +3,7 @@
   (:require [cljs.test :refer [deftest is are async]]
             [engine.build-from-plan-test :as b]
             [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.harvest-test :as h]
             [engine.takeover :as takeover]
             [engine.test-util :as tu]
@@ -211,6 +212,22 @@
           (dotimes [_ 4] (swap! h/clock + 700) (await (core/tick! eng)))
           (is (empty? (h/calls p "place")))
           (is (= [0 [:no-items]] [(count (kinds-of seen :build.declined)) (vec (distinct (map :reason (kinds-of seen :waiting))))])))))))
+
+(deftest the-default-fetch-explores-for-fences-that-are-short
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [orig ctx/call-child
+              asked (atom [])
+              {:keys [eng p]} (b/start (spec [{:name "oak_fence_gate" :count 1}]) {"pen" (ring-plan)} [])]
+          (tu/seeing-all p)
+          (set! ctx/call-child (fn [c slot j args]
+                                 (when (= 'jobs.items.obtain j) (swap! asked conj args))
+                                 (orig c slot j args)))
+          (try
+            (await (tu/child-outcome eng job {:plan "pen"} 300))
+            (finally (set! ctx/call-child orig)))
+          (is (some #(and (= "oak_fence" (:item %)) (true? (:explore %))) @asked) (pr-str @asked)))))))
 
 ;; ---------------------------------------------------------------- resuming
 
