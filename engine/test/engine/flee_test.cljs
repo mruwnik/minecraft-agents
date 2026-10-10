@@ -255,6 +255,23 @@
           (is (<= @searches-at-attack 1) "a hostile in reach bounds the leg to one search round, so the body does not stand taking hits")
           (is (<= (- @first-attack t0) (* 1000 (+ 4 (retreat/close-leg-s)))) "after one short leg (and the calls to equip and look), not after standing searching"))))))
 
+(deftest a-flee-leg-is-short-when-the-body-was-just-hurt-and-no-hostile-is-in-reach
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup {:entities [(zombie 7 5 {})]})
+              {:keys [p]} s
+              searches (atom 0)]
+          (mem/write! (:store (:eng s)) :hurt {:amount 2 :health 10 :causes ["spider"]} {:cap 50 :ttl 60000})
+          (with-redefs [near/walk-round! (fn [c _ _ _]
+                                           (swap! searches inc)
+                                           (swap! (fake/state p) assoc :entities [])
+                                           (swap! (:clock s) + 1000)
+                                           (js/Promise.resolve {:result {:status :searching :fresh false} :status "searching"
+                                                                :from (:pos c) :to (:pos c)}))]
+            (await (run-job! s 'jobs.survival.retreat {})))
+          (is (<= @searches 2) "a body hurt a moment ago, with nothing seen in reach, does not stand searching a whole leg"))))))
+
 (deftest a-chase-that-gains-no-distance-escalates-and-a-gain-resets-it
   (let [step (fn [mem gap] (retreat-flight/note-gap mem gap))]
     (is (= {:best-gap 5 :since-gain 0 :sweeps 0} (step {:sweeps 1} 5)) "first gap is a gain")
