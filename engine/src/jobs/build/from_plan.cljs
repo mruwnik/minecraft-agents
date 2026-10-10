@@ -22,6 +22,7 @@
             [plan.rail :as rail]
             [plan.shape :as shape]
             [jobs.build.wood :as wood]
+            [jobs.lib.trees :as trees]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.world :as known]))
 
@@ -73,9 +74,9 @@
   - while no zone list has been read (it waits :plan-trouble).
   A plan that is missing, unreadable or has no cells to build (in :part) ends the job at once: stopped, :reason :plan-trouble,
   with the cause in :text (after the one warn), so a held job never blocks the queue.
-  Wood: a plan's wood blocks (jobs.build.wood) are one family. Where too little of a planned species is carried, the species
-  carried most is built with instead, same shape and state, fetched by that species; the choice is booked and the result
-  names it (:substituted {\"oak\" \"birch\"}). A want [:any \"oak_planks\"] or a plan with :metadata {:exact-wood true} keeps its species.
+  Wood: a generic wood want (jobs.build.wood: planks, logs, wooden_stairs, wooden_slabs, wooden_doors, wooden_fences,
+  fence_gates, wooden_trapdoors ...) is built in one species chosen for the plan (carried most, else the nearest log seen,
+  else oak), booked, fetched by that species, and named in the result (:wood \"birch\"); a species name (oak_planks) stays exact.
   When cells are missing but none of their blocks is carried and none can be fetched, the job waits (:no-items with :needs).
   Material: while cells wait for an item not carried (and not given up or refused), each round first fetches it (:fetch,
   jobs.lib.fetch with :explore on: a jobs.items.obtain child for the missing count, walking off to look for what is unseen; an item whose fetch failed is skipped for the next); a pickaxe block to dig without a pickaxe fetches the tool the same way
@@ -281,25 +282,22 @@
   (reduce (fn [m {:keys [name count]}] (update m name (fnil + 0) count)) {} (u/inventory p)))
 
 (defn judged
-  "The plan's cells (of part) judged against the world, each with the :item to place it with. Wood is wanted in the
-  species of to-of ({planned chosen}); a block of the planned species already standing there still matches."
-  [p answer part carried to-of]
+  "The plan's cells (of part) judged against the world, each with the :item to place it with. A generic wood want
+  (jobs.build.wood) is wanted in species sp first, any other counts where it stands."
+  [p answer part carried sp]
   (->> (:cells answer)
        (filter #(or (nil? part) (= part (:part %))))
-       (mapv #(assoc % :planned (:want %) :want (wood/rewrite (:want %) to-of)))
+       (mapv #(cond-> % sp (update :want wood/resolve-want sp)))
        (#(shape/plan-minus-world % (partial world-block p)))
-       (mapv (fn [{:keys [planned want answer found] :as cell}]
-               (let [held? (and (= :wrong answer) (not= planned want) (= :match (shape/judge planned (world-block p (:pos cell)))))]
-                 (-> (cond-> cell held? (assoc :answer :match))
-                     (dissoc :planned)
-                     (assoc :item (item-for want carried))))))))
+       (mapv #(assoc % :item (item-for (:want %) carried)))))
 
 (defn wood-choice
-  "{planned chosen} for the plan's wood: nil when the plan pins the species, else the booked choice (step books it),
-  else a new one."
+  "The wood species of the plan's generic wants: nil when it has none, else the booked one (step books it), else a new
+  choice (carried most, else the nearest log seen, else oak)."
   [c answer carried-map]
-  (when-not (get-in answer [:plan :metadata :exact-wood])
-    (or (:wood (ctx/mem c)) (wood/choose (map :want (:cells answer)) carried-map))))
+  (when (wood/generic-wants? (map :want (:cells answer)))
+    (or (:wood (ctx/mem c))
+        (wood/choose carried-map (some-> (trees/scan (:primitives c) trees/default-radius trees/log-name? 1) first :name)))))
 
 (defn prepared
   "Cells (as judged) ready for the rounds: a wrong cell holding a replaceable block is :missing (placed into
@@ -340,7 +338,7 @@
         wood (when usable? (wood-choice c answer carried-map))
         cells (when usable?
                 (let [carried (set (keys carried-map))]
-                  (let [cells (prepared (judged (:primitives c) answer part carried (or wood {})) carried (:misplaced (ctx/mem c) {}))
+                  (let [cells (prepared (judged (:primitives c) answer part carried wood) carried (:misplaced (ctx/mem c) {}))
                         kept? (kept-ground c cells (:sturdy-ground (:args c)))]
                     (mapv #(if (and (:short? %) (kept? %)) (dissoc % :short?) %) cells))))
         trouble (or (plan-trouble answer cells)
@@ -672,10 +670,10 @@
                           short? (assoc :short true))))
                     (filter #(and (#{:wrong :extra} (:answer %)) (not (kept? %))) cells))
         refused (->> (:refused m) (sort-by key) (mapv (fn [[pos why]] (assoc why :pos pos))))
-        substituted (into (sorted-map) (filter (fn [[from to]] (not= from to))) (:wood m))]
+        wood (:wood m)]
     (cond-> {:placed (:placed m 0) :missing (mapv :pos left) :short (shortage left (carried-counts (:primitives c)))
              :given-up given-up :wrong wrong :refused refused}
-      (seq substituted) (assoc :substituted substituted))))
+      wood (assoc :wood wood))))
 
 (def listed 8)
 
@@ -710,8 +708,7 @@
                                                                           (when (:short %) (str ", needs " (:want %) " (short)")))))}))
     (ctx/emit! c :build.done :info (merge {:plan plan :placed (:placed result) :missing (count left)
                                            :text (str "build of " plan " done: placed " (:placed result) ", still missing " (count left)
-                                                      (when-let [sub (:substituted result)]
-                                                        (str ", wood " (str/join ", " (map (fn [[from to]] (str from " as " to)) sub))))
+                                                      (when-let [sp (:wood result)] (str ", wood " sp))
                                                       (some->> (spent/text (spent/log c) "plan") (str "; ")))}
                                           (some-> (spent/log c) spent/summary)))))
 

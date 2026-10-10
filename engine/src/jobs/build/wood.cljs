@@ -1,51 +1,68 @@
 (ns jobs.build.wood
-  "Wood species of a build (jobs.build.from-plan helper, not a job): a plan's wood blocks (planks, logs, stairs, slabs,
-  doors, fences, trapdoors ...) are one family, so a species the body carries stands in for the planned one, with the
-  same shape and state. Pinned: an any-of want ([:any \"oak_planks\"]) and a plan with :metadata {:exact-wood true}
-  keep their species. The choice is made once per species of the plan (booked in the job memory by the caller)."
+  "Generic wood names of a plan (jobs.build.from-plan helper, not a job): a want of `planks`, `logs`, `wooden_stairs`,
+  `wooden_slabs`, `wooden_doors`, `wooden_fences`, `fence_gates`, `wooden_trapdoors`, `wooden_buttons` or
+  `wooden_pressure_plates` (a name or a block with state) is satisfied by any species, as Minecraft's tags are. A species
+  name (oak_planks) stays exact. One species is chosen for the plan: the one carried most, else the nearest log seen,
+  else oak; it is listed first among the choices (the rest follow, so a block of another species already standing counts).
+  Not wood: bamboo, crimson and warped."
   (:require [clojure.string :as str]))
 
-(def species ["dark_oak" "pale_oak" "oak" "spruce" "birch" "jungle" "acacia" "mangrove" "cherry"])
-(def kinds ["planks" "log" "wood" "stairs" "slab" "door" "fence_gate" "fence" "trapdoor" "button" "pressure_plate"])
+(def species ["oak" "spruce" "birch" "jungle" "acacia" "dark_oak" "mangrove" "cherry" "pale_oak"])
+
+(def generic
+  "Generic name -> the kind of block after the species (oak_ + kind)."
+  {"planks" "planks" "logs" "log" "wooden_stairs" "stairs" "wooden_slabs" "slab" "wooden_doors" "door"
+   "wooden_fences" "fence" "fence_gates" "fence_gate" "wooden_trapdoors" "trapdoor" "wooden_buttons" "button"
+   "wooden_pressure_plates" "pressure_plate"})
+
+(def kinds (set (vals generic)))
 
 (def wood-re
-  (re-pattern (str "^(stripped_)?(" (str/join "|" species) ")_(" (str/join "|" kinds) ")$")))
+  (re-pattern (str "^(stripped_)?(" (str/join "|" (sort-by (comp - count) species)) ")_(" (str/join "|" kinds) ")$")))
 
-(defn parse
-  "[prefix species kind] of a wood block or item name, else nil."
+(defn species-of
+  "The species of a wood block or item name (oak_planks -> \"oak\"), else nil."
   [name]
-  (when-let [[_ pre sp kind] (and (string? name) (re-matches wood-re name))]
-    [pre sp kind]))
+  (when-let [[_ _ sp _] (and (string? name) (re-matches wood-re name))] sp))
 
-(defn species-of [name] (second (parse name)))
+(defn kind-of
+  "The kind a generic name stands for, else nil."
+  [name]
+  (get generic name))
 
-(defn swap
-  "The name in species to, or the name when it is no wood."
-  [name to]
-  (if-let [[pre _ kind] (parse name)]
-    (str pre to "_" kind)
-    name))
+(defn want-name [want] (cond (string? want) want (map? want) (:block want)))
 
-(defn rewrite
-  "The want with its wood in the species of to-of ({from to}); an any-of, a crop, a tree and a non-wood want stay."
-  [want to-of]
-  (cond
-    (string? want) (if-let [to (to-of (species-of want))] (swap want to) want)
-    (and (map? want) (string? (:block want))) (if-let [to (to-of (species-of (:block want)))] (update want :block swap to) want)
-    :else want))
+(defn generic-want?
+  [want]
+  (boolean (kind-of (want-name want))))
+
+(defn generic-wants?
+  "Whether any of the wants is a generic wood want."
+  [wants]
+  (boolean (some generic-want? wants)))
 
 (defn weight
   "How much of species the inventory ({name n}) holds, in planks: a log or wood block counts four."
   [carried sp]
   (reduce-kv (fn [w name n]
-               (let [[_ s kind] (parse name)]
-                 (if (= s sp) (+ w (* n (if (#{"log" "wood"} kind) 4 1))) w)))
+               (if (= sp (species-of name))
+                 (+ w (* n (if (str/ends-with? name "_log") 4 1)))
+                 w))
              0 carried))
 
 (defn choose
-  "{planned-species chosen-species} for the wants of a plan's cells and the inventory {name n}. A species keeps itself
-  when enough of it is carried to place its cells; else the species carried most stands in; else it keeps itself."
-  [wants carried]
-  (let [need (frequencies (keep #(species-of (if (map? %) (:block %) (when (string? %) %))) wants))
-        best (->> species (map (fn [sp] [sp (weight carried sp)])) (filter (comp pos? second)) (sort-by (comp - second)) ffirst)]
-    (into {} (map (fn [[sp n]] [sp (cond (>= (weight carried sp) n) sp best best :else sp)])) need)))
+  "The species for the plan's generic wood: the one carried most, else nearest-log's species (a log name or nil), else oak."
+  [carried nearest-log]
+  (let [best (->> species (map (fn [sp] [sp (weight carried sp)])) (filter (comp pos? second)) (sort-by (comp - second)) ffirst)]
+    (or best (some-> nearest-log (str/replace #"_log$" "")) "oak")))
+
+(defn resolve-want
+  "The want with a generic wood name made [:any chosen-first ...] over the species (state kept); other wants stay."
+  [want sp]
+  (let [kind (kind-of (want-name want))]
+    (if-not kind
+      want
+      (let [ordered (cons sp (remove #{sp} species))
+            state (when (map? want) (dissoc want :block))
+            one #(let [name (str % "_" kind)] (if (seq state) (assoc state :block name) name))]
+        (into [:any] (map one) ordered)))))

@@ -72,7 +72,7 @@
         p (:primitives c)
         answer (known/plan c plan)
         cells (when (and answer (not (:broken answer)))
-                (build/judged p answer part (set (keys (build/carried-counts p))) {}))
+                (build/judged p answer part (set (keys (build/carried-counts p))) nil))
         trouble (or (build/plan-trouble answer cells)
                     (when-not (barrier-box cells) "the plan has no fence, wall or gate cells")
                     (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) "no zone list has been read"))]
