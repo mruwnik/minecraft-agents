@@ -197,5 +197,7 @@
           (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal :box pen-box}) {})
           (loop [i 0] (when (and (< i 150) (not (finished? s))) (swap! clock + 700) (await (core/tick! eng)) (recur (inc i))))
           (is (finished? s))
-          (is (= :lagging (:reason (done-event s))) (str "the cow stalled outside the box " (pr-str (done-event s))))
+          (is (= :animal-outside (:reason (done-event s))) (str "the cow stalled outside the box " (pr-str (done-event s))))
+          (is (number? (:distance (done-event s))) "how far the animal stands from :pos")
+          (is (re-find #"outside" (:text (first (stopped s)))))
           (is (not (in-pen-box? (cow-of s 1)))))))))

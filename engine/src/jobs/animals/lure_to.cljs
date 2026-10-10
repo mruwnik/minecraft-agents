@@ -27,7 +27,8 @@
   Ends with info lure-to.done and a warn lure-to.gave-up unless the reason is :arrived. Result {:reason :animal key
   :near bool (the animal is within 6 blocks of :pos) :at pos}. Reasons:
   - :arrived: the body stands within :range of :pos and the animal is in :box (none: within 6 blocks of :pos), else the
-    body holds still for it up to 10 s and the end is :lagging. The food is then put away; :near says whether the animal is by the spot.
+    body holds still for it up to 10 s and the end is :animal-outside. The food is then put away; :near says whether the animal is by the spot.
+  - :animal-outside: the body is at :pos but the animal is not in the destination; the result gives :distance (animal to :pos).
   - :none (no animal to lure within :radius), :no-food, :no-hold (the food would not stay in hand), :lost, :lagging,
     :unreachable (a walk gave up), :timeout (:timeout-s from the first round, not the food fetch).
   Every reason but :arrived ends the job :stopped with a :text.
@@ -72,6 +73,8 @@
   (let [{:keys [mob radius]} (:args c)]
     (case reason
       :none (str "no adult " mob " free to lure within " radius " blocks" (skipped-text c))
+      :animal-outside (str "the body is at the spot but the " mob " stands outside the destination, "
+                           (some-> (lead-to/animal-now c) .-pos u/pos-of (lead-to/flat-dist (:pos (:args c))) js/Math.round) " blocks from it")
       :no-food (str "no food for " mob " carried and none could be got")
       (str "luring stopped: " (name reason)))))
 
@@ -95,6 +98,7 @@
         a (lead-to/animal-now c)
         ok? (= :arrived reason)
         result {:reason reason :animal (:animal m) :at (u/self-pos c)
+                :distance (some-> a .-pos u/pos-of (lead-to/flat-dist (:pos (:args c))))
                 :near (boolean (and a (<= (lead-to/flat-dist (u/pos-of (.-pos a)) (:pos (:args c))) near-spot)))}]
     (ctx/emit! c :lure-to.done :info (cond-> (assoc result :text (str "lure-to done: " (name reason)))
                                        (= :lost reason) (assoc :lost (lost-detail c))))
@@ -183,14 +187,14 @@
 
 (defn ^:async arrive!
   "The body stands at :pos: the job ends :arrived once the led animal is at the destination; until then the body holds
-  still for it, and gives it up :lagging after max-wait-ms."
+  still for it, and ends :animal-outside after max-wait-ms."
   [c]
   (let [a (lead-to/animal-now c)
         now (ctx/now c)
         since (or (:arrive-since (ctx/mem c)) now)]
     (cond
       (or (nil? a) (at-destination? c a)) (finish! c :arrived)
-      (> (- now since) lead-to/max-wait-ms) (finish! c :lagging)
+      (> (- now since) lead-to/max-wait-ms) (finish! c :animal-outside)
       :else (do (ctx/update-mem! c assoc :arrive-since since)
                 (await (lead-to/wait-for-animal! c))))))
 
