@@ -75,3 +75,23 @@
       (is (= kind (:status result)) (str kind))
       (is (true? (:finished? result)) (str kind))
       (is (nil? (:state result)) (str kind)))))
+
+(deftest a-recent-job-is-found-in-few-requests
+  (let [n 8000
+        log (into (mapv #(event % "filler" :memory_written {}) (range 1 (- n 2)))
+                  [(event (- n 2) "j9" :queued {}) (event (- n 1) "j9" :round_started {}) (event n "j9" :completed {})])
+        calls (atom 0)
+        edn (fn [v] (js/Promise.resolve {:status 200 :content-type "application/edn" :text (pr-str v)}))
+        get! (fn [_ path _]
+               (swap! calls inc)
+               (if (= "/snapshot" path)
+                 (edn {:generation-id "g" :cursor {:stream-id "s" :seq n}})
+                 (let [after (js/parseInt (second (re-find #"after=(\d+)" path)))
+                       size (js/parseInt (second (re-find #"limit=(\d+)" path)))]
+                   (edn {:gap? false :events (vec (take size (drop after log)))}))))]
+    (async done
+      (.then (results/read! get! "sock" "j9" {})
+             (fn [result]
+               (is (= :completed (:status result)))
+               (is (<= @calls 6) (str @calls " requests"))
+               (done))))))

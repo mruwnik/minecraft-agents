@@ -109,7 +109,7 @@
         target (:seq cursor)
         query (fn [after size] (str "/events?stream-id=" (js/encodeURIComponent (:stream-id cursor))
                                     "&after=" after "&limit=" size))]
-    (loop [after (max 0 (- target limit)) size 128 events [] partial? false]
+    (loop [after (max 0 (- target limit)) size 512 events [] partial? false]
       (let [attempt (try {:page (await (read (query after size)))}
                          (catch :default e
                            (if (and (= "ERESPONSETOOLARGE" (.-code e)) (> size 1)) {:smaller? true} (throw e))))]
@@ -127,13 +127,22 @@
                   (recur next-seq size combined partial?))))))))))
 
 (defn ^:async read!
-  "The projected outcome of job id from the retained history (see history! for get!)."
+  "The projected outcome of job id from the retained history (see history! for get!): the newest history-limit
+  events first, the result-limit window only when those do not hold the whole job."
   [get! socket-path id {:keys [signal deadline]}]
-  (let [history (await (history! get! socket-path {:signal signal :deadline deadline :limit result-limit :record-ids [id]}))]
-    (project id (get-in history [:snapshot :generation-id])
-             (with-recorded (:events history) (get-in history [:snapshot :generation-id]) (:recorded history) [id])
-             (or (:partial? history) (:truncated? history))
-             (get-in history [:snapshot :state :next-id]))))
+  (let [project-from (fn [history partial?]
+                       (project id (get-in history [:snapshot :generation-id])
+                                (with-recorded (:events history) (get-in history [:snapshot :generation-id]) (:recorded history) [id])
+                                partial?
+                                (get-in history [:snapshot :state :next-id])))
+        deadline (or deadline (+ (js/Date.now) 3000))
+        recent-history (await (history! get! socket-path {:signal signal :deadline deadline :limit history-limit :record-ids [id]}))
+        recent (project-from recent-history false)]
+    (if (and (:ok recent) (= :complete (:history recent)))
+      recent
+      (let [history (await (history! get! socket-path {:signal signal :deadline deadline :limit result-limit :record-ids [id]
+                                                       :snap (:snapshot recent-history)}))]
+        (project-from history (or (:partial? history) (:truncated? history)))))))
 
 (defn js-get
   "A cljs get! over a JavaScript one: (get-fn socket path #js {:signal :timeoutMs :maxBytes}), a promise of
