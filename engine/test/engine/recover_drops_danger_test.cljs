@@ -116,3 +116,29 @@
       (fn ^:async t []
         (let [{:keys [eng]} (await ((resume-run {:cuts 0} hostile-cut!)))]
           (is (= :collected (:decision (recovered eng)))))))))
+
+(deftest a-pile-lost-to-drowning-is-priced-as-water
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [r (await ((fetch-run "drowning")))]
+          (is (re-find #"danger [1-9][0-9.]*,.*: drowning" (decided-text (:seen r)))))))))
+
+(deftest a-pile-under-water-is-priced-as-water-whatever-the-cause
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [wet (into {} (for [y [64 65]] [(str (:x dt/death-pos) "," y "," (:z dt/death-pos)) "water"]))
+              r (await ((fetch-run "fall" {:blocks wet})))]
+          (is (re-find #"danger [1-9][0-9.]*,.*: water" (decided-text (:seen r)))))))))
+
+(deftest a-second-run-after-a-skip-says-the-death-was-decided
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (await ((fetch-run "skeleton")))
+              id (core/submit! eng job {})]
+          (await (core/tick! eng))
+          (let [w (core/waiting eng id)]
+            (is (= [:no-drops :skip] ((juxt :reason :decision) w)) (pr-str w))
+            (is (re-find #"already decided: skip: value .*cost" (:text w)) (pr-str w))))))))

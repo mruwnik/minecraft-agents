@@ -39,7 +39,7 @@
 
 (def doc
   "After a death, go back for the drops when they are worth it.
-  Takes the latest :died entry with no newer :recovered. The check holds while a death is unrecovered, however old,
+  Takes the latest :died entry with no newer :recovered; once a death is decided (a skip too) the check waits :no-drops and the wait names the decision. The check holds while a death is unrecovered, however old,
   so an expired trip still gets to write :abandoned.
   One run is the whole trip: it holds still (declared :respawning, then :settling) until a :respawned entry newer than
   the death exists and its 2 s have passed (no decision, no walk), decides, walks, collects and writes :recovered.
@@ -52,6 +52,7 @@
   - Cost: a trip of 10, 0.3 per block of straight distance, and 10 per point of route danger (jobs.lib.cost/route-danger)
     past the hostiles the body knows of (seen or heard, jobs.lib.danger/known-hostiles; :danger-overrides, after armour),
     many times dearer for a mob the body (its best weapon, armour, health) cannot afford to fight.
+  - A pile in water (its cell or the one above) or lost to drowning adds :wet-danger points of route danger (named water or drowning).
   - Infinite when lava, fire or the void took the pile, or the walk would end after the despawn.
   A fetch emits recover-drops.fetching. A skip emits recover-drops.decided. Both texts give the value, the cost and their parts.
   Kit: before the decision, when the pile is worth the trip were the route safe, a body with no weapon or with an empty armour slot, whose killer or the hostiles it knows make the route
@@ -88,7 +89,9 @@
    ::stray-range {:default 5 :doc "A body this far from the death point in the collect phase (a flee cut the trip) walks back first." :spec (a/int-in 0 nil)}
    ::max-hostile-cuts {:default 2 :doc "Resumes of one trip that followed a cut by a hostile reflex, or a decline for a danger, before it is given up as :danger." :spec (a/int-in 1 nil)}
    ::max-blocked-retries {:default 3 :doc "Walks of one trip that did not arrive before it is given up as :unreachable." :spec (a/int-in 1 nil)}
+   ::wet-danger {:default 30 :doc "Points of route danger added for a pile in water or lost to drowning (a swim with the air running out); 10 cost each." :spec (a/num-in 0 nil)}
    ::bed-away-blocks {:default 10 :doc "A respawn farther than this from the bed the body slept in is reported." :spec (a/int-in 0 nil)}})
+(defn wet-danger [] (settings/get settings ::wet-danger))
 (defn arrive-range [] (settings/get settings ::arrive-range))
 (defn max-hostile-cuts [] (settings/get settings ::max-hostile-cuts))
 (defn max-blocked-retries [] (settings/get settings ::max-blocked-retries))
@@ -99,10 +102,6 @@
 (def day-ms (* 24 60 60 1000))
 (def recovered-policy {:cap 10 :ttl day-ms})
 (def trip-policy {:cap 1 :ttl day-ms}) ; wall clock; the despawn window itself is counted in game ticks
-
-(defn check [c]
-  (or (some? (body/unrecovered-death (ctx/view c)))
-      (ctx/wait c {:reason :no-drops})))
 
 (defn finite [n] (if (js/isFinite n) n :infinite))
 
@@ -129,6 +128,21 @@
     :partial (str "partial: " items " items back, left " (str/join ", " (map (fn [[k n]] (str n " " k)) (:left decided)))
                   ", " (case reason :unreachable "in sight but not picked up" "not in sight"))
     :abandoned (str "abandoned: " (name (or reason :unknown)))))
+
+(defn decided-wait
+  "The wait reason when no death is unrecovered: {:reason :no-drops}, with :decision and a :text naming it when the
+  latest death was already decided (a skip is final for that death, whoever asks again)."
+  [view]
+  (let [died (mem/latest view :died)
+        recovered (mem/latest view :recovered)
+        decision (when (and died recovered (> (:t recovered) (:t died))) (:data recovered))]
+    (cond-> {:reason :no-drops}
+      decision (assoc :decision (:decision decision)
+                      :text (str "the latest death is already decided: " (decision-text (:decision decision) decision nil))))))
+
+(defn check [c]
+  (or (some? (body/unrecovered-death (ctx/view c)))
+      (ctx/wait c (decided-wait (ctx/view c)))))
 
 (defn finish!
   "Write the :recovered entry, report the decision and end the job."
@@ -182,6 +196,12 @@
 (defn xp-per-level [] (settings/get settings ::xp-per-level))
 (defn top-n [] (settings/get settings ::top-n))
 
+(defn wet-pile?
+  "Whether the pile's cell or the one above it is water (the body would swim to collect)."
+  [kind-at pos]
+  (let [[x y z] (map js/Math.floor [(:x pos) (:y pos) (:z pos)])]
+    (boolean (and pos (or (= :water (kind-at x y z)) (= :water (kind-at x (inc y) z)))))))
+
 (defn estimate
   "{:value :cost :parts :reason :top-items :top-mobs} of recovering the drops of the :died data (cost js/Infinity when
   they cannot be fetched)."
@@ -197,6 +217,9 @@
                  (cost/route-danger version kind-at route (concat (danger-q/seen-hostiles p) guard) (.-equipment (.self p))
                                     :overrides (:danger-overrides (:args c)) :weapon (combat/best-weapon p combat/default-weapons) :health (.-health (.self p)))
                  {:danger 0 :mobs []})
+        wet (when (or (= "drowning" cause) (wet-pile? kind-at pos))
+              {:name (if (= "drowning" cause) "drowning" "water") :danger (wet-danger)})
+        threat (cond-> threat wet (-> (update :danger + (:danger wet)) (update :mobs #(vec (cons wet %)))))
         fetch (cost/fetch-cost {:distance (when pos (u/dist here pos)) :danger (:danger threat) :elapsed-ms elapsed :cause cause})]
     (cond-> {:value (+ (:value worth) (* (xp-per-level) (or (:level experience) 0)))
              :cost (:cost fetch)
