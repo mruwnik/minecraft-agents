@@ -1058,6 +1058,16 @@
                      (observe/wait-observe req (:get! f) nil (fn [_] (js/Promise.resolve nil))))))
           (.then (fn [wake] (is (not= :idle (:wake wake)))))))))
 
+(deftest a-death-from-before-the-watch-started-does-not-wake-it
+  (with-fixture ["200ms"]
+    (fn [f]
+      (-> ((:wait! f))
+          (.then (fn [_]
+                   (push! f (assoc (event :body :died {:cause "zombie"}) :seq 1 :time-ms 1000))
+                   (let [req (assoc-in (:req f) [:wait-options :watch] ["j9"])]
+                     (observe/wait-observe req (:get! f) nil (fn [_] (js/Promise.resolve nil))))))
+          (.then (fn [wake] (is (not= :died (:wake wake)))))))))
+
 ;; Deaths through the wait loop
 
 (defn died-item [result] (when (= :died (:wake result)) result))

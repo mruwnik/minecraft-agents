@@ -178,10 +178,11 @@
                  later)))
 
 (defn idle-before-watch?
-  "Whether e is a body.idle stamped before the wait began, under a --watch: the watch is about its jobs, and the
-  idle was said of a body state that has changed since."
+  "Whether e is a body.idle or a death stamped before the wait began, under a --watch: the watch is about its jobs, the
+  idle was said of a body state that has changed since, and a death in the backlog is news the summary carries (a watched
+  job it cancelled wakes as :job-finished)."
   [e opts started-ms]
-  (boolean (and (seq (:watch opts)) (= :body (:source e)) (= :idle (:kind e)) started-ms
+  (boolean (and (seq (:watch opts)) (= :body (:source e)) (#{:idle :died} (:kind e)) started-ms
                 (some-> (:time-ms e) (< started-ms)))))
 
 (defn classify
