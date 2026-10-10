@@ -205,3 +205,19 @@
     "west" false
     "east" true
     "west" true))
+
+(defn bed-room
+  "A wall at x 8 with a door at z 5 opening onto a bed at x 9, room beyond with its roof at y 70; a lintel over the door
+  unless lintel is false."
+  [lintel]
+  (wall-with (door "oak_door" 5)
+             (when-not lintel [[8 66 5 8 67 5 "air"]])
+             [[9 64 5 9 64 5 "red_bed" {:part "foot" :facing "east"}] [9 64 4 9 64 4 "stone"] [9 64 6 9 64 6 "stone"]
+              [10 64 5 10 64 5 "red_bed" {:part "head" :facing "east"}]
+              [9 70 -2 14 70 40 "stone"]]))
+
+(deftest a-door-onto-a-bed-is-passed-only-without-a-two-high-lintel
+  (are [lintel flood status] (= status (:status (run (bed-room lintel) start (near 12 64 5) {:goalFlood flood})))
+    false 0 "found"
+    false 1 "found"
+    true 0 "partial"))
