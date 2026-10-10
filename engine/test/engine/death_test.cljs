@@ -423,6 +423,33 @@
           (await (run-until-empty eng 10))
           (is (= :collected (:decision (recovered eng)))))))))
 
+(defn appear-after-first-leg!
+  "Cut the first walk step short (2 s, a few blocks) and add entity e to the fake world as it is taken."
+  [p e]
+  (let [n (atom 0)]
+    (.override (.-world p) "steer"
+               (fn [token args impl]
+                 (when (= 1 (swap! n inc))
+                   (set! (.-timeoutS args) 2)
+                   (swap! (fake/state p) update :entities conj e))
+                 (impl token args)))))
+
+(deftest recover-drops-rechecks-the-dangers-between-legs-of-the-walk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [zombie {:id 7 :uuid "u7" :name "zombie" :kind "hostile" :pos [4 64 2]}
+              {:keys [eng p seen]} (setup {:floor tu/walk-floor :inventory sword :entities drops})]
+          (die! eng {:pos death-pos :inventory diamonds})
+          (appear-after-first-leg! p zombie)
+          (core/submit! eng (list (first job) {:leg-s 1}) {})
+          (await (run-until-empty eng 3))
+          (let [e (first (filter #(= :recover-drops.declined (:kind %)) @seen))]
+            (is (= :danger (:reason e)) "a mob that turned up on the way ends the trip for now")
+            (is (= "zombie" (:mob e))))
+          (is (nil? (recovered eng)) "the death stays open")
+          (is (< (.-x (.-pos (.self p))) 19) "the body did not walk on to the pile"))))))
+
 ;; ------------------------------------------- every :declined says why
 
 (defn declined-events [seen] (filter #(= :recover-drops.declined (:kind %)) @seen))

@@ -62,7 +62,7 @@
   dangerous, fetches the best weapon and armour piece a chest of known stock (:fetch/stock) holds (jobs.lib.fetch, chests only,
   :fetch false: off) and wears the armour (jobs.items.wear); nothing known to be in a chest: unchanged.
   A kit fetch waiting on the world is waited for (declared hold :fetching-kit); a fetch that ended the job drops the kit (warn recover-drops.kit-dropped).
-  Fetch: walks to the death point (jobs.movement.go-to), then collects (passes, up to 3) the pile's items it can see within :collect-radius
+  Fetch: walks to the death point (jobs.movement.go-to, in legs of :leg-s seconds; after each leg a danger within :danger-radius ends the run :declined and the value and cost are weighed again, a pile gone dear with danger being retried later), then collects (passes, up to 3) the pile's items it can see within :collect-radius
   (jobs.forestry.collect-drops; only the carried item names, never items out of sight). Drops that went out of sight
   (down a shaft) get one walk to the cell the first was last seen in and a look again before the trip ends :partial.
   The pile out of reach (go-to :goal-enclosed, or no item in sight at it) with blocks this body placed within ::seal-radius of it (the scaffold ledger, a flee
@@ -84,6 +84,7 @@
    :danger-overrides {:doc "jobs.lib.cost/route-danger overrides, a map: mob name -> threat in points of damage before armour, or {:times n}; e.g. {\"creeper\" 100 \"zombie\" 0}" :spec (a/map-of string? (a/or-of number? map?)) :default {}}
    :danger-radius {:doc "a hostile this close makes the job yield without acting" :spec (a/num-in 0 nil) :default 8}
    :fetch {:doc "get a weapon and armour from a chest whose stock the body knows before walking to a pile its killer guards (jobs.lib.fetch limits); false: no kit fetch" :spec fetch/option? :default {:what #{:item} :how #{:chest} :minutes 3}}
+   :leg-s {:doc "the walk to the pile goes in legs of this many seconds; after each the danger and the cost are weighed again" :spec (a/num-in 0.1 120) :default 6}
    :collect-radius {:doc "collect the pile's drops within this many blocks of the death point (a pile on open ground rolls 6-8 out)" :spec (a/num-in 0 nil) :default 10}})
 
 (a/defargs settings
@@ -284,16 +285,18 @@
     :next))
 
 (defn ^:async go!
-  "Walk to the death point by one go-to call: :next once there (the collect phase), else :declined (go-to waits on the
+  "Walk one leg (:leg-s) toward the death point: :next once there (the collect phase) or after a leg that got nearer (the
+  danger and the cost are weighed again), else :declined (go-to waits on the
   world, or it did not arrive: the next run walks again while the pile is worth it, and the window closes it). A walk
   go-to refused for the body's own shelter (:inside-own-shelter) is no failed try: the window closes the trip."
   [c pos]
-  (let [r (await (child/call-walk c :go {:pos pos :range (arrive-range)}))]
+  (let [r (await (child/call-walk c :go {:pos pos :range (arrive-range) :leg-s (:leg-s (:args c))}))]
     (cond
       (not= :done r) (decline! c :unreachable (str "the walk to " (pr-str pos) " is waiting on the world") {:pos pos})
       (:inside-own-shelter (ctx/child-result c :go))
       (decline! c :unreachable (str "the walk to " (pr-str pos) " is refused: the body is sealed in its own shelter, which opens by day") {:pos pos})
       (and (= :goal-enclosed (:why (ctx/child-result c :go))) (await (clear-seal! c pos))) :next
+      (:leg (ctx/child-result c :go)) (do (ctx/update-mem! c assoc :recheck true) :next)
       (not (:arrived (ctx/child-result c :go)))
       (do (ctx/update-mem! c #(-> % (assoc :blocked true) (update :blocked-retries (fnil inc 0))))
           (save-trip! c)
@@ -428,16 +431,17 @@
 
 (defn decide!
   "The decision of this trip: the saved one, else estimate, save and report it. A resumed trip estimates again once (from
-  where the body stands, with the hostiles it knows now); its baseline stays."
+  where the body stands, with the hostiles it knows now), and so does a walk after each leg; its baseline stays."
   [c entry]
-  (if (and (:decided (ctx/mem c)) (or (zero? (:cuts (ctx/mem c) 0)) (:reestimated (ctx/mem c))))
+  (if (and (:decided (ctx/mem c)) (not (:recheck (ctx/mem c))) (or (zero? (:cuts (ctx/mem c) 0)) (:reestimated (ctx/mem c))))
     (:decided (ctx/mem c))
     (let [margin (:margin (:args c))
           e (update (estimate c (:data entry) (settings/ticks->ms (game/ticks-since entry (ctx/view c)))) :cost finite)
+          rechecked? (:recheck (ctx/mem c))
           fetch? (> (:value e) (+ (if (= :infinite (:cost e)) js/Infinity (:cost e)) margin))]
-      (ctx/update-mem! c #(cond-> (assoc % :decided e :reestimated true) (nil? (:baseline %)) (assoc :baseline (carried-counts c))))
+      (ctx/update-mem! c #(cond-> (assoc % :decided e :reestimated true :recheck false) (nil? (:baseline %)) (assoc :baseline (carried-counts c))))
       (save-trip! c)
-      (when fetch?
+      (when (and fetch? (not rechecked?))
         (ctx/emit! c :recover-drops.fetching :info
                    (assoc (select-keys e [:value :cost :parts :top-items :top-mobs])
                           :pos (:pos (:data entry)) :text (decision-text :fetch e margin))))
