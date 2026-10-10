@@ -1,5 +1,6 @@
 (ns jobs.survival.sleep
-  (:require [engine.args :as a]
+  (:require [clojure.string :as str]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.sense :as sense]
             [jobs.lib.shelter :as sh]
@@ -15,7 +16,7 @@
   Ends when asleep, or when it turns day.
   A :bed argument that is not a position declines too.
   Retries three times, then warns and ends: a taken bed, a monster nearby, an unreachable bed.
-  The failure kinds are bed_unreachable, bed_unloaded, bed_missing and bed_unusable (\"cannot sleep: <status>\").
+  The failure kinds are bed_unreachable (\"cannot reach the bed: <go-to's reason>\"), bed_unloaded, bed_missing and bed_unusable (\"cannot sleep: <status>\").
   A bed whose chunk is not loaded is retried the same way.
   A bed that is not there is not retried: the job ends and the shelter chooser falls through.
   If it was the remembered bed, :bed is overwritten with {:gone true :was pos}, so it no longer reads as a place.
@@ -77,7 +78,8 @@
       :else true)))
 
 (defn give-up-unreachable! [c bed]
-  (let [r (u/fail! c :bed_unreachable "cannot reach the bed")]
+  (let [why (some-> (ctx/child-result c :go) :text (str/replace #"^gave up walking to \[[^\]]*\]: " ""))
+        r (u/fail! c :bed_unreachable (str "cannot reach the bed" (some->> why (str ": "))))]
     (when (= :done r)
       (ctx/remember! c :bed-unreachable {:pos bed} unreachable-policy))
     r))

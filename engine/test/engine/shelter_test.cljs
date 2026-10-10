@@ -346,6 +346,25 @@
           (is (= 9 (count (tu/walked-to eng))) "each of the three tries walks go-to afresh: three blocked walks at the bed's cell re-aimed one up before any walk")
           (is (= 1 (count (emitted seen :bed_unreachable)))))))))
 
+(def walled-bed-hut
+  "A birch hut with no door, walls x 10..14, z -2..2, y 64..66, roof y 67, a bed inside (the walk floor is y 63)."
+  (let [room? (fn [k] (let [[x _ z] (map js/Number (.split k ","))] (and (<= 11 x 13) (<= -1 z 1))))]
+    (merge (into {} (remove (comp room? key)) (tu/box 10 64 -2 14 66 2 "birch_planks"))
+           (tu/box 10 67 -2 14 67 2 "birch_planks")
+           {"12,64,0" "white_bed" "13,64,0" "white_bed"})))
+
+(deftest sleep-says-why-the-walk-to-a-walled-in-bed-failed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:time night :self {:pos {:x 12 :y 64 :z -8}}
+                                           :blocks walled-bed-hut})]
+          (know-bed! eng {:x 12 :y 64 :z 0})
+          (core/submit! eng '(jobs.survival.sleep) {})
+          (await (run-until-empty eng 20))
+          (is (empty? (calls p "sleep")))
+          (is (re-find #"cannot reach the bed: .*walled in" (:text (first (emitted seen :bed_unreachable))))))))))
+
 (def unreachable-world {:time night :blocks {"6,64,0" "red_bed"} :unreachable ["6,64,0"]})
 
 (deftest sleep-remembers-an-unreachable-bed-for-ten-minutes
