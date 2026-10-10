@@ -18,17 +18,17 @@
   {:cap 8 :ttl sh/ms-per-day})
 
 (a/defargs settings
-  {:jobs.survival.night/max-sites {:default 4 :doc "Failed sites a night tries before holding exposed." :spec (a/int-in 0 nil)}
-   :jobs.survival.night/relocate-reach {:default 16 :doc "How far (blocks) a night looks for a spot to dig in." :spec (a/int-in 0 nil)}
-   :jobs.survival.night/retry-after-ms {:default 660000 :doc "How long a body holds exposed before it tries to dig in again (past dig-in's own 10-minute give-up)." :spec (a/int-in 0 nil)}
-   :jobs.survival.night/max-retries {:default 2 :doc "Dig-in retries after a night went exposed." :spec (a/int-in 0 nil)}
-   :jobs.survival.night/max-flees {:default 3 :doc "Walks to somewhere safer a night tries." :spec (a/int-in 0 nil)}
-   :jobs.survival.night/ground-candidates {:default 16 :doc "Seen ground cells costed per flee: the nearest ones." :spec (a/int-in 0 nil)}
-   :jobs.survival.night/cave-candidates {:default 16 :doc "Seen cave cells costed per flee: the nearest ones." :spec (a/int-in 0 nil)}
-   :jobs.survival.night/cave-scan {:default 2048 :doc "Solid blocks one cave search reads: nearest first, so it reaches about 16 blocks around the body." :spec (a/int-in 0 nil)}})
-(defn max-sites [] (settings/get settings :jobs.survival.night/max-sites))
+  {:jobs.survival.night.sites/max-sites {:default 4 :doc "Failed sites a night tries before holding exposed." :spec (a/int-in 0 nil)}
+   :jobs.survival.night.sites/relocate-reach {:default 16 :doc "How far (blocks) a night looks for a spot to dig in." :spec (a/int-in 0 nil)}
+   :jobs.survival.night.sites/retry-after-ms {:default 660000 :doc "How long a body holds exposed before it tries to dig in again (past dig-in's own 10-minute give-up)." :spec (a/int-in 0 nil)}
+   :jobs.survival.night.sites/max-retries {:default 2 :doc "Dig-in retries after a night went exposed." :spec (a/int-in 0 nil)}
+   :jobs.survival.night.sites/max-flees {:default 3 :doc "Walks to somewhere safer a night tries." :spec (a/int-in 0 nil)}
+   :jobs.survival.night.sites/ground-candidates {:default 16 :doc "Seen ground cells costed per flee: the nearest ones." :spec (a/int-in 0 nil)}
+   :jobs.survival.night.sites/cave-candidates {:default 16 :doc "Seen cave cells costed per flee: the nearest ones." :spec (a/int-in 0 nil)}
+   :jobs.survival.night.sites/cave-scan {:default 2048 :doc "Solid blocks one cave search reads: nearest first, so it reaches about 16 blocks around the body." :spec (a/int-in 0 nil)}})
+(defn max-sites [] (settings/get settings :jobs.survival.night.sites/max-sites))
 
-(defn relocate-reach [] (settings/get settings :jobs.survival.night/relocate-reach))
+(defn relocate-reach [] (settings/get settings :jobs.survival.night.sites/relocate-reach))
 
 (defn failed-sites
   "Tonight's failed sites [{:pos :reason}]."
@@ -146,9 +146,9 @@
   (let [feet (sh/feet (:primitives c))]
     (first (filter #(and (< (:y feet) (:y %)) (<= (u/dist feet %) (dig-in/futile-radius))) (map :pos (failed-sites c))))))
 
-(defn retry-after-ms [] (settings/get settings :jobs.survival.night/retry-after-ms))
+(defn retry-after-ms [] (settings/get settings :jobs.survival.night.sites/retry-after-ms))
 
-(defn max-retries [] (settings/get settings :jobs.survival.night/max-retries))
+(defn max-retries [] (settings/get settings :jobs.survival.night.sites/max-retries))
 
 (defn retry-due?
   "Whether the exposed hold digs in again: under max-retries, and the body has moved off the spot it went exposed on
@@ -159,11 +159,11 @@
          (or (>= (u/dist (sh/feet (:primitives c)) pos) (inc (dig-in/futile-radius)))
              (>= (- (ctx/now c) at) (retry-after-ms))))))
 
-(defn max-flees [] (settings/get settings :jobs.survival.night/max-flees))
+(defn max-flees [] (settings/get settings :jobs.survival.night.sites/max-flees))
 
-(defn ground-candidates [] (settings/get settings :jobs.survival.night/ground-candidates))
+(defn ground-candidates [] (settings/get settings :jobs.survival.night.sites/ground-candidates))
 
-(defn cave-candidates [] (settings/get settings :jobs.survival.night/cave-candidates))
+(defn cave-candidates [] (settings/get settings :jobs.survival.night.sites/cave-candidates))
 
-(defn cave-scan [] (settings/get settings :jobs.survival.night/cave-scan))
+(defn cave-scan [] (settings/get settings :jobs.survival.night.sites/cave-scan))
 
