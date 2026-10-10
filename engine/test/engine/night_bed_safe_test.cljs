@@ -57,6 +57,17 @@
   (is (nil? (bed-to-use (tunnel-world buried-light))))
   (is (false? (holds? (tunnel-world buried-light))) "the night trigger does not hold"))
 
+(deftest a-buried-body-neither-places-a-carried-bed-nor-logs-out-for-a-sleeper
+  (let [carrying (assoc (tunnel-world buried-light) :inventory [{:name "red_bed" :count 1}])
+        {:keys [eng p]} (setup carrying)]
+    (mem/write! (:store eng) :sleep-status {:sleeping 1 :needed 2} nil)
+    (is (false? (sh/night-holds? p (mem/view (:store eng)) {} (constantly true))) "mining goes on")))
+
+(deftest a-body-the-sky-reaches-logs-out-for-a-sleeper
+  (let [{:keys [eng p]} (setup (tunnel-world {}))]
+    (mem/write! (:store eng) :sleep-status {:sleeping 1 :needed 2} nil)
+    (is (true? (sh/night-holds? p (mem/view (:store eng)) {} (constantly true))))))
+
 (defn bed-to-use-after-days
   "bed-to-use for a body that last slept `days` in-game days ago."
   [world days]

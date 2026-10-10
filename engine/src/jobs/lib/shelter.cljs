@@ -478,15 +478,17 @@
     (first (remove #(= failed (door-key (:cell %))) (open-room-doors p)))))
 
 (defn night-holds?
-  "Whether the night trigger holds (see triggers.survival.night). permit? decides whether a bed may be used (bed-permit)."
+  "Whether the night trigger holds (see triggers.survival.night). permit? decides whether a bed may be used (bed-permit).
+  A buried body is not pulled out of the ground to place a bed or log out: the night changes nothing there."
   [p view args permit?]
-  (let [shelter (:data (mem/latest view :shelter))]
+  (let [shelter (:data (mem/latest view :shelter))
+        buried (buried? p)]
     (boolean
      (if (night? p)
        (and (not (sleeping? p))
             (or (some? (bed-to-use p view (bed-radius view args) permit?))
-                (bed-place-wanted? p view (bed-radius view args) permit?)
-                (log-out-for-sleepers? p view)
+                (and (not buried) (bed-place-wanted? p view (bed-radius view args) permit?))
+                (and (not buried) (log-out-for-sleepers? p view))
                 (not (safe-from-night? p (:roof-height args default-roof-height)))
                 (seq (open-room-doors p))))
        (or (shut-in-by-day? p shelter (:data (mem/latest view :shelter-trapped)))
