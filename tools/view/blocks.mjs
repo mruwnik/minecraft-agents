@@ -17,6 +17,20 @@ const openGateBoxes = facing => {
   return [a, b].map(([lo, hi]) => acrossX ? [lo, 0.3125, 0.375, hi, 1, 1] : [0.375, 0.3125, lo, 1, 1, hi])
 }
 
+// A fence's collision shape is one thin wall 1.5 high, which the renderer would draw as a plank panel. It is drawn as the game
+// does: a post and, to each side it joins, two rails, as boxes in the cell.
+const RAILS = [[0.375, 0.5625], [0.75, 0.9375]]
+const ARMS = {
+  north: (lo, hi) => [0.4375, lo, 0, 0.5625, hi, 0.375],
+  south: (lo, hi) => [0.4375, lo, 0.625, 0.5625, hi, 1],
+  west: (lo, hi) => [0, lo, 0.4375, 0.375, hi, 0.5625],
+  east: (lo, hi) => [0.625, lo, 0.4375, 1, hi, 0.5625]
+}
+const fenceBoxes = props => [
+  [0.375, 0, 0.375, 0.625, 1, 0.625],
+  ...Object.entries(ARMS).filter(([side]) => props[side] === true || props[side] === 'true').flatMap(([, box]) => RAILS.map(([lo, hi]) => box(lo, hi)))
+]
+
 export function makeBlockSource (registry, textureDir) {
   const Block = prismarineBlock(registry)
   const images = new Map()
@@ -41,6 +55,7 @@ export function makeBlockSource (registry, textureDir) {
     const base = { name: b.name, props: b.getProperties() }
     if (b.name === 'water' || b.name === 'lava') return { ...base, kind: 'cube' }
     if (b.name.endsWith('_fence_gate') && base.props.open) return { ...base, kind: 'boxes', boxes: openGateBoxes(base.props.facing) }
+    if (b.name.endsWith('_fence')) return { ...base, kind: 'boxes', boxes: fenceBoxes(base.props) }
     if (!b.shapes.length) return { ...base, kind: 'cross' }
     return JSON.stringify(b.shapes) === FULL_CUBE ? { ...base, kind: 'cube' } : { ...base, kind: 'boxes', boxes: b.shapes }
   }

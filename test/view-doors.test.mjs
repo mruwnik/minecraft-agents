@@ -77,6 +77,16 @@ test('a closed fence gate is a thin bar across its cell', () => {
   assert.deepEqual(info.boxes.map(b => [b[0], b[3]]), [[0, 1]])
 })
 
+test('a fence is drawn as a post with two rails to each side it joins, inside its cell', () => {
+  const info = infoOf('oak_fence', { north: false, east: true, south: false, west: true, waterlogged: false })
+  assert.equal(info.kind, 'boxes')
+  assert.equal(info.boxes.length, 5)
+  assert.ok(info.boxes.every(b => b.every(v => v >= 0 && v <= 1)))
+  const armsAt = y => info.boxes.filter(b => b[0] === 0 || b[3] === 1).filter(b => b[1] <= y && y < b[4]).length
+  assert.equal(armsAt(0.65), 0, 'a gap between the rails')
+  assert.equal(armsAt(0.45), 2, 'the lower rail on both sides')
+})
+
 const GATES = ['oak', 'spruce', 'birch', 'jungle', 'acacia', 'dark_oak', 'mangrove', 'cherry', 'bamboo', 'crimson', 'warped'].map(w => `${w}_fence_gate`)
 for (const name of GATES) {
   test(`${name}: open and closed both draw something in the cell`, async () => {
