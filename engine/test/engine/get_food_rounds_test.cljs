@@ -50,6 +50,9 @@
 
 (def cow {:id 7 :name "cow" :kind "passive" :pos {:x 5 :y 64 :z 0} :health 20 :drops [{:name "beef" :count 1}]})
 
+(def herd "The cow and two more: get-food leaves the last two adults of a kind alone."
+  [cow (assoc cow :id 8 :pos {:x 8 :y 64 :z 0}) (assoc cow :id 9 :pos {:x 9 :y 64 :z 0})])
+
 (def farm
   {:blocks {"10,64,0" "carrots" "11,64,0" "carrots" "12,64,0" "carrots" "10,63,0" "farmland"}
    :ages {"10,64,0" 7 "11,64,0" 3 "12,64,0" 7}
@@ -107,7 +110,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:self {:food 2} :entities [cow]})]
+        (let [{:keys [eng p]} (setup {:self {:food 2} :entities herd})]
           (await (one-round! eng {:attack-gap-ms 0}))
           (is (= [] (:list (core/state eng))) "one round")
           (is (= [7 7 7 7] (call-args p "attack" "id")))
@@ -122,7 +125,7 @@
               look (.-look p)
               added (atom false)]
           (set! (.-look p) (fn [& args]
-                             (when (compare-and-set! added false true) (fake/add-entity! p cow))
+                             (when (compare-and-set! added false true) (run! #(fake/add-entity! p %) herd))
                              (.apply look p (to-array args))))
           (await (one-round! eng {:attack-gap-ms 0}))
           (is (= [] (:list (core/state eng))) "one round")
@@ -138,7 +141,7 @@
               entities (.-entities p)
               looks (atom 0)
               spotted (atom false)]
-          (fake/add-entity! p cow)
+          (run! #(fake/add-entity! p %) herd)
           (set! (.-look p) (fn [& args] (swap! looks inc) (.apply look p (to-array args))))
           (set! (.-entities p) (fn [& args]
                                  (when (= 3 @looks) (reset! spotted true))
@@ -152,7 +155,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [gap [0 600]]
-          (let [{:keys [eng p clock]} (setup {:self {:food 2} :entities [cow]} :step-ms 5)
+          (let [{:keys [eng p clock]} (setup {:self {:food 2} :entities herd} :step-ms 5)
                 swings (atom [])]
             (.override (.-world p) "attack" (fn [token args impl] (swap! swings conj @clock) (impl token args)))
             (await (one-round! eng {:attack-gap-ms gap}))
@@ -208,7 +211,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:self {:food 0} :entities [cow]
+        (let [{:keys [eng p]} (setup {:self {:food 0} :entities herd
                                       :containers {"20,64,0" [{:name "cobblestone" :count 3}]}})]
           (know-source! eng {:x 20 :y 64 :z 0} :chest)
           (await (one-round! eng {:attack-gap-ms 0}))
@@ -225,7 +228,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[world fed?] [[{:self {:food 3} :inventory [{:name "bread" :count 5}]} true]
-                              [{:self {:food 3} :entities [cow]} true]
+                              [{:self {:food 3} :entities herd} true]
                               [{:self {:food 3}} false]]]
           (let [{:keys [eng p seen]} (setup world :step-ms 5)]
             (core/load-scenario! eng (scenario/parse "{:register [{:trigger :hungry}]}"))
@@ -242,7 +245,7 @@
               n (atom 0)]
           (with-redefs [get-food/next-way! (fn ^:async f [c]
                                              (if (< (swap! n inc) 3) :continue (await (real c))))]
-            (let [{:keys [eng p seen]} (setup {:self {:food 3} :entities [cow]} :step-ms 5)]
+            (let [{:keys [eng p seen]} (setup {:self {:food 3} :entities herd} :step-ms 5)]
               (await (one-round! eng {}))
               (is (= [] (:list (core/state eng))) "the round waited and went on in one tick")
               (is (< 3 (food p)))
@@ -253,9 +256,9 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[ent zones attacks] [[cow nil true]
-                                     [cow [{:name "pen" :owner "Miles" :min [4 63 -1] :max [6 66 1]}] false]
+                                     [cow [{:name "pen" :owner "Miles" :min [4 63 -1] :max [12 66 1]}] false]
                                      [(assoc cow :baby true) nil false]]]
-          (let [{:keys [eng p]} (setup {:self {:food 1} :entities [ent]} :step-ms 5 :zones zones)]
+          (let [{:keys [eng p]} (setup {:self {:food 1} :entities (into [ent] (rest herd))} :step-ms 5 :zones zones)]
             (await (one-round! eng {}))
             (is (= attacks (boolean (seq (calls p "attack")))) (pr-str [ent zones]))))))))
 
@@ -736,7 +739,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:self {:food 20} :entities [cow]})]
+        (let [{:keys [eng p seen]} (setup {:self {:food 20} :entities herd})]
           (await (one-round! eng {:stock 3 :attack-gap-ms 0}))
           (is (= [7 7 7 7] (call-args p "attack" "id")))
           (is (empty? (call-args p "eat" "item")) "a fed body eats nothing")
@@ -746,7 +749,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:self {:food 20} :inventory [{:name "bread" :count 3}] :entities [cow]})]
+        (let [{:keys [eng p seen]} (setup {:self {:food 20} :inventory [{:name "bread" :count 3}] :entities herd})]
           (await (one-round! eng {:stock 10}))
           (is (empty? (call-args p "attack" "id")))
           (is (empty? (ended seen)) "the check declines: nothing to do"))))))

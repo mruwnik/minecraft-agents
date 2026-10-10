@@ -10,14 +10,16 @@
             [engine.test-util :as tu :refer [run-until-empty]]
             [engine.triggers :as triggers]
             [jobs.survival.eat :as eat]
+            [jobs.lib.world-files :as ew]
             [engine.game :as game]))
 
-(defn setup [world]
+(defn setup [world & [zones]]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         p (tu/seeing-all (tu/fake (merge {:floor tu/walk-floor} world)))
-        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
-                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+        eng (core/create (cond-> {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                                  :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}
+                          zones (assoc :world (ew/of-data {} {} zones))))]
     {:eng eng :p p :seen seen :clock clock}))
 
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
@@ -420,11 +422,37 @@
 (def cow
   {:id 7 :name "cow" :kind "passive" :pos {:x 5 :y 64 :z 0} :health 20 :drops [{:name "beef" :count 1}]})
 
+(def three-cows
+  [cow (assoc cow :id 8 :pos {:x 8 :y 64 :z 0}) (assoc cow :id 9 :pos {:x 9 :y 64 :z 0})])
+
+(defn hunt-world [entities zones]
+  (let [{:keys [eng p seen] :as w} (setup {:self {:food 2} :entities entities} zones)]
+    (core/submit! eng '(jobs.survival.get-food {:attack-gap-ms 0}) {})
+    w))
+
+(deftest get-food-keeps-the-last-two-adults-of-a-kind-for-breeding
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (hunt-world (take 2 three-cows) nil)]
+          (await (run-until-empty eng 40))
+          (is (= [] (calls p "attack")))
+          (is (some #(and (= :food.none (:kind %)) (re-find #"cow: kept for breeding" (str (:text %)))) @seen)
+              "the text says the cows were kept"))))))
+
+(deftest get-food-spares-animals-in-the-bodys-own-zone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (hunt-world three-cows [{:name "farm" :owner "Fake" :min [0 60 -3] :max [20 70 3]}])]
+          (await (run-until-empty eng 40))
+          (is (= [] (calls p "attack"))))))))
+
 (deftest get-food-hunts-an-animal-when-no-source-is-known
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:self {:food 2} :entities [cow]})]
+        (let [{:keys [eng p seen]} (setup {:self {:food 2} :entities three-cows})]
           (core/submit! eng '(jobs.survival.get-food {:attack-gap-ms 0}) {})
           (await (run-until-empty eng 40))
           (is (= [] (:list (core/state eng))))
