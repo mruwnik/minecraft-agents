@@ -236,8 +236,8 @@
     :again))
 
 (defn ^:async round!
-  "One round of the fetch in slot :fetch for plan pl (from due). :continue while the child waits on the world, :again
-  after it ended or failed."
+  "One round of the fetch in slot :fetch for plan pl (from due). :continue while the child waits on the world (a child
+  that declines while its furnace cooks too), :again after it ended or failed."
   [c pl]
   (let [{:keys [job key opts]} pl
         args (merge (:args pl) (select-keys opts [:depth :minutes :how :fail-minutes]))
@@ -252,7 +252,8 @@
     (let [r (await (ctx/call-child c :fetch job args))]
       (case r
         :continue :continue
-        :declined (book-failed! c pl (or (b/child-wait c :fetch job args) {:reason :not-ready}))
+        :declined (let [w (or (b/child-wait c :fetch job args) {:reason :not-ready})]
+                    (if (= :cooking (:reason w)) :continue (book-failed! c pl w)))
         (let [res (ctx/child-result c :fetch)]
           (if (= :done (:status res))
             (do (ctx/update-mem! c dissoc :fetching)

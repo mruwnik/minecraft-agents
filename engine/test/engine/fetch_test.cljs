@@ -371,6 +371,29 @@
           (is (= 1 (get (inv s) "wooden_pickaxe")) (pr-str (core/waiting (:eng s) id)))
           (is (= 1 (count (events-of s :fetch.done)))))))))
 
+(deftest a-fetch-child-declining-while-it-cooks-is-waited-for-not-failed
+  ;; an obtain whose smelt child cooks declines :cooking; the from-plan torch fetch took that as a failure live
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:self {:pos {:x 0 :y 64 :z 0}}
+                        :blocks {"0,61,1" "andesite" "0,62,1" "andesite" "0,63,1" "stone" "0,64,1" "stone" "0,65,1" "stone"
+                                 "-3,64,2" "chest"}
+                        :containers {"-3,64,2" [{:name "wooden_pickaxe" :count 1}]}
+                        :drops {"stone" "cobblestone"}}
+                       [own-zone])
+              id (core/submit! (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 1 :fetch true}) {})
+              call ctx/call-child
+              check ctx/check-child]
+          (set! ctx/call-child (fn [c slot job args] (if (= :fetch slot) (js/Promise.resolve :declined) (call c slot job args))))
+          (set! ctx/check-child (fn [c slot job args] (if (= :fetch slot) (do (ctx/wait c {:reason :cooking}) false) (check c slot job args))))
+          (try (await (run-ticks s 3))
+               (finally (set! ctx/call-child call) (set! ctx/check-child check)))
+          (is (empty? (events-of s :fetch.failed)) "cooking is a wait, not a failure")
+          (is (= 1 (count (listed s))))
+          (await (run-ticks s 60))
+          (is (= 1 (get (inv s) "wooden_pickaxe")) (pr-str (core/waiting (:eng s) id))))))))
+
 (deftest a-failed-fetch-clears-the-return-cell
   (async done
     (tu/run-async done
