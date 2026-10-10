@@ -27,6 +27,24 @@
                       (contains? fires (u/feel-name p (update feet :y inc))))
                   (not-any? #(= "fire_resistance" (.-name %)) (array-seq (.-effects self)))))))
 
+;; A flight from heard-only mobs that ended blocked mutes heard mobs for a growing time; a seen mob fires through it.
+(def mute-policy {:cap 8 :ttl (* 60 60 1000)})
+
+(def mute-base-ms 60000)
+
+(def mute-max-ms (* 30 60 1000))
+
+(defn heard-muted?
+  "Whether heard-only mobs are muted now: the latest :heard-mute entry's :until is ahead of the view's now."
+  [view]
+  (boolean (when-let [m (mem/latest view :heard-mute)]
+             (> (:until (:data m)) (:now view)))))
+
+(defn next-mute-ms
+  "How long the next mute lasts: mute-base-ms, doubled for each mute within the last hour, up to mute-max-ms."
+  [view]
+  (min mute-max-ms (* mute-base-ms (js/Math.pow 2 (count (mem/entries view :heard-mute))))))
+
 (defn open-deaths
   "The :died entries (oldest first) no :recovered entry covers: one with the death's :death-t, or, from before
   :recovered carried it, any newer one."

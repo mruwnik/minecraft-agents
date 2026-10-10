@@ -10,6 +10,7 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.reach.proofs :as proofs]
             [engine.perception :as perception]
+            [engine.memory :as mem]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.survival.recover-drops :as recover-drops]))
@@ -239,3 +240,22 @@
 (deftest an-idle-creeper-behind-the-body-stays-unknown
   (let [{:keys [p]} (rig {:entities [(assoc (mob 1 "creeper" 0 -3) :fusing false)]})]
     (is (= [] (known p)))))
+
+;; ---- card 10a36e29: a heard-only mob that ended a flight blocked is muted, growing; sight still fires
+
+(defn muted-memory
+  "A memory view at now holding one :heard-mute entry that lasts until the given ms."
+  [now until]
+  {:now now :data (mem/add-entry mem/empty-data :heard-mute {:t 0 :data {:until until}} {:cap 8 :ttl :forever})})
+
+(defn near-with-memory? [p memory] ((:when (:hostile-near triggers/all)) p memory (:args (:hostile-near triggers/all))))
+
+(deftest a-muted-heard-mob-does-not-fire-the-trigger-until-the-mute-ends
+  (let [{:keys [p]} (rig {:entities [(mob 1 "zombie" 6 -3)] :blocks wall})]
+    (is (true? (near-with-memory? p {:now 10 :data mem/empty-data})) "no mute set: a heard melee mob with a way counts")
+    (is (false? (near-with-memory? p (muted-memory 100 5000))))
+    (is (true? (near-with-memory? p (muted-memory 6000 5000))) "the mute is over")))
+
+(deftest a-seen-mob-fires-the-trigger-through-a-mute
+  (let [{:keys [p]} (rig {:entities [(mob 1 "zombie" 0 4)]})]
+    (is (true? (near-with-memory? p (muted-memory 100 5000))))))

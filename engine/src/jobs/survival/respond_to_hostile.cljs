@@ -1,6 +1,7 @@
 (ns jobs.survival.respond-to-hostile
   (:require [engine.args :as a]
             [jobs.lib.blocks :as lb]
+            [jobs.lib.body :as body]
             [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
@@ -201,6 +202,16 @@
    :ids (set (map #(.-id %) hs))
    :fight (select-keys (get-in (ctx/mem c) [:children :fight]) [:struck :no-damage :blocked :killed])})
 
+(defn mute-heard!
+  "Mutes heard mobs (jobs.lib.body/heard-muted?) when every danger in hs is heard only, else lifts the mutes: a mob
+  the body sees counts again."
+  [c hs]
+  (cond
+    (empty? hs) nil
+    (every? (complement danger-q/seen-only?) hs)
+    (ctx/remember! c :heard-mute {:until (+ (ctx/now c) (body/next-mute-ms (ctx/view c)))} body/mute-policy)
+    :else (ctx/forget-where! c :heard-mute (constantly true))))
+
 (defn ^:async round
   "One whole attempt: respond (or let the retreat hide on) while a danger is near; stopped when a child stops, or
   :no_response after max-unchanged calls in a row that changed nothing; never for the time a danger stays."
@@ -217,12 +228,14 @@
         :else (await (respond c hs)))
       (let [after (near c)]
         (if-let [[slot res] (stopped-child c)]
-          (r/stop! c (:reason res) (:text res) :cause (r/cause-of slot res))
+          (do (mute-heard! c hs)
+              (r/stop! c (:reason res) (:text res) :cause (r/cause-of slot res)))
           (cond
             (not (or (seq after) (hiding? c))) :done
             :else
             (let [n (if (= before (signature c after)) (inc unchanged) 0)]
               (if (>= n max-unchanged)
-                (do (ctx/emit! c :no_response :warn {:text "the hostile is still near and nothing changed in three tries"})
+                (do (mute-heard! c hs)
+                    (ctx/emit! c :no_response :warn {:text "the hostile is still near and nothing changed in three tries"})
                     (r/stop! c :no_response "a hostile is still near and three tries changed nothing"))
                 (do (await (pace/pace!)) (recur n))))))))))

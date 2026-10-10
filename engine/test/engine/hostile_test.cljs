@@ -5,6 +5,7 @@
             [engine.registry :as registry]
             [engine.core :as core]
             [engine.ctx :as ctx]
+            [jobs.lib.body :as body]
             [jobs.lib.combat :as combat]
             [jobs.lib.danger :as danger-q]
             [jobs.survival.fight-back :as fight-back]
@@ -1021,3 +1022,30 @@
   (doseq [[x n] [[12 0] [6 1]]]
     (let [p (tu/fake-on-floor {:floor flight-floor :entities [{:id 5 :name "skeleton" :kind "hostile" :visible false :pos {:x x :y 64 :z 0}}]})]
       (is (= n (count (danger-q/dangers p 8 {:ranged-radius 16}))) (str "heard " x " blocks east")))))
+
+;; ---- card 10a36e29: a flight from heard-only mobs that ends blocked mutes them, growing
+
+(def heard-wall (tu/box 5 64 -6 5 65 -1 "stone"))
+
+(defn mutes [eng] (mapv (comp :until :data) (mem/entries (mem/view (:store eng)) :heard-mute)))
+
+(deftest a-flight-from-a-heard-only-mob-that-ends-blocked-mutes-heard-mobs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup-seeing {:blocks heard-wall :entities [(zombie 6.5 -3.5)]} nil 1000)]
+          (stuck-walks! p)
+          (core/submit! eng respond {})
+          (await (core/tick! eng))
+          (is (= 1 (count (mutes eng))) "one mute entry, not a mute per round")
+          (is (true? (body/heard-muted? (mem/view (:store eng))))))))))
+
+(deftest a-flight-from-a-seen-mob-that-ends-blocked-mutes-nothing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup-seeing {:entities [(zombie 0.5 4.5)]} nil 1000)]
+          (stuck-walks! p)
+          (core/submit! eng respond {})
+          (await (core/tick! eng))
+          (is (= [] (mutes eng))))))))

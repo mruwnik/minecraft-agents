@@ -114,11 +114,13 @@
 
 (defn danger-in?
   "danger? reading blocks through kind-at (shared by the mobs of one query) and, with pr, sharing walk proofs. opts
-  :arrow-at is the query's shared arrow lookup (reach/lookup p reach/arrow-kind-of); without it a ranged mob builds its own."
+  :arrow-at is the query's shared arrow lookup (reach/lookup p reach/arrow-kind-of); without it a ranged mob builds its own.
+  :ignore-heard? leaves out every mob the body has not seen (a muted heard mob, jobs.lib.body/heard-muted?)."
   ([p kind-at e opts] (danger-in? p kind-at nil e opts))
-  ([p kind-at pr e {:keys [sight? arrow-at] :or {sight? true}}]
+  ([p kind-at pr e {:keys [sight? arrow-at ignore-heard?] :or {sight? true}}]
    (cond
      (calm-enderman? e) false
+     (and ignore-heard? (not (seen-only? e))) false
      (combat/ranged? e)
      (and (or (not sight?) (seen-only? e) (<= (mob-distance p e) obs/near-band))
           (or (not sight?) (seen-only? e) (not (in-tunnel? kind-at (reach/cell-of (u/pos-of (.-pos (.self p)))))))
