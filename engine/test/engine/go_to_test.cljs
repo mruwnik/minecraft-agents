@@ -29,12 +29,12 @@
 
 (defn setup
   "A world key :light [sky block] makes the body see through perception, in that light everywhere; :jitter (0.5) fixes
-  where each pass's rays fall in their grid cells."
+  where each pass's rays fall in their grid cells; :clock is the atom of the fake time (ms)."
   ([world] (setup world nil))
   ([world shared]
-  (let [clock (atom 1000000)
+  (let [clock (or (:clock world) (atom 1000000))
         [seen sink] (tu/legacy-capture-sink)
-        raw (tu/fake (merge {:self {:pos start}} (dissoc world :light :jitter)))
+        raw (tu/fake (merge {:self {:pos start}} (dissoc world :light :jitter :clock)))
         _ (when-let [l (:light world)] (swap! (fake/state raw) assoc :light-default l))
         p (if (:light world)
             (perception/wrap raw (perception/create (fake-raw/create raw) {:radius 16 :ray-deg 2 :now #(deref clock)

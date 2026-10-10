@@ -39,8 +39,12 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (await ((deep-run 290000)))
-              digs (filter #(= "dig" (.-name %)) (.-calls (.-world p)))]
+        (let [{:keys [eng p seen]} (await ((deep-run 290000)))
+              digs (filter #(= "dig" (.-name %)) (.-calls (.-world p)))
+              decided (first (filter #(= :recover-drops.decided (:kind %)) @seen))]
+          (is (= :warn (:level decided)) "an abandoned pile is said to the owner, not logged quietly")
+          (is (re-find #"20 50 0" (:text decided)) (str "the text names the pile: " (:text decided)))
+          (is (re-find #"window-closed" (:text decided)) (:text decided))
           (is (= {:decision :abandoned :reason :window-closed} (select-keys (recovered eng) [:decision :reason])) (pr-str (recovered eng)))
           (is (empty? digs) "nothing is dug for a stair that ends after the pile is gone"))))))
 

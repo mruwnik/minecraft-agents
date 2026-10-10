@@ -133,14 +133,14 @@
               ")"))
        (when (and (number? margin) (not (zero? margin))) (str " + margin " margin))))
 
-(defn decision-text [decision {:keys [reason items] :as decided} margin]
+(defn decision-text [decision {:keys [reason items detail] :as decided} margin]
   (case decision
     :skip (str "skip: " (why-text decided margin))
     :fetch (str "fetch: " (why-text decided margin))
     :collected (str "collected " items " items")
     :partial (str "partial: " items " items back, left " (str/join ", " (map (fn [[k n]] (str n " " k)) (:left decided)))
                   ", " (case reason :unreachable "in sight but not picked up" "not in sight"))
-    :abandoned (str "abandoned: " (name (or reason :unknown)))))
+    :abandoned (str "abandoned: " (name (or reason :unknown)) (when detail (str " (" detail ")")))))
 
 (defn decided-wait
   "The wait reason when no death is unrecovered: {:reason :no-drops}, with :decision and a :text naming it when the
@@ -181,10 +181,11 @@
   (let [death (current-death c)
         pos (:pos (:data death))]
     (ctx/remember! c :recovered (merge {:decision decision :death-t (:t death)} fields) recovered-policy)
-    (ctx/emit! c :recover-drops.decided :info
+    (ctx/emit! c :recover-drops.decided (if (= :abandoned decision) :warn :info)
                (assoc (select-keys fields [:value :cost :reason :items :left :parts :top-items :top-mobs])
                       :decision decision :pos pos
-                      :text (decision-text decision fields (:margin (:args c)))))
+                      :text (cond-> (decision-text decision fields (:margin (:args c)))
+                              (= :abandoned decision) (str "; the pile at " (str/join " " (map #(js/Math.floor (% pos)) [:x :y :z]))))))
     :done))
 
 (defn settling?
@@ -559,7 +560,7 @@
         left-s (/ (settings/ticks->ms (game/despawn-left-ticks entry (ctx/view c))) 1000)
         give-up! (fn [reason text]
                    (ctx/emit! c :recover-drops.deep :info {:reason reason :below below :aside aside :text text})
-                   (finish! c :abandoned (assoc (:decided (ctx/mem c)) :reason reason)))]
+                   (finish! c :abandoned (assoc (:decided (ctx/mem c)) :reason reason :detail text)))]
     (if (> need-s left-s)
       (give-up! :window-closed (str "the pile is " below " blocks down: a stair takes about " (js/Math.round need-s) " s, " (js/Math.round left-s) " s are left"))
       (let [args {:target [(js/Math.floor (:x pos)) (js/Math.floor (:y pos)) (js/Math.floor (:z pos))] :max-length 96 :keep true :max-steps 1}]

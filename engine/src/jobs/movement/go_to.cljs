@@ -159,7 +159,7 @@
    :goal-danger {:doc "when the goal lies within the full-cost radius of a known mob the body would flee: :wait (walk on; an info goal-in-danger says so once), :end (give up at once, :why :goal-dangerous with the mob)" :spec #{:wait :end "wait" "end"} :default :wait}
    :clear-seal {:doc "false: never start a jobs.access.cleanup child for ledger blocks around an unreachable goal (cleanup's own walks, which would nest cleanup in go-to in cleanup without end)" :spec boolean? :default true}
    :zone-tolls {:doc "true: also toll the cells of other bodies' zones near each walk (jobs.lib.toll-cells/zone-walk-tolls), none with :ignore-zones?; for a job that respects zones" :spec boolean? :default false}
-   :leg-s {:doc "walk one leg of at most this many seconds (0.1 to 120), then end {:arrived false :leg true} so the caller can re-aim at a moving target; nil: the whole way" :spec (a/num-in 0.1 120) :default nil}
+   :leg-s {:doc "walk one leg of at most this many seconds (0.1 to 120), then end {:arrived false :leg true} so the caller can re-aim at a moving target (a search that goes on past them ends :no-path :leg-search-spent); nil: the whole way" :spec (a/num-in 0.1 120) :default nil}
    :one-way {:doc "arg, not the :one-way key of a give-up result: :closed takes no drop of 2 or 3 or gap jump down that the body cannot climb back, and walks to no frontier of loaded land (a walk to something visible); :open (default) takes one when the land past it runs on into unloaded land" :spec #{:open :closed} :default :open}
    :explore-blocks {:doc "blocks the body may walk in a call without coming nearer its goal than ever before (a tour of frontiers past a dead end), then it gives up :why :explore-spent; nil: no bound (the tour ends when every frontier is spent)" :spec (a/num-in 0 nil) :default nil}
    :retry {:doc "false: a walk that got no nearer gives up at once instead of walking again (up to 3 times), for a caller that re-aims itself" :spec boolean? :default true}
@@ -638,6 +638,12 @@
       (await (ctx/call-child c :seal-cleanup 'jobs.access.cleanup {:job :all :near near}))
       true)))
 
+(defn leg-search-spent?
+  "Whether a call with :leg-s has used its seconds since start-attempt!: a leg is bounded in search as in walking."
+  [c]
+  (let [{:keys [leg-s]} (:args c)]
+    (boolean (and leg-s (:leg-t0 (ctx/mem c)) (>= (- (ctx/now c) (:leg-t0 (ctx/mem c))) (* 1000 leg-s))))))
+
 (defn ^:async walk! [c0 pos range doors]
   (let [c (cond-> c0 (:over-budget (ctx/mem c0)) (assoc :over-budget true))
         from (u/self-pos c)
@@ -716,6 +722,9 @@
                                                     {:surface-air (surface-air) :restarts (wet-restarts)})))
           :again
 
+          (and (= "searching" status) (leg-search-spent? c))
+          (end/give-up! c pos (:blocked (ctx/mem c) 0) :searching {:status :no-path :reason :leg-search-spent})
+
           (= "searching" status)
           (let [n (cond-> (:searching (ctx/mem c) 0) (:fresh walked) inc)]
             (ctx/update-mem! c assoc :searching n)
@@ -753,7 +762,7 @@
   (let [m (ctx/mem c)
         there? (here? c pos (:range (:args c)))]
     (wworld/warn-bad-settings! c)
-    (ctx/update-mem! c #(cond-> (-> % (dissoc :best :fault-cells :over-budget :off-hand-tried :air-looked :air-relooks :surfacings :column-looks :column-near :hang-walks :waypoint-misses :waypoint-why :way-looks :dry-tried :in-water :wet-fresh :wet-surfacings) (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {}))
+    (ctx/update-mem! c #(cond-> (-> % (dissoc :best :fault-cells :over-budget :off-hand-tried :air-looked :air-relooks :surfacings :column-looks :column-near :hang-walks :waypoint-misses :waypoint-why :way-looks :dry-tried :in-water :wet-fresh :wet-surfacings) (assoc :blocked 0 :searching 0 :leg-t0 (ctx/now c) :frontier-best {} :target-best {}))
                           (not (:fetching m)) (dissoc :torch-fetched :fetched)
                           (and there? (:escalate-now m)) (dissoc :escalate-now)
                           (and there? (:escalation m))

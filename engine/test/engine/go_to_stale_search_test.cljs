@@ -6,6 +6,7 @@
             [engine.core :as core]
             [engine.fake :as fake]
             [engine.go-to-test :as gt]
+            [jobs.lib.near :as near]
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.search :as wsearch]
             [engine.test-util :as tu :refer [box]]))
@@ -177,3 +178,21 @@
     (is (wsearch/go-on? kept k nil [0 0 0] {:air-used 15 :health 8}) "one hit (2 hp) lost: the plan's lethal line still holds")
     (is (not (wsearch/go-on? kept k nil [0 0 0] {:air-used 15 :health 6})) "two hits lost: a new search plans with the hp left")
     (is (wsearch/go-on? kept k nil [0 0 0] {:air-used 15 :health 10.5}) "healed a little: the plan was the more careful")))
+
+;; a search that goes on from the same cell (no fresh start) is no gave-up for max-searching rounds; a leg call is bounded in time
+(deftest a-leg-call-whose-search-goes-on-ends-once-its-leg-seconds-passed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [clock (atom 1000000)
+              rounds (atom 0)]
+          (with-redefs [near/walk-round! (fn [c _ _ _]
+                                           (swap! rounds inc)
+                                           (swap! clock + 1000)
+                                           (js/Promise.resolve {:result {:status :searching :fresh false} :status "searching"
+                                                                :from (:pos c) :to (:pos c)}))]
+            (let [{:keys [out]} (await (gt/go! {:self {:pos [0.5 64 0.5]} :blocks floor-blocks :clock clock}
+                                               {:pos [30 64 0] :range 1 :escalate false :leg-s 3}))]
+              (is (false? (:arrived @out)) (pr-str @out))
+              (is (= :leg-search-spent (:why @out)) (pr-str @out))
+              (is (<= @rounds 6) "it gave up within a few slices"))))))))
