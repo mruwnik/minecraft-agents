@@ -8,6 +8,7 @@
             [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.test-util :as tu]
+            [jobs.survival.go-home :as gh]
             [triggers.survival.dusk-home :as dh]))
 
 (defn holds?
@@ -68,7 +69,20 @@
           (do (core/submit! eng '(jobs.survival.go-home) {})
             (await (tu/run-until-empty eng 10))
             (is (= [:too-far] (mapv :reason (filter #(= :stopped (:kind %)) @seen))))
-            (is (some #(and (= :go-home.too-far (:kind %)) (= :warn (:level %))) @seen) "one warn names the distance")))))))
+            (is (some #(and (= :go-home.too-far (:kind %)) (= :warn (:level %))) @seen) "one warn names the distance")
+            (is (= [{:x 300 :y 64 :z 0}] (mapv (comp :home :data) (mem/entries (mem/view (:store eng)) :too-far)))
+                "the refusal is remembered, so the trigger does not fire again for it")))))))
+
+(deftest a-home-go-home-refused-does-not-fire-the-trigger-again
+  (let [store (mem/open (tu/tmp-dir) {:now (constantly 1000)})
+        holds (fn [] (dh/dusk-home (tu/seeing-all (tu/fake-on-floor {:floor [-200 -200 200 200] :time 11000 :self {:pos {:x 0.5 :y 64 :z 0.5}}}))
+                                   (mem/view store) dh/defaults))]
+    (mem/write! store :home {:pos {:x 400 :y 64 :z 0}} mem/place-policy)
+    (is (true? (holds)))
+    (mem/write! store :too-far {:home {:x 400 :y 64 :z 0}} gh/too-far-policy)
+    (is (false? (holds)) "refused for this home")
+    (mem/write! store :home {:pos {:x 300 :y 64 :z 0}} mem/place-policy)
+    (is (true? (holds)) "a new home is a new decision")))
 
 (deftest go-home-arriving-at-the-bed-records-it-as-home
   (async done

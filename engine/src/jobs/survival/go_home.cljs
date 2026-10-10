@@ -9,13 +9,17 @@
 (def doc
   "Walk home before night: to the remembered :home, else the remembered :bed (a go-to child, :range 2, walking on
   through the night). Waits (check) at night or with neither place known (:no-home). A place farther than :limit blocks ends stopped
-  :too-far with one warn go-home.too-far (the night job then digs in or sleeps). Done {:home pos} on arrival, which
+  :too-far with one warn go-home.too-far and a :too-far memory (the night job then digs in or sleeps; :dusk-home skips that place). Done {:home pos} on arrival, which
   also records :home there unless a live one exists; stopped :walk-failed
   with the walk's reason otherwise. The :dusk-home trigger starts it when the day left no longer covers the walk;
   a work job it cuts is resumed by the scheduler afterwards.")
 
 (a/defargs args
   {:limit {:doc "farthest place, in blocks, worth the walk" :spec (a/num-in 0 nil) :default 160}})
+
+(def too-far-policy
+  "One :too-far entry, one in-game day: dusk-home does not fire again for the home it names."
+  {:cap 1 :ttl 1200000})
 
 (defn place [c] (sh/home-target (ctx/view c)))
 
@@ -33,6 +37,7 @@
   (let [d (js/Math.round (u/dist (u/self-pos c) pos))
         text (str "home at " (pr-str pos) " is " d " blocks away, beyond " (:limit (:args c)) ": night finds the body here; dig in or head back now")]
     (ctx/emit! c :go-home.too-far :warn {:pos pos :distance d :text text})
+    (ctx/remember! c :too-far {:home pos} too-far-policy)
     (result/stop! c :too-far text :distance d)))
 
 (defn ^:async walk! [c pos]
