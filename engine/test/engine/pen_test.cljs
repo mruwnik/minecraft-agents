@@ -248,14 +248,10 @@
     (is (true? (:closed? r)) "nothing stands in or on a cell under a fence post")
     (is (= [] (:leaks r)))))
 
-(deftest an-unseen-head-cell-under-a-lintel-is-no-proof-of-a-closed-doorway
-  (let [doorway (merge (ring "stone" [64 65 66]) {[2 64 -1] "air" [2 65 -1] :unloaded [2 66 -1] "stone"})
-        r (check doorway {:max-cells 100})]
-    (is (false? (:closed? r)) "the head cell may be air: a 2-high gap a cow walks out of")
-    (is (= :unloaded (:reason r)))
-    (is (= [{:pos {:x 2 :y 65 :z -1} :why :unloaded}] (:leaks r)))
-    (is (true? (:closed? (check (assoc doorway [2 65 -1] "stone") {:max-cells 100}))) "seen: the doorway is shut")
-    (is (false? (:closed? (check (assoc doorway [2 65 -1] "air") {:max-cells 100}))) "seen: the doorway leaks")))
+(deftest a-doorway-one-block-high-leaks-whatever-its-head-cell-reads
+  (let [doorway (merge (ring "stone" [64 65 66]) {[2 64 -1] "air" [2 65 -1] "stone" [2 66 -1] "stone"})]
+    (are [head] (= [{:pos {:x 2 :y 64 :z -1} :why :gap}] (:leaks (check (assoc doorway [2 65 -1] head) {:max-cells 100})))
+      "stone" :unloaded "air")))
 
 (deftest a-start-that-is-no-floor-answers-no-start
   (are [at] (= :no-start (:reason (check fence-ring {:at at})))
@@ -324,3 +320,10 @@
 
 (deftest in-pen-is-false-for-an-open-field
   (is (false? (pen/in-pen? (check {} {:max-cells 50}) {:x 2.5 :y 64.0 :z 2.5}))))
+
+(deftest a-fence-one-block-above-the-floor-leaks-under-it
+  (let [floating (ring "oak_fence" [65])
+        box {:box {:min {:x 0 :y 64 :z 0} :max {:x 4 :y 66 :z 4}}}]
+    (is (false? (:closed? (check floating))) "from a cell")
+    (is (false? (:closed? (check floating (assoc box :at nil)))) "from a box taller than the floor")
+    (is (false? (:closed? (check floating (assoc-in (assoc box :at nil) [:box :min :y] 63)))) "box starting below the floor")))

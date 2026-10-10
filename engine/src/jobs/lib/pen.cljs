@@ -1,5 +1,5 @@
 (ns jobs.lib.pen
-  "The pen check: from a standing cell or a box, flood-fill what a cow can walk
+  "The pen check: from a standing cell or a box, flood-fill what a chicken (the smallest herded animal) can walk
   and say whether it stays inside. Pure over a block-at function that takes
   {:x :y :z} and returns a block (#js {:name :properties}) or nil (unloaded).
 
@@ -9,7 +9,7 @@
     door, a plant, air and water have none; lava, fire and the like are
     hazards an animal never enters; a block this file does not know counts as
     a full block;
-  - an animal stands on a surface, the top of a column with 1.4 free above it;
+  - an animal stands on a surface, the top of a column with 0.7 free above it (a fence hung a block above the floor is a way out);
   - from a surface it steps to the neighbouring column's highest surface at
     most 1 above (so a block, a slab or a carpet is climbed, a fence top is
     not, from level ground) and falls to the first surface below, at most 3
@@ -25,7 +25,7 @@
 
 (a/defargs settings
   {::max-drop {:default 3.0 :doc "Blocks a penned animal may drop when it walks." :spec (a/num-in 0 nil)}
-   ::body-height {:default 1.4 :doc "Height of an animal's box a pen needs clear." :spec (a/num-in 0 nil)}
+   ::body-height {:default 0.7 :doc "Height of the smallest herded animal (a chicken): a pen must hold it, so a gap this high is a way out." :spec (a/num-in 0 nil)}
    ::gate-scan {:default 600 :doc "The most cells searched for gates when the flood was cut short." :spec (a/int-in 1 nil)}
    ::max-seals {:default 4 :doc "Rounds of leaks shut when planning a pen." :spec (a/int-in 0 nil)}
    ::max-listed {:default 12 :doc "Leaks listed in a pen report." :spec (a/int-in 1 nil)}})
