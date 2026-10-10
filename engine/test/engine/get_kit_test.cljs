@@ -34,11 +34,12 @@
 
 (defn start
   "fetch-test's perception engine, with a recording parent that runs the job as a child and keeps its result in :out."
-  [w args]
+  ([w args] (start w args f/sight-opts))
+  ([w args sight]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         raw (tu/fake-on-floor (assoc w :floor-block "andesite"))
-        p (perception/wrap raw (perception/create (fake-raw/create raw) (assoc f/sight-opts :now #(deref clock))))
+        p (perception/wrap raw (perception/create (fake-raw/create raw) (assoc sight :now #(deref clock))))
         out (atom :not-done)
         parent {:check (constantly true)
                 :round (fn ^:async recording-round [c]
@@ -50,7 +51,7 @@
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     (perception/pass! (aget p "perception"))
     (core/submit! eng '(recording-parent) {})
-    {:eng eng :p p :seen seen :clock clock :out out}))
+    {:eng eng :p p :seen seen :clock clock :out out})))
 
 (defn worn [{:keys [p]}]
   (into {} (keep (fn [[k v]] (when (and v (#{"head" "torso" "legs" "feet"} k)) [k (get v "name")])))
@@ -227,3 +228,31 @@
           (is (= [:no-stock] (mapv :cause (f/events-of s :kit.no-food))))
           (is (= {:status :stopped :item "iron_ingot" :reason :no-source}
                  (select-keys @(:out s) [:status :item :reason]))))))))
+
+(defn raw-world
+  "Nothing carried; a furnace at the camp (the crafting table is made), three oak trees on grass, then stone, coal and iron ore beyond the own zone, on an andesite floor."
+  []
+  (let [trees (for [x [-4 0 4]] (merge (into {} (for [y [64 65 66]] [(str x "," y ",5") "oak_log"]))
+                                       {(str x ",67,5") "oak_leaves" (str x ",63,5") "grass_block"}))]
+    (-> (assoc (world [] {}) :floor [-30 -10 40 30])
+        (assoc :blocks (merge (apply merge trees)
+                              (into {} (for [x (range -2 4) z [12 13] y [63 64]] [(str x "," y "," z) "stone"]))
+                              {"2,64,15" "coal_ore" "2,63,15" "stone"}
+                              (into {} (for [x [-1 0 1]] [(str x ",64,17") "iron_ore"]))
+                              (into {} (for [x [-1 0 1]] [(str x ",63,17") "stone"]))))
+        (assoc :drops {"oak_log" "oak_log" "stone" "cobblestone" "coal_ore" "coal" "iron_ore" "raw_iron"})
+        (assoc-in [:blocks "2,64,2"] "furnace"))))
+
+(deftest an-iron-pickaxe-is-got-from-an-empty-pack-wood-stone-coal-and-iron
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (raw-world) {:items ["iron_pickaxe"] :food false :min-food 0 :wear false} (assoc f/sight-opts :radius 48))]
+          (loop [i 0]
+            (await (f/run-ticks s 1))
+            (.advance (.-world (:p s)) 40)
+            (when (and (< i 3000) (= :not-done @(:out s)))
+              (recur (inc i))))
+          (is (= {:status :done :made ["iron_pickaxe"]} (select-keys @(:out s) [:status :made]))
+              (pr-str (select-keys @(:out s) [:status :item :reason :why])))
+          (is (= 1 (get (f/inv s) "iron_pickaxe"))))))))
