@@ -38,7 +38,7 @@
   see): the stair looks at each step before judging it and at each cell it dug, and the stops below fire on what is
   then seen.
 
-  A step's floor must be solid, the cell under it neither air nor fluid (:cave-below), and everything loaded.
+  A step's floor must be solid, the cell under it not a fluid, nor air when no building block is carried (:cave-below), and everything loaded.
   A floor of air gets a carried building block (blocks/building-blocks, never an ore or valuable) after the
   rules' may-place?, against a neighbour, or from the cell under it first when only that has a face (jobs.access.stair/bridge-plans; a plan whose face was unseen air gives way to the next), or in a cave from the step's feet cell first (cut again) when only that has one.
   The cell under a placed floor is not judged. With no such block: :no-floor with :filler :none; with no face to place
@@ -180,9 +180,9 @@
 (defn stop-of
   "Why the step cannot go on, as {:reason ...detail}, or nil when every cell may be cut.
   in: the rules' input without :cell; its :unseen? (fn cell -> true when never sensed) makes a floor the body has not
-  seen a stop :floor-unseen once the cut is open, not a guess. cells :bridged? true: the floor was placed by the stair, what is under it is not judged; :up? true: it never is (a stair up
+  seen a stop :floor-unseen once the cut is open, not a guess. cells :bridged? true: the floor was placed by the stair, what is under it is not judged; :filler? true: air under a solid floor is no stop (the next floor is bridged); :up? true: it never is (a stair up
   digs no floor)."
-  [{:keys [block-at] :as in} {:keys [cut floor under bridged? up? ways]} accept]
+  [{:keys [block-at] :as in} {:keys [cut floor under bridged? up? filler? ways]} accept]
   (let [floor-cell (known-floor block-at cut (into (set (:ways in)) ways))
         fluid-cell (first (filter #(rules/fluids (block-at %)) cut))
         crop-cell (first (filter #(crop-names (block-at %)) cut))
@@ -197,7 +197,7 @@
                   :why "the cell is the floor of a stair this body cut earlier; cutting it breaks the way"}
       unseen-cell {:reason :floor-unseen :cell unseen-cell}
       (not (rules/solid-floor? block-at floor)) {:reason :no-floor :cell floor :block (block-at floor)}
-      (and (not bridged?) (not up?) (let [n (block-at under)] (or (rules/air n) (rules/fluids n))))
+      (and (not bridged?) (not up?) (let [n (block-at under)] (or (and (rules/air n) (not filler?)) (rules/fluids n))))
       {:reason :cave-below :cell under :block (block-at under)}
       :else
       (some (fn [cell]
@@ -506,13 +506,13 @@
   "The cell lists to place for a missing floor, to try in order: [floor] when it has a face to place against, [support
   floor] when only the cell under it has one (the previous floor of a stair up), [next floor] when only the step's feet
   cell has one (a cave: the stair cuts it again). Cells with a seen face come before those whose face is an unseen
-  neighbour, which may be air (place answers no-support)."
+  neighbour, which may be air (place answers no-support). Only cells that are air are placed."
   [block-at floor next]
   (let [under (update floor 1 dec)]
     (vec (distinct (for [loose? [false true]
                          [probe plan] [[floor [floor]] [under [under floor]] [next [next floor]]]
                          :when (face-support? block-at probe loose?)]
-                     plan)))))
+                     (filterv #(rules/air (block-at %)) plan))))))
 
 (defn ^:async place-floor!
   "Place item at cell (in the scaffold ledger when take-back-floor?): nil when it stands, else a stop map."
@@ -604,7 +604,8 @@
               (or (await (lava-step! c :stair.sealed (:block-at in) feet [])) :finished)
               (let [{:keys [next cut] :as cells} (-> (step-cells feet dir heading)
                                                            (as-> cs (assoc cs :up? (= :up dir)
-                                                                 :bridged? (contains? (:bridged (ctx/mem c)) (:floor cs)))))
+                                                                 :bridged? (contains? (:bridged (ctx/mem c)) (:floor cs))
+                                                                 :filler? (some? (blocks/pick c blocks/building-blocks)))))
                     _ (await (look-ahead! c feet next cut))
                     stop (or (await (lava-step! c :stair.sealed (:block-at in) feet cut))
                              (await (water-step! c (:block-at in) accept cut))

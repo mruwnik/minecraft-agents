@@ -80,9 +80,9 @@
     (let [n (get named cell (if (< y 65) "stone" "air"))]
       (when-not (= :unloaded n) n))))
 
-(defn stop [named accept & {:keys [zones dir] :or {zones [] dir :down}}]
+(defn stop [named accept & {:keys [zones dir filler?] :or {zones [] dir :down}}]
   (let [in {:block-at (world-fn named) :feet [0 65 0] :zones zones :footprints #{} :ledger #{}}]
-    (stair/stop-of in (assoc (stair/step-cells [0 65 0] dir :east) :up? (= :up dir)) accept)))
+    (stair/stop-of in (assoc (stair/step-cells [0 65 0] dir :east) :up? (= :up dir) :filler? filler?) accept)))
 
 (deftest the-stop-rules-of-one-step
   (are [named accept zones reason] (= reason (:reason (stop named accept :zones zones)))
@@ -531,6 +531,19 @@
           (is (= 1 (:steps @out)))
           (is (= "stone" (block-at p [2 64 0])) "nothing of the step is cut"))))))
 
+(deftest air-under-the-next-floor-is-bridged-when-filler-is-carried
+  (is (nil? (:reason (stop {[1 62 0] "cave_air"} #{:water} :filler? true))))
+  (is (= :cave-below (:reason (stop {[1 62 0] "water"} #{:water} :filler? true))) "a fluid under it still stops"))
+
+(deftest a-stair-goes-on-down-through-a-cave-with-filler
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [inv (conj pick {:name "cobblestone" :count 10})
+              {:keys [out p]} (await (stair! {:blocks (dissoc ground "2,61,0") :inventory inv} east (fn [_])))]
+          (is (= :done (:status @out)))
+          (is (= 3 (:steps @out))))))))
+
 (def cave-gap
   "Open air at x 1, y 62..65 over the stone ground: the floor of the first step up is missing, and so is what is under it."
   (apply dissoc ground (for [y (range 62 65) z (range -2 3)] (str "1," y "," z))))
@@ -625,6 +638,24 @@
           (is (= :done (:status @out)))
           (is (= "cobblestone" (block-at p [1 63 0])) "the floor was placed")
           (is (= "air" (block-at p [1 64 0])) "the step it was placed from is cut again"))))))
+
+(deftest a-bridge-plan-the-world-answers-no-support-to-gives-way-to-the-next
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [inv (conj pick {:name "cobblestone" :count 10})
+              n (atom 0)
+              prep (fn [p]
+                     (let [world (.-world p)]
+                       (.override world "place"
+                                  (fn ^:async f [token a impl]
+                                    (if (= 1 (swap! n inc))
+                                      #js {:status "no-support"}
+                                      (await (impl token a)))))))
+              {:keys [out p]} (await (stair! {:blocks (dissoc ground "1,63,0" "1,64,0" "1,65,0") :inventory inv} (assoc east :steps 1) prep))]
+          (is (= :done (:status @out)) (pr-str (dissoc @out :dug)))
+          (is (< 1 @n) "a second plan was tried")
+          (is (= "cobblestone" (block-at p [1 63 0]))))))))
 
 (deftest lava-for-a-floor-is-never-bridged-it-is-exposed-lava
   (async done
