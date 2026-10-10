@@ -575,7 +575,9 @@
          flank? (and (some? (or refuge goal)) (cost/outruns-at? (retreat-home/food p) (walk/flank-turn)))]
      (await (glance-away! c (walk/direction from threat-pos home flank?)))
      (walk/choose-target (block-at-fn p) from threat-pos home (keep (comp :pos :data) (ctx/entries c :hazard))
-                         (:step (:args c)) {:swim-factor (swim-factor c) :covered? covered? :flank? flank?})))))
+                         (:step (:args c)) {:swim-factor (swim-factor c) :covered? covered? :flank? flank?
+                          :floor (- (:y (or (:flight-from (ctx/mem c)) from)) (walk/max-descent))
+                          :known (ledger/ways-of c)})))))
 
 (defn ^:async take-cover!
   "Seal in, else dig down and plug, else a side pocket (refuge), the first not failed this sweep: its step's result, nil

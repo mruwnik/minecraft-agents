@@ -19,16 +19,18 @@
             [jobs.survival.retreat-refuge :as retreat-refuge]))
 
 (defn setup
-  "An engine over a fake; its clock moves a second with every primitive call (a whole flight ends by time)."
+  "An engine over a fake; its clock moves a second with every primitive call (a whole flight ends by time). The world's
+  :stair-way (floors) is written to memory as stairs the body cut."
   [world]
   (let [zones (:zones world)
         clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake-on-floor (dissoc world :zones))
+        p (tu/fake-on-floor (dissoc world :zones :stair-way))
         now (tu/act-clock clock p 1000)
         eng (core/create (cond-> {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
                                   :events (events/make {:body "Fake" :sinks [sink] :now now})}
                            zones (assoc :world (ew/of-data {} {} zones))))]
+    (some->> (:stair-way world) (assoc {:dim "overworld"} :floors) (mem/write! (:store eng) :stair-way))
     {:eng eng :p p :seen seen :clock clock}))
 
 (defn ^:async first-round [spec world]
@@ -92,6 +94,8 @@
 
 (def stair (rock [-10 6] [52 74] stair-cells))
 
+(def stair-floors "The floors of stair-cells, as the stairs the body cut." (vec (for [x (range -9 6)] [x (+ 63 x) 0])))
+
 (def retreat '(jobs.survival.retreat))
 
 (def hiding-retreat
@@ -102,7 +106,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (await (first-round retreat {:blocks stair :entities [(skeleton 3 67 0)]}))
+        (let [{:keys [eng seen]} (await (first-round retreat {:blocks stair :stair-way stair-floors :entities [(skeleton 3 67 0)]}))
               m (first-move eng)]
           (is (< (:x m) -3) "away from the skeleton at the top")
           (is (< (:y m) 61) "down the steps, not along its own height")
@@ -114,7 +118,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p eng]} (await (first-round '(jobs.survival.respond-to-hostile)
-                                              {:blocks stair :inventory [{:name "stone_pickaxe" :count 1}]
+                                              {:blocks stair :stair-way stair-floors :inventory [{:name "stone_pickaxe" :count 1}]
                                                :entities [(skeleton 3 67 0)]}))]
           (is (zero? (count (calls p "attack"))) "a pickaxe is no weapon: it flees first")
           (is (< (:y (first-move eng)) 61) "down the stair"))))))

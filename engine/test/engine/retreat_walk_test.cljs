@@ -88,3 +88,36 @@
 (deftest a-walk-over-deep-water-stays-at-the-surface
   (is (= [61 61 61 61] (mapv :y (walk/walk-cells deep-lake {:x 0.5 :y 61 :z 0.5} [1 0] 4)))
       "a swimmer is not walked down to the lake floor with its head under water"))
+
+(defn slope-world
+  "Stone floor sloping down one block per x from x 0 (feet y 64 - x); a stone roof from y 66 when roofed?; corridor? walls
+  every column but z 0."
+  [{:keys [roofed? corridor?]}]
+  (fn [{:keys [x y z]}]
+    (cond
+      (and corridor? (not= z 0)) "stone"
+      (<= y (- 63 (max 0 x))) "stone"
+      (and roofed? (>= y 66)) "stone"
+      :else "air")))
+
+(deftest a-flight-does-not-run-down-into-a-roofed-place-below-its-floor
+  (let [floor 61
+        end (walk/choose-target (slope-world {:roofed? true}) from [threat] nil [] 6 {:floor floor})]
+    (is (>= (:y end) floor) "a level way sideways is taken over the slope under the rock")
+    (is (nil? (walk/choose-target (slope-world {:roofed? true :corridor? true}) from [threat] nil [] 6 {:floor floor}))
+        "no way but down under the rock: cornered, not deeper")))
+
+(deftest a-flight-may-descend-in-the-open
+  (is (= 58 (:y (walk/choose-target (slope-world {}) from [threat] nil [] 6 {:floor 61})))
+      "under open sky the slope is no cave")
+  (is (= 58 (:y (walk/choose-target (slope-world {:roofed? true}) from [threat] nil [] 6)))
+      "no floor given: unchanged"))
+
+(deftest a-flight-may-descend-under-rock-out-of-a-ranged-mobs-fire
+  (is (= 58 (:y (walk/choose-target (slope-world {:roofed? true}) from [threat] nil [] 6 {:floor 61 :covered? (constantly true)})))
+      "cover from arrows outweighs depth"))
+
+(deftest a-flight-may-descend-a-stair-the-body-cut
+  (is (= 58 (:y (walk/choose-target (slope-world {:roofed? true}) from [threat] nil [] 6
+                                    {:floor 61 :known (set (for [x (range 0 9)] [x (- 63 x) 0]))})))
+      "known floors are no unknown cave"))

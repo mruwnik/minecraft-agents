@@ -9,9 +9,11 @@
 
 (a/defargs settings
   {::hazard-clearance {:default 2.5 :doc "Distance in blocks kept from a hazard on a flight path." :spec (a/num-in 0 nil)}
-   ::flank-turn {:default 45 :doc "Degrees a flight turns from straight away toward a refuge that lies behind the chasers, to go round them, when it still gains on them so (jobs.lib.cost/outruns-at?)." :spec (a/num-in 0 90)}})
+   ::flank-turn {:default 45 :doc "Degrees a flight turns from straight away toward a refuge that lies behind the chasers, to go round them, when it still gains on them so (jobs.lib.cost/outruns-at?)." :spec (a/num-in 0 90)}
+   ::max-descent {:default 3 :doc "Blocks lower than where a flight began that it may end a step under rock (a cave, not a hillside); a step further down is not taken while another is open, else the body is cornered." :spec (a/num-in 0 nil)}})
 (defn hazard-clearance [] (settings/get settings ::hazard-clearance))
 (defn flank-turn [] (settings/get settings ::flank-turn))
+(defn max-descent [] (settings/get settings ::max-descent))
 
 (def turns
   "Angles to try, in degrees from the preferred direction, best first."
@@ -176,15 +178,22 @@
   [arrow-at mob-positions {:keys [x y z]}]
   (not-any? #(reach/line-of-fire? arrow-at % {:x (+ x 0.5) :y y :z (+ z 0.5)}) mob-positions))
 
+(def roof-reach "Blocks above the head searched for rock over a cell." 8)
+
+(defn roofed?
+  "Whether a block that is not passable lies within roof-reach above the head of feet cell end."
+  [block-at {:keys [x y z]}]
+  (some #(not (passable? (block-at {:x x :y (+ y 2 %) :z z}))) (range roof-reach)))
+
 (defn choose-target
   "The walk target, a feet cell, among the directions (turns from the preferred one) that avoid every hazard and are
   worth walking (see worth?): first one whose end (covered? true: out of a ranged mob's line of fire) gives cover, a
   full step before a short one; else the full step that takes least time (walk-time: a swim is slow), turn order
   breaking ties; else the most open. With a swim-factor above 1 a direction that ends in water counts only when none ends dry (a swim is
   slow and drowned wait in it). nil when cornered. opts {:swim-factor (default 1) :covered? (end -> bool)
-  :flank? (home is a refuge: direction)}."
+  :flank? (home is a refuge: direction) :floor (lowest feet y an end under rock may have, unless it is out of a ranged mob's line of fire or on a floor of known, a set of [x y z] floors of stairs the body cut)}."
   ([block-at from threats home hazards step] (choose-target block-at from threats home hazards step nil))
-  ([block-at from threats home hazards step {:keys [swim-factor covered? flank?] :or {swim-factor 1}}]
+  ([block-at from threats home hazards step {:keys [swim-factor covered? flank? floor known] :or {swim-factor 1}}]
    (let [dir (direction from threats home flank?)
          options (->> turns
                       (map #(rotate dir %))
@@ -192,7 +201,8 @@
                                      {:open (count cells) :dir d :end (peek cells)
                                       :time (walk-time block-at cells swim-factor)})))
                       (remove #(near-hazard? hazards from (point-along from (:dir %) step)))
-                      (filter #(worth? from threats %)))
+                      (filter #(worth? from threats %))
+                      (remove #(and floor (< (:y (:end %)) floor) (roofed? block-at (:end %)) (not (and covered? (covered? (:end %)))) (not (contains? known [(:x (:end %)) (dec (:y (:end %))) (:z (:end %))])))))
          dry (remove #(wet? block-at (:end %)) options)
          options (if (and (> swim-factor 1) (seq dry)) dry options)
          full? #(>= (:open %) step)
