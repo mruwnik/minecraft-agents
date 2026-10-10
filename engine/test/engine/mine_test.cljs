@@ -2104,3 +2104,48 @@
                               (rock-world {}) w 120))]
           (is (every? #(< (first %) 8) (dug-cells s)) "no cell of the zone is cut")
           (is (= [:own-zone] (map :reason (events-of s :mine.tunnel-end)))))))))
+
+(def no-shaft-args {:block "iron_ore" :count 1 :direction "east" :level 58 :mend false})
+(def deep-ore (deep-rock {"9,58,1" "iron_ore"}))
+
+(deftest a-fresh-stair-with-no-shaft-suggests-declaring-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario no-shaft-args deep-ore 400))
+              e (done-event s)
+              {:keys [at heading to-y] :as suggest} (:shaft-suggest e)]
+          (is (= {:at [0 64 0] :heading :east} (select-keys suggest [:at :heading])))
+          (is (< to-y 64) "the bottom of the stair")
+          (is (re-find (re-pattern (str "declare it with plans.mjs mineshaft <id> --at=0,64,0 --heading east --to-y " to-y)) (:text e)))
+          (is (empty? (shape/plan-errors {:id "x" :kind :mineshaft :parts [{:id "stair" :stair {:from at :heading heading :to-y to-y} :want :clear}]} "x"))
+              "the suggestion is a valid shaft"))))))
+
+(deftest a-shaft-in-use-or-shafts-off-suggest-nothing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [used (await (shafted via-shaft ore-east [] 400))
+              off (await (scenario (assoc no-shaft-args :shaft false) deep-ore 400))]
+          (is (nil? (:shaft-suggest (done-event used))))
+          (is (nil? (:shaft-suggest (done-event off))))
+          (is (empty? (events-of off :mine.no-shaft)) "false never looks a shaft up"))))))
+
+(deftest shaft-required-with-none-usable-stops-before-digging
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario (assoc no-shaft-args :shaft :required) deep-ore 400))
+              e (done-event s)]
+          (is (= :no-shaft (:reason e)))
+          (is (= 0 (:got e)))
+          (is (empty? (dug-cells s)) "nothing dug")
+          (is (nil? (:shaft-suggest e)))
+          (is (finished? s)))))))
+
+(deftest shaft-required-uses-a-usable-shaft
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (shafted (assoc via-shaft :shaft :required) ore-east [] 400))]
+          (is (= :count (:reason (done-event s)))))))))
