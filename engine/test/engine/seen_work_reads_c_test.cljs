@@ -21,7 +21,7 @@
 (deftest mine-cut-hazard-needs-sight-of-the-cell
   (let [blocks {"0,64,4" "stone" "0,65,4" "stone"}
         hazard (fn [w] (mine/cut-hazard {:primitives w :args {}} far))]
-    (is (= {:reason :not-loaded :at far} (hazard (wrapped blocks true))) "unseen cell is unknown")
+    (is (nil? (hazard (wrapped blocks true))) "loaded but unseen: no hazard, the dig looks (no chunk is :not-loaded: mine-test)")
     (is (nil? (hazard (wrapped blocks false))) "seen stone: no hazard")))
 
 (deftest mine-owed-ignores-unseen-ground
