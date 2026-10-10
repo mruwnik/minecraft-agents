@@ -5,8 +5,6 @@
             [engine.ctx :as ctx]
             [engine.memory :as mem]
             [jobs.lib.access :as access]
-            [jobs.lib.access.zones :as zones]
-            [jobs.lib.world :as known]
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
@@ -356,16 +354,6 @@
   "Adults of a kind within the hunt radius that are never taken, so they can breed (combat.hunt's :keep default)."
   2)
 
-(defn own-pen?
-  "Whether the animal stands in a zone this body owns or on the footprint of a plan it made: a farm or pen to leave alone."
-  [c e]
-  (let [{:keys [x y z]} (u/pos-of (.-pos e))
-        cell [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]
-        self (ctx/self-name c)]
-    (boolean
-     (or (some (fn [zn] (and (zones/same-owner? (:owner zn) self) (zones/in-box? cell zn))) (known/zones c))
-         (contains? (access/own-plans c) (get (known/footprints c) cell))))))
-
 (defn animals-in-sight
   "The food animals the entity scan lists within :hunt-radius, nearest first, as {:entity e :why r}: r is nil for one
   to hunt, else :tried (attacked this job), :baby, :refused (another's zone or claim), :pen (in a zone or plan of
@@ -380,7 +368,7 @@
                         :why (cond (skipped (.-id e)) :tried
                                    (true? (.-baby e)) :baby
                                    (access/container-refusal c :take (u/pos-of (.-pos e))) :refused
-                                   (own-pen? c e) :pen
+                                   (access/in-own-area? c (u/pos-of (.-pos e))) :pen
                                    (<= (adults (.-name e)) keep-adults) :kept)})))))
 
 (defn nearest-animal

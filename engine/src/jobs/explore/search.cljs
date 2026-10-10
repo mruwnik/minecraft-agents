@@ -37,7 +37,8 @@
   :end): it is recorded :goal-dangerous, no stuck walk; a step toward an unseen column given up so leaves that column.
 
   With :use-notes, live :seen notes of a target within :max-distance count as found (:noted true, :by), unless the body
-  sees another block at that cell now.
+  sees another block at that cell now, and a noted entity standing in a zone or plan of the body's own (its pens) never counts. The
+  search.done text lists the positions.
 
   Ends with {:reason :found|:not-found :why :found [{:what :pos :id? :noted? :by?}] :coverage {:legs :scans
   :failed [{:pos :reason}] :skipped :farthest}}, info search.done or warn search.not-found. :why is one of
@@ -215,7 +216,8 @@
                  why (assoc :why why))
         what (str/join "/" (targets c))]
     (if (= :found reason)
-      (ctx/emit! c :search.done :info (assoc result :text (str "found " (count (:found result)) " " what)))
+      (ctx/emit! c :search.done :info (assoc result :text (str "found " (count (:found result)) " " what " at "
+                                                                           (str/join ", " (map #(str/join "," (:pos %)) (:found result))))))
       (ctx/emit! c :search.not-found :warn
                  (assoc result :text (str "no " what " found (" (name why) (when (= :time why) (str ", :timeout-s " (:timeout-s (:args c)))) ") after " (:legs m 0) " legs, "
                                           (:scans m 0) " looks, " (:farthest m 0) " blocks out"))))
@@ -223,12 +225,13 @@
     :done))
 
 (defn takeable
-  "found without the blocks in :avoid columns, and (when :takeable is on) those a zone, claim or plan footprint bars taking."
+  "found without the blocks in :avoid columns, the noted entities standing in a zone or plan of the body's own (its pens),
+  and (when :takeable is on) those a zone, claim or plan footprint bars taking."
   [c found]
   (let [{:keys [takeable avoid]} (:args c)
         avoid (set (map vec avoid))
         in (when takeable (access/rules-input c))]
-    (cond->> found
+    (cond->> (remove #(and (:noted %) (:id %) (access/in-own-area? c (zipmap [:x :y :z] (:pos %)))) found)
       (seq avoid) (remove #(and (not (:id %)) (avoid [((:pos %) 0) ((:pos %) 2)])))
       takeable (filter #(or (:id %) (:ok (access/may? in :harvest (:pos %))))))))
 

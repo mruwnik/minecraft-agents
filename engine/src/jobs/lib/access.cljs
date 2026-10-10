@@ -40,6 +40,16 @@
     :spare-own? (boolean (:spare-own? opts))
     :ignore-zones? (boolean (if (contains? opts :ignore-zones?) (:ignore-zones? opts) (:ignore-zones? (:args c))))}))
 
+(defn in-own-area?
+  "Whether pos ({:x :y :z}, floats ok) lies in a zone this body owns or on the footprint of a plan it made: a farm or pen
+  of its own."
+  [c {:keys [x y z]}]
+  (let [cell [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]
+        self (ctx/self-name c)]
+    (boolean
+     (or (some (fn [zn] (and (zones/same-owner? (:owner zn) self) (zones/in-box? cell zn))) (known/zones c))
+         (contains? (own-plans c) (get (known/footprints c) cell))))))
+
 (def hidden-guess "What a cell the body has not sensed is taken for: rock, so a dig goes ahead and looks." "stone")
 
 (defn sensed-at

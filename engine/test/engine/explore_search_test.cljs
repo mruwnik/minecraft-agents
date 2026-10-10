@@ -258,6 +258,19 @@
           (is (= [] (walks s)))
           (is (= :not-found (:reason (event-of own :search.not-found)))))))))
 
+(deftest a-noted-animal-in-the-bodys-own-zone-is-no-find-one-outside-is-and-the-text-gives-where
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [note (fn [pos] [{:kind :seen :what "cow" :id "u1" :pos pos :by "Other" :t 1 :until 9e15}])
+              farm {:name "farm" :owner "Fake" :min [0 60 0] :max [10 70 10]}
+              run! (fn ^:async f [pos] (await (search! {:target "cow" :max-distance 20 :max-legs 0} {:zones [farm]} 20
+                                                       #(write-other! % "Other" (note pos)))))
+              penned (await (run! [3 64 3]))
+              wild (await (run! [12 64 12]))]
+          (is (= :not-found (:reason (event-of penned :search.not-found))) "the penned cow is not counted")
+          (is (re-find #"12,64,12" (str (:text (event-of wild :search.done)))) "the text says where"))))))
+
 (deftest legs-that-cannot-be-stood-on-or-walked-are-recorded-and-skipped
   (async done
     (tu/run-async done
