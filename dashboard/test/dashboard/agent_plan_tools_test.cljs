@@ -60,6 +60,13 @@
         score (tools/score-native (:expansion prepared) blocks (constantly nil) {} false 0 10)]
     (is (= [{:pos [1 64 0] :part "base" :want "stone" :found "dirt"}] (:wrong-cells score)))))
 
+(deftest score-lists-the-missing-cells-with-wanted-and-says-how-many
+  (let [text (str "{:id \"gaps\" :parts [{:id \"base\" :cells [" (cells-text 14) "] :want [:any \"oak_fence\" \"birch_fence\"]}]}")
+        prepared (prepare text "gaps" [] [])
+        score (tools/score-native (:expansion prepared) (constantly {:name "air"}) (constantly nil) {} false 0 10)]
+    (is (= {:pos [0 64 0] :part "base" :want "oak_fence | birch_fence" :found "air"} (first (:missing-cells score))))
+    (is (= [10 14] [(count (:missing-cells score)) (:missing-total score)]))))
+
 (deftest score-caps-the-wrong-cell-list-and-says-so
   (let [text (str "{:id \"many\" :parts [{:id \"base\" :cells [" (cells-text 14) "] :want \"stone\"}]}")
         prepared (prepare text "many" [] [])

@@ -167,7 +167,12 @@
      :unresolved (into {} (map (fn [[kind n]] [kind n]) unresolved))
      :unknown-cells unknown}))
 
-(def max-wrong-cells "Wrong cells a check lists." 10)
+(def max-wrong-cells "Wrong or missing cells a check lists." 10)
+
+(defn listed-cells [judged answer]
+  (mapv (fn [{:keys [pos part want found]}]
+          {:pos pos :part part :want (shape/want-text want) :found found})
+        (take max-wrong-cells (filter #(= answer (:answer %)) judged))))
 
 (defn score-native
   "Compare a native expansion using block and column mtime accessors."
@@ -177,9 +182,10 @@
         checked (assoc (cmp/checked (:cells expansion) mtime-of)
                        :now (js/Date.now))]
     {:counts (:counts result)
-              :wrong-cells (mapv (fn [{:keys [pos part want found]}] {:pos pos :part part :want (shape/want-text want) :found found})
-                                 (take max-wrong-cells (filter #(= :wrong (:answer %)) judged)))
+              :wrong-cells (listed-cells judged :wrong)
               :wrong-total (get-in result [:counts :wrong])
+              :missing-cells (listed-cells judged :missing)
+              :missing-total (get-in result [:counts :missing])
               :elements (mapv #(select-keys % [:id :kind :content :count :bounds :counts :error]) (take limit (drop offset (:elements result))))
               :elements-total (count (:elements result))
               :elements-next-offset (when (< (+ offset limit) (count (:elements result))) (+ offset limit))
