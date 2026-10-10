@@ -7,6 +7,7 @@
             [jobs.items.smelt :as smelt]
             [jobs.lib.armour :as armour]
             [jobs.lib.blocks :as b]
+            [jobs.lib.combat :as combat]
             [jobs.lib.foods :as foods]
             [jobs.lib.util :as u]))
 
@@ -62,7 +63,7 @@
 (defn restarted
   "The job memory after a death: the children and what was made went with the body; the job starts from now."
   [m now]
-  (-> m (dissoc :children :materials :made :fed :partial :no-food-until) (assoc :since now)))
+  (-> m (dissoc :children :materials :made :fed :partial :no-food-until :weapon-tried) (assoc :since now)))
 
 (defn wear-outcome
   "What a wear child round means: :continue (yield), nil (it wore something), or {:reason :wear-failed :why}.
@@ -106,8 +107,18 @@
 
 (defn obtain-args [c item n]
   (let [a (:args c)]
-    {:item item :count (min 64 n) :explore (:explore a)
-     :minutes (or (:minutes a) (settings/get settings ::minutes))}))
+    (assoc (if (vector? item) {:any-of item} {:item item})
+           :count (min 64 n) :explore (:explore a)
+           :minutes (or (:minutes a) (settings/get settings ::minutes)))))
+
+(defn armed?
+  "Whether a weapon (jobs.lib.combat/default-weapons: a sword or an axe) is carried."
+  [carried]
+  (boolean (some #(combat/weapon? combat/default-weapons %) (keys carried))))
+
+(def starter-weapons
+  "The cheap weapons made before the mining starts, best first."
+  ["stone_sword" "wooden_sword"])
 
 (defn ^:async run-obtain!
   "One obtain child round in slot: :continue, or {:reason :why} when it ended without the item (nil when it got it)."
@@ -179,6 +190,14 @@
                   :else (recur)))
 
           (empty? todo) (finish! c items have {:status :done})
+
+          (and need (not (armed? (:carried st))) (not (:weapon-tried (ctx/mem c))))
+          (let [r (await (run-obtain! c :weapon starter-weapons 1))]
+            (cond (= :continue r) :continue
+                  :else (do (ctx/update-mem! c assoc :weapon-tried true)
+                            (when r (ctx/emit! c :kit.no-weapon :warn {:reason (:reason r) :why (:why r)
+                                                                       :text "no sword or axe to fight with, going on unarmed"}))
+                            (recur))))
 
           (and short (< fp min-food) (not (:fed (ctx/mem c))) (not (< (ctx/now c) (or (:no-food-until (ctx/mem c)) 0))))
           (let [r (when (:food a) (await (run-food! c)))]
