@@ -1147,6 +1147,25 @@
           (is (= :brought (:reason e)) (pr-str (select-keys e [:reason :given-up])))
           (is (= #{1} (cows-in-pen s))))))))
 
+(deftest a-lured-cow-that-is-lost-or-trails-too-long-is-given-up-with-its-reason
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[label move reason]
+                [["out of sight" (fn [s] (set-x! s 1 -500)) :lost]
+                 ["beyond the follow range" (fn [s] (set-x! s 1 (- (self-x s) 15))) :lagging]
+                 ["trailing, never catching up" (fn [s] (set-x! s 1 (- (self-x s) 8.5))) :lagging]]]
+          (let [s (submit! (setup (world {:entities [(cow 1 -40 3)] :inventory [wheat] :blocks far-ground})) {:target 1 :radius 60 :timeout-s 900})
+                moved (atom false)]
+            (let [arm! #(when (or @moved (<= (self-x s) -30)) (reset! moved true) (move s))]
+              (doseq [act ["steer" "wait"]]
+                (.override (.-world (:p s)) act
+                           (fn [token a impl]
+                             (when (= "wait" act) (swap! (:clock s) + (or (.-ms a) 0)))
+                             (.then (impl token a) (fn [r] (arm!) r))))))
+            (await (run-ticks s 900))
+            (is (= reason (get-in (done-event s) [:given-up "u1"])) label)))))))
+
 (deftest the-gate-toggle-keeps-the-food-in-hand
   (async done
     (tu/run-async done

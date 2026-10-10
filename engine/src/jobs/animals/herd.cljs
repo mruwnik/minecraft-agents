@@ -25,7 +25,7 @@
   Declines while the box already holds :target adults. A started run always passes, so a cut job resumes.
   A body more than 16 blocks from the pen first walks within 12 of it.
   A lured animal follows the food only within about 10 blocks: from where it was met the body walks to the pen in short legs,
-  holding still while the animal trails more than 7 behind, and gives it up (given-up :lost unseen 3 s, :lagging beyond 10) rather than outrun it.
+  holding still (at most 10 s) while the animal trails more than 7 behind, and gives it up (given-up :lost unseen 3 s, :lagging beyond 10) rather than outrun it.
 
   Checks before the first animal (each ends the run with its reason):
   - :no-pen: the pen cannot be read from :box (the result's :cell names the first unseen cell when there is one; a cell it has not seen is gone near and looked at once; one still unknown goes to the pen's gate to look in, once; still unknown ends here).
@@ -125,7 +125,7 @@
   [c reason]
   (let [k (:animal (ctx/mem c))]
     (ctx/emit! c :herd.lure-lost :info {:animal k :reason reason :text (str "herd gives up the lured " (:mob (:args c)) ": " (name reason))})
-    (ctx/update-mem! c #(-> % (assoc :led []) (update :given-up assoc k reason) (dissoc :unseen-since)))
+    (ctx/update-mem! c #(-> % (assoc :led []) (update :given-up assoc k reason) (dissoc :unseen-since :wait-since)))
     (regather-or-lose! c)))
 
 (defn ^:async lure-approach!
@@ -144,8 +144,13 @@
                  (lure-lost! c :lost)
                  (do (ctx/update-mem! c assoc :unseen-since since) (await (lead-to/wait-for-animal! c)) :continue))
       (> d (follow-range)) (lure-lost! c :lagging)
-      (do (ctx/update-mem! c dissoc :unseen-since) (> d lead-to/safe-gap)) (do (await (lead-to/wait-for-animal! c)) :continue)
-      :else (let [leg (await (lead-to/leg-target c target 1))]
+      (do (ctx/update-mem! c dissoc :unseen-since) (> d lead-to/safe-gap))
+      (let [waiting (or (:wait-since m) now)]
+        (if (> (- now waiting) lead-to/max-wait-ms)
+          (lure-lost! c :lagging)
+          (do (ctx/update-mem! c assoc :wait-since waiting) (await (lead-to/wait-for-animal! c)) :continue)))
+      :else (let [_ (ctx/update-mem! c dissoc :wait-since)
+                  leg (await (lead-to/leg-target c target 1))]
               (if-not leg
                 (await (settle-at! c 0 (settle-out-ms) #(set-phase! c :clear-out)))
                 (do (await (child/call-walk c :walk {:pos leg :range 1 :doors :never :escalate false}))
