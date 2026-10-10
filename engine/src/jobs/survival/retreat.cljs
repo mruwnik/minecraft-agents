@@ -102,7 +102,7 @@
   {:radius {:doc "hostiles within this many blocks start a flight" :spec (a/num-in 0 nil) :default 8}
    :ranged-radius {:doc "ranged hostiles (skeletons and the like) within this many blocks start a flight" :spec (a/num-in 0 nil) :default 16}
    :eat-gap {:doc "with at least this many blocks to the nearest hostile, eat a bite per flee step" :spec (a/num-in 0 nil) :default 12}
-   :goal {:doc "a position {:x :y :z} the flight walks to with go-to legs (planner danger costs keep it round the hostiles) while the body outruns them and the line clears them by 4 blocks, else leans toward, like a refuge; nil: away only" :spec goal/pos-spec :default nil}
+   :goal {:doc "a position {:x :y :z} the flight walks to with go-to legs (planner danger costs keep it round the hostiles) while the body outruns them (dropped within 3 blocks of it or after a leg that lost ground), else leans toward, like a refuge; nil: away only" :spec goal/pos-spec :default nil}
    :step {:doc "blocks per walk" :spec (a/num-in 1 nil) :default 6}
    :home-range {:doc "a flight leans towards the latest :bed or :home only when it lies within this many blocks" :spec (a/num-in 0 nil) :default 64}
    :weapons {:doc "item name substrings that count as weapons, for a cornered fight" :spec (a/coll-of (a/or-of string? keyword?)) :default combat/default-weapons}
@@ -502,22 +502,17 @@
   "Blocks from the goal at which the flight no longer walks to it."
   3)
 
-(def goal-margin
-  "Blocks the straight line to the goal keeps from every chaser for the flight to walk it."
-  4)
-
 (defn goal-leg
-  "The goal as a go-to target while the body outruns its chasers (cost/outruns-at? at the flank turn), is farther than
-  goal-near from it and the straight line to it passes every chaser at goal-margin or more, else nil (the flight leans
-  toward it instead): the planner's danger costs then route the leg round the hostiles."
-  [c threats]
-  (let [goal (active-goal c)
-        p (:primitives c)
-        from (u/self-pos c)]
-    (when (and goal (> (u/dist from goal) goal-near)
-               (walk/clear-of? from goal (mapv #(danger-q/mob-pos p %) threats) goal-margin)
-               (cost/outruns-at? (retreat-home/food (:primitives c)) (walk/flank-turn)))
-      goal)))
+  "The goal as a go-to target while the body outruns its chasers (cost/outruns-at? at the flank turn): the planner's
+  danger costs route the leg round the hostiles. Once the body is within goal-near of it the goal is done for the flight
+  (:goal-off), as it is after a leg that lost ground: the flight goes on away from the chasers; without that it walked
+  back and forth between the goal and the way away for ever."
+  [c]
+  (let [goal (active-goal c)]
+    (cond
+      (nil? goal) nil
+      (<= (u/dist (u/self-pos c) goal) goal-near) (do (ctx/update-mem! c assoc :goal-off true) nil)
+      (cost/outruns-at? (retreat-home/food (:primitives c)) (walk/flank-turn)) goal)))
 
 (def way-reach
   "Blocks within which the stairs the body cut are a way out of a flight."
@@ -729,7 +724,7 @@
       way (await (run-home! c room way))
       :else
       (let [_ (await (eat-on-the-run! c threat))
-            leg (goal-leg c threats)
+            leg (goal-leg c)
             gap0 (flight/nearest-gap p threats)
             goal-gap0 (when leg (u/dist (u/self-pos c) leg))
             target (or leg (await (flight-target! c threats covered? rooms)))

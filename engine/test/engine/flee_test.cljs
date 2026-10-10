@@ -533,13 +533,22 @@
 
 (defn first-target [seen] (:target (first (filterv #(= :retreat.target (:kind %)) @seen))))
 
-(deftest a-flight-with-a-goal-clear-of-the-chaser-takes-a-go-to-path-to-it
+(deftest a-flight-with-a-chaser-on-the-line-to-its-goal-still-walks-to-the-goal
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [seen]} (await (run-job! (setup {:entities [(zombie 7 5 {:chase {:speed 0.7}})]})
-                                              'jobs.survival.retreat {:goal {:x 10 :y 64 :z 16}}))]
-          (is (= [10 64 16] (first-target seen)) "the goal itself, the planner's costs keep it round the zombie"))))))
+        (let [{:keys [seen]} (await (run-job! (setup {:entities [(zombie 7 6 {:chase {:speed 0.7}})]})
+                                              'jobs.survival.retreat {:goal {:x 20 :y 64 :z 0}}))]
+          (is (= [20 64 0] (first-target seen)) "the goal itself: the planner's costs route the leg round the zombie"))))))
+
+(deftest a-flight-that-reaches-its-goal-flees-on-from-there-and-ends
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out seen]} (await (run-job! (setup {:entities [(zombie 7 5 {:chase {:speed 0.7}})]})
+                                                  'jobs.survival.retreat {:goal {:x 20 :y 64 :z 12}}))]
+          (is (= :done (:status out)) (pr-str out))
+          (is (< (count (filterv #(= :retreat.target (:kind %)) @seen)) 200) "no walking back and forth between the goal and the way away"))))))
 
 (def walker
   "A listed job whose memory holds an open go-to walk to (10 64 16), as one cut on its way."

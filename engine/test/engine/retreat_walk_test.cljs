@@ -79,9 +79,3 @@
     (is (nil? (walk/way-target (at 1) [mob] [] 12)) "no stair, no way target")
     (is (nil? (walk/way-target (at 8) [{:x 9.5 :y 70 :z 0.5}] stair-floors 12))
         "every stair cell above the body lies nearer the mob than the body: none")))
-
-(deftest a-line-to-the-goal-is-clear-of-a-mob-only-when-it-passes-at-the-margin
-  (let [goal {:x 10 :y 64 :z 16}]
-    (is (true? (walk/clear-of? from goal [{:x 5 :y 64 :z 0}] 4)) "4.2 blocks to the side")
-    (is (false? (walk/clear-of? from goal [{:x 5 :y 64 :z 8}] 4)) "on the line")
-    (is (false? (walk/clear-of? from goal [{:x 11 :y 64 :z 17}] 4)) "beyond the goal counts from the goal")))
