@@ -956,7 +956,7 @@
         (let [{:keys [eng p seen]} (setup {:time night :inventory dirt-stack :blocks (tu/box -30 58 -30 30 63 30 "stone")})
               _ (core/submit! eng '(jobs.survival.night) {})
               mid (await (night-then-day eng p 8 #(hash-map :holder (some? (core/holder eng)) :pos (pos-of p)) 2))]
-          (is (= {:holder false :pos {:x 0 :y 64 :z 0}} mid) "in place at night, on the surface, not held")
+          (is (= {:holder false :pos {:x 0.5 :y 64 :z 0.5}} mid) "in place at night (stepped to its cell's middle to place the walls), on the surface, not held")
           (is (= 1 (count (emitted seen :dig-in.sealed))) "walled in with placed blocks")
           (is (every? #(>= (:y (arg-pos %)) 64) (calls p "dig")) "no dig below the surface: the only digs are the placed wall, taken down by day"))))))
 

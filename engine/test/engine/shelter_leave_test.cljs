@@ -51,7 +51,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (await (dug-in-world {}))]
-          (is (= {:x 0 :y 64 :z 0} (st/pos-of p)) "sealed in the cell")
+          (is (= {:x 0.5 :y 64 :z 0.5} (st/pos-of p)) "sealed in the cell")
           (core/load-scenario! eng (scenario/parse (str "{:register [{:trigger " shut-in-trigger "}]}")))
           (await (st/tick-n eng 12))
           (is (not= {:x 0 :y 64 :z 0} (st/pos-of p)) "the reflex ran leave!: the body stepped out of its walls")

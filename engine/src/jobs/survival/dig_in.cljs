@@ -147,6 +147,7 @@
         p (:primitives c)
         open (dig-cells/open-cells p (sh/feet p))
         cells (cells-to-try c open)
+        _ (when (and (seq cells) (refuge/off-centre? p)) (await (refuge/centre! c)))
         status (await (dig-cells/place-all! c blocks (take max-places (dig-cells/bottom-up p cells (sh/feet p)))))]
     (cond
       (empty? cells) (do (when-not (sh/roofed? p roof-height) (remember-failed-site! c :walls-refused))

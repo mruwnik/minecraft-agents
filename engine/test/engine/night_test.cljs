@@ -332,7 +332,7 @@
           (is (= {:holder false :notified 1 :places 10}
                  {:holder (some? (core/holder eng)) :notified (st/notified seen) :places (count (st/calls p "place"))})
               "walled in and safe: no hold, the queued job ran at night")
-          (is (= {:x 0 :y 64 :z 0} (st/pos-of p)) "still in the shelter")
+          (is (= {:x 0.5 :y 64 :z 0.5} (st/pos-of p)) "still in the shelter")
           (is (= 1 (fired seen)) "not fired again while safe"))))))
 
 (deftest at-night-a-respawned-body-shelters-before-it-recovers-its-drops

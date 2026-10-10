@@ -243,10 +243,13 @@
                     (recur (if (= "dug" (.-status d)) cells (rest cells))))))))))
 
 (defn sealed-in?
-  "Whether the world shows the body shut in: a roof within roof-height above and, for walls mode, no open cell around
-  the feet (checked from the blocks, not from what was placed)."
+  "Whether the world shows the body shut in: a roof within roof-height above (a solid block, or a cell that stops a mob,
+  sealed?: leaves, glass) and, for walls mode, no open cell around the feet (checked from the blocks, not from what was placed)."
   [p mode roof-height]
-  (and (sh/roofed? p roof-height)
+  (and (or (sh/roofed? p roof-height)
+           (and (= :walls mode)
+                (let [{:keys [x y z]} (sh/feet p)]
+                  (some #(sealed? p {:x x :y (+ y %) :z z}) (range 1 (inc roof-height))))))
        (or (not= :walls mode) (empty? (open-cells p (sh/feet p))))))
 
 (defn ^:async collect-drops!
