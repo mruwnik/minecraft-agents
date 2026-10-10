@@ -682,12 +682,14 @@
           (is (= {:x 3 :y 64 :z 1} (first (tu/walked-to eng))) "walks to the water, not away")
           (is (zero? (count (calls p "place")))))))))
 
-(deftest facing-first-orders-the-cells-by-the-nearest-melee-chaser-too
+(deftest nearest-first-orders-the-sides-by-the-melee-chaser-and-keeps-support-before-roof
   (let [feet {:x 0 :y 64 :z 0}
-        cells [{:x 1 :y 64 :z 0} {:x 0 :y 66 :z 0} {:x -1 :y 64 :z 0}]
-        zombie [{:x 0.5 :y 66 :z 0.5}]]
-    (is (= {:x 0 :y 66 :z 0} (first (retreat-refuge/nearest-first zombie cells))) "the roof cell with the zombie over it")
-    (is (= cells (retreat-refuge/nearest-first [] cells)) "no chaser: as given")))
+        east {:x 1 :y 64 :z 0} west {:x -1 :y 64 :z 0}
+        support {:x 1 :y 66 :z 0} roof {:x 0 :y 66 :z 0}
+        cells [east west support roof]]
+    (is (= [west east support roof] (retreat-refuge/nearest-first feet [{:x -3.5 :y 64 :z 0.5}] cells)) "the side towards it first; support, then roof")
+    (is (= [east west support roof] (retreat-refuge/nearest-first feet [{:x 0.5 :y 66 :z 0.5}] cells)) "a zombie over the roof does not pull the roof ahead of its support")
+    (is (= cells (retreat-refuge/nearest-first feet [] cells)) "no chaser: as given")))
 
 (deftest a-creeper-beside-an-enderman-keeps-the-creeper-order
   (is (= :back-off (first (retreat/escape-order {:enderman? true :creeper? true})))))

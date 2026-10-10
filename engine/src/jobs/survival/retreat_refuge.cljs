@@ -111,13 +111,16 @@
                cells))))
 
 (defn nearest-first
-  "cells ordered by the distance of their middle to the nearest of threats ({:x :y :z}), as given with no threat."
-  [threats cells]
+  "cells (dig-cells/fill-cells order) with the side cells (feet and head height) nearest the nearest of threats ({:x :y :z})
+  first; the roof support and the roof keep their order after them (a block needs a neighbour to be placed against).
+  As given with no threat."
+  [feet threats cells]
   (if (empty? threats)
     cells
-    (let [gap (fn [{:keys [x y z]}]
+    (let [side? (fn [{:keys [y]}] (<= (:y feet) y (inc (:y feet))))
+          gap (fn [{:keys [x y z]}]
                 (apply min (map #(u/dist {:x (+ x 0.5) :y (+ y 0.5) :z (+ z 0.5)} %) threats)))]
-      (sort-by gap cells))))
+      (concat (sort-by gap (filter side? cells)) (remove side? cells)))))
 
 (defn melee-spots
   "Where the seen melee hostiles within the flight's :radius stand."
@@ -146,7 +149,7 @@
         p (:primitives c)
         open (dig-cells/open-cells p (sh/feet p))
         free (remove #(occupied? c %) open)
-        cells (if (seq (shooters c)) (facing-first (sh/feet p) (shooters c) free) (nearest-first (melee-spots c) free))
+        cells (if (seq (shooters c)) (facing-first (sh/feet p) (shooters c) free) (nearest-first (sh/feet p) (melee-spots c) free))
         forget! #(dig-cells/forget-wait! c :seal-mob-since)
         unfillable (fn [] (forget!) (flight/tried! c :seal) :failed)]
     (cond
