@@ -34,9 +34,11 @@
 (deftest the-item-becomes-held
   (let [w (owned {:blocks {p "stone"} :inventory [(stack "bone_meal" 1)] :held "bread"})
         [w1] (click w {:item "bone_meal"})
-        [w2] (click w1 {})]
+        [w2] (click w1 {})
+        [w3] (click w2 {:item "none"})]
     (is (= "bone_meal" (get-in w1 [:self :held])))
-    (is (nil? (get-in w2 [:self :held])))))
+    (is (= "bone_meal" (get-in w2 [:self :held])))
+    (is (nil? (get-in w3 [:self :held])))))
 
 (deftest hoe-makes-farmland
   (doseq [[hoe ground] [["wooden_hoe" "dirt"] ["iron_hoe" "grass_block"] ["diamond_hoe" "dirt_path"]]]

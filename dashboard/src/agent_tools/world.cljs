@@ -14,7 +14,7 @@
   (str "usage: world.mjs <agent> submit <action> [args] --world <world> [--worlds <dir>] [--state <legacy-parent>] [--who NAME]\n"
        "  submit move-to <x> <y> <z> | <x> <z> (a column: any height) [--range <n>] [--doors shut|leave-open|never] [--no-escalate]   (jobs.movement.go-to)\n"
        "  submit dig <x> <y> <z> [--ignore-zones] | submit place <x> <y> <z> <item> [--ignore-zones]   (jobs.blocks.dig / place)\n"
-       "  submit use-on <x> <y> <z> [--item <item>] [--face up|down|north|south|east|west]   (jobs.blocks.use-on)\n"
+       "  submit use-on <x> <y> <z> [--item <item>|none] [--face up|down|north|south|east|west]   (jobs.blocks.use-on)\n"
        "  submit interact <entity-id> [--item <item>]   (jobs.items.interact)\n"
        "  submit wear [<item>]   (jobs.items.wear: a carried armour piece; no item: the best carried piece for each empty or weaker slot)\n"
        "  submit equip <item> [--hand main|off]   (jobs.items.equip: hold a carried item in the main hand or off-hand; refuses a missing item)\n"

@@ -5,7 +5,7 @@
             [jobs.lib.blocks :as b]))
 
 (def doc
-  "Right-click the block at :pos ([x y z] or {:x :y :z}) once, with :item in hand (the empty hand when nil), on :face.
+  "Right-click the block at :pos ([x y z] or {:x :y :z}) once, with :item in hand (nil: whatever is held stays in hand; none: the empty hand), on :face.
   One call is the whole attempt: walk into reach (one jobs.movement.go-to call, range 3, no escalation), click. The
   check always passes. It yields :continue only when the walk waits on the world. Zones are not consulted: a click
   changes no block by itself.
@@ -17,7 +17,7 @@
 
 (a/defargs args
   {:pos {:doc "the block to click, [x y z] or {:x :y :z}" :spec ::a/pos :default nil}
-   :item {:doc "the item to hold for the click; nil: the empty hand" :spec a/item? :default nil}
+   :item {:doc "the item to hold for the click; nil: keep the hand as it is; none: the empty hand" :spec a/item? :default nil}
    :face {:doc "the face clicked: up down north south east west" :spec #{"up" "down" "north" "south" "east" "west"} :default "up"}})
 
 (def faces #{"up" "down" "north" "south" "east" "west"})

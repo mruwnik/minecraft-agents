@@ -110,7 +110,7 @@ for (const c of hands) {
   test(`empty hand, ${c.name}`, async () => {
     const { bot, p } = rig({ items: c.items, freeSlot: c.free })
     bot.heldItem = c.held
-    const r = await p.useOn('t1', dirt)
+    const r = await p.useOn('t1', { ...dirt, item: 'none' })
     const hand = names(bot).filter(n => n === 'setQuickBarSlot' || n === 'unequip' || n === 'equip')
     assert.deepEqual(hand, c.want)
     assert.equal(r.status, c.status ?? 'unchanged')
@@ -122,8 +122,17 @@ test('empty hand picks the first empty hotbar slot', async () => {
   const items = [{ name: 'stone', count: 1, slot: 36 }, { name: 'stone', count: 1, slot: 37 }, hoe]
   const { bot, p } = rig({ items: [...items.slice(0, 2), { ...hoe, slot: 39 }] })
   bot.heldItem = items[0]
-  await p.useOn('t1', dirt)
+  await p.useOn('t1', { ...dirt, item: 'none' })
   assert.deepEqual(calls(bot, 'setQuickBarSlot')[0].args, [2])
+})
+
+test('no :item keeps the held stack in hand', async () => {
+  const { bot, p } = rig({ items: [hoe] })
+  bot.heldItem = hoe
+  const r = await p.useOn('t1', dirt)
+  assert.deepEqual(names(bot).filter(n => n === 'setQuickBarSlot' || n === 'unequip' || n === 'equip'), [])
+  assert.equal(r.status, 'unchanged')
+  assert.equal(calls(bot, 'activateBlock').length, 1)
 })
 
 const faces = [

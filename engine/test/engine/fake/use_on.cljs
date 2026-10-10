@@ -74,8 +74,10 @@
 
 (def face-delta {"up" [0 1 0] "down" [0 -1 0] "north" [0 0 -1] "south" [0 0 1] "east" [1 0 0] "west" [-1 0 0]})
 
-(defn use-on [w {:keys [pos item face] :or {face "up"}}]
-  (let [here (get-in w [:blocks pos] "air")
+(defn use-on [w {:keys [pos face] :or {face "up"} :as args}]
+  (let [keep-hand? (nil? (:item args))
+        item (when-not (= "none" (:item args)) (:item args))
+        here (get-in w [:blocks pos] "air")
         before (snapshot w pos)
         done (fn [w' status & [consumed extra]] [w' (merge {:status status} extra {:before before :after (snapshot w' pos) :consumed (or consumed 0)})])
         self-pos (get-in w [:self :pos])
@@ -95,7 +97,7 @@
       (not near?) (done w "unreachable" 0 {:reason "too-far"
                                            :distance (/ (js/Math.round (* 100 (distance self-pos (mapv + pos [0.5 0.5 0.5])))) 100)})
       :else
-      (let [w (assoc-in w [:self :held] item)]
+      (let [w (cond-> w (not keep-hand?) (assoc-in [:self :held] item))]
         (cond
           (and (re-find #"_fence$" here) (or (= item "lead") hand?))
           (let [[w' tied] (tie-to-post w pos)] (done w' (if (pos? tied) "used" "unchanged")))

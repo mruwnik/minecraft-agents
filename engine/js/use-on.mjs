@@ -1,5 +1,5 @@
 // Why JavaScript: Mineflayer boundary; block use/activate calls and the safety guards before the click.
-// useOn: right-click a block with an item (or an empty hand) and report what changed.
+// useOn: right-click a block with an item (the held stack when none is named, or 'none' for an empty hand) and report what changed.
 import vec3 from 'vec3'
 import { setting } from './settings.mjs'
 import { spawnSetMessage } from './prim-base.mjs'
@@ -42,9 +42,12 @@ export function createUseOn ({ act, getBot, inventory, eye, lookNow, timeScale, 
 
   return async function useOn (token, a = {}) {
     if (!isOwner(token)) throw cutError()
-    const { pos, item, face = 'up' } = a
+    const { pos, face = 'up' } = a
+    // item undefined: keep whatever is in hand; 'none': the empty hand.
+    const keepHand = a.item === undefined
+    const item = a.item === 'none' ? undefined : a.item
     if (!pos || !isNum(pos.x) || !isNum(pos.y) || !isNum(pos.z)) throw badArgs('useOn needs pos {x, y, z}')
-    if (item !== undefined && typeof item !== 'string') throw badArgs('useOn item must be a string')
+    if (a.item !== undefined && typeof a.item !== 'string') throw badArgs('useOn item must be a string')
     if (!Object.hasOwn(FACES, face)) throw badArgs(`useOn face must be one of ${Object.keys(FACES).join(', ')}`)
     const p = new Vec3(Math.floor(pos.x), Math.floor(pos.y), Math.floor(pos.z))
     const d = new Vec3(...FACES[face])
@@ -67,7 +70,7 @@ export function createUseOn ({ act, getBot, inventory, eye, lookNow, timeScale, 
       if (stack) {
         await bot.equip(stack, 'hand')
         ctx.alive()
-      } else if (!await emptyHand(ctx, bot)) return refuse('no-room')
+      } else if (!keepHand && !await emptyHand(ctx, bot)) return refuse('no-room')
       const countBefore = item === undefined ? 0 : carried(item)
       await lookNow(() => bot.lookAt(new Vec3(p.x + 0.5 + 0.5 * d.x, p.y + 0.5 + 0.5 * d.y, p.z + 0.5 + 0.5 * d.z), true))
       ctx.alive()
