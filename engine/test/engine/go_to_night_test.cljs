@@ -230,3 +230,15 @@
           (await (tu/run-until-empty eng 20))
           (is (= ["bread"] (distinct (map #(aget (.-args %) "item") (st/calls p "eat")))) (pr-str (map #(.-name %) (.-calls (.-world p)))))
           (is (= inside (st/pos-of p))))))))
+
+;; ------------------------------------------------------------------ sleep from a shelter
+
+(deftest sleep-from-a-shelter-waits-for-a-far-bed-and-leaves-for-a-near-one
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[bed expect-wait?] [[{:x 150 :y 64 :z 0} true] [outside false]]]
+          (let [{:keys [eng]} (st/setup (night-hut {}))
+                id (core/submit! eng (list 'jobs.survival.sleep {:bed bed}) {})]
+            (await (ticks eng 4))
+            (is (= expect-wait? (= :night-sheltered (:reason (waiting-of eng id)))) (pr-str bed))))))))

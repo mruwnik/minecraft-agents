@@ -9,7 +9,7 @@
 
 (def doc
   "Walk to a bed and sleep in it.
-  Waits unless it is night and a bed is known (reasons :not-night, :no-bed, :bed-unreachable, :bed-occupied): the :bed argument, else the remembered :bed within :bed-radius.
+  Waits unless it is night and a bed is known (reasons :not-night, :no-bed, :bed-unreachable, :bed-occupied, :night-sheltered: the body is in a shelter and the bed is more than 16 blocks away): the :bed argument, else the remembered :bed within :bed-radius.
   Also declines while the bed is in :bed-unreachable (an unexpired entry with the same position), and for a bed
   another player occupies (sh/bed-permit).
   Ends when asleep, or when it turns day.
@@ -51,6 +51,17 @@
     (:pos (places/parse-pos given))
     (sh/bed c (:bed-radius (:args c)))))
 
+(def leave-shelter-radius
+  "A body in a shelter at night walks to a bed only when it is this near (blocks); a farther one is waited for."
+  16)
+
+(defn far-from-shelter
+  "The kind of kept shelter (sh/kept-shelters: not a bare roof) a walk to a bed beyond leave-shelter-radius would leave, else nil."
+  [c bed]
+  (let [p (:primitives c)]
+    (when (> (u/dist (u/self-pos c) bed) leave-shelter-radius)
+      (sh/kept-shelters (sh/walk-leaves-shelter? p (:data (ctx/latest c :shelter)) bed 2)))))
+
 (defn check
   "Night and a bed that is not given up on and not occupied; else false, with the reason the job waits."
   [c]
@@ -61,6 +72,8 @@
       (nil? bed) (ctx/wait c {:reason :no-bed :text "no bed given or remembered within the bed radius"})
       (unreachable-bed? c bed) (ctx/wait c {:reason :bed-unreachable :pos bed})
       (not ((sh/bed-permit p (:world (:engine c))) bed)) (ctx/wait c {:reason :bed-occupied :pos bed})
+      (far-from-shelter c bed) (ctx/wait c {:reason :night-sheltered :shelter (far-from-shelter c bed) :pos bed
+                                            :text (str "the bed is " (js/Math.round (u/dist (u/self-pos c) bed)) " blocks away; the body stays in its shelter until day")})
       :else true)))
 
 (defn give-up-unreachable! [c bed]
