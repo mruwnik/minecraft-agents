@@ -3,7 +3,8 @@
   within the executor's abilities (jobs.lib.walk), follow the plan once, opening shut doors, gates and trapdoors by the
   :doors policy (jobs.lib.pass), and write the :moved memory entry.
   Its own namespace because jobs.lib.walk and jobs.lib.pass require jobs.lib.util."
-  (:require [jobs.lib.child :as child]
+  (:require [jobs.lib.breath :as breath]
+            [jobs.lib.child :as child]
             [jobs.lib.aim :as aim]
             [jobs.lib.click :as click]
             [engine.ctx :as ctx]
@@ -44,7 +45,7 @@
   explore, a search that ran out of loaded land walks to its frontier (walk/plan-walk! :frontier). With budget, at most
   that many expansions of search (walk/plan-walk! :budget): the plan may be status \"searching\" (walk nowhere, the
   search goes on at the next call) or a walk to where an unfinished search has got to (never, with progress false).
-  With budget, each plan's search is an info :planned event {:ms :status :sprint :why :nodes} (:sprint: whether the policy lets the plan sprint; nodes only once the search is over).
+  With budget, each plan's search is an info :planned event {:ms :status :sprint :why :nodes} (:sprint: whether the policy lets the plan sprint; nodes only once the search is over); with the head under water also :oxygen (0-20) and :swim-steps (the plan's swimming steps).
   With dangers, each plan costs the dangers the body knows of now (jobs.lib.threats/planner-dangers): it keeps away from them.
   With dark (default: unless false), each plan costs dark cells twice (wworld/with-dark: look/dark-fn).
   With avoid (a set of [x y z] cells), each plan costs entering them much more (wworld/with-avoid): a way round is taken when there is one.
@@ -64,7 +65,9 @@
         (let [^js r (:r plan)]
           (ctx/emit! c :planned :info (cond-> {:ms (js/Math.round (or (:ms plan) 0)) :status (:status plan) :sprint (boolean (:sprint policy))}
                                         (some-> r .-reason) (assoc :why (.-reason r))
-                                        (some-> r .-expanded) (assoc :nodes (.-expanded r))))))
+                                        (some-> r .-expanded) (assoc :nodes (.-expanded r))
+                                        (breath/head-under? (:primitives c)) (assoc :oxygen (.-oxygen (.self (:primitives c)))
+                                                                                   :swim-steps (count (filter :swim (:steps plan))))))))
       (if (seq iron)
         (recur (into walls iron))
         plan))))
