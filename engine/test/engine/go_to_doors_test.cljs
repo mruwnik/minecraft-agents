@@ -156,6 +156,35 @@
           (is (= 2 (clicks p)) "one click to open, one to shut")
           (is (= [] (opened eng))))))))
 
+;; ------------------------------------------------------------------ a fenced pen with one gate
+
+(def pen-blocks
+  "A pen, interior x 5..9 z -2..2, fenced one cell out, with its gate in the west fence at z 0."
+  (merge (box 4 64 -3 10 64 -3 "oak_fence") (box 4 64 3 10 64 3 "oak_fence")
+         (box 4 64 -3 4 64 3 "oak_fence") (box 10 64 -3 10 64 3 "oak_fence")
+         {"4,64,0" "oak_fence_gate"}))
+
+(deftest a-goal-inside-a-fenced-pen-is-reached-through-its-gate
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks (merge flat pen-blocks)
+                 :states {"4,64,0" {:open false :facing "east"}}}
+              {:keys [out p]} (await (go! w {:pos [7 64 0] :range 1}))]
+          (is (= {:arrived true} (select-keys @out [:arrived])) (pr-str @out))
+          (is (false? (open? p [4 64 0])) "the gate is shut again"))))))
+
+(deftest a-goal-above-the-floor-of-a-sunken-pen-is-reached-through-its-gate
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [sunk (merge (box 5 63 -2 9 63 2 "air") (box 5 62 -2 9 62 2 "stone"))
+              w {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks (merge flat pen-blocks sunk)
+                 :states {"4,64,0" {:open false :facing "east"}}}]
+          (doseq [goal [[7 64 0] [7 63 0]]]
+            (let [{:keys [out]} (await (go! w {:pos goal :range 1}))]
+              (is (true? (:arrived @out)) (str goal " " (pr-str @out))))))))))
+
 ;; ------------------------------------------------------------------ an airlock of two gates
 
 (def airlock-blocks
