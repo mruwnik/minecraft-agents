@@ -654,7 +654,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:inventory [{:name "dirt" :count 16}] :entities [(enderman 4 64 0.5)]})]
+        (let [{:keys [eng p]} (setup {:inventory [{:name "dirt" :count 16}] :entities [(enderman 2.5 64 0.5)]})]
           (.override (.-world p) "place"
                      (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r)))))
           (core/submit! eng retreat {})
@@ -674,7 +674,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory [{:name "dirt" :count 16}] :blocks {(key-of 3 64 1) "water"}
-                                      :entities [(enderman 7 64 0.5)]})]
+                                      :entities [(enderman 2.5 64 0.5)]})]
           (.override (.-world p) "steer"
                      (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r)))))
           (core/submit! eng retreat {})
@@ -688,3 +688,18 @@
         zombie [{:x 0.5 :y 66 :z 0.5}]]
     (is (= {:x 0 :y 66 :z 0} (first (retreat-refuge/nearest-first zombie cells))) "the roof cell with the zombie over it")
     (is (= cells (retreat-refuge/nearest-first [] cells)) "no chaser: as given")))
+
+(deftest a-creeper-beside-an-enderman-keeps-the-creeper-order
+  (is (= :back-off (first (retreat/escape-order {:enderman? true :creeper? true})))))
+
+(deftest a-calm-enderman-is-walked-away-from-not-sealed-against
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory [{:name "dirt" :count 16}] :entities [(enderman 6 64 0.5)]})]
+          (.override (.-world p) "steer"
+                     (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r)))))
+          (core/submit! eng retreat {})
+          (await (core/tick! eng))
+          (is (neg? (:x (first-move eng))) "away from it")
+          (is (zero? (count (calls p "place")))))))))

@@ -938,3 +938,10 @@
     (is (fight-back/given-up-in? mem 7 12 n) "blocked n times, body unhurt since: given up")
     (is (not (fight-back/given-up-in? mem 7 9 n)) "the body lost health since: still fought")
     (is (fight-back/given-up-in? {:no-damage {7 n}} 7 20 n) "no-damage swings still give up")))
+
+(deftest respond-never-fights-an-enderman-however-good-the-sword
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [seen]} (await (flight-round respond {:inventory sword :entities [{:id 100 :name "enderman" :kind "hostile" :pos {:x 5 :y 64 :z 0}}]}))]
+          (is (= [:flee] (mapv :decision (decided seen)))))))))

@@ -53,7 +53,7 @@
   Not while a creeper chases it or a melee mob is within cover-gap: it walks (or backs off, cornered) first.
   4. Cornered (no open direction worth a walk, or the walk is blocked; checked afresh every step) with no hostile within
      :radius: holds a second (wait, why cornered) and looks again; after :no-gain-steps such steps or holds with no gain the flight ends :keeps-off. With one within :radius: takes the safest option it has not yet failed.
-     - an enderman near (it teleports; a walk is no flight): at once, before any walk: water within 6 blocks (it keeps away from water; the body steps in and holds), else seal, pit, pocket, last of all fight.
+     - an angry enderman near (one that hurt the body this flight or is within 3 blocks; it teleports; a walk is no flight): at once, before any walk: water within 6 blocks (it keeps away from water; the body steps in and holds), else seal, pit, pocket, last of all fight.
      - fight (jobs.survival.fight-back) only when jobs.lib.cost/fight-damage leaves :reserve health. Never against a creeper.
      - seal in: fill the open sides at feet and head height and the roof (dig-in's 1x1 cells) with carried :blocks,
        at most :max-places a step, the sides towards a seen ranged hostile first (feet, then head: the first blocks
@@ -161,14 +161,14 @@
 
 (defn escape-order
   "Pure: the cornered options to try, safest first. {:win? the odds say a fight leaves reserve health (never true
-  for a creeper), :creeper? one is near, :enderman? an enderman is (it teleports, so no walk or back-off, and a
+  for a creeper), :creeper? one is near (it comes first), :enderman? an angry enderman is near (angry-enderman?) (it teleports, so no walk or back-off, and a
   pillar is within its reach: the body enters water within water-reach, which it avoids, else shuts itself in), :ranged? the threat shoots, :home? the body is in its home
   room: it digs no pit or pocket in its own floor or walls}."
   [{:keys [win? creeper? enderman? ranged? home?]}]
   (cond->> (cond
+             creeper? [:back-off :seal :pillar :pit :pocket :fight]
              enderman? [:water :seal :pit :pocket :fight]
              win? [:fight]
-             creeper? [:back-off :seal :pillar :pit :pocket :fight]
              :else (into (if ranged? [:seal] [:seal :pillar]) [:back-off :pit :pocket :fight]))
     home? (filterv (complement #{:pit :pocket}))))
 
@@ -177,6 +177,18 @@
   [c]
   (let [{:keys [radius ranged-radius]} (:args c)]
     (flight/near-known (:primitives c) (set (flight/dead-ids c)) radius ranged-radius)))
+
+(def enderman-close
+  "Blocks within which an enderman counts as angry though it has not hurt the body yet (a calm one does not come this near)."
+  3)
+
+(defn angry-enderman?
+  "Whether one of hostiles is an enderman that hurt the body this flight (its health is under the flight's start) or
+  stands within enderman-close: a calm one is walked away from like any mob, never sealed against."
+  [c hostiles]
+  (let [p (:primitives c)
+        hurt? (< (.-health (.self p)) (:flight-health (ctx/mem c) 0))]
+    (boolean (some #(and (combat/enderman? %) (or hurt? (<= (danger-q/mob-distance p %) enderman-close))) hostiles))))
 
 (defn fight-wins?
   "Whether fighting hostiles with the best weapon carried is expected to leave :reserve health
@@ -274,7 +286,7 @@
         threat (first hostiles)
         order (escape-order {:win? (fight-wins? c hostiles)
                              :creeper? (boolean (some combat/creeper? hostiles))
-                             :enderman? (boolean (some combat/enderman? hostiles))
+                             :enderman? (angry-enderman? c hostiles)
                              :ranged? (boolean (and threat (combat/ranged? threat)))
                              :home? home?})]
     (loop [[option & more] order]
@@ -522,7 +534,7 @@
       (flight/no-gain? (ctx/mem c) no-gain-steps)
       (do (when (seq (near-hostiles c)) (ctx/update-mem! c assoc :since-gain 0))
           (await (stuck "the chaser keeps up")))
-      (some combat/enderman? (near-hostiles c)) (await (cornered! c "an enderman cannot be outrun" inside?))
+      (angry-enderman? c (near-hostiles c)) (await (cornered! c "an enderman cannot be outrun" inside?))
       door (await (shut-door! c door))
       (and inside? (home-door c room)) (await (shut-home-door! c (home-door c room)))
       inside? (await (stuck "at home, the hostile still has a way in"))
@@ -550,7 +562,7 @@
   "One whole flight: steps (flight-step!, or the refuge's) until it ends."
   [c]
   (ctx/update-mem! c flight/resume-flight (ctx/now c))
-  (when-not (:flight-start (ctx/mem c)) (ctx/update-mem! c assoc :flight-start (ctx/now c) :flight-from (u/self-pos c)))
+  (when-not (:flight-start (ctx/mem c)) (ctx/update-mem! c assoc :flight-start (ctx/now c) :flight-from (u/self-pos c) :flight-health (.-health (.self (:primitives c)))))
   (loop []
     (ctx/update-mem! c assoc :last-step (ctx/now c))
     (let [r (await (if (:refuge (ctx/mem c)) (refuge/refuge-round! c) (flight-step! c)))]
