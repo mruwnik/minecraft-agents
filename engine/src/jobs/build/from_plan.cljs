@@ -7,6 +7,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.dig-look :as dig-look]
+            [jobs.lib.escape :as escape]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.tools :as tools]
@@ -38,6 +39,7 @@
   A door's upper half, a bed's head and a tall plant's upper half are never targets: the lower or foot cell places
   the whole item. A :clear cell holding a block that is not replaceable and no container is dug (nothing carried
   needed). Crops and trees are not this job's.
+  Its walks never dig through the build, except from a hole the body stands in (2 or more levels walled): they may climb out.
   One call works until the plan is built or nothing more applies (:continue only while a walk or fetch waits). Every
   step re-reads the plan and the world, then takes the first step that applies:
   0. A place that would shut the body in (it has a way out and would have none) is held back; the body first walks
@@ -646,6 +648,16 @@
       (ctx/update-mem! c dissoc :leave))
     (if (= :continue r) :continue :again)))
 
+(def hole-depth
+  "Levels of walls round the body from its feet up that make it a body in a hole (its own dig): its walks may then climb out."
+  2)
+
+(defn in-hole?
+  "Whether the body stands in a hole at least hole-depth deep (escape/pit-depth)."
+  [c]
+  (let [{:keys [x y z]} (u/self-pos c)]
+    (<= hole-depth (escape/pit-depth (escape/block-at-of (:primitives c)) [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]))))
+
 (defn ^:async walk-to!
   "Walk to a stand cell beside cell (:continue while the walk waits, else :again); a cell that cannot be walked to, or is still out of reach (or unseen, as
   :unloaded) on arrival, counts a failure."
@@ -660,7 +672,7 @@
     (if-not stand
       (do (ctx/update-mem! c walk-fail (:pos cell) :unreachable give-up (u/self-pos c))
           :again)
-      (let [w (await (near/go-near! c (zipmap [:x :y :z] stand) 0 {:zone-tolls true :escalate false}))]
+      (let [w (await (near/go-near! c (zipmap [:x :y :z] stand) 0 {:zone-tolls true :escalate (in-hole? c)}))]
         (when (= :blocked w)
           (ctx/update-mem! c #(-> (walk-fail % (:pos cell) :unreachable give-up (u/self-pos c))
                                   (update :bad-stands (fnil conj []) stand))))

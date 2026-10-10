@@ -774,6 +774,19 @@
           (is (every? :zone-tolls @opts))
           (is (not= :unreachable (get-in result [:given-up [40 64 0]]))))))))
 
+(deftest a-body-in-a-hole-walks-with-escalation-so-it-can-climb-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "far" :parts [{:id "post" :cells [[40 64 0]] :want "oak_fence"}]}
+              hole (into {} (for [x [3 4 5] z [3 4 5] y [64 65 66] :when (not= [4 4] [x z])] [(h/cell-key x y z) "dirt"]))
+              opts (atom [])
+              {:keys [eng]} (start {:inventory kit :blocks hole :self {:pos {:x 4.5 :y 64 :z 4.5}}} {"far" plan})
+              _ (await (tu/with-near-stub (fn ^:async f [_ _ _ o] (swap! opts conj o) :partial)
+                         (fn ^:async b [] (await (tu/child-outcome eng job {:plan "far"} 6)))))]
+          (is (seq @opts))
+          (is (every? :escalate @opts) "shut in by its own dig: go-to may pillar or stair out"))))))
+
 (deftest a-whole-plan-is-built-in-one-round
   (async done
     (tu/run-async done
