@@ -74,6 +74,18 @@
       :no-food (str "no food for " mob " carried and none could be got")
       (str "luring stopped: " (name reason)))))
 
+(defn lost-detail
+  "Why :lost, for the next live look: the tracked animal's key, where it was last seen and how far that is from the body,
+  and the nearest adult of the kind the sensing shows now (key, flat distance, leashed)."
+  [c]
+  (let [me (u/self-pos c)
+        {:keys [animal last-seen]} (ctx/mem c)
+        near (first (sort-by #(lead-to/flat-dist me (u/pos-of (.-pos %))) (animals/adults (:primitives c) (:mob (:args c)) (:watch-radius (:args c)))))]
+    {:tracked animal
+     :last-seen last-seen
+     :last-seen-dist (some->> last-seen (lead-to/flat-dist me))
+     :nearest (when near {:key (animals/key-of near) :dist (lead-to/flat-dist me (u/pos-of (.-pos near))) :leashed (animals/leashed? near)})}))
+
 (defn ^:async conclude!
   "Put the food away, emit the outcome, hand it to the parent and end the job."
   [c reason]
@@ -83,7 +95,8 @@
         ok? (= :arrived reason)
         result {:reason reason :animal (:animal m) :at (u/self-pos c)
                 :near (boolean (and a (<= (lead-to/flat-dist (u/pos-of (.-pos a)) (:pos (:args c))) near-spot)))}]
-    (ctx/emit! c :lure-to.done :info (assoc result :text (str "lure-to done: " (name reason))))
+    (ctx/emit! c :lure-to.done :info (cond-> (assoc result :text (str "lure-to done: " (name reason)))
+                                       (= :lost reason) (assoc :lost (lost-detail c))))
     (when-not ok?
       (ctx/emit! c :lure-to.gave-up :warn {:reason reason :text (stop-text c reason)}))
     (ctx/result! c (cond-> result (not ok?) (assoc :status :stopped :text (stop-text c reason))))
@@ -179,7 +192,7 @@
     (ctx/update-mem! c update :started #(or % now))
     (let [{:keys [phase started]} (ctx/mem c)
           a (when (:animal (ctx/mem c)) (lead-to/animal-now c))]
-      (when a (ctx/update-mem! c dissoc :unseen-since))
+      (when a (ctx/update-mem! c #(-> % (dissoc :unseen-since) (assoc :last-seen (u/pos-of (.-pos a))))))
       (cond
         (:ending (ctx/mem c)) (await (lead-to/close-up! c conclude!))
         (>= (- now started) (* 1000 timeout-s)) (finish! c :timeout)

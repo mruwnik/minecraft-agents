@@ -151,3 +151,21 @@
         (let [baby (await (scenario {} {:inventory wheat :entities [(cow 2 3 {:baby true})]} 12))]
           (is (= :none (:reason (done-event baby))))
           (is (re-find #"babies" (:text (first (stopped baby))))))))))
+
+(deftest a-lost-lure-reports-what-it-last-saw
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng clock] :as s} (h/setup {:floor tu/walk-floor :inventory wheat :entities [(cow 1 3)]} 50)
+              steers (atom 0)]
+          (.override (.-world p) "steer"
+                     (fn [token a impl]
+                       (when (= 3 (swap! steers inc)) (swap! (fake/state p) assoc :entities []))
+                       (impl token a)))
+          (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal}) {})
+          (dotimes [_ 14] (swap! clock + 700) (await (core/tick! eng)))
+          (let [lost (:lost (done-event s))]
+            (is (= "u1" (:tracked lost)))
+            (is (some? (:last-seen lost)))
+            (is (number? (:last-seen-dist lost)))
+            (is (nil? (:nearest lost)))))))))
