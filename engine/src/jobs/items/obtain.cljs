@@ -71,11 +71,13 @@
    ::craft-radius {:default 32 :doc "Blocks within which a crafting table is looked for." :spec (a/int-in 0 nil)}
    ::max-fruitless {:default 3 :doc "Rounds without progress before the job gives up." :spec (a/int-in 0 nil)}
    ::max-gap-ms {:default 60000 :doc "Longest gap between two steps that counts toward :minutes; a longer one (a preemption) counts this much." :spec (a/num-in 0 nil)}
+   ::seen-radius {:default 48 :doc "Blocks within which a seen raw block (ore, dirt, leaves) counts as a source; the gather gets the same radius." :spec (a/int-in 0 64)}
    ::sheep-radius {:default 24 :doc "Blocks within which sheep are looked for when wool is gathered." :spec (a/num-in 0 nil)}
    ::explore {:default {:max-distance 64 :max-legs 12 :timeout-s 300} :doc "jobs.explore.search options of a search for a raw need (:explore true)." :spec map?}})
 (defn max-inspections [] (settings/get settings ::max-inspections))
 (defn max-gap-ms [] (settings/get settings ::max-gap-ms))
 (defn sheep-radius [] (settings/get settings ::sheep-radius))
+(defn seen-radius [] (settings/get settings ::seen-radius))
 
 (defn names-of [{:keys [item any-of]}]
   (vec (if item [item] any-of)))
@@ -226,14 +228,14 @@
   (let [p (:primitives c)
         have (carried-counts p)
         version (game/version-of p)
-        seen? #(seq (look/seen-blocks p {:names (vec (material-blocks version %)) :radius 16 :max 1}))
+        seen? #(seq (look/seen-blocks p {:names (vec (material-blocks version %)) :radius (seen-radius) :max 1}))
         seen (set (filter seen? (recipes/stone-materials version)))
         materials (if (seq seen) seen (recipes/stone-materials version))
         plan-of (fn [name]
                   (if-let [seen-of-name (cond (= "dirt" name) dirt-blocks
                                               (leaves-of name) #{(leaves-of name)})]
                     (when (or (= name (get-in (ctx/mem c) [:gather :item]))
-                              (seq (look/seen-blocks p {:names (vec seen-of-name) :radius 16 :max 1})))
+                              (seq (look/seen-blocks p {:names (vec seen-of-name) :radius (seen-radius) :max 1})))
                       {:steps [] :gather {name n} :item name})
                     (let [opts (merge (source-opts)
                                       {:table? (boolean (or (:table (ctx/mem c)) (craft/nearest-table p (craft-radius))))
@@ -282,14 +284,14 @@
           (for [[k n] gather :when (material-blocks version k)]
             (let [blocks (material-blocks version k)]
               {:key k :count n :job 'jobs.gather.mine :seen blocks :tunnel? true
-               :args {:block (first (sort blocks)) :item k :count n :fetch mine-fetch}}))
+               :args {:block (first (sort blocks)) :item k :count n :fetch mine-fetch :radius (seen-radius)}}))
           (when-let [n (get gather "dirt")]
             [{:key "dirt" :count n :job 'jobs.gather.mine :seen dirt-blocks
-              :args {:block "dirt" :item "dirt" :count n :fetch mine-fetch}}])
+              :args {:block "dirt" :item "dirt" :count n :fetch mine-fetch :radius (seen-radius)}}])
           (for [[k n] gather :when (ore-blocks k)]
             (let [blocks (ore-blocks k)]
               {:key k :count n :job 'jobs.gather.mine :seen blocks :ore? true :tunnel? (not= "coal" k)
-               :args {:block (first (sort-by count blocks)) :item k :count n :fetch mine-fetch}})))))))
+               :args {:block (first (sort-by count blocks)) :item k :count n :fetch mine-fetch :radius (seen-radius)}})))))))
 
 (defn gather-need
   "The first of gather-needs."
@@ -300,11 +302,11 @@
   (reduce + 0 (for [[k v] (carried-counts p) :when (if (= "log" key) (log? k) (= key k))] v)))
 
 (defn seen-of
-  "The nearest seen block of a need (within 16), or for a wool need a sheep of its colour in range, else nil."
+  "The nearest seen block of a need (within ::seen-radius), or for a wool need a sheep of its colour in range, else nil."
   [c need]
   (if-let [color (:sheep need)]
     (first (filter #(= color (.-color %)) (sheep-in-range c)))
-    (first (look/seen-blocks (:primitives c) {:match #((:seen need) %) :radius 16 :max 1}))))
+    (first (look/seen-blocks (:primitives c) {:match #((:seen need) %) :radius (seen-radius) :max 1}))))
 
 (defn with-block
   "The need with :block of its args the kind of block seen when it could be either (a coal ore, dirt or grass); a wool need shears when shears are carried, else hunts."

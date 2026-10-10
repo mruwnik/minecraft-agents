@@ -22,16 +22,17 @@
 
 (defn start
   "An engine over a fake world on an andesite floor, seeing through perception (one sight pass first), with zones."
-  [world zones]
+  ([world zones] (start world zones sight-opts))
+  ([world zones sight]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         raw (tu/fake-on-floor (assoc world :floor-block "andesite"))
-        p (perception/wrap raw (perception/create (fake-raw/create raw) (assoc sight-opts :now #(deref clock))))
+        p (perception/wrap raw (perception/create (fake-raw/create raw) (assoc sight :now #(deref clock))))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
                           :now #(deref clock) :world (ew/of-data {} {} zones)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     (perception/pass! (aget p "perception"))
-    {:eng eng :p p :seen seen :clock clock}))
+    {:eng eng :p p :seen seen :clock clock})))
 
 (defn ^:async run-ticks [{:keys [eng clock]} n]
   (dotimes [_ n]
@@ -1203,7 +1204,7 @@
   (is (= #{"stone"} (:seen (obtain/gather-need {"cobblestone" 1}))))
   (let [n (obtain/gather-need {"cobbled_deepslate" 2})]
     (is (= #{"deepslate"} (:seen n)))
-    (is (= {:block "deepslate" :item "cobbled_deepslate" :count 2 :fetch obtain/mine-fetch} (:args n)))))
+    (is (= {:block "deepslate" :item "cobbled_deepslate" :count 2 :fetch obtain/mine-fetch :radius (obtain/seen-radius)} (:args n)))))
 
 (deftest the-stone-materials-are-those-of-the-bodys-version
   (is (= #{"deepslate"} (obtain/material-blocks "26.1" "cobbled_deepslate")))

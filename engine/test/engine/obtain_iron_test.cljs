@@ -160,3 +160,13 @@
          (obtain/progress {:inv {"a" 1} :t 0 :at 5000} {"a" 1} 100000 10000)) "a gap of 95 s counts 10 s")
   (is (= {:inv {"a" 1} :t 0 :at 8000}
          (obtain/progress {:inv {"a" 1} :t 0 :at 5000} {"a" 1} 8000 10000)) "a short gap counts whole"))
+
+(deftest raw-iron-seen-38-blocks-away-sends-the-mine-not-a-search
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (f/start (ore-world (into {} (for [x [0 1 2] y [63 64 65]] [(str x "," y ",38") "iron_ore"])) [{:name "stone_pickaxe" :count 1}]) [] (assoc f/sight-opts :radius 48))]
+          (await (obtain! s {:item "raw_iron" :how #{:craft :gather}} 200))
+          (is (empty? (filter #(= :no-source (:reason %)) (f/events-of s :waiting))))
+          (is (empty? (f/events-of s :obtain.exploring)))
+          (is (seq (mine-events s)) "the mine went for the ore"))))))
