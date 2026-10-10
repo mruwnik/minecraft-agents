@@ -136,6 +136,16 @@
           (is (= 3 (count (calls p "jumpPlace"))) "one block per pillar round")
           (is (empty? (calls p "dig"))))))))
 
+(deftest go-to-at-low-food-escalates-instead-of-giving-up-on-a-sprint-only-way
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:blocks (merge (box 0 63 0 0 63 0 "stone") (box 1 64 0 1 65 0 "stone") (box 1 64 1 1 64 1 "stone"))
+                     :self {:pos {:x 0.5 :y 64 :z 0.5} :food 0}
+                     :inventory [{:name "dirt" :count 5}]}
+              {:keys [out seen]} (await (run-job! world {:pos [1 65 1] :range 0}))]
+          (is (seq (events-of seen :go-to.escalated)) (pr-str @out)))))))
+
 (declare holes dug-cells)
 
 (def foreign

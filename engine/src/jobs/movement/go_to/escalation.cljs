@@ -21,6 +21,13 @@
   with no loaded edge reached (a sealed pen, the goal far and unloaded)."
   #{:exhausted :goal-enclosed :goal-cut-off :start-enclosed})
 
+(defn sprint-only?
+  "Whether a walk result is the planner's only way needing a sprint the body lacks the food for (:abilities of kind
+  :corner-jump or :gap-sprint): it cannot walk that way, so it digs or pillars out like a shut-in body."
+  [result]
+  (and (= :abilities (some-> (:reason result) keyword))
+       (contains? #{:corner-jump :gap-sprint} (some-> (:kind result) keyword))))
+
 (defn escalate-reason?
   "Whether a walk result's reason proves the way needs the world changed (escalate-reasons), or is the planner's way
   through a door that :doors :never refuses (:abilities of kind :open): such a door is a wall."
@@ -206,6 +213,7 @@
   (and (:escalate (:args c))
        (not (sh/sheltered-in c))
        (or (some? (gap-fill c result (:skipped-steps (ctx/mem c) #{})))
+           (sprint-only? result)
            (and (escalate-reason? result (some-> (:doors (:args c)) keyword))
                 (escape/enclosed? (:primitives c) (some-> (:doors (:args c)) keyword))
                 (not (escape/door-beside? (:primitives c) (end/feet-cell c) (some-> (:doors (:args c)) keyword)))))))

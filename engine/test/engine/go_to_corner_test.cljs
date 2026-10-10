@@ -14,7 +14,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p]} (await (g/go! (assoc-in corner-world [:self :food] 6) {:pos [1 65 1]}))]
+        (let [{:keys [out p]} (await (g/go! (assoc-in corner-world [:self :food] 6) {:pos [1 65 1] :escalate false}))]
           (is (= :corner-jump (:kind @out)) (pr-str @out))
           (is (= [0 64 0] (g/at p)) "the body did not move"))))))
 
