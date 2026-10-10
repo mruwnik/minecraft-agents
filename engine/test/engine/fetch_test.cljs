@@ -1163,6 +1163,17 @@
           (let [st (last (events-of s :stopped))]
             (is (= :no-source (:reason st)))))))))
 
+(deftest obtain-explores-when-the-trees-it-sees-cannot-be-reached
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (assoc (update (bare []) :blocks merge tree-blocks) :unreachable (vec (keys tree-blocks))) [own-zone])]
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "wooden_pickaxe" :explore true}) {})
+          (await (run-ticks s 300))
+          (is (seq (events-of s :obtain.exploring)) "it walked to look for another tree")
+          (is (<= (count (events-of s :obtain.exploring)) 3) "bounded")
+          (is (= :no-source (:reason (last (events-of s :stopped))))))))))
+
 (deftest obtain-sapling-leaf-breaking-is-bounded
   (let [need (obtain/gather-need {"oak_sapling" 1})]
     (is (= obtain/sapling-leaf-limit (:dry-digs (:args need))) "digs per child run")

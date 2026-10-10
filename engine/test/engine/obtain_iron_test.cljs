@@ -31,7 +31,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (f/start (ore-world {"1,64,4" "iron_ore" "2,64,4" "iron_ore"} [{:name "stone_pickaxe" :count 1}]) [f/own-zone])]
+        (let [s (f/start (ore-world {"1,64,4" "iron_ore" "2,64,4" "iron_ore"} [{:name "stone_pickaxe" :count 1}]) [])]
           (await (obtain! s {:item "raw_iron" :count 2} 80))
           (is (empty? (f/listed s)))
           (is (= 2 (get (f/inv s) "raw_iron"))))))))
@@ -40,7 +40,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (f/start (ore-world {"1,64,4" "deepslate_iron_ore"} [{:name "stone_pickaxe" :count 1}]) [f/own-zone])]
+        (let [s (f/start (ore-world {"1,64,4" "deepslate_iron_ore"} [{:name "stone_pickaxe" :count 1}]) [])]
           (await (obtain! s {:item "raw_iron"} 80))
           (is (empty? (f/listed s)))
           (is (= 1 (get (f/inv s) "raw_iron"))))))))
@@ -52,7 +52,7 @@
         (let [stone (into {} (for [x [-1 0] z [4 5]] [(str x ",64," z) "stone"]))
               s (f/start (ore-world (merge stone {"2,64,4" "iron_ore"})
                                     [{:name "wooden_pickaxe" :count 1} {:name "stick" :count 2} {:name "crafting_table" :count 1}])
-                         [f/own-zone])]
+                         [])]
           (await (obtain! s {:item "raw_iron"} 240))
           (is (empty? (f/listed s)))
           (is (= 1 (get (f/inv s) "stone_pickaxe")))
@@ -117,7 +117,7 @@
               s (f/start (ore-world (merge ore {"1,64,2" "furnace"})
                                     [{:name "stone_pickaxe" :count 1} {:name "stick" :count 2} {:name "coal" :count 1}
                                      {:name "crafting_table" :count 1}])
-                         [f/own-zone])
+                         [])
               _ (swap! (fake/state (:p s)) assoc-in [:recipes "iron_pickaxe"] {:count 1 :needs {"iron_ingot" 3 "stick" 2} :table true})]
           (core/submit! (:eng s) (list 'jobs.items.obtain {:item "iron_pickaxe" :minutes 1}) {})
           (loop [i 0]

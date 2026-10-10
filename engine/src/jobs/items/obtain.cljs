@@ -570,11 +570,16 @@
   [need r]
   (if (= :declined r) (max-fruitless) (:max-runs need (max-fruitless))))
 
-(defn gather-failed! [c need why r]
-  (let [k (inc (get-in (ctx/mem c) [:gather :fruitless] 0))]
-    (ctx/update-mem! c assoc-in [:gather :fruitless] k)
-    (when (>= k (fruitless-limit need r)) (tried! c :gather (or why :failed)))
-    :again))
+(defn gather-failed!
+  "A gather run that brought nothing. Trees seen but unreachable (:no-tree) with :explore on send the body to look
+  elsewhere (bounded by [:explored key]) instead of counting a fruitless run."
+  [c need why r]
+  (if (and (= :no-tree why) (explore-opts c) (< (get-in (ctx/mem c) [:explored (:key need)] 0) (max-fruitless)))
+    (do (ctx/update-mem! c assoc-in [:gather :unreachable (:key need)] true) :again)
+    (let [k (inc (get-in (ctx/mem c) [:gather :fruitless] 0))]
+      (ctx/update-mem! c assoc-in [:gather :fruitless] k)
+      (when (>= k (fruitless-limit need r)) (tried! c :gather (or why :failed)))
+      :again)))
 
 (defn tools-wanted
   "For a mined need (dirt is dug by hand) whose block the carried tools do not harvest, with :craft allowed: the tools
@@ -633,6 +638,7 @@
       (let [res (ctx/child-result c :explore)
             k (inc (get-in (ctx/mem c) [:explored (:key need)] 0))]
         (ctx/update-mem! c assoc-in [:explored (:key need)] k)
+        (ctx/update-mem! c update :gather update :unreachable dissoc (:key need))
         (if (and (= :found (:reason res)) (seen-of c need))
           :again
           (tried! c :gather (cond-> {:searched (:key need) :for targets :result (or (:reason res) r)}
@@ -656,7 +662,8 @@
       (nil? need) (tried! c :gather :no-plan)
       (and (not (get-in (ctx/mem c) [:gather :before])) (pickaxe-first? c names need) (or (explore-opts c) (seen-of c need)))
       (await (pickaxe-step! c names need))
-      (and (not (get-in (ctx/mem c) [:gather :before])) (explore-opts c) (not (:sheep need)) (not (:tunnel? need)) (not (seen-of c need))
+      (and (not (get-in (ctx/mem c) [:gather :before])) (explore-opts c) (not (:sheep need)) (not (:tunnel? need))
+           (or (not (seen-of c need)) (get-in (ctx/mem c) [:gather :unreachable (:key need)]))
            (< (get-in (ctx/mem c) [:explored (:key need)] 0) (max-fruitless)))
       (await (explore-step! c need))
       (and (not (get-in (ctx/mem c) [:gather :before]))
