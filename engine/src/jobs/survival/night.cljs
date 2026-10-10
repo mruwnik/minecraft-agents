@@ -286,7 +286,7 @@
               (when-not own?
                 (ctx/remember! c :bed-placed {:pos foot} sh/bed-placed-policy))
               (ctx/emit! c :night.bed-placed :info {:pos foot :own-zone own?
-                                                    :text (str "put the carried bed down at " (pr-str foot) (if own? " (in its own zone: it stays)" ", to be picked up by day"))}))
+                                                    :text (str "put the carried bed down at " (pr-str foot) (if own? " (in its own zone: it stays)" ", picked up by day unless sleeping in it made it the respawn bed"))}))
             foot))
         (let [w (await (ctx/call-child c :bed-walk 'jobs.movement.go-to {:pos stand :range 0 :at-night :go}))]
           (when (or (= :continue w) (:arrived (ctx/child-result c :bed-walk))) :continue))))))
