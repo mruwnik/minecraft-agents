@@ -91,7 +91,8 @@
         (let [{:keys [p out] :as r} (await (go-heal! (world {:health 13}) (assoc (dissoc args :allow-over-budget) :food 10) false))]
           (is (= 64 (y-of p)) "still on the plateau")
           (is (empty? (g/events-of r :go-to.over-budget)))
-          (is (= {:arrived false :reason :unreachable :why :needs-health} (select-keys @out [:arrived :reason :why]))))))))
+          (is (= {:arrived false :reason :unreachable :why :needs-health :hp-cost 1 :hp-budget 0} (select-keys @out [:arrived :reason :why :hp-cost :hp-budget])))
+          (is (re-find #"a way exists but costs 1 hp, more than the 0 hp" (:text @out))))))))
 
 (deftest a-callers-floor-is-never-crossed
   (async done

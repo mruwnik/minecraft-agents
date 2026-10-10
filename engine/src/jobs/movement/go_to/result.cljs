@@ -51,7 +51,7 @@
               reason (assoc :detail (str reason)))
     (cond
       (or reason (= :no-path status)) (merge {:why (if reason (keyword reason) :no-path)}
-                                             (select-keys result [:kind :cells :near :one-way :dark-best :torches]))
+                                             (select-keys result [:kind :cells :near :one-way :dark-best :torches :hp-cost :hp-budget]))
       :else {:why :no-progress}))
    (select-keys result [:waypoint-why])))
 
@@ -80,7 +80,7 @@
 
 (defn give-up-words
   "The give-up reason in words, for the :text of the :unreachable event and the result: no map dumps."
-  [pos {:keys [why kind detail escalation shut-in nearest-hostile resets-spent mob mob-distance explored torches waypoint-why]}]
+  [pos {:keys [why kind detail escalation shut-in nearest-hostile resets-spent mob mob-distance explored torches waypoint-why hp-cost hp-budget]}]
   (str "gave up walking to " (if (map? pos) (let [{:keys [x y z]} pos] [x y z]) pos) ": "
        (if escalation
          (str "shut in here; " (escalation-words escalation))
@@ -103,7 +103,7 @@
            :cut-again (str "the walk was cut again and again, each time with the body sent back, and got no nearer" (when resets-spent " (its cut-count resets were spent)") (when nearest-hostile (str " (nearest hostile: " (str/replace (str nearest-hostile) "_" " ") ")")))
            :goal-dangerous (str "the goal is in danger: " (str/replace (str mob) "_" " ") " " mob-distance " blocks from it, a mob the body would flee")
            :moved-while-searching "the body was pushed about while the path was searched"
-           :needs-health "every way costs more hp than the body may spend and it cannot heal first"
+           :needs-health (str "a way exists but costs " hp-cost " hp, more than the " hp-budget " hp the body may spend, and it cannot heal first")
            :air "every way there under water runs out of air"
            :air-lethal "every way there under water would drown the body to death"
            :one-way "the way back is one-way"
