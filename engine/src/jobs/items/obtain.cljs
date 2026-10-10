@@ -52,7 +52,7 @@
     a notice :obtain.exploring says so); none found stops it (:tried {:gather {:searched ..}}).
   - Nothing else: stopped :no-source with :tried.
 
-  The check waits {:reason :no-source :why text :item|:any-of} (:why: what each source lacks) before the first round (once the round has looked around, when chests are allowed) when nothing is carried enough, no
+  The check waits {:reason :no-source :why text :item|:any-of} (:why: what each source lacks; an unseen oak_log names other species of log seen) before the first round (once the round has looked around, when chests are allowed) when nothing is carried enough, no
   usable chest that might hold it is seen and no craft chain makes it from what is carried, and nothing seen to gather what a chain lacks (with :explore, a chain whose raw needs are unseen passes: the search child solves it; when every raw need is seen and the gather child's own check waits (night in a shelter), that wait stands instead). Ends {:status :done :got n :item name} or {:status :stopped
   :reason r :got n :tried {..}}, r :no-source, :cycle (a wanted name is on :chain), :timeout (:minutes without what is
   carried changing) or :bad-args. :depth is the nesting left for sources that need fetches of their own (not used yet: crafting
@@ -435,6 +435,13 @@
                             (or (not (tools-wanted c names %)) (tool-viable? c names %)))
                       (some-> (gather-plan c names n) :gather (gather-needs (game/version-of (:primitives c))))))))
 
+(defn other-logs-seen
+  "The log names of other species seen for an unseen log need (oak_log wanted, birch_log seen), or nil."
+  [c {:keys [key]}]
+  (when (log? key)
+    (not-empty (filter #(seq (look/seen-blocks (:primitives c) {:names [%] :radius (seen-radius) :max 1}))
+                       (remove #{key} trees/log-names)))))
+
 (defn unseen-why
   "Text for the gather source: the raw needs of the chain whose blocks are not seen, those seen but not taken (a zone,
   claim or plan footprint refuses them), or the general text."
@@ -442,8 +449,12 @@
   (let [needs (some-> (gather-plan c names n) :gather (gather-needs (game/version-of (:primitives c))))
         seen (filter #(and (not (:sheep %)) (not (seen-of c %)) (seq (seen-blocks-of c % true))) needs)
         unseen (remove #(or (seen-of c %) (seq (seen-blocks-of c % true))) needs)
-        label (fn [{:keys [key seen sheep]}]
-                (if sheep (str key " (from " sheep " sheep within " (sheep-radius) " blocks)") (if (and (set? seen) (not= #{key} seen)) (str key " (from " (clojure.string/join "/" (sort seen)) ")") key)))]
+        label (fn [{:keys [key seen sheep] :as need}]
+                (cond
+                  sheep (str key " (from " sheep " sheep within " (sheep-radius) " blocks)")
+                  (and (set? seen) (not= #{key} seen)) (str key " (from " (clojure.string/join "/" (sort seen)) ")")
+                  :else (str key (when-let [o (other-logs-seen c need)]
+                                   (str " (only " (clojure.string/join "/" o) " seen: another species)")))))]
     (str "nothing seen to gather what a craft lacks"
          (when (some #(= "obsidian" (:key %)) needs)
            " (obsidian: seen obsidian, or lava with open air above and a water bucket carried; a bucket is 3 iron plus a seen water source)")
