@@ -47,6 +47,8 @@
   - Health below jobs.lib.body/risky-min-health (6): the check waits {:reason :low-health}, also for a resumed job.
   - The head in water (jobs.lib.breath/head-under?) before a dig: no more digging, warn mine.flooded; before the first dig the job ends
     {:status :stopped :got 0 :reason :flooded}, later the dig phase ends :flooded and the body walks home.
+  - Every carried tool that digs the block down to 3 uses (jobs.lib.trip/spent-tool?, no spare was had) ends the same way, :reason :no-tool,
+    before the last one breaks deep down.
   - A pickaxe block (jobs.lib.tools/tool-kind) with no *_pickaxe carried, at the start or later (the pick broke),
     runs jobs.items.get-tool as a child first (unless :fetch is false). Nothing got: before any dig it ends at once, warn mine.no-tool,
     {:status :stopped :got 0 :reason :no-tool :tool <kind needed: pickaxe, sword, shears>}; in the dig phase the mend and walk home follow with
@@ -1593,6 +1595,9 @@
       (and (contains? #{nil :dig} (:phase m)) (not (contains? soil-blocks (:block (:args c)))) (trip/food-short? c)) (hungry! c)
 
       (and (contains? #{nil :dig} (:phase m)) (no-tool? c)) (await (fetch-pickaxe! c))
+
+      (and (contains? #{nil :dig} (:phase m)) (trip/spent-tool? (:primitives c) (:block (:args c))))
+      (if (nil? (:phase m)) (no-tool! c) (to-mend! c :no-tool))
 
       (and (nil? (:phase m)) (not (no-tool? c)) (:pre-start m) (not (at-pre-start? c))) (await (back-to-pre-start! c))
 

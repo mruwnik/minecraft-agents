@@ -613,6 +613,22 @@
           (is (nil? (:ground (job-mem s))) "nothing was written")
           (is (finished? s)))))))
 
+(deftest a-last-pickaxe-near-breaking-ends-no-tool-instead-of-breaking-it-deep-down
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [left [1 3]]
+          (let [s (await (scenario {:block "stone" :count 2} {:blocks (cells "stone" [3 4] [64] [0]) :inventory [{:name "stone_pickaxe" :count 1 :durability left :max 131}]} 10))]
+            (is (zero? (dig-count s)))
+            (is (= :no-tool (:reason (done-event s))))))))))
+
+(deftest a-pickaxe-with-uses-to-spare-digs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "stone" :count 2} {:blocks (cells "stone" [3 4] [64] [0]) :inventory [{:name "stone_pickaxe" :count 1 :durability 4 :max 131}]} 10))]
+          (is (pos? (dig-count s))))))))
+
 (deftest a-block-any-hand-harvests-needs-no-pickaxe
   (async done
     (tu/run-async done
@@ -2193,7 +2209,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [w (assoc (rock-world {}) :inventory [{:name "stone_pickaxe" :count 1 :durability 1 :max 131}])
+        (let [w (assoc (rock-world {}) :inventory [{:name "stone_pickaxe" :count 1 :durability 4 :max 131}])
               s (start {:world w})
               world (.-world (:p s))
               n (atom 0)]

@@ -25,7 +25,8 @@
   {::gave-up-s {:default 600 :doc "Seconds after a fruitless get-food (a :hungry entry) in which a long job stops rather than dig on with no food." :spec (a/int-in 0 nil)}})
 
 (a/defargs spare-settings
-  {::spare-fraction {:default 0.25 :doc "A pickaxe, axe or shovel at or under this fraction of its durability is worn: a job about to dig a lot with the last one gets a spare first." :spec (a/num-in 0 1)}})
+  {::spent-uses {:default 3 :doc "A job digging with only tools of its kind that harvest the block, every one with this many uses left or fewer, stops before the last breaks deep down with no way to make another." :spec (a/int-in 0 nil)}
+   ::spare-fraction {:default 0.25 :doc "A pickaxe, axe or shovel at or under this fraction of its durability is worn: a job about to dig a lot with the last one gets a spare first." :spec (a/num-in 0 1)}})
 
 (defn food-short?
   "Whether a long job should stop for food: the body is hungry (foods/hungry?), carries nothing a meal would eat, and
@@ -112,6 +113,16 @@
         best (tools/suited-item usable block-name harvest)]
     (when (and best (every? worn? usable))
       best)))
+
+(defn spent-tool?
+  "Whether every carried tool that digs block-name is down to ::spent-uses uses or fewer (a tool with no known durability counts as whole) and some is carried:
+  the spare was not had, so one more dig may leave the body without any."
+  [p block-name]
+  (let [harvest (some-> (.harvestTools p block-name) js->clj)
+        suffix (str "_" (tools/tool-kind block-name))
+        ok (set harvest)
+        usable (filter #(and (str/ends-with? (:name %) suffix) (or (empty? ok) (ok (:name %)))) (u/inventory p))]
+    (boolean (and (seq usable) (every? #(and (:durability %) (<= (:durability %) (settings/get spare-settings ::spent-uses))) usable)))))
 
 (defn spare-name
   "The tool to obtain as the spare for the worn need: the cheapest tool of its kind that harvests block-name and
