@@ -491,7 +491,7 @@
           (await (core/tick! eng))
           (let [w (first (events-of seen :waiting))]
             (is (= :not-hungry (:reason w)))
-            (is (re-find #"food 8 .*hungry below 6$" (str (:why w))) (pr-str w))))))))
+            (is (re-find #"food 8 .*hungry below 7$" (str (:why w))) (pr-str w))))))))
 
 (deftest rotten-flesh-above-the-eat-bad-line-is-nothing-to-try
   (async done

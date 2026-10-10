@@ -38,12 +38,13 @@
 (deftest hungry-food-line-rises-one-per-missing-hp-up-to-18
   (are [food health expected] (= expected (foods/hungry? food health {}))
     5 20 true
-    6 20 false
+    6 20 true
+    7 20 false
     2 20 true
-    6 19 true
-    7 19 false
-    13 12 true
-    14 12 false
+    7 19 true
+    8 19 false
+    14 12 true
+    15 12 false
     17 8 true
     17 3 true
     18 3 false))
@@ -58,6 +59,7 @@
     (is (= :hungry (:name (get triggers/all :hungry))))
     (is (= '(jobs.survival.get-food) (:job (get triggers/all :hungry))))
     (is (holds? {:food 4}))
+    (is (holds? {:food 6 :inventory [{:name "bread" :count 7}]}) "food 6 cannot sprint")
     (is (not (holds? {:food 18})))
     (is (holds? {:food 10 :health 12}))))
 

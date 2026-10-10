@@ -57,14 +57,14 @@
   [item]
   (and (food? item) (not (contains? harmful item))))
 
-(def default-food "Hungry below this much food (of 20), plus one per missing hp." 6)
+(def default-food "Hungry below this much food (of 20), plus one per missing hp. 7: at 6 or less the body cannot sprint." 7)
 
 (def top-up-food
   "Natural regeneration needs food of at least this much (of 20)."
   18)
 
 (defn hungry-line
-  "The food below which a body of this health is hungry: :food (default 6) plus one per missing hp, at most top-up-food: a
+  "The food below which a body of this health is hungry: :food (default 7) plus one per missing hp, at most top-up-food: a
   hurt body below 18 food does not heal, so the more hurt it is the sooner it looks for food."
   [health args]
   (min top-up-food (+ (:food args default-food) (- 20 health))))
