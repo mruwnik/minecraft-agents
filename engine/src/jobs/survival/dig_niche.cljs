@@ -28,7 +28,7 @@
   at each opening cell (feet, then head) from the blocks the dig dropped or carried ones.
   Needs a tool that harvests the face (a pickaxe for stone): :fetch (default true; jobs.lib.fetch) runs jobs.items.get-tool
   for it, else, or when that fails, it stops :no-tool.
-  Declines (waiting) with :day or :already-sealed (not while it is cutting: a niche in progress is roofed). Ends done {:pos :door [feet head cells plugged]} with a :shelter entry {:pos :door} (jobs.survival.dig-in-leave/leave! digs
+  Declines (waiting) with :day or :already-sealed (not while it is cutting: a niche in progress is roofed). Ends done {:pos :door [feet head cells plugged]} with a :shelter entry {:pos :door} (jobs.lib.dig-in-leave/leave! digs
   the door out by day), or stopped :no-site, :no-tool, :refused (every site would dig or plug another's zone, claim or plan footprint), :unreachable, :dig-failed, :no-blocks, :place-failed (a mob in the door cell is waited out first, :dig-in-cells/mob-wait-ticks), :no-progress (over max-steps rounds), or :fluid / :open-shell (what a dug cell
   laid open: fluid in or beside the niche, a shell cell that is not solid). Rock the body has not looked into reads stone
   (dig-in-cells/rock-name); after each dig it looks at the cells laid open and waits a lava flow delay.

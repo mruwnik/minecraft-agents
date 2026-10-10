@@ -13,7 +13,7 @@
             [engine.test-util :as tu :refer [box]]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
-            [jobs.survival.dig-in-leave :as dig-leave]))
+            [jobs.lib.dig-in-leave :as dig-leave]))
 
 ;; A cobblestone hut: walls x 3..7, z -2..2, y 64..66, roof at y 67, the room x 4..6, z -1..1. A shut oak door in the
 ;; south wall at (5,64,2)/(5,65,2); a chest and a torch on either side of the cell inside the door, as in the bug's hut.

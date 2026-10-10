@@ -3,8 +3,8 @@
             [engine.ctx :as ctx]
             [jobs.lib.places :as places]
             [jobs.lib.result :as result]
-            [jobs.lib.util :as u]
-            [triggers.survival.dusk-home :as dusk]))
+            [jobs.lib.shelter :as sh]
+            [jobs.lib.util :as u]))
 
 (def doc
   "Walk home before night: to the remembered :home, else the remembered :bed (a go-to child, :range 2, walking on
@@ -17,7 +17,7 @@
 (a/defargs args
   {:limit {:doc "farthest place, in blocks, worth the walk" :spec (a/num-in 0 nil) :default 160}})
 
-(defn place [c] (dusk/target (ctx/view c)))
+(defn place [c] (sh/home-target (ctx/view c)))
 
 (defn check [c]
   (let [p (:primitives c)

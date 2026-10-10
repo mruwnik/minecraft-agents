@@ -10,7 +10,7 @@
             [jobs.lib.step-off :as step-off]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.util :as u]
-            [jobs.survival.dig-in-leave :as dig-leave]
+            [jobs.lib.dig-in-leave :as dig-leave]
             [jobs.movement.go-to.result :as end]
             [jobs.movement.go-to.torch :as torch]))
 

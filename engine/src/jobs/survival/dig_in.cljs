@@ -70,7 +70,7 @@
   Pit mode adds :start, the cell dug from. Walls mode at the bottom of a shaft has :start at the shaft's top.
   :take-back lists the placed {:cell :item} dearer than :take-back-value, and any within 2 of a fence gate a plan wants, which leave! digs again by day.
   Plug mode adds :room true. A shelter sealed again where the latest entry stood keeps that entry's :start and :door.
-  Leaving is jobs.survival.dig-in-leave/leave!, which jobs.survival.night calls by day.")
+  Leaving is jobs.lib.dig-in-leave/leave!, which jobs.survival.night calls by day.")
 
 (def shelter-blocks
   "What dig-in places: the building blocks, then logs (jobs.lib.trees/log-names; worth more, a last resort)."

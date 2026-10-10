@@ -493,3 +493,8 @@
                 (seq (open-room-doors p))))
        (or (shut-in-by-day? p shelter (:data (mem/latest view :shelter-trapped)))
            (some? (bed-to-collect p view)))))))
+
+(defn home-target
+  "The place to go home to before night: the remembered :home, else :bed (view: an engine.memory view)."
+  [view]
+  (or (mem/place view :home) (mem/place view :bed)))

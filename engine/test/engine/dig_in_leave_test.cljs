@@ -1,5 +1,5 @@
 (ns engine.dig-in-leave-test
-  "jobs.survival.dig-in-leave/leave!: from every shelter dig-in builds (a walled cell, a 3-deep pit on flat ground, a 2-deep
+  "jobs.lib.dig-in-leave/leave!: from every shelter dig-in builds (a walled cell, a 3-deep pit on flat ground, a 2-deep
   pit beside a block, a pit in a slope, a roofed shaft) the body gets out by day to a standable open cell, and a go-to
   then arrives; at night it stays shut, by day it leaves whatever hostiles are around (the hostile reflex deals with a
   real danger). Also dig-in's :shelter entry and its
@@ -15,7 +15,7 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as world]
-            [jobs.survival.dig-in-leave :as dig-leave]))
+            [jobs.lib.dig-in-leave :as dig-leave]))
 
 (def night 14000)
 (def dawn 0)

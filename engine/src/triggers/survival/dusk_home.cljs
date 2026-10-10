@@ -4,22 +4,16 @@
   second) plus :margin-s seconds. A place beyond go-home's own limit up to :warn-limit also fires it, for go-home's
   too-far warn: the body digs in where night finds it. It does not hold at night (the night job has it), within :arrive
   blocks of the place, or underground (sh/buried?)."
-  (:require [engine.memory :as mem]
-            [jobs.lib.shelter :as sh]
+  (:require [jobs.lib.shelter :as sh]
             [jobs.lib.util :as u]))
 
 (def defaults {:warn-limit 600 :margin-s 60 :speed 4.3 :slack 1.4 :arrive 4})
-
-(defn target
-  "The place to go home to: :home, else :bed."
-  [view]
-  (or (mem/place view :home) (mem/place view :bed)))
 
 (defn dusk-home
   [p view {:keys [warn-limit margin-s speed slack arrive]}]
   (let [self (.self p)
         left-s (/ (- sh/dusk-tick (.-timeOfDay self)) 20)
-        pos (target view)]
+        pos (sh/home-target view)]
     (boolean
      (and pos (pos? left-s) (not (sh/sleeping? p))
           (let [d (u/dist (u/self-pos {:primitives p}) pos)]

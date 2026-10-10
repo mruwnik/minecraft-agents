@@ -1,4 +1,4 @@
-(ns jobs.survival.dig-in-leave
+(ns jobs.lib.dig-in-leave
   "Leaving the shelter jobs.survival.dig-in built (leave!): jobs.survival.night calls it by day."
   (:require [jobs.lib.access :as access]
             [jobs.lib.tidy :as tidy]

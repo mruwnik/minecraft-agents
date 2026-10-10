@@ -346,12 +346,12 @@
           (is (= 1 (count (filter #(and (= :refused (:kind %)) (= :not-food (:reason %))) @seen)))))))))
 
 (deftest eat-keeps-harmful-and-precious-food-last-whatever-their-points
-  (is (= "dried_kelp" (eat/best-food [{:name "spider_eye"} {:name "dried_kelp"}] true nil 20)) "harmful last")
-  (is (= "dried_kelp" (eat/best-food [{:name "golden_apple"} {:name "dried_kelp"}] false nil 4)) "precious after common"))
+  (is (= "dried_kelp" (eat/best-food [{:name "spider_eye"} {:name "dried_kelp"}] true nil 20 20 #{})) "harmful last")
+  (is (= "dried_kelp" (eat/best-food [{:name "golden_apple"} {:name "dried_kelp"}] false nil 4 20 #{})) "precious after common"))
 
 (deftest eat-chooses-by-saturation-when-points-tie
-  (is (= "cooked_mutton" (eat/best-food [{:name "cooked_chicken"} {:name "cooked_mutton"}] false nil 20)))
-  (is (= "cooked_mutton" (eat/best-food [{:name "honey_bottle"} {:name "cooked_mutton"}] false nil 20))))
+  (is (= "cooked_mutton" (eat/best-food [{:name "cooked_chicken"} {:name "cooked_mutton"}] false nil 20 20 #{})))
+  (is (= "cooked_mutton" (eat/best-food [{:name "honey_bottle"} {:name "cooked_mutton"}] false nil 20 20 #{}))))
 
 (deftest golden-apples-are-rare-for-the-top-up-trigger
   (is (not (foods/top-up? 16 8 ["golden_apple"])))

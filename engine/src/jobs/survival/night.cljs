@@ -24,7 +24,7 @@
             [jobs.lib.foods :as foods]
             [jobs.survival.dig-in :as dig-in]
             [jobs.survival.dig-in-cells :as dig-cells]
-            [jobs.survival.dig-in-leave :as dig-leave]
+            [jobs.lib.dig-in-leave :as dig-leave]
             [jobs.survival.dig-niche :as dig-niche]
             [jobs.survival.eat :as eat]
             [jobs.survival.get-food :as get-food]
