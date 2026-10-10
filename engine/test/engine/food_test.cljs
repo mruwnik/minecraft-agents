@@ -426,7 +426,7 @@
   [cow (assoc cow :id 8 :pos {:x 8 :y 64 :z 0}) (assoc cow :id 9 :pos {:x 9 :y 64 :z 0})])
 
 (defn hunt-world [entities zones]
-  (let [{:keys [eng p seen] :as w} (setup {:self {:food 2} :entities entities} zones)]
+  (let [{:keys [eng p seen] :as w} (setup {:self {:food 4} :entities entities} zones)]
     (core/submit! eng '(jobs.survival.get-food {:attack-gap-ms 0}) {})
     w))
 

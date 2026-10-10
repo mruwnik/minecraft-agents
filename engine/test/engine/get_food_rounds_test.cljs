@@ -258,7 +258,7 @@
         (doseq [[ent zones attacks] [[cow nil true]
                                      [cow [{:name "pen" :owner "Miles" :min [4 63 -1] :max [12 66 1]}] false]
                                      [(assoc cow :baby true) nil false]]]
-          (let [{:keys [eng p]} (setup {:self {:food 1} :entities (into [ent] (rest herd))} :step-ms 5 :zones zones)]
+          (let [{:keys [eng p]} (setup {:self {:food 5} :entities (into [ent] (rest herd))} :step-ms 5 :zones zones)]
             (await (one-round! eng {}))
             (is (= attacks (boolean (seq (calls p "attack")))) (pr-str [ent zones]))))))))
 
@@ -817,3 +817,12 @@
         (let [{:keys [eng p]} (setup {:self {:food 3} :inventory [{:name "fishing_rod" :count 1}]})]
           (await (one-round! eng {:explore false}))
           (is (empty? (calls p "fish"))))))))
+
+(deftest a-starving-body-with-no-food-takes-the-last-adults-too
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[food n] [[2 true] [5 false]]]
+          (let [{:keys [eng p]} (setup {:self {:food food} :entities [cow (assoc cow :id 8 :pos {:x 8 :y 64 :z 0})]})]
+            (await (one-round! eng {:attack-gap-ms 0 :explore false :food 6}))
+            (is (= n (boolean (seq (calls p "attack")))) (str "food " food))))))))

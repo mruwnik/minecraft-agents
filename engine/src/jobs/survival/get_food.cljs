@@ -46,7 +46,7 @@
   :stock n: a fed body also takes the ways until the pack holds n food points, else stops :no-stock; while the pack is short of it the ask cooldown does not block the search.
   Never :continue: a go-to that waits on the world, or a child still going after jobs.lib.child's call cap, is waited out in the round.
   More than 12 ways in one round without getting fed stops :still-hungry.
-  Wheat is never harvested. Babies, animals in another's zone or claim, animals in a zone or plan of the body's own, and the last 2 adults of a kind in sight (for breeding) are never hunted (:ignore-zones? lifts the others' zone only). A chest in another's zone or claim is skipped and never taken from, even when starving
+  Wheat is never harvested. Babies, animals in another's zone or claim, animals in a zone or plan of the body's own, and the last 2 adults of a kind in sight (for breeding; hunted too at food 3 or less with no food carried) are never hunted (:ignore-zones? lifts the others' zone only). A chest in another's zone or claim is skipped and never taken from, even when starving
   (one get-food.skipped warning). A crop in another's zone or claim is dug only when no other is (one
   get-food.trespass-last-resort warning). :ignore-zones? lifts both.
   A cut round starts again from the world: carried food first, then the ways.
@@ -101,6 +101,7 @@
    ::reach {:default 3 :doc "How near a food source the body stands to use it, in blocks." :spec (a/int-in 0 nil)}
    ::explore {:default {:max-distance 64 :max-legs 12 :timeout-s 120} :doc "jobs.explore.search options of the search for food (:explore true)." :spec map?}
    ::fish-radius {:default 48 :doc "Blocks within which seen water two deep with a bank makes fishing a way, with a fishing rod carried." :spec (a/int-in 0 nil)}
+   ::kept-lifted-below {:default 3 :doc "At this much food or less, with no food carried, the last adults of a kind (kept for breeding) are hunted too." :spec (a/int-in 0 20)}
    ::eat-bad-food {:default foods/default-food :doc "At this much food or less the last resort eats harmful food carried (rotten flesh); above it harmful food is not food." :spec (a/num-in 0 20)}
    ::stock-radius {:default 256 :doc "Blocks within which a chest the body booked food in (memory :fetch/stock, what it saw when it opened it) counts as a food source." :spec (a/int-in 0 nil)}
    ::cook-far-radius {:default 64 :doc "Blocks within which a furnace or smoker the body has seen (perception's memory) or the one it remembers (:furnace place) counts for cooking." :spec (a/int-in 0 nil)}
@@ -359,19 +360,21 @@
 (defn animals-in-sight
   "The food animals the entity scan lists within :hunt-radius, nearest first, as {:entity e :why r}: r is nil for one
   to hunt, else :tried (attacked this job), :baby, :refused (another's zone or claim), :pen (in a zone or plan of
-  this body's own) or :kept (no more than keep-adults adults of the kind in sight: left to breed)."
+  this body's own) or :kept (no more than keep-adults adults of the kind in sight: left to breed, unless the body is at ::kept-lifted-below food or less with no food carried)."
   [c]
   (let [skipped (set (:skipped-animals (ctx/mem c)))
         seen (array-seq (.entities (:primitives c) #js {:radius (hunt-radius c) :kind "passive"
                                                         :names (clj->js food-animals) :max 16}))
-        adults (frequencies (map #(.-name %) (remove #(true? (.-baby %)) seen)))]
+        adults (frequencies (map #(.-name %) (remove #(true? (.-baby %)) seen)))
+        self (.self (:primitives c))
+        starved? (and (<= (.-food self) (settings/get settings ::kept-lifted-below)) (not (foods/carries-food? self)))]
     (->> seen
          (mapv (fn [e] {:entity e
                         :why (cond (skipped (.-id e)) :tried
                                    (true? (.-baby e)) :baby
                                    (access/container-refusal c :take (u/pos-of (.-pos e))) :refused
                                    (access/in-own-area? c (u/pos-of (.-pos e))) :pen
-                                   (<= (adults (.-name e)) keep-adults) :kept)})))))
+                                   (and (<= (adults (.-name e)) keep-adults) (not starved?)) :kept)})))))
 
 (defn nearest-animal
   "The nearest adult food animal within :hunt-radius not skipped in this job and not in another's zone or claim."
