@@ -9,6 +9,7 @@
     :feet        [x y z] the body's feet cell (its head cell is one above)
     :body-cols   optional set of [x z] columns the body's box overlaps (default: the feet cell's); a place there is :own-body
     :zones       nil (no zone list loaded) or a vector of zones {:name :min :max :owner :allow}
+    :shafts      ids of :mineshaft plans: their footprint does not refuse a :dig (jobs.lib.access.zones)
     :footprints  cells other plans claim: a set, or a map {cell plan-id} (what jobs.lib.world/footprints gives),
                  in which case a :footprint refusal names the :plan
     :claims      the active area claims (jobs.lib.world/claims)
@@ -126,7 +127,7 @@
   no-zones refusal comes last, see no-zones-check). A footprint given as a set refuses without a :plan.
   :plan-cells, the cells of the plan the job builds, let it work over a foreign zone or claim (ok :plan)."
   [action {:keys [zones footprints cell] :as in}]
-  (let [v (zones/verdict (assoc (select-keys in [:claims :self :now :plan-cells]) :zones (or zones []) :footprints footprints
+  (let [v (zones/verdict (assoc (select-keys in [:claims :self :now :plan-cells :shafts]) :zones (or zones []) :footprints footprints
                                 :action action :cell cell))]
     (cond-> v
       (set? footprints) (dissoc :plan))))

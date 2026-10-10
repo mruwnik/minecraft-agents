@@ -9,6 +9,8 @@
     :claims      [{:id :owner :status :active :until ms :min :max}]; only :active ones not yet past :until count
     :footprints  {cell plan-id} of the plans other than the one the caller builds (the caller leaves its own out,
                  see jobs.lib.world/footprints :except)
+    :shafts      the ids of the :mineshaft plans: their footprint refuses every action but :dig (a shaft is shared to dig
+                 through; zones and claims still rule, and builders keep out of it)
     :plan-cells  the set of cells of the plan the caller builds (see jobs.lib.access/zone-input): with
                  plan-footprint-beats-zone? a cell in it is permitted over a foreign zone or claim, the plan is the
                  permission (another plan's footprint still refuses)
@@ -21,7 +23,7 @@
 
   Checks run in this order, the first that applies is the verdict:
   1. no zone list: refused
-  2. another plan's footprint: refused
+  2. another plan's footprint: refused (a :dig in a mineshaft's is not)
   3. a cell of the caller's own plan: ok :plan
   4. a foreign zone that does not allow the action: refused (on nesting the most restrictive wins)
   5. a foreign claim: refused (claims allow nothing)
@@ -64,7 +66,7 @@
 
 (defn verdict
   "See the namespace docstring."
-  [{:keys [zones claims footprints plan-cells self now action cell]}]
+  [{:keys [zones claims footprints shafts plan-cells self now action cell]}]
   (let [here (filter #(in-box? cell %) zones)
         foreign-zone (first (filter #(and (foreign-owner? (:owner %) self) (not (contains? (:allow %) action))) here))
         live (filter #(and (active? now %) (in-box? cell %)) claims)
@@ -72,7 +74,7 @@
         pass? (and (= :put action) deposit-into-foreign-chest?)]
     (cond
       (nil? zones) {:ok false :reason :no-zones}
-      (contains? footprints cell) (refusal :footprint {:plan (get footprints cell)})
+      (and (contains? footprints cell) (not (and (= :dig action) (contains? shafts (get footprints cell))))) (refusal :footprint {:plan (get footprints cell)})
       (and plan-footprint-beats-zone? (contains? plan-cells cell)) {:ok true :why :plan}
       (and foreign-zone (not pass?)) (refusal :zone {:zone (:name foreign-zone) :owner (:owner foreign-zone)})
       (and foreign-claim (not pass?)) (refusal :claim {:claim (:id foreign-claim) :owner (:owner foreign-claim)})

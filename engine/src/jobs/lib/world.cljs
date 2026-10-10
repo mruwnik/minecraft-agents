@@ -35,6 +35,11 @@
   ([ctx {:keys [except]}]
    (world/footprints (:world (:engine ctx)) except)))
 
+(defn shafts
+  "The ids of the active :mineshaft plans (jobs.lib.access.zones: their footprint is dug through, not refused)."
+  [ctx]
+  (world/shaft-ids (:world (:engine ctx))))
+
 (defn markers
   "The shared markers the agent tools wrote to the world's places.json: [{:name :kind :x :y :z :by :note} ...]. Read-only
   for bodies; [] when there are none. A body's own places stay in its memory (jobs.lib.places)."

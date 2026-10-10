@@ -38,6 +38,11 @@
     {:zones [mine] :footprints {[1 64 1] "hut"} :action :dig :cell [1 64 1]} {:ok false :reason :footprint :plan "hut"}
     {:zones [] :footprints {[1 64 1] "hut"} :action :place :cell [1 64 1]} {:ok false :reason :footprint :plan "hut"}
     {:zones [] :footprints {[1 64 1] "hut"} :action :place :cell [2 64 1]} {:ok true :why :open}
+    ;; a mineshaft's footprint is dug by anyone (zones and claims still rule) and kept clear of builders
+    {:zones [] :footprints {[1 64 1] "shaft"} :shafts #{"shaft"} :action :dig :cell [1 64 1]} {:ok true :why :open}
+    {:zones [theirs] :footprints {[21 64 1] "shaft"} :shafts #{"shaft"} :action :dig :cell [21 64 1]} {:ok false :reason :zone :zone "theirs" :owner "Miles"}
+    {:zones [] :footprints {[1 64 1] "shaft"} :shafts #{"shaft"} :action :place :cell [1 64 1]} {:ok false :reason :footprint :plan "shaft"}
+    {:zones [] :footprints {[1 64 1] "hut"} :shafts #{"shaft"} :action :dig :cell [1 64 1]} {:ok false :reason :footprint :plan "hut"}
     ;; claims
     {:zones [] :claims [their-claim] :action :dig :cell [81 64 1]} {:ok false :reason :claim :claim "c2" :owner "Miles"}
     {:zones [] :claims [their-claim] :action :take :cell [81 64 1]} {:ok false :reason :claim :claim "c2" :owner "Miles"}

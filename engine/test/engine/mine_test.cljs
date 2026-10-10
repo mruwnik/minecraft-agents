@@ -1640,14 +1640,14 @@
           (is (= ["home"] (mapv :zone (events-of s :mine.own-zone))) "the warn names the zone")
           (is (every? #(< (first %) 8) (dug-cells s))))))))
 
-(deftest mine-spares-cells-of-the-bodys-own-plan-unless-told-not-to
+(deftest mine-spares-cells-of-the-bodys-own-plan-unless-told-not-to-or-it-is-a-mineshaft
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [own (ew/of-data {"pad" (shape/with-author pad-plan "Fake")} {} [])]
-          (doseq [[extra n] [[{} 0] [{:spare-own-builds false} 1]]]
-            (let [s (await (zoned (merge {:block "sand" :count 1 :mend false :tunnel-length 0} extra) {:blocks {"6,64,0" "sand"}} own 20))]
-              (is (= n (count (dug-cells s))) (pr-str extra)))))))))
+        (doseq [[kind extra n] [[nil {} 0] [nil {:spare-own-builds false} 1] [:mineshaft {} 1]]]
+          (let [own (ew/of-data {"pad" (cond-> (shape/with-author pad-plan "Fake") kind (assoc :kind kind))} {} [])
+                s (await (zoned (merge {:block "sand" :count 1 :mend false :tunnel-length 0} extra) {:blocks {"6,64,0" "sand"}} own 20))]
+            (is (= n (count (dug-cells s))) (pr-str kind extra))))))))
 
 (defn ^:async descent-run
   "A stair-down mine (mend on) of soil over stone; {:s setup :go-to the args of each go-to call}."

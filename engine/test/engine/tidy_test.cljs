@@ -14,7 +14,8 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [triggers.survival.tidy-pending :as tidy-pending]
-            [jobs.lib.world-files :as ew]))
+            [jobs.lib.world-files :as ew]
+            [plan.shape :as shape]))
 
 (defn ^:async ticks! [eng n]
   (dotimes [_ n] (await (core/tick! eng))))
@@ -728,3 +729,17 @@
     (is (nil? result) "no clear cell: the tunnel is reserved and the pockets are sealed")
     (is (<= searches 6) (str searches " walk searches"))
     (is (= 1 lookups) "one block lookup")))
+
+(def stair-cells-plan
+  {:id "hut" :parts [{:id "stair" :cells [[0 65 0] [0 66 0]] :want :clear}]})
+
+(deftest a-dig-in-another-plans-footprint-is-tidy-work-but-not-in-a-mineshaft
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[kind plan-recorded] [[nil [:hut :hut]] [:mineshaft []]]]
+          (let [{:keys [eng]} (zs/setup-with-plan {:blocks (merge enclosed {"0,63,0" "stone"})}
+                                                  (cond-> (shape/with-author stair-cells-plan "Miles") kind (assoc :kind kind)))]
+            (core/submit! eng '(jobs.survival.breathe {:min-oxygen 12}) {})
+            (await (core/tick! eng))
+            (is (= (map #(some-> % name) plan-recorded) (map :plan (tidy-entries eng))) (str kind))))))))

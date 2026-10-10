@@ -17,7 +17,7 @@
   (into #{} (keep (fn [[id by]] (when (zones/same-owner? by (ctx/self-name c)) id))) (known/plan-authors c)))
 
 (defn zone-input
-  "The social half of the rules' input: {:zones :footprints :plan-cells :claims :self :own-plans :now :ignore-zones?}.
+  "The social half of the rules' input: {:zones :footprints :shafts :plan-cells :claims :self :own-plans :now :ignore-zones?}.
   opts:
   :except is a plan id for a job working that plan. Its footprint is left out of :footprints and its cells are given
   as :plan-cells, because the plan is the permission (see jobs.lib.access.zones/verdict).
@@ -31,6 +31,7 @@
    :plan-cells (if (nil? except)
                  #{}
                  (into #{} (keep (fn [[cell id]] (when (= id except) cell))) (known/footprints c)))
+    :shafts (known/shafts c)
     :claims (known/claims c)
     :self (ctx/self-name c)
     :own-plans (own-plans c)
@@ -97,7 +98,7 @@
       :sow (rules/may-place? (assoc in :feet nil))
       (if (:ignore-zones? in)
         {:ok true}
-        (let [v (zones/verdict (assoc (select-keys in [:zones :footprints :plan-cells :claims :self :now :cell]) :action action))]
+        (let [v (zones/verdict (assoc (select-keys in [:zones :footprints :shafts :plan-cells :claims :self :now :cell]) :action action))]
           (if (:ok v) {:ok true} v))))))
 
 (defn under-feet?

@@ -585,7 +585,7 @@ them: `act!` and the primitives check neither, and a job may ignore them. The he
 `:dig :place :sow :harvest :take :put`) over the pure `jobs.lib.access.zones/verdict`. First match wins:
 
 1. no zone list read: `:no-zones`;
-2. the cell is in another active plan's footprint (the plan the job builds is left out): `:footprint`;
+2. the cell is in another active plan's footprint (the plan the job builds is left out): `:footprint`; a `:dig` in a `:kind :mineshaft` plan's footprint is not refused (it is shared; zones and claims still rule, and nothing is noted for tidy);
 3. a zone holds the cell, its `:owner` is not the body (case-insensitive; `"unknown"` is foreign) and its `:allow` lacks
    the action (`:allow` is what others may do): `:zone`. The owner may always act;
 4. an active, unexpired claim of another owner holds the cell: `:claim`;

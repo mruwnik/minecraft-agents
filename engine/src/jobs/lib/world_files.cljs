@@ -375,6 +375,14 @@
             (footprint-index (dissoc claims except))
             (or footprints {}))))))
 
+(defn shaft-ids
+  "The ids of the plans of :kind :mineshaft, as a set; #{} for a nil world."
+  [w]
+  (if-not w
+    #{}
+    (do (refresh! w)
+        (into #{} (keep (fn [[id e]] (when (= :mineshaft (:kind (:value e))) id))) (:plans @(:state w))))))
+
 (defn plan-authors
   "{plan-id by}: the :metadata :by (the body that made the plan) of each plan that names one; {} for a nil world."
   [w]
