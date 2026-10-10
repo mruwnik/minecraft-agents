@@ -83,14 +83,14 @@ export function createUseOn ({ act, getBot, inventory, eye, lookNow, timeScale, 
       let opened = null
       const onOpen = w => { opened ??= w }
       const now = () => { const b = bot.blockAt(p); return b ? snapshot(b) : { name: 'air', properties: {} } }
-      // A bed used by day answers with the "respawn point set" action bar line instead of changing.
+      // A bed used by day answers with the "respawn point set" chat line instead of changing.
       let spawnSet = false
-      const onBar = msg => { spawnSet ||= spawnSetMessage(msg) }
+      const onMessage = msg => { spawnSet ||= spawnSetMessage(msg) }
       const changed = () => spawnSet || !same(now(), before) || (item !== undefined && carried(item) !== countBefore)
       const windowOpened = () => { opened ??= bot.currentWindow ?? null; return opened !== null }
       // activateBlock resolves once the packet is written, so the server's open_window can arrive during the waits.
       bot.on('windowOpen', onOpen)
-      bot.on('actionBar', onBar)
+      bot.on('message', onMessage)
       try {
         await bot.activateBlock(bot.blockAt(p), d, new Vec3(0.5 + 0.5 * d.x, 0.5 + 0.5 * d.y, 0.5 + 0.5 * d.z))
         ctx.alive()
@@ -115,7 +115,7 @@ export function createUseOn ({ act, getBot, inventory, eye, lookNow, timeScale, 
         return { status: changed() ? 'used' : 'unchanged', ...(spawnSet ? { spawnSet } : {}), before, after: now(), consumed: item === undefined ? 0 : Math.max(0, countBefore - carried(item)) }
       } finally {
         bot.removeListener('windowOpen', onOpen)
-        bot.removeListener('actionBar', onBar)
+        bot.removeListener('message', onMessage)
       }
     })
   }

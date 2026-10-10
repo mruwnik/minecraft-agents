@@ -285,8 +285,9 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       actionBar: msg => {
         const status = sleepStatusOf(msg)
         if (status) emit({ kind: 'sleep-status', ...status })
-        if (spawnSetMessage(msg)) emit({ kind: 'spawn-set', pos: here() })
       },
+      // "Respawn point set" is a system chat line, not an action bar one ('message' fires for either)
+      message: msg => { if (spawnSetMessage(msg)) emit({ kind: 'spawn-set', pos: here() }) },
       // mineflayer's reading of the "no home bed or it was obstructed" game event: the respawn point is gone
       spawnReset: () => emit({ kind: 'spawn-reset' }),
       playerJoined: player => { if (player?.username && player.username !== target.username) emit({ kind: 'player-joined', player: player.username }) },

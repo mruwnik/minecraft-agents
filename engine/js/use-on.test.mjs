@@ -244,7 +244,7 @@ test('a tool with durability never waits for a count change after the block chan
   assert.equal(polls, 3) // the change check, the status check and the after snapshot; no extra wait polls
 })
 
-const bar = bot => bot.emit('actionBar', { translate: 'block.minecraft.set_spawn' })
+const bar = bot => bot.emit('message', { translate: 'block.minecraft.set_spawn' }, 'system')
 
 test('a bed clicked in the overworld that answers "respawn point set" is used and reports spawnSet', async () => {
   const { bot, p } = rig({ blocks: { '1,64,0': 'red_bed' }, onUseBlock: bot => bar(bot) })

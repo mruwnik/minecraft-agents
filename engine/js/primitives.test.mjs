@@ -501,13 +501,13 @@ test('body events: the action bar sleep count is a sleep-status event; other act
     { kind: 'sleep-status', sleeping: 0, needed: 7 }])
 })
 
-test('body events: the respawn point message is spawn-set, the library spawnReset is spawn-reset', () => {
+test('body events: the respawn point chat line is spawn-set, the library spawnReset is spawn-reset', () => {
   const { bot, p } = rig(world)
   const seen = []
   p.onBodyEvent(e => seen.push(e))
   bot.entity.position = new Vec3(12, 70, 3)
-  bot.emit('actionBar', sleepBar('block.minecraft.set_spawn'))
-  bot.emit('actionBar', sleepBar('item.minecraft.bread'))
+  bot.emit('message', sleepBar('block.minecraft.set_spawn'), 'system')
+  bot.emit('message', sleepBar('item.minecraft.bread'), 'system')
   bot.emit('spawnReset')
   assert.deepEqual(seen, [{ kind: 'spawn-set', pos: at(12, 70, 3) }, { kind: 'spawn-reset' }])
 })
