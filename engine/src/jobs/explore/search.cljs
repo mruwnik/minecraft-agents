@@ -23,7 +23,7 @@
   when a live :searched note of any body, this one included, listing every target name lies within half its
   radius.
 
-  A leg needs a standing cell in its column within 12 of the feet, read top down through leaves. An unloaded,
+  A leg needs a standing cell in its column from 12 above the feet down to :descent (40) below, read top down through leaves. An unloaded,
   wet or standless column is recorded failed (:not-loaded, :wet, :no-surface, :unseen) and the next candidate is tried
   in the same round. A loaded column not yet seen (:unseen) is walked toward in steps of up to 12 blocks (not
   counted in :max-legs) and looked at again; within 3 blocks of it, it is recorded failed. An unloaded column is not tried but looked at again later. When only unloaded ones are
@@ -131,7 +131,7 @@
       (or (u/seen-name p pos) (when (u/sensed p pos) :unseen)))))
 
 (defn stand-cell
-  "Where a body could stand in column x z near feet height y, read top down from y+12 to y-40 through open cells and
+  "Where a body could stand in column x z near feet height y, read top down from y+reach to y-descent through open cells and
   leaves to the first other block: {:y feet} when the two cells above it are open, else {:fail :wet} (a fluid),
   {:fail :not-loaded} (an unloaded cell on the way), {:fail :unseen} (a loaded cell not yet seen) or {:fail :no-surface}.
   block-at: [x y z] -> name, :unseen or nil."
@@ -298,6 +298,13 @@
                   fail (recur more (inc reads) (-> acc (update :tried conj pt) (update :failed conj failed)))
                   :else (assoc (update acc :tried conj pt) :leg [(pt 0) sy (pt 1)])))))))
 
+(def interrupted #{:cut-again :moved-while-searching})
+
+(defn interrupted?
+  "Whether go-to's result res is an interruption (the walk was cut or the body pushed about), not a verdict on the leg."
+  [{:keys [why reason]}]
+  (boolean (or (interrupted why) (interrupted reason))))
+
 (defn ^:async walk!
   "One go-to call toward the leg (the last one before the failed legs in a row end the search may dig out); on its end book the leg arrived or failed. :continue when go-to yields, else :again
   (or :done when the failed legs in a row end the search)."
@@ -317,7 +324,7 @@
                                      arrived (dissoc :blocked)
                                      (not (or arrived dangerous?)) (update :blocked (fnil conj []) {:at [hx hz] :leg [x z]})
                                      (not arrived) (update :failed (fnil conj []) {:pos [x y z] :reason (cond dangerous? :goal-dangerous in-water :wet :else :unreachable)})
-                                     (and (not arrived) (:leg-column m)) (-> (update :tried (fnil conj []) (:leg-column m))
+                                     (and (not arrived) (not (interrupted? res)) (:leg-column m)) (-> (update :tried (fnil conj []) (:leg-column m))
                                                                               (cond-> (not dangerous?) (update :legs (fnil inc 0)))))))
         (if (>= in-row (max-failed-in-row)) (finish! c :not-found :stuck) :again)))))
 

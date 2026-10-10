@@ -330,6 +330,13 @@
               s (await (search! {:target "diamond_block" :max-distance 23} {:blocks room} 200))]
           (is (some #(= :go-to.escalated (:kind %)) @(:seen s))))))))
 
+(deftest an-interrupted-walk-is-not-a-verdict-on-its-leg
+  (are [res expected] (= expected (search/interrupted? res))
+    {:reason :cut-again} true
+    {:reason :unreachable :why :moved-while-searching} true
+    {:reason :unreachable :why :goal-not-standable} false
+    {:arrived true} false))
+
 (deftest three-failed-legs-in-a-row-end-it-stuck
   (async done
     (tu/run-async done
