@@ -1,5 +1,6 @@
 (ns jobs.storage.make-room
   (:require [engine.args :as a]
+            [jobs.lib.access.rules :as rules]
             [jobs.lib.blocks :as lb]
             [clojure.string :as str]
             [engine.ctx :as ctx]
@@ -35,8 +36,8 @@
      below :toss-below, and it is thrown whole and only while the name's floor stays carried. Cheapest first,
      then the one picked up longest ago (:picked-up entries), then the smaller stack. The body turns to the first
      of the four directions with two free cells ahead at eye level and tosses.
-  After tossing it walks :away blocks from where the items were thrown (a go-to child), so it does not pick them up
-  again.
+  After tossing it walks up to :away blocks from where the items were thrown (a go-to child; the farthest cell back
+  that is no seen obstacle, none: no walk), so it does not pick them up again.
   Resume: a toss or swap writes its intent first; a run that finds one (after a cut or a restart) checks the
   inventory before acting again. What was tossed before a cut stays in the result when the job survives the cut (a
   child); the spot to walk away from is body memory, so a cut reflex's refire still walks away from it.
@@ -304,17 +305,34 @@
         reach (+ 8 (:away (:args c)))]
     (<= (js/Math.hypot (- (.-x pos) (:x at)) (- (.-z pos) (:z at))) reach)))
 
+(defn standable?
+  "Whether the cell {:x :y :z} is no known obstacle for the body: feet and head cells not seen as solid, the floor not
+  seen as air or fluid. A cell never seen counts as standable (the walk looks)."
+  [p {:keys [x y z]}]
+  (let [seen (fn [dy] (u/seen-name p {:x x :y (+ y dy) :z z}))
+        open? (fn [n] (or (nil? n) (and (rules/replaceable n) (not (rules/fluids n)))))]
+    (and (open? (seen 0)) (open? (seen 1))
+         (or (nil? (seen -1)) (rules/solid-floor? (fn [_] (seen -1)) nil)))))
+
+(defn away-goal
+  "The cell to step to from the toss spot at: the farthest one up to away blocks back along dir that the body can stand
+  on, else nil (a one-wide tunnel may end behind it)."
+  [p {:keys [x y z]} away [dx dz]]
+  (->> (range away 0 -1)
+       (map (fn [d] {:x (- x (* d dx)) :y y :z (- z (* d dz))}))
+       (filter #(standable? p %))
+       first))
+
 (defn ^:async walk-away!
-  "Walk :away blocks back from spot, where the items were thrown (a go-to child), so they are not picked up again. Best
-  effort: a walk that does not arrive is not retried. The walk is run to its end (child/run!); the spot is forgotten
-  whatever the result."
+  "Walk up to :away blocks back from spot, where the items were thrown (a go-to child), so they are not picked up
+  again; no walk when no cell behind it can be stood on. Best effort: a walk that does not arrive is not retried. The
+  walk is run to its end (child/run!); the spot is forgotten whatever the result."
   [c {:keys [at dir]}]
-  (let [away (:away (:args c))
-        [dx dz] dir
-        goal {:x (- (:x at) (* away dx)) :y (:y at) :z (- (:z at) (* away dz))}]
-    (let [r (await (child/run! c :away 'jobs.movement.go-to {:pos goal :range 1 :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
-      (ctx/forget-where! c :make-room-tossed (constantly true))
-      r)))
+  (let [goal (away-goal (:primitives c) at (:away (:args c)) dir)
+        r (when goal
+            (await (child/run! c :away 'jobs.movement.go-to {:pos goal :range 1 :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))})))]
+    (ctx/forget-where! c :make-room-tossed (constantly true))
+    r))
 
 (defn ^:async put-away!
   "One call of the deposit child with names. Once it ends (all put away, or it gave up: that chest is remembered as

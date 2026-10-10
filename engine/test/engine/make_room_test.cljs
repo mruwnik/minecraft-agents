@@ -741,6 +741,21 @@
           (is (= 1 @walks) "the items thrown in the last 2 minutes may still lie there: step away once")
           (is (empty? (spots))))))))
 
+(deftest the-walk-away-stops-short-of-a-wall-instead-of-aiming-into-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory (same "diamond" 35 1) :blocks {"-2,64,0" "stone" "-2,65,0" "stone"}})
+              goals (atom [])
+              go-to {:check (constantly true)
+                     :round (fn ^:async go-to-round [c] (swap! goals conj (:pos (:args c))) :done)}
+              eng (assoc eng :jobs (assoc (:jobs eng) 'jobs.movement.go-to go-to))]
+          (tu/seeing-all p)
+          (mem/write! (:store eng) :make-room-tossed {:at {:x 2 :y 64 :z 0} :dir [1 0]} mr/tossed-policy)
+          (core/submit! eng '(jobs.storage.make-room) {})
+          (await (tick-out! eng 10))
+          (is (= [{:x -1 :y 64 :z 0}] @goals) "four blocks back is the wall: the farthest open cell is aimed at"))))))
+
 (deftest a-toss-direction-is-not-picked-from-cells-never-seen
   (let [p (tu/seeing-all (tu/fake-on-floor {}))
         {fx :x} (sh/feet p)
