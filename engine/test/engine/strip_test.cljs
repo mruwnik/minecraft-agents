@@ -92,3 +92,45 @@
   (let [tree (strip/order (strip/segments (t-world (constantly false))) [-18 y 20])]
     (is (= "x-27-20:-20..0" (:root tree)))
     (is (= #{"z-27-0:0..20" "x-27-20:0..20"} (set (:leaves tree))))))
+
+(def seg {:axis :x :y y :line 20 :from 0 :to 12})
+
+(defn takings-world []
+  (let [air (corridor :x 20 0 12)
+        floor (into {} (for [a (range 0 13) w [-1 0 1]] [[a (dec y) (+ 20 w)] "stone"]))]
+    (blocks-of
+     (merge (shell air) floor
+            (support-cells :x 20 2)
+            (rail-cells :x 20 3 4)
+            {[3 (inc y) 20] "cobweb"
+             [6 y 22] "iron_ore"
+             [7 y 22] "coal_ore" [7 y 21] "stone"
+             [9 (dec y) 20] "oak_planks" [9 (- y 2) 20] "cave_air"
+             [10 (+ y 2) 20] "oak_planks" [10 (+ y 3) 20] "gravel"
+             [12 y 19] "oak_planks" [12 y 18] "lava"}))))
+
+(defn cells-of [xs] (mapv (comp (juxt :x :y :z) :pos) xs))
+
+(deftest targets-take-wood-rails-cobweb-and-exposed-ore-in-order
+  (let [{:keys [targets]} (strip/targets (takings-world) seg {:entry [0 y 20]})]
+    (is (= {:wood 7 :rail 2 :cobweb 1 :ore 1} (frequencies (map :class targets))))
+    (is (= (sort (map #(:x (:pos %)) targets)) (map #(:x (:pos %)) targets)))
+    (is (= [:cobweb :rail] (map :class (filter #(= 3 (:x (:pos %))) targets)))
+        "a cobweb on the walk line comes before the rail beside it")
+    (is (= [[6 y 22]] (cells-of (filter #(= :ore (:class %)) targets))) "the buried coal is not taken")))
+
+(deftest targets-start-at-the-end-nearest-the-entry
+  (let [{:keys [targets]} (strip/targets (takings-world) seg {:entry [12 y 20]})]
+    (is (= (reverse (sort (map #(:x (:pos %)) targets))) (map #(:x (:pos %)) targets)))))
+
+(deftest kept-bridge-falling-and-lava-planks-are-not-targets
+  (let [{:keys [targets kept]} (strip/targets (takings-world) seg {:entry [0 y 20]})]
+    (is (= #{{:pos {:x 9 :y (dec y) :z 20} :why :bridge}
+             {:pos {:x 10 :y (+ y 2) :z 20} :why :falling}
+             {:pos {:x 12 :y y :z 19} :why :lava}}
+           (set kept)))
+    (is (empty? (filter #(contains? (set (map :pos kept)) (:pos %)) targets)))))
+
+(deftest take-set-limits-the-classes
+  (let [{:keys [targets]} (strip/targets (takings-world) seg {:entry [0 y 20] :take #{:rail}})]
+    (is (= #{:rail} (set (map :class targets))))))

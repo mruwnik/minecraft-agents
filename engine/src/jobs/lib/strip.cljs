@@ -195,3 +195,61 @@
              :children (into {} (for [id order] [id (get children id [])]))
              :leaves (vec (remove children order))
              :unreached (vec (remove (set order) (map :id segs)))}))))))
+
+(defn air? [n] (contains? #{"air" "cave_air" "void_air"} n))
+(defn falling? [n] (boolean (and n (or (#{"gravel" "sand" "red_sand"} n) (re-find #"_concrete_powder$" n)))))
+(defn wood? [n] (boolean (and n (or (planks? n) (fence? n) (re-find #"_(log|wood)$" n)))))
+
+(defn kind
+  "The class a block is taken as, nil when it is not a target."
+  [n]
+  (cond (wood? n) :wood
+        (= n "cobweb") :cobweb
+        (rail? n) :rail
+        (and n (re-find #"_ore$" n)) :ore
+        (= n "spawner") :spawner))
+
+(def faces [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])
+
+(defn why-kept
+  "Why the wood at cell must stay (:lava :bridge :falling), nil when it may go. floor? is a cell of the corridor floor."
+  [block-at cell floor?]
+  (let [[x y z] cell
+        beside (fn [[dx dy dz]] (block-at [(+ x dx) (+ y dy) (+ z dz)]))
+        below (beside [0 -1 0])]
+    (cond (some #(= "lava" (beside %)) faces) :lava
+          (and floor? (or (nil? below) (air? below) (contains? #{"water" "lava"} below))) :bridge
+          (falling? (beside [0 1 0])) :falling)))
+
+(defn targets
+  "What to take in a segment, from the seen blocks: {:targets [{:pos :name :class}] :kept [{:pos :why}]}.
+  Classes :wood (planks, fences, logs in the 3x3 corridor and its floor row), :cobweb, :rail, :ore (exposed to air),
+  :spawner; :take limits them (default all). Wood that is next to lava, floors a bridge or holds up gravel or sand is kept,
+  never a target. Ordered outward from the end nearest :entry [x y z] (default :from), a cobweb on the walk line first
+  within a step."
+  [blocks {:keys [axis y line from to] :as _seg} {:keys [entry take block-at] :or {take #{:wood :cobweb :rail :ore :spawner}}}]
+  (let [block-at (or block-at (index blocks))
+        ea (when entry (if (= axis :x) (first entry) (nth entry 2)))
+        start (if (and ea (< (js/Math.abs (- ea to)) (js/Math.abs (- ea from)))) to from)
+        cells (for [a (range from (inc to)) w (range -2 3) h (range -1 4)
+                    :let [cell (at axis y line a) cell (update cell 1 + h) cell (if (= axis :x) (update cell 2 + w) (update cell 0 + w))
+                          n (block-at cell)
+                          k (kind n)]
+                    :when k
+                    :let [inside? (and (<= (js/Math.abs w) 1) (<= h 2))]
+                    :when (case k :wood inside? true)
+                    :when (or (not= k :ore) (some (fn [[dx dy dz]] (air? (block-at (mapv + cell [dx dy dz])))) faces))]
+                {:a a :w w :h h :cell cell :name n :class k})
+        kept (for [c cells :when (= :wood (:class c))
+                   :let [why (why-kept block-at (:cell c) (= -1 (:h c)))]
+                   :when why]
+               [c why])
+        kept-cells (set (map (comp :cell first) kept))
+        pos (fn [[x yy z]] {:x x :y yy :z z})]
+    {:targets (->> cells
+                   (remove #(kept-cells (:cell %)))
+                   (filter #(take (:class %)))
+                   (sort-by (fn [{:keys [a w h cell] k :class}]
+                             [(js/Math.abs (- a start)) (if (and (= k :cobweb) (zero? w) (<= 0 h 1)) 0 1) cell]))
+                   (mapv (fn [{:keys [cell name] k :class}] {:pos (pos cell) :name name :class k})))
+     :kept (mapv (fn [[c why]] {:pos (pos (:cell c)) :why why}) kept)}))
