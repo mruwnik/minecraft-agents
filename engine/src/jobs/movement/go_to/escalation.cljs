@@ -175,6 +175,28 @@
                                          :planned (planned-cells (:primitives c) e feet) :holes-before (count (own-holes c)))))
           :again))))
 
+(def stair-step-s
+  "Seconds one step of a stair up is reckoned to take (two cuts and a step), against a found plan's seconds."
+  3)
+
+(def stair-first-rise
+  "How far above the feet a goal is for a found plan to be weighed against a stair up."
+  8)
+
+(defn stair-check
+  "A fn (seconds) true when a found plan costing that many seconds is more than 3 stairs' worth, for go-to's first plan:
+  the goal is stair-first-rise or more above the feet, escalating is on, the stair has not been tried this call, the body
+  is not in its shelter, and escape/choose would stair (steps n). Else nil."
+  [c pos]
+  (let [m (ctx/mem c)
+        feet (end/feet-cell c)
+        goal (mapv #(js/Math.floor (% pos)) [:x :y :z])]
+    (when (and (:escalate (:args c)) (not (:stair-tried m)) (not (sh/sheltered-in c))
+               (>= (- (second goal) (second feet)) stair-first-rise))
+      (let [e (escape/choose (:primitives c) feet goal (may-dig-fn c) {:own? (own-placed-fn c) :skip (:skipped-steps m #{})})]
+        (when (= :stair (:step e))
+          (fn [seconds] (and (number? seconds) (> seconds (* 3 stair-step-s (:steps e))))))))))
+
 (defn escalate?
   "Whether a give-up with result may escalate instead: a carried block fills the 1-cell gap it was refused (gap-fill), or the body is shut in (reach/enclosed?) and no door or gate
   borders where it can walk (escape/door-beside?: that is its way out; an iron door, or any door under :doors :never,

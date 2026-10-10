@@ -189,6 +189,7 @@
     (let [steps (.stepsTo s node)
           n (.-length steps)
           cost #js {:seconds (aget (.-secs s) node)
+                    :priced (aget (.-gs s) node)
                     :risk (aget (.-risks s) node)
                     :damage (aget (.-dmgs s) node)
                     :drown (aget (.-drowns s) node)

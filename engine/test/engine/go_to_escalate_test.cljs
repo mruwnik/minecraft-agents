@@ -817,3 +817,36 @@
                                                {:pos [9 64 0] :range 0}))]
           (is (false? (:arrived @out)))
           (is (= "air" (block p [5 63 0]))))))))
+
+;; a mine reached by drops: the only way back on foot is a long loop (20 east, 10 up a staircase over 20, 30 back) that costs
+;; more than three stairs of the 10 the goal is above
+(def long-loop
+  (let [open (fn [x y z] [(str x "," y "," z) (str x "," (inc y) "," z)])]
+    (apply dissoc (box -2 45 -3 45 66 3 "stone")
+           (concat (mapcat #(open % 50 0) (range 0 21))
+                   (mapcat #(concat (open (+ 20 %) (+ 50 (quot % 2)) 0) [(str (+ 20 %) "," (+ 52 (quot % 2)) ",0")]) (range 21))
+                   (mapcat #(open % 60 2) (range 10 41)) (open 40 60 1)))))
+
+(def loop-tolls (vec (for [x (range 0 21)] {:x x :y 50 :z 0 :factor 60})))
+
+(deftest go-to-digs-a-stair-up-instead-of-a-long-priced-walk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out seen]} (await (run-job! {:self {:pos {:x 0 :y 50 :z 0}} :blocks long-loop :inventory [{:name "iron_pickaxe" :count 1}]}
+                                              {:pos [10 60 2] :range 1 :tolls loop-tolls}))]
+          (is (= {:arrived true} @out))
+          (is (= [:stair] (mapv :step (events-of seen :go-to.escalated)))))))))
+
+(deftest go-to-walks-the-long-loop-when-escalating-is-off-or-the-goal-is-near
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:self {:pos {:x 0 :y 50 :z 0}} :blocks long-loop :inventory [{:name "iron_pickaxe" :count 1}]}
+              off (await (run-job! world {:pos [10 60 2] :range 1 :tolls loop-tolls :escalate false}))
+              near (await (run-job! world {:pos [24 52 0] :range 1 :tolls loop-tolls}))]
+          (is (true? (:arrived @(:out off))))
+          (is (empty? (events-of (:seen off) :go-to.escalated)))
+          (is (true? (:arrived @(:out near))))
+          (is (empty? (events-of (:seen near) :go-to.escalated))))))))
+

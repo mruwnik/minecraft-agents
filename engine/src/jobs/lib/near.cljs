@@ -134,8 +134,9 @@
   {:status :searching} (wplan/no-walk), nothing walked; progress false: an unfinished search walks nowhere (plan!).
   dangers: whether the plans keep away from known dangers (plan!). avoid: cells the plans keep off (plan!). dark: false plans dark cells like lit ones. tolls: cells the plans price (plan!). drop-cost: the policy's :drop-cost (wplan/with-drops: a number scales drops, false takes none of 2 or 3). costs: the policy's :costs (planner price overrides, cost/planner-costs).
   unknown: the mask spec (plan!); the result then says what the last plan said of unseen floors (with-sight).
-  sight: (fn [x y z]) of a feet cell, the policy's :goal-seen: only a cell in range that answers true is the goal."
-  [c to range doors shut-also timeout-s explore one-way budget progress dangers & [avoid dark tolls drop-cost costs unknown sight]]
+  sight: (fn [x y z]) of a feet cell, the policy's :goal-seen: only a cell in range that answers true is the goal.
+  stair-check: (fn [seconds]) asked of the first plan when it is a whole path; true ends the walk before it starts, {:status :stair-cheaper}."
+  [c to range doors shut-also timeout-s explore one-way budget progress dangers & [avoid dark tolls drop-cost costs unknown sight stair-check]]
   (await (walk/settle! c))
   (let [policy-of (fn [] (cond-> (wworld/body-policy c) (not= :never doors) (update :moves conj :open) (some? drop-cost) (assoc :drop-cost drop-cost) (some? costs) (assoc :costs costs) (some? sight) (assoc :goal-seen sight)))
         announce! (fn [_kind data] (ctx/emit! c :replan :info data))
@@ -148,6 +149,8 @@
                    (let [plan (await (plan! c to range doors (policy-of) walls explore one-way budget progress dangers avoid dark tolls unknown))]
                      (if-let [no (wplan/no-walk plan 0 (policy-of))]
                        (if stuck (door-stuck stuck) (with-sight no plan to))
+                       (if (and stair-check (empty? walls) (= "found" (:status plan)) (stair-check (some-> ^js (:r plan) .-path .-cost .-priced)))
+                         {:status :stair-cheaper}
                        (let [began (ctx/now c)
                              {done :done last-plan :plan planned :damage}
                              (await (walk/follow! c plan {:plan-fn #(plan! c to range doors (policy-of) (into walls %) explore one-way (wsearch/replan-budget budget) progress dangers avoid dark tolls unknown)
@@ -160,7 +163,7 @@
                              (:known (:frontier-taken last-plan)) (assoc :frontier-known true
                                                          :frontier-target (:target (:frontier-taken last-plan))))
                            stuck (door-stuck (:cells done))
-                           :else (recur (into walls (:cells done)) (:cells done)))))))]
+                           :else (recur (into walls (:cells done)) (:cells done))))))))]
       (when (and (not= :never doors) (= :arrived (:status result)))
         (await (step-out! c to range doors shut-also timeout-s (policy-of))))
       ;; however the walk ended, what it opened and could not shut yet (the body was in its column) is shut when in reach
@@ -183,19 +186,20 @@
   stand whose eye sees that block (jobs.lib.aim) as the goal and as an arrival; unknown the mask spec (walk-once!); zone-tolls true adds the cells of other bodies' zones to tolls (toll-cells/zone-walk-tolls, none under the job's :ignore-zones?); doors, shut-also (jobs.lib.pass), explore, one-way (default :open: past a drop toward a far goal), budget, progress (default true) and dangers (default true) and avoid as walk-once!, timeout-s the bound of each steer (default walk-timeout-s). {:result :status :from :to}: result
   is the walk's result map, status the entry's (\"partial\" too for a walk to a frontier that moved the body over a block:
   it went where a way may be, not stuck). A round whose plan is still searching (result :searching) walked nowhere and
-  failed at nothing: status \"searching\", no :moved entry and no walk booked."
-  [c pos range {:keys [doors shut-also timeout-s explore one-way budget progress dangers avoid dark tolls zone-tolls drop-cost costs unknown see-cell] :or {timeout-s walk-timeout-s one-way :open progress true dangers true}}]
+  failed at nothing: status \"searching\", no :moved entry and no walk booked; likewise status \"stair\" for a stair-check (walk-once!) that ended it."
+  [c pos range {:keys [doors shut-also timeout-s explore one-way budget progress dangers avoid dark tolls zone-tolls drop-cost costs unknown see-cell stair-check] :or {timeout-s walk-timeout-s one-way :open progress true dangers true}}]
   (let [from (u/self-pos c)
         tolls (if zone-tolls (into (vec tolls) (tc/zone-walk-tolls c pos)) tolls)
         cell [(:x pos) (:y pos) (:z pos)]
         result (await (walk-once! c cell range doors shut-also timeout-s explore one-way budget progress dangers avoid dark tolls drop-cost costs unknown
-                                  (when see-cell (aim/stand-sees-fn (:primitives c) see-cell))))
+                                  (when see-cell (aim/stand-sees-fn (:primitives c) see-cell)) stair-check))
         to (u/self-pos c)
         status (cond
                  (= :searching (:status result)) "searching"
+                 (= :stair-cheaper (:status result)) "stair"
                  (and (:frontier result) (> (u/dist from to) 1)) "partial"
                  :else (move-status (and (u/within? to pos range) (or (nil? see-cell) (aim/body-sees? c see-cell))) (u/dist from pos) (u/dist to pos)))]
-    (when-not (= "searching" status)
+    (when-not (#{"searching" "stair"} status)
       (ctx/remember! c :moved (cond-> {:from from :to to :status status :target pos}
                                 (= :no-path (:status result)) (assoc :no-path true))
                      mem/moved-policy)

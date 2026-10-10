@@ -626,7 +626,8 @@
       :else
       (let [_ (forget-known-land! c)
             opts (assoc (walk-opts c doors) :progress (empty? (:frontier-best (ctx/mem c))))
-            {walked :result status :status to :to} (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos)) pos range (assoc opts :see-cell (see-cell c))))
+            stair-check (esc/stair-check c pos)
+            {walked :result status :status to :to} (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos)) pos range (assoc opts :see-cell (see-cell c) :stair-check stair-check)))
             _ (ctx/hold-still! c (when (= "searching" status) :searching))
             fetched (when (= :no-torch (:status walked)) (await (fetch-torches! c)))
             aided? (when (and (not fetched) (not= "arrived" status) (torch/torch-aid? c walked)) (await (torch/hold-torch! c)))
@@ -651,6 +652,9 @@
         (cond
           (= "arrived" status)
           (await (arrive! c pos))
+
+          (= "stair" status)
+          (do (ctx/update-mem! c assoc :stair-tried true :escalate-now true) :again)
 
           (and (:leg-s (:args c)) (< left (dec d)))
           (end/finish! c {:arrived false :leg true})
