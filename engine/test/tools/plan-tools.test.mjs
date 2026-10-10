@@ -264,3 +264,52 @@ test('native plan checks report overlapping saved claims', async () => {
     assert.equal(checked.value.claims.items[0].count, 3)
   } finally { fx.close() }
 })
+
+const SHAFT = ['mineshaft', 'pit', '--at', '0,64,0', '--heading', 'east', '--to-y', '62', '--by', 'Digger']
+
+test('mineshaft writes a :mineshaft plan with one :stair part that passes validation; show and list name its depth and heading', async () => {
+  const fx = fixture()
+  try {
+    const made = await invoke('plan', fx, SHAFT)
+    assert.equal(made.code, 0, made.output)
+    const file = fs.readFileSync(path.join(fx.state, 'worlds', 'fixture', 'plans', 'pit.edn'), 'utf8')
+    assert.match(file, /:kind :mineshaft/)
+    assert.match(file, /:stair \{:from \[0 64 0\] :heading :east :to-y 62\}/)
+    assert.match(file, /:metadata \{:by "Digger"\}/)
+    const shown = await invoke('plan', fx, ['show', 'pit'])
+    assert.deepEqual(shown.value.validation.items, [])
+    assert.deepEqual(shown.value.shaft, { heading: keyword('east'), from: [0, 64, 0], 'to-y': 62, depth: 2, steps: 2, bottom: [2, 62, 0] })
+    const listed = await invoke('plan', fx, ['list'])
+    assert.deepEqual(listed.value.items.map(i => [i.id, i.kind, i.shaft.depth]), [['pit', keyword('mineshaft'), 2]])
+  } finally { fx.close() }
+})
+
+test('mineshaft refuses a bad heading, a to-y at or above the top, bad coordinates and an existing id', async () => {
+  const fx = fixture()
+  try {
+    const bad = (args, reason) => invoke('plan', fx, ['mineshaft', 'pit', '--by', 'Digger', ...args]).then(r => {
+      assert.equal(r.code, 2, r.output)
+      assert.deepEqual(r.value.reason, keyword(reason))
+    })
+    await bad(['--at', '0,64,0', '--heading', 'up', '--to-y', '62'], 'bad-heading')
+    await bad(['--at', '0,64,0', '--heading', 'east', '--to-y', '64'], 'bad-to-y')
+    await bad(['--at', '0,64,0', '--heading', 'east', '--to-y', '70'], 'bad-to-y')
+    await bad(['--at', '0,64', '--heading', 'east', '--to-y', '62'], 'bad-at')
+    await bad(['--heading', 'east', '--to-y', '62'], 'bad-at')
+    assert.equal((await invoke('plan', fx, SHAFT)).code, 0)
+    const again = await invoke('plan', fx, SHAFT)
+    assert.equal(again.code, 2)
+    assert.deepEqual(again.value.reason, keyword('already-exists'))
+  } finally { fx.close() }
+})
+
+test('check of a mineshaft counts its steps dug, undug and unseen from what the body has seen', async () => {
+  const fx = fixture()
+  try {
+    await invoke('plan', fx, SHAFT)
+    await writeSeen(fx, 'Probe', [[1, 65, 0, 'air'], [1, 64, 0, 'air'], [1, 63, 0, 'air'], [2, 64, 0, 'stone']], Date.now() - 1000)
+    const checked = await invoke('plan', fx, ['check', 'pit', '--body', 'Probe'])
+    assert.equal(checked.code, 0, checked.output)
+    assert.deepEqual(checked.value.shaft, { steps: 2, dug: 1, undug: 1, unseen: 0, heading: keyword('east'), depth: 2 })
+  } finally { fx.close() }
+})

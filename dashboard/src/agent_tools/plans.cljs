@@ -15,10 +15,54 @@
 (def names #"^[A-Za-z0-9_-]{1,100}$")
 (def repo-root (.resolve path js/__dirname "../.."))
 (def usage
-  {:plan "usage: plans.mjs --world <world> <command> [options]\n  list [--limit 10 --offset 0] [--raw [--large]]\n  find <text> [--limit 10 --offset 0] [--raw [--large]] | show <id> [--raw [--large]] [--geometry [--large]]\n  add <id> --edn '<plan-map>' --by <name> [--dry-run] [--raw]\n  edit <id> --edn '<plan-map>' --by <name> --revision <digest> [--dry-run] [--raw]\n  remove <id> --by <name> --revision <digest> [--dry-run] [--raw]   (every submitted plan is active; remove retires one)\n  validate <id> --edn '<plan-map>' [--blueprint <id>=<blueprint-map>]... [--raw] [--geometry [--large]]\n  check <id> --body <name> [--inventory '<block-count-map>'] [--blueprint <id>=<blueprint-map>]... [--raw] [--geometry [--large]]\n  Common: --worlds <dir> --state <legacy-parent> --repo <dir> --limit 1..100 --offset 0..10000\n  check judges only what that body has seen (its seen memory); cells never seen count unknown and :checked :unseen. Large raw output is opt-in with --large; raw output otherwise stops at 64 KiB. Plan/world edits need --by."
+  {:plan "usage: plans.mjs --world <world> <command> [options]\n  list [--limit 10 --offset 0] [--raw [--large]]\n  find <text> [--limit 10 --offset 0] [--raw [--large]] | show <id> [--raw [--large]] [--geometry [--large]]\n  add <id> --edn '<plan-map>' --by <name> [--dry-run] [--raw]\n  edit <id> --edn '<plan-map>' --by <name> --revision <digest> [--dry-run] [--raw]\n  remove <id> --by <name> --revision <digest> [--dry-run] [--raw]   (every submitted plan is active; remove retires one)\n  mineshaft <id> --at=x,y,z --heading north|east|south|west --to-y <y> --by <name> [--dry-run] [--raw]   (declare a stair shaft: :at is the feet cell of its top step, --to-y below it; show names its depth and heading, check counts its steps dug)\n  validate <id> --edn '<plan-map>' [--blueprint <id>=<blueprint-map>]... [--raw] [--geometry [--large]]\n  check <id> --body <name> [--inventory '<block-count-map>'] [--blueprint <id>=<blueprint-map>]... [--raw] [--geometry [--large]]\n  Common: --worlds <dir> --state <legacy-parent> --repo <dir> --limit 1..100 --offset 0..10000\n  check judges only what that body has seen (its seen memory); cells never seen count unknown and :checked :unseen. Large raw output is opt-in with --large; raw output otherwise stops at 64 KiB. Plan/world edits need --by."
    :blueprint "usage: blueprints.mjs --world <world> <command> [options]\n  list [--limit 10 --offset 0] [--raw [--large]] | find <text> [--limit 10 --offset 0] [--raw [--large]]\n  show <id> [--raw [--large]] | save <id> --edn '<blueprint-map>' --by <name> [--revision <digest>] [--dry-run] [--raw]\n  remove <id> --by <name> --revision <digest> [--dry-run] [--raw]   (deletes the global blueprint file)\n  validate <id> --edn '<blueprint-map>' [--raw] [--large]\n  Common: --worlds <dir> --state <legacy-parent> --repo <dir> --limit 1..100 --offset 0..10000\n  Blueprints are shared globally; each result reports :scope :global. Writes need --by."})
 
 (defn fail! [reason message] (throw (data/fail reason message)))
+
+(def air-names #{"air" "cave_air" "void_air"})
+
+(defn mineshaft-args!
+  "The {:from :heading :to-y} stair of the mineshaft options, or a refusal naming the bad option."
+  [{:keys [at heading to-y]}]
+  (let [from (when (string? at) (mapv js/Number (str/split at #",")))
+        down (js/Number to-y)]
+    (when-not (and (= 3 (count from)) (every? js/Number.isSafeInteger from))
+      (fail! :bad-at "--at needs the feet cell of the top step as x,y,z integers (write --at=-5,64,3 for a negative x)"))
+    (when-not (contains? shape/headings (keyword heading))
+      (fail! :bad-heading "--heading must be north, east, south or west"))
+    (when-not (js/Number.isSafeInteger down) (fail! :bad-to-y "--to-y needs an integer"))
+    (when-not (< down (second from))
+      (fail! :bad-to-y (str "--to-y " down " must be below the top step's y " (second from) ": a shaft goes down")))
+    {:from from :heading (keyword heading) :to-y down}))
+
+(defn shaft-of
+  "{:heading :from :to-y :depth :steps :bottom} of the first valid :stair part of a :mineshaft plan value, or nil."
+  [value]
+  (when (= :mineshaft (:kind value))
+    (when-let [{:keys [from heading to-y] :as stair} (some #(when (and (:stair %) (nil? (shape/stair-error (:stair %)))) (:stair %)) (:parts value))]
+      (let [n (shape/stair-steps stair) [dx dy dz] (shape/delta :down heading)]
+        {:heading heading :from from :to-y to-y :depth n :steps n
+         :bottom (shape/add from [(* n dx) (* n dy) (* n dz)])}))))
+
+(defn shaft-progress
+  "The shaft of a plan value with its steps counted from block-at (pos -> block name or nil when unseen): a step is :dug
+  when all three cells it cuts are seen air, :undug when one is seen as anything else, else :unseen."
+  [value block-at]
+  (when-let [{:keys [from heading steps depth]} (shaft-of value)]
+    (let [state (fn [feet]
+                  (let [names (map block-at (:cut (shape/step-cells feet :down heading)))]
+                    (cond (some #(and % (not (air-names %))) names) :undug
+                          (every? some? names) :dug
+                          :else :unseen)))
+          counts (frequencies (map state (take steps (iterate #(shape/add % (shape/delta :down heading)) from))))]
+      {:heading heading :depth depth :steps steps :dug (get counts :dug 0) :undug (get counts :undug 0) :unseen (get counts :unseen 0)})))
+
+(defn mineshaft-edn
+  "The plan text of a mineshaft the options declare."
+  [req]
+  (pr-str {:id (:id req) :kind :mineshaft
+           :parts [{:id "stair" :stair (mineshaft-args! req) :want :clear}]}))
 
 (defn one-form [text]
   (when (or (not (string? text)) (> (js/Buffer.byteLength text) (* 8 1024 1024)))
@@ -47,7 +91,7 @@
 
 (defn parsed-args [kind argv]
   (let [options (merge (into {} (map (fn [k] [k {:type "string"}])
-                                    [:world :by :revision :edn :status :limit :offset :query :inventory :body]))
+                                    [:world :by :revision :edn :status :limit :offset :query :inventory :body :at :heading :to-y]))
                        {:state {:type "string"} :worlds {:type "string"}
                         :repo {:type "string" :default repo-root}
                         :blueprint {:type "string" :multiple true}}
@@ -56,9 +100,9 @@
         parsed (data/from-json (.parseArgs util #js {:args argv :allowPositionals true :options (clj->js options)}))
         [command id & extra] (:positionals parsed)
         v (:values parsed)
-        commands (if (= kind :plan) #{"list" "find" "show" "add" "edit" "remove" "validate" "check"}
+        commands (if (= kind :plan) #{"list" "find" "show" "add" "edit" "remove" "validate" "check" "mineshaft"}
                      #{"list" "find" "show" "save" "remove" "validate"})
-        mutations #{"add" "edit" "save" "remove"}
+        mutations #{"add" "edit" "save" "remove" "mineshaft"}
         allowed (cond-> #{:world :worlds :state :repo}
                   (#{"list" "find"} command) (into [:limit :offset :raw :large])
                   (= command "show") (into [:raw :geometry :large])
@@ -66,7 +110,8 @@
                   (and (= command "validate") (= kind :plan)) (conj :blueprint)
                   (= command "check") (into [:body :inventory :blueprint :raw :geometry :large :limit :offset])
                   (mutations command) (into [:by :revision :dry-run :raw :large])
-                  (#{"add" "edit" "save"} command) (conj :edn))]
+                  (#{"add" "edit" "save"} command) (conj :edn)
+                  (= command "mineshaft") (into [:at :heading :to-y]))]
     (when-not (and (:world v) (re-matches #"^[A-Za-z0-9_-]{1,64}$" (:world v)))
       (fail! :invalid-world "supply an explicit valid --world"))
     (when (and (= kind :plan) (= command "status"))
@@ -78,6 +123,7 @@
     (when-not (commands command) (fail! :usage (str "unknown " (name kind) " command " command)))
     (when (or (seq extra) (if (= command "list") (some? id) (nil? id)))
       (fail! :usage (str command (if (= command "list") " takes no ID" (if (= command "find") " needs one search string" " needs exactly one ID")))))
+    (when (= command "mineshaft") (mineshaft-args! v))
     (when (and id (not= command "find") (not (re-matches names id)))
       (fail! :invalid-id "ID must use letters, digits, _ or - (up to 100)"))
     (doseq [[key value] v]
@@ -136,7 +182,10 @@
   ([errors offset limit] (page errors limit offset)))
 (defn current-docs [ctx kind] (vec (remove nil? (data/list-documents ctx kind))))
 (defn plan-summary [doc]
-  (let [p (:value doc)] {:id (:id doc) :revision (:revision doc) :note (:note p) :parts (count (:parts p))}))
+  (let [p (:value doc)]
+    (cond-> {:id (:id doc) :revision (:revision doc) :note (:note p) :parts (count (:parts p))}
+      (:kind p) (assoc :kind (:kind p))
+      (shaft-of p) (assoc :shaft (select-keys (shaft-of p) [:heading :from :depth])))))
 (defn blueprint-summary [doc errors]
   (let [bp (:value doc)]
     {:id (:id doc) :scope :global :revision (:revision doc) :title (:title bp) :front (:front bp)
@@ -144,7 +193,8 @@
      :errors (errors-page errors)}))
 (defn plan-output [doc ctx raw]
   (if raw {:ok true :kind :plan :id (:id doc) :world (:world ctx) :scope :world :revision (:revision doc) :document (raw-edn (:text doc))}
-      (assoc (plan-summary doc) :validation (errors-page (:errors (parse/parse (:text doc) (:id doc)))) :scope :world)))
+      (cond-> (assoc (plan-summary doc) :validation (errors-page (:errors (parse/parse (:text doc) (:id doc)))) :scope :world)
+        (shaft-of (:value doc)) (assoc :shaft (shaft-of (:value doc))))))
 (defn blueprint-output [doc raw]
   (if raw {:ok true :kind :blueprint :id (:id doc) :scope :global :revision (:revision doc) :document (raw-edn (:text doc))}
       (blueprint-summary doc (:errors (parse/parse-blueprint (:text doc) (:id doc))))))
@@ -216,6 +266,7 @@
                                           :score (assoc score :checked
                                                         (assoc checked :newest-age-ms (when (:newest checked) (max 0 (- (:now checked) (:newest checked))))
                                                                        :oldest-age-ms (when (:oldest checked) (max 0 (- (:now checked) (:oldest checked)))))))
+                             (shaft-progress (:plan-value req) #(some-> (get @blocks %) :name)) (assoc :shaft (shaft-progress (:plan-value req) #(some-> (get @blocks %) :name)))
                              (:geometry req) (assoc :cells (:cells prepared))
                              (:large req) (assoc :large true)))
                          (finally (.call (aget memory "close") memory)))))))))))
@@ -293,6 +344,7 @@
     (cond
       (#{"list" "find"} command) (do (write (list-result :plan (current-docs ctx :plan) req)) 0)
       (#{"add" "edit" "remove"} command) (mutate-plan req ctx write)
+      (= command "mineshaft") (mutate-plan (assoc req :command "add" :edn (mineshaft-edn req)) ctx write)
       (= command "show") (let [doc (data/read-document ctx :plan (:id req))]
                             (when-not doc (fail! :not-found (str "no plan " (:id req) " in " (:world ctx))))
                             (let [output (plan-output doc ctx (:raw req))]
@@ -308,7 +360,7 @@
         (let [value (if (= command "check") (:value doc) (edn-value source "edn"))
               inline (mapv blueprint-form (:blueprint req))]
           (when-not (= (:id value) (:id req)) (fail! :bad-plan (str "plan :id must be \"" (:id req) "\"")))
-          (-> (js/Promise.resolve (if (= command "check") (check-plan ctx source (:id req) inline (assoc req :dim (shape/plan-dim value)))
+          (-> (js/Promise.resolve (if (= command "check") (check-plan ctx source (:id req) inline (assoc req :dim (shape/plan-dim value) :plan-value value))
                                       (prepare ctx source (:id req) inline nil [])))
               (.then (fn [result]
                        (write (compact-result (cond-> result (= command "check") (assoc :revision (:revision doc))) req source))
