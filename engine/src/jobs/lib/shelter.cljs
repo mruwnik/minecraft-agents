@@ -476,6 +476,6 @@
                 (bed-place-wanted? p view (bed-radius view args) permit?)
                 (log-out-for-sleepers? p view)
                 (not (safe-from-night? p (:roof-height args default-roof-height)))
-                (some? (open-room-door p view))))
+                (seq (open-room-doors p))))
        (or (shut-in-by-day? p shelter (:data (mem/latest view :shelter-trapped)))
            (some? (bed-to-collect p view)))))))

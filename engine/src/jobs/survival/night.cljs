@@ -694,15 +694,19 @@
 
 (defn ^:async shut-room-door!
   "Shut an open door of the closed room the body stands in (retreat/shut-home-door!: from where it stands within a hand's
-  reach, else a step to the room cell inside it first). A door still open once tried (clicked, or no step got nearer)
-  writes :night-door-failed for this door, so the night digs in as before. :again."
+  reach, else a step to the room cell inside it first). A door in another's zone or claim is not clicked; a door still open
+  once tried (clicked, or no step got nearer) is given up too: :night-door-failed for this door (shelter.door-failed warn),
+  so the night digs in as before. :again."
   [c door]
-  (await (retreat/shut-home-door! c door))
-  (when (and (some #(= (sh/door-key (:cell door)) (sh/door-key (:cell %))) (sh/open-room-doors (:primitives c)))
-             (contains? (:doors-clicked (ctx/mem c) #{}) (retreat/door-key (:cell door))))
-    (ctx/emit! c :shelter.door-failed :warn {:cell (retreat/door-key (:cell door))
-                                             :text "an open door of the room would not shut; digging in instead"})
-    (ctx/remember! c :night-door-failed {:door (sh/door-key (:cell door))} {:cap 1 :ttl (sh/door-failed-ms)}))
+  (let [refused (access/trespass-refusal c :place (:cell door))]
+    (when-not refused (await (retreat/shut-home-door! c door)))
+    (when (and (some #(= (sh/door-key (:cell door)) (sh/door-key (:cell %))) (sh/open-room-doors (:primitives c)))
+               (or refused (contains? (:doors-clicked (ctx/mem c) #{}) (retreat/door-key (:cell door)))))
+      (ctx/emit! c :shelter.door-failed :warn {:cell (retreat/door-key (:cell door))
+                                               :text (if refused
+                                                       "an open door of the room is in another's zone or claim; digging in instead"
+                                                       "an open door of the room would not shut; digging in instead")})
+      (ctx/remember! c :night-door-failed {:door (sh/door-key (:cell door))} {:cap 1 :ttl (sh/door-failed-ms)})))
   :again)
 
 ;; ------------------------------------------------------------------ morning
@@ -808,7 +812,7 @@
           (log-out-wanted? c) (await (log-out-step c))
           (and (:enclose (ctx/mem c)) (not= :dug-in sheltered)) (await (enclose! c))
           door (await (shut-room-door! c door))
-          (or roofed (sh/buried? p) (sh/shut-in-room? p)) (do (ctx/forget-where! c :night-site (constantly true))
+          (and (or roofed (sh/buried? p) (sh/shut-in-room? p)) (empty? (sh/open-room-doors p))) (do (ctx/forget-where! c :night-site (constantly true))
                                                                  (result/finish! c (cond-> (assoc (spent-fields c) :night (if (= :logged-out sheltered) :logged-out :roofed)) (fled c) (assoc :fled (fled c)))))
           (:fleeing (ctx/mem c)) (await (flee! c (:fleeing (ctx/mem c))))
           (and (= :exposed sheltered) (retry-due? c)) (do (retry-dig-in! c) (await (shelter! c)))

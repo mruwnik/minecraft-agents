@@ -4,6 +4,8 @@
             [engine.core :as core]
             [engine.hut-shelter-test :refer [hut-world door-states door-open? roof door]]
             [engine.memory :as mem]
+            [engine.registry :as registry]
+            [jobs.lib.world-files :as ew]
             [jobs.lib.shelter :as sh]
             [engine.shelter-test :as st]
             [engine.test-util :as tu :refer [box]]
@@ -61,7 +63,7 @@
           (is (false? (door-open? p)) "the door is shut")
           (is (= [] (st/calls p "place")) "nothing placed"))))))
 
-(deftest a-door-that-stays-open-is-given-up-once-and-the-night-ends
+(deftest a-door-that-stays-open-is-given-up-once-and-the-body-is-not-called-safe
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -72,8 +74,29 @@
           (is (true? (door-open? p)) "the click did nothing")
           (is (= [{:door [5 64 2]}] (st/entries eng :night-door-failed)))
           (is (= 1 (count (filterv #(= :shelter.door-failed (:kind %)) @seen))))
-          (is (= [] (st/calls p "dig")) "nothing dug")
-          (is (empty? (:list (core/state eng))) "the night ended, the failed door is not tried again"))))))
+          (is (some #(= :shelter.exposed (:kind %)) @seen) "the body says it is exposed, it is not called roofed"))))))
+
+(defn zoned-setup
+  "st/setup over the same world with a zone list in the engine."
+  [world zones]
+  (let [clock (atom 1000000)
+        p (tu/fake (merge {:offlineScale 0.0001 :floor tu/walk-floor} world))
+        _ (st/dawn-after! p st/default-dawn)
+        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                          :world (ew/of-data {} {} zones)})]
+    {:eng eng :p p}))
+
+(deftest a-door-in-anothers-zone-is-not-shut-and-the-body-is-not-called-safe
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (zoned-setup (merge (open-door-hut {:x 5 :y 64 :z 0} {}) {:inventory st/dirt-stack})
+                                           [{:name "yard" :min [5 60 2] :max [5 70 2] :owner "Miles"}])]
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (tu/run-until-empty eng 12))
+          (is (= [] (st/calls p "useOn")) "the door is not clicked")
+          (is (= [{:door [5 64 2]}] (st/entries eng :night-door-failed)))
+          (is (empty? (st/entries eng :shelter)) "no shelter is claimed behind the open door"))))))
 
 (deftest a-failed-door-is-given-up-wherever-the-body-stands-in-the-room
   (let [p (tu/fake (open-door-hut {:x 5 :y 64 :z -1} {}))

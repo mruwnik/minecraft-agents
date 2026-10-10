@@ -5,7 +5,7 @@
     a bed item carried and no bed to use (sh/bed-place-wanted?)
     someone else on the server asleep (sh/log-out-for-sleepers?)
     nothing solid within :roof-height blocks straight above, not buried and not in a closed room (sh/unsafe-night?)
-    an open door in the closed room the body stands in (sh/open-room-door), unless the night failed to shut it there
+    an open door in the closed room the body stands in (sh/open-room-doors), also one the night could not shut
   By day it holds while the body is shut in its own latest :shelter (no :shelter-trapped entry for the cell), or a bed
   it put down outside its own zone (:bed-placed) still stands. Roofed, buried or shut in (its dug-in shelter too) with no bed and no sleeper it does not
   hold: the queue runs. An agent that wants the night for itself mutes it."
