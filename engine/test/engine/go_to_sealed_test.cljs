@@ -22,19 +22,20 @@
 
 (defn ^:async sealed
   "A noon world with the body in a 1-cell pit whose east side is a retreat plug, a skeleton outside; ticks n."
-  [n]
+  ([n] (sealed n nil))
+  ([n self]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake (merge {:floor tu/walk-floor :time st/noon :self {:pos {:x 0 :y 64 :z 0}} :blocks pit}))
+        p (tu/fake (merge {:floor tu/walk-floor :time st/noon :self (merge {:pos {:x 0 :y 64 :z 0}} self) :blocks pit}))
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'walker parent) :triggers triggers/all
                           :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})
-        s {:eng eng :p p :seen seen}]
+        s {:eng eng :p p :seen seen :clock clock}]
     (ledger/write! (:store eng) [{:cell [1 64 0] :item "dirt" :before "air" :job "j9" :purpose :retreat-plug :state :placed}])
     (fake/add-entity! p {:id 9 :name "skeleton" :kind "hostile" :pos {:x -6 :y 64 :z 0} :health 20})
     (core/submit! eng '(walker) {})
     (await (st/tick-n eng n))
-    s))
+    s)))
 
 (deftest a-walk-from-the-sealed-plug-with-a-hostile-near-holds-with-the-reason
   (async done
@@ -56,3 +57,22 @@
           (is (pos? held))
           (is (= held (count (st/emitted seen :holding))) "no further :sealed-hostile-near hold")
           (is (seq (st/emitted seen :unreachable)) "the walk ends in its own give-up, not an endless wait"))))))
+
+(deftest the-hold-ends-at-its-deadline-with-the-hostile-still-near
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen clock]} (await (sealed 6))]
+          (is (empty? (st/emitted seen :unreachable)))
+          (swap! clock + (* 10 60 1000))
+          (await (st/tick-n eng 8))
+          (is (seq (st/emitted seen :unreachable)) "after the deadline the walk goes on to its own give-up"))))))
+
+(deftest a-starving-or-hurt-body-is-not-held
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [self [{:food 2} {:health 4}]]
+          (let [{:keys [seen]} (await (sealed 6 self))]
+            (is (empty? (st/emitted seen :holding)) (str self))
+            (is (seq (st/emitted seen :unreachable)) (str self))))))))

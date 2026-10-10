@@ -77,7 +77,7 @@
     (jobs.lib.shelter/walk-leaves-shelter?: a closed room, its dug-in shelter, a roof, underground) waits for day: a listed
     go-to declines {:reason :night-sheltered :shelter :goal}, a child call waits 1 s and yields :continue (info
     go-to.night-sheltered, once a call). :go walks anyway; a reflex job's go-to always walks.
-  - A walk without :escalate from a body shut in by its own retreat plug (ledger) with a known hostile near waits the same way, {:reason :sealed-hostile-near}, until the plug is taken back.
+  - A walk without :escalate from a body shut in by its own retreat plug (ledger) with a known hostile near waits the same way, {:reason :sealed-hostile-near}, until the hostile goes, :plug-wait-ms (3 min) pass, or food or health fall to :plug-wait-min-food or -health (it never holds a starving or hurt body).
   - :goal-danger :end gives up at once (:why :goal-dangerous, :mob, :mob-pos, :mob-distance) when the goal lies within the full-cost radius of a known mob the body would flee; :wait (default) walks on, an info goal-in-danger says so.
   - :dangers false plans straight past known dangers (default: the plans keep away from them, jobs.lib.threats). :leg-s n
     walks one leg of at most n s and, when it got more than 1 block nearer, ends {:arrived false :leg true} (job :done)
@@ -181,6 +181,9 @@
    ::dry-radius {:default 6 :doc "Blocks from the body an arrival in water reads for a dry stand (also within :range of the goal)." :spec (a/num-in 0 nil)}
    ::dry-walk-rounds {:default 3 :doc "Walk rounds (search slices or walks) the walk on from an arrival in water to a dry stand takes at most." :spec (a/int-in 1 nil)}
    ::night-wait-ms {:default 1000 :doc "Milliseconds a go-to waits before it yields :continue while it holds for day inside a shelter." :spec (a/int-in 0 nil)}
+   ::plug-wait-ms {:default 180000 :doc "Milliseconds a go-to shut in by its retreat plug holds for a known hostile (:sealed-hostile-near) before it walks on as without the hold." :spec (a/int-in 0 nil)}
+   ::plug-wait-min-food {:default 6 :doc "Food at or under which a go-to shut in by its retreat plug no longer holds for a hostile: starving beats waiting." :spec (a/num-in 0 20)}
+   ::plug-wait-min-health {:default 8 :doc "Health at or under which a go-to shut in by its retreat plug no longer holds for a hostile." :spec (a/num-in 0 20)}
    ::max-waypoint-misses {:default 3 :doc "Waypoint walks toward a column goal whose ground is only guessed that a call takes while they bring the body no nearer it." :spec (a/int-in 0 nil)}
    ::waypoint-gain {:default 2 :doc "Blocks (across) a waypoint must lie nearer a guessed column goal than the body, and a waypoint walk must bring the body nearer, not to be a miss." :spec (a/num-in 1 nil)}
    ::way-looks {:default [[6 1] [3 4]] :doc "The looks taken in turn before each waypoint walk: [blocks ahead toward the goal, blocks under the feet] (ahead and a little down: a slope up; close and steeply down: a slope or drop below an edge)." :spec (a/coll-of (a/pred "a pair [ahead down] of numbers >= 0" #(and (sequential? %) (= 2 (count %)) (every? (fn [n] (and (number? n) (>= n 0))) %))))}})
@@ -195,6 +198,9 @@
 (defn dry-radius [] (settings/get settings ::dry-radius))
 (defn dry-walk-rounds [] (settings/get settings ::dry-walk-rounds))
 (defn night-wait-ms [] (settings/get settings ::night-wait-ms))
+(defn plug-wait-ms [] (settings/get settings ::plug-wait-ms))
+(defn plug-wait-min-food [] (settings/get settings ::plug-wait-min-food))
+(defn plug-wait-min-health [] (settings/get settings ::plug-wait-min-health))
 (defn max-waypoint-misses [] (settings/get settings ::max-waypoint-misses))
 (defn waypoint-gain [] (settings/get settings ::waypoint-gain))
 (defn way-looks [] (settings/get settings ::way-looks))
@@ -916,16 +922,32 @@
                    (sh/walk-leaves-shelter? p (:data (ctx/latest c :shelter)) goal (:range (:args c) 1)))]
         (when kind {:reason :night-sheltered :shelter kind :goal goal})))))
 
-(defn plug-wait
-  "The wait {:reason :sealed-hostile-near} while the body is shut in with a retreat plug of its ledger still standing, a
-  known hostile is near (the cleanup keeps the plug then) and this walk may not dig out (no :escalate). Never under a reflex job."
+(def plug-since
+  "Job id -> when its plug-wait began (in process, like approaches); kept while the hold is due, so a deadline stays passed."
+  (atom {}))
+
+(defn plug-held?
+  "Whether the body is shut in with a retreat plug of its ledger standing, a known hostile is near and the body is
+  neither starving nor hurt (waiting costs food and health, and underground a hostile may stay for ever)."
   [c]
-  (let [p (:primitives c)]
-    (when (and (not (:reflex c)) (not (:escalate (:args c)))
-               (some #(= :retreat-plug (:purpose %)) (ledger/open-entries (ctx/view c)))
-               (escape/enclosed? p (some-> (:doors (:args c)) keyword))
-               (seq (danger-q/known-hostiles p threats/max-follow-range {:ranged-radius (danger-q/ranged-radius)})))
-      {:reason :sealed-hostile-near})))
+  (let [p (:primitives c)
+        self (.self p)]
+    (and (some #(= :retreat-plug (:purpose %)) (ledger/open-entries (ctx/view c)))
+         (> (or (.-food self) 20) (plug-wait-min-food))
+         (> (or (.-health self) 20) (plug-wait-min-health))
+         (escape/enclosed? p (some-> (:doors (:args c)) keyword))
+         (seq (danger-q/known-hostiles p threats/max-follow-range {:ranged-radius (danger-q/ranged-radius)})))))
+
+(defn plug-wait
+  "The wait {:reason :sealed-hostile-near} while plug-held? and this walk may not dig out (no :escalate), until
+  :plug-wait-ms have passed since it began. Never under a reflex job."
+  [c]
+  (when (and (not (:reflex c)) (not (:escalate (:args c))))
+    (if (plug-held? c)
+      (let [since (get (swap! plug-since update (:id c) #(or % (ctx/now c))) (:id c))]
+        (when (< (- (ctx/now c) since) (plug-wait-ms))
+          {:reason :sealed-hostile-near}))
+      (do (swap! plug-since dissoc (:id c)) nil))))
 
 (defn wait-reason [c] (or (night-wait c) (plug-wait c)))
 
@@ -999,6 +1021,7 @@
                  (when (ctx/alive? c) (await (torch/return-torch! c)))
                  (throw e)))]
     (when-not (= :continue r)
+      (swap! plug-since dissoc (:id c))
       (wsearch/release! c)
       (await (torch/return-torch! c)))
     r))
