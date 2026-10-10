@@ -16,7 +16,6 @@
             [jobs.access.stair :as stair]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.access.zones :as zones]
-            [jobs.lib.cost.health :as hp-cost]
             [jobs.lib.shafts :as shafts]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
@@ -489,7 +488,7 @@
   [c]
   (let [{:keys [dug-at drop-walked last-carried]} (ctx/mem c)]
     (when (and dug-at (not= dug-at drop-walked) (<= (carried c) (or last-carried 0)))
-      (let [w (await (near/go-near! c (zipmap [:x :y :z] dug-at) 1 {:zone-tolls true :escalate false :min-health (hp-cost/default-min-health)}))]
+      (let [w (await (near/go-near! c (zipmap [:x :y :z] dug-at) 1 {:zone-tolls true :escalate false}))]
         (when-not (= :partial w) (ctx/update-mem! c assoc :drop-walked dug-at))
         (case w :partial :partial :there :walked nil)))))
 
@@ -1013,11 +1012,10 @@
 
 (defn ^:async walk-to-dig!
   "Walk toward pos until the body is within reach of it, and close enough to see its drop (range 1) when the line to it
-  is blocked from here; a body within reach that cannot get closer digs from there. Never over the walk's damage budget
-  (a drop that costs most of the hp for an ore). :there, :partial or :blocked
+  is blocked from here; a body within reach that cannot get closer digs from there. :there, :partial or :blocked
   (jobs.lib.near/go-near!)."
   [c pos]
-  (let [walked (await (near/go-near! c pos (if (drop-in-line? c pos) (reach) 1) (cond-> {:zone-tolls true :min-health (hp-cost/default-min-health)} (underground? c) (assoc :at-night :go))))]
+  (let [walked (await (near/go-near! c pos (if (drop-in-line? c pos) (reach) 1) (cond-> {:zone-tolls true} (underground? c) (assoc :at-night :go))))]
     (if (and (not= :there walked) (u/within? (u/self-pos c) (cell-of pos) (reach)))
       :there
       walked)))
@@ -1286,7 +1284,7 @@
 
 (defn ^:async place! [c pos item]
   (let [walked (if (> (u/dist (u/self-pos c) pos) (mend-reach))
-                 (await (near/go-near! c pos (reach) {:zone-tolls true :min-health (hp-cost/default-min-health)}))
+                 (await (near/go-near! c pos (reach) {:zone-tolls true}))
                  :there)]
     (if (not= :there walked)
       (do (when (= :blocked walked) (mend-fail! c)) (if (= :blocked walked) :again :continue))

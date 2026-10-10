@@ -52,7 +52,7 @@
 
 (defn y-of [p] (js/Math.floor (second (g/at p))))
 
-(def args {:pos [40 60 0] :escalate false})
+(def args {:pos [40 60 0] :escalate false :allow-over-budget true})
 
 (deftest a-hurt-body-with-food-waits-to-heal-and-then-drops
   (async done
@@ -83,6 +83,15 @@
           (is (< (count (filter #(= "bread" (:name %)) (.-inventory (.self p)))) 3) "it ate")
           (is (= 60 (y-of p)) "down the cliff")
           (is (= {:arrived true} @out)))))))
+
+(deftest by-default-a-walk-never-goes-over-its-damage-budget
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p out] :as r} (await (go-heal! (world {:health 13}) (assoc (dissoc args :allow-over-budget) :food 10) false))]
+          (is (= 64 (y-of p)) "still on the plateau")
+          (is (empty? (g/events-of r :go-to.over-budget)))
+          (is (= {:arrived false :reason :unreachable :why :needs-health} (select-keys @out [:arrived :reason :why]))))))))
 
 (deftest a-callers-floor-is-never-crossed
   (async done

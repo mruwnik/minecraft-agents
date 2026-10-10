@@ -1924,26 +1924,6 @@
   [go-tos]
   (filterv #(let [{:keys [x y z]} (:pos %)] (and (= 64 y) (<= (+ (abs (- x 0.5)) (abs (- z 0.5))) 1))) go-tos))
 
-(deftest the-walk-to-an-owed-mend-cell-keeps-the-damage-floor
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [[s go-tos] (spy-go-to (start {:world {:blocks floor}}))
-              p (:p s)]
-          (.override (.-world p) "dig"
-                     (fn [token args impl]
-                       (.then (impl token args)
-                              (fn [r]
-                                (fake/add-item! p "dirt" 1)
-                                (swap! (fake/state p) assoc :entities [])
-                                (set-pos! s 10 64 0)
-                                r))))
-          (core/submit! (:eng s) (spec {:block "dirt" :count 1}) {})
-          (await (run-ticks s 40))
-          (let [to-owed (filterv #(= 63 (:y (:pos %))) @go-tos)]
-            (is (seq to-owed))
-            (is (every? #(= 12 (:min-health %)) to-owed))))))))
-
 (deftest the-walk-home-from-a-patch-is-one-go-to-onto-the-start-cell
   (async done
     (tu/run-async done

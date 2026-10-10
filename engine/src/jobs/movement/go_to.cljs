@@ -56,8 +56,8 @@
   - A drop or plant that costs hp is planned only within a damage budget (jobs.lib.cost/damage-budget: the health over :min-health,
     default 12, less 1, at most :max-damage). When that budget is why no way was found, the body that can heal waits (info
     go-to.waiting-health, :continue; it eats a carried food first when hungry), and one that cannot heal or whose healing
-    stalled goes over it, down to 1 hp (info go-to.over-budget). With a :min-health or :max-damage given it does neither and
-    gives up :why :needs-health. See jobs.movement.go-to.health.
+    stalled goes over it, down to 1 hp (info go-to.over-budget) only with :allow-over-budget; otherwise, and with a
+    :min-health or :max-damage given, it gives up :why :needs-health. See jobs.movement.go-to.health.
   - :unknown true (default false) plans over what the body has seen or felt only: a cell it never saw is unknown (air to
     the body), a floor it never saw is stepped onto only after the walk stops to look at it (jobs.lib.walk.sight), and
     only where it can see it from the takeoff (a drop deeper than it sees in the dark is refused). A map overrides the
@@ -146,6 +146,7 @@
    :danger-max-rate {:doc "danger price: hp a second one known danger costs at most; above the default it also raises the total of all dangers a second (planner dangerCap)" :spec a/pos-num? :default cost/danger-max-rate}
    :danger-shape {:doc (str "danger price: {:sensed|:remembered|:creeper {:close :radius}} blocks, full within :close, none past :radius; only the terms given replace the default (" (str/join ", " (map (fn [[k {:keys [close radius]}]] (str (name k) " " close " " radius)) cost/danger-default-shape)) ")") :spec (a/valid-by "a map of :sensed, :remembered or :creeper to {:close :radius} numbers >= 0, :close under :radius" cost/danger-shape-problem) :default nil}
    :hp-seconds {:doc "seconds an hp costs at full health when the planner weighs a drop or a plant's prick against a longer way (more at low health)" :spec a/pos-num? :default cost/hp-seconds}
+   :allow-over-budget {:doc "when the damage budget is why no way is found and the body cannot heal, go over it, down to 1 hp; false: give up :needs-health" :spec boolean? :default false}
    :max-damage {:doc "hp at most a walk may spend on drops and plants that hurt (0: none), under the :min-health budget" :spec (a/num-in 0 nil) :default nil}
    :drop-cost {:doc "number: scales the cost of a drop (fall seconds and damage; 1 as is, 0 free, 5 dear); false: no drop of 2 or 3 at all. :one-way :closed instead refuses only a drop the body cannot climb back" :spec (a/or-of (a/num-in 0 nil) false?) :default 1}
    :costs {:doc (str "map of price name to seconds, overriding the planner's price of a move (jobs.lib.cost.planner: " (str/join " " (map name (keys cost/planner-names))) "); a price left out keeps the planner's default; :lethal-air is no price: 1 lets a plan drown the body when no other way exists, else such a plan is refused (:why :air-lethal)" ) :spec (a/valid-by "a map of planner price name to a number of seconds >= 0" cost/planner-costs-problem) :default nil}

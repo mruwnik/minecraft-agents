@@ -219,9 +219,9 @@
   caller chasing something that moves; default one 60 s steer), :look-round (default true; false for a caller that keeps moving),
   :one-way (go-to's arg, default :closed here: no drop the body cannot climb back; not the :one-way key of a give-up
   result), :see (go-to's: in range only where the eye sees the block at pos), always :retry false (the job counts its own
-  tries), :at-night (go-to's arg; :go walks on at night), :min-health (go-to's: a floor never crossed, so no drop over the damage budget); :ignore-zones? comes from the job's args."
+  tries), :at-night (go-to's arg; :go walks on at night); :ignore-zones? comes from the job's args."
   ([c pos range] (go-near! c pos range nil))
-  ([c pos range {:keys [doors dangers tolls zone-tolls escalate leg-s look-round one-way see at-night min-health] :or {doors :shut dangers true escalate true look-round true one-way :closed}}]
+  ([c pos range {:keys [doors dangers tolls zone-tolls escalate leg-s look-round one-way see at-night] :or {doors :shut dangers true escalate true look-round true one-way :closed}}]
    (let [cell (cell-of pos)]
      (cond
        (nil? cell) (do (ctx/emit! c :refused :warn {:reason :bad-pos :text (:message (places/parse-pos pos))})
@@ -230,8 +230,7 @@
        :else (let [r (await (child/call-walk c :walk
                                             (cond-> {:pos cell :range range :doors doors :dangers dangers :tolls tolls :zone-tolls (boolean zone-tolls)
                                              :escalate escalate :leg-s leg-s :look-round look-round :one-way one-way :see (boolean see) :warn false :retry false :ignore-zones? (boolean (:ignore-zones? (:args c)))}
-                                              at-night (assoc :at-night at-night)
-                                              min-health (assoc :min-health min-health))))]
+                                              at-night (assoc :at-night at-night))))]
                (case r
                  :continue :partial
                  :done (let [res (ctx/child-result c :walk)]

@@ -4,9 +4,10 @@
   - A body that can heal (heal-way) waits: with food of 18 or more it regenerates (info go-to.waiting-health {:health},
     :continue after a one second wait), with a carried food it eats first (a jobs.survival.eat child). Healing that gains
     no hp in heal-stall-s stops.
-  - A body that cannot heal, or whose healing stalled, goes over the budget (mem :over-budget; info go-to.over-budget
-    {:health}): the walks then plan with the survivable budget, all but 1 hp. Not with a :min-health (a caller's floor is
-    never crossed) or a :max-damage (a caller's cap): those, and a body that still has no way, give up :needs-health."
+  - A body that cannot heal, or whose healing stalled, goes over the budget only when the caller allows it
+    (:allow-over-budget; mem :over-budget; info go-to.over-budget {:health}): the walks then plan with the survivable
+    budget, all but 1 hp. Not with a :min-health (a caller's floor is never crossed) or a :max-damage (a caller's cap):
+    those, a call that does not allow it, and a body that still has no way, give up :needs-health."
   (:require [engine.ctx :as ctx]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.health :as health]
@@ -128,7 +129,7 @@
                   way)]
         (cond
           (#{:regen :eat} way) (await (heal! c way body st))
-          (or (:over-budget (ctx/mem c)) min-health) :needs-health
+          (or (:over-budget (ctx/mem c)) min-health (not (:allow-over-budget (:args c)))) :needs-health
           :else (do (ctx/update-mem! c assoc :over-budget true)
                     (ctx/emit! c :go-to.over-budget :info {:health (:health body) :planned planned
                                                            :text (str "no way within the damage budget and no way to heal: going over it at " (:health body) " hp for " planned " hp")})

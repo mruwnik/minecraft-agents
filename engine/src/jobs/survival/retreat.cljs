@@ -249,7 +249,7 @@
   [c slot target range]
   (let [r (await (ctx/call-child c slot 'jobs.movement.go-to {:pos target :range range :escalate false :at-night :go
                                                               :warn false :leg-s flight-timeout-s
-                                                              :retry false :look-round false}))
+                                                              :retry false :look-round false :allow-over-budget true}))
         res (when (= :done r) (ctx/child-result c slot))]
     (boolean (or (:arrived res) (:leg res)))))
 
