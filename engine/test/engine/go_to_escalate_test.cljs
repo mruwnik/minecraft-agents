@@ -914,3 +914,19 @@
                                                  {:pos [-40 41 0] :range 1}))]
           (is (= [:stair] (take 1 (mapv :step (events-of seen :go-to.escalated)))))
           (is (= {:arrived true} @out)))))))
+
+(def cave
+  "A sealed 2-high 12x12 cave (x 0..11, z -6..5, y 64..65) inside a stone hill (x -6..20, y 60..70) on a stone plain."
+  (apply dissoc (merge (box -30 63 -20 40 63 20 "stone") (box -6 64 -8 20 70 8 "stone"))
+         (for [x (range 0 12) z (range -6 6) y [64 65]] (str x "," y "," z))))
+
+(deftest a-go-to-sealed-in-a-cave-without-escalate-says-why-each-time-it-plans-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out seen]} (await (run-job! {:self {:pos {:x 3.5 :y 64 :z 0.5}} :blocks cave
+                                                   :inventory [{:name "iron_pickaxe" :count 1}]}
+                                                  {:pos [30 64 0] :range 1 :escalate false}))]
+          (is (= [false :exhausted] ((juxt :arrived :why) @out)) (pr-str @out))
+          (is (= [[:exhausted 1] [:exhausted 2]] (mapv (juxt :reason :try) (events-of seen :go-to.retrying)))
+              (pr-str (events-of seen :go-to.retrying))))))))

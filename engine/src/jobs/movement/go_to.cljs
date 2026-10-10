@@ -54,7 +54,7 @@
     most 60 s each) until it arrives or gives up. A search that needs more slices walks on toward where it has got
     to, or not at all while it goes on; every iteration awaits a pace-ms timer. A goal in unloaded land is walked
     toward walk by walk, and to the edge of loaded land when that is the only way on. It returns :continue only while
-    an escalation or put-back child, or healing, is waiting on the world.
+    an escalation or put-back child, or healing, is waiting on the world. Each fruitless round that plans again says so (info go-to.retrying: reason, try).
   - A drop or plant that costs hp is planned only within a damage budget (jobs.lib.cost/damage-budget: the health over :min-health,
     default 12, less 1, at most :max-damage). When that budget is why no way was found, the body that can heal waits (info
     go-to.waiting-health, :continue; it eats a carried food first when hungry), and one that cannot heal or whose healing
@@ -645,6 +645,14 @@
   (let [{:keys [leg-s]} (:args c)]
     (boolean (and leg-s (:leg-t0 (ctx/mem c)) (>= (- (ctx/now c) (:leg-t0 (ctx/mem c))) (* 1000 leg-s))))))
 
+(defn retrying!
+  "A fruitless round that plans again: an info go-to.retrying says why (the result's reason, which try), so the gap before the
+  next plan is not silent."
+  [c result tries]
+  (let [reason (or (:why result) (:reason result) :no-path)]
+    (ctx/emit! c :go-to.retrying :info {:reason reason :try tries
+                                        :text (str "no way found (" (name reason) "), planning again (try " tries " of " max-blocked ")")})))
+
 (defn ^:async walk! [c0 pos range doors]
   (let [c (cond-> c0 (:over-budget (ctx/mem c0)) (assoc :over-budget true))
         from (u/self-pos c)
@@ -746,7 +754,8 @@
                              :target-best (cond-> tbests target (assoc target (min tdist (get tbests target js/Infinity)))))
             (when (and progress? (:restore-pending (ctx/mem c))) (esc/restore-next! c))
             (if (and (if (false? (:retry (:args c))) progress? (< tries max-blocked)) (not (#{:goal-enclosed :goal-cut-off :goal-on-magma} (:reason result))))
-              :again
+              (do (when (pos? tries) (retrying! c result tries))
+                  :again)
               (let [unloaded? (wsearch/goal-unloaded? (.-snapshot pw) (mapv #(js/Math.floor (% pos)) [:x :y :z]))
                     result (dark-end c result)
                     ended (cond-> (if (esc/escalate? c result) result (sight-end c pos (unloaded-end result unloaded?)))
