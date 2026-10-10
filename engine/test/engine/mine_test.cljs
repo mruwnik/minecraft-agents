@@ -1696,6 +1696,18 @@
           (is (<= 2 (get (inv s) "cobblestone" 0)))
           (is (= :count (:reason (done-event s)))))))))
 
+;; Rowan j119: mining stone from the pit at the foot of a short stair; the body must get home (escalation may dig out).
+(deftest mining-at-the-foot-of-its-stair-still-gets-the-body-home
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks (soil-over-stone 63 61) :drops cobble :inventory pickaxe}})]
+          (core/submit! (:eng s) (spec {:block "stone" :count 20 :direction "east" :tunnel-length 0 :mend false}) {})
+          (await (run-ticks s 400))
+          (is (finished? s))
+          (is (empty? (events-of s :mine.not-home)) "the walk home arrives")
+          (is (= [0 64 0] (feet s)) "the body is back on its start cell"))))))
+
 (deftest soil-deeper-than-the-descent-limit-ends-no-stone-found
   (async done
     (tu/run-async done
