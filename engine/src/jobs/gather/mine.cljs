@@ -1167,14 +1167,24 @@
                     (do (ctx/update-mem! c update :descent assoc :stop stop)
                         (if level? (stair-stopped! c) (no-stone! c))))))))))
 
+(def failed-shaft-policy
+  "Body memory policy of :mine-shaft-failed: a shaft whose stair stopped is left alone for a day unless :shaft names it."
+  {:cap 20 :ttl (* 24 60 60 1000)})
+
+(defn failed-shafts [c]
+  (set (map (comp :id :data) (ctx/entries c :mine-shaft-failed))))
+
 (defn pick-shaft
-  "The usable mineshaft the :shaft arg names, else the nearest (jobs.lib.shafts/lookup; :ignore-zones? uses a foreign one): the shaft,
+  "The usable mineshaft the :shaft arg names, else the nearest not failed lately (jobs.lib.shafts/lookup; :ignore-zones? uses a foreign one): the shaft,
   or {:none reason}."
   [c]
   (let [{:keys [shaft ignore-zones?]} (:args c)
         {:keys [usable refused]} (shafts/lookup c (u/self-pos c) {:foreign-zone? ignore-zones?})
-        usable (if (string? shaft) (filter #(= shaft (:id %)) usable) usable)]
-    (or (first usable)
+        usable (if (string? shaft) (filter #(= shaft (:id %)) usable) usable)
+        failed (when-not (string? shaft) (failed-shafts c))
+        fresh (remove #(contains? failed (:id %)) usable)]
+    (or (first fresh)
+        (when-let [stale (first usable)] {:none :failed-lately :shaft (:id stale)})
         {:none (or (get-in (first refused) [:verdict :reason]) :no-shaft)})))
 
 (defn xyz [[x y z]] {:x x :y y :z z})
@@ -1186,12 +1196,20 @@
     (boolean (and (not none) (u/within? (u/self-pos c) (cell-of (xyz top)) 1)))))
 
 (defn shaft-none!
-  [c reason]
-  (ctx/emit! c :mine.no-shaft :info {:reason reason :text (str "mine uses no mineshaft: " (name reason))})
-  (ctx/update-mem! c assoc :shaft {:state :none :reason reason})
-  (if (= :required (:shaft (:args c)))
-    (to-mend! c :no-shaft)
-    :again))
+  "End the shaft descent for reason (shaft: the shaft's id when it is one). A shaft whose stair or walk failed is left
+  alone by later runs (failed-shaft-policy)."
+  ([c reason] (shaft-none! c reason (:id (:shaft (ctx/mem c)))))
+  ([c reason shaft]
+   (when (and shaft (not (#{:failed-lately :zone :claim :footprint :no-shaft} reason)))
+     (ctx/remember! c :mine-shaft-failed {:id shaft} failed-shaft-policy))
+   (ctx/emit! c :mine.no-shaft :info (cond-> {:reason reason
+                                              :text (str "mine uses no mineshaft" (some->> shaft (str " ")) ": " (name reason)
+                                                         (when shaft (str "; name it with :shaft \"" shaft "\" to try it again")))}
+                                       shaft (assoc :shaft shaft)))
+   (ctx/update-mem! c assoc :shaft {:state :none :reason reason})
+   (if (= :required (:shaft (:args c)))
+     (to-mend! c :no-shaft)
+     :again)))
 
 (defn ^:async shaft-round!
   "One step of a descent by mineshaft: pick it, walk to its top, the stair child down to its depth, walk to the next branch and
@@ -1201,7 +1219,7 @@
     (case state
       nil (let [p (pick-shaft c)]
             (if (:none p)
-              (shaft-none! c (:none p))
+              (shaft-none! c (:none p) (:shaft p))
               (let [feet (cell-of (u/self-pos c))]
                 (ctx/update-mem! c assoc :shaft (assoc (select-keys p [:id :top :heading :to-y :bottom])
                                                        :state (if (shafts/on-line? p [(:x feet) (:y feet) (:z feet)]) :down :going)))

@@ -993,6 +993,20 @@
           (is (= [[7 60 0] "north"] [(:origin (:tunnel e)) (:heading (:tunnel e))]))
           (is (re-find #"branch 2 north" (:text e))))))))
 
+(deftest a-shaft-whose-stair-stopped-is-named-and-not-tried-again-by-the-next-run
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [walled (into {} (for [y (range 58 68)] [(str "2," y ",0") "bedrock"]))
+              s (await (shafted via-shaft (merge ore-east walled) [] 400))
+              _ (core/submit! (:eng s) (spec via-shaft) {})
+              _ (await (run-ticks s 400))
+              [first-no second-no] (events-of s :mine.no-shaft)]
+          (is (= "s" (:shaft first-no)))
+          (is (re-find #"shaft s" (:text first-no)) "the text names the shaft")
+          (is (re-find #":shaft" (:text first-no)) "and how to override it")
+          (is (= {:shaft "s" :reason :failed-lately} (select-keys second-no [:shaft :reason])) "the next run leaves it alone"))))))
+
 (deftest a-shaft-in-another-zone-is-left-alone-unless-zones-are-ignored
   (async done
     (tu/run-async done
