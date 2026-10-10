@@ -120,7 +120,7 @@
   (when (empty? (ctx/entries c :needs-bed))
     (ctx/remember! c :needs-bed {} needs-bed-policy)
     (ctx/emit! c :needs_bed :warn {:days (sh/days-awake c)
-                                   :text "not slept for too long; phantoms will come, find or make a bed"})))
+                                   :text "not slept for too long; phantoms will come; the :needs-bed trigger gets a bed by day"})))
 
 (def hold-ms
   "How long one hold waits before the night looks again (the wait primitive does not wake a sleeping body)."

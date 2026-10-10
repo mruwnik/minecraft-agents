@@ -13,6 +13,7 @@
   {:id :hostile-near :level :danger :when triggers.survival.hostile-near/hostile-near :job (jobs.survival.respond-to-hostile) :args triggers.survival.hostile-near/defaults :persistence :retry :backoff false}
   {:id :night :level :urgent :when triggers.survival.night/night :job (jobs.survival.night) :args triggers.survival.night/defaults :persistence :cooldown :cooldown-s 10 :backoff false}
   {:id :hungry :level :comfort :when triggers.survival.hungry/hungry :job (jobs.survival.get-food) :args triggers.survival.hungry/defaults :persistence :cooldown :cooldown-s 90}
+  {:id :needs-bed :level :comfort :when triggers.survival.needs-bed/needs-bed :job (jobs.items.obtain) :args triggers.survival.needs-bed/defaults :persistence :cooldown :cooldown-s 600}
   {:id :door-left :level :comfort :when triggers.maintenance.door-left/door-left :job (jobs.maintenance.shut-doors) :args triggers.maintenance.door-left/defaults :persistence :cooldown :cooldown-s 5 :backoff {:after 9}}
   {:id :died :level :danger :when triggers.survival.died/died :job (jobs.survival.recover-drops) :args {} :persistence :cooldown :cooldown-s 30}
   {:id :inventory-nearly-full :level :comfort :when triggers.storage.inventory-nearly-full/inventory-nearly-full :job (jobs.storage.make-room) :args triggers.storage.inventory-nearly-full/defaults :persistence :cooldown :cooldown-s 120}
