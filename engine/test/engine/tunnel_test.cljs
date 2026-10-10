@@ -754,6 +754,30 @@
           (is (= "air" (block-at p [0 20 5])) "the first leg ran to the target's row")
           (is (= "iron_ore" (block-at p [6 20 5]))))))))
 
+(deftest a-first-leg-refused-on-the-shorter-axis-is-tried-on-the-other
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [deep (merge (stone -12 12 0 64 -3 8) {"0,20,0" "air" "0,21,0" "air" "6,20,5" "iron_ore"
+                                                    "0,20,3" "water"})
+              {:keys [out p]} (await (tunnel! {:self {:pos {:x 0.5 :y 20 :z 0.5}} :blocks deep :inventory pick}
+                                              {:target [6 20 5] :max-length 24} (fn [_])))]
+          (is (= :reached (:reason @out)) (pr-str @out))
+          (is (= [6 20 4] (feet p)) "beside the target, after the long axis (x) first"))))))
+
+(deftest a-run-over-a-hole-in-the-floor-is-bridged-with-a-carried-block
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [row (merge (stone -12 12 0 64 -3 8) {"0,20,0" "air" "0,21,0" "air" "6,20,0" "iron_ore"})
+              holed (merge row {"2,19,0" "air" "3,19,0" "air" "2,18,0" "air" "3,18,0" "air"})
+              {:keys [out p]} (await (tunnel! {:self {:pos {:x 0.5 :y 20 :z 0.5}} :blocks holed
+                                               :inventory (conj pick {:name "dirt" :count 8})}
+                                              {:target [6 20 0] :max-length 24} (fn [_])))]
+          (is (= :reached (:reason @out)) (pr-str @out))
+          (is (= [5 20 0] (feet p)))
+          (is (not= "air" (block-at p [2 19 0])) "the missing floor was placed"))))))
+
 (deftest one-call-is-a-dead-end-and-its-way-out
   (async done
     (tu/run-async done

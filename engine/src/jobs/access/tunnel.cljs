@@ -6,6 +6,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.declined :as declined]
             [jobs.lib.dig-look :as look]
+            [jobs.lib.blocks :as blocks]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.pace :as pace]
             [jobs.lib.sense :as sense]
@@ -62,7 +63,8 @@
 
   A target off the body's row and column, with the body underground and no line entered within 24 blocks, is
   reached in two legs: a kept tunnel child along the shorter axis to a waypoint one past the target's column, then
-  the line above from the body's own cell. That first leg stays open even in a dead end (:keep false).
+  the line above from the body's own cell. That first leg stays open even in a dead end (:keep false). A leg that stops is tried once on the other axis; a
+  floor of air is bridged with a carried building block (stair/bridge!), as the stair does.
 
   The body's cell is the progress. On the stair line the stair child goes on, on the run line the run, at the
   stand it is done, anywhere else it walks to the entry. A cell dug before a cut is air and is not dug again.
@@ -186,12 +188,21 @@
               nxt (last (filter #(pos? (light-between cells at (inc %))) (range (inc at) n)))]
           (if (and (dark? sites) nxt) (recur (conj sites nxt)) sites))))))
 
+(defn step-stop
+  "stair/stop-of for a step of the line. With a building block carried (in :filler?) air under or in the floor is no stop:
+  the walk bridges it."
+  [in feet cells accept]
+  (let [filler? (:filler? in)
+        stop (stair/stop-of (assoc in :feet feet) (assoc cells :filler? filler?) accept)]
+    (when-not (and filler? (= :no-floor (:reason stop)) (rules/air (:block stop)))
+      stop)))
+
 (defn line-stop
   "The first stop on the line of plan, or nil when every step and the target may be cut."
   [in plan accept]
   (let [{:keys [steps stand]} (line plan)]
-    (or (some (fn [[feet cells]] (stair/stop-of (assoc in :feet feet) cells accept)) steps)
-        (stair/stop-of (assoc in :feet stand) (run-cells stand (:heading plan)) accept))))
+    (or (some (fn [[feet cells]] (step-stop in feet cells accept)) steps)
+        (step-stop in stand (run-cells stand (:heading plan)) accept))))
 
 (defn standable?
   "Whether the body can stand at feet: it and the head cell open, a solid floor under."
@@ -271,10 +282,11 @@
 (defn leg-target
   "The waypoint of the first leg of a diagonal target seen from feet underground: on the body's row, one past the
   target's column, so the first leg stands in that column. The shorter axis goes first. nil when the target is on
-  the body's row or column, the body stands on the surface, or a leg is longer than max-length."
-  [block-at [fx fy fz :as feet] [tx _ tz] max-length]
+  the body's row or column, the body stands on the surface, or a leg is longer than max-length. swap? takes the longer
+  axis first."
+  [block-at [fx fy fz :as feet] [tx _ tz] max-length swap?]
   (let [dx (- tx fx) dz (- tz fz)
-        x-first? (<= (js/Math.abs dx) (js/Math.abs dz))
+        x-first? (not= (boolean swap?) (<= (js/Math.abs dx) (js/Math.abs dz)))
         [a b] (if x-first? [dx dz] [dz dx])]
     (when (and (not (zero? dx)) (not (zero? dz))
                (<= (inc (js/Math.abs a)) max-length) (<= (js/Math.abs b) max-length)
@@ -340,10 +352,15 @@
   (let [{:keys [plan]} (ctx/mem c)
         accept (set (:accept (:args c)))
         in (stair/rules-in c feet)
-        {:keys [next cut] :as cells} (run-cells feet (:heading plan))]
+        base (run-cells feet (:heading plan))
+        {:keys [next cut] :as cells} (assoc base :bridged? (contains? (:bridged (ctx/mem c)) (:floor base))
+                                                 :filler? (some? (blocks/pick c blocks/building-blocks)))]
     (await (stair/look-ahead! c feet next cut))
     (or (await (stair/lava-step! c :tunnel.sealed (:block-at in) feet cut))
-        (await (stair/judge! c in cells accept))
+        (let [stop (await (stair/judge! c in cells accept))]
+          (if (and (= :no-floor (:reason stop)) (rules/air (:block stop)))
+            (await (stair/bridge! c in cells))
+            stop))
         (if-let [cell (first (remove #(rules/air ((:block-at in) %)) cut))]
           (or (await (stair/peek! c cell)) (await (dig-cell! c in cell cut accept)))
           (or (await (look/settle! c cut))
@@ -562,11 +579,11 @@
         feet (feet-of c)]
     (if (bad-target? target)
       (finish! c :bad-args {:why "target must be [x y z] of integers"})
-      (let [a (await (sense/decide! c ::approach #(approach (dissoc (stair/rules-in c feet) :feet) target feet max-length (set accept))
+      (let [a (await (sense/decide! c ::approach #(approach (assoc (dissoc (stair/rules-in c feet) :feet) :filler? (some? (blocks/pick c blocks/building-blocks))) target feet max-length (set accept))
                                     {:retry? #(not (:entry %))}))]
         (if-let [w (when (or (not (:entry a)) (far-entry? a feet))
                      (when (or (:entry a) (#{:too-far :no-approach} (:reason a)))
-                       (leg-target (:block-at (stair/rules-in c feet)) feet target max-length)))]
+                       (leg-target (:block-at (stair/rules-in c feet)) feet target max-length (:leg-swap (ctx/mem c)))))]
           (do (ctx/update-mem! c assoc :leg w) :again)
           (if (:entry a)
           (do (ctx/update-mem! c assoc :plan (assoc a :sites (torch-sites a)) :dug [])
@@ -597,8 +614,12 @@
       (let [res (ctx/child-result c :leg)]
         (if (= :done (:status res))
           (do (ctx/update-mem! c dissoc :leg) :again)
-          (finish! c (:reason res) (assoc (select-keys res [:cell :hazards :zone :claim :plan :fluid :block :tool :walk :why])
-                                          :in :leg :dug (:dug res))))))))
+          (if-let [alt (when-not (:leg-swap (ctx/mem c))
+                         (let [feet (feet-of c)]
+                           (leg-target (:block-at (stair/rules-in c feet)) feet (target-of c) max-length true)))]
+            (do (ctx/update-mem! c assoc :leg-swap true :leg alt) :again)
+            (finish! c (:reason res) (assoc (select-keys res [:cell :hazards :zone :claim :plan :fluid :block :tool :walk :why :headings])
+                                            :in :leg :dug (:dug res)))))))))
 
 (defn ^:async work-round [c]
   (declined/begin! c)
