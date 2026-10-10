@@ -7,6 +7,7 @@
             [jobs.lib.fetch :as fetch]
             [jobs.lib.pen :as pen]
             [jobs.lib.util :as u]
+            [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.animals.herd-run :refer [animal-now deepest end! finish! gate-open? held-by-me? holds-food? in-pen-adults lure? near-pen out-1 read-pen regather-radius set-phase!]]
             [jobs.animals.herd-pen :refer [animal-pos pinned-ms settle-at! step-in-step]]))
@@ -167,8 +168,11 @@
   The first call settles the run's :method."
   [c]
   (let [{:keys [target]} (:args c)]
-    (if (>= (count (in-pen-adults c (read-pen c))) target)
+    (cond
+      (not (look/surveyed? c)) (await (look/survey! c)) ; animals count only while in view: turn round once before judging
+      (>= (count (in-pen-adults c (read-pen c))) target)
       (finish! c nil)
+      :else
       (do (when-not (:method (ctx/mem c)) (ctx/update-mem! c assoc :method (resolve-method c)))
           (if-let [lost (look-back-target c)]
             (await (look-back! c lost))

@@ -1310,3 +1310,16 @@
             (await (run-ticks (assoc s :eng again) 200))
             (is (< (count (events-of s :toggle.done)) 6) "a gate found shut is not shut again for ever")
             (is (not= :shut-gate (:phase (core/job-memory again "j1"))) "the run went on")))))))
+
+(deftest an-animal-outside-the-view-cone-is-looked-for-before-the-run-ends-none
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (submit! (setup (world {:entities [(cow 1 4 3)] :inventory [wheat]})) {:target 1})
+              p (:p s)
+              entities (.-entities p)
+              looked? #(some (fn [call] (= "look" (.-name call))) (.-calls (.-world p)))]
+          (aset p "entities" (fn [q] (if (looked?) (.call entities p q) #js [])))
+          (await (run-ticks s 600))
+          (is (= :brought (:reason (done-event s))))
+          (is (= #{1} (cows-in-pen s))))))))
