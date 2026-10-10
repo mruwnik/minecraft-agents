@@ -85,3 +85,20 @@
           (is (zero? transfers))
           (is (pos? attacks))
           (is (not-any? #{:trip.deposited :trip.no-chest :trip.far} kinds)))))))
+
+(deftest the-deposit-before-a-trip-keeps-raw-materials-gathered-for-a-goal
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (h/setup {:inventory (into (into h/sword [{:name "raw_iron" :count 5} {:name "coal" :count 3}]) junk)
+                          :containers {"10,64,0" []} :entities [(cow 1 3)]} 20)]
+          (mem/write! (:store (:eng s)) :chest {:pos {:x 10 :y 64 :z 0}} mem/place-policy)
+          (core/submit! (:eng s) '(jobs.combat.hunt {:count 1 :keep 0}) {})
+          (dotimes [_ 40]
+            (swap! (:clock s) + 700)
+            (await (core/tick! (:eng s))))
+          (let [carried (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self (:p s))))]
+            (is (contains? (set (map :kind @(:seen s))) :trip.deposited))
+            (is (= 5 (get carried "raw_iron")))
+            (is (= 3 (get carried "coal")))
+            (is (nil? (get carried "junk_0")) "the other goods went into the chest")))))))
