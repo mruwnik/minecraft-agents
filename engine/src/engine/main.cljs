@@ -8,6 +8,7 @@
             [engine.event-api :as event-api]
             [engine.backoff :as backoff]
             [engine.events :as events]
+            [engine.heap :as heap]
             [engine.hurt :as hurt]
             [engine.lease :as lease]
             [engine.notes :as notes]
@@ -210,7 +211,8 @@
                           (perception/start! per {:file (path/join (:engine-dir cfg) "seen.bin")
                                                   :io ((createRequire (str root "/")) "./js/seen-file.mjs")
                                                   :on-event (fn [e] (some-> @eng-ref (core/emit! e)))})
-                          (fn []))]
+                          (fn []))
+        stop-heap (heap/start! #(core/emit! eng %) (:stats-ms eng))]
     (let [event-socket (event-api/create (path/join (:engine-dir cfg) "events.sock") eng
                                              {:died recover-drops/death-status})]
       (try
@@ -220,6 +222,7 @@
               stop-ticks (core/start! eng {:tick-ms 250 :before-tick #(do (takeover/tick! eng lease-opts) (trigger-api/tick! eng))})]
           {:engine eng :stop (fn ^:async stop []
                                ((:stop seen))
+                               (stop-heap)
                                (let [saved (stop-perception)]
                                  (stop-ticks) (takeover/close! eng) (some-> control .close)
                                  ((:close event-socket)) (core/shutdown! eng)
@@ -229,6 +232,7 @@
                                  (release)))})
         (catch :default e
           ((:stop seen))
+          (stop-heap)
           (stop-perception)
           ((:close event-socket))
           (core/shutdown! eng)
