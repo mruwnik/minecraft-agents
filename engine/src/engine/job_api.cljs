@@ -23,6 +23,8 @@
              :round (:round inst) :hold? (boolean (:hold? inst))}
       (:survive-death? inst) (assoc :survive-death? true)
       (= id (core/manual-job eng)) (assoc :manual true)
+      (and (core/manual? eng) (not= id (core/manual-job eng)))
+      (assoc :waiting {:reason :manual-control :who (:who @(:manual eng))})
       (core/waiting eng id) (assoc :waiting (core/waiting eng id))
       (core/holding eng id) (assoc :holding (core/holding eng id)))))
 (defn list-jobs [eng offset limit]

@@ -66,6 +66,13 @@
     (is (= :manual-control (:reason (command eng "interrupt" :interrupt {:spec '(done)}))))
     (is (= {:who "driver" :token "manual"} @(:manual eng)))
     (core/shutdown! eng)))
+(deftest a-job-queued-under-manual-lease-says-it-waits-for-the-lease
+  (let [{:keys [eng]} (setup)]
+    (reset! (:manual eng) {:who "driver" :token "manual"})
+    (let [job (:job (command eng "queue" :submit {:spec '(done)}))]
+      (is (= {:reason :manual-control :who "driver"} (:waiting job)) (pr-str job))
+      (is (= {:reason :manual-control :who "driver"} (:waiting (first (:items (api/list-jobs eng 0 10)))))))
+    (core/shutdown! eng)))
 (deftest failed-interrupt-parks-with-attention-and-predecessor-resumes
   (async done
     (tu/run-async done
