@@ -145,6 +145,7 @@
                                             :entities [(skeleton 4 64 0)]}
                                    120000 (fn [{:keys [eng p]}] {:list (:list (core/state eng)) :places (count (calls p "place"))})))]
           (is (= [[1 64 0] [1 65 0]] (placed-cells p)) "the open side towards the skeleton, feet then head")
+          (is (= #{[1 64 0] [1 65 0]} (set (map :cell (filter #(= :retreat-plug (:purpose %)) (ledger/open-entries (mem/view (:store eng))))))) "the seal blocks are in the scaffold ledger, for the cleanup")
           (is (zero? (count (calls p "attack"))))
           (is (= [0 64 0] (mapv js/Math.floor (:pos (fake/self p)))) "no walk: at most a step to the middle of its own cell")
           (is (= {:list ["j1"] :places 2} while-hidden) "still sealed two minutes on (inside :hide-s), nothing more placed")
