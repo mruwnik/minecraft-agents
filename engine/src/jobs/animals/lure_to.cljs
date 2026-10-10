@@ -17,7 +17,7 @@
   a started job always passes.
 
   A body that holds none of the food first gets it (a jobs.items.obtain child, unless :fetch is false); when none can
-  be got the job ends :no-food. It picks the nearest adult within :radius that is on nobody's lead (the zone rules let
+  be got the job ends :no-food. It picks the nearest adult within :radius that is on nobody's lead and not already in :box (the zone rules let
   it), holds the food, walks within 6 blocks of it and then to :pos in short go-to legs, the same legs as
   jobs.animals.lead-to (doors left open for the animal and shut afterwards). After each leg the animal is looked at:
   unseen or more than 7 blocks behind, the body holds still (:waiting-for-animal) for it; unseen for 3 s :lost (an allowed adult within 10 blocks takes its place at once); more
@@ -26,8 +26,8 @@
 
   Ends with info lure-to.done and a warn lure-to.gave-up unless the reason is :arrived. Result {:reason :animal key
   :near bool (the animal is within 6 blocks of :pos) :at pos}. Reasons:
-  - :arrived: the body stands within :range of :pos and the food is away. The animal follows only while the food is
-    in hand, so it is wherever it had got to; :near says whether that is by the spot.
+  - :arrived: the body stands within :range of :pos and the animal is in :box (none: within 6 blocks of :pos), else the
+    body holds still for it up to 10 s and the end is :lagging. The food is then put away; :near says whether the animal is by the spot.
   - :none (no animal to lure within :radius), :no-food, :no-hold (the food would not stay in hand), :lost, :lagging,
     :unreachable (a walk gave up), :timeout (:timeout-s from the first round, not the food fetch).
   Every reason but :arrived ends the job :stopped with a :text.
@@ -37,6 +37,7 @@
 (a/defargs args
   {:mob {:doc "the animal's name, such as \"cow\"" :spec a/name? :default nil}
    :pos {:doc "where to lure it {:x :y :z}" :spec ::a/pos :default nil}
+   :box {:doc "the destination pen {:min :max} (feet cells, inclusive): animals in it are not lured, and the job arrives only when the led animal stands in it; none: the animal within 6 blocks of :pos" :spec a/box? :default nil}
    :range {:doc "how close to :pos counts as there" :spec (a/num-in 0 nil) :default 2}
    :radius {:doc "animals within this many blocks of where the job starts are lured" :spec (a/num-in 0 nil) :default 8}
    :watch-radius {:doc "how far from the body the lured animal is looked for" :spec (a/num-in 0 nil) :default 64}
@@ -106,13 +107,23 @@
   (ctx/update-mem! c assoc :ending reason)
   :again)
 
+(defn at-destination?
+  "True when the animal stands in :box, else within near-spot of :pos."
+  [c a]
+  (let [{:keys [box pos]} (:args c)
+        there (u/pos-of (.-pos a))]
+    (if box
+      (animals/in-box? box there)
+      (<= (lead-to/flat-dist there pos) near-spot))))
+
 (defn candidates
-  "The adults within radius of the start, on nobody's lead, the zone rules allowing, nearest first."
+  "The adults within radius of the start, on nobody's lead, the zone rules allowing, nearest first; none already in :box."
   [c]
   (let [{:keys [mob radius]} (:args c)
         origin (:origin (ctx/mem c))]
     (->> (animals/adults (:primitives c) mob (+ radius (lead-to/flat-dist origin (u/self-pos c))))
-         (filterv #(and (not (animals/leashed? %)) (<= (lead-to/flat-dist origin (u/pos-of (.-pos %))) radius)))
+         (filterv #(and (not (animals/leashed? %)) (<= (lead-to/flat-dist origin (u/pos-of (.-pos %))) radius)
+                        (not (and (:box (:args c)) (animals/in-box? (:box (:args c)) (u/pos-of (.-pos %)))))))
          (sort-by #(lead-to/flat-dist (u/self-pos c) (u/pos-of (.-pos %))))
          vec
          (animals/allowed c :lure-to.declined "lure-to" :take))))
@@ -170,12 +181,25 @@
                 (await (ctx/act c :equip (clj->js {:item food})))
                 :again))))
 
+(defn ^:async arrive!
+  "The body stands at :pos: the job ends :arrived once the led animal is at the destination; until then the body holds
+  still for it, and gives it up :lagging after max-wait-ms."
+  [c]
+  (let [a (lead-to/animal-now c)
+        now (ctx/now c)
+        since (or (:arrive-since (ctx/mem c)) now)]
+    (cond
+      (or (nil? a) (at-destination? c a)) (finish! c :arrived)
+      (> (- now since) lead-to/max-wait-ms) (finish! c :lagging)
+      :else (do (ctx/update-mem! c assoc :arrive-since since)
+                (await (lead-to/wait-for-animal! c))))))
+
 (defn ^:async walk-legs! [c]
   (let [r (await (lead-to/walk-legs! c :walk (:pos (:args c)) (:range (:args c)) nil nil lead-to/safe-gap))]
     (cond
       (= :waiting r) :yield
       (= :catching-up r) (await (lead-to/wait-for-animal! c))
-      (= :arrived r) (finish! c :arrived)
+      (= :arrived r) (await (arrive! c))
       (= :failed r) (finish! c :unreachable)
       (and (= :lead-broke (:problem r)) (not (hr/holds-food? c))) :again
       :else (finish! c (:problem r)))))

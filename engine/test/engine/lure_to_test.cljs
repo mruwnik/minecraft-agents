@@ -169,3 +169,33 @@
             (is (some? (:last-seen lost)))
             (is (number? (:last-seen-dist lost)))
             (is (nil? (:nearest lost)))))))))
+
+(def pen-box {:min {:x 28 :y 64 :z -2} :max {:x 34 :y 64 :z 2}})
+(defn in-pen-box? [c] (let [[x _ z] (:pos c)] (and (<= 28 x 35) (<= -2 z 3))))
+
+(deftest an-animal-already-in-the-destination-box-is-not-the-one-lured
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:box pen-box :radius 12 :pos {:x 34 :y 64 :z 0} :range 1}
+                                 {:self {:pos {:x 26 :y 64 :z 0}} :inventory wheat :entities [(cow 1 29) (cow 2 21)]} 20))]
+          (is (= :arrived (:reason (done-event s))))
+          (is (= "u2" (:animal (done-event s))) "the penned cow stays")
+          (is (in-pen-box? (cow-of s 2))))))))
+
+(deftest arrived-means-the-led-animal-is-in-the-destination-not-just-the-body
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng clock] :as s} (h/setup {:floor tu/walk-floor :self {:pos {:x 22 :y 64 :z 0}} :inventory wheat :entities [(cow 1 20)]} 50)
+              hold! (fn [token a impl]
+                      (.then (impl token a)
+                             (fn [r]
+                               (when (>= (.. p self -pos -x) 24) (swap! (fake/state p) update :entities (fn [es] (mapv #(assoc % :pos [26 64 0]) es))))
+                               r)))]
+          (doseq [act ["steer" "wait"]] (.override (.-world p) act hold!))
+          (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal :box pen-box}) {})
+          (loop [i 0] (when (and (< i 150) (not (finished? s))) (swap! clock + 700) (await (core/tick! eng)) (recur (inc i))))
+          (is (finished? s))
+          (is (= :lagging (:reason (done-event s))) (str "the cow stalled outside the box " (pr-str (done-event s))))
+          (is (not (in-pen-box? (cow-of s 1)))))))))
