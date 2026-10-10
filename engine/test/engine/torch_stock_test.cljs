@@ -43,3 +43,15 @@
         (let [s (await (st/stair! {:blocks st/ground :inventory st/pick :self {:pos {:x 0 :y 55 :z 0}}}
                                   {:dir :up :heading :east :steps 2} (fn [_])))]
           (is (not-any? #{:torch.stocked :torch.no-stock} (kinds s))))))))
+
+(deftest a-stair-down-with-two-coal-and-logs-makes-the-torches-the-coal-allows-and-plans-no-charcoal
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (st/stair! {:blocks st/ground :inventory (into st/pick [{:name "coal" :count 2} {:name "oak_log" :count 11}])} east tu/seeing-all))
+              carried (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self (:p s))))]
+          (is (= :done (:status @(:out s))))
+          (is (= 8 (get carried "torch")) "2 coal make 8 torches")
+          (is (contains? (kinds s) :torch.stocked))
+          (is (nil? (get carried "crafting_table")))
+          (is (empty? (filter #(= "place" (.-name %)) (.-calls (.-world (:p s))))) "no table placed"))))))

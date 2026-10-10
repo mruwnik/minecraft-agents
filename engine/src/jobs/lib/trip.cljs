@@ -153,14 +153,17 @@
 (defn ^:async torches-ready!
   "Before a job that digs down or tunnels sets out: when fewer than ::torch-low torches are carried, run jobs.items.obtain
   for torches up to ::torch-stock (child :torches; chest, craft from coal or charcoal, charcoal from logs by smelt, gather).
-  Resolves nil to go on, :continue while the child waits on the world. Once per job (:torches-tried in its memory): info
+  With coal or charcoal carried the count is what that fuel makes (4 torches each), so the obtain plans no charcoal smelt
+  and no table for the rest. Resolves nil to go on, :continue while the child waits on the world. Once per job (:torches-tried in its memory): info
   torch.stocked when it came back with some, warn torch.no-stock with the child's reason when not (the job goes on, dark
   when none are carried). The job's :fetch off, a set of kinds without :item, or a body short of food (food-short?) skips it."
   [c]
   (let [held (torch/torches-held (:primitives c))
         limits (fetch/parse-arg (:fetch (:args c)))
         fetch? (and (map? limits) (not (:error limits)) (or (nil? (:what limits)) (contains? (:what limits) :item)))
-        args {:item "torch" :count (- (torch-stock) held)}]
+        fuel (torch/fuel-held (:primitives c))
+        want (- (torch-stock) held)
+        args {:item "torch" :count (if (pos? fuel) (min want (* 4 fuel)) want)}]
     (when (and fetch? (< held (torch-low)) (not (:torches-tried (ctx/mem c))) (not (food-short? c)))
       (let [r (await (ctx/call-child c :torches 'jobs.items.obtain args))]
         (if (= :continue r)

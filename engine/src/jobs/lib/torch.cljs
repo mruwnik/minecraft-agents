@@ -9,6 +9,11 @@
 (defn torches-carried [p]
   (reduce + (map :count (filter #(= "torch" (:name %)) (u/inventory p)))))
 
+(defn fuel-held
+  "How many coal and charcoal are carried: each makes 4 torches with a stick."
+  [p]
+  (reduce + (map :count (filter #(#{"coal" "charcoal"} (:name %)) (u/inventory p)))))
+
 (defn off-hand-torches
   "The torches in the off hand (the place act takes only the inventory's)."
   [p]
