@@ -41,6 +41,12 @@
       {:id id :from from :top from :heading heading :to-y to-y
        :bottom (shape/add from [(* n dx) (* n dy) (* n dz)])})))
 
+(defn on-line?
+  "Whether feet ([x y z]) is a step of shaft (shaft-of) below its top: a stair left half dug is continued from there."
+  [{:keys [top heading bottom]} feet]
+  (let [[dx dy dz] (shape/delta :down heading)]
+    (boolean (some #(= feet (shape/add top [(* % dx) (* % dy) (* % dz)])) (range 1 (inc (- (second top) (second bottom))))))))
+
 (def turns {:north {:left :west :right :east} :south {:left :east :right :west}
             :east {:left :north :right :south} :west {:left :south :right :north}})
 

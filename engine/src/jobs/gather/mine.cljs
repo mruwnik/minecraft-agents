@@ -92,7 +92,7 @@
      (info mine.descent-stopped {:steps :stop :y :level}) and the tunnel runs at that height.
   7. Else the strip tunnel, at the level then stood on.
 
-  A descent (6, 6b) goes by a mineshaft instead when one is usable (:shaft, jobs.lib.shafts): the body walks to the shaft's top, a
+  A descent (6, 6b) goes by a mineshaft instead when one is usable (:shaft, jobs.lib.shafts): the body walks to the shaft's top (not when it stands on a step of the shaft: it goes on from there), a
   jobs.access.stair child runs its stair down to the plan's depth, and the strip tunnel is the shaft's next branch
   (shafts/next-for; remembered when the run ends). A shaft in another's zone or claim is not used (:ignore-zones? uses it); one in the
   body's own zone is, without walking out of the zone first. No usable shaft or a stair that stops: the descent above. The text says
@@ -1170,7 +1170,10 @@
       nil (let [p (pick-shaft c)]
             (if (:none p)
               (shaft-none! c (:none p))
-              (do (ctx/update-mem! c assoc :shaft (assoc (select-keys p [:id :top :heading :to-y :bottom]) :state :going)) :again)))
+              (let [feet (cell-of (u/self-pos c))]
+                (ctx/update-mem! c assoc :shaft (assoc (select-keys p [:id :top :heading :to-y :bottom])
+                                                       :state (if (shafts/on-line? p [(:x feet) (:y feet) (:z feet)]) :down :going)))
+                :again)))
       :going (let [r (await (child/call-walk c :shaft-walk {:pos top :range 0 :zone-tolls true}))]
                (cond
                  (= :continue r) :continue

@@ -1,6 +1,7 @@
 (ns engine.mine-test
   "jobs.gather.mine against the fake world."
   (:require [cljs.test :refer [deftest is async]]
+            [clojure.string]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
@@ -16,6 +17,7 @@
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
             [jobs.gather.mine :as mine]
+            [jobs.access.stair :as stair]
             [plan.shape :as shape]))
 
 (defn spec [args] (list 'jobs.gather.mine args))
@@ -940,6 +942,17 @@
           (is (= [4 60 0] (:origin (:tunnel e))) "the first branch runs on from the shaft's bottom")
           (is (re-find #"via shaft s \(stair 4 steps to y 60\), branch 1 east" (:text e)))
           (is (= [0 64 0] (feet s))))))))
+
+(deftest a-body-inside-a-half-dug-shaft-continues-it-from-where-it-stands
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cut (into {} (for [f [[0 64 0] [1 63 0]] cell (:cut (stair/step-cells f :down :east))] [(clojure.string/join "," cell) "air"]))
+              world (assoc (deep-rock (merge cut ore-east)) :self {:pos {:x 2.5 :y 62 :z 0.5}})
+              s (await (zoned via-shaft world (ew/of-data {"s" shaft-plan} {} []) 400))
+              e (done-event s)]
+          (is (re-find #"via shaft s \(stair 2 steps to y 60\)" (:text e)) "the 2 steps left, not the whole shaft walked again from its top")
+          (is (= 1 (get (inv s) "raw_iron"))))))))
 
 (deftest the-next-run-takes-another-branch-of-the-shaft
   (async done

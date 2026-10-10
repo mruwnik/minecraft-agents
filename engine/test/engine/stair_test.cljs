@@ -604,6 +604,22 @@
             (is (= "bedrock" (:block @out)))
             (is (empty? (digs p)))))))))
 
+(def cave-below
+  "A cave under the first step down: the next feet cell (1 64 0) is open (already cut), and the floor under it at (1 63 0)
+  has only air round it. The one face to place against is the current floor (0 64 0), beside the next feet cell."
+  (-> (apply dissoc ground (for [x (range 0 3) y (range 60 64) z (range -1 2)] (str x "," y "," z)))
+      (dissoc "1,64,0" "1,65,0")))
+
+(deftest a-floor-in-a-cave-is-bridged-from-the-step-above-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [inv (conj pick {:name "cobblestone" :count 10})
+              {:keys [out p]} (await (stair! {:blocks cave-below :inventory inv} (assoc east :steps 1) (fn [_])))]
+          (is (= :done (:status @out)))
+          (is (= "cobblestone" (block-at p [1 63 0])) "the floor was placed")
+          (is (= "air" (block-at p [1 64 0])) "the step it was placed from is cut again"))))))
+
 (deftest lava-for-a-floor-is-never-bridged-it-is-exposed-lava
   (async done
     (tu/run-async done
