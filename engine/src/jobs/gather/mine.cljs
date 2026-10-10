@@ -1570,7 +1570,7 @@
         :done)))
 
 (defn hungry!
-  "Food is short and get-food found none (trip/food-short?): before the first dig end at once {:status :stopped :got 0
+  "Food is short and get-food found none (trip/food-short?; not for soil, dug at the surface near home): before the first dig end at once {:status :stopped :got 0
   :reason :hungry}, later end the dig phase :hungry and walk home."
   [c]
   (ctx/emit! c :mine.hungry :warn {:text "mine stopped digging: hungry, no food carried and get-food found none"})
@@ -1590,7 +1590,7 @@
     (cond
       (and (contains? #{nil :dig} (:phase m)) (breath/head-under? (:primitives c))) (flooded! c)
 
-      (and (contains? #{nil :dig} (:phase m)) (trip/food-short? c)) (hungry! c)
+      (and (contains? #{nil :dig} (:phase m)) (not (contains? soil-blocks (:block (:args c)))) (trip/food-short? c)) (hungry! c)
 
       (and (contains? #{nil :dig} (:phase m)) (no-tool? c)) (await (fetch-pickaxe! c))
 

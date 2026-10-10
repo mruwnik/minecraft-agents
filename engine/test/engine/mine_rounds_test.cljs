@@ -189,3 +189,13 @@
           (is (= :count (:reason ev2)))
           (is (>= sand1 6))
           (is (>= sand2 6)))))))
+
+(deftest mine-of-surface-soil-goes-on-hungry
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (m/start {:world {:blocks m/floor :self {:food 2} :inventory []}})]
+          (mem/write! (:store (:eng s)) :hungry {:food 2} {:cap 10 :ttl 3600000})
+          (core/submit! (:eng s) (m/spec {:block "dirt" :count 4 :mend false}) {})
+          (await (m/run-ticks s 40))
+          (is (not= :hungry (:reason (m/done-event s)))))))))
