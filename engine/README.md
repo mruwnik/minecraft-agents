@@ -381,7 +381,7 @@ Built-in triggers, in the order of `triggers/defaults.edn` (the default register
 | `:tidy-pending` | body safe and on the ground, a `:tidy` entry pending; a cell a run tried (the entry's `:tried` stamp) waits 2 min or until the body moves 8 blocks; entries over `range` (48) blocks from the body wait until it comes near | `survival.restore-broken` | 10 s |
 | `:pen-gate` | a planned fence gate within 8 was last seen open, body more than 2 away; no `:opened`/`:gate-held`/`:gate-gave-up` entry for it | `animals.shut-gate` (waits `:open-s`, 4 s, before shutting; a gate it left for an animal or an interrupted walk is paused 30 s) | 5 s |
 | `:mounted` | the body rides something and no live job holds a vehicle | `movement.leave-vehicle` | cooldown 30 s |
-| `:needs-bed` | by day, awake, `max-days-awake` (3) in-game days since the latest `:slept`, no bed item carried and no bed remembered within 128 (no `:slept` entry: never); sets of beds of any colour | `items.obtain` (`:any-of` the 16 beds, `:explore`) | 600 s |
+| `:needs-bed` | by day, awake, `max-days-awake` (3) in-game days since the body last rested (latest `:slept`, `:respawned` or death, else its first memory), no bed item carried and no bed remembered within 128 | `items.obtain` (`:any-of` the 16 beds, `:explore`) | 600 s |
 | `:loose-items` | on the ground, not nearly full, no danger within 8, and a seen item within `:radius` 8 that `jobs.lib.loose` takes (worth / detour cost at least `:min-ratio`, or on `:always`; not on `:never`, thrown, owed to a live job or in another's zone or claim); settings only, register `:args` ignored | `items.pick-up-loose` | 30 s |
 
 The dangers (`:suffocating`, `:burning`) have no cooldown and no backoff. Needs rest with a reason the agent

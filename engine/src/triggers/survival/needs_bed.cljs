@@ -1,7 +1,8 @@
 (ns triggers.survival.needs-bed
-  "The needs-bed trigger: by day, a body overdue for sleep (sh/max-days-awake in-game days since its latest :slept) with
+  "The needs-bed trigger: by day, a body overdue for sleep (sh/max-days-awake in-game days since it last rested:
+  sh/rest-since, its sleep or respawn, else the first thing it remembers) with
   no bed carried and none remembered within the urgent radius gets one (jobs.items.obtain: wool from sheep, planks), so
-  the night job can put it down and sleep before phantoms come. No :slept entry is never overdue."
+  the night job can put it down and sleep before phantoms come."
   (:require [jobs.lib.shelter :as sh]))
 
 (def beds

@@ -25,8 +25,14 @@
 (deftest an-overdue-body-with-no-bed-by-day-needs-one
   (is (true? (holds? {:entries slept-long-ago}))))
 
-(deftest a-rested-or-never-sleeping-body-does-not
-  (is (false? (holds? {:entries [[:slept {:pos {:x 0 :y 64 :z 0}} 1]]})))
+(deftest a-body-that-never-slept-counts-from-its-respawn-or-its-first-memory
+  (is (true? (holds? {:entries [[:looked {} 4]]})))
+  (is (true? (holds? {:entries [[:looked {} 4] [:respawned {} 3.5]]})))
+  (is (false? (holds? {:entries [[:looked {} 4] [:respawned {} 1]]})))
+  (is (false? (holds? {:entries [[:looked {} 4] [:deaths {:death-t (- (* 10 sh/ms-per-day) sh/ms-per-day)} 1]]}))))
+
+(deftest a-rested-body-or-one-with-no-memory-does-not
+  (is (false? (holds? {:entries [[:slept {:pos {:x 0 :y 64 :z 0}} 1] [:looked {} 4]]})))
   (is (false? (holds? {}))))
 
 (deftest a-carried-or-remembered-bed-or-the-night-needs-no-errand

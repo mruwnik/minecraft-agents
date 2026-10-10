@@ -170,15 +170,27 @@
 
 (def max-days-awake 3)
 
-(defn days-awake-in
-  "In-game days since the latest :slept entry in view, or nil when none is remembered."
+(defn rest-since
+  "When the body's time since rest began, in engine-clock ms, or nil on an empty memory: the latest of its :slept
+  entry, its :respawned entry and its latest death (:deaths, kept for good), else its oldest entry of any kind (the
+  first thing it remembers)."
   [view]
-  (when-let [t (:t (mem/latest view :slept))]
+  (let [death (some-> (mem/latest view :deaths) :data :death-t)
+        ts (concat (keep #(:t (mem/latest view %)) [:slept :respawned]) (when death [death]))]
+    (if (seq ts)
+      (apply max ts)
+      (some->> (keys (get-in view [:data :entries])) (mapcat #(mem/entries view %)) (map :t) seq (apply min)))))
+
+(defn days-awake-in
+  "In-game days since the body last rested (rest-since: its sleep or respawn, else its first memory), or nil when
+  it remembers nothing."
+  [view]
+  (when-let [t (rest-since view)]
     (/ (- (:now view) t) ms-per-day)))
 
 (defn bed-radius
   "How far a remembered bed may be: :bed-radius, or :urgent-bed-radius once the latest :slept entry is :max-days-awake
-  in-game days old (phantoms come). No :slept entry is never overdue."
+  in-game days old (phantoms come)."
   [view {:keys [bed-radius urgent-bed-radius max-days-awake]
          :or {bed-radius default-bed-radius urgent-bed-radius urgent-bed-radius max-days-awake max-days-awake}}]
   (let [days (days-awake-in view)]
@@ -354,7 +366,7 @@
          (others-asleep? p view))))
 
 (defn days-awake
-  "In-game days since the latest :slept entry, or nil when none is remembered."
+  "In-game days since the body last rested (days-awake-in), or nil when it remembers nothing."
   [c]
   (days-awake-in (ctx/view c)))
 
