@@ -177,6 +177,11 @@
   [c result]
   (finish! c (assoc result :status :stopped)))
 
+(defn mark-full
+  "The left drops with their reason :inventory-full when the body has no room for the block's drop now (the pickup filled the last stack), else as they are."
+  [left room?]
+  (if room? left (mapv #(assoc % :reason :inventory-full) left)))
+
 (defn ^:async collect!
   "Pick up the dug block's drops (jobs.forestry.collect-drops child, called until it ends); finish when it has."
   [c pos]
@@ -186,7 +191,7 @@
       :continue
       (let [res (when (= :done r) (ctx/child-result c :collect))]
         (finish! c (cond-> {:dug true :pos pos :block block :reason :dug :collected (:collected res 0)}
-                     (seq (:left res)) (assoc :left (:left res))))))))
+                     (seq (:left res)) (assoc :left (mark-full (:left res) (room? (:primitives c) block)))))))))
 
 (defn ^:async seal-step!
   "One step after a dig with :on-lava :seal: nil when no seen lava borders the dug cell, :again once one lava cell is

@@ -1,6 +1,6 @@
 (ns engine.blocks-dig-test
   "jobs.blocks.dig against the fake world."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
@@ -12,6 +12,7 @@
             [engine.takeover :as takeover]
             [engine.test-util :as tu :refer [run-until-empty]]
             [engine.triggers :as triggers]
+            [jobs.blocks.dig :as dig]
             [jobs.lib.world-files :as world]
             [plan.shape :as shape]))
 
@@ -215,6 +216,11 @@
         (let [stone-full (conj (vec (butlast full-inventory)) {:name "stone" :count 10})
               env (setup {:self body :blocks {"2,64,0" "stone"} :inventory (into stone-full pick)})]
           (is (= {:reason :inventory-full :pos at} (await (waiting-after env (list job {:pos at}) 3)))))))))
+
+(deftest drops-left-with-no-room-left-are-reported-as-inventory-full
+  (are [room? expected] (= expected (dig/mark-full [{:reason :unseen :ids [3]}] room?))
+    true [{:reason :unseen :ids [3]}]
+    false [{:reason :inventory-full :ids [3]}]))
 
 (deftest a-carried-stack-of-the-real-drop-is-room
   (async done

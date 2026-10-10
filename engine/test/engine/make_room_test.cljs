@@ -136,10 +136,10 @@
                    {:name "stick" :count 7}]]
     (is (= {"iron_pickaxe" 1 "water_bucket" 1
             "cooked_beef" 12 "bread" 4 "apple" 0
-            "dirt" 30 "cobblestone" 34
+            "dirt" 0 "cobblestone" 64
             "stick" 0}
            (mr/keep-counts inventory {:keep-food 16 :keep-blocks 64}))
-        "beef (8 points) keeps its 12, bread (5) the 4 left of 16, apple none; dirt then cobblestone share 64")))
+        "beef (8 points) keeps its 12, bread (5) the 4 left of 16, apple none; cobblestone then dirt share 64")))
 
 (deftest keep-counts-without-keep-food-uses-the-food-reserve
   (is (= {"bread" 12 "apple" 0 "golden_apple" 2 "dirt" 0}

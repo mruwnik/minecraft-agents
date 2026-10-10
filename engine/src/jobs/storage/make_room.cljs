@@ -22,7 +22,7 @@
   tuff, dirt, gravel...), whole big stacks before partial, then the rest by worth; ores, fuel and the like
   only after the junk. Never put away or thrown: tools, weapons, armour and buckets. Food is never thrown and is put away only above
   :keep-food (best food-points first; the body's 3-day food reserve when nil). Golden apples are never put away.
-  Building blocks (the dig-in list, in its order) are kept up to
+  Building blocks (the dig-in list, last first: cobblestone before dirt) are kept up to
   :keep-blocks.
   Steps, in order:
   1. A chest known within :chest-range (and not marked :chest-unusable) takes what jobs.storage.deposit may put
@@ -52,7 +52,7 @@
   {:free {:doc "done once at least this many slots are free (above the trigger's 2, so it does not refire at once)" :spec (a/int-in 0 nil) :default 4}
    :chest-range {:doc "the known :chest place is used only within this distance" :spec (a/num-in 0 nil) :default 32}
    :keep-food {:doc "food items kept carried (best food by points first); the body's food reserve (jobs.lib.cost/food-reserve) when nil" :spec (a/int-in 0 nil) :default nil}
-   :keep-blocks {:doc "building blocks kept carried (dig-in's list, in its order)" :spec (a/int-in 0 nil) :default 64}
+   :keep-blocks {:doc "building blocks kept carried (dig-in's list, last first)" :spec (a/int-in 0 nil) :default 64}
    :toss-below {:doc "a stack is tossed to make room only when its item-worth (jobs.lib.cost/item-value per item, seconds of work) is below this: dirt, cobblestone, rotten flesh and seeds go; ores, fuel, tools and food stay" :spec (a/num-in 0 nil) :default 3.2}
    :swap-radius {:doc "when no slot is free, a dropped item worth more than some carried stack within this radius is swapped in" :spec (a/num-in 0 nil) :default 8}
    :away {:doc "after tossing, walk this far away from where the items were thrown" :spec (a/num-in 0 nil) :default 4}
@@ -114,7 +114,7 @@
 (defn keep-counts
   "{name n}: how many of each carried name stay carried. Protected names keep
   their whole total; food names share keep-food, best food-points first;
-  building blocks share keep-blocks in building-blocks order; the rest 0."
+  building blocks share keep-blocks, the last of dig-in's list first (it spends dirt first; sturdy blocks stay); the rest 0."
   [inventory {:keys [keep-food keep-blocks]}]
   (let [totals (totals inventory)
         names (keys totals)
@@ -124,7 +124,7 @@
         food-floors (if keep-food
                       (shared-floors food totals keep-food)
                       (select-keys (cost/food-reserve inventory) food))
-        blocks (filter #(contains? totals %) lb/building-blocks)]
+        blocks (filter #(contains? totals %) (reverse lb/building-blocks))]
     (merge (zipmap names (repeat 0))
            (select-keys totals (filter protected? names))
            food-floors
