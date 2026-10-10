@@ -462,3 +462,26 @@
           (await (run-until-empty eng 6))
           (is (seq (calls p "look")))
           (is (= [:nothing-to-do] (distinct (map :reason (events-of seen :waiting))))))))))
+
+(def dried-world
+  "The field with two cells dried back to dirt."
+  (field-world (inv "wheat_seeds" 9) {:blocks (merge (farmland (range 2 5) (range 2 5)) {"2,63,2" "dirt" "3,63,2" "grass_block"})}))
+
+(deftest a-field-dried-back-to-dirt-says-which-cells-need-tilling
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (start dried-world)
+              result (await (child-outcome eng job {:box field-box} 100))]
+          (is (= 7 (:planted result)))
+          (is (= [{:x 2 :y 63 :z 2} {:x 3 :y 63 :z 2}] (:untilled result)) "the dirt cells are named")
+          (is (= 2 (:untilled (first (events-of seen :plant.done))))))))))
+
+(deftest a-field-wholly-dried-back-waits-naming-the-count
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (start (field-world (inv "wheat_seeds" 9) {:blocks (into {} (for [x (range 2 5) z (range 2 5)] [(str x ",63," z) "dirt"]))}))]
+          (core/submit! eng (list job {:box field-box}) {})
+          (await (run-until-empty eng 6))
+          (is (= [[:nothing-to-do 9]] (distinct (map (juxt :reason :untilled) (events-of seen :waiting))))))))))

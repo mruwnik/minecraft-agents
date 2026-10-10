@@ -13,6 +13,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
             [jobs.farm.harvest :as harvest]
+            [jobs.farm.till :as till]
             [jobs.lib.world :as known]))
 
 (def doc
@@ -23,7 +24,8 @@
   reserve. That pick is kept while it is carried, so one run sows one crop.
   One call plants the bare cells within :reach, walking to the nearest when none is, until the field is done. A cell whose place is refused or
   unreachable, or whose walk is blocked, three times is skipped (warn plant.gave-up).
-  Result: {:planted n :skipped [cells] :reason r}. :reason is :done, :none (no bare cell), :gave-up (cells
+  Result: {:planted n :skipped [cells] :reason r}, plus :untilled [cells] when ground cells of the box are dirt, grass or path
+  (farmland that dried back: till them first; the wait carries :untilled n). :reason is :done, :none (no bare cell), :gave-up (cells
   were skipped), :no-seed, or :food-reserve (a food-crop seed is carried but the reserve keeps it; the result adds
   :seed :held :kept :reserve-points, and nothing is fetched).
   :plan (optionally :part) makes the plan's crop cells the field instead (:box and :seed are then unused).
@@ -63,6 +65,16 @@
          (remove skipped)
          (filter #(and (= "farmland" (u/seen-name p %))
                        (= "air" (u/seen-name p (update % :y inc))))))))
+
+(defn untilled-cells
+  "The cells of box whose ground layer is dirt, grass or a path (farmland that dried back, or never tilled), in x then z order."
+  [p box]
+  (let [{:keys [min max]} box
+        y (:y min)]
+    (vec (for [x (range (:x min) (inc (:x max))) z (range (:z min) (inc (:z max)))
+               :let [pos {:x x :y y :z z}]
+               :when (contains? till/tillable (u/seen-name p pos))]
+           pos))))
 
 (defn sowable
   "{name count} of the carried items that may be sown: food crops (carrots, potatoes) only above the food reserve,
@@ -175,7 +187,8 @@
     (cond
       (:started m) true
       (and (empty? bare) (not (look/surveyed? c :cell))) true ; the round looks around before it gives up
-      (empty? bare) (ctx/wait c {:reason :nothing-to-do})
+      (empty? bare) (ctx/wait c (cond-> {:reason :nothing-to-do}
+                                  (seq (untilled-cells p box)) (assoc :untilled (count (untilled-cells p box)))))
       (held-back seed (u/inventory p)) true ; the round says :food-reserve
       (not (pick-seed seed (u/inventory p)))
       (fetch/check c job-sym (seed-need seed (count bare)))
@@ -286,14 +299,17 @@
   ([c reason extra]
   (let [m (ctx/mem c)
         skipped (vec (:skipped m))
-        result (merge {:planted (:planted m 0) :skipped skipped :reason reason} extra)]
+        untilled (when (:box (:args c)) (untilled-cells (:primitives c) (:box (:args c))))
+        result (cond-> (merge {:planted (:planted m 0) :skipped skipped :reason reason} extra)
+                 (seq untilled) (assoc :untilled untilled))]
     (when (seq skipped)
       (ctx/emit! c :plant.gave-up :warn
                  {:cells skipped
                   :text (str "plant gave up on " (count skipped) " cells: " (str/join ", " (map pr-str skipped)))}))
     (ctx/emit! c :plant.done :info
-               {:planted (:planted result) :skipped-count (count skipped) :reason reason
+               {:planted (:planted result) :skipped-count (count skipped) :reason reason :untilled (count untilled)
                 :text (str "plant done: planted " (:planted result) ", skipped " (count skipped) ", reason " (name reason)
+                           (when (seq untilled) (str ", " (count untilled) " cells are dirt: they need tilling"))
                            (when extra (str " (" (:seed extra) ": holding " (:held extra) ", reserve keeps " (:kept extra)
                                             " of " (:reserve-points extra) " food points)")))})
     (ctx/result! c result)
