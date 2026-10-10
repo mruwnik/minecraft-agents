@@ -896,3 +896,21 @@
           (is (true? (:arrived @(:out near))))
           (is (empty? (events-of (:seen near) :go-to.escalated))))))))
 
+
+(def stair-below-surface
+  "Stone x -45..5, y 0..40, z -3..3 with a tunnel west: a stair up from (0,10) to its dead end at (-9,19) under 21 blocks
+  of rock, and a mine floor (y 9) that runs on west and drops 3 at x -12 to a lower floor going on to x -38."
+  (let [carve (concat (for [k (range 10) y [(+ 10 k) (+ 11 k) (+ 12 k)]] [(- k) y 0])
+                      (for [x (range 0 -12 -1) y [10 11 12]] [x y 0])
+                      (for [x (range -12 -39 -1) y [7 8 9 10 11]] [x y 0]))]
+    (apply dissoc (box -45 0 -3 5 40 3 "stone") (map (fn [[x y z]] (str x "," y "," z)) carve))))
+
+(deftest go-to-digs-the-last-steps-of-its-stair-out-instead-of-calling-the-way-one-way
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out seen]} (await (run-job! {:self {:pos {:x -8.5 :y 19 :z 0.5}} :blocks stair-below-surface
+                                                  :inventory [{:name "iron_pickaxe" :count 1}]}
+                                                 {:pos [-40 41 0] :range 1}))]
+          (is (= [:stair] (take 1 (mapv :step (events-of seen :go-to.escalated)))))
+          (is (= {:arrived true} @out)))))))

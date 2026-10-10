@@ -19,8 +19,9 @@
 (def escalate-reasons
   "Planner reasons that prove the way needs the world changed. A stuck or off-plan walk is the walker's fault and
   never escalates: changing the world there would hide a go-to bug. :start-enclosed is the search running out of land
-  with no loaded edge reached (a sealed pen, the goal far and unloaded)."
-  #{:exhausted :goal-enclosed :goal-cut-off :start-enclosed})
+  with no loaded edge reached (a sealed pen, the goal far and unloaded); :one-way is every nearer node lying behind a drop
+  (escalating then needs the body shut in, escalate?)."
+  #{:exhausted :goal-enclosed :goal-cut-off :start-enclosed :one-way})
 
 (defn sprint-only?
   "Whether a walk result is the planner's only way needing a sprint the body lacks the food for (:abilities of kind
