@@ -175,7 +175,8 @@
         (foods/top-up? (.-food self) (.-health self) (foods/carried-names self))
         (foods/eat-now? self (:args c))
         (boolean (:eating (ctx/mem c)))
-        (ctx/wait c {:reason :not-hungry})))))
+        (ctx/wait c {:reason :not-hungry
+                     :why (str "food " (.-food self) " at health " (.-health self) ", hungry below " (foods/hungry-line (.-health self) (:args c)))})))))
 
 ;; ------------------------------------------------------------------ sources
 
