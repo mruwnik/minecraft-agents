@@ -6,6 +6,8 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
+            [jobs.survival.fight-back :as fight-back]
+            [jobs.lib.util :as u]
             [jobs.survival.recover-drops :as recover-drops]
             [jobs.survival.respond-to-hostile :as respond-to-hostile]
             [jobs.lib.cost :as cost]
@@ -927,3 +929,12 @@
         (let [{:keys [eng p]} (await (first-round-ms fight {:inventory sword :entities [(zombie 7 3 0)]} 20))]
           (is (= 4 (count (calls p "attack"))) "four hits in one call")
           (is (= [] (:list (core/state eng))) "done in the first call"))))))
+
+;; ------------------------------------------------------- a mob that hurts the body is not given up on
+
+(deftest fight-back-gives-up-on-a-blocked-mob-only-while-it-does-not-hurt-the-body
+  (let [n (u/max-failures)
+        mem {:blocked {7 n} :blocked-health {7 12}}]
+    (is (fight-back/given-up-in? mem 7 12 n) "blocked n times, body unhurt since: given up")
+    (is (not (fight-back/given-up-in? mem 7 9 n)) "the body lost health since: still fought")
+    (is (fight-back/given-up-in? {:no-damage {7 n}} 7 20 n) "no-damage swings still give up")))

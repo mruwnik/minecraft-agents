@@ -53,6 +53,7 @@
   Not while a creeper chases it or a melee mob is within cover-gap: it walks (or backs off, cornered) first.
   4. Cornered (no open direction worth a walk, or the walk is blocked; checked afresh every step) with no hostile within
      :radius: holds a second (wait, why cornered) and looks again; after :no-gain-steps such steps or holds with no gain the flight ends :keeps-off. With one within :radius: takes the safest option it has not yet failed.
+     - an enderman near (it teleports; a walk is no flight): at once, before any walk, seal, pit, pocket, last of all fight.
      - fight (jobs.survival.fight-back) only when jobs.lib.cost/fight-damage leaves :reserve health. Never against a creeper.
      - seal in: fill the open sides at feet and head height and the roof (dig-in's 1x1 cells) with carried :blocks,
        at most :max-places a step, the sides towards a seen ranged hostile first (feet, then head: the first blocks
@@ -160,10 +161,12 @@
 
 (defn escape-order
   "Pure: the cornered options to try, safest first. {:win? the odds say a fight leaves reserve health (never true
-  for a creeper), :creeper? one is near, :ranged? the threat shoots, :home? the body is in its home room: it digs
-  no pit or pocket in its own floor or walls}."
-  [{:keys [win? creeper? ranged? home?]}]
+  for a creeper), :creeper? one is near, :enderman? an enderman is (it teleports, so no walk or back-off, and a
+  pillar is within its reach: the body shuts itself in), :ranged? the threat shoots, :home? the body is in its home
+  room: it digs no pit or pocket in its own floor or walls}."
+  [{:keys [win? creeper? enderman? ranged? home?]}]
   (cond->> (cond
+             enderman? [:seal :pit :pocket :fight]
              win? [:fight]
              creeper? [:back-off :seal :pillar :pit :pocket :fight]
              :else (into (if ranged? [:seal] [:seal :pillar]) [:back-off :pit :pocket :fight]))
@@ -242,6 +245,7 @@
         threat (first hostiles)
         order (escape-order {:win? (fight-wins? c hostiles)
                              :creeper? (boolean (some combat/creeper? hostiles))
+                             :enderman? (boolean (some combat/enderman? hostiles))
                              :ranged? (boolean (and threat (combat/ranged? threat)))
                              :home? home?})]
     (loop [[option & more] order]
@@ -488,6 +492,7 @@
       (flight/no-gain? (ctx/mem c) no-gain-steps)
       (do (when (seq (near-hostiles c)) (ctx/update-mem! c assoc :since-gain 0))
           (await (stuck "the chaser keeps up")))
+      (some combat/enderman? (near-hostiles c)) (await (cornered! c "an enderman cannot be outrun" inside?))
       door (await (shut-door! c door))
       (and inside? (home-door c room)) (await (shut-home-door! c (home-door c room)))
       inside? (await (stuck "at home, the hostile still has a way in"))

@@ -44,6 +44,8 @@
        :prefer (into (filterv #(.-visible %) all) (remove #(.-visible %)) all)
        (vec all)))))
 
+(defn enderman? [e] (= "enderman" (.-name e)))
+
 (defn creeper? [e]
   (or (true? (.-creeper e)) (= "creeper" (.-name e))))
 
