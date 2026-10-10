@@ -98,3 +98,17 @@
               full (first (await (answer-of floor ts 0 nil {:world {:entities [zombie]}})))
               low (first (await (answer-of floor ts 0 nil {:world {:entities [zombie]} :self {:health 4}})))]
           (is (> (:cost low) (:cost full)) (str "low " (:cost low) " full " (:cost full))))))))
+
+(def pen-ring
+  "A fence ring round x -1..5, z -1..5 at y 64 with a shut oak_fence_gate on its east side at x 5, z 2."
+  (-> (into {} (for [x (range -1 6) z (range -1 6) :when (#{-1 5} (if (#{-1 5} x) x z))]
+                 [(str x ",64," z) "oak_fence"]))
+      (assoc "5,64,2" "oak_fence_gate")))
+
+(deftest a-shut-fence-gate-in-a-pen-ring-lets-the-search-find-targets-outside
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [outside [{:x 12 :y 64 :z 2} {:x 12 :y 64 :z 8}]
+              [a] (await (answer-of (merge floor pen-ring) outside 3 nil))]
+          (is (= :found (:status a)) (pr-str a)))))))
