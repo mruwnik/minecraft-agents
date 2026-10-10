@@ -25,7 +25,7 @@
 # tools/res-slot (held for the server's life, so its JVM counts against the memory floor; kind apart from compiles, max 4); no free slot in ~2 min exits 75 (retry).
 # Every server stops itself after an idle time without a compile: MC_COMPILE_SERVER_IDLE_S (default 600) for a worktree, MC_COMPILE_MAIN_IDLE_S (1800) for the main checkout (tools/compile-idle-watch, started with it: kills only that pid with that start time, never during a compile; the next compile restarts it).
 # That start waits before queueing (under <lock>.start only), so the global compile lock is free meanwhile.
-# A build that prints an :undeclared-var or :undeclared-ns warning exits 1 (shadow-cljs itself exits 0).
+# A build that prints an :undeclared-var, :undeclared-ns or :fn-arity warning exits 1 (shadow-cljs itself exits 0).
 # Env: MC_COMPILE_LOG=1 prints "waited Ns, compiled Ns".
 set -u
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -166,9 +166,9 @@ touch .shadow-cljs/last-use; echo $$ > .shadow-cljs/last-use.compiling  # keeps 
 out=$(mktemp)
 npx shadow-cljs "$verb" "${builds[@]}" "${extra[@]}" 9>&- 2>&1 | tee "$out"
 code=${PIPESTATUS[0]}
-# shadow-cljs only warns on a call to a missing var or namespace (a moved function): the build passes and the job throws at run time.
-if [ "$code" = 0 ] && grep -qE 'WARNING #[0-9]+ - :undeclared-(var|ns)' "$out"; then
-  echo "tools/compile: failing the build: undeclared-var/undeclared-ns warning above (a call to a var or namespace that does not exist)" >&2
+# shadow-cljs only warns on a call to a missing var or namespace (a moved function) or with the wrong number of args: the build passes and the job throws or reads nil at run time.
+if [ "$code" = 0 ] && grep -qE 'WARNING #[0-9]+ - :(undeclared-(var|ns)|fn-arity)' "$out"; then
+  echo "tools/compile: failing the build: undeclared-var/undeclared-ns/fn-arity warning above (a call to a var or namespace that does not exist, or with the wrong number of args)" >&2
   code=1
 fi
 rm -f "$out"; out=
