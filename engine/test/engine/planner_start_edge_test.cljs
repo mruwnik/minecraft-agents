@@ -80,3 +80,10 @@
   (are [pz side] (= ["found" #{side}] ((juxt :status side-of-line) (run (world {:fill [fence-line]}) (near 4 64 3) {} {:x 13 :y 64 :z 6 :px 13.5 :py 64 :pz pz})))
     6.9375 :south
     6.0625 :north))
+
+(def stair [2 64 4 2 64 4 "cherry_stairs" {:facing "east" :half "bottom" :shape "straight"}])
+
+(deftest start-on-a-stair-plans-from-the-cell-above-it
+  (are [from] (= ["found" nil [2 65 4]] (status+first (run (world {:fill [stair]}) (near 8 64 4) {} from)))
+    {:x 2 :y 64 :z 4 :px 2.7 :py 64.5 :pz 4.5}
+    {:x 2 :y 64 :z 4 :px 2.2 :py 64.5 :pz 4.5}))

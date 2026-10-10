@@ -436,20 +436,25 @@
 (defn- start-query
   "query with its start cell moved for a body on the edge of a block: when from (the floored body position) is no
   place to stand but from.px/pz is given, the first cell the 0.6-wide hitbox overlaps (hitbox-cells) that stands with
-  the feet at from.py (when given, within 1/16). Unchanged when the floored cell stands or no overlapped cell does.
+  the feet at from.py (when given, within 1/16). A body whose feet are above the floored cell's floor (a stair, whose
+  stand the search puts in the cell above it) starts from the cell above when that stands. Unchanged when the floored
+  cell stands or no cell does.
   search: a search of query, initialised."
   [^Search search ^js query]
   (let [^js from (.-from query)
         px (.-px from) pz (.-pz from) py (.-py from)
-        fx (.-x from) fy (.-y from) fz (.-z from)]
-    (if (or (>= (.-start-h search) 0) (nil? px) (nil? pz))
-      query
-      (if-some [[x z] (first (filter (fn [[x z]]
-                                      (let [h (.nodeH search x fy z)]
-                                        (and (>= h 0) (or (nil? py) (<= (js/Math.abs (- (+ fy (/ h WHOLE)) py)) (/ 1 WHOLE))))))
-                                    (hitbox-cells fx fz px pz)))]
-        (js/Object.assign #js {} query #js {:from (js/Object.assign #js {} from #js {:x x :z z})})
-        query))))
+        fx (.-x from) fy (.-y from) fz (.-z from)
+        edge (when (and (some? px) (some? pz))
+               (first (filter (fn [[x z]]
+                                (let [h (.nodeH search x fy z)]
+                                  (and (>= h 0) (or (nil? py) (<= (js/Math.abs (- (+ fy (/ h WHOLE)) py)) (/ 1 WHOLE))))))
+                              (hitbox-cells fx fz px pz))))
+        above? (and (some? py) (> py (+ fy (/ 1 WHOLE))) (>= (.nodeH search fx (inc fy) fz) 0))]
+    (cond
+      (>= (.-start-h search) 0) query
+      (some? edge) (js/Object.assign #js {} query #js {:from (js/Object.assign #js {} from #js {:x (first edge) :z (second edge)})})
+      above? (js/Object.assign #js {} query #js {:from (js/Object.assign #js {} from #js {:y (inc fy)})})
+      :else query)))
 
 (defn- with-start-air
   "search with its start node (node 0) having used options.costs.airUsed seconds of air (a plan made mid-dive)."
