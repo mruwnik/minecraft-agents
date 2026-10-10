@@ -86,7 +86,7 @@
                           :world (ew/of-data {} {} zones)})]
     {:eng eng :p p}))
 
-(deftest a-door-in-anothers-zone-is-not-shut-and-the-body-is-not-called-safe
+(deftest a-door-in-anothers-zone-is-shut-all-the-same
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -94,9 +94,8 @@
                                            [{:name "yard" :min [5 60 2] :max [5 70 2] :owner "Miles"}])]
           (core/submit! eng '(jobs.survival.night) {})
           (await (tu/run-until-empty eng 12))
-          (is (= [] (st/calls p "useOn")) "the door is not clicked")
-          (is (= [{:door [5 64 2]}] (st/entries eng :night-door-failed)))
-          (is (empty? (st/entries eng :shelter)) "no shelter is claimed behind the open door"))))))
+          (is (false? (door-open? p)) "shutting a door changes no block: no zone rule applies")
+          (is (= [] (st/entries eng :night-door-failed))))))))
 
 (deftest a-failed-door-is-given-up-wherever-the-body-stands-in-the-room
   (let [p (tu/fake (open-door-hut {:x 5 :y 64 :z -1} {}))
