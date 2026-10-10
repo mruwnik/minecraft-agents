@@ -5,6 +5,7 @@
             [engine.ctx :as ctx]
             [engine.memory :as mem]
             [jobs.lib.access :as access]
+            [jobs.lib.animal-spare :as spare]
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
@@ -46,7 +47,7 @@
   :stock n: a fed body also takes the ways until the pack holds n food points, else stops :no-stock; while the pack is short of it the ask cooldown does not block the search.
   Never :continue: a go-to that waits on the world, or a child still going after jobs.lib.child's call cap, is waited out in the round.
   More than 12 ways in one round without getting fed stops :still-hungry.
-  Wheat is never harvested. Babies, animals in another's zone or claim, animals in a zone or plan of the body's own, and the last 2 adults of a kind in sight (for breeding; hunted too at food 3 or less with no food carried) are never hunted (:ignore-zones? lifts the others' zone only). A chest in another's zone or claim is skipped and never taken from, even when starving
+  Wheat is never harvested. Babies, animals in another's zone or claim, animals in a zone or plan of the body's own (:spare-pens, default true), kinds in :off-limits (default the jobs.lib.animal-spare setting), and the last :keep-adults (2) adults of a kind in sight (for breeding; hunted too at food 3 or less with no food carried) are never hunted (:ignore-zones? lifts the others' zone only). Each animal attacked is a food.killed info with its name and cell; the result carries :killed. A chest in another's zone or claim is skipped and never taken from, even when starving
   (one get-food.skipped warning). A crop in another's zone or claim is dug only when no other is (one
   get-food.trespass-last-resort warning). :ignore-zones? lifts both.
   A cut round starts again from the world: carried food first, then the ways.
@@ -64,6 +65,9 @@
    :explore {:doc "with nothing known or seen, walk and look for food animals and crops once per job (a starving body again after foods/::starving-rest-ms; not underground unless starving): false, true (the ::explore setting) or jobs.explore.search options over it" :spec (a/or-of boolean? map?) :default true}
    :stock {:doc "also carry food worth this many hunger points: a fed body takes the ways below until the pack holds it (0: only feed)" :spec (a/num-in 0 nil) :default 0}
    :ask-cooldown-ms {:doc "after finding nothing, how long before saying so (and searching) again" :spec (a/num-in 0 nil) :default (* 10 60 1000)}
+   :spare-pens {:doc "never hunt animals in a zone or plan of the body's own (false: a job asked to get food may take them)" :spec boolean? :default true}
+   :keep-adults {:doc "adults of a kind in sight that are never hunted, so they can breed (lifted at food 3 or less with none carried)" :spec (a/int-in 0 nil) :default 2}
+   :off-limits {:doc "animal kinds never hunted; nil: the jobs.lib.animal-spare/off-limits setting" :spec (a/or-of (a/pred "nil" nil?) (a/coll-of a/item?)) :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (def food-animals #{"cow" "pig" "sheep" "chicken" "rabbit"})
@@ -353,14 +357,10 @@
         (pos? wheat) (await (withdraw! c pos "wheat" wheat))
         :else (bury-source! c pos)))))
 
-(def keep-adults
-  "Adults of a kind within the hunt radius that are never taken, so they can breed (combat.hunt's :keep default)."
-  2)
-
 (defn animals-in-sight
   "The food animals the entity scan lists within :hunt-radius, nearest first, as {:entity e :why r}: r is nil for one
-  to hunt, else :tried (attacked this job), :baby, :refused (another's zone or claim), :pen (in a zone or plan of
-  this body's own) or :kept (no more than keep-adults adults of the kind in sight: left to breed, unless the body is at ::kept-lifted-below food or less with no food carried)."
+  to hunt, else :tried (attacked this job), :baby, :refused (another's zone or claim), or what jobs.lib.animal-spare/why
+  says (:off-limits, :pen, :kept: the last :keep-adults of a kind are lifted at ::kept-lifted-below food or less with no food carried)."
   [c]
   (let [skipped (set (:skipped-animals (ctx/mem c)))
         seen (array-seq (.entities (:primitives c) #js {:radius (hunt-radius c) :kind "passive"
@@ -373,8 +373,8 @@
                         :why (cond (skipped (.-id e)) :tried
                                    (true? (.-baby e)) :baby
                                    (access/container-refusal c :take (u/pos-of (.-pos e))) :refused
-                                   (access/in-own-area? c (u/pos-of (.-pos e))) :pen
-                                   (and (<= (adults (.-name e)) keep-adults) (not starved?)) :kept)})))))
+                                   :else (spare/why (:args c) (.-name e) (adults (.-name e))
+                                                    (access/in-own-area? c (u/pos-of (.-pos e))) starved?))})))))
 
 (defn nearest-animal
   "The nearest adult food animal within :hunt-radius not skipped in this job and not in another's zone or claim."
@@ -386,6 +386,15 @@
   [c]
   (or (nearest-animal c)
       (await (look/survey-until! c :cell #(nearest-animal c)))))
+
+(defn note-kill!
+  "Say which animal the hunt attacked and where, and keep it for the result."
+  [c animal]
+  (let [p (u/pos-of (.-pos animal))
+        cell (mapv #(js/Math.floor %) [(:x p) (:y p) (:z p)])]
+    (ctx/update-mem! c update :killed (fnil conj []) {:name (.-name animal) :pos cell})
+    (ctx/emit! c :food.killed :info {:name (.-name animal) :pos cell
+                                     :text (str "hunted a " (.-name animal) " at " (pr-str cell))})))
 
 (defn ^:async hunt!
   "Kill the nearest food animal (combat.attack) and pick up its drops: :again, or nil when there is none (after a
@@ -400,6 +409,7 @@
       (if (= :continue st)
         :continue
         (do (ctx/update-mem! c update :skipped-animals (fnil conj []) (.-id animal))
+            (note-kill! c animal)
             (or (await (collect-drops! c (drop-radius))) :again))))))
 
 ;; ------------------------------------------------------------------ nothing found
@@ -738,7 +748,7 @@
         (not (ctx/alive? c)) :done
         (= :again cooked) (recur n)
         (or (= :continue eaten) (= :continue way)) (do (await (child/pace!)) (recur n))
-        (= ::fed way) (r/finish! c {:food (food-level c)})
+        (= ::fed way) (r/finish! c (cond-> {:food (food-level c)} (seq (:killed (ctx/mem c))) (assoc :killed (:killed (ctx/mem c)))))
         (= ::enough way) (r/stop! c :still-hungry (str "still hungry (food " (food-level c) ") after " n " ways")
                                   :food (food-level c))
         (= :again way) (recur (inc n))

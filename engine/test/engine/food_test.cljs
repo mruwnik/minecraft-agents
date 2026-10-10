@@ -455,6 +455,46 @@
           (await (run-until-empty eng 40))
           (is (= [] (calls p "attack"))))))))
 
+(def own-farm [{:name "farm" :owner "Fake" :min [0 60 -3] :max [20 70 3]}])
+
+(defn hunt-world-with [spec entities zones]
+  (let [{:keys [eng p seen] :as w} (setup {:self {:food 4} :entities entities} zones)]
+    (core/submit! eng (list 'jobs.survival.get-food (merge {:attack-gap-ms 0} spec)) {})
+    w))
+
+(deftest get-food-spares-listed-kinds
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (hunt-world-with {:off-limits ["cow"]} three-cows nil)]
+          (await (run-until-empty eng 40))
+          (is (= [] (calls p "attack")))
+          (is (some #(and (= :food.none (:kind %)) (re-find #"cow: off-limits" (str (:text %)))) @seen)))))))
+
+(deftest get-food-takes-penned-animals-when-asked
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (hunt-world-with {:spare-pens false} three-cows own-farm)]
+          (await (run-until-empty eng 40))
+          (is (seq (calls p "attack"))))))))
+
+(deftest get-food-keep-count-is-an-arg
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (hunt-world-with {:keep-adults 0} (take 2 three-cows) nil)]
+          (await (run-until-empty eng 40))
+          (is (seq (calls p "attack"))))))))
+
+(deftest get-food-says-what-it-killed-and-where
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (hunt-world-with {} three-cows nil)]
+          (await (run-until-empty eng 40))
+          (is (some #(and (= :food.killed (:kind %)) (re-find #"cow" (str (:text %))) (re-find #"\[5 64 0\]" (str (:text %)))) @seen)))))))
+
 (deftest get-food-hunts-an-animal-when-no-source-is-known
   (async done
     (tu/run-async done
