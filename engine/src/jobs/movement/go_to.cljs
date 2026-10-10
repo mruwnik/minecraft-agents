@@ -74,7 +74,7 @@
   - :dark false plans dark cells like lit ones (default: a dark cell costs twice a lit one, so a lit route up to about 2x
     longer is taken: a cell seen and dark, or one never seen at night; look/dark-fn).
   - :at-night :wait (default): at night a walk that would take the body out of the shelter it stands in
-    (jobs.lib.shelter/walk-leaves-shelter?: a closed room, its dug-in shelter, a roof, underground) waits for day: a listed
+    (jobs.lib.shelter/walk-leaves-shelter?: a closed room, its dug-in shelter, a roof, underground; a walk down to open air leaves a roofed hut) waits for day: a listed
     go-to declines {:reason :night-sheltered :shelter :goal}, a child call waits 1 s and yields :continue (info
     go-to.night-sheltered, once a call). :go walks anyway; a reflex job's go-to always walks.
   - A walk without :escalate from a body shut in by its own retreat plug (ledger) with a known hostile near waits the same way, {:reason :sealed-hostile-near}, until the hostile goes, :plug-wait-ms (3 min) pass, or food or health fall to :plug-wait-min-food or -health (it never holds a starving or hurt body).

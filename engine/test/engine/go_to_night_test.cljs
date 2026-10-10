@@ -52,8 +52,15 @@
 
 (deftest a-walk-deeper-underground-does-not-leave-the-shelter-a-walk-up-does
   (let [p (tu/seeing-all (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks {"0,66,0" "stone"}}))]
-    (is (= :underground (sh/walk-leaves-shelter? p nil outside 1)))
-    (is (nil? (sh/walk-leaves-shelter? p nil {:x 15 :y 50 :z 0} 1)))))
+    (is (= :underground (sh/walk-leaves-shelter? p nil outside 1)))))
+
+(deftest a-walk-down-to-open-air-leaves-the-roofed-shelter
+  (let [world {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 66 :z 0}}}
+        in-open (tu/seeing-all (tu/fake (assoc world :blocks {"0,68,0" "stone"})))
+        covered (tu/seeing-all (tu/fake (assoc world :blocks {"0,68,0" "stone" "15,67,0" "stone"})))
+        goal {:x 15 :y 64 :z 0}]
+    (is (= :underground (sh/walk-leaves-shelter? in-open nil goal 1)) "the table down a hillside is outdoors")
+    (is (nil? (sh/walk-leaves-shelter? covered nil goal 1)))))
 
 ;; ------------------------------------------------------------------ a listed go-to
 
@@ -247,3 +254,17 @@
                 id (core/submit! eng (list 'jobs.survival.sleep {:bed bed}) {})]
             (await (ticks eng 4))
             (is (= expect-wait? (= :night-sheltered (:reason (waiting-of eng id)))) (pr-str bed))))))))
+
+(deftest a-queued-craft-does-not-walk-out-of-the-hut-to-a-table-at-night
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (st/setup (-> (night-hut {}) (update :blocks assoc "10,64,0" "crafting_table")
+                                            (assoc :inventory [{:name "wheat" :count 3}])))]
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
+          (core/submit! eng '(jobs.items.craft {:item "bread" :table {:x 10 :y 64 :z 0}}) {})
+          (await (ticks eng 20))
+          (is (= inside (st/pos-of p)) "the body stays in the hut")
+          (.setTime (.-world p) st/noon)
+          (await (tu/run-until-empty eng 40))
+          (is (> 4 (js/Math.abs (- 10 (:x (st/pos-of p))))) "by day it walks to the table"))))))
