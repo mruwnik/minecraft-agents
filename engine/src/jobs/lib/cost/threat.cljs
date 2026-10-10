@@ -1,7 +1,7 @@
 (ns jobs.lib.cost.threat
   "What one mob does to a body: hostile? from minecraft-data, the damage type of its attack, and mob-hurt, the damage it
   deals over some seconds of exposure after the body's armour (jobs.lib.cost.armour).
-  A creeper is one blast of 43 (:explosion) however long the exposure; a ranged mob shoots (:projectile); any other
+  A witch's potions (poison, harming) bypass armour. A creeper is one blast of 43 (:explosion) however long the exposure; a ranged mob shoots (:projectile); any other
   hits at its mob-dps (3 if unknown) once a second (:melee). Endermen and zombified piglins only fight when provoked."
   (:require [engine.args :as a]
             [engine.settings :as settings]
@@ -49,4 +49,6 @@
   ([stats mob-name seconds] (mob-hurt stats mob-name seconds identity))
   ([stats mob-name seconds threat-fn]
    (let [{:keys [threat hits]} (base-threat mob-name seconds)]
-     (armour/after-armour stats (damage-type mob-name) (threat-fn threat) hits))))
+     (if (= "witch" mob-name)
+       (threat-fn threat)
+       (armour/after-armour stats (damage-type mob-name) (threat-fn threat) hits)))))

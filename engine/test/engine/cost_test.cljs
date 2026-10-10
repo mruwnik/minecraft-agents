@@ -38,6 +38,12 @@
     (is (= (cost/mob-hurt plain "creeper" 1) (cost/mob-hurt plain "creeper" 10)) "one blast, however long the exposure")
     (is (= 43 (cost/mob-hurt (cost/armour-stats nil) "creeper" 1)))))
 
+(deftest a-witchs-potions-ignore-armour
+  (let [bare (cost/armour-stats nil)
+        iron (cost/armour-stats iron-set)]
+    (is (= (cost/mob-hurt bare "witch" 5) (cost/mob-hurt iron "witch" 5)) "poison and harming bypass armour")
+    (is (< (cost/mob-hurt iron "skeleton" 5) (cost/mob-hurt bare "skeleton" 5)) "arrows are still reduced")))
+
 (deftest fight-damage-with-real-equipment
   (is (= 7.5 (cost/fight-damage {:weapon "iron_sword" :equipment nil :mobs [{:name "zombie" :distance 3}]})))
   (is (= 3.45 (round2 (cost/fight-damage {:weapon "iron_sword" :equipment iron-set :mobs [{:name "zombie" :distance 3}]})))
