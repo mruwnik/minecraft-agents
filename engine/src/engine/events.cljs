@@ -14,7 +14,8 @@
    :engine.events/recent-count {:default 256 :spec (a/int-in 1 nil) :doc "Events kept in memory for the live reader; an older cursor reads from disk."}
    :engine.events/recent-bytes {:default (* 256 1024) :spec (a/int-in 1 nil) :doc "Bytes of events kept in memory for the live reader."}
    :engine.events/default-page-size {:default 256 :spec (a/int-in 1 nil) :doc "Events a read returns when it names no limit."}
-   :engine.events/max-page-size {:default 2000 :spec (a/int-in 1 nil) :doc "The most events one read returns."}})
+   :engine.events/max-page-size {:default 2000 :spec (a/int-in 1 nil) :doc "The most events one read returns."}
+   :engine.events/max-page-bytes {:default (* 1024 1024) :spec (a/int-in 1 nil) :doc "Bytes of disk events one read parses before it stops (at least one event is always returned)."}})
 
 (defn setting [k] (settings/get settings (keyword "engine.events" k)))
 
@@ -428,46 +429,59 @@
           :else (recur (inc (:start found)) hi best))))))
 
 (defn records-from
-  "Up to n records of file from byte offset start (a line start) on, read
-  forward a chunk at a time."
-  [fd size file start n]
-  (loop [at start out [] chunk read-chunk-bytes]
+  "Up to n records of file from byte offset start (a line start) on, read forward a chunk at a time, stopping once their
+  lines hold budget bytes (the first record is always taken): {:records :bytes :capped?}, capped? when the budget cut it short."
+  [fd size file start n budget]
+  (loop [at start out [] bytes 0 chunk read-chunk-bytes]
     (if (or (>= at size) (>= (count out) n))
-      out
+      {:records out :bytes bytes :capped? false}
       (let [buf (read-bytes fd at chunk)
             last-nl (.lastIndexOf buf 10)
             complete? (or (>= (+ at (.-length buf)) size) (not (neg? last-nl)))]
         (if-not complete?
-          (recur at out (* 2 chunk)) ; one line longer than the chunk
+          (recur at out bytes (* 2 chunk)) ; one line longer than the chunk
           (let [used (if (neg? last-nl) (.-length buf) (inc last-nl))
                 lines (->> (str/split-lines (.toString (.subarray buf 0 used) "utf8"))
                            (remove str/blank?))
-                records (map #(seq-of-record % file (str "(byte " at ")")) lines)]
-            (recur (+ at used) (into out (take (- n (count out)) records)) read-chunk-bytes)))))))
+                [out bytes capped?]
+                (reduce (fn [[out bytes _] line]
+                          (cond
+                            (>= (count out) n) (reduced [out bytes false])
+                            (and (seq out) (>= bytes budget)) (reduced [out bytes true])
+                            :else [(conj out (seq-of-record line file (str "(byte " at ")"))) (+ bytes (bytes-of line)) false]))
+                        [out bytes false] lines)]
+            (if capped?
+              {:records out :bytes bytes :capped? true}
+              (recur (+ at used) out bytes read-chunk-bytes))))))))
 
-(defn segment-records-after [file after n]
+(defn segment-records-after
+  "{:records :bytes :capped?} of up to n records of file with :seq above after, within budget bytes (see records-from)."
+  [file after n budget]
   (let [fd (fs/openSync file "r")]
     (try
       (let [size (.-size (fs/fstatSync fd))
-            start (first-start-after fd size file after)]
-        (->> (records-from fd size file start n)
-             (filter #(> (:seq %) after))
-             vec))
+            start (first-start-after fd size file after)
+            r (records-from fd size file start n budget)]
+        (update r :records (fn [records] (filterv #(> (:seq %) after) records))))
       (finally (fs/closeSync fd)))))
 
 (defn disk-events-after
-  "Up to limit events with :seq above after, oldest first. Cost follows the
-  events returned, not the segment sizes: the first wanted line of a segment
-  is found by binary search on byte offsets, so earlier lines are never parsed."
-  [segments after limit]
-  (loop [remaining segments out []]
-    (if (or (empty? remaining) (>= (count out) limit))
-      out
+  "{:events :capped?}: up to limit events with :seq above after, oldest first, parsing about budget bytes at most (the
+  first event is always taken). Cost follows the events returned, not the segment sizes: the first wanted line of a
+  segment is found by binary search on byte offsets, so earlier lines are never parsed."
+  [segments after limit budget]
+  (loop [remaining segments out [] left budget]
+    (cond
+      (and (seq out) (<= left 0)) {:events out :capped? true}
+      (or (empty? remaining) (>= (count out) limit)) {:events out :capped? false}
+      :else
       (let [{:keys [file bytes last-seq]} (first remaining)]
         (if (or (zero? bytes) (nil? last-seq) (<= last-seq after))
-          (recur (rest remaining) out)
-          (recur (rest remaining)
-                 (into out (segment-records-after file after (- limit (count out))))))))))
+          (recur (rest remaining) out left)
+          (let [r (segment-records-after file after (- limit (count out)) left)]
+            (if (:capped? r)
+              {:events (into out (:records r)) :capped? true}
+              (recur (rest remaining) (into out (:records r)) (- left (:bytes r))))))))))
 
 (defn read-after
   "Read a bounded page after a cursor. A stream replacement, retention loss,
@@ -489,14 +503,15 @@
       (>= after latest) (assoc base :gap? false :events [] :cursor {:stream-id sid :seq after})
       :else
       (let [recent-first (some-> recent first :seq)
-            events (if (and recent-first (>= after (dec recent-first)))
-                     (->> recent (filter #(> (:seq %) after)) (take limit) vec)
-                     (disk-events-after segments after limit))
+            {:keys [events capped?]}
+            (if (and recent-first (>= after (dec recent-first)))
+              {:events (->> recent (filter #(> (:seq %) after)) (take limit) vec)}
+              (disk-events-after segments after limit (setting "max-page-bytes")))
             seqs (map :seq events)
             expected (inc after)
             hole? (or (and (seq seqs) (> (first seqs) expected))
                       (and (empty? seqs) (< after latest))
-                      (and (seq seqs) (< (count seqs) limit) (< (last seqs) latest)))
+                      (and (seq seqs) (not capped?) (< (count seqs) limit) (< (last seqs) latest)))
             internal-hole? (some true? (map (fn [[a b]] (> b (inc a)))
                                               (partition 2 1 seqs)))]
         (if (or hole? internal-hole?)

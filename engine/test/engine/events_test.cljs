@@ -260,8 +260,10 @@
      (fs/writeFileSync file (apply str (map line seqs)))
      file)))
 
+(def one-page-bytes (* 8 1024 1024))
+
 (defn seqs-after [file after n]
-  (mapv :seq (events/segment-records-after file after n)))
+  (mapv :seq (:records (events/segment-records-after file after n one-page-bytes))))
 
 (deftest a-line-split-across-the-chunk-edge-is-read-whole
   (doseq [pad [(- events/read-chunk-bytes 40) (- events/read-chunk-bytes 20) events/read-chunk-bytes]]
@@ -274,8 +276,8 @@
     (let [file (write-lines! (range 1 5) (quot events/read-chunk-bytes 3) "é")
           file2 (write-lines! (range 1 5) pad "日")]
       (is (every? #(= (quot events/read-chunk-bytes 3) (count (:pad %)))
-                  (events/segment-records-after file 0 10)))
-      (is (every? #(= pad (count (:pad %))) (events/segment-records-after file2 0 10))
+                  (:records (events/segment-records-after file 0 10 one-page-bytes))))
+      (is (every? #(= pad (count (:pad %))) (:records (events/segment-records-after file2 0 10 one-page-bytes)))
           (str "pad " pad)))))
 
 (deftest a-line-longer-than-one-chunk-is-read-whole
@@ -283,7 +285,45 @@
     (is (= [1 2 3] (seqs-after file 0 10)))
     (is (= [2 3] (seqs-after file 1 10)))
     (is (= [3] (seqs-after file 2 10)))
-    (is (= (* 5 events/read-chunk-bytes) (count (:pad (first (events/segment-records-after file 0 1))))))))
+    (is (= (* 5 events/read-chunk-bytes) (count (:pad (first (:records (events/segment-records-after file 0 1 one-page-bytes)))))))))
+
+(defn all-pages
+  "Every event read-after returns, page after page from cursor 0, reading from disk only."
+  [stream sid]
+  (loop [after 0 out []]
+    (let [p (events/read-after (disk-only stream) {:stream-id sid :after after :limit 100})]
+      (if (empty? (:events p)) out (recur (:seq (:cursor p)) (into out (:events p)))))))
+
+(deftest a-page-of-huge-events-stops-at-the-byte-budget-and-still-pages-on
+  (let [file (path/join (tu/tmp-dir) "events.edn")
+        stream (events/make {:file file :generation-id "g"})
+        sid (:stream-id (events/cursor stream))
+        pad (apply str (repeat 200000 "p"))]
+    (doseq [i (range 12)]
+      (events/emit! stream {:source :job :kind :memory_written :data {:i i :pad pad}}))
+    (let [page (events/read-after (disk-only stream) {:stream-id sid :after 0 :limit 100})
+          seqs (mapv :seq (:events page))]
+      (is (false? (:gap? page)) "a page cut short by bytes is no gap")
+      (is (<= 1 (count seqs) 6) "far fewer than the 12 on disk, at least one")
+      (is (= seqs (vec (range 1 (inc (count seqs))))))
+      (is (= (last seqs) (:seq (:cursor page))))
+      (is (= (vec (range 1 13)) (mapv :seq (all-pages stream sid))) "paging on reaches the last event"))))
+
+(deftest byte-capped-pages-cross-a-segment-boundary-without-a-hole
+  (let [file (path/join (tu/tmp-dir) "events.edn")
+        stream (events/make {:file file :generation-id "g" :max-bytes (* 4 1024 1024)})
+        sid (:stream-id (events/cursor stream))
+        pad (apply str (repeat 150000 "p"))]
+    (doseq [i (range 20)]
+      (events/emit! stream {:source :job :kind :memory_written :data {:i i :pad pad}}))
+    (let [oldest (:oldest-seq (events/read-after stream {:stream-id sid :after 20}))
+          pages (loop [after (dec oldest) out []]
+                  (let [p (events/read-after (disk-only stream) {:stream-id sid :after after :limit 100})]
+                    (if (empty? (:events p)) out (recur (:seq (:cursor p)) (conj out p)))))]
+      (is (< 1 (count (filter #(fs/existsSync (events/segment-file file %)) (range events/segment-count)))) "several segments")
+      (is (< 1 (count pages)) "capped into several pages")
+      (is (every? (comp false? :gap?) pages))
+      (is (= (vec (range oldest 21)) (mapv :seq (mapcat :events pages)))))))
 
 (deftest a-cursor-older-than-every-segment-reports-a-gap
   (let [file (path/join (tu/tmp-dir) "events.edn")
@@ -300,7 +340,7 @@
 (deftest an-empty-file-yields-no-records
   (let [file (write-lines! [] 0)]
     (is (= [] (seqs-after file 0 10)))
-    (is (= [] (events/records-from (fs/openSync file "r") 0 file 0 10)))))
+    (is (= [] (:records (events/records-from (fs/openSync file "r") 0 file 0 10 one-page-bytes))))))
 
 (deftest a-corrupt-line-is-reported-with-its-file
   (let [file (write-lines! [1 2] 10)]
