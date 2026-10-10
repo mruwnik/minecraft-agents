@@ -97,8 +97,8 @@
       (bit-and (.lightAt ^js raw x y z) 15))))
 
 (defn cave-cells
-  "How many standable cells (feet and head free, a solid floor, a seen solid within cave-ceiling over them) lie within
-  cave-radius of the feet, a block up or down: a cave is wide, a tunnel the body dug is not."
+  "How many standable cells (feet, head and the cell over it free, a solid floor, a seen solid within cave-ceiling over them) lie
+  within cave-radius of the feet, a block up or down: a cave is wide and high, what the body digs is 2 high (a tunnel, a mine's room)."
   [p]
   (let [{:keys [x y z]} (feet p)
         solid? (fn [cx cy cz] (solid-at? p {:x cx :y cy :z cz}))]
@@ -106,7 +106,7 @@
                  dz (range (- cave-radius) (inc cave-radius))
                  dy [-1 0 1]
                  :let [cx (+ x dx) cy (+ y dy) cz (+ z dz)]
-                 :when (and (solid? cx (dec cy) cz) (not (solid? cx cy cz)) (not (solid? cx (inc cy) cz))
+                 :when (and (solid? cx (dec cy) cz) (not (solid? cx cy cz)) (not (solid? cx (inc cy) cz)) (not (solid? cx (+ cy 2) cz))
                             (some #(solid? cx (+ cy %) cz) (range 2 (inc cave-ceiling))))]
              1))))
 

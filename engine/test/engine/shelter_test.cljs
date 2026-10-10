@@ -196,6 +196,17 @@
   (is (true? (sh/unsafe-night? (seen-dark cave-blocks) sh/default-roof-height)))
   (is (false? (sh/unsafe-night? (seen-dark tunnel-blocks) sh/default-roof-height))))
 
+(def dug-room-blocks
+  "A mine's room the body dug: 5x4 cells, 2 high (ceiling at y 66), light 7."
+  (merge (into {} (for [x (range -2 3) z (range -2 2) y [63 66]] [(str x "," y "," z) "stone"]))
+         (into {} (for [x (range -3 4) z (range -3 3) y [64 65] :when (not (and (<= -2 x 2) (<= -2 z 1)))] [(str x "," y "," z) "stone"]))))
+
+(deftest a-room-the-body-dug-is-not-a-cave
+  (let [p (seen-dark dug-room-blocks {[0 64 0] [0 7] [0 65 0] [0 7]})]
+    (is (< (sh/cave-cells p) 16))
+    (is (false? (sh/open-cave? p)))
+    (is (false? (sh/unsafe-night? p sh/default-roof-height)))))
+
 (deftest a-lit-cave-is-not-unsafe
   (is (false? (sh/open-cave? (seen-dark cave-blocks {[0 64 0] [0 14] [0 65 0] [0 14]})))))
 
