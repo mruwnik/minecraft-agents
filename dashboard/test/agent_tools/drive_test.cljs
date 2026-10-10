@@ -84,4 +84,10 @@
         ok "{\"ok\":true}"]
     (is (re-find #"reflexes are off.*go-to still keeps air" (drive/reply-note take ok)))
     (is (nil? (drive/reply-note take "{\"ok\":false}")))
-    (is (nil? (drive/reply-note (drive/request-for ["Bob" "ping" "--world" "w"]) ok)))))
+    (is (nil? (drive/reply-note (drive/request-for ["Bob" "release" "--world" "w"]) ok)))
+    (is (nil? (drive/reply-note (drive/request-for ["Bob" "state" "--world" "w"]) ok)))))
+
+(deftest every-reply-under-a-held-take-repeats-that-reflexes-are-off
+  (doseq [argv [["hold" "forward" "500"] ["look" "10" "0"] ["turn" "5"] ["jump"] ["stop"] ["ping"]]]
+    (is (re-find #"reflexes are off" (str (drive/reply-note (drive/request-for (into ["Bob"] (concat argv ["--world" "w"]))) "{\"ok\":true}")))
+        (pr-str argv))))

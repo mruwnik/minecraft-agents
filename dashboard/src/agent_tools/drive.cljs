@@ -1,6 +1,7 @@
 (ns agent-tools.drive
   "Manual control of a body over its control socket: drive.mjs <agent> <op> ..."
   (:require [agent-tools.http :as http]
+            [agent-tools.vitals :as vitals]
             [agent-tools.world-data :as data]
             [agent-tools.map :as map-tool]
             [engine.bodies :as bodies]
@@ -141,10 +142,10 @@
     (if (map? value) (data/write-edn value) text)))
 
 (defn reply-note
-  "One extra line after a successful take: what manual control switches off and what still protects the body."
+  "One extra line after a successful take or any later op but release and state: what manual control switches off and what still protects the body."
   [req text]
-  (when (and (= "take" (get-in req [:body :op])) (true? (:ok (parse-json text))))
-    "manual control: reflexes are off (no breathe, hostile, night); go-to still keeps air"))
+  (when (and (= "POST" (:method req)) (not= "release" (get-in req [:body :op])) (true? (:ok (parse-json text))))
+    vitals/reflexes-off))
 
 (defn print-text! [text] (js/console.log text))
 

@@ -6,6 +6,7 @@
             [agent-tools.map :as map-tool]
             [agent-tools.observe :as observe]
             [agent-tools.observe.request :as observe-request]
+            [agent-tools.vitals :as vitals]
             [agent-tools.world-data :as data]
             [clojure.string :as str]
             ["node:fs" :as fs]
@@ -326,10 +327,12 @@
                             (observe/get! socket endpoint (cond-> options request-fn (assoc :request-fn request-fn))))]
                  (.then (manual-for r response opts)
                         (fn [manual]
-                          (.then (observe/wait-for! {:agent (:body r) :world (:world r) :state (:state r) :socket-path (:socketPath r)}
-                                                    {:watch [id] :timeout (get-in r [:wait :timeout])} get!)
-                                 (fn [wake]
-                                   (output (str (data/write-edn (with-hint r (wait-result answer id wake) (when (:follow (wait-result answer id wake)) manual))) "\n"))
+                          (.then (vitals/around! (:socketPath r) get!
+                                                 #(observe/wait-for! {:agent (:body r) :world (:world r) :state (:state r) :socket-path (:socketPath r)}
+                                                                     {:watch [id] :timeout (get-in r [:wait :timeout])} get!))
+                                 (fn [[wake report]]
+                                   (output (str (data/write-edn (-> (with-hint r (wait-result answer id wake) (when (:follow (wait-result answer id wake)) manual))
+                                                                    (assoc :vitals report))) "\n"))
                                    0))))))))))
 
 (defn run-request!
