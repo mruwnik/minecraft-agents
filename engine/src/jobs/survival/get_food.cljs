@@ -41,7 +41,7 @@
   flesh, with :allow-bad). Still nothing: it stops :no-food with a food.none warning (what was searched, the nearest known source) and writes
   :hungry. For :ask-cooldown-ms after that a round still eats and still does ways 1, 3, 4 and 5, but not a source it
   already knew when it gave up (one learned since is tried first; a starving body, food 0 or health below 7, rests only foods/::starving-rest-ms); with nothing to do (harmful food above ::eat-bad-food does not count) the check waits :no-food-found, else the round declines.
-  :stock n: a fed body also takes the ways until the pack holds n food points, else stops :no-stock.
+  :stock n: a fed body also takes the ways until the pack holds n food points, else stops :no-stock; while the pack is short of it the ask cooldown does not block the search.
   Never :continue: a go-to that waits on the world, or a child still going after jobs.lib.child's call cap, is waited out in the round.
   More than 12 ways in one round without getting fed stops :still-hungry.
   Wheat is never harvested. Babies and animals in another's zone or claim are never hunted (:ignore-zones? lifts the zone). A chest in another's zone or claim is skipped and never taken from, even when starving
@@ -454,10 +454,13 @@
   [c]
   (foods/starving? (.self (:primitives c)) (:args c)))
 
-(defn gave-up-recently? [c]
-  (pos? (ctx/count-in c :hungry (if (starving? c)
-                                  (min (:ask-cooldown-ms (:args c)) (foods/starving-rest-ms))
-                                  (:ask-cooldown-ms (:args c))))))
+(defn gave-up-recently?
+  "Whether a fruitless search is still inside the ask cooldown; an explicit :stock ask not yet met is never blocked by it."
+  [c]
+  (and (not (stock-short? c))
+       (pos? (ctx/count-in c :hungry (if (starving? c)
+                                       (min (:ask-cooldown-ms (:args c)) (foods/starving-rest-ms))
+                                       (:ask-cooldown-ms (:args c)))))))
 
 ;; ------------------------------------------------------------------ bread
 

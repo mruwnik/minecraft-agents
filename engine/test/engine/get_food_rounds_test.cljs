@@ -727,6 +727,16 @@
             (is (= :stopped (:kind stop)))
             (is (= :no-stock (:reason stop)) (pr-str stop))))))))
 
+(deftest a-stock-ask-searches-despite-an-earlier-give-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:self {:food 20}} :step-ms 5)]
+          (mem/write! (:store eng) :hungry {:food 3} {:cap 10 :ttl 3600000})
+          (await (one-round! eng {:stock 8}))
+          (is (= 1 (count (events-of seen :search.not-found))) "searched though it gave up a minute ago")
+          (is (= :no-stock (:reason (first (ended seen))))))))))
+
 (deftest explore-is-done-once-per-job-unless-starving-and-rested
   (is (false? (get-food/explore-done? nil false 100 60000)))
   (is (true? (get-food/explore-done? {:explored "x" :explored-at 0} false 999999 60000)))
