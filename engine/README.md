@@ -486,7 +486,7 @@ round, reflex id, action-call id), `:data`, `:message`, `:attention` (omitted/`:
 `events.edn` and `.1` to `.3` (setting `:engine.events/max-bytes`, min 1024); a cursor is `{:stream-id :seq}` and a
 rotated-away cursor gets an explicit gap. Start-up parses only each segment's first and last record and the
 recent tail, so its memory does not grow with the log. Only the newest 256 events (at most 256 KiB; settings
-`:engine.events/recent-count`, `recent-bytes`) stay in memory; an older cursor reads the files. Every `stats-ms` the body emits `body.heap` (`engine.heap`: V8 heap used, limit and total, rss, external, array buffers, in bytes; the planner state kept outside job memory: `:known-cells`, `:known-edges`, `:goal-floods`, `:searches`).
+`:engine.events/recent-count`, `recent-bytes`) stay in memory; an older cursor reads the files, a page parsing about `max-page-bytes`; a line over `max-line-bytes` is not parsed, it reads as a stub with `:seq`, `:time-ms`, `:source`, `:kind`, `:level` and `:truncated`; an event's job id and chain are cut to `max-id-chars` and `max-chain` when written. Every `stats-ms` the body emits `body.heap` (`engine.heap`: V8 heap used, limit and total, rss, external, array buffers, in bytes; the planner state kept outside job memory: `:known-cells`, `:known-edges`, `:goal-floods`, `:searches`).
 
 A job that ends with a result of `:status :stopped` gets a `:stopped` warn event; its text is the result's `:text` (clipped to 200 chars), else `stopped: <reason>`.
 

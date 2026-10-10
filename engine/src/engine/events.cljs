@@ -15,7 +15,10 @@
    :engine.events/recent-bytes {:default (* 256 1024) :spec (a/int-in 1 nil) :doc "Bytes of events kept in memory for the live reader."}
    :engine.events/default-page-size {:default 256 :spec (a/int-in 1 nil) :doc "Events a read returns when it names no limit."}
    :engine.events/max-page-size {:default 2000 :spec (a/int-in 1 nil) :doc "The most events one read returns."}
-   :engine.events/max-page-bytes {:default (* 1024 1024) :spec (a/int-in 1 nil) :doc "Bytes of disk events one read parses before it stops (at least one event is always returned)."}})
+   :engine.events/max-page-bytes {:default (* 1024 1024) :spec (a/int-in 1 nil) :doc "Bytes of disk events one read parses before it stops (at least one event is always returned)."}
+   :engine.events/max-line-bytes {:default (* 16 1024) :spec (a/int-in 1 nil) :doc "An event line longer than this many characters is not parsed on read; the reader returns a stub with its seq, time, source and kind."}
+   :engine.events/max-id-chars {:default 256 :spec (a/int-in 8 nil) :doc "Longest job id or chain element an event keeps; the middle of a longer one is cut."}
+   :engine.events/max-chain {:default 8 :spec (a/int-in 3 nil) :doc "Most chain elements an event keeps; the middle of a longer chain is cut."}})
 
 (defn setting [k] (settings/get settings (keyword "engine.events" k)))
 
@@ -46,9 +49,43 @@
 (defn write-meta! [file meta]
   (write-atomic! (metadata-file file) (str (pr-str meta) "\n")))
 
+(defn top-level
+  "The text of a record line outside its nested collections and strings, one pass: enough to find the scalar fields
+  without building the line's data."
+  [line]
+  (let [n (count line)]
+    (loop [i 0 depth 0 in-str? false out (array)]
+      (if (>= i n)
+        (.join out "")
+        (let [ch (.charAt line i)]
+          (cond
+            in-str? (recur (if (= ch "\\") (+ i 2) (inc i)) depth (not= ch "\"") out)
+            (= ch "\"") (recur (inc i) depth true out)
+            (contains? #{"{" "[" "("} ch) (recur (inc i) (inc depth) false (do (when (= depth 0) (.push out ch)) out))
+            (contains? #{"}" "]" ")"} ch) (recur (inc i) (dec depth) false (do (when (= depth 1) (.push out ch)) out))
+            :else (recur (inc i) depth false (do (when (= depth 1) (.push out ch)) out))))))))
+
+(defn stub-record
+  "A record for a line too long to parse: the scalar :seq, :time-ms, :source, :kind and :level read off the line, and
+  :data {:oversize-chars n}. nil when the line has no :seq."
+  [line]
+  (let [flat (top-level line)
+        field (fn [k re f] (some->> (re-find re flat) second f (vector k)))
+        kw #(keyword %)
+        n (second (re-find #":seq (\d+)" flat))]
+    (when n
+      (into {:seq (js/parseInt n) :truncated true :data {:oversize-chars (count line)}}
+            (keep identity)
+            [(field :time-ms #":time-ms (\d+)" js/parseInt)
+             (field :source #":source :([^\s,{}\[\]()]+)" kw)
+             (field :kind #":kind :([^\s,{}\[\]()]+)" kw)
+             (field :level #":level :([^\s,{}\[\]()]+)" kw)]))))
+
 (defn seq-of-record [line file line-no]
   (let [record (try
-                 (reader/read-string line)
+                 (if (> (count line) (setting "max-line-bytes"))
+                   (or (stub-record line) (reader/read-string line))
+                   (reader/read-string line))
                  (catch :default e
                    (throw (ex-info (str "malformed complete event record in " file
                                         " at line " line-no ": " (.-message e))
@@ -203,6 +240,22 @@
 (defn bytes-of [text]
   (js/Buffer.byteLength text "utf8"))
 
+(defn cap-id
+  "An id of at most max-id-chars characters: a longer one keeps its head and its tail around \"...\"."
+  [id]
+  (let [m (setting "max-id-chars")]
+    (if (and (string? id) (> (count id) m))
+      (str (subs id 0 (quot m 2)) "..." (subs id (- (count id) (quot m 2))))
+      id)))
+
+(defn cap-chain
+  "A chain of at most max-chain elements, each capped: a longer one keeps its first two and its last elements around \"...\"."
+  [chain]
+  (let [m (setting "max-chain")]
+    (if (and (sequential? chain) (> (count chain) m))
+      (mapv cap-id (concat (take 2 chain) ["..."] (take-last (- m 3) chain)))
+      (if (sequential? chain) (mapv cap-id chain) (cap-id chain)))))
+
 (defn canonical-event
   "The canonical event for internal event map event, numbered n. :body is dropped,
   :level is kept. Other fields outside the known set fold into :data."
@@ -211,9 +264,9 @@
         kind (:kind event)
         old-context (or (:context event) {})
         context (cond-> old-context
-                  (some? (:job event)) (assoc :job-id (:job event))
+                  (some? (:job event)) (assoc :job-id (cap-id (:job event)))
                   (some? (:round event)) (assoc :round (:round event))
-                  (some? (:chain event)) (assoc :chain (:chain event))
+                  (some? (:chain event)) (assoc :chain (cap-chain (:chain event)))
                   (some? (:reflex event)) (assoc :reflex-id (:reflex event))
                   (some? (:action-id event)) (assoc :action-id (:action-id event))
                   (number? (:cause event)) (assoc :cause-seq (:cause event))

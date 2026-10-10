@@ -22,6 +22,7 @@
    :engine.lease/default-idle-ms 15000
    :engine.events/max-bytes 67108864 :engine.events/recent-count 256 :engine.events/recent-bytes 262144
    :engine.events/default-page-size 256 :engine.events/max-page-size 2000 :engine.events/max-page-bytes 1048576
+   :engine.events/max-line-bytes 16384 :engine.events/max-id-chars 256 :engine.events/max-chain 8
    :engine.event-api/max-body-bytes 16384 :engine.event-api/max-limit 1000 :engine.event-api/status-job-limit 4
    :engine.event-api/attention-limit 4 :engine.event-api/catalog-page-limit 20
    :engine.event-api/max-catalog-page-limit 64 :engine.event-api/catalog-doc-limit 1200

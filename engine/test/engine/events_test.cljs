@@ -3,6 +3,7 @@
             [clojure.string :as str]
             [cljs.reader :as reader]
             [engine.events :as events]
+            [engine.settings :as settings]
             [engine.test-util :as tu]
             ["fs" :as fs]
             ["path" :as path]))
@@ -271,21 +272,28 @@
       (is (= [1 2 3 4 5] (seqs-after file 0 10)) (str "pad " pad))
       (is (= [4 5] (seqs-after file 3 10)) (str "pad " pad)))))
 
+(defn parsing-whole
+  "Run f with the oversize-line stub switched off, for tests of how long lines are read."
+  [f]
+  (settings/with-settings {:engine.events/max-line-bytes (* 100 1024 1024)} f))
+
 (deftest multi-byte-utf8-at-the-chunk-edge-is-not-split
-  (doseq [pad (range 20000 20003)]
-    (let [file (write-lines! (range 1 5) (quot events/read-chunk-bytes 3) "é")
-          file2 (write-lines! (range 1 5) pad "日")]
-      (is (every? #(= (quot events/read-chunk-bytes 3) (count (:pad %)))
-                  (:records (events/segment-records-after file 0 10 one-page-bytes))))
-      (is (every? #(= pad (count (:pad %))) (:records (events/segment-records-after file2 0 10 one-page-bytes)))
-          (str "pad " pad)))))
+  (parsing-whole
+   #(doseq [pad (range 20000 20003)]
+      (let [file (write-lines! (range 1 5) (quot events/read-chunk-bytes 3) "é")
+            file2 (write-lines! (range 1 5) pad "日")]
+        (is (every? (fn [r] (= (quot events/read-chunk-bytes 3) (count (:pad r))))
+                    (:records (events/segment-records-after file 0 10 one-page-bytes))))
+        (is (every? (fn [r] (= pad (count (:pad r)))) (:records (events/segment-records-after file2 0 10 one-page-bytes)))
+            (str "pad " pad))))))
 
 (deftest a-line-longer-than-one-chunk-is-read-whole
   (let [file (write-lines! [1 2 3] (* 5 events/read-chunk-bytes))]
     (is (= [1 2 3] (seqs-after file 0 10)))
     (is (= [2 3] (seqs-after file 1 10)))
     (is (= [3] (seqs-after file 2 10)))
-    (is (= (* 5 events/read-chunk-bytes) (count (:pad (first (:records (events/segment-records-after file 0 1 one-page-bytes)))))))))
+    (is (= (* 5 events/read-chunk-bytes)
+           (parsing-whole #(count (:pad (first (:records (events/segment-records-after file 0 1 one-page-bytes))))))))))
 
 (defn all-pages
   "Every event read-after returns, page after page from cursor 0, reading from disk only."
@@ -427,3 +435,46 @@
     (is (= (range (:seq (first kept)) 41) (mapv :seq kept)) "whole lines, the newest kept")
     (is (= (:seq (first kept)) (:oldest-seq @stream)))
     (is (= 40 (:seq (events/cursor stream))))))
+
+(deftest an-oversize-line-between-normal-ones-is-a-stub-that-keeps-the-seq-run
+  (let [file (path/join (tu/tmp-dir) "events.edn")
+        stream (events/make {:file file :generation-id "g" :now (constantly 77)})
+        sid (:stream-id (events/cursor stream))
+        pad (apply str (repeat (* 2 1024 1024) "p"))]
+    (events/emit! stream {:source :job :kind :queued :data {:i 1}})
+    (events/emit! stream {:source :job :kind :memory_written :level :info :message "has :seq 99 in it" :data {:seq 98 :pad pad}})
+    (events/emit! stream {:source :job :kind :done :data {:i 3}})
+    (let [page (events/read-after (disk-only stream) {:stream-id sid :after 0 :limit 100})
+          [a b c] (all-pages stream sid)]
+      (is (false? (:gap? page)))
+      (is (= [1 2 3] (mapv :seq (all-pages stream sid))) "no hole at the oversize line")
+      (is (= {:seq 2 :time-ms 77 :source :job :kind :memory_written :level :info :truncated true}
+             (dissoc b :data))
+          "seq, time, source, kind and level survive; the payload is gone")
+      (is (< (count (pr-str b)) 300))
+      (is (= {:i 3} (:data c)) "normal lines still parse")
+      (is (= {:i 1} (:data a))))
+    (is (= [3] (mapv :seq (:events (events/read-after (disk-only stream) {:stream-id sid :after 2 :limit 100})))))))
+
+(deftest a-restart-over-an-oversize-last-line-keeps-counting
+  (let [file (path/join (tu/tmp-dir) "events.edn")
+        stream (events/make {:file file :generation-id "g"})
+        pad (apply str (repeat (* 2 1024 1024) "p"))]
+    (events/emit! stream {:source :job :kind :memory_written :data {:pad pad}})
+    (let [again (events/make {:file file :generation-id "g2"})]
+      (is (= 1 (:seq (events/cursor again))))
+      (is (= 2 (events/emit! again {:source :job :kind :queued}))))))
+
+(deftest a-job-id-and-a-chain-are-capped-when-written
+  (let [file (path/join (tu/tmp-dir) "events.edn")
+        stream (events/make {:file file :generation-id "g"})
+        id (apply str "j1" (repeat 5000 "/spare"))
+        chain (mapv #(str "j" %) (range 2303))]
+    (events/emit! stream {:source :job :kind :stopped :job id :chain chain})
+    (let [ctx (:context (first (read-lines file)))]
+      (is (<= (count (:job-id ctx)) 300))
+      (is (str/starts-with? (:job-id ctx) "j1/spare"))
+      (is (str/ends-with? (:job-id ctx) "/spare"))
+      (is (<= (count (:chain ctx)) 8))
+      (is (= ["j0" "j1"] (take 2 (:chain ctx))))
+      (is (= "j2302" (last (:chain ctx)))))))
