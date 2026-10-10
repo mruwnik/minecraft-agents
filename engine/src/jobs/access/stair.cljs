@@ -641,15 +641,20 @@
       r r
       (and (:origin m) (need c)) :continue
       (nil? (:origin m))
-      (let [feet (feet-of c)
+      (let [feet (or (some-> (:start m) vec) (feet-of c))
             target (target-steps (:args c) feet)]
         (if (map? target)
           (finish! c :bad-args {:why (:error target)})
           ;; stone stands for the cells to dig: unseen cells are taken for stone (see the ns doc)
-          (if (= :continue (await (trip/tool-ready! c "stone")))
-            :continue
-            (do (ctx/update-mem! c assoc :origin feet :target target :dug [])
-                :again))))
+          (do
+            ;; the spare's fetch may walk the body off: the stair starts where it was asked, not where the fetch ended
+            (ctx/update-mem! c assoc :start feet)
+            (if (= :continue (await (trip/tool-ready! c "stone")))
+              :continue
+              (if (and (not= feet (feet-of c)) (= :continue (await (walk-into! c :start feet))))
+                :continue
+                (do (ctx/update-mem! c assoc :origin feet :target target :dug [])
+                    :again))))))
       :else
       (let [r (await (work! c))]
         (cond

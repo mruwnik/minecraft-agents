@@ -57,3 +57,15 @@
           (await (bd/child-outcome eng 'jobs.blocks.dig {:pos [2 64 0]} 10))
           (await (bd/child-outcome eng 'jobs.blocks.dig {:pos [2 64 1]} 10))
           (is (= 1 (count (filter #(= :tool.low (:kind %)) @seen)))))))))
+
+(deftest a-spare-fetched-from-afar-does-not-move-the-stairs-start
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [far "10,65,0"
+              s (await (st/stair! {:blocks (assoc st/ground far "chest") :containers {far [{:name "stone_pickaxe" :count 1}]}
+                                   :inventory [worn]}
+                                  east tu/seeing-all))]
+          (is (contains? (kinds s) :tool.spare))
+          (is (= :done (:status @(:out s))))
+          (is (= [2 63 0] (:at @(:out s)))))))))
