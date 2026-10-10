@@ -1708,6 +1708,18 @@
           (is (empty? (events-of s :mine.not-home)) "the walk home arrives")
           (is (= [0 64 0] (feet s)) "the body is back on its start cell"))))))
 
+;; Rowan j119: mine dug the step-up cells and floors round its pit until the body stood on a one-cell column.
+(deftest mine-leaves-the-block-that-is-the-bodys-last-way-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks {"1,63,0" "iron_ore"} :drops {"iron_ore" "raw_iron"} :inventory pickaxe}})]
+          (doseq [c [[-1 63 0] [0 63 1] [0 63 -1]]] (fake/set-block! (:p s) c "air"))
+          (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :tunnel-length 0 :mend false}) {})
+          (await (run-ticks s 40))
+          (is (= "iron_ore" (block-at s 1 63 0)) "the only floor to step onto is left")
+          (is (seq (events-of s :mine.spared-exit))))))))
+
 (deftest soil-deeper-than-the-descent-limit-ends-no-stone-found
   (async done
     (tu/run-async done

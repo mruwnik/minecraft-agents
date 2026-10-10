@@ -126,6 +126,16 @@
               (boolean (and below (not (hazard-blocks (.-name below))))))))))
 
 
+(defn exits
+  "How many of the four side columns of the body at feet [x y z] it can step into: a standable cell there one up, level
+  or one down. open: a cell [x y z] taken as air (what if it were dug)."
+  ([p feet] (exits p feet nil))
+  ([p [x y z] open]
+   (let [base (lookup p)
+         kind-at (if open (fn [a b c] (if (= [a b c] open) :open (base a b c))) base)]
+     (count (filter (fn [[dx dz]] (some #(standable-cell? p {:x (+ x dx) :y (+ y %) :z (+ z dz)} kind-at) [1 0 -1]))
+                    [[1 0] [-1 0] [0 1] [0 -1]])))))
+
 (defn overlap [a0 a1 c] (max 0 (- (min a1 (inc c)) (max a0 c))))
 
 (defn standing-cell

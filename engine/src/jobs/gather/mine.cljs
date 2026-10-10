@@ -417,6 +417,15 @@
         name-at #(u/seen-name (:primitives c) %)]
     (first (filter #(and (contains? ways (access/cell %)) (rules/solid-floor? name-at %)) cells))))
 
+(defn last-exit?
+  "Whether digging cell pos would leave the body, which has a side cell to step to now, with none (the floor or the
+  step-up of its last way out): Rowan's pit ended on a one-cell column."
+  [c pos]
+  (let [p (:primitives c)
+        feet (let [f (cell-of (u/self-pos c))] [(:x f) (:y f) (:z f)])]
+    (and (pos? (reach-lib/exits p feet))
+         (zero? (reach-lib/exits p feet [(:x pos) (:y pos) (:z pos)])))))
+
 (defn skip! [c pos] (ctx/update-mem! c update :skipped (fnil conj []) pos))
 
 (defn drop-radius
@@ -1207,6 +1216,8 @@
       (nil? looked) (do (await (look-around! c)) :again)
       (= :searching pos) :again
       (and (some? pos) (way-floor c [pos])) (do (skip! c pos) :again)
+      (and (some? pos) (last-exit? c pos)) (do (ctx/emit! c :mine.spared-exit :info {:pos (access/cell pos) :text (str "mine leaves " (str/join "," (access/cell pos)) ": it is the body's last way out")})
+                                               (skip! c pos) :again)
       (some? pos) (let [walked (await (walk-to-dig! c pos))]
                     (cond
                       (and (= :blocked walked) (cleanup/permanent-walk? (ctx/child-result c :walk))) (do (skip-unreachable! c pos) :again)
