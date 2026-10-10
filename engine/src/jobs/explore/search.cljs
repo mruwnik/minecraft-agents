@@ -299,11 +299,12 @@
                   :else (assoc (update acc :tried conj pt) :leg [(pt 0) sy (pt 1)])))))))
 
 (defn ^:async walk!
-  "One go-to call toward the leg; on its end book the leg arrived or failed. :continue when go-to yields, else :again
+  "One go-to call toward the leg (the last one before the failed legs in a row end the search may dig out); on its end book the leg arrived or failed. :continue when go-to yields, else :again
   (or :done when the failed legs in a row end the search)."
   [c]
   (let [[x y z] (:leg (ctx/mem c))
-        r (await (ctx/call-child c :leg 'jobs.movement.go-to {:pos {:x x :y y :z z} :range 2 :escalate false
+        r (await (ctx/call-child c :leg 'jobs.movement.go-to {:pos {:x x :y y :z z} :range 2
+                                                              :escalate (>= (:failed-in-row (ctx/mem c) 0) (dec (max-failed-in-row)))
                                                               :goal-danger :end}))]
     (if-not (= :done r)
       :continue

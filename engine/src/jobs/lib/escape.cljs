@@ -286,6 +286,8 @@
   - {:step :clear-path :heading kw}: a wall at most max-door thick straight toward the goal, with floor beyond,
     every cell diggable?. Chosen before a stair when the goal is no higher than the feet: a sealed tunnel reads as a
     pit, and its stair would climb away from the goal.
+  - a stair with no pit and no goal above (a sealed tunnel, a goal through thick rock) is the last way: the deepest
+    diggable one, up to max-depth, before :none.
   - {:step :approach :pos cell}: no side of the body's cell is solid: walk to wall-spot first; in the free part of a
     shut door's cell with no door-spot in sight, step back off the panel (door-back).
   - {:step :none :why kw}: none of these. :why :no-headroom: a pit the carried blocks would pillar out of but for
@@ -305,6 +307,9 @@
                         (or (some (fn [n] (some-> (stair-heading block-at feet stair-dirs n may-dig? own?) (vector n)))
                                   (distinct (filter pos? [rise depth])))
                             [nil rise]))
+         climb (delay (when-not (or (skip :stair) (pos? rise))
+                        (some (fn [n] (some-> (stair-heading block-at feet stair-dirs n may-dig? own?) (vector n)))
+                              (range (max-depth) 0 -1))))
          gap (when (and dir (not (skip :clear-path))) (door block-at (unseen-of p) feet dir (max-door)))
          spot (delay (when (and dir (not (skip :approach)) (walled-side? block-at feet))
                        (door-spot p feet dir #(diggable? block-at may-dig? own? %))))
@@ -331,6 +336,9 @@
 
        (and (not (skip :approach)) (not (walled-side? block-at feet)))
        (if-let [spot (wall-spot p feet dir)] {:step :approach :pos spot} {:step :none :why :no-wall})
+
+       @climb
+       (let [[heading n] @climb] {:step :stair :heading heading :steps n})
 
        pillar-blocks? {:step :none :why :no-headroom}
 

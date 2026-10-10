@@ -322,6 +322,14 @@
           (let [ps (map :pos (get-in e [:coverage :failed]))]
             (is (= (count ps) (count (set ps))) "a column whose step failed is not stepped toward again")))))))
 
+(deftest the-last-leg-before-stuck-digs-out-of-a-sealed-pocket
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [room (apply dissoc (tu/box -3 64 -3 3 66 3 "dirt") (for [x (range -2 3) z (range -2 3) y [64 65]] (str x "," y "," z)))
+              s (await (search! {:target "diamond_block" :max-distance 23} {:blocks room} 200))]
+          (is (some #(= :go-to.escalated (:kind %)) @(:seen s))))))))
+
 (deftest three-failed-legs-in-a-row-end-it-stuck
   (async done
     (tu/run-async done
