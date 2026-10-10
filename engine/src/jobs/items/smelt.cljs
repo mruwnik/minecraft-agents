@@ -34,7 +34,7 @@
   - no-item, nothing-smeltable, not-smeltable (this kind of furnace cannot cook it, also found when it never lit).
   - no-fuel, unknown-fuel, rejected-fuel, out-of-fuel (leftover input is taken back), fuel-busy (the fuel slot
     holds another fuel).
-  - furnace-busy (the input slot holds another item), furnace-full, inventory-full (the output stays in the
+  - furnace-busy (the input slot holds another item that is not cooking; one that is cooking is waited out, its output taken, then the load goes in), furnace-full, inventory-full (the output stays in the
     furnace).
   - \"refused\" (with :zones, :claims): the furnace is in another owner's zone or claim and does not allow
     :put (loading) or :take (collecting, or the output already there). Nothing is loaded or taken. :ignore-zones? true skips the check.")
@@ -355,8 +355,10 @@
         {:keys [count fuel]} (:args c)
         item (input-of (:item (:args c)) (carried c))
         plan (plan-load {:state state :carried (carried c) :item item :count count :fuel fuel :target (:target m)})]
-    (if (:give-up plan)
-      (stop! c (:give-up plan))
+    (cond
+      (and (= "furnace-busy" (:give-up plan)) (= :wait (judge state))) (wait-until! c (wait-ms (:kind state) state))
+      (:give-up plan) (stop! c (:give-up plan))
+      :else
       (if-let [v (when (:output state) (access/container-refusal c :take (furnace-of c)))]
         (refuse! c v)
         (let [freed (when (:output state) (await (visit! c "take" {})))]

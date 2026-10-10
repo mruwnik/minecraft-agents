@@ -330,6 +330,25 @@
                     (is (= 4 (get (inv-of p) out)) block)
                     (is (empty? (:list (core/state eng))) block)))))))))
 
+(deftest a-furnace-still-cooking-another-item-is-waited-for-then-emptied-and-used
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen clock]} (setup (assoc base-world :furnaces {pos-key {:input {:name "beef" :count 2} :fuel {:name "coal" :count 1}}}))
+              _ (advance! p 1)
+              _ (core/submit! eng iron-job {})
+              _ (await (ticks eng 2))]
+          (is (empty? (of-kind seen :smelt.gave-up)) "the cook in the furnace is waited out")
+          (is (= 1 (count (:list (core/state eng)))))
+          (advance! p 2000)
+          (swap! clock + 100000)
+          (await (ticks eng 3))
+          (advance! p 2000)
+          (swap! clock + 100000)
+          (await (ticks eng 3))
+          (is (empty? (of-kind seen :smelt.gave-up)))
+          (is (= {"cooked_beef" 2 "iron_ingot" 3} (select-keys (inv-of p) ["cooked_beef" "iron_ingot"]))))))))
+
 (def gave-up-rows
   [["no furnace there" {:inventory [{:name "raw_iron" :count 3} {:name "coal" :count 2}]} "raw_iron" "no-furnace"]
    ["a chest" {:blocks {pos-key "chest"} :inventory [{:name "raw_iron" :count 3} {:name "coal" :count 2}]} "raw_iron" "not-a-furnace"]
