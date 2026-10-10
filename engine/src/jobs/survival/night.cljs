@@ -693,14 +693,14 @@
 (defn ^:async shut-room-door!
   "Shut an open door of the closed room the body stands in (retreat/shut-home-door!: from where it stands within a hand's
   reach, else a step to the room cell inside it first). A door still open once tried (clicked, or no step got nearer)
-  writes :night-door-failed for this cell, so the night digs in as before. :again."
+  writes :night-door-failed for this door, so the night digs in as before. :again."
   [c door]
   (await (retreat/shut-home-door! c door))
-  (when (and (sh/open-room-door (:primitives c))
+  (when (and (some #(= (sh/door-key (:cell door)) (sh/door-key (:cell %))) (sh/open-room-doors (:primitives c)))
              (contains? (:doors-clicked (ctx/mem c) #{}) (retreat/door-key (:cell door))))
     (ctx/emit! c :shelter.door-failed :warn {:cell (retreat/door-key (:cell door))
                                              :text "an open door of the room would not shut; digging in instead"})
-    (ctx/remember! c :night-door-failed {:pos (sh/feet (:primitives c))} {:cap 1 :ttl (sh/door-failed-ms)}))
+    (ctx/remember! c :night-door-failed {:door (sh/door-key (:cell door))} {:cap 1 :ttl (sh/door-failed-ms)}))
   :again)
 
 ;; ------------------------------------------------------------------ morning
@@ -799,7 +799,7 @@
             :else (end-night! c)))
       :else
       (let [bed (await (sense/decide! c ::bed #(sh/bed-to-use p (ctx/view c) (radius c) (bed-permit c))))
-            door (when-not (sh/door-given-up? p (ctx/view c)) (sh/open-room-door p))]
+            door (sh/open-room-door p (ctx/view c))]
         (cond
           bed (await (sleep-step c bed))
           (sh/bed-place-wanted? p (ctx/view c) (radius c) (bed-permit c)) (await (place-bed-and-sleep c))

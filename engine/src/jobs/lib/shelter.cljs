@@ -382,12 +382,17 @@
 
 (declare shut-in-room?)
 
+(defn safe-from-night?
+  "Whether the body is safe from the night where it stands: a roof within roof-height (default default-roof-height) over it, buried,
+  or shut in a closed room (shut-in-room?). The one notion the night trigger, night-sheltered and walk-leaves-shelter? share."
+  ([p] (safe-from-night? p default-roof-height))
+  ([p roof-height] (or (not (unsafe-night? p roof-height)) (shut-in-room? p))))
+
 (defn night-sheltered
   "At night, awake and safe from it (roofed or buried, or shut-in-room?), the kind of shelter the body is in (:dug-in
   the one shelter says it is shut in, :room, :underground, :roofed), else nil: outdoor work waits for day then."
   [p shelter]
-  (when (and (night? p) (not (sleeping? p))
-             (or (not (unsafe-night? p default-roof-height)) (shut-in-room? p)))
+  (when (and (night? p) (not (sleeping? p)) (safe-from-night? p))
     (cond
       (in-own-shelter p shelter) :dug-in
       (shut-in-room? p) :room
@@ -400,8 +405,7 @@
   latest :shelter entry) is the one the body is shut in. :room: no cell of the closed room is within dist of the goal.
   :underground: buried, and nothing solid within default-roof-height over a y goal. :roofed: any other roof."
   [p shelter goal dist]
-  (when (and (night? p) (not (sleeping? p))
-             (or (not (unsafe-night? p default-roof-height)) (shut-in-room? p)))
+  (when (and (night? p) (not (sleeping? p)) (safe-from-night? p))
     (let [goal (update-vals goal js/Math.floor)
           near? (fn [cell] (if (:y goal) (u/within? cell goal dist) (u/within? (assoc cell :y 0) (assoc goal :y 0) dist)))
           room (when (shut-in-room? p) (reach/room p (feet p)))]
@@ -440,9 +444,10 @@
   [p]
   (and (roofed? p (room-roof-height)) (reach/closed-room? p (feet p))))
 
-(defn open-room-door
-  "{:cell :inside} of a door or gate standing open in the closed room around the body (shut-in-room?), the nearest
-  first: shut, the room keeps the night out. Nil when there is none."
+(defn door-key [{:keys [x y z]}] [x y z])
+
+(defn open-room-doors
+  "[{:cell :inside} ...]: the doors and gates standing open in the closed room around the body, the nearest first."
   [p]
   (when (roofed? p (room-roof-height))
     (let [self (u/self-pos {:primitives p})
@@ -451,13 +456,14 @@
                     (and b (= :openable (click/kind-of (.-name b))) (click/reached? :open (click/props-of b)))))]
       (->> (:doors (reach/room p (feet p)))
            (filter open?)
-           (sort-by #(u/dist self (:cell %)))
-           first))))
+           (sort-by #(u/dist self (:cell %)))))))
 
-(defn door-given-up?
-  "Whether the night failed to shut a door of the room around the feet cell (a :night-door-failed entry for it)."
+(defn open-room-door
+  "{:cell :inside} of the nearest door or gate standing open in the closed room around the body (shut: the room keeps the
+  night out), not one the night failed to shut (the :night-door-failed entry in view, keyed on the door); nil when none."
   [p view]
-  (= (feet p) (:pos (:data (mem/latest view :night-door-failed)))))
+  (let [failed (:door (:data (mem/latest view :night-door-failed)))]
+    (first (remove #(= failed (door-key (:cell %))) (open-room-doors p)))))
 
 (defn night-holds?
   "Whether the night trigger holds (see triggers.survival.night). permit? decides whether a bed may be used (bed-permit)."
@@ -469,8 +475,7 @@
             (or (some? (bed-to-use p view (bed-radius view args) permit?))
                 (bed-place-wanted? p view (bed-radius view args) permit?)
                 (log-out-for-sleepers? p view)
-                (and (unsafe-night? p (:roof-height args default-roof-height))
-                     (not (shut-in-room? p)))
-                (and (some? (open-room-door p)) (not (door-given-up? p view)))))
+                (not (safe-from-night? p (:roof-height args default-roof-height)))
+                (some? (open-room-door p view))))
        (or (shut-in-by-day? p shelter (:data (mem/latest view :shelter-trapped)))
            (some? (bed-to-collect p view)))))))
