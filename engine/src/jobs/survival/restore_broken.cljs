@@ -223,8 +223,9 @@
       (ctx/emit! c :tidy.not-restored :warn {:cells not-restored :text (str (count not-restored) " broken blocks not restored")}))
     (ctx/remember! c :tidy-reported {:cells (mapv :cell (tidy/entries c))} tidy/reported-policy)
     (if (or (pos? unvisited) (seq (remove #(= :changed (:why %)) failed)))
-      (result/stop! c :not-restored (str (+ unvisited (count failed)) " broken blocks not restored, " (count restored) " restored")
-                    :restored (count restored) :failed (+ unvisited (count failed)))
+      (let [n (+ unvisited (count (remove #(= :changed (:why %)) failed)))]
+        (result/stop! c :not-restored (str n " broken blocks not restored, " (count restored) " restored")
+                      :restored (count restored) :failed n))
       :done)))
 
 (defn skip! [c {:keys [cell was]} why]
@@ -276,7 +277,12 @@
         [verdict e why] (decide c waiting)]
     (case verdict
       :done :done
-      :skip (do (skip! c e why) :again)
+      :skip (do (if (and (= :changed why) (= (:was e) (tidy/block-now (:primitives c) (:cell e))))
+                  (do (tidy/forget-cell! c (:cell e))
+                      (ctx/update-mem! c update :restored (fnil conj []) (:cell e))
+                      (ctx/update-mem! c update :seen (fnil conj #{}) (:cell e)))
+                  (skip! c e why))
+                :again)
       :step-clear (do (await (step-clear! c e waiting)) :again)
       :restore (do (await (restore-one! c e (:reach (:args c)))) :again))))
 

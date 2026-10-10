@@ -137,6 +137,22 @@
             (is (= [[{:cell [0 65 0] :was "stone" :why why}]] (mapv :cells (zs/trespass seen :tidy.not-restored))) (pr-str why))
             (is (= [] (zs/trespass seen :tidy.restored)) (pr-str why))))))))
 
+(deftest a-cell-replanted-by-its-harvester-counts-as-restored-and-the-message-counts-only-real-failures
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [crop (fn [x] {:cell [x 65 0] :action :dig :was "potatoes" :now "air" :zone "vault" :tries 0})
+              carrot {:cell [9 65 0] :action :dig :was "carrots" :now "air" :zone "vault" :tries 0}
+              {:keys [eng p seen]} (restore! {:inventory [] :blocks {"1,65,0" "potatoes" "2,65,0" "potatoes"}} [(zs/whole-zone "Miles")]
+                                             [(crop 1) (crop 2) carrot])
+              id (first (:list (core/state eng)))]
+          (await (zs/run-until-empty eng 6))
+          (is (= [] (zs/calls p "place")))
+          (is (= [[{:cell [9 65 0] :was "carrots" :why :not-carried}]] (mapv :cells (zs/trespass seen :tidy.not-restored))))
+          (is (= [[1 65 0] [2 65 0]] (:cells (first (zs/trespass seen :tidy.restored)))) "the replanted cells are restored")
+          (is (= "1 broken blocks not restored, 2 restored" (:text (first (zs/trespass seen :stopped)))))
+          (is (= 1 (count (tidy-entries eng)))))))))
+
 (def standing-in-the-cell {:floor [-5 -5 5 5] :inventory [{:name "stone" :count 2}]})
 
 (deftest restore-steps-clear-of-the-cell-before-placing-in-it
