@@ -115,6 +115,8 @@
 
 (defn job-rows [s] (cond->> (vec (get-in s [:jobs :items])) (:current s) (cons (:current s))))
 
+(def low-hp 4)
+
 (defn needs-you
   "What only the agent can clear, as short texts, from a compact status (observe.status/compact-status)."
   [s]
@@ -130,6 +132,7 @@
           (keep #(when (and (:waiting %) (not (routine-wait? (:waiting %))))
                    (str (:id %) " waits " (wait-text (:waiting %))))
                 rows)
+          (when (and (:health s) (<= (:health s) low-hp)) [(str "low hp " (round1 (:health s)))])
           (when (and (:idle s) (empty? rows)) ["idle: no jobs"])))))
 
 (defn want-counts
@@ -207,16 +210,18 @@
 ;; Wakes
 
 (defn routine-idle?
-  "Whether every job of a body.idle waits for something that clears by itself, holds on purpose or is idle-ok."
+  "Whether every job of a body.idle waits for something that clears by itself or holds on purpose. Idle-ok jobs (a
+  look-around) do not count: a body with only those has no work."
   [jobs]
-  (and (seq jobs)
-       (every? #(and (not (:failed %))
-                     (or (:idle-ok %) (:holding %) (and (:waiting %) (routine-wait? (:waiting %)))))
-               jobs)))
+  (let [real (remove :idle-ok jobs)]
+    (and (seq real)
+         (every? #(and (not (:failed %))
+                       (or (:holding %) (and (:waiting %) (routine-wait? (:waiting %)))))
+                 real))))
 
 (defn idle-text [jobs]
-  (if (empty? jobs)
-    "no jobs"
+  (if (every? :idle-ok jobs)
+    (if (empty? jobs) "no jobs" "no work, only look-around")
     (str/join "; " (map #(str (:job %) " " (cond (:failed %) (str "failed " (clip (:failed %) 60))
                                                     (:waiting %) (str "waits " (wait-text (:waiting %)))
                                                     (:holding %) "holding"

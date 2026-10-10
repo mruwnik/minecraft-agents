@@ -54,6 +54,10 @@
   (is (some #(str/includes? % "offline") (progress/needs-you {:offline {:reason "kicked"} :current {:id "j1"}})))
   (is (some #(str/includes? % "manual") (progress/needs-you {:mode :manual :manual {:who "Ann"} :current {:id "j1"}}))))
 
+(deftest needs-you-names-a-low-hp
+  (is (some #(str/includes? % "hp 1.8") (progress/needs-you {:health 1.8 :current {:id "j1"}})))
+  (is (empty? (progress/needs-you {:health 12 :current {:id "j1"}}))))
+
 (deftest want-counts-include-worn-items
   (is (= [["iron_ingot" 3 24] ["iron_helmet" 1 1] ["iron_boots" 0 1]]
          (progress/want-counts inventory [["iron_ingot" 24] ["iron_helmet" 1] ["iron_boots" 1]]))))
@@ -101,6 +105,7 @@
                        [{:wake :job-finished :job "j15" :result :stopped :message "unreachable"} :gave-up]
                        [{:wake :idle :jobs [{:job "j14" :name "obtain" :waiting {:reason :no-source}}]} :needs-you]
                        [{:wake :idle :jobs []} :needs-you]
+                       [{:wake :idle :jobs [{:job "j1" :name "look-around" :idle-ok true}]} :needs-you]
                        [{:wake :idle :jobs [{:job "j14" :name "obtain" :failed "boom"}]} :needs-you]]]
     (is (= kind (:wake (progress/wake-verdict wake "j14"))) (pr-str wake))))
 
