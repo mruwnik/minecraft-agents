@@ -270,6 +270,14 @@
   [c]
   (assoc (access/rules-input c {:own-plans-ok? (false? (:spare-own-builds (:args c)))}) :keep-base? true))
 
+(def soil-blocks "Mined blocks gathered from the top layer of the ground only." #{"dirt" "grass_block"})
+
+(defn too-deep?
+  "Whether a soil dig at pos would go deeper than the ground the run started on: that makes a pit the body is left in."
+  [c pos]
+  (let [{:keys [start]} (ctx/mem c)]
+    (boolean (and start (contains? soil-blocks (:block (:args c))) (< (:y pos) (dec (:y start)))))))
+
 (defn scan
   "{:targets [pos] nearest first (the higher of two as near), those over the ground snapshot after all others, :refused [verdict] of blocks a
   zone or plan refuses, :wet? true when an unskipped block was rejected only for water, :wet-n how many}. Only seen blocks that are
@@ -282,7 +290,8 @@
         here (u/self-pos c)
         cells (->> (look/seen-blocks p {:names (vec (kinds (:args c))) :radius radius :max 128 :live? true})
                    (map :pos)
-                   (remove skipped))
+                   (remove skipped)
+                   (remove #(too-deep? c %)))
         graded (map (juxt identity #(classify c wet %)) cells)
         in (rules-in c)
         judged (->> graded

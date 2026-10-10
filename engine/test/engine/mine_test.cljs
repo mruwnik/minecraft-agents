@@ -122,6 +122,15 @@
           (is (not-any? #(= {:x 5 :y 68 :z 0} (:target %)) (moved s)) "no walk toward the pillar")
           (is (finished? s)))))))
 
+(deftest dirt-is-gathered-from-the-top-layer-only-never-a-pit
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "dirt" :count 40 :mend false :tunnel-length 0 :descend-limit 0} {:blocks floor} 120))]
+          (is (seq (dug-cells s)))
+          (is (every? #(>= (second %) 63) (dug-cells s)) "no dig below the ground the body started on")
+          (is (finished? s)))))))
+
 (deftest digging-the-floor-it-stands-on-is-mended
   (async done
     (tu/run-async done

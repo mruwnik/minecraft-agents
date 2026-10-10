@@ -787,6 +787,21 @@
           (is (seq @opts))
           (is (every? :escalate @opts) "shut in by its own dig: go-to may pillar or stair out"))))))
 
+(deftest a-body-that-cannot-climb-out-of-its-hole-stops-shut-in-at-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "far" :parts [{:id "posts" :cells [[40 64 0] [41 64 0] [42 64 0] [43 64 0]] :want "oak_fence"}]}
+              hole (into {} (for [x [3 4 5] z [3 4 5] y [64 65 66] :when (not= [4 4] [x z])] [(h/cell-key x y z) "dirt"]))
+              walks (atom 0)
+              {:keys [eng]} (start {:inventory kit :blocks hole :self {:pos {:x 4.5 :y 64 :z 4.5}}} {"far" plan})
+              result (await (tu/with-near-stub (fn ^:async f [_ _ _ _] (swap! walks inc) :blocked)
+                              (fn ^:async b [] (await (tu/child-outcome eng job {:plan "far"} 30)))))]
+          (is (= :stopped (:status result)))
+          (is (= :shut-in (:reason result)))
+          (is (re-find #"hole" (:text result)))
+          (is (<= @walks 3) "not one failed walk per planned cell"))))))
+
 (deftest a-whole-plan-is-built-in-one-round
   (async done
     (tu/run-async done

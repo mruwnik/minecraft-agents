@@ -658,6 +658,20 @@
   (let [{:keys [x y z]} (u/self-pos c)]
     (<= hole-depth (escape/pit-depth (escape/block-at-of (:primitives c)) [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]))))
 
+(def hole-walks
+  "Walks in a row that fail from a hole (even climbing out) after which the build stops :shut-in."
+  2)
+
+(defn hole-blocked!
+  "Count a failed walk from a hole; at hole-walks of them in a row stop the build :shut-in (:done), else :again."
+  [c]
+  (ctx/update-mem! c update :hole-blocked (fnil inc 0))
+  (if (< (:hole-blocked (ctx/mem c)) hole-walks)
+    :again
+    (do (ctx/result! c {:status :stopped :reason :shut-in :placed (:placed (ctx/mem c) 0)
+                        :text (str "build of " (:plan (:args c)) " stopped: the body is shut in a hole and cannot climb out")})
+        :done)))
+
 (defn ^:async walk-to!
   "Walk to a stand cell beside cell (:continue while the walk waits, else :again); a cell that cannot be walked to, or is still out of reach (or unseen, as
   :unloaded) on arrival, counts a failure."
@@ -684,7 +698,10 @@
               (ctx/update-mem! c walk-fail pos :unloaded give-up (u/self-pos c)))))
         (when (and (= :there w) (:found cell) (empty? (if (:dig? cell) (in-dig-reach c [cell]) (in-reach c [cell]))))
           (ctx/update-mem! c walk-fail (:pos cell) :unreachable give-up (u/self-pos c)))
-        (if (= :partial w) :continue :again)))))
+        (if (and (= :blocked w) (in-hole? c))
+          (hole-blocked! c)
+          (do (ctx/update-mem! c dissoc :hole-blocked)
+              (if (= :partial w) :continue :again)))))))
 
 (defn summary
   "What a build of cells left, from the job memory m: {:placed :missing :short :given-up :wrong :refused}."
