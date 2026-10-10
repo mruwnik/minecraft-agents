@@ -302,7 +302,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       playerCollect: (collector, collected) => {
         if (collector !== target.entity) return
         const item = collected && droppedItem(target, collected)
-        if (item) emit({ kind: 'picked-up', item: item.name, count: item.count })
+        if (item) emit({ kind: 'picked-up', item: item.name, count: item.count, pos: here() })
       },
       spawn: () => {
         emit({ kind: 'spawned' })

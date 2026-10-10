@@ -5,6 +5,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
             [jobs.lib.cost :as cost]
+            [jobs.lib.found :as found]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.util :as u]
             [engine.memory :as mem]
@@ -32,6 +33,8 @@
   full and :make-chests? is true, a chest (jobs.blocks.place child, fetching or crafting it by default; :fetch-chests? false only a carried one) goes down
   beside a full one; a refused spot is skipped for the next free cell and joins the group; none to be had ends {:reason \"no-chest-item\"}, no free cell beside
   {:reason \"no-chest-spot\"}, :make-chests? false {:reason \"all-chests-full\"}. Any other :chest is used alone.
+  Found goods (jobs.lib.found: bulk or containers picked up with no job reason) stay carried, even when named in :items; one
+  goods.found notice (:attention :notice) names item, count and the pick-up place.
   Stock: a chest whose stock is booked in body memory :fetch/stock gets what was put in added (jobs.lib.fetch).")
 
 (a/defargs args
@@ -183,13 +186,28 @@
         (:arrived (ctx/child-result c :walk)) :again
         :else :unreachable))))
 
+(defn found-here!
+  "{item pick-up} of the carried found goods (jobs.lib.found), which stay carried; one goods.found notice each, once per call."
+  [c carried]
+  (let [goods (select-keys (found/goods (ctx/view c)) (map :name carried))]
+    (doseq [[item {:keys [pos]}] goods
+            :when (not (contains? (:reported (ctx/mem c) #{}) item))]
+      (ctx/update-mem! c update :reported (fnil conj #{}) item)
+      (ctx/emit! c :goods.found :info
+                 {:attention :notice :item item :count (storage/carried carried item) :at pos
+                  :text (str "found goods, not deposited: " (storage/carried carried item) " " item
+                             (when pos (str " picked up at " (pr-str [(:x pos) (:y pos) (:z pos)]))))}))
+    goods))
+
 (defn ^:async step!
   "Put the next stack away, walking to the chest first: :again, :continue (go-to waits), or :done."
   [c]
   (let [{:keys [items keep free]} (:args c)
         {:keys [pool open group?]} (chests c)
         chest (some-> (first open) cell-pos)
-        inventory (u/inventory (:primitives c))
+        carried (u/inventory (:primitives c))
+        keeps (found-here! c carried)
+        inventory (remove #(contains? keeps (:name %)) carried)
         pick (when-not (and free (>= (u/free-slots (:primitives c)) free))
                (to-deposit inventory items (if items keep (merge-with max (cost/food-reserve inventory) keep))))]
     (cond

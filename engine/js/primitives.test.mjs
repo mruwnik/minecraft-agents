@@ -2270,12 +2270,13 @@ test('toss without watchS has no receipt', async () => {
 
 const pickup = (bot, collector, dropped) => bot.emit('playerCollect', collector, { getDroppedItem: () => dropped })
 
-test('picked-up: the body collecting an item entity is reported with the item name and count', () => {
+test('picked-up: the body collecting an item entity is reported with the item name, count and place', () => {
   const { bot, p } = rig(world)
   const seen = []
   p.onBodyEvent(e => seen.push(e))
   pickup(bot, bot.entity, { name: 'stick', count: 3 })
-  assert.deepEqual(seen, [{ kind: 'picked-up', item: 'stick', count: 3 }])
+  assert.deepEqual(seen.map(e => [e.kind, e.item, e.count]), [['picked-up', 'stick', 3]])
+  assert.equal(typeof seen[0].pos.x, 'number')
 })
 
 test('picked-up: another collector, or an entity whose item cannot be read, is not reported', () => {
