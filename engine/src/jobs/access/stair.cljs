@@ -39,8 +39,9 @@
 
   A step's floor must be solid, the cell under it neither air nor fluid (:cave-below), and everything loaded.
   A floor of air gets a carried building block (blocks/building-blocks, never an ore or valuable) after the
-  rules' may-place?. The cell under a placed floor is not judged. With no such block: :no-floor with :filler
-  :none. A lava or water floor is never bridged. A go-to stair (:note) writes its placed floors to the scaffold ledger
+  rules' may-place?, against a neighbour, or from the cell under it first when only that has a face (jobs.access.stair/floor-plan).
+  The cell under a placed floor is not judged. With no such block: :no-floor with :filler :none; with no face to place
+  against at either cell (a void pocket): :no-support-floor with :cell, :tried and :why. A lava or water floor is never bridged. A go-to stair (:note) writes its placed floors to the scaffold ledger
   (purpose :stair-floor) for jobs.access.cleanup to take back once go-to's job ended (setting take-back-floors?).
 
   Each step is judged when chosen and each cell again right before its dig. Stops:
@@ -480,28 +481,59 @@
   [c]
   (boolean (and (:note (:args c)) (settings/get settings ::take-back-floors?))))
 
+(def face-steps [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])
+
+(defn face-support?
+  "Whether a block can be placed against a face of cell: some neighbour is solid or unseen (a void pocket has none)."
+  [block-at cell]
+  (boolean (some (fn [d] (let [n (block-at (mapv + cell d))]
+                           (or (nil? n) (not (or (rules/air n) (#{"water" "lava"} n))))))
+                 face-steps)))
+
+(defn floor-plan
+  "The cells to place for a missing floor, in order: [floor] when it has a face to place against, [support floor] when
+  only the cell under it has one (the previous floor of a stair up), else nil."
+  [block-at floor]
+  (let [under (update floor 1 dec)]
+    (cond (face-support? block-at floor) [floor]
+          (face-support? block-at under) [under floor])))
+
+(defn ^:async place-floor!
+  "Place item at cell (in the scaffold ledger when take-back-floor?): nil when it stands, else a stop map."
+  [c in item cell]
+  (let [verdict (rules/may-place? (assoc in :cell cell))
+        [x y z] cell]
+    (if-not (:ok verdict)
+      (assoc (dissoc verdict :ok) :cell cell)
+      (let [l (when (take-back-floor? c)
+                (ledger/intend (ledger/open-entries (ctx/view c))
+                               {:cell cell :item item :before ((:block-at in) cell) :job (:id c) :purpose :stair-floor}))
+            _ (when l (ledger/remember! c l))
+            r (await (ctx/act c :place #js {:pos #js {:x x :y y :z z} :item item}))]
+        (when l (ledger/remember! c (ledger/reconcile l (escape/block-at-of (:primitives c)))))
+        (if (rules/air ((:block-at (rules-in c (feet-of c))) cell))
+          (if (= "no-support" (some-> r .-status))
+            {:reason :no-support-floor :cell cell :item item :why (str "nothing to place " item " against at " (pr-str cell))}
+            {:reason :place-failed :cell cell :item item})
+          (do (ctx/update-mem! c update :bridged (fnil conj #{}) cell)
+              nil))))))
+
 (defn ^:async bridge!
-  "Place carried filler on the missing floor of the step (in the scaffold ledger when take-back-floor?). :again, or a
-  stop map."
+  "Place carried filler on the missing floor of the step, from the cell under it first when only that has a face to
+  place against. :again, or a stop map (:no-support-floor when no cell has a face)."
   [c in {:keys [floor]}]
   (let [item (blocks/pick c blocks/building-blocks)
-        verdict (rules/may-place? (assoc in :cell floor))
-        [x y z] floor]
+        cells (floor-plan (:block-at in) floor)]
     (cond
       (nil? item) {:reason :no-floor :cell floor :block ((:block-at in) floor) :filler :none
                    :why (str "no floor and no filler block carried (" (str/join ", " (take 4 blocks/building-blocks)) " ...)")}
-      (not (:ok verdict)) (assoc (dissoc verdict :ok) :cell floor)
-      :else
-      (let [l (when (take-back-floor? c)
-                (ledger/intend (ledger/open-entries (ctx/view c))
-                               {:cell floor :item item :before ((:block-at in) floor) :job (:id c) :purpose :stair-floor}))
-            _ (when l (ledger/remember! c l))
-            _ (await (ctx/act c :place #js {:pos #js {:x x :y y :z z} :item item}))]
-        (when l (ledger/remember! c (ledger/reconcile l (escape/block-at-of (:primitives c)))))
-        (if (rules/air ((:block-at (rules-in c (feet-of c))) floor))
-          {:reason :place-failed :cell floor :item item}
-          (do (ctx/update-mem! c update :bridged (fnil conj #{}) floor)
-              :again))))))
+      (nil? cells) {:reason :no-support-floor :cell floor :tried [floor (update floor 1 dec)]
+                    :why (str "no block beside or under " (pr-str floor) " to place " item " against: the floor opens into a void")}
+      :else (loop [[cell & more] cells]
+              (let [stop (await (place-floor! c in item cell))]
+                (cond stop stop
+                      (seq more) (recur more)
+                      :else :again))))))
 
 (defn ^:async walk-into!
   "Walk the body into cell [x y z] with a go-to child in slot (no escalation: the dig is this job's own): :continue

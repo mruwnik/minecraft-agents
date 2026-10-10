@@ -43,6 +43,19 @@
       (is (= dug (set (shape/part-cells {:stair {:from from :heading heading :to-y 58}}))) (name heading))
       (is (not-any? (set (shape/part-cells {:stair {:from from :heading heading :to-y 58}})) [from (update from 1 inc)])))))
 
+(defn solid-at
+  "A block-at over the cells named solid, air elsewhere."
+  [& cells]
+  (let [named (set cells)]
+    (fn [cell] (if (named cell) "stone" "air"))))
+
+(deftest a-floor-is-placed-against-a-neighbour-or-from-the-cell-under-it-else-it-has-no-support
+  (let [floor [4 60 0]]
+    (is (= [floor] (stair/floor-plan (solid-at [3 60 0]) floor)) "a face beside it")
+    (is (= [[4 59 0] floor] (stair/floor-plan (solid-at [3 59 0]) floor)) "only the cell under has a face: support first")
+    (is (nil? (stair/floor-plan (solid-at [9 9 9]) floor)) "a void pocket")
+    (is (= [floor] (stair/floor-plan (fn [cell] (when (= cell [5 60 0]) nil)) floor)) "an unseen neighbour may be solid")))
+
 (deftest stair-index-finds-the-step-on-the-line-only
   (are [feet dir heading i] (= i (stair/stair-index [0 65 0] feet dir heading 8))
     [0 65 0] :down :east 0
@@ -518,7 +531,8 @@
           (is (= :done (:status @out)))
           (is (= [1 66 0] (:at @out)))
           (is (= "cobblestone" (block-at p [1 65 0])) "the floor was placed")
-          (is (= 1 (count (filter #(= "place" (.-name %)) (.-calls (.-world p)))))))))))
+          (is (= "cobblestone" (block-at p [1 64 0])) "from the cell under it, the only one with a face (the ground beside it)")
+          (is (= 2 (count (filter #(= "place" (.-name %)) (.-calls (.-world p)))))))))))
 
 (defn scaffold [{:keys [eng]}] (mapv #(select-keys % [:cell :item :purpose]) (ledger/open-entries (mem/view (:store eng)))))
 
@@ -528,7 +542,8 @@
       (fn ^:async t []
         (let [inv (conj pick {:name "cobblestone" :count 10})
               noted (assoc up-east :note {:escalation true})
-              floor [{:cell [1 65 0] :item "cobblestone" :purpose :stair-floor}]]
+              floor [{:cell [1 64 0] :item "cobblestone" :purpose :stair-floor}
+                     {:cell [1 65 0] :item "cobblestone" :purpose :stair-floor}]]
           (is (= floor (scaffold (await (stair! {:blocks cave-gap :inventory inv} noted (fn [_])))))
               "go-to's stair: the floor goes into the scaffold ledger")
           (is (= [] (scaffold (await (stair! {:blocks cave-gap :inventory inv} up-east (fn [_])))))
