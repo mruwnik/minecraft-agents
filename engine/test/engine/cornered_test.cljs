@@ -701,6 +701,14 @@
     (is (= {:x 3 :y 64 :z 0} (retreat/roof-cell at {:x 0.5 :y 64 :z 0.5} 8)) "a cell with a block at head height is no gap; one beyond reach is skipped")
     (is (nil? (retreat/roof-cell at {:x 20.5 :y 64 :z 0.5} 8)) "none within reach")))
 
+(deftest roof-cell-prefers-a-cell-no-enderman-can-stand-within-two-cells-of
+  (let [roof (for [x (range 3 9) z (range -3 4)] [x 66 z])
+        floor (for [x (range 0 9) z (range -3 4)] [x 63 z])
+        solid (set (concat roof floor))
+        at (fn [{:keys [x y z]}] (if (solid [x y z]) "stone" "air"))]
+    (is (= {:x 5 :y 64 :z 0} (retreat/roof-cell at {:x 0.5 :y 64 :z 0.5} 8))
+        "the edge cell x=3 is open to a 3-high stand at x=2: it takes the first cell 2 in")))
+
 (deftest a-body-with-an-enderman-near-and-no-water-walks-under-a-nearby-roof
   (async done
     (tu/run-async done

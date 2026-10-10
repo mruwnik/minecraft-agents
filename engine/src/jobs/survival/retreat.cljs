@@ -302,18 +302,23 @@
 
 (defn roof-cell
   "The nearest cell within reach (blocks, horizontally and 1 vertically) of from that block-at reads as a 2-high gap
-  on a solid floor under a solid roof, which a 3-tall enderman cannot enter, or nil."
+  on a solid floor under a solid roof, which a 3-tall enderman cannot enter, or nil. A cell with no cell an enderman
+  could stand in (3 clear above a solid floor) within 2 blocks comes first: it cannot reach one at the roof's edge."
   [block-at from reach]
-  (let [[fx fy fz] (mapv #(js/Math.floor %) [(:x from) (:y from) (:z from)])]
+  (let [[fx fy fz] (mapv #(js/Math.floor %) [(:x from) (:y from) (:z from)])
+        at (fn [cell dy] (block-at (update cell :y + dy)))
+        gap? (fn [cell] (and (escape/solid? (at cell -1)) (escape/passable? (at cell 0))
+                             (escape/passable? (at cell 1)) (escape/solid? (at cell 2))))
+        tall? (fn [cell] (and (escape/solid? (at cell -1)) (escape/passable? (at cell 0))
+                              (escape/passable? (at cell 1)) (escape/passable? (at cell 2))))
+        deep? (fn [cell] (not-any? tall? (for [dx (range -2 3) dz (range -2 3)]
+                                           (-> cell (update :x + dx) (update :z + dz)))))]
     (->> (for [dx (range (- reach) (inc reach)) dy (range -1 2) dz (range (- reach) (inc reach))
                :when (<= (+ (* dx dx) (* dz dz)) (* reach reach))
                :let [cell {:x (+ fx dx) :y (+ fy dy) :z (+ fz dz)}]
-               :when (and (escape/solid? (block-at (update cell :y dec)))
-                          (escape/passable? (block-at cell))
-                          (escape/passable? (block-at (update cell :y inc)))
-                          (escape/solid? (block-at (update cell :y + 2))))]
+               :when (gap? cell)]
            cell)
-         (sort-by #(u/dist from {:x (+ 0.5 (:x %)) :y (:y %) :z (+ 0.5 (:z %))}))
+         (sort-by (juxt (complement deep?) #(u/dist from {:x (+ 0.5 (:x %)) :y (:y %) :z (+ 0.5 (:z %))})))
          first)))
 
 (defn ^:async roof!
