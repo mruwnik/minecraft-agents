@@ -203,7 +203,7 @@
         (let [{:keys [eng p seen]} (setup (world "oak_door" {:open false :locked true}) (tu/capture-sink))
               result (await (child-outcome eng job {:pos at :state :open} 40))
               warns (filterv #(= :toggle.gave-up (:kind %)) @seen)]
-          (is (= {:status :gave-up :reason :unchanged :wanted :open} (head result [:status :reason :wanted])))
+          (is (= {:status :stopped :reason :unchanged :wanted :open} (head result [:status :reason :wanted])))
           (is (= 1 (count (calls p "useOn"))) "one click, no retry")
           (is (= 1 (count warns)))
           (is (= :unchanged (:reason (:data (first warns))))))))))
@@ -223,7 +223,7 @@
                                             (.then (click) click))
                                         (click)))))
               result (await (child-outcome eng job {:pos at :state :open} 40))]
-          (is (= {:status :gave-up :reason :wrong-way} (head result [:status :reason])))
+          (is (= {:status :stopped :reason :wrong-way} (head result [:status :reason])))
           (is (false? (:open (props p at)))))))))
 
 (deftest a-block-the-body-cannot-walk-to-is-unreachable
@@ -232,7 +232,7 @@
       (fn ^:async t []
         (let [w (assoc (world "oak_door" {:open false} 3 14) :unreachable ["3,64,0"])
               {:keys [result p seen]} (await (run w {:pos at :state :open}))]
-          (is (= {:status :gave-up :reason :unreachable} (head result [:status :reason])))
+          (is (= {:status :stopped :reason :unreachable} (head result [:status :reason])))
           (is (empty? (calls p "useOn")))
           (is (= 1 (count (kinds seen :toggle.gave-up)))))))))
 
@@ -287,7 +287,7 @@
         (let [{:keys [eng p seen]} (setup (world "oak_fence_gate" {:open true} 3 4))
               clicks (too-far-first! p 99)
               result (await (child-outcome eng job {:pos at :state :closed :reach 4} 80))]
-          (is (= {:status :gave-up :reason :unreachable} (head result [:status :reason])))
+          (is (= {:status :stopped :reason :unreachable} (head result [:status :reason])))
           (is (= 3 @clicks) "the first click and one after each of two walks closer")
           (is (= 1 (count (kinds seen :toggle.gave-up)))))))))
 

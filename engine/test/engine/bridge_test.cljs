@@ -175,7 +175,9 @@
           (is (= 2 (count (the-ledger eng))))
           (let [g (first (of-kind seen :bridge.gave-up))]
             (is (= :too-few-blocks (:reason g)))
-            (is (= (row 2) (:placed g)))))))))
+            (is (= (row 2) (:placed g))))
+          (is (= [:too-few-blocks] (mapv :reason (of-kind seen :stopped))) "the job ends stopped with the reason, not completed")
+          (is (empty? (of-kind seen :completed))))))))
 
 (deftest a-zone-refuses-before-any-placement
   (async done

@@ -38,7 +38,7 @@
   Declines before any walk with warn toggle.declined and :reason :bad-args, :not-loaded, :no-block,
   :not-toggleable, :needs-redstone, :bad-state or :standing-in.
 
-  Ends with info toggle.done (:changed or :already) and the result {:status :done|:declined|:gave-up :reason
+  Ends with info toggle.done (:changed or :already) and the result {:status :done|:declined|:stopped :reason
   :pos :block :wanted :was :now}. The pen-gate trigger may shut a planned pen gate this job opened once the
   body has been more than 2 blocks away for 4 s.")
 
@@ -76,7 +76,7 @@
 
 (defn give-up!
   [c reason pos state text more]
-  (let [result (report :gave-up reason pos state more)]
+  (let [result (report :stopped reason pos state more)]
     (ctx/emit! c :toggle.gave-up :warn (assoc result :text (str "toggle: " text)))
     (ctx/result! c result)
     :done))

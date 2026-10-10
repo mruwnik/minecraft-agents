@@ -36,7 +36,7 @@
   for it after looking ahead); run short part way, it gives up
   :too-few-blocks; a cell ahead still unsensed after the look gives up :unseen. Every give-up ends the job, so a parent running it as a child reads the result.
 
-  Ends with {:status :done|:gave-up :reason :placed [[x y z] ...] :built n :length n}. :placed are this job's confirmed
+  Ends with {:status :done|:stopped :reason :placed [[x y z] ...] :built n :length n}. :placed are this job's confirmed
   blocks, nearest first. Events: bridge.done (info) and bridge.gave-up (warn, with :reason and by reason :at :block
   :zone :short :detail). Gives up with :too-few-blocks, :not-on-solid, :blocked (a cell ahead at body height is not
   clear), :zone, :footprint, :no-zones, :not-loaded, :not-replaceable, :off-line, :place-failed (3 failed places in a
@@ -132,7 +132,7 @@
   (let [{:keys [heading length]} (:args c)
         cells (placed c l (:start (ctx/mem c)) heading)
         done? (= :done (:step step))
-        result (merge {:status (if done? :done :gave-up) :placed cells :built (count cells) :length length}
+        result (merge {:status (if done? :done :stopped) :placed cells :built (count cells) :length length}
                       (dissoc step :step))]
     (ctx/result! c result)
     (if done?
