@@ -215,3 +215,21 @@
           (is (number? (:distance (done-event s))) "how far the animal stands from :pos")
           (is (re-find #"outside" (:text (first (stopped s)))))
           (is (not (in-pen-box? (cow-of s 1)))))))))
+
+(deftest a-cow-out-of-sight-at-the-spot-is-lost-not-arrived
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng clock] :as s} (h/setup {:floor tu/walk-floor :self {:pos {:x 26 :y 64 :z 0}} :inventory wheat :entities [(cow 1 24)]} 50)
+              vanish! (fn [token a impl]
+                        (.then (impl token a)
+                               (fn [r]
+                                 (when (>= (.. p self -pos -x) 27) (swap! (fake/state p) assoc :entities []))
+                                 r)))]
+          (.override (.-world p) "steer" vanish!)
+          (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal}) {})
+          (loop [i 0] (when (and (< i 150) (not (finished? s))) (swap! clock + 700) (await (core/tick! eng)) (recur (inc i))))
+          (is (finished? s))
+          (is (= :lost (:reason (done-event s))) (pr-str (done-event s)))
+          (is (some? (:last-seen (:lost (done-event s)))))
+          (is (= 1 (count (stopped s)))))))))

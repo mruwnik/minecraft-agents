@@ -27,8 +27,8 @@
 
   Ends with info lure-to.done and a warn lure-to.gave-up unless the reason is :arrived. Result {:reason :animal key
   :near bool (the animal is within 6 blocks of :pos) :at pos}. Reasons:
-  - :arrived: the body stands within :range of :pos and the animal is in :box (none: within 6 blocks of :pos), else the
-    body holds still for it up to 10 s and the end is :animal-outside. The food is then put away; :near says whether the animal is by the spot.
+  - :arrived: the body stands within :range of :pos and the animal is seen in :box (none: within 6 blocks of :pos), else the
+    body holds still for it up to 10 s and the end is :animal-outside (seen elsewhere) or :lost (not seen). The food is then put away; :near says whether the animal is by the spot.
   - :animal-outside: the body is at :pos but the animal is not in the destination; the result gives :distance (animal to :pos).
   - :none (no animal to lure within :radius), :no-food, :no-hold (the food would not stay in hand), :lost, :lagging,
     :unreachable (a walk gave up), :timeout (:timeout-s from the first round, not the food fetch).
@@ -188,14 +188,14 @@
 
 (defn ^:async arrive!
   "The body stands at :pos: the job ends :arrived once the led animal is at the destination; until then the body holds
-  still for it, and ends :animal-outside after max-wait-ms."
+  still for it, and ends :animal-outside (seen outside) or :lost (not seen) after max-wait-ms."
   [c]
   (let [a (lead-to/animal-now c)
         now (ctx/now c)
         since (or (:arrive-since (ctx/mem c)) now)]
     (cond
-      (or (nil? a) (at-destination? c a)) (finish! c :arrived)
-      (> (- now since) lead-to/max-wait-ms) (finish! c :animal-outside)
+      (and a (at-destination? c a)) (finish! c :arrived)
+      (> (- now since) lead-to/max-wait-ms) (finish! c (if a :animal-outside :lost))
       :else (do (ctx/update-mem! c assoc :arrive-since since)
                 (await (lead-to/wait-for-animal! c))))))
 
