@@ -44,3 +44,15 @@
           (is (= {:x 0 :y 64 :z 0} (select-keys (st/pos-of p) [:x :y :z])))
           (is (= [:sealed-hostile-near] (distinct (map :reason (st/emitted seen :holding)))))
           (is (empty? (st/emitted seen :unreachable))))))))
+
+(deftest the-hold-ends-when-the-hostile-is-gone-with-the-plug-still-shut
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (await (sealed 6))
+              held (count (st/emitted seen :holding))]
+          (swap! (fake/state p) update :entities #(vec (remove (comp #{9} :id) %)))
+          (await (st/tick-n eng 8))
+          (is (pos? held))
+          (is (= held (count (st/emitted seen :holding))) "no further :sealed-hostile-near hold")
+          (is (seq (st/emitted seen :unreachable)) "the walk ends in its own give-up, not an endless wait"))))))
