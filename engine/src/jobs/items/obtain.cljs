@@ -600,11 +600,14 @@
      :explore (:explore a)}))
 
 (defn ^:async pickaxe-step!
-  "Get the cheapest tool that harvests the need's block (a jobs.items.obtain child): :again once it is carried, else the gather source fails."
+  "Get the cheapest tool that harvests the need's block (a jobs.items.obtain child): :again once it is carried, :declined
+  while the tool's smelt cooks, else the gather source fails."
   [c names need]
-  (let [r (await (ctx/call-child c :pickaxe 'jobs.items.obtain (pickaxe-args c names need)))]
+  (let [args (pickaxe-args c names need)
+        r (await (declined/call-child! c :pickaxe 'jobs.items.obtain args))]
     (cond
       (= :continue r) :continue
+      (and (= :declined r) (= :cooking (:reason (b/child-wait c :pickaxe 'jobs.items.obtain args)))) :declined
       (pickaxe-first? c names need)
       (tried! c :gather {:pickaxe (or (:reason (ctx/child-result c :pickaxe)) r)})
       :else :again)))

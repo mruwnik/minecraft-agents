@@ -965,6 +965,22 @@
           (is (= 1 (get (inv s) "wooden_pickaxe")))
           (is (seq (calls s "dig")) "a log was felled"))))))
 
+(deftest an-obtain-whose-pickaxe-child-is-cooking-waits-instead-of-failing-the-mine
+  ;; the pickaxe is smelting (a copper pickaxe's ingots): the mine source must not be written off as no-source
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (world {}) [own-zone])
+              id (core/submit! (:eng s) (list 'jobs.items.obtain {:item "cobblestone" :count 3}) {})
+              call ctx/call-child
+              check ctx/check-child]
+          (set! ctx/call-child (fn [c slot job args] (if (= :pickaxe slot) (js/Promise.resolve :declined) (call c slot job args))))
+          (set! ctx/check-child (fn [c slot job args] (if (= :pickaxe slot) (do (ctx/wait c {:reason :cooking}) false) (check c slot job args))))
+          (try (await (run-ticks s 20))
+               (finally (set! ctx/call-child call) (set! ctx/check-child check)))
+          (is (empty? (events-of s :stopped)) (pr-str (map :why (events-of s :stopped))))
+          (is (= :cooking (:reason (core/waiting (:eng s) id)))))))))
+
 (deftest obtain-oak-planks-fells-no-birch
   ;; a birch log makes no oak planks: felling birch for them gathered hundreds of logs live
   (async done
