@@ -261,12 +261,12 @@
          first)))
 
 (defn ^:async leg-step!
-  "One flee step to target as a go-to child of legs of at most leg-s seconds (a flee never digs or pillars: :escalate false;
+  "One flee step to target as a go-to child of legs of at most leg-s seconds (a flee never digs or pillars: :escalate false, and plans no route deeper or higher than 16 blocks past body and target: :y-margin;
   known dangers stay costed): true when the body arrived or got on a leg nearer, false when go-to gave up, waited or was declined."
   [c slot target range leg-s]
   (let [from (u/self-pos c)
         t0 (ctx/now c)
-        r (await (ctx/call-child c slot 'jobs.movement.go-to {:pos target :range range :escalate false :at-night :go
+        r (await (ctx/call-child c slot 'jobs.movement.go-to {:pos target :range range :escalate false :y-margin 16 :at-night :go
                                                               :warn false :leg-s leg-s
                                                               :retry false :look-round false :allow-over-budget true}))
         res (when (= :done r) (ctx/child-result c slot))

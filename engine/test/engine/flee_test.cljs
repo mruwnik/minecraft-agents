@@ -130,6 +130,7 @@
           (is (= :far (:ended out)))
           (is (pos? (count @args)) "every flight step is a go-to call")
           (is (every? #(false? (:escalate %)) @args) "a flee never digs or pillars")
+          (is (every? #(= 16 (:y-margin %)) @args) "a flee plans no route far below or above itself and its goal")
           (is (every? #(and (false? (:retry %)) (false? (:look-round %))) @args)
               "a step that gains nothing ends at once and never looks round")
           (is (> (fake/dist (body-pos p) (mob-pos p 7)) 35)))))))
