@@ -43,3 +43,25 @@
               digs (filter #(= "dig" (.-name %)) (.-calls (.-world p)))]
           (is (= {:decision :abandoned :reason :window-closed} (select-keys (recovered eng) [:decision :reason])) (pr-str (recovered eng)))
           (is (empty? digs) "nothing is dug for a stair that ends after the pile is gone"))))))
+
+(defn feet-y [p] (js/Math.floor (.-y (.-pos (.self p)))))
+
+(deftest a-zombie-turning-up-mid-stair-ends-the-run-declined-for-danger
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [arrived (atom false)
+              {:keys [eng p seen]} (setup {:blocks deep-ground :inventory [{:name "iron_pickaxe" :count 1} {:name "torch" :count 16}]
+                                           :entities [{:id 1 :name "item" :kind "item" :pos pile-pos :item {:name "diamond" :count 5}}]})]
+          (die! eng {:pos pile-pos :inventory pile} 5000)
+          (core/submit! eng job {})
+          (add-watch (fake/state p) ::zombie
+                     (fn [_ _ _ _]
+                       (when (and (<= (feet-y p) 58) (not @arrived))
+                         (reset! arrived true)
+                         (let [pos (.-pos (.self p))]
+                           (fake/add-entity! p
+                                  {:id 7 :name "zombie" :kind "hostile" :pos {:x (- (js/Math.floor (.-x pos)) 0.5) :y (inc (js/Math.floor (.-y pos))) :z (+ 0.5 (js/Math.floor (.-z pos)))}})))))
+          (await (run-until-empty eng 20))
+          (is (some #(= :danger (:reason %)) (filter #(= :recover-drops.declined (:kind %)) @seen)))
+          (is (> (feet-y p) 50) "the stair was not carried on to the pile"))))))

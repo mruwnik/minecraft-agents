@@ -562,13 +562,17 @@
                    (finish! c :abandoned (assoc (:decided (ctx/mem c)) :reason reason)))]
     (if (> need-s left-s)
       (give-up! :window-closed (str "the pile is " below " blocks down: a stair takes about " (js/Math.round need-s) " s, " (js/Math.round left-s) " s are left"))
-      (let [r (await (child/run! c :dig 'jobs.access.tunnel {:target [(js/Math.floor (:x pos)) (js/Math.floor (:y pos)) (js/Math.floor (:z pos))]
-                                                              :max-length 96 :keep true}))
-            result (ctx/child-result c :dig)]
-        (cond
-          (= :done r) :next
-          (= :continue r) (decline! c :unreachable "the stair down to the pile is waiting on the world" {:pos pos})
-          :else (give-up! :unreachable (str "no stair down to the pile: " (pr-str (or (:reason result) r)))))))))
+      (let [args {:target [(js/Math.floor (:x pos)) (js/Math.floor (:y pos)) (js/Math.floor (:z pos))] :max-length 96 :keep true :max-steps 1}]
+        (loop [n 0]
+          (let [danger (threatened? c)
+                r (when-not danger (await (ctx/call-child c :dig 'jobs.access.tunnel args)))]
+            (cond
+              danger (decline-danger! c danger)
+              (= :done r) :next
+              (not (ctx/alive? c)) :declined
+              (and (= :continue r) (< n (child/default-max-calls))) (do (await (pace/pace!)) (recur (inc n)))
+              (= :continue r) (decline! c :unreachable "the stair down to the pile is waiting on the world" {:pos pos})
+              :else (give-up! :unreachable (str "no stair down to the pile: " (pr-str (or (:reason (ctx/child-result c :dig)) r)))))))))))
 
 (defn ^:async trip!
   "The decision, then the walk and the collect passes of a trip inside its window."

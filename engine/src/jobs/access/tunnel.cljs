@@ -106,6 +106,7 @@
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
    :on-lava {:doc "exposed lava: :seal (fill it with a building block, then go on) or :stop (jobs.access.stair)" :spec #{:seal :stop} :default :seal}
    :keep {:doc "a tunnel that stays: torches left and the tunnel left open; false (a dead end): torches go into the scaffold ledger for jobs.access.leave-tunnel to take back" :spec boolean? :default false}
+   :max-steps {:doc "give the round back with :continue after this many steps (a stair segment, a run cell), for a caller that looks around between them; nil: the stair's ::max-steps" :spec (a/int-in 1 nil) :default nil}
    :fetch {:doc "get a missing pickaxe instead of waiting :no-tool (jobs.lib.fetch): true, a set of kinds or a map of limits; false waits :no-tool" :spec fetch/option? :default true}
    :pick-up-ores {:doc "true: dig the ores of jobs.lib.ore-pick's ::ores setting that are exposed within reach on the way; false: none; or the ore block names to dig" :spec (a/or-of boolean? (a/coll-of a/name?)) :default true}})
 
@@ -651,4 +652,4 @@
   [c]
   (or (await (trip/torches-ready! c))
       (let [n (atom 0)]
-        (await (pace/steps! c #(if (< (swap! n inc) (stair/max-steps)) (step! c) :continue))))))
+        (await (pace/steps! c #(if (< (swap! n inc) (if-let [m (:max-steps (:args c))] (inc m) (stair/max-steps))) (step! c) :continue))))))
