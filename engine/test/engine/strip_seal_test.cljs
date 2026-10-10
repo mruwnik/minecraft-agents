@@ -1,0 +1,125 @@
+(ns engine.strip-seal-test
+  "jobs.strip.seal: a 3x3 corridor cross-section blocked off from the base side, in the fake world."
+  (:require [cljs.test :refer [deftest is are async]]
+            [engine.blocks-dig-test :as bd]
+            [engine.test-util :as tu]
+            [jobs.strip.seal :as seal]))
+
+(def job 'jobs.strip.seal)
+(def args {:at [0 64 0] :axis :x :side :from})
+(def cobble [{:name "cobblestone" :count 12}])
+(def tools [{:name "iron_sword" :count 1}])
+(def drops {"rail" "rail" "cobweb" "string" "torch" "torch"})
+(def plane (for [y [64 65 66] z [-1 0 1]] [0 y z]))
+
+(def corridor
+  "A corridor along x, 3 wide and 3 high, in rock: a rail in the centre of the section, a cobweb and a torch in it."
+  (merge (tu/box -10 63 -2 10 63 2 "stone") (tu/box -10 64 -2 10 66 -2 "stone") (tu/box -10 64 2 10 66 2 "stone") (tu/box -10 67 -2 10 67 2 "stone")
+         {"0,64,0" "rail" "0,65,1" "cobweb" "0,65,-1" "torch"}))
+
+(defn world [& {:keys [at inventory extra zones] :or {at -3 inventory (into cobble tools)}}]
+  (bd/setup {:self {:pos {:x at :y 64 :z 0}} :blocks (merge corridor extra) :inventory inventory :drops drops :zones (or zones [])}))
+
+(defn run! [{:keys [eng]} a] (bd/child-outcome eng job a 120))
+(defn solid? [p cell] (= "cobblestone" (bd/block-at p cell)))
+(defn feet-x [p] (js/Math.floor (.-x (.-pos (.self p)))))
+(defn placed-cells [p] (mapv #(let [pos (.-pos (.-args %))] [(.-x pos) (.-y pos) (.-z pos)]) (bd/calls p "place")))
+
+(deftest the-section-is-cleared-and-sealed-from-the-base-side
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (world)
+              p (:p env)
+              r (await (run! env args))]
+          (is (= {:status :done :reason :sealed :placed 9} (select-keys r [:status :reason :placed])))
+          (is (every? #(solid? p %) plane))
+          (is (neg? (feet-x p)) "the body ends on the side it was asked to")
+          (is (= 1 (bd/carried p "torch")) "the torch in the section is taken")
+          (is (= 3 (bd/carried p "cobblestone")))
+          (is (= [0 64 0] (last (placed-cells p))) "the centre bottom cell is closed last")
+          (is (= [64 64 64 65 65 65 66 66 66] (sort (mapv second (placed-cells p)))) "nine cells, three rows"))))))
+
+(deftest the-lowest-row-is-placed-before-the-rows-above
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (world)
+              _ (await (run! env args))
+              ys (mapv second (placed-cells (:p env)))]
+          (is (= (sort (butlast ys)) (butlast ys)) "rows go up, apart from the centre bottom cell last"))))))
+
+(deftest a-sealed-section-is-done-with-nothing-placed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (world :extra (into {} (map (fn [[x y z]] [(str x "," y "," z) "cobblestone"]) plane)))
+              r (await (run! env args))]
+          (is (= {:status :done :reason :sealed :placed 0} (select-keys r [:status :reason :placed])))
+          (is (empty? (bd/calls (:p env) "place"))))))))
+
+(deftest short-of-blocks-stops-no-blocks-naming-the-shortfall
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (world :inventory (into [{:name "cobblestone" :count 4}] tools))
+              r (await (run! env args))]
+          (is (= {:status :stopped :reason :no-blocks :placed 4 :short 5} (select-keys r [:status :reason :placed :short]))))))))
+
+(deftest a-body-on-the-far-side-walks-round-to-the-base-side
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (world :at 4)
+              r (await (run! env args))]
+          (is (= :sealed (:reason r)))
+          (is (every? #(solid? (:p env) %) plane))
+          (is (neg? (feet-x (:p env)))))))))
+
+(deftest a-far-side-body-with-no-way-round-stops-wrong-side
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (world :at 4 :extra (merge (tu/box 2 64 -1 2 66 1 "stone") (tu/box -11 64 -2 -11 66 2 "stone") (tu/box 11 64 -2 11 66 2 "stone")))
+              r (await (run! env args))]
+          (is (= {:status :stopped :reason :wrong-side :placed 0} (select-keys r [:status :reason :placed])))
+          (is (empty? (bd/calls (:p env) "place"))))))))
+
+(deftest a-cell-in-anothers-zone-stops-refused-naming-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (world :zones [{:name "farm" :min [0 60 0] :max [0 70 0] :owner "Miles"}])
+              r (await (run! env args))]
+          (is (= {:status :stopped :reason :refused} (select-keys r [:status :reason])))
+          (is (= [0 65 0] (vec (:cell r))) "the centre cells are the zone's; the first refused is reported")
+          (is (not (solid? (:p env) [0 64 0]))))))))
+
+(deftest a-container-in-the-section-is-never-dug
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (world :extra {"0,64,1" "chest"})
+              r (await (run! env args))]
+          (is (= {:status :stopped :reason :blocked :cell [0 64 1]} (select-keys r [:status :reason :cell])))
+          (is (= "chest" (bd/block-at (:p env) [0 64 1]))))))))
+
+(deftest bad-args-stop-bad-args
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [r (await (run! (world) {:axis :x :side :from}))]
+          (is (= {:status :stopped :reason :bad-args} (select-keys r [:status :reason]))))))))
+
+(deftest section-cells-run-lowest-row-first-with-the-centre-bottom-last
+  (let [cells (seal/section [0 64 0] :x 3 3)]
+    (is (= 9 (count (distinct cells))))
+    (is (= [0 64 0] (last cells)))
+    (is (= (sort (map second (butlast cells))) (map second (butlast cells))))))
+
+(deftest the-stand-cell-is-one-step-back-on-the-side
+  (are [axis side expected] (= expected (seal/stand [0 64 0] axis side))
+    :x :from [-1 64 0]
+    :x :to [1 64 0]
+    :z :from [0 64 -1]
+    :z :to [0 64 1]))
