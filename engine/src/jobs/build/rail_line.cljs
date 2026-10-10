@@ -7,7 +7,7 @@
             [jobs.lib.pace :as pace]
             [jobs.build.rail :as builder]
             [jobs.lib.placement :as placement]
-            [jobs.build.from-plan :as build]
+            [jobs.build.from-plan.plan :as plan]
             [plan.rail :as rail]
             [plan.shape :as shape]
             [jobs.lib.util :as u]
@@ -72,11 +72,11 @@
         p (:primitives c)
         answer (known/plan c plan)
         cells (when (and answer (not (:broken answer)))
-                (build/judged p answer part (set (keys (build/carried-counts p))) nil))
+                (plan/judged p answer part (set (keys (plan/carried-counts p))) nil))
         chain (when (seq cells) (rail/line cells))
         trouble (cond
-                  (build/plan-trouble answer cells) {:reason :plan :detail (build/plan-trouble answer cells)
-                                                     :text (build/plan-trouble answer cells)}
+                  (plan/plan-trouble answer cells) {:reason :plan :detail (plan/plan-trouble answer cells)
+                                                     :text (plan/plan-trouble answer cells)}
                   (:error chain) (merge {:reason :not-a-line :why (:error chain)
                                          :text (str "its rail cells are not one line: " (name (:error chain))
                                                     (when (:at chain) (str " at " (pr-str (:at chain)))))}
@@ -87,23 +87,23 @@
       (do (decline! c trouble)
           {:trouble trouble}))))
 
-(defn block-at [c] (partial build/world-block (:primitives c)))
+(defn block-at [c] (partial plan/world-block (:primitives c)))
 
 (defn sound?
   "True when nothing the plan wants is still to place and the line passes the proof."
   [c cells]
-  (and (empty? (build/owed cells))
+  (and (empty? (plan/owed cells))
        (:ok? (rail/judge-line cells (block-at c)))))
 
 (defn refused
   "The cells still to build that the access rules refuse now: [{:pos :reason ...}]."
   [c cells]
-  (let [in (build/rules-input c)
+  (let [in (plan/rules-input c)
         accept (:accept (:args c))]
     (into [] (keep (fn [{:keys [pos]}]
-                     (let [d (build/decide in accept pos)]
+                     (let [d (plan/decide in accept pos)]
                        (when (vector? d) (assoc (second d) :pos pos)))))
-          (build/owed cells))))
+          (plan/owed cells))))
 
 (defn choices
   "The items that place cell: every choice of an :any want, else its one item."
@@ -144,8 +144,8 @@
   (let [{:keys [plan part all-carried]} (:args c)
         blocked (blocked-sources cells)
         no (refused c cells)
-        owed (build/owed cells)
-        carried (build/carried-counts (:primitives c))
+        owed (plan/owed cells)
+        carried (plan/carried-counts (:primitives c))
         short (short-of owed carried)]
     (cond
       (seq blocked) (let [text (str "a redstone block cannot go at " (str/join ", " (map pr-str blocked))
@@ -157,7 +157,7 @@
                  (decline! c {:reason :refused :refused no :text text})
                  {:reason :refused :why text})
       (and all-carried (seq short))
-      (let [text (str "short of " (build/shortage-text short))]
+      (let [text (str "short of " (plan/shortage-text short))]
         (ctx/warn-once! c [plan :short] :rail-build.short
                         {:plan plan :part part :short short :up-to (up-to-of owed carried)
                          :text (str "rail build of " plan " waits: " text)})
@@ -180,10 +180,10 @@
   builder not yet begun with nothing to do is skipped: the proof says what is missing."
   [c cells]
   (if (and (not (:building (ctx/mem c))) (builder/idle? c cells))
-    (let [left (build/owed cells)]
+    (let [left (plan/owed cells)]
       (ctx/update-mem! c assoc :phase :switch
                        :built {:placed 0 :missing (mapv :pos left)
-                               :short (short-of left (build/carried-counts (:primitives c)))
+                               :short (short-of left (plan/carried-counts (:primitives c)))
                                :given-up {} :wrong [] :refused []})
       :again)
     (do (when-not (:building (ctx/mem c)) (ctx/update-mem! c assoc :building true))
@@ -232,7 +232,7 @@
         built (still-wrong (:built (ctx/mem c)) cells at)
         proof (rail/judge-line cells at)
         rails (count (filter rail/rail-cell? cells))
-        left (build/left-text built)]
+        left (plan/left-text built)]
     (if (:ok? proof)
       (ctx/emit! c :rail-build.done :info {:plan plan :cells rails :placed (:placed built)
                                            :text (str "rail line " plan " is sound, " rails " rails, placed " (:placed built))})

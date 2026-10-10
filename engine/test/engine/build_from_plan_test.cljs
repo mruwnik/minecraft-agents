@@ -14,12 +14,13 @@
             [engine.triggers :as triggers]
             [jobs.lib.reach :as reach]
             [jobs.lib.world-files :as world]
-            [jobs.build.from-plan :as build]))
+            [jobs.build.from-plan :as build]
+            [jobs.build.from-plan.plan :as plan]))
 
 (def job 'jobs.build.from-plan)
 
 (deftest left-text-names-what-a-build-left
-  (are [built text] (= text (build/left-text built))
+  (are [built text] (= text (plan/left-text built))
     {} ""
     {:refused [{:pos [1 2 3] :reason :zone}]} "refused [1 2 3] zone"
     {:given-up {[1 2 3] :shape}} "gave up [1 2 3] shape"
@@ -151,7 +152,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [plan {:id "far" :parts [{:id "post" :cells [[40 64 0]] :want "oak_fence"}]}
-              {:keys [eng]} (start {:inventory kit :unreachable (map #(apply h/cell-key %) (build/stand-cells [40 64 0] 64 nil #{}))} {"far" plan})
+              {:keys [eng]} (start {:inventory kit :unreachable (map #(apply h/cell-key %) (plan/stand-cells [40 64 0] 64 nil #{}))} {"far" plan})
               result (await (tu/child-outcome eng job {:plan "far"} 200))]
           (is (= {[40 64 0] :unreachable} (:given-up result)))
           (is (= 0 (:placed result))))))))
@@ -222,9 +223,9 @@
 
 (deftest the-check-judges-the-plan-once-per-window
   (let [n (atom 0)
-        real build/judged
+        real plan/judged
         {:keys [eng seen p]} (start {:inventory []} {"pen" (pen-plan)})]
-    (with-redefs [build/judged (fn [& args] (swap! n inc) (apply real args))]
+    (with-redefs [plan/judged (fn [& args] (swap! n inc) (apply real args))]
       (core/submit! eng (list job {:plan "pen" :fetch false}) {})
       (dotimes [_ 8] (swap! h/clock + 700) (core/tick! eng)))
     (is (< 0 @n 8) "eight ticks, fewer than eight judgements")))
@@ -239,7 +240,7 @@
            (mapv #(select-keys % [:plan :reason]) (h/events-of seen :build.declined))))))
 
 (deftest item-for-picks-the-block-to-place
-  (are [want carried item] (= item (build/item-for want carried))
+  (are [want carried item] (= item (plan/item-for want carried))
     "oak_fence" #{} "oak_fence"
     {:block "oak_fence_gate" :facing :north} #{} "oak_fence_gate"
     [:any "oak_fence" "spruce_fence"] #{"spruce_fence"} "spruce_fence"
@@ -250,7 +251,7 @@
     :clear #{} nil))
 
 (deftest facing-ok-wants-the-body-on-the-far-side
-  (are [facing body ok] (= ok (build/facing-ok? facing [3 64 2] body))
+  (are [facing body ok] (= ok (plan/facing-ok? facing [3 64 2] body))
     nil {:x 0.5 :y 64 :z 0.5} true
     "north" {:x 3.5 :y 64 :z 4.5} true
     "north" {:x 3.5 :y 64 :z 0.5} false
@@ -260,7 +261,7 @@
 
 (deftest a-corner-can-be-placed-from-inside-the-ring
   (let [planned (set (map first (map vector (conj ring [3 64 2]))))]
-    (is (some #{[3 64 3]} (build/stand-cells [2 64 2] 64 nil planned)))))
+    (is (some #{[3 64 3]} (plan/stand-cells [2 64 2] 64 nil planned)))))
 
 ;; ---------------------------------------------------------------- access
 
@@ -716,7 +717,7 @@
   (let [ground (into {} (concat (for [x (range 5 23) z (range 5 23)] [(h/cell-key x 63 z) "stone"])
                                 (for [x (range 15 23) z (range 5 23)] [(h/cell-key x 64 z) "stone"])))
         p (tu/fake-on-floor {:blocks ground :self {:pos {:x 12.5 :y 64 :z 14.5}}})
-        stands (build/ground-stands p [[15 64 10] [14 64 10] [13 64 8] [16 64 12]])]
+        stands (plan/ground-stands p [[15 64 10] [14 64 10] [13 64 8] [16 64 12]])]
     (is (= [[15 65 10] [14 64 10] [13 64 8] [16 65 12]] (vec stands)))))
 
 (def fence-chest "-2,64,3")
@@ -744,7 +745,7 @@
 (deftest follow-surface-moves-each-column-onto-its-seen-ground
   (let [cells [{:pos [1 64 1] :want "oak_fence"} {:pos [1 65 1] :want "torch"} {:pos [4 64 1] :want "oak_fence"} {:pos [7 64 1] :want "oak_fence"}]
         tops {[1 1] 62 [4 1] 70}
-        moved (build/follow-surface cells (fn [x z _] (tops [x z])))]
+        moved (plan/follow-surface cells (fn [x z _] (tops [x z])))]
     (is (= [[1 63 1] [1 64 1] [4 71 1] [7 64 1]] (mapv :pos moved)) "a column moves as a whole; an unseen one stays")))
 
 (deftest a-surface-build-puts-the-fence-on-the-ground-of-every-column
@@ -905,7 +906,7 @@
           (is (= 9 (:placed @out))))))))
 
 (deftest a-rail-shape-in-the-place-result-is-no-misplacement
-  (are [want block text] (= text (build/misplaced want "rail" block))
+  (are [want block text] (= text (plan/misplaced want "rail" block))
     {:block "rail" :shape "south_east"} {:name "rail" :state {:shape "north_south"}} nil
     {:block "powered_rail" :shape "north_south" :powered true} {:name "powered_rail" :state {:shape "north_south" :powered "false"}} nil
     {:block "rail" :shape "south_east"} {:name "stone"} "stone"
@@ -1012,7 +1013,7 @@
           (is (some #(and (= "oak_fence" (:item %)) (true? (:explore %))) @seen) (pr-str @seen)))))))
 
 (deftest stand-levels-are-the-cells-first-then-the-bodys-when-near
-  (are [body cell levels] (= levels (build/stand-levels body cell))
+  (are [body cell levels] (= levels (plan/stand-levels body cell))
     64 64 [64]
     62 64 [64 62]
     67 64 [64 67]
@@ -1022,7 +1023,7 @@
 
 (deftest a-body-near-the-threshold-above-the-cell-aims-at-the-cells-ground-not-its-own-level
   (let [p (tu/seeing-all (tu/fake-on-floor {:blocks {}}))
-        stands (build/stands-for p [40 64 0] 67 nil #{} #{})]
+        stands (plan/stands-for p [40 64 0] 67 nil #{} #{})]
     (is (seq stands))
     (is (every? #(= 64 (second %)) stands) (pr-str stands))))
 
@@ -1030,7 +1031,7 @@
   (let [rim (into {} (for [x (range 37 44) z (range -3 4) y (range 63 67)
                            :when (not= [40 0] [x z])] [(str x "," y "," z) "stone"]))
         p (tu/seeing-all (tu/fake-on-floor {:blocks rim}))
-        stands (build/stands-for p [40 64 0] 67 nil #{} #{})]
+        stands (plan/stands-for p [40 64 0] 67 nil #{} #{})]
     (is (seq stands))
     (is (every? #(= 67 (second %)) stands) (pr-str stands))))
 

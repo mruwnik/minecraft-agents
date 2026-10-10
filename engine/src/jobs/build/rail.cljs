@@ -16,6 +16,8 @@
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
             [jobs.build.from-plan :as build]
+            [jobs.build.from-plan.plan :as plan]
+            [jobs.build.from-plan.text :as text]
             [plan.rail :as rail]))
 
 ;; ------------------------------------------------------------------ order
@@ -58,7 +60,7 @@
 (defn wrong-shapes
   "The positions of settled rails (every chain neighbour is a rail in the world) whose shape differs from the chain's."
   [c ps]
-  (let [at (partial build/world-block (:primitives c))
+  (let [at (partial plan/world-block (:primitives c))
         rail? #(rail/rail-name? (:name (at %)))]
     (vec (for [i (range (count ps))
                :let [pos (ps i)
@@ -78,10 +80,10 @@
   "Whether the builder has nothing to do: nothing placeable with what is carried, no unseen cell with its item
   carried, no settled wrong shape."
   [c cells]
-  (let [carried (build/carried-counts (:primitives c))
+  (let [carried (plan/carried-counts (:primitives c))
         ps (mapv :pos (rail/line cells))]
-    (and (empty? (build/buildable cells carried {}))
-         (not-any? #(pos? (get carried (:item %) 0)) (build/unseen cells {}))
+    (and (empty? (plan/buildable cells carried {}))
+         (not-any? #(pos? (get carried (:item %) 0)) (plan/unseen cells {}))
          (empty? (wrong-shapes c ps)))))
 
 ;; ------------------------------------------------------------------ steps
@@ -96,14 +98,14 @@
     (->> [1 2 3]
          (keep #(get ps (+ i (* step %))))
          (remove #(or (bad %) (= % (:pos cell))))
-         (filter #(rail/rail-name? (:name (build/world-block (:primitives c) %))))
+         (filter #(rail/rail-name? (:name (plan/world-block (:primitives c) %))))
          first)))
 
 (defn beside-stand
-  "The stand beside pos nearest the body, on the ground there (build/ground-stands), not planned or bad; nil if none."
+  "The stand beside pos nearest the body, on the ground there (plan/ground-stands), not planned or bad; nil if none."
   [c body pos planned bad]
-  (->> (build/stand-cells pos (js/Math.floor (:y body)) nil planned)
-       (build/ground-stands (:primitives c))
+  (->> (plan/stand-cells pos (js/Math.floor (:y body)) nil planned)
+       (plan/ground-stands (:primitives c))
        (remove bad)
        (sort-by #(u/dist body (zipmap [:x :y :z] %)))
        first))
@@ -149,14 +151,14 @@
   :shape failure, and so does a cell already clear that the plan still reads as a wrong rail (the next round re-reads it).
   Resolves to the child's :continue or :declined, else :again."
   [c pos]
-  (let [v (rules/may-dig? (assoc (build/rules-input c) :cell pos))
+  (let [v (rules/may-dig? (assoc (plan/rules-input c) :cell pos))
         [x y z] pos
-        lava? (some #{:lava-adjacent} (build/hazards (:block-at (build/rules-input c)) pos))
+        lava? (some #{:lava-adjacent} (plan/hazards (:block-at (plan/rules-input c)) pos))
         args (merge (select-keys (:args c) [:ignore-zones?])
                     {:accept (if lava? [] (filter #{:fluid-adjacent} (:accept (:args c))))}
                     {:pos {:x x :y y :z z} :need-drop false :collect true :on-fluid :fail :for-plan (:plan (:args c))})]
     (if-not (:ok v)
-      (do (ctx/update-mem! c build/refuse pos (select-keys v [:reason :zone :plan :claim]))
+      (do (ctx/update-mem! c plan/refuse pos (select-keys v [:reason :zone :plan :claim]))
           :again)
       (let [r (await (declined/call-child! c :dig 'jobs.blocks.dig args))]
         (if (#{:continue :declined} r)
@@ -181,8 +183,8 @@
 (defn finish!
   "End the build: keep the result, emit its events and move on to switching levers."
   [c cells]
-  (let [result (build/summary c cells (ctx/mem c) true)]
-    (build/announce! c result)
+  (let [result (text/summary c cells (ctx/mem c) true)]
+    (text/announce! c result)
     (ctx/update-mem! c assoc :phase :switch :built result)
     :again))
 
@@ -197,10 +199,10 @@
         from (:from (ctx/mem c))
         closed (merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))
         bad (remove #(contains? closed %) (wrong-shapes c ps))
-        buildable (build/buildable cells (build/carried-counts p) closed)
-        todo (build/placeable c (build/permitted c buildable))
-        underfoot (filter #((build/body-cells (u/self-pos c)) (:pos %)) buildable)
-        unseen (build/unseen cells closed)]
+        buildable (plan/buildable cells (plan/carried-counts p) closed)
+        todo (plan/placeable c (plan/permitted c buildable))
+        underfoot (filter #((plan/body-cells (u/self-pos c)) (:pos %)) buildable)
+        unseen (plan/unseen cells closed)]
     (cond
       (seq bad) (await (fix-step! c ps from cells (first bad)))
       (seq todo) (let [{:keys [placed next]} (await (place-run! c (work-order ps from todo)))]

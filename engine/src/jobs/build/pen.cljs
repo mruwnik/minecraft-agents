@@ -5,7 +5,7 @@
             [jobs.lib.apiary :as apiary]
             [jobs.lib.look :as look]
             [jobs.lib.pen :as pen]
-            [jobs.build.from-plan :as build]
+            [jobs.build.from-plan.plan :as plan]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
             [jobs.lib.world :as known]))
@@ -72,10 +72,10 @@
   [c]
   (let [{:keys [plan part]} (:args c)
         p (:primitives c)
-        answer (build/surfaced c (known/plan c plan))
+        answer (plan/surfaced c (known/plan c plan))
         cells (when (and answer (not (:broken answer)))
-                (build/judged p answer part (set (keys (build/carried-counts p))) nil))
-        trouble (or (build/plan-trouble answer cells)
+                (plan/judged p answer part (set (keys (plan/carried-counts p))) nil))
+        trouble (or (plan/plan-trouble answer cells)
                     (when-not (barrier-box cells) "the plan has no fence, wall or gate cells")
                     (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) "no zone list has been read"))]
     (if-not trouble
@@ -95,7 +95,7 @@
 (defn sound?
   "True when nothing the plan wants is missing and the pen holds."
   [c cells]
-  (and (empty? (build/owed cells))
+  (and (empty? (plan/owed cells))
        (:closed? (read-pen c cells))))
 
 (defn build-args [c]
@@ -123,7 +123,7 @@
         built (:built (ctx/mem c))
         answer (pen/summary (read-pen c cells))
         result (assoc answer :built built)
-        left (build/left-text built)]
+        left (plan/left-text built)]
     (if (:closed? answer)
       (ctx/emit! c :pen-build.done :info {:plan plan :cells (:cells answer) :placed (:placed built)
                                           :text (str "pen of " plan " holds, " (:cells answer) " cells, placed " (:placed built))})

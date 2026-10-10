@@ -4,7 +4,7 @@
   (:require [cljs.test :refer [deftest is]]
             [engine.ctx :as ctx]
             [engine.seen-work-reads-test :refer [wrapped]]
-            [jobs.build.from-plan :as from-plan]
+            [jobs.build.from-plan.plan :as plan]
             [jobs.explore.search :as search]
             [jobs.gather.mine :as mine]))
 
@@ -38,5 +38,5 @@
 
 (deftest build-world-block-needs-sight
   (let [blocks {"0,64,4" "stone"}]
-    (is (nil? (from-plan/world-block (wrapped blocks true) [0 64 4])))
-    (is (= {:name "stone"} (from-plan/world-block (wrapped blocks false) [0 64 4])))))
+    (is (nil? (plan/world-block (wrapped blocks true) [0 64 4])))
+    (is (= {:name "stone"} (plan/world-block (wrapped blocks false) [0 64 4])))))
