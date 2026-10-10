@@ -93,3 +93,33 @@ test('a rebase conflict is aborted and leaves the branch and main unchanged', ()
     assert.equal(fs.readFileSync(path.join(repo, 'a.txt'), 'utf8'), 'theirs\n')
   } finally { fs.rmSync(root, { recursive: true, force: true }) }
 })
+
+const stubCompile = repo => {
+  const log = path.join(repo, 'compile.log')
+  fs.writeFileSync(path.join(repo, 'tools', 'compile'), `#!/usr/bin/env bash\necho "$@" >> ${log}\n`, { mode: 0o755 })
+  return log
+}
+const waitFor = (file, ms) => {
+  const end = Date.now() + ms
+  while (!fs.existsSync(file) && Date.now() < end) spawnSync('sleep', ['0.1'])
+  return fs.existsSync(file)
+}
+
+test('landing a change to the agent-tools sources rebuilds the main checkout bundle, any other landing does not', () => {
+  const { root, repo, wt } = fakeRepo()
+  try {
+    const log = stubCompile(repo)
+    run(repo, 'fixer-worktree.sh', CARD)
+    commitIn(wt, 'a.txt', 'fixed\n')
+    assert.equal(run(wt, 'land.sh').status, 0)
+    assert.equal(waitFor(log, 1000), false, 'a.txt is no bundle source')
+    run(repo, 'fixer-worktree.sh', CARD)
+    fs.mkdirSync(path.join(wt, 'dashboard/src/agent_tools'), { recursive: true })
+    fs.writeFileSync(path.join(wt, 'dashboard/src/agent_tools/x.cljs'), '(ns x)\n')
+    git(wt, 'add', '.')
+    git(wt, 'commit', '-q', '-m', 'tool')
+    assert.equal(run(wt, 'land.sh').status, 0)
+    assert.equal(waitFor(log, 3000), true, 'compile was started')
+    assert.equal(fs.readFileSync(log, 'utf8').trim(), 'dashboard agent-tools')
+  } finally { fs.rmSync(root, { recursive: true, force: true }) }
+})

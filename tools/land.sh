@@ -5,6 +5,7 @@
 # Exit 3: the branch was behind and is now rebased. What you tested is not what would land: rerun your test namespaces, then land.sh again.
 #         --rebased-ok lands the rebased branch anyway (use only when the upstream commits it printed touch none of your files).
 # Exit 1: rebase conflict (aborted; branch unchanged), dirty worktree, or the main checkout is not on the branch you were cut from.
+# A landing that changes the agent-tools bundle sources starts a detached rebuild of the main checkout bundle.
 # Exit 4: the main checkout has uncommitted edits to a file the landing changes (git refused; nothing moved): wait or ask the lead.
 set -euo pipefail
 
@@ -49,3 +50,8 @@ release; trap - EXIT
 card8=${branch#fix/}
 cd "$main"
 "$main/tools/fixer-worktree.sh" --remove "$card8"
+# The agent tools run from the main checkout's compiled bundle: rebuild it (detached; the compile queues) when this landing
+# changed its sources (engine/tools/agent-tools-bundle-check.mjs bundleSources), so its stale-bundle warning stays true.
+if git diff --name-only "$old" "$target" | grep -qE '^(dashboard/src/agent_tools/|dashboard/src/dashboard/(agent_plan_tools|plan_compare)\.cljs$|engine/src/plan/|engine/src/engine/bodies\.cljs$)'; then
+  nohup tools/compile dashboard agent-tools >/dev/null 2>&1 &
+fi
