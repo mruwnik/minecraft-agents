@@ -216,3 +216,22 @@
           (await (f/run-ticks s 80))
           (is (= {:status :stopped :item "iron_pickaxe" :reason :needs-food :cause :no-stock}
                  (select-keys @(:out s) [:status :item :reason :cause]))))))))
+
+(deftest carried-raw-iron-is-smelted-and-the-pieces-it-covers-are-made-when-the-materials-fail
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (assoc-in (world [{:name "raw_iron" :count 3} {:name "coal" :count 1} {:name "stick" :count 2}] {})
+                                 [:blocks "-1,64,2"] "furnace")
+                       {:items ["iron_pickaxe" "iron_helmet"] :explore false :min-food 0})]
+          (loop [i 0]
+            (await (f/run-ticks s 20))
+            (.advance (.-world (:p s)) 2000)
+            (when (and (< i 30) (= :not-done @(:out s)))
+              (recur (inc i))))
+          (is (= 1 (get (f/inv s) "iron_pickaxe")))
+          (is (= {:status :stopped :item "iron_helmet" :made ["iron_pickaxe"]}
+                 (select-keys @(:out s) [:status :item :made]))))))))
+
+(deftest a-partial-kit-is-forgotten-by-a-death-restart
+  (is (= {:since 500} (kit/restarted {:since 100 :partial true} 500))))

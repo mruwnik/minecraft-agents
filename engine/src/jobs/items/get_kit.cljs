@@ -17,7 +17,8 @@
   Each round starts from the world: an item carried or worn (or a better armour piece worn in its slot) is skipped.
   One jobs.items.obtain child gets the furnace material all missing pieces need together (iron_ingot: 32 for the
   whole kit, less what is carried), so the ore is mined and smelted in one go; if it cannot, the job stops at once
-  naming the material. Then one obtain child per missing piece, in order, with :explore and :minutes (nil: ::minutes,
+  naming the material, unless raw input of it is carried: then that is smelted, the pieces it covers are made in
+  order and the job stops at the first one it cannot make. Then one obtain child per missing piece, in order, with :explore and :minutes (nil: ::minutes,
   longer than the fetch limit). Each piece got is an info kit.progress.
   While furnace material is still short (mining or smelting ahead; pure crafting needs no food) and fewer than
   :min-food food points are carried (nil: ::min-food; harmful food does not count), a jobs.survival.get-food child
@@ -58,7 +59,7 @@
 (defn restarted
   "The job memory after a death: the children and what was made went with the body; the job starts from now."
   [m now]
-  (-> m (dissoc :children :materials :made :fed) (assoc :since now)))
+  (-> m (dissoc :children :materials :made :fed :partial) (assoc :since now)))
 
 (defn wear-outcome
   "What a wear child round means: :continue (yield), nil (it wore something), or {:reason :wear-failed :why}.
@@ -112,7 +113,8 @@
         r (await (ctx/call-child c slot 'jobs.items.obtain oargs))]
     (case r
       :continue :continue
-      :declined (let [w (b/child-wait c slot 'jobs.items.obtain oargs)] {:reason (:reason w) :why (:why w)})
+      :declined (let [w (b/child-wait c slot 'jobs.items.obtain oargs)]
+                  (if (= :cooking (:reason w)) :continue {:reason (:reason w) :why (:why w)}))
       (let [res (ctx/child-result c slot)]
         (when-not (= :done (:status res)) {:reason (:reason res :failed) :why (:why res)})))))
 
@@ -160,7 +162,10 @@
             have (filterv #(had? (:carried st) (:worn st) %) items)
             todo (remove (set have) items)
             fp (foods/stock-points (:inv st))
-            short (when (seq todo) (first (furnace-short version todo (:carried st))))]
+            partial (:partial (ctx/mem c))
+            need (when (seq todo) (first (furnace-short version todo (:carried st))))
+            short (when-not partial need)
+            raw (when partial (get (:carried st) (get smelt/made-from (first need)) 0))]
         (cond
           wear
           (let [r (await (ctx/call-child c :wear 'jobs.items.wear {:item wear}))
@@ -183,17 +188,31 @@
 
           short
           (let [[mat n] short
-                r (await (run-obtain! c :materials mat n))]
+                r (await (run-obtain! c :materials mat n))
+                carried-raw (get (:carried st) (get smelt/made-from mat) 0)]
             (cond (= :continue r) :continue
+                  (and (some? r) (pos? carried-raw)) (do (ctx/update-mem! c assoc :partial (assoc r :item mat))
+                                                         (recur))
                   (some? r) (finish! c items have (merge {:status :stopped :item mat} r))
                   :else (recur)))
+
+          (and partial (not (:smelted partial)) (or (:smelting partial) (pos? raw)))
+          (let [[mat n] need
+                r (await (run-obtain! c :smelt mat (min (or (:smelting partial) raw) n)))]
+            (cond (= :continue r) (do (ctx/update-mem! c assoc-in [:partial :smelting] (or (:smelting partial) raw))
+                                      :continue)
+                  (some? r) (finish! c items have (merge {:status :stopped :item mat} r))
+                  :else (do (ctx/update-mem! c assoc-in [:partial :smelted] true)
+                            (recur))))
 
           :else
           (let [item (first todo)
                 r (await (run-obtain! c (keyword item) item 1))]
             (cond
               (= :continue r) :continue
-              (some? r) (finish! c items have (merge {:status :stopped :item item} r))
+              (some? r) (finish! c items have (merge {:status :stopped :item item}
+                                                     (cond-> r partial (update :why #(str % " (the materials for the whole kit failed: "
+                                                                                          (:reason partial) ")")))))
               :else (do (ctx/update-mem! c #(-> % (update :made (fnil conj []) item) (dissoc :fed)))
                         (ctx/emit! c :kit.progress :info {:item item :have (inc (count have)) :of (count items)
                                                           :text (str "got " item " (" (inc (count have)) " of " (count items) ")")})
