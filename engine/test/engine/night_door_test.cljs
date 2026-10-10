@@ -63,7 +63,7 @@
           (is (false? (door-open? p)) "the door is shut")
           (is (= [] (st/calls p "place")) "nothing placed"))))))
 
-(deftest a-door-that-stays-open-is-given-up-once-and-the-body-is-not-called-safe
+(deftest a-door-that-stays-open-is-given-up-once-and-the-night-digs-in
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -74,7 +74,9 @@
           (is (true? (door-open? p)) "the click did nothing")
           (is (= [{:door [5 64 2]}] (st/entries eng :night-door-failed)))
           (is (= 1 (count (filterv #(= :shelter.door-failed (:kind %)) @seen))))
-          (is (some #(= :shelter.exposed (:kind %)) @seen) "the body says it is exposed, it is not called roofed"))))))
+          (is (seq (st/calls p "place")) "the body shuts itself in on its spot (dig-in) instead of calling the hut roofed")
+          (is (not-any? #(= :shelter.exposed (:kind %)) @seen))
+          (is (seq (st/entries eng :shelter)) "a shelter is written"))))))
 
 (defn zoned-setup
   "st/setup over the same world with a zone list in the engine."

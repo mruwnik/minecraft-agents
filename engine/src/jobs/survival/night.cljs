@@ -665,6 +665,18 @@
                     (site-failed! c site :unreachable))
                   :again)))))))
 
+(def pit-roof-height
+  "How far above the feet a block counts as the roof when dig-in must roof a pit under a roof that leaves the room open (an
+  open door): the pit's own roof sits two above the original feet, the room's roof at three or more."
+  2)
+
+(defn dig-in-roof-height
+  "The :roof-height for dig-in: the night's, but pit-roof-height at most while an open door stands in the room, so the room's
+  roof does not make dig-in decline :already-sealed."
+  [c]
+  (let [h (:roof-height (:args c))]
+    (if (seq (sh/open-room-doors (:primitives c))) (min h pit-roof-height) h)))
+
 (defn ^:async shelter!
   "No bed, nobody asleep, not roofed: dig in here (jobs.survival.dig-in, one call), unless a site failed here tonight.
   The site is written :interrupted before the call (a firing after a cut mid-pit does not dig it deeper; a listed night
@@ -680,13 +692,13 @@
             _ (when-not resume
                 (ctx/update-mem! c assoc :digging start)
                 (site-failed! c start :interrupted))
-            d (await (ctx/call-child c :dig-in 'jobs.survival.dig-in {:roof-height (:roof-height (:args c)) :wall-value (:wall-value (:args c))}))
+            d (await (ctx/call-child c :dig-in 'jobs.survival.dig-in {:roof-height (dig-in-roof-height c) :wall-value (:wall-value (:args c))}))
             res (ctx/child-result c :dig-in)]
         (if (= :continue d)
           :again
           (do (ctx/update-mem! c dissoc :digging)
               (ctx/forget-where! c :night-site #(= {:pos start :reason :interrupted} %))
-              (if (and (= :done d) (sh/roofed? p (:roof-height (:args c))) (not= :stopped (:status res)))
+              (if (and (= :done d) (sh/roofed? p (dig-in-roof-height c)) (not= :stopped (:status res)))
                 (sheltered! c :dug-in)
                 (site-failed! c start (or (:reason res) (if (= :declined d) :declined :unsealed))))
               :again))))))
