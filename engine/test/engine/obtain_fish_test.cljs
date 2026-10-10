@@ -1,0 +1,34 @@
+(ns engine.obtain-fish-test
+  "Fish as a gathered need of items.obtain: raw cod and salmon are caught with a rod (jobs.food.fish), also for the
+  furnace step of a cooked fish."
+  (:require [cljs.test :refer [deftest is async]]
+            [engine.fish-test :as ft]
+            [engine.library-test :as lt]
+            [engine.test-util :as tu]
+            [engine.game :as game]
+            [jobs.items.obtain :as obtain]
+            [jobs.items.recipes :as recipes]))
+
+(defn ^:async obtain [world args]
+  (let [{:keys [eng p]} (lt/setup world)
+        res (await (tu/child-outcome eng 'jobs.items.obtain args 200))]
+    {:res res :p p}))
+
+(deftest raw-cod-is-caught-with-a-rod
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [res p]} (await (obtain (ft/world [ft/rod] {:catch ["cod"]}) {:item "cod" :count 2}))]
+          (is (= :done (:status res)) (pr-str res))
+          (is (= 2 (ft/carried p "cod"))))))))
+
+(deftest no-rod-no-fish-says-no-source
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [res]} (await (obtain (ft/world [] {}) {:item "cod" :count 1}))]
+          (is (= :stopped (:status res)))
+          (is (= :no-source (:reason res))))))))
+
+(deftest a-cooked-fish-plan-gathers-the-raw-fish
+  (is (= {"cod" 2} (:gather (recipes/plan game/default-version {} "cooked_cod" 2 (merge (obtain/source-opts) {:gather? true :table? true}))))))

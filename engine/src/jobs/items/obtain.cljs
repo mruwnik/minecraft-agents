@@ -42,6 +42,7 @@
   - :gather (in :how): coal comes from a plain or deepslate ore seen; dirt is dug from seen dirt or grass; every raw item a chain lacks must be seen before it starts. A sapling (no recipe) comes from the leaves of its tree the body has seen, broken by
     jobs.gather.get-seeds (at most 60 leaves, one run; the drop is picked up). What a craft chain lacks that has no recipe (logs, coal, stone-tool material; recipes/gatherable?, stone-materials) is
     felled or mined as one child per round, only what the body has seen: logs by jobs.forestry.harvest-wood (of any species, but one only its species makes, oak_log for oak_planks, from that species' trees),
+    raw fish (cod, salmon: also the input of a cooked fish's smelt step) by jobs.food.fish from water seen (its rod from a chest or a craft; string has no source, so no rod ends :no-source),
     cobblestone and ore drops (coal, raw_iron, raw_gold, diamond ..: from the plain or deepslate ore seen) by jobs.gather.mine (its pickaxe only from a chest or a craft, never gathered: no mine inside a mine's fetch, so no loop back into obtain). The crafts follow once the chain is whole (a chain that is craftable now
     is crafted first). A child that brings in nothing three times stops it (:tried :gather). A mined need (seen, or
     with :explore) whose block no carried tool harvests gets the cheapest tool that does first (an obtain child, slot
@@ -124,11 +125,13 @@
   "The items mined from ores (raw_iron, coal, diamond ..): gathered, never crafted."
   (set (vals b/ores)))
 
+(def fish-items "Raw fish: caught with a rod (jobs.food.fish), never crafted." #{"cod" "salmon"})
+
 (defn source-opts
   "The recipes/plan options of the gather and smelt sources: ore drops count as gathered, and every furnace product
   (jobs.items.smelt/made-from; charcoal from any overworld log) is also made by a smelt step."
   []
-  {:raw ore-drops
+  {:raw (into ore-drops fish-items)
    :smelts (assoc (into {} (map (fn [[out in]] [out [in]])) smelt/made-from) "charcoal" trees/log-names)})
 
 (defn furnace-free
@@ -297,6 +300,8 @@
             (let [blocks (material-blocks version k)]
               {:key k :count n :job 'jobs.gather.mine :seen blocks :tunnel? true
                :args {:block (first (sort blocks)) :item k :count n :fetch mine-fetch :radius (seen-radius)}}))
+          (for [[k n] gather :when (fish-items k)]
+            {:key k :count n :job 'jobs.food.fish :seen #{"water"} :args {:count n :fetch #{:item}}})
           (when-let [n (get gather "dirt")]
             [{:key "dirt" :count n :job 'jobs.gather.mine :seen dirt-blocks
               :args {:block "dirt" :item "dirt" :count n :fetch mine-fetch :radius (seen-radius)}}])
