@@ -38,7 +38,7 @@
     down on a free cell beside the body with a jobs.blocks.place child). Each step is a jobs.items.craft child; a
     furnace product (iron_ingot from raw_iron, charcoal from a log, cooked food; jobs.items.smelt/made-from) is a step
     run by a jobs.items.smelt child, which fetches its own fuel and furnace one :depth deeper. The names are tried in
-    order; the first with a plan is made, but one with no smelt step before one with. Three fruitless steps stop it (:tried :craft).
+    order; the first with a plan is made, but one with no smelt step before one with. Three fruitless steps stop it (:tried :craft); a craft child that ran and made nothing stops it at once.
   - :gather (in :how): coal comes from a plain or deepslate ore seen; dirt is dug from seen dirt or grass; every raw item a chain lacks must be seen before it starts. A sapling (no recipe) comes from the leaves of its tree the body has seen, broken by
     jobs.gather.get-seeds (at most 60 leaves, one run; the drop is picked up). What a craft chain lacks that has no recipe (logs, coal, stone-tool material; recipes/gatherable?, stone-materials) is
     felled or mined as one child per round, only what the body has seen: logs by jobs.forestry.harvest-wood (of any species, but one only its species makes, oak_log for oak_planks, from that species' trees),
@@ -647,8 +647,10 @@
                   (and (#{"unreachable" "no-table"} (:reason res)) (not (:table-unreachable mem)))
                   (do (ctx/update-mem! c assoc-in [:craft :table-unreachable] true) :again)
 
+                  ;; the craft child ran its own rounds and made nothing: another child of the same step would repeat them
                   :else
-                  (fruitless! c (or (:reason res) (when (:short res) {:short (:short res)}) :declined))))))))))
+                  (let [why (or (:reason res) (when (:short res) {:short (:short res)}) :declined)]
+                    (if (= :declined r) (fruitless! c why) (tried! c :craft why)))))))))))
 
 (defn fruitless-limit
   "Fruitless runs that end the gather source: the need's :max-runs, but only for a run that happened; a child that

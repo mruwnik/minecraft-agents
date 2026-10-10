@@ -199,6 +199,7 @@
             (let [res (if (= :declined r) (b/child-wait c :torches 'jobs.items.obtain args) (ctx/child-result c :torches))
                   now (torch/torches-held (:primitives c))]
               (ctx/update-mem! c assoc :torches-tried true)
+              (when (and (pos? fuel) (<= now held)) (ctx/update-mem! c assoc :craft-failed true))
               (if (> now held)
                 (ctx/emit! c :torch.stocked :info {:held now :text (str "carrying " now " torches for the dig")})
                 (ctx/emit! c :torch.no-stock :warn {:held now :reason (:reason res) :tried (:tried res)

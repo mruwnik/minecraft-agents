@@ -148,6 +148,18 @@
           (is (= :tunnel-length (:reason (m/done-event s))))
           (is (>= 3 (count (m/calls s "craft"))) "bounded: the craft is given up, not retried each round"))))))
 
+(deftest a-stocking-torch-craft-that-makes-nothing-is-not-retried
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (m/start {:world (m/torch-world coal-stick)})]
+          (.override (.-world (:p s)) "craft" (fn [_ _ _] (js/Promise.resolve #js {:status "failed" :reason "no-recipe"})))
+          (core/submit! (:eng s) (m/spec torch-tunnel) {})
+          (await (m/run-ticks s 60))
+          (is (m/finished? s))
+          (is (= :tunnel-length (:reason (m/done-event s))))
+          (is (>= 3 (count (m/calls s "craft"))) "bounded: the craft is given up, not retried each round"))))))
+
 (deftest a-collect-that-ends-with-nothing-gained-is-booked-and-does-not-loop
   (async done
     (tu/run-async done
