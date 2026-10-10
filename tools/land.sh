@@ -4,6 +4,8 @@
 # Exit 0: landed; the worktree and its branch are removed (cd out of it) and the new hashes are printed.
 # Exit 3: the branch was behind and is now rebased. What you tested is not what would land: rerun your test namespaces, then land.sh again.
 #         --rebased-ok lands the rebased branch anyway (use only when the upstream commits it printed touch none of your files).
+# Exit 5: the branch was rebased over commits that touch files it changes and no clean test run (a .claude/live-tests/*.log ending
+#         "0 failures, 0 errors") is newer than that rebase; the overlapping files are named. Rerun the tests, then land.sh again.
 # Exit 1: rebase conflict (aborted; branch unchanged), dirty worktree, or the main checkout is not on the branch you were cut from.
 # A landing that changes the agent-tools bundle sources starts a detached rebuild of the main checkout bundle.
 # Exit 4: the main checkout has uncommitted edits to a file the landing changes (git refused; nothing moved): wait or ask the lead.
@@ -36,12 +38,23 @@ done
 echo $$ > "$lock/pid"
 trap release EXIT
 
+marker=$(git rev-parse --absolute-git-dir)/land-overlap
 old=$(git rev-parse "$target")
 if [ "$(git merge-base HEAD "$target")" != "$old" ]; then
-  upstream=$(git log --oneline "$(git merge-base HEAD "$target")..$target")
+  base=$(git merge-base HEAD "$target")
+  upstream=$(git log --oneline "$base..$target")
   git rebase -q "$target" || { git rebase --abort; echo "land: rebase conflict; resolve by hand against $target" >&2; exit 1; }
   echo "land: rebased onto:"; echo "$upstream"
+  overlap=$(comm -12 <(git diff --name-only "$base" "$old" | sort) <(git diff --name-only "$old" HEAD | sort))
+  [ -z "$overlap" ] || { printf '%s\n' "$overlap" >> "$marker"; touch "$marker"; }
   [ "$ok" = 1 ] || { echo "land: rerun your tests, then land.sh again" >&2; exit 3; }
+fi
+
+# A rebase over commits that touch this branch's files must be followed by a clean test run before it lands.
+if [ -s "$marker" ]; then
+  top=$(git rev-parse --show-toplevel)
+  clean=$(find "$top/.claude/live-tests" -name '*.log' -newer "$marker" -exec grep -lE '(^|[^0-9])0 failures, 0 errors' {} + 2>/dev/null | head -1 || true)
+  [ -n "$clean" ] || { echo "land: rebased over commits that touch your files; no clean test run since. Run the tests, then land.sh again. Overlap:" >&2; sort -u "$marker" >&2; exit 5; }
 fi
 
 git -C "$main" merge --ff-only -q "$branch" || { echo "land: ff-only merge refused (see above)" >&2; exit 4; }

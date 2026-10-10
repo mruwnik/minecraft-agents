@@ -123,3 +123,38 @@ test('landing a change to the agent-tools sources rebuilds the main checkout bun
     assert.equal(fs.readFileSync(log, 'utf8').trim(), 'dashboard agent-tools')
   } finally { fs.rmSync(root, { recursive: true, force: true }) }
 })
+
+const recordTestRun = (wt, text = 'Ran 3 tests containing 4 assertions.\n0 failures, 0 errors.\n') => {
+  fs.mkdirSync(path.join(wt, '.claude/live-tests'), { recursive: true })
+  fs.writeFileSync(path.join(wt, '.claude/live-tests/engine-1.log'), text)
+}
+
+test('after a rebase over commits that touch its files, the branch lands only once a clean test run is recorded', () => {
+  const { root, repo, wt } = fakeRepo()
+  try {
+    run(repo, 'fixer-worktree.sh', CARD)
+    commitIn(wt, 'a.txt', 'mine\none\n')
+    commitIn(wt, 'b.txt', 'mine\n')
+    commitIn(repo, 'a.txt', 'one\nother\n')
+    assert.equal(run(wt, 'land.sh').status, 3)
+    const refused = run(wt, 'land.sh', '--rebased-ok')
+    assert.equal(refused.status, 5, refused.stderr)
+    assert.match(refused.stderr, /a\.txt/)
+    assert.doesNotMatch(refused.stderr, /b\.txt/, 'only the overlap is named')
+    assert.equal(run(wt, 'land.sh').status, 5, 'a plain rerun is refused the same way')
+    recordTestRun(wt, 'Ran 3 tests containing 4 assertions.\n2 failures, 0 errors.\n')
+    assert.equal(run(wt, 'land.sh', '--rebased-ok').status, 5, 'a failing run is no evidence')
+    recordTestRun(wt)
+    assert.equal(run(wt, 'land.sh', '--rebased-ok').status, 0)
+  } finally { fs.rmSync(root, { recursive: true, force: true }) }
+})
+
+test('--rebased-ok lands at once when the commits rebased onto touch none of its files', () => {
+  const { root, repo, wt } = fakeRepo()
+  try {
+    run(repo, 'fixer-worktree.sh', CARD)
+    commitIn(wt, 'a.txt', 'mine\n')
+    commitIn(repo, 'b.txt', 'other\n')
+    assert.equal(run(wt, 'land.sh', '--rebased-ok').status, 0)
+  } finally { fs.rmSync(root, { recursive: true, force: true }) }
+})
