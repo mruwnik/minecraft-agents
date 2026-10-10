@@ -432,7 +432,9 @@
       [(-> w (take-one item) (put-block pos (crops item)) (assoc-in [:ages pos] 0)) {:status "placed" :block item}]
 
       (= item "water_bucket")           ; pours water and leaves the empty bucket
-      (let [w (-> w (take-one item) (give "bucket" 1) (put-block pos "water"))]
+      (let [below (update pos 1 dec)
+            w (-> w (take-one item) (give "bucket" 1) (put-block pos "water")
+                  (cond-> (= "lava" (block-name w below)) (put-block below "obsidian")))]
         [(cond-> w (= pos (body-pos w)) settle) {:status "placed" :block "water"}])
 
       (str/ends-with? item "campfire")

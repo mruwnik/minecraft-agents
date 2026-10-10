@@ -43,6 +43,7 @@
     jobs.gather.get-seeds (at most 60 leaves, one run; the drop is picked up). What a craft chain lacks that has no recipe (logs, coal, stone-tool material; recipes/gatherable?, stone-materials) is
     felled or mined as one child per round, only what the body has seen: logs by jobs.forestry.harvest-wood (of any species, but one only its species makes, oak_log for oak_planks, from that species' trees),
     raw fish (cod, salmon: also the input of a cooked fish's smelt step) by jobs.food.fish from water seen (its rod from a chest or a craft; string has no source, so no rod ends :no-source),
+    obsidian by gather.mine where seen (a diamond pickaxe), else jobs.gather.make-obsidian (water poured on a seen lava source from a stand beside it, mined, the bucket scooped back; no water bucket ends :no-source),
     cobblestone and ore drops (coal, raw_iron, raw_gold, diamond ..: from the plain or deepslate ore seen) by jobs.gather.mine (its pickaxe only from a chest or a craft, never gathered: no mine inside a mine's fetch, so no loop back into obtain). The crafts follow once the chain is whole (a chain that is craftable now
     is crafted first). A child that brings in nothing three times stops it (:tried :gather). A mined need (seen, or
     with :explore) whose block no carried tool harvests gets the cheapest tool that does first (an obtain child, slot
@@ -131,7 +132,7 @@
   "The recipes/plan options of the gather and smelt sources: ore drops count as gathered, and every furnace product
   (jobs.items.smelt/made-from; charcoal from any overworld log) is also made by a smelt step."
   []
-  {:raw (into ore-drops fish-items)
+  {:raw (conj (into ore-drops fish-items) "obsidian")
    :smelts (assoc (into {} (map (fn [[out in]] [out [in]])) smelt/made-from) "charcoal" trees/log-names)})
 
 (defn furnace-free
@@ -302,6 +303,9 @@
                :args {:block (first (sort blocks)) :item k :count n :fetch mine-fetch :radius (seen-radius)}}))
           (for [[k n] gather :when (fish-items k)]
             {:key k :count n :job 'jobs.food.fish :seen #{"water"} :args {:count n :fetch #{:item}}})
+          (when-let [n (get gather "obsidian")]
+            [{:key "obsidian" :count n :job 'jobs.gather.mine :seen #{"obsidian" "lava"}
+              :args {:block "obsidian" :item "obsidian" :count n :mend false :fetch mine-fetch :radius (seen-radius)}}])
           (when-let [n (get gather "dirt")]
             [{:key "dirt" :count n :job 'jobs.gather.mine :seen dirt-blocks
               :args {:block "dirt" :item "dirt" :count n :fetch mine-fetch :radius (seen-radius)}}])
@@ -345,6 +349,10 @@
   (cond
     (and (:sheep need) (pos? (storage/carried (u/inventory (:primitives c)) "shears")))
     (assoc need :job 'jobs.animals.shear :args {:color (:sheep need) :radius (sheep-radius)})
+
+    (and (= "obsidian" (:key need))
+         (empty? (look/seen-blocks (:primitives c) {:names ["obsidian"] :radius (seen-radius) :max 1})))
+    (assoc need :job 'jobs.gather.make-obsidian :args {:count (:count need) :radius (seen-radius)})
 
     :else
     (if-let [name (when (or (:ore? need) (= "dirt" (:key need))) (:name (seen-of c need)))]
@@ -424,6 +432,8 @@
         label (fn [{:keys [key seen sheep]}]
                 (if sheep (str key " (from " sheep " sheep within " (sheep-radius) " blocks)") (if (and (set? seen) (not= #{key} seen)) (str key " (from " (clojure.string/join "/" (sort seen)) ")") key)))]
     (str "nothing seen to gather what a craft lacks"
+         (when (some #(= "obsidian" (:key %)) needs)
+           " (obsidian: seen obsidian, or lava with open air above and a water bucket carried; a bucket is 3 iron plus a seen water source)")
          (when (seq unseen) (str ": " (clojure.string/join ", " (map label unseen))))
          (when (seq seen)
            (str "; seen but not taken (a zone, claim or plan footprint may refuse it): "
