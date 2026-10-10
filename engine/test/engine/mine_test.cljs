@@ -38,11 +38,11 @@
   "An engine over primitives p (made from world, on a floor-block floor, when not given) on dir, seeing through
   perception; one sight pass first (what the body sees where it faces before the job; the job's own looks do the
   rest)."
-  [{:keys [world p dir clock shared]}]
+  [{:keys [world p dir clock shared jobs]}]
   (let [clock (or clock (atom 1000000))
         [seen sink] (tu/legacy-capture-sink)
         p (seeing (or p (tu/fake-on-floor (assoc world :floor-block floor-block))))
-        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (or dir (tu/tmp-dir))
+        eng (core/create {:primitives p :jobs (or jobs registry/jobs) :triggers triggers/all :dir (or dir (tu/tmp-dir))
                           :now #(deref clock) :world shared
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     (perception/pass! (aget p "perception"))
@@ -240,17 +240,16 @@
           (is (= 6 (dig-count s)) "each cell once")
           (is (finished? s)))))))
 
-(deftest blocked-walks-give-up-and-still-mend
+;; Juniper j747: ore a go-to judges has no stand beside it (a permanent verdict) is skipped; three of them were three failures.
+(deftest unstandable-ore-is-skipped-without-counting-a-failure
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [sand (cells "sand" [6] [64] [-1 0 1 2])
               s (await (scenario {:block "sand" :count 4}
-                                 {:blocks (merge floor sand) :unreachable (vec (keys sand))} 30))
-              warns (events-of s :mine.gave-up)]
-          (is (= :gave-up (:reason (done-event s))))
-          (is (= 1 (count warns)))
-          (is (= :warn (:level (first warns))))
+                                 {:blocks (merge floor sand) :unreachable (vec (keys sand))} 30))]
+          (is (empty? (events-of s :mine.gave-up)))
+          (is (= 4 (count (events-of s :mine.unreachable))))
           (is (zero? (dig-count s)))
           (is (finished? s)))))))
 
@@ -1638,6 +1637,7 @@
               s (await (zoned {:block "stone" :count 2 :direction "east" :tunnel-length 4 :mend false}
                               {:blocks (soil-over-stone 63 40) :drops cobble :inventory [{:name "stone_pickaxe" :count 1}]} w 200))]
           (is (= :own-zone (:reason (done-event s))))
+          (is (= ["home"] (mapv :zone (events-of s :mine.own-zone))) "the warn names the zone")
           (is (every? #(< (first %) 8) (dug-cells s))))))))
 
 (deftest mine-spares-cells-of-the-bodys-own-plan-unless-told-not-to
@@ -1909,6 +1909,20 @@
           (await (run-ticks s 40))
           (is (= 1 (dig-count s)) "nothing is dug once the head is wet")
           (is (= :flooded (:reason (done-event s)))))))))
+
+;; ------------------------------------------------------------------ walks that cannot end
+
+;; Juniper j754: the walk to an ore waited for day for ever (go-to at night); mine gave the round back for 12 minutes.
+(deftest a-walk-that-keeps-waiting-is-skipped-after-the-stall-rounds
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [waiting {:check (constantly true) :round (fn ^:async w [_] :continue)}
+              s (start {:world {:blocks {"15,64,0" "sand"}} :jobs (assoc registry/jobs 'jobs.movement.go-to waiting)})]
+          (core/submit! (:eng s) (spec {:block "sand" :count 1 :tunnel-length 0 :mend false}) {})
+          (await (run-ticks s 60))
+          (is (= 1 (count (events-of s :mine.stalled))))
+          (is (finished? s)))))))
 
 ;; ------------------------------------------------------------------ an own zone is left before the first dig
 

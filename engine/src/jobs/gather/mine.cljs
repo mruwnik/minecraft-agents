@@ -12,6 +12,7 @@
             [jobs.lib.gate :as gate]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.tools :as tools]
+            [jobs.access.cleanup :as cleanup]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.access.zones :as zones]
             [jobs.lib.util :as u]
@@ -178,6 +179,7 @@
    ::torch-craft-count {:default 4 :doc "Torches one craft makes." :spec (a/int-in 1 nil)}
    ::open-skip-drop {:default 3 :doc "The most blocks the strip tunnel's start steps down while it skips open cells on its line (a stair); the tunnel then runs at that level." :spec (a/int-in 0 nil)}
    ::max-resumes {:default 2 :doc "Resumes of a cut before the job gives up." :spec (a/int-in 0 nil)}
+   ::stall-rounds {:default 5 :doc "Rounds in a row a walk to one target waits without the body getting nearer before the target is skipped as a failure." :spec (a/int-in 1 nil)}
    ::max-steps {:default 400 :doc "Pieces of work of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}
    ::zone-margin {:default 8 :doc "Before it digs, the body walks to a start cell this many blocks outside any zone it owns; its stair and tunnel stop at such a zone." :spec (a/int-in 0 nil)}
    ::max-recuts {:default 12 :doc "Cuts again of one tunnel cell that a falling block (gravel, sand) refilled before the tunnel stops :dig-failed." :spec (a/int-in 0 nil)}
@@ -505,6 +507,30 @@
   (skip! c pos)
   (ctx/update-mem! c update :failures (fnil inc 0)))
 
+(defn skip-unreachable!
+  "Skip a target go-to judged a permanent verdict on (an ore of a cave seen from above has no stand): no failure counted, so a
+  vein of such cells never ends the run."
+  [c pos]
+  (ctx/emit! c :mine.unreachable :info {:pos (access/cell pos) :why (:why (ctx/child-result c :walk))
+                                        :text (str "mine skips " (str/join "," (access/cell pos)) ": no way to stand beside it")})
+  (skip! c pos))
+
+(defn stall-rounds [] (settings/get settings ::stall-rounds))
+
+(defn stalled!
+  "A walk to pos is waiting (:partial): :continue, but the ::stall-rounds-th round in a row with the body no nearer warns
+  mine.stalled and skips the target as a failure (:again)."
+  [c pos]
+  (let [d (u/dist (u/self-pos c) (cell-of pos))
+        prev (:stall (ctx/mem c))
+        n (if (and (= pos (:pos prev)) (<= (:d prev) d)) (inc (:n prev)) 1)]
+    (if (< n (stall-rounds))
+      (do (ctx/update-mem! c assoc :stall {:pos pos :d d :n n}) :continue)
+      (do (ctx/emit! c :mine.stalled :warn {:pos (access/cell pos) :rounds n :text (str "mine's walk to " (str/join "," (access/cell pos)) " waited " n " rounds without getting nearer; it skips the target")})
+          (ctx/update-mem! c dissoc :stall)
+          (skip-failed! c pos)
+          :again))))
+
 ;; ------------------------------------------------------------------ the strip tunnel
 
 (defn cut-hazard
@@ -548,7 +574,7 @@
 
 (def heading-stops
   "Stops that say only this heading is blocked: the stair or tunnel at 0 steps tries the next heading."
-  #{:base-block :crop :fluid-in-cut :place-failed :no-support-floor :no-floor :walk-failed :refused})
+  #{:own-zone :floor-unseen :not-loaded :base-block :crop :fluid-in-cut :place-failed :no-support-floor :no-floor :walk-failed :refused})
 
 (defn turn-heading!
   "Turn the run to the next of the four headings not yet tried (memory :tried-headings), forgetting the stop and the tunnel
@@ -921,12 +947,18 @@
   (let [clear (filterv #(drop-in-line? c %) targets)]
     (if (seq clear) clear targets)))
 
+(defn underground?
+  "Whether the run has dug down or tunnelled: its walks go on at night inside its own cuts."
+  [c]
+  (let [m (ctx/mem c)]
+    (boolean (or (pos? (get-in m [:descent :steps] 0)) (:tunnel m)))))
+
 (defn ^:async walk-to-dig!
   "Walk toward pos until the body is within reach of it, and close enough to see its drop (range 1) when the line to it
   is blocked from here; a body within reach that cannot get closer digs from there. :there, :partial or :blocked
   (jobs.lib.near/go-near!)."
   [c pos]
-  (let [walked (await (near/go-near! c pos (if (drop-in-line? c pos) (reach) 1) {:zone-tolls true}))]
+  (let [walked (await (near/go-near! c pos (if (drop-in-line? c pos) (reach) 1) (cond-> {:zone-tolls true} (underground? c) (assoc :at-night :go))))]
     (if (and (not= :there walked) (u/within? (u/self-pos c) (cell-of pos) (reach)))
       :there
       walked)))
@@ -991,11 +1023,11 @@
     :again))
 
 (defn stair-in-own-zone?
-  "Whether the stair's next step (the cell ahead along the heading, its head and the one below) lies in a zone the body owns."
+  "The own zone the stair's next step (the cell ahead along the heading, its head and the one below) lies in, else nil."
   [c]
   (let [here (cell-of (u/self-pos c))
         ahead (step-cell {:origin here :heading (:heading (ctx/mem c))} 1)]
-    (boolean (some #(within-own-zone c 0 (access/cell %)) [ahead (update ahead :y dec) (update ahead :y inc)]))))
+    (some #(within-own-zone c 0 (access/cell %)) [ahead (update ahead :y dec) (update ahead :y inc)])))
 
 (defn ^:async descend-round!
   "One step of the stair down (jobs.access.stair child, :steps 1) along the tunnel heading; the next round looks round and scans.
@@ -1008,6 +1040,8 @@
       (and level? (stair-torch-due? c)) (await (torch-step! c :stair))
       (and (not level?) (>= n (:descend-limit (:args c)))) (no-stone! c)
       (stair-in-own-zone? c) (do (ctx/update-mem! c assoc-in [:descent :stop] :own-zone)
+                                 (ctx/emit! c :mine.own-zone :warn {:zone (:name (stair-in-own-zone? c))
+                                                                    :text (str "mine's stair stops at the edge of its own zone " (:name (stair-in-own-zone? c)))})
                                  (if level? (stair-stopped! c) (to-mend! c :own-zone)))
       :else
       (let [r (await (ctx/call-child c :stair 'jobs.access.stair
@@ -1040,8 +1074,9 @@
       (= :searching pos) :again
       (some? pos) (let [walked (await (walk-to-dig! c pos))]
                     (cond
+                      (and (= :blocked walked) (cleanup/permanent-walk? (ctx/child-result c :walk))) (do (skip-unreachable! c pos) :again)
                       (= :blocked walked) (do (skip-failed! c pos) :again)
-                      (= :partial walked) :continue
+                      (= :partial walked) (stalled! c pos)
                       (branch-torch-due? c) (await (torch-step! c true))
                       :else (do (await (watch/watch! c {:before-dig pos}))
                                 (await (dig! c pos)))))
