@@ -35,9 +35,9 @@ const resolveTable = (bot, a, reach) => {
   return { table: block }
 }
 
-// every candidate recipe ({name: n} of ingredients) and what is carried: jobs.items.shortfall chooses what to report as missing
+// every candidate recipe ({name: n} of ingredients, the table recipes too) and what is carried: jobs.items.shortfall chooses what to report as missing
 const shortOf = (bot, id, table) => ({
-  recipes: bot.recipesAll(id, null, table ?? null).map(r => ingredientsOf(bot, r)),
+  recipes: bot.recipesAll(id, null, table ?? true).map(r => ingredientsOf(bot, r)),
   have: carriedCounts(bot)
 })
 
@@ -188,6 +188,8 @@ export async function craftItem (bot, ctx, a, { timeScale = 1, reach = 4.5 } = {
     if (!r) {
       await resync(bot, ctx, timeScale)
       if (bot.recipesFor(id, null, 1, table)[0]) continue
+      // a recipe that needs a table is carried, but no table was handed over (the 2x2 ones, e.g. a re-dye, hide that)
+      if (!table && bot.recipesFor(id, null, 1, true)[0]) return { status: 'unreachable', reason: 'no-table' }
       shortage = shortOf(bot, id, table)
       break
     }

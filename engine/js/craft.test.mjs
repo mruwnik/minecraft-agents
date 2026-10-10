@@ -12,7 +12,11 @@ const REG = {
   5: { id: 5, name: 'crafting_table', stackSize: 64 },
   6: { id: 6, name: 'iron_ingot', stackSize: 64 },
   7: { id: 7, name: 'oak_log', stackSize: 64 },
-  8: { id: 8, name: 'cherry_planks', stackSize: 64 }
+  8: { id: 8, name: 'cherry_planks', stackSize: 64 },
+  9: { id: 9, name: 'white_wool', stackSize: 64 },
+  10: { id: 10, name: 'white_bed', stackSize: 1 },
+  11: { id: 11, name: 'black_bed', stackSize: 1 },
+  12: { id: 12, name: 'white_dye', stackSize: 64 }
 }
 const ID = Object.fromEntries(Object.values(REG).map(i => [i.name, i.id]))
 
@@ -27,7 +31,8 @@ const RECIPES = {
   stick: [recipe('stick', 4, { oak_planks: 2 }), recipe('stick', 4, { cherry_planks: 2 })],
   oak_planks: [recipe('oak_planks', 4, { oak_log: 1 })],
   crafting_table: [recipe('crafting_table', 1, { oak_planks: 4 })],
-  iron_ingot: []
+  iron_ingot: [],
+  white_bed: [recipe('white_bed', 1, { black_bed: 1, white_dye: 1 }), recipe('white_bed', 1, { white_wool: 3, oak_planks: 3 }, true)]
 }
 
 const inv = (...pairs) => pairs.map(([name, count], i) => ({ name, count, type: ID[name], slot: 36 + i }))
@@ -147,6 +152,24 @@ for (const [name, a, blocks, expected] of tableCases) {
     assert.deepEqual(await craftItem(bot, ctx, a, opts), expected)
   })
 }
+
+test('craftItem: a carried table recipe beats the 2x2 re-dye recipe: no-table, not no-item', async () => {
+  const { bot } = setup({ items: inv(['white_wool', 3], ['oak_planks', 3]) })
+  assert.deepEqual(await craftItem(bot, ctx, { item: 'white_bed' }, opts), { status: 'unreachable', reason: 'no-table' })
+})
+
+test('craftItem: the same bed is crafted at the table', async () => {
+  const { bot, carried } = setup({ items: inv(['white_wool', 3], ['oak_planks', 3]), blocks: tableBlocks })
+  assert.equal((await craftItem(bot, ctx, { item: 'white_bed', table }, opts)).status, 'crafted')
+  assert.equal(carried('white_bed'), 1)
+})
+
+test('craftItem: no table and ingredients short, the shortage lists the table recipe too', async () => {
+  const { bot } = setup({ items: inv(['white_wool', 3], ['oak_planks', 1]) })
+  const r = await craftItem(bot, ctx, { item: 'white_bed' }, opts)
+  assert.equal(r.status, 'no-item')
+  assert.deepEqual(r.recipes, [{ black_bed: 1, white_dye: 1 }, { white_wool: 3, oak_planks: 3 }])
+})
 
 const shortCases = [
   ['missing ingredients', [['wheat', 1]], { item: 'bread', table }, [{ wheat: 3 }], { wheat: 1 }],
