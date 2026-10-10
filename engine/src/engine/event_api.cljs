@@ -343,6 +343,7 @@
     (if-let [done (and (not (get-in s [:instances id])) (get (core/recent-results eng) id))]
       {:ok true :generation-id (:generation-id s) :id id :name (short-text (:name done) 160) :finished? true
        :status (:status done) :result (some-> (:result done) (bounded-value 0 (volatile! 32)))
+       :died (:died done)
        :ended-at (:ended-at done)}
     (when-let [inst (get-in s [:instances id])]
       (let [[_ args] (core/job-of eng inst)

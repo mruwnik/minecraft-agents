@@ -87,7 +87,8 @@
   (some-> (:results eng) deref))
 
 (defn result-entry
-  "The recent-results entry of a job's terminal event: {:name :status :result :ended-at :reflex? :n}, :result the
+  "The recent-results entry of a job's terminal event: {:name :status :result :ended-at :reflex? :died :n}, :died true
+  when the body died since the manual takeover that is held now began (the driver's next job runs on the respawned body), :result the
   event's data (dropped with :result-clipped true when it prints past max-result-chars). name and reflex come from
   the event, else from the job's instance."
   [eng event ended-at]
@@ -95,9 +96,11 @@
         inst (get-in (state eng) [:instances (:job event)])
         clipped? (> (count (pr-str data)) max-result-chars)
         reflex (or (:reflex event) (:reflex inst))
-        name (or (:name event) (some-> (:spec inst) expr/label))]
+        name (or (:name event) (some-> (:spec inst) expr/label))
+        died-t (some-> (mem/latest (mem/view (:store eng)) :died) :t)]
     (cond-> {:name name :status (:kind event) :ended-at ended-at}
       reflex (assoc :reflex? true)
+      (and died-t (some-> @(:manual eng) :since (<= died-t))) (assoc :died true)
       (and (seq data) (not clipped?)) (assoc :result data)
       clipped? (assoc :result-clipped true)
       (string? (:text event)) (assoc :text (subs (:text event) 0 (min 200 (count (:text event))))))))

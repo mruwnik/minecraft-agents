@@ -524,7 +524,7 @@ one `job.cancelled` event each; the register is untouched, so reflexes keep runn
 
 ## Manual takeover
 
-For rescuing a stuck body by hand. A death under manual control emits a `takeover_body_died` warn with attention `:notice` (besides the body's `died`); the takeover goes on. The body listens on `worlds/<world>/agents/<name>/engine/control.sock` (mode 0600).
+For rescuing a stuck body by hand. A death under manual control emits a `takeover_body_died` warn with attention `:notice` (besides the body's `died`); the takeover goes on, and the recorded result (`/job`, results.edn) of each job that ends after the death carries `:died true`. The body listens on `worlds/<world>/agents/<name>/engine/control.sock` (mode 0600).
 Three control modes exist: normal scheduling, `do-now!` (an urgent holder), and manual takeover. `take` cuts the current
 holder and mutes all triggers and the loop until release or lease expiry: only the driver's slot job runs (the job the
 driver submits with `:by` = the lease's `who`; a new one replaces it). It gets one call and leaves the slot whatever it returns: `:done`/`:stopped` as returned, an error ends it `job.failed` with attention (unlisted, not parked), a cut ends it `:stopped` reason `:cut`, `:continue` or `:declined` end it `:stopped` reason `:yielded` (or the child's wait reason) plus the wait text, a failing check ends it at once `:stopped` with the check's reason. Then the body idles. Jobs from others queue and

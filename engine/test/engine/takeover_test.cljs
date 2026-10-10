@@ -148,6 +148,18 @@
       (is (= ["claude" :warn :notice] ((juxt :who :level :attention) e)))
       (is (re-find #"claude" (:text e))))))
 
+(deftest a-job-that-ends-after-a-death-under-manual-control-records-died
+  (let [{:keys [eng]} (setup {})
+        end! (fn [id] (core/emit! eng {:source :job :kind :completed :job id :data {:arrived true}}))]
+    (takeover/take! eng me)
+    (end! "j1")
+    (core/record-body-event! eng #js {:kind "died"})
+    (end! "j2")
+    (takeover/release! eng {:who "claude" :reason "done" :held-ms 1})
+    (end! "j3")
+    (let [r (core/recent-results eng)]
+      (is (= [nil true nil] (mapv #(:died (r %)) ["j1" "j2" "j3"]))))))
+
 (deftest manual-state-is-not-persisted
   (let [{:keys [eng dir]} (setup {})]
     (takeover/take! eng me)
