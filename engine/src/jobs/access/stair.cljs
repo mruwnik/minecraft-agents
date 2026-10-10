@@ -104,7 +104,8 @@
    :note {:doc "a map (go-to's escalation): each cell dug in another's zone, claim or plan is written to the tidy ledger at once with it (jobs.lib.escape/note-hole!), each floor placed to the scaffold ledger (take-back-floor?)" :spec map? :default nil}
    :fetch {:doc "get a missing pickaxe instead of waiting :no-tool (jobs.lib.fetch), and a block to seal lava with: true, a set of kinds or a map of limits" :spec fetch/option? :default true}
    :on-lava {:doc "exposed lava: :seal (fill it with a building block, then go on) or :stop" :spec #{:seal :stop} :default :seal}
-   :by-hand {:doc "dig a block no carried tool clears bare-handed (slow, the drop is lost) instead of waiting :no-tool" :spec boolean? :default false}})
+   :by-hand {:doc "dig a block no carried tool clears bare-handed (slow, the drop is lost) instead of waiting :no-tool" :spec boolean? :default false}
+   :through {:doc "the id of a mineshaft plan the stair runs down: its footprint is no obstacle (jobs.lib.shafts)" :spec string? :default nil}})
 
 (def headings shape/headings)
 (def rises shape/rises)
@@ -235,7 +236,7 @@
   "The social half of the rules' input (jobs.lib.access/zone-input): zones, claims, footprints, the body's name and
   the clock, and the job's :ignore-zones? arg."
   [c]
-  (access/zone-input c {:ignore-zones? (:ignore-zones? (:args c)) :own-plans-ok? true}))
+  (access/zone-input c {:ignore-zones? (:ignore-zones? (:args c)) :own-plans-ok? true :except (:through (:args c))}))
 
 (defn feet-of
   "The cell [x y z] the body stands on (jobs.lib.reach/standing-cell: the planner's start on a block's edge)."

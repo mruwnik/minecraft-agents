@@ -916,6 +916,64 @@
           (is (= [0 64 0] (feet s)) "back on its start cell")
           (is (seq (calls s "place")) "a torch lights the stair or the tunnel"))))))
 
+(def shaft-plan
+  "A mineshaft by Miles: its top is the body's start cell, a stair east down to y 60."
+  (-> {:id "s" :kind :mineshaft :parts [{:id "stair" :stair {:from [0 64 0] :heading :east :to-y 60} :want :clear}]}
+      (shape/with-author "Miles")))
+
+(defn shafted
+  "Submit args in a deep-rock world sharing plans and zones; run n ticks; the setup map."
+  [args extra zones n]
+  (zoned args (deep-rock extra) (ew/of-data {"s" shaft-plan} {} zones) n))
+
+(def via-shaft {:block "iron_ore" :count 1 :level 60 :mend false})
+(def ore-east {"10,60,0" "iron_ore"})
+
+(deftest a-shaft-in-reach-is-stairred-down-and-a-branch-mined
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (shafted via-shaft ore-east [] 400))
+              e (done-event s)]
+          (is (= 1 (get (inv s) "raw_iron")))
+          (is (= :count (:reason e)))
+          (is (= [4 60 0] (:origin (:tunnel e))) "the first branch runs on from the shaft's bottom")
+          (is (re-find #"via shaft s \(stair 4 steps to y 60\), branch 1 east" (:text e)))
+          (is (= [0 64 0] (feet s))))))))
+
+(deftest the-next-run-takes-another-branch-of-the-shaft
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (shafted via-shaft (assoc ore-east "7,60,-4" "iron_ore") [] 400))
+              _ (core/submit! (:eng s) (spec via-shaft) {})
+              _ (await (run-ticks s 400))
+              e (second (events-of s :mine.done))]
+          (is (= 2 (get (inv s) "raw_iron")))
+          (is (= [[7 60 0] "north"] [(:origin (:tunnel e)) (:heading (:tunnel e))]))
+          (is (re-find #"branch 2 north" (:text e))))))))
+
+(deftest a-shaft-in-another-zone-is-left-alone-unless-zones-are-ignored
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [theirs {:name "theirs" :min [-1 63 -1] :max [1 65 1] :owner "Miles"}
+              plain (await (shafted via-shaft ore-east [theirs] 400))
+              forced (await (shafted (assoc via-shaft :ignore-zones? true) ore-east [theirs] 400))]
+          (is (= [{:reason :zone}] (map #(select-keys % [:reason]) (events-of plain :mine.no-shaft))))
+          (is (not (re-find #"via shaft" (str (:text (done-event plain))))))
+          (is (re-find #"via shaft s" (:text (done-event forced)))))))))
+
+(deftest a-shaft-inside-an-own-zone-is-used-without-walking-out-first
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [mine-zone {:name "home" :min [-1 59 -1] :max [4 65 1] :owner "Fake"}
+              s (await (shafted via-shaft ore-east [mine-zone] 400))]
+          (is (empty? (events-of s :mine.left-zone)))
+          (is (re-find #"via shaft s" (:text (done-event s))))
+          (is (= "stone" (block-at s 0 64 1)) "the zone's other cells are not dug"))))))
+
 (deftest a-plot-with-no-ore-gives-up-naming-the-tunnel-and-its-depth
   (async done
     (tu/run-async done

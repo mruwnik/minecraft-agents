@@ -157,7 +157,7 @@
       {:reason :no-exit}
       (stranding? in cell) {:reason :stranding}
       :else
-      (let [v (rules/may-dig? (-> (select-keys in [:block-at :feet :zones :footprints :claims :self :now :ignore-zones? :ledger])
+      (let [v (rules/may-dig? (-> (select-keys in [:block-at :feet :zones :footprints :shafts :claims :self :now :ignore-zones? :ledger])
                                   (update :footprints #(into {} (remove (comp (:own-plans in #{}) val)) %))
                                   (assoc :cell cell)))
             hazards (mapv hazard-reason (:hazards v))]
