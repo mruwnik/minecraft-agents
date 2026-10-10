@@ -3,7 +3,7 @@
   resort, or any job run with :ignore-zones?) notes what it did.
   Before the act, `refusal` asks the rules (ignoring the :ignore-zones? opt-out) whether the cell is another's.
   After the act, `record!` writes a :tidy entry to body memory:
-  {:cell [x y z] :action :dig|:place :was block-before :now block-after :zone/:claim/:plan :tries n :job id}.
+  {:cell [x y z] :action :dig|:place :was block-before (a dug crop also :any-of [its seed]) :now block-after :zone/:claim/:plan :tries n :job id}.
   :job is the top-level job that recorded it; the :tidy-pending trigger waits until that job has ended.
   A hole is tidy work only in another's zone, claim or plan (tidy-work?): the body's own diggings stay.
   jobs.survival.restore-broken puts the cells back when the body is safe. Best effort, never at the cost of safety."
@@ -12,6 +12,7 @@
             [engine.game :as game]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
+            [jobs.lib.crops :as crops]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.reach :as reach]
             [jobs.lib.spent :as spent]
@@ -67,7 +68,7 @@
 (defn why-not
   "Why entry cannot be restored now, or nil: :changed (the cell no longer holds what was recorded), :not-carried (no
   place-item carried), :shut-in (a go-to escalation hole, :escalation, while the body is shut in: the hole is its way
-  on) or :occupied (the block would be placed into the body). enclosed: a delay of (reach/enclosed? p), shared by the
+  on) or :occupied (the block would be placed into the body; never a crop). enclosed: a delay of (reach/enclosed? p), shared by the
   calls of one decision so the flood runs at most once."
   ([p e] (why-not p e (delay (reach/enclosed? p))))
   ([p {:keys [cell now action escalation] :as e} enclosed]
@@ -75,7 +76,7 @@
      (not= now (block-now p cell)) :changed
      (and (= :dig action) (nil? (place-item p e))) :not-carried
      (and (= :dig action) escalation @enclosed) :shut-in
-     (and (= :dig action) (in-body? p cell)) :occupied)))
+     (and (= :dig action) (in-body? p cell) (not (crops/seed-of (:was e)))) :occupied))) ; a sown crop has no hitbox
 
 (defn unreachable?
   "Whether the body cannot get within reach blocks of entry's cell: it is farther off and has no walkable way to the
@@ -97,8 +98,10 @@
   another's, else nil. Reads the block, so call it before the act."
   [c action pos]
   (when-let [v (refusal c action pos)]
-    (merge {:cell (access/cell pos) :action action :was (u/block-name (:primitives c) pos)}
-           (select-keys v [:zone :claim :plan]))))
+    (let [was (u/block-name (:primitives c) pos)]
+      (merge {:cell (access/cell pos) :action action :was was}
+             (when (and (= :dig action) (crops/seed-of was)) {:any-of [(crops/seed-of was)]}) ; a crop is put back as its seed
+             (select-keys v [:zone :claim :plan])))))
 
 (defn record!
   "Remember pending entry p (see pending) with the block now at its cell; nil p does nothing."

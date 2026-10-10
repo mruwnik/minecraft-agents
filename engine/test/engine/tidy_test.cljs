@@ -81,6 +81,20 @@
           (is (= [[[0 65 0]]] (mapv :cells (zs/trespass seen :tidy.restored))))
           (is (= [] (zs/trespass seen :tidy.not-restored)) "nothing left, no warn"))))))
 
+(deftest a-crop-dug-in-another-zone-is-put-back-as-its-seed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (zs/setup (merge aside {:blocks {"0,65,0" "potatoes" "0,64,0" "farmland"} :inventory []}) [(zs/whole-zone "Miles")])]
+          (core/submit! eng '(jobs.blocks.dig {:pos {:x 0 :y 65 :z 0} :ignore-zones? true}) {})
+          (await (zs/run-until-empty eng 6))
+          (is (= [["potato"]] (mapv :any-of (tidy-entries eng))) "the entry names the seed that replants the crop")
+          (fake/add-item! p "potato" 2)
+          (core/register-reflex! eng {:trigger :tidy-pending})
+          (await (ticks! eng 20))
+          (is (= [{:x 0 :y 65 :z 0}] (mapv zs/arg-pos (zs/calls p "place"))) "the potato is sown in the harvested cell")
+          (is (= [] (tidy-entries eng))))))))
+
 (deftest restore-digs-a-placed-block-again
   (async done
     (tu/run-async done
