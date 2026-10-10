@@ -13,6 +13,7 @@
             [jobs.lib.result :as r]
             [jobs.lib.threats :as threats]
             [jobs.lib.shelter :as sh]
+            [jobs.lib.shore :as shore]
             [jobs.lib.util :as u]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.foods :as foods]
@@ -37,7 +38,7 @@
   3. Harvest items lying within 8 blocks (collect-drops).
   4. The nearest passive food animal within :hunt-radius (combat.attack, then collect-drops).
   5. Mature crops, sweet berry bushes or melons within :hunt-radius (blocks.dig).
-  Nothing left: once per job (:explore, default on; a starving body again after foods/::starving-rest-ms) it searches for food animals and crops (jobs.explore.search, the
+  Nothing left: with a fishing rod carried and a bank beside seen water two deep within ::fish-radius (48), once per job it fishes two (jobs.food.fish) and eats or cooks them. Then, once per job (:explore, default on; a starving body again after foods/::starving-rest-ms) it searches for food animals and crops (jobs.explore.search, the
   ::explore setting; not at night nor while the night handler holds) and goes on if it found some; at ::eat-bad-food (6) or below it then eats harmful food carried (rotten
   flesh, with :allow-bad). Still nothing: it stops :no-food with a food.none warning (what was searched, the nearest known source) and writes
   :hungry. For :ask-cooldown-ms after that a round still eats and still does ways 1, 3, 4 and 5, but not a source it
@@ -99,6 +100,7 @@
   {::drop-radius {:default 8 :doc "Blocks around the body in which dropped food is picked up." :spec (a/int-in 0 nil)}
    ::reach {:default 3 :doc "How near a food source the body stands to use it, in blocks." :spec (a/int-in 0 nil)}
    ::explore {:default {:max-distance 64 :max-legs 12 :timeout-s 120} :doc "jobs.explore.search options of the search for food (:explore true)." :spec map?}
+   ::fish-radius {:default 48 :doc "Blocks within which seen water two deep with a bank makes fishing a way, with a fishing rod carried." :spec (a/int-in 0 nil)}
    ::eat-bad-food {:default foods/default-food :doc "At this much food or less the last resort eats harmful food carried (rotten flesh); above it harmful food is not food." :spec (a/num-in 0 20)}
    ::stock-radius {:default 256 :doc "Blocks within which a chest the body booked food in (memory :fetch/stock, what it saw when it opened it) counts as a food source." :spec (a/int-in 0 nil)}
    ::cook-far-radius {:default 64 :doc "Blocks within which a furnace or smoker the body has seen (perception's memory) or the one it remembers (:furnace place) counts for cooking." :spec (a/int-in 0 nil)}
@@ -674,6 +676,26 @@
                                     (when (:why res) (str ", " (name (:why res))))))
               (when (= :found (:reason res)) :again))))))))
 
+(defn fish-spot?
+  "Whether a fishing rod is carried and a bank beside seen water two deep lies within ::fish-radius."
+  [c]
+  (let [p (:primitives c)]
+    (boolean (and (some #(= "fishing_rod" (:name %)) (u/inventory p))
+                  (some #(= "water" (u/seen-name p (update (:water %) :y dec)))
+                        (shore/spots p (u/self-pos c) {:radius (settings/get settings ::fish-radius)}))))))
+
+(defn ^:async fish!
+  "With nothing else to do, a rod carried and a bank in sight: jobs.food.fish for two fish, once per job (:fished), not at
+  night unless starving with no danger near. :again when it caught any (they are eaten or cooked next), :continue while
+  the child waits on the world, else nil."
+  [c]
+  (when (and (not (:fished (ctx/mem c))) (not (night-blocks-search? c)) (fish-spot? c))
+    (let [st (await (child/run! c :fish 'jobs.food.fish {:count 2 :radius (settings/get settings ::fish-radius) :fetch false} {:max-calls 1}))]
+      (if (= :continue st)
+        :continue
+        (do (ctx/update-mem! c assoc :fished true)
+            (when (pos? (:got (ctx/child-result c :fish) 0)) :again))))))
+
 (defn ^:async eat-bad!
   "Last resort when food is at or below the ::eat-bad-food line: eat what hurts (rotten flesh) with :allow-bad.
   :again when the food level rose, else nil."
@@ -715,7 +737,8 @@
         (= ::enough way) (r/stop! c :still-hungry (str "still hungry (food " (food-level c) ") after " n " ways")
                                   :food (food-level c))
         (= :again way) (recur (inc n))
-        :else (let [more (if (or (gave-up-recently? c) (not (:explore (:args c)))) nil (await (explore! c)))
+        :else (let [fished (when-not (gave-up-recently? c) (await (fish! c)))
+                    more (cond fished fished (or (gave-up-recently? c) (not (:explore (:args c)))) nil :else (await (explore! c)))
                     bad (when-not more (await (eat-bad! c)))]
                 (cond
                   (or (= :continue more) (= :continue bad)) (do (await (child/pace!)) (recur n))

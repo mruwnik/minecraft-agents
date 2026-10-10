@@ -789,3 +789,31 @@
   (let [opts (get-food/widen-explore {:max-distance 64 :max-legs 12 :timeout-s 120} get-food/widen-max)]
     (is (= 128 (:max-distance opts)))
     (is (= 36 (:max-legs opts)))))
+
+(def pond
+  (merge (into {} (for [x (range 0 9) z (range 0 9) y [62 63]] [(str x "," y "," z) "water"]))
+         (into {} (for [z (range 0 9) y [62 63]] [(str "9," y "," z) "stone"]))))
+
+(defn fishing-world [inventory]
+  {:blocks pond :self {:food 3 :pos [9.5 64 4.5]} :inventory inventory :fish {:catch ["cod"]}})
+
+(deftest with-nothing-else-a-hungry-body-with-a-rod-fishes-and-eats
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup (fishing-world [{:name "fishing_rod" :count 1}]))]
+          (await (one-round! eng {:explore false}))
+          (is (pos? (count (calls p "fish"))) "cast")
+          (is (> (food p) 3) "ate the catch")
+          (is (empty? (calls p "attack"))))))))
+
+(deftest without-a-rod-or-water-in-sight-it-does-not-fish
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup (fishing-world []))]
+          (await (one-round! eng {:explore false}))
+          (is (empty? (calls p "fish"))))
+        (let [{:keys [eng p]} (setup {:self {:food 3} :inventory [{:name "fishing_rod" :count 1}]})]
+          (await (one-round! eng {:explore false}))
+          (is (empty? (calls p "fish"))))))))
