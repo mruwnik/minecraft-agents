@@ -1167,3 +1167,17 @@
         (let [s (await (scenario {:target 1} {:entities [(cow 1 4 3)]} 400))]
           (is (= :brought (:reason (done-event s))))
           (is (seq (calls-of s "interact"))))))))
+
+(deftest an-unusable-gate-says-why-and-names-the-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[label w why cell text]
+                [["no floor outside the gate" {:entities [(cow 1 4 3)] :blocks {"9,63,3" "air"}} :no-floor-outside [9 64 3] #"no-floor-outside at \[9 64 3\]"]
+                 ["no gate in the pen's fence" {:entities [(cow 1 4 3)] :blocks {gate-key "oak_fence" "10,64,0" "oak_fence_gate"}} :no-gate-in-pen nil #"\(no-gate-in-pen\)"]]]
+          (let [s (await (scenario {:target 1} w 20))
+                e (done-event s)]
+            (is (= :no-gate (:reason e)) label)
+            (is (= why (:why e)) label)
+            (is (= cell (:cell e)) label)
+            (is (re-find text (str (failed-error s))) label)))))))

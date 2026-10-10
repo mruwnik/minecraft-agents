@@ -28,7 +28,9 @@
   - :leaky: the pen has a leak other than the chosen gate (:leaks lists them).
   - :no-gate: no usable gate. The gate is :gate, else the pen's gate nearest the body. It needs pen floor on
     one side and free floor straight across (a corner gate has none). The four cells straight out from the gate
-    must be free floor too (:why :no-approach).
+    must be free floor too (:why :no-approach). The result and the failure text name the cause: :why
+    :no-floor-outside (a drop or a blocked cell outside the gate), :not-in-wall (a corner gate), :no-gate-in-pen or
+    :no-approach, with the :cell.
   - :refused: the gate stands in another owner's zone or claim, or in a plan's footprint (or no zone list was read;
     warn herd.declined once). :ignore-zones? true skips the check.
   - :too-shallow: fewer than 5 pen cells in a line inward from the gate.

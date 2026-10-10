@@ -45,6 +45,26 @@
          (sort-by #(u/dist here (:gate %)))
          first)))
 
+(defn gate-diagnosis
+  "Why no gate of the pen is usable, as {:why :cell}: :no-floor-outside with the cell outside a gate that is not free
+  floor (feet and head free, ground below: a drop outside is this), else :not-in-wall for a gate with no pen cell on
+  one side and open ground across (a corner gate), else :no-gate-in-pen. :gate narrows it to that gate."
+  [c answer]
+  (let [p (:primitives c)
+        wanted (:gate (:args c))
+        gates (filter #(or (nil? wanted) (= (cell wanted) (cell %))) (map :pos (:gates answer)))
+        inside (:inside answer)
+        outs (for [g gates
+                   :let [[x y z] (cell g)]
+                   [dx dz] orthogonal
+                   :let [in [(- x dx) y (- z dz)] out [(+ x dx) y (+ z dz)]]
+                   :when (and (contains? inside in) (not (contains? inside out)))]
+               out)]
+    (cond
+      (seq outs) {:why :no-floor-outside :cell (first outs)}
+      (seq gates) {:why :not-in-wall :cell (cell (first gates))}
+      :else {:why :no-gate-in-pen})))
+
 (def min-depth
   "Pen cells in a straight line from in-1 the gate's axis needs: the body on in-5 puts a led animal 2.2 cells
   inside the gate cell; on in-4 it still overlaps it."
@@ -215,9 +235,11 @@
         inside (count (in-pen-adults c answer))]
     (cond
       (= :no-start (:reason answer)) (finish! c :no-pen)
-      (nil? chosen) (finish! c :no-gate)
+      (nil? chosen) (finish! c :no-gate (gate-diagnosis c answer))
       (not (gate/allowed? c :herd.declined "herd" :place gate {:own-plans-ok? true})) (finish! c :refused)
-      (not (approach-free? (:primitives c) (cell gate) in out)) (finish! c :no-gate {:why :no-approach})
+      (not (approach-free? (:primitives c) (cell gate) in out))
+      (finish! c :no-gate {:why :no-approach
+                           :cell (first (remove #(free-floor? (:primitives c) %) (take approach-cells (axis-cells (cell gate) in out 0))))})
       (seq leaks) (finish! c :leaky {:leaks (vec (take 12 leaks))})
       (>= inside target) (finish! c :full)
       (< (depth (:inside answer) (cell gate) in) min-depth) (finish! c :too-shallow)

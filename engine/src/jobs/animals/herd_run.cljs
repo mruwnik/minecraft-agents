@@ -157,7 +157,9 @@
       (ctx/emit! c :herd.gave-up :warn {:reason reason :text (str "herding stopped: " (name reason))}))
     (ctx/result! c result)
     (when (and (empty? brought) (not (#{:brought :full} reason)))
-      (throw (ex-info (str "herd brought none of the " target " wanted: " (name reason) ", " (count inside) " in the pen"
+      (throw (ex-info (str "herd brought none of the " target " wanted: " (name reason)
+                           (when (:why result) (str " (" (name (:why result)) (when (:cell result) (str " at " (pr-str (:cell result)))) ")"))
+                           ", " (count inside) " in the pen"
                            (when (seq (:given-up m)) (str ", given up " (pr-str (:given-up m)))))
                       result)))
     :done))
