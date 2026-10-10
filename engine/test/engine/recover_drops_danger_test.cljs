@@ -3,6 +3,7 @@
   over and over is given up."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
+            [engine.fake :as fake]
             [engine.death-test :as dt :refer [die! job recovered recovered-trip pile-drops fetching-events]]
             [engine.library-test :refer [setup]]
             [jobs.lib.ledger :as ledger]
@@ -50,7 +51,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (await ((fetch-run "skeleton")))]
-          (is (= :skip (:decision (recovered eng))))
+          (is (nil? (recovered eng)) "a danger skip stays open")
           (is (re-find #"skip: .*danger [1-9][0-9.]*,.*: skeleton" (decided-text seen))))))))
 
 (deftest a-body-with-an-iron-sword-and-armour-goes-for-the-guarded-pile
@@ -133,11 +134,31 @@
               r (await ((fetch-run "fall" {:blocks wet})))]
           (is (re-find #"danger [1-9][0-9.]*,.*: water" (decided-text (:seen r)))))))))
 
+(deftest a-skip-for-danger-is-tried-again-when-the-danger-is-gone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pile dt/death-pile-of-the-field-report
+              {:keys [eng p]} (setup {:floor tu/walk-floor :entities (conj (vec (pile-drops pile)) dt/zombie-by-the-way)})]
+          (die! eng {:pos dt/death-pos :inventory pile})
+          (core/submit! eng (list 'jobs.survival.recover-drops {:danger-overrides {"zombie" 1000}}) {})
+          (await (run-until-empty eng 5))
+          (is (nil? (recovered eng)) "a danger skip is not final")
+          (is (true? (died/died nil (mem/view (:store eng)) {})) "the died trigger fires again")
+          (is (= [] (tu/walk-calls p)))
+          (swap! (fake/state p) update :entities #(filterv (fn [e] (not= "hostile" (:kind e))) %))
+          (core/submit! eng job {})
+          (await (run-until-empty eng 20))
+          (is (= :collected (:decision (recovered eng)))))))))
+
 (deftest a-second-run-after-a-skip-says-the-death-was-decided
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (await ((fetch-run "skeleton")))
+        (let [{:keys [eng]} (setup {:floor tu/walk-floor :entities dt/drops})
+              _ (die! eng {:pos dt/death-pos :inventory dt/junk})
+              _ (core/submit! eng job {})
+              _ (await (run-until-empty eng 5))
               id (core/submit! eng job {})]
           (await (core/tick! eng))
           (let [w (core/waiting eng id)]

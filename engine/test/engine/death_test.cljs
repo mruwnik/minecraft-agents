@@ -667,7 +667,7 @@
           (core/submit! eng (list 'jobs.survival.recover-drops {:danger-overrides {"zombie" 1000}}) {})
           (await (run-until-empty eng 5))
           (is (= [] (tu/walk-calls p)))
-          (is (= :skip (:decision (recovered eng))))
+          (is (nil? (recovered eng)) "a danger skip stays open")
           (is (re-find #"zombie" (:text (first (decided-events seen))))))))))
 
 (deftest recover-drops-refuses-overrides-that-are-not-maps-at-submit

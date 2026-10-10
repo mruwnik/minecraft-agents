@@ -55,6 +55,7 @@
     many times dearer for a mob the body (its best weapon, armour, health) cannot afford to fight.
   - A pile in water (its cell or the one above) or lost to drowning adds :wet-danger points of route danger (named water or drowning).
   - Infinite when lava, fire or the void took the pile, or the walk would end after the despawn.
+  A skip for danger alone (the pile would be fetched were the route safe) is not final: the run ends :declined, the death stays open and the died trigger weighs the pile anew until the window closes; a skip for value is final.
   A fetch emits recover-drops.fetching. A skip emits recover-drops.decided. Both texts give the value, the cost and their parts.
   Kit: before the decision, when the pile is worth the trip were the route safe, a body with no weapon or with an empty armour slot, whose killer or the hostiles it knows make the route
   dangerous, fetches the best weapon and armour piece a chest of known stock (:fetch/stock) holds (jobs.lib.fetch, chests only,
@@ -486,6 +487,25 @@
           (threatened? c) (do (ctx/hold-still! c nil) (decline-danger! c (threatened? c)))
           :else (do (ctx/hold-still! c :fetching-kit) (await (pace/pace!)) (recur)))))))
 
+(defn danger-only?
+  "Whether the estimate e is a skip for danger alone: the pile would be fetched were the route safe."
+  [e margin]
+  (and (number? (:cost e))
+       (pos? (get-in e [:parts :danger] 0))
+       (> (:value e) (+ (- (:cost e) (get-in e [:parts :danger])) margin))))
+
+(defn retry-later!
+  "A skip for danger is not final while the window is open: report it, forget the estimate and end :declined, so the
+  died trigger runs the job again and the danger is weighed anew."
+  [c decided]
+  (ctx/update-mem! c dissoc :decided)
+  (save-trip! c)
+  (ctx/emit! c :recover-drops.decided :info
+             (assoc (select-keys decided [:value :cost :parts :top-items :top-mobs])
+                    :decision :skip :retry true :pos (:pos (:data (body/unrecovered-death (ctx/view c))))
+                    :text (str (decision-text :skip decided (:margin (:args c))) "; looks again")))
+  :declined)
+
 (defn ^:async trip!
   "The decision, then the walk and the collect passes of a trip inside its window."
   [c entry]
@@ -497,7 +517,9 @@
       kit :declined
 
       (<= (:value decided) (+ (if (= :infinite (:cost decided)) js/Infinity (:cost decided)) margin))
-      (finish! c :skip decided)
+      (if (danger-only? decided margin)
+        (retry-later! c decided)
+        (finish! c :skip decided))
 
       (>= (:cuts (ctx/mem c) 0) (max-hostile-cuts))
       (finish! c :abandoned (assoc decided :reason :danger))

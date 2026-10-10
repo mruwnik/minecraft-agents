@@ -46,7 +46,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (await ((run-with-chest nil false "skeleton")))]
-          (is (= :skip (:decision (recovered eng))))
+          (is (nil? (recovered eng)) "a danger skip stays open")
           (is (nil? (get (inv p) "iron_sword"))))))))
 
 (deftest a-chest-whose-stock-is-unknown-is-not-searched
@@ -54,7 +54,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (await ((run-with-chest kit-in-chest false "skeleton")))]
-          (is (= :skip (:decision (recovered eng))))
+          (is (nil? (recovered eng)) "a danger skip stays open")
           (is (nil? (get (inv p) "iron_sword"))))))))
 
 (deftest a-fall-calls-for-no-kit
@@ -88,7 +88,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (await ((run-with-pile dt/junk nil)))]
           (is (nil? (get (inv p) "iron_sword")))
-          (is (= :skip (:decision (recovered eng)))))))))
+          (is (= :skip (:decision (recovered eng))) "a skip for value is final"))))))
 
 (deftest a-waiting-kit-fetch-is-a-wait-not-a-decline
   (async done
@@ -110,4 +110,4 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (await ((run-with-pile dt/death-pile-of-the-field-report (fn ^:async stub-fetch [c j pr] :done))))]
           (is (some #{:recover-drops.kit-dropped} (kinds-of seen)))
-          (is (some? (recovered eng))))))))
+          (is (some #{:recover-drops.decided} (kinds-of seen))))))))
