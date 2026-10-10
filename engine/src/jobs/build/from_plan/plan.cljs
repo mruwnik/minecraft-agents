@@ -271,10 +271,12 @@
     (or (:wood (ctx/mem c))
         (wood/choose carried-map (some-> (trees/scan (:primitives c) trees/default-radius trees/log-name? 1) first :name)))))
 
+(def opening-pattern #"(_door|_fence_gate|_trapdoor)$")
+
 (defn prepared
   "Cells (as judged) ready for the rounds: a wrong cell holding a replaceable block is :missing (placed into
   directly); a companion half is marked :companion; a wrong block of another kind that the body carries the item for,
-  that is no container, not already misplaced by this job, is marked :dig? (dug, then placed). So is a block that is
+  that is no container, door or gate, not already misplaced by this job, is marked :dig? (dug, then placed). So is a block that is
   no replaceable one in a :clear cell (:extra), whatever is carried."
   [cells carried misplaced]
   (mapv (fn [{:keys [answer found want item pos] :as cell}]
@@ -282,7 +284,8 @@
                 loose? (and wrong? (rules/replaceable found))
                 extra? (and (= :extra answer) (not (rules/replaceable found)))
                 dug? #(and (not (contains? misplaced pos))
-                           (not (clear-box/kept? [] found)))
+                           (not (clear-box/kept? [] found))
+                           (not (re-find opening-pattern found)))
                 digs? (and (or extra? (and wrong? (not loose?) item (contains? carried item))) (dug?))
                 short? (and wrong? (not loose?) item (not (contains? carried item)) (dug?))]
             (cond-> cell
