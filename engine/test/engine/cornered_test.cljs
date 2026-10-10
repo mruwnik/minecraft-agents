@@ -452,7 +452,7 @@
           (is (= 3 (count (calls p "jumpPlace"))) "the one-call pillar tried and gave up")
           (is (empty? (pillar-entries eng)) "no block went in")
           (is (not (hiding? seen)) "built under 2: not hidden")
-          (is (pos? (count (calls p "attack"))) "the pillar option is spent: it fights the zombie in the doorway"))))))
+          (is (pos? (count (calls p "attack"))) "hit while sealed: it stops hiding and hits back"))))))
 
 (deftest a-pillar-that-stops-at-two-high-still-hides
   (async done
@@ -754,3 +754,16 @@
           (dotimes [_ 6] (await (core/tick! eng)))
           (is (empty? (calls p "attack")) "no fist fight")
           (is (= -5 (:x (first-move eng))) "the first walk is to the nearest dry land, west of the pool"))))))
+
+(deftest a-sealed-body-that-keeps-taking-hits-leaves-the-seal-and-fights
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:blocks dead-end :inventory [{:name "cobblestone" :count 20}]
+                                           :entities [(assoc (zombie 3 64 0) :visible true)]})
+              hurt! #(swap! (fake/state p) update-in [:self :health] - 2)]
+          (.override (.-world p) "wait" (fn [token a impl] (when (hiding? seen) (hurt!)) (impl token a)))
+          (core/submit! eng '(jobs.survival.retreat {:hide-s 100000}) {})
+          (await (core/tick! eng))
+          (is (= 1 (count (filter #(= :retreat_sealed (:kind %)) @seen))) "sealed first")
+          (is (pos? (count (calls p "attack"))) "hit while sealed: it stops hiding and hits back"))))))

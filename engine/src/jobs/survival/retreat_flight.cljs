@@ -124,7 +124,7 @@
 (defn look!
   "Update the flight's chasers (job memory :chasers, by id): the real dangers within :radius (ranged :ranged-radius)
   join or are seen afresh; one that stopped chasing (stopped-chasing) moves to :fled with :ended why. The chasers
-  still on, as JS entities, nearest first."
+  still on, as JS entities, nearest first. A mob that hurt the body in its refuge (:reached) has a way whatever the map says."
   [c]
   (let [{:keys [radius ranged-radius lost-s]} (:args c)
         p (:primitives c)
@@ -132,14 +132,17 @@
         dead (set (dead-ids c))
         live (remove #(dead (.-id %)) (known-chasers p))
         listed (into {} (map (juxt #(.-id %) identity)) live)
-        joining (remove #(dead (.-id %)) (danger-q/dangers p radius {:ranged-radius ranged-radius} {:sight? false}))
+        reached (set (:reached (ctx/mem c)))
+        joining (remove #(dead (.-id %)) (concat (danger-q/dangers p radius {:ranged-radius ranged-radius} {:sight? false})
+                                                 (filter #(reached (.-id %)) live)))
         chasers (merge (:chasers (ctx/mem c)) (into {} (map (juxt #(.-id %) #(chaser-entry p % now))) joining))
         looked (set (:looked-back (ctx/mem c)))
         judged (for [[id ch] chasers
                      :let [e (listed id)
                            seen-t (if (and e (true? (.-visible e))) now (:seen-t ch))
                            ch (cond-> (assoc ch :seen-t seen-t) e (-> (dissoc :pos :direction :band :from) (merge (threats/place-of p e))))
-                           why (stopped-chasing (some->> e (seen-now p)) seen-t now (* 1000 lost-s))]]
+                           m (some->> e (seen-now p))
+                           why (stopped-chasing (cond-> m (and m (contains? reached id)) (assoc :way? true)) seen-t now (* 1000 lost-s))]]
                  {:id id :ch ch :e e :why why
                   :look-back? (and (unsensed-loss? e why) (not (looked id)) (not (dead id)))})
         on (filter #(nil? (:why %)) judged)

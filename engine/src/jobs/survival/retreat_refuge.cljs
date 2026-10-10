@@ -406,11 +406,16 @@
          (map #(str (.-name %) " at " (pr-str (mapv (fn [k] (js/Math.floor (k (danger-q/mob-pos p %)))) [:x :y :z]))))
          (str/join ", "))))
 
+(def reach-radius
+  "Blocks within which a hostile counts as the one that hurt a hidden body."
+  3)
+
 (defn ^:async hide-hold!
   "Sealed in, up the pillar or down the pit: hold (a :wait, why hiding) while the refuge keeps a danger off
   (refuge-danger?) and :quiet-s after the last one, then end the flight :hidden. Past :hide-s in the refuge with no real
   danger on the body as it stands (danger-q/danger-near?, the hostile-near trigger's test) it ends :hidden at once,
-  saying which hostile it still keeps off (info retreat.hide-ended): the trigger fires again should one reach it."
+  saying which hostile it still keeps off (info retreat.hide-ended): the trigger fires again should one reach it.
+  A body hurt while hidden (a mob reaching it round a corner of the seal) leaves the refuge as failed (abandon-refuge!)."
   [c]
   (let [now (ctx/now c)]
     (when-not (:quiet-from (ctx/mem c)) (ctx/update-mem! c assoc :quiet-from now))
@@ -418,11 +423,18 @@
   (loop []
     (when (refuge-danger? c (:refuge (ctx/mem c))) (ctx/update-mem! c assoc :quiet-from (ctx/now c)))
     (let [{:keys [radius ranged-radius quiet-s hide-s]} (:args c)
-          {:keys [quiet-from hidden-since refuge]} (ctx/mem c)
+          {:keys [quiet-from hidden-since refuge hold-health]} (ctx/mem c)
+          health (.-health (.self (:primitives c)))
+          hurt? (< health (or hold-health health))
+          _ (ctx/update-mem! c assoc :hold-health health)
           quiet? (>= (- (ctx/now c) quiet-from) (* 1000 quiet-s))
           spent? (and (>= (- (ctx/now c) hidden-since) (* 1000 hide-s))
                       (not (danger-q/danger-near? (:primitives c) radius ranged-radius)))]
       (cond
+        hurt? (let [ids (map (fn [e] (.-id e)) (flight/near-known (:primitives c) #{} reach-radius reach-radius))]
+                (ctx/update-mem! c #(-> % (dissoc :quiet-from :hidden-since :hold-health) (update :reached (fnil into #{}) ids)))
+                (ctx/emit! c :retreat.hide-hurt :warn {:text "hurt while hidden: the refuge does not keep the hostile off" :pos (sh/feet (:primitives c))})
+                (await (abandon-refuge! c)))
         quiet? (do (ctx/update-mem! c dissoc :quiet-from :hidden-since)
                    (flight/end-flight! c :hidden))
         spent? (let [held (js/Math.round (/ (- (ctx/now c) hidden-since) 1000))
