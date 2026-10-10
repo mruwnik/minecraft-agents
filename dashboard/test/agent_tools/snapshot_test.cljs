@@ -130,7 +130,7 @@
               {:type "creeper" :id 9 :sense :remembered :pos {:x 5 :y 64 :z 6} :age-ms 5000}
               {:type "skeleton" :sense :heard :direction :north-east :band :near}
               {:type "wolf" :sense :self :pos {:x 0 :y 64 :z 0} :self? true}]
-        {:keys [entities heard]} (snap/perceived rows)]
+        {:keys [entities heard]} (snap/perceived rows "26.1")]
     (is (= [["zombie" 1 2] ["player" 3 4]] (map (fn [e] [(:name e) (get-in e [:pos :x]) (get-in e [:pos :z])]) entities)))
     (is (= "Ann" (:username (second entities))))
     (is (= [{:name "skeleton" :direction :north-east :band :near}] heard))))

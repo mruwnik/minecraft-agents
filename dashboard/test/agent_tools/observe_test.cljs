@@ -385,6 +385,8 @@
     (is (true? (:more @summary)))
     (is (= {:event :picked-up :item "wheat" :count 1} (first (:items @summary))))))
 
+(defn plain-job-event [kind id data] {:source :job :kind kind :context {:job-id id} :data data})
+
 (deftest a-job-end-or-notice-takes-a-routine-items-place-in-a-full-summary
   (let [routine [(event :body :picked-up {:item "dirt" :count 1}) (event :body :picked-up {:item "dirt" :count 1})
                  (assoc (event :reflex :fired) :context {:job-id "j142" :reflex-id :hostile-near})
@@ -415,7 +417,6 @@
     (is (= {:notices 2} (:counts summary)))
     (is (= ["j140/dig-in"] (mapv :job (:items summary))))))
 
-(defn plain-job-event [kind id data] {:source :job :kind kind :context {:job-id id} :data data})
 
 (deftest a-death-names-the-jobs-it-cancelled
   (let [events [(plain-job-event :queued "j1" {:name "jobs.explore.search"})
