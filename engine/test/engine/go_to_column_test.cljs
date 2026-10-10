@@ -289,6 +289,7 @@
    :update-mem (fn [f more] (apply swap! mem* f more))
    :remember (fn [_ _ _] nil)
    :emit (fn [_ _ _] nil)
+   :hold-still (fn [_] nil)
    :call-child (fn [_ _ _] (js/Promise.resolve :continue))})
 
 (deftest a-y-goals-first-look-is-at-the-goal-cell
