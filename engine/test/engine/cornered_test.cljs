@@ -681,3 +681,10 @@
           (await (core/tick! eng))
           (is (= {:x 3 :y 64 :z 1} (first (tu/walked-to eng))) "walks to the water, not away")
           (is (zero? (count (calls p "place")))))))))
+
+(deftest facing-first-orders-the-cells-by-the-nearest-melee-chaser-too
+  (let [feet {:x 0 :y 64 :z 0}
+        cells [{:x 1 :y 64 :z 0} {:x 0 :y 66 :z 0} {:x -1 :y 64 :z 0}]
+        zombie [{:x 0.5 :y 66 :z 0.5}]]
+    (is (= {:x 0 :y 66 :z 0} (first (retreat-refuge/nearest-first zombie cells))) "the roof cell with the zombie over it")
+    (is (= cells (retreat-refuge/nearest-first [] cells)) "no chaser: as given")))

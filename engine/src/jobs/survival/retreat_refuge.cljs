@@ -97,7 +97,8 @@
 
 (defn facing-first
   "cells (dig-cells/fill-cells order) with the sides towards the nearest of shooters first, each side's feet cell then its
-  head cell, so the first blocks stop arrows; the roof support and the roof stay last. As given with no shooter."
+  head cell, so the first blocks stop arrows; the roof support and the roof stay last. As given with no shooter
+  (seal! then orders by nearest-first of the melee hostiles)."
   [feet shooters cells]
   (if (empty? shooters)
     cells
@@ -108,6 +109,23 @@
       (sort-by (fn [{:keys [y] :as cell}]
                  (if-let [r (rank (side-of cell))] [0 r (- y (:y feet))] [1 0 0]))
                cells))))
+
+(defn nearest-first
+  "cells ordered by the distance of their middle to the nearest of threats ({:x :y :z}), as given with no threat."
+  [threats cells]
+  (if (empty? threats)
+    cells
+    (let [gap (fn [{:keys [x y z]}]
+                (apply min (map #(u/dist {:x (+ x 0.5) :y (+ y 0.5) :z (+ z 0.5)} %) threats)))]
+      (sort-by gap cells))))
+
+(defn melee-spots
+  "Where the seen melee hostiles within the flight's :radius stand."
+  [c]
+  (let [p (:primitives c)]
+    (->> (danger-q/known-hostiles p (:radius (:args c)) {})
+         (filter #(and (not (combat/ranged? %)) (danger-q/seen-only? %)))
+         (mapv #(danger-q/mob-pos p %)))))
 
 (defn sealing-here?
   "Whether a seal was begun at the body's feet cell this flight and has not failed: it is finished before the walk goes on."
@@ -127,7 +145,8 @@
   (let [{:keys [radius max-places blocks]} (:args c)
         p (:primitives c)
         open (dig-cells/open-cells p (sh/feet p))
-        cells (facing-first (sh/feet p) (shooters c) (remove #(occupied? c %) open))
+        free (remove #(occupied? c %) open)
+        cells (if (seq (shooters c)) (facing-first (sh/feet p) (shooters c) free) (nearest-first (melee-spots c) free))
         forget! #(dig-cells/forget-wait! c :seal-mob-since)
         unfillable (fn [] (forget!) (flight/tried! c :seal) :failed)]
     (cond
