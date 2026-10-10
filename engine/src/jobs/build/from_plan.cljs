@@ -25,6 +25,7 @@
             [jobs.build.wood :as wood]
             [jobs.lib.trees :as trees]
             [jobs.lib.fetch :as fetch]
+            [jobs.farm.find-spot :as spot]
             [jobs.lib.world :as known]))
 
 (def doc
@@ -93,6 +94,7 @@
    :accept {:doc "fluid hazards of a cell taken: :fluid-adjacent (water beside; placing beside or into water seals and bridges), :lava-adjacent (lava beside; not taken by default: the body stands beside the cell)" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default [:fluid-adjacent]}
    :fetch {:doc "get the blocks and tools the plan lacks (jobs.lib.fetch): true, a set of kinds or a map of limits; false builds with what is carried" :spec fetch/option? :default {:explore true}}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
+   :surface {:doc "put each column of the plan on the ground the body has seen there: the column's lowest cell stands on the ground's top, the rest keep their height above it (an unseen column stays as planned); for a pen on a slope" :spec boolean? :default false}
    :sturdy-ground {:doc "a sturdy block on the ground of a rail line (plan.rail/ground) is no wrong block, whatever fill the plan wants there" :spec boolean? :default false}})
 
 (a/defargs settings
@@ -300,6 +302,35 @@
              {:cells [] :left carried}
              cells))))
 
+(defn follow-surface
+  "cells with each column [x z] moved up or down as a whole so its lowest cell stands on the top of the ground:
+  (top-of x z lowest-y) is that top's y, nil when unknown (the column stays)."
+  [cells top-of]
+  (let [shift (into {}
+                    (for [[col cs] (group-by (fn [{[x _ z] :pos}] [x z]) cells)
+                          :let [base (apply min (map (comp second :pos) cs))
+                                top (top-of (first col) (second col) base)]
+                          :when top]
+                      [col (- (inc top) base)]))]
+    (mapv (fn [{[x y z] :pos :as cell}]
+            (let [d (get shift [x z] 0)] (if (zero? d) cell (assoc cell :pos [x (+ y d) z]))))
+          cells)))
+
+(def surface-depth "Blocks above and below a planned column's lowest cell that the surface is looked for in." 6)
+
+(def on-ground
+  "Names that stand on the ground and are not it: fences, gates, walls and torches."
+  #"(_fence|_fence_gate|_wall|torch)$")
+
+(defn surfaced
+  "answer with its cells put on the seen ground when the args ask for it (:surface)."
+  [c answer]
+  (if-not (and answer (:surface (:args c)))
+    answer
+    (let [p (:primitives c)
+          name-fn (fn [pos] (let [n (u/seen-name p pos)] (if (and n (re-find on-ground n)) "air" n)))]
+      (update answer :cells follow-surface (fn [x z y] (spot/column-top name-fn x z y surface-depth))))))
+
 (defn judged
   "The plan's cells (of part) judged against the world, each with the :item to place it with. A generic wood want
   (jobs.build.wood) is wanted in species sp first, any other counts where it stands."
@@ -351,7 +382,7 @@
   "{:cells judged} for the plan in the args, or {:trouble text} (warned once per reason)."
   [c]
   (let [{:keys [plan part]} (:args c)
-        answer (known/plan c plan)
+        answer (surfaced c (known/plan c plan))
         usable? (and answer (not (:broken answer)))
         carried-map (when usable? (carried-counts (:primitives c)))
         wood (when usable? (wood-choice c answer carried-map))

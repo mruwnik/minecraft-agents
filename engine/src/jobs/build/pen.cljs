@@ -13,6 +13,7 @@
 (def doc
   "Build the fence a plan wants (:plan, optionally only its :part) and prove it holds animals.
   The pen is the bounding box of the plan's cells that want a fence, a fence gate or a wall.
+  With :surface (default) each column of the plan is put on the ground the body has seen there, so a pen on a slope follows it.
   Phase 1 runs jobs.build.from-plan on the plan. Its args :reach :give-up :accept pass through, and its rules
   (zones, other plans' footprints, materials, cuts) apply. Phase 2 checks the pen over that box with
   jobs.lib.pen (see jobs.animals.pen-check): a step out of the box is a leak.
@@ -38,6 +39,7 @@
    :accept {:doc "as jobs.build.from-plan" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default [:fluid-adjacent]}
    :max-cells {:doc "most cells the pen check visits before it gives up with :unbounded" :spec (a/int-in 1 nil) :default pen/default-max-cells}
    :fetch {:doc "as jobs.build.from-plan: get the blocks the plan lacks; false builds with what is carried" :spec fetch/option? :default {:explore true}}
+   :surface {:doc "as jobs.build.from-plan: each column of the pen on the seen ground (a pen on a slope)" :spec boolean? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it (passed to jobs.build.from-plan)" :spec boolean? :default false}})
 
 ;; ------------------------------------------------------------------ the pen from the plan
@@ -70,7 +72,7 @@
   [c]
   (let [{:keys [plan part]} (:args c)
         p (:primitives c)
-        answer (known/plan c plan)
+        answer (build/surfaced c (known/plan c plan))
         cells (when (and answer (not (:broken answer)))
                 (build/judged p answer part (set (keys (build/carried-counts p))) nil))
         trouble (or (build/plan-trouble answer cells)
@@ -97,7 +99,7 @@
        (:closed? (read-pen c cells))))
 
 (defn build-args [c]
-  (select-keys (:args c) [:plan :part :reach :give-up :accept :fetch :ignore-zones?]))
+  (select-keys (:args c) [:plan :part :reach :give-up :accept :fetch :ignore-zones? :surface]))
 
 ;; ------------------------------------------------------------------ check
 
