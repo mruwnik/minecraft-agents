@@ -181,3 +181,9 @@
   "Hold cells from a job's round."
   [c cells]
   (ctx/remember! c held-kind {:cells (vec cells)} held-policy))
+
+(defn ways-of
+  "The set of floors of the stairs this body cut earlier in its current dimension (memory :stair-way)."
+  [c]
+  (let [dim (.-dimension (.self (:primitives c)))]
+    (set (mapcat #(when (= dim (:dim (:data %))) (:floors (:data %))) (ctx/entries c :stair-way)))))

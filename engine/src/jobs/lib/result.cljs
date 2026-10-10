@@ -23,3 +23,14 @@
   ([c data]
    ((:result c) (assoc data :status :done))
    :done))
+
+(def permanent-why "go-to's :why of a give-up that is a verdict on the cell." #{:abilities :goal-enclosed :goal-cut-off :one-way :goal-not-standable :goal-on-magma :exhausted})
+
+(defn permanent-walk?
+  "Whether a go-to result is a verdict on the cell (held :unreachable), not something that may pass: a refused call
+  (:bad-pos, :unsupported) or an :unreachable whose :why is permanent (a door stuck, a stuck step, no progress, a move
+  while searching are not)."
+  [{:keys [status reason why]}]
+  (and (= :stopped status)
+       (or (contains? #{:bad-pos :unsupported} reason)
+           (and (= :unreachable reason) (contains? permanent-why why)))))

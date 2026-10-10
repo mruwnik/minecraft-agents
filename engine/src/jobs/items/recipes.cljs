@@ -13,14 +13,10 @@
   step {:op :smelt :item product :count n :input name}, one input per item; without it no smelt is planned).
   (lacking version have item n) says why a craft cannot start."
   (:require ["minecraft-data" :as minecraft-data]
+            [jobs.lib.game-facts :as facts]
             [clojure.string]))
 
 (def table-item "crafting_table")
-
-(defn gatherable?
-  "Items with no recipe that the body gets by mining, felling or from sheep: logs, coal, wool (and stone-materials)."
-  [item]
-  (boolean (or (= "coal" item) (clojure.string/ends-with? item "_log") (clojure.string/ends-with? item "_wool"))))
 
 (defn id-of [x]
   (cond (number? x) x (and (some? x) (number? (.-id x))) (.-id x)))
@@ -73,7 +69,7 @@
 (defn gathered?
   "Whether item counts as gathered, not crafted, in plan state st."
   [st item]
-  (boolean (and (:gather? st) (or (gatherable? item) (contains? (:materials st) item) (contains? (:raw st) item)))))
+  (boolean (and (:gather? st) (or (facts/gatherable? item) (contains? (:materials st) item) (contains? (:raw st) item)))))
 
 (defn acquire
   "State st with n of item taken from what is carried, the rest crafted; nil when it cannot be had, or when item is

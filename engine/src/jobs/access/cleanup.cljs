@@ -274,16 +274,6 @@
             :else (ctx/update-mem! c count-fail cell {:reason :dig-failed :dig outcome} (:give-up (:args c))))
           (if (= :continue outcome) :continue :again))))))
 
-(def permanent-why "go-to's :why of a give-up that is a verdict on the cell." #{:abilities :goal-enclosed :goal-cut-off :one-way :goal-not-standable :goal-on-magma :exhausted})
-
-(defn permanent-walk?
-  "Whether a go-to result is a verdict on the cell (held :unreachable), not something that may pass: a refused call
-  (:bad-pos, :unsupported) or an :unreachable whose :why is permanent (a door stuck, a stuck step, no progress, a move
-  while searching are not)."
-  [{:keys [status reason why]}]
-  (and (= :stopped status)
-       (or (contains? #{:bad-pos :unsupported} reason)
-           (and (= :unreachable reason) (contains? permanent-why why)))))
 
 (defn ^:async walk!
   "Walk to within 3 of cell; a permanent verdict holds it :unreachable, an end out of reach, a walk that did not end or
@@ -293,7 +283,7 @@
         result (when (= :done r) (ctx/child-result c :walk))
         status (:status result)]
     (cond
-      (permanent-walk? result)
+      (result/permanent-walk? result)
       (ctx/update-mem! c assoc-in [:held cell] {:reason :unreachable :walk status})
       (or (not= :done r) (= :stopped status) (> (distance (eye-of c) (centre cell)) (:reach (:args c))))
       (ctx/update-mem! c count-fail cell {:reason :out-of-reach :walk status} (:give-up (:args c))))

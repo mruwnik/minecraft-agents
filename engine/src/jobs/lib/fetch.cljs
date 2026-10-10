@@ -24,7 +24,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
             [jobs.lib.declined :as declined]
-            [jobs.items.recipes :as recipes]
+            [jobs.lib.game-facts :as facts]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
@@ -127,9 +127,9 @@
 (def failed-policy {:cap 32 :ttl (* 24 60 60 1000)})
 
 (defn raw-carried
-  "Carried counts of the raw materials (recipes/gatherable?) a failed fetch could have crafted from."
+  "Carried counts of the raw materials (facts/gatherable?) a failed fetch could have crafted from."
   [c]
-  (reduce (fn [m {:keys [name count]}] (cond-> m (recipes/gatherable? name) (update name (fnil + 0) count)))
+  (reduce (fn [m {:keys [name count]}] (cond-> m (facts/gatherable? name) (update name (fnil + 0) count)))
           {} (u/inventory (:primitives c))))
 
 (defn failure

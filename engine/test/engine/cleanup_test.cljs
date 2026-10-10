@@ -17,7 +17,8 @@
             [jobs.lib.blocks :as blocks]
             [engine.dig-to-see-test :as d]
             [jobs.lib.dig-look :as look]
-            [jobs.access.cleanup :as cleanup]))
+            [jobs.access.cleanup :as cleanup]
+            [jobs.lib.result :as result]))
 
 ;; ------------------------------------------------------------------ the step
 
@@ -599,7 +600,7 @@
           (is (= #{[0 64 0]} (ledger/held-cells (mem/view (:store eng))))))))))
 
 (deftest only-a-permanent-walk-verdict-holds-a-cell-unreachable
-  (are [result permanent?] (= permanent? (cleanup/permanent-walk? result))
+  (are [result permanent?] (= permanent? (result/permanent-walk? result))
     {:status :stopped :reason :unreachable :why :abilities} true
     {:status :stopped :reason :unreachable :why :goal-enclosed} true
     {:status :stopped :reason :unreachable :why :goal-cut-off} true

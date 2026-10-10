@@ -5,6 +5,8 @@
             [engine.game :as game]
             [jobs.lib.blocks :as blocks]
             [clojure.string :as str]
+            [jobs.lib.ledger :as ledger]
+            [jobs.lib.result :as result]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.body :as body]
@@ -12,8 +14,6 @@
             [jobs.lib.gate :as gate]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.tools :as tools]
-            [jobs.access.cleanup :as cleanup]
-            [jobs.access.stair :as stair]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.access.zones :as zones]
             [jobs.lib.shafts :as shafts]
@@ -413,7 +413,7 @@
   "The first of cells (maps {:x :y :z}) that is a still-solid floor of a stair this body cut (memory :stair-way): digging it
   cuts the walk back up."
   [c cells]
-  (let [ways (stair/ways-of c)
+  (let [ways (ledger/ways-of c)
         name-at #(u/seen-name (:primitives c) %)]
     (first (filter #(and (contains? ways (access/cell %)) (rules/solid-floor? name-at %)) cells))))
 
@@ -1223,7 +1223,7 @@
                                                (skip! c pos) :again)
       (some? pos) (let [walked (await (walk-to-dig! c pos))]
                     (cond
-                      (and (= :blocked walked) (cleanup/permanent-walk? (ctx/child-result c :walk))) (do (skip-unreachable! c pos) :again)
+                      (and (= :blocked walked) (result/permanent-walk? (ctx/child-result c :walk))) (do (skip-unreachable! c pos) :again)
                       (= :blocked walked) (do (skip-failed! c pos) :again)
                       (= :partial walked) (stalled! c pos)
                       (branch-torch-due? c) (await (torch-step! c true))

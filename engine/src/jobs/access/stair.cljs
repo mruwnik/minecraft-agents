@@ -177,12 +177,6 @@
   [block-at cut ways]
   (first (filter #(and (contains? ways %) (rules/solid-floor? block-at %)) cut)))
 
-(defn ways-of
-  "The set of floors of the stairs this body cut earlier in its current dimension (memory :stair-way)."
-  [c]
-  (let [dim (.-dimension (.self (:primitives c)))]
-    (set (mapcat #(when (= dim (:dim (:data %))) (:floors (:data %))) (ctx/entries c :stair-way)))))
-
 (defn stop-of
   "Why the step cannot go on, as {:reason ...detail}, or nil when every cell may be cut.
   in: the rules' input without :cell; its :unseen? (fn cell -> true when never sensed) makes a floor the body has not
@@ -254,7 +248,7 @@
   scanned from the sky down for a stand, jobs.access.tunnel/surface)."
   [c feet]
   (merge {:floor-at (access/seen-at (:primitives c)) :block-at (access/sensed-at (:primitives c) blocks/hidden-guess) :column-at (access/sensed-at (:primitives c) "air")
-          :feet feet :ledger #{} :ways (ways-of c) :keep-base? true}
+          :feet feet :ledger #{} :ways (ledger/ways-of c) :keep-base? true}
          (access-world c)))
 
 (defn judged-in
