@@ -752,6 +752,29 @@
           (is (= :step-failed (:reason @out)))
           (is (= [1 64 0] (:cell @out))))))))
 
+(deftest a-falling-block-hazard-names-the-block
+  (let [stop (stop {[1 67 0] "gravel" [1 66 0] "stone"} #{:water} :zones [])]
+    (is (re-find #"gravel" (str (:why stop))))))
+
+(deftest a-stair-that-reached-its-last-step-is-done-even-when-the-way-back-is-gone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [total (count (digs (:p (await (stair! {:blocks ground} east (fn [_]))))))
+              n (atom 0)
+              prep (fn [p]
+                     (let [world (.-world p)]
+                       (.override world "dig"
+                                  (fn ^:async f [token a impl]
+                                    (let [r (await (impl token a))]
+                                      (when (= total (swap! n inc))
+                                        (swap! (.. world -state) assoc-in [:blocks [0 65 0]] "stone"))
+                                      r)))))
+              {:keys [out]} (await (stair! {:blocks ground} east prep))]
+          (is (pos? total))
+          (is (= :done (:status @out)))
+          (is (= 3 (:steps @out))))))))
+
 (deftest a-cell-is-judged-again-right-before-its-dig
   (async done
     (tu/run-async done

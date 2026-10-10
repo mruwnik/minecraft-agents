@@ -166,6 +166,11 @@
   (let [d (delta dir heading)]
     (vec (for [i (range 1 (inc (or steps 0)))] (add (add origin (mapv #(* i %) d)) [0 -1 0])))))
 
+(defn hazards-why
+  "The hazards in words: \"falling-block gravel at [x y z]; ...\"."
+  [hazards]
+  (str/join "; " (map (fn [h] (str (name (:reason h)) (some->> (:block h) (str " ")) (some->> (:at h) pr-str (str " at ")))) hazards)))
+
 (defn known-floor
   "The first cut cell that is a floor of a stair the body made earlier (ways: the set of those floors) and is still
   solid as the body sees it now (a floor dug away since, or put back as air, no longer carries a way)."
@@ -207,7 +212,7 @@
                   (cond
                     (not (:ok v)) (assoc (dissoc v :ok) :cell cell)
                     (not-every? (comp accept hazard-key) (:hazards v))
-                    {:reason :hazard :cell cell :hazards (:hazards v)}))))
+                    {:reason :hazard :cell cell :hazards (:hazards v) :why (hazards-why (:hazards v))}))))
             cut))))
 
 (defn room-for?
@@ -465,7 +470,7 @@
               block ((:block-at in) cell)]
           (cond
             (not (:ok v)) (assoc (dissoc v :ok) :cell cell)
-            (not-every? (comp accept hazard-key) (:hazards v)) {:reason :hazard :cell cell :hazards (:hazards v)}
+            (not-every? (comp accept hazard-key) (:hazards v)) {:reason :hazard :cell cell :hazards (:hazards v) :why (hazards-why (:hazards v))}
             (rules/air block) :continue
             :else
             (do
@@ -583,7 +588,7 @@
       :else
       (do
         (ctx/update-mem! c assoc :at-step i)
-        (if-let [stop (when (and (pos? i) (not= i checked)) (await (way-back c origin)))]
+        (if-let [stop (when (and (pos? i) (not= i checked) (not= i target)) (await (way-back c origin)))]
           stop
           (do
             (ctx/update-mem! c assoc :checked i)
