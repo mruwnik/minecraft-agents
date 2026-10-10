@@ -15,6 +15,8 @@ const bedSafe = bot => /overworld$/.test(bot.game?.dimension ?? 'overworld')
 const CONTAINER = /chest$|barrel$|shulker_box$|furnace$|smoker$|hopper$|dispenser$|dropper$|brewing_stand$|crafting_table$|anvil$|enchanting_table$|grindstone$|loom$|stonecutter$|cartography_table$|smithing_table$|lectern$|beacon$|^crafter$|command_block$|^structure_block$|^jigsaw$|^vault$/
 const HAZARDS = new Set(['flint_and_steel', 'fire_charge', 'lava_bucket'])
 // A click the block does not take would place or pour the held item against it, so these are put away first.
+// Animal foods a lure holds: several share a name with their crop block (wheat, carrots), so the block-name test must not stow them. Mirror of jobs.lib.animals/breeding-food.
+const LURE_FOODS = new Set(['wheat', 'wheat_seeds', 'melon_seeds', 'pumpkin_seeds', 'beetroot_seeds', 'torchflower_seeds', 'carrot', 'potato', 'beetroot', 'golden_carrot'])
 const PLACING = /_bucket$|_spawn_egg$|_boat$|_raft$|minecart/
 const isAir = name => name === 'air' || name.endsWith('_air')
 const isNum = n => typeof n === 'number' && Number.isFinite(n)
@@ -42,7 +44,7 @@ export function createUseOn ({ act, getBot, inventory, eye, lookNow, timeScale, 
     return true
   }
 
-  const placing = (bot, name) => name && (HAZARDS.has(name) || PLACING.test(name) || bot.registry?.blocksByName?.[name])
+  const placing = (bot, name) => name && !LURE_FOODS.has(name) && (HAZARDS.has(name) || PLACING.test(name) || bot.registry?.blocksByName?.[name])
 
   return async function useOn (token, a = {}) {
     if (!isOwner(token)) throw cutError()

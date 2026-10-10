@@ -71,3 +71,34 @@
       (fn ^:async t []
         (let [s (await (scenario {} {:inventory wheat :entities [(cow 1 3 {:leashed true})]} 12))]
           (is (= :none (:reason (done-event s)))))))))
+
+(deftest the-food-is-held-again-when-it-leaves-the-hand-mid-walk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng clock] :as s} (h/setup (merge {:floor tu/walk-floor} {:inventory wheat :entities [(cow 1 3)]}) 50)
+              moves (atom 0)]
+          (.override (.-world p) "steer"
+                     (fn [token a impl]
+                       (when (= 3 (swap! moves inc)) (swap! (fake/state p) assoc-in [:self :held] nil))
+                       (impl token a)))
+          (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal}) {})
+          (dotimes [_ 12] (swap! clock + 700) (await (core/tick! eng)))
+          (is (<= 3 @moves) "the food was knocked out of the hand during the walk")
+          (is (= :arrived (:reason (done-event s))))
+          (is (empty? (filter #(= :lead-broke (:reason %)) (map :data @(:seen s))))))))))
+
+(deftest food-gone-from-the-inventory-mid-walk-ends-no-food
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng clock] :as s} (h/setup (merge {:floor tu/walk-floor} {:inventory wheat :entities [(cow 1 3)]}) 50)
+              moves (atom 0)]
+          (.override (.-world p) "steer"
+                     (fn [token a impl]
+                       (when (= 3 (swap! moves inc)) (swap! (fake/state p) #(-> % (assoc :inventory []) (assoc-in [:self :held] nil))))
+                       (impl token a)))
+          (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal}) {})
+          (dotimes [_ 12] (swap! clock + 700) (await (core/tick! eng)))
+          (is (<= 3 @moves))
+          (is (= :no-food (:reason (done-event s)))))))))

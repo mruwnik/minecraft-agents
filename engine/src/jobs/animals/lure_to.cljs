@@ -20,7 +20,8 @@
   it), holds the food, walks within 6 blocks of it and then to :pos in short go-to legs, the same legs as
   jobs.animals.lead-to (doors left open for the animal and shut afterwards). After each leg the animal is looked at:
   unseen or more than 7 blocks behind, the body holds still (:waiting-for-animal) for it; unseen for 3 s :lost; more
-  than 10 behind, or still waiting after 10 s, :lagging (animals follow food only within about 10 blocks).
+  than 10 behind, or still waiting after 10 s, :lagging (animals follow food only within about 10 blocks). Each round
+  the food is checked in hand and held again if not (a cut, another job's equip); none left ends :no-food.
 
   Ends with info lure-to.done and a warn lure-to.gave-up unless the reason is :arrived. Result {:reason :animal key
   :near bool (the animal is within 6 blocks of :pos) :at pos}. Reasons:
@@ -122,14 +123,35 @@
                 (do (ctx/update-mem! c assoc :animal k :phase :walk) :again)
                 :again)))))
 
-(defn ^:async walk! [c]
+(defn ^:async rehold!
+  "The food is not in the hand (a cut, another job's equip): hold it again, or end :no-food when none is carried, or
+  :no-hold after max-equips tries in a row."
+  [c]
+  (let [p (:primitives c)
+        food (animals/food-carried p (:mob (:args c)))
+        tries (:rehold-tries (ctx/mem c) 0)]
+    (cond
+      (nil? food) (finish! c :no-food)
+      (>= tries max-equips) (finish! c :no-hold)
+      :else (do (ctx/update-mem! c assoc :rehold-tries (inc tries))
+                (await (ctx/act c :equip (clj->js {:item food})))
+                :again))))
+
+(defn ^:async walk-legs! [c]
   (let [r (await (lead-to/walk-legs! c :walk (:pos (:args c)) (:range (:args c)) nil nil lead-to/safe-gap))]
     (cond
       (= :waiting r) :yield
       (= :catching-up r) (await (lead-to/wait-for-animal! c))
       (= :arrived r) (finish! c :arrived)
       (= :failed r) (finish! c :unreachable)
+      (and (= :lead-broke (:problem r)) (not (hr/holds-food? c))) :again
       :else (finish! c (:problem r)))))
+
+(defn ^:async walk! [c]
+  (if-not (hr/holds-food? c)
+    (await (rehold! c))
+    (do (ctx/update-mem! c dissoc :rehold-tries)
+        (await (walk-legs! c)))))
 
 (defn ^:async step [c]
   (let [now (ctx/now c)

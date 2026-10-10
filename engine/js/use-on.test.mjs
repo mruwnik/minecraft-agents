@@ -140,12 +140,12 @@ const riskyHeld = [
   { name: 'a lava bucket', held: { name: 'lava_bucket', count: 1, slot: 36 }, empties: true },
   { name: 'a water bucket', held: { name: 'water_bucket', count: 1, slot: 36 }, empties: true },
   { name: 'flint and steel', held: { name: 'flint_and_steel', count: 1, slot: 36 }, empties: true },
-  { name: 'seeds', held: { name: 'wheat_seeds', count: 8, slot: 36 }, empties: false }
+  ...['wheat', 'wheat_seeds', 'carrot', 'potato', 'beetroot', 'melon_seeds'].map(name => ({ name: `${name} (a crop block of the same name exists)`, held: { name, count: 8, slot: 36 }, empties: false, crop: name }))
 ]
 for (const c of riskyHeld) {
   test(`no :item with ${c.name} in hand ${c.empties ? 'empties the hand first' : 'keeps it'}`, async () => {
     const { bot, p } = rig({ items: [c.held] })
-    bot.registry.blocksByName = { cobblestone: { id: 4 }, dirt: { id: 3 } }
+    bot.registry.blocksByName = { cobblestone: { id: 4 }, dirt: { id: 3 }, ...(c.crop ? { [c.crop]: { id: 9 } } : {}) }
     bot.heldItem = c.held
     await p.useOn('t1', dirt)
     assert.deepEqual(names(bot).filter(n => n === 'setQuickBarSlot' || n === 'unequip'), c.empties ? ['setQuickBarSlot'] : [])
