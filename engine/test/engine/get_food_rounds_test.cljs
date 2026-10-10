@@ -3,6 +3,7 @@
   a cut round resumes from the world; jobs.lib.child/run! runs a child to its end."
   (:require [cljs.test :refer [deftest is async]]
             [engine.registry :as registry]
+            [engine.settings :as settings]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
@@ -835,11 +836,13 @@
           (await (one-round! eng {:explore false}))
           (is (empty? (calls p "fish"))))))))
 
-(deftest a-starving-body-with-no-food-takes-the-last-adults-too
+(deftest a-starving-body-takes-the-last-adults-only-when-the-lift-is-set
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[food n] [[2 true] [5 false]]]
-          (let [{:keys [eng p]} (setup {:self {:food food} :entities [cow (assoc cow :id 8 :pos {:x 8 :y 64 :z 0})]})]
-            (await (one-round! eng {:attack-gap-ms 0 :explore false :food 6}))
-            (is (= n (boolean (seq (calls p "attack")))) (str "food " food))))))))
+        (doseq [[lift food n] [[3 2 true] [3 5 false] [-1 2 false]]]
+          (await (settings/with-settings {:jobs.survival.get-food/kept-lifted-below lift}
+                   (fn ^:async t2 []
+                     (let [{:keys [eng p]} (setup {:self {:food food} :entities [cow (assoc cow :id 8 :pos {:x 8 :y 64 :z 0})]})]
+                       (await (one-round! eng {:attack-gap-ms 0 :explore false :food 6}))
+                       (is (= n (boolean (seq (calls p "attack")))) (str "lift " lift " food " food)))))))))))

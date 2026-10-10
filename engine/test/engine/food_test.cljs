@@ -3,6 +3,7 @@
   (:require [cljs.test :refer [deftest is are async]]
             [engine.ctx :as ctx]
             [engine.registry :as registry]
+            [engine.settings :as settings]
             [engine.core :as core]
             [engine.events :as events]
             [jobs.lib.foods :as foods]
@@ -508,15 +509,26 @@
           (is (= [{:adults 3 :keep 2 :food 4 :rule :surplus}]
                  (mapv #(select-keys % [:adults :keep :food :rule]) (killed-events seen)))))))))
 
-(deftest get-food-names-the-starvation-lift-as-the-rule
+(deftest get-food-leaves-the-last-pair-alone-even-when-starving
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (setup {:self {:food 2} :entities (take 2 three-cows)})]
+        (let [{:keys [eng p seen]} (setup {:self {:food 0} :entities (take 2 three-cows)})]
           (core/submit! eng '(jobs.survival.get-food {:attack-gap-ms 0}) {})
           (await (run-until-empty eng 40))
-          (is (= [{:adults 2 :keep 2 :food 2 :rule :starved}]
-                 (mapv #(select-keys % [:adults :keep :food :rule]) (killed-events seen)))))))))
+          (is (= [] (calls p "attack")))
+          (is (some #(and (= :food.none (:kind %)) (re-find #"cow: kept for breeding" (str (:text %)))) @seen)))))))
+
+(deftest get-food-names-the-starvation-lift-as-the-rule
+  (async done
+    (tu/run-async done
+      (fn [] (settings/with-settings {:jobs.survival.get-food/kept-lifted-below 3}
+        (fn ^:async t []
+          (let [{:keys [eng seen]} (setup {:self {:food 2} :entities (take 2 three-cows)})]
+            (core/submit! eng '(jobs.survival.get-food {:attack-gap-ms 0}) {})
+            (await (run-until-empty eng 40))
+            (is (= [{:adults 2 :keep 2 :food 2 :rule :starved}]
+                   (mapv #(select-keys % [:adults :keep :food :rule]) (killed-events seen)))))))))))
 
 (def pen-ring
   (merge (tu/box 3 64 -2 12 64 -2 "oak_fence") (tu/box 3 64 2 12 64 2 "oak_fence")

@@ -49,7 +49,7 @@
   :stock n: a fed body also takes the ways until the pack holds n food points, else stops :no-stock; while the pack is short of it the ask cooldown does not block the search.
   Never :continue: a go-to that waits on the world, or a child still going after jobs.lib.child's call cap, is waited out in the round.
   More than 12 ways in one round without getting fed stops :still-hungry.
-  Wheat is never harvested. Babies, animals in another's zone or claim, animals in a zone or plan of the body's own or inside a closed enclosure (:spare-pens, default true), kinds in :off-limits (default the jobs.lib.animal-spare setting), and the last :keep-adults (2) adults of a kind in sight (for breeding; hunted too at food 3 or less with no food carried) are never hunted (:ignore-zones? lifts the others' zone only). Each animal attacked is a food.killed info with its name, cell, adults counted, :keep-adults, food and the rule that allowed it; the result carries :killed. A chest in another's zone or claim is skipped and never taken from, even when starving
+  Wheat is never harvested. Babies, animals in another's zone or claim, animals in a zone or plan of the body's own or inside a closed enclosure (:spare-pens, default true), kinds in :off-limits (default the jobs.lib.animal-spare setting), and the last :keep-adults (2) adults of a kind in sight (for breeding; never hunted, even when starving, unless ::kept-lifted-below lifts it) are never hunted (:ignore-zones? lifts the others' zone only). Each animal attacked is a food.killed info with its name, cell, adults counted, :keep-adults, food and the rule that allowed it; the result carries :killed. A chest in another's zone or claim is skipped and never taken from, even when starving
   (one get-food.skipped warning). A crop in another's zone or claim is dug only when no other is (one
   get-food.trespass-last-resort warning). :ignore-zones? lifts both.
   A cut round starts again from the world: carried food first, then the ways.
@@ -68,7 +68,7 @@
    :stock {:doc "also carry food worth this many hunger points: a fed body takes the ways below until the pack holds it (0: only feed)" :spec (a/num-in 0 nil) :default 0}
    :ask-cooldown-ms {:doc "after finding nothing, how long before saying so (and searching) again" :spec (a/num-in 0 nil) :default (* 10 60 1000)}
    :spare-pens {:doc "never hunt animals in a zone or plan of the body's own (false: a job asked to get food may take them)" :spec boolean? :default true}
-   :keep-adults {:doc "adults of a kind in sight that are never hunted, so they can breed (lifted at food 3 or less with none carried)" :spec (a/int-in 0 nil) :default 2}
+   :keep-adults {:doc "adults of a kind in sight that are never hunted, so they can breed (hunted only when ::kept-lifted-below lifts it)" :spec (a/int-in 0 nil) :default 2}
    :off-limits {:doc "animal kinds never hunted; nil: the jobs.lib.animal-spare/off-limits setting" :spec (a/or-of (a/pred "nil" nil?) (a/coll-of a/item?)) :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
@@ -108,7 +108,7 @@
    ::explore {:default {:max-distance 64 :max-legs 12 :timeout-s 120} :doc "jobs.explore.search options of the search for food (:explore true)." :spec map?}
    ::fish-radius {:default 48 :doc "Blocks within which seen water two deep with a bank makes fishing a way, with a fishing rod carried." :spec (a/int-in 0 nil)}
    ::pen-max-cells {:default 400 :doc "Most cells searched to tell whether a food animal stands in a closed enclosure (then it counts as penned)." :spec (a/int-in 1 nil)}
-   ::kept-lifted-below {:default 3 :doc "At this much food or less, with no food carried, the last adults of a kind (kept for breeding) are hunted too." :spec (a/int-in 0 20)}
+   ::kept-lifted-below {:default -1 :doc "At this much food or less, with no food carried, the last adults of a kind (kept for breeding) are hunted too; -1 (default) never." :spec (a/int-in -1 20)}
    ::eat-bad-food {:default 6 :doc "At this much food or less the last resort eats harmful food carried (rotten flesh); above it harmful food is not food." :spec (a/num-in 0 20)}
    ::stock-radius {:default 256 :doc "Blocks within which a chest the body booked food in (memory :fetch/stock, what it saw when it opened it) counts as a food source." :spec (a/int-in 0 nil)}
    ::cook-far-radius {:default 64 :doc "Blocks within which a furnace or smoker the body has seen (perception's memory) or the one it remembers (:furnace place) counts for cooking." :spec (a/int-in 0 nil)}
@@ -375,8 +375,8 @@
 (defn animals-in-sight
   "The food animals the entity scan lists within :hunt-radius, nearest first, as {:entity e :why r :adults n :rule k}: r is nil for one
   to hunt, else :tried (attacked this job), :baby, :refused (another's zone or claim), or what jobs.lib.animal-spare/why
-  says (:off-limits, :pen: a zone or plan of its own or a closed enclosure, :kept: the last :keep-adults of a kind are lifted at ::kept-lifted-below
-  food or less with no food carried); n counts the adults of its kind in sight and k is the spare rule that allowed the hunt."
+  says (:off-limits, :pen: a zone or plan of its own or a closed enclosure, :kept: the last :keep-adults of a kind are lifted only at ::kept-lifted-below
+  food or less with no food carried, by default never); n counts the adults of its kind in sight and k is the spare rule that allowed the hunt."
   [c]
   (let [skipped (set (:skipped-animals (ctx/mem c)))
         seen (array-seq (.entities (:primitives c) #js {:radius (hunt-radius c) :kind "passive"
