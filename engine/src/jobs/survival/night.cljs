@@ -46,7 +46,7 @@
     :sleep-failed (5 minutes, shelter.sleep_failed warn).
   - a bed item carried and no bed to use: put down beside the body (roofed cells first, else in the open; never in a
     doorway or another's zone), slept in, recorded as :bed unless a live :bed is; outside its own zones also as
-    :bed-placed for the morning. No room writes :bed-place-failed (10 minutes, or until the body is 6+ blocks away).
+    :bed-placed for the morning (info night.bed-placed {:pos :own-zone} says where). No room writes :bed-place-failed (10 minutes, or until the body is 6+ blocks away).
   - someone else asleep (sh/log-out-for-sleepers?): jobs.survival.log-out, a 30 s stint at most until morning, again
     while anyone sleeps or nothing is known. A log-out that is not ok or cut is not tried again tonight.
   - a closed room around the body (roofed within :room-roof-height) with an open door: the door is shut (retreat/shut-home-door!,
@@ -282,8 +282,11 @@
         (let [r (await (tidy/place! c foot item false (click-for layout)))]
           (when (and (= "placed" (.-status r)) (await (bed-visible? c foot)))
             (places/offer! c :bed foot)
-            (when-not (sh/in-own-zone? p (:world (:engine c)) foot)
-              (ctx/remember! c :bed-placed {:pos foot} sh/bed-placed-policy))
+            (let [own? (boolean (sh/in-own-zone? p (:world (:engine c)) foot))]
+              (when-not own?
+                (ctx/remember! c :bed-placed {:pos foot} sh/bed-placed-policy))
+              (ctx/emit! c :night.bed-placed :info {:pos foot :own-zone own?
+                                                    :text (str "put the carried bed down at " (pr-str foot) (if own? " (in its own zone: it stays)" ", to be picked up by day"))}))
             foot))
         (let [w (await (ctx/call-child c :bed-walk 'jobs.movement.go-to {:pos stand :range 0 :at-night :go}))]
           (when (or (= :continue w) (:arrived (ctx/child-result c :bed-walk))) :continue))))))
