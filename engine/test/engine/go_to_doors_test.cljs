@@ -510,3 +510,25 @@
           (is (= {:arrived true} @out))
           (is (= 5 (js/Math.floor (first (at p)))) "no step on: the door stays open anyway")
           (is (= [true true] (mapv #(open? p %) [[5 64 0] [5 65 0]]))))))))
+
+;; ------------------------------------------------------------------ a stand on a vine
+
+(deftest a-body-hanging-on-a-vine-over-a-drop-is-no-arrival-within-range-it-walks-on-to-a-floor
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w {:self {:pos {:x 0.5 :y 64 :z 0.5}}
+                 :blocks (-> flat (dissoc "0,63,0") (assoc "0,64,0" "vine" "0,65,0" "vine"))}
+              {:keys [out p]} (await (go! w {:pos [2 64 0] :range 3}))]
+          (is (true? (:arrived @out)) (pr-str @out))
+          (is (not= "vine" (.-name (.blockAt p #js {:x (js/Math.floor (first (at p))) :y (js/Math.floor (second (at p))) :z 0})))
+              (pr-str (at p))))))))
+
+(deftest a-vine-is-the-only-stand-within-range-so-the-walk-ends-unreachable
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w {:self {:pos {:x 0.5 :y 64 :z 0.5}}
+                 :blocks (-> (floor 5 -3 40 3) (assoc "0,64,0" "vine" "0,65,0" "vine"))}
+              {:keys [out]} (await (go! w {:pos [1 64 0] :range 2}))]
+          (is (= {:arrived false :reason :unreachable} (select-keys @out [:arrived :reason])) (pr-str @out)))))))

@@ -12,6 +12,7 @@
             [jobs.lib.breath :as breath]
             [jobs.lib.sense :as sense]
             [jobs.lib.shelter :as sh]
+            [jobs.lib.step-off :as step-off]
             [jobs.lib.util :as u]
             [jobs.lib.watch :as watch]
             [jobs.lib.near :as near]
@@ -306,6 +307,27 @@
                      [at])))
      nil)))
 
+(def climbables "Blocks a body hangs in (a vine slides it off once nothing else holds it)." #{"vine" "ladder" "scaffolding" "twisting_vines" "twisting_vines_plant" "weeping_vines" "weeping_vines_plant" "cave_vines" "cave_vines_plant"})
+
+(def max-hang-walks "Walks off a floorless climbable a call tries before it takes the stand." 2)
+
+(defn hanging-cell
+  "The feet cell [x y z] when the body hangs in a climbable with no floor of its own under it and pos is no climbable
+  cell itself (a walk to a vine means to climb), else nil."
+  [c pos]
+  (let [p (:primitives c)
+        feet (reach/standing-cell p)
+        name-at (fn [{:keys [x y z]}] (u/feel-name p {:x x :y y :z z}))]
+    (when (and (climbables (name-at feet))
+               (not (climbables (u/seen-name p {:x (js/Math.floor (:x pos)) :y (js/Math.floor (:y pos)) :z (js/Math.floor (:z pos))})))
+               (not (reach/standable-cell? p feet)))
+      [(:x feet) (:y feet) (:z feet)])))
+
+(defn refused-hang
+  "The cell [x y z] the body hangs in while a floor stand is still to be found (hanging-cell, up to max-hang-walks)."
+  [c pos]
+  (when (< (:hang-walks (ctx/mem c) 0) max-hang-walks) (hanging-cell c pos)))
+
 (defn note-fault!
   "A walk that failed at the walker is a bug to see (a go-to.walker-fault warn) and a cell to keep the next plans off
   (mem :fault-cells, at most max-fault-cells; a new call starts with none): the walks go round it when there is a way."
@@ -530,6 +552,20 @@
           (do (await (pace!)) (recur (inc i)))
           status)))))
 
+(defn ^:async leave-hang!
+  "The body hangs in a climbable at feet cell hang within range of pos: walk on to the nearest floor stand within range
+  (jobs.lib.step-off, range 0), :again; with none a hanging body is no arrival, the call ends :unreachable."
+  [c pos hang]
+  (let [p (:primitives c)
+        [x y z] hang
+        range (:range (:args c) 1)
+        stand (first (step-off/candidates p {:x x :y y :z z} {:reach 3 :ok? #(<= (u/dist % pos) range)}))]
+    (ctx/emit! c :go-to.hanging :info {:at hang :stand (some-> stand ((juxt :x :y :z))) :text (str "within range but hanging in a climbable at " hang)})
+    (if stand
+      (do (await (walk-dry! c stand)) :again)
+      (end/finish! c {:status :stopped :arrived false :reason :unreachable :why :hanging
+                      :text (str "the only stand within range is a climbable at " hang " with no floor under it")}))))
+
 (defn ^:async leave-water!
   "An arrival within range of pos, in water: with :leave-water (default), once a call (mem :dry-tried), walk on to the
   nearest seen dry stand within range (air/dry-stand, dry-radius of the body; walk-dry!). Out of water and in range:
@@ -564,9 +600,12 @@
   [c pos]
   (let [m (ctx/mem c)
         p (:primitives c)
-        wet? (and (or (not= :guess (:column-open m)) (:column-near m)) (breath/in-water? p))]
+        wet? (and (or (not= :guess (:column-open m)) (:column-near m)) (breath/in-water? p))
+        hang (refused-hang c pos)]
     (cond
       (:restore-pending m) (esc/restore-next! c)
+      hang (do (ctx/update-mem! c update :hang-walks (fnil inc 0))
+               (await (leave-hang! c pos hang)))
       wet? (await (leave-water! c pos))
       (or (not= :guess (:column-open m)) (:column-near m)) (arrived! c)
       (await (look-at-column! c pos)) :again
@@ -578,7 +617,7 @@
         d (u/dist from pos)
         pw (wworld/path-world (:primitives c))]
     (cond
-      (here? c pos range)
+      (and (here? c pos range) (not (refused-hang c pos)))
       (await (arrive! c pos))
 
       (nil? pw)
@@ -680,7 +719,7 @@
   (let [m (ctx/mem c)
         there? (here? c pos (:range (:args c)))]
     (wworld/warn-bad-settings! c)
-    (ctx/update-mem! c #(cond-> (-> % (dissoc :best :fault-cells :over-budget :off-hand-tried :air-looked :air-relooks :surfacings :column-looks :column-near :waypoint-misses :waypoint-why :way-looks :dry-tried :in-water :wet-fresh :wet-surfacings) (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {}))
+    (ctx/update-mem! c #(cond-> (-> % (dissoc :best :fault-cells :over-budget :off-hand-tried :air-looked :air-relooks :surfacings :column-looks :column-near :hang-walks :waypoint-misses :waypoint-why :way-looks :dry-tried :in-water :wet-fresh :wet-surfacings) (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {}))
                           (not (:fetching m)) (dissoc :torch-fetched :fetched)
                           (and there? (:escalate-now m)) (dissoc :escalate-now)
                           (and there? (:escalation m))
