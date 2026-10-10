@@ -480,6 +480,11 @@
     (cond
       (= :searching chosen) :again
 
+      (and fresh? chosen (trip/food-short? c))
+      (do (ctx/emit! c :tree.hungry :warn {:text "felling stopped: hungry, no food carried and get-food found none"})
+          (ctx/result! c {:status :stopped :reason :hungry :logs (:dug (ctx/mem c) 0)})
+          :done)
+
       (and (not chosen) (seq (:unreachable (ctx/mem c))))
       (let [why (:unreachable-why (ctx/mem c))]
         (ctx/emit! c :tree_blocked :warn (cond-> {:text "no reachable tree"} why (assoc :why why)))

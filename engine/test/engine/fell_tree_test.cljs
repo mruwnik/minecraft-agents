@@ -523,3 +523,13 @@
       (fn ^:async t []
         (let [s (await (fell fenced {:radius 12} 150))]
           (is (= "exhausted" (:why (:out s))) "a walk tried and gave its reason"))))))
+
+(deftest a-hungry-body-with-no-food-and-a-failed-get-food-stops-before-the-next-tree
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (fm/start (assoc tall :self {:food 2}) {})
+              _ (mem/write! (:store (:eng s)) :hungry {:food 2} {:cap 10 :ttl 3600000})
+              out (await (tu/child-outcome (:eng s) 'jobs.forestry.fell-tree {:radius 10} 50))]
+          (is (= :hungry (:reason out)))
+          (is (empty? (dug-ys (:p s))) "dug nothing"))))))
