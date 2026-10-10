@@ -125,3 +125,21 @@
             (is (finished? s) (name reason))
             (is (= reason (:reason (done-event s))) (name reason))
             (is (= 1 (count (stopped s))) (name reason))))))))
+
+(deftest an-animal-near-the-body-takes-over-when-the-led-one-is-gone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng clock] :as s} (h/setup {:floor tu/walk-floor :inventory wheat :entities [(cow 1 3)]} 50)
+              steers (atom 0)]
+          (.override (.-world p) "steer"
+                     (fn [token a impl]
+                       (when (= 3 (swap! steers inc))
+                         (swap! (fake/state p) assoc :entities [])
+                         (fake/add-entity! p (cow 2 (inc (first (:pos (fake/self p)))))))
+                       (impl token a)))
+          (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal}) {})
+          (dotimes [_ 14] (swap! clock + 700) (await (core/tick! eng)))
+          (is (finished? s))
+          (is (= :arrived (:reason (done-event s))))
+          (is (= "u2" (:animal (done-event s)))))))))

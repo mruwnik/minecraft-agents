@@ -19,7 +19,7 @@
   be got the job ends :no-food. It picks the nearest adult within :radius that is on nobody's lead (the zone rules let
   it), holds the food, walks within 6 blocks of it and then to :pos in short go-to legs, the same legs as
   jobs.animals.lead-to (doors left open for the animal and shut afterwards). After each leg the animal is looked at:
-  unseen or more than 7 blocks behind, the body holds still (:waiting-for-animal) for it; unseen for 3 s :lost; more
+  unseen or more than 7 blocks behind, the body holds still (:waiting-for-animal) for it; unseen for 3 s :lost (an allowed adult within 10 blocks takes its place at once); more
   than 10 behind, or still waiting after 10 s, :lagging (animals follow food only within about 10 blocks). Each round
   the food is checked in hand and held again if not (a cut, another job's equip); none left ends :no-food.
 
@@ -91,6 +91,14 @@
          (sort-by #(lead-to/flat-dist (u/self-pos c) (u/pos-of (.-pos %))))
          vec
          (animals/allowed c :lure-to.declined "lure-to" :take))))
+
+(defn successor
+  "Another adult the zone rules allow, within follow-reach of the body: it follows the food as well as the lost one."
+  [c]
+  (let [me (u/self-pos c)]
+    (->> (candidates c)
+         (filterv #(<= (lead-to/flat-dist me (u/pos-of (.-pos %))) lead-to/follow-reach))
+         first)))
 
 (defn ^:async get-food!
   "No food carried: fetch it when :fetch allows, else (or when none came) end :no-food. :again once it is carried."
@@ -165,9 +173,11 @@
         (>= (- now started) (* 1000 timeout-s)) (finish! c :timeout)
         (nil? phase) (do (ctx/update-mem! c assoc :method :lure :origin (u/self-pos c) :phase :start) :again)
         (= :start phase) (await (u/untimed! c #(start! c)))
-        (nil? a) (if (= :lost (lead-to/escort-problem c lead-to/safe-gap))
-                   (finish! c :lost)
-                   (await (lead-to/wait-for-animal! c)))
+        (nil? a) (if-let [next-one (successor c)]
+                   (do (ctx/update-mem! c #(-> % (assoc :animal (animals/key-of next-one)) (dissoc :unseen-since))) :again)
+                   (if (= :lost (lead-to/escort-problem c lead-to/safe-gap))
+                     (finish! c :lost)
+                     (await (lead-to/wait-for-animal! c))))
         :else (do (await (watch/watch! c {})) (await (walk! c)))))))
 
 (defn ^:async round
