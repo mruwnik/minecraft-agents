@@ -141,6 +141,13 @@
         (let [s (await (search! {:target "diamond_block" :avoid [[10 0]]} {:blocks two-diamonds}))]
           (is (= [[0 64 12]] (map :pos (:found (event-of s :search.done))))))))))
 
+(deftest a-target-in-an-avoided-box-is-not-found
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (search! {:target "diamond_block" :avoid-boxes [[[8 -3] [14 3]]]} {:blocks two-diamonds}))]
+          (is (= [[0 64 12]] (map :pos (:found (event-of s :search.done))))))))))
+
 (deftest a-target-in-a-foreign-zone-is-found-only-without-takeable
   (async done
     (tu/run-async done
