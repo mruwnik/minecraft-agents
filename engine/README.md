@@ -377,7 +377,7 @@ Built-in triggers, in the order of `triggers/defaults.edn` (the default register
 | `:door-left` | a door a walk opened and meant to shut was last seen open 10 s after (never read through a wall) | `maintenance.shut-doors` | 5 s |
 | `:died` | a `:died` under the despawn window (6000 game ticks) old with a newer `:respawned` and no `:recovered` | `recover-drops` | 30 s |
 | `:inventory-nearly-full` | at most `:free` 2 of 36 main and hotbar slots empty, not within `:rest-s` 120 of a make-room toss | `storage.make-room` | 120 s |
-| `:scaffold-left` | the scaffold ledger holds blocks whose job is gone | `access.cleanup` | stop |
+| `:scaffold-left` | the scaffold ledger holds blocks whose job is gone and that lie within `:within` 32 of the body (farther ones wait for an explicit cleanup or for the body to come near) | `access.cleanup` | stop |
 | `:tidy-pending` | body safe and on the ground, a `:tidy` entry pending; a cell a run tried (the entry's `:tried` stamp) waits 2 min or until the body moves 8 blocks; entries over `range` (48) blocks from the body wait until it comes near | `survival.restore-broken` | 10 s |
 | `:pen-gate` | a planned fence gate within 8 was last seen open, body more than 2 away; no `:opened`/`:gate-held`/`:gate-gave-up` entry for it | `animals.shut-gate` (waits `:open-s`, 4 s, before shutting; a gate it left for an animal or an interrupted walk is paused 30 s) | 5 s |
 | `:mounted` | the body rides something and no live job holds a vehicle | `movement.leave-vehicle` | cooldown 30 s |

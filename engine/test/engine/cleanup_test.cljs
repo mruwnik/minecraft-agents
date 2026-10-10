@@ -152,8 +152,9 @@
     (doseq [id jobs] (mem/write! s (mem/job-kind id) {:args {} :children {}} {:cap 1 :ttl :forever}))
     s))
 
-(defn fires? [p s zones]
-  (scaffold-left/scaffold-left p (mem/view s) {} (world/of-data {} {} zones)))
+(defn fires?
+  ([p s zones] (fires? p s zones {}))
+  ([p s zones args] (scaffold-left/scaffold-left p (mem/view s) args (world/of-data {} {} zones))))
 
 (deftest the-trigger-offers-cleanup-for-blocks-no-live-job-owns
   (let [p (tu/fake {:blocks {"0,64,0" "dirt"} :unloaded ["50,64,0"]})]
@@ -163,6 +164,21 @@
     (is (false? (fires? p (trigger-store [(entry [0 64 0])] []) nil)) "no zone list")
     (is (false? (fires? p (trigger-store [(entry [50 64 0])] []) [])) "the cell is not loaded")
     (is (false? (fires? p (doto (trigger-store [(entry [0 64 0])] []) (ledger/hold! [[0 64 0]])) [])) "held")))
+
+(deftest the-trigger-leaves-scaffold-beyond-its-radius-for-an-explicit-cleanup
+  (let [p (tu/fake {:blocks {"0,64,0" "dirt" "50,64,0" "dirt"}})
+        args scaffold-left/defaults]
+    (is (= {:within 32} args))
+    (is (true? (fires? p (trigger-store [(entry [20 64 0])] []) [] args)) "near")
+    (is (false? (fires? p (trigger-store [(entry [50 64 0])] []) [] args)) "far: nothing for the reflex")
+    (is (true? (fires? p (trigger-store [(entry [50 64 0])] []) [])) "no radius given: any distance")
+    (is (= args (:args (:scaffold-left triggers/all))))))
+
+(deftest cleanup-within-narrows-to-the-body-and-near-wins
+  (let [c {:primitives (tu/fake {:blocks {"0,64,0" "dirt"}})}]
+    (is (= [32 #{:x :y :z}] ((juxt :radius (comp set keys :pos)) (cleanup/near-of-args c {:within 32}))))
+    (is (= {:pos {:x 9 :y 9 :z 9} :radius 5} (cleanup/near-of-args c {:within 32 :near {:pos {:x 9 :y 9 :z 9} :radius 5}})))
+    (is (nil? (cleanup/near-of-args c {})))))
 
 (deftest the-trigger-is-a-builtin
   (is (= scaffold-left/scaffold-left (:when (:scaffold-left triggers/all))))
