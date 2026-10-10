@@ -9,6 +9,7 @@
             [jobs.lib.watch :as watch]
             [jobs.lib.near :as near]
             [jobs.lib.walk :as walk]
+            [jobs.lib.walk.search :as wsearch]
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.reach :as reach]
             [jobs.lib.pass :as pass]
@@ -257,10 +258,11 @@
   "The walk plan to the cell of target (floored by places/parse-pos, as go-to does; a promise: the search yields to
   the event loop), nil when there is none or planning throws a RangeError (a far target the planner cannot index):
   the check never fails the job."
-  [c pw target]
+  ([c pw target] (plan-or-nil c pw target nil))
+  ([c pw target opts]
   (when-let [{:keys [x y z]} (:pos (places/parse-pos target))]
-    (try (await (walk/plan-walk! c pw [x y z] 1 walk/default-weight))
-         (catch js/RangeError _ nil))))
+    (try (await (walk/plan-walk! c pw [x y z] 1 walk/default-weight opts))
+         (catch js/RangeError _ nil)))))
 
 (defn ^:async path-leaves-reach?
   "True when the walk the body would now take to target passes farther than path-reach from the animal. A body
@@ -293,10 +295,12 @@
 
 (defn ^:async leg-target
   "Where the next leg of a walk to target (within range) goes: the planned path's cell leg-steps on, or nil when the
-  rest is within one leg, there is no plan, or the leg would not move the body (the caller walks the whole way)."
+  rest is within one leg, there is no plan, or the leg would not move the body (the caller walks the whole way). The
+  search is one round of go-to's budget (the path to where it has got to): a far target never leaves the body silent
+  for seconds, which body.idle would report."
   [c target range]
   (let [pw (wworld/path-world (:primitives c))
-        steps (when pw (:steps (await (plan-or-nil c pw (snap-to-ground c target)))))
+        steps (when pw (:steps (await (plan-or-nil c pw (snap-to-ground c target) {:budget wsearch/round-budget}))))
         step (when (< leg-steps (count steps)) (nth steps leg-steps))
         me (u/self-pos c)]
     (when (and step (< 1 (flat-dist me {:x (:px step) :z (:pz step)})))

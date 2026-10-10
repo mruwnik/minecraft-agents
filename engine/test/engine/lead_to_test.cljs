@@ -427,6 +427,16 @@
             (await (reach-check s {:x 9794.82 :y 64 :z -3.5})))
           (is (= [9794 64 -4] @asked) "the planner is given whole cells, as go-to gives it"))))))
 
+(deftest the-plan-for-the-next-leg-is-a-bounded-search-so-the-body-never-stands-silent-for-long
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup {:floor tu/walk-floor :inventory lead})
+              opts (atom nil)]
+          (with-redefs [walk/plan-walk! (fn ([_ _ _ _ _] (js/Promise.resolve nil)) ([_ _ _ _ _ o] (reset! opts o) (js/Promise.resolve nil)))]
+            (await (lead-to/leg-target {:primitives (:p s)} {:x 150 :y 64 :z 0} 3)))
+          (is (pos? (:budget @opts)) "a far target is searched a round at a time"))))))
+
 (deftest the-reach-check-is-false-when-planning-throws
   (async done
     (tu/run-async done
