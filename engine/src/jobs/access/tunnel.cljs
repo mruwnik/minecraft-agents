@@ -57,6 +57,10 @@
 
   One call does it all, in and (a dead end) out; :continue only while a child waits on the world.
 
+  A target off the body's row and column, with the body underground and no line entered within 24 blocks, is
+  reached in two legs: a kept tunnel child along the shorter axis to a waypoint one past the target's column, then
+  the line above from the body's own cell. That first leg stays open even in a dead end (:keep false).
+
   The body's cell is the progress. On the stair line the stair child goes on, on the run line the run, at the
   stand it is done, anywhere else it walks to the entry. A cell dug before a cut is air and is not dug again.
   Dug cells are left and recorded.
@@ -256,6 +260,21 @@
             :else {:reason :no-approach :headings (into {} (map (fn [[h s]] [h (:reason s)])) stops)}))))))
 
 (defn feet-of [c] (stair/feet-of c))
+
+(defn leg-target
+  "The waypoint of the first leg of a diagonal target seen from feet underground: on the body's row, one past the
+  target's column, so the first leg stands in that column. The shorter axis goes first. nil when the target is on
+  the body's row or column, the body stands on the surface, or a leg is longer than max-length."
+  [block-at [fx fy fz :as feet] [tx _ tz] max-length]
+  (let [dx (- tx fx) dz (- tz fz)
+        x-first? (<= (js/Math.abs dx) (js/Math.abs dz))
+        [a b] (if x-first? [dx dz] [dz dx])]
+    (when (and (not (zero? dx)) (not (zero? dz))
+               (<= (inc (js/Math.abs a)) max-length) (<= (js/Math.abs b) max-length)
+               (not= fy (surface block-at [fx fz] (- fy 1) (+ fy max-length 1))))
+      (if x-first?
+        [(+ tx (js/Math.sign dx)) fy fz]
+        [fx fy (+ tz (js/Math.sign dz))]))))
 
 (def torch-blocks torch/torch-blocks)
 
@@ -536,12 +555,16 @@
       (finish! c :bad-args {:why "target must be [x y z] of integers"})
       (let [a (await (sense/decide! c ::approach #(approach (dissoc (stair/rules-in c feet) :feet) target feet max-length (set accept))
                                     {:retry? #(not (:entry %))}))]
-        (if (:entry a)
+        (if-let [w (when (or (not (:entry a)) (far-entry? a feet))
+                     (when (or (:entry a) (#{:too-far :no-approach} (:reason a)))
+                       (leg-target (:block-at (stair/rules-in c feet)) feet target max-length)))]
+          (do (ctx/update-mem! c assoc :leg w) :again)
+          (if (:entry a)
           (do (ctx/update-mem! c assoc :plan (assoc a :sites (torch-sites a)) :dug [])
               (ctx/emit! c :tunnel.plan :info (assoc a :text (str "tunnel from " (pr-str (:entry a)) " " (name (:heading a))
                                                                   ", " (:steps a) " steps, run " (:run a))))
               :again)
-          (finish! c (:reason a) (dissoc a :reason)))))))
+          (finish! c (:reason a) (dissoc a :reason))))))))
 
 (defn fetch-for-stop!
   "A :no-tool stop the fetch can cure: remember the wait so the next step fetches for it; :again. Nil when not."
@@ -551,10 +574,28 @@
       (ctx/update-mem! c assoc :fetch-wait w)
       :again)))
 
+(defn ^:async leg!
+  "The first leg of a diagonal target: a kept tunnel child to the waypoint (its stand is in the target's column), then
+  the plan is chosen again from there. :again, :continue or :declined; else the job ends with the leg's stop."
+  [c w]
+  (let [{:keys [fetch accept ignore-zones? on-lava max-length]} (:args c)
+        r (await (declined/call-child! c :leg 'jobs.access.tunnel
+                                       (cond-> {:target w :keep true :max-length max-length :accept accept
+                                                :ignore-zones? ignore-zones? :on-lava on-lava}
+                                         (some? fetch) (assoc :fetch fetch))))]
+    (if (not= :done r)
+      (if (= :declined r) :declined :continue)
+      (let [res (ctx/child-result c :leg)]
+        (if (= :done (:status res))
+          (do (ctx/update-mem! c dissoc :leg) :again)
+          (finish! c (:reason res) (assoc (select-keys res [:cell :hazards :zone :claim :plan :fluid :block :tool :walk :why])
+                                          :in :leg :dug (:dug res))))))))
+
 (defn ^:async work-round [c]
   (declined/begin! c)
   (let [m (ctx/mem c)]
     (cond
+      (:leg m) (await (leg! c (:leg m)))
       (nil? (:plan m)) (await (choose! c))
       (:stop m) (await (retreat! c))
       :else (let [r (await (work! c))]
