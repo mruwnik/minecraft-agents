@@ -108,3 +108,24 @@
         (let [s (await (run-with [(item "potato" 4)] {"cobblestone" 20}))]
           (is (empty? (events-of s :round_started)))
           (is (= [[:nothing-to-do nil]] (waits s))))))))
+
+(deftest a-rest-after-a-missing-table-ends-when-a-table-is-seen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock] :as s} (setup {:inventory [(item "wheat" 6)] :containers {"10,64,0" []}})]
+          (swap! (fake/state p) fake/drop-block [11 64 0])
+          (core/submit! eng (list 'repeat (list job {:chest chest})) {})
+          (dotimes [_ 8] (await (core/tick! eng)) (swap! clock + 1000))
+          (is (= 1 (count (events-of s :kitchen.done))) "the pass without a table ends and rests")
+          (swap! (fake/state p) fake/put-block [11 64 0] "crafting_table")
+          (dotimes [_ 40] (await (core/tick! eng)) (.advance (.-world p) 700) (swap! clock + 1000))
+          (is (pos? (get (inv s) "bread" 0)) "baked well inside the 10 minute rest"))))))
+
+(deftest bread-carried-within-the-keep-is-reported-as-kept
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (run-with [(item "bread" 4)]))]
+          (is (= [{:smelt :no-food :bake :no-wheat :deposit :kept-carried}]
+                 (distinct (map :skipped (events-of s :waiting))))))))))

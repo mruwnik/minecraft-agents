@@ -1,6 +1,7 @@
 (ns jobs.items.kitchen
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.items.bake :as bake]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.standing :as standing]
             [jobs.lib.steps :as steps]
@@ -19,7 +20,7 @@
   A step with nothing to do is skipped and booked {:skipped reason}: :no-food, :no-wheat, :no-chest,
   :nothing-to-store. The check passes when a run is under way or a step would run (raw food carried, wheat for a
   loaf carried above the keep or in the chest), so a body with nothing to cook is not held. A pass that leaves such work (no furnace, no
-  fuel) rests the kitchen 10 minutes (jobs.lib.standing): the check waits {:reason :nothing-to-do :backed-off
+  fuel) rests the kitchen 10 minutes (jobs.lib.standing; a rest after bake found no table ends once a table is seen near the chest): the check waits {:reason :nothing-to-do :backed-off
   [\"kitchen\"]}, so the job can stand in the queue under repeat without starving other jobs.
   Ends :done with info kitchen.done and {:steps {step summary}}; smelt summaries are keyed by food.")
 
@@ -69,18 +70,24 @@
       :deposit (let [items (to-store carried keep)]
                  (cond
                    (not chest?) {:skip :no-chest}
-                   (empty? items) {:skip :nothing-to-store}
+                   (empty? items) {:skip (if (some #(pos? (get carried % 0)) (conj cooked-foods "bread")) :kept-carried :nothing-to-store)}
                    :else {:call {:slot :deposit :job (jobs :deposit) :args (merge zone {:chest chest :items items :keep keep})}})))))
 
 (defn decisions [c f] (into {} (map (juxt identity #(decide % (:args c) f))) steps))
 
 (defn would-run? [c f] (boolean (some :call (vals (decisions c f)))))
 
+(defn table-seen?
+  "A crafting table is seen near the chest, so a rest for a missing one is over."
+  [c]
+  (let [chest (storage/chest-of (ctx/view c) (:args c))]
+    (boolean (and chest (bake/nearest-table (:primitives c) chest 8)))))
+
 (defn check
   "A run is under way, or a step would run and the kitchen is not resting."
   [c]
   (let [f (facts c)
-        resting (get (standing/rested c job-sym) rest-key)]
+        resting (let [r (get (standing/rested c job-sym) rest-key)] (when-not (and (= :no-table (:why r)) (table-seen? c)) r))]
     (cond
       (:todo (ctx/mem c)) true
       resting (ctx/wait c {:reason :nothing-to-do :backed-off [rest-key]})
@@ -95,7 +102,7 @@
 
 (defn finish! [c report]
   (when (would-run? c (assoc (facts c) :tried nil))
-    (standing/rest! c job-sym rest-key :undone))
+    (standing/rest! c job-sym rest-key (if (= "no-table" (get-in report [:bake :reason])) :no-table :undone)))
   (ctx/emit! c :kitchen.done :info {:steps report :text (str "kitchen done: " (count report) " steps")})
   (ctx/result! c {:steps report})
   :done)
