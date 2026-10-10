@@ -105,7 +105,7 @@
     its own diggings elsewhere stay) (jobs.blocks.place, the dug block or its drop, when carried): info
     go-to.restored, warn go-to.restore-skipped for cells it could not. Pillar blocks and a stair's placed floors are
     left to jobs.access.cleanup. Its children's walks never escalate. Jobs that must not change the world on the way pass
-    :escalate false.
+    :escalate false: a shut-in body then gives up with :shut-in true and says so in the text.
   - Gives up with {:status :stopped :arrived false :reason :unreachable :why ... :text words} (the job ends :stopped) and an :unreachable warn: :why is the planner's
     reason (:exhausted, :goal-unloaded (the goal lies in unloaded land and the loaded land leads no nearer), :goal-enclosed, :goal-cut-off, :goal-on-magma, :door-stuck with :cells, :one-way with :near and :one-way ...), or :stuck
     (:kind the step, :detail the executor's text), :off-plan, :steer-failed, :no-progress, :cut-again (sent back by 3 cuts, each restart more than send-back-margin farther than where the cut found the body, with no 2 blocks gained on the closest approach in between (in-place cuts do not count or break it); a restart that knows of no hostile within the hostile-near radius of the way ahead clears the count instead; an escalation child's own walk is its own call, a parent waiting on it is not walking; :nearest-hostile names a guess at the cause) or :moved-while-searching; :at is the

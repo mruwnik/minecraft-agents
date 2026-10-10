@@ -215,7 +215,11 @@
     (do (ctx/update-mem! c assoc :give-up {:tries tries :status status
                                            :result (select-keys result [:status :reason :kind :cells :near :one-way :at])})
         (await (escalate! c pos nil)))
-    (end/give-up! c pos tries status result)))
+    (end/give-up! c pos tries status result
+                  (when (and (not (sh/sheltered-in c))
+                             (escalate-reason? result (some-> (:doors (:args c)) keyword))
+                             (escape/enclosed? (:primitives c) (some-> (:doors (:args c)) keyword)))
+                    {:shut-in true}))))
 
 (defn climb-on?
   "Whether a stair that is done leaves the body still shut in (escape/enclosed?) under the goal pos: a walk could only

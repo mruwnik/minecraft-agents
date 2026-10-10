@@ -291,6 +291,26 @@
           (is (empty? (events-of seen :go-to.escalated)) "not shut in: go-to does not change the world")
           (is (empty? (calls p "jumpPlace"))))))))
 
+(deftest a-shut-in-body-that-may-not-escalate-says-it-is-shut-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out seen]} (await (run-job! (merge in-pit {:blocks pit}) {:pos [10 64 0] :range 1 :escalate false}))]
+          (is (= false (:arrived @out)))
+          (is (true? (:shut-in @out)) "the result says the body is shut in")
+          (is (re-find #"shut in" (:text @out)) "and so does the text, not 'no walkable way'")
+          (is (empty? (events-of seen :go-to.escalated))))))))
+
+(deftest a-walk-on-open-ground-is-not-called-shut-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [tower (merge (box -20 63 -20 20 63 20 "stone") (box 8 64 0 8 68 0 "stone"))
+              {:keys [out]} (await (run-job! {:self {:pos {:x 0 :y 64 :z 0}} :blocks tower}
+                                             {:pos [8 69 0] :range 0 :escalate false}))]
+          (is (false? (:arrived @out)))
+          (is (nil? (:shut-in @out))))))))
+
 (deftest a-dig-s-walk-does-not-escalate
   (async done
     (tu/run-async done
