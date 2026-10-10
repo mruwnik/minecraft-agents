@@ -237,3 +237,15 @@
 
 (deftest the-check-declines-when-the-only-drops-lie-outside-the-box
   (is (declines? {:box box :target 4} (conj four-cows (drop-at 90 "leather" 9)))))
+
+(defn waiting-fields [args entities]
+  (let [{:keys [eng seen]} (h/setup {:inventory [(wheat 4)] :entities entities})]
+    (core/submit! eng (list 'jobs.animals.tend args) {})
+    (core/tick! eng)
+    (first (events-of {:seen seen} :waiting))))
+
+(deftest nothing-to-do-says-the-census-and-why-each-step-is-skipped
+  (let [w (waiting-fields {:box box :target 2} [(cow 1 2) (cow 2 3) (calf 3 4)])]
+    (is (= :nothing-to-do (:reason w)))
+    (is (= {:adults 2 :babies 1 :target 2} (select-keys w [:adults :babies :target])))
+    (is (= {:breed :at-target :cull :within-target :shear :not-sheep :collect :no-drops :deposit :no-chest} (:skipped w)))))

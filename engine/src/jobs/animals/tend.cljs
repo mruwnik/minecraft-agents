@@ -25,7 +25,8 @@
   or :declined when the child declined.
 
   The check passes when a box is given and some step would run, and always once started. Otherwise it declines,
-  so the job is cheap under repeat.
+  so the job is cheap under repeat: it waits :nothing-to-do with the census {:adults :babies :target} and
+  {:skipped {step reason}}.
 
   Ends :done with info tend.done and {:mob :target :adults :babies (live census in the box) :steps {step
   summary}}. Summaries: breed {:fed n :reason}, cull {:killed :remaining :reason}, shear {:shorn n :reason
@@ -141,11 +142,15 @@
     {:skip :todo}))
 
 (defn check [c]
-  (cond
-    (not (:box (:args c))) (ctx/wait c {:reason :no-box})
-    (:todo (ctx/mem c)) true
-    (let [f (facts c)] (some #(:call (decide % (:args c) f)) steps)) true
-    :else (ctx/wait c {:reason :nothing-to-do})))
+  (let [{:keys [box target] :as args} (:args c)]
+    (cond
+      (not box) (ctx/wait c {:reason :no-box})
+      (:todo (ctx/mem c)) true
+      :else (let [f (facts c)
+                  decisions (into {} (map (juxt identity #(decide % args f))) steps)]
+              (or (boolean (some :call (vals decisions)))
+                  (ctx/wait c {:reason :nothing-to-do :adults (:adults f) :babies (:babies f) :target target
+                               :skipped (into {} (map (fn [[step d]] [step (:skip d)])) decisions)}))))))
 
 (defn summary
   "What the report keeps of a child's result."
