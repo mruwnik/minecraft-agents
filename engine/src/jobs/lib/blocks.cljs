@@ -231,6 +231,8 @@
         r (await (ctx/call-child c :dig 'jobs.blocks.dig args))
         res (ctx/child-result c :dig)
         waits (when (= :declined r) (child-wait c :dig 'jobs.blocks.dig args))]
+    ;; the dig child told any wear of the tool; this job's older snapshot would tell it again
+    (ctx/update-mem! c dissoc :tool-wear)
     (dig-outcome r res waits)))
 
 (defn chosen

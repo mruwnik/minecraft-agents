@@ -1945,6 +1945,37 @@
           (is (= 1 (count (events-of s :mine.stalled))))
           (is (finished? s)))))))
 
+;; Sorrel #23: a tunnel through stone wore the iron pickaxe out and nothing said so.
+(deftest a-tunnel-through-stone-holds-the-stone-pickaxe-not-the-iron-one
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (assoc (rock-world {}) :inventory [{:name "iron_pickaxe" :count 1 :durability 250 :max 250}
+                                                   {:name "stone_pickaxe" :count 1 :durability 131 :max 131}])
+              s (await (scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 4 :mend false} w 80))
+              held (mapv #(.-item (.-args %)) (calls s "equip"))]
+          (is (seq held))
+          (is (every? #{"stone_pickaxe"} held) (pr-str held)))))))
+
+(deftest a-pickaxe-that-breaks-in-the-tunnel-says-tool-broke
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (assoc (rock-world {}) :inventory [{:name "stone_pickaxe" :count 1 :durability 1 :max 131}])
+              s (start {:world w})
+              world (.-world (:p s))
+              n (atom 0)]
+          (.override world "dig"
+                     (fn ^:async f [token a impl]
+                       (let [r (await (impl token a))]
+                         (when (= 3 (swap! n inc))
+                           (swap! (.. world -state) assoc :inventory []))
+                         r)))
+          (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 8 :mend false}) {})
+          (await (run-ticks s 120))
+          (is (= 1 (count (events-of s :tool.broke))))
+          (is (= 1 (count (events-of s :tool.none)))))))))
+
 ;; ------------------------------------------------------------------ an own zone is left before the first dig
 
 (def home-zone {:name "home" :min [-3 60 -3] :max [3 70 3] :owner "Fake"})
