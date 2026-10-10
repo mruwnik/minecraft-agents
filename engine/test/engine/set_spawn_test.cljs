@@ -10,6 +10,13 @@
 (def bed {:x 6 :y 64 :z 0})
 (def far-bed {:x 90 :y 64 :z 0})
 (def bed-world {:time noon :blocks {"6,64,0" "red_bed"}})
+(def hut
+  "A walled hut (inside x 5..9, z -2..2) with a doorway at x 4, z 0, and a bed in it beside the north wall."
+  (merge (apply dissoc (tu/box 4 64 -3 10 66 3 "stone")
+                (concat (for [x (range 5 10) z (range -2 3) y [64 65 66]] (str x "," y "," z))
+                        ["4,64,0" "4,65,0"]))
+         {"6,64,-2" "red_bed"}))
+
 (def policy {:cap 5 :ttl 1200000})
 
 (defn ^:async run-set-spawn
@@ -44,6 +51,14 @@
         (let [{:keys [eng p]} (await (run-set-spawn bed-world {:bed bed} (constantly nil)))]
           (is (= [bed] (mapv st/arg-pos (calls p "useOn"))))
           (is (= [{:pos bed}] (entries eng :spawn-bed))))))))
+
+(deftest set-spawn-walks-in-to-a-bed-behind-a-wall-instead-of-clicking-through-it
+  (async done
+    (run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (run-set-spawn {:time noon :blocks hut :self {:pos {:x 6.5 :y 64 :z -4.5}}} {:bed {:x 6 :y 64 :z -2}} (constantly nil)))
+              pos (.-pos (.self p))]
+          (is (< -3 (.-z pos)) (str "the body is inside the hut, at " (.-x pos) " " (.-z pos))))))))
 
 (deftest set-spawn-does-not-click-again-when-the-spawn-bed-is-known
   (async done

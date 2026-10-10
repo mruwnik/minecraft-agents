@@ -18,6 +18,7 @@
 (a/defargs args
   {:pos {:doc "the block to click, [x y z] or {:x :y :z}" :spec ::a/pos :default nil}
    :item {:doc "the item to hold for the click; nil: keep the hand as it is; none: the empty hand" :spec a/item? :default nil}
+   :see {:doc "true: click only from where the eye sees the block (jobs.lib.aim), walking to such a stand first (go-to :see; none: :unreachable); false: within reach is enough, though a wall in between refuses the click" :spec boolean? :default false}
    :face {:doc "the face clicked: up down north south east west" :spec #{"up" "down" "north" "south" "east" "west"} :default "up"}})
 
 (def faces #{"up" "down" "north" "south" "east" "west"})
@@ -35,7 +36,7 @@
   :done)
 
 (defn ^:async round [c]
-  (let [{:keys [item face] :or {face "up"}} (:args c)
+  (let [{:keys [item face see] :or {face "up"}} (:args c)
         {:keys [pos error]} (b/parse (:args c))
         error (or error (when-not (faces face) (str "face is one of " (pr-str (sort faces)))))]
     (if error
@@ -43,7 +44,7 @@
           (ctx/result! c {:status :stopped :used false :reason :bad-args :text error})
           :done)
       (loop [fails 0]
-        (let [w (when-not (b/in-reach? c pos) (await (b/walk! c pos)))]
+        (let [w (when-not (b/in-reach? c pos see) (await (b/walk! c pos see)))]
           (cond
             (= :continue w) :continue
             (map? w) (if (>= (inc fails) (max-walks))

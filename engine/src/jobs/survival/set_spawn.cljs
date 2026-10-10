@@ -5,7 +5,7 @@
             [jobs.lib.shelter :as sh]))
 
 (def doc
-  "Set the respawn point at a bed without sleeping: by day, click the bed (jobs.blocks.use-on walks into reach) and the
+  "Set the respawn point at a bed without sleeping: by day, click the bed (jobs.blocks.use-on walks to where the eye sees it, through the door of a hut) and the
   server answers \"respawn point set\".
   Needs a bed: the :bed argument, else the remembered :bed within :bed-radius. Waits (:no-bed, :night); at night the
   sleep job sets it. Done at once when the spawn is already known at that bed (jobs.lib.shelter/spawn-known?: :spawn-bed or :spawn-set near it, not reset since).
@@ -36,7 +36,7 @@
       (sh/spawn-known? (ctx/view c) bed (ctx/now c)) (do (ctx/remember! c :spawn-bed {:pos bed} sh/spawn-bed-policy)
                                                           (ctx/result! c {:status :completed :spawn bed}) :done)
       :else
-      (let [w (await (ctx/call-child c :use 'jobs.blocks.use-on {:pos bed}))
+      (let [w (await (ctx/call-child c :use 'jobs.blocks.use-on {:pos bed :see true}))
             r (ctx/child-result c :use)]
         (cond
           (= :continue w) :continue
