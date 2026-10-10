@@ -102,15 +102,20 @@
         lasting (remove #(#{"wooden" "golden"} (weapon/material-of %)) harvest)]
     (or (tools/cheapest-tool (seq lasting)) (tools/cheapest-tool harvest) (:name need))))
 
+(defn in-spare?
+  "Whether this job runs under a spare fetch (a /spare slot in its chain): the digging that fetch needs makes no spare of its own."
+  [c]
+  (boolean (some #(str/ends-with? % "/spare") (:chain c))))
+
 (defn ^:async tool-ready!
   "Before a job that digs a lot sets out: when the tool for block-name is the last of its kind that harvests it and is
   worn (spare-need), run jobs.items.obtain for the cheapest tool of its kind that harvests block-name (spare-name; child :spare; chest, craft, gather). Resolves nil
   to go on, :continue while the child waits on the world. Told once per tool name in the job's memory (:spare-tried):
   info tool.spare when one came, warn tool.no-spare with the child's reason when not (the job goes on with the worn
-  tool). The job's :fetch off, or a set of kinds without :tool, skips it."
+  tool). The job's :fetch off, or a set of kinds without :tool, skips it; so does a job under a spare fetch (no spare of a spare)."
   [c block-name]
   (let [p (:primitives c)
-        need (when (and block-name (let [f (fetch/parse-arg (:fetch (:args c)))] (and (map? f) (not (:error f)) (or (nil? (:what f)) (contains? (:what f) :tool))))) (spare-need p block-name))
+        need (when (and block-name (not (in-spare? c)) (let [f (fetch/parse-arg (:fetch (:args c)))] (and (map? f) (not (:error f)) (or (nil? (:what f)) (contains? (:what f) :tool))))) (spare-need p block-name))
         tool-name (when need (spare-name p block-name need))]
     (when (and need (not (contains? (:spare-tried (ctx/mem c)) tool-name)))
       (let [r (await (ctx/call-child c :spare 'jobs.items.obtain {:item tool-name :count 1}))]

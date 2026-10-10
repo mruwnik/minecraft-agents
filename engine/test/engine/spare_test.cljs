@@ -2,6 +2,7 @@
   "jobs.lib.trip/tool-ready!: a stair that would dig with the last worn pickaxe gets a spare first, or says why not."
   (:require [cljs.test :refer [deftest is async]]
             [engine.blocks-dig-test :as bd]
+            [engine.mine-test :as m]
             [engine.stair-test :as st]
             [engine.test-util :as tu]))
 
@@ -69,3 +70,11 @@
           (is (contains? (kinds s) :tool.spare))
           (is (= :done (:status @(:out s))))
           (is (= [2 63 0] (:at @(:out s)))))))))
+
+(deftest a-spare-fetch-never-asks-for-a-spare-itself
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (m/scenario {:block "stone" :count 2} (assoc (m/rock-world {}) :inventory [worn {:name "stick" :count 2} {:name "crafting_table" :count 1}]) 60))
+              spare-depth (fn [e] (count (re-seq #"/spare" (str (:job e)))))]
+          (is (<= (apply max 0 (map spare-depth @(:seen s))) 1) "a spare's own digging has no spare child"))))))
