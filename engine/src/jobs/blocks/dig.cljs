@@ -177,6 +177,10 @@
   [c result]
   (finish! c (assoc result :status :stopped)))
 
+(def search-blocks
+  "How far round the dug cell collect-drops walks to look for a drop that is out of sight (behind leaves)."
+  3)
+
 (defn mark-full
   "The left drops with their reason :inventory-full when the body has no room for the block's drop now (the pickup filled the last stack), else as they are."
   [left room?]
@@ -186,7 +190,7 @@
   "Pick up the dug block's drops (jobs.forestry.collect-drops child, called until it ends); finish when it has."
   [c pos]
   (let [{:keys [block ids]} (:dug (ctx/mem c))
-        r (await (child/run! c :collect 'jobs.forestry.collect-drops {:radius (collect-radius) :ids ids :holes [pos]}))]
+        r (await (child/run! c :collect 'jobs.forestry.collect-drops {:radius (collect-radius) :ids ids :holes [pos] :search search-blocks}))]
     (if (= :continue r)
       :continue
       (let [res (when (= :done r) (ctx/child-result c :collect))]

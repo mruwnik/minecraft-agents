@@ -217,6 +217,28 @@
               env (setup {:self body :blocks {"2,64,0" "stone"} :inventory (into stone-full pick)})]
           (is (= {:reason :inventory-full :pos at} (await (waiting-after env (list job {:pos at}) 3)))))))))
 
+(defn items-hidden-until-moved!
+  "p whose entities() shows no item while the body stands where it began: a drop beyond leaves is out of sight until it walks round."
+  [p]
+  (let [entities (.bind (.-entities p) p)
+        start (let [q (.-pos (.self p))] [(.-x q) (.-z q)])]
+    (aset p "entities"
+          (fn [opts]
+            (let [q (.-pos (.self p))]
+              (if (= start [(.-x q) (.-z q)])
+                (.filter (entities opts) (fn [e] (not= "item" (.-kind e))))
+                (entities opts)))))))
+
+(deftest a-drop-out-of-sight-after-a-dig-is-looked-for-from-the-cells-round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self body :blocks {"2,64,0" "oak_log"} :drops {"oak_log" "oak_log"}})]
+          (items-hidden-until-moved! p)
+          (let [result (await (child-outcome eng job {:pos at} 60))]
+            (is (= {:dug true :collected 1} (select-keys result [:dug :collected])) (pr-str result))
+            (is (= 1 (carried p "oak_log")))))))))
+
 (deftest drops-left-with-no-room-left-are-reported-as-inventory-full
   (are [room? expected] (= expected (dig/mark-full [{:reason :unseen :ids [3]}] room?))
     true [{:reason :unseen :ids [3]}]
