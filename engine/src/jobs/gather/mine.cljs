@@ -546,6 +546,26 @@
           (and (passable (name-at q)) (open? down) (<= (- (:y cell) (:y down)) (open-skip-drop))) (recur down (inc n))
           :else p)))))
 
+(def heading-stops
+  "Stops that say only this heading is blocked: the stair or tunnel at 0 steps tries the next heading."
+  #{:base-block :crop :fluid-in-cut :place-failed :no-support-floor :no-floor :walk-failed :refused})
+
+(defn turn-heading!
+  "Turn the run to the next of the four headings not yet tried (memory :tried-headings), forgetting the stop and the tunnel
+  begun on the old one; info mine.turned. False (nothing changed) when a heading arg was given or all four are tried."
+  [c stop]
+  (let [m (ctx/mem c)
+        {:keys [heading direction]} (:args c)
+        tried (conj (set (:tried-headings m)) (:heading m))
+        cycle ["north" "east" "south" "west"]
+        order (map #(nth cycle (mod (+ (.indexOf cycle (:heading m)) %) 4)) (range 1 4))
+        to (first (remove tried order))]
+    (when (and to (nil? heading) (nil? direction))
+      (ctx/emit! c :mine.turned :info {:from (:heading m) :to to :stop stop
+                                       :text (str "mine's " (name stop) " blocks its heading " (:heading m) "; it turns " to)})
+      (ctx/update-mem! c #(-> % (assoc :heading to :tried-headings tried) (dissoc :tunnel) (update :descent dissoc :stop)))
+      true)))
+
 (defn tunnel-reason [stop] (if (= :tunnel-length stop) :tunnel-length :tunnel-stopped))
 
 (defn walk-text [{:keys [status reason cell floor]}]
@@ -558,6 +578,9 @@
   (let [{:keys [goal tunnel]} (ctx/mem c)
         {:keys [heading steps]} tunnel
         got (max 0 (- (carried c) (- goal (:count (:args c)))))]
+    (if (and (zero? steps) (heading-stops stop) (turn-heading! c stop))
+      :again
+      (do
     (ctx/emit! c :mine.tunnel-end :warn
                (cond-> {:reason stop :heading heading :length steps :y (:y (:origin tunnel)) :got got
                         :text (str "mine's tunnel ended after " steps " blocks " heading " at y " (:y (:origin tunnel)) ": "
@@ -569,7 +592,7 @@
                  next (assoc :next (access/cell next))
                  walk (assoc :walk walk)))
     (ctx/update-mem! c assoc-in [:tunnel :stop] stop)
-    (to-mend! c (tunnel-reason stop))))
+    (to-mend! c (tunnel-reason stop))))))
 
 (defn ^:async step-to!
   "Walk to the centre of cell pos: nil when there, else what stopped the walk {:status :reason :cell :floor} (the moveTo
@@ -995,8 +1018,11 @@
           (= :continue r) :continue
           (and (= :done r) (= :done (:status res)))
           (do (ctx/update-mem! c update-in [:descent :steps] (fnil + 0) (or (:steps res) 1)) :again)
-          :else (do (ctx/update-mem! c update :descent assoc :stop (or (:reason res) :declined))
-                    (if level? (stair-stopped! c) (to-mend! c :own-zone))))))))
+          :else (let [stop (or (:reason res) :declined)]
+                  (if (and (zero? n) (heading-stops stop) (turn-heading! c stop))
+                    :again
+                    (do (ctx/update-mem! c update :descent assoc :stop stop)
+                        (if level? (stair-stopped! c) (no-stone! c))))))))))
 
 (defn ^:async dig-round! [c]
   (let [{:keys [goal failures dry looked]} (ctx/mem c)

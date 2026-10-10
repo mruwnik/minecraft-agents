@@ -1576,6 +1576,48 @@
             (is (seq soil-digs) "it dug soil")
             (is (< -1 (.indexOf names "unequip") (.indexOf names "equip")) "the hand was emptied before the pickaxe came out")))))))
 
+;; soil over stone wide enough for a stair in any of the four headings
+(def soil-all-round (merge (cells "stone" (range -8 9) (range 55 60) (range -8 9)) (cells "dirt" (range -8 9) (range 60 64) (range -8 9))))
+
+;; Sorrel j23: the crafting table the kit just placed stood in the first stair step of the faced heading.
+(deftest a-table-in-the-first-step-of-the-faced-heading-turns-the-stair-to-another
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks (merge soil-all-round {"-1,64,0" "crafting_table"}) :drops cobble :yaw 90
+                                :inventory [{:name "stone_pickaxe" :count 1}]}})]
+          (core/submit! (:eng s) (spec {:block "stone" :count 2 :tunnel-length 4 :mend false}) {})
+          (await (run-ticks s 300))
+          (is (finished? s))
+          (is (seq (events-of s :mine.turned)) "it turned")
+          (is (= "crafting_table" (block-at s -1 64 0)) "the table stands")
+          (is (<= 2 (get (inv s) "cobblestone" 0)))
+          (is (= :count (:reason (done-event s)))))))))
+
+(deftest a-table-on-every-side-ends-no-stone-found-after-trying-each-heading
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [tables {"-1,64,0" "crafting_table" "1,64,0" "crafting_table" "0,64,1" "crafting_table" "0,64,-1" "crafting_table"}
+              s (start {:world {:blocks (merge (soil-over-stone 63 59) tables) :drops cobble :yaw 90
+                                :inventory [{:name "stone_pickaxe" :count 1}]}})]
+          (core/submit! (:eng s) (spec {:block "stone" :count 2 :tunnel-length 4 :mend false}) {})
+          (await (run-ticks s 300))
+          (is (finished? s))
+          (is (= 3 (count (events-of s :mine.turned))))
+          (is (= :no-stone-found (:reason (done-event s)))))))))
+
+(deftest a-given-heading-is-not-turned
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks (merge (soil-over-stone 63 59) {"-1,64,0" "crafting_table"}) :drops cobble
+                                :inventory [{:name "stone_pickaxe" :count 1}]}})]
+          (core/submit! (:eng s) (spec {:block "stone" :count 2 :heading "west" :tunnel-length 4 :mend false}) {})
+          (await (run-ticks s 300))
+          (is (empty? (events-of s :mine.turned)))
+          (is (= :no-stone-found (:reason (done-event s)))))))))
+
 (deftest soil-deeper-than-the-descent-limit-ends-no-stone-found
   (async done
     (tu/run-async done
