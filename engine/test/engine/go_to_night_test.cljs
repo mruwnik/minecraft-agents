@@ -50,6 +50,11 @@
     {:time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks {"0,67,0" "stone"}} nil outside 1 :roofed
     {:time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks {"0,67,0" "stone" "15,67,0" "stone"}} nil outside 1 :roofed))
 
+(deftest a-walk-deeper-underground-does-not-leave-the-shelter-a-walk-up-does
+  (let [p (tu/seeing-all (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks {"0,66,0" "stone"}}))]
+    (is (= :underground (sh/walk-leaves-shelter? p nil outside 1)))
+    (is (nil? (sh/walk-leaves-shelter? p nil {:x 15 :y 50 :z 0} 1)))))
+
 ;; ------------------------------------------------------------------ a listed go-to
 
 (deftest a-listed-go-to-out-of-the-hut-waits-at-night-and-walks-by-day
