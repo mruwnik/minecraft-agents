@@ -141,9 +141,9 @@
 
 (defn ^:async craft-run
   "Run the kit on a chest with the hoe recipes and a table by default; {:result :inv :chest :p :eng}."
-  [{:keys [contents carried blocks args]
-    :or {blocks table args hoe-args}}]
-  (let [{:keys [eng p]} (setup {:containers {"10,64,0" contents} :inventory (or carried []) :blocks blocks :recipes hoe-recipes})
+  [{:keys [contents carried blocks args recipes]
+    :or {blocks table args hoe-args recipes hoe-recipes}}]
+  (let [{:keys [eng p]} (setup {:containers {"10,64,0" contents} :inventory (or carried []) :blocks blocks :recipes recipes})
         result (await (child-outcome eng job args 60))]
     {:result result :inv (inv p) :chest (into {} (comp (filter #(pos? (:count %))) (map (juxt :name :count))) (chest-items p)) :p p}))
 
@@ -223,8 +223,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [packed (concat (repeat 34 {:name "dirt" :count 64}) [{:name "cobblestone" :count 2} {:name "stick" :count 2}])
-              {:keys [result p]} (await (craft-run {:contents [{:name "dirt" :count 4}] :carried packed}))]
+        (let [packed (concat (repeat 35 {:name "iron_pickaxe" :count 1}) [{:name "diamond" :count 2}])
+              recipes {"stone_hoe" {:needs {"diamond" 2} :count 1 :table true}}
+              {:keys [result p]} (await (craft-run {:contents [{:name "dirt" :count 4}] :carried packed :recipes recipes}))]
           (is (= {:gave-up false :short {"hoe" 1} :missing {"hoe" "full"}} result))
           (is (empty? (calls p "toss"))))))))
 
