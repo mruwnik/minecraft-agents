@@ -1028,7 +1028,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:target 2} {:entities [(cow 1 4 3)] :blocks {"7,64,3" "stone"}} 20))
+        (let [s (await (scenario {:target 2} {:entities [(cow 1 4 3)] :blocks {"7,64,3" "stone" "7,65,3" "stone"}} 20))
               e (done-event s)]
           (is (failed-error s))
           (is (= :no-gate (:reason e)))
@@ -1044,6 +1044,15 @@
               s (await (scenario {:target 2} {:entities [(cow 1 4 3)] :blocks dug} 20))
               e (done-event s)]
           (is (not (contains? #{:no-gate :too-shallow :leaky} (:reason e))) (pr-str e)))))))
+
+(deftest a-rising-ramp-outside-the-gate-is-an-approach
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [ramp (into {} (for [[x top] [[8 64] [7 65] [6 66]] z (range 2 5) y (range 64 (inc top))] [(str x "," y "," z) "dirt"]))
+              s (await (scenario {:target 2} {:entities [(cow 1 4 3)] :blocks ramp} 20))
+              e (done-event s)]
+          (is (not (and (= :no-gate (:reason e)) (= :no-approach (:why e)))) (pr-str e)))))))
 
 (deftest no-food-is-not-a-reason-to-decline
   (async done

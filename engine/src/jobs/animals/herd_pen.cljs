@@ -144,14 +144,14 @@
         n))))
 
 (defn level-axis
-  "The axis cells with each cell off the gate moved a step up or down to where an animal stands: free floor outside,
-  a pen cell inside."
+  "The axis cells with each cell off the gate moved a step up or down to where an animal stands: free floor outside
+  (a ramp may rise or fall away from the gate), a pen cell inside."
   [p inside axis]
   (let [g (nth axis gate-index)
         carry (fn [ok? up? cells] (rest (reductions (fn [[_ y _] [x _ z]]
                                                       (or (first (filter ok? (near-levels [x y z] up?))) [x y z]))
                                                     g cells)))]
-    (vec (concat (reverse (carry #(free-floor? p %) false (reverse (subvec axis 0 gate-index))))
+    (vec (concat (reverse (carry #(free-floor? p %) true (reverse (subvec axis 0 gate-index))))
                  [g]
                  (carry inside true (subvec axis (inc gate-index)))))))
 
