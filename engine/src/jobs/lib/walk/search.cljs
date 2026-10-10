@@ -71,6 +71,13 @@
     (swap! known-land dissoc who)
     (swap! goal-floods dissoc who)))
 
+(defn release!
+  "Forget everything the planner kept for the body (searches, known-land, goal-floods): a go-to call has ended."
+  [c]
+  (let [who (.-username (.self (:primitives c)))]
+    (swap! searches dissoc who)
+    (forget-known! c)))
+
 (defn learn-known!
   "Add the cells a planner result knew to its end (its known, set when it ran out of land) to the known land's cells,
   dropping them from its edges, and add the result's edges that are not known."

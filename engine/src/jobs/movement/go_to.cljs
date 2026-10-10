@@ -901,12 +901,14 @@
                   (await (run-steps! c goal))))))))))
 
 (defn ^:async round
-  "attempt, then (unless it waits on a child) the off-hand torch goes back whatever the outcome, a throw too (rethrown).
-  A cut ends the call without it."
+  "attempt, then (unless it waits on a child) the off-hand torch goes back whatever the outcome, a throw too (rethrown),
+  and the planner's kept state is released. A cut ends the call without either."
   [c]
   (let [r (try (await (attempt c))
                (catch :default e
                  (when (ctx/alive? c) (await (torch/return-torch! c)))
                  (throw e)))]
-    (when-not (= :continue r) (await (torch/return-torch! c)))
+    (when-not (= :continue r)
+      (wsearch/release! c)
+      (await (torch/return-torch! c)))
     r))

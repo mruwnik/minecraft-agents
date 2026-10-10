@@ -95,6 +95,18 @@
           (is (<= (turns eng 40) 1)
               (str "east, then west, never back over land searched: " (mapv (juxt :status :to) (moved eng)))))))))
 
+;; the planner state of a body is process memory kept out of the job's: it must not outlive the call
+(deftest a-finished-go-to-keeps-no-planner-state
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [blocks (merge (box -56 63 9 47 63 9 "stone") (box -40 79 8 87 79 8 "stone"))
+              _ (reset! wsearch/goal-floods {})
+              {:keys [out]} (await (go! {:blocks blocks :self {:pos {:x 40.5 :y 80 :z 8.5}} :viewChunks 1}
+                                        {:pos [40 64 9] :range 1}))]
+          (is (= :unreachable (:reason @out)) (str "result " @out))
+          (is (= [{} {} {}] [@wsearch/known-land @wsearch/goal-floods @wsearch/searches])))))))
+
 ;; the walkway runs 160 blocks on past the goal: the way down lies several view distances behind the body
 (deftest go-to-walks-back-along-a-long-walkway-to-the-stair-out-of-view
   (async done
