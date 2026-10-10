@@ -211,11 +211,6 @@
             :ledger (ledger/cells l) :zones zones :accept (set accept) :reach reach
             :held (:held (ctx/mem c) {}) :retreats (:retreats (ctx/mem c) 0)})))
 
-(defn near-of-args
-  "The :near the entries are narrowed to: the arg, else the body's position and :within, else nil."
-  [c {:keys [near within]}]
-  (or near (when within {:pos (u/self-pos c) :radius within})))
-
 (defn bad-job? [job] (not (or (nil? job) (= :all job) (string? job))))
 
 ;; ------------------------------------------------------------------ check
@@ -224,7 +219,7 @@
   "Whether an entry this cleanup would work on lies in a cell the body has never seen (it reads as not loaded)."
   [c]
   (let [v (ctx/view c)
-        cells (->> (ledger/select (ledger/open-entries v) v (:job (:args c)) (near-of-args c (:args c)))
+        cells (->> (ledger/select (ledger/open-entries v) v (:job (:args c)) (ledger/near-of-args c (:args c)))
                    (map (fn [{[x y z] :cell}] {:x x :y y :z z})))]
     (look/unseen? (:primitives c) cells)))
 
@@ -235,7 +230,7 @@
                         {:reason "no zone list has been read" :text "cleanup declines: no zone list has been read"})
         (ctx/wait c {:reason :no-zones}))
     (:started (ctx/mem c)) true
-    :else (or (boolean (seq (ledger/offered (ctx/view c) (access/sensed-at (:primitives c) nil) (:job (:args c)) (near-of-args c (:args c)))))
+    :else (or (boolean (seq (ledger/offered (ctx/view c) (access/sensed-at (:primitives c) nil) (:job (:args c)) (ledger/near-of-args c (:args c)))))
               (if (unseen-entries? c)
                 (look/wait-unless-surveyed c {:reason :nothing-to-do})
                 (ctx/wait c {:reason :nothing-to-do})))))
@@ -362,7 +357,7 @@
   [c zones]
   (let [view (ctx/view c)
         l (ledger/open-entries view)
-        picked (set (map :cell (ledger/select l view (:job (:args c)) (near-of-args c (:args c)))))
+        picked (set (map :cell (ledger/select l view (:job (:args c)) (ledger/near-of-args c (:args c)))))
         settled (settle! c l picked)
         step (next-step (inputs c settled (filterv #(picked (:cell %)) settled) zones))
         m (ctx/mem c)]
@@ -381,7 +376,7 @@
       (bad-job? job) (do (ctx/result! c {:status :bad-args :text ":job must be nil, :all or an instance id"}) :done)
       (and (nil? zones) (not (:ignore-zones? (:args c)))) :declined
       (and (not (:started (ctx/mem c)))
-           (empty? (ledger/offered (ctx/view c) (access/sensed-at (:primitives c) nil) job (near-of-args c (:args c)))))
+           (empty? (ledger/offered (ctx/view c) (access/sensed-at (:primitives c) nil) job (ledger/near-of-args c (:args c)))))
       (if (and (not (look/surveyed? c)) (unseen-entries? c))
         (await (look/survey! c)) ; a block behind the body is not seen until it looks
         :declined)

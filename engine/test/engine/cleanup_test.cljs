@@ -177,9 +177,9 @@
 
 (deftest cleanup-within-narrows-to-the-body-and-near-wins
   (let [c {:primitives (tu/fake {:blocks {"0,64,0" "dirt"}})}]
-    (is (= [32 #{:x :y :z}] ((juxt :radius (comp set keys :pos)) (cleanup/near-of-args c {:within 32}))))
-    (is (= {:pos {:x 9 :y 9 :z 9} :radius 5} (cleanup/near-of-args c {:within 32 :near {:pos {:x 9 :y 9 :z 9} :radius 5}})))
-    (is (nil? (cleanup/near-of-args c {})))))
+    (is (= [32 #{:x :y :z}] ((juxt :radius (comp set keys :pos)) (ledger/near-of-args c {:within 32}))))
+    (is (= {:pos {:x 9 :y 9 :z 9} :radius 5} (ledger/near-of-args c {:within 32 :near {:pos {:x 9 :y 9 :z 9} :radius 5}})))
+    (is (nil? (ledger/near-of-args c {})))))
 
 (deftest the-trigger-is-a-builtin
   (is (= scaffold-left/scaffold-left (:when (:scaffold-left triggers/all))))

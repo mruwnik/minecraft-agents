@@ -31,7 +31,8 @@
   (:require [clojure.string :as str]
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
-            [engine.memory :as mem]))
+            [engine.memory :as mem]
+            [jobs.lib.util :as u]))
 
 (def kind :scaffold)
 
@@ -187,3 +188,8 @@
   [c]
   (let [dim (.-dimension (.self (:primitives c)))]
     (set (mapcat #(when (= dim (:dim (:data %))) (:floors (:data %))) (ctx/entries c :stair-way)))))
+
+(defn near-of-args
+  "The :near the entries are narrowed to: the arg, else the body's position and :within, else nil."
+  [c {:keys [near within]}]
+  (or near (when within {:pos (u/self-pos c) :radius within})))

@@ -8,8 +8,7 @@
   Runs jobs.access.cleanup, which takes exactly those entries.
   Persistence :stop: a cleanup that leaves entries holds them, so the condition turns false.
   It fires again only for new entries or once the hold has run out."
-  (:require [jobs.access.cleanup :as cleanup]
-            [jobs.lib.ledger :as ledger]
+  (:require [jobs.lib.ledger :as ledger]
             [jobs.lib.util :as u]
             [jobs.lib.world-files :as world]))
 
@@ -21,4 +20,4 @@
   [p memory args kn]
   (boolean (and (some? (world/zones kn))
                 (seq (ledger/offered memory (block-at-of p) nil
-                                     (cleanup/near-of-args {:primitives p} args))))))
+                                     (ledger/near-of-args {:primitives p} args))))))
