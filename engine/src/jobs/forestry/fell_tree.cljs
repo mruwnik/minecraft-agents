@@ -257,12 +257,14 @@
             (commit-tree! c (first ts))))))))
 
 (defn mark-unreachable!
-  "Remember the chosen column as unreachable and forget the choice."
-  [c]
-  (ctx/update-mem! c (fn [m] (-> m
+  "Remember the chosen column as unreachable and forget the choice; why (the walk's give-up reason) is kept for the end."
+  ([c] (mark-unreachable! c nil))
+  ([c why]
+   (ctx/update-mem! c (fn [m] (-> m
+                             (cond-> why (assoc :unreachable-why why))
                              (update :unreachable (fnil conj []) [(get-in m [:column :x]) (get-in m [:column :z])])
                              (dissoc :column :species :base)
-                             (assoc :partials 0)))))
+                             (assoc :partials 0))))))
 
 ;; ------------------------------------------------------------------ the pillar
 
@@ -438,7 +440,7 @@
   [c r]
   (let [partials (inc (:partials (ctx/mem c) 0))]
     (if (or (= :blocked r) (>= partials max-partials))
-      (do (mark-unreachable! c) :again)
+      (do (mark-unreachable! c (some-> (ctx/child-result c :walk) :why name)) :again)
       (do (ctx/update-mem! c assoc :partials partials) :continue))))
 
 (defn axe-carried? [c]
@@ -476,8 +478,10 @@
       (= :searching chosen) :again
 
       (and (not chosen) (seq (:unreachable (ctx/mem c))))
-      (do (ctx/emit! c :tree_blocked :warn {:text "no reachable tree"})
-          :done)
+      (let [why (:unreachable-why (ctx/mem c))]
+        (ctx/emit! c :tree_blocked :warn (cond-> {:text "no reachable tree"} why (assoc :why why)))
+        (ctx/result! c (cond-> {:unreachable (count (:unreachable (ctx/mem c)))} why (assoc :why why)))
+        :done)
 
       (not chosen) :continue
 

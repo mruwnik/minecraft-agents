@@ -137,6 +137,15 @@
           (await (obtain! s {:any-of ["oak_log" "birch_log"] :count 2 :how #{:gather} :explore true} 12))
           (is (re-find #"seen but not taken.*zone" (str (:why (first (f/events-of s :stopped))))) "the stop says the logs were seen and refused"))))))
 
+(deftest the-only-tree-seen-being-unreachable-the-stop-says-why
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (f/start (assoc (ore-world f/tree-blocks []) :unreachable ["0,64,4" "0,65,4" "0,66,4" "0,67,4"]) [f/own-zone])]
+          (await (obtain! s {:item "oak_log" :count 2 :how #{:gather}} 300))
+          (let [stop (first (f/events-of s :stopped))]
+            (is (re-find #"ended :no-tree \(goal-not-standable\)" (str (:why stop))) "the stop names the walk's reason")))))))
+
 (deftest an-iron-ingot-with-raw-iron-carried-is-smelted-by-a-smelt-child
   (async done
     (tu/run-async done

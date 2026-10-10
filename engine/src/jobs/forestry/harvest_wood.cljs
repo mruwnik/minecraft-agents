@@ -131,9 +131,11 @@
         next-phase (second (drop-while #(not= phase %) (map first (phases (:args c) nil nil))))]
     (cond
       (or no-more-trees? (and (= :fell phase) (= :done r) (:count (:args c)) (not (:tree (ctx/mem c)))))
-      (do (warn-owed! c)
-          (result/stop! c :no-tree (str "no tree left to fell: " (logs-carried c) " of " (:count (:args c)) " logs carried")
-                        :got (logs-carried c) :replant-owed (warn-replant-owed! c)))
+      (let [why (:why (ctx/child-result c :fell))]
+        (warn-owed! c)
+        (result/stop! c :no-tree (str "no tree left to fell: " (logs-carried c) " of " (:count (:args c)) " logs carried"
+                                      (when why (str "; the trees seen could not be reached (" why ")")))
+                      :got (logs-carried c) :why why :replant-owed (warn-replant-owed! c)))
       (not= :done r) :continue
       (and (= :collect phase) (:tree (ctx/mem c)) (not (pos? gained)))
       (result/stop! c :nothing-collected "felled a tree but no drop came into the inventory" :got (logs-carried c))

@@ -416,11 +416,11 @@
              (when-let [w (and (contains? how :gather) (pickaxe-why version have names))] [w])))))
 
 (defn tried-text
-  "What a gather that was tried and failed adds to the no-source text (\"; gathering was tried and ended ..\"), or nil
-  when none was tried."
-  [tried]
+  "What a gather that was tried and failed adds to the no-source text (\"; gathering was tried and ended ..\", with the
+  child's reason when it gave one), or nil when none was tried."
+  [tried why]
   (when-let [g (:gather tried)]
-    (str "; gathering was tried and ended " (pr-str g))))
+    (str "; gathering was tried and ended " (pr-str g) (when why (str " (" why ")")))))
 
 (defn check [c]
   (let [a (:args c)
@@ -713,7 +713,8 @@
                 (ctx/update-mem! c update :gather dissoc :before :item :tree)
                 (if (> (gather-carried p need) before)
                   (do (ctx/update-mem! c assoc-in [:gather :fruitless] 0) :again)
-                  (gather-failed! c names need (or (:reason res) :nothing-gathered) r)))))))))
+                  (do (when-let [w (:why res)] (ctx/update-mem! c assoc-in [:gather :why] w))
+                      (gather-failed! c names need (or (:reason res) :nothing-gathered) r))))))))))
 
 (defn ^:async finish-tree!
   "The log child of an earlier round was cut before it ended: runs it to its end even when the logs carried are enough
@@ -780,7 +781,7 @@
                            (cond-> {:got got :tried (:tried m)}
                              (not unreachable) (assoc :why (str "no source for " (clojure.string/join "/" names) ": "
                                                                 (no-source-why c names (:count a))
-                                                                (tried-text (:tried m)))))))))))))
+                                                                (tried-text (:tried m) (get-in m [:gather :why])))))))))))))
 
 (defn ^:async round
   "The whole attempt in one call: step! again until the count is carried or it stops; :continue only while a child waits on the world, :declined while a smelt child cooks."
