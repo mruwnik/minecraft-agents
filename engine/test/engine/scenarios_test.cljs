@@ -1,6 +1,7 @@
 (ns engine.scenarios-test
   "The shipped scenarios run end to end against the fake primitives."
   (:require [cljs.test :refer [deftest is async]]
+            [clojure.set :as set]
             [engine.registry :as registry]
             [engine.core :as core]
             [engine.events :as events]
@@ -82,7 +83,8 @@
                                                1000)
               food #(:food (fake/self p))]
           (is (= [:suffocating :burning :wedged :hostile-near :night :hungry :needs-bed :door-left
-                  :died :inventory-nearly-full :scaffold-left :tidy-pending]
+                  :died :inventory-nearly-full :scaffold-left :tidy-pending
+                  :pen-gate :mounted]
                  (mapv :id (:register (core/state eng)))))
           (await (run-ticks eng clock 3 1000))
           (is (= [] (fired seen)) "a healthy body in daylight fires nothing")
@@ -136,6 +138,15 @@
     (doseq [[id cooldown] survival-cooldowns]
       (is (= [:cooldown cooldown] ((juxt :persistence :cooldown-s) (by-id id))) (str id " in the register"))
       (is (= [:cooldown cooldown] ((juxt :persistence :cooldown-s) (triggers/all id))) (str id " by default")))))
+
+;; A default trigger left out of survival.edn on purpose goes here, with the reason: a register that omits a new default
+;; never offers it to existing bodies.
+(def survival-excluded
+  #{:loose-items}) ; would fire on the death pile the survival tests pin to recover-drops
+
+(deftest survival-registers-every-default-trigger
+  (let [{:keys [eng]} (boot "scenarios/survival.edn" {})]
+    (is (= #{} (set/difference (set (keys triggers/all)) survival-excluded (set (map :id (:register (core/state eng)))))))))
 
 (deftest survival-hostile-near-never-cools-down
   (let [{:keys [eng]} (boot "scenarios/survival.edn" {})
