@@ -7,6 +7,7 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.fake :as fake]
+            [engine.hut-shelter-test :as hut]
             [engine.memory :as mem]
             [engine.scenario :as scenario]
             [engine.test-util :as tu :refer [run-until-empty child-outcome]]
@@ -648,7 +649,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:floor tu/walk-floor :time 14000 :blocks {"6,64,0" "red_bed"}})]
+        (let [{:keys [eng p]} (setup hut/night-bed-world)]
           (know-place! eng :bed {:x 6 :y 64 :z 0})
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
           (await (run-until-empty eng 1))
