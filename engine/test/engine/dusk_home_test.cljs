@@ -1,0 +1,59 @@
+(ns engine.dusk-home-test
+  "The :dusk-home trigger: before night, a body whose bed or home is a walk away leaves for it in time."
+  (:require [cljs.test :refer [deftest is are async]]
+            [engine.core :as core]
+            [engine.expr :as expr]
+            [engine.job-api :as job-api]
+            [engine.shelter-test :as st]
+            [engine.memory :as mem]
+            [engine.registry :as registry]
+            [engine.test-util :as tu]
+            [triggers.survival.dusk-home :as dh]))
+
+(defn holds?
+  "The trigger over a fake body at (0 64 0) at time-of-day t, with places [[kind x z] ..] remembered."
+  [t places & [over]]
+  (let [store (mem/open (tu/tmp-dir) {:now (constantly 1000)})]
+    (doseq [[kind x z] places]
+      (mem/write! store kind {:pos {:x x :y 64 :z z}} mem/place-policy))
+    (dh/dusk-home (tu/seeing-all (tu/fake-on-floor (merge {:floor [-200 -200 200 200] :time t :self {:pos {:x 0.5 :y 64 :z 0.5}}} over)))
+                  (mem/view store) dh/defaults)))
+
+(deftest leaves-when-the-walk-takes-as-long-as-the-day-has-left
+  (are [t places expected] (= expected (holds? t places))
+    1000 [[:home 100 0]] false
+    11000 [[:home 100 0]] true
+    11000 [[:bed 100 0]] true
+    11000 [[:home 20 0]] false
+    11000 [[:home 400 0]] false
+    11000 [] false))
+
+(deftest it-does-not-fire-at-night-or-once-there
+  (are [t places expected] (= expected (holds? t places))
+    13000 [[:home 100 0]] false
+    11000 [[:home 2 0]] false))
+
+(deftest a-body-underground-has-no-reason-to-go-home
+  (is (false? (holds? 11000 [[:home 100 0]]
+                      {:blocks {"0,66,0" "stone"}}))))
+
+(deftest the-trigger-args-are-valid-go-home-args
+  (is (nil? (expr/problem registry/jobs (list 'jobs.survival.go-home {:limit 160})))))
+
+(deftest go-home-walks-to-the-home-by-day-and-waits-at-night-or-with-none
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (st/setup {:time st/noon :floor [-30 -30 30 30]})
+              waiting (fn [world know]
+                        (let [{:keys [eng]} (st/setup world)]
+                          (when know (mem/write! (:store eng) :home {:pos {:x 12 :y 64 :z 0}} mem/place-policy))
+                          (let [id (core/submit! eng '(jobs.survival.go-home) {})]
+                            (core/tick! eng)
+                            (:reason (:waiting (job-api/summary eng id))))))]
+          (is (= :no-home (waiting {:time st/noon} false)))
+          (is (= :night (waiting {:time st/night} true)))
+          (mem/write! (:store eng) :home {:pos {:x 12 :y 64 :z 0}} mem/place-policy)
+          (core/submit! eng '(jobs.survival.go-home) {})
+          (await (tu/run-until-empty eng 30))
+          (is (< (js/Math.abs (- 12 (.-x (.-pos (.self p))))) 3) "the body stands within 2 of the home"))))))

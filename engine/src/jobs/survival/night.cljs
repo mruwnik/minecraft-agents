@@ -796,6 +796,19 @@
     (await (pick-up-drop! c pos))
     (morning-step! c)))
 
+(defn note-bed-far!
+  "Once a night, with no bed to use: say a remembered :bed or :home is too far, so the agent can carry a bed on long trips."
+  [c]
+  (when-not (:bed-far-noted (ctx/mem c))
+    (let [view (ctx/view c)
+          here (u/self-pos c)]
+      (when-let [pos (some #(when (> (u/dist here %) (radius c)) %) (keep #(mem/place view %) [:bed :home]))]
+        (ctx/update-mem! c assoc :bed-far-noted true)
+        (ctx/emit! c :night.bed-too-far :info
+                   {:pos pos :distance (js/Math.round (u/dist here pos))
+                    :text (str "the bed or home at " (pr-str pos) " is " (js/Math.round (u/dist here pos))
+                               " blocks away, too far to walk to tonight; digging in here (carry a bed to sleep on long trips)")})))))
+
 (defn ^:async pass
   "One choice of the night (see doc): :again, or the round's end."
   [c]
@@ -815,6 +828,7 @@
       :else
       (let [bed (await (sense/decide! c ::bed #(sh/bed-to-use p (ctx/view c) (radius c) (bed-permit c))))
             door (sh/open-room-door p (ctx/view c))]
+        (when-not bed (note-bed-far! c))
         (cond
           bed (await (sleep-step c bed))
           (sh/bed-place-wanted? p (ctx/view c) (radius c) (bed-permit c)) (await (place-bed-and-sleep c))

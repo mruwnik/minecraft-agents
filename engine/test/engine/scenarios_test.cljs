@@ -82,7 +82,7 @@
                                                 :inventory [{:name "bread" :count 4}]}
                                                1000)
               food #(:food (fake/self p))]
-          (is (= [:suffocating :burning :wedged :hostile-near :night :hungry :needs-bed :door-left
+          (is (= [:suffocating :burning :wedged :hostile-near :night :dusk-home :hungry :needs-bed :door-left
                   :died :inventory-nearly-full :scaffold-left :tidy-pending
                   :pen-gate :mounted]
                  (mapv :id (:register (core/state eng)))))

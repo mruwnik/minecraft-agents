@@ -12,7 +12,7 @@
   sleep job sets it. Done at once, with a spawn_unchanged event and :why :unchanged, when the spawn is already known at that bed (jobs.lib.shelter/spawn-known?: :spawn-bed or :spawn-set near it, not reset since).
   Returns {:status :completed :spawn pos} when the server set the point (or it was already known); {:status :stopped
   :reason ...} when the click did not set it (:no-bed, :night, :not-set). Writes :spawn-bed {:pos bed} (cap 1, forever),
-  which jobs.survival.sleep also writes; warns spawn_not_set when the click did not set it.")
+  which jobs.survival.sleep also writes, and :home at the bed unless a live :home is recorded; warns spawn_not_set when the click did not set it.")
 
 (a/defargs args
   {:bed-radius {:doc "a remembered bed farther than this many blocks from the body is not used"
@@ -47,6 +47,7 @@
     (cond
       (nil? bed) (do (ctx/result! c {:status :stopped :reason :no-bed}) :done)
       (sh/spawn-known? (ctx/view c) bed (ctx/now c)) (do (ctx/remember! c :spawn-bed {:pos bed} sh/spawn-bed-policy)
+                                                          (places/offer! c :home bed)
                                                           (ctx/emit! c :spawn_unchanged :info {:pos bed :text "the respawn point is already at this bed"})
                                                           (ctx/result! c {:status :completed :spawn bed :why :unchanged}) :done)
       :else
@@ -55,6 +56,7 @@
         (cond
           (= :continue w) :continue
           (:used r) (do (ctx/remember! c :spawn-bed {:pos bed} sh/spawn-bed-policy)
+                        (places/offer! c :home bed)
                         (ctx/result! c {:status :completed :spawn bed})
                         :done)
           :else (do (ctx/emit! c :spawn_not_set :warn {:pos bed :text (str "clicking the bed did not set the respawn point: " (name (or (:reason r) :unknown)))})

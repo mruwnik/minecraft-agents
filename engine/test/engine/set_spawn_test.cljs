@@ -44,6 +44,16 @@
           (is (= [{:pos bed}] (entries eng :spawn-bed)))
           (is (= [] (emitted seen :spawn_not_set))))))))
 
+(deftest set-spawn-makes-the-bed-home-unless-a-home-is-set
+  (async done
+    (run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (await (run-set-spawn bed-world {} #(know-bed! % bed)))
+              mine {:x 1 :y 64 :z 1}
+              {eng2 :eng} (await (run-set-spawn bed-world {} (fn [e] (know-bed! e bed) (mem/write! (:store e) :home {:pos mine} mem/place-policy))))]
+          (is (= [{:pos bed}] (entries eng :home)))
+          (is (= [{:pos mine}] (entries eng2 :home)) "a home the agent set stays"))))))
+
 (deftest set-spawn-uses-the-bed-argument-without-a-remembered-bed
   (async done
     (run-async done

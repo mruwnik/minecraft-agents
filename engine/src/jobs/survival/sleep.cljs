@@ -20,7 +20,7 @@
   A bed that is not there is not retried: the job ends and the shelter chooser falls through.
   If it was the remembered bed, :bed is overwritten with {:gone true :was pos}, so it no longer reads as a place.
   With a :bed argument the radius is ignored. After sleeping there it is recorded as :bed
-  when none is recorded or the recorded one is gone. A live recorded :bed is kept (one place.kept event).
+  when none is recorded or the recorded one is gone. A live recorded :bed is kept (one place.kept event). Every sleep also records :home there unless a live :home is recorded.
   Warns spawn_not_set when it sleeps and no :spawn-set (the body event for the Respawn point set line) follows, unless one
   was seen within 3 blocks of the bed before (kept as :spawn-bed, forever, until a later :spawn-reset):
   death would then send the body to the world spawn.
@@ -78,6 +78,7 @@
                        (ctx/remember! c :spawn-bed {:pos bed} sh/spawn-bed-policy)
                        (ctx/emit! c :spawn_not_set :warn {:pos bed :text "slept in the bed but the server did not say the respawn point was set"}))
                      (when (:bed (:args c)) (places/offer! c :bed bed))
+                     (places/offer! c :home bed)
                      :done)
       "not-night" :done
       "missing" (if (nil? (u/sensed (:primitives c) bed))
