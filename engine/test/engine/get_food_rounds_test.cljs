@@ -463,6 +463,25 @@
           (is (= [] (events-of seen :search.not-found)))
           (is (re-find #"night" (str (:text (first (events-of seen :food.none)))))))))))
 
+(deftest a-starving-body-searches-at-night-when-no-danger-is-near
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:self {:food 0} :time 15000} :step-ms 5)]
+          (await (one-round! eng {}))
+          (is (= 1 (count (events-of seen :search.not-found))) "food 0 and nothing near: the night does not stop the search"))))))
+
+(deftest a-starving-body-does-not-search-at-night-with-a-hostile-near
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:self {:food 0 :pos {:x 0.5 :y 64 :z 0.5}} :time 15000
+                                         :entities [{:id 5 :name "zombie" :kind "hostile" :pos {:x 4.5 :y 64 :z 0.5} :health 20}]}
+                                        :step-ms 5)]
+          (await (one-round! eng {}))
+          (is (= [] (events-of seen :search.not-found)) "a hostile near: no search")
+          (is (re-find #"night" (str (:text (first (events-of seen :food.none)))))))))))
+
 (deftest hungry-at-night-in-a-roofed-hut-does-not-explore-out-of-it
   (async done
     (tu/run-async done

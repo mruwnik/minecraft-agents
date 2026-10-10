@@ -7,6 +7,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
+            [jobs.lib.danger :as danger-q]
             [jobs.lib.crops :as crops]
             [jobs.lib.look :as look]
             [jobs.lib.result :as r]
@@ -587,6 +588,13 @@
   [c]
   (boolean (sh/night-holds? (:primitives c) (ctx/view c) {} (sh/bed-permit (:primitives c) (:world (:engine c))))))
 
+(defn night-blocks-search?
+  "Whether the night stops the search: it does, unless the body is starving and no danger is near."
+  [c]
+  (and (or (sh/night? (:primitives c)) (night-holds? c))
+       (not (and (starving? c)
+                 (not (danger-q/danger-near? (:primitives c) (danger-q/hostile-radius) (danger-q/ranged-radius)))))))
+
 (defn explore-done?
   "Whether this job's search is over: it ran, and a starving body's :starving-rest-ms has not passed since."
   [mem starving? now rest-ms]
@@ -594,13 +602,14 @@
 
 (defn ^:async explore!
   "Once per job, with nothing known or seen: search for food animals and ripe crops (jobs.explore.search, :explore),
-  not at night (a body sheltered for the night stays in) nor while the night handler holds. :again when the search found something to hunt or dig, else nil with what it
+  not at night (a body sheltered for the night stays in) nor while the night handler holds, unless starving with no
+  danger near (jobs.lib.danger/danger-near?). :again when the search found something to hunt or dig, else nil with what it
   covered remembered."
   [c]
   (let [e (:explore (:args c))]
     (cond
       (or (not e) (explore-done? (ctx/mem c) (starving? c) (ctx/now c) (:starving-rest-ms (:args c)))) nil
-      (or (sh/night? (:primitives c)) (night-holds? c))
+      (night-blocks-search? c)
       (do (ctx/update-mem! c assoc :explored "not searched at night or while the night handler holds") nil)
       :else
       (do
