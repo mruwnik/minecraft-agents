@@ -37,6 +37,20 @@
             (is (= why (:why result)))
             (is (re-find #"still air" (:text done-event)))))))))
 
+(deftest a-refused-place-without-a-reason-says-why-from-its-status
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[r why] [[#js {:status "occupied" :block "stone"} #"stone"]
+                         [#js {:status "no-support"} #"nothing to place against"]
+                         [#js {:status "no-item"} #"not carried"]
+                         [#js {:status "weird"} #"weird"]]]
+          (let [{:keys [eng p]} (bd/setup {:self body :inventory cobble})
+                _ (.override (.-world p) "place" (fn ^:async f [_ _ _] r))
+                result (await (bd/child-outcome eng job {:pos at :item "cobblestone"} 5))]
+            (is (= :failed (:reason result)))
+            (is (re-find why (str (:why result))) (.-status r))))))))
+
 (deftest any-of-places-the-first-carried
   (async done
     (tu/run-async done

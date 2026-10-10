@@ -36,7 +36,7 @@
   {:name :state} as the place act reported it. :reason is :placed or :already
   (the cell holds the block: nothing done): done. Stopped ({:status :stopped}, :placed false): :occupied (another
   block fills the cell), :clear-failed (the plant could not be dug), :bad-args (with a blocks.place.declined
-  warn) or :failed (the primitive refused, with its status as :primitive and its reason text as :why). Declined, the check then waits: :unreachable (the walk failed twice or the place is out of reach), a zone
+  warn) or :failed (the primitive refused, with its status as :primitive and why as :why: its reason text, else one from its status). Declined, the check then waits: :unreachable (the walk failed twice or the place is out of reach), a zone
   or other cell reason that appeared during the call, or an item still missing after the fetch (:need). The caller
   decides whether to try again.
 
@@ -162,6 +162,16 @@
       :else (stop! c {:placed false :pos pos :item (first items) :reason :clear-failed
                       :block (:block res) :why (or (:reason res) (:reason (b/child-wait c :clear 'jobs.blocks.dig (clear-args c pos))))}))))
 
+(defn refusal-why
+  "Why the primitive refused: its reason text, else one from its status."
+  [r]
+  (or (.-reason r)
+      (case (.-status r)
+        "occupied" (str "the cell holds " (or (.-block r) "a block") " that cannot be replaced")
+        "no-support" "nothing to place against: no solid block beside the cell the body can click"
+        "no-item" "the item is not carried"
+        (str "the primitive answered " (.-status r)))))
+
 (defn ^:async place!
   "Place the chosen item. Resolves to :done (finished) or :unreachable (the primitive says out of reach)."
   [c pos items]
@@ -174,8 +184,7 @@
                             (.-placed r) (assoc :block {:name (.-name (.-placed r))
                                                         :state (js->clj (.-properties (.-placed r)) :keywordize-keys true)})))
       "unreachable" :unreachable
-      (stop! c (cond-> {:placed false :pos pos :item item :reason :failed :primitive status}
-                 (.-reason r) (assoc :why (.-reason r)))))))
+      (stop! c {:placed false :pos pos :item item :reason :failed :primitive status :why (refusal-why r)}))))
 
 (a/defargs settings
   {::max-walks {:default 2 :doc "Failed walks of one call before it declines :unreachable." :spec (a/int-in 0 nil)}
