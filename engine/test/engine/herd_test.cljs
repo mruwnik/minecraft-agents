@@ -1175,6 +1175,23 @@
             (await (run-ticks s 900))
             (is (= reason (get-in (done-event s) [:given-up "u1"])) label)))))))
 
+(deftest a-lured-cow-that-trails-out-of-range-with-the-gate-open-is-gone-back-for-not-written-off
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (submit! (setup (world {:entities [(cow 1 4 3)] :inventory [wheat]})) {:target 1 :timeout-s 900})
+              moved (atom false)
+              backs (atom 0)]
+          (on-step-when! s #(and (not @moved) (gate-open? s) (>= (self-x s) 12))
+                         #(do (reset! moved true) (set-x! s 1 (- (self-x s) 15))))
+          (on-step! s #(let [m (core/job-memory (:eng s) "j1")]
+                         (when (and @moved (not (:regathered m))) (swap! backs max (:backs m 0)))))
+          (await (run-ticks s 900))
+          (is @moved "the cow was left behind in the pen")
+          (is (pos? @backs) "the pinned steps back off for the lagging cow before anything is given up")
+          (is (= #{1} (cows-in-pen s)))
+          (is (not (gate-open? s))))))))
+
 (defn track-range!
   "Entities farther than r from the body are not listed, as a server loads animals only near the player."
   [{:keys [p]} r]

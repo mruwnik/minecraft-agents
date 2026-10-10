@@ -8,7 +8,7 @@
             [jobs.lib.pen :as pen]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
-            [jobs.animals.herd-run :refer [animal-now deepest end! finish! gate-open? held-by-me? in-pen-adults lure? near-pen out-1 read-pen regather-radius set-phase!]]
+            [jobs.animals.herd-run :refer [animal-now deepest end! finish! gate-open? held-by-me? holds-food? in-pen-adults lure? near-pen out-1 read-pen regather-radius set-phase!]]
             [jobs.animals.herd-pen :refer [animal-pos pinned-ms settle-at! step-in-step]]))
 
 
@@ -176,11 +176,13 @@
 
 (defn prune-led!
   "Drop from :led the animals no longer on this body's lead, booking each (:lead-broke seen, :lost not seen);
-  how many were dropped."
+  how many were dropped. A lured animal seen beyond follow-range while the gate stands open and the food is in hand
+  stays: shutting the gate on it is the pinned steps' call, not a drop's."
   [c]
-  (let [gone (keep (fn [k] (let [a (animal-now c k)]
+  (let [waiting? (and (lure? c) (holds-food? c) (gate-open? c))
+        gone (keep (fn [k] (let [a (animal-now c k)]
                              (cond (nil? a) [k :lost]
-                                   (not (held-by-me? c a)) [k :lead-broke])))
+                                   (and (not waiting?) (not (held-by-me? c a))) [k :lead-broke])))
                    (:led (ctx/mem c)))]
     (when (seq gone)
       (ctx/update-mem! c #(-> %

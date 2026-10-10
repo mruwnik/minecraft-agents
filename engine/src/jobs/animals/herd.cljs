@@ -69,7 +69,7 @@
   leaves it alone. It is dropped after each shut.
 
   Lead watching: an animal seen off this body's lead is given up on (:lead-broke), one not seen at all too
-  (:lost). With nobody led, the open gate is shut, leads within 8 blocks are picked up
+  (:lost); a lured animal seen beyond follow-range while the gate stands open is kept (the pinned steps go back for it). With nobody led, the open gate is shut, leads within 8 blocks are picked up
   (jobs.forestry.collect-drops) and leashing starts again once, with the :lead-broke animals forgiven. A second time ends :lost. :timeout-s limits one
   animal from its lead on until it is let go. An end with an animal on the lead lets it go where the body
   stands and shuts the gate from the body's side.
