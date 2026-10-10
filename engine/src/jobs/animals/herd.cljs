@@ -92,7 +92,7 @@
    :box {:doc "the pen: {:min {:x :y :z} :max {:x :y :z}}, inclusive, the feet cells of its floor" :spec a/box? :default nil}
    :target {:doc "grown animals of :mob the pen should hold" :spec (a/int-in 0 nil) :default 2}
    :gate {:doc "the fence gate {:x :y :z} to bring them through; the pen's usable gate nearest the body when nil" :spec ::a/pos :default nil}
-   :radius {:doc "animals within this many blocks of the body are fetched" :spec (a/num-in 0 nil) :default 24}
+   :radius {:doc "animals within this many blocks of where the body started the run are fetched" :spec (a/num-in 0 nil) :default 24}
    :timeout-s {:doc "seconds one animal may take from its lead on until it is let go" :spec (a/num-in 0 nil) :default 180}
    :method {:doc "how animals are brought: :lead (each on a lead), :lure (following the food in hand), :auto (a lead when one is carried or can be crafted from a carried slime ball, else the food)" :spec #{:auto :lead :lure} :default :auto}
    :fetch {:doc "get the food when none is carried and the run lures (jobs.lib.fetch): true, a set of kinds or a map of limits; false ends :no-food" :spec fetch/option? :default true}
@@ -245,6 +245,7 @@
   [c]
   (declined/begin! c)
   (ctx/update-mem! c update :started #(or % (ctx/now c)))
+  (ctx/update-mem! c update :origin #(or % (u/self-pos c)))
   (when-not (safe? c) (restart! c))
   (loop []
     (let [before (ctx/mem c)

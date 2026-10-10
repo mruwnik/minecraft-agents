@@ -43,7 +43,7 @@
   "The pen with its gate shut, the body west of it; more blocks and states merged over, other world keys passed on."
   [{:keys [entities inventory blocks states] :as w}]
   (merge w
-         {:self {:pos {:x 2 :y 64 :z 3}}
+         {:self (merge {:pos {:x 2 :y 64 :z 3}} (:self w))
           :inventory (or inventory (leads 2))
           :entities (or entities [])
           :blocks (merge ground fence-ring {gate-key "oak_fence_gate"} blocks)
@@ -1192,3 +1192,26 @@
           (let [s (await (scenario {:target 2} w 20))]
             (is (= reason (:reason (done-event s))) label)
             (is (re-find text (str (failed-error s))) label)))))))
+
+(deftest radius-is-measured-from-where-the-body-started-not-from-the-pen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [far-floor (into {} (for [x (range -70 -10) z (range -10 16)] [(str x ",63," z) "stone"]))
+              s (await (scenario {:target 1 :radius 24}
+                                 {:self {:pos {:x -40 :y 64 :z 3}} :blocks far-floor :entities [(cow 1 -58 3)]}
+                                 600))
+              e (done-event s)]
+          (is (finished? s))
+          (is (= :brought (:reason e)))
+          (is (= #{1} (cows-in-pen s))))))))
+
+(deftest an-animal-beyond-the-radius-from-the-start-is-none
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [far-floor (into {} (for [x (range -70 -10) z (range -10 16)] [(str x ",63," z) "stone"]))
+              s (await (scenario {:target 1 :radius 10}
+                                 {:self {:pos {:x -40 :y 64 :z 3}} :blocks far-floor :entities [(cow 1 -58 3)]}
+                                 100))]
+          (is (= :none (:reason (done-event s)))))))))

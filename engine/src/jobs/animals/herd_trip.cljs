@@ -22,12 +22,20 @@
   [tries pen-keys]
   (into [] (comp (filter #(>= (val %) (max-tries))) (map key) (remove pen-keys)) tries))
 
+(defn range-from-origin
+  "[center radius] for listing animals: the run's start (the body walks to the pen first) and a radius that covers
+  :radius from there seen from the body's spot plus the pen's surroundings."
+  [c]
+  (let [origin (or (:origin (ctx/mem c)) (u/self-pos c))]
+    [origin (+ (:radius (:args c)) (u/dist (u/self-pos c) origin))]))
+
 (defn skip-keys
   "Keys never to leash: babies, animals in the pen, the ones given up on, those already fetched twice and outside."
   [c]
-  (let [{:keys [mob radius]} (:args c)
+  (let [{:keys [mob]} (:args c)
         answer (read-pen c)
-        near (animals/herd (:primitives c) mob (+ radius (near-pen)))
+        [_ listed] (range-from-origin c)
+        near (animals/herd (:primitives c) mob (+ listed (near-pen)))
         in-pen? #(pen/in-pen? answer (u/pos-of (.-pos %)))
         skip? #(or (true? (.-baby %)) (in-pen? %))
         pen-keys (into #{} (comp (filter in-pen?) (map animals/key-of)) near)]
@@ -48,7 +56,7 @@
   (let [{:keys [mob radius]} (:args c)
         m (ctx/mem c)
         r (await (ctx/call-child c :leash 'jobs.animals.leash
-                                 (cond-> {:mob mob :radius radius :skip (skip-keys c)} (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))
+                                 (cond-> {:mob mob :radius radius :center (:origin (ctx/mem c)) :skip (skip-keys c)} (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))
         res (when (= :done r) (ctx/child-result c :leash))]
     (cond
       (nil? res) :continue
@@ -82,9 +90,11 @@
   "The adults within radius outside the pen, not on a lead, not skipped, the zone rules allowing, nearest first."
   [c]
   (let [{:keys [mob radius]} (:args c)
+        [origin listed] (range-from-origin c)
         skip (set (skip-keys c))]
-    (->> (animals/adults (:primitives c) mob radius)
-         (filterv #(and (not (animals/leashed? %)) (not (skip (animals/key-of %)))))
+    (->> (animals/adults (:primitives c) mob listed)
+         (filterv #(and (not (animals/leashed? %)) (not (skip (animals/key-of %)))
+                        (<= (u/dist origin (u/pos-of (.-pos %))) radius)))
          (animals/allowed c :herd.declined "herd" :take))))
 
 (defn ^:async lure-next!
