@@ -80,6 +80,29 @@
           (is (= 20 (food p)))
           (is (= [:completed] (mapv :kind (ended seen)))))))))
 
+(defn note-stock! [eng pos items]
+  (mem/write! (:store eng) :fetch/stock {:pos pos :items items} {:cap 64 :ttl (* 6 60 60 1000)}))
+
+(deftest a-chest-whose-stock-the-body-booked-is-a-food-source-even-far-away
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:food 0} :floor [-30 -10 100 10]
+                                      :containers {"90,64,0" [{:name "cobblestone" :count 30} {:name "bread" :count 40}]}})]
+          (note-stock! eng [90 64 0] {"cobblestone" 30 "bread" 40})
+          (await (one-round! eng {}))
+          (is (= ["bread"] (call-args p "transfer" "item")) "the booked chest 90 blocks off is used")
+          (is (= 20 (food p))))))))
+
+(deftest a-booked-chest-with-no-food-is-not-a-food-source
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:food 0} :floor [-30 -10 100 10] :containers {"90,64,0" [{:name "cobblestone" :count 30}]}})]
+          (note-stock! eng [90 64 0] {"cobblestone" 30})
+          (await (one-round! eng {}))
+          (is (empty? (calls p "transfer"))))))))
+
 (deftest one-round-hunts-an-animal-and-eats-it
   (async done
     (tu/run-async done

@@ -14,6 +14,7 @@
             [jobs.lib.threats :as threats]
             [jobs.lib.shelter :as sh]
             [jobs.lib.util :as u]
+            [jobs.lib.fetch :as fetch]
             [jobs.lib.foods :as foods]
             [jobs.survival.eat :as eat]))
 
@@ -27,7 +28,7 @@
      to pay for making one (jobs.lib.cost/cook-worth?): cook it (the smelt job, which fetches a furnace and fuel, waiting out the cook in
      the round), then eat it. Done before eating unless a danger is sensed or food is 0 and health would not outlast the cook plus ::cook-margin-hp. Not at night nor while the night
      handler holds. A failed cook is remembered as :no-cook for 10 minutes.
-  2. The newest :food-source entry {:pos :kind} within :source-radius, reached by go-to:
+  2. The newest :food-source entry {:pos :kind} within :source-radius, or a chest it booked food in (memory :fetch/stock) within ::stock-radius (256), reached by go-to:
      :farm: dig its mature crops (blocks.dig, which collects the drops). It does not replant.
      :chest: withdraw its best food (storage.withdraw); with no food but 3 or more wheat, wheat in multiples of 3,
      enough for the hunger, for way 1.
@@ -99,6 +100,7 @@
    ::reach {:default 3 :doc "How near a food source the body stands to use it, in blocks." :spec (a/int-in 0 nil)}
    ::explore {:default {:max-distance 64 :max-legs 12 :timeout-s 120} :doc "jobs.explore.search options of the search for food (:explore true)." :spec map?}
    ::eat-bad-food {:default foods/default-food :doc "At this much food or less the last resort eats harmful food carried (rotten flesh); above it harmful food is not food." :spec (a/num-in 0 20)}
+   ::stock-radius {:default 256 :doc "Blocks within which a chest the body booked food in (memory :fetch/stock, what it saw when it opened it) counts as a food source." :spec (a/int-in 0 nil)}
    ::cook-far-radius {:default 64 :doc "Blocks within which a furnace or smoker the body has seen (perception's memory) or the one it remembers (:furnace place) counts for cooking." :spec (a/int-in 0 nil)}
    ::shelter-cook-reach {:default 5 :doc "Blocks within which a furnace counts for cooking while the night handler holds the body in its shelter." :spec (a/int-in 0 nil)}
    ::starve-s-per-hp {:default 4 :doc "Seconds of starvation (food 0) that cost one hp." :spec (a/num-in 0 nil)}
@@ -191,15 +193,28 @@
                         (assoc fields :pos pos :text (str "skipped the chest at " (pr-str pos) ": " (access/refusal-text fields))))))
     (boolean v)))
 
-(defn usable-entries
-  "The :food-source entries, newest first, within :source-radius, not tried in this job and not another's chest."
+(defn stock-entries
+  "The chests the body booked food in (memory :fetch/stock, latest per chest) within ::stock-radius, as :food-source-shaped
+  entries {:t :data {:pos {:x :y :z} :kind :chest}}: its own stores count as sources though nothing wrote a :food-source."
   [c]
-  (let [tried (set (:tried-sources (ctx/mem c)))]
-    (->> (ctx/entries c :food-source)
-         reverse
+  (let [here (u/self-pos c)]
+    (->> (ctx/entries c fetch/stock-kind)
+         (reduce (fn [m e] (assoc m (:pos (:data e)) e)) {})
+         vals
+         (filter (fn [{:keys [data]}] (and (some foods/edible? (keys (:items data))) (<= (u/dist here (zipmap [:x :y :z] (:pos data))) (settings/get settings ::stock-radius)))))
+         (map (fn [{:keys [t data]}] {:t t :data {:pos (zipmap [:x :y :z] (:pos data)) :kind :chest}})))))
+
+(defn usable-entries
+  "The :food-source entries within :source-radius and the chests booked with food within ::stock-radius, newest first,
+  not tried in this job and not another's chest."
+  [c]
+  (let [tried (set (:tried-sources (ctx/mem c)))
+        noted (filter (fn [{:keys [data]}] (<= (u/dist (u/self-pos c) (:pos data)) (:source-radius (:args c)))) (ctx/entries c :food-source))
+        known (set (map (comp :pos :data) noted))]
+    (->> (concat noted (remove #(known (:pos (:data %))) (stock-entries c)))
+         (sort-by :t >)
          (filter (fn [{:keys [data]}]
-                   (and (<= (u/dist (u/self-pos c) (:pos data)) (:source-radius (:args c)))
-                        (not (tried (:pos data)))
+                   (and (not (tried (:pos data)))
                         (not (foreign-chest? c data))))))))
 
 (defn known-source
