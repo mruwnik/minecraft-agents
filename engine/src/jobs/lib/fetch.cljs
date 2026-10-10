@@ -5,7 +5,7 @@
   A job with :fetch reads its own wait reason (or the booked declined child's, jobs.lib.declined) and, when the
   reason is one a fetch job can cure, its check passes and its round runs that fetch job as the child in slot :fetch
   (jobs.items.get-tool for :no-tool, with the :explore limit; jobs.items.obtain for :need). It does not pass :fetch to its children: their waits
-  come up to it. A fetch that ends without the thing is remembered as :fetch/failed for :fail-minutes; meanwhile the
+  come up to it. A fetch that ends without the thing is remembered as :fetch/failed for :fail-minutes (or until more logs, coal or wool are carried than at the failure); meanwhile the
   job waits with its reason plus {:fetch {:failed reason ...}} and nothing is tried again.
 
   The :fetch arg: false/nil (off), true (all kinds, all sources), a set of kinds (#{:tool :item}), or a map of limits
@@ -24,6 +24,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
             [jobs.lib.declined :as declined]
+            [jobs.items.recipes :as recipes]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
@@ -125,11 +126,22 @@
 (def failed-kind :fetch/failed)
 (def failed-policy {:cap 32 :ttl (* 24 60 60 1000)})
 
+(defn raw-carried
+  "Carried counts of the raw materials (recipes/gatherable?) a failed fetch could have crafted from."
+  [c]
+  (reduce (fn [m {:keys [name count]}] (cond-> m (recipes/gatherable? name) (update name (fnil + 0) count)))
+          {} (u/inventory (:primitives c))))
+
 (defn failure
-  "The live failure booked for key, or nil."
+  "The live failure booked for key, or nil: not once the time is up or more of a raw material is carried than when it
+  was booked (a fetch that found nothing to craft from may succeed now)."
   [c key]
-  (let [now (ctx/now c)]
-    (some #(let [d (:data %)] (when (and (= key (:key d)) (< now (:until d))) d))
+  (let [now (ctx/now c)
+        have (raw-carried c)]
+    (some #(let [d (:data %)]
+             (when (and (= key (:key d)) (< now (:until d))
+                        (every? (fn [[k n]] (<= n (get (:raw d) k 0))) have))
+               d))
           (rseq (ctx/entries c failed-kind)))))
 
 (defn shown
@@ -227,7 +239,7 @@
   "Book the failed fetch (until now + :fail-minutes), warn fetch.failed, :again (the check now waits)."
   [c {:keys [key opts wait args]} res]
   (let [f (merge (select-keys args [:item :any-of :block :kind])
-                 {:key key :until (+ (ctx/now c) (* 60000 (:fail-minutes opts))) :failed (:reason res :failed)}
+                 {:key key :until (+ (ctx/now c) (* 60000 (:fail-minutes opts))) :failed (:reason res :failed) :raw (raw-carried c)}
                  (select-keys res [:tried :chain :why]))]
     (ctx/remember! c failed-kind f failed-policy)
     (ctx/update-mem! c #(-> % (dissoc :fetching :fetched :fetch-return) (update :children dissoc :fetch)))

@@ -251,6 +251,31 @@
             (is (= :no-source (:failed (:fetch (core/waiting (:eng s) b)))))
             (is (= 1 (count (events-of s :fetch.failed))))))))))
 
+(deftest a-failure-is-forgotten-when-the-body-gets-material-for-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (world {}) [own-zone])
+              id (core/submit! (:eng s) (dig-spec {:fetch true}) {})]
+          (await (run-ticks s 25))
+          (is (= 1 (count (events-of s :fetch.failed))))
+          (is (= :no-source (:failed (:fetch (core/waiting (:eng s) id)))))
+          (swap! (fake/state (:p s)) fake/give "oak_log" 4)
+          (await (run-ticks s 60))
+          (is (= 1 (get (inv s) "wooden_pickaxe")) (pr-str (core/waiting (:eng s) id))))))))
+
+(deftest a-failure-stays-when-the-body-picks-up-something-unrelated
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (world {}) [own-zone])
+              id (core/submit! (:eng s) (dig-spec {:fetch true}) {})]
+          (await (run-ticks s 25))
+          (swap! (fake/state (:p s)) fake/give "dirt" 4)
+          (await (run-ticks s 25))
+          (is (= 1 (count (events-of s :fetch.failed))))
+          (is (= :no-source (:failed (:fetch (core/waiting (:eng s) id))))))))))
+
 (deftest a-failure-expires-after-fail-minutes
   (async done
     (tu/run-async done

@@ -696,7 +696,7 @@ of leave-tunnel, tunnel, dig-in and breathe, obtain's table place passes `:fetch
 set narrows the kinds; a map gives limits `{:what :how :depth :minutes :fail-minutes}` (built-in, the job's default, the
 body's defaults from `items.fetch-limits`, then the call's arg; later wins). A fetchable wait (`:no-tool`, `:need`) then runs
 `items.get-tool` or `items.obtain` as child `:fetch` (info `fetch.started`, `fetch.done`). A failed fetch (also a child that ends done while the same wait remains: `:not-solved`) writes
-`:fetch/failed` (warn `fetch.failed`) and the job waits for `:fail-minutes` before trying again. Only the job given `:fetch`
+`:fetch/failed` (warn `fetch.failed`) and the job waits for `:fail-minutes` (or until it carries more logs, coal or wool than at the failure) before trying again. Only the job given `:fetch`
 fetches; its children and go-to never do. Sources are carried items, seen chests, crafting and gathering (a sapling by breaking seen leaves). A fetch child that waits on the world makes the job yield `:continue` at once (the fetch resumes next round).
 
 Helpers shared by jobs (not jobs): `jobs.lib.watch` (`watch/watch!` between acts: when the place is dark or a hostile
