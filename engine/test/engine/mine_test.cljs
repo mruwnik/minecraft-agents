@@ -837,6 +837,16 @@
           (is (= [[2 63 0] [2 64 0]] (sort-by second (dug-cells s))) "cut at the lower level")
           (is (empty? (filter #(= :no-floor (:reason %)) (tunnel-ends s)))))))))
 
+(deftest the-tunnel-bridges-a-missing-floor-when-it-carries-a-block
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[inv ends-no-floor?] [[(conj pickaxe {:name "cobblestone" :count 5}) false] [pickaxe true]]]
+          (let [s (await (scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 3 :mend false}
+                                   (assoc (rock-world {"1,63,0" "air" "2,63,0" "air"}) :inventory inv) 120))]
+            (is (= ends-no-floor? (boolean (some #(= :no-floor (:reason %)) (tunnel-ends s)))) (pr-str (map :text (tunnel-ends s))))
+            (is (= (if ends-no-floor? "air" "cobblestone") (block-at s 1 63 0)))))))))
+
 (deftest the-tunnel-stops-before-lava
   (async done
     (tu/run-async done
@@ -1860,6 +1870,21 @@
           (is (every? :zone-tolls @opts))
           (is (zero? (:failures (job-mem s) 0)) "a waiting walk is no failure")
           (is (zero? (dig-count s))))))))
+
+(deftest a-mine-started-on-its-own-stair-walks-on-at-night
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [on-stair? [true false]]
+          (let [s (start {:world {:blocks {"15,64,0" "sand"}}})
+                opts (atom [])]
+            (when on-stair?
+              (mem/write! (:store (:eng s)) :stair-way {:dim "overworld" :floors (vec (for [y (range 58 68)] [0 y 0]))}))
+            (await (tu/with-near-stub (fn ^:async f [_ _ _ o] (swap! opts conj o) :partial)
+              (fn ^:async b [] (core/submit! (:eng s) (spec {:block "sand" :tunnel-length 0}) {})
+              (await (run-ticks s 6)))))
+            (is (seq @opts))
+            (is (= (if on-stair? [:go] [nil]) (distinct (map :at-night @opts))))))))))
 
 (deftest no-tool-names-the-kind-the-block-needs
   (async done

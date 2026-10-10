@@ -14,6 +14,7 @@
             [jobs.lib.gate :as gate]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.tools :as tools]
+            [jobs.access.stair :as stair]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.access.zones :as zones]
             [jobs.lib.shafts :as shafts]
@@ -103,7 +104,7 @@
   mine.tunnel-skipped, also down a stair to a floor) and never digs a torch. 0 means no tunnel: then no
   target ends :wet when a seen block was rejected only for water, else :none. Each step stands on the last
   cell of the run and judges the next cell and the one over it: no fluid in it, no seen lava beside it, no seen water
-  beside it unless :wet, a solid floor, the zone and plan rules with only :accept hazards. It digs them head
+  beside it unless :wet, a solid floor (an air one gets a carried building block, jobs.access.stair/bridge-plans; none carried: :no-floor), the zone and plan rules with only :accept hazards. It digs them head
   first (a cut of :block is collected like a target), looks ahead level and down so perception records what
   the cut exposed, and steps in. A cut cell a falling block (gravel, sand) refilled is cut again, at most ::max-recuts times per cell, then
   :dig-failed; one not seen yet is looked at again first. Ore that comes into view is dug before the next step.
@@ -939,6 +940,23 @@
       (await (end! c :dig-failed next))
       (do (ctx/update-mem! c assoc :recuts n) :again))))
 
+(defn ^:async bridge-floor!
+  "Place a carried building block on the air floor under the tunnel's next feet cell (stair/bridge-plans, the feet cell itself
+  left open): true when the floor stands, false with none carried, no plan or no support."
+  [c next]
+  (let [feet [(:x next) (:y next) (:z next)]
+        floor (update feet 1 dec)
+        in (stair/rules-in c (stair/feet-of c))
+        item (blocks/pick c blocks/building-blocks)
+        plans (remove #(some #{feet} %) (stair/bridge-plans (:block-at in) floor feet))]
+    (if-not (and item (seq plans))
+      false
+      (loop [[plan & more] plans]
+        (let [stop (await (stair/place-all! c in item plan))]
+          (cond (nil? stop) true
+                (and (= :no-support-floor (:reason stop)) (seq more)) (recur more)
+                :else false))))))
+
 (defn ^:async tunnel-round!
   "One step of the strip tunnel: back onto its last cell, judge and cut the next two, look at them, step in."
   [c]
@@ -984,6 +1002,9 @@
                           (await (glance! c [(headings heading)]))
                           :again)
                       (not= :clear (after-cut name-at cut)) (await (recut! c next))
+                      (and (not (rules/solid-floor? name-at (update next :y dec))) (rules/air (name-at (update next :y dec)))
+                           (await (bridge-floor! c next)))
+                      :again
                       (not (rules/solid-floor? name-at (update next :y dec))) (end! c :no-floor next)
                       (do (reset! walk (await (step-to! c next))) (nil? @walk))
                       (do (ctx/update-mem! c #(-> % (update-in [:tunnel :steps] inc) (assoc :looked next) (dissoc :recuts)))
@@ -1011,10 +1032,13 @@
     (if (seq clear) clear targets)))
 
 (defn underground?
-  "Whether the run has dug down or tunnelled: its walks go on at night inside its own cuts."
+  "Whether the run has dug down or tunnelled, or the body stands on a floor of a stair it cut earlier: its walks go on at
+  night inside its own cuts."
   [c]
-  (let [m (ctx/mem c)]
-    (boolean (or (pos? (get-in m [:descent :steps] 0)) (:tunnel m)))))
+  (let [m (ctx/mem c)
+        feet (cell-of (u/self-pos c))]
+    (boolean (or (pos? (get-in m [:descent :steps] 0)) (:tunnel m)
+                 (contains? (ledger/ways-of c) (access/cell (update feet :y dec)))))))
 
 (defn ^:async walk-to-dig!
   "Walk toward pos until the body is within reach of it, and close enough to see its drop (range 1) when the line to it
