@@ -59,7 +59,8 @@
   :fetch false: off) and wears the armour (jobs.items.wear); nothing known to be in a chest: unchanged.
   A kit fetch waiting on the world is waited for (declared hold :fetching-kit); a fetch that ended the job drops the kit (warn recover-drops.kit-dropped).
   Fetch: walks to the death point (jobs.movement.go-to), then collects (passes, up to 3) the pile's items it can see within :collect-radius
-  (jobs.forestry.collect-drops; only the carried item names, never items out of sight).
+  (jobs.forestry.collect-drops; only the carried item names, never items out of sight). Drops that went out of sight
+  (down a shaft) get one walk to the cell the first was last seen in and a look again before the trip ends :partial.
   Ends by writing a :recovered entry {:decision :skip|:collected|:partial|:abandoned}.
   :collected counts the pile's items that entered the inventory since the decision, those picked up on the walk too.
   :abandoned with :reason :unreachable (the walk was blocked, or did not arrive :max-blocked-retries times), :danger
@@ -273,6 +274,26 @@
       (zero? items) (finish! c :abandoned (assoc decided :items 0 :reason :nothing-found))
       :else (finish! c :partial (assoc decided :items items :left left :reason (if (seq ids) :unreachable :not-visible))))))
 
+(defn look-cell
+  "The cell [x y z] the first unseen drop of the last collect pass was last seen in, or nil."
+  [c]
+  (->> (:left (ctx/child-result c :collect))
+       (filter #(= :unseen (:reason %)))
+       (mapcat (comp vals :last))
+       first))
+
+(defn ^:async look-round!
+  "Drops of the pile went out of sight (down a shaft): once, walk to the cell the first was last seen in (go-to, range 1)
+  and look again. :next with a pass counted when drops are in sight now, else the end of the trip (what is left, with its
+  reason). Not an arrival ends the trip :partial too."
+  [c [x y z] pos names radius pile]
+  (ctx/update-mem! c assoc :looked true)
+  (await (child/run! c :look 'jobs.movement.go-to {:pos {:x x :y y :z z} :range 1 :escalate false}))
+  (let [again (pile-ids c pos names radius)]
+    (if (seq again)
+      (do (ctx/update-mem! c update :passes (fnil inc 0)) (save-trip! c) :next)
+      (finish-collect! c pile again))))
+
 (defn ^:async collect!
   "One collect pass over the pile's visible items: :next after a pass that left some in sight (walk back, at most
   max-collect-passes), else the job's end."
@@ -291,9 +312,14 @@
               (finish-collect! c pile [])
               (let [again (pile-ids c pos names radius)
                     passes (:passes (ctx/mem c) 0)]
-                (if (and (seq again) (< passes (max-collect-passes)))
+                (cond
+                  (and (seq again) (< passes (max-collect-passes)))
                   (do (ctx/update-mem! c assoc :passes (inc passes) :phase :go) (save-trip! c) :next)
-                  (finish-collect! c pile again))))))))))
+
+                  (and (empty? again) (not (:looked (ctx/mem c))) (look-cell c))
+                  (await (look-round! c (look-cell c) pos names radius pile))
+
+                  :else (finish-collect! c pile again))))))))))
 
 (defn window-closed?
   "True once the despawn window of the death entry has passed."

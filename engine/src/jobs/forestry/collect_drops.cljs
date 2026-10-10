@@ -26,7 +26,7 @@
   to seen standable cells round the anchor, nearest first, and looks again at each, until an item is seen or the cells within :search
   blocks are tried.
   While it runs it holds its work area (jobs.lib.loose :collecting), so the :loose-items reflex leaves those drops to it.
-  With :ids, ids not in sight when none is left to try are booked as one :left {:reason :unseen :ids [...]}.
+  With :ids, ids not in sight when none is left to try are booked as one :left {:reason :unseen :ids [...] :last {id [x y z]}}, the cell each was last seen in.
   With :dig, a drop go-to cannot reach, or one too deep in the dug hole, is dug to once: the fewest cells (jobs.lib.dig-route,
   over the blocks the body has seen, an unseen one taken for stone) that open a way to it, each a jobs.blocks.dig child (zones, claims, hazards
   are its rules), then the walk is tried again. No such way, or a dig that fails, leaves the drop :unreachable.
@@ -55,8 +55,8 @@
         (map #(.-count %))
         (reduce + 0))))
 
-(defn nearest-item
-  "The nearest wanted item within :radius of the anchor that is not skipped, or nil."
+(defn candidates
+  "The wanted items within :radius of the anchor that are not skipped, nearest first."
   [c anchor]
   (let [{:keys [radius ids]} (:args c)
         only-ids (some-> ids set)
@@ -66,12 +66,18 @@
          (filter #(if-let [p (.-pos %)] (<= (u/dist anchor (u/pos-of p)) radius) true))
          (remove #(skipped (.-id %)))
          (filter #(or (nil? only-ids) (only-ids (.-id %))))
-         (filter #(or (nil? wanted) (wanted (some-> (.-item %) .-name))))
-         first)))
-
-(def fluids #{"water" "lava" "bubble_column"})
+         (filter #(or (nil? wanted) (wanted (some-> (.-item %) .-name)))))))
 
 (defn item-cell [item] (let [{:keys [x y z]} (u/pos-of (.-pos item))] [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]))
+
+(defn note-last-cells!
+  "Remember, per wanted :ids id, the cell it was last seen in (job memory :last-cells), for a drop that then goes out of
+  sight (down a shaft)."
+  [c items]
+  (when (:ids (:args c))
+    (ctx/update-mem! c update :last-cells #(into (or % {}) (keep (fn [e] (when (.-pos e) [(.-id e) (item-cell e)]))) items))))
+
+(def fluids #{"water" "lava" "bubble_column"})
 
 (defn feet-y [c] (js/Math.floor (:y (u/self-pos c))))
 
@@ -169,10 +175,13 @@
   "The wanted :ids that were neither picked up nor skipped are not in sight (a pit, a wall): booked as one :left entry."
   [c]
   (let [gone (set (:skipped (ctx/mem c)))
-        ids (vec (remove gone (:ids (:args c))))]
+        ids (vec (remove gone (:ids (:args c))))
+        lasts (select-keys (:last-cells (ctx/mem c)) ids)]
     (when (seq ids)
       (ctx/emit! c :collect-drops.left :debug {:reason :unseen :ids ids :text (str "left " (count ids) " drops not in sight")})
-      (ctx/update-mem! c update :left (fnil conj []) {:reason :unseen :ids ids}))))
+      (ctx/update-mem! c update :left (fnil conj [])
+                       (cond-> {:reason :unseen :ids ids}
+                         (seq lasts) (assoc :last lasts))))))
 
 (defn seen-standable?
   "Whether cell is standable (jobs.lib.reach/standable-cell?) by the blocks the body has seen: its feet, head and floor cells all seen."
@@ -227,7 +236,9 @@
                      a))
         done! (fn [result] (loose/release! c) (ctx/result! c result) :done)]
     (loop []
-      (let [item (when (ctx/alive? c) (nearest-item c anchor))]
+      (let [items (when (ctx/alive? c) (candidates c anchor))
+            _ (note-last-cells! c items)
+            item (first items)]
         (if (and (not item) (ctx/alive? c) (pos? (:search (:args c)))
                  (< (wanted-count c) (:want (:args c))) (empty? (:left (ctx/mem c))))
           (let [r (await (search-step! c anchor))]

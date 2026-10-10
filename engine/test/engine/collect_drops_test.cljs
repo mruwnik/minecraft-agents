@@ -181,6 +181,21 @@
             (is (= [{:reason :unseen :ids [999]}] (:left result)))
             (is (= [:unseen] (mapv :reason (bd/left-drops seen))))))))))
 
+(deftest an-id-that-goes-out-of-sight-is-left-unseen-with-the-cell-it-was-last-seen-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (bd/setup {:self body})]
+          (drop! p [2 64 0] "oak_log")
+          (drop! p [4 64 1] "iron_sword")
+          (let [[a b] (mapv :id (:entities @(fake/state p)))]
+            (.override (.-world p) "collect"
+                       (fn [token args impl]
+                         (swap! (fake/state p) update :entities (fn [es] (mapv #(cond-> % (= b (:id %)) (assoc :visible false)) es)))
+                         (impl token args)))
+            (let [result (await (bd/child-outcome eng job {:radius 8 :ids [a b]} 30))]
+              (is (= [{:reason :unseen :ids [b] :last {b [4 64 1]}}] (:left result))))))))))
+
 (deftest a-drop-in-a-sealed-pocket-is-dug-to-with-dig-true
   (async done
     (tu/run-async done

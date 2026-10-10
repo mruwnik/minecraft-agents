@@ -276,6 +276,23 @@
           (is (= {:decision :partial :items 1 :left {"diamond_sword" 1} :reason :not-visible}
                  (select-keys (recovered eng) [:decision :items :left :reason]))))))))
 
+(deftest recover-drops-looks-round-once-for-a-drop-that-went-out-of-sight-down-a-shaft
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities [(drop-item 1 20 "diamond_pickaxe") (drop-item 2 24 "diamond_sword")]})
+              hidden (atom false)
+              show! (fn [v] (swap! (fake/state p) update :entities (fn [es] (mapv #(cond-> % (= 2 (:id %)) (assoc :visible v)) es))))]
+          (.override (.-world p) "collect"
+                     (fn [token a impl] (when-not @hidden (reset! hidden true) (show! false)) (impl token a)))
+          (.override (.-world p) "steer"
+                     (fn [token a impl] (when @hidden (show! true)) (impl token a)))
+          (die! eng {:pos death-pos :inventory diamonds})
+          (core/submit! eng (list 'jobs.survival.recover-drops {:collect-radius 8}) {})
+          (is (< (await (run-until-empty eng 40)) 40))
+          (is (= {"diamond_pickaxe" 1 "diamond_sword" 1} (inv p)) "the walk to where it was last seen found it again")
+          (is (= :collected (:decision (recovered eng)))))))))
+
 (deftest recover-drops-abandons-when-the-window-closes-mid-trip
   (async done
     (tu/run-async done
