@@ -660,7 +660,7 @@
 (def enderman (fn [x y z] {:id 10 :name "enderman" :kind "hostile" :pos {:x x :y y :z z} :health 40}))
 
 (deftest an-angry-enderman-is-not-fled-on-foot-nor-fought-the-body-shelters
-  (is (= [:water :seal :pit :pocket :fight] (retreat/escape-order {:enderman? true :win? true}))
+  (is (= [:water :roof :seal :pit :pocket :fight] (retreat/escape-order {:enderman? true :win? true}))
       "no walk away, no pillar (it is 3 tall), no back-off; a fight only last, whatever the odds"))
 
 (deftest a-body-with-an-enderman-near-walls-itself-in-instead-of-walking
@@ -693,6 +693,26 @@
           (core/submit! eng retreat {})
           (await (core/tick! eng))
           (is (= {:x 3 :y 64 :z 1} (first (tu/walked-to eng))) "walks to the water, not away")
+          (is (zero? (count (calls p "place")))))))))
+
+(deftest roof-cell-is-the-nearest-seen-two-high-gap-under-a-roof
+  (let [solid #{[0 63 0] [3 63 0] [3 66 0] [-2 63 1] [-2 65 1] [9 63 0] [9 66 0]}
+        at (fn [{:keys [x y z]}] (if (solid [x y z]) "stone" "air"))]
+    (is (= {:x 3 :y 64 :z 0} (retreat/roof-cell at {:x 0.5 :y 64 :z 0.5} 8)) "a cell with a block at head height is no gap; one beyond reach is skipped")
+    (is (nil? (retreat/roof-cell at {:x 20.5 :y 64 :z 0.5} 8)) "none within reach")))
+
+(deftest a-body-with-an-enderman-near-and-no-water-walks-under-a-nearby-roof
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory [{:name "dirt" :count 16}]
+                                      :blocks {(key-of 3 66 0) "stone" (key-of 3 63 0) "stone"}
+                                      :entities [(enderman 2.5 64 0.5)]})]
+          (.override (.-world p) "steer"
+                     (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r)))))
+          (core/submit! eng retreat {})
+          (await (core/tick! eng))
+          (is (= {:x 3 :y 64 :z 0} (first (tu/walked-to eng))) "walks under the roof, digs and places nothing")
           (is (zero? (count (calls p "place")))))))))
 
 (deftest nearest-first-orders-the-sides-by-the-melee-chaser-and-keeps-support-before-roof

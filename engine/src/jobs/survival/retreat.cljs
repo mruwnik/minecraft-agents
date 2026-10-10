@@ -11,6 +11,7 @@
             [jobs.lib.danger :as danger-q]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.ledger :as ledger]
+            [jobs.lib.escape :as escape]
             [jobs.lib.look :as look]
             [jobs.lib.reach :as reach]
             [jobs.lib.shelter :as sh]
@@ -59,7 +60,7 @@
   Not while a creeper chases it or a melee mob is within cover-gap: it walks (or backs off, cornered) first.
   4. Cornered (no open direction worth a walk, or the walk is blocked, or a melee hostile within 3 hit the body since the last step: it cannot be outrun, and the fight is weighed over those hostiles alone; checked afresh every step) with no hostile within
      :radius: holds a second (wait, why cornered) and looks again; after :no-gain-steps such steps or holds with no gain the flight ends :keeps-off. With one within :radius: takes the safest option it has not yet failed.
-     - an angry enderman near (one the client flags angry, that hurt the body this flight or is within 3 blocks; it teleports; a walk is no flight): at once, before any walk: water within 6 blocks (it keeps away from water; the body steps in and holds), else seal, pit, pocket, last of all fight.
+     - an angry enderman near (one the client flags angry, that hurt the body this flight or is within 3 blocks; it teleports; a walk is no flight): at once, before any walk: water within 6 blocks (it keeps away from water; the body steps in and holds), else a seen 2-high gap under a roof within 8 blocks (a 3-tall enderman cannot enter; walks there and holds), else seal, pit, pocket, last of all fight.
      - a drowned near while the body is in water (and no fight wins): swims to the nearest seen dry stand within 16 blocks first (past the mob if need be), before seal, pillar or a fist fight.
      - fight (jobs.survival.fight-back) only when jobs.lib.cost/fight-damage leaves :reserve health. Never against a creeper.
      - seal in: fill the open sides at feet and head height and the roof (dig-in's 1x1 cells) with carried :blocks,
@@ -169,12 +170,12 @@
 (defn escape-order
   "Pure: the cornered options to try, safest first. {:win? the odds say a fight leaves reserve health (never true
   for a creeper), :flyer? a phantom is near (it outflies a walker: shelter, else fight), :creeper? one is near (it comes first), :enderman? an angry enderman is near (angry-enderman?) (it teleports, so no walk or back-off, and a
-  pillar is within its reach: the body enters water within water-reach, which it avoids, else shuts itself in), :ranged? the threat shoots, :home? the body is in its home
+  pillar is within its reach: the body enters water within water-reach, which it avoids, else walks under a 2-high roof within roof-reach, which it cannot enter, else shuts itself in), :ranged? the threat shoots, :home? the body is in its home
   room: it digs no pit or pocket in its own floor or walls, :swim? the body is in water with a drowned near: swimming out to dry land comes first unless a fight wins}."
   [{:keys [win? creeper? enderman? flyer? ranged? swim? home?]}]
   (cond->> (cond
              creeper? [:back-off :seal :pillar :pit :pocket :fight]
-             enderman? [:water :seal :pit :pocket :fight]
+             enderman? [:water :roof :seal :pit :pocket :fight]
              win? [:fight]
              flyer? [:seal :pit :pocket :fight]
              :else (into (if ranged? [:seal] [:seal :pillar]) [:back-off :pit :pocket :fight]))
@@ -295,6 +296,40 @@
           :again
           (do (flight/tried! c :water) nil))))))
 
+(def roof-reach
+  "Blocks within which a body hunted by an enderman looks for a 2-high gap under a roof."
+  8)
+
+(defn roof-cell
+  "The nearest cell within reach (blocks, horizontally and 1 vertically) of from that block-at reads as a 2-high gap
+  on a solid floor under a solid roof, which a 3-tall enderman cannot enter, or nil."
+  [block-at from reach]
+  (let [[fx fy fz] (mapv #(js/Math.floor %) [(:x from) (:y from) (:z from)])]
+    (->> (for [dx (range (- reach) (inc reach)) dy (range -1 2) dz (range (- reach) (inc reach))
+               :when (<= (+ (* dx dx) (* dz dz)) (* reach reach))
+               :let [cell {:x (+ fx dx) :y (+ fy dy) :z (+ fz dz)}]
+               :when (and (escape/solid? (block-at (update cell :y dec)))
+                          (escape/passable? (block-at cell))
+                          (escape/passable? (block-at (update cell :y inc)))
+                          (escape/solid? (block-at (update cell :y + 2))))]
+           cell)
+         (sort-by #(u/dist from {:x (+ 0.5 (:x %)) :y (:y %) :z (+ 0.5 (:z %))}))
+         first)))
+
+(defn ^:async roof!
+  "Stand under a roof an enderman cannot enter: a step to the nearest roof-cell, a short hold once there. :again, nil when
+  there is none or the walk is blocked."
+  [c]
+  (let [block-at (block-at-fn (:primitives c))
+        self (u/self-pos c)
+        here {:x (js/Math.floor (:x self)) :y (js/Math.floor (:y self)) :z (js/Math.floor (:z self))}]
+    (if (and (escape/passable? (block-at (update here :y inc))) (escape/solid? (block-at (update here :y + 2))))
+      (do (await (ctx/act c :wait #js {:ms (flight/wait-ms) :why "under a roof, out of the enderman's reach"})) :again)
+      (when-let [cell (roof-cell block-at self roof-reach)]
+        (if (await (step! c :roof {:x (+ 0.5 (:x cell)) :y (:y cell) :z (+ 0.5 (:z cell))} 0))
+          :again
+          (do (flight/tried! c :roof) nil))))))
+
 (def swim-reach
   "Blocks within which a body in water looks for dry land to swim out to."
   16)
@@ -353,6 +388,7 @@
                   :seal (await (refuge/hide! c))
                   :pillar (await (refuge/pillar! c))
                   :water (await (water! c))
+                  :roof (await (roof! c))
                   :swim-out (await (swim-out! c))
                   :back-off (when threat (await (back-off! c threat)))
                   :pit (await (refuge/pit! c))
