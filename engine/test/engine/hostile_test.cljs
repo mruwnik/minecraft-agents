@@ -269,10 +269,24 @@
           (is (empty? (calls p "attack")) "and does not swing at one it cannot reach"))))))
 
 (deftest the-fight-holds-position-at-night-with-more-than-one-hostile-known
-  (are [world held?] (= held? (respond-to-hostile/hold? {:primitives (tu/fake world)}))
+  (are [world held?] (= held? (respond-to-hostile/hold? {:primitives (tu/fake world) :view (fn [] {:data {} :now 0}) :args {:stay-inside true}}))
     {:time 14000 :entities [(zombie 7 5 0) (zombie 8 6 3)]} true
     {:time 14000 :entities [(zombie 7 5 0)]} false
     {:time 1000 :entities [(zombie 7 5 0) (zombie 8 6 3)]} false))
+
+(def closed-room
+  "A 3x3 room around the body, walls to y 69, roof at y 70, floor at y 63."
+  (into {} (for [x (range -2 3) z (range -2 3) y (range 63 71)
+                 :let [wall? (or (= 2 (Math/abs x)) (= 2 (Math/abs z)))]
+                 :when (or wall? (= y 63) (= y 70))]
+             [(str x "," y "," z) "stone"])))
+
+(deftest a-body-shut-in-a-room-at-night-holds-against-one-hostile-unless-stay-inside-is-off
+  (are [world args held?] (= held? (respond-to-hostile/hold? {:primitives (tu/fake world) :view (fn [] {:data {} :now 0}) :args args}))
+    {:time 14000 :blocks closed-room :entities [(zombie 7 5 0)]} {:stay-inside true} true
+    {:time 14000 :blocks closed-room :entities [(zombie 7 5 0)]} {:stay-inside false} false
+    {:time 1000 :blocks closed-room :entities [(zombie 7 5 0)]} {:stay-inside true} false
+    {:time 14000 :entities [(zombie 7 5 0)]} {:stay-inside true} false))
 
 (deftest fight-back-chases-in-legs-that-never-escalate
   (async done

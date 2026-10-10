@@ -39,6 +39,7 @@
    :quiet-s {:doc "passed to the retreat: a hidden body keeps its refuge this many seconds after the last danger" :spec (a/num-in 0 nil) :default 30}
    :hide-s {:doc "passed to the retreat: a hidden body hands back after this many seconds once no real danger is on it" :spec (a/num-in 0 nil) :default 60}
    :goal {:doc "passed to the retreat: where the flight leans; nil: the destination of the walk this reflex interrupted (jobs.lib.goal), read once" :spec goal/pos-spec :default nil}
+   :stay-inside {:doc "at night a body shut in a closed room or its own shelter fights from there and never steps out toward a mob (false: it may)" :spec boolean? :default true}
    :weapons {:doc "item name substrings that count as weapons" :spec (a/coll-of (a/or-of string? keyword?)) :default combat/default-weapons}})
 
 (def hostile-policy {:cap 50 :ttl (* 60 60 1000)})
@@ -62,10 +63,13 @@
   16)
 
 (defn hold?
-  "Whether the fight stays where it is: at night, with more than one hostile known (the ones in view are not all there are)."
+  "Whether the fight stays where it is: at night, with more than one hostile known (the ones in view are not all there are),
+  or with any when the body is shut in a closed room or its own shelter and :stay-inside is on."
   [c]
   (let [p (:primitives c)]
-    (boolean (and (sh/night? p) (> (count (danger-q/known-hostiles p hold-radius {})) 1)))))
+    (boolean (and (sh/night? p)
+                  (or (> (count (danger-q/known-hostiles p hold-radius {})) 1)
+                      (and (:stay-inside (:args c)) (or (sh/shut-in-room? p) (sh/sheltered-in c))))))))
 
 (defn ^:async run-child [c decision {:keys [radius ranged-radius weapons reserve quiet-s hide-s]}]
   (let [child-args (case decision
