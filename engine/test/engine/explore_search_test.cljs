@@ -96,6 +96,9 @@
     {[5 66 5] "oak_leaves" [5 63 5] "dirt"} {:y 64}
     {[5 63 5] "water"} {:fail :wet}
     {[5 63 5] "dirt" [5 64 5] "oak_log" [5 65 5] "oak_log" [5 66 5] "oak_leaves"} {:fail :no-surface}
+    {[5 43 5] "dirt"} {:y 44}
+    {[5 66 5] "jungle_leaves" [5 30 5] "dirt"} {:y 31}
+    {[5 66 5] "jungle_leaves" [5 20 5] "dirt"} {:fail :no-surface}
     {} {:fail :no-surface}
     {:unloaded true} {:fail :not-loaded}))
 
@@ -303,6 +306,21 @@
           (is (finished? s) "the search ends")
           (is (= [{:pos [0 64 -6] :reason :goal-dangerous}] given-up) (pr-str (event-of s :search.not-found) (walks s)))
           (is (not-any? #(= {:x 0 :z -6} (select-keys % [:x :z])) (walks s)) "the step by the zombie is never walked to"))))))
+
+(deftest a-step-toward-an-unseen-column-that-fails-is-not-repeated
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [blind-far (fn [{:keys [p]}]
+                          (let [at (.-sensedAt p)]
+                            (aset p "sensedAt" (fn [pos] (if (or (> (js/Math.abs (.-x pos)) 8) (> (js/Math.abs (.-z pos)) 8)) #js {:unknown true} (at pos))))))
+              s (await (search! {:target "diamond_block" :max-distance 20}
+                                {:self {:pos [0 100 0]} :blocks (tu/box -2 99 -2 8 99 2 "stone")} 60 blind-far))
+              e (event-of s :search.not-found)]
+          (is (finished? s) "the search ends within 60 rounds, not at the time bound")
+          (is (not= :time (:why e)))
+          (let [ps (map :pos (get-in e [:coverage :failed]))]
+            (is (= (count ps) (count (set ps))) "a column whose step failed is not stepped toward again")))))))
 
 (deftest three-failed-legs-in-a-row-end-it-stuck
   (async done

@@ -65,6 +65,7 @@
 (a/defargs settings
   {::max-failed-in-row {:default 3 :doc "Failed attempts in a row before the search gives up." :spec (a/int-in 0 nil)}
    ::wait-ms {:default 2000 :doc "How long the search waits for the world to settle, in ms." :spec (a/int-in 0 nil)}
+   ::descent {:default 40 :doc "How far below its feet a leg's ground is looked for, in blocks (go-to does the descent)." :spec (a/int-in 0 nil)}
    ::reach {:default 12 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
    ::held-angle {:default 60 :doc "A leg lies the way a failed leg went when the angle between them, seen from the body, is under this many degrees." :spec (a/num-in 0 180)}
    ::held-near {:default 4 :doc "Blocks from where a leg failed within which its way still holds others back." :spec (a/num-in 0 nil)}
@@ -72,6 +73,7 @@
 (defn max-failed-in-row [] (settings/get settings ::max-failed-in-row))
 (defn wait-ms [] (settings/get settings ::wait-ms))
 (defn reach [] (settings/get settings ::reach))
+(defn descent [] (settings/get settings ::descent))
 (def headings {:north [0 -1] :east [1 0] :south [0 1] :west [-1 0]})
 
 ;; ------------------------------------------------------------------ pure
@@ -129,14 +131,14 @@
       (or (u/seen-name p pos) (when (u/sensed p pos) :unseen)))))
 
 (defn stand-cell
-  "Where a body could stand in column x z near feet height y, read top down from y+12 through open cells and
+  "Where a body could stand in column x z near feet height y, read top down from y+12 to y-40 through open cells and
   leaves to the first other block: {:y feet} when the two cells above it are open, else {:fail :wet} (a fluid),
   {:fail :not-loaded} (an unloaded cell on the way), {:fail :unseen} (a loaded cell not yet seen) or {:fail :no-surface}.
   block-at: [x y z] -> name, :unseen or nil."
   [block-at x z y]
   (let [y0 (js/Math.floor y)]
     (loop [h (+ y0 (reach))]
-      (if (< h (- y0 (reach)))
+      (if (< h (- y0 (descent)))
         {:fail :no-surface}
         (let [n (block-at [x h z])]
           (cond
@@ -314,7 +316,8 @@
                                      arrived (dissoc :blocked)
                                      (not (or arrived dangerous?)) (update :blocked (fnil conj []) {:at [hx hz] :leg [x z]})
                                      (not arrived) (update :failed (fnil conj []) {:pos [x y z] :reason (cond dangerous? :goal-dangerous in-water :wet :else :unreachable)})
-                                     (and dangerous? (:leg-column m)) (update :tried (fnil conj []) (:leg-column m)))))
+                                     (and (not arrived) (:leg-column m)) (-> (update :tried (fnil conj []) (:leg-column m))
+                                                                              (cond-> (not dangerous?) (update :legs (fnil inc 0)))))))
         (if (>= in-row (max-failed-in-row)) (finish! c :not-found :stuck) :again)))))
 
 (defn ^:async step!
