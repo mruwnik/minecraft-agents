@@ -1,14 +1,16 @@
 (ns jobs.survival.go-home
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.lib.places :as places]
             [jobs.lib.result :as result]
             [jobs.lib.util :as u]
             [triggers.survival.dusk-home :as dusk]))
 
 (def doc
   "Walk home before night: to the remembered :home, else the remembered :bed (a go-to child, :range 2, walking on
-  through the night). Waits (check) at night, with neither place known (:no-home) or when the place is farther than
-  :limit blocks (:too-far); the night job then digs in or sleeps. Done {:home pos} on arrival; stopped :walk-failed
+  through the night). Waits (check) at night or with neither place known (:no-home). A place farther than :limit blocks ends stopped
+  :too-far with one warn go-home.too-far (the night job then digs in or sleeps). Done {:home pos} on arrival, which
+  also records :home there unless a live one exists; stopped :walk-failed
   with the walk's reason otherwise. The :dusk-home trigger starts it when the day left no longer covers the walk;
   a work job it cuts is resumed by the scheduler afterwards.")
 
@@ -23,15 +25,27 @@
     (cond
       (not (.-isDay (.self p))) (ctx/wait c {:reason :night :text "night has come; the night job has the body"})
       (nil? pos) (ctx/wait c {:reason :no-home :text "no :home or :bed remembered to walk to"})
-      (> (u/dist (u/self-pos c) pos) (:limit (:args c)))
-      (ctx/wait c {:reason :too-far :pos pos :text (str "the bed or home at " (pr-str pos) " is farther than " (:limit (:args c)) " blocks")})
       :else true)))
 
-(defn ^:async round [c]
-  (let [pos (place c)
-        w (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos pos :range 2 :at-night :go}))
+(defn too-far!
+  "Home is beyond :limit at dusk: one warn so the agent can dig in or turn back, and stop."
+  [c pos]
+  (let [d (js/Math.round (u/dist (u/self-pos c) pos))
+        text (str "home at " (pr-str pos) " is " d " blocks away, beyond " (:limit (:args c)) ": night finds the body here; dig in or head back now")]
+    (ctx/emit! c :go-home.too-far :warn {:pos pos :distance d :text text})
+    (result/stop! c :too-far text :distance d)))
+
+(defn ^:async walk! [c pos]
+  (let [w (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos pos :range 2 :at-night :go}))
         r (ctx/child-result c :walk)]
     (cond
       (= :continue w) :continue
-      (:arrived r) (result/finish! c {:home pos})
+      (:arrived r) (do (places/offer! c :home pos)
+                       (result/finish! c {:home pos}))
       :else (result/stop! c :walk-failed (or (:text r) "could not walk home") :walk r))))
+
+(defn ^:async round [c]
+  (let [pos (place c)]
+    (if (> (u/dist (u/self-pos c) pos) (:limit (:args c)))
+      (too-far! c pos)
+      (await (walk! c pos)))))

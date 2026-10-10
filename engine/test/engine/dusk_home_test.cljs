@@ -25,7 +25,8 @@
     11000 [[:home 100 0]] true
     11000 [[:bed 100 0]] true
     11000 [[:home 20 0]] false
-    11000 [[:home 400 0]] false
+    11000 [[:home 400 0]] true
+    11000 [[:home 900 0]] false
     11000 [] false))
 
 (deftest it-does-not-fire-at-night-or-once-there
@@ -57,3 +58,24 @@
           (core/submit! eng '(jobs.survival.go-home) {})
           (await (tu/run-until-empty eng 30))
           (is (< (js/Math.abs (- 12 (.-x (.-pos (.self p))))) 3) "the body stands within 2 of the home"))))))
+
+(deftest go-home-beyond-its-limit-warns-and-stops-too-far
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (st/setup {:time st/noon :floor [-30 -30 30 30]})]
+          (mem/write! (:store eng) :home {:pos {:x 300 :y 64 :z 0}} mem/place-policy)
+          (do (core/submit! eng '(jobs.survival.go-home) {})
+            (await (tu/run-until-empty eng 10))
+            (is (= [:too-far] (mapv :reason (filter #(= :stopped (:kind %)) @seen))))
+            (is (some #(and (= :go-home.too-far (:kind %)) (= :warn (:level %))) @seen) "one warn names the distance")))))))
+
+(deftest go-home-arriving-at-the-bed-records-it-as-home
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (st/setup {:time st/noon :floor [-30 -30 30 30]})]
+          (mem/write! (:store eng) :bed {:pos {:x 12 :y 64 :z 0}} mem/place-policy)
+          (core/submit! eng '(jobs.survival.go-home) {})
+          (await (tu/run-until-empty eng 30))
+          (is (= {:x 12 :y 64 :z 0} (mem/place (mem/view (:store eng)) :home))))))))
