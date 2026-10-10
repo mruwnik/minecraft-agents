@@ -10,6 +10,8 @@
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.foods :as foods]
+            [jobs.lib.near :as near]
+            [jobs.lib.near :as near]
             [jobs.lib.tools :as tools]
             [jobs.lib.torch :as torch]
             [jobs.lib.util :as u]))
@@ -150,31 +152,42 @@
                                                             (when-let [r (:reason res)] (str ": " (name r))))}))
             nil))))))
 
+(defn ^:async back-from-stocking!
+  "After the torch trip, walk back to the cell it began on (:torches-from): :continue while the walk waits on the world, else nil."
+  [c]
+  (let [{:keys [torches-from torches-tried]} (ctx/mem c)]
+    (when (and torches-from torches-tried)
+      (if (= :partial (await (near/go-near! c torches-from 2)))
+        :continue
+        (do (ctx/update-mem! c dissoc :torches-from) nil)))))
+
 (defn ^:async torches-ready!
   "Before a job that digs down or tunnels sets out: when fewer than ::torch-low torches are carried, run jobs.items.obtain
   for torches up to ::torch-stock (child :torches; chest, craft from coal or charcoal, charcoal from logs by smelt, gather).
   With coal or charcoal carried the count is what that fuel makes (4 torches each), so the obtain plans no charcoal smelt
   and no table for the rest. Resolves nil to go on, :continue while the child waits on the world. Once per job (:torches-tried in its memory): info
   torch.stocked when it came back with some, warn torch.no-stock with the child's reason when not (the job goes on, dark
-  when none are carried). The job's :fetch off, a set of kinds without :item, or a body short of food (food-short?) skips it."
+  when none are carried), then walks back to the cell the trip began on (:torches-from), so a chest elsewhere does not move the dig. The job's :fetch off, a set of kinds without :item, or a body short of food (food-short?) skips it."
   [c]
-  (let [held (torch/torches-held (:primitives c))
-        limits (fetch/parse-arg (:fetch (:args c)))
-        fetch? (and (map? limits) (not (:error limits)) (or (nil? (:what limits)) (contains? (:what limits) :item)))
-        fuel (torch/fuel-held (:primitives c))
-        want (- (torch-stock) held)
-        args {:item "torch" :count (if (pos? fuel) (min want (* 4 fuel)) want)}]
-    (when (and fetch? (< held (torch-low)) (not (:torches-tried (ctx/mem c))) (not (food-short? c)))
-      (let [r (await (ctx/call-child c :torches 'jobs.items.obtain args))]
-        (if (= :continue r)
-          :continue
-          (let [res (if (= :declined r) (b/child-wait c :torches 'jobs.items.obtain args) (ctx/child-result c :torches))
-                now (torch/torches-held (:primitives c))]
-            (ctx/update-mem! c assoc :torches-tried true)
-            (if (> now held)
-              (ctx/emit! c :torch.stocked :info {:held now :text (str "carrying " now " torches for the dig")})
-              (ctx/emit! c :torch.no-stock :warn {:held now :reason (:reason res) :tried (:tried res)
-                                                  :text (str "carries " (if (zero? now) "no torches" (str "only " now " torches"))
-                                                             (if (zero? now) ", no coal or logs to make any" " and could not get more")
-                                                             ": the dig goes on " (if (zero? now) "dark" "with them"))}))
-            nil))))))
+  (or (await (back-from-stocking! c))
+      (let [held (torch/torches-held (:primitives c))
+          limits (fetch/parse-arg (:fetch (:args c)))
+          fetch? (and (map? limits) (not (:error limits)) (or (nil? (:what limits)) (contains? (:what limits) :item)))
+          fuel (torch/fuel-held (:primitives c))
+          want (- (torch-stock) held)
+          args {:item "torch" :count (if (pos? fuel) (min want (* 4 fuel)) want)}]
+      (when (and fetch? (< held (torch-low)) (not (:torches-tried (ctx/mem c))) (not (food-short? c)))
+        (when-not (:torches-from (ctx/mem c)) (ctx/update-mem! c assoc :torches-from (u/self-pos c)))
+        (let [r (await (ctx/call-child c :torches 'jobs.items.obtain args))]
+          (if (= :continue r)
+            :continue
+            (let [res (if (= :declined r) (b/child-wait c :torches 'jobs.items.obtain args) (ctx/child-result c :torches))
+                  now (torch/torches-held (:primitives c))]
+              (ctx/update-mem! c assoc :torches-tried true)
+              (if (> now held)
+                (ctx/emit! c :torch.stocked :info {:held now :text (str "carrying " now " torches for the dig")})
+                (ctx/emit! c :torch.no-stock :warn {:held now :reason (:reason res) :tried (:tried res)
+                                                    :text (str "carries " (if (zero? now) "no torches" (str "only " now " torches"))
+                                                               (if (zero? now) ", no coal or logs to make any" " and could not get more")
+                                                               ": the dig goes on " (if (zero? now) "dark" "with them"))}))
+              (await (back-from-stocking! c)))))))))

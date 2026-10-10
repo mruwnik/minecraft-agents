@@ -1,6 +1,7 @@
 (ns engine.torch-stock-test
   "jobs.lib.trip/torches-ready!: a stair down that carries few torches stocks up first, or says it digs dark."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.mine-test :as mt]
             [engine.stair-test :as st]
             [engine.test-util :as tu]))
 
@@ -55,3 +56,16 @@
           (is (contains? (kinds s) :torch.stocked))
           (is (nil? (get carried "crafting_table")))
           (is (empty? (filter #(= "place" (.-name %)) (.-calls (.-world (:p s))))) "no table placed"))))))
+
+(deftest the-torch-stocking-trip-to-a-far-chest-does-not-move-the-tunnel
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [chest "12,64,0"
+              w (-> (mt/torch-world mt/bare-pickaxe)
+                    (update :blocks #(merge % (mt/cells "air" (range 1 12) [64 65] [0]) {chest "chest"}))
+                    (assoc :containers {chest [{:name "torch" :count 20}]}))
+              s (await (mt/scenario {:block "iron_ore" :level false :count 1 :direction "north" :tunnel-length 4 :mend false} w 300))]
+          (is (pos? (get (mt/inv s) "torch" 0)) "the chest's torches were taken")
+          (is (seq (mt/dug-cells s)))
+          (is (every? (fn [[x]] (<= x 2)) (mt/dug-cells s)) (pr-str (mt/dug-cells s))))))))
