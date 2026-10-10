@@ -717,3 +717,17 @@
           (await (ticks s eng 60))
           (is (= [] @digs) "Juniper j658: the plug dug next to the skeleton let it in")
           (is (= #{:hostile-near} (set (map :reason (:open @out))))))))))
+
+(deftest a-far-scaffold-block-beside-a-known-hostile-is-not-walked-to
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cells [[10 64 0]]
+              {:keys [eng p out digs] :as s} (setup {:self {:x 3.5 :y 64 :z 0.5} :blocks (pillar-blocks cells)
+                                                     :entries (mapv entry cells)})]
+          (fake/add-entity! p {:id 9 :name "zombie" :kind "hostile" :pos {:x 12 :y 64 :z 0} :health 20})
+          (core/submit! eng '(recording-parent) {})
+          (await (ticks s eng 60))
+          (is (= [] @digs))
+          (is (= 3 (js/Math.floor (.-x (.-pos (.self p))))) "the body stayed where it was")
+          (is (= [:danger] (mapv :reason (:open @out)))))))))

@@ -41,7 +41,9 @@
   Then one step, passes repeated (paced) until nothing is left to do:
   - Dig the highest (then nearest) cell within :reach of the eye that may be dug. The entry is marked
     :removing before the dig, so a cut or restart is decided from the cell.
-  - Else walk to within 3 of the nearest (jobs.movement.go-to as a child, :escalate false: never digging a way).
+  - Else walk to within 3 of the nearest (jobs.movement.go-to as a child, :escalate false: never digging a way), in legs of
+    :leg-s. Before each leg a real danger within :danger-radius of the body, or a known hostile within it of the cell,
+    holds that cell :danger instead (the hostile reflex acts; the cell is offered again after the hold).
   - Else finish.
 
   A body standing on a ledger row (a bridge) never digs the last way back to firm ground: that cell is :stranding.
@@ -78,6 +80,8 @@
             :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block :under-feet}) :default #{:fluid-adjacent}}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
    :reach {:doc "cells whose centre is this close to the eye are dug from where the body stands, in blocks" :spec (a/num-in 0 nil) :default u/bucket-reach}
+   :danger-radius {:doc "a walk is not made while a real danger is this close to the body, or a known hostile this close to the cell walked to: the cell is held :danger" :spec (a/num-in 0 nil) :default 16}
+   :leg-s {:doc "a walk goes in legs of this many seconds; the danger is weighed again after each" :spec (a/num-in 0.1 120) :default 6}
    :give-up {:doc "walks ending out of reach, or failed digs, after which a cell is held" :spec (a/int-in 1 nil) :default 2}})
 
 
@@ -201,6 +205,16 @@
   [p]
   (boolean (seq (danger-q/known-hostiles p threats/max-follow-range {:ranged-radius (danger-q/ranged-radius)}))))
 
+(defn danger-ahead?
+  "Whether walking to cell is unsafe: a real danger near the body, or a known hostile (seen or heard) near the cell."
+  [c cell]
+  (let [p (:primitives c)
+        r (:danger-radius (:args c))
+        [x y z] cell]
+    (boolean (or (danger-q/nearest-danger p r {} {})
+                 (some #(<= (u/dist (danger-q/mob-pos p %) {:x x :y y :z z}) r)
+                       (danger-q/known-hostiles p (+ r (danger-q/known-scan)) {}))))))
+
 (defn inputs
   "next-step's input now: entries to work on, the whole ledger l for the rules."
   [c l entries zones]
@@ -272,18 +286,22 @@
 
 
 (defn ^:async walk!
-  "Walk to within 3 of cell; a permanent verdict holds it :unreachable, an end out of reach, a walk that did not end or
-  a go-to that gave up for a passing reason counts a failure."
+  "Walk one leg toward within 3 of cell, or hold it :danger. A permanent verdict holds it :unreachable, an end out of
+  reach, a walk that did not end or a go-to that gave up for a passing reason counts a failure; a leg that got nearer does not."
   [c {:keys [cell]}]
-  (let [r (await (child/call-walk c :walk {:pos cell :range (walk-range) :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))
-        result (when (= :done r) (ctx/child-result c :walk))
-        status (:status result)]
-    (cond
-      (result/permanent-walk? result)
-      (ctx/update-mem! c assoc-in [:held cell] {:reason :unreachable :walk status})
-      (or (not= :done r) (= :stopped status) (> (distance (eye-of c) (centre cell)) (:reach (:args c))))
-      (ctx/update-mem! c count-fail cell {:reason :out-of-reach :walk status} (:give-up (:args c))))
-    :again))
+  (if (danger-ahead? c cell)
+    (ctx/update-mem! c assoc-in [:held cell] {:reason :danger})
+    (let [r (await (child/call-walk c :walk {:pos cell :range (walk-range) :escalate false :leg-s (:leg-s (:args c))
+                                             :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))
+          result (when (= :done r) (ctx/child-result c :walk))
+          status (:status result)]
+      (cond
+        (:leg result) nil
+        (result/permanent-walk? result)
+        (ctx/update-mem! c assoc-in [:held cell] {:reason :unreachable :walk status})
+        (or (not= :done r) (= :stopped status) (> (distance (eye-of c) (centre cell)) (:reach (:args c))))
+        (ctx/update-mem! c count-fail cell {:reason :out-of-reach :walk status} (:give-up (:args c))))))
+  :again)
 
 (defn ^:async retreat!
   "Walk to the ground at the end of the row the body stands on (go-to, range 0, no digging); counts a try."
