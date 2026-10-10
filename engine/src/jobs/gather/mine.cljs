@@ -12,6 +12,7 @@
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.tools :as tools]
             [jobs.lib.access.rules :as rules]
+            [jobs.lib.access.zones :as zones]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
@@ -177,6 +178,7 @@
    ::open-skip-drop {:default 3 :doc "The most blocks the strip tunnel's start steps down while it skips open cells on its line (a stair); the tunnel then runs at that level." :spec (a/int-in 0 nil)}
    ::max-resumes {:default 2 :doc "Resumes of a cut before the job gives up." :spec (a/int-in 0 nil)}
    ::max-steps {:default 400 :doc "Pieces of work of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}
+   ::zone-margin {:default 8 :doc "Before it digs, the body walks to a start cell this many blocks outside any zone it owns; its stair and tunnel stop at such a zone." :spec (a/int-in 0 nil)}
    ::max-recuts {:default 12 :doc "Cuts again of one tunnel cell that a falling block (gravel, sand) refilled before the tunnel stops :dig-failed." :spec (a/int-in 0 nil)}
    ::ore-levels {:default {"iron_ore" 16 "copper_ore" 48 "gold_ore" -16 "lapis_ore" 0 "redstone_ore" -54 "diamond_ore" -54}
                  :doc "The feet height a strip tunnel for an ore runs at when :level is nil, by the ore's stone kind; an ore not listed tunnels where the body stands."
@@ -757,6 +759,53 @@
     (await (torch-step! c false))
     (tunnel-end! c stop at next walk)))
 
+(defn zone-margin [] (settings/get settings ::zone-margin))
+
+(defn own-zones
+  "The zones this body owns (none with :ignore-zones?)."
+  [c]
+  (when-not (:ignore-zones? (:args c))
+    (filter #(zones/same-owner? (:owner %) (ctx/self-name c)) (known/zones c))))
+
+(defn grown
+  "Zone z's box grown by m blocks on x and z."
+  [z m]
+  (-> z (update :min #(-> % (update 0 - m) (update 2 - m))) (update :max #(-> % (update 0 + m) (update 2 + m)))))
+
+(defn within-own-zone
+  "The own zone whose box, grown by m, holds the cell [x y z], else nil."
+  [c m cell]
+  (first (filter #(zones/in-box? cell (grown % m)) (own-zones c))))
+
+(defn exit-goal
+  "The cell outside zone zn's box by margin m + 2 on its nearest side, at the level of here."
+  [{:keys [x y z]} zn m]
+  (let [[x0 _ z0] (:min zn) [x1 _ z1] (:max zn)
+        out (+ m 2)
+        sides [[(- x x0) {:x (- x0 out) :z z}] [(- x1 x) {:x (+ x1 out) :z z}] [(- z z0) {:x x :z (- z0 out)}] [(- z1 z) {:x x :z (+ z1 out)}]]]
+    (assoc (second (apply min-key first sides)) :y y)))
+
+(defn ^:async leave-zone!
+  "Before the first dig: a go-to child to a cell zone-margin outside the own zone zn the body stands near (memory :pre-start moves with it).
+  One info mine.left-zone when out; else the job ends :stopped :zone-exit. :continue while it walks, :again once out."
+  [c zn]
+  (let [m (zone-margin)
+        goal (exit-goal (cell-of (u/self-pos c)) zn m)
+        from (:pre-start (ctx/mem c))
+        r (await (ctx/call-child c :leave 'jobs.movement.go-to
+                                 {:pos {:x (+ (:x goal) 0.5) :y (:y goal) :z (+ (:z goal) 0.5)} :range 2 :y-slack 8 :escalate true :zone-tolls true}))
+        here (cell-of (u/self-pos c))]
+    (cond
+      (= :continue r) :continue
+      (not (within-own-zone c (dec m) (access/cell here)))
+      (do (ctx/emit! c :mine.left-zone :info {:zone (:name zn) :from (access/cell from) :to (access/cell here)
+                                              :text (str "mine walked out of zone " (:name zn) " to " (str/join "," (access/cell here)) " before it digs")})
+          (ctx/update-mem! c assoc :pre-start here)
+          :again)
+      :else (do (ctx/emit! c :mine.done :warn {:got 0 :reason :zone-exit :text (str "mine could not get out of zone " (:name zn) " before it digs")})
+                (ctx/result! c {:status :stopped :got 0 :reason :zone-exit})
+                :done))))
+
 (defn max-recuts [] (settings/get settings ::max-recuts))
 
 (defn after-cut
@@ -800,6 +849,7 @@
         walk (atom nil)]
     (cond
       stop (to-mend! c (tunnel-reason stop))
+      (some #(within-own-zone c 0 (access/cell %)) cut) (end! c :own-zone next)
       (>= steps (:tunnel-length (:args c))) (end! c :tunnel-length nil)
       (do (reset! walk (await (step-to! c from))) @walk) (end! c :walk-failed from nil @walk)
       (and (look/unseen? (:primitives c) cut) (not= next (:glanced m)))
@@ -916,6 +966,13 @@
                                                          "; it tunnels there")})
     :again))
 
+(defn stair-in-own-zone?
+  "Whether the stair's next step (the cell ahead along the heading, its head and the one below) lies in a zone the body owns."
+  [c]
+  (let [here (cell-of (u/self-pos c))
+        ahead (step-cell {:origin here :heading (:heading (ctx/mem c))} 1)]
+    (boolean (some #(within-own-zone c 0 (access/cell %)) [ahead (update ahead :y dec) (update ahead :y inc)]))))
+
 (defn ^:async descend-round!
   "One step of the stair down (jobs.access.stair child, :steps 1) along the tunnel heading; the next round looks round and scans.
   To the tunnel level: a torch first when one is due (stair-torch-due?), :fetch passed on; the stair stopping ends the descent there.
@@ -926,6 +983,8 @@
     (cond
       (and level? (stair-torch-due? c)) (await (torch-step! c :stair))
       (and (not level?) (>= n (:descend-limit (:args c)))) (no-stone! c)
+      (stair-in-own-zone? c) (do (ctx/update-mem! c assoc-in [:descent :stop] :own-zone)
+                                 (if level? (stair-stopped! c) (no-stone! c)))
       :else
       (let [r (await (ctx/call-child c :stair 'jobs.access.stair
                                      {:dir :down :heading (keyword (:heading (ctx/mem c))) :steps 1 :fetch (if level? (:fetch (:args c)) true)
@@ -1244,6 +1303,9 @@
       (and (contains? #{nil :dig} (:phase m)) (no-tool? c)) (await (fetch-pickaxe! c))
 
       (and (nil? (:phase m)) (not (no-tool? c)) (:pre-start m) (not (at-pre-start? c))) (await (back-to-pre-start! c))
+
+      (and (nil? (:phase m)) (within-own-zone c (dec (zone-margin)) (access/cell (cell-of (u/self-pos c)))))
+      (await (leave-zone! c (within-own-zone c (dec (zone-margin)) (access/cell (cell-of (u/self-pos c))))))
 
       (nil? (:phase m))
       (let [faced (facing (:primitives c))

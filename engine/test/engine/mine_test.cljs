@@ -1145,10 +1145,11 @@
           (is (= 2 (count (dug-cells s)))))))))
 
 (deftest the-mend-follows-the-zone-owner-and-the-opt-out
+  ;; the owner's body walks out of its own zone first, off the dirt: nothing to dig or mend
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[owner extra mended-some declined] [["Fake" {} true []] ["FAKE" {} true []]
+        (doseq [[owner extra mended-some declined] [["Fake" {} false []] ["FAKE" {} false []]
                                                    ["Miles" {} false [{:reason :refused :zones ["farm"]}]]
                                                    ["Miles" {:ignore-zones? true} true []]]]
           (let [zone {:name "farm" :min [-2 60 -2] :max [2 70 2] :owner owner :allow #{:dig}}
@@ -1855,3 +1856,39 @@
           (await (run-ticks s 40))
           (is (= 1 (dig-count s)) "nothing is dug once the head is wet")
           (is (= :flooded (:reason (done-event s)))))))))
+
+;; ------------------------------------------------------------------ an own zone is left before the first dig
+
+(def home-zone {:name "home" :min [-3 60 -3] :max [3 70 3] :owner "Fake"})
+
+(deftest the-body-walks-out-of-its-own-zone-before-it-digs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (ew/of-data {} {} [home-zone])
+              s (await (zoned {:block "sand" :count 2 :mend false :tunnel-length 0} {:floor [-30 -30 40 30] :blocks {"6,64,11" "sand" "7,64,11" "sand"}} w 60))
+              left (first (events-of s :mine.left-zone))
+              first-dig (first (dug-cells s))]
+          (is (= "home" (:zone left)))
+          (is (= 2 (count (dug-cells s))))
+          (is (every? (fn [[_ _ z]] (> z 9)) (dug-cells s)))
+          (is (some? first-dig)))))))
+
+(deftest ignoring-zones-digs-from-inside-the-own-zone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (ew/of-data {} {} [home-zone])
+              s (await (zoned {:block "sand" :count 1 :mend false :tunnel-length 0 :ignore-zones? true} {:blocks {"2,64,0" "sand"}} w 20))]
+          (is (empty? (events-of s :mine.left-zone)))
+          (is (= 1 (count (dug-cells s)))))))))
+
+(deftest the-tunnel-stops-at-the-edge-of-an-own-zone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (ew/of-data {} {} [{:name "home" :min [8 60 -3] :max [12 70 3] :owner "Fake"}])
+              s (await (zoned {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 20}
+                              (rock-world {}) w 120))]
+          (is (every? #(< (first %) 8) (dug-cells s)) "no cell of the zone is cut")
+          (is (= [:own-zone] (map :reason (events-of s :mine.tunnel-end)))))))))

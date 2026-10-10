@@ -945,7 +945,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start (assoc (update (world {}) :blocks merge (into {} (for [x [0 1] z [5 6]] [(str x ",64," z) "stone"]))) :inventory [{:name "wooden_pickaxe" :count 1} {:name "oak_planks" :count 4} {:name "stick" :count 4} {:name "crafting_table" :count 1}]) [own-zone])]
+        (let [s (start (assoc (update (world {}) :blocks merge (into {} (for [x [0 1] z [5 6]] [(str x ",64," z) "stone"]))) :inventory [{:name "wooden_pickaxe" :count 1} {:name "oak_planks" :count 4} {:name "stick" :count 4} {:name "crafting_table" :count 1}]) [])]
           (core/submit! (:eng s) (list 'jobs.items.obtain {:item "stone_pickaxe"}) {})
           (await (run-ticks s 80))
           (is (empty? (listed s)))
@@ -955,7 +955,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start (assoc (update (world {}) :blocks merge (into {} (for [x [0 1] z [5 6]] [(str x ",64," z) "stone"]))) :inventory [{:name "oak_planks" :count 12} {:name "crafting_table" :count 1}]) [own-zone])]
+        (let [s (start (assoc (update (world {}) :blocks merge (into {} (for [x [0 1] z [5 6]] [(str x ",64," z) "stone"]))) :inventory [{:name "oak_planks" :count 12} {:name "crafting_table" :count 1}]) [])]
           (core/submit! (:eng s) (list 'jobs.items.obtain {:item "stone_pickaxe"}) {})
           (await (run-ticks s 160))
           (is (empty? (listed s)))
@@ -1045,7 +1045,7 @@
       (fn ^:async t []
         (let [s (start (assoc (update (world {}) :blocks merge {"1,64,5" "deepslate_coal_ore" "2,64,5" "deepslate_coal_ore"})
                               :drops {"deepslate_coal_ore" "coal"}
-                              :inventory [{:name "wooden_pickaxe" :count 1} {:name "stick" :count 4}]) [own-zone])]
+                              :inventory [{:name "wooden_pickaxe" :count 1} {:name "stick" :count 4}]) [])]
           (core/submit! (:eng s) (list 'jobs.items.obtain {:item "torch"}) {})
           (await (run-ticks s 80))
           (is (empty? (listed s)))
@@ -1056,7 +1056,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (assoc (update (world {}) :blocks merge (into {} (for [x [0 1] z [5 6]] [(str x ",64," z) "stone"])))
-                              :inventory [{:name "oak_log" :count 4}]) [own-zone])]
+                              :inventory [{:name "oak_log" :count 4}]) [])]
           (core/submit! (:eng s) (list 'jobs.items.obtain {:item "cobblestone" :count 3}) {})
           (await (run-ticks s 160))
           (is (empty? (listed s)) (pr-str (map :why (events-of s :waiting))))
@@ -1081,7 +1081,7 @@
       (fn ^:async t []
         (let [s (start (assoc (update (world {}) :blocks merge {"1,63,5" "grass_block" "2,63,5" "grass_block" "3,63,5" "grass_block"})
                               :drops {"grass_block" "dirt"}
-                              :inventory []) [own-zone])]
+                              :inventory []) [])]
           (core/submit! (:eng s) (list 'jobs.items.obtain {:any-of ["dirt" "cobblestone"] :count 2}) {})
           (await (run-ticks s 80))
           (is (empty? (events-of s :waiting)))
@@ -1142,7 +1142,7 @@
         (let [s (start (assoc (update (bare [{:name "wooden_pickaxe" :count 1} {:name "oak_planks" :count 4} {:name "stick" :count 4} {:name "crafting_table" :count 1}])
                                     :blocks merge (into {} (for [x [0 1] z [5 6]] [(str x ",64," z) "deepslate"])))
                               :drops {"deepslate" "cobbled_deepslate"}
-                              :recipes {"stone_pickaxe" {:count 1 :needs {"cobbled_deepslate" 3 "stick" 2} :table true}}) [own-zone])]
+                              :recipes {"stone_pickaxe" {:count 1 :needs {"cobbled_deepslate" 3 "stick" 2} :table true}}) [])]
           (core/submit! (:eng s) (list 'jobs.items.obtain {:item "stone_pickaxe"}) {})
           (await (run-ticks s 80))
           (is (= 1 (get (inv s) "stone_pickaxe"))))))))
