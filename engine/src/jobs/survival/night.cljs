@@ -19,6 +19,7 @@
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [engine.memory :as mem]
+            [jobs.lib.danger :as danger-q]
             [jobs.lib.places :as places]
             [jobs.lib.foods :as foods]
             [jobs.survival.dig-in :as dig-in]
@@ -74,7 +75,7 @@
   reflex resumes the same target. Arrived: the next pass sleeps, is roofed, or digs in there (a niche is tried again).
   Done {:night how :fled n} (stopped :exposed {:fled n}) when it fled.
   Every hold is declared (ctx/hold-still!) and waits hold-ms at a time, eating one carried food when the hungry
-  trigger's condition holds (hungry?, or below 7 hp; not asleep).
+  trigger's condition holds (hungry?, or below 7 hp; not asleep); a starving body with no food runs get-food (when no danger is near).
   An overdue body (no sleep for :max-days-awake in-game days) warns needs_bed once an in-game day (:needs-bed).
   Memory: job memory :enclose (the cave cell being walled in), :sheltered (:slept, :dug-in, :logged-out, :exposed), :log-out-failed, :relocating, :digging (the
   site of a dig-in in flight), :pit-trapped and leave!'s :dig-out; :roof-walk-failed (no second walk to a roofed place tonight); body memory :night-site (failed sites, forgotten whenever the night ends, at most a day), so a
@@ -152,11 +153,28 @@
         (when (= "ate" (.-status r))
           (ctx/emit! c :shelter.ate :info {:item best :food (.-food r) :text (str "ate " best " while holding the night")}))))))
 
+(defn food-wanted?
+  "A starving body with nothing to eat, no get-food give-up in the last foods/starving-rest-ms, and no danger near
+  (the same check as get-food's night search): worth a get-food child instead of a hold."
+  [c]
+  (let [p (:primitives c)
+        self (.self p)]
+    (and (not (sh/sleeping? p))
+         (foods/starving? self {})
+         (not (foods/carries-food? self))
+         (zero? (ctx/count-in c :hungry (foods/starving-rest-ms)))
+         (not (danger-q/danger-near? p (danger-q/hostile-radius) (danger-q/ranged-radius))))))
+
 (defn ^:async hold!
-  "Hold the body still on purpose (reason) for hold-ms, eating first when hungry; :again."
+  "Hold the body still on purpose (reason) for hold-ms, eating first when hungry; a starving body with no food looks
+  for some first (food-wanted?, a get-food child): :again."
   [c reason]
   (ctx/hold-still! c reason)
   (await (eat-if-hungry! c))
+  (when (food-wanted? c)
+    (ctx/hold-still! c nil)
+    (await (ctx/call-child c :food 'jobs.survival.get-food {}))
+    (ctx/hold-still! c reason))
   (await (ctx/act c :wait #js {:ms hold-ms}))
   :again)
 

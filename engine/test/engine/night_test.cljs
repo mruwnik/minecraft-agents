@@ -992,3 +992,42 @@
           (await (core/tick! eng))
           (is (= [] (furnace-ops p)) "no walk out to a furnace at night")
           (is (> (.-food (.self p)) 5) "ate raw"))))))
+
+;; ------------------------------------------------------------------ starving while held
+
+(defn held-starving
+  "(The night trigger fires the night as a reflex, as a body's night runs.) A held (exposed, nothing to build with) night at food 0 with nothing to eat; the clock moves 5 ms a read and 20 s a hold, and day comes at the first attack."
+  [entities]
+  (let [clock (atom 1000000)
+        [seen sink] (tu/legacy-capture-sink)
+        p (tu/seeing-all (tu/fake {:offlineScale 0.0001 :floor tu/walk-floor :time night :blocks st/ground
+                                   :self {:food 0 :health 15} :entities entities}))
+        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
+                          :now #(swap! clock + 5)
+                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+    (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
+    (st/refuse-placing! p)
+    (st/dawn-after! p 12 (fn [_] (swap! clock + 20000)))
+    (.override (.-world p) "attack" (fn ^:async g [token a impl]
+                                      (.setTime (.-world p) st/noon)
+                                      (await (impl token a))))
+    {:eng eng :p p :seen seen}))
+
+(def cow {:id 7 :name "cow" :kind "passive" :pos {:x 5 :y 64 :z 0} :health 20 :drops [{:name "beef" :count 1}]})
+(def zombie {:id 8 :name "zombie" :kind "hostile" :pos {:x 4 :y 64 :z 2} :health 20})
+
+(deftest a-held-starving-body-hunts-a-cow-in-reach
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (held-starving [cow])]
+          (await (core/tick! eng))
+          (is (seq (filterv #(= "attack" (.-name %)) (.-calls (.-world p)))) "it went for the cow instead of starving in the hold"))))))
+
+(deftest a-held-starving-body-stays-put-with-a-hostile-near
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (held-starving [cow zombie])]
+          (await (core/tick! eng))
+          (is (empty? (filterv #(= "attack" (.-name %)) (.-calls (.-world p)))) "no hunt with a danger near"))))))
