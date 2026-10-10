@@ -1016,11 +1016,11 @@
 
 (defn held-starving
   "(The night trigger fires the night as a reflex, as a body's night runs.) A held (exposed, nothing to build with) night at food 0 with nothing to eat; the clock moves 5 ms a read and 20 s a hold, and day comes at the first attack."
-  [entities]
+  [entities & [self inventory]]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         p (tu/seeing-all (tu/fake {:offlineScale 0.0001 :floor tu/walk-floor :time night :blocks st/ground
-                                   :self {:food 0 :health 15} :entities entities}))
+                                   :self (or self {:food 0 :health 15}) :inventory (or inventory []) :entities entities}))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
                           :now #(swap! clock + 5)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -1042,6 +1042,18 @@
         (let [{:keys [eng p]} (held-starving [cow (assoc cow :id 8 :pos {:x 6 :y 64 :z 0}) (assoc cow :id 9 :pos {:x 7 :y 64 :z 0})])]
           (await (core/tick! eng))
           (is (seq (filterv #(= "attack" (.-name %)) (.-calls (.-world p)))) "it went for the cow instead of starving in the hold"))))))
+
+(deftest a-held-hungry-body-leaves-the-bait-an-animal-job-reserved
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [ate (fn ^:async ate* [reserve?]
+                    (let [{:keys [eng p]} (held-starving [] {:food 5 :health 20} [{:name "carrot" :count 10}])]
+                      (when reserve? (mem/write! (:store eng) :bait-reserve {:foods ["carrot"]} {:cap 5 :ttl :forever}))
+                      (await (core/tick! eng))
+                      (count (filterv #(= "eat" (.-name %)) (.-calls (.-world p))))))]
+          (is (zero? (await (ate true))) "reserved bait is not eaten at food 5")
+          (is (pos? (await (ate false))) "unreserved carrots are"))))))
 
 (deftest a-held-starving-body-stays-put-with-a-hostile-near
   (async done

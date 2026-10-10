@@ -148,7 +148,7 @@
         hungry (and (not (sh/sleeping? p)) (or (foods/hungry? (.-food self) health {}) (foods/eat-now? self {})))
         cooking (when hungry (await (cooking-in-shelter? c)))
         best (when (and hungry (not cooking))
-               (eat/best-food (u/inventory p) false nil health))]
+               (eat/best-food (u/inventory p) false nil health (.-food self) (foods/reserved (ctx/view c))))]
     (when best
       (await (ctx/act c :equip #js {:item best}))
       (let [r (await (ctx/act c :eat #js {:item best}))]
