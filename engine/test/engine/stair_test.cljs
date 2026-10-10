@@ -1011,3 +1011,12 @@
           (is (= :done (:status @(:out on))))
           (is (= "coal_ore" (block-at (:p off) [1 64 1])) "opted out")
           (is (= "coal_ore" (block-at (:p wet) [1 64 1])) "lava beside it"))))))
+
+(deftest a-stair-goes-on-cutting-and-walking-its-own-steps-at-night-from-a-dug-in-start-underground
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out] :as s} (await (stair! {:blocks (dissoc ground "0,60,0" "0,61,0") :self {:pos {:x 0 :y 60 :z 0}} :time 18000} east (fn [p] (swap! (fake/state p) assoc :light-default [0 0]))))]
+          (is (= :done (:status @out)) "not held night-sheltered between its steps")
+          (is (= 3 (:steps @out)))
+          (is (nil? (waiting s))))))))

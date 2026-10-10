@@ -515,9 +515,11 @@
 
 (defn ^:async walk-into!
   "Walk the body into cell [x y z] with a go-to child in slot (no escalation: the dig is this job's own): :continue
-  while it walks, else the child's result."
+  while it walks, else the child's result. The steps of the line (:walk, :back) go on at night: the cell is one this job
+  cut, and the night shelter would hold the body between two steps for ever."
   [c slot cell]
-  (if (= :done (await (child/call-walk c slot {:pos cell :range 0 :escalate false})))
+  (if (= :done (await (child/call-walk c slot (cond-> {:pos cell :range 0 :escalate false}
+                                                (#{:walk :back} slot) (assoc :at-night :go)))))
     (ctx/child-result c slot)
     :continue))
 
