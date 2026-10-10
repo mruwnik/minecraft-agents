@@ -289,19 +289,19 @@
   "Walk one leg toward within 3 of cell, or hold it :danger. A permanent verdict holds it :unreachable, an end out of
   reach, a walk that did not end or a go-to that gave up for a passing reason counts a failure; a leg that got nearer does not."
   [c {:keys [cell]}]
-  (if (danger-ahead? c cell)
-    (ctx/update-mem! c assoc-in [:held cell] {:reason :danger})
-    (let [r (await (child/call-walk c :walk {:pos cell :range (walk-range) :escalate false :leg-s (:leg-s (:args c))
-                                             :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))
-          result (when (= :done r) (ctx/child-result c :walk))
-          status (:status result)]
-      (cond
-        (:leg result) nil
-        (result/permanent-walk? result)
-        (ctx/update-mem! c assoc-in [:held cell] {:reason :unreachable :walk status})
-        (or (not= :done r) (= :stopped status) (> (distance (eye-of c) (centre cell)) (:reach (:args c))))
-        (ctx/update-mem! c count-fail cell {:reason :out-of-reach :walk status} (:give-up (:args c))))))
-  :again)
+  (let [[r d] (await (child/call-walk-leg c :walk {:pos cell :range (walk-range) :escalate false :zone-tolls true
+                                                   :ignore-zones? (boolean (:ignore-zones? (:args c)))}
+                                          (:leg-s (:args c)) #(danger-ahead? c cell)))
+        result (when (= :done r) (ctx/child-result c :walk))
+        status (:status result)]
+    (cond
+      (= :danger r) (ctx/update-mem! c assoc-in [:held cell] {:reason :danger})
+      (:leg result) nil
+      (result/permanent-walk? result)
+      (ctx/update-mem! c assoc-in [:held cell] {:reason :unreachable :walk status})
+      (or (not= :done r) (= :stopped status) (> (distance (eye-of c) (centre cell)) (:reach (:args c))))
+      (ctx/update-mem! c count-fail cell {:reason :out-of-reach :walk status} (:give-up (:args c))))
+    :again))
 
 (defn ^:async retreat!
   "Walk to the ground at the end of the row the body stands on (go-to, range 0, no digging); counts a try."

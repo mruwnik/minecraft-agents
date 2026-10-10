@@ -50,3 +50,12 @@
   for day in a shelter), the round holds still with that reason, so jobs show and body.idle name what the walk waits on."
   [c slot args]
   (first (await (call-walk-reason c slot args))))
+
+(defn ^:async call-walk-leg
+  "One leg of a walk: resolves to [:danger d] when (danger) answers d (the walk is not made, the caller yields so the
+  reflex can act), else [r] of call-walk in slot with args and :leg-s leg-s. The leg ends {:arrived false :leg true} in the go-to
+  result while the goal is still ahead; the caller weighs danger again by calling it again."
+  [c slot args leg-s danger]
+  (if-let [d (danger)]
+    [:danger d]
+    [(await (call-walk c slot (assoc args :leg-s leg-s)))]))

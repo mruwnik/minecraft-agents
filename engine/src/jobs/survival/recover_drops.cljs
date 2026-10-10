@@ -284,14 +284,17 @@
       (ctx/update-mem! c assoc :seal-cleared true))
     :next))
 
+(declare threatened? decline-danger!)
+
 (defn ^:async go!
   "Walk one leg (:leg-s) toward the death point: :next once there (the collect phase) or after a leg that got nearer (the
   danger and the cost are weighed again), else :declined (go-to waits on the
   world, or it did not arrive: the next run walks again while the pile is worth it, and the window closes it). A walk
   go-to refused for the body's own shelter (:inside-own-shelter) is no failed try: the window closes the trip."
   [c pos]
-  (let [r (await (child/call-walk c :go {:pos pos :range (arrive-range) :leg-s (:leg-s (:args c))}))]
+  (let [[r danger] (await (child/call-walk-leg c :go {:pos pos :range (arrive-range)} (:leg-s (:args c)) #(threatened? c)))]
     (cond
+      (= :danger r) (decline-danger! c danger)
       (not= :done r) (decline! c :unreachable (str "the walk to " (pr-str pos) " is waiting on the world") {:pos pos})
       (:inside-own-shelter (ctx/child-result c :go))
       (decline! c :unreachable (str "the walk to " (pr-str pos) " is refused: the body is sealed in its own shelter, which opens by day") {:pos pos})
@@ -553,7 +556,7 @@
       (>= (:blocked-retries (ctx/mem c) 0) (max-blocked-retries))
       (finish! c :abandoned (assoc decided :reason :unreachable))
 
-      (threatened? c) (decline-danger! c (threatened? c))
+      (and (= :collect (:phase (ctx/mem c))) (threatened? c)) (decline-danger! c (threatened? c))
 
       (and (= :collect (:phase (ctx/mem c))) (> (u/dist (u/self-pos c) pos) (stray-range)))
       (do (ctx/update-mem! c assoc :phase :go) :next)
