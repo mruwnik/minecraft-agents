@@ -77,20 +77,21 @@
   "Pure: nil while a mob still chases, else why it stopped. m is the mob as seen now ({:mob :distance :in-line? :way?};
   :way? false: no walkable way, nor a line of fire for a ranged mob), nil when no longer listed (dead, despawned, out
   of tracking); seen-t when it was last in line. Vanilla: a mob drops its target past its follow range or a while out
-  of sight."
+  of sight. A low body (:low?) is not let go by a ranged mob (:ranged?) that is merely out of line: it may come round
+  a corner and throw again."
   [m seen-t now lost-ms]
   (cond
     (nil? m) :gone
     (> (:distance m) (threats/follow-range (:mob m))) :far
-    (and (not (:in-line? m)) (> (- now seen-t) lost-ms)) :lost
+    (and (not (:in-line? m)) (> (- now seen-t) lost-ms) (not (and (:low? m) (:ranged? m)))) :lost
     (false? (:way? m)) :closed
     :else nil))
 
 (defn seen-now
   "What stopped-chasing needs of hostile e (a JS entity; visible: a clear line from the eye, whichever way the body
   faces). A way: a walkable way to the body, or for a ranged mob a line of fire (a shut door takes both)."
-  [p e]
-  {:mob (.-name e) :distance (danger-q/mob-distance p e) :in-line? (true? (.-visible e))
+  [p e low?]
+  {:mob (.-name e) :low? low? :ranged? (boolean (combat/ranged? e)) :distance (danger-q/mob-distance p e) :in-line? (true? (.-visible e))
    :way? (or (reach/walkable-way? p (danger-q/mob-pos p e) (u/pos-of (.-pos (.self p))))
              (and (combat/ranged? e) (danger-q/danger? p e {:sight? false})))})
 
@@ -131,8 +132,9 @@
   join or are seen afresh; one that stopped chasing (stopped-chasing) moves to :fled with :ended why. The chasers
   still on, as JS entities, nearest first. A mob that hurt the body in its refuge (:reached) has a way whatever the map says."
   [c]
-  (let [{:keys [radius ranged-radius lost-s]} (:args c)
+  (let [{:keys [radius ranged-radius lost-s hide-health]} (:args c)
         p (:primitives c)
+        low? (<= (.-health (.self p)) hide-health)
         now (ctx/now c)
         dead (set (dead-ids c))
         live (remove #(dead (.-id %)) (known-chasers p))
@@ -146,7 +148,7 @@
                      :let [e (listed id)
                            seen-t (if (and e (true? (.-visible e))) now (:seen-t ch))
                            ch (cond-> (assoc ch :seen-t seen-t) e (-> (dissoc :pos :direction :band :from) (merge (threats/place-of p e))))
-                           m (some->> e (seen-now p))
+                           m (when e (seen-now p e low?))
                            why (stopped-chasing (cond-> m (and m (contains? reached id)) (assoc :way? true)) seen-t now (* 1000 lost-s))]]
                  {:id id :ch ch :e e :why why
                   :look-back? (and (unsensed-loss? e why) (not (looked id)) (not (dead id)))})

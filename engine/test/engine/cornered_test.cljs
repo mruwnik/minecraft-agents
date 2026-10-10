@@ -6,6 +6,7 @@
             [jobs.lib.ledger :as ledger]
             [jobs.lib.world-files :as ew]
             [engine.memory :as mem]
+            [engine.ctx :as ctx]
             [engine.registry :as registry]
             [engine.core :as core]
             [engine.events :as events]
@@ -632,6 +633,31 @@
               (is (not-any? #(> (first %) -3) (placed-cells p)) (str what ": no seal beside it " (placed-cells p)))
               (is (< (:x (first-move eng)) 0) (str what ": it walks away first")))
             (recur more)))))))
+
+(def standing-go-to
+  "A go-to whose walk stands searching: it ends a leg at once, the body where it was."
+  (fn [n] {:check (constantly true)
+           :round (fn ^:async stand [c] (swap! n inc) (ctx/result! c {:arrived false :leg true}) :done)}))
+
+;; a go-to that stands searching under a skeleton's fire is no flight: one stalled step, then it takes cover where it stands
+(deftest a-low-body-whose-cover-step-stands-still-takes-cover-where-it-stands
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [n (atom 0)
+              wall (into {} (for [z (range 3 6) y [64 65 66]] [(key-of 2 y z) "stone"]))
+              {:keys [eng p]} (setup {:self {:pos [0.5 64 0.5] :health 1}
+                                      :inventory [{:name "cobblestone" :count 20}]
+                                      :blocks wall
+                                      :entities [(assoc (skeleton 6.5 64 0.5) :visible true)]})
+              eng (assoc-in eng [:jobs 'jobs.movement.go-to] (standing-go-to n))]
+          (core/submit! eng retreat {})
+          (let [round (core/tick! eng)]
+            (loop [i 0] (when (and (empty? (calls p "place")) (< i 250)) (await (sleep 20)) (recur (inc i))))
+            (swap! (fake/state p) assoc :entities [])
+            (await round))
+          (is (pos? (count (calls p "place"))) "sealed in")
+          (is (<= 1 @n 2) "after one or two stalled steps"))))))
 
 ;; a skeleton only heard (its rough spot) is no line of fire to hide from: the low body walks
 (deftest a-low-body-does-not-seal-in-from-a-heard-only-skeleton

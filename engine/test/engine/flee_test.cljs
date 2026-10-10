@@ -87,6 +87,15 @@
     (is (= :closed (retreat-flight/stopped-chasing (assoc chasing :way? false) now now lost-ms)))
     (is (= :far (retreat-flight/stopped-chasing {:mob "skeleton" :distance 17 :in-line? true} now now lost-ms)))))
 
+(deftest a-low-body-keeps-fleeing-a-ranged-mob-that-lost-its-line-while-near
+  (let [now 10000 lost-ms 4000
+        witch {:mob "witch" :distance 6 :in-line? false :way? true :ranged? true}]
+    (is (= :lost (retreat-flight/stopped-chasing witch 0 now lost-ms)) "a healthy body lets it go")
+    (is (nil? (retreat-flight/stopped-chasing (assoc witch :low? true) 0 now lost-ms)) "a low one may not rest 6 blocks from it")
+    (is (= :far (retreat-flight/stopped-chasing (assoc witch :low? true :distance 17) 0 now lost-ms)))
+    (is (= :lost (retreat-flight/stopped-chasing {:mob "zombie" :distance 6 :in-line? false :way? true :low? true} 0 now lost-ms))
+        "a melee mob out of line is still let go")))
+
 (deftest decide-moved-to-combat-unchanged
   (is (= :fight (cost/decide {:health 20 :damage 10 :creeper? false :reserve 4})))
   (is (= :flee (cost/decide {:health 20 :damage 17 :creeper? false :reserve 4})))

@@ -59,6 +59,7 @@
   covered step, it takes cover where it stands first: seal in, else dig down and plug, else a side pocket (as below);
   none of them possible, it walks on. A seal begun where it stands is finished before it walks on (refuge/sealing-here?).
   Not while a creeper chases it or a melee mob is within cover-gap: it walks (or backs off, cornered) first.
+  A step of at most 1.5 s there that left the body where it stood (a search) is followed by that cover at once.
   4. Cornered (no open direction worth a walk, or the walk is blocked, or a melee hostile within 3 hit the body since the last step: it cannot be outrun, and the fight is weighed over those hostiles alone; checked afresh every step) with no hostile within
      :radius: holds a second (wait, why cornered) and looks again; after :no-gain-steps such steps or holds with no gain the flight ends :keeps-off. With one within :radius: takes the safest option it has not yet failed.
      - an angry enderman near (one the client flags angry, that hurt the body this flight or is within 3 blocks; it teleports; a walk is no flight): at once, before any walk: water within 6 blocks (it keeps away from water; the body steps in and holds), else a seen 2-high gap under a roof within 8 blocks (a 3-tall enderman cannot enter; walks there and holds), else seal, pit, pocket, last of all fight.
@@ -124,6 +125,12 @@
 (def flight-timeout-s
   "Bound of one step of the flight: the mob moves, so the next step aims again."
   5)
+
+(def low-leg-s
+  "Bound of a flight step while exposed low in a ranged chaser's line of fire: a search that stands still must not last."
+  1.5)
+
+(def stall-blocks "A low step that moved the body less than this stood still: cover where it stands comes next." 1)
 
 (defn home-pos
   "The position of the latest :bed or :home entry within :home-range blocks of the body, or nil."
@@ -250,15 +257,17 @@
          (sort-by #(- (u/dist % threat)))
          first)))
 
-(defn ^:async step!
-  "One flee step to target as a go-to child (a flee never digs or pillars: :escalate false; known dangers stay costed):
-  true when the body arrived or got on a leg nearer, false when go-to gave up, waited or was declined."
-  [c slot target range]
+(defn ^:async leg-step!
+  "One flee step to target as a go-to child of legs of at most leg-s seconds (a flee never digs or pillars: :escalate false;
+  known dangers stay costed): true when the body arrived or got on a leg nearer, false when go-to gave up, waited or was declined."
+  [c slot target range leg-s]
   (let [r (await (ctx/call-child c slot 'jobs.movement.go-to {:pos target :range range :escalate false :at-night :go
-                                                              :warn false :leg-s flight-timeout-s
+                                                              :warn false :leg-s leg-s
                                                               :retry false :look-round false :allow-over-budget true}))
         res (when (= :done r) (ctx/child-result c slot))]
     (boolean (or (:arrived res) (:leg res)))))
+
+(defn step! [c slot target range] (leg-step! c slot target range flight-timeout-s))
 
 (defn ^:async back-off!
   "Step back from threat (back-off-target): :again, nil when there is no such cell or the walk is blocked."
@@ -728,9 +737,10 @@
             gap0 (flight/nearest-gap p threats)
             goal-gap0 (when leg (u/dist (u/self-pos c) leg))
             target (or leg (await (flight-target! c threats covered? rooms)))
+            low? (exposed-low? c covered?)
             cover (cond
-                    (and (exposed-low? c covered?)
-                         (or (refuge/sealing-here? c) (not (and target (covered? target))))
+                    (and low?
+                         (or (refuge/sealing-here? c) (not (and target (covered? target))) (pos? (:stalled (ctx/mem c) 0)))
                          (not (close-danger? p threats)))
                     (await (take-cover! c))
                     (and target (not (way-up c threats)) (sh/buried? p) (not (close-danger? p threats)))
@@ -741,7 +751,11 @@
           :else
           (let [_ (when (:cornered (ctx/mem c)) (ctx/update-mem! c dissoc :cornered))
                 _ (say-target! c target threats covered?)
-                moved (await (step! c :step target 1))]
+                from (u/self-pos c)
+                moved (await (leg-step! c :step target 1 (if low? low-leg-s flight-timeout-s)))]
+            (ctx/update-mem! c #(if (and low? (< (u/dist from (u/self-pos c)) stall-blocks))
+                                  (update % :stalled (fnil inc 0))
+                                  (dissoc % :stalled)))
             (cond
               (and leg (not (and moved
                                  (>= (or (flight/nearest-gap p threats) js/Infinity) (dec (or gap0 0)))
