@@ -16,6 +16,11 @@
    ::far-flight {:default 16 :doc "Blocks a flight must move the body to tell the agent (hostile.fled)." :spec (a/num-in 0 nil)}
    ::chain-window-ms {:default 60000 :doc "Flights this close together (end to end) add up to one move for hostile.fled." :spec (a/int-in 0 nil)}
    ::resume-gap-ms {:default 5000 :doc "A flight cut for longer than this starts its clocks afresh when it resumes." :spec (a/int-in 0 nil)}})
+
+(def displaced-policy
+  "One :displaced entry, half an hour: the night job may then walk back to a bed up to :urgent-bed-radius away."
+  {:cap 1 :ttl 1800000})
+
 (defn wait-ms [] (settings/get settings ::wait-ms))
 
 (defn dead-ids
@@ -202,7 +207,8 @@
           n (fled-notice origin (u/self-pos c) all why (far-flight))]
       (ctx/forget-where! c :flight (constantly true))
       (if n
-        (ctx/emit! c :hostile.fled :warn n)
+        (do (ctx/emit! c :hostile.fled :warn n)
+            (ctx/remember! c :displaced {:from origin} displaced-policy))
         (when origin (ctx/remember! c :flight {:from origin} {:cap 1 :ttl (settings/get settings ::chain-window-ms)}))))
     (ctx/update-mem! c dissoc :chasers :fled :look-back :looked-back :pocket-tried :pocket-dug)
     (if (= :cannot-escape ended)

@@ -154,6 +154,17 @@
           (await (tu/run-until-empty eng 20))
           (is (= [{:x 20 :y 64 :z 0}] (mapv st/arg-pos (st/calls p "sleep")))))))))
 
+(deftest after-a-far-flight-the-night-takes-a-bed-beyond-the-usual-radius
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (st/setup {:time night :inventory st/dirt-stack :blocks st/floor})]
+          (st/know-bed! eng {:x 100 :y 64 :z 0})
+          (write! eng :displaced {:from {:x 0 :y 64 :z 0}})
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (st/tick-n eng 4))
+          (is (empty? (st/emitted seen :night.bed-too-far)) "a bed 100 blocks away is walked to, not given up on"))))))
+
 (deftest a-bed-too-far-to-walk-to-is-said-once-before-the-body-digs-in
   (async done
     (tu/run-async done

@@ -190,11 +190,11 @@
 
 (defn bed-radius
   "How far a remembered bed may be: :bed-radius, or :urgent-bed-radius once the latest :slept entry is :max-days-awake
-  in-game days old (phantoms come)."
+  in-game days old (phantoms come), or while a :displaced entry stands (a far flight drove the body off its bed)."
   [view {:keys [bed-radius urgent-bed-radius max-days-awake]
          :or {bed-radius default-bed-radius urgent-bed-radius urgent-bed-radius max-days-awake max-days-awake}}]
   (let [days (days-awake-in view)]
-    (if (and days (>= days max-days-awake)) urgent-bed-radius bed-radius)))
+    (if (or (and days (>= days max-days-awake)) (seq (mem/entries view :displaced))) urgent-bed-radius bed-radius)))
 
 (declare walk-leaves-shelter?)
 

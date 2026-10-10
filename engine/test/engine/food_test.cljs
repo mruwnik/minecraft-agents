@@ -67,6 +67,13 @@
     (is (= :urgent (level {:self {:food 2}})) "food 2")
     (is (= :urgent (level {:self {:food 15 :health 5} :inventory [{:name "bread" :count 1}]})) "hurt, food carried")))
 
+(deftest hungry-at-night-only-holds-with-food-to-eat
+  (let [level (fn [world] ((:when (get triggers/all :hungry)) (tu/fake world) {} {}))
+        night 15000]
+    (is (level {:time 6000 :self {:food 4}}) "by day the search goes on")
+    (is (not (level {:time night :self {:food 4}})) "at night nothing is searched for: the body waits sheltered")
+    (is (level {:time night :self {:food 4} :inventory [{:name "bread" :count 1}]}) "carried food is eaten at night")))
+
 ;; ------------------------------------------- the hungry reflex with nothing to eat
 
 (defn hungry-fired [seen]
