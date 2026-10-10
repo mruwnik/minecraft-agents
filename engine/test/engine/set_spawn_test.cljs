@@ -131,10 +131,11 @@
   (async done
     (run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup bed-world)]
+        (let [{:keys [eng p seen]} (setup bed-world)]
           (know-bed! eng bed)
           (mem/write! (:store eng) :spawn-set {:pos bed} policy)
           (core/submit! eng '(jobs.survival.set-spawn) {})
           (await (run-until-empty eng 6))
           (is (= 0 (count (calls p "useOn"))))
+          (is (= 1 (count (emitted seen :spawn_unchanged))))
           (is (= [{:pos bed}] (entries eng :spawn-bed))))))))

@@ -9,7 +9,7 @@
   "Set the respawn point at a bed without sleeping: by day, click the bed (jobs.blocks.use-on walks to where the eye sees it, through the door of a hut) and the
   server answers \"respawn point set\".
   Needs a bed: the :bed argument, else the remembered :bed within :bed-radius (forgotten with a bed_missing warn when its block is seen to be gone), else a bed the body sees. Waits (:no-bed, :night); at night the
-  sleep job sets it. Done at once when the spawn is already known at that bed (jobs.lib.shelter/spawn-known?: :spawn-bed or :spawn-set near it, not reset since).
+  sleep job sets it. Done at once, with a spawn_unchanged event and :why :unchanged, when the spawn is already known at that bed (jobs.lib.shelter/spawn-known?: :spawn-bed or :spawn-set near it, not reset since).
   Returns {:status :completed :spawn pos} when the server set the point (or it was already known); {:status :stopped
   :reason ...} when the click did not set it (:no-bed, :night, :not-set). Writes :spawn-bed {:pos bed} (cap 1, forever),
   which jobs.survival.sleep also writes; warns spawn_not_set when the click did not set it.")
@@ -47,7 +47,8 @@
     (cond
       (nil? bed) (do (ctx/result! c {:status :stopped :reason :no-bed}) :done)
       (sh/spawn-known? (ctx/view c) bed (ctx/now c)) (do (ctx/remember! c :spawn-bed {:pos bed} sh/spawn-bed-policy)
-                                                          (ctx/result! c {:status :completed :spawn bed}) :done)
+                                                          (ctx/emit! c :spawn_unchanged :info {:pos bed :text "the respawn point is already at this bed"})
+                                                          (ctx/result! c {:status :completed :spawn bed :why :unchanged}) :done)
       :else
       (let [w (await (ctx/call-child c :use 'jobs.blocks.use-on {:pos bed :see true}))
             r (ctx/child-result c :use)]
