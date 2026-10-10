@@ -251,13 +251,13 @@
   [c item r made]
   (let [{:keys [short] :as shortage} (craft/no-item (js->clj (.-recipes r)) (js->clj (.-have r)))
         have (js->clj (.-have r))]
-    (when (and (seq short) (fetch/opts c 'jobs.items.craft) (not= made (:fetched-made (ctx/mem c))))
+    (when (and (seq short) (fetch/opts c 'jobs.items.craft) (not (contains? (:fetched (ctx/mem c)) [made short])))
       (ctx/update-mem! c assoc :wants (into {} (map (fn [[name n]] [name (+ n (get have name 0))])) short)))
     (let [f (when (seq (:wants (ctx/mem c))) (await (fetch/fetch! c 'jobs.items.craft problem)))]
       (cond
         f f
         (and (seq (:wants (ctx/mem c))) (nil? (problem c)))
-        (do (ctx/update-mem! c #(-> % (assoc :fetched-made made) (dissoc :wants))) :again)
+        (do (ctx/update-mem! c #(-> % (update :fetched (fnil conj #{}) [made short]) (dissoc :wants))) :again)
 
         :else
         (do (ctx/update-mem! c dissoc :wants)

@@ -428,3 +428,15 @@
               result (await (child-outcome eng job {:item "bread" :fetch false} 20))]
           (is (seq (calls p "look")) "the table behind the body is not known until it looks")
           (is (= {:made 1} result)))))))
+
+(deftest craft-a-gate-fetches-the-planks-its-own-sticks-used-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [n [1]]
+          (let [[result p] (await (craft {:blocks table-block
+                                          :recipes {"oak_fence_gate" {:count 1 :needs {"oak_planks" 2 "stick" 4} :table true}}
+                                          :inventory [{:name "oak_log" :count 11} {:name "oak_planks" :count 2}]}
+                                         {:item "oak_fence_gate" :count n}))]
+            (is (= n (get (inv p) "oak_fence_gate")) (str "gate x" n))
+            (is (= {:made n} (select-keys result [:made])) (pr-str result))))))))
