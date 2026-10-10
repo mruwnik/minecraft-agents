@@ -120,6 +120,16 @@ test('./bin/goal sets, shows and clears the bound body goal file', t => {
   assert.equal(fs.existsSync(path.join(dir, 'goal.edn')), false)
 })
 
+test('every bound tool call logs a start and an end line in the body folder', t => {
+  const f = fixture(t)
+  const dir = path.join(f.worlds, 'w', 'agents', 'B')
+  fs.mkdirSync(dir, { recursive: true })
+  f.run('goal', ['dig a well'])
+  const lines = fs.readFileSync(path.join(dir, 'logs', 'tool-calls.edn'), 'utf8').trim().split('\n')
+  assert.match(lines[0], /^\{:t :start, .*:tool "goal", :argv \["dig a well"\]/)
+  assert.match(lines[1], /^\{:t :end, .*:exit 0, :ok true/)
+})
+
 test('player help shows the ./bin form, no body/world plumbing, and says what output means', t => {
   const f = fixture(t)
   const help = command => f.run(command, ['--help']).stdout

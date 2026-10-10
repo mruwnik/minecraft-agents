@@ -3,11 +3,30 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { loadTools } from './agent-tools-loader.mjs'
-const tools = loadTools(['ednWrite', 'workspaceGenerate', 'workspaceRoute', 'workspaceUsage', 'workspacePlayerUsage', 'workspacePlayerError', 'workspacePlayerEdn', 'workspaceErrorEdn'])
+const tools = loadTools(['ednWrite', 'workspaceGenerate', 'workspaceRoute', 'workspaceUsage', 'workspacePlayerUsage', 'workspacePlayerError', 'workspacePlayerEdn', 'workspaceErrorEdn', 'callLogBegin', 'callLogFinish'])
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 
+// Logs the call to the body's tool-calls.edn; the tee only reads what the tool prints.
 export async function runBound (context, command, argv) {
+  const call = tools.callLogBegin(fileURLToPath(context), command, argv)
+  const writeOut = process.stdout.write.bind(process.stdout)
+  let printed = ''
+  process.stdout.write = (text, ...rest) => {
+    if (typeof text === 'string') printed += text
+    return writeOut(text, ...rest)
+  }
+  let exit = 2
+  try {
+    exit = await runTool(context, command, argv)
+    return exit
+  } finally {
+    process.stdout.write = writeOut
+    tools.callLogFinish(call, exit, printed)
+  }
+}
+
+async function runTool (context, command, argv) {
   try {
     const args = tools.workspaceRoute(fileURLToPath(context), command, argv)
     const module = await import(new URL(`./${command}.mjs`, import.meta.url))

@@ -774,6 +774,8 @@ node engine/tools/goal.mjs Bob --world test ["fence the pen" [--by NAME] | --cle
 node engine/tools/progress.mjs Bob --world test [--goal j14] [--want iron_ingot:24,iron_pickaxe] [--wait 60m [--stall 10m]]   # one check-in line; --wait returns only on goal end, death, a give-up, needs-you (also a body idle with only look-around left, or hp 4 or less) or a stall
 ```
 
+Every workspace `bin/` call appends a `:start` and an `:end` line (tool, argv, observer, exit, `:wake` of a wait) to `worlds/<world>/agents/<Body>/logs/tool-calls.edn`; an `:end` is missing while the call is open.
+
 - `observe --wait` blocks until addressed chat, new attention, a watched job or action finishing, `body.idle`, an engine restart or the
   timeout (default 60 s). Each named observer (`--observer`) keeps its cursor in `worlds/<world>/observers/<body>/`; delivery
   is at least once. `--chatter none|addressed|all`, `--danger` and `--disconnect` choose what wakes it. Only the first `reconnect-failed` of an
