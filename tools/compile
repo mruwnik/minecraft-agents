@@ -23,7 +23,7 @@
 # Memory: a missing server starts only with MIN_START_MB (3500) available; the compile itself uses the server's heap.
 # A server started outside the main checkout (a git worktree: integration batches, test copies) runs under a `server` slot of
 # tools/res-slot (held for the server's life, so its JVM counts against the memory floor; kind apart from compiles, max 4); no free slot in ~2 min exits 75 (retry).
-# Every server stops itself after an idle time without a compile: MC_COMPILE_SERVER_IDLE_S (default 1200) for a worktree, MC_COMPILE_MAIN_IDLE_S (1800) for the main checkout (tools/compile-idle-watch, started with it: kills only that pid with that start time, never during a compile; the next compile restarts it).
+# Every server stops itself after an idle time without a compile: MC_COMPILE_SERVER_IDLE_S (default 600) for a worktree, MC_COMPILE_MAIN_IDLE_S (1800) for the main checkout (tools/compile-idle-watch, started with it: kills only that pid with that start time, never during a compile; the next compile restarts it).
 # That start waits before queueing (under <lock>.start only), so the global compile lock is free meanwhile.
 # A build that prints an :undeclared-var or :undeclared-ns warning exits 1 (shadow-cljs itself exits 0).
 # Env: MC_COMPILE_LOG=1 prints "waited Ns, compiled Ns".
@@ -84,7 +84,7 @@ start_server() {
   # the background subshell must drop the lock fds (8, 9) too, or it holds the lock until the server dies
   slot=()
   idle=${MC_COMPILE_MAIN_IDLE_S:-1800}
-  [ "$(cd "$repo" && git rev-parse --git-dir)" = "$(cd "$repo" && git rev-parse --git-common-dir)" ] || { idle=${MC_COMPILE_SERVER_IDLE_S:-1200}
+  [ "$(cd "$repo" && git rev-parse --git-dir)" = "$(cd "$repo" && git rev-parse --git-common-dir)" ] || { idle=${MC_COMPILE_SERVER_IDLE_S:-600}
     slot=(env RES_SLOT_MAX_WAIT_MS=${RES_SLOT_MAX_WAIT_MS:-120000} "$repo/tools/res-slot" server --); }
   # The server is shared by every agent: double fork so it is no descendant of the caller's shell, and drop the agent label
   # (LIVE_TESTS_AGENT_ID), so agent-usage attributes it to no agent (agent_reap of the starter must not kill it). The idle watcher stops it.

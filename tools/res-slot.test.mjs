@@ -183,5 +183,5 @@ test('config: shadow-cljs servers have their own slot kind, with room for severa
   const res = JSON.parse(fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), 'res-slot.json'), 'utf8'))
   assert.equal(res.kinds.compile, undefined)
   assert.equal(res.kinds.server.needMb, 2000)
-  assert.ok(res.kinds.server.max >= 4)
+  assert.ok(res.kinds.server.max >= 6)
 })
