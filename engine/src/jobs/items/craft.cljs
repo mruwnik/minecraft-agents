@@ -280,7 +280,8 @@
           made (- (storage/carried (u/inventory p) item) start)]
       (when table (ctx/update-mem! c assoc :table table))
       (case status
-        "crafted" (finish! c made {})
+        "crafted" (do (ctx/emit! c :craft.done :info {:text (str "crafted " made " " item) :item item :made made})
+                      (finish! c made {}))
         "no-item" (await (short! c item r made))
         "partial" (if (= "no-item" (.-reason r))
                     (await (short! c item r made))

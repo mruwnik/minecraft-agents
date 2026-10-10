@@ -76,17 +76,19 @@
   (boolean (and (:gather? st) (or (gatherable? item) (contains? (:materials st) item) (contains? (:raw st) item)))))
 
 (defn acquire
-  "State st with n of item taken from what is carried, the rest crafted; nil when it cannot be had."
+  "State st with n of item taken from what is carried, the rest crafted; nil when it cannot be had, or when item is
+  one being made up the chain (a carried ingot is not crafted down to nuggets to make ingots)."
   [rs st item n chain depth]
-  (let [have (get-in st [:have item] 0)
-        use (min have n)
-        st (update-in st [:have item] (fnil - 0) use)
-        deficit (- n use)]
-    (cond
-      (zero? deficit) st
-      (gathered? st item) (update-in st [:gather item] (fnil + 0) deficit)
-      :else (when-let [st (make rs st item deficit chain depth)]
-              (update-in st [:have item] - deficit)))))
+  (when-not (chain item)
+    (let [have (get-in st [:have item] 0)
+          use (min have n)
+          st (update-in st [:have item] (fnil - 0) use)
+          deficit (- n use)]
+      (cond
+        (zero? deficit) st
+        (gathered? st item) (update-in st [:gather item] (fnil + 0) deficit)
+        :else (when-let [st (make rs st item deficit chain depth)]
+                (update-in st [:have item] - deficit))))))
 
 (defn short-count
   "How many of the recipe's ingredients (for batches crafts) the state lacks."

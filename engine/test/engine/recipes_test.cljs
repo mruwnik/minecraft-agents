@@ -84,3 +84,6 @@
 (deftest a-gathered-chain-prefers-no-furnace
   (is (= {"coal" 1} (:gather (plan {"stick" 1} "torch" 4 {:gather? true :smelts {"charcoal" ["oak_log"]}})))
       "coal is gathered rather than a log smelted to charcoal"))
+
+(deftest a-needed-item-is-never-crafted-down-to-be-crafted-back
+  (is (nil? (plan {"iron_ingot" 3} "iron_ingot" 3 {:table? true})) "ingots are not turned into nuggets to make more ingots"))

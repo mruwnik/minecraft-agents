@@ -43,9 +43,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p _ eng] (await (craft {:inventory [{:name "oak_log" :count 1}]} {:item "oak_planks" :count 4}))]
+        (let [[result p seen eng] (await (craft {:inventory [{:name "oak_log" :count 1}]} {:item "oak_planks" :count 4}))]
           (is (= {"oak_planks" 4} (inv p)))
           (is (= {:made 4} result))
+          (is (= ["crafted 4 oak_planks"] (map :text (filter #(= :craft.done (:kind %)) @seen))) "a craft shows in the events")
           (is (empty? (tu/walked-to eng))))))))
 
 (deftest craft-walks-to-a-table-then-crafts
