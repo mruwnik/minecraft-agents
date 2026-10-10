@@ -5,7 +5,8 @@
             [engine.hostile-test :as h]
             [engine.fake :as fake]
             [engine.test-util :as tu]
-            [jobs.animals.tend :as tend]))
+            [jobs.animals.tend :as tend]
+            [jobs.lib.world-files :as ew]))
 
 (def box {:min {:x 0 :y 60 :z -5} :max {:x 8 :y 70 :z 5}})
 
@@ -281,3 +282,49 @@
           (is (true? (finished? s)))
           (is (< (.-x (.-pos (.self (:p s)))) 12) "it walked to the box to look")
           (is (= 0 (:adults (done-event s)))))))))
+
+
+(def pen-plan
+  {:id "pen" :metadata {:by "Fake"} :parts [{:id "cows" :box [[0 60 -5] [8 70 5]] :want "air" :herd {:mob "cow" :target 4}}]})
+
+(defn ^:async plan-scenario
+  "Submit form over a world whose plans are plans; run n ticks 700 ms apart; the setup map."
+  [form plans world n]
+  (let [s (h/setup world 50 (ew/of-data plans {} []))]
+    (core/submit! (:eng s) form {})
+    (dotimes [_ n]
+      (swap! (:clock s) + 700)
+      (await (core/tick! (:eng s))))
+    s))
+
+(deftest a-pen-part-of-a-plan-gives-the-box-the-kind-and-the-target
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (plan-scenario (list 'jobs.animals.tend {:plan "pen" :part "cows"}) {"pen" pen-plan}
+                                      {:inventory [(wheat 4)] :entities [(cow 1 2) (cow 2 3)]} 12))]
+          (is (= ["wheat" "wheat"] (mapv #(.-item (.-args %)) (interacts s))))
+          (is (= {:mob "cow" :target 4} (select-keys (done-event s) [:mob :target])))
+          (is (true? (finished? s))))))))
+
+(deftest a-part-that-is-no-pen-or-a-missing-plan-starts-no-run-and-the-wait-says-so
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[plan part] [["pen" "nowhere"] ["none" "cows"]]]
+          (let [s (await (plan-scenario (list 'jobs.animals.tend {:plan plan :part part}) {"pen" pen-plan}
+                                        {:inventory [(wheat 4)] :entities [(cow 1 2) (cow 2 3)]} 6))]
+            (is (empty? (interacts s)))
+            (is (= [:plan-trouble] (distinct (map :reason (events-of s :waiting)))))))))))
+
+(deftest a-pass-that-leaves-a-step-to-run-rests-the-pen-so-a-standing-job-does-not-starve-the-queue
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (plan-scenario (list 'repeat (list 'jobs.animals.tend {:plan "pen" :part "cows"})) {"pen" pen-plan}
+                                      {:inventory [(wheat 8)] :entities [(cow 1 2) (cow 2 3)]} 60))]
+          (is (= 1 (count (events-of s :tend.done))) "one pass, then the pen rests")
+          (is (some #(= ["pen/cows"] (:backed-off %)) (events-of s :waiting)) "the wait names the pen")
+          (swap! (:clock s) + 660000)
+          (dotimes [_ 40] (swap! (:clock s) + 700) (await (core/tick! (:eng s))))
+          (is (= 2 (count (events-of s :tend.done))) "after the back-off it tries again"))))))

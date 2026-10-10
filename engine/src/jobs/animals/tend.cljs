@@ -3,10 +3,12 @@
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
             [jobs.lib.look :as look]
+            [jobs.lib.standing :as standing]
             [jobs.lib.steps :as steps]
             [jobs.lib.util :as u]
             [jobs.animals.cull :as cull]
-            [jobs.lib.hunting :as hunting]))
+            [jobs.lib.hunting :as hunting]
+            [jobs.lib.world :as known]))
 
 (def doc
   "Keep one pen of one kind of animal in order. The pen is :box. One run is one pass over five steps in this
@@ -35,12 +37,19 @@
   summary}}. Summaries: breed {:fed n :reason}, cull {:killed :remaining :reason}, shear {:shorn n :reason
   :collected}, collect {:collected}, deposit {:gave-up :reason}.
 
+  With :plan and :part the pen is that part of the plan: its :box, and :mob and :target from its :herd
+  {:mob :target}; the check waits :plan-trouble while the plan, the part or its :herd is missing. A pass that leaves
+  a step that would still run rests the pen 10 minutes (jobs.lib.standing): the check waits {:reason :nothing-to-do
+  :backed-off [pen]}, so the job can stand in the queue under repeat without starving other jobs.
+
   Limit: the box is the only pen there is. An animal inside it may be outside the fence. Breed, shear and
   collect-drops look in a radius around the body that covers the box, so animals or items just outside it can
   be fed, sheared or picked up.")
 
 (a/defargs args
-  {:mob {:doc "mob type name of the animals in the pen" :spec a/name? :default "cow"}
+  {:plan {:doc "id of a plan of the body's world; with :part, the pen is that part (its :box, :herd {:mob :target}) and :box, :mob and :target are not used" :spec a/name? :default nil}
+   :part {:doc "with :plan, the id of the pen part" :spec a/name? :default nil}
+   :mob {:doc "mob type name of the animals in the pen" :spec a/name? :default "cow"}
    :box {:doc "the pen: {:min {:x :y :z} :max {:x :y :z}}, inclusive; required (without it the check declines)" :spec a/box? :default nil}
    :target {:doc "adult herd size wanted; babies count toward it, they grow" :spec (a/int-in 0 nil) :default 4}
    :chest {:doc "chest position {:x :y :z} for the produce; nil: do not store" :spec ::a/pos :default nil}
@@ -158,7 +167,32 @@
   [{:keys [min max]}]
   [(js/Math.floor (/ (+ (:x min) (:x max)) 2)) (js/Math.floor (/ (+ (:z min) (:z max)) 2))])
 
-(defn check [c]
+(defn corner-box
+  "A plan part's :box [[x y z] [x y z]] as {:min :max}."
+  [[[x1 y1 z1] [x2 y2 z2]]]
+  {:min {:x (min x1 x2) :y (min y1 y2) :z (min z1 z2)} :max {:x (max x1 x2) :y (max y1 y2) :z (max z1 z2)}})
+
+(defn pen-of
+  "With :plan, {:args {:box :mob :target}} of the pen part, else {:trouble text}; nil without :plan."
+  [c]
+  (when-let [id (:plan (:args c))]
+    (let [{:keys [part]} (:args c)
+          answer (known/plan c id)
+          found (some #(when (= part (:id %)) %) (:parts (:plan answer)))]
+      (cond
+        (nil? answer) {:trouble "no such plan"}
+        (:broken answer) {:trouble (str "the plan cannot be read: " (:broken answer))}
+        (not found) {:trouble (str "no part " (pr-str part))}
+        (not (and (:box found) (:herd found))) {:trouble (str "part " part " has no :box and :herd")}
+        :else {:args (assoc (:herd found) :box (corner-box (:box found)))}))))
+
+(defn with-pen [c pen] (update c :args merge (:args pen)))
+
+(defn pen-key [c]
+  (let [{:keys [plan part box]} (:args c)]
+    (if plan (str plan "/" part) (pr-str box))))
+
+(defn check-pen [c]
   (let [{:keys [box target] :as args} (:args c)]
     (cond
       (not box) (ctx/wait c {:reason :no-box})
@@ -169,6 +203,18 @@
               (or (boolean (some :call (vals decisions)))
                   (ctx/wait c {:reason :nothing-to-do :adults (:adults f) :babies (:babies f) :target target
                                :skipped (into {} (map (fn [[step d]] [step (:skip d)])) decisions)}))))))
+
+(defn check
+  "Passes when a started run goes on, or the pen is not resting and check-pen passes."
+  [c]
+  (let [{:keys [trouble] :as pen} (pen-of c)
+        c (if pen (with-pen c pen) c)
+        resting (get (standing/rested c 'jobs.animals.tend) (pen-key c))]
+    (cond
+      trouble (ctx/wait c {:reason :plan-trouble :why trouble})
+      (:todo (ctx/mem c)) true
+      resting (ctx/wait c {:reason :nothing-to-do :backed-off [(pen-key c)] :until (:until resting)})
+      :else (check-pen c))))
 
 (defn summary
   "What the report keeps of a child's result."
@@ -184,7 +230,10 @@
   [c report]
   (let [{:keys [mob target]} (:args c)
         {:keys [adults babies]} (cull/census c)
+        f (facts c)
         out {:mob mob :target target :adults (count adults) :babies (count babies) :steps report}]
+    (when (some #(:call (decide % (:args c) f)) steps)
+      (standing/rest! c 'jobs.animals.tend (pen-key c) :undone))
     (ctx/emit! c :tend.done :info (assoc out :text (str "tend done: " (count adults) " adults, " (count babies) " babies")))
     (ctx/result! c out)
     :done))
@@ -219,10 +268,17 @@
 
 (defn ^:async round
   "The whole pass: each step's child once, until the run ends; yields only while a child waits on the world."
-  [c]
-  (loop []
-    (let [r (await (step c))]
-      (case r
-        :again (recur)
-        :yield :continue
-        r))))
+  [c0]
+  (let [{:keys [trouble] :as pen} (pen-of c0)
+        c (if pen (with-pen c0 pen) c0)]
+    (if trouble
+      (do (ctx/warn-once! c [(:plan (:args c)) trouble] :tend.declined
+                          {:plan (:plan (:args c)) :part (:part (:args c)) :reason trouble
+                           :text (str "tend declines plan " (:plan (:args c)) " part " (:part (:args c)) ": " trouble)})
+          :declined)
+      (loop []
+        (let [r (await (step c))]
+          (case r
+            :again (recur)
+            :yield :continue
+            r))))))

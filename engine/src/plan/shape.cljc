@@ -45,7 +45,7 @@
     (assoc :dim (if (str/includes? dim ":") dim (str "minecraft:" dim)))))
 
 (def where-keys [:box :outline :cells :stair])
-(def area-part-keys #{:id :box :outline :cells :stair :want :note})
+(def area-part-keys #{:id :box :outline :cells :stair :want :note :herd})
 (def stair-keys #{:from :heading :to-y})
 (def blueprint-part-keys #{:id :blueprint :at :turn :note})
 (def blueprint-keys #{:id :front :key :layers :spots :note})
@@ -131,6 +131,16 @@
     (> (* 3 (stair-steps stair)) max-cells) (str ":stair too large (" (* 3 (stair-steps stair)) " cells, at most " max-cells ")")
     :else (unknown-key-error stair stair-keys)))
 
+(defn herd-error
+  "Why a pen part's :herd {:mob :target} is bad, or nil (absent is fine)."
+  [herd]
+  (cond
+    (nil? herd) nil
+    (not (map? herd)) ":herd must be a map {:mob \"cow\" :target 4}"
+    (not (string? (:mob herd))) ":herd needs a :mob name"
+    (not (and (integer? (:target herd)) (>= (:target herd) 0))) ":herd needs a :target count"
+    :else (unknown-key-error herd #{:mob :target})))
+
 (defn area-part-error [part]
   (let [wheres (filter #(contains? part %) where-keys)
         where (first wheres)]
@@ -143,7 +153,7 @@
       (and (= :cells where) (not (and (vector? (:cells part)) (seq (:cells part)) (every? coords? (:cells part)))))
       ":cells needs a non-empty list of [x y z] integers"
       (not (contains? part :want)) "a part needs a :want"
-      :else (or (want-error (:want part)) (unknown-key-error part area-part-keys)))))
+      :else (or (want-error (:want part)) (herd-error (:herd part)) (unknown-key-error part area-part-keys)))))
 
 (defn blueprint-part-error [part]
   (cond

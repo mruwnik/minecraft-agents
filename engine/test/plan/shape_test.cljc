@@ -68,6 +68,8 @@
     {:id "x" :box [[0 0 0] [1 0 1]] :want [:any "stone" :clear]} "want"
     {:id "x" :box [[0 0 0] [1 0 1]] :want {:block 3}} "want"
     {:id "x" :box [[0 0 0] [1 0 1]] :want "stone" :harvest true} ":harvest"
+    {:id "x" :box [[0 0 0] [1 0 1]] :want "air" :herd {:mob "cow"}} ":herd"
+    {:id "x" :box [[0 0 0] [1 0 1]] :want "air" :herd {:mob "cow" :target 4 :food "wheat"}} "unknown key :food"
     {:id "x" :box [[0 0 0] [1 0 1]] :want "stone" :yield 3} ":yield"
     {:id "x" :box [[0 0 0] [500 0 500]] :want "stone"} "too large"
     {:id "x" :stair {:from [0 64 0] :heading :east :to-y 60} :cells [[0 0 0]] :want :clear} "one of :box"
