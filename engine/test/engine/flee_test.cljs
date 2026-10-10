@@ -204,6 +204,20 @@
             (is (> (calls) 400) "the chase went on past the old 180 s bound, until the zombie left")
             (is (not= :still-chased (:reason out)))))))))
 
+(deftest a-flight-that-keeps-taking-hits-from-a-melee-mob-turns-and-fights-an-armed-body
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup {:inventory [{:name "stone_sword" :count 1}] :entities [(zombie 7 2 {:chase {:speed 1}})]})
+              {:keys [p]} s
+              world (.-world p)]
+          (.override world "steer" (fn ^:async f [token a impl]
+                                     (swap! (fake/state p) update-in [:self :health] - 2)
+                                     (when (> (.-length (.-calls world)) 60) (swap! (fake/state p) assoc :entities []))
+                                     (await (impl token a))))
+          (await (run-job! s 'jobs.survival.retreat {}))
+          (is (pos? (count (filter #(= "attack" (.-name %)) (.-calls world)))) "outrun by a zombie that hits it, it hits back"))))))
+
 (deftest a-chase-that-gains-no-distance-escalates-and-a-gain-resets-it
   (let [step (fn [mem gap] (retreat-flight/note-gap mem gap))]
     (is (= {:best-gap 5 :since-gain 0 :sweeps 0} (step {:sweeps 1} 5)) "first gap is a gain")

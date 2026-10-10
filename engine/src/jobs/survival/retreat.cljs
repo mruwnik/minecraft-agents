@@ -53,7 +53,7 @@
   covered step, it takes cover where it stands first: seal in, else dig down and plug, else a side pocket (as below);
   none of them possible, it walks on. A seal begun where it stands is finished before it walks on (refuge/sealing-here?).
   Not while a creeper chases it or a melee mob is within cover-gap: it walks (or backs off, cornered) first.
-  4. Cornered (no open direction worth a walk, or the walk is blocked; checked afresh every step) with no hostile within
+  4. Cornered (no open direction worth a walk, or the walk is blocked, or a melee hostile within 3 hit the body since the last step: it cannot be outrun, and the fight is weighed over those hostiles alone; checked afresh every step) with no hostile within
      :radius: holds a second (wait, why cornered) and looks again; after :no-gain-steps such steps or holds with no gain the flight ends :keeps-off. With one within :radius: takes the safest option it has not yet failed.
      - an angry enderman near (one the client flags angry, that hurt the body this flight or is within 3 blocks; it teleports; a walk is no flight): at once, before any walk: water within 6 blocks (it keeps away from water; the body steps in and holds), else seal, pit, pocket, last of all fight.
      - a drowned near while the body is in water (and no fight wins): swims to the nearest seen dry stand within 16 blocks first (past the mob if need be), before seal, pillar or a fist fight.
@@ -195,6 +195,27 @@
         hurt? (< (.-health (.self p)) (:flight-health (ctx/mem c) 0))]
     (boolean (some #(and (combat/enderman? %) (or hurt? (true? (.-angry %)) (<= (danger-q/mob-distance p %) enderman-close))) hostiles))))
 
+(def hit-reach
+  "Blocks within which a melee hostile counts as the one that hit the body."
+  3)
+
+(defn hitters
+  "Of hostiles, the melee ones (not a creeper or an enderman) within hit-reach."
+  [c hostiles]
+  (filterv #(and (not (combat/ranged? %)) (not (combat/creeper? %)) (not (combat/enderman? %))
+                 (<= (danger-q/mob-distance (:primitives c) %) hit-reach))
+           hostiles))
+
+(defn hit-on-the-run!
+  "Whether the body lost health since the previous flight step with a hitter near: a chaser that hits it cannot be
+  outrun. Noted in job memory (:hit-on-the-run), with the health, for the cornered options' odds."
+  [c]
+  (let [health (.-health (.self (:primitives c)))
+        prev (:step-health (ctx/mem c))
+        hit? (boolean (and prev (< health prev) (seq (hitters c (near-hostiles c)))))]
+    (ctx/update-mem! c assoc :step-health health :hit-on-the-run hit?)
+    hit?))
+
 (defn fight-wins?
   "Whether fighting hostiles with the best weapon carried is expected to leave :reserve health
   (jobs.lib.cost/fight-damage); never against a creeper."
@@ -314,7 +335,7 @@
   (let [{:keys [weapons]} (:args c)
         hostiles (near-hostiles c)
         threat (first hostiles)
-        order (escape-order {:win? (fight-wins? c hostiles)
+        order (escape-order {:win? (fight-wins? c (if (:hit-on-the-run (ctx/mem c)) (hitters c hostiles) hostiles))
                              :creeper? (boolean (some combat/creeper? hostiles))
                              :enderman? (angry-enderman? c hostiles)
                              :flyer? (boolean (some combat/flyer? hostiles))
@@ -573,6 +594,7 @@
         p (:primitives c)
         threats (flight/look! c)
         threat (first threats)
+        hit? (hit-on-the-run! c)
         door (when threat (door-to-shut c (danger-q/mob-pos p threat)))
         covered? (cover-fn p threats)
         rooms (when threat (refuges c))
@@ -590,6 +612,7 @@
       (do (when (seq (near-hostiles c)) (ctx/update-mem! c assoc :since-gain 0))
           (await (stuck "the chaser keeps up")))
       (angry-enderman? c (near-hostiles c)) (await (cornered! c "an enderman cannot be outrun" inside?))
+      hit? (await (cornered! c "a hostile keeps hitting the body as it flees" inside?))
       (some combat/flyer? (near-hostiles c)) (await (cornered! c "a phantom cannot be outrun" inside?))
       door (await (shut-door! c door))
       (and inside? (home-door c room)) (await (shut-home-door! c (home-door c room)))
