@@ -225,6 +225,19 @@
           (is (= {:pos {:x 0 :y 60 :z 0} :roof {:x 0 :y 62 :z 0} :start {:x 0 :y 64 :z 0} :state :built}
                  (last (entries eng :shelter)))))))))
 
+(deftest a-door-dug-open-in-a-pit-shelter-is-followed-by-the-climb-not-by-a-step-back
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p out] :as s} (setup {:blocks (dissoc (ground) "0,62,0" "0,63,0") :self {:pos {:x 0.5 :y 62 :z 0.5}} :inventory dirt-kit})]
+          (mem/write! (:store eng) :shelter
+                      {:pos {:x 0 :y 62 :z 0} :state :built :start {:x 0 :y 64 :z 0}
+                       :door [{:x 1 :y 62 :z 0} {:x 1 :y 63 :z 0}]}
+                      {:cap 10 :ttl 1200000})
+          (await (leave-at-dawn! s))
+          (is (= [:done :out] ((juxt :status :reason) @out)) "leave! ends, it does not step in and out of the door")
+          (is (<= 64 (second (feet p))) "up out of the pit"))))))
+
 (defn have [p item]
   (->> (array-seq (.-inventory (.self p))) (filter #(= item (.-name %))) (map #(.-count %)) (reduce + 0)))
 

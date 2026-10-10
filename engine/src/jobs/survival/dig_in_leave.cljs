@@ -210,7 +210,8 @@
   plus :why (:unsafe), :heading (the stair that got it out) or :tries ({:heading :reason :cell} per stopped stair).
   The shelter is the latest :shelter entry when the body stands in its :pos and is shut in. Without one: done, :out.
   At night nothing is dug: stopped, :unsafe, :why :night. By day it leaves whatever hostiles are around.
-  - A walled shelter: digs its :door cells (feet, then head), then steps through to the cell beyond if it has a floor.
+  - A walled shelter: digs its :door cells (feet, then head), then steps through to the cell beyond if it has a floor;
+    still shut in by a pit :start with the door open, it climbs.
   - A pit (:start) or a roofed shaft (no :start, no :door): a stair up (jobs.access.stair :up) to the start height.
     A shaft goes one step at a time until nothing solid is within 4 above (at most 32 steps, else :too-deep).
     The heading nearest :toward goes first. The stair refuses lava, water, falling blocks and a missing floor,
@@ -235,5 +236,5 @@
        (and (not shut?) take-back? (not (leave-unsafe p)) (= :continue (await (take-back! c)))) :continue
        (not shut?) (leave-result! c :done :out (select-keys (leave-mem c) [:heading]))
        why (leave-result! c :stopped :unsafe {:why why})
-       (:door entry) (await (open-door! c (:door entry)))
+       (some #(sh/solid-at? p %) (:door entry)) (await (open-door! c (:door entry)))
        :else (await (climb! c entry toward))))))
