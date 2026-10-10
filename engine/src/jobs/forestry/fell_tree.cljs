@@ -467,17 +467,29 @@
     (not (axe-worth-fetching? (:first-logs (ctx/mem c) 0))) :skipped-small-tree
     :else :none-found))
 
+(def at-range "Blocks from the :at column the body walks to when it has not seen the cell." 6)
+
+(defn ^:async walk-to-at!
+  "With :at on a cell the body has not seen, walk to within at-range of it (one go-to call) so the column can be read.
+  :partial while that walk goes on, else nil."
+  [c]
+  (when-let [at (:at (:args c))]
+    (when-not (u/seen-name (:primitives c) at)
+      (when (= :partial (await (near/go-near! c at at-range {:zone-tolls true}))) :partial))))
+
 (defn ^:async step
   "One piece of the felling: :again, :continue (a child waits on the world, or nothing is in sight), :done or a stop."
   [c]
   (let [{:keys [species radius]} (:args c)
-        _ (when (and (not (:column (ctx/mem c))) (not (first (candidates c radius species))))
-            (await (look/survey! c :cell)))
+        walked (when (and (not (:column (ctx/mem c))) (not (first (candidates c radius species))))
+                 (or (await (walk-to-at! c)) (await (look/survey! c :cell))))
         _ (when (and (not (:pillar (ctx/mem c))) (open-scaffold? c))
             (set-pillar! c {:phase :clean}))
         fresh? (not (:column (ctx/mem c)))
         chosen (or (:column (ctx/mem c)) (await (choose-tree! c radius species)))]
     (cond
+      (= :partial walked) :continue
+
       (= :searching chosen) :again
 
       (and fresh? chosen (trip/food-short? c))

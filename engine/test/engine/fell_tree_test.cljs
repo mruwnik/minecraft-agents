@@ -533,3 +533,23 @@
               out (await (tu/child-outcome (:eng s) 'jobs.forestry.fell-tree {:radius 10} 50))]
           (is (= :hungry (:reason out)))
           (is (empty? (dug-ys (:p s))) "dug nothing"))))))
+
+(defn ^:async fell-far-unseen
+  "fell over a world where the trunk at x 30 reads as never seen until the body stands within 12 blocks of it."
+  [args n]
+  (let [s (fm/start {:blocks (lt/tree 30 0 "oak" 3)} {})
+        p (:p s)
+        sensed (.-sensedAt p)
+        block-at (.-seenBlockAt p)
+        hidden? (fn [pos] (and (= 30 (.-x pos)) (> (- 30 (.-x (.-pos (.self p)))) 12)))]
+    (eye-reach! p)
+    (aset p "sensedAt" (fn [pos] (if (hidden? pos) #js {:unknown true} (.call sensed p pos))))
+    (aset p "seenBlockAt" (fn [pos] (if (hidden? pos) #js {:unknown true :pos pos} (.call block-at p pos))))
+    (assoc s :out (await (tu/child-outcome (:eng s) 'jobs.forestry.fell-tree args n)))))
+
+(deftest an-at-column-not-in-sight-is-walked-to-and-felled
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (fell-far-unseen {:at {:x 30 :y 64 :z 0}} 300))]
+          (is (seq (filter #(= 30 (first %)) (fm/digs p))) "the unseen column was walked to and dug"))))))
