@@ -1,6 +1,7 @@
 (ns jobs.animals.pen-check
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.lib.animals :as animals]
             [jobs.lib.apiary :as apiary]
             [jobs.lib.near :as near]
             [jobs.lib.pen :as pen]
@@ -23,7 +24,8 @@
     listed, :leaks-total gives the count when more.
   - :cells counts the inside cells. For a leaky pen without a box it counts the cells the pen would enclose with
     its leaks shut, and 0 when shutting up to 4 rounds of them does not close it (a low wall all round).
-  - :gates lists every fence gate in or beside those cells with :open?.")
+  - :gates lists every fence gate in or beside those cells with :open?.
+  - :animals lists the livestock seen on those cells as {:kind :id :pos [x y z]}, :animals-in counts them, so a loss can be dated from the log.")
 
 (a/defargs args
   {:at {:doc "feet cell [x y z] or {:x :y :z} of a spot inside the pen (the floor's top, where the animal's feet are)" :spec ::a/pos :default nil}
@@ -35,6 +37,8 @@
       (ctx/wait c {:reason :no-pen :why "needs :at or :box"})))
 
 (def max-walks 3)
+
+(def animal-radius 48)
 
 (defn unseen-leak
   "The nearest-listed leak cell that is unseen, as {:x :y :z}."
@@ -53,7 +57,8 @@
     (case walk
       :partial :continue
       :there (do (ctx/update-mem! c update :walks (fnil inc 0)) :continue)
-      (let [result (pen/summary checked)]
+      (let [rows (animals/in-pen-rows (:primitives c) checked animal-radius)
+            result (assoc (pen/summary checked) :animals rows :animals-in (count rows))]
         (ctx/emit! c :pen-check.done :info
                    (assoc result :text (if (:closed? result)
                                          (str "pen closed, " (:cells result) " cells")

@@ -199,6 +199,7 @@
           (is (finished? s))
           (is (= :brought (:reason (done-event s))))
           (is (every? in-pen? [(cow-of s 1) (cow-of s 2)]))
+          (is (= [[1 "cow"] [2 "cow"]] (sort (map (juxt :id :kind) (:animals (done-event s))))) "the animals in the pen are logged")
           (is (not (gate-open? s))))))))
 
 (deftest the-held-entry-names-the-gate-cell

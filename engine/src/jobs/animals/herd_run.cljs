@@ -145,14 +145,16 @@
   [c reason & [extra]]
   (let [m (ctx/mem c)
         target (:target (:args c))
-        inside (set (map animals/key-of (in-pen-adults c (read-pen c))))
+        answer (read-pen c)
+        inside (set (map animals/key-of (in-pen-adults c answer)))
+        rows (animals/in-pen-rows (:primitives c) answer (watch-radius))
         brought (filterv inside (:brought m))
         reason (or reason
                    (cond (>= (count (remove (set (keys (:given-up m))) inside)) target) :brought
                          (seq brought) :short
                          :else :short))
         result (merge {:reason reason :inside (count inside) :target target :brought brought
-                       :given-up (:given-up m {}) :gate (:gate m) :escaped (:escaped-total m 0)}
+                       :given-up (:given-up m {}) :gate (:gate m) :escaped (:escaped-total m 0) :animals rows}
                       extra)]
     (when (:gate m) (drop-gate! c))
     (ctx/emit! c :herd.done :info (assoc result :text (str "herd done: " (name reason) ", " (count inside) " of " target " in the pen")))

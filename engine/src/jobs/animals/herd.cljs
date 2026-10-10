@@ -80,7 +80,7 @@
   with the body in the pen goes out, nobody led with the gate open shuts it.
 
   Ends with info herd.done and result {:reason :inside n :target :brought [keys] :given-up {key reason}
-  :gate pos :escaped n}. :inside is counted on the pen's cells at the end. Every reason but :brought and
+  :gate pos :escaped n :animals [{:kind :id :pos}] (the livestock on the pen cells)}. :inside is counted on the pen's cells at the end. Every reason but :brought and
   :full also gives one warn herd.gave-up. An animal is booked brought once, however often it is led. Reasons:
   :brought (pen holds :target), :short (fewer than :target in the pen: some came, or none came and no other
   reason), :full,
