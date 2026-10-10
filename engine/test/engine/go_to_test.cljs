@@ -1,6 +1,6 @@
 (ns engine.go-to-test
   "jobs.movement.go-to over the path planner and the executor, against the fake world."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [deftest is are async]]
             [clojure.string :as str]
             [engine.registry :as registry]
             [engine.core :as core]
@@ -952,6 +952,13 @@
         (let [{:keys [out] :as s} (await (go! {:blocks flat} {:pos [120 64 0]}))]
           (is (= false (:arrived @out)))
           (is (= 0 (count (events-of s :walker-fault))) "the partial plan's end is a normal end, no warn"))))))
+
+(deftest an-off-plan-walk-that-fell-also-avoids-the-cells-above-where-it-left-the-plan
+  (are [result hurt? expected] (= expected (go-to/fault-cells result hurt?))
+    {:status :off-plan :at [1 75 2]} false [[1 75 2]]
+    {:status :off-plan :at [1 75 2]} true (mapv (fn [y] [1 y 2]) (range 75 82))
+    {:status :off-plan :at [1 75 2] :partial true} true nil
+    {:status :stuck :target [3 64 0]} true [[3 64 0]]))
 
 (deftest go-to-routes-round-a-cell-the-walker-got-stuck-on
   (async done

@@ -92,7 +92,7 @@
     bounds it: once the body has walked n blocks since it last came nearer its goal than ever in the call, the call gives
     up :why :explore-spent (:explored the blocks) at the end of that walk.
   - A walk stuck or off its plan at a cell is a go-to.walker-fault warn; the next plans of the call cost that cell
-    (up to 8) far more (wworld/with-avoid), so a way round is taken when there is one.
+    (up to 16; after a fall also the cells above it) far more (wworld/with-avoid), so a way round is taken when there is one.
   - :escalate (default true): a body that is shut in (jobs.lib.reach/enclosed?), not in its own shelter, and whose
     search ran out of land (:exhausted, :goal-enclosed or :goal-cut-off) makes a way instead of giving up, one child job
     each (jobs.lib.escape/choose), at most 3 in a row that start no nearer the goal than one before (escalation/count-escalation): jobs.access.pillar up out of a pit when it carries enough blocks; else
@@ -194,7 +194,11 @@
 (defn waypoint-gain [] (settings/get settings ::waypoint-gain))
 (defn way-looks [] (settings/get settings ::way-looks))
 
-(def max-fault-cells "Cells a call keeps its plans away from (the walker's faults: fault-cells), the oldest dropped." 8)
+(def max-fault-cells "Cells a call keeps its plans away from (the walker's faults: fault-cells), the oldest dropped." 16)
+
+(def hurt-window-ms "How recent a hurt event is that an off-plan walk is taken to have fallen." 10000)
+
+(def fall-column "Cells above the point a damaging off-plan walk left its plan that the next plans avoid too: where the fall began." 6)
 
 (def max-searching
   "Search slices in a row whose search is still going on and began afresh (wsearch/round-budget expansions each) before
@@ -289,18 +293,24 @@
 
 (defn fault-cells
   "The cells a walk that failed at the walker (:stuck at :target, :off-plan at :at) says it cannot pass, [x y z] each.
-  A partial plan walked to its end (:partial) is a normal end."
-  [{:keys [status target at partial]}]
-  (case status
-    :stuck (some-> target vector)
-    :off-plan (when-not partial (some-> at vector))
-    nil))
+  An off-plan walk that was hurt (a fall) also takes the cells above :at, where the fall began (a vine or ladder it
+  left). A partial plan walked to its end (:partial) is a normal end."
+  ([result] (fault-cells result false))
+  ([{:keys [status target at partial]} hurt?]
+   (case status
+     :stuck (some-> target vector)
+     :off-plan (when-not partial
+                 (when-let [[x y z] at]
+                   (if hurt?
+                     (mapv (fn [dy] [x (+ y dy) z]) (range (inc fall-column)))
+                     [at])))
+     nil)))
 
 (defn note-fault!
   "A walk that failed at the walker is a bug to see (a go-to.walker-fault warn) and a cell to keep the next plans off
   (mem :fault-cells, at most max-fault-cells; a new call starts with none): the walks go round it when there is a way."
   [c {:keys [status] :as result}]
-  (when-let [cells (seq (fault-cells result))]
+  (when-let [cells (seq (fault-cells result (pos? (ctx/count-in c :hurt hurt-window-ms))))]
     (ctx/emit! c :walker-fault :warn (cond-> {:why status :target (first cells)}
                                        (:move result) (assoc :kind (:move result))
                                        (:why result) (assoc :detail (:why result))))
