@@ -1490,3 +1490,18 @@
   (try
     (is (= 238525 (sh/ms-until-morning 14000)) "the ticks at 25 ms, plus the same margin")
     (finally (settings/set-clock! 20 false :assumed))))
+
+(defn reads-during
+  "How many sensedAt reads (f) makes on p."
+  [p f]
+  (let [n (atom 0)
+        orig (.-sensedAt p)]
+    (set! (.-sensedAt p) (fn [& args] (swap! n inc) (.apply orig p (to-array args))))
+    (f)
+    @n))
+
+(deftest the-night-trigger-in-a-wide-cave-floods-the-room-once-for-a-body-standing-still
+  (let [p (seen-dark cave-blocks)
+        ask #(reads-during p (fn [] ((:when (get triggers/all :night)) p {} {})))
+        first-ask (ask)]
+    (is (< (ask) (/ first-ask 20)) "the second ask reuses the room")))

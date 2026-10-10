@@ -10,6 +10,7 @@
             [jobs.lib.loose :as loose]
             [jobs.lib.reach :as reach]
             [jobs.lib.sense :as sense]
+            [jobs.lib.shelter :as sh]
             [jobs.lib.util :as u]
             [jobs.lib.trees :refer [default-radius]]))
 
@@ -25,7 +26,7 @@
   {:pos :reason :unseen-floor|:unseen-cell|:unsafe-floor|:too-deep}. A drop still falling is judged at rest.
   With :search, when fewer than :want items (those named in :want-items, else any) were collected and no item is in sight (leaves hide drops beyond them), the body walks (a go-to child, range 0)
   to seen standable cells round the anchor, nearest first, and looks again at each, until an item is seen or the cells within :search
-  blocks are tried.
+  blocks are tried. Underground a walk goes on at night; a search that go-to made wait :search-waits calls in a row ends with :reason :search-waited.
   While it runs it holds its work area (jobs.lib.loose :collecting), so the :loose-items reflex leaves those drops to it.
   With :ids, ids not in sight when none is left to try are booked as one :left {:reason :unseen :ids [...] :last {id [x y z]}}, the cell each was last seen in.
   With :dig, a drop go-to cannot reach, or one too deep in the dug hole, is dug to once: the fewest cells (jobs.lib.dig-route,
@@ -48,9 +49,17 @@
 (a/defargs settings
   {::dig-max-cells {:default 16 :doc "The most cells :dig digs to reach one drop; a dearer route leaves it." :spec (a/int-in 0 nil)}
    ::dig-margin {:default 3 :doc "How far outside the box round the body and the drop the dig route may wander, in blocks." :spec (a/int-in 0 nil)}
-   ::dig-max-fall {:default 3 :doc "The longest fall, in blocks, the dig route plans." :spec (a/int-in 0 nil)}})
+   ::dig-max-fall {:default 3 :doc "The longest fall, in blocks, the dig route plans." :spec (a/int-in 0 nil)}
+   ::search-waits {:default 5 :doc "How many calls in a row a :search walk may wait on go-to (the night, a danger) before the search is given up." :spec (a/int-in 1 nil)}})
+
+(defn search-waits [] (settings/get settings ::search-waits))
 
 (defn check [_c] true)
+
+(defn walk-args
+  "go-to args for a walk of this job: underground it goes on at night (:at-night :go), like the digs that made the hole."
+  [c args]
+  (cond-> args (sh/buried? (:primitives c)) (assoc :at-night :go)))
 
 (defn gained-count
   "The items an act result says entered the inventory (only those named in names when given)."
@@ -144,7 +153,7 @@
   "Walk within a block of item, more than a block lower than the feet: one go-to call (child/run!, slot :walk).
   :arrived, :continue (go-to waits on the world) or :unreachable."
   [c item]
-  (let [r (await (child/run! c :walk 'jobs.movement.go-to {:pos (item-cell item) :range 1 :escalate false}))]
+  (let [r (await (child/run! c :walk 'jobs.movement.go-to (walk-args c {:pos (item-cell item) :range 1 :escalate false})))]
     (cond
       (= :continue r) :continue
       (and (= :done r) (:arrived (ctx/child-result c :walk))) :arrived
@@ -222,15 +231,18 @@
 
 (defn ^:async search-step!
   "Walks to the next unvisited search cell (one go-to call, slot :search; a cell go-to cannot reach is dropped).
-  :continue while go-to waits on the world, :walked after a cell, nil when none is left."
+  :continue while go-to waits on the world, :waited after search-waits calls in a row did, :walked after a cell, nil when none is left."
   [c anchor]
   (let [queue (or (:search-queue (ctx/mem c))
                   (let [q (vec (search-cells c anchor))] (ctx/update-mem! c assoc :search-queue q) q))]
     (when-let [cell (first queue)]
-      (let [r (await (child/run! c :search 'jobs.movement.go-to {:pos (u/cell-vec cell) :range 0 :escalate false}))]
+      (let [r (await (child/run! c :search 'jobs.movement.go-to (walk-args c {:pos (u/cell-vec cell) :range 0 :escalate false})))]
         (if (= :continue r)
-          :continue
-          (do (ctx/update-mem! c update :search-queue (comp vec rest))
+          (if (>= (:search-waited (ctx/mem c) 0) (search-waits))
+            :waited
+            (do (ctx/update-mem! c update :search-waited (fnil inc 0))
+                :continue))
+          (do (ctx/update-mem! c #(-> % (update :search-queue (comp vec rest)) (dissoc :search-waited)))
               :walked))))))
 
 (defn ^:async round
@@ -254,9 +266,10 @@
           (let [r (await (search-step! c anchor))]
             (if (= :continue r)
               :continue
-              (if r
+              (if (and r (not= :waited r))
                 (recur)
                 (done! (cond-> {:collected (:collected (ctx/mem c) 0)}
+                         (= :waited r) (assoc :reason :search-waited)
                          (not (ctx/alive? c)) (assoc :reason :cut))))))
           (if-not item
           (done! (cond-> (do (when (ctx/alive? c) (leave-unseen! c)) {:collected (:collected (ctx/mem c) 0)})

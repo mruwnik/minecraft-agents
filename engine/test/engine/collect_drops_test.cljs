@@ -4,7 +4,8 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.blocks-dig-test :as bd]
             [engine.fake :as fake]
-            [engine.test-util :as tu]))
+            [engine.test-util :as tu]
+            [jobs.lib.shelter :as sh]))
 
 (def job 'jobs.forestry.collect-drops)
 (def body {:pos {:x 0 :y 64 :z 0}})
@@ -156,6 +157,29 @@
           (let [result (await (bd/child-outcome eng job {:radius 6 :filter ["oak_log"] :near {:x 4 :y 64 :z 0} :search 3 :want 3} 80))]
             (is (= 1 (:collected result)))
             (is (= 1 (bd/carried p "oak_log")))))))))
+
+(def night-ms 14000)
+
+(deftest a-search-underground-at-night-walks-on-in-its-own-tunnel
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (bd/setup {:self body :time night-ms :blocks (assoc leaf-wall "0,66,0" "stone")})]
+          (drop! p [4 64 0] "oak_log")
+          (let [result (with-redefs [sh/buried? (constantly true)]
+                         (await (bd/child-outcome eng job {:radius 6 :filter ["oak_log"] :near {:x 4 :y 64 :z 0} :search 3} 60)))]
+            (is (= 1 (:collected result)))))))))
+
+(deftest a-search-held-by-the-night-gives-up-with-a-reason
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (bd/setup {:self body :time night-ms :blocks (assoc leaf-wall "0,67,0" "stone")})]
+          (drop! p [4 64 0] "oak_log")
+          (let [result (await (bd/child-outcome eng job {:radius 6 :filter ["oak_log"] :near {:x 4 :y 64 :z 0} :search 3} 60))]
+            (is (= 0 (:collected result)))
+            (is (= :search-waited (:reason result)))
+            (is (some #(= :go-to.night-sheltered (:kind %)) @seen) "the hold was the night's")))))))
 
 (deftest only-the-want-items-count-towards-want
   (async done

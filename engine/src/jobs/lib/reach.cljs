@@ -5,6 +5,7 @@
   that no arrow-stopping block crosses). jobs.lib.reach.proofs shares walk proofs between the mobs of one query;
   jobs.lib.danger decides which known mobs are real dangers."
   (:require [engine.game :as game]
+            [engine.perception.rays :as rays]
             [clojure.string :as str]
             [engine.entity-observations :as obs]
             [engine.sight :as sight]
@@ -396,7 +397,7 @@
        (shut-in? p kind-at))
      false)))
 
-(defn room
+(defn room*
   "The closed room around cell pos {:x :y :z}: the cells a walker there reaches with every door, gate and trapdoor shut,
   fewer than room-cells (flood over the blocks the body has seen; an unseen or unloaded cell is open). {:cells #{[x y
   z]} feet cells, :doors [{:cell {:x :y :z} :inside {:x :y :z}}] each door or gate beside a room cell at its feet, with
@@ -414,6 +415,32 @@
                         :when (and name (openable? name) (not (str/ends-with? name "_trapdoor")))]
                     {:cell cell :inside {:x cx :y cy :z cz}})]
         {:cells cells :doors (vec (vals (into {} (map (juxt :cell identity)) doors)))}))))
+
+(def room-memo-ms
+  "How long a room answer is reused while the body and the world stand still: the night trigger asks every 250 ms and a flood reads up to room-cells cells."
+  2000)
+
+(defn steady-key
+  "What a room answer depends on: the raw world's epoch, the eye and the clock in room-memo-ms steps; nil offline."
+  [{:keys [raw opts]}]
+  (when-let [^js eye (.eye ^js raw)]
+    (str (js/Math.floor (/ ((:now opts)) room-memo-ms)) "|" (rays/epoch-of raw) "|" (.-dimension eye) "|"
+         (.-x eye) "|" (.-y eye) "|" (.-z eye) "|" (.-yaw eye) "|" (.-pitch eye))))
+
+(defn room
+  "room* kept per body (in its perception store) for room-memo-ms while its eye and the world stay the same; not kept without a perception."
+  [p pos]
+  (let [per (aget p "perception") k (some-> per steady-key)]
+    (if-not k
+      (room* p pos)
+      (let [^js st (:st per)]
+        (when-not (= k (.-roomKey st))
+          (set! (.-roomKey st) k)
+          (set! (.-roomMemo st) (js/Map.)))
+        (let [^js m (.-roomMemo st) ck (str (:x pos) "|" (:y pos) "|" (:z pos))]
+          (if (.has m ck)
+            (.get m ck)
+            (let [v (room* p pos)] (.set m ck v) v)))))))
 
 (defn walk-steps
   "The steps of a walk (search-steps) from cell from to a cell next to cell to ({:x :y :z} each) over the blocks the
