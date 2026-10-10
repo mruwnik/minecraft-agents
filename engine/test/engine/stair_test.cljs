@@ -759,6 +759,21 @@
           (is (= 3 (count (digs p))))
           (is (= [{:cell [1 64 0] :block "stone"}] (:dug @out)) "a dig that left the same block is not recorded"))))))
 
+(deftest a-cell-put-back-that-does-not-fall-is-named-as-placed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [prep (fn [p]
+                     (let [world (.-world p)]
+                       (.override world "dig"
+                                  (fn ^:async f [token a impl]
+                                    (let [r (await (impl token a))]
+                                      (swap! (.. world -state) assoc-in [:blocks [1 64 0]] "stone")
+                                      r)))))
+              {:keys [out]} (await (stair! {:blocks ground} east prep))]
+          (is (= :refills (:reason @out)))
+          (is (re-find #"put back" (str (:why @out)))))))))
+
 (deftest the-bodys-own-plan-footprint-ahead-is-cut-through
   (async done
     (tu/run-async done

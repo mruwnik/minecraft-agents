@@ -54,7 +54,7 @@
   - :unbreakable: bedrock, barrier, portal frames, command blocks.
   - :no-tool: a pickaxe block with no pickaxe carried.
   - :inventory-full: the drop has no room.
-  - :refills: a cell refilled 3 times.
+  - :refills: a cell refilled 3 times (with a :why when the block does not fall: something put it back).
   - :hazard: a hazard not in :accept (below).
   - :off-stair: the body is off the stair line.
   - :lava-exposed: lava beside an open cell of the step (or in one) with :on-lava :stop.
@@ -428,6 +428,11 @@
     (access/decline! c :stair.declined "stair" (assoc (access/refusal-fields [stop]) :reason :refused))
     (if-let [lack (need c)] (fetch/check c 'jobs.access.stair lack) true)))
 
+(defn falling-block?
+  "Whether a block falls into the cell it was dug from (sand, gravel, concrete powder)."
+  [block]
+  (boolean (re-find #"^(red_)?sand$|^gravel$|_concrete_powder$" (str block))))
+
 (defn ^:async dig!
   "Equip the best tool, check the cell again, write the intent and dig it (a blocks.dig child). :continue (dug, go on), :yield (the child waits on the world), or a stop map."
   [c in cell cut accept]
@@ -435,7 +440,9 @@
         block ((:block-at in) cell)
         tries (get-in (ctx/mem c) [:tries cell] 0)]
     (cond
-      (>= tries (max-cell-digs)) {:reason :refills :cell cell :block block}
+      (>= tries (max-cell-digs)) (cond-> {:reason :refills :cell cell :block block}
+                                   (not (falling-block? block))
+                                   (assoc :why "put back by something else, e.g. the night shelter closing an opened refuge again"))
       (unbreakable block) {:reason :unbreakable :cell cell :block block}
       (lacks-tool? c block) {:reason :no-tool :cell cell :block block :tool (tools/needed-kind p block)}
       (not (drop-room? c block)) {:reason :inventory-full :cell cell :block block}
