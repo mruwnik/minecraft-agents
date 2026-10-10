@@ -85,6 +85,7 @@
    :danger-radius {:doc "a hostile this close makes the job yield without acting" :spec (a/num-in 0 nil) :default 8}
    :fetch {:doc "get a weapon and armour from a chest whose stock the body knows before walking to a pile its killer guards (jobs.lib.fetch limits); false: no kit fetch" :spec fetch/option? :default {:what #{:item} :how #{:chest} :minutes 3}}
    :leg-s {:doc "the walk to the pile goes in legs of this many seconds; after each the danger and the cost are weighed again" :spec (a/num-in 0.1 120) :default 6}
+   :retry {:doc "try a pile again that an earlier run ended :abandoned, while its despawn window is open (a reflex run keeps the decision; an agent asks for another try)" :spec boolean? :default false}
    :collect-radius {:doc "collect the pile's drops within this many blocks of the death point (a pile on open ground rolls 6-8 out)" :spec (a/num-in 0 nil) :default 10}})
 
 (a/defargs settings
@@ -97,7 +98,7 @@
    ::max-blocked-retries {:default 3 :doc "Walks of one trip that did not arrive before it is given up as :unreachable." :spec (a/int-in 1 nil)}
    ::wet-danger {:default 30 :doc "Points of route danger added for a pile in water or lost to drowning (a swim with the air running out); 10 cost each." :spec (a/num-in 0 nil)}
    ::seal-radius {:default 4 :doc "Scaffold blocks this body placed within this many blocks of the pile (a flee seal) are taken back when they keep it out of reach." :spec (a/num-in 0 nil)}
-   ::deep-drop {:default 8 :doc "A pile this many blocks or more below the body, within ::deep-reach aside, is reached by a stair down (jobs.access.tunnel) instead of a walk." :spec (a/int-in 1 nil)}
+   ::deep-drop {:default 8 :doc "A pile this many blocks or more below the body, within ::deep-reach aside, is reached by a stair down (jobs.access.tunnel) once the walk did not arrive." :spec (a/int-in 1 nil)}
    ::deep-reach {:default 24 :doc "How far aside of a deep pile the walk goes on before the stair down is cut." :spec (a/num-in 0 nil)}
    ::stair-step-s {:default 3 :doc "Seconds one block of a stair down and its run is reckoned to take, against the despawn window left." :spec (a/num-in 0 nil)}
    ::killer-guard-ms {:default 60000 :doc "How long after a death its killer is assumed to still stand at the pile; later only the hostiles the body knows of count." :spec (a/num-in 0 nil)}
@@ -153,8 +154,23 @@
       decision (assoc :decision (:decision decision)
                       :text (str "the latest death is already decided: " (decision-text (:decision decision) decision nil))))))
 
+(defn retried-deaths
+  "With :retry, the latest death whose pile an earlier run ended :abandoned while its despawn window is still open."
+  [c]
+  (let [view (ctx/view c)
+        died (mem/latest view :died)
+        recovered (last (filter #(= (:t died) (:death-t (:data %))) (mem/entries view :recovered)))]
+    (when (and (:retry (:args c)) died (= :abandoned (:decision (:data recovered)))
+               (< (game/ticks-since died view) game/despawn-ticks))
+      [died])))
+
+(defn open-deaths
+  "body/open-deaths, plus the death :retry takes up again."
+  [c]
+  (vec (sort-by :t (concat (retried-deaths c) (body/open-deaths (ctx/view c))))))
+
 (defn check [c]
-  (or (seq (body/open-deaths (ctx/view c)))
+  (or (seq (open-deaths c))
       (ctx/wait c (decided-wait (ctx/view c)))))
 
 (defn death-score
@@ -168,7 +184,7 @@
   "The death this run serves: the one its memory is keyed to while still open, else the open death inside its window
   whose pile is best (value net of the walk), else the latest open one (past its window: it ends :abandoned)."
   [c]
-  (let [open (body/open-deaths (ctx/view c))
+  (let [open (open-deaths c)
         keyed (some #(when (= (:t %) (:death-t (ctx/mem c))) %) open)
         fresh (filterv #(< (game/ticks-since % (ctx/view c)) game/despawn-ticks) open)]
     (or keyed
@@ -220,7 +236,7 @@
   cut before, or a restart), else afresh. The hostile cuts are counted whatever :blocked says."
   [c entry]
   (when (not= (:t entry) (:death-t (ctx/mem c)))
-    (let [saved (saved-trip c (:t entry))]
+    (let [saved (when-not (seq (retried-deaths c)) (saved-trip c (:t entry)))]
       (ctx/update-mem! c (constantly (merge {:death-t (:t entry)}
                                             (select-keys saved [:decided :baseline :phase :blocked :blocked-retries])
                                             (when saved {:cuts (+ (:cuts saved 0) (if (hostile-cut? c saved) 1 0))}))))
@@ -544,7 +560,8 @@
   :declined)
 
 (defn deep-pile
-  "{:below n :aside d} when the pile lies ::deep-drop or more under the body and within ::deep-reach aside of it, else nil."
+  "{:below n :aside d} when the pile lies ::deep-drop or more under the body and within ::deep-reach aside of it, else nil.
+  A walk that did not arrive comes first: the stair is for a pile no walk reaches."
   [c pos]
   (let [here (u/self-pos c)
         below (- (js/Math.floor (:y here)) (js/Math.floor (:y pos)))
@@ -602,8 +619,9 @@
       (do (ctx/update-mem! c assoc :phase :go) :next)
 
       (= :collect (:phase (ctx/mem c))) (await (collect! c pos collect-radius (:inventory (:data entry))))
-      (deep-pile c pos) (await (dig-down! c entry pos (deep-pile c pos)))
-      :else (await (go! c pos)))))
+      (and (deep-pile c pos) (:blocked (ctx/mem c))) (await (dig-down! c entry pos (deep-pile c pos)))
+      :else (let [r (await (go! c pos))]
+              (if (and (= :declined r) (:blocked (ctx/mem c)) (deep-pile c pos)) :next r)))))
 
 (defn ^:async step!
   "One step of the trip: :next to go on, or the round's end (:done, :declined)."

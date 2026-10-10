@@ -4,6 +4,7 @@
             [engine.core :as core]
             [engine.death-test :as dt :refer [die! job recovered]]
             [engine.fake :as fake]
+            [engine.memory :as mem]
             [engine.library-test :refer [setup]]
             [engine.test-util :as tu :refer [run-until-empty]]))
 
@@ -69,3 +70,42 @@
           (await (run-until-empty eng 20))
           (is (some #(= :danger (:reason %)) (filter #(= :recover-drops.declined (:kind %)) @seen)))
           (is (> (feet-y p) 50) "the stair was not carried on to the pile"))))))
+
+(def slope-pile-pos {:x 20 :y 82 :z 0})
+
+(def open-slope
+  "A hillside over x -2..22, z -4..4: the top at y 99 falls one block a step (a flat every tenth) to y 81 at x 20."
+  (into {} (for [x (range -2 23) z (range -4 5)
+                 :let [top (- 99 (js/Math.floor (/ (* (max x 0) 18) 20)))]
+                 y (range (- top 3) (inc top))]
+             [(str x "," y "," z) "stone"])))
+
+(deftest a-pile-eighteen-below-on-an-open-slope-is-walked-to-with-no-tool
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:blocks open-slope :self {:pos [0 100 0]}
+                                           :entities [{:id 1 :name "item" :kind "item" :pos slope-pile-pos :item {:name "diamond" :count 5}}]})]
+          (die! eng {:pos slope-pile-pos :inventory pile} 5000)
+          (core/submit! eng job {})
+          (await (run-until-empty eng 120))
+          (is (empty? (filter #(= :recover-drops.deep (:kind %)) @seen)) "no stair is cut for a pile a walk reaches")
+          (is (empty? (filter #(= "dig" (.-name %)) (.-calls (.-world p)))))
+          (is (= :collected (:decision (recovered eng))) (pr-str (recovered eng))))))))
+
+(deftest an-agent-retry-walks-to-a-pile-an-earlier-run-abandoned
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:blocks open-slope :self {:pos [0 100 0]}
+                                    :entities [{:id 1 :name "item" :kind "item" :pos slope-pile-pos :item {:name "diamond" :count 5}}]})]
+          (die! eng {:pos slope-pile-pos :inventory pile} 5000)
+          (let [store (:store eng)
+                died (mem/latest (mem/view store) :died)]
+            (swap! store update :data mem/add-entry :recovered {:t (inc (:t died)) :wt ((:world-time @store)) :data {:decision :abandoned :death-t (:t died) :reason :unreachable}} nil))
+          (core/submit! eng job {})
+          (await (run-until-empty eng 20))
+          (is (= :abandoned (:decision (recovered eng))) "a reflex run keeps the decision")
+          (core/submit! eng '(jobs.survival.recover-drops {:retry true}) {})
+          (await (run-until-empty eng 120))
+          (is (= :collected (:decision (recovered eng))) (pr-str (recovered eng))))))))

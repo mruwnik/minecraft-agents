@@ -1,18 +1,28 @@
 (ns triggers.survival.needs-weapon
   "The needs-weapon trigger: by day, an awake body carrying no weapon (jobs.lib.combat/default-weapons) gets a sword
   (jobs.items.obtain, the best it can make: iron, else stone, else wooden), so a mob it meets is fought, not fled from
-  with the fist."
-  (:require [jobs.lib.body :as body]
+  with the fist. Not while an open death's live pile holds a weapon: recover-drops fetches it first."
+  (:require [engine.game :as game]
+            [jobs.lib.body :as body]
             [jobs.lib.combat :as combat]
             [jobs.lib.shelter :as sh]))
 
 (def defaults {:any-of ["iron_sword" "stone_sword" "wooden_sword"] :count 1 :explore true})
 
+(defn weapon-in-pile?
+  "Whether a death no :recovered covers, still inside the despawn window, dropped a weapon."
+  [view]
+  (boolean (some (fn [d] (and (< (game/ticks-since d view) game/despawn-ticks)
+                              (some (fn [{:keys [name]}] (some #(.includes name %) combat/default-weapons))
+                                    (:inventory (:data d)))))
+                 (body/open-deaths view))))
+
 (defn needs-weapon
-  "Holds by day, alive and awake, when no carried item is a weapon."
+  "Holds by day, alive and awake, when no carried item is a weapon and no live pile holds one."
   [p view _args]
   (boolean
    (and (not (body/dead? view))
         (not (sh/night? p))
         (not (sh/sleeping? p))
+        (not (weapon-in-pile? view))
         (nil? (combat/best-weapon p combat/default-weapons)))))

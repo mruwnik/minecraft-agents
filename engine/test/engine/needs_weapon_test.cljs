@@ -1,6 +1,7 @@
 (ns engine.needs-weapon-test
   "The :needs-weapon trigger: a body with no weapon gets a sword by day."
   (:require [cljs.test :refer [deftest is are]]
+            [engine.death-test :refer [memory-with]]
             [engine.expr :as expr]
             [engine.memory :as mem]
             [engine.registry :as registry]
@@ -21,3 +22,15 @@
 
 (deftest the-trigger-args-are-valid-obtain-args
   (is (nil? (expr/problem registry/jobs (list 'jobs.items.obtain nw/defaults)))))
+
+(defn holds-with-memory? [memory]
+  (nw/needs-weapon (tu/fake-on-floor {:floor [-10 -10 10 10] :inventory []}) memory {}))
+
+(def respawned [:respawned 1100 {}])
+
+(deftest a-body-leaves-a-live-pile-holding-its-weapon-to-the-recovery
+  (are [memory expected] (= expected (holds-with-memory? memory))
+    (memory-with 2000 [:died 1000 {:inventory [{:name "iron_sword" :count 1}]}] respawned) false
+    (memory-with 2000 [:died 1000 {:inventory [{:name "cobblestone" :count 9}]}] respawned) true
+    (memory-with 2000 [:died 1000 {:inventory [{:name "iron_sword" :count 1}]}] respawned [:recovered 1500 {:decision :abandoned :death-t 1000}]) true
+    (memory-with 400000 [:died 1000 {:inventory [{:name "iron_sword" :count 1}]}] respawned) true))
