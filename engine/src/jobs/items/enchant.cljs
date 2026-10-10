@@ -2,6 +2,7 @@
   (:require [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.lib.look :as look]
@@ -181,7 +182,7 @@
         (do (await (look/survey! c)) :again)) ; a table behind the body is not seen until it looks
       (let [r (if (u/within? (u/self-pos c) pos (reach))
                 :done
-                (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos pos :range (reach) :escalate false :warn false :retry false :zone-tolls true})))]
+                (await (child/call-walk c :walk {:pos pos :range (reach) :escalate false :warn false :retry false :zone-tolls true})))]
         (cond
           (= :continue r) :continue
           (not (or (u/within? (u/self-pos c) pos (reach)) (:arrived (ctx/child-result c :walk)))) (fail-up! c "unreachable")

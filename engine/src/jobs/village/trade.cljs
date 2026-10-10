@@ -2,6 +2,7 @@
   (:require [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]))
 
@@ -173,7 +174,7 @@
       (nil? e) (give-up! c "gone" "the villager is not here")
       (u/within? (u/self-pos c) (u/pos-of (.-pos e)) (reach)) (await (trade! c))
       :else
-      (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to
+      (let [r (await (child/call-walk c :walk
                                      {:pos (u/pos-of (.-pos e)) :range (reach) :leg-s chase-timeout-s :escalate false :warn false}))]
         (cond
           (= :continue r) :continue

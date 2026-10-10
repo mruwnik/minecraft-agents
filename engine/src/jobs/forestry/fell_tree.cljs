@@ -351,7 +351,7 @@
 
 (defn ^:async pillar-walk!
   [c {:keys [plan]}]
-  (let [r (await (ctx/call-child c :pwalk 'jobs.movement.go-to {:pos (cell-pos (or (:base plan) (:stand plan))) :range 0 :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))
+  (let [r (await (child/call-walk c :pwalk {:pos (cell-pos (or (:base plan) (:stand plan))) :range 0 :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))
         res (ctx/child-result c :pwalk)]
     (cond
       (= :continue r) :continue

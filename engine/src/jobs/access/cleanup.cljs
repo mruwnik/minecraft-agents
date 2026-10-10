@@ -7,6 +7,7 @@
             [jobs.lib.ledger :as ledger]
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.look :as look]
@@ -279,7 +280,7 @@
   "Walk to within 3 of cell; a permanent verdict holds it :unreachable, an end out of reach, a walk that did not end or
   a go-to that gave up for a passing reason counts a failure."
   [c {:keys [cell]}]
-  (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos cell :range (walk-range) :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))
+  (let [r (await (child/call-walk c :walk {:pos cell :range (walk-range) :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))
         result (when (= :done r) (ctx/child-result c :walk))
         status (:status result)]
     (cond
@@ -293,7 +294,7 @@
   "Walk to the ground at the end of the row the body stands on (go-to, range 0, no digging); counts a try."
   [c {:keys [to]}]
   (let [[x y z] to
-        r (await (ctx/call-child c :retreat 'jobs.movement.go-to {:pos {:x x :y y :z z} :range 0 :escalate false
+        r (await (child/call-walk c :retreat {:pos {:x x :y y :z z} :range 0 :escalate false
                                                                   :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
     (when-not (= :continue r) (ctx/update-mem! c update :retreats (fnil inc 0)))
     :again))

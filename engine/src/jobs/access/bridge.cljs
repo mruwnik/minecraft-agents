@@ -9,6 +9,7 @@
             [jobs.lib.ledger :as ledger]
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [jobs.lib.pace :as pace]))
 
 (def doc
@@ -194,7 +195,7 @@
 (defn ^:async walk-to!
   "A go-to child to the cell [x y z] (range 0, no escalation). :continue while it waits; :ok on arrival, else :failed."
   [c [x y z]]
-  (let [r (await (ctx/call-child c :step 'jobs.movement.go-to {:pos {:x x :y y :z z} :range 0 :escalate false
+  (let [r (await (child/call-walk c :step {:pos {:x x :y y :z z} :range 0 :escalate false
                                                                :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
     (cond
       (= :continue r) :continue

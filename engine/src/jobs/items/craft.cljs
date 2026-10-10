@@ -2,6 +2,7 @@
   (:require [engine.args :as a]
             [jobs.items.shortfall :as craft]
             [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
             [jobs.lib.escape :as escape]
@@ -213,7 +214,7 @@
       (do (ctx/update-mem! c assoc :table table)
           (if (u/within? (u/self-pos c) table 3)
             (if handed? (give-up! c made "unreachable") :again)
-            (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos table :range 3 :escalate false :warn false :retry false :zone-tolls true}))]
+            (let [r (await (child/call-walk c :walk {:pos table :range 3 :escalate false :warn false :retry false :zone-tolls true}))]
               (cond
                 (= :continue r) :continue
                 (:arrived (ctx/child-result c :walk)) :again

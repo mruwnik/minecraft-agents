@@ -4,6 +4,7 @@
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [jobs.lib.access :as access]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.reach :as reach]
@@ -52,7 +53,7 @@
   [c cell {:keys [reach] :or {reach (reach-blocks)}  :as opts}]
   (await (dig-look/look-unknown! c (floors cell reach)))
   (if-let [to (first (candidates (:primitives c) cell opts))]
-    (let [r (await (ctx/call-child c :step-off 'jobs.movement.go-to {:pos to :range 0 :escalate false}))
+    (let [r (await (child/call-walk c :step-off {:pos to :range 0 :escalate false}))
           res (ctx/child-result c :step-off)]
       (cond
         (= :continue r) :continue

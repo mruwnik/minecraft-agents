@@ -3,6 +3,7 @@
   (:require [jobs.lib.access :as access]
             [jobs.lib.tidy :as tidy]
             [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [jobs.lib.shelter :as sh]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]))
@@ -154,7 +155,7 @@
                 nil)))
         (do (update-take-back! c assoc :done true) nil))
       (> (u/dist (sh/feet p) cell) take-back-reach)
-      (let [r (await (ctx/call-child c :take-back-walk 'jobs.movement.go-to {:pos cell :range 3 :escalate false :warn false :retry false}))]
+      (let [r (await (child/call-walk c :take-back-walk {:pos cell :range 3 :escalate false :warn false :retry false}))]
         (cond
           (= :continue r) :continue
           (= :done r) :continue

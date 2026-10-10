@@ -1,6 +1,7 @@
 (ns jobs.maintenance.shut-doors
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [jobs.lib.util :as u]
             [jobs.lib.result :as res]
             [jobs.lib.pass :as pass]
@@ -56,7 +57,7 @@
 (defn ^:async walk!
   "nil when the body stands within reach, else why not: :walk-interrupted (the walk ended :continue) or :unreachable."
   [c {:keys [cell]}]
-  (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos cell :range (:reach (:args c)) :doors :never :escalate false}))]
+  (let [r (await (child/call-walk c :walk {:pos cell :range (:reach (:args c)) :doors :never :escalate false}))]
     (cond
       (= :continue r) :walk-interrupted
       (and (= :done r) (:arrived (ctx/child-result c :walk))) nil

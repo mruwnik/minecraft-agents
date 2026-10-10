@@ -4,6 +4,7 @@
             [jobs.lib.ledger :as ledger]
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [jobs.lib.access :as access]
             [jobs.lib.dig-look :as look]
             [jobs.lib.blocks :as blocks]
@@ -212,7 +213,7 @@
     (let [{sx :x sz :z} (reach/standing-cell (:primitives c))
           on-column? (= [x z] [sx sz])
           r (when-not on-column?
-              (await (ctx/call-child c :recentre 'jobs.movement.go-to {:pos {:x hx :y y :z hz} :range 0 :escalate false})))]
+              (await (child/call-walk c :recentre {:pos {:x hx :y y :z hz} :range 0 :escalate false})))]
       (if (= :continue r)
         :continue
         (do (await (walk/centre! c hx hz))

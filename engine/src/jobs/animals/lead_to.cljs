@@ -2,6 +2,7 @@
   (:require [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [jobs.lib.animals :as animals]
             [jobs.lib.blocks :as b]
             [jobs.lib.util :as u]
@@ -380,7 +381,7 @@
         (ctx/update-mem! c dissoc :catching-up)
         (loop []
           (let [leg (await (leg-target c target range))
-                r (await (ctx/call-child c slot 'jobs.movement.go-to
+                r (await (child/call-walk c slot
                                          {:pos (or leg target) :range (if leg 1 range) :doors :leave-open :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
             (cond
               (not= :done r) :waiting

@@ -218,7 +218,7 @@
   world, or it did not arrive: the next run walks again while the pile is worth it, and the window closes it). A walk
   go-to refused for the body's own shelter (:inside-own-shelter) is no failed try: the window closes the trip."
   [c pos]
-  (let [r (await (ctx/call-child c :go 'jobs.movement.go-to {:pos pos :range (arrive-range)}))]
+  (let [r (await (child/call-walk c :go {:pos pos :range (arrive-range)}))]
     (cond
       (not= :done r) (decline! c :unreachable (str "the walk to " (pr-str pos) " is waiting on the world") {:pos pos})
       (:inside-own-shelter (ctx/child-result c :go))

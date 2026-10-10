@@ -2,6 +2,7 @@
   (:require [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [jobs.lib.util :as u]))
 
 (def doc
@@ -53,7 +54,7 @@
           (cond
             (nil? e) (stop! c id item :gone)
             (> (u/dist (u/self-pos c) (u/pos-of (.-pos e))) (reach))
-            (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos (u/pos-of (.-pos e)) :range 2 :escalate false}))
+            (let [r (await (child/call-walk c :walk {:pos (u/pos-of (.-pos e)) :range 2 :escalate false}))
                   res (ctx/child-result c :walk)]
               (cond
                 (= :continue r) :continue

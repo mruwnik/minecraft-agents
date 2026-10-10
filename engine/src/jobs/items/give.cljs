@@ -2,6 +2,7 @@
   (:require [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [jobs.lib.util :as u]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
@@ -86,7 +87,7 @@
   :again, :continue (go-to waits) or :done."
   [c pos]
   (let [reach (:reach (:args c))
-        r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos pos :range reach :doors :shut :leg-s (walk-leg-s)
+        r (await (child/call-walk c :walk {:pos pos :range reach :doors :shut :leg-s (walk-leg-s)
                                                                :escalate false :warn false :retry false :zone-tolls true}))
         res (when-not (= :continue r) (ctx/child-result c :walk))]
     (if (= :continue r)

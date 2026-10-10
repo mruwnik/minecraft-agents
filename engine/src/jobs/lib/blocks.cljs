@@ -7,6 +7,7 @@
             [jobs.lib.access.rules :as rules]
             [jobs.lib.aim :as aim]
             [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [jobs.lib.access :as access]
             [jobs.lib.dig-look :as look]
             [jobs.lib.trees :as forestry]
@@ -179,7 +180,7 @@
   (go-to waits on the world) or {:unreachable why} (it gave up, or arrived with the block still out of reach). With see?
   the walk ends only where the eye sees the block (go-to :see)."
   [c pos & [see?]]
-  (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos pos :range 3 :see (boolean see?) :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))
+  (let [r (await (child/call-walk c :walk {:pos pos :range 3 :see (boolean see?) :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))
         res (ctx/child-result c :walk)]
     (cond
       (= :continue r) :continue

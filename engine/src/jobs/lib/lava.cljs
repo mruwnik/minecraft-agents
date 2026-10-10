@@ -2,7 +2,8 @@
   "Lava a dig laid open: which seen lava cells border a dug cell, sealing one with a building block from the rim (a
   jobs.blocks.place child), and stepping off when it cannot be sealed. Shared by jobs.blocks.dig and jobs.access.stair.
   Cells are [x y z]."
-  (:require [engine.ctx :as ctx]
+  (:require [jobs.lib.child :as child]
+            [engine.ctx :as ctx]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
@@ -92,7 +93,7 @@
               (do (clear!)
                   (if (seq away-tried) {:unreachable :all-walks-failed :walk away-why} {:unreachable :no-cell}))
               (let [_ (ctx/update-mem! c assoc :away-to to :away-escalate escalate)
-                    r (await (ctx/call-child c :step-off 'jobs.movement.go-to {:pos to :range 0 :escalate escalate}))
+                    r (await (child/call-walk c :step-off {:pos to :range 0 :escalate escalate}))
                     res (ctx/child-result c :step-off)]
                 (cond
                   (= :continue r) :continue

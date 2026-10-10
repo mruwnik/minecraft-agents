@@ -159,6 +159,24 @@
           (is (= inside (st/pos-of p)))
           (is (= [:night-sheltered] (distinct (map :reason (st/emitted seen :holding))))))))))
 
+(deftest a-parent-walking-with-run!-shows-the-night-wait-and-yields
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [clock (atom 1000000)
+              [seen sink] (tu/legacy-capture-sink)
+              p (tu/fake-on-floor (night-hut {}))
+              parent {:check (constantly true)
+                      :round (fn ^:async walker [c]
+                               (await (child/run! c :walk 'jobs.movement.go-to {:pos [15 64 0]})))}
+              eng (core/create {:primitives p :jobs (assoc registry/jobs 'walker parent) :triggers triggers/all
+                                :dir (tu/tmp-dir) :now #(deref clock)
+                                :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+          (core/submit! eng '(walker) {})
+          (await (ticks eng 4))
+          (is (= inside (st/pos-of p)))
+          (is (= [:night-sheltered] (distinct (map :reason (st/emitted seen :holding))))))))))
+
 ;; ------------------------------------------------------------------ the night trigger and a queued walk (card 4252e02e)
 
 (deftest a-queued-walk-does-not-lead-the-body-out-of-its-mended-room-at-night

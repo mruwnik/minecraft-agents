@@ -5,6 +5,7 @@
             [jobs.lib.animals :as animals]
             [jobs.lib.click :as click]
             [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [jobs.lib.declined :as declined]
             [jobs.lib.gate :as gate]
             [jobs.lib.near :as near]
@@ -321,7 +322,7 @@
 (defn ^:async go!
   "One round of a go-to (range 0, :doors :never) to the cell: :arrived, :failed or nil while it goes on."
   [c cell]
-  (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos (cell-pos cell) :range 0 :doors :never :escalate false}))]
+  (let [r (await (child/call-walk c :walk {:pos (cell-pos cell) :range 0 :doors :never :escalate false}))]
     (cond
       (not= :done r) nil
       (:arrived (ctx/child-result c :walk)) :arrived

@@ -1,6 +1,7 @@
 (ns jobs.movement.follow
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [jobs.lib.util :as u]))
 
 (def doc
@@ -79,7 +80,7 @@
   ([c pos range] (walk! c pos range (constantly pos) nil))
   ([c pos range target-now leg-s]
    (loop [pos pos blocked 0 out 0]
-     (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to
+     (let [r (await (child/call-walk c :walk
                                     (cond-> {:pos pos :range range :doors :shut :escalate false :warn false}
                                       leg-s (assoc :leg-s leg-s))))
            res (ctx/child-result c :walk)

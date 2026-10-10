@@ -2,6 +2,7 @@
   (:require [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [jobs.animals.herd-run :as hr]
             [jobs.lib.apiary :as apiary]
             [jobs.lib.util :as u]
@@ -122,7 +123,7 @@
 (defn ^:async walk!
   "nil when the body stands within reach, else why not: :walk-interrupted (the walk ended :continue) or :unreachable."
   [c cell]
-  (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos (cell-pos cell) :range (:reach (:args c)) :doors :never :escalate false}))]
+  (let [r (await (child/call-walk c :walk {:pos (cell-pos cell) :range (:reach (:args c)) :doors :never :escalate false}))]
     (cond
       (= :continue r) :walk-interrupted
       (and (= :done r) (:arrived (ctx/child-result c :walk))) nil

@@ -2,6 +2,7 @@
   (:require [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
@@ -240,7 +241,7 @@
         target (when-not (:stepped (ctx/mem c)) (clear-cell c e waiting))]
     (if-not target
       (skip! c e :occupied)
-      (do (await (ctx/call-child c :go 'jobs.movement.go-to {:pos target :range 0 :escalate false}))
+      (do (await (child/call-walk c :go {:pos target :range 0 :escalate false}))
           (ctx/update-mem! c assoc :stepped true)))))
 
 (defn max-passes [] (settings/get settings ::max-passes))

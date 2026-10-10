@@ -3,6 +3,7 @@
             [jobs.lib.game-facts :as facts]
             [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.lib.look :as look]
@@ -231,7 +232,7 @@
         craft? (and (not spare?) (>= wheat 3))
         walk? (if (and (:table (ctx/mem c)) (or spare? craft?)) false (not (u/within? (u/self-pos c) chest 3)))
         w (when walk?
-            (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos chest :range 3 :escalate false :warn false :retry false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))})))]
+            (await (child/call-walk c :walk {:pos chest :range 3 :escalate false :warn false :retry false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))})))]
     (cond
       (= :continue w) :continue
       (and w (not (:arrived (ctx/child-result c :walk)))) (give-up! c "cannot reach the chest" "unreachable")

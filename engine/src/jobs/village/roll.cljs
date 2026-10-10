@@ -2,6 +2,7 @@
   (:require [engine.settings :as settings]
             [engine.args :as a] [jobs.lib.fetch :as fetch]
             [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [jobs.lib.blocks :as b]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
@@ -112,7 +113,7 @@
 (defn ^:async walk!
   "One go-to leg toward the villager at pos. :again, :continue or the stop."
   [c pos]
-  (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to
+  (let [r (await (child/call-walk c :walk
                                  {:pos pos :range (reach) :leg-s (leg-s) :escalate false :warn false}))]
     (cond
       (= :continue r) :continue

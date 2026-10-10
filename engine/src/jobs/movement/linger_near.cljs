@@ -1,6 +1,7 @@
 (ns jobs.movement.linger-near
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [jobs.lib.util :as u]))
 
 (def idle-ok true)
@@ -43,7 +44,7 @@
   "Walk within range of pos: :continue while the child waits or after an arrival or one failure, else the third
   failure in a row ends the job stopped."
   [c pos range]
-  (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos pos :range range :escalate false}))
+  (let [r (await (child/call-walk c :walk {:pos pos :range range :escalate false}))
         res (ctx/child-result c :walk)]
     (cond
       (= :continue r) :continue

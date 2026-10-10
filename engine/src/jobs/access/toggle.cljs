@@ -3,6 +3,7 @@
             [engine.args :as a]
             [jobs.lib.click :as click]
             [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
             [jobs.lib.places :as places]))
@@ -139,7 +140,7 @@
       :wrong-way (give-up! c :wrong-way pos state (str text " moved, but not to " (name state)) facts))))
 
 (defn ^:async walk! [c pos state block]
-  (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos pos :range (reach c) :doors :never :escalate false}))]
+  (let [r (await (child/call-walk c :walk {:pos pos :range (reach c) :doors :never :escalate false}))]
     (cond
       (= :continue r) :continue
       (:arrived (ctx/child-result c :walk)) (do (ctx/update-mem! c assoc :arrived true) :again)

@@ -2,6 +2,7 @@
   (:require [engine.args :as a]
             [clojure.string :as str]
             [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.food :as food]
@@ -309,7 +310,7 @@
   [c chest still]
   (if (u/within? (u/self-pos c) chest 3)
     nil
-    (let [r (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos chest :range 3 :escalate false :warn false :retry false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+    (let [r (await (child/call-walk c :walk {:pos chest :range 3 :escalate false :warn false :retry false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
       (cond
         (= :continue r) :continue
         (:arrived (ctx/child-result c :walk)) nil

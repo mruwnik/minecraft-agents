@@ -2,6 +2,7 @@
   (:require [engine.args :as a]
             [clojure.string :as str]
             [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [jobs.lib.blocks :as b]
             [jobs.lib.look :as look]
             [jobs.lib.result :as result]
@@ -184,7 +185,7 @@
               (nil? boat) (result/stop! c :gone (if (pos? hits) "the boat broke but its item was not seen" "no boat in sight") :id id)
               (>= (js/Date.now) deadline) (result/stop! c :not-broken (str (:name boat) " is still there after " hits " hits") :id (:id boat))
               (> (u/dist (u/self-pos c) (:pos boat)) reach)
-              (let [w (await (ctx/call-child c :walk 'jobs.movement.go-to {:pos (:pos boat) :range 2 :escalate false}))]
+              (let [w (await (child/call-walk c :walk {:pos (:pos boat) :range 2 :escalate false}))]
                 (cond
                   (= :continue w) :continue
                   (= :done w) (recur hits failed)
