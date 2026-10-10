@@ -56,7 +56,7 @@
   (is (nil? (expr/problem registry/jobs '(jobs.movement.go-to {:pos [50 40 3]})))))
 
 (deftest the-trigger-registry-holds-the-default-trigger-set
-  (is (= #{:suffocating :burning :wedged :hostile-near :hungry :needs-bed :night :dusk-home :died :pen-gate :door-left
+  (is (= #{:suffocating :burning :wedged :hostile-near :hungry :needs-bed :needs-weapon :night :dusk-home :died :pen-gate :door-left
            :inventory-nearly-full :scaffold-left :tidy-pending :mounted :loose-items}
          (set (keys triggers/all))))
   (doseq [[id t] triggers/all]

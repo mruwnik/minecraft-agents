@@ -79,10 +79,10 @@
                                                {:time 1000
                                                 :floor [-45 -10 40 10]
                                                 :self {:experience {:level 3 :points 40 :progress 0}}
-                                                :inventory [{:name "bread" :count 4}]}
+                                                :inventory [{:name "bread" :count 4} {:name "stone_sword" :count 1}]}
                                                1000)
               food #(:food (fake/self p))]
-          (is (= [:suffocating :burning :wedged :hostile-near :night :dusk-home :hungry :needs-bed :door-left
+          (is (= [:suffocating :burning :wedged :hostile-near :night :dusk-home :hungry :needs-bed :needs-weapon :door-left
                   :died :inventory-nearly-full :scaffold-left :tidy-pending
                   :pen-gate :mounted]
                  (mapv :id (:register (core/state eng)))))
@@ -120,17 +120,17 @@
           (.respawn (.-world p))
           (swap! clock + 2500) ; the job holds still until the respawn has settled; this clock only moves between ticks
           (await (run-ticks eng clock 3 1000))
-          (is (= [:hungry :hostile-near :died] (fired seen)) "the respawn lets a death fire recover-drops")
+          (is (= [:hungry :hostile-near :needs-weapon :died] (fired seen)) "the respawn lets a death fire recover-drops (and the unarmed body ask for a sword)")
           (await (run-ticks eng clock 10 1000))
-          (is (= {:decision :collected :items 2}
+          (is (= {:decision :collected :items 3}
                  (select-keys (:data (mem/latest (mem/view (:store eng)) :recovered)) [:decision :items]))
-              "the drops lie at its feet, so the trip is worth it; items counts the stack (two bread left after eating)")
-          (is (= ["bread"] (mapv #(.-name %) (.-inventory (.self p)))) "the bread is back")
+              "the drops lie at its feet, so the trip is worth it; items counts the stacks (two bread left after eating, the sword)")
+          (is (= ["bread" "stone_sword"] (mapv #(.-name %) (.-inventory (.self p)))) "the bread and the sword are back")
           (is (not-any? #(and (#{:error :failed} (:kind %)) (not= :body (:source %))) @seen)
               "no errors besides the death itself"))))))
 
 (def survival-cooldowns
-  {:suffocating 0 :burning 0 :hungry 90 :needs-bed 600 :night 10 :door-left 5 :died 30 :inventory-nearly-full 120 :tidy-pending 10})
+  {:suffocating 0 :burning 0 :hungry 90 :needs-bed 600 :needs-weapon 600 :night 10 :door-left 5 :died 30 :inventory-nearly-full 120 :tidy-pending 10})
 
 (deftest survival-triggers-wait-a-cooldown-after-their-job-ends
   (let [{:keys [eng]} (boot "scenarios/survival.edn" {})

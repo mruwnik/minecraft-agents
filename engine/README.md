@@ -384,6 +384,7 @@ Built-in triggers, in the order of `triggers/defaults.edn` (the default register
 | `:mounted` | the body rides something and no live job holds a vehicle | `movement.leave-vehicle` | cooldown 30 s |
 | `:dusk-home` | before night, under the open sky, with a remembered `:home` (else `:bed`) more than 4 and at most 600 blocks away (beyond go-home's 160 it only warns), once the day left is no more than 60 s plus 1.4 times the straight line at 4.3 blocks a second; runs `survival.go-home` (`:urgent`, cooldown 60 s). Not underground, asleep or at night. Beyond 160 blocks the night digs in and warns `night.bed-too-far` |
 | `:needs-bed` | by day, awake, `max-days-awake` (3) in-game days since the body last rested (latest `:slept`, `:respawned` or death, else its first memory), no bed item carried and no bed remembered within 128 | `items.obtain` (`:any-of` the 16 beds, `:explore`) | 600 s |
+| `:needs-weapon` | by day, alive and awake, with no weapon carried (`_sword`, `_axe`); runs `items.obtain` `:any-of` iron, stone, wooden sword (`:comfort`, cooldown 600 s). Never at night. |
 | `:loose-items` | on the ground, not nearly full, no danger within 8, and a seen item within `:radius` 8 that `jobs.lib.loose` takes (worth / detour cost at least `:min-ratio`, or on `:always`; not on `:never`, thrown, owed to a live job or in another's zone or claim); settings only, register `:args` ignored | `items.pick-up-loose` | 30 s |
 
 The dangers (`:suffocating`, `:burning`) have no cooldown and no backoff. Needs rest with a reason the agent

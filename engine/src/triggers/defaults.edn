@@ -16,6 +16,7 @@
   {:id :dusk-home :level :urgent :when triggers.survival.dusk-home/dusk-home :job (jobs.survival.go-home) :args triggers.survival.dusk-home/defaults :persistence :cooldown :cooldown-s 60}
   {:id :hungry :level :comfort :when triggers.survival.hungry/hungry :job (jobs.survival.get-food) :args triggers.survival.hungry/defaults :persistence :cooldown :cooldown-s 90}
   {:id :needs-bed :level :comfort :when triggers.survival.needs-bed/needs-bed :job (jobs.items.obtain) :args triggers.survival.needs-bed/defaults :persistence :cooldown :cooldown-s 600}
+  {:id :needs-weapon :level :comfort :when triggers.survival.needs-weapon/needs-weapon :job (jobs.items.obtain) :args triggers.survival.needs-weapon/defaults :persistence :cooldown :cooldown-s 600}
   {:id :door-left :level :comfort :when triggers.maintenance.door-left/door-left :job (jobs.maintenance.shut-doors) :args triggers.maintenance.door-left/defaults :persistence :cooldown :cooldown-s 5 :backoff {:after 9}}
   {:id :inventory-nearly-full :level :comfort :when triggers.storage.inventory-nearly-full/inventory-nearly-full :job (jobs.storage.make-room) :args triggers.storage.inventory-nearly-full/defaults :persistence :cooldown :cooldown-s 120}
   {:id :scaffold-left :level :comfort :when triggers.access.scaffold-left/scaffold-left :job (jobs.access.cleanup {:within 32}) :args triggers.access.scaffold-left/defaults :persistence :stop}
