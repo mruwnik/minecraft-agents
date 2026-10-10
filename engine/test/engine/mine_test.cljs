@@ -2051,6 +2051,21 @@
 
 ;; ------------------------------------------------------------------ walks that cannot end
 
+;; Alder j607: ore 50 blocks down, walks ended :off-plan (and, since go-to refuses big drops, :needs-health): three of them ended get-kit no-source.
+(deftest ore-a-walk-cannot-reach-is-skipped-without-a-failure-whatever-the-why
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [why [:off-plan :needs-health]]
+          (let [stub {:check (constantly true)
+                      :round (fn [c] (ctx/result! c {:status :stopped :arrived false :reason :unreachable :why why}) :done)}
+                s (start {:world {:blocks (cells "sand" [15] [64] [-1 0 1 2])} :jobs (assoc registry/jobs 'jobs.movement.go-to stub)})]
+            (core/submit! (:eng s) (spec {:block "sand" :count 4 :tunnel-length 0 :mend false}) {})
+            (await (run-ticks s 60))
+            (is (empty? (events-of s :mine.gave-up)) (str why))
+            (is (= 4 (count (events-of s :mine.unreachable))) (str why))))))))
+
+
 ;; Juniper j754: the walk to an ore waited for day for ever (go-to at night); mine gave the round back for 12 minutes.
 (deftest a-walk-that-keeps-waiting-is-skipped-after-the-stall-rounds
   (async done

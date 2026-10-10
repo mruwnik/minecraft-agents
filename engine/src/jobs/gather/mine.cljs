@@ -561,9 +561,15 @@
   (skip! c pos)
   (ctx/update-mem! c update :failures (fnil inc 0)))
 
+(defn unreachable-walk?
+  "Whether a blocked walk to a target is no reason to count a failure: a permanent verdict, or a way go-to will not take
+  (:off-plan on a long drop, :needs-health: too costly to walk). The run digs toward other ore or tunnels instead."
+  [{:keys [why] :as result}]
+  (boolean (or (result/permanent-walk? result)
+               (and (= :stopped (:status result)) (contains? #{:off-plan :needs-health} why)))))
+
 (defn skip-unreachable!
-  "Skip a target go-to judged a permanent verdict on (an ore of a cave seen from above has no stand): no failure counted, so a
-  vein of such cells never ends the run."
+  "Skip a target the walk cannot reach (unreachable-walk?): no failure counted, so a vein of such cells never ends the run."
   [c pos]
   (ctx/emit! c :mine.unreachable :info {:pos (access/cell pos) :why (:why (ctx/child-result c :walk))
                                         :text (str "mine skips " (str/join "," (access/cell pos)) ": no way to stand beside it")})
@@ -1223,7 +1229,7 @@
                                                (skip! c pos) :again)
       (some? pos) (let [walked (await (walk-to-dig! c pos))]
                     (cond
-                      (and (= :blocked walked) (result/permanent-walk? (ctx/child-result c :walk))) (do (skip-unreachable! c pos) :again)
+                      (and (= :blocked walked) (unreachable-walk? (ctx/child-result c :walk))) (do (skip-unreachable! c pos) :again)
                       (= :blocked walked) (do (skip-failed! c pos) :again)
                       (= :partial walked) (stalled! c pos)
                       (branch-torch-due? c) (await (torch-step! c true))
