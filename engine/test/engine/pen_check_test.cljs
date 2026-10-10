@@ -79,11 +79,11 @@
     (is (= leaks (pen/dedupe-leaks (concat leaks leaks))))))
 
 (defn ^:async run-seeing
-  "run-job with the body seeing through perception and no look taken yet; facing yaw (Minecraft degrees)."
-  [args w yaw]
+  "run-job with the body seeing through perception and no look taken yet; facing yaw (Minecraft degrees), ticks rounds (default 6)."
+  [args w yaw & [ticks]]
   (let [s (h/setup-seeing (assoc w :yaw yaw) nil)]
     (core/submit! (:eng s) (list job args) {})
-    (dotimes [_ 6]
+    (dotimes [_ (or ticks 6)]
       (swap! (:clock s) + 700)
       (await (core/tick! (:eng s))))
     (first (filter #(= :pen-check.done (:kind %)) @(:seen s)))))
@@ -110,3 +110,12 @@
           (let [event (await (run-seeing {:at [2 64 2]} (world {"2,64,-1" "oak_fence_gate"} {"2,64,-1" {:open false}}) yaw))]
             (is (= {:closed? true :cells 25} (select-keys event [:closed? :reason :cells])) (str "yaw " yaw))
             (is (= [{:pos {:x 2 :y 64 :z -1} :open? false}] (:gates event)) (str "yaw " yaw))))))))
+
+(deftest a-gate-hidden-behind-a-pillar-is-walked-to-and-seen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (world {"-1,64,2" "oak_fence_gate" "1,64,2" "stone" "1,65,2" "stone" "1,66,2" "stone"} {"-1,64,2" {:open false}})
+              event (await (run-seeing {:at [3 64 2]} (assoc-in w [:self :pos] {:x 3 :y 64 :z 2}) 90 60))]
+          (is (= {:closed? true :cells 24} (select-keys event [:closed? :cells])) "the body walks round the pillar to see the gate")
+          (is (= [{:pos {:x -1 :y 64 :z 2} :open? false}] (:gates event))))))))

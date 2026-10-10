@@ -2,6 +2,7 @@
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.apiary :as apiary]
+            [jobs.lib.near :as near]
             [jobs.lib.pen :as pen]
             [jobs.lib.sense :as sense]))
 
@@ -10,7 +11,8 @@
   jobs.lib.pen: fences, walls and closed gates are 1.5 high, an open gate is a way out, a drop of more than 3
   is not taken) from the feet cell :at [x y z], or from every surface inside :box, where a step out of the box
   is a leak. Reads what the body has seen; a pen it has not seen closed is checked again after it looks at the
-  cells it has not seen (jobs.lib.sense/decide!). Never moves, digs or places. Declines without :at and :box.
+  cells it has not seen (jobs.lib.sense/decide!); a cell that stays unseen (hidden behind a block) is walked to, at
+  most 3 times, until the eye sees it. Never digs or places. Declines without :at and :box.
 
   The fill stops after :max-cells cells: a bigger pen is not closed, reason :unbounded. A fill without a box
   that finds no wall either side of a gap says that too.
@@ -32,15 +34,29 @@
   (or (boolean (or (:at (:args c)) (:box (:args c))))
       (ctx/wait c {:reason :no-pen :why "needs :at or :box"})))
 
+(def max-walks 3)
+
+(defn unseen-leak
+  "The nearest-listed leak cell that is unseen, as {:x :y :z}."
+  [checked]
+  (:pos (first (filter #(= :unloaded (:why %)) (:leaks checked)))))
+
 (defn ^:async round [c]
   (let [{:keys [at box max-cells]} (:args c)
         block-at (apiary/seen-block-at-fn (:primitives c))
         checked (await (sense/decide! c ::pen #(pen/check {:block-at block-at :at at :box box :max-cells max-cells})
                                       {:retry? #(not (:closed? %))}))
-        result (pen/summary checked)]
-    (ctx/emit! c :pen-check.done :info
-               (assoc result :text (if (:closed? result)
-                                     (str "pen closed, " (:cells result) " cells")
-                                     (str "pen not closed: " (name (:reason result))))))
-    (ctx/result! c result)
-    :done))
+        unseen (when (= :unloaded (:reason checked)) (unseen-leak checked))
+        walks (:walks (ctx/mem c) 0)
+        walk (when (and unseen (< walks max-walks))
+               (await (near/go-near! c unseen 1 {:doors :never :escalate false})))]
+    (case walk
+      :partial :continue
+      :there (do (ctx/update-mem! c update :walks (fnil inc 0)) :continue)
+      (let [result (pen/summary checked)]
+        (ctx/emit! c :pen-check.done :info
+                   (assoc result :text (if (:closed? result)
+                                         (str "pen closed, " (:cells result) " cells")
+                                         (str "pen not closed: " (name (:reason result))))))
+        (ctx/result! c result)
+        :done))))
