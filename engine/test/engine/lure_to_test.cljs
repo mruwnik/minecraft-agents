@@ -143,3 +143,11 @@
           (is (finished? s))
           (is (= :arrived (:reason (done-event s))))
           (is (= "u2" (:animal (done-event s)))))))))
+
+(deftest a-baby-is-named-when-it-is-the-only-animal-skipped
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [baby (await (scenario {} {:inventory wheat :entities [(cow 2 3 {:baby true})]} 12))]
+          (is (= :none (:reason (done-event baby))))
+          (is (re-find #"babies" (:text (first (stopped baby))))))))))

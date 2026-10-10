@@ -1,5 +1,6 @@
 (ns jobs.animals.lure-to
-  (:require [engine.args :as a]
+  (:require [clojure.string :as str]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.animals.herd-run :as hr]
             [jobs.animals.herd-trip :as ht]
@@ -55,10 +56,21 @@
       (nil? pos) (ctx/wait c :no-destination)
       :else true)))
 
+(defn skipped-text
+  "What kept the animals seen within radius from being lured: babies, those on a lead, the zone rules."
+  [c]
+  (let [{:keys [mob radius]} (:args c)
+        seen (animals/herd (:primitives c) mob radius)
+        parts (cond-> []
+                (some #(true? (.-baby %)) seen) (conj "babies are not lured")
+                (some animals/leashed? seen) (conj "some are on a lead")
+                (animals/refusal c) (conj (str "zone rules: " (name (animals/refusal c)))))]
+    (when (seq parts) (str " (" (count seen) " seen: " (str/join ", " parts) ")"))))
+
 (defn stop-text [c reason]
   (let [{:keys [mob radius]} (:args c)]
     (case reason
-      :none (str "no " mob " seen within " radius " blocks to lure")
+      :none (str "no adult " mob " free to lure within " radius " blocks" (skipped-text c))
       :no-food (str "no food for " mob " carried and none could be got")
       (str "luring stopped: " (name reason)))))
 
