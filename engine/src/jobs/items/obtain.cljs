@@ -44,7 +44,7 @@
     cobblestone and ore drops (coal, raw_iron, raw_gold, diamond ..: from the plain or deepslate ore seen) by jobs.gather.mine (its pickaxe only from a chest or a craft, never gathered: no mine inside a mine's fetch, so no loop back into obtain). The crafts follow once the chain is whole (a chain that is craftable now
     is crafted first). A child that brings in nothing three times stops it (:tried :gather). A mined need (seen, or
     with :explore) whose block no carried tool harvests gets the cheapest tool that does first (an obtain child, slot
-    :pickaxe: wooden_pickaxe for stone and coal, stone_pickaxe for iron).
+    :pickaxe: wooden_pickaxe for stone and coal, stone_pickaxe for iron); a mine that ends :no-tool (its pickaxe broke) does not count as a nothing run, that tool is got again the same way.
     With :explore, an unseen stone material or ore other than coal is left to the mine child (it tunnels for ore); any other unseen raw need is searched for (jobs.explore.search child, slot :explore, at most 3 per need;
     a notice :obtain.exploring says so); none found stops it (:tried {:gather {:searched ..}}).
   - Nothing else: stopped :no-source with :tried.
@@ -582,17 +582,6 @@
   [need r]
   (if (= :declined r) (max-fruitless) (:max-runs need (max-fruitless))))
 
-(defn gather-failed!
-  "A gather run that brought nothing. Trees seen but unreachable (:no-tree) with :explore on send the body to look
-  elsewhere (bounded by [:explored key]) instead of counting a fruitless run."
-  [c need why r]
-  (if (and (= :no-tree why) (explore-opts c) (< (get-in (ctx/mem c) [:explored (:key need)] 0) (max-fruitless)))
-    (do (ctx/update-mem! c assoc-in [:gather :unreachable (:key need)] true) :again)
-    (let [k (inc (get-in (ctx/mem c) [:gather :fruitless] 0))]
-      (ctx/update-mem! c assoc-in [:gather :fruitless] k)
-      (when (>= k (fruitless-limit need r)) (tried! c :gather (or why :failed)))
-      :again)))
-
 (defn tools-wanted
   "For a mined need (dirt is dug by hand) whose block the carried tools do not harvest, with :craft allowed: the tools
   that do, cheapest first (wooden_pickaxe for stone, stone_pickaxe for iron_ore), less those being fetched above; else nil."
@@ -606,6 +595,23 @@
       (not-empty (vec (remove (set (concat names (:chain (:args c)))) tools))))))
 
 (defn pickaxe-first? [c names need] (boolean (tools-wanted c names need)))
+
+(defn gather-failed!
+  "A gather run that brought nothing. Trees seen but unreachable (:no-tree) with :explore on send the body to look
+  elsewhere (bounded by [:explored key]); a mine that lost its pickaxe (:no-tool) that the pickaxe step can replace
+  goes to that step; neither counts as a fruitless run."
+  [c names need why r]
+  (cond
+    (and (= :no-tree why) (explore-opts c) (< (get-in (ctx/mem c) [:explored (:key need)] 0) (max-fruitless)))
+    (do (ctx/update-mem! c assoc-in [:gather :unreachable (:key need)] true) :again)
+
+    (and (= :no-tool why) (pickaxe-first? c names need)) :again
+
+    :else
+    (let [k (inc (get-in (ctx/mem c) [:gather :fruitless] 0))]
+      (ctx/update-mem! c assoc-in [:gather :fruitless] k)
+      (when (>= k (fruitless-limit need r)) (tried! c :gather (or why :failed)))
+      :again)))
 
 (defn pickaxe-args
   "The args of the obtain child that gets a tool for need."
@@ -701,7 +707,7 @@
                 (ctx/update-mem! c update :gather dissoc :before :item :tree)
                 (if (> (gather-carried p need) before)
                   (do (ctx/update-mem! c assoc-in [:gather :fruitless] 0) :again)
-                  (gather-failed! c need (or (:reason res) :nothing-gathered) r)))))))))
+                  (gather-failed! c names need (or (:reason res) :nothing-gathered) r)))))))))
 
 (defn ^:async finish-tree!
   "The log child of an earlier round was cut before it ended: runs it to its end even when the logs carried are enough

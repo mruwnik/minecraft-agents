@@ -58,6 +58,37 @@
           (is (= 1 (get (f/inv s) "stone_pickaxe")))
           (is (= 1 (get (f/inv s) "raw_iron"))))))))
 
+(deftest a-pickaxe-that-breaks-mid-mine-is-replaced-with-wood-and-stone-gathered-and-mining-resumes
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [trees (for [x [-4 0 4]] (merge (into {} (for [y [64 65 66]] [(str x "," y ",5") "oak_log"]))
+                                             {(str x ",67,5") "oak_leaves" (str x ",63,5") "grass_block"}))
+              blocks (merge (apply merge trees)
+                            (into {} (for [x (range -2 4) z [12 13] y [63 64]] [(str x "," y "," z) "stone"]))
+                            (into {} (for [x (range -2 3)] [(str x ",64,17") "iron_ore"]))
+                            (into {} (for [x (range -2 3)] [(str x ",63,17") "stone"])))
+              s (f/start (-> (ore-world blocks [{:name "stone_pickaxe" :count 1} {:name "crafting_table" :count 1}])
+                             (assoc :floor [-30 -10 40 30])
+                             (update :drops assoc "oak_log" "oak_log"))
+                         [] (assoc f/sight-opts :radius 48))
+              p (:p s)
+              breaks (atom 0)]
+          (.override (.-world p) "dig"
+                     (fn ^:async f [token args impl]
+                       (let [r (await (impl token args))]
+                         (when (and (< @breaks 3) (some (comp #{"stone_pickaxe"} :name) (:inventory @(fake/state p))))
+                           (swap! breaks inc)
+                           (swap! (fake/state p) update :inventory #(vec (remove (comp #{"stone_pickaxe"} :name) %))))
+                         r)))
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "raw_iron" :count 4 :explore true}) {})
+          (loop [i 0]
+            (await (f/run-ticks s 1))
+            (.advance (.-world p) 40)
+            (when (and (< i 3000) (seq (f/listed s))) (recur (inc i))))
+          (is (= 3 @breaks))
+          (is (<= 4 (get (f/inv s) "raw_iron" 0))))))))
+
 (deftest raw-iron-with-no-ore-seen-waits-no-source-naming-it
   (async done
     (tu/run-async done
