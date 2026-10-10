@@ -5,6 +5,7 @@
             [engine.core :as core]
             [engine.death-test :as dt :refer [die! job recovered recovered-trip pile-drops fetching-events]]
             [engine.library-test :refer [setup]]
+            [jobs.lib.ledger :as ledger]
             [engine.memory :as mem]
             [engine.test-util :as tu :refer [run-until-empty]]
             [triggers.survival.died :as died]))
@@ -142,3 +143,28 @@
           (let [w (core/waiting eng id)]
             (is (= [:no-drops :skip] ((juxt :reason :decision) w)) (pr-str w))
             (is (re-find #"already decided: skip: value .*cost" (:text w)) (pr-str w))))))))
+
+(def plug-cells
+  "The two dirt cells the body placed in the mouth of a stone cell round the death point."
+  [[19 64 0] [19 65 0]])
+
+(def stone-cell
+  "Stone round the death point's two interior cells, but for the mouth towards the body (west)."
+  (for [x (range 19 22) z [-1 0 1] y [64 65 66]
+        :when (not (and (= x 20) (= z 0) (#{64 65} y)))
+        :when (not (some #{[x y z]} plug-cells))]
+    [x y z]))
+
+(deftest a-pile-inside-the-bodys-own-seal-is-dug-out-and-recovered
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pile dt/death-pile-of-the-field-report
+              blocks (merge (into {} (map (fn [[x y z]] [(str x "," y "," z) "stone"])) stone-cell)
+                            (into {} (map (fn [[x y z]] [(str x "," y "," z) "dirt"])) plug-cells))
+              {:keys [eng]} (setup {:floor tu/walk-floor :blocks blocks :entities (vec (pile-drops pile))})]
+          (ledger/write! (:store eng) (mapv (fn [cell] {:cell cell :item "dirt" :before "air" :job "j9" :purpose :retreat-plug :state :placed}) plug-cells))
+          (die! eng {:pos dt/death-pos :inventory pile})
+          (core/submit! eng job {})
+          (await (run-until-empty eng 40))
+          (is (= :collected (:decision (recovered eng))) (pr-str (recovered eng))))))))

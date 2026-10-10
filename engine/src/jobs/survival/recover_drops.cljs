@@ -4,6 +4,7 @@
             [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.combat :as combat]
             [jobs.lib.armour :as armour]
             [jobs.lib.cost :as cost]
@@ -62,6 +63,8 @@
   Fetch: walks to the death point (jobs.movement.go-to), then collects (passes, up to 3) the pile's items it can see within :collect-radius
   (jobs.forestry.collect-drops; only the carried item names, never items out of sight). Drops that went out of sight
   (down a shaft) get one walk to the cell the first was last seen in and a look again before the trip ends :partial.
+  The pile out of reach (go-to :goal-enclosed, or no item in sight at it) with blocks this body placed within ::seal-radius of it (the scaffold ledger, a flee
+  seal): once per trip they are taken back (jobs.access.cleanup, event recover-drops.seal) and the walk goes on.
   Ends by writing a :recovered entry {:decision :skip|:collected|:partial|:abandoned}.
   :collected counts the pile's items that entered the inventory since the decision, those picked up on the walk too.
   :abandoned with :reason :unreachable (the walk was blocked, or did not arrive :max-blocked-retries times), :danger
@@ -71,7 +74,7 @@
   Restart-safe: the decision, the baseline of carried items and the phase are kept in a :recover-trip entry keyed to the death.
   A run cut by a higher reflex, or a restarted body, goes on with the same trip.
   Warns respawn_away_from_bed once per death when the body respawned over 10 blocks from its respawn bed (the live :spawn-bed, else the :bed it slept in).
-  Memory: reads :died, :respawned, :bed, :slept, :recover-trip. Writes :recovered and :recover-trip.")
+  Memory: reads :died, :respawned, :bed, :slept, :recover-trip, the scaffold ledger. Writes :recovered and :recover-trip.")
 
 (a/defargs args
   {:margin {:doc "added to the fetch cost before comparing it to the value" :spec (a/num-in nil nil) :default 0}
@@ -90,7 +93,9 @@
    ::max-hostile-cuts {:default 2 :doc "Resumes of one trip that followed a cut by a hostile reflex, or a decline for a danger, before it is given up as :danger." :spec (a/int-in 1 nil)}
    ::max-blocked-retries {:default 3 :doc "Walks of one trip that did not arrive before it is given up as :unreachable." :spec (a/int-in 1 nil)}
    ::wet-danger {:default 30 :doc "Points of route danger added for a pile in water or lost to drowning (a swim with the air running out); 10 cost each." :spec (a/num-in 0 nil)}
+   ::seal-radius {:default 4 :doc "Scaffold blocks this body placed within this many blocks of the pile (a flee seal) are taken back when they keep it out of reach." :spec (a/num-in 0 nil)}
    ::bed-away-blocks {:default 10 :doc "A respawn farther than this from the bed the body slept in is reported." :spec (a/int-in 0 nil)}})
+(defn seal-radius [] (settings/get settings ::seal-radius))
 (defn wet-danger [] (settings/get settings ::wet-danger))
 (defn arrive-range [] (settings/get settings ::arrive-range))
 (defn max-hostile-cuts [] (settings/get settings ::max-hostile-cuts))
@@ -237,6 +242,22 @@
   (ctx/emit! c :recover-drops.declined :info (assoc fields :reason reason :text (str "recover-drops declined: " text)))
   :declined)
 
+(defn own-seal-near
+  "The open scaffold ledger entries (jobs.lib.ledger) within seal-radius of pos: blocks this body placed round the pile."
+  [c pos]
+  (filterv #(<= (u/dist pos (zipmap [:x :y :z] (:cell %))) (seal-radius)) (ledger/open-entries (ctx/view c))))
+
+(defn ^:async clear-seal!
+  "Once per trip, when the body's own placed blocks stand near the pile (its flee seal): take them back
+  (jobs.access.cleanup) and walk again. :next when it ran, else nil."
+  [c pos]
+  (when (and (not (:seal-cleared (ctx/mem c))) (seq (own-seal-near c pos)))
+    (ctx/update-mem! c assoc :seal-cleared true :phase :go)
+    (save-trip! c)
+    (ctx/emit! c :recover-drops.seal :info {:pos pos :text "the pile is out of reach behind blocks this body placed: taking them back"})
+    (await (child/run! c :seal 'jobs.access.cleanup {:job :all}))
+    :next))
+
 (defn ^:async go!
   "Walk to the death point by one go-to call: :next once there (the collect phase), else :declined (go-to waits on the
   world, or it did not arrive: the next run walks again while the pile is worth it, and the window closes it). A walk
@@ -247,6 +268,7 @@
       (not= :done r) (decline! c :unreachable (str "the walk to " (pr-str pos) " is waiting on the world") {:pos pos})
       (:inside-own-shelter (ctx/child-result c :go))
       (decline! c :unreachable (str "the walk to " (pr-str pos) " is refused: the body is sealed in its own shelter, which opens by day") {:pos pos})
+      (and (= :goal-enclosed (:why (ctx/child-result c :go))) (await (clear-seal! c pos))) :next
       (not (:arrived (ctx/child-result c :go)))
       (do (ctx/update-mem! c #(-> % (assoc :blocked true) (update :blocked-retries (fnil inc 0))))
           (save-trip! c)
@@ -327,7 +349,7 @@
       (finish-collect! c pile [])
       (let [ids (pile-ids c pos names radius)]
         (if (empty? ids)
-          (finish-collect! c pile ids)
+          (or (await (clear-seal! c pos)) (finish-collect! c pile ids))
           (do
             (await (child/run! c :collect 'jobs.forestry.collect-drops
                                {:radius (+ radius (stray-range) 4) :ids ids :filter names}))
