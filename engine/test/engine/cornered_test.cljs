@@ -342,6 +342,18 @@
           (is (= ["j1"] while-hidden) "hiding in the pocket")
           (is (= [] (:list (core/state eng)))))))))
 
+(deftest a-phantom-is-hidden-from-not-outrun
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p seen]}
+              (await (hidden-round hiding-retreat {:inventory [{:name "cobblestone" :count 20}]
+                                            :entities [{:id 9 :name "phantom" :kind "hostile" :pos {:x 4 :y 64 :z 0} :health 20}]}
+                                   120000 (fn [_] nil)))]
+          (is (zero? (count (calls p "steer"))) "no walk: a phantom flies faster than the body runs")
+          (is (pos? (count (calls p "place"))) "it walls itself in")
+          (is (= 1 (count (filter #(= :retreat_sealed (:kind %)) @seen)))))))))
+
 (deftest a-cornered-body-with-a-pickaxe-fights-when-no-side-can-be-dug
   (async done
     (tu/run-async done

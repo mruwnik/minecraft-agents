@@ -46,6 +46,8 @@
 
 (defn enderman? [e] (= "enderman" (.-name e)))
 
+(defn flyer? [e] (= "phantom" (.-name e)))
+
 (defn creeper? [e]
   (or (true? (.-creeper e)) (= "creeper" (.-name e))))
 

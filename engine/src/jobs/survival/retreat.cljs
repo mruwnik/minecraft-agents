@@ -164,14 +164,15 @@
 
 (defn escape-order
   "Pure: the cornered options to try, safest first. {:win? the odds say a fight leaves reserve health (never true
-  for a creeper), :creeper? one is near (it comes first), :enderman? an angry enderman is near (angry-enderman?) (it teleports, so no walk or back-off, and a
+  for a creeper), :flyer? a phantom is near (it outflies a walker: shelter, else fight), :creeper? one is near (it comes first), :enderman? an angry enderman is near (angry-enderman?) (it teleports, so no walk or back-off, and a
   pillar is within its reach: the body enters water within water-reach, which it avoids, else shuts itself in), :ranged? the threat shoots, :home? the body is in its home
   room: it digs no pit or pocket in its own floor or walls, :swim? the body is in water with a drowned near: swimming out to dry land comes first unless a fight wins}."
-  [{:keys [win? creeper? enderman? ranged? swim? home?]}]
+  [{:keys [win? creeper? enderman? flyer? ranged? swim? home?]}]
   (cond->> (cond
              creeper? [:back-off :seal :pillar :pit :pocket :fight]
              enderman? [:water :seal :pit :pocket :fight]
              win? [:fight]
+             flyer? [:seal :pit :pocket :fight]
              :else (into (if ranged? [:seal] [:seal :pillar]) [:back-off :pit :pocket :fight]))
     (and swim? (not creeper?) (not enderman?) (not win?)) (into [:swim-out])
     home? (filterv (complement #{:pit :pocket}))))
@@ -316,6 +317,7 @@
         order (escape-order {:win? (fight-wins? c hostiles)
                              :creeper? (boolean (some combat/creeper? hostiles))
                              :enderman? (angry-enderman? c hostiles)
+                             :flyer? (boolean (some combat/flyer? hostiles))
                              :ranged? (boolean (and threat (combat/ranged? threat)))
                              :swim? (and (boolean (some #(= "drowned" (.-name %)) hostiles)) (in-water? c))
                              :home? home?})]
@@ -588,6 +590,7 @@
       (do (when (seq (near-hostiles c)) (ctx/update-mem! c assoc :since-gain 0))
           (await (stuck "the chaser keeps up")))
       (angry-enderman? c (near-hostiles c)) (await (cornered! c "an enderman cannot be outrun" inside?))
+      (some combat/flyer? (near-hostiles c)) (await (cornered! c "a phantom cannot be outrun" inside?))
       door (await (shut-door! c door))
       (and inside? (home-door c room)) (await (shut-home-door! c (home-door c room)))
       inside? (await (stuck "at home, the hostile still has a way in"))
