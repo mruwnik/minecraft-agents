@@ -705,3 +705,20 @@
           (await (core/tick! eng))
           (is (neg? (:x (first-move eng))) "away from it")
           (is (zero? (count (calls p "place")))))))))
+
+(deftest a-cornered-body-keeps-fighting-a-mob-that-keeps-hurting-it-though-the-walk-to-it-is-blocked
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:blocks dead-end :entities [(zombie 6 64 0)]})
+              calls (atom 0)
+              hurt! (fn []
+                      (swap! calls inc)
+                      (swap! (fake/state p) update-in [:self :health] - 0.1)
+                      (when (>= @calls 60) (swap! (fake/state p) assoc :entities [])))]
+          (.override (.-world p) "steer" (fn [_ _ _] (hurt!) (js/Promise.resolve #js {:status "timeout" :pose #js {}})))
+          (.override (.-world p) "wait" (fn [token a impl] (hurt!) (impl token a)))
+          (core/submit! eng retreat {})
+          (await (core/tick! eng))
+          (is (<= 60 @calls) "kept trying until the zombie was gone")
+          (is (not-any? #(re-find #"cannot_escape" (pr-str %)) @seen) "never gives up on the mob that is hurting it"))))))

@@ -16,7 +16,7 @@
   Declines when health is below :min-health.
   Ends when no hostile is within :range, with the result {:killed [ids]}.
   A hostile the walk toward is blocked for three times is given up on, with a fight_unreachable warning, and no longer counts,
-  unless the body has been hurt since the last blocked walk.
+  unless the body lost health since the last blocked walk (the count then starts over).
   So is one that three swings in a row did no damage to (the attack result says hurt false), with a fight_no_damage warning.
   When no other hostile is in range the job declines, so respond-to-hostile retreats instead.
   A killed mob, or one whose id is in :skip, is not swung at again while its corpse is listed.
@@ -35,17 +35,24 @@
   {::reach {:default 3 :doc "How near the target the body stands to hit, in blocks." :spec (a/int-in 0 nil)}})
 (defn reach [] (settings/get settings ::reach))
 
+(defn blocked-count
+  "mem's blocked-walk count for hostile id after one more walk blocked with the body at health: it starts over when the
+  body lost health since the last blocked walk (a mob that keeps hurting it is not given up on)."
+  [mem id health]
+  (if (< health (get-in mem [:blocked-health id] ##-Inf))
+    1
+    (inc (get-in mem [:blocked id] 0))))
+
 (defn given-up-in?
   "Whether mem says the walk towards hostile id has been blocked, or swings at it done no damage, n times."
-  [mem id health n]
-  (or (and (>= (get-in mem [:blocked id] 0) n)
-           (>= health (get-in mem [:blocked-health id] ##Inf)))
+  [mem id n]
+  (or (>= (get-in mem [:blocked id] 0) n)
       (>= (get-in mem [:no-damage id] 0) n)))
 
 (defn given-up?
-  "Whether hostile e is given up on (given-up-in?), at the body's health now."
+  "Whether hostile e is given up on (given-up-in?)."
   [c e]
-  (given-up-in? (ctx/mem c) (.-id e) (.-health (.self (:primitives c))) (u/max-failures)))
+  (given-up-in? (ctx/mem c) (.-id e) (u/max-failures)))
 
 (defn start-of
   "Where the job started: the first round's position (the current one before it)."
@@ -83,9 +90,10 @@
 (defn note-blocked!
   "Count a blocked walk towards target; warn once when it is given up on."
   [c target]
-  (let [n (inc (get-in (ctx/mem c) [:blocked (.-id target)] 0))]
+  (let [health (.-health (.self (:primitives c)))
+        n (blocked-count (ctx/mem c) (.-id target) health)]
     (ctx/update-mem! c #(-> % (assoc-in [:blocked (.-id target)] n)
-                            (assoc-in [:blocked-health (.-id target)] (.-health (.self (:primitives c))))))
+                            (assoc-in [:blocked-health (.-id target)] health)))
     (when (= n (u/max-failures))
       (ctx/emit! c :fight_unreachable :warn {:text (str "cannot reach the " (.-name target) ", giving up on it")}))))
 

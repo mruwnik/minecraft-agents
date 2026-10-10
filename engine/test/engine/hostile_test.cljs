@@ -935,10 +935,12 @@
 
 (deftest fight-back-gives-up-on-a-blocked-mob-only-while-it-does-not-hurt-the-body
   (let [n (u/max-failures)
-        mem {:blocked {7 n} :blocked-health {7 12}}]
-    (is (fight-back/given-up-in? mem 7 12 n) "blocked n times, body unhurt since: given up")
-    (is (not (fight-back/given-up-in? mem 7 9 n)) "the body lost health since: still fought")
-    (is (fight-back/given-up-in? {:no-damage {7 n}} 7 20 n) "no-damage swings still give up")))
+        mem {:blocked {7 2} :blocked-health {7 12}}]
+    (is (= 3 (fight-back/blocked-count mem 7 12)) "blocked again, body unhurt since: the count goes on")
+    (is (= 1 (fight-back/blocked-count mem 7 9)) "the body lost health since: the count starts over")
+    (is (= 1 (fight-back/blocked-count {} 7 20)))
+    (is (fight-back/given-up-in? {:blocked {7 n}} 7 n))
+    (is (fight-back/given-up-in? {:no-damage {7 n}} 7 n) "no-damage swings still give up")))
 
 (deftest respond-never-fights-an-enderman-however-good-the-sword
   (async done
