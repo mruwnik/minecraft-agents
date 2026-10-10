@@ -135,6 +135,24 @@ test('no :item keeps the held stack in hand', async () => {
   assert.equal(calls(bot, 'activateBlock').length, 1)
 })
 
+const riskyHeld = [
+  { name: 'a placeable block', held: { name: 'cobblestone', count: 8, slot: 36 }, empties: true },
+  { name: 'a lava bucket', held: { name: 'lava_bucket', count: 1, slot: 36 }, empties: true },
+  { name: 'a water bucket', held: { name: 'water_bucket', count: 1, slot: 36 }, empties: true },
+  { name: 'flint and steel', held: { name: 'flint_and_steel', count: 1, slot: 36 }, empties: true },
+  { name: 'seeds', held: { name: 'wheat_seeds', count: 8, slot: 36 }, empties: false }
+]
+for (const c of riskyHeld) {
+  test(`no :item with ${c.name} in hand ${c.empties ? 'empties the hand first' : 'keeps it'}`, async () => {
+    const { bot, p } = rig({ items: [c.held] })
+    bot.registry.blocksByName = { cobblestone: { id: 4 }, dirt: { id: 3 } }
+    bot.heldItem = c.held
+    await p.useOn('t1', dirt)
+    assert.deepEqual(names(bot).filter(n => n === 'setQuickBarSlot' || n === 'unequip'), c.empties ? ['setQuickBarSlot'] : [])
+    assert.equal(calls(bot, 'activateBlock').length, 1)
+  })
+}
+
 const faces = [
   { face: undefined, vec: [0, 1, 0], cursor: [0.5, 1, 0.5] },
   { face: 'up', vec: [0, 1, 0], cursor: [0.5, 1, 0.5] },

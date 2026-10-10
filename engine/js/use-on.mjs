@@ -14,6 +14,8 @@ const bedSafe = bot => /overworld$/.test(bot.game?.dimension ?? 'overworld')
 // The generic window guard is a last resort: a window mineflayer misparses can desync the inventory, so refuse window-opening blocks before the click.
 const CONTAINER = /chest$|barrel$|shulker_box$|furnace$|smoker$|hopper$|dispenser$|dropper$|brewing_stand$|crafting_table$|anvil$|enchanting_table$|grindstone$|loom$|stonecutter$|cartography_table$|smithing_table$|lectern$|beacon$|^crafter$|command_block$|^structure_block$|^jigsaw$|^vault$/
 const HAZARDS = new Set(['flint_and_steel', 'fire_charge', 'lava_bucket'])
+// A click the block does not take would place or pour the held item against it, so these are put away first.
+const PLACING = /_bucket$|_spawn_egg$|_boat$|_raft$|minecart/
 const isAir = name => name === 'air' || name.endsWith('_air')
 const isNum = n => typeof n === 'number' && Number.isFinite(n)
 const sleepMs = ms => new Promise(resolve => setTimeout(resolve, ms))
@@ -39,6 +41,8 @@ export function createUseOn ({ act, getBot, inventory, eye, lookNow, timeScale, 
     ctx.alive()
     return true
   }
+
+  const placing = (bot, name) => name && (HAZARDS.has(name) || PLACING.test(name) || bot.registry?.blocksByName?.[name])
 
   return async function useOn (token, a = {}) {
     if (!isOwner(token)) throw cutError()
@@ -70,7 +74,7 @@ export function createUseOn ({ act, getBot, inventory, eye, lookNow, timeScale, 
       if (stack) {
         await bot.equip(stack, 'hand')
         ctx.alive()
-      } else if (!keepHand && !await emptyHand(ctx, bot)) return refuse('no-room')
+      } else if ((!keepHand || placing(bot, bot.heldItem?.name)) && !await emptyHand(ctx, bot)) return refuse('no-room')
       const countBefore = item === undefined ? 0 : carried(item)
       await lookNow(() => bot.lookAt(new Vec3(p.x + 0.5 + 0.5 * d.x, p.y + 0.5 + 0.5 * d.y, p.z + 0.5 + 0.5 * d.z), true))
       ctx.alive()
