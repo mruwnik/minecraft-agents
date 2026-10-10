@@ -98,7 +98,7 @@
   "The feet height a walker at feet height y in column [px pz] reaches in the
   next column [x z], or nil when it cannot enter it: the same height, one
   lower when the floor there is open and the cell under it is not (a step
-  down; a column with no floor, a drop of two or more, is not entered), else one higher when that is free and there is headroom above the
+  down, never into water over the head: a swimmer keeps to the surface; a column with no floor, a drop of two or more, is not entered), else one higher when that is free and there is headroom above the
   column it steps from (a step up)."
   [block-at [px pz] [x z] y]
   (cond
@@ -106,7 +106,7 @@
     (let [below (block-at {:x x :y (dec y) :z z})
           below2 (block-at {:x x :y (- y 2) :z z})]
       (cond
-        (and (passable? below) (not (passable? below2))) (dec y)
+        (and (passable? below) (not (passable? below2)) (not= "water" (block-at {:x x :y y :z z}))) (dec y)
         (floorless? below) nil
         :else y))
     (and (free-at? block-at x (inc y) z) (passable? (block-at {:x px :y (+ y 2) :z pz}))) (inc y)

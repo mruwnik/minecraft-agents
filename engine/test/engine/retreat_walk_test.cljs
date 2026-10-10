@@ -79,3 +79,12 @@
     (is (nil? (walk/way-target (at 1) [mob] [] 12)) "no stair, no way target")
     (is (nil? (walk/way-target (at 8) [{:x 9.5 :y 70 :z 0.5}] stair-floors 12))
         "every stair cell above the body lies nearer the mob than the body: none")))
+
+(defn deep-lake
+  "Stone up to y 59, water at y 60 and 61 for x >= 0, air above: a lake two deep."
+  [{:keys [x y]}]
+  (cond (<= y 59) "stone" (<= 60 y 61) (if (>= x 0) "water" "air") :else "air"))
+
+(deftest a-walk-over-deep-water-stays-at-the-surface
+  (is (= [61 61 61 61] (mapv :y (walk/walk-cells deep-lake {:x 0.5 :y 61 :z 0.5} [1 0] 4)))
+      "a swimmer is not walked down to the lake floor with its head under water"))
