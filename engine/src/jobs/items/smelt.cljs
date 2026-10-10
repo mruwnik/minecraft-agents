@@ -1,5 +1,6 @@
 (ns jobs.items.smelt
-  (:require [jobs.lib.game-facts :as facts]
+  (:require [clojure.string :as str]
+            [jobs.lib.game-facts :as facts]
             [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -13,6 +14,9 @@
 
 (def doc
   "Smelt :count of an item in a furnace, blast furnace or smoker without standing by it.
+  :item may be a list, and with :item nil and two or more raw foods or ores carried every one of them is cooked: one child
+  smelt per item, in order, each with the same :count; the result is {:smelted n :wanted n :items {item result}} (stopped,
+  with the first item's reason, when nothing was smelted; :failed names the items that gave up).
   The first round walks to the furnace, reads it, takes any output already there (it does not count) and loads
   the input and the fuel. Fuel is worked out from the count: in a furnace one fuel item smelts 8 items for coal
   or charcoal, 1.5 for overworld wood (crimson and warped do not burn), 0.5 for a stick (twice that in a blast furnace or smoker). It is taken from what is carried when :fuel is nil, coal and charcoal first.
@@ -41,7 +45,7 @@
 
 (a/defargs args
   {:furnace {:doc "furnace, blast furnace or smoker position [x y z] or {:x :y :z}; when nil the nearest one the body has seen within 32 blocks that cooks :item (or anything carried) is chosen (smelt.furnace says which), or the job ends with no-furnace-seen" :spec ::a/pos :default nil}
-   :item {:doc "what to smelt (an input; a product such as cooked_chicken or iron_ingot means its input, charcoal the carried log there is most of; an item no furnace cooks ends not-smeltable at once); the first smeltable thing carried when nil" :spec a/item? :default nil}
+   :item {:doc "what to smelt, or a list of them (an input; a product such as cooked_chicken or iron_ingot means its input, charcoal the carried log there is most of; an item no furnace cooks ends not-smeltable at once); the first smeltable thing carried when nil, or every raw food and ore carried when there are several" :spec (a/or-of a/item? (a/coll-of a/item?)) :default nil}
    :count {:doc "how many; all carried (at most one stack) when nil" :spec (a/int-in 0 nil) :default nil}
    :fuel {:doc "fuel item to load; the best carried when nil" :spec a/item? :default nil}
    :fetch {:doc "get a missing input, fuel or furnace (jobs.lib.fetch): true, a set of kinds or a map of limits; false ends with the reason" :spec fetch/option? :default true}
@@ -260,19 +264,25 @@
          (or (not (furnace-block? (.-name block)))
              (false? (some-> (.-properties block) .-lit))))))
 
-(defn check
-  "The cook is due: no furnace chosen yet (the round chooses one), nothing loaded yet, or the clock passed ready-at,
-  or since :unlit-from the furnace block is unlit or gone. Else it waits with reason :cooking. Memory, the clock and
-  one block: no window is opened."
-  [c]
-  (let [furnace (furnace-of c)
-        m (ctx/mem c)
+(defn due?
+  "Whether the cook of the job memory m is due: see check."
+  [c m]
+  (let [furnace (or (:furnace (:args c)) (:furnace m))
         now (ctx/now c)]
     (or (nil? furnace)
         (nil? (:ready-at m))
         (>= now (:ready-at m))
-        (and (>= now (:unlit-from m)) (needs-attention? (:primitives c) furnace))
-        (ctx/wait c {:reason :cooking :furnace furnace :ready-at (:ready-at m)}))))
+        (and (>= now (:unlit-from m)) (needs-attention? (:primitives c) furnace)))))
+
+(defn check
+  "The cook is due: no furnace chosen yet (the round chooses one), nothing loaded yet, or the clock passed ready-at,
+  or since :unlit-from the furnace block is unlit or gone. Else it waits with reason :cooking. Memory, the clock and
+  one block: no window is opened. A job smelting several items asks the same of the child that is cooking."
+  [c]
+  (let [m (ctx/mem c)
+        m (if-let [slot (:active m)] (get-in m [:children slot]) m)]
+    (or (due? c m)
+        (ctx/wait c {:reason :cooking :furnace (or (:furnace (:args c)) (:furnace m)) :ready-at (:ready-at m)}))))
 
 ;; ------------------------------------------------------------------ the round
 
@@ -556,7 +566,7 @@
               :again (await (round-with c (:furnace (ctx/mem c))))
               f))))))
 
-(defn ^:async round
+(defn ^:async item-round
   "One bounded step: reach the furnace, read it, then load (first) or collect. Without a :furnace the first round
   chooses the nearest seen one (kept in memory); with none in view it looks around once from where it stands (the
   four headings, level and down, a sight pass after each) and chooses again; none seen after that ends no-furnace-seen."
@@ -564,3 +574,58 @@
   (cond
     (and (nil? (:owed (ctx/mem c))) (:item (:args c)) (not (smeltable? (input-of (:item (:args c)) (carried c))))) (refuse-item! c (:item (:args c)))
     :else (or (await (fetch-stages! c)) (await (round-fetched c)))))
+
+(defn raw-carried
+  "The raw foods and ores carried, by name."
+  [c]
+  (->> (carried c) (map :name) distinct (filter #(or (foods %) (ore? %))) vec))
+
+(defn batch-items
+  "The items of a batch job, kept in memory once chosen: the :item list, or with :item nil the raw foods and ores
+  carried when there are two or more; nil for a one-item job."
+  [c]
+  (let [item (:item (:args c))
+        items (or (:items (ctx/mem c))
+                  (cond (coll? item) (vec (distinct item))
+                        (nil? item) (let [r (raw-carried c)] (when (> (count r) 1) r))))]
+    (when items (ctx/update-mem! c assoc :items items))
+    items))
+
+(defn finish-batch!
+  "End the batch: the sums of the children, each item's result and the items that gave up."
+  [c items]
+  (let [results (into {} (map (fn [i] [i (get-in (ctx/mem c) [:batch i])])) items)
+        smelted (reduce + (map #(:smelted % 0) (vals results)))
+        wanted (reduce + (map #(:wanted % 0) (vals results)))
+        failed (into {} (keep (fn [[i r]] (when (:reason r) [i (:reason r)]))) results)
+        out (cond-> {:smelted smelted :wanted wanted :items results}
+              (seq failed) (assoc :failed failed)
+              (zero? smelted) (assoc :status :stopped :reason (get failed (first items) "nothing-smeltable")))]
+    (ctx/emit! c :smelt.batch-done (if (zero? smelted) :warn :info)
+               {:smelted smelted :wanted wanted :failed failed
+                :text (str "smelted " smelted " of " wanted " (" (str/join ", " items) ")")})
+    (ctx/result! c out)
+    :done))
+
+(defn ^:async batch-round
+  "One child smelt after another, one per item; :continue while a child waits on its cook."
+  [c items]
+  (loop []
+    (let [done (:batch (ctx/mem c))
+          item (first (remove #(contains? done %) items))]
+      (if-not item
+        (do (ctx/update-mem! c dissoc :active) (finish-batch! c items))
+        (let [slot (keyword (str "item-" item))
+              _ (ctx/update-mem! c assoc :active slot)
+              out (await (ctx/call-child c slot 'jobs.items.smelt (assoc (:args c) :item item)))]
+          (if (= :done out)
+            (do (ctx/update-mem! c assoc-in [:batch item] (ctx/child-result c slot))
+                (recur))
+            :continue))))))
+
+(defn ^:async round
+  "One bounded step of the one item, or one child smelt after another for several items."
+  [c]
+  (if-let [items (batch-items c)]
+    (await (batch-round c items))
+    (await (item-round c))))

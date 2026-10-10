@@ -644,7 +644,7 @@
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
     (core/submit! eng '(recording-parent) {})
     (loop [i 0]
-      (when (and (< i 8) (seq (:list (core/state eng))))
+      (when (and (< i 24) (seq (:list (core/state eng))))
         (await (core/tick! eng))
         (advance! p 700)
         (swap! clock + 40000)
@@ -935,3 +935,42 @@
                                         {:item "raw_iron" :count 3}))]
           (is (= {:smelted 3 :wanted 3} r))
           (is (= 1 (count (furnaces-at p)))))))))
+
+;; ------------------------------------------------------------------ several items in one call
+
+(def two-foods {:blocks {pos-key "furnace"}
+                :inventory [{:name "beef" :count 2} {:name "porkchop" :count 3} {:name "coal" :count 3}]})
+
+(deftest an-item-list-cooks-each-one-and-adds-the-results
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [r (await (result-of two-foods {:furnace {:x 1 :y 64 :z 0} :item ["beef" "porkchop"]}))]
+          (is (= {:smelted 5 :wanted 5} (select-keys r [:smelted :wanted])))
+          (is (= {"beef" 2 "porkchop" 3} (into {} (map (fn [[k v]] [k (:smelted v)])) (:items r)))))))))
+
+(deftest no-item-cooks-every-raw-food-carried
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [r (await (result-of two-foods {:furnace {:x 1 :y 64 :z 0}}))]
+          (is (= {:smelted 5 :wanted 5} (select-keys r [:smelted :wanted]))))))))
+
+(deftest an-item-list-where-nothing-cooks-ends-stopped
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [r (await (result-of two-foods {:furnace {:x 1 :y 64 :z 0} :item ["dirt" "stick"] :fetch false}))]
+          (is (= :stopped (:status r)))
+          (is (= 0 (:smelted r))))))))
+
+(deftest a-batch-waits-with-its-active-childs-cooking-reason
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup two-foods)]
+          (core/submit! eng '(jobs.items.smelt {:furnace {:x 1 :y 64 :z 0} :item ["beef" "porkchop"]}) {})
+          (await (ticks eng 1))
+          (is (= ["read" "load"] (ops p)) "the first item is loaded")
+          (await (ticks eng 3))
+          (is (= ["read" "load"] (ops p)) "while it cooks the batch is left alone"))))))

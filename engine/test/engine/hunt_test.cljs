@@ -41,6 +41,42 @@
 (defn world-ids [{:keys [p]}] (set (map :id (fake/entities p))))
 (defn job-mem [{:keys [eng]}] (core/job-memory eng "j1"))
 
+;; ------------------------------------------------------------------ several kinds in one call
+
+(defn pig [id x] (animal id "pig" x {:drops [{:name "porkchop" :count 1}]}))
+
+(deftest a-mob-list-hunts-each-kind-with-count-and-keep-per-kind
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:mob ["cow" "pig"] :count 1 :keep 1}
+                                 {:inventory h/sword :entities [(cow 1 3) (cow 2 5) (pig 3 4) (pig 4 6)]} 60))
+              e (first (events-of s :hunt.batch-done))]
+          (is (= #{2 4} (world-ids s)) "the nearest cow and the nearest pig died")
+          (is (= 1 (get (inv s) "beef")))
+          (is (= 1 (get (inv s) "porkchop")))
+          (is (= 2 (:killed e)))
+          (is (finished? s)))))))
+
+(deftest food-animals-means-cows-pigs-sheep-and-chickens
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:mob :food-animals :count 1 :keep 0}
+                                 {:inventory h/sword :entities [(cow 1 3) (pig 2 4) (animal 3 "horse" 5)]} 60))]
+          (is (= #{3} (world-ids s)) "the cow and the pig died, the horse is no food animal")
+          (is (finished? s)))))))
+
+(deftest a-mob-list-with-no-animal-of-any-kind-ends-stopped
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:mob ["cow" "pig"] :keep 0} {:inventory h/sword :entities []} 20))
+              e (first (events-of s :hunt.batch-done))]
+          (is (= 0 (:killed e)))
+          (is (= :stopped (:status e)))
+          (is (finished? s)))))))
+
 ;; ------------------------------------------------------------------ the job
 
 (deftest kills-one-cow-and-collects-its-drops

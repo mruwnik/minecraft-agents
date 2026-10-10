@@ -13,6 +13,9 @@
 
 (def doc
   "Kill :count adult animals of the mob kind :mob within :radius, collecting their drops.
+  :mob may be a list of kinds, or :food-animals (cow, pig, sheep, chicken): one child hunt per kind, in order, each with
+  its own :count and :keep (:color goes to sheep only); the result is {:killed n :kinds {mob result} :reason r}: reason :count
+  when every kind reached its count, else :partial; no kill at all ends stopped with the first kind's reason.
   Never takes the last :keep adults of the kind, so they can breed. :keep nil means 2 for animals and 0 for hostile mobs
   (a kind any of whose entities in range reports kind hostile). 0 turns the rule off.
   Babies are never targets and never counted.
@@ -35,7 +38,7 @@
   :remaining is the adults of the kind in range at the end.")
 
 (a/defargs args
-  {:mob {:doc "mob type name of the animals to hunt" :spec a/name? :default "cow"}
+  {:mob {:doc "mob type name of the animals to hunt, a list of them, or :food-animals (cow, pig, sheep, chicken); one hunt per kind, :count and :keep apply to each" :spec (a/or-of a/name? (a/coll-of a/name?) #{:food-animals "food-animals"}) :default "cow"}
    :color {:doc "sheep only: kill only sheep of this wool colour (e.g. \"white\"); nil: any" :spec a/name? :default nil}
    :count {:doc "animals to kill" :spec (a/int-in 1 nil) :default 1}
    :radius {:doc "animals within this many blocks of the body count" :spec (a/num-in 0 nil) :default 24}
@@ -190,10 +193,61 @@
             :else (do (ctx/update-mem! c assoc :target (.-id next-target) :misses 0)
                       (await (hunting/attack! c (attack-opts c))))))))))
 
-(defn ^:async round
-  "The whole hunt: steps until it ends; yields only while a child waits on the world."
+(defn ^:async hunt-round
+  "The whole hunt of one kind: steps until it ends; yields only while a child waits on the world."
   [c]
   (if-let [t (await (trip/ready! c))]
     t
     (let [r (await (pace/steps! c #(step c)))]
       (if (= :yield r) :continue r))))
+
+(def food-animals ["cow" "pig" "sheep" "chicken"])
+
+(defn kinds
+  "The kinds of :mob when it names several (a list, or :food-animals); nil for one kind."
+  [c]
+  (let [mob (:mob (:args c))]
+    (cond (contains? #{:food-animals "food-animals"} mob) food-animals
+          (coll? mob) (vec (distinct mob)))))
+
+(defn kind-slot [kind] (keyword (str "kind-" kind)))
+
+(defn kind-args [c kind]
+  (cond-> (assoc (:args c) :mob kind)
+    (not= "sheep" kind) (dissoc :color)))
+
+(defn finish-kinds!
+  "End the batch: the sums and each kind's result. No kill ends stopped with the first kind's reason."
+  [c kinds]
+  (let [results (into {} (map (fn [k] [k (get-in (ctx/mem c) [:kinds k])])) kinds)
+        killed (reduce + (map #(:killed % 0) (vals results)))
+        all-count? (every? #(= :count (:reason %)) (vals results))
+        reason (cond all-count? :count (zero? killed) (:reason (get results (first kinds))) :else :partial)
+        out (cond-> {:killed killed :reason reason :kinds results}
+              (zero? killed) (assoc :status :stopped))]
+    (ctx/emit! c :hunt.batch-done (if (zero? killed) :warn :info)
+               (assoc out :text (str "hunt done: killed " killed " of " (str/join ", " kinds) ", " (some-> reason name))))
+    (ctx/result! c out)
+    :done))
+
+(defn ^:async kinds-round
+  "One child hunt after another, one per kind; :continue only while a child waits on the world."
+  [c kinds]
+  (loop []
+    (let [done (:kinds (ctx/mem c))
+          kind (first (remove #(contains? done %) kinds))]
+      (if-not kind
+        (finish-kinds! c kinds)
+        (let [slot (kind-slot kind)
+              out (await (ctx/call-child c slot 'jobs.combat.hunt (kind-args c kind)))]
+          (if (= :done out)
+            (do (ctx/update-mem! c assoc-in [:kinds kind] (ctx/child-result c slot))
+                (recur))
+            :continue))))))
+
+(defn ^:async round
+  "The hunt of the one :mob kind, or one hunt after another for a list of kinds."
+  [c]
+  (if-let [ks (kinds c)]
+    (await (kinds-round c ks))
+    (await (hunt-round c))))

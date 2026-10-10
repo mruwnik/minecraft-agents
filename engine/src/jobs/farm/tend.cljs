@@ -50,7 +50,7 @@
   Limits: harvest and fertilize work in a sphere around the box centre, so crops just outside the box may be
   touched. A dirt lane inside the box counts as a bed unless :till is false. A ripe crop that cannot be reached
   keeps the check passing on every run (harvest gives up on it and the run still ends).
-  :plan (optionally :part) makes the plan's crop cells the field instead of :box. Only crops harvest knows
+  :plan (optionally :part; with neither :part nor :parts every crop part of the plan is worked) makes the plan's crop cells the field instead of :box. Only crops harvest knows
   (wheat, carrots, potatoes, beetroots) count. The plan's other cells are never touched. The same six steps run
   per cell, with the crop the plan names there:
   - harvest never digs a wrong crop. A ripe crop of another kind in a crop cell stays standing and is listed in
@@ -74,7 +74,7 @@
 (a/defargs args
   {:box {:doc "the field: {:min {:x :y :z} :max {:x :y :z}}, inclusive; y min is the farmland layer, max y at least min y + 1; at most 2048 cells; required unless :plan is given (without either the check declines)" :spec a/box? :default nil}
    :plan {:doc "id of a plan of the body's world whose crop cells are the field, each cell worked with the crop the plan wants there (then :box is not used)" :spec a/name? :default nil}
-   :part {:doc "with :plan, only the cells of this part" :spec a/name? :default nil}
+   :part {:doc "with :plan, only the cells of this part; omit :part (and :parts) to work every crop part of the plan" :spec a/name? :default nil}
    :parts {:doc "with :plan, the parts worked in one job, one pass each in this order (instead of :part)" :spec (a/coll-of a/name?) :default nil}
    :till {:doc "hoe untilled dirt and grass in the ground layer when seed and a hoe are carried" :spec boolean? :default true}
    :fertilize {:doc "use bone meal on unripe crops" :spec boolean? :default false}
