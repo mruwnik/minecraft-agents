@@ -158,3 +158,34 @@ test('--rebased-ok lands at once when the commits rebased onto touch none of its
     assert.equal(run(wt, 'land.sh', '--rebased-ok').status, 0)
   } finally { fs.rmSync(root, { recursive: true, force: true }) }
 })
+
+test('a rebase over docs only (*.md) lands at once, even when the branch edits the same doc', () => {
+  const { root, repo, wt } = fakeRepo()
+  try {
+    fs.writeFileSync(path.join(repo, 'README.md'), 'a\n\nb\n\nc\n')
+    git(repo, 'add', '.'); git(repo, 'commit', '-q', '-m', 'readme')
+    run(repo, 'fixer-worktree.sh', CARD)
+    commitIn(wt, 'a.txt', 'mine\n')
+    commitIn(wt, 'README.md', 'a\n\nb\n\nc mine\n')
+    commitIn(repo, 'README.md', 'a other\n\nb\n\nc\n')
+    const landed = run(wt, 'land.sh')
+    assert.equal(landed.status, 0, landed.stderr)
+    assert.equal(fs.readFileSync(path.join(repo, 'README.md'), 'utf8'), 'a other\n\nb\n\nc mine\n')
+  } finally { fs.rmSync(root, { recursive: true, force: true }) }
+})
+
+test('a docs overlap needs no test run, a code commit rebased over still gets exit 3 first', () => {
+  const { root, repo, wt } = fakeRepo()
+  try {
+    fs.writeFileSync(path.join(repo, 'README.md'), 'a\n\nb\n\nc\n')
+    git(repo, 'add', '.'); git(repo, 'commit', '-q', '-m', 'readme')
+    run(repo, 'fixer-worktree.sh', CARD)
+    commitIn(wt, 'a.txt', 'mine\n')
+    commitIn(wt, 'README.md', 'a\n\nb\n\nc mine\n')
+    commitIn(repo, 'README.md', 'a other\n\nb\n\nc\n')
+    commitIn(repo, 'b.txt', 'other\n')
+    assert.equal(run(wt, 'land.sh').status, 3)
+    const landed = run(wt, 'land.sh', '--rebased-ok')
+    assert.equal(landed.status, 0, landed.stderr)
+  } finally { fs.rmSync(root, { recursive: true, force: true }) }
+})

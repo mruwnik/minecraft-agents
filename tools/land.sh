@@ -2,6 +2,7 @@
 # Land the current fix/<card8> worktree's commits on the main checkout's branch: rebase, then fast-forward, under the commit lock.
 # Usage (from the worktree): tools/land.sh [--rebased-ok]
 # Exit 0: landed; the worktree and its branch are removed (cd out of it) and the new hashes are printed.
+# Docs (*.md) never count: a rebase over commits that changed only docs lands at once, and a docs overlap is no overlap.
 # Exit 3: the branch was behind and is now rebased. What you tested is not what would land: rerun your test namespaces, then land.sh again.
 #         --rebased-ok lands the rebased branch anyway (use only when the upstream commits it printed touch none of your files).
 # Exit 5: the branch was rebased over commits that touch files it changes and no clean test run (a .claude/live-tests/*.log ending
@@ -45,9 +46,11 @@ if [ "$(git merge-base HEAD "$target")" != "$old" ]; then
   upstream=$(git log --oneline "$base..$target")
   git rebase -q "$target" || { git rebase --abort; echo "land: rebase conflict; resolve by hand against $target" >&2; exit 1; }
   echo "land: rebased onto:"; echo "$upstream"
-  overlap=$(comm -12 <(git diff --name-only "$base" "$old" | sort) <(git diff --name-only "$old" HEAD | sort))
+  # Docs (*.md) cannot break a test: they never count as an overlap, and a rebase over docs alone lands at once.
+  upstream_code=$(git diff --name-only "$base" "$old" | grep -v '\.md$' | sort || true)
+  overlap=$(comm -12 <(printf '%s\n' "$upstream_code") <(git diff --name-only "$old" HEAD | sort))
   [ -z "$overlap" ] || { printf '%s\n' "$overlap" >> "$marker"; touch "$marker"; }
-  [ "$ok" = 1 ] || { echo "land: rerun your tests, then land.sh again" >&2; exit 3; }
+  [ "$ok" = 1 ] || [ -z "$upstream_code" ] || { echo "land: rerun your tests, then land.sh again" >&2; exit 3; }
 fi
 
 # A rebase over commits that touch this branch's files must be followed by a clean test run before it lands.
