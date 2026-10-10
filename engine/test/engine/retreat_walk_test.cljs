@@ -68,3 +68,14 @@
   (let [skeleton {:x 0.5 :y 64 :z 0.5}]
     (is (walk/out-of-fire? leaf-wall-world [skeleton] {:x 5 :y 64 :z 0}) "behind the leaves")
     (is (not (walk/out-of-fire? leaf-wall-world [skeleton] {:x 0 :y 64 :z 6})) "in the open beside them")))
+
+(def stair-floors (vec (for [i (range 1 9)] [(- 10 i) (- 70 i) 0])))
+
+(deftest a-flight-takes-the-bodys-own-stair-up-away-from-the-mobs
+  (let [at (fn [i] {:x (+ 0.5 (- 10 i)) :y (- 71 i) :z 0.5})
+        mob {:x 0.5 :y 62 :z 0.5}]
+    (is (= {:x 9 :y 70 :z 0} (walk/way-target (at 6) [mob] stair-floors 12))
+        "the highest stair cell within reach, toward the entry, that is no nearer the mob")
+    (is (nil? (walk/way-target (at 1) [mob] [] 12)) "no stair, no way target")
+    (is (nil? (walk/way-target (at 8) [{:x 9.5 :y 70 :z 0.5}] stair-floors 12))
+        "every stair cell above the body lies nearer the mob than the body: none")))

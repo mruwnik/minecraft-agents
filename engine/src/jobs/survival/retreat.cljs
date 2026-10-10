@@ -10,6 +10,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.dig-look :as dig-look]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.look :as look]
             [jobs.lib.reach :as reach]
             [jobs.lib.shelter :as sh]
@@ -39,6 +40,9 @@
      low in a ranged chaser's line of fire (the cover step below comes first). Any cell of the room counts as home:
      there an open door of the room is shut (a step back to one out of reach first), and a chaser still with a way in
      gets the cornered options (4.), no pit or pocket dug in the hut: it does not walk out.
+  Underground (shelter/buried?) it first takes the stairs the body cut (ledger/ways-of: the highest stair cell within 14
+  blocks, above it and no nearer a chaser), and with none digs a side pocket (as below) before it walks across the open cave,
+  unless a creeper or a melee mob is within cover-gap.
   3. Walks a short step (:step blocks) away from all chasers (nearer ones weigh more) with a go-to child (:escalate false),
      leaning toward the first closed room of 2. (else the latest :bed or :home within :home-range) when not through the
      hostiles (a closed room behind them: turned retreat-walk ::flank-turn degrees toward it, to go round them, while it still gains on them so:
@@ -438,12 +442,26 @@
          (mapcat (fn [d] (when-let [pos (or (:pos d) (danger-q/rough-pos d))]
                            (repeat (if (= "creeper" (:mob d)) 3 1) pos)))))))
 
+(def way-reach
+  "Blocks within which the stairs the body cut are a way out of a flight."
+  14)
+
+(defn way-up
+  "Underground, the feet cell on a stair this body cut (ledger/ways-of) that leads up and away from threats
+  (walk/way-target), else nil."
+  [c threats]
+  (let [p (:primitives c)]
+    (when (and (seq threats) (sh/buried? p))
+      (walk/way-target (u/self-pos c) (mapv #(danger-q/mob-pos p %) threats) (ledger/ways-of c) way-reach))))
+
 (defn ^:async flight-target!
   "The walk target away from threats (walk/choose-target over what the body sees, after glance-away!; cover from the
   ranged ones first, a swim slow), leaning toward the first of rooms (refuges), nil when none. covered? as cover-fn
   (given so the caller shares one)."
   ([c threats] (await (flight-target! c threats (cover-fn (:primitives c) threats) (refuges c))))
   ([c threats covered? rooms]
+   (if-let [way (way-up c threats)]
+     way
    (let [p (:primitives c)
          from (u/self-pos c)
          threat-pos (into (mapv #(danger-q/mob-pos p %) threats) (lost-spots c threats))
@@ -452,7 +470,7 @@
          flank? (and (some? refuge) (cost/outruns-at? (retreat-home/food p) (walk/flank-turn)))]
      (await (glance-away! c (walk/direction from threat-pos home flank?)))
      (walk/choose-target (block-at-fn p) from threat-pos home (keep (comp :pos :data) (ctx/entries c :hazard))
-                         (:step (:args c)) {:swim-factor (swim-factor c) :covered? covered? :flank? flank?}))))
+                         (:step (:args c)) {:swim-factor (swim-factor c) :covered? covered? :flank? flank?})))))
 
 (defn ^:async take-cover!
   "Seal in, else dig down and plug, else a side pocket (refuge), the first not failed this sweep: its step's result, nil
@@ -466,6 +484,12 @@
                   :pit (await (refuge/pit! c))
                   :pocket (await (refuge/pocket! c))))]
         (if (some? r) r (recur more))))))
+
+(defn ^:async dig-pocket!
+  "Underground with no stair to take, a side pocket in the rock beats a hop across the open cave: its step's result,
+  nil when it is not possible or failed this sweep."
+  [c]
+  (when-not (flight/tried? c :pocket) (await (refuge/pocket! c))))
 
 (defn close-danger?
   "Whether a creeper chases the body or a melee threat is within cover-gap: a seal or pit beside it is no cover (a blast
@@ -621,10 +645,13 @@
       :else
       (let [_ (await (eat-on-the-run! c threat))
             target (await (flight-target! c threats covered? rooms))
-            cover (when (and (exposed-low? c covered?)
-                             (or (refuge/sealing-here? c) (not (and target (covered? target))))
-                             (not (close-danger? p threats)))
-                    (await (take-cover! c)))]
+            cover (cond
+                    (and (exposed-low? c covered?)
+                         (or (refuge/sealing-here? c) (not (and target (covered? target))))
+                         (not (close-danger? p threats)))
+                    (await (take-cover! c))
+                    (and target (not (way-up c threats)) (sh/buried? p) (not (close-danger? p threats)))
+                    (await (dig-pocket! c)))]
         (cond
           (some? cover) cover
           (nil? target) (await (stuck "no open way away from the hostile"))

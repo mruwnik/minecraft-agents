@@ -531,6 +531,18 @@
           (await (run-job! s 'targeter {:step 6}))
           (is (nil? @out) (str "the cave behind its rock wall is no way: " (pr-str @out))))))))
 
+(deftest a-buried-flight-takes-the-stair-the-body-cut-instead-of-a-hop-across-the-cave
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [out (atom nil)
+              s (setup-sensed {:entities [(zombie 7 5 {})]})
+              _ (swap! (fake/state (:raw s)) assoc :light-default [0 0])
+              _ (mem/write! (:store (:eng s)) :stair-way {:dim "overworld" :floors [[-4 64 0] [-5 65 0]]})
+              s (assoc-in s [:eng :jobs 'targeter] (targeter out))]
+          (await (run-job! s 'targeter {:step 6}))
+          (is (= {:x -5 :y 66 :z 0} @out) "the highest stair cell, away from the zombie, not a 6 block hop"))))))
+
 (defn looks [raw] (count (filter #(= "look" (.-name %)) (.-calls (.-world raw)))))
 
 (deftest a-flight-in-a-seen-tunnel-looks-once-per-direction-not-every-step
