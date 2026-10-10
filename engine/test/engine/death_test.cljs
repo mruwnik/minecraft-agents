@@ -3,6 +3,7 @@
   trigger and the recover-drops job against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.expr :as expr]
             [engine.fake :as fake]
             [engine.library-test :refer [setup calls inv]]
@@ -434,6 +435,22 @@
           (let [e (first (declined-events seen))]
             (is (= :unreachable (:reason e)))
             (is (seq (:text e)))))))))
+
+(deftest recover-drops-does-not-count-a-walk-the-own-shelter-refused-as-unreachable
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:floor tu/walk-floor :entities drops})]
+          (die! eng {:pos death-pos :inventory diamonds})
+          (with-redefs [ctx/call-child (fn [& _] (js/Promise.resolve :done))
+                        ctx/child-result (fn [& _] {:arrived false :reason :unreachable :why :start-enclosed
+                                                    :inside-own-shelter {:x 0 :y 64 :z 0}})]
+            (dotimes [_ 5]
+              (core/submit! eng job {})
+              (await (run-until-empty eng 6))))
+          (is (nil? (recovered eng)) "no verdict: the trip waits for the shelter to open")
+          (is (seq (declined-events seen)))
+          (is (every? #(re-find #"shelter" (:text %)) (declined-events seen))))))))
 
 ;; ------------------------------------------- cut by a higher reflex, fired again
 

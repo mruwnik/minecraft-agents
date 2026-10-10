@@ -215,11 +215,14 @@
 
 (defn ^:async go!
   "Walk to the death point by one go-to call: :next once there (the collect phase), else :declined (go-to waits on the
-  world, or it did not arrive: the next run walks again while the pile is worth it, and the window closes it)."
+  world, or it did not arrive: the next run walks again while the pile is worth it, and the window closes it). A walk
+  go-to refused for the body's own shelter (:inside-own-shelter) is no failed try: the window closes the trip."
   [c pos]
   (let [r (await (ctx/call-child c :go 'jobs.movement.go-to {:pos pos :range (arrive-range)}))]
     (cond
       (not= :done r) (decline! c :unreachable (str "the walk to " (pr-str pos) " is waiting on the world") {:pos pos})
+      (:inside-own-shelter (ctx/child-result c :go))
+      (decline! c :unreachable (str "the walk to " (pr-str pos) " is refused: the body is sealed in its own shelter, which opens by day") {:pos pos})
       (not (:arrived (ctx/child-result c :go)))
       (do (ctx/update-mem! c #(-> % (assoc :blocked true) (update :blocked-retries (fnil inc 0))))
           (save-trip! c)
