@@ -9,7 +9,8 @@
             [engine.game :as game]))
 
 (a/defargs settings
-  {::low-health {:default 10 :doc "Below this health (of 20) precious food is eaten unnamed." :spec (a/int-in 0 nil)}})
+  {::starving-rest-ms {:default 60000 :doc "The rest after a fruitless food search while starving (food 0, or hurt and hungry), for get-food's ask cooldown and the hungry trigger." :spec (a/num-in 0 nil)}
+   ::low-health {:default 10 :doc "Below this health (of 20) precious food is eaten unnamed." :spec (a/int-in 0 nil)}})
 
 (def table-for
   "{item name {:points :saturation}} for every food minecraft-data lists for a version (memoised)."
@@ -71,6 +72,8 @@
 (def default-health
   "Below this health (of 20) carried food is eaten up to a full bar: saturation heals fastest on a full bar."
   7)
+
+(defn starving-rest-ms [] (settings/get settings ::starving-rest-ms))
 
 (defn starving?
   "Food 0, or health below default-health while hungry: the rest after a fruitless search shortens."

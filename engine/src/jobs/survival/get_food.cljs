@@ -36,11 +36,11 @@
   3. Harvest items lying within 8 blocks (collect-drops).
   4. The nearest passive food animal within :hunt-radius (combat.attack, then collect-drops).
   5. Mature crops or sweet berry bushes within :hunt-radius (blocks.dig).
-  Nothing left: once per job (:explore, default on; a starving body again after :starving-rest-ms) it searches for food animals and crops (jobs.explore.search, the
+  Nothing left: once per job (:explore, default on; a starving body again after foods/::starving-rest-ms) it searches for food animals and crops (jobs.explore.search, the
   ::explore setting; not at night nor while the night handler holds) and goes on if it found some; at ::eat-bad-food (6) or below it then eats harmful food carried (rotten
   flesh, with :allow-bad). Still nothing: it stops :no-food with a food.none warning (what was searched, the nearest known source) and writes
   :hungry. For :ask-cooldown-ms after that a round still eats and still does ways 1, 3, 4 and 5, but not a source it
-  already knew when it gave up (one learned since is tried first; a starving body, food 0 or health below 7, rests only :starving-rest-ms); with nothing to do (harmful food above ::eat-bad-food does not count) the check waits :no-food-found, else the round declines.
+  already knew when it gave up (one learned since is tried first; a starving body, food 0 or health below 7, rests only foods/::starving-rest-ms); with nothing to do (harmful food above ::eat-bad-food does not count) the check waits :no-food-found, else the round declines.
   :stock n: a fed body also takes the ways until the pack holds n food points, else stops :no-stock.
   Never :continue: a go-to that waits on the world, or a child still going after jobs.lib.child's call cap, is waited out in the round.
   More than 12 ways in one round without getting fed stops :still-hungry.
@@ -59,10 +59,9 @@
    :farm-radius {:doc "how far around a known farm to harvest, in blocks" :spec (a/num-in 0 nil) :default 6}
    :take {:doc "most items to withdraw from a chest in one go" :spec (a/int-in 1 nil) :default 16}
    :attack-gap-ms {:doc "least time between two swings at an animal, so a swing lands at full strength" :spec (a/num-in 0 nil) :default 600}
-   :explore {:doc "with nothing known or seen, walk and look for food animals and crops once per job (a starving body again after :starving-rest-ms): false, true (the ::explore setting) or jobs.explore.search options over it" :spec (a/or-of boolean? map?) :default true}
+   :explore {:doc "with nothing known or seen, walk and look for food animals and crops once per job (a starving body again after foods/::starving-rest-ms): false, true (the ::explore setting) or jobs.explore.search options over it" :spec (a/or-of boolean? map?) :default true}
    :stock {:doc "also carry food worth this many hunger points: a fed body takes the ways below until the pack holds it (0: only feed)" :spec (a/num-in 0 nil) :default 0}
    :ask-cooldown-ms {:doc "after finding nothing, how long before saying so (and searching) again" :spec (a/num-in 0 nil) :default (* 10 60 1000)}
-   :starving-rest-ms {:doc "when starving (food 0, or health below 7 and hungry), the ask cooldown is cut to this" :spec (a/num-in 0 nil) :default (* 60 1000)}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (def food-animals #{"cow" "pig" "sheep" "chicken" "rabbit"})
@@ -447,13 +446,13 @@
              :food (food-level c) :stock (:stock (:args c)) :have have)))
 
 (defn starving?
-  "Food 0, or health at or below 6 and hungry: the rest after a fruitless search is only :starving-rest-ms."
+  "Food 0, or health at or below 6 and hungry: the rest after a fruitless search is only foods/::starving-rest-ms."
   [c]
   (foods/starving? (.self (:primitives c)) (:args c)))
 
 (defn gave-up-recently? [c]
   (pos? (ctx/count-in c :hungry (if (starving? c)
-                                  (min (:ask-cooldown-ms (:args c)) (:starving-rest-ms (:args c)))
+                                  (min (:ask-cooldown-ms (:args c)) (foods/starving-rest-ms))
                                   (:ask-cooldown-ms (:args c))))))
 
 ;; ------------------------------------------------------------------ bread
@@ -608,7 +607,7 @@
                  (not (danger-q/danger-near? (:primitives c) (danger-q/hostile-radius) (danger-q/ranged-radius)))))))
 
 (defn explore-done?
-  "Whether this job's search is over: it ran, and a starving body's :starving-rest-ms has not passed since."
+  "Whether this job's search is over: it ran, and a starving body's foods/::starving-rest-ms has not passed since."
   [mem starving? now rest-ms]
   (boolean (and (:explored mem) (not (and starving? (>= (- now (:explored-at mem 0)) rest-ms))))))
 
@@ -623,7 +622,7 @@
   [c]
   (let [e (:explore (:args c))]
     (cond
-      (or (not e) (explore-done? (ctx/mem c) (starving? c) (ctx/now c) (:starving-rest-ms (:args c)))) nil
+      (or (not e) (explore-done? (ctx/mem c) (starving? c) (ctx/now c) (foods/starving-rest-ms))) nil
       (night-blocks-search? c)
       (do (ctx/update-mem! c assoc :explored "not searched at night or while the night handler holds") nil)
       :else
