@@ -1,6 +1,6 @@
 (ns jobs.lib.pass
   "Walking a plan that opens doors, gates and trapdoors by hand, or iron doors by a button, lever or plate. The plan is cut at each step that opens something.
-  The walk goes up to the step before it, the block is clicked open with an empty hand (jobs.lib.click) and read
+  The walk goes up to the step before it, the block is clicked open with the hand as it is (jobs.lib.click) and read
   back, and the walk goes on. Once the body is out of the opened block's column the walker shuts it again, if its
   policy says so. The executor's tick never sees an :opens step.
 

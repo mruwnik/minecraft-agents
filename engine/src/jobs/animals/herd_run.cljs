@@ -14,6 +14,7 @@
    ::approach-range {:default 12 :doc "Blocks from the animal at which the body starts to approach." :spec (a/int-in 0 nil)}
    ::watch-radius {:default 64 :doc "Blocks within which animals are watched." :spec (a/int-in 0 nil)}
    ::release-radius {:default 8 :doc "Blocks within which a released animal counts as near." :spec (a/int-in 0 nil)}
+   ::follow-range {:default 10 :doc "Blocks within which an animal follows the food in the body's hand." :spec (a/int-in 0 nil)}
    ::regather-radius {:default 8 :doc "Blocks within which strays are gathered again." :spec (a/int-in 0 nil)}
    ::settle-ms {:default 500 :doc "How long the body waits for an animal to settle, in ms." :spec (a/int-in 0 nil)}
    ::settle-out-ms {:default 8000 :doc "How long the body waits for the animal to rest at a position outside the gate." :spec (a/int-in 0 nil)}
@@ -29,6 +30,7 @@
 (defn approach-range [] (settings/get settings ::approach-range))
 (defn watch-radius [] (settings/get settings ::watch-radius))
 (defn release-radius [] (settings/get settings ::release-radius))
+(defn follow-range [] (settings/get settings ::follow-range))
 (defn regather-radius [] (settings/get settings ::regather-radius))
 (defn settle-ms [] (settings/get settings ::settle-ms))
 (def orthogonal [[1 0] [-1 0] [0 1] [0 -1]])
@@ -74,10 +76,20 @@
 (defn animal-now [c k]
   (animals/find-by-key (:primitives c) (:mob (:args c)) (watch-radius) k))
 
+(defn lure? [c] (= :lure (:method (ctx/mem c))))
+
+(defn held-by-me?
+  "True when the animal is on this body's lead, or in a lure run follows the food held in hand (within follow-range)."
+  [c e]
+  (if (lure? c)
+    (boolean (and (some #{(.-held (.self (:primitives c)))} (get animals/breeding-food (:mob (:args c))))
+                  (<= (u/dist (u/self-pos c) (u/pos-of (.-pos e))) (follow-range))))
+    (animals/led-by-me? e)))
+
 (defn led-now
-  "The keys of :led whose animal is on this body's lead now."
+  "The keys of :led whose animal is on this body's lead (or follows the food in hand) now."
   [c]
-  (filterv #(some-> (animal-now c %) animals/led-by-me?) (:led (ctx/mem c))))
+  (filterv #(some->> (animal-now c %) (held-by-me? c)) (:led (ctx/mem c))))
 
 (def transient-keys "Memory of one wait or walk, dropped when the phase or position moves on." [:walked :settle-from :last-seen :wait-from])
 
@@ -206,14 +218,16 @@
 (defn max-release-declines [] (settings/get settings ::max-release-declines))
 
 (defn ^:async release-step!
-  "One round of unleashing (jobs.animals.unleash by key, kept on one animal until that child is done, which
+  "One round of unleashing (in a lure run: the food put away, so nothing follows; jobs.animals.unleash by key, kept on one animal until that child is done, which
   includes picking its lead up), the next led animal not yet tried after it; on-done once none is left. A child
   that declines max-release-declines times gives the animal up as :declined."
   [c on-done]
   (let [m (ctx/mem c)
         k (or (:releasing m) (first (remove (set (:release-tried m)) (led-now c))))]
-    (if-not k
-      (on-done)
+    (cond
+      (not k) (on-done)
+      (lure? c) (do (await (ctx/act c :unequip #js {})) (on-done))
+      :else
       (do (ctx/update-mem! c assoc :releasing k)
           (let [r (await (ctx/call-child c :unleash 'jobs.animals.unleash
                                          (cond-> {:mob (:mob (:args c)) :animal k :radius (release-radius)}

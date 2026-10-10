@@ -23,8 +23,8 @@
   type changes.
 
   The body walks within :reach of the block (jobs.movement.go-to child with :doors :never, so the approach
-  opens nothing). A walk that gives up is :unreachable. It then clicks once with an empty hand (useOn with no
-  item, which never tosses what was held; a hand that cannot be emptied is :no-room) and reads the block again.
+  opens nothing). A walk that gives up is :unreachable. It then clicks once with the hand as it is (useOn with no
+  item: what is held stays in hand) and reads the block again.
   A click the game answers out of reach (it measures from the eye to the block's middle) walks one cell closer
   and clicks again, twice at most and never closer than 1, then is :unreachable.
 
@@ -123,14 +123,13 @@
   :again)
 
 (defn ^:async click!
-  "Click once with an empty hand and read the block again."
+  "Click once with the hand as it is and read the block again."
   [c pos state block]
   (let [{:keys [outcome facts status reason]} (await (click/click! c pos state block))
         text (str block " at " (pr-str pos))]
     (case outcome
       :gone (give-up! c :gone pos state (str text " is gone") facts)
       :unseen (give-up! c :unseen pos state (str text " cannot be made out after the click (too dark or too far)") facts)
-      :no-room (give-up! c :no-room pos state (str "no room to empty the hand at " text) facts)
       :unreachable (if (and (< (:closer (ctx/mem c) 0) (max-closer)) (> (reach c) 1))
                      (closer! c)
                      (give-up! c :unreachable pos state (str text " is out of reach") facts))

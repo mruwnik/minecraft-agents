@@ -4,14 +4,17 @@
             [engine.settings :as settings]
             [jobs.lib.animals :as animals]
             [engine.ctx :as ctx]
+            [jobs.lib.fetch :as fetch]
             [jobs.lib.pen :as pen]
             [jobs.lib.util :as u]
-            [jobs.animals.herd-run :refer [animal-now deepest end! finish! gate-open? in-pen-adults near-pen out-1 read-pen regather-radius set-phase!]]
+            [jobs.animals.herd-run :refer [animal-now deepest end! finish! gate-open? held-by-me? in-pen-adults lure? near-pen out-1 read-pen regather-radius set-phase!]]
             [jobs.animals.herd-pen :refer [animal-pos pinned-ms settle-at! step-in-step]]))
 
 
 (a/defargs settings
-  {::max-tries {:default 2 :doc "Attempts before the job gives up." :spec (a/int-in 0 nil)}})
+  {::lure-reach {:default 6 :doc "A lured animal is waited for once the body is this near it, in blocks." :spec (a/int-in 0 nil)}
+   ::max-tries {:default 2 :doc "Attempts before the job gives up." :spec (a/int-in 0 nil)}})
+(defn lure-reach [] (settings/get settings ::lure-reach))
 (defn max-tries [] (settings/get settings ::max-tries))
 
 (defn tired-keys
@@ -32,24 +35,97 @@
         (into (comp (filter skip?) (map animals/key-of)) near)
         (into (tired-keys (:tries (ctx/mem c)) pen-keys)))))
 
-(defn ^:async leash-next!
-  "Lead one more animal and start its trip, or end when the pen holds enough or none more can be led."
+(defn start-trip!
+  "The animal k is with the body (on its lead, or following its food): its trip to the gate starts."
+  [c k]
+  (set-phase! c :approach {:animal k :led [k] :animal-started (ctx/now c)
+                           :tries (update (:tries (ctx/mem c)) k (fnil inc 0))
+                           :pos-index 0 :backs 0 :retried false :deepest-tried false}))
+
+(defn ^:async lead-next!
+  "Lead one more animal and start its trip, or end when none more can be led."
   [c]
-  (let [{:keys [mob radius target]} (:args c)
-        m (ctx/mem c)]
+  (let [{:keys [mob radius]} (:args c)
+        m (ctx/mem c)
+        r (await (ctx/call-child c :leash 'jobs.animals.leash
+                                 (cond-> {:mob mob :radius radius :skip (skip-keys c)} (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))
+        res (when (= :done r) (ctx/child-result c :leash))]
+    (cond
+      (nil? res) :continue
+      (= :leashed (:reason res)) (start-trip! c (:animal res))
+      (and (empty? (:brought m)) (empty? (:given-up m))) (finish! c (:reason res))
+      :else (finish! c nil))))
+
+(defn lead-possible?
+  "True when the body carries a lead or what makes one (a slime ball)."
+  [c]
+  (let [have (into #{} (map :name) (u/inventory (:primitives c)))]
+    (boolean (or (have "lead") (have "slime_ball")))))
+
+(defn resolve-method
+  "The :method of the run: :lead or :lure as given; :auto leads when a lead can be had, else lures with the mob's food."
+  [c]
+  (let [{:keys [method mob]} (:args c)]
+    (cond
+      (not= :auto method) method
+      (or (lead-possible? c) (not (contains? animals/breeding-food mob))) :lead
+      :else :lure)))
+
+(defn lure-problem
+  "The need wait for the mob's food while none is carried, else nil."
+  [c]
+  (let [mob (:mob (:args c))]
+    (when (nil? (animals/food-carried (:primitives c) mob))
+      {:reason :need :any-of (get animals/breeding-food mob) :count 1})))
+
+(defn lure-candidates
+  "The adults within radius outside the pen, not on a lead, not skipped, the zone rules allowing, nearest first."
+  [c]
+  (let [{:keys [mob radius]} (:args c)
+        skip (set (skip-keys c))]
+    (->> (animals/adults (:primitives c) mob radius)
+         (filterv #(and (not (animals/leashed? %)) (not (skip (animals/key-of %)))))
+         (animals/allowed c :herd.declined "herd" :take))))
+
+(defn ^:async lure-next!
+  "Fetch the mob's food when none is carried, hold it, walk within follow range of the nearest animal and start its
+  trip; end :no-food when no food can be had, else as lead-next! when no animal is left."
+  [c]
+  (let [{:keys [mob]} (:args c)
+        p (:primitives c)
+        m (ctx/mem c)
+        food (animals/food-carried p mob)]
+    (if-not food
+      (let [r (when (fetch/opts c 'jobs.animals.herd) (await (fetch/fetch-untimed! c 'jobs.animals.herd lure-problem)))]
+        (cond
+          r r
+          (animals/food-carried p mob) :continue
+          :else (finish! c :no-food)))
+      (let [cands (lure-candidates c)
+            target (first cands)]
+        (cond
+          (empty? cands) (if (and (empty? (:brought m)) (empty? (:given-up m)))
+                           (finish! c (or (animals/refusal c) :none))
+                           (finish! c nil))
+          (and (not= food (.-held (.self p))) (>= (:equip-tries m 0) 3)) (finish! c :no-hold)
+          (not= food (.-held (.self p))) (do (ctx/update-mem! c update :equip-tries (fnil inc 0))
+                                             (await (ctx/act c :equip (clj->js {:item food})))
+                                             :continue)
+          :else
+          (let [k (animals/key-of target)
+                _ (ctx/update-mem! c dissoc :equip-tries)
+                walked (await (animals/walk! c k target (lure-reach) {:doors :shut}))]
+            (if (= :there walked) (start-trip! c k) :continue)))))))
+
+(defn ^:async leash-next!
+  "Bring one more animal to the body and start its trip, or end when the pen holds enough or none more can be had.
+  The first call settles the run's :method."
+  [c]
+  (let [{:keys [target]} (:args c)]
     (if (>= (count (in-pen-adults c (read-pen c))) target)
       (finish! c nil)
-      (let [r (await (ctx/call-child c :leash 'jobs.animals.leash
-                                 (cond-> {:mob mob :radius radius :skip (skip-keys c)} (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))
-            res (when (= :done r) (ctx/child-result c :leash))]
-        (cond
-          (nil? res) :continue
-          (= :leashed (:reason res))
-          (set-phase! c :approach {:animal (:animal res) :led [(:animal res)] :animal-started (ctx/now c)
-                                   :tries (update (:tries m) (:animal res) (fnil inc 0))
-                                   :pos-index 0 :backs 0 :retried false :deepest-tried false})
-          (and (empty? (:brought m)) (empty? (:given-up m))) (finish! c (:reason res))
-          :else (finish! c nil))))))
+      (do (when-not (:method (ctx/mem c)) (ctx/update-mem! c assoc :method (resolve-method c)))
+          (if (lure? c) (await (lure-next! c)) (await (lead-next! c)))))))
 
 (defn prune-led!
   "Drop from :led the animals no longer on this body's lead, booking each (:lead-broke seen, :lost not seen);
@@ -57,7 +133,7 @@
   [c]
   (let [gone (keep (fn [k] (let [a (animal-now c k)]
                              (cond (nil? a) [k :lost]
-                                   (not (animals/led-by-me? a)) [k :lead-broke])))
+                                   (not (held-by-me? c a)) [k :lead-broke])))
                    (:led (ctx/mem c)))]
     (when (seq gone)
       (ctx/update-mem! c #(-> %
@@ -76,8 +152,10 @@
         (set-phase! c (if (gate-open? c) :shut-gate :regather)))))
 
 (defn ^:async regather! [c]
-  (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops {:radius (regather-radius) :filter ["lead"]}))]
-    (if (= :done r) (set-phase! c :leash) :continue)))
+  (if (lure? c)
+    (set-phase! c :leash)
+    (let [r (await (ctx/call-child c :collect 'jobs.forestry.collect-drops {:radius (regather-radius) :filter ["lead"]}))]
+      (if (= :done r) (set-phase! c :leash) :continue))))
 
 
 

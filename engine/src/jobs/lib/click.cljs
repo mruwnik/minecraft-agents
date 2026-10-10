@@ -1,5 +1,5 @@
 (ns jobs.lib.click
-  "Working a door, gate, trapdoor, lever or button with one click of an empty hand: which blocks a hand works, the state of a
+  "Working a door, gate, trapdoor, lever or button with one click with the hand as it is: which blocks a hand works, the state of a
   block read back, and the click itself. jobs.access.toggle and the walk driver (jobs.lib.pass) share it."
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
@@ -43,14 +43,13 @@
     (and (= x fx) (= z fz) (<= low (inc fy)) (<= fy high))))
 
 (defn ^:async click!
-  "Click the block at pos once with an empty hand, then read it again as the body sees it. Returns {:outcome :facts ...}, facts
+  "Click the block at pos once with the hand as it is (what is held stays held), then read it again as the body sees it. Returns {:outcome :facts ...}, facts
   being {:block :was :now}. outcome is one of:
   - :changed, the block is now in state
   - :unchanged, the click moved nothing
   - :wrong-way, it moved, but not to state
   - :gone, :why :missing (the game found no block there)
   - :unseen, the click went through but the body cannot make the block out afterwards (dark, far) and the game gave no state
-  - :no-room, the hand cannot be emptied
   - :unreachable, out of reach
   - :refused, the click was turned away (:status and :reason are the primitive's)"
   [c pos state block]
@@ -64,7 +63,6 @@
         out (fn [outcome & {:as more}] (merge {:outcome outcome :facts facts} more))]
     (cond
       (= "missing" status) (out :gone :why :missing)
-      (= "no-room" status) (out :no-room)
       (= "unreachable" status) (out :unreachable)
       (not (#{"used" "unchanged"} status)) (out :refused :status status :reason (.-reason r))
       (nil? now) (out :unseen)

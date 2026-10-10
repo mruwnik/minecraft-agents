@@ -128,7 +128,8 @@
                (fn [token args impl]
                  (swap! log conj {:was-open (gate-open? s)
                                   :overlapping (count (filter #(hp/overlaps-cell? (pos-map %) 0.45 [10 64 3]) (entities-of s)))
-                                  :held (count (mem/entries (mem/view (:store eng)) :gate-held))})
+                                  :held (count (mem/entries (mem/view (:store eng)) :gate-held))
+                                 :held-item (held s)})
                  (impl token args)))
     log))
 
@@ -659,7 +660,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[label w reason]
-                [["no lead" {:inventory [wheat] :entities [(cow 1 4 3)]} :no-lead]
+                [["no lead or food" {:inventory [] :entities [(cow 1 4 3)]} :no-food]
                  ["no cow outside" {:entities [(cow 9 13 3)]} :none]
                  ["a gap in the fence" {:entities [(cow 1 4 3)] :blocks {"16,64,3" "air"}} :leaky]
                  ["no gate" {:entities [(cow 1 4 3)] :blocks {gate-key "oak_fence"}} :no-gate]
@@ -1119,3 +1120,50 @@
           (is (seq opts))
           (is (every? #(false? (:escalate %)) opts) "a body shut in the pen is not dug or pillared out through its fence")
           (is (= :brought (:reason (done-event s)))))))))
+
+(deftest with-no-lead-and-food-carried-the-cows-are-lured-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:target 2} {:entities [(cow 1 4 3) (cow 2 6 4)] :inventory [wheat]} 600))
+              e (done-event s)]
+          (is (finished? s))
+          (is (= :brought (:reason e)))
+          (is (= #{1 2} (cows-in-pen s)))
+          (is (empty? (calls-of s "interact")) "no lead is used")
+          (is (not (gate-open? s)))
+          (is (< (self-x s) 10) "the body ends outside the pen")
+          (is (= 4 (count-of s "wheat")) "the food is not used up")
+          (is (nil? (held s)) "the hand is empty again so nothing follows out"))))))
+
+(deftest the-gate-toggle-keeps-the-food-in-hand
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[s log] (await (scenario-log {:target 1} {:entities [(cow 1 4 3)] :inventory [wheat]} 600))]
+          (is (= :brought (:reason (done-event s))))
+          (is (= ["wheat" "wheat"] (map :held-item (take 2 @log))) "open and shut with the animal behind the body; the food is put away only after the release"))))))
+
+(deftest no-lead-and-no-food-ends-no-food
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:target 1} {:entities [(cow 1 4 3)] :inventory []} 200))]
+          (is (= :no-food (:reason (done-event s))))
+          (is (failed-error s)))))))
+
+(deftest method-lead-with-no-lead-does-not-lure
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:target 1 :method :lead} {:entities [(cow 1 4 3)] :inventory [wheat]} 200))]
+          (is (= :no-lead (:reason (done-event s))))
+          (is (= #{} (cows-in-pen s))))))))
+
+(deftest a-lead-in-hand-is-preferred-by-auto
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:target 1} {:entities [(cow 1 4 3)]} 400))]
+          (is (= :brought (:reason (done-event s))))
+          (is (seq (calls-of s "interact"))))))))

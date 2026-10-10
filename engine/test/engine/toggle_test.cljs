@@ -226,16 +226,6 @@
           (is (= {:status :gave-up :reason :wrong-way} (head result [:status :reason])))
           (is (false? (:open (props p at)))))))))
 
-(deftest a-hand-that-cannot-be-emptied-is-given-up
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup (world "oak_door" {:open false}))
-              _ (set! (.-useOn p) (fn [_ _] (js/Promise.resolve #js {:status "no-room"})))
-              result (await (child-outcome eng job {:pos at :state :open} 40))]
-          (is (= {:status :gave-up :reason :no-room} (head result [:status :reason])))
-          (is (= 1 (count (kinds seen :toggle.gave-up)))))))))
-
 (deftest a-block-the-body-cannot-walk-to-is-unreachable
   (async done
     (tu/run-async done

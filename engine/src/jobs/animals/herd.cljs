@@ -4,16 +4,21 @@
             [jobs.lib.animals :as animals]
             [engine.ctx :as ctx]
             [jobs.lib.declined :as declined]
+            [jobs.lib.fetch :as fetch]
             [jobs.lib.util :as u]
             [jobs.lib.watch :as watch]
-            [jobs.animals.herd-run :refer [adults after-shut! cell census! crowd-in-radius crowd-ms crowd-out-radius deepest end! exit-shut-ms gate-cell gate-index gate-open? hold-gate! in-1 in-pen-adults out-1 read-pen release-step! set-phase! settle-ms settle-out-ms shut-failed! shut-look-ms transient-keys]]
+            [jobs.animals.herd-run :refer [adults after-shut! cell census! crowd-in-radius crowd-ms crowd-out-radius deepest end! exit-shut-ms gate-cell gate-index gate-open? hold-gate! in-1 in-pen-adults led-now lure? out-1 read-pen release-step! set-phase! settle-ms settle-out-ms shut-failed! shut-look-ms transient-keys]]
             [jobs.animals.herd-pen :refer [body-in-pen? cell-middle crowded-near? exit-dash! flat-dist go-then! let-go-cell look-wait! max-leaves on-gate? set-gate! settle-at! shut-side! shut-when-clear! survey! wait-clear! waited-ms]]
             [jobs.animals.herd-trip :refer [leash-next! pinned! prune-led! regather! regather-or-lose! released! step-position!]]))
 
 (def doc
   "Bring grown animals of type :mob into the pen :box until it holds :target of them. Each animal goes
-  on a lead and is walked through the gate one cell at a time (a long drag jams in a 1-wide gate).
-  No food is needed.
+  on a lead (:method :lead) or follows the food held in hand (:method :lure, the mob's breeding food: wheat,
+  carrots, seeds), and is walked through the gate one cell at a time (a long drag jams in a 1-wide gate).
+  :auto (the default) leads when a lead or a slime ball is carried and lures otherwise. A lure run fetches the food
+  when none is carried (no source: ends :no-food), walks within 6 blocks of the nearest animal outside the pen, and
+  puts the food away at the far end of the pen so nothing follows the body out. The lead steps below hold for both;
+  \"on the lead\" means following the food in a lure run, \"let go\" means the food put away.
 
   Declines while the box already holds :target adults. A started run always passes, so a cut job resumes.
   A body more than 16 blocks from the pen first walks within 12 of it.
@@ -71,6 +76,7 @@
   :brought (pen holds :target), :short (fewer than :target in the pen: some came, or none came and no other
   reason), :full,
   :no-pen, :leaky, :no-gate, :too-shallow, :unreachable (a walk was blocked), :gate-stuck, :lost, :timeout,
+  :no-food (a lure run found no food), :no-hold (the food would not stay in hand),
   or the leash reason when nobody could be led. The body ends outside with the gate shut. The job ends completed
   when the pen holds :target or is :full, or when some animals were brought (a partial run, :short or another reason);
   when none was brought it fails with the reason, after the result and herd.done were given.
@@ -85,6 +91,8 @@
    :gate {:doc "the fence gate {:x :y :z} to bring them through; the pen's usable gate nearest the body when nil" :spec ::a/pos :default nil}
    :radius {:doc "animals within this many blocks of the body are fetched" :spec (a/num-in 0 nil) :default 24}
    :timeout-s {:doc "seconds one animal may take from its lead on until it is let go" :spec (a/num-in 0 nil) :default 180}
+   :method {:doc "how animals are brought: :lead (each on a lead), :lure (following the food in hand), :auto (a lead when one is carried or can be crafted from a carried slime ball, else the food)" :spec #{:auto :lead :lure} :default :auto}
+   :fetch {:doc "get the food when none is carried and the run lures (jobs.lib.fetch): true, a set of kinds or a map of limits; false ends :no-food" :spec fetch/option? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 
 (def leading
@@ -181,7 +189,9 @@
 (defn led-by-me
   "The keys of the adults of :mob on this body's lead now, as the world shows them (not the memory)."
   [c]
-  (into [] (comp (filter animals/led-by-me?) (map animals/key-of)) (adults c)))
+  (if (lure? c)
+    (led-now c)
+    (into [] (comp (filter animals/led-by-me?) (map animals/key-of)) (adults c))))
 
 (defn safe?
   "True when the body may be given away: before the survey has chosen the gate (nothing touched yet), else no animal
