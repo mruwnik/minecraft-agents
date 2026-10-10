@@ -180,7 +180,8 @@
   "The walk target, a feet cell, among the directions (turns from the preferred one) that avoid every hazard and are
   worth walking (see worth?): first one whose end (covered? true: out of a ranged mob's line of fire) gives cover, a
   full step before a short one; else the full step that takes least time (walk-time: a swim is slow), turn order
-  breaking ties; else the most open. nil when cornered. opts {:swim-factor (default 1) :covered? (end -> bool)
+  breaking ties; else the most open. With a swim-factor above 1 a direction that ends in water counts only when none ends dry (a swim is
+  slow and drowned wait in it). nil when cornered. opts {:swim-factor (default 1) :covered? (end -> bool)
   :flank? (home is a refuge: direction)}."
   ([block-at from threats home hazards step] (choose-target block-at from threats home hazards step nil))
   ([block-at from threats home hazards step {:keys [swim-factor covered? flank?] :or {swim-factor 1}}]
@@ -192,6 +193,8 @@
                                       :time (walk-time block-at cells swim-factor)})))
                       (remove #(near-hazard? hazards from (point-along from (:dir %) step)))
                       (filter #(worth? from threats %)))
+         dry (remove #(wet? block-at (:end %)) options)
+         options (if (and (> swim-factor 1) (seq dry)) dry options)
          full? #(>= (:open %) step)
          pick (or (when covered?
                     (first (filter #(covered? (:end %)) (sort-by (juxt (complement full?) :time) options))))

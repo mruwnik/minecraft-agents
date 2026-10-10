@@ -23,6 +23,19 @@
   (is (= {:x 6 :y 63 :z 0} (walk/choose-target pond-world from [threat] nil [] 6 {:swim-factor 1}))
       "with water as fast as ground the way straight away is kept"))
 
+(defn walled-pond-world
+  "pond-world with the pond |z| <= 3 wide and stone walls two high at |z| = 4: dry ground sideways is only 3 blocks."
+  [{:keys [x y z]}]
+  (cond
+    (and (#{64 65} y) (= 4 (js/Math.abs z))) "stone"
+    (and (= y 63) (>= x 1) (<= (js/Math.abs z) 3)) "water"
+    :else (pond-world {:x x :y y :z (if (= y 63) 9 z)})))
+
+(deftest a-flight-takes-a-short-dry-step-over-a-swim
+  (is (contains? #{{:x 0 :y 64 :z 3} {:x 0 :y 64 :z -3}}
+                 (walk/choose-target walled-pond-world from [threat] nil [] 6 {:swim-factor 2.2}))
+      "a drowned or a lost breath waits in water: a dry step of 3 beats a full swim"))
+
 (deftest a-flight-without-options-keeps-the-preferred-direction
   (is (= {:x 6 :y 63 :z 0} (walk/choose-target pond-world from [threat] nil [] 6))))
 
