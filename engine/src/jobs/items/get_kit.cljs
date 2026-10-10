@@ -23,7 +23,9 @@
   While furnace material is still short (mining or smelting ahead; pure crafting needs no food) and fewer than
   :min-food food points are carried (nil: ::min-food; harmful food does not count), a jobs.survival.get-food child
   (with :explore, and :stock :min-food to fill the pack) runs before the work and again after each piece (:food false: no child, stops :needs-food instead). A child that
-  stops (:no-food, or :no-stock when fed with nothing to stock) ends the job :needs-food with its reason as :cause. Get a base first.
+  stops (:no-food, or :no-stock when fed with nothing to stock) ends the job :needs-food with its reason as :cause only
+  when the body is starving (jobs.lib.foods/starving?); else a warn kit.no-food names the cause and the work goes on, with
+  no new food search for ::no-food-wait-ms. Get a base first.
   A death since the job began (body memory :died) clears the children and what was made; the next round re-plans from
   what is carried. A death only keeps the job listed when it was submitted with :survive-death?.
   Ends {:status :done :have [..] :made [..]} or {:status :stopped :item next :reason r :why text :have :made}, warn
@@ -43,6 +45,7 @@
 
 (a/defargs settings
   {::minutes {:default 45 :doc "Time budget of each obtain child of the kit." :spec (a/num-in 0 nil)}
+   ::no-food-wait-ms {:default 300000 :doc "After a food search fails while the body is not starving, how long the kit goes on without asking get-food again." :spec (a/num-in 0 nil)}
    ::min-food {:default 20 :doc "Food points carried before the kit job starts work or a new piece." :spec (a/int-in 0 nil)}})
 
 (defn furnace-short
@@ -59,7 +62,7 @@
 (defn restarted
   "The job memory after a death: the children and what was made went with the body; the job starts from now."
   [m now]
-  (-> m (dissoc :children :materials :made :fed :partial) (assoc :since now)))
+  (-> m (dissoc :children :materials :made :fed :partial :no-food-until) (assoc :since now)))
 
 (defn wear-outcome
   "What a wear child round means: :continue (yield), nil (it wore something), or {:reason :wear-failed :why}.
@@ -177,9 +180,14 @@
 
           (empty? todo) (finish! c items have {:status :done})
 
-          (and short (< fp min-food) (not (:fed (ctx/mem c))))
+          (and short (< fp min-food) (not (:fed (ctx/mem c))) (not (< (ctx/now c) (or (:no-food-until (ctx/mem c)) 0))))
           (let [r (when (:food a) (await (run-food! c)))]
             (cond (= :continue r) :continue
+                  (and (some? r) (not (foods/starving? (.self (:primitives c)) {})))
+                  (do (ctx/update-mem! c assoc :no-food-until (+ (ctx/now c) (settings/get settings ::no-food-wait-ms)))
+                      (ctx/emit! c :kit.no-food :warn {:cause (:cause r) :why (:why r) :food fp
+                                                       :text (str "no food found (" (name (:cause r)) "), going on with " fp " food points carried")})
+                      (recur))
                   (some? r) (finish! c items have (assoc r :status :stopped :item (first todo) :reason :needs-food
                                                          :food fp :min-food min-food))
                   (not (:food a)) (finish! c items have {:status :stopped :item (first todo) :reason :needs-food :food fp :min-food min-food

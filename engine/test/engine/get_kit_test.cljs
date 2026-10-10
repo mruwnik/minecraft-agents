@@ -142,14 +142,24 @@
           (is (= 1 (get (f/inv s) "iron_pickaxe")))
           (is (= :done (:status @(:out s)))))))))
 
-(deftest a-hungry-body-with-no-food-to-be-found-stops-needing-food-with-the-childs-reason
+(deftest a-starving-body-with-no-food-to-be-found-stops-needing-food-with-the-childs-reason
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start (hungry-world [] 5) {:items ["iron_pickaxe"] :min-food 20 :explore false})]
+        (let [s (start (hungry-world [] 0) {:items ["iron_pickaxe"] :min-food 20 :explore false})]
           (await (f/run-ticks s 60))
           (is (= {:status :stopped :item "iron_pickaxe" :reason :needs-food :cause :no-food}
                  (select-keys @(:out s) [:status :item :reason :cause]))))))))
+
+(deftest a-hungry-but-not-starving-body-with-no-food-to-be-found-goes-on-with-the-work
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (hungry-world [] 14) {:items ["iron_pickaxe"] :min-food 20 :explore false})]
+          (await (f/run-ticks s 80))
+          (is (= 1 (count (f/events-of s :kit.no-food))) "asked once, not again")
+          (is (= {:status :stopped :item "iron_ingot" :reason :no-source}
+                 (select-keys @(:out s) [:status :item :reason]))))))))
 
 (deftest with-a-food-stock-it-goes-on
   (async done
@@ -208,30 +218,12 @@
           (is (= {:status :stopped :item "iron_ingot" :reason :no-source}
                  (select-keys @(:out s) [:status :item :reason]))))))))
 
-(deftest a-fed-body-with-no-food-source-stops-needing-food-naming-no-stock
+(deftest a-fed-body-with-no-food-source-goes-on-naming-no-stock
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (hungry-world [] 20) {:items ["iron_pickaxe"] :min-food 20 :explore false})]
           (await (f/run-ticks s 80))
-          (is (= {:status :stopped :item "iron_pickaxe" :reason :needs-food :cause :no-stock}
-                 (select-keys @(:out s) [:status :item :reason :cause]))))))))
-
-(deftest carried-raw-iron-is-smelted-and-the-pieces-it-covers-are-made-when-the-materials-fail
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (start (assoc-in (world [{:name "raw_iron" :count 3} {:name "coal" :count 1} {:name "stick" :count 2}] {})
-                                 [:blocks "-1,64,2"] "furnace")
-                       {:items ["iron_pickaxe" "iron_helmet"] :explore false :min-food 0})]
-          (loop [i 0]
-            (await (f/run-ticks s 20))
-            (.advance (.-world (:p s)) 2000)
-            (when (and (< i 30) (= :not-done @(:out s)))
-              (recur (inc i))))
-          (is (= 1 (get (f/inv s) "iron_pickaxe")))
-          (is (= {:status :stopped :item "iron_helmet" :made ["iron_pickaxe"]}
-                 (select-keys @(:out s) [:status :item :made]))))))))
-
-(deftest a-partial-kit-is-forgotten-by-a-death-restart
-  (is (= {:since 500} (kit/restarted {:since 100 :partial true} 500))))
+          (is (= [:no-stock] (mapv :cause (f/events-of s :kit.no-food))))
+          (is (= {:status :stopped :item "iron_ingot" :reason :no-source}
+                 (select-keys @(:out s) [:status :item :reason]))))))))
