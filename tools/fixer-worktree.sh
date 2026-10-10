@@ -26,7 +26,8 @@ wt=$root/fix-$1
 mkdir -p "$root"
 git -C "$repo" worktree add -q -b "fix/$1" "$wt" "$(git -C "$repo" symbolic-ref --short HEAD)"
 
-for d in . engine dashboard; do
+ln -s "$repo/node_modules" "$wt/node_modules"
+for d in engine dashboard; do
   ln -s "$repo/$d/node_modules" "$wt/$d/node_modules"
 done
 for d in worlds state textures; do
