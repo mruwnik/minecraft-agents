@@ -170,6 +170,20 @@
           (is (= {:status :stopped :reason :nothing-worth-it :collected 0} (dissoc r :text)))
           (is (= 0 (carried p "dirt"))))))))
 
+(deftest the-stop-text-says-why-nothing-was-taken
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [text (fn ^:async text* [w args]
+                     (:text (await (tu/child-outcome (:eng (setup w)) 'jobs.items.pick-up-loose args 20))))
+              far (await (text (world log-ten-off) {:radius 8}))
+              unworthy (await (text (world dirt-down) {}))
+              none (await (text (world) {}))]
+          (is (re-find #"within 8 blocks" far))
+          (is (re-find #"oak_log 1[01] blocks away" far) "the nearest one beyond the radius is named")
+          (is (re-find #"dirt not worth the detour" unworthy) "what was seen and why it was left")
+          (is (re-find #"no loose item" none)))))))
+
 (deftest a-declined-run-leaves-what-it-saw-so-a-disagreeing-trigger-cannot-repeat
   (async done
     (tu/run-async done

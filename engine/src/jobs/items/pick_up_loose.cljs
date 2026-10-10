@@ -13,7 +13,8 @@
   picked up are remembered (:loose-left) for :left-s; so are the seen items when it finds none worth it, so a
   reflex that judged otherwise cannot fire it again for them. One info event loose-items.picked {:collected :items :left}.
   Result {:collected n :items [names] :left [ids]}. :declined when none came in, or (the reflex) nothing is worth it;
-  run by the agent with nothing worth it, it ends stopped :nothing-worth-it at once (a held run never blocks the queue).")
+  run by the agent with nothing worth it, it ends stopped :nothing-worth-it at once (a held run never blocks the queue), the text
+  naming the radius, what within it was left and why, and the nearest item seen beyond it.")
 
 (a/defargs args
   {:radius {:doc "blocks from the body; nil: the jobs.lib.loose setting" :spec (a/num-in 0 32) :default nil}
@@ -30,6 +31,16 @@
 
 (defn names-of [items] (vec (distinct (keep #(some-> (.-item %) .-name) items))))
 
+(defn stop-text
+  "The words of a stop with nothing taken: the radius, what was left and why, the nearest item beyond the radius."
+  [{:keys [radius left beyond]}]
+  (str "pick-up-loose stopped: "
+       (if (seq left)
+         (str (count left) " loose item kind" (when (> (count left) 1) "s") " within " radius " blocks, none taken: "
+              (str/join ", " (map (fn [[n why]] (str n " " (if (= :not-worth why) "not worth the detour" (name why)))) left)))
+         (str "no loose item in sight within " radius " blocks"))
+       (when beyond (str "; nearest beyond: " (:name beyond) " " (:distance beyond) " blocks away (a larger :radius takes it)"))))
+
 (defn ^:async round
   [c]
   (let [p (:primitives c)
@@ -43,7 +54,7 @@
             (do (ctx/result! c {:collected 0 :reason :nothing-worth-it})
                 :declined)
             (do (ctx/result! c {:status :stopped :reason :nothing-worth-it :collected 0
-                                :text "pick-up-loose stopped: no loose item in sight is worth picking up"})
+                                :text (stop-text (loose/explain p view (:world (:engine c)) (:args c) (:root c)))})
                 :done)))
       (let [r (await (child/run! c :collect 'jobs.forestry.collect-drops {:ids ids :radius (+ (:radius o) (:collect-pad o))}))
             n (or (:collected (ctx/child-result c :collect)) 0)

@@ -158,6 +158,24 @@
 
 (defn seen [p o] (look/seen-items p {:radius (:radius o) :max 32}))
 
+(defn explain
+  "Why no candidate: {:radius r :left {name why} :beyond {:name :distance}}: the reason (judge) each seen item within
+  :radius is left for, and the nearest worthwhile-looking item seen beyond it up to :check-radius, if any."
+  [p view kn args except]
+  (let [o (options args)
+        feet (u/pos-of (.-pos (.self p)))
+        env {:view view :kn kn :o o :self (.-username (.self p)) :feet feet
+             :live (live-ids view except) :left (left-ids view)}
+        near (seen p o)
+        near-ids (set (map #(.-id %) near))
+        beyond (->> (look/seen-items p {:radius (:check-radius o) :max 32})
+                    (remove #(near-ids (.-id %)))
+                    (sort-by #(u/dist feet (item-pos %)))
+                    first)]
+    {:radius (:radius o)
+     :left (into {} (keep (fn [e] (when-let [why (judge env e)] [(some-> (.-item e) .-name) why]))) near)
+     :beyond (when beyond {:name (some-> (.-item beyond) .-name) :distance (js/Math.round (u/dist feet (item-pos beyond)))})}))
+
 (defn candidates
   "The seen item entities within :radius of the body judge takes, nearest first. except is the caller's own job id
   (nil for the trigger): every other listed job counts as live (live-ids)."
