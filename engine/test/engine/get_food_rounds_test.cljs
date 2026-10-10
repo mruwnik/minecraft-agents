@@ -414,6 +414,19 @@
           (await (one-round! eng {}))
           (is (= 2 (count (events-of seen :search.not-found))) "the 10 min rest is cut short when starving"))))))
 
+(deftest each-give-up-widens-the-next-search
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen clock]} (setup {:self {:food 4 :health 20}} :step-ms 5)
+              radii (fn [] (mapv #(re-find #"within \d+ blocks" (str (:text %))) (events-of seen :food.none)))]
+          (await (one-round! eng {:explore false}))
+          (swap! clock + 700000)
+          (await (one-round! eng {:explore false}))
+          (swap! clock + 700000)
+          (await (one-round! eng {:explore false}))
+          (is (= ["within 24 blocks" "within 48 blocks" "within 72 blocks"] (radii))))))))
+
 (deftest a-fed-enough-body-keeps-the-full-rest-before-searching-again
   (async done
     (tu/run-async done

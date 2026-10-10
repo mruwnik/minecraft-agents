@@ -80,6 +80,17 @@
 
 (def hungry-policy {:cap 10 :ttl (* 60 60 1000)})
 
+(def widen-max
+  "The search grows with each recent give-up (:hungry entry) up to this many times its size."
+  3)
+
+(defn widen
+  "How many times the search radius is multiplied: 1 plus the :hungry give-ups within the policy ttl, at most widen-max."
+  [c]
+  (min widen-max (inc (ctx/count-in c :hungry (:ttl hungry-policy)))))
+
+(defn hunt-radius [c] (* (widen c) (:hunt-radius (:args c))))
+
 (a/defargs settings
   {::drop-radius {:default 8 :doc "Blocks around the body in which dropped food is picked up." :spec (a/int-in 0 nil)}
    ::reach {:default 3 :doc "How near a food source the body stands to use it, in blocks." :spec (a/int-in 0 nil)}
@@ -147,7 +158,7 @@
        (not (can-cook? c))
        (nil? (fresh-source c))
        (empty? (remove :why (animals-in-sight c)))
-       (empty? (ripe-blocks c (merge ripe-age berry-bush) (u/self-pos c) (:hunt-radius (:args c))))))
+       (empty? (ripe-blocks c (merge ripe-age berry-bush) (u/self-pos c) (hunt-radius c)))))
 
 (defn check
   "Hungry, or in the middle of a meal that began when it was. Hungry with nothing to try waits :no-food-found."
@@ -156,7 +167,7 @@
     (if (and (hungry-now? c) (not (:eating (ctx/mem c))) (nothing-to-try? c))
       (ctx/wait c {:reason :no-food-found
                    :why (str "hungry (food " (.-food self) ") but no food is carried, known or in sight within "
-                             (:hunt-radius (:args c)) " blocks; searched recently")})
+                             (hunt-radius c) " blocks; searched recently")})
     (or (wants-food? c)
         (foods/top-up? (.-food self) (.-health self) (foods/carried-names self))
         (foods/eat-now? self (:args c))
@@ -325,7 +336,7 @@
   to hunt, else :tried (attacked this job), :baby or :refused (another's zone or claim)."
   [c]
   (let [skipped (set (:skipped-animals (ctx/mem c)))]
-    (->> (array-seq (.entities (:primitives c) #js {:radius (:hunt-radius (:args c)) :kind "passive"
+    (->> (array-seq (.entities (:primitives c) #js {:radius (hunt-radius c) :kind "passive"
                                                     :names (clj->js food-animals) :max 16}))
          (mapv (fn [e] {:entity e
                         :why (cond (skipped (.-id e)) :tried
@@ -348,7 +359,8 @@
   look around). An animal is attacked once per job, killed or not."
   [c]
   (when-let [animal (await (animal-in-sight c))]
-    (let [{:keys [hunt-radius attack-gap-ms]} (:args c)
+    (let [{:keys [attack-gap-ms]} (:args c)
+          hunt-radius (hunt-radius c)
           st (await (child/run! c :attack 'jobs.combat.attack
                                 {:targets [(.-id animal)] :radius hunt-radius :attack-gap-ms attack-gap-ms
                                  :lost-s 0 :timeout-s 60}))]
@@ -389,12 +401,12 @@
   "The mobs of any kind the body sees or heard within :hunt-radius, as {:name :kind :distance}: tells a hunt filter from
   an empty scan when no animal qualified."
   [c]
-  (->> (look/seen-entities (:primitives c) {:radius (:hunt-radius (:args c)) :max 16})
+  (->> (look/seen-entities (:primitives c) {:radius (hunt-radius c) :max 16})
        (remove #(#{"item" "player"} (:kind %)))
        (mapv (fn [e] {:name (:name e) :kind (:kind e) :distance (/ (js/Math.round (* 10 (:distance e))) 10)}))))
 
 (defn none-text [c around explored]
-  (let [{:keys [hunt-radius]} (:args c)
+  (let [hunt-radius (hunt-radius c)
         near (nearest-known-source c)
         passed (passed-over c)
         wheat (carried-count c "wheat")
@@ -431,7 +443,7 @@
   [c]
   (let [have (foods/stock-points (u/inventory (:primitives c)))]
     (r/stop! c :no-stock (str "fed (food " (food-level c) ") but carries " have " of " (:stock (:args c))
-                              " food points and found no more within " (:hunt-radius (:args c)) " blocks")
+                              " food points and found no more within " (hunt-radius c) " blocks")
              :food (food-level c) :stock (:stock (:args c)) :have have)))
 
 (defn starving?
@@ -581,7 +593,7 @@
         (when source (await (use-source! c source)))
         (await (collect-drops! c (drop-radius)))
         (await (hunt! c))
-        (await (dig-ripe! c (merge ripe-age berry-bush) (u/self-pos c) (:hunt-radius (:args c)))))))
+        (await (dig-ripe! c (merge ripe-age berry-bush) (u/self-pos c) (hunt-radius c))))))
 
 (defn night-holds?
   "Whether the night handler would take the body now (jobs.lib.shelter/night-holds?): no exploring then."
@@ -600,6 +612,9 @@
   [mem starving? now rest-ms]
   (boolean (and (:explored mem) (not (and starving? (>= (- now (:explored-at mem 0)) rest-ms))))))
 
+(defn widen-explore [opts k]
+  (-> opts (update :max-distance #(some-> % (* k))) (update :max-legs #(some-> % (* k))) (update :timeout-s #(some-> % (* k)))))
+
 (defn ^:async explore!
   "Once per job, with nothing known or seen: search for food animals and ripe crops (jobs.explore.search, :explore),
   not at night (a body sheltered for the night stays in) nor while the night handler holds, unless starving with no
@@ -614,7 +629,7 @@
       :else
       (do
         (ctx/update-mem! c assoc :explored "started" :explored-at (ctx/now c))
-        (let [opts (merge (settings/get settings ::explore) (when (map? e) e))
+        (let [opts (widen-explore (merge (settings/get settings ::explore) (when (map? e) e)) (widen c))
               st (await (child/run! c :explore 'jobs.explore.search
                                     (assoc opts :target (vec (concat (sort food-animals) (keys ripe-age) (keys berry-bush))))
                                     {:max-calls 1}))]
