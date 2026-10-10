@@ -10,6 +10,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.dig-look :as dig-look]
+            [jobs.lib.goal :as goal]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.escape :as escape]
             [jobs.lib.look :as look]
@@ -45,7 +46,7 @@
   blocks, above it and no nearer a chaser), and with none digs a side pocket (as below) before it walks across the open cave,
   unless a creeper or a melee mob is within cover-gap.
   3. Walks a short step (:step blocks) away from all chasers (nearer ones weigh more) with a go-to child (:escalate false),
-     leaning toward the first closed room of 2. (else the latest :bed or :home within :home-range) when not through the
+     leaning toward the first closed room of 2. (else the :goal, the destination of the walk the flight interrupted; else the latest :bed or :home within :home-range) when not through the
      hostiles (a closed room behind them: turned retreat-walk ::flank-turn degrees toward it, to go round them, while it still gains on them so:
      jobs.lib.cost/outruns-at?), avoiding :hazard positions.
      When a wall blocks the way away it turns up to 120 degrees towards open ground (at least 2 clear cells).
@@ -101,6 +102,7 @@
   {:radius {:doc "hostiles within this many blocks start a flight" :spec (a/num-in 0 nil) :default 8}
    :ranged-radius {:doc "ranged hostiles (skeletons and the like) within this many blocks start a flight" :spec (a/num-in 0 nil) :default 16}
    :eat-gap {:doc "with at least this many blocks to the nearest hostile, eat a bite per flee step" :spec (a/num-in 0 nil) :default 12}
+   :goal {:doc "a position {:x :y :z} the flight leans toward, round the hostiles, like a refuge (the walk the body was on); nil: away only" :spec goal/pos-spec :default nil}
    :step {:doc "blocks per walk" :spec (a/num-in 1 nil) :default 6}
    :home-range {:doc "a flight leans towards the latest :bed or :home only when it lies within this many blocks" :spec (a/num-in 0 nil) :default 64}
    :weapons {:doc "item name substrings that count as weapons, for a cornered fight" :spec (a/coll-of (a/or-of string? keyword?)) :default combat/default-weapons}
@@ -484,6 +486,13 @@
          (mapcat (fn [d] (when-let [pos (or (:pos d) (danger-q/rough-pos d))]
                            (repeat (if (= "creeper" (:mob d)) 3 1) pos)))))))
 
+(defn goal-pos
+  "The :goal arg ({:x :y :z} or [x y z]) as a position map, nil when none."
+  [goal]
+  (when goal
+    (let [[x y z] (if (vector? goal) goal [(:x goal) (:y goal) (:z goal)])]
+      {:x x :y y :z z})))
+
 (def way-reach
   "Blocks within which the stairs the body cut are a way out of a flight."
   14)
@@ -508,8 +517,9 @@
          from (u/self-pos c)
          threat-pos (into (mapv #(danger-q/mob-pos p %) threats) (lost-spots c threats))
          refuge (:start (first rooms))
-         home (or refuge (home-pos c))
-         flank? (and (some? refuge) (cost/outruns-at? (retreat-home/food p) (walk/flank-turn)))]
+         goal (goal-pos (:goal (:args c)))
+         home (or refuge goal (home-pos c))
+         flank? (and (some? (or refuge goal)) (cost/outruns-at? (retreat-home/food p) (walk/flank-turn)))]
      (await (glance-away! c (walk/direction from threat-pos home flank?)))
      (walk/choose-target (block-at-fn p) from threat-pos home (keep (comp :pos :data) (ctx/entries c :hazard))
                          (:step (:args c)) {:swim-factor (swim-factor c) :covered? covered? :flank? flank?})))))

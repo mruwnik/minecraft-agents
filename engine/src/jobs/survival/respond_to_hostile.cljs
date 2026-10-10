@@ -6,6 +6,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.pace :as pace]
             [jobs.lib.danger :as danger-q]
+            [jobs.lib.goal :as goal]
             [jobs.lib.result :as r]
             [jobs.lib.shelter :as sh]
             [jobs.lib.threats :as threats]
@@ -37,6 +38,7 @@
    :reserve {:doc "health a fight must be expected to leave" :spec (a/num-in 0 20) :default 4}
    :quiet-s {:doc "passed to the retreat: a hidden body keeps its refuge this many seconds after the last danger" :spec (a/num-in 0 nil) :default 30}
    :hide-s {:doc "passed to the retreat: a hidden body hands back after this many seconds once no real danger is on it" :spec (a/num-in 0 nil) :default 60}
+   :goal {:doc "passed to the retreat: where the flight leans; nil: the destination of the walk this reflex interrupted (jobs.lib.goal), read once" :spec goal/pos-spec :default nil}
    :weapons {:doc "item name substrings that count as weapons" :spec (a/coll-of (a/or-of string? keyword?)) :default combat/default-weapons}})
 
 (def hostile-policy {:cap 50 :ttl (* 60 60 1000)})
@@ -58,7 +60,8 @@
 (defn ^:async run-child [c decision {:keys [radius ranged-radius weapons reserve quiet-s hide-s]}]
   (let [child-args (case decision
                      :fight {:range radius :ranged-range ranged-radius :min-health 0 :weapons weapons}
-                     :flee {:radius radius :ranged-radius ranged-radius :weapons weapons :reserve reserve :quiet-s quiet-s :hide-s hide-s})]
+                     :flee {:radius radius :ranged-radius ranged-radius :weapons weapons :reserve reserve :quiet-s quiet-s :hide-s hide-s
+                            :goal (:goal (ctx/mem c))})]
     (await (ctx/call-child c decision (child-jobs decision) child-args))))
 
 (defn encounter-text [{:keys [mob decision pos direction band]}]
@@ -166,6 +169,8 @@
   "One whole attempt: respond (or let the retreat hide on) while a danger is near; stopped when a child stops, or
   :no_response after max-unchanged calls in a row that changed nothing; never for the time a danger stays."
   [c]
+  (when-not (contains? (ctx/mem c) :goal)
+    (ctx/update-mem! c assoc :goal (or (:goal (:args c)) (goal/interrupted-goal (ctx/view c) (:root c)))))
   (loop [unchanged 0]
     (let [hs (near c)
           before (signature c hs)]

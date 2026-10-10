@@ -516,6 +516,21 @@
           (await (run-job! s 'targeter {:step 6}))
           (is (= {:x -6 :y 64 :z 0} @out) "straight west, away from the zombie"))))))
 
+(deftest a-flight-with-a-goal-behind-the-chaser-goes-round-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [run (fn ^:async run [args]
+                    (let [out (atom nil)
+                          s (assoc-in (setup-sensed {:entities [(zombie 7 5 {})]}) [:eng :jobs 'targeter] (targeter out))]
+                      (await (run-job! s 'targeter args))
+                      @out))
+              away (await (run {:step 6}))
+              round (await (run {:step 6 :goal {:x 20 :y 64 :z 12}}))]
+          (is (= {:x -6 :y 64 :z 0} away) "no goal: straight away")
+          (is (pos? (:z round)) (str "the goal lies past the zombie on the +z side: the flight turns that way " (pr-str round)))
+          (is (<= (:x round) 0) "and still gains on the zombie"))))))
+
 (def tunnel-cells (set (for [x (range 0 9) y [64 65]] [x y 0])))
 
 (deftest a-flight-target-never-reads-unseen-rock-as-a-way
