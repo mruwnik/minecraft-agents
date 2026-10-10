@@ -17,6 +17,7 @@
             [jobs.lib.watch :as watch]
             [jobs.lib.near :as near]
             [jobs.lib.cost :as cost]
+            [jobs.lib.body :as body]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.escape :as escape]
             [jobs.lib.fetch :as fetch]
@@ -77,7 +78,7 @@
     (jobs.lib.shelter/walk-leaves-shelter?: a closed room, its dug-in shelter, a roof, underground; a walk down to open air leaves a roofed hut) waits for day: a listed
     go-to declines {:reason :night-sheltered :shelter :goal}, a child call waits 1 s and yields :continue (info
     go-to.night-sheltered, once a call). :go walks anyway; a reflex job's go-to always walks.
-  - A walk without :escalate from a body shut in by its own retreat plug (ledger) with a known hostile near waits the same way, {:reason :sealed-hostile-near}, until the hostile goes, :plug-wait-ms (3 min) pass, or food or health fall to :plug-wait-min-food or -health (it never holds a starving or hurt body).
+  - A walk without :escalate from a body shut in by its own retreat plug (ledger) with a known hostile near waits the same way, {:reason :sealed-hostile-near}, until the hostile goes (a heard-only one counts not while heard mobs are muted, jobs.lib.body/heard-muted?), :plug-wait-ms (3 min) pass, or food or health fall to :plug-wait-min-food or -health (it never holds a starving or hurt body).
   - :goal-danger :end gives up at once (:why :goal-dangerous, :mob, :mob-pos, :mob-distance) when the goal lies within the full-cost radius of a known mob the body would flee; :wait (default) walks on, an info goal-in-danger says so.
   - :dangers false plans straight past known dangers (default: the plans keep away from them, jobs.lib.threats). :leg-s n
     walks one leg of at most n s and, when it got more than 1 block nearer, ends {:arrived false :leg true} (job :done)
@@ -940,7 +941,7 @@
 
 (defn plug-held?
   "Whether the body is shut in with a retreat plug of its ledger standing, a known hostile is near and the body is
-  neither starving nor hurt (waiting costs food and health, and underground a hostile may stay for ever)."
+  neither starving nor hurt, a heard-only one not counting while heard mobs are muted (waiting costs food and health, and underground a hostile may stay for ever)."
   [c]
   (let [p (:primitives c)
         self (.self p)]
@@ -948,7 +949,8 @@
          (> (or (.-food self) 20) (plug-wait-min-food))
          (> (or (.-health self) 20) (plug-wait-min-health))
          (escape/enclosed? p (some-> (:doors (:args c)) keyword))
-         (seq (danger-q/known-hostiles p threats/max-follow-range {:ranged-radius (danger-q/ranged-radius)})))))
+         (seq (cond->> (danger-q/known-hostiles p threats/max-follow-range {:ranged-radius (danger-q/ranged-radius)})
+                (body/heard-muted? (ctx/view c)) (filter danger-q/seen-only?))))))
 
 (defn plug-wait
   "The wait {:reason :sealed-hostile-near} while plug-held? and this walk may not dig out (no :escalate), until

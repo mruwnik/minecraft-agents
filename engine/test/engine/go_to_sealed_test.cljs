@@ -9,6 +9,8 @@
             [engine.triggers :as triggers]
             [engine.shelter-test :as st]
             [engine.test-util :as tu]
+            [engine.memory :as mem]
+            [jobs.lib.body :as body]
             [jobs.lib.child :as child]
             [jobs.lib.ledger :as ledger]))
 
@@ -23,7 +25,8 @@
 (defn ^:async sealed
   "A noon world with the body in a 1-cell pit whose east side is a retreat plug, a skeleton outside; ticks n."
   ([n] (sealed n nil))
-  ([n self]
+  ([n self] (sealed n self nil))
+  ([n self setup]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         p (tu/fake (merge {:floor tu/walk-floor :time st/noon :self (merge {:pos {:x 0 :y 64 :z 0}} self) :blocks pit}))
@@ -33,6 +36,7 @@
         s {:eng eng :p p :seen seen :clock clock}]
     (ledger/write! (:store eng) [{:cell [1 64 0] :item "dirt" :before "air" :job "j9" :purpose :retreat-plug :state :placed}])
     (fake/add-entity! p {:id 9 :name "skeleton" :kind "hostile" :pos {:x -6 :y 64 :z 0} :health 20})
+    (when setup (setup eng))
     (core/submit! eng '(walker) {})
     (await (st/tick-n eng n))
     s)))
@@ -76,3 +80,13 @@
           (let [{:keys [seen]} (await (sealed 6 self))]
             (is (empty? (st/emitted seen :holding)) (str self))
             (is (seq (st/emitted seen :unreachable)) (str self))))))))
+
+(deftest a-muted-heard-only-hostile-does-not-hold-the-sealed-walk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[muted? held?] [[true false] [false true]]]
+          (let [{:keys [seen]} (await (sealed 6 nil
+                                              (fn [eng]
+                                                (when muted? (mem/write! (:store eng) :heard-mute {:until 9999999999} body/mute-policy)))))]
+            (is (= held? (boolean (seq (st/emitted seen :holding)))) (str "muted " muted?))))))))
