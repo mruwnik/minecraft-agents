@@ -185,6 +185,14 @@
   (boolean (and (seq (:watch opts)) (= :body (:source e)) (#{:idle :died} (:kind e)) started-ms
                 (some-> (:time-ms e) (< started-ms)))))
 
+(defn stale-death?
+  "Whether a death stamped before the wait began is old news: the body has respawned since (a later online/spawned/
+  respawned in the backlog), so the summary carries it and the body is alive."
+  [e later started-ms]
+  (boolean (and (= :body (:source e)) (= :died (:kind e)) started-ms
+                (some-> (:time-ms e) (< started-ms))
+                (some recovered? later))))
+
 (defn classify
   "The wake an event causes under the options, or nil. Options: :from :chatter :watch :danger :disconnect
   :quiet-notices. A body.idle and a death always wake, and so does any :attention :notice event but a job end; under

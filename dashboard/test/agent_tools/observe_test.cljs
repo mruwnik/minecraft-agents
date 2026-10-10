@@ -1069,6 +1069,23 @@
                      (observe/wait-observe req (:get! f) nil (fn [_] (js/Promise.resolve nil))))))
           (.then (fn [wake] (is (not= :died (:wake wake)))))))))
 
+(defn wake-over-backlog
+  "The wake of a plain wait over events stamped before it began."
+  [check & evs]
+  (with-fixture ["200ms"]
+    (fn [f]
+      (-> ((:wait! f))
+          (.then (fn [_]
+                   (apply push! f (map-indexed (fn [i e] (assoc e :seq (inc i) :time-ms (* 1000 (inc i)))) evs))
+                   ((:wait! f))))
+          (.then (fn [wake] (is (check (:wake wake)) (pr-str wake))))))))
+
+(deftest a-death-the-body-has-since-respawned-from-does-not-wake-a-plain-wait
+  (wake-over-backlog #(not= :died %) (event :body :died {:cause "zombie"}) (event :body :respawned {})))
+
+(deftest a-death-from-before-the-wait-with-no-respawn-still-wakes
+  (wake-over-backlog #(= :died %) (event :body :died {:cause "zombie"})))
+
 ;; Deaths through the wait loop
 
 (defn died-item [result] (when (= :died (:wake result)) result))
