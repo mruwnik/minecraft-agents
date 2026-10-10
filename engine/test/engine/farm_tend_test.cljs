@@ -286,6 +286,14 @@
           (is (> (age-at s 2 64 2) 3))
           (is (true? (finished? s))))))))
 
+(deftest bones-are-crafted-into-bone-meal-when-fertilizing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:fertilize true} (world (farm "wheat" 3 [[2 2] [3 2]] [[2 2] [3 2]]) {:inventory [(item "bone" 2)] :recipes {"bone_meal" {:count 3 :needs {"bone" 1}}}}) 80))]
+          (is (pos? (:used (step s :fertilize))))
+          (is (> (age-at s 2 64 2) 3)))))))
+
 (deftest an-unreachable-ripe-crop-is-given-up-and-the-run-ends-with-a-result
   (async done
     (tu/run-async done
@@ -417,6 +425,7 @@
     nil :plant {:box box} {:bare 1 :seed true}
     :fertilize-off :fertilize {:fertilize false} {:meal true :unripe 2}
     :no-bone-meal :fertilize {:fertilize true} {:meal false :unripe 2}
+    nil :fertilize {:fertilize true} {:meal false :bones true :unripe 2 :mid {} :radius 2}
     :none-unripe :fertilize {:fertilize true} {:meal true :unripe 0}
     nil :fertilize {:fertilize true} {:meal true :unripe 1 :mid {} :radius 2}
     :no-composter :compost {} {:waste ["wheat_seeds"]}

@@ -27,7 +27,7 @@
   - :till (jobs.farm.till): :till is true, a hoe is carried, dirt or grass lies uncovered in the ground layer and
     more seed is carried than there is bare farmland. It tills one cell at a time, nearest first.
   - :plant (jobs.farm.plant): bare farmland lies in the box and a seed is carried.
-  - :fertilize (jobs.farm.fertilize): :fertilize is true, bone meal is carried and an unripe crop lies in the box.
+  - :fertilize (jobs.farm.fertilize): :fertilize is true, bone meal (or bones, which the fertilize child crafts) is carried and an unripe crop lies in the box.
   - :compost (jobs.farm.compost): a :composter is given and seed above the keep is carried.
   - :deposit (jobs.storage.deposit): a :chest is given and farm goods are carried above the keep. Farm goods are
     seeds, crops (carrots, potatoes and beetroot too), melon, pumpkin, hay and cocoa. Tools, bread and other
@@ -189,6 +189,7 @@
      :seeds (transduce (map #(get (plant/sowable inventory) % 0)) + 0 seed-items)
      :seed (some? (plant/pick-seed nil inventory))
      :meal (boolean (fertilize/has-meal? p))
+     :bones (boolean (some #(= "bone" (:name %)) inventory))
      :unripe (if fertilize (count (unripe-in-box p box mid R)) 0)
      :keep keep-of
      :waste (stock/surplus inventory keep-of stock/waste-seeds)

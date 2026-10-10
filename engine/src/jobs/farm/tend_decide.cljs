@@ -40,10 +40,10 @@
     :else {:call {:slot :plant :job (jobs :plant) :args (if plan {:plan plan :part part :fetch false} {:box box :fetch false})}}))
 
 (defn decide-fertilize
-  [{:keys [fertilize]} {:keys [meal unripe mid radius]}]
+  [{:keys [fertilize]} {:keys [meal bones unripe mid radius]}]
   (cond
     (not fertilize) {:skip :fertilize-off}
-    (not meal) {:skip :no-bone-meal}
+    (not (or meal bones)) {:skip :no-bone-meal}
     (zero? unripe) {:skip :none-unripe}
     :else {:call {:slot :fertilize :job (jobs :fertilize) :args {:center mid :radius radius}}}))
 
