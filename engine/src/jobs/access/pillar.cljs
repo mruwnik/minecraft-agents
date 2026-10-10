@@ -37,7 +37,7 @@
   The check waits (:too-few-blocks, with :short) when blocks are missing at the start; run short part way, it gives
   up :too-few-blocks. Every give-up ends the job, so a parent running this as a child reads the result.
 
-  Ends with {:status :done|:gave-up :reason :cells [[x y z] ...] :built n :height n}. :cells are this job's
+  Ends with {:status :done|:stopped :reason :cells [[x y z] ...] :built n :height n}. :cells are this job's
   confirmed blocks, lowest first. Events: pillar.done (info) and pillar.gave-up (warn, with :reason and by
   reason :at :block :zone :short :detail). Gives up with :too-few-blocks (:short still owed), :ceiling,
   :not-on-solid, :zone, :footprint, :no-zones, :not-loaded, :not-replaceable, :off-column (the body left the
@@ -150,7 +150,7 @@
   (let [cells (built c l)
         height (:height (:args c))
         spent-log (spent-log c l)
-        result (merge {:status (if (= :done (:step step)) :done :gave-up) :cells cells :built (count cells) :height height}
+        result (merge {:status (if (= :done (:step step)) :done :stopped) :cells cells :built (count cells) :height height}
                       (some-> spent-log spent/summary)
                       (dissoc step :step))]
     (ctx/result! c result)

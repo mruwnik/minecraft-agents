@@ -788,3 +788,32 @@
     (is (some? back))
     (is (nil? (escape/door-back seen-wall [0 64 0])) "a wall it sees")
     (is (= back (escape/door-back dark-wall [0 64 0])) "a wall it has not seen: go and look, not an x-ray read")))
+
+;; ------------------------------------------------------------------ a 1-cell gap under a low ceiling
+
+(def gap-tunnel
+  "A 2-high tunnel (x 0..10, y 64..65, z 0) in stone, its floor at y 63 broken at x 5 down to y 62: a 1-cell gap, too
+  deep to climb out of, under a ceiling too low for the gap jump."
+  (apply dissoc (box -2 60 -2 12 67 2 "stone")
+         "5,63,0" "5,62,0"
+         (for [x (range 0 11) y [64 65]] (str x "," y ",0"))))
+
+(deftest go-to-fills-a-one-cell-gap-under-a-low-ceiling-with-a-carried-block
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p seen]} (await (run-job! {:self {:pos {:x 1.5 :y 64 :z 0.5}} :blocks gap-tunnel :inventory [{:name "dirt" :count 5}]}
+                                                    {:pos [9 64 0] :range 0}))]
+          (is (= {:arrived true} @out))
+          (is (= [:fill-gap] (mapv :step (events-of seen :go-to.escalated))))
+          (is (= "dirt" (block p [5 63 0])) "the block went into the gap")
+          (is (empty? (calls p "dig"))))))))
+
+(deftest go-to-gives-up-at-a-gap-under-a-low-ceiling-with-nothing-to-fill-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (run-job! {:self {:pos {:x 1.5 :y 64 :z 0.5}} :blocks gap-tunnel}
+                                               {:pos [9 64 0] :range 0}))]
+          (is (false? (:arrived @out)))
+          (is (= "air" (block p [5 63 0]))))))))

@@ -166,7 +166,9 @@
           (let [g (first (of-kind seen :pillar.gave-up))]
             (is (= :ceiling (:reason g)))
             (is (= [0 68 0] (:at g)))
-            (is (= (column base 2) (:cells g)))))))))
+            (is (= (column base 2) (:cells g)))
+            (is (= [:ceiling] (mapv :reason (of-kind seen :stopped))) "the job ends stopped with the reason, not completed")
+            (is (empty? (of-kind seen :completed)))))))))
 
 (deftest too-few-blocks-at-the-start-waits-saying-so
   (async done

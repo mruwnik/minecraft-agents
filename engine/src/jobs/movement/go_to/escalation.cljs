@@ -37,10 +37,14 @@
     :pillar ['jobs.access.pillar {:height (:height e) :item (:item e) :ignore-zones? ignore-zones?}]
     :stair ['jobs.access.stair {:dir :up :heading (:heading e) :steps (:steps e) :note tag :fetch false :ignore-zones? ignore-zones? :by-hand by-hand?}]
     :clear-path ['jobs.access.clear-path {:heading (:heading e) :note tag :ignore-zones? ignore-zones? :by-hand by-hand?}]
-    :approach ['jobs.movement.go-to {:pos (zipmap [:x :y :z] (:pos e)) :range 0 :escalate false}]))
+    :approach ['jobs.movement.go-to {:pos (zipmap [:x :y :z] (:pos e)) :range 0 :escalate false}]
+    :fill-gap ['jobs.blocks.place {:pos (zipmap [:x :y :z] (:cell e)) :any-of [(:item e)] :fetch false :ignore-zones? ignore-zones?}]))
 
 (defn succeeded? [{:keys [step]} result]
-  (if (= :approach step) (true? (:arrived result)) (= :done (:status result))))
+  (case step
+    :approach (true? (:arrived result))
+    :fill-gap (boolean (:placed result))
+    (= :done (:status result))))
 
 (defn may-dig-fn
   "(may-dig? cell): no other owner's zone, claim or plan footprint refuses a dig there (jobs.lib.tidy/refusal)."
@@ -60,6 +64,18 @@
 (defn note-placed! [c cell]
   (when-let [block (u/seen-name (:primitives c) (zipmap [:x :y :z] cell))]
     (ctx/remember! c :escalation-placed {:cell (vec cell) :block block} placed-policy)))
+
+(defn gap-fill
+  "{:step :fill-gap :cell :item} when result (a planner no-path) is a gap jump refused for a low ceiling, a carried
+  pillar block can fill the gap's floor, and no zone refuses the place; else nil."
+  [c result skip]
+  (let [p (:primitives c)
+        {:keys [item]} (escape/pillar-item p)
+        cell (when (and (= :abilities (some-> (:reason result) keyword)) (= :gap-low-ceiling (some-> (:kind result) keyword))
+                        (not (skip :fill-gap)) item (:at result))
+               (escape/gap-floor (escape/block-at-of p) (:at result)))]
+    (when (and cell (or (:ignore-zones? (:args c)) (nil? (tidy/refusal c :place (zipmap [:x :y :z] cell)))))
+      {:step :fill-gap :cell cell :item item})))
 
 (defn planned-cells
   "The solid cells escalation e from feet would cut, [{:cell :block}]: the stair's cuts or clear-path's door, those
@@ -143,7 +159,8 @@
         _ (when (<= n max-escalations) (await (look-round! c feet)))
         goal (mapv #(js/Math.floor (% pos)) [:x :y :z])
         opts {:own? (own-placed-fn c) :skip (:skipped-steps (ctx/mem c) #{})}
-        e (escape/choose (:primitives c) feet goal (may-dig-fn c) opts)
+        e (or (gap-fill c result (:skip opts))
+              (escape/choose (:primitives c) feet goal (may-dig-fn c) opts))
         e (if (and (= :none (:step e)) (not= :none (:step (escape/choose (:primitives c) feet goal (constantly true) opts))))
             {:step :none :why :zone}
             e)]
@@ -159,21 +176,22 @@
           :again))))
 
 (defn escalate?
-  "Whether a give-up with result may escalate instead: the body is shut in (reach/enclosed?) and no door or gate
+  "Whether a give-up with result may escalate instead: a carried block fills the 1-cell gap it was refused (gap-fill), or the body is shut in (reach/enclosed?) and no door or gate
   borders where it can walk (escape/door-beside?: that is its way out; an iron door, or any door under :doors :never,
   is a wall). Never out of
   the body's own shelter: it is shut in on purpose."
   [c result]
   (and (:escalate (:args c))
-       (escalate-reason? result (some-> (:doors (:args c)) keyword))
        (not (sh/sheltered-in c))
-       (escape/enclosed? (:primitives c) (some-> (:doors (:args c)) keyword))
-       (not (escape/door-beside? (:primitives c) (end/feet-cell c) (some-> (:doors (:args c)) keyword)))))
+       (or (some? (gap-fill c result (:skipped-steps (ctx/mem c) #{})))
+           (and (escalate-reason? result (some-> (:doors (:args c)) keyword))
+                (escape/enclosed? (:primitives c) (some-> (:doors (:args c)) keyword))
+                (not (escape/door-beside? (:primitives c) (end/feet-cell c) (some-> (:doors (:args c)) keyword)))))))
 
 (defn ^:async give-up-or-escalate! [c pos tries status result]
   (if (escalate? c result)
     (do (ctx/update-mem! c assoc :give-up {:tries tries :status status
-                                           :result (select-keys result [:status :reason :kind :cells :near :one-way])})
+                                           :result (select-keys result [:status :reason :kind :cells :near :one-way :at])})
         (await (escalate! c pos nil)))
     (end/give-up! c pos tries status result)))
 
@@ -194,7 +212,7 @@
     (ctx/update-mem! c #(cond-> (-> % (dissoc :escalation :escalation-from :planned :holes-before :best)
                                     (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {}))
                           again? (assoc :escalate-now true)
-                          (not= :approach step) (assoc :restore-pending true))))
+                          (not (#{:approach :fill-gap} step)) (assoc :restore-pending true))))
   :again)
 
 (defn partly-made?
