@@ -4,6 +4,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.go-to-escalate-test :as e :refer [in-pit pit stone-pit]]
+            [engine.go-to-health-test :as h]
             [engine.test-util :refer [floor]]
             [jobs.lib.near :as near]))
 
@@ -78,4 +79,15 @@
              {:keys [out p]} (await (run-probe! {:blocks cliff} {:x 120 :y 61 :z 0} 1 {:escalate false}))]
          (is (= :blocked @out))
          (is (= 64 (js/Math.floor (second (e/feet p)))) "still on the plateau")
+         (done))))))
+
+(deftest a-callers-health-floor-keeps-a-walk-from-going-over-its-damage-budget
+  (async done
+    ((fn ^:async t []
+       (let [world (h/world {:health 13 :food 10})
+             target {:x 40 :y 60 :z 0}
+             floored (await (run-probe! world target 1 {:min-health 12}))
+             free (await (run-probe! world target 1))]
+         (is (= [:blocked 64] [@(:out floored) (h/y-of (:p floored))]) "the cliff is not dropped for a floor of 12")
+         (is (= [:there 60] [@(:out free) (h/y-of (:p free))]) "with no floor it goes over the budget")
          (done))))))
