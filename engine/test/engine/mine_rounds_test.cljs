@@ -4,6 +4,7 @@
             [engine.core :as core]
             [engine.fake :as fake]
             [engine.get-seeds-test :as gs]
+            [engine.memory :as mem]
             [engine.mine-test :as m]
             [engine.test-util :as tu]))
 
@@ -159,3 +160,32 @@
           (is (m/finished? s))
           (is (= :no-drops (:reason (m/done-event s))) "nothing came in, so the digs ran dry")
           (is (= 2 (m/dig-count s))))))))
+
+(defn ^:async hungry-mine
+  "A sand mine of 6 with the body at food, after get-food gave up (a :hungry entry); [finished? sand-dug event]."
+  [food held]
+  (let [s (m/start {:world (merge {:blocks (merge m/floor m/sand-patch)} {:self {:food food} :inventory held})})]
+    (mem/write! (:store (:eng s)) :hungry {:food food} {:cap 10 :ttl 3600000})
+    (core/submit! (:eng s) (m/spec {:block "sand" :count 6}) {})
+    (await (m/run-ticks s 1))
+    [(m/finished? s) (get (m/inv s) "sand" 0) (m/done-event s)]))
+
+(deftest mine-stops-hungry-when-get-food-gave-up-and-no-food-is-carried
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[fin sand ev] (await (hungry-mine 2 []))]
+          (is fin)
+          (is (zero? sand) "dug nothing")
+          (is (= :hungry (:reason ev))))))))
+
+(deftest mine-goes-on-when-food-is-carried-or-plenty
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[_ sand1 ev1] (await (hungry-mine 2 [{:name "bread" :count 2}]))
+              [_ sand2 ev2] (await (hungry-mine 20 []))]
+          (is (= :count (:reason ev1)))
+          (is (= :count (:reason ev2)))
+          (is (>= sand1 6))
+          (is (>= sand2 6)))))))

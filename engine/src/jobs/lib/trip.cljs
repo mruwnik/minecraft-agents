@@ -9,6 +9,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.fetch :as fetch]
+            [jobs.lib.foods :as foods]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]))
 
@@ -16,8 +17,23 @@
   {::want-free {:default 12 :doc "Free slots a trip wants at its start: with fewer free and a known chest near, the body deposits first." :spec (a/int-in 0 36)}
    ::max-cost {:default 30 :doc "Walk cost (jobs.lib.cost/walk-cost, about 100 blocks) up to which a known chest is near enough to deposit at before a trip." :spec (a/num-in 0 nil)}})
 
+(a/defargs food-settings
+  {::gave-up-s {:default 600 :doc "Seconds after a fruitless get-food (a :hungry entry) in which a long job stops rather than dig on with no food." :spec (a/int-in 0 nil)}})
+
 (a/defargs spare-settings
   {::spare-fraction {:default 0.25 :doc "A pickaxe, axe or shovel at or under this fraction of its durability is worn: a job about to dig a lot with the last one gets a spare first." :spec (a/num-in 0 1)}})
+
+(defn food-short?
+  "Whether a long job should stop for food: the body is hungry (foods/hungry?), carries nothing a meal would eat, and
+  get-food gave up less than ::gave-up-s ago (the hungry trigger had its try; digging on only starves it)."
+  [c]
+  (let [self (.self (:primitives c))
+        view (ctx/view c)
+        gave-up (:t (mem/latest view :hungry))]
+    (boolean (and gave-up
+                  (< (- (:now view) gave-up) (* 1000 (settings/get food-settings ::gave-up-s)))
+                  (foods/hungry? (.-food self) (.-health self) {})
+                  (not (foods/carries-food? self))))))
 
 (defn spare-fraction [] (settings/get spare-settings ::spare-fraction))
 

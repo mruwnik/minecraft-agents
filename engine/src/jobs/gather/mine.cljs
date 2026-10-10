@@ -1529,6 +1529,18 @@
         (ctx/result! c {:status :stopped :got 0 :reason :flooded :text "mine got nothing: the head is in water"})
         :done)))
 
+(defn hungry!
+  "Food is short and get-food found none (trip/food-short?): before the first dig end at once {:status :stopped :got 0
+  :reason :hungry}, later end the dig phase :hungry and walk home."
+  [c]
+  (ctx/emit! c :mine.hungry :warn {:text "mine stopped digging: hungry, no food carried and get-food found none"})
+  (if (:phase (ctx/mem c))
+    (do (ctx/update-mem! c assoc :reason :hungry)
+        (wrap-up! c))
+    (do (ctx/emit! c :mine.done :info {:got 0 :reason :hungry :mended 0 :text "mine done: hungry, got 0, mended 0"})
+        (ctx/result! c {:status :stopped :got 0 :reason :hungry :text "mine got nothing: hungry, no food"})
+        :done)))
+
 (defn ^:async step [c]
   (settle-dig! c)
   (when (and (nil? (:phase (ctx/mem c))) (nil? (:pre-start (ctx/mem c))))
@@ -1537,6 +1549,8 @@
         {:keys [heading direction]} (:args c)]
     (cond
       (and (contains? #{nil :dig} (:phase m)) (breath/head-under? (:primitives c))) (flooded! c)
+
+      (and (contains? #{nil :dig} (:phase m)) (trip/food-short? c)) (hungry! c)
 
       (and (contains? #{nil :dig} (:phase m)) (no-tool? c)) (await (fetch-pickaxe! c))
 
