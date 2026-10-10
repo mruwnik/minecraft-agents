@@ -883,6 +883,24 @@
           (is (= "air" (block [0 68 0])) "the cap is dug")
           (is (not (.-inWater (.self p)))))))))
 
+(deftest drowning-far-below-a-cap-swims-up-to-it-then-digs-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [deep (merge (into {} (for [y (range 64 73)] [(str "0," y ",0") "water"]))
+                          (into {} (for [y (range 64 73) [x z] [[-1 0] [0 1] [0 -1] [1 0]]] [(str x "," y "," z) "stone"]))
+                          {"0,73,0" "dirt"})
+              clock (atom 1000000)
+              [seen sink] (tu/legacy-capture-sink)
+              p (tu/seeing-all (tu/fake {:self {:inWater true :oxygen 4} :blocks deep}))
+              eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                                :world (world-files/of-data {} {} [])
+                                :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+          (swap! (fake/state p) assoc :dig-ms 0)
+          (await (one-run! eng cap-args))
+          (is (= [[:completed nil]] (ended seen)) (pr-str (stopped-data seen)))
+          (is (= "air" (.-name (.blockAt p (apply tu/pos [0 73 0])))) "the cap is dug once the body is under it"))))))
+
 (defn ^:async never-dug!
   "A cap of block: stopped :no_air with :cap why, the block still there, no dig call."
   [done block why]

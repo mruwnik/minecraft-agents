@@ -173,10 +173,22 @@
           (filter #(and (land-cell? p %) (keep? p %)))
           first))))
 
+(defn cap-beyond-dig?
+  "The own column over the head is water or air, unseen included, up to a seen block within reach that lies farther than
+  the 3 cells dig-cap reaches: the body must rise under it first."
+  [p head reach]
+  (loop [k 0]
+    (let [n (when (<= k (inc reach)) (breath/seen-water-name p (update head :y + k)))]
+      (cond
+        (> k (inc reach)) false
+        (or (nil? n) (breath/passable-water-or-air? n)) (recur (inc k))
+        :else (> k 3)))))
+
 (defn ^:async swim-up!
   "Drowning: look, then swim up the own column when it reaches air, else walk (through
   water, at the feet's height) to the nearest column that does. With no air seen and no block seen over the own
-  column, swim up anyway: a body in the dark learns by moving, as a player does. True when the action succeeded (a swim
+  column, swim up anyway: a body in the dark learns by moving, as a player does; so does one under a seen cap more than 3
+  above its head (cap-beyond-dig?), to dig it from below. True when the action succeeded (a swim
   counts when it surfaced or rose above the best height reached); :no-air
   when there is no air in reach; nil when the move failed (failure counted)."
   [c]
@@ -198,6 +210,9 @@
                   (or surfaced? rose)))]
     (cond
       (and (nil? target) (breath/column-open? p fx fz fy reach))
+      (or (await (swim!)) :no-air)
+
+      (and (nil? target) (cap-beyond-dig? p (breath/eye-cell (.self p)) reach))
       (or (await (swim!)) :no-air)
 
       (nil? target) :no-air
