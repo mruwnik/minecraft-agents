@@ -1009,3 +1009,16 @@
               result (await (tu/child-outcome eng job {:plan "wall" :fetch false} 300))]
           (is (= "oak_planks" (block p [10 64 0])) "left, not dug")
           (is (= "birch_planks" (block p [11 64 0]))))))))
+
+(deftest an-any-want-uses-the-next-choice-carried-when-the-first-runs-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "row" :parts [{:id "fence" :cells [[2 64 2] [3 64 2] [4 64 2] [5 64 2] [6 64 2] [7 64 2]]
+                                       :want [:any "oak_fence" "spruce_fence"]}]}
+              {:keys [eng p seen]} (start {:inventory [{:name "oak_fence" :count 2} {:name "spruce_fence" :count 10}]} {"row" plan})
+              result (await (tu/child-outcome eng job {:plan "row"} 200))]
+          (is (empty? (h/events-of seen :fetch.started)) "nothing is fetched: a listed choice is carried")
+          (is (= 6 (:placed result)))
+          (is (= {} (:short result)))
+          (is (= {"oak_fence" 2 "spruce_fence" 4} (:spent result))))))))

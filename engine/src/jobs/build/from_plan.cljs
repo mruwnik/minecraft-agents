@@ -107,12 +107,12 @@
 
 (defn item-for
   "The item to place for want: the block it names (a wall torch with a torch), for an :any the first choice carried
-  (else the first); nil for :clear, crops and trees."
+  (else the first); nil for :clear, crops and trees. carried: a set of names, or {name n} where n above 0 counts."
   [want carried]
   (cond
     (string? want) (placement/item-of want)
     (vector? want) (let [names (map #(placement/item-of (if (string? %) % (:block %))) (rest want))]
-                     (or (first (filter carried names)) (first names)))
+                     (or (first (filter #(if (map? carried) (pos? (get carried % 0)) (contains? carried %)) names)) (first names)))
     (and (map? want) (:block want)) (placement/item-of (:block want))))
 
 (defn block-want
@@ -281,6 +281,23 @@
 (defn carried-counts [p]
   (reduce (fn [m {:keys [name count]}] (update m name (fnil + 0) count)) {} (u/inventory p)))
 
+(defn allot
+  "cells with their :item. carried {name n}: an :any want takes the first choice still left after the cells before it
+  (each cell to place takes one), so a choice that runs out passes to the next, and the first choice when none is
+  left; carried as a set of names: the first choice carried."
+  [carried cells]
+  (if-not (map? carried)
+    (mapv #(assoc % :item (item-for (:want %) carried)) cells)
+    (:cells
+     (reduce (fn [{:keys [left] :as acc} cell]
+               (let [item (item-for (:want cell) left)
+                     take? (and item (#{:missing :wrong} (:answer cell)))]
+                 (-> acc
+                     (update :cells conj (assoc cell :item item))
+                     (cond-> take? (update-in [:left item] #(max 0 (dec (or % 0))))))))
+             {:cells [] :left carried}
+             cells))))
+
 (defn judged
   "The plan's cells (of part) judged against the world, each with the :item to place it with. A generic wood want
   (jobs.build.wood) is wanted in species sp first, any other counts where it stands."
@@ -289,7 +306,7 @@
        (filter #(or (nil? part) (= part (:part %))))
        (mapv #(cond-> % sp (update :want wood/resolve-want sp)))
        (#(shape/plan-minus-world % (partial world-block p)))
-       (mapv #(assoc % :item (item-for (:want %) carried)))))
+       (allot carried)))
 
 (defn wood-choice
   "The wood species of the plan's generic wants: nil when it has none, else the booked one (step books it), else a new
@@ -338,7 +355,7 @@
         wood (when usable? (wood-choice c answer carried-map))
         cells (when usable?
                 (let [carried (set (keys carried-map))]
-                  (let [cells (prepared (judged (:primitives c) answer part carried wood) carried (:misplaced (ctx/mem c) {}))
+                  (let [cells (prepared (judged (:primitives c) answer part carried-map wood) carried (:misplaced (ctx/mem c) {}))
                         kept? (kept-ground c cells (:sturdy-ground (:args c)))]
                     (mapv #(if (and (:short? %) (kept? %)) (dissoc % :short?) %) cells))))
         trouble (or (plan-trouble answer cells)

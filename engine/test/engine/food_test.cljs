@@ -735,4 +735,4 @@
           (is (= [] (tu/walk-calls p))))))))
 
 (deftest eat-prefers-common-food-over-golden-apple
-  (is (= "bread" (eat/best-food [{:name "golden_apple"} {:name "bread"}] false nil 20))))
+  (is (= "bread" (eat/best-food [{:name "golden_apple"} {:name "bread"}] false nil 20 20 #{}))))
