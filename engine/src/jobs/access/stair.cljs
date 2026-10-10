@@ -111,9 +111,11 @@
 (def rises shape/rises)
 (a/defargs settings
   {::max-cell-digs {:default 3 :doc "Digs of one cell before the stair stops :refills." :spec (a/int-in 0 nil)}
+   ::max-fall-digs {:default 12 :doc "Digs of one cell a falling block (gravel, sand) keeps refilling before the stair stops :refills." :spec (a/int-in 0 nil)}
    ::max-steps {:default 400 :doc "Digs, steps, bridges and fetch rounds of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}
    ::take-back-floors? {:default true :doc "A floor block a go-to stair (:note) places goes into the scaffold ledger for jobs.access.cleanup to take back; false keeps it." :spec boolean?}})
 (defn max-cell-digs [] (settings/get settings ::max-cell-digs))
+(defn max-fall-digs [] (settings/get settings ::max-fall-digs))
 (defn max-steps [] (settings/get settings ::max-steps))
 (def unbreakable #{"bedrock" "barrier" "end_portal_frame" "end_portal" "nether_portal" "command_block" "structure_block" "jigsaw"})
 
@@ -451,7 +453,7 @@
         block ((:block-at in) cell)
         tries (get-in (ctx/mem c) [:tries cell] 0)]
     (cond
-      (>= tries (max-cell-digs)) (cond-> {:reason :refills :cell cell :block block}
+      (>= tries (if (falling-block? block) (max-fall-digs) (max-cell-digs))) (cond-> {:reason :refills :cell cell :block block}
                                    (not (falling-block? block))
                                    (assoc :why "put back by something else, e.g. the night shelter closing an opened refuge again"))
       (unbreakable block) {:reason :unbreakable :cell cell :block block}

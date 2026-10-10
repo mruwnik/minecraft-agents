@@ -856,8 +856,24 @@
                                       r)))))
               {:keys [out p]} (await (stair! {:blocks ground} east prep))]
           (is (= :refills (:reason @out)))
-          (is (= 3 (count (digs p))))
+          (is (= (stair/max-fall-digs) (count (digs p))) "a falling block gets more digs than other refills")
           (is (= [{:cell [1 64 0] :block "stone"}] (:dug @out)) "a dig that left the same block is not recorded"))))))
+
+(deftest gravel-that-falls-into-the-cut-a-few-times-is-dug-until-clear
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [refills (atom 5)
+              prep (fn [p]
+                     (let [world (.-world p)]
+                       (.override world "dig"
+                                  (fn ^:async f [token a impl]
+                                    (let [r (await (impl token a))]
+                                      (when (pos? (swap! refills dec))
+                                        (swap! (.. world -state) assoc-in [:blocks [1 64 0]] "gravel"))
+                                      r)))))
+              {:keys [out]} (await (stair! {:blocks ground} east prep))]
+          (is (= :done (:status @out))))))))
 
 (deftest a-cell-put-back-that-does-not-fall-is-named-as-placed
   (async done

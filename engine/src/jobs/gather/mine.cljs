@@ -1147,6 +1147,7 @@
                 (ctx/update-mem! c update :descent assoc :top (access/cell (cell-of (u/self-pos c))) :top-heading (keyword (:heading (ctx/mem c)))))
             r (await (ctx/call-child c :stair 'jobs.access.stair
                                      {:dir :down :heading (keyword (:heading (ctx/mem c))) :steps 1 :fetch (if level? (:fetch (:args c)) true)
+                                      :accept (filterv #{:falling-block} (:accept (:args c)))
                                       :ignore-zones? (:ignore-zones? (:args c))}))
             res (when (not= :continue r) (ctx/child-result c :stair))]
         (cond

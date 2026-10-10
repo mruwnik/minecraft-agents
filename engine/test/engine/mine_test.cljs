@@ -1010,6 +1010,16 @@
           (is (re-find #"tunnel 3 blocks east at y 60" (:text e)))
           (is (= [0 64 0] (feet s))))))))
 
+(deftest the-stair-down-goes-on-under-gravel-and-stops-when-falling-blocks-are-not-accepted
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[accept stops?] [[#{:falling-block} false] [#{} true]]]
+          (let [s (await (scenario {:block "iron_ore" :count 1 :direction "east" :level 60 :tunnel-length 3 :mend false :accept accept}
+                                   (deep-rock {"1,66,0" "gravel" "0,66,0" "air"}) 60))]
+            (is (= stops? (boolean (some #(= :hazard (:stop %)) (events-of s :mine.descent-stopped)))) (pr-str accept))
+            (is (= (not stops?) (boolean (some #(< (second %) 64) (dug-cells s)))) "the stair cut below the start")))))))
+
 (deftest gravel-that-falls-into-the-cut-is-dug-until-the-line-is-clear
   (async done
     (tu/run-async done
