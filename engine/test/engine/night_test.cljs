@@ -364,7 +364,7 @@
           (write! eng :died {:pos {:x 40 :y 64 :z 0}})
           (swap! clock + 1000)
           (write! eng :respawned {})
-          (swap! clock + 1000)
+          (swap! clock + 5000) ; past recover-drops' settle wait: this clock only moves between ticks
           (await (core/tick! eng))
           (is (= :died (fired-first)) "the drops are fetched first: the pile despawns, the night waits"))))))
 
@@ -1039,7 +1039,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (held-starving [cow])]
+        (let [{:keys [eng p]} (held-starving [cow (assoc cow :id 8 :pos {:x 6 :y 64 :z 0}) (assoc cow :id 9 :pos {:x 7 :y 64 :z 0})])]
           (await (core/tick! eng))
           (is (seq (filterv #(= "attack" (.-name %)) (.-calls (.-world p)))) "it went for the cow instead of starving in the hold"))))))
 
