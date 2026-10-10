@@ -429,7 +429,7 @@
         items (into [] (keep #(if (hurt-event? %) (when (identical? % (first hits)) hurt) %)) news)]
     (when (seq items)
       (let [latest (set (take-last max-missed items))
-            shown (filter #(or (critical? %) (latest %)) items)]
+            shown (filter #(or (critical? %) (= :hurt (:kind %)) (latest %)) items)]
         (cond-> (array-map :count (count items)
                            :items (mapv #(missed-item now-ms %) shown))
           (pos? skipped) (assoc :skipped skipped)))))))
