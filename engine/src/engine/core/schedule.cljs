@@ -51,7 +51,8 @@
 
 (defn choose-listed
   "The listed job to run next, never a failed one nor, while the body is dead, one kept through the death: a holder
-  (or nothing, while its check declines), else the cut job, else round-robin from the cursor over passing checks."
+  while its check passes (else the list runs until it does), else the cut job, else round-robin from the cursor over
+  passing checks."
   [eng]
   (let [{:keys [list instances resume cursor]} (state eng)
         n (count list)
@@ -60,7 +61,7 @@
         runnable? (fn [id] (and (not (failed? id)) (not (and dead (:survive-death? (instances id)))) (check-passes? eng id)))
         holder (some #(when (and (:hold? (instances %)) (not (failed? %))) %) list)]
     (cond
-      holder (when (runnable? holder) holder)
+      (and holder (runnable? holder)) holder
       (and resume (some #{resume} list) (runnable? resume)) resume
       (zero? n) nil
       :else (some (fn [i] (let [id (nth list (mod (+ cursor i) n))] (when (runnable? id) id)))

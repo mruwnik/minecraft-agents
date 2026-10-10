@@ -273,7 +273,7 @@
           (is (= ["j1"] (listed eng)))
           (is (some #(= :failed (:kind %)) @seen)))))))
 
-(deftest a-holding-job-whose-check-declines-idles-the-body
+(deftest a-holding-job-whose-check-declines-lets-the-list-run
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -281,10 +281,11 @@
           (reset! flag false)
           (core/submit! eng '(count) {})
           (core/submit! eng '(gated) {:hold? true})
-          (is (nil? (core/tick! eng)) "the holder declines; the others wait")
+          (await (core/tick! eng))
+          (is (= ["j1"] (ran seen)) "the holder declines; the others run")
           (reset! flag true)
           (dotimes [_ 2] (await (core/tick! eng)))
-          (is (= ["j2" "j2"] (ran seen))))))))
+          (is (= ["j1" "j2" "j2"] (ran seen)) "ready again, the holder has the body"))))))
 
 (deftest a-declining-child-returns-declined
   (async done
