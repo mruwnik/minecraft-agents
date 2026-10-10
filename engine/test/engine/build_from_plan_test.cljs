@@ -732,6 +732,31 @@
     (tu/seeing-all p)
     {:result (await (tu/child-outcome eng job (merge {:plan "pen"} args) 300)) :p p}))
 
+(deftest a-cell-inside-the-ground-is-buried-not-unloaded
+  (let [block (fn [x y z] [(h/cell-key x y z) "stone"])
+        around (into {} (map (fn [[x y z]] (block x y z))) [[3 65 3] [3 63 3] [4 64 3] [2 64 3] [3 64 4] [3 64 2]])
+        p (tu/seeing-all (tu/fake-on-floor {:blocks around}))]
+    (is (true? (build/buried? p [3 64 3])))
+    (is (false? (build/buried? p [8 64 3])) "open air round it")
+    (is (false? (build/buried? (tu/seeing-all (tu/fake-on-floor {:blocks (dissoc around (h/cell-key 3 65 3))})) [3 64 3]))
+        "air above it")))
+
+(deftest what-is-carried-is-placed-before-the-rest-is-fetched
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [spec {:inventory [{:name "oak_fence_gate" :count 1} {:name "torch" :count 4} {:name "oak_fence" :count 3}]
+                    :blocks {fence-chest "chest"} :containers {fence-chest [{:name "oak_fence" :count 4}]}}
+              {:keys [eng p]} (start spec {"pen" (pen-plan)})
+              _ (tu/seeing-all p)
+              result (await (tu/child-outcome eng job {:plan "pen"} 300))
+              names (mapv #(.-name %) (.-calls (.-world p)))
+              first-place (.indexOf names "place")
+              first-take (.indexOf names "transfer")]
+          (is (= [] (:missing result)))
+          (is (pos? first-take))
+          (is (< first-place first-take) "the carried fences go in before the body walks to the chest"))))))
+
 (deftest missing-material-is-fetched-from-a-seen-chest-by-default
   (async done
     (tu/run-async done

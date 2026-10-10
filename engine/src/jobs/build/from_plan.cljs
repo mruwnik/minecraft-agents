@@ -80,7 +80,7 @@
   fence_gates, wooden_trapdoors ...) is built in one species chosen for the plan (carried most, else the nearest log seen,
   else oak), booked, fetched by that species, and named in the result (:wood \"birch\"); a species name (oak_planks) stays exact.
   When cells are missing but none of their blocks is carried and none can be fetched, the job waits (:no-items with :needs).
-  Material: while cells wait for an item not carried (and not given up or refused), each round first fetches it (:fetch,
+  Material: while cells wait for an item not carried (and not given up or refused), each round fetches it, once no cell can be placed from what is carried (:fetch,
   jobs.lib.fetch with :explore on: a jobs.items.obtain child for the missing count, walking off to look for what is unseen; an item whose fetch failed is skipped for the next); a pickaxe block to dig without a pickaxe fetches the tool the same way
   (jobs.items.get-tool). With :fetch false, or once a fetch failed, the build goes on with what is carried and ends
   :short as before (the stop text and :fetch-failed name each failed fetch and why), a pickaxe block given up :no-tool.")
@@ -464,11 +464,18 @@
           (first waits)
           tool))))
 
+(defn placeable-now?
+  "Whether a cell can be placed from what is carried: the fetch for the rest waits until these are in."
+  [c]
+  (let [mem (ctx/mem c)]
+    (boolean (seq (buildable (:cells (planned c)) (carried-counts (:primitives c)) (merge (:given-up mem) (:refused mem)))))))
+
 (defn problem
-  "need-of for the plan as it stands now, nil when the plan is in trouble."
+  "need-of for the plan as it stands now, nil when the plan is in trouble. While a cell can be placed from what is
+  carried, only a tool is fetched: the items for the rest wait until those are in."
   [c]
   (let [{:keys [cells trouble]} (planned c)]
-    (when-not trouble (need-of c cells))))
+    (when-not trouble (if (placeable-now? c) (tool-of c cells) (need-of c cells)))))
 
 (defn check
   "Passes while there is something to build, dig, fetch or look at, and for a plan that can never be built (the round
@@ -648,6 +655,15 @@
       (ctx/update-mem! c dissoc :leave))
     (if (= :continue r) :continue :again)))
 
+(defn buried?
+  "Whether every neighbour of cell [x y z] is a seen solid block: the cell is inside the ground, so it is never seen
+  (as opposed to unloaded)."
+  [p [x y z]]
+  (every? (fn [[dx dy dz]]
+            (let [n (u/seen-name p {:x (+ x dx) :y (+ y dy) :z (+ z dz)})]
+              (and n (not (shape/air? n)) (not (#{"water" "lava"} n)))))
+          [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]]))
+
 (def hole-depth
   "Levels of walls round the body from its feet up that make it a body in a hole (its own dig): its walks may then climb out."
   2)
@@ -695,7 +711,7 @@
             ;; a cell outside the view cone is seen only by turning to it
             (when (dig-look/unknown? (:primitives c) pos) (await (dig-look/look-at! c pos)))
             (when (nil? (u/seen-block (:primitives c) (zipmap [:x :y :z] pos)))
-              (ctx/update-mem! c walk-fail pos :unloaded give-up (u/self-pos c)))))
+              (ctx/update-mem! c walk-fail pos (if (buried? (:primitives c) pos) :buried :unloaded) give-up (u/self-pos c)))))
         (when (and (= :there w) (:found cell) (empty? (if (:dig? cell) (in-dig-reach c [cell]) (in-reach c [cell]))))
           (ctx/update-mem! c walk-fail (:pos cell) :unreachable give-up (u/self-pos c)))
         (if (and (= :blocked w) (in-hole? c))
