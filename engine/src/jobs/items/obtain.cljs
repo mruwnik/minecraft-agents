@@ -409,6 +409,13 @@
              (when (contains? how :gather) [(unseen-why c names n)])
              (when-let [w (and (contains? how :gather) (pickaxe-why version have names))] [w])))))
 
+(defn tried-text
+  "What a gather that was tried and failed adds to the no-source text (\"; gathering was tried and ended ..\"), or nil
+  when none was tried."
+  [tried]
+  (when-let [g (:gather tried)]
+    (str "; gathering was tried and ended " (pr-str g))))
+
 (defn check [c]
   (let [a (:args c)
         names (names-of a)]
@@ -760,7 +767,8 @@
                     (stop! c (if unreachable :table-unreachable :no-source)
                            (cond-> {:got got :tried (:tried m)}
                              (not unreachable) (assoc :why (str "no source for " (clojure.string/join "/" names) ": "
-                                                                (no-source-why c names (:count a)))))))))))))
+                                                                (no-source-why c names (:count a))
+                                                                (tried-text (:tried m)))))))))))))
 
 (defn ^:async round
   "The whole attempt in one call: step! again until the count is carried or it stops; :continue only while a child waits on the world, :declined while a smelt child cooks."

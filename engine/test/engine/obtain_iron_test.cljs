@@ -180,3 +180,8 @@
           (await (obtain! s {:item "iron_ingot" :count 1 :how [:craft]} 80))
           (is (empty? (f/listed s)))
           (is (= 1 (get (f/inv s) "iron_ingot"))))))))
+
+(deftest a-failed-gather-is-named-in-the-no-source-text
+  (is (nil? (obtain/tried-text {:craft :no-plan})))
+  (is (= "; gathering was tried and ended :gave-up" (obtain/tried-text {:gather :gave-up})))
+  (is (re-find #"searched" (obtain/tried-text {:gather {:searched "coal" :result :not-found}}))))
