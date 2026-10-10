@@ -246,8 +246,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start (assoc (hungry-world [] 20) :entities [{:id 7 :name "cow" :kind "passive" :pos {:x 5 :y 64 :z 0} :health 20
-                                                                :drops [{:name "beef" :count 1}]}])
+        (let [s (start (assoc (hungry-world [] 20) :entities (for [[id x] [[7 5] [8 6] [9 7]]]
+                                                                 {:id id :name "cow" :kind "passive" :pos {:x x :y 64 :z 0} :health 20
+                                                                  :drops [{:name "beef" :count 1}]}))
                        {:items ["iron_pickaxe"] :min-food 3 :explore false})]
           (let [timer (js/setInterval #(swap! (:clock s) + 500) 5)]
             (await (f/run-ticks s 80))
