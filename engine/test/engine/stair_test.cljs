@@ -125,6 +125,15 @@
           (is (= :done (:status @out)))
           (is (= [[1 63 0] [2 62 0] [3 61 0]] (vec ways))))))))
 
+(deftest a-stair-without-a-heading-goes-the-way-the-body-faces
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng out]} (await (stair! {:blocks ground} {:dir :down :steps 2} (fn [_])))
+              ways (mapcat (comp :floors :data) (mem/entries (mem/view (:store eng)) :stair-way))]
+          (is (= :done (:status @out)) (pr-str @out))
+          (is (= [[0 63 1] [0 62 2]] (vec ways))))))))
+
 (def second-east {:dir :down :heading :east :steps 1})
 
 (defn ^:async second-stair!

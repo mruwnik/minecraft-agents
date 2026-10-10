@@ -15,6 +15,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
             [jobs.lib.blocks :as blocks]
+            [jobs.lib.look :as look]
             [jobs.lib.dig-look :refer [unknown? look-at! settle! see-round!]]
             [jobs.lib.tools :as tools]
             [jobs.lib.trip :as trip]
@@ -25,7 +26,7 @@
             [jobs.lib.walk.plan :as wplan]))
 
 (def doc
-  "Dig a 1-wide stair :down or :up along :heading from where the body stands, :steps steps or to feet height :y.
+  "Dig a 1-wide stair :down or :up along :heading (nil: the way the body faces) from where the body stands, :steps steps or to feet height :y.
   The check waits (:no-tool, :no-free-slot) when the next dig lacks a pickaxe or room for the drop.
 
   A step cuts three cells, top first, so the body can walk one block forward and one down (or up) with full
@@ -95,7 +96,7 @@
 
 (a/defargs args
   {:dir {:doc ":down or :up" :spec #{:down :up} :default :down}
-   :heading {:doc ":north :east :south or :west" :spec #{:north :east :south :west} :default nil}
+   :heading {:doc ":north :east :south or :west; nil: the way the body faces" :spec #{:north :east :south :west} :default nil}
    :steps {:doc "steps to cut; or give :y" :spec (a/int-in 1 nil) :default nil}
    :y {:doc "feet height to end at, instead of :steps" :spec (a/num-in nil nil) :default nil}
    :accept {:doc "hazards taken: #{:water :lava :falling-block}" :spec (a/coll-of #{:water :lava :falling-block}) :default #{}}
@@ -420,14 +421,23 @@
             stop (stop-of in cells (set (:accept (:args c))))]
         (when (#{:zone :claim :footprint} (:reason stop)) stop)))))
 
+(defn with-heading
+  "c with the :heading arg filled when the call gave none: the heading the first round chose (job memory), else the way
+  the body faces."
+  [c]
+  (if (:heading (:args c))
+    c
+    (assoc-in c [:args :heading] (keyword (or (:heading (ctx/mem c)) (look/facing (:primitives c)))))))
+
 (defn check
   "True, or a wait for what the next dig lacks (see need), or :refused when a zone, claim or plan refuses the first
   step. As a child (leave-tunnel, tunnel, dig-in) it runs and stops with the same reason in its result, which its
   parent reads."
-  [c]
-  (if-let [stop (refusal c)]
-    (access/decline! c :stair.declined "stair" (assoc (access/refusal-fields [stop]) :reason :refused))
-    (if-let [lack (need c)] (fetch/check c 'jobs.access.stair lack) true)))
+  [c0]
+  (let [c (with-heading c0)]
+    (if-let [stop (refusal c)]
+      (access/decline! c :stair.declined "stair" (assoc (access/refusal-fields [stop]) :reason :refused))
+      (if-let [lack (need c)] (fetch/check c 'jobs.access.stair lack) true))))
 
 (defn falling-block?
   "Whether a block falls into the cell it was dug from (sand, gravel, concrete powder)."
@@ -642,6 +652,8 @@
 
 (defn ^:async round
   "The whole stair: next! until it ends, a pace between pieces; :continue after max-steps of them."
-  [c]
-  (let [n (atom 0)]
+  [c0]
+  (let [c (with-heading c0)
+        n (atom 0)]
+    (when-not (:heading (:args c0)) (ctx/update-mem! c assoc :heading (name (:heading (:args c)))))
     (await (pace/steps! c #(if (< (swap! n inc) (max-steps)) (next! c) :continue)))))
