@@ -8,6 +8,16 @@
             [engine.perception.rays :as rays]
             [engine.test-util :as tu]))
 
+(defn rng
+  "mulberry32: floats in [0, 1) from a seed, so the ray jitter of every pass is the same in each run."
+  [seed]
+  (let [s (atom seed)]
+    (fn []
+      (swap! s #(bit-or (+ % 0x6D2B79F5) 0))
+      (let [t (js/Math.imul (bit-xor @s (unsigned-bit-shift-right @s 15)) (bit-or @s 1))
+            t (bit-xor t (+ t (js/Math.imul (bit-xor t (unsigned-bit-shift-right t 7)) (bit-or t 61))))]
+        (/ (unsigned-bit-shift-right (bit-xor t (unsigned-bit-shift-right t 14)) 0) 4294967296)))))
+
 (defn hits [ore-pos passes & [dark?]]
   (let [blocks (merge (tu/box -3 62 -3 3 68 20 "stone")
                       (tu/box 0 64 0 0 65 20 "air")
@@ -16,7 +26,7 @@
         p (tu/fake {:blocks blocks})
         _ (when dark? (swap! (fake/state p) assoc :light-default [0 0]))
         raw (fake-raw/create p)
-        per (perception/create raw {:now #(deref clock)})]
+        per (perception/create raw {:now #(deref clock) :rand (rng 1)})]
     (count (filter true?
                    (for [_ (range passes)]
                      (do (swap! clock + 100000)
