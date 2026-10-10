@@ -168,3 +168,28 @@
           (core/submit! eng job {})
           (await (run-until-empty eng 40))
           (is (= :collected (:decision (recovered eng))) (pr-str (recovered eng))))))))
+
+(defn sealed-run
+  "The field-report pile inside the stone cell closed by the plug cells; extra ledger entries and world spec merged in."
+  [extra-entries spec]
+  (let [pile dt/death-pile-of-the-field-report
+        blocks (merge (into {} (map (fn [[x y z]] [(str x "," y "," z) "stone"])) stone-cell)
+                      (into {} (map (fn [[x y z]] [(str x "," y "," z) "dirt"])) plug-cells)
+                      (:blocks spec))
+        {:keys [eng seen]} (setup (merge {:floor tu/walk-floor :entities (vec (pile-drops pile))} spec {:blocks blocks}))]
+    (ledger/write! (:store eng) (into (mapv (fn [cell] {:cell cell :item "dirt" :before "air" :job "j9" :purpose :retreat-plug :state :placed}) plug-cells)
+                                      extra-entries))
+    (die! eng {:pos dt/death-pos :inventory pile})
+    (core/submit! eng job {})
+    {:eng eng :seen seen}))
+
+(deftest the-seal-cleanup-takes-back-only-blocks-near-the-pile
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [far [40 64 0]
+              {:keys [eng]} (sealed-run [{:cell far :item "dirt" :before "air" :job "j8" :purpose :bridge :state :placed}]
+                                        {:blocks {"40,64,0" "dirt"}})]
+          (await (run-until-empty eng 40))
+          (is (= :collected (:decision (recovered eng))) (pr-str (recovered eng)))
+          (is (= [far] (mapv :cell (ledger/open-entries (mem/view (:store eng))))) "the far scaffold block is still there"))))))

@@ -146,20 +146,31 @@
 
 (defn held-cells [view] (set (:cells (:data (mem/latest view held-kind)))))
 
+(defn near-of
+  "The entries of l whose cell lies within the :radius of the :pos of near ({:pos {:x :y :z} :radius n}); all of l when near is nil."
+  [l near]
+  (if-not near
+    l
+    (let [{:keys [x y z]} (:pos near)]
+      (filterv (fn [{[cx cy cz] :cell}] (<= (js/Math.hypot (- cx x) (- cy y) (- cz z)) (:radius near))) l))))
+
 (defn select
   "The entries of l a cleanup with :job job works on: nil, those whose owner is not live and that are not held; :all,
-  every one; an instance id, those of that instance and its children."
-  [l view job]
-  (cond
-    (nil? job) (let [held (held-cells view)]
-                 (filterv #(and (not (owner-live? view %)) (not (held (:cell %)))) l))
-    (= :all job) (vec l)
-    :else (filterv #(of-instance? job %) l)))
+  every one; an instance id, those of that instance and its children. near narrows them to a pos and radius (near-of)."
+  ([l view job] (select l view job nil))
+  ([l view job near]
+   (near-of (cond
+              (nil? job) (let [held (held-cells view)]
+                           (filterv #(and (not (owner-live? view %)) (not (held (:cell %)))) l))
+              (= :all job) (vec l)
+              :else (filterv #(of-instance? job %) l))
+            near)))
 
 (defn offered
-  "The entries a cleanup with :job job would work on now: selected and loaded."
-  [view block-at job]
-  (filterv #(some? (block-at (:cell %))) (select (open-entries view) view job)))
+  "The entries a cleanup with :job job (and :near near) would work on now: selected and loaded."
+  ([view block-at job] (offered view block-at job nil))
+  ([view block-at job near]
+   (filterv #(some? (block-at (:cell %))) (select (open-entries view) view job near))))
 
 (defn hold!
   "Hold cells in body-memory store."

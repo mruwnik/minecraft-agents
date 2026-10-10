@@ -248,14 +248,16 @@
   (filterv #(<= (u/dist pos (zipmap [:x :y :z] (:cell %))) (seal-radius)) (ledger/open-entries (ctx/view c))))
 
 (defn ^:async clear-seal!
-  "Once per trip, when the body's own placed blocks stand near the pile (its flee seal): take them back
-  (jobs.access.cleanup) and walk again. :next when it ran, else nil."
+  "When the body's own placed blocks stand near the pile (its flee seal): take back those within seal-radius of it
+  (jobs.access.cleanup :near) and walk again. Tried twice a trip at most; :seal-cleared is set once a run finished.
+  :next when it ran, else nil."
   [c pos]
-  (when (and (not (:seal-cleared (ctx/mem c))) (seq (own-seal-near c pos)))
-    (ctx/update-mem! c assoc :seal-cleared true :phase :go)
+  (when (and (not (:seal-cleared (ctx/mem c))) (< (:seal-tries (ctx/mem c) 0) 2) (seq (own-seal-near c pos)))
+    (ctx/update-mem! c #(-> % (update :seal-tries (fnil inc 0)) (assoc :phase :go)))
     (save-trip! c)
     (ctx/emit! c :recover-drops.seal :info {:pos pos :text "the pile is out of reach behind blocks this body placed: taking them back"})
-    (await (child/run! c :seal 'jobs.access.cleanup {:job :all}))
+    (when (= :done (await (child/run! c :seal 'jobs.access.cleanup {:job :all :near {:pos pos :radius (seal-radius)}})))
+      (ctx/update-mem! c assoc :seal-cleared true))
     :next))
 
 (defn ^:async go!
