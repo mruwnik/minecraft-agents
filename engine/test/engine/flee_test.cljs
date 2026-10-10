@@ -16,6 +16,7 @@
             [jobs.lib.result :as r]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
+            [jobs.lib.near :as near]
             [jobs.lib.threats :as threats]
             [jobs.survival.retreat :as retreat]
             [jobs.survival.retreat-flight :as retreat-flight]
@@ -227,6 +228,26 @@
                                      (await (impl token a))))
           (await (run-job! s 'jobs.survival.retreat {}))
           (is (pos? (count (filter #(= "attack" (.-name %)) (.-calls world)))) "outrun by a zombie that hits it, it hits back"))))))
+
+(deftest a-flee-leg-whose-search-runs-out-with-a-hostile-adjacent-fights-at-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup {:inventory [{:name "stone_sword" :count 1}] :entities [(zombie 7 1 {})]})
+              {:keys [p clock]} s
+              world (.-world p)
+              t0 @clock
+              first-attack (atom nil)]
+          (.override world "attack" (fn ^:async f [token a impl]
+                                      (swap! first-attack #(or % (+ @clock (* ms-per-call (.-length (.-calls world))))))
+                                      (await (impl token a))))
+          (with-redefs [near/walk-round! (fn [c _ _ _]
+                                           (swap! clock + 1000)
+                                           (js/Promise.resolve {:result {:status :searching :fresh false} :status "searching"
+                                                                :from (:pos c) :to (:pos c)}))]
+            (await (run-job! s 'jobs.survival.retreat {})))
+          (is (some? @first-attack) "the body hit back")
+          (is (<= (- @first-attack t0) (* 1000 (+ 4 retreat/flight-timeout-s))) "after one leg's search (and the calls to equip and look), not after standing searching"))))))
 
 (deftest a-chase-that-gains-no-distance-escalates-and-a-gain-resets-it
   (let [step (fn [mem gap] (retreat-flight/note-gap mem gap))]
