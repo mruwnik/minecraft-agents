@@ -2,6 +2,8 @@
   "The shipped scenarios run end to end against the fake primitives."
   (:require [cljs.test :refer [deftest is async]]
             [clojure.set :as set]
+            [clojure.string :as str]
+            ["fs" :as fs]
             [engine.registry :as registry]
             [engine.core :as core]
             [engine.events :as events]
@@ -82,8 +84,8 @@
                                                 :inventory [{:name "bread" :count 4} {:name "stone_sword" :count 1}]}
                                                1000)
               food #(:food (fake/self p))]
-          (is (= [:suffocating :burning :wedged :hostile-near :night :dusk-home :hungry :needs-bed :needs-weapon :door-left
-                  :died :inventory-nearly-full :scaffold-left :tidy-pending
+          (is (= [:suffocating :burning :wedged :died :hostile-near :night :dusk-home :hungry :needs-bed :needs-weapon :door-left
+                  :inventory-nearly-full :scaffold-left :tidy-pending
                   :pen-gate :mounted]
                  (mapv :id (:register (core/state eng)))))
           (await (run-ticks eng clock 3 1000))
@@ -120,7 +122,7 @@
           (.respawn (.-world p))
           (swap! clock + 2500) ; the job holds still until the respawn has settled; this clock only moves between ticks
           (await (run-ticks eng clock 3 1000))
-          (is (= [:hungry :hostile-near :needs-weapon :died] (fired seen)) "the respawn lets a death fire recover-drops (and the unarmed body ask for a sword)")
+          (is (= [:hungry :hostile-near :died] (fired seen)) "the respawn lets a death fire recover-drops, which returns the sword")
           (await (run-ticks eng clock 10 1000))
           (is (= {:decision :collected :items 3}
                  (select-keys (:data (mem/latest (mem/view (:store eng)) :recovered)) [:decision :items]))
@@ -168,3 +170,15 @@
           (is (some #{:night} (fired seen)) "night in the open fires the night reflex with no job submitted")
           (is (contains? (names-started seen) "jobs.survival.night") "the reflex ran the night job")
           (is (seq (filter #(= "place" (.-name %)) (.-calls (.-world p)))) "no bed: shelter dug in and placed blocks"))))))
+
+(def scenario-files
+  (->> (fs/readdirSync "scenarios") (filter #(str/ends-with? % ".edn")) sort))
+
+(deftest died-is-registered-before-the-hostile-and-night-reflexes
+  (doseq [f scenario-files
+          :let [ids (mapv :trigger (:register (scenario/read-file (str "scenarios/" f))))
+                at (into {} (map-indexed (fn [i id] [id i])) ids)]
+          :when (contains? at :died)
+          later [:hostile-near :night]
+          :when (contains? at later)]
+    (is (< (at :died) (at later)) (str f ": :died before " later))))

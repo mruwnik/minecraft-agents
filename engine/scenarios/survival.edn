@@ -14,6 +14,8 @@
              :job (jobs.survival.extinguish {:water-radius 6})}
             {:trigger :wedged :persistence :cooldown :cooldown-s 0
              :job (jobs.survival.unwedge)}
+            {:trigger :died :persistence :cooldown :cooldown-s 30
+             :job (jobs.survival.recover-drops {:collect-radius 6})}
             {:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
              :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}
             {:trigger :night :persistence :cooldown :cooldown-s 10 :args {:roof-height 4}
@@ -25,8 +27,6 @@
             {:trigger :needs-bed :persistence :cooldown :cooldown-s 600}
             {:trigger :needs-weapon :persistence :cooldown :cooldown-s 600}
             {:trigger :door-left :persistence :cooldown :cooldown-s 5 :job (jobs.maintenance.shut-doors)}
-            {:trigger :died :persistence :cooldown :cooldown-s 30
-             :job (jobs.survival.recover-drops {:collect-radius 6})}
             {:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 120 :args {:free 2}
              :job (jobs.storage.make-room {:free 4 :chest-range 32})}
             {:trigger :scaffold-left :persistence :stop}
