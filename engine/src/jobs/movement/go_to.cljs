@@ -18,6 +18,7 @@
             [jobs.lib.near :as near]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
+            [jobs.lib.escape :as escape]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.threats :as threats]
@@ -76,6 +77,7 @@
     (jobs.lib.shelter/walk-leaves-shelter?: a closed room, its dug-in shelter, a roof, underground) waits for day: a listed
     go-to declines {:reason :night-sheltered :shelter :goal}, a child call waits 1 s and yields :continue (info
     go-to.night-sheltered, once a call). :go walks anyway; a reflex job's go-to always walks.
+  - A walk without :escalate from a body shut in by its own retreat plug (ledger) with a known hostile near waits the same way, {:reason :sealed-hostile-near}, until the plug is taken back.
   - :goal-danger :end gives up at once (:why :goal-dangerous, :mob, :mob-pos, :mob-distance) when the goal lies within the full-cost radius of a known mob the body would flee; :wait (default) walks on, an info goal-in-danger says so.
   - :dangers false plans straight past known dangers (default: the plans keep away from them, jobs.lib.threats). :leg-s n
     walks one leg of at most n s and, when it got more than 1 block nearer, ends {:arrived false :leg true} (job :done)
@@ -913,11 +915,24 @@
                    (sh/walk-leaves-shelter? p (:data (ctx/latest c :shelter)) goal (:range (:args c) 1)))]
         (when kind {:reason :night-sheltered :shelter kind :goal goal})))))
 
+(defn plug-wait
+  "The wait {:reason :sealed-hostile-near} while the body is shut in with a retreat plug of its ledger still standing, a
+  known hostile is near (the cleanup keeps the plug then) and this walk may not dig out (no :escalate). Never under a reflex job."
+  [c]
+  (let [p (:primitives c)]
+    (when (and (not (:reflex c)) (not (:escalate (:args c)))
+               (some #(= :retreat-plug (:purpose %)) (ledger/open-entries (ctx/view c)))
+               (escape/enclosed? p (some-> (:doors (:args c)) keyword))
+               (seq (danger-q/known-hostiles p threats/max-follow-range {:ranged-radius (danger-q/ranged-radius)})))
+      {:reason :sealed-hostile-near})))
+
+(defn wait-reason [c] (or (night-wait c) (plug-wait c)))
+
 (defn check
-  "A listed go-to waits while night-wait holds (a child's round yields instead: its parent goes on, and asks with
+  "A listed go-to waits while wait-reason holds (a child's round yields instead: its parent goes on, and asks with
   :report-wait, jobs.lib.child/call-walk, to name the wait)."
   [c]
-  (if-let [w (and (or (empty? (:slots c)) (:report-wait c)) (night-wait c))]
+  (if-let [w (and (or (empty? (:slots c)) (:report-wait c)) (wait-reason c))]
     (ctx/wait c w)
     true))
 
@@ -941,7 +956,8 @@
         c (cond-> c0 u (assoc :unknown (wworld/unknown-spec (when (map? u) u))))
         refusal (args-refusal c)
         night (when-not refusal (night-wait c))
-        goal (when-not (or refusal night) (:pos (target c)))
+        plug (when-not (or refusal night) (plug-wait c))
+        goal (when-not (or refusal night plug) (:pos (target c)))
         pos (goal-pos c goal)]
     (cond
       refusal (end/refuse! c refusal)
@@ -951,6 +967,8 @@
                              (assoc night :text (str "night: waiting for day in its shelter (" (name (:shelter night)) ") instead of walking out"))))
                 (await (ctx/act c :wait #js {:ms (night-wait-ms)}))
                 :continue)
+      plug (do (await (ctx/act c :wait #js {:ms (night-wait-ms)}))
+               :continue)
       :else
       (let [state (note-restart! c pos)
             spent? (and (cut-loop? state) (>= (:resets state) (max-cut-resets)))

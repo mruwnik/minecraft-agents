@@ -268,7 +268,7 @@ The one argument of a check and a round. Helpers are in `engine.ctx`:
 | `(ctx/remember! ctx kind data policy?)`, `forget-where!`, `forget-until!` | body-memory writes |
 | `(await (ctx/act ctx :moveTo #js {...}))` | call an acting primitive |
 | `(await (ctx/call-child ctx slot job args))` | run one round of a child (`:done`, `:continue`, `:declined`) |
-| `(await (jobs.lib.child/call-walk ctx slot go-to-args))` | a go-to child round that, when it yields `:continue` waiting for day in a shelter, holds the round still with `:night-sheltered` so jobs show and body.idle name it; every walking parent uses it instead of `ctx/call-child` on go-to (`child/run!` of go-to does the same and returns `:continue` at once; the night, retreat, sleep, extinguish, breathe and dig-niche walks go at night on purpose and stay on `call-child`) |
+| `(await (jobs.lib.child/call-walk ctx slot go-to-args))` | a go-to child round that, when it yields `:continue` waiting for day in a shelter, holds the round still with `:night-sheltered` (or `:sealed-hostile-near`: shut in by its own retreat plug with a hostile near, no `:escalate`) so jobs show and body.idle name it; every walking parent uses it instead of `ctx/call-child` on go-to (`child/run!` of go-to does the same and returns `:continue` at once; the night, retreat, sleep, extinguish, breathe and dig-niche walks go at night on purpose and stay on `call-child`) |
 | `(ctx/check-child ctx slot job args)` | the child's check, for a parent's check |
 | `(ctx/wait ctx reason)` | in a check: false, noting why the job waits |
 | `(ctx/result! ctx data)`, `(ctx/child-result ctx slot)` | hand data to the parent in the round that ends `:done` |
