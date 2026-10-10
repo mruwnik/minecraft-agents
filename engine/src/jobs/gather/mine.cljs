@@ -1585,8 +1585,6 @@
 
 (defn ^:async step [c]
   (settle-dig! c)
-  (when (and (nil? (:phase (ctx/mem c))) (nil? (:pre-start (ctx/mem c))))
-    (ctx/update-mem! c assoc :pre-start (cell-of (u/self-pos c))))
   (let [m (ctx/mem c)
         {:keys [heading direction]} (:args c)]
     (cond
@@ -1627,6 +1625,8 @@
 
 (defn ^:async round
   [c]
+  (when (and (nil? (:phase (ctx/mem c))) (nil? (:pre-start (ctx/mem c))))
+    (ctx/update-mem! c assoc :pre-start (cell-of (u/self-pos c))))
   (if-let [t (or (await (trip/ready! c)) (await (trip/tool-ready! c (:block (:args c))))
                  (await (when (and (pos? (or (:torch-interval (:args c)) 0)) (or (pos? (:tunnel-length (:args c))) (descent-wanted? c)))
                           (trip/torches-ready! c))))]

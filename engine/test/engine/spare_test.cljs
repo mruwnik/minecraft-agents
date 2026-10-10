@@ -78,3 +78,14 @@
         (let [s (await (m/scenario {:block "stone" :count 2} (assoc (m/rock-world {}) :inventory [worn {:name "stick" :count 2} {:name "crafting_table" :count 1}]) 60))
               spare-depth (fn [e] (count (re-seq #"/spare" (str (:job e)))))]
           (is (<= (apply max 0 (map spare-depth @(:seen s))) 1) "a spare's own digging has no spare child"))))))
+
+(deftest a-spare-fetched-from-afar-does-not-move-the-mines-start
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [corridor (-> (m/cells "air" (range 1 7) [64 65] [0]) (assoc "7,64,0" "chest"))
+              world (-> (m/rock-world corridor)
+                        (assoc :inventory [worn] :containers {"7,64,0" [{:name "stone_pickaxe" :count 1}]}))
+              s (await (m/scenario {:block "iron_ore" :level false :count 1 :tunnel-length 0} world 60))]
+          (is (contains? (kinds s) :tool.spare))
+          (is (= [0 64 0] (m/feet s))))))))
