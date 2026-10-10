@@ -383,7 +383,7 @@ Built-in triggers, in the order of `triggers/defaults.edn` (the default register
 | `:loose-items` | on the ground, not nearly full, no danger within 8, and a seen item within `:radius` 8 that `jobs.lib.loose` takes (worth / detour cost at least `:min-ratio`, or on `:always`; not on `:never`, thrown, owed to a live job or in another's zone or claim); settings only, register `:args` ignored | `items.pick-up-loose` | 30 s |
 
 The dangers (`:suffocating`, `:burning`) have no cooldown and no backoff. Needs rest with a reason the agent
-sees (`:hungry` after `food.none`). There is no timer trigger: periodic work is a job.
+sees (`:hungry` after `food.none`: 600 s, 60 s while starving). There is no timer trigger: periodic work is a job.
 To see a trigger fire without its real job, register it against `jobs.debug.notify`.
 
 ### Conditions

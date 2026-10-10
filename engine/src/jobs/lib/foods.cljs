@@ -72,6 +72,12 @@
   "Below this health (of 20) carried food is eaten up to a full bar: saturation heals fastest on a full bar."
   7)
 
+(defn starving?
+  "Food 0, or health below default-health while hungry: the rest after a fruitless search shortens."
+  [self args]
+  (or (<= (.-food self) 0)
+      (and (< (.-health self) default-health) (hungry? (.-food self) (.-health self) args))))
+
 (def rare-food
   "Foods kept for emergencies; never eaten just to top up."
   precious)

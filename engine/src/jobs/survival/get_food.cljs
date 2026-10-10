@@ -436,8 +436,7 @@
 (defn starving?
   "Food 0, or health at or below 6 and hungry: the rest after a fruitless search is only :starving-rest-ms."
   [c]
-  (let [self (.self (:primitives c))]
-    (or (<= (.-food self) 0) (and (< (.-health self) foods/default-health) (hungry-now? c)))))
+  (foods/starving? (.self (:primitives c)) (:args c)))
 
 (defn gave-up-recently? [c]
   (pos? (ctx/count-in c :hungry (if (starving? c)

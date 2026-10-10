@@ -16,6 +16,7 @@
    :triggers.storage.inventory-nearly-full/rest-s 120
    :triggers.survival.hungry/bake-wheat 3
    :triggers.survival.hungry/rest-s 600
+   :triggers.survival.hungry/starving-rest-s 60
    :triggers.survival.hungry/urgent-food 2
    :triggers.survival.tidy-pending/range 48
    :triggers.survival.tidy-pending/retry-s 120})
@@ -46,6 +47,16 @@
     (is (true? (nearly-full/inventory-nearly-full full (rested 100000 50000) {:rest-s 10})) "the entry's :rest-s wins")
     (settings/with-settings {:triggers.storage.inventory-nearly-full/rest-s 300}
       (fn [] (is (false? (nearly-full/inventory-nearly-full full (rested 200000 50000) {})))))))
+
+(defn gave-up [now t] {:now now :data {:entries {:hungry [{:t t :data {}}]}}})
+
+(deftest hungry-rests-after-a-give-up-but-a-starving-body-only-a-minute
+  (let [at (fn [food health] (tu/fake {:self {:food food :health health}}))]
+    (is (not (hungry/hungry (at 3 10) (gave-up 100000 50000) {})) "hungry, 50 s: resting")
+    (is (= :urgent (hungry/hungry (at 0 10) (gave-up 120000 50000) {})) "food 0, 70 s after: fires again")
+    (is (not (hungry/hungry (at 0 10) (gave-up 100000 50000) {})) "food 0, 50 s: still resting")
+    (is (hungry/hungry (at 3 5) (gave-up 120000 50000) {}) "losing health while hungry: 70 s is enough")
+    (is (not (hungry/hungry (at 6 15) (gave-up 120000 50000) {})) "hungry but healthy, 70 s: still resting")))
 
 (deftest a-layer-moves-the-accessors
   (settings/with-settings {:jobs.lib.danger/hostile-radius 5 :jobs.lib.danger/ranged-radius 6
