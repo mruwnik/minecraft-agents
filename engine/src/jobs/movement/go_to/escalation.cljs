@@ -10,6 +10,7 @@
             [jobs.lib.step-off :as step-off]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.util :as u]
+            [jobs.survival.dig-in-leave :as dig-leave]
             [jobs.movement.go-to.result :as end]
             [jobs.movement.go-to.torch :as torch]))
 
@@ -35,6 +36,16 @@
   (let [reason (some-> (:reason result) keyword)]
     (boolean (or (contains? escalate-reasons reason)
                  (and (= :abilities reason) (= :never doors) (= :open (some-> (:kind result) keyword)))))))
+
+(defn shelter-exit?
+  "Whether a give-up with result may leave the body's own shelter instead: the walk proved the way needs the world
+  changed, the body is shut in its shelter and it is not night (dig-in-leave/leave-unsafe)."
+  [c result]
+  (boolean (and (:escalate (:args c))
+                (not (contains? (:skipped-steps (ctx/mem c) #{}) :leave-shelter))
+                (or (escalate-reason? result (some-> (:doors (:args c)) keyword)) (sprint-only? result))
+                (sh/sheltered-in c)
+                (nil? (dig-leave/leave-unsafe (:primitives c))))))
 
 (defn escalation-job
   "[job args] of the child that carries out escalation e (jobs.lib.escape/choose); tag marks the holes it digs;
@@ -166,7 +177,8 @@
         _ (when (<= n max-escalations) (await (look-round! c feet)))
         goal (mapv #(js/Math.floor (% pos)) [:x :y :z])
         opts {:own? (own-placed-fn c) :skip (:skipped-steps (ctx/mem c) #{})}
-        e (or (gap-fill c result (:skip opts))
+        e (or (when (shelter-exit? c result) {:step :leave-shelter})
+              (gap-fill c result (:skip opts))
               (escape/choose (:primitives c) feet goal (may-dig-fn c) opts))
         e (if (and (= :none (:step e)) (not= :none (:step (escape/choose (:primitives c) feet goal (constantly true) opts))))
             {:step :none :why :zone}
@@ -211,8 +223,9 @@
   the body's own shelter: it is shut in on purpose."
   [c result]
   (and (:escalate (:args c))
-       (not (sh/sheltered-in c))
-       (or (some? (gap-fill c result (:skipped-steps (ctx/mem c) #{})))
+       (or (shelter-exit? c result) (not (sh/sheltered-in c)))
+       (or (shelter-exit? c result)
+           (some? (gap-fill c result (:skipped-steps (ctx/mem c) #{})))
            (sprint-only? result)
            (and (escalate-reason? result (some-> (:doors (:args c)) keyword))
                 (escape/enclosed? (:primitives c) (some-> (:doors (:args c)) keyword))
@@ -308,7 +321,18 @@
       hand? :again
       :else (await (escalation-next! c pos detail)))))
 
-(defn ^:async escalation-round!
+(defn ^:async leave-shelter-round!
+  "One round of leaving the body's own shelter (dig-in-leave/leave!) toward the goal."
+  [c pos]
+  (let [e (:escalation (ctx/mem c))
+        r (await (dig-leave/leave! c {:toward pos}))]
+    (cond
+      (= :continue r) :continue
+      (= :done (:status r)) (do (ctx/update-mem! c update :skipped-steps (fnil conj #{}) :leave-shelter)
+                                (escalated! c pos e true))
+      :else (escalation-failed! c pos {:step :leave-shelter :reason (:reason r) :why (:why r)}))))
+
+(defn ^:async escalation-child-round!
   "One call of the escalation child: the whole pillar, stair or door. After it, every planned cell now dug is in the
   ledger (note-holes!). Its wait or its failure gives up, with the child's reason, unless it got part of the way."
   [c pos]
@@ -326,6 +350,13 @@
           (succeeded? e res) (escalated! c pos e true)
           :else (escalation-failed! c pos (merge {:step step}
                                                  (select-keys res [:reason :why :cell :block :at :short :detail :wait]))))))))
+
+(defn ^:async escalation-round!
+  "One round of the escalation: leaving the shelter, or the child's call (escalation-child-round!)."
+  [c pos]
+  (if (= :leave-shelter (:step (:escalation (ctx/mem c))))
+    (leave-shelter-round! c pos)
+    (escalation-child-round! c pos)))
 
 (defn restore-done!
   "Tell what was put back and what was left, and end the put-back (the walk goes on from a fresh count)."

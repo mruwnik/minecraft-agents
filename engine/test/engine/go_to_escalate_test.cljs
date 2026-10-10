@@ -332,23 +332,36 @@
           (is (empty? (events-of seen :go-to.escalated)) "its go-to child runs with :escalate false")
           (is (empty? (calls p "jumpPlace"))))))))
 
-(deftest go-to-sealed-in-its-own-shelter-does-not-dig-out
+(defn run-in-shelter!
+  "go-to [8 64 0] from inside a dirt shelter at the origin (a :shelter entry), the world's time as given."
+  [time]
+  (let [cell (merge (box -6 63 -6 12 63 6 "stone") (dissoc (box -1 64 -1 1 66 1 "dirt") "0,64,0" "0,65,0"))
+        {:keys [eng p seen]} (setup {:self {:pos {:x 0 :y 64 :z 0}} :blocks cell :time time :inventory [{:name "dirt" :count 5}]})
+        out (atom :not-done)
+        eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent
+                                    (recording-parent out 'jobs.movement.go-to {:pos [8 64 0] :range 1})))]
+    (mem/write! (:store eng) :shelter {:pos {:x 0 :y 64 :z 0} :roof {:x 0 :y 66 :z 0} :state :built}
+                {:cap 10 :ttl 86400000})
+    (core/submit! eng '(recording-parent) {})
+    (-> (tick-out! eng 300) (.then (fn [_] {:out out :p p :seen seen})))))
+
+(deftest go-to-sealed-in-its-own-shelter-by-night-stays-in-it
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [cell (merge (box -6 63 -6 12 63 6 "stone") (dissoc (box -1 64 -1 1 66 1 "dirt") "0,64,0" "0,65,0"))
-              {:keys [eng p seen]} (setup {:self {:pos {:x 0 :y 64 :z 0}} :blocks cell :inventory [{:name "dirt" :count 5}]})
-              out (atom :not-done)
-              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent
-                                          (recording-parent out 'jobs.movement.go-to {:pos [8 64 0] :range 1})))]
-          (mem/write! (:store eng) :shelter {:pos {:x 0 :y 64 :z 0} :roof {:x 0 :y 66 :z 0} :state :built}
-                      {:cap 10 :ttl 86400000})
-          (core/submit! eng '(recording-parent) {})
-          (await (tick-out! eng 300))
-          (is (= false (:arrived @out)))
-          (is (= {:x 0 :y 64 :z 0} (:inside-own-shelter @out)) "the give-up names the shelter")
-          (is (empty? (events-of seen :go-to.escalated)) "a body sealed in its own shelter stays in it")
+        (let [{:keys [out p seen]} (await (run-in-shelter! 14000))]
+          (is (not= {:arrived true} @out))
+          (is (empty? (events-of seen :go-to.escalated)) "no refuge exit at night")
           (is (empty? (calls p "dig"))))))))
+
+(deftest go-to-sealed-in-its-own-shelter-by-day-leaves-it-and-walks-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p seen]} (await (run-in-shelter! 1000))]
+          (is (= [:leave-shelter] (mapv :step (events-of seen :go-to.escalated))))
+          (is (seq (calls p "dig")) "it dug out of the shelter")
+          (is (= {:arrived true} @out)))))))
 
 (defn ledger [eng] (mapv :data (mem/entries (mem/view (:store eng)) :tidy)))
 

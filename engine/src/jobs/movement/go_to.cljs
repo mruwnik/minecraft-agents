@@ -97,6 +97,7 @@
     up :why :explore-spent (:explored the blocks) at the end of that walk.
   - A walk stuck or off its plan at a cell is a go-to.walker-fault warn; the next plans of the call cost that cell
     (up to 16; after a fall also the cells above it) far more (wworld/with-avoid), so a way round is taken when there is one.
+  - :escalate (default true): a body sealed in its own shelter (a :shelter entry) by day, when the walk finds no way, leaves it first (dig-in-leave/leave!, a go-to.escalated {:step :leave-shelter}); never at night.
   - :escalate (default true): a body that is shut in (jobs.lib.reach/enclosed?), not in its own shelter, and whose
     search ran out of land (:exhausted, :goal-enclosed or :goal-cut-off), or any body whose only way needs a sprint it lacks the food for (:abilities :corner-jump or :gap-sprint), makes a way instead of giving up, one child job
     each (jobs.lib.escape/choose), at most 3 in a row that start no nearer the goal than one before (escalation/count-escalation): jobs.access.pillar up out of a pit when it carries enough blocks; else
