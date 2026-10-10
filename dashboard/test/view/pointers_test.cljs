@@ -49,6 +49,10 @@
     (is (= ["hostile" "player"] (map :kind r)) "the zombie is 10 away, Bob about 20")
     (is (= [true false] (map :on-screen? r)) "the zombie is ahead, Bob far to the right")))
 
+(deftest a-target-the-body-does-not-see-gets-no-pointer
+  (let [r (p/pointers basis eye [(assoc zombie :seen false) (assoc bob :seen true)] W H)]
+    (is (= ["player"] (map :kind r)) "a hostile behind a wall is not known to the body; a box with no :seen flag counts as seen")))
+
 (deftest labels-name-the-target-and-round-the-distance
   (let [r (p/pointers basis eye [zombie bob] W H)]
     (is (= #{"Bob 20m" "zombie villager 10m"} (set (map :text r))))))

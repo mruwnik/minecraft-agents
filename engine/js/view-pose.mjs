@@ -1,6 +1,8 @@
 // Why JavaScript: binary/graphics; the view dump's column, light and pose encoding.
 // View dump pose and hud snapshots of the body and what it sees.
+import vec3 from 'vec3'
 import { liveEntities } from './live-entities.mjs'
+import { clearLine } from './sight.mjs'
 import { mobFields, sheepDye } from './interact.mjs'
 import { VIEW_VERSION } from './view-column.mjs'
 
@@ -25,7 +27,7 @@ const droppedName = (bot, e) => {
   } catch { return null }
 }
 
-const entityView = (bot, e, item = droppedName(bot, e), baby = mobFields(bot, e).baby === true, dye = sheepDye(bot, e)) => ({
+const entityView = (bot, e, seen, item = droppedName(bot, e), baby = mobFields(bot, e).baby === true, dye = sheepDye(bot, e)) => ({
   id: e.id,
   type: e.type ?? null,
   name: e.name ?? null,
@@ -34,6 +36,7 @@ const entityView = (bot, e, item = droppedName(bot, e), baby = mobFields(bot, e)
   ...(item ? { item } : {}),
   ...(baby ? { baby } : {}),
   ...(dye === null ? {} : { dye }),
+  seen,
   pos: xyz(e.position),
   yaw: e.yaw ?? 0,
   pitch: e.pitch ?? 0,
@@ -42,11 +45,23 @@ const entityView = (bot, e, item = droppedName(bot, e), baby = mobFields(bot, e)
   health: e.health ?? null
 })
 
+const { Vec3 } = vec3
+
+// whether the body's eye has a clear line to the entity (feet, middle or head): a player does not see through walls. A bot that
+// cannot read blocks sees everything.
+const inSight = (bot, eye, e) => {
+  if (typeof bot.blockAt !== 'function') return true
+  const h = e.height ?? 1
+  const blockAt = c => bot.blockAt(new Vec3(c.x, c.y, c.z))
+  return [0.1, h / 2, h * 0.9].some(up => clearLine(blockAt, eye, { x: e.position.x, y: e.position.y + up, z: e.position.z }))
+}
+
 const near = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) <= ENTITY_RANGE
 
 export function poseSnapshot (bot, { world, now }) {
   const self = bot.entity
   const p = self.position
+  const eye = { x: p.x, y: p.y + eyeHeight(self), z: p.z }
   return {
     v: VIEW_VERSION,
     t: now,
@@ -55,12 +70,12 @@ export function poseSnapshot (bot, { world, now }) {
     dimension: bot.game?.dimension ?? null,
     mcVersion: bot.version,
     pos: xyz(p),
-    eye: { x: p.x, y: p.y + eyeHeight(self), z: p.z },
+    eye,
     yaw: self.yaw,
     pitch: self.pitch,
     velocity: xyz(self.velocity ?? { x: 0, y: 0, z: 0 }),
     onGround: Boolean(self.onGround),
-    entities: liveEntities(bot).filter(e => e !== self && e.position && near(e.position, p)).map(e => entityView(bot, e)),
+    entities: liveEntities(bot).filter(e => e !== self && e.position && near(e.position, p)).map(e => entityView(bot, e, inSight(bot, eye, e))),
     timeOfDay: bot.time?.timeOfDay ?? null,
     rain: bot.rainState ?? 0,
     held: bot.heldItem?.name ?? null,

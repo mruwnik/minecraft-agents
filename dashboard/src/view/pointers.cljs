@@ -49,12 +49,12 @@
     (str text " " (js/Math.round dist) "m")))
 
 (defn pointers
-  "Pointers for the hostile and player boxes ({:min [x y z] :max [x y z] :kind :name :label}, relative to the eye's frame) as seen from
+  "Pointers for the hostile and player boxes ({:min [x y z] :max [x y z] :kind :name :label :seen}, relative; one the body does not see (:seen false: behind a wall) gets none, to the eye's frame) as seen from
    `eye` through `basis`: the nearest MAX-POINTERS, nearest first, each {:kind :text :px :py :on-screen? :angle :dist}.
    The target is the box's middle; an on-screen marker sits above its head."
   [basis eye boxes width height]
   (->> boxes
-       (filter #(contains? SHOWN-KINDS (:kind %)))
+       (filter #(and (contains? SHOWN-KINDS (:kind %)) (not (false? (:seen %)))))
        (keep (fn [{[x0 y0 z0] :min [x1 y1 z1] :max :as box}]
                (let [offset {:x (- (/ (+ x0 x1) 2) (:x eye)) :y (- (/ (+ y0 y1) 2) (:y eye)) :z (- (/ (+ z0 z1) 2) (:z eye))}
                      p (pointer-for basis offset width height EDGE-MARGIN)]
@@ -69,7 +69,7 @@
        vec))
 
 (defn- ->box [^js b]
-  {:min (vec (.-min b)) :max (vec (.-max b)) :kind (.-kind b) :name (.-name b) :label (.-label b)})
+  {:min (vec (.-min b)) :max (vec (.-max b)) :kind (.-kind b) :name (.-name b) :label (.-label b) :seen (.-seen b)})
 
 (defn js-pointers
   "pointers for the renderer's draw params (eye, basis as view.camera/js-camera-basis gives, entities) as an array of

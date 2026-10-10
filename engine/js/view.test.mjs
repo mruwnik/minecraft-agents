@@ -279,6 +279,14 @@ test('pose snapshot has the fixed shape, eye height and nearby entities only', (
   assert.equal(pose.rain, 0)
 })
 
+test('a pose entity carries whether the eye has a clear line to it: one behind a wall is not seen', () => {
+  const wall = { name: 'stone', boundingBox: 'block' }
+  const bot = fakeBot({ entities: { 2: entity(2, 13, -3), 4: entity(4, 7, -3), 5: entity(5, 13, -3, { height: 5 }) } })
+  bot.blockAt = v => (v.x === 11 && v.y >= 63 && v.y <= 69 ? wall : { name: 'air', boundingBox: 'empty' })
+  const seen = Object.fromEntries(poseSnapshot(bot, { world: 'w', now: 1 }).entities.map(e => [e.id, e.seen]))
+  assert.deepEqual(seen, { 2: false, 4: true, 5: false })
+})
+
 test('a dropped item in the pose names what it holds; a drop the library cannot read, and other entities, carry no item', () => {
   const drop = (id, getDroppedItem) => entity(id, 12, -3, { name: 'item', getDroppedItem })
   const bot = fakeBot({ entities: { 2: drop(2, () => ({ name: 'oak_log', count: 1 })), 3: drop(3, () => { throw new Error('no slot') }), 4: entity(4, 11, -3) } })
