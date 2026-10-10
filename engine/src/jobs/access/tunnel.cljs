@@ -12,6 +12,7 @@
             [jobs.lib.util :as u]
             [jobs.lib.torch :as torch]
             [jobs.access.stair :as stair]
+            [jobs.lib.ore-pick :as ore-pick]
             [jobs.lib.placement :as placement]
             [jobs.lib.world :as known]))
 
@@ -81,6 +82,9 @@
   :keep (default false, a dead end) writes each torch to the scaffold ledger (purpose :tunnel-torch, before the
   place) for jobs.access.leave-tunnel to take back. :keep true leaves the torches and the tunnel as they are.
 
+  On the run it digs the exposed ores within reach (:pick-up-ores, jobs.lib.ore-pick), never the target; :ores lists them
+  with those of the stair child.
+
   Hands over {:status :done|:stopped :reason :reached|kw :target :entry :heading :stand :at [x y z] :dug
   [{:cell :block}] :inside bool :keep bool :line {:entry :heading :dir :steps :run :stand :target} :torches
   [{:cell :site :block}] :unlit [{:cell :site :reason}]} plus detail. :torches are those standing now, read
@@ -98,7 +102,8 @@
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
    :on-lava {:doc "exposed lava: :seal (fill it with a building block, then go on) or :stop (jobs.access.stair)" :spec #{:seal :stop} :default :seal}
    :keep {:doc "a tunnel that stays: torches left and the tunnel left open; false (a dead end): torches go into the scaffold ledger for jobs.access.leave-tunnel to take back" :spec boolean? :default false}
-   :fetch {:doc "get a missing pickaxe instead of waiting :no-tool (jobs.lib.fetch): true, a set of kinds or a map of limits; false waits :no-tool" :spec fetch/option? :default true}})
+   :fetch {:doc "get a missing pickaxe instead of waiting :no-tool (jobs.lib.fetch): true, a set of kinds or a map of limits; false waits :no-tool" :spec fetch/option? :default true}
+   :pick-up-ores {:doc "true: dig the ores of jobs.lib.ore-pick's ::ores setting that are exposed within reach on the way; false: none; or the ore block names to dig" :spec (a/or-of boolean? (a/coll-of a/name?)) :default true}})
 
 (def heading-order [:north :east :south :west])
 
@@ -300,10 +305,10 @@
 (defn finish!
   "Hand the result over and end: :done when reached, else :stopped (warn)."
   [c reason detail]
-  (let [{:keys [plan dug unlit]} (ctx/mem c)
+  (let [{:keys [plan dug unlit ores]} (ctx/mem c)
         feet (feet-of c)
         result (merge (cond-> {:status (if (= :reached reason) :done :stopped) :reason reason :target (target-of c)
-                               :at feet :dug (or dug []) :inside (boolean (and plan (not= feet (:entry plan))))
+                               :at feet :dug (or dug []) :ores (into (vec ores) (ore-pick/picked c)) :inside (boolean (and plan (not= feet (:entry plan))))
                                :keep (boolean (:keep (:args c))) :torches [] :unlit (or unlit [])}
                         plan (assoc :line (select-keys plan [:entry :heading :dir :steps :run :stand :target])
                                     :torches (standing-torches (:block-at (stair/rules-in c feet)) plan)))
@@ -388,12 +393,13 @@
   (let [cells (line-cells plan)
         r (await (declined/call-child! c :stair 'jobs.access.stair
                                  {:dir dir :heading heading :fetch (stair-fetch (:fetch (:args c))) :y ((cells (segment-end plan k)) 1) :on-lava (:on-lava (:args c) :seal)
-                                  :accept (set (:accept (:args c))) :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+                                  :accept (set (:accept (:args c))) :ignore-zones? (boolean (:ignore-zones? (:args c)))
+                                 :pick-up-ores (:pick-up-ores (:args c))}))]
     (if (not= :done r)
       (if (= :declined r) :declined :continue)
       (let [res (ctx/child-result c :stair)
             done? (= :done (:status res))]
-        (ctx/update-mem! c #(-> % (update :dug (fnil into []) (:dug res))
+        (ctx/update-mem! c #(-> % (update :dug (fnil into []) (:dug res)) (update :ores (fnil into []) (:ores res))
                                 (assoc :stair-done (and done? (= (cells (:steps plan)) (feet-of c))))))
         (if done?
           :again
@@ -474,6 +480,7 @@
         i (when (pos? steps) (stair/stair-index entry feet dir heading steps))]
     (ctx/update-mem! c stair/record-dug (:block-at (stair/rules-in c feet)))
     (or (when k (await (torch-step! c k)))
+        (when (and j (= :continue (await (ore-pick/pick! c {:except #{(target-of c)}})))) :continue)
         (cond
           (and i (not stair-done) (or (< i steps) (not (segment-start? c))))
           (if-let [stop (when (and (pos? i) (not= i checked) (segment-start? c)) (await (stair/way-back c entry)))]

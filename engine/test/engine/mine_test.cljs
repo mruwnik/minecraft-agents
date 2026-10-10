@@ -2224,3 +2224,14 @@
       (fn ^:async t []
         (let [s (await (shafted (assoc via-shaft :shaft :required) ore-east [] 400))]
           (is (= :count (:reason (done-event s)))))))))
+
+(deftest mine-digs-an-exposed-ore-within-reach-of-its-stand-and-reports-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:blocks (merge floor sand-patch {"-1,64,1" "coal_ore"}) :inventory [{:name "wooden_pickaxe" :count 1}]}
+              on (await (scenario {:block "sand" :count 6} world 60))
+              off (await (scenario {:block "sand" :count 6 :pick-up-ores false} world 60))]
+          (is (= "air" (block-at on -1 64 1)))
+          (is (= [[-1 64 1]] (mapv :cell (:ores (done-event on)))))
+          (is (= "coal_ore" (block-at off -1 64 1)) "opted out"))))))

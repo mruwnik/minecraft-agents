@@ -20,6 +20,7 @@
             [jobs.lib.shafts :as shafts]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
+            [jobs.lib.ore-pick :as ore-pick]
             [jobs.lib.pace :as pace]
             [jobs.lib.trip :as trip]
             [jobs.lib.targets :as targets]
@@ -158,6 +159,7 @@
    :count {:doc "how many more to carry than at the start" :spec (a/int-in 0 nil) :default 8}
    :radius {:doc "seen blocks within this many blocks of the body count" :spec (a/num-in 0 nil) :default 16}
    :wet {:doc "dig blocks that touch water, and tunnel beside water" :spec boolean? :default false}
+   :pick-up-ores {:doc "true: dig the ores of jobs.lib.ore-pick's ::ores setting that are exposed within reach of where it stands; false: none; or the ore block names to dig" :spec (a/or-of boolean? (a/coll-of a/name?)) :default true}
    :fetch {:doc "get a pickaxe when none is carried (jobs.items.get-tool via jobs.lib.fetch limits): true, a set of kinds or a map of limits; false ends :no-tool" :spec fetch/option? :default true}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
    :deposit-first? {:doc "deposit at the known chest first when the bag is fullish and the chest is near (jobs.lib.trip/ready!)" :spec boolean? :default true}
@@ -365,6 +367,7 @@
         reason (if (and (zero? got) (pos? (or wet-skipped 0)) (#{:none :no-drops :tunnel-length :tunnel-stopped} (:reason m))) :wet (:reason m))
         why (cond-> {} dig-reason (assoc :dig-reason dig-reason) (or (= :no-stone-found reason) (pos? (:steps descent 0))) (assoc :descent descent) (= :wet reason) (assoc :wet-skipped (or wet-skipped 0)) resumes (assoc :resumes resumes) suggest (assoc :shaft-suggest suggest)
               (pos? (:steps tunnel 0)) (assoc :tunnel (-> tunnel (select-keys [:origin :heading :steps :stop :end :back-at :walked-back?]) (update :origin access/cell)))
+              (seq (ore-pick/picked c)) (assoc :ores (ore-pick/picked c))
               (seq left) (assoc :left (mapv (fn [[pos n]] {:pos pos :count n}) left)))]
     (ctx/emit! c :mine.done (if (= :not-home reason) :warn :info) (merge {:got got :reason reason :mended (or mended 0)
                                           :text (str "mine done: " (name reason) ", got " got ", mended " (or mended 0)
@@ -1144,7 +1147,8 @@
             r (await (ctx/call-child c :stair 'jobs.access.stair
                                      {:dir :down :heading (keyword (:heading (ctx/mem c))) :steps 1 :fetch (if level? (:fetch (:args c)) true)
                                       :accept (filterv #{:falling-block} (:accept (:args c)))
-                                      :ignore-zones? (:ignore-zones? (:args c))}))
+                                      :ignore-zones? (:ignore-zones? (:args c))
+                                      :pick-up-ores (:pick-up-ores (:args c))}))
             res (when (not= :continue r) (ctx/child-result c :stair))]
         (cond
           (= :continue r) :continue
@@ -1230,7 +1234,7 @@
                                                              :text (str "mine took shaft " id " down to y " to-y (when heading (str ", branch " (:n sh) " " (name heading))))})
                              :again))))))
 
-(defn ^:async dig-round! [c]
+(defn ^:async dig-round-1! [c]
   (let [{:keys [goal failures dry looked]} (ctx/mem c)
         {:keys [max-failures wet dry-digs tunnel-length]} (:args c)
         {:keys [targets refused wet? wet-n]} (scan c)
@@ -1265,6 +1269,13 @@
                   (pos? tunnel-length) (await (tunnel-round! c))
                   (seq refused) (to-mend! c :refused)
                   :else (to-mend! c (if (and wet? (not wet)) :wet :none)))))))
+
+(defn ^:async dig-round!
+  "The ores within reach first, then one piece of the digging."
+  [c]
+  (if (= :continue (await (ore-pick/pick! c {:leave (kinds (:args c))})))
+    :continue
+    (await (dig-round-1! c))))
 
 ;; ------------------------------------------------------------------ mend
 

@@ -11,6 +11,7 @@
             [jobs.lib.escape :as escape]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.lava :as lava]
+            [jobs.lib.ore-pick :as ore-pick]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
@@ -86,7 +87,9 @@
   max-steps digs, steps and fetch rounds. The body's cell is the progress: a resumed call finds its step from where
   the body stands on the stair line. Dug cells are left and recorded.
 
-  Hands over {:status :done|:stopped :reason kw :steps n :at [x y z] :dug [{:cell :block}]} plus detail (:cell
+  Before each step it digs the exposed ores within reach (:pick-up-ores, jobs.lib.ore-pick) and returns to its place.
+
+  Hands over {:status :done|:stopped :reason kw :steps n :at [x y z] :dug [{:cell :block}] :ores [{:cell :block :got}]} plus detail (:cell
   :hazards :zone :walk ...), also as a stair.done info or stair.stopped warn event.
 
   :fetch (default true; jobs.lib.fetch; false waits :no-tool): the :no-tool wait is not waited out; the call runs jobs.items.get-tool
@@ -106,6 +109,7 @@
    :fetch {:doc "get a missing pickaxe instead of waiting :no-tool (jobs.lib.fetch), and a block to seal lava with: true, a set of kinds or a map of limits" :spec fetch/option? :default true}
    :on-lava {:doc "exposed lava: :seal (fill it with a building block, then go on) or :stop" :spec #{:seal :stop} :default :seal}
    :by-hand {:doc "dig a block no carried tool clears bare-handed (slow, the drop is lost) instead of waiting :no-tool" :spec boolean? :default false}
+   :pick-up-ores {:doc "true: dig the ores of jobs.lib.ore-pick's ::ores setting that are exposed within reach on the way; false: none; or the ore block names to dig" :spec (a/or-of boolean? (a/coll-of a/name?)) :default true}
    :through {:doc "the id of a mineshaft plan the stair runs down: its footprint is no obstacle (jobs.lib.shafts)" :spec string? :default nil}})
 
 (def headings shape/headings)
@@ -354,7 +358,7 @@
   (let [m (ctx/mem c)
         steps (or (:at-step m) 0)
         result (merge {:status (if (= :done reason) :done :stopped) :reason reason :steps steps
-                       :at (feet-of c) :dug (:dug m [])}
+                       :at (feet-of c) :dug (:dug m []) :ores (vec (ore-pick/picked c))}
                       detail)]
     (ctx/result! c result)
     (when-let [{:keys [origin]} (when (pos? steps) m)]
@@ -541,6 +545,7 @@
                 :offset (mapv - feet origin)
                 :why (str "the body is " (pr-str (mapv - feet origin)) " from the stair's start " (pr-str origin)
                           ", off its line")}
+      (= :continue (await (ore-pick/pick! c))) :continue
       :else
       (do
         (ctx/update-mem! c assoc :at-step i)

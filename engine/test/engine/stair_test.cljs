@@ -996,3 +996,18 @@
           (is (= :done (:status @out)) (pr-str @out))
           (is (nil? (waiting s)))
           (is (seq (digs p)) "dug bare-handed"))))))
+
+(deftest a-stair-digs-an-exposed-ore-beside-the-way-unless-told-not-to-or-lava-touches-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [coal (assoc ground "1,64,1" "coal_ore")
+              run (fn ^:async run1 [blocks args] (await (stair! {:blocks blocks} (merge east args) tu/seeing-all)))
+              on (await (run coal {}))
+              off (await (run coal {:pick-up-ores false}))
+              wet (await (run (assoc coal "2,64,1" "lava") {}))]
+          (is (= "air" (block-at (:p on) [1 64 1])) "picked")
+          (is (= [{:cell [1 64 1] :block "coal_ore"}] (mapv #(select-keys % [:cell :block]) (:ores @(:out on)))))
+          (is (= :done (:status @(:out on))))
+          (is (= "coal_ore" (block-at (:p off) [1 64 1])) "opted out")
+          (is (= "coal_ore" (block-at (:p wet) [1 64 1])) "lava beside it"))))))
