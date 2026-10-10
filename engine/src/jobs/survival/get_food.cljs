@@ -61,7 +61,7 @@
    :farm-radius {:doc "how far around a known farm to harvest, in blocks" :spec (a/num-in 0 nil) :default 6}
    :take {:doc "most items to withdraw from a chest in one go" :spec (a/int-in 1 nil) :default 16}
    :attack-gap-ms {:doc "least time between two swings at an animal, so a swing lands at full strength" :spec (a/num-in 0 nil) :default 600}
-   :explore {:doc "with nothing known or seen, walk and look for food animals and crops once per job (a starving body again after foods/::starving-rest-ms): false, true (the ::explore setting) or jobs.explore.search options over it" :spec (a/or-of boolean? map?) :default true}
+   :explore {:doc "with nothing known or seen, walk and look for food animals and crops once per job (a starving body again after foods/::starving-rest-ms; not underground unless starving): false, true (the ::explore setting) or jobs.explore.search options over it" :spec (a/or-of boolean? map?) :default true}
    :stock {:doc "also carry food worth this many hunger points: a fed body takes the ways below until the pack holds it (0: only feed)" :spec (a/num-in 0 nil) :default 0}
    :ask-cooldown-ms {:doc "after finding nothing, how long before saying so (and searching) again" :spec (a/num-in 0 nil) :default (* 10 60 1000)}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
@@ -656,7 +656,7 @@
 (defn ^:async explore!
   "Once per job, with nothing known or seen: search for food animals and ripe crops (jobs.explore.search, :explore),
   not at night (a body sheltered for the night stays in) nor while the night handler holds, unless starving with no
-  danger near (jobs.lib.danger/danger-near?). :again when the search found something to hunt or dig, else nil with what it
+  danger near (jobs.lib.danger/danger-near?), nor underground (sh/buried?) unless starving. :again when the search found something to hunt or dig, else nil with what it
   covered remembered."
   [c]
   (let [e (:explore (:args c))]
@@ -664,6 +664,8 @@
       (or (not e) (explore-done? (ctx/mem c) (starving? c) (ctx/now c) (foods/starving-rest-ms))) nil
       (night-blocks-search? c)
       (do (ctx/update-mem! c assoc :explored "not searched at night or while the night handler holds") nil)
+      (and (sh/buried? (:primitives c)) (not (starving? c)))
+      (do (ctx/update-mem! c assoc :explored "not searched underground: the caves are dark and full of mobs; surface or eat first") nil)
       :else
       (do
         (ctx/update-mem! c assoc :explored "started" :explored-at (ctx/now c))
