@@ -497,6 +497,42 @@
           (await (run-until-empty eng 40))
           (is (some #(and (= :food.killed (:kind %)) (re-find #"cow" (str (:text %))) (re-find #"\[5 64 0\]" (str (:text %)))) @seen)))))))
 
+(defn killed-events [seen] (filterv #(= :food.killed (:kind %)) @seen))
+
+(deftest get-food-says-why-each-kill-was-allowed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (hunt-world-with {} three-cows nil)]
+          (await (run-until-empty eng 40))
+          (is (= [{:adults 3 :keep 2 :food 4 :rule :surplus}]
+                 (mapv #(select-keys % [:adults :keep :food :rule]) (killed-events seen)))))))))
+
+(deftest get-food-names-the-starvation-lift-as-the-rule
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:self {:food 2} :entities (take 2 three-cows)})]
+          (core/submit! eng '(jobs.survival.get-food {:attack-gap-ms 0}) {})
+          (await (run-until-empty eng 40))
+          (is (= [{:adults 2 :keep 2 :food 2 :rule :starved}]
+                 (mapv #(select-keys % [:adults :keep :food :rule]) (killed-events seen)))))))))
+
+(def pen-ring
+  (merge (tu/box 3 64 -2 12 64 -2 "oak_fence") (tu/box 3 64 2 12 64 2 "oak_fence")
+         (tu/box 3 64 -1 3 64 1 "oak_fence") (tu/box 12 64 -1 12 64 1 "oak_fence")))
+
+(deftest get-food-spares-animals-inside-a-closed-fence-that-is-no-zone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (let [w (setup {:self {:food 4} :entities three-cows :blocks pen-ring})]
+                                     (core/submit! (:eng w) '(jobs.survival.get-food {:attack-gap-ms 0}) {})
+                                     w)]
+          (await (run-until-empty eng 40))
+          (is (= [] (calls p "attack")))
+          (is (some #(and (= :food.none (:kind %)) (re-find #"cow: pen" (str (:text %)))) @seen)))))))
+
 (deftest get-food-hunts-an-animal-when-no-source-is-known
   (async done
     (tu/run-async done

@@ -1,5 +1,5 @@
 (ns jobs.lib.animal-spare
-  "Which food animals a hunt leaves alone: kinds on the body's off-limits list, animals in the body's own pens, and the
+  "Which food animals a hunt leaves alone: kinds on the body's off-limits list, animals in the body's own pens or in any closed enclosure, and the
   last few adults of a kind so a breeding pair survives."
   (:require [engine.args :as a]
             [engine.settings :as settings]))
@@ -19,3 +19,11 @@
   (cond (contains? (off-limits args) kind) :off-limits
         (and (:spare-pens args) in-own-area?) :pen
         (and (<= adults-of-kind (:keep-adults args)) (not starved?)) :kept))
+
+(defn allowed-by
+  "Which rule let a hunt take an adult why left alone: :pen-taken (:spare-pens false and it stood in a pen), :surplus (more
+  than :keep-adults of its kind) or :starved (the kept pair, lifted by hunger)."
+  [args adults-of-kind in-own-area?]
+  (cond (and in-own-area? (not (:spare-pens args))) :pen-taken
+        (> adults-of-kind (:keep-adults args)) :surplus
+        :else :starved))

@@ -5,6 +5,8 @@
             [engine.ctx :as ctx]
             [engine.memory :as mem]
             [jobs.lib.access :as access]
+            [jobs.lib.apiary :as apiary]
+            [jobs.lib.pen :as pen]
             [jobs.lib.animal-spare :as spare]
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
@@ -47,7 +49,7 @@
   :stock n: a fed body also takes the ways until the pack holds n food points, else stops :no-stock; while the pack is short of it the ask cooldown does not block the search.
   Never :continue: a go-to that waits on the world, or a child still going after jobs.lib.child's call cap, is waited out in the round.
   More than 12 ways in one round without getting fed stops :still-hungry.
-  Wheat is never harvested. Babies, animals in another's zone or claim, animals in a zone or plan of the body's own (:spare-pens, default true), kinds in :off-limits (default the jobs.lib.animal-spare setting), and the last :keep-adults (2) adults of a kind in sight (for breeding; hunted too at food 3 or less with no food carried) are never hunted (:ignore-zones? lifts the others' zone only). Each animal attacked is a food.killed info with its name and cell; the result carries :killed. A chest in another's zone or claim is skipped and never taken from, even when starving
+  Wheat is never harvested. Babies, animals in another's zone or claim, animals in a zone or plan of the body's own or inside a closed enclosure (:spare-pens, default true), kinds in :off-limits (default the jobs.lib.animal-spare setting), and the last :keep-adults (2) adults of a kind in sight (for breeding; hunted too at food 3 or less with no food carried) are never hunted (:ignore-zones? lifts the others' zone only). Each animal attacked is a food.killed info with its name, cell, adults counted, :keep-adults, food and the rule that allowed it; the result carries :killed. A chest in another's zone or claim is skipped and never taken from, even when starving
   (one get-food.skipped warning). A crop in another's zone or claim is dug only when no other is (one
   get-food.trespass-last-resort warning). :ignore-zones? lifts both.
   A cut round starts again from the world: carried food first, then the ways.
@@ -105,6 +107,7 @@
    ::reach {:default 3 :doc "How near a food source the body stands to use it, in blocks." :spec (a/int-in 0 nil)}
    ::explore {:default {:max-distance 64 :max-legs 12 :timeout-s 120} :doc "jobs.explore.search options of the search for food (:explore true)." :spec map?}
    ::fish-radius {:default 48 :doc "Blocks within which seen water two deep with a bank makes fishing a way, with a fishing rod carried." :spec (a/int-in 0 nil)}
+   ::pen-max-cells {:default 400 :doc "Most cells searched to tell whether a food animal stands in a closed enclosure (then it counts as penned)." :spec (a/int-in 1 nil)}
    ::kept-lifted-below {:default 3 :doc "At this much food or less, with no food carried, the last adults of a kind (kept for breeding) are hunted too." :spec (a/int-in 0 20)}
    ::eat-bad-food {:default 6 :doc "At this much food or less the last resort eats harmful food carried (rotten flesh); above it harmful food is not food." :spec (a/num-in 0 20)}
    ::stock-radius {:default 256 :doc "Blocks within which a chest the body booked food in (memory :fetch/stock, what it saw when it opened it) counts as a food source." :spec (a/int-in 0 nil)}
@@ -357,50 +360,72 @@
         (pos? wheat) (await (withdraw! c pos "wheat" wheat))
         :else (bury-source! c pos)))))
 
+(defn enclosed?
+  "Whether the animal stands inside a closed fence or wall the body has seen: the pen check from its feet cell, the
+  closed pens found so far kept in `pens` (an atom of cell sets)."
+  [c pens e]
+  (let [{:keys [x y z]} (u/pos-of (.-pos e))
+        cell [(js/Math.floor x) (js/Math.floor (+ y 0.01)) (js/Math.floor z)]]
+    (or (boolean (some #(contains? % cell) @pens))
+        (let [answer (pen/check {:block-at (apiary/seen-block-at-fn (:primitives c)) :at {:x (cell 0) :y (cell 1) :z (cell 2)}
+                                 :max-cells (settings/get settings ::pen-max-cells)})]
+          (when (:closed? answer) (swap! pens conj (:inside answer)))
+          (boolean (:closed? answer))))))
+
 (defn animals-in-sight
-  "The food animals the entity scan lists within :hunt-radius, nearest first, as {:entity e :why r}: r is nil for one
+  "The food animals the entity scan lists within :hunt-radius, nearest first, as {:entity e :why r :adults n :rule k}: r is nil for one
   to hunt, else :tried (attacked this job), :baby, :refused (another's zone or claim), or what jobs.lib.animal-spare/why
-  says (:off-limits, :pen, :kept: the last :keep-adults of a kind are lifted at ::kept-lifted-below food or less with no food carried)."
+  says (:off-limits, :pen: a zone or plan of its own or a closed enclosure, :kept: the last :keep-adults of a kind are lifted at ::kept-lifted-below
+  food or less with no food carried); n counts the adults of its kind in sight and k is the spare rule that allowed the hunt."
   [c]
   (let [skipped (set (:skipped-animals (ctx/mem c)))
         seen (array-seq (.entities (:primitives c) #js {:radius (hunt-radius c) :kind "passive"
                                                         :names (clj->js food-animals) :max 16}))
         adults (frequencies (map #(.-name %) (remove #(true? (.-baby %)) seen)))
         self (.self (:primitives c))
+        pens (atom [])
         starved? (and (<= (.-food self) (settings/get settings ::kept-lifted-below)) (not (foods/carries-food? self)))]
     (->> seen
-         (mapv (fn [e] {:entity e
-                        :why (cond (skipped (.-id e)) :tried
-                                   (true? (.-baby e)) :baby
-                                   (access/container-refusal c :take (u/pos-of (.-pos e))) :refused
-                                   :else (spare/why (:args c) (.-name e) (adults (.-name e))
-                                                    (access/in-own-area? c (u/pos-of (.-pos e))) starved?))})))))
+         (mapv (fn [e]
+                 (let [n (adults (.-name e))
+                       penned? (and (not (skipped (.-id e))) (not (true? (.-baby e)))
+                                    (or (access/in-own-area? c (u/pos-of (.-pos e))) (enclosed? c pens e)))
+                       why (cond (skipped (.-id e)) :tried
+                                 (true? (.-baby e)) :baby
+                                 (access/container-refusal c :take (u/pos-of (.-pos e))) :refused
+                                 :else (spare/why (:args c) (.-name e) n penned? starved?))]
+                   {:entity e :why why :adults n
+                    :rule (when-not why (spare/allowed-by (:args c) n penned?))}))))))
 
 (defn nearest-animal
-  "The nearest adult food animal within :hunt-radius not skipped in this job and not in another's zone or claim."
+  "The nearest adult food animal within :hunt-radius not skipped in this job and not in another's zone or claim, as an animals-in-sight entry."
   [c]
-  (->> (animals-in-sight c) (remove :why) first :entity))
+  (->> (animals-in-sight c) (remove :why) first))
 
 (defn ^:async animal-in-sight
-  "The nearest food animal in sight; with none, the body looks around once from where it stands and tries again."
+  "The nearest food animal in sight (an animals-in-sight entry); with none, the body looks around once from where it stands and tries again."
   [c]
   (or (nearest-animal c)
       (await (look/survey-until! c :cell #(nearest-animal c)))))
 
 (defn note-kill!
-  "Say which animal the hunt attacked and where, and keep it for the result."
-  [c animal]
+  "Say which animal the hunt attacked and where, with the adults of its kind counted, the keep threshold, the food level
+  and the rule that allowed it, and keep it for the result."
+  [c {animal :entity :keys [adults rule]}]
   (let [p (u/pos-of (.-pos animal))
-        cell (mapv #(js/Math.floor %) [(:x p) (:y p) (:z p)])]
-    (ctx/update-mem! c update :killed (fnil conj []) {:name (.-name animal) :pos cell})
-    (ctx/emit! c :food.killed :info {:name (.-name animal) :pos cell
-                                     :text (str "hunted a " (.-name animal) " at " (pr-str cell))})))
+        cell (mapv #(js/Math.floor %) [(:x p) (:y p) (:z p)])
+        why {:adults adults :keep (:keep-adults (:args c)) :food (food-level c) :rule rule}]
+    (ctx/update-mem! c update :killed (fnil conj []) (merge {:name (.-name animal) :pos cell} why))
+    (ctx/emit! c :food.killed :info (merge {:name (.-name animal) :pos cell
+                                            :text (str "hunted a " (.-name animal) " at " (pr-str cell)
+                                                       " (" adults " adults, keep " (:keep why) ", food " (:food why) ", " (name rule) ")")}
+                                           why))))
 
 (defn ^:async hunt!
   "Kill the nearest food animal (combat.attack) and pick up its drops: :again, or nil when there is none (after a
   look around). An animal is attacked once per job, killed or not."
   [c]
-  (when-let [animal (await (animal-in-sight c))]
+  (when-let [{animal :entity :as target} (await (animal-in-sight c))]
     (let [{:keys [attack-gap-ms]} (:args c)
           hunt-radius (hunt-radius c)
           st (await (child/run! c :attack 'jobs.combat.attack
@@ -409,7 +434,7 @@
       (if (= :continue st)
         :continue
         (do (ctx/update-mem! c update :skipped-animals (fnil conj []) (.-id animal))
-            (note-kill! c animal)
+            (note-kill! c target)
             (or (await (collect-drops! c (drop-radius))) :again))))))
 
 ;; ------------------------------------------------------------------ nothing found
