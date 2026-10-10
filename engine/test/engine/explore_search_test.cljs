@@ -31,7 +31,7 @@
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         dir (tu/tmp-dir)
-        p (tu/fake (update (dissoc spec :cone?) :blocks #(merge (ground (or ground-r 64)) %)))
+        p (tu/fake (update (dissoc spec :cone? :zones) :blocks #(merge (ground (or ground-r 64)) %)))
         p (if (:cone? spec)
             (let [w (perception/wrap p (perception/create (fake-raw/create p) {:radius 16 :ray-deg 2}))]
               (.setOwner p "Fake")
@@ -39,7 +39,7 @@
             (tu/seeing-all p))
         store (notes/open {:world-dir dir :body "Fake" :emit (fn [_])})
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
-                          :world (assoc (world/of-data {} {}) :notes store)
+                          :world (assoc (world/of-data {} {} (:zones spec [])) :notes store)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen :clock clock :dir dir :store store}))
 
@@ -131,6 +131,26 @@
           (is (= :found (:reason (event-of s :search.done))))
           (is (= [{:what "diamond_block" :pos [10 64 0]}] (:found (event-of s :search.done))))
           (is (= [] (walks s))))))))
+
+(def two-diamonds {"10,64,0" "diamond_block" "0,64,12" "diamond_block"})
+
+(deftest a-target-in-an-avoided-column-is-not-found
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (search! {:target "diamond_block" :avoid [[10 0]]} {:blocks two-diamonds}))]
+          (is (= [[0 64 12]] (map :pos (:found (event-of s :search.done))))))))))
+
+(deftest a-target-in-a-foreign-zone-is-found-only-without-takeable
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [vault {:name "vault" :min [8 60 -2] :max [12 70 2] :owner "Miles"}
+              spec {:blocks two-diamonds :zones [vault]}
+              any (await (search! {:target "diamond_block"} spec))
+              own (await (search! {:target "diamond_block" :takeable true} spec))]
+          (is (= [[10 64 0]] (map :pos (:found (event-of any :search.done)))))
+          (is (= [[0 64 12]] (map :pos (:found (event-of own :search.done))))))))))
 
 (deftest a-target-out-of-sight-is-walked-to-found-and-noted
   (async done

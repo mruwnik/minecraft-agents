@@ -5,8 +5,11 @@
             [engine.fake :as fake]
             [engine.fetch-test :as f]
             [engine.game :as game]
+            [engine.perception :as perception]
+            [engine.shelter-test :as st]
             [engine.test-util :as tu]
             [jobs.items.obtain :as obtain]
+            [jobs.lib.shelter :as sh]
             [jobs.items.recipes :as recipes]))
 
 (defn ore-world
@@ -159,6 +162,19 @@
               s (f/start (assoc (ore-world (merge f/tree-blocks free) []) :unreachable ["0,64,4" "0,65,4" "0,66,4" "0,67,4"]) [f/own-zone])]
           (await (obtain! s {:any-of ["oak_log"] :count 2 :how #{:gather} :explore true} 600))
           (is (<= 2 (get (f/inv s) "oak_log" 0)) "logs were got from the reachable tree"))))))
+
+(deftest a-tree-seen-while-sheltered-at-night-waits-night-sheltered-not-no-source
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (f/start (assoc (ore-world (merge f/tree-blocks {"0,66,0" "stone"}) []) :time st/night) [f/own-zone])]
+          (doseq [pitch [-80 80 0]]
+            (swap! (fake/state (:p s)) assoc :pitch pitch)
+            (perception/pass! (aget (:p s) "perception")))
+          (is (some? (sh/night-sheltered (:p s) nil)) "sheltered at the start")
+          (await (obtain! s {:any-of ["oak_log" "spruce_log" "birch_log"] :count 2 :how #{:gather} :explore true} 8))
+          (is (empty? (filter #(= :no-source (:reason %)) (f/events-of s :waiting))) "the tree is seen")
+          (is (some #(= :night-sheltered (:reason %)) (f/events-of s :waiting))))))))
 
 (deftest an-iron-ingot-with-raw-iron-carried-is-smelted-by-a-smelt-child
   (async done

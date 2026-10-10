@@ -51,7 +51,7 @@
   - Nothing else: stopped :no-source with :tried.
 
   The check waits {:reason :no-source :why text :item|:any-of} (:why: what each source lacks) before the first round (once the round has looked around, when chests are allowed) when nothing is carried enough, no
-  usable chest that might hold it is seen and no craft chain makes it from what is carried, and nothing seen to gather what a chain lacks (with :explore, a chain whose raw needs are unseen passes: the search child solves it). Ends {:status :done :got n :item name} or {:status :stopped
+  usable chest that might hold it is seen and no craft chain makes it from what is carried, and nothing seen to gather what a chain lacks (with :explore, a chain whose raw needs are unseen passes: the search child solves it; when every raw need is seen and the gather child's own check waits (night in a shelter), that wait stands instead). Ends {:status :done :got n :item name} or {:status :stopped
   :reason r :got n :tried {..}}, r :no-source, :cycle (a wanted name is on :chain), :timeout (:minutes without what is
   carried changing) or :bad-args. :depth is the nesting left for sources that need fetches of their own (not used yet: crafting
   plans its whole chain; a gather child fetches its own tools).")
@@ -444,6 +444,13 @@
    (when-let [g (:gather tried)]
      (str "; gathering was tried and ended " (pr-str g) (when why (str " (" why ")"))))))
 
+(defn gather-held?
+  "Whether every raw need of the chain is seen and the first one's child declined with a wait reason of its own
+  (night in a shelter ..), left standing as the job's: the source is there, only not now."
+  [c names n]
+  (let [needs (some-> (gather-plan c names n) :gather (gather-needs (game/version-of (:primitives c))) seq)]
+    (boolean (and needs (every? #(seen-of c %) needs) (some-> (:wait c) deref)))))
+
 (defn check [c]
   (let [a (:args c)
         names (names-of a)]
@@ -456,6 +463,7 @@
       (and (contains? (:how (limits c)) :gather) (gather-viable? c names (:count a))) true
       (and (contains? (:how (limits c)) :gather) (explorable? c names (:count a)))
       (if-let [hurt (body/too-hurt (:primitives c))] (ctx/wait c hurt) true)
+      (and (contains? (:how (limits c)) :gather) (gather-held? c names (:count a))) false
       :else (let [reason (merge {:reason :no-source :why (no-source-why c names (:count a))} (wanted-fields a))]
               (if (contains? (:how (limits c)) :chest)
                 (look/wait-unless-surveyed c reason)
