@@ -1166,6 +1166,23 @@
             (await (run-ticks s 900))
             (is (= reason (get-in (done-event s) [:given-up "u1"])) label)))))))
 
+(defn track-range!
+  "Entities farther than r from the body are not listed, as a server loads animals only near the player."
+  [{:keys [p]} r]
+  (let [orig (.-entities p)]
+    (set! (.-entities p) (fn [a] (.filter (orig a) (fn [e] (<= (.-distance e) r)))))))
+
+(deftest an-animal-near-the-start-but-out-of-sight-from-the-pen-is-still-fetched
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (submit! (setup (world {:self {:pos {:x -45 :y 64 :z 3}} :entities [(cow 1 -40 3)] :inventory [wheat] :blocks far-ground}))
+                         {:target 1 :radius 60})]
+          (track-range! s 30)
+          (await (run-ticks s 900))
+          (is (= :brought (:reason (done-event s))) (pr-str (dissoc (done-event s) :source :chain :t :seq)))
+          (is (= #{1} (cows-in-pen s))))))))
+
 (deftest the-gate-toggle-keeps-the-food-in-hand
   (async done
     (tu/run-async done

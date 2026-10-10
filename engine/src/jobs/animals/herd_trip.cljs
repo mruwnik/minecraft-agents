@@ -7,14 +7,17 @@
             [jobs.lib.fetch :as fetch]
             [jobs.lib.pen :as pen]
             [jobs.lib.util :as u]
+            [jobs.lib.near :as near]
             [jobs.animals.herd-run :refer [animal-now deepest end! finish! gate-open? held-by-me? in-pen-adults lure? near-pen out-1 read-pen regather-radius set-phase!]]
             [jobs.animals.herd-pen :refer [animal-pos pinned-ms settle-at! step-in-step]]))
 
 
 (a/defargs settings
   {::lure-reach {:default 6 :doc "A lured animal is waited for once the body is this near it, in blocks." :spec (a/int-in 0 nil)}
+   ::look-back-range {:default 12 :doc "How near the body goes to where an animal near the start was last listed, to see it again, in blocks." :spec (a/int-in 0 nil)}
    ::max-tries {:default 2 :doc "Attempts before the job gives up." :spec (a/int-in 0 nil)}})
 (defn lure-reach [] (settings/get settings ::lure-reach))
+(defn look-back-range [] (settings/get settings ::look-back-range))
 (defn max-tries [] (settings/get settings ::max-tries))
 
 (defn tired-keys
@@ -127,6 +130,38 @@
                 walked (await (animals/walk! c k target (lure-reach) {:doors :shut}))]
             (if (= :there walked) (start-trip! c k) :continue)))))))
 
+(defn remember-start!
+  "Once, before the walk to the pen: the adults of :mob listed within :radius of the body, unleashed, as {:key :pos}. The server
+  loads animals only near the body, so those near the start are not listed once the body stands at the pen (look-back!)."
+  [c]
+  (when-not (contains? (ctx/mem c) :remembered)
+    (let [{:keys [mob radius]} (:args c)]
+      (ctx/update-mem! c assoc :remembered
+                       (->> (animals/adults (:primitives c) mob radius)
+                            (remove animals/leashed?)
+                            (mapv (fn [e] {:key (animals/key-of e) :pos (u/pos-of (.-pos e))})))))))
+
+(defn look-back-target
+  "The remembered animal to go and look for when none is listed within :radius of the start now: the nearest to the body not
+  yet looked for, else nil."
+  [c]
+  (let [m (ctx/mem c)
+        looked (set (:looked-back m))]
+    (when (empty? (lure-candidates c))
+      (->> (:remembered m)
+           (remove #(contains? looked (:key %)))
+           (sort-by #(u/dist (u/self-pos c) (:pos %)))
+           first))))
+
+(defn ^:async look-back!
+  "Walk to within look-back-range of where the animal was last listed, so it is loaded and listed again; then it is booked looked-for.
+  :continue while the walk goes on."
+  [c {:keys [key pos]}]
+  (let [r (await (near/go-near! c pos (look-back-range) {:doors :never :escalate false}))]
+    (if (= :partial r)
+      :continue
+      (do (ctx/update-mem! c update :looked-back (fnil conj []) key) :continue))))
+
 (defn ^:async leash-next!
   "Bring one more animal to the body and start its trip, or end when the pen holds enough or none more can be had.
   The first call settles the run's :method."
@@ -135,7 +170,9 @@
     (if (>= (count (in-pen-adults c (read-pen c))) target)
       (finish! c nil)
       (do (when-not (:method (ctx/mem c)) (ctx/update-mem! c assoc :method (resolve-method c)))
-          (if (lure? c) (await (lure-next! c)) (await (lead-next! c)))))))
+          (if-let [lost (look-back-target c)]
+            (await (look-back! c lost))
+            (if (lure? c) (await (lure-next! c)) (await (lead-next! c))))))))
 
 (defn prune-led!
   "Drop from :led the animals no longer on this body's lead, booking each (:lead-broke seen, :lost not seen);

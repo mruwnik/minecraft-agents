@@ -11,7 +11,7 @@
             [jobs.lib.watch :as watch]
             [jobs.animals.herd-run :refer [adults after-shut! cell census! crowd-in-radius crowd-ms crowd-out-radius deepest end! exit-shut-ms gate-cell gate-index gate-open? hold-gate! cell-pos in-1 in-pen-adults led-now lure? animal-now follow-range out-1 read-pen release-step! set-phase! settle-ms settle-out-ms shut-failed! shut-look-ms transient-keys]]
             [jobs.animals.herd-pen :refer [body-in-pen? cell-middle crowded-near? exit-dash! flat-dist go-then! let-go-cell look-wait! max-leaves on-gate? set-gate! settle-at! shut-side! shut-when-clear! survey! wait-clear! waited-ms]]
-            [jobs.animals.herd-trip :refer [leash-next! pinned! prune-led! regather! regather-or-lose! released! step-position!]]))
+            [jobs.animals.herd-trip :refer [leash-next! pinned! remember-start! prune-led! regather! regather-or-lose! released! step-position!]]))
 
 (def doc
   "Bring grown animals of type :mob into the pen :box until it holds :target of them. Each animal goes
@@ -24,6 +24,8 @@
 
   Declines while the box already holds :target adults. A started run always passes, so a cut job resumes.
   A body more than 16 blocks from the pen first walks within 12 of it.
+  The adults listed within :radius of the body before that walk are remembered; once the body stands at the pen and none is listed any
+  more (a server loads animals only near the body), it walks back to within 12 of each remembered spot to see it again.
   A lured animal follows the food only within about 10 blocks: from where it was met the body walks to the pen in short legs,
   holding still (at most 10 s) while the animal trails more than 7 behind, and gives it up (given-up :lost unseen 3 s, :lagging beyond 10) rather than outrun it.
 
@@ -160,7 +162,7 @@
   (let [m (ctx/mem c)
         axis-cell #(nth (:axis m) %)]
     (case phase
-      :survey (await (survey! c))
+      :survey (do (remember-start! c) (await (survey! c)))
       :regather (await (regather! c))
       :leash (await (leash-next! c))
       :approach (if (and (lure? c) (not (:walked m)))
