@@ -179,6 +179,7 @@
    ::torch-craft-count {:default 4 :doc "Torches one craft makes." :spec (a/int-in 1 nil)}
    ::open-skip-drop {:default 3 :doc "The most blocks the strip tunnel's start steps down while it skips open cells on its line (a stair); the tunnel then runs at that level." :spec (a/int-in 0 nil)}
    ::max-resumes {:default 2 :doc "Resumes of a cut before the job gives up." :spec (a/int-in 0 nil)}
+   ::max-restairs {:default 3 :doc "Times the descent starts a new stair where the body stands after the stair found it off its line (a reflex, a fall or a drop pick-up moved it) before the stop stands." :spec (a/int-in 0 nil)}
    ::stall-rounds {:default 5 :doc "Rounds in a row a walk to one target waits without the body getting nearer before the target is skipped as a failure." :spec (a/int-in 1 nil)}
    ::max-steps {:default 400 :doc "Pieces of work of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}
    ::zone-margin {:default 8 :doc "Before it digs, the body walks to a start cell this many blocks outside any zone it owns; its stair and tunnel stop at such a zone." :spec (a/int-in 0 nil)}
@@ -514,6 +515,8 @@
   (ctx/emit! c :mine.unreachable :info {:pos (access/cell pos) :why (:why (ctx/child-result c :walk))
                                         :text (str "mine skips " (str/join "," (access/cell pos)) ": no way to stand beside it")})
   (skip! c pos))
+
+(defn max-restairs [] (settings/get settings ::max-restairs))
 
 (defn stall-rounds [] (settings/get settings ::stall-rounds))
 
@@ -1052,6 +1055,10 @@
           (= :continue r) :continue
           (and (= :done r) (= :done (:status res)))
           (do (ctx/update-mem! c update-in [:descent :steps] (fnil + 0) (or (:steps res) 1)) :again)
+          (and (= :off-stair (:reason res)) (< (get-in (ctx/mem c) [:descent :restairs] 0) (max-restairs)))
+          (do (ctx/emit! c :mine.restair :info {:at (access/cell (cell-of (u/self-pos c))) :text (str "mine's stair finds the body off its line (" (:why res) "); it starts a new stair here")})
+              (ctx/update-mem! c #(-> % (update :children dissoc :stair) (update-in [:descent :restairs] (fnil inc 0))))
+              :again)
           :else (let [stop (or (:reason res) :declined)]
                   (if (and (zero? n) (heading-stops stop) (turn-heading! c stop))
                     :again

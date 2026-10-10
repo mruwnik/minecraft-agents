@@ -1617,6 +1617,27 @@
           (is (empty? (events-of s :mine.turned)))
           (is (= :no-stone-found (:reason (done-event s)))))))))
 
+;; Alder j48: between two stair steps something moved the body off the stair line; the stair stopped :off-stair and mine ended with no stone.
+(deftest a-stair-that-finds-the-body-off-its-line-starts-again-where-it-stands
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks (soil-over-stone 63 59) :drops cobble :inventory [{:name "stone_pickaxe" :count 1}]}})
+              world (.-world (:p s))
+              moved (atom false)]
+          (.override world "dig"
+                     (fn ^:async f [token a impl]
+                       (let [r (await (impl token a))]
+                         (when-not @moved
+                           (reset! moved true)
+                           (swap! (.. world -state) assoc-in [:self :pos] [0.5 64 2.5]))
+                         r)))
+          (core/submit! (:eng s) (spec {:block "stone" :count 2 :direction "east" :tunnel-length 4 :mend false}) {})
+          (await (run-ticks s 300))
+          (is (seq (events-of s :mine.restair)))
+          (is (<= 2 (get (inv s) "cobblestone" 0)))
+          (is (= :count (:reason (done-event s)))))))))
+
 (deftest soil-deeper-than-the-descent-limit-ends-no-stone-found
   (async done
     (tu/run-async done
