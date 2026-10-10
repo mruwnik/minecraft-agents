@@ -16,7 +16,7 @@
             [jobs.build.wood :as wood]
             [jobs.lib.trees :as trees]
             [jobs.lib.fetch :as fetch]
-            [jobs.farm.find-spot :as spot]
+            [jobs.lib.surface :as spot]
             [jobs.lib.world :as known]))
 
 (a/defargs settings

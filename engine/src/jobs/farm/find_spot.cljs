@@ -2,7 +2,7 @@
   (:require [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
-            [jobs.lib.blocks :as b]
+            [jobs.lib.surface :as surface :refer [open?]]
             [jobs.farm.till :as till]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
@@ -33,30 +33,10 @@
    :limit {:doc "how many spots to keep, 1 to 8" :spec (a/int-in 1 8) :default 3}
    :walk {:doc "walk to the best spot (finding and walking are separate; a parent can walk)" :spec boolean? :default false}})
 
-(def air #{"air" "cave_air" "void_air"})
-(defn open? "Air, or a plant a hoe's user digs first (grass, flowers): no ground." [n] (or (air n) (contains? b/clearable n)))
-(def no-floor #{"water" "lava" "bubble_column" "ice" "frosted_ice" "magma_block" "powder_snow"})
 (a/defargs settings
   {::water-reach {:default 4 :doc "Blocks from water within which farmland is hydrated." :spec (a/int-in 0 nil)}
    ::sky-extra {:default 8 :doc "Extra blocks of sky checked above a spot." :spec (a/int-in 0 nil)}})
 (defn water-reach [] (settings/get settings ::water-reach))
-
-(defn column-top
-  "The y of the surface of column x z: the highest non-air block scanning from
-  (+ from-y depth) down to (- (+ from-y 1) depth), when air lies above it. nil
-  for an unloaded cell on the way, a fluid, ice or magma surface, nothing, or a
-  covered top; grass and flowers lying on the ground are skipped (the top is the ground under them, where till works). name-fn takes {:x :y :z} and returns a block name or nil."
-  [name-fn x z from-y depth]
-  (let [low (inc (- from-y depth))]
-    (loop [y (+ from-y depth)]
-      (when (>= y low)
-        (let [n (name-fn {:x x :y y :z z})]
-          (cond
-            (nil? n) nil
-            (open? n) (recur (dec y))
-            (no-floor n) nil
-            :else (when-let [above (name-fn {:x x :y (inc y) :z z})]
-                    (when (open? above) y))))))))
 
 (defn commonest
   "The most frequent value of xs; ties go to the lowest."
@@ -157,7 +137,7 @@
                        (fn [& k] (if-let [e (find @cache k)]
                                    (val e)
                                    (let [r (apply f k)] (vswap! cache assoc k r) r)))))
-        top-of (memo (fn [x z] (column-top name-fn x z (:y from) depth)))
+        top-of (memo (fn [x z] (surface/column-top name-fn x z (:y from) depth)))
         sky-of (memo (fn [x z t] (sky-above? name-fn x z t (:y from) depth)))
         wet? (memo (fn [x z y] (hydrated? waters x y z)))
         fx (:x from) fz (:z from)

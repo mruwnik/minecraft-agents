@@ -1,12 +1,20 @@
 (ns jobs.strip.seal
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
-            [jobs.access.stair :as stair]
-            [jobs.lib.blocks :as b]
+                        [jobs.lib.blocks :as b]
             [jobs.lib.child :as child]
             [jobs.lib.found :as found]
             [jobs.lib.pace :as pace]
+            [jobs.lib.reach :as reach]
             [jobs.lib.access.rules :as rules]))
+
+(def max-steps "Pieces of work of one call before it gives the round back with :continue." 400)
+
+(defn feet-of
+  "The cell [x y z] the body stands on."
+  [c]
+  (let [{:keys [x y z]} (reach/standing-cell (:primitives c))]
+    [x y z]))
 
 (def doc
   "Block a corridor cross-section off from the base side (a mineshaft corridor, 3 wide and 3 high). One call does it
@@ -85,7 +93,7 @@
 (defn stop! [c reason detail] (finish! c :stopped reason detail))
 
 (defn on-side? [c [x _ z] axis side]
-  (let [[fx _ fz] (stair/feet-of c)
+  (let [[fx _ fz] (feet-of c)
         k (if (= axis :x) fx fz)
         plane (if (= axis :x) x z)]
     (if (= side :from) (< k plane) (> k plane))))
@@ -95,7 +103,7 @@
         r (await (child/call-walk c :walk {:pos stand-cell :range 0 :escalate false}))]
     (cond
       (= :continue r) :continue
-      (= stand-cell (stair/feet-of c)) :again
+      (= stand-cell (feet-of c)) :again
       (on-side? c at axis side) (stop! c :unreachable {:cell stand-cell})
       :else (stop! c :wrong-side {:cell stand-cell}))))
 
@@ -139,7 +147,7 @@
       (:collect (ctx/mem c)) (await (collect! c))
       (empty? todo) (finish! c :done :sealed {})
       (some #(= :container (second %)) todo) (stop! c :blocked {:cell (first (first (filter #(= :container (second %)) todo)))})
-      (not= (stand at axis side) (stair/feet-of c)) (await (go-stand! c at axis side))
+      (not= (stand at axis side) (feet-of c)) (await (go-stand! c at axis side))
       (= :loose k) (await (dig! c cell))
       :else (await (place! c cell (count todo))))))
 
@@ -149,4 +157,4 @@
   (if-let [why (bad-args (:args c))]
     (stop! c :bad-args {:why why})
     (let [n (atom 0)]
-      (await (pace/steps! c #(if (< (swap! n inc) (stair/max-steps)) (step! c) :continue))))))
+      (await (pace/steps! c #(if (< (swap! n inc) max-steps) (step! c) :continue))))))

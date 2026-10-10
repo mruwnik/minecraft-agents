@@ -9,7 +9,8 @@
             [jobs.lib.util :as u]
             [engine.test-util :as tu :refer [run-until-empty child-outcome]]
             [engine.triggers :as triggers]
-            [jobs.farm.find-spot :as fs]))
+            [jobs.farm.find-spot :as fs]
+            [jobs.lib.surface :as surface]))
 
 (defn setup [world]
   (let [clock (atom 1000000)
@@ -41,7 +42,7 @@
 (defn names-of [m] (fn [{:keys [x y z]}] (get m [x y z] "air")))
 
 (deftest column-top-table
-  (are [m expected] (= expected (fs/column-top (names-of m) 0 0 64 12))
+  (are [m expected] (= expected (surface/column-top (names-of m) 0 0 64 12))
     {[0 63 0] "dirt"} 63
     {[0 63 0] "dirt" [0 60 0] "stone"} 63
     {[0 70 0] "stone"} 70
@@ -63,9 +64,9 @@
     {[0 77 0] "dirt"} nil))
 
 (deftest column-top-is-nil-for-unloaded-or-covered
-  (is (nil? (fs/column-top (fn [{:keys [y]}] (when (not= y 70) "air")) 0 0 64 12)) "unloaded above the ground")
-  (is (nil? (fs/column-top (fn [{:keys [y]}] (cond (= y 63) "dirt" (= y 64) nil :else "air")) 0 0 64 12)) "unloaded above the top")
-  (is (= 63 (fs/column-top (fn [{:keys [y]}] (case y 63 "dirt" "cave_air")) 0 0 64 12))))
+  (is (nil? (surface/column-top (fn [{:keys [y]}] (when (not= y 70) "air")) 0 0 64 12)) "unloaded above the ground")
+  (is (nil? (surface/column-top (fn [{:keys [y]}] (cond (= y 63) "dirt" (= y 64) nil :else "air")) 0 0 64 12)) "unloaded above the top")
+  (is (= 63 (surface/column-top (fn [{:keys [y]}] (case y 63 "dirt" "cave_air")) 0 0 64 12))))
 
 (deftest score-patch-table
   (are [in expected] (= expected (fs/score-patch in))
