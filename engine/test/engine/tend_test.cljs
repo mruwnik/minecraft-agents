@@ -249,3 +249,35 @@
     (is (= :nothing-to-do (:reason w)))
     (is (= {:adults 2 :babies 1 :target 2} (select-keys w [:adults :babies :target])))
     (is (= {:breed :at-target :cull :within-target :shear :not-sheep :collect :no-drops :deposit :no-chest} (:skipped w)))))
+
+(defn track-range!
+  "Entities farther than r from the body are not listed, as a server loads animals only near the player."
+  [{:keys [p]} r]
+  (let [orig (.-entities p)]
+    (set! (.-entities p) (fn [a] (.filter (orig a) (fn [e] (<= (.-distance e) r)))))))
+
+(deftest a-body-outside-the-box-that-lists-no-animal-walks-to-the-box-and-counts-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng clock] :as s} (h/setup {:self {:pos {:x 40 :y 64 :z 0}} :entities [(cow 1 2) (cow 2 3) (cow 3 4) (cow 4 5)]} 50)]
+          (track-range! s 20)
+          (core/submit! eng (spec {:target 4}) {})
+          (dotimes [_ 60]
+            (swap! clock + 700)
+            (await (core/tick! eng)))
+          (is (true? (finished? s)))
+          (is (= 4 (:adults (done-event s)))))))))
+
+(deftest a-body-outside-the-box-sees-nothing-there-after-walking-to-it-and-ends-with-an-empty-census
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng clock] :as s} (h/setup {:self {:pos {:x 40 :y 64 :z 0}} :entities []} 50)]
+          (core/submit! eng (spec {:target 4}) {})
+          (dotimes [_ 60]
+            (swap! clock + 700)
+            (await (core/tick! eng)))
+          (is (true? (finished? s)))
+          (is (< (.-x (.-pos (.self (:p s)))) 12) "it walked to the box to look")
+          (is (= 0 (:adults (done-event s)))))))))

@@ -20,6 +20,9 @@
   - :deposit (jobs.storage.deposit): a :chest is given and produce of the kind is carried above its :keep
     entry. Produce is the hunt drops table plus eggs for chickens, never tools or breeding food.
 
+  A body outside the box that lists no animal of the kind in it first walks to the box (go-to, once; the server
+  lists animals only near the body) and counts again; the job starts for that look.
+
   A step whose conditions do not hold is skipped and booked {:skipped reason}: :at-target, :too-few-adults,
   :no-food, :within-target, :not-sheep, :no-shears, :none-shearable, :no-drops, :no-chest, :nothing-to-store,
   or :declined when the child declined.
@@ -141,11 +144,26 @@
     :deposit (decide-deposit args facts)
     {:skip :todo}))
 
+(defn look-due?
+  "Whether the body, outside the box, lists no animal of the kind in it and has not walked there to look yet: the
+  server lists animals only near the body, and sound gives a direction, not a place."
+  [c]
+  (let [{:keys [adults babies]} (cull/census c)]
+    (boolean (and (not (:looked (ctx/mem c)))
+                  (empty? adults) (empty? babies)
+                  (not (cull/in-bound? c (u/self-pos c)))))))
+
+(defn look-pos
+  "The middle column of the box, as the [x z] go-to takes (the ground of that column)."
+  [{:keys [min max]}]
+  [(js/Math.floor (/ (+ (:x min) (:x max)) 2)) (js/Math.floor (/ (+ (:z min) (:z max)) 2))])
+
 (defn check [c]
   (let [{:keys [box target] :as args} (:args c)]
     (cond
       (not box) (ctx/wait c {:reason :no-box})
       (:todo (ctx/mem c)) true
+      (look-due? c) true
       :else (let [f (facts c)
                   decisions (into {} (map (juxt identity #(decide % args f))) steps)]
               (or (boolean (some :call (vals decisions)))
@@ -171,7 +189,7 @@
     (ctx/result! c out)
     :done))
 
-(defn ^:async step
+(defn ^:async step-steps
   "One step: finish, or one call of the next step's child. :again after it ended (done or declined), :yield while it waits on the world, :done at the end."
   [c]
   (when-not (:todo (ctx/mem c))
@@ -189,6 +207,15 @@
           :declined (do (ctx/update-mem! c #(-> % (update :todo rest) (dissoc :call-args) (assoc-in [:report step] {:skipped :declined})))
                         :again)
           :yield)))))
+
+(defn ^:async step
+  "One step: first a look at the box when the body lists no animal in it, else the next step child (step-steps)."
+  [c]
+  (if (look-due? c)
+    (let [r (await (ctx/call-child c :look 'jobs.movement.go-to {:pos (look-pos (:box (:args c))) :range 3}))]
+      (when-not (= :yield r) (ctx/update-mem! c assoc :looked true))
+      (if (= :yield r) :yield :again))
+    (await (step-steps c))))
 
 (defn ^:async round
   "The whole pass: each step's child once, until the run ends; yields only while a child waits on the world."
