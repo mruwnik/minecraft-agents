@@ -74,6 +74,7 @@
    :accept {:doc "dig hazards (jobs.lib.access.rules) taken: a set of :fluid-adjacent :lava-adjacent :falling-block" :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent :falling-block}}
    :fetch {:doc "get an axe when none is carried, and the dirt or cobblestone a pillar needs (jobs.lib.fetch): true, a set of kinds or a map of limits; false chops by hand and waits :need for a pillar" :spec fetch/option? :default true}
    :pillar? {:doc "fell a log out of reach of the ground from a pillar (blocks placed, then taken back); false: such a tree is left" :spec boolean? :default true}
+   :avoid {:doc "columns [x z] of trees to leave alone (ones an earlier run found cut off)" :spec (a/coll-of (a/pred "an [x z] column" vector?)) :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
 
 (defn gate-opts [c]
@@ -207,7 +208,7 @@
   those of species within radius not marked unreachable; a tree whose base log the zones refuse is left out."
   [c radius species]
   (let [p (:primitives c)
-        excluded (unreachable-set (ctx/mem c))]
+        excluded (into (unreachable-set (ctx/mem c)) (map vec) (:avoid (:args c)))]
     (if-let [at (:at (:args c))]
       (when-let [t (tree-at p at)]
         (when-not (or (excluded [(:x at) (:z at)]) (not (log-allowed? c (:base t)))) [t]))
@@ -480,7 +481,7 @@
       (and (not chosen) (seq (:unreachable (ctx/mem c))))
       (let [why (:unreachable-why (ctx/mem c))]
         (ctx/emit! c :tree_blocked :warn (cond-> {:text "no reachable tree"} why (assoc :why why)))
-        (ctx/result! c (cond-> {:unreachable (count (:unreachable (ctx/mem c)))} why (assoc :why why)))
+        (ctx/result! c (cond-> {:unreachable (count (:unreachable (ctx/mem c))) :columns (vec (:unreachable (ctx/mem c)))} why (assoc :why why)))
         :done)
 
       (not chosen) :continue

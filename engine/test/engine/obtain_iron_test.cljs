@@ -151,6 +151,15 @@
           (await (obtain! s {:any-of ["oak_log"] :count 2 :how #{:gather} :explore true} 400))
           (is (<= 2 (get (f/inv s) "oak_log" 0)) "logs were got from the tree outside the zone"))))))
 
+(deftest a-tree-cut-off-from-the-body-is-explored-past-with-explore
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [free (into {"30,68,4" "oak_leaves" "31,67,4" "oak_leaves"} (for [y [64 65 66 67]] [(str "30," y ",4") "oak_log"]))
+              s (f/start (assoc (ore-world (merge f/tree-blocks free) []) :unreachable ["0,64,4" "0,65,4" "0,66,4" "0,67,4"]) [f/own-zone])]
+          (await (obtain! s {:any-of ["oak_log"] :count 2 :how #{:gather} :explore true} 600))
+          (is (<= 2 (get (f/inv s) "oak_log" 0)) "logs were got from the reachable tree"))))))
+
 (deftest an-iron-ingot-with-raw-iron-carried-is-smelted-by-a-smelt-child
   (async done
     (tu/run-async done

@@ -26,15 +26,17 @@
    :radius {:doc "search radius in blocks" :spec (a/num-in 0 nil) :default default-radius}
    :filter {:doc "items to collect; the species' log, sapling, stick and apple when nil" :spec (a/coll-of a/item?) :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims (passed to the felling and the planting); the rules of the game allow it" :spec boolean? :default false}
+   :avoid {:doc "columns [x z] of trees to leave alone (passed to fell-tree)" :spec (a/coll-of (a/pred "an [x z] column" vector?)) :default nil}
    :deposit-first? {:doc "deposit at the known chest first when the bag is fullish and the chest is near (jobs.lib.trip/ready!)" :spec boolean? :default true}
    :count {:doc "logs to carry: another tree is felled while fewer of the species' logs (any log when no species) are carried; nil: one tree" :spec (a/int-in 1 nil) :default nil}
    :fetch {:doc "get a missing sapling or an axe (passed to plant-sapling and fell-tree; see their :fetch): true, a set of kinds or a map of limits; false leaves the replant owed" :spec fetch/option? :default true}})
 
 (defn phases
   "The children in order: [phase job args]; the phase is also the slot. tree is the felled tree's base, if any."
-  [{:keys [species radius filter ignore-zones? fetch]} origin tree]
+  [{:keys [species radius filter ignore-zones? fetch avoid]} origin tree]
   [[:fell 'jobs.forestry.fell-tree (cond-> {:species species :radius radius :ignore-zones? ignore-zones?}
-                                     (some? fetch) (assoc :fetch fetch))]
+                                     (some? fetch) (assoc :fetch fetch)
+                                     (seq avoid) (assoc :avoid avoid))]
    [:collect 'jobs.forestry.collect-drops {:radius radius :filter (or filter (drop-filter species)) :want-items (if species [(str species "_log")] trees/log-names) :near tree :search radius}]
    [:plant 'jobs.forestry.plant-sapling (cond-> {:species species :ignore-zones? ignore-zones? :near origin :within radius}
                                          (some? fetch) (assoc :fetch fetch))]])
@@ -135,7 +137,7 @@
         (warn-owed! c)
         (result/stop! c :no-tree (str "no tree left to fell: " (logs-carried c) " of " (:count (:args c)) " logs carried"
                                       (when why (str "; the trees seen could not be reached (" why ")")))
-                      :got (logs-carried c) :why why :replant-owed (warn-replant-owed! c)))
+                      :got (logs-carried c) :why why :columns (:columns (ctx/child-result c :fell)) :replant-owed (warn-replant-owed! c)))
       (not= :done r) :continue
       (and (= :collect phase) (:tree (ctx/mem c)) (not (pos? gained)))
       (result/stop! c :nothing-collected "felled a tree but no drop came into the inventory" :got (logs-carried c))

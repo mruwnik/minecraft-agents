@@ -305,13 +305,18 @@
 (defn gather-carried [p {:keys [key]}]
   (reduce + 0 (for [[k v] (carried-counts p) :when (if (= "log" key) (log? k) (= key k))] v)))
 
+(defn cut-off?
+  "Whether the block b stands in a column of a tree an earlier gather found cut off."
+  [c b]
+  (contains? (get (ctx/mem c) :cut-off #{}) [(:x (:pos b)) (:z (:pos b))]))
+
 (defn seen-blocks-of
   "The seen blocks of a need (within ::seen-radius), nearest first, with those a zone, claim or plan footprint bars
   taking left out unless all? is true."
   [c need all?]
   (let [in (access/rules-input c)
         blocks (look/seen-blocks (:primitives c) {:match #((:seen need) %) :radius (seen-radius) :max (if all? 1 64)})]
-    (if all? blocks (filter #(:ok (access/may? in :harvest (:pos %))) blocks))))
+    (if all? blocks (filter #(and (:ok (access/may? in :harvest (:pos %))) (not (cut-off? c %))) blocks))))
 
 (defn seen-of
   "The nearest seen block of a need that may be taken, or for a wool need a sheep of its colour in range, else nil."
@@ -337,6 +342,13 @@
   [p need]
   (if (= 'jobs.forestry.harvest-wood (:job need))
     (assoc-in need [:args :count] (+ (gather-carried p need) (:count need)))
+    need))
+
+(defn with-avoid
+  "The need with the columns of trees found cut off in its args when it fells trees."
+  [c need]
+  (if-let [cut (seq (:cut-off (ctx/mem c)))]
+    (cond-> need (= 'jobs.forestry.harvest-wood (:job need)) (assoc-in [:args :avoid] (vec cut)))
     need))
 
 (defn gather-slot
@@ -427,9 +439,10 @@
 (defn tried-text
   "What a gather that was tried and failed adds to the no-source text (\"; gathering was tried and ended ..\", with the
   child's reason when it gave one), or nil when none was tried."
-  [tried why]
-  (when-let [g (:gather tried)]
-    (str "; gathering was tried and ended " (pr-str g) (when why (str " (" why ")")))))
+  ([tried] (tried-text tried nil))
+  ([tried why]
+   (when-let [g (:gather tried)]
+     (str "; gathering was tried and ended " (pr-str g) (when why (str " (" why ")"))))))
 
 (defn check [c]
   (let [a (:args c)
@@ -665,7 +678,7 @@
                       :for targets :max-distance (:max-distance o) :max-legs (:max-legs o)
                       :from (mapv #(js/Math.floor %) [(.-x here) (.-y here) (.-z here)])})
         r (await (ctx/call-child c :explore 'jobs.explore.search
-                                 (merge (explore-opts c) {:target targets :count 1 :scan-radius 16 :use-notes false :takeable true})))]
+                                 (merge (explore-opts c) {:target targets :count 1 :scan-radius 16 :use-notes false :takeable true :avoid (vec (:cut-off (ctx/mem c)))})))]
     (if (= :continue r)
       :continue
       (let [res (ctx/child-result c :explore)
@@ -690,7 +703,7 @@
   [c names have target]
   (let [p (:primitives c)
         pl (gather-plan c names (- target have))
-        need (some->> (some-> pl :gather (gather-need (game/version-of p))) (with-block c) (with-count p))]
+        need (some->> (some-> pl :gather (gather-need (game/version-of p))) (with-block c) (with-count p) (with-avoid c))]
     (cond
       (nil? need) (tried! c :gather :no-plan)
       (and (not (get-in (ctx/mem c) [:gather :before])) (pickaxe-first? c names need) (or (explore-opts c) (seen-of c need)))
@@ -723,6 +736,7 @@
                 (if (> (gather-carried p need) before)
                   (do (ctx/update-mem! c assoc-in [:gather :fruitless] 0) :again)
                   (do (when-let [w (:why res)] (ctx/update-mem! c assoc-in [:gather :why] w))
+                      (when-let [cols (seq (:columns res))] (ctx/update-mem! c update :cut-off (fnil into #{}) (map vec) cols))
                       (gather-failed! c names need (or (:reason res) :nothing-gathered) r))))))))))
 
 (defn ^:async finish-tree!

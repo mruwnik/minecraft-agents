@@ -59,6 +59,7 @@
    :max-legs {:doc "legs walked before it gives up" :spec (a/int-in 0 nil) :default 32}
    :timeout-s {:doc "seconds from the first round before it gives up, not counting the time go-to holds for day in a shelter" :spec (a/num-in 0 nil) :default 600}
    :takeable {:doc "leave out blocks a zone, claim or plan footprint bars this body from taking" :spec boolean? :default false}
+   :avoid {:doc "columns [x z] whose blocks do not count as found" :spec (a/coll-of (a/pred "an [x z] column" vector?)) :default nil}
    :use-notes {:doc "targets noted (by any body) within :max-distance count as found" :spec boolean? :default true}
    :seen-ttl-s {:doc "how long a note of a block seen lasts" :spec (a/num-in 0 nil) :default 259200}
    :entity-ttl-s {:doc "how long a note of an entity seen lasts" :spec (a/num-in 0 nil) :default 600}
@@ -222,12 +223,14 @@
     :done))
 
 (defn takeable
-  "found without the blocks a zone, claim or plan footprint bars taking, when :takeable is on."
+  "found without the blocks in :avoid columns, and (when :takeable is on) those a zone, claim or plan footprint bars taking."
   [c found]
-  (if-not (:takeable (:args c))
-    found
-    (let [in (access/rules-input c)]
-      (filter #(or (:id %) (:ok (access/may? in :harvest (:pos %)))) found))))
+  (let [{:keys [takeable avoid]} (:args c)
+        avoid (set (map vec avoid))
+        in (when takeable (access/rules-input c))]
+    (cond->> found
+      (seq avoid) (remove #(and (not (:id %)) (avoid [((:pos %) 0) ((:pos %) 2)])))
+      takeable (filter #(or (:id %) (:ok (access/may? in :harvest (:pos %))))))))
 
 (defn ^:async scan!
   "Look round (every heading, once per cell), note what was seen and the spot as searched, book the findings."
