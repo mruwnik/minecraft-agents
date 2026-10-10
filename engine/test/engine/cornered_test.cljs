@@ -722,3 +722,23 @@
           (await (core/tick! eng))
           (is (<= 60 @calls) "kept trying until the zombie was gone")
           (is (not-any? #(re-find #"cannot_escape" (pr-str %)) @seen) "never gives up on the mob that is hurting it"))))))
+
+(deftest a-body-in-water-hunted-by-a-drowned-tries-to-swim-out-before-anything-else
+  (is (= [:swim-out :seal :pillar :back-off :pit :pocket :fight] (retreat/escape-order {:swim? true})))
+  (is (= [:fight] (retreat/escape-order {:swim? true :win? true})) "an armed body that wins still fights")
+  (is (= :back-off (first (retreat/escape-order {:swim? true :creeper? true})))))
+
+(def pool
+  "Water x -4..8, y 64..65, z -4..4 over the floor: dry land beyond it, nearest at x -5."
+  (into {} (for [x (range -4 9) y [64 65] z (range -4 5)] [(key-of x y z) "water"])))
+
+(deftest a-bare-body-in-water-with-a-drowned-beside-it-swims-to-dry-land-instead-of-punching
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks pool
+                                      :entities [{:id 5 :name "drowned" :kind "hostile" :pos {:x 1.5 :y 64 :z 0.5} :health 20}]})]
+          (core/submit! eng retreat {})
+          (dotimes [_ 6] (await (core/tick! eng)))
+          (is (empty? (calls p "attack")) "no fist fight")
+          (is (= -5 (:x (first-move eng))) "the first walk is to the nearest dry land, west of the pool"))))))

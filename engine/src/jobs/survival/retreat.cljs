@@ -12,6 +12,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.reach :as reach]
             [jobs.lib.shelter :as sh]
+            [jobs.lib.step-off :as step-off]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.survival.dig-in-cells :as dig-cells]
@@ -54,6 +55,7 @@
   4. Cornered (no open direction worth a walk, or the walk is blocked; checked afresh every step) with no hostile within
      :radius: holds a second (wait, why cornered) and looks again; after :no-gain-steps such steps or holds with no gain the flight ends :keeps-off. With one within :radius: takes the safest option it has not yet failed.
      - an angry enderman near (one the client flags angry, that hurt the body this flight or is within 3 blocks; it teleports; a walk is no flight): at once, before any walk: water within 6 blocks (it keeps away from water; the body steps in and holds), else seal, pit, pocket, last of all fight.
+     - a drowned near while the body is in water (and no fight wins): swims to the nearest seen dry stand within 16 blocks first (past the mob if need be), before seal, pillar or a fist fight.
      - fight (jobs.survival.fight-back) only when jobs.lib.cost/fight-damage leaves :reserve health. Never against a creeper.
      - seal in: fill the open sides at feet and head height and the roof (dig-in's 1x1 cells) with carried :blocks,
        at most :max-places a step, the sides towards a seen ranged hostile first (feet, then head: the first blocks
@@ -163,13 +165,14 @@
   "Pure: the cornered options to try, safest first. {:win? the odds say a fight leaves reserve health (never true
   for a creeper), :creeper? one is near (it comes first), :enderman? an angry enderman is near (angry-enderman?) (it teleports, so no walk or back-off, and a
   pillar is within its reach: the body enters water within water-reach, which it avoids, else shuts itself in), :ranged? the threat shoots, :home? the body is in its home
-  room: it digs no pit or pocket in its own floor or walls}."
-  [{:keys [win? creeper? enderman? ranged? home?]}]
+  room: it digs no pit or pocket in its own floor or walls, :swim? the body is in water with a drowned near: swimming out to dry land comes first unless a fight wins}."
+  [{:keys [win? creeper? enderman? ranged? swim? home?]}]
   (cond->> (cond
              creeper? [:back-off :seal :pillar :pit :pocket :fight]
              enderman? [:water :seal :pit :pocket :fight]
              win? [:fight]
              :else (into (if ranged? [:seal] [:seal :pillar]) [:back-off :pit :pocket :fight]))
+    (and swim? (not creeper?) (not enderman?) (not win?)) (into [:swim-out])
     home? (filterv (complement #{:pit :pocket}))))
 
 (defn near-hostiles
@@ -265,6 +268,31 @@
           :again
           (do (flight/tried! c :water) nil))))))
 
+(def swim-reach
+  "Blocks within which a body in water looks for dry land to swim out to."
+  16)
+
+(defn in-water?
+  "Whether the body's feet cell reads as water."
+  [c]
+  (let [{:keys [x y z]} (u/self-pos c)]
+    (= "water" ((block-at-fn (:primitives c)) {:x (js/Math.floor x) :y (js/Math.floor y) :z (js/Math.floor z)}))))
+
+(defn ^:async swim-out!
+  "Swim to the nearest seen dry stand within swim-reach (a go-to step, past the mob if that is the only way): :again,
+  nil when there is none or the walk is blocked."
+  [c]
+  (let [p (:primitives c)
+        block-at (block-at-fn p)
+        feet (u/self-pos c)
+        dry? (fn [{:keys [x y z]}] (and (not= "water" (block-at {:x x :y y :z z})) (not= "water" (block-at {:x x :y (inc y) :z z}))))
+        to (first (step-off/candidates p {:x (js/Math.floor (:x feet)) :y (js/Math.floor (:y feet)) :z (js/Math.floor (:z feet))}
+                                       {:reach swim-reach :ok? dry?}))]
+    (when to
+      (if (await (step! c :swim-out {:x (+ 0.5 (:x to)) :y (:y to) :z (+ 0.5 (:z to))} 0))
+        :again
+        (do (flight/tried! c :swim-out) nil)))))
+
 (defn ^:async blocked!
   "Every option failed: forget them all, warn once a flight, hold a moment (wait, why cornered) and go on: the next step
   tries them again from the start (the danger still stands). The second sweep in a row ends the flight :cannot-escape."
@@ -288,6 +316,7 @@
                              :creeper? (boolean (some combat/creeper? hostiles))
                              :enderman? (angry-enderman? c hostiles)
                              :ranged? (boolean (and threat (combat/ranged? threat)))
+                             :swim? (and (boolean (some #(= "drowned" (.-name %)) hostiles)) (in-water? c))
                              :home? home?})]
     (loop [[option & more] order]
       (let [r (when-not (flight/tried? c option)
@@ -296,6 +325,7 @@
                   :seal (await (refuge/hide! c))
                   :pillar (await (refuge/pillar! c))
                   :water (await (water! c))
+                  :swim-out (await (swim-out! c))
                   :back-off (when threat (await (back-off! c threat)))
                   :pit (await (refuge/pit! c))
                   :pocket (await (refuge/pocket! c))))]
