@@ -52,6 +52,9 @@
     {[0 63 0] "magma_block"} nil
     {[0 63 0] "powder_snow"} nil
     {[0 63 0] "dirt" [0 64 0] "stone"} 64
+    {[0 63 0] "grass_block" [0 64 0] "short_grass"} 63
+    {[0 63 0] "grass_block" [0 64 0] "poppy"} 63
+    {[0 63 0] "grass_block" [0 64 0] "tall_grass" [0 65 0] "tall_grass"} 63
     {[0 63 0] "dirt" [0 64 0] "water" [0 65 0] "air"} nil
     {[0 40 0] "dirt"} nil
     {[0 53 0] "dirt"} 53

@@ -5,6 +5,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
+            [jobs.lib.blocks :as b]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.gate :as gate]
             [jobs.lib.util :as u]
@@ -17,7 +18,7 @@
   "Hoe dirt, grass_block or dirt_path into farmland over a set of ground cells, given as the box :from/:to or
   the square :center/:radius (at most 256 cells). Water nearby is not its concern.
   Needs a hoe: without one it fetches one (jobs.lib.fetch, child :fetch) while cells wait; with :fetch false, or
-  after a failed fetch, the check waits :no-tool (kind hoe) and cells left without a hoe are skipped :no-hoe. Ground cover over a cell (grass, ferns, snow layer) is dug first with
+  after a failed fetch, the check waits :no-tool (kind hoe) and cells left without a hoe are skipped :no-hoe. Ground cover over a cell (grass, ferns, flowers, snow layer) is dug first with
   a jobs.blocks.dig child. If that child declines or gives up, it counts a try.
   Cells are skipped with a reason: :not-tillable, :covered (something else above), :not-permitted (zone rules),
   :unreachable, :gone, :refused (the hoe failed twice), :no-hoe (the hoe is gone) or :cover-stuck (two failed cover
@@ -42,7 +43,9 @@
    ::max-tries {:default 2 :doc "Attempts before the job gives up." :spec (a/int-in 0 nil)}})
 (defn max-cells [] (settings/get settings ::max-cells))
 (def tillable #{"dirt" "grass_block" "dirt_path"})
-(def ground-cover #{"short_grass" "tall_grass" "fern" "large_fern" "dead_bush" "snow"})
+(def ground-cover
+  "What lies on a cell and is dug first: the plants, small flowers and snow layer a placement clears (b/clearable) and the tall flowers."
+  (into b/clearable #{"short_grass" "tall_grass" "fern" "large_fern" "dead_bush" "snow" "sunflower" "lilac" "rose_bush" "peony"}))
 (def air #{"air" "cave_air" "void_air"})
 (defn max-tries [] (settings/get settings ::max-tries))
 

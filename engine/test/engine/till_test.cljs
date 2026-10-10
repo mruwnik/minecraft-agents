@@ -125,6 +125,15 @@
           (is (= 1 (count (calls p "dig"))))
           (is (= "farmland" (block-at p {:x 1 :y 63 :z 1}))))))))
 
+(deftest till-digs-a-flower-over-a-cell-then-tills
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory hoe :blocks (assoc four "1,64,1" "poppy" "2,64,2" "sweet_berry_bush")})
+              result (await (child-outcome eng job box 20))]
+          (is (= {:tilled 3 :skipped {{:x 2 :y 63 :z 2} :covered}} result) "a poppy is cut; a berry bush is no cover")
+          (is (= "farmland" (block-at p {:x 1 :y 63 :z 1}))))))))
+
 (deftest till-without-a-hoe-and-with-fetch-false-the-check-is-false
   (async done
     (tu/run-async done
