@@ -40,7 +40,7 @@
 
   A step's floor must be solid, the cell under it neither air nor fluid (:cave-below), and everything loaded.
   A floor of air gets a carried building block (blocks/building-blocks, never an ore or valuable) after the
-  rules' may-place?, against a neighbour, or from the cell under it first when only that has a face (jobs.access.stair/floor-plan), or in a cave from the step's feet cell first (cut again) when only that has one.
+  rules' may-place?, against a neighbour, or from the cell under it first when only that has a face (jobs.access.stair/bridge-plans; a plan whose face was unseen air gives way to the next), or in a cave from the step's feet cell first (cut again) when only that has one.
   The cell under a placed floor is not judged. With no such block: :no-floor with :filler :none; with no face to place
   against at any of them (a void pocket): :no-support-floor with :cell, :tried and :why. A lava or water floor is never bridged. A go-to stair (:note) writes its placed floors to the scaffold ledger
   (purpose :stair-floor) for jobs.access.cleanup to take back once go-to's job ended (setting take-back-floors?).
@@ -494,19 +494,25 @@
 (def face-steps [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])
 
 (defn face-support?
-  "Whether a block can be placed against a face of cell: some neighbour is solid or unseen (a void pocket has none)."
-  [block-at cell]
+  "Whether a block can be placed against a face of cell: some neighbour is solid (seen), or unseen when loose?."
+  [block-at cell loose?]
   (boolean (some (fn [d] (let [n (block-at (mapv + cell d))]
-                           (or (nil? n) (not (or (rules/air n) (#{"water" "lava"} n))))))
+                           (if (nil? n)
+                             loose?
+                             (not (or (rules/air n) (#{"water" "lava"} n))))))
                  face-steps)))
 
-(defn floor-plan
-  "The cells to place for a missing floor, in order: [floor] when it has a face to place against, [support floor] when
-  only the cell under it has one (the previous floor of a stair up), else nil."
-  [block-at floor]
+(defn bridge-plans
+  "The cell lists to place for a missing floor, to try in order: [floor] when it has a face to place against, [support
+  floor] when only the cell under it has one (the previous floor of a stair up), [next floor] when only the step's feet
+  cell has one (a cave: the stair cuts it again). Cells with a seen face come before those whose face is an unseen
+  neighbour, which may be air (place answers no-support)."
+  [block-at floor next]
   (let [under (update floor 1 dec)]
-    (cond (face-support? block-at floor) [floor]
-          (face-support? block-at under) [under floor])))
+    (vec (distinct (for [loose? [false true]
+                         [probe plan] [[floor [floor]] [under [under floor]] [next [next floor]]]
+                         :when (face-support? block-at probe loose?)]
+                     plan)))))
 
 (defn ^:async place-floor!
   "Place item at cell (in the scaffold ledger when take-back-floor?): nil when it stands, else a stop map."
@@ -528,24 +534,30 @@
           (do (ctx/update-mem! c update :bridged (fnil conj #{}) cell)
               nil))))))
 
+(defn ^:async place-all!
+  "Place item at each of cells in order: nil when all stand, else the first stop map."
+  [c in item cells]
+  (loop [[cell & more] cells]
+    (let [stop (await (place-floor! c in item cell))]
+      (cond stop stop
+            (seq more) (recur more)))))
+
 (defn ^:async bridge!
-  "Place carried filler on the missing floor of the step, from the cell under it first when only that has a face to
-  place against; in a cave, the step's feet cell first when only that has one (the stair cuts it again). :again, or a
-  stop map (:no-support-floor when no cell has a face)."
+  "Place carried filler on the missing floor of the step (bridge-plans, a plan whose placing found no support gives way
+  to the next). :again, or a stop map (:no-support-floor when no plan works)."
   [c in {:keys [floor next]}]
   (let [item (blocks/pick c blocks/building-blocks)
-        cells (or (floor-plan (:block-at in) floor)
-                  (when (face-support? (:block-at in) next) [next floor]))]
+        plans (bridge-plans (:block-at in) floor next)]
     (cond
       (nil? item) {:reason :no-floor :cell floor :block ((:block-at in) floor) :filler :none
                    :why (str "no floor and no filler block carried (" (str/join ", " (take 4 blocks/building-blocks)) " ...)")}
-      (nil? cells) {:reason :no-support-floor :cell floor :tried [floor (update floor 1 dec)]
-                    :why (str "no block beside or under " (pr-str floor) " to place " item " against: the floor opens into a void")}
-      :else (loop [[cell & more] cells]
-              (let [stop (await (place-floor! c in item cell))]
-                (cond stop stop
-                      (seq more) (recur more)
-                      :else :again))))))
+      (empty? plans) {:reason :no-support-floor :cell floor :tried [floor (update floor 1 dec) next]
+                      :why (str "no block beside, under or above " (pr-str floor) " to place " item " against: the floor opens into a void")}
+      :else (loop [[plan & more] plans]
+              (let [stop (await (place-all! c in item plan))]
+                (cond (nil? stop) :again
+                      (and (= :no-support-floor (:reason stop)) (seq more)) (recur more)
+                      :else stop))))))
 
 (defn ^:async walk-into!
   "Walk the body into cell [x y z] with a go-to child in slot (no escalation: the dig is this job's own): :continue

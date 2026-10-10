@@ -49,12 +49,18 @@
   (let [named (set cells)]
     (fn [cell] (if (named cell) "stone" "air"))))
 
-(deftest a-floor-is-placed-against-a-neighbour-or-from-the-cell-under-it-else-it-has-no-support
-  (let [floor [4 60 0]]
-    (is (= [floor] (stair/floor-plan (solid-at [3 60 0]) floor)) "a face beside it")
-    (is (= [[4 59 0] floor] (stair/floor-plan (solid-at [3 59 0]) floor)) "only the cell under has a face: support first")
-    (is (nil? (stair/floor-plan (solid-at [9 9 9]) floor)) "a void pocket")
-    (is (= [floor] (stair/floor-plan (fn [cell] (when (= cell [5 60 0]) nil)) floor)) "an unseen neighbour may be solid")))
+(deftest a-floor-is-placed-against-a-neighbour-or-from-the-cell-under-it-or-the-step-above-else-it-has-no-support
+  (let [floor [4 60 0] next [4 61 0]
+        plans #(stair/bridge-plans % floor next)]
+    (is (= [[floor]] (plans (solid-at [3 60 0]))) "a face beside it")
+    (is (= [[[4 59 0] floor]] (plans (solid-at [3 59 0]))) "only the cell under has a face: support first")
+    (is (= [[next floor]] (plans (solid-at [3 61 0]))) "only the step's feet cell has one: placed first, cut again")
+    (is (empty? (plans (solid-at [9 9 9]))) "a void pocket")))
+
+(deftest an-unseen-neighbour-is-tried-only-after-the-cells-with-a-known-face
+  (let [floor [4 60 0] next [4 61 0]
+        unseen-east (fn [cell] (cond (= cell [5 60 0]) nil (= cell [3 61 0]) "stone" :else "air"))]
+    (is (= [[next floor] [floor]] (stair/bridge-plans unseen-east floor next)))))
 
 (deftest stair-index-finds-the-step-on-the-line-only
   (are [feet dir heading i] (= i (stair/stair-index [0 65 0] feet dir heading 8))
