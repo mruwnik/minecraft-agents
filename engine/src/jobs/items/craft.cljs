@@ -312,9 +312,14 @@
         (give-up! c made status)))))
 
 (defn ^:async step!
-  "Stop when the target is carried, else craft the rest and act on the status: :again, :continue (go-to waits) or :done."
+  "Stop when the target is carried, else craft the rest and act on the status: :again, :continue (go-to waits) or :done.
+  A table known to be out of reach is walked to first: the craft act would only fail again while the walk waits."
   [c]
-  (await (settle! c (await (craft-act! c)))))
+  (let [table (:table (ctx/mem c))]
+    (if (and table (not (u/within? (u/self-pos c) table 3)))
+      (let [have (storage/carried (u/inventory (:primitives c)) (:item (:args c)))]
+        (await (reach-table! c (- have (:start (ctx/mem c) have)))))
+      (await (settle! c (await (craft-act! c)))))))
 
 (defn ^:async round
   "The whole craft in one call: step! until it is done or stopped."

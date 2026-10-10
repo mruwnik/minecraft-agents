@@ -9,7 +9,8 @@
             [engine.events :as events]
             [engine.test-util :as tu :refer [child-outcome]]
             [engine.triggers :as triggers]
-            [jobs.items.craft :as craft]))
+            [jobs.items.craft :as craft]
+            [jobs.lib.child :as child]))
 
 (defn setup [world]
   (let [clock (atom 1000000)
@@ -130,6 +131,19 @@
             (is (= {:made 0 :status :stopped :reason "unreachable"} result))
             (is (= 3 (count (tu/walked-to eng))))
             (is (some #(= :craft.gave-up (:kind %)) @seen))))))))
+
+(deftest craft-does-not-repeat-the-craft-act-while-the-walk-to-its-table-waits
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [walks (atom 0)
+              orig child/call-walk]
+          (set! child/call-walk (fn [_c _slot _args] (swap! walks inc) (js/Promise.resolve :continue)))
+          (try
+            (let [[_ p _ _] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks table-block} {:item "bread" :table table}))]
+              (is (< 1 @walks) "the walk was asked in several rounds")
+              (is (= 1 (count (calls p "craft"))) "one failed act, then only the walk until it arrives"))
+            (finally (set! child/call-walk orig))))))))
 
 (deftest craft-with-a-full-inventory
   (async done
