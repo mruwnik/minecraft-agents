@@ -97,7 +97,7 @@
   for the block (child :fetch) first, then walks back to the cell it stood on (child :fetch-back) and goes on. A
   parent's stair child does not fetch.
   :by-hand (default false): a block no carried tool clears is dug bare-handed anyway (slow, its drop lost): go-to's
-  last resort when it has no pickaxe.")
+  last resort when it has no pickaxe. Also done once the fetch of a tool for that block failed.")
 
 (a/defargs args
   {:dir {:doc ":down or :up" :spec #{:down :up} :default :down}
@@ -229,15 +229,23 @@
   [p block]
   (tools/needs-tool-to-clear? p block))
 
-(defn lacks-tool?
-  "no-tool?, unless :by-hand digs it bare-handed."
+(defn by-hand?
+  "Whether block is dug bare-handed: :by-hand asks for it, or the fetch of a tool for it failed (the way out must open
+  even with no pickaxe to be had)."
   [c block]
-  (and (not (:by-hand (:args c))) (no-tool? (:primitives c) block)))
+  (and (no-tool? (:primitives c) block)
+       (or (:by-hand (:args c))
+           (fetch/failed? c 'jobs.access.stair {:reason :no-tool :block block}))))
+
+(defn lacks-tool?
+  "no-tool?, unless it is dug by hand (by-hand?)."
+  [c block]
+  (and (not (by-hand? c block)) (no-tool? (:primitives c) block)))
 
 (defn drop-room?
   "Room for block's drop, or no drop to keep: a :by-hand dig with no tool that harvests it loses it."
   [c block]
-  (or (and (:by-hand (:args c)) (no-tool? (:primitives c) block))
+  (or (by-hand? c block)
       (room-for? (:primitives c) (blocks/item-name {:block block}))))
 
 (defn access-world

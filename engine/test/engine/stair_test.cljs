@@ -997,6 +997,15 @@
           (is (nil? (waiting s)))
           (is (seq (digs p)) "dug bare-handed"))))))
 
+(deftest a-stair-digs-bare-handed-once-the-tool-fetch-failed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p] :as s} (await (stair! {:blocks ground :inventory []} east (fn [_])))]
+          (is (= :done (:status @out)) (pr-str @out))
+          (is (seq (events-of s :fetch.failed)))
+          (is (seq (digs p)) "dug bare-handed"))))))
+
 (deftest a-stair-digs-an-exposed-ore-beside-the-way-unless-told-not-to-or-lava-touches-it
   (async done
     (tu/run-async done

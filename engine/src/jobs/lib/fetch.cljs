@@ -163,6 +163,12 @@
       f (ctx/wait c (assoc w :fetch (shown f)))
       :else true)))
 
+(defn failed?
+  "Whether the fetch for wait reason w of job already failed lately (nothing left to wait for)."
+  [c job w]
+  (boolean (when-let [pl (some->> (opts c job) (plan-for w))]
+             (failure c (:key pl)))))
+
 (defn tighten
   "Limits o tightened by a wait's limits l: the sources both allow, the shorter :minutes; other keys of l fill in."
   [o l]
