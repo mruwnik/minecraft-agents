@@ -362,10 +362,12 @@
   "One fill: {:world :fill :leaks} with the leaks found (the unloaded cells too); nil when there is no start and no
   unloaded cell was read looking for one."
   [{:keys [block-at at box max-cells sealed near]}]
-  (let [world (make-world block-at sealed)
+  (let [scan (make-world block-at sealed)
         seeds (cond
-                at (seeds-at world at)
-                box (seeds-in-box world box))]
+                at (seeds-at scan at)
+                box (seeds-in-box scan box))
+        ;; the scan of a tall box reads every cell under the floors; only what the fill reads can leak
+        world (if (and box (seq seeds)) (make-world block-at sealed) scan)]
     (when (or (seq seeds) (seq @(:unloaded world)))
       (let [{:keys [seen exits truncated?] end :last :as fill} (fill world seeds box max-cells)
             found (cond

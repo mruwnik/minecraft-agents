@@ -305,6 +305,13 @@
         r (pen/check {:block-at (block-at-from fence-ring) :box tall})]
     (is (true? (:closed? r)))))
 
+(deftest a-box-taller-than-the-pen-ignores-unseen-cells-under-its-floor
+  (let [deep {:min {:x 0 :y 55 :z 0} :max {:x 4 :y 80 :z 4}}
+        buried (into {} (for [x (range 0 5) z (range 0 5) y [58 59 60]] [[x y z] :unloaded]))
+        r (pen/check {:block-at (block-at-from (merge fence-ring buried)) :box deep})]
+    (is (true? (:closed? r)))
+    (is (empty? (:leaks r)))))
+
 ;; ------------------------------------------------------------------ membership
 
 (deftest in-pen-reads-the-feet-cell-of-a-position
