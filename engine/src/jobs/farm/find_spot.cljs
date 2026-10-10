@@ -3,6 +3,7 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as b]
+            [jobs.farm.till :as till]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
@@ -19,7 +20,8 @@
   :water-share :sky :away :y}; the info find-spot.found lists them all. A pos is the north-west corner at ground level.
   Score = level (% of the patch's cells at its commonest ground height y, 0-100) + 25 x water-share + 15 for open sky,
   less :work (sum of blocks the other cells are off y, at most 40) and :away / 4 (blocks from :center, at most 30).
-  A spot with level under 100 has cells to level or build up.
+  A spot with level under 100 has cells to level or build up. :farmable is the % of its cells whose ground a hoe makes
+  farmland of (dirt, grass, path, coarse or rooted dirt); every missing tenth costs 4 points.
   :reason is :none (no patch found) or :unreachable (walk failed).")
 
 (a/defargs args
@@ -66,7 +68,7 @@
 (defn score-patch
   "Score a patch {:tops [y ...] :water-share 0..1 :sky bool :away dist}, nil
   when any top is nil."
-  [{:keys [tops water-share sky away]}]
+  [{:keys [tops water-share sky away farmable]}]
   (when-not (some nil? tops)
     (let [y (commonest tops)
           work (reduce + (map #(js/Math.abs (- % y)) tops))
@@ -74,9 +76,15 @@
           away (or away 0)
           score (- (+ level (js/Math.round (* 25 water-share)) (if sky 15 0))
                    (min 40 work)
-                   (min 30 (js/Math.round (/ away 4))))]
-      {:y y :level level :work work :water-share water-share :sky (boolean sky)
-       :away (js/Math.round away) :score score})))
+                   (min 30 (js/Math.round (/ away 4)))
+                   (if farmable (js/Math.round (* 40 (- 1 farmable))) 0))]
+      (cond-> {:y y :level level :work work :water-share water-share :sky (boolean sky)
+               :away (js/Math.round away) :score score}
+        farmable (assoc :farmable (js/Math.round (* 100 farmable)))))))
+
+(def farmable-ground
+  "The grounds a hoe makes farmland of (coarse and rooted dirt in two passes)."
+  (into #{"coarse_dirt" "rooted_dirt"} till/tillable))
 
 (defn hydrated?
   "True when a water cell of water-set (a set of [x y z]) lies within 4 in x and
@@ -162,7 +170,8 @@
                    (when (not-any? nil? tops)
                      (let [wetn (count (filter true? (map (fn [[cx cz] t] (wet? cx cz t)) cols tops)))
                            sky (every? true? (map (fn [[cx cz] t] (sky-of cx cz t)) cols tops))
-                           s (score-patch {:tops tops :water-share (/ wetn (count cols)) :sky sky
+                           farm (count (filter true? (map (fn [[cx cz] t] (contains? farmable-ground (name-fn {:x cx :y t :z cz}))) cols tops)))
+                           s (score-patch {:tops tops :water-share (/ wetn (count cols)) :sky sky :farmable (/ farm (count cols))
                                            :away (js/Math.hypot (- (+ x (/ (dec w) 2)) fx) (- (+ z (/ (dec h) 2)) fz))})]
                        (when s (assoc s :pos {:x x :y (:y s) :z z})))))))]
     (loop [rs (drop-while #(< % next-ring) rings) found found]

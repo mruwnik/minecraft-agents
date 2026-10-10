@@ -79,6 +79,8 @@
     {:y 60 :level 91 :work 30 :water-share 0.5 :sky false :away 200 :score 44}
     {:tops [60 80] :water-share 0 :sky false :away 400}
     {:y 60 :level 50 :work 20 :water-share 0 :sky false :away 400 :score 0}
+    {:tops [63 63 63 63] :water-share 0 :sky true :away 0 :farmable 0.5}
+    {:y 63 :level 100 :work 0 :water-share 0 :sky true :away 0 :farmable 50 :score 95}
     {:tops [63 nil] :water-share 0 :sky true :away 0} nil))
 
 (deftest hydrated-table
@@ -334,3 +336,9 @@
                                 text)
                       (:spots r))
               text))))))
+
+
+(deftest a-stone-patch-scores-below-a-grass-patch
+  (let [p (tu/seeing-all (tu/fake {:blocks (merge (patch 0 0 3 3 63 "stone") (patch 10 0 3 3 63 "grass_block"))}))
+        spots (fs/scan p {:w 3 :h 3 :range 12 :depth 4 :limit 2} {:x 1 :y 64 :z 1})]
+    (is (= [100 0] (mapv :farmable (sort-by (comp - :farmable) spots))))))
