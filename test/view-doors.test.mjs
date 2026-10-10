@@ -62,6 +62,9 @@ for (const name of DOORS) {
 
 // ---- fence gates, trapdoors
 const blockSource = makeBlockSource(Chunk.registry, path.join(import.meta.dirname, '../textures'))
+const Chunk26 = makeChunkClass('26.1')
+const Block26 = prismarineBlock(Chunk26.registry)
+const source26 = makeBlockSource(Chunk26.registry, path.join(import.meta.dirname, '../textures'))
 const infoOf = (name, props) => blockSource.info(stateOf(name, props))
 
 test('an open fence gate is drawn as boxes inside its cell, not as a plant', () => {
@@ -85,6 +88,14 @@ test('a fence is drawn as a post with two rails to each side it joins, inside it
   const armsAt = y => info.boxes.filter(b => b[0] === 0 || b[3] === 1).filter(b => b[1] <= y && y < b[4]).length
   assert.equal(armsAt(0.65), 0, 'a gap between the rails')
   assert.equal(armsAt(0.45), 2, 'the lower rail on both sides')
+})
+
+test('leaf litter is a thin tinted layer on the ground, not an upright grey plant', () => {
+  const info = Block26.fromProperties('leaf_litter', { segment_amount: 4, facing: 'north' }, 0)
+  const drawn = source26.info(info.stateId)
+  assert.equal(drawn.kind, 'boxes')
+  assert.ok(drawn.boxes.every(b => b[4] <= 0.125), 'a layer on the floor')
+  assert.ok(source26.texture('leaf_litter', 'top', {})?.tint, 'tinted by the dry foliage colour')
 })
 
 const GATES = ['oak', 'spruce', 'birch', 'jungle', 'acacia', 'dark_oak', 'mangrove', 'cherry', 'bamboo', 'crimson', 'warped'].map(w => `${w}_fence_gate`)

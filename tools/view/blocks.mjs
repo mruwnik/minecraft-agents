@@ -5,6 +5,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import prismarineBlock from 'prismarine-block'
 import { decodePng, textureCandidates, tintOf } from './renderer.mjs'
+import { DRY_FOLIAGE_FALLBACK } from './tints.mjs'
 
 const AIR = new Set(['air', 'cave_air', 'void_air', 'light', 'barrier', 'structure_void'])
 const FULL_CUBE = JSON.stringify([[0, 0, 0, 1, 1, 1]])
@@ -31,6 +32,9 @@ const fenceBoxes = props => [
   ...Object.entries(ARMS).filter(([side]) => props[side] === true || props[side] === 'true').flatMap(([, box]) => RAILS.map(([lo, hi]) => box(lo, hi)))
 ]
 
+// Leaf litter has no collision shape (the renderer would stand it up as a plant); it is a layer 1/16 thick over the cell, whatever its segments.
+const LITTER_BOXES = [[0, 0, 0, 1, 0.0625, 1]]
+
 export function makeBlockSource (registry, textureDir) {
   const Block = prismarineBlock(registry)
   const images = new Map()
@@ -40,7 +44,7 @@ export function makeBlockSource (registry, textureDir) {
   const image = name => {
     if (images.has(name)) return images.get(name)
     const file = path.join(textureDir, `${name}.png`)
-    const decoded = fs.existsSync(file) ? { ...decodePng(fs.readFileSync(file)), tint: tintOf(name) } : null
+    const decoded = fs.existsSync(file) ? { ...decodePng(fs.readFileSync(file)), tint: tintOf(name) ?? (name === 'leaf_litter' ? DRY_FOLIAGE_FALLBACK : undefined) } : null
     images.set(name, decoded)
     return decoded
   }
@@ -56,6 +60,7 @@ export function makeBlockSource (registry, textureDir) {
     if (b.name === 'water' || b.name === 'lava') return { ...base, kind: 'cube' }
     if (b.name.endsWith('_fence_gate') && base.props.open) return { ...base, kind: 'boxes', boxes: openGateBoxes(base.props.facing) }
     if (b.name.endsWith('_fence')) return { ...base, kind: 'boxes', boxes: fenceBoxes(base.props) }
+    if (b.name === 'leaf_litter') return { ...base, kind: 'boxes', boxes: LITTER_BOXES }
     if (!b.shapes.length) return { ...base, kind: 'cross' }
     return JSON.stringify(b.shapes) === FULL_CUBE ? { ...base, kind: 'cube' } : { ...base, kind: 'boxes', boxes: b.shapes }
   }
