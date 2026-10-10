@@ -365,10 +365,29 @@
    (let [picked (mapv scenario-id (offered-named eng ids))]
      {:ok true :op :decline :declined picked :offered (settle-offer! eng picked)})))
 
+(def spec-keys [:trigger :when :job :args :persistence :cooldown-s :level :backoff :builtin?])
+
+(defn refresh-defaults!
+  "Entries still as the scenario or an upgrade put them (:by, which any agent edit replaces) take the current default
+  spec; put! keeps their mute and place. One trigger.refreshed event per entry that differs."
+  [eng register]
+  (doseq [d register
+          :let [id (scenario-id d)
+                old (find-entry (core/state eng) id)
+                fresh (entry-of eng (assoc d :id id :by (:by old)))]
+          :when (and old (#{:scenario :upgrade} (:by old)) (not= (select-keys old spec-keys) (select-keys fresh spec-keys))
+                     (nil? (entry-problem (:jobs eng) (:triggers eng) d)))]
+    (put! eng fresh)
+    (core/emit! eng {:source :system :kind :trigger.refreshed :level :info :reflex id
+                     :was (pr-str (:job old)) :now (pr-str (:job fresh))
+                     :text (str (name id) " refreshed to the current default")})))
+
 (defn resume-scenario!
-  "On a restart with a scenario: the register stays as saved. Ids the body has never had are the new defaults; they are
+  "On a restart with a scenario: the register stays as saved, except that unedited default entries are refreshed to the
+  current spec. Ids the body has never had are the new defaults; they are
   added at once when upgrade? is set, else offered with one attention request. Returns the offered ids."
   [eng {:keys [register]} upgrade?]
+  (refresh-defaults! eng register)
   (swap! (:state eng) (fn [s] (update s :seen-triggers #(into (or % #{}) (map :id) (:register s)))))
   (let [seen (:seen-triggers (core/state eng))
         fresh (filterv #(not (contains? seen (scenario-id %))) register)

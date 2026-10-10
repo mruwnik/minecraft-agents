@@ -546,3 +546,30 @@
   (let [{:keys [eng]} (restarted identity)]
     (is (= :bad-ids (:reason (api/request! eng {:op :decline :ids "night"}))))
     (is (= :bad-ids (:reason (api/request! eng {:op :upgrade :ids [:Night]}))))))
+
+;; ---------------------------------------------------------------- changed default specs
+
+(def day3 '{:register [{:trigger :high} {:id :bread-low :when (flag :low) :job (spin)}]})
+
+(deftest a-restart-refreshes-scenario-entries-to-the-current-default-and-keeps-the-mute
+  (let [{:keys [eng seen]} (restarted #(api/request! % {:op :mute :id :bread-low :ttl-s 600}))
+        muted (get-in (core/state eng) [:changes :bread-low :mute])]
+    (api/resume-scenario! eng day3 false)
+    (is (= (quote (spin)) (:job (entry eng :bread-low))))
+    (is (= muted (get-in (core/state eng) [:changes :bread-low :mute])) "mute and its ttl kept")
+    (is (= [:bread-low] (mapv :reflex (of-kind seen :system :trigger.refreshed))) "one event, only the changed entry")))
+
+(deftest a-restart-leaves-agent-edited-entries-and-unchanged-defaults-alone
+  (let [{:keys [eng seen]} (restarted #(api/request! % {:op :put :id :bread-low :when '(flag :mine) :job '(quick) :by "agent"}))]
+    (api/resume-scenario! eng day3 false)
+    (is (= '(flag :mine) (:when (entry eng :bread-low))))
+    (is (= (quote (quick)) (:job (entry eng :bread-low))))
+    (is (empty? (of-kind seen :system :trigger.refreshed)))))
+
+(deftest a-second-restart-with-the-same-default-refreshes-nothing
+  (let [{:keys [eng seen]} (restarted #(api/request! % {:op :mute :id :bread-low :ttl-s 600}))]
+    (api/resume-scenario! eng day3 false)
+    (swap! (:state eng) assoc-in [:reflex-state :bread-low] {:marker 1})
+    (api/resume-scenario! eng day3 false)
+    (is (= 1 (count (of-kind seen :system :trigger.refreshed))))
+    (is (= {:marker 1} (get-in (core/state eng) [:reflex-state :bread-low])) "runtime state not reset")))
