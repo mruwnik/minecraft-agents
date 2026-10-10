@@ -105,13 +105,14 @@
 
 (defn die!
   "A death that happened 5 s ago and a respawn 3 s ago: the body is alive again and settled."
-  [eng data]
-  (let [store (:store eng)
-        now ((:now @store))
-        entry (fn [t d] {:t t :wt ((:world-time @store)) :data d})]
-    (swap! store update :data
-           #(-> % (mem/add-entry :died (entry (- now 5000) data) nil)
-                (mem/add-entry :respawned (entry (- now 3000) {:pos {:x 0 :y 64 :z 0}}) nil)))))
+  ([eng data] (die! eng data 5000))
+  ([eng data ago-ms]
+   (let [store (:store eng)
+         now ((:now @store))
+         entry (fn [t d] {:t t :wt ((:world-time @store)) :data d})]
+     (swap! store update :data
+            #(-> % (mem/add-entry :died (entry (- now ago-ms) data) nil)
+                 (mem/add-entry :respawned (entry (- now (- ago-ms 2000)) {:pos {:x 0 :y 64 :z 0}}) nil))))))
 
 (defn recovered-trip [eng] (:data (mem/latest (mem/view (:store eng)) :recover-trip)))
 
@@ -512,6 +513,8 @@
           (die! eng {:pos death-pos :inventory diamonds})
           (core/submit! eng job {})
           (await (cut-at-the-walk! eng p (fn [] (swap! clock + 10) (die! eng {:pos second-death-pos :inventory diamonds}))))
+          (await (run-until-empty eng 15))
+          (core/submit! eng job {})
           (await (run-until-empty eng 15))
           (is (= second-death-pos (last (tu/walked-to eng))))
           (is (= :collected (:decision (recovered eng))))

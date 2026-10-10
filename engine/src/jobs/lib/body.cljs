@@ -27,13 +27,13 @@
                       (contains? fires (u/feel-name p (update feet :y inc))))
                   (not-any? #(= "fire_resistance" (.-name %)) (array-seq (.-effects self)))))))
 
-(defn unrecovered-death
-  "The latest :died entry when no :recovered entry is newer, else nil."
+(defn open-deaths
+  "The :died entries (oldest first) no :recovered entry covers: one with the death's :death-t, or, from before
+  :recovered carried it, any newer one."
   [view]
-  (let [died (mem/latest view :died)
-        recovered (mem/latest view :recovered)]
-    (when (and died (or (nil? recovered) (> (:t died) (:t recovered))))
-      died)))
+  (let [recovered (mem/entries view :recovered)
+        covered? (fn [died] (some #(if-let [t (:death-t (:data %))] (= t (:t died)) (> (:t %) (:t died))) recovered))]
+    (into [] (remove covered?) (mem/entries view :died))))
 
 (defn respawned-since?
   "True when a :respawned entry newer than death exists: the body is alive again."

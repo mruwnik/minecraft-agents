@@ -40,7 +40,7 @@
 
 (def doc
   "After a death, go back for the drops when they are worth it.
-  Takes the latest :died entry with no newer :recovered; once a death is decided (a skip too) the check waits :no-drops and the wait names the decision. The check holds while a death is unrecovered, however old,
+  Serves one :died entry no :recovered covers (its :death-t): the one a trip is keyed to, else the pile inside its window with the best value net of the walk, so an older open pile is not lost to a newer death. Once every death is decided (a skip too) the check waits :no-drops and the wait names the decision. The check holds while a death is unrecovered, however old,
   so an expired trip still gets to write :abandoned.
   One run is the whole trip: it holds still (declared :respawning, then :settling) until a :respawned entry newer than
   the death exists and its 2 s have passed (no decision, no walk), decides, walks, collects and writes :recovered.
@@ -53,6 +53,7 @@
   - Cost: a trip of 10, 0.3 per block of straight distance, and 10 per point of route danger (jobs.lib.cost/route-danger)
     past the hostiles the body knows of (seen or heard, jobs.lib.danger/known-hostiles; :danger-overrides, after armour),
     many times dearer for a mob the body (its best weapon, armour, health) cannot afford to fight.
+    The killer named in the :died cause is assumed at the pile for ::killer-guard-ms after the death only.
   - A pile in water (its cell or the one above) or lost to drowning adds :wet-danger points of route danger (named water or drowning).
   - Infinite when lava, fire or the void took the pile, or the walk would end after the despawn.
   A skip for danger alone (the pile would be fetched were the route safe) is not final: the run ends :declined, the death stays open and the died trigger weighs the pile anew until the window closes; a skip for value is final.
@@ -95,8 +96,10 @@
    ::max-blocked-retries {:default 3 :doc "Walks of one trip that did not arrive before it is given up as :unreachable." :spec (a/int-in 1 nil)}
    ::wet-danger {:default 30 :doc "Points of route danger added for a pile in water or lost to drowning (a swim with the air running out); 10 cost each." :spec (a/num-in 0 nil)}
    ::seal-radius {:default 4 :doc "Scaffold blocks this body placed within this many blocks of the pile (a flee seal) are taken back when they keep it out of reach." :spec (a/num-in 0 nil)}
+   ::killer-guard-ms {:default 60000 :doc "How long after a death its killer is assumed to still stand at the pile; later only the hostiles the body knows of count." :spec (a/num-in 0 nil)}
    ::bed-away-blocks {:default 10 :doc "A respawn farther than this from the bed the body slept in is reported." :spec (a/int-in 0 nil)}})
 (defn seal-radius [] (settings/get settings ::seal-radius))
+(defn killer-guard-ms [] (settings/get settings ::killer-guard-ms))
 (defn wet-danger [] (settings/get settings ::wet-danger))
 (defn arrive-range [] (settings/get settings ::arrive-range))
 (defn max-hostile-cuts [] (settings/get settings ::max-hostile-cuts))
@@ -147,14 +150,33 @@
                       :text (str "the latest death is already decided: " (decision-text (:decision decision) decision nil))))))
 
 (defn check [c]
-  (or (some? (body/unrecovered-death (ctx/view c)))
+  (or (seq (body/open-deaths (ctx/view c)))
       (ctx/wait c (decided-wait (ctx/view c)))))
+
+(defn death-score
+  "What a death's pile is worth net of the walk to it: its carried items' value less 0.3 per block."
+  [c died]
+  (let [{:keys [pos inventory]} (:data died)]
+    (- (:value (cost/item-value inventory :overrides (:value-overrides (:args c))))
+       (* 0.3 (if pos (u/dist (u/self-pos c) pos) 0)))))
+
+(defn current-death
+  "The death this run serves: the one its memory is keyed to while still open, else the open death inside its window
+  whose pile is best (value net of the walk), else the latest open one (past its window: it ends :abandoned)."
+  [c]
+  (let [open (body/open-deaths (ctx/view c))
+        keyed (some #(when (= (:t %) (:death-t (ctx/mem c))) %) open)
+        fresh (filterv #(< (game/ticks-since % (ctx/view c)) game/despawn-ticks) open)]
+    (or keyed
+        (when (seq fresh) (apply max-key #(death-score c %) fresh))
+        (peek open))))
 
 (defn finish!
   "Write the :recovered entry, report the decision and end the job."
   [c decision fields]
-  (let [pos (:pos (:data (body/unrecovered-death (ctx/view c))))]
-    (ctx/remember! c :recovered (merge {:decision decision} fields) recovered-policy)
+  (let [death (current-death c)
+        pos (:pos (:data death))]
+    (ctx/remember! c :recovered (merge {:decision decision :death-t (:t death)} fields) recovered-policy)
     (ctx/emit! c :recover-drops.decided :info
                (assoc (select-keys fields [:value :cost :reason :items :left :parts :top-items :top-mobs])
                       :decision decision :pos pos
@@ -218,7 +240,7 @@
         worth (cost/item-value inventory :overrides (:value-overrides (:args c)))
         route (when pos (cost/straight-route kind-at here pos))
         version (game/version-of p)
-        guard (when (and pos (string? cause)) [{:name cause :pos pos}]) ; route-danger drops a cause that is no hostile mob
+        guard (when (and pos (string? cause) (< elapsed (killer-guard-ms))) [{:name cause :pos pos}]) ; route-danger drops a cause that is no hostile mob
         threat (if route
                  (cost/route-danger version kind-at route (concat (danger-q/seen-hostiles p) guard) (.-equipment (.self p))
                                     :overrides (:danger-overrides (:args c)) :weapon (combat/best-weapon p combat/default-weapons) :health (.-health (.self p)))
@@ -502,7 +524,7 @@
   (save-trip! c)
   (ctx/emit! c :recover-drops.decided :info
              (assoc (select-keys decided [:value :cost :parts :top-items :top-mobs])
-                    :decision :skip :retry true :pos (:pos (:data (body/unrecovered-death (ctx/view c))))
+                    :decision :skip :retry true :pos (:pos (:data (current-death c)))
                     :text (str (decision-text :skip decided (:margin (:args c))) "; looks again")))
   :declined)
 
@@ -566,7 +588,7 @@
   :declined when a danger is within :danger-radius (the hostile reflex acts, the trigger fires again) or the walk
   did not arrive."
   [c]
-  (let [entry (body/unrecovered-death (ctx/view c))]
+  (let [entry (current-death c)]
     (when entry (key-to-death! c entry))
     (if (nil? entry)
       :done
@@ -577,6 +599,6 @@
         (if (= :declined waited)
           :declined
           (loop []
-            (let [entry (body/unrecovered-death (ctx/view c))
+            (let [entry (current-death c)
                   r (if entry (await (step! c entry)) :done)]
               (if (= :next r) (recur) r))))))))

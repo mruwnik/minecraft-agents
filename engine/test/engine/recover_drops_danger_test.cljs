@@ -151,6 +151,34 @@
           (await (run-until-empty eng 20))
           (is (= :collected (:decision (recovered eng)))))))))
 
+(deftest an-older-open-pile-is-fetched-before-a-newer-empty-one
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:floor tu/walk-floor :entities dt/drops})]
+          (die! eng {:pos dt/death-pos :inventory dt/diamonds} 60000)
+          (die! eng {:pos {:x 5 :y 64 :z 0} :inventory []} 5000)
+          (core/submit! eng job {})
+          (await (run-until-empty eng 20))
+          (is (= :collected (:decision (recovered eng))) "the pile with the diamonds first")
+          (is (true? (died/died nil (mem/view (:store eng)) {})) "the newer death is still open")
+          (core/submit! eng job {})
+          (await (run-until-empty eng 20))
+          (is (= [:collected :skip] (mapv (comp :decision :data) (mem/entries (mem/view (:store eng)) :recovered))))
+          (is (false? (died/died nil (mem/view (:store eng)) {}))))))))
+
+(deftest a-killer-guard-ends-with-the-minute-after-the-death
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pile dt/death-pile-of-the-field-report
+              {:keys [eng seen]} (setup {:floor tu/walk-floor :entities (vec (pile-drops pile))})]
+          (die! eng {:pos dt/death-pos :inventory pile :cause "skeleton"} 120000)
+          (core/submit! eng job {})
+          (await (run-until-empty eng 20))
+          (is (re-find #"^fetch: " (decided-text seen)))
+          (is (= :collected (:decision (recovered eng)))))))))
+
 (deftest a-second-run-after-a-skip-says-the-death-was-decided
   (async done
     (tu/run-async done
