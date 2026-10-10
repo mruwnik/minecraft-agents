@@ -759,10 +759,10 @@ node engine/tools/say.mjs Bob --world test [--to Steve] "message"       # chat, 
 node engine/tools/snapshot.mjs Bob --world test [--yaw 90 --pitch -20 --look-at X,Y,Z]   # PNG of its view: draws its seen entities, prints :heard and :light; a torch held in either hand lights it (14, less 1 per block)
 node engine/tools/time.mjs --world test clock | dawn --timeout 1200   # world time from a fresh observer pose
 node engine/tools/goal.mjs Bob --world test ["fence the pen" [--by NAME] | --clear]   # the goal line the dashboard shows (agents/Bob/goal.edn)
+node engine/tools/progress.mjs Bob --world test [--goal j14] [--want iron_ingot:24,iron_pickaxe] [--wait 60m [--stall 10m]]   # one check-in line; --wait returns only on goal end, death, a give-up, needs-you or a stall
 ```
 
 - `observe --wait` blocks until addressed chat, new attention, a watched job or action finishing, `body.idle`, an engine restart or the
-node engine/tools/progress.mjs Bob --world test [--goal j14] [--want iron_ingot:24,iron_pickaxe] [--wait 60m [--stall 10m]]   # one check-in line; --wait returns only on goal end, death, a give-up, needs-you or a stall
   timeout (default 60 s). Each named observer (`--observer`) keeps its cursor in `worlds/<world>/observers/<body>/`; delivery
   is at least once. `--chatter none|addressed|all`, `--danger` and `--disconnect` choose what wakes it. Only the first `reconnect-failed` of an
   outage wakes it (later tries are summarised). Status of an offline body adds `:back-in-s`. A `died` wake or summary item carries `:cancelled-jobs [{:id :name}]` (jobs the death cancelled, seen in the same call).
