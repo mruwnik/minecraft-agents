@@ -265,3 +265,7 @@
   (is (nil? (obtain/tried-text {:craft :no-plan})))
   (is (= "; gathering was tried and ended :gave-up" (obtain/tried-text {:gather :gave-up})))
   (is (re-find #"searched" (obtain/tried-text {:gather {:searched "coal" :result :not-found}}))))
+
+(deftest the-bad-args-text-names-the-arg-and-its-value
+  (is (re-find #":count.*\"16\"" (obtain/args-error {:item "torch" :count "16"})))
+  (is (re-find #":item.*nil" (obtain/args-error {:count 4}))))

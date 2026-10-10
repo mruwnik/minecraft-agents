@@ -92,8 +92,8 @@
 (defn args-error [a]
   (let [names (names-of a)]
     (cond
-      (not (and (seq names) (every? string? names))) "needs :item, or :any-of [names]"
-      (not (and (int? (:count a)) (pos? (:count a)))) ":count is a positive whole number")))
+      (not (and (seq names) (every? string? names))) (str "needs :item, or :any-of [names], got :item " (pr-str (:item a)) " :any-of " (pr-str (:any-of a)))
+      (not (and (int? (:count a)) (pos? (:count a)))) (str ":count is a positive whole number, got " (pr-str (:count a))))))
 
 (defn carried-of [inv names]
   (reduce + 0 (map #(storage/carried inv %) names)))
