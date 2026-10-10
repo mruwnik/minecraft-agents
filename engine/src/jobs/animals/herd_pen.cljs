@@ -312,7 +312,8 @@
     (cond
       (not= :done r) (if (= :declined r) :declined :continue)
       (= :done (:status (ctx/child-result c :gate)))
-      (do (when (= :closed state) (ctx/update-mem! c assoc :gate-closed true) (drop-gate! c))
+      (do (ctx/emit! c (if (= :open state) :gate.opened :gate.shut) :info {:cell (gate-cell c) :text (str "gate " (gate-cell c) (if (= :open state) " opened" " shut"))})
+          (when (= :closed state) (ctx/update-mem! c assoc :gate-closed true) (drop-gate! c))
           (set-phase! c next then))
       (= :open state) (end! c :gate-stuck)
       :else (shut-failed! c))))

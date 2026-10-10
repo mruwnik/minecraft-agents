@@ -13,7 +13,7 @@
             [jobs.lib.world :as known]))
 
 (def doc
-  "Shut the planned fence gates that stand open. A planned gate is a cell of a plan whose want is a fence gate
+  "Shut the planned fence gates that stand open (info gate.shut {:cell} for each one shut). A planned gate is a cell of a plan whose want is a fence gate
   (jobs.lib.pen-gate/gate-cells). A gate in no plan is never touched.
 
   - Without :plan: the open planned gates within :radius of the body. This is the job of the pen-gate trigger,
@@ -36,7 +36,7 @@
 
 (a/defargs args
   {:plan {:doc "id of a plan whose open gates are all shut; nil: the open planned gates of every active plan within :radius" :spec a/name? :default nil}
-   :radius {:doc "without :plan, how far from the body a gate is looked for, in blocks" :spec (a/num-in 0 nil) :default 8}
+   :radius {:doc "without :plan, how far from the body a gate is looked for, in blocks" :spec (a/num-in 0 nil) :default 64}
    :open-s {:doc "without :plan, seconds to wait before shutting a gate that stands open (0: shut at once)" :spec (a/num-in 0 nil) :default 4}
    :reach {:doc "walk until within this many cells of the gate (the click reaches 4.5 from the eye)" :spec (a/num-in 0 nil) :default 3}
    :tries {:doc "failed clicks on one gate before it is given up" :spec (a/int-in 1 nil) :default 3}})
@@ -169,7 +169,7 @@
         (loop [n 1]
           (let [reason (await (click! c cell))]
             (cond
-              (nil? reason) nil
+              (nil? reason) (do (ctx/emit! c :gate.shut :info {:cell cell :text (str "gate " cell " shut")}) nil)
               (< n (:tries (:args c))) (recur (inc n))
               :else reason)))))))
 

@@ -5,7 +5,7 @@
   (jobs.lib.world-files/derived), never per tick.
 
   The trigger holds when a planned gate was last seen open (perception's memory, never through a wall), within :radius
-  (8) of the body and farther than :min-dist (2). It keeps no state: a gate a job opened on purpose is hidden by memory
+  (64) of the body and farther than :min-dist (2). It keeps no state: a gate a job opened on purpose is hidden by memory
   entries, three kinds:
     :gate-gave-up  written by jobs.animals.shut-gate; the cell is skipped for :quiet-s (10 min)
     :gate-held     written by a job leading animals through, dropped after it shuts the gate; skipped while

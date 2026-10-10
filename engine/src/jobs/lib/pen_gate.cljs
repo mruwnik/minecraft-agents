@@ -8,7 +8,7 @@
             [jobs.lib.world-files :as world]
             [clojure.string :as str]))
 
-(def defaults {:radius 8 :min-dist 2 :quiet-s 600 :held-s 30})
+(def defaults {:radius 64 :min-dist 2 :quiet-s 600 :held-s 30})
 
 ;; ------------------------------------------------------------------ the index
 

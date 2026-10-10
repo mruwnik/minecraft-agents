@@ -135,7 +135,8 @@
   (is (= f7 (holds-over (fake-at false 2 5) (knowledge pen-a) times)) "shut")
   (is (= f7 (holds-over (fake-at true 2 0) (knowledge pen-a) times)) "the body stands in the gate cell")
   (is (= f7 (holds-over (fake-at true 2 1) (knowledge pen-a) times)) "the body 1 block from it: a job at the gate")
-  (is (= f7 (holds-over (fake-at true 2 20) (knowledge pen-a) times)) "too far away")
+  (is (= t7 (holds-over (fake-at true 2 40) (knowledge pen-a) times)) "40 away: a gate left open is still shut")
+  (is (= f7 (holds-over (fake-at true 2 100) (knowledge pen-a) times)) "too far away")
   (is (= f7 (holds-over (fake-at true 2 5) (knowledge) times)) "the gate is in no plan")
   (is (= f7 (holds-over (fake-at true 2 5) nil times)) "no world data at all"))
 
@@ -210,7 +211,18 @@
         (let [s (await (run-job (pen-world true 2 -7) {"pen-a" pen-a} {} 20))]
           (is (not (gate-open? (:p s) 2 64 0)))
           (is (empty? (:list (core/state (:eng s)))))
-          (is (= 1 (:shut (first (events-of s :shut-gate.done)))) "one gate shut, reported"))))))
+          (is (= 1 (:shut (first (events-of s :shut-gate.done)))) "one gate shut, reported")
+          (is (= [[2 64 0]] (mapv :cell (events-of s :gate.shut))) "the shut is logged with its cell"))))))
+
+(deftest a-lure-holds-the-open-gate-beside-its-spot-so-the-trigger-leaves-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cow {:id 1 :uuid "u1" :name "cow" :kind "passive" :pos {:x 8 :y 64 :z -6}}
+              s (start (pen-world true 2 -7 {:entities [cow] :inventory [{:name "wheat" :count 4}]}) {"pen-a" pen-a})]
+          (core/submit! (:eng s) '(jobs.animals.lure-to {:mob "cow" :pos {:x 2 :y 64 :z -3}}) {})
+          (dotimes [_ 3] (swap! clock + 700) (await (core/tick! (:eng s))))
+          (is (contains? (pg/held-cells (mem/view (:store (:eng s))) 30000) [2 64 0])))))))
 
 (defn waited-ms-before-click
   "The ms of the wait calls the body made before its first click on the gate."
@@ -346,7 +358,7 @@
       (fn ^:async t []
         (let [spec (pen-world true 2 -6 {:blocks (merge ground ring {"2,64,0" "oak_fence_gate" "20,64,0" "oak_fence_gate"})
                                         :states {"2,64,0" {:open true} "20,64,0" {:open true}}})
-              s (await (run-job spec {"pen-a" pen-a "pen-b" pen-b} {} 40))]
+              s (await (run-job spec {"pen-a" pen-a "pen-b" pen-b} {:radius 8} 40))]
           (is (not (gate-open? (:p s) 2 64 0)))
           (is (gate-open? (:p s) 20 64 0) "12 blocks off: beyond the radius"))))))
 

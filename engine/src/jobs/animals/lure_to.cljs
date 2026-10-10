@@ -7,13 +7,14 @@
             [jobs.animals.lead-to :as lead-to]
             [jobs.lib.animals :as animals]
             [jobs.lib.fetch :as fetch]
+            [jobs.lib.pen-gate :as pg]
             [jobs.lib.util :as u]
             [jobs.lib.watch :as watch]))
 
 (def doc
   "Walk to :pos with one animal of type :mob following the breeding food held in hand (wheat for cows, sheep and goats,
   carrots for pigs, seeds for chickens; jobs.lib.animals/breeding-food), then put the food away. No lead is needed.
-  A one-shot order that starts and ends itself. Declines (waits) with :no-mob or :no-destination until both are given;
+  A one-shot order that starts and ends itself. Each step it keeps a :gate-held entry fresh for every planned gate seen open within 10 blocks of :pos, so the pen-gate trigger does not shut the gate it leads the animal through. Declines (waits) with :no-mob or :no-destination until both are given;
   a started job always passes.
 
   A body that holds none of the food first gets it (a jobs.items.obtain child, unless :fetch is false); when none can
@@ -214,7 +215,20 @@
     (do (ctx/update-mem! c dissoc :rehold-tries)
         (await (walk-legs! c)))))
 
+(def gate-hold-range "Planned gates this near the spot are held while the lure runs." 10)
+
+(defn hold-gates!
+  "Tell the pen-gate trigger the open planned gates near :pos are open on purpose (fresh :gate-held entries)."
+  [c]
+  (let [{:keys [x z]} (:pos (:args c))
+        near (filter (fn [[gx _ gz]] (<= (js/Math.hypot (- gx x) (- gz z)) gate-hold-range))
+                     (keys (pg/gate-index (:world (:engine c)))))]
+    (doseq [cell (pg/seen-open-cells (:primitives c) near)]
+      (ctx/forget-where! c :gate-held #(= cell (some-> (:cell %) vec)))
+      (ctx/remember! c :gate-held {:cell cell :by (:id c)} hr/held-policy))))
+
 (defn ^:async step [c]
+  (hold-gates! c)
   (let [now (ctx/now c)
         {:keys [timeout-s]} (:args c)]
     (ctx/update-mem! c update :started #(or % now))
