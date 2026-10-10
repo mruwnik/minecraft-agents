@@ -64,7 +64,8 @@
   A target off the body's row and column, with the body underground and no line entered within 24 blocks, is
   reached in two legs: a kept tunnel child along the shorter axis to a waypoint one past the target's column, then
   the line above from the body's own cell. That first leg stays open even in a dead end (:keep false). A leg that stops is tried once on the other axis; a
-  floor of air is bridged with a carried building block (stair/bridge!), as the stair does.
+  floor of air is bridged with a carried building block (stair/bridge!), as the stair does. A target on the body's
+  row or column farther than :max-length is cut the same way in legs of :max-length from the body's cell.
 
   The body's cell is the progress. On the stair line the stair child goes on, on the run line the run, at the
   stand it is done, anywhere else it walks to the entry. A cell dug before a cut is air and is not dug again.
@@ -281,20 +282,22 @@
 (defn feet-of [c] (stair/feet-of c))
 
 (defn leg-target
-  "The waypoint of the first leg of a diagonal target seen from feet underground: on the body's row, one past the
-  target's column, so the first leg stands in that column. The shorter axis goes first. nil when the target is on
-  the body's row or column, the body stands on the surface, or a leg is longer than max-length. swap? takes the longer
-  axis first."
+  "The waypoint of the first leg of a target far from feet underground. Diagonal: on the body's row, one past the
+  target's column, so the first leg stands in that column; the shorter axis goes first (swap? takes the longer axis
+  first). On the body's row or column but farther than max-length: max-length along it. nil when the body stands on
+  the surface or a leg is longer than max-length."
   [block-at [fx fy fz :as feet] [tx _ tz] max-length swap?]
   (let [dx (- tx fx) dz (- tz fz)
         x-first? (not= (boolean swap?) (<= (js/Math.abs dx) (js/Math.abs dz)))
         [a b] (if x-first? [dx dz] [dz dx])]
-    (when (and (not (zero? dx)) (not (zero? dz))
-               (<= (inc (js/Math.abs a)) max-length) (<= (js/Math.abs b) max-length)
-               (not= fy (surface block-at [fx fz] (- fy 1) (+ fy max-length 1))))
-      (if x-first?
-        [(+ tx (js/Math.sign dx)) fy fz]
-        [fx fy (+ tz (js/Math.sign dz))]))))
+    (when (not= fy (surface block-at [fx fz] (- fy 1) (+ fy max-length 1)))
+      (cond
+        (and (zero? dz) (> (js/Math.abs dx) max-length)) [(+ fx (* max-length (js/Math.sign dx))) fy fz]
+        (and (zero? dx) (> (js/Math.abs dz) max-length)) [fx fy (+ fz (* max-length (js/Math.sign dz)))]
+        (and (not (zero? dx)) (not (zero? dz)) (<= (inc (js/Math.abs a)) max-length) (<= (js/Math.abs b) max-length))
+        (if x-first?
+          [(+ tx (js/Math.sign dx)) fy fz]
+          [fx fy (+ tz (js/Math.sign dz))])))))
 
 (def torch-blocks torch/torch-blocks)
 
