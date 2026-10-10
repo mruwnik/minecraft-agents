@@ -781,3 +781,8 @@
   (let [{:keys [p]} (setup {:self {:food 15 :health 6.5}} :step-ms 5)
         c {:primitives p :args {}}]
     (is (get-food/starving? c) "health below 7 and hungry")))
+
+(deftest the-widened-search-stays-within-what-explore-search-accepts
+  (let [opts (get-food/widen-explore {:max-distance 64 :max-legs 12 :timeout-s 120} get-food/widen-max)]
+    (is (= 128 (:max-distance opts)))
+    (is (= 36 (:max-legs opts)))))

@@ -634,8 +634,10 @@
   [mem starving? now rest-ms]
   (boolean (and (:explored mem) (not (and starving? (>= (- now (:explored-at mem 0)) rest-ms))))))
 
+(def search-max-distance "The largest :max-distance jobs.explore.search accepts." 128)
+
 (defn widen-explore [opts k]
-  (-> opts (update :max-distance #(some-> % (* k))) (update :max-legs #(some-> % (* k))) (update :timeout-s #(some-> % (* k)))))
+  (-> opts (update :max-distance #(some-> % (* k) (min search-max-distance))) (update :max-legs #(some-> % (* k))) (update :timeout-s #(some-> % (* k)))))
 
 (defn ^:async explore!
   "Once per job, with nothing known or seen: search for food animals and ripe crops (jobs.explore.search, :explore),
