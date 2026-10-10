@@ -4,6 +4,7 @@
             [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.breath :as breath]
+            [jobs.lib.child :as child]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
@@ -39,10 +40,10 @@
 
   Ends with {:reason :found|:not-found :why :found [{:what :pos :id? :noted? :by?}] :coverage {:legs :scans
   :failed [{:pos :reason}] :skipped :farthest}}, info search.done or warn search.not-found. :why is one of
-  :distance (no leg left), :legs (:max-legs walked), :time (:timeout-s since the first round), :stuck
+  :distance (no leg left), :legs (:max-legs walked), :time (:timeout-s since the first round, not counting go-to's wait for day in a shelter), :stuck
   or :not-loaded.
 
-  Memory: :origin :started :legs :scans :found :tried :failed :skipped :farthest :failed-in-row :blocked (the ways legs
+  Memory: :origin :started :paused-ms :legs :scans :found :tried :failed :skipped :farthest :failed-in-row :blocked (the ways legs
   failed since the last arrival) :deferred (unloaded legs set aside while a sweep goes on), and :leg while
   a walk is under way, so a cut or restart resumes it.")
 
@@ -55,7 +56,7 @@
    :spacing {:doc "blocks between legs, 4 to 64" :spec (a/int-in 4 64) :default 16}
    :scan-radius {:doc "how far round the body each look reaches" :spec (a/num-in 0 nil) :default 24}
    :max-legs {:doc "legs walked before it gives up" :spec (a/int-in 0 nil) :default 32}
-   :timeout-s {:doc "seconds from the first round before it gives up" :spec (a/num-in 0 nil) :default 600}
+   :timeout-s {:doc "seconds from the first round before it gives up, not counting the time go-to holds for day in a shelter" :spec (a/num-in 0 nil) :default 600}
    :use-notes {:doc "targets noted (by any body) within :max-distance count as found" :spec boolean? :default true}
    :seen-ttl-s {:doc "how long a note of a block seen lasts" :spec (a/num-in 0 nil) :default 259200}
    :entity-ttl-s {:doc "how long a note of an entity seen lasts" :spec (a/num-in 0 nil) :default 600}
@@ -213,7 +214,7 @@
     (if (= :found reason)
       (ctx/emit! c :search.done :info (assoc result :text (str "found " (count (:found result)) " " what)))
       (ctx/emit! c :search.not-found :warn
-                 (assoc result :text (str "no " what " found (" (name why) ") after " (:legs m 0) " legs, "
+                 (assoc result :text (str "no " what " found (" (name why) (when (= :time why) (str ", :timeout-s " (:timeout-s (:args c)))) ") after " (:legs m 0) " legs, "
                                           (:scans m 0) " looks, " (:farthest m 0) " blocks out"))))
     (ctx/result! c result)
     :done))
@@ -310,9 +311,10 @@
   (or :done when the failed legs in a row end the search)."
   [c]
   (let [[x y z] (:leg (ctx/mem c))
-        r (await (ctx/call-child c :leg 'jobs.movement.go-to {:pos {:x x :y y :z z} :range 2
-                                                              :escalate (>= (:failed-in-row (ctx/mem c) 0) (dec (max-failed-in-row)))
-                                                              :goal-danger :end}))]
+        [r waiting] (await (child/call-walk-reason c :leg {:pos {:x x :y y :z z} :range 2
+                                                           :escalate (>= (:failed-in-row (ctx/mem c) 0) (dec (max-failed-in-row)))
+                                                           :goal-danger :end}))]
+    (ctx/update-mem! c assoc :holding (boolean waiting))
     (if-not (= :done r)
       :continue
       (let [{:keys [in-water why] :as res} (ctx/child-result c :leg)
@@ -366,9 +368,12 @@
   "One pass: end, walk the leg under way, or look and start the next leg. :again goes on, else a round result."
   [c]
   (ctx/update-mem! c (fn [m] (cond-> m (nil? (:origin m)) (assoc :origin (here c) :started (ctx/now c)))))
-  (let [{:keys [leg started]} (ctx/mem c)]
+  (let [now (ctx/now c)]
+    (ctx/update-mem! c (fn [m] (cond-> (assoc m :last-step now)
+                                 (:holding m) (update :paused-ms (fnil + 0) (- now (:last-step m now)))))))
+  (let [{:keys [leg started paused-ms]} (ctx/mem c)]
     (cond
-      (>= (- (ctx/now c) started) (* 1000 (:timeout-s (:args c)))) (finish! c :not-found :time)
+      (>= (- (ctx/now c) started (or paused-ms 0)) (* 1000 (:timeout-s (:args c)))) (finish! c :not-found :time)
       leg (await (walk! c))
       :else (await (step! c)))))
 

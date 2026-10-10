@@ -17,6 +17,7 @@
             [engine.triggers :as triggers]
             [jobs.lib.threats :as threats]
             [jobs.lib.world-files :as world]
+            [jobs.lib.child :as child]
             [jobs.explore.search :as search]))
 
 (def ground
@@ -336,6 +337,32 @@
     {:reason :unreachable :why :moved-while-searching} true
     {:reason :unreachable :why :goal-not-standable} false
     {:arrived true} false))
+
+(deftest time-a-leg-spends-waiting-for-day-in-a-shelter-does-not-count-toward-the-timeout
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls (atom 0)
+              real child/call-walk-reason
+              night (fn ^:async night-walk [c slot args]
+                      (if (< (swap! calls inc) 150)
+                        [:continue :night-sheltered]
+                        (await (real c slot args))))
+              s (with-redefs [child/call-walk-reason night]
+                  (await (search! {:target "diamond_block" :max-distance 20 :timeout-s 60} {} 400)))
+              e (event-of s :search.not-found)]
+          (is (finished? s))
+          (is (not= :time (:why e)) (:text e)))))))
+
+(deftest a-plain-search-still-ends-at-the-timeout
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (with-redefs [child/call-walk-reason (fn [_ _ _] (js/Promise.resolve [:continue nil]))]
+                  (await (search! {:target "diamond_block" :max-distance 20 :timeout-s 60} {} 400)))
+              e (event-of s :search.not-found)]
+          (is (= :time (:why e)))
+          (is (re-find #"timeout-s" (:text e))))))))
 
 (deftest three-failed-legs-in-a-row-end-it-stuck
   (async done

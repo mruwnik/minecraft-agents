@@ -32,13 +32,18 @@
          (do (await (pace!)) (recur (inc n)))
          r)))))
 
-(defn ^:async call-walk
-  "Call a go-to child in slot with args (one round). While it yields :continue and its check would decline (go-to waiting
-  for day in a shelter), the round holds still with that reason, so jobs show and body.idle name what the walk waits on."
+(defn ^:async call-walk-reason
+  "call-walk, resolving to [result reason]: reason is what go-to waits on (:night-sheltered) when it yielded :continue, else nil."
   [c slot args]
   (let [r (await (ctx/call-child c slot 'jobs.movement.go-to args))
         w (atom nil)]
     (when (= :continue r)
       (ctx/check-child (assoc c :wait w :report-wait true) slot 'jobs.movement.go-to args)
       (when-let [reason (some-> @w :reason)] (ctx/hold-still! c reason)))
-    r))
+    [r (some-> @w :reason)]))
+
+(defn ^:async call-walk
+  "Call a go-to child in slot with args (one round). While it yields :continue and its check would decline (go-to waiting
+  for day in a shelter), the round holds still with that reason, so jobs show and body.idle name what the walk waits on."
+  [c slot args]
+  (first (await (call-walk-reason c slot args))))
