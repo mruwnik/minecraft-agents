@@ -74,18 +74,28 @@
                               (not (walk/on-the-way? from hostiles h))))
                  homes)))
 
+(defn home-why
+  "Pure: why home (a position, or nil) is no safe run for a body at from: :past-hostile (a hostile on the way) or :hostile-nearer (one nearer to it than
+  the body); nil when it is safe or there is no home."
+  [from hostiles home]
+  (cond
+    (nil? home) nil
+    (walk/on-the-way? from hostiles home) :past-hostile
+    (not-every? #(< (u/dist from home) (u/dist % home)) hostiles) :hostile-nearer))
+
 (defn verdict
   "Pure: why a flight from `from` does not go to goal, nil when it may. :steep: more than steep-rise up or down and
   farther so than across; :under-rock: buried? and more than buried-rise up or down; :hostile-there: one of hostiles
   (positions) within hostile-gap of it; :past-hostile: one on the way to it; :home-safer: home (safe-home) lies
-  elsewhere (farther than same-place from it)."
-  [from goal {:keys [hostiles buried? home]}]
+  elsewhere (farther than same-place from it); :died-there: within flight/::died-radius of a place the body died."
+  [from goal {:keys [hostiles buried? home died]}]
   (let [rise (js/Math.abs (- (:y goal) (:y from)))]
     (cond
       (and (> rise (steep-rise)) (> rise (u/flat-dist from goal))) :steep
       (and buried? (> rise (buried-rise))) :under-rock
       (some #(< (u/dist goal %) (hostile-gap)) hostiles) :hostile-there
       (walk/on-the-way? from hostiles goal) :past-hostile
+      (flight/near-died? died goal) :died-there
       (and home (> (u/dist home goal) (same-place))) :home-safer)))
 
 (defn judge
@@ -100,7 +110,7 @@
      :why (when goal
             (if (given-up? c goal)
               :given-up
-              (verdict from goal {:hostiles spots :buried? (sh/buried? (:primitives c)) :home home})))}))
+              (verdict from goal {:hostiles spots :buried? (sh/buried? (:primitives c)) :home home :died (flight/died-spots c)})))}))
 
 (defn usable
   "The goal of judged (judge) when nothing speaks against it, else nil."

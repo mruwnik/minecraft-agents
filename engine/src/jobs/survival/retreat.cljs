@@ -55,6 +55,8 @@
      hostiles (a closed room behind them: turned retreat-walk ::flank-turn degrees toward it, to go round them, while it still gains on them so:
      jobs.lib.cost/outruns-at?), avoiding :hazard positions.
      When a wall blocks the way away it turns up to 120 degrees towards open ground (at least 2 clear cells).
+     It leaves out the ends within retreat-flight/::died-radius of a recent :died place, then dark ones at night or under ground
+     (retreat-flight/::prefer-lit?), each only while another end is open.
      It prefers, in this order: a step whose end is out of every ranged chaser's line of fire (cover: leaves stop arrows),
      the full step that takes least time (a swim block costs :swim-factor), the most open.
      It first looks away and to either side where it has not seen the ground (at most 3 looks); a cell still unseen
@@ -106,7 +108,7 @@
   cornered options instead of walking on; stopped :cannot_escape only once every option failed in two sweeps in a row
   with no gain between.
   Each change of what it chose among is said in one retreat.choice info: the hostiles and where, every closed room and why
-  it is not run to, the cells that are no closed room, the home, the goal and why it is dropped, where it leans.
+  it is not run to, the cells that are no closed room, the home and why it is no run (:home-why), the goal and why it is dropped, where it leans.
   Returns done {:fled [ids] :ended :gone|:far|:lost|:closed|:hidden|:keeps-off|:none}, or stopped :cannot_escape.
   Memory: one :threat entry per mob fled (jobs.lib.threats); the third from one mob within 5 min warns hostile.chased.
   A cell in another's zone is used only as a last resort (retreat.trespass-last-resort warning).")
@@ -598,6 +600,7 @@
      (await (glance-away! c (walk/direction from threat-pos home flank?)))
      (walk/choose-target (block-at-fn p) from threat-pos home (keep (comp :pos :data) (ctx/entries c :hazard))
                          (:step (:args c)) {:swim-factor (swim-factor c) :covered? covered? :flank? flank?
+                          :avoid (flight/avoid-ends c)
                           :floor (flight/floor c)
                           :known (ledger/ways-of c)})))))
 
@@ -758,13 +761,14 @@
                     verdicts)
         goal (at (:goal judged))
         lean (at (or (:start (first (:rooms survey))) (:home judged) (retreat-goal/usable judged) (home-pos c)))
-        choice {:rooms rooms :dropped (:dropped survey) :home (at (home-pos c)) :goal goal :goal-why (:why judged) :lean lean}]
+        choice {:rooms rooms :dropped (:dropped survey) :home (at (home-pos c)) :home-why (retreat-goal/home-why (u/self-pos c) (retreat-goal/hostile-spots c) (home-pos c)) :goal goal :goal-why (:why judged) :lean lean}]
     (when (not= choice (:choice-said (ctx/mem c)))
       (ctx/update-mem! c assoc :choice-said choice)
       (ctx/emit! c :retreat.choice :info
                  (assoc choice
                         :hostiles (mapv #(str (.-name %) " " (.-id %) " " (at (danger-q/mob-pos p %))) (flight/known-chasers p))
                         :text (str "flee choice: leans to " (or lean "nothing")
+                                   (when (:home-why choice) (str "; home " (at (home-pos c)) " dropped (" (name (:home-why choice)) ")"))
                                    (when goal (str "; goal " goal (when (:why judged) (str " dropped (" (name (:why judged)) ")"))))
                                    (when (seq rooms)
                                      (str "; rooms " (str/join ", " (map #(str (:at %) " " (name (or (:why %) :run))) rooms))))

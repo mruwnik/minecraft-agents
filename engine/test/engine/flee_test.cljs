@@ -18,6 +18,8 @@
             [jobs.lib.danger :as danger-q]
             [jobs.lib.near :as near]
             [jobs.lib.threats :as threats]
+            [jobs.lib.util :as u]
+            [jobs.lib.look :as look]
             [jobs.survival.retreat :as retreat]
             [jobs.survival.retreat-flight :as retreat-flight]
             [jobs.lib.seal :as seal]
@@ -776,7 +778,25 @@
     (is (nil? (retreat-goal/safe-home here [{:x -5 :y 64 :z 0}] [home])) "the hostile stands on the way")
     (is (nil? (retreat-goal/safe-home here [{:x 6 :y 64 :z 0}] [])) "no home known")))
 
+(deftest a-home-is-dropped-for-the-reason-it-is-no-safe-run
+  (let [home {:x -12 :y 64 :z 0}]
+    (is (nil? (retreat-goal/home-why here [{:x 6 :y 64 :z 0}] home)))
+    (is (= :hostile-nearer (retreat-goal/home-why here [{:x -10 :y 64 :z 10}] home)))
+    (is (= :past-hostile (retreat-goal/home-why here [{:x -5 :y 64 :z 0}] home)))
+    (is (nil? (retreat-goal/home-why here [{:x 6 :y 64 :z 0}] nil)) "no home: nothing to explain")))
+
 (defn choice [seen] (first (events-of seen :retreat.choice)))
+
+(deftest the-choice-says-why-a-home-is-no-run
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls (atom [])
+              s (setup {:entities [(zombie 7 6 {})]})
+              _ (mem/write! (:store (:eng s)) :home {:pos {:x 12 :y 64 :z 0}} {:cap 1 :ttl :forever})
+              {:keys [seen]} (await (run-job! (stub-go-to s calls identity) 'jobs.survival.retreat {}))
+              e (choice seen)]
+          (is (= [[12 64 0] :past-hostile] [(:home e) (:home-why e)]) (pr-str e)))))))
 
 (deftest a-flight-spends-no-leg-on-a-goal-straight-above-it
   (async done
@@ -813,6 +833,53 @@
               {:keys [seen]} (await (run-job! (stub-go-to s calls identity) 'jobs.survival.retreat {:goal {:x -20 :y 64 :z 0}}))]
           (is (not= [-20 64 0] (first-target seen)))
           (is (= :hostile-there (:goal-why (choice seen))) (pr-str (choice seen))))))))
+
+;; ------------------------------------------------------------------ the flight avoids where the body died and dark ground
+
+(defn looking-targeter
+  "targeter that looks all round first, so the ground about is seen (and its light known)."
+  [out]
+  (update (targeter out) :round (fn [round] (fn ^:async looking-round [c] (await (look/look-around! c)) (await (round c))))))
+
+(defn ^:async target-after
+  "The cell retreat/flight-target! picks for a zombie to the east, with the :died spots and settings given."
+  [{:keys [light light-default time]} died settings-map]
+  (let [out (atom nil)
+        s (assoc-in (setup-sensed (cond-> {:entities [(zombie 7 5 {})]} time (assoc :time time))) [:eng :jobs 'targeter] (looking-targeter out))]
+    (when light-default (swap! (fake/state (:raw s)) assoc :light light :light-default light-default))
+    (doseq [pos died] (mem/write! (:store (:eng s)) :died {:pos pos} {:cap 4 :ttl :forever}))
+    (await (settings/with-settings settings-map #(run-job! s 'targeter {:step 6})))
+    @out))
+
+(deftest a-verdict-drops-a-goal-near-a-place-the-body-died
+  (let [spot {:x -22 :y 64 :z 3}]
+    (is (= :died-there (retreat-goal/verdict here {:x -20 :y 64 :z 0} {:died [spot]})))
+    (is (nil? (retreat-goal/verdict here {:x -20 :y 64 :z 0} {:died [{:x -22 :y 64 :z 40}]})) "a death far from the goal")))
+
+(deftest a-flight-does-not-run-toward-a-place-the-body-died
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [spot {:x -12 :y 64 :z 0}
+              out (await (target-after {} [spot] {}))
+              plain (await (target-after {} [] {}))
+              off (await (target-after {} [spot] {:jobs.survival.retreat-flight/died-radius 0}))]
+          (is (= {:x -6 :y 64 :z 0} plain) "no death: straight west")
+          (is (> (u/dist out spot) 12) (str "the straight way ends within the radius of the death: " (pr-str out)))
+          (is (= {:x -6 :y 64 :z 0} off) "radius 0 turns it off"))))))
+
+(deftest a-flight-prefers-lit-ground-to-dark
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [lit (into {} (for [x (range -12 4) z (range -12 13) y [63 64 65] :when (> (js/Math.abs z) 1)] [[x y z] [0 8]]))
+              world {:time 18000 :light-default [15 0] :light lit}
+              out (await (target-after world [] {}))
+              off (await (target-after world [] {:jobs.survival.retreat-flight/prefer-lit? false}))
+              day (await (target-after (assoc world :time 1000) [] {}))]
+          (is (neg? (:z out)) (str "west is dark, north-west is lit: " (pr-str out)))
+          (is (= {:x -6 :y 64 :z 0} off) "prefer-lit? false: straight west")
+          (is (= {:x -6 :y 64 :z 0} day) "by day above ground light is no reason to turn"))))))
 
 ;; ------------------------------------------------------------------ a goal given up comes back
 
@@ -1033,3 +1100,5 @@
           (is (= :warn (:level (first fled))))
           (is (= ["zombie 7"] (:mobs (first fled))))
           (is (> (:distance (first fled)) 30)))))))
+
+

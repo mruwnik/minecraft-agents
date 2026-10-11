@@ -148,3 +148,21 @@
     (is (some? (walk/way-target body [{:x -9.5 :y 63 :z 0.5}] floors 12)) "far from the threat")
     (is (nil? (walk/way-target body [{:x 0.5 :y 63 :z 0.5}] floors 12))
         "no nearer the threat than the body, but 3 blocks from it")))
+
+(def flat-world (fn [{:keys [y]}] (if (<= y 63) "stone" "air")))
+
+(deftest a-flight-leaves-out-the-ends-it-is-asked-to-avoid-unless-nothing-else-is-open
+  (let [ahead? (fn [end] (pos? (- (:x end) 3)))
+        straight (walk/choose-target flat-world from [threat] nil [] 6 {})
+        avoided (walk/choose-target flat-world from [threat] nil [] 6 {:avoid [ahead?]})]
+    (is (= {:x 6 :y 64 :z 0} straight))
+    (is (not= straight avoided) "the end straight away is avoided, another turn is taken")
+    (is (= straight (walk/choose-target flat-world from [threat] nil [] 6 {:avoid [(constantly true)]}))
+        "every end avoided: the preferred one stays")))
+
+(deftest an-avoid-that-would-empty-the-options-gives-way-to-the-next
+  (let [no-ahead (fn [end] (>= (:x end) 3))
+        no-left (fn [end] (pos? (:z end)))
+        end (walk/choose-target flat-world from [threat] nil [] 6 {:avoid [no-ahead (constantly true) no-left]})]
+    (is (< (:x end) 3) "the first avoid holds")
+    (is (not (pos? (:z end))) "the all-avoiding one is skipped, the last holds")))
