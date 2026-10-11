@@ -99,6 +99,10 @@
        A pillared body that is hit raises the pillar `retreat-refuge/::pillar-extend` (2) blocks, once, before the refuge fails.
      Order: fight if it wins, then seal, pillar (not against a ranged mob or a spider), back off (not from a mob that outruns the body), pit, pocket, fight.
      Against a creeper back off comes first.
+     Under fire (::fire-hits hits within ::hurt-window-s whose attacker is a ranged mob, or arrow damage: the mob need not be seen or known) cover comes before any fight: the order is
+     seal, back off, pit, pocket, fight, though a melee mob is at the body; the fight is weighed over every hostile near, and never counts as won
+     while no ranged hostile near has been seen. With none seen the last-resort fight swings only at a mob within 3 blocks, none walked to. In another cell than the
+     last time it was under fire, a seal, pit or pocket that failed is tried again.
      An option that fails is not tried again until all have failed. Then, after a second's hold, all are tried again
      (one retreat_blocked warning per flight).
   Sealed in, up a pillar or down a pit it hides (one retreat_sealed warning; a declared hold, wait why hiding) while a
@@ -176,12 +180,19 @@
   (let [at (access/sensed-at p access/hidden-guess)]
     (fn [{:keys [x y z]}] (at [x y z]))))
 
+(def hit-reach
+  "Blocks within which a melee hostile counts as the one that hit the body."
+  3)
+
 (defn ^:async fight!
   "Fight back with the best of weapons (the fist when none is carried) whatever
   the health, kept while the hostile stays close: :again, nil when the fight
-  cannot reach any hostile (the option failed this flight)."
-  [c weapons]
-  (let [{:keys [radius ranged-radius]} (:args c)]
+  cannot reach any hostile (the option failed this flight). reach-only?: only a hostile within hit-reach is
+  swung at, none walked to."
+  [c weapons reach-only?]
+  (let [{:keys [radius ranged-radius]} (:args c)
+        radius (if reach-only? (min radius hit-reach) radius)
+        ranged-radius (if reach-only? radius ranged-radius)]
     (ctx/update-mem! c assoc :cornered true)
     (let [r (await (ctx/call-child c :cornered 'jobs.survival.fight-back
                                    {:range radius :ranged-range ranged-radius :min-health 0 :weapons weapons
@@ -197,9 +208,9 @@
 (defn escape-order
   "Pure: the cornered options to try, safest first. {:win? the odds say a fight leaves reserve health (never true
   for a creeper), :flyer? a phantom is near (it outflies a walker: shelter, else fight), :creeper? one is near (it comes first), :enderman? an angry enderman is near (angry-enderman?) (it teleports, so no walk or back-off, and a
-  pillar is within its reach: the body enters water within water-reach, which it avoids, else walks under a 2-high roof within roof-reach, which it cannot enter, else shuts itself in), :ranged? the threat shoots, :climber? it is a spider (it climbs the pillar), :faster? a mob
+  pillar is within its reach: the body enters water within water-reach, which it avoids, else walks under a 2-high roof within roof-reach, which it cannot enter, else shuts itself in), :ranged? the threat shoots, or the body is under fire (under-fire?), :climber? it is a spider (it climbs the pillar), :faster? a mob
   the body cannot outrun is near (no step back: it gains nothing), :home? the body is in its home
-  room: it digs no pit or pocket in its own floor or walls, :pressed? pressed? holds (a seal or pillar cannot be built beside the mob: the fight comes first, except against a creeper or an enderman), :swim? the body is in water with a drowned near: swimming out to dry land comes first unless a fight wins}."
+  room: it digs no pit or pocket in its own floor or walls, :pressed? pressed? holds and the body is not under fire (a seal or pillar cannot be built beside the mob: the fight comes first, except against a creeper or an enderman), :swim? the body is in water with a drowned near: swimming out to dry land comes first unless a fight wins}."
   [{:keys [win? creeper? enderman? flyer? ranged? climber? faster? swim? home? pressed?]}]
   (cond->> (cond
              creeper? [:back-off :seal :pillar :pit :pocket :fight]
@@ -239,10 +250,6 @@
   (let [p (:primitives c)
         hurt? (< (.-health (.self p)) (:flight-health (ctx/mem c) 0))]
     (boolean (some #(and (combat/enderman? %) (or hurt? (true? (.-angry %)) (<= (danger-q/mob-distance p %) enderman-close))) hostiles))))
-
-(def hit-reach
-  "Blocks within which a melee hostile counts as the one that hit the body."
-  3)
 
 (defn hitters
   "Of hostiles, the melee ones (not a creeper or an enderman) within hit-reach."
@@ -296,6 +303,7 @@
    ::close-radius {:default 8 :doc "Blocks within which a hostile that attacks at close range (a creeper too, not a ranged mob or an enderman) bounds a flee step to close-leg-s, at its start and again during its search." :spec (a/num-in 0 nil)}
    ::close-leg-s {:default 1 :doc "Seconds a flee step may search or walk while a close-range hostile is within close-radius, or the body was hurt: a body that stands searching there is hit for the whole leg." :spec (a/num-in 0 nil)}
    ::hurt-window-s {:default 5 :doc "Seconds after the body lost health in which a flee step is bounded to close-leg-s, even with no hostile seen in reach (an unseen attacker hits as hard)." :spec (a/num-in 0 nil)}
+   ::fire-hits {:default 1 :doc "Hits by a ranged mob (the damage's attacker, or an arrow) within hurt-window-s that put a cornered body under fire: cover comes before any fight, and a shooter it has not seen is never weighed as beaten. 0: never." :spec (a/int-in 0 nil)}
    ::press-gap {:default 2 :doc "Blocks within which a melee mob (not a creeper or an enderman) makes a cornered armed body fight before it builds a seal or pillar, hit or not: the mob strikes before a block is placed and stands in the cells to fill." :spec (a/num-in 0 nil)}
    ::refuge-gap {:default 10 :doc "Blocks within which a lone melee hostile the body cannot outfight is pillared against (else sealed against) before any flee step, when blocks are carried; 0 never." :spec (a/num-in 0 nil)}})
 (defn glance-reach [] (settings/get settings ::glance-reach))
@@ -476,6 +484,30 @@
                       (recently-hurt? c)
                       (some #(<= (danger-q/mob-distance p %) (press-gap)) near))))))
 
+(defn fire-hits [] (settings/get settings ::fire-hits))
+
+(defn shot?
+  "Whether :hurt entry e is a ranged mob's hit: its attacker is one, or the damage is an arrow (the shooter untracked)."
+  [e]
+  (let [{:keys [attacker damageType]} (:data e)]
+    (or (contains? cost/ranged-mobs (:name attacker))
+        (= "arrow" (some-> damageType (str/replace #"^minecraft:" ""))))))
+
+(defn under-fire?
+  "Whether a ranged mob hit the body fire-hits times within hurt-window-s, seen or not."
+  [c]
+  (let [n (fire-hits)]
+    (and (pos? n)
+         (<= n (count (filter shot? (ctx/since c :hurt (- (ctx/now c) (* 1000 (hurt-window-s))))))))))
+
+(defn retry-covers
+  "Pure: mem of a body under fire at feet cell: in another cell than the last time (:fire-cell), the covers that failed
+  there (seal, pit, pocket) are open again."
+  [mem cell]
+  (if (= cell (:fire-cell mem))
+    mem
+    (-> mem (update :tried #(reduce disj (set %) [:seal :pit :pocket])) (assoc :fire-cell cell))))
+
 (defn ^:async cornered!
   "Nowhere worth walking to: the first option of escape-order that it can take and has not failed since the last
   start over (blocked!). home?: the body is in its home room."
@@ -484,15 +516,19 @@
   (let [{:keys [weapons fist-sweeps]} (:args c)
         hostiles (near-hostiles c)
         threat (first hostiles)
-        win? (fight-wins? c (if (:hit-on-the-run (ctx/mem c)) (hitters c hostiles) hostiles))
+        fire? (under-fire? c)
+        blind? (and fire? (not-any? #(and (combat/ranged? %) (danger-q/seen-only? %)) hostiles))
+        _ (when fire? (ctx/update-mem! c retry-covers (let [{:keys [x y z]} (sh/feet (:primitives c))] [x y z])))
+        win? (and (not blind?)
+                  (fight-wins? c (if (and (:hit-on-the-run (ctx/mem c)) (not fire?)) (hitters c hostiles) hostiles)))
         order (escape-order {:win? win?
                              :creeper? (boolean (some combat/creeper? hostiles))
                              :enderman? (angry-enderman? c hostiles)
                              :flyer? (boolean (some combat/flyer? hostiles))
-                             :ranged? (boolean (and threat (combat/ranged? threat)))
+                             :ranged? (boolean (or fire? (and threat (combat/ranged? threat))))
                              :climber? (boolean (some combat/climber? hostiles))
                              :faster? (not (outrun? c hostiles))
-                             :pressed? (pressed? c hostiles)
+                             :pressed? (and (not fire?) (pressed? c hostiles))
                              :swim? (and (boolean (some #(= "drowned" (.-name %)) hostiles)) (in-water? c))
                              :home? home?})]
     (loop [[option & more] order]
@@ -501,7 +537,7 @@
                   :fight (if (fist-hold? {:armed? (some? (combat/best-weapon (:primitives c) weapons)) :win? win?
                                           :sweeps (:sweeps (ctx/mem c) 0) :fist-sweeps fist-sweeps})
                            (await (fist-look! c))
-                           (await (fight! c (if (= [:fight] order) weapons (into (vec weapons) tool-weapons)))))
+                           (await (fight! c (if (= [:fight] order) weapons (into (vec weapons) tool-weapons)) blind?)))
                   :seal (await (refuge/hide! c))
                   :pillar (await (refuge/pillar! c))
                   :water (await (water! c))

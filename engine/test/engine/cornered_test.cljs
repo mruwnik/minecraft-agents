@@ -900,6 +900,37 @@
           (is (zero? (count (calls p "place"))) "no seal with a mob already in the cell beside it")
           (is (= 1 (count (calls p "attack")))))))))
 
+;; an arrow from a skeleton the body never saw: the damage packet names it, nothing else does
+(defn shot!
+  [{:keys [eng]}]
+  (mem/write! (:store eng) :hurt {:amount 3 :health 8 :damageType "arrow" :attacker {:id 99 :name "skeleton"}} {:cap 50 :ttl 60000}))
+
+(deftest an-armed-body-shot-by-an-unseen-skeleton-seals-before-it-fights-the-mob-at-its-side
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (beset-round [(zombie 2.5 64 0) (assoc (zombie 0 64 2.5) :id 8)] shot!))]
+          (is (pos? (count (calls p "place"))) "the line of fire is broken first")
+          (is (zero? (count (calls p "attack"))) "no blows traded in the open under arrows"))))))
+
+(deftest a-body-shot-by-an-unseen-skeleton-does-not-walk-up-to-a-melee-mob-to-fight-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p] :as s} (setup {:self {:health 8} :inventory [{:name "iron_sword" :count 1}]
+                                            :entities [(zombie 5 64 0)]})]
+          (.override (.-world p) "steer" (fn [_ _ _] (shot! s) (js/Promise.resolve #js {:status "timeout" :pose #js {}})))
+          (core/submit! eng retreat {})
+          (await (core/tick! eng))
+          (is (= [] (filterv #(> (:x %) 3) (tu/walked-to eng))) "no walk through the fire to the zombie five blocks off")
+          (is (zero? (count (calls p "attack")))))))))
+
+(deftest under-fire-in-a-new-cell-the-covers-that-failed-elsewhere-are-tried-again
+  (is (= {:tried #{:back-off} :fire-cell [1 64 0]}
+         (retreat/retry-covers {:tried #{:seal :pit :pocket :back-off} :fire-cell [0 64 0]} [1 64 0])))
+  (is (= {:tried #{:seal} :fire-cell [0 64 0]} (retreat/retry-covers {:tried #{:seal} :fire-cell [0 64 0]} [0 64 0]))
+      "the same cell: a failed seal stays failed"))
+
 (deftest an-unarmed-body-at-full-health-seals-in-against-a-spider-instead-of-running-or-punching
   (async done
     (tu/run-async done
