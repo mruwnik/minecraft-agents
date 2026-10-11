@@ -58,7 +58,7 @@
   A block on the footprint of a plan this body made is the plan's: its entry is dropped (cleanup.plan-cell) and the cell
   never dug, unless :spare-own-plans? is false.
 
-  A shelter's block (purpose :shelter or :retreat-plug) stays while a known hostile is near (:hostile-near) and all night (:night): it keeps the hostile out of the body's refuge.
+  A shelter's block (purpose :shelter or :retreat-plug) stays while a known hostile is near (:hostile-near) and all night (:night; arg :keep-at-night?): it keeps the hostile out of the body's refuge.
 
   Every dig asks jobs.lib.access.rules/may-dig? (zones, plan footprints, ledger cells) when chosen and again
   right before the dig. A refusal (:zone :footprint :no-zones :not-loaded) or a hazard :accept does not name
@@ -84,6 +84,7 @@
             :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block :under-feet}) :default #{:fluid-adjacent}}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
    :reach {:doc "cells whose centre is this close to the eye are dug from where the body stands, in blocks" :spec (a/num-in 0 nil) :default u/bucket-reach}
+   :keep-at-night? {:doc "a shelter's block (:shelter, :retreat-plug) stays all night; false takes it back at night too" :spec boolean? :default true}
    :spare-own-plans? {:doc "a block on the footprint of a plan this body made is the plan's, not scaffold: its entry is dropped and never dug" :spec boolean? :default true}
    :danger-radius {:doc "a walk is not made while a real danger is this close to the body, or a known hostile this close to the cell walked to: the cell is held :danger" :spec (a/num-in 0 nil) :default 16}
    :leg-s {:doc "a walk goes in legs of this many seconds; the danger is weighed again after each" :spec (a/num-in 0.1 120) :default 6}
@@ -165,14 +166,14 @@
   "Why entry e cannot be dug now, as {:reason ...detail}, or nil. in: {:feet :block-at :zones :footprints :ledger
   :accept :can-clear? (block name -> whether the body can clear it now, by hand or a carried tool; absent: always)
   :hostile-near? (a known hostile near) :night?: a shelter's blocks stay}."
-  [{:keys [feet block-at accept can-clear? hostile-near? night?] :as in} {:keys [cell purpose]}]
+  [{:keys [feet block-at accept can-clear? hostile-near? night? keep-at-night?] :as in} {:keys [cell purpose]}]
   (let [[fx fy fz] feet
         [x y z] cell
         below (rules/offset cell 0 -1 0)]
     (cond
       (nil? (block-at cell)) {:reason :not-loaded}
       (and hostile-near? (shelter-purposes purpose)) {:reason :hostile-near}
-      (and night? (shelter-purposes purpose)) {:reason :night}
+      (and night? (not (false? keep-at-night?)) (shelter-purposes purpose)) {:reason :night}
       (and can-clear? (not (can-clear? (block-at cell)))) {:reason :no-tool :block (block-at cell)}
       (and (= [x z] [fx fz]) (< y (dec fy))) {:reason :under-body}
       (and (= cell [fx (dec fy) fz]) (not (rules/solid-floor? block-at below)))
@@ -237,7 +238,7 @@
     (merge (access/zone-input c {:ignore-zones? (:ignore-zones? (:args c))})
            {:feet (stair/feet-of c) :eye (eye-of c) :block-at (access/sensed-at (:primitives c) blocks/hidden-guess) :entries entries
             :can-clear? #(not (tools/needs-tool-to-clear? (:primitives c) %))
-            :hostile-near? (hostile-near? (:primitives c)) :night? (sh/night? (:primitives c))
+            :hostile-near? (hostile-near? (:primitives c)) :night? (sh/night? (:primitives c)) :keep-at-night? (:keep-at-night? (:args c))
             :ledger (ledger/cells l) :zones zones :accept (set accept) :reach reach
             :spare-own-plans? (:spare-own-plans? (:args c))
             :held (:held (ctx/mem c) {}) :retreats (:retreats (ctx/mem c) 0)})))

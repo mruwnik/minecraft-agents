@@ -164,7 +164,8 @@
     (is (= [{:cell [3 64 1] :item "dirt" :reason :hostile-near}]
            (:open (step :entries [seal] :hostile-near? true :block-at world))))
     (is (= :dig (:step (step :entries [pillar] :night? true :block-at world))) "other scaffold is taken back")
-    (is (= :dig (:step (step :entries [seal] :night? false :block-at world))) "by day the seal is taken back")))
+    (is (= :dig (:step (step :entries [seal] :night? false :block-at world))) "by day the seal is taken back")
+    (is (= :dig (:step (step :entries [seal] :night? true :keep-at-night? false :block-at world))) "unless the night keep is off")))
 
 ;; ------------------------------------------------------------------ the trigger
 
