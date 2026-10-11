@@ -343,6 +343,43 @@
        (sort-by (juxt (comp :x :pos) (comp :y :pos) (comp :z :pos)))
        vec))
 
+;; ------------------------------------------------------------------ a drop inside the gate
+
+(defn level-region
+  "The cells of inside reached from seeds by orthogonal steps of at most one block up or down."
+  [inside seeds]
+  (loop [region (set seeds) queue (into cljs.core/PersistentQueue.EMPTY seeds)]
+    (if (empty? queue)
+      region
+      (let [[x y z] (peek queue)
+            next (for [[dx dz] orthogonal dy [0 -1 1]
+                       :let [k [(+ x dx) (+ y dy) (+ z dz)]]
+                       :when (and (contains? inside k) (not (contains? region k)))]
+                   k)
+            fresh (distinct next)]
+        (recur (into region fresh) (into (pop queue) fresh))))))
+
+(defn gate-drop
+  "{:gate :from :to :drop} for a gate whose inside side reaches fewer than half the inside cells by steps of one block
+  and borders a cell more than one lower (an animal will not step down two, so it never leaves the gate side), else nil."
+  [inside {{:keys [x y z]} :pos :as gate}]
+  (let [seeds (for [[dx dz] orthogonal dy [0 -1 1]
+                    :let [k [(+ x dx) (+ y dy) (+ z dz)]]
+                    :when (contains? inside k)]
+                k)
+        region (when (seq seeds) (level-region inside seeds))
+        edges (when (and region (< (* 2 (count region)) (count inside)))
+                (for [[kx ky kz :as from] region
+                      [dx dz] orthogonal
+                      ty (range (- ky 2) (- ky (+ 2 (max-drop))) -1)
+                      :let [to [(+ kx dx) ty (+ kz dz)]]
+                      :when (contains? inside to)]
+                  {:gate (:pos gate) :from from :to to :drop (- ky ty)}))]
+    (first (sort-by (juxt :from :to) edges))))
+
+(defn gate-drops [inside gates]
+  (vec (keep #(gate-drop inside %) gates)))
+
 ;; ------------------------------------------------------------------ the answer
 
 (defn answer [closed? reason inside leaks gates]
@@ -411,12 +448,13 @@
   opts: :block-at (required), :at {:x :y :z} (feet cell to start from) and/or :box {:min :max} (every surface in it
   starts the fill and a step out of it is a leak), :max-cells (default 2000), :near [x y z] (the unloaded leaks
   listed are the nearest to it, else the first by coordinate).
-  Returns {:closed? :reason :inside :leaks :gates}.
+  Returns {:closed? :reason :inside :leaks :gates :gate-drops}.
   :reason is nil when closed, else :leak, :unbounded (more than :max-cells reached and no way out pinned down; give
   a :box for exact crossings), :unloaded (a needed cell was not loaded or seen, the start's floor too) or :no-start (the start is no floor).
   :inside is a set of [x y z] feet cells. For a leaky pen without a box it is what the pen encloses with its leaks
   shut, or empty when that does not close it.
-  :leaks is [{:pos {:x :y :z} :why}], :why one of :open-gate :gap :climb :open :unloaded."
+  :leaks is [{:pos {:x :y :z} :why}], :why one of :open-gate :gap :climb :open :unloaded.
+  :gate-drops is [{:gate :from :to :drop}]: a gate whose side of the pen is cut off from the rest by a drop of more than 1."
   [{:keys [max-cells] :or {max-cells default-max-cells} :as opts}]
   (let [opts (assoc opts :max-cells max-cells :sealed #{})
         {:keys [world fill leaks]} (analyse opts)]
@@ -433,8 +471,9 @@
                     (or closed? (:box opts) (not truncated?)) order
                     shut (:order shut)
                     :else [])]
-        (answer closed? reason (set cells) leaks
-                (gates-near world (if (and truncated? (not shut)) (take (gate-scan) order) cells)))))))
+        (let [inside (set cells)
+              gates (gates-near world (if (and truncated? (not shut)) (take (gate-scan) order) cells))]
+          (assoc (answer closed? reason inside leaks gates) :gate-drops (gate-drops inside gates)))))))
 
 (def ledge-height 3)
 
@@ -449,6 +488,7 @@
 
 (defn summary
   "The answer as the event and result carry it: the cells counted, the leaks capped."
-  [{:keys [closed? reason inside leaks gates]}]
+  [{:keys [closed? reason inside leaks gates gate-drops]}]
   (cond-> {:closed? closed? :reason reason :cells (count inside) :leaks (vec (take (max-listed) leaks)) :gates gates}
+    (seq gate-drops) (assoc :gate-drops gate-drops)
     (> (count leaks) (max-listed)) (assoc :leaks-total (count leaks))))

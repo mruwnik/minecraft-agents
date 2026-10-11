@@ -27,6 +27,7 @@
     its leaks shut, and 0 when shutting up to 4 rounds of them does not close it (a low wall all round).
   - :remembered lists the cells the answer rests on that are remembered, not in view even after a look (at most 12,
     :remembered-total when more).
+  - :gate-drops (only when found) lists {:gate :from :to :drop}: a gate whose side of the pen is cut off by a drop of more than 1 block (animals will not step down 2).
   - :gates lists every fence gate in or beside those cells with :open?.
   - :animals lists the livestock on those cells (or up to 3 above one: a ledge inside the fence) as {:kind :id :pos [x y z]}, :animals-in counts them, so a loss can be dated from the log.")
 
@@ -71,6 +72,11 @@
       (str ": " (str/join ", " (map (fn [{:keys [pos why]}] (str (name why) " at [" (:x pos) " " (:y pos) " " (:z pos) "]")) shown))
            (when (pos? more) (str " and " more " more"))))))
 
+(defn gate-drop-text
+  [{:keys [gate-drops]}]
+  (when-let [{:keys [gate drop]} (first gate-drops)]
+    (str "; gate at [" (:x gate) " " (:y gate) " " (:z gate) "] has a drop of " drop " inside, animals will not step down")))
+
 (defn ^:async round [c]
   (let [{:keys [at max-cells]} (:args c)
         box (:box (pen-box c))
@@ -86,7 +92,7 @@
             result (merge (pen/summary checked) (pen-read/listed checked (u/self-pos c)) {:animals rows :animals-in (count rows)})]
         (ctx/emit! c :pen-check.done :info
                    (assoc result :text (if (:closed? result)
-                                         (str "pen closed, " (:cells result) " cells")
-                                         (str "pen not closed: " (name (:reason result)) (leak-text result)))))
+                                         (str "pen closed, " (:cells result) " cells" (gate-drop-text result))
+                                         (str "pen not closed: " (name (:reason result)) (leak-text result) (gate-drop-text result)))))
         (ctx/result! c result)
         :done))))

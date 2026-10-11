@@ -386,3 +386,22 @@
     wall2 3 false
     (ring "stone" [64 65 66 67]) 2 true
     fence-ring 2 false))
+
+;; ------------------------------------------------------------------ a drop inside the gate
+
+(defn sunk-floor
+  "The ring with a gate at 2 64 -1 and the inside floor of rows z 1..4 dug down by depth below the row z 0."
+  [depth]
+  (merge (assoc fence-ring [2 64 -1] ["oak_fence_gate" {:open false}])
+         (into {} (for [x (range 0 5) z (range 1 5) y (range (- 64 depth) 64)] [[x y z] "air"]))))
+
+(deftest a-drop-of-more-than-one-just-inside-the-gate-is-a-finding
+  (let [r (check (sunk-floor 2) {:at {:x 2 :y 64 :z 0}})]
+    (is (true? (:closed? r)))
+    (is (= [{:gate {:x 2 :y 64 :z -1} :drop 2}] (map #(select-keys % [:gate :drop]) (:gate-drops r))))
+    (is (= [{:gate {:x 2 :y 64 :z -1} :drop 2}] (map #(select-keys % [:gate :drop]) (:gate-drops (pen/summary r)))))))
+
+(deftest a-step-of-one-inside-the-gate-is-no-finding
+  (are [depth] (empty? (:gate-drops (check (sunk-floor depth) {:at {:x 2 :y 64 :z 0}})))
+    1
+    0))
