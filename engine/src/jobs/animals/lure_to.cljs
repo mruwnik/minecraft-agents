@@ -33,10 +33,10 @@
   Ends with info lure-to.done and a warn lure-to.gave-up unless the reason is :arrived. Result {:reason :animal key
   :near bool (the animal is within 6 blocks of :pos) :at pos (the body) :animal-at pos (the animal, nil unseen) :in-box bool (with :box)
   :lost / :stalled detail for those reasons}. Reasons:
-  - :arrived: the body stands within :range of :pos and the animal is seen in :box (none: within 6 blocks of :pos) and not in the cell of a planned gate, else the
+  - :arrived: the body stands within :range of :pos and the animal is seen in :box (none: within :range + 3 blocks of :pos) and not in the cell of a planned gate, else the
     body holds still for it up to 10 s and the end is :animal-outside (seen elsewhere) or :lost (not seen). The food is then put away (another carried item in hand when no slot is free); :near says whether the animal is by the spot.
   - :animal-outside: the body is at :pos but the animal is not in the destination; the result gives :distance (animal to :pos).
-  - :none (no animal to lure within :radius), :no-food, :no-hold (the food would not stay in hand), :lost, :animal-stalled (result :stalled {:animal :body :distance}),
+  - :no-animal (no animal to lure within :radius), :no-food, :no-hold (the food would not stay in hand), :lost, :animal-stalled (result :stalled {:animal :body :distance}),
     :unreachable (a walk gave up), :timeout (:timeout-s from the first round, not the food fetch).
   Every reason but :arrived ends the job :stopped with a :text.
 
@@ -56,6 +56,7 @@
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 
 (def near-spot "An animal this close (flat) to :pos counts as :near." 6)
+(def arrive-slack "Without :box the animal arrives when it is within :range plus this many blocks (flat) of :pos: it follows the food a few blocks behind." 3)
 (def lure-reach "The body walks this close to the animal before it leads the way." 6)
 (def max-equips "Tries to get the food into the hand before the job ends :no-hold." 3)
 
@@ -88,7 +89,7 @@
 (defn stop-text [c reason]
   (let [{:keys [mob radius]} (:args c)]
     (case reason
-      :none (if-let [uuid (:uuid (:args c))]
+      :no-animal (if-let [uuid (:uuid (:args c))]
               (str "the " mob " " uuid " is not in sight to lure")
               (str "no adult " mob " free to lure within " radius " blocks" (skipped-text c)))
       :animal-outside (str "the body is at the spot but the " mob " stands outside the destination, "
@@ -143,14 +144,14 @@
   (contains? (pg/gate-index (:world (:engine c))) [(js/Math.floor x) (js/Math.floor (+ y 0.01)) (js/Math.floor z)]))
 
 (defn at-destination?
-  "True when the animal stands in :box, else within near-spot of :pos, and not in a gate's cell."
+  "True when the animal stands in :box, else within :range plus arrive-slack of :pos, and not in a gate's cell."
   [c a]
-  (let [{:keys [box pos]} (:args c)
+  (let [{:keys [box pos range]} (:args c)
         there (u/pos-of (.-pos a))]
     (and (not (in-doorway? c there))
          (if box
            (animals/in-box? box there)
-           (<= (u/flat-dist there pos) near-spot)))))
+           (<= (u/flat-dist there pos) (+ range arrive-slack))))))
 
 (defn candidates
   "The adults within radius of the start, on nobody's lead, the zone rules allowing, nearest first; none already in :box."
@@ -195,7 +196,7 @@
         tries (:equip-tries (ctx/mem c) 0)]
     (cond
       (nil? food) (await (get-food! c))
-      (empty? cands) (finish! c :none)
+      (empty? cands) (finish! c :no-animal)
       (not= food (.-held (.self p))) (if (>= tries max-equips)
                                        (finish! c :no-hold)
                                        (do (ctx/update-mem! c assoc :equip-tries (inc tries))

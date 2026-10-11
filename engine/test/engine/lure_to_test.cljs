@@ -84,12 +84,12 @@
           (is (not= :no-food (:reason (done-event s))) "seeds were got from the grass")
           (is (= :arrived (:reason (done-event s)))))))))
 
-(deftest no-animal-ends-none
+(deftest no-animal-ends-no-animal
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {} {:inventory wheat :entities []} 12))]
-          (is (= :none (:reason (done-event s))))
+          (is (= :no-animal (:reason (done-event s))))
           (is (= 1 (count (stopped s)))))))))
 
 (deftest an-animal-on-a-lead-is-not-lured
@@ -97,7 +97,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {} {:inventory wheat :entities [(cow 1 3 {:leashed true})]} 12))]
-          (is (= :none (:reason (done-event s)))))))))
+          (is (= :no-animal (:reason (done-event s)))))))))
 
 (deftest the-food-is-held-again-when-it-leaves-the-hand-mid-walk
   (async done
@@ -176,7 +176,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [baby (await (scenario {} {:inventory wheat :entities [(cow 2 3 {:baby true})]} 12))]
-          (is (= :none (:reason (done-event baby))))
+          (is (= :no-animal (:reason (done-event baby))))
           (is (re-find #"babies" (:text (first (stopped baby))))))))))
 
 (deftest a-lost-lure-reports-what-it-last-saw
@@ -229,6 +229,23 @@
           (is (number? (:distance (done-event s))) "how far the animal stands from :pos")
           (is (re-find #"outside" (:text (first (stopped s)))))
           (is (not (in-pen-box? (cow-of s 1)))))))))
+
+(deftest an-animal-left-5-blocks-short-of-the-spot-has-not-arrived
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng clock] :as s} (h/setup {:floor tu/walk-floor :self {:pos {:x 22 :y 64 :z 0}} :inventory wheat :entities [(cow 1 20)]} 50)
+              hold! (fn [token a impl]
+                      (.then (impl token a)
+                             (fn [r]
+                               (when (>= (.. p self -pos -x) 24) (swap! (fake/state p) update :entities (fn [es] (mapv #(assoc % :pos [25 64 0]) es))))
+                               r)))]
+          (doseq [act ["steer" "wait"]] (.override (.-world p) act hold!))
+          (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal :range 1}) {})
+          (loop [i 0] (when (and (< i 150) (not (finished? s))) (swap! clock + 700) (await (core/tick! eng)) (recur (inc i))))
+          (is (finished? s))
+          (is (= :animal-outside (:reason (done-event s))) (pr-str (done-event s)))
+          (is (= 5 (js/Math.round (:distance (done-event s))))))))))
 
 (deftest a-cow-out-of-sight-at-the-spot-is-lost-not-arrived
   (async done
@@ -297,12 +314,12 @@
           (is (= :arrived (:reason (done-event s))))
           (is (= "u2" (:animal (done-event s)))))))))
 
-(deftest a-named-animal-that-is-not-there-ends-none-naming-it
+(deftest a-named-animal-that-is-not-there-ends-no-animal-naming-it
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:uuid "u9"} {:inventory wheat :entities [(cow 1 3)]} 12))]
-          (is (= :none (:reason (done-event s))))
+          (is (= :no-animal (:reason (done-event s))))
           (is (re-find #"u9" (:text (first (stopped s))))))))))
 
 (deftest a-named-animal-that-is-gone-is-lost-not-replaced
