@@ -22,6 +22,7 @@
   (:require [clojure.string :as str]
             [engine.args :as a]
             [engine.settings :as settings]
+            [jobs.lib.bait :as bait]
             [jobs.lib.click :as click]
             [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
@@ -247,6 +248,8 @@
     (if-let [o (first todo)]
       (let [cell (select-keys o [:x :y :z])
             will-shut? (shut? doors shut-also cell)
+            _ (when (and will-shut? (some-> (block-at c cell) .-name (str/ends-with? "_fence_gate")))
+                (await (bait/put-away-near! c)))
             {:keys [result column]} (await (if (:via o)
                                              (work-activator! c cell o will-shut?)
                                              (open-block! c cell will-shut?)))]

@@ -1,0 +1,40 @@
+(ns jobs.lib.bait
+  "The food animals follow, and putting it out of the hand: a body that walks out through a gate with it in hand takes
+  the penned animals along."
+  (:require [engine.ctx :as ctx]
+            [jobs.lib.util :as u]))
+
+(def breeding-food
+  "Mob name -> the foods that put it in love, in the order the body prefers them."
+  {"cow" ["wheat"]
+   "mooshroom" ["wheat"]
+   "sheep" ["wheat"]
+   "goat" ["wheat"]
+   "pig" ["carrot" "potato" "beetroot"]
+   "chicken" ["wheat_seeds" "melon_seeds" "pumpkin_seeds" "beetroot_seeds" "torchflower_seeds"]
+   "rabbit" ["carrot" "golden_carrot" "dandelion"]
+   "bee" ["dandelion" "poppy" "blue_orchid" "allium" "azure_bluet" "red_tulip" "orange_tulip"
+          "white_tulip" "pink_tulip" "oxeye_daisy" "cornflower" "lily_of_the_valley" "sunflower"
+          "lilac" "rose_bush" "peony" "torchflower" "pink_petals" "wildflowers"]})
+
+(def near-range "Animals this near that follow the held food make it worth putting away." 16)
+
+(defn held [c] (.-held (.self (:primitives c))))
+
+(defn ^:async put-away!
+  "Empty the hand when it holds one of foods; with no free slot to put it in, take another carried item in hand, so no
+  animal follows the body out."
+  [c foods]
+  (when (some #{(held c)} foods)
+    (let [r (await (ctx/act c :unequip #js {}))]
+      (when (and (some #{(held c)} foods) (not= "ok" (.-status r)))
+        (when-let [other (first (remove (set foods) (map :name (u/inventory (:primitives c)))))]
+          (await (ctx/act c :equip (clj->js {:item other}))))))))
+
+(defn ^:async put-away-near!
+  "put-away! when the hand holds food that animals within near-range follow."
+  [c]
+  (let [p (:primitives c)
+        mobs (vec (for [[mob foods] breeding-food :when (some #{(held c)} foods)] mob))]
+    (when (and (seq mobs) (pos? (.-length (.entities p #js {:radius near-range :names (clj->js mobs) :max 1}))))
+      (await (put-away! c (into [] (mapcat breeding-food) mobs))))))

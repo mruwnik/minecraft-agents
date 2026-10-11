@@ -467,6 +467,26 @@
           (is (= [gate-cell] (mapv :cell (opened eng))) "the entry stays for the trigger")
           (is (= [[5 64 0]] (mapv :cell (events-of s :door-left-open)))))))))
 
+;; ------------------------------------------------------------------ lure food in hand at a gate
+
+(defn bait-world [animal]
+  (-> (gate-world false)
+      (assoc :entities (when animal [animal]) :inventory [{:name "wheat" :count 4}])
+      (assoc-in [:self :held] "wheat")))
+
+(defn held [p] (.-held (.self p)))
+
+(deftest the-lure-food-is-put-away-before-the-walker-opens-a-gate-with-its-animals-near
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[animal expected] [[{:id 7 :name "cow" :kind "passive" :pos {:x 3 :y 64 :z 2}} nil]
+                                   [{:id 8 :name "pig" :kind "passive" :pos {:x 3 :y 64 :z 2}} "wheat"]
+                                   [nil "wheat"]]]
+          (let [{:keys [out p]} (await (go! (bait-world animal) {:pos [10 64 0] :range 0}))]
+            (is (= {:arrived true} @out))
+            (is (= expected (held p)) (pr-str animal))))))))
+
 ;; ------------------------------------------------------------------ a door on a sill, a step above the ground outside
 
 (defn sill-hut-world

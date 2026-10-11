@@ -1,6 +1,7 @@
 (ns jobs.lib.animals
   "Helpers for the animal jobs: what each mob breeds on, and the herd near the body."
   (:require [engine.ctx :as ctx]
+            [jobs.lib.bait :as bait]
             [jobs.lib.gate :as gate]
             [jobs.lib.near :as near]
             [jobs.lib.pen :as pen]
@@ -12,18 +13,7 @@
   (let [fx (js/Math.floor x) fy (js/Math.floor (+ y 0.01)) fz (js/Math.floor z)]
     (and (<= (:x min) fx (:x max)) (<= (:y min) fy (:y max)) (<= (:z min) fz (:z max)))))
 
-(def breeding-food
-  "Mob name -> the foods that put it in love, in the order the body prefers them."
-  {"cow" ["wheat"]
-   "mooshroom" ["wheat"]
-   "sheep" ["wheat"]
-   "goat" ["wheat"]
-   "pig" ["carrot" "potato" "beetroot"]
-   "chicken" ["wheat_seeds" "melon_seeds" "pumpkin_seeds" "beetroot_seeds" "torchflower_seeds"]
-   "rabbit" ["carrot" "golden_carrot" "dandelion"]
-   "bee" ["dandelion" "poppy" "blue_orchid" "allium" "azure_bluet" "red_tulip" "orange_tulip"
-          "white_tulip" "pink_tulip" "oxeye_daisy" "cornflower" "lily_of_the_valley" "sunflower"
-          "lilac" "rose_bush" "peony" "torchflower" "pink_petals" "wildflowers"]})
+(def breeding-food bait/breeding-food)
 
 (defn food-carried
   "The first food of mob's list the body carries, else nil."

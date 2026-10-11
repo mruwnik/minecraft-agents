@@ -4,6 +4,7 @@
             [engine.settings :as settings]
             [jobs.lib.animals :as animals]
             [jobs.lib.apiary :as apiary]
+            [jobs.lib.bait :as bait]
             [engine.ctx :as ctx]
             [jobs.lib.pen :as pen]
             [jobs.lib.pen-gate :as pg]
@@ -86,14 +87,9 @@
   (boolean (some #{(.-held (.self (:primitives c)))} (get animals/breeding-food (:mob (:args c))))))
 
 (defn ^:async put-food-away!
-  "Empty the hand of the lure food; with no free slot to put it in, take another carried item in hand, so no animal
-  follows the body out."
+  "Empty the hand of the lure food (jobs.lib.bait/put-away!)."
   [c]
-  (when (holds-food? c)
-    (let [r (await (ctx/act c :unequip #js {}))]
-      (when (and (holds-food? c) (not= "ok" (.-status r)))
-        (when-let [other (first (remove (set (get animals/breeding-food (:mob (:args c)))) (map :name (u/inventory (:primitives c)))))]
-          (await (ctx/act c :equip (clj->js {:item other}))))))))
+  (await (bait/put-away! c (get animals/breeding-food (:mob (:args c))))))
 
 (defn held-by-me?
   "True when the animal is on this body's lead, or in a lure run follows the food held in hand (within follow-range)."
