@@ -192,6 +192,30 @@
           (is (contains? (names-started seen) "jobs.survival.night") "the reflex ran the night job")
           (is (seq (filter #(= "place" (.-name %)) (.-calls (.-world p)))) "no bed: shelter dug in and placed blocks"))))))
 
+(def dirt-ground
+  "Dirt (no tool needed) from y 60 to 63 over x and z -8..8."
+  (into {} (for [x (range -8 9) z (range -8 9) y (range 60 64)] [(str x "," y "," z) "dirt"])))
+
+(deftest survival-respawned-at-night-far-from-home-shelters-where-it-stands
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen clock]} (boot "scenarios/survival.edn" {:time 14000 :floor [-30 -10 260 10] :blocks dirt-ground} 1000)
+              store (:store eng)
+              pile (for [i (range 3)] {:name "iron_ingot" :count 30 :slot i})]
+          (mem/write! store :home {:pos {:x 200 :y 64 :z 0}} mem/place-policy)
+          (mem/write! store :spawn-bed {:pos {:x 205 :y 64 :z 0}} {:cap 1 :ttl :forever})
+          (mem/write! store :spawn-reset {} {:cap 5 :ttl 1200000})
+          (mem/write! store :died {:pos {:x 200 :y 64 :z 0} :inventory pile} nil)
+          (swap! clock + 1000)
+          (mem/write! store :respawned {:pos {:x 0 :y 64 :z 0}} nil)
+          (swap! clock + 5000)
+          (await (run-ticks eng clock 8 1000))
+          (is (not-any? #{:dusk-home :needs-bed} (fired seen)) "no walk home at night, no bed errand")
+          (is (some #{:night} (fired seen)) "the night reflex has the body")
+          (is (< (js/Math.abs (first (:pos (fake/self p)))) 10) "it stays where it stands")
+          (is (seq (filter #(= "place" (.-name %)) (.-calls (.-world p)))) "and shelters"))))))
+
 (def scenario-files
   (->> (fs/readdirSync "scenarios") (filter #(str/ends-with? % ".edn")) sort))
 

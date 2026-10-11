@@ -330,6 +330,19 @@
       (and ended (> ended (:t e))) pos
       (let [n (u/seen-name p pos)] (and n (not (.endsWith n "_bed")))) pos)))
 
+(defn spawn-state
+  "What the body knows of its respawn point: {:bed pos} (the live :spawn-bed), {:lost pos :why w} (:why the :spawn-lost entry's,
+  :reset, or :seen-gone), else nil."
+  [p view]
+  (if-let [pos (spawn-lost-pos p view)]
+    (let [t (:t (spawn-bed-entry view))
+          after? (fn [kind] (when-let [e (mem/latest view kind)] (> (:t e) t)))]
+      {:lost pos :why (cond (after? :spawn-lost) (:why (:data (mem/latest view :spawn-lost)))
+                            (after? :spawn-reset) :reset
+                            :else :seen-gone)})
+    (when-let [e (spawn-bed-live view)]
+      {:bed (:pos (:data e))})))
+
 (def spawn-lost-policy {:cap 1 :ttl :forever})
 
 (defn lose-spawn!

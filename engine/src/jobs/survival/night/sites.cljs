@@ -4,6 +4,7 @@
             [engine.ctx :as ctx]
             [engine.memory :as mem]
             [engine.settings :as settings]
+            [jobs.lib.access :as access]
             [jobs.lib.look :as look]
             [jobs.lib.shelter :as sh]
             [jobs.lib.solid :as solid]
@@ -64,11 +65,18 @@
   (let [failed (concat (map :pos (failed-sites c)) (map (comp :pos :data) (ctx/entries c :dig-in-futile)))]
     (every? #(>= (u/dist % f) (inc (dig-in/futile-radius))) failed)))
 
+(defn zone-refused?
+  "Whether another's zone, claim or plan refuses the pit under feet cell f (three cells down) or the block at f."
+  [c {:keys [x y z]}]
+  (let [in (access/rules-input c)]
+    (boolean (or (some #(access/trespass-refusal in :dig {:x x :y (- y %) :z z}) [1 2 3])
+                 (access/trespass-refusal (assoc in :feet nil) :place {:x x :y y :z z})))))
+
 (defn relocation-site
   "The nearest feet cell within relocate-reach of the failed site the body is at (its feet when none: a body in its
   pit looks from the surface), at least futile-radius+1 from every failed site (tonight's and dig-in's
-  :dig-in-futile entries), where a pit can be dug (pit-site?), or nil."
-  [c]
+  :dig-in-futile entries), where a pit can be dug (pit-site?), or nil. With :free?, only cells no zone, claim or plan refuses."
+  [c & [{:keys [free?]}]]
   (let [p (:primitives c)
         feet (sh/feet p)
         here (first (filter #(<= (u/dist feet %) (dig-in/futile-radius)) (map :pos (failed-sites c))))
@@ -80,7 +88,7 @@
                            [dx dz]))]
     (some (fn [[dx dz]]
             (some (fn [dy] (let [f {:x (+ x dx) :y (+ y dy) :z (+ z dz)}]
-                             (when (and (clear-of-failed? c f) (pit-site? p f)) f)))
+                             (when (and (clear-of-failed? c f) (pit-site? p f) (not (and free? (zone-refused? c f)))) f)))
                   [0 -1 1 -2 2]))
           offsets)))
 

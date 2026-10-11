@@ -26,7 +26,7 @@
   One run is the whole trip: it holds still (declared :respawning, then :settling) until a :respawned entry newer than
   the death exists and its 2 s have passed (no decision, no walk), decides, walks, collects and writes :recovered.
   Every :declined emits recover-drops.declined with a :reason (:danger with :mob and :mob-pos, :unreachable) and a text.
-  It ends :declined without walking while the walk would leave a shelter at night (::hold-at-night; the window goes on).
+  It ends :declined without walking while the walk would leave a shelter at night (::hold-at-night; the window goes on), and for a pile farther than ::open-night-radius while the body is in the open at night (the night reflex shelters it first).
   It ends :declined, without acting, while a real danger is within :danger-radius, so a reflex can deal with it
   (the died trigger fires it again), and when go-to does not arrive; the despawn window ends it :abandoned.
   A real danger is a mob that can reach the body, or a ranged one with a line of fire (jobs.lib.danger/nearest-danger).
@@ -85,6 +85,7 @@
    ::stair-step-s {:default 3 :doc "Seconds one block of a stair down and its run is reckoned to take, against the despawn window left." :spec (a/num-in 0 nil)}
    ::killer-guard-ms {:default 60000 :doc "How long after a death its killer is assumed to still stand at the pile; later only the hostiles the body knows of count." :spec (a/num-in 0 nil)}
    ::hold-at-night {:default true :doc "At night a body that stands in a shelter (a roof, a closed room, underground) does not walk out of it for the pile: the run ends :declined (:night) and the died trigger tries again, by day if the pile is still there." :spec boolean?}
+   ::open-night-radius {:default 48 :doc "At night a body under the open sky does not walk farther than this for the pile: the run ends :declined (:night) so the night reflex shelters it where it stands; the trip resumes by day while the pile lasts." :spec (a/num-in 0 nil)}
    ::bed-away-blocks {:default 10 :doc "A respawn farther than this from the bed the body slept in is reported." :spec (a/int-in 0 nil)}})
 (defn seal-radius [] (settings/get settings ::seal-radius))
 (defn killer-guard-ms [] (settings/get settings ::killer-guard-ms))
@@ -571,16 +572,21 @@
               :else (give-up! :unreachable (str "no stair down to the pile: " (pr-str (or (:reason (ctx/child-result c :dig)) r)))))))))))
 
 (defn night-shelter
-  "The shelter (jobs.lib.shelter/walk-leaves-shelter?) the walk to pos would leave at night, else nil; nil with ::hold-at-night off."
+  "The shelter (jobs.lib.shelter/walk-leaves-shelter?) the walk to pos would leave at night, else :open for a walk of
+  more than ::open-night-radius under the open sky at night, else nil; nil with ::hold-at-night off."
   [c pos]
-  (when (settings/get settings ::hold-at-night)
-    (sh/walk-leaves-shelter? (:primitives c) (:data (ctx/latest c :shelter)) pos (arrive-range))))
+  (let [p (:primitives c)]
+    (when (settings/get settings ::hold-at-night)
+      (or (sh/walk-leaves-shelter? p (:data (ctx/latest c :shelter)) pos (arrive-range))
+          (when (and (sh/night? p) (not (sh/sleeping? p)) (not (sh/safe-from-night? p))
+                     (> (u/dist (u/self-pos c) pos) (settings/get settings ::open-night-radius)))
+            :open)))))
 
 (defn decline-night!
   "End :declined (not final) for the shelter the walk would leave: the despawn window goes on, so by day the trip resumes only if the pile is still there."
   [c entry pos kind]
   (decline! c :night
-            (str "the walk to " (pr-str pos) " would leave the " (name kind) " shelter at night; it waits for day while the pile lasts ("
+            (str "the walk to " (pr-str pos) (if (= :open kind) " is a long one under the open sky at night; the body shelters first" (str " would leave the " (name kind) " shelter at night")) "; it waits for day while the pile lasts ("
                  (js/Math.round (/ (settings/ticks->ms (game/despawn-left-ticks entry (ctx/view c))) 1000)) " s left)")
             {:pos pos :shelter kind}))
 

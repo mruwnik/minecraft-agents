@@ -218,6 +218,30 @@
     (is (= {:reason :not-night} (waiting {:time noon})))
     (is (= {:reason :night-safe :shelter :roofed} (waiting {:time night :blocks roof})))))
 
+(deftest the-night-says-once-that-the-respawn-bed-it-sees-gone-is-lost
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (st/setup {:time night :inventory st/dirt-stack :blocks (merge st/floor {"6,64,0" "stone"})})]
+          (mem/write! (:store eng) :spawn-bed {:pos {:x 6 :y 64 :z 0}} {:cap 1 :ttl :forever})
+          (st/dawn-after! p 3)
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (tu/run-until-empty eng 20))
+          (is (= [{:pos {:x 6 :y 64 :z 0} :why :seen-gone}] (st/entries eng :spawn-lost)))
+          (is (= 1 (count (st/emitted seen :spawn_lost)))))))))
+
+(deftest the-night-check-shows-the-spawn-state
+  (let [waiting (fn [world seed!]
+                  (let [{:keys [eng]} (st/setup world)
+                        _ (seed! eng)
+                        id (core/submit! eng '(jobs.survival.night) {})]
+                    (core/tick! eng)
+                    (:spawn (:waiting (job-api/summary eng id)))))
+        bed {:pos {:x 6 :y 64 :z 0}}]
+    (is (nil? (waiting {:time noon} (constantly nil))))
+    (is (= {:bed {:x 6 :y 64 :z 0}} (waiting {:time noon :blocks {"6,64,0" "red_bed"}} #(write! % :spawn-bed bed))))
+    (is (= {:lost {:x 6 :y 64 :z 0} :why :seen-gone} (waiting {:time noon :blocks {"6,64,0" "stone"}} #(write! % :spawn-bed bed))))))
+
 (deftest the-night-puts-a-carried-bed-down-in-the-open-sleeps-and-picks-it-up-by-day
   (async done
     (tu/run-async done

@@ -149,6 +149,22 @@
           (is (= 10 (count (calls p "place"))))
           (is (= 1 (count (trespass seen :dig-in.trespass-last-resort)))))))))
 
+(def wide-ground
+  "Dirt (no tool needed) from y 60 to 63 over x and z -12..12."
+  (into {} (for [x (range -12 13) z (range -12 13) y (range 60 64)] [(str x "," y "," z) "dirt"])))
+
+(deftest the-night-moves-out-of-a-foreign-zone-to-free-ground-before-it-digs-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:time st/night :floor [-14 -14 14 14] :blocks wide-ground} [(whole-zone "Miles")])]
+          (st/dawn-after! p 3)
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (run-until-empty eng 40))
+          (is (every? #(or (< 3 (js/Math.abs (:x %))) (< 3 (js/Math.abs (:z %)))) (mapv arg-pos (calls p "dig"))) "every cell dug lies outside the zone")
+          (is (seq (calls p "dig")) "it dug in")
+          (is (= [] (trespass seen :dig-in.trespass-last-resort))))))))
+
 (defn dug [p] (mapv arg-pos (calls p "dig")))
 
 (deftest dig-in-spares-the-bodys-own-plans-but-not-the-rest-of-its-zone

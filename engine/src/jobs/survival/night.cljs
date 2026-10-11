@@ -67,7 +67,8 @@
   Done {:night how :fled n} (stopped :exposed {:fled n}) when it fled.
   Every hold is declared (ctx/hold-still!) and waits hold-ms at a time, eating one carried food when the hungry
   trigger's condition holds (hungry?, or below 7 hp; not asleep); a starving body with no food runs get-food (when no danger is near).
-  An overdue body (no sleep for :max-days-awake in-game days) warns needs_bed once an in-game day (:needs-bed).
+  An overdue body (no sleep for :max-days-awake in-game days) warns needs_bed once an in-game day (:needs-bed). A respawn bed
+  it sees is no bed is written :spawn-lost and warned (spawn_lost) once; its waiting reasons carry :spawn ({:bed pos} or {:lost pos :why}).
   Memory: job memory :enclose (the cave cell being walled in), :sheltered (:slept, :dug-in, :logged-out, :exposed), :log-out-failed, :relocating, :digging (the
   site of a dig-in in flight), :pit-trapped and leave!'s :dig-out; :roof-walk-failed (no second walk to a roofed place tonight); body memory :night-site (failed sites, forgotten whenever the night ends, at most a day), so a
   firing after a cut does not dig a failed site again.
@@ -89,11 +90,12 @@
 (defn check
   "The night trigger's condition, or job memory :sheltered (a listed night cut before its morning)."
   [c]
-  (or (some? (:sheltered (ctx/mem c)))
-      (boolean (sh/night-holds? (:primitives c) (ctx/view c) (:args c) (bed-down/bed-permit c)))
-      (if-let [shelter (sh/night-sheltered (:primitives c) (:data (ctx/latest c :shelter)))]
-        (ctx/wait c {:reason :night-safe :shelter shelter})
-        (ctx/wait c {:reason :not-night}))))
+  (let [spawn (sh/spawn-state (:primitives c) (ctx/view c))]
+    (or (some? (:sheltered (ctx/mem c)))
+        (boolean (sh/night-holds? (:primitives c) (ctx/view c) (:args c) (bed-down/bed-permit c)))
+        (if-let [shelter (sh/night-sheltered (:primitives c) (:data (ctx/latest c :shelter)))]
+          (ctx/wait c (cond-> {:reason :night-safe :shelter shelter} spawn (assoc :spawn spawn)))
+          (ctx/wait c (cond-> {:reason :not-night} spawn (assoc :spawn spawn)))))))
 
 (def needs-bed-policy {:cap 1 :ttl sh/ms-per-day})
 
@@ -102,6 +104,13 @@
     (ctx/remember! c :needs-bed {} needs-bed-policy)
     (ctx/emit! c :needs_bed :warn {:days (sh/days-awake c)
                                    :text "not slept for too long; phantoms will come; a bed is needed (the :needs-bed trigger fetches one by day when registered)"})))
+
+(defn note-spawn-lost!
+  "The respawn bed is seen gone: remember :spawn-lost and warn spawn_lost once (sh/lose-spawn!)."
+  [c]
+  (when-let [pos (:lost (sh/spawn-state (:primitives c) (ctx/view c)))]
+    (when-not (= pos (:pos (:data (ctx/latest c :spawn-lost))))
+      (sh/lose-spawn! c pos :seen-gone))))
 
 (defn log-out-wanted? [c]
   (and (not (:log-out-failed (ctx/mem c)))
@@ -256,9 +265,19 @@
   resumes its dig-in child instead), then forgotten when the body is roofed, else marked with dig-in's stop or wait
   reason."
   [c]
-  (let [resume (:digging (ctx/mem c))]
-    (if (and (sites/failed-here? c) (not resume))
+  (let [resume (:digging (ctx/mem c))
+        free-site (when-not (or resume (sites/failed-here? c) (not (sites/zone-refused? c (sh/feet (:primitives c)))))
+                    (or (:relocating (ctx/mem c))
+                            (when (< (count (sites/failed-sites c)) (sites/max-sites)) (sites/relocation-site c {:free? true}))))]
+    (cond
+      (and (sites/failed-here? c) (not resume))
       (await (relocate! c))
+
+      free-site
+      (do (ctx/update-mem! c assoc :relocating free-site)
+          (await (relocate! c)))
+
+      :else
       (let [p (:primitives c)
             start (or resume (sh/feet p))
             _ (hold/busy! c)
@@ -408,6 +427,7 @@
         roofed (and (sh/roofed? p (:roof-height (:args c))) (not breached))
         sheltered (:sheltered (ctx/mem c))]
     (when (and (sh/night? p) (bed-down/overdue? c)) (note-needs-bed! c))
+    (note-spawn-lost! c)
     (cond
       (not (sh/night? p)) (await (morning! c))
       (sh/sleeping? p) (do (when-not (= :slept sheltered) (hold/sheltered! c :slept)) (await (hold/hold! c :sleeping)))
