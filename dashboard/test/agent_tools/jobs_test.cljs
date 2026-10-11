@@ -476,3 +476,21 @@
                                 ['(jobs.access.stair {:from {:x 0 :y 0 :z 0}}) true '(jobs.access.stair {:from {:x 0 :y 0 :z 0}})]
                                 ['(repeat (jobs.farm.tend)) true '(repeat (jobs.farm.tend))]]]
       (is (= want (jobs/stamp-from spec pos takes?)) (pr-str spec takes?)))))
+
+(deftest the-jobs-that-take-from-are-named-not-read-from-the-truncated-catalog
+  (doseq [spec ['(jobs.access.stair {:dir :down}) '(jobs.access.bridge) '(jobs.access.pillar) '(jobs.gather.mine {:block "coal_ore"})]]
+    (is (true? (jobs/takes-from? spec)) (pr-str spec)))
+  (doseq [spec ['(jobs.movement.go-to {:pos [1 2 3]}) '(repeat (jobs.access.stair)) '(jobs.access.tunnel {})]]
+    (is (false? (jobs/takes-from? spec)) (pr-str spec))))
+
+(deftest a-stair-submit-posts-from-the-snapshot-position
+  (let [state (state-dir)]
+    (async done
+      (-> (run-main! state ["submit" "(jobs.access.stair {:dir :down})"]
+                     (fn [{:keys [path]}] {:text (if (= "/snapshot" path)
+                                                   "{:generation-id \"g\" :position {:x -528.3 :y 64 :z 350.5}}"
+                                                   "{:ok true :job {:id \"j5\" :status :queued}}")}))
+          (.then (fn [{:keys [seen]}]
+                   (is (= '(jobs.access.stair {:dir :down :from {:x -528.3 :y 64 :z 350.5}})
+                          (:spec (data/read-edn (:body (last (filterv #(= "POST" (:method %)) seen)))))) (pr-str seen))))
+          (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))

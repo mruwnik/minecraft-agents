@@ -208,25 +208,21 @@
       (list (first spec) (assoc args :from (select-keys position [:x :y :z])))
       spec)))
 
+(def from-jobs
+  "Jobs that declare :from (jobs.lib.submitted). Named here because the catalog entry cuts a long args map, and :from sits past the cut in stair's."
+  #{"jobs.access.stair" "jobs.access.bridge" "jobs.access.pillar" "jobs.gather.mine"})
+
 (defn takes-from?
-  "A promise: whether the job's catalog entry lists the arg :from (false when unreadable)."
-  [r spec opts]
-  (let [head (str (first spec))]
-    (if-not (str/starts-with? head "jobs.")
-      (js/Promise.resolve false)
-      (-> (get! (:socketPath r) (str "/catalog?kind=job&name=" head) opts)
-          (.then (fn [{:keys [status content-type text]}]
-                   (and (= 200 status) (http/edn-response? content-type)
-                        (contains? (:args (data/read-edn text)) :from))))
-          (.catch (fn [_] false))))))
+  "Whether the spec's job is one of from-jobs."
+  [spec]
+  (contains? from-jobs (str (first spec))))
 
 (defn stamped
-  "A promise of the request body with :from stamped into a submitted spec (see stamp-from); position is the snapshot's."
-  [r request position opts]
+  "The request body with :from stamped into a submitted spec (see stamp-from); position is the snapshot's."
+  [request position]
   (if-not (and (#{:submit :interrupt} (:op request)) (:spec request) position)
-    (js/Promise.resolve request)
-    (.then (takes-from? r (:spec request) opts)
-           (fn [takes?] (update request :spec stamp-from position takes?)))))
+    request
+    (update request :spec stamp-from position (takes-from? (:spec request)))))
 
 (defn exchange! [r opts]
   (cond
@@ -237,8 +233,7 @@
              (when-not (and (= 200 (:status snapshot)) (http/edn-response? (:content-type snapshot)))
                (throw (js/Error. "snapshot unavailable")))
              (let [generation (generation-for! r snapshot)]
-               (.then (stamped r (:request r) (:position (data/read-edn (:text snapshot))) opts)
-                      (fn [request] (post! (:socketPath r) (assoc request :generation-id generation) (assoc opts :path (:path r))))))))
+               (post! (:socketPath r) (-> (stamped (:request r) (:position (data/read-edn (:text snapshot)))) (assoc :generation-id generation)) (assoc opts :path (:path r))))))
     :else (get! (:socketPath r) (:path r) opts)))
 
 (defn job-detail [value]
