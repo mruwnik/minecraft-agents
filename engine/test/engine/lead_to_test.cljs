@@ -5,6 +5,7 @@
             [engine.fake :as fake]
             [jobs.lib.walk :as walk]
             [jobs.lib.walk.plan :as wplan]
+            [jobs.animals.escort :as escort]
             [jobs.animals.lead-to :as lead-to]
             [engine.fetch-test :as fetch-test]
             [engine.hostile-test :as h]
@@ -109,8 +110,8 @@
               waited (- (now) t0)]
           (is (= :lagging (:reason (done-event s))))
           (is (seq holds) "the wait is a declared hold")
-          (is (<= lead-to/max-wait-ms waited) "the cow was waited for the whole bound")
-          (is (< waited (+ lead-to/max-wait-ms 3000)) "and given up soon after it"))))))
+          (is (<= escort/max-wait-ms waited) "the cow was waited for the whole bound")
+          (is (< waited (+ escort/max-wait-ms 3000)) "and given up soon after it"))))))
 
 (deftest a-tie-walk-that-cannot-arrive-ends-unreachable-with-the-cow-still-led
   (async done
@@ -434,7 +435,7 @@
         (let [s (setup {:floor tu/walk-floor :inventory lead})
               opts (atom nil)]
           (with-redefs [walk/plan-walk! (fn ([_ _ _ _ _] (js/Promise.resolve nil)) ([_ _ _ _ _ o] (reset! opts o) (js/Promise.resolve nil)))]
-            (await (lead-to/leg-target {:primitives (:p s)} {:x 150 :y 64 :z 0} 3)))
+            (await (escort/leg-target {:primitives (:p s)} {:x 150 :y 64 :z 0} 3)))
           (is (pos? (:budget @opts)) "a far target is searched a round at a time"))))))
 
 (deftest the-reach-check-is-false-when-planning-throws
@@ -713,8 +714,8 @@
 
 (deftest shut-radius-covers-every-opened-gate
   (let [e #(hash-map :cell {:x % :y 64 :z 0})]
-    (is (= 16 (lead-to/shut-radius {:x 0 :y 64 :z 0} [(e 3)])) "never below the default")
-    (is (= 41 (lead-to/shut-radius {:x 0 :y 64 :z 0} [(e 3) (e 40)])) "a gate 40.5 away")))
+    (is (= 16 (escort/shut-radius {:x 0 :y 64 :z 0} [(e 3)])) "never below the default")
+    (is (= 41 (escort/shut-radius {:x 0 :y 64 :z 0} [(e 3) (e 40)])) "a gate 40.5 away")))
 
 (def fence-line
   "A fence line across the lane at x 15, z -4..9; the way round is the open end at z -5."

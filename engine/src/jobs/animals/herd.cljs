@@ -7,10 +7,10 @@
             [jobs.lib.fetch :as fetch]
             [jobs.lib.util :as u]
             [jobs.lib.child :as child]
-            [jobs.animals.lead-to :as lead-to]
+            [jobs.animals.escort :as escort]
             [jobs.lib.watch :as watch]
             [jobs.animals.herd-run :refer [adults after-shut! cell census! crowd-in-radius crowd-ms crowd-out-radius deepest end! exit-shut-ms gate-cell gate-index gate-open? hold-gate! cell-pos in-1 in-pen-adults led-now lure? animal-now follow-range out-1 read-pen release-step! set-phase! settle-ms settle-out-ms shut-failed! shut-look-ms transient-keys]]
-            [jobs.animals.herd-pen :refer [body-in-pen? cell-middle crowded-near? exit-dash! flat-dist go-then! let-go-cell look-wait! max-leaves on-gate? set-gate! settle-at! shut-side! shut-when-clear! survey! wait-clear! waited-ms]]
+            [jobs.animals.herd-pen :refer [body-in-pen? cell-middle crowded-near? exit-dash! go-then! let-go-cell look-wait! max-leaves on-gate? set-gate! settle-at! shut-side! shut-when-clear! survey! wait-clear! waited-ms]]
             [jobs.animals.herd-trip :refer [leash-next! pinned! remember-start! prune-led! regather! regather-or-lose! released! step-position!]]))
 
 (def doc
@@ -132,27 +132,27 @@
 
 (defn ^:async lure-approach!
   "The walk to the pen's first cell with a lured animal: an animal follows the food only within follow-range, so the body goes
-  in short go-to legs and holds still while the animal trails more than lead-to/safe-gap; unseen for lead-to/unseen-lost-ms
+  in short go-to legs and holds still while the animal trails more than escort/safe-gap; unseen for escort/unseen-lost-ms
   or beyond follow-range it is given up. The last leg is settle-at!'s."
   [c]
   (let [m (ctx/mem c)
         a (animal-now c (:animal m))
         now (ctx/now c)
         since (or (:unseen-since m) now)
-        d (when a (flat-dist (u/pos-of (.-pos a)) (u/self-pos c)))
+        d (when a (u/flat-dist (u/pos-of (.-pos a)) (u/self-pos c)))
         target (cell-pos (nth (:axis m) 0))]
     (cond
-      (nil? a) (if (<= lead-to/unseen-lost-ms (- now since))
+      (nil? a) (if (<= escort/unseen-lost-ms (- now since))
                  (lure-lost! c :lost)
-                 (do (ctx/update-mem! c assoc :unseen-since since) (await (lead-to/wait-for-animal! c)) :continue))
+                 (do (ctx/update-mem! c assoc :unseen-since since) (await (escort/wait-for-animal! c)) :continue))
       (> d (follow-range)) (lure-lost! c :lagging)
-      (do (ctx/update-mem! c dissoc :unseen-since) (> d lead-to/safe-gap))
+      (do (ctx/update-mem! c dissoc :unseen-since) (> d escort/safe-gap))
       (let [waiting (or (:wait-since m) now)]
-        (if (> (- now waiting) lead-to/max-wait-ms)
+        (if (> (- now waiting) escort/max-wait-ms)
           (lure-lost! c :lagging)
-          (do (ctx/update-mem! c assoc :wait-since waiting) (await (lead-to/wait-for-animal! c)) :continue)))
+          (do (ctx/update-mem! c assoc :wait-since waiting) (await (escort/wait-for-animal! c)) :continue)))
       :else (let [_ (ctx/update-mem! c dissoc :wait-since)
-                  leg (await (lead-to/leg-target c target 1))]
+                  leg (await (escort/leg-target c target 1))]
               (if-not leg
                 (await (settle-at! c 0 (settle-out-ms) #(set-phase! c :clear-out)))
                 (do (await (child/call-walk c :walk {:pos leg :range 1 :doors :never :escalate false}))
@@ -252,7 +252,7 @@
   [c]
   (let [axis (:axis (ctx/mem c))
         here (u/self-pos c)]
-    (apply min-key #(flat-dist here (cell-middle (nth axis %))) (range gate-index (inc (min deepest (dec (count axis))))))))
+    (apply min-key #(u/flat-dist here (cell-middle (nth axis %))) (range gate-index (inc (min deepest (dec (count axis))))))))
 
 (defn restart!
   "The round starts unsafe: the last one was cut there (or the world changed). Go on from what the world shows, the

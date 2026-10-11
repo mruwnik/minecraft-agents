@@ -132,6 +132,9 @@
 (defn dist [a b]
   (js/Math.hypot (- (:x a) (:x b)) (- (:y a) (:y b)) (- (:z a) (:z b))))
 
+(defn flat-dist [a b]
+  (js/Math.hypot (- (:x a) (:x b)) (- (:z a) (:z b))))
+
 
 (def eye-reach
   "Eye-to-centre distance within which a block is dug or placed without walking: a margin under the primitives' 4.5."

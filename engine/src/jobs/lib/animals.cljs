@@ -138,3 +138,6 @@
           (do (give-up! c k :unreachable)
               (bump-row! c)
               :blocked))))))
+
+(defn lead-carried? [c]
+  (some #(= "lead" (:name %)) (u/inventory (:primitives c))))

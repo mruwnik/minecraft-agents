@@ -4,7 +4,7 @@
             [engine.ctx :as ctx]
             [jobs.animals.herd-run :as hr]
             [jobs.animals.herd-trip :as ht]
-            [jobs.animals.lead-to :as lead-to]
+            [jobs.animals.escort :as escort]
             [jobs.lib.animals :as animals]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.pen-gate :as pg]
@@ -75,7 +75,7 @@
     (case reason
       :none (str "no adult " mob " free to lure within " radius " blocks" (skipped-text c))
       :animal-outside (str "the body is at the spot but the " mob " stands outside the destination, "
-                           (some-> (lead-to/animal-now c) .-pos u/pos-of (lead-to/flat-dist (:pos (:args c))) js/Math.round) " blocks from it")
+                           (some-> (escort/animal-now c) .-pos u/pos-of (u/flat-dist (:pos (:args c))) js/Math.round) " blocks from it")
       :no-food (str "no food for " mob " carried and none could be got")
       (str "luring stopped: " (name reason)))))
 
@@ -85,22 +85,22 @@
   [c]
   (let [me (u/self-pos c)
         {:keys [animal last-seen]} (ctx/mem c)
-        near (first (sort-by #(lead-to/flat-dist me (u/pos-of (.-pos %))) (animals/adults (:primitives c) (:mob (:args c)) (:watch-radius (:args c)))))]
+        near (first (sort-by #(u/flat-dist me (u/pos-of (.-pos %))) (animals/adults (:primitives c) (:mob (:args c)) (:watch-radius (:args c)))))]
     {:tracked animal
      :last-seen last-seen
-     :last-seen-dist (some->> last-seen (lead-to/flat-dist me))
-     :nearest (when near {:key (animals/key-of near) :dist (lead-to/flat-dist me (u/pos-of (.-pos near))) :leashed (animals/leashed? near)})}))
+     :last-seen-dist (some->> last-seen (u/flat-dist me))
+     :nearest (when near {:key (animals/key-of near) :dist (u/flat-dist me (u/pos-of (.-pos near))) :leashed (animals/leashed? near)})}))
 
 (defn ^:async conclude!
   "Put the food away, emit the outcome, hand it to the parent and end the job."
   [c reason]
   (when (hr/holds-food? c) (await (ctx/act c :unequip #js {})))
   (let [m (ctx/mem c)
-        a (lead-to/animal-now c)
+        a (escort/animal-now c)
         ok? (= :arrived reason)
         result {:reason reason :animal (:animal m) :at (u/self-pos c)
-                :distance (some-> a .-pos u/pos-of (lead-to/flat-dist (:pos (:args c))))
-                :near (boolean (and a (<= (lead-to/flat-dist (u/pos-of (.-pos a)) (:pos (:args c))) near-spot)))}]
+                :distance (some-> a .-pos u/pos-of (u/flat-dist (:pos (:args c))))
+                :near (boolean (and a (<= (u/flat-dist (u/pos-of (.-pos a)) (:pos (:args c))) near-spot)))}]
     (ctx/emit! c :lure-to.done :info (cond-> (assoc result :text (str "lure-to done: " (name reason)))
                                        (= :lost reason) (assoc :lost (lost-detail c))))
     (when-not ok?
@@ -119,17 +119,17 @@
         there (u/pos-of (.-pos a))]
     (if box
       (animals/in-box? box there)
-      (<= (lead-to/flat-dist there pos) near-spot))))
+      (<= (u/flat-dist there pos) near-spot))))
 
 (defn candidates
   "The adults within radius of the start, on nobody's lead, the zone rules allowing, nearest first; none already in :box."
   [c]
   (let [{:keys [mob radius]} (:args c)
         origin (:origin (ctx/mem c))]
-    (->> (animals/adults (:primitives c) mob (+ radius (lead-to/flat-dist origin (u/self-pos c))))
-         (filterv #(and (not (animals/leashed? %)) (<= (lead-to/flat-dist origin (u/pos-of (.-pos %))) radius)
+    (->> (animals/adults (:primitives c) mob (+ radius (u/flat-dist origin (u/self-pos c))))
+         (filterv #(and (not (animals/leashed? %)) (<= (u/flat-dist origin (u/pos-of (.-pos %))) radius)
                         (not (and (:box (:args c)) (animals/in-box? (:box (:args c)) (u/pos-of (.-pos %)))))))
-         (sort-by #(lead-to/flat-dist (u/self-pos c) (u/pos-of (.-pos %))))
+         (sort-by #(u/flat-dist (u/self-pos c) (u/pos-of (.-pos %))))
          vec
          (animals/allowed c :lure-to.declined "lure-to" :take))))
 
@@ -138,7 +138,7 @@
   [c]
   (let [me (u/self-pos c)]
     (->> (candidates c)
-         (filterv #(<= (lead-to/flat-dist me (u/pos-of (.-pos %))) lead-to/follow-reach))
+         (filterv #(<= (u/flat-dist me (u/pos-of (.-pos %))) escort/follow-reach))
          first)))
 
 (defn ^:async get-food!
@@ -190,20 +190,20 @@
   "The body stands at :pos: the job ends :arrived once the led animal is at the destination; until then the body holds
   still for it, and ends :animal-outside (seen outside) or :lost (not seen) after max-wait-ms."
   [c]
-  (let [a (lead-to/animal-now c)
+  (let [a (escort/animal-now c)
         now (ctx/now c)
         since (or (:arrive-since (ctx/mem c)) now)]
     (cond
       (and a (at-destination? c a)) (finish! c :arrived)
-      (> (- now since) lead-to/max-wait-ms) (finish! c (if a :animal-outside :lost))
+      (> (- now since) escort/max-wait-ms) (finish! c (if a :animal-outside :lost))
       :else (do (ctx/update-mem! c assoc :arrive-since since)
-                (await (lead-to/wait-for-animal! c))))))
+                (await (escort/wait-for-animal! c))))))
 
 (defn ^:async walk-legs! [c]
-  (let [r (await (lead-to/walk-legs! c :walk (:pos (:args c)) (:range (:args c)) nil nil lead-to/safe-gap))]
+  (let [r (await (escort/walk-legs! c :walk (:pos (:args c)) (:range (:args c)) nil nil escort/safe-gap))]
     (cond
       (= :waiting r) :yield
-      (= :catching-up r) (await (lead-to/wait-for-animal! c))
+      (= :catching-up r) (await (escort/wait-for-animal! c))
       (= :arrived r) (await (arrive! c))
       (= :failed r) (finish! c :unreachable)
       (and (= :lead-broke (:problem r)) (not (hr/holds-food? c))) :again
@@ -233,18 +233,18 @@
         {:keys [timeout-s]} (:args c)]
     (ctx/update-mem! c update :started #(or % now))
     (let [{:keys [phase started]} (ctx/mem c)
-          a (when (:animal (ctx/mem c)) (lead-to/animal-now c))]
+          a (when (:animal (ctx/mem c)) (escort/animal-now c))]
       (when a (ctx/update-mem! c #(-> % (dissoc :unseen-since) (assoc :last-seen (u/pos-of (.-pos a))))))
       (cond
-        (:ending (ctx/mem c)) (await (lead-to/close-up! c conclude!))
+        (:ending (ctx/mem c)) (await (escort/close-up! c conclude!))
         (>= (- now started) (* 1000 timeout-s)) (finish! c :timeout)
         (nil? phase) (do (ctx/update-mem! c assoc :method :lure :origin (u/self-pos c) :phase :start) :again)
         (= :start phase) (await (u/untimed! c #(start! c)))
         (nil? a) (if-let [next-one (successor c)]
                    (do (ctx/update-mem! c #(-> % (assoc :animal (animals/key-of next-one)) (dissoc :unseen-since))) :again)
-                   (if (= :lost (lead-to/escort-problem c lead-to/safe-gap))
+                   (if (= :lost (escort/escort-problem c escort/safe-gap))
                      (finish! c :lost)
-                     (await (lead-to/wait-for-animal! c))))
+                     (await (escort/wait-for-animal! c))))
         :else (do (await (watch/watch! c {})) (await (walk! c)))))))
 
 (defn ^:async round

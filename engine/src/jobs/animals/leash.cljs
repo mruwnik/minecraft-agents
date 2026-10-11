@@ -62,16 +62,13 @@
     (ctx/result! c result)
     :done))
 
-(defn flat-dist [a b]
-  (js/Math.hypot (- (:x a) (:x b)) (- (:z a) (:z b))))
-
 (defn herd [c]
   (let [{:keys [mob radius center]} (:args c)
         p (:primitives c)]
     (if-not center
       (animals/herd p mob radius)
-      (let [around (fn [e] (flat-dist (u/pos-of (.-pos e)) center))]
-        (->> (animals/herd p mob (+ radius (flat-dist (u/self-pos c) center)))
+      (let [around (fn [e] (u/flat-dist (u/pos-of (.-pos e)) center))]
+        (->> (animals/herd p mob (+ radius (u/flat-dist (u/self-pos c) center)))
              (filterv #(<= (around %) radius))
              (sort-by #(around %))
              vec)))))
@@ -129,13 +126,10 @@
       (>= (:in-row (ctx/mem c) 0) (max-in-row)) (finish! c (none-reason c) nil)
       :else :again)))
 
-(defn lead-carried? [c]
-  (some #(= "lead" (:name %)) (u/inventory (:primitives c))))
-
 (defn problem
   "The need wait for a lead while none is carried and an animal waits, else nil."
   [c]
-  (when (and (not (lead-carried? c)) (seq (candidates c)))
+  (when (and (not (animals/lead-carried? c)) (seq (candidates c)))
     {:reason :need :item "lead"}))
 
 (defn ^:async no-lead!
@@ -155,7 +149,7 @@
           cands (candidates c)]
       (cond
         (>= (- now (:started m)) (* 1000 timeout-s)) (finish! c :timeout nil)
-        (not (lead-carried? c)) (await (no-lead! c))
+        (not (animals/lead-carried? c)) (await (no-lead! c))
         (empty? cands) (finish! c (none-reason c) nil)
         :else (await (engage! c (first cands)))))))
 

@@ -397,9 +397,6 @@
     :failed (end! c :unreachable)
     :continue))
 
-(defn flat-dist [a b]
-  (js/Math.hypot (- (:x a) (:x b)) (- (:z a) (:z b))))
-
 (defn cell-middle [[x _ z]] {:x (+ x 0.5) :z (+ z 0.5)})
 
 (defn animal-pos [c]
@@ -416,9 +413,9 @@
         :failed :unreachable
         nil)
       (if-let [there (animal-pos c)]
-        (let [moved (if-let [l (:last-seen m)] (flat-dist l there) 1.0)
+        (let [moved (if-let [l (:last-seen m)] (u/flat-dist l there) 1.0)
               waited (- (ctx/now c) (:settle-from m))]
-          (case (settle-step (flat-dist (u/self-pos c) there) moved waited)
+          (case (settle-step (u/flat-dist (u/self-pos c) there) moved waited)
             :settled :settled
             :pinned :pinned
             (if (>= waited max-ms)
@@ -452,7 +449,7 @@
 (defn crowded-near?
   "True when an adult of :mob stands within r (flat) of the middle of cell."
   [c cell r]
-  (boolean (some #(<= (flat-dist (u/pos-of (.-pos %)) (cell-middle cell)) r) (adults c))))
+  (boolean (some #(<= (u/flat-dist (u/pos-of (.-pos %)) (cell-middle cell)) r) (adults c))))
 
 (defn on-gate?
   "True when an adult of :mob overlaps the gate cell."
