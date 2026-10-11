@@ -160,20 +160,23 @@
 
 (a/defargs settings
   {::pillar-height {:default 3 :doc "Height of the pillar built as a refuge, in blocks." :spec (a/int-in 0 nil)}
+   ::pillar-extend {:default 2 :doc "Blocks a body hit on its pillar raises it by, once, before it gives the refuge up; 0: it gives up at once." :spec (a/int-in 0 nil)}
    ::leave-for-breakers {:default true :doc "Whether a hidden body leaves its refuge, before it is hit, for a creeper (its blast breaks any refuge) or, on a pillar, a spider (it climbs) within :breaker-reach." :spec boolean?}
    ::breaker-reach {:default 6 :doc "Blocks within which a creeper or a climber counts as breaching a hidden body's refuge." :spec (a/num-in 0 nil)}})
 (defn leave-for-breakers? [] (settings/get settings ::leave-for-breakers))
 (defn breaker-reach [] (settings/get settings ::breaker-reach))
 (defn pillar-height [] (settings/get settings ::pillar-height))
+(defn pillar-extend [] (settings/get settings ::pillar-extend))
 
 (defn pillar-item
-  "The carried :blocks block with the most, when it is at least pillar-height; else nil."
-  [c]
+  "The carried :blocks block with the most, when it is at least n (default pillar-height); else nil."
+  ([c] (pillar-item c (pillar-height)))
+  ([c n]
   (->> (lb/carried c (:blocks (:args c)))
-       (filter #(>= (:count %) (pillar-height)))
+       (filter #(>= (:count %) n))
        (sort-by :count >)
        first
-       :name))
+       :name)))
 
 (def climb-radius
   "Blocks round the pillar within which a mob's climb to its top is looked for."
@@ -426,6 +429,26 @@
            (filter #(or (combat/creeper? %) (and (= :pillar kind) (combat/climber? %))))
            first))))
 
+(declare hostiles-known)
+
+(defn ^:async raise-or-abandon!
+  "A pillared body that was hit: once, raise the pillar pillar-extend blocks (jobs.access.pillar from the top, its cells
+  added to the refuge) when that many blocks are carried; else the refuge fails (abandon-refuge!)."
+  [c]
+  (let [{:keys [kind cells] :as refuge} (:refuge (ctx/mem c))
+        n (pillar-extend)
+        item (when (= :pillar kind) (pillar-item c n))
+        top (peek cells)]
+    (if-not (and item (pos? n) (not (:raised refuge)))
+      (await (abandon-refuge! c))
+      (let [r (await (ctx/call-child c :pillar 'jobs.access.pillar {:height n :item item :ignore-zones? true}))
+            built (:built (ctx/child-result c :pillar) 0)
+            more (mapv #(escape/up top %) (range 1 (inc n)))]
+        (ctx/update-mem! c update :refuge assoc :raised true :cells (into cells (take built more)))
+        (if (and (= :done r) (pos? built))
+          :again
+          (await (abandon-refuge! c)))))))
+
 (defn ^:async hide-hold!
   "Sealed in, up the pillar or down the pit: hold (a :wait, why hiding) while the refuge keeps a danger off
   (refuge-danger?) and :quiet-s after the last one, then end the flight :hidden. Past :hide-s in the refuge with no real
@@ -450,8 +473,9 @@
       (cond
         hurt? (let [ids (map (fn [e] (.-id e)) (flight/near-known (:primitives c) #{} reach-radius reach-radius))]
                 (ctx/update-mem! c #(-> % (dissoc :quiet-from :hidden-since :hold-health) (update :reached (fnil into #{}) ids)))
-                (ctx/emit! c :retreat.hide-hurt :warn {:text "hurt while hidden: the refuge does not keep the hostile off" :pos (sh/feet (:primitives c))})
-                (await (abandon-refuge! c)))
+                (ctx/emit! c :retreat.hide-hurt :warn {:text "hurt while hidden: the refuge does not keep the hostile off" :pos (sh/feet (:primitives c))
+                                                       :hostiles (hostiles-known c)})
+                (await (raise-or-abandon! c)))
         breaker (let [name (.-name breaker)]
                   (ctx/update-mem! c #(-> % (dissoc :quiet-from :hidden-since :hold-health) (update :reached (fnil conj #{}) (.-id breaker))))
                   (ctx/emit! c :retreat.hide-breached :warn {:text (str "a " name " is near: the refuge does not keep it off, leaving before it strikes")

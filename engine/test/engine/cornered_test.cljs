@@ -904,3 +904,33 @@
                 ev (first (filter #(= :retreat.hide-breached (:kind %)) @seen))]
             (is (= mob-name (:mob ev)) "the arrival is logged with the mob")
             (is (empty? (filter #(= :retreat.hide-hurt (:kind %)) @seen)) "left before being hit")))))))
+
+(deftest an-unarmed-cornered-body-looks-for-a-way-to-walk-before-it-punches
+  (doseq [[in held] [[{:armed? false :win? false :sweeps 0 :fist-sweeps 1} true]
+                     [{:armed? false :win? false :sweeps 1 :fist-sweeps 1} false]
+                     [{:armed? false :win? false :sweeps 0 :fist-sweeps 0} false]
+                     [{:armed? true :win? false :sweeps 0 :fist-sweeps 1} false]
+                     [{:armed? false :win? true :sweeps 0 :fist-sweeps 1} false]]]
+    (is (= held (retreat/fist-hold? in)) (pr-str in))))
+
+(deftest a-pillared-body-hurt-on-its-pillar-raises-it-instead-of-fighting
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:blocks doorway :inventory [{:name "dirt" :count 20}] :entities [(zombie 0 64 1)]})
+              hurt (atom false)]
+          (.override (.-world p) "wait"
+                     (fn [token a impl]
+                       (when (and (hiding? seen) (not @hurt))
+                         (reset! hurt true)
+                         (swap! (fake/state p) update-in [:self :health] - 2))
+                       (when (>= (count (calls p "jumpPlace")) 5) (swap! (fake/state p) assoc :entities []))
+                       (impl token a)))
+          (core/submit! eng hiding-retreat {})
+          (await (core/tick! eng))
+          (is (= 5 (count (calls p "jumpPlace"))) "three blocks, then two more once the first three were hit")
+          (is (zero? (count (calls p "attack"))) "no fist fight")
+          (is (= 1 (count (filter #(= :retreat.hide-hurt (:kind %)) @seen))))
+          (let [hostiles (:hostiles (first (filter #(= :retreat.hide-hurt (:kind %)) @seen)))]
+            (is (= ["zombie"] (map :name hostiles)) "the hit names who was near")
+            (is (every? number? (:pos (first hostiles))) "and where")))))))

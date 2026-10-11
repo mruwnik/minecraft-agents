@@ -86,7 +86,9 @@
        harvestable with what is carried), step in and seal the way in with the dug blocks (the seal option again).
      - The pit and the pocket are dropped when a dig shows fluid or a cave (a seen open cell) in their shell. Lava is first
        filled with a carried block (:on-lava :seal, the default; :stop leaves it).
-     - last of all, fight with the best weapon or tool (pickaxe, shovel, hoe) or the fist.
+     - last of all, fight with the best weapon or tool (pickaxe, shovel, hoe) or the fist. A body with no weapon
+       (:weapons) first looks for a way to walk once more (:fist-sweeps, default 1).
+       A pillared body that is hit raises the pillar `retreat-refuge/::pillar-extend` (2) blocks, once, before the refuge fails.
      Order: fight if it wins, then seal, pillar (not against a ranged mob or a spider), back off, pit, pocket, fight.
      Against a creeper back off comes first.
      An option that fails is not tried again until all have failed. Then, after a second's hold, all are tried again
@@ -123,7 +125,8 @@
    :hide-s {:doc "a hidden body hands back after this many seconds in its refuge, though a danger it keeps off stays, once no real danger is on it as it stands" :spec (a/num-in 0 nil) :default 60}
    :swim-factor {:doc "blocks of walking a block of swimming costs a flight; nil: jobs.lib.cost/swim-factor of the boots" :spec (a/num-in 1 nil) :default nil}
    :hide-health {:doc "at or under this health, in a ranged chaser's line of fire with no covered step, take cover where it stands before walking on" :spec (a/num-in 0 20) :default 12}
-   :no-gain-steps {:doc "flight steps without a new best gap to the nearest chaser before the cornered options are tried" :spec (a/int-in 1 nil) :default 20}})
+   :no-gain-steps {:doc "flight steps without a new best gap to the nearest chaser before the cornered options are tried" :spec (a/int-in 1 nil) :default 20}
+   :fist-sweeps {:doc "times a body with no weapon, every cornered option failed, looks for a way to walk before it punches a hostile it would not beat; 0: it punches at once" :spec (a/int-in 0 nil) :default 1}})
 
 (def tool-weapons
   "Item name substrings a cornered body with no weapon and no seal swings: any of them beats the fist."
@@ -418,15 +421,28 @@
   (await (ctx/act c :wait #js {:ms (flight/wait-ms) :why "cornered"}))
   (if (flight/cannot-escape? (ctx/mem c)) (flight/end-flight! c :cannot-escape) :again))
 
+(defn fist-hold?
+  "Pure: whether a cornered body walks on if it can once more before it fights: no weapon carried (armed? false), the odds
+  not won (win?) and fewer than fist-sweeps sweeps done."
+  [{:keys [armed? win? sweeps fist-sweeps]}]
+  (and (not armed?) (not win?) (< sweeps fist-sweeps)))
+
+(defn ^:async fist-look!
+  "Count a sweep and let the flight step again: it walks away if a way has opened, else the options (all failed) come back here."
+  [c]
+  (ctx/update-mem! c flight/count-sweep)
+  :again)
+
 (defn ^:async cornered!
   "Nowhere worth walking to: the first option of escape-order that it can take and has not failed since the last
   start over (blocked!). home?: the body is in its home room."
   ([c why] (await (cornered! c why false)))
   ([c why home?]
-  (let [{:keys [weapons]} (:args c)
+  (let [{:keys [weapons fist-sweeps]} (:args c)
         hostiles (near-hostiles c)
         threat (first hostiles)
-        order (escape-order {:win? (fight-wins? c (if (:hit-on-the-run (ctx/mem c)) (hitters c hostiles) hostiles))
+        win? (fight-wins? c (if (:hit-on-the-run (ctx/mem c)) (hitters c hostiles) hostiles))
+        order (escape-order {:win? win?
                              :creeper? (boolean (some combat/creeper? hostiles))
                              :enderman? (angry-enderman? c hostiles)
                              :flyer? (boolean (some combat/flyer? hostiles))
@@ -437,7 +453,10 @@
     (loop [[option & more] order]
       (let [r (when-not (flight/tried? c option)
                 (case option
-                  :fight (await (fight! c (if (= [:fight] order) weapons (into (vec weapons) tool-weapons))))
+                  :fight (if (fist-hold? {:armed? (some? (combat/best-weapon (:primitives c) weapons)) :win? win?
+                                          :sweeps (:sweeps (ctx/mem c) 0) :fist-sweeps fist-sweeps})
+                           (await (fist-look! c))
+                           (await (fight! c (if (= [:fight] order) weapons (into (vec weapons) tool-weapons)))))
                   :seal (await (refuge/hide! c))
                   :pillar (await (refuge/pillar! c))
                   :water (await (water! c))
