@@ -322,5 +322,29 @@
           (is (empty? (gt/events-of s :go-to.escalated)) "nothing new is cut")
           (is (= [[true [-79 59 0]]] (map (juxt :take :to) (gt/events-of s :go-to.own-way)))))))))
 
+;; A dirt mass with a shut tunnel (feet 40, x 0..6) and the body's own stair from its west end up to feet 46 at x -6
+;; (floors [-1 40 0] .. [-6 45 0]), shut by the body with two cobblestone in the head space of its second step (a pickaxe carried).
+(def short-floors (vec (for [i (range 1 7)] [(- i) (+ 39 i) 0])))
+(def cap [[-2 43 0] [-2 44 0]])
+
+(def capped
+  (let [tunnel (for [x (range 0 7) y [40 41 42]] (str x "," y ",0"))
+        stair (for [[x y _] short-floors dy [1 2 3]] (str x "," (+ y dy) ",0"))]
+    (merge (apply dissoc (box -30 29 -1 20 59 1 "dirt") (concat tunnel stair))
+           (into {} (for [[x y z] cap] [(str x "," y "," z) "cobblestone"])))))
+
+(deftest a-body-shut-in-by-a-cap-in-its-own-stair-digs-the-cap-and-climbs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p] :as s} (await (climb! {:blocks capped :self {:pos {:x 0.5 :y 40 :z 0.5}} :light [0 0] :stair-way short-floors
+                                                    :inventory [{:name "stone_pickaxe" :count 1}]}
+                                                   {:pos [-6 46 0]}))
+              blocks (:blocks @(fake/state p))]
+          (is (true? (:arrived @out)))
+          (is (= ["air" "air"] (map #(get blocks % "air") cap)) "the cap is dug")
+          (is (= (repeat 6 "dirt") (map #(get blocks %) short-floors)) "no floor of the stair is dug")
+          (is (= [[:stair :own-way-blocked]] (map (juxt :step :why) (gt/events-of s :go-to.escalated)))))))))
+
 (deftest a-walk-up-its-own-way-slower-than-a-new-stair-is-not-taken
   (is (= [true false] (map #(:take (climb/weigh (vec (range %)) 16 3)) [193 200]))))

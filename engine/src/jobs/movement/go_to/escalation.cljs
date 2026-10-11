@@ -199,6 +199,14 @@
     {:fruitless (inc (if nearer? 0 (:fruitless m 0)))
      :escalation-best (min d (or best d))}))
 
+(defn own-stair
+  "The body's own stair cut again (climb/recut) as the way out for a body standing on it under goal: what stands in its
+  walk space (a cap the body put there) is cleared before any other way is cut, its floors are not. nil once it failed
+  this call (memory :own-way-done) and on a climb away from a dive (climb/own-route chose the way there)."
+  [c feet goal]
+  (when (and (> (second goal) (second feet)) (not-any? (ctx/mem c) [:own-way-done :dive-climb]))
+    (climb/recut feet (ledger/ways-of c))))
+
 (defn ^:async escalate!
   "Start the next escalation for the give-up kept in memory (:give-up), or give up with it when there is none (or
   with failed, the detail of the escalation that just failed, when there is none left after it; past max-escalations
@@ -216,6 +224,7 @@
         opts {:own? (own-placed-fn c) :skip (:skipped-steps (ctx/mem c) #{})}
         e (or (when (shelter-exit? c result) {:step :leave-shelter})
               (gap-fill c result (:skip opts))
+              (own-stair c feet goal)
               (escape/choose (:primitives c) feet goal (may-dig-fn c) opts))
         choosable? #(not= :none (:step (escape/choose (:primitives c) feet goal % opts)))
         e (cond
@@ -230,8 +239,8 @@
       (> n max-escalations) (end/give-up! c pos tries status result {:escalation (or failed (:last-failed (ctx/mem c)) {:step :spent :n max-escalations})})
       (= :none (:step e)) (end/give-up! c pos tries status result {:escalation (or failed e)})
       :else
-      (do (ctx/emit! c :go-to.escalated :info {:step (:step e) :why (:why (end/give-up-fields result)) :n n :at feet
-                                               :text (str "no way out on foot: " (name (:step e)))})
+      (do (ctx/emit! c :go-to.escalated :info {:step (:step e) :why (if (:own e) :own-way-blocked (:why (end/give-up-fields result))) :n n :at feet
+                                               :text (if (:own e) "its own stair up is blocked: cutting it again" (str "no way out on foot: " (name (:step e))))})
           (ctx/update-mem! c #(-> (merge % counted)
                                   (assoc :escalations (inc (:escalations % 0)) :escalation e :escalation-from feet
                                          :planned (planned-cells (:primitives c) e feet) :holes-before (count (own-holes c)))))
