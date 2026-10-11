@@ -89,3 +89,18 @@
               s (await (m/scenario {:block "iron_ore" :level false :count 1 :tunnel-length 0} world 60))]
           (is (contains? (kinds s) :tool.spare))
           (is (= [0 64 0] (m/feet s))))))))
+
+(deftest a-pickaxe-worn-down-mid-stair-gets-a-spare-instead-of-stopping-tool-spent
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [wear (fn [p]
+                     (let [world (.-world p)]
+                       (.override world "dig"
+                                  (fn ^:async f [token a impl]
+                                    (let [r (await (impl token a))]
+                                      (swap! (.. world -state) assoc-in [:inventory 0 :durability] 3)
+                                      r)))))
+              s (await (st/stair! (assoc spare-chest :inventory [{:name "iron_pickaxe" :count 1 :durability 240 :max-durability 250}]) east (fn [p] (tu/seeing-all p) (wear p))))]
+          (is (= :done (:status @(:out s))) (pr-str @(:out s)))
+          (is (contains? (kinds s) :tool.spare) (pr-str (kinds s))))))))

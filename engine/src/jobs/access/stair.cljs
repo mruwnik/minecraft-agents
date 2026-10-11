@@ -21,11 +21,13 @@
             [jobs.lib.dig-look :refer [unknown? look-at! settle! see-round!]]
             [jobs.lib.tools :as tools]
             [jobs.lib.trip :as trip]
+            [jobs.lib.util :as u]
             [jobs.lib.walk :as walk]))
 
 (def doc
   "Dig a 1-wide stair :down or :up along :heading (nil: the way the body faces) from where the body stands, :steps steps or to feet height :y.
-  The check waits (:no-tool, :no-free-slot) when the next dig lacks a pickaxe or room for the drop.
+  The check waits (:no-tool, :no-free-slot) when the next dig lacks a pickaxe or room for the drop; with :make-room (default) a
+  pack without room is first made room in (jobs.storage.make-room child, once per pack content), so it waits :no-free-slot only when nothing may be tossed.
   A stair down first stocks torches when under 8 are carried (jobs.lib.trip/torches-ready!; :stock-torches false skips it, as does :fetch off).
 
   A step cuts three cells, top first, so the body can walk one block forward and one down (or up) with full
@@ -94,7 +96,7 @@
   for the block (child :fetch) first, then walks back to the cell it stood on (child :fetch-back) and goes on. A
   parent's stair child does not fetch.
   :spent-ok (default false): a dig whose every carried tool is down to 3 uses (jobs.lib.trip/spent-tool?) stops {:reason :tool-spent :tool <kind>}
-  before the last tool breaks deep down; true digs on.
+  before the last tool breaks deep down, after a spare was tried once (jobs.lib.trip/tool-ready!); true digs on.
   :by-hand (default false): a block no carried tool clears is dug bare-handed anyway (slow, its drop lost): go-to's
   last resort when it has no pickaxe. Also done once the fetch of a tool for that block failed.")
 
@@ -114,6 +116,7 @@
    :spent-ok {:doc "dig on with tools down to jobs.lib.trip's ::spent-uses (3) uses instead of stopping :tool-spent before the last breaks; true for a way out" :spec boolean? :default false}
    :stock-torches {:doc "a stair down first gets torches when few are carried (jobs.lib.trip/torches-ready!, needs :fetch); false for a stair a job runs as its own child" :spec boolean? :default true}
    :pick-up-ores {:doc "true: dig the ores of jobs.lib.ore-pick's ::ores setting that are exposed within reach on the way; false: none; or the ore block names to dig" :spec (a/or-of boolean? (a/coll-of a/name?)) :default true}
+   :make-room {:doc "a pack with no room for the next drop is made room in (a jobs.storage.make-room child that tosses junk blocks; it keeps building blocks) instead of waiting :no-free-slot" :spec boolean? :default true}
    :spare-own-builds {:doc "a cell of a plan this body made is never dug (stops :footprint naming the plan); false: it may be" :spec boolean? :default true}
    :dig-plugs {:doc "true: a cell this body plugged against water may be dug (stops :plugged otherwise)" :spec boolean? :default false}
    :through {:doc "the id of a mineshaft plan the stair runs down: its footprint is no obstacle (jobs.lib.shafts)" :spec string? :default nil}})
@@ -268,6 +271,27 @@
   [c block]
   (or (by-hand? c block)
       (blocks/room-for? (:primitives c) (blocks/item-name {:block block}))))
+
+(declare need)
+
+(defn room-due?
+  "Whether lack (from need) is a full pack that a make-room child may cure: :make-room is on and the pack has not
+  changed since make-room last stopped short."
+  [c lack]
+  (and (= :no-free-slot (:reason lack))
+       (:make-room (:args c))
+       (not= (u/inventory (:primitives c)) (:room-failed (ctx/mem c)))))
+
+(defn ^:async make-room!
+  "Run make-room as child :room (no walk away: the stair is one tunnel wide). :continue while it waits, else :again; a
+  stop short of the room is remembered with the pack it saw, so the wait is not retried until the pack changes."
+  [c]
+  (let [r (await (ctx/call-child c :room 'jobs.storage.make-room {:away 0 :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+    (if (= :continue r)
+      :continue
+      (do (when (= :no-free-slot (:reason (need c)))
+            (ctx/update-mem! c assoc :room-failed (u/inventory (:primitives c))))
+          :again))))
 
 (defn access-world
   "The social half of the rules' input (jobs.lib.access/zone-input): zones, claims, footprints, the body's name and
@@ -456,7 +480,9 @@
     (cond
       (some? (submitted/away-wait c)) false
       stop (access/decline! c :stair.declined "stair" (assoc (access/refusal-fields [stop]) :reason :refused))
-      :else (if-let [lack (need c)] (fetch/check c 'jobs.access.stair lack) (trip/torches-check c)))))
+      :else (if-let [lack (need c)]
+              (or (room-due? c lack) (fetch/check c 'jobs.access.stair lack))
+              (trip/torches-check c)))))
 
 (defn ^:async dig!
   "Equip the best tool, check the cell again, write the intent and dig it (a blocks.dig child). :continue (dug, go on), :yield (the child waits on the world), or a stop map."
@@ -470,7 +496,12 @@
                                    (assoc :why "put back by something else, e.g. the night shelter closing an opened refuge again"))
       (rules/unbreakable block) {:reason :unbreakable :cell cell :block block}
       (lacks-tool? c block) {:reason :no-tool :cell cell :block block :tool (tools/needed-kind p block)}
-      (and (not (:spent-ok (:args c))) (trip/spent-tool? p block)) {:reason :tool-spent :cell cell :block block :tool (tools/needed-kind p block)}
+      (and (not (:spent-ok (:args c))) (trip/spent-tool? p block))
+      (if (= :continue (await (trip/tool-ready! c block)))
+        :yield
+        (if (trip/spent-tool? p block)
+          {:reason :tool-spent :cell cell :block block :tool (tools/needed-kind p block)}
+          :continue))
       (not (drop-room? c block)) {:reason :inventory-full :cell cell :block block}
       :else
       (do
@@ -595,7 +626,11 @@
   waits, or the next cell lacks a tool or room with nothing to fetch: the check waits) or :done."
   [c]
   (let [m (ctx/mem c)
-        r (when-not (:backoff m) (await (fetch/step! c 'jobs.access.stair (need c) {:return? true})))]
+        lack (when-not (:backoff m) (need c))
+        r (cond
+            (:backoff m) nil
+            (room-due? c lack) (await (make-room! c))
+            :else (await (fetch/step! c 'jobs.access.stair lack {:return? true})))]
     (cond
       (:backoff m) (await (back-off! c))
       r r

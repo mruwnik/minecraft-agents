@@ -737,11 +737,23 @@
           (is (= 0 (:steps @out)))
           (is (empty? (digs p))))))))
 
-(deftest a-full-inventory-stops-before-a-lost-drop
+(deftest a-full-pack-of-junk-is-made-room-in-and-the-stair-goes-on
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [full (into pick (repeat 35 {:name "dirt" :count 64}))
+              {:keys [out] :as s} (await (stair! {:blocks (dissoc (stone -3 12 60 80) "0,65,0" "0,66,0") :inventory full}
+                                                 {:dir :up :heading :east :steps 6} (fn [_])))]
+          (is (= :done (:status @out)) (pr-str @out))
+          (is (= 6 (:steps @out)))
+          (is (seq (events-of s :make-room.tossed)) "dirt was tossed to make room")
+          (is (nil? (waiting s))))))))
+
+(deftest a-full-pack-with-nothing-to-toss-stops-before-a-lost-drop
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [full (into pick (repeat 35 {:name "diamond" :count 64}))
               {:keys [out p] :as s} (await (stair! {:blocks ground :inventory full} east (fn [_])))]
           (is (= :not-done @out) "the child declines: its parent waits")
           (is (= :no-free-slot (:reason (waiting s))))
