@@ -124,7 +124,7 @@
     "cobblestone" false
     "oak_log" false))
 
-(deftest keep-counts-protect-tools-and-share-the-food-and-block-budgets
+(deftest keep-counts-protect-tools-share-the-food-budget-and-keep-each-shelter-material
   (let [inventory [{:name "iron_pickaxe" :count 1}
                    {:name "water_bucket" :count 1}
                    {:name "bread" :count 10}
@@ -133,13 +133,18 @@
                    {:name "cobblestone" :count 64}
                    {:name "cobblestone" :count 64}
                    {:name "dirt" :count 30}
+                   {:name "oak_planks" :count 90}
+                   {:name "diorite" :count 48}
+                   {:name "wheat_seeds" :count 63}
+                   {:name "poppy" :count 3}
                    {:name "stick" :count 7}]]
     (is (= {"iron_pickaxe" 1 "water_bucket" 1
             "cooked_beef" 12 "bread" 4 "apple" 0
-            "dirt" 0 "cobblestone" 64
+            "dirt" 30 "cobblestone" 64 "oak_planks" 64 "diorite" 0
+            "wheat_seeds" 16 "poppy" 0
             "stick" 0}
-           (mr/keep-counts inventory {:keep-food 16 :keep-blocks 64}))
-        "beef (8 points) keeps its 12, bread (5) the 4 left of 16, apple none; cobblestone then dirt share 64")))
+           (mr/keep-counts inventory {:keep-food 16 :keep-blocks 64 :keep-seeds 16}))
+        "beef (8 points) keeps its 12, bread (5) the 4 left of 16; cobblestone, dirt and planks each keep up to 64, other blocks none")))
 
 (deftest keep-counts-without-keep-food-uses-the-food-reserve
   (is (= {"bread" 12 "apple" 0 "golden_apple" 2 "dirt" 0}
@@ -189,6 +194,24 @@
     (is (= ["cobbled_deepslate" "granite" "tuff" "iron_ore" "raw_copper" "coal"]
            (names-of (mr/toss-order inventory {} {} 8)))
         "raised :toss-below lets the stacks of raw copper and coal go")))
+
+(def linden-bag
+  [{:name "dirt" :count 36 :slot 0} {:name "cobblestone" :count 58 :slot 1} {:name "dandelion" :count 7 :slot 2}
+   {:name "cornflower" :count 2 :slot 3} {:name "poppy" :count 2 :slot 4} {:name "oxeye_daisy" :count 1 :slot 5}
+   {:name "leaf_litter" :count 5 :slot 6} {:name "granite" :count 1 :slot 7} {:name "oak_sapling" :count 8 :slot 8}
+   {:name "wheat_seeds" :count 63 :slot 9} {:name "diorite" :count 48 :slot 10}])
+
+(deftest toss-order-spares-the-shelter-materials-of-a-full-bag
+  (let [keep (mr/keep-counts linden-bag {:keep-food 16 :keep-blocks 64 :keep-seeds 16})
+        order (names-of (mr/toss-order linden-bag keep {} 3.2))]
+    (is (= #{"dandelion" "cornflower" "poppy" "oxeye_daisy" "leaf_litter" "granite" "oak_sapling" "diorite"} (set order)))
+    (is (not-any? #{"dirt" "cobblestone" "wheat_seeds"} order))))
+
+(deftest toss-order-throws-surplus-of-kept-materials-after-everything-without-a-keep
+  (let [inventory [{:name "cobblestone" :count 64 :slot 0} {:name "cobblestone" :count 64 :slot 1}
+                   {:name "poppy" :count 2 :slot 2} {:name "granite" :count 3 :slot 3}]
+        keep (mr/keep-counts inventory {:keep-food 16 :keep-blocks 64 :keep-seeds 16})]
+    (is (= ["granite" "poppy" "cobblestone"] (names-of (mr/toss-order inventory keep {} 3.2))))))
 
 (deftest toss-order-orders-by-recency-before-count
   (let [inventory [{:name "item_b" :count 9 :slot 0} {:name "item_a" :count 3 :slot 1}]]
@@ -395,6 +418,17 @@
           (is (not (declined? seen)))
           (is (= [:short] (mapv :reason (of-kind seen :make-room.stopped))) "ending short is stopped, not done")
           (is (empty? (of-kind seen :make-room.done))))))))
+
+(deftest a-nearly-full-bag-tosses-the-flower-and-keeps-dirt-cobblestone-and-seeds
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory (vec (concat (take 11 (map #(dissoc % :slot) linden-bag)) (same "diamond_pickaxe" 23 1)))})]
+          (await (run-reflex eng {} {}))
+          (is (= ["diorite" "granite"] (mapv #(arg-of "item" %) (calls p "toss"))) "two tosses free the fourth slot")
+          (is (= 36 (get (carried p) "dirt")))
+          (is (= 58 (get (carried p) "cobblestone")))
+          (is (= 63 (get (carried p) "wheat_seeds"))))))))
 
 (deftest everything-worth-keeping-stops-with-no-toss
   (async done
