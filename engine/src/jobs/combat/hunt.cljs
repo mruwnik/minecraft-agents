@@ -3,6 +3,7 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.animal-spare :as spare]
             [jobs.lib.body :as body]
             [jobs.lib.combat :as combat]
             [jobs.lib.hunting :as hunting]
@@ -18,7 +19,9 @@
   when every kind reached its count, else :partial; no kill at all ends stopped with the first kind's reason.
   Never takes the last :keep adults of the kind, so they can breed. :keep nil means 2 for animals and 0 for hostile mobs
   (a kind any of whose entities in range reports kind hostile). 0 turns the rule off.
-  Babies are never targets and never counted.
+  Babies are never targets and never counted. Animals the body spares (jobs.lib.animal-spare: kinds in :off-limits, animals in
+  a zone or plan of its own or a closed enclosure unless :spare-pens is false) are never targets either; when only such animals
+  are left it ends :spared (stopped when nothing was killed; the result has :spared-by, a count per rule, and warn hunt.done names them).
   With :keep or fewer adults within :radius at the start it ends at once, stopped :too-few (warn hunt.too-few; the result
   has :in-range, :radius, :keep and :nearest, the distance of the nearest adult of the kind in sight up to ::sight-radius).
   One call hunts until it ends, in steps; it yields (:continue) only while a child is waiting on the world:
@@ -47,6 +50,8 @@
    :deposit-first? {:doc "deposit at the known chest first when the bag is fullish and the chest is near (jobs.lib.trip/ready!)" :spec boolean? :default true}
    :weapons {:doc "item name substrings that count as weapons" :spec (a/coll-of (a/or-of string? keyword?)) :default combat/default-weapons}
    :drops {:doc "item names to collect after a kill; nil: the kind's entry in the drops table, else every item" :spec (a/coll-of a/item?) :default nil}
+   :off-limits {:doc "animal kinds never hunted; nil: the jobs.lib.animal-spare/off-limits setting" :spec (a/or-of (a/pred "nil" nil?) (a/coll-of a/item?)) :default nil}
+   :spare-pens {:doc "never hunt animals in a zone or plan of the body's own or in a closed enclosure (false: this hunt may take them)" :spec boolean? :default true}
    :max-skips {:doc "animals skipped in a row before the hunt gives up" :spec (a/int-in 1 nil) :default 3}})
 
 (a/defargs settings
@@ -77,13 +82,22 @@
   [c]
   (vec (coloured c (present-any c))))
 
+(defn spare-rules
+  "The present animals of the :color the body leaves alone, as {id rule} (jobs.lib.animal-spare/why: :off-limits or :pen);
+  the pair rule is :keep's."
+  [c]
+  (let [pens (atom [])
+        args {:off-limits (:off-limits (:args c)) :spare-pens (:spare-pens (:args c)) :keep-adults -1}]
+    (into {} (keep #(some->> (spare/why args (.-name %) 0 (spare/penned? c pens %) false) (vector (.-id %)))) (present c))))
+
 (defn candidates
-  "The present animals of the :color not skipped, nearest first."
+  "The present animals of the :color not skipped and not spared, nearest first."
   [c]
   (let [skipped (set (:skipped (ctx/mem c)))
+        left (spare-rules c)
         here (u/self-pos c)]
     (->> (present c)
-         (remove #(contains? skipped (.-id %)))
+         (remove #(or (contains? skipped (.-id %)) (contains? left (.-id %))))
          (sort-by #(u/dist here (u/pos-of (.-pos %)))))))
 
 (defn hostile?
@@ -149,10 +163,14 @@
   (let [killed (:killed (ctx/mem c) 0)
         spared (if (and (= :keep reason) (pos? (keep-of c))) (max 0 (- (:count (:args c)) killed)) 0)
         remaining (count (present c))
+        by (when (= :spared reason) (frequencies (vals (spare-rules c))))
         out (cond-> {:killed killed :reason reason :spared spared :remaining remaining}
-              (= :gave-up reason) (merge (sh/shelter-hint c)))]
-    (ctx/emit! c :hunt.done :info (assoc out :text (str "hunt done: " (name reason) ", killed " killed
-                                                        ", spared " spared " of the ask, " remaining " adults left")))
+              (= :gave-up reason) (merge (sh/shelter-hint c))
+              by (assoc :spared-by by)
+              (and by (zero? killed)) (assoc :status :stopped))
+        text (str "hunt done: " (name reason) ", killed " killed ", spared " spared " of the ask, " remaining " adults left"
+                  (when by (str "; left alone: " (str/join ", " (map (fn [[k n]] (str n " " (name k))) by)))))]
+    (ctx/emit! c :hunt.done (if (and by (zero? killed)) :warn :info) (assoc out :text text))
     (ctx/result! c out)
     :done))
 
@@ -189,6 +207,7 @@
             collecting (await (hunting/collect! c :yield))
             (>= (or killed 0) wanted) (finish! c :count)
             (<= (count (present c)) keep) (finish! c :keep)
+            (and (nil? next-target) (seq (spare-rules c))) (finish! c :spared)
             (nil? next-target) (await (hunting/search! c #(finish! % :none)))
             :else (do (ctx/update-mem! c assoc :target (.-id next-target) :misses 0)
                       (await (hunting/attack! c (attack-opts c))))))))))

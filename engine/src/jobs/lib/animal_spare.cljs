@@ -2,10 +2,15 @@
   "Which food animals a hunt leaves alone: kinds on the body's off-limits list, animals in the body's own pens or in any closed enclosure, and the
   last few adults of a kind so a breeding pair survives."
   (:require [engine.args :as a]
-            [engine.settings :as settings]))
+            [engine.settings :as settings]
+            [jobs.lib.access :as access]
+            [jobs.lib.apiary :as apiary]
+            [jobs.lib.pen :as pen]
+            [jobs.lib.util :as u]))
 
 (a/defargs settings
-  {::off-limits {:default #{} :doc "Animal kinds (\"cow\") a hunt for food never takes, wherever they are." :spec (a/set-of a/item?)}})
+  {::off-limits {:default #{} :doc "Animal kinds (\"cow\") a hunt for food never takes, wherever they are." :spec (a/set-of a/item?)}
+   ::pen-max-cells {:default 400 :doc "Most cells searched to tell whether an animal stands in a closed enclosure (then it counts as penned)." :spec (a/int-in 1 nil)}})
 
 (defn off-limits
   "The kinds a hunt never takes: the job's :off-limits arg over the ::off-limits setting."
@@ -27,3 +32,20 @@
   (cond (and in-own-area? (not (:spare-pens args))) :pen-taken
         (> adults-of-kind (:keep-adults args)) :surplus
         :else :starved))
+
+(defn enclosed?
+  "Whether the animal stands inside a closed fence or wall the body has seen: the pen check from its feet cell, the
+  closed pens found so far kept in `pens` (an atom of cell sets)."
+  [c pens e]
+  (let [{:keys [x y z]} (u/pos-of (.-pos e))
+        cell [(js/Math.floor x) (js/Math.floor (+ y 0.01)) (js/Math.floor z)]]
+    (or (boolean (some #(contains? % cell) @pens))
+        (let [answer (pen/check {:block-at (apiary/seen-block-at-fn (:primitives c)) :at {:x (cell 0) :y (cell 1) :z (cell 2)}
+                                 :max-cells (settings/get settings ::pen-max-cells)})]
+          (when (:closed? answer) (swap! pens conj (:inside answer)))
+          (boolean (:closed? answer))))))
+
+(defn penned?
+  "Whether an adult animal stands in a zone or plan of the body's own or in a closed enclosure (see enclosed?)."
+  [c pens e]
+  (or (access/in-own-area? c (u/pos-of (.-pos e))) (enclosed? c pens e)))

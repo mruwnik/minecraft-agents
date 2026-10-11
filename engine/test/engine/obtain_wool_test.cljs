@@ -3,8 +3,10 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.hostile-test :as h]
+            [engine.settings :as settings]
             [engine.test-util :as tu]
-            [jobs.items.obtain :as obtain]))
+            [jobs.items.obtain :as obtain]
+            [jobs.lib.world-files :as ew]))
 
 (defn sheep [id x color]
   {:id id :name "sheep" :kind "passive" :pos {:x x :y 64 :z 0} :color color
@@ -118,3 +120,19 @@
         (let [s (await (scenario {:item "white_wool" :count 1}
                                  {:inventory h/sword :entities [(sheep 1 3 "white") (sheep 2 6 "white")]} 40))]
           (is (empty? (attacked s)) "the last two adults live"))))))
+
+(deftest wool-is-never-taken-from-penned-or-off-limits-sheep
+  (async done
+    (tu/run-async done
+      (fn []
+        (settings/with-settings {:jobs.lib.animal-spare/off-limits #{"sheep"}}
+          (fn ^:async t []
+            (let [inv (into h/sword (carried "oak_planks" 3 "crafting_table" 1))
+                  pen [{:name "linden-west-pen" :owner "Fake" :min [0 60 -3] :max [20 70 3]}]
+                  s (h/setup {:inventory inv :entities [(sheep 1 3 "white") (sheep 2 6 "white") (sheep 3 8 "white") (sheep 4 10 "white")]}
+                             50 (ew/of-data {} {} pen))]
+              (core/submit! (:eng s) '(jobs.items.obtain {:any-of ["white_bed"] :count 1 :how #{:craft :gather}}) {})
+              (dotimes [_ 40]
+                (swap! (:clock s) + 700)
+                (await (core/tick! (:eng s))))
+              (is (empty? (attacked s)) "no sheep attacked"))))))))

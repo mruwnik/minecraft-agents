@@ -5,8 +5,10 @@
             [engine.ctx :as ctx]
             [engine.fake :as fake]
             [engine.hostile-test :as h]
+            [engine.settings :as settings]
             [engine.test-util :as tu]
-            [jobs.combat.hunt :as hunt]))
+            [jobs.combat.hunt :as hunt]
+            [jobs.lib.world-files :as ew]))
 
 (defn spec [args] (list 'jobs.combat.hunt args))
 
@@ -409,3 +411,54 @@
         (let [s (await (scenario {:count 1 :keep 0} {:inventory h/sword :self {:health 0.5} :entities [(cow 1 3)]} 10))]
           (is (empty? (attacked s)) "nothing attacked at 0.5 hp")
           (is (= [:low-health] (distinct (map :reason (events-of s :waiting))))))))))
+
+;; ------------------------------------------------------------------ animals the body spares
+
+(def own-pen [{:name "linden-west-pen" :owner "Fake" :min [0 60 -3] :max [20 70 3]}])
+
+(def pen-ring
+  (merge (tu/box 3 64 -2 12 64 -2 "oak_fence") (tu/box 3 64 2 12 64 2 "oak_fence")
+         (tu/box 3 64 -1 3 64 1 "oak_fence") (tu/box 12 64 -1 12 64 1 "oak_fence")))
+
+(defn four-sheep [] (mapv #(animal % "sheep" (+ 4 %) {:color "white" :drops [{:name "white_wool" :count 1}]}) (range 1 5)))
+
+(defn ^:async spared-hunt [args world zones]
+  (let [s (h/setup world 20 (ew/of-data {} {} zones))]
+    (core/submit! (:eng s) (spec (merge {:mob "sheep" :count 2 :keep 0} args)) {})
+    (await (run-ticks s 30 700))
+    s))
+
+(deftest a-hunt-leaves-animals-in-the-bodys-own-zone-and-says-so
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (spared-hunt {} {:inventory h/sword :entities (four-sheep)} own-pen))
+              e (done-event s)]
+          (is (empty? (attacked s)))
+          (is (= [:spared 0 {:pen 4}] [(:reason e) (:killed e) (:spared-by e)]))
+          (is (re-find #"pen" (:text e))))))))
+
+(deftest a-hunt-leaves-animals-in-a-closed-fence-that-is-no-zone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (spared-hunt {} {:inventory h/sword :entities (four-sheep) :blocks pen-ring} nil))]
+          (is (empty? (attacked s)))
+          (is (= {:pen 4} (:spared-by (done-event s)))))))))
+
+(deftest a-hunt-leaves-off-limits-kinds-alone
+  (async done
+    (tu/run-async done
+      (fn []
+        (settings/with-settings {:jobs.lib.animal-spare/off-limits #{"sheep"}}
+          (fn ^:async t []
+            (let [s (await (spared-hunt {} {:inventory h/sword :entities (four-sheep)} nil))]
+              (is (empty? (attacked s)))
+              (is (= {:off-limits 4} (:spared-by (done-event s)))))))))))
+
+(deftest an-explicit-hunt-may-lift-the-pen-rule
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (spared-hunt {:spare-pens false} {:inventory h/sword :entities (four-sheep)} own-pen))]
+          (is (seq (attacked s))))))))

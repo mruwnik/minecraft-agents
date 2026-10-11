@@ -5,8 +5,6 @@
             [engine.ctx :as ctx]
             [engine.memory :as mem]
             [jobs.lib.access :as access]
-            [jobs.lib.apiary :as apiary]
-            [jobs.lib.pen :as pen]
             [jobs.lib.animal-spare :as spare]
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
@@ -107,7 +105,6 @@
    ::reach {:default 3 :doc "How near a food source the body stands to use it, in blocks." :spec (a/int-in 0 nil)}
    ::explore {:default {:max-distance 64 :max-legs 12 :timeout-s 120} :doc "jobs.explore.search options of the search for food (:explore true)." :spec map?}
    ::fish-radius {:default 48 :doc "Blocks within which seen water two deep with a bank makes fishing a way, with a fishing rod carried." :spec (a/int-in 0 nil)}
-   ::pen-max-cells {:default 400 :doc "Most cells searched to tell whether a food animal stands in a closed enclosure (then it counts as penned)." :spec (a/int-in 1 nil)}
    ::kept-lifted-below {:default -1 :doc "At this much food or less, with no food carried, the last adults of a kind (kept for breeding) are hunted too; -1 (default) never." :spec (a/int-in -1 20)}
    ::eat-bad-food {:default 6 :doc "At this much food or less the last resort eats harmful food carried (rotten flesh); above it harmful food is not food." :spec (a/num-in 0 20)}
    ::stock-radius {:default 256 :doc "Blocks within which a chest the body booked food in (memory :fetch/stock, what it saw when it opened it) counts as a food source." :spec (a/int-in 0 nil)}
@@ -360,18 +357,6 @@
         (pos? wheat) (await (withdraw! c pos "wheat" wheat))
         :else (bury-source! c pos)))))
 
-(defn enclosed?
-  "Whether the animal stands inside a closed fence or wall the body has seen: the pen check from its feet cell, the
-  closed pens found so far kept in `pens` (an atom of cell sets)."
-  [c pens e]
-  (let [{:keys [x y z]} (u/pos-of (.-pos e))
-        cell [(js/Math.floor x) (js/Math.floor (+ y 0.01)) (js/Math.floor z)]]
-    (or (boolean (some #(contains? % cell) @pens))
-        (let [answer (pen/check {:block-at (apiary/seen-block-at-fn (:primitives c)) :at {:x (cell 0) :y (cell 1) :z (cell 2)}
-                                 :max-cells (settings/get settings ::pen-max-cells)})]
-          (when (:closed? answer) (swap! pens conj (:inside answer)))
-          (boolean (:closed? answer))))))
-
 (defn animals-in-sight
   "The food animals the entity scan lists within :hunt-radius, nearest first, as {:entity e :why r :adults n :rule k}: r is nil for one
   to hunt, else :tried (attacked this job), :baby, :refused (another's zone or claim), or what jobs.lib.animal-spare/why
@@ -389,7 +374,7 @@
          (mapv (fn [e]
                  (let [n (adults (.-name e))
                        penned? (and (not (skipped (.-id e))) (not (true? (.-baby e)))
-                                    (or (access/in-own-area? c (u/pos-of (.-pos e))) (enclosed? c pens e)))
+                                    (spare/penned? c pens e))
                        why (cond (skipped (.-id e)) :tried
                                  (true? (.-baby e)) :baby
                                  (access/container-refusal c :take (u/pos-of (.-pos e))) :refused
