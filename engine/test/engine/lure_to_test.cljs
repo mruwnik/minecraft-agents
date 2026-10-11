@@ -4,7 +4,8 @@
             [engine.core :as core]
             [engine.fake :as fake]
             [engine.hostile-test :as h]
-            [engine.test-util :as tu]))
+            [engine.test-util :as tu]
+            [jobs.lib.world-files :as ew]))
 
 (defn cow [id x & [more]]
   (merge {:id id :uuid (str "u" id) :name "cow" :kind "passive" :pos {:x x :y 64 :z 0}} more))
@@ -242,3 +243,23 @@
           (is (= :lost (:reason (done-event s))) (pr-str (done-event s)))
           (is (some? (:last-seen (:lost (done-event s)))))
           (is (= 1 (count (stopped s)))))))))
+
+(def gate-plan
+  {"pen" {:id "pen" :parts [{:id "gate" :cells [[27 64 0]] :want "oak_fence_gate"}]}})
+
+(deftest an-animal-stalled-in-the-gate-cell-has-not-arrived
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng clock] :as s} (h/setup {:floor tu/walk-floor :self {:pos {:x 22 :y 64 :z 0}} :inventory wheat :entities [(cow 1 20)]}
+                                                   50 (ew/of-data gate-plan {} []))
+              stall! (fn [token a impl]
+                       (.then (impl token a)
+                              (fn [r]
+                                (when (>= (.. p self -pos -x) 24) (swap! (fake/state p) update :entities (fn [es] (mapv #(assoc % :pos [27.5 64 0.5]) es))))
+                                r)))]
+          (doseq [act ["steer" "wait"]] (.override (.-world p) act stall!))
+          (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal}) {})
+          (loop [i 0] (when (and (< i 150) (not (finished? s))) (swap! clock + 700) (await (core/tick! eng)) (recur (inc i))))
+          (is (finished? s))
+          (is (= :animal-outside (:reason (done-event s))) (pr-str (done-event s))))))))

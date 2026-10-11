@@ -27,7 +27,7 @@
 
   Ends with info lure-to.done and a warn lure-to.gave-up unless the reason is :arrived. Result {:reason :animal key
   :near bool (the animal is within 6 blocks of :pos) :at pos}. Reasons:
-  - :arrived: the body stands within :range of :pos and the animal is seen in :box (none: within 6 blocks of :pos), else the
+  - :arrived: the body stands within :range of :pos and the animal is seen in :box (none: within 6 blocks of :pos) and not in the cell of a planned gate, else the
     body holds still for it up to 10 s and the end is :animal-outside (seen elsewhere) or :lost (not seen). The food is then put away (another carried item in hand when no slot is free); :near says whether the animal is by the spot.
   - :animal-outside: the body is at :pos but the animal is not in the destination; the result gives :distance (animal to :pos).
   - :none (no animal to lure within :radius), :no-food, :no-hold (the food would not stay in hand), :lost, :lagging,
@@ -112,14 +112,20 @@
   (ctx/update-mem! c assoc :ending reason)
   :again)
 
+(defn in-doorway?
+  "True when pos stands in a planned gate's cell: an animal there keeps the gate from shutting and is not yet inside."
+  [c {:keys [x y z]}]
+  (contains? (pg/gate-index (:world (:engine c))) [(js/Math.floor x) (js/Math.floor (+ y 0.01)) (js/Math.floor z)]))
+
 (defn at-destination?
-  "True when the animal stands in :box, else within near-spot of :pos."
+  "True when the animal stands in :box, else within near-spot of :pos, and not in a gate's cell."
   [c a]
   (let [{:keys [box pos]} (:args c)
         there (u/pos-of (.-pos a))]
-    (if box
-      (animals/in-box? box there)
-      (<= (u/flat-dist there pos) near-spot))))
+    (and (not (in-doorway? c there))
+         (if box
+           (animals/in-box? box there)
+           (<= (u/flat-dist there pos) near-spot)))))
 
 (defn candidates
   "The adults within radius of the start, on nobody's lead, the zone rules allowing, nearest first; none already in :box."
