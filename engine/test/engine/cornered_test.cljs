@@ -875,3 +875,32 @@
         "a slope up to the pillar's top: a zombie walks up and reaches the body")
     (is (true? (retreat-refuge/pillar-ok? (with (set (column 1 3))) [0 64 0]))
         "a wall of the same height with no steps up to it: out of reach")))
+
+(defn ^:async pillar-then-arrives
+  "A body pillared up against a zombie; once it hides, mob replaces the zombie (the hold's next wait), and the round runs on
+  with the mob gone after that. The seen events and the world's health at the end."
+  [mob]
+  (let [{:keys [eng p seen]} (setup {:blocks doorway :inventory [{:name "cobblestone" :count 20}] :entities [(zombie 0 64 1)]})
+        arrived (atom false)]
+    (.override (.-world p) "wait"
+               (fn [token a impl]
+                 (when (and (hiding? seen) (not @arrived))
+                   (reset! arrived true)
+                   (fake/add-entity! p (assoc mob :visible true)))
+                 (when (and @arrived (some #(= :retreat.hide-breached (:kind %)) @seen))
+                   (swap! (fake/state p) assoc :entities []))
+                 (impl token a)))
+    (core/submit! eng hiding-retreat {})
+    (await (core/tick! eng))
+    {:seen seen :health (:health (:self @(fake/state p)))}))
+
+(deftest a-hidden-body-leaves-before-a-creeper-or-a-climber-arrives
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[mob mob-name] [[(creeper 0 64 5) "creeper"]
+                                [(assoc (zombie 0 64 5) :name "spider") "spider"]]]
+          (let [{:keys [seen]} (await (pillar-then-arrives mob))
+                ev (first (filter #(= :retreat.hide-breached (:kind %)) @seen))]
+            (is (= mob-name (:mob ev)) "the arrival is logged with the mob")
+            (is (empty? (filter #(= :retreat.hide-hurt (:kind %)) @seen)) "left before being hit")))))))

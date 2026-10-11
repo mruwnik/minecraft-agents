@@ -159,7 +159,11 @@
                          "cornered: sealed in with blocks until the hostile leaves"))))
 
 (a/defargs settings
-  {::pillar-height {:default 3 :doc "Height of the pillar built as a refuge, in blocks." :spec (a/int-in 0 nil)}})
+  {::pillar-height {:default 3 :doc "Height of the pillar built as a refuge, in blocks." :spec (a/int-in 0 nil)}
+   ::leave-for-breakers {:default true :doc "Whether a hidden body leaves its refuge, before it is hit, for a creeper (its blast breaks any refuge) or, on a pillar, a spider (it climbs) within :breaker-reach." :spec boolean?}
+   ::breaker-reach {:default 6 :doc "Blocks within which a creeper or a climber counts as breaching a hidden body's refuge." :spec (a/num-in 0 nil)}})
+(defn leave-for-breakers? [] (settings/get settings ::leave-for-breakers))
+(defn breaker-reach [] (settings/get settings ::breaker-reach))
 (defn pillar-height [] (settings/get settings ::pillar-height))
 
 (defn pillar-item
@@ -411,6 +415,17 @@
   "Blocks within which a hostile counts as the one that hurt a hidden body."
   3)
 
+(defn breaker-of
+  "The known hostile that would breach the refuge: a creeper (its blast breaks any refuge) or, against a pillar, a climber,
+  within breaker-reach; nil when none or leave-for-breakers is off."
+  [c {:keys [kind]}]
+  (when (leave-for-breakers?)
+    (let [p (:primitives c)
+          reach (breaker-reach)]
+      (->> (flight/near-known p (set (flight/dead-ids c)) reach reach)
+           (filter #(or (combat/creeper? %) (and (= :pillar kind) (combat/climber? %))))
+           first))))
+
 (defn ^:async hide-hold!
   "Sealed in, up the pillar or down the pit: hold (a :wait, why hiding) while the refuge keeps a danger off
   (refuge-danger?) and :quiet-s after the last one, then end the flight :hidden. Past :hide-s in the refuge with no real
@@ -427,6 +442,7 @@
           {:keys [quiet-from hidden-since refuge hold-health]} (ctx/mem c)
           health (.-health (.self (:primitives c)))
           hurt? (< health (or hold-health health))
+          breaker (breaker-of c refuge)
           _ (ctx/update-mem! c assoc :hold-health health)
           quiet? (>= (- (ctx/now c) quiet-from) (* 1000 quiet-s))
           spent? (and (>= (- (ctx/now c) hidden-since) (* 1000 hide-s))
@@ -436,6 +452,11 @@
                 (ctx/update-mem! c #(-> % (dissoc :quiet-from :hidden-since :hold-health) (update :reached (fnil into #{}) ids)))
                 (ctx/emit! c :retreat.hide-hurt :warn {:text "hurt while hidden: the refuge does not keep the hostile off" :pos (sh/feet (:primitives c))})
                 (await (abandon-refuge! c)))
+        breaker (let [name (.-name breaker)]
+                  (ctx/update-mem! c #(-> % (dissoc :quiet-from :hidden-since :hold-health) (update :reached (fnil conj #{}) (.-id breaker))))
+                  (ctx/emit! c :retreat.hide-breached :warn {:text (str "a " name " is near: the refuge does not keep it off, leaving before it strikes")
+                                                              :mob name :pos (sh/feet (:primitives c))})
+                  (await (abandon-refuge! c)))
         quiet? (do (ctx/update-mem! c dissoc :quiet-from :hidden-since)
                    (flight/end-flight! c :hidden))
         spent? (let [held (js/Math.round (/ (- (ctx/now c) hidden-since) 1000))
