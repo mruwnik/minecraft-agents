@@ -462,3 +462,22 @@
       (fn ^:async t []
         (let [s (await (spared-hunt {:spare-pens false} {:inventory h/sword :entities (four-sheep)} own-pen))]
           (is (seq (attacked s))))))))
+
+(deftest every-kill-of-a-passive-mob-is-an-event-naming-the-rule-that-allowed-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pigs (mapv #(animal % "pig" (+ 2 %) {:drops [{:name "porkchop" :count 1}]}) [1 2 3 4])
+              s (await (scenario {:mob "pig" :count 2 :keep 2} {:inventory h/sword :entities pigs} 40))
+              es (events-of s :animal.killed)]
+          (is (= [["pig" "jobs.combat.hunt" :surplus] ["pig" "jobs.combat.hunt" :surplus]]
+                 (mapv (juxt :animal :by :rule) es)))
+          (is (= #{1 2} (set (map :entity es))))
+          (is (every? #(= 64 (second (:cell %))) es)))))))
+
+(deftest a-hostile-kill-is-no-passive-kill-event
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:mob "zombie" :count 1} {:inventory h/sword :entities [(animal 1 "zombie" 3 {:kind "hostile"})]} 20))]
+          (is (empty? (events-of s :animal.killed))))))))

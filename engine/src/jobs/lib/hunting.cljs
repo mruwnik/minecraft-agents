@@ -1,7 +1,8 @@
 (ns jobs.lib.hunting
   "The kill-and-collect steps combat.hunt and animals.cull share: the drops table, the attack child call, the
   drop collection and the search wait. Memory keys: :target, :killed, :skipped, :skips, :collecting, :misses."
-  (:require [engine.ctx :as ctx]))
+  (:require [engine.ctx :as ctx]
+            [jobs.lib.util :as u]))
 
 (def raw-meats
   {"beef" "cooked_beef" "porkchop" "cooked_porkchop" "mutton" "cooked_mutton"
@@ -21,11 +22,32 @@
              "rabbit" ["rabbit" "rabbit_hide" "rabbit_foot"]}]
     (update-vals raw (fn [items] (into items (keep raw-meats) items)))))
 
+(defn note-target!
+  "Remember the passive target as last seen (:animal, :entity id, :uuid, :cell, :by job and the rule that allowed the kill, from (rule-fn c entity)),
+  for the kill event: the entity is gone once it is dead."
+  [c target {:keys [radius job rule-fn]}]
+  (when-let [e (->> (array-seq (.entities (:primitives c) #js {:radius radius :names #js [(:mob (:args c))] :max 64}))
+                    (filter #(and (= target (.-id %)) (= "passive" (.-kind %))))
+                    first)]
+    (let [p (u/pos-of (.-pos e))]
+      (ctx/update-mem! c assoc :target-seen
+                       {:animal (.-name e) :entity target :uuid (.-uuid e) :by job :rule (rule-fn c e)
+                        :cell (mapv #(js/Math.floor %) [(:x p) (:y p) (:z p)])}))))
+
+(defn kill-event!
+  "Info animal.killed for the passive target last seen, when it died."
+  [c target]
+  (when-let [seen (:target-seen (ctx/mem c))]
+    (when (= target (:entity seen))
+      (ctx/emit! c :animal.killed :info
+                 (assoc seen :text (str (:by seen) " killed a " (:animal seen) " at " (pr-str (:cell seen)) " (" (name (:rule seen)) ")"))))))
+
 (defn book-outcome!
   "Book the attack child's result for target: a kill, or a skipped animal. Then
   start collecting."
   [c target]
   (let [killed? (some #{target} (:killed (ctx/child-result c :attack)))]
+    (when killed? (kill-event! c target))
     (ctx/update-mem! c (fn [m]
                          (-> (if killed?
                                (-> m (update :killed (fnil inc 0)) (assoc :skips 0))
@@ -35,10 +57,12 @@
 
 (defn ^:async attack!
   "Call the attack child on the target (a whole fight); books its end. opts: :radius (search radius of the child),
-  :waiting (what to return while it waits on the world), :give-up (fn of c, called after too many skips in a row).
+  :waiting (what to return while it waits on the world), :give-up (fn of c, called after too many skips in a row),
+  :job (its name) and :rule-fn (of c and the entity: which jobs.lib.animal-spare rule allows the kill) for the animal.killed event.
   Shared by combat.hunt and animals.cull."
-  [c {:keys [radius waiting give-up]}]
+  [c {:keys [radius waiting give-up] :as opts}]
   (let [target (:target (ctx/mem c))
+        _ (note-target! c target opts)
         r (await (ctx/call-child c :attack 'jobs.combat.attack
                                  {:targets [target] :radius radius :weapons (:weapons (:args c)) :lost-s 1 :absent :done}))]
     (cond

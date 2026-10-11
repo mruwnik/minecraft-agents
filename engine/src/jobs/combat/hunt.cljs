@@ -183,10 +183,16 @@
                                             (sh/shelter-hint c)))
     (finish! c :gave-up)))
 
+(defn allowed-by
+  "Which animal-spare rule let the hunt take the adult e: :pen-taken, :surplus or :starved."
+  [c e]
+  (let [adults (count (adults-within c (:radius (:args c))))]
+    (spare/allowed-by {:keep-adults (keep-of c) :spare-pens (:spare-pens (:args c))} adults (spare/penned? c (atom []) e))))
+
 (defn attack-opts
   "Options for hunting.attack!: a wide search around the ask; ends the job after too many skips."
   [c]
-  {:radius (+ (:radius (:args c)) 8) :waiting :yield :give-up give-up!})
+  {:radius (+ (:radius (:args c)) 8) :waiting :yield :give-up give-up! :job "jobs.combat.hunt" :rule-fn allowed-by})
 
 (defn ^:async step
   "One step: attack the target, collect, finish, or pick the next target. :again, :yield (a child is waiting on the world) or :done."

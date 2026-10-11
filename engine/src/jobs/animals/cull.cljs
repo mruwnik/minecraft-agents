@@ -144,7 +144,8 @@
 (defn attack-opts
   "Options for hunting.attack!: a search around the reach; yields while waiting, ends with :gave-up."
   [c]
-  {:radius (+ (reach c) 16) :waiting :continue :give-up #(give-up! % :gave-up)})
+  {:radius (+ (reach c) 16) :waiting :continue :give-up #(give-up! % :gave-up)
+   :job "jobs.animals.cull" :rule-fn (constantly :cull)})
 
 (defn none!
   "Nothing left to attack: end with the refusal, else :none."

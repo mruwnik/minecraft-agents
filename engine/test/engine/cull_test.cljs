@@ -256,3 +256,13 @@
                                  {:inventory h/sword :entities [(sheep 1 3 "brown") (sheep 2 6 "white")]} 40))]
           (is (= #{2} (set (attacked s))) "the nearer brown sheep is left alone")
           (is (= #{1} (world-ids s))))))))
+
+(deftest every-culled-cow-is-a-kill-event-naming-the-job
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:keep 2} {:inventory h/sword :entities (mapv #(cow % (+ 2 %)) (range 1 5))} 60))
+              es (events-of s :animal.killed)]
+          (is (= [["cow" "jobs.animals.cull" :cull] ["cow" "jobs.animals.cull" :cull]]
+                 (mapv (juxt :animal :by :rule) es)))
+          (is (= #{1 2} (set (map :entity es)))))))))
