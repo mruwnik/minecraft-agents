@@ -277,3 +277,29 @@
         (let [{:keys [eng]} (pen-env)
               allowed (await (bd/child-outcome eng job {:pos [9 64 0] :item "dirt" :enter-pens true} 40))]
           (is (= true (:placed allowed))))))))
+
+(def use-on 'jobs.blocks.use-on)
+
+(deftest a-use-on-the-gate-or-near-the-fence-works-from-outside
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [pos [[5 64 0] [7 63 2]]]
+          (let [{:keys [eng p seen]} (pen-env)
+                result (await (bd/child-outcome eng use-on {:pos pos} 40))]
+            (is (not= :unreachable (:reason result)) (pr-str pos))
+            (is (= 1 (gate-clicks p)) (pr-str pos))
+            (is (empty? (filter #(= :blocks.pen-kept-out (:kind %)) @seen)) (pr-str pos))))))))
+
+(deftest a-use-on-deep-inside-a-pen-declines-naming-the-pen-and-enter-pens-allows-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (pen-env)
+              declined (await (bd/child-outcome eng use-on {:pos [10 63 0]} 40))]
+          (is (= :unreachable (:reason declined)))
+          (is (zero? (gate-clicks p)))
+          (is (some #(and (= :blocks.pen-kept-out (:kind %)) (re-find #"\[5 64 0\]" (:text %))) @seen)))
+        (let [{:keys [eng]} (pen-env)
+              allowed (await (bd/child-outcome eng use-on {:pos [10 63 0] :enter-pens true} 40))]
+          (is (not= :unreachable (:reason allowed))))))))
