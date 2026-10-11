@@ -14,6 +14,7 @@
     most 1 above (so a block, a slab or a carpet is climbed, a fence top is
     not, from level ground) and falls to the first surface below, at most 3
     down, never through one; 4 down is not walked;
+  - in water two or more deep it steps from the surface, not the bottom;
   - a diagonal step needs both orthogonal neighbours steppable.
 
   Leaks: with a :box, any step out of it. Without one, the fill runs into open
@@ -167,13 +168,26 @@
                        (clear? world x z t (+ (max s t) body-height)))
               {:top t :perch? (> (:hi c) 1)})))))))
 
+;; An animal in water this deep floats clear of the bottom and steps from the surface.
+(def swim-depth 2)
+(def water-surface 0.89)
+
+(defn swim-top
+  "Height an animal standing at s in column x z steps from: the water surface when the water over the floor is
+  swim-depth cells deep or more, else s."
+  [{:keys [block]} x z s]
+  (let [y0 (floor-cell s)
+        y (first (drop-while #(some-> (block x % z) .-name (= "water")) (iterate inc y0)))]
+    (if (>= (- y y0) swim-depth) (+ y -1 water-surface) s)))
+
 (def orthogonal [[1 0] [-1 0] [0 1] [0 -1]])
 (def diagonal [[1 1] [1 -1] [-1 1] [-1 -1]])
 
 (defn moves
   "[[dx dz] {:top :perch?}] for every step from column x z at height s; a diagonal needs both orthogonals."
-  [world x z s]
-  (let [at (fn [[dx dz]] (reach world (+ x dx) (+ z dz) s))
+  [world x z floor]
+  (let [s (swim-top world x z floor)
+        at (fn [[dx dz]] (reach world (+ x dx) (+ z dz) s))
         straight (into {} (keep (fn [d] (when-let [r (at d)] [d r]))) orthogonal)
         corners (for [[dx dz] diagonal
                       :when (and (straight [dx 0]) (straight [0 dz]))

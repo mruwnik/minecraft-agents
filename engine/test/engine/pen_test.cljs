@@ -348,3 +348,38 @@
                  {:at {:x 2 :y 63 :z 2}})]
     (is (true? (:closed? r)))
     (is (= [{:pos {:x 2 :y 64 :z -1} :open? false}] (:gates r)))))
+
+;; ------------------------------------------------------------------ over a 1-2 high wall
+
+(def wall2 (ring "stone" [64 65]))
+
+(deftest a-block-or-slope-inside-a-two-high-wall-is-a-way-out
+  (let [slope (into {} (for [z (range 5)] [[0 64 z] "stone"]))]
+    (are [inside opts] (false? (:closed? (check (merge wall2 inside) opts)))
+      {[0 64 2] "stone"} nil
+      {[0 64 2] "stone"} {:at nil :box box}
+      {[0 64 0] "stone"} nil
+      {[1 64 2] "stone" [0 64 2] "stone"} nil
+      {[0 64 2] ["stone_slab" {:type "double"}]} nil
+      slope nil
+      slope {:at nil :box box})))
+
+(deftest a-two-high-wall-with-nothing-beside-it-holds
+  (is (true? (:closed? (check wall2)))))
+
+(deftest a-three-high-wall-holds-past-a-block-inside
+  (is (true? (:closed? (check (merge (ring "stone" [64 65 66]) {[0 64 2] "stone"}))))))
+
+(deftest a-fence-on-a-raised-wall-block-holds-past-a-block-inside
+  (is (true? (:closed? (check (merge (ring "stone" [64]) (ring "oak_fence" [65]) {[0 64 2] "stone"}))))))
+
+(defn pool [depth]
+  (into {} (for [x (range 0 5) z (range 0 5) y (range 64 (+ 64 depth))] [[x y z] "water"])))
+
+(deftest water-two-deep-lifts-an-animal-over-a-two-high-wall
+  (are [wall depth closed?] (= closed? (:closed? (check (merge wall (pool depth)))))
+    wall2 1 true
+    wall2 2 false
+    wall2 3 false
+    (ring "stone" [64 65 66 67]) 2 true
+    fence-ring 2 false))
