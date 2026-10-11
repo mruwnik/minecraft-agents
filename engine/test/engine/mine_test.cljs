@@ -994,6 +994,40 @@
           (is (= "cobblestone" (block-at s 2 65 0)))
           (is (not-any? #(> (first %) 2) (dug-cells s))))))))
 
+(defn ^:async stay-run
+  "A stay-level mine east over rock-world extra with body memory (kind data pairs) written first; the setup."
+  [extra memory]
+  (let [s (start {:world (update (rock-world extra) :inventory into [{:name "cobblestone" :count 5}])})]
+    (doseq [[kind data] memory] (mem/write! (:store (:eng s)) kind data))
+    (core/submit! (:eng s) (spec {:block "iron_ore" :direction "east" :tunnel-length 4 :stay-level true :mend false}) {})
+    (await (run-ticks s 120))
+    s))
+
+(deftest stay-level-takes-the-air-of-its-own-stair-for-no-breach
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (stay-run side-cave [[:stair-way {:dim "overworld" :floors [[2 63 1]]}]]))]
+          (is (= [:tunnel-length] (mapv :reason (tunnel-ends s))) (pr-str (map :text (tunnel-ends s))))
+          (is (= "air" (block-at s 2 64 1)) "nothing sealed into the stair"))))))
+
+(deftest stay-level-takes-the-air-of-its-own-earlier-tunnel-for-no-breach
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (stay-run (cells "air" [2] [64 65] [1 2 3])
+                                 [[:tunnel-way {:dim "overworld" :origin [2 64 1] :delta [0 1] :steps 2}]]))]
+          (is (= [:tunnel-length] (mapv :reason (tunnel-ends s))) (pr-str (map :text (tunnel-ends s))))
+          (is (= "air" (block-at s 2 64 2))))))))
+
+(deftest a-stay-level-tunnel-is-remembered-as-the-body's-own
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (stay-run {} []))
+              e (mem/latest (mem/view (:store (:eng s))) :tunnel-way)]
+          (is (= {:dim "overworld" :origin [0 64 0] :delta [1 0] :steps 4} (select-keys (:data e) [:dim :origin :delta :steps]))))))))
+
 (deftest stay-level-stops-open-when-it-cannot-seal
   (async done
     (tu/run-async done

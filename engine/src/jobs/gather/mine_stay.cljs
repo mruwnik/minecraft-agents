@@ -1,8 +1,34 @@
 (ns jobs.gather.mine-stay
   "The :stay-level option of jobs.gather.mine: ore only beside the body, and a cut that opens into a cave sealed again."
-  (:require [jobs.lib.access.rules :as rules]
+  (:require [engine.ctx :as ctx]
+            [jobs.lib.access.rules :as rules]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.bridge :as bridge]))
+
+(def tunnel-way-policy {:cap 30 :ttl :forever})
+
+(defn record-tunnel!
+  "Remember the tunnel this run cut (memory :tunnel-way: dim, origin feet cell [x y z], delta [dx dz], steps), so a later stay-level run
+  does not take its air for a cave."
+  [c {:keys [origin steps]} delta]
+  (when (pos? steps)
+    (ctx/remember! c :tunnel-way {:dim (.-dimension (.self (:primitives c))) :origin [(:x origin) (:y origin) (:z origin)]
+                                  :delta (vec delta) :steps steps}
+                   tunnel-way-policy)))
+
+(defn own-cells
+  "The cells of the passages this body cut itself in its dimension: feet and head of each step of its stairs (memory :stair-way) and of its tunnels (:tunnel-way), as [x y z]."
+  [c]
+  (let [dim (.-dimension (.self (:primitives c)))
+        here? #(= dim (:dim (:data %)))
+        stairs (for [e (ctx/entries c :stair-way) :when (here? e)
+                     [x y z] (:floors (:data e)) dy [1 2]]
+                 [x (+ y dy) z])
+        tunnels (for [e (ctx/entries c :tunnel-way) :when (here? e)
+                      :let [{[x y z] :origin [dx dz] :delta :keys [steps]} (:data e)]
+                      k (range (inc steps)) dy [0 1]]
+                  [(+ x (* k dx)) (+ y dy) (+ z (* k dz))])]
+    (set (concat stairs tunnels))))
 
 (defn beside-body?
   "Whether the target is one column or less from the body's feet cell and at its feet or head height."
@@ -14,12 +40,12 @@
 (def around [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 1 0]])
 
 (defn breaches
-  "The cells of cut (feet cell first) that touch seen air other than the cells of the cut, the cell the body stands in (from) and the one over it."
-  [name-at from cut]
+  "The cells of cut (feet cell first) that touch seen air other than the cells of the cut, the cell the body stands in (from) and the one over it, and the own cells ([x y z] set)."
+  [name-at from cut own]
   (let [open (into #{from (update from :y inc)} cut)]
     (filterv (fn [cell] (some #(let [n (mapv + [(:x cell) (:y cell) (:z cell)] %)
                                      q {:x (n 0) :y (n 1) :z (n 2)}]
-                                 (and (not (open q)) (rules/air (name-at q))))
+                                 (and (not (open q)) (not (own n)) (rules/air (name-at q))))
                               around))
              cut)))
 

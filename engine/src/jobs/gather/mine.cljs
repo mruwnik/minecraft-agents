@@ -704,6 +704,7 @@
                  next (assoc :next (access/cell next))
                  walk (assoc :walk walk)))
     (ctx/update-mem! c assoc-in [:tunnel :stop] stop)
+    (stay/record-tunnel! c tunnel (headings heading))
     (to-mend! c (tunnel-reason stop))))))
 
 (defn ^:async step-to!
@@ -1011,8 +1012,8 @@
                           (await (glance! c [(headings heading)]))
                           :again)
                       (not= :clear (after-cut name-at cut)) (await (recut! c next))
-                      (and (:stay-level (:args c)) (seq (stay/breaches name-at from cut)))
-                      (let [open (stay/breaches name-at from cut)]
+                      (and (:stay-level (:args c)) (seq (stay/breaches name-at from cut (stay/own-cells c))))
+                      (let [open (stay/breaches name-at from cut (stay/own-cells c))]
                         (end! c (if (await (stay/seal! c (rules-in c) open)) :breach-sealed :breach-open) (first open) next))
                       (and (not (rules/solid-floor? name-at (update next :y dec))) (rules/air (name-at (update next :y dec)))
                            (await (bridge-floor! c next)))
