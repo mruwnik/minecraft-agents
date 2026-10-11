@@ -121,7 +121,9 @@
 
   :stay-level true is the cave-safe mode: the tunnel runs at the start height (no stair down, no :level, no descent through soil), only
   seen ore within one column of the body counts, and a cut that opens into air beyond the tunnel is refilled with a carried building
-  block, ending the tunnel :breach-sealed (:breach-open when it cannot seal).
+  block, ending the tunnel :breach-sealed (:breach-open when it cannot seal). Seen ore 2 to :ore-reach blocks straight out from the body
+  (feet or head height, through rock seen solid) is taken by a child mine run: a stay-level side cut that digs it and walks back, its
+  mouth then shut with a carried block (info mine.side); the ore is skipped afterwards.
 
   Torches: a dig of seen ore that takes the body 4+ blocks off the tunnel line hangs one torch there the same way
   (none within 4 of an earlier branch torch). The strip tunnel hangs a torch (jobs.access.tunnel/torch-at: a wall torch in the head cell, else a floor
@@ -182,7 +184,8 @@
    :heading {:doc "the strip tunnel's heading, over :direction: north, south, east or west (n/s/e/w), or a cell [x y z] (the dominant axis from the start toward it); nil: :direction" :spec (a/pred "a heading name or a cell [x y z]" #(or (and (or (string? %) (keyword? %)) (heading-name %)) (and (sequential? %) (= 3 (count %)) (every? number? %)))) :default nil}
    :direction {:doc "the strip tunnel's heading: north, south, east or west (n/s/e/w); nil: the way the body faces when the job starts" :spec (a/pred "north, south, east or west (n/s/e/w), a string or keyword" #(and (or (string? %) (keyword? %)) (heading-name %))) :default nil}
    :tunnel-length {:doc "the most blocks the strip tunnel runs in this job, at the body's level; 0: no tunnel, seen blocks only" :spec (a/int-in 0 nil) :default 32}
-   :stay-level {:doc "caution for caves: dig only at the level the body starts at (the two-high tunnel, no stair down, no :level), mine only seen ore beside the body, and seal a dug cell that opens into air beyond the tunnel with a carried block (tunnel ends :breach-sealed, or :breach-open when it cannot seal)" :spec boolean? :default false}
+   :stay-level {:doc "caution for caves: dig only at the level the body starts at (the two-high tunnel, no stair down, no :level), mine only seen ore beside the body (:ore-reach: or a short side cut out), and seal a dug cell that opens into air beyond the tunnel with a carried block (tunnel ends :breach-sealed, or :breach-open when it cannot seal)" :spec boolean? :default false}
+   :ore-reach {:doc "with :stay-level: seen ore this many blocks into the wall beside the tunnel is taken by a short side cut (a child mine run), shut behind with a carried block; 0 or 1: only ore beside the body" :spec (a/int-in 0 nil) :default 2}
    :variants {:doc "an ore's stone and deepslate kinds both count as the block (iron_ore and deepslate_iron_ore, either named); false: only :block" :spec boolean? :default true}
    :level {:doc "the feet height the strip tunnel runs at (a whole number, or a cell [x y z] / {:x :y :z} whose y it takes): with no target seen the body first stairs down to it (jobs.access.stair) when higher; nil: the ore's level (setting ::ore-levels), none for other blocks; false: where the body stands"
            :spec (a/pred "a whole number, a cell [x y z] or {:x :y :z}, nil or false" #(or (nil? %) (false? %) (integer? %) (and (sequential? %) (= 3 (count %)) (integer? (second %))) (and (map? %) (integer? (:y %))))) :default nil}
@@ -298,17 +301,28 @@
         skipped (set (:skipped (ctx/mem c)))
         ground (into #{} (map :pos) (:ground (ctx/mem c)))
         here (u/self-pos c)
-        cells (->> (look/seen-blocks p {:names (vec (kinds (:args c))) :radius radius :max 128 :live? true})
-                   (map :pos)
-                   (filter #(or (not (:stay-level (:args c))) (stay/beside-body? (cell-of here) %)))
-                   (remove skipped)
-                   (remove #(too-deep? c %)))
+        stay? (:stay-level (:args c))
+        seen (->> (look/seen-blocks p {:names (vec (kinds (:args c))) :radius radius :max 128 :live? true})
+                  (map :pos)
+                  (remove skipped)
+                  (remove #(too-deep? c %)))
+        cells (filter #(or (not stay?) (stay/beside-body? (cell-of here) %)) seen)
+        heading (headings (:heading (ctx/mem c)))
+        side (when (and stay? heading)
+               (->> seen
+                    (remove #(stay/beside-body? (cell-of here) %))
+                    (keep (fn [pos] (when-let [cut (stay/side-cut (cell-of here) heading (:ore-reach (:args c)) pos)] (assoc cut :pos pos))))
+                    (filter #(not-any? (comp rules/air (fn [cell] (u/seen-name p cell))) (stay/side-cells (cell-of here) %)))
+                    (filter #(and (= :ok (classify c wet (:pos %))) (= :ok (access/judge (access/may-dig? (rules-in c) (:pos %)) accept))))
+                    (sort-by #(u/dist here (:pos %)))
+                    vec))
         graded (map (juxt identity #(classify c wet %)) cells)
         in (rules-in c)
         judged (->> graded
                     (filter #(= :ok (second %)))
                     (map (fn [[pos]] (let [v (access/may-dig? in pos)] [pos v (access/judge v accept)]))))]
-    {:targets (->> judged (filter #(= :ok (nth % 2))) (map first) (sort-by (juxt #(if (ground %) 1 0) #(u/dist here %) #(- (:y %)))) vec)
+    {:side side
+     :targets (->> judged (filter #(= :ok (nth % 2))) (map first) (sort-by (juxt #(if (ground %) 1 0) #(u/dist here %) #(- (:y %)))) vec)
      :refused (into [] (comp (filter #(= :refused (nth % 2))) (map second)) judged)
      :wet? (boolean (some #(= :wet (second %)) graded))
      :wet-n (count (filter #(= :wet (second %)) graded))}))
@@ -1267,10 +1281,32 @@
                                                              :text (str "mine took shaft " id " down to y " to-y (when heading (str ", branch " (:n sh) " " (name heading))))})
                              :again))))))
 
+(defn ^:async side-round!
+  "Take ore in the tunnel wall by a child mine run: a stay-level tunnel of the cut's steps to the side, which digs the ore beside it and
+  walks home. Then the cut's mouth is shut with a carried block, and the ore is skipped."
+  [c {:keys [pos heading steps]}]
+  (let [here (cell-of (u/self-pos c))
+        args (-> (:args c)
+                 (dissoc :direction)
+                 (assoc :heading heading :tunnel-length steps :count 1 :ore-reach 0 :mend false :fetch false :shaft false :stay-level true))
+        r (await (ctx/call-child c :side 'jobs.gather.mine args))]
+    (if (= :continue r)
+      :continue
+      (let [[dx dz] (headings heading)
+            mouth (-> here (update :x + dx) (update :z + dz))
+            name-at #(u/seen-name (:primitives c) %)
+            open (filterv #(not (rules/solid-floor? name-at %)) [mouth (update mouth :y inc)])
+            shut (or (empty? open) (await (stay/seal! c (rules-in c) open)))]
+        (ctx/emit! c :mine.side :info {:pos (access/cell pos) :heading heading :steps steps :shut shut
+                                       :text (str "mine took the wall ore at " (str/join "," (access/cell pos)) " by a side cut " steps " " heading
+                                                  (when-not shut "; the cut stays open"))})
+        (skip! c pos)
+        :again))))
+
 (defn ^:async dig-round-1! [c]
   (let [{:keys [goal failures dry looked]} (ctx/mem c)
         {:keys [max-failures wet dry-digs tunnel-length]} (:args c)
-        {:keys [targets refused wet? wet-n]} (scan c)
+        {:keys [targets refused wet? wet-n side]} (scan c)
         ready? (and (< (carried c) goal) (< (or dry 0) dry-digs) (< failures max-failures) (some? looked))
         pos (when ready? (await (next-target! c targets)))]
     (cond
@@ -1299,6 +1335,7 @@
                 (cond
                   (and (empty? refused) (not (and wet? (not wet))) (shaft-due? c)) (await (shaft-round! c))
                   (and (empty? refused) (not (and wet? (not wet))) (descend-due? c)) (await (descend-round! c))
+                  (and (seq side) (< (carried c) goal)) (await (side-round! c (first side)))
                   (pos? tunnel-length) (await (tunnel-round! c))
                   (seq refused) (to-mend! c :refused)
                   :else (to-mend! c (if (and wet? (not wet)) :wet :none)))))))

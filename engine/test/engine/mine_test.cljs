@@ -17,6 +17,7 @@
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
             [jobs.gather.mine :as mine]
+            [jobs.gather.mine-stay :as stay]
             [jobs.access.stair :as stair]
             [plan.shape :as shape]))
 
@@ -1027,6 +1028,41 @@
         (let [s (await (stay-run {} []))
               e (mem/latest (mem/view (:store (:eng s))) :tunnel-way)]
           (is (= {:dim "overworld" :origin [0 64 0] :delta [1 0] :steps 4} (select-keys (:data e) [:dim :origin :delta :steps]))))))))
+
+(deftest side-cut-names-the-heading-and-steps-to-ore-in-line-with-the-body
+  (doseq [[pos reach want] [[{:x 2 :y 64 :z 2} 2 {:heading "south" :steps 1}]
+                            [{:x 2 :y 65 :z -2} 2 {:heading "north" :steps 1}]
+                            [{:x 2 :y 64 :z 3} 3 {:heading "south" :steps 2}]
+                            [{:x 2 :y 64 :z 3} 2 nil]
+                            [{:x 2 :y 64 :z 1} 2 nil]
+                            [{:x 3 :y 64 :z 2} 2 nil]
+                            [{:x 2 :y 66 :z 2} 2 nil]
+                            [{:x 2 :y 64 :z 2} 0 nil]]]
+    (is (= want (stay/side-cut {:x 2 :y 64 :z 0} [1 0] reach pos)) (pr-str pos reach))))
+
+(defn ^:async side-ore-run
+  "A stay-level mine east with :ore-reach reach in rock with ore at (1 65 -2) beside a pocket of air that the body sees through a one-cell window of its own earlier tunnel (no breach)."
+  [reach]
+  (let [s (start {:world (update (rock-world {"0,65,-1" "air" "0,65,-2" "air" "1,65,-2" "iron_ore"}) :inventory into [{:name "cobblestone" :count 5}])})]
+    (mem/write! (:store (:eng s)) :tunnel-way {:dim "overworld" :origin [0 64 -1] :delta [0 -1] :steps 0})
+    (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 4 :stay-level true :ore-reach reach :mend false}) {})
+    (await (run-ticks s 500))
+    s))
+
+(deftest stay-level-takes-ore-seen-two-blocks-into-the-wall-by-a-side-cut
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (side-ore-run 2))]
+          (is (= 1 (get (inv s) "raw_iron")) (pr-str (keep :text @(:seen s)) (dug-cells s) (feet s)))
+          (is (= "cobblestone" (block-at s 1 64 -1)) "the side cut is shut behind"))))))
+
+(deftest stay-level-leaves-ore-beyond-its-ore-reach
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (side-ore-run 1))]
+          (is (nil? (get (inv s) "raw_iron"))))))))
 
 (deftest stay-level-stops-open-when-it-cannot-seal
   (async done

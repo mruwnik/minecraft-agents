@@ -37,6 +37,27 @@
        (<= (abs (- (:z target) (:z body))) 1)
        (<= 0 (- (:y target) (:y body)) 1)))
 
+(def side-deltas {"north" [0 -1] "south" [0 1] "east" [1 0] "west" [-1 0]})
+
+(defn side-cut
+  "How to reach the ore at pos in the wall beside a tunnel running along heading [dx dz] from the body's feet cell: {:heading name :steps n}
+  for a side cut of n blocks, straight out from the body, that ends beside it; nil when the ore does not lie in that line 2 to reach
+  blocks to the side, or off the tunnel's two heights."
+  [body [dx dz] reach pos]
+  (let [x? (not (zero? dx))
+        lat (if x? (- (:z pos) (:z body)) (- (:x pos) (:x body)))
+        along (if x? (- (:x pos) (:x body)) (- (:z pos) (:z body)))]
+    (when (and (zero? along) (<= 2 (abs lat) reach) (<= 0 (- (:y pos) (:y body)) 1))
+      {:heading (cond (and x? (pos? lat)) "south" x? "north" (pos? lat) "east" :else "west")
+       :steps (dec (abs lat))})))
+
+(defn side-cells
+  "The cells a side cut of the body at feet cell body digs: feet and head of each step."
+  [body {:keys [heading steps]}]
+  (let [[dx dz] (side-deltas heading)]
+    (for [k (range 1 (inc steps)) dy [0 1]]
+      {:x (+ (:x body) (* k dx)) :y (+ (:y body) dy) :z (+ (:z body) (* k dz))})))
+
 (def around [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 1 0]])
 
 (defn breaches
