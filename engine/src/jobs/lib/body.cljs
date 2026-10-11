@@ -51,10 +51,12 @@
 (def mute-max-ms (* 30 60 1000))
 
 (defn heard-muted?
-  "Whether heard-only mobs are muted now: the latest :heard-mute entry's :until is ahead of the view's now."
+  "Whether heard-only mobs are muted now: the latest :heard-mute entry's :until is ahead of the view's now and the
+  body was not hurt since it was written (an unseen mob may be the one hitting)."
   [view]
   (boolean (when-let [m (mem/latest view :heard-mute)]
-             (> (:until (:data m)) (:now view)))))
+             (and (> (:until (:data m)) (:now view))
+                  (empty? (mem/since view :hurt (:t m)))))))
 
 (defn next-mute-ms
   "How long the next mute lasts: mute-base-ms, doubled for each mute within the last hour, up to mute-max-ms."

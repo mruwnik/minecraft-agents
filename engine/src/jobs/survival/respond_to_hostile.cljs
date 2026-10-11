@@ -24,7 +24,10 @@
   `jobs.lib.cost.fight/fist-gap-ms`, so a body with no weapon retreats from a whole spider or zombie).
   A fight begun goes on against a single mob above `jobs.lib.cost.fight/hysteresis-health`, and at any health against
   a mob the body cannot outrun (jobs.lib.cost/outruns?: a spider at any food).
-  If the chosen child declines, the other one runs.
+  If the chosen child declines, the other one runs; but a fight that declines because every danger near is only heard
+  (none in sight to hit), with the body not hurt in the last 5 s, runs no retreat: heard mobs are muted (jobs.lib.body/heard-muted?), a
+  hostile.heard-only event names the mob, and the job is done, so the job it cut goes on. A mob that comes into sight
+  fires the reflex through the mute.
   Only ranged mobs with a line of fire near and the body under a roof, carrying building blocks and a tool that digs
   stone (a block in the doorway must not shut it in): it stops the arrows instead (jobs.survival.block-arrow-gap, no
   fetch), once per call; when that places nothing it decides as above.
@@ -123,6 +126,39 @@
 
 (def hit-window-ms "A flight hit twice within this long is failing: the body fights." 5000)
 
+(defn mute-heard!
+  "Mutes heard mobs (jobs.lib.body/heard-muted?) when every danger in hs is heard only, else lifts the mutes: a mob
+  the body sees counts again."
+  [c hs]
+  (cond
+    (empty? hs) nil
+    (every? (complement danger-q/seen-only?) hs)
+    (ctx/remember! c :heard-mute {:until (+ (ctx/now c) (body/next-mute-ms (ctx/view c)))} body/mute-policy)
+    :else (ctx/forget-where! c :heard-mute (constantly true))))
+
+(defn leave-heard?
+  "Whether a fight that found no target leaves the dangers hs alone instead of fleeing: every one only heard (none
+  seen, so none to walk to or hit), none a creeper, and the body not hurt within hit-window-ms (an unseen mob may be
+  the one hitting it)."
+  [c hs]
+  (and (not-any? danger-q/seen-only? hs)
+       (not-any? combat/creeper? hs)
+       (empty? (:hits (ctx/mem c)))
+       (empty? (ctx/since c :hurt (- (ctx/now c) hit-window-ms)))))
+
+(defn leave-heard!
+  "Mutes heard mobs (mute-heard!) and says which one was left, so the job the reflex cut goes on; :left-heard."
+  [c hs]
+  (let [mute-ms (body/next-mute-ms (ctx/view c))
+        entry (assoc (threats/place-of (:primitives c) (first hs)) :mob (.-name (first hs)))]
+    (mute-heard! c hs)
+    (ctx/emit! c :hostile.heard-only :info
+               (assoc (dissoc entry :from) :mute-s (/ mute-ms 1000)
+                      :text (str "the " (:mob entry) " heard " (name (:band entry)) ", " (name (:direction entry))
+                                 " is not in sight and the body can afford the fight: no flight; heard mobs are left alone for "
+                                 (/ mute-ms 1000) " s, one that comes into sight is fought")))
+    :left-heard))
+
 (defn ^:async respond [c near]
   (let [{:keys [reserve weapons] :as a} (:args c)
         p (:primitives c)
@@ -149,9 +185,10 @@
     (log-encounter! c (first near) decision)
     (ctx/update-mem! c assoc :decision decision)
     (let [result (await (run-child c decision a stay?))]
-      (if (and (= :declined result) (not stay?))
-        (await (run-child c (other decision) a false))
-        result))))
+      (cond
+        (or (not= :declined result) stay?) result
+        (and (= :fight decision) (leave-heard? c near)) (leave-heard! c near)
+        :else (await (run-child c (other decision) a false))))))
 
 (def cover-sides
   "Of the four sides of the body's cell, how many must be walled (feet and head cell solid) for it to hold cover: a
@@ -215,16 +252,6 @@
    :ids (set (map #(.-id %) hs))
    :fight (select-keys (get-in (ctx/mem c) [:children :fight]) [:struck :no-damage :blocked :killed])})
 
-(defn mute-heard!
-  "Mutes heard mobs (jobs.lib.body/heard-muted?) when every danger in hs is heard only, else lifts the mutes: a mob
-  the body sees counts again."
-  [c hs]
-  (cond
-    (empty? hs) nil
-    (every? (complement danger-q/seen-only?) hs)
-    (ctx/remember! c :heard-mute {:until (+ (ctx/now c) (body/next-mute-ms (ctx/view c)))} body/mute-policy)
-    :else (ctx/forget-where! c :heard-mute (constantly true))))
-
 (defn ^:async round
   "One whole attempt: respond (or let the retreat hide on) while a danger is near; stopped when a child stops, or
   :no_response after max-unchanged calls in a row that changed nothing; never for the time a danger stays."
@@ -233,22 +260,23 @@
     (ctx/update-mem! c assoc :goal (or (:goal (:args c)) (goal/interrupted-goal (ctx/view c) (:root c)))))
   (loop [unchanged 0]
     (let [hs (near c)
-          before (signature c hs)]
-      (cond
-        (hiding? c) (await (run-child c :flee (:args c) false))
-        (empty? hs) nil
-        (gap-wanted? c hs (:gap-tried (ctx/mem c))) (await (gap! c))
-        :else (await (respond c hs)))
-      (let [after (near c)]
-        (if-let [[slot res] (stopped-child c)]
-          (do (mute-heard! c hs)
-              (r/stop! c (:reason res) (:text res) :cause (r/cause-of slot res)))
-          (cond
-            (not (or (seq after) (hiding? c))) :done
-            :else
-            (let [n (if (= before (signature c after)) (inc unchanged) 0)]
-              (if (>= n max-unchanged)
-                (do (mute-heard! c hs)
-                    (ctx/emit! c :no_response :warn {:text "the hostile is still near and nothing changed in three tries"})
-                    (r/stop! c :no_response "a hostile is still near and three tries changed nothing"))
-                (do (await (pace/pace!)) (recur n))))))))))
+          before (signature c hs)
+          outcome (cond
+                    (hiding? c) (await (run-child c :flee (:args c) false))
+                    (empty? hs) nil
+                    (gap-wanted? c hs (:gap-tried (ctx/mem c))) (await (gap! c))
+                    :else (await (respond c hs)))
+          after (near c)]
+      (if-let [[slot res] (stopped-child c)]
+        (do (mute-heard! c hs)
+            (r/stop! c (:reason res) (:text res) :cause (r/cause-of slot res)))
+        (cond
+          (= :left-heard outcome) :done
+          (not (or (seq after) (hiding? c))) :done
+          :else
+          (let [n (if (= before (signature c after)) (inc unchanged) 0)]
+            (if (>= n max-unchanged)
+              (do (mute-heard! c hs)
+                  (ctx/emit! c :no_response :warn {:text "the hostile is still near and nothing changed in three tries"})
+                  (r/stop! c :no_response "a hostile is still near and three tries changed nothing"))
+              (do (await (pace/pace!)) (recur n)))))))))

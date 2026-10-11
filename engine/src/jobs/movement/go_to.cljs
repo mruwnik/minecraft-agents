@@ -115,7 +115,7 @@
     :escalate false: a shut-in body then gives up with :shut-in true and says so in the text.
   - Gives up with {:status :stopped :arrived false :reason :unreachable :why ... :text words} (the job ends :stopped) and an :unreachable warn: :why is the planner's
     reason (:exhausted, :goal-unloaded (the goal lies in unloaded land and the loaded land leads no nearer), :goal-enclosed, :goal-cut-off, :goal-on-magma, :door-stuck with :cells, :one-way with :near and :one-way ...), or :stuck
-    (:kind the step, :detail the executor's text), :off-plan, :steer-failed, :no-progress, :cut-again (sent back by 3 cuts, each restart more than send-back-margin farther than where the cut found the body, with no 2 blocks gained on the closest approach in between (in-place cuts do not count or break it); a restart that knows of no hostile within the hostile-near radius of the way ahead clears the count instead; an escalation child's own walk is its own call, a parent waiting on it is not walking; :nearest-hostile names a guess at the cause) or :moved-while-searching; :at is the
+    (:kind the step, :detail the executor's text), :off-plan, :steer-failed, :no-progress, :cut-again (sent back by 3 cuts, each restart more than send-back-margin farther than where the cut found the body, with no 2 blocks gained on the closest approach in between (in-place cuts do not count or break it); a restart that knows of no hostile within the hostile-near radius of the way ahead clears the count instead; an escalation child's own walk is its own call, a parent waiting on it is not walking; :nearest-hostile names a guess at the cause, :nearest-hostile-at its cell, or {:direction :band} when only heard) or :moved-while-searching; :at is the
     body's feet cell and :near its blocks from the goal. A failed
     escalation adds :escalation {:step :reason ...}, the child's reason or wait.
   - Under water with no way to the goal in the air left (:air), it first walks to the nearest air it sees or finds by
@@ -915,10 +915,14 @@
   (danger-q/hostiles-near-way (:primitives c) pos (danger-q/hostile-radius) {:ranged-radius (danger-q/ranged-radius)}))
 
 (defn nearest-hostile
-  "The name of the hostile nearest the way ahead to pos, else of the nearest the body knows within 16 blocks, a guess
-  at the sender back (the engine does not say which reflex cut), else nil."
+  "{:nearest-hostile name :nearest-hostile-at place} of the hostile nearest the way ahead to pos, else of the nearest
+  the body knows within 16 blocks, a guess at the sender back (the engine does not say which reflex cut), else nil.
+  The place is its cell when seen, {:direction :band} when only heard."
   [c pos]
-  (some-> (or (first (way-hostiles c pos)) (first (combat/hostiles (:primitives c) 16))) .-name))
+  (when-let [e (or (first (way-hostiles c pos)) (first (combat/hostiles (:primitives c) 16)))]
+    (let [{at :pos :as place} (threats/place-of (:primitives c) e)]
+      {:nearest-hostile (.-name e)
+       :nearest-hostile-at (if at (mapv #(js/Math.floor (% at)) [:x :y :z]) (select-keys place [:direction :band]))})))
 
 (defn with-body-food
   "c with the :food arg the caller gave, else the body's own food now (a felt fact): the walk counts on it."
@@ -1137,9 +1141,8 @@
           (ctx/update-mem! c assoc :cuts 0 :ref (:closest state) :resets (inc (:resets state))))
         (if cycle?
           (do (ctx/update-mem! c #(-> % (dissoc :open :goal :closest :ref :last-dist) (assoc :cuts 0)))
-              (await (end/give-up! c pos 0 :cut {:reason :cut-again} (cond-> {}
-                                                                         spent? (assoc :resets-spent true)
-                                                                         (nearest-hostile c pos) (assoc :nearest-hostile (nearest-hostile c pos))))))
+              (await (end/give-up! c pos 0 :cut {:reason :cut-again} (cond-> (or (nearest-hostile c pos) {})
+                                                                         spent? (assoc :resets-spent true)))))
           (let [danger (goal-danger c pos)]
             (when danger (ctx/emit! c :goal-in-danger :info (assoc danger :target pos)))
             (if (and danger (= :end (some-> (:goal-danger (:args c)) keyword)))

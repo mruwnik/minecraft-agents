@@ -254,6 +254,8 @@
   (let [{:keys [p]} (rig {:entities [(mob 1 "zombie" 6 -3)] :blocks wall})]
     (is (true? (near-with-memory? p {:now 10 :data mem/empty-data})) "no mute set: a heard melee mob with a way counts")
     (is (false? (near-with-memory? p (muted-memory 100 5000))))
+    (is (true? (near-with-memory? p (update (muted-memory 100 5000) :data mem/add-entry :hurt {:t 50 :data {}} {:cap 8 :ttl :forever})))
+        "hurt since the mute began: the unseen mob may be the one hitting")
     (is (true? (near-with-memory? p (muted-memory 6000 5000))) "the mute is over")))
 
 (deftest a-seen-mob-fires-the-trigger-through-a-mute

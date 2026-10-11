@@ -1098,6 +1098,42 @@
           (is (= 1 (count (mutes eng))) "one mute entry, not a mute per round")
           (is (true? (body/heard-muted? (mem/view (:store eng))))))))))
 
+;; ---- a body that would fight leaves a mob it only hears alone
+
+(defn heard-skeleton [id x z] {:id id :name "skeleton" :kind "hostile" :visible false :pos {:x x :y 64 :z z}})
+
+(defn heard-only-events [seen] (filterv #(= :hostile.heard-only (:kind %)) @seen))
+
+(deftest full-iron-and-a-sword-afford-two-skeletons-heard-near
+  (let [near {:name "skeleton" :distance 4}
+        cost-of #(cost/fight-damage {:weapon "iron_sword" :equipment iron-armour :mobs %})
+        round2 #(/ (js/Math.round (* 100 %)) 100)]
+    (is (= [2.42 7.26] (mapv (comp round2 cost-of) [[near] [near near]])) "of the 16 a body at 20 may spend")
+    (is (= :fight (cost/decide {:health 20 :reserve 4 :damage (cost-of [near near])})))))
+
+(deftest a-body-that-would-fight-does-not-flee-mobs-it-only-hears
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [skeletons [(heard-skeleton 5 6 0) (heard-skeleton 6 -3 3)]
+              kit {:inventory sword :equipment iron-armour :entities skeletons}]
+          (let [{:keys [eng seen]} (await (flight-round respond kit))]
+            (is (= [:fight] (mapv :decision (decided seen))))
+            (is (= [] (tu/walked-to eng)) "no flight from a sound")
+            (is (= 1 (count (mutes eng))) "heard mobs are muted: the walk it cut goes on")
+            (is (= [] (:list (core/state eng))) "done, not held")
+            (is (= ["skeleton"] (mapv :mob (heard-only-events seen))) "it says which mob it heard and left"))
+          (let [{:keys [eng seen] :as s} (setup-flight kit)]
+            (mem/write! (:store eng) :hurt {:amount 3})
+            (core/submit! eng respond {})
+            (await (core/tick! eng))
+            (is (walked? s) "just hurt: the unseen mob may be the one hitting, it flees")
+            (is (= [] (heard-only-events seen))))
+          (let [{:keys [eng seen] :as s} (await (flight-round respond (assoc kit :self {:health 5})))]
+            (is (= [:flee] (mapv :decision (decided seen))))
+            (is (walked? s) "a body that cannot afford the fight still flees")
+            (is (= [] (mutes eng)))))))))
+
 (deftest a-flight-from-a-seen-mob-that-ends-blocked-mutes-nothing
   (async done
     (tu/run-async done

@@ -706,6 +706,7 @@
                                                             (cut-seed {:closest 3 :ref 3 :cuts 2})))]
           (is (= {:arrived false :reason :unreachable :why :cut-again} (select-keys @out [:arrived :reason :why])) (pr-str @out))
           (is (= "zombie" (:nearest-hostile @out)) (pr-str @out))
+          (is (= [14 64 6] (:nearest-hostile-at @out)) (pr-str @out))
           (is (= [:done] @returns))
           (is (= [] (moved eng)) "it walked nowhere"))
         ;; the same three cuts with no hostile known near the way ahead (the sender is dead or gone): it walks on
@@ -817,7 +818,11 @@
   (is (str/includes? (end/give-up-words [10 64 0] {:why :air-lethal}) "drown")))
 
 (deftest the-cut-again-text-names-the-nearest-hostile-as-a-guess
-  (is (str/includes? (end/give-up-words [10 64 0] {:why :cut-again :nearest-hostile "zombie"}) "nearest hostile: zombie"))
+  (is (str/includes? (end/give-up-words [10 64 0] {:why :cut-again :nearest-hostile "zombie"}) "nearest hostile: zombie)"))
+  (is (str/includes? (end/give-up-words [10 64 0] {:why :cut-again :nearest-hostile "zombie" :nearest-hostile-at [14 64 6]})
+                     "nearest hostile: zombie at [14 64 6])"))
+  (is (str/includes? (end/give-up-words [10 64 0] {:why :cut-again :nearest-hostile "skeleton" :nearest-hostile-at {:band :near :direction :south-west}})
+                     "nearest hostile: skeleton heard near, south-west)"))
   (is (not (str/includes? (end/give-up-words [10 64 0] {:why :cut-again}) "hostile"))))
 
 (defn ^:async cut-cycles!

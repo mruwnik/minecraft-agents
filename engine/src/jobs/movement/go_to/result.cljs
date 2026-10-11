@@ -80,9 +80,15 @@
       :none (str "no way out" (some->> r (str ": ")))
       (str "could not " (or (step-words step) "make a way out") (some->> r (str ": "))))))
 
+(defn hostile-place-words
+  "Where a hostile is, in words: \" at [x y z]\" for a cell, \" heard near, south\" for {:direction :band}, else nil."
+  [at]
+  (cond (vector? at) (str " at " (pr-str at))
+        (:band at) (str " heard " (name (:band at)) ", " (name (:direction at)))))
+
 (defn give-up-words
   "The give-up reason in words, for the :text of the :unreachable event and the result: no map dumps."
-  [pos {:keys [why kind detail escalation shut-in nearest-hostile resets-spent mob mob-distance explored torches waypoint-why heal hp-cost hp-budget low-passage dip rise]}]
+  [pos {:keys [why kind detail escalation shut-in nearest-hostile nearest-hostile-at resets-spent mob mob-distance explored torches waypoint-why heal hp-cost hp-budget low-passage dip rise]}]
   (str "gave up walking to " (if (map? pos) (let [{:keys [x y z]} pos] [x y z]) pos) ": "
        (if (and escalation (not= :way-dives why))
          (str "shut in here; " (escalation-words escalation))
@@ -102,7 +108,7 @@
            :stuck (str "the body got stuck" (some->> kind name (str " on ")) (some->> detail (str ": ")))
            :off-plan (or detail "the walk left its plan")
            :steer-failed (str "steering failed" (some->> detail (str ": ")))
-           :cut-again (str "the walk was cut again and again, each time with the body sent back, and got no nearer" (when resets-spent " (its cut-count resets were spent)") (when nearest-hostile (str " (nearest hostile: " (str/replace (str nearest-hostile) "_" " ") ")")))
+           :cut-again (str "the walk was cut again and again, each time with the body sent back, and got no nearer" (when resets-spent " (its cut-count resets were spent)") (when nearest-hostile (str " (nearest hostile: " (str/replace (str nearest-hostile) "_" " ") (hostile-place-words nearest-hostile-at) ")")))
            :goal-dangerous (str "the goal is in danger: " (str/replace (str mob) "_" " ") " " mob-distance " blocks from it, a mob the body would flee")
            :moved-while-searching "the body was pushed about while the path was searched"
            :needs-health (str "a way exists but costs " hp-cost " hp, more than the " hp-budget " hp the body may spend"
