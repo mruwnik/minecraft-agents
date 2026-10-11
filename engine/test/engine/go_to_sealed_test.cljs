@@ -41,7 +41,7 @@
                              (impl nil a)))
     (ledger/write! (:store eng) [{:cell [1 64 0] :item "dirt" :before "air" :job "j9" :purpose :retreat-plug :state :placed}])
     (fake/add-entity! p {:id 9 :name "skeleton" :kind "hostile" :pos {:x -6 :y 64 :z 0} :health 20})
-    (when setup (setup eng))
+    (when setup (setup eng p))
     (core/submit! eng '(walker) {})
     (await (st/tick-n eng n))
     s)))
@@ -92,7 +92,7 @@
       (fn ^:async t []
         (doseq [[muted? held?] [[true false] [false true]]]
           (let [{:keys [seen]} (await (sealed 6 nil
-                                              (fn [eng]
+                                              (fn [eng _]
                                                 (when muted? (mem/write! (:store eng) :heard-mute {:until 9999999999} body/mute-policy)))))]
             (is (= held? (boolean (seq (st/emitted seen :holding)))) (str "muted " muted?))))))))
 
@@ -103,3 +103,11 @@
         (let [{:keys [waits]} (await (sealed 6))]
           (is (seq @waits))
           (is (= [:sealed-hostile-near] (distinct @waits))))))))
+
+(deftest a-heard-only-hostile-in-the-far-band-does-not-hold-the-sealed-walk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[x held?] [[-6 true] [-20 false]]]
+          (let [{:keys [seen]} (await (sealed 6 nil (fn [_ p] (swap! (fake/state p) update :entities (partial mapv #(assoc-in % [:pos 0] x))))))]
+            (is (= held? (boolean (seq (st/emitted seen :holding)))) (str "skeleton at x " x))))))))
