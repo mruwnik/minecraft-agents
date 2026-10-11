@@ -90,6 +90,8 @@
   (let [p (tu/seeing-all (tu/fake-on-floor (hut {:x 5.5 :y 64 :z 0.5} open-door [])))]
     (is (true? (reach/closed-room? p home)) "an open door counts as one that can be shut")
     (is (false? (reach/closed-room? p {:x 15 :y 64 :z 0})) "the open field outside")
+    (is (true? (reach/closed-room? p {:x 5 :y 64 :z 2})) "standing in the open door's own cell: judged by the room it belongs to")
+    (is (= #{[5 64 0]} (set (filter #{[5 64 0]} (:cells (reach/room* p {:x 5 :y 64 :z 2}))))) "the room of a doorway holds the room cells")
     (is (false? (reach/closed-room? (tu/seeing-all (tu/fake-on-floor (hut {:x 5.5 :y 64 :z 0.5} {} []
                                                                           {"5,64,2" "air" "5,65,2" "air"})))
                                     home))

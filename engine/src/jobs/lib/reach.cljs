@@ -403,24 +403,33 @@
        (shut-in? p kind-at))
      false)))
 
+(defn room-from
+  "The closed room a walker at cell [x y z] reaches (room*'s answer), nil when it is no closed room."
+  [p kind-at x y z]
+  (when-let [cells (flood-cells (fn [cx cy cz] (forward kind-at cx cy cz)) [x y z] room-cells)]
+    (let [cells (set (map vec cells))
+          doors (for [[cx cy cz] cells
+                      [dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
+                      :let [cell {:x (+ cx dx) :y cy :z (+ cz dz)}
+                            name (some-> (u/seen-block p cell) .-name)]
+                      :when (and name (openable? name) (not (str/ends-with? name "_trapdoor")))]
+                  {:cell cell :inside {:x cx :y cy :z cz}})]
+      {:cells cells :doors (vec (vals (into {} (map (juxt :cell identity)) doors)))})))
+
 (defn room*
   "The closed room around cell pos {:x :y :z}: the cells a walker there reaches with every door, gate and trapdoor shut,
   fewer than room-cells (flood over the blocks the body has seen; an unseen or unloaded cell is open). {:cells #{[x y
   z]} feet cells, :doors [{:cell {:x :y :z} :inside {:x :y :z}}] each door or gate beside a room cell at its feet, with
-  that room cell}; nil when it is no closed room."
+  that room cell}; nil when it is no closed room. A door or gate cell is the room's boundary whether open or shut, so
+  a pos in one is judged by the first closed room beside it."
   [p {:keys [x y z]}]
   (let [kind-at (fn [cx cy cz]
                   (let [b (u/seen-block p {:x cx :y cy :z cz})]
-                    (if (and b (openable? (.-name b))) :solid (kind-of b))))]
-    (when-let [cells (flood-cells (fn [cx cy cz] (forward kind-at cx cy cz)) [x y z] room-cells)]
-      (let [cells (set (map vec cells))
-            doors (for [[cx cy cz] cells
-                        [dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
-                        :let [cell {:x (+ cx dx) :y cy :z (+ cz dz)}
-                              name (some-> (u/seen-block p cell) .-name)]
-                        :when (and name (openable? name) (not (str/ends-with? name "_trapdoor")))]
-                    {:cell cell :inside {:x cx :y cy :z cz}})]
-        {:cells cells :doors (vec (vals (into {} (map (juxt :cell identity)) doors)))}))))
+                    (if (and b (openable? (.-name b))) :solid (kind-of b))))
+        in-door? (some-> (u/seen-block p {:x x :y y :z z}) .-name openable?)]
+    (if in-door?
+      (some (fn [[dx dz]] (room-from p kind-at (+ x dx) y (+ z dz))) [[1 0] [-1 0] [0 1] [0 -1]])
+      (room-from p kind-at x y z))))
 
 (def room-memo-ms
   "How long a room answer is reused while the body and the world stand still: the night trigger asks every 250 ms and a flood reads up to room-cells cells."
