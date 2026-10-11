@@ -16,6 +16,7 @@
             [jobs.lib.danger :as danger-q]
             [jobs.lib.dig-look :as look]
             [jobs.lib.reach :as reach]
+            [jobs.lib.seal :as seal]
             [jobs.lib.shelter :as sh]
             [jobs.lib.solid :as solid]
             [jobs.lib.spent :as spent]
@@ -25,23 +26,6 @@
             [jobs.lib.util :as u]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.retreat-flight :as flight]))
-
-(def mob-half-width
-  "Half the width of a zombie-sized mob's hitbox."
-  0.3)
-
-(defn hitbox-cells
-  "The feet and head cells a mob standing at pos overlaps (its hitbox is 0.6 wide, so one straddling a cell
-  boundary is in both cells: the server refuses a block there)."
-  [{:keys [x y z]}]
-  (let [span (fn [v] (distinct [(js/Math.floor (- v mob-half-width)) (js/Math.floor (+ v mob-half-width))]))
-        fy (js/Math.floor y)]
-    (for [cx (span x) cz (span z) cy [fy (inc fy)]] {:x cx :y cy :z cz})))
-
-(defn hostile-cells
-  "The cells the hostiles within radius overlap: no block goes there."
-  [p radius]
-  (set (mapcat #(hitbox-cells (danger-q/mob-pos p %)) (danger-q/known-hostiles p radius {}))))
 
 (defn occupied? [c cell] (contains? (:seal-occupied (ctx/mem c)) cell))
 
@@ -76,20 +60,6 @@
                   (dig-cells/keep-waiting! c :seal-mob-since r) :wait
                   :else (do (dig-cells/forget-wait! c :seal-mob-since)
                             :failed)))))))
-
-(defn off-centre?
-  "Whether the body's hitbox (0.6 wide) reaches out of its cell into a side cell."
-  [p]
-  (let [{:keys [x z]} (u/self-pos {:primitives p})
-        frac #(- % (js/Math.floor %))]
-    (boolean (some #(or (< (frac %) 0.3) (> (frac %) 0.7)) [x z]))))
-
-(defn ^:async centre!
-  "Step to the middle of the body's own cell, so the side cells around it can take blocks."
-  [c]
-  (let [{:keys [x y z]} (sh/feet (:primitives c))]
-    ;; raw moveTo kept: a step inside the body's own cell, range 0.15; the planner has no goal finer than a cell.
-    (await (ctx/act c :moveTo #js {:pos #js {:x (+ x 0.5) :y y :z (+ z 0.5)} :range 0.15}))))
 
 (defn shooters
   "Where the seen ranged hostiles within the flight's :ranged-radius stand."
@@ -160,10 +130,10 @@
     (cond
       (empty? open) (do (forget!) :sealed)
       (empty? cells) (unfillable)
-      (some (hostile-cells p radius) cells) (do (forget!) :failed)
+      (some (seal/hostile-cells p radius) cells) (do (forget!) :failed)
       (nil? (lb/pick c blocks)) (do (forget!) :failed)
       :else
-      (do (when (off-centre? p) (await (centre! c)))
+      (do (when (seal/off-centre? p) (await (seal/centre! c)))
           (access/trespass! c "retreat" (some #(access/trespass-refusal (access/rules-input c) :place %) cells))
           (ctx/update-mem! c #(-> % (update :seal-cells (fnil into #{}) (map (juxt :x :y :z) (take max-places cells)))
                                   (assoc :seal-at (sh/feet p))))
@@ -201,8 +171,6 @@
        first
        :name))
 
-(defn up [[x y z] n] [x (+ y n) z])
-
 (def climb-radius
   "Blocks round the pillar within which a mob's climb to its top is looked for."
   4)
@@ -212,9 +180,9 @@
   (levels 2 to 4 above the start: its hitbox then overlaps the body's)."
   [block-at feet]
   (let [[x y z] feet
-        standable? (fn [cell] (and (rules/solid-floor? block-at (up cell -1))
+        standable? (fn [cell] (and (rules/solid-floor? block-at (escape/up cell -1))
                                    (pl/clear? (block-at cell))
-                                   (pl/clear? (block-at (up cell 1)))))
+                                   (pl/clear? (block-at (escape/up cell 1)))))
         near? (fn [[cx _ cz]] (and (<= (abs (- cx x)) climb-radius) (<= (abs (- cz z)) climb-radius)))
         beside-top? (fn [[cx cy cz]] (and (<= (abs (- cx x)) 1) (<= (abs (- cz z)) 1) (not= [x z] [cx cz]) (<= (+ y 2) cy (+ y 4))))
         start (filter standable? (for [dx (range (- climb-radius) (inc climb-radius)) dz (range (- climb-radius) (inc climb-radius))
@@ -235,8 +203,8 @@
   "Whether a pillar-height pillar fits here: a solid floor, the head cell and every cell the body rises into free, and
   no ledge beside its top a mob could climb to."
   [block-at feet]
-  (and (rules/solid-floor? block-at (up feet -1))
-       (every? #(pl/clear? (block-at (up feet %))) (range 1 (+ 2 (pillar-height))))
+  (and (rules/solid-floor? block-at (escape/up feet -1))
+       (every? #(pl/clear? (block-at (escape/up feet %))) (range 1 (+ 2 (pillar-height))))
        (not (climbable-top? block-at feet))))
 
 (defn cell-map [[x y z]] {:x x :y y :z z})
@@ -258,13 +226,13 @@
         feet (pl/feet-cell c)
         item (pillar-item c)]
     (when item
-      (doseq [cell (map #(up feet %) (range 1 (+ 2 (pillar-height))))]
+      (doseq [cell (map #(escape/up feet %) (range 1 (+ 2 (pillar-height))))]
         (when (look/unknown? p cell) (await (look/look-at! c cell)))))
     (when (and item (pillar-ok? (escape/block-at-of p) feet))
-      (access/trespass! c "retreat" (some #(access/trespass-refusal (access/rules-input c) :place (cell-map (up feet %)))
+      (access/trespass! c "retreat" (some #(access/trespass-refusal (access/rules-input c) :place (cell-map (escape/up feet %)))
                                           (range (pillar-height))))
       (await (start-refuge! c {:kind :pillar :item item :anchor (cell-map feet)
-                               :cells (mapv #(up feet %) (range (pillar-height)))})))))
+                               :cells (mapv #(escape/up feet %) (range (pillar-height)))})))))
 
 (def drop-of
   "The block a dug block drops, where it is another (an unlisted one drops itself)."
@@ -275,7 +243,7 @@
   look down the zigzag pit's next column and step into it."
   [c cell]
   (let [p (:primitives c)
-        mobs (hostile-cells p (:radius (:args c) 0))]
+        mobs (seal/hostile-cells p (:radius (:args c) 0))]
     (every? #(and (dig-cells/open-cell? p %) (not (mobs %))) [cell (update cell :y inc)])))
 
 (defn dug-cells-ok?
@@ -305,7 +273,7 @@
         prepped (fn [shape]
                   (let [side (update (:to (first (:steps shape))) :y inc)]
                     (assoc shape :prep [side (update side :y inc)])))
-        mobs (hostile-cells p (:radius (:args c) 0))
+        mobs (seal/hostile-cells p (:radius (:args c) 0))
         shapes (dig-cells/pit-shapes p feet #(side-open? c %))
         shape (or (first (filter fits? shapes))
                   (->> (dig-cells/pit-shapes p feet #(not (mobs %)))
@@ -315,8 +283,6 @@
                        first))]
     (when shape
       (assoc shape :target-y (:y (:to (peek (:steps shape))))))))
-
-(defn cell-vec [{:keys [x y z]}] [x y z])
 
 (defn ^:async pit!
   "Start digging down and plugging (pit-plan) when it can: a step's result, else nil."
@@ -329,7 +295,7 @@
                                           (some #(access/trespass-refusal (assoc in :feet nil) :place %) (conj plugs roof))))
         (ctx/update-mem! c dissoc :pit-drops)
         (await (start-refuge! c (assoc plan :kind :pit :anchor feet
-                                       :cells (mapv cell-vec (distinct (concat digs plugs [roof]))))))))))
+                                       :cells (mapv lb/cell (distinct (concat digs plugs [roof]))))))))))
 
 (defn pocket-cells
   "The two cells [feet head] of a side pocket dug from feet towards [dx dz], or nil: both solid, harvestable with what is
@@ -525,7 +491,7 @@
       (nil? item) (await (abandon-refuge! c))
       :else
       (let [l (ledger/intend (ledger/open-entries (ctx/view c))
-                             {:cell (cell-vec cell) :item item :before (u/seen-name p cell) :job (:id c) :purpose :retreat-plug})
+                             {:cell (lb/cell cell) :item item :before (u/seen-name p cell) :job (:id c) :purpose :retreat-plug})
             _ (ledger/remember! c l)
             r (await (tidy/place! c cell item true))]
         (ledger/remember! c (ledger/reconcile l (escape/block-at-of p)))
@@ -541,7 +507,7 @@
   lays-open?), or the cell fills again."
   [c cell keep]
   (let [p (:primitives c)
-        v (cell-vec cell)
+        v (lb/cell cell)
         blocks (set (:blocks (:args c)))
         _ (await (tools/equip-for! c (dig-cells/rock-name p cell) {:fast true}))
         r (await (tidy/dig! c cell true))]
@@ -574,13 +540,13 @@
       (let [{:keys [dig to floor]} (nth steps at)
             cell (first (remove #(dig-cells/open-cell? p %) (if (zero? at) (concat prep dig) dig)))
             under? (= cell (update feet :y dec))]
-        (when (and cell (look/unknown? p (cell-vec cell))) (await (look/look-at! c (cell-vec cell))))
+        (when (and cell (look/unknown? p (lb/cell cell))) (await (look/look-at! c (lb/cell cell))))
         (cond
           (and cell (not (dig-cells/rock-solid? p cell))) (await (abandon-refuge! c))
           (and under? (not (dig-cells/known-solid? p floor))) (await (abandon-refuge! c))
           cell (await (dig-pit-cell! c cell keep))
           :else
-          (do (when (look/unknown? p (cell-vec floor)) (await (look/look-at! c (cell-vec floor))))
+          (do (when (look/unknown? p (lb/cell floor)) (await (look/look-at! c (lb/cell floor))))
               (if (dig-cells/known-solid? p floor)
                 ;; raw moveTo kept: a drop into the body's own pit, as dig-in's descent; the planner has no standable goal there.
                 (do (await (ctx/act c :moveTo (clj->js {:pos to :range 0.5})))

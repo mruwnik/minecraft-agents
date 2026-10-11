@@ -20,7 +20,7 @@
             [jobs.lib.threats :as threats]
             [jobs.survival.retreat :as retreat]
             [jobs.survival.retreat-flight :as retreat-flight]
-            [jobs.survival.retreat-refuge :as retreat-refuge]
+            [jobs.lib.seal :as seal]
             [jobs.survival.retreat-walk :as retreat-walk]))
 
 (def ms-per-call
@@ -548,7 +548,7 @@
         ids #(mapv (fn [e] (.-id e)) %)]
     (is (= [7] (ids (retreat-flight/near-known p #{} 40 nil))) "no perception: every tracked mob")
     (is (= [] (ids (retreat-flight/near-known wrapped #{} 40 nil))) "unseen and unheard: not weighed")
-    (is (= [] (vec (retreat-refuge/hostile-cells wrapped 40))) "no cell is kept clear for an unknown mob")
+    (is (= [] (vec (seal/hostile-cells wrapped 40))) "no cell is kept clear for an unknown mob")
     (is (= [] (ids (retreat-flight/near-known p #{7} 40 nil))) "a corpse is skipped")))
 
 (deftest a-flight-resumed-after-a-gap-starts-its-clocks-afresh
@@ -592,7 +592,7 @@
   (let [p0 (tu/fake-on-floor {:floor big-floor})
         [bx] (body-pos p0)
         p (tu/fake-on-floor {:floor big-floor :entities [(zombie 7 (+ bx 10) {:visible false})]})
-        cells (retreat-refuge/hostile-cells p 40)]
+        cells (seal/hostile-cells p 40)]
     (is (contains? (set (map :x cells)) (js/Math.floor (+ bx 16))) "heard 10 blocks east (far band): 16 east")
     (is (not-any? #(= (js/Math.floor (+ bx 10)) (:x %)) cells) "the exact place is not kept")))
 

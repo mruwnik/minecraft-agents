@@ -4,17 +4,17 @@
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as lb]
+            [jobs.lib.access.rules :as rules]
             [jobs.lib.escape :as escape]
             [jobs.lib.look :as look]
+            [jobs.lib.seal :as seal]
             [jobs.lib.shelter :as sh]
             [jobs.lib.solid :as solid]
             [jobs.lib.targets :as targets]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.survival.bed-down :as bed-down]
-            [jobs.survival.dig-in :as dig-in]
             [jobs.survival.dig-in-cells :as dig-cells]
-            [jobs.survival.dig-niche :as dig-niche]
             [jobs.survival.night.hold :as hold]
             [jobs.survival.night.sites :as sites]))
 
@@ -23,7 +23,7 @@
   cells ({:kind :ground :pos}) a pit can be dug at (sites/pit-site?), clear of failed sites, the nearest sites/ground-candidates."
   [c radius]
   (let [p (:primitives c)]
-    (->> (look/seen-blocks p {:match #(and (solid/solid? %) (escape/natural? %) (not (dig-niche/falling? %)) (tools/can-harvest? p %))
+    (->> (look/seen-blocks p {:match #(and (solid/solid? %) (escape/natural? %) (not (rules/falling? %)) (tools/can-harvest? p %))
                               :radius (min 64 radius) :max 64})
          (map #(update (:pos %) :y inc))
          (filter #(and (sites/pit-site? p %) (sites/clear-of-failed? c %)))
@@ -43,7 +43,7 @@
         solid? (into #{} (map (comp key-of :pos)) solids)
         seen-free? (fn [cell] (and (not (solid? (key-of cell)))
                                    (not (:unknown (look/seen-block p cell)))))
-        have (reduce + (map :count (lb/carried c (dig-in/cheap-blocks dig-in/shelter-blocks (:wall-value (:args c))))))
+        have (reduce + (map :count (lb/carried c (seal/cheap-blocks seal/shelter-blocks (:wall-value (:args c))))))
         up (fn [{:keys [x y z]} dy] {:x x :y (+ y dy) :z z})
         sealed? (fn [cell] (and (solid? (key-of cell)) (dig-cells/sealed? p cell)))]
     (->> solids

@@ -11,11 +11,11 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.reach :as reach]
+            [jobs.lib.seal :as seal]
             [jobs.lib.result :as r]
             [jobs.lib.shelter :as sh]
             [jobs.lib.solid :as solid]
             [jobs.lib.util :as u]
-            [jobs.survival.dig-in :as dig-in]
             [jobs.survival.dig-in-cells :as dig-cells]))
 
 (def doc
@@ -40,7 +40,7 @@
 (a/defargs args
   {:radius {:doc "ranged mobs within this many blocks count" :spec (a/num-in 0 nil) :default 16}
    :reach {:doc "open cells within this many blocks of the body's feet may be filled" :spec (a/num-in 0 nil) :default 3}
-   :blocks {:doc "names of the blocks it may place" :spec (a/coll-of a/item?) :default dig-in/shelter-blocks}
+   :blocks {:doc "names of the blocks it may place" :spec (a/coll-of a/item?) :default seal/shelter-blocks}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
    :fetch {:doc "get a missing block (jobs.lib.fetch): true, a set of kinds or a map of limits; false stops :no-blocks" :spec fetch/option? :default true}})
 

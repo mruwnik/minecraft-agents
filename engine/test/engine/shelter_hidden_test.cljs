@@ -13,6 +13,7 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as world]
+            [jobs.lib.seal :as seal]
             [jobs.survival.dig-in :as dig-in]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.dig-niche :as niche]
@@ -46,7 +47,7 @@
 (defn seen-world [extra]
   (see-surface! (sensing {:blocks (merge ground hill extra)})))
 
-(defn ctx-of [p] {:primitives p :args {:blocks dig-in/shelter-blocks}})
+(defn ctx-of [p] {:primitives p :args {:blocks seal/shelter-blocks}})
 
 (deftest a-pit-in-rock-the-body-has-not-looked-into-is-planned
   (async done

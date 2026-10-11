@@ -2,18 +2,16 @@
   (:require [engine.settings :as settings]
             [engine.args :as a]
             [clojure.string :as str]
-            [jobs.lib.cost :as cost]
             [jobs.lib.pen-gate :as pen-gate]
             [jobs.lib.reach :as reach]
+            [jobs.lib.seal :as seal]
             [jobs.lib.blocks :as lb]
-            [jobs.lib.trees :as trees]
             [jobs.lib.tidy :as tidy]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.child :as child]
             [jobs.lib.dig-look :as look]
             [jobs.survival.dig-in-cells :as dig-cells]
-            [jobs.survival.retreat-refuge :as refuge]
             [jobs.lib.result :as result]
             [jobs.lib.sense :as sense]
             [jobs.lib.shelter :as sh]
@@ -73,24 +71,15 @@
   Plug mode adds :room true. A shelter sealed again where the latest entry stood keeps that entry's :start and :door.
   Leaving is jobs.lib.dig-in-leave/leave!, which jobs.survival.night calls by day.")
 
-(def shelter-blocks
-  "What dig-in places: the building blocks, then logs (jobs.lib.trees/log-names; worth more, a last resort)."
-  (into lb/building-blocks trees/log-names))
-
 (a/defargs args
   {:roof-height {:doc "a solid block within this many blocks above counts as a roof" :spec (a/int-in 0 nil) :default sh/default-roof-height}
-   :blocks {:doc "names of the blocks it may place" :spec (a/coll-of a/item?) :default shelter-blocks}
+   :blocks {:doc "names of the blocks it may place" :spec (a/coll-of a/item?) :default seal/shelter-blocks}
    :wall-value {:doc "a block worth more than this each (jobs.lib.cost/item-value; dirt 0.35, cobblestone 0.85, stone 2.85, planks 3.4, log 12.8) walls the body in only when no pit can be dug" :spec (a/num-in 0 nil) :default 3}
    :take-back-value {:doc "a placed block worth more than this each (jobs.lib.cost/item-value; dirt 0.35, cobblestone 0.85) is dug again and collected when the shelter is left by day" :spec (a/num-in 0 nil) :default 0.5}
    :max-places {:doc "placements per step" :spec (a/int-in 1 nil) :default 4}
    :on-lava {:doc ":seal: lava the dig lays open in or beside the hole is filled with a carried block; :stop: the dig is given up (:fluid-adjacent)" :spec #{:seal :stop} :default :seal}
    :enclose {:doc "wall in under a roof already overhead: walls only, never a pit; stops :no-blocks when too few blocks are carried" :spec boolean? :default false}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
-
-(defn cheap-blocks
-  "The blocks worth at most max-value each by jobs.lib.cost/item-value."
-  [blocks max-value]
-  (filterv #(<= (:value (cost/item-value [{:name % :count 1}])) max-value) blocks))
 
 (def gate-take-back-range
   "A cheap seal block this near a planned gate is taken back with the dear ones: it would box the gate in."
@@ -101,8 +90,6 @@
   [c {:keys [x y z]}]
   (boolean (some (fn [[gx gy gz]] (<= (u/dist {:x x :y y :z z} {:x gx :y gy :z gz}) gate-take-back-range))
                  (keys (pen-gate/opening-index (:world (:engine c)))))))
-
-(def shelter-policy {:cap 10 :ttl sh/ms-per-day})
 
 (def futile-policy {:cap 5 :ttl 600000})
 
@@ -159,7 +146,7 @@
         p (:primitives c)
         open (dig-cells/open-cells p (sh/feet p))
         cells (cells-to-try c open)
-        _ (when (and (seq cells) (refuge/off-centre? p)) (await (refuge/centre! c)))
+        _ (when (and (seq cells) (seal/off-centre? p)) (await (seal/centre! c)))
         status (await (dig-cells/place-all! c blocks (take max-places (dig-cells/bottom-up p cells (sh/feet p)))))]
     (cond
       (empty? cells) (do (when-not (sh/roofed? p roof-height) (remember-failed-site! c :walls-refused))
@@ -402,7 +389,7 @@
 (defn side-ok?
   "Whether the side column at feet height (cell and the one over it) is seen open, dry and free of hostiles."
   [p cell]
-  (let [mobs (refuge/hostile-cells p (side-mob-radius))]
+  (let [mobs (seal/hostile-cells p (side-mob-radius))]
     (every? #(and (dig-cells/open-cell? p %) (not (mobs %))) [cell (update cell :y inc)])))
 
 (defn pit-cells
@@ -442,7 +429,7 @@
     (when (or moved (not mode))
       (let [cells (dig-cells/open-cells p start)
             have (reduce + (map :count (lb/carried c (:blocks (:args c)))))
-            cheap (reduce + (map :count (lb/carried c (cheap-blocks (:blocks (:args c)) (:wall-value (:args c))))))
+            cheap (reduce + (map :count (lb/carried c (seal/cheap-blocks (:blocks (:args c)) (:wall-value (:args c))))))
             enclose (:enclose (:args c))
             plan (when-not enclose (await (sense/decide! c ::dig-plan #(dig-cells/dig-plan p start))))
             shape (when plan (await (find-shape! c start plan)))
@@ -587,7 +574,7 @@
         door (when (= :walls (:mode (ctx/mem c))) (dig-cells/door placed feet))
         start (when (#{:dig :walls} (:mode (ctx/mem c))) (:start (ctx/mem c)))
         spent (:spent (ctx/mem c) {})
-        cheap (set (cheap-blocks (keys spent) (:take-back-value (:args c))))
+        cheap (set (seal/cheap-blocks (keys spent) (:take-back-value (:args c))))
         prev (:data (ctx/latest c :shelter))
         resealed (= feet (:pos prev))
         take-back (->> (concat (when resealed (:take-back prev))
@@ -616,7 +603,7 @@
                                 start (assoc :start start)
                                 (seq take-back) (assoc :take-back take-back)
                                 (= :plug mode) (assoc :room true))
-                   shelter-policy)
+                   sh/shelter-policy)
     (if (dig-cells/sealed-in? p judged (:roof-height (:args c)))
       (result/finish! c (cond-> {:pos feet :mode mode} (contains? placed roof) (assoc :roof roof)))
       (let [reason (or (:stop (ctx/mem c)) :unsealed)]

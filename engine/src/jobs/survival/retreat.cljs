@@ -250,7 +250,7 @@
               (- (.-health self) reserve))))))
 
 (defn back-off-target
-  "A cell to back off to: of the ends of the open cells (refuge/up to 2, see walk-cells) in the eight compass directions,
+  "A cell to back off to: of the ends of the open cells (escape/up to 2, see walk-cells) in the eight compass directions,
   the farthest from threat, when it gains at least a block on it and passes no hazard; nil when none does."
   [block-at from threat hazards]
   (let [now (u/dist from threat)]

@@ -16,6 +16,7 @@
             [engine.triggers :as triggers]
             [jobs.survival.retreat :as retreat]
             [jobs.survival.retreat-walk :as retreat-walk]
+            [jobs.lib.seal :as seal]
             [jobs.survival.retreat-refuge :as retreat-refuge]))
 
 (defn setup
@@ -541,8 +542,8 @@
           (is (zero? (count (calls p "attack")))))))))
 
 (deftest hitbox-cells-are-every-cell-a-mob-overlaps
-  (is (= #{[0 64 0] [1 64 0] [0 65 0] [1 65 0]} (set (map (juxt :x :y :z) (retreat-refuge/hitbox-cells {:x 0.8 :y 64 :z 0.5})))))
-  (is (= #{[0 64 0] [0 65 0]} (set (map (juxt :x :y :z) (retreat-refuge/hitbox-cells {:x 0.5 :y 64 :z 0.5}))))))
+  (is (= #{[0 64 0] [1 64 0] [0 65 0] [1 65 0]} (set (map (juxt :x :y :z) (seal/hitbox-cells {:x 0.8 :y 64 :z 0.5})))))
+  (is (= #{[0 64 0] [0 65 0]} (set (map (juxt :x :y :z) (seal/hitbox-cells {:x 0.5 :y 64 :z 0.5}))))))
 
 (def deep-dead-end
   "dead-end over solid rock down to y 58: a tunnel with a roof at y 66, a pickaxe digs down into it."

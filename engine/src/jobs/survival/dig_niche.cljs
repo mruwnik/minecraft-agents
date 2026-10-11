@@ -8,7 +8,9 @@
             [jobs.lib.child :as child]
             [jobs.lib.dig-look :as dl]
             [jobs.lib.fetch :as fetch]
+            [jobs.lib.access.rules :as rules]
             [jobs.lib.look :as look]
+            [jobs.lib.seal :as seal]
             [jobs.lib.result :as result]
             [jobs.lib.shelter :as sh]
             [jobs.lib.solid :as solid]
@@ -16,7 +18,6 @@
             [jobs.lib.tidy :as tidy]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
-            [jobs.survival.dig-in :as dig-in]
             [jobs.survival.dig-in-cells :as dig-cells]))
 
 (def doc
@@ -36,7 +37,7 @@
 
 (a/defargs args
   {:reach {:doc "how far from the body to look for a face, 1 to 32" :spec (a/int-in 1 32) :default 16}
-   :blocks {:doc "names of the blocks it may place" :spec (a/coll-of a/item?) :default dig-in/shelter-blocks}
+   :blocks {:doc "names of the blocks it may place" :spec (a/coll-of a/item?) :default seal/shelter-blocks}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
    :fetch {:doc "get a missing tool (jobs.lib.fetch): true, a set of kinds or a map of limits; false stops :no-tool" :spec fetch/option? :default true}
    :roof-height {:doc "a solid block within this many blocks above counts as a roof, 1 to 32" :spec (a/int-in 1 32) :default sh/default-roof-height}})
@@ -55,7 +56,6 @@
    ::dig-reach {:default 4 :doc "How far from a cell the body digs it without walking closer." :spec (a/int-in 0 nil)}})
 (defn max-steps [] (settings/get settings ::max-steps))
 
-(defn falling? [name] (boolean (re-find #"^(sand|red_sand|gravel)$|_concrete_powder$" (or name ""))))
 
 (defn at
   "The cell k along dir from stand cell f, s to the side, h up."
@@ -86,12 +86,12 @@
     (and (solid? (at f dir 0 0 -1)) (not (solid? f))
          (not (solid? (at f dir -1 0 0))) (not (solid? (at f dir -1 0 1))) (not (solid? (at f dir 0 0 1)))
          (not (dig-cells/wet? p f)) (not (dig-cells/wet? p (at f dir 0 0 1)))
-         (every? #(and (solid? %) (not (falling? (name %))) (not (dig-cells/wet? p %))
+         (every? #(and (solid? %) (not (rules/falling? (name %))) (not (dig-cells/wet? p %))
                        (or (not need-tool?) (tools/can-harvest? p (name %))))
                  (dug-cells f dir))
          (every? #(and (solid? %) (not (dig-cells/wet? p %))) (shell-cells f dir))
-         (not (falling? (name (at f dir 1 0 2))))
-         (not (falling? (name (at f dir 2 0 2))))))))
+         (not (rules/falling? (name (at f dir 1 0 2))))
+         (not (rules/falling? (name (at f dir 2 0 2))))))))
 
 (defn permitted?
   "Whether the zone rules (input in, see jobs.lib.access/rules-input) let the job dig the niche's cells and plug its opening."
@@ -216,7 +216,7 @@
         feet (sh/feet p)
         door (door-cells stand dir)
         placed (spent/log c)]
-    (ctx/remember! c :shelter {:pos feet :state :built :door door} dig-in/shelter-policy)
+    (ctx/remember! c :shelter {:pos feet :state :built :door door} sh/shelter-policy)
     (ctx/emit! c :dig-niche.sealed :info (merge {:pos feet :door door
                                                  :text (str "shut in a niche in the hillside for the night"
                                                             (some->> (spent/text placed "niche plug") (str ": ")))}

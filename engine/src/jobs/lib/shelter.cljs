@@ -579,3 +579,5 @@
   "The place to go home to before night: the remembered :home, else :bed (view: an engine.memory view)."
   [view]
   (or (mem/place view :home) (mem/place view :bed)))
+
+(def shelter-policy {:cap 10 :ttl ms-per-day})
