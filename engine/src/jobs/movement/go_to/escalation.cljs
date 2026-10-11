@@ -220,8 +220,8 @@
   8)
 
 (defn stair-check
-  "A fn of go-to's first plan of a round, saying why it is not walked and a stair up is cut instead, when escalating is
-  on, the body is not in its shelter and escape/choose would stair (steps n):
+  "A fn of a plan and whether it is the first of its round, saying why it is not walked and a stair up is cut instead (a
+  re-plan inside a walk is held to :dives only), when escalating is on, the body is not in its shelter and escape/choose would stair (steps n):
   - :dives: under a cave floor (c :cave-floor, with c :dive-stair) the plan goes below it on a cell that is no stair of
     the body's own (climb/dives?);
   - :cheaper: it is a whole path costing more seconds than 3 such stairs, the goal is stair-first-rise or more above
@@ -236,11 +236,11 @@
         stair (delay (let [e (escape/choose (:primitives c) feet goal (may-dig-fn c) {:own? (own-placed-fn c) :skip (:skipped-steps m #{})})]
                        (when (= :stair (:step e)) e)))]
     (when (and (:escalate (:args c)) (not (sh/sheltered-in c)) (or cave cheaper?))
-      (fn [{:keys [status steps ^js r]}]
+      (fn [{:keys [status steps ^js r]} first?]
         (let [seconds (some-> r .-path .-cost .-priced)]
           (cond
             (and cave (climb/dives? steps cave (ledger/ways-of c)) @stair) :dives
-            (and cheaper? (= "found" status) (number? seconds) @stair (> seconds (* 3 stair-step-s (:steps @stair)))) :cheaper))))))
+            (and first? cheaper? (= "found" status) (number? seconds) @stair (> seconds (* 3 stair-step-s (:steps @stair)))) :cheaper))))))
 
 (defn dive-refused!
   "A plan refused because it goes down through caves (stair-check :dives): climb as from a dive (memory :dive-climb,

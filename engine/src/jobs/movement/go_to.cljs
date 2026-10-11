@@ -130,7 +130,7 @@
     - first climbs the stairs it cut itself (memory :stair-way) that lie within ::climb/own-way-reach, hop by hop, once
       a call (setting ::climb/own-way); a hop it cannot walk, standing on such a stair, has the stair cut again from
       there (a go-to.escalated {:step :stair :why :own-way-blocked}; these holes stay open);
-    - walks no plan that goes more than ::climb/cave-dip below where the call began over cells that are no stair of
+    - walks no plan (first or re-plan inside a walk) that goes more than ::climb/cave-dip below where the call began over cells that are no stair of
       its own, while a stair up can be cut there (with :escalate and ::climb-stair): it climbs as from a dive
       (:why :way-dives); when no stair can be cut it walks the plan after all.
     An explicit :y-margin switches all of this off.

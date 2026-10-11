@@ -81,14 +81,16 @@
 (defn ^:async climb!
   "go! with ticks enough for a stair, a second of fake time each (the stair waits out a lava delay): {:out :p :seen
   :track}, track every position the body had. A world key :stair-way (floors) is written to memory as a stair the body
-  cut."
+  cut. A world key :on-move (fn [p pos]) is called with every position the body has."
   [world args]
   (let [clock (atom 1000000)
-        {:keys [eng p] :as s} (gt/setup (assoc (dissoc world :stair-way) :clock clock))
+        {:keys [eng p] :as s} (gt/setup (assoc (dissoc world :stair-way :on-move) :clock clock))
         out (atom :not-done)
         track (atom [])
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (gt/recording-parent out args)))]
     (add-watch (fake/state p) :track (fn [_ _ _ w] (swap! track conj (:pos (:self w)))))
+    (when-let [f (:on-move world)]
+      (add-watch (fake/state p) :on-move (fn [_ _ _ w] (f p (:pos (:self w))))))
     (some->> (:stair-way world) (hash-map :dim "overworld" :floors) (mem/write! (:store eng) :stair-way))
     (core/submit! eng '(recording-parent) {})
     (loop [i 0]
@@ -161,6 +163,28 @@
           (is (= #{:stair} (set (map :step (gt/events-of s :go-to.escalated)))))
           (is (= #{:way-dives} (set (map :why (gt/events-of s :go-to.escalated)))))
           (is (<= 37 (lowest s)) "never more than ::cave-dip below where it began"))))))
+
+;; The shallow world plus a stair tunnel west (floors [-i 39+i 0], i 1..20) up to the mass's top: the first plan climbs it
+;; and dips nowhere. Once the body is past x -3 the tunnel is walled at x -10, so the re-plan can only go down to the cave.
+(def walled-stair
+  (let [carve (for [i (range 1 21) y (range (+ 40 i) (+ 44 i))] (str (- i) "," y ",0"))]
+    (apply dissoc shallow carve)))
+
+(defn wall-stair! []
+  (let [walled (atom false)]
+    (fn [p pos]
+      (when (and (< (first pos) -3) (not @walled))
+        (reset! walled true)
+        (doseq [y (range 50 54)] (fake/set-block! p [-10 y 0] "dirt"))))))
+
+(deftest a-re-plan-after-a-partial-leg-that-dips-into-the-cave-cuts-a-stair-up-instead
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out] :as s} (await (climb! (assoc in-shallow :blocks walled-stair :on-move (wall-stair!)) {:pos mass-top}))]
+          (is (true? (:arrived @out)))
+          (is (= #{:way-dives} (set (map :why (gt/events-of s :go-to.escalated)))))
+          (is (<= 37 (lowest s)) "never more than ::cave-dip below where the call began"))))))
 
 (deftest the-cave-is-walked-with-a-y-margin-or-a-deeper-cave-dip
   (async done
