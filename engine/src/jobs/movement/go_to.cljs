@@ -719,14 +719,16 @@
     (climb/way-up (u/self-pos c) (ledger/ways-of c) (climb/own-way-reach) (js/Math.floor (:y pos)))))
 
 (defn ^:async walk-own-way!
-  "Walk to way (own-way), planning nowhere below the feet: the way up a stair never leads down, and a way round through
-  the caves to its top is not it. A walk that does not get there cuts the stair again from where the body stands on it
-  (esc/own-recut!), else ends the call's use of its own stairs (memory :own-way-done). :again."
+  "Walk onto way (own-way), planning nowhere below the feet: the way up a stair never leads down, and a way round through
+  the caves to its top is not it; only way's own cell is there (under a floor that is gone is not). A walk that does not
+  get there, or max-searching searches begun afresh (memory :searching), cuts the stair again from where the body stands
+  on it (esc/own-recut!), else ends the call's use of its own stairs (memory :own-way-done). :again."
   [c way opts]
   (let [level (assoc c :dive-floor (js/Math.floor (:y (u/self-pos c))))
-        {:keys [status]} (await (near/walk-round! level way 1 (dissoc opts :progress)))]
-    (ctx/update-mem! c assoc :own-way-on true)
-    (when-not (or (#{"arrived" "searching"} status) (esc/own-recut! c))
+        {:keys [status result]} (await (near/walk-round! level way 0 (dissoc opts :progress)))
+        n (cond-> (:searching (ctx/mem c) 0) (and (= "searching" status) (:fresh result)) inc)]
+    (ctx/update-mem! c assoc :own-way-on true :searching n)
+    (when-not (or (= "arrived" status) (and (= "searching" status) (< n max-searching)) (esc/own-recut! c))
       (ctx/update-mem! c assoc :own-way-done true))
     :again))
 

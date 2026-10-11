@@ -8,7 +8,9 @@
             [engine.memory :as mem]
             [engine.path-preview-test :as pt]
             [engine.settings :as settings]
-            [engine.test-util :as tu :refer [box floor]]))
+            [engine.test-util :as tu :refer [box floor]]
+            [jobs.lib.near :as near]
+            [jobs.movement.go-to :as go-to]))
 
 ;; level ground x 0..6 (feet 64), a valley stepping down one block a column to feet 52 and up again, level ground to x 40
 (def valley
@@ -81,10 +83,10 @@
 (defn ^:async climb!
   "go! with ticks enough for a stair, a second of fake time each (the stair waits out a lava delay): {:out :p :seen
   :track}, track every position the body had. A world key :stair-way (floors) is written to memory as a stair the body
-  cut. A world key :on-move (fn [p pos]) is called with every position the body has."
+  cut. A world key :on-move (fn [p pos]) is called with every position the body has; :ticks bounds the run (default 1000)."
   [world args]
   (let [clock (atom 1000000)
-        {:keys [eng p] :as s} (gt/setup (assoc (dissoc world :stair-way :on-move) :clock clock))
+        {:keys [eng p] :as s} (gt/setup (assoc (dissoc world :stair-way :on-move :ticks) :clock clock))
         out (atom :not-done)
         track (atom [])
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (gt/recording-parent out args)))]
@@ -94,7 +96,7 @@
     (some->> (:stair-way world) (hash-map :dim "overworld" :floors) (mem/write! (:store eng) :stair-way))
     (core/submit! eng '(recording-parent) {})
     (loop [i 0]
-      (when (and (< i 1000) (seq (:list (core/state eng))))
+      (when (and (< i (:ticks world 1000)) (seq (:list (core/state eng))))
         (await (core/tick! eng))
         (swap! clock + 1000)
         (recur (inc i))))
@@ -246,3 +248,32 @@
           (is (> 21 (farthest-east s)) "never out of the tunnel's east end into the cave")
           (is (= [[:stair :own-way-blocked]] (map (juxt :step :why) (gt/events-of s :go-to.escalated))))
           (is (= "air" (get-in @(fake/state (:p s)) [:blocks [-14 49 0]] "air")) "the stair is left open"))))))
+
+;; The forked mass with the block of the stair's top floor gone: its feet cell [-26 60 0] has a hole under it.
+(def topless (dissoc forked "-26,59,0"))
+
+;; f's call may take n steps of go-to's loop (its pace! between them); the step after fails the job.
+(defn ^:async within-steps [n f]
+  (let [pace go-to/pace!
+        left (atom n)]
+    (set! go-to/pace! #(if (neg? (swap! left dec)) (js/Promise.reject (js/Error. "step budget spent")) (pace)))
+    (try (await (f))
+         (finally (set! go-to/pace! pace)))))
+
+(deftest an-own-stair-whose-top-floor-is-gone-does-not-hold-the-call-for-ever
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out] :as s} (await (within-steps 200 #(climb! (assoc in-forked :blocks topless :ticks 50) {:pos fork-top})))]
+          (is (true? (:arrived @out)) "the call ends within 200 steps, at the goal")
+          (is (> 21 (farthest-east s)) "never out of the tunnel's east end into the cave"))))))
+
+(deftest a-body-moved-off-every-search-up-its-own-stair-gives-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [walk near/walk-round!
+              _ (set! near/walk-round! (fn [& _] (js/Promise.resolve {:status "searching" :result {:status :searching :fresh true}})))
+              {:keys [out]} (await (-> (within-steps 300 #(climb! (assoc in-forked :ticks 50) {:pos fork-top}))
+                                       (.finally #(set! near/walk-round! walk))))]
+          (is (= {:arrived false :why :moved-while-searching} (select-keys @out [:arrived :why]))))))))
