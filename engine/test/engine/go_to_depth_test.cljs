@@ -244,6 +244,15 @@
           (is (> 21 (farthest-east s)) "never out of the tunnel's east end into the cave")
           (is (empty? (gt/events-of s :go-to.escalated))))))))
 
+(deftest a-goal-on-a-step-of-its-own-stair-is-walked-to-with-nothing-cut
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out] :as s} (await (climb! in-forked {:pos [-24 58 0] :range 0}))]
+          (is (true? (:arrived @out)))
+          (is (> 21 (farthest-east s)) "never out of the tunnel's east end into the cave")
+          (is (empty? (gt/events-of s :go-to.escalated))))))))
+
 (deftest a-stair-of-its-own-not-in-memory-or-with-the-setting-off-is-not-preferred
   (async done
     (tu/run-async done
