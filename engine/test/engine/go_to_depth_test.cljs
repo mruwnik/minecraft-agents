@@ -1,7 +1,7 @@
 (ns engine.go-to-depth-test
   "go-to's :y-margin: blocks past the lowest and highest of body and goal that a walk's search may reach, so a route that
   dips far below both ends (through deep caves) is refused instead of walked; absent: the walks' wide box."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
             [engine.fake :as fake]
             [engine.go-to-test :as gt]
@@ -11,6 +11,7 @@
             [engine.test-util :as tu :refer [box floor]]
             [jobs.lib.near :as near]
             [jobs.movement.go-to.climb :as climb]
+            [jobs.movement.go-to.detour :as detour]
             [jobs.movement.go-to :as go-to]))
 
 ;; level ground x 0..6 (feet 64), a valley stepping down one block a column to feet 52 and up again, level ground to x 40
@@ -357,3 +358,42 @@
 
 (deftest a-walk-up-its-own-way-slower-than-a-new-stair-is-not-taken
   (is (= [true false] (map #(:take (climb/weigh (vec (range %)) 16 3)) [193 200]))))
+
+;; Two corridors 6 apart (z 0 and z 6, x 0..40) joined only at their far end: the goal is 6 blocks from the body across
+;; a gap it cannot jump, and 84 by the only way. No sky light: under ground, the far cells never seen.
+(def loop-way (merge (floor 63 0 0 40 0) (floor 63 40 0 40 6) (floor 63 0 6 40 6)))
+
+(def across [0 64 6])
+
+(def in-loop {:blocks loop-way :self {:pos {:x 0.5 :y 64 :z 0.5}} :light [0 0]})
+
+(deftest a-buried-body-does-not-walk-a-long-unseen-way-to-a-near-goal
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (gt/go! in-loop {:pos across}))]
+          (is (= {:arrived false :why :detour :route 84 :straight 6 :allowed 48}
+                 (select-keys @out [:arrived :why :route :straight :allowed])))
+          (is (re-find #"84 blocks.*6 blocks away.*:detour false" (str (:text @out))))
+          (is (= [0.5 64 0.5] (gt/at p)) "it did not set out"))))))
+
+(deftest the-long-way-is-walked-on-request-under-the-sky-or-within-the-bound
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (true? (:arrived @(:out (await (gt/go! in-loop {:pos across :detour false}))))))
+        (is (true? (:arrived @(:out (await (gt/go! (assoc in-loop :light [15 0]) {:pos across}))))) "sky light on the body")
+        (is (true? (:arrived @(:out (await (settings/with-settings {:jobs.movement.go-to.detour/floor 100}
+                                             #(gt/go! in-loop {:pos across}))))))
+            "setting ::detour/floor")))))
+
+(def line-20 (mapv (fn [x] {:x x :y 64 :z 0}) (range 21)))
+
+(deftest a-way-is-a-detour-when-long-for-its-goal-and-mostly-unseen
+  (are [steps straight unseen? out] (= out (detour/refusal steps straight unseen?))
+    (mapv #(update % :x * 3) line-20) 6 (constantly true) {:detour true :route 60 :straight 6 :allowed 48}
+    (mapv #(update % :x * 3) line-20) 6 (constantly false) nil
+    (mapv #(update % :x * 3) line-20) 6 (fn [x _ _] (>= x 30)) {:detour true :route 60 :straight 6 :allowed 48}
+    (mapv #(update % :x * 3) line-20) 6 (fn [x _ _] (> x 30)) nil
+    (mapv #(update % :x * 3) line-20) 15 (constantly true) nil
+    line-20 2 (constantly true) nil))

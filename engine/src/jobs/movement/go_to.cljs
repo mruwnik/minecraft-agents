@@ -36,6 +36,7 @@
             [jobs.movement.go-to.air :as air]
             [jobs.movement.go-to.climb :as climb]
             [jobs.movement.go-to.column :as column]
+            [jobs.movement.go-to.detour :as detour]
             [jobs.movement.go-to.escalation :as esc]
             [jobs.movement.go-to.health :as health]
             [jobs.movement.go-to.result :as end]
@@ -140,6 +141,10 @@
       its own, while a stair up can be cut there (with :escalate and ::climb-stair): it climbs as from a dive
       (:why :way-dives); when no stair can be cut it walks the plan after all.
     An explicit :y-margin switches all of this off.
+  - :detour (default true): a body under ground (jobs.lib.shelter/buried?) whose goal is under ::climb-rise above it
+    walks no found way longer than ::detour/ratio times the distance to its goal at the call's start (at least
+    ::detour/floor blocks) when half or more of its cells were never seen: it gives up :why :detour with :route,
+    :straight and :allowed (blocks) before it sets out. :detour false walks it. See jobs.movement.go-to.detour.
   - Every walk writes a :moved memory entry {:from :to :status :target} (arrived, partial or blocked) for
     the stuck trigger.
   - :doors (jobs.lib.pass): :shut (default) opens a shut door, gate or trapdoor with an empty hand, passes and
@@ -186,6 +191,7 @@
    :leg-alert-within {:doc "with :leg-alert-s: blocks within which a hostile that attacks at close range (not a ranged mob or an enderman; a creeper counts), or a loss of health since the call began, shortens a leg's search to :leg-alert-s seconds from its start" :spec (a/num-in 0 nil) :default nil}
    :leg-alert-s {:doc "seconds a search may last once the :leg-alert-within alert is on (0.1 to 120)" :spec (a/num-in 0.1 120) :default nil}
    :one-way {:doc "arg, not the :one-way key of a give-up result: :closed takes no drop of 2 or 3 or gap jump down that the body cannot climb back, and walks to no frontier of loaded land (a walk to something visible); :open (default) takes one when the land past it runs on into unloaded land" :spec #{:open :closed} :default :open}
+   :detour {:doc "false: under ground, walk a found way however long; true: one over mostly unseen cells and longer than the bound of jobs.movement.go-to.detour for a goal that near is not walked (:why :detour)" :spec boolean? :default true}
    :explore-blocks {:doc "blocks the body may walk in a call without coming nearer its goal than ever before (a tour of frontiers past a dead end), then it gives up :why :explore-spent; nil: no bound (the tour ends when every frontier is spent)" :spec (a/num-in 0 nil) :default nil}
    :retry {:doc "false: a walk that got no nearer gives up at once instead of walking again (up to 3 times), for a caller that re-aims itself" :spec boolean? :default true}
    :look-round {:doc "false: no look round on arrival, for a caller that keeps moving" :spec boolean? :default true}
@@ -763,6 +769,25 @@
   (when (and (nil? way) (:own-way-on (ctx/mem c)))
     (ctx/update-mem! c #(-> % (dissoc :own-way-on :dive-floor) (assoc :own-way-done true)))))
 
+(defn plan-check
+  "near/walk-round!'s :stair-check of a walk round: stair-check's why (may be nil: none), else the detour bound's
+  (detour/refusal, a map) for a whole plan to pos, straight blocks from it at the call's start, of a body that senses
+  and stands under ground, unless :detour is false or pos lies ::climb-rise or more above it (the climb's)."
+  [c pos stair-check straight]
+  (let [p (:primitives c)
+        kind-at (column/seen-kind-at p)
+        unseen? #(keyword-identical? :unknown (kind-at %1 %2 %3))
+        bound? (and (not (false? (:detour (:args c)))) (some? (.-sensedAt p)) (< (- (:y pos) (:y (u/self-pos c))) (climb-rise)))]
+    (fn [{:keys [status steps] :as plan} first?]
+      (or (when stair-check (stair-check plan first?))
+          (when (and bound? (= "found" status) (sh/buried? p)) (detour/refusal steps straight unseen?))))))
+
+(defn straight-from!
+  "Blocks from the goal the call's first walk round found the body, d then (memory :detour-from)."
+  [c d]
+  (or (:detour-from (ctx/mem c))
+      (do (ctx/update-mem! c assoc :detour-from d) d)))
+
 (defn ^:async walk! [c0 pos range doors]
   (let [way (own-way c0 pos (dive-floor! c0 pos))
         _ (own-way-left! c0 way)
@@ -787,7 +812,7 @@
       :else
       (let [_ (forget-known-land! c)
             opts (assoc (walk-opts c doors) :progress (empty? (:frontier-best (ctx/mem c))))
-            stair-check (esc/stair-check c pos)
+            stair-check (plan-check c pos (esc/stair-check c pos) (straight-from! c d))
             {walked :result status :status to :to} (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos)) pos range (assoc opts :see-cell (see-cell c) :stair-check stair-check)))
             _ (ctx/hold-still! c (when (= "searching" status) :searching))
             fetched (when (= :no-torch (:status walked)) (await (fetch-torches! c)))
@@ -816,6 +841,9 @@
 
           (and (= "stair" status) (= :dives (:why walked)))
           (esc/dive-refused! c pos)
+
+          (and (= "stair" status) (:detour (:why walked)))
+          (end/give-up! c pos (:blocked (ctx/mem c) 0) :detour {:status :no-path :reason :detour} (dissoc (:why walked) :detour))
 
           (= "stair" status)
           (do (ctx/update-mem! c assoc :stair-tried true :escalate-now true) :again)
@@ -897,7 +925,7 @@
         there? (here? c pos (:range (:args c)))]
     (wworld/warn-bad-settings! c)
     (pen-entry/warn-left-open! c pos (:doors (:args c)))
-    (ctx/update-mem! c #(cond-> (-> % (dissoc :best :fault-cells :over-budget :off-hand-tried :air-looked :air-relooks :surfacings :column-looks :column-near :hang-walks :waypoint-misses :waypoint-why :way-looks :dry-tried :in-water :wet-fresh :wet-surfacings :dive-floor :cave-ok :cave-climb :own-way-on :own-way-done) (assoc :blocked 0 :searching 0 :leg-t0 (ctx/now c) :leg-hp (.-health (.self (:primitives c))) :frontier-best {} :target-best {}))
+    (ctx/update-mem! c #(cond-> (-> % (dissoc :best :fault-cells :over-budget :off-hand-tried :air-looked :air-relooks :surfacings :column-looks :column-near :hang-walks :waypoint-misses :waypoint-why :way-looks :dry-tried :in-water :wet-fresh :wet-surfacings :dive-floor :cave-ok :cave-climb :own-way-on :own-way-done :detour-from) (assoc :blocked 0 :searching 0 :leg-t0 (ctx/now c) :leg-hp (.-health (.self (:primitives c))) :frontier-best {} :target-best {}))
                           (not (:fetching m)) (dissoc :torch-fetched :fetched)
                           (and there? (:escalate-now m)) (dissoc :escalate-now)
                           (and there? (:escalation m))

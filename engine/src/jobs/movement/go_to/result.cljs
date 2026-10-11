@@ -90,7 +90,7 @@
 
 (defn give-up-words
   "The give-up reason in words, for the :text of the :unreachable event and the result: no map dumps."
-  [pos {:keys [why kind detail escalation shut-in nearest-hostile nearest-hostile-at resets-spent mob mob-distance explored torches waypoint-why heal hp-cost hp-budget low-passage dip rise]}]
+  [pos {:keys [why kind detail escalation shut-in nearest-hostile nearest-hostile-at resets-spent mob mob-distance explored torches waypoint-why heal hp-cost hp-budget low-passage dip rise route straight]}]
   (str "gave up walking to " (if (map? pos) (let [{:keys [x y z]} pos] [x y z]) pos) ": "
        (if (and escalation (not= :way-dives why))
          (str "shut in here; " (escalation-words escalation))
@@ -123,6 +123,7 @@
                              (str "its own stair up failed (" (escalation-words escalation) "); cut one from another spot")
                              "cut a stair up")
                            ", or pass :y-margin to walk the deep way")
+           :detour (str "the only way found is " route " blocks long for a goal that was " straight " blocks away, mostly over cells the body has never seen under ground: dig toward the goal, or pass :detour false to walk it")
            :door-stuck "a door in the way will not open"
            :unseen-floor-dark (str "the way goes down onto floors it cannot see in the dark: carry a torch (held in the off hand it sees deeper), light the way, or set :place-torches (go-to lights them)"
                                    (case torches
