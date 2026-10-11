@@ -195,6 +195,21 @@
           (is (= [] (opened eng)) "dropped after the last try")
           (is (= :warn (:level (last (gave-up)))) "told again when it is dropped"))))))
 
+(deftest a-gate-an-animal-stands-in-is-retried-at-once-and-never-given-up-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cow {:id 7 :name "cow" :kind "passive" :pos {:x 5 :y 64 :z 0}}
+              {:keys [eng p] :as s} (setup (gate-world true 8 0 {:entities [cow]}))
+              run! (fn ^:async f []
+                     (core/submit! eng '(jobs.maintenance.shut-doors) {})
+                     (await (tick-until s #(empty? (:list (core/state eng))) 80)))]
+          (remember-opened! s)
+          (doseq [_ (range 7)] (await (run!)))
+          (is (open? p gate-cell))
+          (is (= [{:cell gate-cell :t 1000000}] (mapv #(select-keys % [:cell :t]) (opened eng)))
+              "the entry stays as written, so the trigger fires again at once; an animal is no failed shut"))))))
+
 (deftest a-gate-that-failed-once-is-shut-by-a-later-run
   (async done
     (tu/run-async done

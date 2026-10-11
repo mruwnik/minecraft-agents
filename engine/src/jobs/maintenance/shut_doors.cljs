@@ -24,7 +24,8 @@
   :tries clicks fails this run (shut-doors.gave-up, warn the first time); its entry is kept, stamped afresh so the
   trigger waits :open-s and a later run tries again, until :attempts runs have failed: then it is dropped with a last
   warn. A block that cannot be reached is dropped at once. A block the body stands in the column of, or whose walk was
-  interrupted (:walk-interrupted, info only), is left and keeps its entry the same way.
+  interrupted (:walk-interrupted, info only), is left and keeps its entry the same way. A block an animal stands in
+  (:animal-in-the-way, info only) keeps its entry untouched and no failure counts, so the trigger tries again at once.
   Ends done with info shut-doors.done {:shut n :left []} when every block was shut (or none stood open); with any
   left, stopped :left with warn shut-doors.stopped and {:shut n :left [{:cell :reason}]}.")
 
@@ -75,6 +76,7 @@
         (cond
           (not (doors/open-block (:primitives c) cell)) nil
           (< n (:tries (:args c))) (recur (inc n))
+          (seq (pass/animals-in c column)) :animal-in-the-way
           :else :shut-failed)))))
 
 (defn give-up!
@@ -88,10 +90,11 @@
                 (:standing-in :walk-interrupted) true
                 :shut-failed (< fails' (:attempts (:args c)))
                 false)]
-    (ctx/forget-where! c :opened #(= cell (:cell %)))
-    (when keep?
-      (ctx/remember! c :opened {:cell cell :by by :t (ctx/now c) :shut? true :fails fails'} pass/opened-policy))
-    (ctx/emit! c :shut-doors.gave-up (if (or (= :walk-interrupted reason) (and keep? (pos? fails))) :info :warn)
+    (when-not (= :animal-in-the-way reason)
+      (ctx/forget-where! c :opened #(= cell (:cell %)))
+      (when keep?
+        (ctx/remember! c :opened {:cell cell :by by :t (ctx/now c) :shut? true :fails fails'} pass/opened-policy)))
+    (ctx/emit! c :shut-doors.gave-up (if (or (#{:walk-interrupted :animal-in-the-way} reason) (and keep? (pos? fails))) :info :warn)
                {:cell k :reason reason :text (str "the block at " k " stays open: " (name reason)
                                                   (when (and (= :shut-failed reason) keep?) ", will try again later"))})
     {:cell k :reason reason}))
