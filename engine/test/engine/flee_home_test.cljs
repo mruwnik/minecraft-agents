@@ -127,6 +127,20 @@
           (is (= [:creeper] (room-whys seen)) "and the flight says why the hut was no refuge")
           (is (not (in-room? (body p)))))))))
 
+(deftest a-creeper-beside-the-hut-the-body-stands-in-is-not-shut-out-and-forgotten
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [creeper (assoc (zombie 5.5 4.3 nil) :name "creeper")
+              {:keys [p seen]} (await (flee! (hut {:x 5.5 :y 64 :z 1.5} open-door [creeper])))
+              choice (first (filter #(= :retreat.choice (:kind %)) @seen))
+              steps (mapv :target (filter #(= :retreat.target (:kind %)) @seen))]
+          (is (false? (hs/door-open? p)) "the door is shut: it takes the creeper's line of sight")
+          (is (= ["creeper 7"] (:blast choice)) "the flight says the creeper is within blast reach")
+          (is (= [[] nil] [(:rooms choice) (:dropped choice)]) "and looks for no room: walls do not stop the blast")
+          (is (= [-1] (distinct (map #(nth % 2) steps)))
+              (str "the shut door does not end the flight: it steps to the far side of the room, " steps)))))))
+
 (deftest a-zombie-at-the-door-is-not-run-into
   (async done
     (tu/run-async done

@@ -90,6 +90,13 @@
   [p {:keys [cells]}]
   (boolean (some #(contains? cells (mapv % [:x :y :z])) [(sh/feet p) (reach/standing-cell p)])))
 
+(defn in-home?
+  "Whether the body is in the closed room that holds home ({:x :y :z} or nil); no other room is looked at."
+  [c home]
+  (let [p (:primitives c)]
+    (boolean (when (and home (closed? c home))
+               (some->> (reach/room p home) (inside? p))))))
+
 (defn way-in
   "The door of room the body walks to in fewest steps over the blocks it has seen (jobs.lib.reach/walk-steps to the room
   cell inside it): {:cell :inside :steps}, nil when it finds no walk to any."

@@ -31,11 +31,14 @@
   A real danger (jobs.lib.danger: a mob with a walkable way to the body, or a ranged one with a line of fire) within
   :radius (ranged ones :ranged-radius) starts a chase, or is seen afresh. A mob stops chasing (vanilla) once it is
   gone (dead, despawned, untracked), beyond its follow range (jobs.lib.threats: zombie 35, most 16), out of line of
-  sight for :lost-s, or has no walkable way to the body (nor, ranged, a line of fire).
+  sight for :lost-s, or has no walkable way to the body (nor, ranged, a line of fire; a creeper within
+  retreat-flight/::blast-reach (6) always has one: its blast).
   Each step, in this order:
   1. A door, gate or trapdoor standing open within a hand's reach and nearer the nearest chaser than the body is shut
      with one click (retreat.door-shut info). Each door is clicked at most once a flight.
-  2. Runs into a closed building first (not while a creeper chases: its blast would take the door and what is inside): the latest :bed or :home within :home-range, or a room behind a wooden door or
+  2. Runs into a closed building first (not while a creeper chases: its blast would take the door and what is inside;
+     with a creeper within blast reach no room is looked for, and the one the body stands in is no refuge: it steps away
+     or takes the cornered options): the latest :bed or :home within :home-range, or a room behind a wooden door or
      gate the body has seen (jobs.survival.retreat-home/rooms, bounded by its settings), that is a closed room (walls,
      doors that shut: jobs.lib.reach/room) whose door it walks to (over seen blocks, at its own speed) ahead of every
      melee chaser (jobs.lib.cost/reach-first?), the fewest steps of those, with a go-to child to the room cell inside
@@ -758,16 +761,18 @@
 (defn say-choice!
   "Log (retreat.choice info), when it changes, what the flight chose among: the hostiles it knows and where, each
   closed room (survey) and why it is not run to (verdicts; nil: it is), the cells that are no closed room, the home,
-  the goal and why it is dropped (judged), and where the flight leans."
-  [c survey verdicts judged]
+  the goal and why it is dropped (judged), and where the flight leans. blast: the creepers within blast reach
+  (flight/blaster?), for which no room was judged."
+  [c survey verdicts judged blast]
   (let [p (:primitives c)
         at (fn [pos] (when pos (mapv #(js/Math.floor (% pos)) [:x :y :z])))
         rooms (mapv (fn [{:keys [room why inside?]}]
                       {:at (at (:start room)) :own? (boolean (:home? room)) :why (if inside? :inside why)})
                     verdicts)
         goal (at (:goal judged))
-        lean (at (or (:start (first (:rooms survey))) (:home judged) (retreat-goal/usable judged) (home-pos c)))
-        choice {:rooms rooms :dropped (:dropped survey) :home (at (home-pos c)) :home-why (retreat-goal/home-why (u/self-pos c) (retreat-goal/hostile-spots c) (home-pos c)) :goal goal :goal-why (:why judged) :lean lean}]
+        blast (mapv #(str (.-name %) " " (.-id %)) blast)
+        lean (at (or (:start (first (:rooms survey))) (:home judged) (retreat-goal/usable judged) (when (empty? blast) (home-pos c))))
+        choice {:blast blast :rooms rooms :dropped (:dropped survey) :home (at (home-pos c)) :home-why (retreat-goal/home-why (u/self-pos c) (retreat-goal/hostile-spots c) (home-pos c)) :goal goal :goal-why (:why judged) :lean lean}]
     (when (not= choice (:choice-said (ctx/mem c)))
       (ctx/update-mem! c assoc :choice-said choice)
       (ctx/emit! c :retreat.choice :info
@@ -776,6 +781,7 @@
                         :text (str "flee choice: leans to " (or lean "nothing")
                                    (when (:home-why choice) (str "; home " (at (home-pos c)) " dropped (" (name (:home-why choice)) ")"))
                                    (when goal (str "; goal " goal (when (:why judged) (str " dropped (" (name (:why judged)) ")"))))
+                                   (when (seq blast) (str "; no room is a refuge within blast reach of " (str/join ", " blast)))
                                    (when (seq rooms)
                                      (str "; rooms " (str/join ", " (map #(str (:at %) " " (name (or (:why %) :run))) rooms))))
                                    (when (seq (:dropped survey))
@@ -814,15 +820,16 @@
         door (when threat (door-to-shut c (danger-q/mob-pos p threat)))
         early (when (and threat (not hit?)) (await (early-refuge! c)))
         covered? (cover-fn p threats)
-        survey (when threat (retreat-home/survey c (home-pos c)))
+        blast (filterv #(flight/blaster? p %) threats)
+        survey (when (and threat (empty? blast)) (retreat-home/survey c (home-pos c)))
         rooms (:rooms survey)
-        verdicts (when threat (retreat-home/verdicts p rooms threats (not (exposed-low? c covered?))))
+        verdicts (when survey (retreat-home/verdicts p rooms threats (not (exposed-low? c covered?))))
         {:keys [room way inside?]} (retreat-home/pick verdicts)
-        judged (when threat (retreat-goal/judge c (remove nil? [(:start (first rooms)) (home-pos c)])))
-        _ (when threat (say-choice! c survey verdicts judged))
+        judged (when threat (retreat-goal/judge c (if (seq blast) [] (remove nil? [(:start (first rooms)) (home-pos c)]))))
+        _ (when threat (say-choice! c survey verdicts judged blast))
         stuck (fn ^:async stuck [why]
                 (if (seq (near-hostiles c))
-                  (await (cornered! c why inside?))
+                  (await (cornered! c why (or inside? (and (seq blast) (retreat-home/in-home? c (home-pos c))))))
                   (do (ctx/update-mem! c update :since-gain (fnil inc 0))
                       (if (flight/no-gain? (ctx/mem c) no-gain-steps)
                         (flight/end-flight! c :keeps-off)

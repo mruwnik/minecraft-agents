@@ -16,6 +16,7 @@
 
 (a/defargs settings
   {::wait-ms {:default 1000 :doc "One hold of a hidden or cornered body before it looks again." :spec (a/int-in 0 nil)}
+   ::blast-reach {:default 6 :doc "Blocks within which a creeper's blast reaches the body through a wall or a shut door (twice its explosion power 3): no room is a refuge from it and a shut door does not end the flight." :spec (a/num-in 0 nil)}
    ::far-flight {:default 16 :doc "Blocks a flight must move the body to tell the agent (hostile.fled)." :spec (a/num-in 0 nil)}
    ::chain-window-ms {:default 60000 :doc "Flights this close together (end to end) add up to one move for hostile.fled." :spec (a/int-in 0 nil)}
    ::resume-gap-ms {:default 5000 :doc "A flight cut for longer than this starts its clocks afresh when it resumes." :spec (a/int-in 0 nil)}
@@ -128,13 +129,22 @@
     (false? (:way? m)) :closed
     :else nil))
 
+(defn blast-reach [] (settings/get settings ::blast-reach))
+
+(defn blaster?
+  "Whether hostile e is a creeper within blast-reach of the body: walls and doors do not keep its blast off."
+  [p e]
+  (boolean (and (combat/creeper? e) (<= (danger-q/mob-distance p e) (blast-reach)))))
+
 (defn seen-now
   "What stopped-chasing needs of hostile e (a JS entity; visible: a clear line from the eye, whichever way the body
-  faces). A way: a walkable way to the body, or for a ranged mob a line of fire (a shut door takes both)."
+  faces). A way: a walkable way to the body, or for a ranged mob a line of fire (a shut door takes both), or a blast
+  that reaches it (blaster?)."
   [p e low?]
   {:mob (.-name e) :low? low? :ranged? (boolean (combat/ranged? e)) :distance (danger-q/mob-distance p e) :in-line? (true? (.-visible e))
    :way? (or (reach/walkable-way? p (danger-q/mob-pos p e) (u/pos-of (.-pos (.self p))))
-             (and (combat/ranged? e) (danger-q/danger? p e {:sight? false})))})
+             (and (combat/ranged? e) (danger-q/danger? p e {:sight? false}))
+             (blaster? p e))})
 
 (defn known-chasers
   "The hostiles the body knows of (seen or heard, or remembered where last sensed) within the longest follow range."
