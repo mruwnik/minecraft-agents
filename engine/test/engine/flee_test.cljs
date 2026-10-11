@@ -20,7 +20,8 @@
             [jobs.lib.threats :as threats]
             [jobs.survival.retreat :as retreat]
             [jobs.survival.retreat-flight :as retreat-flight]
-            [jobs.survival.retreat-refuge :as retreat-refuge]))
+            [jobs.survival.retreat-refuge :as retreat-refuge]
+            [jobs.survival.retreat-walk :as retreat-walk]))
 
 (def ms-per-call
   "Game time one primitive call takes in these tests: a flight ends by time (out of line, its bound), so the clock moves
@@ -684,6 +685,65 @@
           (is (= :done (:status out)) (pr-str out))
           (is (< (count (filterv #(= :retreat.target (:kind %)) @seen)) 200) "no walking back and forth between the goal and the way away"))))))
 
+;; ------------------------------------------------------------------ the goal leg keeps its height
+
+(defn stub-go-to
+  "s with a go-to that walks nowhere: each call's args go to calls, (move state-atom) runs, the hostiles vanish (so the
+  flight ends after one step) and the call ends as a leg that got nearer."
+  [s calls move]
+  (let [real (get registry/jobs 'jobs.movement.go-to)
+        st (fake/state (or (:raw s) (:p s)))]
+    (assoc-in s [:eng :jobs 'jobs.movement.go-to]
+              (assoc real :round (fn ^:async stub [c]
+                                   (swap! calls conj (:args c))
+                                   (move st)
+                                   (swap! st assoc :entities [])
+                                   (r/finish! c {:arrived false :leg true}))))))
+
+(defn events-of [seen kind] (filterv #(= kind (:kind %)) @seen))
+
+(deftest a-buried-flight-takes-its-own-stair-before-a-goal-far-above
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls (atom [])
+              s (setup-sensed {:entities [(zombie 7 5 {})]})
+              _ (swap! (fake/state (:raw s)) assoc :light-default [0 0])
+              _ (mem/write! (:store (:eng s)) :stair-way {:dim "overworld" :floors [[-4 64 0] [-5 65 0]]})
+              {:keys [seen]} (await (run-job! (stub-go-to s calls identity) 'jobs.survival.retreat {:goal {:x -40 :y 114 :z 0}}))]
+          (is (= [-5 66 0] (first-target seen)) "the stair it cut, not a leg to a goal 50 blocks above through the caves"))))))
+
+(deftest a-goal-leg-that-takes-the-body-away-from-the-goals-height-ends-the-goal-walk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls (atom [])
+              s (setup {:entities [(zombie 7 6 {})]})
+              dive (fn [st] (swap! st update-in [:self :pos] (fn [[x y z]] [(- x 4) (- y 5) z])))
+              {:keys [seen]} (await (run-job! (stub-go-to s calls dive) 'jobs.survival.retreat {:goal {:x -20 :y 64 :z 0}}))]
+          (is (= [-20 64 0] (first-target seen)) "the first leg aims at the goal")
+          (is (= 1 (count (events-of seen :retreat.goal-off)))
+              "a leg that ends nearer in x/z but 5 blocks under the goal's height is no way to it"))))))
+
+(deftest a-flight-does-not-walk-to-a-goal-under-rock-below-its-descent-floor
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls (atom [])
+              s (setup {:blocks {(key-of -20 63 0) "stone"} :entities [(zombie 7 6 {})]})
+              {:keys [seen]} (await (run-job! (stub-go-to s calls identity) 'jobs.survival.retreat {:goal {:x -20 :y 54 :z 0}}))]
+          (is (some? (first-target seen)))
+          (is (not= [-20 54 0] (first-target seen)) "a goal 10 down a roofed shaft is not walked to"))))))
+
+(deftest a-goal-leg-never-ends-within-keep-away-of-a-hostile
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls (atom [])
+              s (setup {:entities [(zombie 7 5 {}) (zombie 8 0 {:pos {:x -6 :y 64 :z 3}})]})
+              {:keys [seen]} (await (run-job! (stub-go-to s calls identity) 'jobs.survival.retreat {:goal {:x -6 :y 64 :z 0}}))]
+          (is (not= [-6 64 0] (first-target seen)) "a second hostile stands 3 blocks from the goal"))))))
+
 (def walker
   "A listed job whose memory holds an open go-to walk to (10 64 16), as one cut on its way."
   {:check (constantly true)
@@ -741,6 +801,16 @@
     s))
 
 (defn dug [p] (filterv #(= "dig" (.-name %)) (.-calls (.-world p))))
+
+(deftest a-goal-leg-under-rock-plans-no-deeper-than-the-descent-floor
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls (atom [])
+              s (buried-setup {:inventory [] :entities [(zombie 7 6 {})]})]
+          (await (run-job! (stub-go-to s calls identity) 'jobs.survival.retreat {:goal {:x -9 :y 64 :z 0}}))
+          (is (= {:x -9 :y 64 :z 0} (:pos (first @calls))) "the leg goes to the goal")
+          (is (= (retreat-walk/max-descent) (:y-margin (first @calls))) "and its plan may not dip under the descent floor"))))))
 
 (deftest a-buried-flight-with-no-stair-digs-a-pocket-before-any-hop
   (async done

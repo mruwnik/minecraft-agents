@@ -9,6 +9,7 @@
             [jobs.lib.result :as r]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
+            [jobs.survival.retreat-walk :as walk]
             [clojure.string :as str]))
 
 (a/defargs settings
@@ -22,6 +23,11 @@
   {:cap 1 :ttl 1800000})
 
 (defn wait-ms [] (settings/get settings ::wait-ms))
+
+(defn floor
+  "The lowest feet height a flight step may end at under rock: retreat-walk/max-descent below where the flight began."
+  [c]
+  (- (:y (or (:flight-from (ctx/mem c)) (u/self-pos c))) (walk/max-descent)))
 
 (defn dead-ids
   "The ids of hostiles a cornered fight has killed: their corpses may stay listed a while."

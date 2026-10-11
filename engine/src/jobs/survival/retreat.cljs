@@ -21,6 +21,7 @@
             [jobs.lib.pace :as pace]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.retreat-flight :as flight]
+            [jobs.survival.retreat-goal :as retreat-goal]
             [jobs.survival.retreat-home :as retreat-home]
             [jobs.survival.retreat-refuge :as refuge]
             [jobs.survival.retreat-walk :as walk]))
@@ -43,7 +44,7 @@
      there an open door of the room is shut (a step back to one out of reach first), and a chaser still with a way in
      gets the cornered options (4.), no pit or pocket dug in the hut: it does not walk out.
   Underground (shelter/buried?) it first takes the stairs the body cut (ledger/ways-of: the highest stair cell within 14
-  blocks, above it and no nearer a chaser), and with none digs a side pocket (as below) before it walks across the open cave,
+  blocks, above it and no nearer a chaser), before any walk to the :goal, and with none digs a side pocket (as below) before it walks across the open cave,
   unless a creeper or a melee mob is within cover-gap.
   2b. A lone melee mob (no creeper, enderman, spider, flyer or shooter) between ::cover-gap (5) and ::refuge-gap (10) that a fight would not win, with
      pillar-height blocks carried: pillar up, else seal in, before any flee step (a walk gains little on it); when neither can be
@@ -106,7 +107,7 @@
   {:radius {:doc "hostiles within this many blocks start a flight" :spec (a/num-in 0 nil) :default 8}
    :ranged-radius {:doc "ranged hostiles (skeletons and the like) within this many blocks start a flight" :spec (a/num-in 0 nil) :default 16}
    :eat-gap {:doc "with at least this many blocks to the nearest hostile, eat a bite per flee step" :spec (a/num-in 0 nil) :default 12}
-   :goal {:doc "a position {:x :y :z} the flight walks to with go-to legs (planner danger costs keep it round the hostiles) while the body outruns them (dropped within 3 blocks of it or after a leg that lost ground), else leans toward, like a refuge; nil: away only" :spec goal/pos-spec :default nil}
+   :goal {:doc "a position {:x :y :z} the flight walks to with go-to legs (planner danger costs keep it round the hostiles) while the body outruns them (dropped within 3 blocks of it or after a leg that lost ground or left the goal's height: jobs.survival.retreat-goal), else leans toward, like a refuge; nil: away only" :spec goal/pos-spec :default nil}
    :step {:doc "blocks per walk" :spec (a/num-in 1 nil) :default 6}
    :home-range {:doc "a flight leans towards the latest :bed or :home only when it lies within this many blocks" :spec (a/num-in 0 nil) :default 64}
    :weapons {:doc "item name substrings that count as weapons, for a cornered fight" :spec (a/coll-of (a/or-of string? keyword?)) :default combat/default-weapons}
@@ -260,15 +261,35 @@
          (sort-by #(- (u/dist % threat)))
          first)))
 
-(declare close-radius close-leg-s)
+(a/defargs settings
+  {::lost-memory-ms {:default 30000 :doc "Milliseconds a mob the flight lost (its :threat entry) still counts, at the place it was last known, when choosing where to flee; a creeper counts triple." :spec (a/int-in 0 nil)}
+   ::glance-reach {:default 3 :doc "Blocks along a direction to the feet cell a glance looks at." :spec (a/int-in 0 nil)}
+   ::glance-memory {:default 24 :doc "Most glanced cells a flight remembers." :spec (a/int-in 0 nil)}
+   ::cover-gap {:default 5 :doc "Blocks within which a melee chaser keeps a low body from taking cover where it stands." :spec (a/num-in 0 nil)}
+   ::close-radius {:default 8 :doc "Blocks within which a hostile that attacks at close range (a creeper too, not a ranged mob or an enderman) bounds a flee step to close-leg-s, at its start and again during its search." :spec (a/num-in 0 nil)}
+   ::close-leg-s {:default 1 :doc "Seconds a flee step may search or walk while a close-range hostile is within close-radius, or the body was hurt: a body that stands searching there is hit for the whole leg." :spec (a/num-in 0 nil)}
+   ::hurt-window-s {:default 5 :doc "Seconds after the body lost health in which a flee step is bounded to close-leg-s, even with no hostile seen in reach (an unseen attacker hits as hard)." :spec (a/num-in 0 nil)}
+   ::refuge-gap {:default 10 :doc "Blocks within which a lone melee hostile the body cannot outfight is pillared against (else sealed against) before any flee step, when blocks are carried; 0 never." :spec (a/num-in 0 nil)}})
+(defn glance-reach [] (settings/get settings ::glance-reach))
+
+(defn glance-memory [] (settings/get settings ::glance-memory))
+
+(defn cover-gap [] (settings/get settings ::cover-gap))
+
+(defn refuge-gap [] (settings/get settings ::refuge-gap))
+
+(defn close-leg-s [] (settings/get settings ::close-leg-s))
+
+(defn close-radius [] (settings/get settings ::close-radius))
 
 (defn ^:async leg-step!
-  "One flee step to target as a go-to child of legs of at most leg-s seconds (a flee never digs or pillars: :escalate false, and plans no route deeper or higher than 16 blocks past body and target: :y-margin;
+  "One flee step to target as a go-to child of legs of at most leg-s seconds (a flee never digs or pillars: :escalate false, and plans no route deeper or higher than y-margin (16) blocks past body and target;
   known dangers stay costed): true when the body arrived or got on a leg nearer, false when go-to gave up, waited or was declined."
-  [c slot target range leg-s]
+  ([c slot target range leg-s] (await (leg-step! c slot target range leg-s retreat-goal/leg-margin)))
+  ([c slot target range leg-s y-margin]
   (let [from (u/self-pos c)
         t0 (ctx/now c)
-        r (await (ctx/call-child c slot 'jobs.movement.go-to {:pos target :range range :escalate false :y-margin 16 :at-night :go
+        r (await (ctx/call-child c slot 'jobs.movement.go-to {:pos target :range range :escalate false :y-margin y-margin :at-night :go
                                                               :warn false :leg-s leg-s
                                                               :leg-alert-within (close-radius) :leg-alert-s (close-leg-s)
                                                               :retry false :look-round false :allow-over-budget true}))
@@ -277,7 +298,7 @@
         d (u/dist from (u/self-pos c))]
     (ctx/emit! c :retreat.step-speed :debug {:slot slot :blocks (/ (js/Math.round (* 10 d)) 10) :seconds (/ (js/Math.round (* 10 s)) 10)
                                              :bps (when (pos? s) (/ (js/Math.round (* 10 (/ d s))) 10))})
-    (boolean (or (:arrived res) (:leg res)))))
+    (boolean (or (:arrived res) (:leg res))))))
 
 (defn step! [c slot target range] (leg-step! c slot target range flight-timeout-s))
 
@@ -432,27 +453,6 @@
   takes in every turn walk/choose-target tries."
   [0 90 -90])
 
-(a/defargs settings
-  {::lost-memory-ms {:default 30000 :doc "Milliseconds a mob the flight lost (its :threat entry) still counts, at the place it was last known, when choosing where to flee; a creeper counts triple." :spec (a/int-in 0 nil)}
-   ::glance-reach {:default 3 :doc "Blocks along a direction to the feet cell a glance looks at." :spec (a/int-in 0 nil)}
-   ::glance-memory {:default 24 :doc "Most glanced cells a flight remembers." :spec (a/int-in 0 nil)}
-   ::cover-gap {:default 5 :doc "Blocks within which a melee chaser keeps a low body from taking cover where it stands." :spec (a/num-in 0 nil)}
-   ::close-radius {:default 8 :doc "Blocks within which a hostile that attacks at close range (a creeper too, not a ranged mob or an enderman) bounds a flee step to close-leg-s, at its start and again during its search." :spec (a/num-in 0 nil)}
-   ::close-leg-s {:default 1 :doc "Seconds a flee step may search or walk while a close-range hostile is within close-radius, or the body was hurt: a body that stands searching there is hit for the whole leg." :spec (a/num-in 0 nil)}
-   ::hurt-window-s {:default 5 :doc "Seconds after the body lost health in which a flee step is bounded to close-leg-s, even with no hostile seen in reach (an unseen attacker hits as hard)." :spec (a/num-in 0 nil)}
-   ::refuge-gap {:default 10 :doc "Blocks within which a lone melee hostile the body cannot outfight is pillared against (else sealed against) before any flee step, when blocks are carried; 0 never." :spec (a/num-in 0 nil)}})
-(defn glance-reach [] (settings/get settings ::glance-reach))
-
-(defn glance-memory [] (settings/get settings ::glance-memory))
-
-(defn cover-gap [] (settings/get settings ::cover-gap))
-
-(defn refuge-gap [] (settings/get settings ::refuge-gap))
-
-(defn close-leg-s [] (settings/get settings ::close-leg-s))
-
-(defn close-radius [] (settings/get settings ::close-radius))
-
 (defn close-hitters
   "Of the hostiles near, those that attack at close range (creepers included, not ranged mobs or endermen) within close-radius."
   [c]
@@ -531,40 +531,6 @@
          (mapcat (fn [d] (when-let [pos (or (:pos d) (danger-q/rough-pos d))]
                            (repeat (if (= "creeper" (:mob d)) 3 1) pos)))))))
 
-(defn goal-pos
-  "The :goal arg ({:x :y :z} or [x y z]) as a position map, nil when none."
-  [goal]
-  (when goal
-    (let [[x y z] (if (vector? goal) goal [(:x goal) (:y goal) (:z goal)])]
-      {:x x :y y :z z})))
-
-(defn active-goal
-  "The :goal as a position, nil when none or a walk to it lost ground on the chasers this flight (:goal-off)."
-  [c]
-  (when-not (:goal-off (ctx/mem c)) (goal-pos (:goal (:args c)))))
-
-(defn safe-goal
-  "The active goal unless a threat (positions) lies on the way to it (walk/on-the-way?), else nil."
-  [c threat-pos]
-  (let [goal (active-goal c)]
-    (when (and goal (not (walk/on-the-way? (u/self-pos c) threat-pos goal))) goal)))
-
-(def goal-near
-  "Blocks from the goal at which the flight no longer walks to it."
-  3)
-
-(defn goal-leg
-  "The goal (when no threat is on the way to it) as a go-to target while the body outruns its chasers (cost/outruns-at? at the flank turn): the planner's
-  danger costs route the leg round the hostiles. Once the body is within goal-near of it the goal is done for the flight
-  (:goal-off), as it is after a leg that lost ground: the flight goes on away from the chasers; without that it walked
-  back and forth between the goal and the way away for ever."
-  [c threats]
-  (let [goal (safe-goal c (mapv #(danger-q/mob-pos (:primitives c) %) threats))]
-    (cond
-      (nil? goal) nil
-      (<= (u/dist (u/self-pos c) goal) goal-near) (do (ctx/update-mem! c assoc :goal-off true) nil)
-      (cost/outruns-at? (retreat-home/food (:primitives c)) (walk/flank-turn)) goal)))
-
 (def way-reach
   "Blocks within which the stairs the body cut are a way out of a flight."
   14)
@@ -589,13 +555,13 @@
          from (u/self-pos c)
          threat-pos (into (mapv #(danger-q/mob-pos p %) threats) (lost-spots c threats))
          refuge (:start (first rooms))
-         goal (safe-goal c threat-pos)
+         goal (retreat-goal/safe c threat-pos)
          home (or refuge goal (home-pos c))
          flank? (and (some? (or refuge goal)) (cost/outruns-at? (retreat-home/food p) (walk/flank-turn)))]
      (await (glance-away! c (walk/direction from threat-pos home flank?)))
      (walk/choose-target (block-at-fn p) from threat-pos home (keep (comp :pos :data) (ctx/entries c :hazard))
                          (:step (:args c)) {:swim-factor (swim-factor c) :covered? covered? :flank? flank?
-                          :floor (- (:y (or (:flight-from (ctx/mem c)) from)) (walk/max-descent))
+                          :floor (flight/floor c)
                           :known (ledger/ways-of c)})))))
 
 (defn ^:async take-cover!
@@ -801,7 +767,8 @@
       :else
       (let [_ (await (eat-on-the-run! c threat))
             away? (fn [cell] (when (and cell (not (walk/too-close? (mapv #(danger-q/mob-pos p %) threats) cell))) cell))
-            leg (away? (goal-leg c threats))
+            stair (way-up c threats)
+            leg (when-not stair (away? (retreat-goal/leg c threats)))
             gap0 (flight/nearest-gap p threats)
             goal-gap0 (when leg (u/dist (u/self-pos c) leg))
             target (or leg (away? (await (flight-target! c threats covered? rooms))))
@@ -811,7 +778,7 @@
                          (or (refuge/sealing-here? c) (not (and target (covered? target))) (pos? (:stalled (ctx/mem c) 0)))
                          (not (close-danger? p threats)))
                     (await (take-cover! c))
-                    (and target (not (way-up c threats)) (sh/buried? p) (not (close-danger? p threats)))
+                    (and target (not stair) (sh/buried? p) (not (close-danger? p threats)))
                     (await (dig-pocket! c)))]
         (cond
           (some? cover) cover
@@ -819,10 +786,13 @@
           :else
           (let [_ (when (:cornered (ctx/mem c)) (ctx/update-mem! c dissoc :cornered))
                 _ (say-target! c target threats covered?)
+                _ (when leg (retreat-goal/start-leg! c))
                 from (u/self-pos c)
-                moved (await (leg-step! c :step target 1 (cond (or (seq (close-hitters c)) (recently-hurt? c)) (close-leg-s)
-                                                                                       low? low-leg-s
-                                                                                       :else flight-timeout-s)))]
+                moved (await (leg-step! c :step target 1
+                                        (cond (or (seq (close-hitters c)) (recently-hurt? c)) (close-leg-s)
+                                              low? low-leg-s
+                                              :else flight-timeout-s)
+                                        (if leg (retreat-goal/margin c) retreat-goal/leg-margin)))]
             (ctx/update-mem! c #(if (and low? (< (u/dist from (u/self-pos c)) stall-blocks))
                                   (update % :stalled (fnil inc 0))
                                   (dissoc % :stalled)))
@@ -830,9 +800,8 @@
               (and leg (not (and moved
                                  (>= (or (flight/nearest-gap p threats) js/Infinity) (dec (or gap0 0)))
                                  (< (u/dist (u/self-pos c) leg) (- goal-gap0 0.5)))))
-              (do (ctx/update-mem! c assoc :goal-off true)
-                  (ctx/emit! c :retreat.goal-off :info {:text "the walk to the goal lost ground on the hostiles or did not near the goal: away from them instead"})
-                  :again)
+              (do (retreat-goal/off! c :lost-ground) :again)
+              (and leg (retreat-goal/drifted? c leg)) (do (retreat-goal/off! c :height) :again)
               (not moved) (await (stuck "the way away from the hostile is blocked"))
               :else
               (let [gap (flight/nearest-gap p threats)]
