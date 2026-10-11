@@ -28,6 +28,14 @@
                      (and (< y floor) (not (contains? ways [x (dec y) z])))))
                  steps)))
 
+(defn returns?
+  "Whether a plan's steps ({:x :y :z} feet) go below floor on a stand of the body's own stairs (stands, feet cells)."
+  [steps floor stands]
+  (boolean (some (fn [{:keys [x y z]}]
+                   (let [cell (mapv #(js/Math.floor %) [x y z])]
+                     (and (< (second cell) floor) (contains? stands cell))))
+                 steps)))
+
 (defn route
   "The shortest walk from start (a feet cell [x y z]) to the nearest cell end? holds of, by steps of one block along and
   at most one up or down over cells pass? holds of, or first straight to one of seeds: the cells, start first; nil when
@@ -49,15 +57,17 @@
 (defn own-route
   "The walk (route) from the body's feet up its own ways to goal height top, or nil: over the stands of its stairs and
   tunnels (jobs.lib.ledger; open or not, a blocked stair is cut again) and the standable cells it has seen no deeper than
-  ::cave-dip below the feet, or straight to a stand of a stair of its own within ::own-way-reach, to the nearest stand of a stair of its own at top (or one under it) or under the open sky. A
-  stair that ends in rock below that is no way up."
+  ::cave-dip below the feet, or straight to a stand of a stair of its own within ::own-way-reach, to the nearest stand of a stair of its own at top (or one under it), or under the open sky where
+  its stair goes no higher (a step part way up one is no end: what shuts the steps above it is on the way). A stair that
+  ends in rock below that is no way up."
   [c feet top]
   (let [p (:primitives c)
         stairs (ledger/stair-stands c)
         own (into stairs (ledger/tunnel-stands c))
         kind-at (column/seen-kind-at p)
         surface-at (column/surface-kind-at p)
-        low (- (second feet) (cave-dip))]
+        low (- (second feet) (cave-dip))
+        goes-on? (fn [[x y z]] (some (fn [[dx dz]] (contains? stairs [(+ x dx) (inc y) (+ z dz)])) escape/cardinals))]
     (when (seq stairs)
       (route feet
              (filter (fn [[x y z]] (<= (u/dist (u/self-pos c) {:x (+ x 0.5) :y y :z (+ z 0.5)}) (own-way-reach))) stairs)
@@ -65,7 +75,7 @@
              (fn [[x y z :as cell]]
                (and (contains? stairs cell)
                     (or (>= y (dec top))
-                        (and (keyword-identical? :open (kind-at x (+ y 2) z)) (= y (column/top surface-at x z))))))
+                        (and (not (goes-on? cell)) (keyword-identical? :open (kind-at x (+ y 2) z)) (= y (column/top surface-at x z))))))
              (own-way-search)))))
 
 (defn hop

@@ -133,13 +133,14 @@
     with :dip and :rise. Such a body (jobs.movement.go-to.climb):
     - first walks its own way up, once a call (setting ::climb/own-way): over its stairs and tunnels (memory :stair-way,
       :tunnel-way) and standable cells it has seen, to the nearest of its stairs that stands at the goal's height or
-      under the open sky (a stair that ends in rock is no way), in hops of ::climb/own-way-reach; the walk is weighed
+      at its top under the open sky (a stair that ends in rock is no way), in hops of ::climb/own-way-reach; the walk is weighed
       against a new stair first (info go-to.own-way {:take :to :blocks :walk-s :cut-steps :cut-s}) and a slower one
       is not taken; a hop it cannot walk, standing on such a stair, has the stair cut again from
       there (a go-to.escalated {:step :stair :why :own-way-blocked}; these holes stay open);
     - walks no plan (first or re-plan inside a walk) that goes more than ::climb/cave-dip below where the call began over cells that are no stair of
       its own, while a stair up can be cut there (with :escalate and ::climb-stair): it climbs as from a dive
-      (:why :way-dives); when no stair can be cut it walks the plan after all.
+      (:why :way-dives); when no stair can be cut it walks the plan after all. Likewise, once at the end of its own
+      way (memory :own-way-top), a plan that goes more than ::climb/cave-dip below it back down a stair of its own.
     An explicit :y-margin switches all of this off.
   - :detour (default true): a body under ground (jobs.lib.shelter/buried?) whose goal is under ::climb-rise above it
     walks no found way longer than ::detour/ratio times the distance to its goal at the call's start (at least
@@ -764,10 +765,10 @@
 
 (defn own-way-left!
   "Once the body has climbed its own stairs (memory :own-way-on) and none leads on (way nil): done with them for this call,
-  and the dive floor counts from here."
+  the dive floor counts from here, and where it got to is kept (memory :own-way-top)."
   [c way]
   (when (and (nil? way) (:own-way-on (ctx/mem c)))
-    (ctx/update-mem! c #(-> % (dissoc :own-way-on :dive-floor) (assoc :own-way-done true)))))
+    (ctx/update-mem! c #(-> % (dissoc :own-way-on :dive-floor) (assoc :own-way-done true :own-way-top (second (end/feet-cell c)))))))
 
 (defn plan-check
   "near/walk-round!'s :stair-check of a walk round: stair-check's why (may be nil: none), else the detour bound's
@@ -792,7 +793,9 @@
   (let [way (own-way c0 pos (dive-floor! c0 pos))
         _ (own-way-left! c0 way)
         floor (dive-floor! c0 pos)
+        {:keys [own-way-top cave-ok]} (ctx/mem c0)
         c (cond-> c0
+            (and own-way-top (not cave-ok)) (assoc :own-floor (- own-way-top (climb/cave-dip)))
             (:over-budget (ctx/mem c0)) (assoc :over-budget true)
             floor (assoc :dive-floor floor :dive-stair (climb-stair))
             (and floor (not (:cave-ok (ctx/mem c0)))) (assoc :cave-floor (- (+ floor (climb-dip)) (climb/cave-dip))))
@@ -925,7 +928,7 @@
         there? (here? c pos (:range (:args c)))]
     (wworld/warn-bad-settings! c)
     (pen-entry/warn-left-open! c pos (:doors (:args c)))
-    (ctx/update-mem! c #(cond-> (-> % (dissoc :best :fault-cells :over-budget :off-hand-tried :air-looked :air-relooks :surfacings :column-looks :column-near :hang-walks :waypoint-misses :waypoint-why :way-looks :dry-tried :in-water :wet-fresh :wet-surfacings :dive-floor :cave-ok :cave-climb :own-way-on :own-way-done :detour-from) (assoc :blocked 0 :searching 0 :leg-t0 (ctx/now c) :leg-hp (.-health (.self (:primitives c))) :frontier-best {} :target-best {}))
+    (ctx/update-mem! c #(cond-> (-> % (dissoc :best :fault-cells :over-budget :off-hand-tried :air-looked :air-relooks :surfacings :column-looks :column-near :hang-walks :waypoint-misses :waypoint-why :way-looks :dry-tried :in-water :wet-fresh :wet-surfacings :dive-floor :cave-ok :cave-climb :own-way-on :own-way-done :own-way-top :detour-from) (assoc :blocked 0 :searching 0 :leg-t0 (ctx/now c) :leg-hp (.-health (.self (:primitives c))) :frontier-best {} :target-best {}))
                           (not (:fetching m)) (dissoc :torch-fetched :fetched)
                           (and there? (:escalate-now m)) (dissoc :escalate-now)
                           (and there? (:escalation m))

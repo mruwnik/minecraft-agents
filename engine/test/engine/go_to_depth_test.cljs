@@ -7,6 +7,7 @@
             [engine.go-to-test :as gt]
             [engine.memory :as mem]
             [engine.path-preview-test :as pt]
+            [engine.perception :as perception]
             [engine.settings :as settings]
             [engine.test-util :as tu :refer [box floor]]
             [jobs.lib.near :as near]
@@ -85,16 +86,17 @@
 (defn ^:async climb!
   "go! with ticks enough for a stair, a second of fake time each (the stair waits out a lava delay): {:out :p :seen
   :track}, track every position the body had. A world key :stair-way (floors) is written to memory as a stair the body
-  cut, :own-ways ([kind data] each) as more of its ways. A world key :on-move (fn [p pos]) is called with every position the body has; :ticks bounds the run (default 1000)."
+  cut, :own-ways ([kind data] each) as more of its ways, :known (cells) as cells the body remembers as they are. A world key :on-move (fn [p pos]) is called with every position the body has; :ticks bounds the run (default 1000)."
   [world args]
   (let [clock (atom 1000000)
-        {:keys [eng p] :as s} (gt/setup (assoc (dissoc world :stair-way :own-ways :on-move :ticks) :clock clock))
+        {:keys [eng p] :as s} (gt/setup (assoc (dissoc world :stair-way :own-ways :known :on-move :ticks) :clock clock))
         out (atom :not-done)
         track (atom [])
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (gt/recording-parent out args)))]
     (add-watch (fake/state p) :track (fn [_ _ _ w] (swap! track conj (:pos (:self w)))))
     (when-let [f (:on-move world)]
       (add-watch (fake/state p) :on-move (fn [_ _ _ w] (f p (:pos (:self w))))))
+    (run! #(perception/touch! (.-perception p) %) (:known world))
     (some->> (:stair-way world) (hash-map :dim "overworld" :floors) (mem/write! (:store eng) :stair-way))
     (doseq [[kind data] (:own-ways world)] (mem/write! (:store eng) kind (assoc data :dim "overworld")))
     (core/submit! eng '(recording-parent) {})
@@ -355,6 +357,42 @@
           (is (= ["air" "air"] (map #(get blocks % "air") cap)) "the cap is dug")
           (is (= (repeat 6 "dirt") (map #(get blocks %) short-floors)) "no floor of the stair is dug")
           (is (= [[:stair :own-way-blocked]] (map (juxt :step :why) (gt/events-of s :go-to.escalated)))))))))
+
+;; The forked mass with the stair's top steps shut by the body: cobblestone in the head of its 18th step and the feet of
+;; its 19th, so the 17th stands in a pit under the open sky, 3 below the top (a pickaxe carried). The body remembers the
+;; stair's top (mouth), and walks its way from the stair's foot in hops of 3, so that no hop goes straight to a step
+;; above the cap.
+(def mouth-cap [[-24 59 0] [-25 59 0]])
+
+(def mouth (for [x (range -27 -20) y (range 55 63)] [x y 0]))
+
+(def mouth-capped (merge forked (into {} (for [[x y z] mouth-cap] [(str x "," y "," z) "cobblestone"]))))
+
+(deftest a-stair-of-its-own-capped-under-its-mouth-is-cut-again-not-walked-back-down
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p] :as s} (await (settings/with-settings {:jobs.movement.go-to.climb/own-way-reach 3}
+                                             #(climb! (assoc in-forked :blocks mouth-capped :known mouth :self {:pos {:x -5.5 :y 40 :z 0.5}}
+                                                             :inventory [{:name "stone_pickaxe" :count 1}])
+                                                      {:pos fork-top})))
+              blocks (:blocks @(fake/state p))]
+          (is (true? (:arrived @out)))
+          (is (> 21 (farthest-east s)) "never back down and out of the tunnel's east end")
+          (is (= ["air" "air"] (map #(get blocks % "air") mouth-cap)) "the cap is dug")
+          (is (= [[:stair :own-way-blocked]] (map (juxt :step :why) (gt/events-of s :go-to.escalated)))))))))
+
+;; The forked mass with a stair of 17 steps only: its top stands in a pit under the open sky, 3 below the top.
+(def pit-topped (merge forked {"-24,58,0" "dirt" "-24,59,0" "dirt" "-25,59,0" "dirt"}))
+
+(deftest a-body-at-the-top-of-its-own-stair-in-a-pit-cuts-on-up-not-back-down-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out] :as s} (await (climb! (assoc in-forked :blocks pit-topped :known mouth :stair-way (subvec stair-floors 0 17)) {:pos fork-top}))]
+          (is (true? (:arrived @out)))
+          (is (> 21 (farthest-east s)) "never back down and out of the tunnel's east end")
+          (is (= [:stair] (map :step (gt/events-of s :go-to.escalated)))))))))
 
 (deftest a-walk-up-its-own-way-slower-than-a-new-stair-is-not-taken
   (is (= [true false] (map #(:take (climb/weigh (vec (range %)) 16 3)) [193 200]))))

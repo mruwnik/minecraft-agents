@@ -264,7 +264,7 @@
   "A fn of a plan and whether it is the first of its round, saying why it is not walked and a stair up is cut instead (a
   re-plan inside a walk is held to :dives only), when escalating is on, the body is not in its shelter and escape/choose would stair (steps n):
   - :dives: under a cave floor (c :cave-floor, with c :dive-stair) the plan goes below it on a cell that is no stair of
-    the body's own (climb/dives?);
+    the body's own (climb/dives?), or below c :own-floor back down a stair of its own (climb/returns?);
   - :cheaper: it is a whole path costing more seconds than 3 such stairs, the goal is stair-first-rise or more above
     the feet and the stair has not been tried this call.
   Else nil."
@@ -273,14 +273,16 @@
         feet (end/feet-cell c)
         goal (mapv #(js/Math.floor (% pos)) [:x :y :z])
         cave (when (:dive-stair c) (:cave-floor c))
+        back (:own-floor c)
         cheaper? (and (not (:stair-tried m)) (>= (- (second goal) (second feet)) stair-first-rise))
         stair (delay (let [e (escape/choose (:primitives c) feet goal (may-dig-fn c) {:own? (own-placed-fn c) :skip (:skipped-steps m #{})})]
                        (when (= :stair (:step e)) e)))]
-    (when (and (:escalate (:args c)) (not (sh/sheltered-in c)) (or cave cheaper?))
+    (when (and (:escalate (:args c)) (not (sh/sheltered-in c)) (or cave cheaper? back))
       (fn [{:keys [status steps ^js r]} first?]
         (let [seconds (some-> r .-path .-cost .-priced)]
           (cond
             (and cave (climb/dives? steps cave (ledger/ways-of c)) @stair) :dives
+            (and back (climb/returns? steps back (ledger/stair-stands c)) @stair) :dives
             (and first? cheaper? (= "found" status) (number? seconds) @stair (> seconds (* 3 stair-step-s (:steps @stair)))) :cheaper))))))
 
 (defn dive-refused!
