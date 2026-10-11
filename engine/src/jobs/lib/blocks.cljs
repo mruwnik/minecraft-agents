@@ -184,13 +184,15 @@
 
 (defn ^:async walk!
   "The walk to pos: one go-to call (child :walk, range 3), the whole walk. Resolves to :arrived (in reach), :continue
-  (go-to waits on the world) or {:unreachable why} (it gave up, or arrived with the block still out of reach). With see?
-  the walk ends only where the eye sees the block (go-to :see)."
-  [c pos & [see?]]
-  (let [r (await (child/call-walk c :walk {:pos pos :range 3 :see (boolean see?) :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))
+  (go-to waits on the world), {:held reason} (it waits, and the caller asked to hear what on: held?) or {:unreachable why}
+  (it gave up, or arrived with the block still out of reach). With see? the walk ends only where the eye sees the block
+  (go-to :see). at-night is go-to's :at-night."
+  [c pos & [see? held? at-night]]
+  (let [[r held] (await (child/call-walk-reason c :walk (cond-> {:pos pos :range 3 :see (boolean see?) :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}
+                                                          at-night (assoc :at-night at-night))))
         res (ctx/child-result c :walk)]
     (cond
-      (= :continue r) :continue
+      (= :continue r) (if (and held? held) {:held held} :continue)
       (and (= :done r) (:arrived res) (in-reach? c pos see?)) :arrived
       :else {:unreachable (cond (not= :done r) :declined
                                 (:arrived res) :out-of-reach

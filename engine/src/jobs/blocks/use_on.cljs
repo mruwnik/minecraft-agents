@@ -12,13 +12,14 @@
 
   Ends with info blocks.use-on.done and {:used true|false :pos :item :face :reason}, plus :spawn-set true when a bed answered \"respawn point set\" (a bed is used by day to set the spawn; not in the Nether or End). :reason is the primitive's
   status (:used, :unchanged, :no-item, :no-room, :missing, :cannot, :unreachable, :failed); only :used is done.
-  Anything else, or a walk that failed twice (:unreachable), is {:status :stopped}. A bad :pos or :face
+  Anything else, a walk that failed twice (:unreachable), or a walk that would leave a night shelter (:night-sheltered, :at-night :go walks out) is {:status :stopped}. A bad :pos or :face
   is :bad-args with a blocks.use-on.declined warn.")
 
 (a/defargs args
   {:pos {:doc "the block to click, [x y z] or {:x :y :z}" :spec ::a/pos :default nil}
    :item {:doc "the item to hold for the click; nil: keep the hand as it is; none: the empty hand" :spec a/item? :default nil}
    :see {:doc "true: click only from where the eye sees the block (jobs.lib.aim), walking to such a stand first (go-to :see; none: :unreachable); false: within reach is enough, though a wall in between refuses the click" :spec boolean? :default false}
+   :at-night {:doc "go-to's :at-night for the walk: wait (default) stops the call :night-sheltered when the walk would leave a night shelter; go walks out" :spec #{"wait" "go" :wait :go} :default :wait}
    :face {:doc "the face clicked: up down north south east west" :spec #{"up" "down" "north" "south" "east" "west"} :default "up"}})
 
 (def faces #{"up" "down" "north" "south" "east" "west"})
@@ -30,13 +31,13 @@
 
 (defn finish! [c {:keys [used] :as result}]
   (ctx/emit! c :blocks.use-on.done :info
-             (assoc result :text (str (if used "clicked " "did not click ") (pr-str (b/cell (:pos result)))
-                                      (when-not used (str ": " (name (:reason result)))))))
+             (update result :text #(or % (str (if used "clicked " "did not click ") (pr-str (b/cell (:pos result)))
+                                              (when-not used (str ": " (name (:reason result))))))))
   (ctx/result! c result)
   :done)
 
 (defn ^:async round [c]
-  (let [{:keys [item face see] :or {face "up"}} (:args c)
+  (let [{:keys [item face see at-night] :or {face "up"}} (:args c)
         {:keys [pos error]} (b/parse (:args c))
         error (or error (when-not (faces face) (str "face is one of " (pr-str (sort faces)))))]
     (if error
@@ -44,9 +45,11 @@
           (ctx/result! c {:status :stopped :used false :reason :bad-args :text error})
           :done)
       (loop [fails 0]
-        (let [w (when-not (b/in-reach? c pos see) (await (b/walk! c pos see)))]
+        (let [w (when-not (b/in-reach? c pos see) (await (b/walk! c pos see true at-night)))]
           (cond
             (= :continue w) :continue
+            (:held w) (finish! c {:status :stopped :used false :pos pos :item item :face face :reason (:held w)
+                                  :text (str "held: " (name (:held w)) "; pass :at-night :go to walk out anyway")})
             (map? w) (if (>= (inc fails) (max-walks))
                        (finish! c {:status :stopped :used false :pos pos :item item :face face :reason :unreachable :why (:unreachable w)})
                        (recur (inc fails)))

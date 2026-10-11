@@ -44,7 +44,9 @@
 (def quiet-ttl-ms (* 1000 (:quiet-s pg/defaults)))
 
 (a/defargs settings
-  {::pause-ttl-ms {:default 30000 :doc "How long a gate stays paused after a failed shut, in ms." :spec (a/int-in 0 nil)}})
+  {::pause-ttl-ms {:default 30000 :doc "How long a gate stays paused after a failed shut, in ms." :spec (a/int-in 0 nil)}
+   ::unreachable-ttl-ms {:default 120000 :doc "How long the trigger leaves a gate the walk could not reach, in ms (the body may be shut in; it tries again then)." :spec (a/int-in 0 nil)}})
+(defn unreachable-ttl-ms [] (settings/get settings ::unreachable-ttl-ms))
 (defn pause-ttl-ms [] (settings/get settings ::pause-ttl-ms))
 
 (defn world-of [c] (:world (:engine c)))
@@ -107,9 +109,10 @@
 (defn give-up!
   "Give up the gate: one warn, one memory entry the trigger reads; the entry for the left list."
   [c cell reason]
-  (ctx/remember! c :gate-gave-up {:cell cell :reason reason} {:cap 50 :ttl quiet-ttl-ms})
-  (ctx/emit! c :shut-gate.gave-up :warn {:cell cell :reason reason :plan (:plan (:args c))
-                                        :text (str "gate " cell " stays open: " (name reason))})
+  (let [blocker (:blocker (ctx/mem c))]
+    (ctx/remember! c :gate-gave-up {:cell cell :reason reason} {:cap 50 :ttl (if blocker (unreachable-ttl-ms) quiet-ttl-ms)})
+    (ctx/emit! c :shut-gate.gave-up :warn {:cell cell :reason reason :plan (:plan (:args c)) :blocker blocker
+                                          :text (str "gate " cell " stays open: " (name reason) (when blocker (str " (" blocker ")")))}))
   {:cell cell :reason reason})
 
 (defn leave!
@@ -121,11 +124,14 @@
 (defn ^:async walk!
   "nil when the body stands within reach, else why not: :walk-interrupted (the walk ended :continue) or :unreachable."
   [c cell]
-  (let [r (await (child/call-walk c :walk {:pos (u/cell-pos cell) :range (:reach (:args c)) :doors :never :escalate false}))]
+  (let [r (await (child/call-walk c :walk {:pos (u/cell-pos cell) :range (:reach (:args c)) :doors :never :escalate false}))
+        res (ctx/child-result c :walk)]
+    (ctx/update-mem! c dissoc :blocker)
     (cond
       (= :continue r) :walk-interrupted
-      (and (= :done r) (:arrived (ctx/child-result c :walk))) nil
-      :else :unreachable)))
+      (and (= :done r) (:arrived res)) nil
+      :else (do (ctx/update-mem! c assoc :blocker (str (or (:hint res) (some-> (:why res) name) "no walk leads there")))
+                :unreachable))))
 
 (defn ^:async clear-of-animals?
   "Whether no animal stands in the gate's cell, after waiting out one for pass/shut-waits times pass/shut-wait-ms."

@@ -268,3 +268,16 @@
           (.setTime (.-world p) st/noon)
           (await (tu/run-until-empty eng 40))
           (is (> 4 (js/Math.abs (- 10 (:x (st/pos-of p))))) "by day it walks to the table"))))))
+
+(deftest a-use-on-submitted-from-a-night-shelter-stops-at-once-and-names-the-hold
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (st/setup (night-hut {}))]
+          (core/submit! eng '(jobs.blocks.use-on {:pos [15 64 0]}) {})
+          (await (tu/run-until-empty eng 10))
+          (is (empty? (:list (core/state eng))) "the submit is answered, not held until day")
+          (is (= inside (st/pos-of p)))
+          (let [done (first (st/emitted seen :blocks.use-on.done))]
+            (is (= [false :night-sheltered] ((juxt :used :reason) done)))
+            (is (re-find #":at-night :go" (str (:text done))) "the text says how to override")))))))

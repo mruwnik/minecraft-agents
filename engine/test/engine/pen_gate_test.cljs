@@ -389,6 +389,15 @@
           (is (empty? (:list (core/state (:eng s)))) "the job ended")
           (is (= [[2 64 0]] (mapv (comp :cell :data) (mem/entries (mem/view (:store (:eng s))) :gate-gave-up)))))))))
 
+(deftest the-warn-for-an-unreachable-gate-names-what-stopped-the-walk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (run-job (pen-world true 2 12 {:unreachable ["2,64,0"]}) {"pen-a" pen-a} {} 12))
+              warn (first (events-of s :shut-gate.gave-up))]
+          (is (some? (:blocker warn)))
+          (is (re-find (re-pattern (str (:blocker warn))) (:text warn))))))))
+
 (deftest the-registered-reflex-shuts-a-gate-left-open-beside-an-idle-body
   (async done
     (tu/run-async done
