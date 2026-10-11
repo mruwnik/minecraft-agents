@@ -166,7 +166,8 @@
   and whether the body walked back. :got is how many more are carried than at the start, at least 0. :tunnel is
   {:origin :heading :steps :stop :end :back-at :walked-back?}, :end the cell it ended on before the walk back.
   :stay-level with no :heading or :direction goes on after a sealed breach or a fluid stop: it turns to a heading not yet tried from the
-  cell it stands in (not back along its tunnel), the :tunnel-length shared by all legs; :legs lists them [{:heading :length :stop}].")
+  cell it stands in (not back along its tunnel), the :tunnel-length shared by all legs; :legs lists them [{:heading :length :stop}].
+  A breach's tunnel-end event and leg carry :behind {:names :cells}, the seen air and fluid cells beside the cut (read before the seal), also kept in body memory :breach-behind.")
 
 (a/defargs args
   {:from {:doc "where the body stood at submit (jobs.mjs adds it): the job waits :moved-since-submit before its first round when the body is then over jobs.lib.submitted/limit away" :spec a/position? :default nil}
@@ -709,8 +710,8 @@
       (ctx/emit! c :mine.turned :info {:from (:heading m) :to to :stop stop :length (or steps 0)
                                        :text (str "mine's " (name stop) " blocks its heading " (:heading m) (when mid? (str " after " steps " blocks")) "; it turns " to)})
       (when mid? (stay/record-tunnel! c tunnel (headings (:heading m))))
-      (ctx/update-mem! c #(cond-> (-> % (assoc :heading to :tried-headings tried) (dissoc :tunnel :torch-at :glanced :relooked :looked :recuts) (update :descent dissoc :stop))
-                            tunnel (-> (update :legs (fnil conj []) {:heading (:heading m) :length (or steps 0) :stop stop})
+      (ctx/update-mem! c #(cond-> (-> % (assoc :heading to :tried-headings tried) (dissoc :tunnel :behind :torch-at :glanced :relooked :looked :recuts) (update :descent dissoc :stop))
+                            tunnel (-> (update :legs (fnil conj []) (cond-> {:heading (:heading m) :length (or steps 0) :stop stop} (:behind m) (assoc :behind (:behind m))))
                                        (update :spent (fnil + 0) (or steps 0)))))
       true)))
 
@@ -731,7 +732,7 @@
              (turn-heading! c stop))
       :again
       (do
-    (ctx/update-mem! c update :legs (fnil conj []) {:heading heading :length steps :stop stop})
+    (ctx/update-mem! c update :legs (fnil conj []) (cond-> {:heading heading :length steps :stop stop} (:behind (ctx/mem c)) (assoc :behind (:behind (ctx/mem c)))))
     (ctx/emit! c :mine.tunnel-end :warn
                (cond-> {:reason stop :heading heading :length steps :y (:y (:origin tunnel)) :got got
                         :text (str "mine's tunnel ended after " steps " blocks " heading " at y " (:y (:origin tunnel)) ": "
@@ -741,6 +742,7 @@
                                    "; got " got " of " (:count (:args c)))}
                  at (assoc :at (access/cell at))
                  next (assoc :next (access/cell next))
+                 (:behind (ctx/mem c)) (assoc :behind (:behind (ctx/mem c)))
                  walk (assoc :walk walk)))
     (ctx/update-mem! c assoc-in [:tunnel :stop] stop)
     (stay/record-tunnel! c tunnel (headings heading))
@@ -1052,7 +1054,11 @@
                           :again)
                       (not= :clear (after-cut name-at cut)) (await (recut! c next))
                       (and (:stay-level (:args c)) (seq (stay/breaches name-at from cut (stay/own-cells c))))
-                      (let [open (stay/breaches name-at from cut (stay/own-cells c))]
+                      (let [own (stay/own-cells c)
+                            open (stay/breaches name-at from cut own)
+                            b (stay/behind name-at from cut own open)]
+                        (stay/remember-behind! c (access/cell (first open)) b)
+                        (ctx/update-mem! c assoc :behind b)
                         (end! c (if (await (stay/seal! c (rules-in c) open)) :breach-sealed :breach-open) (first open) next))
                       (and (not (rules/solid-floor? name-at (update next :y dec))) (rules/air (name-at (update next :y dec)))
                            (await (bridge-floor! c next)))

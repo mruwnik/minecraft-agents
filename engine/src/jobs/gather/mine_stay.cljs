@@ -86,3 +86,25 @@
                 (if (and (seq plans) (nil? (await (bridge/place-plans! c in item plans false))))
                   (recur more)
                   false))))))
+
+(def behind-policy {:cap 30 :ttl :forever})
+
+(defn behind
+  "What the breach cells (of cut, from the cell the body stands in) open onto: {:names sorted distinct, :cells [x y z] sorted} of the
+  seen air and fluid cells beside them that are not the cut, the body's cells or the own cells; nil when none."
+  [name-at from cut own breach]
+  (let [open (into #{from (update from :y inc)} cut)
+        cells (into (sorted-set)
+                    (for [cell breach d around
+                          :let [n (mapv + [(:x cell) (:y cell) (:z cell)] d)
+                                q {:x (n 0) :y (n 1) :z (n 2)}]
+                          :when (and (not (open q)) (not (own n)) (let [nm (name-at q)] (or (rules/air nm) (rules/fluids nm))))]
+                      n))]
+    (when (seq cells)
+      {:names (vec (sort (distinct (map (fn [[x y z]] (name-at {:x x :y y :z z})) cells)))) :cells (vec cells)})))
+
+(defn remember-behind!
+  "Keep what a breach showed in body memory (:breach-behind: dim, the breach cell at, names, cells), for jobs that look for caves or lava."
+  [c at b]
+  (when b
+    (ctx/remember! c :breach-behind (assoc b :dim (.-dimension (.self (:primitives c))) :at at) behind-policy)))

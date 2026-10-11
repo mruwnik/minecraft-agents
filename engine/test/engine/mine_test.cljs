@@ -1026,6 +1026,18 @@
           (is (>= 9 (reduce + (map :length legs))) "the length budget is shared by the legs")
           (is (= "cobblestone" (block-at s -6 64 0)) "the breach stays sealed"))))))
 
+(deftest stay-level-records-what-the-sealed-breach-showed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [air ["air" "cave_air"]]
+          (let [s (await (scenario {:block "iron_ore" :direction "east" :tunnel-length 6 :stay-level true :mend false}
+                                   (update (rock-world {"2,64,1" air "2,65,1" air}) :inventory into [{:name "cobblestone" :count 5}]) 120))
+                behind {:names [air] :cells [[2 64 1] [2 65 1]]}]
+            (is (= behind (:behind (first (tunnel-ends s)))))
+            (is (= behind (:behind (first (:legs (done-event s))))))
+            (is (= [behind] (map #(select-keys (:data %) [:names :cells]) (mem/entries (mem/view (:store (:eng s))) :breach-behind))))))))))
+
 (defn ^:async stay-run
   "A stay-level mine east over rock-world extra with body memory (kind data pairs) written first; the setup."
   [extra memory]
