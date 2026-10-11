@@ -935,12 +935,12 @@
                 flight (core/tick! eng)]
             (await (js/Promise. (fn [r] (js/setTimeout r 50))))
             (is (= [:hostile-near] (mapv :reflex (reflex-fired seen))))
-            (fake/swap-self! p assoc :onFire true)
+            (fake/swap-self! p assoc :inLava true)
             (let [burning (core/tick! eng)]
-              (is (= :burning (:reflex (peek (reflex-fired seen)))) "the fire cuts the flight mid-walk")
+              (is (= :burning (:reflex (peek (reflex-fired seen)))) "the lava cuts the flight mid-walk")
               (release)
               (await flight)
-              (fake/swap-self! p assoc :onFire false)
+              (fake/swap-self! p assoc :inLava false)
               (await burning)))
           (set-entities! p [(zombie (+ 3 (first (:pos (fake/self p)))) 0)])
           (await (core/tick! eng))

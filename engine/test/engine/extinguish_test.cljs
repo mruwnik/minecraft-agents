@@ -8,6 +8,7 @@
             [jobs.lib.util :as u]
             [engine.memory :as mem]
             [engine.registry :as registry]
+            [engine.settings :as settings]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.survival.extinguish :as extinguish]))
@@ -111,6 +112,35 @@
                             [{:self {} :blocks {"1,64,0" "fire"}} false]]]
     (is (= expected (extinguish/check (bare-ctx (tu/fake world) {}))) (pr-str world))
     (is (= expected ((:when (:burning triggers/all)) (tu/fake world) nil {})) (pr-str world))))
+
+(defn zombie-at [x z] {:id 7 :name "zombie" :kind "hostile" :pos {:x x :y 64 :z z}})
+
+(def pour-view {:now 1000 :data {:entries {:extinguish-pour [{:t 0 :data {:pos {:x 0 :y 64 :z 0}}}]}
+                                 :policies {:extinguish-pour extinguish/pour-policy}}})
+
+(deftest burning-trigger-leaves-plain-fire-to-the-hostile-reflex-while-a-danger-is-near
+  (doseq [[world memory settings-layer expected]
+          [[{:self {:onFire true} :entities [(zombie-at 3 0)]} nil {} false]
+           [{:self {:onFire true} :entities [(zombie-at 3 0)]} nil {:triggers.survival.burning/with-hostile true} true]
+           [{:self {:onFire true} :entities [(zombie-at 30 0)]} nil {} true]
+           [{:self {:onFire true} :entities []} nil {} true]
+           [{:self {:inLava true} :entities [(zombie-at 3 0)]} nil {} true]
+           [{:self {:onFire true} :blocks {"0,64,0" "fire"} :entities [(zombie-at 3 0)]} nil {} true]
+           [{:self {} :entities [(zombie-at 3 0)]} pour-view {} false]]]
+    (settings/with-settings settings-layer
+      (fn [] (is (= expected ((:when (:burning triggers/all)) (tu/fake-on-floor world) memory {})) (pr-str world settings-layer))))))
+
+(deftest standing-off-the-fire-never-waits-beside-a-danger
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:onFire true} :blocks (floor 8) :entities [(zombie-at 2 0)]})
+              waits (atom 0)]
+          (on-wait! p (fn [_ _] (swap! waits inc)))
+          (core/submit! eng '(jobs.survival.extinguish) {})
+          (await (core/tick! eng))
+          (is (= 0 @waits) "no wait beside the zombie")
+          (is (= :hostile-near (stopped-reason seen))))))))
 
 (deftest steps-off-a-fire-block-in-the-rain
   (async done

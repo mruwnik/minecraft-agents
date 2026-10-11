@@ -16,6 +16,7 @@
    :triggers.storage.inventory-nearly-full/rest-s 120
    :triggers.access.scaffold-left/at-night false
    :triggers.access.scaffold-left/with-hostile false
+   :triggers.survival.burning/with-hostile false
    :triggers.survival.hungry/bake-wheat 3
    :triggers.survival.hungry/rest-s 600
    :triggers.survival.hungry/urgent-food 2

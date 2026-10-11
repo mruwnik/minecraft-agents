@@ -3,6 +3,7 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
+            [jobs.lib.danger :as danger-q]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.result :as result]
@@ -30,7 +31,8 @@
   other falling blocks, never in another's zone or claim, and at most 3 covers per run.
   Before each decision from a new cell it looks round (level and down) so the fire at the feet and the lava beside them are seen.
   5. On fire, not in lava, with no water in reach and no hazard within 1.5 blocks, there is nothing useful to do.
-     It holds still (:burning-wait): emits info extinguish_wait once, eats when food is under 18 and food is carried
+     With a real danger near (jobs.lib.danger, the hostile-near radii) it ends stopped :hostile-near instead, never standing still beside it.
+     Otherwise it holds still (:burning-wait): emits info extinguish_wait once, eats when food is under 18 and food is carried
      (to keep regenerating), and waits a second per pass; still burning after 20 seconds ends stopped :still-burning.
   A walk that is blocked (boxed in, perhaps by its own covers) goes through a go-to from then on (it pillars, stairs or digs
   out when shut in); a go-to still working is not a failure. Three failures (no safe cell, or a go-to that fails, with its reason) give an extinguish_stuck warning and end stopped :stuck.
@@ -295,9 +297,9 @@
   (when (await (pour-water! c pos))
     :again))
 
-(defn ^:async stand-pass!
-  "On fire, nothing to do but wait it out off the fire: eat to keep regenerating, tell the agent once, wait a second.
-  Stopped :still-burning after max-stand-waits."
+(defn ^:async stand-wait!
+  "One wait off the fire: eat to keep regenerating, tell the agent once, wait a second. Stopped :still-burning after
+  max-stand-waits."
   [c]
   (let [p (:primitives c)
         waits (inc (:stand-waits (ctx/mem c) 0))
@@ -314,6 +316,14 @@
       (clear? c) :done
       (>= waits (max-stand-waits)) (result/stop! c :still-burning "still burning after standing still off the fire")
       :else :again)))
+
+(defn ^:async stand-pass!
+  "On fire, nothing to do but wait it out off the fire (stand-wait!). Never beside a real danger: that ends stopped
+  :hostile-near, so the hostile reflex can act."
+  [c]
+  (if (danger-q/danger-near? (:primitives c) (danger-q/hostile-radius) (danger-q/ranged-radius))
+    (result/stop! c :hostile-near "a hostile is near: not standing still")
+    (await (stand-wait! c))))
 
 (defn stuck!
   "One failed walk: :again until u/max-failures in a row, then a warn and stopped :stuck."

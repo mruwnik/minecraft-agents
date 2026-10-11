@@ -16,17 +16,27 @@
 
 (def fires #{"fire" "soul_fire"})
 
-(defn burning?
-  "True when the body (primitives p) is on fire, in lava or in a fire block at its feet or head (rain puts the on-fire
-  flag out every tick, the fire block still hurts), and has no fire_resistance effect (which makes all three harmless)."
+(defn fire-resistant? [p]
+  (boolean (some #(= "fire_resistance" (.-name %)) (array-seq (.-effects (.self p))))))
+
+(defn in-hazard?
+  "True when the body is in lava or in a fire block at its feet or head, and not fire resistant: standing there hurts
+  whatever the body does, so it has to move."
   [p]
   (let [self (.self p)
         pos (.-pos self)
         feet {:x (js/Math.floor (.-x pos)) :y (js/Math.floor (.-y pos)) :z (js/Math.floor (.-z pos))}]
-    (boolean (and (or (.-onFire self) (.-inLava self)
+    (boolean (and (or (.-inLava self)
                       (contains? fires (u/feel-name p feet))
                       (contains? fires (u/feel-name p (update feet :y inc))))
-                  (not-any? #(= "fire_resistance" (.-name %)) (array-seq (.-effects self)))))))
+                  (not (fire-resistant? p))))))
+
+(defn burning?
+  "True when the body (primitives p) is on fire, in lava or in a fire block at its feet or head (rain puts the on-fire
+  flag out every tick, the fire block still hurts), and has no fire_resistance effect (which makes all three harmless)."
+  [p]
+  (boolean (or (in-hazard? p)
+               (and (.-onFire (.self p)) (not (fire-resistant? p))))))
 
 ;; A flight from heard-only mobs that ended blocked mutes heard mobs for a growing time; a seen mob fires through it.
 (def mute-policy {:cap 8 :ttl (* 60 60 1000)})
