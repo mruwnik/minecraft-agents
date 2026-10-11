@@ -334,9 +334,9 @@
       :open
       (kind-of b))))
 
-(defn flood-cells
-  "Breadth-first over (next-cells x y z) from start [x y z]: every reachable cell (#js [x y z] each) when they are
-  expanded within budget cells, else nil."
+(defn flood-visit
+  "Breadth-first over (next-cells x y z) from start [x y z], expanding at most budget cells: {:cells #js [[x y z]..] in
+  visiting order, :closed? whether every reachable cell was expanded within budget}."
   [next-cells [sx sy sz] budget]
   (let [key (keyer sx sz)
         seen (js/Set.)
@@ -344,8 +344,8 @@
     (.add seen (key sx sy sz))
     (loop [head 0]
       (cond
-        (== head (.-length queue)) queue
-        (>= (.-size seen) budget) nil
+        (== head (.-length queue)) {:cells queue :closed? true}
+        (>= (.-size seen) budget) {:cells queue :closed? false}
         :else (let [c (aget queue head)
                     nexts (next-cells (aget c 0) (aget c 1) (aget c 2))]
                 (dotimes [i (.-length nexts)]
@@ -355,6 +355,12 @@
                       (.add seen k)
                       (.push queue n))))
                 (recur (inc head)))))))
+
+(defn flood-cells
+  "flood-visit's cells when every reachable cell was expanded within budget, else nil."
+  [next-cells start budget]
+  (let [{:keys [cells closed?]} (flood-visit next-cells start budget)]
+    (when closed? cells)))
 
 (defn flood
   "flood-cells' answer as :closed (every reachable cell expanded within budget) or :room."
@@ -430,6 +436,20 @@
     (if in-door?
       (some (fn [[dx dz]] (room-from p kind-at (+ x dx) y (+ z dz))) [[1 0] [-1 0] [0 1] [0 -1]])
       (room-from p kind-at x y z))))
+
+(defn escape-cell
+  "Where a walker at pos {:x :y :z} gets out of a room with a hole (room* nil, doors shut): the first cell the flood
+  reaches with no block seen within room-roof cells over it, {:x :y :z}; nil when the flood is closed or every cell is roofed."
+  [p {:keys [x y z]}]
+  (let [kind-at (fn [cx cy cz]
+                  (let [b (u/seen-block p {:x cx :y cy :z cz})]
+                    (if (and b (openable? (.-name b))) :solid (kind-of b))))
+        roofed? (fn [cx cy cz] (some #(let [b (u/seen-block p {:x cx :y (+ cy %) :z cz})] (and b (not= :open (kind-of b))))
+                                     (range 2 7)))
+        {:keys [cells closed?]} (flood-visit (fn [cx cy cz] (forward kind-at cx cy cz)) [x y z] room-cells)]
+    (when-not closed?
+      (when-let [c (.find cells (fn [c] (not (roofed? (aget c 0) (aget c 1) (aget c 2)))))]
+        {:x (aget c 0) :y (aget c 1) :z (aget c 2)}))))
 
 (def room-memo-ms
   "How long a room answer is reused while the body and the world stand still: the night trigger asks every 250 ms and a flood reads up to room-cells cells."

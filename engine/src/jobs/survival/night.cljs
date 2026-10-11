@@ -4,6 +4,7 @@
             [engine.memory :as mem]
             [jobs.lib.child :as child]
             [jobs.lib.dig-in-leave :as dig-leave]
+            [jobs.lib.reach :as reach]
             [jobs.lib.result :as result]
             [jobs.lib.sense :as sense]
             [jobs.lib.shelter :as sh]
@@ -406,8 +407,11 @@
   [c]
   (when-not (:room-open-noted (ctx/mem c))
     (ctx/update-mem! c assoc :room-open-noted true)
-    (ctx/emit! c :shelter.room_open :warn {:pos (sh/feet (:primitives c))
-                                           :text (str "the room around the bed is not shut in (a hole in its walls); walling in under the roof at " (pr-str (sh/feet (:primitives c))))})))
+    (let [feet (sh/feet (:primitives c))
+          escape (reach/escape-cell (:primitives c) feet)]
+      (ctx/emit! c :shelter.room_open :warn (cond-> {:pos feet
+                                                     :text (str "the room around the bed is not shut in (a hole in its walls" (when escape (str ", open to " (pr-str escape))) "); walling in under the roof at " (pr-str feet))}
+                                              escape (assoc :escape escape))))))
 
 (defn carried-bed-wanted? [c]
   (sh/bed-place-wanted? (:primitives c) (ctx/view c) (bed-down/radius c) (bed-down/bed-permit c)))

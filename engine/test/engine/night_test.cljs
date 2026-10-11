@@ -662,7 +662,10 @@
 (deftest a-breached-room-is-said
   (run-night-in {:blocks breached-room}
                 (fn [{:keys [seen]}]
-                  (is (re-find #"not shut in" (str (:text (first (st/emitted seen :shelter.room_open)))))))))
+                  (let [e (first (st/emitted seen :shelter.room_open))]
+                    (is (re-find #"not shut in" (str (:text e))))
+                    (is (<= (:x (:escape e)) -2) "the event names the cell the flood got out at, beyond the hole in the west wall")
+                    (is (re-find #"open to" (str (:text e))))))))
 
 ;; ------------------------------------------------------------------ job: a roofed place close by
 
