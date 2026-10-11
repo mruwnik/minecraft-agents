@@ -1060,3 +1060,12 @@
             (is (= dug? (boolean (seq (digs p)))) (pr-str extra))
             (is (= reason (:reason w)) (pr-str extra))
             (is (= (when reason 80) (some-> w :distance)) (pr-str extra))))))))
+
+(deftest a-stair-never-digs-the-floor-under-a-door
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [blocks (assoc ground "2,65,0" "dirt" "2,66,0" "oak_door" "2,67,0" "oak_door")
+              {:keys [out p]} (await (stair! {:blocks blocks} east (fn [_])))]
+          (is (= [:stopped :base-block] [(:status @out) (:reason @out)]) (pr-str @out))
+          (is (not-any? #(= {:x 2 :y 65 :z 0} %) (digs p)) "the block the door stands on is kept"))))))

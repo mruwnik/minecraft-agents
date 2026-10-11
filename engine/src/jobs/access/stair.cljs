@@ -49,7 +49,7 @@
     but :not-loaded. A cell of a plan this body made refuses :footprint too unless :spare-own-builds is false.
   - :fluid-in-cut: a cut cell holds a fluid.
   - :crop: a crop, stem or farmland in a cut cell (never dug, zone or not).
-  - :base-block: a chest, bed, furnace, table, door or other base block in a cut cell (never dug, anyone's).
+  - :base-block: a chest, bed, furnace, table, door or other base block in a cut cell, or the block a door stands on (never dug, anyone's).
   - :undercuts-way: a cut cell is the floor of a stair this body cut earlier (memory :stair-way, written at every
     end with the floors of the steps walked).
   - :unbreakable: bedrock, barrier, portal frames, command blocks.

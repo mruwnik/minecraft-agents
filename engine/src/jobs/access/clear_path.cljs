@@ -2,6 +2,7 @@
   (:require [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.reach :as reach]
@@ -23,7 +24,7 @@
   One call is the whole door; it yields :continue only while a dig child waits on the world.
   Ends with {:status :done|:stopped :reason :dug [{:cell :block}] :at [x y z] :through [x y z]}, also as a
   clear-path.done info or clear-path.stopped warn event. Stops: :bad-args, :no-door (no such wall here),
-  :protected (a block it never digs), :dig-waits (the dig child's wait or decline, as :wait), :dig-failed (its
+  :protected (a block it never digs), :footprint (a cell of a plan this body made, unless :spare-own-builds is false), :dig-waits (the dig child's wait or decline, as :wait), :dig-failed (its
   :dig result), :refills (a cell dug max-cell-digs times, e.g. sand falling in), :step-failed (the walk through did
   not arrive).
   It does not put the blocks back: jobs.movement.go-to does that once through.
@@ -35,7 +36,8 @@
    :max-thick {:doc "the thickest wall it digs through, in blocks" :spec (a/int-in 0 nil) :default 3}
    :note {:doc "a map: each cell dug is written to the tidy ledger at once with it (jobs.lib.escape/note-hole!; go-to's escalation)" :spec map? :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
-   :by-hand {:doc "dig a block no carried tool harvests bare-handed (slow, the drop is lost)" :spec boolean? :default false}})
+   :by-hand {:doc "dig a block no carried tool harvests bare-handed (slow, the drop is lost)" :spec boolean? :default false}
+   :spare-own-builds {:doc "a cell of a plan this body made is never dug (stops :footprint naming the plan); false: it may be" :spec boolean? :default true}})
 
 (def headings {:north [0 -1] :south [0 1] :east [1 0] :west [-1 0]})
 
@@ -80,6 +82,12 @@
     (boolean (or (pos? (u/free-slots p))
                  (some #(and (drops (:name %)) (< (:count %) 64)) (u/inventory p))))))
 
+(defn own-build
+  "The refusal naming the plan this body made that covers cell, unless :spare-own-builds is false; else nil."
+  [c cell]
+  (when-not (false? (:spare-own-builds (:args c)))
+    (access/own-keep (access/rules-input c {:spare-own? true}) (zipmap [:x :y :z] cell))))
+
 (defn ^:async dig-cell!
   "One dig child call on the cell being dug (:digging {:cell :block :collect}, kept until the child ends, so a resumed
   call goes on with it). :again, :continue while the child waits on the world, or :done."
@@ -90,6 +98,7 @@
         done! (fn [] (ctx/update-mem! c dissoc :digging))]
     (cond
       (escape/protected? block) (finish! c :protected {:cell cell :block block})
+      (own-build c cell) (finish! c :footprint {:cell cell :block block :plan (:plan (own-build c cell))})
       (and (not (:started (:digging (ctx/mem c))))
            (>= (get-in (ctx/mem c) [:tries cell] 0) (max-cell-digs)))
       (finish! c :refills {:cell cell :block block})

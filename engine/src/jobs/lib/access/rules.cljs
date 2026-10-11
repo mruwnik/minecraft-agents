@@ -19,7 +19,7 @@
                  physical rules still apply.
     :ledger      set of [x y z] cells holding this body's own scaffold blocks (may be empty)
     :keep-base?  true refuses a dig of a base block (base-block?), whoever's: a job cutting its own way (stair,
-                 tunnel) never breaks a chest, bed or furnace it meets
+                 tunnel) never breaks a chest, bed or furnace it meets, nor the block a door stands on
   The social part (zones, claims, footprints, no zone list) is jobs.lib.access.zones/verdict.
 
   Output: {:ok true}, or {:ok false :reason kw ...detail}. A dig with hazards is {:ok true :hazards [{:reason
@@ -75,6 +75,8 @@
 (def base-blocks
   "Blocks of a base: storage, beds, workstations, doors and signs."
   #"chest$|barrel$|shulker_box$|furnace$|^smoker$|_bed$|_table$|^hopper$|^dispenser$|^dropper$|^brewing_stand$|^lectern$|^composter$|anvil$|cauldron$|^grindstone$|^loom$|^stonecutter$|^beehive$|^jukebox$|^bell$|^beacon$|^respawn_anchor$|_door$|_trapdoor$|_gate$|_sign$|_banner$")
+
+(def door-block #"_door$")
 
 (defn base-block? [n] (boolean (and n (re-find base-blocks n))))
 
@@ -137,6 +139,9 @@
 (defn common-checks [action {:keys [block-at cell ignore-zones? keep-base?] :as in}]
   [#(when (nil? (block-at cell)) (refuse :not-loaded))
    #(when (and keep-base? (= :dig action) (base-block? (block-at cell))) (refuse :base-block :block (block-at cell)))
+   #(when (and keep-base? (= :dig action))
+      (let [over (block-at [(cell 0) (inc (cell 1)) (cell 2)])]
+        (when (and over (re-find door-block over)) (refuse :base-block :block over))))
    #(when-not ignore-zones?
       (let [v (social-verdict action in)]
         (when-not (:ok v) v)))])

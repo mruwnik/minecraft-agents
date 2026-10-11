@@ -8,6 +8,7 @@
             [engine.fake :as fake]
             [engine.memory :as mem]
             [jobs.lib.escape :as escape]
+            [plan.shape :as shape]
             [jobs.movement.go-to.escalation :as esc]
             [engine.registry :as registry]
             [engine.test-util :as tu :refer [box]]
@@ -21,7 +22,7 @@
   ([world zones]
    (let [clock (atom 1000000)
          [seen sink] (tu/legacy-capture-sink)
-         p (tu/fake world)
+         p (tu/fake (dissoc world :plans))
          eng (core/create (cond-> {:primitives p :jobs registry/jobs :triggers {} :dir (tu/tmp-dir) :now #(deref clock)
                                    :backoff false
                                    :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}
@@ -538,9 +539,30 @@
               {:keys [out p seen]} (await (run-job! (merge in-room {:blocks room}) 'jobs.movement.go-to
                                                 {:pos [8 64 0] :range 1} {:plans {"hut" hut}}))]
           (is (= false (:arrived @out)))
-          (is (= {:step :none :why :zone} (:escalation @out)) "the wall is the body's own plan")
+          (is (= {:step :none :why :own-build} (:escalation @out)) "the wall is the body's own plan")
           (is (empty? (events-of seen :go-to.escalated)))
           (is (empty? (calls p "dig"))))))))
+
+(def own-pit-wall
+  "The pit's dirt walls as a plan this body made (a hut's walls)."
+  (shape/with-author {:id "hut" :parts [{:id "w" :cells (vec (for [x (range -2 3) y (range 60 64) z (range -2 3)
+                                                                  :when (not (contains? pit-cells (str x "," y "," z)))]
+                                                              [x y z])) :want "dirt"}]} "Fake"))
+
+(deftest go-to-never-digs-the-bodys-own-plan-unless-told-to-and-then-warns-of-each-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (merge in-pit {:blocks pit :plans {"hut" own-pit-wall}})
+              {:keys [out p seen]} (await (run-job! world 'jobs.movement.go-to {:pos [10 64 0] :range 1} {:plans (:plans world)}))
+              {out2 :out seen2 :seen} (await (run-job! world 'jobs.movement.go-to {:pos [10 64 0] :range 1 :spare-own-builds false} {:plans (:plans world)}))
+              warned (events-of seen2 :go-to.dug-own-build)]
+          (is (= false (:arrived @out)))
+          (is (= {:step :none :why :own-build} (:escalation @out)))
+          (is (empty? (calls p "dig")))
+          (is (= {:arrived true} @out2))
+          (is (seq warned) "each own cell dug is named")
+          (is (every? #(and (= :warn (:level %)) (= "hut" (:plan %)) (vector? (:cell %))) warned)))))))
 
 (deftest go-to-roofed-pit-stairs-through-the-roof-rather-than-pillar
   (async done

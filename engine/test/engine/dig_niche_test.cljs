@@ -7,6 +7,7 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [jobs.lib.world-files :as ew]
+            [plan.shape :as shape]
             [jobs.survival.dig-niche :as niche]))
 
 (defn blocks [name [x0 x1] [y0 y1] [z0 z1]]
@@ -66,9 +67,9 @@
          p (tu/seeing-all (tu/fake (merge {:offlineScale 0.0001 :time 14000 :blocks (merge ground hill)
                                            :drops {"stone" "cobblestone"}
                                            :inventory [{:name "iron_pickaxe" :count 1}]}
-                                          spec)))
+                                          (dissoc spec :plans))))
          eng (core/create {:primitives p :jobs registry/jobs :triggers {} :dir (tu/tmp-dir) :now #(deref clock)
-                           :world (ew/of-data {} {} zones)
+                           :world (ew/of-data (:plans spec {}) {} zones)
                            :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
      {:eng eng :p p :seen seen :clock clock})))
 
@@ -279,3 +280,13 @@
           (is (= 1 @n) "one fetch round per scheduler round, no busy loop")
           (is (nil? (failed seen)))
           (is (= 1 (count (:list (core/state eng)))) "the job yielded and is still there"))))))
+
+(deftest a-niche-is-not-cut-in-the-bodys-own-plan
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan (shape/with-author {:id "hut" :parts [{:id "w" :want "stone" :cells (vec (for [x (range 4 9) y [64 65 66] z (range -3 4)] [x y z]))}]} "Fake")
+              {:keys [p seen] :as s} (setup [] {:plans {"hut" plan}})]
+          (await (run! s {}))
+          (is (= :refused (:reason (failed seen))))
+          (is (= "stone" (block-at p [5 64 0]))))))))

@@ -6,7 +6,9 @@
             [engine.events :as events]
             [engine.registry :as registry]
             [engine.test-util :as tu :refer [box]]
-            [engine.triggers :as triggers]))
+            [engine.triggers :as triggers]
+            [jobs.lib.world-files :as ew]
+            [plan.shape :as shape]))
 
 (def job 'jobs.access.clear-path)
 
@@ -23,7 +25,7 @@
   ([world stub args rounds]
    (let [clock (atom 1000000)
          [_ sink] (tu/legacy-capture-sink)
-         p (tu/fake world)
+         p (tu/fake (dissoc world :plans))
          out (atom :not-done)
          parent {:check (constantly true)
                  :round (fn ^:async recording-round [c]
@@ -34,6 +36,7 @@
                 stub (assoc 'jobs.blocks.dig (assoc (get registry/jobs 'jobs.blocks.dig) :round stub))
                 rounds (as-> js (reduce-kv (fn [m k round] (assoc m k (assoc (get m k) :round round))) js rounds)))
          eng (core/create {:primitives p :jobs jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                           :world (ew/of-data (:plans world {}) {} [])
                            :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
      (core/submit! eng '(recording-parent) {})
      (loop [i 0]
@@ -138,3 +141,14 @@
       (fn ^:async t []
         (let [r (await (run-door wall nil {:max-thick 3}))]
           (is (= [:stopped :bad-args] [(:status r) (:reason r)]) (pr-str r)))))))
+
+(deftest a-wall-of-the-bodys-own-plan-is-not-dug-unless-told-to
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan (shape/with-author {:id "hut" :parts [{:id "w" :cells [[1 64 0] [1 65 0] [2 64 0] [2 65 0]] :want "stone"}]} "Fake")
+              world (assoc wall :plans {"hut" plan})
+              r (await (run-door world nil {:heading :east :max-thick 3 :by-hand true}))
+              r2 (await (run-door world nil {:heading :east :max-thick 3 :spare-own-builds false :by-hand true}))]
+          (is (= [:stopped :footprint "hut"] [(:status r) (:reason r) (:plan r)]) (pr-str r))
+          (is (= :done (:status r2)) (pr-str r2)))))))

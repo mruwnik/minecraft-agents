@@ -12,6 +12,7 @@
             [jobs.lib.step-off :as step-off]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.util :as u]
+            [jobs.lib.world :as known]
             [jobs.lib.dig-in-leave :as dig-leave]
             [jobs.movement.go-to.climb :as climb]
             [jobs.movement.go-to.result :as end]
@@ -59,13 +60,13 @@
 
 (defn escalation-job
   "[job args] of the child that carries out escalation e (jobs.lib.escape/choose); tag marks the holes it digs;
-  by-hand? digs what no carried tool clears bare-handed. The body's own stair cut again (:own) is marked by no tag: it
-  stays open."
-  [{:keys [step] :as e} tag ignore-zones? by-hand?]
+  by-hand? digs what no carried tool clears bare-handed; spare-own? keeps the children off the body's own plans. The
+  body's own stair cut again (:own) is marked by no tag: it stays open."
+  [{:keys [step] :as e} tag ignore-zones? by-hand? spare-own?]
   (case step
     :pillar ['jobs.access.pillar {:height (:height e) :item (:item e) :ignore-zones? ignore-zones?}]
-    :stair ['jobs.access.stair {:dir :up :heading (:heading e) :steps (:steps e) :note (when-not (:own e) tag) :fetch false :spent-ok true :ignore-zones? ignore-zones? :by-hand by-hand?}]
-    :clear-path ['jobs.access.clear-path {:heading (:heading e) :note tag :ignore-zones? ignore-zones? :by-hand by-hand?}]
+    :stair ['jobs.access.stair {:dir :up :heading (:heading e) :steps (:steps e) :note (when-not (:own e) tag) :fetch false :spent-ok true :ignore-zones? ignore-zones? :by-hand by-hand? :spare-own-builds spare-own?}]
+    :clear-path ['jobs.access.clear-path {:heading (:heading e) :note tag :ignore-zones? ignore-zones? :by-hand by-hand? :spare-own-builds spare-own?}]
     :approach ['jobs.movement.go-to {:pos (zipmap [:x :y :z] (:pos e)) :range 0 :escalate false}]
     :fill-gap ['jobs.blocks.place {:pos (zipmap [:x :y :z] (:cell e)) :any-of [(:item e)] :fetch false :ignore-zones? ignore-zones?}]))
 
@@ -75,15 +76,27 @@
     :fill-gap (boolean (:placed result))
     (= :done (:status result))))
 
-(defn may-dig-fn
-  "(may-dig? cell): no other owner's zone, claim or plan footprint refuses a dig there (jobs.lib.tidy/refusal), nor
-  does a plan this body made (a way out never digs its own building)."
+(defn spare-own?
+  "Whether go-to keeps off the plans this body made (arg :spare-own-builds, default true)."
   [c]
-  (let [own (access/rules-input c {:spare-own? true})]
-    (fn [cell]
-      (or (boolean (:ignore-zones? (:args c)))
-          (let [pos (zipmap [:x :y :z] cell)]
-            (and (nil? (tidy/refusal c :dig pos)) (nil? (access/own-keep own pos))))))))
+  (not (false? (:spare-own-builds (:args c)))))
+
+(defn own-plan-fn
+  "(own-plan cell): the id of the plan this body made that covers cell, else nil."
+  [c]
+  (let [footprints (known/footprints c)
+        own (access/own-plans c)]
+    (fn [cell] (some own [(get footprints (vec cell))]))))
+
+(defn may-dig-fn
+  "(may-dig? cell): no other owner's zone, claim or plan footprint refuses a dig there (jobs.lib.tidy/refusal), and
+  no plan this body made covers it when spare? (default: go-to's spare-own?)."
+  ([c] (may-dig-fn c (spare-own? c)))
+  ([c spare?]
+   (let [own-plan (own-plan-fn c)]
+     (fn [cell]
+       (and (or (not spare?) (nil? (own-plan cell)))
+            (or (boolean (:ignore-zones? (:args c))) (nil? (tidy/refusal c :dig (zipmap [:x :y :z] cell)))))))))
 
 (def placed-policy
   "Body memory policy of :escalation-placed, the cells go-to put a block back in: later escalations may dig them."
@@ -141,8 +154,12 @@
   :escalation true and :any-of, the items that put it back (the block or what it drops). Body memory outlives the
   round, a cut, a cancel and a restart: jobs.survival.restore-broken puts back what go-to did not."
   [c dug]
-  (doseq [{:keys [cell block]} (distinct dug)]
-    (escape/note-hole! c (hole-tag c) cell block)))
+  (let [own-plan (own-plan-fn c)]
+    (doseq [{:keys [cell block]} (distinct dug)]
+      (when-let [plan (own-plan cell)]
+        (ctx/warn-once! c [:dug-own cell] :go-to.dug-own-build
+                        {:cell (vec cell) :block block :plan plan :text (str "dug " block " at " (pr-str (vec cell)) " in its own plan " plan)}))
+      (escape/note-hole! c (hole-tag c) cell block))))
 
 (defn ^:async look-level!
   "Look at each cell beside the body at level lvl above feet that it has not sensed."
@@ -200,9 +217,12 @@
         e (or (when (shelter-exit? c result) {:step :leave-shelter})
               (gap-fill c result (:skip opts))
               (escape/choose (:primitives c) feet goal (may-dig-fn c) opts))
-        e (if (and (= :none (:step e)) (not= :none (:step (escape/choose (:primitives c) feet goal (constantly true) opts))))
-            {:step :none :why :zone}
-            e)]
+        choosable? #(not= :none (:step (escape/choose (:primitives c) feet goal % opts)))
+        e (cond
+            (not= :none (:step e)) e
+            (and (spare-own? c) (choosable? (may-dig-fn c false))) {:step :none :why :own-build}
+            (choosable? (constantly true)) {:step :none :why :zone}
+            :else e)]
     (cond
       (and (:cave-climb (ctx/mem c)) (or (> n max-escalations) (= :none (:step e))))
       (do (ctx/update-mem! c #(-> % (dissoc :cave-climb :dive-climb :give-up) (assoc :cave-ok true)))
@@ -415,7 +435,7 @@
   ledger (note-holes!). Its wait or its failure gives up, with the child's reason, unless it got part of the way."
   [c pos]
   (let [{:keys [step] :as e} (:escalation (ctx/mem c))
-        [job args] (escalation-job e (hole-tag c) (boolean (:ignore-zones? (:args c))) (boolean (:by-hand (ctx/mem c))))]
+        [job args] (escalation-job e (hole-tag c) (boolean (:ignore-zones? (:args c))) (boolean (:by-hand (ctx/mem c))) (spare-own? c))]
     (if-let [wait (b/child-wait c :escalation job args)]
       (escalation-failed! c pos (merge {:step step} wait))
       (let [_ (await (torch/return-torch! c))

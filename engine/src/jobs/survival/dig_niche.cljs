@@ -94,9 +94,10 @@
          (not (rules/falling? (name (at f dir 2 0 2))))))))
 
 (defn permitted?
-  "Whether the zone rules (input in, see jobs.lib.access/rules-input) let the job dig the niche's cells and plug its opening."
+  "Whether the zone rules (input in, see jobs.lib.access/rules-input, with :spare-own? for the body's own plans) let the job
+  dig the niche's cells and plug its opening."
   [in f dir]
-  (not (or (some #(access/trespass-refusal in :dig %) (dug-cells f dir))
+  (not (or (some #(or (access/own-keep in %) (access/trespass-refusal in :dig %)) (dug-cells f dir))
            (some #(access/trespass-refusal in :place %) (door-cells f dir)))))
 
 (defn stand-ok?
@@ -225,7 +226,7 @@
 
 (defn ^:async step [c]
   (let [p (:primitives c)
-        in (access/rules-input c)
+        in (access/rules-input c {:spare-own? true})
         ok? (partial permitted? in)
         saved (:site (ctx/mem c))
         reach (:reach (:args c))
