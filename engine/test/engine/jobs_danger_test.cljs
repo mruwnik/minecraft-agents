@@ -127,10 +127,12 @@
     (is (> bare 90))
     (is (> bare (* 10 armed)))))
 
-(deftest a-body-that-would-win-the-fight-is-priced-as-before
-  (let [zombie (mob 1 "zombie" 15 2)]
-    (is (= (:danger (route-danger (world) route [zombie] iron-armour))
-           (armed-danger zombie "iron_sword" 20 iron-armour)))))
+(deftest a-body-that-would-win-the-fight-is-priced-alike-whatever-it-wins-with
+  (let [zombie (mob 1 "zombie" 15 2)
+        armed (armed-danger zombie "iron_sword" 20 iron-armour)]
+    (is (= armed (armed-danger zombie "wooden_sword" 20 iron-armour)))
+    (is (> (:danger (route-danger (world) route [zombie] iron-armour)) armed)
+        "bare hands lose to a zombie even in iron armour")))
 
 (deftest the-weaker-the-body-the-dearer-the-danger
   (let [zombie (mob 1 "zombie" 15 2)]

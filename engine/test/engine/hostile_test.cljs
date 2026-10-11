@@ -3,6 +3,7 @@
   against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.registry :as registry]
+            [engine.settings :as settings]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [jobs.lib.body :as body]
@@ -158,21 +159,46 @@
     {:health 10 :fighting? true :single? true} :flee
     {:health 18 :fighting? true :single? true :creeper? true} :flee))
 
-(deftest a-body-that-cannot-sprint-fights-a-mob-it-cannot-outrun
+(deftest a-mob-that-outruns-the-body-is-no-reason-to-start-a-fight-but-a-fight-begun-goes-on
   (are [world expected] (= expected (cost/decide (merge {:reserve 4 :damage 16 :health 18} world)))
     {} :flee
-    {:cannot-outrun? true} :fight
-    {:cannot-outrun? true :creeper? true} :flee
-    {:cannot-outrun? true :health 4} :flee))
+    {:cannot-outrun? true} :flee
+    {:cannot-outrun? true :fighting? true :health 5} :fight
+    {:cannot-outrun? true :fighting? true :single? false :health 5} :fight
+    {:fighting? true :single? true :health 5} :flee
+    {:cannot-outrun? true :fighting? true :creeper? true} :flee))
 
-(deftest respond-fights-a-spider-with-the-fist-when-food-forbids-sprinting
+(deftest the-health-a-begun-fight-is-held-above-is-a-setting
+  (is (= :flee (cost/decide {:reserve 4 :damage 16 :health 9 :fighting? true :single? true})))
+  (is (= :fight (settings/with-settings {:jobs.lib.cost.fight/hysteresis-health 8}
+                  #(cost/decide {:reserve 4 :damage 16 :health 9 :fighting? true :single? true})))))
+
+(defn fist-stance
+  "What decide makes of a body at full health with weapon against one mob (health: what is left of it, nil full)."
+  [weapon mob health]
+  (cost/decide {:health 20 :reserve 4
+                :damage (cost/fight-damage {:weapon weapon :mobs [{:name mob :distance 2 :health health}]})}))
+
+(deftest an-unarmed-body-at-full-health-does-not-choose-a-fist-fight
+  (are [weapon mob health expected] (= expected (fist-stance weapon mob health))
+    nil "spider" nil :flee
+    nil "zombie" nil :flee
+    "stone_pickaxe" "spider" nil :flee
+    nil "spider" 2 :fight
+    "wooden_sword" "spider" nil :fight)
+  (is (= :fight (settings/with-settings {:jobs.lib.cost.fight/fist-gap-ms 500} #(fist-stance nil "spider" nil)))
+      "the price of a fist swing is a setting"))
+
+(defn spider [x] {:id 5 :name "spider" :kind "hostile" :pos {:x x :y 64 :z 0}})
+
+(deftest respond-with-bare-hands-and-nowhere-to-hide-fights-a-spider-and-never-runs-in-the-open
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (fought? (await (flight-round respond {:self {:health 18 :food 6} :entities [{:id 5 :name "spider" :kind "hostile" :pos {:x 2 :y 64 :z 0}}]})))
-            "no sprint, a spider as fast as the body: fight")
-        (is (fled? (await (flight-round respond {:self {:health 18 :food 20} :entities [{:id 5 :name "spider" :kind "hostile" :pos {:x 2 :y 64 :z 0}}]})))
-            "fed, the body sprints: retreat as before")))))
+        (doseq [self [{:health 20 :food 20} {:health 18 :food 6} {:health 6 :food 20}]]
+          (let [{:keys [eng] :as s} (await (flight-round respond {:self self :entities [(spider 2)]}))]
+            (is (fought? s) (str "the fist is all that is left " self))
+            (is (zero? (count (tu/walked-to eng))) (str "no flee step from a mob that outruns it " self))))))))
 
 (deftest hits-taken-while-fleeing-are-counted-in-a-window
   (are [hits now before after expected] (= expected (respond-to-hostile/note-hits hits now before after 5000))
@@ -821,7 +847,7 @@
 (deftest combat-fight-damage-weighs-weapon-mobs-and-armour
   (let [z {:name "zombie" :distance 3}]
     (is (= 7.5 (cost/fight-damage {:weapon "iron_sword" :equipment nil :mobs [z]})) "4 hits at 0.625 s while it hits 3/s")
-    (is (= 30 (cost/fight-damage {:weapon nil :equipment nil :mobs [z]})) "the fist: 20 hits at 0.5 s")
+    (is (= 78 (cost/fight-damage {:weapon nil :equipment nil :mobs [z]})) "the fist: 20 hits, one landed every 1.3 s")
     (is (= 22.5 (cost/fight-damage {:weapon "iron_sword" :equipment nil :mobs [z z]})) "the second hits until it dies too")
     (is (= 3.45 (/ (js/Math.round (* 100 (cost/fight-damage {:weapon "iron_sword" :equipment iron-armour :mobs [z]}))) 100))
         "iron armour: vanilla's 13.5 effective points against 3 hp hits take 54% off")

@@ -1,6 +1,7 @@
 (ns engine.cost-test
   "jobs.lib.cost: one armour formula (vanilla's) under every calculator: fight cost, mob threat and the planner's rate."
-  (:require [cljs.test :refer [deftest is]]
+  (:require [cljs.test :refer [deftest is are]]
+            [engine.settings :as settings]
             [jobs.lib.cost :as cost]
             [jobs.survival.retreat :as retreat]))
 
@@ -126,3 +127,20 @@
   (let [one-mutton [{:name "mutton" :count 1}]]
     (is (not (cost/cook-worth? one-mutton 12 nil false costs)) "no furnace at all: one mutton does not pay for making one")
     (is (cost/cook-worth? one-mutton 12 nil true costs) "a furnace in the pack only needs putting down")))
+
+(deftest a-body-outruns-only-mobs-well-slower-than-itself
+  (are [food mobs expected] (= expected (cost/outruns? food mobs))
+    20 [] true
+    20 ["zombie"] true
+    6 ["zombie"] true
+    20 ["creeper"] true
+    20 ["spider"] false
+    6 ["spider"] false
+    20 ["cave_spider"] false
+    20 ["zombie" "spider"] false)
+  (is (true? (settings/with-settings {:jobs.lib.cost.danger/outrun-factor 1} #(cost/outruns? 20 ["spider"])))))
+
+(deftest the-race-to-a-refuge-counts-each-chaser-at-its-own-speed
+  (are [names expected] (= expected (cost/reach-first? 5 [5] 20 names))
+    ["zombie"] true
+    ["spider"] false))

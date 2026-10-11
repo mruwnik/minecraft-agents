@@ -101,13 +101,13 @@
 
 (defn race-won?
   "Whether the body, at its own speed (food), walks way-in's steps before any melee threat (ranged ones shoot, they do
-  not race) gets to a door of room (straight line, the nearest door): cost/reach-first?."
+  not race), each at its own speed, gets to a door of room (straight line, the nearest door): cost/reach-first?."
   [p room {:keys [steps]} threats]
-  (cost/reach-first? steps
-                     (->> threats
-                          (remove combat/ranged?)
-                          (map (fn [t] (apply min (map #(u/dist (danger-q/mob-pos p t) (mid (:cell %))) (:doors room))))))
-                     (food p)))
+  (let [racers (remove combat/ranged? threats)]
+    (cost/reach-first? steps
+                       (map (fn [t] (apply min (map #(u/dist (danger-q/mob-pos p t) (mid (:cell %))) (:doors room)))) racers)
+                       (food p)
+                       (map #(.-name %) racers))))
 
 (defn verdicts
   "What the flight makes of each of rooms (rooms): [{:room r :inside? true}] alone for the room the body is in, else

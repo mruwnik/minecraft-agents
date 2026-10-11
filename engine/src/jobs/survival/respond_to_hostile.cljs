@@ -20,7 +20,10 @@
   One whole attempt per round: decides afresh before each call of the child, while a danger is near.
   Never fights a creeper or an enderman (a hit would anger it: the retreat handles it). Otherwise fights when the damage the fight is expected to cost
   leaves at least :reserve health (jobs.lib.cost/fight-damage: weapon, armour worn, each mob's kind
-  and what is left of it after the hits landed, the dangers killed nearest first).
+  and what is left of it after the hits landed, the dangers killed nearest first; bare hands land a hit every
+  `jobs.lib.cost.fight/fist-gap-ms`, so a body with no weapon retreats from a whole spider or zombie).
+  A fight begun goes on against a single mob above `jobs.lib.cost.fight/hysteresis-health`, and at any health against
+  a mob the body cannot outrun (jobs.lib.cost/outruns?: a spider at any food).
   If the chosen child declines, the other one runs.
   Only ranged mobs with a line of fire near and the body under a roof, carrying building blocks and a tool that digs
   stone (a block in the doorway must not shut it in): it stops the arrows instead (jobs.survival.block-arrow-gap, no
@@ -120,10 +123,6 @@
 
 (def hit-window-ms "A flight hit twice within this long is failing: the body fights." 5000)
 
-(def faster-mobs "Mobs a walking body cannot get away from." #{"spider" "cave_spider"})
-
-(def sprint-food "A body sprints only above this food." 6)
-
 (defn ^:async respond [c near]
   (let [{:keys [reserve weapons] :as a} (:args c)
         p (:primitives c)
@@ -136,7 +135,7 @@
                    (cost/decide {:health (.-health self)
                                :fighting? (= :fight (:decision m))
                                :single? (= 1 (count near))
-                               :cannot-outrun? (boolean (and (<= (.-food self) sprint-food) (some #(faster-mobs (.-name %)) near)))
+                               :cannot-outrun? (not (cost/outruns? (or (.-food self) 20) (map #(.-name %) (remove combat/ranged? near))))
                                :creeper? (boolean (some combat/creeper? near))
                                :reserve reserve
                                :damage (cost/fight-damage {:weapon (combat/best-weapon p weapons)

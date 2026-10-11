@@ -64,6 +64,7 @@
 (def danger-default-shape danger/danger-shape)
 (def reach-first? danger/reach-first?)
 (def outruns-at? danger/outruns-at?)
+(def outruns? danger/outruns?)
 
 (def hp-seconds health/hp-seconds)
 (def health-scale health/health-scale)

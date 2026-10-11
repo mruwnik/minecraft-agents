@@ -28,6 +28,7 @@
    ::walk-speed {:default 4.3 :doc "Blocks a second a walking body covers, one too hungry to sprint (reach-first?)." :spec (a/num-in 0.1 nil)}
    ::sprint-food {:default 6 :doc "Food at or under which a body cannot sprint (reach-first?)." :spec (a/int-in 0 20)}
    ::chase-speed {:default 3 :doc "Blocks a second a chasing melee mob covers, a little over a zombie's (reach-first?)." :spec (a/num-in 0.1 nil)}
+   ::outrun-factor {:default 1.5 :doc "Times a mob's chase speed the body must run to get away from it on foot (outruns?): a flight goes in steps and round obstacles, the mob comes straight on." :spec (a/num-in 0 nil)}
    ::no-answer-scale {:default 60 :doc "How much dearer a mob's route danger is for each time over what the body can afford to lose in a fight with it (no-answer-factor)." :spec (a/num-in 0 nil)}
    ::race-margin-s {:default 0.5 :doc "Seconds the body must win a race to a refuge by (reach-first?)." :spec (a/num-in 0 nil)}})
 
@@ -216,12 +217,27 @@
   [food]
   (settings/get settings (if (> food (settings/get settings ::sprint-food)) ::sprint-speed ::walk-speed)))
 
+(defn chase-speed
+  "Blocks a second mob-name covers chasing the body: threat/mob-speed, ::chase-speed for a mob not listed there."
+  [mob-name]
+  (get threat/mob-speed mob-name (settings/get settings ::chase-speed)))
+
 (defn reach-first?
   "Whether a body with food food (body-speed), body-dist blocks from a refuge, gets there ::race-margin-s before every
-  chaser, each (mob-dists) that many blocks from it at ::chase-speed. True with no chaser."
-  [body-dist mob-dists food]
-  (let [[chase-speed race-margin-s] (map #(settings/get settings %) [::chase-speed ::race-margin-s])]
-    (every? #(< (+ (/ body-dist (body-speed food)) race-margin-s) (/ % chase-speed)) mob-dists)))
+  chaser, each (mob-dists) that many blocks from it at ::chase-speed, or its own chase-speed when that is more
+  (mob-names, in the order of mob-dists). True with no chaser."
+  ([body-dist mob-dists food] (reach-first? body-dist mob-dists food (repeat nil)))
+  ([body-dist mob-dists food mob-names]
+   (let [body-s (+ (/ body-dist (body-speed food)) (settings/get settings ::race-margin-s))
+         floor (settings/get settings ::chase-speed)]
+     (every? true? (map #(< body-s (/ %1 (max floor (chase-speed %2)))) mob-dists mob-names)))))
+
+(defn outruns?
+  "Whether a body with food food gets away from every one of mob-names on foot: its body-speed is at least
+  ::outrun-factor times each one's chase-speed. A spider is faster at any food, a zombie never."
+  [food mob-names]
+  (let [factor (settings/get settings ::outrun-factor)]
+    (every? #(>= (body-speed food) (* factor (chase-speed %))) mob-names)))
 
 (defn outruns-at?
   "Whether a body with food food (body-speed) running degrees off straight away from a chaser still gains on it (at

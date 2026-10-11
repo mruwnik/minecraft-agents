@@ -837,6 +837,25 @@
   (is (= [:seal :back-off :pit :pocket :fight] (retreat/escape-order {:climber? true}))
       "a spider climbs the pillar's side to the body on top"))
 
+(deftest no-step-back-from-a-mob-that-outruns-the-body
+  (is (= [:seal :pit :pocket :fight] (retreat/escape-order {:climber? true :faster? true})))
+  (is (= [:seal :pillar :pit :pocket :fight] (retreat/escape-order {:faster? true})) "one that cannot climb is pillared against")
+  (is (= [:fight] (retreat/escape-order {:faster? true :win? true}))))
+
+(deftest an-unarmed-body-at-full-health-seals-in-against-a-spider-instead-of-running-or-punching
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p seen]}
+              (await (hidden-round '(jobs.survival.respond-to-hostile {:hide-s 100000})
+                                   {:self {:health 20 :food 20} :inventory [{:name "cobblestone" :count 20}]
+                                    :entities [{:id 9 :name "spider" :kind "hostile" :pos {:x 4 :y 64 :z 0} :health 16}]}
+                                   120000 (fn [_] nil)))]
+          (is (zero? (count (calls p "attack"))) "no fist fight")
+          (is (zero? (count (calls p "steer"))) "no walk: a spider outruns the body")
+          (is (pos? (count (calls p "place"))) "it walls itself in")
+          (is (= 1 (count (filter #(= :retreat_sealed (:kind %)) @seen)))))))))
+
 (def pool
   "Water x -4..8, y 64..65, z -4..4 over the floor: dry land beyond it, nearest at x -5."
   (into {} (for [x (range -4 9) y [64 65] z (range -4 5)] [(key-of x y z) "water"])))

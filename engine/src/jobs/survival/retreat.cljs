@@ -65,6 +65,9 @@
   none of them possible, it walks on. A seal begun where it stands is finished before it walks on (refuge/sealing-here?).
   Not while a creeper chases it or a melee mob is within cover-gap: it walks (or backs off, cornered) first.
   A step of at most 1.5 s there that left the body where it stood (a search) is followed by that cover at once.
+  A mob that attacks at close range within :radius and outruns the body (jobs.lib.cost/outruns?: a spider at any food;
+  not a creeper or an enderman): no flee step. After the door and room steps (1., 2., the race at each chaser's own
+  speed) it takes the cornered options (4.) without the back-off.
   4. Cornered (no open direction worth a walk, or the walk is blocked, or a melee hostile within 3 hit the body since the last step: it cannot be outrun, and the fight is weighed over those hostiles alone; checked afresh every step) with no hostile within
      :radius: holds a second (wait, why cornered) and looks again; after :no-gain-steps such steps or holds with no gain the flight ends :keeps-off. With one within :radius: takes the safest option it has not yet failed.
      - an angry enderman near (one the client flags angry, that hurt the body this flight or is within 3 blocks; it teleports; a walk is no flight): at once, before any walk: water within 6 blocks (it keeps away from water; the body steps in and holds), else a seen 2-high gap under a roof within 8 blocks (a 3-tall enderman cannot enter; walks there and holds), else seal, pit, pocket, last of all fight.
@@ -89,7 +92,7 @@
      - last of all, fight with the best weapon or tool (pickaxe, shovel, hoe) or the fist. A body with no weapon
        (:weapons) first looks for a way to walk once more (:fist-sweeps, default 1).
        A pillared body that is hit raises the pillar `retreat-refuge/::pillar-extend` (2) blocks, once, before the refuge fails.
-     Order: fight if it wins, then seal, pillar (not against a ranged mob or a spider), back off, pit, pocket, fight.
+     Order: fight if it wins, then seal, pillar (not against a ranged mob or a spider), back off (not from a mob that outruns the body), pit, pocket, fight.
      Against a creeper back off comes first.
      An option that fails is not tried again until all have failed. Then, after a second's hold, all are tried again
      (one retreat_blocked warning per flight).
@@ -189,17 +192,27 @@
 (defn escape-order
   "Pure: the cornered options to try, safest first. {:win? the odds say a fight leaves reserve health (never true
   for a creeper), :flyer? a phantom is near (it outflies a walker: shelter, else fight), :creeper? one is near (it comes first), :enderman? an angry enderman is near (angry-enderman?) (it teleports, so no walk or back-off, and a
-  pillar is within its reach: the body enters water within water-reach, which it avoids, else walks under a 2-high roof within roof-reach, which it cannot enter, else shuts itself in), :ranged? the threat shoots, :climber? it is a spider (it climbs the pillar), :home? the body is in its home
+  pillar is within its reach: the body enters water within water-reach, which it avoids, else walks under a 2-high roof within roof-reach, which it cannot enter, else shuts itself in), :ranged? the threat shoots, :climber? it is a spider (it climbs the pillar), :faster? a mob
+  the body cannot outrun is near (no step back: it gains nothing), :home? the body is in its home
   room: it digs no pit or pocket in its own floor or walls, :swim? the body is in water with a drowned near: swimming out to dry land comes first unless a fight wins}."
-  [{:keys [win? creeper? enderman? flyer? ranged? climber? swim? home?]}]
+  [{:keys [win? creeper? enderman? flyer? ranged? climber? faster? swim? home?]}]
   (cond->> (cond
              creeper? [:back-off :seal :pillar :pit :pocket :fight]
              enderman? [:water :roof :seal :pit :pocket :fight]
              win? [:fight]
              flyer? [:seal :pit :pocket :fight]
-             :else (into (if (or ranged? climber?) [:seal] [:seal :pillar]) [:back-off :pit :pocket :fight]))
+             :else (into (if (or ranged? climber?) [:seal] [:seal :pillar]) (if faster? [:pit :pocket :fight] [:back-off :pit :pocket :fight])))
     (and swim? (not creeper?) (not enderman?) (not win?)) (into [:swim-out])
     home? (filterv (complement #{:pit :pocket}))))
+
+(defn outrun?
+  "Whether the body gets away on foot from every one of hostiles that attacks at close range (jobs.lib.cost/outruns?,
+  at its food). Creepers, endermen and ranged mobs have their own rules."
+  [c hostiles]
+  (cost/outruns? (retreat-home/food (:primitives c))
+                 (->> hostiles
+                      (remove #(or (combat/creeper? %) (combat/enderman? %) (combat/ranged? %)))
+                      (map #(.-name %)))))
 
 (defn near-hostiles
   "The hostiles a cornered body weighs: within :radius, ranged ones within :ranged-radius, the dead skipped."
@@ -448,6 +461,7 @@
                              :flyer? (boolean (some combat/flyer? hostiles))
                              :ranged? (boolean (and threat (combat/ranged? threat)))
                              :climber? (boolean (some combat/climber? hostiles))
+                             :faster? (not (outrun? c hostiles))
                              :swim? (and (boolean (some #(= "drowned" (.-name %)) hostiles)) (in-water? c))
                              :home? home?})]
     (loop [[option & more] order]
@@ -816,6 +830,7 @@
       (and inside? (home-door c room)) (await (shut-home-door! c (home-door c room)))
       inside? (await (stuck "at home, the hostile still has a way in"))
       way (await (run-home! c room way))
+      (not (outrun? c (near-hostiles c))) (await (cornered! c "the hostile outruns the body" inside?))
       :else
       (let [_ (await (eat-on-the-run! c threat))
             away? (fn [cell] (when (and cell (not (walk/too-close? (mapv #(danger-q/mob-pos p %) threats) cell))) cell))
