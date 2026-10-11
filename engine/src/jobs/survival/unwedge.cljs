@@ -8,8 +8,7 @@
             [jobs.lib.tidy :as tidy]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
-            [jobs.lib.breath :as breath]
-            [jobs.survival.breathe :as breathe]))
+            [jobs.lib.breath :as breath]))
 
 (def doc
   "Get out of a block that fills the feet cell (jobs.lib.breath), e.g. sand that fell on the body.
@@ -70,7 +69,7 @@
   "One try at the wedged cell: the side step once, else a dig. Resolves :again or :done (stopped)."
   [c cell]
   (let [p (:primitives c)
-        side (when-not (:side-tried (ctx/mem c)) (breathe/side-cell p (.self p)))]
+        side (when-not (:side-tried (ctx/mem c)) (breath/side-cell p (.self p)))]
     (if-not side
       (await (dig-feet! c cell))
       (do (ctx/update-mem! c assoc :side-tried true)

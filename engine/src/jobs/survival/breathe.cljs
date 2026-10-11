@@ -11,6 +11,7 @@
             [jobs.lib.ledger :as ledger]
             [jobs.lib.pace :as pace]
             [jobs.lib.result :as result]
+            [jobs.lib.shore :as shore]
             [jobs.lib.sense :as sense]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
@@ -122,11 +123,6 @@
 
 (defn status [r] (.-status r))
 
-(defn land-cell?
-  "A feet cell on land by what is seen (jobs.lib.land); an unloaded cell is not land."
-  [p cell]
-  (land/land-cell? #(u/seen-name p %) cell))
-
 (defn surface-pos
   "pos with y raised to the feet cell at the top of the own water column (breath/surface-in-column), so a body that has
   sunk a few blocks below the surface still finds a bank flush with it; pos itself when the column has no surface."
@@ -170,7 +166,7 @@
                 dy [0 -1 1 2]]
             {:x (+ fx dx) :y (+ fy dy) :z (+ fz dz)})
           (remove (set failed))
-          (filter #(and (land-cell? p %) (keep? p %)))
+          (filter #(and (shore/standable? p %) (keep? p %)))
           first))))
 
 (defn cap-beyond-dig?
@@ -224,30 +220,6 @@
                                                                 :range 0}))))))))
 
 (def falling "Blocks that fall when dug from below: they would drop into the water." #{"sand" "red_sand" "gravel" "suspicious_sand" "suspicious_gravel"})
-
-(def harmful-in-cell #{"lava" "fire" "soul_fire" "cactus" "sweet_berry_bush" "campfire" "soul_campfire" "magma_block"})
-
-(defn side-cell
-  "A horizontal neighbour of the feet cell where the body fits (feet and head
-  cells passable and not harmful: lava, fire, cactus...) and can stand (the cell below is neither air, water, a water
-  plant, a bubble column, lava nor magma); nil if none. Unloaded cells do not count."
-  [p self]
-  (let [fx (js/Math.floor (.. self -pos -x))
-        fy (js/Math.floor (.. self -pos -y))
-        fz (js/Math.floor (.. self -pos -z))
-        fits? (fn [cell]
-                (let [feet (breath/seen-water-name p cell)
-                      head (breath/seen-water-name p (update cell :y inc))
-                      below (breath/seen-water-name p (update cell :y dec))]
-                  (and feet head below
-                       (not (breath/suffocates? p cell)) (not (breath/suffocates? p (update cell :y inc)))
-                       (not (contains? harmful-in-cell feet)) (not (contains? harmful-in-cell head))
-                       (not (breath/air? below)) (not (contains? breath/swimmable below)) (not (contains? #{"lava" "magma_block"} below))
-                       (not-any? #{"bubble_column_down"} [feet head below]))))]
-    (->> [[1 0] [-1 0] [0 1] [0 -1]]
-         (map (fn [[dx dz]] {:x (+ fx dx) :y fy :z (+ fz dz)}))
-         (filter fits?)
-         first)))
 
 (defn ^:async dig-out!
   "Enclosed: dig the head block (and the one above if solid), step up. True
@@ -577,7 +549,7 @@
 
       :else
       (let [side (when (and (= :enclosed why) (not (:side-tried (ctx/mem c))))
-                   (side-cell p (.self p)))]
+                   (breath/side-cell p (.self p)))]
         (ctx/hold-still! c nil)
         (note! c why)
         (if side

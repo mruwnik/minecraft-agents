@@ -244,3 +244,27 @@
           (doseq [[dx dz] (rest (columns radius))]
               (await (look-column! c (+ fx dx) (+ fz dz) fy reach true)))
             (nearest-air p pos radius reach)))))
+
+(def harmful-in-cell #{"lava" "fire" "soul_fire" "cactus" "sweet_berry_bush" "campfire" "soul_campfire" "magma_block"})
+
+(defn side-cell
+  "A horizontal neighbour of the feet cell where the body fits (feet and head
+  cells passable and not harmful: lava, fire, cactus...) and can stand (the cell below is neither air, water, a water
+  plant, a bubble column, lava nor magma); nil if none. Unloaded cells do not count."
+  [p self]
+  (let [fx (js/Math.floor (.. self -pos -x))
+        fy (js/Math.floor (.. self -pos -y))
+        fz (js/Math.floor (.. self -pos -z))
+        fits? (fn [cell]
+                (let [feet (seen-water-name p cell)
+                      head (seen-water-name p (update cell :y inc))
+                      below (seen-water-name p (update cell :y dec))]
+                  (and feet head below
+                       (not (suffocates? p cell)) (not (suffocates? p (update cell :y inc)))
+                       (not (contains? harmful-in-cell feet)) (not (contains? harmful-in-cell head))
+                       (not (air? below)) (not (contains? swimmable below)) (not (contains? #{"lava" "magma_block"} below))
+                       (not-any? #{"bubble_column_down"} [feet head below]))))]
+    (->> [[1 0] [-1 0] [0 1] [0 -1]]
+         (map (fn [[dx dz]] {:x (+ fx dx) :y fy :z (+ fz dz)}))
+         (filter fits?)
+         first)))

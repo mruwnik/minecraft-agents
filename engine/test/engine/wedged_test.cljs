@@ -8,7 +8,7 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [triggers.survival.wedged :as wedged]
-            [jobs.survival.breathe :as breathe]
+            [jobs.lib.breath :as breath]
             [jobs.survival.unwedge :as uw]))
 
 (def unwedge 'jobs.survival.unwedge)
@@ -120,7 +120,7 @@
 (deftest a-fire-or-magma-side-cell-is-not-stepped-into
   (doseq [[label blocks] [["fire" {"1,64,0" "fire"}] ["magma floor" {"1,63,0" "magma_block"}]]]
     (let [p (tu/fake {:blocks (merge stone-sides-but-east {"0,64,0" "sand"} blocks)})]
-      (is (nil? (breathe/side-cell p (.self p))) label))))
+      (is (nil? (breath/side-cell p (.self p))) label))))
 
 (deftest a-dig-beside-lava-is-refused-and-counts-as-failure
   (async done

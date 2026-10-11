@@ -8,6 +8,7 @@
             [jobs.lib.ledger :as ledger]
             [jobs.lib.world-files :as world-files]
             [jobs.lib.breath :as breath]
+            [jobs.lib.shore :as shore]
             [jobs.survival.breathe :as b]
             [engine.fake :as fake]
             [engine.takeover :as takeover]
@@ -1197,12 +1198,12 @@
         self (.self p)
         cell {:x 1 :y 64 :z 0}
         shore {:x 1 :y 65 :z 0}]
-    (is (some? (b/side-cell p self)) "seen: a side cell")
-    (is (b/land-cell? p cell) "seen: land")
+    (is (some? (breath/side-cell p self)) "seen: a side cell")
+    (is (shore/standable? p cell) "seen: land")
     (is (some? (b/shore-cell? p shore)) "seen: shore")
     (stub-seen! p (constantly false))
-    (is (nil? (b/side-cell p self)) "unseen: no side cell")
-    (is (not (b/land-cell? p cell)) "unseen: no land")
+    (is (nil? (breath/side-cell p self)) "unseen: no side cell")
+    (is (not (shore/standable? p cell)) "unseen: no land")
     (is (not (b/shore-cell? p shore)) "unseen: no shore")))
 
 (defn neighbour-column
@@ -1279,13 +1280,13 @@
     (let [world {:blocks (merge {"0,65,0" "stone" "1,63,0" "stone"} (into {} (for [c cells] [c "bubble_column"])))
                  :states (into {} (for [c cells] [c {:drag drag?}]))}
           {:keys [p]} (setup (assoc world :self {:inWater true :oxygen 20 :pos {:x 0.5 :y 64 :z 0.5}}))]
-      (is (= expect? (some? (b/side-cell p (.self p)))) (str cells " drag " drag?)))))
+      (is (= expect? (some? (breath/side-cell p (.self p)))) (str cells " drag " drag?)))))
 
 (deftest side-cell-never-stands-on-an-upward-bubble-column-or-a-water-plant
   (doseq [below ["bubble_column" "kelp" "seagrass"]]
     (let [world {:blocks {"0,65,0" "stone" "1,63,0" below} :states {"1,63,0" {:drag false}}}
           {:keys [p]} (setup (assoc world :self {:inWater true :oxygen 20 :pos {:x 0.5 :y 64 :z 0.5}}))]
-      (is (nil? (b/side-cell p (.self p))) below))))
+      (is (nil? (breath/side-cell p (.self p))) below))))
 
 (deftest a-swim-is-progress-only-above-the-best-height-reached
   (is (b/rose? nil 64 65) "first rise")
