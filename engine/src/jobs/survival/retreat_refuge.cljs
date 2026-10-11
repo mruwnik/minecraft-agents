@@ -162,11 +162,15 @@
   {::pillar-height {:default 3 :doc "Height of the pillar built as a refuge, in blocks." :spec (a/int-in 0 nil)}
    ::pillar-extend {:default 2 :doc "Blocks a body hit on its pillar raises it by, once, before it gives the refuge up; 0: it gives up at once." :spec (a/int-in 0 nil)}
    ::leave-for-breakers {:default true :doc "Whether a hidden body leaves its refuge, before it is hit, for a creeper (its blast breaks any refuge) or, on a pillar, a spider (it climbs) within :breaker-reach." :spec boolean?}
+   ::foot-reach {:default 4 :doc "Blocks within which a melee hostile kept off a hidden body counts as waiting at its foot: the hide then outlasts :hide-s, up to ::hide-max-s, since the first step off the refuge would pass it." :spec (a/num-in 0 nil)}
+   ::hide-max-s {:default 300 :doc "Seconds after which a hidden body hands back though a melee hostile still waits at its foot." :spec (a/num-in 0 nil)}
    ::breaker-reach {:default 6 :doc "Blocks within which a creeper or a climber counts as breaching a hidden body's refuge." :spec (a/num-in 0 nil)}})
 (defn leave-for-breakers? [] (settings/get settings ::leave-for-breakers))
 (defn breaker-reach [] (settings/get settings ::breaker-reach))
 (defn pillar-height [] (settings/get settings ::pillar-height))
 (defn pillar-extend [] (settings/get settings ::pillar-extend))
+(defn foot-reach [] (settings/get settings ::foot-reach))
+(defn hide-max-s [] (settings/get settings ::hide-max-s))
 
 (defn pillar-item
   "The carried :blocks block with the most, when it is at least n (default pillar-height); else nil."
@@ -414,6 +418,13 @@
          (map #(str (.-name %) " at " (pr-str (mapv (fn [k] (js/Math.floor (k (danger-q/mob-pos p %)))) [:x :y :z]))))
          (str/join ", "))))
 
+(defn waiting-at-foot?
+  "Whether a known melee hostile stands within foot-reach of the body."
+  [c]
+  (let [p (:primitives c)
+        r (foot-reach)]
+    (boolean (some #(not (combat/ranged? %)) (flight/near-known p (set (flight/dead-ids c)) r r)))))
+
 (def reach-radius
   "Blocks within which a hostile counts as the one that hurt a hidden body."
   3)
@@ -451,7 +462,7 @@
 
 (defn ^:async hide-hold!
   "Sealed in, up the pillar or down the pit: hold (a :wait, why hiding) while the refuge keeps a danger off
-  (refuge-danger?) and :quiet-s after the last one, then end the flight :hidden. Past :hide-s in the refuge with no real
+  (refuge-danger?) and :quiet-s after the last one, then end the flight :hidden. Past :hide-s (while a melee hostile waits at the foot, ::hide-max-s) in the refuge with no real
   danger on the body as it stands (danger-q/danger-near?, the hostile-near trigger's test) it ends :hidden at once,
   saying which hostile it still keeps off (info retreat.hide-ended): the trigger fires again should one reach it.
   A body hurt while hidden (a mob reaching it round a corner of the seal) leaves the refuge as failed (abandon-refuge!)."
@@ -468,7 +479,9 @@
           breaker (breaker-of c refuge)
           _ (ctx/update-mem! c assoc :hold-health health)
           quiet? (>= (- (ctx/now c) quiet-from) (* 1000 quiet-s))
-          spent? (and (>= (- (ctx/now c) hidden-since) (* 1000 hide-s))
+          held-ms (- (ctx/now c) hidden-since)
+          spent? (and (>= held-ms (* 1000 hide-s))
+                      (or (>= held-ms (* 1000 (hide-max-s))) (not (waiting-at-foot? c)))
                       (not (danger-q/danger-near? (:primitives c) radius ranged-radius)))]
       (cond
         hurt? (let [ids (map (fn [e] (.-id e)) (flight/near-known (:primitives c) #{} reach-radius reach-radius))]

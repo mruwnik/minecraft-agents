@@ -279,7 +279,7 @@
           (let [{:keys [seen listed]}
                 (await (hide-steps spec {:blocks long-dead-end :inventory [{:name "cobblestone" :count 20}]
                                          :entities [(zombie-at 4)]}
-                                   [[[(zombie-at 4)] 61000]]))]
+                                   [[[(zombie-at 9)] 61000]]))]
             (is (= listed-want listed)
                 (str spec ": Juniper j655 hid a minute from a skeleton that never left; sealed and in no real danger, it hands back"))
             (is (= ended-want (mapv :ended (filterv #(= :retreat.hide-ended (:kind %)) @seen)))
@@ -540,6 +540,17 @@
                                                    1000 (constantly nil)))]
           (is (= [] (:list (core/state eng))))
           (is (zero? (count (calls p "attack")))))))))
+
+(deftest a-pillared-body-keeps-hiding-past-hide-s-while-a-melee-mob-waits-at-its-foot
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [seen listed]}
+              (await (hide-steps retreat {:blocks doorway :inventory [{:name "cobblestone" :count 20}]
+                                          :entities [(zombie 0 64 1)]}
+                                 [[[(zombie 0 64 1)] 61000] [[(zombie 0 64 1)] 400000]]))]
+          (is (= [["j1"] []] listed) "held at 61 s with the zombie at the foot, handed back past :hide-max-s")
+          (is (= 1 (count (filterv #(= :retreat.hide-ended (:kind %)) @seen)))))))))
 
 (deftest hitbox-cells-are-every-cell-a-mob-overlaps
   (is (= #{[0 64 0] [1 64 0] [0 65 0] [1 65 0]} (set (map (juxt :x :y :z) (seal/hitbox-cells {:x 0.8 :y 64 :z 0.5})))))
