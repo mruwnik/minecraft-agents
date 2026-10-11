@@ -1053,8 +1053,8 @@
                           (await (glance! c [(headings heading)]))
                           :again)
                       (not= :clear (after-cut name-at cut)) (await (recut! c next))
-                      (and (:stay-level (:args c)) (seq (stay/breaches name-at from cut (stay/own-cells c))))
-                      (let [own (stay/own-cells c)
+                      (and (:stay-level (:args c)) (seq (stay/breaches name-at from cut (ledger/own-cells c))))
+                      (let [own (ledger/own-cells c)
                             open (stay/breaches name-at from cut own)
                             b (stay/behind name-at from cut own open)]
                         (stay/remember-behind! c (access/cell (first open)) b)

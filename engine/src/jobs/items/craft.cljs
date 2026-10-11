@@ -8,6 +8,7 @@
             [jobs.lib.escape :as escape]
             [jobs.lib.tools :as tools]
             [jobs.lib.fetch :as fetch]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.lib.look :as look]
@@ -26,7 +27,9 @@
   An ingredient that runs out is fetched (jobs.lib.fetch: a jobs.items.obtain child for each missing item) and the
   craft goes on (a further fetch for each batch while the last one led to more made), unless :fetch is false or the fetch failed: then it stops with :short and a :text. With no table in reach a
   carried one is put down beside the body, else one is fetched (a crafting_table obtain child) and put down, the same
-  way; :fetch false or a failed fetch stops with :reason \"no-table\".")
+  way; :fetch false or a failed fetch stops with :reason \"no-table\".
+  A table this call put down is dug up again when it ends (stopped short too), unless :keep-table, it stands in an area of the body's own or a zone refuses
+  the dig. No table is put in a cell of a stair or tunnel the body cut (memory :stair-way, :tunnel-way).")
 
 (a/defargs args
   {:item {:doc "item name to craft" :spec a/item? :default nil}
@@ -35,6 +38,7 @@
    :radius {:doc "how far to look for a crafting table" :spec (a/num-in 0 nil) :default 32}
    :far {:doc "how far a seen crafting table is walked to when none is within :radius (the seen memory reaches 64)" :spec (a/num-in 0 64) :default 64}
    :fetch {:doc "get an ingredient that runs out (jobs.lib.fetch): true, a set of kinds or a map of limits; false stops :short" :spec fetch/option? :default true}
+   :keep-table {:doc "leave a table this call put down standing; false: it is dug up again when the call ends" :spec boolean? :default false}
    :avoid {:doc "cells [x y z] a table is never put in or dug for: the dig line of a job that crafts as its child" :spec (a/coll-of a/position?) :default nil}})
 
 (defn check
@@ -77,12 +81,12 @@
 (defn solid? [n] (and n (not (b/air n)) (not (b/fluids n)) (not (b/clearable n))))
 
 (defn spot-cells
-  "The candidate table cells beside the body, outside its box (the server refuses a place the body touches) and not in :avoid: [pos floor-pos] for each offset at its level, then (a 1-wide stair has
+  "The candidate table cells beside the body, outside its box (the server refuses a place the body touches), not in :avoid and not in a stair or tunnel this body cut (its way out): [pos floor-pos] for each offset at its level, then (a 1-wide stair has
   no free cell at its level) each one level up. dig-spot-cells keeps to the level ones."
   [c]
   (let [{:keys [x y z]} (u/self-pos c)
         cols (access/body-columns x z)
-        avoid (into #{} (map (comp (juxt :x :y :z) a/cell)) (:avoid (:args c)))
+        avoid (into (ledger/own-cells c) (map (comp (juxt :x :y :z) a/cell)) (:avoid (:args c)))
         [x y z] (mapv #(js/Math.floor %) [x y z])]
     (for [dy [0 1]
           [dx dz] table-offsets
@@ -190,7 +194,7 @@
           :continue
           (do (ctx/update-mem! c dissoc :table-spot)
               (when (and (= :done r) (:placed (ctx/child-result c :place)))
-                (ctx/update-mem! c #(-> % (assoc :table spot) (dissoc :want-table)))
+                (ctx/update-mem! c #(-> % (assoc :table spot :table-placed spot) (dissoc :want-table)))
                 (spent/note! c "crafting_table" spot)
                 :again))))))))
 
@@ -347,6 +351,23 @@
                      (finish! c made {:reason (.-reason r)}))
         (give-up! c made status)))))
 
+(defn ^:async pick-up!
+  "Dig up the table this call put down, once, unless :keep-table, a zone or claim refuses the dig or it stands in an area of this body's own
+  (a home): jobs.blocks.dig child, :continue while it waits, else :done."
+  [c]
+  (let [spot (:table-placed (ctx/mem c))
+        cell spot]
+    (if (or (nil? spot) (:keep-table (:args c)) (:picked-up (ctx/mem c))
+            (not= "crafting_table" (u/seen-name (:primitives c) cell))
+            (access/in-own-area? c cell)
+            (not (:ok (access/may? c :dig cell))))
+      :done
+      (let [r (await (ctx/call-child c :pickup 'jobs.blocks.dig {:pos spot :collect true :need-drop false :fetch false :on-fluid :fail}))]
+        (if (= :continue r)
+          :continue
+          (do (ctx/update-mem! c assoc :picked-up true)
+              :done))))))
+
 (defn ^:async step!
   "Stop when the target is carried, else craft the rest and act on the status: :again, :continue (go-to waits) or :done.
   A table known to be out of reach is walked to first: the craft act would only fail again while the walk waits."
@@ -358,6 +379,8 @@
       (await (settle! c (await (craft-act! c)))))))
 
 (defn ^:async round
-  "The whole craft in one call: step! until it is done or stopped."
+  "The whole craft in one call: step! until it is done or stopped, then pick-up!."
   [c]
-  (await (pace/steps! c (fn ^:async craft-step [] (await (step! c))))))
+  (await (pace/steps! c (fn ^:async craft-step []
+                          (let [r (await (step! c))]
+                            (if (= :done r) (await (pick-up! c)) r))))))

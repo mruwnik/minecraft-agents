@@ -16,20 +16,6 @@
                                   :delta (vec delta) :steps steps}
                    tunnel-way-policy)))
 
-(defn own-cells
-  "The cells of the passages this body cut itself in its dimension: feet and head of each step of its stairs (memory :stair-way) and of its tunnels (:tunnel-way), as [x y z]."
-  [c]
-  (let [dim (.-dimension (.self (:primitives c)))
-        here? #(= dim (:dim (:data %)))
-        stairs (for [e (ctx/entries c :stair-way) :when (here? e)
-                     [x y z] (:floors (:data e)) dy [1 2]]
-                 [x (+ y dy) z])
-        tunnels (for [e (ctx/entries c :tunnel-way) :when (here? e)
-                      :let [{[x y z] :origin [dx dz] :delta :keys [steps]} (:data e)]
-                      k (range (inc steps)) dy [0 1]]
-                  [(+ x (* k dx)) (+ y dy) (+ z (* k dz))])]
-    (set (concat stairs tunnels))))
-
 (defn beside-body?
   "Whether the target is one column or less from the body's feet cell, from one below it to one over the head (the cell under the feet itself never)."
   [body target]

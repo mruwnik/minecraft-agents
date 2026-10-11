@@ -203,6 +203,20 @@
                k (range (inc steps))]
            [(+ x (* k dx)) y (+ z (* k dz))]))))
 
+(defn own-cells
+  "The cells of the passages this body cut itself in its dimension: feet and head of each step of its stairs (memory :stair-way) and of its tunnels (:tunnel-way), as [x y z]."
+  [c]
+  (let [dim (.-dimension (.self (:primitives c)))
+        here? #(= dim (:dim (:data %)))
+        stairs (for [e (ctx/entries c :stair-way) :when (here? e)
+                     [x y z] (:floors (:data e)) dy [1 2]]
+                 [x (+ y dy) z])
+        tunnels (for [e (ctx/entries c :tunnel-way) :when (here? e)
+                      :let [{[x y z] :origin [dx dz] :delta :keys [steps]} (:data e)]
+                      k (range (inc steps)) dy [0 1]]
+                  [(+ x (* k dx)) (+ y dy) (+ z (* k dz))])]
+    (set (concat stairs tunnels))))
+
 (defn near-of-args
   "The :near the entries are narrowed to: the arg, else the body's position and :within, else (unowned entries, :job
   nil) the body's position and 32, so a saved trigger register whose job spec has no :within stays bounded, else nil."

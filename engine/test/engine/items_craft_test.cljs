@@ -7,6 +7,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.memory :as mem]
             [engine.test-util :as tu :refer [child-outcome]]
             [engine.triggers :as triggers]
             [jobs.items.craft :as craft]
@@ -94,7 +95,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p] (await (craft {:inventory [{:name "wheat" :count 3} {:name "oak_planks" :count 4}]} {:item "bread"}))]
+        (let [[result p] (await (craft {:inventory [{:name "wheat" :count 3} {:name "oak_planks" :count 4}]} {:item "bread" :keep-table true}))]
           (is (= 1 (:made result)))
           (is (= {"bread" 1} (inv p))))))))
 
@@ -340,7 +341,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory [{:name "wheat" :count 3} {:name "crafting_table" :count 1}]})
-              result (await (child-outcome eng job {:item "bread"} 40))]
+              result (await (child-outcome eng job {:item "bread" :keep-table true} 40))]
           (is (= {:made 1 :spent {"crafting_table" 1}} (select-keys result [:made :spent])))
           (is (re-find #"^used 1 crafting_table \(crafting table at \[" (:text result)))
           (is (= 1 (get (inv p) "bread")))
@@ -351,7 +352,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory [{:name "wheat" :count 3} {:name "crafting_table" :count 1}] :blocks table-block})
-              result (await (child-outcome eng job {:item "bread"} 40))]
+              result (await (child-outcome eng job {:item "bread" :keep-table true} 40))]
           (is (= 1 (get (inv p) "bread")))
           (is (nil? (get (inv p) "crafting_table")) "the carried table was put down")
           (is (= {"crafting_table" 1} (:spent result)))
@@ -408,7 +409,7 @@
               {:keys [eng p]} (setup {:inventory [{:name "wheat" :count 3} {:name "crafting_table" :count 1}] :blocks pocket})
               result (await (child-outcome eng job {:item "bread"} 40))]
           (is (= {:made 1 :spent {"crafting_table" 1}} (select-keys result [:made :spent])) (pr-str result))
-          (is (= 1 (count (calls p "dig"))) "one cell beside dug, bare-handed")
+          (is (= 2 (count (calls p "dig"))) "one cell beside dug bare-handed, then the table dug up")
           (is (= 1 (get (inv p) "bread"))))))))
 
 (deftest craft-in-a-pocket-skips-the-cells-beside-water-and-digs-the-next
@@ -485,3 +486,49 @@
                                          {:item "oak_fence_gate" :count n}))]
             (is (= n (get (inv p) "oak_fence_gate")) (str "gate x" n))
             (is (= {:made n} (select-keys result [:made])) (pr-str result))))))))
+
+(def own-stair-world
+  "A stair rising east from the body, cut into rock: floors (0 63) (1 64) (2 65), feet and head cells carved."
+  (merge (into {} (for [x (range -1 5) z [-1 0 1] y (range 63 69)] [(str x "," y "," z) "stone"]))
+         (into {} (for [[x y] [[0 64] [0 65] [1 65] [1 66] [2 66] [2 67]]] [(str x "," y ",0") "air"]))))
+
+(defn ^:async craft-in-own-stair [args]
+  (let [{:keys [eng p]} (setup {:inventory [{:name "wheat" :count 3} {:name "crafting_table" :count 1}] :blocks own-stair-world})]
+    (mem/write! (:store eng) :stair-way {:dim "overworld" :floors [[0 63 0] [1 64 0] [2 65 0]]})
+    (let [result (await (child-outcome eng job (merge {:item "bread"} args) 60))]
+      [result p])))
+
+(deftest craft-on-its-own-stair-never-puts-the-table-on-a-step
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (craft-in-own-stair {:keep-table true}))
+              way #{{:x 1 :y 65 :z 0} {:x 1 :y 66 :z 0} {:x 2 :y 66 :z 0} {:x 2 :y 67 :z 0}}]
+          (is (= 1 (:made result)) (pr-str result))
+          (is (= 1 (count (placed-at p))))
+          (is (not-any? way (placed-at p)) (pr-str (placed-at p))))))))
+
+(deftest craft-picks-its-table-up-again-when-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (craft {:inventory [{:name "wheat" :count 3} {:name "crafting_table" :count 1}]} {:item "bread"}))]
+          (is (= 1 (:made result)) (pr-str result))
+          (is (= 1 (count (calls p "dig"))) "the table was dug")
+          (is (= 1 (get (inv p) "crafting_table")) "and is carried again"))))))
+
+(deftest craft-with-keep-table-leaves-it-standing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[_ p] (await (craft {:inventory [{:name "wheat" :count 3} {:name "crafting_table" :count 1}]} {:item "bread" :keep-table true}))]
+          (is (empty? (calls p "dig")))
+          (is (nil? (get (inv p) "crafting_table"))))))))
+
+(deftest craft-that-stops-short-still-picks-its-table-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (craft {:inventory [{:name "crafting_table" :count 1}]} {:item "bread" :fetch false}))]
+          (is (some? (:reason result)) (pr-str result))
+          (is (= 1 (get (inv p) "crafting_table"))))))))
