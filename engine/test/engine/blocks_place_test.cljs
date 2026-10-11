@@ -4,7 +4,7 @@
             [engine.blocks-dig-test :as bd]
             [engine.fake :as fake]
             [engine.memory :as mem]
-            [engine.test-util :as tu]
+            [engine.test-util :as tu :refer [box]]
             [jobs.blocks.place :as place]
             [plan.shape :as shape]))
 
@@ -239,3 +239,41 @@
   (is (true? (place/boats? ["oak_boat" "bamboo_raft"])))
   (is (false? (place/boats? [])) "no items: the support check stays")
   (is (false? (place/boats? ["oak_boat" "dirt"]))))
+
+;; ------------------------------------------------------------------ a pen holding animals
+
+(def pen-blocks
+  "A fence pen x 5..13, z -4..4 with a gate in each end wall, for a body that stands at x 0."
+  (-> (merge (box 5 63 -4 13 63 4 "stone") (box 5 64 -4 13 64 -4 "oak_fence") (box 5 64 4 13 64 4 "oak_fence")
+             (box 5 64 -4 5 64 4 "oak_fence") (box 13 64 -4 13 64 4 "oak_fence"))
+      (assoc "5,64,0" "oak_fence_gate" "13,64,0" "oak_fence_gate")))
+
+(defn pen-env []
+  (bd/setup {:self body :blocks pen-blocks :inventory [{:name "dirt" :count 4}]
+             :states {"5,64,0" {:open false :facing "east"} "13,64,0" {:open false :facing "east"}}
+             :entities [{:id 7 :name "cow" :kind "passive" :pos {:x 8.5 :y 64 :z 0.5}}
+                        {:id 8 :name "sheep" :kind "passive" :pos {:x 10.5 :y 64 :z 1.5}}]}))
+
+(defn gate-clicks [p] (count (filterv #(= "useOn" (.-name %)) (.-calls (.-world p)))))
+
+(deftest a-place-beyond-a-pen-works-from-outside-without-using-its-gate
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (pen-env)
+              result (await (bd/child-outcome eng job {:pos [16 64 0] :item "dirt"} 40))]
+          (is (= true (:placed result)))
+          (is (zero? (gate-clicks p)) "the gates stay shut, the walk went round"))))))
+
+(deftest a-place-inside-a-pen-from-outside-declines-naming-the-pen-and-enter-pens-allows-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (pen-env)
+              declined (await (bd/child-outcome eng job {:pos [9 64 0] :item "dirt"} 40))]
+          (is (not= true (:placed declined)))
+          (is (zero? (gate-clicks p)))
+          (is (some #(and (= :blocks.pen-kept-out (:kind %)) (re-find #"\[5 64 0\]" (:text %))) @seen)))
+        (let [{:keys [eng]} (pen-env)
+              allowed (await (bd/child-outcome eng job {:pos [9 64 0] :item "dirt" :enter-pens true} 40))]
+          (is (= true (:placed allowed))))))))

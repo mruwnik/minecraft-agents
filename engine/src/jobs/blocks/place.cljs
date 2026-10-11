@@ -50,6 +50,7 @@
    :any-of {:doc "block items, the first carried one is placed (instead of :item)" :spec (a/coll-of a/item?) :default nil}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :spec a/name? :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
+   :enter-pens {:doc "true: the walk to the cell may go through the gate of a pen holding animals; false: it keeps out of those gates and, with no other way, declines (a :blocks.pen-kept-out warn names the pen)" :spec boolean? :default false}
    :clear {:doc "dig a plant, flower or snow layer out of the cell first; false places into what a placement overwrites" :spec boolean? :default true}
    :click {:doc "how to place it ({:against [x y z] :cursor [x y z] :yaw :pitch :sneak}, jobs.lib.placement/click); nil: plainly" :spec map? :default nil}
    :fetch {:doc "get the missing block item instead of waiting :need (jobs.lib.fetch): true, a set of kinds or a map of limits" :spec fetch/option? :default true}})
@@ -77,7 +78,7 @@
 (defn clear-args
   "The jobs.blocks.dig args for clearing the plant at pos."
   [c pos]
-  (merge (select-keys (:args c) [:for-plan :ignore-zones?])
+  (merge (select-keys (:args c) [:for-plan :ignore-zones? :enter-pens])
          {:pos pos :collect false :need-drop false :accept #{:fluid-adjacent :falling-block}}))
 
 (defn clears?

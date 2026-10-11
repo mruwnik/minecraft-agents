@@ -174,6 +174,7 @@
    :gait {:doc "how the body walks: :auto (sprints on long straight runs and over gaps, as the walker does), :walk (never sprints: no gap jump over 2 or more), :sneak (slow, never sprints; holds sneak on level steps so it never walks off an edge, lets go for a planned drop, gap, climb or water); nil: the body's :walk-settings :gait, else :auto" :spec #{:auto :walk :sneak} :default nil}
    :goal-danger {:doc "when the goal lies within the full-cost radius of a known mob the body would flee: :wait (walk on; an info goal-in-danger says so once), :end (give up at once, :why :goal-dangerous with the mob)" :spec #{:wait :end "wait" "end"} :default :wait}
    :clear-seal {:doc "false: never start a jobs.access.cleanup child for ledger blocks around an unreachable goal (cleanup's own walks, which would nest cleanup in go-to in cleanup without end)" :spec boolean? :default true}
+   :keep-out {:doc "cells the walk treats as solid, [{:x :y :z}]: no way through them is planned (jobs.lib.pen-entry gives a block job the gates of pens holding animals)" :spec (a/valid-by "a list of {:x :y :z} of whole numbers" (fn [cells] (when-not (and (sequential? cells) (every? #(and (map? %) (every? integer? (map % [:x :y :z]))) cells)) "keep-out is a list of {:x :y :z} of whole numbers"))) :default nil}
    :zone-tolls {:doc "true: also toll the cells of other bodies' zones near each walk (jobs.lib.toll-cells/zone-walk-tolls), none with :ignore-zones?; for a job that respects zones" :spec boolean? :default false}
    :leg-s {:doc "walk one leg of at most this many seconds (0.1 to 120), then end {:arrived false :leg true} so the caller can re-aim at a moving target (a search that goes on past them ends :no-path :leg-search-spent); nil: the whole way" :spec (a/num-in 0.1 120) :default nil}
    :leg-alert-within {:doc "with :leg-alert-s: blocks within which a hostile that attacks at close range (not a ranged mob or an enderman; a creeper counts), or a loss of health since the call began, shortens a leg's search to :leg-alert-s seconds from its start" :spec (a/num-in 0 nil) :default nil}
@@ -574,6 +575,7 @@
      :avoid (set (:fault-cells (ctx/mem c)))
      :tolls (:tolls (:args c))
      :zone-tolls (:zone-tolls (:args c))
+     :keep-out (:keep-out (:args c))
      :drop-cost (:drop-cost (:args c))
      :costs (:costs (:args c))
      :unknown (round-unknown c)}))

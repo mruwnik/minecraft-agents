@@ -4,12 +4,14 @@
   the parent waits too) from one about the cell (the parent skips that cell)."
   (:require ["minecraft-data" :as minecraft-data]
             [clojure.set :as set]
+            [clojure.string :as str]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.aim :as aim]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.access :as access]
             [jobs.lib.game-facts :as facts]
+            [jobs.lib.pen-entry :as pen-entry]
             [jobs.lib.dig-look :as look]
             [jobs.lib.trees :as forestry]
             [jobs.lib.util :as u]
@@ -182,21 +184,32 @@
   [c why]
   (ctx/update-mem! c assoc :unreachable {:from (feet-cell c) :why why}))
 
+(defn kept-out-text [pens]
+  (str "the walk failed while keeping out of the gate of a pen holding animals: "
+       (str/join "; " (map (fn [{:keys [gates animals]}] (str animals " animals, gate " (str/join " " (map (fn [{:keys [x y z]}] [x y z]) gates)))) pens))
+       "; :enter-pens true allows the walk through"))
+
 (defn ^:async walk!
   "The walk to pos: one go-to call (child :walk, range 3), the whole walk. Resolves to :arrived (in reach), :continue
   (go-to waits on the world), {:held reason} (it waits, and the caller asked to hear what on: held?) or {:unreachable why}
   (it gave up, or arrived with the block still out of reach). With see? the walk ends only where the eye sees the block
-  (go-to :see). at-night is go-to's :at-night."
+  (go-to :see). at-night is go-to's :at-night. Unless the job's :enter-pens, the walk keeps out of the gates of pens
+  holding animals (jobs.lib.pen-entry); one that fails then warns :blocks.pen-kept-out naming them."
   [c pos & [see? held? at-night]]
-  (let [[r held] (await (child/call-walk-reason c :walk (cond-> {:pos pos :range 3 :see (boolean see?) :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}
-                                                          at-night (assoc :at-night at-night))))
+  (let [pens (when-not (:enter-pens (:args c)) (pen-entry/pens c))
+        keep-out (vec (mapcat :gates pens))
+        [r held] (await (child/call-walk-reason c :walk (cond-> {:pos pos :range 3 :see (boolean see?) :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}
+                                                          at-night (assoc :at-night at-night)
+                                                          (seq keep-out) (assoc :keep-out keep-out))))
         res (ctx/child-result c :walk)]
     (cond
       (= :continue r) (if (and held? held) {:held held} :continue)
       (and (= :done r) (:arrived res) (in-reach? c pos see?)) :arrived
-      :else {:unreachable (cond (not= :done r) :declined
-                                (:arrived res) :out-of-reach
-                                :else (:why res :unreachable))})))
+      :else (do (when (seq pens)
+                  (ctx/emit! c :blocks.pen-kept-out :warn {:pens pens :text (kept-out-text pens)}))
+                {:unreachable (cond (not= :done r) :declined
+                                    (:arrived res) :out-of-reach
+                                    :else (:why res :unreachable))}))))
 
 ;; ------------------------------------------------------------------ for parents
 
