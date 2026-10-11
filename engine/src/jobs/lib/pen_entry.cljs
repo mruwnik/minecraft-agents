@@ -42,16 +42,29 @@
                        found)))))
         (mapv #(dissoc % :inside) found)))))
 
+(defn open-gate-near?
+  "Whether a seen fence gate stands open within ::open-radius of here: the cheap test before any pen is searched."
+  [c here]
+  (let [block-at (apiary/seen-block-at-fn (:primitives c))
+        r (settings/get settings ::open-radius)
+        [x y z] (map #(js/Math.floor (% here)) [:x :y :z])]
+    (boolean (some (fn [[dx dy dz]]
+                     (let [b (block-at {:x (+ x dx) :y (+ y dy) :z (+ z dz)})]
+                       (and (pen/gate? b) (pen/on? b "open"))))
+                   (for [dx (range (- r) (inc r)) dz (range (- r) (inc r)) dy [0 1 -1 2]] [dx dy dz])))))
+
 (defn warn-left-open!
   "Warn (once a call) when the walk to goal {:x :y :z} leads away from a pen with animals in it whose gate stands open
-  within ::open-radius of the body: the pen empties in about a minute."
-  [c goal]
-  (when (every? number? (map goal [:x :y :z]))
-    (let [here (u/self-pos c)
-          gates (->> (pens c) (mapcat :open)
-                     (filter #(and (<= (u/dist here %) (settings/get settings ::open-radius))
-                                   (>= (u/dist % goal) (settings/get settings ::leave-dist))))
-                     vec)]
-      (when (seq gates)
-        (ctx/warn-once! c :pen-gate-open :go-to.pen-gate-open
-                        {:gates gates :text (str "walking away from a pen with animals in it whose gate stands open: " (str/join " " (map (fn [{:keys [x y z]}] [x y z]) gates)))})))))
+  within ::open-radius of the body: the pen empties in about a minute. Not for a :leave-open walk (doors), which leaves
+  gates open on purpose."
+  [c goal doors]
+  (when (and (not= :leave-open doors) (every? number? (map goal [:x :y :z])))
+    (let [here (u/self-pos c)]
+      (when (open-gate-near? c here)
+        (let [gates (->> (pens c) (mapcat :open)
+                         (filter #(and (<= (u/dist here %) (settings/get settings ::open-radius))
+                                       (>= (u/dist % goal) (settings/get settings ::leave-dist))))
+                         vec)]
+          (when (seq gates)
+            (ctx/warn-once! c :pen-gate-open :go-to.pen-gate-open
+                            {:gates gates :text (str "walking away from a pen with animals in it whose gate stands open: " (str/join " " (map (fn [{:keys [x y z]}] [x y z]) gates)))})))))))

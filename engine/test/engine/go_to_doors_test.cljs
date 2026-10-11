@@ -10,6 +10,7 @@
             [engine.test-util :as tu :refer [box floor]]
             [engine.triggers :as triggers]
             [jobs.lib.ledger :as ledger]
+            [jobs.lib.pen :as pen]
             [jobs.lib.world-files :as world]
             [jobs.movement.go-to :as go-to]))
 
@@ -665,3 +666,22 @@
           (is (re-find #"\[5 64 0\]" (str (:text (first (events-of far :go-to.pen-gate-open))))))
           (is (empty? (events-of near :go-to.pen-gate-open)) "the goal is by the gate")
           (is (empty? (events-of shut :go-to.pen-gate-open)) "a shut gate"))))))
+
+(deftest a-leave-open-walk-away-from-an-open-pen-gate-does-not-warn
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [r (await (go! (pen-world true 3) {:pos [20 64 -3] :range 0 :doors :leave-open}))]
+          (is (empty? (events-of r :go-to.pen-gate-open))))))))
+
+(deftest pens-are-checked-only-when-an-open-gate-is-near-the-start
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [checks (atom 0)
+              check pen/check]
+          (with-redefs [pen/check (fn [o] (swap! checks inc) (check o))]
+            (await (go! (pen-world false 3) {:pos [20 64 -3] :range 0}))
+            (is (zero? @checks) "a shut gate: no pen check")
+            (await (go! (pen-world true 3) {:pos [20 64 -3] :range 0}))
+            (is (pos? @checks) "an open gate near the start")))))))
