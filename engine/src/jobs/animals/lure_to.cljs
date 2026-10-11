@@ -31,7 +31,8 @@
   the food is checked in hand and held again if not (a cut, another job's equip); none left ends :no-food.
 
   Ends with info lure-to.done and a warn lure-to.gave-up unless the reason is :arrived. Result {:reason :animal key
-  :near bool (the animal is within 6 blocks of :pos) :at pos}. Reasons:
+  :near bool (the animal is within 6 blocks of :pos) :at pos (the body) :animal-at pos (the animal, nil unseen) :in-box bool (with :box)
+  :lost / :stalled detail for those reasons}. Reasons:
   - :arrived: the body stands within :range of :pos and the animal is seen in :box (none: within 6 blocks of :pos) and not in the cell of a planned gate, else the
     body holds still for it up to 10 s and the end is :animal-outside (seen elsewhere) or :lost (not seen). The food is then put away (another carried item in hand when no slot is free); :near says whether the animal is by the spot.
   - :animal-outside: the body is at :pos but the animal is not in the destination; the result gives :distance (animal to :pos).
@@ -119,14 +120,17 @@
         a (escort/animal-now c)
         ok? (= :arrived reason)
         result {:reason reason :animal (:animal m) :at (u/self-pos c)
+                :animal-at (some-> a .-pos u/pos-of)
+                :in-box (when-let [box (:box (:args c))] (boolean (and a (animals/in-box? box (u/pos-of (.-pos a))))))
                 :distance (some-> a .-pos u/pos-of (u/flat-dist (:pos (:args c))))
                 :near (boolean (and a (<= (u/flat-dist (u/pos-of (.-pos a)) (:pos (:args c))) near-spot)))}]
-    (ctx/emit! c :lure-to.done :info (cond-> (assoc result :text (str "lure-to done: " (name reason)))
-                                       (= :lost reason) (assoc :lost (lost-detail c))
-                                       (= :animal-stalled reason) (assoc :stalled (stalled-detail c))))
-    (when-not ok?
-      (ctx/emit! c :lure-to.gave-up :warn {:reason reason :text (stop-text c reason)}))
-    (ctx/result! c (cond-> result (not ok?) (assoc :status :stopped :text (stop-text c reason))))
+    (let [result (cond-> result
+                   (= :lost reason) (assoc :lost (lost-detail c))
+                   (= :animal-stalled reason) (assoc :stalled (stalled-detail c)))]
+      (ctx/emit! c :lure-to.done :info (assoc result :text (str "lure-to done: " (name reason))))
+      (when-not ok?
+        (ctx/emit! c :lure-to.gave-up :warn {:reason reason :text (stop-text c reason)}))
+      (ctx/result! c (cond-> result (not ok?) (assoc :status :stopped :text (stop-text c reason)))))
     :done))
 
 (defn finish! [c reason]

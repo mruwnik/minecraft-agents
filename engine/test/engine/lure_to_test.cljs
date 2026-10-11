@@ -40,6 +40,8 @@
           (is (= :arrived (:reason (done-event s))))
           (is (= "u1" (:animal (done-event s))))
           (is (<= (js/Math.abs (- 30 (first (:pos c)))) 5) "the cow stands near the spot")
+          (is (<= (js/Math.abs (- 30 (:x (:animal-at (done-event s))))) 5) "the result says where the animal stands")
+          (is (true? (:near (done-event s))))
           (is (= 4 (count-of s "wheat")) "no food is used")
           (is (nil? (.-held (.self (:p s)))) "the food is put away at the end"))))))
 
@@ -192,6 +194,7 @@
           (let [lost (:lost (done-event s))]
             (is (= "u1" (:tracked lost)))
             (is (some? (:last-seen lost)))
+            (is (some? (:last-seen (:lost (first (stopped s))))) "the stopped result carries the last sighting")
             (is (number? (:last-seen-dist lost)))
             (is (nil? (:nearest lost)))))))))
 
