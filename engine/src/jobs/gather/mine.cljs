@@ -1281,6 +1281,7 @@
                      r (when from (await (child/call-walk c :shaft-branch {:pos from :range 0 :zone-tolls true})))]
                  (cond
                    (= :continue r) :continue
+                   (and from (not (u/within? (u/self-pos c) (cell-of (xyz from)) 1))) (shaft-none! c :unreachable)
                    :else (do (ctx/update-mem! c #(cond-> (assoc-in % [:shaft :state] :used)
                                                    heading (assoc :heading (name heading))))
                              (ctx/emit! c :mine.shaft :info {:shaft id :to-y to-y :branch (:n sh) :heading heading

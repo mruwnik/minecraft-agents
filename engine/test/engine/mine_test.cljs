@@ -1172,6 +1172,21 @@
           (is (= [[7 60 0] "north"] [(:origin (:tunnel e)) (:heading (:tunnel e))]))
           (is (re-find #"branch 2 north" (:text e))))))))
 
+(deftest a-walk-that-misses-the-next-branch-start-digs-no-branch-from-the-wrong-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (shafted via-shaft (assoc ore-east "7,60,-4" "iron_ore") [] 400))
+              _ (doseq [y [60 61]] (fake/set-block! (:p s) [7 y 0] "bedrock"))
+              _ (core/submit! (:eng s) (spec via-shaft) {})
+              _ (await (run-ticks s 400))
+              [no] (events-of s :mine.no-shaft)
+              second-done (second (events-of s :mine.done))]
+          (is (= {:shaft "s" :reason :unreachable} (select-keys no [:shaft :reason])))
+          (is (not= [4 60 0] (:origin (:tunnel second-done))) "no tunnel dug from the stair bottom as if it were the branch start")
+          (is (not (re-find #"branch 2" (str (:text second-done)))))
+          (is (= 1 (get-in (last (mem/entries (mem/view (:store (:eng s))) :mine/shafts)) [:data "s" :n])) "the branch that was not dug is not recorded"))))))
+
 (deftest a-shaft-whose-stair-stopped-is-named-and-not-tried-again-by-the-next-run
   (async done
     (tu/run-async done
