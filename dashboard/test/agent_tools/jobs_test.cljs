@@ -341,7 +341,7 @@
           (.then (fn [{:keys [code out seen]}]
                    (is (= 1 code))
                    (is (= {:ok false :reason :bad-spec} (data/read-edn out)))
-                   (is (= ["GET" "POST"] (mapv :method seen)) "no event reads")))
+                   (is (= ["GET" "GET" "POST"] (mapv :method seen)) "the job list, the snapshot, the post; no event reads")))
           (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
 
 (defn manual-engine [manual]
@@ -413,3 +413,56 @@
         m (:message (jobs/failure-for {:mutating true :request {:request-id "abc-1"}} e))]
     (is (re-find #"--request-id abc-1" m) m)
     (is (re-find #"same command" m) m)))
+
+(defn listing-engine [items]
+  (fn [{:keys [method path]}]
+    {:text (cond (= "/snapshot" path) "{:generation-id \"generation\"}"
+                 (and (= "GET" method) (str/starts-with? path "/jobs?")) (str "{:total " (count items) " :items " (pr-str items) "}")
+                 :else "{:ok true :job {:id \"j9\" :status :queued}}")}))
+
+(def mine-spec "(jobs.gather.mine {:target \"iron_ore\"})")
+
+(defn posted? [{:keys [seen]}] (boolean (some #(= "POST" (:method %)) seen)))
+
+(deftest a-submit-clashing-with-a-live-job-of-the-same-name-is-held-back
+  (let [state (state-dir)]
+    (async done
+      (-> (js/Promise.resolve nil)
+          (.then (fn [_] (run-main! state ["submit" mine-spec] (listing-engine [{:id "j1442" :name "jobs.gather.mine" :status :running}]))))
+          (.then (fn [{:keys [code out] :as result}]
+                   (let [answer (data/read-edn out)]
+                     (is (= 1 code) out)
+                     (is (false? (posted? result)) "nothing was submitted")
+                     (is (= :job-clash (:reason answer)) out)
+                     (is (= [{:id "j1442" :name "jobs.gather.mine" :status :running}] (:clashes answer)) out)
+                     (is (re-find #"--alongside" (str (:hint answer))) out)
+                     (is (re-find #"cancel j1442" (str (:hint answer))) out))))
+          (.then (fn [_] (run-main! state ["submit" mine-spec] (listing-engine [{:id "j7" :name "jobs.gather.mine" :status :queued}]))))
+          (.then (fn [{:keys [out]}] (is (= :job-clash (:reason (data/read-edn out))) "a queued twin clashes too")))
+          (.then (fn [_] (run-main! state ["submit" mine-spec "--now" "--wait"] (listing-engine [{:id "j7" :name "jobs.gather.mine" :status :resuming}]))))
+          (.then (fn [{:keys [out]}] (is (= :job-clash (:reason (data/read-edn out))) "--now and --wait do not skip the guard")))
+          (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
+
+(deftest alongside-or-a-different-or-standing-job-goes-through
+  (let [state (state-dir)
+        twin {:id "j1" :name "jobs.gather.mine" :status :running}]
+    (async done
+      (-> (js/Promise.resolve nil)
+          (.then (fn [_] (run-main! state ["submit" mine-spec "--alongside"] (listing-engine [twin]))))
+          (.then (fn [result] (is (posted? result) "--alongside overrides")))
+          (.then (fn [_] (run-main! state ["submit" "(jobs.gather.chop {})"] (listing-engine [twin]))))
+          (.then (fn [result] (is (posted? result) "another job name")))
+          (.then (fn [_] (run-main! state ["submit" mine-spec] (listing-engine [(assoc twin :survive-death? true :name "(repeat jobs.gather.mine)")]))))
+          (.then (fn [result] (is (posted? result) "a standing repeat of the name is not a twin")))
+          (.then (fn [_] (run-main! state ["submit" mine-spec] (listing-engine [(assoc twin :status :failed)]))))
+          (.then (fn [result] (is (posted? result) "a failed job is not live")))
+          (.then (fn [_] (run-main! state ["submit" "(repeat (jobs.gather.mine {}))"] (listing-engine [twin]))))
+          (.then (fn [result] (is (posted? result) "a standing submit is never held")))
+          (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
+
+(deftest --alongside-belongs-to-submit-and-usage-names-the-guard
+  (is (re-find #"--alongside requires submit" (str (:error (request "Bob" "--world" "w" "list" "--alongside")))))
+  (is (= "jobs.gather.mine" (:clash-name (request "Bob" "--world" "w" "submit" mine-spec))))
+  (is (nil? (:clash-name (request "Bob" "--world" "w" "submit" mine-spec "--alongside"))))
+  (is (re-find #"--alongside" jobs/usage))
+  (is (re-find #"same job name" jobs/usage)))

@@ -770,7 +770,7 @@ node engine/tools/observe.mjs Bob --world test inventory [--slots] | equipment
 node engine/tools/observe.mjs Bob --world test settings [--changed] [--raw] | settings reload | settings set :jobs.x/key <edn> | settings unset :jobs.x/key   # keys with layer and the game rate; dashboard popup has the same
 node engine/tools/entities.mjs Bob --world test [--type zombie --radius 32 --player Alex --limit 20]
 node engine/tools/jobs.mjs Bob --world test list | show j17 | cancel j17 | cancel-all | retry j17 | resolve <attention> --reason handled
-node engine/tools/jobs.mjs Bob --world test submit '(jobs.movement.go-to {:pos {:x 10 :y 64 :z 20}})' [--next|--now|--hold] [--wait --timeout 5m]
+node engine/tools/jobs.mjs Bob --world test submit '(jobs.movement.go-to {:pos {:x 10 :y 64 :z 20}})' [--next|--now|--hold] [--alongside] [--wait --timeout 5m]
 node engine/tools/triggers.mjs Bob --world test list | show hungry | upgrade [ids] | decline [ids] | add hungry --trigger hungry | mute hungry --for 10m | unmute | move X --before Y | reset X --property position | remove X
 node engine/tools/triggers.mjs Bob --world test put near-home --when '(< (inventory "bread") 8)' --job '(jobs.movement.look-around)' --persistence cooldown --cooldown-s 30
 node engine/tools/say.mjs Bob --world test [--to Steve] "message"       # chat, shares the engine's rate limits
@@ -787,6 +787,7 @@ Every workspace `bin/` call appends a `:start` and an `:end` line (tool, argv, o
   is at least once. `--chatter none|addressed|all`, `--danger` and `--disconnect` choose what wakes it. Only the first `reconnect-failed` of an
   outage wakes it (later tries are summarised). Status of an offline body adds `:back-in-s`. A `died` wake or summary item carries `:cancelled-jobs [{:id :name}]` (jobs the death cancelled, seen in the same call).
 - `jobs.mjs show jID` of a job the scheduler no longer holds answers from the event history, as `observe job` does.
+- `jobs.mjs submit` of a plain job call is held back (exit 1, `:reason :job-clash`, `:clashes`, `:hint`) while a job of the same name is running, queued or resuming on the body; `--alongside` overrides, a `(repeat ...)` or combinator spec is never held (tool only; the engine accepts both).
 - `jobs.mjs submit` appends to the list; `--next` lists after the current job without cutting; `--now` cuts the current
   listed job and runs the new one as a holder (a running reflex is not cut); `--hold` keeps the body while the check
   declines; `--survive-death` keeps the job listed through a death (it runs again after the respawn reflexes); a `(repeat ...)` spec gets it by default. `--wait` blocks until the job ends (or a wake) and prints the result and a bounded summary. Mutations carry a

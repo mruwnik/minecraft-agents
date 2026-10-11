@@ -14,7 +14,7 @@
 
 (defn usage-for [prefix]
   "Build the usage string with the given invocation prefix (e.g., 'jobs.mjs' or './bin/jobs')."
-  (str "usage: " prefix " <body> --world <world> list [--limit 8 --offset 0] | show <jID> | submit <EDN-spec> [--hold] [--survive-death] [--next | --now] [--wait [--timeout 60s]] | cancel <jID> | cancel-all | retry <jID> | resolve <request-id> --reason handled|condition-recovered [--worlds DIR --state LEGACY_PARENT]\n"
+  (str "usage: " prefix " <body> --world <world> list [--limit 8 --offset 0] | show <jID> | submit <EDN-spec> [--hold] [--survive-death] [--next | --now] [--alongside] [--wait [--timeout 60s]] | cancel <jID> | cancel-all | retry <jID> | resolve <request-id> --reason handled|condition-recovered [--worlds DIR --state LEGACY_PARENT]\n"
        "While manual control holds the body (drive.mjs take) only the driver's one job runs (world.mjs submit): others stay :queued and list/submit say who holds it; drive.mjs <body> release frees it.\n"
        "submit appends the job to the end of the list (jobs take turns). --hold makes the job hold the body: no other job gets a round until it ends or fails (reflexes still come first).\n"
        "A spec is a job name then its args map: submit '(jobs.movement.go-to {:pos {:x 1 :y 64 :z 2}})' or '(jobs.items.get-tool {:item \"stone_pickaxe\"})'. Find a job's args with observe.mjs <body> catalog job <name> (catalog jobs [prefix] lists names).\n"
@@ -22,6 +22,7 @@
        "  --next  list it directly after the current job: it gets the next round, nothing is cut\n"
        "  --now    cut the current job and run this one at once (it holds the body, as --hold does, until it ends); the cut job keeps its memory and\n"
        "           continues right after it ends. Reflexes still come first: --now queues behind a running reflex (night, hostile) and the answer's :hint names it. --now and --next cannot be combined (refused).\n"
+       "  --alongside  submit even when a job of the same name (same job name, running or queued on this body) exists: without it such a submit is held back and the answer names the clashing job; two of one job can undo each other's work. A (repeat ...) submit is never held\n"
        "  --wait   block until the job ends, or until anything that ends observe --wait (addressed chat, attention, an\n"
        "           engine restart, the --timeout), and print {:job .. :wait <the wake>}: the job's last events and a\n"
        "           bounded summary of what else happened meanwhile (reflexes fired, pickups, hurt, other jobs ended,\n"
@@ -51,13 +52,19 @@
   [text]
   (= 'repeat (first (spec-for text))))
 
+(defn clash-name
+  "The job name a submit would clash on: a plain job call's name; nil for a (repeat ...) or other combinator."
+  [text]
+  (let [head (str (first (spec-for text)))]
+    (when (str/starts-with? head "jobs.") head)))
+
 (defn request-for [argv]
   (try
     (let [{:keys [positionals values]} (map-tool/parse-options argv
           {:state {:type "string"} :worlds {:type "string"} :world {:type "string"}
            :request-id {:type "string"} :limit {:type "string"} :offset {:type "string"}
            :reason {:type "string"} :hold {:type "boolean"} :survive-death {:type "boolean"} :next {:type "boolean"} :now {:type "boolean"}
-           :wait {:type "boolean"} :timeout {:type "string"}})
+           :wait {:type "boolean"} :timeout {:type "string"} :alongside {:type "boolean"}})
           [body op arg & extra] positionals
           op (keyword (or op "list"))
           interrupt? (and (= op :submit) (true? (:now values)))
@@ -90,6 +97,8 @@
         (throw (js/Error. "--now requires submit")))
       (when (and (:now values) (:next values))
         (throw (js/Error. "--now and --next are exclusive: --now cuts the current job, --next waits for its round to end")))
+      (when (and (contains? values :alongside) (not= op :submit))
+        (throw (js/Error. "--alongside requires submit")))
       (when (and (contains? values :wait) (not= op :submit))
         (throw (js/Error. "--wait requires submit")))
       (when (and (:timeout values) (not (:wait values)))
@@ -104,7 +113,8 @@
             base (cond-> {:body body :world (:world values) :state state
                           :socketPath (.join path (bodies/worlds-dir state) (:world values) "agents" body "engine" "events.sock")
                           :mutating mutating?}
-                   (:wait values) (assoc :wait {:timeout (:timeout values)}))]
+                   (:wait values) (assoc :wait {:timeout (:timeout values)})
+                   (and spec-op? (not (:alongside values))) (assoc :clash-name (clash-name arg)))]
         (cond
           (= op :list)
           (let [limit (js/Number (or (:limit values) 8)) offset (js/Number (or (:offset values) 0))]
@@ -332,11 +342,39 @@
                                    (output (str (data/write-edn (with-hint r (wait-result answer id wake) (when (:follow (wait-result answer id wake)) manual))) "\n"))
                                    0))))))))))
 
+(defn clash-hint [body {:keys [id name status]}]
+  (str id " " name " is " (cljs.core/name status) " on this body; a second " name " can undo its work (two digs undercut each other). "
+       "Wait for it (observe.mjs " body " --wait --watch " id "), stop it (jobs.mjs " body " cancel " id "), or run both anyway: repeat this submit with --alongside."))
+
+(defn clashes-for
+  "A promise of the live jobs of the body that share the submit's job name (nil when none, or the list is unreadable)."
+  [r opts]
+  (if-not (:clash-name r)
+    (js/Promise.resolve nil)
+    (-> (get! (:socketPath r) "/jobs?limit=32&offset=0" opts)
+        (.then (fn [{:keys [status content-type text]}]
+                 (when (and (= 200 status) (http/edn-response? content-type))
+                   (->> (:items (data/read-edn text))
+                        (filter #(and (= (:clash-name r) (:name %)) (#{:running :queued :resuming} (:status %)) (not (:reflex %))))
+                        (map #(select-keys % [:id :name :status]))
+                        seq
+                        vec))))
+        (.catch (fn [_] nil)))))
+
+(defn run-submit! [r output opts]
+  (if (:wait r)
+    (submit-and-wait! r output opts)
+    (.then (exchange! r opts) (fn [response] (.then (manual-for r response opts) (fn [manual] (deliver! r output response (assoc opts :status manual))))))))
+
 (defn run-request!
   "Send the request map r (request-for's shape) and print the answer; a promise of the exit code."
   [r output {:keys [request-fn] :as opts}]
-  (-> (js/Promise.resolve nil)
-      (.then #(if (:wait r) (submit-and-wait! r output opts) (.then (exchange! r opts) (fn [response] (.then (manual-for r response opts) (fn [manual] (deliver! r output response (assoc opts :status manual))))))))
+  (-> (clashes-for r opts)
+      (.then (fn [clashes]
+               (if (seq clashes)
+                 (do (output (str (data/write-edn {:ok false :reason :job-clash :clashes clashes :hint (clash-hint (:body r) (first clashes))}) "\n"))
+                     1)
+                 (run-submit! r output opts))))
       (.catch (fn [error]
                 (output (str (data/write-edn (failure-for r error)) "\n"))
                 2))))
