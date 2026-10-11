@@ -10,7 +10,6 @@
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.child :as child]
-            [jobs.lib.game-facts :as facts]
             [jobs.lib.look :as look]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]))
@@ -42,11 +41,6 @@
   (let [ns (face-names p cell)]
     (and (some blocks/air ns) (not-any? blocks/fluids ns))))
 
-(defn room-for?
-  [p item]
-  (or (pos? (u/free-slots p))
-      (some #(and (= item (:name %)) (< (:count %) facts/stack-size)) (u/inventory p))))
-
 (defn count-of [p item] (transduce (comp (filter #(= item (:name %))) (map :count)) + 0 (u/inventory p)))
 
 (defn candidates
@@ -65,7 +59,7 @@
                             (blocks/in-reach? c pos true)
                             (exposed? p cell)
                             (tools/can-harvest? p name)
-                            (room-for? p (blocks/item-name {:block name}))
+                            (blocks/room-for? p (blocks/item-name {:block name}))
                             (= :ok (access/judge (access/may-dig? in pos) #{}))))))
            (sort-by #(u/eye-dist here (:pos %)))))))
 

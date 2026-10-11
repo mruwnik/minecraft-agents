@@ -9,6 +9,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.access :as access]
+            [jobs.lib.game-facts :as facts]
             [jobs.lib.dig-look :as look]
             [jobs.lib.trees :as forestry]
             [jobs.lib.util :as u]
@@ -37,6 +38,12 @@
   ["dirt" "cobblestone" "cobbled_deepslate" "stone" "andesite" "diorite" "granite" "netherrack"
    "oak_planks" "spruce_planks" "birch_planks" "jungle_planks" "acacia_planks" "dark_oak_planks"
    "mangrove_planks" "cherry_planks"])
+
+(defn room-for?
+  "A free slot, or a carried stack of item with room."
+  [p item]
+  (or (pos? (u/free-slots p))
+      (some #(and (= item (:name %)) (< (:count %) facts/stack-size)) (u/inventory p))))
 
 (defn carried
   "The carried [{:name :count}] whose name is in blocks, in the order of blocks."

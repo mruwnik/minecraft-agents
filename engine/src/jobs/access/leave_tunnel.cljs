@@ -8,6 +8,8 @@
             [jobs.lib.declined :as declined]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.pace :as pace]
+            [jobs.lib.torch :as torch]
+            [plan.shape :as shape]
             [jobs.lib.util :as u]
             [jobs.access.stair :as stair]
             [jobs.access.tunnel :as tunnel]
@@ -76,7 +78,7 @@
   entry's floor (entry y less 1) that are open now and have an open face neighbour the tunnel did not dig."
   [dug [_ entry-y _] block-at]
   (let [dug-cells (set (map :cell dug))
-        outside? (fn [cell] (some #(let [n (stair/add cell %)] (and (not (dug-cells n)) (open? block-at n))) faces))]
+        outside? (fn [cell] (some #(let [n (shape/add cell %)] (and (not (dug-cells n)) (open? block-at n))) faces))]
     (vec (filter #(and (>= (% 1) (dec entry-y)) (open? block-at %) (outside? %)) (distinct (map :cell dug))))))
 
 (defn seal-item
@@ -103,7 +105,7 @@
   [block-at tunnel m]
   (let [left (left-cells m)]
     (->> (:torches tunnel)
-         (filter #(and (tunnel/torch-blocks (block-at (:cell %))) (not (left (:cell %)))))
+         (filter #(and (torch/torch-blocks (block-at (:cell %))) (not (left (:cell %)))))
          (sort-by (comp - :site)))))
 
 (defn gone-cells
@@ -112,7 +114,7 @@
   [l tunnel block-at]
   (->> (:torches tunnel)
        (map :cell)
-       (filter #(and (ledger/entry-at l %) (let [n (block-at %)] (and n (not (tunnel/torch-blocks n))))))))
+       (filter #(and (ledger/entry-at l %) (let [n (block-at %)] (and n (not (torch/torch-blocks n))))))))
 
 (defn forget-gone!
   "Drop the ledger entries of the tunnel's torches whose cell holds no torch any more (the escape stair or the

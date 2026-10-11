@@ -26,7 +26,7 @@
 (deftest step-cells-per-direction-and-heading
   (are [dir heading next cut]
        (= {:next next :cut cut :floor (update next 1 dec) :under (update next 1 - 2)}
-          (stair/step-cells [0 65 0] dir heading))
+          (shape/step-cells [0 65 0] dir heading))
     :down :east [1 64 0] [[1 66 0] [1 65 0] [1 64 0]]
     :down :west [-1 64 0] [[-1 66 0] [-1 65 0] [-1 64 0]]
     :down :south [0 64 1] [[0 66 1] [0 65 1] [0 64 1]]
@@ -39,8 +39,8 @@
 (deftest a-plan-stair-part-has-the-cells-the-stair-job-cuts
   (doseq [heading [:north :east :south :west]]
     (let [from [3 70 -2]
-          feet (take 12 (iterate #(:next (stair/step-cells % :down heading)) from))
-          dug (into #{} (mapcat #(:cut (stair/step-cells % :down heading))) feet)]
+          feet (take 12 (iterate #(:next (shape/step-cells % :down heading)) from))
+          dug (into #{} (mapcat #(:cut (shape/step-cells % :down heading))) feet)]
       (is (= dug (set (shape/part-cells {:stair {:from from :heading heading :to-y 58}}))) (name heading))
       (is (not-any? (set (shape/part-cells {:stair {:from from :heading heading :to-y 58}})) [from (update from 1 inc)])))))
 
@@ -84,7 +84,7 @@
 
 (defn stop [named accept & {:keys [zones dir filler?] :or {zones [] dir :down}}]
   (let [in {:block-at (world-fn named) :feet [0 65 0] :zones zones :footprints #{} :ledger #{}}]
-    (stair/stop-of in (assoc (stair/step-cells [0 65 0] dir :east) :up? (= :up dir) :filler? filler?) accept)))
+    (stair/stop-of in (assoc (shape/step-cells [0 65 0] dir :east) :up? (= :up dir) :filler? filler?) accept)))
 
 (deftest the-stop-rules-of-one-step
   (are [named accept zones reason] (= reason (:reason (stop named accept :zones zones)))
@@ -108,7 +108,7 @@
 
 (deftest a-cut-cell-that-is-the-floor-of-an-earlier-stair-is-refused
   (let [in {:block-at (world-fn {}) :feet [0 65 0] :zones [] :footprints #{} :ledger #{}}
-        cells (stair/step-cells [0 65 0] :down :east)]
+        cells (shape/step-cells [0 65 0] :down :east)]
     (is (= {:reason :undercuts-way :cell [1 64 0] :block "stone"}
            (select-keys (stair/stop-of in (assoc cells :ways #{[1 64 0]}) #{}) [:reason :cell :block])))
     (is (nil? (stair/stop-of in (assoc cells :ways #{[5 60 0]}) #{})) "an unrelated floor")

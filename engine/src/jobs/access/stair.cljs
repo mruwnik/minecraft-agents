@@ -1,7 +1,6 @@
 (ns jobs.access.stair
   (:require [jobs.lib.child :as child]
             [engine.settings :as settings]
-            [jobs.lib.game-facts :as facts]
             [engine.args :as a]
             [clojure.string :as str]
             [plan.shape :as shape]
@@ -21,7 +20,6 @@
             [jobs.lib.dig-look :refer [unknown? look-at! settle! see-round!]]
             [jobs.lib.tools :as tools]
             [jobs.lib.trip :as trip]
-            [jobs.lib.util :as u]
             [engine.path.executor :as executor]
             [jobs.lib.walk :as walk]
             [jobs.lib.walk.world :as wworld]
@@ -117,8 +115,6 @@
    :pick-up-ores {:doc "true: dig the ores of jobs.lib.ore-pick's ::ores setting that are exposed within reach on the way; false: none; or the ore block names to dig" :spec (a/or-of boolean? (a/coll-of a/name?)) :default true}
    :through {:doc "the id of a mineshaft plan the stair runs down: its footprint is no obstacle (jobs.lib.shafts)" :spec string? :default nil}})
 
-(def headings shape/headings)
-(def rises shape/rises)
 (a/defargs settings
   {::max-cell-digs {:default 3 :doc "Digs of one cell before the stair stops :refills." :spec (a/int-in 0 nil)}
    ::max-fall-digs {:default 12 :doc "Digs of one cell a falling block (gravel, sand) keeps refilling before the stair stops :refills." :spec (a/int-in 0 nil)}
@@ -127,18 +123,13 @@
 (defn max-cell-digs [] (settings/get settings ::max-cell-digs))
 (defn max-fall-digs [] (settings/get settings ::max-fall-digs))
 (defn max-steps [] (settings/get settings ::max-steps))
-(def unbreakable #{"bedrock" "barrier" "end_portal_frame" "end_portal" "nether_portal" "command_block" "structure_block" "jigsaw"})
-
-(def add shape/add)
-(def delta shape/delta)
-(def step-cells shape/step-cells)
 
 (defn stair-index
   "i when feet is the stair's cell after i steps from origin, 0 <= i <= steps; else nil."
   [origin feet dir heading steps]
-  (let [[dx dy dz] (delta dir heading)
+  (let [[dx dy dz] (shape/delta dir heading)
         i (+ (* dx (- (feet 0) (origin 0))) (* dz (- (feet 2) (origin 2))))]
-    (when (and (<= 0 i steps) (= feet (add origin [(* i dx) (* i dy) (* i dz)])))
+    (when (and (<= 0 i steps) (= feet (shape/add origin [(* i dx) (* i dy) (* i dz)])))
       i)))
 
 (def crop-names
@@ -156,7 +147,7 @@
   "The hazard the stair adds to the rules' for cell: a falling block over it, unless that cell is cut too (the rules
   see one only over the body's own column; the body walks into the next one)."
   [block-at cell cut]
-  (let [above (add cell [0 1 0])
+  (let [above (shape/add cell [0 1 0])
         n (block-at above)]
     (when (and (rules/falling? n) (not (some #{above} cut)))
       [{:reason :falling-block :block n :at above}])))
@@ -175,8 +166,8 @@
 (defn way-floors
   "The floors of the steps a stair walked (not the start's own ground), from its origin, direction and steps reached."
   [origin dir heading steps]
-  (let [d (delta dir heading)]
-    (vec (for [i (range 1 (inc (or steps 0)))] (add (add origin (mapv #(* i %) d)) [0 -1 0])))))
+  (let [d (shape/delta dir heading)]
+    (vec (for [i (range 1 (inc (or steps 0)))] (shape/add (shape/add origin (mapv #(* i %) d)) [0 -1 0])))))
 
 (defn hazards-why
   "The hazards in words: \"falling-block gravel at [x y z]; ...\"."
@@ -221,35 +212,24 @@
                     {:reason :hazard :cell cell :hazards (:hazards v) :why (hazards-why (:hazards v))}))))
             cut))))
 
-(defn room-for?
-  "A free slot, or a carried stack of item with room."
-  [p item]
-  (or (pos? (u/free-slots p))
-      (some #(and (= item (:name %)) (< (:count %) facts/stack-size)) (u/inventory p))))
-
-(defn no-tool?
-  "Whether block needs a tool to clear (jobs.lib.tools/needs-tool-to-clear?) and none is carried."
-  [p block]
-  (tools/needs-tool-to-clear? p block))
-
 (defn by-hand?
   "Whether block is dug bare-handed: :by-hand asks for it, or the fetch of a tool for it failed (the way out must open
   even with no pickaxe to be had)."
   [c block]
-  (and (no-tool? (:primitives c) block)
+  (and (tools/needs-tool-to-clear? (:primitives c) block)
        (or (:by-hand (:args c))
            (fetch/failed? c 'jobs.access.stair {:reason :no-tool :block block}))))
 
 (defn lacks-tool?
-  "no-tool?, unless it is dug by hand (by-hand?)."
+  "A tool is needed and not carried, and the block is not dug by hand (by-hand?)."
   [c block]
-  (and (not (by-hand? c block)) (no-tool? (:primitives c) block)))
+  (and (not (by-hand? c block)) (tools/needs-tool-to-clear? (:primitives c) block)))
 
 (defn drop-room?
   "Room for block's drop, or no drop to keep: a :by-hand dig with no tool that harvests it loses it."
   [c block]
   (or (by-hand? c block)
-      (room-for? (:primitives c) (blocks/item-name {:block block}))))
+      (blocks/room-for? (:primitives c) (blocks/item-name {:block block}))))
 
 (defn access-world
   "The social half of the rules' input (jobs.lib.access/zone-input): zones, claims, footprints, the body's name and
@@ -283,8 +263,8 @@
   (when-not (= [feet next] (:looked (ctx/mem c)))
     (ctx/update-mem! c assoc :looked [feet next])
     (await (look-at! c next))
-    (loop [cells (concat cut (map #(add next [0 % 0]) [-1 -2])
-                         (for [b [feet (add feet [0 1 0])] d rules/neighbour-deltas] (add b d)))]
+    (loop [cells (concat cut (map #(shape/add next [0 % 0]) [-1 -2])
+                         (for [b [feet (shape/add feet [0 1 0])] d rules/neighbour-deltas] (shape/add b d)))]
       (when-let [cell (first cells)]
         (when (unknown? (:primitives c) cell) (await (look-at! c cell)))
         (recur (rest cells))))))
@@ -314,10 +294,10 @@
   "The lava cells a step lays open: lava beside the feet, the head or a cut cell that is open (air or fluid) now,
   then lava in one of those; sources behind first."
   [block-at feet cut]
-  (let [open (into [feet (add feet [0 1 0])] (filter #(let [n (block-at %)] (or (rules/air n) (rules/fluids n))) cut))
+  (let [open (into [feet (shape/add feet [0 1 0])] (filter #(let [n (block-at %)] (or (rules/air n) (rules/fluids n))) cut))
         open? (set open)
         lava? #(= "lava" (block-at %))
-        beside (for [o open d rules/neighbour-deltas :let [n (add o d)] :when (and (not (open? n)) (lava? n))] n)]
+        beside (for [o open d rules/neighbour-deltas :let [n (shape/add o d)] :when (and (not (open? n)) (lava? n))] n)]
     (distinct (concat beside (filter lava? open)))))
 
 (defn ^:async lava-step!
@@ -339,7 +319,7 @@
       (vec (for [cell cut :when (dug? cell)
                  :let [n (block-at cell)]
                  :when (or (rules/air n) (rules/fluids n))
-                 w (cons cell (map #(add cell %) rules/neighbour-deltas))
+                 w (cons cell (map #(shape/add cell %) rules/neighbour-deltas))
                  :when (= "water" (block-at w))]
              [cell w])))))
 
@@ -359,10 +339,10 @@
   "Steps to cut from the args and the start feet, or {:error text}."
   [{:keys [dir heading steps y]} [_ fy _]]
   (cond
-    (not (rises dir)) {:error "dir must be :down or :up"}
-    (not (headings heading)) {:error "heading must be :north :east :south or :west"}
+    (not (shape/rises dir)) {:error "dir must be :down or :up"}
+    (not (shape/headings heading)) {:error "heading must be :north :east :south or :west"}
     (and (int? steps) (pos? steps)) steps
-    (and (int? y) (pos? (* (rises dir) (- y fy)))) (js/Math.abs (- y fy))
+    (and (int? y) (pos? (* (shape/rises dir) (- y fy)))) (js/Math.abs (- y fy))
     :else {:error "give :steps > 0, or :y beyond the feet in :dir"}))
 
 (defn finish!
@@ -419,10 +399,10 @@
         feet (feet-of c)
         {:keys [origin target]} (ctx/mem c)
         on-stair? (or (nil? origin) (some? (stair-index origin feet dir heading target)))]
-    (when (and on-stair? (rises dir) (headings heading))
+    (when (and on-stair? (shape/rises dir) (shape/headings heading))
       (let [block-at (:block-at (rules-in c feet))
-            {:keys [cut]} (step-cells feet dir heading)
-            block (some #(let [n (when-not (unknown? p %) (block-at %))] (when (and n (not (rules/air n)) (not (unbreakable n))) n)) cut)]
+            {:keys [cut]} (shape/step-cells feet dir heading)
+            block (some #(let [n (when-not (unknown? p %) (block-at %))] (when (and n (not (rules/air n)) (not (rules/unbreakable n))) n)) cut)]
         (cond
           (nil? block) nil
           (lacks-tool? c block) {:reason :no-tool :tool (tools/needed-kind p block) :block block}
@@ -435,9 +415,9 @@
         {:keys [origin target]} (ctx/mem c)
         feet (feet-of c)]
     (when (and (or (nil? origin) (and (= feet origin) (empty? (:dug (ctx/mem c)))))
-               (rises dir) (headings heading))
+               (shape/rises dir) (shape/headings heading))
       (let [in (rules-in c feet)
-            cells (-> (step-cells feet dir heading) (assoc :up? (= :up dir)))
+            cells (-> (shape/step-cells feet dir heading) (assoc :up? (= :up dir)))
             stop (stop-of in cells (set (:accept (:args c))))]
         (when (#{:zone :claim :footprint} (:reason stop)) stop)))))
 
@@ -459,11 +439,6 @@
       (access/decline! c :stair.declined "stair" (assoc (access/refusal-fields [stop]) :reason :refused))
       (if-let [lack (need c)] (fetch/check c 'jobs.access.stair lack) true))))
 
-(defn falling-block?
-  "Whether a block falls into the cell it was dug from (sand, gravel, concrete powder)."
-  [block]
-  (boolean (re-find #"^(red_)?sand$|^gravel$|_concrete_powder$" (str block))))
-
 (defn ^:async dig!
   "Equip the best tool, check the cell again, write the intent and dig it (a blocks.dig child). :continue (dug, go on), :yield (the child waits on the world), or a stop map."
   [c in cell cut accept]
@@ -471,10 +446,10 @@
         block ((:block-at in) cell)
         tries (get-in (ctx/mem c) [:tries cell] 0)]
     (cond
-      (>= tries (if (falling-block? block) (max-fall-digs) (max-cell-digs))) (cond-> {:reason :refills :cell cell :block block}
-                                   (not (falling-block? block))
+      (>= tries (if (rules/falling? block) (max-fall-digs) (max-cell-digs))) (cond-> {:reason :refills :cell cell :block block}
+                                   (not (rules/falling? block))
                                    (assoc :why "put back by something else, e.g. the night shelter closing an opened refuge again"))
-      (unbreakable block) {:reason :unbreakable :cell cell :block block}
+      (rules/unbreakable block) {:reason :unbreakable :cell cell :block block}
       (lacks-tool? c block) {:reason :no-tool :cell cell :block block :tool (tools/needed-kind p block)}
       (and (not (:spent-ok (:args c))) (trip/spent-tool? p block)) {:reason :tool-spent :cell cell :block block :tool (tools/needed-kind p block)}
       (not (drop-room? c block)) {:reason :inventory-full :cell cell :block block}
@@ -575,7 +550,7 @@
             (ctx/update-mem! c assoc :checked i)
             (if (= i target)
               (or (await (lava-step! c :stair.sealed (:block-at in) feet [])) :finished)
-              (let [{:keys [next cut] :as cells} (-> (step-cells feet dir heading)
+              (let [{:keys [next cut] :as cells} (-> (shape/step-cells feet dir heading)
                                                            (as-> cs (assoc cs :up? (= :up dir)
                                                                  :bridged? (contains? (:bridged (ctx/mem c)) (:floor cs))
                                                                  :filler? (some? (blocks/pick c blocks/building-blocks)))))
@@ -598,7 +573,7 @@
         {:keys [origin target]} (ctx/mem c)
         i (when origin (stair-index origin (feet-of c) dir heading target))]
     (when (and i (pos? i))
-      (add origin (mapv #(* (dec i) %) (delta dir heading))))))
+      (shape/add origin (mapv #(* (dec i) %) (shape/delta dir heading))))))
 
 (defn ^:async back-off!
   "After a failed seal: walk one step back up the stair (a go-to child), then finish with the stop, :backed-off true

@@ -78,6 +78,8 @@
 
 (defn base-block? [n] (boolean (and n (re-find base-blocks n))))
 
+(def unbreakable #{"bedrock" "barrier" "end_portal_frame" "end_portal" "nether_portal" "command_block" "structure_block" "jigsaw"})
+
 (def falling-names #{"sand" "red_sand" "gravel"})
 
 (defn falling? [n]

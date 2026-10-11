@@ -111,7 +111,7 @@
                       (range (max-depth))))))
 
 (defn stair-cuts
-  "The cells a stair up along dir ([dx dz]) cuts from feet in n steps, step by step (jobs.access.stair/step-cells)."
+  "The cells a stair up along dir ([dx dz]) cuts from feet in n steps, step by step (plan.shape/step-cells)."
   [feet [dx dz] n]
   (vec (for [i (range n)
              :let [f (add feet [(* i dx) i (* i dz)])

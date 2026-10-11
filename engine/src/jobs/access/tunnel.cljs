@@ -16,6 +16,8 @@
             [jobs.access.stair :as stair]
             [jobs.lib.ore-pick :as ore-pick]
             [jobs.lib.placement :as placement]
+            [jobs.lib.pillar :as pillar]
+            [plan.shape :as shape]
             [jobs.lib.world :as known]))
 
 (def doc
@@ -119,13 +121,8 @@
 (defn ahead
   "The cell n along heading from cell, same height."
   [cell heading n]
-  (let [[dx dz] (stair/headings heading)]
-    (stair/add cell [(* n dx) 0 (* n dz)])))
-
-(defn open-cell?
-  "Nothing to stand in: air or a plant a body walks through."
-  [n]
-  (boolean (and n (rules/replaceable n) (not (rules/fluids n)))))
+  (let [[dx dz] (shape/headings heading)]
+    (shape/add cell [(* n dx) 0 (* n dz)])))
 
 (defn surface
   "The feet height of the top stand of column [x z], looking down from hi to lo: the first cell that is not open must
@@ -139,7 +136,7 @@
        (let [n (block-at [x y z])]
          (cond
            (nil? n) nil
-           (open-cell? n) (recur (dec y))
+           (pillar/clear? n) (recur (dec y))
            (and (<= (+ y 2) hi) (or (nil? seen-at) (every? seen-at [[x y z] [x (+ y 1) z] [x (+ y 2) z]])) (rules/solid-floor? block-at [x y z])) (inc y)
            :else nil))))))
 
@@ -147,16 +144,16 @@
   "The cells of one flat run step from feet: {:next :cut (head first) :floor :under}."
   [feet heading]
   (let [n (ahead feet heading 1)]
-    {:next n :cut [(stair/add n [0 1 0]) n] :floor (stair/add n [0 -1 0]) :under (stair/add n [0 -2 0])}))
+    {:next n :cut [(shape/add n [0 1 0]) n] :floor (shape/add n [0 -1 0]) :under (shape/add n [0 -2 0])}))
 
 (defn line
   "The steps of a line, as [feet cells] each: the stair from entry, then the run; with :end (the stair's last cell)
   and :stand."
   [{:keys [entry heading dir steps run]}]
-  (let [stair-feet (take (inc steps) (iterate #(:next (stair/step-cells % dir heading)) entry))
+  (let [stair-feet (take (inc steps) (iterate #(:next (shape/step-cells % dir heading)) entry))
         end (last stair-feet)
         run-feet (take (inc run) (iterate #(ahead % heading 1) end))]
-    {:steps (concat (map (fn [f] [f (stair/step-cells f dir heading)]) (butlast stair-feet))
+    {:steps (concat (map (fn [f] [f (shape/step-cells f dir heading)]) (butlast stair-feet))
                     (map (fn [f] [f (run-cells f heading)]) (butlast run-feet)))
      :end end
      :stand (last run-feet)}))
@@ -173,7 +170,7 @@
   "The light of a torch for site s at cell k of cells: 14 less the taxicab distance, from the nearer of head and feet."
   [cells s k]
   (let [feet (cells s)]
-    (- 14 (max (taxi (stair/add feet [0 1 0]) (cells k)) (taxi feet (cells k))))))
+    (- 14 (max (taxi (shape/add feet [0 1 0]) (cells k)) (taxi feet (cells k))))))
 
 (defn torch-light [plan s k] (light-between (line-cells plan) s k))
 
@@ -211,7 +208,7 @@
 (defn standable?
   "Whether the body can stand at feet: it and the head cell open, a solid floor under."
   [block-at [x y z]]
-  (and (open-cell? (block-at [x y z])) (open-cell? (block-at [x (inc y) z]))
+  (and (pillar/clear? (block-at [x y z])) (pillar/clear? (block-at [x (inc y) z]))
        (boolean (rules/solid-floor? block-at [x (dec y) z]))))
 
 (defn entry-heights
@@ -259,7 +256,7 @@
 (defn cuts-floor?
   "Whether the line of plan cuts the floor under feet (the body would come back to a hole where it stood)."
   [plan feet]
-  (let [floor (stair/add feet [0 -1 0])]
+  (let [floor (shape/add feet [0 -1 0])]
     (boolean (some (fn [[_ {:keys [cut]}]] (some #{floor} cut)) (:steps (line plan))))))
 
 
@@ -301,14 +298,12 @@
           [(+ tx (js/Math.sign dx)) fy fz]
           [fx fy (+ tz (js/Math.sign dz))])))))
 
-(def torch-blocks torch/torch-blocks)
-
-(defn head-of [cell] (stair/add cell [0 1 0]))
+(defn head-of [cell] (shape/add cell [0 1 0]))
 
 (defn torch-cell
   "The cell of site s (head, then feet) that holds a torch in the world, or nil."
   [block-at cells s]
-  (first (filter #(torch-blocks (block-at %)) [(head-of (cells s)) (cells s)])))
+  (first (filter #(torch/torch-blocks (block-at %)) [(head-of (cells s)) (cells s)])))
 
 (defn standing-torches
   "[{:cell :site :block}] for the sites of plan whose torch stands now."
@@ -451,7 +446,7 @@
 (defn torch-choice
   "How to hang the torch of site s from the eye: jobs.lib.torch/torch-at for the head and feet cells of s."
   [plan s eye block-at]
-  (torch/torch-at (stair/headings (:heading plan)) ((line-cells plan) s) eye block-at))
+  (torch/torch-at (shape/headings (:heading plan)) ((line-cells plan) s) eye block-at))
 
 (defn ^:async hang!
   "Hang the torch of site s from the body's place, or book the site :unlit with why not. The ledger entry (a dead
@@ -474,7 +469,7 @@
             _ (await (torch/off-hand-to-inventory! c))
             r (await (ctx/act c :place (clj->js {:pos (zipmap [:x :y :z] cell) :item "torch"
                                                  :click (placement/js-click (:click choice))})))
-            held? (or (= "placed" (.-status r)) (torch-blocks (block-at cell)))]
+            held? (or (= "placed" (.-status r)) (torch/torch-blocks (block-at cell)))]
         (when-not keep? (ledger/remember! c (if held? (ledger/confirm intended cell) (ledger/reconcile intended block-at))))
         (when-not held? (book-unlit! c plan s :place-failed cell))
         :again))))

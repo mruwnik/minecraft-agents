@@ -1,11 +1,11 @@
 (ns jobs.lib.dig-route
   "The fewest cells to dig for a walkable way from one feet cell to another through stone: a pure search over what the
   caller says each cell is (block-at cell -> name, or nil when never seen)."
-  (:require [jobs.lib.reach :as reach]))
+  (:require [jobs.lib.access.rules :as rules]
+            [jobs.lib.reach :as reach]))
 
 (def air #{"air" "cave_air" "void_air"})
 (def fluids #{"water" "lava" "bubble_column"})
-(def unbreakable #{"bedrock" "barrier" "end_portal_frame" "end_portal" "nether_portal" "command_block" "structure_block" "jigsaw"})
 (def falling #{"sand" "red_sand" "gravel"})
 
 (defn open? [n] (boolean (and n (or (air n) (re-find reach/arrow-passes n)))))
@@ -17,7 +17,7 @@
   (cond
     (open? n) 0
     (nil? n) 1
-    (or (fluids n) (reach/hazard-blocks n) (unbreakable n) (falling n)) nil
+    (or (fluids n) (reach/hazard-blocks n) (rules/unbreakable n) (falling n)) nil
     :else 1))
 
 (defn floor-ok? [n] (boolean (and n (not (open? n)) (not (fluids n)) (not (reach/hazard-blocks n)))))

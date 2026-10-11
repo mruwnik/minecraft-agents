@@ -1046,7 +1046,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [cut (into {} (for [f [[0 64 0] [1 63 0]] cell (:cut (stair/step-cells f :down :east))] [(clojure.string/join "," cell) "air"]))
+        (let [cut (into {} (for [f [[0 64 0] [1 63 0]] cell (:cut (shape/step-cells f :down :east))] [(clojure.string/join "," cell) "air"]))
               world (assoc (deep-rock (merge cut ore-east)) :self {:pos {:x 2.5 :y 62 :z 0.5}})
               s (await (zoned via-shaft world (ew/of-data {"s" shaft-plan} {} []) 400))
               e (done-event s)]
