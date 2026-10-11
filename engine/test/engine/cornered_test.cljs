@@ -860,6 +860,46 @@
   (is (= :back-off (first (retreat/escape-order {:pressed? true :creeper? true}))) "a creeper is never fought first")
   (is (= :water (first (retreat/escape-order {:pressed? true :enderman? true})))))
 
+(defn ^:async beset-round
+  "A retreat of an armed body that carries blocks, at 8 health with zombies about and every walk blocked ((on-walk
+  setup-map) runs at each); the mobs leave at its first place or attack. The setup map."
+  [zombies on-walk]
+  (let [{:keys [eng p] :as s} (setup {:self {:health 8}
+                                      :inventory [{:name "iron_sword" :count 1} {:name "dirt" :count 16}]
+                                      :entities zombies})
+        leave! (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r))))]
+    (.override (.-world p) "steer" (fn [_ _ _] (on-walk s) (js/Promise.resolve #js {:status "timeout" :pose #js {}})))
+    (.override (.-world p) "place" leave!)
+    (.override (.-world p) "attack" leave!)
+    (core/submit! eng retreat {})
+    (await (core/tick! eng))
+    s))
+
+(defn hit-and-closed-on!
+  "The zombies, kept off so far, hit the body once and stand just out of arm's reach of it."
+  [{:keys [eng p]}]
+  (swap! (fake/state p) #(-> % (update-in [:self :health] - 2) (assoc :entities [])))
+  (fake/add-entity! p (zombie 2.5 64 0))
+  (fake/add-entity! p (assoc (zombie 0 64 2.5) :id 8))
+  (mem/write! (:store eng) :hurt {:amount 2 :health 6 :causes ["zombie"]} {:cap 50 :ttl 60000}))
+
+;; the hit lands during a flee step, so the step's own hit-on-the-run check (at its start) missed it
+(deftest an-armed-body-hit-during-a-step-that-got-nowhere-fights-before-it-builds
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (beset-round [(zombie 6 64 0) (assoc (zombie 0 64 6) :id 8)] hit-and-closed-on!))]
+          (is (zero? (count (calls p "place"))) "no seal beside the mobs that just hit it")
+          (is (= 1 (count (calls p "attack")))))))))
+
+(deftest an-armed-body-with-a-melee-mob-at-its-side-fights-before-it-builds
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (beset-round [(zombie 1.5 64 0) (assoc (zombie 0 64 2.5) :id 8)] (constantly nil)))]
+          (is (zero? (count (calls p "place"))) "no seal with a mob already in the cell beside it")
+          (is (= 1 (count (calls p "attack")))))))))
+
 (deftest an-unarmed-body-at-full-health-seals-in-against-a-spider-instead-of-running-or-punching
   (async done
     (tu/run-async done

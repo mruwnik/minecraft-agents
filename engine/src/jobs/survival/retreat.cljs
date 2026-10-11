@@ -199,7 +199,7 @@
   for a creeper), :flyer? a phantom is near (it outflies a walker: shelter, else fight), :creeper? one is near (it comes first), :enderman? an angry enderman is near (angry-enderman?) (it teleports, so no walk or back-off, and a
   pillar is within its reach: the body enters water within water-reach, which it avoids, else walks under a 2-high roof within roof-reach, which it cannot enter, else shuts itself in), :ranged? the threat shoots, :climber? it is a spider (it climbs the pillar), :faster? a mob
   the body cannot outrun is near (no step back: it gains nothing), :home? the body is in its home
-  room: it digs no pit or pocket in its own floor or walls, :pressed? an armed body already hit by a melee mob at its side (a seal or pillar cannot be built beside it: the fight comes first, except against a creeper or an enderman), :swim? the body is in water with a drowned near: swimming out to dry land comes first unless a fight wins}."
+  room: it digs no pit or pocket in its own floor or walls, :pressed? pressed? holds (a seal or pillar cannot be built beside the mob: the fight comes first, except against a creeper or an enderman), :swim? the body is in water with a drowned near: swimming out to dry land comes first unless a fight wins}."
   [{:keys [win? creeper? enderman? flyer? ranged? climber? faster? swim? home? pressed?]}]
   (cond->> (cond
              creeper? [:back-off :seal :pillar :pit :pocket :fight]
@@ -296,6 +296,7 @@
    ::close-radius {:default 8 :doc "Blocks within which a hostile that attacks at close range (a creeper too, not a ranged mob or an enderman) bounds a flee step to close-leg-s, at its start and again during its search." :spec (a/num-in 0 nil)}
    ::close-leg-s {:default 1 :doc "Seconds a flee step may search or walk while a close-range hostile is within close-radius, or the body was hurt: a body that stands searching there is hit for the whole leg." :spec (a/num-in 0 nil)}
    ::hurt-window-s {:default 5 :doc "Seconds after the body lost health in which a flee step is bounded to close-leg-s, even with no hostile seen in reach (an unseen attacker hits as hard)." :spec (a/num-in 0 nil)}
+   ::press-gap {:default 2 :doc "Blocks within which a melee mob (not a creeper or an enderman) makes a cornered armed body fight before it builds a seal or pillar, hit or not: the mob strikes before a block is placed and stands in the cells to fill." :spec (a/num-in 0 nil)}
    ::refuge-gap {:default 10 :doc "Blocks within which a lone melee hostile the body cannot outfight is pillared against (else sealed against) before any flee step, when blocks are carried; 0 never." :spec (a/num-in 0 nil)}})
 (defn glance-reach [] (settings/get settings ::glance-reach))
 
@@ -304,6 +305,8 @@
 (defn cover-gap [] (settings/get settings ::cover-gap))
 
 (defn refuge-gap [] (settings/get settings ::refuge-gap))
+
+(defn press-gap [] (settings/get settings ::press-gap))
 
 (defn close-leg-s [] (settings/get settings ::close-leg-s))
 
@@ -454,6 +457,25 @@
   (ctx/update-mem! c flight/count-sweep)
   :again)
 
+(defn hurt-window-s [] (settings/get settings ::hurt-window-s))
+
+(defn recently-hurt?
+  "Whether the body lost health within hurt-window-s."
+  [c]
+  (pos? (ctx/count-in c :hurt (* 1000 (hurt-window-s)))))
+
+(defn pressed?
+  "Whether an armed body has a melee mob (hitters) on it: one within press-gap, or one within hit-reach and the body
+  was hit this step or within hurt-window-s (a hit in an earlier step counts: the step since may have gained nothing)."
+  [c hostiles]
+  (let [near (hitters c hostiles)
+        p (:primitives c)]
+    (boolean (and (seq near)
+                  (combat/best-weapon p (:weapons (:args c)))
+                  (or (:hit-on-the-run (ctx/mem c))
+                      (recently-hurt? c)
+                      (some #(<= (danger-q/mob-distance p %) (press-gap)) near))))))
+
 (defn ^:async cornered!
   "Nowhere worth walking to: the first option of escape-order that it can take and has not failed since the last
   start over (blocked!). home?: the body is in its home room."
@@ -470,7 +492,7 @@
                              :ranged? (boolean (and threat (combat/ranged? threat)))
                              :climber? (boolean (some combat/climber? hostiles))
                              :faster? (not (outrun? c hostiles))
-                             :pressed? (boolean (and (:hit-on-the-run (ctx/mem c)) (combat/best-weapon (:primitives c) weapons)))
+                             :pressed? (pressed? c hostiles)
                              :swim? (and (boolean (some #(= "drowned" (.-name %)) hostiles)) (in-water? c))
                              :home? home?})]
     (loop [[option & more] order]
@@ -504,13 +526,6 @@
   (filterv #(and (not (combat/ranged? %)) (not (combat/enderman? %))
                  (<= (danger-q/mob-distance (:primitives c) %) (close-radius)))
            (near-hostiles c)))
-
-(defn hurt-window-s [] (settings/get settings ::hurt-window-s))
-
-(defn recently-hurt?
-  "Whether the body lost health within hurt-window-s."
-  [c]
-  (pos? (ctx/count-in c :hurt (* 1000 (hurt-window-s)))))
 
 (defn unseen-before-wall?
   "Whether a cell the body has not sensed lies in the columns along d from the first, up to glance-reach or the first
