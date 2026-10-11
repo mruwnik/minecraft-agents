@@ -800,10 +800,11 @@
       way (await (run-home! c room way))
       :else
       (let [_ (await (eat-on-the-run! c threat))
-            leg (goal-leg c threats)
+            away? (fn [cell] (when (and cell (not (walk/too-close? (mapv #(danger-q/mob-pos p %) threats) cell))) cell))
+            leg (away? (goal-leg c threats))
             gap0 (flight/nearest-gap p threats)
             goal-gap0 (when leg (u/dist (u/self-pos c) leg))
-            target (or leg (await (flight-target! c threats covered? rooms)))
+            target (or leg (away? (await (flight-target! c threats covered? rooms))))
             low? (exposed-low? c covered?)
             cover (cond
                     (and low?

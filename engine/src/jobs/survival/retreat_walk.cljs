@@ -9,9 +9,11 @@
 
 (a/defargs settings
   {::route-cone {:default 45 :doc "Degrees either side of the line to a destination (goal or home) within which a hostile nearer than the destination lies on the way: the flight does not go there." :spec (a/num-in 0 180)}
+   ::keep-away {:default 4 :doc "Blocks a flee step's end keeps from every known hostile (a creeper's blast reaches about 3); a step that ends nearer is not taken, and a body with no other is cornered." :spec (a/num-in 0 nil)}
    ::hazard-clearance {:default 2.5 :doc "Distance in blocks kept from a hazard on a flight path." :spec (a/num-in 0 nil)}
    ::flank-turn {:default 45 :doc "Degrees a flight turns from straight away toward a refuge that lies behind the chasers, to go round them, when it still gains on them so (jobs.lib.cost/outruns-at?)." :spec (a/num-in 0 90)}
    ::max-descent {:default 3 :doc "Blocks lower than where a flight began that it may end a step under rock (a cave, not a hillside); a step further down is not taken while another is open, else the body is cornered." :spec (a/num-in 0 nil)}})
+(defn keep-away [] (settings/get settings ::keep-away))
 (defn hazard-clearance [] (settings/get settings ::hazard-clearance))
 (defn flank-turn [] (settings/get settings ::flank-turn))
 (defn max-descent [] (settings/get settings ::max-descent))
@@ -201,6 +203,11 @@
   [block-at {:keys [x y z]}]
   (some #(not (passable? (block-at {:x x :y (+ y 2 %) :z z}))) (range roof-reach)))
 
+(defn too-close?
+  "Whether pos lies within keep-away of any of threats (positions)."
+  [threats pos]
+  (some #(< (u/dist pos %) (keep-away)) threats))
+
 (defn choose-target
   "The walk target, a feet cell, among the directions (turns from the preferred one) that avoid every hazard and are
   worth walking (see worth?): first one whose end (covered? true: out of a ranged mob's line of fire) gives cover, a
@@ -218,6 +225,7 @@
                                       :time (walk-time block-at cells swim-factor)})))
                       (remove #(near-hazard? hazards from (point-along from (:dir %) step)))
                       (filter #(worth? from threats %))
+                      (remove #(too-close? threats (:end %)))
                       (remove #(and floor (< (:y (:end %)) floor) (roofed? block-at (:end %)) (not (and covered? (covered? (:end %)))) (not (contains? known [(:x (:end %)) (dec (:y (:end %))) (:z (:end %))])))))
          dry (remove #(wet? block-at (:end %)) options)
          options (if (and (> swim-factor 1) (seq dry)) dry options)
@@ -236,6 +244,6 @@
         now (near-threat from)
         cells (for [[x y z] floors
                     :let [cell {:x x :y (inc y) :z z} centre {:x (+ x 0.5) :y (inc y) :z (+ z 0.5)}]
-                    :when (and (> (inc y) (+ (:y from) 0.5)) (<= (u/dist from centre) reach) (>= (near-threat centre) now))]
+                    :when (and (> (inc y) (+ (:y from) 0.5)) (<= (u/dist from centre) reach) (>= (near-threat centre) now) (not (too-close? threats centre)))]
                 [cell (u/dist from centre)])]
     (some->> (seq cells) (sort-by (juxt (comp - :y first) second)) ffirst)))

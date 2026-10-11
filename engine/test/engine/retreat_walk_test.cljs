@@ -129,3 +129,22 @@
     (is (not (on-way? {:x 10 :y 64 :z 14})) "ahead but well to the side")
     (is (not (on-way? {:x -5 :y 64 :z 0.5})) "behind the body")
     (is (not (on-way? {:x 60 :y 64 :z 0.5})) "beyond the destination")))
+
+(defn corridor-world
+  "Stone up to y 63 and walls at y 64-65 except along z 0: a corridor along x."
+  [{:keys [y z]}]
+  (if (or (<= y 63) (and (<= y 65) (not (zero? z)))) "stone" "air"))
+
+(deftest a-flight-never-ends-within-keep-away-of-a-threat
+  (let [close {:x -0.5 :y 64 :z 0.5}]
+    (is (nil? (walk/choose-target corridor-world from [close] nil [] 3 {}))
+        "a 3 block step gains 2.5 blocks but ends inside keep-away: cornered")
+    (is (some? (walk/choose-target corridor-world from [close] nil [] 6 {}))
+        "a 6 block step ends outside it")))
+
+(deftest the-way-up-is-not-taken-to-a-cell-within-keep-away-of-a-threat
+  (let [body {:x 0.5 :y 60 :z 0.5}
+        floors [[3 62 0]]]
+    (is (some? (walk/way-target body [{:x -9.5 :y 63 :z 0.5}] floors 12)) "far from the threat")
+    (is (nil? (walk/way-target body [{:x 0.5 :y 63 :z 0.5}] floors 12))
+        "no nearer the threat than the body, but 3 blocks from it")))
