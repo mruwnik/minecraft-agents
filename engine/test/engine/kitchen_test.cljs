@@ -162,3 +162,16 @@
       (fn ^:async t []
         (let [s (await (run-beside (list job args) {:inventory [(item "beef" 3)] :containers {"10,64,0" []}}))]
           (is (seq (events-of s :round_started))))))))
+
+(def other-far-chest {:x 300 :y 64 :z 0})
+(def far-world {:inventory [(item "beef" 3)] :containers {"200,64,0" [] "300,64,0" []}})
+
+(deftest two-standing-kitchens-far-from-their-chests-do-not-wait-for-each-other
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng clock] :as s} (setup far-world)]
+          (core/submit! eng (list 'repeat (list job (assoc args :chest far-chest))) {})
+          (core/submit! eng (list 'repeat (list job (assoc args :chest other-far-chest))) {})
+          (dotimes [_ 6] (await (core/tick! eng)) (swap! clock + 1000))
+          (is (seq (events-of s :round_started))))))))

@@ -4,7 +4,7 @@
   {:job :key :until :why}; a target rests ::rest-ms, then is tried once more. A standing job also declines far from
   its site while a job that is not standing is listed, or deep below it (away-wait), so it does not walk the body home
   between or after trips;
-  a job marks itself standing (mark!) when it runs. Body memory :standing/self {:id}."
+  standing jobs are the listed ones under repeat (standing-ids)."
   (:require [clojure.string :as str]
             [engine.args :as a]
             [engine.ctx :as ctx]
@@ -38,14 +38,12 @@
   (ctx/forget-where! c kind #(and (= job (:job %)) (= key (:key %))))
   (ctx/remember! c kind {:job job :key key :why why :until (+ (ctx/now c) (rest-ms))} {:cap 32 :ttl (rest-ms)}))
 
-(def self-kind :standing/self)
-
 (defn root-id [c] (first (str/split (:id c) #"/")))
 
-(defn mark!
-  "Note that this job is standing, so another standing job's away-wait does not wait for it."
+(defn standing-ids
+  "The ids of the listed jobs kept under repeat."
   [c]
-  (ctx/remember! c self-kind {:id (root-id c)} {:cap 16 :ttl :forever}))
+  (into #{} (comp (filter (comp #{:repeat} :op :spec val)) (map key)) (:instances @(:state (:engine c)))))
 
 (defn away-wait
   "For a check: nil, or the declined wait (false, reason :away) when site (a position, or nil) is farther than
@@ -53,7 +51,7 @@
   more than ::away-depth below it."
   [c site]
   (let [view (ctx/view c)
-        standing (into #{(root-id c)} (map (comp :id :data)) (mem/entries view self-kind))]
+        standing (conj (standing-ids c) (root-id c))]
     (when (and site
                (or (> (- (:y site) (:y (u/self-pos c))) (away-depth))
                    (and (> (u/dist (u/self-pos c) site) (away-limit))

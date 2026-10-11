@@ -122,7 +122,6 @@
 (defn ^:async round
   "One child call after another until the pass is over; :continue only while a child waits on the world."
   [c]
-  (standing/mark! c)
   (when-not (:todo (ctx/mem c))
     (ctx/update-mem! c assoc :todo steps :report {} :tried #{}))
   (loop []

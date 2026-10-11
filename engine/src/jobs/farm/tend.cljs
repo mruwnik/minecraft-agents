@@ -436,5 +436,4 @@
   "The whole run: one pass per part, each one child call after another over the six steps; :continue only while a
   child waits on the world."
   [c]
-  (standing/mark! c)
   (await (pace/steps! c (fn ^:async s [] (await (run-step c))))))
