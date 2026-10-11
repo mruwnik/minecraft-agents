@@ -995,6 +995,37 @@
           (is (= "cobblestone" (block-at s 2 65 0)))
           (is (not-any? #(> (first %) 2) (dug-cells s))))))))
 
+(defn ^:async facing-west-run
+  "A stay-level mine with no heading argument, the body facing west, over rock-world extra with cobblestone carried."
+  [extra length ticks]
+  (let [s (start {:world (-> (rock-world extra) (assoc :yaw 90) (update :inventory into [{:name "cobblestone" :count 5}]))})]
+    (core/submit! (:eng s) (spec {:block "iron_ore" :count 30 :tunnel-length length :stay-level true :mend false}) {})
+    (await (run-ticks s ticks))
+    s))
+
+(deftest stay-level-turns-from-water-at-its-first-cell-and-lists-the-legs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (facing-west-run {"-1,64,0" "water"} 4 250))
+              legs (:legs (done-event s))]
+          (is (= {:heading "west" :length 0 :stop :water} (first legs)))
+          (is (= 2 (count legs)) (pr-str legs))
+          (is (= 4 (:length (second legs))))
+          (is (some #(< (nth % 2) 0) (dug-cells s)) "it went on north"))))))
+
+(deftest stay-level-turns-from-the-last-safe-cell-after-a-sealed-breach
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (facing-west-run {"-6,64,1" "air" "-6,65,1" "air"} 9 400))
+              legs (:legs (done-event s))]
+          (is (= {:heading "west" :stop :breach-sealed} (select-keys (first legs) [:heading :stop])))
+          (is (< 1 (count legs)) (pr-str legs))
+          (is (not= "west" (:heading (second legs))))
+          (is (>= 9 (reduce + (map :length legs))) "the length budget is shared by the legs")
+          (is (= "cobblestone" (block-at s -6 64 0)) "the breach stays sealed"))))))
+
 (defn ^:async stay-run
   "A stay-level mine east over rock-world extra with body memory (kind data pairs) written first; the setup."
   [extra memory]

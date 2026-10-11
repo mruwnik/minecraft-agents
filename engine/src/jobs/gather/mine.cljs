@@ -106,7 +106,7 @@
   \"via shaft s (stair 54 steps to y 16), branch 2 north 32 blocks\".
 
   Strip tunnel: a 1-wide 2-high straight run at the level the body stood on at the start, along :heading or :direction
-  (north, south, east, west or n/s/e/w), at most :tunnel-length blocks per job; it starts past cells of the line already open (info
+  (north, south, east, west or n/s/e/w; give :heading to choose it, else the way the body faces), at most :tunnel-length blocks per job; it starts past cells of the line already open (info
   mine.tunnel-skipped, also down a stair to a floor) and never digs a torch. 0 means no tunnel: then no
   target ends :wet when a seen block was rejected only for water, else :none. Each step stands on the last
   cell of the run and judges the next cell and the one over it: no fluid in it, no seen lava beside it, no seen water
@@ -164,7 +164,9 @@
   :mended, the cells filled; its text (and the result's text when :got is 0) names the stair's steps and the tunnel's length,
   heading and height (\"; stair down 48 steps; tunnel 32 blocks east at y 16\"); :descent {:steps :stop} is in the result after any descent. With reason :wet (also when a tunnel dug nothing and seen blocks were skipped for water), :wet-skipped counts the seen blocks left for water beside them. Its text says the reason, :got and :mended, and for a tunnel its length, heading, end cell
   and whether the body walked back. :got is how many more are carried than at the start, at least 0. :tunnel is
-  {:origin :heading :steps :stop :end :back-at :walked-back?}, :end the cell it ended on before the walk back.")
+  {:origin :heading :steps :stop :end :back-at :walked-back?}, :end the cell it ended on before the walk back.
+  :stay-level with no :heading or :direction goes on after a sealed breach or a fluid stop: it turns to a heading not yet tried from the
+  cell it stands in (not back along its tunnel), the :tunnel-length shared by all legs; :legs lists them [{:heading :length :stop}].")
 
 (a/defargs args
   {:from {:doc "where the body stood at submit (jobs.mjs adds it): the job waits :moved-since-submit before its first round when the body is then over jobs.lib.submitted/limit away" :spec a/position? :default nil}
@@ -411,6 +413,7 @@
         reason (if (and (zero? got) (pos? (or wet-skipped 0)) (#{:none :no-drops :tunnel-length :tunnel-stopped} (:reason m))) :wet (:reason m))
         why (cond-> {} dig-reason (assoc :dig-reason dig-reason) (or (= :no-stone-found reason) (pos? (:steps descent 0))) (assoc :descent descent) (= :wet reason) (assoc :wet-skipped (or wet-skipped 0)) resumes (assoc :resumes resumes) suggest (assoc :shaft-suggest suggest) (seq unreached) (assoc :unreached unreached) (seq (:holes-open m)) (assoc :holes-open (:holes-open m))
               (pos? (:steps tunnel 0)) (assoc :tunnel (-> tunnel (select-keys [:origin :heading :steps :stop :end :back-at :walked-back?]) (update :origin access/cell)))
+              (seq (:legs m)) (assoc :legs (:legs m))
               (seq (ore-pick/picked c)) (assoc :ores (ore-pick/picked c))
               (seq left) (assoc :left (mapv (fn [[pos n]] {:pos pos :count n}) left)))]
     (ctx/emit! c :mine.done (if (= :not-home reason) :warn :info) (merge {:got got :reason reason :mended (or mended 0)
@@ -682,20 +685,33 @@
   "Stops that say only this heading is blocked: the stair or tunnel at 0 steps tries the next heading."
   #{:breach-sealed :way-out :own-zone :floor-unseen :not-loaded :base-block :crop :fluid-in-cut :place-failed :no-support-floor :no-floor :walk-failed :refused})
 
+(def leg-stops
+  "Stops after which a stay-level run goes on along another heading from the cell it stands in."
+  (into heading-stops #{:fluid :water :lava}))
+
+(def opposite {"north" "south" "south" "north" "east" "west" "west" "east"})
+
 (defn turn-heading!
   "Turn the run to the next of the four headings not yet tried (memory :tried-headings), forgetting the stop and the tunnel
-  begun on the old one; info mine.turned. False (nothing changed) when a heading arg was given or all four are tried."
+  begun on the old one; info mine.turned. A tunnel of steps > 0 is kept as a leg (memory :legs, :spent) and the way back along
+  it is not a heading. False (nothing changed) when a heading arg was given or all are tried."
   [c stop]
   (let [m (ctx/mem c)
         {:keys [heading direction]} (:args c)
-        tried (conj (set (:tried-headings m)) (:heading m))
+        {:keys [steps] :as tunnel} (:tunnel m)
+        mid? (pos? (or steps 0))
+        tried (cond-> (conj (set (:tried-headings m)) (:heading m))
+                mid? (conj (opposite (:heading m))))
         cycle ["north" "east" "south" "west"]
         order (map #(nth cycle (mod (+ (.indexOf cycle (:heading m)) %) 4)) (range 1 4))
         to (first (remove tried order))]
     (when (and to (nil? heading) (nil? direction))
-      (ctx/emit! c :mine.turned :info {:from (:heading m) :to to :stop stop
-                                       :text (str "mine's " (name stop) " blocks its heading " (:heading m) "; it turns " to)})
-      (ctx/update-mem! c #(-> % (assoc :heading to :tried-headings tried) (dissoc :tunnel) (update :descent dissoc :stop)))
+      (ctx/emit! c :mine.turned :info {:from (:heading m) :to to :stop stop :length (or steps 0)
+                                       :text (str "mine's " (name stop) " blocks its heading " (:heading m) (when mid? (str " after " steps " blocks")) "; it turns " to)})
+      (when mid? (stay/record-tunnel! c tunnel (headings (:heading m))))
+      (ctx/update-mem! c #(cond-> (-> % (assoc :heading to :tried-headings tried) (dissoc :tunnel :torch-at :glanced :relooked :looked :recuts) (update :descent dissoc :stop))
+                            tunnel (-> (update :legs (fnil conj []) {:heading (:heading m) :length (or steps 0) :stop stop})
+                                       (update :spent (fnil + 0) (or steps 0)))))
       true)))
 
 (defn tunnel-reason [stop] (if (= :tunnel-length stop) :tunnel-length :tunnel-stopped))
@@ -710,9 +726,12 @@
   (let [{:keys [goal tunnel]} (ctx/mem c)
         {:keys [heading steps]} tunnel
         got (max 0 (- (carried c) (- goal (:count (:args c)))))]
-    (if (and (zero? steps) (heading-stops stop) (turn-heading! c stop))
+    (if (and (if (:stay-level (:args c)) (leg-stops stop) (and (zero? steps) (heading-stops stop)))
+             (< (+ steps (:spent (ctx/mem c) 0)) (:tunnel-length (:args c)))
+             (turn-heading! c stop))
       :again
       (do
+    (ctx/update-mem! c update :legs (fnil conj []) {:heading heading :length steps :stop stop})
     (ctx/emit! c :mine.tunnel-end :warn
                (cond-> {:reason stop :heading heading :length steps :y (:y (:origin tunnel)) :got got
                         :text (str "mine's tunnel ended after " steps " blocks " heading " at y " (:y (:origin tunnel)) ": "
@@ -1011,7 +1030,7 @@
       stop (to-mend! c (tunnel-reason stop))
       (some #(within-own-zone c 0 (access/cell %)) cut) (end! c :own-zone next)
       (way-floor c cut) (end! c :way-out (way-floor c cut) next)
-      (>= steps (:tunnel-length (:args c))) (end! c :tunnel-length nil)
+      (>= (+ steps (:spent m 0)) (:tunnel-length (:args c))) (end! c :tunnel-length nil)
       (do (reset! walk (await (step-to! c from))) @walk) (end! c :walk-failed from nil @walk)
       (and (look/unseen? (:primitives c) cut) (not= next (:glanced m)))
       (do (ctx/update-mem! c assoc :glanced next)
