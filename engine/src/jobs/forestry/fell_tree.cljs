@@ -273,8 +273,6 @@
 
 (def pillar-items pl/default-items)
 
-(defn cell-pos [[x y z]] {:x x :y y :z z})
-
 (defn log-cell [l] (let [{:keys [x y z]} (:pos l)] [x y z]))
 
 (defn pillar-plan
@@ -363,7 +361,7 @@
 
 (defn ^:async pillar-walk!
   [c {:keys [plan]}]
-  (let [r (await (child/call-walk c :pwalk {:pos (cell-pos (or (:base plan) (:stand plan))) :range 0 :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))
+  (let [r (await (child/call-walk c :pwalk {:pos (u/cell-pos (or (:base plan) (:stand plan))) :range 0 :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))
         res (ctx/child-result c :pwalk)]
     (cond
       (= :continue r) :continue

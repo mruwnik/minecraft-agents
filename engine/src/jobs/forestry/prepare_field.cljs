@@ -54,7 +54,7 @@
   (let [m (ctx/mem c)
         world {:planned planned
                :holes (set (:holes m))
-               :carried (maintain/carried-names (:primitives c))
+               :carried (u/carried-names (:primitives c))
                :over (:headroom (:args c))}]
     (into {} (map (fn [[pos species]]
                     [pos (settle-wet c (assoc (rule/assess (:primitives c) pos species world) :pos pos :species species))]))

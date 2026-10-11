@@ -12,7 +12,7 @@
             [jobs.lib.pen :as pen]
             [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
-            [jobs.animals.herd-run :refer [adults animal-now approach-range box-centre cell cell-pos drop-gate! end! finish! gate-cell gate-index gate-open? hold-gate! in-pen-adults max-reopens near-pen orthogonal out-1 read-pen set-phase! settle-ms shut-failed!]]))
+            [jobs.animals.herd-run :refer [adults animal-now approach-range box-centre cell drop-gate! end! finish! gate-cell gate-index gate-open? hold-gate! in-pen-adults max-reopens near-pen orthogonal out-1 read-pen set-phase! settle-ms shut-failed!]]))
 
 ;; ------------------------------------------------------------------ the pen and its gate
 
@@ -281,7 +281,7 @@
       (>= inside target) (finish! c :full)
       (< (depth (:inside answer) (cell gate) in) min-depth)
       (finish! c :too-shallow {:cell (cell in) :depth (depth (:inside answer) (cell gate) in) :need min-depth})
-      :else (do (ctx/update-mem! c assoc :phase :leash :gate gate :inside-cell (cell-pos in) :outside-cell (cell-pos out)
+      :else (do (ctx/update-mem! c assoc :phase :leash :gate gate :inside-cell (u/cell-pos in) :outside-cell (u/cell-pos out)
                                  :axis (axis (:primitives c) (:inside answer) (cell gate) in out (depth (:inside answer) (cell gate) in)))
                   :continue))))
 
@@ -324,7 +324,7 @@
   written before an open and dropped after a shut. A shut with the body in the gate cell first walks out of it."
   [c state next & [{:keys [reach then] :or {reach 3}}]]
   (when (= :open state) (hold-gate! c))
-  (if (and (= :closed state) (click/standing-in? (u/self-pos c) (cell-pos (gate-cell c)) nil))
+  (if (and (= :closed state) (click/standing-in? (u/self-pos c) (u/cell-pos (gate-cell c)) nil))
     (await (step-out-of-gate! c))
     (await (toggle-gate! c state next reach then))))
 
@@ -354,7 +354,7 @@
   failure counted in :dash-tries."
   [c]
   (hold-gate! c)
-  (let [r (await (near/go-near! c (cell-pos (nth (:axis (ctx/mem c)) out-1)) 0 {:escalate false}))
+  (let [r (await (near/go-near! c (u/cell-pos (nth (:axis (ctx/mem c)) out-1)) 0 {:escalate false}))
         outside? (body-outside? c)
         open? (gate-open? c)]
     (cond
@@ -383,7 +383,7 @@
 (defn ^:async go!
   "One round of a go-to (range 0, :doors :never) to the cell: :arrived, :failed or nil while it goes on."
   [c cell]
-  (let [r (await (child/call-walk c :walk {:pos (cell-pos cell) :range 0 :doors :never :escalate false}))]
+  (let [r (await (child/call-walk c :walk {:pos (u/cell-pos cell) :range 0 :doors :never :escalate false}))]
     (cond
       (not= :done r) nil
       (:arrived (ctx/child-result c :walk)) :arrived

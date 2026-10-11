@@ -12,6 +12,7 @@
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
             [jobs.farm.harvest :as harvest]
+            [jobs.farm.field :as fld]
             [jobs.lib.aim :as aim]))
 
 (def clock
@@ -78,7 +79,7 @@
                              "5,64,0" "beetroots" "6,64,0" "beetroots" "7,64,0" "potatoes" "30,64,0" "wheat"}
                     :ages {"1,64,0" 7 "2,64,0" 6 "3,64,0" 7 "4,64,0" 6 "5,64,0" 3 "6,64,0" 2 "7,64,0" 7 "30,64,0" 7}}))
         xs (fn [cells] (mapv :x cells))]
-    (are [args center skipped expected] (= expected (xs (harvest/ripe-crops p (plain-args args) center skipped)))
+    (are [args center skipped expected] (= expected (xs (fld/ripe-crops p (plain-args args) center skipped)))
       {} origin [] [1 3 5 7]
       {:crops ["carrots"]} origin [] [3]
       {:crops ["beetroots" "wheat"]} origin [] [1 5]
@@ -477,7 +478,7 @@
         cells (for [x xs z xs] (cell-key x 64 z))
         p (tu/seeing-all (tu/fake {:blocks (assoc (zipmap cells (repeat "wheat")) "12,64,0" "wheat")
                     :ages (assoc (zipmap cells (repeat 3)) "12,64,0" 7)}))]
-    (is (= [12] (mapv :x (harvest/ripe-crops p (plain-args {}) origin []))))))
+    (is (= [12] (mapv :x (fld/ripe-crops p (plain-args {}) origin []))))))
 
 (deftest a-place-that-is-unreachable-leaves-the-cell-bare-after-three-tries
   (async done

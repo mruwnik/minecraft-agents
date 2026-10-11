@@ -3,16 +3,14 @@
             [engine.args :as a]
             [clojure.string :as str]
             [engine.ctx :as ctx]
+            [jobs.farm.field :as fld]
             [jobs.lib.blocks :as blocks]
-            [jobs.lib.cost :as cost]
             [jobs.lib.gate :as gate]
             [jobs.lib.crops :as crops]
             [jobs.lib.look :as look]
             [jobs.lib.result :as result]
             [jobs.lib.util :as u]
-            [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
-            [jobs.lib.toll-cells :as tc]
             [jobs.lib.world :as known]))
 
 (def doc
@@ -60,73 +58,10 @@
 
 ;; ------------------------------------------------------------------ pure helpers
 
-(defn cell-pos [[x y z]] {:x x :y y :z z})
-
-(defn crop-cells
-  "{pos crop} of the cells of a plan answer (of part, when given) that want a crop harvest knows."
-  [answer part]
-  (into {} (keep (fn [{:keys [pos want] :as cell}]
-                   (when (and (map? want) (ripe-age (:crop want)) (or (nil? part) (= part (:part cell))))
-                     [(cell-pos pos) (:crop want)])))
-        (:cells answer)))
-
-(defn plan-trouble
-  "Why a plan answer with these crop cells cannot be worked, or nil."
-  [answer cells]
-  (cond
-    (nil? answer) "no such plan"
-    (:broken answer) (str "the plan cannot be read: " (:broken answer))
-    (empty? cells) "no crop cells"))
-
-(defn ripe-at?
-  "Whether p shows crop ripe at pos (nil, an unloaded cell, is not)."
-  [p pos crop]
-  (let [b (u/seen-block p pos)]
-    (boolean (and b (= crop (.-name b)) (some-> (.-age b) (>= (ripe-age crop)))))))
-
 (defn still-ripe
   "The targets p shows ripe now (a ripe reading may be remembered and stale; the cell is in view after the walk)."
   [p targets]
-  (filterv #(some->> (u/seen-name p %) (ripe-at? p %)) targets))
-
-(defn planned-ripe
-  "The planned cells (cells {pos crop}) ripe with the crop the plan wants there, of a wanted crop, not in skipped,
-  nearest to the body first."
-  [p args cells skipped]
-  (let [crops (set (or (:crops args) (keys ripe-age)))
-        skipped (set skipped)
-        here (u/pos-of (.-pos (.self p)))]
-    (->> cells
-         (filter (fn [[pos crop]] (and (crops crop) (not (skipped pos)) (ripe-at? p pos crop))))
-         (map key)
-         (sort-by #(u/dist here %)))))
-
-(defn planned-bare
-  "Debts {:pos :seed} of the planned cells standing bare: air over farmland."
-  [p cells]
-  (keep (fn [[pos crop]]
-          (when (and (= "air" (u/seen-name p pos)) (= "farmland" (u/seen-name p (update pos :y dec))))
-            {:pos pos :seed (seed-of crop)}))
-        cells))
-
-(defn sowable-counts
-  "{name count} of the carried items that may be sown: food crops only above the food reserve, the rest in full."
-  [inventory]
-  (let [kept (cost/food-reserve inventory)
-        totals (reduce (fn [acc {:keys [name count]}] (update acc name (fnil + 0) count)) {} inventory)]
-    (reduce-kv (fn [acc name n] (assoc acc name (- n (get kept name 0)))) {} totals)))
-
-(defn above-reserve
-  "The debts of bare cells without those whose seed is carried but held back by the food reserve."
-  [inventory debts]
-  (let [carried (into {} (map (juxt :name :count)) inventory)
-        left (volatile! (sowable-counts inventory))]
-    (filterv (fn [{:keys [seed]}]
-               (or (not (pos? (get carried seed 0)))
-                   (when (pos? (get @left seed 0))
-                     (vswap! left update seed dec)
-                     true)))
-             debts)))
+  (filterv #(some->> (u/seen-name p %) (fld/ripe-at? p %)) targets))
 
 (defn sync-debts
   "m with :replant made the debts of bare (those given up as :bare excepted), each keeping the counts of its old debt,
@@ -139,27 +74,6 @@
     (assoc m :replant (vec (concat (for [{:keys [pos] :as debt} bare :when (not (given-up pos))]
                                      (merge (dissoc (old pos) :seed) debt))
                                    (filter #(and (:cut %) (not (planned (:pos %)))) (:replant m)))))))
-
-(defn plan-field
-  "[center radius] around cells {pos crop}: their mean and the farthest cell's distance from it, plus 2."
-  [cells]
-  (let [ps (keys cells)
-        mean (fn [k] (js/Math.round (/ (reduce + (map k ps)) (count ps))))
-        center {:x (mean :x) :y (mean :y) :z (mean :z)}]
-    [center (+ 2 (js/Math.ceil (reduce max 0 (map #(u/dist center %) ps))))]))
-
-(defn ripe-crops
-  "Ripe crop cells of a wanted crop within :radius of center, not in skipped, nearest to the body first."
-  [p args center skipped]
-  (let [crops (or (:crops args) (keys ripe-age))
-        skipped (set skipped)
-        here (u/pos-of (.-pos (.self p)))
-        radius (+ (:radius args) (u/dist here center))]
-    (->> (crops/seen-crops p crops radius 4096)
-         (filter #(some-> (:age %) (>= (ripe-age (:name %)))))
-         (map :pos)
-         (filter #(<= (u/dist % center) (:radius args)))
-         (remove skipped))))
 
 (defn center-of
   "The centre: the :center arg, else the remembered one, else the body's position."
@@ -232,18 +146,6 @@
    {:owed [] :gone [] :bare []}
    debts))
 
-(defn ^:async walk!
-  "Walk until within range of pos (near/go-near!, doors :shut): :there, :partial (closer or an escalation waiting, call
-  again) or :blocked (it gave up, maybe only this time, or no pathWorld sensing)."
-  [c pos range]
-  (near/go-near! c pos range {:tolls (tc/walk-tolls c (near/cell-of pos))}))
-
-(defn carried-names [p] (set (map :name (u/inventory p))))
-
-(defn nearest [p cells]
-  (let [here (u/pos-of (.-pos (.self p)))]
-    (first (sort-by #(u/dist here %) cells))))
-
 (defn permitted
   "The poss the job may act on with action: zones, claims and the footprints of plans but its own (see jobs.lib.gate).
   Sowing is also allowed in a plan this body made; cutting is not (it would undo that plan)."
@@ -262,8 +164,8 @@
   [c skipped]
   (permitted c (cut-action c)
              (if-let [cells (:plan-cells c)]
-               (planned-ripe (:primitives c) (:args c) cells skipped)
-               (ripe-crops (:primitives c) (:args c) (center-of c) skipped))))
+               (fld/planned-ripe (:primitives c) (:args c) cells skipped)
+               (fld/ripe-crops (:primitives c) (:args c) (center-of c) skipped))))
 
 (defn planned
   "Without :plan nil; else {:cells {pos crop}}, or {:trouble text} (warned once per reason) when the plan
@@ -272,8 +174,8 @@
   (when-let [id (:plan (:args c))]
     (let [part (:part (:args c))
           answer (known/plan c id)
-          cells (crop-cells answer part)
-          trouble (plan-trouble answer cells)]
+          cells (fld/crop-cells answer part)
+          trouble (fld/plan-trouble answer cells)]
       (if-not trouble
         {:cells cells}
         (do (ctx/warn-once! c [id trouble] :harvest.declined
@@ -285,7 +187,7 @@
   "c over the field of planned (nil: unchanged): :plan-cells set, :center and :radius of the args around them."
   [c field]
   (if-let [cells (:cells field)]
-    (let [[center radius] (plan-field cells)]
+    (let [[center radius] (fld/plan-field cells)]
       (-> c
           (assoc :plan-cells cells)
           (update :args assoc :center center :radius radius)))
@@ -301,11 +203,11 @@
   "The planned bare cells whose seed is carried, unless replanting is off or the cell was given up."
   [c]
   (when (and (:replant (:args c)) (:replant-bare (:args c)))
-    (let [have (carried-names (:primitives c))
+    (let [have (u/carried-names (:primitives c))
           given-up (set (:bare (ctx/mem c)))]
-      (->> (planned-bare (:primitives c) (:plan-cells c))
+      (->> (fld/planned-bare (:primitives c) (:plan-cells c))
            (filter #(and (have (:seed %)) (not (given-up (:pos %)))))
-           (above-reserve (u/inventory (:primitives c)))
+           (fld/above-reserve (u/inventory (:primitives c)))
            (permitted-debts c)))))
 
 (defn gave-up? [c]
@@ -374,14 +276,14 @@
   [c]
   (let [p (:primitives c)
         owed (drop-settled! c)
-        have (carried-names p)
+        have (u/carried-names p)
         plantable (permitted-debts c (filterv #(have (:seed %)) owed))]
     (when (seq plantable)
       (let [here (u/self-pos c)
             reach (:reach (:args c))
             near (filterv #(<= (u/eye-dist here (:pos %)) (debt-reach % reach)) plantable)
             nearest-debt (first (sort-by #(u/dist here (:pos %)) plantable))
-            walked (when (empty? near) (await (walk! c (:pos nearest-debt) (walk-range nearest-debt))))
+            walked (when (empty? near) (await (fld/walk! c (:pos nearest-debt) (walk-range nearest-debt))))
             targets (if (seq near) near [nearest-debt])]
         (case walked
           :partial :continue
@@ -437,7 +339,7 @@
     (when (seq ripe)
       (let [here (u/self-pos c)
             near (filterv #(<= (u/eye-dist here %) (:reach (:args c))) ripe)
-            walked (when (empty? near) (await (walk! c (first ripe) 3)))
+            walked (when (empty? near) (await (fld/walk! c (first ripe) 3)))
             targets (if (seq near) near [(first ripe)])
             targets (still-ripe p targets)]
         (when (and (empty? targets) (not (#{:partial :blocked} walked)))
@@ -471,7 +373,7 @@
                (> (u/dist (u/self-pos c) center) radius))
       (if (>= (:home-fails m 0) (max-home-fails))
         :finish
-        (case (await (walk! c center (quot radius 2)))
+        (case (await (fld/walk! c center (quot radius 2)))
           :there :again
           :partial :continue
           (do (ctx/update-mem! c inc-in :home-fails) :again))))))
@@ -522,7 +424,7 @@
   (when (and (:plan-cells c) (:replant (:args c)))
     (let [m (ctx/mem c)
           bare (when (:replant-bare (:args c))
-                 (above-reserve (u/inventory (:primitives c)) (planned-bare (:primitives c) (:plan-cells c))))
+                 (fld/above-reserve (u/inventory (:primitives c)) (fld/planned-bare (:primitives c) (:plan-cells c))))
           synced (sync-debts m bare)]
       (when (not= (:replant m) (:replant synced))
         (ctx/update-mem! c assoc :replant (:replant synced))))))

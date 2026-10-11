@@ -9,7 +9,7 @@
             [engine.test-util :as tu :refer [child-outcome]]
             [engine.triggers :as triggers]
             [jobs.farm.find-spot :as find-spot]
-            [jobs.farm.harvest :as harvest]
+            [jobs.farm.field :as fld]
             [jobs.farm.tend :as tend]))
 
 (def field {:blocks {"1,64,0" "wheat" "2,64,0" "wheat"} :ages {"1,64,0" 7 "2,64,0" 3}})
@@ -33,8 +33,8 @@
 
 (deftest ripe-crops-are-those-seen
   (let [args {:radius 10}]
-    (is (= [1] (mapv :x (harvest/ripe-crops (tu/seeing-all (tu/fake field)) args origin []))))
-    (is (empty? (harvest/ripe-crops (tu/blind (tu/fake field)) args origin [])) "unseen crops are not cut")))
+    (is (= [1] (mapv :x (fld/ripe-crops (tu/seeing-all (tu/fake field)) args origin []))))
+    (is (empty? (fld/ripe-crops (tu/blind (tu/fake field)) args origin [])) "unseen crops are not cut")))
 
 (deftest tend-counts-only-the-unripe-crops-seen
   (let [box {:min {:x 0 :y 64 :z 0} :max {:x 4 :y 64 :z 2}}]

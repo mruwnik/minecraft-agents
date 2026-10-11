@@ -82,14 +82,12 @@
 
 ;; ------------------------------------------------------------------ pure helpers
 
-(defn cell-pos [[x y z]] {:x x :y y :z z})
-
 (defn tree-cells
   "{pos species} of the cells of a plan answer (of part, when given) that want a tree."
   [answer part]
   (into {} (keep (fn [{:keys [pos want] :as cell}]
                    (when (and (map? want) (string? (:tree want)) (or (nil? part) (= part (:part cell))))
-                     [(cell-pos pos) (:tree want)])))
+                     [(u/cell-pos pos) (:tree want)])))
         (:cells answer)))
 
 (defn plan-trouble
@@ -124,8 +122,6 @@
       (not ((soil-for species) below)) :no-ground
       (some-> (u/seen-name p (up pos)) forestry/log-name?) :cramped
       :else :bare)))
-
-(defn carried-names [p] (set (map :name (u/inventory p))))
 
 ;; ------------------------------------------------------------------ left cells
 
@@ -169,7 +165,7 @@
   "Say, once each, which planned cells hold something foreign, cannot take a sapling, or want a sapling not carried."
   [c classes]
   (let [p (:primitives c)
-        have (carried-names p)]
+        have (u/carried-names p)]
     (doseq [[pos [kind species]] classes]
       (case kind
         :foreign (let [found (u/seen-name p pos)]
@@ -222,7 +218,7 @@
 (defn plantable
   "The owed cells whose sapling is carried."
   [c owed]
-  (let [have (carried-names (:primitives c))]
+  (let [have (u/carried-names (:primitives c))]
     (filterv #(have (forestry/sapling-of (:species %))) owed)))
 
 ;; ------------------------------------------------------------------ check
@@ -244,7 +240,7 @@
   [c classes]
   (let [kinds (group-by (comp first val) classes)
         cells (fn [& ks] (vec (sort (map (comp cell-vec key) (mapcat kinds ks)))))
-        have (carried-names (:primitives c))
+        have (u/carried-names (:primitives c))
         short (filter (fn [[_ [_ species]]] (not (have (forestry/sapling-of species)))) (:bare kinds))]
     (cond
       (seq (:foreign kinds)) {:reason :cells-foreign :cells (cells :foreign)}

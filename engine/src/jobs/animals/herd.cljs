@@ -9,7 +9,7 @@
             [jobs.lib.child :as child]
             [jobs.animals.escort :as escort]
             [jobs.lib.watch :as watch]
-            [jobs.animals.herd-run :refer [adults after-shut! cell census! crowd-in-radius crowd-ms crowd-out-radius deepest end! exit-shut-ms gate-cell gate-index gate-open? hold-gate! cell-pos in-1 in-pen-adults led-now lure? animal-now follow-range out-1 read-pen release-step! set-phase! settle-ms settle-out-ms shut-failed! shut-look-ms transient-keys]]
+            [jobs.animals.herd-run :refer [adults after-shut! cell census! crowd-in-radius crowd-ms crowd-out-radius deepest end! exit-shut-ms gate-cell gate-index gate-open? hold-gate! in-1 in-pen-adults led-now lure? animal-now follow-range out-1 read-pen release-step! set-phase! settle-ms settle-out-ms shut-failed! shut-look-ms transient-keys]]
             [jobs.animals.herd-pen :refer [body-in-pen? cell-middle crowded-near? exit-dash! go-then! let-go-cell look-wait! max-leaves on-gate? set-gate! settle-at! shut-side! shut-when-clear! survey! wait-clear! waited-ms]]
             [jobs.animals.herd-trip :refer [leash-next! pinned! remember-start! prune-led! regather! regather-or-lose! released! step-position!]]))
 
@@ -140,7 +140,7 @@
         now (ctx/now c)
         since (or (:unseen-since m) now)
         d (when a (u/flat-dist (u/pos-of (.-pos a)) (u/self-pos c)))
-        target (cell-pos (nth (:axis m) 0))]
+        target (u/cell-pos (nth (:axis m) 0))]
     (cond
       (nil? a) (if (<= escort/unseen-lost-ms (- now since))
                  (lure-lost! c :lost)

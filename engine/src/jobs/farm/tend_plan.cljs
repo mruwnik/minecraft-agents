@@ -9,7 +9,7 @@
             [jobs.lib.util :as u]
             [jobs.farm.fertilize :as fertilize]
             [jobs.lib.crops :as crops]
-            [jobs.farm.harvest :as harvest]
+            [jobs.farm.field :as fld]
             [jobs.farm.plant :as plant]
             [jobs.farm.tidy :as tidy]
             [jobs.farm.till :as till]
@@ -30,7 +30,7 @@
   "{ground-pos crop}: the plan's farmland under the crop cells crops {pos crop}, the cell below each unless the plan
   (answer) names it with a want that is not farmland."
   [answer crops]
-  (let [wants (into {} (map (fn [{:keys [pos want]}] [(harvest/cell-pos pos) want])) (:cells answer))]
+  (let [wants (into {} (map (fn [{:keys [pos want]}] [(u/cell-pos pos) want])) (:cells answer))]
     (into {} (keep (fn [[pos crop]]
                      (let [g (update pos :y dec)]
                        (when (or (not (contains? wants g)) (farmland-want? (wants g)))
@@ -44,8 +44,8 @@
   (when-let [id (:plan (:args c))]
     (let [part (:part (:args c))
           answer (known/plan c id)
-          crops (harvest/crop-cells answer part)
-          trouble (or (harvest/plan-trouble answer crops)
+          crops (fld/crop-cells answer part)
+          trouble (or (fld/plan-trouble answer crops)
                       (when (nil? (known/zones c)) "no zone list has been read"))]
       (if-not trouble
         {:answer answer :crops crops}
@@ -112,8 +112,8 @@
   [inventory cells]
   (some (fn [seed]
           (when-let [h (plant/held-back seed inventory)]
-            (assoc h :cells (count (filter #(= seed (harvest/seed-of (val %))) cells)))))
-        (distinct (map (comp harvest/seed-of val) cells))))
+            (assoc h :cells (count (filter #(= seed (crops/seed-of (val %))) cells)))))
+        (distinct (map (comp crops/seed-of val) cells))))
 
 (defn plan-facts
   "What the decisions are made from for a plan, read live."
@@ -125,17 +125,17 @@
         have (plant/sowable inventory)
         me (u/self-pos c)
         tried (:till-tried (ctx/mem c) #{})
-        bare (harvest/planned-bare p crops)
+        bare (fld/planned-bare p crops)
         bare-of (frequencies (map :seed bare))
         sowing (plant/sowing c crops)
-        [mid R] (harvest/plan-field crops)
+        [mid R] (fld/plan-field crops)
         keep (stock/keeps (seed-reserve crops) inventory keep)
         untilled-cells (->> (ground-cells answer crops)
                             (remove (fn [[pos _]] (tried pos)))
                             (filter (fn [[pos _]] (stock/untilled? (ground-cell p pos)))))
         _ (note-refused! c plan (map key untilled-cells))
         tillable (filter (fn [[pos _]] (permit/ok? c plan :dig pos)) untilled-cells)
-        seeded (filter (fn [[_ crop]] (let [seed (harvest/seed-of crop)] (> (get have seed 0) (get bare-of seed 0)))) tillable)
+        seeded (filter (fn [[_ crop]] (let [seed (crops/seed-of crop)] (> (get have seed 0) (get bare-of seed 0)))) tillable)
         seeded-set (set (map key seeded))
         unseeded (remove (comp seeded-set key) tillable)
         wet (filter (fn [[pos _]] (wet? p pos)) unseeded)
@@ -143,7 +143,7 @@
         tilled-cells (concat seeded wet)]
     {:mid mid
      :radius R
-     :ripe (count (harvest/planned-ripe p {} crops []))
+     :ripe (count (fld/planned-ripe p {} crops []))
      :hoe (some? (till/hoe-of p))
      :untilled (->> tilled-cells (map key) (sort-by #(u/dist me %)) vec)
      :till-short (count dry)
@@ -173,7 +173,7 @@
         crops (or crops {})
         have (set (map :name (u/inventory p)))]
     {:crops (count (filter (fn [[pos crop]] (contains? (shape/crop-names crop) (u/seen-name p pos))) crops))
-     :bare (count (harvest/planned-bare p crops))
+     :bare (count (fld/planned-bare p crops))
      :untilled (count (filter #(stock/untilled? (ground-cell p %)) (keys (ground-cells answer crops))))
      :wrong (wrong-crops p crops)
-     :short (into #{} (comp (map :seed) (remove have)) (harvest/planned-bare p crops))}))
+     :short (into #{} (comp (map :seed) (remove have)) (fld/planned-bare p crops))}))

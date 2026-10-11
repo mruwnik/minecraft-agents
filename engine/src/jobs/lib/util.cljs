@@ -31,6 +31,8 @@
   [pos]
   (mapv js/Math.floor (if (map? pos) [(:x pos) (:y pos) (:z pos)] [(.-x pos) (.-y pos) (.-z pos)])))
 
+(defn cell-pos [[x y z]] {:x x :y y :z z})
+
 (defn ^:async untimed!
   "Await (thunk), then move mem :started (the job's :timeout-s start) on by the time it took: :timeout-s bounds the
   work the job does, not a fetch inside it. Returns the thunk's result."
@@ -160,6 +162,8 @@
   (mapv (fn [i] (cond-> {:name (.-name i) :count (.-count i) :slot (.-slot i)}
                   (some? (.-durability i)) (assoc :durability (.-durability i) :max (.-maxDurability i))))
         (some-> (.self p) .-inventory array-seq)))
+
+(defn carried-names [p] (set (map :name (inventory p))))
 
 (def inventory-slots
   "Main and hotbar slots: what the inventory list holds (armour and off-hand are not in it)."

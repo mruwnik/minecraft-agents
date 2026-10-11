@@ -8,7 +8,7 @@
             [engine.test-util :as tu]
             [jobs.animals.lead-to :as lead-to]
             [jobs.apiary.harvest :as apiary-harvest]
-            [jobs.farm.harvest :as harvest]
+            [jobs.farm.field :as fld]
             [jobs.farm.plant :as plant]
             [jobs.farm.tend :as tend]
             [jobs.farm.tend-plan :as tend-plan]
@@ -76,7 +76,7 @@
 
 (deftest harvest-ripe-reading-needs-sight
   (let [blocks {"0,64,4" "wheat"}
-        ripe (fn [w] (vec (harvest/planned-ripe w {} {{:x 0 :y 64 :z 4} "wheat"} [])))]
+        ripe (fn [w] (vec (fld/planned-ripe w {} {{:x 0 :y 64 :z 4} "wheat"} [])))]
     (is (= [] (ripe (wrapped blocks true))) "behind stone: unknown, not ripe")))
 
 (def cell {:x 0 :y 64 :z 4})

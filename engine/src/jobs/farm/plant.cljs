@@ -12,7 +12,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
-            [jobs.farm.harvest :as harvest]
+            [jobs.farm.field :as fld]
             [jobs.farm.till :as till]
             [jobs.lib.world :as known]))
 
@@ -80,7 +80,7 @@
   "{name count} of the carried items that may be sown: food crops (carrots, potatoes) only above the food reserve,
   everything else in full. A cell just harvested is replanted by jobs.farm.harvest and ignores the reserve."
   [inventory]
-  (harvest/sowable-counts inventory))
+  (fld/sowable-counts inventory))
 
 (defn pick-seed
   "The seed to sow given the inventory: seed when it may be sown, else the largest sowable stack of a known seed;
@@ -143,7 +143,7 @@
       (cond
         (:started (ctx/mem c)) true
         (seq ready) true
-        (seq short) (fetch/check c job-sym (need-of short (count (harvest/planned-bare (:primitives c) (:cells field)))))
+        (seq short) (fetch/check c job-sym (need-of short (count (fld/planned-bare (:primitives c) (:cells field)))))
         :else (gate/wait-unless-set c {:reason :nothing-to-do})))))
 
 (defn sowable-cells
@@ -170,7 +170,7 @@
         (let [field (planned c)
               {:keys [ready short]} (when (:cells field) (sowing c (:cells field)))]
           (when (and (empty? ready) (seq short))
-            (need-of short (count (harvest/planned-bare p (:cells field))))))
+            (need-of short (count (fld/planned-bare p (:cells field))))))
         (let [{:keys [box seed]} (:args c)
               bare (when box (bare-cells p box (:skipped m)))]
           (when (and (seq bare) (not (pick-seed seed (u/inventory p))) (not (held-back seed (u/inventory p))))
@@ -209,8 +209,8 @@
   (when-let [id (:plan (:args c))]
     (let [part (:part (:args c))
           answer (known/plan c id)
-          cells (harvest/crop-cells answer part)
-          trouble (or (harvest/plan-trouble answer cells)
+          cells (fld/crop-cells answer part)
+          trouble (or (fld/plan-trouble answer cells)
                       (when (nil? (known/zones c)) "no zone list has been read"))]
       (if-not trouble
         {:cells cells}
@@ -232,7 +232,7 @@
                                            (not (have seed)) (update acc :short conj seed)
                                            :else (update acc :seeded conj debt)))
                                        {:short #{} :seeded []}
-                                       (harvest/planned-bare (:primitives c) cells))
+                                       (fld/planned-bare (:primitives c) cells))
         ok (set (gate/allowed c :plant.declined "plant" :sow (map :pos seeded) {:except plan :own-plans-ok? true}))]
     (reduce (fn [acc {:keys [pos] :as debt}]
               (if (ok pos)
@@ -274,13 +274,13 @@
 (defn ^:async plan-round [c field]
   (when-not (:started (ctx/mem c))
     (ctx/update-mem! c assoc :started true))
-  (let [{:keys [ready] :as found} (update (sowing c (:cells field)) :ready #(harvest/above-reserve (u/inventory (:primitives c)) %))]
+  (let [{:keys [ready] :as found} (update (sowing c (:cells field)) :ready #(fld/above-reserve (u/inventory (:primitives c)) %))]
     (if (empty? ready)
       (finish-plan! c found)
       (let [here (u/self-pos c)
             near (filterv #(<= (u/eye-dist here (:pos %)) (:reach (:args c))) ready)
             target (first (sort-by #(u/dist here (:pos %)) ready))
-            walked (when (empty? near) (await (harvest/walk! c (:pos target) 3)))]
+            walked (when (empty? near) (await (fld/walk! c (:pos target) 3)))]
         (case walked
           :partial :continue
           :no-path (do (ctx/update-mem! c count-fail :walk-fails (:pos target)) :again)
@@ -355,8 +355,8 @@
       :else
       (let [here (u/self-pos c)
             near (filterv #(<= (u/eye-dist here %) (:reach (:args c))) cells)
-            target (harvest/nearest p cells)
-            walked (when (empty? near) (await (harvest/walk! c target 3)))]
+            target (fld/nearest p cells)
+            walked (when (empty? near) (await (fld/walk! c target 3)))]
         (case walked
           :partial :continue
           :no-path (do (ctx/update-mem! c count-fail :walk-fails target) :again)

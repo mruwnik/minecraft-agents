@@ -13,7 +13,7 @@
             [jobs.lib.util :as u]
             [jobs.farm.fertilize :as fertilize]
             [jobs.lib.crops :as crops]
-            [jobs.farm.harvest :as harvest]
+            [jobs.farm.field :as fld]
             [jobs.farm.plant :as plant]
             [jobs.farm.till :as till]
             [jobs.farm.tend-decide :as decide]
@@ -180,7 +180,7 @@
         keep-of (stock/keeps (reserve (beds ground) inventory) inventory keep)]
     {:mid mid
      :radius R
-     :ripe (count (box-permitted c :harvest (filter #(in-box? box %) (harvest/ripe-crops p {:radius R :crops nil} mid []))))
+     :ripe (count (box-permitted c :harvest (filter #(in-box? box %) (fld/ripe-crops p {:radius R :crops nil} mid []))))
      :hoe (some? (till/hoe-of p))
      :untilled (->> ground
                     (filter stock/untilled?)

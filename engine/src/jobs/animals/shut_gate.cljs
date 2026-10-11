@@ -47,8 +47,6 @@
   {::pause-ttl-ms {:default 30000 :doc "How long a gate stays paused after a failed shut, in ms." :spec (a/int-in 0 nil)}})
 (defn pause-ttl-ms [] (settings/get settings ::pause-ttl-ms))
 
-(defn cell-pos [[x y z]] {:x x :y y :z z})
-
 (defn world-of [c] (:world (:engine c)))
 
 (defn plan-gates
@@ -123,7 +121,7 @@
 (defn ^:async walk!
   "nil when the body stands within reach, else why not: :walk-interrupted (the walk ended :continue) or :unreachable."
   [c cell]
-  (let [r (await (child/call-walk c :walk {:pos (cell-pos cell) :range (:reach (:args c)) :doors :never :escalate false}))]
+  (let [r (await (child/call-walk c :walk {:pos (u/cell-pos cell) :range (:reach (:args c)) :doors :never :escalate false}))]
     (cond
       (= :continue r) :walk-interrupted
       (and (= :done r) (:arrived (ctx/child-result c :walk))) nil
@@ -132,7 +130,7 @@
 (defn ^:async clear-of-animals?
   "Whether no animal stands in the gate's cell, after waiting out one for pass/shut-waits times pass/shut-wait-ms."
   [c cell]
-  (let [col (pass/column-of (cell-pos cell) {})]
+  (let [col (pass/column-of (u/cell-pos cell) {})]
     (loop [n 0]
       (cond
         (empty? (pass/animals-in c col)) true
@@ -142,7 +140,7 @@
 (defn ^:async click!
   "Click the gate at cell once the body is in reach, then read it again: nil when shut, else the reason."
   [c cell]
-  (let [r (await (ctx/act c :useOn (clj->js {:pos (cell-pos cell)})))]
+  (let [r (await (ctx/act c :useOn (clj->js {:pos (u/cell-pos cell)})))]
     (cond
       (empty? (pg/open-cells (apiary/seen-block-at-fn (:primitives c)) [cell])) nil
       (= "unreachable" (.-status r)) :unreachable

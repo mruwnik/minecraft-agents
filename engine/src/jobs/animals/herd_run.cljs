@@ -50,8 +50,6 @@
 
 (defn cell [{:keys [x y z]}] [x y z])
 
-(defn cell-pos [[x y z]] {:x x :y y :z z})
-
 (defn box-centre [{:keys [min max]}]
   {:x (/ (+ (:x min) (:x max) 1) 2) :y (:y min) :z (/ (+ (:z min) (:z max) 1) 2)})
 
@@ -111,7 +109,7 @@
   "The gate at cell as the body knows it: :open, :shut, or :unknown (never seen, or remembered past its 10 s)."
   [p cell]
   (let [b (apiary/seen-block-at-fn p)
-        pos (cell-pos cell)]
+        pos (u/cell-pos cell)]
     (cond
       (nil? (b pos)) :unknown
       (seq (pg/open-cells b [cell])) :open
