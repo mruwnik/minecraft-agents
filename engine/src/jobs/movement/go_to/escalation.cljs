@@ -7,6 +7,7 @@
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.escape :as escape]
             [jobs.lib.ledger :as ledger]
+            [jobs.lib.own-pen :as own-pen]
             [jobs.lib.reach :as reach]
             [jobs.lib.shelter :as sh]
             [jobs.lib.step-off :as step-off]
@@ -90,12 +91,16 @@
 
 (defn may-dig-fn
   "(may-dig? cell): no other owner's zone, claim or plan footprint refuses a dig there (jobs.lib.tidy/refusal), and
-  no plan this body made covers it when spare? (default: go-to's spare-own?)."
+  when spare? (default: go-to's spare-own?) no plan this body made covers it and, when pens? (default spare?), it is
+  not the wall of the own pen holding livestock the body stands in (jobs.lib.own-pen)."
   ([c] (may-dig-fn c (spare-own? c)))
-  ([c spare?]
-   (let [own-plan (own-plan-fn c)]
+  ([c spare?] (may-dig-fn c spare? spare?))
+  ([c spare? pens?]
+   (let [own-plan (own-plan-fn c)
+         pen-wall? (if pens? (own-pen/wall? c (end/feet-cell c)) (constantly false))]
      (fn [cell]
        (and (or (not spare?) (nil? (own-plan cell)))
+            (not (pen-wall? cell))
             (or (boolean (:ignore-zones? (:args c))) (nil? (tidy/refusal c :dig (zipmap [:x :y :z] cell)))))))))
 
 (def placed-policy
@@ -229,7 +234,8 @@
         choosable? #(not= :none (:step (escape/choose (:primitives c) feet goal % opts)))
         e (cond
             (not= :none (:step e)) e
-            (and (spare-own? c) (choosable? (may-dig-fn c false))) {:step :none :why :own-build}
+            (and (spare-own? c) (choosable? (may-dig-fn c false)))
+            {:step :none :why (if (choosable? (may-dig-fn c true false)) :own-pen :own-build)}
             (choosable? (constantly true)) {:step :none :why :zone}
             :else e)]
     (cond

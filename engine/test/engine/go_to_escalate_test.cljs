@@ -564,6 +564,20 @@
           (is (seq warned) "each own cell dug is named")
           (is (every? #(and (= :warn (:level %)) (= "hut" (:plan %)) (vector? (:cell %))) warned)))))))
 
+(deftest go-to-never-digs-out-of-its-own-pen-holding-animals
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [zones [{:name "pen" :owner "Fake" :min [-2 60 -2] :max [2 64 2]}]
+              cow {:id 7 :name "cow" :kind "passive" :pos {:x 0.5 :y 61 :z 0.5}}
+              go (fn [world zones] (run-job! world 'jobs.movement.go-to {:pos [10 64 0] :range 1} zones))
+              {:keys [out p seen]} (await (go (merge in-pit {:blocks pit :entities [cow]}) zones))
+              open (await (go (merge in-pit {:blocks pit}) zones))]
+          (is (= false (:arrived @out)))
+          (is (= {:step :none :why :own-pen} (:escalation @out)) "animals stand in the pit the body owns")
+          (is (empty? (calls p "dig")))
+          (is (= {:arrived true} @(:out open)) "an own pit with no animals in it is dug out of as before"))))))
+
 (deftest go-to-roofed-pit-stairs-through-the-roof-rather-than-pillar
   (async done
     (tu/run-async done
