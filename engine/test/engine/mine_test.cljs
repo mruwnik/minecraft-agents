@@ -2362,3 +2362,11 @@
           (is (= "air" (block-at on -1 64 1)))
           (is (= [[-1 64 1]] (mapv :cell (:ores (done-event on)))))
           (is (= "coal_ore" (block-at off -1 64 1)) "opted out"))))))
+
+(deftest the-end-text-names-why-a-run-with-no-tunnel-blocks-stopped
+  (is (= "; stair stopped: undercuts-way; tunnel stopped: way-out"
+         (mine/dug-text {:descent {:steps 0 :stop :undercuts-way} :tunnel {:steps 0 :stop :way-out}} :tunnel-stopped)))
+  (is (= "; tunnel 2 blocks east at y 5; tunnel stopped: lava"
+         (mine/dug-text {:tunnel {:steps 2 :heading "east" :origin {:y 5} :stop :lava}} :tunnel-stopped)))
+  (is (= "; tunnel 2 blocks east at y 5"
+         (mine/dug-text {:tunnel {:steps 2 :heading "east" :origin {:y 5} :stop :tunnel-length}} :tunnel-length))))

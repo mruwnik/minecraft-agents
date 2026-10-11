@@ -374,7 +374,9 @@
          (when branch (str ", branch " n " " (name (:heading branch)) " " (:steps tunnel 0) " blocks")))
     (str (when (and (pos? (:steps descent 0)) (not= :no-stone-found reason)) (str "; stair down " (:steps descent) " steps"))
          (some-> suggest suggest-text)
-         (when (pos? (:steps tunnel 0)) (str "; tunnel " (:steps tunnel) " blocks " (:heading tunnel) " at y " (:y (:origin tunnel)))))))
+         (when (pos? (:steps tunnel 0)) (str "; tunnel " (:steps tunnel) " blocks " (:heading tunnel) " at y " (:y (:origin tunnel))))
+         (when (and (zero? (:steps descent 0)) (:stop descent)) (str "; stair stopped: " (name (:stop descent))))
+         (when-let [stop (:stop tunnel)] (when (not= :tunnel-length stop) (str "; tunnel stopped: " (name stop)))))))
 
 (defn finish!
   "Emit the outcome, hand it to the parent and end the job."
