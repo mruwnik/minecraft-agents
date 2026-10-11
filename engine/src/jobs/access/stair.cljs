@@ -21,10 +21,7 @@
             [jobs.lib.dig-look :refer [unknown? look-at! settle! see-round!]]
             [jobs.lib.tools :as tools]
             [jobs.lib.trip :as trip]
-            [engine.path.executor :as executor]
-            [jobs.lib.walk :as walk]
-            [jobs.lib.walk.world :as wworld]
-            [jobs.lib.walk.plan :as wplan]))
+            [jobs.lib.walk :as walk]))
 
 (def doc
   "Dig a 1-wide stair :down or :up along :heading (nil: the way the body faces) from where the body stands, :steps steps or to feet height :y.
@@ -240,12 +237,6 @@
   [c]
   (access/zone-input c {:ignore-zones? (:ignore-zones? (:args c)) :own-plans-ok? true :except (:through (:args c))}))
 
-(defn feet-of
-  "The cell [x y z] the body stands on (jobs.lib.reach/standing-cell: the planner's start on a block's edge)."
-  [c]
-  (let [{:keys [x y z]} (reach/standing-cell (:primitives c))]
-    [x y z]))
-
 (defn rules-in
   "The rules' input at feet: :block-at reads unsensed cells as hidden-guess; :column-at reads them as air (a column
   scanned from the sky down for a stand, jobs.access.tunnel/surface)."
@@ -354,7 +345,7 @@
   (let [m (ctx/mem c)
         steps (or (:at-step m) 0)
         result (merge {:status (if (= :done reason) :done :stopped) :reason reason :steps steps
-                       :at (feet-of c) :dug (:dug m []) :ores (vec (ore-pick/picked c))}
+                       :at (reach/standing-vec (:primitives c)) :dug (:dug m []) :ores (vec (ore-pick/picked c))}
                       detail)]
     (ctx/result! c result)
     (when-let [{:keys [origin]} (when (pos? steps) m)]
@@ -377,21 +368,6 @@
       (not= block (block-at cell)) (update :dug (fnil conj []) {:cell cell :block block}))
     m))
 
-(defn ^:async way-back
-  "nil when a whole plan the executor can walk leads from the body to origin on a fresh pathWorld, else the stop (a
-  promise: the search yields to the event loop)."
-  [c origin]
-  (let [pw (wworld/path-world (:primitives c))]
-    (if (nil? pw)
-      {:reason :no-way-back :why :unsupported}
-      (let [{:keys [r steps beyond]} (await (wplan/plan-within! c pw origin 0 walk/default-weight (wworld/body-policy c)))
-            status (.-status r)
-            stop (fn [refused] {:reason :no-way-back :why :refused :kind (:kind refused) :step (:at refused)})]
-        (cond
-          beyond (stop beyond)
-          (not= "found" status) {:reason :no-way-back :why (keyword status) :planner (some-> (.-reason r) keyword)}
-          :else (some-> (executor/refusal (wworld/body-policy c) steps) stop))))))
-
 (defn need
   "What the next cell to dig lacks, as a reason map for ctx/wait, or nil: :no-tool (a pickaxe), :no-free-slot (no room
   for the drop). Judged for the step from the feet when the body is at the stair's start or on it; bad args and the
@@ -399,7 +375,7 @@
   [c]
   (let [{:keys [dir heading]} (:args c)
         p (:primitives c)
-        feet (feet-of c)
+        feet (reach/standing-vec (:primitives c))
         {:keys [origin target]} (ctx/mem c)
         on-stair? (or (nil? origin) (some? (stair-index origin feet dir heading target)))]
     (when (and on-stair? (shape/rises dir) (shape/headings heading))
@@ -416,7 +392,7 @@
   [c]
   (let [{:keys [dir heading]} (:args c)
         {:keys [origin target]} (ctx/mem c)
-        feet (feet-of c)]
+        feet (reach/standing-vec (:primitives c))]
     (when (and (or (nil? origin) (and (= feet origin) (empty? (:dug (ctx/mem c)))))
                (shape/rises dir) (shape/headings heading))
       (let [in (rules-in c feet)
@@ -505,27 +481,13 @@
                       :why (str "no block beside or under " (pr-str floor) " to place " item " against: the floor opens into a void")}
       :else (or (await (bridge/place-plans! c in item plans (take-back-floor? c))) :again))))
 
-(def entry-depth "Blocks below both ends a walk to or from a line's entry may plan." 16)
-
-(defn ^:async walk-into!
-  "Walk the body into cell [x y z] with a go-to child in slot (no escalation: the dig is this job's own): :continue
-  while it walks, else the child's result. The steps of the line (:walk, :back) go on at night: the cell is one this job
-  cut, and the night shelter would hold the body between two steps for ever. The walks to and from the entry (:in, :out)
-  plan no deeper than entry-depth below the lower of body and cell: a way through deep caves is no way, the job digs."
-  [c slot cell]
-  (if (= :done (await (child/call-walk c slot (cond-> {:pos cell :range 0 :escalate false}
-                                                (#{:walk :back} slot) (assoc :at-night :go)
-                                                (#{:in :out} slot) (assoc :y-margin entry-depth)))))
-    (ctx/child-result c slot)
-    :continue))
-
 (defn ^:async step!
   "Walk into the cut step. :again, :continue while the walk waits, or a stop map."
   [c next-feet]
-  (let [r (await (walk-into! c :walk next-feet))]
+  (let [r (await (child/walk-into! c :walk next-feet))]
     (cond
       (= :continue r) :continue
-      (and (:arrived r) (= next-feet (feet-of c)))
+      (and (:arrived r) (= next-feet (reach/standing-vec (:primitives c))))
       (do (ctx/emit! c :stair.step :info {:at next-feet :text (str "stepped to " (pr-str next-feet))})
           :again)
       :else {:reason :step-failed :cell next-feet :walk r})))
@@ -536,7 +498,7 @@
   (let [{:keys [dir heading]} (:args c)
         accept (set (:accept (:args c)))
         {:keys [origin target checked]} (ctx/mem c)
-        feet (feet-of c)
+        feet (reach/standing-vec (:primitives c))
         in (rules-in c feet)
         i (stair-index origin feet dir heading target)]
     (ctx/update-mem! c record-dug (:block-at in))
@@ -549,7 +511,7 @@
       :else
       (do
         (ctx/update-mem! c assoc :at-step i)
-        (if-let [stop (when (and (pos? i) (not= i checked) (not= i target)) (await (way-back c origin)))]
+        (if-let [stop (when (and (pos? i) (not= i checked) (not= i target)) (await (walk/way-back c origin)))]
           stop
           (do
             (ctx/update-mem! c assoc :checked i)
@@ -576,7 +538,7 @@
   [c]
   (let [{:keys [dir heading]} (:args c)
         {:keys [origin target]} (ctx/mem c)
-        i (when origin (stair-index origin (feet-of c) dir heading target))]
+        i (when origin (stair-index origin (reach/standing-vec (:primitives c)) dir heading target))]
     (when (and i (pos? i))
       (shape/add origin (mapv #(* (dec i) %) (shape/delta dir heading))))))
 
@@ -585,10 +547,10 @@
   when the body got there."
   [c]
   (let [{:keys [stop cell]} (:backoff (ctx/mem c))
-        r (when cell (await (walk-into! c :back cell)))]
+        r (when cell (await (child/walk-into! c :back cell)))]
     (if (= :continue r)
       :continue
-      (finish! c (:reason stop) (assoc (dissoc stop :reason) :backed-off (boolean (and cell (= cell (feet-of c)))))))))
+      (finish! c (:reason stop) (assoc (dissoc stop :reason) :backed-off (boolean (and cell (= cell (reach/standing-vec (:primitives c))))))))))
 
 (defn ^:async next!
   "One piece of the stair: a fetch round, the start, a dig, a bridge, a seal or a step. :again, :continue (a child
@@ -601,7 +563,7 @@
       r r
       (and (:origin m) (need c)) :continue
       (nil? (:origin m))
-      (let [feet (or (some-> (:start m) vec) (feet-of c))
+      (let [feet (or (some-> (:start m) vec) (reach/standing-vec (:primitives c)))
             target (target-steps (:args c) feet)]
         (if (map? target)
           (finish! c :bad-args {:why (:error target)})
@@ -612,7 +574,7 @@
             (if (= :continue (or (await (when (and (= :down (:dir (:args c))) (:stock-torches (:args c))) (trip/torches-ready! c)))
                                    (await (trip/tool-ready! c "stone"))))
               :continue
-              (if (and (not= feet (feet-of c)) (= :continue (await (walk-into! c :start feet))))
+              (if (and (not= feet (reach/standing-vec (:primitives c))) (= :continue (await (child/walk-into! c :start feet))))
                 :continue
                 (do (ctx/update-mem! c assoc :origin feet :target target :dug [])
                     :again))))))

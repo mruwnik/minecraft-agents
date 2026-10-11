@@ -10,12 +10,6 @@
 
 (def max-steps "Pieces of work of one call before it gives the round back with :continue." 400)
 
-(defn feet-of
-  "The cell [x y z] the body stands on."
-  [c]
-  (let [{:keys [x y z]} (reach/standing-cell (:primitives c))]
-    [x y z]))
-
 (def doc
   "Block a corridor cross-section off from the base side (a mineshaft corridor, 3 wide and 3 high). One call does it
   all (:continue only while a child waits on the world); a cut or restart reads the world again and goes on.
@@ -93,7 +87,7 @@
 (defn stop! [c reason detail] (finish! c :stopped reason detail))
 
 (defn on-side? [c [x _ z] axis side]
-  (let [[fx _ fz] (feet-of c)
+  (let [[fx _ fz] (reach/standing-vec (:primitives c))
         k (if (= axis :x) fx fz)
         plane (if (= axis :x) x z)]
     (if (= side :from) (< k plane) (> k plane))))
@@ -103,7 +97,7 @@
         r (await (child/call-walk c :walk {:pos stand-cell :range 0 :escalate false}))]
     (cond
       (= :continue r) :continue
-      (= stand-cell (feet-of c)) :again
+      (= stand-cell (reach/standing-vec (:primitives c))) :again
       (on-side? c at axis side) (stop! c :unreachable {:cell stand-cell})
       :else (stop! c :wrong-side {:cell stand-cell}))))
 
@@ -147,7 +141,7 @@
       (:collect (ctx/mem c)) (await (collect! c))
       (empty? todo) (finish! c :done :sealed {})
       (some #(= :container (second %)) todo) (stop! c :blocked {:cell (first (first (filter #(= :container (second %)) todo)))})
-      (not= (stand at axis side) (feet-of c)) (await (go-stand! c at axis side))
+      (not= (stand at axis side) (reach/standing-vec (:primitives c))) (await (go-stand! c at axis side))
       (= :loose k) (await (dig! c cell))
       :else (await (place! c cell (count todo))))))
 

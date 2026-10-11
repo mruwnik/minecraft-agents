@@ -14,6 +14,9 @@
             [jobs.lib.torch :as torch]
             [jobs.lib.trip :as trip]
             [jobs.access.stair :as stair]
+            [jobs.lib.reach :as reach]
+            [jobs.lib.child :as child]
+            [jobs.lib.walk :as walk]
             [jobs.lib.ore-pick :as ore-pick]
             [jobs.lib.placement :as placement]
             [jobs.lib.pillar :as pillar]
@@ -278,8 +281,6 @@
             (= 1 (count reasons)) (first real)
             :else {:reason :no-approach :headings (into {} (map (fn [[h s]] [h (:reason s)])) stops)}))))))
 
-(defn feet-of [c] (stair/feet-of c))
-
 (defn leg-target
   "The waypoint of the first leg of a target far from feet underground. Diagonal: on the body's row, one past the
   target's column, so the first leg stands in that column; the shorter axis goes first (swap? takes the longer axis
@@ -321,7 +322,7 @@
   "Hand the result over and end: :done when reached, else :stopped (warn)."
   [c reason detail]
   (let [{:keys [plan dug unlit ores]} (ctx/mem c)
-        feet (feet-of c)
+        feet (reach/standing-vec (:primitives c))
         result (merge (cond-> {:status (if (= :reached reason) :done :stopped) :reason reason :target (target-of c)
                                :at feet :dug (or dug []) :ores (into (vec ores) (ore-pick/picked c)) :inside (boolean (and plan (not= feet (:entry plan))))
                                :keep (boolean (:keep (:args c))) :torches [] :unlit (or unlit [])}
@@ -365,10 +366,10 @@
         (if-let [cell (first (remove #(rules/air ((:block-at in) %)) cut))]
           (or (await (stair/peek! c cell)) (await (dig-cell! c in cell cut accept)))
           (or (await (look/settle! c cut))
-              (let [r (await (stair/walk-into! c :walk next))]
+              (let [r (await (child/walk-into! c :walk next))]
                 (cond
                   (= :continue r) :continue
-                  (and (:arrived r) (= next (feet-of c)))
+                  (and (:arrived r) (= next (reach/standing-vec (:primitives c))))
                   (do (ctx/emit! c :tunnel.step :info {:at next :text (str "tunnel step to " (pr-str next))}) :again)
                   :else {:reason :step-failed :cell next :walk r})))))))
 
@@ -420,7 +421,7 @@
       (let [res (ctx/child-result c :stair)
             done? (= :done (:status res))]
         (ctx/update-mem! c #(-> % (update :dug (fnil into []) (:dug res)) (update :ores (fnil into []) (:ores res))
-                                (assoc :stair-done (and done? (= (cells (:steps plan)) (feet-of c))))))
+                                (assoc :stair-done (and done? (= (cells (:steps plan)) (reach/standing-vec (:primitives c)))))))
         (if done?
           :again
           (assoc (select-keys res [:cell :hazards :zone :claim :plan :fluid :block :tool :walk :why]) :reason (:reason res)
@@ -479,7 +480,7 @@
   :unlit, nothing hanging in its cells). :again after a place, else nil."
   [c k]
   (let [{:keys [plan unlit]} (ctx/mem c)
-        in (stair/rules-in c (feet-of c))
+        in (stair/rules-in c (reach/standing-vec (:primitives c)))
         cells (line-cells plan)
         booked (set (map :site unlit))
         pending (remove #(or (booked %) (torch-cell (:block-at in) cells %)) (filter #(<= (inc %) k) (:sites plan)))]
@@ -494,7 +495,7 @@
         {:keys [entry heading dir steps run]} plan
         cells (line-cells plan)
         {:keys [end stand]} (line plan)
-        feet (feet-of c)
+        feet (reach/standing-vec (:primitives c))
         k (line-index cells feet)
         j (run-index end feet heading run)
         i (when (pos? steps) (stair/stair-index entry feet dir heading steps))]
@@ -503,18 +504,18 @@
         (when (and j (= :continue (await (ore-pick/pick! c {:except #{(target-of c)}})))) :continue)
         (cond
           (and i (not stair-done) (or (< i steps) (not (segment-start? c))))
-          (if-let [stop (when (and (pos? i) (not= i checked) (segment-start? c)) (await (stair/way-back c entry)))]
+          (if-let [stop (when (and (pos? i) (not= i checked) (segment-start? c)) (await (walk/way-back c entry)))]
             stop
             (do (when (segment-start? c) (ctx/update-mem! c assoc :checked i))
                 (await (stair-part! c plan i))))
-          j (if-let [stop (when (and (not= feet entry) (not= (+ steps j) checked)) (await (stair/way-back c entry)))]
+          j (if-let [stop (when (and (not= feet entry) (not= (+ steps j) checked)) (await (walk/way-back c entry)))]
               stop
               (do (ctx/update-mem! c assoc :checked (+ steps j))
                   (if (= feet stand) (await (open-over-target! c feet)) (await (run-step! c feet)))))
-          :else (let [r (await (stair/walk-into! c :in entry))]
+          :else (let [r (await (child/walk-into! c :in entry))]
                   (cond
                     (= :continue r) :continue
-                    (and (:arrived r) (= entry (feet-of c))) :again
+                    (and (:arrived r) (= entry (reach/standing-vec (:primitives c)))) :again
                     :else {:reason :walk-in-failed :cell entry :walk r :outside true}))))))
 
 (defn way-out
@@ -522,7 +523,7 @@
   [c]
   (let [{:keys [plan dug]} (ctx/mem c)]
     {:line (select-keys plan [:entry :heading :dir :steps :run :stand :target]) :dug (or dug [])
-     :torches (standing-torches (:block-at (stair/rules-in c (feet-of c))) plan)}))
+     :torches (standing-torches (:block-at (stair/rules-in c (reach/standing-vec (:primitives c)))) plan)}))
 
 (defn ^:async retreat!
   "Leave after a stop: a dead end through jobs.access.leave-tunnel (torches back, mouth sealed), a kept tunnel by the
@@ -531,7 +532,7 @@
   (let [{:keys [stop plan way-out]} (ctx/mem c)
         keep? (:keep (:args c))
         r (if keep?
-            (await (stair/walk-into! c :out (:entry plan)))
+            (await (child/walk-into! c :out (:entry plan)))
             (let [k (await (declined/call-child! c :out 'jobs.access.leave-tunnel
                                            (cond-> {:tunnel way-out :ignore-zones? (boolean (:ignore-zones? (:args c)))}
                                              (some? (:fetch (:args c))) (assoc :fetch (:fetch (:args c))))))]
@@ -540,14 +541,14 @@
                     :else :continue)))]
     (cond
       (#{:continue :declined} r) r
-      keep? (finish! c (:reason stop) (assoc (dissoc stop :reason) :out (= (:entry plan) (feet-of c)) :walk-out r))
-      :else (finish! c (:reason stop) (assoc (dissoc stop :reason) :out (= (:entry plan) (feet-of c)) :leave r)))))
+      keep? (finish! c (:reason stop) (assoc (dissoc stop :reason) :out (= (:entry plan) (reach/standing-vec (:primitives c))) :walk-out r))
+      :else (finish! c (:reason stop) (assoc (dissoc stop :reason) :out (= (:entry plan) (reach/standing-vec (:primitives c))) :leave r)))))
 
 (defn stop!
   "After a stop: finish where the body is (outside, at the entry, or no way back in a kept tunnel), else walk out first;
   a dead end with no way back goes through leave-tunnel, which digs its own way out."
   [c {:keys [reason outside] :as stop}]
-  (if (or outside (and (= :no-way-back reason) (:keep (:args c))) (= (feet-of c) (:entry (:plan (ctx/mem c)))))
+  (if (or outside (and (= :no-way-back reason) (:keep (:args c))) (= (reach/standing-vec (:primitives c)) (:entry (:plan (ctx/mem c)))))
     (finish! c reason (cond-> (dissoc stop :reason :outside) outside (assoc :inside false)))
     (do (ctx/update-mem! c assoc :stop stop :way-out (way-out c)) :again)))
 
@@ -559,7 +560,7 @@
   (let [{:keys [max-length accept]} (:args c)
         target (target-of c)
         a (when-not (or (:plan (ctx/mem c)) (bad-target? target))
-            (approach (dissoc (stair/rules-in c (feet-of c)) :feet) target (feet-of c) max-length (set accept)))]
+            (approach (dissoc (stair/rules-in c (reach/standing-vec (:primitives c))) :feet) target (reach/standing-vec (:primitives c)) max-length (set accept)))]
     (when (contains? #{:zone :footprint :claim} (:reason a)) a)))
 
 (defn check
@@ -577,7 +578,7 @@
   [c]
   (let [{:keys [max-length accept]} (:args c)
         target (target-of c)
-        feet (feet-of c)]
+        feet (reach/standing-vec (:primitives c))]
     (if (bad-target? target)
       (finish! c :bad-args {:why "target must be [x y z] of integers"})
       (let [a (await (sense/decide! c ::approach #(approach (assoc (dissoc (stair/rules-in c feet) :feet) :filler? (some? (blocks/pick c blocks/building-blocks))) target feet max-length (set accept))
@@ -616,7 +617,7 @@
         (if (= :done (:status res))
           (do (ctx/update-mem! c dissoc :leg) :again)
           (if-let [alt (when-not (:leg-swap (ctx/mem c))
-                         (let [feet (feet-of c)]
+                         (let [feet (reach/standing-vec (:primitives c))]
                            (leg-target (:block-at (stair/rules-in c feet)) feet (target-of c) max-length true)))]
             (do (ctx/update-mem! c assoc :leg-swap true :leg alt) :again)
             (finish! c (:reason res) (assoc (select-keys res [:cell :hazards :zone :claim :plan :fluid :block :tool :walk :why :headings])

@@ -2,7 +2,6 @@
   "jobs.lib.reach: the walk searches the hostile trigger, retreat, respond-to-hostile, restore-broken and tidy run.
   Their answers, and that one query reads each block at most once (a query over several mobs shares its reads)."
   (:require [cljs.test :refer [deftest is]]
-            [jobs.access.stair :as stair]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.reach :as reach]
             [jobs.movement.go-to.result :as end]
@@ -130,7 +129,7 @@
 (deftest a-body-on-a-block-edge-stands-on-the-cell-the-planner-starts-from
   (let [p (tu/fake edge-world)]
     (is (= {:x 0 :y 64 :z -9} (reach/standing-cell p)))
-    (is (= [0 64 -9] (stair/feet-of {:primitives p})))
+    (is (= [0 64 -9] (reach/standing-vec p)))
     (is (= [0 64 -9] (end/feet-cell {:primitives p})))))
 
 (deftest a-body-over-its-own-cell-stands-in-it

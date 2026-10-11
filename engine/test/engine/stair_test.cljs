@@ -16,6 +16,7 @@
             [jobs.lib.bridge :as bridge]
             [jobs.lib.ledger :as ledger]
             [engine.settings :as settings]
+            [jobs.lib.walk :as walk]
             [jobs.lib.walk.plan :as wplan]
             [plan.shape :as shape]))
 
@@ -915,9 +916,9 @@
 ;; ---------------------------------------------------------------- way-back
 
 (defn ^:async way-back-of
-  "stair/way-back from (1 64 1) to origin over the block map (its answer, awaited)."
+  "walk/way-back from (1 64 1) to origin over the block map (its answer, awaited)."
   [blocks origin]
-  (await (stair/way-back {:primitives (tu/fake {:blocks blocks :self {:pos {:x 1 :y 64 :z 1}}})} origin)))
+  (await (walk/way-back {:primitives (tu/fake {:blocks blocks :self {:pos {:x 1 :y 64 :z 1}}})} origin)))
 
 (defn slab
   "Stone at y for x in xs, z 0..2."

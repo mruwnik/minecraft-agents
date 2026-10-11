@@ -12,6 +12,8 @@
             [plan.shape :as shape]
             [jobs.lib.util :as u]
             [jobs.access.stair :as stair]
+            [jobs.lib.reach :as reach]
+            [jobs.lib.child :as child]
             [jobs.access.tunnel :as tunnel]
             [jobs.lib.world :as known]))
 
@@ -94,8 +96,6 @@
         (first (filter #(and (have? %) (not (spare? %))) blocks/building-blocks))
         (first (filter #(and (have? %) (placeable? %)) spare)))))
 
-(defn feet-of [c] (stair/feet-of c))
-
 (defn cell-pos [[x y z]] {:x x :y y :z z})
 
 (defn left-cells [m] (set (map :cell (:left m))))
@@ -135,7 +135,7 @@
         _ (forget-gone! c tunnel block-at)
         still (when stopped?
                 (map (fn [{:keys [cell site]}] {:cell cell :site site :reason reason}) (standing block-at tunnel m)))
-        result (merge {:status status :reason reason :at (feet-of c) :taken (:taken m []) :left (into (:left m []) still)
+        result (merge {:status status :reason reason :at (reach/standing-vec (:primitives c)) :taken (:taken m []) :left (into (:left m []) still)
                        :filled (:filled m []) :open (:open m [])}
                       detail)
         text (str "leave-tunnel " (name reason) ": took " (count (:taken result)) " torches, filled "
@@ -151,10 +151,10 @@
   "Walk to cell: :continue while the walk waits on the world, :again once there. A walk that did not arrive starts the escape (the way out
   does not need the tunnel's stair); once out, giveup is called with the walk instead."
   [c cell giveup]
-  (let [r (await (stair/walk-into! c :walk cell))]
+  (let [r (await (child/walk-into! c :walk cell))]
     (cond
       (= :continue r) :continue
-      (and (:arrived r) (= cell (feet-of c))) :again
+      (and (:arrived r) (= cell (reach/standing-vec (:primitives c)))) :again
       (:escaped (ctx/mem c)) (giveup r)
       :else (do (ctx/update-mem! c assoc :escape {:i 0 :cell cell :walk r :results []})
                 :again))))
@@ -202,7 +202,7 @@
           (= :declined r) :declined
           (nil? res) :continue
           (= :done (:status res))
-          (do (ctx/emit! c :leave-tunnel.escape :info {:at (feet-of c) :heading (:heading attempt) :ignore-zones? (:ignore-zones? attempt)
+          (do (ctx/emit! c :leave-tunnel.escape :info {:at (reach/standing-vec (:primitives c)) :heading (:heading attempt) :ignore-zones? (:ignore-zones? attempt)
                                                       :text (str "leave-tunnel dug its own way out " (name (:heading attempt)))})
               (ctx/update-mem! c #(-> % (dissoc :escape) (assoc :escaped true)))
               :again)
@@ -221,7 +221,7 @@
   "From the cell after its site: the torch's dig asked of the rules, its ledger entry marked :removing before the
   dig and dropped once the cell is air."
   [c {:keys [cell site]}]
-  (let [in (stair/rules-in c (feet-of c))
+  (let [in (stair/rules-in c (reach/standing-vec (:primitives c)))
         block-at (:block-at in)
         verdict (rules/may-dig? (assoc in :cell cell))]
     (cond
@@ -251,7 +251,7 @@
   "Walk to the cell after the torch's site and take it back."
   [c {:keys [site] :as torch}]
   (let [stand ((tunnel/line-cells (:line (:tunnel (:args c)))) (inc site))]
-    (if (= stand (feet-of c))
+    (if (= stand (reach/standing-vec (:primitives c)))
       (await (dig-torch! c torch))
       (await (walk-to! c stand (fn [_] (book-left! c (:cell torch) site :walk-failed)))))))
 
@@ -260,7 +260,7 @@
   [c cell]
   (let [{:keys [tunnel spare reach]} (:args c)
         p (:primitives c)
-        in (stair/rules-in c (feet-of c))
+        in (stair/rules-in c (reach/standing-vec (:primitives c)))
         block-at (:block-at in)
         verdict (rules/may-place? (assoc in :cell cell))
         block (:block (first (filter #(= cell (:cell %)) (:dug tunnel))))
@@ -282,12 +282,12 @@
   (let [{:keys [tunnel]} (:args c)
         m (ctx/mem c)
         entry (first (tunnel/line-cells (:line tunnel)))
-        in (stair/rules-in c (feet-of c))
+        in (stair/rules-in c (reach/standing-vec (:primitives c)))
         booked (set (map :cell (:open m)))
         body (u/self-pos c)
         todo (remove booked (mouth (:dug tunnel) entry (:block-at in)))]
     (cond
-      (not= entry (feet-of c)) (await (walk-to! c entry #(finish! c :done :open {:escaped true :walk %})))
+      (not= entry (reach/standing-vec (:primitives c))) (await (walk-to! c entry #(finish! c :done :open {:escaped true :walk %})))
       (empty? todo) (finish! c :done (if (empty? (:open m)) :sealed :open) {})
       :else (await (fill! c (first (sort-by (juxt #(% 1) #(- (u/eye-dist body %))) todo)))))))
 
@@ -295,7 +295,7 @@
   (declined/begin! c)
   (let [{:keys [tunnel]} (:args c)
         m (ctx/mem c)
-        torches (when (:line tunnel) (standing (:block-at (stair/rules-in c (feet-of c))) tunnel m))]
+        torches (when (:line tunnel) (standing (:block-at (stair/rules-in c (reach/standing-vec (:primitives c)))) tunnel m))]
     (cond
       (not (:line tunnel)) (finish! c :stopped :bad-args {:why "tunnel must be the result of jobs.access.tunnel"})
       (:escape m) (await (escape! c))

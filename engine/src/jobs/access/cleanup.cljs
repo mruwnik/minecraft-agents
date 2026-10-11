@@ -4,6 +4,7 @@
             [engine.game :as game]
             [engine.memory :as mem]
             [jobs.access.stair :as stair]
+            [jobs.lib.reach :as reach]
             [jobs.lib.body :as body]
             [jobs.lib.combat :as combat]
             [jobs.lib.danger :as danger-q]
@@ -290,7 +291,7 @@
   [c l entries zones]
   (let [{:keys [accept reach]} (:args c)]
     (merge (access/zone-input c {:ignore-zones? (:ignore-zones? (:args c))})
-           {:feet (stair/feet-of c) :eye (eye-of c) :block-at (access/sensed-at (:primitives c) blocks/hidden-guess) :entries entries
+           {:feet (reach/standing-vec (:primitives c)) :eye (eye-of c) :block-at (access/sensed-at (:primitives c) blocks/hidden-guess) :entries entries
             :can-clear? #(not (tools/needs-tool-to-clear? (:primitives c) %))
             :hostile-near? (hostile-near? (:primitives c)) :night? (sh/night? (:primitives c)) :keep-at-night? (:keep-at-night? (:args c))
             :ledger (ledger/cells l) :zones zones :accept (set accept) :reach reach
@@ -340,7 +341,7 @@
   (let [p (:primitives c)
         l (ledger/open-entries (ctx/view c))
         e (ledger/entry-at l cell)
-        under? (= cell (update (stair/feet-of c) 1 dec))]
+        under? (= cell (update (reach/standing-vec (:primitives c)) 1 dec))]
     (if-let [why (if e (blocker (inputs c l [e] (known/zones c)) e) {:reason :gone})]
       (do (ctx/update-mem! c count-fail cell why (:give-up (:args c)))
           :again)

@@ -165,6 +165,12 @@
                first)
           centre)))))
 
+(defn standing-vec
+  "standing-cell as a vector [x y z]."
+  [p]
+  (let [{:keys [x y z]} (standing-cell p)]
+    [x y z]))
+
 (def dirs #js [#js [1 0] #js [-1 0] #js [0 1] #js [0 -1]])
 
 (defn step-to

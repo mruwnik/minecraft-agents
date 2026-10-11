@@ -4,7 +4,8 @@
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as b]
             [jobs.lib.dig-look :as dig-look]
-            [jobs.access.stair :as stair]
+            [jobs.lib.reach :as reach]
+            [jobs.lib.child :as child]
             [jobs.lib.escape :as escape]
             [jobs.lib.pace :as pace]
             [jobs.lib.tools :as tools]
@@ -49,7 +50,7 @@
   [c reason detail]
   (let [m (ctx/mem c)
         result (merge {:status (if (= :done reason) :done :stopped) :reason reason :dug (:dug m [])
-                       :at (stair/feet-of c)}
+                       :at (reach/standing-vec (:primitives c))}
                       (when-let [t (:through m)] {:through t})
                       detail)]
     (ctx/result! c result)
@@ -66,11 +67,11 @@
         p (:primitives c)]
     (if-not (and dir (pos-int? max-thick))
       (finish! c :bad-args {:why "needs :heading (:north :east :south :west) and :max-thick > 0"})
-      (if-let [{:keys [cells through unseen]} (escape/door (escape/block-at-of p) (escape/unseen-of p) (stair/feet-of c) dir max-thick)]
-        (do (ctx/update-mem! c assoc :cells cells :through through :unseen unseen :from (stair/feet-of c) :dug [])
+      (if-let [{:keys [cells through unseen]} (escape/door (escape/block-at-of p) (escape/unseen-of p) (reach/standing-vec (:primitives c)) dir max-thick)]
+        (do (ctx/update-mem! c assoc :cells cells :through through :unseen unseen :from (reach/standing-vec (:primitives c)) :dug [])
             :again)
         (finish! c :no-door {:why (str "no wall at most " max-thick " thick with a floor beyond, "
-                                       (name (:heading (:args c))) " of " (pr-str (stair/feet-of c)))})))))
+                                       (name (:heading (:args c))) " of " (pr-str (reach/standing-vec (:primitives c))))})))))
 
 (defn room-for-drop?
   "A free slot, or a carried stack of what block drops (b/drops-of) under 64."
@@ -113,10 +114,10 @@
             :else (finish! c :dig-failed {:cell cell :block block :dig (select-keys res [:reason :primitive])})))))))
 
 (defn ^:async step-through! [c through]
-  (let [r (await (stair/walk-into! c :walk through))]
+  (let [r (await (child/walk-into! c :walk through))]
     (cond
       (= :continue r) :continue
-      (and (:arrived r) (= through (stair/feet-of c))) (finish! c :done {})
+      (and (:arrived r) (= through (reach/standing-vec (:primitives c)))) (finish! c :done {})
       :else (finish! c :step-failed {:cell through :walk (select-keys r [:status :reason :why :arrived])}))))
 
 (defn ^:async replan!
