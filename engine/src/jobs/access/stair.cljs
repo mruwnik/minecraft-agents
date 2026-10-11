@@ -63,6 +63,7 @@
   - :lava-unsealed: that lava could not be filled (:on-lava :seal, the default): the place child's outcome in :place,
     or still lava after max-seals places (a seal, then one reseal when lava flows back). The body first steps back to the stair's cell before (:backed-off) and
     digs no more.
+  - :plugged: a cut cell was plugged against water by this body (this stair or an earlier job; memory :stair-plug, the fluid may be out of view); :dig-plugs true digs it.
   - :water-unplugged: a cell the stair dug turned out to touch seen water (:water not in :accept) and could not be filled.
 
   Water a dig lays open (a cell the stair dug now touches seen water, :water not in :accept) is plugged at once: the cell
@@ -114,6 +115,7 @@
    :stock-torches {:doc "a stair down first gets torches when few are carried (jobs.lib.trip/torches-ready!, needs :fetch); false for a stair a job runs as its own child" :spec boolean? :default true}
    :pick-up-ores {:doc "true: dig the ores of jobs.lib.ore-pick's ::ores setting that are exposed within reach on the way; false: none; or the ore block names to dig" :spec (a/or-of boolean? (a/coll-of a/name?)) :default true}
    :spare-own-builds {:doc "a cell of a plan this body made is never dug (stops :footprint naming the plan); false: it may be" :spec boolean? :default true}
+   :dig-plugs {:doc "true: a cell this body plugged against water may be dug (stops :plugged otherwise)" :spec boolean? :default false}
    :through {:doc "the id of a mineshaft plan the stair runs down: its footprint is no obstacle (jobs.lib.shafts)" :spec string? :default nil}})
 
 (a/defargs settings
@@ -164,6 +166,19 @@
 
 (def way-policy {:cap 30 :ttl :forever})
 
+(def plug-policy {:cap 60 :ttl :forever})
+
+(defn plugs-of
+  "The set of cells this body plugged against water in its current dimension (memory :stair-plug), whatever job did."
+  [c]
+  (let [dim (.-dimension (.self (:primitives c)))]
+    (set (keep #(when (= dim (:dim (:data %))) (:cell (:data %))) (ctx/entries c :stair-plug)))))
+
+(defn plug!
+  "Remember cell as filled against water, so a later stair keeps it shut."
+  [c cell]
+  (ctx/remember! c :stair-plug {:dim (.-dimension (.self (:primitives c))) :cell cell} plug-policy))
+
 (defn way-floors
   "The floors of the steps a stair walked (not the start's own ground), from its origin, direction and steps reached."
   [origin dir heading steps]
@@ -186,8 +201,9 @@
   in: the rules' input without :cell; its :unseen? (fn cell -> true when never sensed) makes a floor the body has not
   seen a stop :floor-unseen once the cut is open, not a guess. cells :bridged? true: the floor was placed by the stair, what is under it is not judged; :filler? true: air under a solid floor is no stop (the next floor is bridged); :up? true: it never is (a stair up
   digs no floor)."
-  [{:keys [block-at] :as in} {:keys [cut floor under bridged? up? filler? ways]} accept]
-  (let [floor-cell (known-floor block-at cut (into (set (:ways in)) ways))
+  [{:keys [block-at plugs] :as in} {:keys [cut floor under bridged? up? filler? ways]} accept]
+  (let [plug-cell (first (filter #(and (contains? plugs %) (not (rules/air (block-at %)))) cut))
+        floor-cell (known-floor block-at cut (into (set (:ways in)) ways))
         fluid-cell (first (filter #(rules/fluids (block-at %)) cut))
         crop-cell (first (filter #(crop-names (block-at %)) cut))
         unseen-cell (when-let [unseen? (:unseen? in)]
@@ -197,6 +213,8 @@
       {:reason :not-loaded :cell (first (filter #(nil? (block-at %)) (conj cut floor under)))}
       fluid-cell {:reason :fluid-in-cut :cell fluid-cell :fluid (block-at fluid-cell)}
       crop-cell {:reason :crop :cell crop-cell :block (block-at crop-cell)}
+      plug-cell {:reason :plugged :cell plug-cell :block (block-at plug-cell)
+                 :why "the cell was filled against water by this body; the water is behind it (:dig-plugs true digs it)"}
       floor-cell {:reason :undercuts-way :cell floor-cell :block (block-at floor-cell)
                   :why "the cell is the floor of a stair this body cut earlier; cutting it breaks the way"}
       unseen-cell {:reason :floor-unseen :cell unseen-cell}
@@ -243,7 +261,8 @@
   scanned from the sky down for a stand, jobs.access.tunnel.line/surface)."
   [c feet]
   (merge {:floor-at (access/seen-at (:primitives c)) :block-at (access/sensed-at (:primitives c) blocks/hidden-guess) :column-at (access/sensed-at (:primitives c) "air")
-          :feet feet :ledger #{} :ways (ledger/ways-of c) :keep-base? true}
+          :feet feet :ledger #{} :ways (ledger/ways-of c) :keep-base? true
+          :plugs (if (:dig-plugs (:args c)) #{} (plugs-of c))}
          (access-world c)))
 
 (defn judged-in
@@ -327,7 +346,7 @@
     (let [r (await (lava/seal! c :stair.plugged block-at cell {:fetch (:fetch (:args c)) :ignore-zones? (:ignore-zones? (:args c))}))]
       (cond
         (= :continue r) :continue
-        (= :again r) {:reason :hazard :cell cell :plugged cell :hazards [{:reason :fluid-adjacent :fluid "water" :at w}]}
+        (= :again r) (do (plug! c cell) {:reason :hazard :cell cell :plugged cell :hazards [{:reason :fluid-adjacent :fluid "water" :at w}]})
         :else (assoc r :reason :water-unplugged)))))
 
 (defn target-steps
