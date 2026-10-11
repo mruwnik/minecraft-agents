@@ -29,6 +29,11 @@
     {:check (constantly true)
      :round (fn ^:async hop [c] (await (child/call-walk c (keyword (str "step" (swap! n inc))) {:pos [15 64 0] :escalate false})))}))
 
+(defn sealed-holds
+  "The :sealed-hostile-near holds; a walk with the way open may also hold :searching, as long as its search takes."
+  [seen]
+  (filterv #(= :sealed-hostile-near (:reason %)) (st/emitted seen :holding)))
+
 (defn ^:async sealed
   "A noon world with the body in a 1-cell pit whose east side is a retreat plug, a skeleton outside; ticks n."
   ([n] (sealed n nil))
@@ -69,11 +74,11 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (await (sealed 6))
-              held (count (st/emitted seen :holding))]
+              held (count (sealed-holds seen))]
           (swap! (fake/state p) update :entities #(vec (remove (comp #{9} :id) %)))
           (await (st/tick-n eng 8))
           (is (pos? held))
-          (is (= held (count (st/emitted seen :holding))) "no further :sealed-hostile-near hold")
+          (is (= held (count (sealed-holds seen))) "no further :sealed-hostile-near hold")
           (is (seq (st/emitted seen :unreachable)) "the walk ends in its own give-up, not an endless wait"))))))
 
 (deftest the-hold-ends-at-its-deadline-with-the-hostile-still-near
@@ -92,7 +97,7 @@
       (fn ^:async t []
         (doseq [self [{:food 2} {:health 4}]]
           (let [{:keys [seen]} (await (sealed 6 self))]
-            (is (empty? (st/emitted seen :holding)) (str self))
+            (is (empty? (sealed-holds seen)) (str self))
             (is (seq (st/emitted seen :unreachable)) (str self))))))))
 
 (deftest a-muted-heard-only-hostile-does-not-hold-the-sealed-walk
@@ -103,7 +108,7 @@
           (let [{:keys [seen]} (await (sealed 6 nil
                                               (fn [eng _]
                                                 (when muted? (mem/write! (:store eng) :heard-mute {:until 9999999999} body/mute-policy)))))]
-            (is (= held? (boolean (seq (st/emitted seen :holding)))) (str "muted " muted?))))))))
+            (is (= held? (boolean (seq (sealed-holds seen)))) (str "muted " muted?))))))))
 
 (deftest every-wait-of-the-held-walk-names-its-reason
   (async done
@@ -119,7 +124,7 @@
       (fn ^:async t []
         (doseq [[x held?] [[-6 true] [-20 false]]]
           (let [{:keys [seen]} (await (sealed 6 nil (fn [_ p] (swap! (fake/state p) update :entities (partial mapv #(assoc-in % [:pos 0] x))))))]
-            (is (= held? (boolean (seq (st/emitted seen :holding)))) (str "skeleton at x " x))))))))
+            (is (= held? (boolean (seq (sealed-holds seen)))) (str "skeleton at x " x))))))))
 
 (deftest the-hold-deadline-counts-across-a-parents-fresh-go-to-children
   (async done
