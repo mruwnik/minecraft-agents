@@ -47,7 +47,7 @@
    :shaft {:doc "id of a mineshaft plan down from the base; nil: the nearest usable one; false: walk" :spec (a/or-of a/name? boolean?) :default nil}
    :radius {:doc "how far from :at a corridor belongs to the site" :spec (a/int-in 8 65) :default 64}
    :take {:doc "classes stripped" :spec (a/coll-of #{:wood :cobweb :rail :ore}) :default [:wood :cobweb :rail :ore]}
-   :spawner {:doc "a spawner in a segment: :break lights and digs it, :seal seals the segment's mouth at once (its subtree skipped), :skip leaves it" :spec #{:break :seal :skip} :default :skip}
+   :spawner {:doc "a spawner in a segment: :light lights its spawn box and leaves it, :break lights and digs it, :seal seals the segment's mouth at once (its subtree skipped), :skip leaves it unlit" :spec #{:light :break :seal :skip} :default :light}
    :seal-with {:doc "blocks to seal with, the first carried; nil: strip.seal's own" :spec (a/coll-of a/item?) :default nil}
    :haul {:doc "false leaves the loot in the base chests" :spec boolean? :default true}
    :want-free {:doc "free slots under which a trip turns back; nil: jobs.lib.trip/want-free" :spec (a/int-in 0 36) :default nil}

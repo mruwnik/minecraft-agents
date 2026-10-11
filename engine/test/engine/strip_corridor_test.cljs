@@ -178,8 +178,8 @@
           (is (= {:status :done :taken {:spawner 1 :torch 2}} (select-keys r [:status :taken])) "the torches hung are taken back")
           (is (gone? p [spawner-cell]))
           (is (seq torches))
-          (is (every? (fn [{:keys [x y z]}] (<= (+ (* (- x 10) (- x 10)) (* (- y 65) (- y 65)) (* (- z 2) (- z 2))) 16)) torches)
-              "every torch within 4 of the spawner"))))))
+          (is (every? (fn [{:keys [x y z]}] (and (<= (js/Math.abs (- x 10)) 4) (<= (js/Math.abs (- y 65)) 1) (<= (js/Math.abs (- z 2)) 4))) torches)
+              "every torch within the spawner's spawn box"))))))
 
 (deftest spawner-break-in-the-dark-without-torches-stops-no-torches-leaving-it
   (async done
@@ -200,12 +200,46 @@
           (is (empty? (bd/calls (:p env) "dig")))
           (is (= "spawner" (bd/block-at (:p env) spawner-cell))))))))
 
+(defn torch-poses [p]
+  (map #(js->clj (.-pos (.-args %)) :keywordize-keys true) (filter #(= "torch" (.-item (.-args %))) (bd/calls p "place"))))
+
+(deftest spawner-light-is-the-default-it-lights-the-box-and-leaves-spawner-and-torches
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p] :as env} (dark-world pick-torches spawner-corridor (range 6 13))
+              r (await (run! env args))
+              torches (torch-poses p)]
+          (is (= {:status :done :taken {}} (select-keys r [:status :taken])) "the torches stay")
+          (is (= [{:pos {:x 10 :y 65 :z 2} :why :spawner :lit true}] (:kept r)))
+          (is (= "spawner" (bd/block-at p spawner-cell)))
+          (is (seq torches))
+          (is (every? (fn [{:keys [x y z]}] (and (<= (js/Math.abs (- x 10)) 4) (<= (js/Math.abs (- y 65)) 1) (<= (js/Math.abs (- z 2)) 4))) torches))
+          (is (every? #(= "torch" (bd/block-at p [(:x %) (:y %) (:z %)])) torches) "none taken back"))))))
+
+(deftest spawner-light-reaches-the-far-corner-of-the-spawn-box
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p] :as env} (dark-world pick-torches spawner-corridor (range 6 13))
+              _ (await (run! env args))]
+          (is (some #(<= (:x %) 7) (torch-poses p)) "x 6 is 4 along, 2 across and 1 below the spawner: a torch stands beside it"))))))
+
+(deftest spawner-light-without-torches-in-the-dark-stops-no-torches-leaving-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p] :as env} (dark-world kit spawner-corridor (range 6 13))
+              r (await (run! env args))]
+          (is (= {:status :stopped :reason :no-torches} (select-keys r [:status :reason])))
+          (is (= "spawner" (bd/block-at p spawner-cell))))))))
+
 (deftest spawner-skip-strips-the-rest-and-lists-it-kept
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [env (world :blocks (assoc corridor "10,65,2" "spawner"))
-              r (await (run! env args))]
+              r (await (run! env (assoc args :spawner :skip)))]
           (is (= {:status :done :taken {:wood 21 :rail 13 :cobweb 1}} (select-keys r [:status :taken])))
           (is (some #{{:pos {:x 10 :y 65 :z 2} :why :spawner}} (:kept r)))
           (is (= "spawner" (bd/block-at (:p env) spawner-cell))))))))
