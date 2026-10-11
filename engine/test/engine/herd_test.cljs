@@ -798,7 +798,8 @@
       (fn ^:async t []
         (let [s (await (scenario {:target 1} {:entities [(cow 1 4 3 {:snaps true})]} 200))
               e (done-event s)]
-          (is (failed-error s))
+          (is (nil? (failed-error s)) "losing the animal is a named stop, not a failed job")
+          (is (finished? s))
           (is (= :lost (:reason e)))
           (is (= {"u1" :lead-broke} (:given-up e)))
           (is (= 2 (count (filter #(= "lead" (.. % -args -item)) (calls-of s "interact")))) "leashed twice, not more")
@@ -813,10 +814,10 @@
               e (done-event s)
               why (failed-error s)]
           (is (= :lost (:reason e)) "the outcome is still reported")
-          (is (not (finished? s)) "not completed: parked failed")
-          (is (string? why))
-          (is (re-find #"lost" why))
-          (is (re-find #"none of the 1" why)))))))
+          (is (finished? s) "an animal lost is a named stop, not a parked failure")
+          (is (nil? why))
+          (is (re-find #"lost" (:text e)))
+          (is (re-find #"u1" (:text e)) "the text names the animal given up"))))))
 
 (deftest bringing-some-but-fewer-than-wanted-still-completes-short
   (async done
@@ -1172,8 +1173,8 @@
       (fn ^:async t []
         (doseq [[label move reason]
                 [["out of sight" (fn [s] (set-x! s 1 -500)) :lost]
-                 ["beyond the follow range" (fn [s] (set-x! s 1 (- (self-x s) 15))) :lagging]
-                 ["trailing, never catching up" (fn [s] (set-x! s 1 (- (self-x s) 8.5))) :lagging]]]
+                 ["beyond the follow range" (fn [s] (set-x! s 1 (- (self-x s) 15))) :animal-stalled]
+                 ["trailing, never catching up" (fn [s] (set-x! s 1 (- (self-x s) 8.5))) :animal-stalled]]]
           (let [s (submit! (setup (world {:entities [(cow 1 -40 3)] :inventory [wheat] :blocks far-ground})) {:target 1 :radius 60 :timeout-s 900})
                 moved (atom false)]
             (let [arm! #(when (or @moved (<= (self-x s) -30)) (reset! moved true) (move s))]
@@ -1345,3 +1346,20 @@
           (is (= ["u2"] (:brought (done-event s))))
           (is (= {} (:given-up (done-event s))) (pr-str (done-event s)))
           (is (<= -3 (first (:pos (cow-of s 1))) 3) "the penned cow never left its pen"))))))
+
+(deftest the-count-of-a-run-ending-far-from-the-pen-includes-the-cows-already-inside
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (submit! (setup (world {:self {:pos {:x -45 :y 64 :z 3}} :entities [(cow 1 -40 3) (cow 9 13 3)] :inventory [wheat] :blocks far-ground}))
+                         {:target 2 :radius 60})]
+          (track-range! s 30)
+          (.override (.-world (:p s)) "steer"
+                     (fn [token a impl]
+                       (.then (impl token a) (fn [r] (when (and (< -38 (self-x s)) (< (first (:pos (cow-of s 1))) 0)) (set-x! s 1 -500)) r))))
+          (await (run-ticks s 900))
+          (let [e (done-event s)]
+            (is (= :none (:reason e)) (pr-str (dissoc e :animals)))
+            (is (= 1 (:inside e)) "the cow in the pen counts though the pen is out of sight")
+            (is (re-find #"1 of 2" (:text e)))
+))))))

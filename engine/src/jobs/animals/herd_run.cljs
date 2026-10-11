@@ -1,6 +1,7 @@
 (ns jobs.animals.herd-run
   "The state of a herd run: its constants, the ending and what the animals on the lead did, shared by the pen, the trip and the job."
-  (:require [engine.args :as a]
+  (:require [clojure.string :as str]
+            [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.animals :as animals]
             [jobs.lib.apiary :as apiary]
@@ -148,28 +149,51 @@
 
 ;; ------------------------------------------------------------------ the end
 
+(def animal-reasons
+  "Endings about the animals, not the pen: a run that brought none stops with them named instead of failing."
+  #{:lost})
+
+(defn pen-keys
+  "The keys of the adults in the pen: those on its cells as sensed, plus those known in it (in at the start or brought)
+  that the sensing does not show anywhere, as when the body ends far from the pen."
+  [c answer]
+  (let [m (ctx/mem c)
+        sensed (into #{} (map animals/key-of) (in-pen-adults c answer))
+        unseen? #(nil? (animals/find-by-key (:primitives c) (:mob (:args c)) (watch-radius) %))]
+    (into sensed (filter unseen?) (concat (:in-pen-start m) (:brought m)))))
+
+(defn end-text
+  "The herd.done text: the count and why the others did not come."
+  [c reason n]
+  (let [{:keys [mob target radius]} (:args c)
+        given-up (:given-up (ctx/mem c))]
+    (str "herd done: " (name reason) ", " n " of " target " in the pen"
+         (cond
+           (seq given-up) (str " (given up: " (str/join ", " (map (fn [[k r]] (str k " " (name r))) given-up)) ")")
+           (= :short reason) (str " (no other grown " mob " to fetch within " radius " blocks)")))))
+
 (defn finish!
   "Count the pen, emit the outcome, hand it to the parent and end. A nil reason is judged by the count."
   [c reason & [extra]]
   (let [m (ctx/mem c)
         target (:target (:args c))
         answer (read-pen c)
-        inside (set (map animals/key-of (in-pen-adults c answer)))
+        inside (pen-keys c answer)
         rows (animals/in-pen-rows (:primitives c) answer (watch-radius))
         brought (filterv inside (:brought m))
         reason (or reason
-                   (cond (>= (count (remove (set (keys (:given-up m))) inside)) target) :brought
-                         (seq brought) :short
-                         :else :short))
+                   (if (>= (count (remove (set (keys (:given-up m))) inside)) target) :brought :short))
+        stop? (and (empty? brought) (animal-reasons reason))
+        text (end-text c reason (count inside))
         result (merge {:reason reason :inside (count inside) :target target :brought brought
                        :given-up (:given-up m {}) :gate (:gate m) :escaped (:escaped-total m 0) :animals rows}
                       extra)]
     (when (:gate m) (drop-gate! c))
-    (ctx/emit! c :herd.done :info (assoc result :text (str "herd done: " (name reason) ", " (count inside) " of " target " in the pen")))
+    (ctx/emit! c :herd.done :info (assoc result :text text))
     (when-not (#{:brought :full} reason)
       (ctx/emit! c :herd.gave-up :warn {:reason reason :text (str "herding stopped: " (name reason))}))
-    (ctx/result! c result)
-    (when (and (empty? brought) (not (#{:brought :full} reason)))
+    (ctx/result! c (cond-> (assoc result :text text) stop? (assoc :status :stopped)))
+    (when (and (empty? brought) (not stop?) (not (#{:brought :full} reason)))
       (throw (ex-info (str "herd brought none of the " target " wanted: " (name reason)
                            (let [leak (first (:leaks result))
                                  cell (or (:cell result) (some-> leak :pos cell))]

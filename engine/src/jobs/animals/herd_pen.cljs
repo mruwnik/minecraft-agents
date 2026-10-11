@@ -282,7 +282,7 @@
       (>= inside target) (finish! c :full)
       (< (depth (:inside answer) (cell gate) in) min-depth)
       (finish! c :too-shallow {:cell (cell in) :depth (depth (:inside answer) (cell gate) in) :need min-depth})
-      :else (do (ctx/update-mem! c assoc :phase :leash :gate gate :inside-cell (u/cell-pos in) :outside-cell (u/cell-pos out)
+      :else (do (ctx/update-mem! c assoc :phase :leash :in-pen-start (mapv animals/key-of (in-pen-adults c answer)) :gate gate :inside-cell (u/cell-pos in) :outside-cell (u/cell-pos out)
                                  :axis (axis (:primitives c) (:inside answer) (cell gate) in out (depth (:inside answer) (cell gate) in)))
                   :continue))))
 

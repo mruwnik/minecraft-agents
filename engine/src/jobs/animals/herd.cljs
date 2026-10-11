@@ -9,7 +9,7 @@
             [jobs.lib.child :as child]
             [jobs.animals.escort :as escort]
             [jobs.lib.watch :as watch]
-            [jobs.animals.herd-run :as hr :refer [adults after-shut! cell census! crowd-in-radius crowd-ms crowd-out-radius deepest end! exit-shut-ms gate-cell gate-index gate-open? hold-gate! in-1 in-pen-adults led-now lure? animal-now follow-range out-1 read-pen release-step! set-phase! settle-ms settle-out-ms shut-failed! shut-look-ms transient-keys]]
+            [jobs.animals.herd-run :as hr :refer [adults after-shut! cell census! crowd-in-radius crowd-ms crowd-out-radius deepest end! exit-shut-ms gate-cell gate-index gate-open? hold-gate! in-1 in-pen-adults led-now lure? animal-now out-1 read-pen release-step! set-phase! settle-ms settle-out-ms shut-failed! shut-look-ms transient-keys]]
             [jobs.animals.herd-pen :refer [body-in-pen? cell-middle crowded-near? exit-dash! go-then! let-go-cell look-wait! max-leaves on-gate? set-gate! settle-at! shut-side! shut-when-clear! survey! wait-clear! waited-ms]]
             [jobs.animals.herd-trip :refer [leash-next! pinned! remember-start! prune-led! regather! regather-or-lose! released! step-position!]]))
 
@@ -27,7 +27,7 @@
   The adults listed within :radius of the body before that walk are remembered; once the body stands at the pen and none is listed any
   more (a server loads animals only near the body), it walks back to within 12 of each remembered spot to see it again.
   A lured animal follows the food only within about 10 blocks: from where it was met the body walks to the pen in short legs,
-  holding still (at most 10 s) while the animal trails more than 7 behind, and gives it up (given-up :lost unseen 3 s, :lagging beyond 10) rather than outrun it.
+  holding still while the animal trails more than 7 behind, and gives it up (given-up :lost unseen 3 s after a walk back to where it was last seen, :animal-stalled when it stops coming nearer for 10 s) rather than outrun it.
 
   Checks before the first animal (each ends the run with its reason):
   - :no-pen: the pen cannot be read from :box (the result's :cell names the first unseen cell when there is one; a cell it has not seen is gone near and looked at once; one still unknown goes to the pen's gate to look in, once; still unknown ends here).
@@ -88,7 +88,9 @@
   :no-food (a lure run found no food), :no-hold (the food would not stay in hand),
   or the leash reason when nobody could be led. The body ends outside with the gate shut. The job ends completed
   when the pen holds :target or is :full, or when some animals were brought (a partial run, :short or another reason);
-  when none was brought it fails with the reason, after the result and herd.done were given.
+  when none was brought it fails with the reason, after the result and herd.done were given, except :lost, which ends :stopped;
+  the :text names the animals given up and why (or that none other was in reach). The count
+  \"N of M in the pen\" includes the animals known in the pen that the sensing cannot show from where the body ends.
 
   Zones: the leash child also refuses an animal standing in another owner's zone or claim (see jobs.animals.leash);
   :ignore-zones? true is passed to it.")
@@ -123,39 +125,34 @@
       :else (ctx/wait c {:reason :at-target :target target}))))
 
 (defn lure-lost!
-  "The lured animal is given up (reason :lost, unseen, or :lagging, beyond follow range); the run goes on as when nobody is led."
+  "The lured animal is given up (reason :lost, unseen; :animal-stalled, seen but not coming; :unreachable); the run goes on as when nobody is led."
   [c reason]
   (let [k (:animal (ctx/mem c))]
-    (ctx/emit! c :herd.lure-lost :info {:animal k :reason reason :text (str "herd gives up the lured " (:mob (:args c)) ": " (name reason))})
-    (ctx/update-mem! c #(-> % (assoc :led []) (update :given-up assoc k reason) (dissoc :unseen-since :wait-since)))
+    (ctx/emit! c :herd.lure-lost :info {:animal k :reason reason :text (str "herd gives up the lured " (:mob (:args c)) ": " (if (= :animal-stalled reason) "it stopped following" (name reason)))})
+    (ctx/update-mem! c #(-> % (assoc :led []) (update :given-up assoc k reason) (dissoc :unseen-since :progress :waiting :back-to :search-rounds)))
     (regather-or-lose! c)))
 
 (defn ^:async lure-approach!
-  "The walk to the pen's first cell with a lured animal: an animal follows the food only within follow-range, so the body goes
-  in short go-to legs and holds still while the animal trails more than escort/safe-gap; unseen for escort/unseen-lost-ms
-  or beyond follow-range it is given up. The last leg is settle-at!'s."
+  "The walk to the pen's first cell with a lured animal: an animal follows the food only within follow-range, so the body
+  goes in short go-to legs and, by escort/follow-verdict, holds still (or walks back toward the last sighting) while the
+  animal trails more than escort/safe-gap; unseen long, or seen and not coming nearer, it is given up. The last leg is settle-at!'s."
   [c]
   (let [m (ctx/mem c)
         a (animal-now c (:animal m))
-        now (ctx/now c)
-        since (or (:unseen-since m) now)
-        d (when a (u/flat-dist (u/pos-of (.-pos a)) (u/self-pos c)))
-        target (u/cell-pos (nth (:axis m) 0))]
-    (cond
-      (nil? a) (if (<= escort/unseen-lost-ms (- now since))
-                 (lure-lost! c :lost)
-                 (do (ctx/update-mem! c assoc :unseen-since since) (await (escort/wait-for-animal! c)) :continue))
-      (> d (follow-range)) (lure-lost! c :lagging)
-      (do (ctx/update-mem! c dissoc :unseen-since) (> d escort/safe-gap))
-      (let [waiting (or (:wait-since m) now)]
-        (if (> (- now waiting) escort/max-wait-ms)
-          (lure-lost! c :lagging)
-          (do (ctx/update-mem! c assoc :wait-since waiting) (await (escort/wait-for-animal! c)) :continue)))
-      :else (let [_ (ctx/update-mem! c dissoc :wait-since)
-                  leg (await (escort/leg-target c target 1))]
-              (if-not leg
-                (await (settle-at! c 0 (settle-out-ms) #(set-phase! c :clear-out)))
-                (do (await (child/call-walk c :walk {:pos leg :range 1 :doors :never :escalate false}))
+        target (u/cell-pos (nth (:axis m) 0))
+        verdict (escort/follow-verdict c a true escort/safe-gap)]
+    (if verdict
+      (if (= :wait verdict)
+        (do (await (escort/wait-for-animal! c)) :continue)
+        (lure-lost! c verdict))
+      (let [{:keys [leg searching]} (await (escort/leg-plan c target 1))
+            n (inc (:search-rounds m 0))]
+        (ctx/update-mem! c assoc :search-rounds (if searching n 0))
+        (cond
+          (and searching (<= n escort/max-search-rounds)) :continue
+          searching (lure-lost! c :unreachable)
+          (not leg) (await (settle-at! c 0 (settle-out-ms) #(set-phase! c :clear-out)))
+          :else (do (await (child/call-walk c :walk {:pos leg :range 1 :doors :never :escalate false}))
                     :continue))))))
 
 (defn ^:async step! [c phase]
