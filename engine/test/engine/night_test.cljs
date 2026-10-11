@@ -188,6 +188,19 @@
           (await (st/tick-n eng 4))
           (is (= [100] (mapv :x (map :pos (st/emitted seen :night.bed-too-far))))))))))
 
+(deftest a-near-home-and-spawn-bed-beat-a-stale-far-bed-place-in-the-too-far-note
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (st/setup {:time night :inventory st/dirt-stack :blocks (merge st/floor {"2,64,0" "red_bed"})})]
+          (st/know-bed! eng {:x 100 :y 64 :z 0})
+          (mem/write! (:store eng) :home {:pos {:x 1 :y 64 :z 0}} mem/place-policy)
+          (mem/write! (:store eng) :spawn-bed {:pos {:x 2 :y 64 :z 0}} {:cap 1 :ttl :forever})
+          (write! eng :sleep-failed {:pos {:x 2 :y 64 :z 0}})
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (st/tick-n eng 4))
+          (is (empty? (st/emitted seen :night.bed-too-far))))))))
+
 (deftest the-night-leaves-an-occupied-remembered-bed-alone
   (async done
     (tu/run-async done

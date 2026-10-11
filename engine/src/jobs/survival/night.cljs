@@ -390,12 +390,14 @@
     (morning-step! c)))
 
 (defn note-bed-far!
-  "Once a night, with no bed to use: say a remembered :bed or :home is too far, so the agent can carry a bed on long trips."
+  "Once a night, with no bed to use: say the nearest known bed or :home is too far, so the agent can carry a bed on long trips."
   [c]
   (when-not (:bed-far-noted (ctx/mem c))
     (let [view (ctx/view c)
           here (u/self-pos c)]
-      (when-let [pos (some #(when (> (u/dist here %) (bed-down/radius c)) %) (keep #(mem/place view %) [:bed :home]))]
+      (when-let [pos (let [known (sort-by #(u/dist here %) (concat (sh/known-beds (:primitives c) view) (keep #(mem/place view %) [:home])))
+                  nearest (first known)]
+              (when (and nearest (> (u/dist here nearest) (bed-down/radius c))) nearest))]
         (ctx/update-mem! c assoc :bed-far-noted true)
         (ctx/emit! c :night.bed-too-far :info
                    {:pos pos :distance (js/Math.round (u/dist here pos))

@@ -329,18 +329,23 @@
       (and ended (> ended (:t e))) pos
       (let [n (u/seen-name p pos)] (and n (not (.endsWith n "_bed")))) pos)))
 
-(defn standing-beds
-  "The beds the body can use within radius, nearest first: the remembered :bed place (its job retracts it on finding
-  it gone) and the live :spawn-bed (it is set to a bed the body slept in or set the spawn at, whichever half the place
-  key holds) unless its block is seen not a bed."
-  [p view radius]
+(defn known-beds
+  "The remembered :bed place and the live :spawn-bed (unless its block is seen not a bed), at any distance, nearest first."
+  [p view]
   (let [me (u/self-pos {:primitives p})
         spawn (:pos (:data (spawn-bed-live view)))
         spawn-ok? (or (nil? spawn) (let [n (u/seen-name p spawn)] (or (nil? n) (.endsWith n "_bed"))))]
     (->> [(mem/place view :bed) (when spawn-ok? spawn)]
-         (filter #(and % (<= (u/dist me %) radius)))
+         (filter some?)
          distinct
          (sort-by #(u/dist me %)))))
+
+(defn standing-beds
+  "The known-beds within radius, nearest first (the :bed place's job retracts it on finding it gone; the live
+  :spawn-bed is set to a bed the body slept in or set the spawn at, whichever half the place key holds)."
+  [p view radius]
+  (let [me (u/self-pos {:primitives p})]
+    (filter #(<= (u/dist me %) radius) (known-beds p view))))
 
 (defn standing-bed
   "The nearest of standing-beds, or nil."

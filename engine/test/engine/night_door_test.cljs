@@ -115,3 +115,13 @@
     (is (= [5 64 2] (some-> (sh/open-room-door p {:data mem/empty-data :now 0}) :cell sh/door-key)))
     (is (nil? (sh/open-room-door p (view [5 64 2]))) "that door is not tried again")
     (is (some? (sh/open-room-door p (view [9 64 9]))) "another door is")))
+
+(deftest night-steps-in-from-the-door-cell-before-shutting-the-door
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (st/setup (merge (open-door-hut {:x 5 :y 64 :z 2} {}) {:inventory st/dirt-stack}))]
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (tu/run-until-empty eng 12))
+          (is (< (:z (st/pos-of p)) 2) "the body stands inside the room, not in the door cell")
+          (is (false? (door-open? p)) "the door is shut"))))))

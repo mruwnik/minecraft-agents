@@ -419,3 +419,14 @@
     (is (true? (sh/doorway? p {:x 5 :y 64 :z 2})))
     (is (false? (sh/doorway? p {:x 5 :y 64 :z 1})))
     (is (false? (sh/doorway? p {:x 4 :y 64 :z 0})))))
+
+(deftest a-sleep-the-server-refuses-says-why-in-the-failure-text
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (st/setup (merge (hut-world {:x 5 :y 64 :z 0} bed-block) {:time st/night}))]
+          (st/know-bed! eng {:x 6 :y 64 :z 0})
+          (set! (.-sleep p) (fn [& _] (js/Promise.resolve #js {:status "failed" :reason "bot is not sleeping"})))
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (st/tick-n eng 12))
+          (is (re-find #"cannot sleep: failed \(bot is not sleeping\)" (str (:text (first (st/emitted seen :bed_unusable)))))))))))

@@ -736,10 +736,12 @@
 
 (defn ^:async shut-home-door!
   "Shut an open door of the home room the body is in: from where it stands within door-reach, else a step to the room
-  cell inside it first (a step that gets no nearer gives the door up for the flight). :again."
+  cell inside it first, as also when it stands in the door's own cell (a step that gets no nearer gives the door up for
+  the flight). :again."
   [c {:keys [cell inside]}]
-  (let [b (dig-cells/open-openable (:primitives c) cell)]
-    (if (<= (u/dist (u/self-pos c) (retreat-home/mid cell)) door-reach)
+  (let [b (dig-cells/open-openable (:primitives c) cell)
+        in-door? (click/standing-in? (u/self-pos c) cell (:half (click/props-of b)))]
+    (if (and (not in-door?) (<= (u/dist (u/self-pos c) (retreat-home/mid cell)) door-reach))
       (await (shut-door! c {:cell cell :name (.-name b)}))
       (do (when-not (await (step! c :home inside 0))
             (ctx/update-mem! c update :doors-clicked (fnil conj #{}) (door-key cell)))

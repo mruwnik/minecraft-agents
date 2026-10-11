@@ -17,7 +17,7 @@
   Ends when asleep, or when it turns day.
   A :bed argument that is not a position declines too.
   Retries three times, then warns and ends: a taken bed, a monster nearby, an unreachable bed.
-  The failure kinds are bed_unreachable (\"cannot reach the bed: <go-to's reason>\"), bed_unloaded, bed_missing and bed_unusable (\"cannot sleep: <status>\").
+  The failure kinds are bed_unreachable (\"cannot reach the bed: <go-to's reason>\"), bed_unloaded, bed_missing and bed_unusable (\"cannot sleep: <status> (<reason>)\").
   A bed whose chunk is not loaded is retried the same way.
   A bed that is not there is not retried: the job ends and the shelter chooser falls through.
   If it was the remembered bed, :bed is overwritten with {:gone true :was pos}, so it no longer reads as a place.
@@ -110,7 +110,7 @@
                             (ctx/emit! c :bed_missing :warn {:pos bed :text "no bed at the remembered place"}))
                         (ctx/emit! c :bed_missing :warn {:pos bed :text "no bed at the given place"}))
                       :done))
-      (u/fail! c :bed_unusable (str "cannot sleep: " (.-status r))))))
+      (u/fail! c :bed_unusable (str "cannot sleep: " (.-status r) (when-let [why (.-reason r)] (str " (" why ")")))))))
 
 (defn bed-block? [c bed]
   (.endsWith (or (u/seen-name (:primitives c) bed) "") "_bed"))
