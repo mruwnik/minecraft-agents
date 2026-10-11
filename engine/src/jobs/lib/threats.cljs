@@ -99,15 +99,15 @@
 
 (defn sensed-mobs
   "The real dangers primitives p senses within sensed-radius (jobs.lib.danger/dangers: seen or heard, with a way to the body
-  or a line of fire; never x-ray), as [{:key :name :pos}]."
-  [p]
+  or a line of fire; never x-ray; danger-opts as danger-q/danger-in?), as [{:key :name :pos}]."
+  [p danger-opts]
   (mapv (fn [e] {:key (mob-key e) :name (.-name e) :pos (danger-q/mob-pos p e)})
-        (danger-q/dangers p (sensed-radius) {:ranged-radius (sensed-radius)})))
+        (danger-q/dangers p (sensed-radius) {:ranged-radius (sensed-radius)} danger-opts)))
 
 (defn known-dangers
   "danger-list of the body of primitives p: sensed-mobs and the remembered :threat entries' data."
   ([p remembered] (known-dangers p remembered nil))
-  ([p remembered opts] (cost/danger-list (body-of p) (sensed-mobs p) remembered opts)))
+  ([p remembered opts] (cost/danger-list (body-of p) (sensed-mobs p {:way? false}) remembered opts)))
 
 (defn planner-dangers
   "The planner's options.dangers for the body of c (JS array, nil for none): known-dangers with the :threat spots its

@@ -242,11 +242,11 @@
   a mob is planned for once), the dangers sensed now join it and a newly sensed one near the way ahead stops the walk."
   ([c plan] (watch-of c plan nil))
   ([c plan known]
-  (when known (swap! known into (map :key (threats/sensed-mobs (:primitives c)))))
+  (when known (swap! known into (map :key (threats/sensed-mobs (:primitives c) {}))))
   (cond-> {:base (:pw plan) :fresh #(wworld/path-world (:primitives c) (wworld/unknown-of (:pw plan))) :ahead [] :skip (opens-cells (:steps plan))
    :mobs #(combat/sensed (:primitives c) {:radius 8 :max 64}) :seen (atom {})
    :status (:status plan) :interval (refresh-ticks (:ms plan) (settings/physics-ms (:primitives c))) :budget #(wworld/damage-budget c)}
-    known (assoc :known known :sense #(threats/sensed-mobs (:primitives c))))))
+    known (assoc :known known :sense #(threats/sensed-mobs (:primitives c) {})))))
 
 (defn mob-cells
   "The cells {:x :y :z} (feet and head) of the entities, not items and not the body, that stand on the leg the body is

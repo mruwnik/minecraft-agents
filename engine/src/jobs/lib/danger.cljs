@@ -115,9 +115,10 @@
 (defn danger-in?
   "danger? reading blocks through kind-at (shared by the mobs of one query) and, with pr, sharing walk proofs. opts
   :arrow-at is the query's shared arrow lookup (reach/lookup p reach/arrow-kind-of); without it a ranged mob builds its own.
-  :ignore-heard? leaves out every mob the body has not seen (a muted heard mob, jobs.lib.body/heard-muted?)."
+  :ignore-heard? leaves out every mob the body has not seen (a muted heard mob, jobs.lib.body/heard-muted?).
+  :way? false takes a melee mob without a way to the body (on a pillar or behind a door) as one: it stands where the body's walk will land."
   ([p kind-at e opts] (danger-in? p kind-at nil e opts))
-  ([p kind-at pr e {:keys [sight? arrow-at ignore-heard?] :or {sight? true}}]
+  ([p kind-at pr e {:keys [sight? arrow-at ignore-heard? way?] :or {sight? true way? true}}]
    (cond
      (calm-enderman? e) false
      (and ignore-heard? (not (seen-only? e))) false
@@ -127,9 +128,10 @@
           (reach/line-of-fire? (or arrow-at (reach/lookup p reach/arrow-kind-of)) (mob-pos p e) (u/pos-of (.-pos (.self p)))))
      :else
      (and (or (seen-mob? e) (not sight?))
-          (let [mob (reach/cell-of (mob-pos p e))
-                body (reach/cell-of (u/pos-of (.-pos (.self p))))]
-            (if pr (proofs/proved-way? kind-at pr mob body) (reach/way? kind-at mob body)))))))
+          (or (not way?)
+              (let [mob (reach/cell-of (mob-pos p e))
+                    body (reach/cell-of (u/pos-of (.-pos (.self p))))]
+                (if pr (proofs/proved-way? kind-at pr mob body) (reach/way? kind-at mob body))))))))
 
 (defn danger?
   "Whether hostile e (JS entity) is a real danger to the body.

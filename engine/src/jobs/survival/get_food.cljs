@@ -569,7 +569,7 @@
 (defn rushed?
   "No time to cook: a real danger is sensed near, or food is 0 and health would not outlast the cook (starving-too-soon?)."
   [c]
-  (boolean (or (seq (threats/sensed-mobs (:primitives c)))
+  (boolean (or (seq (threats/sensed-mobs (:primitives c) {}))
                (and (<= (food-level c) 0) (starving-too-soon? c)))))
 
 (defn worth-cooking?

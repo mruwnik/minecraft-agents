@@ -864,7 +864,7 @@
         ;; the body walks to 4 blocks short of the goal, is cut there and sent back to the start each time (a stationary
         ;; zombie's flee): the walk records how near it got, so the fourth restart gives up
         (let [near-goal [#(>= (.-x %) 6) send-back!]
-              {:keys [out returns mems]} (await (cut-cycles! {:blocks flat :entities [way-zombie]} {:pos [10 64 0] :range 0} [near-goal near-goal near-goal]))]
+              {:keys [out returns mems]} (await (cut-cycles! {:blocks flat :entities [way-zombie]} {:pos [10 64 0] :range 0 :dangers false} [near-goal near-goal near-goal]))]
           (is (<= (:closest (first mems)) 4.5) (str "the cut walk recorded its approach: " (pr-str (first mems))))
           (is (= {:arrived false :reason :unreachable :why :cut-again} (select-keys @out [:arrived :reason :why])) (pr-str @out))
           (is (str/includes? (:text @out) "sent back") (:text @out))
@@ -1053,7 +1053,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [mob {:key "z1" :name "zombie" :pos {:x 20 :y 64 :z 1}}
-              s (with-redefs [threats/sensed-mobs (fn [p] (if (> (first (at p)) 5) [mob] []))]
+              s (with-redefs [threats/sensed-mobs (fn [p _] (if (> (first (at p)) 5) [mob] []))]
                   (await (go! {:blocks flat} {:pos [35 64 0] :range 0})))]
           (is (= {:arrived true} @(:out s)))
           (is (= [:danger] (mapv :why (events-of s :replan))) "one replan, for the danger"))))))
@@ -1063,7 +1063,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [mob {:key "z1" :name "zombie" :pos {:x 20 :y 64 :z 30}}
-              s (with-redefs [threats/sensed-mobs (fn [p] (if (> (first (at p)) 5) [mob] []))]
+              s (with-redefs [threats/sensed-mobs (fn [p _] (if (> (first (at p)) 5) [mob] []))]
                   (await (go! {:blocks flat} {:pos [35 64 0] :range 0})))]
           (is (= {:arrived true} @(:out s)))
           (is (= [] (events-of s :replan))))))))
@@ -1073,7 +1073,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [mob (fn [x] {:key "z1" :name "zombie" :pos {:x x :y 64 :z 1}})
-              s (with-redefs [threats/sensed-mobs (fn [p] (let [bx (first (at p))]
+              s (with-redefs [threats/sensed-mobs (fn [p _] (let [bx (first (at p))]
                                                             (cond (> bx 20) [] (> bx 5) [(mob (+ 10 (mod (js/Math.floor bx) 3)))] :else [])))]
                   (await (go! {:blocks flat} {:pos [35 64 0] :range 0})))]
           (is (= {:arrived true} @(:out s)))
