@@ -20,7 +20,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (f/start (oi/ore-world birch-trees []) [])]
-          (await (oi/obtain! s {:item "oak_log"} 40))
+          (await (oi/obtain! s {:item "oak_log" :explore false} 40))
           (let [w (first (filter #(= :waiting (:kind %)) (deref (:seen s))))]
             (is (= :no-source (:reason w)))
             (is (re-find #"birch_log" (:why w)) (:why w))))))))

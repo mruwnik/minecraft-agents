@@ -39,7 +39,7 @@
 
 (defn ^:async waiting [w]
   (let [{:keys [eng]} (lt/setup w)
-        id (core/submit! eng '(jobs.items.obtain {:item "obsidian" :count 1}) {})]
+        id (core/submit! eng '(jobs.items.obtain {:item "obsidian" :count 1 :explore false}) {})]
     (await (tu/run-until-empty eng 30))
     (core/waiting eng id)))
 

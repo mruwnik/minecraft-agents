@@ -97,7 +97,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (f/start (ore-world {} [{:name "stone_pickaxe" :count 1}]) [f/own-zone])]
-          (await (obtain! s {:item "raw_iron" :how #{:craft :gather}} 6))
+          (await (obtain! s {:item "raw_iron" :how #{:craft :gather} :explore false} 6))
           (let [w (first (filter #(= :no-source (:reason %)) (f/events-of s :waiting)))]
             (is (some? w))
             (is (re-find #"raw_iron \(from deepslate_iron_ore/iron_ore\)" (str (:why w)))))
@@ -110,6 +110,15 @@
         (let [s (f/start (ore-world {} [{:name "stone_pickaxe" :count 1}]) [f/own-zone])]
           (await (obtain! s {:item "raw_iron" :how #{:craft :gather} :explore true} 4))
           (is (empty? (f/events-of s :obtain.exploring)) "no surface search")
+          (is (seq (mine-events s)) "the mine child ran"))))))
+
+(deftest an-iron-pickaxe-with-no-ore-seen-goes-to-the-mine-by-default
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (f/start (ore-world {} [{:name "stone_pickaxe" :count 1} {:name "stick" :count 2} {:name "crafting_table" :count 1}]) [f/own-zone])]
+          (await (obtain! s {:item "iron_pickaxe"} 4))
+          (is (empty? (f/events-of s :waiting)) "no silent wait")
           (is (seq (mine-events s)) "the mine child ran"))))))
 
 (deftest cobblestone-unseen-with-explore-goes-to-the-mine-not-a-surface-walk
@@ -166,7 +175,7 @@
                                      {:name "crafting_table" :count 1}])
                          [])
               _ (swap! (fake/state (:p s)) assoc-in [:recipes "iron_pickaxe"] {:count 1 :needs {"iron_ingot" 3 "stick" 2} :table true})]
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "iron_pickaxe" :minutes 1}) {})
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "iron_pickaxe" :minutes 1 :explore false}) {})
           (loop [i 0]
             (await (f/run-ticks s 20))
             (.advance (.-world (:p s)) 2000)

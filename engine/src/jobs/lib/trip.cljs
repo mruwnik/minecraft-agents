@@ -152,11 +152,11 @@
         need (when (and block-name (not (in-spare? c)) (let [f (fetch/parse-arg (:fetch (:args c)))] (and (map? f) (not (:error f)) (or (nil? (:what f)) (contains? (:what f) :tool))))) (spare-need p block-name))
         tool-name (when need (spare-name p block-name need))]
     (when (and need (not (contains? (:spare-tried (ctx/mem c)) tool-name)))
-      (let [r (await (ctx/call-child c :spare 'jobs.items.obtain {:item tool-name :count 1}))]
+      (let [r (await (ctx/call-child c :spare 'jobs.items.obtain {:item tool-name :count 1 :explore false}))]
         (if (= :continue r)
           :continue
           (let [res (if (= :declined r)
-                      (b/child-wait c :spare 'jobs.items.obtain {:item tool-name :count 1})
+                      (b/child-wait c :spare 'jobs.items.obtain {:item tool-name :count 1 :explore false})
                       (ctx/child-result c :spare))
                 got? (and (not= :declined r) (= :done (:status res)) (pos? (:got res 0)))]
             (ctx/update-mem! c update :spare-tried (fnil conj #{}) tool-name)
@@ -227,7 +227,7 @@
           fetch? (and (map? limits) (not (:error limits)) (or (nil? (:what limits)) (contains? (:what limits) :item)))
           fuel (torch/fuel-held (:primitives c))
           want (- (torch-stock) held)
-          args {:item "torch" :count (if (pos? fuel) (min want (* 4 fuel)) want) :avoid (line-ahead c)}]
+          args {:item "torch" :count (if (pos? fuel) (min want (* 4 fuel)) want) :avoid (line-ahead c) :explore false}]
       (when (and fetch? (< held (torch-low)) (not (:torches-tried (ctx/mem c))) (not (food-short? c)))
         (when-not (:torches-from (ctx/mem c)) (ctx/update-mem! c assoc :torches-from (u/self-pos c)))
         (let [r (await (ctx/call-child c :torches 'jobs.items.obtain args))]

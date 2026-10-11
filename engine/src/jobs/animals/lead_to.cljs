@@ -142,7 +142,7 @@
 (defn ^:async get-lead!
   "Without a lead: a jobs.items.obtain child gets one (chest or craft). Any child failure ends :no-lead."
   [c]
-  (let [oargs {:item "lead" :count 1}
+  (let [oargs {:item "lead" :count 1 :explore false}
         r (await (ctx/call-child c :obtain 'jobs.items.obtain oargs))]
     (cond
       (= :continue r) :yield

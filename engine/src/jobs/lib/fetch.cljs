@@ -107,7 +107,7 @@
   [w o]
   (let [{:keys [reason item any-of block needs]} w
         explore (or (:explore o) false)
-        with-explore #(cond-> % explore (assoc :explore explore))
+        with-explore #(assoc % :explore explore)
         pl (case reason
              :no-tool (cond
                         block {:kind :tool :job 'jobs.items.get-tool :args {:block block :explore explore} :key [:tool block]}

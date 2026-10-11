@@ -91,15 +91,15 @@
 
 (deftest a-need-above-64-is-fetched-whole
   (let [o (fetch/merge-limits nil nil nil nil)]
-    (is (= {:item "cobblestone" :count 100} (:args (fetch/plan-for {:reason :need :item "cobblestone" :count 100} o))) "no 64 cap on one fetch")
-    (is (= {:any-of ["dirt"] :count 100} (:args (fetch/plan-for {:reason :need :any-of ["dirt"] :count 100} o))))))
+    (is (= {:item "cobblestone" :count 100 :explore false} (:args (fetch/plan-for {:reason :need :item "cobblestone" :count 100} o))) "no 64 cap on one fetch")
+    (is (= {:any-of ["dirt"] :count 100 :explore false} (:args (fetch/plan-for {:reason :need :any-of ["dirt"] :count 100} o))))))
 
 (deftest a-wait-maps-to-a-fetch-only-for-wanted-kinds
   (let [o (fetch/merge-limits nil nil nil nil)]
     (is (= 'jobs.items.get-tool (:job (fetch/plan-for {:reason :no-tool :needs "wooden_pickaxe" :block "stone"} o))))
     (is (= {:block "stone" :explore false} (:args (fetch/plan-for {:reason :no-tool :needs "wooden_pickaxe" :block "stone"} o))))
-    (is (= {:item "oak_planks" :count 1} (:args (fetch/plan-for {:reason :need :item "oak_planks" :pos {}} o))))
-    (is (= {:any-of ["dirt" "cobblestone"] :count 1} (:args (fetch/plan-for {:reason :need :any-of ["dirt" "cobblestone"]} o))))
+    (is (= {:item "oak_planks" :count 1 :explore false} (:args (fetch/plan-for {:reason :need :item "oak_planks" :pos {}} o))))
+    (is (= {:any-of ["dirt" "cobblestone"] :count 1 :explore false} (:args (fetch/plan-for {:reason :need :any-of ["dirt" "cobblestone"]} o))))
     (is (nil? (fetch/plan-for {:reason :no-tool :block "stone"} (assoc o :what #{:item}))))
     (is (nil? (fetch/plan-for {:reason :inventory-full :pos {}} o)))
     (is (nil? (fetch/plan-for {:reason :not-allowed :pos {}} o)))))
@@ -537,7 +537,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (-> (world {}) (update :blocks dissoc chest-at)) [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "cobblestone" :count 3}) {})
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "cobblestone" :count 3 :explore false}) {})
           (await (run-ticks s 5))
           (is (re-find #"pickaxe" (:why (first (events-of s :waiting))))))))))
 
@@ -1031,7 +1031,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (bare []) [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "wooden_pickaxe"}) {})
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "wooden_pickaxe" :explore false}) {})
           (await (run-ticks s 6))
           (is (= 1 (count (filter #(= :no-source (:reason %)) (events-of s :waiting)))))
           (is (re-find #"nothing seen to gather" (:why (first (events-of s :waiting)))))
@@ -1097,7 +1097,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (update (bare []) :blocks merge tree-blocks) [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "stone_pickaxe"}) {})
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "stone_pickaxe" :explore false}) {})
           (await (run-ticks s 10))
           (is (= 1 (count (filter #(= :no-source (:reason %)) (events-of s :waiting)))))
           (is (empty? (calls s "dig")) "no tree felled for a chain that then lacks stone")
