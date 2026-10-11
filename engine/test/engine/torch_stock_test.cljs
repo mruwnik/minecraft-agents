@@ -67,8 +67,18 @@
           (is (= :done (:status @(:out s))))
           (is (= :no-source (:reason ev)))
           (is (= "no-furnace-seen" (:craft (:tried ev))))
-          (is (re-find #"no-furnace-seen" (:text ev)) "the text names why")
+          (is (re-find #"8 cobblestone" (:text ev)) "the text says what would make a furnace")
           (is (not (re-find #"no coal or logs" (:text ev))) "11 logs are carried"))))))
+
+(deftest a-stair-down-with-logs-and-minable-stone-makes-a-furnace-and-loads-the-logs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (st/stair! {:blocks st/ground :drops {"stone" "cobblestone"}
+                                   :recipes {"furnace" {:count 1 :needs {"cobblestone" 8} :table true}}
+                                   :inventory (conj st/pick {:name "oak_log" :count 11})} east tu/seeing-all))]
+          (is (= 1 (count (filter #(re-find #"put a furnace down" (:text %)) (st/events-of s :smelt.furnace)))) "a furnace was put down")
+          (is (= 1 (count (st/events-of s :smelt.loaded))) "the logs went in to be charcoal"))))))
 
 (deftest the-torch-stocking-trip-to-a-far-chest-does-not-move-the-tunnel
   (async done

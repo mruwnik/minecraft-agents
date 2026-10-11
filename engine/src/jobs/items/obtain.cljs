@@ -489,9 +489,13 @@
   "What a gather that was tried and failed adds to the no-source text (\"; gathering was tried and ended ..\", with the
   child's reason when it gave one), or nil when none was tried."
   ([tried] (tried-text tried nil))
-  ([tried why]
-   (when-let [g (:gather tried)]
-     (str "; gathering was tried and ended " (pr-str g) (when why (str " (" why ")"))))))
+  ([tried why] (tried-text tried why nil))
+  ([tried why craft-detail]
+   (not-empty
+    (str (when-let [g (:gather tried)]
+           (str "; gathering was tried and ended " (pr-str g) (when why (str " (" why ")"))))
+         (when (and craft-detail (:craft tried))
+           (str "; crafting ended " (let [k (:craft tried)] (if (keyword? k) (name k) k)) ": " craft-detail))))))
 
 (defn gather-held?
   "Whether every raw need of the chain is seen and the first one's child declined with a wait reason of its own
@@ -598,7 +602,8 @@
         (ctx/update-mem! c update :craft dissoc :step)
         (if (and (= :done r) (pos? (:smelted res 0)))
           :again
-          (fruitless! c (or (:reason res) :declined)))))))
+          (do (when (:why res) (ctx/update-mem! c assoc-in [:craft :detail] (:why res)))
+              (fruitless! c (or (:reason res) :declined))))))))
 
 (defn ^:async craft-step!
   "One round of the craft source: run the current step of the plan as a child, until it ends."
@@ -872,7 +877,7 @@
                            (cond-> {:got got :tried (:tried m)}
                              (not unreachable) (assoc :why (str "no source for " (clojure.string/join "/" names) ": "
                                                                 (no-source-why c names (:count a))
-                                                                (tried-text (:tried m) (get-in m [:gather :why])))))))))))))
+                                                                (tried-text (:tried m) (get-in m [:gather :why]) (get-in m [:craft :detail])))))))))))))
 
 (defn ^:async round
   "The whole attempt in one call: step! again until the count is carried or it stops; :continue only while a child waits on the world, :declined while a smelt child cooks."

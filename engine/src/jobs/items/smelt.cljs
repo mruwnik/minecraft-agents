@@ -562,7 +562,7 @@
             (case f
               nil (if-let [why (and (pos? (carried-count (carried c) "furnace")) (:furnace-refusal (ctx/mem c)))]
                     (stop! c "furnace-not-placed" nil (str "a furnace is carried but could not be put down: " why))
-                    (stop! c "no-furnace-seen"))
+                    (stop! c "no-furnace-seen" nil (when (:furnace-tried (ctx/mem c)) "none could be made either: a furnace is 8 cobblestone mined with a pickaxe")))
               :again (await (round-with c (:furnace (ctx/mem c))))
               f))))))
 
