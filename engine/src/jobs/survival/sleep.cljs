@@ -11,7 +11,7 @@
 
 (def doc
   "Walk to a bed and sleep in it.
-  Waits unless it is night and a bed is known (reasons :not-night, :no-bed, :bed-unreachable, :bed-occupied, :night-sheltered: the body is in a shelter and the bed is more than 16 blocks away): the :bed argument, else the remembered :bed within :bed-radius.
+  Waits unless it is night and a bed is known (reasons :not-night, :no-bed, :bed-unreachable, :bed-occupied, :night-sheltered: the body is in a shelter and the bed is more than 16 blocks away): the :bed argument, else the remembered :bed within :bed-radius, else the live :spawn-bed within it.
   Also declines while the bed is in :bed-unreachable (an unexpired entry with the same position), and for a bed
   another player occupies (sh/bed-permit).
   Ends when asleep, or when it turns day.
@@ -48,12 +48,13 @@
   (boolean (some #(= bed (:pos (:data %))) (ctx/entries c :bed-unreachable))))
 
 (defn bed-of
-  "The bed to sleep in: the :bed argument (nil when it is not a position), else the remembered :bed within
-  :bed-radius."
+  "The bed to sleep in: the :bed argument (nil when it is not a position), else the remembered :bed within :bed-radius (so a
+  gone one is found out and retracted), else sh/standing-bed."
   [c]
   (if-let [given (:bed (:args c))]
     (:pos (places/parse-pos given))
-    (sh/bed c (:bed-radius (:args c)))))
+    (or (sh/bed c (:bed-radius (:args c)))
+        (sh/standing-bed (:primitives c) (ctx/view c) (:bed-radius (:args c))))))
 
 (def leave-shelter-radius
   "A body in a shelter at night walks to a bed only when it is this near (blocks); a farther one is waited for."

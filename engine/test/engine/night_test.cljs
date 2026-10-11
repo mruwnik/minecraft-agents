@@ -57,6 +57,15 @@
         "given up on")
     (is (false? (holds? {:time night :blocks roof} (fn [_]))) "roofed, no bed, nobody asleep")))
 
+(deftest night-holds-for-the-live-spawn-bed-when-the-remembered-bed-is-far
+  (let [world {:time night :floor tu/walk-floor :blocks {"0,67,0" "stone" "20,64,0" "red_bed"}}
+        far {:x 500 :y 64 :z 500}
+        seed (fn [spawn] (fn [eng] (st/know-bed! eng far)
+                           (mem/write! (:store eng) :spawn-bed {:pos spawn} {:cap 1 :ttl :forever})))]
+    (is (true? (holds? world (seed {:x 20 :y 64 :z 0}))) "the respawn bed is the one within reach")
+    (is (false? (holds? (assoc-in world [:blocks "20,64,0"] "air") (seed {:x 20 :y 64 :z 0})))
+        "seen not to be a bed")))
+
 (def closed-hut
   "A 3x3 room around the body with walls to y 69 and a roof at y 70 (out of :roof-height's reach), floor at y 63."
   (into {} (for [x (range -2 3) z (range -2 3) y (range 63 71)

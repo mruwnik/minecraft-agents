@@ -238,7 +238,7 @@
   (let [days (days-awake-in view)]
     (if (or (and days (>= days max-days-awake)) (seq (mem/entries view :displaced))) urgent-bed-radius bed-radius)))
 
-(declare walk-leaves-shelter?)
+(declare walk-leaves-shelter? standing-beds)
 
 (def kept-shelters
   "The shelters (walk-leaves-shelter?) a body does not leave at night for a bed: a bare roof is not one of them."
@@ -264,8 +264,7 @@
                              (not-any? #(= pos (:pos (:data %))) (mem/entries view :bed-open))
                              (or overdue? (not (kept-shelters (walk-leaves-shelter? p shelter pos 1))))))]
       (or (seen-bed p ok?)
-          (when-let [pos (bed-in-view p view radius)]
-            (when (ok? pos) pos))))))
+          (first (filter ok? (standing-beds p view radius)))))))
 
 (def bed-place-failed-policy
   "Policy of the :bed-place-failed entry the night job writes when it could not set up a carried bed: one, ten
@@ -330,16 +329,23 @@
       (and ended (> ended (:t e))) pos
       (let [n (u/seen-name p pos)] (and n (not (.endsWith n "_bed")))) pos)))
 
-(defn standing-bed
-  "A bed the body can use within radius: the remembered :bed place, else the live :spawn-bed (it is set to a bed the body
-  slept in or set the spawn at, whichever half the place key holds) unless its block is seen not a bed."
+(defn standing-beds
+  "The beds the body can use within radius, nearest first: the remembered :bed place (its job retracts it on finding
+  it gone) and the live :spawn-bed (it is set to a bed the body slept in or set the spawn at, whichever half the place
+  key holds) unless its block is seen not a bed."
   [p view radius]
-  (or (bed-in-view p view radius)
-      (let [pos (:pos (:data (spawn-bed-live view)))
-            n (some->> pos (u/seen-name p))]
-        (when (and pos (<= (u/dist (u/self-pos {:primitives p}) pos) radius)
-                   (or (nil? n) (.endsWith n "_bed")))
-          pos))))
+  (let [me (u/self-pos {:primitives p})
+        spawn (:pos (:data (spawn-bed-live view)))
+        spawn-ok? (or (nil? spawn) (let [n (u/seen-name p spawn)] (or (nil? n) (.endsWith n "_bed"))))]
+    (->> [(mem/place view :bed) (when spawn-ok? spawn)]
+         (filter #(and % (<= (u/dist me %) radius)))
+         distinct
+         (sort-by #(u/dist me %)))))
+
+(defn standing-bed
+  "The nearest of standing-beds, or nil."
+  [p view radius]
+  (first (standing-beds p view radius)))
 
 (defn spawn-state
   "What the body knows of its respawn point: {:bed pos} (the live :spawn-bed), {:lost pos :why w} (:why the :spawn-lost entry's,
