@@ -1415,3 +1415,84 @@
           (await (one-run! eng defaults))
           (is @looked)
           (is (= {:x 4 :y 65 :z 0} (core/self-pos p)) "the ledge, not the wall"))))))
+
+;; ---------------------------------------------------------------- no air seen: a dry pocket, a footing, the cap as a last resort
+
+(defn flooded-cut
+  "Solid stone with a flooded 1-wide cut: water in the own column from y 64 up to top, cap at top + 1, no air anywhere."
+  [top cap]
+  (merge (into {} (for [x (range -3 4) z (range -3 4) y (range 62 (+ top 3))] [(str x "," y "," z) "stone"]))
+         (into {} (for [y (range 64 (inc top))] [(str "0," y ",0") "water"]))
+         {(str "0," (inc top) ",0") cap}))
+
+(def kit [{:name "cobblestone" :count 64} {:name "iron_pickaxe" :count 1}])
+
+(defn ^:async cut-run!
+  "One breathe run of a body at feet y fy in (flooded-cut top cap) carrying inventory, a dig taking 1.5 s."
+  [top cap fy inventory]
+  (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y fy :z 0}} :blocks (flooded-cut top cap)
+                                     :inventory inventory})]
+    (swap! (fake/state p) assoc :dig-ms 1500)
+    (await (one-run! eng cap-args))
+    {:ended (ended seen) :p p :eng eng :data (stopped-data seen) :pos (core/self-pos p)
+     :block (fn [cell] (.-name (.blockAt p (apply tu/pos cell))))}))
+
+(deftest a-flooded-cut-under-deep-water-is-left-for-a-dry-pocket-in-the-wall
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [ended p pos block]} (await (cut-run! 82 "stone" 64 kit))]
+          (is (= [[:completed nil]] ended))
+          (is (nil? (breath/situation p 12)) "breathing")
+          (is (pos? (.-health (.self p))))
+          (is (= {:x 1 :y 64 :z 0} pos) "in the pocket beside the cut, not up the water column")
+          (is (= ["cobblestone" "cobblestone"] [(block [0 64 0]) (block [0 65 0])]) "the opening is plugged behind it")
+          (is (= "air" (block [1 65 0])) "the head cell is dry")
+          (is (not (some #{"swim"} (call-names p)))))))))
+
+(deftest drowning-again-near-a-pocket-just-made-swims-up-instead-of-making-another
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p block]} (await (cut-run! 82 "stone" 64 kit))]
+          (set-self! p {:pos [0 66 0] :inWater true :oxygen 4})
+          (await (one-run! eng cap-args))
+          (is (= "stone" (block [1 66 0])) "no second pocket")
+          (is (= 82 (:y (core/self-pos p))) "up the column"))))))
+
+(deftest a-pocket-needs-a-carried-block-to-plug-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p block]} (await (cut-run! 82 "stone" 64 [{:name "iron_pickaxe" :count 1}]))]
+          (is (= "stone" (block [1 64 0])) "no pocket is dug")
+          (is (some #{"swim"} (call-names p)) "the column is swum up as before"))))))
+
+(deftest afloat-under-a-cap-it-may-not-dig-it-stands-on-a-placed-block-and-makes-the-pocket
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [ended p pos block]} (await (cut-run! 72 "oak_planks" 70 kit))]
+          (is (= [[:completed nil]] ended))
+          (is (nil? (breath/situation p 12)) "breathing")
+          (is (= "cobblestone" (block [0 69 0])) "the footing under the feet")
+          (is (= {:x 1 :y 70 :z 0} pos) "in the pocket")
+          (is (= "oak_planks" (block [0 73 0])) "the cap is left"))))))
+
+(deftest a-stop-with-no-air-says-why-no-pocket-was-made
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [ended data]} (await (cut-run! 72 "oak_planks" 70 []))]
+          (is (= [[:stopped :no_air]] ended))
+          (is (= [:not-natural :no-block] [(:cap data) (:pocket data)]))
+          (is (re-find #"pocket: no-block.*cap: not-natural" (:text data))))))))
+
+(deftest a-cap-dig-over-its-share-of-the-air-is-started-when-nothing-else-is-left
+  ;; oxygen 4 and health 20 leave 13 s: 9 s is over the share (6.5 s) and within the air left
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [ended] at :block} (await (cap-run! {:block "stone" :dig-ms 9000}))]
+          (is (= [[:completed nil]] ended))
+          (is (= "air" (at [0 68 0]))))))))
