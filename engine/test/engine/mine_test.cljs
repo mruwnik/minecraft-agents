@@ -2076,8 +2076,13 @@
           (is (finished? s))
           (is (= :count (:reason (done-event s))))
           (is (seq go-to) "home by a go-to child")
+          (is (= [16] (distinct (map :y-margin (filter #(= 64 (:y (:pos %))) go-to)))) "the walk home plans no deep way round")
           (is (= [0 64 0] (feet s)) "the body is back on its start cell")
           (is (empty? (events-of s :mine.not-home))))))))
+
+(deftest the-walk-home-bounds-its-search-only-near-under-the-start
+  (is (= {:y-margin 16} (mine/home-margin 6)) "a start near above: no way round through deep caves")
+  (is (nil? (mine/home-margin 16)) "from far below go-to's own climb rules hold, which an explicit :y-margin switches off"))
 
 (deftest the-mend-leaves-the-stair-cells-below-the-start-level
   (async done
@@ -2260,6 +2265,7 @@
           (await (run-ticks s 120))
           (is (seq (home-go-tos @go-tos)) "home by a go-to child, not a raw moveTo")
           (is (= #{0} (set (map :range (home-go-tos @go-tos)))) "onto the start cell: range 0 on every round of the walk")
+          (is (= #{16} (set (map :y-margin (home-go-tos @go-tos)))) "a start near above: no way round through deep caves")
           (is (= [0 64 0] (feet s)))
           (is (finished? s)))))))
 
