@@ -33,6 +33,7 @@
             [jobs.lib.torch :as ltorch]
             [jobs.lib.world :as known]
             [jobs.movement.go-to.air :as air]
+            [jobs.movement.go-to.climb :as climb]
             [jobs.movement.go-to.column :as column]
             [jobs.movement.go-to.escalation :as esc]
             [jobs.movement.go-to.health :as health]
@@ -125,7 +126,14 @@
     up under the goal). With no other way it cuts a stair up toward the goal instead (setting ::climb-stair, with
     :escalate: the escalation's stair, a go-to.escalated {:step :stair :why :way-dives}), stair after stair with no walk
     in between while it is under ground below the goal; else, or when no stair can be cut, it gives up :why :way-dives
-    with :dip and :rise. An explicit :y-margin switches all of this off.
+    with :dip and :rise. Such a body (jobs.movement.go-to.climb):
+    - first climbs the stairs it cut itself (memory :stair-way) that lie within ::climb/own-way-reach, hop by hop, once
+      a call (setting ::climb/own-way); a hop it cannot walk, standing on such a stair, has the stair cut again from
+      there (a go-to.escalated {:step :stair :why :own-way-blocked}; these holes stay open);
+    - walks no plan that goes more than ::climb/cave-dip below where the call began over cells that are no stair of
+      its own, while a stair up can be cut there (with :escalate and ::climb-stair): it climbs as from a dive
+      (:why :way-dives); when no stair can be cut it walks the plan after all.
+    An explicit :y-margin switches all of this off.
   - Every walk writes a :moved memory entry {:from :to :status :target} (arrived, partial or blocked) for
     the stuck trigger.
   - :doors (jobs.lib.pass): :shut (default) opens a shut door, gate or trapdoor with an empty hand, passes and
@@ -699,11 +707,41 @@
     (assoc result :reason :way-dives :dip (climb-dip) :rise (js/Math.round (- (:y pos) (:y (u/self-pos c)))))
     result))
 
+(defn own-way
+  "Under a dive floor, or once on them (memory :own-way-on), the next hop up the stairs this body cut (climb/way-up over
+  ledger/ways-of, no higher than pos), unless the setting is off or this call is done with them (memory :own-way-done);
+  nil when none."
+  [c pos floor]
+  (when (and (or floor (:own-way-on (ctx/mem c))) (climb/own-way) (not (:own-way-done (ctx/mem c))))
+    (climb/way-up (u/self-pos c) (ledger/ways-of c) (climb/own-way-reach) (js/Math.floor (:y pos)))))
+
+(defn ^:async walk-own-way!
+  "Walk to way (own-way), planning nowhere below the feet: the way up a stair never leads down, and a way round through
+  the caves to its top is not it. A walk that does not get there cuts the stair again from where the body stands on it
+  (esc/own-recut!), else ends the call's use of its own stairs (memory :own-way-done). :again."
+  [c way opts]
+  (let [level (assoc c :dive-floor (js/Math.floor (:y (u/self-pos c))))
+        {:keys [status]} (await (near/walk-round! level way 1 (dissoc opts :progress)))]
+    (ctx/update-mem! c assoc :own-way-on true)
+    (when-not (or (#{"arrived" "searching"} status) (esc/own-recut! c))
+      (ctx/update-mem! c assoc :own-way-done true))
+    :again))
+
+(defn own-way-left!
+  "Once the body has climbed its own stairs (memory :own-way-on) and none leads on (way nil): done with them for this call,
+  and the dive floor counts from here."
+  [c way]
+  (when (and (nil? way) (:own-way-on (ctx/mem c)))
+    (ctx/update-mem! c #(-> % (dissoc :own-way-on :dive-floor) (assoc :own-way-done true)))))
+
 (defn ^:async walk! [c0 pos range doors]
-  (let [floor (dive-floor! c0 pos)
+  (let [way (own-way c0 pos (dive-floor! c0 pos))
+        _ (own-way-left! c0 way)
+        floor (dive-floor! c0 pos)
         c (cond-> c0
             (:over-budget (ctx/mem c0)) (assoc :over-budget true)
-            floor (assoc :dive-floor floor :dive-stair (climb-stair)))
+            floor (assoc :dive-floor floor :dive-stair (climb-stair))
+            (and floor (not (:cave-ok (ctx/mem c0)))) (assoc :cave-floor (- (+ floor (climb-dip)) (climb/cave-dip))))
         from (u/self-pos c)
         d (u/dist from pos)
         pw (wworld/path-world (:primitives c))]
@@ -713,6 +751,9 @@
 
       (nil? pw)
       (end/refuse! c {:reason :unsupported :message "the body cannot sense the world for path planning"})
+
+      way
+      (await (walk-own-way! c way (walk-opts c doors)))
 
       :else
       (let [_ (forget-known-land! c)
@@ -743,6 +784,9 @@
         (cond
           (= "arrived" status)
           (await (arrive! c pos))
+
+          (and (= "stair" status) (= :dives (:why walked)))
+          (esc/dive-refused! c pos)
 
           (= "stair" status)
           (do (ctx/update-mem! c assoc :stair-tried true :escalate-now true) :again)
@@ -821,7 +865,7 @@
   (let [m (ctx/mem c)
         there? (here? c pos (:range (:args c)))]
     (wworld/warn-bad-settings! c)
-    (ctx/update-mem! c #(cond-> (-> % (dissoc :best :fault-cells :over-budget :off-hand-tried :air-looked :air-relooks :surfacings :column-looks :column-near :hang-walks :waypoint-misses :waypoint-why :way-looks :dry-tried :in-water :wet-fresh :wet-surfacings :dive-floor) (assoc :blocked 0 :searching 0 :leg-t0 (ctx/now c) :leg-hp (.-health (.self (:primitives c))) :frontier-best {} :target-best {}))
+    (ctx/update-mem! c #(cond-> (-> % (dissoc :best :fault-cells :over-budget :off-hand-tried :air-looked :air-relooks :surfacings :column-looks :column-near :hang-walks :waypoint-misses :waypoint-why :way-looks :dry-tried :in-water :wet-fresh :wet-surfacings :dive-floor :cave-ok :cave-climb :own-way-on :own-way-done) (assoc :blocked 0 :searching 0 :leg-t0 (ctx/now c) :leg-hp (.-health (.self (:primitives c))) :frontier-best {} :target-best {}))
                           (not (:fetching m)) (dissoc :torch-fetched :fetched)
                           (and there? (:escalate-now m)) (dissoc :escalate-now)
                           (and there? (:escalation m))

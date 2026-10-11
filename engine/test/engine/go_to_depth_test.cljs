@@ -3,7 +3,9 @@
   dips far below both ends (through deep caves) is refused instead of walked; absent: the walks' wide box."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
+            [engine.fake :as fake]
             [engine.go-to-test :as gt]
+            [engine.memory :as mem]
             [engine.path-preview-test :as pt]
             [engine.settings :as settings]
             [engine.test-util :as tu :refer [box floor]]))
@@ -77,19 +79,24 @@
 (def in-mine {:blocks mine :self {:pos {:x 0.5 :y 40 :z 0.5}} :light [0 0]})
 
 (defn ^:async climb!
-  "go! with ticks enough for a stair, a second of fake time each (the stair waits out a lava delay): {:out :p :seen}."
+  "go! with ticks enough for a stair, a second of fake time each (the stair waits out a lava delay): {:out :p :seen
+  :track}, track every position the body had. A world key :stair-way (floors) is written to memory as a stair the body
+  cut."
   [world args]
   (let [clock (atom 1000000)
-        {:keys [eng] :as s} (gt/setup (assoc world :clock clock))
+        {:keys [eng p] :as s} (gt/setup (assoc (dissoc world :stair-way) :clock clock))
         out (atom :not-done)
+        track (atom [])
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (gt/recording-parent out args)))]
+    (add-watch (fake/state p) :track (fn [_ _ _ w] (swap! track conj (:pos (:self w)))))
+    (some->> (:stair-way world) (hash-map :dim "overworld" :floors) (mem/write! (:store eng) :stair-way))
     (core/submit! eng '(recording-parent) {})
     (loop [i 0]
       (when (and (< i 1000) (seq (:list (core/state eng))))
         (await (core/tick! eng))
         (swap! clock + 1000)
         (recur (inc i))))
-    (assoc s :eng eng :out out)))
+    (assoc s :eng eng :out out :track @track)))
 
 (defn lowest-walk [s] (apply min (map #(:y (:to %)) (gt/moved (:eng s)))))
 
@@ -125,3 +132,93 @@
                                            #(climb! in-mine {:pos on-top})))]
           (is (= {:arrived false :why :way-dives} (select-keys @out [:arrived :why])))
           (is (empty? (gt/events-of s :go-to.escalated))))))))
+
+;; A dirt mass (x -30..20, y 29..59, z -1..1) with a tunnel cut 3 high: feet 40 at x 0, down one block a column to feet
+;; 33 (x 7), level to the mass's east face, out onto a cave floor, and from its far side a ramp beside the mass up to its
+;; top. The goal stands on the mass, 20 above the body: the way there dips 7, less than ::climb-dip. No sky light.
+(def shallow
+  (let [heights (concat [39] (range 38 31 -1) (repeat 13 32))
+        cut (for [[x y] (map-indexed vector heights) dy [1 2 3]] (str x "," (+ y dy) ",0"))
+        ramp (for [i (range 28)] [(str (- 47 i) "," (+ 32 i) ",2") "stone"])]
+    (merge (apply dissoc (box -30 29 -1 20 59 1 "dirt") cut)
+           (floor 32 21 -17 53 17)
+           (into {} ramp))))
+
+(def in-shallow {:blocks shallow :self {:pos {:x 0.5 :y 40 :z 0.5}} :light [0 0]})
+
+(def mass-top [10 60 0])
+
+(defn lowest [s] (apply min (map second (:track s))))
+
+(defn farthest-east [s] (apply max (map first (:track s))))
+
+(deftest a-buried-body-cuts-a-stair-up-rather-than-walk-down-into-a-cave
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out] :as s} (await (climb! in-shallow {:pos mass-top}))]
+          (is (true? (:arrived @out)))
+          (is (= #{:stair} (set (map :step (gt/events-of s :go-to.escalated)))))
+          (is (= #{:way-dives} (set (map :why (gt/events-of s :go-to.escalated)))))
+          (is (<= 37 (lowest s)) "never more than ::cave-dip below where it began"))))))
+
+(deftest the-cave-is-walked-with-a-y-margin-or-a-deeper-cave-dip
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [margin (await (climb! in-shallow {:pos mass-top :y-margin 96}))
+              dip (await (settings/with-settings {:jobs.movement.go-to.climb/cave-dip 8}
+                           #(climb! in-shallow {:pos mass-top})))]
+          (is (= [true true] (map (comp :arrived deref :out) [margin dip])))
+          (is (= [33 33] (map lowest [margin dip])))
+          (is (= [[] []] (map #(vec (gt/events-of % :go-to.escalated)) [margin dip]))))))))
+
+;; A dirt mass (x -40..20, y 29..59, z -1..1) with a level tunnel (feet 40) from x -6 to its east face, where a cave floor
+;; and a ramp beside the mass lead up to its top: the short way to the goal on top. From the tunnel's west end the body's
+;; own stair climbs west to the top (floors [-7 40 0] .. [-26 59 0]): the longer way.
+(def stair-floors (vec (for [i (range 1 21)] [(- -6 i) (+ 39 i) 0])))
+
+(def forked
+  (let [tunnel (for [x (range -6 21) y [40 41 42]] (str x "," y ",0"))
+        stair (for [[x y _] stair-floors dy [1 2 3]] (str x "," (+ y dy) ",0"))
+        ramp (for [i (range 21)] [(str (- 40 i) "," (+ 39 i) ",2") "stone"])]
+    (merge (apply dissoc (box -40 29 -1 20 59 1 "dirt") (concat tunnel stair))
+           (floor 39 21 -17 46 17)
+           (into {} ramp))))
+
+(def in-forked {:blocks forked :self {:pos {:x 0.5 :y 40 :z 0.5}} :light [0 0] :stair-way stair-floors})
+
+(def fork-top [18 60 0])
+
+(deftest a-buried-body-climbs-its-own-stair-before-a-shorter-way-through-a-cave
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out] :as s} (await (climb! in-forked {:pos fork-top}))]
+          (is (true? (:arrived @out)))
+          (is (> 21 (farthest-east s)) "never out of the tunnel's east end into the cave")
+          (is (empty? (gt/events-of s :go-to.escalated))))))))
+
+(deftest a-stair-of-its-own-not-in-memory-or-with-the-setting-off-is-not-preferred
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [unknown (await (climb! (dissoc in-forked :stair-way) {:pos fork-top}))
+              off (await (settings/with-settings {:jobs.movement.go-to.climb/own-way false}
+                           #(climb! in-forked {:pos fork-top})))]
+          (is (= [true true] (map (comp :arrived deref :out) [unknown off])))
+          (is (= [true true] (map #(< 21 (farthest-east %)) [unknown off]))))))))
+
+;; The forked mass with two steps of the stair filled in again (the cuts over [-14 47 0] and [-15 48 0]).
+(def refilled
+  (merge forked (box -15 48 0 -14 51 0 "dirt")))
+
+(deftest a-blocked-stair-of-its-own-is-cut-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out] :as s} (await (climb! (assoc in-forked :blocks refilled) {:pos fork-top}))]
+          (is (true? (:arrived @out)))
+          (is (> 21 (farthest-east s)) "never out of the tunnel's east end into the cave")
+          (is (= [[:stair :own-way-blocked]] (map (juxt :step :why) (gt/events-of s :go-to.escalated))))
+          (is (= "air" (get-in @(fake/state (:p s)) [:blocks [-14 49 0]] "air")) "the stair is left open"))))))

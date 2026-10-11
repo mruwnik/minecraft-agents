@@ -5,12 +5,14 @@
             [jobs.lib.blocks :as b]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.escape :as escape]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.reach :as reach]
             [jobs.lib.shelter :as sh]
             [jobs.lib.step-off :as step-off]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.util :as u]
             [jobs.lib.dig-in-leave :as dig-leave]
+            [jobs.movement.go-to.climb :as climb]
             [jobs.movement.go-to.result :as end]
             [jobs.movement.go-to.torch :as torch]))
 
@@ -56,11 +58,12 @@
 
 (defn escalation-job
   "[job args] of the child that carries out escalation e (jobs.lib.escape/choose); tag marks the holes it digs;
-  by-hand? digs what no carried tool clears bare-handed."
+  by-hand? digs what no carried tool clears bare-handed. The body's own stair cut again (:own) is marked by no tag: it
+  stays open."
   [{:keys [step] :as e} tag ignore-zones? by-hand?]
   (case step
     :pillar ['jobs.access.pillar {:height (:height e) :item (:item e) :ignore-zones? ignore-zones?}]
-    :stair ['jobs.access.stair {:dir :up :heading (:heading e) :steps (:steps e) :note tag :fetch false :spent-ok true :ignore-zones? ignore-zones? :by-hand by-hand?}]
+    :stair ['jobs.access.stair {:dir :up :heading (:heading e) :steps (:steps e) :note (when-not (:own e) tag) :fetch false :spent-ok true :ignore-zones? ignore-zones? :by-hand by-hand?}]
     :clear-path ['jobs.access.clear-path {:heading (:heading e) :note tag :ignore-zones? ignore-zones? :by-hand by-hand?}]
     :approach ['jobs.movement.go-to {:pos (zipmap [:x :y :z] (:pos e)) :range 0 :escalate false}]
     :fill-gap ['jobs.blocks.place {:pos (zipmap [:x :y :z] (:cell e)) :any-of [(:item e)] :fetch false :ignore-zones? ignore-zones?}]))
@@ -176,7 +179,8 @@
 (defn ^:async escalate!
   "Start the next escalation for the give-up kept in memory (:give-up), or give up with it when there is none (or
   with failed, the detail of the escalation that just failed, when there is none left after it; past max-escalations
-  with the last one that failed, if any)."
+  with the last one that failed, if any). A climb begun because a walkable plan went down through caves (memory
+  :cave-climb) walks that plan after all instead of giving up (memory :cave-ok)."
   [c pos failed]
   (let [{:keys [tries status result]} (:give-up (ctx/mem c))
         feet (end/feet-cell c)
@@ -194,6 +198,9 @@
             {:step :none :why :zone}
             e)]
     (cond
+      (and (:cave-climb (ctx/mem c)) (or (> n max-escalations) (= :none (:step e))))
+      (do (ctx/update-mem! c #(-> % (dissoc :cave-climb :dive-climb :give-up) (assoc :cave-ok true)))
+          :again)
       (> n max-escalations) (end/give-up! c pos tries status result {:escalation (or failed (:last-failed (ctx/mem c)) {:step :spent :n max-escalations})})
       (= :none (:step e)) (end/give-up! c pos tries status result {:escalation (or failed e)})
       :else
@@ -213,18 +220,57 @@
   8)
 
 (defn stair-check
-  "A fn (seconds) true when a found plan costing that many seconds is more than 3 stairs' worth, for go-to's first plan:
-  the goal is stair-first-rise or more above the feet, escalating is on, the stair has not been tried this call, the body
-  is not in its shelter, and escape/choose would stair (steps n). Else nil."
+  "A fn of go-to's first plan of a round, saying why it is not walked and a stair up is cut instead, when escalating is
+  on, the body is not in its shelter and escape/choose would stair (steps n):
+  - :dives: under a cave floor (c :cave-floor, with c :dive-stair) the plan goes below it on a cell that is no stair of
+    the body's own (climb/dives?);
+  - :cheaper: it is a whole path costing more seconds than 3 such stairs, the goal is stair-first-rise or more above
+    the feet and the stair has not been tried this call.
+  Else nil."
   [c pos]
   (let [m (ctx/mem c)
         feet (end/feet-cell c)
-        goal (mapv #(js/Math.floor (% pos)) [:x :y :z])]
-    (when (and (:escalate (:args c)) (not (:stair-tried m)) (not (sh/sheltered-in c))
-               (>= (- (second goal) (second feet)) stair-first-rise))
-      (let [e (escape/choose (:primitives c) feet goal (may-dig-fn c) {:own? (own-placed-fn c) :skip (:skipped-steps m #{})})]
-        (when (= :stair (:step e))
-          (fn [seconds] (and (number? seconds) (> seconds (* 3 stair-step-s (:steps e))))))))))
+        goal (mapv #(js/Math.floor (% pos)) [:x :y :z])
+        cave (when (:dive-stair c) (:cave-floor c))
+        cheaper? (and (not (:stair-tried m)) (>= (- (second goal) (second feet)) stair-first-rise))
+        stair (delay (let [e (escape/choose (:primitives c) feet goal (may-dig-fn c) {:own? (own-placed-fn c) :skip (:skipped-steps m #{})})]
+                       (when (= :stair (:step e)) e)))]
+    (when (and (:escalate (:args c)) (not (sh/sheltered-in c)) (or cave cheaper?))
+      (fn [{:keys [status steps ^js r]}]
+        (let [seconds (some-> r .-path .-cost .-priced)]
+          (cond
+            (and cave (climb/dives? steps cave (ledger/ways-of c)) @stair) :dives
+            (and cheaper? (= "found" status) (number? seconds) @stair (> seconds (* 3 stair-step-s (:steps @stair)))) :cheaper))))))
+
+(defn dive-refused!
+  "A plan refused because it goes down through caves (stair-check :dives): climb as from a dive (memory :dive-climb,
+  :cave-climb), the give-up kept being :way-dives."
+  [c pos]
+  (ctx/update-mem! c assoc :escalate-now true :dive-climb true :cave-climb true
+                   :give-up {:tries 0 :status :no-path
+                             :result {:status :no-path :reason :way-dives :dip (climb/cave-dip)
+                                      :rise (js/Math.round (- (:y pos) (:y (u/self-pos c))))}})
+  :again)
+
+(defn own-recut!
+  "Cut the body's own stair again from where it stands on it (climb/recut over ledger/ways-of), as the escalation, after
+  a go-to.escalated {:step :stair :why :own-way-blocked}: :again, nil when no stair of its own leads up from there."
+  [c]
+  (let [feet (end/feet-cell c)]
+    (when-let [e (and (:escalate (:args c)) (climb/recut feet (ledger/ways-of c)))]
+      (ctx/emit! c :go-to.escalated :info {:step :stair :why :own-way-blocked :at feet :heading (:heading e) :steps (:steps e)
+                                           :text "its own stair up is blocked: cutting it again"})
+      (ctx/update-mem! c assoc :escalation e :escalation-from feet :planned [] :holes-before (count (own-holes c)))
+      :again)))
+
+(defn own-failed!
+  "The cut of the body's own stair stopped where it began: no more of its own way this call (memory :own-way-done),
+  walk again, after a go-to.escalation-stopped warn."
+  [c {:keys [step] :as detail}]
+  (ctx/emit! c :go-to.escalation-stopped :warn (assoc detail :text (str "its own " (name step) " could not be cut again: "
+                                                                        (some-> (:reason detail) name) "; walking again")))
+  (ctx/update-mem! c #(-> % (dissoc :escalation :escalation-from :planned :holes-before) (assoc :own-way-done true)))
+  :again)
 
 (defn escalate?
   "Whether a give-up with result may escalate instead: a carried block fills the 1-cell gap it was refused (gap-fill), its only way dives (dive?), or the body is shut in (reach/enclosed?) and no door or gate
@@ -336,13 +382,15 @@
 
 (defn ^:async escalation-failed!
   "The child stopped or would wait: when it changed something, walk again (escalation-stopped!); when it had no tool
-  and has not dug by hand yet, run it again by hand (by-hand!); else try the next method (escalation-next!)."
+  and has not dug by hand yet, run it again by hand (by-hand!); else try the next method (escalation-next!), or after
+  the body's own stair walk again (own-failed!)."
   [c pos detail]
   (let [hand? (and (no-tool? detail) (not (:by-hand (ctx/mem c))))]
     (when hand? (by-hand! c detail))
     (cond
       (partly-made? c) (escalation-stopped! c pos detail)
       hand? :again
+      (:own (:escalation (ctx/mem c))) (own-failed! c detail)
       :else (await (escalation-next! c pos detail)))))
 
 (defn ^:async leave-shelter-round!
@@ -367,7 +415,7 @@
       (let [_ (await (torch/return-torch! c))
             r (await (ctx/call-child c :escalation job args))
             res (ctx/child-result c :escalation)]
-        (note-holes! c (concat (:planned (ctx/mem c)) (when (not= :continue r) (:dug res))))
+        (when-not (:own e) (note-holes! c (concat (:planned (ctx/mem c)) (when (not= :continue r) (:dug res)))))
         (cond
           (= :continue r) :continue
           (= :declined r) (escalation-failed! c pos {:step step :reason :not-ready})

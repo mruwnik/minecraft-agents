@@ -135,7 +135,7 @@
   dangers: whether the plans keep away from known dangers (plan!). avoid: cells the plans keep off (plan!). dark: false plans dark cells like lit ones. tolls: cells the plans price (plan!). drop-cost: the policy's :drop-cost (wplan/with-drops: a number scales drops, false takes none of 2 or 3). costs: the policy's :costs (planner price overrides, cost/planner-costs).
   unknown: the mask spec (plan!); the result then says what the last plan said of unseen floors (with-sight).
   sight: (fn [x y z]) of a feet cell, the policy's :goal-seen: only a cell in range that answers true is the goal.
-  stair-check: (fn [seconds]) asked of the first plan when it is a whole path; true ends the walk before it starts, {:status :stair-cheaper}."
+  stair-check: (fn [plan]) asked of the first plan; a why ends the walk before it starts, {:status :stair-cheaper :why why}."
   [c to range doors shut-also timeout-s explore one-way budget progress dangers & [avoid dark tolls drop-cost costs unknown sight stair-check]]
   (await (walk/settle! c))
   (let [policy-of (fn [] (cond-> (wworld/body-policy c) (not= :never doors) (update :moves conj :open) (some? drop-cost) (assoc :drop-cost drop-cost) (some? costs) (assoc :costs costs) (some? sight) (assoc :goal-seen sight)))
@@ -149,8 +149,8 @@
                    (let [plan (await (plan! c to range doors (policy-of) walls explore one-way budget progress dangers avoid dark tolls unknown))]
                      (if-let [no (wplan/no-walk plan 0 (policy-of))]
                        (if stuck (door-stuck stuck) (with-sight no plan to))
-                       (if (and stair-check (empty? walls) (= "found" (:status plan)) (stair-check (some-> ^js (:r plan) .-path .-cost .-priced)))
-                         {:status :stair-cheaper}
+                       (if-let [why (and stair-check (empty? walls) (stair-check plan))]
+                         {:status :stair-cheaper :why why}
                        (let [began (ctx/now c)
                              {done :done last-plan :plan planned :damage}
                              (await (walk/follow! c plan {:plan-fn #(plan! c to range doors (policy-of) (into walls %) explore one-way (wsearch/replan-budget budget) progress dangers avoid dark tolls unknown)
