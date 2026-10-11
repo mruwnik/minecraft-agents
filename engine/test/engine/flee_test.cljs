@@ -688,18 +688,25 @@
 
 ;; ------------------------------------------------------------------ the goal leg keeps its height
 
-(defn stub-go-to
-  "s with a go-to that walks nowhere: each call's args go to calls, (move state-atom) runs, the hostiles vanish (so the
-  flight ends after one step) and the call ends as a leg that got nearer."
-  [s calls move]
+(defn scripted-go-to
+  "s with a go-to that walks nowhere: each call's args go to calls and the call ends with the result
+  (script state-atom n) gives, n the count of calls so far."
+  [s calls script]
   (let [real (get registry/jobs 'jobs.movement.go-to)
         st (fake/state (or (:raw s) (:p s)))]
     (assoc-in s [:eng :jobs 'jobs.movement.go-to]
               (assoc real :round (fn ^:async stub [c]
                                    (swap! calls conj (:args c))
-                                   (move st)
-                                   (swap! st assoc :entities [])
-                                   (r/finish! c {:arrived false :leg true}))))))
+                                   (r/finish! c (script st (count @calls))))))))
+
+(defn stub-go-to
+  "scripted-go-to of one step: (move state-atom) runs, the hostiles vanish (so the flight ends after one step) and the
+  call ends as a leg that got nearer."
+  [s calls move]
+  (scripted-go-to s calls (fn [st _]
+                            (move st)
+                            (swap! st assoc :entities [])
+                            {:arrived false :leg true})))
 
 (defn events-of [seen kind] (filterv #(= kind (:kind %)) @seen))
 
@@ -806,6 +813,44 @@
               {:keys [seen]} (await (run-job! (stub-go-to s calls identity) 'jobs.survival.retreat {:goal {:x -20 :y 64 :z 0}}))]
           (is (not= [-20 64 0] (first-target seen)))
           (is (= :hostile-there (:goal-why (choice seen))) (pr-str (choice seen))))))))
+
+;; ------------------------------------------------------------------ a goal given up comes back
+
+(def west-goal {:x -20 :y 64 :z 0})
+
+(defn goal-legs [calls] (filterv #(= west-goal (:pos %)) @calls))
+
+(deftest a-goal-given-up-is-walked-to-again-after-the-retry-time
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[retry-s legs] [[30 2] [100000 1]]]
+          (let [calls (atom [])
+                s (setup {:entities [(zombie 7 6 {})]})
+                script (fn [st n]
+                         (swap! (:clock s) + 10000)
+                         (swap! st update :entities #(vec (take (- 8 n) %)))
+                         {:arrived false :leg (> n 1)})]
+            (await (settings/with-settings {:jobs.survival.retreat-goal/retry-s retry-s}
+                     #(run-job! (scripted-go-to s calls script) 'jobs.survival.retreat {:goal west-goal})))
+            (is (= west-goal (:pos (first @calls))) "the first leg, which fails, goes to the goal")
+            (is (= legs (count (goal-legs calls))) (str "retry-s " retry-s ": " (mapv :pos @calls)))))))))
+
+(deftest a-flight-soon-after-one-that-gave-its-goal-up-skips-that-goal-at-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls (atom [])
+              s (setup {:entities [(zombie 7 6 {})]})
+              st (fake/state (:p s))
+              mobs (:entities @st)
+              s (scripted-go-to s calls (fn [st _] (swap! st assoc :entities []) {:arrived false :leg false}))
+              s (await (run-job! s 'jobs.survival.retreat {:goal west-goal}))
+              _ (swap! st assoc :entities mobs)
+              {:keys [seen]} (await (run-job! s 'jobs.survival.retreat {:goal west-goal}))]
+          (is (= 2 (count @calls)) "one step a flight")
+          (is (= 1 (count (goal-legs calls))) "the second flight does not spend a leg on the goal the first gave up")
+          (is (= :given-up (:goal-why (last (events-of seen :retreat.choice))))))))))
 
 (def walker
   "A listed job whose memory holds an open go-to walk to (10 64 16), as one cut on its way."

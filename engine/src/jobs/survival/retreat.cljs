@@ -110,7 +110,7 @@
   {:radius {:doc "hostiles within this many blocks start a flight" :spec (a/num-in 0 nil) :default 8}
    :ranged-radius {:doc "ranged hostiles (skeletons and the like) within this many blocks start a flight" :spec (a/num-in 0 nil) :default 16}
    :eat-gap {:doc "with at least this many blocks to the nearest hostile, eat a bite per flee step" :spec (a/num-in 0 nil) :default 12}
-   :goal {:doc "a position {:x :y :z} the flight walks to with go-to legs (planner danger costs keep it round the hostiles) while the body outruns them (dropped within 3 blocks of it or after a leg that lost ground or left the goal's height: jobs.survival.retreat-goal), else leans toward, like a refuge; nil: away only" :spec goal/pos-spec :default nil}
+   :goal {:doc "a position {:x :y :z} the flight walks to with go-to legs (planner danger costs keep it round the hostiles) while the body outruns them (done within 3 blocks of it; given up for jobs.survival.retreat-goal/retry-s after a leg that lost ground or left the goal's height), else leans toward, like a refuge; nil: away only" :spec goal/pos-spec :default nil}
    :step {:doc "blocks per walk" :spec (a/num-in 1 nil) :default 6}
    :home-range {:doc "a flight leans towards the latest :bed or :home only when it lies within this many blocks" :spec (a/num-in 0 nil) :default 64}
    :weapons {:doc "item name substrings that count as weapons, for a cornered fight" :spec (a/coll-of (a/or-of string? keyword?)) :default combat/default-weapons}
@@ -833,8 +833,8 @@
               (and leg (not (and moved
                                  (>= (or (flight/nearest-gap p threats) js/Infinity) (dec (or gap0 0)))
                                  (< (u/dist (u/self-pos c) leg) (- goal-gap0 0.5)))))
-              (do (retreat-goal/off! c :lost-ground) :again)
-              (and leg (retreat-goal/drifted? c leg)) (do (retreat-goal/off! c :height) :again)
+              (do (retreat-goal/off! c leg :lost-ground) :again)
+              (and leg (retreat-goal/drifted? c leg)) (do (retreat-goal/off! c leg :height) :again)
               (not moved) (await (stuck "the way away from the hostile is blocked"))
               :else
               (let [gap (flight/nearest-gap p threats)]

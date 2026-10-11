@@ -18,12 +18,14 @@
    ::steep-rise {:default 4 :doc "Blocks of height between body and goal above which a goal farther up or down than it is across is no goal of a flight: a climb or a shaft is no way out." :spec (a/num-in 0 nil)}
    ::buried-rise {:default 8 :doc "Blocks of height between a body under ground and its goal above which the flight does not go there: under rock it knows no way." :spec (a/num-in 0 nil)}
    ::hostile-gap {:default 8 :doc "Blocks from the goal within which a known hostile, or the last known place of a mob fled within jobs.lib.threats/fled-memory-ms, makes it no goal of a flight." :spec (a/num-in 0 nil)}
-   ::same-place {:default 8 :doc "Blocks from a safe home within which the goal counts as that home; a goal farther off gives way to the home." :spec (a/num-in 0 nil)}})
+   ::same-place {:default 8 :doc "Blocks from a safe home within which the goal counts as that home; a goal farther off gives way to the home." :spec (a/num-in 0 nil)}
+   ::retry-s {:default 30 :doc "Seconds after a walk to the goal was given up (it lost ground on the hostiles, did not near the goal or left its height) before a flight, this one or the next, may walk to that goal again." :spec (a/num-in 0 nil)}})
 (defn drift [] (settings/get settings ::drift))
 (defn steep-rise [] (settings/get settings ::steep-rise))
 (defn buried-rise [] (settings/get settings ::buried-rise))
 (defn hostile-gap [] (settings/get settings ::hostile-gap))
 (defn same-place [] (settings/get settings ::same-place))
+(defn retry-s [] (settings/get settings ::retry-s))
 
 (def near
   "Blocks from the goal at which the flight no longer walks to it."
@@ -41,9 +43,16 @@
       {:x x :y y :z z})))
 
 (defn active
-  "The :goal as a position, nil when none or the flight gave it up (:goal-off)."
+  "The :goal as a position, nil when none or the flight has been there (:goal-reached)."
   [c]
-  (when-not (:goal-off (ctx/mem c)) (goal-pos (:goal (:args c)))))
+  (when-not (:goal-reached (ctx/mem c)) (goal-pos (:goal (:args c)))))
+
+(defn cell [pos] (mapv #(js/Math.floor (% pos)) [:x :y :z]))
+
+(defn given-up?
+  "Whether a walk to goal was given up within retry-s (off!: body memory :goal-off, so the next flight knows it too)."
+  [c goal]
+  (boolean (some #(= (cell goal) (:goal (:data %))) (ctx/entries c :goal-off))))
 
 (defn hostile-spots
   "Where the body knows hostiles to be: those it senses or remembers within the longest follow range (this flight's
@@ -80,15 +89,18 @@
       (and home (> (u/dist home goal) (same-place))) :home-safer)))
 
 (defn judge
-  "What the flight makes of its goal this step: {:goal (active) :why (verdict, nil: it may go there) :home (safe-home
-  of homes)}."
+  "What the flight makes of its goal this step: {:goal (active) :why (:given-up, else verdict; nil: it may go there)
+  :home (safe-home of homes)}."
   [c homes]
   (let [from (u/self-pos c)
         spots (hostile-spots c)
         home (safe-home from spots homes)
         goal (active c)]
     {:goal goal :home home
-     :why (when goal (verdict from goal {:hostiles spots :buried? (sh/buried? (:primitives c)) :home home}))}))
+     :why (when goal
+            (if (given-up? c goal)
+              :given-up
+              (verdict from goal {:hostiles spots :buried? (sh/buried? (:primitives c)) :home home})))}))
 
 (defn usable
   "The goal of judged (judge) when nothing speaks against it, else nil."
@@ -111,27 +123,29 @@
   (if (sh/buried? (:primitives c)) (walk/max-descent) leg-margin))
 
 (defn off!
-  "Give the goal up (:goal-off) and say why (:lost-ground or :height) in a retreat.goal-off info."
-  [c why]
-  (ctx/update-mem! c #(-> % (assoc :goal-off true) (dissoc :goal-y0)))
+  "Give the walk to goal up for retry-s (body memory :goal-off) and say why (:lost-ground or :height) in a
+  retreat.goal-off info."
+  [c goal why]
+  (ctx/update-mem! c dissoc :goal-y0)
+  (ctx/remember! c :goal-off {:goal (cell goal) :why why} {:cap 4 :ttl (* 1000 (retry-s))})
   (ctx/emit! c :retreat.goal-off :info
              {:why why
               :text (str (case why
                            :lost-ground "the walk to the goal lost ground on the hostiles or did not near the goal"
                            :height "the walk to the goal left the goal's height or went down under rock")
-                         ": away from them instead")}))
+                         ": away from them instead, the goal again in " (retry-s) " s")}))
 
 (defn leg
   "The goal of judged (judge), when nothing speaks against it, as a go-to target while the body outruns its chasers
   (cost/outruns-at? at the flank turn): the planner's danger costs route the leg round the hostiles. Once the body is
-  within near of it the goal is done for the flight (:goal-off), as it is after a leg that lost ground: the flight
-  goes on away from the chasers; without that it walked back and forth between the goal and the way away for ever.
+  within near of it the goal is done for the flight (:goal-reached): the flight goes on away from the chasers; without
+  that it walked back and forth between the goal and the way away for ever.
   Never a goal under rock below the flight's floor (under-floor?)."
   [c judged]
   (let [goal (usable judged)]
     (cond
       (nil? goal) nil
-      (<= (u/dist (u/self-pos c) goal) near) (do (ctx/update-mem! c assoc :goal-off true) nil)
+      (<= (u/dist (u/self-pos c) goal) near) (do (ctx/update-mem! c assoc :goal-reached true) nil)
       (under-floor? c goal) nil
       (cost/outruns-at? (retreat-home/food (:primitives c)) (walk/flank-turn)) goal)))
 
