@@ -158,7 +158,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng out p]} (await (run-job! (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 5}]})
+        (let [{:keys [eng out p]} (await (run-job! (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 5} {:name "iron_sword" :count 1}]})
                                                    'jobs.movement.go-to {:pos [10 64 0] :range 1} []))
               column [[0 61 0] [0 62 0] [0 63 0]]]
           (is (= {:arrived true} @out))

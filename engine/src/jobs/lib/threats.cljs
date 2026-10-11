@@ -8,6 +8,7 @@
             [engine.settings :as settings]
             [engine.ctx :as ctx]
             [engine.entity-observations :as obs]
+            [engine.memory :as mem]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
@@ -16,6 +17,8 @@
 (a/defargs settings
   {::default-follow-range {:default 16 :doc "Blocks a mob of unknown kind notices the body from." :spec (a/int-in 1 nil)}
    ::chased-flights {:default 3 :doc "Flights from one mob within the ttl that tell the agent." :spec (a/int-in 1 nil)}
+   ::fled-memory-ms {:default 180000 :doc "Milliseconds after a flight during which a mob it fled from still counts as near the place it was last known (errands that walk to a spot hold off), and the body is not sent out on a comfort errand." :spec (a/int-in 0 nil)}
+   ::fled-radius {:default 40 :doc "Blocks around a fled mob's last known place that an errand's walk treats as dangerous." :spec (a/num-in 0 nil)}
    ::sensed-radius {:default 24 :doc "Blocks out to which a sensed real danger is costed." :spec (a/int-in 1 nil)}})
 
 (def follow-ranges
@@ -30,6 +33,25 @@
 (def max-follow-range (apply max (vals follow-ranges)))
 
 (def threat-policy {:cap 20 :ttl (* 5 60 1000)})
+
+(defn fled-memory-ms [] (settings/get settings ::fled-memory-ms))
+
+(defn fled-radius [] (settings/get settings ::fled-radius))
+
+(defn fresh-threats
+  "The :threat entries of view written within ::fled-memory-ms."
+  [view]
+  (filterv #(< (- (:now view) (:t %)) (fled-memory-ms)) (mem/entries view :threat)))
+
+(defn fled-recently?
+  "Whether a flight left a :threat entry within ::fled-memory-ms."
+  [view]
+  (boolean (seq (fresh-threats view))))
+
+(defn fled-near?
+  "Whether a mob fled from in the last ::fled-memory-ms was last known within ::fled-radius of spot {:x :y :z}."
+  [view spot]
+  (boolean (some #(some-> (danger-q/rough-pos (:data %)) (u/dist spot) (<= (fled-radius))) (fresh-threats view))))
 
 (defn chased-flights [] (settings/get settings ::chased-flights))
 

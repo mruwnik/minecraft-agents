@@ -5,15 +5,16 @@
     belongs to a job that is no longer live (its job memory is gone: done, cancelled, discarded)
     no cleanup held in the last 10 minutes
     within :within (32) blocks of the body (cleanup's :within), so a far scaffold never drags the body back to it
-  It holds only by day and with no known hostile near, unless ::at-night / ::with-hostile are set: the night's seal is
-  scaffold too, and the body is inside it.
+  It holds only by day, past the dawn grace and with no known hostile near (jobs.lib.dawn/calm?), and not within
+  jobs.lib.threats/fled-memory-ms of a flight, unless ::at-night / ::with-hostile are set: the night's seal is scaffold
+  too, and the body is inside it.
   Runs jobs.access.cleanup, which takes exactly those entries.
   Persistence :stop: a cleanup that leaves entries holds them, so the condition turns false.
   It fires again only for new entries or once the hold has run out."
   (:require [jobs.lib.body :as body]
             [engine.args :as a]
             [engine.settings :as settings]
-            [jobs.lib.danger :as danger-q]
+            [jobs.lib.dawn :as dawn]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.shelter :as sh]
             [jobs.lib.threats :as threats]
@@ -22,7 +23,7 @@
 
 (a/defargs settings
   {::at-night {:default false :doc "Whether the trigger may fire at night." :spec boolean?}
-   ::with-hostile {:default false :doc "Whether the trigger may fire while a known hostile is near." :spec boolean?}})
+   ::with-hostile {:default false :doc "Whether the trigger may fire in the first light, while a known hostile is near, or just after a flight." :spec boolean?}})
 
 (def defaults {:within 32})
 
@@ -34,6 +35,6 @@
                 (some? (world/zones kn))
                 (or (settings/get settings ::at-night) (not (sh/night? p)))
                 (or (settings/get settings ::with-hostile)
-                    (empty? (danger-q/known-hostiles p threats/max-follow-range {:ranged-radius (danger-q/ranged-radius)})))
+                    (and (dawn/calm? p) (not (threats/fled-recently? memory))))
                 (seq (ledger/offered memory (block-at-of p) nil
                                      (ledger/near-of-args {:primitives p} args))))))

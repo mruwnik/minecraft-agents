@@ -13,6 +13,7 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [triggers.access.scaffold-left :as scaffold-left]
+            [jobs.lib.threats :as threats]
             [jobs.lib.world-files :as world]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
@@ -41,7 +42,7 @@
         feet (:feet in [3 64 0])]
     (cleanup/next-step (merge {:feet feet :eye (eye feet) :block-at (lookup) :entries entries
                                :ledger (set (map :cell entries)) :zones [] :footprints {} :accept #{:fluid-adjacent}
-                               :reach 4.5 :held {}}
+                               :reach 4.5 :held {} :guard-walks? true :max-below 4 :roof-height 4}
                               (dissoc in :feet)))))
 
 (defn column-world [cells] (apply lookup (mapcat (fn [c] [c "dirt"]) cells)))
@@ -210,6 +211,21 @@
         (is (true? (fires? (night) dirt [])))
         (is (true? (fires? (hostile) dirt [])))))))
 
+(deftest the-trigger-waits-out-the-first-light
+  (let [dirt (trigger-store [(entry [0 64 0])] [])
+        at (fn [t] (tu/fake {:blocks {"0,64,0" "dirt"} :time t}))]
+    (is (false? (fires? (at 400) dirt [])) "dawn grace (jobs.lib.dawn)")
+    (is (true? (fires? (at 1000) dirt [])))
+    (is (false? (fires? (doto (at 1000) (fake/add-entity! {:id 9 :name "zombie" :kind "hostile" :pos {:x 30 :y 64 :z 0} :health 20})) dirt []))
+        "a hostile within the dawn radius, past the 16 the old check looked at")))
+
+(deftest the-trigger-holds-off-after-a-flight
+  (let [p (tu/fake {:blocks {"0,64,0" "dirt"}})
+        fled (doto (trigger-store [(entry [0 64 0])] [])
+               (mem/write! :threat {:mob "skeleton" :pos {:x 8 :y 64 :z 0}} threats/threat-policy))]
+    (is (false? (fires? p fled [])) "a skeleton fled from a moment ago is out of sight, not gone")
+    (is (true? (settings/with-settings {::threats/fled-memory-ms 0} #(fires? p fled []))))))
+
 (deftest cleanup-within-narrows-to-the-body-and-near-wins
   (let [c {:primitives (tu/fake {:blocks {"0,64,0" "dirt"}})}]
     (is (= [32 #{:x :y :z}] ((juxt :radius (comp set keys :pos)) (ledger/near-of-args c {:within 32}))))
@@ -222,6 +238,41 @@
 (deftest the-trigger-is-a-builtin
   (is (= scaffold-left/scaffold-left (:when (:scaffold-left triggers/all))))
   (is (= '(jobs.access.cleanup {:within 32}) (:job (:scaffold-left triggers/all)))))
+
+(deftest a-scaffold-far-below-the-body-is-not-walked-to
+  (let [e (entry [10 60 0])
+        world (fn [[_ y _ :as pos]] (cond (= pos [10 60 0]) "dirt" (< y 60) "stone" :else "air"))
+        go #(apply step :entries [e] :block-at world %&)]
+    (is (= [:finish [{:cell [10 60 0] :item "dirt" :reason :far-below}]] ((juxt :step :open) (go :feet [3 70 0]))))
+    (is (= :walk (:step (go :feet [3 62 0]))) "two below is a walk")
+    (is (= :walk (:step (go :feet [3 66 0] :max-below 8))))
+    (is (= :walk (:step (go :feet [3 70 0] :guard-walks? false))) "an owner's or a caller's cleanup goes anyway")))
+
+(deftest a-scaffold-where-the-body-died-is-not-walked-to
+  (let [s (step :feet [3 64 0] :entries [(entry [10 64 0])] :block-at (lookup [10 64 0] "dirt") :died-near? #(= [10 64 0] %))]
+    (is (= :died-near (:reason (first (:open s)))))))
+
+(deftest a-scaffold-under-a-roof-is-not-walked-to-from-the-open
+  (let [roofed (lookup [10 64 0] "dirt" [10 67 0] "stone")
+        under (lookup [10 64 0] "dirt" [10 67 0] "stone" [3 67 0] "stone")
+        go #(step :feet [3 64 0] :entries [(entry [10 64 0])] :block-at %)]
+    (is (= :roofed (:reason (first (:open (go roofed))))))
+    (is (= :walk (:step (go under))) "a body under a roof itself has nothing to fear in a roof")
+    (is (= :walk (:step (go (lookup [10 64 0] "dirt" [10 70 0] "stone")))) "a roof out of range is open sky")))
+
+(deftest the-walk-hold-reads-the-weapon-and-the-health-of-the-body
+  (let [sword [{:name "iron_sword" :count 1}]]
+    (are [world hold] (= hold (:reason (cleanup/walk-hold-of (tu/fake world))))
+      {:inventory []} :unarmed
+      {:inventory sword} nil
+      {:inventory sword :self {:health 3}} :low-health)
+    (is (nil? (settings/with-settings {::cleanup/hold-unarmed? false} #(cleanup/walk-hold-of (tu/fake {:inventory []})))))))
+
+(deftest an-unarmed-or-hurt-body-walks-to-no-scaffold
+  (are [hold reason] (= reason (:reason (first (:open (step :feet [3 64 0] :entries [(entry [10 64 0])] :walk-hold hold)))))
+    {:reason :unarmed} :unarmed
+    {:reason :low-health} :low-health)
+  (is (= :dig (:step (step :feet [3 64 0] :entries [(entry [4 64 0])] :walk-hold {:reason :unarmed}))) "within reach it is still dug"))
 
 ;; ------------------------------------------------------------------ against the fake world
 
@@ -292,7 +343,7 @@
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         dir (tu/tmp-dir)
-        p (tu/fake (cond-> {:self {:pos self} :blocks blocks :inventory []} drops (assoc :drops drops)))
+        p (tu/fake (cond-> {:self {:pos self} :blocks blocks :inventory [{:name "iron_sword" :count 1}]} drops (assoc :drops drops)))
         out (atom :not-done)
         w (world/of-data {} {} zones)
         parent {:check (constantly true)

@@ -2,6 +2,8 @@
   "jobs.lib.threats' dangers for the planner (jobs.lib.cost/danger-list): sensed real dangers and remembered :threat spots, costed by what the hostile
   reflex would do (flee: dear, fight: cheap)."
   (:require [cljs.test :refer [deftest is are]]
+            [engine.memory :as mem]
+            [engine.settings :as settings]
             [engine.test-util :as tu]
             [jobs.lib.cost :as cost]
             [jobs.lib.threats :as threats]))
@@ -72,3 +74,31 @@
   (is (= {:stances {:flee 2 :fight 0.5} :max-rate 3 :shape {:sensed {:radius 9}}}
          (cost/danger-opts {:flee-factor 2 :fight-factor 0.5 :danger-max-rate 3 :danger-shape {:sensed {:radius 9}}})))
   (is (= {} (cost/danger-opts {})) "absent args: defaults apply downstream"))
+
+(defn fled-view
+  "A memory view at t 1000 whose :threat entries were written at the given ms with the given data."
+  [& written]
+  (let [now (atom 0)
+        s (mem/open (tu/tmp-dir) {:now #(deref now)})]
+    (doseq [[t data] (partition 2 written)]
+      (reset! now t)
+      (mem/write! s :threat data threats/threat-policy))
+    (reset! now 1000)
+    (mem/view s)))
+
+(deftest a-flight-counts-for-the-fled-memory-window-only
+  (let [v (fled-view 0 {:mob "skeleton" :pos {:x 10 :y 64 :z 0}})]
+    (is (true? (threats/fled-recently? v)))
+    (is (false? (settings/with-settings {::threats/fled-memory-ms 500} #(threats/fled-recently? v))))
+    (is (false? (threats/fled-recently? (fled-view))))))
+
+(deftest a-fled-mob-is-near-a-spot-within-the-radius-of-where-it-was-last-known
+  (let [v (fled-view 0 {:mob "skeleton" :pos {:x 10 :y 64 :z 0}})]
+    (are [spot near?] (= near? (threats/fled-near? v spot))
+      {:x 12 :y 64 :z 0} true
+      {:x 100 :y 64 :z 0} false)
+    (is (false? (settings/with-settings {::threats/fled-memory-ms 500} #(threats/fled-near? v {:x 12 :y 64 :z 0}))))))
+
+(deftest a-fled-mob-heard-only-is-placed-by-its-direction-and-band
+  (let [v (fled-view 0 {:mob "zombie" :direction :north :band :near :from {:x 0 :y 64 :z 0}})]
+    (is (true? (threats/fled-near? v {:x 0 :y 64 :z -5})))))

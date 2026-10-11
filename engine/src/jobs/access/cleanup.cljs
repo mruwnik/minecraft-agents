@@ -2,7 +2,10 @@
   (:require [engine.settings :as settings]
             [engine.args :as a]
             [engine.game :as game]
+            [engine.memory :as mem]
             [jobs.access.stair :as stair]
+            [jobs.lib.body :as body]
+            [jobs.lib.combat :as combat]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.shelter :as sh]
@@ -58,6 +61,12 @@
   A block on the footprint of a plan this body made is the plan's: its entry is dropped (cleanup.plan-cell) and the cell
   never dug, unless :spare-own-plans? is false.
 
+  An unowned entry (:job nil, no :near) out of reach is walked to only when safe, else held with the reason: :unarmed / :low-health (no weapon carried,
+  or health under jobs.lib.body/risky-min-health: ::hold-unarmed?), :far-below (more than ::max-below under the feet),
+  :died-near (within ::died-radius of a :died entry in body memory), :roofed (a solid non-scaffold block within
+  ::roof-height above it while the body is in the open). A walk leg also stops while a mob the body fled from within
+  jobs.lib.threats/fled-memory-ms was last known within jobs.lib.threats/fled-radius of the cell or the body (:danger).
+
   A shelter's block (purpose :shelter or :retreat-plug) stays while a known hostile is near (:hostile-near) and all night (:night; arg :keep-at-night?): it keeps the hostile out of the body's refuge.
 
   Every dig asks jobs.lib.access.rules/may-dig? (zones, plan footprints, ledger cells) when chosen and again
@@ -94,7 +103,17 @@
 (a/defargs settings
   {::walk-range {:default 3 :doc "How near a scaffold block the body walks before it digs it." :spec (a/int-in 0 nil)}
    ::max-collect-radius {:default 48 :doc "Blocks around the body in which dropped scaffold is collected, at most." :spec (a/int-in 0 nil)}
+   ::max-below {:default 4 :doc "Blocks below the body a scaffold may lie to be walked to; a deeper one (a cave, a pit) is held :far-below." :spec (a/int-in 0 nil)}
+   ::roof-height {:default 4 :doc "Blocks above a scaffold block within which a solid block (not scaffold) roofs it; a roofed one is not walked to from the open (:roofed)." :spec (a/int-in 0 nil)}
+   ::died-radius {:default 24 :doc "Blocks around a place the body died within which a scaffold is not walked to (:died-near)." :spec (a/num-in 0 nil)}
+   ::hold-unarmed? {:default true :doc "Whether an unarmed body, or one below jobs.lib.body/risky-min-health, walks to no scaffold (:unarmed, :low-health)." :spec boolean?}
    ::max-passes {:default 200 :doc "Steps (dig, walk, collect) in one run before it stops." :spec (a/int-in 0 nil)}})
+(defn max-below [] (settings/get settings ::max-below))
+
+(defn roof-height [] (settings/get settings ::roof-height))
+
+(defn died-radius [] (settings/get settings ::died-radius))
+
 (defn walk-range [] (settings/get settings ::walk-range))
 
 (defn max-collect-radius [] (settings/get settings ::max-collect-radius))
@@ -190,15 +209,33 @@
           (not (:ok v)) (select-keys v [:reason :zone :claim :plan :block])
           (not-every? accept hazards) {:reason :hazard :hazards hazards})))))
 
+(defn roofed?
+  "Whether a solid block that is not a ledger cell lies within roof-height above cell."
+  [{:keys [block-at ledger roof-height]} cell]
+  (boolean (some (fn [dy] (let [c (rules/offset cell 0 dy 0)
+                                n (block-at c)]
+                            (and n (not (rules/replaceable n)) (not (contains? ledger c)))))
+                 (range 1 (inc roof-height)))))
+
+(defn walk-blocker
+  "Why the body should not walk to the entry at cell, as {:reason ...}, or nil: :unarmed/:low-health (walk-hold), :far-below
+  (more than max-below under the feet), :died-near (died-near? of the cell), :roofed (under cover where the body is not)."
+  [{:keys [feet walk-hold max-below died-near?] :as in} {:keys [cell]}]
+  (cond
+    walk-hold walk-hold
+    (> (- (get feet 1) (get cell 1)) max-below) {:reason :far-below}
+    (and died-near? (died-near? cell)) {:reason :died-near}
+    (and (roofed? in cell) (not (roofed? in (update feet 1 dec)))) {:reason :roofed}))
+
 (defn next-step
   "The next step over entries (each holding its item, or unloaded), from {:feet :eye [x y z] :block-at :entries
   :ledger #{cells} :zones :footprints :accept :reach :held {cell {:reason ...}}}: {:step :dig :cell :item},
   {:step :walk :cell}, {:step :retreat :to stand} (only :stranding cells are left, and :retreats is under 3) or
   {:step :finish :open [{:cell :item :reason ...}]}. Held cells are given up for this run."
-  [{:keys [entries eye reach held retreats] :as in}]
-  (let [judged (map (fn [e] [e (or (held (:cell e)) (blocker in e))]) entries)
+  [{:keys [entries eye reach held retreats guard-walks?] :as in}]
+  (let [d #(distance eye (centre (:cell %)))
+        judged (map (fn [e] [e (or (held (:cell e)) (blocker in e) (when-not (or (<= (d e) reach) (not guard-walks?)) (walk-blocker in e)))]) entries)
         ready (map first (remove second judged))
-        d #(distance eye (centre (:cell %)))
         near (filter #(<= (d %) reach) ready)
         far (remove #(<= (d %) reach) ready)]
     (cond
@@ -222,14 +259,31 @@
   (boolean (seq (danger-q/known-hostiles p threats/max-follow-range {:ranged-radius (danger-q/ranged-radius)}))))
 
 (defn danger-ahead?
-  "Whether walking to cell is unsafe: a real danger near the body, or a known hostile (seen or heard) near the cell."
+  "Whether walking to cell is unsafe: a real danger near the body, a known hostile (seen or heard) near the cell, or a mob
+  the body fled from lately last known near the cell or the body."
   [c cell]
   (let [p (:primitives c)
         r (:danger-radius (:args c))
         [x y z] cell]
     (boolean (or (danger-q/nearest-danger p r {} {})
+                 (threats/fled-near? (ctx/view c) {:x x :y y :z z})
+                 (threats/fled-near? (ctx/view c) (u/self-pos c))
                  (some #(<= (u/dist (danger-q/mob-pos p %) {:x x :y y :z z}) r)
                        (danger-q/known-hostiles p (+ r (danger-q/known-scan)) {}))))))
+
+(defn died-near-of
+  "A fn of a cell: whether a :died entry of view lies within died-radius of it."
+  [view]
+  (let [spots (keep (comp :pos :data) (mem/entries view :died))]
+    (fn [[x y z]] (boolean (some #(<= (u/dist % {:x x :y y :z z}) (died-radius)) spots)))))
+
+(defn walk-hold-of
+  "The reason {:reason :unarmed|:low-health} the body of primitives p walks to no scaffold, or nil."
+  [p]
+  (when (settings/get settings ::hold-unarmed?)
+    (if (nil? (combat/best-weapon p combat/default-weapons))
+      {:reason :unarmed}
+      (some-> (body/too-hurt p) (select-keys [:reason :health :min-health])))))
 
 (defn inputs
   "next-step's input now: entries to work on, the whole ledger l for the rules."
@@ -241,6 +295,9 @@
             :hostile-near? (hostile-near? (:primitives c)) :night? (sh/night? (:primitives c)) :keep-at-night? (:keep-at-night? (:args c))
             :ledger (ledger/cells l) :zones zones :accept (set accept) :reach reach
             :spare-own-plans? (:spare-own-plans? (:args c))
+            :guard-walks? (and (nil? (:job (:args c))) (nil? (:near (:args c))))
+            :max-below (max-below) :roof-height (roof-height)
+            :died-near? (died-near-of (ctx/view c)) :walk-hold (walk-hold-of (:primitives c))
             :held (:held (ctx/mem c) {}) :retreats (:retreats (ctx/mem c) 0)})))
 
 (defn bad-job? [job] (not (or (nil? job) (= :all job) (string? job))))
