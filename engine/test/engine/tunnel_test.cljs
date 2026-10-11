@@ -13,7 +13,8 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as world]
-            [jobs.access.tunnel :as tunnel]))
+            [jobs.access.tunnel :as tunnel]
+            [jobs.access.tunnel.line :as ln]))
 
 (def job 'jobs.access.tunnel)
 
@@ -27,7 +28,7 @@
       (when-not (= :unloaded n) n))))
 
 (defn approach [named target & {:keys [zones footprints max-length accept ways feet] :or {zones [] footprints #{} max-length 24 accept #{} feet [0 65 0]}}]
-  (tunnel/approach {:block-at (world-fn named) :zones zones :footprints footprints :ledger #{} :ways ways}
+  (ln/approach {:block-at (world-fn named) :zones zones :footprints footprints :ledger #{} :ways ways}
                    target feet max-length accept))
 
 (defn stair-target [{:keys [stand heading]}]
@@ -36,7 +37,7 @@
     [(+ x dx) y (+ z dz)]))
 
 (deftest the-surface-of-a-column
-  (are [named y] (= y (tunnel/surface (world-fn named) [3 5] 50 80))
+  (are [named y] (= y (ln/surface (world-fn named) [3 5] 50 80))
     {} 65
     {[3 65 5] "short_grass"} 65
     {[3 65 5] "stone" [3 66 5] "dirt"} 67
@@ -58,7 +59,7 @@
         in {:block-at (world-fn cave-room) :floor-at #(when (seen %) ((world-fn cave-room) %))
             :column-at #(if (seen %) ((world-fn cave-room) %) "air")
             :zones [] :footprints #{} :ledger #{} :ways nil}
-        a (tunnel/approach in [4 57 0] [0 60 0] 24 #{})]
+        a (ln/approach in [4 57 0] [0 60 0] 24 #{})]
     (is (= [0 60 0] (:entry a)) (pr-str a))))
 
 (deftest a-shorter-surface-entry-beats-the-body-underground
@@ -136,19 +137,19 @@
 
 (deftest the-line-cells-run-from-the-entry-to-the-stand-then-the-target
   (let [plan {:entry [0 65 0] :heading :north :dir :down :steps 2 :run 1 :target [0 63 -4]}
-        cells (tunnel/line-cells plan)]
+        cells (ln/line-cells plan)]
     (is (= [[0 65 0] [0 64 -1] [0 63 -2] [0 63 -3] [0 63 -4]] cells))
     (is (= 5 (count cells)) "n + 2 cells: 0..n and the target")))
 
 (deftest taxicab-distance
-  (are [a b d] (= d (tunnel/taxi a b))
+  (are [a b d] (= d (ln/taxi a b))
     [0 0 0] [0 0 0] 0
     [0 0 0] [1 -2 3] 6
     [5 5 5] [4 6 3] 4))
 
 (deftest light-falls-one-a-step-from-the-farther-of-head-and-feet
   (let [plan {:entry [0 61 0] :heading :east :dir :down :steps 0 :run 24 :target [25 61 0]}]
-    (are [s k light] (= light (tunnel/torch-light plan s k))
+    (are [s k light] (= light (ln/torch-light plan s k))
       0 0 13
       0 1 12
       0 12 1
@@ -165,7 +166,7 @@
    :nothing {:entry [0 61 0] :heading :east :dir :down :steps 0 :run 0 :target [1 61 0]}})
 
 (deftest torch-sites-of-known-lines
-  (are [k sites] (= sites (tunnel/torch-sites (sites-plans k)))
+  (are [k sites] (= sites (ln/torch-sites (sites-plans k)))
     :straight-down [0]
     :eight-down [0 5]
     :flat-run [0 11 22]
@@ -174,11 +175,11 @@
 
 (deftest sites-light-every-cell-and-each-site-is-lit-by-the-one-before
   (doseq [[k plan] (dissoc sites-plans :nothing)
-          :let [sites (tunnel/torch-sites plan)
+          :let [sites (ln/torch-sites plan)
                 n (+ (:steps plan) (:run plan))]]
-    (is (every? (fn [cell] (some #(pos? (tunnel/torch-light plan % cell)) sites)) (range 0 (+ n 2)))
+    (is (every? (fn [cell] (some #(pos? (ln/torch-light plan % cell)) sites)) (range 0 (+ n 2)))
         (str k " every cell lit"))
-    (is (every? (fn [[before s]] (pos? (tunnel/torch-light plan before (inc s)))) (partition 2 1 sites))
+    (is (every? (fn [[before s]] (pos? (ln/torch-light plan before (inc s)))) (partition 2 1 sites))
         (str k " the standing cell of a site is lit by the site before"))))
 
 ;; ---------------------------------------------------------------- the fake world
@@ -482,7 +483,7 @@
   [res]
   (let [plan (:line res)
         sites (map :site (:torches res))]
-    (remove (fn [k] (some #(pos? (tunnel/torch-light plan % k)) sites))
+    (remove (fn [k] (some #(pos? (ln/torch-light plan % k)) sites))
             (range 0 (+ 2 (:steps plan) (:run plan))))))
 
 (deftest torches-held-in-the-off-hand-are-hung
@@ -502,7 +503,7 @@
       (fn ^:async t []
         (let [{:keys [out p]} (await (tunnel! {:blocks eight-down :inventory torches} {:target [6 57 0]} (fn [_])))
               res @out
-              sites (tunnel/torch-sites (:line res))]
+              sites (ln/torch-sites (:line res))]
           (is (= :reached (:reason res)))
           (is (= [5 57 0] (feet p)))
           (is (= 22 (count (:dug res))) "torches never cost a dig")
@@ -560,7 +561,7 @@
           (is (= :reached (:reason res)))
           (is (= 22 (count (:dug res))))
           (is (empty? (:torches res)))
-          (is (= (tunnel/torch-sites (:line res)) (mapv :site (:unlit res))))
+          (is (= (ln/torch-sites (:line res)) (mapv :site (:unlit res))))
           (is (every? #(= :no-torches (:reason %)) (:unlit res)))
           (is (= [:no-torches] (mapv :reason (events-of s :tunnel.unlit)))))))))
 
@@ -614,7 +615,7 @@
                 hung (places p)]
             (is (= :reached (:reason res)))
             (is (= (count hung) (count (distinct hung))) "no cell placed twice")
-            (is (= (count (tunnel/torch-sites (:line res))) (count (:torches res))))
+            (is (= (count (ln/torch-sites (:line res))) (count (:torches res))))
             (is (empty? (lit-from-standing res)))
             (is (= (count (digs p)) (count (distinct (digs p)))))))))))
 
@@ -808,7 +809,7 @@
 (deftest the-widest-line-reads-few-blocks-over-open-air
   (let [reads (atom 0)
         air (fn [_] (swap! reads inc) "air")]
-    (tunnel/approach {:block-at air :zones [] :footprints #{} :ledger #{} :ways nil :ignore-zones? true}
+    (ln/approach {:block-at air :zones [] :footprints #{} :ledger #{} :ways nil :ignore-zones? true}
                      [4 64 4] [0 65 0] 64 #{})
     (is (< @reads 40000))))
 

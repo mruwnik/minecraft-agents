@@ -14,7 +14,7 @@
             [jobs.access.stair :as stair]
             [jobs.lib.reach :as reach]
             [jobs.lib.child :as child]
-            [jobs.access.tunnel :as tunnel]
+            [jobs.access.tunnel.line :as ln]
             [jobs.lib.world :as known]))
 
 (def doc
@@ -183,7 +183,7 @@
         {:keys [i cell walk results]} (:escape (ctx/mem c))
         attempts (escape-attempts (:heading (:line tunnel)) ignore?)
         attempt (get attempts i)
-        entry-y (second (first (tunnel/line-cells (:line tunnel))))]
+        entry-y (second (first (ln/line-cells (:line tunnel))))]
     (cond
       (nil? attempt)
       (finish! c :stopped :walk-failed {:cell cell :walk walk :escape results})
@@ -250,7 +250,7 @@
 (defn ^:async take-torch!
   "Walk to the cell after the torch's site and take it back."
   [c {:keys [site] :as torch}]
-  (let [stand ((tunnel/line-cells (:line (:tunnel (:args c)))) (inc site))]
+  (let [stand ((ln/line-cells (:line (:tunnel (:args c)))) (inc site))]
     (if (= stand (reach/standing-vec (:primitives c)))
       (await (dig-torch! c torch))
       (await (walk-to! c stand (fn [_] (book-left! c (:cell torch) site :walk-failed)))))))
@@ -281,7 +281,7 @@
   [c]
   (let [{:keys [tunnel]} (:args c)
         m (ctx/mem c)
-        entry (first (tunnel/line-cells (:line tunnel)))
+        entry (first (ln/line-cells (:line tunnel)))
         in (stair/rules-in c (reach/standing-vec (:primitives c)))
         booked (set (map :cell (:open m)))
         body (u/self-pos c)

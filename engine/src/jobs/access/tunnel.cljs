@@ -19,7 +19,7 @@
             [jobs.lib.walk :as walk]
             [jobs.lib.ore-pick :as ore-pick]
             [jobs.lib.placement :as placement]
-            [jobs.lib.pillar :as pillar]
+            [jobs.access.tunnel.line :as ln]
             [plan.shape :as shape]
             [jobs.lib.world :as known]))
 
@@ -118,187 +118,6 @@
    :spent-ok {:doc "dig on with tools down to 3 uses instead of stopping :tool-spent (see jobs.access.stair)" :spec boolean? :default false}
    :pick-up-ores {:doc "true: dig the ores of jobs.lib.ore-pick's ::ores setting that are exposed within reach on the way; false: none; or the ore block names to dig" :spec (a/or-of boolean? (a/coll-of a/name?)) :default true}})
 
-(def heading-order [:north :east :south :west])
-
-
-(defn ahead
-  "The cell n along heading from cell, same height."
-  [cell heading n]
-  (let [[dx dz] (shape/headings heading)]
-    (shape/add cell [(* n dx) 0 (* n dz)])))
-
-(defn surface
-  "The feet height of the top stand of column [x z], looking down from hi to lo: the first cell that is not open must
-  be a solid floor with two open cells over it. nil when it is not (a fluid, a cave roof above hi), or a cell on the
-  way is not loaded. With seen-at (nil for a cell not seen) the floor and the two cells over it must be seen: unseen
-  cells read as air above the surface, so the first seen stone of a hidden column is no surface."
-  ([block-at column lo hi] (surface block-at nil column lo hi))
-  ([block-at seen-at [x z] lo hi]
-   (loop [y hi]
-     (when (>= y lo)
-       (let [n (block-at [x y z])]
-         (cond
-           (nil? n) nil
-           (pillar/clear? n) (recur (dec y))
-           (and (<= (+ y 2) hi) (or (nil? seen-at) (every? seen-at [[x y z] [x (+ y 1) z] [x (+ y 2) z]])) (rules/solid-floor? block-at [x y z])) (inc y)
-           :else nil))))))
-
-(defn run-cells
-  "The cells of one flat run step from feet: {:next :cut (head first) :floor :under}."
-  [feet heading]
-  (let [n (ahead feet heading 1)]
-    {:next n :cut [(shape/add n [0 1 0]) n] :floor (shape/add n [0 -1 0]) :under (shape/add n [0 -2 0])}))
-
-(defn line
-  "The steps of a line, as [feet cells] each: the stair from entry, then the run; with :end (the stair's last cell)
-  and :stand."
-  [{:keys [entry heading dir steps run]}]
-  (let [stair-feet (take (inc steps) (iterate #(:next (shape/step-cells % dir heading)) entry))
-        end (last stair-feet)
-        run-feet (take (inc run) (iterate #(ahead % heading 1) end))]
-    {:steps (concat (map (fn [f] [f (shape/step-cells f dir heading)]) (butlast stair-feet))
-                    (map (fn [f] [f (run-cells f heading)]) (butlast run-feet)))
-     :end end
-     :stand (last run-feet)}))
-
-(defn line-cells
-  "The feet cells of the line of plan: index 0 the entry to n (steps + run) the stand, then the target as n+1."
-  [plan]
-  (let [{:keys [steps stand]} (line plan)]
-    (-> (mapv first steps) (conj stand) (conj (:target plan)))))
-
-(defn taxi [a b] (reduce + (map #(js/Math.abs (- %1 %2)) a b)))
-
-(defn light-between
-  "The light of a torch for site s at cell k of cells: 14 less the taxicab distance, from the nearer of head and feet."
-  [cells s k]
-  (let [feet (cells s)]
-    (- 14 (max (taxi (shape/add feet [0 1 0]) (cells k)) (taxi feet (cells k))))))
-
-(defn torch-light [plan s k] (light-between (line-cells plan) s k))
-
-(defn torch-sites
-  "The site indices of the torches of plan: [] when the entry is the stand, else 0 and each time the largest s after
-  the last whose cell s+1 the last still lights (s up to n-1), until every cell 0..n+1 has light."
-  [plan]
-  (let [cells (line-cells plan)
-        n (- (count cells) 2)
-        lit? (fn [sites k] (some #(pos? (light-between cells % k)) sites))
-        dark? (fn [sites] (not-every? #(lit? sites %) (range 0 (+ n 2))))]
-    (if (zero? n)
-      []
-      (loop [sites [0]]
-        (let [at (peek sites)
-              nxt (last (filter #(pos? (light-between cells at (inc %))) (range (inc at) n)))]
-          (if (and (dark? sites) nxt) (recur (conj sites nxt)) sites))))))
-
-(defn step-stop
-  "stair/stop-of for a step of the line. With a building block carried (in :filler?) air under or in the floor is no stop:
-  the walk bridges it."
-  [in feet cells accept]
-  (let [filler? (:filler? in)
-        stop (stair/stop-of (assoc in :feet feet) (assoc cells :filler? filler?) accept)]
-    (when-not (and filler? (= :no-floor (:reason stop)) (rules/air (:block stop)))
-      stop)))
-
-(defn line-stop
-  "The first stop on the line of plan, or nil when every step and the target may be cut."
-  [in plan accept]
-  (let [{:keys [steps stand]} (line plan)]
-    (or (some (fn [[feet cells]] (step-stop in feet cells accept)) steps)
-        (step-stop in stand (run-cells stand (:heading plan)) accept))))
-
-(defn standable?
-  "Whether the body can stand at feet: it and the head cell open, a solid floor under."
-  [block-at [x y z]]
-  (and (pillar/clear? (block-at [x y z])) (pillar/clear? (block-at [x (inc y) z]))
-       (boolean (rules/solid-floor? block-at [x (dec y) z]))))
-
-(defn entry-heights
-  "The feet heights an entry in column [ex ez] may take: the surface, and the body's own cell when it stands in
-  that column (a cave or tunnel roof hides the surface from a body underground)."
-  [block-at seen-at [ex ez] lo hi feet]
-  (let [[fx fy fz] feet
-        own (when (and feet (= [fx fz] [ex ez]) (<= lo fy hi) (standable? block-at feet)) fy)]
-    (distinct (keep identity [(surface block-at seen-at [ex ez] lo hi) own]))))
-
-(defn fits
-  "The plans of the lines along heading whose entry is n before the target, when the stair fits in it (entry: the
-  surface, or the body's cell feet); else ()."
-  [block-at seen-at target heading n max-length feet]
-  (let [[tx ty tz] target
-        [ex _ ez] (ahead target heading (- n))]
-    (for [y (entry-heights block-at seen-at [ex ez] (- ty max-length) (+ ty max-length 1) feet)
-          :when (<= (js/Math.abs (- y ty)) (dec n))]
-      (let [d (- y ty)
-            plan {:entry [ex y ez] :heading heading :dir (if (neg? d) :up :down) :steps (js/Math.abs d)
-                  :run (- n 1 (js/Math.abs d)) :length n :target [tx ty tz]}]
-        (assoc plan :stand (:stand (line plan)))))))
-
-(defn dist2 [[x y z] [a b c]] (+ (* (- x a) (- x a)) (* (- y b) (- y b)) (* (- z c) (- z c))))
-
-(def walk-in-max
-  "Blocks the body walks to an entry before a longer line from where it stands is taken instead."
-  24)
-
-(defn far-entry?
-  "Whether the entry of plan is more than walk-in-max from feet: such a line loses to any nearer one."
-  [plan feet]
-  (> (dist2 feet (:entry plan)) (* walk-in-max walk-in-max)))
-
-(defn best-on-heading
-  "{:plan p} for the shortest valid line along heading, else {:stop s} (the shortest fitting line's stop, or
-  :too-far when none fits)."
-  [in target heading max-length accept feet]
-  (let [fitting (mapcat #(fits (or (:column-at in) (:block-at in)) (:floor-at in) target heading % max-length feet) (range 1 (inc max-length)))
-        judged (map (fn [p] [p (line-stop in p accept)]) fitting)]
-    (if-let [[p] (first (filter (comp nil? second) judged))]
-      {:plan p :near (some (fn [[q stop]] (when (and (nil? stop) (not (far-entry? q feet))) q)) judged)}
-      {:stop (or (second (first judged)) {:reason :too-far})})))
-
-(defn cuts-floor?
-  "Whether the line of plan cuts the floor under feet (the body would come back to a hole where it stood)."
-  [plan feet]
-  (let [floor (shape/add feet [0 -1 0])]
-    (boolean (some (fn [[_ {:keys [cut]}]] (some #{floor} cut)) (:steps (line plan))))))
-
-
-(defn approach
-  "The line to cut to target (the plan map, see fits) from rules input in (without :cell and :feet), the body at
-  feet; else {:reason ...} (see the doc), with :headings when the headings fail for different reasons."
-  [in target feet max-length accept]
-  (if (and (nil? (:zones in)) (not (:ignore-zones? in)))
-    {:reason :no-zones}
-    (let [per (into {} (map (fn [h] [h (best-on-heading in target h max-length accept feet)])) heading-order)
-          plans (distinct (mapcat (fn [h] (keep identity [(:plan (per h)) (:near (per h))])) heading-order))]
-      (if (seq plans)
-        (first (sort-by (juxt #(far-entry? % feet) :length #(cuts-floor? % feet) #(dist2 feet (:entry %))) plans))
-        (let [stops (into {} (map (fn [[h r]] [h (:stop r)])) per)
-              real (remove #(= :too-far (:reason %)) (vals stops))
-              reasons (set (map :reason real))]
-          (cond
-            (empty? real) {:reason :too-far}
-            (= 1 (count reasons)) (first real)
-            :else {:reason :no-approach :headings (into {} (map (fn [[h s]] [h (:reason s)])) stops)}))))))
-
-(defn leg-target
-  "The waypoint of the first leg of a target far from feet underground. Diagonal: on the body's row, one past the
-  target's column, so the first leg stands in that column; the shorter axis goes first (swap? takes the longer axis
-  first). On the body's row or column but farther than max-length: max-length along it. nil when the body stands on
-  the surface or a leg is longer than max-length."
-  [block-at [fx fy fz :as feet] [tx _ tz] max-length swap?]
-  (let [dx (- tx fx) dz (- tz fz)
-        x-first? (not= (boolean swap?) (<= (js/Math.abs dx) (js/Math.abs dz)))
-        [a b] (if x-first? [dx dz] [dz dx])]
-    (when (not= fy (surface block-at [fx fz] (- fy 1) (+ fy max-length 1)))
-      (cond
-        (and (zero? dz) (> (js/Math.abs dx) max-length)) [(+ fx (* max-length (js/Math.sign dx))) fy fz]
-        (and (zero? dx) (> (js/Math.abs dz) max-length)) [fx fy (+ fz (* max-length (js/Math.sign dz)))]
-        (and (not (zero? dx)) (not (zero? dz)) (<= (inc (js/Math.abs a)) max-length) (<= (js/Math.abs b) max-length))
-        (if x-first?
-          [(+ tx (js/Math.sign dx)) fy fz]
-          [fx fy (+ tz (js/Math.sign dz))])))))
-
 (defn head-of [cell] (shape/add cell [0 1 0]))
 
 (defn torch-cell
@@ -309,7 +128,7 @@
 (defn standing-torches
   "[{:cell :site :block}] for the sites of plan whose torch stands now."
   [block-at plan]
-  (let [cells (line-cells plan)]
+  (let [cells (ln/line-cells plan)]
     (vec (keep (fn [s] (when-let [cell (torch-cell block-at cells s)] {:cell cell :site s :block (block-at cell)}))
                (:sites plan)))))
 
@@ -340,7 +159,7 @@
 (defn run-index
   "k when feet is the run's cell k steps from end, 0 <= k <= run; else nil."
   [end feet heading run]
-  (first (filter #(= feet (ahead end heading %)) (range 0 (inc run)))))
+  (first (filter #(= feet (ln/ahead end heading %)) (range 0 (inc run)))))
 
 (defn ^:async dig-cell!
   "stair/dig! with :again for a dug cell (more to do), else a stop map."
@@ -354,7 +173,7 @@
   (let [{:keys [plan]} (ctx/mem c)
         accept (set (:accept (:args c)))
         in (stair/rules-in c feet)
-        base (run-cells feet (:heading plan))
+        base (ln/run-cells feet (:heading plan))
         {:keys [next cut] :as cells} (assoc base :bridged? (contains? (:bridged (ctx/mem c)) (:floor base))
                                                  :filler? (some? (blocks/pick c blocks/building-blocks)))]
     (await (stair/look-ahead! c feet next cut))
@@ -378,7 +197,7 @@
   [c feet]
   (let [accept (set (:accept (:args c)))
         in (stair/rules-in c feet)
-        {:keys [next cut] :as cells} (run-cells feet (:heading (:plan (ctx/mem c))))
+        {:keys [next cut] :as cells} (ln/run-cells feet (:heading (:plan (ctx/mem c))))
         over (first cut)]
     (await (stair/look-ahead! c feet next cut))
     (or (await (stair/lava-step! c :tunnel.sealed (:block-at in) feet [over]))
@@ -411,7 +230,7 @@
   job.waiting), or a stop map when the stair stopped. :stair-done once the body stands at the stair's
   end."
   [c {:keys [heading dir] :as plan} k]
-  (let [cells (line-cells plan)
+  (let [cells (ln/line-cells plan)
         r (await (declined/call-child! c :stair 'jobs.access.stair
                                  {:dir dir :heading heading :fetch (stair-fetch (:fetch (:args c))) :stock-torches false :y ((cells (segment-end plan k)) 1) :on-lava (:on-lava (:args c) :seal)
                                   :accept (set (:accept (:args c))) :ignore-zones? (boolean (:ignore-zones? (:args c))) :spent-ok (boolean (:spent-ok (:args c)))
@@ -436,7 +255,7 @@
   "Book site s as :unlit with reason, at the cell its torch would take (cell, else the site's head cell); the first of
   the tunnel warns."
   [c plan s reason cell]
-  (let [cell (or cell (head-of ((line-cells plan) s)))
+  (let [cell (or cell (head-of ((ln/line-cells plan) s)))
         first? (empty? (:unlit (ctx/mem c)))]
     (ctx/update-mem! c update :unlit (fnil conj []) {:cell cell :site s :reason reason})
     (when first?
@@ -447,7 +266,7 @@
 (defn torch-choice
   "How to hang the torch of site s from the eye: jobs.lib.torch/torch-at for the head and feet cells of s."
   [plan s eye block-at]
-  (torch/torch-at (shape/headings (:heading plan)) ((line-cells plan) s) eye block-at))
+  (torch/torch-at (shape/headings (:heading plan)) ((ln/line-cells plan) s) eye block-at))
 
 (defn ^:async hang!
   "Hang the torch of site s from the body's place, or book the site :unlit with why not. The ledger entry (a dead
@@ -481,7 +300,7 @@
   [c k]
   (let [{:keys [plan unlit]} (ctx/mem c)
         in (stair/rules-in c (reach/standing-vec (:primitives c)))
-        cells (line-cells plan)
+        cells (ln/line-cells plan)
         booked (set (map :site unlit))
         pending (remove #(or (booked %) (torch-cell (:block-at in) cells %)) (filter #(<= (inc %) k) (:sites plan)))]
     (doseq [s (filter #(< (inc %) k) pending)] (book-unlit! c plan s :passed nil))
@@ -493,8 +312,8 @@
   [c]
   (let [{:keys [plan checked stair-done]} (ctx/mem c)
         {:keys [entry heading dir steps run]} plan
-        cells (line-cells plan)
-        {:keys [end stand]} (line plan)
+        cells (ln/line-cells plan)
+        {:keys [end stand]} (ln/line plan)
         feet (reach/standing-vec (:primitives c))
         k (line-index cells feet)
         j (run-index end feet heading run)
@@ -560,7 +379,7 @@
   (let [{:keys [max-length accept]} (:args c)
         target (target-of c)
         a (when-not (or (:plan (ctx/mem c)) (bad-target? target))
-            (approach (dissoc (stair/rules-in c (reach/standing-vec (:primitives c))) :feet) target (reach/standing-vec (:primitives c)) max-length (set accept)))]
+            (ln/approach (dissoc (stair/rules-in c (reach/standing-vec (:primitives c))) :feet) target (reach/standing-vec (:primitives c)) max-length (set accept)))]
     (when (contains? #{:zone :footprint :claim} (:reason a)) a)))
 
 (defn check
@@ -581,14 +400,14 @@
         feet (reach/standing-vec (:primitives c))]
     (if (bad-target? target)
       (finish! c :bad-args {:why "target must be [x y z] of integers"})
-      (let [a (await (sense/decide! c ::approach #(approach (assoc (dissoc (stair/rules-in c feet) :feet) :filler? (some? (blocks/pick c blocks/building-blocks))) target feet max-length (set accept))
+      (let [a (await (sense/decide! c ::approach #(ln/approach (assoc (dissoc (stair/rules-in c feet) :feet) :filler? (some? (blocks/pick c blocks/building-blocks))) target feet max-length (set accept))
                                     {:retry? #(not (:entry %))}))]
-        (if-let [w (when (or (not (:entry a)) (far-entry? a feet))
+        (if-let [w (when (or (not (:entry a)) (ln/far-entry? a feet))
                      (when (or (:entry a) (#{:too-far :no-approach} (:reason a)))
-                       (leg-target (:block-at (stair/rules-in c feet)) feet target max-length (:leg-swap (ctx/mem c)))))]
+                       (ln/leg-target (:block-at (stair/rules-in c feet)) feet target max-length (:leg-swap (ctx/mem c)))))]
           (do (ctx/update-mem! c assoc :leg w) :again)
           (if (:entry a)
-          (do (ctx/update-mem! c assoc :plan (assoc a :sites (torch-sites a)) :dug [])
+          (do (ctx/update-mem! c assoc :plan (assoc a :sites (ln/torch-sites a)) :dug [])
               (ctx/emit! c :tunnel.plan :info (assoc a :text (str "tunnel from " (pr-str (:entry a)) " " (name (:heading a))
                                                                   ", " (:steps a) " steps, run " (:run a))))
               :again)
@@ -618,7 +437,7 @@
           (do (ctx/update-mem! c dissoc :leg) :again)
           (if-let [alt (when-not (:leg-swap (ctx/mem c))
                          (let [feet (reach/standing-vec (:primitives c))]
-                           (leg-target (:block-at (stair/rules-in c feet)) feet (target-of c) max-length true)))]
+                           (ln/leg-target (:block-at (stair/rules-in c feet)) feet (target-of c) max-length true)))]
             (do (ctx/update-mem! c assoc :leg-swap true :leg alt) :again)
             (finish! c (:reason res) (assoc (select-keys res [:cell :hazards :zone :claim :plan :fluid :block :tool :walk :why :headings])
                                             :in :leg :dug (:dug res)))))))))
