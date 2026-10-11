@@ -18,6 +18,7 @@
   "A hostile is near: fight it (jobs.survival.fight-back, best weapon equipped) when the odds are fair,
   else retreat (jobs.survival.retreat).
   One whole attempt per round: decides afresh before each call of the child, while a danger is near.
+  Under a roof at night, with every danger only heard or a flyer, it stays in (hostile.sealed-hold) and fights only what comes within reach.
   Never fights a creeper or an enderman (a hit would anger it: the retreat handles it). Otherwise fights when the damage the fight is expected to cost
   leaves at least :reserve health (jobs.lib.cost/fight-damage: weapon, armour worn, each mob's kind
   and what is left of it after the hits landed, the dangers killed nearest first; bare hands land a hit every
@@ -79,15 +80,15 @@
                       (and (:stay-inside (:args c)) (or (sh/shut-in-room? p) (sh/sheltered-in c))))))))
 
 (defn stay-under-roof?
-  "Whether the body keeps its roof: :stay-inside on, night, a roof over the feet, and every danger near only heard
-  (none seen) and none a creeper or an enderman. Fight-back then faces the sound and the retreat does not run."
+  "Whether the body keeps its roof: :stay-inside on, night, a roof over the feet, and every danger near either only heard
+  or a flyer (a phantom cannot get under a roof), none a creeper or an enderman. Fight-back then holds and the retreat does not run."
   [c hs]
   (let [p (:primitives c)]
     (boolean (and (:stay-inside (:args c))
                   (seq hs)
                   (sh/night? p)
                   (sh/roofed? p sh/default-roof-height)
-                  (not-any? danger-q/seen-only? hs)
+                  (every? #(or (combat/flyer? %) (not (danger-q/seen-only? %))) hs)
                   (not-any? #(or (combat/creeper? %) (combat/enderman? %)) hs)))))
 
 (defn ^:async run-child [c decision {:keys [radius ranged-radius weapons reserve quiet-s hide-s]} hold]
@@ -183,6 +184,9 @@
                    chosen)
         decision (if stay? :fight decision)]
     (log-encounter! c (first near) decision)
+    (when (and stay? (not (:stay-noted (ctx/mem c))))
+      (ctx/update-mem! c assoc :stay-noted true)
+      (ctx/emit! c :hostile.sealed-hold :info {:text "under a roof at night: the mobs near are heard only or flyers, so the body stays in" :mobs (mapv #(.-name %) near)}))
     (ctx/update-mem! c assoc :decision decision)
     (let [result (await (run-child c decision a stay?))]
       (cond

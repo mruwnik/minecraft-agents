@@ -338,6 +338,13 @@
               (await (core/tick! eng))
               (is (= decision (:decision (first (hostile-entries eng)))) why))))))))
 
+(deftest a-roofed-body-at-night-stays-in-for-a-phantom-it-sees-but-not-for-a-seen-zombie
+  (are [entity stays?] (= stays? (let [p (tu/fake {:time 14000 :blocks breached-room :entities [entity]})]
+                                   (respond-to-hostile/stay-under-roof? {:primitives p :args {:stay-inside true}}
+                                                                        (danger-q/known-hostiles p 16 {}))))
+    {:id 9 :name "phantom" :kind "hostile" :visible true :pos {:x 4 :y 72 :z 0}} true
+    (assoc (zombie 4 0) :visible true) false))
+
 (deftest fight-back-chases-in-legs-that-never-escalate
   (async done
     (tu/run-async done
