@@ -1,6 +1,7 @@
 (ns engine.hunt-test
   "jobs.combat.hunt against the fake world."
   (:require [cljs.test :refer [deftest is async]]
+            [clojure.string :as str]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.fake :as fake]
@@ -347,12 +348,14 @@
                  [{:mob "pig" :keep 1 :radius 24} [(animal 1 "pig" 5) (animal 2 "pig" 40)]
                   {:keep 1 :in-range 1 :radius 24 :nearest 5} "one in range, keep 1"]
                  [{:mob "pig" :keep 0 :radius 24} []
-                  {:keep 0 :in-range 0 :radius 24} "none seen at all"]]]
+                  {:keep 0 :in-range 0 :radius 24} "none seen at all"]
+                 [{:mob "skeleton" :radius 24} [(animal 1 "skeleton" 32 {:kind "hostile"})]
+                  {:keep 0 :in-range 0 :radius 24 :nearest 32} "a hostile kind keeps none, with none in range to say it is hostile"]]]
           (let [{:keys [eng]} (h/setup {:inventory h/sword :entities entities})
                 r (await (tu/child-outcome eng 'jobs.combat.hunt args 20))]
-            (is (= (assoc want :status :stopped :reason :too-few :mob "pig" :killed 0)
+            (is (= (assoc want :status :stopped :reason :too-few :mob (:mob args) :killed 0)
                    (select-keys r [:status :reason :mob :killed :keep :in-range :radius :nearest])) note)
-            (is (string? (:text r)) note)))))))
+            (is (= (pos? (:keep want)) (str/includes? (:text r) "keeping")) note)))))))
 
 ;; ------------------------------------------------------------------ colour
 

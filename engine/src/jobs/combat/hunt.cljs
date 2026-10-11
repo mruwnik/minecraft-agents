@@ -2,10 +2,12 @@
   (:require [clojure.string :as str]
             [engine.args :as a]
             [engine.ctx :as ctx]
+            [engine.game :as game]
             [engine.settings :as settings]
             [jobs.lib.animal-spare :as spare]
             [jobs.lib.body :as body]
             [jobs.lib.combat :as combat]
+            [jobs.lib.cost :as cost]
             [jobs.lib.hunting :as hunting]
             [jobs.lib.shelter :as sh]
             [jobs.lib.pace :as pace]
@@ -18,7 +20,7 @@
   its own :count and :keep (:color goes to sheep only); the result is {:killed n :kinds {mob result} :reason r}: reason :count
   when every kind reached its count, else :partial; no kill at all ends stopped with the first kind's reason.
   Never takes the last :keep adults of the kind, so they can breed. :keep nil means 2 for animals and 0 for hostile mobs
-  (a kind any of whose entities in range reports kind hostile). 0 turns the rule off.
+  (by the kind's name, else a kind any of whose entities in range reports kind hostile). 0 turns the rule off.
   Babies are never targets and never counted. Animals the body spares (jobs.lib.animal-spare: kinds in :off-limits, animals in
   a zone or plan of its own or a closed enclosure unless :spare-pens is false) are never targets either; when only such animals
   are left it ends :spared (stopped when nothing was killed; the result has :spared-by, a count per rule, and warn hunt.done names them).
@@ -101,11 +103,13 @@
          (sort-by #(u/dist here (u/pos-of (.-pos %)))))))
 
 (defn hostile?
-  "Does any entity of the kind within :radius report kind hostile (babies included)?"
+  "Is the kind hostile: by its name (jobs.lib.cost/hostile?), else any entity of it within :radius reporting kind hostile (babies included)?"
   [c]
-  (let [{:keys [mob radius]} (:args c)]
-    (boolean (some #(= "hostile" (.-kind %))
-                   (array-seq (.entities (:primitives c) #js {:radius radius :names #js [mob] :max 64}))))))
+  (let [{:keys [mob radius]} (:args c)
+        p (:primitives c)]
+    (boolean (or (cost/hostile? (game/version-of p) {:name mob})
+                 (some #(= "hostile" (.-kind %))
+                       (array-seq (.entities p #js {:radius radius :names #js [mob] :max 64})))))))
 
 (defn keep-of
   "Adults of the kind never taken: the :keep arg when a number, else the value
@@ -136,7 +140,8 @@
   [c]
   (let [{:keys [reason] :as m} (too-few c)
         out (-> m (dissoc :reason) (assoc :status :stopped :reason reason :killed 0))
-        text (str "hunt stopped: " (:in-range m) " " (:mob m) " adults within " (:radius m) " blocks, keeping " (:keep m)
+        text (str "hunt stopped: " (:in-range m) " " (:mob m) " adults within " (:radius m) " blocks"
+                  (when (pos? (:keep m)) (str ", keeping " (:keep m)))
                   (when-let [n (:nearest m)] (str "; the nearest is " n " away")))]
     (ctx/emit! c :hunt.too-few :warn (assoc out :text text))
     (ctx/result! c (assoc out :text text))
