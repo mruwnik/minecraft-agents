@@ -6,7 +6,7 @@
   lies in another's zone or claim, or in another plan's footprint, is not used. The caller can override the rule
   (:foreign-zone? true). The shaft plan's own footprint is no obstacle.
 
-  Branch memory: body memory kind :mine/shafts, one entry {shaft-id {:branches [{:from [x y z] :heading h :length n}]}}.
+  Branch memory: body memory kind :mine/shafts, one entry {shaft-id {:n :run :branches [{:from [x y z] :heading h :length n}]}}.
   A branch is a point, a heading and a length (a point implying a line), never a list of blocks, and only the newest
   max-branches of a shaft are kept, so the entry stays small however long the tunnels are."
   (:require [engine.args :as a]
@@ -51,25 +51,29 @@
             :east {:left :north :right :south} :west {:left :south :right :north}})
 
 (defn next-branch
-  "The branch the next run should dig off shaft (shaft-of), given the branches {:from :heading :length} already recorded:
+  "The branch the next run should dig off shaft (shaft-of), given the progress {:n branches dug :run length of the first} already recorded:
   the first runs straight on along the shaft's heading from its bottom; branch k >= 1 leaves the first run sideways, left
   for odd k and right for even, every spacing cells along it (k = 1, 2 at spacing, 3 and 4 at twice that ...). The
   answer is {:from :heading}, or nil when the first run is too short to carry that branch (the shaft is used up)."
-  [{:keys [bottom heading]} branches spacing]
-  (let [k (count branches)]
+  [{:keys [bottom heading]} {k :n :keys [run] :or {k 0}} spacing]
+  (let [run (or run 0)]
     (if (zero? k)
       {:from bottom :heading heading}
       (let [along (* spacing (quot (inc k) 2))
-            run (:length (first branches) 0)
             [dx _ dz] (shape/delta :down heading)]
         (when (<= along run)
           {:from (shape/add bottom [(* along dx) 0 (* along dz)])
            :heading (get-in turns [heading (if (odd? k) :left :right)])})))))
 
 (defn with-branch
-  "The memory map {shaft-id {:branches [...]}} with branch appended to shaft id, keeping the newest max-n."
+  "The memory map {shaft-id {:n :run :branches [...]}} with branch appended to shaft id: :n counts every branch dug,
+  :run is the first one's length, :branches keeps the newest max-n."
   [shafts id branch max-n]
-  (update-in (or shafts {}) [id :branches] #(vec (take-last max-n (conj (vec %) (select-keys branch [:from :heading :length]))))))
+  (update (or shafts {}) id
+          (fn [{:keys [n run branches]}]
+            {:n (inc (or n 0))
+             :run (or run (:length branch))
+             :branches (vec (take-last max-n (conj (vec branches) (select-keys branch [:from :heading :length]))))})))
 
 ;; ------------------------------------------------------------------ memory
 
@@ -82,10 +86,17 @@
   [c id branch]
   (ctx/remember! c kind (with-branch (shafts-memory c) id branch (max-branches)) policy))
 
+(defn progress
+  "{:n :run} of shaft id: branches dug so far and the first run's length."
+  [c id]
+  (select-keys (get (shafts-memory c) id) [:n :run]))
+
+(defn branch-count [c id] (or (:n (progress c id)) 0))
+
 (defn next-for
   "next-branch for shaft (shaft-of) over what this body has recorded."
   [c shaft]
-  (next-branch shaft (branches c (:id shaft)) (branch-spacing)))
+  (next-branch shaft (progress c (:id shaft)) (branch-spacing)))
 
 ;; ------------------------------------------------------------------ lookup
 

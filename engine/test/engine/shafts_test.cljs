@@ -63,13 +63,13 @@
 
 (deftest the-first-branch-runs-on-and-later-ones-leave-the-first-run-left-and-right
   (let [first-run {:from [14 60 0] :heading :east :length 30}]
-    (are [done expected] (= expected (shafts/next-branch shaft done 3))
+    (are [done expected] (= expected (shafts/next-branch shaft {:n (count done) :run (:length (first done))} 3))
       [] {:from [14 60 0] :heading :east}
       [first-run] {:from [17 60 0] :heading :north}
       [first-run first-run] {:from [17 60 0] :heading :south}
       [first-run first-run first-run] {:from [20 60 0] :heading :north}
       [first-run first-run first-run first-run] {:from [20 60 0] :heading :south})
-    (is (nil? (shafts/next-branch shaft [(assoc first-run :length 2)] 3)) "a first run too short to carry a branch: used up")))
+    (is (nil? (shafts/next-branch shaft {:n 1 :run 2} 3)) "a first run too short to carry a branch: used up")))
 
 (deftest shaft-of-reads-top-and-bottom-from-the-stair
   (is (= {:id "s" :top [10 64 0] :bottom [14 60 0] :heading :east :to-y 60 :from [10 64 0]}
@@ -87,3 +87,12 @@
       (is (every? #(= #{:from :heading :length} (set (keys %))) kept) "a point, a heading and a length")
       (is (= 1 (count (shafts/branches c "t"))))
       (is (< (count (pr-str (shafts/shafts-memory c))) 2500) "the entry is small whatever the lengths"))))
+
+(deftest branch-slots-stay-distinct-past-the-remembered-branches
+  (let [c (ctx {} [])
+        slots (vec (for [_ (range 30)
+                         :let [slot (shafts/next-for c shaft)]]
+                     (do (shafts/record-branch! c "s" (assoc slot :length 100))
+                         slot)))]
+    (is (= 30 (count (set slots))) "no slot is handed out twice")
+    (is (= 30 (shafts/branch-count c "s")))))

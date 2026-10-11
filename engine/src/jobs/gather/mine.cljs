@@ -1264,7 +1264,7 @@
                 (= :continue r) :continue
                 (and (= :done r) (= :done (:status res)))
                 (let [shaft (assoc sh :to-y to-y)
-                      n (count (shafts/branches c id))
+                      n (shafts/branch-count c id)
                       branch (shafts/next-for c shaft)]
                   (ctx/update-mem! c #(-> % (assoc-in [:descent :steps] (or (:steps res) 1)) (assoc-in [:shaft :state] :walking)
                                           (assoc-in [:shaft :n] (inc n)) (assoc-in [:shaft :branch] branch)))
