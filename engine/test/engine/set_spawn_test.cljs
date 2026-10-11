@@ -80,6 +80,15 @@
           (is (= {:gone true :was bed} (:data (mem/latest (mem/view (:store eng)) :bed))))
           (is (= [{:pos seen-bed}] (entries eng :spawn-bed))))))))
 
+(deftest set-spawn-finding-the-respawn-bed-gone-says-the-spawn-is-lost-once
+  (async done
+    (run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (await (run-set-spawn {:time noon :blocks {"2,64,0" "red_bed"}} {}
+                                                       #(do (know-bed! % bed) (mem/write! (:store %) :spawn-bed {:pos bed} {:cap 1 :ttl :forever}))))]
+          (is (= [{:pos bed :why :missing}] (entries eng :spawn-lost)))
+          (is (= 1 (count (emitted seen :spawn_lost)))))))))
+
 (deftest set-spawn-forgets-a-remembered-bed-that-is-gone-and-waits-when-it-sees-none
   (let [{:keys [eng]} (setup {:time noon})]
     (know-bed! eng bed)

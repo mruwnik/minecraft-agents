@@ -84,7 +84,9 @@
   (let [why (some-> (ctx/child-result c :go) :text (str/replace #"^gave up walking to \[[^\]]*\]: " ""))
         r (u/fail! c :bed_unreachable (str "cannot reach the bed" (some->> why (str ": "))))]
     (when (= :done r)
-      (ctx/remember! c :bed-unreachable {:pos bed} unreachable-policy))
+      (ctx/remember! c :bed-unreachable {:pos bed} unreachable-policy)
+      (when-let [seen (u/seen-name (:primitives c) bed)]
+        (when-not (.endsWith seen "_bed") (sh/lose-spawn! c bed :gone))))
     r))
 
 (defn ^:async sleep-at! [c bed]
@@ -101,7 +103,8 @@
       "not-night" :done
       "missing" (if (nil? (u/sensed (:primitives c) bed))
                   (u/fail! c :bed_unloaded "bed chunk not loaded yet")
-                  (do (if (= bed (mem/place (ctx/view c) :bed))
+                  (do (sh/lose-spawn! c bed :missing)
+                      (if (= bed (mem/place (ctx/view c) :bed))
                         (do (ctx/remember! c :bed {:gone true :was bed} mem/place-policy)
                             (ctx/emit! c :bed_missing :warn {:pos bed :text "no bed at the remembered place"}))
                         (ctx/emit! c :bed_missing :warn {:pos bed :text "no bed at the given place"}))

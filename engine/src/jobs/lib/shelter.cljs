@@ -300,13 +300,46 @@
 
 (def spawn-bed-policy {:cap 1 :ttl :forever})
 
-(defn spawn-bed-live
-  "The durable :spawn-bed entry of view unless a :spawn-reset came after it."
+(defn spawn-bed-entry
+  "The latest :spawn-bed entry, live or not."
   [view]
-  (let [e (mem/latest view :spawn-bed)
-        reset (mem/latest view :spawn-reset)]
-    (when-not (and e reset (> (:t reset) (:t e)))
+  (mem/latest view :spawn-bed))
+
+(defn spawn-ended-at
+  "When the respawn point was last reset (:spawn-reset, the server's word) or found lost (:spawn-lost), or nil."
+  [view]
+  (some->> [:spawn-reset :spawn-lost] (keep #(:t (mem/latest view %))) seq (apply max)))
+
+(defn spawn-bed-live
+  "The durable :spawn-bed entry of view unless a :spawn-reset or :spawn-lost came after it."
+  [view]
+  (let [e (spawn-bed-entry view)
+        ended (spawn-ended-at view)]
+    (when-not (and e ended (> ended (:t e)))
       e)))
+
+(defn spawn-lost-pos
+  "The position of the respawn bed the body knows is gone: the latest :spawn-bed when a reset or loss came after it,
+  or the live one whose block is seen and no longer a bed."
+  [p view]
+  (let [e (spawn-bed-entry view)
+        pos (:pos (:data e))
+        ended (spawn-ended-at view)]
+    (cond
+      (nil? pos) nil
+      (and ended (> ended (:t e))) pos
+      (let [n (u/seen-name p pos)] (and n (not (.endsWith n "_bed")))) pos)))
+
+(def spawn-lost-policy {:cap 1 :ttl :forever})
+
+(defn lose-spawn!
+  "A job found the bed at pos gone or cut off: when it is the live respawn bed, remember :spawn-lost and warn
+  spawn_lost once (why: a short word)."
+  [c pos why]
+  (let [view (ctx/view c)]
+    (when (some-> (:pos (:data (spawn-bed-live view))) (u/dist pos) (<= (spawn-near)))
+      (ctx/remember! c :spawn-lost {:pos pos :why why} spawn-lost-policy)
+      (ctx/emit! c :spawn_lost :warn {:pos pos :why why :text (str "the respawn bed at " (pr-str pos) " is gone (" (name why) "): the next death respawns at the world spawn")}))))
 
 (defn spawn-bed-at?
   "Whether the live :spawn-bed is within spawn-near of pos (the bed's other half counts)."

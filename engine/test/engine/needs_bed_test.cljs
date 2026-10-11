@@ -12,14 +12,14 @@
 
 (defn holds?
   "The trigger over a fake world (night? and inv given), the memory entries [[kind data age-days] ..] written age-days ago."
-  [{:keys [night inv entries time entities] :or {entries []}}]
+  [{:keys [night inv entries time entities blocks] :or {entries []}}]
   (let [clock (atom 0)
         store (mem/open (tu/tmp-dir) {:now #(deref clock)})]
     (doseq [[kind data age] entries]
       (reset! clock (- (* 10 sh/ms-per-day) (* age sh/ms-per-day)))
       (mem/write! store kind data {:cap 8 :ttl (* 20 sh/ms-per-day)}))
     (reset! clock (* 10 sh/ms-per-day))
-    (nb/needs-bed (tu/fake-on-floor (cond-> {:floor [-10 -10 10 10] :inventory (or inv []) :entities entities} night (assoc :time 18000) time (assoc :time time)))
+    (nb/needs-bed (tu/seeing-all (tu/fake-on-floor (cond-> {:floor [-10 -10 10 10] :inventory (or inv []) :entities entities :blocks blocks} night (assoc :time 18000) time (assoc :time time))))
                   (mem/view store) {})))
 
 (def slept-long-ago [[:slept {:pos {:x 0 :y 64 :z 0}} 4]])
@@ -48,3 +48,16 @@
 
 (deftest the-trigger-args-are-valid-obtain-args
   (is (nil? (expr/problem registry/jobs (list 'jobs.items.obtain nb/defaults)))))
+
+(def rested [[:slept {:pos {:x 0 :y 64 :z 0}} 1]])
+(def spawn-bed-at-5 [:spawn-bed {:pos {:x 5 :y 64 :z 0}} 0.5])
+
+(deftest a-rested-body-whose-respawn-bed-is-reset-or-lost-needs-a-bed
+  (is (true? (holds? {:entries (conj rested spawn-bed-at-5 [:spawn-reset {} 0.2])})))
+  (is (true? (holds? {:entries (conj rested spawn-bed-at-5 [:spawn-lost {:pos {:x 5 :y 64 :z 0}} 0.2])})))
+  (is (false? (holds? {:entries (conj rested [:spawn-reset {} 0.8] spawn-bed-at-5) :blocks {"5,64,0" "red_bed"}}))))
+
+(deftest a-respawn-bed-seen-gone-needs-a-bed-even-with-the-bed-place-remembered
+  (let [entries (conj rested spawn-bed-at-5 [:bed {:pos {:x 5 :y 64 :z 0}} 0.5])]
+    (is (true? (holds? {:entries entries :blocks {"5,64,0" "air"}})))
+    (is (false? (holds? {:entries entries :blocks {"5,64,0" "red_bed"}})))))

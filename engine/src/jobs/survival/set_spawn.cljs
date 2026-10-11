@@ -42,6 +42,7 @@
 
 (defn ^:async round [c]
   (when (remembered-gone? c)
+    (sh/lose-spawn! c (sh/bed c (:bed-radius (:args c))) :missing)
     (places/retract-if-missing! c :bed (sh/bed c (:bed-radius (:args c))) "missing"))
   (let [bed (bed-of c)]
     (cond

@@ -384,6 +384,18 @@
           (is (= [{:gone true :was {:x 6 :y 64 :z 0}}] (entries eng :bed)))
           (is (= 1 (count (emitted seen :bed_missing)))))))))
 
+(deftest sleep-finding-the-respawn-bed-gone-says-the-spawn-is-lost-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:time night})]
+          (know-bed! eng {:x 6 :y 64 :z 0})
+          (mem/write! (:store eng) :spawn-bed {:pos {:x 6 :y 64 :z 0}} {:cap 1 :ttl :forever})
+          (core/submit! eng '(jobs.survival.sleep) {})
+          (await (run-until-empty eng 6))
+          (is (= [{:pos {:x 6 :y 64 :z 0} :why :missing}] (entries eng :spawn-lost)))
+          (is (= 1 (count (emitted seen :spawn_lost)))))))))
+
 (deftest sleep-keeps-a-bed-whose-chunk-is-not-loaded
   (async done
     (tu/run-async done
