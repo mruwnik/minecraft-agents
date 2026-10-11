@@ -16,7 +16,7 @@
 
 (def doc
   "Craft :count more of :item. 2x2 recipes work anywhere. Bigger ones need a crafting table: :table, else the
-  nearest within :radius, walking there when out of reach (a carried table is put down instead, with no :table).
+  nearest within :radius, else the nearest seen within :far (up to 64), walking there when out of reach (a carried table is put down instead, with no :table).
   The count carried at the start is kept in memory and the target is that plus :count, so a cut or a partial
   batch loses nothing.
   Ends with {:made n}, the number of items gained (plus :spent, :spent-at and a :text when it put a table down). When it stops short it adds :short {name n} (an ingredient ran
@@ -33,6 +33,7 @@
    :count {:doc "how many more to end up with" :spec (a/int-in 0 nil) :default 1}
    :table {:doc "crafting table position; the nearest seen within :radius when nil and the recipe needs one" :spec ::a/pos :default nil}
    :radius {:doc "how far to look for a crafting table" :spec (a/num-in 0 nil) :default 32}
+   :far {:doc "how far a seen crafting table is walked to when none is within :radius (the seen memory reaches 64)" :spec (a/num-in 0 64) :default 64}
    :fetch {:doc "get an ingredient that runs out (jobs.lib.fetch): true, a set of kinds or a map of limits; false stops :short" :spec fetch/option? :default true}
    :avoid {:doc "cells [x y z] a table is never put in or dug for: the dig line of a job that crafts as its child" :spec (a/coll-of a/position?) :default nil}})
 
@@ -46,6 +47,15 @@
   "The position of the nearest crafting table the body has seen within radius, or nil."
   [p radius]
   (:pos (first (look/seen-blocks p {:names ["crafting_table"] :radius radius :max 8 :live? true}))))
+
+(defn no-table-text
+  "Why no table is used: none within radius, naming the nearest seen one (up to 64 blocks) when there is one."
+  [c radius]
+  (let [far (first (look/seen-blocks (:primitives c) {:names ["crafting_table"] :radius 64 :max 1 :live? true}))
+        {:keys [x y z]} (:pos far)
+        from (u/self-pos c)]
+    (str "no crafting table within " radius
+         (when far (str "; the nearest known is at " "[" x " " y " " z "]" ", " (js/Math.round (u/dist from (:pos far))) " blocks away")))))
 
 (defn finish!
   "Hand the parent a result, made so far plus extra (a stop when extra is not empty: :status :stopped), and return :done."
@@ -220,17 +230,17 @@
   "No crafting table is within the radius: fetch one (table-fetch!), else warn and finish. :again, :continue or :done."
   [c made]
   (or (await (table-fetch! c))
-      (do (ctx/emit! c :craft.no-table :warn {:text (str "no crafting table within " (:radius (:args c)))})
+      (do (ctx/emit! c :craft.no-table :warn {:text (no-table-text c (:radius (:args c)))})
           (finish! c made {:reason "no-table"}))))
 
 (defn ^:async reach-table!
   "The craft was unreachable: walk to the remembered or the nearest table with a go-to child.
   :again to craft again, :continue while go-to waits, :done when there is none or the walk was given up."
   [c made]
-  (let [{:keys [table radius]} (merge (:args c) (ctx/mem c))
+  (let [{:keys [table radius far]} (merge (:args c) (ctx/mem c))
         p (:primitives c)
         handed? (some? table)
-        table (or table (nearest-table p radius))]
+        table (or table (nearest-table p radius) (nearest-table p far))]
     (cond
       (and (nil? table) (not (look/surveyed? c)))
       (do (await (look/survey! c)) :again) ; a table behind the body is not seen until it looks

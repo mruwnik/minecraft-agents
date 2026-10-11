@@ -70,14 +70,33 @@
           (is (= {:made 1} result))
           (is (empty? (tu/walked-to eng))))))))
 
-(deftest craft-without-a-table-in-radius
+(deftest craft-without-a-table-in-reach-names-the-nearest-known-one
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p seen eng] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks {"60,64,0" "crafting_table"}} {:item "bread" :fetch false}))]
+        (let [[result p seen eng] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks {"60,64,0" "crafting_table"}} {:item "bread" :fetch false :far 40}))
+              warn (first (filter #(= :craft.no-table (:kind %)) @seen))]
           (is (= {:made 0 :status :stopped :reason "no-table"} result))
           (is (empty? (tu/walked-to eng)))
-          (is (some #(= :craft.no-table (:kind %)) @seen)))))))
+          (is (str/includes? (:text warn) "[60 64 0]"))
+          (is (str/includes? (:text warn) "60 blocks")))))))
+
+(deftest craft-walks-to-a-known-table-beyond-the-radius
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p _ eng] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks {"30,64,0" "crafting_table"}} {:item "bread" :fetch false :radius 8}))]
+          (is (= {:made 1} result))
+          (is (= {"bread" 1} (inv p)))
+          (is (= 1 (count (tu/walked-to eng)))))))))
+
+(deftest craft-makes-a-table-of-carried-planks-when-none-is-known
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (craft {:inventory [{:name "wheat" :count 3} {:name "oak_planks" :count 4}]} {:item "bread"}))]
+          (is (= 1 (:made result)))
+          (is (= {"bread" 1} (inv p))))))))
 
 (deftest craft-reports-what-is-missing
   (async done
@@ -232,7 +251,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [[result p seen eng] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks {"20,64,0" "crafting_table"}}
-                                            {:item "bread" :radius 8}))]
+                                            {:item "bread" :radius 8 :far 8}))]
           (is (= {:made 0 :status :stopped :reason "no-table"} result))
           (is (empty? (tu/walked-to eng)))
           (is (some #(= :craft.no-table (:kind %)) @seen)))))))
