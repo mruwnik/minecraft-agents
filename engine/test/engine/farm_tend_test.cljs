@@ -541,3 +541,15 @@
     (tu/run-async done
       (fn ^:async t []
         (is (seq (events-of (await (far-run false)) :round_started)))))))
+
+(def high-box {:min {:x 2 :y 93 :z 2} :max {:x 4 :y 94 :z 4}})
+
+(deftest a-tend-far-below-its-field-declines-though-nothing-else-is-listed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup far-ripe)]
+          (core/submit! (:eng s) (list 'jobs.farm.tend {:box high-box}) {})
+          (dotimes [_ 3] (swap! (:clock s) + 700) (await (core/tick! (:eng s))))
+          (is (empty? (events-of s :round_started)))
+          (is (some #(= :away (:reason %)) (events-of s :waiting))))))))
