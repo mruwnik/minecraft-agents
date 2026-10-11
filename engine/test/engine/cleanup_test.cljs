@@ -8,6 +8,7 @@
             [engine.events :as events]
             [engine.memory :as mem]
             [engine.registry :as registry]
+            [engine.settings :as settings]
             [engine.fake :as fake]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
@@ -145,6 +146,17 @@
            (step :entries [plug] :hostile-near? false :block-at (lookup [3 64 1] "dirt")))
         "the hostile gone, the plug is taken back")))
 
+(deftest a-shelter-seal-stays-at-night-and-while-a-hostile-is-near
+  (let [seal (entry [3 64 1] :purpose :shelter)
+        plug (entry [3 65 1] :purpose :retreat-plug)
+        pillar (entry [3 66 1])
+        world (lookup [3 64 1] "dirt" [3 65 1] "dirt" [3 66 1] "dirt")]
+    (is (= #{:night} (set (map :reason (:open (step :entries [seal plug] :night? true :block-at world))))))
+    (is (= [{:cell [3 64 1] :item "dirt" :reason :hostile-near}]
+           (:open (step :entries [seal] :hostile-near? true :block-at world))))
+    (is (= :dig (:step (step :entries [pillar] :night? true :block-at world))) "other scaffold is taken back")
+    (is (= :dig (:step (step :entries [seal] :night? false :block-at world))) "by day the seal is taken back")))
+
 ;; ------------------------------------------------------------------ the trigger
 
 (defn trigger-store [entries jobs]
@@ -175,6 +187,18 @@
     (is (false? (fires? p (trigger-store [(entry [50 64 0])] []) [])) "no radius given: the default radius, as a saved register's old spec has")
     (is (= args (:args (:scaffold-left triggers/all))))
     (is (= [args] (rest (:job (:scaffold-left triggers/all)))) "the job the reflex starts gets the radius too")))
+
+(deftest the-trigger-waits-for-day-and-for-no-hostile-near
+  (let [dirt (trigger-store [(entry [0 64 0])] [])
+        night #(tu/fake {:blocks {"0,64,0" "dirt"} :time 14000})
+        hostile (fn [] (doto (tu/fake {:blocks {"0,64,0" "dirt"}})
+                         (fake/add-entity! {:id 9 :name "zombie" :kind "hostile" :pos {:x 4 :y 64 :z 0} :health 20})))]
+    (is (false? (fires? (night) dirt [])) "night")
+    (is (false? (fires? (hostile) dirt [])) "a hostile near")
+    (settings/with-settings {:triggers.access.scaffold-left/at-night true :triggers.access.scaffold-left/with-hostile true}
+      (fn []
+        (is (true? (fires? (night) dirt [])))
+        (is (true? (fires? (hostile) dirt [])))))))
 
 (deftest cleanup-within-narrows-to-the-body-and-near-wins
   (let [c {:primitives (tu/fake {:blocks {"0,64,0" "dirt"}})}]

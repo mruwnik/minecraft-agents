@@ -130,6 +130,11 @@
         "a source learned since")
     (is (holds? [] (view 602000 [:hungry 1000 gave-up])) "the rest is over")))
 
+(deftest hungry-reflex-backs-off-for-minutes-after-fruitless-hunts
+  (let [{:keys [first-s max-s]} (:backoff (get triggers/all :hungry))]
+    (is (<= 120 first-s) "a hunt that found nothing is not repeated after a second")
+    (is (<= 1800 max-s) "and the wait doubles up to half an hour")))
+
 ;; ---------------------------------------------------------------- eat
 
 (deftest eat-picks-the-best-food-and-writes-fed

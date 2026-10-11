@@ -5,6 +5,7 @@
             [jobs.access.stair :as stair]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.ledger :as ledger]
+            [jobs.lib.shelter :as sh]
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
@@ -54,7 +55,7 @@
   (the body falls one block and lands). Deeper cells wait for the descent (:under-body). Over a hole it stops
   (:no-floor-below).
 
-  A retreat's plug (purpose :retreat-plug) stays while a known hostile is near (:hostile-near): it keeps that hostile out.
+  A shelter's block (purpose :shelter or :retreat-plug) stays while a known hostile is near (:hostile-near) and all night (:night): it keeps the hostile out of the body's refuge.
 
   Every dig asks jobs.lib.access.rules/may-dig? (zones, plan footprints, ledger cells) when chosen and again
   right before the dig. A refusal (:zone :footprint :no-zones :not-loaded) or a hazard :accept does not name
@@ -147,17 +148,20 @@
          (some? (row-exit in nil))
          (nil? (row-exit in cell)))))
 
+(def shelter-purposes #{:shelter :retreat-plug})
+
 (defn blocker
   "Why entry e cannot be dug now, as {:reason ...detail}, or nil. in: {:feet :block-at :zones :footprints :ledger
   :accept :can-clear? (block name -> whether the body can clear it now, by hand or a carried tool; absent: always)
-  :hostile-near? (a known hostile near: a retreat's plug stays)}."
-  [{:keys [feet block-at accept can-clear? hostile-near?] :as in} {:keys [cell purpose]}]
+  :hostile-near? (a known hostile near) :night?: a shelter's blocks stay}."
+  [{:keys [feet block-at accept can-clear? hostile-near? night?] :as in} {:keys [cell purpose]}]
   (let [[fx fy fz] feet
         [x y z] cell
         below (rules/offset cell 0 -1 0)]
     (cond
       (nil? (block-at cell)) {:reason :not-loaded}
-      (and hostile-near? (= :retreat-plug purpose)) {:reason :hostile-near}
+      (and hostile-near? (shelter-purposes purpose)) {:reason :hostile-near}
+      (and night? (shelter-purposes purpose)) {:reason :night}
       (and can-clear? (not (can-clear? (block-at cell)))) {:reason :no-tool :block (block-at cell)}
       (and (= [x z] [fx fz]) (< y (dec fy))) {:reason :under-body}
       (and (= cell [fx (dec fy) fz]) (not (rules/solid-floor? block-at below)))
@@ -222,7 +226,7 @@
     (merge (access/zone-input c {:ignore-zones? (:ignore-zones? (:args c))})
            {:feet (stair/feet-of c) :eye (eye-of c) :block-at (access/sensed-at (:primitives c) blocks/hidden-guess) :entries entries
             :can-clear? #(not (tools/needs-tool-to-clear? (:primitives c) %))
-            :hostile-near? (hostile-near? (:primitives c))
+            :hostile-near? (hostile-near? (:primitives c)) :night? (sh/night? (:primitives c))
             :ledger (ledger/cells l) :zones zones :accept (set accept) :reach reach
             :held (:held (ctx/mem c) {}) :retreats (:retreats (ctx/mem c) 0)})))
 
