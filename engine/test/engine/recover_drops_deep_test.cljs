@@ -6,7 +6,9 @@
             [engine.fake :as fake]
             [engine.memory :as mem]
             [engine.library-test :refer [setup]]
-            [engine.test-util :as tu :refer [run-until-empty]]))
+            [engine.registry :as registry]
+            [engine.test-util :as tu :refer [run-until-empty]]
+            [jobs.lib.result :as r]))
 
 (def pile-pos {:x 20 :y 50 :z 0})
 
@@ -109,3 +111,48 @@
           (core/submit! eng '(jobs.survival.recover-drops {:retry true}) {})
           (await (run-until-empty eng 120))
           (is (= :collected (:decision (recovered eng))) (pr-str (recovered eng))))))))
+
+(defn walk-script
+  "A deep-ground run whose first walks to the pile are scripted (later ones and the stair's are real): walk n moves the
+  body to (get at n) and ends as a leg that did not arrive."
+  [at pile-at]
+  (fn ^:async t []
+    (let [calls (atom [])
+          {:keys [eng p seen]} (setup {:blocks deep-ground :inventory [{:name "iron_pickaxe" :count 1} {:name "torch" :count 16}]
+                                       :entities [{:id 1 :name "item" :kind "item" :pos pile-at :item {:name "diamond" :count 5}}]})
+          real (get registry/jobs 'jobs.movement.go-to)
+          scripted? (fn [c] (and (= pile-at (:pos (:args c))) (< (count @calls) (count at))))
+          eng (assoc-in eng [:jobs 'jobs.movement.go-to]
+                        (assoc real :round (fn ^:async stub [c]
+                                             (if-not (scripted? c)
+                                               (await ((:round real) c))
+                                               (do (swap! calls conj (:args c))
+                                                   (swap! (fake/state p) assoc-in [:self :pos] (get at (dec (count @calls))))
+                                                   (r/finish! c {:arrived false :leg true}))))))]
+      (die! eng {:pos pile-at :inventory pile} 5000)
+      (core/submit! eng job {})
+      (await (run-until-empty eng 40))
+      {:eng eng :p p :seen seen :calls calls})))
+
+(deftest legs-that-bounce-away-from-a-deep-pile-end-in-the-stair-down
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p calls]} (await ((walk-script [[20 64 0] [-10 64 0] [20 64 0]] pile-pos)))
+              digs (filter #(= "dig" (.-name %)) (.-calls (.-world p)))]
+          (is (<= (count @calls) 3) "no more walks once one went away from the pile")
+          (is (seq digs) "the stair is cut from above the pile")
+          (is (= :collected (:decision (recovered eng))) (pr-str (recovered eng))))))))
+
+(def far-pile {:x 28 :y 64 :z 0})
+
+(deftest legs-that-never-near-a-far-pile-end-stopped-naming-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng calls]} (await ((walk-script (vec (repeat 8 [0 64 0])) far-pile)))
+              res (->> @(:results eng) vals (filter #(re-find #"recover-drops" (str (:name %)))) last)]
+          (is (<= (count @calls) 4) "bounded by progress, not by the clock")
+          (is (= {:decision :abandoned :reason :unreachable} (select-keys (recovered eng) [:decision :reason])))
+          (is (= :stopped (:status res)) (pr-str res))
+          (is (re-find #"28 64 0" (str (:text res))) (pr-str res)))))))

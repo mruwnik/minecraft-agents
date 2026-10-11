@@ -12,6 +12,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.reach :as reach]
+            [jobs.lib.result :as result]
             [jobs.lib.util :as u]
             [jobs.lib.storage :as storage]
             [jobs.lib.body :as body]
@@ -51,9 +52,10 @@
   seal): once per trip they are taken back (jobs.access.cleanup, event recover-drops.seal) and the walk goes on.
   Ends by writing a :recovered entry {:decision :skip|:collected|:partial|:abandoned}.
   :collected counts the pile's items that entered the inventory since the decision, those picked up on the walk too.
-  :abandoned with :reason :unreachable (the walk was blocked, or did not arrive :max-blocked-retries times), :danger
+  :abandoned with :reason :unreachable (the walk was blocked, or did not arrive or got no nearer :max-blocked-retries times; a pile too far to walk after such walks ends so, not :skip), :danger
   (the trip was cut by a hostile, or declined for a danger, :max-hostile-cuts times), :nothing-found or :window-closed
   (the five minute despawn window closed). :partial carries :left and :reason :unreachable or :not-visible.
+  An :abandoned end with no item back ends the job {:status :stopped :reason :text :pos}, the text naming the pile and what to do.
   A pile already carried again ends :collected without a collect step.
   Restart-safe: the decision, the baseline of carried items and the phase are kept in a :recover-trip entry keyed to the death.
   A run cut by a higher reflex, or a restarted body, goes on with the same trip.
@@ -179,14 +181,16 @@
   "Write the :recovered entry, report the decision and end the job."
   [c decision fields]
   (let [death (current-death c)
-        pos (:pos (:data death))]
+        pos (:pos (:data death))
+        text (cond-> (decision-text decision fields (:margin (:args c)))
+               (= :abandoned decision) (str "; the pile at " (str/join " " (map #(js/Math.floor (% pos)) [:x :y :z]))))]
     (ctx/remember! c :recovered (merge {:decision decision :death-t (:t death)} fields) recovered-policy)
     (ctx/emit! c :recover-drops.decided (if (= :abandoned decision) :warn :info)
                (assoc (select-keys fields [:value :cost :reason :items :left :parts :top-items :top-mobs])
-                      :decision decision :pos pos
-                      :text (cond-> (decision-text decision fields (:margin (:args c)))
-                              (= :abandoned decision) (str "; the pile at " (str/join " " (map #(js/Math.floor (% pos)) [:x :y :z]))))))
-    :done))
+                      :decision decision :pos pos :text text))
+    (if (and (= :abandoned decision) (not (pos? (:items fields 0))))
+      (result/stop! c (:reason fields :abandoned) text :pos pos)
+      :done)))
 
 (defn settling?
   "True while the latest :respawned entry, newer than the death, is younger than settle-ms."
@@ -295,19 +299,25 @@
 (declare threatened? decline-danger!)
 
 (defn ^:async go!
-  "Walk one leg (:leg-s) toward the death point: :next once there (the collect phase) or after a leg that got nearer (the
-  danger and the cost are weighed again), else :declined (go-to waits on the
+  "Walk one leg (:leg-s) toward the death point: :next once there (the collect phase) or after a leg (the danger and the
+  cost are weighed again; one that got no nearer counts as a walk that did not arrive), else :declined (go-to waits on the
   world, or it did not arrive: the next run walks again while the pile is worth it, and the window closes it). A walk
   go-to refused for the body's own shelter (:inside-own-shelter) is no failed try: the window closes the trip."
   [c pos]
-  (let [[r danger] (await (child/call-walk-leg c :go {:pos pos :range (arrive-range)} (:leg-s (:args c)) #(threatened? c)))]
+  (let [before (u/dist (u/self-pos c) pos)
+        [r danger] (await (child/call-walk-leg c :go {:pos pos :range (arrive-range)} (:leg-s (:args c)) #(threatened? c)))]
     (cond
       (= :danger r) (decline-danger! c danger)
       (not= :done r) (decline! c :unreachable (str "the walk to " (pr-str pos) " is waiting on the world") {:pos pos})
       (:inside-own-shelter (ctx/child-result c :go))
       (decline! c :unreachable (str "the walk to " (pr-str pos) " is refused: the body is sealed in its own shelter, which opens by day") {:pos pos})
       (and (= :goal-enclosed (:why (ctx/child-result c :go))) (await (clear-seal! c pos))) :next
-      (:leg (ctx/child-result c :go)) (do (ctx/update-mem! c assoc :recheck true) :next)
+      (:leg (ctx/child-result c :go))
+      (let [nearer? (< (u/dist (u/self-pos c) pos) (- before 1))]
+        (ctx/update-mem! c #(cond-> (assoc % :recheck true)
+                              (not nearer?) (-> (assoc :blocked true) (update :blocked-retries (fnil inc 0)))))
+        (when-not nearer? (save-trip! c))
+        :next)
       (not (:arrived (ctx/child-result c :go)))
       (do (ctx/update-mem! c #(-> % (assoc :blocked true) (update :blocked-retries (fnil inc 0))))
           (save-trip! c)
@@ -590,6 +600,13 @@
                  (js/Math.round (/ (settings/ticks->ms (game/despawn-left-ticks entry (ctx/view c))) 1000)) " s left)")
             {:pos pos :shelter kind}))
 
+(defn unreachable-detail
+  "Where the pile lies from the body and what the agent can do about it."
+  [c pos]
+  (let [here (u/self-pos c)]
+    (str (js/Math.round (u/dist (assoc here :y 0) (assoc pos :y 0))) " blocks aside and " (js/Math.round (- (:y here) (:y pos)))
+         " below, no walk got nearer; run (jobs.survival.recover-drops {:retry true}) from a spot above it, or a stair down yourself")))
+
 (defn ^:async trip!
   "The decision, then the walk and the collect passes of a trip inside its window."
   [c entry]
@@ -603,13 +620,15 @@
       (<= (:value decided) (+ (if (= :infinite (:cost decided)) js/Infinity (:cost decided)) margin))
       (if (danger-only? decided margin)
         (retry-later! c decided)
-        (finish! c :skip decided))
+        (if (and (= :too-far (:reason decided)) (pos? (:blocked-retries (ctx/mem c) 0)))
+          (finish! c :abandoned (assoc decided :reason :unreachable :detail (unreachable-detail c pos)))
+          (finish! c :skip decided)))
 
       (>= (:cuts (ctx/mem c) 0) (max-hostile-cuts))
       (finish! c :abandoned (assoc decided :reason :danger))
 
       (>= (:blocked-retries (ctx/mem c) 0) (max-blocked-retries))
-      (finish! c :abandoned (assoc decided :reason :unreachable))
+      (finish! c :abandoned (assoc decided :reason :unreachable :detail (unreachable-detail c pos)))
 
       (and (= :collect (:phase (ctx/mem c))) (threatened? c)) (decline-danger! c (threatened? c))
 
