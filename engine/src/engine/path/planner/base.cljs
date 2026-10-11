@@ -1,5 +1,6 @@
 (ns engine.path.planner.base
-  "The planner's constants (block table codes, move kinds, costs, body sizes, search limits) and small helpers.")
+  "The planner's constants (block table codes, move kinds, costs, body sizes, search limits) and small helpers."
+  (:require [engine.constants :as constants]))
 
 ;; block table codes (engine.path.blocks) and the snapshot's unloaded marker
 (def ^:const UNLOADED 0xFFFF)
@@ -67,8 +68,8 @@
        :dropFactor 1 :lethalAir 0 :drownSlack 1
        :walkS WALK-S :sprintS SPRINT-S})
 
-(def ^:const BODY 29) ; 1.8 blocks in 1/16, rounded up
-(def ^:const STEP 9) ; 0.6 blocks
+(def BODY (js/Math.ceil (* 16 constants/body-height))) ; in 1/16, rounded up
+(def STEP (js/Math.floor (* 16 constants/step-height))) ; in 1/16
 (def ^:const JUMP-UP 20) ; 1.25 blocks
 (def ^:const ARC 32) ; headroom over a gap: feet + 2
 (def ^:const ARC-UP 40) ; headroom over a gap whose landing is one block higher: feet + 2.5
@@ -101,7 +102,7 @@
   (loop [n 0 y (max 0 fall) vy 0 contact -1 top 0 peak -1]
     (let [ground (<= (+ y vy) 0)
           y' (if ground 0 (+ y vy))
-          v (* (- (if (and ground (neg? vy)) (- vy) vy) 0.08) 0.98)
+          v (* (- (if (and ground (neg? vy)) (- vy) vy) constants/gravity) constants/air-drag)
           vy' (if (< (js/Math.abs v) 0.003) 0 v)
           contact' (if (>= contact 0) contact (if ground n -1))
           top' (if (>= contact' 0) (max top y') 0)
@@ -114,7 +115,7 @@
 
 (defn bounce-flight
   "A body's bounce on a slime block after a fall of `fall` blocks from rest, in vanilla physics (the fall reverses at
-  contact, then each tick vy = (vy - 0.08) * 0.98, under 0.003 is 0): {:peak the first bounce's height in blocks, :settle
+  contact, then each tick vy = (vy - gravity) * air-drag, under 0.003 is 0): {:peak the first bounce's height in blocks, :settle
   the ticks from the first contact until it is on the block with |vy| at most 0.4}. A 10-block fall: 6.33, 90. Kept per fall."
   [fall]
   (let [kept (.get bounce-flights fall)]
@@ -157,7 +158,7 @@
 (def ^:const FLOOD-GROWTH 4) ; a goal flood that ran out of budget runs again with this many times the budget,
 (def ^:const FLOOD-SPACING 8) ; after this many times the expansions: the floods cost about half the search
 (def ^:const WHOLE 16) ; a full block in 1/16
-(def ^:const BODY-BLOCKS 1.8)
+(def BODY-BLOCKS constants/body-height)
 (def ^:const REGIONS 16) ; regions of one cell that can be nodes (4 bits of the key)
 (def ^:const AIR-REFILL 4) ; seconds of air a second with the head out of water gives back (vanilla: +4 air a tick, -1 under water)
 (def ^:const DROWN-HP 2) ; hp a second with no air left costs (vanilla: 2 every 20 ticks at 0 air)
@@ -172,7 +173,8 @@
 (def ^:const FLOOD-TABLE 65536) ; slots of the direct-mapped cache of the goal flood's stand heights
 (def ^:const FLOOD-MEMO 40000) ; cells whose moves the flood keeps (flood-moves) before it starts the memo afresh
 (def ^:const SNAP 6) ; a blocked boundary point takes the region of the nearest free position within this many 1/16
-(def ^:const DROP-INSET 5) ; a body walking off a ledge falls once its 0.31 half-width clears it: 5/16 past the edge
+;; a body walking off a ledge falls once its half-width clears it: this many 1/16 past the edge
+(def DROP-INSET (js/Math.ceil (* 16 constants/body-half-width)))
 (def ^:const NONE -1e9) ; surfaceY of a water column that does not reach open air
 
 (def CENTRE "the representative point of an ordinary cell, in 1/16" #js {:px 8 :pz 8})

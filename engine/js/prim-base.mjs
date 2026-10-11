@@ -3,6 +3,8 @@
 
 import vec3 from 'vec3'
 import { setting } from './settings.mjs'
+import constants from '../src/engine/constants.json' with { type: 'json' }
+import './clip-tolerance.mjs' // every user of the body's width gets the body's collision clip
 
 const { Vec3 } = vec3
 export const CONTAINER = /chest|barrel|shulker_box|furnace|smoker|hopper|dispenser|dropper|brewing_stand/
@@ -16,12 +18,8 @@ export const KINDS = ['hostile', 'passive', 'player', 'item', 'other']
 // position about 20 times a second, indefinitely. Verified live against 26.1: 2 of 2 walks past one block on a flat
 // stone pad stuck 25 s at 0.3, 3 of 3 took 0.7-1 s with no setbacks at 0.31 (same on a leaf-litter hillside where
 // every moveTo came back blocked); a swim toward a rim, flush against its wall, only climbs out when wider.
-// 5079/16384, not 0.31: a binary fraction, so the edge of a box pressed on a block face (faces lie on 1/16) is exactly
-// the face. With 0.31 the edge came out one rounding step past a face at a power of two (x or z 4, 16, 512), the client
-// physics (no tolerance) stopped clipping there and walked into the block, and the server threw every such move back.
-// The nearest such fraction under 0.31, the width the planner fits a body by to 0.0001 (engine.path.space): 0.0005 wider
-// no longer threads a bamboo gap it plans.
-export const BODY_HALF_WIDTH = 5079 / 16384
+export const BODY_HALF_WIDTH = constants.bodyHalfWidth
+export const EYE_HEIGHT = constants.eyeHeight
 export const PLAN_REASONS = { NoPath: 'noPath', Timeout: 'planTimeout' } // goto's rejection names that say why it gave up
 // A wedged body stands perfectly still, a bobbing or climbing one does not; 4 s leaves room for the pathfinder's 3.5 s stuck reset.
 export const CLIMBABLE = /^(ladder|vine|scaffolding|weeping_vines(_plant)?|twisting_vines(_plant)?|cave_vines(_plant)?)$/

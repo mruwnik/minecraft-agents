@@ -15,7 +15,8 @@
 
   What it can walk is stated once, in policy (:moves and the gap rules); planner-limits tells the planner the same, so a
   search never plans a step the refusal below would turn away."
-  (:require [engine.path.planner.base :as base]
+  (:require [engine.constants :as constants]
+            [engine.path.planner.base :as base]
             [engine.path.planner-tuned :as planner]))
 
 (def policy
@@ -34,13 +35,13 @@
    :off-plan-above 2.5     ; feet this far above the leg's higher end: moved off (teleport)
    :lookahead 3            ; later steps checked for an overshoot
    :jump-xz 1.3            ; a rise is jumped once within this of the aim point
-   :rise 0.6               ; a rise above this (vanilla step height) needs a jump
+   :rise constants/step-height ; a rise above this (vanilla step height) needs a jump
    :pressed-rise 0.01      ; pressed on a block ahead, any rise above this is jumped (a step under a low ceiling is refused
                            ; by the client physics, which lifts the body by the step height first)
    :wall-gap 0.05          ; a rise is jumped straight up (no forward) while the body is within this of the wall it climbs
                            ; (half the body's width apart): forward on that wall made the client sink into it
-   :body-half 0.31         ; half the body's width, as the client physics has it
-   :body-height 1.8        ; a corner jump needs the side cells clear this far over the landing's stand height
+   :body-half constants/body-half-width ; half the body's width, as the client physics has it
+   :body-height constants/body-height ; a corner jump needs the side cells clear this far over the landing's stand height
    :walk-accel 0.098       ; client physics: a walking (not sprinting) body on the ground gains this much speed per tick
                            ; along its yaw (0.1 speed x 0.98 forward)
    :climb-settle 0.1       ; on a vine or ladder more than this above a non-climb step's stand-y: no forward (see controls-for)
@@ -51,7 +52,7 @@
               2 {:from 0.4 :sprint true}   ; edge; a walking jump falls short over 2 cells or more: they need a sprint for the run and the flight
               3 {:from 0.1 :sprint true}}
    :gap-jump-down {2 {:from 0.0 :sprint false}}  ; one block down, by width, where it differs (a sprint jump over 2 overshoots a 1x1 landing)
-   :gap-past 0.3           ; feet up to this far past the takeoff edge are still held by it (half the body's width)
+   :gap-past constants/hitbox-half-width ; feet up to this far past the takeoff edge are still held by it (half the body's width)
    :gap-headroom 3         ; free blocks over the takeoff's stand height needed over takeoff and gap cells
    :bounce-settle-vy 0.4   ; a :bounce drop is reached only on the ground with |vy| at most this (the bounce left is under a block)
    :bounce-margin-ticks 20 ; ...or this long past the settle time of its fall (base/bounce-flight) after the first contact
@@ -579,12 +580,12 @@
      :yaw yaw' :pitch 0}))
 
 (defn beside-start?
-  "The body at pose stands outside step 0's cell but its hitbox (0.3 each way) reaches into it: the planner moved the start
+  "The body at pose stands outside step 0's cell but its hitbox reaches into it: the planner moved the start
   there off a block's edge (planner-tuned start-query)."
   [step0 {:keys [x z] :as pose}]
   (and (not (in-cell? step0 pose))
-       (< (- (:x step0) 0.3) x (+ (:x step0) 1.3))
-       (< (- (:z step0) 0.3) z (+ (:z step0) 1.3))))
+       (< (- (:x step0) constants/hitbox-half-width) x (+ (:x step0) 1 constants/hitbox-half-width))
+       (< (- (:z step0) constants/hitbox-half-width) z (+ (:z step0) 1 constants/hitbox-half-width))))
 
 (defn start
   "The state for walking steps; step 0 is where the plan starts. With the body's pose: a body beside step 0's cell

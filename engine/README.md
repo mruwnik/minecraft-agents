@@ -159,7 +159,7 @@ Statuses below are the common ones; `reason` and extra fields are in `js/primiti
 
 Bounds are 1 to 60 s per call (most 2 to 10 s). `jumpPlace` pillars up: sneak to cell centre, jump, place under the feet,
 stop at the first failure. `swim` without `toward` holds jump until the eyes (1.62 up, not the head top) are out of water; with `toward` it climbs out
-onto a rim. Every bound bot has collision half-width 5079/16384, just under 0.31 (0.3 left the body flush against block faces and rejected every move; a binary fraction, so a pressed box ends exactly on the face).
+onto a rim. Every bound bot has collision half-width 5079/16384, just under 0.31 (0.3 left the body flush against block faces and rejected every move), and a collision clip with a tolerance of 1e-7 on every axis (`js/clip-tolerance.mjs`: a box a rounding step into a face is held at it). The engine's physical constants (body widths, height, eye height, step height, gravity, the clip tolerance) are in `src/engine/constants.json`, the one copy: cljs reads it through `engine.constants`, the JS side imports the file.
 Acting while asleep first leaves the bed.
 
 **Offline is body state.** `offline` quits the bot, emits `offline`, waits `ms`, reconnects with the same params (3 tries),

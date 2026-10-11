@@ -3,7 +3,8 @@
   The primitives give timeOfDay, rainState and thunderState, entities with their height and lying flag, and the raw world
   gives cells (stateAt, sightTable, shapesAt, eye); wrap derives isDay, raining, thundering, visible, hittable and
   sleeping from them, lists only what a player would see, and passes the sleep preconditions down."
-  (:require [engine.perception.rays :as rays]
+  (:require [engine.constants :as constants]
+            [engine.perception.rays :as rays]
             [engine.sight :as sight]))
 
 (def rain-level 0.2)   ;; vanilla client: raining above this rain level, thundering above thunder-level while raining
@@ -11,7 +12,7 @@
 (def hit-range 6)        ;; vanilla facts: melee reach, and the monster box that keeps a body from sleeping
 (def monster-range 8)
 (def monster-height 5)
-(def default-height 1.8)
+(def default-height constants/body-height)
 (def max-listed 1000000)
 
 (defn day-at? [time-of-day] (or (< time-of-day 12542) (> time-of-day 23460)))

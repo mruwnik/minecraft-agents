@@ -3,6 +3,7 @@
 // A body never does: a look that would meet the eyes of a seen enderman keeps its yaw and moves its pitch the least it must.
 import vec3 from 'vec3'
 import { blocksSight } from './sight.mjs'
+import constants from '../src/engine/constants.json' with { type: 'json' }
 
 const { Vec3 } = vec3
 
@@ -32,7 +33,7 @@ const seen = (bot, eye, target) => {
 }
 
 const eyesInSight = bot => {
-  const eye = bot.entity.position.offset(0, bot.entity.eyeHeight ?? 1.62, 0)
+  const eye = bot.entity.position.offset(0, bot.entity.eyeHeight ?? constants.eyeHeight, 0)
   return Object.values(bot.entities ?? {})
     .filter(e => e?.name === 'enderman' && e.position && e.position.distanceTo(eye) <= RANGE)
     .map(e => e.position.offset(0, ENDERMAN_EYE, 0))

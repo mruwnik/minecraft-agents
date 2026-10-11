@@ -4,9 +4,10 @@
 import vec3 from 'vec3'
 import { emptyHand } from './unequip.mjs'
 import { setting } from './settings.mjs'
+import constants from '../src/engine/constants.json' with { type: 'json' }
 
 export const LOVE_STATUS = 18
-const DEFAULT_EYE = 1.62
+const DEFAULT_EYE = constants.eyeHeight
 const WOOL_SHEARED = 0x10
 const WOOL_FALLBACK = 18
 

@@ -1,15 +1,16 @@
 (ns engine.game
   "Facts of the game the body plays: the minecraft-data version it is connected with, and the item despawn window."
-  (:require [engine.memory :as mem]
+  (:require [engine.constants :as constants]
+            [engine.memory :as mem]
             [engine.settings :as settings]))
 
 (def default-version
   "The minecraft-data version used when no body is connected (the connect default, engine/js/connect.mjs)."
   "26.1")
 
-(def eye-height "Blocks from a standing body's feet to its eyes." 1.62)
-(def hitbox-half "Half the width of the body's box (0.6 wide)." 0.3)
-(def body-height "The height of a standing body's box." 1.8)
+(def eye-height constants/eye-height)
+(def hitbox-half constants/hitbox-half-width)
+(def body-height constants/body-height)
 
 (defn version-of
   "The version the body of primitives p is connected with (the raw world's version, from the bot), else the default

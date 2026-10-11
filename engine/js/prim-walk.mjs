@@ -2,7 +2,7 @@
 // Walking for the primitives: the abortable goto with its stall watch and step-up, looks, and the centring sneak.
 
 import vec3 from 'vec3'
-import { PLAN_REASONS, CLIMBABLE, STEP_RISE, physicsStepMs, sleepMs, dist, cell, vec } from './prim-base.mjs'
+import { PLAN_REASONS, CLIMBABLE, STEP_RISE, EYE_HEIGHT, physicsStepMs, sleepMs, dist, cell, vec } from './prim-base.mjs'
 import { setting } from './settings.mjs'
 
 const { Vec3 } = vec3
@@ -26,7 +26,7 @@ export function createWalk (env) {
     const adjacent = Math.abs(to.x - from.x) + Math.abs(to.z - from.z) === 1
     return adjacent && to.y === from.y + 1 ? to : null
   }
-  const faceCentre = (body, c) => body.lookAt(new Vec3(c.x + 0.5, body.entity.position.y + (body.entity.height ?? 1.62), c.z + 0.5), true)
+  const faceCentre = (body, c) => body.lookAt(new Vec3(c.x + 0.5, body.entity.position.y + (body.entity.height ?? EYE_HEIGHT), c.z + 0.5), true)
   // A forced look only sets the rotation locally; mineflayer writes it to the server in the physics tick that follows,
   // synchronously after emitting 'physicsTick'. So resolve on the next tick (bounded, physics may be off). Always
   // wait, even when the rotation did not change: another forced look (faceCentre, jumpPlace, swim) may have set it

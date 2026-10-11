@@ -2,11 +2,12 @@
   "Free space for the body centre inside a cell: which of the 17x17 sub-positions (1/16 apart) let the 0.62-wide body
   stand clear of every collision box nearby. Boxes are world-coordinate, 6 floats each: x0 y0 z0 x1 y1 z1. `space` is the
   JS object the planner takes as options.space (boxesNear, freeMask, labelRegions)."
-  (:require [engine.path.offsets :as offsets]
+  (:require [engine.constants :as constants]
+            [engine.path.offsets :as offsets]
             [engine.path.planner.base :as base]))
 
 (def ^:const UNLOADED base/UNLOADED)
-(def ^:const HALF-WIDTH 0.31)
+(def HALF-WIDTH constants/body-half-width)
 (def ^:const GRID 17)
 ;; the server refuses a move that leaves the body's box exactly touching a face, so touching counts as overlap
 (def ^:const EPS 1e-4)

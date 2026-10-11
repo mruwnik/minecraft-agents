@@ -5,6 +5,7 @@ import { liveEntities } from './live-entities.mjs'
 import { clearLine } from './sight.mjs'
 import { mobFields, sheepDye } from './interact.mjs'
 import { VIEW_VERSION } from './view-column.mjs'
+import constants from '../src/engine/constants.json' with { type: 'json' }
 
 export const ENTITY_RANGE = 48
 
@@ -16,7 +17,7 @@ const xyz = v => ({ x: v.x, y: v.y, z: v.z })
 
 // ---- pose and hud ----
 
-const eyeHeight = entity => entity.height ? entity.height - 0.18 : 1.62
+const eyeHeight = entity => entity.height ? entity.height - 0.18 : constants.eyeHeight
 
 // the name of the item a drop entity holds, or null when the client library cannot read it (it reads one fixed metadata index)
 const droppedName = (bot, e) => {

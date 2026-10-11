@@ -79,12 +79,13 @@
 (defn swim
   "Walk the plan from from to goal in physics. {:done :moves :ticks :wet-run :in-block}: the executor's done map (nil when
   it ran out of ticks), the step kinds planned, ticks used, the longest run of ticks with the eye in water, and the ticks
-  the body was inside a block (in-block?). :at is the point [px pz] in from the body starts at (default: its middle)."
-  [blocks from goal & {:keys [at]}]
+  the body was inside a block (in-block?). :at is the point [px pz] in from the body starts at (default: its middle),
+  :half the collision half-width (default: every bound bot's)."
+  [blocks from goal & {:keys [at half]}]
   (let [{:keys [mc physics]} @lib
         world (world-of blocks)
         phys ((.-Physics physics) mc world)
-        _ (set! (.-playerHalfWidth phys) (.-BODY_HALF_WIDTH (tu/require-here "./js/prim-base.mjs")))
+        _ (set! (.-playerHalfWidth phys) (or half (.-BODY_HALF_WIDTH (tu/require-here "./js/prim-base.mjs"))))
         steps (plan blocks from goal)
         bot (bot-at from at)]
     (if (nil? steps)
@@ -169,12 +170,17 @@
   (into {} (map (fn [[k v]] (let [[x y z] (map js/parseInt (.split k ","))] [(str (+ x dx) "," y "," z) v]))) blocks))
 
 (deftest a-body-leaving-shallow-water-never-enters-the-bank
-  ;; the water's edge is the bank's face at x = edge; a face on a power of two is where rounding once let the box through
-  (are [edge at] (= {:status :arrived :in-block 0}
-                    (let [{:keys [done in-block]} (swim (shifted wade (- edge 5)) [edge 60 1] [(- edge 4) 61 1] :at at)]
-                      {:status (:status done) :in-block in-block}))
-    5 nil
-    16 nil
-    16 [16.5 1.67]
-    4 nil
-    512 nil))
+  ;; the water's edge is the bank's face at x = edge. A width that is no binary fraction (0.31) puts the pressed box one
+  ;; rounding step past a face on a power of two: the clip's tolerance holds it there
+  (are [edge at half] (= {:status :arrived :in-block 0}
+                         (let [{:keys [done in-block]} (swim (shifted wade (- edge 5)) [edge 60 1] [(- edge 4) 61 1] :at at :half half)]
+                           {:status (:status done) :in-block in-block}))
+    5 nil nil
+    16 nil nil
+    16 [16.5 1.67] nil
+    4 nil nil
+    512 nil nil
+    16 nil 0.31
+    16 [16.5 1.67] 0.31
+    4 nil 0.31
+    512 nil 0.31))

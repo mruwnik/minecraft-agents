@@ -9,10 +9,11 @@ import { blocksSight } from './sight.mjs'
 import { fullCube, shapeTop } from './block-shape.mjs'
 import { columnLightSection, hasSkyLight } from './view.mjs'
 import { setting } from './settings.mjs'
+import constants from '../src/engine/constants.json' with { type: 'json' }
 
 const { Vec3 } = vec3
 export const UNLOADED = -1
-export const EYE_HEIGHT = 1.62
+const EYE_HEIGHT = constants.eyeHeight
 const hereY = bot => bot?.entity?.position?.y ?? 0
 
 // Uint8Array over state ids: 1 where the state blocks sight.

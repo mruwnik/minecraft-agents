@@ -21,7 +21,7 @@ import { missingPatches, missingRequired } from './deps-check.mjs'
 import { wrapBlockAt } from './offset-shapes.mjs'
 import { say } from './chat.mjs'
 import vec3 from 'vec3'
-import { BODY_HALF_WIDTH, mcToMineflayerLook, mineflayerToMcLook, sleepMs, waitForWorld, xyz, isNum, vec, cutError, badArgs, isCut, failed, need, attempt, sleepStatusOf, spawnSetMessage, droppedItem, itemCounts } from './prim-base.mjs'
+import { BODY_HALF_WIDTH, EYE_HEIGHT, mcToMineflayerLook, mineflayerToMcLook, sleepMs, waitForWorld, xyz, isNum, vec, cutError, badArgs, isCut, failed, need, attempt, sleepStatusOf, spawnSetMessage, droppedItem, itemCounts } from './prim-base.mjs'
 import { createWalk } from './prim-walk.mjs'
 import { createSense } from './prim-sense.mjs'
 import { createMove } from './prim-move.mjs'
@@ -70,7 +70,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     return low ? floored.offset(0, 1, 0) : floored
   }
   // the eyes: Mineflayer's height is the top of the head (1.8), eyeHeight the eyes (1.62), as the server reads reach and air
-  const eye = () => ({ x: bot.entity.position.x, y: bot.entity.position.y + (bot.entity.eyeHeight ?? 1.62), z: bot.entity.position.z })
+  const eye = () => ({ x: bot.entity.position.x, y: bot.entity.position.y + (bot.entity.eyeHeight ?? EYE_HEIGHT), z: bot.entity.position.z })
   const inventory = () => bot.inventory.items()
   // Worn and off-hand stacks are not in inventory().items(); they sit in these slots of the player window.
   const WORN_SLOTS = { head: 5, torso: 6, legs: 7, feet: 8, offHand: 45 }

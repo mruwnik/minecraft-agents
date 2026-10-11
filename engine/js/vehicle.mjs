@@ -11,6 +11,7 @@ import vec3 from 'vec3'
 import { emptyHand } from './unequip.mjs'
 import { setting } from './settings.mjs'
 import { safePitch } from './gaze.mjs'
+import constants from '../src/engine/constants.json' with { type: 'json' }
 
 
 const BOAT = /_(boat|raft)$/
@@ -99,7 +100,7 @@ export const selfVehicle = bot => bot.vehicle ? describe(bot.vehicle) : null
 
 const sleepMs = ms => new Promise(resolve => setTimeout(resolve, ms))
 const middle = e => vec3(e.position.x, e.position.y + (e.height ?? 1) / 2, e.position.z)
-const eyeOf = bot => vec3(bot.entity.position.x, bot.entity.position.y + (bot.entity.height ?? 1.62), bot.entity.position.z)
+const eyeOf = bot => vec3(bot.entity.position.x, bot.entity.position.y + (bot.entity.height ?? constants.eyeHeight), bot.entity.position.z)
 
 const waitFor = async (ctx, done, ms) => {
   const deadline = Date.now() + ms

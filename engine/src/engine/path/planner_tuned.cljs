@@ -81,7 +81,8 @@
      as its frontier and ends once it has expanded as many nodes again (or run out, or the caller ends it: endSweep), not
      after searching all loaded land; what only those nodes refused is not in the result. go-to's budgeted searches set it
      (walk.search/new-search)."
-  (:require [engine.path.planner.base :as base :refer [OCTILE-SLACK REGIONS TABLE WHOLE next-pow2]]
+  (:require [engine.constants :as constants]
+            [engine.path.planner.base :as base :refer [OCTILE-SLACK REGIONS TABLE WHOLE next-pow2]]
             [engine.path.planner.search :refer [Search ->Search]]
             [engine.path.planner.world]
             [engine.path.planner.nodes]
@@ -417,7 +418,7 @@
      (.-goalSeen options))))
 
 ;; the body's hitbox reaches this far from its centre in x and z
-(def ^:const HITBOX-HALF 0.3)
+(def HITBOX-HALF constants/hitbox-half-width)
 
 (defn- overlap [lo hi c] (- (js/Math.min hi (inc c)) (js/Math.max lo c)))
 
