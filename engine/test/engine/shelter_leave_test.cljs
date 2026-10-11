@@ -147,3 +147,31 @@
               _ (dotimes [_ 300] (swap! clock + 700) (await (core/tick! eng)))
               g (first (st/emitted seen :hunt.gave-up))]
           (is (= {:x 0 :y 64 :z 0} (:inside-own-shelter g))))))))
+
+;; ------------------------------------------------------------------ dawn exit
+
+(def first-light 200)
+(def grace-passed 3000)
+(def far-zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 12 :y 64 :z 2}})
+
+(defn ^:async held-in-then-out
+  "A dug-in body at first light with the given mobs near, the night trigger registered, the dawn grace over at the
+  fourth hold: [whether the body was still sealed in at the third hold (nil: no hold made), whether it ended outside]."
+  [entities]
+  (let [{:keys [eng p]} (await (dug-in-world {:entities entities}))
+        sealed {:x 0.5 :y 64 :z 0.5}
+        third (atom nil)]
+    (st/on-wait! p (fn [n]
+                     (when (= n 3) (reset! third (= sealed (st/pos-of p))))
+                     (when (= n 4) (.setTime (.-world p) grace-passed))))
+    (.setTime (.-world p) first-light)
+    (core/load-scenario! eng (scenario/parse (str "{:register [{:trigger " shut-in-trigger "}]}")))
+    (await (st/tick-n eng 12))
+    [@third (not= sealed (st/pos-of p))]))
+
+(deftest a-dug-in-body-waits-at-first-light-for-a-known-hostile-near-until-the-grace-is-over
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= [nil true] (await (held-in-then-out []))) "nobody near: out at first light, no hold")
+        (is (= [true true] (await (held-in-then-out [far-zombie]))) "a zombie near: held in, out once the grace is over")))))

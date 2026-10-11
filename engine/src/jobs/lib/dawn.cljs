@@ -20,3 +20,12 @@
    (and (>= (ticks-since-dawn (.-timeOfDay (.self p))) (settings/get settings ::grace-ticks))
         (or (settings/get settings ::with-hostile)
             (empty? (danger/known-hostiles p (settings/get settings ::hostile-radius) {:ranged-radius (danger/ranged-radius)}))))))
+
+(defn hostile-hold?
+  "Whether a body in shelter stays in at first light: within ::grace-ticks of the night's end, with a known hostile
+  within ::hostile-radius, unless ::with-hostile is set."
+  [p]
+  (boolean
+   (and (< (ticks-since-dawn (.-timeOfDay (.self p))) (settings/get settings ::grace-ticks))
+        (not (settings/get settings ::with-hostile))
+        (seq (danger/known-hostiles p (settings/get settings ::hostile-radius) {:ranged-radius (danger/ranged-radius)})))))

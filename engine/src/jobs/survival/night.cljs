@@ -3,6 +3,7 @@
             [engine.ctx :as ctx]
             [engine.memory :as mem]
             [jobs.lib.child :as child]
+            [jobs.lib.dawn :as dawn]
             [jobs.lib.dig-in-leave :as dig-leave]
             [jobs.lib.reach :as reach]
             [jobs.lib.result :as result]
@@ -45,6 +46,7 @@
   - a roof over a room with a hole (a fresh :bed-open entry within sh/breach-near and no closed room, sh/breached-home?): says so once
     (shelter.room_open warn) and walls the body in under the roof (the :enclose step), not ending roofed.
   - roofed, buried or shut in a closed room: done {:night :roofed} (the queue runs).
+  - by day, a dug-in body with a known hostile near (jobs.lib.dawn/hostile-hold?) stays in (info night.dawn-hold) until it is gone or the dawn grace passes.
   - else, before any pit and while no site has failed tonight: a remembered roofed place (:roofed-places, nearest first)
     within :walk-radius whose roof the body has seen, and whose route (the straight line, sampled every 2 blocks) is lit
     as far as the body has seen it (a seen cell with block light >= :lit-light; an unseen cell is not lit; the line approximates go-to's route): walk there (go-to :place). A walk
@@ -363,7 +365,13 @@
 (defn ^:async morning-step!
   "By day, nothing to walk over: out of a dig-in pit first, then a bed picked up, then the end."
   [c]
-  (if (or (#{:dug-in :exposed} (:sheltered (ctx/mem c))) (:dig-out (ctx/mem c)) (dig-leave/sheltered-in c))
+  (cond
+    (and (or (= :dug-in (:sheltered (ctx/mem c))) (dig-leave/sheltered-in c)) (dawn/hostile-hold? (:primitives c)))
+    (do (when-not (:dawn-noted (ctx/mem c))
+          (ctx/update-mem! c assoc :dawn-noted true)
+          (ctx/emit! c :night.dawn-hold :info {:text "first light, but a hostile is known near the shelter; staying in until it is gone or the grace is over"}))
+        (await (hold/hold! c "first light: hostile near")))
+    (or (#{:dug-in :exposed} (:sheltered (ctx/mem c))) (:dig-out (ctx/mem c)) (dig-leave/sheltered-in c))
     (let [r (await (dig-leave/leave! c {:take-back? (:take-back? (:args c))}))]
       (cond
         (= :continue r) :again
@@ -377,6 +385,7 @@
           (ctx/forget-where! c :night-site (constantly true))
           (result/stop! c :no-way-out text :at (:at r) :tries (:tries r)))
         :else (await (hold/hold! c :leaving))))
+    :else
     (if-let [bed (sh/bed-to-collect (:primitives c) (ctx/view c))]
       (await (collect-bed! c bed))
       (end-night! c))))
