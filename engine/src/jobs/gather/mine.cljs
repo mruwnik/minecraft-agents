@@ -235,7 +235,6 @@
         (some? level) level
         :else (get (settings/get settings ::ore-levels) (base-ore block))))
 (def not-solid #{"air" "cave_air" "water" "lava" "short_grass" "tall_grass"})
-(def faces [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])
 
 (defn carried
   "Total of the item carried over all stacks."
@@ -259,7 +258,7 @@
                (own? cell) (u/seen-name p cell)
                (and (= [0 1 0] f) (= "lava" (u/seen-name p cell))) "lava"
                (not (:unknown seen)) (:name seen))))
-         faces)))
+         rules/neighbour-deltas)))
 
 (defn classify
   "How the cell of a block would be dug: :ok, :wet (only water stops it), :buried (no seen air face) or :no (seen
@@ -587,15 +586,8 @@
   (skip! c pos)
   (ctx/update-mem! c update :failures (fnil inc 0)))
 
-(defn unreachable-walk?
-  "Whether a blocked walk to a target is no reason to count a failure: a permanent verdict, or a way go-to will not take
-  (:off-plan on a long drop, :needs-health: too costly to walk). The run digs toward other ore or tunnels instead."
-  [{:keys [why] :as result}]
-  (boolean (or (result/permanent-walk? result)
-               (and (= :stopped (:status result)) (contains? #{:off-plan :needs-health} why)))))
-
 (defn skip-unreachable!
-  "Skip a target the walk cannot reach (unreachable-walk?): no failure counted, so a vein of such cells never ends the run."
+  "Skip a target the walk cannot reach (result/unreachable-walk?): no failure counted, so a vein of such cells never ends the run."
   [c pos]
   (ctx/emit! c :mine.unreachable :info {:pos (access/cell pos) :why (:why (ctx/child-result c :walk))
                                         :text (str "mine skips " (str/join "," (access/cell pos)) ": no way to stand beside it")})
@@ -627,7 +619,7 @@
   hazard, nor is a loaded cell not yet seen (the dig looks); only a cell with no chunk is :not-loaded."
   [c pos]
   (let [own (u/seen-name (:primitives c) pos)
-        beside (map (fn [f n] [(around pos f) n]) faces (face-names c pos))
+        beside (map (fn [f n] [(around pos f) n]) rules/neighbour-deltas (face-names c pos))
         beside-of (fn [n] (some (fn [[cell nm]] (when (= n nm) cell)) beside))]
     (cond
       (nil? (u/sensed (:primitives c) pos)) {:reason :not-loaded :at pos}
@@ -762,7 +754,7 @@
   "Whether torches can be crafted from what is carried: coal or charcoal, and sticks or wood to make them from."
   [c]
   (let [names (map :name (u/inventory (:primitives c)))]
-    (and (pos? (count-of c #{"coal" "charcoal"}))
+    (and (pos? (torch/fuel-held (:primitives c)))
          (or (pos? (count-of c #{"stick"})) (some wood? names)))))
 
 (defn on-line?
@@ -916,20 +908,12 @@
   [c m cell]
   (first (filter #(zones/in-box? cell (grown % m)) (own-zones c))))
 
-(defn exit-goal
-  "The cell outside zone zn's box by margin m + 2 on its nearest side, at the level of here."
-  [{:keys [x y z]} zn m]
-  (let [[x0 _ z0] (:min zn) [x1 _ z1] (:max zn)
-        out (+ m 2)
-        sides [[(- x x0) {:x (- x0 out) :z z}] [(- x1 x) {:x (+ x1 out) :z z}] [(- z z0) {:x x :z (- z0 out)}] [(- z1 z) {:x x :z (+ z1 out)}]]]
-    (assoc (second (apply min-key first sides)) :y y)))
-
 (defn ^:async leave-zone!
   "Before the first dig: a go-to child to a cell zone-margin outside the own zone zn the body stands near (memory :pre-start moves with it).
   One info mine.left-zone when out; else the job ends :stopped :zone-exit. :continue while it walks, :again once out."
   [c zn]
   (let [m (zone-margin)
-        goal (exit-goal (cell-of (u/self-pos c)) zn m)
+        goal (zones/exit-goal (cell-of (u/self-pos c)) zn m)
         from (:pre-start (ctx/mem c))
         r (await (child/call-walk c :leave
                                  {:pos {:x (+ (:x goal) 0.5) :y (:y goal) :z (+ (:z goal) 0.5)} :range 2 :y-slack 8 :escalate true :zone-tolls true}))
@@ -1296,7 +1280,7 @@
                                                (skip! c pos) :again)
       (some? pos) (let [walked (await (walk-to-dig! c pos))]
                     (cond
-                      (and (= :blocked walked) (unreachable-walk? (ctx/child-result c :walk))) (do (skip-unreachable! c pos) :again)
+                      (and (= :blocked walked) (result/unreachable-walk? (ctx/child-result c :walk))) (do (skip-unreachable! c pos) :again)
                       (= :blocked walked) (do (skip-failed! c pos) :again)
                       (= :partial walked) (stalled! c pos)
                       (branch-torch-due? c) (await (torch-step! c true))
@@ -1505,18 +1489,10 @@
       (ctx/update-mem! c assoc-in [:tunnel :end] (access/cell (cell-of (u/self-pos c)))))
     (await (home-by-go-to! c start))))
 
-(defn no-tool?
-  "Whether the block needs a tool to drop (get-tool's test: its harvestTools) and none carried is one of them."
-  [c]
-  (not (tools/can-harvest? (:primitives c) (:block (:args c)))))
-
-(defn needed-kind [c]
-  (tools/needed-kind (:primitives c) (:block (:args c))))
-
 (defn no-tool!
   "End at once, before any dig: warn and hand over {:status :stopped :got 0 :reason :no-tool :tool <kind>}."
   [c]
-  (let [kind (needed-kind c)]
+  (let [kind (tools/needed-kind (:primitives c) (:block (:args c)))]
     (ctx/emit! c :mine.no-tool :warn {:tool kind :text (str "mine has no " kind " for " (:block (:args c)))})
     (ctx/emit! c :mine.done :info {:got 0 :reason :no-tool :tool kind :mended 0 :text "mine done: no-tool, got 0, mended 0"})
     (ctx/result! c {:status :stopped :got 0 :reason :no-tool :tool kind})
@@ -1525,7 +1501,7 @@
 (defn tool-problem
   "The :no-tool wait for the block while no pickaxe is carried, else nil."
   [c]
-  (when (no-tool? c) {:reason :no-tool :block (:block (:args c))}))
+  (when-not (tools/can-harvest? (:primitives c) (:block (:args c))) {:reason :no-tool :block (:block (:args c))}))
 
 (defn ^:async fetch-pickaxe!
   "A pickaxe is owed: jobs.lib.fetch runs jobs.items.get-tool for the block (failures are booked, limits apply).
@@ -1535,10 +1511,11 @@
   (let [r (await (fetch/fetch! c 'jobs.gather.mine tool-problem))]
     (cond
       r r
-      (not (no-tool? c)) :again
+      (tools/can-harvest? (:primitives c) (:block (:args c))) :again
       (nil? (:phase (ctx/mem c))) (no-tool! c)
-      :else (do (ctx/emit! c :mine.no-tool :warn {:tool (needed-kind c) :text (str "mine has no " (needed-kind c) " for " (:block (:args c)) " and could not get one")})
-                (to-mend! c :no-tool)))))
+      :else (let [kind (tools/needed-kind (:primitives c) (:block (:args c)))]
+              (ctx/emit! c :mine.no-tool :warn {:tool kind :text (str "mine has no " kind " for " (:block (:args c)) " and could not get one")})
+              (to-mend! c :no-tool)))))
 
 (defn toward
   "The heading name for a :heading arg h at start: a name, or the dominant axis from start to a cell [x y z]; nil when none."
@@ -1604,12 +1581,12 @@
 
       (and (contains? #{nil :dig} (:phase m)) (not (contains? soil-blocks (:block (:args c)))) (trip/food-short? c)) (hungry! c)
 
-      (and (contains? #{nil :dig} (:phase m)) (no-tool? c)) (await (fetch-pickaxe! c))
+      (and (contains? #{nil :dig} (:phase m)) (not (tools/can-harvest? (:primitives c) (:block (:args c))))) (await (fetch-pickaxe! c))
 
       (and (contains? #{nil :dig} (:phase m)) (trip/spent-tool? (:primitives c) (:block (:args c))))
       (if (nil? (:phase m)) (no-tool! c) (to-mend! c :no-tool))
 
-      (and (nil? (:phase m)) (not (no-tool? c)) (:pre-start m) (not (at-pre-start? c))) (await (back-to-pre-start! c))
+      (and (nil? (:phase m)) (tools/can-harvest? (:primitives c) (:block (:args c))) (:pre-start m) (not (at-pre-start? c))) (await (back-to-pre-start! c))
 
       (and (nil? (:phase m)) (within-own-zone c (dec (zone-margin)) (access/cell (cell-of (u/self-pos c)))) (not (shaft-top-here? c)))
       (await (leave-zone! c (within-own-zone c (dec (zone-margin)) (access/cell (cell-of (u/self-pos c))))))

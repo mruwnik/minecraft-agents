@@ -34,3 +34,10 @@
   (and (= :stopped status)
        (or (contains? #{:bad-pos :unsupported} reason)
            (and (= :unreachable reason) (contains? permanent-why why)))))
+
+(defn unreachable-walk?
+  "Whether a blocked walk to a target is no reason to count a failure: a permanent verdict, or a way go-to will not take
+  (:off-plan on a long drop, :needs-health: too costly to walk). The run digs toward other ore or tunnels instead."
+  [{:keys [why] :as result}]
+  (boolean (or (permanent-walk? result)
+               (and (= :stopped (:status result)) (contains? #{:off-plan :needs-health} why)))))

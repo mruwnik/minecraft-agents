@@ -81,3 +81,11 @@
       (some #(same-owner? (:owner %) self) here) {:ok true :why :own-zone}
       (some #(same-owner? (:owner %) self) live) {:ok true :why :own-claim}
       :else {:ok true :why :open})))
+
+(defn exit-goal
+  "The cell outside zone zn's box by margin m + 2 on its nearest side, at the level of here."
+  [{:keys [x y z]} zn m]
+  (let [[x0 _ z0] (:min zn) [x1 _ z1] (:max zn)
+        out (+ m 2)
+        sides [[(- x x0) {:x (- x0 out) :z z}] [(- x1 x) {:x (+ x1 out) :z z}] [(- z z0) {:x x :z (- z0 out)}] [(- z1 z) {:x x :z (+ z1 out)}]]]
+    (assoc (second (apply min-key first sides)) :y y)))
