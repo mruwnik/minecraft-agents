@@ -289,6 +289,29 @@
     {:time 1000 :blocks closed-room :entities [(zombie 7 5 0)]} {:stay-inside true} false
     {:time 14000 :entities [(zombie 7 5 0)]} {:stay-inside true} false))
 
+(def breached-room
+  "The closed room with a hole in its east wall and a low roof over the body."
+  (into (dissoc closed-room "2,64,0" "2,65,0")
+        (for [x (range -1 2) z (range -1 2)] [(str x ",67," z) "stone"])))
+
+(deftest a-roofed-body-at-night-does-not-flee-for-a-mob-it-only-hears
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [heard (zombie 7 0.5 -5.5)
+              stay '(jobs.survival.respond-to-hostile {:stay-inside false})]
+          (doseq [[world spec decision why]
+                  [[{:time 14000 :entities [heard]} respond :flee "no roof: it flees"]
+                   [{:time 14000 :blocks breached-room :entities [heard]} respond :fight "roofed, heard only: it stays"]
+                   [{:time 14000 :blocks breached-room :entities [heard]} stay :flee "stay-inside off: it flees"]
+                   [{:time 1000 :blocks breached-room :entities [heard]} respond :flee "day: it flees"]]]
+            (let [{:keys [eng p]} (setup-seeing (assoc world :self {:health 5} :inventory sword :pitch -80) nil 1000)]
+              (perception/pass! (aget p "perception"))
+              (swap! (fake/state p) assoc :pitch 0)
+              (core/submit! eng spec {})
+              (await (core/tick! eng))
+              (is (= decision (:decision (first (hostile-entries eng)))) why))))))))
+
 (deftest fight-back-chases-in-legs-that-never-escalate
   (async done
     (tu/run-async done

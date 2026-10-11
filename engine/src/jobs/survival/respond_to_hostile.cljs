@@ -40,7 +40,7 @@
    :quiet-s {:doc "passed to the retreat: a hidden body keeps its refuge this many seconds after the last danger" :spec (a/num-in 0 nil) :default 30}
    :hide-s {:doc "passed to the retreat: a hidden body hands back after this many seconds once no real danger is on it" :spec (a/num-in 0 nil) :default 60}
    :goal {:doc "passed to the retreat: where the flight leans; nil: the destination of the walk this reflex interrupted (jobs.lib.goal), read once" :spec goal/pos-spec :default nil}
-   :stay-inside {:doc "at night a body shut in a closed room or its own shelter fights from there and never steps out toward a mob (false: it may)" :spec boolean? :default true}
+   :stay-inside {:doc "at night a body shut in a closed room or its own shelter fights from there and never steps out toward a mob; under any roof it does not flee for mobs it only hears (false: it may)" :spec boolean? :default true}
    :weapons {:doc "item name substrings that count as weapons" :spec (a/coll-of (a/or-of string? keyword?)) :default combat/default-weapons}})
 
 (def hostile-policy {:cap 50 :ttl (* 60 60 1000)})
@@ -72,10 +72,22 @@
                   (or (> (count (danger-q/known-hostiles p hold-radius {})) 1)
                       (and (:stay-inside (:args c)) (or (sh/shut-in-room? p) (sh/sheltered-in c))))))))
 
-(defn ^:async run-child [c decision {:keys [radius ranged-radius weapons reserve quiet-s hide-s]}]
+(defn stay-under-roof?
+  "Whether the body keeps its roof: :stay-inside on, night, a roof over the feet, and every danger near only heard
+  (none seen) and none a creeper or an enderman. Fight-back then faces the sound and the retreat does not run."
+  [c hs]
+  (let [p (:primitives c)]
+    (boolean (and (:stay-inside (:args c))
+                  (seq hs)
+                  (sh/night? p)
+                  (sh/roofed? p sh/default-roof-height)
+                  (not-any? danger-q/seen-only? hs)
+                  (not-any? #(or (combat/creeper? %) (combat/enderman? %)) hs)))))
+
+(defn ^:async run-child [c decision {:keys [radius ranged-radius weapons reserve quiet-s hide-s]} hold]
   (let [child-args (case decision
                      :fight {:range radius :ranged-range ranged-radius :min-health 0 :weapons weapons
-                             :hold (hold? c)}
+                             :hold (or hold (hold? c))}
                      :flee {:radius radius :ranged-radius ranged-radius :weapons weapons :reserve reserve :quiet-s quiet-s :hide-s hide-s
                             :goal (:goal (ctx/mem c))})]
     (await (ctx/call-child c decision (child-jobs decision) child-args))))
@@ -130,14 +142,16 @@
                                :damage (cost/fight-damage {:weapon (combat/best-weapon p weapons)
                                                            :equipment (cost/equipment-of (.-equipment self))
                                                            :mobs (map #(mob-of p (get-in (ctx/mem c) [:children :fight :struck (.-id %)]) %) near)})}))
+        stay? (stay-under-roof? c near)
         decision (if (and (= :flee chosen) (>= (count hits) 2) (not-any? combat/creeper? near) (not-any? combat/enderman? near))
                    :fight
-                   chosen)]
+                   chosen)
+        decision (if stay? :fight decision)]
     (log-encounter! c (first near) decision)
     (ctx/update-mem! c assoc :decision decision)
-    (let [result (await (run-child c decision a))]
-      (if (= :declined result)
-        (await (run-child c (other decision) a))
+    (let [result (await (run-child c decision a stay?))]
+      (if (and (= :declined result) (not stay?))
+        (await (run-child c (other decision) a false))
         result))))
 
 (def cover-sides
@@ -222,7 +236,7 @@
     (let [hs (near c)
           before (signature c hs)]
       (cond
-        (hiding? c) (await (run-child c :flee (:args c)))
+        (hiding? c) (await (run-child c :flee (:args c) false))
         (empty? hs) nil
         (gap-wanted? c hs (:gap-tried (ctx/mem c))) (await (gap! c))
         :else (await (respond c hs)))
