@@ -1,6 +1,8 @@
 (ns engine.torch-stock-test
   "jobs.lib.trip/torches-ready!: a stair down that carries few torches stocks up first, or says it digs dark."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.core :as core]
+            [engine.settings :as settings]
             [engine.mine-test :as mt]
             [engine.stair-test :as st]
             [engine.test-util :as tu]
@@ -9,6 +11,24 @@
 (def chest "2,65,1")
 (def torch-chest {:blocks (assoc st/ground chest "chest") :containers {chest [{:name "torch" :count 20}]}})
 (def east (assoc st/east :steps 2))
+
+(def log-world
+  {:blocks st/ground :drops {"stone" "cobblestone"}
+   :recipes {"furnace" {:count 1 :needs {"cobblestone" 8}}
+             "torch" {:count 4 :needs {"charcoal" 1 "stick" 1}}}
+   :inventory (into st/pick [{:name "oak_log" :count 11} {:name "stick" :count 8}])})
+
+(defn ^:async stair-with-cooking!
+  "The stair over log-world with the furnace cooking as the clock runs (10 ticks per 500 ms tick)."
+  [args]
+  (let [{:keys [eng clock p] :as s} (st/setup log-world args tu/seeing-all)]
+    (loop [i 0]
+      (when (and (< i 900) (seq (:list (core/state eng))))
+        (swap! clock + 500)
+        (.advance (.-world p) 10)
+        (await (core/tick! eng))
+        (recur (inc i))))
+    s))
 
 (defn kinds [s] (set (map :kind @(:seen s))))
 
@@ -74,11 +94,36 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (st/stair! {:blocks st/ground :drops {"stone" "cobblestone"}
-                                   :recipes {"furnace" {:count 1 :needs {"cobblestone" 8} :table true}}
-                                   :inventory (conj st/pick {:name "oak_log" :count 11})} east tu/seeing-all))]
+        (let [s (await (stair-with-cooking! east))]
           (is (= 1 (count (filter #(re-find #"put a furnace down" (:text %)) (st/events-of s :smelt.furnace)))) "a furnace was put down")
           (is (= 1 (count (st/events-of s :smelt.loaded))) "the logs went in to be charcoal"))))))
+
+(deftest a-stair-down-waits-for-the-charcoal-smelt-instead-of-digging-dark
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (stair-with-cooking! east))
+              [ev] (st/events-of s :torch.waiting)]
+          (is (empty? (st/events-of s :torch.no-stock)) "the smelt is waited for")
+          (is (= :cooking (:reason ev)))
+          (is (contains? (kinds s) :torch.stocked)))))))
+
+(deftest a-smelt-that-outlasts-the-wait-bound-lets-the-dig-go-on-dark-and-says-so
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (st/setup log-world east tu/seeing-all)
+              {:keys [eng clock]} s]
+          (await (settings/with-settings {:jobs.lib.trip/torch-wait-s 5}
+                   (fn ^:async run []
+                     (loop [i 0]
+                       (when (and (< i 300) (seq (:list (core/state eng))))
+                         (swap! clock + 500)
+                         (await (core/tick! eng))
+                         (recur (inc i)))))))
+          (let [[ev] (st/events-of s :torch.no-stock)]
+              (is (= :waited-out (:torches ev)))
+            (is (re-find #"still cooking" (:text ev)))))))))
 
 (deftest the-torch-stocking-trip-to-a-far-chest-does-not-move-the-tunnel
   (async done

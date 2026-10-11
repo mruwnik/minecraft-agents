@@ -47,10 +47,13 @@
 
 (a/defargs torch-settings
   {::torch-low {:default 8 :doc "A job that digs down or tunnels gets torches first when fewer than this are carried." :spec (a/int-in 0 nil)}
-   ::torch-stock {:default 16 :doc "How many torches that fetch brings the bag up to." :spec (a/int-in 1 nil)}})
+   ::torch-stock {:default 16 :doc "How many torches that fetch brings the bag up to." :spec (a/int-in 1 nil)}
+   ::torch-wait-s {:default 300 :doc "Seconds a job that digs waits for the charcoal smelt of its torch stock to finish before it digs on dark (torch.no-stock :torches :waited-out)." :spec (a/int-in 0 nil)}})
 
 (defn torch-low [] (settings/get torch-settings ::torch-low))
 (defn torch-stock [] (settings/get torch-settings ::torch-stock))
+
+(defn torch-wait-ms [] (* 1000 (settings/get torch-settings ::torch-wait-s)))
 
 (def child :trip-deposit)
 
@@ -187,13 +190,36 @@
         [x y z] (mapv #(js/Math.floor %) [x y z])]
     (vec (for [n [1 2] dy [-1 0 1]] [(+ x (* n dx)) (+ y dy) (+ z (* n dz))]))))
 
+(defn torches-check
+  "True, or a wait {:reason :torches-cooking :furnace :ready-at} while the torch stock's charcoal smelt cooks (set by torches-ready!), until it is ready or the wait bound passes. For the check of a job that calls torches-ready!."
+  [c]
+  (let [w (:torches-wait (ctx/mem c))]
+    (if (and w (< (ctx/now c) (:until w)))
+      (ctx/wait c (select-keys (assoc w :reason :torches-cooking) [:reason :furnace :ready-at]))
+      true)))
+
+(defn wait-for-smelt!
+  "The torch child declined :cooking (wait w): :continue with the job's check waiting (torches-check), or nil once ::torch-wait-s passed."
+  [c w]
+  (let [now (ctx/now c)
+        from (or (:torches-wait-from (ctx/mem c)) now)
+        deadline (+ from (torch-wait-ms))]
+    (when-not (:torches-wait-from (ctx/mem c))
+      (ctx/update-mem! c assoc :torches-wait-from now)
+      (ctx/emit! c :torch.waiting :info {:reason :cooking :furnace (:furnace w) :ready-at (:ready-at w)
+                                         :text "waiting for the charcoal smelt to finish before the dig"}))
+    (when (< now deadline)
+      (ctx/update-mem! c assoc :torches-wait {:furnace (:furnace w) :ready-at (:ready-at w)
+                                              :until (min deadline (or (:ready-at w) deadline))})
+      :continue)))
+
 (defn ^:async torches-ready!
   "Before a job that digs down or tunnels sets out: when fewer than ::torch-low torches are carried, run jobs.items.obtain
   for torches up to ::torch-stock (child :torches; chest, craft from coal or charcoal, charcoal from logs by smelt, gather).
   With coal or charcoal carried the count is what that fuel makes (4 torches each), so the obtain plans no charcoal smelt
   and no table for the rest. Resolves nil to go on, :continue while the child waits on the world. Once per job (:torches-tried in its memory): info
   torch.stocked when it came back with some, warn torch.no-stock with the child's reason when not (the job goes on, dark
-  when none are carried), then walks back to the cell the trip began on (:torches-from), so a chest elsewhere does not move the dig. The job's :fetch off, a set of kinds without :item, or a body short of food (food-short?) skips it."
+  when none are carried; a charcoal smelt still cooking is waited for, see torches-check), then walks back to the cell the trip began on (:torches-from), so a chest elsewhere does not move the dig. The job's :fetch off, a set of kinds without :item, or a body short of food (food-short?) skips it."
   [c]
   (or (await (back-from-stocking! c))
       (let [held (torch/torches-held (:primitives c))
@@ -209,13 +235,21 @@
             :continue
             (let [res (if (= :declined r) (b/child-wait c :torches 'jobs.items.obtain args) (ctx/child-result c :torches))
                   now (torch/torches-held (:primitives c))]
+              (or
+                (when (and (= :declined r) (= :cooking (:reason res))) (wait-for-smelt! c res))
+                (do
               (ctx/update-mem! c assoc :torches-tried true)
+              (ctx/update-mem! c dissoc :torches-wait)
               (when (and (pos? fuel) (<= now held)) (ctx/update-mem! c assoc :craft-failed true))
               (if (> now held)
                 (ctx/emit! c :torch.stocked :info {:held now :text (str "carrying " now " torches for the dig")})
                 (ctx/emit! c :torch.no-stock :warn {:held now :reason (:reason res) :tried (:tried res)
                                                     :text (str "carries " (if (zero? now) "no torches" (str "only " now " torches"))
-                                                               (if (zero? now) (str ", none made (" (str/join ", " (map (fn [[k v]] (str (name k) " " (if (keyword? v) (name v) v))) (:tried res))) ")") " and could not get more")
+                                                               (if (zero? now)
+                                                                 (str ", none made" (when (seq (:tried res)) (str " (" (str/join ", " (map (fn [[k v]] (str (name k) " " (if (keyword? v) (name v) v))) (:tried res))) ")"))
+                                                                      (when (= :cooking (:reason res)) ", the charcoal smelt was still cooking after the wait"))
+                                                                 " and could not get more")
                                                                ": the dig goes on " (if (zero? now) "dark" "with them")
-                                                               (when-let [w (:why res)] (str " (" w ")")))}))
-              (await (back-from-stocking! c)))))))))
+                                                               (when-let [w (:why res)] (str " (" w ")")))
+                                                    :torches (when (= :cooking (:reason res)) :waited-out)}))
+              (await (back-from-stocking! c)))))))))))

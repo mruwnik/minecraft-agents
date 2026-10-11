@@ -320,6 +320,7 @@
     (cond
       (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) (access/decline! c :mine.declined "mine" {:reason :no-zones})
       hurt (ctx/wait c hurt)
+      (not (trip/torches-check c)) false
       (:phase (ctx/mem c)) true
       (not (:block (:args c))) (ctx/wait c {:reason :no-block})
       :else (let [{:keys [targets refused]} (scan c)]
