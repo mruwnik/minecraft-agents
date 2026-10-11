@@ -7,6 +7,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.pen :as pen]
             [jobs.lib.pen-gate :as pg]
+            [jobs.lib.pen-read :as pen-read]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
@@ -62,9 +63,12 @@
 (defn adults [c]
   (animals/adults (:primitives c) (:mob (:args c)) (view-radius c)))
 
+(defn pen-opts [c]
+  {:box (:box (:args c))
+   :near (let [{:keys [x y z]} (u/self-pos c)] [(Math/floor x) (Math/floor y) (Math/floor z)])})
+
 (defn read-pen [c]
-  (pen/check {:block-at (apiary/seen-block-at-fn (:primitives c)) :box (:box (:args c))
-              :near (let [{:keys [x y z]} (u/self-pos c)] [(Math/floor x) (Math/floor y) (Math/floor z)])}))
+  (pen-read/read (:primitives c) (pen-opts c)))
 
 (defn in-pen-adults
   "The adults of :mob standing on the pen's cells."

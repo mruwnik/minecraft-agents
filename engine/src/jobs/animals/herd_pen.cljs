@@ -10,9 +10,10 @@
             [jobs.lib.gate :as gate]
             [jobs.lib.near :as near]
             [jobs.lib.pen :as pen]
+            [jobs.lib.pen-read :as pen-read]
             [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
-            [jobs.animals.herd-run :refer [adults animal-now approach-range box-centre cell drop-gate! end! finish! gate-cell gate-index gate-open? hold-gate! in-pen-adults max-reopens near-pen orthogonal out-1 read-pen set-phase! settle-ms shut-failed!]]))
+            [jobs.animals.herd-run :refer [adults animal-now approach-range box-centre cell drop-gate! end! finish! gate-cell gate-index gate-open? hold-gate! in-pen-adults max-reopens near-pen orthogonal out-1 pen-opts read-pen set-phase! settle-ms shut-failed!]]))
 
 ;; ------------------------------------------------------------------ the pen and its gate
 
@@ -291,7 +292,7 @@
       (if (= :blocked (await (near/go-near! c centre (approach-range) {:doors :never :escalate false})))
         (finish! c :unreachable)
         :continue)
-      (let [answer (await (sense/decide! c ::pen #(read-pen c) {:retry? #(= :unloaded (:reason %))}))]
+      (let [answer (await (pen-read/read! c (pen-opts c) #(= :unloaded (:reason %))))]
         (if (= :unloaded (:reason answer))
           (await (check-unknown! c answer))
           (survey-pen! c answer))))))

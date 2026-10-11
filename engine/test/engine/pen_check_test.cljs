@@ -1,8 +1,11 @@
 (ns engine.pen-check-test
   "jobs.animals.pen-check against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
+            [engine.build-from-plan-test :as b]
             [engine.core :as core]
+            [engine.fake :as fake]
             [engine.hostile-test :as h]
+            [engine.pen-build-test :as pb]
             [engine.test-util :as tu]
             [jobs.lib.pen :as pen]))
 
@@ -132,3 +135,49 @@
               event (await (run-seeing {:at [3 64 2]} (assoc-in w [:self :pos] {:x 3 :y 64 :z 2}) 90 60))]
           (is (= {:closed? true :cells 24} (select-keys event [:closed? :cells])) "the body walks round the pillar to see the gate")
           (is (= [{:pos {:x -1 :y 64 :z 2} :open? false}] (:gates event))))))))
+
+(defn ^:async check-twice
+  "Run the job in a seeing body, take a fence cell the body does not see now out of the world (blasted while it looked away),
+  and run it again; [cell second-event]."
+  [args]
+  (let [s (h/setup-seeing (assoc (world {}) :yaw 0) nil)
+        run (fn ^:async run [] 
+              (core/submit! (:eng s) (list job args) {})
+              (dotimes [_ 6]
+                (swap! (:clock s) + 700)
+                (await (core/tick! (:eng s))))
+              (last (filter #(= :pen-check.done (:kind %)) @(:seen s))))
+        _ (await (run))
+        cell (first (filter #(and (or (<= 0 (% 0) 4) (<= 0 (% 2) 4)) (not (.-visible (.sensedAt (:p s) (clj->js {:x (% 0) :y (% 1) :z (% 2)})))))
+                            (keys (fake/cells fence-ring identity))))]
+    (swap! (fake/state (:p s)) fake/drop-block cell)
+    [cell (await (run))]))
+
+(deftest a-fence-cell-gone-while-out-of-sight-is-found-not-remembered
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[cell event] (await (check-twice {:at [2 64 2] :max-cells 100}))]
+          (is (= :leak (:reason event)))
+          (is (some #{{:x (cell 0) :y (cell 1) :z (cell 2)}} (map :pos (:leaks event)))))))))
+
+(deftest a-box-given-as-vectors-is-checked-and-the-leaks-are-named-in-the-text
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [event]} (await (run-job {:box {:min [0 64 0] :max [4 64 4]}} (world {"5,64,1" "air"})))]
+          (is (= [{:pos {:x 5 :y 64 :z 1} :why :gap}] (:leaks event)))
+          (is (= "pen not closed: leak: gap at [5 64 1]" (:text event))))))))
+
+(deftest a-plan-names-the-pen-by-its-fence-cells
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (b/start (pb/spec [] pb/built-pen) {"pen" (pb/ring-plan)} [])
+              result (await (tu/child-outcome eng job {:plan "pen"} 300))]
+          (is (true? (:closed? result)))
+          (is (= 1 (:cells result))))
+        (let [{:keys [eng]} (b/start (pb/spec [] (dissoc pb/built-pen "4,64,3")) {"pen" (pb/ring-plan)} [])
+              result (await (tu/child-outcome eng job {:plan "pen"} 300))]
+          (is (= :leak (:reason result)))
+          (is (= [{:pos {:x 4 :y 64 :z 3} :why :gap}] (:leaks result))))))))
