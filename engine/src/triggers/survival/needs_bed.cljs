@@ -14,9 +14,19 @@
 
 (def defaults {:any-of beds :count 1 :explore true})
 
+(defn why
+  "Why a body by day needs a bed: {:why :spawn-lost :pos p} (sh/spawn-lost-pos), {:why :unslept :days d} (sh/max-days-awake
+  passed and sh/standing-bed finds none within sh/urgent-bed-radius), else nil."
+  [p view]
+  (if-let [pos (sh/spawn-lost-pos p view)]
+    {:why :spawn-lost :pos pos}
+    (let [days (or (sh/days-awake-in view) 0)]
+      (when (and (>= days sh/max-days-awake)
+                 (nil? (sh/standing-bed p view sh/urgent-bed-radius)))
+        {:why :unslept :days days}))))
+
 (defn needs-bed
-  "Holds by day, awake, with no bed item carried, when the respawn bed is lost (sh/spawn-lost-pos), or when overdue
-  (sh/max-days-awake) and no bed is remembered within sh/urgent-bed-radius."
+  "Holds by day, awake, with no bed item carried, when why names a reason."
   [p view _args]
   (boolean
    (and (not (body/recovery-pending? view :needs-bed))
@@ -24,6 +34,4 @@
         (not (sh/sleeping? p))
         (dawn/calm? p)
         (nil? (sh/carried-bed p))
-        (or (some? (sh/spawn-lost-pos p view))
-            (and (>= (or (sh/days-awake-in view) 0) sh/max-days-awake)
-                 (nil? (sh/bed-in-view p view sh/urgent-bed-radius)))))))
+        (some? (why p view)))))

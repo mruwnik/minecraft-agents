@@ -330,6 +330,17 @@
       (and ended (> ended (:t e))) pos
       (let [n (u/seen-name p pos)] (and n (not (.endsWith n "_bed")))) pos)))
 
+(defn standing-bed
+  "A bed the body can use within radius: the remembered :bed place, else the live :spawn-bed (it is set to a bed the body
+  slept in or set the spawn at, whichever half the place key holds) unless its block is seen not a bed."
+  [p view radius]
+  (or (bed-in-view p view radius)
+      (let [pos (:pos (:data (spawn-bed-live view)))
+            n (some->> pos (u/seen-name p))]
+        (when (and pos (<= (u/dist (u/self-pos {:primitives p}) pos) radius)
+                   (or (nil? n) (.endsWith n "_bed")))
+          pos))))
+
 (defn spawn-state
   "What the body knows of its respawn point: {:bed pos} (the live :spawn-bed), {:lost pos :why w} (:why the :spawn-lost entry's,
   :reset, or :seen-gone), else nil."

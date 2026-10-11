@@ -10,17 +10,21 @@
 
 (def zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 12 :y 64 :z 0}})
 
-(defn holds?
-  "The trigger over a fake world (night? and inv given), the memory entries [[kind data age-days] ..] written age-days ago."
-  [{:keys [night inv entries time entities blocks] :or {entries []}}]
+(defn run
+  "f over a fake world (night? and inv given) and a view of the memory entries [[kind data age-days] ..] written age-days ago."
+  [f {:keys [night inv entries time entities blocks] :or {entries []}}]
   (let [clock (atom 0)
         store (mem/open (tu/tmp-dir) {:now #(deref clock)})]
     (doseq [[kind data age] entries]
       (reset! clock (- (* 10 sh/ms-per-day) (* age sh/ms-per-day)))
       (mem/write! store kind data {:cap 8 :ttl (* 20 sh/ms-per-day)}))
     (reset! clock (* 10 sh/ms-per-day))
-    (nb/needs-bed (tu/seeing-all (tu/fake-on-floor (cond-> {:floor [-10 -10 10 10] :inventory (or inv []) :entities entities :blocks blocks} night (assoc :time 18000) time (assoc :time time))))
-                  (mem/view store) {})))
+    (f (tu/seeing-all (tu/fake-on-floor (cond-> {:floor [-10 -10 10 10] :inventory (or inv []) :entities entities :blocks blocks} night (assoc :time 18000) time (assoc :time time))))
+       (mem/view store) {})))
+
+(defn holds? [opts] (run nb/needs-bed opts))
+
+(defn why [opts] (run (fn [p view _] (nb/why p view)) opts))
 
 (def slept-long-ago [[:slept {:pos {:x 0 :y 64 :z 0}} 4]])
 
@@ -61,3 +65,18 @@
   (let [entries (conj rested spawn-bed-at-5 [:bed {:pos {:x 5 :y 64 :z 0}} 0.5])]
     (is (true? (holds? {:entries entries :blocks {"5,64,0" "air"}})))
     (is (false? (holds? {:entries entries :blocks {"5,64,0" "red_bed"}})))))
+
+(deftest a-standing-respawn-bed-counts-as-a-bed-though-the-bed-place-is-another
+  (let [far-bed [:bed {:pos {:x 500 :y 64 :z 500}} 2]
+        entries (conj slept-long-ago spawn-bed-at-5 far-bed)]
+    (is (false? (holds? {:entries entries :blocks {"5,64,0" "red_bed"}})))
+    (is (true? (holds? {:entries entries :blocks {"5,64,0" "air"}})))))
+
+(deftest an-overdue-body-with-a-far-respawn-bed-still-needs-one
+  (is (true? (holds? {:entries (conj slept-long-ago [:spawn-bed {:pos {:x 500 :y 64 :z 500}} 2])}))))
+
+(deftest the-reason-it-fires-is-named
+  (is (= {:why :unslept :days 4} (why {:entries slept-long-ago})))
+  (is (= {:why :spawn-lost :pos {:x 5 :y 64 :z 0}}
+         (why {:entries (conj rested spawn-bed-at-5 [:spawn-reset {} 0.2])})))
+  (is (nil? (why {:entries rested}))))
