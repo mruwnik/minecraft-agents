@@ -33,7 +33,12 @@
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'walker parent) :triggers triggers/all
                           :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})
-        s {:eng eng :p p :seen seen :clock clock}]
+        waits (atom [])
+        s {:eng eng :p p :seen seen :clock clock :waits waits}]
+    ((.-override (.-world p)) "wait" (fn [_ a impl]
+                             (let [act @(:activity eng)]
+                               (swap! waits conj (:reason (or (:hold act) (:wait-hold act)))))
+                             (impl nil a)))
     (ledger/write! (:store eng) [{:cell [1 64 0] :item "dirt" :before "air" :job "j9" :purpose :retreat-plug :state :placed}])
     (fake/add-entity! p {:id 9 :name "skeleton" :kind "hostile" :pos {:x -6 :y 64 :z 0} :health 20})
     (when setup (setup eng))
@@ -90,3 +95,11 @@
                                               (fn [eng]
                                                 (when muted? (mem/write! (:store eng) :heard-mute {:until 9999999999} body/mute-policy)))))]
             (is (= held? (boolean (seq (st/emitted seen :holding)))) (str "muted " muted?))))))))
+
+(deftest every-wait-of-the-held-walk-names-its-reason
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [waits]} (await (sealed 6))]
+          (is (seq @waits))
+          (is (= [:sealed-hostile-near] (distinct @waits))))))))

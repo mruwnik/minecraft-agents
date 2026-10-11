@@ -1011,9 +1011,9 @@
                   (ctx/update-mem! c assoc :night-said true)
                   (ctx/emit! c :go-to.night-sheltered :info
                              (assoc night :text (str "night: waiting for day in its shelter (" (name (:shelter night)) ") instead of walking out"))))
-                (await (ctx/act c :wait #js {:ms (night-wait-ms)}))
+                (await (ctx/act c :wait #js {:ms (night-wait-ms) :why :night-sheltered}))
                 :continue)
-      plug (do (await (ctx/act c :wait #js {:ms (night-wait-ms)}))
+      plug (do (await (ctx/act c :wait #js {:ms (night-wait-ms) :why (:reason plug)}))
                :continue)
       :else
       (let [state (note-restart! c pos)
