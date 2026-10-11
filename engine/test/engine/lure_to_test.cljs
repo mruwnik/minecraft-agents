@@ -263,3 +263,56 @@
           (loop [i 0] (when (and (< i 150) (not (finished? s))) (swap! clock + 700) (await (core/tick! eng)) (recur (inc i))))
           (is (finished? s))
           (is (= :animal-outside (:reason (done-event s))) (pr-str (done-event s))))))))
+
+;; ------------------------------------------------------------------ which animal
+
+(def ring
+  (merge (tu/box 3 64 -2 12 64 -2 "oak_fence") (tu/box 3 64 2 12 64 2 "oak_fence")
+         (tu/box 3 64 -1 3 64 1 "oak_fence") (tu/box 12 64 -1 12 64 1 "oak_fence")))
+
+(deftest an-animal-in-a-closed-pen-is-not-the-one-lured
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {} {:self {:pos {:x 14 :y 64 :z 0}} :inventory wheat :blocks ring :entities [(cow 1 11) (cow 2 20)]} 20))]
+          (is (= "u2" (:animal (done-event s))) "the penned cow stays")
+          (is (< (first (:pos (cow-of s 1))) 12) "the penned cow is still inside the ring"))))))
+
+(deftest the-penned-animal-can-be-lured-when-asked
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:include-penned? true} {:self {:pos {:x 14 :y 64 :z 0}} :inventory wheat :blocks ring :entities [(cow 1 11) (cow 2 20)]} 40))]
+          (is (= "u1" (:animal (done-event s)))))))))
+
+(deftest the-animal-named-by-uuid-is-the-only-one-led
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:uuid "u2"} {:self {:pos {:x 22 :y 64 :z 0}} :inventory wheat :entities [(cow 1 24) (cow 2 18)]} 20))]
+          (is (= :arrived (:reason (done-event s))))
+          (is (= "u2" (:animal (done-event s)))))))))
+
+(deftest a-named-animal-that-is-not-there-ends-none-naming-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:uuid "u9"} {:inventory wheat :entities [(cow 1 3)]} 12))]
+          (is (= :none (:reason (done-event s))))
+          (is (re-find #"u9" (:text (first (stopped s))))))))))
+
+(deftest a-named-animal-that-is-gone-is-lost-not-replaced
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng clock] :as s} (h/setup {:floor tu/walk-floor :inventory wheat :entities [(cow 1 3) (cow 2 4)]} 50)
+              steers (atom 0)]
+          (.override (.-world p) "steer"
+                     (fn [token a impl]
+                       (when (= 3 (swap! steers inc)) (swap! (fake/state p) update :entities (fn [es] (filterv #(= 2 (:id %)) es))))
+                       (impl token a)))
+          (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal :uuid "u1"}) {})
+          (dotimes [_ 20] (swap! clock + 700) (await (core/tick! eng)))
+          (is (= :lost (:reason (done-event s))))
+          (is (= "u1" (:tracked (:lost (done-event s)))))
+          (is (re-find #"u1" (:text (first (stopped s))))))))))

@@ -44,7 +44,7 @@
   - :full: adults already on the pen's cells make :target.
 
   One round trip per animal:
-  - Leash the nearest adult outside the pen (jobs.animals.leash, :radius). Babies, animals in the pen,
+  - Leash the nearest adult outside the pen (jobs.animals.leash, :radius). Babies, animals in the pen or in another closed enclosure,
     animals given up on and animals already fetched twice and still outside are skipped.
   - Approach the cell 4 out from the gate and wait until the animal rests (up to 8 s).
   - Wait up to 10 s for other adults to leave the cells inside the gate (one info herd.crowded-gate).

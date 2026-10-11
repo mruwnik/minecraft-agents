@@ -5,6 +5,7 @@
             [jobs.animals.herd-run :as hr]
             [jobs.animals.herd-trip :as ht]
             [jobs.animals.escort :as escort]
+            [jobs.lib.animal-spare :as spare]
             [jobs.lib.animals :as animals]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.pen-gate :as pg]
@@ -45,6 +46,8 @@
    :watch-radius {:doc "how far from the body the lured animal is looked for" :spec (a/num-in 0 nil) :default 64}
    :timeout-s {:doc "seconds from the first round (not the food fetch) before the job gives up" :spec (a/num-in 0 nil) :default 180}
    :fetch {:doc "get the food when none is carried (jobs.lib.fetch): true, a set of kinds or a map of limits; false ends :no-food" :spec fetch/option? :default true}
+   :uuid {:doc "lead only this animal (its uuid, as the entities tool shows; the id when it has none); nothing else takes its place" :spec string? :default nil}
+   :include-penned? {:doc "also lure animals standing in a closed pen" :default false :spec boolean?}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 
 (def near-spot "An animal this close (flat) to :pos counts as :near." 6)
@@ -73,10 +76,13 @@
 (defn stop-text [c reason]
   (let [{:keys [mob radius]} (:args c)]
     (case reason
-      :none (str "no adult " mob " free to lure within " radius " blocks" (skipped-text c))
+      :none (if-let [uuid (:uuid (:args c))]
+              (str "the " mob " " uuid " is not in sight to lure")
+              (str "no adult " mob " free to lure within " radius " blocks" (skipped-text c)))
       :animal-outside (str "the body is at the spot but the " mob " stands outside the destination, "
                            (some-> (escort/animal-now c) .-pos u/pos-of (u/flat-dist (:pos (:args c))) js/Math.round) " blocks from it")
       :no-food (str "no food for " mob " carried and none could be got")
+      :lost (str "lost sight of the " mob (some->> (:uuid (:args c)) (str " ")))
       (str "luring stopped: " (name reason)))))
 
 (defn lost-detail
@@ -130,11 +136,15 @@
 (defn candidates
   "The adults within radius of the start, on nobody's lead, the zone rules allowing, nearest first; none already in :box."
   [c]
-  (let [{:keys [mob radius]} (:args c)
-        origin (:origin (ctx/mem c))]
-    (->> (animals/adults (:primitives c) mob (+ radius (u/flat-dist origin (u/self-pos c))))
-         (filterv #(and (not (animals/leashed? %)) (<= (u/flat-dist origin (u/pos-of (.-pos %))) radius)
-                        (not (and (:box (:args c)) (animals/in-box? (:box (:args c)) (u/pos-of (.-pos %)))))))
+  (let [{:keys [mob radius uuid watch-radius include-penned?]} (:args c)
+        origin (:origin (ctx/mem c))
+        pens (atom #{})
+        free? (fn [e] (and (not (animals/leashed? e)) (<= (u/flat-dist origin (u/pos-of (.-pos e))) radius)
+                           (not (and (:box (:args c)) (animals/in-box? (:box (:args c)) (u/pos-of (.-pos e)))))
+                           (or include-penned? (not (spare/enclosed? c pens e)))))]
+    (->> (if uuid
+           (filterv #(and (= uuid (str (animals/key-of %))) (not (animals/leashed? %))) (animals/adults (:primitives c) mob watch-radius))
+           (filterv free? (animals/adults (:primitives c) mob (+ radius (u/flat-dist origin (u/self-pos c))))))
          (sort-by #(u/flat-dist (u/self-pos c) (u/pos-of (.-pos %))))
          vec
          (animals/allowed c :lure-to.declined "lure-to" :take))))

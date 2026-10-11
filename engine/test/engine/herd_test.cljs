@@ -1333,3 +1333,15 @@
           (await (run-ticks s 600))
           (is (= :brought (:reason (done-event s))))
           (is (= #{1} (cows-in-pen s))))))))
+
+(def other-ring
+  (into {} (for [x (range -3 4) z (range 6 13) :when (or (#{-3 3} x) (#{6 12} z))] [(str x ",64," z) "oak_fence"])))
+
+(deftest an-animal-in-another-closed-pen-is-not-fetched
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:target 1} {:blocks other-ring :entities [(cow 1 0 8) (cow 2 8 0)]} 200))]
+          (is (= ["u2"] (:brought (done-event s))))
+          (is (= {} (:given-up (done-event s))) (pr-str (done-event s)))
+          (is (<= -3 (first (:pos (cow-of s 1))) 3) "the penned cow never left its pen"))))))

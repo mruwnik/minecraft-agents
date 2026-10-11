@@ -2,6 +2,7 @@
   "One animal's trip for jobs.animals.herd: leashing the next, regathering, the steps through the gate and the release."
   (:require [engine.args :as a]
             [engine.settings :as settings]
+            [jobs.lib.animal-spare :as spare]
             [jobs.lib.animals :as animals]
             [engine.ctx :as ctx]
             [jobs.lib.fetch :as fetch]
@@ -34,14 +35,15 @@
     [origin (+ (:radius (:args c)) (u/dist (u/self-pos c) origin))]))
 
 (defn skip-keys
-  "Keys never to leash: babies, animals in the pen, the ones given up on, those already fetched twice and outside."
+  "Keys never to leash: babies, animals in the pen or in any other closed enclosure, the ones given up on, those already fetched twice and outside."
   [c]
   (let [{:keys [mob]} (:args c)
         answer (read-pen c)
         [_ listed] (range-from-origin c)
         near (animals/herd (:primitives c) mob (+ listed (near-pen)))
         in-pen? #(pen/in-pen? answer (u/pos-of (.-pos %)))
-        skip? #(or (true? (.-baby %)) (in-pen? %))
+        pens (atom #{})
+        skip? #(or (true? (.-baby %)) (in-pen? %) (spare/enclosed? c pens %))
         pen-keys (into #{} (comp (filter in-pen?) (map animals/key-of)) near)]
     (-> (vec (keys (:given-up (ctx/mem c))))
         (into (comp (filter skip?) (map animals/key-of)) near)
