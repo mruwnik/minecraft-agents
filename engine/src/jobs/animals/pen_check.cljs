@@ -25,7 +25,7 @@
   - :cells counts the inside cells. For a leaky pen without a box it counts the cells the pen would enclose with
     its leaks shut, and 0 when shutting up to 4 rounds of them does not close it (a low wall all round).
   - :gates lists every fence gate in or beside those cells with :open?.
-  - :animals lists the livestock seen on those cells as {:kind :id :pos [x y z]}, :animals-in counts them, so a loss can be dated from the log.")
+  - :animals lists the livestock on those cells (or up to 3 above one: a ledge inside the fence) as {:kind :id :pos [x y z]}, :animals-in counts them, so a loss can be dated from the log.")
 
 (a/defargs args
   {:at {:doc "feet cell [x y z] or {:x :y :z} of a spot inside the pen (the floor's top, where the animal's feet are)" :spec ::a/pos :default nil}

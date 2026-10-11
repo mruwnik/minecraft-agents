@@ -436,10 +436,14 @@
         (answer closed? reason (set cells) leaks
                 (gates-near world (if (and truncated? (not shut)) (take (gate-scan) order) cells)))))))
 
+(def ledge-height 3)
+
 (defn in-pen?
-  "True when position pos ({:x :y :z}, floats) is on a feet cell of the pen's inside."
+  "True when position pos ({:x :y :z}, floats) stands on a feet cell of the pen's inside, or up to ledge-height
+  above one (a sill or ledge inside the fence that the fill does not walk, a hop)."
   [{:keys [inside]} {:keys [x y z]}]
-  (contains? inside [(js/Math.floor x) (js/Math.floor (+ y 0.01)) (js/Math.floor z)]))
+  (let [cx (js/Math.floor x) cz (js/Math.floor z) fy (js/Math.floor (+ y 0.01))]
+    (boolean (some #(contains? inside [cx % cz]) (range fy (- fy (inc ledge-height)) -1)))))
 
 (defn max-listed [] (settings/get settings ::max-listed))
 
