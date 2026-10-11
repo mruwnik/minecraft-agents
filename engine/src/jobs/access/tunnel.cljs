@@ -116,6 +116,7 @@
    :max-steps {:doc "give the round back with :continue after this many steps (a stair segment, a run cell), for a caller that looks around between them; nil: the stair's ::max-steps" :spec (a/int-in 1 nil) :default nil}
    :fetch {:doc "get a missing pickaxe instead of waiting :no-tool (jobs.lib.fetch): true, a set of kinds or a map of limits; false waits :no-tool" :spec fetch/option? :default true}
    :spent-ok {:doc "dig on with tools down to 3 uses instead of stopping :tool-spent (see jobs.access.stair)" :spec boolean? :default false}
+   :spare-own-builds {:doc "a cell of a plan this body made is never dug; false: it may be (see jobs.access.stair)" :spec boolean? :default true}
    :pick-up-ores {:doc "true: dig the ores of jobs.lib.ore-pick's ::ores setting that are exposed within reach on the way; false: none; or the ore block names to dig" :spec (a/or-of boolean? (a/coll-of a/name?)) :default true}})
 
 (defn head-of [cell] (shape/add cell [0 1 0]))
@@ -233,7 +234,7 @@
   (let [cells (ln/line-cells plan)
         r (await (declined/call-child! c :stair 'jobs.access.stair
                                  {:dir dir :heading heading :fetch (stair-fetch (:fetch (:args c))) :stock-torches false :y ((cells (segment-end plan k)) 1) :on-lava (:on-lava (:args c) :seal)
-                                  :accept (set (:accept (:args c))) :ignore-zones? (boolean (:ignore-zones? (:args c))) :spent-ok (boolean (:spent-ok (:args c)))
+                                  :accept (set (:accept (:args c))) :ignore-zones? (boolean (:ignore-zones? (:args c))) :spent-ok (boolean (:spent-ok (:args c))) :spare-own-builds (:spare-own-builds (:args c))
                                  :pick-up-ores (:pick-up-ores (:args c))}))]
     (if (not= :done r)
       (if (= :declined r) :declined :continue)

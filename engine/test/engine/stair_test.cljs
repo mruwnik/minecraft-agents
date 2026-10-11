@@ -893,14 +893,19 @@
           (is (= :refills (:reason @out)))
           (is (re-find #"put back" (str (:why @out)))))))))
 
-(deftest the-bodys-own-plan-footprint-ahead-is-cut-through
+(deftest the-bodys-own-plan-footprint-ahead-stops-the-stair-unless-spare-own-builds-is-false
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [plan (shape/with-author {:id "wall" :parts [{:id "w" :cells [[2 63 0]] :want "stone"}]} "Fake")
-              {:keys [out p]} (await (stair! {:blocks ground :plans {"wall" plan}} east (fn [_])))]
-          (is (not= :footprint (:reason @out)))
-          (is (some #(= {:x 2 :y 63 :z 0} %) (digs p))))))))
+              dug? (fn [p] (some #(= {:x 2 :y 63 :z 0} %) (digs p)))
+              {:keys [out p]} (await (stair! {:blocks ground :plans {"wall" plan}} east (fn [_])))
+              {out2 :out p2 :p} (await (stair! {:blocks ground :plans {"wall" plan}} (assoc east :spare-own-builds false) (fn [_])))]
+          (is (= :footprint (:reason @out)))
+          (is (= "wall" (:plan @out)))
+          (is (not (dug? p)))
+          (is (not= :footprint (:reason @out2)))
+          (is (dug? p2)))))))
 
 (deftest another-plans-footprint-ahead-stops-and-names-the-plan
   (async done

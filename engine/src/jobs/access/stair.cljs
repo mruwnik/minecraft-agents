@@ -46,7 +46,7 @@
 
   Each step is judged when chosen and each cell again right before its dig. Stops:
   - Access refusals with their reason: :zone :claim :footprint :not-loaded :no-zones. :ignore-zones? skips all
-    but :not-loaded.
+    but :not-loaded. A cell of a plan this body made refuses :footprint too unless :spare-own-builds is false.
   - :fluid-in-cut: a cut cell holds a fluid.
   - :crop: a crop, stem or farmland in a cut cell (never dug, zone or not).
   - :base-block: a chest, bed, furnace, table, door or other base block in a cut cell (never dug, anyone's).
@@ -113,6 +113,7 @@
    :spent-ok {:doc "dig on with tools down to jobs.lib.trip's ::spent-uses (3) uses instead of stopping :tool-spent before the last breaks; true for a way out" :spec boolean? :default false}
    :stock-torches {:doc "a stair down first gets torches when few are carried (jobs.lib.trip/torches-ready!, needs :fetch); false for a stair a job runs as its own child" :spec boolean? :default true}
    :pick-up-ores {:doc "true: dig the ores of jobs.lib.ore-pick's ::ores setting that are exposed within reach on the way; false: none; or the ore block names to dig" :spec (a/or-of boolean? (a/coll-of a/name?)) :default true}
+   :spare-own-builds {:doc "a cell of a plan this body made is never dug (stops :footprint naming the plan); false: it may be" :spec boolean? :default true}
    :through {:doc "the id of a mineshaft plan the stair runs down: its footprint is no obstacle (jobs.lib.shafts)" :spec string? :default nil}})
 
 (a/defargs settings
@@ -235,7 +236,7 @@
   "The social half of the rules' input (jobs.lib.access/zone-input): zones, claims, footprints, the body's name and
   the clock, and the job's :ignore-zones? arg."
   [c]
-  (access/zone-input c {:ignore-zones? (:ignore-zones? (:args c)) :own-plans-ok? true :except (:through (:args c))}))
+  (access/zone-input c {:ignore-zones? (:ignore-zones? (:args c)) :own-plans-ok? (false? (:spare-own-builds (:args c))) :except (:through (:args c))}))
 
 (defn rules-in
   "The rules' input at feet: :block-at reads unsensed cells as hidden-guess; :column-at reads them as air (a column
