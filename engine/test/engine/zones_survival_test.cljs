@@ -182,7 +182,7 @@
         (doseq [[world zones expected warns] [[two-carrots [(zone "Miles" [2 64 0] [2 64 0])] [{:x 3 :y 64 :z 0}] []]
                                               [(update two-carrots :blocks dissoc "3,64,0") [(zone "Miles" [2 64 0] [2 64 0])] [{:x 2 :y 64 :z 0}] [["vault"]]]
                                               [(update two-carrots :blocks dissoc "3,64,0") nil [{:x 2 :y 64 :z 0}] []]]]
-          (let [{:keys [eng p seen]} (setup (assoc world :self {:food 1}) zones)]
+          (let [{:keys [eng p seen]} (setup (assoc world :self {:food 2}) zones)]
             (core/submit! eng '(jobs.survival.get-food) {})
             (await (run-until-empty eng 6))
             (is (= expected (take (count expected) (dug p))) (pr-str [zones expected]))
