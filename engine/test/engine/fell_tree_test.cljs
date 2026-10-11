@@ -213,8 +213,8 @@
 
 (deftest a-fetch-plan-for-a-need-asks-for-the-count
   (let [o {:what #{:item} :how #{:chest} :depth 2}]
-    (is (= {:any-of ["dirt" "cobblestone"] :count 4} (:args (fetch/plan-for {:reason :need :any-of ["dirt" "cobblestone"] :count 4} o))))
-    (is (= {:item "dirt" :count 3} (:args (fetch/plan-for {:reason :need :item "dirt" :count 3} o))))))
+    (is (= {:any-of ["dirt" "cobblestone"] :count 4 :explore false} (:args (fetch/plan-for {:reason :need :any-of ["dirt" "cobblestone"] :count 4} o))))
+    (is (= {:item "dirt" :count 3 :explore false} (:args (fetch/plan-for {:reason :need :item "dirt" :count 3} o))))))
 
 (deftest cut-logs-are-the-pillars-blocks-so-a-seen-chest-of-dirt-is-left-alone
   (async done
