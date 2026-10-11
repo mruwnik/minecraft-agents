@@ -16,6 +16,7 @@
             [jobs.items.craft :as craft]
             [jobs.items.get-tool :as get-tool]
             [jobs.items.smelt :as smelt]
+            [jobs.items.smelt.plan :as smelt-plan]
             [jobs.lib.storage :as storage]
             [engine.game :as game]
             [jobs.lib.tools :as tools]
@@ -36,7 +37,7 @@
   - :craft (in :how): a chain of crafts planned from the recipes (jobs.items.recipes) over what is carried: logs to
     planks to sticks to the tool, and a crafting table when the chain needs one and none is seen (crafted, then put
     down on a free cell beside the body with a jobs.blocks.place child). Each step is a jobs.items.craft child; a
-    furnace product (iron_ingot from raw_iron, charcoal from a log, cooked food; jobs.items.smelt/made-from) is a step
+    furnace product (iron_ingot from raw_iron, charcoal from a log, cooked food; jobs.items.smelt.plan/made-from) is a step
     run by a jobs.items.smelt child, which fetches its own fuel and furnace one :depth deeper. The names are tried in
     order; the first with a plan is made, but one with no smelt step before one with. Three fruitless steps stop it (:tried :craft); a craft child that ran and made nothing stops it at once.
   - :gather (in :how): coal comes from a plain or deepslate ore seen; dirt is dug from seen dirt or grass; every raw item a chain lacks must be seen before it starts. A sapling (no recipe) comes from the leaves of its tree the body has seen, broken by
@@ -131,24 +132,21 @@
 
 (defn source-opts
   "The recipes/plan options of the gather and smelt sources: ore drops count as gathered, and every furnace product
-  (jobs.items.smelt/made-from; charcoal from any overworld log) is also made by a smelt step."
+  (jobs.items.smelt.plan/made-from; charcoal from any overworld log) is also made by a smelt step."
   []
   {:raw (conj (into ore-drops fish-items) "obsidian")
-   :smelts (assoc (into {} (map (fn [[out in]] [out [in]])) smelt/made-from) "charcoal" trees/log-names)})
+   :smelts (assoc (into {} (map (fn [[out in]] [out [in]])) smelt-plan/made-from) "charcoal" trees/log-names)})
 
 (defn furnace-free
   "Of plans in order of preference, the first with no smelt step (a furnace needs fuel and time), else the first."
   [plans]
   (or (first (remove (fn [pl] (some #(= :smelt (:op %)) (:steps pl))) plans)) (first plans)))
 
-(defn carried-counts [p]
-  (reduce (fn [acc {:keys [name count]}] (update acc name (fnil + 0) count)) {} (u/inventory p)))
-
 (defn craft-plan
   "{:item name :steps [..]} for the first of names a craft chain makes n more of from what is carried, else nil."
   [c names n]
   (let [p (:primitives c)
-        have (carried-counts p)
+        have (storage/carried-totals (u/inventory p))
         mem (ctx/mem c)
         table? (and (not (get-in mem [:craft :table-unreachable]))
                     (boolean (or (:table mem) (craft/nearest-table p (craft-radius)))))
@@ -232,8 +230,6 @@
   [c plan]
   (every? #(or (:sheep %) (seen-of c %)) (some-> plan :gather (gather-needs (game/version-of (:primitives c))))))
 
-(defn log? [name] (clojure.string/ends-with? name "_log"))
-
 (defn any-log
   "The gather map with the logs any species would do as \"log\" (summed); a log only its own species makes (oak_log
   for oak_planks) keeps its name: it stays the plan's even with plenty of another species carried."
@@ -241,7 +237,7 @@
   (let [free? (fn [k] (let [other (first (remove #{k} trees/log-names))
                             pl (recipes/plan version (assoc have other 1000) name n opts)]
                         (not (pos? (get-in pl [:gather k] 0)))))
-        free (filter (fn [[k _]] (and (log? k) (free? k))) gather)]
+        free (filter (fn [[k _]] (and (trees/log-name? k) (free? k))) gather)]
     (cond-> (apply dissoc gather (map key free))
       (seq free) (update "log" (fnil + 0) (reduce + 0 (vals free))))))
 
@@ -251,7 +247,7 @@
   Of several names that lack wool, the one gathering the least (pick-plan)."
   [c names n]
   (let [p (:primitives c)
-        have (carried-counts p)
+        have (storage/carried-totals (u/inventory p))
         version (game/version-of p)
         seen? #(seq (look/seen-blocks p {:names (vec (material-blocks version %)) :radius (seen-radius) :max 1}))
         seen (set (filter seen? (recipes/stone-materials version)))
@@ -307,8 +303,8 @@
           (for [[k n] gather :when (wool? k)]
             {:key k :count n :job 'jobs.combat.hunt :sheep (wool-color k)
              :args {:mob "sheep" :color (wool-color k) :count n :radius (sheep-radius)}})
-          (when (pos? logs) [{:key "log" :count logs :job 'jobs.forestry.harvest-wood :seen log? :args {:fetch #{:item}}}])
-          (for [[k n] gather :when (log? k)]
+          (when (pos? logs) [{:key "log" :count logs :job 'jobs.forestry.harvest-wood :seen trees/log-name? :args {:fetch #{:item}}}])
+          (for [[k n] gather :when (trees/log-name? k)]
             {:key k :count n :job 'jobs.forestry.harvest-wood :seen #{k} :args {:species (trees/species-of k) :fetch #{:item}}})
           (for [[k n] gather :when (material-blocks version k)]
             (let [blocks (material-blocks version k)]
@@ -333,7 +329,7 @@
   ([gather version] (first (gather-needs gather version))))
 
 (defn gather-carried [p {:keys [key]}]
-  (reduce + 0 (for [[k v] (carried-counts p) :when (if (= "log" key) (log? k) (= key k))] v)))
+  (reduce + 0 (for [[k v] (storage/carried-totals (u/inventory p)) :when (if (= "log" key) (trees/log-name? k) (= key k))] v)))
 
 (defn cut-off?
   "Whether the block b stands in a column of a tree an earlier gather found cut off."
@@ -438,7 +434,7 @@
 (defn other-logs-seen
   "The log names of other species seen for an unseen log need (oak_log wanted, birch_log seen), or nil."
   [c {:keys [key]}]
-  (when (log? key)
+  (when (trees/log-name? key)
     (not-empty (filter #(seq (look/seen-blocks (:primitives c) {:names [%] :radius (seen-radius) :max 1}))
                        (remove #{key} trees/log-names)))))
 
@@ -476,7 +472,7 @@
   "Text for the no-source wait: what each allowed source lacks."
   [c names n]
   (let [how (:how (limits c))
-        have (carried-counts (:primitives c))
+        have (storage/carried-totals (u/inventory (:primitives c)))
         version (game/version-of (:primitives c))]
     (clojure.string/join
      "; "
@@ -846,7 +842,7 @@
                   (ctx/update-mem! c update :craft dissoc :table-unreachable)
                   (ctx/update-mem! c assoc :start {:have have :target (+ have (min 64 (:count a)))}))
               {:keys [target] :as start} (:start (ctx/mem c))
-              seen-inv (carried-counts (:primitives c))
+              seen-inv (storage/carried-totals (u/inventory (:primitives c)))
               prog (progress (:progress (ctx/mem c)) seen-inv now (max-gap-ms))
               _ (when (not= prog (:progress (ctx/mem c))) (ctx/update-mem! c assoc :progress prog))
               t (:t prog)

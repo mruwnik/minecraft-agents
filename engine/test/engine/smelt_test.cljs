@@ -14,12 +14,13 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.items.smelt :as smelt]
+            [jobs.items.smelt.plan :as smelt-plan]
             [jobs.lib.result :as r]))
 
 ;; ------------------------------------------------------------------ tables
 
 (deftest what-each-kind-smelts
-  (are [kind item ok] (= ok (boolean (smelt/smelts? kind item)))
+  (are [kind item ok] (= ok (boolean (smelt-plan/smelts? kind item)))
     "furnace" "raw_iron" true
     "blast_furnace" "raw_iron" true
     "smoker" "raw_iron" false
@@ -35,7 +36,7 @@
     "furnace" "coal" false))
 
 (deftest fuel-values-in-items-per-fuel-item
-  (are [item per] (= per (smelt/fuel-per-unit "furnace" item))
+  (are [item per] (= per (smelt-plan/fuel-per-unit "furnace" item))
     "coal" 8
     "charcoal" 8
     "oak_planks" 1.5
@@ -44,17 +45,17 @@
     "dirt" nil))
 
 (deftest nether-wood-is-no-fuel
-  (are [item] (nil? (smelt/fuel-per-unit "furnace" item))
+  (are [item] (nil? (smelt-plan/fuel-per-unit "furnace" item))
     "crimson_planks" "warped_planks" "crimson_stem" "warped_hyphae"))
 
 (deftest the-quick-kinds-burn-fuel-twice-as-fast-so-an-item-costs-the-same
-  (are [kind item per] (= per (smelt/fuel-per-unit kind item))
+  (are [kind item per] (= per (smelt-plan/fuel-per-unit kind item))
     "blast_furnace" "coal" 8
     "smoker" "oak_planks" 1.5
     "smoker" "dirt" nil))
 
 (deftest cook-times-per-kind
-  (are [kind ticks] (= ticks (smelt/cook-ticks kind))
+  (are [kind ticks] (= ticks (smelt-plan/cook-ticks kind))
     "furnace" 200
     "blast_furnace" 100
     "smoker" 100))
@@ -63,7 +64,7 @@
 
 (def empty-furnace {:kind "furnace" :input nil :fuel nil :output nil :lit false :burn {:left 0 :total 0} :cook {:done 0 :total 0}})
 (defn inv [& pairs] (mapv (fn [[n c]] {:name n :count c}) (partition 2 pairs)))
-(defn plan [m] (smelt/plan-load (merge {:state empty-furnace :carried [] :item nil :count nil :fuel nil} m)))
+(defn plan [m] (smelt-plan/plan-load (merge {:state empty-furnace :carried [] :item nil :count nil :fuel nil} m)))
 
 (deftest the-plan-loads-what-was-asked-and-the-fuel-it-needs
   (are [m expected] (= expected (plan m))
@@ -175,7 +176,7 @@
 ;; ------------------------------------------------------------------ what a visit found
 
 (deftest judging-what-the-furnace-holds
-  (are [state verdict] (= verdict (smelt/judge (merge empty-furnace state)))
+  (are [state verdict] (= verdict (smelt-plan/judge (merge empty-furnace state)))
     {:output {:name "iron_ingot" :count 1}} :take
     {:output {:name "iron_ingot" :count 1} :input {:name "raw_iron" :count 1}} :take
     {:input {:name "raw_iron" :count 2} :lit true} :wait
@@ -711,7 +712,7 @@
               "the nearer smoker cannot cook the carried iron"))))))
 
 (deftest a-cooked-product-names-its-raw-input
-  (are [out in] (= in (smelt/input-of out))
+  (are [out in] (= in (smelt-plan/input-of out))
     "cooked_chicken" "chicken"
     "baked_potato" "potato"
     "dried_kelp" "kelp"
@@ -731,7 +732,7 @@
     nil nil))
 
 (deftest charcoal-is-made-from-the-most-plentiful-carried-log
-  (are [carried in] (= in (smelt/input-of "charcoal" carried))
+  (are [carried in] (= in (smelt-plan/input-of "charcoal" carried))
     [{:name "oak_log" :count 2} {:name "birch_log" :count 5} {:name "coal" :count 9}] "birch_log"
     [{:name "oak_planks" :count 9}] "oak_log"
     [] "oak_log"))

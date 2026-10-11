@@ -4,6 +4,7 @@
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.cost :as cost]
+            [jobs.lib.storage :as storage]
             [jobs.farm.till :as till]))
 
 (def waste-seeds ["wheat_seeds" "beetroot_seeds" "melon_seeds" "pumpkin_seeds"])
@@ -16,15 +17,10 @@
   ["wheat_seeds" "beetroot_seeds" "melon_seeds" "pumpkin_seeds" "carrot" "potato" "wheat" "beetroot" "melon_slice"
    "melon" "pumpkin" "poisonous_potato" "hay_block" "cocoa_beans"])
 
-(defn carried
-  "{name count} of an inventory ([{:name :count}])."
-  [inventory]
-  (reduce (fn [acc {:keys [name count]}] (update acc name (fnil + 0) count)) {} inventory))
-
 (defn surplus
   "The names (in the order of names) of which more is carried than the keep map holds back."
   [inventory keep names]
-  (let [have (carried inventory)]
+  (let [have (storage/carried-totals inventory)]
     (filterv #(> (get have % 0) (get keep % 0)) names)))
 
 (defn keeps

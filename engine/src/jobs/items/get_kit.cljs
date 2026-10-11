@@ -4,7 +4,7 @@
             [engine.game :as game]
             [engine.settings :as settings]
             [jobs.items.recipes :as recipes]
-            [jobs.items.smelt :as smelt]
+            [jobs.items.smelt.plan :as smelt-plan]
             [jobs.lib.armour :as armour]
             [jobs.lib.blocks :as b]
             [jobs.lib.combat :as combat]
@@ -56,7 +56,7 @@
   (let [rs (recipes/recipes-for version)
         need (apply merge-with + {} (for [item items
                                           [k v] (:needs (first (get rs item)))
-                                          :when (contains? smelt/made-from k)]
+                                          :when (contains? smelt-plan/made-from k)]
                                       {k v}))]
     (into {} (keep (fn [[k v]] (let [n (- v (get carried k 0))] (when (pos? n) [k n])))) need)))
 
@@ -180,7 +180,7 @@
             need (when (and (seq todo) (seq (furnace-short version [(first todo)] {})))
                    (first (furnace-short version todo (:carried st))))
             short (when-not partial need)
-            raw (when partial (get (:carried st) (get smelt/made-from (first need)) 0))]
+            raw (when partial (get (:carried st) (get smelt-plan/made-from (first need)) 0))]
         (cond
           wear
           (let [r (await (ctx/call-child c :wear 'jobs.items.wear {:item wear}))
@@ -217,7 +217,7 @@
           short
           (let [[mat n] short
                 r (await (run-obtain! c :materials mat n))
-                carried-raw (get (:carried st) (get smelt/made-from mat) 0)]
+                carried-raw (get (:carried st) (get smelt-plan/made-from mat) 0)]
             (cond (= :continue r) :continue
                   (and (some? r) (pos? carried-raw)) (do (ctx/update-mem! c assoc :partial (assoc r :item mat))
                                                          (recur))

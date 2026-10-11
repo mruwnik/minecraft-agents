@@ -9,6 +9,7 @@
             [jobs.lib.blocks :as blocks]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
+            [jobs.lib.storage :as storage]
             [jobs.lib.watch :as watch]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
@@ -18,7 +19,7 @@
             [plan.shape :as shape]
             [jobs.lib.fetch :as fetch]
             [jobs.lib.check-cache :as check-cache]
-            [jobs.build.from-plan.plan :as plan :refer [retry-distance max-retries facing-of facing-ok? body-cells stands-for plan-trouble owed need-of shortage hazards decide rules-input refuse permitted world-block carried-counts judged no-zones planned how placeable misplaced missing digging unseen buildable problem]]
+            [jobs.build.from-plan.plan :as plan :refer [retry-distance max-retries facing-of facing-ok? body-cells stands-for plan-trouble owed need-of shortage hazards decide rules-input refuse permitted world-block judged no-zones planned how placeable misplaced missing digging unseen buildable problem]]
             [jobs.build.from-plan.text :refer [summary announce! stopped-text assoc-fetch-failed]]))
 
 (def doc
@@ -102,12 +103,12 @@
       trouble true
       (or (:begun (ctx/mem c))
           (empty? (owed cells))
-          (seq (buildable cells (carried-counts p) {}))
+          (seq (buildable cells (storage/carried-totals (u/inventory p)) {}))
           (seq (digging cells))
           (seq (unseen cells (merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))))
           (when-let [w (need-of c cells)] (some? (fetch/due c 'jobs.build.from-plan w)))) true
       :else (ctx/wait c {:reason :no-items :plan (:plan (:args c)) :part (:part (:args c))
-                         :needs (into {} (shortage (owed cells) (carried-counts p)))}))))
+                         :needs (into {} (shortage (owed cells) (storage/carried-totals (u/inventory p))))}))))
 
 ;; ------------------------------------------------------------------ steps
 
@@ -368,7 +369,7 @@
   [c cells]
   (let [_ (ctx/update-mem! c retry-walks (u/self-pos c) false)
         closed #(merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))
-        todo (placeable c (permitted c (buildable cells (carried-counts (:primitives c)) (closed))))
+        todo (placeable c (permitted c (buildable cells (storage/carried-totals (u/inventory (:primitives c))) (closed))))
         digs (diggable c (digging cells) (closed))
         given-up (closed)
         near (in-reach c todo)

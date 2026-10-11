@@ -4,7 +4,9 @@
             [jobs.lib.spent :as spent]
             [plan.shape :as shape]
             [jobs.lib.fetch :as fetch]
-            [jobs.build.from-plan.plan :refer [owed kept-ground shortage carried-counts left-text shortage-text]]))
+            [jobs.lib.storage :as storage]
+            [jobs.lib.util :as u]
+            [jobs.build.from-plan.plan :refer [owed kept-ground shortage left-text shortage-text]]))
 
 (defn summary
   "What a build of cells left, from the job memory m: {:placed :missing :short :given-up :wrong :refused}."
@@ -20,7 +22,7 @@
                     (filter #(and (#{:wrong :extra} (:answer %)) (not (kept? %))) cells))
         refused (->> (:refused m) (sort-by key) (mapv (fn [[pos why]] (assoc why :pos pos))))
         wood (:wood m)]
-    (cond-> {:placed (:placed m 0) :missing (mapv :pos left) :short (shortage left (carried-counts (:primitives c)))
+    (cond-> {:placed (:placed m 0) :missing (mapv :pos left) :short (shortage left (storage/carried-totals (u/inventory (:primitives c))))
              :given-up given-up :wrong wrong :refused refused}
       wood (assoc :wood wood))))
 

@@ -8,6 +8,7 @@
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
+            [jobs.lib.storage :as storage]
             [jobs.build.clear-box :as clear-box]
             [jobs.lib.placement :as placement]
             [jobs.lib.reach :as reach]
@@ -204,9 +205,6 @@
     (cond-> {:name (.-name b)}
       (.-properties b) (assoc :state (js->clj (.-properties b) :keywordize-keys true)))))
 
-(defn carried-counts [p]
-  (reduce (fn [m {:keys [name count]}] (update m name (fnil + 0) count)) {} (u/inventory p)))
-
 (defn allot
   "cells with their :item. carried {name n}: an :any want takes the first choice still left after the cells before it
   (each cell to place takes one), so a choice that runs out passes to the next, and the first choice when none is
@@ -309,7 +307,7 @@
   (let [{:keys [plan part]} (:args c)
         answer (surfaced c (known/plan c plan))
         usable? (and answer (not (:broken answer)))
-        carried-map (when usable? (carried-counts (:primitives c)))
+        carried-map (when usable? (storage/carried-totals (u/inventory (:primitives c))))
         wood (when usable? (wood-choice c answer carried-map))
         cells (when usable?
                 (let [carried (set (keys carried-map))]
@@ -413,7 +411,7 @@
   (let [mem (ctx/mem c)
         closed (merge (:given-up mem) (:refused mem))
         open (remove #(contains? closed (:pos %)) (into (missing cells) (short-wrong cells)))
-        waits (map (fn [[item n]] {:reason :need :item item :count n}) (shortage open (carried-counts (:primitives c))))]
+        waits (map (fn [[item n]] {:reason :need :item item :count n}) (shortage open (storage/carried-totals (u/inventory (:primitives c)))))]
     (let [tool (tool-of c cells)
           all (cond-> (vec waits) tool (conj tool))]
       (or (first (filter #(fetch/due c 'jobs.build.from-plan %) all))
@@ -424,7 +422,7 @@
   "Whether a cell can be placed from what is carried: the fetch for the rest waits until these are in."
   [c]
   (let [mem (ctx/mem c)]
-    (boolean (seq (buildable (:cells (planned c)) (carried-counts (:primitives c)) (merge (:given-up mem) (:refused mem)))))))
+    (boolean (seq (buildable (:cells (planned c)) (storage/carried-totals (u/inventory (:primitives c))) (merge (:given-up mem) (:refused mem)))))))
 
 (defn problem
   "need-of for the plan as it stands now, nil when the plan is in trouble. While a cell can be placed from what is

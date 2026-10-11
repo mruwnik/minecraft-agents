@@ -11,6 +11,7 @@
             [jobs.lib.standing :as standing]
             [jobs.lib.steps :as steps]
             [jobs.lib.util :as u]
+            [jobs.lib.storage :as storage]
             [jobs.farm.fertilize :as fertilize]
             [jobs.lib.crops :as crops]
             [jobs.farm.field :as fld]
@@ -122,7 +123,7 @@
 (defn reserve
   "{seed count} to keep: twice the beds in all, taken one at a time from each carried seed that has more than is reserved already."
   [beds inventory]
-  (let [have (stock/carried inventory)]
+  (let [have (storage/carried-totals inventory)]
     (loop [budget (* 2 beds) res {}]
       (let [open (filterv #(> (get have % 0) (get res % 0)) seed-items)]
         (if (or (zero? budget) (empty? open))

@@ -8,6 +8,7 @@
             [jobs.build.from-plan.plan :as plan]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
+            [jobs.lib.storage :as storage]
             [jobs.lib.world :as known]))
 
 (def doc
@@ -74,7 +75,7 @@
         p (:primitives c)
         answer (plan/surfaced c (known/plan c plan))
         cells (when (and answer (not (:broken answer)))
-                (plan/judged p answer part (set (keys (plan/carried-counts p))) nil))
+                (plan/judged p answer part (set (keys (storage/carried-totals (u/inventory p)))) nil))
         trouble (or (plan/plan-trouble answer cells)
                     (when-not (barrier-box cells) "the plan has no fence, wall or gate cells")
                     (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) "no zone list has been read"))]

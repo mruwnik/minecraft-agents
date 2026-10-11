@@ -13,6 +13,7 @@
             [jobs.lib.danger :as danger-q]
             [jobs.lib.reach :as reach]
             [jobs.lib.util :as u]
+            [jobs.lib.storage :as storage]
             [jobs.lib.body :as body]
             [engine.game :as game]
             [engine.settings :as settings]
@@ -310,18 +311,13 @@
           (decline! c :unreachable (str "the walk to " (pr-str pos) " did not arrive") {:pos pos}))
       :else (do (ctx/update-mem! c assoc :phase :collect :blocked false) (save-trip! c) :next))))
 
-(defn carried-counts
-  "{item name total} of what the body carries."
-  [c]
-  (reduce (fn [m {:keys [name count]}] (update m name (fnil + 0) count)) {} (u/inventory (:primitives c))))
-
 (defn recovered-items
   "How many of the pile's items entered the inventory since the baseline (taken when the
   trip was decided): per item name the rise, capped by what the pile held. Items picked up
   on the walk count as well as those the collect step picks up."
   [c pile]
   (let [baseline (:baseline (ctx/mem c))
-        now (carried-counts c)
+        now (storage/carried-totals (u/inventory (:primitives c)))
         wanted (reduce (fn [m {:keys [name count]}] (update m name (fnil + 0) count)) {} pile)]
     (reduce + 0 (map (fn [[name n]] (min n (max 0 (- (get now name 0) (get baseline name 0))))) wanted))))
 
@@ -339,7 +335,7 @@
   "{item name count} of the pile not yet back in the inventory."
   [c pile]
   (let [baseline (:baseline (ctx/mem c))
-        now (carried-counts c)
+        now (storage/carried-totals (u/inventory (:primitives c)))
         wanted (reduce (fn [m {:keys [name count]}] (update m name (fnil + 0) count)) {} pile)]
     (into {} (keep (fn [[name n]] (let [l (- n (max 0 (- (get now name 0) (get baseline name 0))))] (when (pos? l) [name l]))) wanted))))
 
@@ -446,7 +442,7 @@
           e (update (estimate c (:data entry) (settings/ticks->ms (game/ticks-since entry (ctx/view c)))) :cost finite)
           rechecked? (:recheck (ctx/mem c))
           fetch? (> (:value e) (+ (if (= :infinite (:cost e)) js/Infinity (:cost e)) margin))]
-      (ctx/update-mem! c #(cond-> (assoc % :decided e :reestimated true :recheck false) (nil? (:baseline %)) (assoc :baseline (carried-counts c))))
+      (ctx/update-mem! c #(cond-> (assoc % :decided e :reestimated true :recheck false) (nil? (:baseline %)) (assoc :baseline (storage/carried-totals (u/inventory (:primitives c))))))
       (save-trip! c)
       (when (and fetch? (not rechecked?))
         (ctx/emit! c :recover-drops.fetching :info

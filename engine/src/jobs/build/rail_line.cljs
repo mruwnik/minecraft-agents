@@ -11,6 +11,7 @@
             [plan.rail :as rail]
             [plan.shape :as shape]
             [jobs.lib.util :as u]
+            [jobs.lib.storage :as storage]
             [jobs.lib.world :as known]))
 
 (def doc
@@ -72,7 +73,7 @@
         p (:primitives c)
         answer (known/plan c plan)
         cells (when (and answer (not (:broken answer)))
-                (plan/judged p answer part (set (keys (plan/carried-counts p))) nil))
+                (plan/judged p answer part (set (keys (storage/carried-totals (u/inventory p)))) nil))
         chain (when (seq cells) (rail/line cells))
         trouble (cond
                   (plan/plan-trouble answer cells) {:reason :plan :detail (plan/plan-trouble answer cells)
@@ -145,7 +146,7 @@
         blocked (blocked-sources cells)
         no (refused c cells)
         owed (plan/owed cells)
-        carried (plan/carried-counts (:primitives c))
+        carried (storage/carried-totals (u/inventory (:primitives c)))
         short (short-of owed carried)]
     (cond
       (seq blocked) (let [text (str "a redstone block cannot go at " (str/join ", " (map pr-str blocked))
@@ -183,7 +184,7 @@
     (let [left (plan/owed cells)]
       (ctx/update-mem! c assoc :phase :switch
                        :built {:placed 0 :missing (mapv :pos left)
-                               :short (short-of left (plan/carried-counts (:primitives c)))
+                               :short (short-of left (storage/carried-totals (u/inventory (:primitives c))))
                                :given-up {} :wrong [] :refused []})
       :again)
     (do (when-not (:building (ctx/mem c)) (ctx/update-mem! c assoc :building true))

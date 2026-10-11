@@ -14,6 +14,7 @@
             [jobs.lib.declined :as declined]
             [engine.ctx :as ctx]
             [jobs.lib.util :as u]
+            [jobs.lib.storage :as storage]
             [jobs.lib.near :as near]
             [jobs.build.from-plan :as build]
             [jobs.build.from-plan.plan :as plan]
@@ -80,7 +81,7 @@
   "Whether the builder has nothing to do: nothing placeable with what is carried, no unseen cell with its item
   carried, no settled wrong shape."
   [c cells]
-  (let [carried (plan/carried-counts (:primitives c))
+  (let [carried (storage/carried-totals (u/inventory (:primitives c)))
         ps (mapv :pos (rail/line cells))]
     (and (empty? (plan/buildable cells carried {}))
          (not-any? #(pos? (get carried (:item %) 0)) (plan/unseen cells {}))
@@ -199,7 +200,7 @@
         from (:from (ctx/mem c))
         closed (merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))
         bad (remove #(contains? closed %) (wrong-shapes c ps))
-        buildable (plan/buildable cells (plan/carried-counts p) closed)
+        buildable (plan/buildable cells (storage/carried-totals (u/inventory p)) closed)
         todo (plan/placeable c (plan/permitted c buildable))
         underfoot (filter #((plan/body-cells (u/self-pos c)) (:pos %)) buildable)
         unseen (plan/unseen cells closed)]

@@ -53,3 +53,8 @@
   "Total carried of name over all stacks."
   [items name]
   (transduce (comp (filter #(= name (:name %))) (map :count)) + 0 items))
+
+(defn carried-totals
+  "{name total} of the carried items."
+  [items]
+  (reduce (fn [acc {:keys [name count]}] (update acc name (fnil + 0) count)) {} items))
