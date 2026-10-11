@@ -28,6 +28,8 @@
   - roofed and sheltered (slept, dug in, or shut in its own latest :shelter): a log-out stint while someone else sleeps,
     else hold (:sheltered) while the trigger would still fire (a bed to use, a sleeper), else the job ends: a body
     that is safe leaves the queue to run (the morning's trigger lets it out).
+  - a bed to use or a carried bed to put down, with a roofed :roofed-places place within :home-radius and the body not roofed: walks into the place first (go-to :place, lit or not; one try, a failed walk is not repeated tonight). A carried bed is never put down in the open while such a place is close (info night.bed-kept once); the night goes on below.
+  - an open door of the closed room the body stands in is shut before any bed is used or put down (below).
   - a bed (sh/bed-to-use: seen, or remembered within :bed-radius, :urgent-bed-radius once :max-days-awake days without
     sleep; never an occupied one, one given up on, or, unless :max-days-awake days without sleep, one whose walk leaves an underground, dug-in or room shelter): jobs.survival.bed-down sleeps in it (jobs.survival.sleep). A sleep that ends without sleeping writes
     :sleep-failed (5 minutes, shelter.sleep_failed warn).
@@ -81,6 +83,7 @@
    :max-days-awake {:doc "in-game days without sleep before finding a bed becomes urgent" :spec (a/num-in 0 nil) :default sh/max-days-awake}
    :wall-value {:doc "a block worth more than this each (jobs.lib.cost/item-value) is not counted as a wall block when a cave is walled in (dig-in's :wall-value)" :spec (a/num-in 0 nil) :default 3}
    :take-back? {:doc "by day, dig the blocks (above dirt) dig-in placed in the shelter again and collect them" :spec boolean? :default true}
+   :home-radius {:doc "a remembered roofed place (:roofed-places) this close is walked into, whatever the light, before a bed is used or put down; a carried bed is never put down in the open while one is" :spec (a/num-in 0 nil) :default 12}
    :flee-radius {:doc "when no shelter can be dug here, how far the night looks for somewhere safer (a known bed or roofed place, a seen cave or overhang to wall in, or seen ground the carried tools dig); 0 never flees" :spec (a/num-in 0 nil) :default 64}})
 
 (defn check
@@ -387,6 +390,16 @@
     (ctx/emit! c :shelter.room_open :warn {:pos (sh/feet (:primitives c))
                                            :text (str "the room around the bed is not shut in (a hole in its walls); walling in under the roof at " (pr-str (sh/feet (:primitives c))))})))
 
+(defn carried-bed-wanted? [c]
+  (sh/bed-place-wanted? (:primitives c) (ctx/view c) (bed-down/radius c) (bed-down/bed-permit c)))
+
+(defn note-bed-kept!
+  "Once a night, with a carried bed and a roofed home close that could not be entered: say the bed stays in the bag."
+  [c]
+  (when (and (sh/carried-bed (:primitives c)) (not (:bed-kept-noted (ctx/mem c))))
+    (ctx/update-mem! c assoc :bed-kept-noted true)
+    (ctx/emit! c :night.bed-kept :info {:text "a roofed home is close but could not be entered; the carried bed is not put down in the open"})))
+
 (defn ^:async pass
   "One choice of the night (see doc): :again, or the round's end."
   [c]
@@ -406,17 +419,20 @@
             :else (end-night! c)))
       :else
       (let [bed (await (sense/decide! c ::bed #(sh/bed-to-use p (ctx/view c) (bed-down/radius c) (bed-down/bed-permit c))))
-            door (sh/open-room-door p (ctx/view c))]
+            door (sh/open-room-door p (ctx/view c))
+            home-near (when-not roofed (sites/near-roofed-home c))]
         (when-not bed (note-bed-far! c))
+        (when (and home-near (:roof-walk-failed (ctx/mem c)) (not bed)) (note-bed-kept! c))
         (when breached
           (note-room-open! c)
           (when-not (or door (:enclose (ctx/mem c)) (sites/failed-here? c))
             (ctx/update-mem! c assoc :enclose (sh/feet p))))
         (cond
-          (or bed (sh/bed-place-wanted? p (ctx/view c) (bed-down/radius c) (bed-down/bed-permit c))) (await (bed-down-step c bed))
+          door (await (shut-room-door! c door))
+          (and home-near (sites/roof-walk-wanted? c) (or bed (carried-bed-wanted? c))) (await (roof-walk! c home-near))
+          (or bed (and (carried-bed-wanted? c) (not home-near))) (await (bed-down-step c bed))
           (log-out-wanted? c) (await (log-out-step c))
           (and (:enclose (ctx/mem c)) (not= :dug-in sheltered)) (await (enclose! c))
-          door (await (shut-room-door! c door))
           (and (or roofed (and (sh/buried? p) (not (sh/open-cave? p))) (sh/shut-in-room? p)) (empty? (sh/open-room-doors p))) (do (ctx/forget-where! c :night-site (constantly true))
                                                                  (result/finish! c (cond-> (assoc (spent-fields c) :night (if (= :logged-out sheltered) :logged-out :roofed)) (fled c) (assoc :fled (fled c)))))
           (:fleeing (ctx/mem c)) (await (flee/flee! c (:fleeing (ctx/mem c))))

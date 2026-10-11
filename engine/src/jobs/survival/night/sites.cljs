@@ -122,6 +122,11 @@
   [c]
   (first (roofed-places-in c (:walk-radius (:args c)) true)))
 
+(defn near-roofed-home
+  "The nearest roofed place of :roofed-places within :home-radius, lit or not, as {:name :pos}, or nil."
+  [c]
+  (first (roofed-places-in c (:home-radius (:args c)) false)))
+
 (defn roof-walk-wanted?
   "Whether to walk to a roofed place before digging in: none failed tonight, no dig-in in flight, no walk failed."
   [c]

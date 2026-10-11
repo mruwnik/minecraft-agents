@@ -757,6 +757,31 @@
           (is (= 1 (count (filter #(and (= :roof-walk (first %)) (:place (nth % 2))) log))) "walked once, arrived unroofed, then dug in")
           (is (seq (st/calls p "place")) "the night dug in"))))))
 
+(def bed-world (update lit-world :inventory conj {:name "red_bed" :count 1}))
+
+(defn bed-places [p]
+  (filterv #(= "red_bed" (.-item (.-args %))) (st/calls p "place")))
+
+(deftest a-carried-bed-is-put-down-inside-a-close-home-not-in-the-open
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (await (night-at-home bed-world {:x 10 :y 64 :z 0}))]
+          (await (tu/run-until-empty eng 40))
+          (is (<= 9 (:x (st/pos-of p))) "walked into the home first")
+          (is (= [] (filterv #(< (:x (st/arg-pos %)) 9) (bed-places p))) "no bed was set down on the open ground")
+          (is (seq (bed-places p)) "it was set down in the home"))))))
+
+(deftest a-home-that-cannot-be-entered-leaves-the-carried-bed-in-the-bag
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (await (night-at-home (update bed-world :blocks merge walled-home) {:x 10 :y 64 :z 0}))]
+          (await (tu/run-until-empty eng 60))
+          (is (= [] (bed-places p)) "no bed in the open")
+          (is (= [] (st/calls p "sleep")) "and no sleep out there")
+          (is (seq (st/calls p "place")) "the shelter step dug in instead"))))))
+
 ;; ------------------------------------------------------------------ flee somewhere safer
 
 (def dark-world (assoc lit-world :light-default [15 0]))
