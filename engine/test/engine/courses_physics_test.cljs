@@ -50,7 +50,7 @@
                              :limits (ex/planner-limits ex/policy (wworld/solid-fn pw))})
         world (physics-world snapshot)
         phys ((.-Physics physics) mc world)
-        _ (set! (.-playerHalfWidth phys) 0.31)
+        _ (set! (.-playerHalfWidth phys) (sp/body-half))
         steps (when (= "found" (.-status r)) (wplan/plan-steps pw r))
         bot (sp/bot-at [(:x from) (:y from) (:z from)] [(:px from) (:pz from)])]
     (if (nil? steps)

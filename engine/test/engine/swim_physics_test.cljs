@@ -1,7 +1,7 @@
 (ns engine.swim-physics-test
   "engine.path.executor walking planned routes through water in prismarine-physics, the body's own client physics:
   plans come from the tuned planner over the fake's pathWorld, the body moves by physics over the same blocks (collision
-  half-width 0.31, as every bound bot). Physics has no breath, no bubble columns and no server; those are live tests."
+  half-width as every bound bot's). Physics has no breath, no bubble columns and no server; those are live tests."
   (:require [cljs.test :refer [deftest is are]]
             [engine.path.executor :as ex]
             [engine.path.planner-tuned :as planner]
@@ -49,9 +49,11 @@
     (when (= "found" (.-status r))
       (wplan/plan-steps pw r))))
 
-(defn bot-at [[x y z]]
+(defn bot-at
+  "A bot at feet cell [x y z], at its middle or at the point px pz inside it."
+  [[x y z] [px pz]]
   (let [{:keys [vec3]} @lib]
-    #js {:entity #js {:position (new vec3 (+ x 0.5) y (+ z 0.5)) :velocity (new vec3 0 0 0) :onGround true :isInWater false
+    #js {:entity #js {:position (new vec3 (or px (+ x 0.5)) y (or pz (+ z 0.5))) :velocity (new vec3 0 0 0) :onGround true :isInWater false
                       :isInLava false :isInWeb false :isCollidedHorizontally false :isCollidedVertically false
                       :elytraFlying false :yaw 0 :pitch 0 :effects #js {} :attributes #js {}}
          :jumpTicks 0 :jumpQueued false :fireworkRocketDuration 0 :version version :inventory #js {:slots #js []}}))
@@ -64,28 +66,40 @@
 (defn eye-wet? [blocks {:keys [x y z]}]
   (= "water" (name-of (get blocks (str (Math/floor x) "," (Math/floor (+ y 1.62)) "," (Math/floor z))))))
 
+(defn in-block?
+  "The body's box as the server has it (0.3 each way, 1.8 high) reaches into a block that is neither air nor water: a
+  position the server refuses."
+  [blocks {:keys [x y z]}]
+  (boolean (some (fn [[cx cy cz]] (not (#{"air" "water"} (name-of (get blocks (str cx "," cy "," cz) "air")))))
+                 (for [cx (range (Math/floor (- x 0.3)) (Math/ceil (+ x 0.3)))
+                       cy (range (Math/floor y) (Math/ceil (+ y 1.8)))
+                       cz (range (Math/floor (- z 0.3)) (Math/ceil (+ z 0.3)))]
+                   [cx cy cz]))))
+
 (defn swim
-  "Walk the plan from from to goal in physics. {:done :moves :ticks :wet-run}: the executor's done map (nil when it ran out
-  of ticks), the step kinds planned, ticks used, and the longest run of ticks with the eye in water."
-  [blocks from goal]
+  "Walk the plan from from to goal in physics. {:done :moves :ticks :wet-run :in-block}: the executor's done map (nil when
+  it ran out of ticks), the step kinds planned, ticks used, the longest run of ticks with the eye in water, and the ticks
+  the body was inside a block (in-block?). :at is the point [px pz] in from the body starts at (default: its middle)."
+  [blocks from goal & {:keys [at]}]
   (let [{:keys [mc physics]} @lib
         world (world-of blocks)
         phys ((.-Physics physics) mc world)
-        _ (set! (.-playerHalfWidth phys) 0.31)
+        _ (set! (.-playerHalfWidth phys) (.-BODY_HALF_WIDTH (tu/require-here "./js/prim-base.mjs")))
         steps (plan blocks from goal)
-        bot (bot-at from)]
+        bot (bot-at from at)]
     (if (nil? steps)
       {:done {:status :no-plan}}
-      (loop [t 0 state (ex/start steps 0) run 0 wet-run 0]
+      (loop [t 0 state (ex/start steps 0) run 0 wet-run 0 in-block 0]
         (let [pose (pose-of bot)
               {:keys [done controls yaw] :as r} (ex/tick ex/policy state pose)
               run' (if (eye-wet? blocks pose) (inc run) 0)
-              wet-run' (max wet-run run')]
+              wet-run' (max wet-run run')
+              in-block' (cond-> in-block (in-block? blocks pose) inc)]
           (if (or done (>= t max-ticks))
-            {:done done :moves (set (map :move steps)) :ticks t :wet-run wet-run'}
+            {:done done :moves (set (map :move steps)) :ticks t :wet-run wet-run' :in-block in-block'}
             (do (set! (.-yaw (.-entity bot)) yaw)
                 (.apply (.simulatePlayer phys (new (.-PlayerState physics) bot (clj->js controls)) world) bot)
-                (recur (inc t) (:state r) run' wet-run'))))))))
+                (recur (inc t) (:state r) run' wet-run' in-block'))))))))
 
 ;; Courses along +x, z -2..4 (walls of water edge to edge, so there is no way round), floor at y 59.
 
@@ -148,3 +162,19 @@
   (let [{:keys [done moves]} (swim deep [1 63 1] [8 60 1])]
     (is (= :arrived (:status done)))
     (is (contains? moves :swim-down))))
+
+(defn shifted
+  "blocks moved dx along x."
+  [blocks dx]
+  (into {} (map (fn [[k v]] (let [[x y z] (map js/parseInt (.split k ","))] [(str (+ x dx) "," y "," z) v]))) blocks))
+
+(deftest a-body-leaving-shallow-water-never-enters-the-bank
+  ;; the water's edge is the bank's face at x = edge; a face on a power of two is where rounding once let the box through
+  (are [edge at] (= {:status :arrived :in-block 0}
+                    (let [{:keys [done in-block]} (swim (shifted wade (- edge 5)) [edge 60 1] [(- edge 4) 61 1] :at at)]
+                      {:status (:status done) :in-block in-block}))
+    5 nil
+    16 nil
+    16 [16.5 1.67]
+    4 nil
+    512 nil))

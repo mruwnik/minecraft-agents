@@ -39,7 +39,8 @@
             [jobs.movement.go-to.escalation :as esc]
             [jobs.movement.go-to.health :as health]
             [jobs.movement.go-to.result :as end]
-            [jobs.movement.go-to.torch :as torch]))
+            [jobs.movement.go-to.torch :as torch]
+            [jobs.movement.go-to.unstick :as unstick]))
 
 (def doc
   "Walk to :pos ([x y z] or {:x :y :z}, fractions floored to the cell) until the body's cell is within :range cells of
@@ -101,6 +102,7 @@
     up :why :explore-spent (:explored the blocks) at the end of that walk.
   - A walk stuck or off its plan at a cell is a go-to.walker-fault warn; the next plans of the call cost that cell
     (up to 16; after a fall also the cells above it) far more (wworld/with-avoid), so a way round is taken when there is one.
+    A body such a walk left stuck in water first swims at a bank beside it (go-to.unstick, info go-to.unstuck).
   - :escalate (default true): a body sealed in its own shelter (a :shelter entry) by day, when the walk finds no way, leaves it first (dig-in-leave/leave!, a go-to.escalated {:step :leave-shelter}); never at night.
   - :escalate (default true): a body that is shut in (jobs.lib.reach/enclosed?), not in its own shelter, and whose
     search ran out of land (:exhausted, :goal-enclosed or :goal-cut-off), or any body whose only way needs a sprint it lacks the food for (:abilities :corner-jump or :gap-sprint), makes a way instead of giving up, one child job
@@ -371,10 +373,11 @@
 
 (defn note-fault!
   "A walk that failed at the walker is a bug to see (a go-to.walker-fault warn) and a cell to keep the next plans off
-  (mem :fault-cells, at most max-fault-cells; a new call starts with none): the walks go round it when there is a way."
+  (mem :fault-cells, at most max-fault-cells; a new call starts with none): the walks go round it when there is a way.
+  The warn asks for no attention: the call goes on, and its give-up is the notice."
   [c {:keys [status] :as result}]
   (when-let [cells (seq (fault-cells result (pos? (ctx/count-in c :hurt hurt-window-ms))))]
-    (ctx/emit! c :walker-fault :warn (cond-> {:why status :target (first cells)}
+    (ctx/emit! c :walker-fault :warn (cond-> {:why status :target (first cells) :attention :none}
                                        (:move result) (assoc :kind (:move result))
                                        (:why result) (assoc :detail (:why result))))
     (ctx/update-mem! c update :fault-cells #(vec (take-last max-fault-cells (distinct (into (vec %) cells)))))))
@@ -846,6 +849,7 @@
            (or (#{:continue :again} handled)
           (let [result (cond-> result (:needs-health handled) (-> (assoc :reason :needs-health) (merge (select-keys handled [:heal :health :hp-cost :hp-budget]))))
                 _ (note-fault! c walked)
+                unstuck? (await (unstick/swim-out! c pos walked))
                 progress? (or (< left (dec best)) explored? nearer?)
                 tries (if progress? 0 (inc (:blocked (ctx/mem c) 0)))]
             (ctx/update-mem! c assoc :blocked tries :searching 0 :best (if (< left (dec best)) left best)
@@ -853,8 +857,9 @@
                              :frontier-best (cond-> fbests frontier (assoc frontier (min fbest (u/dist to fcell))))
                              :target-best (cond-> tbests target (assoc target (min tdist (get tbests target js/Infinity)))))
             (when (and progress? (:restore-pending (ctx/mem c))) (esc/restore-next! c))
-            (if (and (if (false? (:retry (:args c))) progress? (< tries max-blocked)) (not (#{:goal-enclosed :goal-cut-off :goal-on-magma} (:reason result))))
-              (do (when (pos? tries) (retrying! c result tries))
+            (if (or unstuck?
+                    (and (if (false? (:retry (:args c))) progress? (< tries max-blocked)) (not (#{:goal-enclosed :goal-cut-off :goal-on-magma} (:reason result)))))
+              (do (when (and (pos? tries) (not unstuck?)) (retrying! c result tries))
                   :again)
               (let [unloaded? (wsearch/goal-unloaded? (.-snapshot pw) (mapv #(js/Math.floor (% pos)) [:x :y :z]))
                     result (dive-end c pos (dark-end c result))

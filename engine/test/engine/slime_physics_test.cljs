@@ -36,7 +36,7 @@
   (let [{:keys [mc physics]} @sp/lib
         world (sp/world-of fills)
         phys ((.-Physics physics) mc world)
-        _ (set! (.-playerHalfWidth phys) 0.31)
+        _ (set! (.-playerHalfWidth phys) (sp/body-half))
         steps (plan fills from goal)
         bot (sp/bot-at from)]
     (loop [t 0 state (ex/start steps 0) ys []]

@@ -205,3 +205,45 @@
         (let [{:keys [out p]} (await (gt/go! {:self {:pos [1.5 58 0.5] :inWater true :oxygen 20} :blocks sealed-tunnel}
                                              {:pos [32 58 0] :range 0 :escalate false}))]
           (is (true? (:arrived @out)) (str "result " @out " at " (gt/at p))))))))
+
+;; a stone plain (top y 63) with a pool 1 deep (water y 63) from x 0 to 6, z -4..4; the body in the water at the east bank
+(def shallow (merge (box -10 55 -6 30 62 6 "stone") (box -10 63 -6 -1 63 6 "stone") (box 7 63 -6 30 63 6 "stone")
+                    (box 0 63 -4 6 63 4 "water")))
+
+(defn stuck-in-water
+  "near/walk-round! as real, but a walk begun in water ends stuck at the bank cell [7 64 0] where the body is; walks, an
+  atom, counts them."
+  [real walks]
+  (fn [c pos range opts]
+    (if (.-inWater (.self (:primitives c)))
+      (do (swap! walks inc)
+          (js/Promise.resolve {:result {:status :stuck :target [7 64 0] :move :jump :why "no progress on step 1"} :status "blocked"
+                               :from (:pos c) :to {:x 6.5 :y 63 :z 0.5}}))
+      (real c pos range opts))))
+
+(deftest a-body-its-walk-left-stuck-in-water-swims-at-another-bank-and-walks-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [walks (atom 0)]
+          (with-redefs [near/walk-round! (stuck-in-water near/walk-round! walks)]
+            (let [{:keys [out p] :as s} (await (gt/go! {:self {:pos [6.5 63 0.5] :inWater true} :blocks shallow}
+                                                       {:pos [12 64 0] :range 0 :escalate false}))]
+              (is (true? (:arrived @out)) (str "result " @out " at " (gt/at p)))
+              (is (= 1 @walks) "one stuck walk, then the swim")
+              (is (= [[[7 64 -1] "landed" 1]] (map (juxt :toward :status :swim) (gt/events-of s :go-to.unstuck)))
+                  "the bank beside the one the walk was stuck at, said in an event")
+              (is (= [:none] (map :attention (gt/events-of s :walker-fault))) "a fault the call gets over wakes no waiting agent"))))))))
+
+(deftest swims-at-a-bank-are-bounded-and-a-body-still-stuck-gives-up-with-a-reason
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [walks (atom 0)]
+          (with-redefs [near/walk-round! (stuck-in-water near/walk-round! walks)]
+            (let [{:keys [out] :as s} (await (gt/go! {:self {:pos [6.5 63 0.5] :inWater true} :blocks shallow :swimFails true}
+                                                     {:pos [12 64 0] :range 0 :escalate false}))]
+              (is (= {:arrived false :reason :unreachable :why :stuck} (select-keys @out [:arrived :reason :why])) (str "result " @out))
+              (is (string? (:text @out)) "the give-up says why in words")
+              (is (= [[[7 64 -1] "timeout"] [[7 64 1] "timeout"]] (map (juxt :toward :status) (gt/events-of s :go-to.unstuck)))
+                  "two swims a call, the stuck bank never reached"))))))))

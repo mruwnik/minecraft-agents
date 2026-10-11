@@ -54,7 +54,7 @@
   (let [{:keys [mc physics]} @sp/lib
         world (sp/world-of fills)
         phys ((.-Physics physics) mc world)
-        _ (set! (.-playerHalfWidth phys) 0.31)
+        _ (set! (.-playerHalfWidth phys) (sp/body-half))
         steps (steps-of fills from goal unknown)
         bot (sp/bot-at from at)
         known (atom (set (remove unknown (for [s steps] (ws/floor-cell s)))))

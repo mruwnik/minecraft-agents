@@ -1,7 +1,7 @@
 (ns engine.stairs-physics-test
   "engine.path.executor walking planned routes over stairs and slabs in prismarine-physics, the body's own client
   physics: plans come from the tuned planner over a fixture snapshot (block states with their properties), the body moves
-  by physics over the same blocks (collision half-width 0.31, as every bound bot)."
+  by physics over the same blocks (collision half-width as every bound bot's)."
   (:require [cljs.test :refer [deftest is are]]
             [engine.path.blocks :as blocks]
             [engine.path.executor :as ex]
@@ -19,6 +19,9 @@
                  :vec3 (.-Vec3 (tu/require-here "vec3"))}))
 
 (def max-ticks 1200)
+
+(defn body-half "The collision half-width of every bound bot." []
+  (.-BODY_HALF_WIDTH (tu/require-here "./js/prim-base.mjs")))
 
 ;; A world is a vector of fills [x0 y0 z0 x1 y1 z1 name props]; a later fill overrides an earlier one, air elsewhere.
 
@@ -95,7 +98,7 @@
   (let [{:keys [mc physics]} @lib
         world (world-of fills)
         phys ((.-Physics physics) mc world)
-        _ (set! (.-playerHalfWidth phys) 0.31)
+        _ (set! (.-playerHalfWidth phys) (body-half))
         steps (plan fills from goal)
         bot (bot-at from at)]
     (if (nil? steps)

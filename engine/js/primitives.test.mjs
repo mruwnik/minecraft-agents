@@ -2,6 +2,7 @@
 import { test, mock } from 'node:test'
 import assert from 'node:assert/strict'
 import { createPrimitives, createPrimitivesFromBot, mcToMineflayerLook, mineflayerToMcLook } from './primitives.mjs'
+import { BODY_HALF_WIDTH } from './prim-base.mjs'
 import { EventEmitter } from 'node:events'
 import { stubBot, names, Vec3 } from './stub-bot.mjs'
 import registryFor from 'prismarine-registry'
@@ -1845,8 +1846,6 @@ test('the view attaches to every bot, detaches while offline and on close, then 
   assert.deepEqual(calls, [['attach', first], ['detach'], ['attach', second], ['detach'], ['stop']])
 })
 
-// Every bound body gets half-width 0.31 (mineflayer's 0.3 has the server reject every move of a body flush against a block face).
-
 test('dig, place, jumpPlace and useOn mark their cell on the view once they settle, whatever the outcome', async () => {
   const marks = []
   const view = { attach: () => {}, detach: () => {}, stop: () => {}, markCell: (x, y, z) => marks.push([x, y, z]) }
@@ -1862,14 +1861,19 @@ test('dig, place, jumpPlace and useOn mark their cell on the view once they sett
   await p.close()
 })
 
-test('a bound bot has half-width 0.31, the initial one and a reconnected one', async () => {
+test('the body half-width is a binary fraction just under 0.31, the width the planner fits by', () => {
+  assert.ok(BODY_HALF_WIDTH <= 0.31 && BODY_HALF_WIDTH > 0.3099)
+  assert.equal(BODY_HALF_WIDTH * 16384, Math.round(BODY_HALF_WIDTH * 16384))
+})
+
+test('a bound bot has the body half-width, the initial one and a reconnected one', async () => {
   const first = stubBot(world)
   const second = stubBot(world)
   const p = createPrimitivesFromBot(first, { timeScale: SCALE, reconnect: async () => second })
-  assert.equal(first.physics.playerHalfWidth, 0.31)
+  assert.equal(first.physics.playerHalfWidth, BODY_HALF_WIDTH)
   p.setOwner('t1')
   await p.offline('t1', { ms: 1 })
-  assert.equal(second.physics.playerHalfWidth, 0.31)
+  assert.equal(second.physics.playerHalfWidth, BODY_HALF_WIDTH)
   await p.close()
 })
 
@@ -1887,7 +1891,7 @@ test('swim toward leaves the half-width alone', async () => {
   const { bot, p } = rig({ blocks })
   setTimeout(() => { delete blocks['0,64,0'] }, 5)
   await p.swim('t1', { ms: 3000, toward: rim })
-  assert.equal(bot.physics.playerHalfWidth, 0.31)
+  assert.equal(bot.physics.playerHalfWidth, BODY_HALF_WIDTH)
 })
 
 test('swim toward is not landed while still in the water next to the target', async () => {

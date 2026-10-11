@@ -145,7 +145,7 @@
   (let [{:keys [mc physics]} @sp/lib
         world (sp/world-of tower)
         phys ((.-Physics physics) mc world)
-        _ (set! (.-playerHalfWidth phys) 0.31)
+        _ (set! (.-playerHalfWidth phys) (sp/body-half))
         steps (sp/plan tower [2 68 2] [7 64 2])
         bot (sp/bot-at [2 68 2])
         name-at (fn [x y z] (.-name (.getBlock ^js world (.floored (.offset (.-position (.-entity bot)) x y z)))))
