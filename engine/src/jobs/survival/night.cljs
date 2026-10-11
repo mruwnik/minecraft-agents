@@ -281,7 +281,7 @@
   night does not call the body safe behind it. :again."
   [c door]
   (await (retreat/shut-home-door! c door))
-  (when (and (some #(= (sh/door-key (:cell door)) (sh/door-key (:cell %))) (sh/open-room-doors (:primitives c)))
+  (when (and (some #(= (sh/door-key (:cell door)) (sh/door-key (:cell %))) (sh/open-doors (:primitives c) (ctx/view c)))
              (contains? (:doors-clicked (ctx/mem c) #{}) (retreat/door-key (:cell door))))
     (ctx/emit! c :shelter.door-failed :warn {:cell (retreat/door-key (:cell door))
                                              :text "an open door of the room would not shut; the room is not safe"})
@@ -410,7 +410,7 @@
         (when-not bed (note-bed-far! c))
         (when breached
           (note-room-open! c)
-          (when-not (or (:enclose (ctx/mem c)) (sites/failed-here? c))
+          (when-not (or door (:enclose (ctx/mem c)) (sites/failed-here? c))
             (ctx/update-mem! c assoc :enclose (sh/feet p))))
         (cond
           (or bed (sh/bed-place-wanted? p (ctx/view c) (bed-down/radius c) (bed-down/bed-permit c))) (await (bed-down-step c bed))

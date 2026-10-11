@@ -36,6 +36,16 @@
           (is (= [] (st/calls p "dig")) "nothing dug")
           (is (= [] (st/entries eng :shelter)) "no dig-in shelter"))))))
 
+(deftest night-shuts-an-open-door-of-a-room-with-a-hole-in-its-wall
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (st/setup (merge (open-door-hut {:x 5 :y 64 :z 0} {"3,64,0" "air" "3,65,0" "air"}) {:inventory st/dirt-stack}))]
+          (mem/write! (:store eng) :bed-open {:pos {:x 4 :y 64 :z 0}} sh/bed-open-policy)
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (tu/run-until-empty eng 8))
+          (is (false? (door-open? p)) "the door is shut though the room is open"))))))
+
 (deftest night-in-a-room-with-an-open-door-and-a-hole-in-the-roof-digs-in-as-before
   (async done
     (tu/run-async done

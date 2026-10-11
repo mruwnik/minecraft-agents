@@ -520,24 +520,42 @@
 
 (defn door-key [{:keys [x y z]}] [x y z])
 
+(defn open-door?
+  "Whether the {:cell} door entry stands open (a door or gate seen open)."
+  [p {:keys [cell]}]
+  (let [b (u/seen-block p cell)]
+    (and b (= :openable (click/kind-of (.-name b))) (click/reached? :open (click/props-of b)))))
+
 (defn open-room-doors
   "[{:cell :inside} ...]: the doors and gates standing open in the closed room around the body, the nearest first."
   [p]
   (when (roofed? p (room-roof-height))
-    (let [self (u/self-pos {:primitives p})
-          open? (fn [{:keys [cell]}]
-                  (let [b (u/seen-block p cell)]
-                    (and b (= :openable (click/kind-of (.-name b))) (click/reached? :open (click/props-of b)))))]
+    (let [self (u/self-pos {:primitives p})]
       (->> (:doors (reach/room p (feet p)))
-           (filter open?)
+           (filter #(open-door? p %))
            (sort-by #(u/dist self (:cell %)))))))
+
+(def breach-door-reach
+  "Blocks (square) around the feet searched for an open door when the room has a hole."
+  3)
+
+(defn open-doors
+  "open-room-doors, else (breached-home?) the doors and gates standing open within breach-door-reach of the feet, the
+  nearest first: a hole in the walls hides the room, not its door."
+  [p view]
+  (or (seq (open-room-doors p))
+      (when (breached-home? p view)
+        (let [{:keys [x y z] :as self} (feet p)
+              r (range (- breach-door-reach) (inc breach-door-reach))]
+          (->> (for [dx r dz r :let [e {:cell {:x (+ x dx) :y y :z (+ z dz)} :inside self}] :when (open-door? p e)] e)
+               (sort-by #(u/dist (u/self-pos {:primitives p}) (:cell %))))))))
 
 (defn open-room-door
   "{:cell :inside} of the nearest door or gate standing open in the closed room around the body (shut: the room keeps the
   night out), not one the night failed to shut (the :night-door-failed entry in view, keyed on the door); nil when none."
   [p view]
   (let [failed (:door (:data (mem/latest view :night-door-failed)))]
-    (first (remove #(= failed (door-key (:cell %))) (open-room-doors p)))))
+    (first (remove #(= failed (door-key (:cell %))) (open-doors p view)))))
 
 (defn night-holds?
   "Whether the night trigger holds (see triggers.survival.night). permit? decides whether a bed may be used (bed-permit).
@@ -553,7 +571,7 @@
                 (and (not buried) (log-out-for-sleepers? p view))
                 (not (safe-from-night? p (:roof-height args default-roof-height)))
                 (breached-home? p view)
-                (seq (open-room-doors p))))
+                (seq (open-doors p view))))
        (or (shut-in-by-day? p shelter (:data (mem/latest view :shelter-trapped)))
            (some? (bed-to-collect p view)))))))
 
