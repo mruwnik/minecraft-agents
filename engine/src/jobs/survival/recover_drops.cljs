@@ -18,26 +18,6 @@
             [engine.settings :as settings]
             [engine.memory :as mem]))
 
-(defn death-summary
-  "What status reports of a :died memory entry at view {:now :age}: {:pos :cause? :ago-ms :despawns-in-ms :recovered?}
-  while the drops can still be there (under the despawn window, 6000 game ticks counted in world age), else nil. :recovered is the decision
-  of a :recovered entry newer than the death (:collected, :partial, :skip, :abandoned), when there is one."
-  ([entry view] (death-summary entry view nil))
-  ([entry view recovered]
-   (when entry
-     (let [since (game/ticks-since entry view)
-           {:keys [pos cause]} (:data entry)
-           decision (when (and recovered (> (:t recovered) (:t entry))) (:decision (:data recovered)))]
-       (when (< since game/despawn-ticks)
-         (cond-> {:pos pos :ago-ms (settings/ticks->ms since) :despawns-in-ms (settings/ticks->ms (- game/despawn-ticks since))}
-           cause (assoc :cause cause)
-           decision (assoc :recovered decision)))))))
-
-(defn death-status
-  "The status :died extra for a memory view."
-  [view]
-  (death-summary (mem/latest view :died) view (mem/latest view :recovered)))
-
 (def doc
   "After a death, go back for the drops when they are worth it.
   Serves one :died entry no :recovered covers (its :death-t): the one a trip is keyed to, else the pile inside its window with the best value net of the walk, so an older open pile is not lost to a newer death. Once every death is decided (a skip too) the check waits :no-drops and the wait names the decision. The check holds while a death is unrecovered, however old,

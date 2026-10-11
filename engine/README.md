@@ -489,7 +489,7 @@ round, reflex id, action-call id), `:data`, `:message`, `:attention` (omitted/`:
 `events.edn` and `.1` to `.3` (setting `:engine.events/max-bytes`, min 1024); a cursor is `{:stream-id :seq}` and a
 rotated-away cursor gets an explicit gap. Start-up parses only each segment's first and last record and the
 recent tail, so its memory does not grow with the log. Only the newest 256 events (at most 256 KiB; settings
-`:engine.events/recent-count`, `recent-bytes`) stay in memory; an older cursor reads the files, a page parsing about `max-page-bytes`; a line over `max-line-bytes` is not parsed, it reads as a stub with `:seq`, `:time-ms`, `:source`, `:kind`, `:level` and `:truncated`; an event's job id and chain are cut to `max-id-chars` and `max-chain` when written. Every `stats-ms` the body emits `body.heap` (`engine.heap`: V8 heap used, limit and total, rss, external, array buffers, in bytes; the planner state kept outside job memory: `:known-cells`, `:known-edges`, `:goal-floods`, `:searches`).
+`:engine.events/recent-count`, `recent-bytes`) stay in memory; an older cursor reads the files, a page parsing about `max-page-bytes`; a line over `max-line-bytes` is not parsed, it reads as a stub with `:seq`, `:time-ms`, `:source`, `:kind`, `:level` and `:truncated`; an event's job id and chain are cut to `max-id-chars` and `max-chain` when written. Every `stats-ms` the body emits `body.heap` (`engine.heap`: V8 heap used, limit and total, rss, external, array buffers, in bytes; one key per gauge registered with `engine.heap/gauge!`: `jobs.lib.walk.search` registers the planner state kept outside job memory, `:known-cells`, `:known-edges`, `:goal-floods`, `:searches`).
 
 A job that ends with a result of `:status :stopped` gets a `:stopped` warn event; its text is the result's `:text` (clipped to 200 chars), else `stopped: <reason>`.
 
@@ -501,7 +501,7 @@ HTTP over `worlds/<world>/agents/<name>/engine/events.sock` (mode 0600; all bodi
 | `GET /events?stream-id=&after=&limit=` | an event page after a cursor, with gap indication |
 | `POST /attention/resolve` | `{:request-id :reason :handled}`; does not retry or cancel its job |
 | `POST /chat` | one public line or whisper, sharing the chat limits |
-| `GET /status?limit=` | compact body/job/attention projection (includes `:died` while a death is under 6000 game ticks of world age old; supplied by recover-drops through the status extras main passes to event-api/create) |
+| `GET /status?limit=` | compact body/job/attention projection (includes `:died` while a death is under 6000 game ticks of world age old; `engine.game/death-status`, a status extra main passes to event-api/create) |
 | `GET /inventory` | carried stacks and worn equipment (with a short enchants list), read-only |
 | `GET /seen?names=a,*_ore&radius=&max=` | blocks remembered by perception (never x-ray), nearest first with `:pos`, `:distance` and `:age-ms` (air left out when no names); radius and max capped at 64; offline: `{:ok false :reason :offline}`; read-only |
 | `GET /chests?max=` | chest stock the body saw (memory `:fetch/stock`, kept 6 h, latest per chest), nearest first with `:pos`, `:distance`, `:age-ms`, `:items {name n}`; max capped at 64; read-only (`observe <agent> chests`) |

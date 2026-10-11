@@ -1,7 +1,8 @@
 (ns jobs.lib.walk.search
   "The walk driver's budgeted search (go-to): one bounded slice of search a round, kept per body over the rounds, with the
   known land and the goal flood kept for one goal."
-  (:require [engine.path.executor :as executor]
+  (:require [engine.heap :as heap]
+            [engine.path.executor :as executor]
             [engine.path.planner-tuned :as planner]
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.world :as wworld]))
@@ -63,6 +64,14 @@
 (defonce ^{:doc "Per body: {:key :t :memo}, memo the planner's options.goalFloodMemo shared by go-to's searches toward one
   goal (key [to range weight policy walls mask], mask wworld/unknown-key), kept for search-max-age-ms; forgotten with the known land."}
   goal-floods (atom {}))
+
+(defn known-size "The summed size of the js/Set under k of every body's known land." [k]
+  (transduce (map #(if-let [^js s (k %)] (.-size s) 0)) + (vals @known-land)))
+
+(heap/gauge! :known-cells #(known-size :cells))
+(heap/gauge! :known-edges #(known-size :edges))
+(heap/gauge! :goal-floods #(count @goal-floods))
+(heap/gauge! :searches #(count @searches))
 
 (defn forget-known!
   "Forget the body's known land (known-land) and its kept goal flood (goal-floods)."

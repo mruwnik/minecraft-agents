@@ -8,6 +8,7 @@
             [engine.event-api :as event-api]
             [engine.backoff :as backoff]
             [engine.events :as events]
+            [engine.game :as game]
             [engine.heap :as heap]
             [engine.hurt :as hurt]
             [engine.lease :as lease]
@@ -16,7 +17,6 @@
             [engine.perception :as perception]
             [engine.registry :as registry]
             [engine.settings-registry :as settings-registry]
-            [jobs.survival.recover-drops :as recover-drops]
             [engine.scenario :as scenario]
             [engine.settings :as settings]
             [engine.senses :as senses]
@@ -214,7 +214,7 @@
                           (fn []))
         stop-heap (heap/start! #(core/emit! eng %) (:stats-ms eng))]
     (let [event-socket (event-api/create (path/join (:engine-dir cfg) "events.sock") eng
-                                             {:died recover-drops/death-status})]
+                                             {:died game/death-status})]
       (try
         (await ((:listen event-socket)))
         (let [lease-opts {:idle-ms (* 1000 (:drive-idle-s opts))}

@@ -1,7 +1,8 @@
 (ns engine.layering-test
   "Layering guard: jobs call other jobs as children, shared helpers live in jobs.lib, and jobs and libs never reach into
   triggers. Rules over the ns forms of src/jobs and src/triggers; the known leftovers are the shrink-only
-  allow-list layering_allow.edn (one reason per edge)."
+  allow-list layering_allow.edn (one reason per edge). The engine (src/engine) never requires a jobs namespace: no
+  allow-list."
   (:require [cljs.reader :as reader]
             [cljs.test :refer [deftest is]]
             [clojure.set :as set]
@@ -48,6 +49,15 @@
                    :let [rule (edge-violation files from to)]
                    :when rule]
                [from to rule]))))
+
+(defn engine-requires-jobs
+  "Sorted [from to] for every engine.* namespace requiring a jobs.* one."
+  [files]
+  (vec (sort (for [[from {:keys [requires]}] files
+                   :when (= "engine" (first (segments from)))
+                   to requires
+                   :when (= "jobs" (first (segments to)))]
+               [from to]))))
 
 ;; ----------------------------------------------------------------- reading
 
@@ -113,6 +123,12 @@
         allowed (set (map (juxt :from :to :rule) (allow-list)))]
     (is (= #{} (set/difference found allowed)) "new layering violations: move the helper into jobs.lib")
     (is (= #{} (set/difference allowed found)) "allow-list entries that no longer break a rule: delete them")))
+
+(deftest the-engine-never-requires-a-job-namespace
+  (is (= '[[engine.a jobs.lib.x]]
+         (engine-requires-jobs {'engine.a {:requires '#{jobs.lib.x engine.b}} 'jobs.a.job {:requires '#{jobs.lib.x}}})))
+  (is (= [] (engine-requires-jobs (into {} (map read-file) (scan "src/engine"))))
+      "the engine requires job code: move the generic part into the engine, or have the job side hand it in"))
 
 (deftest allow-list-gives-a-reason-for-every-edge
   (is (every? (comp seq :why) (allow-list))))
