@@ -576,7 +576,8 @@
       (fn ^:async t []
         (doseq [[world futile reason]
                 [[{:time noon :blocks floor} [] {:reason :day}]
-                 [{:time night :blocks (assoc floor "0,66,0" "stone")} [] {:reason :already-sealed :pos {:x 0 :y 64 :z 0}}]
+                 [{:time night :blocks (assoc floor "0,66,0" "stone")} [] {:reason :roofed-not-enclosed :pos {:x 0 :y 64 :z 0}}]
+                 [{:time night :blocks (merge floor bed-room (tu/box -1 63 -1 7 63 1 "stone"))} [] {:reason :already-sealed :pos {:x 0 :y 64 :z 0}}]
                  [{:time night :blocks floor} [{:pos {:x 0 :y 64 :z 0} :reason :no-floor}]
                   {:reason :futile :pos {:x 0 :y 64 :z 0} :why :no-floor}]
                  [{:time night :blocks floor} [{:pos {:x 0 :y 63 :z 0}}] {:reason :futile :pos {:x 0 :y 63 :z 0}}]]]
@@ -1483,7 +1484,7 @@
           (core/submit! eng '(jobs.survival.dig-in) {})
           (await (run-until-empty eng 4))
           (is (empty? (calls p "place")))
-          (is (= [:already-sealed] (mapv :reason (emitted seen :waiting)))))))))
+          (is (= [:roofed-not-enclosed] (mapv :reason (emitted seen :waiting)))))))))
 
 (deftest ms-until-morning-follows-the-game-rate
   (settings/set-clock! 40 false :packet)

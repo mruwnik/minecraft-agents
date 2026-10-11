@@ -55,6 +55,9 @@
   (the body falls one block and lands). Deeper cells wait for the descent (:under-body). Over a hole it stops
   (:no-floor-below).
 
+  A block on the footprint of a plan this body made is the plan's: its entry is dropped (cleanup.plan-cell) and the cell
+  never dug, unless :spare-own-plans? is false.
+
   A shelter's block (purpose :shelter or :retreat-plug) stays while a known hostile is near (:hostile-near) and all night (:night): it keeps the hostile out of the body's refuge.
 
   Every dig asks jobs.lib.access.rules/may-dig? (zones, plan footprints, ledger cells) when chosen and again
@@ -81,6 +84,7 @@
             :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block :under-feet}) :default #{:fluid-adjacent}}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
    :reach {:doc "cells whose centre is this close to the eye are dug from where the body stands, in blocks" :spec (a/num-in 0 nil) :default u/bucket-reach}
+   :spare-own-plans? {:doc "a block on the footprint of a plan this body made is the plan's, not scaffold: its entry is dropped and never dug" :spec boolean? :default true}
    :danger-radius {:doc "a walk is not made while a real danger is this close to the body, or a known hostile this close to the cell walked to: the cell is held :danger" :spec (a/num-in 0 nil) :default 16}
    :leg-s {:doc "a walk goes in legs of this many seconds; the danger is weighed again after each" :spec (a/num-in 0.1 120) :default 6}
    :give-up {:doc "walks ending out of reach, or failed digs, after which a cell is held" :spec (a/int-in 1 nil) :default 2}})
@@ -150,6 +154,13 @@
 
 (def shelter-purposes #{:shelter :retreat-plug})
 
+(defn plan-cells
+  "The cells of entries l that lie on the footprint of a plan this body made (own-plans), when spare-own-plans? holds."
+  [l footprints own-plans spare-own-plans?]
+  (if-not spare-own-plans?
+    #{}
+    (into #{} (comp (map :cell) (filter #(contains? own-plans (get footprints %)))) l)))
+
 (defn blocker
   "Why entry e cannot be dug now, as {:reason ...detail}, or nil. in: {:feet :block-at :zones :footprints :ledger
   :accept :can-clear? (block name -> whether the body can clear it now, by hand or a carried tool; absent: always)
@@ -171,7 +182,7 @@
       (stranding? in cell) {:reason :stranding}
       :else
       (let [v (rules/may-dig? (-> (select-keys in [:block-at :feet :zones :footprints :shafts :claims :self :now :ignore-zones? :ledger])
-                                  (update :footprints #(into {} (remove (comp (:own-plans in #{}) val)) %))
+                                  (update :footprints #(if (:spare-own-plans? in) % (into {} (remove (comp (:own-plans in #{}) val)) %)))
                                   (assoc :cell cell)))
             hazards (mapv hazard-reason (:hazards v))]
         (cond
@@ -228,6 +239,7 @@
             :can-clear? #(not (tools/needs-tool-to-clear? (:primitives c) %))
             :hostile-near? (hostile-near? (:primitives c)) :night? (sh/night? (:primitives c))
             :ledger (ledger/cells l) :zones zones :accept (set accept) :reach reach
+            :spare-own-plans? (:spare-own-plans? (:args c))
             :held (:held (ctx/mem c) {}) :retreats (:retreats (ctx/mem c) 0)})))
 
 (defn bad-job? [job] (not (or (nil? job) (= :all job) (string? job))))
@@ -364,8 +376,13 @@
   "Settle the entries this cleanup works on from their cells; store the ledger when it changed, book removed and
   dropped entries (one cleanup.dropped info each). The ledger after."
   [c l picked]
-  (let [{:keys [ledger removed dropped]} (ledger/settle l #(picked (:cell %)) (access/sensed-at (:primitives c) nil))]
+  (let [{:keys [footprints own-plans]} (access/zone-input c)
+        planned (plan-cells (filterv #(picked (:cell %)) l) footprints own-plans (:spare-own-plans? (:args c)))
+        {:keys [ledger removed dropped]} (ledger/settle (filterv #(not (planned (:cell %))) l) #(picked (:cell %)) (access/sensed-at (:primitives c) nil))]
     (when (not= ledger l) (ledger/remember! c ledger))
+    (doseq [cell planned]
+      (ctx/emit! c :cleanup.plan-cell :info {:cell cell :plan (get footprints cell)
+                                             :text (str "ledger block at " (pr-str cell) " is on the plan " (get footprints cell) ": kept, entry dropped")}))
     (doseq [{:keys [cell item found job]} dropped]
       (ctx/emit! c :cleanup.dropped :info {:cell cell :item item :found found :job job
                                            :text (str "scaffold " item " at " (pr-str cell) " is now " found

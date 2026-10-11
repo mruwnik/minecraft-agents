@@ -114,12 +114,21 @@
     {:block-at (lookup [1 64 0] "dirt" [2 64 0] "lava")} :hazard
     {:block-at (constantly nil)} :not-loaded))
 
-(deftest the-footprint-of-a-plan-this-body-made-does-not-keep-its-scaffold
-  (are [own-plans result] (= result (:step (step :entries [(entry [1 64 0])] :block-at (lookup [1 64 0] "dirt")
-                                                 :footprints {[1 64 0] "farm"} :own-plans own-plans)))
-    #{"farm"} :dig
-    #{"other"} :finish
-    #{} :finish))
+(deftest the-footprint-of-a-plan-this-body-made-keeps-its-blocks-unless-told-otherwise
+  (are [own-plans spare? result] (= result (:step (step :entries [(entry [1 64 0])] :block-at (lookup [1 64 0] "dirt")
+                                                        :footprints {[1 64 0] "farm"} :own-plans own-plans :spare-own-plans? spare?)))
+    #{"farm"} true :finish
+    #{"farm"} false :dig
+    #{"other"} false :finish
+    #{} true :finish))
+
+(deftest ledger-entries-in-an-own-plan-are-the-plans-not-scaffold
+  (let [l [(entry [1 64 0]) (entry [5 64 0]) (entry [9 64 0])]
+        footprints {[1 64 0] "hut" [5 64 0] "farm" [9 64 0] "hut"}]
+    (are [spare? own cells] (= cells (cleanup/plan-cells l footprints own spare?))
+      true #{"hut"} #{[1 64 0] [9 64 0]}
+      true #{} #{}
+      false #{"hut"} #{})))
 
 (deftest water-beside-is-accepted-by-default-lava-is-not
   (is (= :dig (:step (step :entries [(entry [1 64 0])] :block-at (lookup [1 64 0] "dirt" [1 65 0] "water")))))

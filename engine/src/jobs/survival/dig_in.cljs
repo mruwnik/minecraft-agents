@@ -4,6 +4,7 @@
             [clojure.string :as str]
             [jobs.lib.cost :as cost]
             [jobs.lib.pen-gate :as pen-gate]
+            [jobs.lib.reach :as reach]
             [jobs.lib.blocks :as lb]
             [jobs.lib.trees :as trees]
             [jobs.lib.tidy :as tidy]
@@ -22,8 +23,8 @@
 
 (def doc
   "Roof the body in for the night.
-  Declines (waiting) with :day, :already-sealed {:pos} (something solid within :roof-height above; with :enclose, only
-  when no open cell is left around the feet),
+  Declines (waiting) with :day, :already-sealed {:pos} (a roof within :roof-height above and the body shut in: no open cell around the
+  feet, or a closed room), :roofed-not-enclosed {:pos} (a roof but open cells; not with :enclose, which walls them in),
   or :futile {:pos :why} (a :dig-in-futile entry within 8 blocks that blocks it, see below).
   One call is a whole attempt. It ends with the result {:pos :mode :roof} when the world shows the body shut in, else
   stopped {:reason :text :pos}: the :dig-in-futile reasons below, :no-blocks, :no-tool, :spared, :unsealed or :no-progress.
@@ -502,8 +503,11 @@
   (let [p (:primitives c)]
     (cond
       (not (sh/night? p)) (ctx/wait c {:reason :day})
-      (dig-cells/sealed-in? p (if (:enclose (:args c)) :walls :open) (:roof-height (:args c)))
+      (or (dig-cells/sealed-in? p :walls (:roof-height (:args c)))
+          (and (not (:enclose (:args c))) (sh/roofed? p (:roof-height (:args c))) (reach/closed-room? p (sh/feet p))))
       (ctx/wait c {:reason :already-sealed :pos (sh/feet p)})
+      (and (not (:enclose (:args c))) (dig-cells/sealed-in? p :open (:roof-height (:args c))))
+      (ctx/wait c {:reason :roofed-not-enclosed :pos (sh/feet p)})
       :else (if-let [site (futile-site c)]
               (ctx/wait c (merge {:reason :futile} (select-keys site [:pos]) (when (:reason site) {:why (:reason site)})))
               true))))
