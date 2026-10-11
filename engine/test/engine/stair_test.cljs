@@ -123,6 +123,15 @@
   (is (= [[0 65 -1]] (stair/way-floors [0 65 0] :up :north 1)))
   (is (= [] (stair/way-floors [0 65 0] :down :east 0))))
 
+(deftest a-stair-that-goes-on-from-an-earlier-one-is-joined-to-it
+  (is (= {:floors [[1 64 0] [2 65 0] [3 66 0] [4 67 0]] :gone #{[[1 64 0] [2 65 0]]}}
+         (stair/joined-way [[[1 64 0] [2 65 0]] [[9 60 9]]] [2 65 0] [[3 66 0] [4 67 0]]))
+      "it began on the last floor of the first")
+  (is (= {:floors [[3 66 0] [4 67 0]] :gone #{[[4 67 0]]}}
+         (stair/joined-way [[[4 67 0]] [[9 60 9]]] [2 65 0] [[3 66 0] [4 67 0]]))
+      "a way wholly inside the new one is dropped")
+  (is (= {:floors [[3 66 0]] :gone #{}} (stair/joined-way [[[9 60 9]]] [2 65 0] [[3 66 0]]))))
+
 (declare block-at stair! east ground setup tick-out!)
 
 (deftest a-finished-stair-remembers-its-floors-and-a-second-one-stops-at-them

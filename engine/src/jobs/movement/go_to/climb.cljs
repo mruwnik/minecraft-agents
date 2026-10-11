@@ -1,18 +1,24 @@
 (ns jobs.movement.go-to.climb
   "go-to's way up for a body under ground whose goal lies far above it: the stairs it cut itself (jobs.lib.ledger/ways-of)
-  before any other way, and no way down through caves."
+  that lead to the goal's level or the surface before any other way, and no way down through caves."
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.escape :as escape]
-            [jobs.lib.util :as u]))
+            [jobs.lib.ledger :as ledger]
+            [jobs.lib.util :as u]
+            [jobs.movement.go-to.column :as column]))
 
 (a/defargs settings
   {::cave-dip {:default 3 :doc "Blocks below where it began that a go-to of a body under ground to a goal far above (jobs.movement.go-to/climb-rise) walks over cells that are no stair of its own: a plan that goes deeper is not walked while a stair up can be cut instead." :spec (a/num-in 0 nil)}
    ::own-way {:default true :doc "Whether a go-to of a body under ground to a goal far above (jobs.movement.go-to/climb-rise) first climbs the stairs the body cut itself, and cuts a blocked one again." :spec boolean?}
-   ::own-way-reach {:default 14 :doc "Blocks within which a floor of a stair the body cut is a way up for its go-to (::own-way)." :spec (a/num-in 1 nil)}})
+   ::own-way-reach {:default 14 :doc "Blocks of its own way up (::own-way) a go-to walks in one hop." :spec (a/num-in 1 nil)}
+   ::own-way-search {:default 4000 :doc "Cells a go-to looks over for a way up its own stairs (::own-way): its stairs and tunnels and the standable cells it has seen." :spec (a/int-in 1 nil)}})
 (defn cave-dip [] (settings/get settings ::cave-dip))
 (defn own-way [] (settings/get settings ::own-way))
 (defn own-way-reach [] (settings/get settings ::own-way-reach))
+(defn own-way-search [] (settings/get settings ::own-way-search))
+
+(def walk-speed "Blocks a second a walk along the body's own way is reckoned at, against the seconds of a new stair." 4)
 
 (defn dives?
   "Whether a plan's steps ({:x :y :z} feet) go below floor on a cell that stands on none of ways (stair floors [x y z])."
@@ -22,16 +28,67 @@
                      (and (< y floor) (not (contains? ways [x (dec y) z])))))
                  steps)))
 
-(defn way-up
-  "The feet cell, a map, of the highest of ways (stair floors [x y z]) above from (the body) and no higher than top whose
-  centre is within reach blocks, the nearest of those; nil when none."
-  [from ways reach top]
-  (->> (for [[x y z] ways
-             :let [centre {:x (+ x 0.5) :y (inc y) :z (+ z 0.5)}]
-             :when (and (> (inc y) (+ (:y from) 0.5)) (<= (inc y) top) (<= (u/dist from centre) reach))]
-         [{:x x :y (inc y) :z z} (u/dist from centre)])
-       (sort-by (juxt (comp - :y first) second))
-       ffirst))
+(defn route
+  "The shortest walk from start (a feet cell [x y z]) to the nearest cell end? holds of, by steps of one block along and
+  at most one up or down over cells pass? holds of, or first straight to one of seeds: the cells, start first; nil when
+  none is met within limit cells."
+  [start seeds pass? end? limit]
+  (loop [queue (into (conj cljs.core/PersistentQueue.EMPTY start) seeds)
+         from (into {start nil} (map #(vector % start)) (remove #{start} seeds))]
+    (when-let [[x y z :as cell] (peek queue)]
+      (cond
+        (end? cell) (vec (reverse (take-while some? (iterate from cell))))
+        (> (count from) limit) nil
+        :else
+        (let [nexts (for [[dx dz] escape/cardinals dy [1 0 -1]
+                          :let [n [(+ x dx) (+ y dy) (+ z dz)]]
+                          :when (and (not (contains? from n)) (pass? n))]
+                      n)]
+          (recur (into (pop queue) nexts) (into from (map #(vector % cell)) nexts)))))))
+
+(defn own-route
+  "The walk (route) from the body's feet up its own ways to goal height top, or nil: over the stands of its stairs and
+  tunnels (jobs.lib.ledger; open or not, a blocked stair is cut again) and the standable cells it has seen no deeper than
+  ::cave-dip below the feet, or straight to a stand of a stair of its own within ::own-way-reach, to the nearest stand of a stair of its own at top (or one under it) or under the open sky. A
+  stair that ends in rock below that is no way up."
+  [c feet top]
+  (let [p (:primitives c)
+        stairs (ledger/stair-stands c)
+        own (into stairs (ledger/tunnel-stands c))
+        kind-at (column/seen-kind-at p)
+        surface-at (column/surface-kind-at p)
+        low (- (second feet) (cave-dip))]
+    (when (seq stairs)
+      (route feet
+             (filter (fn [[x y z]] (<= (u/dist (u/self-pos c) {:x (+ x 0.5) :y y :z (+ z 0.5)}) (own-way-reach))) stairs)
+             (fn [[x y z :as cell]] (or (contains? own cell) (and (>= y low) (column/stands? kind-at x y z))))
+             (fn [[x y z :as cell]]
+               (and (contains? stairs cell)
+                    (or (>= y (dec top))
+                        (and (keyword-identical? :open (kind-at x (+ y 2) z)) (= y (column/top surface-at x z))))))
+             (own-way-search)))))
+
+(defn hop
+  "The next cell of route (cells, the body's first) to walk to from from, a map with :floor, the lowest y on the way
+  there: the last of its leading cells whose centre is within reach blocks, short of the first that blocked? holds of
+  (that one itself when it is the next cell). nil for a route of one cell."
+  [route from reach blocked?]
+  (let [near (take-while (fn [[x y z]] (<= (u/dist from {:x (+ x 0.5) :y y :z (+ z 0.5)}) reach)) (rest route))
+        walk (or (seq (take-while (complement blocked?) near)) (take 1 (rest route)))]
+    (when-let [[x y z] (last walk)]
+      {:x x :y y :z z :floor (apply min (map second (cons (first route) walk)))})))
+
+(defn weigh
+  "Walking route (cells) against cutting a new stair of rise steps at step-s seconds each: {:take :to :blocks :walk-s
+  :cut-steps :cut-s :text}, :take whether the walk is no slower."
+  [route rise step-s]
+  (let [blocks (dec (count route))
+        walk-s (js/Math.round (/ blocks walk-speed))
+        cut-s (* rise step-s)
+        take (<= walk-s cut-s)]
+    {:take take :to (peek route) :blocks blocks :walk-s walk-s :cut-steps rise :cut-s cut-s
+     :text (str "its own way up is " blocks " blocks (about " walk-s " s) to its stair at " (pr-str (peek route))
+                "; a new stair is " rise " steps (about " cut-s " s): " (if take "walking its own way" "cutting a new stair"))}))
 
 (defn recut
   "For a body at feet (a cell) with floors of ways (stair floors [x y z]) running up from it along a heading, one up and

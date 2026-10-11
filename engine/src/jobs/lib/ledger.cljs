@@ -189,6 +189,20 @@
   (let [dim (.-dimension (.self (:primitives c)))]
     (set (mapcat #(when (= dim (:dim (:data %))) (:floors (:data %))) (ctx/entries c :stair-way)))))
 
+(defn stair-stands
+  "The set of feet cells [x y z] of the steps of the stairs this body cut (ways-of)."
+  [c]
+  (set (map (fn [[x y z]] [x (inc y) z]) (ways-of c))))
+
+(defn tunnel-stands
+  "The set of feet cells [x y z] of the level tunnels this body cut in its current dimension (memory :tunnel-way)."
+  [c]
+  (let [dim (.-dimension (.self (:primitives c)))]
+    (set (for [{{[x y z] :origin [dx dz] :delta :keys [steps] :as data} :data} (ctx/entries c :tunnel-way)
+               :when (= dim (:dim data))
+               k (range (inc steps))]
+           [(+ x (* k dx)) y (+ z (* k dz))]))))
+
 (defn near-of-args
   "The :near the entries are narrowed to: the arg, else the body's position and :within, else (unowned entries, :job
   nil) the body's position and 32, so a saved trigger register whose job spec has no :within stays bounded, else nil."

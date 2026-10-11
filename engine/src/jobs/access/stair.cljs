@@ -51,7 +51,7 @@
   - :crop: a crop, stem or farmland in a cut cell (never dug, zone or not).
   - :base-block: a chest, bed, furnace, table, door or other base block in a cut cell, or the block a door stands on (never dug, anyone's).
   - :undercuts-way: a cut cell is the floor of a stair this body cut earlier (memory :stair-way, written at every
-    end with the floors of the steps walked).
+    end with the floors of the steps walked, joined to the earlier stair it goes on from).
   - :unbreakable: bedrock, barrier, portal frames, command blocks.
   - :no-tool: a pickaxe block with no pickaxe carried.
   - :inventory-full: the drop has no room.
@@ -164,7 +164,7 @@
       (let [hs (vec (distinct (concat (:hazards v) (stair-hazards (:block-at in) (:cell in) cut))))]
         (cond-> {:ok true} (seq hs) (assoc :hazards hs))))))
 
-(def way-policy {:cap 30 :ttl :forever})
+(def way-policy {:cap 200 :ttl :forever})
 
 (def plug-policy {:cap 60 :ttl :forever})
 
@@ -184,6 +184,25 @@
   [origin dir heading steps]
   (let [d (shape/delta dir heading)]
     (vec (for [i (range 1 (inc (or steps 0)))] (shape/add (shape/add origin (mapv #(* i %) d)) [0 -1 0])))))
+
+(defn joined-way
+  "floors (of a run that began standing on the cell ground) as one way with the earlier ways (olds, the floors of each)
+  it goes on from or covers, those that hold ground or one of floors: {:floors [theirs, then floors] :gone #{the olds
+  taken in}}."
+  [olds ground floors]
+  (let [touched (conj (set floors) ground)
+        gone (set (filter #(some touched %) olds))]
+    {:floors (vec (concat (remove (set floors) (distinct (mapcat identity gone))) floors)) :gone gone}))
+
+(defn record-way!
+  "Remember the steps walked (memory :stair-way, one entry a connected way: joined-way), so a climb cut in many runs
+  does not push the body's other stairs out of the memory."
+  [c origin dir heading steps]
+  (let [dim (.-dimension (.self (:primitives c)))
+        olds (keep #(when (= dim (:dim (:data %))) (:floors (:data %))) (ctx/entries c :stair-way))
+        {:keys [floors gone]} (joined-way olds (shape/add origin [0 -1 0]) (way-floors origin dir heading steps))]
+    (when (seq gone) (ctx/forget-where! c :stair-way #(and (= dim (:dim %)) (contains? gone (:floors %)))))
+    (ctx/remember! c :stair-way {:dim dim :floors floors} way-policy)))
 
 (defn hazards-why
   "The hazards in words: \"falling-block gravel at [x y z]; ...\"."
@@ -370,8 +389,7 @@
     (ctx/result! c result)
     (when-let [{:keys [origin]} (when (pos? steps) m)]
       (let [{:keys [dir heading]} (:args c)]
-        (ctx/remember! c :stair-way {:dim (.-dimension (.self (:primitives c)))
-                                     :floors (way-floors origin dir heading steps)} way-policy)))
+        (record-way! c origin dir heading steps)))
     (if (= :done reason)
       (ctx/emit! c :stair.done :info (assoc result :text (str "stair " (name (:dir (:args c))) " done, " steps " steps")))
       (ctx/emit! c :stair.stopped :warn

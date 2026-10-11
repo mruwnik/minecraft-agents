@@ -10,6 +10,7 @@
             [engine.settings :as settings]
             [engine.test-util :as tu :refer [box floor]]
             [jobs.lib.near :as near]
+            [jobs.movement.go-to.climb :as climb]
             [jobs.movement.go-to :as go-to]))
 
 ;; level ground x 0..6 (feet 64), a valley stepping down one block a column to feet 52 and up again, level ground to x 40
@@ -83,10 +84,10 @@
 (defn ^:async climb!
   "go! with ticks enough for a stair, a second of fake time each (the stair waits out a lava delay): {:out :p :seen
   :track}, track every position the body had. A world key :stair-way (floors) is written to memory as a stair the body
-  cut. A world key :on-move (fn [p pos]) is called with every position the body has; :ticks bounds the run (default 1000)."
+  cut, :own-ways ([kind data] each) as more of its ways. A world key :on-move (fn [p pos]) is called with every position the body has; :ticks bounds the run (default 1000)."
   [world args]
   (let [clock (atom 1000000)
-        {:keys [eng p] :as s} (gt/setup (assoc (dissoc world :stair-way :on-move :ticks) :clock clock))
+        {:keys [eng p] :as s} (gt/setup (assoc (dissoc world :stair-way :own-ways :on-move :ticks) :clock clock))
         out (atom :not-done)
         track (atom [])
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (gt/recording-parent out args)))]
@@ -94,6 +95,7 @@
     (when-let [f (:on-move world)]
       (add-watch (fake/state p) :on-move (fn [_ _ _ w] (f p (:pos (:self w))))))
     (some->> (:stair-way world) (hash-map :dim "overworld" :floors) (mem/write! (:store eng) :stair-way))
+    (doseq [[kind data] (:own-ways world)] (mem/write! (:store eng) kind (assoc data :dim "overworld")))
     (core/submit! eng '(recording-parent) {})
     (loop [i 0]
       (when (and (< i (:ticks world 1000)) (seq (:list (core/state eng))))
@@ -294,3 +296,31 @@
               {:keys [out]} (await (-> (within-steps 300 #(climb! (assoc in-forked :ticks 50) {:pos fork-top}))
                                        (.finally #(set! near/walk-round! walk))))]
           (is (= {:arrived false :why :moved-while-searching} (select-keys @out [:arrived :why]))))))))
+
+;; A dirt mass (x -90..10, y 29..59, z -1..1) with the body's own level tunnel (feet 40) from x 0 west to x -60, its own
+;; stair from there west up to the top (floors [-61 40 0] .. [-80 59 0]), and beside the body a stair of its own that
+;; ends in rock after 5 steps east (floors [1 40 0] .. [5 44 0]).
+(def far-floors (vec (for [i (range 1 21)] [(- -60 i) (+ 39 i) 0])))
+(def stub-floors (vec (for [i (range 1 6)] [i (+ 39 i) 0])))
+
+(def branched
+  (let [tunnel (for [x (range -60 1) y [40 41 42]] (str x "," y ",0"))
+        stairs (for [[x y _] (concat far-floors stub-floors) dy [1 2 3]] (str x "," (+ y dy) ",0"))]
+    (apply dissoc (box -90 29 -1 10 59 1 "dirt") (concat tunnel stairs))))
+
+(def in-branched {:blocks branched :self {:pos {:x 0.5 :y 40 :z 0.5}} :light [0 0]
+                  :own-ways [[:stair-way {:floors far-floors}] [:stair-way {:floors stub-floors}]
+                             [:tunnel-way {:origin [0 40 0] :delta [-1 0] :steps 60}]]})
+
+(deftest a-buried-body-walks-its-tunnel-to-its-stair-that-reaches-the-top-not-up-a-dead-end-beside-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out] :as s} (await (climb! in-branched {:pos [-84 60 0]}))]
+          (is (true? (:arrived @out)))
+          (is (> 2 (farthest-east s)) "never up the dead end")
+          (is (empty? (gt/events-of s :go-to.escalated)) "nothing new is cut")
+          (is (= [[true [-79 59 0]]] (map (juxt :take :to) (gt/events-of s :go-to.own-way)))))))))
+
+(deftest a-walk-up-its-own-way-slower-than-a-new-stair-is-not-taken
+  (is (= [true false] (map #(:take (climb/weigh (vec (range %)) 16 3)) [193 200]))))

@@ -130,8 +130,11 @@
     :escalate: the escalation's stair, a go-to.escalated {:step :stair :why :way-dives}), stair after stair with no walk
     in between while it is under ground below the goal; else, or when no stair can be cut, it gives up :why :way-dives
     with :dip and :rise. Such a body (jobs.movement.go-to.climb):
-    - first climbs the stairs it cut itself (memory :stair-way) that lie within ::climb/own-way-reach, hop by hop, once
-      a call (setting ::climb/own-way); a hop it cannot walk, standing on such a stair, has the stair cut again from
+    - first walks its own way up, once a call (setting ::climb/own-way): over its stairs and tunnels (memory :stair-way,
+      :tunnel-way) and standable cells it has seen, to the nearest of its stairs that stands at the goal's height or
+      under the open sky (a stair that ends in rock is no way), in hops of ::climb/own-way-reach; the walk is weighed
+      against a new stair first (info go-to.own-way {:take :to :blocks :walk-s :cut-steps :cut-s}) and a slower one
+      is not taken; a hop it cannot walk, standing on such a stair, has the stair cut again from
       there (a go-to.escalated {:step :stair :why :own-way-blocked}; these holes stay open);
     - walks no plan (first or re-plan inside a walk) that goes more than ::climb/cave-dip below where the call began over cells that are no stair of
       its own, while a stair up can be cut there (with :escalate and ::climb-stair): it climbs as from a dive
@@ -715,25 +718,41 @@
     (assoc result :reason :way-dives :dip (climb-dip) :rise (js/Math.round (- (:y pos) (:y (u/self-pos c)))))
     result))
 
+(defn seen-blocked?
+  "Whether the body has seen a solid in the feet or head of the stand cell [x y z]."
+  [c [x y z]]
+  (let [kind-at (column/seen-kind-at (:primitives c))]
+    (boolean (some #(keyword-identical? :solid (kind-at x % z)) [y (inc y)]))))
+
 (defn own-way
-  "Under a dive floor, or once on them (memory :own-way-on), the next hop up the stairs this body cut (climb/way-up over
-  ledger/ways-of, no higher than pos), unless the setting is off or this call is done with them (memory :own-way-done);
-  nil when none."
+  "Under a dive floor, or once on them (memory :own-way-on), the next hop (climb/hop) of the walk up the body's own ways
+  to pos's height (climb/own-route), unless the setting is off or this call is done with them (memory :own-way-done);
+  nil when none. Before the first hop of a call the walk is weighed against a new stair (climb/weigh, info
+  go-to.own-way): a slower walk is not taken (memory :own-way-done)."
   [c pos floor]
-  (when (and (or floor (:own-way-on (ctx/mem c))) (climb/own-way) (not (:own-way-done (ctx/mem c))))
-    (climb/way-up (u/self-pos c) (ledger/ways-of c) (climb/own-way-reach) (js/Math.floor (:y pos)))))
+  (let [m (ctx/mem c)
+        feet (end/feet-cell c)
+        top (js/Math.floor (:y pos))
+        route (when (and (or floor (:own-way-on m)) (climb/own-way) (not (:own-way-done m))) (climb/own-route c feet top))
+        weighed (when (and route (next route) (not (:own-way-on m))) (climb/weigh route (- top (second feet)) esc/stair-step-s))]
+    (when weighed (ctx/emit! c :go-to.own-way :info weighed))
+    (if (false? (:take weighed))
+      (do (ctx/update-mem! c assoc :own-way-done true) nil)
+      (some-> route (climb/hop (u/self-pos c) (climb/own-way-reach) #(seen-blocked? c %))))))
 
 (defn ^:async walk-own-way!
-  "Walk onto way (own-way), planning nowhere below the feet: the way up a stair never leads down, and a way round through
-  the caves to its top is not it; only way's own cell is there (under a floor that is gone is not). A walk that does not
-  get there, or max-searching searches begun afresh (memory :searching), cuts the stair again from where the body stands
-  on it (esc/own-recut!), else ends the call's use of its own stairs (memory :own-way-done). :again."
+  "Walk onto way (own-way), planning nowhere below the feet and the way's own cells (:floor): a way round through the
+  caves is not it; only way's own cell is there (under a floor that is gone is not). A walk that does not get there
+  nor a block nearer, or max-searching searches begun afresh (memory :searching), cuts the stair again from where the
+  body stands on it (esc/own-recut!), else ends the call's use of its own stairs (memory :own-way-done). :again."
   [c way opts]
-  (let [level (assoc c :dive-floor (js/Math.floor (:y (u/self-pos c))))
-        {:keys [status result]} (await (near/walk-round! level way 0 (dissoc opts :progress)))
-        n (cond-> (:searching (ctx/mem c) 0) (and (= "searching" status) (:fresh result)) inc)]
+  (let [level (assoc c :dive-floor (min (:floor way) (js/Math.floor (:y (u/self-pos c)))))
+        cell (dissoc way :floor)
+        {:keys [status result from to]} (await (near/walk-round! level cell 0 (dissoc opts :progress)))
+        n (cond-> (:searching (ctx/mem c) 0) (and (= "searching" status) (:fresh result)) inc)
+        nearer? (< (u/dist to cell) (dec (u/dist from cell)))]
     (ctx/update-mem! c assoc :own-way-on true :searching n)
-    (when-not (or (= "arrived" status) (and (= "searching" status) (< n max-searching)) (esc/own-recut! c))
+    (when-not (or (= "arrived" status) (and (= "searching" status) (< n max-searching)) nearer? (esc/own-recut! c))
       (ctx/update-mem! c assoc :own-way-done true))
     :again))
 
