@@ -587,13 +587,22 @@
 
 (defn first-target [seen] (:target (first (filterv #(= :retreat.target (:kind %)) @seen))))
 
-(deftest a-flight-with-a-chaser-on-the-line-to-its-goal-still-walks-to-the-goal
+(deftest a-flight-never-walks-to-a-goal-past-its-chaser
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [seen]} (await (run-job! (setup {:entities [(zombie 7 6 {:chase {:speed 0.7}})]})
-                                              'jobs.survival.retreat {:goal {:x 20 :y 64 :z 0}}))]
-          (is (= [20 64 0] (first-target seen)) "the goal itself: the planner's costs route the leg round the zombie"))))))
+                                              'jobs.survival.retreat {:goal {:x 20 :y 64 :z 0}}))
+              [x] (first-target seen)]
+          (is (< x 0) (str "the goal lies past the zombie: away from it instead " (pr-str (first-target seen)))))))))
+
+(deftest a-flight-walks-to-a-goal-on-the-side-away-from-its-chaser
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [seen]} (await (run-job! (setup {:entities [(zombie 7 6 {:chase {:speed 0.7}})]})
+                                              'jobs.survival.retreat {:goal {:x -20 :y 64 :z 0}}))]
+          (is (= [-20 64 0] (first-target seen))))))))
 
 (deftest a-flight-that-reaches-its-goal-flees-on-from-there-and-ends
   (async done

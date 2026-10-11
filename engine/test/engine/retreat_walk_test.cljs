@@ -121,3 +121,11 @@
   (is (= 58 (:y (walk/choose-target (slope-world {:roofed? true}) from [threat] nil [] 6
                                     {:floor 61 :known (set (for [x (range 0 9)] [x (- 63 x) 0]))})))
       "known floors are no unknown cave"))
+
+(deftest a-destination-lies-on-the-way-past-a-nearer-threat-in-its-direction
+  (let [on-way? #(walk/on-the-way? from [%] {:x 40.5 :y 64 :z 0.5})]
+    (is (on-way? {:x 10 :y 64 :z 0.5}) "ahead on the line")
+    (is (on-way? {:x 10 :y 64 :z 8}) "ahead, 38 degrees off")
+    (is (not (on-way? {:x 10 :y 64 :z 14})) "ahead but well to the side")
+    (is (not (on-way? {:x -5 :y 64 :z 0.5})) "behind the body")
+    (is (not (on-way? {:x 60 :y 64 :z 0.5})) "beyond the destination")))

@@ -8,12 +8,14 @@
             [jobs.lib.util :as u]))
 
 (a/defargs settings
-  {::hazard-clearance {:default 2.5 :doc "Distance in blocks kept from a hazard on a flight path." :spec (a/num-in 0 nil)}
+  {::route-cone {:default 45 :doc "Degrees either side of the line to a destination (goal or home) within which a hostile nearer than the destination lies on the way: the flight does not go there." :spec (a/num-in 0 180)}
+   ::hazard-clearance {:default 2.5 :doc "Distance in blocks kept from a hazard on a flight path." :spec (a/num-in 0 nil)}
    ::flank-turn {:default 45 :doc "Degrees a flight turns from straight away toward a refuge that lies behind the chasers, to go round them, when it still gains on them so (jobs.lib.cost/outruns-at?)." :spec (a/num-in 0 90)}
    ::max-descent {:default 3 :doc "Blocks lower than where a flight began that it may end a step under rock (a cave, not a hillside); a step further down is not taken while another is open, else the body is cornered." :spec (a/num-in 0 nil)}})
 (defn hazard-clearance [] (settings/get settings ::hazard-clearance))
 (defn flank-turn [] (settings/get settings ::flank-turn))
 (defn max-descent [] (settings/get settings ::max-descent))
+(defn route-cone [] (settings/get settings ::route-cone))
 
 (def turns
   "Angles to try, in degrees from the preferred direction, best first."
@@ -70,6 +72,20 @@
       (and along flank?) (let [cross (- (* (first away) (second to-home)) (* (second away) (first to-home)))]
                            (rotate away (if (neg? cross) (- (flank-turn)) (flank-turn))))
       :else away))))
+
+(defn on-the-way?
+  "Whether any threat (position) lies toward dest from `from`: nearer than dest and within route-cone degrees of the
+  line to it, so a walk there leads to or past the hostile."
+  [from threats dest]
+  (let [[dx dz] [(- (:x dest) (:x from)) (- (:z dest) (:z from))]
+        d (js/Math.hypot dx dz)
+        cos-cone (js/Math.cos (* (route-cone) (/ js/Math.PI 180)))]
+    (boolean (some (fn [t]
+                     (let [[tx tz] [(- (:x t) (:x from)) (- (:z t) (:z from))]
+                           td (js/Math.hypot tx tz)]
+                       (and (< td d)
+                            (or (< td 1) (>= (/ (+ (* dx tx) (* dz tz)) (* d td)) cos-cone)))))
+                   threats))))
 
 (defn column-along
   "The [x z] column k blocks along [ux uz] from the centre of from's cell (a

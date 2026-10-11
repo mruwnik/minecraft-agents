@@ -530,17 +530,23 @@
   [c]
   (when-not (:goal-off (ctx/mem c)) (goal-pos (:goal (:args c)))))
 
+(defn safe-goal
+  "The active goal unless a threat (positions) lies on the way to it (walk/on-the-way?), else nil."
+  [c threat-pos]
+  (let [goal (active-goal c)]
+    (when (and goal (not (walk/on-the-way? (u/self-pos c) threat-pos goal))) goal)))
+
 (def goal-near
   "Blocks from the goal at which the flight no longer walks to it."
   3)
 
 (defn goal-leg
-  "The goal as a go-to target while the body outruns its chasers (cost/outruns-at? at the flank turn): the planner's
+  "The goal (when no threat is on the way to it) as a go-to target while the body outruns its chasers (cost/outruns-at? at the flank turn): the planner's
   danger costs route the leg round the hostiles. Once the body is within goal-near of it the goal is done for the flight
   (:goal-off), as it is after a leg that lost ground: the flight goes on away from the chasers; without that it walked
   back and forth between the goal and the way away for ever."
-  [c]
-  (let [goal (active-goal c)]
+  [c threats]
+  (let [goal (safe-goal c (mapv #(danger-q/mob-pos (:primitives c) %) threats))]
     (cond
       (nil? goal) nil
       (<= (u/dist (u/self-pos c) goal) goal-near) (do (ctx/update-mem! c assoc :goal-off true) nil)
@@ -570,7 +576,7 @@
          from (u/self-pos c)
          threat-pos (into (mapv #(danger-q/mob-pos p %) threats) (lost-spots c threats))
          refuge (:start (first rooms))
-         goal (active-goal c)
+         goal (safe-goal c threat-pos)
          home (or refuge goal (home-pos c))
          flank? (and (some? (or refuge goal)) (cost/outruns-at? (retreat-home/food p) (walk/flank-turn)))]
      (await (glance-away! c (walk/direction from threat-pos home flank?)))
@@ -781,7 +787,7 @@
       way (await (run-home! c room way))
       :else
       (let [_ (await (eat-on-the-run! c threat))
-            leg (goal-leg c)
+            leg (goal-leg c threats)
             gap0 (flight/nearest-gap p threats)
             goal-gap0 (when leg (u/dist (u/self-pos c) leg))
             target (or leg (await (flight-target! c threats covered? rooms)))

@@ -615,6 +615,15 @@
         (let [s (await (flight-round respond {:inventory sword :entities [(skeleton 7 13 0)]}))]
           (is (pos? (walks-to s {:x 13 :z 0})) "armed and healthy: it closes in on the skeleton"))))))
 
+(deftest fight-back-does-not-close-in-on-a-far-skeleton-with-other-hostiles-about
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (flight-round '(jobs.survival.fight-back {:ranged-range 16})
+                                     {:inventory sword :entities [(skeleton 7 13 0) (skeleton 8 15 4)]}))]
+          (is (zero? (walks-to s {:x 13 :z 0})) "a lone skeleton is walked up to; with another about it is not")
+          (is (zero? (count (calls (:p s) "attack"))) "nothing in reach to swing at"))))))
+
 ;; ------------------------------------------------------- retreat keeps going and minds walls
 
 (defn wall-cells

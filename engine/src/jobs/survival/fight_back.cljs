@@ -13,6 +13,7 @@
   Only a hostile the body has seen is fought: one only heard is judged by its direction and band (jobs.lib.danger), never
   walked to or hit; the body turns toward it and the job declines, so the retreat takes over.
   With :hold the body stays where it is: a melee hostile beyond reach is waited for, 15 s at most, then the job declines (a ranged one is still walked up to).
+  A ranged hostile farther than ::ranged-chase (6) is not walked to while another is in range (the job declines).
   A hostile more than :leash blocks from the point the job started at is not chased (the job declines, so the retreat takes over).
   Declines when health is below :min-health.
   Ends when no hostile is within :range, with the result {:killed [ids]}.
@@ -34,8 +35,10 @@
    :hold {:doc "true: never walk toward a melee mob; strike one that comes within reach (night, with more hostiles about than the body sees)" :spec boolean? :default false}})
 
 (a/defargs settings
-  {::reach {:default 3 :doc "How near the target the body stands to hit, in blocks." :spec (a/int-in 0 nil)}})
+  {::reach {:default 3 :doc "How near the target the body stands to hit, in blocks." :spec (a/int-in 0 nil)}
+   ::ranged-chase {:default 6 :doc "Farthest a ranged mob may be for the body to cross open ground to it while another hostile is in range; beyond it the fight declines." :spec (a/num-in 0 nil)}})
 (defn reach [] (settings/get settings ::reach))
+(defn ranged-chase [] (settings/get settings ::ranged-chase))
 
 (defn blocked-count
   "mem's blocked-walk count for hostile id after one more walk blocked with the body at health: it starts over when the
@@ -154,6 +157,13 @@
         (when (= "killed" (.-status a)) (ctx/update-mem! c update :killed (fnil conj []) (.-id target)))))
     r))
 
+(defn too-far-to-chase?
+  "Whether target is a ranged mob beyond ranged-chase while another hostile is in range."
+  [c target]
+  (and (combat/ranged? target)
+       (> (danger-q/mob-distance (:primitives c) target) (ranged-chase))
+       (some #(not= (.-id %) (.-id target)) (in-range c))))
+
 (defn ^:async step
   "One step of the fight: look at a heard mob, wait out the swing gap, or swing once. :again, :continue, :done or :declined."
   [c]
@@ -165,6 +175,7 @@
     (cond
       (and last-attack (< (.-health (.self p)) min-health)) :declined
       (held-too-long? c) :declined
+      (and target (too-far-to-chase? c target)) :declined
       (and last-attack (< (.-health (.self p)) (:health0 (ctx/mem c)))) :continue
       (nil? target) (if-let [heard (first (remove danger-q/seen-only? (in-range c)))]
                       (do (await (ctx/act c :look (let [{:keys [x y z]} (danger-q/mob-pos p heard)] #js {:pos #js {:x x :y (+ 1 y) :z z}})))
