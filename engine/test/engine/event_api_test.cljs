@@ -510,3 +510,16 @@
            (event-api/chests-view eng {:max 10})) "the latest entry per chest wins")
     (is (= [[5 64 0]] (mapv :pos (:chests (event-api/chests-view eng {:max 1})))))
     (is (true? (:more? (event-api/chests-view eng {:max 1}))))))
+
+(def wide-args
+  (into {} (for [i (range 40)] [(keyword (str "arg" i)) {:default i :doc "d"}])))
+
+(deftest catalog-entry-shows-every-declared-arg
+  (let [eng {:jobs {'jobs.demo.wide {:doc "wide" :args wide-args}}}
+        args (:args (event-api/catalog-entry eng "job" "jobs.demo.wide"))]
+    (is (= (set (keys wide-args)) (set (keys args))))
+    (is (not (contains? args :truncated)))))
+
+(deftest event-payload-values-stay-bounded
+  (let [bounded (event-api/bounded-value wide-args 0 (volatile! 64))]
+    (is (true? (:truncated bounded)))))

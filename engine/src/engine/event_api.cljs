@@ -365,6 +365,10 @@
          :attention {:total (count requests) :items (->> requests (take limit) vec)
                      :more? (> (count requests) limit)}}))))))
 
+(def catalog-args-budget
+  "Nodes of a job's declared args a catalog entry shows; far above any job, so agents see every arg."
+  5000)
+
 (defn catalog-entry [eng kind name]
   (case kind
     "job" (let [sym (symbol name)
@@ -372,7 +376,7 @@
             (when entry
               {:ok true :kind :job :name sym
                :doc (short-text (:doc entry) (setting "catalog-doc-limit"))
-               :args (bounded-value (a/described sym (:args entry)) 0 (volatile! 64))}))
+               :args (bounded-value (a/described sym (:args entry)) 0 (volatile! catalog-args-budget))}))
     "trigger" (let [id (keyword name)
                     entry (get (:triggers eng) id)]
                 (when entry
