@@ -21,6 +21,7 @@
             [jobs.survival.retreat :as retreat]
             [jobs.survival.retreat-flight :as retreat-flight]
             [jobs.lib.seal :as seal]
+            [jobs.survival.retreat-goal :as retreat-goal]
             [jobs.survival.retreat-walk :as retreat-walk]))
 
 (def ms-per-call
@@ -743,6 +744,68 @@
               s (setup {:entities [(zombie 7 5 {}) (zombie 8 0 {:pos {:x -6 :y 64 :z 3}})]})
               {:keys [seen]} (await (run-job! (stub-go-to s calls identity) 'jobs.survival.retreat {:goal {:x -6 :y 64 :z 0}}))]
           (is (not= [-6 64 0] (first-target seen)) "a second hostile stands 3 blocks from the goal"))))))
+
+;; ------------------------------------------------------------------ a goal must be safe to lean to
+
+(def here {:x 0.5 :y 64 :z 0.5})
+
+(deftest a-goal-is-judged-in-three-dimensions-against-every-known-hostile-and-a-safer-home
+  (doseq [[why goal opts] [[nil {:x -20 :y 64 :z 0} {:hostiles [{:x 6 :y 64 :z 0}]}]
+                           [:steep {:x 3 :y 90 :z 0} {:hostiles [{:x 4 :y 64 :z 0}]}]
+                           [:steep {:x 3 :y 40 :z 0} {}]
+                           [nil {:x -20 :y 72 :z 0} {}]
+                           [:under-rock {:x -40 :y 84 :z 0} {:buried? true}]
+                           [nil {:x -40 :y 84 :z 0} {:buried? false}]
+                           [:hostile-there {:x -20 :y 64 :z 0} {:hostiles [{:x -22 :y 64 :z 5}]}]
+                           [:past-hostile {:x 20 :y 64 :z 0} {:hostiles [{:x 6 :y 64 :z 0}]}]
+                           [:home-safer {:x 10 :y 64 :z 30} {:hostiles [{:x 6 :y 64 :z 0}] :home {:x -12 :y 64 :z 0}}]
+                           [nil {:x -14 :y 64 :z 3} {:hostiles [{:x 6 :y 64 :z 0}] :home {:x -12 :y 64 :z 0}}]]]
+    (is (= why (retreat-goal/verdict here goal opts)) (pr-str goal opts))))
+
+(deftest a-home-is-safer-only-when-the-body-is-nearer-it-than-every-hostile-and-none-is-on-the-way
+  (let [home {:x -12 :y 64 :z 0}]
+    (is (= home (retreat-goal/safe-home here [{:x 6 :y 64 :z 0}] [home])))
+    (is (nil? (retreat-goal/safe-home here [{:x -10 :y 64 :z 8}] [home])) "the hostile gets there first")
+    (is (nil? (retreat-goal/safe-home here [{:x -5 :y 64 :z 0}] [home])) "the hostile stands on the way")
+    (is (nil? (retreat-goal/safe-home here [{:x 6 :y 64 :z 0}] [])) "no home known")))
+
+(defn choice [seen] (first (events-of seen :retreat.choice)))
+
+(deftest a-flight-spends-no-leg-on-a-goal-straight-above-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls (atom [])
+              s (setup {:entities [(zombie 7 4 {})]})
+              {:keys [seen]} (await (run-job! (stub-go-to s calls identity) 'jobs.survival.retreat {:goal {:x 3 :y 90 :z 0}}))]
+          (is (some? (first-target seen)))
+          (is (not= [3 90 0] (first-target seen)) "26 up and 3 across is no way out")
+          (is (= :steep (:goal-why (choice seen))) (pr-str (choice seen))))))))
+
+(deftest a-home-the-body-reaches-first-wins-over-the-goal-of-the-walk-it-was-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls (atom [])
+              s (setup {:entities [(zombie 7 6 {})]})
+              _ (mem/write! (:store (:eng s)) :home {:pos {:x -12 :y 64 :z 0}} {:cap 1 :ttl :forever})
+              {:keys [seen]} (await (run-job! (stub-go-to s calls identity) 'jobs.survival.retreat {:goal {:x 10 :y 64 :z 30}}))
+              [x] (first-target seen)
+              e (choice seen)]
+          (is (neg? x) (str "west, to the home side, not to the errand's goal: " (pr-str (first-target seen))))
+          (is (= [:home-safer [10 64 30] [-12 64 0]] [(:goal-why e) (:goal e) (:lean e)]) (pr-str e))
+          (is (= ["zombie 7 [6 64 0]"] (:hostiles e)) "the choice names the hostiles and where they were"))))))
+
+(deftest a-flight-does-not-walk-to-a-goal-beside-a-place-it-fled-a-mob-from
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls (atom [])
+              s (setup {:entities [(zombie 7 6 {})]})
+              _ (mem/write! (:store (:eng s)) :threat {:id 99 :mob "skeleton" :pos {:x -22 :y 64 :z 5} :ended :lost} threats/threat-policy)
+              {:keys [seen]} (await (run-job! (stub-go-to s calls identity) 'jobs.survival.retreat {:goal {:x -20 :y 64 :z 0}}))]
+          (is (not= [-20 64 0] (first-target seen)))
+          (is (= :hostile-there (:goal-why (choice seen))) (pr-str (choice seen))))))))
 
 (def walker
   "A listed job whose memory holds an open go-to walk to (10 64 16), as one cut on its way."

@@ -50,7 +50,8 @@
      pillar-height blocks carried: pillar up, else seal in, before any flee step (a walk gains little on it); when neither can be
      done the flight walks. Each flee step emits debug retreat.step-speed {:blocks :seconds :bps}.
   3. Walks a short step (:step blocks) away from all chasers (nearer ones weigh more) with a go-to child (:escalate false),
-     leaning toward the first closed room of 2. (else the :goal, the destination of the walk the flight interrupted; else the latest :bed or :home within :home-range) when not through the
+     leaning toward the first closed room of 2. (else a home it is nearer to than every hostile it knows, none on the way; else the :goal, the destination of the walk the flight
+     interrupted, while it is safe: jobs.survival.retreat-goal/verdict, judged every step in three dimensions against every hostile it knows and the places of those it fled lately; else the latest :bed or :home within :home-range) when not through the
      hostiles (a closed room behind them: turned retreat-walk ::flank-turn degrees toward it, to go round them, while it still gains on them so:
      jobs.lib.cost/outruns-at?), avoiding :hazard positions.
      When a wall blocks the way away it turns up to 120 degrees towards open ground (at least 2 clear cells).
@@ -99,6 +100,8 @@
   A chase has no time limit. With no new best gap to the nearest chaser in :no-gain-steps steps it takes the
   cornered options instead of walking on; stopped :cannot_escape only once every option failed in two sweeps in a row
   with no gain between.
+  Each change of what it chose among is said in one retreat.choice info: the hostiles and where, every closed room and why
+  it is not run to, the cells that are no closed room, the home, the goal and why it is dropped, where it leans.
   Returns done {:fled [ids] :ended :gone|:far|:lost|:closed|:hidden|:keeps-off|:none}, or stopped :cannot_escape.
   Memory: one :threat entry per mob fled (jobs.lib.threats); the third from one mob within 5 min warns hostile.chased.
   A cell in another's zone is used only as a last resort (retreat.trespass-last-resort warning).")
@@ -555,8 +558,9 @@
          from (u/self-pos c)
          threat-pos (into (mapv #(danger-q/mob-pos p %) threats) (lost-spots c threats))
          refuge (:start (first rooms))
-         goal (retreat-goal/safe c threat-pos)
-         home (or refuge goal (home-pos c))
+         judged (retreat-goal/judge c (remove nil? [refuge (home-pos c)]))
+         goal (retreat-goal/usable judged)
+         home (or refuge (:home judged) goal (home-pos c))
          flank? (and (some? (or refuge goal)) (cost/outruns-at? (retreat-home/food p) (walk/flank-turn)))]
      (await (glance-away! c (walk/direction from threat-pos home flank?)))
      (walk/choose-target (block-at-fn p) from threat-pos home (keep (comp :pos :data) (ctx/entries c :hazard))
@@ -709,6 +713,31 @@
     (ctx/emit! c :retreat.target :info {:target cell :from from :cover (boolean (and covered? (covered? target)))
                                         :text (str "flee step to " (str/join " " cell) " away from " (str/join ", " from))})))
 
+(defn say-choice!
+  "Log (retreat.choice info), when it changes, what the flight chose among: the hostiles it knows and where, each
+  closed room (survey) and why it is not run to (verdicts; nil: it is), the cells that are no closed room, the home,
+  the goal and why it is dropped (judged), and where the flight leans."
+  [c survey verdicts judged]
+  (let [p (:primitives c)
+        at (fn [pos] (when pos (mapv #(js/Math.floor (% pos)) [:x :y :z])))
+        rooms (mapv (fn [{:keys [room why inside?]}]
+                      {:at (at (:start room)) :own? (boolean (:home? room)) :why (if inside? :inside why)})
+                    verdicts)
+        goal (at (:goal judged))
+        lean (at (or (:start (first (:rooms survey))) (:home judged) (retreat-goal/usable judged) (home-pos c)))
+        choice {:rooms rooms :dropped (:dropped survey) :home (at (home-pos c)) :goal goal :goal-why (:why judged) :lean lean}]
+    (when (not= choice (:choice-said (ctx/mem c)))
+      (ctx/update-mem! c assoc :choice-said choice)
+      (ctx/emit! c :retreat.choice :info
+                 (assoc choice
+                        :hostiles (mapv #(str (.-name %) " " (.-id %) " " (at (danger-q/mob-pos p %))) (flight/known-chasers p))
+                        :text (str "flee choice: leans to " (or lean "nothing")
+                                   (when goal (str "; goal " goal (when (:why judged) (str " dropped (" (name (:why judged)) ")"))))
+                                   (when (seq rooms)
+                                     (str "; rooms " (str/join ", " (map #(str (:at %) " " (name (or (:why %) :run))) rooms))))
+                                   (when (seq (:dropped survey))
+                                     (str "; no room " (str/join ", " (map #(str (:at %) " " (name (:why %))) (:dropped survey)))))))))))
+
 (defn lone-melee?
   "Whether hostiles is one melee mob a pillar stops (not a creeper, enderman, spider, flyer or shooter) farther than cover-gap (it would stand in the cells to fill) and within refuge-gap."
   [p hostiles]
@@ -742,8 +771,12 @@
         door (when threat (door-to-shut c (danger-q/mob-pos p threat)))
         early (when (and threat (not hit?)) (await (early-refuge! c)))
         covered? (cover-fn p threats)
-        rooms (when threat (refuges c))
-        {:keys [room way inside?]} (when threat (retreat-home/choose p rooms threats (not (exposed-low? c covered?))))
+        survey (when threat (retreat-home/survey c (home-pos c)))
+        rooms (:rooms survey)
+        verdicts (when threat (retreat-home/verdicts p rooms threats (not (exposed-low? c covered?))))
+        {:keys [room way inside?]} (retreat-home/pick verdicts)
+        judged (when threat (retreat-goal/judge c (remove nil? [(:start (first rooms)) (home-pos c)])))
+        _ (when threat (say-choice! c survey verdicts judged))
         stuck (fn ^:async stuck [why]
                 (if (seq (near-hostiles c))
                   (await (cornered! c why inside?))
@@ -768,7 +801,7 @@
       (let [_ (await (eat-on-the-run! c threat))
             away? (fn [cell] (when (and cell (not (walk/too-close? (mapv #(danger-q/mob-pos p %) threats) cell))) cell))
             stair (way-up c threats)
-            leg (when-not stair (away? (retreat-goal/leg c threats)))
+            leg (when-not stair (away? (retreat-goal/leg c judged)))
             gap0 (flight/nearest-gap p threats)
             goal-gap0 (when leg (u/dist (u/self-pos c) leg))
             target (or leg (away? (await (flight-target! c threats covered? rooms))))

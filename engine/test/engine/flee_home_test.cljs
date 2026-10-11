@@ -57,6 +57,11 @@
 
 (defn ran-home? [seen] (boolean (some #(= :retreat.home (:kind %)) @seen)))
 
+(defn room-whys
+  "Why each closed room of the first retreat.choice was not run to."
+  [seen]
+  (mapv :why (:rooms (first (filter #(= :retreat.choice (:kind %)) @seen)))))
+
 (defn walk-targets [eng] (mapv #(select-keys % [:x :z]) (tu/walked-to eng)))
 
 (deftest the-race-to-a-refuge-is-won-with-a-margin-at-the-bodys-own-speed
@@ -117,15 +122,17 @@
         (let [creeper (assoc (zombie 5.5 13.5 0.4) :name "creeper")
               {:keys [p seen]} (await (flee! (hut {:x 5.5 :y 64 :z 6.5} hs/door-states [creeper])))]
           (is (not (ran-home? seen)) "a blast at the door would take the door, chest and bed")
+          (is (= [:creeper] (room-whys seen)) "and the flight says why the hut was no refuge")
           (is (not (in-room? (body p)))))))))
 
 (deftest a-zombie-at-the-door-is-not-run-into
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup (hut {:x 5.5 :y 64 :z 9.5} hs/door-states [(zombie 5.5 3.5 nil)]))]
+        (let [{:keys [eng p seen]} (setup (hut {:x 5.5 :y 64 :z 9.5} hs/door-states [(zombie 5.5 3.5 nil)]))]
           (core/submit! eng '(jobs.survival.retreat) {})
           (await (core/tick! eng))
+          (is (= [:race-lost] (room-whys seen)) "the flight says why the hut was no refuge")
           (is (> (:z (first (walk-targets eng))) 9) (str "the first step is not toward the zombie: " (walk-targets eng)))
           (is (not (in-room? (body p)))))))))
 

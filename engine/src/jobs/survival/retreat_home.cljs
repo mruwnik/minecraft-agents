@@ -58,22 +58,31 @@
         (ctx/update-mem! c assoc-in [:refuge-rooms k] v)
         v))))
 
-(defn rooms
-  "The closed rooms to flee to (jobs.lib.reach/room plus :start and :home?): the home's (home {:x :y :z} or nil) and
-  those behind the doors the body has seen (starts), none a run to failed this flight, at most max-rooms, the home
-  first then the nearest."
+(defn survey
+  "The closed rooms to flee to, {:rooms [...]} (jobs.lib.reach/room plus :start and :home?): the home's (home
+  {:x :y :z} or nil) and those behind the doors the body has seen (starts), at most max-rooms, the home first then the
+  nearest; and {:dropped [{:at [x y z] :own? :why}]}, the cells that are none: :run-failed (a run to it failed this
+  flight) or :not-closed."
   [c home]
   (let [p (:primitives c)
         me (u/self-pos c)
-        failed (:refuges-failed (ctx/mem c) #{})]
-    (->> (starts p home)
-         (remove #(failed (cell-key (:pos %))))
-         (filter #(closed? c (:pos %)))
-         (sort-by (fn [{:keys [pos home?]}] [(if home? 0 1) (u/dist me (mid pos))]))
-         (keep (fn [{:keys [pos home?]}] (some-> (reach/room p pos) (assoc :start pos :home? home?))))
-         (reduce (fn [acc r] (if (some #(contains? (:cells %) (mapv (:start r) [:x :y :z])) acc) acc (conj acc r))) [])
-         (take (max-rooms))
-         vec)))
+        failed (:refuges-failed (ctx/mem c) #{})
+        judged (mapv (fn [{:keys [pos] :as s}]
+                       (assoc s :why (cond (failed (cell-key pos)) :run-failed (not (closed? c pos)) :not-closed)))
+                     (starts p home))]
+    {:dropped (vec (for [{:keys [pos home? why]} judged :when why] {:at (mapv pos [:x :y :z]) :own? home? :why why}))
+     :rooms (->> judged
+                 (remove :why)
+                 (sort-by (fn [{:keys [pos home?]}] [(if home? 0 1) (u/dist me (mid pos))]))
+                 (keep (fn [{:keys [pos home?]}] (some-> (reach/room p pos) (assoc :start pos :home? home?))))
+                 (reduce (fn [acc r] (if (some #(contains? (:cells %) (mapv (:start r) [:x :y :z])) acc) acc (conj acc r))) [])
+                 (take (max-rooms))
+                 vec)}))
+
+(defn rooms
+  "The closed rooms to flee to (survey), none a run to failed this flight."
+  [c home]
+  (:rooms (survey c home)))
 
 (defn inside?
   "Whether the body is in room (jobs.lib.reach/room): its feet cell or the cell it stands on (as go-to arrives) is one of
@@ -100,19 +109,34 @@
                           (map (fn [t] (apply min (map #(u/dist (danger-q/mob-pos p t) (mid (:cell %))) (:doors room))))))
                      (food p)))
 
-(defn choose
-  "Where the flight goes among rooms (rooms): {:room r :inside? true} for the room the body is in, else {:room r :way w}
-  for the one whose door it walks to in fewest steps (way-in) ahead of every melee chaser (race-won?), the home on a tie;
-  nil when none. way?: whether a run may be looked for now (false: only the room it is in counts). No run while a
-  creeper chases: it would follow to the door and blow the door, chest and bed."
+(defn verdicts
+  "What the flight makes of each of rooms (rooms): [{:room r :inside? true}] alone for the room the body is in, else
+  per room {:room r :way w} with :why it is not run to: :no-run (way? false: no run may be looked for now), :creeper
+  (one chases: it would follow to the door and blow the door, chest and bed), :no-way (way-in finds none) or
+  :race-lost (a melee chaser gets to a door first: race-won?); no :why: a run there is on."
   [p rooms threats way?]
   (if-let [r (some #(when (inside? p %) %) rooms)]
-    {:room r :inside? true}
-    (when (and way? (not-any? combat/creeper? threats))
-      (->> rooms
-           (keep (fn [r] (when-let [w (way-in p r)] (when (race-won? p r w threats) {:room r :way w}))))
-           (sort-by (comp :steps :way))
-           first))))
+    [{:room r :inside? true}]
+    (let [creeper? (some combat/creeper? threats)]
+      (mapv (fn [r]
+              (cond
+                (not way?) {:room r :why :no-run}
+                creeper? {:room r :why :creeper}
+                :else (let [w (way-in p r)]
+                        (cond
+                          (nil? w) {:room r :why :no-way}
+                          (race-won? p r w threats) {:room r :way w}
+                          :else {:room r :way w :why :race-lost}))))
+            rooms))))
+
+(defn pick
+  "Where the flight goes among verdicts: the room the body is in, else the one a run is on to in fewest steps, the home
+  on a tie; nil when none."
+  [verdicts]
+  (->> verdicts
+       (remove :why)
+       (sort-by (comp :steps :way))
+       first))
 
 (defn say-once!
   "One retreat.home info a flight: it runs to its home or to another closed building, room."
