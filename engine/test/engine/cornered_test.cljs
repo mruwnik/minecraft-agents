@@ -853,6 +853,13 @@
   (is (= [:seal :pillar :pit :pocket :fight] (retreat/escape-order {:faster? true})) "one that cannot climb is pillared against")
   (is (= [:fight] (retreat/escape-order {:faster? true :win? true}))))
 
+(deftest an-armed-body-with-a-hitter-at-it-fights-before-it-builds
+  (is (= [:fight :seal :pillar :back-off :pit :pocket] (retreat/escape-order {:pressed? true}))
+      "four dirt placed beside a zombie that keeps hitting cost three hits")
+  (is (= [:fight :seal :pillar :pit :pocket] (retreat/escape-order {:pressed? true :faster? true})))
+  (is (= :back-off (first (retreat/escape-order {:pressed? true :creeper? true}))) "a creeper is never fought first")
+  (is (= :water (first (retreat/escape-order {:pressed? true :enderman? true})))))
+
 (deftest an-unarmed-body-at-full-health-seals-in-against-a-spider-instead-of-running-or-punching
   (async done
     (tu/run-async done

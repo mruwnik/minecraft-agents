@@ -196,14 +196,17 @@
   for a creeper), :flyer? a phantom is near (it outflies a walker: shelter, else fight), :creeper? one is near (it comes first), :enderman? an angry enderman is near (angry-enderman?) (it teleports, so no walk or back-off, and a
   pillar is within its reach: the body enters water within water-reach, which it avoids, else walks under a 2-high roof within roof-reach, which it cannot enter, else shuts itself in), :ranged? the threat shoots, :climber? it is a spider (it climbs the pillar), :faster? a mob
   the body cannot outrun is near (no step back: it gains nothing), :home? the body is in its home
-  room: it digs no pit or pocket in its own floor or walls, :swim? the body is in water with a drowned near: swimming out to dry land comes first unless a fight wins}."
-  [{:keys [win? creeper? enderman? flyer? ranged? climber? faster? swim? home?]}]
+  room: it digs no pit or pocket in its own floor or walls, :pressed? an armed body already hit by a melee mob at its side (a seal or pillar cannot be built beside it: the fight comes first, except against a creeper or an enderman), :swim? the body is in water with a drowned near: swimming out to dry land comes first unless a fight wins}."
+  [{:keys [win? creeper? enderman? flyer? ranged? climber? faster? swim? home? pressed?]}]
   (cond->> (cond
              creeper? [:back-off :seal :pillar :pit :pocket :fight]
              enderman? [:water :roof :seal :pit :pocket :fight]
              win? [:fight]
              flyer? [:seal :pit :pocket :fight]
-             :else (into (if (or ranged? climber?) [:seal] [:seal :pillar]) (if faster? [:pit :pocket :fight] [:back-off :pit :pocket :fight])))
+             :else (into (if pressed? [:fight] [])
+                         (concat (if (or ranged? climber?) [:seal] [:seal :pillar])
+                                 (if faster? [:pit :pocket] [:back-off :pit :pocket])
+                                 (when-not pressed? [:fight]))))
     (and swim? (not creeper?) (not enderman?) (not win?)) (into [:swim-out])
     home? (filterv (complement #{:pit :pocket}))))
 
@@ -464,6 +467,7 @@
                              :ranged? (boolean (and threat (combat/ranged? threat)))
                              :climber? (boolean (some combat/climber? hostiles))
                              :faster? (not (outrun? c hostiles))
+                             :pressed? (boolean (and (:hit-on-the-run (ctx/mem c)) (combat/best-weapon (:primitives c) weapons)))
                              :swim? (and (boolean (some #(= "drowned" (.-name %)) hostiles)) (in-water? c))
                              :home? home?})]
     (loop [[option & more] order]
