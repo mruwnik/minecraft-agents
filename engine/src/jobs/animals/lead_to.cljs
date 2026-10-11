@@ -21,8 +21,8 @@
   - :walk: jobs.movement.go-to to :pos (the :fence cell when no :pos), range :range, in legs of a few blocks along
     the planned path. One call is the whole run; it yields only while a child waits on the world. After each leg the animal is looked at: off the lead
     :lead-broke; unseen or more than 7 blocks behind, the body holds still (:waiting-for-animal) for it to come into sight or
-    catch up; unseen for 3 s (a ledge or tree can hide it) :lost; more than 10 behind, or still waiting
-    after 10 s, :lagging.
+    catch up; unseen for 3 s (a ledge or tree can hide it) the body walks back toward where it was last seen (up to 12 blocks), then :lost;
+    still more than 7 behind and not closing in for 10 s (escort/::stall-s), :animal-stalled.
   - :gather (no :fence only): see below.
   - :arrive: with :fence, walk within 2 of the post and click it with an empty hand (useOn), tried twice.
     Without :fence, jobs.animals.unleash lets the animal go and picks the lead up.
@@ -48,7 +48,7 @@
   Ends with info lead-to.done and a warn lead-to.gave-up unless the reason is :tied or :unleashed. Result
   {:reason :animal key :still-led bool :at pos :gathered bool}. Reasons:
   - :tied, :unleashed: success.
-  - :none (no animal seen within :radius), :lead-broke, :lost, :lagging (the animal is still on the lead): as above.
+  - :none (no animal seen within :radius), :lead-broke, :lost, :animal-stalled (the animal is still on the lead): as above.
   Every reason but :tied and :unleashed ends the job :stopped with a :text.
   - :unreachable: the walk gave up (the animal is still on the lead).
   - :tie-failed: the post did not take the animal (still on the lead).
@@ -222,10 +222,11 @@
   (let [r (await (escort/walk-legs! c :walk (destination c) (:range (:args c)) nil nil escort/safe-gap))]
     (cond
       (= :waiting r) :yield
+      (= :searching r) :again
       (= :catching-up r) (await (escort/wait-for-animal! c))
       (= :arrived r) (do (set-phase! c (if (:fence (:args c)) :arrive :gather)) :again)
       (= :failed r) (finish! c :unreachable)
-      :else (do (ctx/update-mem! c assoc :still-led (= :lagging (:problem r)))
+      :else (do (ctx/update-mem! c assoc :still-led (= :animal-stalled (:problem r)))
                 (finish! c (:problem r))))))
 
 (defn stop-gathering!
@@ -249,8 +250,9 @@
       (let [r (await (escort/walk-legs! c :pull target pull-range started (* 1000 pull-timeout-s) escort/follow-reach))]
         (cond
           (= :waiting r) :yield
+          (= :searching r) :again
           (= :catching-up r) (await (escort/wait-for-animal! c))
-          (map? r) (do (ctx/update-mem! c assoc :still-led (= :lagging (:problem r)))
+          (map? r) (do (ctx/update-mem! c assoc :still-led (= :animal-stalled (:problem r)))
                        (finish! c (:problem r)))
           :else (do (ctx/update-mem! c dissoc :pull-target :pull-started)
                     (ctx/update-mem! c update :pulls (fnil inc 0))

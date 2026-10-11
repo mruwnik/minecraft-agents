@@ -5,6 +5,7 @@
             [engine.fake :as fake]
             [engine.hostile-test :as h]
             [engine.test-util :as tu]
+            [jobs.lib.walk.search :as wsearch]
             [jobs.lib.world-files :as ew]))
 
 (defn cow [id x & [more]]
@@ -316,3 +317,100 @@
           (is (= :lost (:reason (done-event s))))
           (is (= "u1" (:tracked (:lost (done-event s)))))
           (is (re-find #"u1" (:text (first (stopped s))))))))))
+
+;; ------------------------------------------------------------------ an animal that stops following
+
+(defn self-x [p] (first (:pos (fake/self p))))
+
+(defn ^:async run-until-done [{:keys [eng clock] :as s} n]
+  (loop [i 0]
+    (when (and (< i n) (not (finished? s)))
+      (swap! clock + 700)
+      (await (core/tick! eng))
+      (recur (inc i))))
+  s)
+
+(defn after-acts!
+  "After every steer and wait, (f p) runs: the scripted behaviour of an animal that is not following."
+  [p f]
+  (doseq [act ["steer" "wait"]]
+    (.override (.-world p) act (fn [token a impl] (.then (impl token a) (fn [r] (f p act) r))))))
+
+(defn set-cow-x! [p x] (swap! (fake/state p) update :entities (fn [es] (mapv #(assoc % :pos [x 64 0.5]) es))))
+
+(deftest a-cow-that-stays-behind-ends-animal-stalled-with-both-positions
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng] :as s} (h/setup {:floor tu/walk-floor :inventory wheat :entities [(cow 1 3)]} 50)]
+          (after-acts! p (fn [p _] (set-cow-x! p 3.5)))
+          (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal}) {})
+          (await (run-until-done s 60))
+          (let [e (done-event s)]
+            (is (= :animal-stalled (:reason e)))
+            (is (< (self-x p) 16) "the body stopped where it stood instead of walking on")
+            (is (= 3.5 (get-in e [:stalled :animal :x])))
+            (is (number? (get-in e [:stalled :body :x])))
+            (is (< 7 (get-in e [:stalled :distance])))
+            (is (re-find #"stopped following" (:text (first (stopped s)))))))))))
+
+(deftest the-wait-for-an-animal-shows-both-positions-and-the-distance
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng seen] :as s} (h/setup {:floor tu/walk-floor :inventory wheat :entities [(cow 1 3)]} 50)]
+          (after-acts! p (fn [p _] (set-cow-x! p 3.5)))
+          (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal}) {})
+          (await (run-until-done s 60))
+          (let [w (first (filter #(= :escort.waiting (:kind %)) @seen))]
+            (is (some? w))
+            (is (number? (get-in w [:animal-pos :x])))
+            (is (number? (get-in w [:body-pos :x])))
+            (is (< 7 (:distance w)))))))))
+
+(deftest a-cow-that-fell-far-behind-but-keeps-closing-is-waited-for-not-given-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng] :as s} (h/setup {:floor tu/walk-floor :inventory wheat :entities [(cow 1 3)]} 50)
+              cow-x (atom nil)]
+          (after-acts! p (fn [p act]
+                           (when (and (nil? @cow-x) (<= 8 (self-x p))) (reset! cow-x (- (self-x p) 12)))
+                           (when @cow-x
+                             (when (= "wait" act) (swap! cow-x + 0.1))
+                             (set-cow-x! p @cow-x))))
+          (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal}) {})
+          (await (run-until-done s 400))
+          (is (some? @cow-x) "the cow fell behind")
+          (is (= :arrived (:reason (done-event s)))))))))
+
+(deftest a-cow-out-of-sight-is-walked-back-toward-where-it-was-last-seen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng] :as s} (h/setup {:floor tu/walk-floor :inventory wheat :entities [(cow 1 3)]} 50)
+              hid-at (atom nil)]
+          (after-acts! p (fn [p act]
+                           (when (nil? @hid-at) (set-cow-x! p 3.5))
+                           (when (and (nil? @hid-at) (= "wait" act))
+                             (reset! hid-at (self-x p))
+                             (swap! (fake/state p) assoc :entities []))))
+          (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal}) {})
+          (await (run-until-done s 120))
+          (is (some? @hid-at) "the cow went out of sight")
+          (is (= :lost (:reason (done-event s))))
+          (is (< (self-x p) (- @hid-at 3)) "the body went back toward the last sighting")
+          (is (some? (get-in (done-event s) [:lost :last-seen]))))))))
+
+(deftest a-plan-search-that-is-still-running-never-sends-the-body-the-whole-way-in-one-walk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [wall (tu/box 15 64 -29 15 66 28 "stone")
+              budget wsearch/round-budget]
+          (set! wsearch/round-budget 1)
+          (try
+            (let [s (await (scenario {:pos {:x 30 :y 64 :z 0} :range 3}
+                                     {:floor [-30 -30 40 30] :blocks wall :inventory wheat :entities [(cow 1 2)]} 6))]
+              (is (< 10 (count (tu/walked-to (:eng s)))) (pr-str (tu/walked-to (:eng s)))))
+            (finally (set! wsearch/round-budget budget))))))))

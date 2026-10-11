@@ -22,8 +22,12 @@
   be got the job ends :no-food. It picks the nearest adult within :radius that is on nobody's lead and not already in :box (the zone rules let
   it), holds the food, walks within 6 blocks of it and then to :pos in short go-to legs, the same legs as
   jobs.animals.lead-to (doors left open for the animal and shut afterwards). After each leg the animal is looked at:
-  unseen or more than 7 blocks behind, the body holds still (:waiting-for-animal) for it; unseen for 3 s :lost (an allowed adult within 10 blocks takes its place at once); more
-  than 10 behind, or still waiting after 10 s, :lagging (animals follow food only within about 10 blocks). Each round
+  unseen or more than 7 blocks behind, the body holds still (:waiting-for-animal) for it and the first look of the wait emits info
+  escort.waiting (both positions, the distance); unseen for 3 s the body walks back toward where it was last seen (up to
+  12 blocks) and then ends :lost (an allowed adult within 10 blocks takes its place at once); seen more than 7 behind and not
+  coming nearer for 10 s (jobs.animals.escort/::stall-s), :animal-stalled. An animal that keeps closing in is waited for
+  however far it fell behind. The plan of each leg is searched before the body walks: a search still running never sends
+  the body the whole way in one go. Each round
   the food is checked in hand and held again if not (a cut, another job's equip); none left ends :no-food.
 
   Ends with info lure-to.done and a warn lure-to.gave-up unless the reason is :arrived. Result {:reason :animal key
@@ -31,7 +35,7 @@
   - :arrived: the body stands within :range of :pos and the animal is seen in :box (none: within 6 blocks of :pos) and not in the cell of a planned gate, else the
     body holds still for it up to 10 s and the end is :animal-outside (seen elsewhere) or :lost (not seen). The food is then put away (another carried item in hand when no slot is free); :near says whether the animal is by the spot.
   - :animal-outside: the body is at :pos but the animal is not in the destination; the result gives :distance (animal to :pos).
-  - :none (no animal to lure within :radius), :no-food, :no-hold (the food would not stay in hand), :lost, :lagging,
+  - :none (no animal to lure within :radius), :no-food, :no-hold (the food would not stay in hand), :lost, :animal-stalled (result :stalled {:animal :body :distance}),
     :unreachable (a walk gave up), :timeout (:timeout-s from the first round, not the food fetch).
   Every reason but :arrived ends the job :stopped with a :text.
 
@@ -73,6 +77,13 @@
                 (animals/refusal c) (conj (str "zone rules: " (name (animals/refusal c)))))]
     (when (seq parts) (str " (" (count seen) " seen: " (str/join ", " parts) ")"))))
 
+(defn stalled-detail
+  "Where the animal that stopped following and the body stand, and how far apart."
+  [c]
+  (let [me (u/self-pos c)
+        animal (or (some-> (escort/animal-now c) .-pos u/pos-of) (:last-seen (ctx/mem c)))]
+    {:animal animal :body me :distance (u/flat-dist animal me)}))
+
 (defn stop-text [c reason]
   (let [{:keys [mob radius]} (:args c)]
     (case reason
@@ -83,6 +94,9 @@
                            (some-> (escort/animal-now c) .-pos u/pos-of (u/flat-dist (:pos (:args c))) js/Math.round) " blocks from it")
       :no-food (str "no food for " mob " carried and none could be got")
       :lost (str "lost sight of the " mob (some->> (:uuid (:args c)) (str " ")))
+      :animal-stalled (let [{:keys [animal body distance]} (stalled-detail c)]
+                        (str "the " mob " stopped following at " (pr-str (select-keys animal [:x :z])) ", "
+                             (js/Math.round distance) " blocks from the body at " (pr-str (select-keys body [:x :z]))))
       (str "luring stopped: " (name reason)))))
 
 (defn lost-detail
@@ -108,7 +122,8 @@
                 :distance (some-> a .-pos u/pos-of (u/flat-dist (:pos (:args c))))
                 :near (boolean (and a (<= (u/flat-dist (u/pos-of (.-pos a)) (:pos (:args c))) near-spot)))}]
     (ctx/emit! c :lure-to.done :info (cond-> (assoc result :text (str "lure-to done: " (name reason)))
-                                       (= :lost reason) (assoc :lost (lost-detail c))))
+                                       (= :lost reason) (assoc :lost (lost-detail c))
+                                       (= :animal-stalled reason) (assoc :stalled (stalled-detail c))))
     (when-not ok?
       (ctx/emit! c :lure-to.gave-up :warn {:reason reason :text (stop-text c reason)}))
     (ctx/result! c (cond-> result (not ok?) (assoc :status :stopped :text (stop-text c reason))))
@@ -219,6 +234,7 @@
   (let [r (await (escort/walk-legs! c :walk (:pos (:args c)) (:range (:args c)) nil nil escort/safe-gap))]
     (cond
       (= :waiting r) :yield
+      (= :searching r) :again
       (= :catching-up r) (await (escort/wait-for-animal! c))
       (= :arrived r) (await (arrive! c))
       (= :failed r) (finish! c :unreachable)

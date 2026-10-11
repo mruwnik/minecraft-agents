@@ -1,7 +1,9 @@
 (ns jobs.animals.escort
   "Walking a led or lured animal along: the legs of the walk, the looks at the animal after each, the wait for it, and shutting the gates left open. State lives in the caller's job memory."
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [engine.memory :as mem]
+            [engine.settings :as settings]
             [clojure.string :as str]
             [jobs.animals.herd-run :as hr]
             [jobs.lib.animals :as animals]
@@ -75,25 +77,34 @@
                    (concat (range y (- y 12) -1) (range (inc y) (+ y 4)))))]
     (if y' {:x x :y y' :z z} target)))
 
-(defn ^:async leg-target
-  "Where the next leg of a walk to target (within range) goes: the planned path's cell leg-steps on, or nil when the
-  rest is within one leg, there is no plan, or the leg would not move the body (the caller walks the whole way). The
-  search is one round of go-to's budget (the path to where it has got to): a far target never leaves the body silent
+(defn ^:async leg-plan
+  "Where the next leg of a walk to target (within range) goes: {:leg cell} the planned path's cell leg-steps on,
+  {} while the plan search is still going on (the caller looks at the animal and asks again), else {}
+  (the rest is within one leg, there is no plan, or the leg would not move the body: the caller walks the whole way).
+  The search is one round of go-to's budget (the path to where it has got to): a far target never leaves the body silent
   for seconds, which body.idle would report."
   [c target range]
   (let [pw (wworld/path-world (:primitives c))
-        steps (when pw (:steps (await (plan-or-nil c pw (snap-to-ground c target) {:budget wsearch/round-budget}))))
+        plan (when pw (await (plan-or-nil c pw (snap-to-ground c target) {:budget wsearch/round-budget})))
+        steps (:steps plan)
         step (when (< leg-steps (count steps)) (nth steps leg-steps))
         me (u/self-pos c)]
-    (when (and step (< 1 (u/flat-dist me {:x (:px step) :z (:pz step)})))
-      (select-keys step [:x :y :z]))))
+    (cond
+      (and (empty? steps) (= "searching" (:status plan))) {:searching true}
+      (and step (< 1 (u/flat-dist me {:x (:px step) :z (:pz step)}))) {:leg (select-keys step [:x :y :z])}
+      :else {})))
+
+(defn ^:async leg-target
+  "The :leg of leg-plan, nil when none."
+  [c target range]
+  (:leg (await (leg-plan c target range))))
 
 (def safe-gap
   "The body does not walk on while a seen animal trails it by more than this many blocks: the lead breaks past 10."
   7)
 
 (def max-wait-ms
-  "Time spent waiting for an animal to catch up or come into sight before the job gives it up as :lagging."
+  "Time spent waiting for an animal to catch up or come into sight before the job gives it up (also lure-to's arrival wait)."
   10000)
 
 (def wait-look-ms
@@ -113,42 +124,91 @@
     (hr/holds-food? c)
     (animals/led-by-me? a)))
 
+(a/defargs settings
+  {::stall-s {:default 10 :doc "Seconds a seen animal beyond the safe gap may make no progress toward the body before the walk ends :animal-stalled." :spec (a/num-in 0 nil)}
+   ::back-blocks {:default 12 :doc "An animal out of sight for unseen-lost-ms is looked for by walking back toward where it was last seen, when that is no farther from the body than this." :spec (a/num-in 0 nil)}})
+(defn stall-ms [] (* 1000 (settings/get settings ::stall-s)))
+(defn back-blocks [] (settings/get settings ::back-blocks))
+
+(def back-near "Blocks from the last sighting at which the body counts as back there." 4)
+
+(def back-limit-ms "Time from the first miss after which the walk back gives up and the animal is :lost." 15000)
+
+(def closing-blocks "Blocks nearer the body an animal must come to count as making progress." 0.5)
+
+(defn waiting-detail [c a me]
+  (let [pos (some-> a .-pos u/pos-of)]
+    {:animal-pos (or pos (:last-seen (ctx/mem c))) :body-pos me :seen (some? a)
+     :distance (some->> (or pos (:last-seen (ctx/mem c))) (u/flat-dist me))}))
+
+(defn note-wait!
+  "The first look of a wait in a row emits escort.waiting with both positions and the distance."
+  [c a me]
+  (when-not (:waiting (ctx/mem c))
+    (ctx/update-mem! c assoc :waiting true)
+    (let [d (waiting-detail c a me)]
+      (ctx/emit! c :escort.waiting :info
+                 (assoc d :text (str "waiting for the " (:mob (:args c)) (when-not (:seen d) " (out of sight)")
+                                     ": animal at " (pr-str (some-> (:animal-pos d) (select-keys [:x :z])))
+                                     ", body at " (pr-str (select-keys me [:x :z]))
+                                     (some->> (:distance d) js/Math.round (str ", ") (#(str % " blocks")))))))))
+
+(defn follow-verdict
+  "Why a walk with the animal a (nil: not seen) must stop: :lost (unseen for unseen-lost-ms and no walk back to where
+  it was last seen is left), :lead-broke (following? false), :animal-stalled (seen beyond gap and not closing in for
+  stall-ms), :wait (the body holds still: unseen, or beyond gap but coming), else nil. The state is in the caller's
+  memory: :unseen-since, :last-seen, :back-to (where wait-for-animal! walks back to), :progress {:best :at}."
+  [c a following? gap]
+  (let [now (ctx/now c)
+        me (u/self-pos c)
+        m (ctx/mem c)]
+    (if (nil? a)
+      (let [since (or (:unseen-since m) now)
+            elapsed (- now since)
+            seen (:last-seen m)
+            away (some->> seen (u/flat-dist me))
+            back? (and away (< back-near away (inc (back-blocks))) (< elapsed back-limit-ms))]
+        (ctx/update-mem! c #(-> % (assoc :unseen-since since) (dissoc :progress)
+                                (assoc :back-to (when (and back? (<= unseen-lost-ms elapsed)) seen))))
+        (cond
+          (< elapsed unseen-lost-ms) (do (note-wait! c nil me) :wait)
+          back? (do (note-wait! c nil me) :wait)
+          :else :lost))
+      (let [pos (u/pos-of (.-pos a))
+            d (u/flat-dist pos me)]
+        (ctx/update-mem! c #(-> % (dissoc :unseen-since :back-to) (assoc :last-seen pos)))
+        (cond
+          (not following?) :lead-broke
+          (<= d gap) (do (ctx/update-mem! c dissoc :progress :waiting) nil)
+          :else (let [{:keys [best]} (:progress m)
+                      prog (if (or (nil? best) (< d (- best closing-blocks))) {:best d :at now} (:progress m))]
+                  (ctx/update-mem! c assoc :progress prog)
+                  (note-wait! c a me)
+                  (if (> (- now (:at prog)) (stall-ms)) :animal-stalled :wait)))))))
+
 (defn escort-problem
-  "Why the walk must stop after a leg: :lost (not seen for unseen-lost-ms), :lead-broke or :lagging (the animal
-  farther than follow-reach), :wait (not seen yet, or seen more than gap behind: the body holds still), else nil."
+  "follow-verdict for the led animal of the caller's memory (:animal)."
   [c gap]
   (let [a (animal-now c)]
-    (if (nil? a)
-      (let [now (ctx/now c)
-            since (or (:unseen-since (ctx/mem c)) now)]
-        (ctx/update-mem! c assoc :unseen-since since)
-        (if (<= unseen-lost-ms (- now since)) :lost :wait))
-      (do (ctx/update-mem! c dissoc :unseen-since)
-          (let [d (u/flat-dist (u/pos-of (.-pos a)) (u/self-pos c))]
-            (cond
-              (not (following? c a)) :lead-broke
-              (> d follow-reach) :lagging
-              (> d gap) :wait))))))
-
-(defn escort-verdict
-  "escort-problem with the wait timed: :wait becomes :lagging after max-wait-ms of waiting in a row, and a clear look resets the clock."
-  [c gap]
-  (let [p (escort-problem c gap)
-        now (ctx/now c)
-        since (or (:wait-since (ctx/mem c)) now)]
-    (if (= :wait p)
-      (do (ctx/update-mem! c assoc :wait-since since)
-          (if (> (- now since) max-wait-ms) :lagging :wait))
-      (do (ctx/update-mem! c dissoc :wait-since)
-          p))))
+    (follow-verdict c a (or (nil? a) (following? c a)) gap)))
 
 (defn ^:async wait-for-animal!
-  "Hold still on purpose for one look's wait; the caller then looks again. Always :again."
+  "Hold still on purpose for one look's wait; the caller then looks again. When follow-verdict set :back-to the body
+  walks back toward the last sighting instead (one round of a go-to child: :yield while it is not done). Else :again."
   [c]
-  (ctx/hold-still! c :waiting-for-animal)
-  (await (ctx/act c :wait #js {:ms wait-look-ms}))
-  (ctx/hold-still! c nil)
-  :again)
+  (if-let [to (:back-to (ctx/mem c))]
+    (if (= :done (await (child/call-walk c :back {:pos to :range 2 :doors :leave-open :escalate false :zone-tolls true
+                                                  :ignore-zones? (boolean (:ignore-zones? (:args c)))})))
+      :again
+      :yield)
+    (do (ctx/hold-still! c :waiting-for-animal)
+        (await (ctx/act c :wait #js {:ms wait-look-ms}))
+        (ctx/hold-still! c nil)
+        :again)))
+
+(def max-search-rounds
+  "Calls in a row a walk may spend on the plan search of its next leg (about 80 ms each) before it counts as :failed."
+  40)
 
 (defn ^:async walk-legs!
   "Walk to target (within range) in short go-to legs in child slot, looking at the animal after each (a pull passes
@@ -156,9 +216,10 @@
   outrun the animal: when it is out of sight or trails too far the walk answers :catching-up and looks again at the next
   round before the next leg. Answer :arrived, :failed (a leg did not arrive), :limit (limit-ms from started passed),
   :waiting (a leg's child is waiting on the world: the job yields), :catching-up (the caller waits for the animal) or
-  {:problem :lost|:lead-broke|:lagging}."
+  {:problem :lost|:lead-broke|:animal-stalled}. :searching: the plan search for the next leg is still
+  going on (nothing was walked; the caller calls again), at most max-search-rounds calls in a row, then :failed."
   [c slot target range started limit-ms gap]
-  (let [pre (when (:catching-up (ctx/mem c)) (escort-verdict c gap))]
+  (let [pre (when (:catching-up (ctx/mem c)) (escort-problem c gap))]
     (cond
       (= :wait pre) :catching-up
       pre {:problem pre}
@@ -166,13 +227,18 @@
       (do
         (ctx/update-mem! c dissoc :catching-up)
         (loop []
-          (let [leg (await (leg-target c target range))
-                r (await (child/call-walk c slot
-                                         {:pos (or leg target) :range (if leg 1 range) :doors :leave-open :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+          (let [{:keys [leg searching]} (await (leg-plan c target range))
+                r (when-not searching
+                    (await (child/call-walk c slot
+                                            {:pos (or leg target) :range (if leg 1 range) :doors :leave-open :escalate false :zone-tolls true :ignore-zones? (boolean (:ignore-zones? (:args c)))})))]
+            (when-not searching (ctx/update-mem! c dissoc :search-rounds))
             (cond
+              searching (let [n (inc (:search-rounds (ctx/mem c) 0))]
+                          (ctx/update-mem! c assoc :search-rounds n)
+                          (if (< max-search-rounds n) :failed :searching))
               (not= :done r) :waiting
               (not (:arrived (ctx/child-result c slot))) :failed
-              :else (let [problem (escort-verdict c gap)]
+              :else (let [problem (escort-problem c gap)]
                       (cond
                         (= :wait problem) (if leg
                                             (do (ctx/update-mem! c assoc :catching-up true) :catching-up)

@@ -96,7 +96,7 @@
       (fn ^:async t []
         (let [s (await (scenario {} {:inventory lead :entities [(cow 1 3 {:trail 9})]} 1))]
           (is (finished? s))
-          (is (= :lagging (:reason (done-event s)))))))))
+          (is (= :animal-stalled (:reason (done-event s)))))))))
 
 (deftest a-lagging-cow-is-waited-for-in-a-declared-hold-for-about-max-wait-ms
   (async done
@@ -108,7 +108,7 @@
               _ (await (submit s {} 1))
               holds (filterv #(and (= :holding (:kind %)) (= "waiting-for-animal" (some-> (:reason %) name))) @seen)
               waited (- (now) t0)]
-          (is (= :lagging (:reason (done-event s))))
+          (is (= :animal-stalled (:reason (done-event s))))
           (is (seq holds) "the wait is a declared hold")
           (is (<= escort/max-wait-ms waited) "the cow was waited for the whole bound")
           (is (< waited (+ escort/max-wait-ms 3000)) "and given up soon after it"))))))
@@ -170,7 +170,7 @@
              (fn [token args impl]
                (let [r (impl token args)]
                  (when (< x (first (:pos (fake/self p))))
-                   (swap! (fake/state p) update :entities subvec 1))
+                   (swap! (fake/state p) update :entities #(vec (rest %))))
                  r))))
 
 (defn slow-clock-from!
@@ -527,7 +527,7 @@
                  (let [r (impl token args)]
                    (when (and (nil? @saved) (hide?))
                      (reset! saved (first (:entities @(fake/state p))))
-                     (swap! (fake/state p) update :entities subvec 1))
+                     (swap! (fake/state p) update :entities #(vec (rest %))))
                    r)))
     (.override (.-world p) "wait"
                (fn [token args impl]
@@ -569,7 +569,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {} {:inventory lead :entities [(cow 1 3 {:trail 9})]} 60))]
-          (is (= :lagging (:reason (done-event s))))
+          (is (= :animal-stalled (:reason (done-event s))))
           (is (true? (:still-led (done-event s))))
           (is (< (first (:pos (fake/self (:p s)))) 14) "the body stopped when the cow fell 8 or more behind"))))))
 
