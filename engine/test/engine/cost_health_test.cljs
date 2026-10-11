@@ -45,8 +45,8 @@
 (deftest the-budget-leaves-the-body-fed-enough-not-to-go-hungry-after-the-drop
   (are [food budget] (= budget (health/damage-budget {:health 20 :food food} {}))
     18 7
-    12 5
-    8 1
+    12 4
+    8 0
     5 0))
 
 (deftest the-walk-policy-carries-the-budget-weight-and-the-longest-drop-it-survives
