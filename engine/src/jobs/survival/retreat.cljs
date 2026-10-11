@@ -260,6 +260,8 @@
          (sort-by #(- (u/dist % threat)))
          first)))
 
+(declare close-radius close-leg-s)
+
 (defn ^:async leg-step!
   "One flee step to target as a go-to child of legs of at most leg-s seconds (a flee never digs or pillars: :escalate false, and plans no route deeper or higher than 16 blocks past body and target: :y-margin;
   known dangers stay costed): true when the body arrived or got on a leg nearer, false when go-to gave up, waited or was declined."
@@ -268,6 +270,7 @@
         t0 (ctx/now c)
         r (await (ctx/call-child c slot 'jobs.movement.go-to {:pos target :range range :escalate false :y-margin 16 :at-night :go
                                                               :warn false :leg-s leg-s
+                                                              :leg-alert-within (close-radius) :leg-alert-s (close-leg-s)
                                                               :retry false :look-round false :allow-over-budget true}))
         res (when (= :done r) (ctx/child-result c slot))
         s (/ (- (ctx/now c) t0) 1000)
@@ -434,7 +437,8 @@
    ::glance-reach {:default 3 :doc "Blocks along a direction to the feet cell a glance looks at." :spec (a/int-in 0 nil)}
    ::glance-memory {:default 24 :doc "Most glanced cells a flight remembers." :spec (a/int-in 0 nil)}
    ::cover-gap {:default 5 :doc "Blocks within which a melee chaser keeps a low body from taking cover where it stands." :spec (a/num-in 0 nil)}
-   ::close-leg-s {:default 1 :doc "Seconds a flee step may search or walk while a melee hostile is within hit reach: a body that stands searching there is hit for the whole leg." :spec (a/num-in 0 nil)}
+   ::close-radius {:default 8 :doc "Blocks within which a hostile that attacks at close range (a creeper too, not a ranged mob or an enderman) bounds a flee step to close-leg-s, at its start and again during its search." :spec (a/num-in 0 nil)}
+   ::close-leg-s {:default 1 :doc "Seconds a flee step may search or walk while a close-range hostile is within close-radius, or the body was hurt: a body that stands searching there is hit for the whole leg." :spec (a/num-in 0 nil)}
    ::hurt-window-s {:default 5 :doc "Seconds after the body lost health in which a flee step is bounded to close-leg-s, even with no hostile seen in reach (an unseen attacker hits as hard)." :spec (a/num-in 0 nil)}
    ::refuge-gap {:default 10 :doc "Blocks within which a lone melee hostile the body cannot outfight is pillared against (else sealed against) before any flee step, when blocks are carried; 0 never." :spec (a/num-in 0 nil)}})
 (defn glance-reach [] (settings/get settings ::glance-reach))
@@ -446,6 +450,15 @@
 (defn refuge-gap [] (settings/get settings ::refuge-gap))
 
 (defn close-leg-s [] (settings/get settings ::close-leg-s))
+
+(defn close-radius [] (settings/get settings ::close-radius))
+
+(defn close-hitters
+  "Of the hostiles near, those that attack at close range (creepers included, not ranged mobs or endermen) within close-radius."
+  [c]
+  (filterv #(and (not (combat/ranged? %)) (not (combat/enderman? %))
+                 (<= (danger-q/mob-distance (:primitives c) %) (close-radius)))
+           (near-hostiles c)))
 
 (defn hurt-window-s [] (settings/get settings ::hurt-window-s))
 
@@ -806,7 +819,7 @@
           (let [_ (when (:cornered (ctx/mem c)) (ctx/update-mem! c dissoc :cornered))
                 _ (say-target! c target threats covered?)
                 from (u/self-pos c)
-                moved (await (leg-step! c :step target 1 (cond (or (seq (hitters c (near-hostiles c))) (recently-hurt? c)) (close-leg-s)
+                moved (await (leg-step! c :step target 1 (cond (or (seq (close-hitters c)) (recently-hurt? c)) (close-leg-s)
                                                                                        low? low-leg-s
                                                                                        :else flight-timeout-s)))]
             (ctx/update-mem! c #(if (and low? (< (u/dist from (u/self-pos c)) stall-blocks))
