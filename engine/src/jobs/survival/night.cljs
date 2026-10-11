@@ -39,6 +39,8 @@
   - a closed room around the body (roofed within :room-roof-height) with an open door: the door is shut (retreat/shut-home-door!,
     walking to it when out of reach); a door that stays open writes :night-door-failed (shelter.door-failed warn) and the
     night goes on as below.
+  - a roof over a room with a hole (a fresh :bed-open entry within sh/breach-near and no closed room, sh/breached-home?): says so once
+    (shelter.room_open warn) and walls the body in under the roof (the :enclose step), not ending roofed.
   - roofed, buried or shut in a closed room: done {:night :roofed} (the queue runs).
   - else, before any pit and while no site has failed tonight: a remembered roofed place (:roofed-places, nearest first)
     within :walk-radius whose roof the body has seen, and whose route (the straight line, sampled every 2 blocks) is lit
@@ -244,6 +246,7 @@
   (let [h (:roof-height (:args c))]
     (if (seq (sh/open-room-doors (:primitives c))) (min h pit-roof-height) h)))
 
+
 (defn ^:async shelter!
   "No bed, nobody asleep, not roofed: dig in here (jobs.survival.dig-in, one call), unless a site failed here tonight.
   The site is written :interrupted before the call (a firing after a cut mid-pit does not dig it deeper; a listed night
@@ -376,11 +379,20 @@
                     :text (str "the bed or home at " (pr-str pos) " is " (js/Math.round (u/dist here pos))
                                " blocks away, too far to walk to tonight; digging in here (carry a bed to sleep on long trips)")})))))
 
+(defn note-room-open!
+  "Once a night, with a bed found open beside a roofed body: say the room is not shut in, so the roof alone does not end the night."
+  [c]
+  (when-not (:room-open-noted (ctx/mem c))
+    (ctx/update-mem! c assoc :room-open-noted true)
+    (ctx/emit! c :shelter.room_open :warn {:pos (sh/feet (:primitives c))
+                                           :text (str "the room around the bed is not shut in (a hole in its walls); walling in under the roof at " (pr-str (sh/feet (:primitives c))))})))
+
 (defn ^:async pass
   "One choice of the night (see doc): :again, or the round's end."
   [c]
   (let [p (:primitives c)
-        roofed (sh/roofed? p (:roof-height (:args c)))
+        breached (sh/breached-home? p (ctx/view c))
+        roofed (and (sh/roofed? p (:roof-height (:args c))) (not breached))
         sheltered (:sheltered (ctx/mem c))]
     (when (and (sh/night? p) (bed-down/overdue? c)) (note-needs-bed! c))
     (cond
@@ -396,6 +408,10 @@
       (let [bed (await (sense/decide! c ::bed #(sh/bed-to-use p (ctx/view c) (bed-down/radius c) (bed-down/bed-permit c))))
             door (sh/open-room-door p (ctx/view c))]
         (when-not bed (note-bed-far! c))
+        (when breached
+          (note-room-open! c)
+          (when-not (or (:enclose (ctx/mem c)) (sites/failed-here? c))
+            (ctx/update-mem! c assoc :enclose (sh/feet p))))
         (cond
           (or bed (sh/bed-place-wanted? p (ctx/view c) (bed-down/radius c) (bed-down/bed-permit c))) (await (bed-down-step c bed))
           (log-out-wanted? c) (await (log-out-step c))

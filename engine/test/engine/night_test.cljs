@@ -601,6 +601,36 @@
             (is (= 2 (reduce + (vals (:spent r)))) (pr-str r))
             (is (re-find #"used 1 dirt, 1 stone \(night shelter" (:text r)) (pr-str r))))))))
 
+(def breached-room (merge st/floor (dissoc st/bed-room "-2,64,0" "-2,65,0")))
+
+(defn run-night-in
+  "Night in world with a fresh :bed-open entry at the bed; calls (f {:p :seen}) once the queue is empty."
+  [world f]
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (st/setup (merge {:time night :inventory st/dirt-stack} world))]
+          (mem/write! (:store eng) :bed-open {:pos {:x 6 :y 64 :z 0}} sh/bed-open-policy)
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (tu/run-until-empty eng 40))
+          (f {:eng eng :p p :seen seen}))))))
+
+(deftest a-roof-over-a-breached-room-does-not-end-the-night
+  (run-night-in {:blocks breached-room}
+                (fn [{:keys [p seen]}]
+                  (is (seq (st/calls p "place")) "the body walled itself in under the roof instead of calling a hole in the wall roofed"))))
+
+(deftest a-closed-room-with-a-stale-bed-open-entry-ends-the-night-roofed
+  (run-night-in {:blocks st/bed-room}
+                (fn [{:keys [p]}]
+                  (is (empty? (st/calls p "place")) "shut in: nothing to do")
+                  (is (empty? (tu/walk-calls p))))))
+
+(deftest a-breached-room-is-said
+  (run-night-in {:blocks breached-room}
+                (fn [{:keys [seen]}]
+                  (is (re-find #"not shut in" (str (:text (first (st/emitted seen :shelter.room_open)))))))))
+
 ;; ------------------------------------------------------------------ job: a roofed place close by
 
 (def home-roof {"10,66,0" "stone"})

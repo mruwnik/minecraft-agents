@@ -20,6 +20,8 @@
                  :doc "Blocks within which a :spawn-set or :spawn-bed entry counts as the respawn point of a bed (either half)."}
    ::room-roof-height {:default 16 :spec (a/int-in 1 nil)
                        :doc "How high above the feet a roof may be and still make the closed room around the body a shelter."}
+   ::breach-near {:default 8 :spec (a/int-in 0 nil)
+                  :doc "Blocks within which a fresh :bed-open entry makes a roofed body's room count as breached when it is not shut in."}
    ::door-failed-ms {:default 600000 :spec (a/int-in 0 nil)
                      :doc "How long (ms) a room door the night could not shut is left alone from the cell it was tried at."}
    ::default-player-radius {:default 128 :spec (a/int-in 1 nil)
@@ -29,6 +31,7 @@
 (defn default-player-radius [] (settings/get settings ::default-player-radius))
 (defn spawn-near [] (settings/get settings ::spawn-near))
 (defn room-roof-height [] (settings/get settings ::room-roof-height))
+(defn breach-near [] (settings/get settings ::breach-near))
 (defn door-failed-ms [] (settings/get settings ::door-failed-ms))
 
 (def ms-per-day
@@ -505,6 +508,16 @@
   [p]
   (and (roofed? p (room-roof-height)) (reach/closed-room? p (feet p))))
 
+(defn breached-home?
+  "Whether the roofed body's room has a hole: a :bed-open entry (a bed found open) within breach-near blocks and the body
+  not shut in a closed room. A bare roof alone is no sign of a home."
+  [p view]
+  (let [self (feet p)]
+    (boolean (and (roofed? p (room-roof-height))
+                  (some #(<= (u/dist self (:pos (:data %))) (breach-near)) (mem/entries view :bed-open))
+                  (not (shut-in-room? p))
+                  (not (in-own-shelter p (:data (mem/latest view :shelter))))))))
+
 (defn door-key [{:keys [x y z]}] [x y z])
 
 (defn open-room-doors
@@ -539,6 +552,7 @@
                 (and (not buried) (bed-place-wanted? p view (bed-radius view args) permit?))
                 (and (not buried) (log-out-for-sleepers? p view))
                 (not (safe-from-night? p (:roof-height args default-roof-height)))
+                (breached-home? p view)
                 (seq (open-room-doors p))))
        (or (shut-in-by-day? p shelter (:data (mem/latest view :shelter-trapped)))
            (some? (bed-to-collect p view)))))))
