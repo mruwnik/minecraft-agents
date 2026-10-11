@@ -38,6 +38,12 @@
     (boolean (or (contains? escalate-reasons reason)
                  (and (= :abilities reason) (= :never doors) (= :open (some-> (:kind result) keyword)))))))
 
+(defn dive?
+  "Whether a give-up with result is a way that dives (:way-dives) that go-to may climb out of by a stair (c :dive-stair,
+  the setting)."
+  [c result]
+  (boolean (and (:dive-stair c) (= :way-dives (some-> (:reason result) keyword)))))
+
 (defn shelter-exit?
   "Whether a give-up with result may leave the body's own shelter instead: the walk proved the way needs the world
   changed, the body is shut in its shelter and it is not night (dig-in-leave/leave-unsafe)."
@@ -159,7 +165,8 @@
 (defn count-escalation
   "The count toward max-escalations of an escalation starting d from the goal, given memory m: {:fruitless n
   :escalation-best b}. One that starts more than 1 block nearer than any before (b, the least so far) counts as the
-  first again: a stair that climbed is a way made, and a deep climb takes more than max-escalations of them."
+  first again: a stair that climbed is a way made, and a deep climb takes more than max-escalations of them. On a
+  climb away from a dive (memory :dive-climb) d is the height still to gain: its stairs may lead off sideways."
   [m d]
   (let [best (:escalation-best m)
         nearer? (and best (< d (dec best)))]
@@ -173,7 +180,9 @@
   [c pos failed]
   (let [{:keys [tries status result]} (:give-up (ctx/mem c))
         feet (end/feet-cell c)
-        counted (count-escalation (ctx/mem c) (u/dist (zipmap [:x :y :z] feet) pos))
+        counted (count-escalation (ctx/mem c) (if (:dive-climb (ctx/mem c))
+                                                (- (:y pos) (second feet))
+                                                (u/dist (zipmap [:x :y :z] feet) pos)))
         n (:fruitless counted)
         _ (when (<= n max-escalations) (await (look-round! c feet)))
         goal (mapv #(js/Math.floor (% pos)) [:x :y :z])
@@ -218,7 +227,7 @@
           (fn [seconds] (and (number? seconds) (> seconds (* 3 stair-step-s (:steps e))))))))))
 
 (defn escalate?
-  "Whether a give-up with result may escalate instead: a carried block fills the 1-cell gap it was refused (gap-fill), or the body is shut in (reach/enclosed?) and no door or gate
+  "Whether a give-up with result may escalate instead: a carried block fills the 1-cell gap it was refused (gap-fill), its only way dives (dive?), or the body is shut in (reach/enclosed?) and no door or gate
   borders where it can walk (escape/door-beside?: that is its way out; an iron door, or any door under :doors :never,
   is a wall). Never out of
   the body's own shelter: it is shut in on purpose."
@@ -228,14 +237,16 @@
        (or (shelter-exit? c result)
            (some? (gap-fill c result (:skipped-steps (ctx/mem c) #{})))
            (sprint-only? result)
+           (dive? c result)
            (and (escalate-reason? result (some-> (:doors (:args c)) keyword))
                 (escape/enclosed? (:primitives c) (some-> (:doors (:args c)) keyword))
                 (not (escape/door-beside? (:primitives c) (end/feet-cell c) (some-> (:doors (:args c)) keyword)))))))
 
 (defn ^:async give-up-or-escalate! [c pos tries status result]
   (if (escalate? c result)
-    (do (ctx/update-mem! c assoc :give-up {:tries tries :status status
-                                           :result (select-keys result [:status :reason :kind :cells :near :one-way :at])})
+    (do (ctx/update-mem! c assoc :dive-climb (dive? c result)
+                         :give-up {:tries tries :status status
+                                   :result (select-keys result [:status :reason :kind :cells :near :one-way :at :dip :rise])})
         (await (escalate! c pos nil)))
     (end/give-up! c pos tries status result
                   (when (and (not (sh/sheltered-in c))
@@ -251,12 +262,21 @@
   (and (< (second (end/feet-cell c)) (js/Math.floor (:y pos)))
        (escape/enclosed? (:primitives c) (some-> (:doors (:args c)) keyword))))
 
+(defn dive-climb-on?
+  "Whether a stair cut because the only way dives (memory :dive-climb) leaves the body still under ground below the
+  goal pos: a walk would lead back down the stair toward the dive, so the next stair follows at once."
+  [c pos]
+  (boolean (and (:dive-climb (ctx/mem c))
+                (< (second (end/feet-cell c)) (js/Math.floor (:y pos)))
+                (sh/buried? (:primitives c)))))
+
 (defn escalated!
   "The child made a way (or part of one, done false): walk again from a fresh count, or escalate again at once after an
-  approach, or after a whole stair that left the body shut in under the goal (climb-on?). Its holes are put back once
-  a walk round gets on past it (restore-next!)."
+  approach, after a whole stair that left the body shut in under the goal (climb-on?), or after any stair that left it
+  under ground on its climb away from a dive (dive-climb-on?). Its holes are put back once a walk round gets on past
+  it (restore-next!)."
   [c pos {:keys [step]} done?]
-  (let [again? (or (= :approach step) (and done? (= :stair step) (climb-on? c pos)))]
+  (let [again? (or (= :approach step) (and (= :stair step) (or (and done? (climb-on? c pos)) (dive-climb-on? c pos))))]
     (ctx/update-mem! c #(cond-> (-> % (dissoc :escalation :escalation-from :planned :holes-before :best)
                                     (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {}))
                           again? (assoc :escalate-now true)
@@ -292,11 +312,14 @@
                                                   " by hand (slow, the drops are lost)")})))
 
 (defn escalation-stopped!
-  "The child changed something before it stopped: walk again (escalated!) after a go-to.escalation-stopped warn."
+  "The child changed something before it stopped: walk again (escalated!) after a go-to.escalation-stopped warn. On a
+  climb away from a dive (dive-climb-on?) the next stair takes another heading instead."
   [c pos {:keys [step] :as detail}]
   (ctx/emit! c :go-to.escalation-stopped :warn (assoc detail :text (str (name step) " stopped part way: "
                                                                         (some-> (:reason detail) name)
-                                                                        "; walking again")))
+                                                                        (if (dive-climb-on? c pos) "; climbing on another way" "; walking again"))))
+  (when (dive-climb-on? c pos)
+    (ctx/update-mem! c update :skipped-steps (fnil conj #{}) (skip-key (:escalation (ctx/mem c)))))
   (escalated! c pos detail false))
 
 (defn ^:async escalation-next!

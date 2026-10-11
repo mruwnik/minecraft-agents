@@ -122,8 +122,10 @@
     estimated y) or :stand-in true (a column with no ground known: the feet y). The result is also a :result info event.
   - A body under ground (jobs.lib.shelter/buried?) whose goal lies ::climb-rise blocks or more above it plans no route
     deeper than ::climb-dip blocks below where the call first found it so (it does not dive through deep caves to come
-    up under the goal); with no other way it gives up :why :way-dives with :dip and :rise, for the caller to cut a
-    stair up. An explicit :y-margin switches this off.
+    up under the goal). With no other way it cuts a stair up toward the goal instead (setting ::climb-stair, with
+    :escalate: the escalation's stair, a go-to.escalated {:step :stair :why :way-dives}), stair after stair with no walk
+    in between while it is under ground below the goal; else, or when no stair can be cut, it gives up :why :way-dives
+    with :dip and :rise. An explicit :y-margin switches all of this off.
   - Every walk writes a :moved memory entry {:from :to :status :target} (arrived, partial or blocked) for
     the stuck trigger.
   - :doors (jobs.lib.pass): :shut (default) opens a shut door, gate or trapdoor with an empty hand, passes and
@@ -193,6 +195,7 @@
    ::dry-walk-rounds {:default 3 :doc "Walk rounds (search slices or walks) the walk on from an arrival in water to a dry stand takes at most." :spec (a/int-in 1 nil)}
    ::climb-rise {:default 16 :doc "Blocks a goal must lie above a body under ground for its go-to to plan no dive (::climb-dip)." :spec (a/num-in 0 nil)}
    ::climb-dip {:default 24 :doc "Blocks below where it began that a go-to of a body under ground to a goal far above (::climb-rise) may plan; a way that dives deeper is not walked (:way-dives)." :spec (a/num-in 0 nil)}
+   ::climb-stair {:default true :doc "Whether a go-to that would give up :way-dives cuts a stair up instead (its escalation, when :escalate allows)." :spec boolean?}
    ::night-wait-ms {:default 1000 :doc "Milliseconds a go-to waits before it yields :continue while it holds for day inside a shelter." :spec (a/int-in 0 nil)}
    ::plug-wait-ms {:default 180000 :doc "Milliseconds a go-to shut in by its retreat plug holds for a known hostile (:sealed-hostile-near) before it walks on as without the hold." :spec (a/int-in 0 nil)}
    ::plug-wait-min-food {:default 6 :doc "Food at or under which a go-to shut in by its retreat plug no longer holds for a hostile: starving beats waiting." :spec (a/num-in 0 20)}
@@ -213,6 +216,7 @@
 (defn night-wait-ms [] (settings/get settings ::night-wait-ms))
 (defn climb-rise [] (settings/get settings ::climb-rise))
 (defn climb-dip [] (settings/get settings ::climb-dip))
+(defn climb-stair [] (settings/get settings ::climb-stair))
 (defn plug-wait-ms [] (settings/get settings ::plug-wait-ms))
 (defn plug-wait-min-food [] (settings/get settings ::plug-wait-min-food))
 (defn plug-wait-min-health [] (settings/get settings ::plug-wait-min-health))
@@ -691,7 +695,7 @@
 (defn dive-end
   "A fruitless round's result as go-to gives it up under a dive floor: a search the floor cut short (:box) is :way-dives."
   [c pos result]
-  (if (and (:y-below c) (= :box (some-> (:reason result) keyword)))
+  (if (and (:dive-floor c) (= :box (some-> (:reason result) keyword)))
     (assoc result :reason :way-dives :dip (climb-dip) :rise (js/Math.round (- (:y pos) (:y (u/self-pos c)))))
     result))
 
@@ -699,7 +703,7 @@
   (let [floor (dive-floor! c0 pos)
         c (cond-> c0
             (:over-budget (ctx/mem c0)) (assoc :over-budget true)
-            floor (assoc :y-below (max 0 (- (js/Math.floor (:y (u/self-pos c0))) floor))))
+            floor (assoc :dive-floor floor :dive-stair (climb-stair)))
         from (u/self-pos c)
         d (u/dist from pos)
         pw (wworld/path-world (:primitives c))]

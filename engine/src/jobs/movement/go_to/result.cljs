@@ -84,7 +84,7 @@
   "The give-up reason in words, for the :text of the :unreachable event and the result: no map dumps."
   [pos {:keys [why kind detail escalation shut-in nearest-hostile resets-spent mob mob-distance explored torches waypoint-why heal hp-cost hp-budget low-passage dip rise]}]
   (str "gave up walking to " (if (map? pos) (let [{:keys [x y z]} pos] [x y z]) pos) ": "
-       (if escalation
+       (if (and escalation (not= :way-dives why))
          (str "shut in here; " (escalation-words escalation))
          (case why
            :abilities (str (if shut-in "the body is shut in and " "it ") (or (kind-words kind) (str "needs a " (some-> kind name) " move the body cannot make")))
@@ -110,7 +110,11 @@
            :air "every way there under water runs out of air"
            :air-lethal "every way there under water would drown the body to death"
            :one-way "the way back is one-way"
-           :way-dives (str "the goal is " rise " blocks above and the only way found dives more than " dip " blocks below where the walk began under ground: cut a stair up, or pass :y-margin to walk the deep way")
+           :way-dives (str "the goal is " rise " blocks above and the only way found dives more than " dip " blocks below where the walk began under ground: "
+                           (if escalation
+                             (str "its own stair up failed (" (escalation-words escalation) "); cut one from another spot")
+                             "cut a stair up")
+                           ", or pass :y-margin to walk the deep way")
            :door-stuck "a door in the way will not open"
            :unseen-floor-dark (str "the way goes down onto floors it cannot see in the dark: carry a torch (held in the off hand it sees deeper), light the way, or set :place-torches (go-to lights them)"
                                    (case torches
