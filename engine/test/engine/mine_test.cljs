@@ -1062,7 +1062,44 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (side-ore-run 1))]
-          (is (nil? (get (inv s) "raw_iron"))))))))
+          (is (nil? (get (inv s) "raw_iron")))
+          (is (= [[1 65 -2]] (:unreached (done-event s))) "the seen ore it left is reported"))))))
+
+(deftest beside-body-takes-the-column-round-the-feet-from-one-below-to-above-the-head
+  (doseq [[pos want] [[{:x 1 :y 63 :z -1} true]
+                      [{:x 0 :y 63 :z 0} false]
+                      [{:x 1 :y 66 :z 1} true]
+                      [{:x 1 :y 67 :z 1} false]
+                      [{:x 2 :y 64 :z 0} false]
+                      [{:x 1 :y 62 :z 0} false]]]
+    (is (= want (stay/beside-body? {:x 0 :y 64 :z 0} pos)) (pr-str pos))))
+
+(defn ^:async below-ore-run
+  "A stay-level mine east, ore at (0 63 -1) one below a cell of the body's own earlier tunnel beside the start; drops as given."
+  [drops]
+  (let [s (start {:world (-> (rock-world {"0,64,-1" "air" "0,65,-1" "air" "0,63,-1" "iron_ore" "-1,64,0" "air" "-1,65,0" "air"})
+                             (assoc :drops drops)
+                             (update :inventory into [{:name "cobblestone" :count 5}]))})]
+    (mem/write! (:store (:eng s)) :tunnel-way {:dim "overworld" :origin [0 64 -1] :delta [0 -1] :steps 0})
+    (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 3 :stay-level true :mend false}) {})
+    (await (run-ticks s 400))
+    s))
+
+(deftest stay-level-takes-ore-one-below-the-tunnel-and-shuts-the-hole
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (below-ore-run {"iron_ore" "raw_iron" "stone" "cobblestone"}))]
+          (is (= 1 (get (inv s) "raw_iron")) (pr-str (keep :text @(:seen s))))
+          (is (= "cobblestone" (block-at s 0 63 -1)) "the hole is shut after the drop is in the bag"))))))
+
+(deftest stay-level-shuts-the-hole-even-when-the-drop-was-not-picked-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (below-ore-run {"stone" "cobblestone"}))]
+          (is (some #{[0 63 -1]} (dug-cells s)) (pr-str (keep :text @(:seen s))))
+          (is (= "cobblestone" (block-at s 0 63 -1)) (pr-str (keep :text @(:seen s)))))))))
 
 (deftest stay-level-stops-open-when-it-cannot-seal
   (async done

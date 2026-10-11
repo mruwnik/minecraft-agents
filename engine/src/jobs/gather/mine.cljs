@@ -123,7 +123,9 @@
   seen ore within one column of the body counts, and a cut that opens into air beyond the tunnel is refilled with a carried building
   block, ending the tunnel :breach-sealed (:breach-open when it cannot seal). Seen ore 2 to :ore-reach blocks straight out from the body
   (feet or head height, through rock seen solid) is taken by a child mine run: a stay-level side cut that digs it and walks back, its
-  mouth then shut with a carried block (info mine.side); the ore is skipped afterwards.
+  mouth then shut with a carried block (info mine.side); the ore is skipped afterwards. Seen ore one column round the feet from one cell below to one over the head is dug from the stand; the hole it leaves is
+  shut with a carried block once the drop is collected (the body steps back to the tunnel line first; warn mine.hole-open and
+  :holes-open in the result when it cannot). Seen ore it did not take is listed in the result as :unreached (up to 10).
 
   Torches: a dig of seen ore that takes the body 4+ blocks off the tunnel line hangs one torch there the same way
   (none within 4 of an earlier branch torch). The strip tunnel hangs a torch (jobs.access.tunnel/torch-at: a wall torch in the head cell, else a floor
@@ -322,6 +324,7 @@
                     (filter #(= :ok (second %)))
                     (map (fn [[pos]] (let [v (access/may-dig? in pos)] [pos v (access/judge v accept)]))))]
     {:side side
+     :far (when stay? (into [] (comp (remove #(stay/beside-body? (cell-of here) %)) (remove (set (map :pos side))) (map access/cell)) seen))
      :targets (->> judged (filter #(= :ok (nth % 2))) (map first) (sort-by (juxt #(if (ground %) 1 0) #(u/dist here %) #(- (:y %)))) vec)
      :refused (into [] (comp (filter #(= :refused (nth % 2))) (map second)) judged)
      :wet? (boolean (some #(= :wet (second %)) graded))
@@ -386,7 +389,7 @@
 
 (defn dug-text
   "The descent and the tunnel of a run, for the end texts: \"; stair down 6 steps; tunnel 3 blocks east at y 58\" (empty for neither)."
-  [{:keys [descent tunnel shaft] suggest :shaft-suggest} reason]
+  [{:keys [descent tunnel shaft unreached] suggest :shaft-suggest} reason]
   (if-let [{:keys [id n to-y branch]} (when (= :used (:state shaft)) shaft)]
     (str "; via shaft " id " (stair " (:steps descent 0) " steps to y " to-y ")"
          (when branch (str ", branch " n " " (name (:heading branch)) " " (:steps tunnel 0) " blocks")))
@@ -394,17 +397,19 @@
          (some-> suggest suggest-text)
          (when (pos? (:steps tunnel 0)) (str "; tunnel " (:steps tunnel) " blocks " (:heading tunnel) " at y " (:y (:origin tunnel))))
          (when (and (zero? (:steps descent 0)) (:stop descent)) (str "; stair stopped: " (name (:stop descent))))
-         (when-let [stop (:stop tunnel)] (when (not= :tunnel-length stop) (str "; tunnel stopped: " (name stop)))))))
+         (when-let [stop (:stop tunnel)] (when (not= :tunnel-length stop) (str "; tunnel stopped: " (name stop))))
+         (when (seq unreached) (str "; seen ore out of reach at " (str/join " " (map #(str/join "," %) unreached)))))))
 
 (defn finish!
   "Emit the outcome, hand it to the parent and end the job."
   [c]
   (let [{:keys [goal mended dig-reason resumes tunnel left descent wet-skipped] :as m} (ctx/mem c)
         suggest (shaft-suggest m (:args c))
-        m (assoc m :shaft-suggest suggest)
+        unreached (into [] (comp (filter (fn [[x y z]] (contains? (kinds (:args c)) (u/seen-name (:primitives c) {:x x :y y :z z})))) (take 10)) (:unreached m))
+        m (assoc m :shaft-suggest suggest :unreached unreached)
         got (max 0 (- (carried c) (- goal (:count (:args c)))))
         reason (if (and (zero? got) (pos? (or wet-skipped 0)) (#{:none :no-drops :tunnel-length :tunnel-stopped} (:reason m))) :wet (:reason m))
-        why (cond-> {} dig-reason (assoc :dig-reason dig-reason) (or (= :no-stone-found reason) (pos? (:steps descent 0))) (assoc :descent descent) (= :wet reason) (assoc :wet-skipped (or wet-skipped 0)) resumes (assoc :resumes resumes) suggest (assoc :shaft-suggest suggest)
+        why (cond-> {} dig-reason (assoc :dig-reason dig-reason) (or (= :no-stone-found reason) (pos? (:steps descent 0))) (assoc :descent descent) (= :wet reason) (assoc :wet-skipped (or wet-skipped 0)) resumes (assoc :resumes resumes) suggest (assoc :shaft-suggest suggest) (seq unreached) (assoc :unreached unreached) (seq (:holes-open m)) (assoc :holes-open (:holes-open m))
               (pos? (:steps tunnel 0)) (assoc :tunnel (-> tunnel (select-keys [:origin :heading :steps :stop :end :back-at :walked-back?]) (update :origin access/cell)))
               (seq (ore-pick/picked c)) (assoc :ores (ore-pick/picked c))
               (seq left) (assoc :left (mapv (fn [[pos n]] {:pos pos :count n}) left)))]
@@ -564,7 +569,8 @@
 (defn dug-booked!
   "Book a dig of the mined block at pos: drops to collect, a look round at the next cell."
   [c pos]
-  (ctx/update-mem! c #(-> % (dissoc :digging) (assoc :failures 0 :collecting true :looked :dug :dug-at (access/cell pos)))))
+  (ctx/update-mem! c #(cond-> (-> % (dissoc :digging) (assoc :failures 0 :collecting true :looked :dug :dug-at (access/cell pos)))
+                        (:stay-level (:args c)) (update :holes (fnil conj []) (access/cell pos)))))
 
 (defn settle-dig!
   "A round cut during a dig of the mined block (:digging written before it) books the dig when the cell is air now."
@@ -1072,7 +1078,7 @@
   is blocked from here; a body within reach that cannot get closer digs from there. :there, :partial or :blocked
   (jobs.lib.near/go-near!)."
   [c pos]
-  (let [walked (await (near/go-near! c pos (if (drop-in-line? c pos) (reach) 1) (cond-> {:zone-tolls true} (underground? c) (assoc :at-night :go))))]
+  (let [walked (await (near/go-near! c pos (if (or (:stay-level (:args c)) (drop-in-line? c pos)) (reach) 1) (cond-> {:zone-tolls true} (underground? c) (assoc :at-night :go))))]
     (if (and (not= :there walked) (u/within? (u/self-pos c) (cell-of pos) (reach)))
       :there
       walked)))
@@ -1306,9 +1312,10 @@
 (defn ^:async dig-round-1! [c]
   (let [{:keys [goal failures dry looked]} (ctx/mem c)
         {:keys [max-failures wet dry-digs tunnel-length]} (:args c)
-        {:keys [targets refused wet? wet-n side]} (scan c)
+        {:keys [targets refused wet? wet-n side far]} (scan c)
         ready? (and (< (carried c) goal) (< (or dry 0) dry-digs) (< failures max-failures) (some? looked))
         pos (when ready? (await (next-target! c targets)))]
+    (when (seq far) (ctx/update-mem! c update :unreached #(into (vec %) (remove (set %)) far)))
     (cond
       (>= (carried c) goal) (to-mend! c :count)
       (>= (or dry 0) dry-digs) (do (ctx/emit! c :mine.gave-up :warn {:reason :no-drops :dry dry :text (str "mine gave up: " dry " digs brought nothing")})
@@ -1340,12 +1347,38 @@
                   (seq refused) (to-mend! c :refused)
                   :else (to-mend! c (if (and wet? (not wet)) :wet :none)))))))
 
-(defn ^:async dig-round!
-  "The ores within reach first, then one piece of the digging."
+(defn ^:async shut-holes!
+  "Fill each cell an ore was dug from in the wall (stay-level, after its drop was collected) with a carried block, so no cut
+  stays open beside the tunnel. A body that went into a hole to fetch its drop first steps back to the tunnel line. A hole that
+  cannot be filled warns mine.hole-open and is listed in the result."
   [c]
-  (if (= :continue (await (ore-pick/pick! c {:leave (kinds (:args c))})))
-    :continue
-    (await (dig-round-1! c))))
+  (let [{:keys [holes tunnel start]} (ctx/mem c)
+        feet (cell-of (u/self-pos c))
+        in-hole? (some #(and (= (:x feet) (% 0)) (= (:z feet) (% 2)) (<= 0 (- (% 1) (:y feet)) 1)) holes)
+        line (if tunnel (step-cell tunnel (:steps tunnel)) start)]
+    (if (and in-hole? (some? (await (step-to! c line))))
+      (do (ctx/update-mem! c #(-> % (dissoc :holes) (update :holes-open into holes)))
+          (ctx/emit! c :mine.hole-open :warn {:cells holes :text (str "mine could not leave the hole it dug at " (str/join " " (map #(str/join "," %) holes)) " to shut it")})
+          :again)
+      (loop [[[x y z] & more] holes open []]
+        (if x
+          (do (await (ctx/act c :look (clj->js {:pos {:x (+ x 0.5) :y (+ y 0.5) :z (+ z 0.5)}})))
+              (look/see! c)
+              (recur more (cond-> open (rules/air (u/seen-name (:primitives c) {:x x :y y :z z})) (conj {:x x :y y :z z}))))
+          (let [shut (or (empty? open) (await (stay/seal! c (rules-in c) open)))]
+            (ctx/update-mem! c #(cond-> (dissoc % :holes) (not shut) (update :holes-open into (map access/cell open))))
+            (when-not shut
+              (ctx/emit! c :mine.hole-open :warn {:cells (mapv access/cell open)
+                                                  :text (str "mine could not shut the hole it dug at " (str/join " " (map #(str/join "," (access/cell %)) open)))}))
+            :again))))))
+
+(defn ^:async dig-round!
+  "A hole dug in the wall is shut first, then the ores within reach, then one piece of the digging."
+  [c]
+  (cond
+    (seq (:holes (ctx/mem c))) (await (shut-holes! c))
+    (= :continue (await (ore-pick/pick! c {:leave (kinds (:args c))}))) :continue
+    :else (await (dig-round-1! c))))
 
 ;; ------------------------------------------------------------------ mend
 

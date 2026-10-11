@@ -31,11 +31,13 @@
     (set (concat stairs tunnels))))
 
 (defn beside-body?
-  "Whether the target is one column or less from the body's feet cell and at its feet or head height."
+  "Whether the target is one column or less from the body's feet cell, from one below it to one over the head (the cell under the feet itself never)."
   [body target]
-  (and (<= (abs (- (:x target) (:x body))) 1)
-       (<= (abs (- (:z target) (:z body))) 1)
-       (<= 0 (- (:y target) (:y body)) 1)))
+  (let [dx (- (:x target) (:x body))
+        dz (- (:z target) (:z body))
+        dy (- (:y target) (:y body))]
+    (and (<= (abs dx) 1) (<= (abs dz) 1)
+         (or (<= 0 dy 2) (and (= -1 dy) (not (and (zero? dx) (zero? dz))))))))
 
 (def side-deltas {"north" [0 -1] "south" [0 1] "east" [1 0] "west" [-1 0]})
 
