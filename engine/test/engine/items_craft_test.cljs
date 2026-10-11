@@ -148,9 +148,9 @@
         (doseq [spec [:unreachable :noPath]]
           (let [[result p seen eng] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks table-block spec ["10,64,0"]}
                                               {:item "bread"}))]
-            (is (= {:made 0 :status :stopped :reason "unreachable"} result))
-            (is (= 3 (count (tu/walked-to eng))))
-            (is (some #(= :craft.gave-up (:kind %)) @seen))))))))
+            (is (= {:made 0 :status :stopped :reason "unreachable"} (select-keys result [:made :status :reason])))
+            (is (= 1 (count (tu/walked-to eng))))
+            (is (some #(= :craft.no-table (:kind %)) @seen))))))))
 
 (deftest craft-does-not-repeat-the-craft-act-while-the-walk-to-its-table-waits
   (async done
@@ -436,14 +436,42 @@
           (is (= {:made 1 :spent {"crafting_table" 1}} (select-keys result [:made :spent])))
           (is (= 1 (get (inv p) "bread"))))))))
 
-(deftest craft-fetch-false-without-a-table-stops-no-table
+(deftest craft-fetch-false-still-puts-a-carried-table-down
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory [{:name "wheat" :count 3} {:name "crafting_table" :count 1}]})
               result (await (child-outcome eng job {:item "bread" :fetch false} 40))]
+          (is (= 1 (:made result)))
+          (is (= 1 (get (inv p) "bread"))))))))
+
+(deftest craft-fetch-false-without-a-table-stops-no-table
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (craft {:inventory [{:name "wheat" :count 3}]} {:item "bread" :fetch false}))]
           (is (= {:made 0 :status :stopped :reason "no-table"} result))
-          (is (= 1 (get (inv p) "crafting_table"))))))))
+          (is (nil? (get (inv p) "bread"))))))))
+
+(deftest craft-does-not-walk-twice-to-a-walled-in-table-and-says-so
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result _ _ eng] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks table-block :unreachable ["10,64,0"]}
+                                             {:item "bread" :fetch false}))]
+          (is (= {:made 0 :status :stopped :reason "unreachable"} (select-keys result [:made :status :reason])))
+          (is (= 1 (count (tu/walked-to eng))) "a table the walk cannot reach is not walked to again")
+          (is (re-find #"cannot be reached" (:text result))))))))
+
+(deftest craft-says-why-the-carried-table-could-not-be-put-down
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [around (vec (for [y [64 65] [dx dz] craft/table-offsets] [dx y dz]))
+              [result] (await (craft {:inventory [{:name "wheat" :count 3} {:name "crafting_table" :count 1}] :blocks table-block :unreachable ["10,64,0"]}
+                                     {:item "bread" :avoid around}))]
+          (is (= "unreachable" (:reason result)))
+          (is (re-find #"carried crafting_table could not be put down" (:text result))))))))
 
 (deftest craft-goes-on-after-a-timeout-that-made-something
   (async done
@@ -530,5 +558,5 @@
     (tu/run-async done
       (fn ^:async t []
         (let [[result p] (await (craft {:inventory [{:name "crafting_table" :count 1}]} {:item "bread" :fetch false}))]
-          (is (some? (:reason result)) (pr-str result))
+          (is (some? (:short result)) (pr-str result))
           (is (= 1 (get (inv p) "crafting_table"))))))))
