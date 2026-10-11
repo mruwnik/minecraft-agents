@@ -264,27 +264,49 @@
                 (ctx/update-mem! c update :looked-pen (fnil conj []) (cell unk))
                 :continue))))
 
-(defn survey-pen!
-  "The pen is read in full: choose the gate and go to the leash phase, or end with the reason."
+(defn verdict
+  "What the pen read says of the run: {:refuse reason :extra map} or {:chosen {:gate :in :out}}."
   [c answer]
   (let [{:keys [target]} (:args c)
         {:keys [gate in out] :as chosen} (choose-gate c answer)
         leaks (when chosen (other-leaks answer gate))
-        inside (count (in-pen-adults c answer))]
+        inside (count (in-pen-adults c answer))
+        refuse (fn [reason & [extra]] {:refuse reason :extra extra})]
     (cond
-      (= :no-start (:reason answer)) (finish! c :no-pen {:why :no-start})
-      (nil? chosen) (finish! c :no-gate (gate-diagnosis c answer))
-      (not (gate/allowed? c :herd.declined "herd" :place gate {:own-plans-ok? true})) (finish! c :refused)
+      (= :no-start (:reason answer)) (refuse :no-pen {:why :no-start})
+      (nil? chosen) (refuse :no-gate (gate-diagnosis c answer))
+      (not (gate/allowed? c :herd.declined "herd" :place gate {:own-plans-ok? true})) (refuse :refused)
       (not (approach-free? (:primitives c) (:inside answer) (cell gate) in out))
-      (finish! c :no-gate {:why :no-approach
-                           :cell (first (remove #(free-floor? (:primitives c) %) (take approach-cells (axis (:primitives c) (:inside answer) (cell gate) in out 0))))})
-      (seq leaks) (finish! c :leaky {:leaks (vec (take 12 leaks))})
-      (>= inside target) (finish! c :full)
+      (refuse :no-gate {:why :no-approach
+                        :cell (first (remove #(free-floor? (:primitives c) %) (take approach-cells (axis (:primitives c) (:inside answer) (cell gate) in out 0))))})
+      (seq leaks) (refuse :leaky {:leaks (vec (take 12 leaks))})
+      (>= inside target) (refuse :full)
       (< (depth (:inside answer) (cell gate) in) min-depth)
-      (finish! c :too-shallow {:cell (cell in) :depth (depth (:inside answer) (cell gate) in) :need min-depth})
-      :else (do (ctx/update-mem! c assoc :phase :leash :in-pen-start (mapv animals/key-of (in-pen-adults c answer)) :gate gate :inside-cell (u/cell-pos in) :outside-cell (u/cell-pos out)
-                                 :axis (axis (:primitives c) (:inside answer) (cell gate) in out (depth (:inside answer) (cell gate) in)))
-                  :continue))))
+      (refuse :too-shallow {:cell (cell in) :depth (depth (:inside answer) (cell gate) in) :need min-depth})
+      :else {:chosen chosen})))
+
+(defn survey-pen!
+  "The pen is read in full: choose the gate and go to the leash phase, or end with the reason."
+  [c answer]
+  (let [{:keys [refuse extra chosen]} (verdict c answer)
+        {:keys [gate in out]} chosen]
+    (if refuse
+      (finish! c refuse extra)
+      (do (ctx/update-mem! c assoc :phase :leash :in-pen-start (mapv animals/key-of (in-pen-adults c answer)) :gate gate :inside-cell (u/cell-pos in) :outside-cell (u/cell-pos out)
+                           :axis (axis (:primitives c) (:inside answer) (cell gate) in out (depth (:inside answer) (cell gate) in)))
+          :continue))))
+
+(defn precheck!
+  "Once, for a body far from the pen: the pen as the body sees and remembers it, before any walk. A definite refusal ends the
+  run here; a pen it cannot read from where it stands (unseen cells) is left to the survey at the pen. :precheck? false skips it."
+  [c]
+  (let [m (ctx/mem c)]
+    (when (and (:precheck? (:args c)) (not (:prechecked m)) (> (u/dist (u/self-pos c) (box-centre (:box (:args c)))) (near-pen)))
+      (ctx/update-mem! c assoc :prechecked true)
+      (let [answer (read-pen c)]
+        (when-not (#{:unloaded :no-start} (:reason answer))
+          (let [{:keys [refuse extra]} (verdict c answer)]
+            (when refuse (finish! c refuse extra))))))))
 
 (defn ^:async survey! [c]
   (let [centre (box-centre (:box (:args c)))]

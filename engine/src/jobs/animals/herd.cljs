@@ -10,15 +10,15 @@
             [jobs.animals.escort :as escort]
             [jobs.lib.watch :as watch]
             [jobs.animals.herd-run :as hr :refer [adults after-shut! cell census! crowd-in-radius crowd-ms crowd-out-radius deepest end! exit-shut-ms gate-cell gate-index gate-open? hold-gate! in-1 in-pen-adults led-now lure? animal-now out-1 read-pen release-step! set-phase! settle-ms settle-out-ms shut-failed! shut-look-ms transient-keys]]
-            [jobs.animals.herd-pen :refer [body-in-pen? cell-middle crowded-near? exit-dash! go-then! let-go-cell look-wait! max-leaves on-gate? set-gate! settle-at! shut-side! shut-when-clear! survey! wait-clear! waited-ms]]
-            [jobs.animals.herd-trip :refer [leash-next! pinned! remember-start! prune-led! regather! regather-or-lose! released! step-position!]]))
+            [jobs.animals.herd-pen :refer [body-in-pen? cell-middle crowded-near? exit-dash! go-then! let-go-cell look-wait! max-leaves on-gate? precheck! set-gate! settle-at! shut-side! shut-when-clear! survey! wait-clear! waited-ms]]
+            [jobs.animals.herd-trip :refer [food-first! leash-next! pinned! remember-start! prune-led! regather! regather-or-lose! released! step-position!]]))
 
 (def doc
   "Bring grown animals of type :mob into the pen :box until it holds :target of them. Each animal goes
   on a lead (:method :lead) or follows the food held in hand (:method :lure, the mob's breeding food: wheat,
   carrots, seeds), and is walked through the gate one cell at a time (a long drag jams in a 1-wide gate).
   :auto (the default) leads when a lead or a slime ball is carried and lures otherwise. A lure run fetches the food
-  when none is carried (no source: ends :no-food), walks within 6 blocks of the nearest animal outside the pen, and
+  when none is carried (no source: ends :no-food, the text naming the food), walks within 6 blocks of the nearest animal outside the pen, and
   puts the food away at the far end of the pen so nothing follows the body out. The lead steps below hold for both;
   \"on the lead\" means following the food in a lure run, \"let go\" means the food put away.
 
@@ -29,7 +29,9 @@
   A lured animal follows the food only within about 10 blocks: from where it was met the body walks to the pen in short legs,
   holding still while the animal trails more than 7 behind, and gives it up (given-up :lost unseen 3 s after a walk back to where it was last seen, :animal-stalled when it stops coming nearer for 10 s) rather than outrun it.
 
-  Checks before the first animal (each ends the run with its reason):
+  Checks before the first animal (each ends the run with its reason, :stopped, the result naming the leak, cell or gate). A body more than 16
+  blocks from the pen reads it first from what it sees and remembers and ends on a definite refusal before it walks (a pen it cannot read
+  from there is read at the pen; :precheck? false skips this); a lure run gets its food before the walk too. The reasons:
   - :no-pen: the pen cannot be read from :box (the result's :cell names the first unseen cell when there is one; a cell it has not seen is gone near and looked at once; one still unknown goes to the pen's gate to look in, once; still unknown ends here).
   - :leaky: the pen has a leak other than the chosen gate (:leaks lists them).
   - :no-gate: no usable gate. The gate is :gate, else the pen's gate nearest the body. It needs pen floor on
@@ -88,7 +90,7 @@
   :no-food (a lure run found no food), :no-hold (the food would not stay in hand),
   or the leash reason when nobody could be led. The body ends outside with the gate shut. The job ends completed
   when the pen holds :target or is :full, or when some animals were brought (a partial run, :short or another reason);
-  when none was brought it fails with the reason, after the result and herd.done were given, except :lost, which ends :stopped;
+  when none was brought it fails with the reason, after the result and herd.done were given, except :lost and the checks above (:no-pen, :leaky, :no-gate, :refused, :too-shallow, :no-food), which end :stopped;
   the :text names the animals given up and why (or that none other was in reach). The count
   \"N of M in the pen\" includes the animals known in the pen that the sensing cannot show from where the body ends.
 
@@ -104,6 +106,7 @@
    :timeout-s {:doc "seconds one animal may take from its lead on until it is let go" :spec (a/num-in 0 nil) :default 180}
    :method {:doc "how animals are brought: :lead (each on a lead), :lure (following the food in hand), :auto (a lead when one is carried or can be crafted from a carried slime ball, else the food)" :spec #{:auto :lead :lure} :default :auto}
    :fetch {:doc "get the food when none is carried and the run lures (jobs.lib.fetch): true, a set of kinds or a map of limits; false ends :no-food" :spec fetch/option? :default true}
+   :precheck? {:doc "a body far from the pen first reads it from what it sees and remembers and ends at once on a definite refusal (leak, no gate, too shallow), before walking; false walks to the pen first" :default true :spec boolean?}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :default false :spec boolean?}})
 
 (def leading
@@ -159,7 +162,10 @@
   (let [m (ctx/mem c)
         axis-cell #(nth (:axis m) %)]
     (case phase
-      :survey (do (remember-start! c) (await (survey! c)))
+      :survey (do (remember-start! c)
+              (or (precheck! c)
+                  (await (food-first! c))
+                  (await (survey! c))))
       :regather (await (regather! c))
       :leash (await (leash-next! c))
       :approach (if (and (lure? c) (not (:walked m)))

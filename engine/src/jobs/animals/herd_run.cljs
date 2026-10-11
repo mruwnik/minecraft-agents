@@ -149,9 +149,9 @@
 
 ;; ------------------------------------------------------------------ the end
 
-(def animal-reasons
-  "Endings about the animals, not the pen: a run that brought none stops with them named instead of failing."
-  #{:lost})
+(def stop-reasons
+  "Endings that are an answer, not a fault (the animals are lost, the pen or the food will not do): a run that brought none stops with them named instead of failing."
+  #{:lost :no-pen :leaky :no-gate :refused :too-shallow :no-food})
 
 (defn pen-keys
   "The keys of the adults in the pen: those on its cells as sensed, plus those known in it (in at the start or brought)
@@ -170,7 +170,17 @@
     (str "herd done: " (name reason) ", " n " of " target " in the pen"
          (cond
            (seq given-up) (str " (given up: " (str/join ", " (map (fn [[k r]] (str k " " (name r))) given-up)) ")")
+           (= :no-food reason) (str " (no " (str/join " or " (get animals/breeding-food mob)) " carried, none could be got)")
            (= :short reason) (str " (no other grown " mob " to fetch within " radius " blocks)")))))
+
+(defn detail-text
+  "\" (why at cell, depth)\" for a result that names the cause of a refusal, else nil."
+  [result]
+  (let [leak (first (:leaks result))
+        cell (or (:cell result) (some-> leak :pos cell))]
+    (when (or (:why result) cell)
+      (str " (" (some-> (or (:why result) (:why leak)) name) (when cell (str " at " (pr-str cell)))
+           (when (:need result) (str ", " (:depth result) " cells in a line, " (:need result) " needed")) ")"))))
 
 (defn finish!
   "Count the pen, emit the outcome, hand it to the parent and end. A nil reason is judged by the count."
@@ -183,8 +193,8 @@
         brought (filterv inside (:brought m))
         reason (or reason
                    (if (>= (count (remove (set (keys (:given-up m))) inside)) target) :brought :short))
-        stop? (and (empty? brought) (animal-reasons reason))
-        text (end-text c reason (count inside))
+        stop? (and (empty? brought) (stop-reasons reason))
+        text (str (end-text c reason (count inside)) (detail-text extra))
         result (merge {:reason reason :inside (count inside) :target target :brought brought
                        :given-up (:given-up m {}) :gate (:gate m) :escaped (:escaped-total m 0) :animals rows}
                       extra)]
@@ -195,11 +205,7 @@
     (ctx/result! c (cond-> (assoc result :text text) stop? (assoc :status :stopped)))
     (when (and (empty? brought) (not stop?) (not (#{:brought :full} reason)))
       (throw (ex-info (str "herd brought none of the " target " wanted: " (name reason)
-                           (let [leak (first (:leaks result))
-                                 cell (or (:cell result) (some-> leak :pos cell))]
-                             (when (or (:why result) cell)
-                               (str " (" (some-> (or (:why result) (:why leak)) name) (when cell (str " at " (pr-str cell)))
-                                    (when (:need result) (str ", " (:depth result) " cells in a line, " (:need result) " needed")) ")")))
+                           (detail-text result)
                            ", " (count inside) " in the pen"
                            (when (seq (:given-up m)) (str ", given up " (pr-str (:given-up m)))))
                       result)))

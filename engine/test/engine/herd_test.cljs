@@ -667,11 +667,41 @@
                  ["no gate" {:entities [(cow 1 4 3)] :blocks {gate-key "oak_fence"}} :no-gate]
                  ["only a corner gate" {:entities [(cow 1 4 3)] :blocks {gate-key "oak_fence" "10,64,0" "oak_fence_gate"}} :no-gate]]]
           (let [s (await (scenario {:target 2} w 20))]
-            (is (failed-error s) label)
+            (is (or (= :none reason) (nil? (failed-error s))) label)
             (is (= reason (:reason (done-event s))) label)
             (is (empty? (calls-of s "useOn")) label)
             (is (empty? (on-lead s)) label)
             (is (= 1 (count (events-of s :herd.gave-up))) label)))))))
+
+(def far-floor (into {} (for [x (range -70 -10) z (range -10 16)] [(str x ",63," z) "stone"])))
+
+(deftest a-pen-that-fails-the-check-ends-the-run-before-the-body-leaves
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[label w reason key value]
+                [["a gap in the fence" {:blocks {"16,64,3" "air"}} :leaky :leaks [{:pos {:x 16 :y 64 :z 3} :why :gap}]]
+                 ["no gate" {:blocks {gate-key "oak_fence"}} :no-gate :why :no-gate-in-pen]
+                 ["a pen too shallow" {:blocks (into {} (for [z (range 0 7)] [(str "13,64," z) "oak_fence"]))} :too-shallow :depth 2]]]
+          (let [s (await (scenario {:target 2} (-> w (update :blocks merge far-floor) (assoc :self {:pos {:x -40 :y 64 :z 3}} :entities [(cow 1 -58 3)])) 20))
+                e (done-event s)]
+            (is (= reason (:reason e)) label)
+            (is (= value (if (= :leaks key) (mapv #(select-keys % [:pos :why]) (:leaks e)) (get e key))) label)
+            (is (= -40 (js/Math.round (self-x s))) (str label ": the body stayed where the animal is"))
+            (is (nil? (failed-error s)) label)
+            (is (finished? s) label)))))))
+
+(deftest no-food-ends-the-run-before-the-body-leaves
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:target 1} {:self {:pos {:x -40 :y 64 :z 3}} :blocks far-floor :inventory [] :entities [(cow 1 -58 3)]} 20))
+              e (done-event s)]
+          (is (= :no-food (:reason e)))
+          (is (re-find #"wheat" (:text e)))
+          (is (= -40 (js/Math.round (self-x s))))
+          (is (nil? (failed-error s)))
+          (is (finished? s)))))))
 
 (deftest a-gate-that-will-not-open-is-given-up-and-the-animals-let-go
   (async done
@@ -1020,7 +1050,7 @@
       (fn ^:async t []
         (let [s (await (scenario3 {} 20))
               e (done-event s)]
-          (is (failed-error s))
+          (is (nil? (failed-error s)))
           (is (= :too-shallow (:reason e)))
           (is (empty? (calls-of s "useOn")))
           (is (empty? (on-lead s)))
@@ -1032,7 +1062,7 @@
       (fn ^:async t []
         (let [s (await (scenario {:target 2} {:entities [(cow 1 4 3)] :blocks {"7,64,3" "stone" "7,65,3" "stone"}} 20))
               e (done-event s)]
-          (is (failed-error s))
+          (is (nil? (failed-error s)))
           (is (= :no-gate (:reason e)))
           (is (= :no-approach (:why e)))
           (is (empty? (calls-of s "useOn")))
@@ -1234,7 +1264,7 @@
       (fn ^:async t []
         (let [s (await (scenario {:target 1} {:entities [(cow 1 4 3)] :inventory []} 200))]
           (is (= :no-food (:reason (done-event s))))
-          (is (failed-error s)))))))
+          (is (nil? (failed-error s))))))))
 
 (deftest method-lead-with-no-lead-does-not-lure
   (async done
@@ -1264,7 +1294,7 @@
             (is (= :no-gate (:reason e)) label)
             (is (= why (:why e)) label)
             (is (= cell (:cell e)) label)
-            (is (re-find text (str (failed-error s))) label)))))))
+            (is (re-find text (:text (done-event s))) label)))))))
 
 (deftest herd-refusals-name-the-cell
   (async done
@@ -1275,7 +1305,7 @@
                  ["a pen too shallow" {:entities [(cow 1 4 3)] :blocks (into {} (for [z (range 0 7)] [(str "13,64," z) "oak_fence"]))} :too-shallow #"2 cells in a line, 5 needed"]]]
           (let [s (await (scenario {:target 2} w 20))]
             (is (= reason (:reason (done-event s))) label)
-            (is (re-find text (str (failed-error s))) label)))))))
+            (is (re-find text (:text (done-event s))) label)))))))
 
 (deftest radius-is-measured-from-where-the-body-started-not-from-the-pen
   (async done

@@ -103,8 +103,26 @@
                         (<= (u/dist origin (u/pos-of (.-pos %))) radius)))
          (animals/allowed c :herd.declined "herd" :take))))
 
+(defn ^:async fetch-food!
+  "A lure run with no food carried: fetch it (:fetch allowing), else end :no-food. Nil when food is carried."
+  [c]
+  (let [p (:primitives c)]
+    (when-not (animals/food-carried p (:mob (:args c)))
+      (let [r (when (fetch/opts c 'jobs.animals.herd) (await (fetch/fetch-untimed! c 'jobs.animals.herd lure-problem)))]
+        (cond
+          r r
+          (animals/food-carried p (:mob (:args c))) :continue
+          :else (finish! c :no-food))))))
+
+(defn ^:async food-first!
+  "Before the walk to the pen: settle the method and, for a lure run, get the food. Nil when there is nothing to do."
+  [c]
+  (when-not (:method (ctx/mem c)) (ctx/update-mem! c assoc :method (resolve-method c)))
+  (when (= :lure (:method (ctx/mem c)))
+    (await (fetch-food! c))))
+
 (defn ^:async lure-next!
-  "Fetch the mob's food when none is carried, hold it, walk within follow range of the nearest animal and start its
+  "Hold the mob's food (fetched when none is carried), walk within follow range of the nearest animal and start its
   trip; end :no-food when no food can be had, else as lead-next! when no animal is left."
   [c]
   (let [{:keys [mob]} (:args c)
@@ -112,11 +130,7 @@
         m (ctx/mem c)
         food (animals/food-carried p mob)]
     (if-not food
-      (let [r (when (fetch/opts c 'jobs.animals.herd) (await (fetch/fetch-untimed! c 'jobs.animals.herd lure-problem)))]
-        (cond
-          r r
-          (animals/food-carried p mob) :continue
-          :else (finish! c :no-food)))
+      (await (fetch-food! c))
       (let [cands (lure-candidates c)
             target (first cands)]
         (cond
