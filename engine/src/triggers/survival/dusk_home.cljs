@@ -5,7 +5,8 @@
   too-far warn: the body digs in where night finds it, and go-home's :too-far memory for that place keeps it from
   firing again. Stored args missing a key (an older entry) fall back to defaults. It does not hold at night (the night job has it), within :arrive
   blocks of the place, or underground (sh/buried?)."
-  (:require [engine.memory :as mem]
+  (:require [jobs.lib.body :as body]
+            [engine.memory :as mem]
             [jobs.lib.shelter :as sh]
             [jobs.lib.util :as u]))
 
@@ -18,7 +19,7 @@
         left-s (/ (- sh/dusk-tick (.-timeOfDay self)) 20)
         pos (sh/home-target view)]
     (boolean
-     (and pos (pos? left-s) (not (sh/sleeping? p))
+     (and pos (pos? left-s) (not (body/recovery-pending? view)) (not (sh/sleeping? p))
           (not-any? #(= pos (get-in % [:data :home])) (mem/entries view :too-far))
           (let [d (u/dist (u/self-pos {:primitives p}) pos)]
             (and (< arrive d) (<= d warn-limit)

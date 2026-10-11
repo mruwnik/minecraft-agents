@@ -3,7 +3,8 @@
   sh/rest-since, its sleep or respawn, else the first thing it remembers) with
   no bed carried and none remembered within the urgent radius gets one (jobs.items.obtain: wool from sheep, planks), so
   the night job can put it down and sleep before phantoms come."
-  (:require [jobs.lib.shelter :as sh]))
+  (:require [jobs.lib.body :as body]
+            [jobs.lib.shelter :as sh]))
 
 (def beds
   (mapv #(str % "_bed") ["white" "orange" "magenta" "light_blue" "yellow" "lime" "pink" "gray"
@@ -16,7 +17,8 @@
   sh/urgent-bed-radius."
   [p view _args]
   (boolean
-   (and (not (sh/night? p))
+   (and (not (body/recovery-pending? view))
+        (not (sh/night? p))
         (not (sh/sleeping? p))
         (>= (or (sh/days-awake-in view) 0) sh/max-days-awake)
         (nil? (sh/carried-bed p))

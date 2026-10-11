@@ -15,7 +15,8 @@
   Entries in an unloaded cell, or more than :range blocks from the body, wait until the body is near.
   Persistence is :cooldown (10 s), not :stop. A run cut short by a backoff leaves entries pending, so the condition
   stays true and a :stop latch would never clear. The retries are bounded: each try counts toward max-tries."
-  (:require [engine.args :as a]
+  (:require [jobs.lib.body :as body]
+            [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.reach :as reach]
             [jobs.lib.tidy :as tidy]
@@ -76,6 +77,6 @@
         h (u/self-pos {:primitives p})
         here {:x (:x h) :y (:y h) :z (:z h)}
         enclosed (delay (reach/enclosed? p))
-        pending (when-not (or (airborne? p) (tidy/unsafe? p args))
+        pending (when-not (or (body/recovery-pending? view) (airborne? p) (tidy/unsafe? p args))
                   (holds? p view args live enclosed here))]
     (boolean (some #(not (tried-lately? args now here (tidy/restorable? p % enclosed) %)) pending))))

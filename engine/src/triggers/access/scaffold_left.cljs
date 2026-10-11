@@ -10,7 +10,8 @@
   Runs jobs.access.cleanup, which takes exactly those entries.
   Persistence :stop: a cleanup that leaves entries holds them, so the condition turns false.
   It fires again only for new entries or once the hold has run out."
-  (:require [engine.args :as a]
+  (:require [jobs.lib.body :as body]
+            [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.ledger :as ledger]
@@ -29,7 +30,8 @@
 
 (defn scaffold-left
   [p memory args kn]
-  (boolean (and (some? (world/zones kn))
+  (boolean (and (not (body/recovery-pending? memory))
+                (some? (world/zones kn))
                 (or (settings/get settings ::at-night) (not (sh/night? p)))
                 (or (settings/get settings ::with-hostile)
                     (empty? (danger-q/known-hostiles p threats/max-follow-range {:ranged-radius (danger-q/ranged-radius)})))

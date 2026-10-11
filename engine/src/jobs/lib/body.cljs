@@ -3,6 +3,7 @@
   an unrecovered death. Memory entries :died, :recovered and :respawned are written by the engine and
   jobs.survival.recover-drops."
   (:require [engine.args :as a]
+            [engine.game :as game]
             [engine.memory :as mem]
             [engine.settings :as settings]
             [jobs.lib.util :as u]))
@@ -64,6 +65,13 @@
   [view]
   (let [death (mem/latest view :died)]
     (boolean (and death (not (respawned-since? view death))))))
+
+(defn recovery-pending?
+  "True while the body is dead or an unrecovered death is inside the drops' despawn window: the :died reflex has the
+  body, so a later reflex in a saved register that lists it ahead of :died must not start."
+  [view]
+  (boolean (or (dead? view)
+               (some #(< (game/ticks-since % view) game/despawn-ticks) (open-deaths view)))))
 
 (defn too-hurt
   "The wait reason {:reason :low-health :health :min-health :text} of a risky job while the body's health (primitives

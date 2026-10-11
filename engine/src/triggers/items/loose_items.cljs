@@ -1,6 +1,7 @@
 (ns triggers.items.loose-items
   "The loose-items trigger: a seen dropped item nearby is worth picking up (jobs.lib.loose)."
-  (:require [jobs.lib.danger :as danger-q]
+  (:require [jobs.lib.body :as body]
+            [jobs.lib.danger :as danger-q]
             [jobs.lib.loose :as loose]
             [jobs.lib.util :as u]
             [triggers.storage.inventory-nearly-full :as nearly-full]))
@@ -17,7 +18,8 @@
   [p view _args kn _live]
   (let [o (loose/options {})]
     (boolean
-     (and (not (false? (.-onGround (.self p))))
+     (and (not (body/recovery-pending? view))
+          (not (false? (.-onGround (.self p))))
           (> (u/free-slots p) (nearly-full/nearly-full-free))
           (nil? (danger-q/nearest-danger p (:danger-radius o) {} {}))
           (seq (loose/candidates p view kn {} nil))))))

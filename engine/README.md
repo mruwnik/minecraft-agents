@@ -388,6 +388,8 @@ Built-in triggers, in the order of `triggers/defaults.edn` (the default register
 | `:needs-weapon` | by day, alive and awake, with no weapon carried (`_sword`, `_axe`) and none in an open death's live pile; runs `items.obtain` `:any-of` iron, stone, wooden sword (`:comfort`, cooldown 600 s). Never at night. |
 | `:loose-items` | on the ground, not nearly full, no danger within 8, and a seen item within `:radius` 8 that `jobs.lib.loose` takes (worth / detour cost at least `:min-ratio`, or on `:always`; not on `:never`, thrown, owed to a live job or in another's zone or claim); settings only, register `:args` ignored | `items.pick-up-loose` | 30 s |
 
+While the body is dead or an unrecovered death is inside the despawn window (`jobs.lib.body/recovery-pending?`), `:night`, `:dusk-home`, `:hungry`, `:needs-bed`, `:door-left`, `:inventory-nearly-full`, `:scaffold-left`, `:tidy-pending`, `:pen-gate` and `:loose-items` do not hold, wherever a saved register lists them; `:died` does not need to be first. The danger reflexes are not held back.
+
 The dangers (`:suffocating`, `:burning`) have no cooldown and no backoff. Needs rest with a reason the agent
 sees (`:hungry` after `food.none`: 600 s, 60 s while starving). There is no timer trigger: periodic work is a job.
 To see a trigger fire without its real job, register it against `jobs.debug.notify`.

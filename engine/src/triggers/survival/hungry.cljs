@@ -1,6 +1,7 @@
 (ns triggers.survival.hungry
   "The hungry trigger, and the condition the get-food job shares with it."
-  (:require [engine.args :as a]
+  (:require [jobs.lib.body :as body]
+            [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.foods :as foods]
             [jobs.lib.shelter :as sh]
@@ -47,7 +48,8 @@
   (let [self (.self world)
         reserved (foods/reserved memory)
         urgent? (or (foods/eat-now? self args reserved) (<= (.-food self) (settings/get settings ::urgent-food)))]
-    (and (or (foods/hungry? (.-food self) (.-health self) args)
+    (and (not (body/recovery-pending? memory))
+         (or (foods/hungry? (.-food self) (.-health self) args)
              (foods/top-up? (.-food self) (.-health self) (foods/carried-names self reserved))
              (foods/eat-now? self args reserved))
          (not (resting? self memory args))

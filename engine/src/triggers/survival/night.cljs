@@ -9,10 +9,12 @@
   By day it holds while the body is shut in its own latest :shelter (no :shelter-trapped entry for the cell), or a bed
   it put down outside its own zone (:bed-placed) still stands. Roofed, buried or shut in (its dug-in shelter too) with no bed and no sleeper it does not
   hold: the queue runs. An agent that wants the night for itself mutes it."
-  (:require [jobs.lib.shelter :as sh]))
+  (:require [jobs.lib.body :as body]
+            [jobs.lib.shelter :as sh]))
 
 (def defaults {:roof-height sh/default-roof-height :bed-radius sh/default-bed-radius})
 
 (defn night
   [world memory args kn]
-  (sh/night-holds? world memory args (sh/bed-permit world kn)))
+  (and (not (body/recovery-pending? memory))
+       (sh/night-holds? world memory args (sh/bed-permit world kn))))

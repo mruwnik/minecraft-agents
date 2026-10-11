@@ -131,6 +131,27 @@
           (is (not-any? #(and (#{:error :failed} (:kind %)) (not= :body (:source %))) @seen)
               "no errors besides the death itself"))))))
 
+(deftest a-saved-register-with-hungry-before-died-still-recovers-first
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen clock]} (boot "scenarios/survival.edn"
+                                               {:time 1000 :floor [-45 -10 40 10]
+                                                :self {:food 5}
+                                                :inventory [{:name "stone_sword" :count 1}]}
+                                               1000)
+              reg (:register (core/state eng))
+              hungry (some #(when (= :hungry (:id %)) %) reg)]
+          (swap! (:state eng) assoc :register (vec (cons hungry (remove #(= :hungry (:id %)) reg))))
+          (.die (.-world p))
+          (await (run-ticks eng clock 3 1000))
+          (is (= [] (fired seen)) "a dead body starts no hunt")
+          (.respawn (.-world p))
+          (fake/swap-self! p assoc :food 5)
+          (swap! clock + 2500)
+          (await (run-ticks eng clock 3 1000))
+          (is (= :died (first (fired seen))) "the pile first, with :hungry listed ahead of :died"))))))
+
 (def survival-cooldowns
   {:suffocating 0 :burning 0 :hungry 90 :needs-bed 600 :needs-weapon 600 :night 10 :door-left 5 :died 30 :inventory-nearly-full 120 :tidy-pending 10})
 
@@ -174,11 +195,11 @@
 (def scenario-files
   (->> (fs/readdirSync "scenarios") (filter #(str/ends-with? % ".edn")) sort))
 
-(deftest died-is-registered-before-the-hostile-and-night-reflexes
+(deftest died-is-registered-before-the-other-survival-reflexes
   (doseq [f scenario-files
           :let [ids (mapv :trigger (:register (scenario/read-file (str "scenarios/" f))))
                 at (into {} (map-indexed (fn [i id] [id i])) ids)]
           :when (contains? at :died)
-          later [:hostile-near :night]
+          later [:hostile-near :night :dusk-home :hungry]
           :when (contains? at later)]
     (is (< (at :died) (at later)) (str f ": :died before " later))))

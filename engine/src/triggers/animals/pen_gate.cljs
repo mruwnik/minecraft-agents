@@ -11,7 +11,8 @@
     :gate-held     written by a job leading animals through, dropped after it shuts the gate; skipped while
                    younger than :held-s (30)
     :opened        written by a walk (jobs.lib.pass) that opened it; the shut-doors job owns that gate"
-  (:require [jobs.lib.pen-gate :as pg]))
+  (:require [jobs.lib.body :as body]
+            [jobs.lib.pen-gate :as pg]))
 
 (def defaults pg/defaults)
 
@@ -31,4 +32,4 @@
 (defn pen-gate
   "Holds when holds? says so; args :radius :min-dist :quiet-s :held-s. The job it starts shuts the gate."
   [world view args kn]
-  (if kn (holds? world view args kn) false))
+  (if (and kn (not (body/recovery-pending? view))) (holds? world view args kn) false))
