@@ -38,11 +38,38 @@
 
 (defn done [result] (fn [_] result))
 
+(def furnace-1 [5 65 102])
+(def furnace-2 [5 65 103])
+
+(defn smelt-stub
+  "jobs.items.smelt over a furnaces atom {furnace {:phase :cooking|:ready :item :count}}: the first call loads and yields, the
+  check declines :cooking until the furnace is :ready, then the next call gives the ingots; :fail makes it stop with that reason."
+  [p calls furnaces fail]
+  (let [key-of (comp pr-str :furnace :args)]
+    (assoc (get registry/jobs 'jobs.items.smelt)
+           :check (fn [c] (or (not= :cooking (:phase (get @furnaces (key-of c)))) (do (ctx/wait c {:reason :cooking}) false)))
+           :round (fn ^:async smelt-round [c]
+                    (swap! calls conj ['jobs.items.smelt (:args c)])
+                    (let [{:keys [furnace item count]} (:args c)
+                          state (get @furnaces (key-of c))]
+                      (cond
+                        fail (do (ctx/result! c {:status :stopped :reason fail}) :done)
+                        (nil? state) (do (swap! (fake/state p) update :inventory (fn [inv] (mapv #(if (= item (:name %)) (update % :count - count) %) inv)))
+                                         (swap! furnaces assoc (key-of c) {:phase :cooking :item item :count count})
+                                         :continue)
+                        :else (do (fake/add-item! p "iron_ingot" (:count state))
+                                  (swap! furnaces dissoc (key-of c))
+                                  (ctx/result! c {:smelted (:count state) :wanted (:count state)})
+                                  :done)))))))
+
+(defn ready! [furnaces] (swap! furnaces update-vals #(assoc % :phase :ready)))
+
 (defn setup
   "An engine over the site with every child of the job stubbed. results: job symbol -> (fn [ctx]) giving the child's result,
   the default being success."
-  [& {:keys [results inventory dir pos plans]}]
+  [& {:keys [results inventory dir pos plans fail-smelt]}]
   (let [results (atom results)
+        furnaces (atom {})
         p (tu/seeing-all (tu/fake {:self {:pos (or pos {:x 0 :y -27 :z 10})} :blocks (cond-> site-blocks pos (assoc "0,63,100" "stone" "12,63,100" "stone" "12,59,100" "stone"))
                                    :inventory (or inventory [{:name "torch" :count 32} {:name "iron_pickaxe" :count 1}])}))
         calls (atom [])
@@ -73,13 +100,13 @@
                            (ctx/result! c {:arrived true}))))
         clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        eng (core/create {:primitives p :jobs (assoc (merge registry/jobs stubs) 'jobs.movement.go-to go-to)
+        eng (core/create {:primitives p :jobs (assoc (merge registry/jobs stubs) 'jobs.movement.go-to go-to 'jobs.items.smelt (smelt-stub p calls furnaces fail-smelt))
                           :triggers triggers/all :dir (or dir (tu/tmp-dir)) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})
                           :world (world/of-data (merge {"base" plan} plans) {"field-base" blueprint} [])})]
     (mem/write! (:store eng) :home {:pos old-home} mem/place-policy)
     (mem/write! (:store eng) :spawn-bed {:pos old-bed} {:cap 1 :ttl :forever})
-    {:eng eng :p p :calls calls :results results :seen seen}))
+    {:eng eng :p p :calls calls :results results :seen seen :furnaces furnaces}))
 
 (defn start! [{:keys [eng]} a] (tu/child-outcome eng job a 600))
 (defn names [{:keys [calls]}] (mapv (comp name first) @calls))
@@ -217,3 +244,50 @@
           (is (= [:seal] (distinct (map :spawner (called env 'jobs.strip.corridor)))) "the policy goes to the corridor")
           (is (= 1 (count (filter #(= "x-27-20:-20..0" (:id (:segment %))) (called env 'jobs.strip.corridor)))) "not retried")
           (is (= 2 (count (called env 'jobs.strip.seal)))))))))
+
+(def ore-bag [{:name "torch" :count 32} {:name "iron_pickaxe" :count 1} {:name "raw_iron" :count 16} {:name "coal" :count 4}])
+
+(defn full-then [env after]
+  (let [n (atom 0)]
+    (fn [_] (case (swap! n inc)
+              1 {:status :stopped :reason :bag-full :taken {}}
+              (do (after env) {:status :done :taken {}})))))
+
+(deftest a-return-loads-both-furnaces-and-goes-back-down-and-the-next-visit-deposits-the-ingots-before-the-haul
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (setup :inventory ore-bag)
+              _ (swap! (:results env) assoc 'jobs.strip.corridor (full-then env #(ready! (:furnaces %))))
+              r (await (start! env args))
+              smelts (called env 'jobs.items.smelt)
+              short-names (mapv #(last (re-find #"\.([a-z-]+)$" %)) (names env))]
+          (is (= :done (:status r)))
+          (is (= [{:furnace (xyz furnace-1) :item "raw_iron" :count 8} {:furnace (xyz furnace-2) :item "raw_iron" :count 8}]
+                 (mapv #(select-keys % [:furnace :item :count]) (take 2 smelts))) "both furnaces loaded, half each")
+          (is (= ["corridor" "smelt" "smelt" "deposit" "corridor"] (subvec short-names 4 9)) "back down without waiting")
+          (is (= ["smelt" "smelt" "deposit" "haul"] (take 4 (take-last 6 short-names))) "ingots collected and banked before the haul")
+          (is (= (take 2 smelts) (drop 2 smelts)) "the same args resume the same children")
+          (is (= {"raw_iron" 16} (:smelted r))))))))
+
+(deftest smelt-false-leaves-the-ore-raw
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (setup :inventory ore-bag)
+              _ (swap! (:results env) assoc 'jobs.strip.corridor (full-then env (constantly nil)))
+              r (await (start! env (assoc args :smelt false)))]
+          (is (= :done (:status r)))
+          (is (empty? (called env 'jobs.items.smelt)))
+          (is (= 1 (count (called env 'jobs.storage.deposit)))))))))
+
+(deftest a-smelt-that-gives-up-does-not-stop-the-strip-and-is-reported
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (setup :inventory ore-bag :fail-smelt "no-fuel")
+              _ (swap! (:results env) assoc 'jobs.strip.corridor (full-then env (constantly nil)))
+              r (await (start! env args))]
+          (is (= :done (:status r)))
+          (is (= ["no-fuel" "no-fuel"] (mapv :reason (:smelt-failed r))))
+          (is (= 2 (count (called env 'jobs.items.smelt))) "once per furnace, no retry loop"))))))
