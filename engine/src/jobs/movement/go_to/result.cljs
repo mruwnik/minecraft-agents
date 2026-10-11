@@ -69,7 +69,7 @@
 
 (def escalation-reason-words
   {:no-tool "no pickaxe" :no-dig "nothing it may dig" :no-headroom "no room above the head"
-   :zone "a stair or dig is refused by another's zone, claim or plan (pass :ignore-zones? or ask)"})
+   :zone "a stair or dig is refused by another's zone, claim or plan, or by a plan of the body's own (pass :ignore-zones? or ask)"})
 
 (defn escalation-words
   "A failed way out of a shut-in body in words: {:step :reason|:why :n}; a child's wait (:wait) names its own reason."

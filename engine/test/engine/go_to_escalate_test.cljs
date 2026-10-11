@@ -13,7 +13,8 @@
             [engine.test-util :as tu :refer [box]]
             [engine.triggers :as triggers]
             [triggers.access.scaffold-left :as scaffold-left]
-            [jobs.lib.world-files :as ew]))
+            [jobs.lib.world-files :as ew]
+            [plan.shape :as shape]))
 
 (defn setup
   ([world] (setup world nil))
@@ -24,7 +25,8 @@
          eng (core/create (cond-> {:primitives p :jobs registry/jobs :triggers {} :dir (tu/tmp-dir) :now #(deref clock)
                                    :backoff false
                                    :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}
-                            zones (assoc :world (ew/of-data {} {} zones))))]
+                            (sequential? zones) (assoc :world (ew/of-data {} {} zones))
+                            (map? zones) (assoc :world (ew/of-data (:plans zones) {} []))))]
      {:eng eng :p p :seen seen})))
 
 (defn recording-parent
@@ -525,6 +527,18 @@
                                                 {:pos [8 64 0] :range 1} zones))]
           (is (= false (:arrived @out)))
           (is (= {:step :none :why :zone} (:escalation @out)) "the wall is another owner's")
+          (is (empty? (events-of seen :go-to.escalated)))
+          (is (empty? (calls p "dig"))))))))
+
+(deftest go-to-never-digs-the-bodys-own-building
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [hut (shape/with-author {:id "hut" :parts [{:id "shell" :box [[-3 64 -3] [3 66 3]] :want "dirt"}]} "Fake")
+              {:keys [out p seen]} (await (run-job! (merge in-room {:blocks room}) 'jobs.movement.go-to
+                                                {:pos [8 64 0] :range 1} {:plans {"hut" hut}}))]
+          (is (= false (:arrived @out)))
+          (is (= {:step :none :why :zone} (:escalation @out)) "the wall is the body's own plan")
           (is (empty? (events-of seen :go-to.escalated)))
           (is (empty? (calls p "dig"))))))))
 

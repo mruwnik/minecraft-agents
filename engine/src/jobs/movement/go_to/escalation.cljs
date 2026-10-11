@@ -2,6 +2,7 @@
   "go-to's way out of a shut-in body: choose pillar, stair, clear-path or a walk to the wall, run the child, note the
   holes it dug, put them back once the walk is on past them."
   (:require [engine.ctx :as ctx]
+            [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.escape :as escape]
@@ -75,9 +76,14 @@
     (= :done (:status result))))
 
 (defn may-dig-fn
-  "(may-dig? cell): no other owner's zone, claim or plan footprint refuses a dig there (jobs.lib.tidy/refusal)."
+  "(may-dig? cell): no other owner's zone, claim or plan footprint refuses a dig there (jobs.lib.tidy/refusal), nor
+  does a plan this body made (a way out never digs its own building)."
   [c]
-  (fn [cell] (or (boolean (:ignore-zones? (:args c))) (nil? (tidy/refusal c :dig (zipmap [:x :y :z] cell))))))
+  (let [own (access/rules-input c {:spare-own? true})]
+    (fn [cell]
+      (or (boolean (:ignore-zones? (:args c)))
+          (let [pos (zipmap [:x :y :z] cell)]
+            (and (nil? (tidy/refusal c :dig pos)) (nil? (access/own-keep own pos))))))))
 
 (def placed-policy
   "Body memory policy of :escalation-placed, the cells go-to put a block back in: later escalations may dig them."
