@@ -352,6 +352,17 @@
           (is (= 1 (count (placed-at p2))))
           (is (not= {:x 1 :y 64 :z 0} (first (placed-at p2))) "the avoided cell is left free"))))))
 
+(deftest craft-in-a-one-wide-tunnel-puts-its-table-in-a-side-niche-not-the-corridor
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [tunnel (into {} (for [x (range -4 5) z [-1 0 1] y [63 64 65 66]
+                                    :when (or (= 63 y) (= 66 y) (not (zero? z)))]
+                                [(str x "," y "," z) "stone"]))
+              [result p] (await (craft {:inventory [{:name "wheat" :count 3} {:name "crafting_table" :count 1}] :blocks tunnel} {:item "bread"}))]
+          (is (= 1 (:made result)) (pr-str result))
+          (is (every? #(not (zero? (:z %))) (placed-at p)) (pr-str (placed-at p))))))))
+
 (deftest putting-a-table-down-and-crafting-at-it-is-one-urgent-section
   (async done
     (tu/run-async done
@@ -373,7 +384,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [pocket (into {"0,66,0" "stone"}
-                           (for [x [-1 0 1] z [-1 0 1] y [63 64 65] :when (or (= 63 y) (not (and (zero? x) (zero? z))))]
+                           (for [x (range -2 3) z (range -2 3) y [63 64 65] :when (or (= 63 y) (not (and (zero? x) (zero? z))))]
                              [(str x "," y "," z) "stone"]))
               {:keys [eng p]} (setup {:inventory [{:name "wheat" :count 3} {:name "crafting_table" :count 1}] :blocks pocket})
               result (await (child-outcome eng job {:item "bread"} 40))]
@@ -385,9 +396,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [pocket (into {"0,66,0" "stone" "-2,64,0" "water" "2,64,0" "water" "0,64,-2" "water"}
-                           (for [x [-1 0 1] z [-1 0 1] y [63 64 65] :when (or (= 63 y) (not (and (zero? x) (zero? z))))]
-                             [(str x "," y "," z) "stone"]))
+        (let [pocket (into (into {"0,66,0" "stone"}
+                                 (for [x (range -2 3) z (range -2 3) y [63 64 65] :when (or (= 63 y) (not (and (zero? x) (zero? z))))]
+                                   [(str x "," y "," z) "stone"]))
+                           {"-2,64,0" "water" "2,64,0" "water" "0,64,-2" "water"})
               {:keys [eng p]} (setup {:inventory [{:name "wheat" :count 3} {:name "crafting_table" :count 1}] :blocks pocket})
               result (await (child-outcome eng job {:item "bread"} 60))]
           (is (= {:made 1 :spent {"crafting_table" 1}} (select-keys result [:made :spent])) (pr-str result))

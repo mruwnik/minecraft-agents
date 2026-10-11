@@ -64,6 +64,8 @@
 
 (def table-offsets [[1 0] [-1 0] [0 1] [0 -1] [1 1] [-1 1] [1 -1] [-1 -1]])
 
+(defn solid? [n] (and n (not (b/air n)) (not (b/fluids n)) (not (b/clearable n))))
+
 (defn spot-cells
   "The candidate table cells beside the body, outside its box (the server refuses a place the body touches) and not in :avoid: [pos floor-pos] for each offset at its level, then (a 1-wide stair has
   no free cell at its level) each one level up. dig-spot-cells keeps to the level ones."
@@ -79,12 +81,22 @@
       [pos (update pos :y dec)])))
 
 (defn table-spot
-  "A free cell beside the body to put a table in: air at the body's level with a solid block under it, or nil."
+  "A free cell beside the body to put a table in: air at the body's level with a solid block under it, or nil. Where
+  fewer than three of the four cells beside the body are open (a tunnel, a pocket), a cell that leads on to more open
+  air is a passage and is not taken: it would shut the way along the corridor."
   [c]
   (let [p (:primitives c)
-        solid? (fn [n] (and n (not (b/air n)) (not (b/fluids n)) (not (b/clearable n))))]
+        {:keys [x y z]} (u/self-pos c)
+        [x y z] (mapv #(js/Math.floor %) [x y z])
+        sides [[1 0] [-1 0] [0 1] [0 -1]]
+        open? (fn [cx cz] (b/air (u/seen-name p {:x cx :y y :z cz})))
+        cramped? (< (count (filter (fn [[dx dz]] (open? (+ x dx) (+ z dz))) sides)) 3)
+        passage? (fn [{px :x pz :z}]
+                   (some (fn [[dx dz]] (and (not= [(+ px dx) (+ pz dz)] [x z]) (open? (+ px dx) (+ pz dz)))) sides))]
     (some (fn [[pos floor]]
-            (when (and (b/air (u/seen-name p pos)) (solid? (u/seen-name p floor)))
+            (when (and (b/air (u/seen-name p pos)) (solid? (u/seen-name p floor))
+                       (not (and cramped? (= y (:y pos)) (= 1 (+ (js/Math.abs (- x (:x pos))) (js/Math.abs (- z (:z pos)))))
+                                 (passage? pos))))
               pos))
           (spot-cells c))))
 
@@ -108,7 +120,6 @@
   or one not seen yet (rock hides it), not tried yet (memory :spot-dug)."
   [c]
   (let [p (:primitives c)
-        solid? (fn [n] (and n (not (b/air n)) (not (b/fluids n)) (not (b/clearable n))))
         tried (:spot-dug (ctx/mem c) #{})]
     (->> (spot-cells c)
          (filter (fn [[pos _]] (= (:y pos) (js/Math.floor (:y (u/self-pos c))))))
@@ -135,7 +146,8 @@
               (if (and (= :done r) (:dug (ctx/child-result c :spot-dig)))
                 (do (await (ctx/act c :look (clj->js {:pos {:x (+ (:x cell) 0.5) :y (- (:y cell) 0.5) :z (+ (:z cell) 0.5)}})))
                     (look/see! c)
-                    (table-spot c))
+                    (when (and (b/air (u/seen-name (:primitives c) cell)) (solid? (u/seen-name (:primitives c) (update cell :y dec))))
+                      cell))
                 (recur))))))))
 
 (defn ^:async spot!
