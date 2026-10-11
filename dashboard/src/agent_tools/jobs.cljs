@@ -16,6 +16,7 @@
   "Build the usage string with the given invocation prefix (e.g., 'jobs.mjs' or './bin/jobs')."
   (str "usage: " prefix " <body> --world <world> list [--limit 8 --offset 0] | show <jID> | submit <EDN-spec> [--hold] [--survive-death] [--next | --now] [--alongside] [--wait [--timeout 60s]] | cancel <jID> | cancel-all | retry <jID> | resolve <request-id> --reason handled|condition-recovered [--worlds DIR --state LEGACY_PARENT]\n"
        "While manual control holds the body (drive.mjs take) only the driver's one job runs (world.mjs submit): others stay :queued and list/submit say who holds it; drive.mjs <body> release frees it.\n"
+       "A job that depends on where the body stands (access.stair, access.bridge, access.pillar, gather.mine) gets :from (the body's position at submit) added to its args; if the body is then over 6 blocks from it when the job starts, the job waits :moved-since-submit (something moved the body meanwhile) instead of running there. Give :here true in the args to run wherever the body is.\n"
        "submit appends the job to the end of the list (jobs take turns). --hold makes the job hold the body: no other job gets a round until it ends or fails (reflexes still come first).\n"
        "A spec is a job name then its args map: submit '(jobs.movement.go-to {:pos {:x 1 :y 64 :z 2}})' or '(jobs.items.get-tool {:item \"stone_pickaxe\"})'. Find a job's args with observe.mjs <body> catalog job <name> (catalog jobs [prefix] lists names).\n"
        "  --survive-death  the job stays listed through the body's death and runs again once the respawn reflexes (recover-drops, night) are done; other jobs are cancelled; a (repeat ...) spec does this by default\n"
@@ -198,6 +199,35 @@
     (when-not (string? generation) (throw (js/Error. "generation unavailable")))
     (if cached generation (record-generation! meta-file meta-dir generation))))
 
+(defn stamp-from
+  "spec with :from position added to its args map (none given: a new one) when the job takes :from and the call gave neither :from nor :here; else spec. Jobs that depend on where the body stood at submit wait if it has moved (jobs.lib.submitted)."
+  [spec position takes-from?]
+  (let [args (second spec)]
+    (if (and takes-from? position (nil? (nnext spec)) (or (nil? args) (map? args))
+             (not (contains? args :from)) (not (contains? args :here)))
+      (list (first spec) (assoc args :from (select-keys position [:x :y :z])))
+      spec)))
+
+(defn takes-from?
+  "A promise: whether the job's catalog entry lists the arg :from (false when unreadable)."
+  [r spec opts]
+  (let [head (str (first spec))]
+    (if-not (str/starts-with? head "jobs.")
+      (js/Promise.resolve false)
+      (-> (get! (:socketPath r) (str "/catalog?kind=job&name=" head) opts)
+          (.then (fn [{:keys [status content-type text]}]
+                   (and (= 200 status) (http/edn-response? content-type)
+                        (contains? (:args (data/read-edn text)) :from))))
+          (.catch (fn [_] false))))))
+
+(defn stamped
+  "A promise of the request body with :from stamped into a submitted spec (see stamp-from); position is the snapshot's."
+  [r request position opts]
+  (if-not (and (#{:submit :interrupt} (:op request)) (:spec request) position)
+    (js/Promise.resolve request)
+    (.then (takes-from? r (:spec request) opts)
+           (fn [takes?] (update request :spec stamp-from position takes?)))))
+
 (defn exchange! [r opts]
   (cond
     (:resolve r) (post! (:socketPath r) (:request r) (assoc opts :path (:path r)))
@@ -206,7 +236,9 @@
            (fn [snapshot]
              (when-not (and (= 200 (:status snapshot)) (http/edn-response? (:content-type snapshot)))
                (throw (js/Error. "snapshot unavailable")))
-             (post! (:socketPath r) (assoc (:request r) :generation-id (generation-for! r snapshot)) (assoc opts :path (:path r)))))
+             (let [generation (generation-for! r snapshot)]
+               (.then (stamped r (:request r) (:position (data/read-edn (:text snapshot))) opts)
+                      (fn [request] (post! (:socketPath r) (assoc request :generation-id generation) (assoc opts :path (:path r))))))))
     :else (get! (:socketPath r) (:path r) opts)))
 
 (defn job-detail [value]

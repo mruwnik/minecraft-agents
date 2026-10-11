@@ -1,5 +1,6 @@
 (ns jobs.gather.mine
-  (:require [jobs.lib.child :as child]
+  (:require [jobs.lib.submitted :as submitted]
+            [jobs.lib.child :as child]
             [engine.settings :as settings]
             [engine.args :as a]
             [engine.game :as game]
@@ -162,7 +163,9 @@
   {:origin :heading :steps :stop :end :back-at :walked-back?}, :end the cell it ended on before the walk back.")
 
 (a/defargs args
-  {:block {:doc "name of the block to mine (required)" :spec a/name? :default nil}
+  {:from {:doc "where the body stood at submit (jobs.mjs adds it): the job waits :moved-since-submit before its first round when the body is then over jobs.lib.submitted/limit away" :spec a/position? :default nil}
+   :here {:doc "true: run where the body is, whatever :from says" :spec boolean? :default false}
+   :block {:doc "name of the block to mine (required)" :spec a/name? :default nil}
    :item {:doc "the item the block drops; nil: the drop-item table, else the block name" :spec a/item? :default nil}
    :count {:doc "how many more to carry than at the start" :spec (a/int-in 0 nil) :default 8}
    :radius {:doc "seen blocks within this many blocks of the body count" :spec (a/num-in 0 nil) :default 16}
@@ -318,6 +321,7 @@
 (defn check [c]
   (let [hurt (body/too-hurt (:primitives c))]
     (cond
+      (some? (submitted/away-wait c)) false
       (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) (access/decline! c :mine.declined "mine" {:reason :no-zones})
       hurt (ctx/wait c hurt)
       (not (trip/torches-check c)) false
@@ -1615,6 +1619,7 @@
 
 (defn ^:async round
   [c]
+  (submitted/begin! c)
   (when (and (nil? (:phase (ctx/mem c))) (nil? (:pre-start (ctx/mem c))))
     (ctx/update-mem! c assoc :pre-start (cell-of (u/self-pos c))))
   (if-let [t (or (await (trip/ready! c)) (await (trip/tool-ready! c (:block (:args c))))

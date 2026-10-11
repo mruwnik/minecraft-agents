@@ -1,5 +1,6 @@
 (ns jobs.access.bridge
-  (:require [engine.settings :as settings]
+  (:require [jobs.lib.submitted :as submitted]
+            [engine.settings :as settings]
             [engine.args :as a]
             [jobs.access.pillar :as pillar]
             [jobs.lib.pillar :as pl]
@@ -43,7 +44,9 @@
   row, :detail the primitive's reason), :move-failed (3 failed walks onto a placed block) or :bad-args.")
 
 (a/defargs args
-  {:heading {:doc ":north :east :south or :west" :spec #{:north :east :south :west} :default nil}
+  {:from {:doc "where the body stood at submit (jobs.mjs adds it): the job waits :moved-since-submit before its first round when the body is then over jobs.lib.submitted/limit away" :spec a/position? :default nil}
+   :here {:doc "true: run where the body is, whatever :from says" :spec boolean? :default false}
+   :heading {:doc ":north :east :south or :west" :spec #{:north :east :south :west} :default nil}
    :length {:doc "blocks in the row, 1 to 64" :spec (a/int-in 1 64) :default 1}
    :item {:doc "the block to bridge with; nil: dirt while any is carried, then cobblestone" :spec a/item? :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}
@@ -169,6 +172,7 @@
         l (ledger/reconcile (ledger/open-entries (ctx/view c)) (access/sensed-at p nil))
         step (next-step (inputs c l (pl/feet-cell c)))]
     (cond
+      (some? (submitted/away-wait c)) false
       (not= :too-few-blocks (:reason step)) true
       (nil? (fetch/opts c 'jobs.access.bridge)) (ctx/wait c {:reason :too-few-blocks :short (:short step) :item (or (:item (:args c)) pl/default-items)})
       :else (fetch/check c 'jobs.access.bridge (need c step)))))
@@ -258,4 +262,5 @@
 (defn ^:async round
   "The whole bridge: step! until it ends, a pace between blocks."
   [c]
+  (submitted/begin! c)
   (await (pace/steps! c #(step! c))))

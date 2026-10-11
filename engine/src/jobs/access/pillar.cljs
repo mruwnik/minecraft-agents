@@ -1,5 +1,6 @@
 (ns jobs.access.pillar
-  (:require [engine.settings :as settings]
+  (:require [jobs.lib.submitted :as submitted]
+            [engine.settings :as settings]
             [engine.args :as a]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.access.rules :as rules]
@@ -44,7 +45,9 @@
   column it started in), :place-failed (3 failed jumps in a row with the body in the column, :detail the primitive's reason) or :bad-args.")
 
 (a/defargs args
-  {:height {:doc "blocks to rise, 1 to 64" :spec (a/int-in 1 64) :default 1}
+  {:from {:doc "where the body stood at submit (jobs.mjs adds it): the job waits :moved-since-submit before its first round when the body is then over jobs.lib.submitted/limit away" :spec a/position? :default nil}
+   :here {:doc "true: run where the body is, whatever :from says" :spec boolean? :default false}
+   :height {:doc "blocks to rise, 1 to 64" :spec (a/int-in 1 64) :default 1}
    :item {:doc "the block to pillar with; nil: dirt while any is carried, then cobblestone" :spec a/item? :default nil}
    :items {:doc "the blocks to pillar with when :item is nil, first carried wins; nil: dirt, then cobblestone" :spec (a/coll-of a/item?) :default nil}
    :ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec boolean? :default false}})
@@ -176,9 +179,10 @@
         step (next-step (merge (access-inputs c)
                                {:feet feet :base (or (:base (ctx/mem c)) feet) :height height :block-at block-at
                                 :carried (pl/carried p) :item item :items items :ledger (ledger/cells l)}))]
-    (if (= :too-few-blocks (:reason step))
-      (ctx/wait c {:reason :too-few-blocks :short (:short step) :item (or item items pl/default-items)})
-      true)))
+    (cond
+      (some? (submitted/away-wait c)) false
+      (= :too-few-blocks (:reason step)) (ctx/wait c {:reason :too-few-blocks :short (:short step) :item (or item items pl/default-items)})
+      :else true)))
 
 (defn ^:async land!
   "Wait in short steps until the body is on the ground, up to land-max-steps."
@@ -295,4 +299,5 @@
   "The whole pillar: step! until it ends, a pace between blocks, as one urgent section (ctx/atomic :pillar): a night or
   low-food reflex waits for the climb to end, up to its cap."
   [c]
+  (submitted/begin! c)
   (await (ctx/atomic c :urgent :pillar #(pace/steps! c (fn [] (step! c))))))

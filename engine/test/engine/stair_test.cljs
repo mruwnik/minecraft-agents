@@ -1040,3 +1040,17 @@
           (let [{:keys [out p]} (await (stair! {:blocks ground :inventory [{:name "stone_pickaxe" :count 1 :durability uses}]} args (fn [_])))]
             (is (= dug? (boolean (seq (digs p)))) (pr-str uses args))
             (is (= [status reason] [(:status @out) (:reason @out)]) (pr-str uses args))))))))
+
+(deftest a-stair-submitted-far-from-where-the-body-stands-waits-moved-since-submit-unless-told-here
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[extra dug? reason] [[{} true nil]
+                                     [{:from {:x 1 :y 65 :z 0}} true nil]
+                                     [{:from {:x 80 :y 65 :z 0}} false :moved-since-submit]
+                                     [{:from {:x 80 :y 65 :z 0} :here true} true nil]]]
+          (let [{:keys [p] :as s} (await (stair! {:blocks ground :inventory pick} (merge east extra) (fn [_])))
+                w (waiting s)]
+            (is (= dug? (boolean (seq (digs p)))) (pr-str extra))
+            (is (= reason (:reason w)) (pr-str extra))
+            (is (= (when reason 80) (some-> w :distance)) (pr-str extra))))))))

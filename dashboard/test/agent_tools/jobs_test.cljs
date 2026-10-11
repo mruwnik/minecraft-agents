@@ -466,3 +466,13 @@
   (is (nil? (:clash-name (request "Bob" "--world" "w" "submit" mine-spec "--alongside"))))
   (is (re-find #"--alongside" jobs/usage))
   (is (re-find #"same job name" jobs/usage)))
+
+(deftest stamp-from-adds-the-submit-position-only-to-jobs-that-take-it-and-did-not-say-otherwise
+  (let [pos {:x 1.5 :y 64 :z -3 :yaw 2}]
+    (doseq [[spec takes? want] [['(jobs.access.stair {:dir :up}) true '(jobs.access.stair {:dir :up :from {:x 1.5 :y 64 :z -3}})]
+                                ['(jobs.access.stair) true '(jobs.access.stair {:from {:x 1.5 :y 64 :z -3}})]
+                                ['(jobs.access.stair {:dir :up}) false '(jobs.access.stair {:dir :up})]
+                                ['(jobs.access.stair {:here true}) true '(jobs.access.stair {:here true})]
+                                ['(jobs.access.stair {:from {:x 0 :y 0 :z 0}}) true '(jobs.access.stair {:from {:x 0 :y 0 :z 0}})]
+                                ['(repeat (jobs.farm.tend)) true '(repeat (jobs.farm.tend))]]]
+      (is (= want (jobs/stamp-from spec pos takes?)) (pr-str spec takes?)))))

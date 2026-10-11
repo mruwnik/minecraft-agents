@@ -1,5 +1,6 @@
 (ns jobs.access.stair
-  (:require [jobs.lib.child :as child]
+  (:require [jobs.lib.submitted :as submitted]
+            [jobs.lib.child :as child]
             [engine.settings :as settings]
             [engine.args :as a]
             [clojure.string :as str]
@@ -100,7 +101,9 @@
   last resort when it has no pickaxe. Also done once the fetch of a tool for that block failed.")
 
 (a/defargs args
-  {:dir {:doc ":down or :up" :spec #{:down :up} :default :down}
+  {:from {:doc "where the body stood at submit (jobs.mjs adds it): the job waits :moved-since-submit before its first round when the body is then over jobs.lib.submitted/limit away" :spec a/position? :default nil}
+   :here {:doc "true: run where the body is, whatever :from says" :spec boolean? :default false}
+   :dir {:doc ":down or :up" :spec #{:down :up} :default :down}
    :heading {:doc ":north :east :south or :west; nil: the way the body faces" :spec #{:north :east :south :west} :default nil}
    :steps {:doc "steps to cut; or give :y" :spec (a/int-in 1 nil) :default nil}
    :y {:doc "feet height to end at, instead of :steps" :spec (a/num-in nil nil) :default nil}
@@ -434,10 +437,12 @@
   step. As a child (leave-tunnel, tunnel, dig-in) it runs and stops with the same reason in its result, which its
   parent reads."
   [c0]
-  (let [c (with-heading c0)]
-    (if-let [stop (refusal c)]
-      (access/decline! c :stair.declined "stair" (assoc (access/refusal-fields [stop]) :reason :refused))
-      (if-let [lack (need c)] (fetch/check c 'jobs.access.stair lack) (trip/torches-check c)))))
+  (let [c (with-heading c0)
+        stop (refusal c)]
+    (cond
+      (some? (submitted/away-wait c)) false
+      stop (access/decline! c :stair.declined "stair" (assoc (access/refusal-fields [stop]) :reason :refused))
+      :else (if-let [lack (need c)] (fetch/check c 'jobs.access.stair lack) (trip/torches-check c)))))
 
 (defn ^:async dig!
   "Equip the best tool, check the cell again, write the intent and dig it (a blocks.dig child). :continue (dug, go on), :yield (the child waits on the world), or a stop map."
@@ -624,5 +629,6 @@
   [c0]
   (let [c (with-heading c0)
         n (atom 0)]
+    (submitted/begin! c)
     (when-not (:heading (:args c0)) (ctx/update-mem! c assoc :heading (name (:heading (:args c)))))
     (await (pace/steps! c #(if (< (swap! n inc) (max-steps)) (next! c) :continue)))))
