@@ -15,6 +15,7 @@
 (a/defargs settings
   {::near-pen {:default 16 :doc "Blocks from the pen within which the body counts as near it." :spec (a/int-in 0 nil)}
    ::approach-range {:default 12 :doc "Blocks from the animal at which the body starts to approach." :spec (a/int-in 0 nil)}
+   ::listed-range {:default 32 :doc "Blocks from the pen within which an animal known in it that is not listed is gone (dead or out); farther the server lists no animals there." :spec (a/int-in 0 nil)}
    ::watch-radius {:default 64 :doc "Blocks within which animals are watched." :spec (a/int-in 0 nil)}
    ::release-radius {:default 8 :doc "Blocks within which a released animal counts as near." :spec (a/int-in 0 nil)}
    ::follow-range {:default 10 :doc "Blocks within which an animal follows the food in the body's hand." :spec (a/int-in 0 nil)}
@@ -155,11 +156,12 @@
 
 (defn pen-keys
   "The keys of the adults in the pen: those on its cells as sensed, plus those known in it (in at the start or brought)
-  that the sensing does not show anywhere, as when the body ends far from the pen."
+  that the sensing does not show while the body is farther than ::listed-range from the pen (near it, an animal not listed is dead or out)."
   [c answer]
   (let [m (ctx/mem c)
         sensed (into #{} (map animals/key-of) (in-pen-adults c answer))
-        unseen? #(nil? (animals/find-by-key (:primitives c) (:mob (:args c)) (watch-radius) %))]
+        far? (> (u/dist (u/self-pos c) (box-centre (:box (:args c)))) (settings/get settings ::listed-range))
+        unseen? #(and far? (nil? (animals/find-by-key (:primitives c) (:mob (:args c)) (watch-radius) %)))]
     (into sensed (filter unseen?) (concat (:in-pen-start m) (:brought m)))))
 
 (defn end-text

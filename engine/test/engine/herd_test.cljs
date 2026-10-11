@@ -1242,6 +1242,16 @@
             (is (every? #{:never} @backs) (pr-str @backs))
             (finally (set! child/call-walk orig))))))))
 
+(deftest a-penned-cow-that-vanishes-near-the-pen-is-not-counted-as-inside
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (submit! (setup (world {:entities [(cow 1 4 3) (cow 9 13 3)] :inventory [wheat]})) {:target 2 :timeout-s 900})]
+          (on-step-when! s #(gate-open? s) (fn [] (swap! (fake/state (:p s)) update :entities (fn [es] (filterv #(not= 9 (:id %)) es)))))
+          (await (run-ticks s 900))
+          (is (= :short (:reason (done-event s))))
+          (is (= 1 (:inside (done-event s)))))))))
+
 (deftest a-lured-cow-that-trails-out-of-range-with-the-gate-open-is-gone-back-for-not-written-off
   (async done
     (tu/run-async done
