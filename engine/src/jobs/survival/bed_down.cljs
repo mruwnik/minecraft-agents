@@ -7,6 +7,7 @@
             [jobs.lib.sense :as sense]
             [jobs.lib.shelter :as sh]
             [jobs.lib.tidy :as tidy]
+            [jobs.lib.tidy-rules :as tidy-rules]
             [jobs.lib.util :as u]))
 
 (def doc
@@ -15,7 +16,7 @@
   The bed: the :bed argument, else sh/bed-to-use (seen, or remembered within :bed-radius, :urgent-bed-radius once :max-days-awake days passed without sleep; never an occupied one or one given up on; unless that long without sleep, never one whose walk leaves an underground, dug-in or room shelter): jobs.survival.sleep on it.
   A bed in the open is slept in only by a body overdue for sleep or one that just put the bed down; a sleep that stops :bed-open writes :bed-open (shelter.bed_open info) and ends done {:bed-open true}.
   A sleep that ends without sleeping writes :sleep-failed (5 minutes, shelter.sleep_failed warn).
-  A bed item carried and no bed to use: put down beside the body (roofed cells first, else in the open; never in a doorway or another's zone, claim or plan footprint), recorded as :bed unless a live :bed is, and as :bed-placed outside the body's own zones (info night.bed-placed {:pos :own-zone}). No room, or a failed placement, writes :bed-place-failed (10 minutes, shelter.bed_place_failed warn).
+  A bed item carried and no bed to use: put down beside the body (roofed cells first, else in the open; never in a doorway, on a chest, table or other kept block, or in another's zone, claim or plan footprint), recorded as :bed unless a live :bed is, and as :bed-placed outside the body's own zones (info night.bed-placed {:pos :own-zone}). No room, or a failed placement, writes :bed-place-failed (10 minutes, shelter.bed_place_failed warn).
   Walks use :at-night :go. Ends done {:slept true} when asleep, else done {:slept false} (with :bed-open, or nothing to say), :continue while walking or sleeping.")
 
 (a/defargs args
@@ -73,7 +74,7 @@
 
 (defn bed-layout
   "{:stand :foot :head} for a bed set down beside the body: three cells in a row, the body standing at one end (a placed
-  bed faces away from the body), the foot next to it, the head after it. All three free (air, with a solid floor and
+  bed faces away from the body), the foot next to it, the head after it. All three free (air, with a solid floor that is no container, bed or other kept block, and
   the body's headroom for the stand cell) within 3 cells of the body, the foot and head not in a doorway or another's
   zone, claim or plan footprint (a missing zone list refuses nothing), and roofed within roof-height when roofed? is
   set. The stand cell nearest the body first (its own cell when it fits); nil when no row fits."
@@ -83,7 +84,8 @@
         {:keys [x y z]} (sh/feet p)
         in (access/rules-input c)
         air? #(#{"air" "cave_air"} (u/seen-name p %))
-        free? (fn [pos] (and (air? pos) (sh/solid-at? p (update pos :y dec))))
+        free? (fn [pos] (and (air? pos) (sh/solid-at? p (update pos :y dec))
+                             (nil? (tidy-rules/keep-why (u/seen-name p (update pos :y dec))))))
         covered? (fn [pos] (or (not roofed?) (some #(sh/solid-at? p (update pos :y + %)) (range 1 (inc roof)))))
         permitted? #(and (nil? (access/trespass-refusal in :place %)) (not (sh/doorway? p %)))
         stands (sort-by (fn [[dx dz]] (+ (js/Math.abs dx) (js/Math.abs dz)))

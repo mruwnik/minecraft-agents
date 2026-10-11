@@ -194,11 +194,16 @@
                             (ledger/confirm at))))
   (ctx/update-mem! c #(-> % (update :placed (fnil conj #{}) cell) (assoc-in [:placed-items cell] item) (update-in [:spent item] (fnil inc 0)))))
 
+(defn bed?
+  "Whether a bed stands at cell: a shelter never digs one (the spawn bed would go with it)."
+  [p cell]
+  (string/ends-with? (or (u/seen-name p cell) "") "_bed"))
+
 (defn ^:async place-all!
   "Place blocks at cells in order. Resolves to :ok, :wait (a mob stands in the cell: the place was refused and is retried
   for mob-wait-ms, the caller yields in between), or the first status that is not placed or occupied.
   A cell occupied by a block that fills it is sealed already and goes in :occupied.
-  A cell occupied by a block a mob walks through is dug once and placed again.
+  A cell occupied by a block a mob walks through is dug once and placed again, never a bed (it goes in :occupied).
   If that second try is occupied too, or the dig fails, the cell goes in :occupied and is not tried again.
   A cell that is sealed by now (the other half of a door just shut) is skipped.
   An open door, gate or trapdoor is shut (shut-open!), never placed into or dug. One that stays open goes in :occupied."
@@ -235,7 +240,7 @@
                       (ctx/update-mem! c assoc :mob-text (mob-text r))
                       status)
 
-                  (or (full-cube? c cell) (contains? (:cleared (ctx/mem c) #{}) cell))
+                  (or (full-cube? c cell) (contains? (:cleared (ctx/mem c) #{}) cell) (bed? (:primitives c) cell))
                   (do (ctx/update-mem! c update :occupied (fnil conj #{}) cell)
                       (recur (rest cells)))
 

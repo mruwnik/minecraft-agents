@@ -1194,3 +1194,26 @@
         (let [{:keys [eng p]} (held-starving [cow zombie])]
           (await (core/tick! eng))
           (is (empty? (filterv #(= "attack" (.-name %)) (.-calls (.-world p)))) "no hunt with a danger near"))))))
+
+(deftest the-dig-in-at-an-open-bed-never-digs-a-bed-half
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (st/setup {:time night :inventory st/dirt-stack :self {:pos {:x 1 :y 64 :z 0}}
+                                         :blocks (merge st/floor {"1,64,0" "red_bed" "2,64,0" "red_bed"})})]
+          (st/know-bed! eng {:x 1 :y 64 :z 0})
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (tu/run-until-empty eng 60))
+          (is (empty? (filter #(#{{:x 1 :y 64 :z 0} {:x 2 :y 64 :z 0}} %) (map st/arg-pos (st/calls p "dig")))) "no bed half dug")
+          (is (= "red_bed" (.-name (.blockAt p (tu/pos 2 64 0))))))))))
+
+(deftest a-carried-bed-is-never-put-down-on-a-chest-or-a-table
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (st/setup {:time night :inventory [{:name "red_bed" :count 1}]
+                                         :blocks (merge (tu/box -4 63 -4 4 63 4 "chest") {"2,63,2" "crafting_table"})})]
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (tu/run-until-empty eng 30))
+          (is (empty? (st/calls p "place")) "no bed on a container floor")
+          (is (= 1 (count (st/entries eng :bed-place-failed)))))))))

@@ -990,10 +990,10 @@
        (is (empty? (:chat @(fake/state p))))))))
 
 (deftest block-at-marks-full-cubes-only
-  (let [p (fake/create {:blocks {"1,64,0" "stone" "2,64,0" "farmland" "3,64,0" "wheat" "4,64,0" "oak_slab"}})]
+  (let [p (fake/create {:blocks {"1,64,0" "stone" "2,64,0" "farmland" "3,64,0" "wheat" "4,64,0" "oak_slab" "5,64,0" "red_bed"}})]
     (is (= true (:fullCube (block-at p 1 64 0))))
     (are [x] (= false (contains? (block-at p x 64 0) :fullCube))
-      2 3 4 9)))
+      2 3 4 5 9)))
 
 (deftest self-equipment-is-empty-slots-by-default-and-shows-the-spec-equipment-the-held-item-as-main-hand
   (let [bare (fake/create {})
