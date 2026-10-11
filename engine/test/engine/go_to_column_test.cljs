@@ -22,10 +22,10 @@
         ;; y 61 is a cell inside the ground under x 10 (stone 60..62 under the floor), as a block's position is
         (doseq [y [67 61]]
           (let [{:keys [out p] :as s} (await (go! {:blocks (merge flat (box 9 60 -1 11 62 1 "stone"))} {:pos [10 y 0]}))]
-            (is (= {:arrived true :resolved {:x 10 :y 64 :z 0}} @out) (str "y " y " " (pr-str @out)))
+            (is (= {:arrived true :resolved {:x 10 :y 64 :z 0} :why :explicit} @out) (str "y " y " " (pr-str @out)))
             (is (near-x10? p) (str "y " y " at " (at p)))
-            (is (= [{:goal {:x 10 :y y :z 0} :to {:x 10 :y 64 :z 0}}]
-                   (mapv #(select-keys % [:goal :to]) (events-of s :goal-resolved)))
+            (is (= [{:goal {:x 10 :y y :z 0} :to {:x 10 :y 64 :z 0} :why :explicit}]
+                   (mapv #(select-keys % [:goal :to :why]) (events-of s :goal-resolved)))
                 (str "y " y ": the re-aim is said once"))))))))
 
 (deftest a-column-goal-arrives-on-the-ground-there
@@ -36,18 +36,8 @@
         (let [hill (merge flat (box 8 64 -3 12 64 3 "stone"))]
           (doseq [pos [[10 0] {:x 10 :z 0}]]
             (let [{:keys [out p]} (await (go! {:blocks hill} {:pos pos :range 0}))]
-              (is (= {:arrived true :resolved {:x 10 :y 65 :z 0}} @out) (str (pr-str pos) " " (pr-str @out)))
+              (is (= {:arrived true :resolved {:x 10 :y 65 :z 0} :why :surface} @out) (str (pr-str pos) " " (pr-str @out)))
               (is (= [10 65 0] (mapv #(js/Math.floor %) (at p))) (pr-str pos)))))))))
-
-(deftest a-column-goal-picks-the-ground-nearest-the-body
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        ;; a roof at y 70 over x 8..12: standable on top (feet 71) and below (feet 64); the body walks at feet 64
-        (let [roofed (merge flat (box 8 70 -3 12 70 3 "stone"))
-              {:keys [out p]} (await (go! {:blocks roofed} {:pos [10 0] :range 0}))]
-          (is (= {:arrived true :resolved {:x 10 :y 64 :z 0}} @out))
-          (is (= [10 64 0] (mapv #(js/Math.floor %) (at p)))))))))
 
 (deftest range-three-arrives-within-three
   (async done
@@ -72,7 +62,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out eng]} (await (go! {:blocks flat} {:pos [10 67 0]}))]
-          (is (= {:arrived true :resolved {:x 10 :y 64 :z 0}} @out))
+          (is (= {:arrived true :resolved {:x 10 :y 64 :z 0} :why :explicit} @out))
           (is (= [{:x 10 :y 64 :z 0}] (mapv :target (gt/moved eng))) "one walk, to the re-aimed cell: no walk toward y 67"))))))
 
 ;; a sealed stone pocket under a pit: x 4..6, y 56..59, z -1..1, its one open cell (5,58,0); the pit over it (no floor
@@ -110,7 +100,7 @@
       (fn ^:async t []
         ;; perception (radius 16): the column at x 30 is out of sight from the start
         (let [{:keys [out p]} (await (go! {:blocks flat :light [15 0]} {:pos [30 0] :range 0}))]
-          (is (= {:arrived true :resolved {:x 30 :y 64 :z 0}} @out) (pr-str @out))
+          (is (= {:arrived true :resolved {:x 30 :y 64 :z 0} :why :surface} @out) (pr-str @out))
           (is (= [30 64 0] (mapv #(js/Math.floor %) (at p)))))))))
 
 (deftest an-unseen-column-under-unknown-is-walked-toward-and-resolved-once-seen
@@ -121,7 +111,7 @@
         ;; the body's feet y (64, inside the mound) and is aimed again once the body sees it
         (let [mound (merge flat (box 28 64 -3 32 64 3 "stone"))
               {:keys [out p] :as s} (await (go! {:blocks mound :light [15 0]} {:pos [30 0] :range 0 :unknown true}))]
-          (is (= {:arrived true :resolved {:x 30 :y 65 :z 0}} @out) (pr-str @out))
+          (is (= {:arrived true :resolved {:x 30 :y 65 :z 0} :why :surface} @out) (pr-str @out))
           (is (= [30 65 0] (mapv #(js/Math.floor %) (at p))))
           (is (= [{:to {:x 30 :y 64 :z 0} :provisional true} {:to {:x 30 :y 65 :z 0}}]
                  (mapv #(select-keys % [:to :provisional]) ((juxt first last) (events-of s :goal-resolved))))
@@ -164,15 +154,31 @@
     (is (= {:pos {:x 30 :y 63 :z 0} :resolved true :provisional true} (column/aim p {:x 30 :z 0} 4 64 true))
         "the top water cell of the lake beside it")))
 
-(deftest a-seen-column-picks-its-seen-ground-nearest-the-feet
+(deftest a-seen-column-picks-its-surface-not-a-nearer-cave
   (let [p (hiding hill-with-cave (constantly false))]
-    (is (= {:pos {:x 30 :y 60 :z 0} :resolved true} (column/aim p {:x 30 :z 0} 4 64 true))
-        "the cave was seen: it is the ground nearest the feet")))
+    (is (= {:pos {:x 30 :y 75 :z 0} :resolved true :why :surface} (column/aim p {:x 30 :z 0} 4 64 true))
+        "the cave floor is nearer the feet; the surface is the open-sky stand")
+    (is (= {:pos {:x 30 :y 75 :z 0} :resolved true :why :surface} (column/aim p {:x 30 :z 0} 4 40 true))
+        "from deep below too")))
+
+(deftest a-column-seen-only-under-cover-picks-the-stand-nearest-the-feet
+  (let [covered (hiding hill-with-cave #(> (second %) 70))]
+    (is (= {:pos {:x 30 :y 60 :z 0} :resolved true :why :nearest-level} (column/aim covered {:x 30 :z 0} 4 62 true))
+        "the cave under a seen ceiling, its surface never seen")))
+
+(deftest a-tree-over-a-column-is-not-its-surface
+  (let [tree (merge flat (box 10 65 0 10 68 0 "oak_log") (box 9 69 -1 11 70 1 "oak_leaves"))
+        p (hiding tree (constantly false))]
+    (is (= {:pos {:x 10 :y 64 :z 0} :resolved true :why :surface} (column/aim p {:x 10 :z 0} 4 64 true)))))
+
+(deftest a-y-re-aim-says-it-is-explicit
+  (let [p (hiding flat (constantly false))]
+    (is (= {:pos {:x 10 :y 64 :z 0} :resolved true :why :explicit} (column/aim p {:x 10 :y 67 :z 0} 4 64 true)))))
 
 (deftest a-column-far-above-or-below-the-feet-resolves
   (let [p (hiding flat (constantly false))]
     (doseq [feet [-50 200]]
-      (is (= {:pos {:x 10 :y 64 :z 0} :resolved true} (column/aim p {:x 10 :z 0} 4 feet true)) (str "feet " feet)))))
+      (is (= {:pos {:x 10 :y 64 :z 0} :resolved true :why :surface} (column/aim p {:x 10 :z 0} 4 feet true)) (str "feet " feet)))))
 
 (deftest a-column-goal-is-aimed-again-when-it-comes-into-view
   (async done
@@ -182,7 +188,7 @@
         ;; seen); once seen, its ground under it (64) is said again, no longer a guess
         (let [floating (merge flat (box 30 70 0 30 70 0 "stone"))
               {:keys [out p] :as s} (await (go! {:blocks floating :light [15 0]} {:pos [30 0] :range 0}))]
-          (is (= {:arrived true :resolved {:x 30 :y 64 :z 0}} @out) (pr-str @out))
+          (is (= {:arrived true :resolved {:x 30 :y 64 :z 0} :why :surface} @out) (pr-str @out))
           (is (= [30 64 0] (mapv #(js/Math.floor %) (at p))))
           (is (= [{:to {:x 30 :y 64 :z 0} :provisional true} {:to {:x 30 :y 64 :z 0}}]
                  (mapv #(select-keys % [:to :provisional]) (events-of s :goal-resolved)))
@@ -201,9 +207,9 @@
   (let [p (hiding pocket (constantly false))]
     (is (= {:pos {:x 5 :y 58 :z 0}} (column/aim p {:x 5 :y 58 :z 0} 4 64 true))
         "the ground over the pocket's roof is no way to the cell under it")
-    (is (= {:pos {:x 5 :y 60 :z 0} :resolved true} (column/aim p {:x 5 :y 59 :z 0} 4 64 true))
+    (is (= {:pos {:x 5 :y 60 :z 0} :resolved true :why :explicit} (column/aim p {:x 5 :y 59 :z 0} 4 64 true))
         "a goal in the roof block itself is a position in the ground: its top")
-    (is (= {:pos {:x 10 :y 64 :z 0} :resolved true} (column/aim p {:x 10 :y 66 :z 0} 4 64 true))
+    (is (= {:pos {:x 10 :y 64 :z 0} :resolved true :why :explicit} (column/aim p {:x 10 :y 66 :z 0} 4 64 true))
         "a goal in the open air over the ground comes down to it")))
 
 (deftest an-unseen-goal-inside-a-mound-under-unknown-ends-from-near-it
@@ -226,7 +232,7 @@
         (let [mound (merge flat (box 28 64 -3 32 64 3 "stone"))
               {:keys [out p] :as s} (await (go! {:blocks mound :light [15 0] :self {:pos {:x 22 :y 64 :z 0}}}
                                                 {:pos [30 64 0] :range 0 :unknown true}))]
-          (is (= {:arrived true :resolved {:x 30 :y 65 :z 0}} @out) (pr-str @out))
+          (is (= {:arrived true :resolved {:x 30 :y 65 :z 0} :why :explicit} @out) (pr-str @out))
           (is (= [30 65 0] (mapv #(js/Math.floor %) (at p))))
           (is (= [{:x 30 :y 65 :z 0}] (mapv :to (events-of s :goal-resolved)))))))))
 
@@ -333,7 +339,7 @@
         (doseq [[label y0 dir to] [["hill" 64 1 84] ["valley" 84 -1 64]]]
           (let [{:keys [out p]} (await (go! {:blocks (slope y0 dir) :light [15 0] :self {:pos {:x 0 :y y0 :z 0}}}
                                             {:pos [60 0] :range 0}))]
-            (is (= {:arrived true :resolved {:x 60 :y to :z 0}} @out) (str label " " (pr-str @out)))
+            (is (= {:arrived true :resolved {:x 60 :y to :z 0} :why :surface} @out) (str label " " (pr-str @out)))
             (is (= [60 to 0] (mapv #(js/Math.floor %) (at p))) (str label " at " (at p)))))))))
 
 (deftest a-waypoint-is-the-seen-ground-on-the-line-nearest-the-column

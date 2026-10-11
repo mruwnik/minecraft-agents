@@ -255,14 +255,15 @@
 
 (defn ^:async arrived!
   "Look round once if the place is risky (jobs.lib.watch), then finish: the next job starts facing along the walk.
-  A goal whose y go-to chose (goal-pos) adds :resolved, the cell it walked to, with :provisional true when that was a
+  A goal whose y go-to chose (goal-pos) adds :resolved, the cell it walked to, :why it (:surface, :nearest-level, :explicit), with :provisional true when that was a
   column's estimated y, :stand-in true when no ground of it was known."
   [c]
   (when-not (false? (:look-round (:args c)))
     (await (watch/watch! c {})))
-  (let [{:keys [aimed column-open]} (ctx/mem c)]
+  (let [{:keys [aimed aimed-why column-open]} (ctx/mem c)]
     (end/finish! c (cond-> {:arrived true}
                      aimed (assoc :resolved aimed)
+                     (and aimed aimed-why) (assoc :why aimed-why)
                      (= :guess column-open) (assoc :provisional true)
                      (= :stand-in column-open) (assoc :stand-in true)
                      (:in-water (ctx/mem c)) (assoc :in-water true)))))
@@ -993,16 +994,18 @@
   [c goal]
   (when goal
     (let [column? (nil? (:y goal))
-          {:keys [pos resolved provisional]} (if (or column? (:re-aim (ctx/mem c))) (aimed c goal) {:pos goal})
+          {:keys [pos resolved provisional why]} (if (or column? (:re-aim (ctx/mem c))) (aimed c goal) {:pos goal})
           open (when column? (cond provisional :guess (not resolved) :stand-in))
           aimed-at (when (or resolved column?) pos)]
       (when (not= open (:column-open (ctx/mem c)))
         (ctx/update-mem! c assoc :column-open open))
       (when (not= aimed-at (:aimed (ctx/mem c)))
         (ctx/update-mem! c assoc :aimed aimed-at))
+      (when (not= why (:aimed-why (ctx/mem c)))
+        (ctx/update-mem! c assoc :aimed-why why))
       (when (and resolved (not= [pos provisional] (:said (ctx/mem c))))
         (ctx/update-mem! c assoc :said [pos provisional])
-        (ctx/emit! c :goal-resolved :info (cond-> {:goal goal :to pos} provisional (assoc :provisional true))))
+        (ctx/emit! c :goal-resolved :info (cond-> {:goal goal :to pos} provisional (assoc :provisional true) why (assoc :why why))))
       (wworld/stand-goal (wworld/path-world (:primitives c) (:unknown c)) pos))))
 
 (defn goal-danger

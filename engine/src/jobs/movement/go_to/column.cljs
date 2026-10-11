@@ -1,6 +1,7 @@
 (ns jobs.movement.go-to.column
-  "go-to's goal y. A column goal ([x z] or {:x :z}, no y) stands on the ground of that column nearest the body's feet,
-  read from seen cells only, over the whole build height. A column with no ground seen aims provisionally at an
+  "go-to's goal y. A column goal ([x z] or {:x :z}, no y) stands on the surface of that column: its highest seen stand with
+  no seen solid over it (trees skipped), why :surface; else (the column seen only under cover) the stand nearest the body's
+  feet, why :nearest-level; over the whole build height. A column with no ground seen aims provisionally at an
   estimate (estimate: the seen ground of the nearest column around it, else the body's feet y), or, when the column is
   seen there and does not stand, keeps a stand-in y (the body's feet); go-to aims again every step, so it resolves from
   seen cells on approach; a provisional one it first walks to within approach-range of. A y with no standable cell within the
@@ -9,6 +10,7 @@
   (:require [engine.args :as a]
             [jobs.lib.places :as places]
             [jobs.lib.reach :as reach]
+            [jobs.lib.surface :as surface]
             [jobs.lib.util :as u]))
 
 (def approach-range
@@ -42,6 +44,14 @@
   (cond (nil? b) :unknown
         (reach/hazard-blocks (.-name b)) :hazard
         :else (reach/kind-of b)))
+
+(defn surface-kind-at
+  "As seen-kind-at, a log or leaf block read as :open: a tree is not the surface."
+  [p]
+  (if (some? (.-sensedAt p))
+    (fn [x y z] (let [b (u/seen-block p {:x x :y y :z z})]
+                  (if (and b (surface/canopy? (.-name b))) :open (kind b))))
+    (constantly :unknown)))
 
 (defn seen-kind-at
   "(fn [x y z]) -> kind of the block the body of primitives p sees or remembers there, :unknown when never seen (or when
@@ -78,6 +88,22 @@
                          (and (pos? d) (>= down lo) (stands? kind-at x down z) (ok? down)) down)))
          (range 0 (inc (max (- hi y) (- y lo)))))))
 
+(defn top
+  "The y of the highest stand of the column x z with no solid or hazard over it, else nil."
+  [kind-at x z]
+  (loop [y top-y]
+    (when (>= y places/min-y)
+      (cond (stands? kind-at x y z) y
+            (#{:solid :hazard} (kind-at x y z)) nil
+            :else (recur (dec y))))))
+
+(defn pick
+  "[y why] of the stand of the column x z by the cells of kind-at: :surface, else :nearest-level to body-y; nil if none."
+  [kind-at x z body-y]
+  (if-let [y (top kind-at x z)]
+    [y :surface]
+    (when-let [y (ground kind-at x z body-y places/min-y top-y)] [y :nearest-level])))
+
 (defn leads-to?
   "Whether the column x z leads from a goal at y to the stand at g without passing a solid: up only from a goal cell
   that is not free (a position in the ground: its surface), down only through free cells. An open cell under a ceiling
@@ -90,10 +116,12 @@
 (def estimate-reach "Blocks above and below the feet a neighbouring column's seen ground is looked for (estimate)." 32)
 
 (defn estimate
-  "The y an unseen column x z is guessed to stand at: the seen ground nearest the feet (within estimate-reach) of the
-  nearest column around it, looked for in 8 directions out to approach-range, else body-y."
+  "The y an unseen column x z is guessed to stand at: the surface (else the seen ground nearest the feet, within
+  estimate-reach) of the nearest column around it, looked for in 8 directions out to approach-range, else body-y."
   [kind-at x z body-y]
-  (or (some (fn [[d dx dz]] (ground kind-at (+ x (* d dx)) (+ z (* d dz)) body-y (- body-y estimate-reach) (+ body-y estimate-reach)))
+  (or (some (fn [[d dx dz]] (let [cx (+ x (* d dx)) cz (+ z (* d dz))]
+                              (or (top kind-at cx cz)
+                                  (ground kind-at cx cz body-y (- body-y estimate-reach) (+ body-y estimate-reach)))))
             (for [d (range 1 (inc approach-range)) [dx dz] [[1 0] [-1 0] [0 1] [0 -1] [1 1] [1 -1] [-1 1] [-1 -1]]] [d dx dz]))
       body-y))
 
@@ -134,13 +162,13 @@
   only). A y goal comes here only once the planner found no cell in its range stands."
   [p {:keys [x y z] :as goal} slack body-y raw?]
   (if (nil? y)
-    (let [seen (seen-kind-at p)]
-      (if-let [g (ground seen x z body-y places/min-y top-y)]
-        {:pos {:x x :y g :z z} :resolved true}
+    (let [seen (surface-kind-at p)]
+      (if-let [[g why] (pick seen x z body-y)]
+        {:pos {:x x :y g :z z} :resolved true :why why}
         (let [e (estimate seen x z body-y)]
           (if (or (keyword-identical? :unknown (seen x e z)) (keyword-identical? :unknown (seen x (dec e) z)))
             {:pos {:x x :y e :z z} :resolved true :provisional true}
             {:pos {:x x :y body-y :z z}}))))
     (if-let [g (when (pos? slack) (let [ka (kind-at p raw?)] (ground ka x z y (- y slack) (+ y slack) #(leads-to? ka x z y %))))]
-      {:pos (assoc goal :y g) :resolved true}
+      {:pos (assoc goal :y g) :resolved true :why :explicit}
       {:pos goal})))
