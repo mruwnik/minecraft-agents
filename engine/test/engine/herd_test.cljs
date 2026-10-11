@@ -13,6 +13,7 @@
             [jobs.animals.herd-pen :as hp]
             [jobs.animals.herd-run :as hr]
             [jobs.animals.herd-trip :as ht]
+            [jobs.lib.child :as child]
             [jobs.lib.world-files :as ew]
             [plan.shape :as shape]
             [engine.test-util :as tu]))
@@ -1215,6 +1216,31 @@
                              (.then (impl token a) (fn [r] (arm!) r))))))
             (await (run-ticks s 900))
             (is (= reason (get-in (done-event s) [:given-up "u1"])) label)))))))
+
+(deftest the-walk-back-for-a-lost-cow-leaves-no-gate-open
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [orig child/call-walk
+              backs (atom [])
+              s (submit! (setup (world {:entities [(cow 1 -40 3)] :inventory [wheat] :blocks far-ground})) {:target 1 :radius 60 :timeout-s 900})
+              seen (atom false)]
+          (set! child/call-walk (fn [c slot opts] (when (= :back slot) (swap! backs conj (:doors opts))) (orig c slot opts)))
+          (try
+            (doseq [act ["steer" "wait"]]
+              (.override (.-world (:p s)) act
+                         (fn [token a impl]
+                           (when (= "wait" act) (swap! (:clock s) + (or (.-ms a) 0)))
+                           (.then (impl token a)
+                                  (fn [r]
+                                    (when (<= (self-x s) -30)
+                                      (set-x! s 1 (if @seen -500 (- (self-x s) 6)))
+                                      (reset! seen true))
+                                    r)))))
+            (await (run-ticks s 900))
+            (is (seq @backs) "the body walked back for the cow")
+            (is (every? #{:never} @backs) (pr-str @backs))
+            (finally (set! child/call-walk orig))))))))
 
 (deftest a-lured-cow-that-trails-out-of-range-with-the-gate-open-is-gone-back-for-not-written-off
   (async done

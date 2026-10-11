@@ -146,7 +146,7 @@
         verdict (escort/follow-verdict c a true escort/safe-gap)]
     (if verdict
       (if (= :wait verdict)
-        (do (await (escort/wait-for-animal! c)) :continue)
+        (do (await (escort/wait-for-animal! c :never)) :continue)
         (lure-lost! c verdict))
       (let [{:keys [leg searching]} (await (escort/leg-plan c target 1))
             n (inc (:search-rounds m 0))]

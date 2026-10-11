@@ -194,17 +194,19 @@
 
 (defn ^:async wait-for-animal!
   "Hold still on purpose for one look's wait; the caller then looks again. When follow-verdict set :back-to the body
-  walks back toward the last sighting instead (one round of a go-to child: :yield while it is not done). Else :again."
-  [c]
+  walks back toward the last sighting instead (one round of a go-to child, with doors per the caller: :leave-open by
+  default, :never for a caller that does not shut gates after; :yield while it is not done). Else :again."
+  ([c] (wait-for-animal! c :leave-open))
+  ([c doors]
   (if-let [to (:back-to (ctx/mem c))]
-    (if (= :done (await (child/call-walk c :back {:pos to :range 2 :doors :leave-open :escalate false :zone-tolls true
+    (if (= :done (await (child/call-walk c :back {:pos to :range 2 :doors doors :escalate false :zone-tolls true
                                                   :ignore-zones? (boolean (:ignore-zones? (:args c)))})))
       :again
       :yield)
     (do (ctx/hold-still! c :waiting-for-animal)
         (await (ctx/act c :wait #js {:ms wait-look-ms}))
         (ctx/hold-still! c nil)
-        :again)))
+        :again))))
 
 (def max-search-rounds
   "Calls in a row a walk may spend on the plan search of its next leg (about 80 ms each) before it counts as :failed."
